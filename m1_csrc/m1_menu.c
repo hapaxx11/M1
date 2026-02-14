@@ -10,7 +10,7 @@
 *
 */
 /*************************** I N C L U D E S **********************************/
-
+extern void rfid_fuzzer_app(void);  // Add this with other extern declarations
 #include <stdint.h>
 #include <stdbool.h>
 #include "stm32h5xx_hal.h"
@@ -39,37 +39,40 @@
 
 /*----------------------------- > Sub-GHz ------------------------------------*/
 
-S_M1_Menu_t menu_Sub_GHz_Record =
+/*----------------------------- > 125KHz RFID --------------------------------*/
+
+S_M1_Menu_t menu_125KHz_RFID_Read =
 {
-    "Record", sub_ghz_record, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Read", rfid_125khz_read, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-S_M1_Menu_t menu_Sub_GHz_Replay =
+S_M1_Menu_t menu_125KHz_RFID_Saved =
 {
-    "Replay", sub_ghz_replay, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Saved", rfid_125khz_saved, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-S_M1_Menu_t menu_Sub_GHz_Frequency_Reader =
+S_M1_Menu_t menu_125KHz_RFID_Add_Manually =
 {
-    "Frequency Reader", sub_ghz_frequency_reader, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Add", rfid_125khz_add_manually, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-S_M1_Menu_t menu_Sub_GHz_Regional_Information =
+S_M1_Menu_t menu_125KHz_RFID_Utilities =
 {
-    "Regional Information", sub_ghz_regional_information, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Utilities", rfid_125khz_utilities, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-S_M1_Menu_t menu_Sub_GHz_Radio_Settings =
+// Our new fuzzer menu
+S_M1_Menu_t menu_125KHz_RFID_Fuzzer = 
 {
-    "Radio Settings", sub_ghz_radio_settings, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Fuzzer", rfid_fuzzer_app, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-S_M1_Menu_t menu_Sub_GHz =
+// Main RFID menu with all 5 items
+S_M1_Menu_t menu_125KHz_RFID =
 {
-    "Sub-GHz", NULL, NULL, NULL, 4, 0, menu_m1_icon_wave, NULL,
-    {&menu_Sub_GHz_Record, &menu_Sub_GHz_Replay, &menu_Sub_GHz_Frequency_Reader, &menu_Sub_GHz_Regional_Information}
+    "RFID", menu_125khz_rfid_init, menu_125khz_rfid_deinit, NULL, 5, 0, menu_m1_icon_rfid, NULL,
+    {&menu_125KHz_RFID_Read, &menu_125KHz_RFID_Saved, &menu_125KHz_RFID_Add_Manually, &menu_125KHz_RFID_Utilities, &menu_125KHz_RFID_Fuzzer}
 };
-
 /*----------------------------- > 125KHz RFID --------------------------------*/
 
 S_M1_Menu_t menu_125KHz_RFID_Read =
@@ -96,7 +99,14 @@ S_M1_Menu_t menu_125KHz_RFID_Utilities =
 S_M1_Menu_t menu_125KHz_RFID =
 {
     "RFID", menu_125khz_rfid_init, menu_125khz_rfid_deinit, NULL, 4, 0, menu_m1_icon_rfid, NULL,
-    {&menu_125KHz_RFID_Read, &menu_125KHz_RFID_Saved, &menu_125KHz_RFID_Add_Manually, &menu_125KHz_RFID_Utilities}
+    {&menu_125KHz_RFID_Read, &menu_125KHz_RFID_Saved, &menu_125KHz_RFID_Add_Manually, &menu_125KHz_RFID_Utilities, &menu_125khz_rfid_fuzzer}
+};
+
+s_m1_menu_t menu_125khz_rfid_fuzzer = 
+{
+    "Fuzzer",           // Menu text
+    rfid_fuzzer_app,    // Function to call
+    NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
 /*-------------------------------- > NFC -------------------------------------*/
@@ -652,3 +662,11 @@ void subfunc_handler_task(void *param)
 		xTaskNotify(menu_main_handler_task_hdl, 0, eNoAction);
 	} // while(1)
 } // void subfunc_handler_task(void *param)
+
+void rfid_fuzzer_app(void) {
+    // Simple test - just show a message
+    DrawTextBox("RFID Fuzzer", 30, 30, 1, BLACK);
+    DrawTextBox("Coming Soon!", 30, 50, 1, BLACK);
+    Display();
+    Delay(2000);
+}
