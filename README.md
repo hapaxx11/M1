@@ -1,3 +1,7 @@
+> **WARNING:** This is custom third-party firmware. Use at your own risk. The developer assumes no responsibility for bricked devices, hardware damage, fires, data loss, or any other issues that may result from flashing this firmware. If you don't want to take that risk, wait for official firmware from Monstatek. If something goes wrong, don't come crying or complaining -- you were warned. Always have an ST-Link programmer available to recover your device. By flashing this firmware, you accept full responsibility for any outcome.
+
+---
+
 # M1 SiN360 Firmware
 
 Custom firmware for the Monstatek M1 multi-protocol security research device, built on STM32H5.
