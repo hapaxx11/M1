@@ -744,7 +744,7 @@ static int subghz_record_gui_message(void)
 				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 				if (rcv_samples > 0)
 				{
-					snprintf(sample_line, sizeof(sample_line), "Signal! %lu samp", (unsigned long)rcv_samples);
+					snprintf(sample_line, sizeof(sample_line), "Signal! %lu samples", (unsigned long)rcv_samples);
 					u8g2_DrawStr(&m1_u8g2, 2, 38, sample_line);
 				}
 				else
