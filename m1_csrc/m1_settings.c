@@ -40,6 +40,7 @@ void menu_settings_init(void);
 void menu_settings_exit(void);
 void settings_system(void);
 void settings_about(void);
+void setting_switch_bank(void);
 static void settings_about_display_choice(uint8_t choice);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
@@ -345,3 +346,90 @@ static void settings_about_display_choice(uint8_t choice)
 
 	m1_u8g2_nextpage(); // Update display RAM
 } // static void settings_about_display_choice(uint8_t choice)
+
+
+/*============================================================================*/
+/**
+  * @brief  Switch firmware bank
+  *         Shows current active bank and confirms before swapping
+  * @note   SiN360 -- Bank switcher for multi-firmware support
+  */
+/*============================================================================*/
+void setting_switch_bank(void)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint8_t confirmed = 0;
+	char line[32];
+
+	/* Draw initial screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 12, "Switch Bank");
+
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	snprintf(line, sizeof(line), "Active bank: %d", (m1_device_stat.active_bank == BANK1_ACTIVE) ? 1 : 2);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, line);
+	snprintf(line, sizeof(line), "Switch to bank: %d", (m1_device_stat.active_bank == BANK1_ACTIVE) ? 2 : 1);
+	u8g2_DrawStr(&m1_u8g2, 4, 38, line);
+
+	/* Bottom bar */
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Switch  Back=Cancel");
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (ret != pdTRUE) continue;
+
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (!confirmed)
+				{
+					/* Show confirmation */
+					confirmed = 1;
+					u8g2_FirstPage(&m1_u8g2);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+					u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+					u8g2_DrawStr(&m1_u8g2, 4, 12, "Are you sure?");
+					u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+					u8g2_DrawStr(&m1_u8g2, 4, 28, "Device will reboot");
+					u8g2_DrawStr(&m1_u8g2, 4, 40, "to the other bank.");
+					u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+					u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+					u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Confirm Back=Cancel");
+					m1_u8g2_nextpage();
+				}
+				else
+				{
+					/* Swap banks -- device will reboot */
+					u8g2_FirstPage(&m1_u8g2);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+					u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+					u8g2_DrawStr(&m1_u8g2, 4, 30, "Switching banks...");
+					m1_u8g2_nextpage();
+					vTaskDelay(pdMS_TO_TICKS(500));
+					bl_swap_banks();
+					/* bl_swap_banks triggers reboot -- execution won't reach here */
+				}
+			}
+		}
+	}
+} // void setting_switch_bank(void)

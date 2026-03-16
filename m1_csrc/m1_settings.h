@@ -15,11 +15,11 @@
 
 void menu_settings_init(void);
 void menu_settings_exit(void);
-
 void settings_lcd_and_notifications(void);
 void settings_buzzer(void);
 void settings_power(void);
 void settings_system(void);
 void settings_about(void);
+void setting_switch_bank(void);
 
 #endif /* M1_SETTINGS_H_ */

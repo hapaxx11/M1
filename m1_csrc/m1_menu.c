@@ -294,10 +294,15 @@ S_M1_Menu_t menu_Settings_About =
     "About", settings_about, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Settings_Switch_Bank =
+{
+    "Switch Bank", setting_switch_bank, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Settings =
 {
-    "Settings", menu_settings_init, NULL, NULL, 5, 0, menu_m1_icon_setting, NULL,
-    /*{&menu_Settings_LCD_and_Notifications,*/ {&menu_Settings_Storage, &menu_Settings_Power,/* &menu_Settings_System,*/ &menu_Setting_Firmware_Update, &menu_Setting_ESP32, &menu_Settings_About}
+    "Settings", menu_settings_init, NULL, NULL, 6, 0, menu_m1_icon_setting, NULL,
+    {&menu_Settings_Storage, &menu_Settings_Power, &menu_Setting_Firmware_Update, &menu_Setting_ESP32, &menu_Settings_Switch_Bank, &menu_Settings_About}
 };
 
 /*--------------------------------- > Wifi -----------------------------------*/

@@ -21,7 +21,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME M1_SiN360_v0.9)
+set(CMAKE_PROJECT_NAME M1_SiN360_v0.9.0.1)
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
