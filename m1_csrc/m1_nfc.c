@@ -2271,7 +2271,10 @@ static void nfc_tools_write_url_run(void)
     /* Pre-built NDEF message for https://github.com/sincere360/M1_SiN360 */
     /* NDEF TLV: 03 <len> <ndef_record> FE */
     /* Record: D1 01 <payload_len> 55 <uri_prefix=04=https://> <url_text> */
-    static const char *url_text = "github.com/sincere360/M1_SiN360";
+    char url_text[128];
+    char default_url[] = "github.com/sincere360/M1_SiN360";
+    uint8_t vkb_ret = m1_vkb_get_filename("Enter URL (no https://):", default_url, url_text);
+    if (!vkb_ret) return;
     uint8_t url_len = strlen(url_text);
     uint8_t ndef_payload_len = 1 + url_len; /* prefix byte + url */
     uint8_t ndef_record[64];
@@ -2298,8 +2301,8 @@ static void nfc_tools_write_url_run(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
     u8g2_DrawStr(&m1_u8g2, 4, 12, "Write NFC URL");
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 4, 26, "https://github.com/");
-    u8g2_DrawStr(&m1_u8g2, 4, 36, "sincere360/M1_SiN360");
+    u8g2_DrawStr(&m1_u8g2, 4, 26, "https://");
+    u8g2_DrawStr(&m1_u8g2, 4, 36, url_text);
     u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Write  Back=Cancel");
