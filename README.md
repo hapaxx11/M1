@@ -8,7 +8,7 @@ Custom firmware for the Monstatek M1 multi-protocol security research device, bu
 
 Forked from the original Monstatek M1 firmware (v0.8) with completed feature stubs, new tools, and build system fixes.
 
-## What's New in SiN360 v0.9.0.2
+## What's New in SiN360 v0.9.0.3
 
 ### Completed Features (formerly stubs)
 - **USB-UART Bridge** -- Full runtime CDC mode switching with status screen, transparent bridge operation
