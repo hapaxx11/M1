@@ -535,6 +535,16 @@ void esp32_main_init(void)
 	free_heap = xPortGetFreeHeapSize(); // xPortGetMinimumEverFreeHeapSize()
 	assert(free_heap >= M1_LOW_FREE_HEAP_WARNING_SIZE);
 
+	/* Fix SPI handshake race condition - credit: cd3daddy
+	 * If handshake pin is already HIGH, we missed the rising edge interrupt.
+	 * Manually enqueue a message so spi_trans_control_task processes it.
+	 * Backward compatible with stock and third-party ESP32 firmware. */
+	if (HAL_GPIO_ReadPin(ESP32_HANDSHAKE_GPIO_Port, ESP32_HANDSHAKE_Pin) == GPIO_PIN_SET)
+	{
+		spi_master_msg_t spi_msg = { .slave_notify_flag = true };
+		xQueueSend(esp_spi_msg_queue, (void *)&spi_msg, 0);
+	}
+
 	esp32_main_init_done = true;
 } // void app_main(void)
 
