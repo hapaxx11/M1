@@ -857,6 +857,8 @@ static void ir_file_remote_run(const S_M1_file_info *f_info)
                     ir_tx_active = 0;
                 }
                 xQueueReset(main_q_hdl);
+               /* Restore orientation */
+
                 return;
             }
 
@@ -1090,19 +1092,23 @@ void infrared_universal_remotes(void)
     uint8_t sel = 0;
     uint8_t needs_redraw = 1;
 
-    static const char *ur_menu[] = {"Built-in Remotes", "Load .ir File"};
+    static const char *ur_menu[3];
+    ur_menu[0] = "Built-in Remotes";
+    ur_menu[1] = "Load .ir File";
+    ur_menu[2] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
 
     while (1)
     {
         if (needs_redraw)
         {
             needs_redraw = 0;
+            ur_menu[2] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
             u8g2_FirstPage(&m1_u8g2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
             u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 1, 10, "Universal Remote");
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            for (uint8_t i = 0; i < 2; i++)
+            for (uint8_t i = 0; i < 3; i++)
             {
                 uint8_t y = 26 + i * 14;
                 if (i == sel) {
@@ -1133,12 +1139,12 @@ void infrared_universal_remotes(void)
         }
         if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
         {
-            sel = (sel == 0) ? 1 : 0;
+            sel = (sel == 0) ? 2 : (sel - 1);
             needs_redraw = 1;
         }
         if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
         {
-            sel = (sel == 0) ? 1 : 0;
+            sel = (sel + 1) % 3;
             needs_redraw = 1;
         }
         if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
@@ -1149,20 +1155,45 @@ void infrared_universal_remotes(void)
                 ir_builtin_remote_run();
                 needs_redraw = 1;
             }
-            else
+            else if (sel == 1)
             {
+                /* Temporarily switch to normal for file browser */
+                uint8_t browse_orient = m1_screen_orientation;
+                if (browse_orient != M1_ORIENT_NORMAL)
+                {
+                    m1_screen_orientation = M1_ORIENT_NORMAL;
+                    u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R2);
+                }
                 /* Load .ir file from SD */
                 S_M1_file_info *f_info = storage_browse();
                 if (f_info && f_info->file_is_selected)
                 {
                     char filepath[128];
-                    /* Check if dir_name ends with / to avoid double slash */
                     int dlen = strlen(f_info->dir_name);
                     if (dlen > 0 && f_info->dir_name[dlen-1] == '/')
                         snprintf(filepath, sizeof(filepath), "%s%s", f_info->dir_name, f_info->file_name);
                     else
                         snprintf(filepath, sizeof(filepath), "%s/%s", f_info->dir_name, f_info->file_name);
+                    /* Restore orientation before running file remote */
+                    m1_screen_orientation = browse_orient;
+                    if (browse_orient == M1_ORIENT_REMOTE) u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R1);
+                    else if (browse_orient == M1_ORIENT_SOUTHPAW) u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R0);
                     ir_file_remote_run(f_info);
+                }
+                needs_redraw = 1;
+            }
+            else if (sel == 2)
+            {
+                /* Toggle Remote Mode orientation */
+                if (m1_screen_orientation == M1_ORIENT_REMOTE)
+                {
+                    m1_screen_orientation = M1_ORIENT_NORMAL;
+                    u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R2);
+                }
+                else
+                {
+                    m1_screen_orientation = M1_ORIENT_REMOTE;
+                    u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R1);
                 }
                 needs_redraw = 1;
             }

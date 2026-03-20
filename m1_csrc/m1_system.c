@@ -57,6 +57,7 @@ S_M1_Device_Status_t 	m1_device_stat = {0};
 QueueHandle_t 			button_events_q_hdl = NULL;
 TaskHandle_t			system_task_hdl;
 TaskHandle_t 			idle_task_hdl;
+uint8_t 				m1_screen_orientation = M1_ORIENT_NORMAL;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -274,10 +275,37 @@ void system_periodic_task(void *param)
         if ( m1_device_stat.op_mode != M1_OPERATION_MODE_FIRMWARE_UPDATE )
         {
         	if ( event_change & BUTTON_EVENT_ACTIVE ) // Notify task only when there's an active event
-        	{
+                {
+                        /* Load user settings once on first button press */
+                        static uint8_t settings_loaded = 0;
+                        if (!settings_loaded)
+                        {
+                            settings_loaded = 1;
+                            menu_settings_init();
+                        }
     			// Update to queue to notify any listener.
-    			//xQueueOverwrite(button_events_q_hdl, &m1_buttons_status);
-    			xQueueSend(button_events_q_hdl, &m1_buttons_status, 0);
+    			//xQueueOverwrite(button_events_q_hdl, &m1_buttons_status);				
+    			/* Remap buttons based on screen orientation */
+                        if (m1_screen_orientation == M1_ORIENT_SOUTHPAW)
+                        {
+                            S_M1_Key_Event tmp;
+                            tmp = m1_buttons_status.event[BUTTON_UP_KP_ID];
+                            m1_buttons_status.event[BUTTON_UP_KP_ID] = m1_buttons_status.event[BUTTON_DOWN_KP_ID];
+                            m1_buttons_status.event[BUTTON_DOWN_KP_ID] = tmp;
+                            tmp = m1_buttons_status.event[BUTTON_LEFT_KP_ID];
+                            m1_buttons_status.event[BUTTON_LEFT_KP_ID] = m1_buttons_status.event[BUTTON_RIGHT_KP_ID];
+                            m1_buttons_status.event[BUTTON_RIGHT_KP_ID] = tmp;
+                        }
+                        else if (m1_screen_orientation == M1_ORIENT_REMOTE)
+                        {
+                            S_M1_Key_Event tmp;
+                            tmp = m1_buttons_status.event[BUTTON_UP_KP_ID];
+                            m1_buttons_status.event[BUTTON_UP_KP_ID] = m1_buttons_status.event[BUTTON_LEFT_KP_ID];
+                            m1_buttons_status.event[BUTTON_LEFT_KP_ID] = m1_buttons_status.event[BUTTON_DOWN_KP_ID];
+                            m1_buttons_status.event[BUTTON_DOWN_KP_ID] = m1_buttons_status.event[BUTTON_RIGHT_KP_ID];
+                            m1_buttons_status.event[BUTTON_RIGHT_KP_ID] = tmp;
+                        }
+                        xQueueSend(button_events_q_hdl, &m1_buttons_status, 0);
     			//UBaseType_t uxQueueMessagesWaiting( const QueueHandle_t xQueue )
     			// Send notification to button event handling task
     			send_button_evt_to_queue();
@@ -693,12 +721,11 @@ void startup_config_handler(void)
 	if ( m1_device_stat.op_mode != M1_OPERATION_MODE_DISPLAY_ON )
 	{
 		m1_gui_welcome_scr();
-	}
-
-	m1_device_stat.active_bank = bl_get_active_bank();
+        }
+        m1_device_stat.active_bank = bl_get_active_bank();
 
 	M1_LOG_I(M1_LOGDB_TAG, "Device firmware version %d.%d.%d.%d.\r\n", m1_device_stat.config.fw_version_major,
-			m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc);
+                        m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc);
 } // void startup_config_handler(void)
 
 

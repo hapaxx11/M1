@@ -8,7 +8,7 @@ Custom firmware for the Monstatek M1 multi-protocol security research device, bu
 
 Forked from the original Monstatek M1 firmware (v0.8) with completed feature stubs, new tools, and build system fixes.
 
-## What's New in SiN360 v0.9.0.3
+## What's New in SiN360 v0.9.0.4
 
 ### Completed Features (formerly stubs)
 - **USB-UART Bridge** -- Full runtime CDC mode switching with status screen, transparent bridge operation
@@ -24,6 +24,10 @@ Forked from the original Monstatek M1 firmware (v0.8) with completed feature stu
 - **NFC Mifare Fuzzer** -- Cycles sequential UIDs emulating Mifare Classic 1K to test reader responses
 - **NFC Write URL** -- Write custom URLs as NDEF to NTAG tags (NFC business cards)
 - **NFC Utils** -- Write UID to magic cards, Wipe T2T tags
+- **Screen Orientation** -- Normal, Southpaw (180° flip), Remote (90°) with automatic button remapping
+- **IR Remote Mode** -- Toggle 90° orientation from Universal Remote menu for pointing IR at devices
+- **IR File Loader improvements** -- Subfolder browsing, expanded protocol support
+- **LCD & Notifications Settings** -- Backlight brightness (Off/Low/Med/High/Max), Buzzer On/Off, LED Notify On/Off, Screen Orientation (Normal/Southpaw/Remote). Settings persist to SD card. Note: settings apply on first visit to Settings > LCD & Notifications after power-on.
 
 ### Build System Fixes
 - **Fixed CRC generation** -- Replaced broken srec_cat CRC with correct STM32 hardware CRC32 append via Python script

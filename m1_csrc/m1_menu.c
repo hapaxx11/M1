@@ -301,8 +301,8 @@ S_M1_Menu_t menu_Settings_Switch_Bank =
 
 S_M1_Menu_t menu_Settings =
 {
-    "Settings", menu_settings_init, NULL, NULL, 6, 0, menu_m1_icon_setting, NULL,
-    {&menu_Settings_Storage, &menu_Settings_Power, &menu_Setting_Firmware_Update, &menu_Setting_ESP32, &menu_Settings_Switch_Bank, &menu_Settings_About}
+    "Settings", menu_settings_init, NULL, NULL, 7, 0, menu_m1_icon_setting, NULL,
+    {&menu_Settings_LCD_and_Notifications, &menu_Settings_Storage, &menu_Settings_Power, &menu_Setting_Firmware_Update, &menu_Setting_ESP32, &menu_Settings_Switch_Bank, &menu_Settings_About}
 };
 
 /*--------------------------------- > Wifi -----------------------------------*/
@@ -407,7 +407,7 @@ void menu_main_handler_task(void *param)
 	BaseType_t ret;
 
 	vTaskDelay(POWER_UP_SYS_CONFIG_WAIT_TIME); // Give some time to startup_config_handler() during power-up
-	while(1)
+        while(1)
 	{
 		menu_update_stat = MENU_UPDATE_NONE;
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);

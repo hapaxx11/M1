@@ -23,6 +23,11 @@
 #define BUTTON_RIGHT_KP_ID 		3
 #define BUTTON_DOWN_KP_ID 		4
 #define BUTTON_BACK_KP_ID 		5
+/* Screen orientation modes */
+#define M1_ORIENT_NORMAL     0
+#define M1_ORIENT_SOUTHPAW   1
+#define M1_ORIENT_REMOTE     2
+extern uint8_t m1_screen_orientation;
 
 #define NUM_BUTTONS_MAX     	6
 
