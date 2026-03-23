@@ -403,7 +403,7 @@ void GPDMA1_Channel0_IRQHandler(void)
     {
     	subghz_tx_tc_flag = 1;
     } // if ( flag )
-} // void GPDMA1_Channel1_IRQHandler(void)
+} // void GPDMA1_Channel0_IRQHandler(void)
 
 
 
@@ -441,19 +441,31 @@ void GPDMA1_Channel5_IRQHandler(void)
  * UART4 Interrupt handler, Rx/Tx for ESP32
  */
 /******************************************************************************/
+/* Diagnostic counter: incremented each time UART4 hardware FIFO overruns.
+ * Readable via esp32_uart4_overrun_count from m1_rpc.c for flash diagnostics. */
+volatile uint32_t esp32_uart4_overrun_count = 0;
+
 void UART4_IRQHandler(void)
 {
-    if ( __HAL_UART_GET_FLAG(&huart_esp, UART_FLAG_RXFNE) || __HAL_UART_GET_FLAG(&huart_esp, UART_FLAG_ORE) )
+    /* Drain all bytes from the hardware FIFO in one ISR call.
+     * With FIFO enabled, multiple bytes may have accumulated between
+     * interrupts (e.g., while a USB ISR was executing).  Reading them
+     * all here prevents FIFO overflow and reduces ISR entry overhead. */
+    if ( __HAL_UART_GET_IT_SOURCE(&huart_esp, UART_IT_RXFNE) != 0U )
     {
-    	/* Check if interrupt source is enabled */
-    	if ( __HAL_UART_GET_IT_SOURCE(&huart_esp, UART_IT_RXFNE) != 0U )
-    	{
-    		esp32_uartrx_handler(huart_esp.Instance->RDR);
-    	}
-        // Error(s) should be cleared here before calling the default ISR
-        // ISR may disable interrupt unexpectedly if it detects error(s) in the Status Register
-    	__HAL_UART_CLEAR_FLAG(&huart_esp, UART_CLEAR_OREF);
-    } // if ( __HAL_UART_GET_FLAG(&huart_esp, UART_FLAG_RXFNE) || __HAL_UART_GET_FLAG(&huart_esp, UART_FLAG_ORE) )
+        while ( __HAL_UART_GET_FLAG(&huart_esp, UART_FLAG_RXFNE) )
+        {
+            esp32_uartrx_handler(huart_esp.Instance->RDR);
+        }
+    }
+
+    /* Clear overrun — data was already lost but prevent the flag from
+     * blocking further reception.  Count it for diagnostics. */
+    if ( __HAL_UART_GET_FLAG(&huart_esp, UART_FLAG_ORE) )
+    {
+        __HAL_UART_CLEAR_FLAG(&huart_esp, UART_CLEAR_OREF);
+        esp32_uart4_overrun_count++;
+    }
 
     HAL_UART_IRQHandler(&huart_esp);
 } // void UART4_IRQHandler(void)
@@ -622,17 +634,10 @@ void TIM1_UP_IRQHandler(void)
 	__HAL_TIM_CLEAR_FLAG(&timerhdl_subghz_tx, TIM_FLAG_UPDATE);
 	if ( !subghz_tx_tc_flag ) // DMA not completed?
 	{
-		// The fix for the case when an IRS interrupt handler may be missed due to a short pulse (<<100us).
-		// In that case, the following bits' polarity will be inverted.
-		// Solution:
 		// Each time this ISR occurs, the DMA counter (CBR1) is expected to decrease by one data block.
 		// If an ISR is missed, the DMA counter will decrease more than one data block in the next ISR.
-		// If that happens, the CCR4 should be kept unchanged.
-		// Or
 		// SUBGHZ_TX_GPIO_PIN should always be HIGH at the odd data block of a DMA transfer.
-		// That means, an odd data block should be in sync with the HIGH at SUBGHZ_TX_GPIO_PIN.
-		// Otherwise, an ISR may be missed. In that case, keep the CCR4 unchanged.
-		// DMA transfer is always ahead of this ISR.
+		// If out of sync, keep the CCR4 unchanged to correct polarity.
 		toggle = subghz_decenc_ctl.ntx_raw_len - hdma_subghz_tx.Instance->CBR1; // Data blocks transferred
 		toggle >>= 1; // Convert length from bytes to block
 		toggle &= 0x01; // Make odd or even data block
@@ -720,6 +725,10 @@ void TIM1_CC_IRQHandler(void)
 		q_item.q_data.ir_rx_data.ir_edge_te = cap_val;
 		q_item.q_data.ir_rx_data.ir_edge_dir = PULSE_DET_RISING; // edge: '1' for Rising  or '0' for falling edge
 	} // else
+
+	/* Feed pulse to protocol decoder */
+	if (subghz_decenc_ctl.subghz_pulse_handler)
+		subghz_decenc_ctl.subghz_pulse_handler(cap_val);
 
 	send_to_q = 1;
 	if ( subghz_record_mode_flag )

@@ -1202,11 +1202,13 @@ static void lfrfid_saved_browse_update(uint8_t param)
 
 	do
 	{
-		f_info = storage_browse();
+		f_info = storage_browse("0:/RFID");
 		if ( f_info->file_is_selected )
 		{
-			memcpy(lfrfid_tag_info.filepath, f_info->dir_name, sizeof(lfrfid_tag_info.filepath));
-			memcpy(lfrfid_tag_info.filename, f_info->file_name, sizeof(lfrfid_tag_info.filename));
+			strncpy(lfrfid_tag_info.filepath, f_info->dir_name, sizeof(lfrfid_tag_info.filepath) - 1);
+			lfrfid_tag_info.filepath[sizeof(lfrfid_tag_info.filepath) - 1] = '\0';
+			strncpy(lfrfid_tag_info.filename, f_info->file_name, sizeof(lfrfid_tag_info.filename) - 1);
+			lfrfid_tag_info.filename[sizeof(lfrfid_tag_info.filename) - 1] = '\0';
 
 			if(lfrfid_profile_load(f_info, RFID_FILE_EXTENSION_TMP))
 			{
@@ -1766,7 +1768,7 @@ static void lfrfid_saved_edit_destroy(uint8_t param)
 /*============================================================================*/
 static void lfrfid_saved_edit_update(uint8_t param)
 {
-	char data_buffer[64];
+	char data_buffer[192];
 	uint8_t data_size;
 	uint8_t val;
 	const uint8_t *pBitmap;
@@ -1901,8 +1903,8 @@ static void lfrfid_saved_rename_destroy(uint8_t param)
 /*============================================================================*/
 static void lfrfid_saved_rename_update(uint8_t param)
 {
-	char new_file[64];
-	char old_file[64];
+	char new_file[192];
+	char old_file[192];
 	BaseType_t ret;
 	const uint8_t *pBitmap;
 
@@ -2006,7 +2008,7 @@ static int lfrfid_saved_delete_kp_handler(void)
 	else if(this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK )
 	{
 		// Do other things for this task, if needed
-		char file_path[64];
+		char file_path[192];
 		fu_path_combine(file_path, sizeof(file_path), lfrfid_tag_info.filepath, lfrfid_tag_info.filename);
 		m1_fb_delete_file(file_path);
 
@@ -2686,10 +2688,837 @@ void lfrfid_addm_save_init(void)
 }
 
 /*============================================================================*/
+/* Utilities submenu options                                                  */
+/*============================================================================*/
+#define RFID_UTIL_OPTIONS_COUNT		5
+
+static const char *m1_rfid_util_options[] = {
+	"Clone Card",
+	"Erase Tag",
+	"T5577 Info",
+	"RFID Fuzzer",
+	"Brute Force FC"
+};
+
+/* Clone state machine */
+typedef enum {
+	CLONE_ST_READ_SOURCE = 0,
+	CLONE_ST_SOURCE_FOUND,
+	CLONE_ST_WRITING,
+	CLONE_ST_VERIFYING
+} lfrfid_clone_state_t;
+
+/*============================================================================*/
+/*  Clone Card – read source tag then write to T5577                          */
+/*============================================================================*/
+static void lfrfid_util_clone(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	lfrfid_clone_state_t state = CLONE_ST_READ_SOURCE;
+	LFRFID_TAG_INFO source_tag;
+	char szString[64];
+
+	/* Draw initial read screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	m1_draw_text(&m1_u8g2, 0, 40, 128, "Clone Card", TEXT_ALIGN_CENTER);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	m1_draw_text_box(&m1_u8g2, 0, 50, 128, 10, res_string(IDS_HOLD_CARD_), TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+
+	record_stat = RFID_READ_READING;
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (state == CLONE_ST_WRITING || state == CLONE_ST_VERIFYING)
+				{
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE_STOP);
+					memcpy(&lfrfid_tag_info, &source_tag, sizeof(LFRFID_TAG_INFO));
+				}
+				else if (state == CLONE_ST_READ_SOURCE)
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_STOP);
+
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+					 && state == CLONE_ST_SOURCE_FOUND)
+			{
+				/* Start clone write */
+				state = CLONE_ST_WRITING;
+				memcpy(&lfrfid_tag_info, &source_tag, sizeof(LFRFID_TAG_INFO));
+				memcpy(lfrfid_tag_info_back, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
+				lfrfid_write_count = 0;
+				lfrfid_write_screen_draw(0, NULL);
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+			}
+			else if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK
+					 && state == CLONE_ST_SOURCE_FOUND)
+			{
+				/* Retry read source */
+				state = CLONE_ST_READ_SOURCE;
+				record_stat = RFID_READ_READING;
+
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				m1_draw_text(&m1_u8g2, 0, 40, 128, "Clone Card", TEXT_ALIGN_CENTER);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				m1_draw_text_box(&m1_u8g2, 0, 50, 128, 10, res_string(IDS_HOLD_CARD_), TEXT_ALIGN_CENTER);
+				m1_u8g2_nextpage();
+
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_LFRFID_TAG_DETECTED)
+		{
+			if (state == CLONE_ST_READ_SOURCE)
+			{
+				/* Source card found */
+				state = CLONE_ST_SOURCE_FOUND;
+				record_stat = RFID_READ_DONE;
+				memcpy(&source_tag, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
+
+				m1_buzzer_notification();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+
+				/* Show card info */
+				char hex_str[64];
+				lfrfid_protocol_make_menu_list(lfrfid_tag_info.protocol, szString);
+				protocol_render_data(lfrfid_tag_info.protocol, hex_str);
+				char *hex = strtok(hex_str, "\n");
+				char *fc  = strtok(NULL, "\n");
+
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				m1_draw_text(&m1_u8g2, 2, 12, 124, szString, TEXT_ALIGN_LEFT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				if (hex) m1_draw_text(&m1_u8g2, 2, 22, 124, hex, TEXT_ALIGN_LEFT);
+				if (fc)  m1_draw_text(&m1_u8g2, 2, 32, 124, fc, TEXT_ALIGN_LEFT);
+				m1_draw_text_box(&m1_u8g2, 0, 42, 128, 10, "Place T5577, press OK", TEXT_ALIGN_CENTER);
+				m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, res_string(IDS_RETRY), "Clone", arrowright_8x8);
+				m1_u8g2_nextpage();
+			}
+			else if (state == CLONE_ST_VERIFYING)
+			{
+				if (lfrfid_write_count > LFRFID_WRITE_ERROR_COUNT)
+				{
+					lfrfid_write_screen_draw(2, NULL);
+				}
+				else if (lfrfid_write_verify(lfrfid_tag_info_back, &lfrfid_tag_info))
+				{
+					lfrfid_write_screen_draw(1, NULL);
+				}
+				else
+				{
+					/* Verify mismatch – retry write */
+					memcpy(&lfrfid_tag_info, lfrfid_tag_info_back, sizeof(LFRFID_TAG_INFO));
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+					lfrfid_write_screen_draw(0, NULL);
+					continue;
+				}
+				memcpy(&lfrfid_tag_info, &source_tag, sizeof(LFRFID_TAG_INFO));
+				m1_buzzer_notification();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				osDelay(2000);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_WRITE_DONE)
+		{
+			if (state == CLONE_ST_WRITING)
+			{
+				/* Write finished, verify read-back */
+				state = CLONE_ST_VERIFYING;
+				record_stat = RFID_READ_READING;
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_READ_TIMEOUT)
+		{
+			if (state == CLONE_ST_VERIFYING)
+			{
+				if (lfrfid_write_count > LFRFID_WRITE_ERROR_COUNT)
+				{
+					lfrfid_write_screen_draw(2, NULL);
+					memcpy(&lfrfid_tag_info, &source_tag, sizeof(LFRFID_TAG_INFO));
+					m1_buzzer_notification();
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					osDelay(2000);
+					xQueueReset(main_q_hdl);
+					break;
+				}
+				/* Retry write */
+				memcpy(&lfrfid_tag_info, lfrfid_tag_info_back, sizeof(LFRFID_TAG_INFO));
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+				lfrfid_write_screen_draw(0, NULL);
+			}
+			else if (state == CLONE_ST_READ_SOURCE)
+			{
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+			}
+		}
+	}
+}
+
+
+/*============================================================================*/
+/*  Erase Tag – write zeroed EM4100 to T5577                                  */
+/*============================================================================*/
+static void lfrfid_util_erase(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	bool writing = false;
+	bool verifying = false;
+	LFRFID_TAG_INFO saved_tag;
+
+	/* Save current tag info */
+	memcpy(&saved_tag, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
+
+	/* Draw ready screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	m1_draw_text(&m1_u8g2, 60, 20, 60, "Erase Tag", TEXT_ALIGN_LEFT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	m1_draw_text(&m1_u8g2, 60, 32, 60, "Place T5577", TEXT_ALIGN_LEFT);
+	m1_draw_text(&m1_u8g2, 60, 42, 60, "Press OK to erase", TEXT_ALIGN_LEFT);
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (writing || verifying)
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE_STOP);
+
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				memcpy(&lfrfid_tag_info, &saved_tag, sizeof(LFRFID_TAG_INFO));
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK && !writing)
+			{
+				/* Set up blank EM4100 tag with zero UID */
+				memset(&lfrfid_tag_info, 0, sizeof(LFRFID_TAG_INFO));
+				lfrfid_tag_info.protocol = LFRFIDProtocolEM4100;
+				/* uid is already zeroed by memset */
+
+				memcpy(lfrfid_tag_info_back, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
+				lfrfid_write_count = 0;
+				writing = true;
+
+				/* Draw erasing screen */
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				m1_draw_text(&m1_u8g2, 60, 20, 60, "Erasing...", TEXT_ALIGN_LEFT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				m1_draw_text(&m1_u8g2, 60, 32, 60, "EM4100", TEXT_ALIGN_LEFT);
+				m1_draw_text(&m1_u8g2, 60, 42, 60, "00:00:00:00:00", TEXT_ALIGN_LEFT);
+				m1_u8g2_nextpage();
+
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_WRITE_DONE)
+		{
+			if (writing && !verifying)
+			{
+				/* Write done, verify */
+				verifying = true;
+				record_stat = RFID_READ_READING;
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_LFRFID_TAG_DETECTED && verifying)
+		{
+			if (lfrfid_write_count > LFRFID_WRITE_ERROR_COUNT)
+			{
+				lfrfid_write_screen_draw(2, NULL);
+			}
+			else if (lfrfid_write_verify(lfrfid_tag_info_back, &lfrfid_tag_info))
+			{
+				/* Show success */
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				m1_draw_text(&m1_u8g2, 60, 20, 60, "Erase Tag", TEXT_ALIGN_LEFT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				m1_draw_text(&m1_u8g2, 60, 32, 60, res_string(IDS_SUCCESS), TEXT_ALIGN_LEFT);
+				m1_u8g2_nextpage();
+			}
+			else
+			{
+				/* Retry */
+				memcpy(&lfrfid_tag_info, lfrfid_tag_info_back, sizeof(LFRFID_TAG_INFO));
+				verifying = false;
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+				continue;
+			}
+			memcpy(&lfrfid_tag_info, &saved_tag, sizeof(LFRFID_TAG_INFO));
+			m1_buzzer_notification();
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+			osDelay(2000);
+			xQueueReset(main_q_hdl);
+			break;
+		}
+		else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_READ_TIMEOUT && verifying)
+		{
+			if (lfrfid_write_count > LFRFID_WRITE_ERROR_COUNT)
+			{
+				lfrfid_write_screen_draw(2, NULL);
+				memcpy(&lfrfid_tag_info, &saved_tag, sizeof(LFRFID_TAG_INFO));
+				m1_buzzer_notification();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				osDelay(2000);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			/* Retry */
+			memcpy(&lfrfid_tag_info, lfrfid_tag_info_back, sizeof(LFRFID_TAG_INFO));
+			verifying = false;
+			m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+		}
+	}
+}
+
+
+/*============================================================================*/
+/*  T5577 Info – read tag and display protocol details                        */
+/*============================================================================*/
+static void lfrfid_util_t5577_info(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	bool tag_read = false;
+
+	/* Draw reading screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	m1_draw_text(&m1_u8g2, 0, 40, 128, "T5577 Info", TEXT_ALIGN_CENTER);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	m1_draw_text_box(&m1_u8g2, 0, 50, 128, 10, res_string(IDS_HOLD_CARD_), TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+
+	record_stat = RFID_READ_READING;
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (!tag_read)
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_STOP);
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK && tag_read)
+			{
+				/* Retry read */
+				tag_read = false;
+				record_stat = RFID_READ_READING;
+
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				m1_draw_text(&m1_u8g2, 0, 40, 128, "T5577 Info", TEXT_ALIGN_CENTER);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				m1_draw_text_box(&m1_u8g2, 0, 50, 128, 10, res_string(IDS_HOLD_CARD_), TEXT_ALIGN_CENTER);
+				m1_u8g2_nextpage();
+
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+				m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_LFRFID_TAG_DETECTED && !tag_read)
+		{
+			tag_read = true;
+			record_stat = RFID_READ_DONE;
+			m1_buzzer_notification();
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+
+			/* Display detailed tag info */
+			char szString[64];
+			char hex_str[64];
+			const char *mod_str;
+			const char *proto_name = protocol_get_name(lfrfid_tag_info.protocol);
+			const char *mfg = protocol_get_manufacturer(lfrfid_tag_info.protocol);
+
+			/* Derive modulation from protocol */
+			if (lfrfid_tag_info.protocol == LFRFIDProtocolH10301 ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolHIDGeneric ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolAWID ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolPyramid ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolParadox ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolIoProxXSF ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolFDX_A ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolHIDExGeneric ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolGallagher ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolGProxII)
+				mod_str = "FSK2a";
+			else if (lfrfid_tag_info.protocol == LFRFIDProtocolIndala26 ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolKeri ||
+				lfrfid_tag_info.protocol == LFRFIDProtocolNexwatch)
+				mod_str = "PSK1";
+			else
+				mod_str = "Manchester";
+
+			u8g2_FirstPage(&m1_u8g2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+
+			if (mfg && proto_name)
+				sprintf(szString, "%s %s", mfg, proto_name);
+			else if (proto_name)
+				sprintf(szString, "%s", proto_name);
+			else
+				strcpy(szString, "Unknown");
+			m1_draw_text(&m1_u8g2, 2, 10, 124, szString, TEXT_ALIGN_LEFT);
+
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+			/* UID hex */
+			sprintf(hex_str, "UID: %02X:%02X:%02X:%02X:%02X",
+				lfrfid_tag_info.uid[0], lfrfid_tag_info.uid[1],
+				lfrfid_tag_info.uid[2], lfrfid_tag_info.uid[3],
+				lfrfid_tag_info.uid[4]);
+			m1_draw_text(&m1_u8g2, 2, 22, 124, hex_str, TEXT_ALIGN_LEFT);
+
+			/* Modulation */
+			sprintf(szString, "Mod: %s", mod_str);
+			m1_draw_text(&m1_u8g2, 2, 32, 124, szString, TEXT_ALIGN_LEFT);
+
+			/* Bitrate */
+			sprintf(szString, "Bitrate: RF/%d", lfrfid_tag_info.bitrate);
+			m1_draw_text(&m1_u8g2, 2, 42, 124, szString, TEXT_ALIGN_LEFT);
+
+			/* Data rendered by protocol */
+			protocol_render_data(lfrfid_tag_info.protocol, hex_str);
+			char *data_line = strtok(hex_str, "\n");
+			strtok(NULL, "\n"); /* skip second line (FC) */
+			char *card_line = strtok(NULL, "\n");
+			if (data_line) m1_draw_text(&m1_u8g2, 2, 52, 124, data_line, TEXT_ALIGN_LEFT);
+			if (card_line) m1_draw_text(&m1_u8g2, 2, 62, 124, card_line, TEXT_ALIGN_LEFT);
+
+			m1_u8g2_nextpage();
+		}
+		else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_READ_TIMEOUT && !tag_read)
+		{
+			/* Timeout – restart read */
+			m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_START_READ);
+		}
+	}
+}
+
+
+/*============================================================================*/
+/*  RFID Fuzzer helpers                                                       */
+/*============================================================================*/
+static const char *fuzz_proto_names[] = {"EM4100", "H10301"};
+static const LFRFIDProtocol fuzz_proto_ids[] = {LFRFIDProtocolEM4100, LFRFIDProtocolH10301};
+
+static void lfrfid_fuzz_draw_setup(uint8_t proto_sel, const uint8_t uid[5],
+									int8_t dir, uint16_t delay_ms)
+{
+	char sz[64];
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	m1_draw_text(&m1_u8g2, 0, 10, 128, "RFID Fuzzer", TEXT_ALIGN_CENTER);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+	sprintf(sz, "Protocol: %s", fuzz_proto_names[proto_sel]);
+	m1_draw_text(&m1_u8g2, 2, 24, 124, sz, TEXT_ALIGN_LEFT);
+
+	sprintf(sz, "Start: %02X:%02X:%02X:%02X:%02X",
+		uid[0], uid[1], uid[2], uid[3], uid[4]);
+	m1_draw_text(&m1_u8g2, 2, 36, 124, sz, TEXT_ALIGN_LEFT);
+
+	sprintf(sz, "Dir: %s  Delay: %dms", dir > 0 ? "Up" : "Down", delay_ms);
+	m1_draw_text(&m1_u8g2, 2, 48, 124, sz, TEXT_ALIGN_LEFT);
+
+	m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "OK:Start U/D:Proto L/R:Dir", TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+}
+
+static void lfrfid_fuzz_draw_running(uint8_t proto_sel, const uint8_t uid[5],
+									  uint32_t count)
+{
+	char sz[64];
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	m1_draw_text(&m1_u8g2, 0, 10, 128, "RFID Fuzzer", TEXT_ALIGN_CENTER);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+	sprintf(sz, "Proto: %s", fuzz_proto_names[proto_sel]);
+	m1_draw_text(&m1_u8g2, 2, 24, 124, sz, TEXT_ALIGN_LEFT);
+
+	sprintf(sz, "UID: %02X:%02X:%02X:%02X:%02X",
+		uid[0], uid[1], uid[2], uid[3], uid[4]);
+	m1_draw_text(&m1_u8g2, 2, 36, 124, sz, TEXT_ALIGN_LEFT);
+
+	sprintf(sz, "Count: %lu", (unsigned long)count);
+	m1_draw_text(&m1_u8g2, 2, 48, 124, sz, TEXT_ALIGN_LEFT);
+
+	m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "BACK:Stop", TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+}
+
+static void lfrfid_fuzz_uid_step(uint8_t uid[5], int8_t dir)
+{
+	int32_t carry = dir;
+	for (int i = 4; i >= 0; i--)
+	{
+		int32_t val = (int32_t)uid[i] + carry;
+		uid[i] = (uint8_t)(val & 0xFF);
+		carry = (val < 0) ? -1 : (val > 255) ? 1 : 0;
+		if (carry == 0) break;
+	}
+}
+
+/*============================================================================*/
+/*  RFID Fuzzer – cycle through UIDs while emulating                          */
+/*============================================================================*/
+static void lfrfid_util_fuzzer(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	bool running = false;
+	uint8_t proto_sel = 0; /* 0=EM4100, 1=H10301 */
+	uint8_t fuzz_uid[5] = {0, 0, 0, 0, 1};
+	uint32_t fuzz_count = 0;
+	int8_t fuzz_dir = 1; /* 1=increment, -1=decrement */
+	uint16_t fuzz_delay_ms = 500;
+
+	lfrfid_fuzz_draw_setup(proto_sel, fuzz_uid, fuzz_dir, fuzz_delay_ms);
+
+	while (1)
+	{
+		TickType_t wait = running ? pdMS_TO_TICKS(fuzz_delay_ms) : portMAX_DELAY;
+		ret = xQueueReceive(main_q_hdl, &q_item, wait);
+
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (running)
+				{
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE_STOP);
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				}
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (!running)
+				{
+					/* Start fuzzing */
+					running = true;
+					fuzz_count = 0;
+
+					memset(&lfrfid_tag_info, 0, sizeof(LFRFID_TAG_INFO));
+					lfrfid_tag_info.protocol = fuzz_proto_ids[proto_sel];
+					memcpy(lfrfid_tag_info.uid, fuzz_uid, 5);
+
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE);
+					lfrfid_fuzz_draw_running(proto_sel, fuzz_uid, fuzz_count);
+				}
+				else
+				{
+					/* Pause fuzzing */
+					running = false;
+					m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE_STOP);
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					lfrfid_fuzz_draw_setup(proto_sel, fuzz_uid, fuzz_dir, fuzz_delay_ms);
+				}
+			}
+			else if (!running)
+			{
+				if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					proto_sel = (proto_sel + 1) % 2;
+					lfrfid_fuzz_draw_setup(proto_sel, fuzz_uid, fuzz_dir, fuzz_delay_ms);
+				}
+				else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					proto_sel = (proto_sel + 1) % 2;
+					lfrfid_fuzz_draw_setup(proto_sel, fuzz_uid, fuzz_dir, fuzz_delay_ms);
+				}
+				else if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					fuzz_dir = -1;
+					lfrfid_fuzz_draw_setup(proto_sel, fuzz_uid, fuzz_dir, fuzz_delay_ms);
+				}
+				else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					fuzz_dir = 1;
+					lfrfid_fuzz_draw_setup(proto_sel, fuzz_uid, fuzz_dir, fuzz_delay_ms);
+				}
+			}
+		}
+		else if (ret != pdTRUE && running)
+		{
+			/* Timeout – cycle to next UID */
+			m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE_STOP);
+			osDelay(50);
+
+			lfrfid_fuzz_uid_step(fuzz_uid, fuzz_dir);
+			fuzz_count++;
+
+			memcpy(lfrfid_tag_info.uid, fuzz_uid, 5);
+			m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE);
+
+			lfrfid_fuzz_draw_running(proto_sel, fuzz_uid, fuzz_count);
+		}
+	}
+}
+
+
+/*============================================================================*/
+/*  Brute Force FC – cycle facility codes 0-255 for H10301, write to T5577   */
+/*============================================================================*/
+typedef enum {
+	BF_ST_IDLE = 0,
+	BF_ST_RUNNING,
+	BF_ST_PAUSED,
+	BF_ST_DONE
+} bf_state_t;
+
+static void lfrfid_bf_draw(bf_state_t state, uint16_t fc, uint16_t card_num)
+{
+	char sz[32];
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	m1_draw_text(&m1_u8g2, 0, 10, 128, "Brute Force FC", TEXT_ALIGN_CENTER);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+	snprintf(sz, sizeof(sz), "Card#: %05u", card_num);
+	m1_draw_text(&m1_u8g2, 2, 24, 124, sz, TEXT_ALIGN_LEFT);
+
+	switch (state)
+	{
+	case BF_ST_IDLE:
+		m1_draw_text(&m1_u8g2, 2, 36, 124, "U/D:Card# L/R:+/-10", TEXT_ALIGN_LEFT);
+		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "OK:Start  BACK:Exit", TEXT_ALIGN_CENTER);
+		break;
+	case BF_ST_RUNNING:
+		snprintf(sz, sizeof(sz), "FC: %03u / 255", fc);
+		m1_draw_text(&m1_u8g2, 2, 36, 124, sz, TEXT_ALIGN_LEFT);
+		/* Progress bar */
+		u8g2_DrawFrame(&m1_u8g2, 4, 42, 120, 8);
+		u8g2_DrawBox(&m1_u8g2, 5, 43, (uint8_t)((fc * 118) / 255), 6);
+		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "Writing... BACK:Pause", TEXT_ALIGN_CENTER);
+		break;
+	case BF_ST_PAUSED:
+		snprintf(sz, sizeof(sz), "Paused at FC: %03u", fc);
+		m1_draw_text(&m1_u8g2, 2, 36, 124, sz, TEXT_ALIGN_LEFT);
+		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "OK:Resume  BACK:Exit", TEXT_ALIGN_CENTER);
+		break;
+	case BF_ST_DONE:
+		m1_draw_text(&m1_u8g2, 2, 36, 124, "All 256 FCs written!", TEXT_ALIGN_LEFT);
+		m1_draw_text_box(&m1_u8g2, 0, 56, 128, 8, "BACK:Exit", TEXT_ALIGN_CENTER);
+		break;
+	}
+	m1_u8g2_nextpage();
+}
+
+static void lfrfid_util_brute_force_fc(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	bf_state_t state = BF_ST_IDLE;
+	uint16_t card_num = 1;
+	uint16_t current_fc = 0;
+
+	lfrfid_bf_draw(state, current_fc, card_num);
+
+	while (1)
+	{
+		if (state == BF_ST_RUNNING)
+		{
+			/* Build H10301 tag: uid[0]=FC, uid[1:2]=card_num big-endian */
+			lfrfid_tag_info.protocol = LFRFIDProtocolH10301;
+			lfrfid_tag_info.uid[0] = (uint8_t)(current_fc & 0xFF);
+			lfrfid_tag_info.uid[1] = (uint8_t)((card_num >> 8) & 0xFF);
+			lfrfid_tag_info.uid[2] = (uint8_t)(card_num & 0xFF);
+
+			lfrfid_bf_draw(state, current_fc, card_num);
+
+			/* Write to T5577 */
+			memcpy(lfrfid_tag_info_back, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
+			lfrfid_write_count = 0;
+			m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+
+			/* Wait for write complete or user abort (5s timeout) */
+			while (1)
+			{
+				ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(5000));
+				if (ret != pdTRUE)
+					break; /* Timeout — move to next FC */
+
+				if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+				{
+					xQueueReceive(button_events_q_hdl, &bs, 0);
+					if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+					{
+						m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE_STOP);
+						state = BF_ST_PAUSED;
+						m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+						lfrfid_bf_draw(state, current_fc, card_num);
+						goto bf_wait_buttons;
+					}
+				}
+				else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_WRITE_DONE ||
+						 q_item.q_evt_type == Q_EVENT_LFRFID_TAG_DETECTED)
+				{
+					break;
+				}
+				else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_READ_TIMEOUT)
+				{
+					break;
+				}
+			}
+
+			/* Advance to next FC */
+			current_fc++;
+			if (current_fc > 255)
+			{
+				state = BF_ST_DONE;
+				m1_buzzer_notification();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				lfrfid_bf_draw(state, 255, card_num);
+			}
+			continue;
+		}
+
+bf_wait_buttons:
+		/* Idle / Paused / Done — wait for user input */
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (state == BF_ST_IDLE)
+				{
+					current_fc = 0;
+					state = BF_ST_RUNNING;
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+				}
+				else if (state == BF_ST_PAUSED)
+				{
+					state = BF_ST_RUNNING;
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+				}
+				else if (state == BF_ST_DONE)
+				{
+					current_fc = 0;
+					state = BF_ST_IDLE;
+					lfrfid_bf_draw(state, current_fc, card_num);
+				}
+			}
+			if (state == BF_ST_IDLE)
+			{
+				uint8_t redraw = 0;
+				if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					card_num = (card_num < 65535) ? card_num + 1 : 0;
+					redraw = 1;
+				}
+				if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					card_num = (card_num > 0) ? card_num - 1 : 65535;
+					redraw = 1;
+				}
+				if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					card_num = (card_num <= 65525) ? card_num + 10 : card_num;
+					redraw = 1;
+				}
+				if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					card_num = (card_num >= 10) ? card_num - 10 : 0;
+					redraw = 1;
+				}
+				if (redraw)
+					lfrfid_bf_draw(state, current_fc, card_num);
+			}
+		}
+	}
+}
+
+
+/*============================================================================*/
 /*
-  * @brief
-  * @param
-  * @retval
+  * @brief  RFID Utilities – submenu
+  * @param  None
+  * @retval None
  */
 /*============================================================================*/
 void rfid_125khz_utilities(void)
@@ -2697,48 +3526,49 @@ void rfid_125khz_utilities(void)
 	S_M1_Buttons_Status this_button_status;
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
+	uint8_t menu_index;
 
-	m1_gui_let_update_fw();
-
-	/*
-	* Display a list of known protocols to emulate ==> SW team
-	*/
 	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
-	lfrfid_uiview_gui_latest_param = 0xFF; // Initialize with an invalid parameter
-	while (1 ) // Main loop of this task
+	m1_gui_submenu_update(m1_rfid_util_options, RFID_UTIL_OPTIONS_COUNT, 0, X_MENU_UPDATE_RESET);
+
+	while (1)
 	{
-		;
-		; // Do other parts of this task here
-		;
-
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret==pdTRUE)
+		if (ret == pdTRUE)
 		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
+			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
 			{
-				// Notification is only sent to this task when there's any button activity,
-				// so it doesn't need to wait when reading the event from the queue
 				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK ) // user wants to exit?
+				if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
-					; // Do extra tasks here if needed
-
-					xQueueReset(main_q_hdl); // Reset main q before return
-					break; // Exit and return to the calling task (subfunc_handler_task)
-				} // if ( m1_buttons_status[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK )
-				else
-				{
-					; // Do other things for this task, if needed
+					xQueueReset(main_q_hdl);
+					break;
 				}
-			} // if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			else
-			{
-				; // Do other things for this task
+				else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					menu_index = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+					switch (menu_index)
+					{
+						case 0: lfrfid_util_clone(); break;
+						case 1: lfrfid_util_erase(); break;
+						case 2: lfrfid_util_t5577_info(); break;
+						case 3: lfrfid_util_fuzzer(); break;
+						case 4: lfrfid_util_brute_force_fc(); break;
+					}
+					m1_gui_submenu_update(m1_rfid_util_options, RFID_UTIL_OPTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);
+				}
+				else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					m1_gui_submenu_update(m1_rfid_util_options, RFID_UTIL_OPTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_UP);
+				}
+				else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					m1_gui_submenu_update(m1_rfid_util_options, RFID_UTIL_OPTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_DOWN);
+				}
 			}
-		} // if (ret==pdTRUE)
-	} // while (1 ) // Main loop of this task
-
-} // void rfid_125khz_utilities(void)
+		}
+	}
+}
 
 
 
