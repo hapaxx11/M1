@@ -75,6 +75,13 @@ static const nfc_type_map_t nfc_type_table[] = {
 	{ "MF1S50",                FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
 	{ "MF1S70",                FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
 
+	/* Mifare Plus (ISO 14443-4A) */
+	{ "Mifare Plus",           FLIPPER_NFC_TYPE_ISO14443_4A },
+	{ "Mifare Plus S",         FLIPPER_NFC_TYPE_ISO14443_4A },
+	{ "Mifare Plus X",         FLIPPER_NFC_TYPE_ISO14443_4A },
+	{ "Mifare Plus EV1",       FLIPPER_NFC_TYPE_ISO14443_4A },
+	{ "Mifare Plus EV2",       FLIPPER_NFC_TYPE_ISO14443_4A },
+
 	/* Mifare DESFire */
 	{ "Mifare DESFire",        FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
 	{ "Mifare DESFire EV1",    FLIPPER_NFC_TYPE_MIFARE_DESFIRE },

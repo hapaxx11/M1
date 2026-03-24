@@ -144,7 +144,7 @@ const char *protocol_text[] =
 	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 7-bit  (was "Chamberlain 7") */
 	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 8-bit  (was "Chamberlain 8") */
 	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 9-bit  (was "Chamberlain 9") */
-	"Liftmaster",        /* no Flipper lib/subghz equivalent (Security+ 1.0 variant) */
+	"Security+ 1.0",     /* SUBGHZ_PROTOCOL_SECPLUS_V1_NAME (Liftmaster 10-bit variant) */
 	"Dooya",             /* SUBGHZ_PROTOCOL_DOOYA_NAME            */
 	"Honeywell",         /* no Flipper lib/subghz equivalent       */
 	"Intertechno",       /* no Flipper lib/subghz equivalent       */

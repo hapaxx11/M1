@@ -43,6 +43,7 @@ static const ir_proto_map_t ir_proto_table[] = {
 	{ "NEC",        IRMP_NEC_PROTOCOL },         /* 2  */
 	{ "NECext",     IRMP_NEC_PROTOCOL },          /* 2  (extended addressing mode) */
 	{ "NEC42",      IRMP_NEC42_PROTOCOL },        /* 28 */
+	{ "NEC42ext",   IRMP_NEC42_PROTOCOL },        /* 28 (extended addressing mode) */
 	{ "NEC16",      IRMP_NEC16_PROTOCOL },        /* 27 */
 	{ "Samsung32",  IRMP_SAMSUNG32_PROTOCOL },    /* 10 */
 	{ "RC5",        IRMP_RC5_PROTOCOL },          /* 7  */
