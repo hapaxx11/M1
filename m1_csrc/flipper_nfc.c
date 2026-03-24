@@ -36,21 +36,59 @@ typedef struct {
 /***************************** V A R I A B L E S ******************************/
 
 static const nfc_type_map_t nfc_type_table[] = {
-	{ "ISO14443-3A",       FLIPPER_NFC_TYPE_ISO14443_3A },
-	{ "ISO14443-3B",       FLIPPER_NFC_TYPE_ISO14443_3B },
-	{ "ISO14443-4A",       FLIPPER_NFC_TYPE_ISO14443_4A },
-	{ "NTAG",              FLIPPER_NFC_TYPE_NTAG },
-	{ "NTAG203",           FLIPPER_NFC_TYPE_NTAG },
-	{ "NTAG213",           FLIPPER_NFC_TYPE_NTAG },
-	{ "NTAG215",           FLIPPER_NFC_TYPE_NTAG },
-	{ "NTAG216",           FLIPPER_NFC_TYPE_NTAG },
-	{ "NTAGI2C1K",         FLIPPER_NFC_TYPE_NTAG },
-	{ "NTAGI2C2K",         FLIPPER_NFC_TYPE_NTAG },
-	{ "Mifare Classic",    FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
-	{ "Mifare Classic 1K", FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
-	{ "Mifare Classic 4K", FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
-	{ "Mifare DESFire",    FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
-	{ NULL,                FLIPPER_NFC_TYPE_UNKNOWN }
+	/* ISO 14443 base types */
+	{ "ISO14443-3A",           FLIPPER_NFC_TYPE_ISO14443_3A },
+	{ "ISO14443-3B",           FLIPPER_NFC_TYPE_ISO14443_3B },
+	{ "ISO14443-4A",           FLIPPER_NFC_TYPE_ISO14443_4A },
+	{ "ISO14443-4B",           FLIPPER_NFC_TYPE_ISO14443_3B },   /* treat as -3B at parser level */
+
+	/* NTAG series (all map to NTAG handler) */
+	{ "NTAG",                  FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG203",               FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG210",               FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG212",               FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG213",               FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG215",               FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG216",               FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAG216F",              FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAGI2C1K",             FLIPPER_NFC_TYPE_NTAG },
+	{ "NTAGI2C2K",             FLIPPER_NFC_TYPE_NTAG },
+	{ "NT3H1101",              FLIPPER_NFC_TYPE_NTAG },          /* NXP NTAG I2C 1K       */
+	{ "NT3H1201",              FLIPPER_NFC_TYPE_NTAG },          /* NXP NTAG I2C 2K       */
+	{ "NT3H2111",              FLIPPER_NFC_TYPE_NTAG },          /* NXP NTAG I2C Plus 1K  */
+	{ "NT3H2211",              FLIPPER_NFC_TYPE_NTAG },          /* NXP NTAG I2C Plus 2K  */
+
+	/* Mifare Ultralight (ISO14443-3A, treated as NTAG-compatible T2T) */
+	{ "Mifare Ultralight",     FLIPPER_NFC_TYPE_NTAG },
+	{ "Mifare Ultralight C",   FLIPPER_NFC_TYPE_NTAG },
+	{ "Mifare Ultralight EV1", FLIPPER_NFC_TYPE_NTAG },
+	{ "Mifare Ultralight Nano", FLIPPER_NFC_TYPE_NTAG },
+	{ "MF0UL11",               FLIPPER_NFC_TYPE_NTAG },          /* MFU EV1 11            */
+	{ "MF0UL21",               FLIPPER_NFC_TYPE_NTAG },          /* MFU EV1 21            */
+
+	/* Mifare Classic */
+	{ "Mifare Classic",        FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+	{ "Mifare Classic 1K",     FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+	{ "Mifare Classic 4K",     FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+	{ "Mifare Classic Mini",   FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+	{ "Mifare Mini",           FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+	{ "MF1S50",                FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+	{ "MF1S70",                FLIPPER_NFC_TYPE_MIFARE_CLASSIC },
+
+	/* Mifare DESFire */
+	{ "Mifare DESFire",        FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
+	{ "Mifare DESFire EV1",    FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
+	{ "Mifare DESFire EV2",    FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
+	{ "Mifare DESFire EV3",    FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
+	{ "Mifare DESFire Light",  FLIPPER_NFC_TYPE_MIFARE_DESFIRE },
+
+	/* ST25 / ISO14443-3A family */
+	{ "ST25",                  FLIPPER_NFC_TYPE_ISO14443_3A },
+	{ "ST25TA",                FLIPPER_NFC_TYPE_ISO14443_3A },
+	{ "ST25TA512",             FLIPPER_NFC_TYPE_ISO14443_3A },
+	{ "ST25TA02K",             FLIPPER_NFC_TYPE_ISO14443_3A },
+
+	{ NULL,                    FLIPPER_NFC_TYPE_UNKNOWN }
 };
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/

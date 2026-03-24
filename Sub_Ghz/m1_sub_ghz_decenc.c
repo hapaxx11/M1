@@ -54,7 +54,12 @@ const SubGHz_protocol_t subghz_protocols_list[] =
 	{500, 1500, PACKET_PULSE_TIME_TOLERANCE25, 4, 40},  // Infactory (weather)
 	{120, 240, PACKET_PULSE_TIME_TOLERANCE25, 8, 40},   // Schrader TPMS (Manchester)
 	/* --- New protocols --- */
-	{1000, 3000, PACKET_PULSE_TIME_TOLERANCE20, 0, 40}, // Chamberlain Security+ 1.0
+	/* Security+ 1.0: te_short=500us, ternary (3-symbol) encoding.
+	 * Each sub-packet = 1 header + 20 data symbols = 21 symbol pairs = 42 pulses.
+	 * Two sub-packets required to reconstruct rolling+fixed code.
+	 * Matches Flipper Zero SUBGHZ_PROTOCOL_SECPLUS_V1_NAME = "Security+ 1.0"
+	 * Reference: https://github.com/argilo/secplus */
+	{500, 1500, PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Security+ 1.0 (was {1000,3000} generic PWM)
 	{385, 1155, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},  // Clemsa
 	{450, 900, PACKET_PULSE_TIME_TOLERANCE20, 0, 37},   // Doitrand
 	{340, 680, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},   // BETT
@@ -90,65 +95,72 @@ const SubGHz_protocol_t subghz_protocols_list[] =
 	{100, 300, PACKET_PULSE_TIME_TOLERANCE30, 0, 64},   // BinRAW (generic fallback)
 };
 
+/*
+ * Protocol name strings MUST match Flipper Zero's SUBGHZ_PROTOCOL_*_NAME constants
+ * (defined in lib/subghz/protocols/<proto>.h) so that .sub files saved on either
+ * device are readable on the other without conversion.
+ *
+ * If no Flipper equivalent exists the name is kept as-is; see comments below.
+ */
 const char *protocol_text[] =
 {
-	"Princeton",
-	"Security+ 2.0",
-	"CAME",
-	"Nice FLO",
-	"Linear",
-	"Holtek",
-	"KeeLoq",
-	"Oregon v2",
-	"Acurite",
-	"LaCrosse TX",
-	"FAAC SLH",
-	"Hormann",
-	"Marantec",
-	"Somfy Telis",
-	"Star Line",
-	"Gate TX",
-	"SMC5326",
-	"Power Smart",
-	"iDo",
-	"Ansonic",
-	"Infactory",
-	"Schrader TPMS",
-	/* --- New protocols --- */
-	"Chamberlain",
-	"Clemsa",
-	"Doitrand",
-	"BETT",
-	"Nero Radio",
-	"FireFly",
-	"CAME Twee",
-	"CAME Atomo",
-	"Nice Flor S",
-	"Alutech AT-4N",
-	"Centurion",
-	"Kinggates Stylo",
-	"Megacode",
-	"Mastercode",
-	"Chamberlain 7",
-	"Chamberlain 8",
-	"Chamberlain 9",
-	"Liftmaster",
-	"Dooya",
-	"Honeywell",
-	"Intertechno",
-	"Elro",
-	"Ambient Weather",
-	"Bresser 3ch",
-	"Bresser 5in1",
-	"Bresser 6in1",
-	"TFA Dostmann",
-	"Nexus-TH",
-	"ThermoPro TX-2",
-	"GT-WT03",
-	"Scher-Khan Magicar",
-	"Scher-Khan Logicar",
-	"Toyota",
-	"BinRAW"
+	"Princeton",          /* SUBGHZ_PROTOCOL_PRINCETON_NAME        */
+	"Security+ 2.0",     /* SUBGHZ_PROTOCOL_SECPLUS_V2_NAME       */
+	"CAME",              /* SUBGHZ_PROTOCOL_CAME_NAME             */
+	"Nice FLO",          /* SUBGHZ_PROTOCOL_NICE_FLO_NAME         */
+	"Linear",            /* SUBGHZ_PROTOCOL_LINEAR_NAME           */
+	"Holtek_HT12X",      /* SUBGHZ_PROTOCOL_HOLTEK_HT12X_NAME     (was "Holtek") */
+	"KeeLoq",            /* SUBGHZ_PROTOCOL_KEELOQ_NAME           */
+	"Oregon v2",         /* no Flipper lib/subghz equivalent       */
+	"Acurite",           /* no Flipper lib/subghz equivalent       */
+	"LaCrosse TX",       /* no Flipper lib/subghz equivalent       */
+	"Faac SLH",          /* SUBGHZ_PROTOCOL_FAAC_SLH_NAME         (was "FAAC SLH") */
+	"Hormann HSM",       /* SUBGHZ_PROTOCOL_HORMANN_HSM_NAME      (was "Hormann") */
+	"Marantec",          /* SUBGHZ_PROTOCOL_MARANTEC_NAME         */
+	"Somfy Telis",       /* SUBGHZ_PROTOCOL_SOMFY_TELIS_NAME      */
+	"Star Line",         /* SUBGHZ_PROTOCOL_STAR_LINE_NAME        */
+	"GateTX",            /* SUBGHZ_PROTOCOL_GATE_TX_NAME          (was "Gate TX") */
+	"SMC5326",           /* SUBGHZ_PROTOCOL_SMC5326_NAME          */
+	"Power Smart",       /* SUBGHZ_PROTOCOL_POWER_SMART_NAME      */
+	"iDo 117/111",       /* SUBGHZ_PROTOCOL_IDO_NAME              (was "iDo") */
+	"Ansonic",           /* SUBGHZ_PROTOCOL_ANSONIC_NAME          */
+	"Infactory",         /* no Flipper lib/subghz equivalent       */
+	"Schrader TPMS",     /* no Flipper lib/subghz equivalent       */
+	/* --- Protocols added by community contributions --- */
+	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME       (was "Chamberlain") */
+	"Clemsa",            /* SUBGHZ_PROTOCOL_CLEMSA_NAME           */
+	"Doitrand",          /* SUBGHZ_PROTOCOL_DOITRAND_NAME         */
+	"BETT",              /* SUBGHZ_PROTOCOL_BETT_NAME             */
+	"Nero Radio",        /* SUBGHZ_PROTOCOL_NERO_RADIO_NAME       */
+	"FireFly",           /* no Flipper lib/subghz equivalent       */
+	"CAME TWEE",         /* SUBGHZ_PROTOCOL_CAME_TWEE_NAME        (was "CAME Twee") */
+	"CAME Atomo",        /* SUBGHZ_PROTOCOL_CAME_ATOMO_NAME       */
+	"Nice FloR-S",       /* SUBGHZ_PROTOCOL_NICE_FLOR_S_NAME      (was "Nice Flor S") */
+	"Alutech AT-4N",     /* SUBGHZ_PROTOCOL_ALUTECH_AT_4N_NAME   */
+	"Centurion",         /* no Flipper lib/subghz equivalent       */
+	"KingGates Stylo4k", /* SUBGHZ_PROTOCOL_KINGGATES_STYLO_4K_NAME (was "Kinggates Stylo") */
+	"MegaCode",          /* SUBGHZ_PROTOCOL_MEGACODE_NAME         (was "Megacode") */
+	"Mastercode",        /* SUBGHZ_PROTOCOL_MASTERCODE_NAME       */
+	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 7-bit  (was "Chamberlain 7") */
+	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 8-bit  (was "Chamberlain 8") */
+	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 9-bit  (was "Chamberlain 9") */
+	"Liftmaster",        /* no Flipper lib/subghz equivalent (Security+ 1.0 variant) */
+	"Dooya",             /* SUBGHZ_PROTOCOL_DOOYA_NAME            */
+	"Honeywell",         /* no Flipper lib/subghz equivalent       */
+	"Intertechno",       /* no Flipper lib/subghz equivalent       */
+	"Elro",              /* no Flipper lib/subghz equivalent       */
+	"Ambient Weather",   /* no Flipper lib/subghz equivalent       */
+	"Bresser 3ch",       /* no Flipper lib/subghz equivalent       */
+	"Bresser 5in1",      /* no Flipper lib/subghz equivalent       */
+	"Bresser 6in1",      /* no Flipper lib/subghz equivalent       */
+	"TFA Dostmann",      /* no Flipper lib/subghz equivalent       */
+	"Nexus-TH",          /* no Flipper lib/subghz equivalent       */
+	"ThermoPro TX-2",    /* no Flipper lib/subghz equivalent       */
+	"GT-WT03",           /* no Flipper lib/subghz equivalent       */
+	"Scher-Khan",        /* SUBGHZ_PROTOCOL_SCHER_KHAN_NAME       (was "Scher-Khan Magicar") */
+	"Scher-Khan",        /* SUBGHZ_PROTOCOL_SCHER_KHAN_NAME       (was "Scher-Khan Logicar") */
+	"Toyota",            /* no Flipper lib/subghz equivalent       */
+	"BinRAW"             /* SUBGHZ_PROTOCOL_BIN_RAW_NAME          */
 };
 
 

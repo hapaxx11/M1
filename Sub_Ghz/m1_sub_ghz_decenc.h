@@ -21,7 +21,11 @@
 #define INTERPACKET_GAP_MIN					1500 // uS
 #define INTERPACKET_GAP_MAX					80000//5000 // uS
 #define PACKET_PULSE_TIME_MIN				120 // uS
-#define PACKET_PULSE_COUNT_MIN				48 // 24 bits
+/* Minimum pulse count to trigger decode.  Set to 40 so that Security+ 1.0
+ * sub-packets (41-42 pulses each) are captured.  Princeton 24-bit generates
+ * 48 pulses so is unaffected.  Shorter protocols (CAME 12-bit = 24 pulses)
+ * still fall below this threshold unless they repeat within one capture window. */
+#define PACKET_PULSE_COUNT_MIN				40 // was 48 (24 bits)
 #define PACKET_PULSE_COUNT_MAX				256 // 128 bits (weather protocols need longer packets)
 
 #define PACKET_PULSE_TIME_TOLERANCE20		20 // percentage
