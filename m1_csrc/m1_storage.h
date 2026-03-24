@@ -14,7 +14,7 @@
 #define M1_STORAGE_H_
 
 #define ESP_FILE_NAME_LEN_MAX	32
-#define ESP_FILE_PATH_LEN_MAX	64
+#define ESP_FILE_PATH_LEN_MAX	128
 
 #define FW_FILE_NAME_LEN_MAX	32
 #define FW_FILE_PATH_LEN_MAX	64
@@ -25,6 +25,6 @@ void storage_explore(void);
 void storage_mount(void);
 void storage_unmount(void);
 void storage_format(void);
-S_M1_file_info *storage_browse(void);
+S_M1_file_info *storage_browse(const char *initial_dir);
 
 #endif /* M1_STORAGE_H_ */

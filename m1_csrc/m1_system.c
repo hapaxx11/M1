@@ -54,6 +54,16 @@ S_M1_Buttons_Status m1_buttons_status = {	.event= {BUTTON_EVENT_IDLE, BUTTON_EVE
 
 
 S_M1_Device_Status_t 	m1_device_stat = {0};
+uint8_t                 m1_southpaw_mode = 0;
+uint8_t                 m1_esp32_auto_init = 0;
+uint8_t                 m1_screen_orientation = M1_ORIENT_NORMAL;
+uint8_t                 m1_brightness_level = 4;   /* Max by default */
+uint8_t                 m1_buzzer_on = 1;
+uint8_t                 m1_led_notify_on = 1;
+uint8_t                 m1_sleep_timeout_idx = 1;  /* 1 minute default */
+#ifdef M1_APP_BADBT_ENABLE
+char                    m1_badbt_name[BADBT_NAME_MAX_LEN + 1] = "M1-BadBT";
+#endif
 QueueHandle_t 			button_events_q_hdl = NULL;
 TaskHandle_t			system_task_hdl;
 TaskHandle_t 			idle_task_hdl;
@@ -269,6 +279,30 @@ void system_periodic_task(void *param)
         		buttons_ctl[i].event = BUTTON_EVENT_IDLE; // Reset
         	}
     		m1_device_stat.active_timestamp = current_tick; // Update latest time stamp
+
+            /* Remap buttons based on screen orientation.
+             * OK and BACK are unchanged in all modes. */
+            if (m1_screen_orientation == M1_ORIENT_SOUTHPAW)
+            {
+                /* Southpaw: swap UP<->DOWN and LEFT<->RIGHT */
+                S_M1_Key_Event temp;
+                temp = m1_buttons_status.event[BUTTON_UP_KP_ID];
+                m1_buttons_status.event[BUTTON_UP_KP_ID] = m1_buttons_status.event[BUTTON_DOWN_KP_ID];
+                m1_buttons_status.event[BUTTON_DOWN_KP_ID] = temp;
+                temp = m1_buttons_status.event[BUTTON_LEFT_KP_ID];
+                m1_buttons_status.event[BUTTON_LEFT_KP_ID] = m1_buttons_status.event[BUTTON_RIGHT_KP_ID];
+                m1_buttons_status.event[BUTTON_RIGHT_KP_ID] = temp;
+            }
+            else if (m1_screen_orientation == M1_ORIENT_REMOTE)
+            {
+                /* Remote (90°): rotate UP→LEFT→DOWN→RIGHT→UP */
+                S_M1_Key_Event temp;
+                temp = m1_buttons_status.event[BUTTON_UP_KP_ID];
+                m1_buttons_status.event[BUTTON_UP_KP_ID] = m1_buttons_status.event[BUTTON_LEFT_KP_ID];
+                m1_buttons_status.event[BUTTON_LEFT_KP_ID] = m1_buttons_status.event[BUTTON_DOWN_KP_ID];
+                m1_buttons_status.event[BUTTON_DOWN_KP_ID] = m1_buttons_status.event[BUTTON_RIGHT_KP_ID];
+                m1_buttons_status.event[BUTTON_RIGHT_KP_ID] = temp;
+            }
         } // if ( event_change )
 
         if ( m1_device_stat.op_mode != M1_OPERATION_MODE_FIRMWARE_UPDATE )
@@ -492,30 +526,59 @@ static void battery_indicator_update(void)
  * @brief Update LCD backlight operating status
  */
 /*============================================================================*/
+/* Sleep timeout values in ms, indexed by m1_sleep_timeout_idx */
+static const uint32_t s_sleep_timeout_ms[] = {
+    30000,   /* 0: 30 seconds */
+    60000,   /* 1: 1 minute */
+    300000,  /* 2: 5 minutes */
+    600000,  /* 3: 10 minutes */
+    900000,  /* 4: 15 minutes */
+    0        /* 5: Never (0 = disabled) */
+};
+
+/* Brightness values indexed by m1_brightness_level */
+static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
+
 static void lcd_saver_update(void)
 {
-	uint8_t static saver_mode = 0;
+	static uint8_t saver_mode = 0;
 	uint32_t delta;
+	uint32_t timeout;
+
+	/* Get current sleep timeout */
+	if (m1_sleep_timeout_idx >= sizeof(s_sleep_timeout_ms)/sizeof(s_sleep_timeout_ms[0]))
+		m1_sleep_timeout_idx = 1; /* safety */
+	timeout = s_sleep_timeout_ms[m1_sleep_timeout_idx];
+
+	/* If timeout is 0 (Never), always stay on */
+	if (timeout == 0)
+	{
+		if (saver_mode)
+		{
+			lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
+			saver_mode = 0;
+		}
+		return;
+	}
 
 	delta = HAL_GetTick() - m1_device_stat.active_timestamp;
 	if ( saver_mode )
 	{
-		if ( delta < LCD_SAVER_PERIOD ) // Keypad is active?
+		if ( delta < timeout ) /* Keypad is active? */
 		{
-			lp5814_backlight_on(M1_BACKLIGHT_BRIGHTNESS); // Turn on backlight
+			lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
 			saver_mode = 0;
 		}
-	} // if ( saver_mode )
+	}
 	else
 	{
-		if ( delta >= LCD_SAVER_PERIOD ) // Keypad has been inactive?
+		if ( delta >= timeout ) /* Keypad has been inactive? */
 		{
-			lp5814_backlight_on(M1_BACKLIGHT_OFF); // Turn on backlight
+			lp5814_backlight_on(M1_BACKLIGHT_OFF);
 			saver_mode = 1;
 		}
-	} // else
-
-} // static void lcd_saver_update(void)
+	}
+}
 
 
 /*============================================================================*/
@@ -697,8 +760,8 @@ void startup_config_handler(void)
 
 	m1_device_stat.active_bank = bl_get_active_bank();
 
-	M1_LOG_I(M1_LOGDB_TAG, "Device firmware version %d.%d.%d.%d.\r\n", m1_device_stat.config.fw_version_major,
-			m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc);
+	M1_LOG_I(M1_LOGDB_TAG, "Device firmware version %d.%d.%d.%d-C3.%d\r\n", m1_device_stat.config.fw_version_major,
+			m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc, M1_C3_REVISION);
 } // void startup_config_handler(void)
 
 
@@ -781,10 +844,10 @@ void startup_info_screen_display(const char *scr_text)
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X, M1_POWERUP_LOGO_TOP_POS_Y, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
 
-	sprintf(fw_ver, "Version %d.%d", m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor);
+	sprintf(fw_ver, "v%d.%d.%d.%d-C3.%d", m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc, M1_C3_REVISION);
 	len = strlen(fw_ver);
 	u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
-	u8g2_DrawStr(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X + M1_POWERUP_LOGO_WIDTH + 3, M1_POWERUP_LOGO_TOP_POS_Y + 15, "MONSTATEK M1");
+	u8g2_DrawStr(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X + M1_POWERUP_LOGO_WIDTH + 3, M1_POWERUP_LOGO_TOP_POS_Y + 15, "M1 BY C3");
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X + M1_POWERUP_LOGO_WIDTH + 3, M1_POWERUP_LOGO_TOP_POS_Y + 25, fw_ver);
 

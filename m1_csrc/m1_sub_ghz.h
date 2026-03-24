@@ -26,7 +26,7 @@
 #define SUBGHZ_RX_TIMER_CH_ACTIV  		HAL_TIM_ACTIVE_CHANNEL_1
 
 #define SUBGHZ_TX_CARRIER_TIMER         TIM1        /*!< Timer used for IR encoding */
-#define SUBGHZ_TX_TIM_PRESCALER         74           /*!< TIM prescaler */
+#define SUBGHZ_TX_TIM_PRESCALER         149          /*!< TIM prescaler: 75MHz/150 = 500kHz = 2us/tick */
 #define SUBGHZ_TX_TIMER_CLK     		__HAL_RCC_TIM1_CLK_ENABLE      /*!< Clock of the used timer */
 #define SUBGHZ_TX_TIMER_CLK_DIS 		__HAL_RCC_TIM1_CLK_DISABLE
 #define SUBGHZ_TX_TIMER_TX_CHANNEL   	TIM_CHANNEL_4 //CH4N
@@ -50,7 +50,7 @@
 #define SUBGHZ_MODULATION_LIST					3
 
 // Defines for ISM bands regions
-#define SUBGHZ_ISM_BAND_REGIONS_LIST			3
+#define SUBGHZ_ISM_BAND_REGIONS_LIST			4
 
 #define SUBGHZ_ISM_BAND_REGION_NORTH_AMERICA	0
 #define SUBGHZ_ISM_BAND_REGION_EUROPE_REGION_1	1
@@ -95,7 +95,13 @@ typedef enum
 	SUB_GHZ_BAND_433,
 	SUB_GHZ_BAND_433_92,
 	SUB_GHZ_BAND_915,
-	SUB_GHZ_BAND_EOL
+	/* Extended bands below 300 MHz (init with 300 config, retune via SI446x_Set_Frequency) */
+	SUB_GHZ_BAND_150,
+	SUB_GHZ_BAND_200,
+	SUB_GHZ_BAND_250,
+	SUB_GHZ_BAND_EOL,
+	/* Arbitrary frequency via SI446x_Set_Frequency() */
+	SUB_GHZ_BAND_CUSTOM = 0x80
 } S_M1_SubGHz_Band;
 
 typedef enum
@@ -139,6 +145,15 @@ void sub_ghz_replay(void);
 void sub_ghz_frequency_reader(void);
 void sub_ghz_regional_information(void);
 void sub_ghz_radio_settings(void);
+void sub_ghz_spectrum_analyzer(void);
+void sub_ghz_weather_station(void);
+void sub_ghz_brute_force(void);
+void sub_ghz_rssi_meter(void);
+void sub_ghz_freq_scanner(void);
+void sub_ghz_read(void);
+void sub_ghz_saved(void);
+void sub_ghz_add_manually(void);
+uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 
 extern EXTI_HandleTypeDef 	si4463_exti_hdl;
 extern TIM_HandleTypeDef   	timerhdl_subghz_tx;

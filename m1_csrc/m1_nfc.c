@@ -24,12 +24,15 @@
 #include "privateprofilestring.h"
 #include "common/nfc_file.h"
 #include "res_string.h"
+#include "rfal_t2t.h"
+#include "rfal_nfcv.h"
+#include "legacy/mfc_crypto1.h"
 
 /*************************** D E F I N E S ************************************/
 #define M1_LOGDB_TAG					"NFC"
 
 #define NFC_READ_MORE_OPTIONS			4
-#define NFC_READ_MORE_OPTIONS_FILE    	6 // Emulate, Edit UID, Utils, Info, Rename, Delete
+#define NFC_READ_MORE_OPTIONS_FILE    	7 // Emulate, Unlock, Edit UID, Utils, Info, Rename, Delete
 
 #define NFC_FILEPATH					"/NFC"
 #define NFC_FILE_EXTENSION				".nfc"
@@ -54,11 +57,22 @@ const char *m1_nfc_more_options[] = {
 /* Menu for LOAD_FILE (Excluding Save - does not require Save as it was retrieved from a file) */
 const char *m1_nfc_more_options_file[] = {
 		"Emulate UID",
+		"Unlock",
 		"Edit UID",
 		"Utils",
 		"Info",
 		"Rename",
 		"Delete"
+};
+
+/* Menu for NFC Tools (both top-level nfc_tools() and Utils view) */
+#define NFC_TOOL_OPTIONS_COUNT  5
+static const char *m1_nfc_tool_options[] = {
+	"Tag Info",
+	"Clone Emulate",
+	"NFC Fuzzer",
+	"Write UID",
+	"Wipe Tag"
 };
 
 //************************** S T R U C T U R E S *******************************
@@ -112,11 +126,19 @@ static S_M1_file_info *f_info = NULL;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 void nfc_read(void);
-void nfc_tools(void);
+void nfc_detect_reader(void);
 void nfc_saved(void);
+void nfc_extra_actions(void);
+void nfc_add_manually(void);
+void nfc_tools(void);
+static void nfc_tool_unlock_read(void);
+static void nfc_unlock_with_reader(void);
 static uint8_t nfc_read_more_options_save(void);
 static uint8_t nfc_read_more_options_delete(void);
 void m1_nfc_info_more_draw(void);
+static void nfc_extra_read_mfc(void);
+static void nfc_extra_read_ul(void);
+static void nfc_extra_unlock_slix(void);
 
 /* For each mode init/create/update/destroy/message prototype */
 static void nfc_read_gui_init(void);
@@ -153,6 +175,11 @@ static void nfc_utils_gui_destroy(uint8_t param);
 static void nfc_utils_gui_update(uint8_t param);
 static int  nfc_utils_gui_message(void);
 static int nfc_utils_kp_handler(void);
+
+/* Forward declarations for NFC tools (used by nfc_utils view and nfc_tools) */
+static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte);
+static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2]);
+static void nfc_tool_fuzzer(void);
 
 static void nfc_info_gui_init(void);
 static void nfc_info_gui_create(uint8_t param);
@@ -620,7 +647,7 @@ static int nfc_read_more_kp_handler(void)
 			menu_index = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE); // Get current index
 			if (is_load_file)
 			{
-				/* LOAD_FILE: Except Save, index mapping */
+				/* LOAD_FILE: Emulate, Unlock, Edit UID, Utils, Info, Rename, Delete */
 				view_id = 0xFF;
 				switch ( menu_index )
 				{
@@ -628,26 +655,31 @@ static int nfc_read_more_kp_handler(void)
 						view_id = VIEW_MODE_NFC_EMULATE;
 						break;
 
-					case 1:
-						view_id = VIEW_MODE_NFC_EDIT_UID;
+					case 1: /* Unlock — capture password from reader */
+						nfc_unlock_with_reader();
+						m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 						break;
 
 					case 2:
-						view_id = VIEW_MODE_NFC_UTILS;
+						view_id = VIEW_MODE_NFC_EDIT_UID;
 						break;
 
 					case 3:
-						view_id = VIEW_MODE_NFC_INFO;
+						view_id = VIEW_MODE_NFC_UTILS;
 						break;
 
 					case 4:
+						view_id = VIEW_MODE_NFC_INFO;
+						break;
+
+					case 5:
 						view_id = VIEW_MODE_NFC_RENAME;
 						break;
 
-					case 5: // Delete
+					case 6: // Delete
 						if (nfc_read_more_options_delete()==0)
 						{
-							return 0; // exit (파일 삭제됨)
+							return 0; // exit
 						}
 						m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 						break;
@@ -1116,11 +1148,202 @@ void nfc_emulate_gui_init(void)
 
 /*============================================================================*/
 /**
+ * @brief Write UID to a magic/Gen1a T2T card
+ */
+/*============================================================================*/
+static void nfc_utils_write_uid_run(void)
+{
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	if (!c || c->head.uid_len == 0)
+	{
+		u8g2_FirstPage(&m1_u8g2);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		u8g2_DrawStr(&m1_u8g2, 4, 25, "No UID data");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 40, "Read a card first");
+		m1_u8g2_nextpage();
+		vTaskDelay(pdMS_TO_TICKS(2000));
+		return;
+	}
+
+	char uid_str[32];
+	snprintf(uid_str, sizeof(uid_str), "%s", hex2Str(c->head.uid, c->head.uid_len));
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write UID");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, uid_str);
+	u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold target to back");
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Write  Back=Cancel");
+	m1_u8g2_nextpage();
+
+	uint8_t confirmed = 0;
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+		if (ret != pdTRUE) continue;
+
+		if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			return;
+
+		if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (!confirmed)
+			{
+				confirmed = 1;
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 4, 25, "Writing UID...");
+				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+				u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold card steady");
+				m1_u8g2_nextpage();
+
+				ReturnCode err = rfalT2TPollerWrite(0, c->head.uid);
+				if (err == RFAL_ERR_NONE && c->head.uid_len > 4)
+				{
+					err = rfalT2TPollerWrite(1, &c->head.uid[4]);
+				}
+
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				if (err == RFAL_ERR_NONE) {
+					u8g2_DrawStr(&m1_u8g2, 4, 25, "Write Success!");
+					m1_buzzer_notification();
+				} else {
+					u8g2_DrawStr(&m1_u8g2, 4, 25, "Write Failed!");
+					u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+					u8g2_DrawStr(&m1_u8g2, 4, 40, "Use Magic/Gen1a card");
+				}
+				m1_u8g2_nextpage();
+				vTaskDelay(pdMS_TO_TICKS(2000));
+				return;
+			}
+		}
+	}
+}
+
+/*============================================================================*/
+/**
+ * @brief Wipe all user pages on a T2T tag (zeros pages 4 through end)
+ */
+/*============================================================================*/
+static void nfc_utils_wipe_tag_run(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint8_t confirmed = 0;
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 12, "Wipe Tag");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, "Zeros all user pages");
+	u8g2_DrawStr(&m1_u8g2, 4, 38, "Hold tag to back");
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Wipe  Back=Cancel");
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+		if (ret != pdTRUE) continue;
+
+		if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			return;
+
+		if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (!confirmed)
+			{
+				confirmed = 1;
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 4, 12, "Are you sure?");
+				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+				u8g2_DrawStr(&m1_u8g2, 4, 28, "This will erase all");
+				u8g2_DrawStr(&m1_u8g2, 4, 40, "user data on the tag");
+				u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+				u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Confirm Back=Cancel");
+				m1_u8g2_nextpage();
+			}
+			else
+			{
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 4, 25, "Wiping...");
+				m1_u8g2_nextpage();
+
+				uint8_t zeros[4] = {0, 0, 0, 0};
+				uint16_t pages = nfc_ctx_get_t2t_page_count();
+				if (pages == 0) pages = 45;
+				uint16_t end_page = pages - 5;
+				if (end_page > 200) end_page = 40;
+
+				ReturnCode err = RFAL_ERR_NONE;
+				uint16_t wiped = 0;
+				for (uint16_t p = 4; p <= end_page; p++)
+				{
+					err = rfalT2TPollerWrite((uint8_t)p, zeros);
+					if (err != RFAL_ERR_NONE) break;
+					wiped++;
+					m1_wdt_reset();
+				}
+
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				if (err == RFAL_ERR_NONE) {
+					char line[32];
+					snprintf(line, sizeof(line), "Wiped %u pages!", wiped);
+					u8g2_DrawStr(&m1_u8g2, 4, 25, line);
+					m1_buzzer_notification();
+				} else {
+					char line[32];
+					snprintf(line, sizeof(line), "Failed at page %u", wiped + 4);
+					u8g2_DrawStr(&m1_u8g2, 4, 25, "Wipe Failed!");
+					u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+					u8g2_DrawStr(&m1_u8g2, 4, 40, line);
+				}
+				m1_u8g2_nextpage();
+				vTaskDelay(pdMS_TO_TICKS(2000));
+				return;
+			}
+		}
+	}
+}
+
+/*============================================================================*/
+/**
  * @brief nfc_utils_kp_handler - Handle keypad input for NFC utils view
- * 
+ *
  * Processes button events in the NFC utils view:
  * - BACK: Return to submenu with saved cursor index
- * 
+ *
  * @retval 1 Continue processing
  */
 /*============================================================================*/
@@ -1134,9 +1357,197 @@ static int nfc_utils_kp_handler(void)
 	{
 		if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK )
 		{
-			m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);// Return submenu to stored index
+			m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 		}
-	} // if (ret==pdTRUE)
+		else if (this_button_status.event[BUTTON_OK_KP_ID]==BUTTON_EVENT_CLICK)
+		{
+			uint8_t sel = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+			switch (sel)
+			{
+				case 0: /* Tag Info — show enhanced info from current context */
+				{
+					nfc_run_ctx_t *c = nfc_ctx_get();
+					if (c && c->head.uid_len > 0)
+					{
+						uint16_t info_pg = 0;
+						uint16_t pg_scroll = 0;
+						bool show_info = true;
+
+						while (1)
+						{
+							if (show_info)
+							{
+								show_info = false;
+								if (info_pg == 0)
+								{
+									char line[40];
+									u8g2_FirstPage(&m1_u8g2);
+									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+									u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+									u8g2_DrawStr(&m1_u8g2, 2, 10, c->ui.title_text);
+									u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+									snprintf(line, sizeof(line), "Mfr: %s (0x%02X)",
+									         nfc_tool_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
+									u8g2_DrawStr(&m1_u8g2, 2, 20, line);
+									snprintf(line, sizeof(line), "UID: %s",
+									         hex2Str(c->head.uid, c->head.uid_len));
+									u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+									if (c->head.a.has_atqa && c->head.a.has_sak)
+									{
+										snprintf(line, sizeof(line), "ATQA:%02X %02X SAK:%02X",
+										         c->head.a.atqa[0], c->head.a.atqa[1], c->head.a.sak);
+										u8g2_DrawStr(&m1_u8g2, 2, 40, line);
+										snprintf(line, sizeof(line), "Type: %s",
+										         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
+										u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+									}
+									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+									u8g2_DrawBox(&m1_u8g2, 0, 54, 128, 10);
+									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+									u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+									u8g2_DrawXBMP(&m1_u8g2, 119, 55, 8, 8, arrowright_8x8);
+									u8g2_DrawStr(&m1_u8g2, 97, 62, "More");
+									m1_u8g2_nextpage();
+								}
+								else
+								{
+									uint16_t total = nfc_ctx_get_t2t_page_count();
+									char line[32], header[32];
+									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+									u8g2_FirstPage(&m1_u8g2);
+									u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+									if (total == 0) {
+										u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+										u8g2_DrawStr(&m1_u8g2, 2, 20, "No page data");
+										u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+										u8g2_DrawStr(&m1_u8g2, 2, 32, "Only UID-level info");
+									} else {
+										uint16_t max_s = (total > NFC_INFO_LINES_PER_SCREEN)
+										    ? (total - NFC_INFO_LINES_PER_SCREEN) : 0;
+										if (pg_scroll > max_s) pg_scroll = max_s;
+										snprintf(header, sizeof(header), "Max %03u  [hex]  | [Asc]",
+										         (unsigned)(total - 1));
+										u8g2_DrawStr(&m1_u8g2, 2, 8, header);
+										u8g2_DrawStr(&m1_u8g2, 2, 16, "------------------------");
+										for (uint8_t row = 0; row < NFC_INFO_LINES_PER_SCREEN; row++) {
+											uint16_t pg = pg_scroll + row;
+											if (pg >= total) break;
+											if (!nfc_ctx_format_t2t_page_line(pg, line, sizeof(line)))
+												continue;
+											u8g2_DrawStr(&m1_u8g2, 2, 24 + row * 8, line);
+										}
+									}
+									m1_u8g2_nextpage();
+								}
+							}
+
+							S_M1_Main_Q_t qi;
+							S_M1_Buttons_Status bs2;
+							BaseType_t r2 = xQueueReceive(main_q_hdl, &qi, portMAX_DELAY);
+							if (r2 != pdTRUE) continue;
+							if (qi.q_evt_type != Q_EVENT_KEYPAD) continue;
+							r2 = xQueueReceive(button_events_q_hdl, &bs2, 0);
+							if (r2 != pdTRUE) continue;
+							if (bs2.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) break;
+							if (bs2.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK && info_pg == 0) {
+								info_pg = 1; pg_scroll = 0; show_info = true;
+							}
+							if (bs2.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK && info_pg == 1) {
+								info_pg = 0; show_info = true;
+							}
+							if (bs2.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK && info_pg == 1 && pg_scroll > 0) {
+								pg_scroll--; show_info = true;
+							}
+							if (bs2.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK && info_pg == 1) {
+								uint16_t total = nfc_ctx_get_t2t_page_count();
+								uint16_t max_s = (total > NFC_INFO_LINES_PER_SCREEN)
+								    ? (total - NFC_INFO_LINES_PER_SCREEN) : 0;
+								if (pg_scroll < max_s) { pg_scroll++; show_info = true; }
+							}
+						}
+					}
+					/* Refresh utils submenu */
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+				}
+
+				case 1: /* Clone Emulate — emulate the already-read card */
+				{
+					nfc_run_ctx_t *c = nfc_ctx_get();
+					if (c && c->head.uid_len > 0)
+					{
+						nfc_ctx_sync_emu();
+						m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+						m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
+						vTaskDelay(50);
+
+						const char *et = "Emulate UID";
+						if (c->head.family == M1NFC_FAM_ULTRALIGHT &&
+						    c->dump.has_dump && c->dump.data && c->dump.unit_size == 4 && c->dump.unit_count > 0)
+							et = "Emulate";
+						else if (c->head.family == M1NFC_FAM_CLASSIC &&
+						         c->dump.has_dump && c->dump.data && c->dump.unit_size == 16 && c->dump.unit_count > 0)
+							et = "Emulate";
+
+						u8g2_FirstPage(&m1_u8g2);
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+						u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
+						u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+						u8g2_DrawStr(&m1_u8g2, 50, 15, et);
+						u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+						u8g2_DrawStr(&m1_u8g2, 50, 26, "UID:");
+						u8g2_DrawStr(&m1_u8g2, 50, 36, hex2Str(c->head.uid, c->head.uid_len));
+						u8g2_DrawStr(&m1_u8g2, 50, 46, "Tag M1 on reader");
+						m1_u8g2_nextpage();
+
+						while (1) {
+							S_M1_Main_Q_t qi;
+							S_M1_Buttons_Status bs2;
+							BaseType_t r2 = xQueueReceive(main_q_hdl, &qi, portMAX_DELAY);
+							if (r2 != pdTRUE) continue;
+							if (qi.q_evt_type != Q_EVENT_KEYPAD) continue;
+							r2 = xQueueReceive(button_events_q_hdl, &bs2, 0);
+							if (r2 == pdTRUE && bs2.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+								break;
+						}
+
+						ListenerRequestStop();
+						m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+						m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+						vTaskDelay(50);
+					}
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+				}
+
+				case 2: /* NFC Fuzzer */
+					nfc_tool_fuzzer();
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+
+				case 3: /* Write UID */
+					nfc_utils_write_uid_run();
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+
+				case 4: /* Wipe Tag */
+					nfc_utils_wipe_tag_run();
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+
+				default:
+					break;
+			}
+		}
+		else if (this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK)
+		{
+			m1_uiView_display_update(X_MENU_UPDATE_MOVE_UP);
+		}
+		else if (this_button_status.event[BUTTON_DOWN_KP_ID]==BUTTON_EVENT_CLICK)
+		{
+			m1_uiView_display_update(X_MENU_UPDATE_MOVE_DOWN);
+		}
+	}
 
 	return 1;
 }
@@ -1181,8 +1592,7 @@ static void nfc_utils_gui_destroy(uint8_t param)
 /*============================================================================*/
 static void nfc_utils_gui_update(uint8_t param)
 {
-	m1_gui_let_update_fw();
-	/*	utils_menu	*/
+	m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, param);
 }
 
 /*============================================================================*/
@@ -1580,7 +1990,12 @@ void m1_nfc_info_more_draw(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     if (total_pages==0)
     {
-		m1_gui_let_update_fw();
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		u8g2_DrawStr(&m1_u8g2, 2, 20, "No page data");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 2, 32, "Only UID-level info");
+		u8g2_DrawStr(&m1_u8g2, 2, 42, "available for this tag");
+		m1_u8g2_nextpage();
     }
     else
     {
@@ -1613,12 +2028,921 @@ void m1_nfc_info_more_draw(void)
 }
 
 /*============================================================================*/
+/*                   NFC TOOLS — Helpers                                      */
+/*============================================================================*/
+
+/* NFC-A manufacturer lookup (ISO/IEC 7816-6 / JIS X 6319-4, byte 0 of UID) */
+static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte)
+{
+	switch (mfr_byte) {
+		case 0x01: return "Motorola";
+		case 0x02: return "STMicro";
+		case 0x03: return "Hitachi";
+		case 0x04: return "NXP";
+		case 0x05: return "Infineon";
+		case 0x06: return "Cylink";
+		case 0x07: return "TI";
+		case 0x08: return "Fujitsu";
+		case 0x09: return "Matsushita";
+		case 0x0A: return "NEC";
+		case 0x0B: return "Oki";
+		case 0x0C: return "Toshiba";
+		case 0x0D: return "Mitsubishi";
+		case 0x0E: return "Samsung";
+		case 0x0F: return "Hyundai";
+		case 0x10: return "LG";
+		case 0x16: return "EM Micro";
+		case 0x28: return "SiliconCraft";
+		default:   return "Unknown";
+	}
+}
+
+/* SAK meaning for NFC-A */
+static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2])
+{
+	if (sak == 0x08) return "Classic 1K";
+	if (sak == 0x18) return "Classic 4K";
+	if (sak == 0x09) return "Classic Mini";
+	if (sak == 0x10) return "Classic 2K";
+	if (sak == 0x11) return "Classic 4K (Plus)";
+	if (sak == 0x00 && atqa[0] == 0x44) return "Ultralight/NTAG";
+	if (sak == 0x20) return "DESFire/ISO-DEP";
+	if (sak == 0x28) return "Classic+ISO-DEP";
+	if (sak == 0x60) return "Classic+DESFire";
+	return "Other";
+}
+
+/* Fuzzer card profiles for NFC-A emulation */
+#define NFC_FUZZ_PROFILE_COUNT  4
+static const char *nfc_fuzz_profile_names[] = {
+	"Classic 1K", "Classic 4K", "Ultralight", "DESFire"
+};
+static const uint8_t nfc_fuzz_profile_atqa[][2] = {
+	{0x04, 0x00}, {0x02, 0x00}, {0x44, 0x00}, {0x04, 0x03}
+};
+static const uint8_t nfc_fuzz_profile_sak[] = {
+	0x08, 0x18, 0x00, 0x20
+};
+static const uint8_t nfc_fuzz_profile_uid_len[] = {
+	4, 4, 7, 7
+};
+
+static void nfc_fuzz_uid_step(uint8_t *uid, uint8_t uid_len, int8_t dir)
+{
+	if (dir > 0) {
+		for (int i = uid_len - 1; i >= 0; i--) {
+			uid[i]++;
+			if (uid[i] != 0) break;
+		}
+	} else {
+		for (int i = uid_len - 1; i >= 0; i--) {
+			uid[i]--;
+			if (uid[i] != 0xFF) break;
+		}
+	}
+}
+
+static void nfc_fuzz_draw_setup(uint8_t prof_sel, const uint8_t *uid, uint8_t uid_len,
+                                int8_t dir, uint16_t delay_ms)
+{
+	char line[32];
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "NFC Fuzzer Setup");
+
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	snprintf(line, sizeof(line), "Type: %s", nfc_fuzz_profile_names[prof_sel]);
+	u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+	snprintf(line, sizeof(line), "UID: %s", hex2Str((unsigned char*)uid, uid_len));
+	u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+	snprintf(line, sizeof(line), "Dir: %s  Dly: %ums",
+	         (dir > 0) ? "UP" : "DN", delay_ms);
+	u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 61, "UP/DN:adj");
+	u8g2_DrawStr(&m1_u8g2, 74, 61, "OK:Start");
+
+	m1_u8g2_nextpage();
+}
+
+static void nfc_fuzz_draw_running(uint8_t prof_sel, const uint8_t *uid, uint8_t uid_len,
+                                  uint32_t count)
+{
+	char line[32];
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "NFC Fuzzer");
+
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	snprintf(line, sizeof(line), "Type: %s", nfc_fuzz_profile_names[prof_sel]);
+	u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+	snprintf(line, sizeof(line), "UID: %s", hex2Str((unsigned char*)uid, uid_len));
+	u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+	snprintf(line, sizeof(line), "Count: %lu", (unsigned long)count);
+	u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 61, "Emulating...");
+	u8g2_DrawStr(&m1_u8g2, 86, 61, "Bk:Stop");
+
+	m1_u8g2_nextpage();
+}
+
+/*============================================================================*/
 /**
- * @brief nfc_tools - NFC tools menu function (To Be Determined)
- * 
- * Placeholder function for NFC tools menu. Currently displays
- * "Tools(TBD)" message and waits for BACK button to exit.
- * 
+ * @brief nfc_tool_tag_info - Read NFC tag and display enhanced info
+ *
+ * Initiates an NFC read, then displays detailed card metadata including
+ * manufacturer, card type, ATQA/SAK analysis, and memory info.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_tag_info(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Show "Place card" screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 55, 20, "Tag Info");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 30, "Hold card next");
+	u8g2_DrawStr(&m1_u8g2, 50, 40, "to M1's back");
+	m1_u8g2_nextpage();
+
+	/* Start NFC read */
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	/* Wait for read complete or BACK */
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_buzzer_notification();
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+				return;
+			}
+		}
+	}
+
+	/* Display enhanced tag info */
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	if (!c || c->head.uid_len == 0)
+	{
+		m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+		return;
+	}
+
+	uint16_t info_page = 0;   /* 0 = summary, 1 = more detail */
+	uint16_t page_scroll = 0;
+	bool show = true;
+
+	while (1)
+	{
+		if (show)
+		{
+			show = false;
+
+			if (info_page == 0)
+			{
+				/* Page 0: Summary info */
+				char line[40];
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 2, 10, c->ui.title_text);
+
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				snprintf(line, sizeof(line), "Mfr: %s (0x%02X)",
+				         nfc_tool_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
+				u8g2_DrawStr(&m1_u8g2, 2, 20, line);
+
+				snprintf(line, sizeof(line), "UID: %s",
+				         hex2Str(c->head.uid, c->head.uid_len));
+				u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+
+				if (c->head.a.has_atqa && c->head.a.has_sak)
+				{
+					snprintf(line, sizeof(line), "ATQA:%02X %02X SAK:%02X",
+					         c->head.a.atqa[0], c->head.a.atqa[1], c->head.a.sak);
+					u8g2_DrawStr(&m1_u8g2, 2, 40, line);
+
+					snprintf(line, sizeof(line), "Type: %s",
+					         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
+					u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+				}
+
+				/* Bottom bar */
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_DrawBox(&m1_u8g2, 0, 54, 128, 10);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				u8g2_DrawXBMP(&m1_u8g2, 119, 55, 8, 8, arrowright_8x8);
+				u8g2_DrawStr(&m1_u8g2, 97, 62, "More");
+
+				m1_u8g2_nextpage();
+			}
+			else
+			{
+				/* Page 1: T2T page dump (if available) */
+				uint16_t total = nfc_ctx_get_t2t_page_count();
+				char line[32];
+				char header[32];
+
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+				if (total == 0)
+				{
+					u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+					u8g2_DrawStr(&m1_u8g2, 2, 20, "No page data");
+					u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+					u8g2_DrawStr(&m1_u8g2, 2, 32, "Only UID-level info");
+					u8g2_DrawStr(&m1_u8g2, 2, 42, "available for this tag");
+				}
+				else
+				{
+					uint16_t max_scroll = (total > NFC_INFO_LINES_PER_SCREEN)
+					    ? (total - NFC_INFO_LINES_PER_SCREEN) : 0;
+					if (page_scroll > max_scroll) page_scroll = max_scroll;
+
+					snprintf(header, sizeof(header), "Max %03u  [hex]  | [Asc]",
+					         (unsigned)(total - 1));
+					u8g2_DrawStr(&m1_u8g2, 2, 8, header);
+					u8g2_DrawStr(&m1_u8g2, 2, 16, "------------------------");
+
+					for (uint8_t row = 0; row < NFC_INFO_LINES_PER_SCREEN; row++)
+					{
+						uint16_t pg = page_scroll + row;
+						if (pg >= total) break;
+						if (!nfc_ctx_format_t2t_page_line(pg, line, sizeof(line)))
+							continue;
+						u8g2_DrawStr(&m1_u8g2, 2, 24 + row * 8, line);
+					}
+				}
+				m1_u8g2_nextpage();
+			}
+		}
+
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret != pdTRUE) continue;
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				break;
+			}
+			else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (info_page == 0)
+				{
+					info_page = 1;
+					page_scroll = 0;
+					show = true;
+				}
+			}
+			else if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (info_page == 1)
+				{
+					info_page = 0;
+					show = true;
+				}
+			}
+			else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (info_page == 1 && page_scroll > 0)
+				{
+					page_scroll--;
+					show = true;
+				}
+			}
+			else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (info_page == 1)
+				{
+					uint16_t total = nfc_ctx_get_t2t_page_count();
+					uint16_t max_scroll = (total > NFC_INFO_LINES_PER_SCREEN)
+					    ? (total - NFC_INFO_LINES_PER_SCREEN) : 0;
+					if (page_scroll < max_scroll)
+					{
+						page_scroll++;
+						show = true;
+					}
+				}
+			}
+		}
+	}
+
+	/* Cleanup: stop any active read operation */
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tool_clone_emu - Read NFC card then immediately emulate it
+ *
+ * One-step clone workflow: reads a source card, then starts emulating its
+ * UID so another NFC reader/writer can capture it.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_clone_emu(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Show "Place source card" screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, "Clone Emulate");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 26, "Place source");
+	u8g2_DrawStr(&m1_u8g2, 50, 36, "card on M1's");
+	u8g2_DrawStr(&m1_u8g2, 50, 46, "back to read");
+	m1_u8g2_nextpage();
+
+	/* Start NFC read */
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	/* Wait for read complete or BACK */
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_buzzer_notification();
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+				return;
+			}
+		}
+	}
+
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	if (!c || c->head.uid_len == 0)
+	{
+		m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+		return;
+	}
+
+	/* Sync emulator context and start emulation */
+	nfc_ctx_sync_emu();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
+	vTaskDelay(50);
+
+	/* Show emulating screen */
+	const char *emu_text = "Emulate UID";
+	if (c->head.family == M1NFC_FAM_ULTRALIGHT &&
+	    c->dump.has_dump && c->dump.data != NULL &&
+	    c->dump.unit_size == 4 && c->dump.unit_count > 0)
+	{
+		emu_text = "Emulate";
+	}
+	else if (c->head.family == M1NFC_FAM_CLASSIC &&
+	         c->dump.has_dump && c->dump.data != NULL &&
+	         c->dump.unit_size == 16 && c->dump.unit_count > 0)
+	{
+		emu_text = "Emulate";
+	}
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, emu_text);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 26, "UID:");
+	u8g2_DrawStr(&m1_u8g2, 50, 36, hex2Str(c->head.uid, c->head.uid_len));
+	u8g2_DrawStr(&m1_u8g2, 50, 46, "Tag M1 on reader");
+	m1_u8g2_nextpage();
+
+	/* Wait for BACK to stop emulation */
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				break;
+			}
+		}
+	}
+
+	/* Stop emulation */
+	ListenerRequestStop();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+	vTaskDelay(50);
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tool_fuzzer - NFC UID fuzzer via emulation
+ *
+ * Cycles through NFC UIDs while emulating, allowing card type selection,
+ * direction (increment/decrement), and delay configuration.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_fuzzer(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	uint8_t prof_sel = 0;
+	int8_t dir = 1;
+	uint16_t delay_ms = 500;
+	uint8_t setup_field = 0; /* 0=type, 1=dir, 2=delay */
+	uint8_t uid[10];
+	memset(uid, 0, sizeof(uid));
+	uid[0] = 0x04; /* NXP manufacturer byte */
+
+	/* --- Setup screen --- */
+	nfc_fuzz_draw_setup(prof_sel, uid, nfc_fuzz_profile_uid_len[prof_sel], dir, delay_ms);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret != pdTRUE) continue;
+
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			return; /* Exit to tools menu */
+		}
+		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			break; /* Start fuzzing */
+		}
+		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (setup_field == 0) {
+				prof_sel = (prof_sel + 1) % NFC_FUZZ_PROFILE_COUNT;
+				memset(uid, 0, sizeof(uid));
+				uid[0] = 0x04;
+			} else if (setup_field == 1) {
+				dir = (dir > 0) ? -1 : 1;
+			} else {
+				if (delay_ms < 2000) delay_ms += 100;
+			}
+			nfc_fuzz_draw_setup(prof_sel, uid, nfc_fuzz_profile_uid_len[prof_sel], dir, delay_ms);
+		}
+		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (setup_field == 0) {
+				prof_sel = (prof_sel == 0) ? (NFC_FUZZ_PROFILE_COUNT - 1) : (prof_sel - 1);
+				memset(uid, 0, sizeof(uid));
+				uid[0] = 0x04;
+			} else if (setup_field == 1) {
+				dir = (dir > 0) ? -1 : 1;
+			} else {
+				if (delay_ms > 100) delay_ms -= 100;
+			}
+			nfc_fuzz_draw_setup(prof_sel, uid, nfc_fuzz_profile_uid_len[prof_sel], dir, delay_ms);
+		}
+		else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			setup_field = (setup_field + 1) % 3;
+			nfc_fuzz_draw_setup(prof_sel, uid, nfc_fuzz_profile_uid_len[prof_sel], dir, delay_ms);
+		}
+		else if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			setup_field = (setup_field == 0) ? 2 : (setup_field - 1);
+			nfc_fuzz_draw_setup(prof_sel, uid, nfc_fuzz_profile_uid_len[prof_sel], dir, delay_ms);
+		}
+	}
+
+	/* --- Start emulation fuzzing --- */
+	uint8_t uid_len = nfc_fuzz_profile_uid_len[prof_sel];
+	uint32_t count = 0;
+
+	/* Set initial emulator parameters */
+	Emu_SetNfcA(uid, uid_len,
+	            nfc_fuzz_profile_atqa[prof_sel][0],
+	            nfc_fuzz_profile_atqa[prof_sel][1],
+	            nfc_fuzz_profile_sak[prof_sel]);
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
+	vTaskDelay(50);
+
+	nfc_fuzz_draw_running(prof_sel, uid, uid_len, count);
+
+	/* Fuzzing loop: use timed queue receive for delay between UID steps */
+	bool running = true;
+	while (running)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(delay_ms));
+		if (ret == pdTRUE)
+		{
+			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+				if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					running = false;
+					break;
+				}
+			}
+		}
+
+		/* Timeout = step to next UID */
+		nfc_fuzz_uid_step(uid, uid_len, dir);
+		count++;
+
+		/* Update emulator with new UID (live update, no stop/start needed) */
+		Emu_SetNfcA(uid, uid_len,
+		            nfc_fuzz_profile_atqa[prof_sel][0],
+		            nfc_fuzz_profile_atqa[prof_sel][1],
+		            nfc_fuzz_profile_sak[prof_sel]);
+
+		nfc_fuzz_draw_running(prof_sel, uid, uid_len, count);
+	}
+
+	/* Stop emulation */
+	ListenerRequestStop();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+	vTaskDelay(50);
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tool_unlock_read - Read NFC tag with user-entered password
+ *
+ * Prompts the user for a 4-byte hex password via the short keyboard,
+ * stores it as the manual password, then initiates a tag read.
+ * The poller will use this password for PWD_AUTH before reading pages.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_unlock_read(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	char pwd_buf[12]; /* "00 00 00 00" + null */
+	uint8_t pwd_bytes[4];
+
+	/* Check if a captured password is available and pre-fill */
+	uint8_t cap_pwd[4];
+	if (nfc_ctx_get_captured_pwd(cap_pwd)) {
+		snprintf(pwd_buf, sizeof(pwd_buf), "%02X %02X %02X %02X",
+				 cap_pwd[0], cap_pwd[1], cap_pwd[2], cap_pwd[3]);
+	} else {
+		strcpy(pwd_buf, "00 00 00 00");
+	}
+
+	/* Show hex keyboard for 4-byte password entry */
+	uint8_t len = m1_vkbs_get_data("NFC Password", pwd_buf);
+	if (len == 0) {
+		return; /* User cancelled */
+	}
+
+	/* Parse "XX XX XX XX" hex string → 4 bytes */
+	unsigned int b0, b1, b2, b3;
+	if (sscanf(pwd_buf, "%02X %02X %02X %02X", &b0, &b1, &b2, &b3) != 4) {
+		m1_message_box(&m1_u8g2, "Invalid password", NULL, " ", res_string(IDS_BACK));
+		return;
+	}
+	pwd_bytes[0] = (uint8_t)b0;
+	pwd_bytes[1] = (uint8_t)b1;
+	pwd_bytes[2] = (uint8_t)b2;
+	pwd_bytes[3] = (uint8_t)b3;
+
+	/* Store as manual password — poller will use it on next read */
+	nfc_ctx_set_manual_pwd(pwd_bytes);
+
+	/* Show "Place card" screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, "Unlock Read");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 26, "PWD:");
+	{
+		char pwd_disp[16];
+		snprintf(pwd_disp, sizeof(pwd_disp), "%02X %02X %02X %02X",
+				 pwd_bytes[0], pwd_bytes[1], pwd_bytes[2], pwd_bytes[3]);
+		u8g2_DrawStr(&m1_u8g2, 50, 36, pwd_disp);
+	}
+	u8g2_DrawStr(&m1_u8g2, 50, 46, "Hold card on M1");
+	m1_u8g2_nextpage();
+
+	/* Start NFC read */
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	/* Wait for read complete or BACK */
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+
+			nfc_run_ctx_t *c = nfc_ctx_get();
+			if (c && c->head.uid_len > 0) {
+				/* Show result */
+				u8g2_FirstPage(&m1_u8g2);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 2, 12, "Unlock Read Done");
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				u8g2_DrawStr(&m1_u8g2, 2, 24, c->ui.title_text);
+				u8g2_DrawStr(&m1_u8g2, 2, 34, "UID:");
+				u8g2_DrawStr(&m1_u8g2, 30, 34, c->ui.uid_text);
+				if (c->dump.has_dump) {
+					char pg_str[24];
+					snprintf(pg_str, sizeof(pg_str), "Pages: %u",
+							 (unsigned)nfc_ctx_get_t2t_page_count());
+					u8g2_DrawStr(&m1_u8g2, 2, 44, pg_str);
+				}
+				m1_u8g2_nextpage();
+
+				/* Wait for BACK */
+				while (1) {
+					ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+					if (ret != pdTRUE) continue;
+					if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+					ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+					if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+						break;
+				}
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				/* User cancelled — stop reader and clear manual password */
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_STOP);
+				nfc_ctx_clear_manual_pwd();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				read_done = true;
+			}
+		}
+	}
+}
+
+static void nfc_unlock_with_reader(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	nfc_run_ctx_t *c = nfc_ctx_get();
+
+	if (!c || c->head.uid_len == 0) {
+		m1_message_box(&m1_u8g2, "No card loaded", "Load a card first", "", res_string(IDS_BACK));
+		return;
+	}
+
+	nfc_ctx_clear_captured_pwd();
+
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 2, 12, "Unlock with Reader");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 26, "Emulating card UID...");
+	u8g2_DrawStr(&m1_u8g2, 2, 38, "Tap M1 on the reader");
+	u8g2_DrawStr(&m1_u8g2, 2, 50, "to capture password");
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawStr(&m1_u8g2, 30, 61, "BACK to cancel");
+	m1_u8g2_nextpage();
+
+	nfc_ctx_sync_emu();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
+	vTaskDelay(50);
+
+	bool captured = false;
+	uint8_t cap_pwd[4] = {0};
+	while (!captured)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(200));
+		if (ret == pdTRUE)
+		{
+			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+				if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					ListenerRequestStop();
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+					vTaskDelay(50);
+					return;
+				}
+			}
+		}
+		if (nfc_ctx_get_captured_pwd(cap_pwd))
+			captured = true;
+	}
+
+	ListenerRequestStop();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+	vTaskDelay(100);
+
+	{
+		char pwd_str[16];
+		snprintf(pwd_str, sizeof(pwd_str), "%02X %02X %02X %02X",
+				 cap_pwd[0], cap_pwd[1], cap_pwd[2], cap_pwd[3]);
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		u8g2_DrawStr(&m1_u8g2, 2, 12, "Password Captured!");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 2, 26, "PWD:");
+		u8g2_DrawStr(&m1_u8g2, 32, 26, pwd_str);
+		u8g2_DrawStr(&m1_u8g2, 2, 40, "Hold card on M1");
+		u8g2_DrawStr(&m1_u8g2, 2, 50, "to read all pages");
+		u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+		u8g2_DrawStr(&m1_u8g2, 16, 61, "OK=Read  BACK=Exit");
+		m1_u8g2_nextpage();
+	}
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret != pdTRUE) continue;
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			return;
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			break;
+	}
+
+	nfc_ctx_set_manual_pwd(cap_pwd);
+
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, "Reading...");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 28, "with password");
+	u8g2_DrawStr(&m1_u8g2, 50, 40, "Hold card on M1");
+	m1_u8g2_nextpage();
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+			c = nfc_ctx_get();
+			if (c && c->head.uid_len > 0)
+			{
+				m1_u8g2_firstpage();
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 2, 12, "Card Unlocked!");
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				u8g2_DrawStr(&m1_u8g2, 2, 24, c->ui.title_text);
+				u8g2_DrawStr(&m1_u8g2, 2, 34, c->ui.uid_text);
+				if (c->dump.has_dump) {
+					char pg_str[24];
+					snprintf(pg_str, sizeof(pg_str), "Pages: %u",
+							 (unsigned)nfc_ctx_get_t2t_page_count());
+					u8g2_DrawStr(&m1_u8g2, 2, 44, pg_str);
+				}
+				u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+				u8g2_DrawStr(&m1_u8g2, 16, 61, "OK=Save  BACK=Exit");
+				m1_u8g2_nextpage();
+
+				while (1)
+				{
+					ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+					if (ret != pdTRUE) continue;
+					if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+					ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+					if (ret != pdTRUE) continue;
+					if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK) {
+						nfc_read_more_options_save();
+						break;
+					}
+					if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+						break;
+				}
+			}
+			else
+				m1_message_box(&m1_u8g2, "Read failed", "No card detected", "", res_string(IDS_BACK));
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_STOP);
+				nfc_ctx_clear_manual_pwd();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				read_done = true;
+			}
+		}
+	}
+	nfc_ctx_clear_manual_pwd();
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tools - NFC tools menu with Tag Info, Clone Emulate, NFC Fuzzer
+ *
+ * Provides a submenu of NFC utility tools accessible from the main NFC menu.
+ *
  * @retval None
  */
 /*============================================================================*/
@@ -1628,48 +2952,56 @@ void nfc_tools(void)
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
 
-	//const char * msg = "Tools(TBD)";
-	m1_gui_let_update_fw();
-	/*	Tools_Menu	*/
+	/* Drain stale events from parent menu selection */
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+	}
 
 	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
-	nfc_uiview_gui_latest_param = 0xFF; // Initialize with an invalid parameter
-	while (1) // Main loop of this task
+	m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_RESET);
+
+	while (1)
 	{
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret==pdTRUE)
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
 		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
+			ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (ret != pdTRUE) continue;
+
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				// Notification is only sent to this task when there's any button activity,
-				// so it doesn't need to wait when reading the event from the queue
-				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK ) // user wants to exit?
-				{
-					; // Do extra tasks here if needed
-
-					xQueueReset(main_q_hdl); // Reset main q before return
-					break; // Exit and return to the calling task (subfunc_handler_task)
-				} 
-				else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )
-				{
-					// Do other things for this task, if needed
-					platformLog("nfc_tools[BUTTON_UP_KP_ID]\r\n");
-
-				}
-				else if(this_button_status.event[BUTTON_DOWN_KP_ID]==BUTTON_EVENT_CLICK )
-				{
-					// Do other things for this task, if needed
-					platformLog("nfc_tools[BUTTON_DOWN_KP_ID]\r\n");
-
-				}
-			} 
-			else
-			{
-				; // Do other things for this task
+				xQueueReset(main_q_hdl);
+				break;
 			}
-		} 
-	} // while (1)
+			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				uint8_t sel = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+				switch (sel)
+				{
+					case 0: nfc_tool_tag_info();     break;
+					case 1: nfc_tool_clone_emu();    break;
+					case 2: nfc_tool_fuzzer();       break;
+					case 3: nfc_utils_write_uid_run(); break;
+					case 4: nfc_utils_wipe_tag_run();  break;
+					default: break;
+				}
+				/* Redraw submenu after returning from a tool */
+				m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);
+			}
+			else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_UP);
+			}
+			else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_DOWN);
+			}
+		}
+	}
 } 
 
 /*============================================================================*/
@@ -2378,7 +3710,7 @@ static void nfc_saved_browse_gui_destroy(uint8_t param)
 /*============================================================================*/
 static void nfc_saved_browse_gui_update(uint8_t param)
 {
-	f_info = storage_browse();
+	f_info = storage_browse("0:/NFC");
 	if ( f_info->file_is_selected )
 	{
 		if(nfc_profile_load(f_info, NFC_FILE_EXTENSION_TMP))
@@ -2448,5 +3780,823 @@ static int nfc_saved_browse_gui_message(void)
 void nfc_saved_browse_gui_init(void)
 {
    m1_uiView_functions_register(VIEW_MODE_NFC_SAVED_BROWSE, nfc_saved_browse_gui_create, nfc_saved_browse_gui_update, nfc_saved_browse_gui_destroy, nfc_saved_browse_gui_message);
+}
+
+
+/*============================================================================*/
+/*          N E W   M E N U   F U N C T I O N S                              */
+/*============================================================================*/
+
+/*============================================================================*/
+/**
+ * @brief  Detect Reader (Extract MF Keys) — mfkey32 nonce extraction
+ *         Emulates a Mifare Classic card and captures authentication nonces
+ *         from a reader, enabling offline key recovery.
+ */
+/*============================================================================*/
+void nfc_detect_reader(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	if (!c || c->head.uid_len == 0 || c->head.family != M1NFC_FAM_CLASSIC ||
+	    !c->dump.has_dump || c->dump.unit_size != MFC_BLOCK_SIZE)
+	{
+		m1_message_box(&m1_u8g2,
+			"Detect Reader",
+			"Load MFC card first",
+			"(Read or Saved)",
+			"BACK to return");
+		return;
+	}
+
+	/* Reset mfkey capture state */
+	mfkey_capture_enabled = false;
+	mfkey_sample_count = 0;
+	memset(mfkey_samples, 0, sizeof(mfkey_samples));
+
+	/* Sync emulator context and start MFC emulation */
+	nfc_ctx_sync_emu();
+	mfkey_capture_enabled = true;
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
+	vTaskDelay(50);
+
+	/* Show emulating screen with nonce count */
+	bool show = true;
+	uint8_t last_count = 0;
+
+	while (1)
+	{
+		if (show)
+		{
+			show = false;
+			char line1[32], line2[32];
+			snprintf(line1, sizeof(line1), "Nonces: %u/%u",
+			         (unsigned)mfkey_sample_count, MFKEY_MAX_SAMPLES);
+			snprintf(line2, sizeof(line2), "UID: %s",
+			         hex2Str(c->head.uid, c->head.uid_len));
+
+			u8g2_FirstPage(&m1_u8g2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+			u8g2_DrawStr(&m1_u8g2, 50, 12, "Detect Reader");
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 50, 24, line2);
+			u8g2_DrawStr(&m1_u8g2, 50, 36, line1);
+			u8g2_DrawStr(&m1_u8g2, 50, 48, "Tag M1 on reader");
+			m1_u8g2_nextpage();
+		}
+
+		/* Check for new nonces */
+		if (mfkey_sample_count != last_count) {
+			last_count = mfkey_sample_count;
+			m1_buzzer_notification();
+			show = true;
+		}
+
+		/* Auto-stop when full */
+		if (mfkey_sample_count >= MFKEY_MAX_SAMPLES) {
+			break;
+		}
+
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(200));
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				break;
+		}
+	}
+
+	/* Stop emulation */
+	mfkey_capture_enabled = false;
+	ListenerRequestStop();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+	vTaskDelay(50);
+
+	/* Save nonces to SD card if any captured */
+	uint8_t captured = mfkey_sample_count;
+	if (captured > 0)
+	{
+		FIL f;
+		if (m1_fb_open_new_file(&f, "0:/NFC/mfkey_nonces.txt") == 0) {
+			char line[128];
+			snprintf(line, sizeof(line),
+				"# MFKey32 nonces — use mfkey32 tool for key recovery\r\n"
+				"# UID:NT:NR_ENC:AR_ENC:SECTOR:KEY_TYPE\r\n");
+			m1_fb_write_to_file(&f, line, strlen(line));
+
+			for (uint8_t i = 0; i < captured; i++) {
+				snprintf(line, sizeof(line),
+					"%08lX:%08lX:%08lX:%08lX:%u:%s\r\n",
+					(unsigned long)mfkey_samples[i].uid,
+					(unsigned long)mfkey_samples[i].nt,
+					(unsigned long)mfkey_samples[i].nr,
+					(unsigned long)mfkey_samples[i].ar,
+					(unsigned)mfkey_samples[i].sector,
+					(mfkey_samples[i].keyType == MFC_CMD_AUTH_A) ? "A" : "B");
+				m1_fb_write_to_file(&f, line, strlen(line));
+			}
+			m1_fb_close_file(&f);
+		}
+
+		/* Show result */
+		char result_line[32];
+		snprintf(result_line, sizeof(result_line), "%u nonces saved", (unsigned)captured);
+		m1_message_box(&m1_u8g2,
+			"Detect Reader",
+			result_line,
+			"/NFC/mfkey_nonces.txt",
+			"BACK to return");
+	}
+	else
+	{
+		m1_message_box(&m1_u8g2,
+			"Detect Reader",
+			"No nonces captured",
+			" ",
+			"BACK to return");
+	}
+}
+
+
+/*============================================================================*/
+/**
+ * @brief  Extra Actions submenu — Flipper-style advanced NFC operations
+ *
+ *         - Read Mifare Classic (with known keys)
+ *         - Read MF Ultralight/C (with keys)
+ *         - Unlock NTAG/Ultralight (password)
+ *         - Unlock SLIX-L (privacy mode)
+ */
+/*============================================================================*/
+
+/*============================================================================*/
+/* Feature 1: Read MF Classic (with known keys)                               */
+/*============================================================================*/
+static void nfc_extra_read_mfc(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Show "Place card" screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, "Read Classic");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 26, "Using key dict");
+	u8g2_DrawStr(&m1_u8g2, 50, 36, "Hold MF Classic");
+	u8g2_DrawStr(&m1_u8g2, 50, 46, "card on M1");
+	m1_u8g2_nextpage();
+
+	/* Start NFC read (the worker will detect MFC by SAK and use key dict) */
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	/* Wait for read complete or BACK */
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_buzzer_notification();
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+				return;
+			}
+		}
+	}
+
+	/* Show result */
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	if (!c || c->head.uid_len == 0)
+	{
+		m1_message_box(&m1_u8g2, "Read MF Classic", "No card detected", " ", "BACK to return");
+		return;
+	}
+
+	/* Check if it was actually MFC */
+	if (c->head.family != M1NFC_FAM_CLASSIC)
+	{
+		m1_message_box(&m1_u8g2, "Read MF Classic", "Card is not MFC", c->ui.title_text, "BACK to return");
+		return;
+	}
+
+	/* Show read result with Save/Emulate options */
+	#define MFC_READ_RESULT_OPTIONS 3
+	static const char *mfc_result_opts[] = { "Save", "Emulate", "Info" };
+
+	{
+		char line1[32], line2[32];
+		snprintf(line1, sizeof(line1), "UID: %s", hex2Str(c->head.uid, c->head.uid_len));
+		uint16_t read_blocks = 0;
+		if (c->dump.has_dump && c->dump.valid_bits) {
+			for (uint32_t i = 0; i < c->dump.unit_count; i++) {
+				if (c->dump.valid_bits[i >> 3] & (1u << (i & 7)))
+					read_blocks++;
+			}
+		}
+		snprintf(line2, sizeof(line2), "Blocks: %u/%u",
+		         (unsigned)read_blocks, (unsigned)c->dump.unit_count);
+
+		u8g2_FirstPage(&m1_u8g2);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		u8g2_DrawStr(&m1_u8g2, 2, 12, "MF Classic Read");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 2, 24, line1);
+		u8g2_DrawStr(&m1_u8g2, 2, 34, line2);
+		u8g2_DrawStr(&m1_u8g2, 2, 48, "OK=options  BACK=exit");
+		m1_u8g2_nextpage();
+	}
+
+	/* Wait for OK (submenu) or BACK */
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret != pdTRUE) continue;
+
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
+			return;
+		}
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK) {
+			/* Show Save/Emulate/Info submenu */
+			m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+			m1_gui_submenu_update(mfc_result_opts, MFC_READ_RESULT_OPTIONS, 0, X_MENU_UPDATE_RESET);
+
+			bool in_sub = true;
+			while (in_sub)
+			{
+				ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+				if (ret != pdTRUE) continue;
+				if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+				ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+				if (ret != pdTRUE) continue;
+
+				if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
+					in_sub = false;
+				}
+				else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK) {
+					uint8_t sel = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+					switch (sel) {
+					case 0: /* Save */
+						nfc_read_more_options_save();
+						in_sub = false;
+						break;
+					case 1: /* Emulate */
+						nfc_ctx_sync_emu();
+						m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+						m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
+						vTaskDelay(50);
+						{
+							u8g2_FirstPage(&m1_u8g2);
+							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+							u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
+							u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+							u8g2_DrawStr(&m1_u8g2, 50, 15, "Emulate MFC");
+							u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+							u8g2_DrawStr(&m1_u8g2, 50, 26, "UID:");
+							u8g2_DrawStr(&m1_u8g2, 50, 36, hex2Str(c->head.uid, c->head.uid_len));
+							u8g2_DrawStr(&m1_u8g2, 50, 46, "BACK to stop");
+							m1_u8g2_nextpage();
+						}
+						while (1) {
+							ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+							if (ret != pdTRUE) continue;
+							if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+							ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+							if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+								break;
+						}
+						ListenerRequestStop();
+						m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+						m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_EMULATE_STOP);
+						vTaskDelay(50);
+						in_sub = false;
+						break;
+					case 2: /* Info */
+						m1_nfc_info_more_draw();
+						in_sub = false;
+						break;
+					}
+				}
+				else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+					m1_gui_submenu_update(mfc_result_opts, MFC_READ_RESULT_OPTIONS, 0, X_MENU_UPDATE_MOVE_UP);
+				else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+					m1_gui_submenu_update(mfc_result_opts, MFC_READ_RESULT_OPTIONS, 0, X_MENU_UPDATE_MOVE_DOWN);
+			}
+			return;
+		}
+	}
+}
+
+
+/*============================================================================*/
+/* Feature 2: Read MF Ultralight (with password)                              */
+/*============================================================================*/
+static void nfc_extra_read_ul(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	char pwd_buf[12];
+	uint8_t pwd_bytes[4];
+
+	/* Prompt for optional password */
+	strcpy(pwd_buf, "00 00 00 00");
+	uint8_t len = m1_vkbs_get_data("Password (4 bytes)", pwd_buf);
+	if (len == 0) return; /* User cancelled */
+
+	/* Parse hex */
+	unsigned int b0, b1, b2, b3;
+	if (sscanf(pwd_buf, "%02X %02X %02X %02X", &b0, &b1, &b2, &b3) == 4) {
+		pwd_bytes[0] = (uint8_t)b0;
+		pwd_bytes[1] = (uint8_t)b1;
+		pwd_bytes[2] = (uint8_t)b2;
+		pwd_bytes[3] = (uint8_t)b3;
+		/* Only set manual password if non-zero */
+		if (b0 || b1 || b2 || b3)
+			nfc_ctx_set_manual_pwd(pwd_bytes);
+	}
+
+	/* Show "Place card" screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, "Read UL/NTAG");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	{
+		char pwd_disp[20];
+		snprintf(pwd_disp, sizeof(pwd_disp), "PWD: %02X %02X %02X %02X",
+		         pwd_bytes[0], pwd_bytes[1], pwd_bytes[2], pwd_bytes[3]);
+		u8g2_DrawStr(&m1_u8g2, 50, 26, pwd_disp);
+	}
+	u8g2_DrawStr(&m1_u8g2, 50, 36, "Hold card on M1");
+	m1_u8g2_nextpage();
+
+	/* Start NFC read */
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	/* Wait for read complete or BACK */
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_buzzer_notification();
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				nfc_ctx_clear_manual_pwd();
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+				return;
+			}
+		}
+	}
+
+	/* Show result */
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	if (!c || c->head.uid_len == 0)
+	{
+		m1_message_box(&m1_u8g2, "Read UL/NTAG", "No card detected", " ", "BACK to return");
+		return;
+	}
+
+	{
+		char line1[32], line2[32];
+		snprintf(line1, sizeof(line1), "UID: %s", hex2Str(c->head.uid, c->head.uid_len));
+		uint16_t pages = nfc_ctx_get_t2t_page_count();
+		snprintf(line2, sizeof(line2), "Pages: %u", (unsigned)pages);
+
+		u8g2_FirstPage(&m1_u8g2);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		u8g2_DrawStr(&m1_u8g2, 2, 12, c->ui.title_text);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 2, 24, line1);
+		u8g2_DrawStr(&m1_u8g2, 2, 34, line2);
+		u8g2_DrawStr(&m1_u8g2, 2, 48, "BACK to return");
+		m1_u8g2_nextpage();
+	}
+
+	/* Wait for BACK */
+	while (1) {
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			break;
+	}
+}
+
+
+/*============================================================================*/
+/* Feature 3: Unlock SLIX-L (privacy mode)                                    */
+/*============================================================================*/
+static void nfc_extra_unlock_slix(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	char pwd_buf[12];
+	uint8_t pwd_bytes[4];
+
+	/* Prompt for 4-byte SLIX password */
+	strcpy(pwd_buf, "00 00 00 00");
+	uint8_t len = m1_vkbs_get_data("SLIX Password", pwd_buf);
+	if (len == 0) return; /* User cancelled */
+
+	/* Parse hex */
+	unsigned int b0, b1, b2, b3;
+	if (sscanf(pwd_buf, "%02X %02X %02X %02X", &b0, &b1, &b2, &b3) != 4) {
+		m1_message_box(&m1_u8g2, "Invalid password", NULL, " ", "BACK to return");
+		return;
+	}
+	pwd_bytes[0] = (uint8_t)b0;
+	pwd_bytes[1] = (uint8_t)b1;
+	pwd_bytes[2] = (uint8_t)b2;
+	pwd_bytes[3] = (uint8_t)b3;
+
+	/* Show "Place tag" screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 50, 15, "Unlock SLIX-L");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 26, "Hold ISO15693");
+	u8g2_DrawStr(&m1_u8g2, 50, 36, "tag on M1");
+	m1_u8g2_nextpage();
+
+	/* Start NFC read (poller discovers NFC-V tags) */
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+	vTaskDelay(50);
+
+	/* Wait for read complete or BACK */
+	bool read_done = false;
+	while (!read_done)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			read_done = true;
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+				return;
+			}
+		}
+	}
+
+	/* Check if NFC-V tag was found */
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	if (!c || c->head.uid_len == 0 || c->head.tech != M1NFC_TECH_V) {
+		m1_message_box(&m1_u8g2, "Unlock SLIX-L", "No ISO15693 tag found", " ", "BACK to return");
+		return;
+	}
+
+	/* Send PRESENT_PASSWORD command (password ID 0x04 = Privacy) */
+	/* The password is sent LSB-first for SLIX-L */
+	uint8_t pwd_data[5]; /* passwordID + 4-byte password */
+	pwd_data[0] = 0x04; /* Privacy password ID */
+	pwd_data[1] = pwd_bytes[3]; /* LSB first */
+	pwd_data[2] = pwd_bytes[2];
+	pwd_data[3] = pwd_bytes[1];
+	pwd_data[4] = pwd_bytes[0]; /* MSB last */
+
+	uint8_t rxBuf[32];
+	uint16_t rcvLen = 0;
+	uint8_t flags = RFAL_NFCV_REQ_FLAG_DEFAULT | RFAL_NFCV_REQ_FLAG_ADDRESS;
+
+	ReturnCode err = rfalNfcvPollerTransceiveReq(
+		RFAL_NFCV_CMD_PRESENT_PASSWORD,
+		flags,
+		0x04, /* param = password ID */
+		c->head.uid,
+		&pwd_data[1], 4, /* password bytes only (4 bytes) */
+		rxBuf, sizeof(rxBuf), &rcvLen);
+
+	if (err == RFAL_ERR_NONE) {
+		m1_buzzer_notification();
+		m1_message_box(&m1_u8g2, "Unlock SLIX-L", "Tag unlocked!", "Privacy mode off", "BACK to return");
+	} else {
+		char err_str[32];
+		snprintf(err_str, sizeof(err_str), "Error: %d", (int)err);
+		m1_message_box(&m1_u8g2, "Unlock SLIX-L", "Unlock failed", err_str, "BACK to return");
+	}
+}
+
+
+#define NFC_EXTRA_ACTIONS_COUNT  4
+static const char *m1_nfc_extra_options[] = {
+	"Read MF Classic",
+	"Read MF Ultralight",
+	"Unlock NTAG/UL",
+	"Unlock SLIX-L"
+};
+
+void nfc_extra_actions(void)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Drain stale events */
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+	}
+
+	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+	m1_gui_submenu_update(m1_nfc_extra_options, NFC_EXTRA_ACTIONS_COUNT, 0, X_MENU_UPDATE_RESET);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (ret != pdTRUE) continue;
+
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				uint8_t sel = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+				switch (sel)
+				{
+					case 0: /* Read MF Classic */
+						nfc_extra_read_mfc();
+						break;
+					case 1: /* Read MF Ultralight */
+						nfc_extra_read_ul();
+						break;
+					case 2: /* Unlock NTAG/Ultralight */
+						nfc_tool_unlock_read();
+						break;
+					case 3: /* Unlock SLIX-L */
+						nfc_extra_unlock_slix();
+						break;
+					default: break;
+				}
+				m1_gui_submenu_update(m1_nfc_extra_options, NFC_EXTRA_ACTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);
+			}
+			else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_gui_submenu_update(m1_nfc_extra_options, NFC_EXTRA_ACTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_UP);
+			}
+			else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_gui_submenu_update(m1_nfc_extra_options, NFC_EXTRA_ACTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_DOWN);
+			}
+		}
+	}
+}
+
+
+/*============================================================================*/
+/**
+ * @brief  Add Manually — Create NFC card data by entering UID, type, etc.
+ */
+/*============================================================================*/
+void nfc_add_manually(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Card type picker */
+	#define NFC_ADD_TYPE_COUNT 6
+	static const char *add_type_options[] = {
+		"UID (ISO14443-3A)",
+		"Mifare Classic 1K",
+		"Mifare Classic 4K",
+		"NTAG213",
+		"NTAG215",
+		"NTAG216"
+	};
+
+	/* ATQA / SAK for each type */
+	static const uint8_t add_type_atqa[][2] = {
+		{0x44, 0x00}, /* UID only */
+		{0x04, 0x00}, /* MFC 1K */
+		{0x02, 0x00}, /* MFC 4K */
+		{0x44, 0x00}, /* NTAG213 */
+		{0x44, 0x00}, /* NTAG215 */
+		{0x44, 0x00}, /* NTAG216 */
+	};
+	static const uint8_t add_type_sak[] = {
+		0x00, /* UID only */
+		0x08, /* MFC 1K */
+		0x18, /* MFC 4K */
+		0x00, /* NTAG213 */
+		0x00, /* NTAG215 */
+		0x00, /* NTAG216 */
+	};
+	static const uint8_t add_type_family[] = {
+		M1NFC_FAM_ULTRALIGHT, /* UID — T2T default */
+		M1NFC_FAM_CLASSIC,
+		M1NFC_FAM_CLASSIC,
+		M1NFC_FAM_ULTRALIGHT,
+		M1NFC_FAM_ULTRALIGHT,
+		M1NFC_FAM_ULTRALIGHT,
+	};
+	/* Page/block counts for dump initialization */
+	static const uint16_t add_type_units[] = {
+		0,   /* UID only — no dump */
+		64,  /* MFC 1K: 64 blocks */
+		256, /* MFC 4K: 256 blocks */
+		45,  /* NTAG213: 45 pages */
+		135, /* NTAG215: 135 pages */
+		231, /* NTAG216: 231 pages */
+	};
+	static const uint16_t add_type_unit_size[] = {
+		0,   /* UID only */
+		16,  /* MFC block = 16 bytes */
+		16,  /* MFC block = 16 bytes */
+		4,   /* T2T page = 4 bytes */
+		4,   /* T2T page = 4 bytes */
+		4,   /* T2T page = 4 bytes */
+	};
+
+	/* Drain stale events */
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE) {
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+	}
+
+	/* Show card type picker */
+	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+	m1_gui_submenu_update(add_type_options, NFC_ADD_TYPE_COUNT, 0, X_MENU_UPDATE_RESET);
+
+	uint8_t type_sel = 0xFF;
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret != pdTRUE) continue;
+
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
+			xQueueReset(main_q_hdl);
+			return;
+		}
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK) {
+			type_sel = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+			break;
+		}
+		if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			m1_gui_submenu_update(add_type_options, NFC_ADD_TYPE_COUNT, 0, X_MENU_UPDATE_MOVE_UP);
+		if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			m1_gui_submenu_update(add_type_options, NFC_ADD_TYPE_COUNT, 0, X_MENU_UPDATE_MOVE_DOWN);
+	}
+
+	if (type_sel >= NFC_ADD_TYPE_COUNT) return;
+
+	/* Prompt for UID */
+	char uid_buf[24];
+	strcpy(uid_buf, "04 00 00 00 00 00 00"); /* default 7-byte UID */
+	uint8_t uid_len = m1_vkbs_get_data("UID (hex bytes)", uid_buf);
+	if (uid_len == 0) return; /* User cancelled */
+
+	/* Parse UID hex string (space-separated) */
+	uint8_t uid[10];
+	uint8_t uid_byte_count = 0;
+	{
+		const char *p = uid_buf;
+		while (*p && uid_byte_count < 10) {
+			while (*p == ' ') p++;
+			if (*p == '\0') break;
+			unsigned int val;
+			if (sscanf(p, "%02X", &val) != 1) break;
+			uid[uid_byte_count++] = (uint8_t)val;
+			p += 2;
+		}
+	}
+
+	if (uid_byte_count < 4) {
+		m1_message_box(&m1_u8g2, "Add Manually", "UID too short", "Need 4+ bytes", "BACK to return");
+		return;
+	}
+
+	/* Populate NFC context */
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	nfc_run_ctx_init(c);
+	nfc_ctx_begin_live();
+
+	c->head.tech = M1NFC_TECH_A;
+	c->head.family = add_type_family[type_sel];
+	c->head.uid_len = uid_byte_count;
+	memcpy(c->head.uid, uid, uid_byte_count);
+	c->head.a.atqa[0] = add_type_atqa[type_sel][0];
+	c->head.a.atqa[1] = add_type_atqa[type_sel][1];
+	c->head.a.has_atqa = true;
+	c->head.a.sak = add_type_sak[type_sel];
+	c->head.a.has_sak = true;
+	c->head.a.ats_len = 0;
+
+	/* Initialize dump if the type has data */
+	uint16_t units = add_type_units[type_sel];
+	uint16_t usize = add_type_unit_size[type_sel];
+	if (units > 0 && usize > 0) {
+		memset(g_nfc_dump_buf, 0x00, NFC_DUMP_BUF_SIZE);
+		memset(g_nfc_valid_bits, 0xFF, NFC_VALID_BITS_SIZE); /* Mark all valid */
+
+		/* Write UID into block/page 0 for correct header */
+		if (usize == 4 && uid_byte_count >= 7) {
+			/* NTAG: pages 0-1 contain UID */
+			g_nfc_dump_buf[0] = uid[0];
+			g_nfc_dump_buf[1] = uid[1];
+			g_nfc_dump_buf[2] = uid[2];
+			g_nfc_dump_buf[3] = uid[0] ^ uid[1] ^ uid[2] ^ 0x88; /* BCC0 */
+			g_nfc_dump_buf[4] = uid[3];
+			g_nfc_dump_buf[5] = uid[4];
+			g_nfc_dump_buf[6] = uid[5];
+			g_nfc_dump_buf[7] = uid[6];
+		} else if (usize == 16 && uid_byte_count >= 4) {
+			/* MFC: block 0 = UID + manufacturer data */
+			memcpy(g_nfc_dump_buf, uid, uid_byte_count);
+		}
+
+		nfc_ctx_set_dump(usize, units, 0,
+		                 g_nfc_dump_buf, g_nfc_valid_bits,
+		                 units - 1, true);
+		g_nfc_ntag_page_count = (usize == 4) ? units : 0;
+	}
+
+	nfc_ctx_refresh_ui();
+
+	/* Set emulation context */
+	Emu_SetNfcA(uid, uid_byte_count,
+	            add_type_atqa[type_sel][0], add_type_atqa[type_sel][1],
+	            add_type_sak[type_sel]);
+
+	/* Prompt for filename and save */
+	char filepath[128];
+	uint8_t error = nfc_save_file_keyboard(filepath);
+	if (error == 0) {
+		if (nfc_profile_save(filepath, c)) {
+			m1_message_box(&m1_u8g2, "Add Manually", "Card saved!", add_type_options[type_sel], "BACK to return");
+		} else {
+			m1_message_box(&m1_u8g2, "Add Manually", "Save failed", " ", "BACK to return");
+		}
+	} else if (error != 3) {
+		m1_message_box(&m1_u8g2, "Add Manually", "SD card error", " ", "BACK to return");
+	}
 }
 

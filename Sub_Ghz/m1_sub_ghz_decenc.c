@@ -31,14 +31,124 @@
 const SubGHz_protocol_t subghz_protocols_list[] =
 {
 	/*{160, 470, PACKET_PULSE_TIME_TOLERANCE20, 0, 24}, // Princeton: bit 0 |^|___, bit 1 |^^^|_*/
-	{370, 1140, PACKET_PULSE_TIME_TOLERANCE20, 0, 24}, // Princeton: bit 0 |^|___, bit 1 |^^^|_
-	{250, 500, PACKET_PULSE_TIME_TOLERANCE20, 16, 46} // Security+ 2.0: bit 0 |^|___, bit 1 |^|_
+	{370, 1140, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},  // Princeton: bit 0 |^|___, bit 1 |^^^|_
+	{250, 500, PACKET_PULSE_TIME_TOLERANCE20, 16, 46},  // Security+ 2.0
+	{320, 640, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},   // CAME 12-bit
+	{700, 1400, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Nice FLO 12-bit
+	{500, 1500, PACKET_PULSE_TIME_TOLERANCE25, 0, 10},  // Linear 10-bit
+	{340, 1020, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Holtek HT12E
+	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 66},   // KeeLoq
+	{488, 976, PACKET_PULSE_TIME_TOLERANCE25, 24, 64},  // Oregon Scientific v2.1 (Manchester)
+	{200, 600, PACKET_PULSE_TIME_TOLERANCE25, 4, 56},   // Acurite
+	{550, 1100, PACKET_PULSE_TIME_TOLERANCE25, 0, 44},  // LaCrosse TX
+	{255, 510, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},   // FAAC SLH (Manchester)
+	{500, 1000, PACKET_PULSE_TIME_TOLERANCE20, 0, 44},  // Hormann BiSecur
+	{800, 1600, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Marantec
+	{640, 1280, PACKET_PULSE_TIME_TOLERANCE25, 4, 56},  // Somfy Telis (Manchester)
+	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},   // Star Line (KeeLoq variant)
+	{350, 700, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},   // Gate TX
+	{300, 900, PACKET_PULSE_TIME_TOLERANCE25, 0, 25},   // SMC5326
+	{225, 675, PACKET_PULSE_TIME_TOLERANCE25, 0, 16},   // Power Smart
+	{450, 1350, PACKET_PULSE_TIME_TOLERANCE20, 0, 48},  // iDo
+	{555, 1110, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Ansonic
+	{500, 1500, PACKET_PULSE_TIME_TOLERANCE25, 4, 40},  // Infactory (weather)
+	{120, 240, PACKET_PULSE_TIME_TOLERANCE25, 8, 40},   // Schrader TPMS (Manchester)
+	/* --- New protocols --- */
+	{1000, 3000, PACKET_PULSE_TIME_TOLERANCE20, 0, 40}, // Chamberlain Security+ 1.0
+	{385, 1155, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},  // Clemsa
+	{450, 900, PACKET_PULSE_TIME_TOLERANCE20, 0, 37},   // Doitrand
+	{340, 680, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},   // BETT
+	{330, 990, PACKET_PULSE_TIME_TOLERANCE20, 0, 36},   // Nero Sketch/Radio
+	{300, 900, PACKET_PULSE_TIME_TOLERANCE20, 0, 10},   // FireFly
+	{260, 520, PACKET_PULSE_TIME_TOLERANCE20, 0, 54},   // CAME Twee
+	{200, 400, PACKET_PULSE_TIME_TOLERANCE20, 0, 62},   // CAME Atomo (rolling code)
+	{500, 1000, PACKET_PULSE_TIME_TOLERANCE20, 0, 52},  // Nice Flor S
+	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 72},   // Alutech AT-4N
+	{336, 672, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},   // Centurion
+	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 60},  // Kinggates Stylo 4K
+	{1000, 2000, PACKET_PULSE_TIME_TOLERANCE20, 0, 24}, // Megacode
+	{500, 1500, PACKET_PULSE_TIME_TOLERANCE20, 0, 36},  // Mastercode
+	{2000, 6000, PACKET_PULSE_TIME_TOLERANCE25, 0, 7},  // Chamberlain 7-bit
+	{2000, 6000, PACKET_PULSE_TIME_TOLERANCE25, 0, 8},  // Chamberlain 8-bit
+	{2000, 6000, PACKET_PULSE_TIME_TOLERANCE25, 0, 9},  // Chamberlain 9-bit
+	{1000, 3000, PACKET_PULSE_TIME_TOLERANCE25, 0, 10}, // Liftmaster 10-bit
+	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Dooya
+	{250, 750, PACKET_PULSE_TIME_TOLERANCE25, 0, 48},   // Honeywell
+	{250, 750, PACKET_PULSE_TIME_TOLERANCE25, 0, 32},   // Intertechno
+	{330, 990, PACKET_PULSE_TIME_TOLERANCE25, 0, 32},   // Elro
+	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 40},  // Ambient Weather (Manchester)
+	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 40},   // Bresser 3ch
+	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 56},   // Bresser 5in1
+	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 104},  // Bresser 6in1
+	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 48},  // TFA Dostmann
+	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 36},  // Nexus-TH
+	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 37},   // ThermoPro TX-2
+	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 40},  // GT-WT03
+	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},   // Scher-Khan Magicar
+	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},  // Scher-Khan Logicar
+	{250, 750, PACKET_PULSE_TIME_TOLERANCE20, 0, 56},   // Toyota
+	{100, 300, PACKET_PULSE_TIME_TOLERANCE30, 0, 64},   // BinRAW (generic fallback)
 };
 
 const char *protocol_text[] =
 {
 	"Princeton",
-	"Security+ 2.0"
+	"Security+ 2.0",
+	"CAME",
+	"Nice FLO",
+	"Linear",
+	"Holtek",
+	"KeeLoq",
+	"Oregon v2",
+	"Acurite",
+	"LaCrosse TX",
+	"FAAC SLH",
+	"Hormann",
+	"Marantec",
+	"Somfy Telis",
+	"Star Line",
+	"Gate TX",
+	"SMC5326",
+	"Power Smart",
+	"iDo",
+	"Ansonic",
+	"Infactory",
+	"Schrader TPMS",
+	/* --- New protocols --- */
+	"Chamberlain",
+	"Clemsa",
+	"Doitrand",
+	"BETT",
+	"Nero Radio",
+	"FireFly",
+	"CAME Twee",
+	"CAME Atomo",
+	"Nice Flor S",
+	"Alutech AT-4N",
+	"Centurion",
+	"Kinggates Stylo",
+	"Megacode",
+	"Mastercode",
+	"Chamberlain 7",
+	"Chamberlain 8",
+	"Chamberlain 9",
+	"Liftmaster",
+	"Dooya",
+	"Honeywell",
+	"Intertechno",
+	"Elro",
+	"Ambient Weather",
+	"Bresser 3ch",
+	"Bresser 5in1",
+	"Bresser 6in1",
+	"TFA Dostmann",
+	"Nexus-TH",
+	"ThermoPro TX-2",
+	"GT-WT03",
+	"Scher-Khan Magicar",
+	"Scher-Khan Logicar",
+	"Toyota",
+	"BinRAW"
 };
 
 
@@ -52,6 +162,7 @@ enum {
 /***************************** V A R I A B L E S ******************************/
 
 SubGHz_DecEnc_t subghz_decenc_ctl;
+SubGHz_Weather_Data_t weather_data;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -203,6 +314,11 @@ uint16_t *subghz_get_rawdata()
   * @retval None
   */
 /*============================================================================*/
+const SubGHz_Weather_Data_t* subghz_get_weather_data(void)
+{
+    return &weather_data;
+}
+
 bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 {
     uint8_t ret = false;
@@ -215,6 +331,223 @@ bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 
     	case SECURITY_PLUS_20:
     		ret = subghz_decode_security_plus_20(p, pulsecount);
+    		break;
+
+    	case CAME_12BIT:
+    		ret = subghz_decode_came(p, pulsecount);
+    		break;
+
+    	case NICE_FLO:
+    		ret = subghz_decode_nice_flo(p, pulsecount);
+    		break;
+
+    	case LINEAR_10BIT:
+    		ret = subghz_decode_linear(p, pulsecount);
+    		break;
+
+    	case HOLTEK_HT12E:
+    		ret = subghz_decode_holtek(p, pulsecount);
+    		break;
+
+    	case KEELOQ:
+    		ret = subghz_decode_keeloq(p, pulsecount);
+    		break;
+
+    	case OREGON_V2:
+    		ret = subghz_decode_oregon_v2(p, pulsecount);
+    		break;
+
+    	case ACURITE:
+    		ret = subghz_decode_acurite(p, pulsecount);
+    		break;
+
+    	case LACROSSE_TX:
+    		ret = subghz_decode_lacrosse_tx(p, pulsecount);
+    		break;
+
+    	case FAAC_SLH:
+    		ret = subghz_decode_faac_slh(p, pulsecount);
+    		break;
+
+    	case HORMANN:
+    		ret = subghz_decode_hormann(p, pulsecount);
+    		break;
+
+    	case MARANTEC:
+    		ret = subghz_decode_marantec(p, pulsecount);
+    		break;
+
+    	case SOMFY_TELIS:
+    		ret = subghz_decode_somfy_telis(p, pulsecount);
+    		break;
+
+    	case STAR_LINE:
+    		ret = subghz_decode_starline(p, pulsecount);
+    		break;
+
+    	case GATE_TX:
+    		ret = subghz_decode_gate_tx(p, pulsecount);
+    		break;
+
+    	case SMC5326:
+    		ret = subghz_decode_smc5326(p, pulsecount);
+    		break;
+
+    	case POWER_SMART:
+    		ret = subghz_decode_power_smart(p, pulsecount);
+    		break;
+
+    	case IDO:
+    		ret = subghz_decode_ido(p, pulsecount);
+    		break;
+
+    	case ANSONIC:
+    		ret = subghz_decode_ansonic(p, pulsecount);
+    		break;
+
+    	case INFACTORY:
+    		ret = subghz_decode_infactory(p, pulsecount);
+    		break;
+
+    	case SCHRADER_TPMS:
+    		ret = subghz_decode_schrader(p, pulsecount);
+    		break;
+
+    	/* --- New protocols --- */
+    	case CHAMBERLAIN:
+    		ret = subghz_decode_chamberlain(p, pulsecount);
+    		break;
+
+    	case CLEMSA:
+    		ret = subghz_decode_clemsa(p, pulsecount);
+    		break;
+
+    	case DOITRAND:
+    		ret = subghz_decode_doitrand(p, pulsecount);
+    		break;
+
+    	case BETT:
+    		ret = subghz_decode_bett(p, pulsecount);
+    		break;
+
+    	case NERO_RADIO:
+    		ret = subghz_decode_nero(p, pulsecount);
+    		break;
+
+    	case FIREFLY:
+    		ret = subghz_decode_firefly(p, pulsecount);
+    		break;
+
+    	case CAME_TWEE:
+    		ret = subghz_decode_came_twee(p, pulsecount);
+    		break;
+
+    	case CAME_ATOMO:
+    		ret = subghz_decode_came_atomo(p, pulsecount);
+    		break;
+
+    	case NICE_FLOR_S:
+    		ret = subghz_decode_nice_flor_s(p, pulsecount);
+    		break;
+
+    	case ALUTECH_AT4N:
+    		ret = subghz_decode_alutech(p, pulsecount);
+    		break;
+
+    	case CENTURION:
+    		ret = subghz_decode_centurion(p, pulsecount);
+    		break;
+
+    	case KINGGATES_STYLO:
+    		ret = subghz_decode_kinggates(p, pulsecount);
+    		break;
+
+    	case MEGACODE:
+    		ret = subghz_decode_megacode(p, pulsecount);
+    		break;
+
+    	case MASTERCODE:
+    		ret = subghz_decode_mastercode(p, pulsecount);
+    		break;
+
+    	case CHAMBERLAIN_7BIT:
+    		ret = subghz_decode_chamberlain_7bit(p, pulsecount);
+    		break;
+
+    	case CHAMBERLAIN_8BIT:
+    		ret = subghz_decode_chamberlain_8bit(p, pulsecount);
+    		break;
+
+    	case CHAMBERLAIN_9BIT:
+    		ret = subghz_decode_chamberlain_9bit(p, pulsecount);
+    		break;
+
+    	case LIFTMASTER_10BIT:
+    		ret = subghz_decode_liftmaster(p, pulsecount);
+    		break;
+
+    	case DOOYA:
+    		ret = subghz_decode_dooya(p, pulsecount);
+    		break;
+
+    	case HONEYWELL:
+    		ret = subghz_decode_honeywell(p, pulsecount);
+    		break;
+
+    	case INTERTECHNO:
+    		ret = subghz_decode_intertechno(p, pulsecount);
+    		break;
+
+    	case ELRO:
+    		ret = subghz_decode_elro(p, pulsecount);
+    		break;
+
+    	case AMBIENT_WEATHER:
+    		ret = subghz_decode_ambient_weather(p, pulsecount);
+    		break;
+
+    	case BRESSER_3CH:
+    		ret = subghz_decode_bresser_3ch(p, pulsecount);
+    		break;
+
+    	case BRESSER_5IN1:
+    		ret = subghz_decode_bresser_5in1(p, pulsecount);
+    		break;
+
+    	case BRESSER_6IN1:
+    		ret = subghz_decode_bresser_6in1(p, pulsecount);
+    		break;
+
+    	case TFA_DOSTMANN:
+    		ret = subghz_decode_tfa_dostmann(p, pulsecount);
+    		break;
+
+    	case NEXUS_TH:
+    		ret = subghz_decode_nexus_th(p, pulsecount);
+    		break;
+
+    	case THERMOPRO_TX2:
+    		ret = subghz_decode_thermopro_tx2(p, pulsecount);
+    		break;
+
+    	case GT_WT03:
+    		ret = subghz_decode_gt_wt03(p, pulsecount);
+    		break;
+
+    	case SCHER_KHAN_MAGICAR:
+    		ret = subghz_decode_scher_khan_magicar(p, pulsecount);
+    		break;
+
+    	case SCHER_KHAN_LOGICAR:
+    		ret = subghz_decode_scher_khan_logicar(p, pulsecount);
+    		break;
+
+    	case TOYOTA:
+    		ret = subghz_decode_toyota(p, pulsecount);
+    		break;
+
+    	case BIN_RAW:
+    		ret = subghz_decode_bin_raw(p, pulsecount);
     		break;
 
     	default:
