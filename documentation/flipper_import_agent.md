@@ -14,16 +14,30 @@ The M1 firmware shares file-format and protocol compatibility with
 Flipper continuously adds new Sub-GHz, LF-RFID, NFC, and IR protocols.
 This skill keeps M1 in sync with those additions by:
 
-1. Identifying new or updated Flipper protocols since the last M1 sync.
-2. Porting each protocol to M1's architecture.
-3. Registering the protocol in the M1 dispatch tables.
-4. Ensuring protocol names match Flipper's constants for `.sub` / `.rfid` / `.nfc` / `.ir` file
+1. Checking whether the Monstatek/M1 upstream firmware has already added the
+   protocol — if so, pull the work from there instead of re-porting from Flipper.
+2. Identifying new or updated Flipper protocols since the last M1 sync (only if
+   not already present in Monstatek upstream).
+3. Porting each protocol to M1's architecture.
+4. Registering the protocol in the M1 dispatch tables.
+5. Ensuring protocol names match Flipper's constants for `.sub` / `.rfid` / `.nfc` / `.ir` file
    interoperability.
-5. Respecting license obligations (Flipper firmware is GPLv3).
+6. Respecting license obligations (Flipper firmware is GPLv3).
 
 ---
 
 ## Repository Locations
+
+### Monstatek/M1 (firmware origin — do NOT push)
+
+This M1 fork descends from the official Monstatek firmware.
+**Always check here first** before porting anything from Flipper.
+
+| Remote | URL |
+|--------|-----|
+| `monstatek` | `https://github.com/Monstatek/M1` |
+
+Relevant branches: `main` (or the latest release tag).
 
 ### Flipper Zero (upstream reference — do NOT push)
 
@@ -54,6 +68,31 @@ Use the `dev` branch for the latest code.
 ---
 
 ## Step-by-Step Process
+
+### Step 0 — Check Monstatek upstream first
+
+Before doing any Flipper porting work, check whether Monstatek has already
+shipped the protocol in a newer version of the official firmware:
+
+1. Fetch the Monstatek/M1 `main` branch (or the latest tag):
+   ```
+   git fetch monstatek main
+   ```
+2. Compare `Sub_Ghz/protocols/` and `lfrfid/` in `monstatek/main` against the
+   current working tree:
+   ```
+   git diff HEAD monstatek/main -- Sub_Ghz/protocols/ lfrfid/ m1_csrc/
+   ```
+3. If Monstatek already contains the protocol:
+   - Cherry-pick or merge the relevant commits from `monstatek/main`.
+   - Adjust for any C3-specific additions (version fields, build-date injection,
+     RPC extensions) before committing.
+   - **Skip Steps 1–4 below** — the Flipper porting work is already done.
+4. If Monstatek does **not** yet contain the protocol, continue with Step 1.
+
+> **Why this matters:** Monstatek's code is already adapted to M1's architecture
+> and has been tested on real hardware.  Pulling from there is faster and safer
+> than re-porting from Flipper independently.
 
 ### Step 1 — Identify new protocols
 
@@ -252,7 +291,9 @@ new NFC device type, add handling in `flipper_nfc_load()`.
 
 ## Checklist for Each Import
 
-- [ ] New Flipper protocol identified (name, file, timing constants)
+- [ ] Monstatek/M1 upstream checked for the protocol (fetch `monstatek/main`)
+- [ ] If Monstatek has it: cherry-pick/merge applied and C3 adjustments made
+- [ ] If Monstatek does NOT have it: new Flipper protocol identified (name, file, timing constants)
 - [ ] `m1_<proto>_decode.c` and `.h` created in `Sub_Ghz/protocols/`
 - [ ] Timing entry added to `subghz_protocols_list[]`
 - [ ] Protocol name added to `protocol_text[]` (matches Flipper constant exactly)
