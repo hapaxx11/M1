@@ -270,6 +270,51 @@ Known name corrections already applied in M1 (do not revert):
 | `"CAME TWEE"` | `SUBGHZ_PROTOCOL_CAME_TWEE_NAME` |
 | `"Scher-Khan"` | `SUBGHZ_PROTOCOL_SCHER_KHAN_NAME` |
 
+#### Sub-GHz protocols not yet ported (gap analysis — March 2026)
+
+The following protocols are present in the Flipper `dev` branch but have no
+counterpart in M1's `Sub_Ghz/protocols/` or `protocol_text[]`.  Each row lists
+the Flipper source file, the exact `SUBGHZ_PROTOCOL_*_NAME` string that
+**must** be used in `protocol_text[]`, and any relevant M1 notes.
+
+| Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 notes |
+|---------------------|--------------------------|----------|
+| `dickert_mahs.c` | `"Dickert_MAHS"` | Gate/garage remote |
+| `feron.c` | `"Feron"` | Smart home switch |
+| `gangqi.c` | `"GangQi"` | Rolling-code garage remote |
+| `hay21.c` | `"Hay21"` | Decode-only (no encoder in Flipper) |
+| `hollarm.c` | `"Hollarm"` | Security alarm keyfob |
+| `holtek.c` | `"Holtek"` | **Base Holtek** encoder/decoder — distinct from `"Holtek_HT12X"` which M1 already has |
+| `intertechno_v3.c` | `"Intertechno_V3"` | M1 has `"Intertechno"` (older variant) — this is a **separate, newer** protocol; both must coexist |
+| `kia.c` | `"KIA Seed"` | KIA car key — decode-only |
+| `legrand.c` | `"Legrand"` | Smart-home remote |
+| `linear_delta3.c` | `"LinearDelta3"` | Linear gate — distinct from existing `"Linear"` |
+| `magellan.c` | `"Magellan"` | Rolling-code remote |
+| `marantec24.c` | `"Marantec24"` | M1 has `"Marantec"` — this 24-bit variant is a **separate** protocol |
+| `nero_sketch.c` | `"Nero Sketch"` | M1 has `"Nero Radio"` — Nero Sketch is a **different** protocol |
+| `phoenix_v2.c` | `"Phoenix_V2"` | Rolling-code (Phoenix) |
+| `revers_rb2.c` | `"Revers_RB2"` | Rolling-code remote |
+| `roger.c` | `"Roger"` | Roger/BFT gate remotes |
+| `somfy_keytis.c` | `"Somfy Keytis"` | M1 has `"Somfy Telis"` — Keytis is a separate Somfy product line |
+
+#### Security+ 1.0 naming compatibility issue
+
+Flipper saves Security+ 1.0 signals as `Protocol: Security+ 1.0`
+(`SUBGHZ_PROTOCOL_SECPLUS_V1_NAME` in `secplus_v1.h`).  M1's Security+ 1.0
+decode logic already exists inside `m1_chamberlain_decode.c` and
+`m1_liftmaster_decode.c`, but those entries appear in `protocol_text[]` as
+`"Cham_Code"` and `"Liftmaster"` respectively.
+
+**Impact:** A `.sub` file captured on a Flipper and saved as `Security+ 1.0`
+will **fail to load** on M1 because no `protocol_text[]` entry matches the
+string `"Security+ 1.0"`.
+
+**Fix required:** Add `"Security+ 1.0"` as an additional entry in
+`protocol_text[]` (and a corresponding alias entry in `subghz_protocols_list[]`
+and `subghz_decode_protocol()`) that routes to the existing Security+ 1.0
+decode path.  The existing `"Cham_Code"` and `"Liftmaster"` entries must be
+kept for backwards compatibility with M1-saved files.
+
 ### LF-RFID `.rfid` files
 
 Protocol names are defined as `LFRFID_PROTOCOL_*` enum values in
@@ -281,6 +326,12 @@ Match them against M1's `lfrfid/lfrfid_protocol.h`.
 IR protocol names map to IRMP protocol IDs in `m1_csrc/flipper_ir.c`.
 When Flipper adds a new IR protocol, add the name-to-IRMP-ID mapping in
 `flipper_ir_protocol_to_irmp()`.
+
+#### IR protocols not yet mapped (gap analysis — March 2026)
+
+| Flipper `InfraredProtocol` enum | Flipper name string | Fix |
+|---------------------------------|---------------------|-----|
+| `InfraredProtocolNEC42ext` | `"NEC42ext"` | Add `{ "NEC42ext", IRMP_NEC42_PROTOCOL }` to the mapping table in `flipper_ir.c` — NEC42 extended addressing uses the same IRMP decoder |
 
 ### NFC `.nfc` files
 
