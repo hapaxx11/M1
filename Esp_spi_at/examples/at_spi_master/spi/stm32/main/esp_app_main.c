@@ -1652,6 +1652,135 @@ uint8_t ble_hid_wait_connect(ctrl_cmd_t *app_req, uint8_t timeout_sec)
 	return ret;
 }
 
+
+/*============================================================================*/
+/*
+ * ble_hid_send_mouse() — Send a BLE HID mouse report.
+ *
+ * buttons: bitmask  bit0=Left, bit1=Right, bit2=Middle (0=release all)
+ * dx, dy : relative X/Y movement (-127..127)
+ * wheel  : scroll wheel (-127..127, positive=up)
+ *
+ * Sends AT+HIDMSSEND=<buttons>,<dx>,<dy>,<wheel>
+ * NOTE: Requires ESP32-C6 AT firmware with AT+HIDMSSEND handler.
+ */
+/*============================================================================*/
+uint8_t ble_hid_send_mouse(ctrl_cmd_t *app_req, uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
+{
+	char cmd[48];
+	uint8_t ret;
+
+	snprintf(cmd, sizeof(cmd), "%s%d,%d,%d,%d\r\n",
+	         ESP32C6_AT_REQ_BLE_HID_MOUSE,
+	         (int)buttons, (int)dx, (int)dy, (int)wheel);
+
+	esp_free_mem(&app_req->at_cmd);
+	esp_free_mem(&app_req->cmd_resp);
+	app_req->at_cmd  = strdup(cmd);
+	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
+	app_req->cmd_len = strlen(app_req->at_cmd);
+
+	ret = spi_AT_app_send_command(app_req);
+	if (ret == SUCCESS)
+	{
+		char *rx_buf  = NULL;
+		char *resp_buf = NULL;
+		int rx_buf_len = 0;
+		uint32_t rx_uid;
+		uint32_t tick_t0 = HAL_GetTick();
+
+		ret = ERROR;
+		while (true)
+		{
+			uint32_t elapsed = (HAL_GetTick() - tick_t0) / MILLISEC_TO_SEC;
+			if (elapsed >= 2)
+				break;
+			esp_free_mem(&resp_buf);
+			vTaskDelay(10);
+			rx_buf    = spi_AT_app_get_response(&rx_buf_len, &rx_uid, 2);
+			resp_buf  = rx_buf;
+			rx_buf    = m1_resp_string_strip(rx_buf, CR_LF);
+			if (!rx_buf) continue;
+			if (rx_uid != current_uid) continue;
+			if (strcmp(rx_buf, app_req->cmd_resp)) continue;
+			ret = SUCCESS;
+			break;
+		}
+		esp_free_mem(&resp_buf);
+	}
+
+	esp_free_mem(&app_req->at_cmd);
+	esp_free_mem(&app_req->cmd_resp);
+	return ret;
+}
+
+
+/*============================================================================*/
+/*
+ * ble_hid_send_media() — Send a BLE HID Consumer Control (media key) report.
+ *
+ * usage: 16-bit USB HID Consumer Usage ID, e.g.:
+ *   0x00B5 = Scan Next Track
+ *   0x00B6 = Scan Previous Track
+ *   0x00B7 = Stop
+ *   0x00CD = Play/Pause
+ *   0x00E2 = Mute
+ *   0x00E9 = Volume Increment
+ *   0x00EA = Volume Decrement
+ *   0x0000 = Release (all keys up)
+ *
+ * Sends AT+HIDCSSEND=<usage>
+ * NOTE: Requires ESP32-C6 AT firmware with AT+HIDCSSEND handler.
+ */
+/*============================================================================*/
+uint8_t ble_hid_send_media(ctrl_cmd_t *app_req, uint16_t usage)
+{
+	char cmd[32];
+	uint8_t ret;
+
+	snprintf(cmd, sizeof(cmd), "%s%u\r\n",
+	         ESP32C6_AT_REQ_BLE_HID_CONSUMER, (unsigned)usage);
+
+	esp_free_mem(&app_req->at_cmd);
+	esp_free_mem(&app_req->cmd_resp);
+	app_req->at_cmd  = strdup(cmd);
+	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
+	app_req->cmd_len = strlen(app_req->at_cmd);
+
+	ret = spi_AT_app_send_command(app_req);
+	if (ret == SUCCESS)
+	{
+		char *rx_buf  = NULL;
+		char *resp_buf = NULL;
+		int rx_buf_len = 0;
+		uint32_t rx_uid;
+		uint32_t tick_t0 = HAL_GetTick();
+
+		ret = ERROR;
+		while (true)
+		{
+			uint32_t elapsed = (HAL_GetTick() - tick_t0) / MILLISEC_TO_SEC;
+			if (elapsed >= 2)
+				break;
+			esp_free_mem(&resp_buf);
+			vTaskDelay(10);
+			rx_buf    = spi_AT_app_get_response(&rx_buf_len, &rx_uid, 2);
+			resp_buf  = rx_buf;
+			rx_buf    = m1_resp_string_strip(rx_buf, CR_LF);
+			if (!rx_buf) continue;
+			if (rx_uid != current_uid) continue;
+			if (strcmp(rx_buf, app_req->cmd_resp)) continue;
+			ret = SUCCESS;
+			break;
+		}
+		esp_free_mem(&resp_buf);
+	}
+
+	esp_free_mem(&app_req->at_cmd);
+	esp_free_mem(&app_req->cmd_resp);
+	return ret;
+}
+
 #endif /* M1_APP_BADBT_ENABLE */
 
 

@@ -35,6 +35,10 @@ uint8_t ble_hid_init(ctrl_cmd_t *app_req, const char *device_name);
 uint8_t ble_hid_deinit(ctrl_cmd_t *app_req);
 uint8_t ble_hid_send_kb(ctrl_cmd_t *app_req, uint8_t modifier, uint8_t key1);
 uint8_t ble_hid_wait_connect(ctrl_cmd_t *app_req, uint8_t timeout_sec);
+/* Mouse: buttons bitmask (bit0=L, bit1=R, bit2=M), dx/dy/wheel −127..127 */
+uint8_t ble_hid_send_mouse(ctrl_cmd_t *app_req, uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel);
+/* Consumer/Media: 16-bit USB HID Consumer usage ID (e.g. 0x00E9 = Vol+) */
+uint8_t ble_hid_send_media(ctrl_cmd_t *app_req, uint16_t usage);
 #endif
 
 #ifdef M1_APP_BT_MANAGE_ENABLE

@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #ifdef M1_APP_BADBT_ENABLE
 
@@ -447,6 +448,73 @@ static bool badbt_parse_line(const char *line)
     if (strncmp(line, "STRING ", 7) == 0)
     {
         badbt_type_string(line + 7);
+        return true;
+    }
+
+    /* MOUSE_MOVE <dx> <dy>  — relative pointer movement (dx dy as integers) */
+    if (strncmp(line, "MOUSE_MOVE ", 11) == 0)
+    {
+        int dx = 0, dy = 0;
+        sscanf(line + 11, "%d %d", &dx, &dy);
+        if (dx < -127) dx = -127;
+        if (dx >  127) dx =  127;
+        if (dy < -127) dy = -127;
+        if (dy >  127) dy =  127;
+        ble_hid_send_mouse(&badbt_req, 0, (int8_t)dx, (int8_t)dy, 0);
+        osDelay(BADBT_KEY_RELEASE_MS);
+        return true;
+    }
+
+    /* MOUSE_CLICK [LEFT|RIGHT|MIDDLE]  — click a mouse button */
+    if (strncmp(line, "MOUSE_CLICK", 11) == 0)
+    {
+        uint8_t btn = 0x01; /* default: left */
+        const char *arg = line + 11;
+        while (*arg == ' ') arg++;
+        if (strncmp(arg, "RIGHT",  5) == 0) btn = 0x02;
+        else if (strncmp(arg, "MIDDLE", 6) == 0) btn = 0x04;
+        ble_hid_send_mouse(&badbt_req, btn, 0, 0, 0);
+        osDelay(BADBT_KEY_PRESS_MS);
+        ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
+        osDelay(BADBT_KEY_RELEASE_MS);
+        return true;
+    }
+
+    /* MOUSE_SCROLL <amount>  — scroll wheel (+up, -down) */
+    if (strncmp(line, "MOUSE_SCROLL ", 13) == 0)
+    {
+        int wheel = atoi(line + 13);
+        if (wheel < -127) wheel = -127;
+        if (wheel >  127) wheel =  127;
+        ble_hid_send_mouse(&badbt_req, 0, 0, 0, (int8_t)wheel);
+        osDelay(BADBT_KEY_RELEASE_MS);
+        /* Release */
+        ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
+        return true;
+    }
+
+    /* MEDIA <action>  — Consumer Control HID usage */
+    if (strncmp(line, "MEDIA ", 6) == 0)
+    {
+        const char *action = line + 6;
+        uint16_t usage = 0;
+        if      (strncmp(action, "PLAY_PAUSE",  10) == 0) usage = 0x00CD;
+        else if (strncmp(action, "NEXT",         4) == 0) usage = 0x00B5;
+        else if (strncmp(action, "PREVIOUS",     8) == 0) usage = 0x00B6;
+        else if (strncmp(action, "PREV",         4) == 0) usage = 0x00B6;
+        else if (strncmp(action, "STOP",         4) == 0) usage = 0x00B7;
+        else if (strncmp(action, "MUTE",         4) == 0) usage = 0x00E2;
+        else if (strncmp(action, "VOLUME_UP",    9) == 0) usage = 0x00E9;
+        else if (strncmp(action, "VOLUME_DOWN", 11) == 0) usage = 0x00EA;
+        else if (strncmp(action, "VOL_UP",       6) == 0) usage = 0x00E9;
+        else if (strncmp(action, "VOL_DOWN",     8) == 0) usage = 0x00EA;
+        if (usage != 0)
+        {
+            ble_hid_send_media(&badbt_req, usage);
+            osDelay(BADBT_KEY_PRESS_MS);
+            ble_hid_send_media(&badbt_req, 0); /* release */
+            osDelay(BADBT_KEY_RELEASE_MS);
+        }
         return true;
     }
 

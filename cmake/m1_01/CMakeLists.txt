@@ -496,6 +496,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_badusb.c
     # === Enhanced firmware: Bad-BT (Phase 8) ===
     ../../m1_csrc/m1_badbt.c
+    # === Enhanced firmware: BLE Beacon Spam ===
+    ../../m1_csrc/m1_ble_spam.c
     # === Enhanced firmware: Built-in Games (Phase 9) ===
     ../../m1_csrc/m1_games.c
     ../../m1_csrc/game_snake.c

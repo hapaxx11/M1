@@ -578,6 +578,15 @@ When Flipper adds a new IR protocol, add the name-to-IRMP-ID mapping in
 NFC card types are parsed in `m1_csrc/flipper_nfc.c`. When Flipper adds a
 new NFC device type, add handling in `flipper_nfc_load()`.
 
+**Current type coverage** (as of Hapax.9 / March 2026):
+
+| Flipper type string | `flipper_nfc_type_t` enum | M1 tech |
+|---------------------|--------------------------|---------|
+| ISO14443-3A, Mifare Classic, NTAG, Mifare Plus, Mifare DESFire | `_ISO14443_3A / _MIFARE_CLASSIC / _NTAG / _ISO14443_4A / _MIFARE_DESFIRE` | `M1NFC_TECH_A` |
+| ISO14443-3B, ST25TB, SRIx series | `_ISO14443_3B / _ST25TB` | `M1NFC_TECH_B` |
+| FeliCa, Suica, PASMO | `_FELICA` | `M1NFC_TECH_F` |
+| ISO15693-3, SLIX, SLI series | `_ISO15693 / _SLIX` | `M1NFC_TECH_V` |
+
 ---
 
 ## Checklist for Each Import
