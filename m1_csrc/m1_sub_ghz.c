@@ -2129,15 +2129,18 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	{
 		uint32_t te_long, gap_low;
 
-		/* Rolling code protocols — cannot replay from KEY data */
+		/* Rolling code protocols — cannot replay from KEY data.
+		 * Protocol name strings match Flipper's SUBGHZ_PROTOCOL_*_NAME constants. */
 		if (strstr(key_protocol, "KeeLoq") || strstr(key_protocol, "Keeloq") ||
 		    strstr(key_protocol, "Security") ||
-		    strstr(key_protocol, "Star") || strstr(key_protocol, "FAAC") ||
+		    strstr(key_protocol, "Star") ||
+		    strstr(key_protocol, "Faac") || strstr(key_protocol, "FAAC") || /* "Faac SLH" (Flipper) or legacy "FAAC SLH" */
 		    strstr(key_protocol, "Somfy") || strstr(key_protocol, "Hormann") ||
 		    strstr(key_protocol, "Marantec") ||
-		    strstr(key_protocol, "Atomo") ||   /* CAME_Atomo */
-		    strstr(key_protocol, "Twee") ||    /* CAME_Twee */
-		    strstr(key_protocol, "FloR"))       /* Nice_FloR-S */
+		    strstr(key_protocol, "Atomo") ||   /* CAME Atomo */
+		    strstr(key_protocol, "Twee") ||    /* CAME TWEE */
+		    strstr(key_protocol, "FloR") ||    /* Nice FloR-S */
+		    strstr(key_protocol, "Scher"))     /* Scher-Khan rolling code */
 		{
 			f_close(&f_sgh);
 			f_unlink(FLIPPER_SUB_TMP_SGH);

@@ -898,6 +898,8 @@ static bool parse_ir_signal_block(flipper_file_t *ff, ir_universal_cmd_t *cmd)
 /*============================================================================*/
 /*
  * Parse a Flipper .ir file and load signals into s_commands[].
+ * Accepts both "IR signals file" (per-device saved remotes) and
+ * "IR library file" (universal remote databases) — Flipper uses both.
  * Returns the number of commands loaded.
  */
 /*============================================================================*/
@@ -909,11 +911,23 @@ static uint16_t parse_ir_file(const char *filepath)
 	if (!ff_open(&ff, filepath))
 		return 0;
 
-	/* Validate header: "Filetype: IR signals file" with version >= 1 */
+	/*
+	 * Flipper uses two IR filetypes:
+	 *   "IR signals file"  — individual device remote (e.g. user-saved)
+	 *   "IR library file"  — universal remote database (tv.ir, ac.ir, etc.)
+	 * Accept either so files from Flipper SD card work without conversion.
+	 */
 	if (!ff_validate_header(&ff, "IR signals file", 1))
 	{
+		/* Not a signals file — try library format */
 		ff_close(&ff);
-		return 0;
+		if (!ff_open(&ff, filepath))
+			return 0;
+		if (!ff_validate_header(&ff, "IR library file", 1))
+		{
+			ff_close(&ff);
+			return 0;
+		}
 	}
 
 	/* Parse signal blocks */
