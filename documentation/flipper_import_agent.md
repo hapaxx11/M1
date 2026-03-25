@@ -188,7 +188,7 @@ repos.  The reasons:
 - Upstream Flipper makes a breaking API change that affects more than **10 already-copied
   files** simultaneously — a sparse subtree pull would be safer than manual patching.
 
-Current count of directly-copied files: **~35** (lfrfid area) — well below the threshold.
+Current count of directly-copied files: **~58** (lfrfid area + 1 Sub-GHz) — well below the threshold.
 
 ---
 
@@ -198,43 +198,70 @@ Source: `lib/lfrfid/protocols/` in `flipperzero-firmware` (GPLv3)
 
 These files were directly ported from Flipper Zero and adapted to M1's hardware abstraction
 layer.  Each `.c` file carries a GPLv3 attribution header referencing the original project.
+Framework files (`lfrfid.c`, `lfrfid_hal.c`, `lfrfid_file.c`, `lfrfid_manchester.c`) are
+M1-specific wrappers/adapters derived from the Flipper HAL contract.
 
 | M1 file | Flipper origin | Notes |
 |---------|---------------|-------|
 | `lfrfid/lfrfid_protocol.c` | `lib/lfrfid/lfrfid_protocol.c` | Protocol registry — adapted |
 | `lfrfid/lfrfid_protocol.h` | `lib/lfrfid/lfrfid_protocol.h` | |
+| `lfrfid/lfrfid.c` | `lib/lfrfid/lfrfid.c` | M1 HAL adapter |
+| `lfrfid/lfrfid.h` | `lib/lfrfid/lfrfid.h` | |
+| `lfrfid/lfrfid_hal.c` | — | M1-specific HAL glue |
+| `lfrfid/lfrfid_hal.h` | — | |
+| `lfrfid/lfrfid_file.c` | — | SD card file I/O |
+| `lfrfid/lfrfid_file.h` | — | |
 | `lfrfid/t5577.c` | `lib/lfrfid/t5577.c` | Derived — HAL replaced |
 | `lfrfid/t5577.h` | `lib/lfrfid/t5577.h` | |
 | `lfrfid/lfrfid_bit_lib.h` | `lib/toolbox/bit_lib.h` | Header adapted |
+| `lfrfid/lfrfid_manchester.c` | `lib/toolbox/manchester.c` | Adapted |
 | `lfrfid/lfrfid_manchester.h` | `lib/toolbox/manchester.h` | Header adapted |
 | `lfrfid/lfrfid_protocol_awid.c` | `lib/lfrfid/protocols/protocol_awid.c` | |
+| `lfrfid/lfrfid_protocol_awid.h` | `lib/lfrfid/protocols/protocol_awid.h` | |
 | `lfrfid/lfrfid_protocol_electra.c` | `lib/lfrfid/protocols/protocol_electra.c` | |
+| `lfrfid/lfrfid_protocol_electra.h` | `lib/lfrfid/protocols/protocol_electra.h` | |
 | `lfrfid/lfrfid_protocol_em4100.c` | `lib/lfrfid/protocols/protocol_em4100.c` | |
 | `lfrfid/lfrfid_protocol_em4100.h` | `lib/lfrfid/protocols/protocol_em4100.h` | |
 | `lfrfid/lfrfid_protocol_fdx_a.c` | `lib/lfrfid/protocols/protocol_fdx_a.c` | |
+| `lfrfid/lfrfid_protocol_fdx_a.h` | `lib/lfrfid/protocols/protocol_fdx_a.h` | |
 | `lfrfid/lfrfid_protocol_fdx_b.c` | `lib/lfrfid/protocols/protocol_fdx_b.c` | |
+| `lfrfid/lfrfid_protocol_fdx_b.h` | `lib/lfrfid/protocols/protocol_fdx_b.h` | |
 | `lfrfid/lfrfid_protocol_gallagher.c` | `lib/lfrfid/protocols/protocol_gallagher.c` | |
+| `lfrfid/lfrfid_protocol_gallagher.h` | `lib/lfrfid/protocols/protocol_gallagher.h` | |
 | `lfrfid/lfrfid_protocol_gproxii.c` | `lib/lfrfid/protocols/protocol_gproxii.c` | |
+| `lfrfid/lfrfid_protocol_gproxii.h` | `lib/lfrfid/protocols/protocol_gproxii.h` | |
 | `lfrfid/lfrfid_protocol_h10301.c` | `lib/lfrfid/protocols/protocol_h10301.c` | |
 | `lfrfid/lfrfid_protocol_h10301.h` | `lib/lfrfid/protocols/protocol_h10301.h` | |
 | `lfrfid/lfrfid_protocol_hid_ex.c` | `lib/lfrfid/protocols/protocol_hid_ex.c` | |
+| `lfrfid/lfrfid_protocol_hid_ex.h` | `lib/lfrfid/protocols/protocol_hid_ex.h` | |
 | `lfrfid/lfrfid_protocol_hid_generic.c` | `lib/lfrfid/protocols/protocol_hid_generic.c` | |
 | `lfrfid/lfrfid_protocol_hid_generic.h` | `lib/lfrfid/protocols/protocol_hid_generic.h` | |
 | `lfrfid/lfrfid_protocol_idteck.c` | `lib/lfrfid/protocols/protocol_idteck.c` | |
+| `lfrfid/lfrfid_protocol_idteck.h` | `lib/lfrfid/protocols/protocol_idteck.h` | |
 | `lfrfid/lfrfid_protocol_indala26.c` | `lib/lfrfid/protocols/protocol_indala26.c` | |
 | `lfrfid/lfrfid_protocol_indala26.h` | `lib/lfrfid/protocols/protocol_indala26.h` | |
 | `lfrfid/lfrfid_protocol_ioprox.c` | `lib/lfrfid/protocols/protocol_ioprox.c` | |
+| `lfrfid/lfrfid_protocol_ioprox.h` | `lib/lfrfid/protocols/protocol_ioprox.h` | |
 | `lfrfid/lfrfid_protocol_jablotron.c` | `lib/lfrfid/protocols/protocol_jablotron.c` | |
+| `lfrfid/lfrfid_protocol_jablotron.h` | `lib/lfrfid/protocols/protocol_jablotron.h` | |
 | `lfrfid/lfrfid_protocol_keri.c` | `lib/lfrfid/protocols/protocol_keri.c` | |
+| `lfrfid/lfrfid_protocol_keri.h` | `lib/lfrfid/protocols/protocol_keri.h` | |
 | `lfrfid/lfrfid_protocol_nexwatch.c` | `lib/lfrfid/protocols/protocol_nexwatch.c` | |
+| `lfrfid/lfrfid_protocol_nexwatch.h` | `lib/lfrfid/protocols/protocol_nexwatch.h` | |
 | `lfrfid/lfrfid_protocol_noralsy.c` | `lib/lfrfid/protocols/protocol_noralsy.c` | |
+| `lfrfid/lfrfid_protocol_noralsy.h` | `lib/lfrfid/protocols/protocol_noralsy.h` | |
 | `lfrfid/lfrfid_protocol_pac_stanley.c` | `lib/lfrfid/protocols/protocol_pac_stanley.c` | |
+| `lfrfid/lfrfid_protocol_pac_stanley.h` | `lib/lfrfid/protocols/protocol_pac_stanley.h` | |
 | `lfrfid/lfrfid_protocol_paradox.c` | `lib/lfrfid/protocols/protocol_paradox.c` | |
+| `lfrfid/lfrfid_protocol_paradox.h` | `lib/lfrfid/protocols/protocol_paradox.h` | |
 | `lfrfid/lfrfid_protocol_pyramid.c` | `lib/lfrfid/protocols/protocol_pyramid.c` | |
+| `lfrfid/lfrfid_protocol_pyramid.h` | `lib/lfrfid/protocols/protocol_pyramid.h` | |
 | `lfrfid/lfrfid_protocol_securakey.c` | `lib/lfrfid/protocols/protocol_securakey.c` | |
+| `lfrfid/lfrfid_protocol_securakey.h` | `lib/lfrfid/protocols/protocol_securakey.h` | |
 | `lfrfid/lfrfid_protocol_viking.c` | `lib/lfrfid/protocols/protocol_viking.c` | |
+| `lfrfid/lfrfid_protocol_viking.h` | `lib/lfrfid/protocols/protocol_viking.h` | |
 
-**Subtotal:** 32 files
+**Subtotal:** 57 files
 
 ---
 
@@ -242,16 +269,17 @@ layer.  Each `.c` file carries a GPLv3 attribution header referencing the origin
 
 Source: `lib/subghz/protocols/` in `flipperzero-firmware` (GPLv3)
 
-The 57 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
+The 74 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
 the same RF timing specifications as Flipper (so `.sub` files remain compatible), but the M1
-code is not a copy of Flipper source.  The sole exception is noted below.
+code is not a copy of Flipper source.  The sole exception is noted below.  The total of 74
+comprises 73 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
 
 | M1 file | Flipper origin | Notes |
 |---------|---------------|-------|
 | `Sub_Ghz/protocols/m1_chamberlain_decode.c` | `lib/subghz/protocols/secplus_v1.c` | Contains direct port of argilo/secplus ternary algorithm; GPLv3 attribution present |
-| All other `Sub_Ghz/protocols/m1_*_decode.c` (56 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
+| All other `Sub_Ghz/protocols/m1_*_decode.c` (73 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
 
-**Subtotal:** 1 directly-copied file; 56 independent ports
+**Subtotal:** 1 directly-copied file; 72 independent ports (+ 1 bin_raw utility file)
 
 ---
 
@@ -290,13 +318,13 @@ documentation and `.sub`/`.rfid`/`.nfc`/`.ir` file samples.
 
 | Category | Files | Directly copied | Independent ports/writes |
 |----------|-------|-----------------|--------------------------|
-| LF-RFID protocols | 32 | 32 | 0 |
-| Sub-GHz decoders | 57 | 1 | 56 |
+| LF-RFID protocols | 57 | 57 | 0 |
+| Sub-GHz decoders | 74 | 1 | 72 (+ 1 bin_raw) |
 | Furi HAL reference (docs) | 45 | 45 | — |
 | Flipper file parsers | 10 | 0 | 10 |
-| **Total** | **144** | **33 compiled + 45 docs** | **66** |
+| **Total** | **186** | **58 compiled + 45 docs** | **82** |
 
-The **directly-copied compiled files** total ~33, comfortably below the 80-file submodule
+The **directly-copied compiled files** total ~58, comfortably below the 80-file submodule
 threshold.  Continue monitoring this count as new LF-RFID protocols are ported.
 
 ---

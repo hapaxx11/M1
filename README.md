@@ -13,7 +13,7 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 - Drop Flipper files onto the SD card and use them on the M1
 
 ### Sub-GHz Enhancements
-- **30+ protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 2.0, Linear, Holtek, Hormann, Marantec, Somfy, and many more
+- **73 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Acurite, Bresser, Oregon v2, LaCrosse, Scher-Khan, Toyota, and more
 - **Spectrum Analyzer** — visual RF spectrum display
 - **RSSI Meter** — real-time signal strength
 - **Frequency Scanner** — find active frequencies
