@@ -93,6 +93,24 @@ const SubGHz_protocol_t subghz_protocols_list[] =
 	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},  // Scher-Khan Logicar
 	{250, 750, PACKET_PULSE_TIME_TOLERANCE20, 0, 56},   // Toyota
 	{100, 300, PACKET_PULSE_TIME_TOLERANCE30, 0, 64},   // BinRAW (generic fallback)
+	/* --- Flipper compatibility protocols --- */
+	{400,  800,  PACKET_PULSE_TIME_TOLERANCE20, 0, 36},  // Dickert_MAHS
+	{350,  750,  PACKET_PULSE_TIME_TOLERANCE20, 0, 32},  // Feron
+	{500,  1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 34},  // GangQi
+	{300,  700,  PACKET_PULSE_TIME_TOLERANCE20, 0, 21},  // Hay21
+	{200,  1000, PACKET_PULSE_TIME_TOLERANCE20, 0, 42},  // Hollarm
+	{430,  870,  PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Holtek
+	{275,  1375, PACKET_PULSE_TIME_TOLERANCE20, 0, 32},  // Intertechno V3
+	{250,  500,  PACKET_PULSE_TIME_TOLERANCE20, 0, 61},  // KIA Seed
+	{375,  1125, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},  // Legrand
+	{500,  2000, PACKET_PULSE_TIME_TOLERANCE20, 0, 8},   // LinearDelta3
+	{200,  400,  PACKET_PULSE_TIME_TOLERANCE20, 0, 32},  // Magellan
+	{800,  1600, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},  // Marantec24
+	{330,  660,  PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Nero Sketch
+	{427,  853,  PACKET_PULSE_TIME_TOLERANCE20, 0, 52},  // Phoenix V2
+	{250,  500,  PACKET_PULSE_TIME_TOLERANCE25, 0, 64},  // Revers_RB2
+	{500,  1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 28},  // Roger
+	{640,  1280, PACKET_PULSE_TIME_TOLERANCE25, 0, 80},  // Somfy Keytis
 };
 
 /*
@@ -160,7 +178,25 @@ const char *protocol_text[] =
 	"Scher-Khan",        /* SUBGHZ_PROTOCOL_SCHER_KHAN_NAME       (was "Scher-Khan Magicar") */
 	"Scher-Khan",        /* SUBGHZ_PROTOCOL_SCHER_KHAN_NAME       (was "Scher-Khan Logicar") */
 	"Toyota",            /* no Flipper lib/subghz equivalent       */
-	"BinRAW"             /* SUBGHZ_PROTOCOL_BIN_RAW_NAME          */
+	"BinRAW",            /* SUBGHZ_PROTOCOL_BIN_RAW_NAME          */
+	/* --- Flipper compatibility protocols --- */
+	"Dickert_MAHS",     /* SUBGHZ_PROTOCOL_DICKERT_MAHS_NAME     */
+	"Feron",            /* SUBGHZ_PROTOCOL_FERON_NAME            */
+	"GangQi",           /* SUBGHZ_PROTOCOL_GANGQI_NAME           */
+	"Hay21",            /* SUBGHZ_PROTOCOL_HAY21_NAME            */
+	"Hollarm",          /* SUBGHZ_PROTOCOL_HOLLARM_NAME          */
+	"Holtek",           /* SUBGHZ_PROTOCOL_HOLTEK_NAME           */
+	"Intertechno_V3",   /* SUBGHZ_PROTOCOL_INTERTECHNO_V3_NAME   */
+	"KIA Seed",         /* SUBGHZ_PROTOCOL_KIA_NAME              */
+	"Legrand",          /* SUBGHZ_PROTOCOL_LEGRAND_NAME          */
+	"LinearDelta3",     /* SUBGHZ_PROTOCOL_LINEAR_DELTA3_NAME    */
+	"Magellan",         /* SUBGHZ_PROTOCOL_MAGELLAN_NAME         */
+	"Marantec24",       /* SUBGHZ_PROTOCOL_MARANTEC24_NAME       */
+	"Nero Sketch",      /* SUBGHZ_PROTOCOL_NERO_SKETCH_NAME      */
+	"Phoenix_V2",       /* SUBGHZ_PROTOCOL_PHOENIX_V2_NAME       */
+	"Revers_RB2",       /* SUBGHZ_PROTOCOL_REVERSRB2_NAME        */
+	"Roger",            /* SUBGHZ_PROTOCOL_ROGER_NAME            */
+	"Somfy Keytis"      /* SUBGHZ_PROTOCOL_SOMFY_KEYTIS_NAME     */
 };
 
 
@@ -560,6 +596,74 @@ bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 
     	case BIN_RAW:
     		ret = subghz_decode_bin_raw(p, pulsecount);
+    		break;
+
+    	case DICKERT_MAHS:
+    		ret = subghz_decode_dickert_mahs(p, pulsecount);
+    		break;
+
+    	case FERON:
+    		ret = subghz_decode_feron(p, pulsecount);
+    		break;
+
+    	case GANGQI:
+    		ret = subghz_decode_gangqi(p, pulsecount);
+    		break;
+
+    	case HAY21:
+    		ret = subghz_decode_hay21(p, pulsecount);
+    		break;
+
+    	case HOLLARM:
+    		ret = subghz_decode_hollarm(p, pulsecount);
+    		break;
+
+    	case HOLTEK_BASE:
+    		ret = subghz_decode_holtek_base(p, pulsecount);
+    		break;
+
+    	case INTERTECHNO_V3:
+    		ret = subghz_decode_intertechno_v3(p, pulsecount);
+    		break;
+
+    	case KIA_SEED:
+    		ret = subghz_decode_kia_seed(p, pulsecount);
+    		break;
+
+    	case LEGRAND:
+    		ret = subghz_decode_legrand(p, pulsecount);
+    		break;
+
+    	case LINEAR_DELTA3:
+    		ret = subghz_decode_linear_delta3(p, pulsecount);
+    		break;
+
+    	case MAGELLAN:
+    		ret = subghz_decode_magellan(p, pulsecount);
+    		break;
+
+    	case MARANTEC24:
+    		ret = subghz_decode_marantec24(p, pulsecount);
+    		break;
+
+    	case NERO_SKETCH:
+    		ret = subghz_decode_nero_sketch(p, pulsecount);
+    		break;
+
+    	case PHOENIX_V2:
+    		ret = subghz_decode_phoenix_v2(p, pulsecount);
+    		break;
+
+    	case REVERS_RB2:
+    		ret = subghz_decode_revers_rb2(p, pulsecount);
+    		break;
+
+    	case ROGER:
+    		ret = subghz_decode_roger(p, pulsecount);
+    		break;
+
+    	case SOMFY_KEYTIS:
+    		ret = subghz_decode_somfy_keytis(p, pulsecount);
     		break;
 
     	default:

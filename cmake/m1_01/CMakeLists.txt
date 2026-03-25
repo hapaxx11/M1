@@ -368,6 +368,23 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_scher_khan_logicar_decode.c
     ../../Sub_Ghz/protocols/m1_toyota_decode.c
     ../../Sub_Ghz/protocols/m1_bin_raw_decode.c
+    ../../Sub_Ghz/protocols/m1_dickert_mahs_decode.c
+    ../../Sub_Ghz/protocols/m1_feron_decode.c
+    ../../Sub_Ghz/protocols/m1_gangqi_decode.c
+    ../../Sub_Ghz/protocols/m1_hay21_decode.c
+    ../../Sub_Ghz/protocols/m1_hollarm_decode.c
+    ../../Sub_Ghz/protocols/m1_holtek_base_decode.c
+    ../../Sub_Ghz/protocols/m1_intertechno_v3_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_seed_decode.c
+    ../../Sub_Ghz/protocols/m1_legrand_decode.c
+    ../../Sub_Ghz/protocols/m1_linear_delta3_decode.c
+    ../../Sub_Ghz/protocols/m1_magellan_decode.c
+    ../../Sub_Ghz/protocols/m1_marantec24_decode.c
+    ../../Sub_Ghz/protocols/m1_nero_sketch_decode.c
+    ../../Sub_Ghz/protocols/m1_phoenix_v2_decode.c
+    ../../Sub_Ghz/protocols/m1_revers_rb2_decode.c
+    ../../Sub_Ghz/protocols/m1_roger_decode.c
+    ../../Sub_Ghz/protocols/m1_somfy_keytis_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c

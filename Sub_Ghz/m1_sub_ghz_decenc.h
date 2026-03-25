@@ -143,7 +143,25 @@ enum {
 	SCHER_KHAN_MAGICAR,
 	SCHER_KHAN_LOGICAR,
 	TOYOTA,
-	BIN_RAW
+	BIN_RAW,
+	/* --- Flipper compatibility protocols --- */
+	DICKERT_MAHS,
+	FERON,
+	GANGQI,
+	HAY21,
+	HOLLARM,
+	HOLTEK_BASE,
+	INTERTECHNO_V3,
+	KIA_SEED,
+	LEGRAND,
+	LINEAR_DELTA3,
+	MAGELLAN,
+	MARANTEC24,
+	NERO_SKETCH,
+	PHOENIX_V2,
+	REVERS_RB2,
+	ROGER,
+	SOMFY_KEYTIS
 };
 
 /* Weather station decoded data */
@@ -231,6 +249,25 @@ uint8_t subghz_decode_gt_wt03(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_scher_khan_magicar(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_scher_khan_logicar(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_toyota(uint16_t p, uint16_t pulsecount);
+
+/* Flipper compatibility protocol decoders */
+uint8_t subghz_decode_dickert_mahs(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_feron(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_gangqi(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_hay21(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_hollarm(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_holtek_base(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_intertechno_v3(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_kia_seed(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_legrand(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_linear_delta3(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_magellan(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_marantec24(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_nero_sketch(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_phoenix_v2(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_revers_rb2(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_roger(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_somfy_keytis(uint16_t p, uint16_t pulsecount);
 
 /* Weather data access */
 const SubGHz_Weather_Data_t* subghz_get_weather_data(void);
