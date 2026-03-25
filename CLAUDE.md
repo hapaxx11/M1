@@ -156,10 +156,10 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 - Factory image at offset 0x000000 (contains bootloader + partition table + app)
 - Recovery files: `D:\M1Projects\esp32_recovery\`
 
-### Remotes (Monstatek vs ChrisUFO)
+### Remotes (Monstatek vs hapaxx11)
 - `monstatek` remote = Monstatek/M1 (original upstream, still at v0.8.0.0)
-- `origin` remote = ChrisUFO/M1 (fork with additional features up to v0.8.11)
-- "Stock" firmware means Monstatek, NOT ChrisUFO
+- `origin` remote = hapaxx11/M1 (this fork — push here when explicitly told)
+- "Stock" firmware means Monstatek, NOT hapaxx11
 
 ---
 
@@ -173,6 +173,9 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 - **CMake project name** in `CMakeLists.txt:24`: `M1_v0800_Hapax.9` — must match the Hapax revision
 - **When bumping Hapax revision**: update BOTH `M1_HAPAX_REVISION` in `m1_fw_update_bl.h` AND `CMAKE_PROJECT_NAME` in `CMakeLists.txt`
 - **RPC protocol**: `hapax_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-Hapax.X` suffix only when `hapax_revision > 0`, so stock Monstatek firmware displays without it.
+
+For Flipper protocol import procedures (Sub-GHz, LF-RFID, NFC, IR), see
+[`documentation/flipper_import_agent.md`](documentation/flipper_import_agent.md).
 
 ---
 
