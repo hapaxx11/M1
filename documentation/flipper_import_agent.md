@@ -52,6 +52,53 @@ Relevant branches: `main` (or the latest release tag).
 Flipper repository: `https://github.com/flipperdevices/flipperzero-firmware`
 Use the `dev` branch for the latest code.
 
+### Flipper One (fbtng / flipperone-mcu-firmware — do NOT push)
+
+The **Flipper One** is a new Flipper product based on a dual-CPU architecture:
+a main application processor (running Linux) and an RP2350 (Cortex-M33) MCU
+coprocessor that runs FreeRTOS and provides Sub-GHz, NFC, RFID, IR, GPIO, and
+USB services — the exact same peripherals M1 manages.
+
+This makes the Flipper One MCU firmware the **single most relevant reference**
+for a complete, production-quality Furi HAL implementation on a Cortex-M33 +
+FreeRTOS architecture.
+
+#### Key repositories
+
+| Name | URL | Purpose |
+|------|-----|---------|
+| `flipperone-mcu-firmware` | `https://github.com/flipperdevices/flipperone-mcu-firmware` | RP2350 MCU firmware — **furi_hal lives here** |
+| `fbtng` | `https://github.com/flipperdevices/fbtng` | SCons-based build system; defines HAL contract headers and target manifests |
+| `fbtng-corelibs` | `https://github.com/flipperdevices/fbtng-corelibs` | Packages `furi` core, FatFS, `bit_lib`, `mlib`, and other libraries |
+
+#### f100 target — the RP2350 HAL reference
+
+The target we are interested in is `targets/f100/` inside `flipperone-mcu-firmware`.
+It implements the Furi HAL for RP2350 (dual Cortex-M33 + RISC-V, same ISA as STM32H573).
+
+Reference commit: `29ada14951a34902bafaaad2be00e7b05774a414`  
+Direct path: `targets/f100/furi_hal/`
+
+> **All 45 source files from this path have been imported into this repository** at  
+> `documentation/furi_hal_reference/`. See the README in that directory for complete
+> porting notes mapping each RP2350 HAL module to STM32H573 equivalents.
+
+#### Sub-GHz / LF-RFID / NFC / IR in Flipper One
+
+Protocol implementations for the Flipper One follow the same pattern as Flipper Zero but
+live under a different path. When the Flipper One gains a new protocol, check here:
+
+| Area | Path in `flipperone-mcu-firmware` |
+|------|-----------------------------------|
+| Sub-GHz protocols | `lib/subghz/protocols/` (same lib as Flipper Zero, shared via `fbtng-corelibs`) |
+| LF-RFID protocols | `lib/lfrfid/protocols/` |
+| IR encoder/decoder | `lib/infrared/encoder_decoder/` |
+| NFC protocols | `lib/nfc/protocols/` |
+
+These protocol libraries are **shared between Flipper Zero and Flipper One** via the
+`fbtng-corelibs` package — protocol port names and `SUBGHZ_PROTOCOL_*_NAME` constants
+are identical between the two platforms.
+
 ### M1 (this repository)
 
 | Area | M1 path |
@@ -64,6 +111,40 @@ Use the `dev` branch for the latest code.
 | Flipper file parsers | `m1_csrc/flipper_*.c` and `.h` |
 | Flipper integration API | `m1_csrc/m1_flipper_integration.c` / `.h` |
 | Build list | `CMakeLists.txt` — `target_sources(...)` section |
+
+---
+
+---
+
+## Furi HAL Porting Reference
+
+A complete set of Furi HAL source files from the Flipper One f100 target has been imported
+at `documentation/furi_hal_reference/`.  These are **not compiled** in M1 — they are there
+so an agent can read them for API signatures, business logic, and porting guidance.
+
+### When to consult the Furi HAL reference
+
+- Adding or replacing a low-level M1 driver (UART, SPI, I2C, GPIO interrupts, power)
+  and you want the authoritative Furi-compatible API shape.
+- Implementing `furi_hal_serial_control` (acquire/release arbiter) on STM32H573.
+- Implementing tickless deep sleep (`vPortSuppressTicksAndSleep`).
+- Understanding the `FuriHalI2cBus` / `FuriHalI2cBusHandle` multi-bus abstraction.
+- Referencing GPIO pin numbers for the F100 board
+  (`furi_hal_reference/furi_hal_resources_pins.c`).
+
+### Key differences from M1's current architecture
+
+| Furi HAL concept | M1 current equivalent |
+|---|---|
+| `furi_hal_gpio_init_ex()` | Direct STM32 `HAL_GPIO_Init()` calls scattered in drivers |
+| `furi_hal_interrupt_set_isr()` | Direct `HAL_NVIC_EnableIRQ()` + STM32 IRQ handlers |
+| `furi_hal_serial_control` arbiter thread | `m1_esp32_hal.c` ad-hoc locking |
+| `furi_hal_power_insomnia_enter/exit()` | No equivalent; `__WFI()` called directly |
+| `FuriHalI2cBus` with mutex + event callbacks | `HAL_I2C_*` called directly |
+| `furi_hal_nvm` key-value storage | `m1_fw_config` direct struct in flash |
+
+The porting notes in `documentation/furi_hal_reference/README.md` map every RP2350-specific
+API call to its STM32H573 equivalent.
 
 ---
 
