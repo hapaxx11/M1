@@ -1,0 +1,137 @@
+#pragma once
+#include <furi.h>
+#include <hardware/gpio.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * Number of gpio on one port
+ */
+#define GPIO_NUMBER (NUM_BANK0_GPIOS)
+
+/**
+ * Interrupt callback prototype
+ */
+typedef void (*GpioExtiCallback)(void* ctx);
+
+typedef enum {
+    GpioConditionRise,
+    GpioConditionFall,
+    GpioConditionRiseFall,
+} GpioCondition;
+
+/**
+ * Gpio interrupt type
+ */
+typedef struct {
+    GpioExtiCallback callback;
+    void* context;
+    GpioCondition condition;
+} GpioInterrupt;
+
+/**
+ * Gpio modes
+ */
+typedef enum {
+    GpioModeInput,
+    GpioModeOutputPushPull,
+    GpioModeOutputOpenDrain,
+    GpioModeAnalog,
+} GpioMode;
+
+/**
+ * Gpio pull modes
+ */
+typedef enum {
+    GpioPullNo,
+    GpioPullUp,
+    GpioPullDown,
+} GpioPull;
+
+/**
+ * Gpio speed modes
+ */
+typedef enum {
+    GpioSpeedLow, /**< Slew rate limiting enabled */
+    GpioSpeedFast, /**< Slew rate limiting disabled */
+} GpioSpeed;
+
+/**
+* Gpio Drive strength levels for GPIO outputs.
+*/
+typedef enum {
+    GpioDriveStrengthLow, /**< 2 mA nominal drive strength */
+    GpioDriveStrengthMedium, /**< 4 mA nominal drive strength */
+    GpioDriveStrengthHigh, /**< 8 mA nominal drive strength */
+    GpioDriveStrengthVeryHigh, /**< 12 mA nominal drive strength */
+} GpioDriveStrength;
+
+/**
+ * Gpio alternate functions
+ */
+typedef enum {
+    GpioAltFn0Hstx = GPIO_FUNC_HSTX,
+    GpioAltFn1Spi = GPIO_FUNC_SPI,
+    GpioAltFn2Uart = GPIO_FUNC_UART,
+    GpioAltFn3I2c = GPIO_FUNC_I2C,
+    GpioAltFn4Pwm = GPIO_FUNC_PWM,
+    GpioAltFn5Sio = GPIO_FUNC_SIO,
+    GpioAltFn6Pio0 = GPIO_FUNC_PIO0,
+    GpioAltFn7Pio1 = GPIO_FUNC_PIO1,
+    GpioAltFn8Pio2 = GPIO_FUNC_PIO2,
+    GpioAltFn9Gpck = GPIO_FUNC_GPCK,
+    GpioAltFn10Usb = GPIO_FUNC_USB,
+    GpioAltFn11UartAux = GPIO_FUNC_UART_AUX,
+    GpioAltFnUnused = GPIO_FUNC_NULL,
+} GpioAltFn;
+
+/**
+ * Gpio structure
+ */
+typedef struct {
+    uint pin; /**< Pin number */
+} GpioPin;
+
+void furi_hal_gpio_interrupt_init(void);
+void furi_hal_gpio_init_simple(const GpioPin* gpio, const GpioMode mode);
+void furi_hal_gpio_init(const GpioPin* gpio, const GpioMode mode, const GpioPull pull, const GpioSpeed speed);
+void furi_hal_gpio_init_ex(const GpioPin* gpio, const GpioMode mode, const GpioPull pull, const GpioSpeed speed, const GpioAltFn alt_fn);
+
+static FURI_ALWAYS_INLINE void furi_hal_gpio_set_drive_strength(const GpioPin* gpio, GpioDriveStrength strength) {
+    furi_check(gpio->pin <= NUM_BANK0_GPIOS);
+    const enum gpio_drive_strength drive_strength =
+        (strength == GpioDriveStrengthLow)      ? GPIO_DRIVE_STRENGTH_2MA :
+        (strength == GpioDriveStrengthMedium)   ? GPIO_DRIVE_STRENGTH_4MA :
+        (strength == GpioDriveStrengthHigh)     ? GPIO_DRIVE_STRENGTH_8MA :
+        (strength == GpioDriveStrengthVeryHigh) ? GPIO_DRIVE_STRENGTH_12MA :
+                                                  GPIO_DRIVE_STRENGTH_2MA;
+    gpio_set_drive_strength(gpio->pin, drive_strength);
+}
+
+static FURI_ALWAYS_INLINE void furi_hal_gpio_set_function(const GpioPin* gpio, GpioAltFn alt_fn) {
+    furi_check(gpio->pin <= NUM_BANK0_GPIOS);
+    gpio_set_function(gpio->pin, (gpio_function_t)alt_fn);
+}
+
+void furi_hal_gpio_add_int_callback(const GpioPin* gpio, GpioCondition condition, GpioExtiCallback cb, void* ctx);
+void furi_hal_gpio_enable_int_callback(const GpioPin* gpio);
+void furi_hal_gpio_disable_int_callback(const GpioPin* gpio);
+void furi_hal_gpio_remove_int_callback(const GpioPin* gpio);
+
+static FURI_ALWAYS_INLINE void furi_hal_gpio_write(const GpioPin* gpio, const bool state) {
+    gpio_put(gpio->pin, state);
+}
+
+static FURI_ALWAYS_INLINE void furi_hal_gpio_write_open_drain(const GpioPin* gpio, const bool state) {
+    gpio_set_dir(gpio->pin, state);
+}
+
+static FURI_ALWAYS_INLINE bool furi_hal_gpio_read(const GpioPin* gpio) {
+    return gpio_get(gpio->pin);
+}
+
+#ifdef __cplusplus
+}
+#endif
