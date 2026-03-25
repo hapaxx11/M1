@@ -1,7 +1,7 @@
 # CLAUDE.md — Standing Instructions for AI Assistants
 
-## Project: Monstatek M1 Firmware
-## Owner: bedge117
+## Project: Monstatek M1 Firmware — Hapax Fork
+## Owner: hapaxx11
 
 ---
 
@@ -18,7 +18,7 @@
 - **NEVER** create pull requests without explicit permission
 - **NEVER** create issues, releases, or any public GitHub artifacts without explicit permission
 - Default assumption: all work is LOCAL ONLY
-- When pushing is approved, push ONLY to `myfork` (bedge117/M1), never to `monstatek` (upstream)
+- When pushing is approved, push ONLY to `origin` (hapaxx11/M1), never to `monstatek` (upstream)
 
 ### 3. NO Public Exposure
 - **NEVER** make code, binaries, or documentation public without explicit permission
@@ -59,11 +59,11 @@
 - **CMake**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cmake.win32_1.1.100.202601091506/tools/bin/cmake.exe`
 - **Ninja**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.ninja.win32_1.1.100.202601091506/tools/bin/ninja.exe`
 - **Build command**: Set PATH to include all three tool directories, then `cmake --build build`
-- **Post-build CRC + C3 metadata**: The CMake post-build step uses `srec_cat` which is NOT installed and will fail. This is expected — the .bin/.elf/.hex files are already generated before that step. After `cmake --build` completes, run the CRC/metadata injection script. The canonical command is in `do_build.ps1` — always use it as the reference. Currently:
+- **Post-build CRC + Hapax metadata**: The CMake post-build step uses `srec_cat` which is NOT installed and will fail. This is expected — the .bin/.elf/.hex files are already generated before that step. After `cmake --build` completes, run the CRC/metadata injection script. The canonical command is in `do_build.ps1` — always use it as the reference. Currently:
   ```
-  python tools/append_crc32.py build/M1_v0800_C3.4.bin --output build/M1_v0800_C3.4_wCRC.bin --c3-revision 4 --verbose
+  python tools/append_crc32.py build/M1_v0800_Hapax.9.bin --output build/M1_v0800_Hapax.9_wCRC.bin --c3-revision 9 --verbose
   ```
-- **CRITICAL: `--c3-revision 4` is MANDATORY** — without it, the C3 metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only `v0.8.0.0` with no `-C3.1` suffix or build date. This flag must ALWAYS be included. The binary name must also match the CMake project name (`M1_v0800_C3.4`).
+- **CRITICAL: `--c3-revision 9` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only `v0.8.0.0` with no `-Hapax.9` suffix or build date. This flag must ALWAYS be included. The binary name must also match the CMake project name (`M1_v0800_Hapax.9`).
 
 ### qMonstatek Desktop App Build
 
@@ -166,13 +166,13 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 ## Versioning Scheme
 
 - **Monstatek's 4-field version is LOCKED** — `FW_VERSION_MAJOR`, `FW_VERSION_MINOR`, `FW_VERSION_BUILD`, and `FW_VERSION_RC` in `m1_fw_update_bl.h` all belong to Monstatek. NEVER change them. Currently `0.8.0.0`.
-- **`C3` is the project codename**, NOT a version number. It does NOT mean "version 3"
-- **`M1_C3_REVISION`** in `m1_fw_update_bl.h` = the C3 fork revision (currently 4). This is OUR version, completely separate from Monstatek's fields.
-- **Display format**: `v{major}.{minor}.{build}.{rc}-C3.{c3_revision}` — e.g. `v0.8.0.0-C3.1`. Monstatek's 4 digits are displayed verbatim, the C3 suffix is appended.
-- **When Monstatek updates**: bump their 4 fields to match upstream, `M1_C3_REVISION` stays as-is. No collision.
-- **CMake project name** in `CMakeLists.txt:24`: `M1_v0800_C3.4` — must match the C3 revision
-- **When bumping C3 revision**: update BOTH `M1_C3_REVISION` in `m1_fw_update_bl.h` AND `CMAKE_PROJECT_NAME` in `CMakeLists.txt`
-- **RPC protocol**: `c3_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-C3.X` suffix only when `c3_revision > 0`, so stock Monstatek firmware displays without it.
+- **`Hapax` is the project codename**, NOT a version number.
+- **`M1_HAPAX_REVISION`** in `m1_fw_update_bl.h` = the Hapax fork revision (currently 9). This is OUR version, completely separate from Monstatek's fields.
+- **Display format**: `v{major}.{minor}.{build}.{rc}-Hapax.{hapax_revision}` — e.g. `v0.8.0.0-Hapax.9`. Monstatek's 4 digits are displayed verbatim, the Hapax suffix is appended.
+- **When Monstatek updates**: bump their 4 fields to match upstream, `M1_HAPAX_REVISION` stays as-is. No collision.
+- **CMake project name** in `CMakeLists.txt:24`: `M1_v0800_Hapax.9` — must match the Hapax revision
+- **When bumping Hapax revision**: update BOTH `M1_HAPAX_REVISION` in `m1_fw_update_bl.h` AND `CMAKE_PROJECT_NAME` in `CMakeLists.txt`
+- **RPC protocol**: `hapax_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-Hapax.X` suffix only when `hapax_revision > 0`, so stock Monstatek firmware displays without it.
 
 ---
 
@@ -188,7 +188,8 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 
 ## Remote Configuration
 
-- `origin` = ChrisUFO/M1 (DO NOT PUSH)
-- `myfork` = bedge117/M1 (push here ONLY when explicitly told)
+- `origin` = hapaxx11/M1 (this fork — push here when explicitly told)
+- `bedge117` = bedge117/M1 (upstream C3 reference, DO NOT PUSH)
+- `sincere360` = sincere360/M1_SiN360 (upstream SiN360 reference, DO NOT PUSH)
 - `monstatek` = Monstatek/M1 (upstream reference, DO NOT PUSH)
-- Feature branch: `feature/enhanced-firmware`
+- Feature branch: `copilot/update-flipper-apps-and-references`

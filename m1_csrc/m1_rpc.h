@@ -163,7 +163,7 @@ typedef struct __attribute__((packed)) {
     uint8_t  ism_band_region;
     uint8_t  op_mode;
     uint8_t  southpaw_mode;
-    uint8_t  c3_revision;       /* C3 fork revision (0 = stock Monstatek) */
+    uint8_t  hapax_revision;    /* Hapax fork revision (0 = stock Monstatek) */
 
     /* Extended battery detail (appended for backward compat) */
     uint16_t batt_voltage_mv;   /* BQ27421 voltage in millivolts */
@@ -183,7 +183,7 @@ typedef struct __attribute__((packed)) {
     uint8_t  crc_valid;
     uint32_t crc32;
     uint32_t image_size;
-    uint8_t  c3_revision;        /* C3 fork revision (0 = stock or unknown) */
+    uint8_t  hapax_revision;     /* Hapax fork revision (0 = stock or unknown) */
     char     build_date[20];     /* "MMM DD YYYY HH:MM:SS" null-terminated */
 } S_RPC_BankInfo;
 

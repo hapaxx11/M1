@@ -36,10 +36,10 @@
 #define FW_CRC_EXT_MAGIC_VALUE     ((uint32_t)0x43524332)   /* "CRC2" sentinel */
 #define FW_CRC_EXT_ERASED          ((uint32_t)0xFFFFFFFF)   /* Erased flash value */
 
-/* C3 build metadata — injected by append_crc32.py at offset 32 in the reserved area */
-#define FW_C3_META_BASE_OFFSET     32
-#define FW_C3_META_BASE            (FW_CONFIG_RESERVED_ADDRESS + FW_C3_META_BASE_OFFSET)
-#define FW_C3_META_MAGIC_VALUE     ((uint32_t)0x43334D44)   /* "C3MD" sentinel */
+/* Hapax build metadata — injected by append_crc32.py at offset 32 in the reserved area */
+#define FW_HAPAX_META_BASE_OFFSET  32
+#define FW_HAPAX_META_BASE         (FW_CONFIG_RESERVED_ADDRESS + FW_HAPAX_META_BASE_OFFSET)
+#define FW_HAPAX_META_MAGIC_VALUE  ((uint32_t)0x43334D44)   /* "C3MD" sentinel (kept for binary compat) */
 
 #define BOOT_FAIL_SIGNATURE        ((uint32_t)0xDEADBEEF)
 
@@ -73,7 +73,7 @@ typedef struct {
 #define FW_VERSION_BUILD   			0
 #define FW_VERSION_RC   			0
 
-#define M1_C3_REVISION				9
+#define M1_HAPAX_REVISION			9
 
 #define FW_CONFIG_MAGIC_NUMBER_1	((uint32_t)0x4D493235)
 #define FW_CONFIG_MAGIC_NUMBER_2    ((uint32_t)0x534A1F41)

@@ -319,7 +319,7 @@ shipped the protocol in a newer version of the official firmware:
    ```
 3. If Monstatek already contains the protocol:
    - Cherry-pick or merge the relevant commits from `monstatek/main`.
-   - Adjust for any C3-specific additions (version fields, build-date injection,
+   - Adjust for any Hapax-specific additions (version fields, build-date injection,
      RPC extensions) before committing.
    - **Skip Steps 1–4 below** — the Flipper porting work is already done.
 4. If Monstatek does **not** yet contain the protocol, continue with Step 1.
@@ -577,7 +577,7 @@ new NFC device type, add handling in `flipper_nfc_load()`.
 ## Checklist for Each Import
 
 - [ ] Monstatek/M1 upstream checked for the protocol (fetch `monstatek/main`)
-- [ ] If Monstatek has it: cherry-pick/merge applied and C3 adjustments made
+- [ ] If Monstatek has it: cherry-pick/merge applied and Hapax adjustments made
 - [ ] If Monstatek does NOT have it: new Flipper protocol identified (name, file, timing constants)
 - [ ] `m1_<proto>_decode.c` and `.h` created in `Sub_Ghz/protocols/`
 - [ ] Timing entry added to `subghz_protocols_list[]`

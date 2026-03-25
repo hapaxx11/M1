@@ -43,12 +43,12 @@ CRC_EXT_MAGIC_VALUE  = 0x43524332  # "CRC2"
 CRC_POLYNOMIAL       = 0x04C11DB7
 CRC_INIT             = 0xFFFFFFFF
 
-# C3 build metadata (offset 32 in the reserved area)
-C3_META_BASE_OFFSET  = 32
-C3_META_MAGIC_OFFSET = FW_CONFIG_OFFSET + C3_META_BASE_OFFSET + 0   # 0xFFC20
-C3_META_REV_OFFSET   = FW_CONFIG_OFFSET + C3_META_BASE_OFFSET + 4   # 0xFFC24
-C3_META_DATE_OFFSET  = FW_CONFIG_OFFSET + C3_META_BASE_OFFSET + 8   # 0xFFC28
-C3_META_MAGIC_VALUE  = 0x43334D44  # "C3MD"
+# Hapax build metadata (offset 32 in the reserved area)
+HAPAX_META_BASE_OFFSET  = 32
+HAPAX_META_MAGIC_OFFSET = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 0   # 0xFFC20
+HAPAX_META_REV_OFFSET   = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 4   # 0xFFC24
+HAPAX_META_DATE_OFFSET  = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 8   # 0xFFC28
+HAPAX_META_MAGIC_VALUE  = 0x43334D44  # "C3MD" (kept for binary compat with C3 builds)
 
 
 def stm32_crc32(data: bytes) -> int:
@@ -94,7 +94,7 @@ def main():
     parser.add_argument('input', help='Input firmware .bin file')
     parser.add_argument('--output', '-o', help='Output file (default: modify in place)')
     parser.add_argument('--c3-revision', type=int, default=0,
-                        help='C3 fork revision number (0 = stock Monstatek)')
+                        help='Hapax fork revision number (0 = stock Monstatek)')
     parser.add_argument('--sdcard', help='(deprecated, ignored)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Print detailed info')
     args = parser.parse_args()
@@ -146,10 +146,10 @@ def main():
     struct.pack_into('<I', data, CRC_EXT_SIZE_OFFSET, fw_image_size)
     struct.pack_into('<I', data, CRC_EXT_CRC_OFFSET, crc_value)
 
-    # Inject C3 build metadata if revision > 0
+    # Inject Hapax build metadata if revision > 0
     if args.c3_revision > 0:
-        # Ensure file is large enough for C3 metadata (magic + rev + 20-byte date string)
-        c3_min_size = C3_META_DATE_OFFSET + 20
+        # Ensure file is large enough for Hapax metadata (magic + rev + 20-byte date string)
+        c3_min_size = HAPAX_META_DATE_OFFSET + 20
         if len(data) < c3_min_size:
             data.extend(b'\xFF' * (c3_min_size - len(data)))
 
@@ -158,14 +158,14 @@ def main():
         build_ts = now.strftime("%Y-%m-%d %H:%M:%S")  # e.g. "2026-03-12 14:30:15"
         ts_bytes = build_ts.encode('ascii')[:19].ljust(20, b'\x00')
 
-        struct.pack_into('<I', data, C3_META_MAGIC_OFFSET, C3_META_MAGIC_VALUE)
+        struct.pack_into('<I', data, HAPAX_META_MAGIC_OFFSET, HAPAX_META_MAGIC_VALUE)
         # Revision in first byte, padding in next 3
-        struct.pack_into('<I', data, C3_META_REV_OFFSET, args.c3_revision & 0xFF)
+        struct.pack_into('<I', data, HAPAX_META_REV_OFFSET, args.c3_revision & 0xFF)
         # Date string (20 bytes)
-        data[C3_META_DATE_OFFSET:C3_META_DATE_OFFSET + 20] = ts_bytes
+        data[HAPAX_META_DATE_OFFSET:HAPAX_META_DATE_OFFSET + 20] = ts_bytes
 
         if args.verbose:
-            print(f"C3 revision:  {args.c3_revision}")
+            print(f"Hapax revision:  {args.c3_revision}")
             print(f"Build date:   {build_ts}")
 
     # Pad to word alignment if needed
@@ -175,7 +175,7 @@ def main():
 
     # Compute stock-compatible CRC over the entire image and append it
     # This makes the binary compatible with every SD card updater while
-    # preserving the C3 metadata embedded at 0xFFC00.
+    # preserving the Hapax metadata embedded at 0xFFC00.
     sd_crc = stm32_crc32(bytes(data))
     data.extend(struct.pack('<I', sd_crc))
 
