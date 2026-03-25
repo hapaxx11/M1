@@ -148,6 +148,159 @@ API call to its STM32H573 equivalent.
 
 ---
 
+---
+
+## Copied Flipper Code Inventory
+
+This section documents every file in this repository that was **directly copied or closely
+derived** from Flipper Zero or Flipper One firmware source.  It exists so that:
+
+- The total volume of copied code is visible at a glance.
+- Agents can assess whether the submodule threshold has been reached (see below).
+- License obligations can be audited without reading every file header.
+
+> **Agent instruction:** Whenever you copy, port, or directly derive a new file from Flipper
+> firmware source, add it to the appropriate table below **in the same commit**.  If you port
+> a protocol decoder that is independently re-written (same algorithm, new code), note it as
+> "independent port" in the Notes column.  Keep the running totals accurate.
+
+---
+
+### Submodule / Mirroring Threshold
+
+We intentionally do **not** use git submodules or sparse-checkout mirrors for the Flipper
+repos.  The reasons:
+
+1. We are **porting** (transforming) Flipper code to M1's architecture, not vendoring it.
+   Submodules are appropriate for build-time dependencies, not for read-time references.
+2. AI agents working in sandboxed environments can use the GitHub MCP tool
+   (`get_file_contents`) to fetch any Flipper source on demand without a submodule.
+3. A full `flipperzero-firmware` clone is ~1 GB; even a sparse checkout of just the
+   protocol dirs adds unnecessary repository weight.
+
+**Reconsider submodules if any of the following become true:**
+
+- The number of directly-copied (not independently-ported) Flipper source files in
+  `lfrfid/` or `Sub_Ghz/protocols/` exceeds **80 files** — at that point keeping up with
+  upstream bug-fixes by hand becomes impractical.
+- A new protocol area requires copying Flipper **header-only libraries** (e.g. `bit_lib`,
+  `mlib`) verbatim as build dependencies (not just reference docs).
+- Upstream Flipper makes a breaking API change that affects more than **10 already-copied
+  files** simultaneously — a sparse subtree pull would be safer than manual patching.
+
+Current count of directly-copied files: **~35** (lfrfid area) — well below the threshold.
+
+---
+
+### Category 1 — LF-RFID Protocol Implementations
+
+Source: `lib/lfrfid/protocols/` in `flipperzero-firmware` (GPLv3)
+
+These files were directly ported from Flipper Zero and adapted to M1's hardware abstraction
+layer.  Each `.c` file carries a GPLv3 attribution header referencing the original project.
+
+| M1 file | Flipper origin | Notes |
+|---------|---------------|-------|
+| `lfrfid/lfrfid_protocol.c` | `lib/lfrfid/lfrfid_protocol.c` | Protocol registry — adapted |
+| `lfrfid/lfrfid_protocol.h` | `lib/lfrfid/lfrfid_protocol.h` | |
+| `lfrfid/t5577.c` | `lib/lfrfid/t5577.c` | Derived — HAL replaced |
+| `lfrfid/t5577.h` | `lib/lfrfid/t5577.h` | |
+| `lfrfid/lfrfid_bit_lib.h` | `lib/toolbox/bit_lib.h` | Header adapted |
+| `lfrfid/lfrfid_manchester.h` | `lib/toolbox/manchester.h` | Header adapted |
+| `lfrfid/lfrfid_protocol_awid.c` | `lib/lfrfid/protocols/protocol_awid.c` | |
+| `lfrfid/lfrfid_protocol_electra.c` | `lib/lfrfid/protocols/protocol_electra.c` | |
+| `lfrfid/lfrfid_protocol_em4100.c` | `lib/lfrfid/protocols/protocol_em4100.c` | |
+| `lfrfid/lfrfid_protocol_em4100.h` | `lib/lfrfid/protocols/protocol_em4100.h` | |
+| `lfrfid/lfrfid_protocol_fdx_a.c` | `lib/lfrfid/protocols/protocol_fdx_a.c` | |
+| `lfrfid/lfrfid_protocol_fdx_b.c` | `lib/lfrfid/protocols/protocol_fdx_b.c` | |
+| `lfrfid/lfrfid_protocol_gallagher.c` | `lib/lfrfid/protocols/protocol_gallagher.c` | |
+| `lfrfid/lfrfid_protocol_gproxii.c` | `lib/lfrfid/protocols/protocol_gproxii.c` | |
+| `lfrfid/lfrfid_protocol_h10301.c` | `lib/lfrfid/protocols/protocol_h10301.c` | |
+| `lfrfid/lfrfid_protocol_h10301.h` | `lib/lfrfid/protocols/protocol_h10301.h` | |
+| `lfrfid/lfrfid_protocol_hid_ex.c` | `lib/lfrfid/protocols/protocol_hid_ex.c` | |
+| `lfrfid/lfrfid_protocol_hid_generic.c` | `lib/lfrfid/protocols/protocol_hid_generic.c` | |
+| `lfrfid/lfrfid_protocol_hid_generic.h` | `lib/lfrfid/protocols/protocol_hid_generic.h` | |
+| `lfrfid/lfrfid_protocol_idteck.c` | `lib/lfrfid/protocols/protocol_idteck.c` | |
+| `lfrfid/lfrfid_protocol_indala26.c` | `lib/lfrfid/protocols/protocol_indala26.c` | |
+| `lfrfid/lfrfid_protocol_indala26.h` | `lib/lfrfid/protocols/protocol_indala26.h` | |
+| `lfrfid/lfrfid_protocol_ioprox.c` | `lib/lfrfid/protocols/protocol_ioprox.c` | |
+| `lfrfid/lfrfid_protocol_jablotron.c` | `lib/lfrfid/protocols/protocol_jablotron.c` | |
+| `lfrfid/lfrfid_protocol_keri.c` | `lib/lfrfid/protocols/protocol_keri.c` | |
+| `lfrfid/lfrfid_protocol_nexwatch.c` | `lib/lfrfid/protocols/protocol_nexwatch.c` | |
+| `lfrfid/lfrfid_protocol_noralsy.c` | `lib/lfrfid/protocols/protocol_noralsy.c` | |
+| `lfrfid/lfrfid_protocol_pac_stanley.c` | `lib/lfrfid/protocols/protocol_pac_stanley.c` | |
+| `lfrfid/lfrfid_protocol_paradox.c` | `lib/lfrfid/protocols/protocol_paradox.c` | |
+| `lfrfid/lfrfid_protocol_pyramid.c` | `lib/lfrfid/protocols/protocol_pyramid.c` | |
+| `lfrfid/lfrfid_protocol_securakey.c` | `lib/lfrfid/protocols/protocol_securakey.c` | |
+| `lfrfid/lfrfid_protocol_viking.c` | `lib/lfrfid/protocols/protocol_viking.c` | |
+
+**Subtotal:** 32 files
+
+---
+
+### Category 2 — Sub-GHz Protocol Decoders
+
+Source: `lib/subghz/protocols/` in `flipperzero-firmware` (GPLv3)
+
+The 57 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
+the same RF timing specifications as Flipper (so `.sub` files remain compatible), but the M1
+code is not a copy of Flipper source.  The sole exception is noted below.
+
+| M1 file | Flipper origin | Notes |
+|---------|---------------|-------|
+| `Sub_Ghz/protocols/m1_chamberlain_decode.c` | `lib/subghz/protocols/secplus_v1.c` | Contains direct port of argilo/secplus ternary algorithm; GPLv3 attribution present |
+| All other `Sub_Ghz/protocols/m1_*_decode.c` (56 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
+
+**Subtotal:** 1 directly-copied file; 56 independent ports
+
+---
+
+### Category 3 — Furi HAL Reference (documentation only)
+
+Source: `targets/f100/furi_hal/` in `flipperone-mcu-firmware` (GPLv3)
+Commit: `29ada14951a34902bafaaad2be00e7b05774a414`
+
+These 45 files live in `documentation/furi_hal_reference/` and are **not compiled** in M1.
+They are a read-only porting reference for implementing M1's driver layer.  See
+`documentation/furi_hal_reference/README.md` for the full RP2350 → STM32H573 mapping.
+
+**Subtotal:** 45 files (documentation only, not shipped in firmware)
+
+---
+
+### Category 4 — Flipper File Format Parsers (m1_csrc/)
+
+These files were **independently written** by the M1 team to parse Flipper's file formats.
+They are not copied from Flipper source; they implement the format by reading Flipper's
+documentation and `.sub`/`.rfid`/`.nfc`/`.ir` file samples.
+
+| M1 file | Purpose |
+|---------|---------|
+| `m1_csrc/flipper_file.c` / `.h` | Generic Flipper key-value file parser |
+| `m1_csrc/flipper_ir.c` / `.h` | `.ir` file parser — maps Flipper IR protocol names to IRMP IDs |
+| `m1_csrc/flipper_nfc.c` / `.h` | `.nfc` file parser |
+| `m1_csrc/flipper_rfid.c` / `.h` | `.rfid` file parser |
+| `m1_csrc/flipper_subghz.c` / `.h` | `.sub` file parser |
+
+**Subtotal:** 10 files (independent — no Flipper attribution required)
+
+---
+
+### Grand Total
+
+| Category | Files | Directly copied | Independent ports/writes |
+|----------|-------|-----------------|--------------------------|
+| LF-RFID protocols | 32 | 32 | 0 |
+| Sub-GHz decoders | 57 | 1 | 56 |
+| Furi HAL reference (docs) | 45 | 45 | — |
+| Flipper file parsers | 10 | 0 | 10 |
+| **Total** | **144** | **33 compiled + 45 docs** | **66** |
+
+The **directly-copied compiled files** total ~33, comfortably below the 80-file submodule
+threshold.  Continue monitoring this count as new LF-RFID protocols are ported.
+
+---
+
 ## Step-by-Step Process
 
 ### Step 0 — Check Monstatek upstream first
