@@ -161,7 +161,7 @@ enum {
 	PHOENIX_V2,
 	REVERS_RB2,
 	ROGER,
-	SOMFY_KEYTIS
+	SOMFY_KEYTIS,
 };
 
 /* Weather station decoded data */

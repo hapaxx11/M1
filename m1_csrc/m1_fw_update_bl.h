@@ -39,7 +39,7 @@
 /* Hapax build metadata — injected by append_crc32.py at offset 32 in the reserved area */
 #define FW_HAPAX_META_BASE_OFFSET  32
 #define FW_HAPAX_META_BASE         (FW_CONFIG_RESERVED_ADDRESS + FW_HAPAX_META_BASE_OFFSET)
-#define FW_HAPAX_META_MAGIC_VALUE  ((uint32_t)0x43334D44)   /* "C3MD" sentinel (kept for binary compat) */
+#define FW_HAPAX_META_MAGIC_VALUE  ((uint32_t)0x43334D44)   /* "C3MD" sentinel (kept for binary compatibility) */
 
 #define BOOT_FAIL_SIGNATURE        ((uint32_t)0xDEADBEEF)
 
