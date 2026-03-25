@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0.0-Hapax.9] - 2026-03-25
 
+### Changed
+
+- Documentation governance: added "Documentation Update Rules" to `CLAUDE.md` and expanded
+  `.github/GUIDELINES.md` with project-specific CHANGELOG format guidance; all future agent
+  sessions are required to update `CHANGELOG.md`, `README.md`, and
+  `documentation/flipper_import_agent.md` as part of every change
+
 ### Added
 
 **Flipper Zero Compatibility**

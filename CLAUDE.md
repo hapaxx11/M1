@@ -179,6 +179,62 @@ For Flipper protocol import procedures (Sub-GHz, LF-RFID, NFC, IR), see
 
 ---
 
+## Documentation Update Rules
+
+**Every agent session that makes code or documentation changes MUST also update the relevant
+markdown files listed below.  Failing to do so is a workflow violation on par with forgetting
+to build.**
+
+### CHANGELOG.md — mandatory for every meaningful change
+
+- **Location**: `CHANGELOG.md` (repo root)
+- **Format**: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — `### Added`,
+  `### Changed`, `### Fixed`, `### Removed` subsections under the current version heading.
+- **Version label**: Use `[0.8.0.0-Hapax.{M1_HAPAX_REVISION}]` — e.g. `[0.8.0.0-Hapax.9]`.
+  The date is the wall-clock date of the change (`YYYY-MM-DD`).
+- **One entry per logical change**, not one entry per file edited.  Group related items.
+- **When to add an entry**:
+  - New firmware feature, protocol, or UI screen → `### Added`
+  - Modification to existing behaviour, API, or protocol → `### Changed`
+  - Bug fix → `### Fixed`
+  - Removal of a feature or file → `### Removed`
+  - Documentation / process / tooling change → `### Changed` with a "Documentation" prefix
+- **When NOT to add an entry**: Pure whitespace / formatting commits with zero functional
+  effect.  Every other change needs an entry.
+- If the current version block already exists (e.g. the session is a follow-up fix for
+  Hapax.9), append to it rather than creating a new heading.
+- If bumping `M1_HAPAX_REVISION`, create a **new** version heading at the top.
+
+### README.md — update when user-visible descriptions are stale
+
+- Update the Sub-GHz protocol count if decoders are added or removed.
+- Update the LF-RFID, NFC, IR, or feature lists if their descriptions no longer match
+  reality.
+- Update the build instructions if `CMAKE_PROJECT_NAME`, the post-build command, or
+  prerequisites change.
+- Update the SD card layout section if new top-level folders are introduced.
+
+### documentation/flipper_import_agent.md — update when Flipper-derived files change
+
+- When any file is added to `lfrfid/`, `Sub_Ghz/protocols/`, or `m1_csrc/flipper_*.c/h`:
+  - Add it to the correct inventory table (Category 1 / 2 / 4).
+  - Update the category subtotal.
+  - Update the Grand Total table (file count + directly-copied count).
+  - Update the threshold note if the directly-copied count changes significantly.
+- When files are removed, remove them from the table and adjust totals accordingly.
+
+### ARCHITECTURE.md — update when project structure changes
+
+- Add new top-level directories to the component table.
+- Update the Build System section if new build backends or CMake presets are introduced.
+
+### DEVELOPMENT.md — update when build process or coding standards change
+
+- Update build commands, environment requirements, or workflow rules if they change.
+- Keep this in sync with the canonical `CLAUDE.md` build instructions.
+
+---
+
 ## Architecture Rules
 
 - **S_M1_FW_CONFIG_t** struct is EXACTLY 20 bytes — NEVER modify it

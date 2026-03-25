@@ -50,10 +50,16 @@ Build must succeed
 No security vulnerabilities in dependencies
 
 6. Documentation
-Keep README.md updated
+Keep README.md updated with accurate feature descriptions and protocol counts
+Update CHANGELOG.md for every meaningful change following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
+  - Use version label [0.8.0.0-Hapax.{revision}] matching M1_HAPAX_REVISION in m1_fw_update_bl.h
+  - Subsections: ### Added / ### Changed / ### Fixed / ### Removed
+  - New feature → ### Added; behaviour change → ### Changed; bug fix → ### Fixed
+  - Append to the current version block rather than creating a duplicate heading
+  - Create a new version heading only when bumping M1_HAPAX_REVISION
+Update documentation/flipper_import_agent.md inventory tables when Flipper-derived files are added or removed
 Document setup instructions
 Maintain API documentation
-Update changelog
 Comment complex code sections
 Include JSDoc/documentation comments for public APIs
 
