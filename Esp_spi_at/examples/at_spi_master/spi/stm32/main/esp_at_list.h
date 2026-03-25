@@ -88,6 +88,23 @@
 // AT+HIDKBSEND=<modifier>,<key1>,<key2>,<key3>,<key4>,<key5>,<key6>
 #define ESP32C6_AT_REQ_BLE_HID_KB		"AT+HIDKBSEND="
 
+// BLE HID Mouse (requires AT+HIDKBINIT=1 multi-report firmware)
+// AT+HIDMSSEND=<buttons>,<x>,<y>,<wheel>
+//   buttons : bitmask  bit0=Left, bit1=Right, bit2=Middle
+//   x, y    : int8_t   relative movement (-127..127)
+//   wheel   : int8_t   scroll (-127..127)
+// NOTE: Requires ESP32-C6 AT firmware update to add AT+HIDMSSEND handler.
+#define ESP32C6_AT_REQ_BLE_HID_MOUSE	"AT+HIDMSSEND="
+
+// BLE HID Consumer / Media Control
+// AT+HIDCSSEND=<usage>
+//   usage: USB HID Consumer page usage ID (16-bit)
+//   Common values: 0x00B5=Next, 0x00B6=Prev, 0x00B7=Stop,
+//                  0x00CD=Play/Pause, 0x00E2=Mute,
+//                  0x00E9=Vol+, 0x00EA=Vol-
+// NOTE: Requires ESP32-C6 AT firmware update to add AT+HIDCSSEND handler.
+#define ESP32C6_AT_REQ_BLE_HID_CONSUMER	"AT+HIDCSSEND="
+
 // BLE Connect/Disconnect
 // AT+BLECONN=<conn_index>,<remote_BLE_address>[,<addr_type>][,<timeout>]
 #define ESP32C6_AT_REQ_BLE_CONNECT		"AT+BLECONN="

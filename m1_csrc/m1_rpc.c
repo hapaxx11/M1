@@ -695,7 +695,7 @@ static void rpc_handle_get_device_info(const S_RPC_Frame *f)
     info.ism_band_region = m1_fw_config.ism_band_region;
     info.op_mode         = (uint8_t)m1_device_stat.op_mode;
     info.southpaw_mode   = m1_southpaw_mode;
-    info.c3_revision     = M1_C3_REVISION;
+    info.hapax_revision  = M1_HAPAX_REVISION;
 
     m1_rpc_send_frame(RPC_CMD_DEVICE_INFO_RESP, f->seq,
                       (const uint8_t *)&info, sizeof(info));
@@ -1485,15 +1485,15 @@ static void rpc_handle_fw_info(const S_RPC_Frame *f)
                 info.bank1.crc_valid = 1;
             }
 
-            /* C3 build metadata at offset 32 */
-            uint32_t c3_addr = phys_bank1_base + cfg_offset + FW_C3_META_BASE_OFFSET;
+            /* Hapax build metadata at offset 32 */
+            uint32_t c3_addr = phys_bank1_base + cfg_offset + FW_HAPAX_META_BASE_OFFSET;
             uint32_t c3_magic;
             if (bl_safe_flash_read_u32(c3_addr + 0, &c3_magic) &&
-                c3_magic == FW_C3_META_MAGIC_VALUE)
+                c3_magic == FW_HAPAX_META_MAGIC_VALUE)
             {
                 uint32_t rev_word;
                 if (bl_safe_flash_read_u32(c3_addr + 4, &rev_word))
-                    info.bank1.c3_revision = (uint8_t)(rev_word & 0xFF);
+                    info.bank1.hapax_revision = (uint8_t)(rev_word & 0xFF);
 
                 /* Build date string at offset +8 (up to 19 chars + null) */
                 for (int i = 0; i < 20; i += 4) {
@@ -1545,15 +1545,15 @@ static void rpc_handle_fw_info(const S_RPC_Frame *f)
                 info.bank2.crc_valid = 1;
             }
 
-            /* C3 build metadata at offset 32 */
-            uint32_t c3_addr = phys_bank2_base + cfg_offset + FW_C3_META_BASE_OFFSET;
+            /* Hapax build metadata at offset 32 */
+            uint32_t c3_addr = phys_bank2_base + cfg_offset + FW_HAPAX_META_BASE_OFFSET;
             uint32_t c3_magic;
             if (bl_safe_flash_read_u32(c3_addr + 0, &c3_magic) &&
-                c3_magic == FW_C3_META_MAGIC_VALUE)
+                c3_magic == FW_HAPAX_META_MAGIC_VALUE)
             {
                 uint32_t rev_word;
                 if (bl_safe_flash_read_u32(c3_addr + 4, &rev_word))
-                    info.bank2.c3_revision = (uint8_t)(rev_word & 0xFF);
+                    info.bank2.hapax_revision = (uint8_t)(rev_word & 0xFF);
 
                 for (int i = 0; i < 20; i += 4) {
                     uint32_t w;

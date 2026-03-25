@@ -320,6 +320,16 @@ void nfc_import_flipper(void)
             case FLIPPER_NFC_TYPE_ISO14443_3B:
                 c->head.tech   = M1NFC_TECH_B;
                 break;
+            case FLIPPER_NFC_TYPE_FELICA:
+                c->head.tech   = M1NFC_TECH_F;
+                break;
+            case FLIPPER_NFC_TYPE_ISO15693:
+            case FLIPPER_NFC_TYPE_SLIX:
+                c->head.tech   = M1NFC_TECH_V;
+                break;
+            case FLIPPER_NFC_TYPE_ST25TB:
+                c->head.tech   = M1NFC_TECH_B;
+                break;
             default:
                 c->head.tech   = M1NFC_TECH_A;
                 break;

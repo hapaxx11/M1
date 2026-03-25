@@ -1,12 +1,12 @@
 <!-- See COPYING.txt for license details. -->
 
-# M1 Enhanced Firmware (C3)
+# M1 Enhanced Firmware (Hapax)
 
 Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool device, forked from the [original firmware](https://github.com/Monstatek/M1) with significant feature additions, Flipper Zero file compatibility, and stability improvements.
 
 > **This is a community project and is not affiliated with or endorsed by Monstatek.**
 
-## What's New in C3
+## What's New in Hapax
 
 ### Flipper Zero Compatibility
 - Import and use Flipper Zero `.sub`, `.rfid`, `.nfc`, and `.ir` files directly
@@ -138,10 +138,10 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 # Build
 cmake --build build
 
-# Post-build: inject CRC and C3 metadata
-python tools/append_crc32.py build/M1_v0800_C3.1.bin \
-    --output build/M1_v0800_C3.1_wCRC.bin \
-    --c3-revision 1 --verbose
+# Post-build: inject CRC and Hapax metadata
+python tools/append_crc32.py build/M1_v0800_Hapax.9.bin \
+    --output build/M1_v0800_Hapax.9_wCRC.bin \
+    --c3-revision 9 --verbose
 ```
 
 ### Build with STM32CubeIDE

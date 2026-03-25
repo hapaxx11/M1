@@ -21,10 +21,10 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME M1_v0800_C3.9)
+set(CMAKE_PROJECT_NAME M1_v0800_Hapax.9)
 
-# C3 fork revision — must match M1_C3_REVISION in m1_fw_update_bl.h
-set(M1_C3_REVISION 9)
+# Hapax fork revision — must match M1_HAPAX_REVISION in m1_fw_update_bl.h
+set(M1_HAPAX_REVISION 9)
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
@@ -130,16 +130,16 @@ add_custom_command(
     #COMMENT "Generating .hex file"
 )
 
-# Command to inject CRC32 + C3 metadata into the .bin file
+# Command to inject CRC32 + Hapax metadata into the .bin file
 # Also generates a stock-compatible SD card binary (_sdcard.bin)
 add_custom_command(
     TARGET ${CMAKE_PROJECT_NAME}
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + C3 metadata into ${CMAKE_PROJECT_NAME}_wCRC.bin"
+    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${CMAKE_PROJECT_NAME}_wCRC.bin"
     COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/tools/append_crc32.py
         ${TARGET_BIN}
         --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_wCRC.bin
-        --c3-revision ${M1_C3_REVISION}
+        --c3-revision ${M1_HAPAX_REVISION}
         --verbose
 )

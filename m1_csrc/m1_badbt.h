@@ -29,6 +29,19 @@ typedef struct
     char     last_line[BADBT_MAX_LINE_LEN];
 } badbt_state_t;
 
+/*
+ * Supported DuckyScript commands (in addition to standard REM/DELAY/STRING/REPEAT):
+ *
+ *   MOUSE_MOVE <dx> <dy>           — relative mouse movement (integers, −127..127)
+ *   MOUSE_CLICK [LEFT|RIGHT|MIDDLE] — click a mouse button (default LEFT)
+ *   MOUSE_SCROLL <amount>           — scroll wheel (+up, −down, −127..127)
+ *   MEDIA PLAY_PAUSE|NEXT|PREVIOUS|PREV|STOP|MUTE|VOLUME_UP|VOLUME_DOWN
+ *                                   — Consumer Control HID key press + release
+ *
+ * NOTE: MOUSE_* and MEDIA commands require an ESP32-C6 firmware update that
+ * implements the AT+HIDMSSEND and AT+HIDCSSEND command handlers.
+ */
+
 /* Menu entry point */
 void badbt_run(void);
 

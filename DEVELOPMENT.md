@@ -10,24 +10,10 @@
 - Use appropriate integer types (`uint8_t`, `uint16_t`, etc.)
 - Add comments for non-obvious logic
 
-## Branch Naming
+## Branch Naming and Commit Messages
 
-- `feature/` – New features
-- `fix/` – Bug fixes
-- `docs/` – Documentation only
-- `refactor/` – Code refactoring
-
-## Commit Messages
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-- `feat:` – New feature
-- `fix:` – Bug fix
-- `docs:` – Documentation
-- `style:` – Formatting
-- `refactor:` – Code restructure
-- `test:` – Tests
-- `chore:` – Maintenance
+See [`.github/GUIDELINES.md`](.github/GUIDELINES.md) for branch naming conventions and
+Conventional Commits format used in this repository.
 
 ## Testing
 

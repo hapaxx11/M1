@@ -319,7 +319,7 @@ shipped the protocol in a newer version of the official firmware:
    ```
 3. If Monstatek already contains the protocol:
    - Cherry-pick or merge the relevant commits from `monstatek/main`.
-   - Adjust for any C3-specific additions (version fields, build-date injection,
+   - Adjust for any Hapax-specific additions (version fields, build-date injection,
      RPC extensions) before committing.
    - **Skip Steps 1–4 below** — the Flipper porting work is already done.
 4. If Monstatek does **not** yet contain the protocol, continue with Step 1.
@@ -504,32 +504,38 @@ Known name corrections already applied in M1 (do not revert):
 | `"CAME TWEE"` | `SUBGHZ_PROTOCOL_CAME_TWEE_NAME` |
 | `"Scher-Khan"` | `SUBGHZ_PROTOCOL_SCHER_KHAN_NAME` |
 
-#### Sub-GHz protocols not yet ported (gap analysis — March 2026)
+#### Sub-GHz protocols ported — March 2026
 
-The following protocols are present in the Flipper `dev` branch but have no
-counterpart in M1's `Sub_Ghz/protocols/` or `protocol_text[]`.  Each row lists
-the Flipper source file, the exact `SUBGHZ_PROTOCOL_*_NAME` string that
-**must** be used in `protocol_text[]`, and any relevant M1 notes.
+The following 17 protocols were added in this session. Each has a decoder file
+in `Sub_Ghz/protocols/`, an entry in `subghz_protocols_list[]`,
+`protocol_text[]`, the enum, and the dispatch switch.
 
-| Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 notes |
-|---------------------|--------------------------|----------|
-| `dickert_mahs.c` | `"Dickert_MAHS"` | Gate/garage remote |
-| `feron.c` | `"Feron"` | Smart home switch |
-| `gangqi.c` | `"GangQi"` | Rolling-code garage remote |
-| `hay21.c` | `"Hay21"` | Decode-only (no encoder in Flipper) |
-| `hollarm.c` | `"Hollarm"` | Security alarm keyfob |
-| `holtek.c` | `"Holtek"` | **Base Holtek** encoder/decoder — distinct from `"Holtek_HT12X"` which M1 already has |
-| `intertechno_v3.c` | `"Intertechno_V3"` | M1 has `"Intertechno"` (older variant) — this is a **separate, newer** protocol; both must coexist |
-| `kia.c` | `"KIA Seed"` | KIA car key — decode-only |
-| `legrand.c` | `"Legrand"` | Smart-home remote |
-| `linear_delta3.c` | `"LinearDelta3"` | Linear gate — distinct from existing `"Linear"` |
-| `magellan.c` | `"Magellan"` | Rolling-code remote |
-| `marantec24.c` | `"Marantec24"` | M1 has `"Marantec"` — this 24-bit variant is a **separate** protocol |
-| `nero_sketch.c` | `"Nero Sketch"` | M1 has `"Nero Radio"` — Nero Sketch is a **different** protocol |
-| `phoenix_v2.c` | `"Phoenix_V2"` | Rolling-code (Phoenix) |
-| `revers_rb2.c` | `"Revers_RB2"` | Rolling-code remote |
-| `roger.c` | `"Roger"` | Roger/BFT gate remotes |
-| `somfy_keytis.c` | `"Somfy Keytis"` | M1 has `"Somfy Telis"` — Keytis is a separate Somfy product line |
+| Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 decoder | Notes |
+|---------------------|--------------------------|------------|-------|
+| `dickert_mahs.c` | `"Dickert_MAHS"` | `m1_dickert_mahs_decode.c` | Custom inverted-pair decoder (LOW+HIGH, 36 bits) |
+| `feron.c` | `"Feron"` | `m1_feron_decode.c` | Generic PWM (350/750, 32 bits) |
+| `gangqi.c` | `"GangQi"` | `m1_gangqi_decode.c` | Generic PWM (500/1200, 34 bits) |
+| `hay21.c` | `"Hay21"` | `m1_hay21_decode.c` | Generic PWM (300/700, 21 bits) |
+| `hollarm.c` | `"Hollarm"` | `m1_hollarm_decode.c` | Custom PPM (200H + variable LOW, 42 bits) |
+| `holtek.c` | `"Holtek"` | `m1_holtek_base_decode.c` | Custom inverted-pair after start bit (430/870, 40 bits); distinct from existing `"Holtek_HT12X"` |
+| `intertechno_v3.c` | `"Intertechno_V3"` | `m1_intertechno_v3_decode.c` | Custom 4-pulse-per-bit (275/1375, 32 bits); coexists with `"Intertechno"` |
+| `kia.c` | `"KIA Seed"` | `m1_kia_seed_decode.c` | Custom preamble-scan + PDM (250/500, 61 bits) |
+| `legrand.c` | `"Legrand"` | `m1_legrand_decode.c` | Custom inverted PWM (375/1125, 18 bits) |
+| `linear_delta3.c` | `"LinearDelta3"` | `m1_linear_delta3_decode.c` | Custom 1:7 ratio (500/2000, 8 bits); distinct from `"Linear"` |
+| `magellan.c` | `"Magellan"` | `m1_magellan_decode.c` | Generic PWM (200/400, 32 bits) |
+| `marantec24.c` | `"Marantec24"` | `m1_marantec24_decode.c` | Custom asymmetric timing (800/1600, 24 bits); distinct from `"Marantec"` |
+| `nero_sketch.c` | `"Nero Sketch"` | `m1_nero_sketch_decode.c` | Custom preamble-scan + OOK PWM (330/660, 40 bits); distinct from `"Nero Radio"` |
+| `phoenix_v2.c` | `"Phoenix_V2"` | `m1_phoenix_v2_decode.c` | Custom inverted-pair after start bit (427/853, 52 bits) |
+| `revers_rb2.c` | `"Revers_RB2"` | `m1_revers_rb2_decode.c` | Generic Manchester (250/500, 64 bits) |
+| `roger.c` | `"Roger"` | `m1_roger_decode.c` | Generic PWM (500/1000, 28 bits) |
+| `somfy_keytis.c` | `"Somfy Keytis"` | `m1_somfy_keytis_decode.c` | Generic Manchester (640/1280, 80 bits); distinct from `"Somfy Telis"` |
+
+#### Sub-GHz protocols gap (remaining — no unported protocols as of March 2026)
+
+All protocols identified in the March 2026 gap analysis have now been ported.
+If new Flipper protocols appear in future `dev` branch updates, repeat the
+analysis by comparing Flipper's `lib/subghz/protocols/` against M1's
+`protocol_text[]` array.
 
 #### Security+ 1.0 naming compatibility issue
 
@@ -572,12 +578,21 @@ When Flipper adds a new IR protocol, add the name-to-IRMP-ID mapping in
 NFC card types are parsed in `m1_csrc/flipper_nfc.c`. When Flipper adds a
 new NFC device type, add handling in `flipper_nfc_load()`.
 
+**Current type coverage** (as of Hapax.9 / March 2026):
+
+| Flipper type string | `flipper_nfc_type_t` enum | M1 tech |
+|---------------------|--------------------------|---------|
+| ISO14443-3A, Mifare Classic, NTAG, Mifare Plus, Mifare DESFire | `_ISO14443_3A / _MIFARE_CLASSIC / _NTAG / _ISO14443_4A / _MIFARE_DESFIRE` | `M1NFC_TECH_A` |
+| ISO14443-3B, ST25TB, SRIx series | `_ISO14443_3B / _ST25TB` | `M1NFC_TECH_B` |
+| FeliCa, Suica, PASMO | `_FELICA` | `M1NFC_TECH_F` |
+| ISO15693-3, SLIX, SLI series | `_ISO15693 / _SLIX` | `M1NFC_TECH_V` |
+
 ---
 
 ## Checklist for Each Import
 
 - [ ] Monstatek/M1 upstream checked for the protocol (fetch `monstatek/main`)
-- [ ] If Monstatek has it: cherry-pick/merge applied and C3 adjustments made
+- [ ] If Monstatek has it: cherry-pick/merge applied and Hapax adjustments made
 - [ ] If Monstatek does NOT have it: new Flipper protocol identified (name, file, timing constants)
 - [ ] `m1_<proto>_decode.c` and `.h` created in `Sub_Ghz/protocols/`
 - [ ] Timing entry added to `subghz_protocols_list[]`

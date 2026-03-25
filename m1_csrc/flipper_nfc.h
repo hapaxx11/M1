@@ -23,6 +23,10 @@ typedef enum {
 	FLIPPER_NFC_TYPE_NTAG,
 	FLIPPER_NFC_TYPE_MIFARE_CLASSIC,
 	FLIPPER_NFC_TYPE_MIFARE_DESFIRE,
+	FLIPPER_NFC_TYPE_FELICA,          /* Sony FeliCa (ISO 18092 / JIS X 6319-4)  */
+	FLIPPER_NFC_TYPE_ISO15693,        /* ISO/IEC 15693-3 (NFC-V / vicinity cards) */
+	FLIPPER_NFC_TYPE_SLIX,            /* NXP SLIX / I-Code SLI (ISO 15693 subtype)*/
+	FLIPPER_NFC_TYPE_ST25TB,          /* ST ST25TB / SR series (ISO 14443-2B)     */
 	FLIPPER_NFC_TYPE_UNKNOWN
 } flipper_nfc_type_t;
 

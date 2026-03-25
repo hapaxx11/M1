@@ -78,6 +78,7 @@ extern void assert_failed();
 #define M1_APP_WIFI_CONNECT_ENABLE     /* Enable WiFi connect/saved networks/status */
 #define M1_APP_BADUSB_ENABLE           /* Enable BadUSB / USB HID keystroke injection */
 #define M1_APP_BADBT_ENABLE            /* Enable Bad-BT / BLE HID keystroke injection */
+#define M1_APP_BLE_SPAM_ENABLE         /* Enable BLE Beacon Spam */
 #define M1_APP_BT_MANAGE_ENABLE        /* Enable BT device management & connect */
 #define M1_APP_RPC_ENABLE              /* Enable RPC protocol for qMonstatek desktop app */
 #define M1_APP_GAMES_ENABLE            /* Enable built-in Games menu */

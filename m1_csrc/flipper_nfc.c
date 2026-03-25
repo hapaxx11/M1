@@ -95,6 +95,37 @@ static const nfc_type_map_t nfc_type_table[] = {
 	{ "ST25TA512",             FLIPPER_NFC_TYPE_ISO14443_3A },
 	{ "ST25TA02K",             FLIPPER_NFC_TYPE_ISO14443_3A },
 
+	/* FeliCa (ISO 18092 / JIS X 6319-4) */
+	{ "FeliCa",                FLIPPER_NFC_TYPE_FELICA },
+	{ "Felica",                FLIPPER_NFC_TYPE_FELICA },
+	{ "Suica",                 FLIPPER_NFC_TYPE_FELICA },
+	{ "PASMO",                 FLIPPER_NFC_TYPE_FELICA },
+
+	/* ISO 15693-3 (NFC-V / vicinity cards) */
+	{ "ISO15693-3",            FLIPPER_NFC_TYPE_ISO15693 },
+	{ "ISO15693",              FLIPPER_NFC_TYPE_ISO15693 },
+
+	/* NXP SLIX / I-Code SLI (ISO 15693 subtype) */
+	{ "SLIX",                  FLIPPER_NFC_TYPE_SLIX },
+	{ "SLIX-S",                FLIPPER_NFC_TYPE_SLIX },
+	{ "SLIX-L",                FLIPPER_NFC_TYPE_SLIX },
+	{ "SLIX2",                 FLIPPER_NFC_TYPE_SLIX },
+	{ "SLI",                   FLIPPER_NFC_TYPE_SLIX },
+	{ "SLI-S",                 FLIPPER_NFC_TYPE_SLIX },
+	{ "SLI-L",                 FLIPPER_NFC_TYPE_SLIX },
+
+	/* ST ST25TB / SR series (ISO 14443-2 Type B) */
+	{ "ST25TB",                FLIPPER_NFC_TYPE_ST25TB },
+	{ "ST25TB04K",             FLIPPER_NFC_TYPE_ST25TB },
+	{ "ST25TB512-AC",          FLIPPER_NFC_TYPE_ST25TB },
+	{ "ST25TB512-AT",          FLIPPER_NFC_TYPE_ST25TB },
+	{ "ST25TB02K",             FLIPPER_NFC_TYPE_ST25TB },
+	{ "SRi512",                FLIPPER_NFC_TYPE_ST25TB },
+	{ "SRI512",                FLIPPER_NFC_TYPE_ST25TB },
+	{ "SRI4K",                 FLIPPER_NFC_TYPE_ST25TB },
+	{ "SRIX4K",                FLIPPER_NFC_TYPE_ST25TB },
+	{ "SRIx4K",                FLIPPER_NFC_TYPE_ST25TB },
+
 	{ NULL,                    FLIPPER_NFC_TYPE_UNKNOWN }
 };
 
