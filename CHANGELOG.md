@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0.0-Hapax.9] - 2026-03-26
 
+### Changed
+
+- **Documentation: `documentation/hardware_schematics.md`** — expanded from partial 2-sheet
+  extract to full 7-sheet hardware inventory. Added IC designators for NFC board (U2–U7,
+  Q4), crystal refs (Y1/Y2), SWD/USB-UART header pinouts, LCD1 spec (128×64, 1/65 duty),
+  J4/J5/J6/J7 connector details, IR subsystem (U6, LD1/LD2, Q3), LED indicators (D11, IC1),
+  complete power-rail summary, passive component groupings (R/C/L), test points, and
+  mounting holes. Capability summary updated with IR TX/RX, RGB LED, FDCAN, and corrected
+  component references throughout.
+
 ### Fixed
 
 - **signal_gen.c**: Replace undeclared `BUTTON_EVENT_HOLD` with `BUTTON_EVENT_LCLICK` (long-press
