@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0.0-Hapax.9] - 2026-03-26
 
+### Fixed
+
+- **signal_gen.c**: Replace undeclared `BUTTON_EVENT_HOLD` with `BUTTON_EVENT_LCLICK` (long-press
+  enum value) for UP/DOWN navigation in the signal generator screen; fixes CI build failure.
+
 ### Added
 
 - **CI: Manual build-and-release workflow** (`.github/workflows/build-release.yml`):
