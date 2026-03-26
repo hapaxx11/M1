@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_wCRC.bin` artifacts. Tag and release title are auto-derived from source versions but
   can be overridden as inputs.
 
+### Changed
+
+- **Renamed `--c3-revision` → `--hapax-revision`** in `tools/append_crc32.py` and all
+  callers (`CMakeLists.txt`, `README.md`, `CLAUDE.md`). The old `--c3-revision` alias is
+  preserved for backward compatibility with existing local scripts.
+- **Updated Hapax metadata magic sentinel** from `0x43334D44` ("C3MD") to `0x48414D44`
+  ("HAMD") in `tools/append_crc32.py` and `m1_csrc/m1_fw_update_bl.h`. The C3 name was a
+  carry-over from the merged C3 fork; the new value reflects the Hapax identity. Renamed
+  the `c3_magic` / `c3_addr` local variables in `m1_csrc/m1_rpc.c` to `hapax_magic` /
+  `hapax_addr` accordingly.
+
 - **Music Player** (`Games` menu): plays Flipper Music Format (`.fmf`) files from
   `SD:/Music/`. Full FMF parser (BPM, Duration, Octave, Notes), buzzer-based playback
   with progress bar and per-note display. BACK button aborts playback.
@@ -134,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe NMI handler — proper ECC double-fault recovery with protected flash read helper
 - Watchdog suspend/resume around long operations (flash, UART, firmware update)
 - ESP32 serial flasher: MD5 verification, RX flush before retries, watchdog reset during TX
-- Post-build CRC + Hapax metadata injection via `tools/append_crc32.py` (`--c3-revision`)
+- Post-build CRC + Hapax metadata injection via `tools/append_crc32.py` (`--hapax-revision`)
 
 ### Fixed
 
