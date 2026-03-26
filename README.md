@@ -59,6 +59,7 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 
 ### Games
 - Snake, Tetris, T-Rex Runner, Pong, Dice — built-in games accessible from the menu
+- **Music Player** — plays Flipper Music Format (`.fmf`) files from `SD:/Music/`
 
 ### WiFi
 - **Scan** — discover nearby access points
@@ -69,6 +70,12 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 ### NFC/RFID Field Detector
 - Detect external 13.56 MHz NFC reader fields and ~125 kHz RFID reader fields
 - Useful for identifying hidden readers
+- Accessible from the **NFC → Field Detect** menu entry
+
+### Signal Generator
+- Continuous square-wave output via the buzzer pin (GPIO/speaker)
+- 18 frequency presets from 200 Hz to 8 kHz; UP/DOWN to change, OK to toggle on/off
+- Accessible from the **GPIO → Signal Gen** menu entry
 
 ### Bluetooth Device Manager
 - Scan, save, and manage BLE devices

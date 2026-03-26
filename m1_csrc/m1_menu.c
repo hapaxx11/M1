@@ -197,10 +197,15 @@ S_M1_Menu_t menu_NFC_Tools =
     "Tools", nfc_tools, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_NFC_Field_Detect =
+{
+    "Field Detect", nfc_rfid_detect_run, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_NFC =
 {
-    "NFC", &menu_nfc_init, menu_nfc_deinit, NULL, 6, 0, menu_m1_icon_nfc, NULL,
-    {&menu_NFC_Read, &menu_NFC_Detect_Reader, &menu_NFC_Saved, &menu_NFC_Extra_Actions, &menu_NFC_Add_Manually, &menu_NFC_Tools }
+    "NFC", &menu_nfc_init, menu_nfc_deinit, NULL, 7, 0, menu_m1_icon_nfc, NULL,
+    {&menu_NFC_Read, &menu_NFC_Detect_Reader, &menu_NFC_Saved, &menu_NFC_Extra_Actions, &menu_NFC_Add_Manually, &menu_NFC_Tools, &menu_NFC_Field_Detect }
 };
 
 /*----------------------------- > Infrared -----------------------------------*/
@@ -248,10 +253,16 @@ S_M1_Menu_t menu_GPIO_USB_UART =
     "USB-UART bridge", gpio_usb_uart_bridge, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+#include "signal_gen.h"
+S_M1_Menu_t menu_GPIO_Signal_Gen =
+{
+    "Signal Gen", signal_gen_run, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_GPIO =
 {
-    "GPIO", menu_gpio_init, menu_gpio_exit, gpio_xkey_handler, 4, 0, menu_m1_icon_gpio, gpio_gui_update,
-    {&menu_GPIO_GPIO_Manual_Control, &menu_GPIO_3_3V_On_GPIO, &menu_GPIO_5V_On_GPIO, &menu_GPIO_USB_UART}
+    "GPIO", menu_gpio_init, menu_gpio_exit, gpio_xkey_handler, 5, 0, menu_m1_icon_gpio, gpio_gui_update,
+    {&menu_GPIO_GPIO_Manual_Control, &menu_GPIO_3_3V_On_GPIO, &menu_GPIO_5V_On_GPIO, &menu_GPIO_USB_UART, &menu_GPIO_Signal_Gen}
 };
 
 /*------------------------------- > Settings ---------------------------------*/
@@ -536,17 +547,19 @@ S_M1_Menu_t menu_BadUSB =
 /*-------------------------------- > Games -----------------------------------*/
 #ifdef M1_APP_GAMES_ENABLE
 #include "m1_games.h"
+#include "music_player.h"
 
-S_M1_Menu_t menu_Snake   = { "Snake",       game_snake_run,  NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_Tetris  = { "Tetris",      game_tetris_run, NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_TRex    = { "T-Rex Runner",game_trex_run,   NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_Pong    = { "Pong",        game_pong_run,   NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_Dice    = { "Dice Roll",   game_dice_run,   NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+S_M1_Menu_t menu_Snake        = { "Snake",        game_snake_run,    NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+S_M1_Menu_t menu_Tetris       = { "Tetris",        game_tetris_run,   NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+S_M1_Menu_t menu_TRex         = { "T-Rex Runner",  game_trex_run,     NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+S_M1_Menu_t menu_Pong         = { "Pong",          game_pong_run,     NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+S_M1_Menu_t menu_Dice         = { "Dice Roll",     game_dice_run,     NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+S_M1_Menu_t menu_MusicPlayer  = { "Music Player",  music_player_run,  NULL, NULL, 0, 0, NULL, NULL, {NULL} };
 
 S_M1_Menu_t menu_Games =
 {
-    "Games", NULL, NULL, NULL, 5, 0, menu_m1_icon_games, NULL,
-    {&menu_Snake, &menu_Tetris, &menu_TRex, &menu_Pong, &menu_Dice}
+    "Games", NULL, NULL, NULL, 6, 0, menu_m1_icon_games, NULL,
+    {&menu_Snake, &menu_Tetris, &menu_TRex, &menu_Pong, &menu_Dice, &menu_MusicPlayer}
 };
 #endif /* M1_APP_GAMES_ENABLE */
 
