@@ -177,6 +177,11 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 For Flipper protocol import procedures (Sub-GHz, LF-RFID, NFC, IR), see
 [`documentation/flipper_import_agent.md`](documentation/flipper_import_agent.md).
 
+For hardware capability assessment (which silicon is present, which features official firmware
+does not expose), see
+[`documentation/hardware_schematics.md`](documentation/hardware_schematics.md).
+Consult this file *secondarily* — source code and build config are primary truth.
+
 ---
 
 ## Documentation Update Rules
