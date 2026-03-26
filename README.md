@@ -148,7 +148,7 @@ cmake --build build
 # Post-build: inject CRC and Hapax metadata
 python tools/append_crc32.py build/M1_v0800_Hapax.9.bin \
     --output build/M1_v0800_Hapax.9_wCRC.bin \
-    --c3-revision 9 --verbose
+    --hapax-revision 9 --verbose
 ```
 
 ### Build with STM32CubeIDE

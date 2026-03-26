@@ -140,6 +140,6 @@ add_custom_command(
         ${CMAKE_SOURCE_DIR}/tools/append_crc32.py
         ${TARGET_BIN}
         --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_wCRC.bin
-        --c3-revision ${M1_HAPAX_REVISION}
+        --hapax-revision ${M1_HAPAX_REVISION}
         --verbose
 )

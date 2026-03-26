@@ -1486,19 +1486,19 @@ static void rpc_handle_fw_info(const S_RPC_Frame *f)
             }
 
             /* Hapax build metadata at offset 32 */
-            uint32_t c3_addr = phys_bank1_base + cfg_offset + FW_HAPAX_META_BASE_OFFSET;
-            uint32_t c3_magic;
-            if (bl_safe_flash_read_u32(c3_addr + 0, &c3_magic) &&
-                c3_magic == FW_HAPAX_META_MAGIC_VALUE)
+            uint32_t hapax_addr = phys_bank1_base + cfg_offset + FW_HAPAX_META_BASE_OFFSET;
+            uint32_t hapax_magic;
+            if (bl_safe_flash_read_u32(hapax_addr + 0, &hapax_magic) &&
+                hapax_magic == FW_HAPAX_META_MAGIC_VALUE)
             {
                 uint32_t rev_word;
-                if (bl_safe_flash_read_u32(c3_addr + 4, &rev_word))
+                if (bl_safe_flash_read_u32(hapax_addr + 4, &rev_word))
                     info.bank1.hapax_revision = (uint8_t)(rev_word & 0xFF);
 
                 /* Build date string at offset +8 (up to 19 chars + null) */
                 for (int i = 0; i < 20; i += 4) {
                     uint32_t w;
-                    if (bl_safe_flash_read_u32(c3_addr + 8 + i, &w))
+                    if (bl_safe_flash_read_u32(hapax_addr + 8 + i, &w))
                         memcpy(&info.bank1.build_date[i], &w, 4);
                 }
                 info.bank1.build_date[19] = '\0';
@@ -1546,18 +1546,18 @@ static void rpc_handle_fw_info(const S_RPC_Frame *f)
             }
 
             /* Hapax build metadata at offset 32 */
-            uint32_t c3_addr = phys_bank2_base + cfg_offset + FW_HAPAX_META_BASE_OFFSET;
-            uint32_t c3_magic;
-            if (bl_safe_flash_read_u32(c3_addr + 0, &c3_magic) &&
-                c3_magic == FW_HAPAX_META_MAGIC_VALUE)
+            uint32_t hapax_addr = phys_bank2_base + cfg_offset + FW_HAPAX_META_BASE_OFFSET;
+            uint32_t hapax_magic;
+            if (bl_safe_flash_read_u32(hapax_addr + 0, &hapax_magic) &&
+                hapax_magic == FW_HAPAX_META_MAGIC_VALUE)
             {
                 uint32_t rev_word;
-                if (bl_safe_flash_read_u32(c3_addr + 4, &rev_word))
+                if (bl_safe_flash_read_u32(hapax_addr + 4, &rev_word))
                     info.bank2.hapax_revision = (uint8_t)(rev_word & 0xFF);
 
                 for (int i = 0; i < 20; i += 4) {
                     uint32_t w;
-                    if (bl_safe_flash_read_u32(c3_addr + 8 + i, &w))
+                    if (bl_safe_flash_read_u32(hapax_addr + 8 + i, &w))
                         memcpy(&info.bank2.build_date[i], &w, 4);
                 }
                 info.bank2.build_date[19] = '\0';

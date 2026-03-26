@@ -48,7 +48,7 @@ HAPAX_META_BASE_OFFSET  = 32
 HAPAX_META_MAGIC_OFFSET = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 0   # 0xFFC20
 HAPAX_META_REV_OFFSET   = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 4   # 0xFFC24
 HAPAX_META_DATE_OFFSET  = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 8   # 0xFFC28
-HAPAX_META_MAGIC_VALUE  = 0x43334D44  # "C3MD" (kept for binary compatibility with C3 builds)
+HAPAX_META_MAGIC_VALUE  = 0x48415058  # "HAPX" (Hapax sentinel)
 
 
 def stm32_crc32(data: bytes) -> int:
@@ -93,7 +93,8 @@ def main():
     )
     parser.add_argument('input', help='Input firmware .bin file')
     parser.add_argument('--output', '-o', help='Output file (default: modify in place)')
-    parser.add_argument('--c3-revision', type=int, default=0,
+    parser.add_argument('--hapax-revision', '--c3-revision', type=int, default=0,
+                        dest='hapax_revision',
                         help='Hapax fork revision number (0 = stock Monstatek)')
     parser.add_argument('--sdcard', help='(deprecated, ignored)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Print detailed info')
@@ -147,11 +148,11 @@ def main():
     struct.pack_into('<I', data, CRC_EXT_CRC_OFFSET, crc_value)
 
     # Inject Hapax build metadata if revision > 0
-    if args.c3_revision > 0:
+    if args.hapax_revision > 0:
         # Ensure file is large enough for Hapax metadata (magic + rev + 20-byte date string)
-        c3_min_size = HAPAX_META_DATE_OFFSET + 20
-        if len(data) < c3_min_size:
-            data.extend(b'\xFF' * (c3_min_size - len(data)))
+        hapax_min_size = HAPAX_META_DATE_OFFSET + 20
+        if len(data) < hapax_min_size:
+            data.extend(b'\xFF' * (hapax_min_size - len(data)))
 
         # Build timestamp string: "YYYY-MM-DD HH:MM:SS" (19 chars + null, 20 bytes)
         now = datetime.now()
@@ -160,12 +161,12 @@ def main():
 
         struct.pack_into('<I', data, HAPAX_META_MAGIC_OFFSET, HAPAX_META_MAGIC_VALUE)
         # Revision in first byte, padding in next 3
-        struct.pack_into('<I', data, HAPAX_META_REV_OFFSET, args.c3_revision & 0xFF)
+        struct.pack_into('<I', data, HAPAX_META_REV_OFFSET, args.hapax_revision & 0xFF)
         # Date string (20 bytes)
         data[HAPAX_META_DATE_OFFSET:HAPAX_META_DATE_OFFSET + 20] = ts_bytes
 
         if args.verbose:
-            print(f"Hapax revision:  {args.c3_revision}")
+            print(f"Hapax revision:  {args.hapax_revision}")
             print(f"Build date:   {build_ts}")
 
     # Pad to word alignment if needed
