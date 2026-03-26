@@ -70,4 +70,8 @@ void m1_buzzer_notification2(void);
 void m1_buzzer_demoTest(uint8_t freqStp);
 void m1_buzzer_set(uint16_t frequency, uint16_t duration_ms);
 
+/* Continuous tone API: start a tone that runs until m1_buzzer_tone_stop() */
+void m1_buzzer_tone_start(uint16_t frequency);
+void m1_buzzer_tone_stop(void);
+
 #endif /* M1_BUZZER_H_ */

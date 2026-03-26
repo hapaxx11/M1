@@ -22,6 +22,7 @@
 #include "m1_infrared.h"
 #include "m1_nfc.h"
 #include "m1_rfid.h"
+#include "m1_field_detect.h"
 #include "m1_settings.h"
 #include "m1_sub_ghz.h"
 #include "m1_power_ctl.h"
