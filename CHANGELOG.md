@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0.0-Hapax.9] - 2026-03-26
 
+### Fixed
+
+- **Documentation: `documentation/hardware_schematics.md`** — removed `NFC_CS` and `NFC_IRQ`
+  from the 125 kHz LF-RFID signal table where they were incorrectly listed; added a note
+  clarifying they belong to the 13.56 MHz HF/NFC transceiver on the main board.
+
 ### Changed
 
 - **Documentation: `documentation/hardware_schematics.md`** — expanded from partial 2-sheet
