@@ -264,3 +264,54 @@ void m1_buzzer_demoTest(uint8_t freqStp)
 		break;
 	}
 } // void m1_buzzer_notification2(void)
+
+
+/*============================================================================*/
+/**
+  * @brief  Start a continuous tone at the given frequency.
+  *         The tone runs until m1_buzzer_tone_stop() is called.
+  *         Any running one-shot tone is stopped first.
+  * @param  frequency  Tone frequency in Hz (min ~130 Hz due to timer limits)
+  * @retval None
+  */
+/*============================================================================*/
+void m1_buzzer_tone_start(uint16_t frequency)
+{
+	if (frequency == 0)
+		return;
+
+	/* Stop any running tone first */
+	m1_buzzer_tone_stop();
+
+	buzzer_busy = true;
+	buzzer_sys_init(frequency);
+} // void m1_buzzer_tone_start(uint16_t frequency)
+
+
+/*============================================================================*/
+/**
+  * @brief  Stop a continuous tone started by m1_buzzer_tone_start().
+  * @retval None
+  */
+/*============================================================================*/
+void m1_buzzer_tone_stop(void)
+{
+	if (!buzzer_busy)
+		return;
+
+	HAL_TIM_PWM_Stop(&Timerhdl_Buzzer, BUZZER_TIMER_TX_CHANNEL);
+
+	BUZZER_TIMER_CLK_DIS();
+
+	HAL_NVIC_DisableIRQ(BUZZER_TIMER_IRQn);
+
+	GPIO_InitTypeDef gpio_init_struct;
+	gpio_init_struct.Pin = SPK_CTRL_Pin;
+	gpio_init_struct.Mode = GPIO_MODE_OUTPUT_PP;
+	gpio_init_struct.Pull = GPIO_NOPULL;
+	gpio_init_struct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(SPK_CTRL_GPIO_Port, &gpio_init_struct);
+	HAL_GPIO_WritePin(SPK_CTRL_GPIO_Port, SPK_CTRL_Pin, GPIO_PIN_RESET);
+
+	buzzer_busy = false;
+} // void m1_buzzer_tone_stop(void)

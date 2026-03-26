@@ -18,6 +18,7 @@
 /*************************** I N C L U D E S **********************************/
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "stm32h5xx_hal.h"
 #include "main.h"
@@ -29,6 +30,13 @@
 #include "st25r3916.h"
 #include "st25r3916_com.h"
 #include "nfc_conf.h"
+
+/* UI and system */
+#include "m1_lcd.h"
+#include "m1_display.h"
+#include "m1_tasks.h"
+#include "m1_lib.h"
+#include "m1_buzzer.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -345,4 +353,104 @@ int m1_field_detect_nfc_raw(void)
 int m1_field_detect_nfc_opctl(void)
 {
     return last_nfc_opctl;
+}
+
+
+/*============================================================================*/
+/*                                                                            */
+/*  NFC / RFID Field Detector — interactive UI                               */
+/*  Shows real-time NFC (13.56 MHz) and RFID (125 kHz) field presence.       */
+/*                                                                            */
+/*============================================================================*/
+
+void nfc_rfid_detect_run(void)
+{
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t       q_item;
+    BaseType_t          ret;
+    bool                running  = true;
+    bool                nfc_ok;
+    bool                prev_nfc  = false;
+    bool                prev_rfid = false;
+    char                rfid_str[20];
+
+    int rc = m1_field_detect_start();
+    nfc_ok = (rc == 0);
+
+    /* Initial "Listening…" screen */
+    u8g2_FirstPage(&m1_u8g2);
+    do {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 12, "Field Detect");
+        u8g2_DrawStr(&m1_u8g2, 2, 28, "Initialising...");
+        u8g2_DrawStr(&m1_u8g2, 2, 56, "BACK to exit");
+    } while (u8g2_NextPage(&m1_u8g2));
+
+    while (running)
+    {
+        /* Poll both detectors */
+        bool nfc_det  = m1_field_detect_nfc();
+        uint32_t rfid_freq = 0;
+        bool rfid_det = m1_field_detect_rfid(&rfid_freq);
+
+        /* Beep on rising edge */
+        if ((nfc_det && !prev_nfc) || (rfid_det && !prev_rfid))
+            m1_buzzer_notification();
+
+        prev_nfc  = nfc_det;
+        prev_rfid = rfid_det;
+
+        /* Build RFID frequency string */
+        if (rfid_det && rfid_freq > 0)
+            snprintf(rfid_str, sizeof(rfid_str), "%lukHz", rfid_freq / 1000UL);
+        else
+            snprintf(rfid_str, sizeof(rfid_str), "none");
+
+        /* Render display */
+        u8g2_FirstPage(&m1_u8g2);
+        do {
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            u8g2_DrawStr(&m1_u8g2, 2, 10, "Field Detect");
+
+            /* --- NFC row --- */
+            u8g2_DrawStr(&m1_u8g2, 2, 26, "NFC 13.56 MHz:");
+            if (!nfc_ok)
+                u8g2_DrawStr(&m1_u8g2, 90, 26, "N/A");
+            else
+                u8g2_DrawStr(&m1_u8g2, 90, 26, nfc_det ? "FIELD" : "---");
+
+            u8g2_DrawFrame(&m1_u8g2, 2, 28, 124, 6);
+            if (nfc_det)
+                u8g2_DrawBox(&m1_u8g2, 3, 29, 122, 4);
+
+            /* --- RFID row --- */
+            u8g2_DrawStr(&m1_u8g2, 2, 46, "RFID 125 kHz:");
+            if (rfid_det)
+                u8g2_DrawStr(&m1_u8g2, 84, 46, rfid_str);
+            else
+                u8g2_DrawStr(&m1_u8g2, 84, 46, "---");
+
+            u8g2_DrawFrame(&m1_u8g2, 2, 48, 124, 6);
+            if (rfid_det)
+                u8g2_DrawBox(&m1_u8g2, 3, 49, 122, 4);
+
+            u8g2_DrawStr(&m1_u8g2, 2, 63, "BACK to exit");
+        } while (u8g2_NextPage(&m1_u8g2));
+
+        /* Check for BACK button (non-blocking: poll already took ~50ms in NFC) */
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+            if (ret == pdTRUE &&
+                this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                running = false;
+            }
+        }
+    }
+
+    m1_field_detect_stop();
+    xQueueReset(main_q_hdl);
+    m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
 }

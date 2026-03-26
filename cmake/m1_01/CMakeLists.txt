@@ -505,6 +505,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/game_trex.c
     ../../m1_csrc/game_pong.c
     ../../m1_csrc/game_dice.c
+    ../../m1_csrc/music_player.c
+    ../../m1_csrc/signal_gen.c
     # === Enhanced firmware: ELF App Loader (Phase 10) ===
     ../../m1_csrc/m1_elf_loader.c
     ../../m1_csrc/m1_app_api.c
