@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CI: Manual build-and-release workflow** (`.github/workflows/build-release.yml`):
+  `workflow_dispatch`-only GitHub Actions workflow that installs the ARM GCC toolchain,
+  builds the firmware with CMake + Ninja, injects CRC32 + Hapax metadata via
+  `append_crc32.py`, and publishes a GitHub Release with `.elf`, `.hex`, raw `.bin`, and
+  `_wCRC.bin` artifacts. Tag and release title are auto-derived from source versions but
+  can be overridden as inputs.
+
 - **Music Player** (`Games` menu): plays Flipper Music Format (`.fmf`) files from
   `SD:/Music/`. Full FMF parser (BPM, Duration, Octave, Notes), buzzer-based playback
   with progress bar and per-note display. BACK button aborts playback.

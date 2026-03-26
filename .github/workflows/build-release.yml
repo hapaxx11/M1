@@ -1,0 +1,216 @@
+name: Build and Release
+
+# Manual-only trigger — repository admins invoke this from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >
+          Release tag (e.g. v0.8.0.0-Hapax.9).
+          Leave blank to auto-generate from the current date and the
+          M1_HAPAX_REVISION value read from the source tree.
+        required: false
+        default: ''
+      release_name:
+        description: 'Human-readable release title (optional)'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark as pre-release?'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # needed to create the release and upload assets
+
+jobs:
+  build:
+    name: Build firmware
+    runs-on: ubuntu-24.04
+
+    outputs:
+      tag:          ${{ steps.meta.outputs.tag }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      project_name: ${{ steps.meta.outputs.project_name }}
+
+    steps:
+      # ------------------------------------------------------------------ #
+      # 1. Checkout (with submodules)
+      # ------------------------------------------------------------------ #
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # ------------------------------------------------------------------ #
+      # 2. Read project metadata from source tree
+      # ------------------------------------------------------------------ #
+      - name: Read build metadata
+        id: meta
+        run: |
+          # Parse project name from CMakeLists.txt.
+          # Matches: set(CMAKE_PROJECT_NAME <value>) with any surrounding whitespace.
+          PROJECT=$(grep -m1 'set(CMAKE_PROJECT_NAME' CMakeLists.txt \
+                    | sed -E 's/.*set\(CMAKE_PROJECT_NAME[[:space:]]+([^)[:space:]]+).*/\1/')
+          echo "project_name=${PROJECT}" >> "$GITHUB_OUTPUT"
+
+          # Parse Hapax revision from CMakeLists.txt.
+          # Matches: set(M1_HAPAX_REVISION <number>)
+          HAPAX_REV=$(grep -m1 'set(M1_HAPAX_REVISION' CMakeLists.txt \
+                      | sed -E 's/.*set\(M1_HAPAX_REVISION[[:space:]]+([0-9]+).*/\1/')
+          echo "hapax_rev=${HAPAX_REV}" >> "$GITHUB_OUTPUT"
+
+          # Parse Monstatek base version from the header.
+          # Each define line looks like: #define FW_VERSION_MAJOR  0
+          # We capture the third token (the numeric value), ignoring any trailing comments.
+          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          RC=$(grep -m1 '#define[[:space:]]FW_VERSION_RC' m1_csrc/m1_fw_update_bl.h \
+               | awk '{print $3}' | grep -Eo '^[0-9]+')
+
+          # Decide the release tag
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="v${MAJOR}.${MINOR}.${BUILD}.${RC}-Hapax.${HAPAX_REV}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          # Decide the release title
+          if [ -n "${{ inputs.release_name }}" ]; then
+            RNAME="${{ inputs.release_name }}"
+          else
+            RNAME="M1 Firmware ${TAG}"
+          fi
+          echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
+
+          echo "--- Build metadata ---"
+          echo "  Project:      ${PROJECT}"
+          echo "  Hapax rev:    ${HAPAX_REV}"
+          echo "  Base version: ${MAJOR}.${MINOR}.${BUILD}.${RC}"
+          echo "  Tag:          ${TAG}"
+
+      # ------------------------------------------------------------------ #
+      # 3. Install toolchain and build tools
+      # ------------------------------------------------------------------ #
+      - name: Install ARM toolchain and build tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            binutils-arm-none-eabi \
+            cmake \
+            ninja-build \
+            python3
+
+      # ------------------------------------------------------------------ #
+      # 4. Configure CMake
+      # ------------------------------------------------------------------ #
+      - name: Configure CMake
+        run: |
+          cmake -G Ninja -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      # ------------------------------------------------------------------ #
+      # 5. Build (CRC injection is a CMake POST_BUILD step)
+      # ------------------------------------------------------------------ #
+      - name: Build firmware
+        run: |
+          cmake --build build --parallel $(nproc)
+
+      # ------------------------------------------------------------------ #
+      # 6. Verify artifacts and print memory usage
+      # ------------------------------------------------------------------ #
+      - name: Verify artifacts
+        id: verify
+        run: |
+          PROJECT="${{ steps.meta.outputs.project_name }}"
+
+          ELF="build/${PROJECT}.elf"
+          BIN="build/${PROJECT}.bin"
+          HEX="build/${PROJECT}.hex"
+          WCRC="build/${PROJECT}_wCRC.bin"
+
+          for f in "$ELF" "$BIN" "$HEX" "$WCRC"; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: expected artifact missing: $f"
+              exit 1
+            fi
+            echo "OK  $(du -h "$f" | cut -f1)   $f"
+          done
+
+          # Confirm it is valid ARM firmware.
+          # STM32H573 is Cortex-M33 (ARMv8-M); the pattern also matches ARMv7-M
+          # as a safety net if the ELF is somehow from a different build variant.
+          ARCH=$(arm-none-eabi-objdump -f "$ELF" | grep architecture | head -1)
+          echo "Architecture: ${ARCH}"
+          if ! echo "$ARCH" | grep -qE "armv8-m|armv7-m"; then
+            echo "ERROR: unexpected architecture"
+            exit 1
+          fi
+
+          arm-none-eabi-size "$ELF"
+
+      # ------------------------------------------------------------------ #
+      # 7. Upload artifacts for the release job
+      # ------------------------------------------------------------------ #
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ steps.meta.outputs.tag }}
+          path: |
+            build/${{ steps.meta.outputs.project_name }}.elf
+            build/${{ steps.meta.outputs.project_name }}.hex
+            build/${{ steps.meta.outputs.project_name }}.bin
+            build/${{ steps.meta.outputs.project_name }}_wCRC.bin
+          if-no-files-found: error
+          retention-days: 90
+
+  # ====================================================================== #
+  # Publish GitHub Release
+  # ====================================================================== #
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-${{ needs.build.outputs.tag }}
+          path: artifacts/
+
+      - name: List release assets
+        run: ls -lh artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:   ${{ needs.build.outputs.tag }}
+          name:       ${{ needs.build.outputs.release_name }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            artifacts/${{ needs.build.outputs.project_name }}.elf
+            artifacts/${{ needs.build.outputs.project_name }}.hex
+            artifacts/${{ needs.build.outputs.project_name }}.bin
+            artifacts/${{ needs.build.outputs.project_name }}_wCRC.bin
+          body: |
+            ## M1 Firmware — ${{ needs.build.outputs.tag }}
+
+            | File | Description |
+            |------|-------------|
+            | `${{ needs.build.outputs.project_name }}_wCRC.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
+            | `${{ needs.build.outputs.project_name }}.bin`      | Raw binary (no CRC — for reference / J-Link flashing) |
+            | `${{ needs.build.outputs.project_name }}.hex`      | Intel HEX (ST-Link / OpenOCD) |
+            | `${{ needs.build.outputs.project_name }}.elf`      | ELF with debug symbols |
+
+            > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
