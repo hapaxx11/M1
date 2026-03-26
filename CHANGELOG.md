@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Renamed `--c3-revision` → `--hapax-revision`** in `tools/append_crc32.py` and all
   callers (`CMakeLists.txt`, `README.md`, `CLAUDE.md`). The old `--c3-revision` alias is
   preserved for backward compatibility with existing local scripts.
-- **Updated Hapax metadata magic sentinel** from `0x43334D44` ("C3MD") to `0x48414D44`
-  ("HAMD") in `tools/append_crc32.py` and `m1_csrc/m1_fw_update_bl.h`. The C3 name was a
+- **Updated Hapax metadata magic sentinel** from `0x43334D44` ("C3MD") to `0x48415058`
+  ("HAPX") in `tools/append_crc32.py` and `m1_csrc/m1_fw_update_bl.h`. The C3 name was a
   carry-over from the merged C3 fork; the new value reflects the Hapax identity. Renamed
   the `c3_magic` / `c3_addr` local variables in `m1_csrc/m1_rpc.c` to `hapax_magic` /
   `hapax_addr` accordingly.
