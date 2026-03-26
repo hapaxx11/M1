@@ -83,9 +83,10 @@ No 13.56 MHz HF/NFC transceiver IC is present on this board.
 | `RFID_RF_IN` | NFC→MCU | Raw RF envelope / carrier detect |
 | `RF_CARRIER` | MCU→NFC | Carrier enable/gate |
 | `RFID_PULL` | MCU→NFC | Load modulation drive (emulation) |
-| `NFC_IRQ` | NFC→MCU | Interrupt from NFC board |
-| `NFC_CS` | MCU→NFC | Chip-select (SPI or GPIO) |
 | `1_65` | — | 1.65 V mid-rail reference for op-amp biasing |
+
+> **Note:** `NFC_CS` and `NFC_IRQ` are **not** part of the 125 kHz subsystem — they connect the
+> main board's 13.56 MHz HF/NFC transceiver to the MCU (see [NFC (13.56 MHz) Subsystem](#nfc-1356-mhz-subsystem) below).
 
 ---
 
