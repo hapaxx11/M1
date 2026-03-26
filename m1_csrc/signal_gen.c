@@ -126,7 +126,7 @@ void signal_gen_run(void)
             continue;
 
         if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK ||
-            bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_HOLD)
+            bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_LCLICK)
         {
             if (freq_idx < SG_FREQ_COUNT - 1)
                 freq_idx++;
@@ -138,7 +138,7 @@ void signal_gen_run(void)
             need_redraw = true;
         }
         else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK ||
-                 bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_HOLD)
+                 bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_LCLICK)
         {
             if (freq_idx > 0)
                 freq_idx--;
