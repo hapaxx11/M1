@@ -16,7 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sessions are required to update `CHANGELOG.md`, `README.md`, and
   `documentation/flipper_import_agent.md` as part of every change
 
+- Documentation: expanded `HARDWARE.md` with MCU specs, RAM, speed, and peripheral table;
+  added secondary-reference note in `CLAUDE.md` pointing to new hardware schematics doc
+
 ### Added
+
+- `documentation/hardware_schematics.md`: schematic-derived hardware reference covering ICs,
+  power subsystem, RF subsystems, interface signals, and a capability assessment table mapping
+  hardware evidence to firmware support status — intended as a secondary reference for AI
+  agents determining potential device support beyond what official firmware exposes
 
 **Flipper Zero Compatibility**
 - Import and use Flipper Zero `.sub`, `.rfid`, `.nfc`, and `.ir` files directly from SD card
