@@ -48,8 +48,8 @@ end of this file; individual values are omitted as not actionable.
 
 ## 125 kHz LF-RFID Subsystem (NFC Board)
 
-Despite the board name "NFC Board", this subsystem operates at **125 kHz only** (LF-RFID).
-No 13.56 MHz HF/NFC transceiver IC is present on this board.
+The board is labelled "NFC Board" in the hardware, but its subsystem operates at **125 kHz** (LF-RFID).
+The 13.56 MHz HF/NFC transceiver is located on the main board (see [NFC (13.56 MHz) Subsystem](#nfc-1356-mhz-subsystem) below).
 
 **NFC board ICs:**
 | Ref | Description |
