@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CI: Release title now "M1 Hapax vX.Y.Z"** — auto-generated GitHub release titles and
+  release-body headings changed from `"M1 Firmware — v…"` to `"M1 Hapax v…"`, matching
+  SiN360's `"SiN360 v0.9.0.4"` naming convention. The `release_name` workflow input still
+  overrides the title when supplied manually.
+
 - **Version scheme aligned with SiN360**: `FW_VERSION_MINOR` bumped from `8` to `9` and
   `FW_VERSION_RC` / `M1_HAPAX_REVISION` both start at `1`, matching SiN360's `0.9.x.x`
   versioning approach. First public release is `v0.9.0.1`; subsequent releases increment
