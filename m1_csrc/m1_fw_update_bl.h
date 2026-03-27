@@ -24,20 +24,26 @@
 #define FW_CONFIG_RESERVED_ADDRESS		0x080FFC00 // LENGTH = 1K, this address must match the one defined in the MEMORY section in the linker file
 #define FW_CRC_ADDRESS 					FW_CONFIG_RESERVED_ADDRESS + sizeof(S_M1_FW_CONFIG_t)
 
+/* === Stock-compatible CRC at offset 20 (right after the 20-byte struct) === */
+/* This 4-byte field holds a self-referential CRC that satisfies:            */
+/*   CRC(entire_SD_content_minus_trailing_4bytes) == this_value              */
+/* Stock Monstatek firmware reads this to validate after SD-card flashing.   */
+/* FW_CRC_ADDRESS (defined above) already points here: 0x080FFC14.          */
+
 /* === Extended CRC metadata at FIXED ABSOLUTE ADDRESSES === */
-/* These live in the 1KB reserved area AFTER the 20-byte struct */
-/* DO NOT use sizeof(S_M1_FW_CONFIG_t) to compute addresses */
-#define FW_CRC_EXT_BASE_OFFSET     20  /* Fixed: right after the 20-byte struct */
+/* Starts at offset 24, right after the stock CRC compatibility slot.       */
+/* DO NOT use sizeof(S_M1_FW_CONFIG_t) to compute addresses.               */
+#define FW_CRC_EXT_BASE_OFFSET     24  /* After 20-byte struct + 4-byte stock CRC */
 #define FW_CRC_EXT_BASE            (FW_CONFIG_RESERVED_ADDRESS + FW_CRC_EXT_BASE_OFFSET)
-#define FW_CRC_EXT_MAGIC_ADDR      (FW_CRC_EXT_BASE + 0)   /* 0x080FFC14 */
-#define FW_CRC_EXT_SIZE_ADDR       (FW_CRC_EXT_BASE + 4)   /* 0x080FFC18 */
-#define FW_CRC_EXT_CRC_ADDR        (FW_CRC_EXT_BASE + 8)   /* 0x080FFC1C */
+#define FW_CRC_EXT_MAGIC_ADDR      (FW_CRC_EXT_BASE + 0)   /* 0x080FFC18 */
+#define FW_CRC_EXT_SIZE_ADDR       (FW_CRC_EXT_BASE + 4)   /* 0x080FFC1C */
+#define FW_CRC_EXT_CRC_ADDR        (FW_CRC_EXT_BASE + 8)   /* 0x080FFC20 */
 
 #define FW_CRC_EXT_MAGIC_VALUE     ((uint32_t)0x43524332)   /* "CRC2" sentinel */
 #define FW_CRC_EXT_ERASED          ((uint32_t)0xFFFFFFFF)   /* Erased flash value */
 
-/* Hapax build metadata — injected by append_crc32.py at offset 32 in the reserved area */
-#define FW_HAPAX_META_BASE_OFFSET  32
+/* Hapax build metadata — injected by append_crc32.py at offset 36 in the reserved area */
+#define FW_HAPAX_META_BASE_OFFSET  36
 #define FW_HAPAX_META_BASE         (FW_CONFIG_RESERVED_ADDRESS + FW_HAPAX_META_BASE_OFFSET)
 #define FW_HAPAX_META_MAGIC_VALUE  ((uint32_t)0x48415058)   /* "HAPX" Hapax sentinel */
 

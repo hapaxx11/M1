@@ -34,20 +34,27 @@ from datetime import datetime
 
 # === Constants ===
 FW_CONFIG_OFFSET     = 0x0FFC00   # Offset of FW_CONFIG_RESERVED from flash base (within the .bin)
-CRC_EXT_BASE_OFFSET  = 20         # Fixed: right after the 20-byte S_M1_FW_CONFIG_t struct
-CRC_EXT_MAGIC_OFFSET = FW_CONFIG_OFFSET + CRC_EXT_BASE_OFFSET + 0   # 0xFFC14
-CRC_EXT_SIZE_OFFSET  = FW_CONFIG_OFFSET + CRC_EXT_BASE_OFFSET + 4   # 0xFFC18
-CRC_EXT_CRC_OFFSET   = FW_CONFIG_OFFSET + CRC_EXT_BASE_OFFSET + 8   # 0xFFC1C
+
+# Stock CRC slot: offset 20 = right after the 20-byte S_M1_FW_CONFIG_t struct.
+# This holds a self-referential CRC for backward compatibility with stock Monstatek
+# firmware, which reads FW_CRC_ADDRESS (= config_base + 20) after SD-card flashing.
+STOCK_CRC_OFFSET     = FW_CONFIG_OFFSET + 20                                # 0xFFC14
+
+# Hapax CRC extension block: starts at offset 24 (after stock CRC slot)
+CRC_EXT_BASE_OFFSET  = 24         # After 20-byte struct + 4-byte stock CRC
+CRC_EXT_MAGIC_OFFSET = FW_CONFIG_OFFSET + CRC_EXT_BASE_OFFSET + 0   # 0xFFC18
+CRC_EXT_SIZE_OFFSET  = FW_CONFIG_OFFSET + CRC_EXT_BASE_OFFSET + 4   # 0xFFC1C
+CRC_EXT_CRC_OFFSET   = FW_CONFIG_OFFSET + CRC_EXT_BASE_OFFSET + 8   # 0xFFC20
 
 CRC_EXT_MAGIC_VALUE  = 0x43524332  # "CRC2"
 CRC_POLYNOMIAL       = 0x04C11DB7
 CRC_INIT             = 0xFFFFFFFF
 
-# Hapax build metadata (offset 32 in the reserved area)
-HAPAX_META_BASE_OFFSET  = 32
-HAPAX_META_MAGIC_OFFSET = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 0   # 0xFFC20
-HAPAX_META_REV_OFFSET   = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 4   # 0xFFC24
-HAPAX_META_DATE_OFFSET  = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 8   # 0xFFC28
+# Hapax build metadata (offset 36 in the reserved area)
+HAPAX_META_BASE_OFFSET  = 36
+HAPAX_META_MAGIC_OFFSET = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 0   # 0xFFC24
+HAPAX_META_REV_OFFSET   = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 4   # 0xFFC28
+HAPAX_META_DATE_OFFSET  = FW_CONFIG_OFFSET + HAPAX_META_BASE_OFFSET + 8   # 0xFFC2C
 HAPAX_META_MAGIC_VALUE  = 0x48415058  # "HAPX" (Hapax sentinel)
 
 
@@ -85,6 +92,103 @@ def stm32_crc32(data: bytes) -> int:
                 crc = (crc << 1) & 0xFFFFFFFF
 
     return crc
+
+
+def _crc_step(state: int, word: int) -> int:
+    """Process one 32-bit word through the STM32 CRC peripheral."""
+    state ^= word
+    for _ in range(32):
+        if state & 0x80000000:
+            state = ((state << 1) ^ CRC_POLYNOMIAL) & 0xFFFFFFFF
+        else:
+            state = (state << 1) & 0xFFFFFFFF
+    return state
+
+
+def solve_self_referential_crc(data: bytes, placeholder_offset: int) -> int:
+    """Find a 4-byte value X such that CRC(data_with_X) == X.
+
+    The data must have a 4-byte placeholder at ``placeholder_offset``.
+    We solve for X using GF(2) linear algebra:
+
+      CRC(A || X || B) = X
+
+    where A = data[:placeholder_offset] and B = data[placeholder_offset+4:].
+
+    The STM32 CRC is linear over GF(2), so we decompose the computation
+    into a 32×32 matrix equation ``(G ⊕ I) · X = C`` and solve via
+    Gaussian elimination.
+
+    Returns:
+        X as an unsigned 32-bit integer.
+    """
+    assert len(data) % 4 == 0, "Data must be word-aligned"
+    assert placeholder_offset % 4 == 0, "Placeholder must be word-aligned"
+    assert placeholder_offset + 4 <= len(data), "Placeholder out of range"
+
+    data_before = data[:placeholder_offset]
+    data_after  = data[placeholder_offset + 4:]
+
+    # Partial CRC after processing data_before
+    if len(data_before) > 0:
+        state_a = stm32_crc32(data_before)
+    else:
+        state_a = CRC_INIT
+
+    def continue_crc(state: int, chunk: bytes) -> int:
+        for off in range(0, len(chunk), 4):
+            word = struct.unpack_from('<I', chunk, off)[0]
+            state = _crc_step(state, word)
+        return state
+
+    # CRC with placeholder = 0
+    state_zero = _crc_step(state_a, 0)
+    crc_zero = continue_crc(state_zero, data_after)
+
+    # Compute influence of each bit: flip bit b of the placeholder and see
+    # how the final CRC changes.  Because CRC is GF(2)-linear, the XOR
+    # difference gives us the column vector for bit b.
+    influence = [0] * 32
+    for b in range(32):
+        state_bit = _crc_step(state_a, 1 << b)
+        crc_bit = continue_crc(state_bit, data_after)
+        influence[b] = crc_zero ^ crc_bit
+
+    # Build the augmented matrix for (G ⊕ I) · X = crc_zero
+    # Row i: coefficient bits || constant bit
+    matrix = []
+    for i in range(32):
+        bit_i = 1 << i
+        row = bit_i                       # identity contribution
+        for j in range(32):
+            if influence[j] & bit_i:
+                row ^= (1 << j)           # influence contribution
+        c_i = (crc_zero >> i) & 1
+        matrix.append([row, c_i])
+
+    # Gaussian elimination over GF(2)
+    for col in range(32):
+        # Find pivot
+        pivot = None
+        for row in range(col, 32):
+            if matrix[row][0] & (1 << col):
+                pivot = row
+                break
+        if pivot is None:
+            raise ValueError("Self-referential CRC: matrix is singular (no solution)")
+        matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
+        for row in range(32):
+            if row != col and (matrix[row][0] & (1 << col)):
+                matrix[row][0] ^= matrix[col][0]
+                matrix[row][1] ^= matrix[col][1]
+
+    # Read the solution
+    result = 0
+    for i in range(32):
+        if matrix[i][1]:
+            result |= (1 << i)
+
+    return result
 
 
 def main():
@@ -133,16 +237,16 @@ def main():
     if args.verbose:
         print(f"CRC region:   0x00000000 - 0x{fw_image_size:08X} ({fw_image_size} bytes, {fw_image_size // 4} words)")
 
-    # Calculate the CRC32
+    # Calculate the Hapax CRC32 (over firmware code only, excluding config struct)
     crc_value = stm32_crc32(fw_image_data)
 
     if args.verbose:
-        print(f"CRC32:        0x{crc_value:08X}")
+        print(f"Hapax CRC32:  0x{crc_value:08X}")
         print(f"Magic offset: 0x{CRC_EXT_MAGIC_OFFSET:06X}")
         print(f"Size offset:  0x{CRC_EXT_SIZE_OFFSET:06X}")
         print(f"CRC offset:   0x{CRC_EXT_CRC_OFFSET:06X}")
 
-    # Inject the CRC extension block into the binary
+    # Inject the CRC extension block into the binary (at new offset 24)
     struct.pack_into('<I', data, CRC_EXT_MAGIC_OFFSET, CRC_EXT_MAGIC_VALUE)
     struct.pack_into('<I', data, CRC_EXT_SIZE_OFFSET, fw_image_size)
     struct.pack_into('<I', data, CRC_EXT_CRC_OFFSET, crc_value)
@@ -174,9 +278,30 @@ def main():
     if pad:
         data.extend(b'\xFF' * (4 - pad))
 
-    # Compute stock-compatible CRC over the entire image and append it
-    # This makes the binary compatible with every SD card updater while
-    # preserving the Hapax metadata embedded at 0xFFC00.
+    # --- Stock-compatible self-referential CRC at offset 0xFFC14 ---
+    # Stock Monstatek firmware (v0.8.0.0) post-flash verification does:
+    #   write_acc -= 4;  write_acc /= 4;  bl_crc_check(write_acc);
+    # bl_crc_check() computes CRC over (file_size-4)/4 words from bank start
+    # and compares with the 32-bit value at FW_CRC_ADDRESS (= config + 20 = 0x080FFC14).
+    # We solve for X such that CRC(content) == X where X is at offset 0xFFC14
+    # within content.  This is a self-referential CRC (GF(2) linear system).
+    content = bytes(data)  # everything that will be flashed before trailing CRC
+    stock_crc = solve_self_referential_crc(content, STOCK_CRC_OFFSET)
+    struct.pack_into('<I', data, STOCK_CRC_OFFSET, stock_crc)
+
+    if args.verbose:
+        print(f"Stock CRC:    0x{stock_crc:08X} (self-referential at 0x{STOCK_CRC_OFFSET:06X})")
+
+    # Verify the self-referential CRC is correct
+    verify_crc = stm32_crc32(bytes(data))
+    if verify_crc != stock_crc:
+        print(f"ERROR: Self-referential CRC verification failed! "
+              f"computed=0x{verify_crc:08X} expected=0x{stock_crc:08X}", file=sys.stderr)
+        sys.exit(1)
+
+    # Compute trailing CRC over the entire content (including the stock CRC)
+    # and append it.  This is what firmware_update_get_image_file() validates
+    # when the user selects the file on the SD card.
     sd_crc = stm32_crc32(bytes(data))
     data.extend(struct.pack('<I', sd_crc))
 
@@ -188,7 +313,8 @@ def main():
     if args.verbose:
         print(f"Output file:  {output_path}")
 
-    print(f"CRC32 injected: embedded=0x{crc_value:08X} trailing=0x{sd_crc:08X} ({len(data)} bytes) -> {output_path}")
+    print(f"CRC32 injected: hapax=0x{crc_value:08X} stock=0x{stock_crc:08X} "
+          f"trailing=0x{sd_crc:08X} ({len(data)} bytes) -> {output_path}")
 
     return 0
 

@@ -712,15 +712,10 @@ void startup_config_handler(void)
 			    		if ( i < k )
 			    		{
 			    			M1_LOG_I(M1_LOGDB_TAG, "Valid firmware found for rollback. Checking CRC...");
-			    			bu_reg_read++; // Move to CRC32 location which is right after the Magic Number 2
-			    			crc32_add = (uint32_t)bu_reg_read; // Get the CRC address and use it as the size of the firmware resided in this bank
-			    			crc32_add -= (FW_START_ADDRESS + M1_FLASH_BANK_SIZE); // Exclude the size of bank 1
-			    			crc32_add /= 4; // convert size from byte to word (32-bit)
-			    			if ( bl_crc_check(crc32_add)==BL_CODE_OK )
+			    			if ( bl_verify_bank_crc(FW_START_ADDRESS + M1_FLASH_BANK_SIZE) )
 			    			{
 			    				M1_LOG_N(M1_LOGDB_TAG, "OK\r\n");
-			    				i++; // Move to CRC32 location which is right after the Magic Number 2
-					    		memcpy((uint8_t *)&old_fw_config, (__IO uint8_t *)(FW_CONFiG_ADDRESS + M1_FLASH_BANK_SIZE), i*4);
+					    		memcpy((uint8_t *)&old_fw_config, (__IO uint8_t *)(FW_CONFiG_ADDRESS + M1_FLASH_BANK_SIZE), sizeof(S_M1_FW_CONFIG_t));
 			    				fw_ver_new = *(uint32_t *)&m1_device_stat.config.fw_version_rc;
 			    				fw_ver_old = *(uint32_t *)&old_fw_config.fw_version_rc;
 			    				if ( fw_ver_old < fw_ver_new ) // Existing FW in bank 2 is older than current FW?
@@ -735,7 +730,7 @@ void startup_config_handler(void)
 			    				{
 			    					M1_LOG_I(M1_LOGDB_TAG, "Rollback was already completed!\r\n");
 			    				}
-			    			} // if ( bl_crc_check(crc32_add)==BL_CODE_OK )
+			    			} // if ( bl_verify_bank_crc(...) )
 			    			else
 			    			{
 			    				M1_LOG_N(M1_LOGDB_TAG, "Failed\r\n");
