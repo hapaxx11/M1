@@ -7,13 +7,24 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0.0-Hapax.9] - 2026-03-26
+## [0.8.0.0-Hapax.9] - 2026-03-27
 
 ### Fixed
+
+- **`m1_fw_update_bl.c` — SD-card flash now succeeds**: `bl_flash_binary()` was calling
+  `bl_crc_check()`, which reads the "stored CRC" from `FW_CRC_ADDRESS` (`0x080FFC14`).
+  Our binary places the CRC2 magic sentinel (`0x43524332`) there, not the CRC value itself,
+  so `bl_crc_check()` always returned `BL_CODE_CHK_ERROR` and flashing appeared to succeed
+  but then reported failure. Fixed by replacing the call with `bl_verify_bank_crc()`, which
+  correctly interprets the CRC extension block (magic/size/crc at offsets 0/4/8 from
+  `FW_CRC_EXT_BASE = 0x080FFC14`).
 
 - **Documentation: `documentation/hardware_schematics.md`** — removed `NFC_CS` and `NFC_IRQ`
   from the 125 kHz LF-RFID signal table where they were incorrectly listed; added a note
   clarifying they belong to the 13.56 MHz HF/NFC transceiver on the main board.
+
+- **signal_gen.c**: Replace undeclared `BUTTON_EVENT_HOLD` with `BUTTON_EVENT_LCLICK` (long-press
+  enum value) for UP/DOWN navigation in the signal generator screen; fixes CI build failure.
 
 ### Changed
 
@@ -24,11 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   complete power-rail summary, passive component groupings (R/C/L), test points, and
   mounting holes. Capability summary updated with IR TX/RX, RGB LED, FDCAN, and corrected
   component references throughout.
-
-### Fixed
-
-- **signal_gen.c**: Replace undeclared `BUTTON_EVENT_HOLD` with `BUTTON_EVENT_LCLICK` (long-press
-  enum value) for UP/DOWN navigation in the signal generator screen; fixes CI build failure.
 
 ### Added
 
