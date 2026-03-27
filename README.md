@@ -1,6 +1,6 @@
 <!-- See COPYING.txt for license details. -->
 
-# M1 Enhanced Firmware (Hapax)
+# M1 Hapax Firmware
 
 Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool device, forked from the [original firmware](https://github.com/Monstatek/M1) with significant feature additions, Flipper Zero file compatibility, and stability improvements.
 
