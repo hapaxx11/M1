@@ -15,18 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FW_VERSION_RC` / `M1_HAPAX_REVISION` both start at `1`, matching SiN360's `0.9.x.x`
   versioning approach. First public release is `v0.9.0.1`; subsequent releases increment
   automatically. Release tag is a clean `v0.9.0.{RC}` (no `-Hapax.X` suffix in the tag
-  or filename). CMake project name is `M1_v0900_Hapax` (revision counter removed from name).
+  or filename).
 
 - **CI auto-increment**: The `build-release.yml` workflow now queries the latest published
-  GitHub release tag matching `v0.9.0.*`, extracts the RC number, and patches
-  `FW_VERSION_RC`, `M1_HAPAX_REVISION`, `CMAKE_PROJECT_NAME`, and `M1_HAPAX_REVISION` in
-  the source files before compiling. Each CI build automatically produces the next sequential
-  version with no manual edits required. Local builds use the source-file defaults (RC=1).
+  GitHub release tag matching `v0.9.0.*`, extracts the RC number, and patches only
+  `FW_VERSION_RC` and `M1_HAPAX_REVISION` in `m1_fw_update_bl.h` before compiling.
+  `CMakeLists.txt` is never patched — `CMAKE_PROJECT_NAME` is derived automatically from
+  those header values at CMake configure time. Each CI build automatically produces the next
+  sequential version with no manual edits required. Local builds use the source-file
+  defaults (RC=1).
 
-- **Version embedded in CMake project name** (matches SiN360 exactly): `CMAKE_PROJECT_NAME`
-  is now `M1_Hapax_v0.9.0.1` (was a static `M1_v0900_Hapax`). All output files — ELF, BIN,
-  HEX, and `_SD.bin` — derive their versioned names from this single variable, eliminating
-  the separate `M1_RELEASE_NAME` variable.
+- **CMake project name fully dynamic**: `CMAKE_PROJECT_NAME` (`M1_Hapax_v{MAJOR}.{MINOR}.{BUILD}.{RC}`)
+  is derived entirely at CMake configure time by reading the four `FW_VERSION_*` macros from
+  `m1_fw_update_bl.h`. `CMakeLists.txt` never needs to be edited for a version bump — only
+  the header is the single source of truth. All output files — ELF, BIN, HEX, and `_SD.bin`
+  — derive their versioned names from this variable, eliminating the separate
+  `M1_RELEASE_NAME` variable.
 
 ### Fixed
 
