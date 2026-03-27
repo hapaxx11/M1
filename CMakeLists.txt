@@ -20,17 +20,20 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-# Set the project name
-set(CMAKE_PROJECT_NAME M1_v0900_Hapax.9)
+# Set the project name — does NOT include revision number (that lives in M1_RELEASE_NAME)
+set(CMAKE_PROJECT_NAME M1_v0900_Hapax)
 
-# Hapax fork revision — must match M1_HAPAX_REVISION in m1_fw_update_bl.h
-set(M1_HAPAX_REVISION 9)
+# Hapax fork revision — must match M1_HAPAX_REVISION in m1_fw_update_bl.h.
+# The CI auto-increment step patches both this and the header before building,
+# so local builds use this default (= first release) and CI builds always
+# compute the next sequential release number automatically.
+set(M1_HAPAX_REVISION 1)
 
 # Release binary base name — drives the _SD.bin output (SD-card / OTA image).
 # Pattern: M1_Hapax_v{major}.{minor}.{build}.{rc}  (SiN360: M1_{fork}_v{ver}_SD.bin)
 # MINOR maps to our fork generation; RC maps to M1_HAPAX_REVISION.
-# Update M1_HAPAX_REVISION + FW_VERSION_RC + CMAKE_PROJECT_NAME together when bumping.
-set(M1_RELEASE_NAME "M1_Hapax_v0.9.0.9")
+# CI patches M1_HAPAX_REVISION + FW_VERSION_RC + M1_RELEASE_NAME before each build.
+set(M1_RELEASE_NAME "M1_Hapax_v0.9.0.1")
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")

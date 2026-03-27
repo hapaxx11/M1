@@ -7,23 +7,28 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0.9] - 2026-03-27
+## [0.9.0.1] - 2026-03-27
 
 ### Changed
 
 - **Version scheme aligned with SiN360**: `FW_VERSION_MINOR` bumped from `8` to `9` and
-  `FW_VERSION_RC` set to `9` (= `M1_HAPAX_REVISION`), matching SiN360's `0.9.x.x` versioning
-  approach. Release tag is now clean `v0.9.0.9` (no `-Hapax.X` suffix). File is
-  `M1_Hapax_v0.9.0.9_SD.bin`. The CI tag format and CMake project name (`M1_v0900_Hapax.9`)
-  are updated accordingly. Future revisions increment both `M1_HAPAX_REVISION` and
-  `FW_VERSION_RC` together.
+  `FW_VERSION_RC` / `M1_HAPAX_REVISION` both start at `1`, matching SiN360's `0.9.x.x`
+  versioning approach. First public release is `v0.9.0.1`; subsequent releases increment
+  automatically. Release tag is a clean `v0.9.0.{RC}` (no `-Hapax.X` suffix in the tag
+  or filename). CMake project name is `M1_v0900_Hapax` (revision counter removed from name).
+
+- **CI auto-increment**: The `build-release.yml` workflow now queries the latest published
+  GitHub release tag matching `v0.9.0.*`, extracts the RC number, and patches
+  `FW_VERSION_RC`, `M1_HAPAX_REVISION`, and `M1_RELEASE_NAME` in the source files before
+  compiling. Each CI build automatically produces the next sequential version with no manual
+  edits required. Local builds use the source-file defaults (currently `1`).
 
 - **Release binary renamed to SiN360-style format**: SD-card / OTA update image is now
-  `M1_Hapax_v0.9.0.9_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
+  `M1_Hapax_v0.9.0.{RC}_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
   `M1_{fork}_v{version}_SD.bin` convention used by SiN360 (e.g. `M1_SiN360_v0.9.0.4_SD.bin`).
   The CMake post-build step, GitHub Actions workflow, `README.md`, and `CLAUDE.md` are all
-  updated. A `M1_RELEASE_NAME` CMake variable holds the base name; the CI derives it
-  automatically from the `FW_VERSION_*` header fields.
+  updated. A `M1_RELEASE_NAME` CMake variable holds the base name; the CI patches it
+  automatically before each build.
 
 ### Fixed
 

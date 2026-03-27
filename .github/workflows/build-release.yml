@@ -6,9 +6,8 @@ on:
     inputs:
       tag:
         description: >
-          Release tag (e.g. v0.8.0.0-Hapax.9).
-          Leave blank to auto-generate from the current date and the
-          M1_HAPAX_REVISION value read from the source tree.
+          Release tag (e.g. v0.9.0.5).
+          Leave blank to auto-increment from the latest published release.
         required: false
         default: ''
       release_name:
@@ -46,7 +45,73 @@ jobs:
           fetch-depth: 0
 
       # ------------------------------------------------------------------ #
-      # 2. Read project metadata from source tree
+      # 2. Auto-increment version — patch source files before building
+      # ------------------------------------------------------------------ #
+      # Queries the latest published release whose tag matches v{MAJOR}.{MINOR}.{BUILD}.*
+      # and sets RC = (latest RC) + 1, so every CI run produces the next sequential
+      # release automatically.  If a manual tag is supplied, its RC is used instead.
+      # The header (FW_VERSION_RC, M1_HAPAX_REVISION) and CMakeLists.txt
+      # (M1_HAPAX_REVISION, M1_RELEASE_NAME) are patched in-place before CMake runs.
+      - name: Compute next version and patch source
+        id: patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+
+          if [ -n "${{ inputs.tag }}" ]; then
+            # Use RC from the manually-supplied tag (e.g. v0.9.0.5 → 5)
+            NEW_RC=$(echo "${{ inputs.tag }}" | grep -Eo '[0-9]+$')
+            echo "Using manual tag RC: ${NEW_RC}"
+          else
+            # Auto-increment: find the highest RC already released for this prefix
+            PREFIX="v${MAJOR}.${MINOR}.${BUILD}."
+            LATEST_RC=$(gh release list \
+                --repo "$GITHUB_REPOSITORY" \
+                --limit 50 \
+                --json tagName \
+              | python3 -c "
+import json, sys
+prefix = '${PREFIX}'
+tags = [t['tagName'] for t in json.load(sys.stdin)]
+nums = []
+for t in tags:
+    if t.startswith(prefix):
+        tail = t[len(prefix):]
+        if tail.isdigit():
+            nums.append(int(tail))
+print(max(nums) if nums else 0)
+" 2>/dev/null || echo "0")
+            NEW_RC=$((LATEST_RC + 1))
+            echo "Latest released RC: ${LATEST_RC} → next RC: ${NEW_RC}"
+          fi
+
+          echo "new_rc=${NEW_RC}" >> "$GITHUB_OUTPUT"
+
+          # Patch FW_VERSION_RC in the header
+          sed -i "s/^\(#define[[:space:]]FW_VERSION_RC[[:space:]]*\)[0-9]*/\1${NEW_RC}/" \
+              m1_csrc/m1_fw_update_bl.h
+          # Patch M1_HAPAX_REVISION in the header
+          sed -i "s/^\(#define[[:space:]]M1_HAPAX_REVISION[[:space:]]*\)[0-9]*/\1${NEW_RC}/" \
+              m1_csrc/m1_fw_update_bl.h
+          # Patch M1_HAPAX_REVISION in CMakeLists.txt
+          sed -i "s/^set(M1_HAPAX_REVISION [0-9]*)/set(M1_HAPAX_REVISION ${NEW_RC})/" \
+              CMakeLists.txt
+          # Patch M1_RELEASE_NAME in CMakeLists.txt
+          sed -i "s/^set(M1_RELEASE_NAME \"M1_Hapax_v[0-9.]*\")/set(M1_RELEASE_NAME \"M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${NEW_RC}\")/" \
+              CMakeLists.txt
+
+          echo "--- Patched values ---"
+          grep -E 'FW_VERSION_RC|M1_HAPAX_REVISION' m1_csrc/m1_fw_update_bl.h
+          grep -E 'M1_HAPAX_REVISION|M1_RELEASE_NAME' CMakeLists.txt
+
+      # ------------------------------------------------------------------ #
+      # 3. Read project metadata from source tree (after patching)
       # ------------------------------------------------------------------ #
       - name: Read build metadata
         id: meta
@@ -105,7 +170,7 @@ jobs:
           echo "  Release file: ${RFILE}_SD.bin"
 
       # ------------------------------------------------------------------ #
-      # 3. Install toolchain and build tools
+      # 4. Install toolchain and build tools
       # ------------------------------------------------------------------ #
       - name: Install ARM toolchain and build tools
         run: |
@@ -118,7 +183,7 @@ jobs:
             python3
 
       # ------------------------------------------------------------------ #
-      # 4. Configure CMake
+      # 5. Configure CMake
       # ------------------------------------------------------------------ #
       - name: Configure CMake
         run: |
@@ -127,14 +192,14 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       # ------------------------------------------------------------------ #
-      # 5. Build (CRC injection is a CMake POST_BUILD step)
+      # 6. Build (CRC injection is a CMake POST_BUILD step)
       # ------------------------------------------------------------------ #
       - name: Build firmware
         run: |
           cmake --build build --parallel $(nproc)
 
       # ------------------------------------------------------------------ #
-      # 6. Verify artifacts and print memory usage
+      # 7. Verify artifacts and print memory usage
       # ------------------------------------------------------------------ #
       - name: Verify artifacts
         id: verify
@@ -167,7 +232,7 @@ jobs:
           arm-none-eabi-size "$ELF"
 
       # ------------------------------------------------------------------ #
-      # 7. Upload artifacts for the release job
+      # 8. Upload artifacts for the release job
       # ------------------------------------------------------------------ #
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
