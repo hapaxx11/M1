@@ -79,7 +79,7 @@ jobs:
           if [ -n "${{ inputs.tag }}" ]; then
             TAG="${{ inputs.tag }}"
           else
-            TAG="v${MAJOR}.${MINOR}.${BUILD}.${RC}-Hapax.${HAPAX_REV}"
+            TAG="v${MAJOR}.${MINOR}.${BUILD}.${RC}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 

@@ -21,15 +21,16 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME M1_v0800_Hapax.9)
+set(CMAKE_PROJECT_NAME M1_v0900_Hapax.9)
 
 # Hapax fork revision — must match M1_HAPAX_REVISION in m1_fw_update_bl.h
 set(M1_HAPAX_REVISION 9)
 
 # Release binary base name — drives the _SD.bin output (SD-card / OTA image).
-# Pattern: M1_Hapax_v{base}  (follows SiN360: M1_{fork}_v{ver}_SD.bin)
-# Update when bumping the Monstatek base version fields.
-set(M1_RELEASE_NAME "M1_Hapax_v0.8.0.0")
+# Pattern: M1_Hapax_v{major}.{minor}.{build}.{rc}  (SiN360: M1_{fork}_v{ver}_SD.bin)
+# MINOR maps to our fork generation; RC maps to M1_HAPAX_REVISION.
+# Update M1_HAPAX_REVISION + FW_VERSION_RC + CMAKE_PROJECT_NAME together when bumping.
+set(M1_RELEASE_NAME "M1_Hapax_v0.9.0.9")
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")

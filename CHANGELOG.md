@@ -7,12 +7,19 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0.0-Hapax.9] - 2026-03-27
+## [0.9.0.9] - 2026-03-27
 
 ### Changed
 
+- **Version scheme aligned with SiN360**: `FW_VERSION_MINOR` bumped from `8` to `9` and
+  `FW_VERSION_RC` set to `9` (= `M1_HAPAX_REVISION`), matching SiN360's `0.9.x.x` versioning
+  approach. Release tag is now clean `v0.9.0.9` (no `-Hapax.X` suffix). File is
+  `M1_Hapax_v0.9.0.9_SD.bin`. The CI tag format and CMake project name (`M1_v0900_Hapax.9`)
+  are updated accordingly. Future revisions increment both `M1_HAPAX_REVISION` and
+  `FW_VERSION_RC` together.
+
 - **Release binary renamed to SiN360-style format**: SD-card / OTA update image is now
-  `M1_Hapax_v0.8.0.0_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
+  `M1_Hapax_v0.9.0.9_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
   `M1_{fork}_v{version}_SD.bin` convention used by SiN360 (e.g. `M1_SiN360_v0.9.0.4_SD.bin`).
   The CMake post-build step, GitHub Actions workflow, `README.md`, and `CLAUDE.md` are all
   updated. A `M1_RELEASE_NAME` CMake variable holds the base name; the CI derives it
