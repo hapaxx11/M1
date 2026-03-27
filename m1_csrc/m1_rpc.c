@@ -1439,7 +1439,7 @@ static void rpc_handle_fw_info(const S_RPC_Frame *f)
     }
 
     uint32_t cfg_offset     = FW_CONFIG_RESERVED_ADDRESS - FW_START_ADDRESS;  /* 0xFFC00 */
-    uint32_t crc_ext_offset = FW_CRC_EXT_BASE - FW_START_ADDRESS;            /* 0xFFC14 */
+    uint32_t crc_ext_offset = FW_CRC_EXT_BASE - FW_START_ADDRESS;            /* 0xFFC18 */
 
     /* --- Physical Bank 1 info ---
      * Use ECC-safe reads so a corrupted inactive bank cannot trigger

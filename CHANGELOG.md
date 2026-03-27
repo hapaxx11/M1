@@ -7,6 +7,36 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.2] - 2026-03-27
+
+### Fixed
+
+- **SD card firmware update now works from stock Monstatek firmware** — the `_SD.bin` binary
+  now includes a self-referential CRC at offset `0xFFC14` (the stock `FW_CRC_ADDRESS`) that
+  satisfies the stock firmware's post-flash `bl_crc_check()` verification. Previously, the
+  Hapax CRC extension magic sentinel (`0x43524332`) occupied that offset, causing the stock
+  firmware to always fail the CRC comparison with "Update failed!".
+
+### Changed
+
+- **CRC extension block shifted from offset 20 → 24** in the 1 KB reserved area. The 4-byte
+  stock-compatible CRC now occupies offset 20 (`0xFFC14`), and the Hapax CRC extension block
+  (CRC2 magic + size + CRC) starts at offset 24 (`0xFFC18`). Hapax metadata moved from
+  offset 32 → 36. All firmware readers (RPC, boot screen, CRC verifier) use the header
+  constants and adapt automatically.
+
+- **`bl_verify_bank_crc()` now supports both CRC formats** — when the CRC2 extension magic
+  is not found at offset 24, the function falls back to the stock Monstatek CRC format
+  (plain CRC at offset 20, covering the firmware + config struct). This enables correct
+  rollback verification for both stock and Hapax firmware images in the inactive bank.
+
+- **Rollback path uses `bl_verify_bank_crc()`** instead of the raw `bl_crc_check()` call
+  in `m1_system.c`, which only understood the stock CRC format.
+
+- **`append_crc32.py` now injects three CRC values**: the Hapax CRC (firmware-only region),
+  the stock-compatible self-referential CRC (GF(2) linear solver), and the trailing file CRC.
+  The self-referential CRC is verified immediately after computation to catch solver errors.
+
 ## [0.9.0.1] - 2026-03-27
 
 ### Changed

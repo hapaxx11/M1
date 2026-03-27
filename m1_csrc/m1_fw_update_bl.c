@@ -499,8 +499,14 @@ bool bl_is_inactive_bank_valid(void)
 /*============================================================================*/
 /**
   * @brief  Verify the CRC of firmware at the given bank base address.
-  *         Reads the CRC extension block from the bank, computes CRC over
-  *         the firmware region, and compares with the stored CRC.
+  *
+  *         Supports two formats:
+  *         1. Hapax CRC extension block (CRC2 magic at FW_CRC_EXT_BASE offset)
+  *            → CRC computed over fw_image_size bytes stored in the block.
+  *         2. Stock Monstatek format (no CRC2 magic found)
+  *            → CRC computed over bytes [0, FW_CRC_ADDRESS - FW_START_ADDRESS)
+  *              compared with the 4-byte value at FW_CRC_ADDRESS offset.
+  *
   * @param  bank_base: Base address of the bank (0x08000000 or 0x08100000)
   * @retval true if CRC matches, false otherwise
   */
@@ -508,7 +514,7 @@ bool bl_is_inactive_bank_valid(void)
 bool bl_verify_bank_crc(uint32_t bank_base)
 {
     /* Compute offset of CRC extension within a bank */
-    uint32_t crc_ext_offset = FW_CRC_EXT_BASE - FW_START_ADDRESS;  /* 0xFFC14 */
+    uint32_t crc_ext_offset = FW_CRC_EXT_BASE - FW_START_ADDRESS;  /* 0xFFC18 */
     uint32_t crc_ext_addr   = bank_base + crc_ext_offset;
 
     /* Read CRC extension fields using ECC-safe reads.
@@ -521,9 +527,24 @@ bool bl_verify_bank_crc(uint32_t bank_base)
         return false;  /* ECC error reading CRC extension */
     }
 
-    /* Check if CRC extension is present */
+    /* Check if Hapax CRC extension is present */
     if (magic != FW_CRC_EXT_MAGIC_VALUE)
-        return false;
+    {
+        /* Fallback: try stock Monstatek CRC format.
+         * Stock firmware places the CRC at FW_CRC_ADDRESS (= config + 20 = 0x080FFC14).
+         * The CRC covers bytes from bank base to FW_CRC_ADDRESS (0xFFC14 bytes). */
+        uint32_t stock_crc_offset = (uint32_t)(FW_CRC_ADDRESS) - FW_START_ADDRESS;
+        uint32_t stock_crc_addr   = bank_base + stock_crc_offset;
+
+        if (!bl_safe_flash_read_u32(stock_crc_addr, &stored_crc))
+            return false;
+
+        /* Erased flash (0xFFFFFFFF) means no CRC was ever written */
+        if (stored_crc == FW_CRC_EXT_ERASED)
+            return false;
+
+        fw_image_size = stock_crc_offset;  /* CRC covers bytes [0, 0xFFC14) */
+    }
 
     /* Sanity check image size */
     if (fw_image_size == 0 || fw_image_size > M1_FLASH_BANK_SIZE ||
@@ -768,11 +789,10 @@ static uint8_t bl_flash_binary(uint8_t *payload, size_t size)
     M1_LOG_I(M1_LOGDB_TAG, "\r\nFlashing completed!\r\n");
     init_done = false; // reset
 
-    /* Use the CRC extension block to verify the flashed firmware.
-     * bl_crc_check() reads the expected CRC from FW_CRC_ADDRESS (0x080FFC14),
-     * but our binary stores the CRC2 magic sentinel there — not the CRC value.
-     * bl_verify_bank_crc() correctly reads magic/size/crc from the extension
-     * block at offsets +0/+4/+8 from FW_CRC_EXT_BASE (= 0x080FFC14/18/1C). */
+    /* Verify the flashed firmware CRC.
+     * bl_verify_bank_crc() supports both formats:
+     *  - Hapax: CRC2 extension block at FW_CRC_EXT_BASE (0x080FFC18)
+     *  - Stock: plain CRC at FW_CRC_ADDRESS (0x080FFC14) */
     err = bl_verify_bank_crc(FW_START_ADDRESS + M1_FLASH_BANK_SIZE)
           ? BL_CODE_OK : BL_CODE_CHK_ERROR;
 
