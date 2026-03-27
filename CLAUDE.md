@@ -63,7 +63,7 @@
   ```
   python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin --output build/M1_Hapax_v0.9.0.1_SD.bin --hapax-revision 1 --verbose
   ```
-- **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. The input binary name must match the CMake project name (e.g. `M1_Hapax_v0.9.0.1.bin`). The CI auto-patches the project name and revision to the next sequential number before each build; local builds use the source-file defaults.
+- **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. The input binary name must match the CMake project name (e.g. `M1_Hapax_v0.9.0.1.bin`). CI patches only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in the header; `CMAKE_PROJECT_NAME` is derived automatically from those values at CMake configure time. Local builds use the source-file defaults.
 
 ### qMonstatek Desktop App Build
 
@@ -172,8 +172,8 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 - **`M1_HAPAX_REVISION`** in `m1_fw_update_bl.h` = the Hapax fork revision. Keep in sync with `FW_VERSION_RC`. Source-file default = `1` (= local build default). **CI auto-increments** by querying the latest published release tag before each build.
 - **Display format**: `v{major}.{minor}.{build}.{rc}-Hapax.{hapax_revision}` — e.g. `v0.9.0.1-Hapax.1`, `v0.9.0.2-Hapax.2`, etc.
 - **File/tag format**: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — e.g. `M1_Hapax_v0.9.0.1_SD.bin`, tag `v0.9.0.1`. No `-Hapax.X` suffix in filenames or release tags.
-- **CMake project name** in `CMakeLists.txt`: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — **the version is embedded in the project name** (matches SiN360's `M1_SiN360_v0.9.0.4` pattern). All output filenames (ELF, BIN, HEX, SD) derive from this automatically. CI patches it on every build.
-- **When bumping Hapax revision manually** (e.g. for a local build): update `M1_HAPAX_REVISION` and `FW_VERSION_RC` in the header, and `CMAKE_PROJECT_NAME` + `M1_HAPAX_REVISION` in `CMakeLists.txt`. The CI does this automatically.
+- **CMake project name** is fully dynamic: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — derived entirely at CMake configure time by reading the four `FW_VERSION_*` macros from `m1_fw_update_bl.h`. `CMakeLists.txt` is **never** patched by CI and never needs manual editing for a version bump. All output filenames (ELF, BIN, HEX, SD) derive from this automatically.
+- **When bumping Hapax revision manually** (e.g. for a local build): update only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in `m1_fw_update_bl.h` — `CMakeLists.txt` is not touched. The CI does this automatically.
 - **RPC protocol**: `hapax_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-Hapax.X` suffix only when `hapax_revision > 0`, so stock Monstatek firmware displays without it.
 
 For Flipper protocol import procedures (Sub-GHz, LF-RFID, NFC, IR), see

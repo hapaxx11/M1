@@ -137,7 +137,7 @@ jobs:
           if [ -n "${{ inputs.release_name }}" ]; then
             RNAME="${{ inputs.release_name }}"
           else
-            RNAME="M1 Firmware ${TAG}"
+            RNAME="M1 Hapax ${TAG}"
           fi
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
@@ -261,7 +261,7 @@ jobs:
             artifacts/${{ needs.build.outputs.project_name }}.bin
             artifacts/${{ needs.build.outputs.release_file_base }}_SD.bin
           body: |
-            ## M1 Firmware — ${{ needs.build.outputs.tag }}
+            ## M1 Hapax ${{ needs.build.outputs.tag }}
 
             | File | Description |
             |------|-------------|
