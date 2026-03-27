@@ -102,13 +102,13 @@ print(max(nums) if nums else 0)
           # Patch M1_HAPAX_REVISION in CMakeLists.txt
           sed -i "s/^set(M1_HAPAX_REVISION [0-9]*)/set(M1_HAPAX_REVISION ${NEW_RC})/" \
               CMakeLists.txt
-          # Patch M1_RELEASE_NAME in CMakeLists.txt
-          sed -i "s/^set(M1_RELEASE_NAME \"M1_Hapax_v[0-9.]*\")/set(M1_RELEASE_NAME \"M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${NEW_RC}\")/" \
+          # Patch CMAKE_PROJECT_NAME in CMakeLists.txt (SiN360 pattern: version in project name)
+          sed -i "s/^set(CMAKE_PROJECT_NAME M1_Hapax_v[0-9.]*)/set(CMAKE_PROJECT_NAME M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${NEW_RC})/" \
               CMakeLists.txt
 
           echo "--- Patched values ---"
           grep -E 'FW_VERSION_RC|M1_HAPAX_REVISION' m1_csrc/m1_fw_update_bl.h
-          grep -E 'M1_HAPAX_REVISION|M1_RELEASE_NAME' CMakeLists.txt
+          grep -E 'CMAKE_PROJECT_NAME|M1_HAPAX_REVISION' CMakeLists.txt
 
       # ------------------------------------------------------------------ #
       # 3. Read project metadata from source tree (after patching)
@@ -156,10 +156,9 @@ print(max(nums) if nums else 0)
           fi
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
-          # Compose the release file base name: M1_Hapax_v{major}.{minor}.{build}.{rc}
-          # This matches the SiN360 pattern (M1_{fork}_v{ver}) and auto-updates if
-          # the Monstatek base version fields change.
-          RFILE="M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${RC}"
+          # Release file base name = project name (version is embedded in it, SiN360-style).
+          # The SD image is ${PROJECT}_SD.bin, ELF/BIN/HEX are ${PROJECT}.{ext}.
+          RFILE="${PROJECT}"
           echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
 
           echo "--- Build metadata ---"

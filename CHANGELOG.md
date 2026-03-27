@@ -19,16 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **CI auto-increment**: The `build-release.yml` workflow now queries the latest published
   GitHub release tag matching `v0.9.0.*`, extracts the RC number, and patches
-  `FW_VERSION_RC`, `M1_HAPAX_REVISION`, and `M1_RELEASE_NAME` in the source files before
-  compiling. Each CI build automatically produces the next sequential version with no manual
-  edits required. Local builds use the source-file defaults (currently `1`).
+  `FW_VERSION_RC`, `M1_HAPAX_REVISION`, `CMAKE_PROJECT_NAME`, and `M1_HAPAX_REVISION` in
+  the source files before compiling. Each CI build automatically produces the next sequential
+  version with no manual edits required. Local builds use the source-file defaults (RC=1).
 
-- **Release binary renamed to SiN360-style format**: SD-card / OTA update image is now
-  `M1_Hapax_v0.9.0.{RC}_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
-  `M1_{fork}_v{version}_SD.bin` convention used by SiN360 (e.g. `M1_SiN360_v0.9.0.4_SD.bin`).
-  The CMake post-build step, GitHub Actions workflow, `README.md`, and `CLAUDE.md` are all
-  updated. A `M1_RELEASE_NAME` CMake variable holds the base name; the CI patches it
-  automatically before each build.
+- **Version embedded in CMake project name** (matches SiN360 exactly): `CMAKE_PROJECT_NAME`
+  is now `M1_Hapax_v0.9.0.1` (was a static `M1_v0900_Hapax`). All output files — ELF, BIN,
+  HEX, and `_SD.bin` — derive their versioned names from this single variable, eliminating
+  the separate `M1_RELEASE_NAME` variable.
 
 ### Fixed
 
