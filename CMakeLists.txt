@@ -27,9 +27,9 @@ set(CMAKE_PROJECT_NAME M1_v0800_Hapax.9)
 set(M1_HAPAX_REVISION 9)
 
 # Release binary base name — drives the _SD.bin output (SD-card / OTA image).
-# Pattern: M1_Hapax_v{base}-Hapax.{rev}  (follows SiN360 naming: M1_{fork}_v{ver})
-# Update M1_HAPAX_REVISION above; this variable updates automatically.
-set(M1_RELEASE_NAME "M1_Hapax_v0.8.0.0-Hapax.${M1_HAPAX_REVISION}")
+# Pattern: M1_Hapax_v{base}  (follows SiN360: M1_{fork}_v{ver}_SD.bin)
+# Update when bumping the Monstatek base version fields.
+set(M1_RELEASE_NAME "M1_Hapax_v0.8.0.0")
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")

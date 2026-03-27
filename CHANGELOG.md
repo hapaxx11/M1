@@ -12,11 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Release binary renamed to SiN360-style format**: SD-card / OTA update image is now
-  `M1_Hapax_v0.8.0.0-Hapax.9_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
-  `M1_{fork}_v{version}_SD.bin` convention used by SiN360. The CMake post-build step,
-  GitHub Actions workflow, `README.md`, and `CLAUDE.md` are all updated. A new
-  `M1_RELEASE_NAME` CMake variable auto-composes the name from `M1_HAPAX_REVISION`, so
-  only one variable needs bumping on future releases.
+  `M1_Hapax_v0.8.0.0_SD.bin` (was `M1_v0800_Hapax.9_wCRC.bin`), following the
+  `M1_{fork}_v{version}_SD.bin` convention used by SiN360 (e.g. `M1_SiN360_v0.9.0.4_SD.bin`).
+  The CMake post-build step, GitHub Actions workflow, `README.md`, and `CLAUDE.md` are all
+  updated. A `M1_RELEASE_NAME` CMake variable holds the base name; the CI derives it
+  automatically from the `FW_VERSION_*` header fields.
 
 ### Fixed
 

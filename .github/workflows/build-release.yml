@@ -91,12 +91,10 @@ jobs:
           fi
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
-          # Parse Hapax release name from CMakeLists.txt.
-          # Matches: set(M1_RELEASE_NAME "...") — expand the ${M1_HAPAX_REVISION} placeholder.
-          RBASE=$(grep -m1 'set(M1_RELEASE_NAME' CMakeLists.txt \
-                  | sed -E 's/.*set\(M1_RELEASE_NAME[[:space:]]+"([^"]+)".*/\1/')
-          # Replace the literal cmake variable reference with the actual hapax rev
-          RFILE=$(echo "$RBASE" | sed "s/\\\${M1_HAPAX_REVISION}/${HAPAX_REV}/g")
+          # Compose the release file base name: M1_Hapax_v{major}.{minor}.{build}.{rc}
+          # This matches the SiN360 pattern (M1_{fork}_v{ver}) and auto-updates if
+          # the Monstatek base version fields change.
+          RFILE="M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${RC}"
           echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
 
           echo "--- Build metadata ---"
