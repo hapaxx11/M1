@@ -99,16 +99,8 @@ print(max(nums) if nums else 0)
           # Patch M1_HAPAX_REVISION in the header
           sed -i "s/^\(#define[[:space:]]M1_HAPAX_REVISION[[:space:]]*\)[0-9]*/\1${NEW_RC}/" \
               m1_csrc/m1_fw_update_bl.h
-          # Patch M1_HAPAX_REVISION in CMakeLists.txt
-          sed -i "s/^set(M1_HAPAX_REVISION [0-9]*)/set(M1_HAPAX_REVISION ${NEW_RC})/" \
-              CMakeLists.txt
-          # Patch CMAKE_PROJECT_NAME in CMakeLists.txt (SiN360 pattern: version in project name)
-          sed -i "s/^set(CMAKE_PROJECT_NAME M1_Hapax_v[0-9.]*)/set(CMAKE_PROJECT_NAME M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${NEW_RC})/" \
-              CMakeLists.txt
-
           echo "--- Patched values ---"
           grep -E 'FW_VERSION_RC|M1_HAPAX_REVISION' m1_csrc/m1_fw_update_bl.h
-          grep -E 'CMAKE_PROJECT_NAME|M1_HAPAX_REVISION' CMakeLists.txt
 
       # ------------------------------------------------------------------ #
       # 3. Read project metadata from source tree (after patching)
@@ -116,21 +108,8 @@ print(max(nums) if nums else 0)
       - name: Read build metadata
         id: meta
         run: |
-          # Parse project name from CMakeLists.txt.
-          # Matches: set(CMAKE_PROJECT_NAME <value>) with any surrounding whitespace.
-          PROJECT=$(grep -m1 'set(CMAKE_PROJECT_NAME' CMakeLists.txt \
-                    | sed -E 's/.*set\(CMAKE_PROJECT_NAME[[:space:]]+([^)[:space:]]+).*/\1/')
-          echo "project_name=${PROJECT}" >> "$GITHUB_OUTPUT"
-
-          # Parse Hapax revision from CMakeLists.txt.
-          # Matches: set(M1_HAPAX_REVISION <number>)
-          HAPAX_REV=$(grep -m1 'set(M1_HAPAX_REVISION' CMakeLists.txt \
-                      | sed -E 's/.*set\(M1_HAPAX_REVISION[[:space:]]+([0-9]+).*/\1/')
-          echo "hapax_rev=${HAPAX_REV}" >> "$GITHUB_OUTPUT"
-
-          # Parse Monstatek base version from the header.
-          # Each define line looks like: #define FW_VERSION_MAJOR  0
-          # We capture the third token (the numeric value), ignoring any trailing comments.
+          # Parse version from the header — single source of truth now that
+          # CMAKE_PROJECT_NAME and M1_HAPAX_REVISION are derived at configure time.
           MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
                   | awk '{print $3}' | grep -Eo '^[0-9]+')
           MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
@@ -139,6 +118,11 @@ print(max(nums) if nums else 0)
                   | awk '{print $3}' | grep -Eo '^[0-9]+')
           RC=$(grep -m1 '#define[[:space:]]FW_VERSION_RC' m1_csrc/m1_fw_update_bl.h \
                | awk '{print $3}' | grep -Eo '^[0-9]+')
+          HAPAX_REV=${RC}
+
+          PROJECT="M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${RC}"
+          echo "project_name=${PROJECT}" >> "$GITHUB_OUTPUT"
+          echo "hapax_rev=${HAPAX_REV}" >> "$GITHUB_OUTPUT"
 
           # Decide the release tag
           if [ -n "${{ inputs.tag }}" ]; then

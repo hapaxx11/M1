@@ -20,16 +20,24 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-# Set the project name — includes the full version, exactly matching SiN360's pattern
-# (M1_SiN360_v0.9.0.4). All output filenames (ELF, BIN, HEX, _SD.bin) derive from
-# this name automatically. The CI patches this to the next sequential version before
-# each build; local builds use this default (= first release).
-set(CMAKE_PROJECT_NAME M1_Hapax_v0.9.0.1)
+# Derive the project name and Hapax revision from the version defines in
+# m1_fw_update_bl.h at configure time. Only the four #define values in that
+# header need updating — CMakeLists.txt never needs to be touched for a version bump.
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_major REGEX "#define FW_VERSION_MAJOR")
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_minor REGEX "#define FW_VERSION_MINOR")
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_build REGEX "#define FW_VERSION_BUILD")
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_rc    REGEX "#define FW_VERSION_RC[^_]")
+string(REGEX MATCH "[0-9]+" FW_VERSION_MAJOR "${_ver_major}")
+string(REGEX MATCH "[0-9]+" FW_VERSION_MINOR "${_ver_minor}")
+string(REGEX MATCH "[0-9]+" FW_VERSION_BUILD "${_ver_build}")
+string(REGEX MATCH "[0-9]+" FW_VERSION_RC    "${_ver_rc}")
 
-# Hapax fork revision — must match FW_VERSION_RC in m1_fw_update_bl.h and the
-# last number in CMAKE_PROJECT_NAME. Used by append_crc32.py to inject Hapax
-# metadata into the SD image. CI patches this together with the project name.
-set(M1_HAPAX_REVISION 1)
+# M1_Hapax_v{MAJOR}.{MINOR}.{BUILD}.{RC} — all output filenames derive from this.
+set(CMAKE_PROJECT_NAME "M1_Hapax_v${FW_VERSION_MAJOR}.${FW_VERSION_MINOR}.${FW_VERSION_BUILD}.${FW_VERSION_RC}")
+
+# Must equal FW_VERSION_RC. Used by append_crc32.py --hapax-revision to inject
+# Hapax metadata into the SD image.
+set(M1_HAPAX_REVISION ${FW_VERSION_RC})
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
