@@ -50,8 +50,9 @@ jobs:
       # Queries the latest published release whose tag matches v{MAJOR}.{MINOR}.{BUILD}.*
       # and sets RC = (latest RC) + 1, so every CI run produces the next sequential
       # release automatically.  If a manual tag is supplied, its RC is used instead.
-      # The header (FW_VERSION_RC, M1_HAPAX_REVISION) and CMakeLists.txt
-      # (M1_HAPAX_REVISION, M1_RELEASE_NAME) are patched in-place before CMake runs.
+      # Only m1_fw_update_bl.h (FW_VERSION_RC, M1_HAPAX_REVISION) is patched.
+      # CMakeLists.txt is NOT patched — it derives CMAKE_PROJECT_NAME automatically
+      # from those same #define values at configure time.
       - name: Compute next version and patch source
         id: patch
         env:
