@@ -30,9 +30,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     outputs:
-      tag:          ${{ steps.meta.outputs.tag }}
-      release_name: ${{ steps.meta.outputs.release_name }}
-      project_name: ${{ steps.meta.outputs.project_name }}
+      tag:              ${{ steps.meta.outputs.tag }}
+      release_name:     ${{ steps.meta.outputs.release_name }}
+      project_name:     ${{ steps.meta.outputs.project_name }}
+      release_file_base: ${{ steps.meta.outputs.release_file_base }}
 
     steps:
       # ------------------------------------------------------------------ #
@@ -90,11 +91,20 @@ jobs:
           fi
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
+          # Parse Hapax release name from CMakeLists.txt.
+          # Matches: set(M1_RELEASE_NAME "...") — expand the ${M1_HAPAX_REVISION} placeholder.
+          RBASE=$(grep -m1 'set(M1_RELEASE_NAME' CMakeLists.txt \
+                  | sed -E 's/.*set\(M1_RELEASE_NAME[[:space:]]+"([^"]+)".*/\1/')
+          # Replace the literal cmake variable reference with the actual hapax rev
+          RFILE=$(echo "$RBASE" | sed "s/\\\${M1_HAPAX_REVISION}/${HAPAX_REV}/g")
+          echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
+
           echo "--- Build metadata ---"
           echo "  Project:      ${PROJECT}"
           echo "  Hapax rev:    ${HAPAX_REV}"
           echo "  Base version: ${MAJOR}.${MINOR}.${BUILD}.${RC}"
           echo "  Tag:          ${TAG}"
+          echo "  Release file: ${RFILE}_SD.bin"
 
       # ------------------------------------------------------------------ #
       # 3. Install toolchain and build tools
@@ -136,7 +146,7 @@ jobs:
           ELF="build/${PROJECT}.elf"
           BIN="build/${PROJECT}.bin"
           HEX="build/${PROJECT}.hex"
-          WCRC="build/${PROJECT}_wCRC.bin"
+          WCRC="build/${{ steps.meta.outputs.release_file_base }}_SD.bin"
 
           for f in "$ELF" "$BIN" "$HEX" "$WCRC"; do
             if [ ! -f "$f" ]; then
@@ -169,7 +179,7 @@ jobs:
             build/${{ steps.meta.outputs.project_name }}.elf
             build/${{ steps.meta.outputs.project_name }}.hex
             build/${{ steps.meta.outputs.project_name }}.bin
-            build/${{ steps.meta.outputs.project_name }}_wCRC.bin
+            build/${{ steps.meta.outputs.release_file_base }}_SD.bin
           if-no-files-found: error
           retention-days: 90
 
@@ -202,15 +212,15 @@ jobs:
             artifacts/${{ needs.build.outputs.project_name }}.elf
             artifacts/${{ needs.build.outputs.project_name }}.hex
             artifacts/${{ needs.build.outputs.project_name }}.bin
-            artifacts/${{ needs.build.outputs.project_name }}_wCRC.bin
+            artifacts/${{ needs.build.outputs.release_file_base }}_SD.bin
           body: |
             ## M1 Firmware — ${{ needs.build.outputs.tag }}
 
             | File | Description |
             |------|-------------|
-            | `${{ needs.build.outputs.project_name }}_wCRC.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
-            | `${{ needs.build.outputs.project_name }}.bin`      | Raw binary (no CRC — for reference / J-Link flashing) |
-            | `${{ needs.build.outputs.project_name }}.hex`      | Intel HEX (ST-Link / OpenOCD) |
-            | `${{ needs.build.outputs.project_name }}.elf`      | ELF with debug symbols |
+            | `${{ needs.build.outputs.release_file_base }}_SD.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
+            | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for reference / J-Link flashing) |
+            | `${{ needs.build.outputs.project_name }}.hex`         | Intel HEX (ST-Link / OpenOCD) |
+            | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
-            > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
+            > **Flash via SD card:** copy `*_SD.bin` to the root of the SD card and use the M1 firmware update menu.

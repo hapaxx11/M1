@@ -26,6 +26,11 @@ set(CMAKE_PROJECT_NAME M1_v0800_Hapax.9)
 # Hapax fork revision — must match M1_HAPAX_REVISION in m1_fw_update_bl.h
 set(M1_HAPAX_REVISION 9)
 
+# Release binary base name — drives the _SD.bin output (SD-card / OTA image).
+# Pattern: M1_Hapax_v{base}-Hapax.{rev}  (follows SiN360 naming: M1_{fork}_v{ver})
+# Update M1_HAPAX_REVISION above; this variable updates automatically.
+set(M1_RELEASE_NAME "M1_Hapax_v0.8.0.0-Hapax.${M1_HAPAX_REVISION}")
+
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
 
@@ -135,11 +140,11 @@ add_custom_command(
 add_custom_command(
     TARGET ${CMAKE_PROJECT_NAME}
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${CMAKE_PROJECT_NAME}_wCRC.bin"
+    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${M1_RELEASE_NAME}_SD.bin"
     COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/tools/append_crc32.py
         ${TARGET_BIN}
-        --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_wCRC.bin
+        --output ${CMAKE_BINARY_DIR}/${M1_RELEASE_NAME}_SD.bin
         --hapax-revision ${M1_HAPAX_REVISION}
         --verbose
 )

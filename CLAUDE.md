@@ -61,7 +61,7 @@
 - **Build command**: Set PATH to include all three tool directories, then `cmake --build build`
 - **Post-build CRC + Hapax metadata**: The CMake post-build step uses `srec_cat` which is NOT installed and will fail. This is expected — the .bin/.elf/.hex files are already generated before that step. After `cmake --build` completes, run the CRC/metadata injection script. The canonical command is in `do_build.ps1` — always use it as the reference. Currently:
   ```
-  python tools/append_crc32.py build/M1_v0800_Hapax.9.bin --output build/M1_v0800_Hapax.9_wCRC.bin --hapax-revision 9 --verbose
+  python tools/append_crc32.py build/M1_v0800_Hapax.9.bin --output build/M1_Hapax_v0.8.0.0-Hapax.9_SD.bin --hapax-revision 9 --verbose
   ```
 - **CRITICAL: `--hapax-revision 9` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only `v0.8.0.0` with no `-Hapax.9` suffix or build date. This flag must ALWAYS be included. The binary name must also match the CMake project name (`M1_v0800_Hapax.9`).
 
