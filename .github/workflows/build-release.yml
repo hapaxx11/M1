@@ -77,17 +77,17 @@ jobs:
                 --limit 50 \
                 --json tagName \
               | python3 -c "
-import json, sys
-prefix = '${PREFIX}'
-tags = [t['tagName'] for t in json.load(sys.stdin)]
-nums = []
-for t in tags:
-    if t.startswith(prefix):
-        tail = t[len(prefix):]
-        if tail.isdigit():
-            nums.append(int(tail))
-print(max(nums) if nums else 0)
-" 2>/dev/null || echo "0")
+          import json, sys
+          prefix = '${PREFIX}'
+          tags = [t['tagName'] for t in json.load(sys.stdin)]
+          nums = []
+          for t in tags:
+              if t.startswith(prefix):
+                  tail = t[len(prefix):]
+                  if tail.isdigit():
+                      nums.append(int(tail))
+          print(max(nums) if nums else 0)
+          " 2>/dev/null || echo "0")
             NEW_RC=$((LATEST_RC + 1))
             echo "Latest released RC: ${LATEST_RC} → next RC: ${NEW_RC}"
           fi
