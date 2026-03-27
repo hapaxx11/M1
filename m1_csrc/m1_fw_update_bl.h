@@ -69,11 +69,11 @@ typedef struct {
 #define FW_IMAGE_CRC_SIZE				4 // 4 bytes = 32 bits
 
 #define FW_VERSION_MAJOR   			0
-#define FW_VERSION_MINOR   			8
+#define FW_VERSION_MINOR   			9
 #define FW_VERSION_BUILD   			0
-#define FW_VERSION_RC   			0
+#define FW_VERSION_RC   			1
 
-#define M1_HAPAX_REVISION			9
+#define M1_HAPAX_REVISION			1
 
 #define FW_CONFIG_MAGIC_NUMBER_1	((uint32_t)0x4D493235)
 #define FW_CONFIG_MAGIC_NUMBER_2    ((uint32_t)0x534A1F41)

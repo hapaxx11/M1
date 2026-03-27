@@ -20,11 +20,24 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-# Set the project name
-set(CMAKE_PROJECT_NAME M1_v0800_Hapax.9)
+# Derive the project name and Hapax revision from the version defines in
+# m1_fw_update_bl.h at configure time. Only the four #define values in that
+# header need updating — CMakeLists.txt never needs to be touched for a version bump.
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_major REGEX "#define FW_VERSION_MAJOR")
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_minor REGEX "#define FW_VERSION_MINOR")
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_build REGEX "#define FW_VERSION_BUILD")
+file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_rc    REGEX "#define FW_VERSION_RC[^_]")
+string(REGEX MATCH "[0-9]+" FW_VERSION_MAJOR "${_ver_major}")
+string(REGEX MATCH "[0-9]+" FW_VERSION_MINOR "${_ver_minor}")
+string(REGEX MATCH "[0-9]+" FW_VERSION_BUILD "${_ver_build}")
+string(REGEX MATCH "[0-9]+" FW_VERSION_RC    "${_ver_rc}")
 
-# Hapax fork revision — must match M1_HAPAX_REVISION in m1_fw_update_bl.h
-set(M1_HAPAX_REVISION 9)
+# M1_Hapax_v{MAJOR}.{MINOR}.{BUILD}.{RC} — all output filenames derive from this.
+set(CMAKE_PROJECT_NAME "M1_Hapax_v${FW_VERSION_MAJOR}.${FW_VERSION_MINOR}.${FW_VERSION_BUILD}.${FW_VERSION_RC}")
+
+# Must equal FW_VERSION_RC. Used by append_crc32.py --hapax-revision to inject
+# Hapax metadata into the SD image.
+set(M1_HAPAX_REVISION ${FW_VERSION_RC})
 
 # Include toolchain file
 include("cmake/gcc-arm-none-eabi.cmake")
@@ -131,15 +144,16 @@ add_custom_command(
 )
 
 # Command to inject CRC32 + Hapax metadata into the .bin file
-# Also generates a stock-compatible SD card binary (_sdcard.bin)
+# Output: ${CMAKE_PROJECT_NAME}_SD.bin  (e.g. M1_Hapax_v0.9.0.1_SD.bin)
+# Matches SiN360's pattern: project name drives all output filenames.
 add_custom_command(
     TARGET ${CMAKE_PROJECT_NAME}
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${CMAKE_PROJECT_NAME}_wCRC.bin"
+    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${CMAKE_PROJECT_NAME}_SD.bin"
     COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/tools/append_crc32.py
         ${TARGET_BIN}
-        --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_wCRC.bin
+        --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_SD.bin
         --hapax-revision ${M1_HAPAX_REVISION}
         --verbose
 )

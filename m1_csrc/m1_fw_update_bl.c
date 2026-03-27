@@ -768,9 +768,13 @@ static uint8_t bl_flash_binary(uint8_t *payload, size_t size)
     M1_LOG_I(M1_LOGDB_TAG, "\r\nFlashing completed!\r\n");
     init_done = false; // reset
 
-    write_acc -= FW_IMAGE_CRC_SIZE; // exclude the CRC at the end of the image file
-    write_acc /= 4; // convert image size from byte to word (32-bit)
-    err = bl_crc_check(write_acc);
+    /* Use the CRC extension block to verify the flashed firmware.
+     * bl_crc_check() reads the expected CRC from FW_CRC_ADDRESS (0x080FFC14),
+     * but our binary stores the CRC2 magic sentinel there — not the CRC value.
+     * bl_verify_bank_crc() correctly reads magic/size/crc from the extension
+     * block at offsets +0/+4/+8 from FW_CRC_EXT_BASE (= 0x080FFC14/18/1C). */
+    err = bl_verify_bank_crc(FW_START_ADDRESS + M1_FLASH_BANK_SIZE)
+          ? BL_CODE_OK : BL_CODE_CHK_ERROR;
 
 	if (err != BL_CODE_OK)
     {

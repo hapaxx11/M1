@@ -6,9 +6,8 @@ on:
     inputs:
       tag:
         description: >
-          Release tag (e.g. v0.8.0.0-Hapax.9).
-          Leave blank to auto-generate from the current date and the
-          M1_HAPAX_REVISION value read from the source tree.
+          Release tag (e.g. v0.9.0.5).
+          Leave blank to auto-increment from the latest published release.
         required: false
         default: ''
       release_name:
@@ -30,9 +29,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     outputs:
-      tag:          ${{ steps.meta.outputs.tag }}
-      release_name: ${{ steps.meta.outputs.release_name }}
-      project_name: ${{ steps.meta.outputs.project_name }}
+      tag:              ${{ steps.meta.outputs.tag }}
+      release_name:     ${{ steps.meta.outputs.release_name }}
+      project_name:     ${{ steps.meta.outputs.project_name }}
+      release_file_base: ${{ steps.meta.outputs.release_file_base }}
 
     steps:
       # ------------------------------------------------------------------ #
@@ -45,26 +45,72 @@ jobs:
           fetch-depth: 0
 
       # ------------------------------------------------------------------ #
-      # 2. Read project metadata from source tree
+      # 2. Auto-increment version — patch source files before building
+      # ------------------------------------------------------------------ #
+      # Queries the latest published release whose tag matches v{MAJOR}.{MINOR}.{BUILD}.*
+      # and sets RC = (latest RC) + 1, so every CI run produces the next sequential
+      # release automatically.  If a manual tag is supplied, its RC is used instead.
+      # Only m1_fw_update_bl.h (FW_VERSION_RC, M1_HAPAX_REVISION) is patched.
+      # CMakeLists.txt is NOT patched — it derives CMAKE_PROJECT_NAME automatically
+      # from those same #define values at configure time.
+      - name: Compute next version and patch source
+        id: patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
+                  | awk '{print $3}' | grep -Eo '^[0-9]+')
+
+          if [ -n "${{ inputs.tag }}" ]; then
+            # Use RC from the manually-supplied tag (e.g. v0.9.0.5 → 5)
+            NEW_RC=$(echo "${{ inputs.tag }}" | grep -Eo '[0-9]+$')
+            echo "Using manual tag RC: ${NEW_RC}"
+          else
+            # Auto-increment: find the highest RC already released for this prefix
+            PREFIX="v${MAJOR}.${MINOR}.${BUILD}."
+            LATEST_RC=$(gh release list \
+                --repo "$GITHUB_REPOSITORY" \
+                --limit 50 \
+                --json tagName \
+              | python3 -c "
+import json, sys
+prefix = '${PREFIX}'
+tags = [t['tagName'] for t in json.load(sys.stdin)]
+nums = []
+for t in tags:
+    if t.startswith(prefix):
+        tail = t[len(prefix):]
+        if tail.isdigit():
+            nums.append(int(tail))
+print(max(nums) if nums else 0)
+" 2>/dev/null || echo "0")
+            NEW_RC=$((LATEST_RC + 1))
+            echo "Latest released RC: ${LATEST_RC} → next RC: ${NEW_RC}"
+          fi
+
+          echo "new_rc=${NEW_RC}" >> "$GITHUB_OUTPUT"
+
+          # Patch FW_VERSION_RC in the header
+          sed -i "s/^\(#define[[:space:]]FW_VERSION_RC[[:space:]]*\)[0-9]*/\1${NEW_RC}/" \
+              m1_csrc/m1_fw_update_bl.h
+          # Patch M1_HAPAX_REVISION in the header
+          sed -i "s/^\(#define[[:space:]]M1_HAPAX_REVISION[[:space:]]*\)[0-9]*/\1${NEW_RC}/" \
+              m1_csrc/m1_fw_update_bl.h
+          echo "--- Patched values ---"
+          grep -E 'FW_VERSION_RC|M1_HAPAX_REVISION' m1_csrc/m1_fw_update_bl.h
+
+      # ------------------------------------------------------------------ #
+      # 3. Read project metadata from source tree (after patching)
       # ------------------------------------------------------------------ #
       - name: Read build metadata
         id: meta
         run: |
-          # Parse project name from CMakeLists.txt.
-          # Matches: set(CMAKE_PROJECT_NAME <value>) with any surrounding whitespace.
-          PROJECT=$(grep -m1 'set(CMAKE_PROJECT_NAME' CMakeLists.txt \
-                    | sed -E 's/.*set\(CMAKE_PROJECT_NAME[[:space:]]+([^)[:space:]]+).*/\1/')
-          echo "project_name=${PROJECT}" >> "$GITHUB_OUTPUT"
-
-          # Parse Hapax revision from CMakeLists.txt.
-          # Matches: set(M1_HAPAX_REVISION <number>)
-          HAPAX_REV=$(grep -m1 'set(M1_HAPAX_REVISION' CMakeLists.txt \
-                      | sed -E 's/.*set\(M1_HAPAX_REVISION[[:space:]]+([0-9]+).*/\1/')
-          echo "hapax_rev=${HAPAX_REV}" >> "$GITHUB_OUTPUT"
-
-          # Parse Monstatek base version from the header.
-          # Each define line looks like: #define FW_VERSION_MAJOR  0
-          # We capture the third token (the numeric value), ignoring any trailing comments.
+          # Parse version from the header — single source of truth now that
+          # CMAKE_PROJECT_NAME and M1_HAPAX_REVISION are derived at configure time.
           MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
                   | awk '{print $3}' | grep -Eo '^[0-9]+')
           MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
@@ -73,12 +119,17 @@ jobs:
                   | awk '{print $3}' | grep -Eo '^[0-9]+')
           RC=$(grep -m1 '#define[[:space:]]FW_VERSION_RC' m1_csrc/m1_fw_update_bl.h \
                | awk '{print $3}' | grep -Eo '^[0-9]+')
+          HAPAX_REV=${RC}
+
+          PROJECT="M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${RC}"
+          echo "project_name=${PROJECT}" >> "$GITHUB_OUTPUT"
+          echo "hapax_rev=${HAPAX_REV}" >> "$GITHUB_OUTPUT"
 
           # Decide the release tag
           if [ -n "${{ inputs.tag }}" ]; then
             TAG="${{ inputs.tag }}"
           else
-            TAG="v${MAJOR}.${MINOR}.${BUILD}.${RC}-Hapax.${HAPAX_REV}"
+            TAG="v${MAJOR}.${MINOR}.${BUILD}.${RC}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
@@ -90,14 +141,20 @@ jobs:
           fi
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
+          # Release file base name = project name (version is embedded in it, SiN360-style).
+          # The SD image is ${PROJECT}_SD.bin, ELF/BIN/HEX are ${PROJECT}.{ext}.
+          RFILE="${PROJECT}"
+          echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
+
           echo "--- Build metadata ---"
           echo "  Project:      ${PROJECT}"
           echo "  Hapax rev:    ${HAPAX_REV}"
           echo "  Base version: ${MAJOR}.${MINOR}.${BUILD}.${RC}"
           echo "  Tag:          ${TAG}"
+          echo "  Release file: ${RFILE}_SD.bin"
 
       # ------------------------------------------------------------------ #
-      # 3. Install toolchain and build tools
+      # 4. Install toolchain and build tools
       # ------------------------------------------------------------------ #
       - name: Install ARM toolchain and build tools
         run: |
@@ -110,7 +167,7 @@ jobs:
             python3
 
       # ------------------------------------------------------------------ #
-      # 4. Configure CMake
+      # 5. Configure CMake
       # ------------------------------------------------------------------ #
       - name: Configure CMake
         run: |
@@ -119,14 +176,14 @@ jobs:
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       # ------------------------------------------------------------------ #
-      # 5. Build (CRC injection is a CMake POST_BUILD step)
+      # 6. Build (CRC injection is a CMake POST_BUILD step)
       # ------------------------------------------------------------------ #
       - name: Build firmware
         run: |
           cmake --build build --parallel $(nproc)
 
       # ------------------------------------------------------------------ #
-      # 6. Verify artifacts and print memory usage
+      # 7. Verify artifacts and print memory usage
       # ------------------------------------------------------------------ #
       - name: Verify artifacts
         id: verify
@@ -136,7 +193,7 @@ jobs:
           ELF="build/${PROJECT}.elf"
           BIN="build/${PROJECT}.bin"
           HEX="build/${PROJECT}.hex"
-          WCRC="build/${PROJECT}_wCRC.bin"
+          WCRC="build/${{ steps.meta.outputs.release_file_base }}_SD.bin"
 
           for f in "$ELF" "$BIN" "$HEX" "$WCRC"; do
             if [ ! -f "$f" ]; then
@@ -159,7 +216,7 @@ jobs:
           arm-none-eabi-size "$ELF"
 
       # ------------------------------------------------------------------ #
-      # 7. Upload artifacts for the release job
+      # 8. Upload artifacts for the release job
       # ------------------------------------------------------------------ #
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
@@ -169,7 +226,7 @@ jobs:
             build/${{ steps.meta.outputs.project_name }}.elf
             build/${{ steps.meta.outputs.project_name }}.hex
             build/${{ steps.meta.outputs.project_name }}.bin
-            build/${{ steps.meta.outputs.project_name }}_wCRC.bin
+            build/${{ steps.meta.outputs.release_file_base }}_SD.bin
           if-no-files-found: error
           retention-days: 90
 
@@ -202,15 +259,15 @@ jobs:
             artifacts/${{ needs.build.outputs.project_name }}.elf
             artifacts/${{ needs.build.outputs.project_name }}.hex
             artifacts/${{ needs.build.outputs.project_name }}.bin
-            artifacts/${{ needs.build.outputs.project_name }}_wCRC.bin
+            artifacts/${{ needs.build.outputs.release_file_base }}_SD.bin
           body: |
             ## M1 Firmware — ${{ needs.build.outputs.tag }}
 
             | File | Description |
             |------|-------------|
-            | `${{ needs.build.outputs.project_name }}_wCRC.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
-            | `${{ needs.build.outputs.project_name }}.bin`      | Raw binary (no CRC — for reference / J-Link flashing) |
-            | `${{ needs.build.outputs.project_name }}.hex`      | Intel HEX (ST-Link / OpenOCD) |
-            | `${{ needs.build.outputs.project_name }}.elf`      | ELF with debug symbols |
+            | `${{ needs.build.outputs.release_file_base }}_SD.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
+            | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for reference / J-Link flashing) |
+            | `${{ needs.build.outputs.project_name }}.hex`         | Intel HEX (ST-Link / OpenOCD) |
+            | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
-            > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
+            > **Flash via SD card:** copy `*_SD.bin` to the root of the SD card and use the M1 firmware update menu.
