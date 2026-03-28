@@ -26,6 +26,7 @@
 #include "res_string.h"
 #include "rfal_t2t.h"
 #include "rfal_nfcv.h"
+#include "rfal_rf.h"
 #include "legacy/mfc_crypto1.h"
 
 /*************************** D E F I N E S ************************************/
@@ -66,13 +67,16 @@ const char *m1_nfc_more_options_file[] = {
 };
 
 /* Menu for NFC Tools (both top-level nfc_tools() and Utils view) */
-#define NFC_TOOL_OPTIONS_COUNT  5
+#define NFC_TOOL_OPTIONS_COUNT  8
 static const char *m1_nfc_tool_options[] = {
 	"Tag Info",
 	"Clone Emulate",
 	"NFC Fuzzer",
 	"Write UID",
-	"Wipe Tag"
+	"Wipe Tag",
+	"Cyborg Detector",
+	"Read NDEF",
+	"Write URL"
 };
 
 //************************** S T R U C T U R E S *******************************
@@ -180,6 +184,9 @@ static int nfc_utils_kp_handler(void);
 static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte);
 static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2]);
 static void nfc_tool_fuzzer(void);
+static void nfc_tool_cyborg_detector(void);
+static void nfc_tool_read_ndef(void);
+static void nfc_tool_write_url(void);
 
 static void nfc_info_gui_init(void);
 static void nfc_info_gui_create(uint8_t param);
@@ -1532,6 +1539,21 @@ static int nfc_utils_kp_handler(void)
 
 				case 4: /* Wipe Tag */
 					nfc_utils_wipe_tag_run();
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+
+				case 5: /* Cyborg Detector */
+					nfc_tool_cyborg_detector();
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+
+				case 6: /* Read NDEF */
+					nfc_tool_read_ndef();
+					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+					break;
+
+				case 7: /* Write URL */
+					nfc_tool_write_url();
 					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 					break;
 
@@ -2939,6 +2961,385 @@ static void nfc_unlock_with_reader(void)
 
 /*============================================================================*/
 /**
+ * @brief nfc_tool_cyborg_detector - Continuous NFC field for implant LED testing
+ *
+ * Turns on the NFC field continuously so body implant LEDs light up when
+ * held near the device's back. Press BACK to stop and return.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_cyborg_detector(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Turn on NFC field */
+	rfalFieldOnAndStartGT();
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 12, "Cyborg Detector");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, "NFC field is ON");
+	u8g2_DrawStr(&m1_u8g2, 4, 38, "Hold implant near back");
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 61, "Back=Stop");
+	m1_u8g2_nextpage();
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_L);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret == pdTRUE && bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				rfalFieldOff();
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				xQueueReset(main_q_hdl);
+				return;
+			}
+		}
+	}
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tool_parse_ndef_text - Parse NDEF TLV from T2T context
+ *
+ * Extracts URI and Text records from the NDEF data stored in the NFC
+ * context's T2T info structure.
+ *
+ * @param[out] out      Output buffer for parsed text
+ * @param[in]  out_size Size of output buffer
+ * @retval Number of characters written
+ */
+/*============================================================================*/
+static uint16_t nfc_tool_parse_ndef_text(char *out, uint16_t out_size)
+{
+	nfc_run_ctx_t *c = nfc_ctx_get();
+	out[0] = '\0';
+
+	if (!c || !c->t2t.valid || c->t2t.ndef_len == 0)
+		return 0;
+
+	const uint8_t *ndef = c->t2t.ndef;
+	uint16_t len = c->t2t.ndef_len;
+	uint16_t pos = 0;
+	uint16_t written = 0;
+
+	while (pos < len && written < out_size - 1)
+	{
+		if (pos + 3 > len) break;
+
+		uint8_t header = ndef[pos++];
+		uint8_t tnf = header & 0x07;
+		uint8_t type_len = ndef[pos++];
+		uint32_t payload_len;
+
+		if (header & 0x10) { /* SR flag */
+			payload_len = ndef[pos++];
+		} else {
+			if (pos + 4 > len) break;
+			payload_len = ((uint32_t)ndef[pos] << 24) | ((uint32_t)ndef[pos+1] << 16) |
+			              ((uint32_t)ndef[pos+2] << 8) | ndef[pos+3];
+			pos += 4;
+		}
+
+		uint8_t id_len = 0;
+		if (header & 0x08) {
+			if (pos >= len) break;
+			id_len = ndef[pos++];
+		}
+
+		if (pos + type_len > len) break;
+		uint8_t type_byte = (type_len > 0) ? ndef[pos] : 0;
+		pos += type_len;
+		pos += id_len;
+
+		if (pos + payload_len > len) break;
+
+		if (tnf == 0x01 && type_byte == 'U' && payload_len > 0)
+		{
+			static const char *uri_prefixes[] = {
+				"", "http://www.", "https://www.", "http://", "https://",
+				"tel:", "mailto:", "ftp://anonymous:anonymous@", "ftp://ftp.",
+				"ftps://", "sftp://", "smb://", "nfs://", "ftp://", "dav://",
+				"news:", "telnet://", "imap:", "rtsp://", "urn:", "pop:",
+				"sip:", "sips:", "tftp:", "btspp://", "btl2cap://",
+				"btgoep://", "tcpobex://", "irdaobex://", "file://",
+				"urn:epc:id:", "urn:epc:tag:", "urn:epc:pat:", "urn:epc:raw:",
+				"urn:epc:", "urn:nfc:"
+			};
+			uint8_t prefix_code = ndef[pos];
+			const char *prefix = (prefix_code < 36) ? uri_prefixes[prefix_code] : "";
+			uint16_t plen = strlen(prefix);
+			if (written + plen < out_size - 1) {
+				strcpy(&out[written], prefix);
+				written += plen;
+			}
+			uint32_t copy_len = payload_len - 1;
+			if (written + copy_len >= out_size - 1)
+				copy_len = out_size - 1 - written;
+			memcpy(&out[written], &ndef[pos + 1], copy_len);
+			written += copy_len;
+			out[written++] = '\n';
+		}
+		else if (tnf == 0x01 && type_byte == 'T' && payload_len > 1)
+		{
+			uint8_t status = ndef[pos];
+			uint8_t lang_len = status & 0x3F;
+			uint32_t text_start = 1 + lang_len;
+			if (text_start < payload_len) {
+				uint32_t text_len = payload_len - text_start;
+				if (written + text_len >= out_size - 1)
+					text_len = out_size - 1 - written;
+				memcpy(&out[written], &ndef[pos + text_start], text_len);
+				written += text_len;
+				out[written++] = '\n';
+			}
+		}
+
+		pos += payload_len;
+		if (header & 0x40) break; /* ME flag — last record */
+	}
+
+	if (written > 0 && out[written - 1] == '\n') written--;
+	out[written] = '\0';
+	return written;
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tool_read_ndef - Read and display NDEF content from NFC tag
+ *
+ * Initiates an NFC read, then parses NDEF data (URI/Text records) from
+ * T2T tags and displays them on screen.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_read_ndef(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint8_t scanning = 1;
+	char ndef_text[256];
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 55, 20, "Read NDEF");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 50, 35, "Hold tag to back");
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret != pdTRUE) continue;
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (scanning)
+					m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_READ_COMPLETE);
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				xQueueReset(main_q_hdl);
+				return;
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_NFC_READ_COMPLETE)
+		{
+			scanning = 0;
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+			m1_buzzer_notification();
+			nfc_tool_parse_ndef_text(ndef_text, sizeof(ndef_text));
+
+			/* Draw NDEF content */
+			u8g2_FirstPage(&m1_u8g2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 1, 10, "NDEF Content");
+
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			if (ndef_text[0] == '\0')
+			{
+				u8g2_DrawStr(&m1_u8g2, 4, 28, "No NDEF data found");
+				u8g2_DrawStr(&m1_u8g2, 4, 40, "Try scanning a tag");
+			}
+			else
+			{
+				/* Render up to 4 lines of NDEF text */
+				char buf[128];
+				strncpy(buf, ndef_text, sizeof(buf) - 1);
+				buf[sizeof(buf) - 1] = '\0';
+
+				char *line = buf;
+				uint8_t y = 24;
+				uint8_t line_count = 0;
+				while (line && *line && line_count < 4)
+				{
+					char *nl = strchr(line, '\n');
+					if (nl) *nl = '\0';
+					if (strlen(line) > 21) line[21] = '\0';
+					u8g2_DrawStr(&m1_u8g2, 2, y, line);
+					y += 10;
+					line_count++;
+					if (nl) line = nl + 1;
+					else break;
+				}
+			}
+
+			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 2, 61, "Back=Exit");
+			m1_u8g2_nextpage();
+		}
+	}
+}
+
+
+/*============================================================================*/
+/**
+ * @brief nfc_tool_write_url - Write a URL as NDEF to an NTAG tag
+ *
+ * Prompts the user for a URL using the virtual keyboard, then writes it
+ * as an NDEF URI record (https:// prefix) to T2T pages starting at page 4.
+ *
+ * @retval None
+ */
+/*============================================================================*/
+static void nfc_tool_write_url(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	/* Prompt for URL text via virtual keyboard */
+	char url_text[128];
+	char default_url[] = "github.com/hapaxx11/M1";
+	uint8_t vkb_ret = m1_vkb_get_filename("Enter URL (no https://):", default_url, url_text);
+	if (!vkb_ret) return;
+
+	uint8_t url_len = strlen(url_text);
+	if (url_len == 0) return;
+
+	uint8_t ndef_payload_len = 1 + url_len; /* prefix byte + url */
+	uint8_t ndef_record[128];
+	uint8_t ndef_total = 0;
+
+	/* Build NDEF TLV + record */
+	ndef_record[ndef_total++] = 0x03;                    /* NDEF TLV tag */
+	ndef_record[ndef_total++] = 3 + ndef_payload_len;    /* TLV length = header(3) + payload */
+	ndef_record[ndef_total++] = 0xD1;                    /* MB|ME|SR|TNF=WKT */
+	ndef_record[ndef_total++] = 0x01;                    /* Type length = 1 */
+	ndef_record[ndef_total++] = ndef_payload_len;         /* Payload length */
+	ndef_record[ndef_total++] = 'U';                     /* Type = URI */
+	ndef_record[ndef_total++] = 0x04;                    /* URI prefix: https:// */
+	memcpy(&ndef_record[ndef_total], url_text, url_len);
+	ndef_total += url_len;
+	ndef_record[ndef_total++] = 0xFE;                    /* Terminator TLV */
+
+	/* Pad to 4-byte alignment for T2T pages */
+	while (ndef_total % 4 != 0)
+		ndef_record[ndef_total++] = 0x00;
+
+	/* Show write confirmation screen */
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write NFC URL");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, "https://");
+	/* Truncate display if too long */
+	char disp_url[22];
+	strncpy(disp_url, url_text, 21);
+	disp_url[21] = '\0';
+	u8g2_DrawStr(&m1_u8g2, 4, 36, disp_url);
+	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Write  Back=Cancel");
+	m1_u8g2_nextpage();
+
+	/* Wait for OK or BACK */
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE) continue;
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret != pdTRUE) continue;
+
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return;
+		}
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			/* Show writing screen */
+			u8g2_FirstPage(&m1_u8g2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+			u8g2_DrawStr(&m1_u8g2, 4, 25, "Writing URL...");
+			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold NTAG to back");
+			m1_u8g2_nextpage();
+
+			/* Write NDEF to pages starting at page 4 (user data area) */
+			ReturnCode err = RFAL_ERR_NONE;
+			uint8_t pages_needed = ndef_total / 4;
+			for (uint8_t p = 0; p < pages_needed; p++)
+			{
+				err = rfalT2TPollerWrite(4 + p, &ndef_record[p * 4]);
+				if (err != RFAL_ERR_NONE) break;
+				m1_wdt_reset();
+			}
+
+			/* Show result */
+			u8g2_FirstPage(&m1_u8g2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+			if (err == RFAL_ERR_NONE) {
+				u8g2_DrawStr(&m1_u8g2, 4, 25, "URL Written!");
+				m1_buzzer_notification();
+			} else {
+				u8g2_DrawStr(&m1_u8g2, 4, 25, "Write Failed!");
+				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+				u8g2_DrawStr(&m1_u8g2, 4, 40, "Use writable NTAG");
+			}
+			m1_u8g2_nextpage();
+			vTaskDelay(pdMS_TO_TICKS(2000));
+			return;
+		}
+	}
+}
+
+
+/*============================================================================*/
+/**
  * @brief nfc_tools - NFC tools menu with Tag Info, Clone Emulate, NFC Fuzzer
  *
  * Provides a submenu of NFC utility tools accessible from the main NFC menu.
@@ -2987,6 +3388,9 @@ void nfc_tools(void)
 					case 2: nfc_tool_fuzzer();       break;
 					case 3: nfc_utils_write_uid_run(); break;
 					case 4: nfc_utils_wipe_tag_run();  break;
+					case 5: nfc_tool_cyborg_detector(); break;
+					case 6: nfc_tool_read_ndef();    break;
+					case 7: nfc_tool_write_url();    break;
 					default: break;
 				}
 				/* Redraw submenu after returning from a tool */

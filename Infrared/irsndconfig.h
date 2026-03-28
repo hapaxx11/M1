@@ -43,7 +43,7 @@
 #define IRSND_SUPPORT_DENON_PROTOCOL            1       // DENON, Sharp         >= 10000                 ~200 bytes
 #define IRSND_SUPPORT_RC5_PROTOCOL              1       // RC5                  >= 10000                 ~150 bytes
 #define IRSND_SUPPORT_RC6_PROTOCOL              1       // RC6                  >= 10000                 ~250 bytes
-#define IRSND_SUPPORT_RC6A_PROTOCOL             0       // RC6A                 >= 10000                 ~250 bytes
+#define IRSND_SUPPORT_RC6A_PROTOCOL             1       // RC6A                 >= 10000                 ~250 bytes
 #define IRSND_SUPPORT_JVC_PROTOCOL              1       // JVC                  >= 10000                 ~150 bytes
 #define IRSND_SUPPORT_NEC16_PROTOCOL            0       // NEC16                >= 10000                 ~150 bytes
 #define IRSND_SUPPORT_NEC42_PROTOCOL            1       // NEC42                >= 10000                 ~150 bytes
@@ -74,7 +74,7 @@
 #define IRSND_SUPPORT_LEGO_PROTOCOL             0       // LEGO Power RC        >= 20000                 ~150 bytes
 #define IRSND_SUPPORT_RCMM_PROTOCOL             0       // RCMM 12,24, or 32    >= 20000                 DON'T CHANGE, NOT SUPPORTED YET!
 #define IRSND_SUPPORT_LGAIR_PROTOCOL            1       // LG Air Condition     >= 10000                 ~150 bytes.
-#define IRSND_SUPPORT_SAMSUNG48_PROTOCOL        0       // Samsung48            >= 10000                 ~100 bytes
+#define IRSND_SUPPORT_SAMSUNG48_PROTOCOL        1       // Samsung48            >= 10000                 ~100 bytes
 #define IRSND_SUPPORT_PENTAX_PROTOCOL           0       // Pentax               >= 10000                 ~150 bytes
 #define IRSND_SUPPORT_S100_PROTOCOL             0       // S100                 >= 10000                 ~150 bytes
 #define IRSND_SUPPORT_ACP24_PROTOCOL            0       // ACP24                >= 10000                 ~150 bytes
