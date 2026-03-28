@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   key value. Saved files appear in `/SUBGHZ/` on the SD card and are compatible with Flipper
   Zero for replay or analysis.
 
+- **RAW waveform visualization** — press LEFT during recording to toggle a real-time pulse
+  waveform display (like Flipper's Read RAW). Shows a scrolling mark/space waveform at
+  500μs per column across the full 128px display width. The waveform renders marks (high)
+  above and spaces (low) below a center reference line. Includes a sample counter and
+  recording duration. Press BACK to return to the live/protocol view.
+
 ### Changed
 
 - **Continuous signal decoding** — the decoder now runs continuously during recording,

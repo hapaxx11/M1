@@ -2,7 +2,7 @@
 
 > **Temporary tracking document** — delete once all phases are complete.
 >
-> Last updated: 2026-03-28 (Phase 3 complete)
+> Last updated: 2026-03-28 (Phase 4 complete)
 
 ---
 
@@ -135,20 +135,54 @@ During ACTIVE recording with hopping, all buttons work identically to non-hoppin
 
 ---
 
-## Phase 4 — RAW Capture Visualization 🔲 PLANNED
+## Phase 4 — RAW Capture Visualization ✅ COMPLETE
 
-### Goals
-- Show a real-time pulse waveform during recording (like Flipper's Read RAW)
-- Visualize the raw pulse timing data from `subghz_rx_rawdata_rb`
-- Separate "Read RAW" mode vs. protocol-decoded "Read"
+**Branch:** `copilot/fix-no-apps-found`
 
-### Key files
-- `m1_sub_ghz.c` — new display mode
-- `m1_ring_buffer.h` — raw sample ring buffer
+### What was done
 
-### Notes
-- 128px wide display = 128 time bins. Need to decide time scale and
-  whether to show mark/space or just envelope.
+| Item | Status | Details |
+|------|--------|---------|
+| `subghz_raw_waveform[]` buffer | ✅ | 128-byte circular buffer (one byte per display column) |
+| `subghz_raw_waveform_push()` | ✅ | Maps pulse duration (μs) to display columns at 500μs/col |
+| `subghz_raw_waveform_draw()` | ✅ | Draws mark/space VLines from center reference line |
+| `subghz_raw_waveform_reset()` | ✅ | Clears waveform buffer and sample counter |
+| `subghz_raw_view_active` flag | ✅ | Controls RAW waveform sub-view rendering |
+| Waveform feed from RX handler | ✅ | Processes saved ring buffer data after `sub_ghz_rx_raw_save()` |
+| LEFT button toggle | ✅ | Toggles RAW view from live ACTIVE view, resets waveform on entry |
+| BACK button exit | ✅ | Returns from RAW view to live view |
+| "RAW" hint in live bottom bar | ✅ | Left-arrow + "RAW" shown in normal recording bottom bar |
+| RAW view bottom bar | ✅ | "Back" + "Stop" buttons |
+| RAW info overlay | ✅ | Shows "RAW Nk" (sample count) and "Ns" (recording time) |
+| Reset on record start | ✅ | Waveform cleared alongside history reset |
+| CHANGELOG entry | ✅ | Added to [0.9.0.3] |
+
+### Design decisions
+
+- **500μs per column** — each of the 128 display columns represents 500μs.
+  This gives 64ms total visible window, which captures several complete protocol
+  packets (typical te=300–500μs, packet=20–60 pulses).
+- **Mark/Space rendering** — marks draw upward (18px) from center reference line,
+  spaces draw downward (18px). Center reference is a dashed line for visual clarity.
+- **Circular buffer** — 128-byte circular buffer with head pointer, automatically
+  scrolls left as new data arrives (oldest data falls off the left edge).
+- **Pulse clamping** — single pulses clamped to max 16 columns to prevent long
+  inter-packet gaps from flooding the display with empty space.
+- **Data sourced post-save** — waveform is fed from `subghz_ring_read_buffer` after
+  `sub_ghz_rx_raw_save()` drains the ring buffer. This avoids double-reading the
+  ring buffer and ensures zero impact on the existing recording/decode pipeline.
+- **No separate "Read RAW" mode** — instead, RAW visualization is an overlay toggled
+  with LEFT during any recording. This keeps the UI simple and avoids duplicating
+  the entire record state machine.
+
+### Button mapping update (ACTIVE state)
+
+| Sub-view | UP | DOWN | LEFT | OK | BACK | RIGHT |
+|----------|-----|------|------|-----|------|-------|
+| **Live** | Open history | — | **Toggle RAW** | Stop | Stop | — |
+| **History list** | Scroll up | Scroll down | — | View detail | Return to live | — |
+| **Signal detail** | — | Save .sub | — | — | Return to list | — |
+| **RAW waveform** | — | — | — | Stop | **Return to live** | — |
 
 ---
 
