@@ -1201,8 +1201,15 @@ static void subghz_record_gui_update(uint8_t param)
 				else if (subghz_history_detail_active)
 				{
 					/* Save hint in detail view */
-					u8g2_DrawXBMP(&m1_u8g2, 74, 53, 8, 8, arrowdown_8x8);
-					u8g2_DrawStr(&m1_u8g2, 84, 61, "Save");
+					u8g2_DrawXBMP(&m1_u8g2, 40, 53, 8, 8, arrowdown_8x8);
+					u8g2_DrawStr(&m1_u8g2, 50, 61, "Save");
+					/* Send hint for static-code protocols */
+					const SubGHz_History_Entry_t *det_e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+					if (det_e && subghz_protocol_is_static(det_e->info.protocol))
+					{
+						u8g2_DrawXBMP(&m1_u8g2, 84, 53, 8, 8, arrowright_8x8);
+						u8g2_DrawStr(&m1_u8g2, 94, 61, "Send");
+					}
 				}
 			}
 			else
@@ -1523,6 +1530,236 @@ static void subghz_raw_waveform_draw(void)
 
 
 /*============================================================================*/
+/* Phase 5 — Protocol-Specific Emulation (static-code TX)                     */
+/*============================================================================*/
+
+/* Maximum pulse pairs: data_bits * 2 (mark+space per bit) + 2 (sync pulse) + margin */
+#define SUBGHZ_TX_ENCODE_BUF_MAX  280  /* 128 bits × 2 + sync + margin */
+
+/* TX pulse buffer — allocated on first use, freed when no longer needed */
+static uint16_t *subghz_tx_encode_buf = NULL;
+static uint16_t  subghz_tx_encode_len = 0;  /* Number of uint16_t samples */
+
+/*============================================================================*/
+/**
+  * @brief  Check if a protocol is a static-code type safe for TX emulation.
+  *         Static codes have a fixed key (no rolling code / hopping).
+  * @param  protocol  protocol enum value
+  * @retval true if protocol is static-code and safe to transmit
+  */
+/*============================================================================*/
+static bool subghz_protocol_is_static(uint16_t protocol)
+{
+	switch (protocol)
+	{
+		case PRINCETON:
+		case CAME_12BIT:
+		case NICE_FLO:
+		case LINEAR_10BIT:
+		case HOLTEK_HT12E:
+		case GATE_TX:
+		case SMC5326:
+		case POWER_SMART:
+		case ANSONIC:
+		case MARANTEC:
+		case FIREFLY:
+		case CLEMSA:
+		case BETT:
+		case MEGACODE:
+		case INTERTECHNO:
+		case ELRO:
+		case CENTURION:
+		case MARANTEC24:
+		case HAY21:
+		case MAGELLAN:
+		case INTERTECHNO_V3:
+		case LINEAR_DELTA3:
+		case ROGER:
+			return true;
+		default:
+			return false;
+	}
+}
+
+/*============================================================================*/
+/**
+  * @brief  Encode a decoded static-code signal into a TX pulse duration array.
+  *         Uses standard OOK PWM encoding:
+  *           bit 0 = te_short HIGH, te_long LOW
+  *           bit 1 = te_long HIGH, te_short LOW
+  *         Followed by a sync gap (te_short HIGH, te_short × 30 LOW).
+  *
+  * @param  key       Decoded key value (MSB-first)
+  * @param  bit_len   Number of data bits
+  * @param  te_short  Short timing element in μs
+  * @param  te_long   Long timing element in μs
+  * @param  buf       Output buffer (uint16_t pulse durations)
+  * @param  buf_max   Maximum number of uint16_t entries in buf
+  * @retval Number of uint16_t entries written, or 0 on error
+  */
+/*============================================================================*/
+static uint16_t subghz_encode_ook_pwm(uint64_t key, uint16_t bit_len,
+                                       uint16_t te_short, uint16_t te_long,
+                                       uint16_t *buf, uint16_t buf_max)
+{
+	uint16_t idx = 0;
+
+	if (bit_len == 0 || bit_len > 64 || buf == NULL)
+		return 0;
+
+	/* Need 2 entries per bit + 2 for sync gap */
+	if ((uint16_t)(bit_len * 2 + 2) > buf_max)
+		return 0;
+
+	/* Encode data bits MSB-first */
+	for (int16_t b = bit_len - 1; b >= 0; b--)
+	{
+		if ((key >> b) & 1ULL)
+		{
+			/* bit 1: long mark, short space */
+			buf[idx++] = te_long;
+			buf[idx++] = te_short;
+		}
+		else
+		{
+			/* bit 0: short mark, long space */
+			buf[idx++] = te_short;
+			buf[idx++] = te_long;
+		}
+	}
+
+	/* Sync/gap: short mark followed by long pause (30× te_short) */
+	buf[idx++] = te_short;
+	buf[idx++] = te_short * 30;
+
+	return idx;
+}
+
+/*============================================================================*/
+/**
+  * @brief  Transmit a decoded static-code signal from the history.
+  *         Pauses the current RX, encodes the signal as pulse durations,
+  *         transmits via DMA, waits for completion, then restores RX.
+  *
+  *         The transmitter sends the encoded signal with 4 repeats (same as
+  *         raw replay) at the entry's original capture frequency.
+  *
+  * @param  entry  pointer to the history entry to transmit
+  * @retval true if transmitted successfully, false on error
+  */
+/*============================================================================*/
+static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
+{
+	uint16_t proto_idx;
+	uint16_t te_short, te_long;
+	S_M1_SubGHz_Band tx_band;
+
+	if (entry == NULL || entry->info.key == 0)
+		return false;
+
+	proto_idx = entry->info.protocol;
+	if (!subghz_protocol_is_static(proto_idx))
+		return false;
+
+	/* Use TE from the decoded signal if available, otherwise from protocol table */
+	te_short = (entry->info.te > 0) ? entry->info.te
+	           : subghz_protocols_list[proto_idx].te_short;
+	te_long  = subghz_protocols_list[proto_idx].te_long;
+
+	/* Scale te_long proportionally if decoded TE differs from table default */
+	if (entry->info.te > 0 && subghz_protocols_list[proto_idx].te_short > 0)
+	{
+		te_long = (uint16_t)((uint32_t)te_long * te_short
+		          / subghz_protocols_list[proto_idx].te_short);
+	}
+
+	/* Allocate TX buffer if not already */
+	if (subghz_tx_encode_buf == NULL)
+	{
+		subghz_tx_encode_buf = malloc(SUBGHZ_TX_ENCODE_BUF_MAX * sizeof(uint16_t));
+		if (subghz_tx_encode_buf == NULL)
+			return false;
+	}
+
+	/* Encode the signal */
+	subghz_tx_encode_len = subghz_encode_ook_pwm(
+		entry->info.key, entry->info.bit_len,
+		te_short, te_long,
+		subghz_tx_encode_buf, SUBGHZ_TX_ENCODE_BUF_MAX);
+
+	if (subghz_tx_encode_len == 0)
+	{
+		free(subghz_tx_encode_buf);
+		subghz_tx_encode_buf = NULL;
+		return false;
+	}
+
+	/* Determine TX band from the signal's capture frequency */
+	tx_band = subghz_freq_hz_to_band(entry->frequency);
+
+	/* Check region restrictions */
+	if (sub_ghz_fcc_ism_band_check(tx_band, 0))
+	{
+		m1_buzzer_notification();
+		m1_message_box(&m1_u8g2, "TX Blocked:", "Region restricts", "this frequency.", "Set Region to Off");
+		free(subghz_tx_encode_buf);
+		subghz_tx_encode_buf = NULL;
+		return false;
+	}
+
+	/* Pause RX and prepare TX */
+	sub_ghz_rx_pause();
+
+	/* Set up TX hardware and radio */
+	sub_ghz_tx_raw_init();
+
+	/* Tune radio to the signal's capture frequency */
+	subghz_custom_freq_hz = entry->frequency;
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX, tx_band, 0,
+	                   tx_power_values[subghz_tx_power_idx]);
+
+	/* Show "Sending..." overlay */
+	m1_message_box(&m1_u8g2, "Sending...",
+	               protocol_text[proto_idx], "", "");
+
+	/* Transmit with repeats */
+	sub_ghz_transmit_raw(
+		(uint32_t)subghz_tx_encode_buf,
+		(uint32_t)&timerhdl_subghz_tx.Instance->ARR,
+		subghz_tx_encode_len,
+		SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT);
+
+	/* Wait for TX to complete (DMA transfer) */
+	uint32_t timeout = 2000; /* max 2 seconds */
+	while (subghz_decenc_ctl.ntx_raw_repeat > 0 && timeout > 0)
+	{
+		vTaskDelay(pdMS_TO_TICKS(10));
+		timeout -= 10;
+	}
+
+	/* Stop TX and clean up */
+	sub_ghz_raw_tx_stop();
+	sub_ghz_tx_raw_deinit();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, tx_band, 0, 0);
+
+	/* Free encode buffer */
+	free(subghz_tx_encode_buf);
+	subghz_tx_encode_buf = NULL;
+
+	/* Restore RX on the original recording frequency */
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+	sub_ghz_rx_init();
+	sub_ghz_rx_start();
+
+	/* Show success */
+	m1_message_box(&m1_u8g2, "Sent!",
+	               protocol_text[proto_idx], "", "BACK to continue");
+
+	return true;
+}
+
+
+/*============================================================================*/
 /**
   * @brief  Save a history entry as a Flipper-compatible .sub file.
   *         Prompts for filename via virtual keyboard, auto-generating a
@@ -1814,6 +2051,20 @@ static int subghz_record_kp_handler(void)
 				subghz_apply_config();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (subghz_history_detail_active)
+				{
+					/* Send the currently viewed signal (static-code protocols only) */
+					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+					if (e && subghz_protocol_is_static(e->info.protocol))
+					{
+						subghz_transmit_static_signal(e);
+						/* Redraw after message box returns */
+						m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					}
+				}
+			}
 		} // else if(this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK )
 		else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )	// Up
 		{
