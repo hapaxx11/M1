@@ -69,7 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`subghz_reset_data()` now clears extended fields** (`n32_serialnumber`,
   `n32_rollingcode`, `n8_buttonid`) to prevent stale data from persisting across decodes.
 
-## [0.9.0.2] - 2026-03-27
+## [0.9.0.2] - 2026-03-28
+
+### Changed
+
+- **Homescreen layout updated to match SiN360 style** — now shows "MONSTATEK M1" on the first
+  line, "v{major}.{minor}.{build}.{rc}" on the second line, and "Hapax" on the third line.
+  Previously showed "M1 BY Hapax" and "v0.9.0.x-Hapax.x" (two lines only).
 
 ### Fixed
 
