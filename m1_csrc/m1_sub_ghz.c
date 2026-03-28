@@ -346,6 +346,18 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 #define SUBGHZ_HOPPER_DWELL_MS       150  /* ms to dwell per frequency before hopping */
 #define SUBGHZ_HOPPER_RSSI_THRESHOLD -70  /* dBm: stay on freq if RSSI >= this */
 
+/* RAW waveform visualization (Phase 4) */
+#define SUBGHZ_RAW_WAVEFORM_W       128  /* Display columns = display width */
+#define SUBGHZ_RAW_WAVEFORM_Y        12  /* Top Y of waveform area (below header) */
+#define SUBGHZ_RAW_WAVEFORM_H        38  /* Height of waveform area (pixels) */
+#define SUBGHZ_RAW_WAVEFORM_MID_Y   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H / 2)
+#define SUBGHZ_RAW_US_PER_COL       500  /* Microseconds per display column */
+static uint8_t  subghz_raw_waveform[SUBGHZ_RAW_WAVEFORM_W]; /* 0=low, 1=high per column */
+static uint8_t  subghz_raw_wf_head = 0;    /* Next write position (circular) */
+static uint8_t  subghz_raw_wf_len = 0;     /* Number of valid columns */
+static bool     subghz_raw_view_active = false; /* true = showing RAW waveform */
+static uint32_t subghz_raw_sample_count = 0; /* Total samples received (for display) */
+
 //************************** S T R U C T U R E S *******************************
 
 typedef enum {
@@ -1033,7 +1045,22 @@ static void subghz_record_gui_update(uint8_t param)
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-			if (subghz_history_detail_active)
+			if (subghz_raw_view_active)
+			{
+				/*--- RAW Waveform View ---*/
+				subghz_raw_waveform_draw();
+
+				/* Sample count in top-left of waveform area */
+				snprintf(status_str, sizeof(status_str), "RAW %luk",
+				         (unsigned long)(subghz_raw_sample_count / 1000));
+				u8g2_DrawStr(&m1_u8g2, 2, 18, status_str);
+
+				/* Show total recording samples top-right */
+				snprintf(status_str, sizeof(status_str), "%lus",
+				         (unsigned long)(subghz_record_total_samples / 1000));
+				u8g2_DrawStr(&m1_u8g2, 100, 18, status_str);
+			}
+			else if (subghz_history_detail_active)
 			{
 				/*--- Signal Detail View ---*/
 				const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
@@ -1152,7 +1179,15 @@ static void subghz_record_gui_update(uint8_t param)
 			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 
-			if (subghz_history_view_active || subghz_history_detail_active)
+			if (subghz_raw_view_active)
+			{
+				/* RAW waveform mode bottom bar */
+				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
+				u8g2_DrawStr(&m1_u8g2, 12, 61, "Back");
+				u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10);
+				u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop");
+			}
+			else if (subghz_history_view_active || subghz_history_detail_active)
 			{
 				/* History/Detail mode bottom bar */
 				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
@@ -1179,6 +1214,9 @@ static void subghz_record_gui_update(uint8_t param)
 					u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowup_8x8);
 					u8g2_DrawStr(&m1_u8g2, 12, 61, "Hist");
 				}
+				/* RAW view hint */
+				u8g2_DrawXBMP(&m1_u8g2, 48, 53, 8, 8, arrowleft_8x8);
+				u8g2_DrawStr(&m1_u8g2, 58, 61, "RAW");
 			}
 			break;
 		}
@@ -1315,6 +1353,20 @@ static int subghz_record_gui_message(void)
 			M1_LOG_N(M1_LOGDB_TAG, "Raw samples %d\r\n", rcv_samples);
 			subghz_record_total_samples += rcv_samples;
 			sub_ghz_rx_raw_save(false, false);
+
+			/* Feed RAW waveform display buffer from the saved samples */
+			if (subghz_raw_view_active)
+			{
+				uint16_t *psamples = (uint16_t *)subghz_ring_read_buffer;
+				uint16_t n = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
+				subghz_raw_sample_count += n;
+				for (uint16_t s = 0; s < n; s++)
+				{
+					/* Alternating mark(even)/space(odd) */
+					subghz_raw_waveform_push(psamples[s], (s & 1) ? 0 : 1);
+				}
+			}
+
 			vTaskDelay(10); // Give the system some time in case RF noise is flooding the receiver
 
 			/* Update display only when real data is flushed to file */
@@ -1371,6 +1423,101 @@ static int subghz_record_gui_message(void)
 
 	return ret_val;
 } // static int  subghz_record_gui_message(void)
+
+
+/*============================================================================*/
+/**
+  * @brief  Push pulse data into the RAW waveform display buffer.
+  *         Each pulse duration in microseconds is mapped to one or more display
+  *         columns (one column = SUBGHZ_RAW_US_PER_COL microseconds).
+  *         Mark pulses (level=1) draw high, space pulses (level=0) draw low.
+  * @param  duration_us  pulse duration in microseconds
+  * @param  level        1 = mark (high), 0 = space (low)
+  */
+/*============================================================================*/
+static void subghz_raw_waveform_push(uint16_t duration_us, uint8_t level)
+{
+	/* How many display columns does this pulse span? */
+	uint8_t cols = (uint8_t)(duration_us / SUBGHZ_RAW_US_PER_COL);
+	if (cols == 0) cols = 1;
+	if (cols > 16) cols = 16; /* Clamp so a single long gap doesn't flood */
+
+	for (uint8_t i = 0; i < cols; i++)
+	{
+		subghz_raw_waveform[subghz_raw_wf_head] = level;
+		subghz_raw_wf_head = (subghz_raw_wf_head + 1) % SUBGHZ_RAW_WAVEFORM_W;
+		if (subghz_raw_wf_len < SUBGHZ_RAW_WAVEFORM_W)
+			subghz_raw_wf_len++;
+	}
+}
+
+/*============================================================================*/
+/**
+  * @brief  Reset the RAW waveform display buffer.
+  */
+/*============================================================================*/
+static void subghz_raw_waveform_reset(void)
+{
+	memset(subghz_raw_waveform, 0, sizeof(subghz_raw_waveform));
+	subghz_raw_wf_head = 0;
+	subghz_raw_wf_len = 0;
+	subghz_raw_sample_count = 0;
+}
+
+/*============================================================================*/
+/**
+  * @brief  Draw the RAW waveform onto the display.
+  *         Renders a scrolling pulse waveform in the middle display area.
+  *         Mark=high line from mid to top, Space=low line from mid to bottom.
+  */
+/*============================================================================*/
+static void subghz_raw_waveform_draw(void)
+{
+	/* Draw centre reference line (dashed) */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	for (uint8_t x = 0; x < SUBGHZ_RAW_WAVEFORM_W; x += 4)
+		u8g2_DrawPixel(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y);
+
+	if (subghz_raw_wf_len == 0)
+		return;
+
+	/* Calculate the start index in the circular buffer */
+	uint8_t start;
+	uint8_t draw_cols = subghz_raw_wf_len;
+	uint8_t x_offset = 0;
+
+	if (draw_cols < SUBGHZ_RAW_WAVEFORM_W)
+	{
+		/* Not enough data to fill screen — draw right-aligned */
+		x_offset = SUBGHZ_RAW_WAVEFORM_W - draw_cols;
+		start = (subghz_raw_wf_head + SUBGHZ_RAW_WAVEFORM_W - draw_cols) % SUBGHZ_RAW_WAVEFORM_W;
+	}
+	else
+	{
+		/* Full buffer — draw all 128 columns ending at head */
+		start = subghz_raw_wf_head; /* Oldest sample */
+		draw_cols = SUBGHZ_RAW_WAVEFORM_W;
+	}
+
+	uint8_t half_h = SUBGHZ_RAW_WAVEFORM_H / 2 - 1;
+
+	for (uint8_t i = 0; i < draw_cols; i++)
+	{
+		uint8_t idx = (start + i) % SUBGHZ_RAW_WAVEFORM_W;
+		uint8_t x = x_offset + i;
+
+		if (subghz_raw_waveform[idx])
+		{
+			/* Mark (high) — draw upward from midline */
+			u8g2_DrawVLine(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y - half_h, half_h);
+		}
+		else
+		{
+			/* Space (low) — draw downward from midline */
+			u8g2_DrawVLine(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y + 1, half_h);
+		}
+	}
+}
 
 
 /*============================================================================*/
@@ -1449,8 +1596,13 @@ static int subghz_record_kp_handler(void)
 		{
 			if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			{
-				/* History navigation: BACK returns to previous sub-view */
-				if (subghz_history_detail_active)
+				/* Sub-view navigation: BACK returns to previous sub-view */
+				if (subghz_raw_view_active)
+				{
+					subghz_raw_view_active = false;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (subghz_history_detail_active)
 				{
 					subghz_history_detail_active = false;
 					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
@@ -1528,6 +1680,8 @@ static int subghz_record_kp_handler(void)
 					subghz_history_detail_active = false;
 					subghz_history_sel = 0;
 					subghz_history_scroll_top = 0;
+					subghz_raw_view_active = false;
+					subghz_raw_waveform_reset();
 					/* Initialize frequency hopper state */
 					subghz_hopper_active = subghz_cfg.hopping;
 					subghz_hopper_idx = 0;
@@ -1633,6 +1787,17 @@ static int subghz_record_kp_handler(void)
 				subghz_apply_config();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (!subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Toggle RAW waveform view from live view */
+					subghz_raw_view_active = !subghz_raw_view_active;
+					if (subghz_raw_view_active)
+						subghz_raw_waveform_reset();
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+			}
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{
 				sub_ghz_raw_samples_deinit(true); // Discard samples
