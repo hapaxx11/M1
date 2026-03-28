@@ -2,7 +2,7 @@
 
 > **Temporary tracking document** — delete once all phases are complete.
 >
-> Last updated: 2026-03-28 (Phase 4 complete)
+> Last updated: 2026-03-28 (Phase 5 complete)
 
 ---
 
@@ -186,23 +186,61 @@ During ACTIVE recording with hopping, all buttons work identically to non-hoppin
 
 ---
 
-## Phase 5 — Protocol-Specific Emulation 🔲 PLANNED
+## Phase 5 — Protocol-Specific Emulation ✅ COMPLETE
 
-### Goals
-- Direct protocol-based TX (not just raw replay) for static-code protocols
-- "Send" button in signal detail view for appropriate protocols
-- Generate TX pulse train from decoded key + protocol parameters
-- Protocols: Princeton, CAME, Nice FLO, Linear, Gate TX, etc.
+**Branch:** `copilot/fix-no-apps-found`
+**Commit:** `8a0b396`
 
-### Key files
-- `m1_sub_ghz.c` — TX initiation
-- `Sub_Ghz/protocols/` — individual encoder implementations needed
-- `m1_sub_ghz_decenc.c` — `subghz_protocols_list[]` parameters
+### What was done
 
-### Notes
-- Only for static codes. Rolling-code protocols (KeeLoq, Security+, etc.)
-  cannot be replayed from decoded data alone.
-- Raw replay (`sub_ghz_replay_start()`) already works for all protocols.
+| Item | Status | Files |
+|------|--------|-------|
+| `subghz_protocol_is_static()` — classifies 23 static-code protocols | ✅ | `m1_sub_ghz.c` |
+| `subghz_encode_ook_pwm()` — OOK PWM encoder (key → pulse durations) | ✅ | `m1_sub_ghz.c` |
+| `subghz_transmit_static_signal()` — full TX pipeline (encode→tune→transmit→restore RX) | ✅ | `m1_sub_ghz.c` |
+| RIGHT button = "Send" in signal detail view | ✅ | `m1_sub_ghz.c` |
+| Bottom bar shows →Send for static protocols only | ✅ | `m1_sub_ghz.c` |
+| FCC/region restriction check before TX | ✅ | `m1_sub_ghz.c` |
+| TX uses decoded TE with proportional te_long scaling | ✅ | `m1_sub_ghz.c` |
+| "Sending..." / "Sent!" overlay messages | ✅ | `m1_sub_ghz.c` |
+| RX auto-restored after TX completes | ✅ | `m1_sub_ghz.c` |
+| CHANGELOG entry | ✅ | `CHANGELOG.md` |
+
+### Supported static-code protocols (23)
+
+Princeton, CAME 12-bit, Nice FLO, Linear 10-bit, Holtek HT12E, Gate TX,
+SMC5326, Power Smart, Ansonic, Marantec, Firefly, Clemsa, Bett, Megacode,
+Intertechno, Elro, Centurion, Marantec 24-bit, HAY21, Magellan,
+Intertechno V3, Linear Delta3, Roger.
+
+### Excluded (rolling-code / sensor / hopping)
+
+KeeLoq, Security+ 1.0/2.0, FAAC SLH, Somfy, StarLine, Scher-Khan, CAME Atomo,
+Nice Flor-S, Alutech, KingGates, Dooya, and all weather/TPMS protocols.
+
+### Button mapping update (ACTIVE state)
+
+| Sub-view | UP | DOWN | LEFT | RIGHT | OK | BACK |
+|----------|-----|------|------|-------|-----|------|
+| **Live** | Open history | — | Toggle RAW | — | Stop | Stop |
+| **History list** | Scroll up | Scroll down | — | — | View detail | Return to live |
+| **Signal detail** | — | Save .sub | — | **Send TX** | — | Return to list |
+| **RAW waveform** | — | — | — | — | Stop | Return to live |
+
+### Architecture notes
+
+- **Encoder**: `subghz_encode_ook_pwm()` generates standard OOK PWM encoding:
+  - bit 0 = te_short mark, te_long space
+  - bit 1 = te_long mark, te_short space
+  - Sync = te_short mark, 30×te_short space
+- **Timing**: Uses decoded TE (from actual capture) when available, scales te_long
+  proportionally. Falls back to protocol table defaults.
+- **TX path**: Reuses existing DMA-based `sub_ghz_transmit_raw()` with 4 repeats
+  (`SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT`).
+- **Memory**: `subghz_tx_encode_buf` is heap-allocated on demand (max 280 × uint16_t = 560B),
+  freed immediately after TX completes.
+- **Safety**: Rolling-code protocols are excluded at the `subghz_protocol_is_static()` gate.
+  FCC/ISM region checks run before any TX initiation.
 
 ---
 

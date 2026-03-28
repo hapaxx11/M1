@@ -47,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   above and spaces (low) below a center reference line. Includes a sample counter and
   recording duration. Press BACK to return to the live/protocol view.
 
+- **Protocol-specific TX emulation** — press RIGHT in the signal detail view to transmit a
+  decoded static-code signal directly from the history, without needing a raw recording.
+  The encoder generates OOK PWM pulse durations from the decoded key + protocol timing
+  parameters and transmits at the signal's original capture frequency with 4 repeats.
+  Supported for 23 static-code protocols: Princeton, CAME 12-bit, Nice FLO, Linear 10-bit,
+  Holtek HT12E, Gate TX, SMC5326, Power Smart, Ansonic, Marantec, Firefly, Clemsa, Bett,
+  Megacode, Intertechno, Elro, Centurion, Marantec 24-bit, HAY21, Magellan, Intertechno V3,
+  Linear Delta3, and Roger. Rolling-code protocols (KeeLoq, Security+, etc.) are excluded
+  and show no "Send" button. Region/FCC restrictions are enforced before transmitting.
+
 ### Changed
 
 - **Continuous signal decoding** — the decoder now runs continuously during recording,
