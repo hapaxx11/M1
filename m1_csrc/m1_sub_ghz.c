@@ -352,6 +352,7 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 #define SUBGHZ_RAW_WAVEFORM_H        38  /* Height of waveform area (pixels) */
 #define SUBGHZ_RAW_WAVEFORM_MID_Y   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H / 2)
 #define SUBGHZ_RAW_US_PER_COL       500  /* Microseconds per display column */
+#define SUBGHZ_RAW_MAX_COLS_PER_PULSE 16 /* Clamp: max columns for a single pulse (=8ms) */
 static uint8_t  subghz_raw_waveform[SUBGHZ_RAW_WAVEFORM_W]; /* 0=low, 1=high per column */
 static uint8_t  subghz_raw_wf_head = 0;    /* Next write position (circular) */
 static uint8_t  subghz_raw_wf_len = 0;     /* Number of valid columns */
@@ -1440,7 +1441,7 @@ static void subghz_raw_waveform_push(uint16_t duration_us, uint8_t level)
 	/* How many display columns does this pulse span? */
 	uint8_t cols = (uint8_t)(duration_us / SUBGHZ_RAW_US_PER_COL);
 	if (cols == 0) cols = 1;
-	if (cols > 16) cols = 16; /* Clamp so a single long gap doesn't flood */
+	if (cols > SUBGHZ_RAW_MAX_COLS_PER_PULSE) cols = SUBGHZ_RAW_MAX_COLS_PER_PULSE;
 
 	for (uint8_t i = 0; i < cols; i++)
 	{
@@ -1499,6 +1500,7 @@ static void subghz_raw_waveform_draw(void)
 		draw_cols = SUBGHZ_RAW_WAVEFORM_W;
 	}
 
+	/* Reserve 1px for the center reference line so waveform doesn't overlap it */
 	uint8_t half_h = SUBGHZ_RAW_WAVEFORM_H / 2 - 1;
 
 	for (uint8_t i = 0; i < draw_cols; i++)
