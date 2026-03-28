@@ -339,6 +339,13 @@ static bool    subghz_history_detail_active = false; /* true = showing signal de
 #define SUBGHZ_HISTORY_VISIBLE_ITEMS  5  /* Items visible on 128x64 display */
 #define SUBGHZ_HISTORY_ROW_HEIGHT     6  /* Pixels per row in history list */
 
+/* Frequency hopping state (active during Record when subghz_cfg.hopping == true) */
+static uint8_t  subghz_hopper_idx  = 0;   /* Current index into subghz_hopper_freqs[] */
+static uint32_t subghz_hopper_freq = 0;   /* Frequency currently tuned (Hz) */
+static bool     subghz_hopper_active = false; /* true while hopping during ACTIVE record */
+#define SUBGHZ_HOPPER_DWELL_MS       150  /* ms to dwell per frequency before hopping */
+#define SUBGHZ_HOPPER_RSSI_THRESHOLD -70  /* dBm: stay on freq if RSSI >= this */
+
 //************************** S T R U C T U R E S *******************************
 
 typedef enum {
@@ -515,6 +522,10 @@ static void subghz_replay_play_gui_update(uint8_t param);
 static int  subghz_replay_play_gui_message(void);
 static int subghz_replay_play_kp_handler(void);
 
+/* Frequency hopping helpers (defined after forward declarations) */
+static uint32_t subghz_hopper_retune_next(void);
+static int16_t subghz_read_rssi(void);
+
 //************************** C O N S T A N T **********************************/
 
 static const view_func_t view_subghz_record_table[] = {
@@ -529,6 +540,38 @@ static const view_func_t view_subghz_replay_table[] = {
 };
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+/* --- Frequency hopping helpers --- */
+
+static uint32_t subghz_hopper_retune_next(void)
+{
+	subghz_hopper_idx = (subghz_hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
+	uint32_t freq = subghz_hopper_freqs[subghz_hopper_idx];
+
+	sub_ghz_rx_pause();
+
+	subghz_custom_freq_hz = freq;
+	subghz_scan_config.band = subghz_freq_hz_to_band(freq);
+
+	/* Retune via the full opmode path (handles band switch + frontend select) */
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+	SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+
+	sub_ghz_rx_start();
+
+	subghz_hopper_freq = freq;
+	return freq;
+}
+
+static int16_t subghz_read_rssi(void)
+{
+	struct si446x_reply_GET_MODEM_STATUS_map *pstat;
+	pstat = SI446x_Get_ModemStatus(0x00);
+	return (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
+}
+
+/* --- End hopping helpers --- */
+
 /*
 uint16_t *q = 0;
 arrpush(q, 1);
@@ -954,9 +997,13 @@ static void subghz_record_gui_update(uint8_t param)
 
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			/* Show frequency + modulation from config presets */
-			snprintf(cfg_line, sizeof(cfg_line), "%s %s",
-			         subghz_freq_presets[subghz_cfg.freq_idx].label,
-			         subghz_mod_presets[subghz_cfg.mod_idx].label);
+			if (subghz_cfg.hopping)
+				snprintf(cfg_line, sizeof(cfg_line), "Hopping %s",
+				         subghz_mod_presets[subghz_cfg.mod_idx].label);
+			else
+				snprintf(cfg_line, sizeof(cfg_line), "%s %s",
+				         subghz_freq_presets[subghz_cfg.freq_idx].label,
+				         subghz_mod_presets[subghz_cfg.mod_idx].label);
 			u8g2_DrawStr(&m1_u8g2, 55, 18, cfg_line);
 
 			u8g2_DrawXBMP(&m1_u8g2, 0, 5, 50, 27, subghz_antenna_50x27);
@@ -970,6 +1017,16 @@ static void subghz_record_gui_update(uint8_t param)
 			// Clear the CHANGE option at the top right
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawBox(&m1_u8g2, 65, 0, 63, 10); // Clear existing content
+
+			/* Show current hopping frequency in top-right when hopping */
+			if (subghz_hopper_active)
+			{
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				snprintf(status_str, sizeof(status_str), "%.2f",
+				         (float)subghz_hopper_freq / 1000000.0f);
+				u8g2_DrawStr(&m1_u8g2, 74, 8, status_str);
+			}
 
 			// Clear middle area for fresh content
 			u8g2_DrawBox(&m1_u8g2, 0, 10, 128, 42);
@@ -1084,7 +1141,10 @@ static void subghz_record_gui_update(uint8_t param)
 			}
 			else
 			{
-				u8g2_DrawStr(&m1_u8g2, 2, 34, "Recording...");
+				if (subghz_hopper_active)
+					u8g2_DrawStr(&m1_u8g2, 2, 34, "Scanning...");
+				else
+					u8g2_DrawStr(&m1_u8g2, 2, 34, "Recording...");
 			}
 
 			/* Bottom bar */
@@ -1211,75 +1271,97 @@ static int subghz_record_gui_message(void)
 	uint8_t ret_val = 1;
 	uint32_t rcv_samples;
 
-	ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-	if (ret==pdTRUE)
+	/* When hopping is active, use a short timeout so we can cycle frequencies.
+	 * Otherwise block indefinitely waiting for the next event. */
+	TickType_t wait_ticks = (subghz_hopper_active) ?
+	    pdMS_TO_TICKS(SUBGHZ_HOPPER_DWELL_MS) : portMAX_DELAY;
+
+	ret = xQueueReceive(main_q_hdl, &q_item, wait_ticks);
+
+	/* --- Timeout path: no event within dwell period → hop to next frequency --- */
+	if (ret != pdTRUE)
 	{
-		if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
+		if (subghz_hopper_active)
 		{
-			// Notification is only sent to this task when there's any button activity,
-			// so it doesn't need to wait when reading the event from the queue
-			ret_val = subghz_record_kp_handler();
-		}
-		else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
-		{
-			rcv_samples = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
-			if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+			/* Sample RSSI on current frequency — if above threshold, stay (signal activity) */
+			int16_t rssi = subghz_read_rssi();
+			if (rssi < SUBGHZ_HOPPER_RSSI_THRESHOLD)
 			{
-				M1_LOG_N(M1_LOGDB_TAG, "Raw samples %d\r\n", rcv_samples);
-				subghz_record_total_samples += rcv_samples;
-				sub_ghz_rx_raw_save(false, false);
-				vTaskDelay(10); // Give the system some time in case RF noise is flooding the receiver
-
-				/* Update display only when real data is flushed to file */
+				subghz_hopper_retune_next();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
-			} // if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
-
-			/* Check if the protocol decoder recognized a signal */
-			{
-				SubGHz_Dec_Info_t dec;
-				memset(&dec, 0, sizeof(dec));
-				if (subghz_decenc_read(&dec, false) && dec.key != 0)
-				{
-					/* Determine current frequency for history entry */
-					uint32_t cur_freq_hz;
-					if (subghz_scan_config.band == SUB_GHZ_BAND_CUSTOM)
-						cur_freq_hz = subghz_custom_freq_hz;
-					else if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
-						cur_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
-					else
-						cur_freq_hz = 433920000UL;
-
-					uint8_t prev_count = subghz_signal_history.count;
-					subghz_history_add(&subghz_signal_history, &dec, cur_freq_hz);
-
-					/* Update the "last decoded" for the live view and .sub save */
-					subghz_record_last_decoded = dec;
-					subghz_record_has_decoded = true;
-
-					/* Buzzer only on genuinely new signal (not duplicate) */
-					if (subghz_signal_history.count > prev_count ||
-					    subghz_signal_history.count == SUBGHZ_HISTORY_MAX)
-					{
-						if (subghz_cfg.sound)
-							m1_buzzer_notification();
-					}
-
-					/* Refresh display */
-					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
-				}
 			}
+		}
+		return ret_val;
+	}
 
-		} // if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
-
-		else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
+	/* --- Event received --- */
+	if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
+	{
+		// Notification is only sent to this task when there's any button activity,
+		// so it doesn't need to wait when reading the event from the queue
+		ret_val = subghz_record_kp_handler();
+	}
+	else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
+	{
+		rcv_samples = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
+		if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
 		{
-			subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
-			if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
+			M1_LOG_N(M1_LOGDB_TAG, "Raw samples %d\r\n", rcv_samples);
+			subghz_record_total_samples += rcv_samples;
+			sub_ghz_rx_raw_save(false, false);
+			vTaskDelay(10); // Give the system some time in case RF noise is flooding the receiver
+
+			/* Update display only when real data is flushed to file */
+			m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+		} // if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+
+		/* Check if the protocol decoder recognized a signal */
+		{
+			SubGHz_Dec_Info_t dec;
+			memset(&dec, 0, sizeof(dec));
+			if (subghz_decenc_read(&dec, false) && dec.key != 0)
 			{
-				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
-			} // if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
-		} // else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
-	} // if (ret==pdTRUE)
+				/* Determine current frequency for history entry */
+				uint32_t cur_freq_hz;
+				if (subghz_hopper_active)
+					cur_freq_hz = subghz_hopper_freq;
+				else if (subghz_scan_config.band == SUB_GHZ_BAND_CUSTOM)
+					cur_freq_hz = subghz_custom_freq_hz;
+				else if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
+					cur_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+				else
+					cur_freq_hz = 433920000UL;
+
+				uint8_t prev_count = subghz_signal_history.count;
+				subghz_history_add(&subghz_signal_history, &dec, cur_freq_hz);
+
+				/* Update the "last decoded" for the live view and .sub save */
+				subghz_record_last_decoded = dec;
+				subghz_record_has_decoded = true;
+
+				/* Buzzer only on genuinely new signal (not duplicate) */
+				if (subghz_signal_history.count > prev_count ||
+				    subghz_signal_history.count == SUBGHZ_HISTORY_MAX)
+				{
+					if (subghz_cfg.sound)
+						m1_buzzer_notification();
+				}
+
+				/* Refresh display */
+				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+			}
+		}
+
+	} // if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
+
+	else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
+	{
+		subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
+		if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
+		{
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
+		} // if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
+	} // else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
 
 	return ret_val;
 } // static int  subghz_record_gui_message(void)
@@ -1320,6 +1402,7 @@ static int subghz_record_kp_handler(void)
 				else
 				{
 					// Stop recording (original behavior)
+					subghz_hopper_active = false;
 					sub_ghz_rx_pause();
 					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
 					xQueueReset(main_q_hdl);
@@ -1384,6 +1467,17 @@ static int subghz_record_kp_handler(void)
 					subghz_history_detail_active = false;
 					subghz_history_sel = 0;
 					subghz_history_scroll_top = 0;
+					/* Initialize frequency hopper state */
+					subghz_hopper_active = subghz_cfg.hopping;
+					subghz_hopper_idx = 0;
+					subghz_hopper_freq = subghz_hopper_active ?
+					    subghz_hopper_freqs[0] : subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+					if (subghz_hopper_active)
+					{
+						/* Override scan config with first hopper frequency */
+						subghz_custom_freq_hz = subghz_hopper_freq;
+						subghz_scan_config.band = subghz_freq_hz_to_band(subghz_hopper_freq);
+					}
 					m1_sdm_task_init();
 					m1_sdm_task_start();
 					sub_ghz_rx_raw_save(true, false);
@@ -1416,6 +1510,7 @@ static int subghz_record_kp_handler(void)
 				else if (!subghz_history_view_active && !subghz_history_detail_active)
 				{
 					/* OK in live view = stop recording (original) */
+					subghz_hopper_active = false;
 					sub_ghz_rx_pause();
 					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
 					xQueueReset(main_q_hdl);
