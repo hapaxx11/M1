@@ -1544,6 +1544,14 @@ static uint16_t  subghz_tx_encode_len = 0;  /* Number of uint16_t samples */
 /**
   * @brief  Check if a protocol is a static-code type safe for TX emulation.
   *         Static codes have a fixed key (no rolling code / hopping).
+  *
+  *         Rolling-code protocols (KeeLoq, Security+ 1.0/2.0, FAAC SLH,
+  *         Somfy, StarLine, Nice Flor-S, etc.) are intentionally excluded:
+  *         retransmitting a captured rolling code is ineffective (the receiver
+  *         has already advanced its counter) and could desynchronise legitimate
+  *         remotes.  Weather/TPMS sensor protocols are also excluded since
+  *         transmitting sensor data serves no useful purpose.
+  *
   * @param  protocol  protocol enum value
   * @retval true if protocol is static-code and safe to transmit
   */
