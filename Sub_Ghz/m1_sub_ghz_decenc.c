@@ -272,6 +272,9 @@ void subghz_reset_data()
 {
 	subghz_decenc_ctl.n64_decodedvalue = 0;
 	subghz_decenc_ctl.ndecodedbitlength = 0;
+	subghz_decenc_ctl.n32_serialnumber = 0;
+	subghz_decenc_ctl.n32_rollingcode = 0;
+	subghz_decenc_ctl.n8_buttonid = 0;
 	memset(subghz_decenc_ctl.pulse_times, 0, sizeof(subghz_decenc_ctl.pulse_times));
 }
 
@@ -772,6 +775,10 @@ bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw)
             received->rssi = subghz_decenc_ctl.subghz_get_decoded_rssi();
             received->te = subghz_decenc_ctl.subghz_get_decoded_delay();
             received->bit_len = subghz_decenc_ctl.subghz_get_decoded_bitlength();
+            /* Copy extended fields set by protocol-specific decoders */
+            received->serial_number = subghz_decenc_ctl.n32_serialnumber;
+            received->rolling_code  = subghz_decenc_ctl.n32_rollingcode;
+            received->button_id     = subghz_decenc_ctl.n8_buttonid;
         } // if (value)
         subghz_decenc_ctl.subghz_reset_data();
         ret = true;
@@ -820,3 +827,61 @@ void subghz_decenc_init(void)
 	memset(subghz_decenc_ctl.pulse_times, 0, sizeof(subghz_decenc_ctl.pulse_times));
 	subghz_decenc_ctl.n64_decodedvalue = 0;
 } // void subghz_decenc_init(void)
+
+
+/*============================================================================*/
+/* Signal History Ring Buffer Implementation                                   */
+/*============================================================================*/
+
+void subghz_history_reset(SubGHz_History_t *hist)
+{
+	hist->count = 0;
+	hist->head  = 0;
+}
+
+uint8_t subghz_history_add(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *info, uint32_t freq_hz)
+{
+	/* Check for duplicate: same protocol + key + bit_len as the most recent entry */
+	if (hist->count > 0)
+	{
+		uint8_t last_idx = (hist->head == 0) ? SUBGHZ_HISTORY_MAX - 1 : hist->head - 1;
+		SubGHz_History_Entry_t *last = &hist->entries[last_idx];
+		if (last->info.protocol == info->protocol &&
+		    last->info.key      == info->key &&
+		    last->info.bit_len  == info->bit_len)
+		{
+			/* Duplicate — increment count, update RSSI to latest */
+			if (last->count < 255)
+				last->count++;
+			last->info.rssi = info->rssi;
+			return hist->count;
+		}
+	}
+
+	/* Write new entry at head position */
+	SubGHz_History_Entry_t *entry = &hist->entries[hist->head];
+	entry->info          = *info;
+	entry->info.raw_data = NULL;   /* Do not store raw data pointer */
+	entry->info.raw      = false;
+	entry->frequency     = freq_hz;
+	entry->count         = 1;
+
+	hist->head = (hist->head + 1) % SUBGHZ_HISTORY_MAX;
+	if (hist->count < SUBGHZ_HISTORY_MAX)
+		hist->count++;
+
+	return hist->count;
+}
+
+const SubGHz_History_Entry_t *subghz_history_get(const SubGHz_History_t *hist, uint8_t idx)
+{
+	if (idx >= hist->count)
+		return NULL;
+	/* Index 0 = most recent, index (count-1) = oldest */
+	uint8_t pos;
+	if (hist->head >= (idx + 1))
+		pos = hist->head - idx - 1;
+	else
+		pos = SUBGHZ_HISTORY_MAX - (idx + 1 - hist->head);
+	return &hist->entries[pos];
+}

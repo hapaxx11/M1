@@ -330,6 +330,14 @@ static uint32_t subghz_custom_freq_hz = 433920000UL;
 static SubGHz_Dec_Info_t subghz_record_last_decoded;
 static bool subghz_record_has_decoded = false;
 
+/* Signal history for Read screen */
+static SubGHz_History_t subghz_signal_history;
+static uint8_t subghz_history_sel = 0;        /* Currently selected history index */
+static uint8_t subghz_history_scroll_top = 0; /* Top visible index in list */
+static bool    subghz_history_view_active = false; /* true = showing history list */
+static bool    subghz_history_detail_active = false; /* true = showing signal detail */
+#define SUBGHZ_HISTORY_VISIBLE_ITEMS  5  /* Items visible on 128x64 display */
+
 //************************** S T R U C T U R E S *******************************
 
 typedef enum {
@@ -963,34 +971,150 @@ static void subghz_record_gui_update(uint8_t param)
 			u8g2_DrawBox(&m1_u8g2, 65, 0, 63, 10); // Clear existing content
 
 			// Clear middle area for fresh content
-			u8g2_DrawBox(&m1_u8g2, 0, 18, 128, 32);
+			u8g2_DrawBox(&m1_u8g2, 0, 10, 128, 42);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-			/* Show decoded protocol info if available */
-			if (subghz_record_has_decoded)
+			if (subghz_history_detail_active)
 			{
-				u8g2_DrawStr(&m1_u8g2, 2, 28, protocol_text[subghz_record_last_decoded.protocol]);
+				/*--- Signal Detail View ---*/
+				const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+				if (e)
+				{
+					/* Line 1: Protocol name */
+					u8g2_DrawStr(&m1_u8g2, 2, 18, protocol_text[e->info.protocol]);
+
+					/* Line 2: Key value + bit length */
+					snprintf(status_str, sizeof(status_str), "0x%lX %dbit",
+					         (uint32_t)e->info.key, e->info.bit_len);
+					u8g2_DrawStr(&m1_u8g2, 2, 28, status_str);
+
+					/* Line 3: RSSI + TE + Frequency */
+					snprintf(status_str, sizeof(status_str), "%ddBm TE:%d %.2fMHz",
+					         e->info.rssi, e->info.te,
+					         (float)e->frequency / 1000000.0f);
+					u8g2_DrawStr(&m1_u8g2, 2, 38, status_str);
+
+					/* Line 4: Serial/Rolling/Button if available */
+					if (e->info.serial_number || e->info.rolling_code || e->info.button_id)
+					{
+						snprintf(status_str, sizeof(status_str), "SN:%lX RC:%lX Btn:%d",
+						         (unsigned long)e->info.serial_number,
+						         (unsigned long)e->info.rolling_code,
+						         e->info.button_id);
+						u8g2_DrawStr(&m1_u8g2, 2, 48, status_str);
+					}
+					else if (e->count > 1)
+					{
+						snprintf(status_str, sizeof(status_str), "Received x%d", e->count);
+						u8g2_DrawStr(&m1_u8g2, 2, 48, status_str);
+					}
+				}
+			}
+			else if (subghz_history_view_active && subghz_signal_history.count > 0)
+			{
+				/*--- History List View ---*/
+				/* Title bar: "History (N)" at the top of the middle area */
+				snprintf(status_str, sizeof(status_str), "History (%d)", subghz_signal_history.count);
+				u8g2_DrawStr(&m1_u8g2, 2, 18, status_str);
+
+				/* Scrollable list of decoded signals */
+				uint8_t vis = SUBGHZ_HISTORY_VISIBLE_ITEMS;
+				if (vis > subghz_signal_history.count)
+					vis = subghz_signal_history.count;
+
+				for (uint8_t i = 0; i < vis; i++)
+				{
+					uint8_t idx = subghz_history_scroll_top + i;
+					if (idx >= subghz_signal_history.count) break;
+					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, idx);
+					if (!e) break;
+
+					uint8_t y = 20 + i * 6;  /* Tight spacing: 6px per row */
+
+					/* Highlight selected item */
+					if (idx == subghz_history_sel)
+					{
+						u8g2_DrawBox(&m1_u8g2, 0, y, 128, 6);
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+					}
+
+					/* Format: "Protocol 0xKEY" — compact to fit 128px */
+					const char *pname = protocol_text[e->info.protocol];
+					snprintf(status_str, sizeof(status_str), "%s 0x%lX",
+					         pname, (uint32_t)e->info.key);
+					/* Truncate to fit display width */
+					status_str[25] = '\0';
+					u8g2_DrawStr(&m1_u8g2, 2, y + 5, status_str);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				}
+			}
+			else if (subghz_record_has_decoded)
+			{
+				/*--- Live View (original behavior with enhanced info) ---*/
+				u8g2_DrawStr(&m1_u8g2, 2, 20, protocol_text[subghz_record_last_decoded.protocol]);
 				snprintf(status_str, sizeof(status_str), "0x%lX %dbit",
 				         (uint32_t)subghz_record_last_decoded.key,
 				         subghz_record_last_decoded.bit_len);
-				u8g2_DrawStr(&m1_u8g2, 2, 38, status_str);
-				snprintf(status_str, sizeof(status_str), "%ddBm TE:%d",
-				         subghz_record_last_decoded.rssi,
-				         subghz_record_last_decoded.te);
-				u8g2_DrawStr(&m1_u8g2, 2, 48, status_str);
+				u8g2_DrawStr(&m1_u8g2, 2, 30, status_str);
+
+				/* Show serial/rolling/button if available */
+				if (subghz_record_last_decoded.serial_number ||
+				    subghz_record_last_decoded.rolling_code)
+				{
+					snprintf(status_str, sizeof(status_str), "SN:%lX RC:%lX B:%d",
+					         (unsigned long)subghz_record_last_decoded.serial_number,
+					         (unsigned long)subghz_record_last_decoded.rolling_code,
+					         subghz_record_last_decoded.button_id);
+					u8g2_DrawStr(&m1_u8g2, 2, 40, status_str);
+				}
+				else
+				{
+					snprintf(status_str, sizeof(status_str), "%ddBm TE:%d",
+					         subghz_record_last_decoded.rssi,
+					         subghz_record_last_decoded.te);
+					u8g2_DrawStr(&m1_u8g2, 2, 40, status_str);
+				}
+
+				/* History count badge */
+				if (subghz_signal_history.count > 0)
+				{
+					snprintf(status_str, sizeof(status_str), "[%d]", subghz_signal_history.count);
+					u8g2_DrawStr(&m1_u8g2, 104, 18, status_str);
+				}
 			}
 			else
 			{
 				u8g2_DrawStr(&m1_u8g2, 2, 34, "Recording...");
 			}
 
+			/* Bottom bar */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
+			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-			u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10); // draw TARGET icon
-			u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop ");
+			if (subghz_history_view_active || subghz_history_detail_active)
+			{
+				/* History/Detail mode bottom bar */
+				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
+				u8g2_DrawStr(&m1_u8g2, 12, 61, "Back");
+				if (subghz_history_view_active && !subghz_history_detail_active)
+				{
+					u8g2_DrawXBMP(&m1_u8g2, 74, 52, 10, 10, target_10x10);
+					u8g2_DrawStr(&m1_u8g2, 86, 61, "View");
+				}
+			}
+			else
+			{
+				/* Normal recording bottom bar */
+				u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10);
+				u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop ");
+				if (subghz_signal_history.count > 0)
+				{
+					u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowup_8x8);
+					u8g2_DrawStr(&m1_u8g2, 12, 61, "Hist");
+				}
+			}
 			break;
 		}
 
@@ -1112,15 +1236,36 @@ static int subghz_record_gui_message(void)
 			} // if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
 
 			/* Check if the protocol decoder recognized a signal */
-			if (!subghz_record_has_decoded)
 			{
 				SubGHz_Dec_Info_t dec;
+				memset(&dec, 0, sizeof(dec));
 				if (subghz_decenc_read(&dec, false) && dec.key != 0)
 				{
+					/* Determine current frequency for history entry */
+					uint32_t cur_freq_hz;
+					if (subghz_scan_config.band == SUB_GHZ_BAND_CUSTOM)
+						cur_freq_hz = subghz_custom_freq_hz;
+					else if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
+						cur_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+					else
+						cur_freq_hz = 433920000UL;
+
+					uint8_t prev_count = subghz_signal_history.count;
+					subghz_history_add(&subghz_signal_history, &dec, cur_freq_hz);
+
+					/* Update the "last decoded" for the live view and .sub save */
 					subghz_record_last_decoded = dec;
 					subghz_record_has_decoded = true;
-					m1_buzzer_notification();
-					/* Only refresh display when protocol is actually decoded */
+
+					/* Buzzer only on genuinely new signal (not duplicate) */
+					if (subghz_signal_history.count > prev_count ||
+					    subghz_signal_history.count == SUBGHZ_HISTORY_MAX)
+					{
+						if (subghz_cfg.sound)
+							m1_buzzer_notification();
+					}
+
+					/* Refresh display */
 					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
 				}
 			}
@@ -1162,23 +1307,35 @@ static int subghz_record_kp_handler(void)
 		{
 			if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			{
-				// This case is handled the same way
-				// with the case the [BUTTON_OK_KP_ID] is pressed
-				// This code is copied from that case below. It can be placed in a sub-function if needed.
-				sub_ghz_rx_pause(); // Stop receiving
-				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
-				xQueueReset(main_q_hdl); // Reset old samples in the queue, if any
-
-				if ( !last_data_saved )
+				/* History navigation: BACK returns to previous sub-view */
+				if (subghz_history_detail_active)
 				{
-					sub_ghz_rx_raw_save(false, true);
-					last_data_saved = true;
-				} // if ( !last_data_saved )
-				m1_sdm_task_stop(); // Stop sampling raw data and flush data to SD card
-				m1_sdm_task_deinit();
-				sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+					subghz_history_detail_active = false;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (subghz_history_view_active)
+				{
+					subghz_history_view_active = false;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else
+				{
+					// Stop recording (original behavior)
+					sub_ghz_rx_pause();
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					xQueueReset(main_q_hdl);
 
-				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+					if ( !last_data_saved )
+					{
+						sub_ghz_rx_raw_save(false, true);
+						last_data_saved = true;
+					}
+					m1_sdm_task_stop();
+					m1_sdm_task_deinit();
+					sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+				}
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{
@@ -1223,6 +1380,11 @@ static int subghz_record_kp_handler(void)
 					last_data_saved = false;
 					subghz_record_has_decoded = false;
 					subghz_record_total_samples = 0;
+					subghz_history_reset(&subghz_signal_history);
+					subghz_history_view_active = false;
+					subghz_history_detail_active = false;
+					subghz_history_sel = 0;
+					subghz_history_scroll_top = 0;
 					m1_sdm_task_init();
 					m1_sdm_task_start();
 					sub_ghz_rx_raw_save(true, false);
@@ -1246,20 +1408,30 @@ static int subghz_record_kp_handler(void)
 			} // if ( nfc_uiview_gui_latest_param==NFC_READ_DISPLAY_PARAM_READING_COMPLETE )
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			{
-				sub_ghz_rx_pause(); // Stop receiving
-				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
-				xQueueReset(main_q_hdl); // Reset old samples in the queue, if any
-
-				if ( !last_data_saved )
+				if (subghz_history_view_active && !subghz_history_detail_active)
 				{
-					sub_ghz_rx_raw_save(false, true);
-					last_data_saved = true;
-				} // if ( !last_data_saved )
-				m1_sdm_task_stop(); // Stop sampling raw data and flush data to SD card
-				m1_sdm_task_deinit();
-				sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+					/* OK in history list = open detail view */
+					subghz_history_detail_active = true;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (!subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* OK in live view = stop recording (original) */
+					sub_ghz_rx_pause();
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					xQueueReset(main_q_hdl);
 
-				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+					if ( !last_data_saved )
+					{
+						sub_ghz_rx_raw_save(false, true);
+						last_data_saved = true;
+					}
+					m1_sdm_task_stop();
+					m1_sdm_task_deinit();
+					sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+				}
 			} // else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{
@@ -1321,7 +1493,7 @@ static int subghz_record_kp_handler(void)
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
 		} // else if(this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK )
-		else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )	// Up = Custom Freq
+		else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )	// Up
 		{
 			if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
 			{
@@ -1332,6 +1504,29 @@ static int subghz_record_kp_handler(void)
 				}
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			}
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Scroll up in history list */
+					if (subghz_history_sel > 0)
+						subghz_history_sel--;
+					if (subghz_history_sel < subghz_history_scroll_top)
+						subghz_history_scroll_top = subghz_history_sel;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (!subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Open history list from live view */
+					if (subghz_signal_history.count > 0)
+					{
+						subghz_history_view_active = true;
+						subghz_history_sel = 0;
+						subghz_history_scroll_top = 0;
+						m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					}
+				}
+			}
 		} // else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )
 		else if(this_button_status.event[BUTTON_DOWN_KP_ID]==BUTTON_EVENT_CLICK )	// Down
 		{
@@ -1340,6 +1535,18 @@ static int subghz_record_kp_handler(void)
 				sub_ghz_config_screen();
 				subghz_apply_config();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
+			}
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Scroll down in history list */
+					if (subghz_history_sel + 1 < subghz_signal_history.count)
+						subghz_history_sel++;
+					if (subghz_history_sel >= subghz_history_scroll_top + SUBGHZ_HISTORY_VISIBLE_ITEMS)
+						subghz_history_scroll_top = subghz_history_sel - SUBGHZ_HISTORY_VISIBLE_ITEMS + 1;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
 			}
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{

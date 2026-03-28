@@ -7,6 +7,39 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.3] - 2026-03-28
+
+### Added
+
+- **Sub-GHz Signal History** — the Read/Record screen now keeps a scrollable history of all
+  decoded signals (up to 50 entries). Previously only the most recent decoded signal was
+  displayed. Press UP during recording to open the history list, UP/DOWN to scroll, OK to
+  view signal details, BACK to return to the live view. Duplicate consecutive signals are
+  counted instead of creating separate entries.
+
+- **Protocol-aware signal display** — decoded signals now show extended protocol fields
+  (serial number, rolling code, button ID) when available. Protocols that populate these
+  fields include KeeLoq, Security+ 2.0, Somfy Telis, Chamberlain, StarLine, FAAC SLH,
+  Hörmann, and Schrader TPMS.
+
+- **History count badge** — the live recording view shows a `[N]` badge indicating how
+  many unique signals have been captured so far.
+
+- **Signal detail view** — selecting a signal from the history list shows full protocol
+  details including frequency, RSSI, timing element, and protocol-specific fields.
+
+### Changed
+
+- **Continuous signal decoding** — the decoder now runs continuously during recording,
+  capturing every decoded signal into the history buffer. Previously, decoding stopped
+  after the first successful protocol match.
+
+- **`SubGHz_Dec_Info_t` extended** with `serial_number`, `rolling_code`, and `button_id`
+  fields, copied from the decoder control struct after each successful protocol decode.
+
+- **`subghz_reset_data()` now clears extended fields** (`n32_serialnumber`,
+  `n32_rollingcode`, `n8_buttonid`) to prevent stale data from persisting across decodes.
+
 ## [0.9.0.2] - 2026-03-27
 
 ### Fixed
