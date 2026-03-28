@@ -40,6 +40,7 @@
 #define BADUSB_KEY_RELEASE_MS     6     /* Delay after release */
 #define BADUSB_INTER_CHAR_MS      2     /* Between characters in STRING */
 #define BADUSB_TX_WAIT_MS         20    /* Max wait for HID TX complete */
+#define BADUSB_HID_SETTLE_MS      3000  /* Extra delay for OS to load HID drivers */
 
 /* HID Keyboard scancodes */
 #define KEY_NONE                  0x00
@@ -340,11 +341,11 @@ void badusb_type_string_forced(const char *str)
         uint32_t t0 = osKernelGetTickCount();
         while (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
         {
-            if ((osKernelGetTickCount() - t0) > 5000) break;
-            osDelay(50);
+            if ((osKernelGetTickCount() - t0) > BADUSB_ENUM_TIMEOUT_MS) break;
+            osDelay(BADUSB_ENUM_POLL_MS);
         }
         /* Extra settle delay for OS to load HID drivers */
-        osDelay(3000);
+        osDelay(BADUSB_HID_SETTLE_MS);
     }
 
     /* Set running flag for this direct call */
@@ -760,7 +761,7 @@ bool badusb_execute_file(const char *filepath)
 
         /* Phase 4: Settle delay (3s) */
         badusb_breadcrumb(4);
-        osDelay(3000);
+        osDelay(BADUSB_HID_SETTLE_MS);
 
         /* Phase 5: Prime endpoint */
         badusb_breadcrumb(5);

@@ -928,7 +928,10 @@ uint8_t wifi_sync_rtc(void)
 					}
 				}
 
-				if (dt.month > 0 && dt.weekday > 0) {
+				if (dt.month > 0 && dt.weekday > 0 &&
+				    dt.year >= 2024 && dt.year <= 2099 &&
+				    dt.day >= 1 && dt.day <= 31 &&
+				    dt.hour <= 23 && dt.minute <= 59 && dt.second <= 59) {
 					m1_set_datetime(&dt);
 					return 1;
 				}
