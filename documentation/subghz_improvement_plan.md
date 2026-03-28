@@ -2,7 +2,7 @@
 
 > **Temporary tracking document** — delete once all phases are complete.
 >
-> Last updated: 2026-03-28 (Phase 2 complete)
+> Last updated: 2026-03-28 (Phase 3 complete)
 
 ---
 
@@ -99,17 +99,39 @@ During ACTIVE recording with hopping, all buttons work identically to non-hoppin
 
 ---
 
-## Phase 3 — Enhanced Save Workflow 🔲 PLANNED
+## Phase 3 — Enhanced Save Workflow ✅ COMPLETE
 
-### Goals
-- Save individual signals from the history list (not just the whole recording)
-- Save as Flipper-compatible `.sub` file directly from history detail view
-- Add DOWN = "Save" button to the signal detail sub-view
-- Prompt for filename via virtual keyboard
+**Branch:** `copilot/fix-no-apps-found`
 
-### Key files
-- `m1_sub_ghz.c` — save logic (currently in DOWN handler of COMPLETE state)
-- `flipper_subghz.c` / `flipper_subghz.h` — `.sub` file writer
+### What was done
+
+| Item | Status | Details |
+|------|--------|---------|
+| `subghz_save_history_entry()` helper | ✅ | Builds `flipper_subghz_signal_t` from history entry, saves as `.sub` |
+| Virtual keyboard filename prompt | ✅ | Uses `m1_vkb_get_filename()` with default name from protocol + key |
+| DOWN = "Save" in detail view | ✅ | Keypad handler dispatches to save helper when detail active |
+| "Save" hint in bottom bar | ✅ | Down-arrow icon + "Save" text shown in detail view |
+| Success/failure message box | ✅ | `m1_message_box()` shows path or error after save |
+| CHANGELOG entry | ✅ | Added to [0.9.0.3] |
+
+### Design decisions
+
+- **Filename default**: `{Protocol}_{Key_hex}` — e.g. "Princeton_1A2B3C" — user
+  can edit via virtual keyboard before saving.
+- **Save path**: `/SUBGHZ/{filename}.sub` — same directory as existing signal files.
+- **No raw data in saved file**: History entries don't store raw pulse data, so saved
+  `.sub` files are PARSED type only (Protocol/Bit/Key/TE). Raw recordings are still
+  available via the COMPLETE state save which writes both `.sgh` + `.sub`.
+- **Reuses existing infrastructure**: `flipper_subghz_save()`, `m1_vkb_get_filename()`,
+  `m1_message_box()` — no new dependencies.
+
+### Button mapping update (ACTIVE state)
+
+| Sub-view | UP | DOWN | OK | BACK | LEFT/RIGHT |
+|----------|-----|------|-----|------|------------|
+| **Live** | Open history list | — | Stop recording | Stop recording | — |
+| **History list** | Scroll up | Scroll down | View detail | Return to live | — |
+| **Signal detail** | — | **Save .sub** | — | Return to list | — |
 
 ---
 

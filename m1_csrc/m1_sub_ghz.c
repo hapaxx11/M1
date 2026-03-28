@@ -1162,6 +1162,12 @@ static void subghz_record_gui_update(uint8_t param)
 					u8g2_DrawXBMP(&m1_u8g2, 74, 52, 10, 10, target_10x10);
 					u8g2_DrawStr(&m1_u8g2, 86, 61, "View");
 				}
+				else if (subghz_history_detail_active)
+				{
+					/* Save hint in detail view */
+					u8g2_DrawXBMP(&m1_u8g2, 74, 53, 8, 8, arrowdown_8x8);
+					u8g2_DrawStr(&m1_u8g2, 84, 61, "Save");
+				}
 			}
 			else
 			{
@@ -1366,6 +1372,61 @@ static int subghz_record_gui_message(void)
 	return ret_val;
 } // static int  subghz_record_gui_message(void)
 
+
+/*============================================================================*/
+/**
+  * @brief  Save a history entry as a Flipper-compatible .sub file.
+  *         Prompts for filename via virtual keyboard, auto-generating a
+  *         default name from the protocol name and key value.
+  * @param  entry  pointer to the history entry to save
+  * @retval true if saved successfully, false otherwise
+  */
+/*============================================================================*/
+static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
+{
+	flipper_subghz_signal_t sub_sig;
+	char sub_path[64];
+	char default_name[32];
+	char new_name[32];
+
+	if (entry == NULL || entry->info.key == 0)
+		return false;
+
+	/* Build a default filename from protocol + truncated key */
+	snprintf(default_name, sizeof(default_name), "%.12s_%lX",
+	         protocol_text[entry->info.protocol],
+	         (unsigned long)(uint32_t)entry->info.key);
+
+	/* Prompt user for filename (or accept default) */
+	if (!m1_vkb_get_filename("Save signal as:", default_name, new_name))
+		return false; /* User cancelled */
+
+	snprintf(sub_path, sizeof(sub_path), "/SUBGHZ/%s.sub", new_name);
+
+	/* Populate the Flipper .sub signal structure */
+	memset(&sub_sig, 0, sizeof(sub_sig));
+	sub_sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
+	sub_sig.frequency = entry->frequency;
+	sub_sig.bit_count = entry->info.bit_len;
+	sub_sig.key       = entry->info.key;
+	sub_sig.te        = entry->info.te;
+
+	strncpy(sub_sig.preset, "FuriHalSubGhzPresetOok650Async",
+	        FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
+	strncpy(sub_sig.protocol, protocol_text[entry->info.protocol],
+	        FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
+
+	if (flipper_subghz_save(sub_path, &sub_sig))
+	{
+		m1_message_box(&m1_u8g2, "Signal saved:", sub_path + 8, "", "BACK to continue");
+		return true;
+	}
+	else
+	{
+		m1_message_box(&m1_u8g2, "Save failed!", sub_path + 8, "", "BACK to continue");
+		return false;
+	}
+}
 
 /*============================================================================*/
 /**
@@ -1632,7 +1693,18 @@ static int subghz_record_kp_handler(void)
 			}
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			{
-				if (subghz_history_view_active && !subghz_history_detail_active)
+				if (subghz_history_detail_active)
+				{
+					/* Save the currently viewed signal as .sub file */
+					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+					if (e)
+					{
+						subghz_save_history_entry(e);
+						/* Redraw after message box returns */
+						m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					}
+				}
+				else if (subghz_history_view_active && !subghz_history_detail_active)
 				{
 					/* Scroll down in history list */
 					if (subghz_history_sel + 1 < subghz_signal_history.count)

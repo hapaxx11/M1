@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history entry records the frequency it was captured on. The display shows "Scanning..."
   with the current frequency in the top-right corner.
 
+- **Save individual signals from history** — in the signal detail view (reached by pressing
+  OK on a history entry), press DOWN to save the signal as a Flipper-compatible `.sub` file.
+  A virtual keyboard prompts for the filename with a default based on the protocol name and
+  key value. Saved files appear in `/SUBGHZ/` on the SD card and are compatible with Flipper
+  Zero for replay or analysis.
+
 ### Changed
 
 - **Continuous signal decoding** — the decoder now runs continuously during recording,
