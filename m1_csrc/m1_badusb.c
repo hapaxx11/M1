@@ -40,6 +40,7 @@
 #define BADUSB_KEY_RELEASE_MS     6     /* Delay after release */
 #define BADUSB_INTER_CHAR_MS      2     /* Between characters in STRING */
 #define BADUSB_TX_WAIT_MS         20    /* Max wait for HID TX complete */
+#define BADUSB_HID_SETTLE_MS      3000  /* Extra delay for OS to load HID drivers */
 
 /* HID Keyboard scancodes */
 #define KEY_NONE                  0x00
@@ -205,10 +206,10 @@ static const ascii_hid_map_t ascii_to_hid[] =
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 static void badusb_wait_tx_idle(void);
-static void badusb_send_key(uint8_t modifier, uint8_t keycode);
+void badusb_send_key(uint8_t modifier, uint8_t keycode);
 static void badusb_release_all(void);
-static void badusb_type_char(char c);
-static void badusb_type_string(const char *str);
+void badusb_type_char(char c);
+void badusb_type_string(const char *str);
 static bool badusb_parse_line(const char *line);
 static uint8_t badusb_parse_key_name(const char *name);
 static uint8_t badusb_parse_modifier(const char *name, const char **remainder);
@@ -258,7 +259,7 @@ static void badusb_wait_tx_idle(void)
   * @brief  Send a key press (modifier + keycode), wait, then release
   */
 /*============================================================================*/
-static void badusb_send_key(uint8_t modifier, uint8_t keycode)
+void badusb_send_key(uint8_t modifier, uint8_t keycode)
 {
     badusb_wait_tx_idle();
     memset(hid_report, 0, sizeof(hid_report));
@@ -290,7 +291,7 @@ static void badusb_release_all(void)
   * @brief  Type a single ASCII character via HID keyboard
   */
 /*============================================================================*/
-static void badusb_type_char(char c)
+void badusb_type_char(char c)
 {
     if (c < 0x20 || c > 0x7E)
     {
@@ -316,13 +317,47 @@ static void badusb_type_char(char c)
   * @brief  Type a string character by character
   */
 /*============================================================================*/
-static void badusb_type_string(const char *str)
+void badusb_type_string(const char *str)
 {
     while (*str && badusb_state.running)
     {
         badusb_type_char(*str++);
         osDelay(BADUSB_INTER_CHAR_MS);
     }
+}
+
+/**
+ * @brief  Type a string directly from an app.
+ * Switches to HID, waits for enumeration, types string, and switches back to normal.
+ */
+void badusb_type_string_forced(const char *str)
+{
+    if (str == NULL || *str == '\0') return;
+
+    /* If not already in HID mode, switch now */
+    if (m1_usb_get_current_mode() != M1_USB_MODE_HID) {
+        m1_usb_switch_to_hid();
+        /* Wait for enumeration (same as badusb_execute_file) */
+        uint32_t t0 = osKernelGetTickCount();
+        while (hUsbDeviceFS.dev_state != USBD_STATE_CONFIGURED)
+        {
+            if ((osKernelGetTickCount() - t0) > BADUSB_ENUM_TIMEOUT_MS) break;
+            osDelay(BADUSB_ENUM_POLL_MS);
+        }
+        /* Extra settle delay for OS to load HID drivers */
+        osDelay(BADUSB_HID_SETTLE_MS);
+    }
+
+    /* Set running flag for this direct call */
+    badusb_state.running = 1;
+
+    while (*str && badusb_state.running)
+    {
+        badusb_type_char(*str++);
+        osDelay(BADUSB_INTER_CHAR_MS);
+    }
+
+    badusb_state.running = 0;
 }
 
 
@@ -726,7 +761,7 @@ bool badusb_execute_file(const char *filepath)
 
         /* Phase 4: Settle delay (3s) */
         badusb_breadcrumb(4);
-        osDelay(3000);
+        osDelay(BADUSB_HID_SETTLE_MS);
 
         /* Phase 5: Prime endpoint */
         badusb_breadcrumb(5);
