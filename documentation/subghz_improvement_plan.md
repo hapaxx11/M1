@@ -2,7 +2,7 @@
 
 > **Temporary tracking document** — delete once all phases are complete.
 >
-> Last updated: 2026-03-28
+> Last updated: 2026-03-28 (Phase 2 complete)
 
 ---
 
@@ -56,24 +56,46 @@ leveraging the M1's superior radio hardware (SI4463).
 
 ---
 
-## Phase 2 — Frequency Hopping / Auto-Detect 🔲 PLANNED
+## Phase 2 — Frequency Hopping / Auto-Detect ✅ COMPLETE
 
-### Goals
-- Implement Flipper-style frequency hopping during Read
-- Cycle through common frequencies (315, 390, 433.92, 868.35 MHz) when no
-  signal is detected within a timeout
-- Store the detected frequency with each history entry (already supported by
-  `SubGHz_History_Entry_t.frequency`)
-- Add hopping toggle to the Config screen (`subghz_cfg.hopping`)
+**Branch:** `copilot/fix-no-apps-found`
+**Commit:** `0453a64`
 
-### Key files
-- `m1_sub_ghz.c` — hopper logic in the RX event handler
-- `m1_sub_ghz.c` — `subghz_hopper_freqs[]` already defined (6 entries)
-- `m1_sub_ghz.c` — Config screen UI
+### What was done
 
-### Open questions
-- Dwell time per frequency before hopping?
-- Use RSSI threshold to detect activity before committing to decode?
+| Item | Status | Details |
+|------|--------|---------|
+| Hopper state variables | ✅ | `subghz_hopper_idx`, `subghz_hopper_freq`, `subghz_hopper_active` |
+| Helper: `subghz_hopper_retune_next()` | ✅ | Pauses RX → retunes SI4463 → restarts RX (full opmode path) |
+| Helper: `subghz_read_rssi()` | ✅ | Reads current RSSI via `SI446x_Get_ModemStatus()` |
+| Timeout-based queue receive | ✅ | `portMAX_DELAY` → `pdMS_TO_TICKS(150)` when hopping active |
+| Frequency hop on timeout | ✅ | Cycles through 6 Flipper-default frequencies (310–868 MHz) |
+| RSSI threshold gating | ✅ | Stays on freq if RSSI ≥ −70 dBm (signal activity detected) |
+| Hopper init on record start | ✅ | Sets first hopper freq, overrides scan config |
+| Hopper cleanup on stop | ✅ | Clears `subghz_hopper_active` on OK/BACK stop |
+| READY display: "Hopping" | ✅ | Shows "Hopping AM650" instead of "433.92 AM650" |
+| ACTIVE display: current freq | ✅ | Top-right shows current hopping frequency (e.g. "433.92") |
+| ACTIVE display: "Scanning..." | ✅ | Shows "Scanning..." instead of "Recording..." when hopping |
+| History uses hopper freq | ✅ | `cur_freq_hz = subghz_hopper_freq` in decode handler |
+| Config UI toggle | ✅ | Already existed (Phase 1 scaffolding) |
+| CHANGELOG entry | ✅ | Added to [0.9.0.3] |
+
+### Design decisions
+
+- **Dwell time: 150ms** — short enough for responsive scanning, long enough for
+  the SI4463 to settle and for the protocol decoder to catch short-burst signals.
+- **RSSI threshold: −70 dBm** — above typical noise floor (~−95 dBm), below
+  typical signal level (~−50 dBm). Prevents hopping away while a signal is active.
+- **Full opmode retune** — uses `sub_ghz_set_opmode()` rather than just
+  `SI446x_Set_Frequency()` to handle band-switch, frontend select, and VCO
+  recalibration automatically.
+- **Hopping frequencies** — same 6 as Flipper Zero: 310, 315, 318, 390, 433.92, 868.35 MHz.
+  Uses the existing `subghz_hopper_freqs[]` array.
+
+### Button mapping (unchanged from Phase 1)
+
+Hopping adds no new buttons. The Config screen already has the Hopping ON/OFF toggle.
+During ACTIVE recording with hopping, all buttons work identically to non-hopping mode.
 
 ---
 

@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Signal detail view** — selecting a signal from the history list shows full protocol
   details including frequency, RSSI, timing element, and protocol-specific fields.
 
+- **Frequency hopping / auto-detect** — enable "Hopping" in the Config screen to
+  automatically cycle through 6 common frequencies (310, 315, 318, 390, 433.92, 868.35 MHz)
+  during recording. The radio dwells 150ms per frequency and uses RSSI-based detection
+  (threshold −70 dBm) to stay on a frequency when signal activity is detected. Each
+  history entry records the frequency it was captured on. The display shows "Scanning..."
+  with the current frequency in the top-right corner.
+
 ### Changed
 
 - **Continuous signal decoding** — the decoder now runs continuously during recording,
