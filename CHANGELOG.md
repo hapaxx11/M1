@@ -7,6 +7,34 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.4] - 2026-03-28
+
+### Added
+
+- **NFC Cyborg Detector** — new NFC tool that turns on the NFC field continuously
+  so body implants with LED indicators light up when held near the M1's back. Press
+  BACK to stop. Accessible from the NFC Tools submenu.
+
+- **NFC Read NDEF** — new NFC tool that scans a T2T tag and parses its NDEF content
+  (URI and Text records), displaying up to 4 lines of decoded text on screen. Supports
+  both short-record (SR) and standard NDEF TLV framing.
+
+- **NFC Write URL** — new NFC tool that prompts for a URL via the virtual keyboard and
+  writes it as an NDEF URI record (https:// prefix) to an NTAG-compatible T2T tag,
+  starting at user-data page 4. Includes a confirmation screen before writing.
+
+- **IRSND RC6A protocol** — enabled RC6A infrared transmit support
+  (`IRSND_SUPPORT_RC6A_PROTOCOL` 0→1 in `Infrared/irsndconfig.h`).
+
+- **IRSND Samsung48 protocol** — enabled Samsung48 infrared transmit support
+  (`IRSND_SUPPORT_SAMSUNG48_PROTOCOL` 0→1 in `Infrared/irsndconfig.h`).
+
+### Changed
+
+- **NFC Tools menu expanded 5→8 items** — "Cyborg Detector", "Read NDEF", and
+  "Write URL" added after "Wipe Tag". Dispatch updated in both the UIView
+  (`nfc_utils_kp_handler` cases 5–7) and the standalone `nfc_tools()` loop.
+
 ## [0.9.0.3] - 2026-03-28
 
 ### Added
