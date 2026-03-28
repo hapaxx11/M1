@@ -84,7 +84,32 @@ typedef struct
     uint16_t te;
     uint16_t bit_len;
     bool raw;
+    /* Extended fields — populated by protocol decoders that set them */
+    uint32_t serial_number;
+    uint32_t rolling_code;
+    uint8_t  button_id;
 } SubGHz_Dec_Info_t;
+
+/*============================================================================*/
+/* Signal History Ring Buffer                                                  */
+/*============================================================================*/
+#define SUBGHZ_HISTORY_MAX   50   /* Maximum signals stored in history */
+
+typedef struct {
+    SubGHz_Dec_Info_t info;       /* Decoded signal data (no raw_data ptr) */
+    uint32_t frequency;           /* Capture frequency in Hz */
+    uint8_t  count;               /* Duplicate reception count (1 = first) */
+} SubGHz_History_Entry_t;
+
+typedef struct {
+    SubGHz_History_Entry_t entries[SUBGHZ_HISTORY_MAX];
+    uint8_t  count;               /* Number of valid entries (0..SUBGHZ_HISTORY_MAX) */
+    uint8_t  head;                /* Next write position (circular) */
+} SubGHz_History_t;
+
+void subghz_history_reset(SubGHz_History_t *hist);
+uint8_t subghz_history_add(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *info, uint32_t freq_hz);
+const SubGHz_History_Entry_t *subghz_history_get(const SubGHz_History_t *hist, uint8_t idx);
 
 enum {
 	PRINCETON = 0,

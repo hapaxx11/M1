@@ -330,6 +330,35 @@ static uint32_t subghz_custom_freq_hz = 433920000UL;
 static SubGHz_Dec_Info_t subghz_record_last_decoded;
 static bool subghz_record_has_decoded = false;
 
+/* Signal history for Read screen */
+static SubGHz_History_t subghz_signal_history;
+static uint8_t subghz_history_sel = 0;        /* Currently selected history index */
+static uint8_t subghz_history_scroll_top = 0; /* Top visible index in list */
+static bool    subghz_history_view_active = false; /* true = showing history list */
+static bool    subghz_history_detail_active = false; /* true = showing signal detail */
+#define SUBGHZ_HISTORY_VISIBLE_ITEMS  5  /* Items visible on 128x64 display */
+#define SUBGHZ_HISTORY_ROW_HEIGHT     6  /* Pixels per row in history list */
+
+/* Frequency hopping state (active during Record when subghz_cfg.hopping == true) */
+static uint8_t  subghz_hopper_idx  = 0;   /* Current index into subghz_hopper_freqs[] */
+static uint32_t subghz_hopper_freq = 0;   /* Frequency currently tuned (Hz) */
+static bool     subghz_hopper_active = false; /* true while hopping during ACTIVE record */
+#define SUBGHZ_HOPPER_DWELL_MS       150  /* ms to dwell per frequency before hopping */
+#define SUBGHZ_HOPPER_RSSI_THRESHOLD -70  /* dBm: stay on freq if RSSI >= this */
+
+/* RAW waveform visualization (Phase 4) */
+#define SUBGHZ_RAW_WAVEFORM_W       128  /* Display columns = display width */
+#define SUBGHZ_RAW_WAVEFORM_Y        12  /* Top Y of waveform area (below header) */
+#define SUBGHZ_RAW_WAVEFORM_H        38  /* Height of waveform area (pixels) */
+#define SUBGHZ_RAW_WAVEFORM_MID_Y   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H / 2)
+#define SUBGHZ_RAW_US_PER_COL       500  /* Microseconds per display column */
+#define SUBGHZ_RAW_MAX_COLS_PER_PULSE 16 /* Clamp: max columns for a single pulse (=8ms) */
+static uint8_t  subghz_raw_waveform[SUBGHZ_RAW_WAVEFORM_W]; /* 0=low, 1=high per column */
+static uint8_t  subghz_raw_wf_head = 0;    /* Next write position (circular) */
+static uint8_t  subghz_raw_wf_len = 0;     /* Number of valid columns */
+static bool     subghz_raw_view_active = false; /* true = showing RAW waveform */
+static uint32_t subghz_raw_sample_count = 0; /* Total samples received (for display) */
+
 //************************** S T R U C T U R E S *******************************
 
 typedef enum {
@@ -506,6 +535,10 @@ static void subghz_replay_play_gui_update(uint8_t param);
 static int  subghz_replay_play_gui_message(void);
 static int subghz_replay_play_kp_handler(void);
 
+/* Frequency hopping helpers (defined after forward declarations) */
+static uint32_t subghz_hopper_retune_next(void);
+static int16_t subghz_read_rssi(void);
+
 //************************** C O N S T A N T **********************************/
 
 static const view_func_t view_subghz_record_table[] = {
@@ -520,6 +553,38 @@ static const view_func_t view_subghz_replay_table[] = {
 };
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+/* --- Frequency hopping helpers --- */
+
+static uint32_t subghz_hopper_retune_next(void)
+{
+	subghz_hopper_idx = (subghz_hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
+	uint32_t freq = subghz_hopper_freqs[subghz_hopper_idx];
+
+	sub_ghz_rx_pause();
+
+	subghz_custom_freq_hz = freq;
+	subghz_scan_config.band = subghz_freq_hz_to_band(freq);
+
+	/* Retune via the full opmode path (handles band switch + frontend select) */
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+	SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+
+	sub_ghz_rx_start();
+
+	subghz_hopper_freq = freq;
+	return freq;
+}
+
+static int16_t subghz_read_rssi(void)
+{
+	struct si446x_reply_GET_MODEM_STATUS_map *pstat;
+	pstat = SI446x_Get_ModemStatus(0x00);
+	return (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
+}
+
+/* --- End hopping helpers --- */
+
 /*
 uint16_t *q = 0;
 arrpush(q, 1);
@@ -945,9 +1010,13 @@ static void subghz_record_gui_update(uint8_t param)
 
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			/* Show frequency + modulation from config presets */
-			snprintf(cfg_line, sizeof(cfg_line), "%s %s",
-			         subghz_freq_presets[subghz_cfg.freq_idx].label,
-			         subghz_mod_presets[subghz_cfg.mod_idx].label);
+			if (subghz_cfg.hopping)
+				snprintf(cfg_line, sizeof(cfg_line), "Hopping %s",
+				         subghz_mod_presets[subghz_cfg.mod_idx].label);
+			else
+				snprintf(cfg_line, sizeof(cfg_line), "%s %s",
+				         subghz_freq_presets[subghz_cfg.freq_idx].label,
+				         subghz_mod_presets[subghz_cfg.mod_idx].label);
 			u8g2_DrawStr(&m1_u8g2, 55, 18, cfg_line);
 
 			u8g2_DrawXBMP(&m1_u8g2, 0, 5, 50, 27, subghz_antenna_50x27);
@@ -962,35 +1031,201 @@ static void subghz_record_gui_update(uint8_t param)
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawBox(&m1_u8g2, 65, 0, 63, 10); // Clear existing content
 
+			/* Show current hopping frequency in top-right when hopping */
+			if (subghz_hopper_active)
+			{
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				snprintf(status_str, sizeof(status_str), "%.2f",
+				         (float)subghz_hopper_freq / 1000000.0f);
+				u8g2_DrawStr(&m1_u8g2, 74, 8, status_str);
+			}
+
 			// Clear middle area for fresh content
-			u8g2_DrawBox(&m1_u8g2, 0, 18, 128, 32);
+			u8g2_DrawBox(&m1_u8g2, 0, 10, 128, 42);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-			/* Show decoded protocol info if available */
-			if (subghz_record_has_decoded)
+			if (subghz_raw_view_active)
 			{
-				u8g2_DrawStr(&m1_u8g2, 2, 28, protocol_text[subghz_record_last_decoded.protocol]);
+				/*--- RAW Waveform View ---*/
+				subghz_raw_waveform_draw();
+
+				/* Sample count in top-left of waveform area */
+				snprintf(status_str, sizeof(status_str), "RAW %luk",
+				         (unsigned long)(subghz_raw_sample_count / 1000));
+				u8g2_DrawStr(&m1_u8g2, 2, 18, status_str);
+
+				/* Show total recording samples top-right */
+				snprintf(status_str, sizeof(status_str), "%lus",
+				         (unsigned long)(subghz_record_total_samples / 1000));
+				u8g2_DrawStr(&m1_u8g2, 100, 18, status_str);
+			}
+			else if (subghz_history_detail_active)
+			{
+				/*--- Signal Detail View ---*/
+				const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+				if (e)
+				{
+					/* Line 1: Protocol name */
+					u8g2_DrawStr(&m1_u8g2, 2, 18, protocol_text[e->info.protocol]);
+
+					/* Line 2: Key value + bit length */
+					snprintf(status_str, sizeof(status_str), "0x%lX %dbit",
+					         (uint32_t)e->info.key, e->info.bit_len);
+					u8g2_DrawStr(&m1_u8g2, 2, 28, status_str);
+
+					/* Line 3: RSSI + TE + Frequency */
+					snprintf(status_str, sizeof(status_str), "%ddBm TE:%d %.2fMHz",
+					         e->info.rssi, e->info.te,
+					         (float)e->frequency / 1000000.0f);
+					u8g2_DrawStr(&m1_u8g2, 2, 38, status_str);
+
+					/* Line 4: Serial/Rolling/Button if available */
+					if (e->info.serial_number || e->info.rolling_code || e->info.button_id)
+					{
+						snprintf(status_str, sizeof(status_str), "SN:%lX RC:%lX Btn:%d",
+						         (unsigned long)e->info.serial_number,
+						         (unsigned long)e->info.rolling_code,
+						         e->info.button_id);
+						u8g2_DrawStr(&m1_u8g2, 2, 48, status_str);
+					}
+					else if (e->count > 1)
+					{
+						snprintf(status_str, sizeof(status_str), "Received x%d", e->count);
+						u8g2_DrawStr(&m1_u8g2, 2, 48, status_str);
+					}
+				}
+			}
+			else if (subghz_history_view_active && subghz_signal_history.count > 0)
+			{
+				/*--- History List View ---*/
+				/* Title bar: "History (N)" at the top of the middle area */
+				snprintf(status_str, sizeof(status_str), "History (%d)", subghz_signal_history.count);
+				u8g2_DrawStr(&m1_u8g2, 2, 18, status_str);
+
+				/* Scrollable list of decoded signals */
+				uint8_t vis = SUBGHZ_HISTORY_VISIBLE_ITEMS;
+				if (vis > subghz_signal_history.count)
+					vis = subghz_signal_history.count;
+
+				for (uint8_t i = 0; i < vis; i++)
+				{
+					uint8_t idx = subghz_history_scroll_top + i;
+					if (idx >= subghz_signal_history.count) break;
+					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, idx);
+					if (!e) break;
+
+					uint8_t y = 20 + i * SUBGHZ_HISTORY_ROW_HEIGHT;
+
+					/* Highlight selected item */
+					if (idx == subghz_history_sel)
+					{
+						u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, SUBGHZ_HISTORY_ROW_HEIGHT);
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+					}
+
+					/* Format: "Protocol 0xKEY" — compact to fit display */
+					const char *pname = protocol_text[e->info.protocol];
+					snprintf(status_str, sizeof(status_str), "%s 0x%lX",
+					         pname, (uint32_t)e->info.key);
+					u8g2_DrawStr(&m1_u8g2, 2, y + 5, status_str);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				}
+			}
+			else if (subghz_record_has_decoded)
+			{
+				/*--- Live View (original behavior with enhanced info) ---*/
+				u8g2_DrawStr(&m1_u8g2, 2, 20, protocol_text[subghz_record_last_decoded.protocol]);
 				snprintf(status_str, sizeof(status_str), "0x%lX %dbit",
 				         (uint32_t)subghz_record_last_decoded.key,
 				         subghz_record_last_decoded.bit_len);
-				u8g2_DrawStr(&m1_u8g2, 2, 38, status_str);
-				snprintf(status_str, sizeof(status_str), "%ddBm TE:%d",
-				         subghz_record_last_decoded.rssi,
-				         subghz_record_last_decoded.te);
-				u8g2_DrawStr(&m1_u8g2, 2, 48, status_str);
+				u8g2_DrawStr(&m1_u8g2, 2, 30, status_str);
+
+				/* Show serial/rolling/button if available */
+				if (subghz_record_last_decoded.serial_number ||
+				    subghz_record_last_decoded.rolling_code)
+				{
+					snprintf(status_str, sizeof(status_str), "SN:%lX RC:%lX B:%d",
+					         (unsigned long)subghz_record_last_decoded.serial_number,
+					         (unsigned long)subghz_record_last_decoded.rolling_code,
+					         subghz_record_last_decoded.button_id);
+					u8g2_DrawStr(&m1_u8g2, 2, 40, status_str);
+				}
+				else
+				{
+					snprintf(status_str, sizeof(status_str), "%ddBm TE:%d",
+					         subghz_record_last_decoded.rssi,
+					         subghz_record_last_decoded.te);
+					u8g2_DrawStr(&m1_u8g2, 2, 40, status_str);
+				}
+
+				/* History count badge */
+				if (subghz_signal_history.count > 0)
+				{
+					snprintf(status_str, sizeof(status_str), "[%d]", subghz_signal_history.count);
+					u8g2_DrawStr(&m1_u8g2, 104, 18, status_str);
+				}
 			}
 			else
 			{
-				u8g2_DrawStr(&m1_u8g2, 2, 34, "Recording...");
+				if (subghz_hopper_active)
+					u8g2_DrawStr(&m1_u8g2, 2, 34, "Scanning...");
+				else
+					u8g2_DrawStr(&m1_u8g2, 2, 34, "Recording...");
 			}
 
+			/* Bottom bar */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
+			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-			u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10); // draw TARGET icon
-			u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop ");
+			if (subghz_raw_view_active)
+			{
+				/* RAW waveform mode bottom bar */
+				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
+				u8g2_DrawStr(&m1_u8g2, 12, 61, "Back");
+				u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10);
+				u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop");
+			}
+			else if (subghz_history_view_active || subghz_history_detail_active)
+			{
+				/* History/Detail mode bottom bar */
+				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
+				u8g2_DrawStr(&m1_u8g2, 12, 61, "Back");
+				if (subghz_history_view_active && !subghz_history_detail_active)
+				{
+					u8g2_DrawXBMP(&m1_u8g2, 74, 52, 10, 10, target_10x10);
+					u8g2_DrawStr(&m1_u8g2, 86, 61, "View");
+				}
+				else if (subghz_history_detail_active)
+				{
+					/* Save hint in detail view */
+					u8g2_DrawXBMP(&m1_u8g2, 40, 53, 8, 8, arrowdown_8x8);
+					u8g2_DrawStr(&m1_u8g2, 50, 61, "Save");
+					/* Send hint for static-code protocols */
+					const SubGHz_History_Entry_t *det_e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+					if (det_e && subghz_protocol_is_static(det_e->info.protocol))
+					{
+						u8g2_DrawXBMP(&m1_u8g2, 84, 53, 8, 8, arrowright_8x8);
+						u8g2_DrawStr(&m1_u8g2, 94, 61, "Send");
+					}
+				}
+			}
+			else
+			{
+				/* Normal recording bottom bar */
+				u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10);
+				u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop ");
+				if (subghz_signal_history.count > 0)
+				{
+					u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowup_8x8);
+					u8g2_DrawStr(&m1_u8g2, 12, 61, "Hist");
+				}
+				/* RAW view hint */
+				u8g2_DrawXBMP(&m1_u8g2, 48, 53, 8, 8, arrowleft_8x8);
+				u8g2_DrawStr(&m1_u8g2, 58, 61, "RAW");
+			}
 			break;
 		}
 
@@ -1088,58 +1323,504 @@ static int subghz_record_gui_message(void)
 	uint8_t ret_val = 1;
 	uint32_t rcv_samples;
 
-	ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-	if (ret==pdTRUE)
+	/* When hopping is active, use a short timeout so we can cycle frequencies.
+	 * Otherwise block indefinitely waiting for the next event. */
+	TickType_t wait_ticks = (subghz_hopper_active) ?
+	    pdMS_TO_TICKS(SUBGHZ_HOPPER_DWELL_MS) : portMAX_DELAY;
+
+	ret = xQueueReceive(main_q_hdl, &q_item, wait_ticks);
+
+	/* --- Timeout path: no event within dwell period → hop to next frequency --- */
+	if (ret != pdTRUE)
 	{
-		if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
+		if (subghz_hopper_active)
 		{
-			// Notification is only sent to this task when there's any button activity,
-			// so it doesn't need to wait when reading the event from the queue
-			ret_val = subghz_record_kp_handler();
-		}
-		else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
-		{
-			rcv_samples = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
-			if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+			/* Sample RSSI on current frequency — if above threshold, stay (signal activity) */
+			int16_t rssi = subghz_read_rssi();
+			if (rssi < SUBGHZ_HOPPER_RSSI_THRESHOLD)
 			{
-				M1_LOG_N(M1_LOGDB_TAG, "Raw samples %d\r\n", rcv_samples);
-				subghz_record_total_samples += rcv_samples;
-				sub_ghz_rx_raw_save(false, false);
-				vTaskDelay(10); // Give the system some time in case RF noise is flooding the receiver
-
-				/* Update display only when real data is flushed to file */
+				subghz_hopper_retune_next();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
-			} // if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+			}
+		}
+		return ret_val;
+	}
 
-			/* Check if the protocol decoder recognized a signal */
-			if (!subghz_record_has_decoded)
+	/* --- Event received --- */
+	if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
+	{
+		// Notification is only sent to this task when there's any button activity,
+		// so it doesn't need to wait when reading the event from the queue
+		ret_val = subghz_record_kp_handler();
+	}
+	else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
+	{
+		rcv_samples = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
+		if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+		{
+			M1_LOG_N(M1_LOGDB_TAG, "Raw samples %d\r\n", rcv_samples);
+			subghz_record_total_samples += rcv_samples;
+			sub_ghz_rx_raw_save(false, false);
+
+			/* Feed RAW waveform display buffer from the saved samples */
+			if (subghz_raw_view_active)
 			{
-				SubGHz_Dec_Info_t dec;
-				if (subghz_decenc_read(&dec, false) && dec.key != 0)
+				uint16_t *psamples = (uint16_t *)subghz_ring_read_buffer;
+				uint16_t n = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
+				subghz_raw_sample_count += n;
+				for (uint16_t s = 0; s < n; s++)
 				{
-					subghz_record_last_decoded = dec;
-					subghz_record_has_decoded = true;
-					m1_buzzer_notification();
-					/* Only refresh display when protocol is actually decoded */
-					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					/* Alternating mark(even)/space(odd) */
+					subghz_raw_waveform_push(psamples[s], (s & 1) ? 0 : 1);
 				}
 			}
 
-		} // if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
+			vTaskDelay(10); // Give the system some time in case RF noise is flooding the receiver
 
-		else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
+			/* Update display only when real data is flushed to file */
+			m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+		} // if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
+
+		/* Check if the protocol decoder recognized a signal */
 		{
-			subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
-			if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
+			SubGHz_Dec_Info_t dec;
+			memset(&dec, 0, sizeof(dec));
+			if (subghz_decenc_read(&dec, false) && dec.key != 0)
 			{
-				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
-			} // if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
-		} // else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
-	} // if (ret==pdTRUE)
+				/* Determine current frequency for history entry */
+				uint32_t cur_freq_hz;
+				if (subghz_hopper_active)
+					cur_freq_hz = subghz_hopper_freq;
+				else if (subghz_scan_config.band == SUB_GHZ_BAND_CUSTOM)
+					cur_freq_hz = subghz_custom_freq_hz;
+				else if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
+					cur_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+				else
+					cur_freq_hz = 433920000UL;
+
+				uint8_t prev_count = subghz_signal_history.count;
+				subghz_history_add(&subghz_signal_history, &dec, cur_freq_hz);
+
+				/* Update the "last decoded" for the live view and .sub save */
+				subghz_record_last_decoded = dec;
+				subghz_record_has_decoded = true;
+
+				/* Buzzer only on genuinely new signal (not duplicate) */
+				if (subghz_signal_history.count > prev_count ||
+				    subghz_signal_history.count == SUBGHZ_HISTORY_MAX)
+				{
+					if (subghz_cfg.sound)
+						m1_buzzer_notification();
+				}
+
+				/* Refresh display */
+				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+			}
+		}
+
+	} // if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
+
+	else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
+	{
+		subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
+		if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
+		{
+			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
+		} // if ( subghz_replay_ret_code==SUB_GHZ_RAW_DATA_PARSER_IDLE )
+	} // else if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_TX )
 
 	return ret_val;
 } // static int  subghz_record_gui_message(void)
 
+
+/*============================================================================*/
+/**
+  * @brief  Push pulse data into the RAW waveform display buffer.
+  *         Each pulse duration in microseconds is mapped to one or more display
+  *         columns (one column = SUBGHZ_RAW_US_PER_COL microseconds).
+  *         Mark pulses (level=1) draw high, space pulses (level=0) draw low.
+  * @param  duration_us  pulse duration in microseconds
+  * @param  level        1 = mark (high), 0 = space (low)
+  */
+/*============================================================================*/
+static void subghz_raw_waveform_push(uint16_t duration_us, uint8_t level)
+{
+	/* How many display columns does this pulse span? */
+	uint8_t cols = (uint8_t)(duration_us / SUBGHZ_RAW_US_PER_COL);
+	if (cols == 0) cols = 1;
+	if (cols > SUBGHZ_RAW_MAX_COLS_PER_PULSE) cols = SUBGHZ_RAW_MAX_COLS_PER_PULSE;
+
+	for (uint8_t i = 0; i < cols; i++)
+	{
+		subghz_raw_waveform[subghz_raw_wf_head] = level;
+		subghz_raw_wf_head = (subghz_raw_wf_head + 1) % SUBGHZ_RAW_WAVEFORM_W;
+		if (subghz_raw_wf_len < SUBGHZ_RAW_WAVEFORM_W)
+			subghz_raw_wf_len++;
+	}
+}
+
+/*============================================================================*/
+/**
+  * @brief  Reset the RAW waveform display buffer.
+  */
+/*============================================================================*/
+static void subghz_raw_waveform_reset(void)
+{
+	memset(subghz_raw_waveform, 0, sizeof(subghz_raw_waveform));
+	subghz_raw_wf_head = 0;
+	subghz_raw_wf_len = 0;
+	subghz_raw_sample_count = 0;
+}
+
+/*============================================================================*/
+/**
+  * @brief  Draw the RAW waveform onto the display.
+  *         Renders a scrolling pulse waveform in the middle display area.
+  *         Mark=high line from mid to top, Space=low line from mid to bottom.
+  */
+/*============================================================================*/
+static void subghz_raw_waveform_draw(void)
+{
+	/* Draw centre reference line (dashed) */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	for (uint8_t x = 0; x < SUBGHZ_RAW_WAVEFORM_W; x += 4)
+		u8g2_DrawPixel(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y);
+
+	if (subghz_raw_wf_len == 0)
+		return;
+
+	/* Calculate the start index in the circular buffer */
+	uint8_t start;
+	uint8_t draw_cols = subghz_raw_wf_len;
+	uint8_t x_offset = 0;
+
+	if (draw_cols < SUBGHZ_RAW_WAVEFORM_W)
+	{
+		/* Not enough data to fill screen — draw right-aligned */
+		x_offset = SUBGHZ_RAW_WAVEFORM_W - draw_cols;
+		start = (subghz_raw_wf_head + SUBGHZ_RAW_WAVEFORM_W - draw_cols) % SUBGHZ_RAW_WAVEFORM_W;
+	}
+	else
+	{
+		/* Full buffer — draw all 128 columns ending at head */
+		start = subghz_raw_wf_head; /* Oldest sample */
+		draw_cols = SUBGHZ_RAW_WAVEFORM_W;
+	}
+
+	/* Reserve 1px for the center reference line so waveform doesn't overlap it */
+	uint8_t half_h = SUBGHZ_RAW_WAVEFORM_H / 2 - 1;
+
+	for (uint8_t i = 0; i < draw_cols; i++)
+	{
+		uint8_t idx = (start + i) % SUBGHZ_RAW_WAVEFORM_W;
+		uint8_t x = x_offset + i;
+
+		if (subghz_raw_waveform[idx])
+		{
+			/* Mark (high) — draw upward from midline */
+			u8g2_DrawVLine(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y - half_h, half_h);
+		}
+		else
+		{
+			/* Space (low) — draw downward from midline */
+			u8g2_DrawVLine(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y + 1, half_h);
+		}
+	}
+}
+
+
+/*============================================================================*/
+/* Phase 5 — Protocol-Specific Emulation (static-code TX)                     */
+/*============================================================================*/
+
+/* Maximum pulse pairs: data_bits * 2 (mark+space per bit) + 2 (sync pulse) + margin */
+#define SUBGHZ_TX_ENCODE_BUF_MAX  280  /* 128 bits × 2 + sync + margin */
+
+/* TX pulse buffer — allocated on first use, freed when no longer needed */
+static uint16_t *subghz_tx_encode_buf = NULL;
+static uint16_t  subghz_tx_encode_len = 0;  /* Number of uint16_t samples */
+
+/*============================================================================*/
+/**
+  * @brief  Check if a protocol is a static-code type safe for TX emulation.
+  *         Static codes have a fixed key (no rolling code / hopping).
+  *
+  *         Rolling-code protocols (KeeLoq, Security+ 1.0/2.0, FAAC SLH,
+  *         Somfy, StarLine, Nice Flor-S, etc.) are intentionally excluded:
+  *         retransmitting a captured rolling code is ineffective (the receiver
+  *         has already advanced its counter) and could desynchronise legitimate
+  *         remotes.  Weather/TPMS sensor protocols are also excluded since
+  *         transmitting sensor data serves no useful purpose.
+  *
+  * @param  protocol  protocol enum value
+  * @retval true if protocol is static-code and safe to transmit
+  */
+/*============================================================================*/
+static bool subghz_protocol_is_static(uint16_t protocol)
+{
+	switch (protocol)
+	{
+		case PRINCETON:
+		case CAME_12BIT:
+		case NICE_FLO:
+		case LINEAR_10BIT:
+		case HOLTEK_HT12E:
+		case GATE_TX:
+		case SMC5326:
+		case POWER_SMART:
+		case ANSONIC:
+		case MARANTEC:
+		case FIREFLY:
+		case CLEMSA:
+		case BETT:
+		case MEGACODE:
+		case INTERTECHNO:
+		case ELRO:
+		case CENTURION:
+		case MARANTEC24:
+		case HAY21:
+		case MAGELLAN:
+		case INTERTECHNO_V3:
+		case LINEAR_DELTA3:
+		case ROGER:
+			return true;
+		default:
+			return false;
+	}
+}
+
+/*============================================================================*/
+/**
+  * @brief  Encode a decoded static-code signal into a TX pulse duration array.
+  *         Uses standard OOK PWM encoding:
+  *           bit 0 = te_short HIGH, te_long LOW
+  *           bit 1 = te_long HIGH, te_short LOW
+  *         Followed by a sync gap (te_short HIGH, te_short × 30 LOW).
+  *
+  * @param  key       Decoded key value (MSB-first)
+  * @param  bit_len   Number of data bits
+  * @param  te_short  Short timing element in μs
+  * @param  te_long   Long timing element in μs
+  * @param  buf       Output buffer (uint16_t pulse durations)
+  * @param  buf_max   Maximum number of uint16_t entries in buf
+  * @retval Number of uint16_t entries written, or 0 on error
+  */
+/*============================================================================*/
+static uint16_t subghz_encode_ook_pwm(uint64_t key, uint16_t bit_len,
+                                       uint16_t te_short, uint16_t te_long,
+                                       uint16_t *buf, uint16_t buf_max)
+{
+	uint16_t idx = 0;
+
+	if (bit_len == 0 || bit_len > 64 || buf == NULL)
+		return 0;
+
+	/* Need 2 entries per bit + 2 for sync gap */
+	if ((uint16_t)(bit_len * 2 + 2) > buf_max)
+		return 0;
+
+	/* Encode data bits MSB-first */
+	for (int16_t b = bit_len - 1; b >= 0; b--)
+	{
+		if ((key >> b) & 1ULL)
+		{
+			/* bit 1: long mark, short space */
+			buf[idx++] = te_long;
+			buf[idx++] = te_short;
+		}
+		else
+		{
+			/* bit 0: short mark, long space */
+			buf[idx++] = te_short;
+			buf[idx++] = te_long;
+		}
+	}
+
+	/* Sync/gap: short mark followed by long pause (30× te_short) */
+	buf[idx++] = te_short;
+	buf[idx++] = te_short * 30;
+
+	return idx;
+}
+
+/*============================================================================*/
+/**
+  * @brief  Transmit a decoded static-code signal from the history.
+  *         Pauses the current RX, encodes the signal as pulse durations,
+  *         transmits via DMA, waits for completion, then restores RX.
+  *
+  *         The transmitter sends the encoded signal with 4 repeats (same as
+  *         raw replay) at the entry's original capture frequency.
+  *
+  * @param  entry  pointer to the history entry to transmit
+  * @retval true if transmitted successfully, false on error
+  */
+/*============================================================================*/
+static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
+{
+	uint16_t proto_idx;
+	uint16_t te_short, te_long;
+	S_M1_SubGHz_Band tx_band;
+
+	if (entry == NULL || entry->info.key == 0)
+		return false;
+
+	proto_idx = entry->info.protocol;
+	if (!subghz_protocol_is_static(proto_idx))
+		return false;
+
+	/* Use TE from the decoded signal if available, otherwise from protocol table */
+	te_short = (entry->info.te > 0) ? entry->info.te
+	           : subghz_protocols_list[proto_idx].te_short;
+	te_long  = subghz_protocols_list[proto_idx].te_long;
+
+	/* Scale te_long proportionally if decoded TE differs from table default */
+	if (entry->info.te > 0 && subghz_protocols_list[proto_idx].te_short > 0)
+	{
+		te_long = (uint16_t)((uint32_t)te_long * te_short
+		          / subghz_protocols_list[proto_idx].te_short);
+	}
+
+	/* Allocate TX buffer if not already */
+	if (subghz_tx_encode_buf == NULL)
+	{
+		subghz_tx_encode_buf = malloc(SUBGHZ_TX_ENCODE_BUF_MAX * sizeof(uint16_t));
+		if (subghz_tx_encode_buf == NULL)
+			return false;
+	}
+
+	/* Encode the signal */
+	subghz_tx_encode_len = subghz_encode_ook_pwm(
+		entry->info.key, entry->info.bit_len,
+		te_short, te_long,
+		subghz_tx_encode_buf, SUBGHZ_TX_ENCODE_BUF_MAX);
+
+	if (subghz_tx_encode_len == 0)
+	{
+		free(subghz_tx_encode_buf);
+		subghz_tx_encode_buf = NULL;
+		return false;
+	}
+
+	/* Determine TX band from the signal's capture frequency */
+	tx_band = subghz_freq_hz_to_band(entry->frequency);
+
+	/* Check region restrictions */
+	if (sub_ghz_fcc_ism_band_check(tx_band, 0))
+	{
+		m1_buzzer_notification();
+		m1_message_box(&m1_u8g2, "TX Blocked:", "Region restricts", "this frequency.", "Set Region to Off");
+		free(subghz_tx_encode_buf);
+		subghz_tx_encode_buf = NULL;
+		return false;
+	}
+
+	/* Pause RX and prepare TX */
+	sub_ghz_rx_pause();
+
+	/* Set up TX hardware and radio */
+	sub_ghz_tx_raw_init();
+
+	/* Tune radio to the signal's capture frequency */
+	subghz_custom_freq_hz = entry->frequency;
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX, tx_band, 0,
+	                   tx_power_values[subghz_tx_power_idx]);
+
+	/* Show "Sending..." overlay */
+	m1_message_box(&m1_u8g2, "Sending...",
+	               protocol_text[proto_idx], "", "");
+
+	/* Transmit with repeats */
+	sub_ghz_transmit_raw(
+		(uint32_t)subghz_tx_encode_buf,
+		(uint32_t)&timerhdl_subghz_tx.Instance->ARR,
+		subghz_tx_encode_len,
+		SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT);
+
+	/* Wait for TX to complete (DMA transfer) */
+	uint32_t timeout = 2000; /* max 2 seconds */
+	while (subghz_decenc_ctl.ntx_raw_repeat > 0 && timeout > 0)
+	{
+		vTaskDelay(pdMS_TO_TICKS(10));
+		timeout -= 10;
+	}
+
+	/* Stop TX and clean up */
+	sub_ghz_raw_tx_stop();
+	sub_ghz_tx_raw_deinit();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, tx_band, 0, 0);
+
+	/* Free encode buffer */
+	free(subghz_tx_encode_buf);
+	subghz_tx_encode_buf = NULL;
+
+	/* Restore RX on the original recording frequency */
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+	sub_ghz_rx_init();
+	sub_ghz_rx_start();
+
+	/* Show success */
+	m1_message_box(&m1_u8g2, "Sent!",
+	               protocol_text[proto_idx], "", "BACK to continue");
+
+	return true;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Save a history entry as a Flipper-compatible .sub file.
+  *         Prompts for filename via virtual keyboard, auto-generating a
+  *         default name from the protocol name and key value.
+  * @param  entry  pointer to the history entry to save
+  * @retval true if saved successfully, false otherwise
+  */
+/*============================================================================*/
+static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
+{
+	flipper_subghz_signal_t sub_sig;
+	char sub_path[64];
+	char default_name[32];
+	char new_name[32];
+
+	if (entry == NULL || entry->info.key == 0)
+		return false;
+
+	/* Build a default filename from protocol + truncated key */
+	snprintf(default_name, sizeof(default_name), "%.12s_%lX",
+	         protocol_text[entry->info.protocol],
+	         (unsigned long)(uint32_t)entry->info.key);
+
+	/* Prompt user for filename (or accept default) */
+	if (!m1_vkb_get_filename("Save signal as:", default_name, new_name))
+		return false; /* User cancelled */
+
+	snprintf(sub_path, sizeof(sub_path), "/SUBGHZ/%s.sub", new_name);
+
+	/* Populate the Flipper .sub signal structure */
+	memset(&sub_sig, 0, sizeof(sub_sig));
+	sub_sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
+	sub_sig.frequency = entry->frequency;
+	sub_sig.bit_count = entry->info.bit_len;
+	sub_sig.key       = entry->info.key;
+	sub_sig.te        = entry->info.te;
+
+	strncpy(sub_sig.preset, "FuriHalSubGhzPresetOok650Async",
+	        FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
+	strncpy(sub_sig.protocol, protocol_text[entry->info.protocol],
+	        FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
+
+	if (flipper_subghz_save(sub_path, &sub_sig))
+	{
+		m1_message_box(&m1_u8g2, "Signal saved:", sub_path + 8, "", "BACK to continue");
+		return true;
+	}
+	else
+	{
+		m1_message_box(&m1_u8g2, "Save failed!", sub_path + 8, "", "BACK to continue");
+		return false;
+	}
+}
 
 /*============================================================================*/
 /**
@@ -1162,23 +1843,41 @@ static int subghz_record_kp_handler(void)
 		{
 			if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			{
-				// This case is handled the same way
-				// with the case the [BUTTON_OK_KP_ID] is pressed
-				// This code is copied from that case below. It can be placed in a sub-function if needed.
-				sub_ghz_rx_pause(); // Stop receiving
-				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
-				xQueueReset(main_q_hdl); // Reset old samples in the queue, if any
-
-				if ( !last_data_saved )
+				/* Sub-view navigation: BACK returns to previous sub-view */
+				if (subghz_raw_view_active)
 				{
-					sub_ghz_rx_raw_save(false, true);
-					last_data_saved = true;
-				} // if ( !last_data_saved )
-				m1_sdm_task_stop(); // Stop sampling raw data and flush data to SD card
-				m1_sdm_task_deinit();
-				sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+					subghz_raw_view_active = false;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (subghz_history_detail_active)
+				{
+					subghz_history_detail_active = false;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (subghz_history_view_active)
+				{
+					subghz_history_view_active = false;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else
+				{
+					// Stop recording (original behavior)
+					subghz_hopper_active = false;
+					sub_ghz_rx_pause();
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					xQueueReset(main_q_hdl);
 
-				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+					if ( !last_data_saved )
+					{
+						sub_ghz_rx_raw_save(false, true);
+						last_data_saved = true;
+					}
+					m1_sdm_task_stop();
+					m1_sdm_task_deinit();
+					sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+				}
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{
@@ -1223,6 +1922,24 @@ static int subghz_record_kp_handler(void)
 					last_data_saved = false;
 					subghz_record_has_decoded = false;
 					subghz_record_total_samples = 0;
+					subghz_history_reset(&subghz_signal_history);
+					subghz_history_view_active = false;
+					subghz_history_detail_active = false;
+					subghz_history_sel = 0;
+					subghz_history_scroll_top = 0;
+					subghz_raw_view_active = false;
+					subghz_raw_waveform_reset();
+					/* Initialize frequency hopper state */
+					subghz_hopper_active = subghz_cfg.hopping;
+					subghz_hopper_idx = 0;
+					subghz_hopper_freq = subghz_hopper_active ?
+					    subghz_hopper_freqs[0] : subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+					if (subghz_hopper_active)
+					{
+						/* Override scan config with first hopper frequency */
+						subghz_custom_freq_hz = subghz_hopper_freq;
+						subghz_scan_config.band = subghz_freq_hz_to_band(subghz_hopper_freq);
+					}
 					m1_sdm_task_init();
 					m1_sdm_task_start();
 					sub_ghz_rx_raw_save(true, false);
@@ -1246,20 +1963,31 @@ static int subghz_record_kp_handler(void)
 			} // if ( nfc_uiview_gui_latest_param==NFC_READ_DISPLAY_PARAM_READING_COMPLETE )
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			{
-				sub_ghz_rx_pause(); // Stop receiving
-				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
-				xQueueReset(main_q_hdl); // Reset old samples in the queue, if any
-
-				if ( !last_data_saved )
+				if (subghz_history_view_active && !subghz_history_detail_active)
 				{
-					sub_ghz_rx_raw_save(false, true);
-					last_data_saved = true;
-				} // if ( !last_data_saved )
-				m1_sdm_task_stop(); // Stop sampling raw data and flush data to SD card
-				m1_sdm_task_deinit();
-				sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+					/* OK in history list = open detail view */
+					subghz_history_detail_active = true;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (!subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* OK in live view = stop recording (original) */
+					subghz_hopper_active = false;
+					sub_ghz_rx_pause();
+					m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+					xQueueReset(main_q_hdl);
 
-				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+					if ( !last_data_saved )
+					{
+						sub_ghz_rx_raw_save(false, true);
+						last_data_saved = true;
+					}
+					m1_sdm_task_stop();
+					m1_sdm_task_deinit();
+					sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE);
+				}
 			} // else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{
@@ -1306,6 +2034,17 @@ static int subghz_record_kp_handler(void)
 				subghz_apply_config();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (!subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Toggle RAW waveform view from live view */
+					subghz_raw_view_active = !subghz_raw_view_active;
+					if (subghz_raw_view_active)
+						subghz_raw_waveform_reset();
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+			}
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{
 				sub_ghz_raw_samples_deinit(true); // Discard samples
@@ -1320,8 +2059,22 @@ static int subghz_record_kp_handler(void)
 				subghz_apply_config();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			} // if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (subghz_history_detail_active)
+				{
+					/* Send the currently viewed signal (static-code protocols only) */
+					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+					if (e && subghz_protocol_is_static(e->info.protocol))
+					{
+						subghz_transmit_static_signal(e);
+						/* Redraw after message box returns */
+						m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					}
+				}
+			}
 		} // else if(this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK )
-		else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )	// Up = Custom Freq
+		else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )	// Up
 		{
 			if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_READY )
 			{
@@ -1332,6 +2085,29 @@ static int subghz_record_kp_handler(void)
 				}
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 			}
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Scroll up in history list */
+					if (subghz_history_sel > 0)
+						subghz_history_sel--;
+					if (subghz_history_sel < subghz_history_scroll_top)
+						subghz_history_scroll_top = subghz_history_sel;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
+				else if (!subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Open history list from live view */
+					if (subghz_signal_history.count > 0)
+					{
+						subghz_history_view_active = true;
+						subghz_history_sel = 0;
+						subghz_history_scroll_top = 0;
+						m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					}
+				}
+			}
 		} // else if(this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )
 		else if(this_button_status.event[BUTTON_DOWN_KP_ID]==BUTTON_EVENT_CLICK )	// Down
 		{
@@ -1340,6 +2116,29 @@ static int subghz_record_kp_handler(void)
 				sub_ghz_config_screen();
 				subghz_apply_config();
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
+			}
+			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE )
+			{
+				if (subghz_history_detail_active)
+				{
+					/* Save the currently viewed signal as .sub file */
+					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, subghz_history_sel);
+					if (e)
+					{
+						subghz_save_history_entry(e);
+						/* Redraw after message box returns */
+						m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+					}
+				}
+				else if (subghz_history_view_active && !subghz_history_detail_active)
+				{
+					/* Scroll down in history list */
+					if (subghz_history_sel + 1 < subghz_signal_history.count)
+						subghz_history_sel++;
+					if (subghz_history_sel >= subghz_history_scroll_top + SUBGHZ_HISTORY_VISIBLE_ITEMS)
+						subghz_history_scroll_top = subghz_history_sel - SUBGHZ_HISTORY_VISIBLE_ITEMS + 1;
+					m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
+				}
 			}
 			else if ( subghz_uiview_gui_latest_param==SUBGHZ_RECORD_DISPLAY_PARAM_COMPLETE )
 			{

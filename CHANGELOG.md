@@ -7,6 +7,68 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.3] - 2026-03-28
+
+### Added
+
+- **Sub-GHz Signal History** — the Read/Record screen now keeps a scrollable history of all
+  decoded signals (up to 50 entries). Previously only the most recent decoded signal was
+  displayed. Press UP during recording to open the history list, UP/DOWN to scroll, OK to
+  view signal details, BACK to return to the live view. Duplicate consecutive signals are
+  counted instead of creating separate entries.
+
+- **Protocol-aware signal display** — decoded signals now show extended protocol fields
+  (serial number, rolling code, button ID) when available. Protocols that populate these
+  fields include KeeLoq, Security+ 2.0, Somfy Telis, Chamberlain, StarLine, FAAC SLH,
+  Hörmann, and Schrader TPMS.
+
+- **History count badge** — the live recording view shows a `[N]` badge indicating how
+  many unique signals have been captured so far.
+
+- **Signal detail view** — selecting a signal from the history list shows full protocol
+  details including frequency, RSSI, timing element, and protocol-specific fields.
+
+- **Frequency hopping / auto-detect** — enable "Hopping" in the Config screen to
+  automatically cycle through 6 common frequencies (310, 315, 318, 390, 433.92, 868.35 MHz)
+  during recording. The radio dwells 150ms per frequency and uses RSSI-based detection
+  (threshold −70 dBm) to stay on a frequency when signal activity is detected. Each
+  history entry records the frequency it was captured on. The display shows "Scanning..."
+  with the current frequency in the top-right corner.
+
+- **Save individual signals from history** — in the signal detail view (reached by pressing
+  OK on a history entry), press DOWN to save the signal as a Flipper-compatible `.sub` file.
+  A virtual keyboard prompts for the filename with a default based on the protocol name and
+  key value. Saved files appear in `/SUBGHZ/` on the SD card and are compatible with Flipper
+  Zero for replay or analysis.
+
+- **RAW waveform visualization** — press LEFT during recording to toggle a real-time pulse
+  waveform display (like Flipper's Read RAW). Shows a scrolling mark/space waveform at
+  500μs per column across the full 128px display width. The waveform renders marks (high)
+  above and spaces (low) below a center reference line. Includes a sample counter and
+  recording duration. Press BACK to return to the live/protocol view.
+
+- **Protocol-specific TX emulation** — press RIGHT in the signal detail view to transmit a
+  decoded static-code signal directly from the history, without needing a raw recording.
+  The encoder generates OOK PWM pulse durations from the decoded key + protocol timing
+  parameters and transmits at the signal's original capture frequency with 4 repeats.
+  Supported for 23 static-code protocols: Princeton, CAME 12-bit, Nice FLO, Linear 10-bit,
+  Holtek HT12E, Gate TX, SMC5326, Power Smart, Ansonic, Marantec, Firefly, Clemsa, Bett,
+  Megacode, Intertechno, Elro, Centurion, Marantec 24-bit, HAY21, Magellan, Intertechno V3,
+  Linear Delta3, and Roger. Rolling-code protocols (KeeLoq, Security+, etc.) are excluded
+  and show no "Send" button. Region/FCC restrictions are enforced before transmitting.
+
+### Changed
+
+- **Continuous signal decoding** — the decoder now runs continuously during recording,
+  capturing every decoded signal into the history buffer. Previously, decoding stopped
+  after the first successful protocol match.
+
+- **`SubGHz_Dec_Info_t` extended** with `serial_number`, `rolling_code`, and `button_id`
+  fields, copied from the decoder control struct after each successful protocol decode.
+
+- **`subghz_reset_data()` now clears extended fields** (`n32_serialnumber`,
+  `n32_rollingcode`, `n8_buttonid`) to prevent stale data from persisting across decodes.
+
 ## [0.9.0.2] - 2026-03-28
 
 ### Changed
