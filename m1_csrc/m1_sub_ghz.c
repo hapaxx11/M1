@@ -337,6 +337,7 @@ static uint8_t subghz_history_scroll_top = 0; /* Top visible index in list */
 static bool    subghz_history_view_active = false; /* true = showing history list */
 static bool    subghz_history_detail_active = false; /* true = showing signal detail */
 #define SUBGHZ_HISTORY_VISIBLE_ITEMS  5  /* Items visible on 128x64 display */
+#define SUBGHZ_HISTORY_ROW_HEIGHT     6  /* Pixels per row in history list */
 
 //************************** S T R U C T U R E S *******************************
 
@@ -1030,21 +1031,19 @@ static void subghz_record_gui_update(uint8_t param)
 					const SubGHz_History_Entry_t *e = subghz_history_get(&subghz_signal_history, idx);
 					if (!e) break;
 
-					uint8_t y = 20 + i * 6;  /* Tight spacing: 6px per row */
+					uint8_t y = 20 + i * SUBGHZ_HISTORY_ROW_HEIGHT;
 
 					/* Highlight selected item */
 					if (idx == subghz_history_sel)
 					{
-						u8g2_DrawBox(&m1_u8g2, 0, y, 128, 6);
+						u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, SUBGHZ_HISTORY_ROW_HEIGHT);
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 					}
 
-					/* Format: "Protocol 0xKEY" — compact to fit 128px */
+					/* Format: "Protocol 0xKEY" — compact to fit display */
 					const char *pname = protocol_text[e->info.protocol];
 					snprintf(status_str, sizeof(status_str), "%s 0x%lX",
 					         pname, (uint32_t)e->info.key);
-					/* Truncate to fit display width */
-					status_str[25] = '\0';
 					u8g2_DrawStr(&m1_u8g2, 2, y + 5, status_str);
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				}
