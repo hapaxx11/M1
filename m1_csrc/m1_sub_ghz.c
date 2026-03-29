@@ -506,6 +506,11 @@ static uint8_t sub_ghz_file_load(void);
 
 static bool sub_ghz_custom_freq_entry(void);
 
+/* RAW waveform & static TX helpers (defined further below, used in display/UI) */
+static void subghz_raw_waveform_push(uint16_t duration_us, uint8_t level);
+static void subghz_raw_waveform_draw(void);
+static bool subghz_protocol_is_static(uint16_t protocol);
+
 /* Flipper-matching feature functions */
 void sub_ghz_read(void);
 void sub_ghz_saved(void);
