@@ -25,6 +25,7 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 - **Tag Info** — manufacturer lookup, SAK decode, technology identification
 - **T2T Page Dump** — read and display Type 2 Tag memory pages
 - **Clone & Emulate** — copy and replay NFC tags
+- **PicoPass/iCLASS** — read, authenticate, and emulate HID iCLASS cards
 - **NFC Fuzzer** — protocol testing tool
 - **MIFARE Classic Crypto1** support
 

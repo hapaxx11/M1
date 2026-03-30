@@ -7,13 +7,81 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0.6] - 2026-03-30
 
 ### Changed
 
 - **Hapax-branded logos** — updated all three display logos (`menu_m1_icon_M1_logo_1` 128×64
   splash, `m1_logo_40x32` boot, `m1_logo_26x14` menu icon) with the Hapax H crossbar design,
   replacing the original V-notch mountain silhouette.
+  
+## [0.9.0.5] - 2026-03-28
+
+### Added
+
+- **PicoPass/iCLASS NFC support** — full read, write, and emulate support for HID
+  iCLASS / PicoPass cards over ISO15693 PHY. Includes DES cipher for key
+  diversification, poller for card reading with authentication, and listener for
+  card emulation via NFC-V transparent mode. Eight new source files in
+  `NFC/NFC_drv/legacy/picopass/`. Merged from bedge117/M1 (C3 fork).
+
+- **RTC/NTP time synchronization** — new `wifi_sync_rtc()` function syncs the
+  STM32 RTC via ESP32 SNTP (`pool.ntp.org`). New `m1_time_t` struct and
+  `m1_get_datetime()` / `m1_set_datetime()` / `m1_get_localtime()` API in
+  `m1_system.c/h`. Merged from C3 fork.
+
+- **AES-256-CBC encryption with custom keys** — new `m1_crypto_encrypt_with_key()`
+  and `m1_crypto_decrypt_with_key()` functions allow AES operations with
+  externally-provided 32-byte keys (e.g. PicoPass diversified keys). Existing
+  `m1_crypto_encrypt()` / `m1_crypto_decrypt()` refactored as thin wrappers.
+  Merged from C3 fork.
+
+- **BadUSB keyboard emulation API** — `badusb_send_key()`, `badusb_type_char()`,
+  `badusb_type_string()` made public. New `badusb_type_string_forced()` auto-
+  switches to HID mode, waits for USB enumeration, types the string, then returns.
+  Merged from C3 fork.
+
+- **Choice dialog UI** — new `m1_message_box_choice()` displays a multi-button
+  dialog with cursor-based selection (LEFT/RIGHT/UP/DOWN to navigate, OK to
+  select, BACK to cancel). Returns 1-based button index or 0 for cancel.
+  Merged from C3 fork.
+
+- **USB mode detection** — added `M1_USB_MODE_NORMAL`, `M1_USB_MODE_HID` defines
+  and `m1_usb_get_current_mode()` inline helper to `m1_usb_cdc_msc.h`.
+  Merged from C3 fork.
+
+- **App API expansions** — 25+ new exported symbols for external ELF apps:
+  RTC (datetime get/set, NTP sync), crypto (custom key encrypt/decrypt),
+  display (choice dialog), USB HID (mode switch, key send, string type).
+  `API_MAX_SYMBOLS` increased from 200 to 256. Merged from C3 fork.
+
+## [0.9.0.4] - 2026-03-28
+
+### Added
+
+- **NFC Cyborg Detector** — new NFC tool that turns on the NFC field continuously
+  so body implants with LED indicators light up when held near the M1's back. Press
+  BACK to stop. Accessible from the NFC Tools submenu.
+
+- **NFC Read NDEF** — new NFC tool that scans a T2T tag and parses its NDEF content
+  (URI and Text records), displaying up to 4 lines of decoded text on screen. Supports
+  both short-record (SR) and standard NDEF TLV framing.
+
+- **NFC Write URL** — new NFC tool that prompts for a URL via the virtual keyboard and
+  writes it as an NDEF URI record (https:// prefix) to an NTAG-compatible T2T tag,
+  starting at user-data page 4. Includes a confirmation screen before writing.
+
+- **IRSND RC6A protocol** — enabled RC6A infrared transmit support
+  (`IRSND_SUPPORT_RC6A_PROTOCOL` 0→1 in `Infrared/irsndconfig.h`).
+
+- **IRSND Samsung48 protocol** — enabled Samsung48 infrared transmit support
+  (`IRSND_SUPPORT_SAMSUNG48_PROTOCOL` 0→1 in `Infrared/irsndconfig.h`).
+
+### Changed
+
+- **NFC Tools menu expanded 5→8 items** — "Cyborg Detector", "Read NDEF", and
+  "Write URL" added after "Wipe Tag". Dispatch updated in both the UIView
+  (`nfc_utils_kp_handler` cases 5–7) and the standalone `nfc_tools()` loop.
 
 ## [0.9.0.3] - 2026-03-28
 
