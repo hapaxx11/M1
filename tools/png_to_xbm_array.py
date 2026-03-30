@@ -108,6 +108,9 @@ def cmd_img2c(args):
     w = args.width or img.size[0]
     h = args.height or img.size[1]
 
+    # Convert early to avoid decode errors with some 1-bit PNGs
+    img = img.convert('L')
+
     if img.size != (w, h):
         # Check if it's a scaled version
         if img.size[0] % w == 0 and img.size[1] % h == 0:
