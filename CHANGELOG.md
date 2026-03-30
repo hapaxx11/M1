@@ -7,6 +7,19 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Hapax-branded logos** — updated all three display logos (`menu_m1_icon_M1_logo_1` 128×64
+  splash, `m1_logo_40x32` boot, `m1_logo_26x14` menu icon) with the Hapax H crossbar design,
+  replacing the original V-notch mountain silhouette.
+
+### Added
+
+- **PNG↔XBM bitmap tool** — `tools/png_to_xbm_array.py` for bidirectional conversion between
+  scaled PNG files and u8g2 C byte arrays, enabling visual editing of display bitmaps.
+
 ## [0.9.0.3] - 2026-03-28
 
 ### Added
