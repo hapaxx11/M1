@@ -67,6 +67,9 @@ build_lfrfid.txt
 build_lfrfid2.txt
 appsplan.md
 
+# Generated PNG exports from bitmap tool
+M1_logo_*.png
+
 # Claude / AI assistant
 .claude/
 CLAUDE.md
