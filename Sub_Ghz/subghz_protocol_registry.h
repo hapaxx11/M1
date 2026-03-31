@@ -147,7 +147,8 @@ const char* subghz_protocol_get_name(uint16_t index);
 
 /**
  * DURATION_DIFF(a, b) — absolute difference between two durations.
- * Mirrors Flipper's DURATION_DIFF macro from lib/subghz/blocks/math.h
+ * Mirrors Flipper's DURATION_DIFF macro from lib/subghz/blocks/math.h.
+ * Requires <stdlib.h> for abs() — included at the top of this header.
  */
 #ifndef DURATION_DIFF
 #define DURATION_DIFF(a, b)  ((uint32_t)abs((int32_t)(a) - (int32_t)(b)))

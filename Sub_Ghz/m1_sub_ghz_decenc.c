@@ -30,35 +30,16 @@
 //************************** C O N S T A N T **********************************/
 
 /*
- * Legacy subghz_protocols_list[] — now derived from the protocol registry.
- *
- * Existing decoder functions access timing via subghz_protocols_list[p],
- * so this compatibility accessor converts from the registry's SubGhzBlockConst
- * to the old SubGHz_protocol_t on the fly.
- *
- * For new code, prefer subghz_protocol_registry[p].timing directly.
- */
-static SubGHz_protocol_t _legacy_protocol_buf;
-
-const SubGHz_protocol_t* subghz_protocols_list_get(uint16_t index)
-{
-    if (index >= subghz_protocol_registry_count) return NULL;
-    const SubGhzBlockConst *t = &subghz_protocol_registry[index].timing;
-    _legacy_protocol_buf.te_short     = t->te_short;
-    _legacy_protocol_buf.te_long      = t->te_long;
-    _legacy_protocol_buf.te_tolerance = t->te_tolerance_pct;
-    _legacy_protocol_buf.preamble_bits= t->preamble_bits;
-    _legacy_protocol_buf.data_bits    = t->min_count_bit_for_found;
-    return &_legacy_protocol_buf;
-}
-
-/*
  * Static legacy arrays — kept for backward compatibility with existing code
  * that indexes subghz_protocols_list[p] and protocol_text[p] directly.
  *
  * IMPORTANT: These arrays are now GENERATED from the master registry in
  * subghz_protocol_registry.c.  To add a new protocol, edit ONLY the
  * registry — these arrays are rebuilt at startup by subghz_decenc_init().
+ *
+ * NOTE: These arrays are populated once during subghz_decenc_init() and are
+ * only accessed from the Sub-GHz decode task (single-threaded).  They are NOT
+ * safe for concurrent access from ISRs or other RTOS tasks.
  */
 
 /* Max protocols we can hold in the legacy arrays (must be >= registry count) */
