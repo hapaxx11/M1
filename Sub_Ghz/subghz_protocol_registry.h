@@ -142,42 +142,24 @@ const SubGhzProtocolDef* subghz_protocol_get(uint16_t index);
 const char* subghz_protocol_get_name(uint16_t index);
 
 /*============================================================================*/
-/* Flipper-Compatible Helper Macros                                           */
+/* Flipper-Compatible Building Blocks                                         */
+/*                                                                            */
+/* The canonical implementations now live in dedicated headers that mirror     */
+/* Flipper's lib/subghz/blocks/ directory:                                    */
+/*                                                                            */
+/*   subghz_blocks_math.h    — DURATION_DIFF, bit_read/set/clear,            */
+/*                             CRC, parity, LFSR, reverse_key, get_parity     */
+/*   subghz_block_decoder.h  — SubGhzBlockDecoder struct, add_bit,            */
+/*                             add_to_128_bit, get_hash_data                  */
+/*   subghz_block_generic.h  — SubGhzBlockGeneric struct (decoded output)     */
+/*                                                                            */
+/* Include them here so any file that includes the registry header             */
+/* automatically gets access to all Flipper-compatible helpers.               */
 /*============================================================================*/
 
-/**
- * DURATION_DIFF(a, b) — absolute difference between two durations.
- * Mirrors Flipper's DURATION_DIFF macro from lib/subghz/blocks/math.h.
- * Requires <stdlib.h> for abs() — included at the top of this header.
- */
-#ifndef DURATION_DIFF
-#define DURATION_DIFF(a, b)  ((uint32_t)abs((int32_t)(a) - (int32_t)(b)))
-#endif
-
-/**
- * Bit accumulator helpers — mirror Flipper's SubGhzBlockDecoder helpers.
- * These operate on a (uint64_t *decode_data, uint16_t *decode_count_bit) pair.
- */
-static inline void subghz_protocol_blocks_add_bit(uint64_t *decode_data,
-                                                    uint16_t *decode_count_bit,
-                                                    uint8_t bit)
-{
-    *decode_data = (*decode_data << 1) | (bit & 1u);
-    (*decode_count_bit)++;
-}
-
-/**
- * Reverse key bits — mirrors Flipper's subghz_protocol_blocks_reverse_key().
- */
-static inline uint64_t subghz_protocol_blocks_reverse_key(uint64_t key, uint8_t count_bit)
-{
-    uint64_t result = 0;
-    for (uint8_t i = 0; i < count_bit; i++) {
-        result = (result << 1) | (key & 1u);
-        key >>= 1;
-    }
-    return result;
-}
+#include "subghz_blocks_math.h"
+#include "subghz_block_decoder.h"
+#include "subghz_block_generic.h"
 
 /*============================================================================*/
 /* Convenience Macro for Declaring a Protocol                                 */

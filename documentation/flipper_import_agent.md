@@ -123,10 +123,15 @@ are identical between the two platforms.
 |------|---------|
 | Sub-GHz decoder files | `Sub_Ghz/protocols/m1_<proto>_decode.c` and `.h` |
 | Sub-GHz protocol registry | `Sub_Ghz/subghz_protocol_registry.c` — master registry array (names, timing, decode fn ptr) |
-| Sub-GHz registry header | `Sub_Ghz/subghz_protocol_registry.h` — types, Flipper-compat macros (`DURATION_DIFF`, `subghz_protocol_blocks_add_bit`, etc.) |
+| Sub-GHz registry header | `Sub_Ghz/subghz_protocol_registry.h` — types, includes all block headers below |
+| Sub-GHz block decoder | `Sub_Ghz/subghz_block_decoder.h` — `SubGhzBlockDecoder` state machine (mirrors `lib/subghz/blocks/decoder.h`) |
+| Sub-GHz block generic | `Sub_Ghz/subghz_block_generic.{h,c}` — `SubGhzBlockGeneric` decoded output (mirrors `lib/subghz/blocks/generic.h`) |
+| Sub-GHz blocks math | `Sub_Ghz/subghz_blocks_math.h` — `DURATION_DIFF`, `bit_read/set/clear`, CRC, parity, LFSR (mirrors `lib/subghz/blocks/math.h`) |
 | Sub-GHz legacy dispatch | `Sub_Ghz/m1_sub_ghz_decenc.c` / `.h` — enum kept for index constants; legacy arrays populated from registry at init |
+| Existing bit/CRC utilities | `m1_csrc/bit_util.{h,c}` — underlying CRC/parity/LFSR implementations (wrapped by `subghz_blocks_math.h`) |
 | LF-RFID protocol files | `lfrfid/lfrfid_protocol_<proto>.c` and `.h` |
 | LF-RFID registry | `lfrfid/lfrfid_protocol.c` — `lfrfid_protocols[]` table |
+| LF-RFID bit library | `lfrfid/lfrfid_bit_lib.h` — bit manipulation for LF-RFID (same pattern as Sub-GHz blocks) |
 | Flipper file parsers | `m1_csrc/flipper_*.c` and `.h` |
 | Flipper integration API | `m1_csrc/m1_flipper_integration.c` / `.h` |
 | Build list | `cmake/m1_01/CMakeLists.txt` — `target_sources(...)` section |
@@ -348,6 +353,102 @@ threshold.  Continue monitoring this count as new LF-RFID protocols are ported.
 
 ---
 
+## Flipper-Compatible Building Blocks
+
+M1 provides a set of headers that mirror Flipper's `lib/subghz/blocks/` directory.
+These make porting a Flipper or Momentum decoder largely mechanical — ported code
+can use the same struct names, field names, and function names as the original.
+
+### Block Decoder (`subghz_block_decoder.h`)
+
+Maps to Flipper's `lib/subghz/blocks/decoder.h`.
+
+```c
+#include "subghz_block_decoder.h"
+
+// Identical to Flipper's struct — ported code compiles unchanged
+SubGhzBlockDecoder decoder = {0};
+
+// State machine steps (define your own enum per protocol)
+decoder.parser_step = MyProtoStepReset;
+
+// Save last pulse duration for two-pulse analysis
+decoder.te_last = duration;
+
+// Accumulate bits — exact same function name and semantics as Flipper
+subghz_protocol_blocks_add_bit(&decoder, bit_value);
+
+// Check completion
+if (decoder.decode_count_bit >= MIN_COUNT_BIT) {
+    uint64_t result = decoder.decode_data;
+    // success!
+}
+
+// For protocols >64 bits (e.g., Oregon V2, Bresser):
+uint64_t upper_bits = 0;
+subghz_protocol_blocks_add_to_128_bit(&decoder, bit_value, &upper_bits);
+```
+
+### Block Generic (`subghz_block_generic.h`)
+
+Maps to Flipper's `lib/subghz/blocks/generic.h`.
+
+```c
+#include "subghz_block_generic.h"
+
+// Decoded output — same field names as Flipper
+SubGhzBlockGeneric generic = {0};
+generic.data           = decoder.decode_data;
+generic.data_count_bit = decoder.decode_count_bit;
+generic.serial         = (uint32_t)(generic.data >> 8);
+generic.btn            = (uint8_t)(generic.data & 0xF);
+generic.cnt            = rolling_code;
+
+// Bridge to M1's global state (call at end of successful decode)
+subghz_block_generic_commit_to_m1(&generic, PROTOCOL_INDEX);
+```
+
+### Blocks Math (`subghz_blocks_math.h`)
+
+Maps to Flipper's `lib/subghz/blocks/math.h`.
+
+```c
+#include "subghz_blocks_math.h"
+
+// Timing comparison — branchless absolute difference
+if (DURATION_DIFF(duration, te_short) < te_delta) { ... }
+
+// Bit manipulation macros
+bit_read(value, 3);       // read bit 3
+bit_set(value, 5);        // set bit 5
+bit_clear(value, 5);      // clear bit 5
+
+// Key reversal
+uint64_t reversed = subghz_protocol_blocks_reverse_key(key, 24);
+
+// Parity
+uint8_t par = subghz_protocol_blocks_get_parity(key, 24);
+
+// CRC (delegates to M1's bit_util.h implementations)
+uint8_t crc = subghz_protocol_blocks_crc8(msg, len, 0x31, 0x00);
+```
+
+### Mapping: Flipper → M1
+
+| Flipper file | M1 equivalent | Notes |
+|-------------|---------------|-------|
+| `lib/subghz/blocks/decoder.h` | `Sub_Ghz/subghz_block_decoder.h` | All-inline header |
+| `lib/subghz/blocks/decoder.c` | (not needed — all inline) | |
+| `lib/subghz/blocks/generic.h` | `Sub_Ghz/subghz_block_generic.h` | + M1 bridge function |
+| `lib/subghz/blocks/generic.c` | `Sub_Ghz/subghz_block_generic.c` | Only the commit bridge |
+| `lib/subghz/blocks/math.h` | `Sub_Ghz/subghz_blocks_math.h` | Wraps `bit_util.h` |
+| `lib/subghz/blocks/math.c` | `m1_csrc/bit_util.c` | Already exists |
+| `lib/subghz/blocks/encoder.h` | (not yet ported) | Needed for TX encoding |
+| `lib/toolbox/manchester_decoder.h` | (not yet ported) | Planned for Phase 3 |
+| `lib/toolbox/bit_lib.h` | `lfrfid/lfrfid_bit_lib.h` | Exists for LF-RFID |
+
+---
+
 ## Step-by-Step Process
 
 ### Step 0 — Check Monstatek upstream first
@@ -413,22 +514,68 @@ Create `Sub_Ghz/protocols/m1_<proto>_decode.c` following this template:
 #include <string.h>
 #include <stdlib.h>
 #include "stm32h5xx_hal.h"
-#include "bit_util.h"
 #include "m1_sub_ghz_decenc.h"
-#include "subghz_protocol_registry.h"   /* DURATION_DIFF, add_bit helpers */
+#include "subghz_protocol_registry.h"   /* includes all block headers */
 #include "m1_log_debug.h"
 
 #define M1_LOGDB_TAG  "SUBGHZ_<PROTO>"
 
+/* ---- Flipper-compatible decoder state (optional — for complex protocols) ---- */
+
+/* Simple protocols can use direct bit-shifting on a local uint64_t.
+ * Complex protocols should use SubGhzBlockDecoder for Flipper-compatible
+ * state machine porting: */
+
+/*
+ * enum {
+ *     <Proto>DecoderStepReset = 0,
+ *     <Proto>DecoderStepSaveDuration,
+ *     <Proto>DecoderStepCheckDuration,
+ * };
+ */
+
 /* ---- decoder implementation ---- */
 uint8_t subghz_decode_<proto>(uint16_t p, uint16_t pulsecount)
 {
-    /* port Flipper decode logic here, using:
-     *   subghz_protocols_list[p].te_short / te_long / te_tolerance / data_bits
-     *   subghz_decenc_ctl.pulse_times[]
-     *   DURATION_DIFF(a, b) macro from registry header
-     *   subghz_protocol_blocks_add_bit(&data, &count, bit) helper
-     */
+    const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+    const uint16_t te_short = proto->timing.te_short;
+    const uint16_t te_long  = proto->timing.te_long;
+    const uint16_t te_delta = proto->timing.te_delta
+        ? proto->timing.te_delta
+        : (te_short * proto->timing.te_tolerance_pct / 100);
+    const uint16_t min_bits = proto->timing.min_count_bit_for_found;
+
+    /* Option A: Simple protocol — direct bit accumulation */
+    uint64_t code = 0;
+    uint16_t bits_count = 0;
+
+    for (uint16_t i = 0; i + 1 < pulsecount; i += 2) {
+        uint16_t t_hi = subghz_decenc_ctl.pulse_times[i];
+        uint16_t t_lo = subghz_decenc_ctl.pulse_times[i + 1];
+
+        code <<= 1;
+        if (DURATION_DIFF(t_hi, te_short) < te_delta &&
+            DURATION_DIFF(t_lo, te_long) < te_delta) {
+            /* bit 0 */
+        } else if (DURATION_DIFF(t_hi, te_long) < te_delta &&
+                   DURATION_DIFF(t_lo, te_short) < te_delta) {
+            code |= 1;  /* bit 1 */
+        } else {
+            break;
+        }
+        bits_count++;
+    }
+
+    if (bits_count < min_bits)
+        return 1;
+
+    /* Option B: Bridge to M1 global state via SubGhzBlockGeneric */
+    SubGhzBlockGeneric generic = {0};
+    generic.data           = code;
+    generic.data_count_bit = bits_count;
+    generic.serial         = (uint32_t)(code >> 4);  /* protocol-specific extraction */
+    generic.btn            = (uint8_t)(code & 0xF);
+    subghz_block_generic_commit_to_m1(&generic, p);
     return 0;
 }
 ```

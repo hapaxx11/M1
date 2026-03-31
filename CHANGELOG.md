@@ -33,6 +33,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reflect the registry-based workflow, added Momentum Firmware as a reference
   source, updated checklist.
 
+### Added
+
+- **Flipper-compatible decoder building blocks** — new header files that mirror
+  Flipper's `lib/subghz/blocks/` directory structure:
+  - `Sub_Ghz/subghz_block_decoder.h` — `SubGhzBlockDecoder` state machine struct
+    with `parser_step`, `te_last`, `decode_data`, `decode_count_bit` fields plus
+    `subghz_protocol_blocks_add_bit()`, `add_to_128_bit()`, and `get_hash_data()`
+    helpers.  Ported protocol decoders can use the exact same field names as
+    Flipper source.
+  - `Sub_Ghz/subghz_block_generic.h` — `SubGhzBlockGeneric` decoded output struct
+    (`data`, `serial`, `btn`, `cnt`, `data_count_bit`) with a
+    `subghz_block_generic_commit_to_m1()` bridge function that writes results
+    into M1's global state after a successful decode.
+  - `Sub_Ghz/subghz_blocks_math.h` — Flipper-named wrappers (`bit_read`,
+    `bit_set`, `bit_clear`, `bit_write`, `DURATION_DIFF`,
+    `subghz_protocol_blocks_crc8`, `_crc16`, `_parity8`, `_get_parity`,
+    `_lfsr_digest8`, etc.) that delegate to M1's existing `bit_util.h`
+    implementations.  Ported Flipper code calling these functions compiles
+    without renaming.
+
 ## [0.9.0.6] - 2026-03-30
 
 ### Changed
