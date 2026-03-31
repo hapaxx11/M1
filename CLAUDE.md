@@ -42,6 +42,65 @@
 - **XIAO/Pico test bench: build → flash → test is YOUR job** — When working on ESP32-C6 features with the XIAO + Pico AT bridge setup, YOU are responsible for the full cycle: build the firmware, flash it to the XIAO (via COM6), and run the test script (via COM8). Do NOT stop after building and tell the user to flash/test. Only ask the user for help when something is physically outside your control (hard reset, USB replug, putting Pico in boot mode, etc.).
 - **ESP32 XIAO flashing command**: `python -m esptool --chip esp32c6 --port COM6 --baud 460800 write_flash 0x0 build/factory/factory_ESP32C6-SPI-XIAO.bin` (from `D:\M1Projects\esp32-at-hid\`). After flashing, the XIAO auto-resets — wait 3-5s before testing.
 
+### Phase Checklist for Moderate-to-Complex Changes
+
+When a code change meets or exceeds **moderate complexity** (multiple files, multi-step logic,
+new features, refactors, protocol additions, or anything requiring more than a handful of
+small edits), the agent **MUST** create and maintain a temporary phase-tracking checklist file.
+
+#### What is the checklist file?
+
+- **Location**: `PHASE_CHECKLIST.md` in the repository root.
+- **Purpose**: Document every implementation phase, track completion, and record commit/PR
+  metadata so progress is never lost mid-session.
+- **Lifetime**: Committed with each phase so progress is preserved across sessions. It is
+  **removed from the branch before the final PR is created** and **MUST NOT appear** in the PR.
+
+#### Checklist file format
+
+```markdown
+# Phase Checklist — <short task title>
+
+## PR Metadata
+- **PR Title**: <concise title for the pull request>
+- **PR Description**: <1–3 sentence summary of the overall change for the PR body>
+
+## Phases
+
+### Phase 1 — <phase name>
+- **Description**: <what this phase accomplishes>
+- **Status**: ✅ Complete | 🔲 Not started | 🔄 In progress
+- **Commit**: `<short commit message used when this phase was committed>`
+
+### Phase 2 — <phase name>
+- **Description**: <what this phase accomplishes>
+- **Status**: 🔲 Not started
+- **Commit**: _(pending)_
+
+<!-- Add as many phases as needed -->
+```
+
+#### Rules
+
+1. **Create `PHASE_CHECKLIST.md` before writing any code** — plan all phases up front.
+2. **Each phase = one commit.** After completing a phase, stage the relevant source files
+   **and** the updated `PHASE_CHECKLIST.md`, then commit with the message documented in the
+   checklist. Update the checklist status to ✅ and record the commit message.
+3. **Commit `PHASE_CHECKLIST.md` with every phase commit.** This preserves progress across
+   sessions so work is never lost if a session ends unexpectedly. The checklist travels with
+   the branch until the PR is finalized.
+4. **Update the checklist after every commit** — mark the completed phase, note the commit
+   message, and move to the next phase.
+5. **PR metadata must be maintained** — keep the PR Title and PR Description in the checklist
+   current as the work evolves. When it is time to create the PR, use these values.
+6. **Remove `PHASE_CHECKLIST.md` before creating the PR.** Delete the file, stage the
+   deletion (`git rm PHASE_CHECKLIST.md`), and commit with a message such as
+   `Remove phase checklist before PR`. Verify it does not appear in `git status` or in the
+   diff against the base branch. The PR must not contain this file.
+7. **When to skip**: Trivial changes (typo fixes, single-line edits, config tweaks) do NOT
+   require a checklist. Use your judgment — if the change can be fully described in one commit
+   message, skip the checklist.
+
 ---
 
 ## Deploy Locations

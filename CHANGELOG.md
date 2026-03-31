@@ -122,6 +122,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hapax-branded logos** — updated all three display logos (`menu_m1_icon_M1_logo_1` 128×64
   splash, `m1_logo_40x32` boot, `m1_logo_26x14` menu icon) with the Hapax H crossbar design,
   replacing the original V-notch mountain silhouette.
+
+## [0.9.0.7] - 2026-03-31
+
+### Changed
+
+- **Documentation: Flipper import agent — Flipper-weighted pattern adoption policy** — added a
+  Pattern Adoption Policy section to `documentation/flipper_import_agent.md` that gives Flipper
+  Zero/One and community forks (Momentum, Unleashed) higher weight than Monstatek/M1 patterns
+  for protocol decoders, struct layouts, naming, and HAL decisions while the Monstatek stock
+  firmware remains at version ≤ 1.0.0.0.  Added a Monstatek Pattern Deviation Log table to
+  track all cases where Flipper patterns were adopted over divergent Monstatek patterns, for
+  later reconciliation once Monstatek matures.  Updated Step 0 and the import checklist to
+  reflect the new policy.
   
 ## [0.9.0.5] - 2026-03-28
 

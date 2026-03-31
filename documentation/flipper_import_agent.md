@@ -26,6 +26,49 @@ This skill keeps M1 in sync with those additions by:
 
 ---
 
+## Pattern Adoption Policy
+
+When porting protocols or implementing new features, agents must decide which coding
+patterns and architectural conventions to follow.  Two primary references exist:
+
+1. **Monstatek/M1** — the upstream stock firmware from which this fork descends.
+2. **Flipper Zero / Flipper One and community forks** (Momentum, Unleashed, etc.) — the
+   ecosystem whose file formats, protocol names, and decoder algorithms M1 tracks.
+
+### Current weighting: Flipper-first (until Monstatek > 1.0.0.0)
+
+As of this writing, the Monstatek stock firmware has not yet released a version greater
+than **1.0.0.0**.  Until that milestone is reached, the following weighting applies:
+
+| Decision area | Preferred source | Rationale |
+|---------------|-----------------|-----------|
+| Protocol decoder algorithm & timing | **Flipper / forks** | Flipper's protocol implementations are battle-tested across millions of devices and continuously refined by a large community. |
+| Struct layout, field names, enums | **Flipper / forks** | Maximises `.sub` / `.rfid` / `.nfc` / `.ir` interoperability and simplifies future protocol merges. |
+| Naming conventions (`SUBGHZ_PROTOCOL_*_NAME`, file names) | **Flipper / forks** | File-format compatibility is the top priority. |
+| HAL / driver patterns (SPI, UART, GPIO, power) | **Flipper / forks** (consult `documentation/furi_hal_reference/`) | The Furi HAL is a proven abstraction for the same peripherals M1 uses. |
+| Build system, CMake structure, FreeRTOS integration | **Monstatek/M1** | M1's build system is already established and functional. |
+| Flash layout, boot bank, CRC metadata | **Monstatek/M1** | Hardware-specific; Monstatek's implementation is validated on real M1 boards. |
+| UI framework, display rendering, keypad handling | **Monstatek/M1** | M1's UIView framework differs fundamentally from Flipper's ViewPort model. |
+
+When a Flipper pattern conflicts with a Monstatek pattern in the protocol/decoder/HAL
+space, **adopt the Flipper pattern** and log the deviation in the
+[Monstatek Pattern Deviation Log](#monstatek-pattern-deviation-log) below.
+
+### When Monstatek exceeds 1.0.0.0
+
+Once Monstatek ships a release with a version number **greater than 1.0.0.0**, re-evaluate
+the weighting.  At that point Monstatek will have made substantial architectural progress
+and its patterns should carry equal or greater weight.  An agent encountering this
+condition should:
+
+1. Check the latest Monstatek release tag.
+2. If the version is > 1.0.0.0, treat Monstatek and Flipper patterns as **equally weighted**,
+   preferring whichever produces cleaner integration with the existing M1 codebase.
+3. Review the deviation log below and resolve any entries where Monstatek's newer patterns
+   are now preferable.
+
+---
+
 ## Repository Locations
 
 ### Monstatek/M1 (firmware origin — do NOT push)
@@ -558,7 +601,7 @@ bool is_rst = level_duration_is_reset(rst);           // true
 
 ## Step-by-Step Process
 
-### Step 0 — Check Monstatek upstream first
+### Step 0 — Check Monstatek upstream and assess pattern source
 
 Before doing any Flipper porting work, check whether Monstatek has already
 shipped the protocol in a newer version of the official firmware:
@@ -573,15 +616,26 @@ shipped the protocol in a newer version of the official firmware:
    git diff HEAD monstatek/main -- Sub_Ghz/protocols/ lfrfid/ m1_csrc/
    ```
 3. If Monstatek already contains the protocol:
-   - Cherry-pick or merge the relevant commits from `monstatek/main`.
+   - Review Monstatek's implementation **and** the corresponding Flipper source.
+   - If the Monstatek implementation closely follows Flipper patterns, cherry-pick
+     or merge the relevant commits from `monstatek/main`.
+   - If the Monstatek implementation diverges from Flipper patterns (different struct
+     layout, naming, algorithm structure), **prefer porting from Flipper directly**
+     while Monstatek remains at version ≤ 1.0.0.0 (see
+     [Pattern Adoption Policy](#pattern-adoption-policy)).  Log the divergence in
+     the [Monstatek Pattern Deviation Log](#monstatek-pattern-deviation-log).
    - Adjust for any Hapax-specific additions (version fields, build-date injection,
      RPC extensions) before committing.
-   - **Skip Steps 1–4 below** — the Flipper porting work is already done.
-4. If Monstatek does **not** yet contain the protocol, continue with Step 1.
+4. If Monstatek does **not** yet contain the protocol, continue with Step 1 and
+   port from Flipper (or a community fork such as Momentum / Unleashed).
 
-> **Why this matters:** Monstatek's code is already adapted to M1's architecture
-> and has been tested on real hardware.  Pulling from there is faster and safer
-> than re-porting from Flipper independently.
+> **Why Flipper-first while Monstatek is pre-1.0:** Flipper's protocol
+> implementations are maintained by a large community, continuously tested across
+> millions of devices, and define the `.sub` / `.rfid` / `.nfc` / `.ir` file
+> formats that M1 must stay compatible with.  Until Monstatek ships a release
+> above 1.0.0.0, Flipper patterns carry more weight for protocol and decoder
+> decisions.  Deviations from Monstatek patterns are still tracked so they can be
+> reconciled once Monstatek matures.
 
 ### Step 1 — Identify new protocols
 
@@ -906,10 +960,39 @@ new NFC device type, add handling in `flipper_nfc_load()`.
 
 ---
 
+## Monstatek Pattern Deviation Log
+
+This section tracks every case where a Flipper/fork pattern was adopted **instead of**
+the corresponding Monstatek/M1 pattern.  Each entry documents what was done differently
+and why, so that deviations can be reviewed and potentially reconciled once Monstatek
+ships a release above 1.0.0.0.
+
+> **Agent instruction:** Whenever you adopt a Flipper pattern over a conflicting Monstatek
+> pattern, add a row to the table below **in the same commit**.  Be specific about which
+> files are affected so a future agent can locate and reconcile the deviation.
+
+| Date | Area | Flipper pattern adopted | Monstatek pattern diverged from | Affected M1 files | Rationale | Resolution status |
+|------|------|------------------------|--------------------------------|-------------------|-----------|-------------------|
+| 2025-03 | Sub-GHz decoder structs | `SubGhzBlockDecoder` / `SubGhzBlockGeneric` with `commit_to_m1()` bridge | Direct writes to global `subghz_decenc_ctl` fields inside decode loops | `Sub_Ghz/subghz_block_decoder.h`, `subghz_block_generic.h/.c`, all `m1_*_decode.c` files using new helpers | Flipper's struct-based approach isolates decode state, prevents partial-decode globals corruption, and matches upstream Flipper protocol ports 1:1 | 🔲 Unresolved — review when Monstatek > 1.0.0.0 |
+| 2025-03 | Sub-GHz protocol registry | `SubGhzProtocolDef` table with `SubGhzBlockConst` timing, type/flag/filter enums | Parallel `subghz_protocols_list[]` + `protocol_text[]` + switch-case dispatch | `Sub_Ghz/subghz_protocol_registry.h/.c`, `Sub_Ghz/m1_sub_ghz_decenc.c` (legacy arrays populated from registry) | Single-source-of-truth registry eliminates index sync bugs; Flipper protocol metadata (type, flags, filter) enables `.sub` KEY interop and static-TX gating | 🔲 Unresolved — review when Monstatek > 1.0.0.0 |
+| 2025-03 | Sub-GHz helper macros | `DURATION_DIFF`, `subghz_protocol_blocks_add_bit`, `bit_read`/`bit_set`/`bit_clear` from Flipper's `subghz_blocks_math.h` | Ad-hoc inline comparisons and manual bit manipulation | `Sub_Ghz/subghz_blocks_math.h`, protocol decoders using these helpers | Consistent helper API across all protocol decoders; matches Flipper source making ports trivial | 🔲 Unresolved — review when Monstatek > 1.0.0.0 |
+| 2025-03 | Sub-GHz Manchester codec | Flipper's `manchester_advance()` / `manchester_encoder_advance()` inline functions | No Manchester abstraction; each protocol hand-rolled Manchester logic | `Sub_Ghz/subghz_manchester_decoder.h`, `subghz_manchester_encoder.h` | Eliminates duplicated Manchester code across Somfy Telis, Somfy Keytis, Marantec, FAAC SLH, Revers RB2 | 🔲 Unresolved — review when Monstatek > 1.0.0.0 |
+
+### Deviation entry template
+
+When adding a new deviation, copy this row:
+
+```markdown
+| YYYY-MM | <area> | <what Flipper pattern was adopted> | <what Monstatek does differently> | <list of M1 files affected> | <why Flipper was preferred> | 🔲 Unresolved — review when Monstatek > 1.0.0.0 |
+```
+
+---
+
 ## Checklist for Each Import
 
 - [ ] Monstatek/M1 upstream checked for the protocol (fetch `monstatek/main`)
-- [ ] If Monstatek has it: cherry-pick/merge applied and Hapax adjustments made
+- [ ] If Monstatek has it: implementation compared against Flipper; Flipper pattern adopted if divergent (see [Pattern Adoption Policy](#pattern-adoption-policy))
+- [ ] If Flipper pattern adopted over Monstatek: deviation logged in [Monstatek Pattern Deviation Log](#monstatek-pattern-deviation-log)
 - [ ] If Monstatek does NOT have it: new Flipper protocol identified (name, file, timing constants)
 - [ ] `m1_<proto>_decode.c` created in `Sub_Ghz/protocols/`
 - [ ] Entry added to `subghz_protocol_registry[]` in `Sub_Ghz/subghz_protocol_registry.c` (name, timing, type, decode fn)
