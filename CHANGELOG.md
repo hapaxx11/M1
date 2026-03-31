@@ -7,6 +7,32 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.7] - 2026-03-31
+
+### Changed
+
+- **Sub-GHz protocol registry refactor** — replaced the manually-synchronised
+  quartet of enum + `subghz_protocols_list[]` + `protocol_text[]` + switch-case
+  dispatch with a single table-driven `SubGhzProtocolDef` registry
+  (`Sub_Ghz/subghz_protocol_registry.{h,c}`).  Adding a new Sub-GHz protocol now
+  requires only: (1) write the decode function, (2) add one entry to the registry
+  array, (3) add the `.c` to CMakeLists.  No more switch-case edits or
+  three-way manual sync.
+
+- **Flipper/Momentum compatibility macros** — added `DURATION_DIFF()`,
+  `subghz_protocol_blocks_add_bit()`, and `subghz_protocol_blocks_reverse_key()`
+  helpers in the registry header so ported Flipper decode logic compiles with
+  minimal changes.
+
+- **Protocol metadata** — each protocol now carries Flipper-compatible type
+  (`SubGhzProtocolTypeStatic` / `Dynamic` / `Weather` / `TPMS`), capability
+  flags (frequency bands, AM/FM, save/send), and category filter alongside its
+  timing parameters and name.
+
+- **Documentation** — updated `flipper_import_agent.md` porting instructions to
+  reflect the registry-based workflow, added Momentum Firmware as a reference
+  source, updated checklist.
+
 ## [0.9.0.6] - 2026-03-30
 
 ### Changed
