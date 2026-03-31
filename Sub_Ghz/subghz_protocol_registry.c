@@ -120,9 +120,31 @@ extern uint8_t subghz_decode_pocsag(uint16_t, uint16_t);
 extern uint8_t subghz_decode_tpms_generic(uint16_t, uint16_t);
 extern uint8_t subghz_decode_pcsg_generic(uint16_t, uint16_t);
 
+/* Momentum Phase 3: Weather/Sensor protocols */
+extern uint8_t subghz_decode_auriol_ahfl(uint16_t, uint16_t);
+extern uint8_t subghz_decode_auriol_hg0601a(uint16_t, uint16_t);
+extern uint8_t subghz_decode_gt_wt02(uint16_t, uint16_t);
+extern uint8_t subghz_decode_kedsum_th(uint16_t, uint16_t);
+extern uint8_t subghz_decode_solight_te44(uint16_t, uint16_t);
+extern uint8_t subghz_decode_thermopro_tx4(uint16_t, uint16_t);
+extern uint8_t subghz_decode_vauno_en8822c(uint16_t, uint16_t);
+extern uint8_t subghz_decode_acurite_606tx(uint16_t, uint16_t);
+extern uint8_t subghz_decode_acurite_609txc(uint16_t, uint16_t);
+extern uint8_t subghz_decode_emos_e601x(uint16_t, uint16_t);
+extern uint8_t subghz_decode_lacrosse_tx141thbv2(uint16_t, uint16_t);
+extern uint8_t subghz_decode_wendox_w6726(uint16_t, uint16_t);
+
+/* Momentum Phase 4: Remote/Gate/Automation protocols */
+extern uint8_t subghz_decode_ditec_gol4(uint16_t, uint16_t);
+extern uint8_t subghz_decode_elplast(uint16_t, uint16_t);
+extern uint8_t subghz_decode_honeywell_wdb(uint16_t, uint16_t);
+extern uint8_t subghz_decode_keyfinder(uint16_t, uint16_t);
+extern uint8_t subghz_decode_x10(uint16_t, uint16_t);
+
 /* Generic decoders (used as delegates by simple protocols) */
 extern uint8_t subghz_decode_generic_pwm(uint16_t, uint16_t);
 extern uint8_t subghz_decode_generic_manchester(uint16_t, uint16_t);
+extern uint8_t subghz_decode_generic_ppm(uint16_t, uint16_t);
 
 /*============================================================================*/
 /* Shorthand flags for common protocol profiles                                */
@@ -755,6 +777,150 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .timing = { .te_short=640, .te_long=1280, .te_tolerance_pct=25, .min_count_bit_for_found=80 },
         .decode = subghz_decode_somfy_keytis,
     },
+
+    /* ── Momentum Phase 3: Weather/Sensor protocols ────────────────────── */
+
+    [AURIOL_AHFL] = {
+        .name   = "Auriol_AHFL",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=2000, .te_delta=150, .min_count_bit_for_found=42 },
+        .decode = subghz_decode_auriol_ahfl,
+    },
+    [AURIOL_HG0601A] = {
+        .name   = "Auriol_HG0601A",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=2000, .te_delta=150, .min_count_bit_for_found=37 },
+        .decode = subghz_decode_auriol_hg0601a,
+    },
+    [GT_WT02] = {
+        .name   = "GT-WT02",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=2000, .te_delta=150, .min_count_bit_for_found=37 },
+        .decode = subghz_decode_gt_wt02,
+    },
+    [KEDSUM_TH] = {
+        .name   = "Kedsum-TH",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=2000, .te_delta=150, .min_count_bit_for_found=42 },
+        .decode = subghz_decode_kedsum_th,
+    },
+    [SOLIGHT_TE44] = {
+        .name   = "Solight_TE44",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=490, .te_long=1960, .te_delta=150, .min_count_bit_for_found=36 },
+        .decode = subghz_decode_solight_te44,
+    },
+    [THERMOPRO_TX4] = {
+        .name   = "ThermoPro TX-4",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=2000, .te_delta=150, .min_count_bit_for_found=37 },
+        .decode = subghz_decode_thermopro_tx4,
+    },
+    [VAUNO_EN8822C] = {
+        .name   = "Vauno_EN8822C",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=1940, .te_delta=150, .min_count_bit_for_found=42 },
+        .decode = subghz_decode_vauno_en8822c,
+    },
+    [ACURITE_606TX] = {
+        .name   = "Acurite-606TX",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=2000, .te_delta=150, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_acurite_606tx,
+    },
+    [ACURITE_609TXC] = {
+        .name   = "Acurite-609TXC",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=1000, .te_delta=150, .min_count_bit_for_found=40 },
+        .decode = subghz_decode_acurite_609txc,
+    },
+    [EMOS_E601X] = {
+        .name   = "Emos_E601x",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=260, .te_long=800, .te_delta=100, .min_count_bit_for_found=24 },
+        .decode = subghz_decode_emos_e601x,
+    },
+    [LACROSSE_TX141THBV2] = {
+        .name   = "LaCrosse_TX141THBv2",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=208, .te_long=417, .te_delta=120, .min_count_bit_for_found=40 },
+        .decode = subghz_decode_lacrosse_tx141thbv2,
+    },
+    [WENDOX_W6726] = {
+        .name   = "Wendox_W6726",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=1955, .te_long=5865, .te_delta=300, .min_count_bit_for_found=29 },
+        .decode = subghz_decode_wendox_w6726,
+    },
+
+    /* ── Momentum Phase 4: Remote/Gate/Automation protocols ────────────── */
+
+    [DITEC_GOL4] = {
+        .name   = "DITEC_GOL4",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=400, .te_long=1100, .te_delta=200, .min_count_bit_for_found=54 },
+        .decode = subghz_decode_ditec_gol4,
+    },
+    [ELPLAST] = {
+        .name   = "Elplast",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = F_STATIC_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=230, .te_long=1550, .te_delta=160, .min_count_bit_for_found=18 },
+        .decode = subghz_decode_elplast,
+    },
+    [HONEYWELL_WDB] = {
+        .name   = "Honeywell_WDB",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = F_STATIC_MULTI,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=160, .te_long=320, .te_delta=60, .min_count_bit_for_found=48 },
+        .decode = subghz_decode_honeywell_wdb,
+    },
+    [KEYFINDER] = {
+        .name   = "KeyFinder",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = F_STATIC_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=400, .te_long=1200, .te_delta=150, .min_count_bit_for_found=24 },
+        .decode = subghz_decode_keyfinder,
+    },
+    [X10] = {
+        .name   = "X10",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_Decodable,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=600, .te_long=1800, .te_delta=100, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_x10,
+    },
+
     /* --- Specialty protocols --- */
     [TREADMILL37] = {
         .name   = "Treadmill37",
