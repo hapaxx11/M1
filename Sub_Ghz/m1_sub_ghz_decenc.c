@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #include "stm32h5xx_hal.h"
 #include <m1_sub_ghz_decenc.h>
+#include "subghz_protocol_registry.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "si446x_cmd.h"
@@ -28,180 +29,60 @@
 
 //************************** C O N S T A N T **********************************/
 
-const SubGHz_protocol_t subghz_protocols_list[] =
+/*
+ * Legacy subghz_protocols_list[] — now derived from the protocol registry.
+ *
+ * Existing decoder functions access timing via subghz_protocols_list[p],
+ * so this compatibility accessor converts from the registry's SubGhzBlockConst
+ * to the old SubGHz_protocol_t on the fly.
+ *
+ * For new code, prefer subghz_protocol_registry[p].timing directly.
+ */
+static SubGHz_protocol_t _legacy_protocol_buf;
+
+const SubGHz_protocol_t* subghz_protocols_list_get(uint16_t index)
 {
-	/*{160, 470, PACKET_PULSE_TIME_TOLERANCE20, 0, 24}, // Princeton: bit 0 |^|___, bit 1 |^^^|_*/
-	{370, 1140, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},  // Princeton: bit 0 |^|___, bit 1 |^^^|_
-	{250, 500, PACKET_PULSE_TIME_TOLERANCE20, 16, 46},  // Security+ 2.0
-	{320, 640, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},   // CAME 12-bit
-	{700, 1400, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Nice FLO 12-bit
-	{500, 1500, PACKET_PULSE_TIME_TOLERANCE25, 0, 10},  // Linear 10-bit
-	{340, 1020, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Holtek HT12E
-	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 66},   // KeeLoq
-	{488, 976, PACKET_PULSE_TIME_TOLERANCE25, 24, 64},  // Oregon Scientific v2.1 (Manchester)
-	{200, 600, PACKET_PULSE_TIME_TOLERANCE25, 4, 56},   // Acurite
-	{550, 1100, PACKET_PULSE_TIME_TOLERANCE25, 0, 44},  // LaCrosse TX
-	{255, 510, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},   // FAAC SLH (Manchester)
-	{500, 1000, PACKET_PULSE_TIME_TOLERANCE20, 0, 44},  // Hormann BiSecur
-	{800, 1600, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Marantec
-	{640, 1280, PACKET_PULSE_TIME_TOLERANCE25, 4, 56},  // Somfy Telis (Manchester)
-	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},   // Star Line (KeeLoq variant)
-	{350, 700, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},   // Gate TX
-	{300, 900, PACKET_PULSE_TIME_TOLERANCE25, 0, 25},   // SMC5326
-	{225, 675, PACKET_PULSE_TIME_TOLERANCE25, 0, 16},   // Power Smart
-	{450, 1350, PACKET_PULSE_TIME_TOLERANCE20, 0, 48},  // iDo
-	{555, 1110, PACKET_PULSE_TIME_TOLERANCE20, 0, 12},  // Ansonic
-	{500, 1500, PACKET_PULSE_TIME_TOLERANCE25, 4, 40},  // Infactory (weather)
-	{120, 240, PACKET_PULSE_TIME_TOLERANCE25, 8, 40},   // Schrader TPMS (Manchester)
-	/* --- New protocols --- */
-	/* Security+ 1.0: te_short=500us, ternary (3-symbol) encoding.
-	 * Each sub-packet = 1 header + 20 data symbols = 21 symbol pairs = 42 pulses.
-	 * Two sub-packets required to reconstruct rolling+fixed code.
-	 * Matches Flipper Zero SUBGHZ_PROTOCOL_SECPLUS_V1_NAME = "Security+ 1.0"
-	 * Reference: https://github.com/argilo/secplus */
-	{500, 1500, PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Security+ 1.0 (was {1000,3000} generic PWM)
-	{385, 1155, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},  // Clemsa
-	{450, 900, PACKET_PULSE_TIME_TOLERANCE20, 0, 37},   // Doitrand
-	{340, 680, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},   // BETT
-	{330, 990, PACKET_PULSE_TIME_TOLERANCE20, 0, 36},   // Nero Sketch/Radio
-	{300, 900, PACKET_PULSE_TIME_TOLERANCE20, 0, 10},   // FireFly
-	{260, 520, PACKET_PULSE_TIME_TOLERANCE20, 0, 54},   // CAME Twee
-	{200, 400, PACKET_PULSE_TIME_TOLERANCE20, 0, 62},   // CAME Atomo (rolling code)
-	{500, 1000, PACKET_PULSE_TIME_TOLERANCE20, 0, 52},  // Nice Flor S
-	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 72},   // Alutech AT-4N
-	{336, 672, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},   // Centurion
-	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 60},  // Kinggates Stylo 4K
-	{1000, 2000, PACKET_PULSE_TIME_TOLERANCE20, 0, 24}, // Megacode
-	{500, 1500, PACKET_PULSE_TIME_TOLERANCE20, 0, 36},  // Mastercode
-	{2000, 6000, PACKET_PULSE_TIME_TOLERANCE25, 0, 7},  // Chamberlain 7-bit
-	{2000, 6000, PACKET_PULSE_TIME_TOLERANCE25, 0, 8},  // Chamberlain 8-bit
-	{2000, 6000, PACKET_PULSE_TIME_TOLERANCE25, 0, 9},  // Chamberlain 9-bit
-	{1000, 3000, PACKET_PULSE_TIME_TOLERANCE25, 0, 10}, // Liftmaster 10-bit
-	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Dooya
-	{250, 750, PACKET_PULSE_TIME_TOLERANCE25, 0, 48},   // Honeywell
-	{250, 750, PACKET_PULSE_TIME_TOLERANCE25, 0, 32},   // Intertechno
-	{330, 990, PACKET_PULSE_TIME_TOLERANCE25, 0, 32},   // Elro
-	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 40},  // Ambient Weather (Manchester)
-	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 40},   // Bresser 3ch
-	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 56},   // Bresser 5in1
-	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 104},  // Bresser 6in1
-	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 48},  // TFA Dostmann
-	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 36},  // Nexus-TH
-	{250, 500, PACKET_PULSE_TIME_TOLERANCE25, 0, 37},   // ThermoPro TX-2
-	{500, 1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 40},  // GT-WT03
-	{400, 800, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},   // Scher-Khan Magicar
-	{400, 1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 64},  // Scher-Khan Logicar
-	{250, 750, PACKET_PULSE_TIME_TOLERANCE20, 0, 56},   // Toyota
-	{100, 300, PACKET_PULSE_TIME_TOLERANCE30, 0, 64},   // BinRAW (generic fallback)
-	/* --- Flipper compatibility protocols --- */
-	{400,  800,  PACKET_PULSE_TIME_TOLERANCE20, 0, 36},  // Dickert_MAHS
-	{350,  750,  PACKET_PULSE_TIME_TOLERANCE20, 0, 32},  // Feron
-	{500,  1200, PACKET_PULSE_TIME_TOLERANCE20, 0, 34},  // GangQi
-	{300,  700,  PACKET_PULSE_TIME_TOLERANCE20, 0, 21},  // Hay21
-	{200,  1000, PACKET_PULSE_TIME_TOLERANCE20, 0, 42},  // Hollarm
-	{430,  870,  PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Holtek
-	{275,  1375, PACKET_PULSE_TIME_TOLERANCE20, 0, 32},  // Intertechno V3
-	{250,  500,  PACKET_PULSE_TIME_TOLERANCE20, 0, 61},  // KIA Seed
-	{375,  1125, PACKET_PULSE_TIME_TOLERANCE20, 0, 18},  // Legrand
-	{500,  2000, PACKET_PULSE_TIME_TOLERANCE20, 0, 8},   // LinearDelta3
-	{200,  400,  PACKET_PULSE_TIME_TOLERANCE20, 0, 32},  // Magellan
-	{800,  1600, PACKET_PULSE_TIME_TOLERANCE20, 0, 24},  // Marantec24
-	{330,  660,  PACKET_PULSE_TIME_TOLERANCE20, 0, 40},  // Nero Sketch
-	{427,  853,  PACKET_PULSE_TIME_TOLERANCE20, 0, 52},  // Phoenix V2
-	{250,  500,  PACKET_PULSE_TIME_TOLERANCE25, 0, 64},  // Revers_RB2
-	{500,  1000, PACKET_PULSE_TIME_TOLERANCE25, 0, 28},  // Roger
-	{640,  1280, PACKET_PULSE_TIME_TOLERANCE25, 0, 80},  // Somfy Keytis
-};
+    if (index >= subghz_protocol_registry_count) return NULL;
+    const SubGhzBlockConst *t = &subghz_protocol_registry[index].timing;
+    _legacy_protocol_buf.te_short     = t->te_short;
+    _legacy_protocol_buf.te_long      = t->te_long;
+    _legacy_protocol_buf.te_tolerance = t->te_tolerance_pct;
+    _legacy_protocol_buf.preamble_bits= t->preamble_bits;
+    _legacy_protocol_buf.data_bits    = t->min_count_bit_for_found;
+    return &_legacy_protocol_buf;
+}
 
 /*
- * Protocol name strings MUST match Flipper Zero's SUBGHZ_PROTOCOL_*_NAME constants
- * (defined in lib/subghz/protocols/<proto>.h) so that .sub files saved on either
- * device are readable on the other without conversion.
+ * Static legacy arrays — kept for backward compatibility with existing code
+ * that indexes subghz_protocols_list[p] and protocol_text[p] directly.
  *
- * If no Flipper equivalent exists the name is kept as-is; see comments below.
+ * IMPORTANT: These arrays are now GENERATED from the master registry in
+ * subghz_protocol_registry.c.  To add a new protocol, edit ONLY the
+ * registry — these arrays are rebuilt at startup by subghz_decenc_init().
  */
-const char *protocol_text[] =
-{
-	"Princeton",          /* SUBGHZ_PROTOCOL_PRINCETON_NAME        */
-	"Security+ 2.0",     /* SUBGHZ_PROTOCOL_SECPLUS_V2_NAME       */
-	"CAME",              /* SUBGHZ_PROTOCOL_CAME_NAME             */
-	"Nice FLO",          /* SUBGHZ_PROTOCOL_NICE_FLO_NAME         */
-	"Linear",            /* SUBGHZ_PROTOCOL_LINEAR_NAME           */
-	"Holtek_HT12X",      /* SUBGHZ_PROTOCOL_HOLTEK_HT12X_NAME     (was "Holtek") */
-	"KeeLoq",            /* SUBGHZ_PROTOCOL_KEELOQ_NAME           */
-	"Oregon v2",         /* no Flipper lib/subghz equivalent       */
-	"Acurite",           /* no Flipper lib/subghz equivalent       */
-	"LaCrosse TX",       /* no Flipper lib/subghz equivalent       */
-	"Faac SLH",          /* SUBGHZ_PROTOCOL_FAAC_SLH_NAME         (was "FAAC SLH") */
-	"Hormann HSM",       /* SUBGHZ_PROTOCOL_HORMANN_HSM_NAME      (was "Hormann") */
-	"Marantec",          /* SUBGHZ_PROTOCOL_MARANTEC_NAME         */
-	"Somfy Telis",       /* SUBGHZ_PROTOCOL_SOMFY_TELIS_NAME      */
-	"Star Line",         /* SUBGHZ_PROTOCOL_STAR_LINE_NAME        */
-	"GateTX",            /* SUBGHZ_PROTOCOL_GATE_TX_NAME          (was "Gate TX") */
-	"SMC5326",           /* SUBGHZ_PROTOCOL_SMC5326_NAME          */
-	"Power Smart",       /* SUBGHZ_PROTOCOL_POWER_SMART_NAME      */
-	"iDo 117/111",       /* SUBGHZ_PROTOCOL_IDO_NAME              (was "iDo") */
-	"Ansonic",           /* SUBGHZ_PROTOCOL_ANSONIC_NAME          */
-	"Infactory",         /* no Flipper lib/subghz equivalent       */
-	"Schrader TPMS",     /* no Flipper lib/subghz equivalent       */
-	/* --- Protocols added by community contributions --- */
-	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME       (was "Chamberlain") */
-	"Clemsa",            /* SUBGHZ_PROTOCOL_CLEMSA_NAME           */
-	"Doitrand",          /* SUBGHZ_PROTOCOL_DOITRAND_NAME         */
-	"BETT",              /* SUBGHZ_PROTOCOL_BETT_NAME             */
-	"Nero Radio",        /* SUBGHZ_PROTOCOL_NERO_RADIO_NAME       */
-	"FireFly",           /* no Flipper lib/subghz equivalent       */
-	"CAME TWEE",         /* SUBGHZ_PROTOCOL_CAME_TWEE_NAME        (was "CAME Twee") */
-	"CAME Atomo",        /* SUBGHZ_PROTOCOL_CAME_ATOMO_NAME       */
-	"Nice FloR-S",       /* SUBGHZ_PROTOCOL_NICE_FLOR_S_NAME      (was "Nice Flor S") */
-	"Alutech AT-4N",     /* SUBGHZ_PROTOCOL_ALUTECH_AT_4N_NAME   */
-	"Centurion",         /* no Flipper lib/subghz equivalent       */
-	"KingGates Stylo4k", /* SUBGHZ_PROTOCOL_KINGGATES_STYLO_4K_NAME (was "Kinggates Stylo") */
-	"MegaCode",          /* SUBGHZ_PROTOCOL_MEGACODE_NAME         (was "Megacode") */
-	"Mastercode",        /* SUBGHZ_PROTOCOL_MASTERCODE_NAME       */
-	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 7-bit  (was "Chamberlain 7") */
-	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 8-bit  (was "Chamberlain 8") */
-	"Cham_Code",         /* SUBGHZ_PROTOCOL_CHAMB_CODE_NAME 9-bit  (was "Chamberlain 9") */
-	"Security+ 1.0",     /* SUBGHZ_PROTOCOL_SECPLUS_V1_NAME (Liftmaster 10-bit variant) */
-	"Dooya",             /* SUBGHZ_PROTOCOL_DOOYA_NAME            */
-	"Honeywell",         /* no Flipper lib/subghz equivalent       */
-	"Intertechno",       /* no Flipper lib/subghz equivalent       */
-	"Elro",              /* no Flipper lib/subghz equivalent       */
-	"Ambient Weather",   /* no Flipper lib/subghz equivalent       */
-	"Bresser 3ch",       /* no Flipper lib/subghz equivalent       */
-	"Bresser 5in1",      /* no Flipper lib/subghz equivalent       */
-	"Bresser 6in1",      /* no Flipper lib/subghz equivalent       */
-	"TFA Dostmann",      /* no Flipper lib/subghz equivalent       */
-	"Nexus-TH",          /* no Flipper lib/subghz equivalent       */
-	"ThermoPro TX-2",    /* no Flipper lib/subghz equivalent       */
-	"GT-WT03",           /* no Flipper lib/subghz equivalent       */
-	"Scher-Khan",        /* SUBGHZ_PROTOCOL_SCHER_KHAN_NAME       (was "Scher-Khan Magicar") */
-	"Scher-Khan",        /* SUBGHZ_PROTOCOL_SCHER_KHAN_NAME       (was "Scher-Khan Logicar") */
-	"Toyota",            /* no Flipper lib/subghz equivalent       */
-	"BinRAW",            /* SUBGHZ_PROTOCOL_BIN_RAW_NAME          */
-	/* --- Flipper compatibility protocols --- */
-	"Dickert_MAHS",     /* SUBGHZ_PROTOCOL_DICKERT_MAHS_NAME     */
-	"Feron",            /* SUBGHZ_PROTOCOL_FERON_NAME            */
-	"GangQi",           /* SUBGHZ_PROTOCOL_GANGQI_NAME           */
-	"Hay21",            /* SUBGHZ_PROTOCOL_HAY21_NAME            */
-	"Hollarm",          /* SUBGHZ_PROTOCOL_HOLLARM_NAME          */
-	"Holtek",           /* SUBGHZ_PROTOCOL_HOLTEK_NAME           */
-	"Intertechno_V3",   /* SUBGHZ_PROTOCOL_INTERTECHNO_V3_NAME   */
-	"KIA Seed",         /* SUBGHZ_PROTOCOL_KIA_NAME              */
-	"Legrand",          /* SUBGHZ_PROTOCOL_LEGRAND_NAME          */
-	"LinearDelta3",     /* SUBGHZ_PROTOCOL_LINEAR_DELTA3_NAME    */
-	"Magellan",         /* SUBGHZ_PROTOCOL_MAGELLAN_NAME         */
-	"Marantec24",       /* SUBGHZ_PROTOCOL_MARANTEC24_NAME       */
-	"Nero Sketch",      /* SUBGHZ_PROTOCOL_NERO_SKETCH_NAME      */
-	"Phoenix_V2",       /* SUBGHZ_PROTOCOL_PHOENIX_V2_NAME       */
-	"Revers_RB2",       /* SUBGHZ_PROTOCOL_REVERSRB2_NAME        */
-	"Roger",            /* SUBGHZ_PROTOCOL_ROGER_NAME            */
-	"Somfy Keytis"      /* SUBGHZ_PROTOCOL_SOMFY_KEYTIS_NAME     */
-};
+
+/* Max protocols we can hold in the legacy arrays (must be >= registry count) */
+#define LEGACY_PROTOCOL_MAX  128
+
+static SubGHz_protocol_t _subghz_protocols_list_storage[LEGACY_PROTOCOL_MAX];
+static const char *_protocol_text_storage[LEGACY_PROTOCOL_MAX];
+
+/* Expose as non-const pointers so existing code can index them */
+SubGHz_protocol_t *subghz_protocols_list_ptr = _subghz_protocols_list_storage;
+const char **protocol_text_ptr = _protocol_text_storage;
+
+/* Legacy externs — redirect to pointer (see updated header) */
+/* These are populated during subghz_decenc_init() */
+
+/*
+ * protocol_text[] — now populated from registry at init time.
+ * The static storage is in _protocol_text_storage above.
+ * Legacy code accesses protocol_text[i] via the extern pointer.
+ */
 
 
 enum {
-   n_protocol = sizeof(subghz_protocols_list) / sizeof(subghz_protocols_list[0])
+   n_protocol = LEGACY_PROTOCOL_MAX   /* Upper bound; actual count is subghz_protocol_registry_count */
 };
 
 
@@ -370,311 +251,23 @@ const SubGHz_Weather_Data_t* subghz_get_weather_data(void)
     return &weather_data;
 }
 
-bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
+/*
+ * Protocol dispatch — now driven by the registry instead of a switch-case.
+ *
+ * The registry stores a decode function pointer for each protocol.
+ * This eliminates the need to add a case for every new protocol.
+ */
+static bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 {
-    uint8_t ret = false;
-
-    switch ( p )
-    {
-    	case PRINCETON:
-    		ret = subghz_decode_princeton(p, pulsecount);
-    		break;
-
-    	case SECURITY_PLUS_20:
-    		ret = subghz_decode_security_plus_20(p, pulsecount);
-    		break;
-
-    	case CAME_12BIT:
-    		ret = subghz_decode_came(p, pulsecount);
-    		break;
-
-    	case NICE_FLO:
-    		ret = subghz_decode_nice_flo(p, pulsecount);
-    		break;
-
-    	case LINEAR_10BIT:
-    		ret = subghz_decode_linear(p, pulsecount);
-    		break;
-
-    	case HOLTEK_HT12E:
-    		ret = subghz_decode_holtek(p, pulsecount);
-    		break;
-
-    	case KEELOQ:
-    		ret = subghz_decode_keeloq(p, pulsecount);
-    		break;
-
-    	case OREGON_V2:
-    		ret = subghz_decode_oregon_v2(p, pulsecount);
-    		break;
-
-    	case ACURITE:
-    		ret = subghz_decode_acurite(p, pulsecount);
-    		break;
-
-    	case LACROSSE_TX:
-    		ret = subghz_decode_lacrosse_tx(p, pulsecount);
-    		break;
-
-    	case FAAC_SLH:
-    		ret = subghz_decode_faac_slh(p, pulsecount);
-    		break;
-
-    	case HORMANN:
-    		ret = subghz_decode_hormann(p, pulsecount);
-    		break;
-
-    	case MARANTEC:
-    		ret = subghz_decode_marantec(p, pulsecount);
-    		break;
-
-    	case SOMFY_TELIS:
-    		ret = subghz_decode_somfy_telis(p, pulsecount);
-    		break;
-
-    	case STAR_LINE:
-    		ret = subghz_decode_starline(p, pulsecount);
-    		break;
-
-    	case GATE_TX:
-    		ret = subghz_decode_gate_tx(p, pulsecount);
-    		break;
-
-    	case SMC5326:
-    		ret = subghz_decode_smc5326(p, pulsecount);
-    		break;
-
-    	case POWER_SMART:
-    		ret = subghz_decode_power_smart(p, pulsecount);
-    		break;
-
-    	case IDO:
-    		ret = subghz_decode_ido(p, pulsecount);
-    		break;
-
-    	case ANSONIC:
-    		ret = subghz_decode_ansonic(p, pulsecount);
-    		break;
-
-    	case INFACTORY:
-    		ret = subghz_decode_infactory(p, pulsecount);
-    		break;
-
-    	case SCHRADER_TPMS:
-    		ret = subghz_decode_schrader(p, pulsecount);
-    		break;
-
-    	/* --- New protocols --- */
-    	case CHAMBERLAIN:
-    		ret = subghz_decode_chamberlain(p, pulsecount);
-    		break;
-
-    	case CLEMSA:
-    		ret = subghz_decode_clemsa(p, pulsecount);
-    		break;
-
-    	case DOITRAND:
-    		ret = subghz_decode_doitrand(p, pulsecount);
-    		break;
-
-    	case BETT:
-    		ret = subghz_decode_bett(p, pulsecount);
-    		break;
-
-    	case NERO_RADIO:
-    		ret = subghz_decode_nero(p, pulsecount);
-    		break;
-
-    	case FIREFLY:
-    		ret = subghz_decode_firefly(p, pulsecount);
-    		break;
-
-    	case CAME_TWEE:
-    		ret = subghz_decode_came_twee(p, pulsecount);
-    		break;
-
-    	case CAME_ATOMO:
-    		ret = subghz_decode_came_atomo(p, pulsecount);
-    		break;
-
-    	case NICE_FLOR_S:
-    		ret = subghz_decode_nice_flor_s(p, pulsecount);
-    		break;
-
-    	case ALUTECH_AT4N:
-    		ret = subghz_decode_alutech(p, pulsecount);
-    		break;
-
-    	case CENTURION:
-    		ret = subghz_decode_centurion(p, pulsecount);
-    		break;
-
-    	case KINGGATES_STYLO:
-    		ret = subghz_decode_kinggates(p, pulsecount);
-    		break;
-
-    	case MEGACODE:
-    		ret = subghz_decode_megacode(p, pulsecount);
-    		break;
-
-    	case MASTERCODE:
-    		ret = subghz_decode_mastercode(p, pulsecount);
-    		break;
-
-    	case CHAMBERLAIN_7BIT:
-    		ret = subghz_decode_chamberlain_7bit(p, pulsecount);
-    		break;
-
-    	case CHAMBERLAIN_8BIT:
-    		ret = subghz_decode_chamberlain_8bit(p, pulsecount);
-    		break;
-
-    	case CHAMBERLAIN_9BIT:
-    		ret = subghz_decode_chamberlain_9bit(p, pulsecount);
-    		break;
-
-    	case LIFTMASTER_10BIT:
-    		ret = subghz_decode_liftmaster(p, pulsecount);
-    		break;
-
-    	case DOOYA:
-    		ret = subghz_decode_dooya(p, pulsecount);
-    		break;
-
-    	case HONEYWELL:
-    		ret = subghz_decode_honeywell(p, pulsecount);
-    		break;
-
-    	case INTERTECHNO:
-    		ret = subghz_decode_intertechno(p, pulsecount);
-    		break;
-
-    	case ELRO:
-    		ret = subghz_decode_elro(p, pulsecount);
-    		break;
-
-    	case AMBIENT_WEATHER:
-    		ret = subghz_decode_ambient_weather(p, pulsecount);
-    		break;
-
-    	case BRESSER_3CH:
-    		ret = subghz_decode_bresser_3ch(p, pulsecount);
-    		break;
-
-    	case BRESSER_5IN1:
-    		ret = subghz_decode_bresser_5in1(p, pulsecount);
-    		break;
-
-    	case BRESSER_6IN1:
-    		ret = subghz_decode_bresser_6in1(p, pulsecount);
-    		break;
-
-    	case TFA_DOSTMANN:
-    		ret = subghz_decode_tfa_dostmann(p, pulsecount);
-    		break;
-
-    	case NEXUS_TH:
-    		ret = subghz_decode_nexus_th(p, pulsecount);
-    		break;
-
-    	case THERMOPRO_TX2:
-    		ret = subghz_decode_thermopro_tx2(p, pulsecount);
-    		break;
-
-    	case GT_WT03:
-    		ret = subghz_decode_gt_wt03(p, pulsecount);
-    		break;
-
-    	case SCHER_KHAN_MAGICAR:
-    		ret = subghz_decode_scher_khan_magicar(p, pulsecount);
-    		break;
-
-    	case SCHER_KHAN_LOGICAR:
-    		ret = subghz_decode_scher_khan_logicar(p, pulsecount);
-    		break;
-
-    	case TOYOTA:
-    		ret = subghz_decode_toyota(p, pulsecount);
-    		break;
-
-    	case BIN_RAW:
-    		ret = subghz_decode_bin_raw(p, pulsecount);
-    		break;
-
-    	case DICKERT_MAHS:
-    		ret = subghz_decode_dickert_mahs(p, pulsecount);
-    		break;
-
-    	case FERON:
-    		ret = subghz_decode_feron(p, pulsecount);
-    		break;
-
-    	case GANGQI:
-    		ret = subghz_decode_gangqi(p, pulsecount);
-    		break;
-
-    	case HAY21:
-    		ret = subghz_decode_hay21(p, pulsecount);
-    		break;
-
-    	case HOLLARM:
-    		ret = subghz_decode_hollarm(p, pulsecount);
-    		break;
-
-    	case HOLTEK_BASE:
-    		ret = subghz_decode_holtek_base(p, pulsecount);
-    		break;
-
-    	case INTERTECHNO_V3:
-    		ret = subghz_decode_intertechno_v3(p, pulsecount);
-    		break;
-
-    	case KIA_SEED:
-    		ret = subghz_decode_kia_seed(p, pulsecount);
-    		break;
-
-    	case LEGRAND:
-    		ret = subghz_decode_legrand(p, pulsecount);
-    		break;
-
-    	case LINEAR_DELTA3:
-    		ret = subghz_decode_linear_delta3(p, pulsecount);
-    		break;
-
-    	case MAGELLAN:
-    		ret = subghz_decode_magellan(p, pulsecount);
-    		break;
-
-    	case MARANTEC24:
-    		ret = subghz_decode_marantec24(p, pulsecount);
-    		break;
-
-    	case NERO_SKETCH:
-    		ret = subghz_decode_nero_sketch(p, pulsecount);
-    		break;
-
-    	case PHOENIX_V2:
-    		ret = subghz_decode_phoenix_v2(p, pulsecount);
-    		break;
-
-    	case REVERS_RB2:
-    		ret = subghz_decode_revers_rb2(p, pulsecount);
-    		break;
-
-    	case ROGER:
-    		ret = subghz_decode_roger(p, pulsecount);
-    		break;
-
-    	case SOMFY_KEYTIS:
-    		ret = subghz_decode_somfy_keytis(p, pulsecount);
-    		break;
-
-    	default:
-    		break;
-    } // switch ( p )
-
-    return ret;
-} // bool subghz_decode_protocol(uint16_t p, uint16_t subghz_decenc_ctl.npulsecount)
+    if (p >= subghz_protocol_registry_count)
+        return 1;  /* out of range */
+
+    const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+    if (!proto->decode)
+        return 1;  /* no decoder implemented */
+
+    return proto->decode(p, pulsecount);
+}
 
 
 /*============================================================================*/
@@ -700,14 +293,14 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 			  M1_LOG_D(M1_LOGDB_TAG, "Valid gap: %d, pulses:%d\r\n", duration, subghz_decenc_ctl.npulsecount);
 			  if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN ) // Potential packet received?
 			  {
-				  for(i = 0; i < n_protocol; i++)
+				  for(i = 0; i < subghz_protocol_registry_count; i++)
 				  {
 					  if ( !subghz_decode_protocol(i, subghz_decenc_ctl.npulsecount) )
 					  {
 						  // receive successfully for protocol i
 						  break;
 					  }
-				  } // for(i = 0; i < n_protocol; i++)
+				  } // for(i = 0; i < subghz_protocol_registry_count; i++)
 			  } // if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN )
 			  interpacket_gap = duration; // update
 			  subghz_decenc_ctl.npulsecount = 0;
@@ -826,6 +419,19 @@ void subghz_decenc_init(void)
 	subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
 	memset(subghz_decenc_ctl.pulse_times, 0, sizeof(subghz_decenc_ctl.pulse_times));
 	subghz_decenc_ctl.n64_decodedvalue = 0;
+
+	/* Populate legacy compatibility arrays from the protocol registry */
+	uint16_t count = subghz_protocol_registry_count;
+	if (count > LEGACY_PROTOCOL_MAX) count = LEGACY_PROTOCOL_MAX;
+	for (uint16_t i = 0; i < count; i++) {
+	    const SubGhzBlockConst *t = &subghz_protocol_registry[i].timing;
+	    _subghz_protocols_list_storage[i].te_short      = t->te_short;
+	    _subghz_protocols_list_storage[i].te_long        = t->te_long;
+	    _subghz_protocols_list_storage[i].te_tolerance   = t->te_tolerance_pct;
+	    _subghz_protocols_list_storage[i].preamble_bits  = t->preamble_bits;
+	    _subghz_protocols_list_storage[i].data_bits      = t->min_count_bit_for_found;
+	    _protocol_text_storage[i] = subghz_protocol_registry[i].name;
+	}
 } // void subghz_decenc_init(void)
 
 
