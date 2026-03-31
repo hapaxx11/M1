@@ -5,7 +5,7 @@
  * Licensed under GPLv3
  *
  * m1_auriol_hg0601a_decode.c
- * Auriol HG06010A weather sensor — 37 bits, PPM
+ * Auriol HG0601A weather sensor — 37 bits, PPM
  * te_short=500µs (pulse), te_long=2000µs (bit-0 gap), bit-1 gap≈4000µs
  */
 #include "m1_sub_ghz_decenc.h"
