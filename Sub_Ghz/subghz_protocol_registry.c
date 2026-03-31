@@ -837,7 +837,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_vauno_en8822c,
     },
     [ACURITE_606TX] = {
-        .name   = "Acurite-606TX",
+        .name   = "Acurite_606TX",
         .type   = SubGhzProtocolTypeWeather,
         .flags  = F_WEATHER,
         .filter = SubGhzProtocolFilter_Weather,
@@ -845,7 +845,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_acurite_606tx,
     },
     [ACURITE_609TXC] = {
-        .name   = "Acurite-609TXC",
+        .name   = "Acurite_609TXC",
         .type   = SubGhzProtocolTypeWeather,
         .flags  = F_WEATHER,
         .filter = SubGhzProtocolFilter_Weather,
