@@ -49,7 +49,11 @@ static void furi_string_ensure_capacity(FuriString* s, size_t needed)
     }
     char* new_data = (char*)m1_malloc(new_cap);
     if (!new_data) {
-        return; /* allocation failure — embedded target, avoid crash */
+        /* Graceful degradation: on embedded targets with limited heap, we
+         * prefer to silently truncate string output rather than crash.
+         * Protocol decoders use strings only for display formatting — a
+         * truncated string is better than a hard fault. */
+        return;
     }
     if (s->data) {
         memcpy(new_data, s->data, s->length + 1);

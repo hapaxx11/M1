@@ -43,13 +43,7 @@ extern "C" {
 #endif
 
 #ifndef CLAMP
-#define CLAMP(x, upper, lower)                              \
-    ({                                                      \
-        __typeof__(x) _x = (x);                             \
-        __typeof__(upper) _u = (upper);                     \
-        __typeof__(lower) _l = (lower);                     \
-        (_x > _u) ? _u : ((_x < _l) ? _l : _x);           \
-    })
+#define CLAMP(x, upper, lower) (MIN(upper, MAX(x, lower)))
 #endif
 
 #ifndef COUNT_OF

@@ -75,10 +75,24 @@ typedef enum {
 
 /*============================================================================*/
 /* Flipper raw logging function — maps to m1_logdb_printf()                   */
+/*                                                                            */
+/* FuriLogLevel values do NOT align with M1's S_M1_LogDebugLevel_t values,    */
+/* so we map explicitly rather than casting.                                  */
 /*============================================================================*/
 
+static inline S_M1_LogDebugLevel_t furi_log_level_to_m1(int level) {
+    switch (level) {
+        case 2:  return LOG_DEBUG_LEVEL_ERROR; /* FuriLogLevelError */
+        case 3:  return LOG_DEBUG_LEVEL_WARN;  /* FuriLogLevelWarn  */
+        case 4:  return LOG_DEBUG_LEVEL_INFO;  /* FuriLogLevelInfo  */
+        case 5:  return LOG_DEBUG_LEVEL_DEBUG; /* FuriLogLevelDebug */
+        case 6:  return LOG_DEBUG_LEVEL_TRACE; /* FuriLogLevelTrace */
+        default: return LOG_DEBUG_LEVEL_NONE;
+    }
+}
+
 #define furi_log_print_format(level, tag, format, ...) \
-    m1_logdb_printf((S_M1_LogDebugLevel_t)(level), tag, format, ##__VA_ARGS__)
+    m1_logdb_printf(furi_log_level_to_m1(level), tag, format, ##__VA_ARGS__)
 
 /*============================================================================*/
 /* TAG definition helper                                                      */
