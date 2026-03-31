@@ -114,6 +114,12 @@ extern uint8_t subghz_decode_revers_rb2(uint16_t, uint16_t);
 extern uint8_t subghz_decode_roger(uint16_t, uint16_t);
 extern uint8_t subghz_decode_somfy_keytis(uint16_t, uint16_t);
 
+/* Specialty protocols */
+extern uint8_t subghz_decode_treadmill37(uint16_t, uint16_t);
+extern uint8_t subghz_decode_pocsag(uint16_t, uint16_t);
+extern uint8_t subghz_decode_tpms_generic(uint16_t, uint16_t);
+extern uint8_t subghz_decode_pcsg_generic(uint16_t, uint16_t);
+
 /* Generic decoders (used as delegates by simple protocols) */
 extern uint8_t subghz_decode_generic_pwm(uint16_t, uint16_t);
 extern uint8_t subghz_decode_generic_manchester(uint16_t, uint16_t);
@@ -748,6 +754,42 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=640, .te_long=1280, .te_tolerance_pct=25, .min_count_bit_for_found=80 },
         .decode = subghz_decode_somfy_keytis,
+    },
+    /* --- Specialty protocols --- */
+    [TREADMILL37] = {
+        .name   = "Treadmill37",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = F_STATIC_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=300, .te_long=900, .te_tolerance_pct=25, .min_count_bit_for_found=37 },
+        .decode = subghz_decode_treadmill37,
+    },
+    [POCSAG] = {
+        .name   = "POCSAG",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_FM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Industrial,
+        .timing = { .te_short=833, .te_long=833, .te_tolerance_pct=15, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_pocsag,
+    },
+    [TPMS_GENERIC] = {
+        .name   = "TPMS Generic",
+        .type   = SubGhzProtocolTypeTPMS,
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_315 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable,
+        .filter = SubGhzProtocolFilter_TPMS,
+        .timing = { .te_short=52, .te_long=104, .te_tolerance_pct=30, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_tpms_generic,
+    },
+    [PCSG_GENERIC] = {
+        .name   = "PCSG Generic",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_FM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Industrial,
+        .timing = { .te_short=833, .te_long=1666, .te_tolerance_pct=20, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_pcsg_generic,
     },
 };
 

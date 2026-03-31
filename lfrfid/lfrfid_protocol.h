@@ -65,6 +65,9 @@ typedef enum {
     /* PSK protocols */
     LFRFIDProtocolKeri,
     LFRFIDProtocolNexwatch,
+    /* Extended protocols (Flipper-ported) */
+    LFRFIDProtocolIndala224,
+    LFRFIDProtocolInstaFob,
     LFRFIDProtocolMax,
 } LFRFIDProtocol;
 

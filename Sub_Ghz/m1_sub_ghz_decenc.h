@@ -187,6 +187,11 @@ enum {
 	REVERS_RB2,
 	ROGER,
 	SOMFY_KEYTIS,
+	/* --- Specialty protocols --- */
+	TREADMILL37,
+	POCSAG,
+	TPMS_GENERIC,
+	PCSG_GENERIC,
 };
 
 /* Weather station decoded data */

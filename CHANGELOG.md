@@ -7,6 +7,20 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.8] - 2026-03-31
+
+### Added
+
+- **Sub-GHz Phase 4 — Specialty protocols**: Treadmill37 (QH-433 OOK PWM, 37 bits),
+  POCSAG (pager decode, auto-detects 512/1200/2400 baud, FSK/NRZ),
+  TPMS Generic (catch-all TPMS Manchester decoder), PCSG Generic (pager Manchester
+  catch-all).  All registered in `subghz_protocol_registry.c`.
+- **LF-RFID Phase 5 — Indala 224-bit**: PSK2 long-format Motorola card (28 decoded
+  bytes).  Files: `lfrfid_protocol_indala224.{h,c}`.  Ported from Momentum Firmware.
+- **LF-RFID Phase 5 — InstaFob**: Hillman Group Manchester-encoded fob (8 decoded
+  bytes, Block 1 = 0x00107060).  Files: `lfrfid_protocol_insta_fob.{h,c}`.
+  Ported from Momentum Firmware.
+
 ## [0.9.0.7] - 2026-03-31
 
 ### Changed

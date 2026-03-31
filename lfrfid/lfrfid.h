@@ -196,5 +196,8 @@ void bytes_to_u32_array(BitOrder order, const uint8_t in_data[], uint32_t out_da
 #include "lfrfid_protocol_keri.h"
 #include "lfrfid_protocol_nexwatch.h"
 #include "lfrfid_protocol_idteck.h"
+/* Extended protocols */
+#include "lfrfid_protocol_indala224.h"
+#include "lfrfid_protocol_insta_fob.h"
 
 #endif /* LFRFID_H_ */
