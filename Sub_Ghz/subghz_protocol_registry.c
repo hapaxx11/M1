@@ -754,6 +754,16 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
 const uint16_t subghz_protocol_registry_count =
     sizeof(subghz_protocol_registry) / sizeof(subghz_protocol_registry[0]);
 
+/*
+ * Build-time check: ensure registry does not exceed legacy array capacity.
+ * LEGACY_PROTOCOL_MAX is defined in m1_sub_ghz_decenc.c as 128.
+ * If the registry grows beyond this, increase LEGACY_PROTOCOL_MAX or remove
+ * legacy array support.
+ */
+_Static_assert(
+    sizeof(subghz_protocol_registry) / sizeof(subghz_protocol_registry[0]) <= 128,
+    "Protocol registry exceeds LEGACY_PROTOCOL_MAX (128) — increase the limit");
+
 /*============================================================================*/
 /* Registry Lookup Implementations                                             */
 /*============================================================================*/

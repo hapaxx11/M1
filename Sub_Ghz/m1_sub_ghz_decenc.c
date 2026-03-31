@@ -403,7 +403,11 @@ void subghz_decenc_init(void)
 
 	/* Populate legacy compatibility arrays from the protocol registry */
 	uint16_t count = subghz_protocol_registry_count;
-	if (count > LEGACY_PROTOCOL_MAX) count = LEGACY_PROTOCOL_MAX;
+	if (count > LEGACY_PROTOCOL_MAX) {
+	    M1_LOG_D(M1_LOGDB_TAG, "WARN: registry (%u protos) exceeds legacy max (%u), truncated\r\n",
+	             count, LEGACY_PROTOCOL_MAX);
+	    count = LEGACY_PROTOCOL_MAX;
+	}
 	for (uint16_t i = 0; i < count; i++) {
 	    const SubGhzBlockConst *t = &subghz_protocol_registry[i].timing;
 	    _subghz_protocols_list_storage[i].te_short      = t->te_short;
