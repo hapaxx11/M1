@@ -20,6 +20,7 @@ The M1 firmware is organized into the following main components:
 | `Drivers/` | STM32 HAL, CMSIS, u8g2, and other drivers |
 | `FatFs/` | FAT file system for storage |
 | `Middlewares/` | FreeRTOS |
+| `lib/furi/` | Furi compatibility layer (FuriString, FURI_LOG, furi_assert/check) |
 
 ## Build System
 
