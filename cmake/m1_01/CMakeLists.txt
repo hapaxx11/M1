@@ -315,6 +315,8 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/datatypes_utils.c
     ../../Sub_Ghz/m1_sub_ghz_api.c
     ../../Sub_Ghz/m1_sub_ghz_decenc.c
+    ../../Sub_Ghz/subghz_protocol_registry.c
+    ../../Sub_Ghz/subghz_block_generic.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
     ../../Sub_Ghz/protocols/m1_secplus_v2_decode.c
     ../../Sub_Ghz/protocols/m1_came_decode.c
@@ -389,6 +391,10 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_revers_rb2_decode.c
     ../../Sub_Ghz/protocols/m1_roger_decode.c
     ../../Sub_Ghz/protocols/m1_somfy_keytis_decode.c
+    ../../Sub_Ghz/protocols/m1_treadmill37_decode.c
+    ../../Sub_Ghz/protocols/m1_pocsag_decode.c
+    ../../Sub_Ghz/protocols/m1_tpms_generic_decode.c
+    ../../Sub_Ghz/protocols/m1_pcsg_generic_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c
@@ -429,6 +435,8 @@ target_sources(m1_01 INTERFACE
     ../../lfrfid/lfrfid_protocol_idteck.c
     ../../lfrfid/lfrfid_protocol_keri.c
     ../../lfrfid/lfrfid_protocol_nexwatch.c
+    ../../lfrfid/lfrfid_protocol_indala224.c
+    ../../lfrfid/lfrfid_protocol_insta_fob.c
     ../../lfrfid/t5577.c
     ../../m1_csrc/res_string.c
     ../../m1_csrc/bit_util.c

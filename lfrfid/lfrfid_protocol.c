@@ -70,6 +70,9 @@ const LFRFIDProtocolBase* lfrfid_protocols[] = {
     /* PSK protocols */
     [LFRFIDProtocolKeri] = &protocol_keri,
     [LFRFIDProtocolNexwatch] = &protocol_nexwatch,
+    /* Extended protocols */
+    [LFRFIDProtocolIndala224] = &protocol_indala224,
+    [LFRFIDProtocolInstaFob]  = &protocol_insta_fob,
 };
 
 //************************** S T R U C T U R E S *******************************

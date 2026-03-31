@@ -95,6 +95,24 @@ Relevant branches: `main` (or the latest release tag).
 Flipper repository: `https://github.com/flipperdevices/flipperzero-firmware`
 Use the `dev` branch for the latest code.
 
+### Momentum Firmware (community fork — preferred protocol source)
+
+The [Momentum Firmware](https://github.com/Next-Flip/Momentum-Firmware) (formerly
+Xtreme) is a community fork of Flipper Zero firmware that includes additional
+Sub-GHz and LF-RFID protocols beyond the official firmware.  Same directory
+layout as Flipper Zero.
+
+| Area | Path (same as Flipper) |
+|------|------------------------|
+| Sub-GHz protocols | `lib/subghz/protocols/` |
+| LF-RFID protocols | `lib/lfrfid/protocols/` |
+
+Momentum repository: `https://github.com/Next-Flip/Momentum-Firmware`
+Use the `dev` branch or latest release tag (`mntm-XXX`).
+
+> **Prefer Momentum** when both have the protocol — Momentum includes bug fixes
+> and additional protocols not yet in official Flipper firmware.
+
 ### Flipper One (fbtng / flipperone-mcu-firmware — do NOT push)
 
 The **Flipper One** is a new Flipper product based on a dual-CPU architecture:
@@ -147,13 +165,19 @@ are identical between the two platforms.
 | Area | M1 path |
 |------|---------|
 | Sub-GHz decoder files | `Sub_Ghz/protocols/m1_<proto>_decode.c` and `.h` |
-| Sub-GHz dispatch table | `Sub_Ghz/m1_sub_ghz_decenc.c` — `subghz_protocols_list[]` and `protocol_text[]` |
-| Sub-GHz dispatch header | `Sub_Ghz/m1_sub_ghz_decenc.h` |
+| Sub-GHz protocol registry | `Sub_Ghz/subghz_protocol_registry.c` — master registry array (names, timing, decode fn ptr) |
+| Sub-GHz registry header | `Sub_Ghz/subghz_protocol_registry.h` — types, includes all block headers below |
+| Sub-GHz block decoder | `Sub_Ghz/subghz_block_decoder.h` — `SubGhzBlockDecoder` state machine (mirrors `lib/subghz/blocks/decoder.h`) |
+| Sub-GHz block generic | `Sub_Ghz/subghz_block_generic.{h,c}` — `SubGhzBlockGeneric` decoded output (mirrors `lib/subghz/blocks/generic.h`) |
+| Sub-GHz blocks math | `Sub_Ghz/subghz_blocks_math.h` — `DURATION_DIFF`, `bit_read/set/clear`, CRC, parity, LFSR (mirrors `lib/subghz/blocks/math.h`) |
+| Sub-GHz legacy dispatch | `Sub_Ghz/m1_sub_ghz_decenc.c` / `.h` — enum kept for index constants; legacy arrays populated from registry at init |
+| Existing bit/CRC utilities | `m1_csrc/bit_util.{h,c}` — underlying CRC/parity/LFSR implementations (wrapped by `subghz_blocks_math.h`) |
 | LF-RFID protocol files | `lfrfid/lfrfid_protocol_<proto>.c` and `.h` |
 | LF-RFID registry | `lfrfid/lfrfid_protocol.c` — `lfrfid_protocols[]` table |
+| LF-RFID bit library | `lfrfid/lfrfid_bit_lib.h` — bit manipulation for LF-RFID (same pattern as Sub-GHz blocks) |
 | Flipper file parsers | `m1_csrc/flipper_*.c` and `.h` |
 | Flipper integration API | `m1_csrc/m1_flipper_integration.c` / `.h` |
-| Build list | `CMakeLists.txt` — `target_sources(...)` section |
+| Build list | `cmake/m1_01/CMakeLists.txt` — `target_sources(...)` section |
 
 ---
 
@@ -372,6 +396,209 @@ threshold.  Continue monitoring this count as new LF-RFID protocols are ported.
 
 ---
 
+## Flipper-Compatible Building Blocks
+
+M1 provides a set of headers that mirror Flipper's `lib/subghz/blocks/` directory.
+These make porting a Flipper or Momentum decoder largely mechanical — ported code
+can use the same struct names, field names, and function names as the original.
+
+### Block Decoder (`subghz_block_decoder.h`)
+
+Maps to Flipper's `lib/subghz/blocks/decoder.h`.
+
+```c
+#include "subghz_block_decoder.h"
+
+// Identical to Flipper's struct — ported code compiles unchanged
+SubGhzBlockDecoder decoder = {0};
+
+// State machine steps (define your own enum per protocol)
+decoder.parser_step = MyProtoStepReset;
+
+// Save last pulse duration for two-pulse analysis
+decoder.te_last = duration;
+
+// Accumulate bits — exact same function name and semantics as Flipper
+subghz_protocol_blocks_add_bit(&decoder, bit_value);
+
+// Check completion
+if (decoder.decode_count_bit >= MIN_COUNT_BIT) {
+    uint64_t result = decoder.decode_data;
+    // success!
+}
+
+// For protocols >64 bits (e.g., Oregon V2, Bresser):
+uint64_t upper_bits = 0;
+subghz_protocol_blocks_add_to_128_bit(&decoder, bit_value, &upper_bits);
+```
+
+### Block Generic (`subghz_block_generic.h`)
+
+Maps to Flipper's `lib/subghz/blocks/generic.h`.
+
+```c
+#include "subghz_block_generic.h"
+
+// Decoded output — same field names as Flipper
+SubGhzBlockGeneric generic = {0};
+generic.data           = decoder.decode_data;
+generic.data_count_bit = decoder.decode_count_bit;
+generic.serial         = (uint32_t)(generic.data >> 8);
+generic.btn            = (uint8_t)(generic.data & 0xF);
+generic.cnt            = rolling_code;
+
+// Bridge to M1's global state (call at end of successful decode)
+subghz_block_generic_commit_to_m1(&generic, PROTOCOL_INDEX);
+```
+
+### Blocks Math (`subghz_blocks_math.h`)
+
+Maps to Flipper's `lib/subghz/blocks/math.h`.
+
+```c
+#include "subghz_blocks_math.h"
+
+// Timing comparison — branchless absolute difference
+if (DURATION_DIFF(duration, te_short) < te_delta) { ... }
+
+// Bit manipulation macros
+bit_read(value, 3);       // read bit 3
+bit_set(value, 5);        // set bit 5
+bit_clear(value, 5);      // clear bit 5
+
+// Key reversal
+uint64_t reversed = subghz_protocol_blocks_reverse_key(key, 24);
+
+// Parity
+uint8_t par = subghz_protocol_blocks_get_parity(key, 24);
+
+// CRC (delegates to M1's bit_util.h implementations)
+uint8_t crc = subghz_protocol_blocks_crc8(msg, len, 0x31, 0x00);
+```
+
+### Manchester Decoder (`subghz_manchester_decoder.h`)
+
+Maps to Flipper's `lib/toolbox/manchester_decoder.{h,c}`.
+
+Table-driven Manchester decoder state machine used by protocols like Somfy Telis,
+Somfy Keytis, Marantec, FAAC SLH, and Revers RB2.  Feed it (short/long) ×
+(high/low) events and it produces decoded bits.
+
+```c
+#include "subghz_manchester_decoder.h"
+
+ManchesterState manchester_state = ManchesterStateMid1;
+bool bit_value;
+
+// Classify each pulse pair into a Manchester event:
+ManchesterEvent event;
+if (is_short && is_high) event = ManchesterEventShortHigh;
+else if (is_short && !is_high) event = ManchesterEventShortLow;
+else if (!is_short && is_high) event = ManchesterEventLongHigh;
+else event = ManchesterEventLongLow;
+
+// Advance the state machine:
+if (manchester_advance(manchester_state, event, &manchester_state, &bit_value)) {
+    // bit_value is valid — accumulate it
+    subghz_protocol_blocks_add_bit(&decoder, bit_value);
+}
+```
+
+### Manchester Encoder (`subghz_manchester_encoder.h`)
+
+Maps to Flipper's `lib/toolbox/manchester_encoder.{h,c}`.
+
+Converts data bits into Manchester-coded symbols for TX waveform generation.
+
+```c
+#include "subghz_manchester_encoder.h"
+
+ManchesterEncoderState enc_state;
+manchester_encoder_reset(&enc_state);
+
+// Encode each data bit:
+for (int i = 0; i < bit_count; i++) {
+    ManchesterEncoderResult result;
+    bool consumed = false;
+    while (!consumed) {
+        consumed = manchester_encoder_advance(&enc_state, data_bits[i], &result);
+        // result is ShortLow/ShortHigh/LongLow/LongHigh
+        // → map to LevelDuration and append to upload buffer
+    }
+}
+
+// Emit trailing symbol:
+ManchesterEncoderResult final = manchester_encoder_finish(&enc_state);
+```
+
+### Block Encoder (`subghz_block_encoder.h`)
+
+Maps to Flipper's `lib/subghz/blocks/encoder.{h,c}`.
+
+Provides `SubGhzProtocolBlockEncoder` for TX state tracking, bit-array
+helpers, and an upload generator that converts bit arrays to `LevelDuration[]`.
+
+```c
+#include "subghz_block_encoder.h"
+
+// Build a bit array (MSB-first, matching Flipper layout):
+uint8_t data[4] = {0};
+subghz_protocol_blocks_set_bit_array(true,  data, 0, sizeof(data));  // bit 0 = 1
+subghz_protocol_blocks_set_bit_array(false, data, 1, sizeof(data));  // bit 1 = 0
+
+// Convert to LevelDuration waveform:
+LevelDuration upload[128];
+size_t upload_size = subghz_protocol_blocks_get_upload_from_bit_array(
+    data, 24, upload, 128, 500,  // 500μs per bit
+    SubGhzProtocolBlockAlignBitLeft);
+
+// Track TX playback:
+SubGhzProtocolBlockEncoder encoder = {
+    .upload      = upload,
+    .size_upload = upload_size,
+    .repeat      = 4,
+    .is_running  = true,
+};
+```
+
+### LevelDuration (`subghz_level_duration.h`)
+
+Maps to Flipper's `lib/toolbox/level_duration.h`.
+
+A compact (level, duration_μs) pair used by encoders and the TX path.
+
+```c
+#include "subghz_level_duration.h"
+
+LevelDuration ld = level_duration_make(true, 500);   // HIGH for 500μs
+bool is_high = level_duration_get_level(ld);          // true
+uint32_t dur = level_duration_get_duration(ld);       // 500
+
+LevelDuration rst = level_duration_reset();           // sentinel
+bool is_rst = level_duration_is_reset(rst);           // true
+```
+
+### Mapping: Flipper → M1
+
+| Flipper file | M1 equivalent | Notes |
+|-------------|---------------|-------|
+| `lib/subghz/blocks/decoder.h` | `Sub_Ghz/subghz_block_decoder.h` | All-inline header |
+| `lib/subghz/blocks/decoder.c` | (not needed — all inline) | |
+| `lib/subghz/blocks/generic.h` | `Sub_Ghz/subghz_block_generic.h` | + M1 bridge function |
+| `lib/subghz/blocks/generic.c` | `Sub_Ghz/subghz_block_generic.c` | Only the commit bridge |
+| `lib/subghz/blocks/math.h` | `Sub_Ghz/subghz_blocks_math.h` | Wraps `bit_util.h` |
+| `lib/subghz/blocks/math.c` | `m1_csrc/bit_util.c` | Already exists |
+| `lib/subghz/blocks/encoder.h` | `Sub_Ghz/subghz_block_encoder.h` | All-inline header |
+| `lib/subghz/blocks/encoder.c` | (not needed — all inline) | |
+| `lib/toolbox/level_duration.h` | `Sub_Ghz/subghz_level_duration.h` | LevelDuration type |
+| `lib/toolbox/manchester_decoder.h` | `Sub_Ghz/subghz_manchester_decoder.h` | All-inline header |
+| `lib/toolbox/manchester_decoder.c` | (not needed — all inline) | |
+| `lib/toolbox/manchester_encoder.h` | `Sub_Ghz/subghz_manchester_encoder.h` | All-inline header |
+| `lib/toolbox/manchester_encoder.c` | (not needed — all inline) | |
+| `lib/toolbox/bit_lib.h` | `lfrfid/lfrfid_bit_lib.h` | Exists for LF-RFID |
+
+---
+
 ## Step-by-Step Process
 
 ### Step 0 — Check Monstatek upstream and assess pattern source
@@ -436,8 +663,9 @@ Create `Sub_Ghz/protocols/m1_<proto>_decode.c` following this template:
  *
  *  M1 sub-ghz <Protocol Name> decoding
  *
- *  Ported from Flipper Zero firmware
+ *  Ported from Flipper Zero / Momentum firmware
  *  https://github.com/flipperdevices/flipperzero-firmware
+ *  https://github.com/Next-Flip/Momentum-Firmware
  *  Original file: lib/subghz/protocols/<proto>.c
  *  Copyright (C) Flipper Devices Inc. — Licensed under GPLv3
  *
@@ -447,58 +675,105 @@ Create `Sub_Ghz/protocols/m1_<proto>_decode.c` following this template:
 #include <string.h>
 #include <stdlib.h>
 #include "stm32h5xx_hal.h"
-#include "bit_util.h"
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_protocol_registry.h"   /* includes all block headers */
 #include "m1_log_debug.h"
 
 #define M1_LOGDB_TAG  "SUBGHZ_<PROTO>"
 
-/* ---- timing constants (from Flipper <proto>.h) ---- */
-#define TE_SHORT   <value_us>
-#define TE_LONG    <value_us>
+/* ---- Flipper-compatible decoder state (optional — for complex protocols) ---- */
+
+/* Simple protocols can use direct bit-shifting on a local uint64_t.
+ * Complex protocols should use SubGhzBlockDecoder for Flipper-compatible
+ * state machine porting: */
+
+/*
+ * enum {
+ *     <Proto>DecoderStepReset = 0,
+ *     <Proto>DecoderStepSaveDuration,
+ *     <Proto>DecoderStepCheckDuration,
+ * };
+ */
 
 /* ---- decoder implementation ---- */
 uint8_t subghz_decode_<proto>(uint16_t p, uint16_t pulsecount)
 {
-    /* port Flipper decode logic here */
+    const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+    const uint16_t te_short = proto->timing.te_short;
+    const uint16_t te_long  = proto->timing.te_long;
+    const uint16_t te_delta = proto->timing.te_delta
+        ? proto->timing.te_delta
+        : (te_short * proto->timing.te_tolerance_pct / 100);
+    const uint16_t min_bits = proto->timing.min_count_bit_for_found;
+
+    /* Option A: Simple protocol — direct bit accumulation */
+    uint64_t code = 0;
+    uint16_t bits_count = 0;
+
+    for (uint16_t i = 0; i + 1 < pulsecount; i += 2) {
+        uint16_t t_hi = subghz_decenc_ctl.pulse_times[i];
+        uint16_t t_lo = subghz_decenc_ctl.pulse_times[i + 1];
+
+        code <<= 1;
+        if (DURATION_DIFF(t_hi, te_short) < te_delta &&
+            DURATION_DIFF(t_lo, te_long) < te_delta) {
+            /* bit 0 */
+        } else if (DURATION_DIFF(t_hi, te_long) < te_delta &&
+                   DURATION_DIFF(t_lo, te_short) < te_delta) {
+            code |= 1;  /* bit 1 */
+        } else {
+            break;
+        }
+        bits_count++;
+    }
+
+    if (bits_count < min_bits)
+        return 1;
+
+    /* Option B: Bridge to M1 global state via SubGhzBlockGeneric */
+    SubGhzBlockGeneric generic = {0};
+    generic.data           = code;
+    generic.data_count_bit = bits_count;
+    generic.serial         = (uint32_t)(code >> 4);  /* protocol-specific extraction */
+    generic.btn            = (uint8_t)(code & 0xF);
+    subghz_block_generic_commit_to_m1(&generic, p);
     return 0;
 }
 ```
 
-Create the matching `m1_<proto>_decode.h` with the function prototype.
+No header file is required unless the decoder needs shared definitions.
 
-#### 2b. Add timing entry to `subghz_protocols_list[]`
+#### 2b. Add the protocol to the registry
 
-In `Sub_Ghz/m1_sub_ghz_decenc.c`, add a row to `subghz_protocols_list[]`:
-
-```c
-{TE_SHORT, TE_LONG, PACKET_PULSE_TIME_TOLERANCE20, <preamble_bits>, <data_bits>},
-```
-
-Keep the order consistent with `protocol_text[]` — both arrays are indexed by
-the same `SUBGHZ_PROTO_*` enum value.
-
-#### 2c. Add the protocol name to `protocol_text[]`
-
-Use the **exact** string from Flipper's `#define SUBGHZ_PROTOCOL_*_NAME`:
+In `Sub_Ghz/subghz_protocol_registry.c`, append one entry to the
+`subghz_protocol_registry[]` array:
 
 ```c
-"<Flipper SUBGHZ_PROTOCOL_*_NAME>",   /* SUBGHZ_PROTOCOL_*_NAME */
+[NEW_PROTO_ENUM] = {
+    .name   = "<Flipper SUBGHZ_PROTOCOL_*_NAME>",
+    .type   = SubGhzProtocolTypeStatic,  /* or Dynamic/Weather/TPMS */
+    .flags  = F_STATIC_433,
+    .filter = SubGhzProtocolFilter_Auto,
+    .timing = { .te_short=<val>, .te_long=<val>, .te_tolerance_pct=20,
+                .min_count_bit_for_found=<val> },
+    .decode = subghz_decode_<proto>,
+},
 ```
 
-If no Flipper equivalent exists for the protocol, keep the M1 display name and
-note it with `/* no Flipper lib/subghz equivalent */`.
+And add the corresponding `extern` forward declaration at the top of the file.
 
-#### 2d. Add enum entry in `m1_sub_ghz_decenc.h`
+#### 2c. Add enum entry in `m1_sub_ghz_decenc.h`
 
-Add a new constant to the protocol enum (or `#define` block) that identifies
-the protocol index. Keep it in the same position as in `subghz_protocols_list[]`
-and `protocol_text[]`.
+Add a new constant to the protocol enum. It must match the array index used
+in the registry. Append at the end — never reorder existing entries.
 
-#### 2e. Register the decoder callback
+#### 2d. No more switch-case registration needed
 
-In `Sub_Ghz/m1_sub_ghz_decenc.c`, inside `subghz_decode_protocol()`, add a
-case for the new index that calls `subghz_decode_<proto>()`.
+The old `subghz_decode_protocol()` switch-case has been replaced with a
+table-driven dispatch from the registry. No manual case statement is required.
+
+**That's it — 3 edits total** (decoder file + registry entry + enum constant)
+plus adding the `.c` file to CMakeLists.txt.
 
 ### Step 3 — Port an LF-RFID protocol
 
@@ -510,16 +785,16 @@ case for the new index that calls `subghz_decode_<proto>()`.
 
 ### Step 4 — Update the build system
 
-Add each new source file to `CMakeLists.txt` inside the `target_sources(M1 PRIVATE ...)` block:
+Add each new source file to `cmake/m1_01/CMakeLists.txt` inside the `target_sources(M1 PRIVATE ...)` block:
 
 ```cmake
-Sub_Ghz/protocols/m1_<proto>_decode.c
+../../Sub_Ghz/protocols/m1_<proto>_decode.c
 ```
 
 or for LF-RFID:
 
 ```cmake
-lfrfid/lfrfid_protocol_<proto>.c
+../../lfrfid/lfrfid_protocol_<proto>.c
 ```
 
 ### Step 5 — Verify `.sub` / `.rfid` file interoperability
@@ -589,8 +864,8 @@ Known name corrections already applied in M1 (do not revert):
 #### Sub-GHz protocols ported — March 2026
 
 The following 17 protocols were added in this session. Each has a decoder file
-in `Sub_Ghz/protocols/`, an entry in `subghz_protocols_list[]`,
-`protocol_text[]`, the enum, and the dispatch switch.
+in `Sub_Ghz/protocols/` and an entry in `subghz_protocol_registry[]` plus
+the enum in `m1_sub_ghz_decenc.h`.
 
 | Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 decoder | Notes |
 |---------------------|--------------------------|------------|-------|
@@ -619,23 +894,36 @@ If new Flipper protocols appear in future `dev` branch updates, repeat the
 analysis by comparing Flipper's `lib/subghz/protocols/` against M1's
 `protocol_text[]` array.
 
-#### Security+ 1.0 naming compatibility issue
+#### Security+ 1.0 naming compatibility — RESOLVED
 
 Flipper saves Security+ 1.0 signals as `Protocol: Security+ 1.0`
-(`SUBGHZ_PROTOCOL_SECPLUS_V1_NAME` in `secplus_v1.h`).  M1's Security+ 1.0
-decode logic already exists inside `m1_chamberlain_decode.c` and
-`m1_liftmaster_decode.c`, but those entries appear in `protocol_text[]` as
-`"Cham_Code"` and `"Liftmaster"` respectively.
+(`SUBGHZ_PROTOCOL_SECPLUS_V1_NAME` in `secplus_v1.h`).  The M1 registry now
+has the `LIFTMASTER_10BIT` entry registered under the name `"Security+ 1.0"`
+(matching Flipper exactly).  The registry-based `.sub` file loader resolves
+this name correctly — it looks up `"Security+ 1.0"` in the registry, finds
+it as `SubGhzProtocolTypeDynamic`, and rejects it with "rolling code" (which
+is correct behaviour — Security+ 1.0 uses rolling codes).
 
-**Impact:** A `.sub` file captured on a Flipper and saved as `Security+ 1.0`
-will **fail to load** on M1 because no `protocol_text[]` entry matches the
-string `"Security+ 1.0"`.
+The base Chamberlain entry remains as `"Cham_Code"` (matching Flipper's
+`SUBGHZ_PROTOCOL_CHAMB_CODE_NAME`).  Cham_Code `.sub` files now load
+correctly via the registry-based lookup and are encoded using the protocol's
+timing ratio from the registry.
 
-**Fix required:** Add `"Security+ 1.0"` as an additional entry in
-`protocol_text[]` (and a corresponding alias entry in `subghz_protocols_list[]`
-and `subghz_decode_protocol()`) that routes to the existing Security+ 1.0
-decode path.  The existing `"Cham_Code"` and `"Liftmaster"` entries must be
-kept for backwards compatibility with M1-saved files.
+#### `.sub` file interop — registry-based matching
+
+The `.sub` file KEY-type protocol matching in `m1_sub_ghz.c` now uses the
+protocol registry (`subghz_protocol_find_by_name()`) as the primary lookup:
+
+1. Protocol name is looked up in the registry
+2. `SubGhzProtocolTypeDynamic` / `Weather` / `TPMS` → rejected as rolling code
+3. `SubGhzProtocolTypeStatic` → encoding ratio computed from registry timing
+4. Unknown protocol → falls back to legacy `strstr()` matching
+
+This fixed multiple interop issues:
+- **Cham_Code** — was previously unmatched (no strstr entry)
+- **Marantec24** — was incorrectly caught by `strstr("Marantec")` rolling-code check
+- **All Phase 2 static protocols** — Clemsa, BETT, MegaCode, Centurion, etc.
+  were missing from both strstr branches
 
 ### LF-RFID `.rfid` files
 
@@ -649,11 +937,12 @@ IR protocol names map to IRMP protocol IDs in `m1_csrc/flipper_ir.c`.
 When Flipper adds a new IR protocol, add the name-to-IRMP-ID mapping in
 `flipper_ir_protocol_to_irmp()`.
 
-#### IR protocols not yet mapped (gap analysis — March 2026)
+#### IR protocols not yet mapped — NONE
 
-| Flipper `InfraredProtocol` enum | Flipper name string | Fix |
-|---------------------------------|---------------------|-----|
-| `InfraredProtocolNEC42ext` | `"NEC42ext"` | Add `{ "NEC42ext", IRMP_NEC42_PROTOCOL }` to the mapping table in `flipper_ir.c` — NEC42 extended addressing uses the same IRMP decoder |
+All Flipper IR protocol names are mapped in the `ir_proto_table[]` in
+`flipper_ir.c`.  `NEC42ext` was added and maps to `IRMP_NEC42_PROTOCOL`.
+If Flipper adds new IR protocols in future updates, add the
+name-to-IRMP-ID mapping to `ir_proto_table[]`.
 
 ### NFC `.nfc` files
 
@@ -705,12 +994,11 @@ When adding a new deviation, copy this row:
 - [ ] If Monstatek has it: implementation compared against Flipper; Flipper pattern adopted if divergent (see [Pattern Adoption Policy](#pattern-adoption-policy))
 - [ ] If Flipper pattern adopted over Monstatek: deviation logged in [Monstatek Pattern Deviation Log](#monstatek-pattern-deviation-log)
 - [ ] If Monstatek does NOT have it: new Flipper protocol identified (name, file, timing constants)
-- [ ] `m1_<proto>_decode.c` and `.h` created in `Sub_Ghz/protocols/`
-- [ ] Timing entry added to `subghz_protocols_list[]`
-- [ ] Protocol name added to `protocol_text[]` (matches Flipper constant exactly)
+- [ ] `m1_<proto>_decode.c` created in `Sub_Ghz/protocols/`
+- [ ] Entry added to `subghz_protocol_registry[]` in `Sub_Ghz/subghz_protocol_registry.c` (name, timing, type, decode fn)
+- [ ] `extern` forward declaration added at top of `subghz_protocol_registry.c`
 - [ ] Protocol index enum/define added to `m1_sub_ghz_decenc.h`
-- [ ] Decoder callback registered in `subghz_decode_protocol()`
-- [ ] New source file added to `CMakeLists.txt`
+- [ ] New source file added to `cmake/m1_01/CMakeLists.txt`
 - [ ] GPLv3 attribution comment added (if porting Flipper code)
 - [ ] `README_License.md` updated (if porting Flipper code)
 - [ ] Firmware builds without errors

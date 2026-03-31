@@ -7,6 +7,114 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.8] - 2026-03-31
+
+### Added
+
+- **Sub-GHz Phase 4 — Specialty protocols**: Treadmill37 (QH-433 OOK PWM, 37 bits),
+  POCSAG (pager decode, auto-detects 512/1200/2400 baud, FSK/NRZ),
+  TPMS Generic (catch-all TPMS Manchester decoder), PCSG Generic (pager Manchester
+  catch-all).  All registered in `subghz_protocol_registry.c`.
+- **LF-RFID Phase 5 — Indala 224-bit**: PSK2 long-format Motorola card (28 decoded
+  bytes).  Files: `lfrfid_protocol_indala224.{h,c}`.  Ported from Momentum Firmware.
+- **LF-RFID Phase 5 — InstaFob**: Hillman Group Manchester-encoded fob (8 decoded
+  bytes, Block 1 = 0x00107060).  Files: `lfrfid_protocol_insta_fob.{h,c}`.
+  Ported from Momentum Firmware.
+
+## [0.9.0.7] - 2026-03-31
+
+### Changed
+
+- **Sub-GHz protocol registry refactor** — replaced the manually-synchronised
+  quartet of enum + `subghz_protocols_list[]` + `protocol_text[]` + switch-case
+  dispatch with a single table-driven `SubGhzProtocolDef` registry
+  (`Sub_Ghz/subghz_protocol_registry.{h,c}`).  Adding a new Sub-GHz protocol now
+  requires only: (1) write the decode function, (2) add one entry to the registry
+  array, (3) add the `.c` to CMakeLists.  No more switch-case edits or
+  three-way manual sync.
+
+- **Flipper/Momentum compatibility macros** — added `DURATION_DIFF()`,
+  `subghz_protocol_blocks_add_bit()`, and `subghz_protocol_blocks_reverse_key()`
+  helpers in the registry header so ported Flipper decode logic compiles with
+  minimal changes.
+
+- **Protocol metadata** — each protocol now carries Flipper-compatible type
+  (`SubGhzProtocolTypeStatic` / `Dynamic` / `Weather` / `TPMS`), capability
+  flags (frequency bands, AM/FM, save/send), and category filter alongside its
+  timing parameters and name.
+
+- **Documentation** — updated `flipper_import_agent.md` porting instructions to
+  reflect the registry-based workflow, added Momentum Firmware as a reference
+  source, updated checklist.
+
+### Added
+
+- **Flipper-compatible decoder building blocks** — new header files that mirror
+  Flipper's `lib/subghz/blocks/` directory structure:
+  - `Sub_Ghz/subghz_block_decoder.h` — `SubGhzBlockDecoder` state machine struct
+    with `parser_step`, `te_last`, `decode_data`, `decode_count_bit` fields plus
+    `subghz_protocol_blocks_add_bit()`, `add_to_128_bit()`, and `get_hash_data()`
+    helpers.  Ported protocol decoders can use the exact same field names as
+    Flipper source.
+  - `Sub_Ghz/subghz_block_generic.h` — `SubGhzBlockGeneric` decoded output struct
+    (`data`, `serial`, `btn`, `cnt`, `data_count_bit`) with a
+    `subghz_block_generic_commit_to_m1()` bridge function that writes results
+    into M1's global state after a successful decode.
+  - `Sub_Ghz/subghz_blocks_math.h` — Flipper-named wrappers (`bit_read`,
+    `bit_set`, `bit_clear`, `bit_write`, `DURATION_DIFF`,
+    `subghz_protocol_blocks_crc8`, `_crc16`, `_parity8`, `_get_parity`,
+    `_lfsr_digest8`, etc.) that delegate to M1's existing `bit_util.h`
+    implementations.  Ported Flipper code calling these functions compiles
+    without renaming.
+
+- **Manchester codec building blocks** — new inline headers porting Flipper's
+  Manchester encoder/decoder from `lib/toolbox/`:
+  - `Sub_Ghz/subghz_manchester_decoder.h` — table-driven Manchester decoder
+    state machine (`ManchesterEvent`, `ManchesterState`, `manchester_advance()`)
+    used by Somfy Telis, Somfy Keytis, Marantec, FAAC SLH, Revers RB2, and
+    other Manchester-coded protocols.
+  - `Sub_Ghz/subghz_manchester_encoder.h` — Manchester encoder
+    (`manchester_encoder_advance/reset/finish`) that converts data bits into
+    Manchester-coded half-bit symbols for TX waveform generation.
+
+- **TX encoder building blocks** — new inline headers porting Flipper's
+  encoder infrastructure:
+  - `Sub_Ghz/subghz_level_duration.h` — `LevelDuration` type (compact
+    level + duration pair) used by encoder upload buffers and the TX ISR.
+  - `Sub_Ghz/subghz_block_encoder.h` — `SubGhzProtocolBlockEncoder` struct
+    for TX state tracking, MSB-first bit-array helpers
+    (`set_bit_array`/`get_bit_array`), and `get_upload_from_bit_array()` to
+    convert encoded bit arrays into `LevelDuration[]` waveforms.  All inline.
+
+- **Generic decoder conversion** — both `subghz_decode_generic_pwm()` and
+  `subghz_decode_generic_manchester()` now use the Flipper-compatible building
+  blocks (`SubGhzBlockDecoder`, `SubGhzBlockGeneric`, `DURATION_DIFF`,
+  `subghz_protocol_blocks_add_bit`, `manchester_advance`,
+  `subghz_block_generic_commit_to_m1`).  Reads timing from the protocol
+  registry directly, removing the legacy `subghz_protocols_list[]` dependency.
+  All protocols that delegate to these generic decoders benefit automatically.
+
+### Fixed
+
+- **`.sub` file interop — registry-based protocol matching** — replaced the
+  fragile `strstr()` chain for KEY-type `.sub` file playback with a
+  registry-driven lookup.  `subghz_protocol_find_by_name()` resolves the
+  protocol, checks the `SubGhzProtocolType`, and computes encoding timing
+  from the registry's `te_short`/`te_long` ratio.  This fixes:
+  - **Cham_Code** (Chamberlain) — previously fell through to "unsupported"
+  - **Marantec24** — previously caught by rolling-code check via substring
+    match on `"Marantec"` (which is Dynamic); Marantec24 is Static
+  - **All static protocols** added in March 2026 (Clemsa, BETT, MegaCode,
+    Centurion, Elro, Intertechno, Firefly, etc.) — previously missing from
+    both strstr branches
+  - Legacy strstr matching retained as fallback for protocol names not in
+    the registry (e.g. third-party Flipper firmware captures)
+
+- **`subghz_protocol_is_static()` — registry-driven** — replaced hardcoded
+  23-entry switch-case with a single registry type check
+  (`SubGhzProtocolTypeStatic`).  Any static protocol in the registry is now
+  automatically eligible for TX emulation — no manual maintenance needed.
+
 ## [0.9.0.6] - 2026-03-30
 
 ### Changed

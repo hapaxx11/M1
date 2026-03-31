@@ -187,6 +187,11 @@ enum {
 	REVERS_RB2,
 	ROGER,
 	SOMFY_KEYTIS,
+	/* --- Specialty protocols --- */
+	TREADMILL37,
+	POCSAG,
+	TPMS_GENERIC,
+	PCSG_GENERIC,
 };
 
 /* Weather station decoded data */
@@ -200,8 +205,22 @@ typedef struct {
 } SubGHz_Weather_Data_t;
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
-extern const char *protocol_text[];
-extern const SubGHz_protocol_t subghz_protocols_list[];
+
+/*
+ * Legacy compatibility: protocol_text[] and subghz_protocols_list[] are now
+ * populated at init time from the protocol registry (subghz_protocol_registry.h).
+ * These pointers provide backward-compatible array-style indexing:
+ *   protocol_text[i]           → protocol name string
+ *   subghz_protocols_list[i]   → timing parameters
+ *
+ * For new code, prefer subghz_protocol_registry[i].name and .timing directly.
+ */
+extern const char **protocol_text_ptr;
+extern SubGHz_protocol_t *subghz_protocols_list_ptr;
+
+/* Redirect old names to pointers so existing code compiles unchanged */
+#define protocol_text          protocol_text_ptr
+#define subghz_protocols_list  subghz_protocols_list_ptr
 
 void subghz_decenc_init(void);
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);
