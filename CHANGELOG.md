@@ -53,6 +53,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     implementations.  Ported Flipper code calling these functions compiles
     without renaming.
 
+- **Manchester codec building blocks** — new inline headers porting Flipper's
+  Manchester encoder/decoder from `lib/toolbox/`:
+  - `Sub_Ghz/subghz_manchester_decoder.h` — table-driven Manchester decoder
+    state machine (`ManchesterEvent`, `ManchesterState`, `manchester_advance()`)
+    used by Somfy Telis, Somfy Keytis, Marantec, FAAC SLH, Revers RB2, and
+    other Manchester-coded protocols.
+  - `Sub_Ghz/subghz_manchester_encoder.h` — Manchester encoder
+    (`manchester_encoder_advance/reset/finish`) that converts data bits into
+    Manchester-coded half-bit symbols for TX waveform generation.
+
+- **TX encoder building blocks** — new inline headers porting Flipper's
+  encoder infrastructure:
+  - `Sub_Ghz/subghz_level_duration.h` — `LevelDuration` type (compact
+    level + duration pair) used by encoder upload buffers and the TX ISR.
+  - `Sub_Ghz/subghz_block_encoder.h` — `SubGhzProtocolBlockEncoder` struct
+    for TX state tracking, MSB-first bit-array helpers
+    (`set_bit_array`/`get_bit_array`), and `get_upload_from_bit_array()` to
+    convert encoded bit arrays into `LevelDuration[]` waveforms.  All inline.
+
 ## [0.9.0.6] - 2026-03-30
 
 ### Changed

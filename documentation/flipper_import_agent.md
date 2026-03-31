@@ -433,6 +433,108 @@ uint8_t par = subghz_protocol_blocks_get_parity(key, 24);
 uint8_t crc = subghz_protocol_blocks_crc8(msg, len, 0x31, 0x00);
 ```
 
+### Manchester Decoder (`subghz_manchester_decoder.h`)
+
+Maps to Flipper's `lib/toolbox/manchester_decoder.{h,c}`.
+
+Table-driven Manchester decoder state machine used by protocols like Somfy Telis,
+Somfy Keytis, Marantec, FAAC SLH, and Revers RB2.  Feed it (short/long) ×
+(high/low) events and it produces decoded bits.
+
+```c
+#include "subghz_manchester_decoder.h"
+
+ManchesterState manchester_state = ManchesterStateMid1;
+bool bit_value;
+
+// Classify each pulse pair into a Manchester event:
+ManchesterEvent event;
+if (is_short && is_high) event = ManchesterEventShortHigh;
+else if (is_short && !is_high) event = ManchesterEventShortLow;
+else if (!is_short && is_high) event = ManchesterEventLongHigh;
+else event = ManchesterEventLongLow;
+
+// Advance the state machine:
+if (manchester_advance(manchester_state, event, &manchester_state, &bit_value)) {
+    // bit_value is valid — accumulate it
+    subghz_protocol_blocks_add_bit(&decoder, bit_value);
+}
+```
+
+### Manchester Encoder (`subghz_manchester_encoder.h`)
+
+Maps to Flipper's `lib/toolbox/manchester_encoder.{h,c}`.
+
+Converts data bits into Manchester-coded symbols for TX waveform generation.
+
+```c
+#include "subghz_manchester_encoder.h"
+
+ManchesterEncoderState enc_state;
+manchester_encoder_reset(&enc_state);
+
+// Encode each data bit:
+for (int i = 0; i < bit_count; i++) {
+    ManchesterEncoderResult result;
+    bool consumed = false;
+    while (!consumed) {
+        consumed = manchester_encoder_advance(&enc_state, data_bits[i], &result);
+        // result is ShortLow/ShortHigh/LongLow/LongHigh
+        // → map to LevelDuration and append to upload buffer
+    }
+}
+
+// Emit trailing symbol:
+ManchesterEncoderResult final = manchester_encoder_finish(&enc_state);
+```
+
+### Block Encoder (`subghz_block_encoder.h`)
+
+Maps to Flipper's `lib/subghz/blocks/encoder.{h,c}`.
+
+Provides `SubGhzProtocolBlockEncoder` for TX state tracking, bit-array
+helpers, and an upload generator that converts bit arrays to `LevelDuration[]`.
+
+```c
+#include "subghz_block_encoder.h"
+
+// Build a bit array (MSB-first, matching Flipper layout):
+uint8_t data[4] = {0};
+subghz_protocol_blocks_set_bit_array(true,  data, 0, sizeof(data));  // bit 0 = 1
+subghz_protocol_blocks_set_bit_array(false, data, 1, sizeof(data));  // bit 1 = 0
+
+// Convert to LevelDuration waveform:
+LevelDuration upload[128];
+size_t upload_size = subghz_protocol_blocks_get_upload_from_bit_array(
+    data, 24, upload, 128, 500,  // 500μs per bit
+    SubGhzProtocolBlockAlignBitLeft);
+
+// Track TX playback:
+SubGhzProtocolBlockEncoder encoder = {
+    .upload      = upload,
+    .size_upload = upload_size,
+    .repeat      = 4,
+    .is_running  = true,
+};
+```
+
+### LevelDuration (`subghz_level_duration.h`)
+
+Maps to Flipper's `lib/toolbox/level_duration.h`.
+
+A compact (level, duration_μs) pair used by encoders and the TX path.
+
+```c
+#include "subghz_level_duration.h"
+
+LevelDuration ld = level_duration_make(true, 500);   // HIGH for 500μs
+bool is_high = level_duration_get_level(ld);          // true
+uint32_t dur = level_duration_get_duration(ld);       // 500
+
+LevelDuration rst = level_duration_reset();           // sentinel
+bool is_rst = level_duration_is_reset(rst);           // true
+```
+
 ### Mapping: Flipper → M1
 
 | Flipper file | M1 equivalent | Notes |
@@ -443,8 +545,13 @@ uint8_t crc = subghz_protocol_blocks_crc8(msg, len, 0x31, 0x00);
 | `lib/subghz/blocks/generic.c` | `Sub_Ghz/subghz_block_generic.c` | Only the commit bridge |
 | `lib/subghz/blocks/math.h` | `Sub_Ghz/subghz_blocks_math.h` | Wraps `bit_util.h` |
 | `lib/subghz/blocks/math.c` | `m1_csrc/bit_util.c` | Already exists |
-| `lib/subghz/blocks/encoder.h` | (not yet ported) | Needed for TX encoding |
-| `lib/toolbox/manchester_decoder.h` | (not yet ported) | Planned for Phase 3 |
+| `lib/subghz/blocks/encoder.h` | `Sub_Ghz/subghz_block_encoder.h` | All-inline header |
+| `lib/subghz/blocks/encoder.c` | (not needed — all inline) | |
+| `lib/toolbox/level_duration.h` | `Sub_Ghz/subghz_level_duration.h` | LevelDuration type |
+| `lib/toolbox/manchester_decoder.h` | `Sub_Ghz/subghz_manchester_decoder.h` | All-inline header |
+| `lib/toolbox/manchester_decoder.c` | (not needed — all inline) | |
+| `lib/toolbox/manchester_encoder.h` | `Sub_Ghz/subghz_manchester_encoder.h` | All-inline header |
+| `lib/toolbox/manchester_encoder.c` | (not needed — all inline) | |
 | `lib/toolbox/bit_lib.h` | `lfrfid/lfrfid_bit_lib.h` | Exists for LF-RFID |
 
 ---

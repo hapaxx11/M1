@@ -145,13 +145,15 @@ const char* subghz_protocol_get_name(uint16_t index);
 /* Flipper-Compatible Building Blocks                                         */
 /*                                                                            */
 /* The canonical implementations now live in dedicated headers that mirror     */
-/* Flipper's lib/subghz/blocks/ directory:                                    */
+/* Flipper's lib/subghz/blocks/ and lib/toolbox/ directories:                 */
 /*                                                                            */
-/*   subghz_blocks_math.h    — DURATION_DIFF, bit_read/set/clear,            */
-/*                             CRC, parity, LFSR, reverse_key, get_parity     */
-/*   subghz_block_decoder.h  — SubGhzBlockDecoder struct, add_bit,            */
-/*                             add_to_128_bit, get_hash_data                  */
-/*   subghz_block_generic.h  — SubGhzBlockGeneric struct (decoded output)     */
+/*   subghz_blocks_math.h          — DURATION_DIFF, bit macros, CRC, parity  */
+/*   subghz_block_decoder.h        — SubGhzBlockDecoder struct, add_bit       */
+/*   subghz_block_generic.h        — SubGhzBlockGeneric struct (decode out)   */
+/*   subghz_level_duration.h       — LevelDuration pair (encoder waveforms)   */
+/*   subghz_block_encoder.h        — SubGhzProtocolBlockEncoder, bit array    */
+/*   subghz_manchester_decoder.h   — manchester_advance() state machine       */
+/*   subghz_manchester_encoder.h   — manchester_encoder_advance/reset/finish  */
 /*                                                                            */
 /* Include them here so any file that includes the registry header             */
 /* automatically gets access to all Flipper-compatible helpers.               */
@@ -160,6 +162,10 @@ const char* subghz_protocol_get_name(uint16_t index);
 #include "subghz_blocks_math.h"
 #include "subghz_block_decoder.h"
 #include "subghz_block_generic.h"
+#include "subghz_level_duration.h"
+#include "subghz_block_encoder.h"
+#include "subghz_manchester_decoder.h"
+#include "subghz_manchester_encoder.h"
 
 /*============================================================================*/
 /* Convenience Macro for Declaring a Protocol                                 */
