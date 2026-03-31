@@ -840,23 +840,36 @@ If new Flipper protocols appear in future `dev` branch updates, repeat the
 analysis by comparing Flipper's `lib/subghz/protocols/` against M1's
 `protocol_text[]` array.
 
-#### Security+ 1.0 naming compatibility issue
+#### Security+ 1.0 naming compatibility — RESOLVED
 
 Flipper saves Security+ 1.0 signals as `Protocol: Security+ 1.0`
-(`SUBGHZ_PROTOCOL_SECPLUS_V1_NAME` in `secplus_v1.h`).  M1's Security+ 1.0
-decode logic already exists inside `m1_chamberlain_decode.c` and
-`m1_liftmaster_decode.c`, but those entries appear in `protocol_text[]` as
-`"Cham_Code"` and `"Liftmaster"` respectively.
+(`SUBGHZ_PROTOCOL_SECPLUS_V1_NAME` in `secplus_v1.h`).  The M1 registry now
+has the `LIFTMASTER_10BIT` entry registered under the name `"Security+ 1.0"`
+(matching Flipper exactly).  The registry-based `.sub` file loader resolves
+this name correctly — it looks up `"Security+ 1.0"` in the registry, finds
+it as `SubGhzProtocolTypeDynamic`, and rejects it with "rolling code" (which
+is correct behaviour — Security+ 1.0 uses rolling codes).
 
-**Impact:** A `.sub` file captured on a Flipper and saved as `Security+ 1.0`
-will **fail to load** on M1 because no `protocol_text[]` entry matches the
-string `"Security+ 1.0"`.
+The base Chamberlain entry remains as `"Cham_Code"` (matching Flipper's
+`SUBGHZ_PROTOCOL_CHAMB_CODE_NAME`).  Cham_Code `.sub` files now load
+correctly via the registry-based lookup and are encoded using the protocol's
+timing ratio from the registry.
 
-**Fix required:** Add `"Security+ 1.0"` as an additional entry in
-`protocol_text[]` (and a corresponding alias entry in `subghz_protocols_list[]`
-and `subghz_decode_protocol()`) that routes to the existing Security+ 1.0
-decode path.  The existing `"Cham_Code"` and `"Liftmaster"` entries must be
-kept for backwards compatibility with M1-saved files.
+#### `.sub` file interop — registry-based matching
+
+The `.sub` file KEY-type protocol matching in `m1_sub_ghz.c` now uses the
+protocol registry (`subghz_protocol_find_by_name()`) as the primary lookup:
+
+1. Protocol name is looked up in the registry
+2. `SubGhzProtocolTypeDynamic` / `Weather` / `TPMS` → rejected as rolling code
+3. `SubGhzProtocolTypeStatic` → encoding ratio computed from registry timing
+4. Unknown protocol → falls back to legacy `strstr()` matching
+
+This fixed multiple interop issues:
+- **Cham_Code** — was previously unmatched (no strstr entry)
+- **Marantec24** — was incorrectly caught by `strstr("Marantec")` rolling-code check
+- **All Phase 2 static protocols** — Clemsa, BETT, MegaCode, Centurion, etc.
+  were missing from both strstr branches
 
 ### LF-RFID `.rfid` files
 
@@ -870,11 +883,12 @@ IR protocol names map to IRMP protocol IDs in `m1_csrc/flipper_ir.c`.
 When Flipper adds a new IR protocol, add the name-to-IRMP-ID mapping in
 `flipper_ir_protocol_to_irmp()`.
 
-#### IR protocols not yet mapped (gap analysis — March 2026)
+#### IR protocols not yet mapped — NONE
 
-| Flipper `InfraredProtocol` enum | Flipper name string | Fix |
-|---------------------------------|---------------------|-----|
-| `InfraredProtocolNEC42ext` | `"NEC42ext"` | Add `{ "NEC42ext", IRMP_NEC42_PROTOCOL }` to the mapping table in `flipper_ir.c` — NEC42 extended addressing uses the same IRMP decoder |
+All Flipper IR protocol names are mapped in the `ir_proto_table[]` in
+`flipper_ir.c`.  `NEC42ext` was added and maps to `IRMP_NEC42_PROTOCOL`.
+If Flipper adds new IR protocols in future updates, add the
+name-to-IRMP-ID mapping to `ir_proto_table[]`.
 
 ### NFC `.nfc` files
 

@@ -72,6 +72,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`set_bit_array`/`get_bit_array`), and `get_upload_from_bit_array()` to
     convert encoded bit arrays into `LevelDuration[]` waveforms.  All inline.
 
+- **Generic decoder conversion** — both `subghz_decode_generic_pwm()` and
+  `subghz_decode_generic_manchester()` now use the Flipper-compatible building
+  blocks (`SubGhzBlockDecoder`, `SubGhzBlockGeneric`, `DURATION_DIFF`,
+  `subghz_protocol_blocks_add_bit`, `manchester_advance`,
+  `subghz_block_generic_commit_to_m1`).  Reads timing from the protocol
+  registry directly, removing the legacy `subghz_protocols_list[]` dependency.
+  All protocols that delegate to these generic decoders benefit automatically.
+
+### Fixed
+
+- **`.sub` file interop — registry-based protocol matching** — replaced the
+  fragile `strstr()` chain for KEY-type `.sub` file playback with a
+  registry-driven lookup.  `subghz_protocol_find_by_name()` resolves the
+  protocol, checks the `SubGhzProtocolType`, and computes encoding timing
+  from the registry's `te_short`/`te_long` ratio.  This fixes:
+  - **Cham_Code** (Chamberlain) — previously fell through to "unsupported"
+  - **Marantec24** — previously caught by rolling-code check via substring
+    match on `"Marantec"` (which is Dynamic); Marantec24 is Static
+  - **All static protocols** added in March 2026 (Clemsa, BETT, MegaCode,
+    Centurion, Elro, Intertechno, Firefly, etc.) — previously missing from
+    both strstr branches
+  - Legacy strstr matching retained as fallback for protocol names not in
+    the registry (e.g. third-party Flipper firmware captures)
+
+- **`subghz_protocol_is_static()` — registry-driven** — replaced hardcoded
+  23-entry switch-case with a single registry type check
+  (`SubGhzProtocolTypeStatic`).  Any static protocol in the registry is now
+  automatically eligible for TX emulation — no manual maintenance needed.
+
 ## [0.9.0.6] - 2026-03-30
 
 ### Changed

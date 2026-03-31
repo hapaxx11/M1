@@ -23,6 +23,7 @@
 #include "m1_sub_ghz_api.h"
 //#include "m1_sub_ghz.h"
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_protocol_registry.h"
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
@@ -1550,48 +1551,20 @@ static uint16_t  subghz_tx_encode_len = 0;  /* Number of uint16_t samples */
   * @brief  Check if a protocol is a static-code type safe for TX emulation.
   *         Static codes have a fixed key (no rolling code / hopping).
   *
-  *         Rolling-code protocols (KeeLoq, Security+ 1.0/2.0, FAAC SLH,
-  *         Somfy, StarLine, Nice Flor-S, etc.) are intentionally excluded:
-  *         retransmitting a captured rolling code is ineffective (the receiver
-  *         has already advanced its counter) and could desynchronise legitimate
-  *         remotes.  Weather/TPMS sensor protocols are also excluded since
-  *         transmitting sensor data serves no useful purpose.
+  *         Uses the protocol registry's type field instead of a hardcoded
+  *         switch-case — any protocol registered as SubGhzProtocolTypeStatic
+  *         is automatically eligible for TX.  Rolling-code (Dynamic),
+  *         Weather, and TPMS protocols are excluded.
   *
-  * @param  protocol  protocol enum value
+  * @param  protocol  protocol enum value (registry index)
   * @retval true if protocol is static-code and safe to transmit
   */
 /*============================================================================*/
 static bool subghz_protocol_is_static(uint16_t protocol)
 {
-	switch (protocol)
-	{
-		case PRINCETON:
-		case CAME_12BIT:
-		case NICE_FLO:
-		case LINEAR_10BIT:
-		case HOLTEK_HT12E:
-		case GATE_TX:
-		case SMC5326:
-		case POWER_SMART:
-		case ANSONIC:
-		case MARANTEC:
-		case FIREFLY:
-		case CLEMSA:
-		case BETT:
-		case MEGACODE:
-		case INTERTECHNO:
-		case ELRO:
-		case CENTURION:
-		case MARANTEC24:
-		case HAY21:
-		case MAGELLAN:
-		case INTERTECHNO_V3:
-		case LINEAR_DELTA3:
-		case ROGER:
-			return true;
-		default:
-			return false;
-	}
+	if (protocol >= subghz_protocol_registry_count)
+		return false;
+	return (subghz_protocol_registry[protocol].type == SubGhzProtocolTypeStatic);
 }
 
 /*============================================================================*/
@@ -2933,32 +2906,47 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	{
 		uint32_t te_long, gap_low;
 
-		/* Rolling code protocols — cannot replay from KEY data.
-		 * Protocol name strings match Flipper's SUBGHZ_PROTOCOL_*_NAME constants. */
-		if (strstr(key_protocol, "KeeLoq") || strstr(key_protocol, "Keeloq") ||
-		    strstr(key_protocol, "Security") ||
-		    strstr(key_protocol, "Star") ||
-		    strstr(key_protocol, "Faac") || strstr(key_protocol, "FAAC") || /* "Faac SLH" (Flipper) or legacy "FAAC SLH" */
-		    strstr(key_protocol, "Somfy") || strstr(key_protocol, "Hormann") ||
-		    strstr(key_protocol, "Marantec") ||
-		    strstr(key_protocol, "Atomo") ||   /* CAME Atomo */
-		    strstr(key_protocol, "Twee") ||    /* CAME TWEE */
-		    strstr(key_protocol, "FloR") ||    /* Nice FloR-S */
-		    strstr(key_protocol, "Scher"))     /* Scher-Khan rolling code */
-		{
-			f_close(&f_sgh);
-			f_unlink(FLIPPER_SUB_TMP_SGH);
-			free(line_buf); free(out_buf);
-			return 6; /* rolling code — use RAW capture */
+		/* Look up the protocol in the registry to determine its type and
+		 * encoding parameters.  This replaces the previous fragile strstr()
+		 * chain with a single table-driven lookup. */
+		int16_t reg_idx = subghz_protocol_find_by_name(key_protocol);
+
+		/* Rolling-code / dynamic protocols — cannot replay from KEY data.
+		 * Also reject unknown protocols and non-decodable types. */
+		if (reg_idx >= 0) {
+			const SubGhzProtocolDef *proto = &subghz_protocol_registry[reg_idx];
+			if (proto->type == SubGhzProtocolTypeDynamic ||
+			    proto->type == SubGhzProtocolTypeWeather ||
+			    proto->type == SubGhzProtocolTypeTPMS)
+			{
+				f_close(&f_sgh);
+				f_unlink(FLIPPER_SUB_TMP_SGH);
+				free(line_buf); free(out_buf);
+				return 6; /* rolling code / weather / TPMS — use RAW capture */
+			}
 		}
 
-		/* Map protocol to encoding parameters */
-		if (strstr(key_protocol, "Princeton") || strstr(key_protocol, "Gate") ||
-		    strstr(key_protocol, "Holtek") || strstr(key_protocol, "Linear") ||
-		    strstr(key_protocol, "SMC5326") || strstr(key_protocol, "Power") ||
-		    strstr(key_protocol, "iDo"))
+		/* Map protocol to OOK PWM encoding parameters.
+		 * Use registry timing if available, with strstr() fallback for
+		 * protocol names that may not be in the registry (e.g. third-party
+		 * Flipper firmware captures). */
+		if (reg_idx >= 0 &&
+		    subghz_protocol_registry[reg_idx].type == SubGhzProtocolTypeStatic &&
+		    subghz_protocol_registry[reg_idx].timing.te_short > 0 &&
+		    subghz_protocol_registry[reg_idx].timing.te_long > 0)
 		{
-			/* 1:3 ratio protocols */
+			/* Registry-based: compute ratio from the protocol's actual timing */
+			const SubGhzBlockConst *t = &subghz_protocol_registry[reg_idx].timing;
+			if (key_te == 0) key_te = t->te_short;
+			te_long = (uint32_t)key_te * t->te_long / t->te_short;
+			gap_low = key_te * 30;
+		}
+		else if (strstr(key_protocol, "Princeton") || strstr(key_protocol, "Gate") ||
+		         strstr(key_protocol, "Holtek") || strstr(key_protocol, "Linear") ||
+		         strstr(key_protocol, "SMC5326") || strstr(key_protocol, "Power") ||
+		         strstr(key_protocol, "iDo"))
+		{
+			/* 1:3 ratio protocols (legacy strstr fallback) */
 			if (key_te == 0) key_te = 350;
 			te_long = key_te * 3;
 			gap_low = key_te * 30;
@@ -2966,7 +2954,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		else if (strstr(key_protocol, "CAME") || strstr(key_protocol, "Nice") ||
 		         strstr(key_protocol, "Ansonic"))
 		{
-			/* 1:2 ratio protocols */
+			/* 1:2 ratio protocols (legacy strstr fallback) */
 			if (key_te == 0) key_te = 320;
 			te_long = key_te * 2;
 			gap_low = key_te * 36;
