@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Furi compatibility layer** (`lib/furi/`) — minimal shim that implements the
+  subset of Momentum/Flipper's Furi runtime used by Sub-GHz protocol decoders.
+  Enables near-direct porting of protocol code from Momentum-Firmware with minimal
+  edits.  Provides:
+  - `FuriString` — dynamic string type (`furi_string_alloc/free/cat_printf/get_cstr`)
+  - `FURI_LOG_E/W/I/D/T` — logging macros mapped to M1's `m1_logdb_printf()`
+  - `furi_assert` / `furi_check` / `furi_crash` — assertion macros
+  - Common defines (`MAX`, `MIN`, `CLAMP`, `COUNT_OF`, `UNUSED`, etc.)
+  - Aggregate `<furi.h>` header matching Momentum's include convention
+
 - **Sub-GHz Phase 4 — Specialty protocols**: Treadmill37 (QH-433 OOK PWM, 37 bits),
   POCSAG (pager decode, auto-detects 512/1200/2400 baud, FSK/NRZ),
   TPMS Generic (catch-all TPMS Manchester decoder), PCSG Generic (pager Manchester

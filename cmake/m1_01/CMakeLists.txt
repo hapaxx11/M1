@@ -65,6 +65,8 @@ target_include_directories(m1_01 INTERFACE
     ../../USB/Class/HID/Inc
     ../../USB/Core/Inc
     ../../USB/Core/Src
+    ../../lib/furi
+    ../../lib/furi/core
 )
 
 target_sources(m1_01 INTERFACE
@@ -317,6 +319,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/m1_sub_ghz_decenc.c
     ../../Sub_Ghz/subghz_protocol_registry.c
     ../../Sub_Ghz/subghz_block_generic.c
+    ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
     ../../Sub_Ghz/protocols/m1_secplus_v2_decode.c
     ../../Sub_Ghz/protocols/m1_came_decode.c
