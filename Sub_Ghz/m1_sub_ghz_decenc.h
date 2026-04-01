@@ -211,6 +211,13 @@ enum {
 	POCSAG,
 	TPMS_GENERIC,
 	PCSG_GENERIC,
+
+	/* --- Momentum Phase 5: Advanced weather protocols --- */
+	ACURITE_592TXR,
+	ACURITE_986,
+	TX_8300,
+	OREGON_V1,
+	OREGON3,
 };
 
 /* Weather station decoded data */
@@ -278,6 +285,13 @@ uint8_t subghz_decode_bin_raw(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_pwm(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_manchester(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_ppm(uint16_t p, uint16_t pulsecount);
+
+/* Momentum Phase 5: Advanced weather protocols */
+uint8_t subghz_decode_acurite_592txr(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_acurite_986(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_tx_8300(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_oregon_v1(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_oregon3(uint16_t p, uint16_t pulsecount);
 
 /* New protocol decoders */
 uint8_t subghz_decode_chamberlain(uint16_t p, uint16_t pulsecount);

@@ -141,6 +141,13 @@ extern uint8_t subghz_decode_honeywell_wdb(uint16_t, uint16_t);
 extern uint8_t subghz_decode_keyfinder(uint16_t, uint16_t);
 extern uint8_t subghz_decode_x10(uint16_t, uint16_t);
 
+/* Momentum Phase 5: Advanced weather protocols */
+extern uint8_t subghz_decode_acurite_592txr(uint16_t, uint16_t);
+extern uint8_t subghz_decode_acurite_986(uint16_t, uint16_t);
+extern uint8_t subghz_decode_tx_8300(uint16_t, uint16_t);
+extern uint8_t subghz_decode_oregon_v1(uint16_t, uint16_t);
+extern uint8_t subghz_decode_oregon3(uint16_t, uint16_t);
+
 /* Generic decoders (used as delegates by simple protocols) */
 extern uint8_t subghz_decode_generic_pwm(uint16_t, uint16_t);
 extern uint8_t subghz_decode_generic_manchester(uint16_t, uint16_t);
@@ -956,6 +963,48 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Industrial,
         .timing = { .te_short=833, .te_long=1666, .te_tolerance_pct=20, .min_count_bit_for_found=32 },
         .decode = subghz_decode_pcsg_generic,
+    },
+
+    /* --- Momentum Phase 5: Advanced weather protocols --- */
+    [ACURITE_592TXR] = {
+        .name   = "Acurite_592TXR",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=200, .te_long=400, .te_delta=90, .min_count_bit_for_found=56 },
+        .decode = subghz_decode_acurite_592txr,
+    },
+    [ACURITE_986] = {
+        .name   = "Acurite_986",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=800, .te_long=1750, .te_delta=50, .min_count_bit_for_found=40 },
+        .decode = subghz_decode_acurite_986,
+    },
+    [TX_8300] = {
+        .name   = "TX_8300",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=1940, .te_long=3880, .te_delta=250, .min_count_bit_for_found=72 },
+        .decode = subghz_decode_tx_8300,
+    },
+    [OREGON_V1] = {
+        .name   = "Oregon_V1",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=1465, .te_long=2930, .te_delta=350, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_oregon_v1,
+    },
+    [OREGON3] = {
+        .name   = "Oregon3",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=500, .te_long=1100, .te_delta=300, .min_count_bit_for_found=32 },
+        .decode = subghz_decode_oregon3,
     },
 };
 
