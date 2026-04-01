@@ -194,6 +194,10 @@ void Error_Handler(void);
 #define PD0_GPIO_Port GPIOD
 #define PD1_Pin GPIO_PIN_1
 #define PD1_GPIO_Port GPIOD
+#define FDCAN1_RX_Pin PD0_Pin
+#define FDCAN1_RX_GPIO_Port PD0_GPIO_Port
+#define FDCAN1_TX_Pin PD1_Pin
+#define FDCAN1_TX_GPIO_Port PD1_GPIO_Port
 #define SDIO1_CMD_Pin GPIO_PIN_2
 #define SDIO1_CMD_GPIO_Port GPIOD
 #define PD3_Pin GPIO_PIN_3
@@ -245,6 +249,7 @@ extern SPI_HandleTypeDef 	hspi4;
 extern SD_HandleTypeDef 	hsd1;
 extern TIM_HandleTypeDef	Timerhdl_IrRx;
 extern RTC_HandleTypeDef 	hrtc;
+extern FDCAN_HandleTypeDef	hfdcan1;
 
 extern EXTI_HandleTypeDef H_EXTI_0;
 
