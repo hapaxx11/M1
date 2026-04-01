@@ -7,6 +7,19 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.9] - 2026-04-01
+
+### Changed
+
+- Updated Hapax H-crossbar mountain logo across all three display sizes:
+  - **128x64** (splash screen): Wider H crossbar with vertical pillars clearly
+    separated from the mountain slopes
+  - **40x32** (boot logo): Mountain now floats on black background instead of
+    sitting in a filled white rectangle; H crossbar with visible vertical pillars
+  - **26x14** (status bar icon): H crossbar detail visible even at this small size
+- Added `tools/png_to_xbm_array.py` — bidirectional PNG ↔ u8g2 XBM byte array
+  converter for future logo editing. Supports img2c, c2img, and export-all modes.
+
 ## [0.9.0.8] - 2026-03-31
 
 ### Added
