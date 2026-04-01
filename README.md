@@ -53,6 +53,15 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 
 > **Note:** Bad-BT is under active development and may not work reliably on all target devices. Bluetooth pairing and keystroke delivery depend on the target's BLE HID support.
 
+### CAN Bus (FDCAN)
+- **CAN Commander** — sniff, send, and analyse CAN bus traffic via the J7 (X10) header
+- **Sniffer** — real-time CAN frame display with baud rate cycling (125 k / 250 k / 500 k / 1 Mbps)
+- **Send Frame** — build and transmit arbitrary CAN frames
+- Supports standard 11-bit CAN IDs (Classic CAN)
+- **Requires external CAN transceiver** — recommended: [Waveshare SN65HVD230 CAN Board](https://www.waveshare.com/sn65hvd230-can-board.htm) (3.3 V, ESD protected)
+
+> **Note:** The M1 does not include an on-board CAN transceiver. See [`HARDWARE.md`](HARDWARE.md) for wiring instructions.
+
 ### External Apps
 - **ELF app loader** — load and run third-party apps from SD card
 - Browse and launch `.m1app` files from the Apps menu
