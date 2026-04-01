@@ -40,6 +40,10 @@
 #include "m1_flipper_integration.h"
 #endif
 
+#ifdef M1_APP_CAN_ENABLE
+#include "m1_can.h"
+#endif
+
 /*************************** D E F I N E S ************************************/
 
 //************************** C O N S T A N T **********************************/
@@ -259,11 +263,42 @@ S_M1_Menu_t menu_GPIO_Signal_Gen =
     "Signal Gen", signal_gen_run, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+#ifdef M1_APP_CAN_ENABLE
+S_M1_Menu_t menu_CAN_Sniffer =
+{
+    "Sniffer", can_sniffer, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_CAN_Send =
+{
+    "Send Frame", can_send, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_CAN_Saved =
+{
+    "Saved", can_saved, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_CAN =
+{
+    "CAN Bus", menu_can_init, menu_can_deinit, NULL, 3, 0, NULL, NULL,
+    {&menu_CAN_Sniffer, &menu_CAN_Send, &menu_CAN_Saved}
+};
+#endif /* M1_APP_CAN_ENABLE */
+
+#ifdef M1_APP_CAN_ENABLE
+S_M1_Menu_t menu_GPIO =
+{
+    "GPIO", menu_gpio_init, menu_gpio_exit, gpio_xkey_handler, 6, 0, menu_m1_icon_gpio, gpio_gui_update,
+    {&menu_GPIO_GPIO_Manual_Control, &menu_GPIO_3_3V_On_GPIO, &menu_GPIO_5V_On_GPIO, &menu_GPIO_USB_UART, &menu_GPIO_Signal_Gen, &menu_CAN}
+};
+#else
 S_M1_Menu_t menu_GPIO =
 {
     "GPIO", menu_gpio_init, menu_gpio_exit, gpio_xkey_handler, 5, 0, menu_m1_icon_gpio, gpio_gui_update,
     {&menu_GPIO_GPIO_Manual_Control, &menu_GPIO_3_3V_On_GPIO, &menu_GPIO_5V_On_GPIO, &menu_GPIO_USB_UART, &menu_GPIO_Signal_Gen}
 };
+#endif /* M1_APP_CAN_ENABLE */
 
 /*------------------------------- > Settings ---------------------------------*/
 

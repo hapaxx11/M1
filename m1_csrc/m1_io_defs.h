@@ -135,6 +135,11 @@
 #define PD0_GPIO_Port 						GPIOD
 #define PD1_Pin 							GPIO_PIN_1
 #define PD1_GPIO_Port 						GPIOD
+/* FDCAN1 aliases for J7 (X10) CAN bus header */
+#define FDCAN1_RX_Pin						PD0_Pin
+#define FDCAN1_RX_GPIO_Port					PD0_GPIO_Port
+#define FDCAN1_TX_Pin						PD1_Pin
+#define FDCAN1_TX_GPIO_Port					PD1_GPIO_Port
 #define SDIO1_CMD_Pin 						GPIO_PIN_2
 #define SDIO1_CMD_GPIO_Port 				GPIOD
 #define PD3_Pin 							GPIO_PIN_3

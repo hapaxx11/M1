@@ -113,6 +113,7 @@ target_sources(m1_01 INTERFACE
     ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_rcc_ex.c
     ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_rtc.c
     ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_rtc_ex.c
+    ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_fdcan.c
     ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_sd.c
     ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_sd_ex.c
     ../../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_spi.c
@@ -486,6 +487,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_fw_update_bl.c
     ../../m1_csrc/m1_rpc.c
     ../../m1_csrc/m1_gpio.c
+    ../../m1_csrc/m1_can.c
     ../../m1_csrc/m1_i2c.c
     ../../m1_csrc/m1_infrared.c
     ../../m1_csrc/m1_int_hdl.c

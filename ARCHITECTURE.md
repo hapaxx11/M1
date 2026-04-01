@@ -9,7 +9,7 @@ The M1 firmware is organized into the following main components:
 | Directory | Description |
 |-----------|-------------|
 | `Core/` | Application entry, FreeRTOS tasks, HAL configuration |
-| `m1_csrc/` | M1 application logic (display, NFC, RFID, IR, Sub-GHz, firmware update) |
+| `m1_csrc/` | M1 application logic (display, NFC, RFID, IR, Sub-GHz, CAN, firmware update) |
 | `Battery/` | Battery monitoring |
 | `NFC/` | NFC (13.56 MHz) support |
 | `lfrfid/` | LF RFID (125 kHz) support |

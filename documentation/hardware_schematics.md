@@ -264,7 +264,7 @@ MCU's CAN-FD peripheral (`FDCAN1` or `FDCAN2`) is pinned out for accessories.
 | RGB LED | D11 + IC1 I2C LED driver | Yes |
 | USB PD negotiation | USB PD controller (U5) | Not exposed in stock firmware |
 | External UART accessory | J7 (X10) UART1 header | Not exposed in stock firmware |
-| External CAN-FD | J7 (X10) FDCAN header | Not exposed in stock firmware |
+| External CAN-FD | J7 (X10) FDCAN header | **Hapax: CAN Commander** (Sniffer, Send) — requires external transceiver |
 
 ---
 
