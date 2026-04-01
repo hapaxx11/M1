@@ -336,17 +336,22 @@ M1-specific wrappers/adapters derived from the Flipper HAL contract.
 
 Source: `lib/subghz/protocols/` in `flipperzero-firmware` (GPLv3)
 
-The 91 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
+The 96 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
 the same RF timing specifications as Flipper (so `.sub` files remain compatible), but the M1
-code is not a copy of Flipper source.  The sole exception is noted below.  The total of 91
-comprises 90 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
+code is not a copy of Flipper source.  The sole exception is noted below.  The total of 96
+comprises 95 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
 
 | M1 file | Flipper origin | Notes |
 |---------|---------------|-------|
 | `Sub_Ghz/protocols/m1_chamberlain_decode.c` | `lib/subghz/protocols/secplus_v1.c` | Contains direct port of argilo/secplus ternary algorithm; GPLv3 attribution present |
 | All other `Sub_Ghz/protocols/m1_*_decode.c` (90 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
+| `Sub_Ghz/protocols/m1_acurite_592txr_decode.c` | `lib/subghz/protocols/acurite_592txr.c` | **Independent port** — 56-bit PWM, sum checksum + parity |
+| `Sub_Ghz/protocols/m1_acurite_986_decode.c` | `lib/subghz/protocols/acurite_986.c` | **Independent port** — 40-bit PWM, CRC-8 poly 0x07, LSB bit reversal |
+| `Sub_Ghz/protocols/m1_tx_8300_decode.c` | `lib/subghz/protocols/tx_8300.c` | **Independent port** — 72-bit OOK, Fletcher-8 checksum, 128-bit decoder |
+| `Sub_Ghz/protocols/m1_oregon_v1_decode.c` | `lib/subghz/protocols/oregon_v1.c` | **Independent port** — Manchester, 32-bit, byte-sum checksum |
+| `Sub_Ghz/protocols/m1_oregon3_decode.c` | `lib/subghz/protocols/oregon3.c` | **Independent port** — Manchester inverted, 32-bit, nibble checksum |
 
-**Subtotal:** 1 directly-copied file; 89 independent ports (+ 1 bin_raw utility file)
+**Subtotal:** 1 directly-copied file; 94 independent ports (+ 1 bin_raw utility file)
 
 ---
 
@@ -386,10 +391,10 @@ documentation and `.sub`/`.rfid`/`.nfc`/`.ir` file samples.
 | Category | Files | Directly copied | Independent ports/writes |
 |----------|-------|-----------------|--------------------------|
 | LF-RFID protocols | 57 | 57 | 0 |
-| Sub-GHz decoders | 91 | 1 | 89 (+ 1 bin_raw) |
+| Sub-GHz decoders | 96 | 1 | 94 (+ 1 bin_raw) |
 | Furi HAL reference (docs) | 45 | 45 | — |
 | Flipper file parsers | 10 | 0 | 10 |
-| **Total** | **203** | **58 compiled + 45 docs** | **99** |
+| **Total** | **208** | **58 compiled + 45 docs** | **104** |
 
 The **directly-copied compiled files** total ~58, comfortably below the 80-file submodule
 threshold.  Continue monitoring this count as new LF-RFID protocols are ported.

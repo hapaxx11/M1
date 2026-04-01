@@ -13,7 +13,7 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 - Drop Flipper files onto the SD card and use them on the M1
 
 ### Sub-GHz Enhancements
-- **94 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Acurite, Bresser, Oregon v2, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, and more
+- **99 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, TX-8300, and more
 - **Spectrum Analyzer** — visual RF spectrum display
 - **RSSI Meter** — real-time signal strength
 - **Frequency Scanner** — find active frequencies

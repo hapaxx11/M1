@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Honeywell WDB (48-bit wireless doorbell, PWM w/ parity, static),
   KeyFinder (24-bit keyfinder tag, inverted PWM, static),
   X10 (32-bit home automation, PWM w/ preamble, dynamic).
+- **Sub-GHz Phase 5 — Advanced weather protocols** (5 new decoders with CRC/checksum
+  validation):
+  Acurite 592TXR (56-bit, sum checksum + parity validation),
+  Acurite 986 (40-bit, CRC-8 poly 0x07, LSB-first bit reversal),
+  TX-8300 (72-bit, Fletcher-8 checksum + inverted-copy validation, uses 128-bit decoder),
+  Oregon V1 (32-bit Manchester, byte-sum checksum with carry),
+  Oregon 3 (32-bit Manchester inverted, preamble detection + nibble checksum).
 - **`subghz_decode_generic_ppm()`** — generic PPM decoder utility for weather sensors,
   reducing boilerplate across PPM-based protocol decoders.
 - **LF-RFID Phase 5 — Indala 224-bit**: PSK2 long-format Motorola card (28 decoded
