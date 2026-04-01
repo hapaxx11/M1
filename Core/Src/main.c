@@ -61,6 +61,8 @@ SD_HandleTypeDef hsd1;
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
+FDCAN_HandleTypeDef hfdcan1;
+
 /* USER CODE BEGIN PV */
 //uint32_t uwLsiFreq;
 /* USER CODE END PV */
@@ -77,6 +79,7 @@ static void MX_SDMMC1_SD_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
 static void MX_CRC_Init(void);
+static void MX_FDCAN1_Init(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
 
@@ -137,6 +140,9 @@ int main(void)
   MX_RTC_Init();
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
+#ifdef M1_APP_CAN_ENABLE
+  MX_FDCAN1_Init();
+#endif
   UNUSED(MX_SDMMC1_SD_Init);
   HAL_CRC_DeInit(&hcrc);
   /* USER CODE END 2 */
@@ -544,6 +550,79 @@ static void MX_SPI2_Init(void)
 
   /* USER CODE END SPI2_Init 2 */
 
+}
+
+/**
+  * @brief FDCAN1 Initialization Function
+  * @note  Uses PD0 (FDCAN1_RX) and PD1 (FDCAN1_TX) on J7 (X10) connector.
+  *        Requires external CAN transceiver (e.g. Waveshare SN65HVD230 3.3V board).
+  *        Default: 500 kbps nominal, CAN-FD disabled, normal mode.
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN1_Init(void)
+{
+  /* Enable FDCAN clock */
+  __HAL_RCC_FDCAN_CLK_ENABLE();
+
+  /* Configure GPIO pins for FDCAN1: PD0=RX, PD1=TX (AF9) */
+  {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    GPIO_InitStruct.Pin = FDCAN1_TX_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+    HAL_GPIO_Init(FDCAN1_TX_GPIO_Port, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = FDCAN1_RX_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+    HAL_GPIO_Init(FDCAN1_RX_GPIO_Port, &GPIO_InitStruct);
+  }
+
+  /* FDCAN1 parameter configuration */
+  /* Nominal bit timing for 500 kbps with 25 MHz FDCAN clock:
+   *   Prescaler = 5, TQ count = 1 (sync) + TimeSeg1 (7) + TimeSeg2 (2) = 10
+   *   Bit Time = (5 / 25 MHz) × 10 = 2 µs → 500 kbps
+   *   SJW = 2 for robust synchronisation
+   */
+  hfdcan1.Instance = FDCAN1;
+  hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan1.Init.AutoRetransmission = ENABLE;
+  hfdcan1.Init.TransmitPause = ENABLE;
+  hfdcan1.Init.ProtocolException = DISABLE;
+  hfdcan1.Init.NominalPrescaler = 5;
+  hfdcan1.Init.NominalSyncJumpWidth = 2;
+  hfdcan1.Init.NominalTimeSeg1 = 7;
+  hfdcan1.Init.NominalTimeSeg2 = 2;
+  hfdcan1.Init.DataPrescaler = 5;
+  hfdcan1.Init.DataSyncJumpWidth = 2;
+  hfdcan1.Init.DataTimeSeg1 = 7;
+  hfdcan1.Init.DataTimeSeg2 = 2;
+  hfdcan1.Init.StdFiltersNbr = 1;
+  hfdcan1.Init.ExtFiltersNbr = 0;
+  hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+
+  if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+  {
+    /* Init failed — log but don't call Error_Handler (CAN is optional) */
+    return;
+  }
+
+  /* Configure global filter: accept all standard frames to FIFO 0,
+   * reject all extended frames and remote frames */
+  HAL_FDCAN_ConfigGlobalFilter(&hfdcan1,
+    FDCAN_ACCEPT_IN_RX_FIFO0,  /* Non-matching std frames → FIFO 0 */
+    FDCAN_REJECT,               /* Non-matching ext frames → reject  */
+    FDCAN_REJECT_REMOTE,        /* Reject remote std frames          */
+    FDCAN_REJECT_REMOTE);       /* Reject remote ext frames          */
 }
 
 /**

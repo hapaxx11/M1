@@ -245,6 +245,7 @@ extern SPI_HandleTypeDef 	hspi4;
 extern SD_HandleTypeDef 	hsd1;
 extern TIM_HandleTypeDef	Timerhdl_IrRx;
 extern RTC_HandleTypeDef 	hrtc;
+extern FDCAN_HandleTypeDef	hfdcan1;
 
 extern EXTI_HandleTypeDef H_EXTI_0;
 

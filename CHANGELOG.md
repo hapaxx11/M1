@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CAN Commander** — FDCAN1 support via J7 (X10) connector (PD0 RX / PD1 TX).
+  Requires external 3.3 V CAN transceiver (recommended: Waveshare SN65HVD230 CAN Board).
+  - **Sniffer** — real-time CAN bus monitor with scrolling message display, baud rate
+    cycling (125 k / 250 k / 500 k / 1 Mbps), and buffer clear
+  - **Send Frame** — manual CAN frame builder (ID, DLC, data) with one-tap transmit
+  - **Saved** — placeholder for future .can log file support on SD card
+  - Located under GPIO → CAN Bus in the menu system
+  - Gated by `M1_APP_CAN_ENABLE` compile flag (enabled by default)
+  - STM32 HAL FDCAN driver (`stm32h5xx_hal_fdcan.c/.h`) added from STM32CubeH5
+
 - **Furi compatibility layer** (`lib/furi/`) — minimal shim that implements the
   subset of Momentum/Flipper's Furi runtime used by Sub-GHz protocol decoders.
   Enables near-direct porting of protocol code from Momentum-Firmware with minimal
