@@ -141,3 +141,63 @@ uint8_t subghz_decode_generic_manchester(uint16_t p, uint16_t pulsecount)
 
     return 1;
 }
+
+/*
+ * Generic PPM decoder (Pulse Position Modulation).
+ * Constant short HIGH pulse, bit encoded in LOW gap duration.
+ * bit 0: te_short HIGH + te_long LOW
+ * bit 1: te_short HIGH + (te_long * 2) LOW
+ * Registry timing: te_short = HIGH pulse, te_long = bit-0 gap.
+ * Uses SubGhzBlockDecoder for bit accumulation and SubGhzBlockGeneric +
+ * commit_to_m1() for output.
+ * Returns 0 on success, 1 on failure.
+ */
+uint8_t subghz_decode_generic_ppm(uint16_t p, uint16_t pulsecount)
+{
+    const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+    const uint16_t te_short = proto->timing.te_short;
+    const uint16_t te_long  = proto->timing.te_long;
+    const uint16_t te_delta = proto->timing.te_delta
+        ? proto->timing.te_delta
+        : (te_short * proto->timing.te_tolerance_pct / 100);
+    const uint16_t min_bits = proto->timing.min_count_bit_for_found;
+    const uint8_t  preamble = proto->timing.preamble_bits;
+
+    SubGhzBlockDecoder decoder = {0};
+
+    for (uint16_t i = preamble; i + 1 < pulsecount && decoder.decode_count_bit < min_bits; i += 2)
+    {
+        uint16_t t_hi = subghz_decenc_ctl.pulse_times[i];
+        uint16_t t_lo = subghz_decenc_ctl.pulse_times[i + 1];
+
+        /* All HIGHs must be approximately te_short */
+        if (DURATION_DIFF(t_hi, te_short) >= te_delta * 2)
+            break;
+
+        /* bit 0: short gap ≈ te_long */
+        if (DURATION_DIFF(t_lo, te_long) < te_delta)
+        {
+            subghz_protocol_blocks_add_bit(&decoder, 0);
+        }
+        /* bit 1: long gap ≈ te_long * 2 */
+        else if (DURATION_DIFF(t_lo, te_long * 2) < te_delta * 2)
+        {
+            subghz_protocol_blocks_add_bit(&decoder, 1);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    if (decoder.decode_count_bit >= min_bits)
+    {
+        SubGhzBlockGeneric generic = {0};
+        generic.data           = decoder.decode_data;
+        generic.data_count_bit = decoder.decode_count_bit;
+        subghz_block_generic_commit_to_m1(&generic, p);
+        return 0;
+    }
+
+    return 1;
+}

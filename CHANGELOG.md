@@ -25,6 +25,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   POCSAG (pager decode, auto-detects 512/1200/2400 baud, FSK/NRZ),
   TPMS Generic (catch-all TPMS Manchester decoder), PCSG Generic (pager Manchester
   catch-all).  All registered in `subghz_protocol_registry.c`.
+- **Sub-GHz Phase 3 — Weather/Sensor protocols** (12 new decoders):
+  Auriol AHFL (42-bit, PPM), Auriol HG0601A (37-bit, PPM), GT-WT-02 (37-bit, PPM),
+  Kedsum-TH (42-bit temp/humidity, PPM), Solight TE44 (36-bit, PPM),
+  ThermoPro TX-4 (37-bit, PPM), Vauno EN8822C (42-bit, PPM),
+  Acurite 606TX (32-bit temp, PPM), Acurite 609TXC (40-bit temp/humidity, PPM),
+  Emos E601x (24-bit, PWM), LaCrosse TX141THBv2 (40-bit, PWM),
+  Wendox W6726 (29-bit, PWM).
+- **Sub-GHz Phase 4 — Remote/Gate/Automation protocols** (5 new decoders):
+  DITEC GOL4 (54-bit gate remote, PWM, dynamic/rolling),
+  Elplast (18-bit remote, inverted PWM, static),
+  Honeywell WDB (48-bit wireless doorbell, PWM w/ parity, static),
+  KeyFinder (24-bit keyfinder tag, inverted PWM, static),
+  X10 (32-bit home automation, PWM w/ preamble, dynamic).
+- **Sub-GHz Phase 5 — Advanced weather protocols** (5 new decoders with CRC/checksum
+  validation):
+  Acurite 592TXR (56-bit, sum checksum + parity validation),
+  Acurite 986 (40-bit, CRC-8 poly 0x07, LSB-first bit reversal),
+  TX-8300 (72-bit, Fletcher-8 checksum + inverted-copy validation, uses 128-bit decoder),
+  Oregon V1 (32-bit Manchester, byte-sum checksum with carry),
+  Oregon 3 (32-bit Manchester inverted, preamble detection + nibble checksum).
+- **`subghz_decode_generic_ppm()`** — generic PPM decoder utility for weather sensors,
+  reducing boilerplate across PPM-based protocol decoders.
 - **LF-RFID Phase 5 — Indala 224-bit**: PSK2 long-format Motorola card (28 decoded
   bytes).  Files: `lfrfid_protocol_indala224.{h,c}`.  Ported from Momentum Firmware.
 - **LF-RFID Phase 5 — InstaFob**: Hillman Group Manchester-encoded fob (8 decoded

@@ -336,17 +336,22 @@ M1-specific wrappers/adapters derived from the Flipper HAL contract.
 
 Source: `lib/subghz/protocols/` in `flipperzero-firmware` (GPLv3)
 
-The 74 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
+The 96 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
 the same RF timing specifications as Flipper (so `.sub` files remain compatible), but the M1
-code is not a copy of Flipper source.  The sole exception is noted below.  The total of 74
-comprises 73 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
+code is not a copy of Flipper source.  The sole exception is noted below.  The total of 96
+comprises 95 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
 
 | M1 file | Flipper origin | Notes |
 |---------|---------------|-------|
 | `Sub_Ghz/protocols/m1_chamberlain_decode.c` | `lib/subghz/protocols/secplus_v1.c` | Contains direct port of argilo/secplus ternary algorithm; GPLv3 attribution present |
-| All other `Sub_Ghz/protocols/m1_*_decode.c` (73 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
+| All other `Sub_Ghz/protocols/m1_*_decode.c` (90 files) | Various | **Independent ports** — same algorithm, original M1 implementation; no Flipper source copied |
+| `Sub_Ghz/protocols/m1_acurite_592txr_decode.c` | `lib/subghz/protocols/acurite_592txr.c` | **Independent port** — 56-bit PWM, sum checksum + parity |
+| `Sub_Ghz/protocols/m1_acurite_986_decode.c` | `lib/subghz/protocols/acurite_986.c` | **Independent port** — 40-bit PWM, CRC-8 poly 0x07, LSB bit reversal |
+| `Sub_Ghz/protocols/m1_tx_8300_decode.c` | `lib/subghz/protocols/tx_8300.c` | **Independent port** — 72-bit OOK, Fletcher-8 checksum, 128-bit decoder |
+| `Sub_Ghz/protocols/m1_oregon_v1_decode.c` | `lib/subghz/protocols/oregon_v1.c` | **Independent port** — Manchester, 32-bit, byte-sum checksum |
+| `Sub_Ghz/protocols/m1_oregon3_decode.c` | `lib/subghz/protocols/oregon3.c` | **Independent port** — Manchester inverted, 32-bit, nibble checksum |
 
-**Subtotal:** 1 directly-copied file; 72 independent ports (+ 1 bin_raw utility file)
+**Subtotal:** 1 directly-copied file; 94 independent ports (+ 1 bin_raw utility file)
 
 ---
 
@@ -386,10 +391,10 @@ documentation and `.sub`/`.rfid`/`.nfc`/`.ir` file samples.
 | Category | Files | Directly copied | Independent ports/writes |
 |----------|-------|-----------------|--------------------------|
 | LF-RFID protocols | 57 | 57 | 0 |
-| Sub-GHz decoders | 74 | 1 | 72 (+ 1 bin_raw) |
+| Sub-GHz decoders | 96 | 1 | 94 (+ 1 bin_raw) |
 | Furi HAL reference (docs) | 45 | 45 | — |
 | Flipper file parsers | 10 | 0 | 10 |
-| **Total** | **186** | **58 compiled + 45 docs** | **82** |
+| **Total** | **208** | **58 compiled + 45 docs** | **104** |
 
 The **directly-copied compiled files** total ~58, comfortably below the 80-file submodule
 threshold.  Continue monitoring this count as new LF-RFID protocols are ported.
@@ -887,9 +892,40 @@ the enum in `m1_sub_ghz_decenc.h`.
 | `roger.c` | `"Roger"` | `m1_roger_decode.c` | Generic PWM (500/1000, 28 bits) |
 | `somfy_keytis.c` | `"Somfy Keytis"` | `m1_somfy_keytis_decode.c` | Generic Manchester (640/1280, 80 bits); distinct from `"Somfy Telis"` |
 
+#### Sub-GHz Phase 3 — Weather/Sensor protocols (March 2026)
+
+The following 12 weather/sensor protocols were added. PPM-based decoders use the
+new `subghz_decode_generic_ppm()` generic decoder utility.
+
+| Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 decoder | Notes |
+|---------------------|--------------------------|------------|-------|
+| `auriol_ahfl.c` | `"Auriol_AHFL"` | `m1_auriol_ahfl_decode.c` | Generic PPM (42 bits, weather sensor) |
+| `auriol_hg0601a.c` | `"Auriol_HG0601A"` | `m1_auriol_hg0601a_decode.c` | Generic PPM (37 bits, weather sensor) |
+| `gt_wt_02.c` | `"GT-WT-02"` | `m1_gt_wt02_decode.c` | Generic PPM (37 bits, weather sensor) |
+| `kedsum_th.c` | `"Kedsum-TH"` | `m1_kedsum_th_decode.c` | Generic PPM (42 bits, temp/humidity sensor) |
+| `solight_te44.c` | `"Solight_TE44"` | `m1_solight_te44_decode.c` | Generic PPM (36 bits, weather sensor) |
+| `thermopro_tx4.c` | `"ThermoPro_TX4"` | `m1_thermopro_tx4_decode.c` | Generic PPM (37 bits, weather sensor) |
+| `vauno_en8822c.c` | `"Vauno_EN8822C"` | `m1_vauno_en8822c_decode.c` | Generic PPM (42 bits, weather sensor) |
+| `acurite_606tx.c` | `"Acurite_606TX"` | `m1_acurite_606tx_decode.c` | Generic PPM (32 bits, temp sensor) |
+| `acurite_609txc.c` | `"Acurite_609TXC"` | `m1_acurite_609txc_decode.c` | Generic PPM (40 bits, temp/humidity sensor) |
+| `emos_e601x.c` | `"Emos_E601x"` | `m1_emos_e601x_decode.c` | Generic PWM (24 bits, weather sensor) |
+| `lacrosse_tx141thbv2.c` | `"LaCrosse_TX141THBv2"` | `m1_lacrosse_tx141thbv2_decode.c` | Generic PWM (40 bits, weather sensor) |
+| `wendox_w6726.c` | `"Wendox_W6726"` | `m1_wendox_w6726_decode.c` | Generic PWM (29 bits, weather sensor) |
+
+#### Sub-GHz Phase 4 — Remote/Gate/Automation protocols (March 2026)
+
+| Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 decoder | Notes |
+|---------------------|--------------------------|------------|-------|
+| `ditec_gol4.c` | `"DITEC_GOL4"` | `m1_ditec_gol4_decode.c` | PWM (54 bits, gate remote, dynamic/rolling) |
+| `elplast.c` | `"Elplast"` | `m1_elplast_decode.c` | Inverted PWM (18 bits, remote, static) |
+| `honeywell_wdb.c` | `"Honeywell_WDB"` | `m1_honeywell_wdb_decode.c` | PWM w/ parity (48 bits, wireless doorbell, static) |
+| `keyfinder.c` | `"KeyFinder"` | `m1_keyfinder_decode.c` | Inverted PWM (24 bits, keyfinder tag, static) |
+| `x10.c` | `"X10"` | `m1_x10_decode.c` | PWM w/ preamble (32 bits, home automation, dynamic) |
+
 #### Sub-GHz protocols gap (remaining — no unported protocols as of March 2026)
 
-All protocols identified in the March 2026 gap analysis have now been ported.
+All protocols identified in the March 2026 gap analysis have now been ported
+(17 Phase 2 + 12 Phase 3 weather + 5 Phase 4 remote/gate + 5 Phase 5 advanced weather = 39 new protocols total).
 If new Flipper protocols appear in future `dev` branch updates, repeat the
 analysis by comparing Flipper's `lib/subghz/protocols/` against M1's
 `protocol_text[]` array.

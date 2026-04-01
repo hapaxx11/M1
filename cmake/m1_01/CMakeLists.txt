@@ -394,10 +394,32 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_revers_rb2_decode.c
     ../../Sub_Ghz/protocols/m1_roger_decode.c
     ../../Sub_Ghz/protocols/m1_somfy_keytis_decode.c
+    ../../Sub_Ghz/protocols/m1_auriol_ahfl_decode.c
+    ../../Sub_Ghz/protocols/m1_auriol_hg0601a_decode.c
+    ../../Sub_Ghz/protocols/m1_gt_wt02_decode.c
+    ../../Sub_Ghz/protocols/m1_kedsum_th_decode.c
+    ../../Sub_Ghz/protocols/m1_solight_te44_decode.c
+    ../../Sub_Ghz/protocols/m1_thermopro_tx4_decode.c
+    ../../Sub_Ghz/protocols/m1_vauno_en8822c_decode.c
+    ../../Sub_Ghz/protocols/m1_acurite_606tx_decode.c
+    ../../Sub_Ghz/protocols/m1_acurite_609txc_decode.c
+    ../../Sub_Ghz/protocols/m1_emos_e601x_decode.c
+    ../../Sub_Ghz/protocols/m1_lacrosse_tx141thbv2_decode.c
+    ../../Sub_Ghz/protocols/m1_wendox_w6726_decode.c
+    ../../Sub_Ghz/protocols/m1_ditec_gol4_decode.c
+    ../../Sub_Ghz/protocols/m1_elplast_decode.c
+    ../../Sub_Ghz/protocols/m1_honeywell_wdb_decode.c
+    ../../Sub_Ghz/protocols/m1_keyfinder_decode.c
+    ../../Sub_Ghz/protocols/m1_x10_decode.c
     ../../Sub_Ghz/protocols/m1_treadmill37_decode.c
     ../../Sub_Ghz/protocols/m1_pocsag_decode.c
     ../../Sub_Ghz/protocols/m1_tpms_generic_decode.c
     ../../Sub_Ghz/protocols/m1_pcsg_generic_decode.c
+    ../../Sub_Ghz/protocols/m1_acurite_592txr_decode.c
+    ../../Sub_Ghz/protocols/m1_acurite_986_decode.c
+    ../../Sub_Ghz/protocols/m1_tx_8300_decode.c
+    ../../Sub_Ghz/protocols/m1_oregon_v1_decode.c
+    ../../Sub_Ghz/protocols/m1_oregon3_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c

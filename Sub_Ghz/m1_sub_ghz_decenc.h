@@ -187,11 +187,37 @@ enum {
 	REVERS_RB2,
 	ROGER,
 	SOMFY_KEYTIS,
+	/* --- Momentum Phase 3: Weather/Sensor protocols --- */
+	AURIOL_AHFL,
+	AURIOL_HG0601A,
+	GT_WT02,
+	KEDSUM_TH,
+	SOLIGHT_TE44,
+	THERMOPRO_TX4,
+	VAUNO_EN8822C,
+	ACURITE_606TX,
+	ACURITE_609TXC,
+	EMOS_E601X,
+	LACROSSE_TX141THBV2,
+	WENDOX_W6726,
+	/* --- Momentum Phase 4: Remote/Gate/Automation protocols --- */
+	DITEC_GOL4,
+	ELPLAST,
+	HONEYWELL_WDB,
+	KEYFINDER,
+	X10,
 	/* --- Specialty protocols --- */
 	TREADMILL37,
 	POCSAG,
 	TPMS_GENERIC,
 	PCSG_GENERIC,
+
+	/* --- Momentum Phase 5: Advanced weather protocols --- */
+	ACURITE_592TXR,
+	ACURITE_986,
+	TX_8300,
+	OREGON_V1,
+	OREGON3,
 };
 
 /* Weather station decoded data */
@@ -258,6 +284,14 @@ uint8_t subghz_decode_bin_raw(uint16_t p, uint16_t pulsecount);
 /* Generic decoders */
 uint8_t subghz_decode_generic_pwm(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_manchester(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_generic_ppm(uint16_t p, uint16_t pulsecount);
+
+/* Momentum Phase 5: Advanced weather protocols */
+uint8_t subghz_decode_acurite_592txr(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_acurite_986(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_tx_8300(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_oregon_v1(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_oregon3(uint16_t p, uint16_t pulsecount);
 
 /* New protocol decoders */
 uint8_t subghz_decode_chamberlain(uint16_t p, uint16_t pulsecount);
