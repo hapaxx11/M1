@@ -277,6 +277,7 @@ uint8_t subghz_decode_bin_raw(uint16_t p, uint16_t pulsecount);
 /* Generic decoders */
 uint8_t subghz_decode_generic_pwm(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_manchester(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_generic_ppm(uint16_t p, uint16_t pulsecount);
 
 /* New protocol decoders */
 uint8_t subghz_decode_chamberlain(uint16_t p, uint16_t pulsecount);
