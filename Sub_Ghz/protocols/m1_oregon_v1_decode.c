@@ -67,8 +67,6 @@ uint8_t subghz_decode_oregon_v1(uint16_t p, uint16_t pulsecount)
      * We use a simplified approach: look at pulse pairs.
      */
     ManchesterState manchester_state = ManchesterStateMid1;
-    uint8_t prev_bit = 1; /* First bit after sync is typically 1 */
-    (void)prev_bit;
 
     for (; i < pulsecount && decoder.decode_count_bit < min_bits; i++)
     {

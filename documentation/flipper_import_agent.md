@@ -925,7 +925,7 @@ new `subghz_decode_generic_ppm()` generic decoder utility.
 #### Sub-GHz protocols gap (remaining — no unported protocols as of March 2026)
 
 All protocols identified in the March 2026 gap analysis have now been ported
-(17 Phase 2 + 12 Phase 3 weather + 5 Phase 4 remote/gate = 34 new protocols total).
+(17 Phase 2 + 12 Phase 3 weather + 5 Phase 4 remote/gate + 5 Phase 5 advanced weather = 39 new protocols total).
 If new Flipper protocols appear in future `dev` branch updates, repeat the
 analysis by comparing Flipper's `lib/subghz/protocols/` against M1's
 `protocol_text[]` array.
