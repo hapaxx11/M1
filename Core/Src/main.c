@@ -623,6 +623,9 @@ static void MX_FDCAN1_Init(void)
     FDCAN_REJECT_REMOTE,        /* Reject remote std frames          */
     FDCAN_REJECT_REMOTE);       /* Reject remote ext frames          */
 }
+
+/**
+  * @brief GPIO Initialization Function
   * @param None
   * @retval None
   */
