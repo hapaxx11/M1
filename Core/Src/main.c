@@ -587,7 +587,8 @@ static void MX_FDCAN1_Init(void)
 
   /* FDCAN1 parameter configuration */
   /* Nominal bit timing for 500 kbps with 25 MHz FDCAN clock:
-   *   Prescaler = 5, TimeSeg1 = 7, TimeSeg2 = 2  → TQ = 10, Bit Time = 200 ns × 10 = 2 µs → 500 kbps
+   *   Prescaler = 5, TQ count = 1 (sync) + TimeSeg1 (7) + TimeSeg2 (2) = 10
+   *   Bit Time = (5 / 25 MHz) × 10 = 2 µs → 500 kbps
    *   SJW = 2 for robust synchronisation
    */
   hfdcan1.Instance = FDCAN1;
