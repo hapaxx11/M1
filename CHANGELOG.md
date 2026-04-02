@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.0.9] - 2026-04-01
 
+### Added
+
+- **CI build check** (`ci.yml`) — automated firmware build runs on every PR
+  targeting `main` and on direct pushes to `main`. Ensures the project compiles
+  and produces valid ARM artifacts before a PR can be merged. Pair with GitHub
+  branch-protection "required status checks" to enforce the gate.
+
 ### Fixed
 
 - Fixed CI build failure caused by `lib/furi/core/string.h` (FuriString shim)
