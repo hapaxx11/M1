@@ -7,6 +7,18 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.10] - 2026-04-02
+
+### Changed
+
+- **Automatic releases on merge to main** — `build-release.yml` now triggers on
+  every push to `main` (including PR merges) in addition to manual dispatch.
+  Each merge auto-increments the version RC from the latest published release
+  and creates a new GitHub Release with firmware artifacts.
+- **Automatic pre-release flag** — versions with `FW_VERSION_MAJOR` < 1 are
+  automatically marked as pre-release.  Manual dispatch can still force the
+  flag for any version via the workflow input.
+
 ## [0.9.0.9] - 2026-04-01
 
 ### Added
