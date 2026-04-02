@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (binaries, makefiles, object lists) inherited from the upstream Monstatek repo.
   Hapax uses CMake + Ninja with `build/` output and GitHub Releases for distribution.
   Added `Release/` to `.gitignore` to prevent re-introduction.
+- **RC version floor** — removed the temporary RC ≥ 10 floor guard from
+  `build-release.yml` now that v0.9.0.10 has been published.
 
 ### Changed
 
