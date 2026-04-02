@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Sub-GHz recording stability** — removed protocol decoder polling
-  (`subghz_decenc_read()`) from the recording hot path in
+  (`subghz_decenc_read()`) from the `Q_EVENT_SUBGHZ_RX` handler in
   `subghz_record_gui_message()`.  Running the decoder plus a full display
   redraw on every RX batch competed with time-critical SD-card writes and
   could cause ring-buffer overflows and device reboots under sustained RF
