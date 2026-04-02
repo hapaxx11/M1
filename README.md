@@ -60,7 +60,7 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 - Supports standard 11-bit CAN IDs (Classic CAN)
 - **Requires external CAN transceiver** — recommended: [Waveshare SN65HVD230 CAN Board](https://www.waveshare.com/sn65hvd230-can-board.htm) (3.3 V, ESD protected)
 
-> **Note:** The M1 does not include an on-board CAN transceiver. See [`HARDWARE.md`](HARDWARE.md) for wiring instructions.
+> **Note:** The M1 does not include an on-board CAN transceiver. See [`HARDWARE.md`](documentation/HARDWARE.md) for wiring instructions.
 
 ### External Apps
 - **ELF app loader** — load and run third-party apps from SD card

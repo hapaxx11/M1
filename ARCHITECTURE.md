@@ -22,6 +22,7 @@ The M1 firmware is organized into the following main components:
 | `Middlewares/` | FreeRTOS |
 | `lib/furi/` | Furi compatibility layer (FuriString, FURI_LOG, furi_assert/check) |
 | `hardware/step/` | Enclosure 3D CAD models (STEP format) |
+| `documentation/` | Project documentation (hardware specs, schematics, guides) |
 
 ## Build System
 

@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rev 2025-02-26) under `hardware/step/`.  Includes back case, front panel,
   front shell, mid case, direction button, and mid/back button.
 
+### Changed
+
+- Documentation: moved `HARDWARE.md` to `documentation/HARDWARE.md` to resolve
+  name collision with `hardware/` directory (confusing on case-insensitive
+  filesystems); updated all cross-references.
+
 ### Fixed
 
 - **Sub-GHz recording stability** — removed protocol decoder polling
