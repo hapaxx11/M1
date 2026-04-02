@@ -8,7 +8,7 @@ subsystems, capability assessment), see
 
 ## Enclosure 3D Models
 
-STEP files for the M1 enclosure are in [`hardware/step/`](hardware/step/).
+STEP files for the M1 enclosure are in [`cad/step/`](cad/step/).
 See that directory's README for the file inventory and revision date.
 
 ## MCU
