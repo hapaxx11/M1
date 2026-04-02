@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **SiN360 fork sync** — merged sincere360/M1_SiN360 v0.9.0.4
+  (`sincere360/main`, `997c9ce`) using `ours` strategy to record ancestry.
+  SiN360 includes LCD settings with SD persistence, screen orientation,
+  IR remote mode, expanded IR protocols, SPI handshake fix, NFC tools
+  (Cyborg Detector, Fuzzer, Write URL, Utils), and IR file loader.  Many
+  features already present in Hapax or planned for cherry-pick.  No files
+  changed; merge recorded for branch comparison and future cherry-picks.
+
 - **C3 fork sync** — merged bedge117/M1 C3.12 (`bedge117/main`, `8842866`)
   using `ours` strategy to record ancestry.  C3 includes RTC/NTP sync,
   BadUSB forced type, PicoPass/iCLASS support, and 56 Sub-GHz protocols —
