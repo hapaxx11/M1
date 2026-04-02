@@ -7,6 +7,18 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Sub-GHz recording stability** — removed protocol decoder polling
+  (`subghz_decenc_read()`) from the recording hot path in
+  `subghz_record_gui_message()`.  Running the decoder plus a full display
+  redraw on every RX batch competed with time-critical SD-card writes and
+  could cause ring-buffer overflows and device reboots under sustained RF
+  activity.  Decoding still works normally in Read and Weather Station modes.
+  (Ref: bedge117/M1 C3.4 crash fix.)
+
 ## [0.9.0.10] - 2026-04-02
 
 ### Removed
