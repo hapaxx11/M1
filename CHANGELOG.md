@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Upstream sync** — merged Monstatek/M1 upstream (`monstatek/main`) using
+  `ours` strategy to resolve GitHub's "behind" indicator.  Upstream commits
+  (`bb619f9`, `217ca99`) add documentation files and a v0.8.0.1 Release
+  binary — none applicable to the Hapax fork (ESP32 firmware is UART-based,
+  Release/ binary already gitignored, documentation superseded by Hapax
+  docs).  No files changed; merge recorded for branch comparison only.
+
 ### Added
 
 - **Enclosure STEP files** — added 6 enclosure 3D CAD models (STEP AP214,
