@@ -9,19 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sub-GHz recording stability** — removed protocol decoder polling
+  (`subghz_decenc_read()`) from the `Q_EVENT_SUBGHZ_RX` handler in
+  `subghz_record_gui_message()`.  Running the decoder plus a full display
+  redraw on every RX batch competed with time-critical SD-card writes and
+  could cause ring-buffer overflows and device reboots under sustained RF
+  activity.  Decoding still works normally in Read and Weather Station modes.
+  (Ref: bedge117/M1 C3.4 crash fix.)
+
 ### Changed
 
-- **Release workflow skips docs-only merges** — `build-release.yml` now uses
-  `paths-ignore` to skip automatic releases when a push to `main` only touches
-  documentation (`.md` files, `documentation/`, `LICENSE`, IDE project files).
-  Manual dispatch is unaffected. Prevents wasting version numbers and publishing
-  identical binaries for docs-only changes.
-- **Documentation: `[Unreleased]` changelog convention** — added rule to CLAUDE.md
-  requiring `## [Unreleased]` heading for changes that won't trigger a release build,
-  preventing version number desync with actual CI releases.
-- **Documentation: upstream merge policy** — added "Why We Don't Merge Monstatek"
-  section to CLAUDE.md explaining the rationale (stale upstream at v0.8.0.0, massive
-  divergence, cherry-pick-only strategy).
+- **Documentation: Public Forks Tracker** — added a "Public Forks Tracker"
+  section to `CLAUDE.md` with a table of all known Monstatek/M1 public forks,
+  their latest commit hashes/dates (UTC), last-reviewed timestamps, and
+  instructions for agents to discover new forks and keep the table current.
 
 ## [0.9.0.10] - 2026-04-02
 

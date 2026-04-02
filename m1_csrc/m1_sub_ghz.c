@@ -1387,42 +1387,11 @@ static int subghz_record_gui_message(void)
 			m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
 		} // if ( rcv_samples >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW )
 
-		/* Check if the protocol decoder recognized a signal */
-		{
-			SubGHz_Dec_Info_t dec;
-			memset(&dec, 0, sizeof(dec));
-			if (subghz_decenc_read(&dec, false) && dec.key != 0)
-			{
-				/* Determine current frequency for history entry */
-				uint32_t cur_freq_hz;
-				if (subghz_hopper_active)
-					cur_freq_hz = subghz_hopper_freq;
-				else if (subghz_scan_config.band == SUB_GHZ_BAND_CUSTOM)
-					cur_freq_hz = subghz_custom_freq_hz;
-				else if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
-					cur_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
-				else
-					cur_freq_hz = 433920000UL;
-
-				uint8_t prev_count = subghz_signal_history.count;
-				subghz_history_add(&subghz_signal_history, &dec, cur_freq_hz);
-
-				/* Update the "last decoded" for the live view and .sub save */
-				subghz_record_last_decoded = dec;
-				subghz_record_has_decoded = true;
-
-				/* Buzzer only on genuinely new signal (not duplicate) */
-				if (subghz_signal_history.count > prev_count ||
-				    subghz_signal_history.count == SUBGHZ_HISTORY_MAX)
-				{
-					if (subghz_cfg.sound)
-						m1_buzzer_notification();
-				}
-
-				/* Refresh display */
-				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_ACTIVE);
-			}
-		}
+		/* Protocol decoder polling removed from recording hot path.
+		 * Running subghz_decenc_read() + display redraw on every RX batch
+		 * competes with time-critical SD card writes and can cause ring-buffer
+		 * overflows and device reboots (ref: bedge117/M1 C3.4 crash fix).
+		 * Decoding happens separately in sub_ghz_read() / weather_station(). */
 
 	} // if ( q_item.q_evt_type==Q_EVENT_SUBGHZ_RX )
 
