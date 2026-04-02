@@ -220,6 +220,28 @@ with open('D:/M1Projects/esp32-at-hid/build/factory/factory_ESP32C6-SPI.md5', 'w
 - `origin` remote = hapaxx11/M1 (this fork — push here when explicitly told)
 - "Stock" firmware means Monstatek, NOT hapaxx11
 
+### Upstream Merge Policy — Why We Don't Merge Monstatek
+
+As of April 2026, **we do not merge from Monstatek/M1 upstream**. Reasons:
+
+1. **Upstream is stale.** Monstatek/M1 has been at `v0.8.0.0` since mid-2024 with no
+   public commits. There is nothing new to merge.
+2. **Divergence is too large.** Hapax has rewritten the build system (CMake + Ninja
+   replacing STM32CubeIDE managed makefiles), added 60+ Sub-GHz protocols, a Flipper
+   file compatibility layer (`lib/furi/`), CAN bus support, ESP32-C6 SPI AT integration,
+   LF-RFID / NFC / IR Flipper import, and a full CI/CD pipeline. A blind merge would
+   produce hundreds of conflicts with no benefit.
+3. **Version scheme divergence.** Hapax owns `FW_VERSION_MINOR` (9) and `FW_VERSION_RC`.
+   Monstatek's version numbering assumptions no longer apply.
+4. **Cherry-pick, don't merge.** If Monstatek ever pushes a meaningful update, the
+   correct approach is to **review the diff, cherry-pick relevant changes**, and adapt
+   them to the Hapax codebase — not to merge the branch wholesale.
+
+If Monstatek publishes a new release in the future, re-evaluate this policy by:
+- Fetching `monstatek/main` and inspecting the diff against our `main`
+- Cherry-picking any bug fixes or HAL updates that apply
+- Bumping `FW_VERSION_MAJOR` only if upstream introduces a breaking API change
+
 ---
 
 ## Versioning Scheme
@@ -258,6 +280,13 @@ to build.**
   `### Changed`, `### Fixed`, `### Removed` subsections under the current version heading.
 - **Version label**: Use `[{major}.{minor}.{build}.{rc}]` — e.g. `[0.9.0.9]`.
   The date is the wall-clock date of the change (`YYYY-MM-DD`).
+- **`[Unreleased]` heading**: Use `## [Unreleased]` (no date) for changes that will
+  NOT trigger a release build — i.e. changes that only touch paths in
+  `build-release.yml`'s `paths-ignore` list (`.md` files, `documentation/`, `LICENSE`,
+  IDE project files, CI workflow files).  When the next firmware code change merges and
+  CI auto-increments the RC, fold the `[Unreleased]` entries into that version's block.
+  **Never assign a numbered version heading to a change that won't produce a build** —
+  this prevents version numbers from going out of sync with actual releases.
 - **One entry per logical change**, not one entry per file edited.  Group related items.
 - **When to add an entry**:
   - New firmware feature, protocol, or UI screen → `### Added`
