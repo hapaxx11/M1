@@ -6,6 +6,11 @@ For the full schematic-level component and signal reference (ICs, power subsyste
 subsystems, capability assessment), see
 [`documentation/hardware_schematics.md`](documentation/hardware_schematics.md).
 
+## Enclosure 3D Models
+
+STEP files for the M1 enclosure are in [`hardware/step/`](hardware/step/).
+See that directory's README for the file inventory and revision date.
+
 ## MCU
 
 - **Part:** STM32H573VIT6
