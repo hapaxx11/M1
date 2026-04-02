@@ -96,6 +96,15 @@ jobs:
           " 2>/dev/null || echo "0")
             NEW_RC=$((LATEST_RC + 1))
             echo "Latest released RC: ${LATEST_RC} → next RC: ${NEW_RC}"
+
+            # Floor: releases v0.9.0.6 through v0.9.0.9 were never published,
+            # so skip to 10 to sync with the CHANGELOG.  Once releases exceed
+            # this floor the guard is a harmless no-op.
+            # TODO: remove this block after v0.9.0.10 is published.
+            if [ "$NEW_RC" -lt 10 ]; then
+              NEW_RC=10
+              echo "Applying RC floor → ${NEW_RC}"
+            fi
           fi
 
           echo "new_rc=${NEW_RC}" >> "$GITHUB_OUTPUT"
