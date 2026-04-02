@@ -2,11 +2,22 @@ name: Build and Release
 
 # Triggers:
 #   1. Every push (merge) to main → automatic release with auto-incremented version.
+#      Docs-only pushes (*.md, documentation/, LICENSE, IDE files) are skipped.
 #   2. Manual dispatch from the Actions tab → optional tag/name overrides.
 # Versions with MAJOR < 1 are automatically marked as pre-release.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'documentation/**'
+      - 'LICENSE'
+      - 'COPYING.txt'
+      - '.vscode/**'
+      - '.settings/**'
+      - '.project'
+      - '.cproject'
+      - '.mxproject'
   workflow_dispatch:
     inputs:
       tag:
