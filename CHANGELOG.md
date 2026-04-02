@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documentation (`.md` files, `documentation/`, `LICENSE`, IDE project files).
   Manual dispatch is unaffected. Prevents wasting version numbers and publishing
   identical binaries for docs-only changes.
+- **Documentation: `[Unreleased]` changelog convention** — added rule to CLAUDE.md
+  requiring `## [Unreleased]` heading for changes that won't trigger a release build,
+  preventing version number desync with actual CI releases.
+- **Documentation: upstream merge policy** — added "Why We Don't Merge Monstatek"
+  section to CLAUDE.md explaining the rationale (stale upstream at v0.8.0.0, massive
+  divergence, cherry-pick-only strategy).
 
 ## [0.9.0.10] - 2026-04-02
 
