@@ -7,6 +7,16 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0.11] - 2026-04-02
+
+### Changed
+
+- **Release workflow skips docs-only merges** — `build-release.yml` now uses
+  `paths-ignore` to skip automatic releases when a push to `main` only touches
+  documentation (`.md` files, `documentation/`, `LICENSE`, IDE project files).
+  Manual dispatch is unaffected. Prevents wasting version numbers and publishing
+  identical binaries for docs-only changes.
+
 ## [0.9.0.10] - 2026-04-02
 
 ### Removed
