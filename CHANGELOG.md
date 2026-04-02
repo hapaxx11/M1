@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   activity.  Decoding still works normally in Read and Weather Station modes.
   (Ref: bedge117/M1 C3.4 crash fix.)
 
+### Changed
+
+- **Documentation: Public Forks Tracker** — added a "Public Forks Tracker"
+  section to `CLAUDE.md` with a table of all known Monstatek/M1 public forks,
+  their latest commit hashes/dates (UTC), last-reviewed timestamps, and
+  instructions for agents to discover new forks and keep the table current.
+
 ## [0.9.0.10] - 2026-04-02
 
 ### Removed

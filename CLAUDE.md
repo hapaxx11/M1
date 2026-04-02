@@ -318,3 +318,43 @@ to build.**
 - `sincere360` = sincere360/M1_SiN360 (upstream SiN360 reference, DO NOT PUSH)
 - `monstatek` = Monstatek/M1 (upstream reference, DO NOT PUSH)
 - Feature branch: `copilot/update-flipper-apps-and-references`
+
+---
+
+## Public Forks Tracker
+
+Track all known public forks of Monstatek/M1 so agents can determine whether
+a fresh analysis is warranted.  All timestamps are **UTC**.
+
+### Known Forks
+
+| Fork | Owner | Activity | Latest Commit (SHA) | Latest Commit Date (UTC) | Last Reviewed by Hapax | Notes |
+|------|-------|----------|---------------------|--------------------------|------------------------|-------|
+| [Monstatek/M1](https://github.com/Monstatek/M1) | Monstatek | **Active** (upstream) | `217ca99b` | 2026-04-01 16:38 | 2026-04-02 03:21 | Original upstream. Was stale at v0.8.0.0 for months; just pushed v0.8.0.1 binary. Cherry-pick only. |
+| [bedge117/M1](https://github.com/bedge117/M1) | bedge117 | **Active** | `8842866048f7` | 2026-03-26 05:17 | 2026-04-02 03:21 | C3 enhanced firmware. Sub-GHz crash fix (C3.4) cherry-picked. App API (C3.12), NFC menu already present in Hapax. |
+| [sincere360/M1_SiN360](https://github.com/sincere360/M1_SiN360) | sincere360 | **Active** | `997c9ce099` | 2026-03-20 02:02 | 2026-04-02 03:21 | v0.9 lineage — LCD settings, IR remote, screen orientation. Hapax version scheme derived from SiN360. |
+| [rgomez31UAQ/Monstatek-M1_STM32H573VIT6_Firmware](https://github.com/rgomez31UAQ/Monstatek-M1_STM32H573VIT6_Firmware) | rgomez31UAQ | Inactive | `024b4c16` | 2026-02-27 19:25 | 2026-04-02 03:21 | Fork of stock + build doc PR. No custom firmware work. |
+| [steveAG/monstatek-m1](https://github.com/steveAG/monstatek-m1) | steveAG | Inactive | `2df97efc` | 2026-02-20 21:22 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
+| [fengjuan0/Monstatek-M1](https://github.com/fengjuan0/Monstatek-M1) | fengjuan0 | Inactive | `2df97efc` | 2026-02-24 03:45 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
+
+### How to Update This Table
+
+1. **When to check**: Before starting any task that involves porting features,
+   comparing implementations, or auditing upstream changes.  Also check
+   periodically (roughly monthly) or when the user asks.
+2. **Discover new forks**: Search GitHub for `M1 in:name fork:true monstatek`
+   and for forks of related repos (`bedge117/m1-sdk`,
+   `bedge117/esp32-at-monstatek-m1`).  Add any new public fork to the table.
+3. **Update existing rows**: For each **Active** fork, fetch the latest commit
+   SHA and date.  Compare with the "Latest Commit" column.  If the SHA has
+   changed, the fork has new work — update the SHA, date, and bump "Last
+   Reviewed by Hapax" to the current UTC timestamp after reviewing.
+4. **Classify activity**:
+   - **Active** — fork has custom commits beyond stock Monstatek and has been
+     updated within the last 60 days.
+   - **Inactive** — no custom commits, or last update > 60 days ago.
+5. **Record cherry-picks**: When a commit or feature is cherry-picked from a
+   fork into Hapax, note it in the "Notes" column (e.g. "C3.4 crash fix
+   cherry-picked").
+6. **Never remove rows** — mark forks as Inactive instead, so agents know
+   the fork was already evaluated.
