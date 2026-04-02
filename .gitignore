@@ -1,9 +1,6 @@
 # STM32CubeIDE generated files
 Debug/
-Release/*.o
-Release/*.d
-Release/*.su
-Release/*.cyclo
+Release/
 *.launch
 
 # Build files

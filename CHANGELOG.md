@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.0.10] - 2026-04-02
 
+### Removed
+
+- **Release/ folder** — removed legacy STM32CubeIDE v0.8.0.0 build artifacts
+  (binaries, makefiles, object lists) inherited from the upstream Monstatek repo.
+  Hapax uses CMake + Ninja with `build/` output and GitHub Releases for distribution.
+  Added `Release/` to `.gitignore` to prevent re-introduction.
+
 ### Changed
 
 - **Automatic releases on merge to main** — `build-release.yml` now triggers on
