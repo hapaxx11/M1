@@ -12,14 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Enclosure STEP files** — added 6 enclosure 3D CAD models (STEP AP214,
-  rev 2025-02-26) under `hardware/step/`.  Includes back case, front panel,
+  rev 2025-02-26) under `cad/step/`.  Includes back case, front panel,
   front shell, mid case, direction button, and mid/back button.
 
 ### Changed
 
-- Documentation: moved `HARDWARE.md` to `documentation/HARDWARE.md` to resolve
-  name collision with `hardware/` directory (confusing on case-insensitive
-  filesystems); updated all cross-references.
+- Renamed `hardware/` directory to `cad/` to avoid case-insensitive name
+  collision with `HARDWARE.md` (which upstream Monstatek/M1 places at
+  repo root).
 
 ### Fixed
 

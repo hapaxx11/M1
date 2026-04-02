@@ -7,6 +7,7 @@
 �   CMakePresets.json
 �   COPYING.txt
 �   DEVELOPMENT.md
+�   HARDWARE.md
 �   LICENSE
 �   MonstaTek_M1_v0800 Debug.launch
 �   MonstaTek_M1_v0800 Release.launch
