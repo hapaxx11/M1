@@ -1,7 +1,12 @@
 name: Build and Release
 
-# Manual-only trigger — repository admins invoke this from the Actions tab.
+# Triggers:
+#   1. Every push (merge) to main → automatic release with auto-incremented version.
+#   2. Manual dispatch from the Actions tab → optional tag/name overrides.
+# Versions with MAJOR < 1 are automatically marked as pre-release.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -15,7 +20,7 @@ on:
         required: false
         default: ''
       prerelease:
-        description: 'Mark as pre-release?'
+        description: 'Force pre-release flag (versions < 1.0 are always pre-release)'
         required: false
         type: boolean
         default: false
@@ -33,6 +38,7 @@ jobs:
       release_name:     ${{ steps.meta.outputs.release_name }}
       project_name:     ${{ steps.meta.outputs.project_name }}
       release_file_base: ${{ steps.meta.outputs.release_file_base }}
+      is_prerelease:    ${{ steps.meta.outputs.is_prerelease }}
 
     steps:
       # ------------------------------------------------------------------ #
@@ -90,6 +96,15 @@ jobs:
           " 2>/dev/null || echo "0")
             NEW_RC=$((LATEST_RC + 1))
             echo "Latest released RC: ${LATEST_RC} → next RC: ${NEW_RC}"
+
+            # Floor: releases v0.9.0.6 through v0.9.0.9 were never published,
+            # so skip to 10 to sync with the CHANGELOG.  Once releases exceed
+            # this floor the guard is a harmless no-op.
+            # TODO: remove this block after v0.9.0.10 is published.
+            if [ "$NEW_RC" -lt 10 ]; then
+              NEW_RC=10
+              echo "Applying RC floor → ${NEW_RC}"
+            fi
           fi
 
           echo "new_rc=${NEW_RC}" >> "$GITHUB_OUTPUT"
@@ -152,6 +167,19 @@ jobs:
           echo "  Base version: ${MAJOR}.${MINOR}.${BUILD}.${RC}"
           echo "  Tag:          ${TAG}"
           echo "  Release file: ${RFILE}_SD.bin"
+
+          # Auto-detect pre-release: versions with MAJOR < 1 are always
+          # pre-release.  Manual dispatch can also force it via the input.
+          MANUAL_PRERELEASE="${{ inputs.prerelease }}"
+          if [ "${MAJOR}" -lt 1 ]; then
+            IS_PRERELEASE=true
+          elif [ "${MANUAL_PRERELEASE}" = "true" ]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+          echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
+          echo "  Pre-release:  ${IS_PRERELEASE}"
 
       # ------------------------------------------------------------------ #
       # 4. Install toolchain and build tools
@@ -253,7 +281,7 @@ jobs:
         with:
           tag_name:   ${{ needs.build.outputs.tag }}
           name:       ${{ needs.build.outputs.release_name }}
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ needs.build.outputs.is_prerelease }}
           generate_release_notes: true
           files: |
             artifacts/${{ needs.build.outputs.project_name }}.elf
