@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **C3 fork sync** — merged bedge117/M1 C3.12 (`bedge117/main`, `8842866`)
+  using `ours` strategy to record ancestry.  C3 includes RTC/NTP sync,
+  BadUSB forced type, PicoPass/iCLASS support, and 56 Sub-GHz protocols —
+  most already present in Hapax or planned for cherry-pick.  No files
+  changed; merge recorded for branch comparison and future cherry-picks.
+
 - **Upstream sync** — merged Monstatek/M1 upstream (`monstatek/main`) using
   `ours` strategy to resolve GitHub's "behind" indicator.  Upstream commits
   (`bb619f9`, `217ca99`) add documentation files and a v0.8.0.1 Release
