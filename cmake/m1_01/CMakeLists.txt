@@ -66,7 +66,6 @@ target_include_directories(m1_01 INTERFACE
     ../../USB/Core/Inc
     ../../USB/Core/Src
     ../../lib/furi
-    ../../lib/furi/core
 )
 
 target_sources(m1_01 INTERFACE

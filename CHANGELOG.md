@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and produces valid ARM artifacts before a PR can be merged. Pair with GitHub
   branch-protection "required status checks" to enforce the gate.
 
+### Fixed
+
+- Fixed CI build failure caused by `lib/furi/core/string.h` (FuriString shim)
+  shadowing the system `<string.h>` header.  Removed `lib/furi/core` from the
+  CMake include path; all furi headers are already reachable via the `lib/furi`
+  include path using the `core/` prefix.
+
 ### Changed
 
 - Updated Hapax H-crossbar mountain logo across all three display sizes:
