@@ -110,8 +110,11 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
     if (f_open(&fil, path, FA_READ) != FR_OK)
         return false;
 
-    while (f_gets(line, sizeof(line), &fil) && app->playlist_count < PLAYLIST_MAX_FILES)
+    while (f_gets(line, sizeof(line), &fil))
     {
+        if (app->playlist_count >= PLAYLIST_MAX_FILES)
+            break;
+
         /* Strip trailing CR/LF */
         size_t len = strlen(line);
         while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == '\n'))
@@ -316,12 +319,11 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 /* Increase repeat count (max 9, then infinite=0) */
                 if (!app->playlist_running)
                 {
-                    if (app->playlist_repeat_total == 0)
-                        ; /* Already infinite, do nothing */
+                    if (app->playlist_repeat_total > 0 &&
+                        app->playlist_repeat_total < 9)
+                        app->playlist_repeat_total++;
                     else if (app->playlist_repeat_total >= 9)
                         app->playlist_repeat_total = 0; /* infinite */
-                    else
-                        app->playlist_repeat_total++;
                     app->need_redraw = true;
                 }
                 return true;

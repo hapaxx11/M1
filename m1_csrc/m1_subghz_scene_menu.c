@@ -74,10 +74,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 menu_scroll = menu_sel;
             else if (menu_sel >= menu_scroll + MENU_VISIBLE)
                 menu_scroll = menu_sel - MENU_VISIBLE + 1;
-            /* Handle wrap-around */
-            if (menu_sel == MENU_ITEM_COUNT - 1)
-                menu_scroll = (MENU_ITEM_COUNT > MENU_VISIBLE) ?
-                    MENU_ITEM_COUNT - MENU_VISIBLE : 0;
             app->need_redraw = true;
             return true;
 

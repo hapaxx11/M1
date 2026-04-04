@@ -13,10 +13,10 @@ The original files are distributed under the **GNU General Public License v3.0**
 
 ## Adaptations for M1
 
-- **Path remapping**: Flipper Zero uses `/ext/subghz/...` paths.  M1 uses
-  `/SUBGHZ/...` on the SD card.  All paths have been converted accordingly.
+- **Path remapping**: Flipper Zero uses `/ext/subghz/...` paths. M1 uses
+  `/SUBGHZ/...` on the SD card. All paths have been converted accordingly.
 - **16-entry limit**: The M1 playlist player loads at most 16 files per playlist
-  (firmware memory constraint).  Larger UberGuidoZ playlists have been curated
+  (firmware memory constraint). Larger UberGuidoZ playlists have been curated
   to the most representative entries.
 - **Flipper path compatibility**: The M1 firmware automatically remaps
   `/ext/subghz/...` → `/SUBGHZ/...` at runtime, so unmodified Flipper playlists
