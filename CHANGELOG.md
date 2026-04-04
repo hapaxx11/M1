@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Removed redundant "Back" labels from all app button bars and menus** — the
+  hardware back button is self-explanatory. Button bars now only show hints for
+  non-obvious directional actions (Config, Save, OK:Listen, etc.), freeing
+  screen space on the 128px display. Affected apps: Sub-GHz (all scenes),
+  Bluetooth, 802.15.4, BadUSB, BadBT, Infrared, IR Universal, CAN, Settings.
+- **Removed "Back" from Sub-GHz saved file action menus** — the action menu
+  (Emulate / Rename / Delete) no longer includes a redundant "Back" item.
+- **Documentation**: Added UI / Button Bar Rules to CLAUDE.md prohibiting
+  "Back" labels in button bars and action menus.
+
 ### Fixed
 
 - **Sub-GHz signal detection not working** — fixed three issues preventing the
