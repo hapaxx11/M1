@@ -37,6 +37,7 @@ typedef enum {
     SubGhzSceneNeedSaving,     /**< "Unsaved signals — save?" prompt */
     SubGhzSceneSaved,          /**< Browse saved files + action menu */
     SubGhzSceneFreqAnalyzer,   /**< Frequency analyzer / scanner */
+    SubGhzScenePlaylist,       /**< Sub-GHz playlist player */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -140,6 +141,15 @@ typedef struct {
 
     /* --- Computed / derived --- */
     uint32_t current_freq_hz;         /**< Active frequency in Hz */
+
+    /* --- Playlist state --- */
+    char     playlist_path[64];       /**< Path to current .txt playlist */
+    char     playlist_files[16][64];  /**< Up to 16 .sub file paths */
+    uint8_t  playlist_count;          /**< Number of entries loaded */
+    uint8_t  playlist_current;        /**< Index of file being transmitted */
+    uint8_t  playlist_repeat_total;   /**< Total repeats (0 = infinite) */
+    uint8_t  playlist_repeat_done;    /**< Completed repeat passes */
+    bool     playlist_running;        /**< Playback active */
 
     /* --- Flags --- */
     bool     need_redraw;             /**< Scene requests display update */
@@ -250,5 +260,6 @@ extern const SubGhzSceneHandlers subghz_scene_save_success_handlers;
 extern const SubGhzSceneHandlers subghz_scene_need_saving_handlers;
 extern const SubGhzSceneHandlers subghz_scene_saved_handlers;
 extern const SubGhzSceneHandlers subghz_scene_freq_analyzer_handlers;
+extern const SubGhzSceneHandlers subghz_scene_playlist_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

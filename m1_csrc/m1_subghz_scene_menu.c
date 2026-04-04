@@ -25,13 +25,14 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT    5
-#define MENU_VISIBLE       5   /* All fit on screen */
+#define MENU_ITEM_COUNT    6
+#define MENU_VISIBLE       5   /* Visible items (button bar limits space) */
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
     "Read Raw",
     "Saved",
+    "Playlist",
     "Frequency Analyzer",
     "Add Manually"
 };
@@ -40,11 +41,13 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneRead,
     SubGhzSceneReadRaw,
     SubGhzSceneSaved,
+    SubGhzScenePlaylist,
     SubGhzSceneFreqAnalyzer,
     SubGhzSceneCount,        /* Add Manually handled separately */
 };
 
 static uint8_t menu_sel = 0;
+static uint8_t menu_scroll = 0;
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -66,11 +69,26 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventUp:
             menu_sel = (menu_sel > 0) ? menu_sel - 1 : MENU_ITEM_COUNT - 1;
+            /* Adjust scroll window */
+            if (menu_sel < menu_scroll)
+                menu_scroll = menu_sel;
+            else if (menu_sel >= menu_scroll + MENU_VISIBLE)
+                menu_scroll = menu_sel - MENU_VISIBLE + 1;
+            /* Handle wrap-around */
+            if (menu_sel == MENU_ITEM_COUNT - 1)
+                menu_scroll = (MENU_ITEM_COUNT > MENU_VISIBLE) ?
+                    MENU_ITEM_COUNT - MENU_VISIBLE : 0;
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
             menu_sel = (menu_sel + 1) % MENU_ITEM_COUNT;
+            /* Adjust scroll window */
+            if (menu_sel >= menu_scroll + MENU_VISIBLE)
+                menu_scroll = menu_sel - MENU_VISIBLE + 1;
+            /* Handle wrap-around */
+            if (menu_sel == 0)
+                menu_scroll = 0;
             app->need_redraw = true;
             return true;
 
@@ -116,18 +134,19 @@ static void draw(SubGhzApp *app)
 
     /* Menu items */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    for (uint8_t i = 0; i < MENU_ITEM_COUNT && i < MENU_VISIBLE; i++)
+    for (uint8_t i = 0; i < MENU_VISIBLE && (menu_scroll + i) < MENU_ITEM_COUNT; i++)
     {
+        uint8_t idx = menu_scroll + i;
         uint8_t y = 12 + i * 8;
 
-        if (i == menu_sel)
+        if (idx == menu_sel)
         {
             /* Highlight selected item */
             u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 8);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
-        u8g2_DrawStr(&m1_u8g2, 4, y + 7, menu_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + 7, menu_labels[idx]);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
