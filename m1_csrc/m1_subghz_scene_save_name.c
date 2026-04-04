@@ -41,22 +41,12 @@ static void on_enter(SubGhzApp *app)
         snprintf(app->file_name, sizeof(app->file_name), "signal_%lu",
                  (unsigned long)HAL_GetTick());
     }
-    app->need_redraw = true;
-}
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
-{
-    (void)event;
-
-    /* This scene is synchronous — uses the virtual keyboard which takes
-     * over the display and event loop. We trigger it from on_enter's
-     * first draw, then handle the result. */
-
-    const SubGHz_History_Entry_t *e = subghz_history_get(&app->history, app->history_sel);
+    /* Run the blocking VKB + save flow immediately on enter */
     if (!e)
     {
         subghz_scene_pop(app);
-        return true;
+        return;
     }
 
     char new_name[32];
@@ -64,7 +54,7 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     {
         /* User cancelled */
         subghz_scene_pop(app);
-        return true;
+        return;
     }
 
     /* Build full path and save */
@@ -89,11 +79,20 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     }
     else
     {
-        /* Save failed — pop back with error */
+        /* Save failed — pop back */
         subghz_scene_pop(app);
     }
+}
 
-    return true;
+static bool on_event(SubGhzApp *app, SubGhzEvent event)
+{
+    /* VKB is blocking so no events expected here */
+    if (event == SubGhzEventBack)
+    {
+        subghz_scene_pop(app);
+        return true;
+    }
+    return false;
 }
 
 static void on_exit(SubGhzApp *app)
@@ -103,12 +102,8 @@ static void on_exit(SubGhzApp *app)
 
 static void draw(SubGhzApp *app)
 {
-    /* Virtual keyboard handles its own drawing; this is just a placeholder
-     * that triggers the VKB on first draw. */
+    /* VKB handles its own drawing in on_enter; this is a no-op placeholder */
     (void)app;
-
-    /* Trigger the save flow via on_event — the VKB is blocking */
-    subghz_scene_send_event(app, SubGhzEventOk);
 }
 
 /*============================================================================*/

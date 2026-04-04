@@ -314,14 +314,13 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
                     app->last_decoded = decoded;
                     app->has_decoded = true;
 
-                    /* Decode feedback: LED + sound */
+                    /* Decode feedback: green LED flash + sound */
                     m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
                     if (app->sound)
                         m1_buzzer_notification();
 
-                    /* Restore RX LED after brief green flash */
-                    vTaskDelay(pdMS_TO_TICKS(100));
-                    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+                    /* LED will auto-restore to RX color on next redraw cycle
+                     * (fast blink timer handles the flash duration) */
                 }
 
                 /* Update RSSI */

@@ -60,8 +60,6 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
     {
         case ACTION_EMULATE:
         {
-            char full_path[72];
-            snprintf(full_path, sizeof(full_path), "0:%s", saved_filepath);
             sub_ghz_replay_flipper_file(saved_filepath);
             app->need_redraw = true;
             return true;

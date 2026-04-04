@@ -50,9 +50,11 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else
             {
-                /* Discard — pop back to menu */
+                /* Discard — pop this dialog; the calling scene should check
+                 * app context to know if signals were intentionally discarded */
+                subghz_history_reset(&app->history);
+                app->has_decoded = false;
                 subghz_scene_pop(app);
-                subghz_scene_pop(app);  /* Pop twice: this + Read scene */
             }
             return true;
 

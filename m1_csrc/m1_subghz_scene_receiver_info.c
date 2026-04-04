@@ -125,7 +125,7 @@ static void draw(SubGhzApp *app)
     subghz_button_bar_draw(
         arrowleft_8x8, "Back",
         arrowdown_8x8, "Save",
-        can_send ? NULL : NULL,
+        NULL,
         can_send ? "OK:Send" : NULL);
 
     m1_u8g2_nextpage();
