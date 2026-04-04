@@ -135,7 +135,6 @@ static void scene_on_enter(SubGhzApp *app)
     {
         app->has_decoded = false;
         memset(&app->last_decoded, 0, sizeof(app->last_decoded));
-        subghz_history_reset(&app->history);
     }
 
     /* Auto-start RX (Flipper-consistent: entering Read immediately starts
