@@ -499,21 +499,21 @@ static void draw(SubGhzApp *app)
     if (app->read_state == SubGhzReadStateIdle)
     {
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             arrowdown_8x8, "Config",
             NULL, "OK:Listen");
     }
     else if (app->detail_view)
     {
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             arrowdown_8x8, "Save",
             NULL, "OK:Info");
     }
     else if (app->history_view)
     {
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             arrowdown_8x8, "Config",
             NULL, "OK:View");
     }
@@ -521,7 +521,7 @@ static void draw(SubGhzApp *app)
     {
         /* Active RX, no signals yet */
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             arrowdown_8x8, "Config",
             NULL, NULL);
     }

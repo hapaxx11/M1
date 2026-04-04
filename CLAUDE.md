@@ -340,6 +340,28 @@ to build.**
 
 ---
 
+## UI / Button Bar Rules
+
+- **NEVER add "Back" as a menu item or button bar label.** The back button is self-explanatory
+  — users do not need a screen element telling them that pressing back goes back. This applies
+  to `subghz_button_bar_draw()`, `m1_draw_bottom_bar()`, hand-drawn bottom bars, and any
+  selection list / action menu array.
+- **NEVER add "Back" as a selectable item in action menus.** If a menu has items like
+  "Emulate / Rename / Delete", do NOT append "Back" — the hardware back button already
+  handles navigation. Adding it wastes a menu slot and screen space.
+- **Button bars should only show actionable hints** — labels for directional buttons (↓ Config,
+  OK:Listen, LR:Change, etc.) that tell the user what *non-obvious* actions are available.
+  Pass `NULL, NULL` for the left slot instead of showing a back arrow + label.
+- If a bottom bar would be entirely empty after removing "Back", that is acceptable — an
+  empty bar is better than a redundant one.
+- **When adding or removing menu items, redistribute spacing.** If the item count changes,
+  recompute the row height so items fill the available vertical zone evenly.  Calculate:
+  `row_height = available_zone_height / item_count`.  The available zone is between the
+  separator line (or header bottom) and the bottom bar (y=52 if a bar is shown, y=64 if not).
+  Adjust the highlight box height and text baseline offset to match the new row height.
+
+---
+
 ## Remote Configuration
 
 - `origin` = hapaxx11/M1 (this fork — push here when explicitly told)

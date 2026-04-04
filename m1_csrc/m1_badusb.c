@@ -937,7 +937,7 @@ void badusb_run(void)
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             m1_draw_text(&m1_u8g2, 2, 10, 124, "Run BadUSB?", TEXT_ALIGN_CENTER);
             m1_draw_text(&m1_u8g2, 2, 28, 124, msg_line, TEXT_ALIGN_CENTER);
-            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Run", arrowright_8x8);
+            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Run", arrowright_8x8);
             m1_u8g2_nextpage();
 
             /* Wait for OK or BACK */

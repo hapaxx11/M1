@@ -709,7 +709,7 @@ static bool badbt_wait_for_connection(void)
     m1_draw_text(&m1_u8g2, 2, 10, 124, "Bad-BT", TEXT_ALIGN_CENTER);
     m1_draw_text(&m1_u8g2, 2, 26, 124, m1_badbt_name, TEXT_ALIGN_CENTER);
     m1_draw_text(&m1_u8g2, 2, 42, 124, "Connecting...", TEXT_ALIGN_CENTER);
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "OK", arrowright_8x8);
+    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
     m1_u8g2_nextpage();
 
     /* Poll for connection with user abort check */
@@ -752,7 +752,7 @@ static bool badbt_wait_for_connection(void)
         snprintf(time_str, sizeof(time_str), "%lus / %ds", (unsigned long)elapsed, BADBT_CONNECT_TIMEOUT);
         m1_draw_text(&m1_u8g2, 2, 50, 124, time_str, TEXT_ALIGN_CENTER);
 
-        m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "OK", arrowright_8x8);
+        m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
         m1_u8g2_nextpage();
     }
 
@@ -928,7 +928,7 @@ void badbt_run(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     m1_draw_text(&m1_u8g2, 2, 10, 124, "Bad-BT", TEXT_ALIGN_CENTER);
     m1_draw_text(&m1_u8g2, 2, 30, 124, "Init BLE HID...", TEXT_ALIGN_CENTER);
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "OK", arrowright_8x8);
+    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
     m1_u8g2_nextpage();
 
     /* Ensure ESP32 hardware and SPI task are initialized */
@@ -1025,7 +1025,7 @@ void badbt_run(void)
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             m1_draw_text(&m1_u8g2, 2, 10, 124, "Run script?", TEXT_ALIGN_CENTER);
             m1_draw_text(&m1_u8g2, 2, 28, 124, msg_line, TEXT_ALIGN_CENTER);
-            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Run", arrowright_8x8);
+            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Run", arrowright_8x8);
             m1_u8g2_nextpage();
 
             /* Wait for OK or BACK */

@@ -334,7 +334,7 @@ static void settings_system_draw(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     m1_draw_text(&m1_u8g2, 4, 42, 120, "Init WiFi/BT on boot", TEXT_ALIGN_CENTER);
 
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Toggle", arrowright_8x8);
+    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Toggle", arrowright_8x8);
     m1_u8g2_nextpage();
 }
 

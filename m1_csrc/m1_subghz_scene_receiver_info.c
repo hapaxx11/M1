@@ -123,7 +123,7 @@ static void draw(SubGhzApp *app)
     /* Bottom bar */
     bool can_send = subghz_protocol_is_static_ext(e->info.protocol);
     subghz_button_bar_draw(
-        arrowleft_8x8, "Back",
+        NULL, NULL,
         arrowdown_8x8, "Save",
         NULL,
         can_send ? "OK:Send" : NULL);

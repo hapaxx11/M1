@@ -5,7 +5,7 @@
  * @brief  Sub-GHz Saved Scene — browse 0:/SUBGHZ/ files with action menu.
  *
  * Uses the existing storage_browse() file browser.  After selection,
- * shows an action menu: Emulate, Rename, Delete, Back.
+ * shows an action menu: Emulate, Rename, Delete.
  */
 
 #include <stdint.h>
@@ -27,14 +27,13 @@ extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 /* Action menu                                                                */
 /*============================================================================*/
 
-#define ACTION_COUNT  4
+#define ACTION_COUNT  3
 #define ACTION_EMULATE 0
 #define ACTION_RENAME  1
 #define ACTION_DELETE  2
-#define ACTION_BACK    3
 
 static const char *action_labels[ACTION_COUNT] = {
-    "Emulate", "Rename", "Delete", "Back"
+    "Emulate", "Rename", "Delete"
 };
 
 static uint8_t action_sel = 0;
@@ -101,10 +100,6 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             app->need_redraw = true;
             return true;
         }
-        case ACTION_BACK:
-            in_action_menu = false;
-            app->need_redraw = true;
-            return true;
     }
     return false;
 }
@@ -195,7 +190,7 @@ static void draw(SubGhzApp *app)
         m1_draw_text(&m1_u8g2, 2, 40, 124, "0:/SUBGHZ/", TEXT_ALIGN_CENTER);
 
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             NULL, NULL,
             NULL, "OK:Browse");
     }
@@ -214,18 +209,18 @@ static void draw(SubGhzApp *app)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         for (uint8_t i = 0; i < ACTION_COUNT; i++)
         {
-            uint8_t y = 14 + i * 9;
+            uint8_t y = 13 + i * 13;
             if (i == action_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 9);
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
-            u8g2_DrawStr(&m1_u8g2, 8, y + 7, action_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 8, y + 10, action_labels[i]);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
 
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             NULL, NULL,
             NULL, "OK");
     }

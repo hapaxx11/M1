@@ -202,7 +202,7 @@ static void draw(SubGhzApp *app)
 
     /* Bottom bar */
     subghz_button_bar_draw(
-        arrowleft_8x8, "Back",
+        NULL, NULL,
         NULL, "LR:Change",
         arrowdown_8x8, "Select");
 
