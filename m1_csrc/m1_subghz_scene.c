@@ -269,7 +269,15 @@ void subghz_scene_app_run(void)
                     {
                         /* Protocol decode mode — feed pulse to decoder */
                         uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
-                        subghz_decenc_ctl.subghz_pulse_handler(dur);
+                        uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
+
+                        /* Sync ISR state machine with pulse handler output.
+                         * Without this, the ISR stays in NORMAL forever and
+                         * floods the queue with noise pulses between packets,
+                         * preventing real signals from being decoded. */
+                        if (pdet == PULSE_DET_EOP || pdet == PULSE_DET_IDLE)
+                            subghz_decenc_ctl.pulse_det_stat = pdet;
+
                         /* Only notify scene when a full decode is ready */
                         if (subghz_decenc_ctl.subghz_data_ready &&
                             subghz_decenc_ctl.subghz_data_ready())

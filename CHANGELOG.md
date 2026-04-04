@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz signal detection not working** — fixed three issues preventing the
+  Read scene from decoding captured signals:
+  1. **ISR state machine not synchronized**: The pulse handler's return value
+     (PULSE_DET_EOP / PULSE_DET_IDLE) was discarded by the scene manager event
+     loop, leaving the ISR in NORMAL state permanently. This caused every RF
+     noise edge to flood the 256-item FreeRTOS queue, drowning actual signal
+     edges and preventing protocol decoders from accumulating enough pulses.
+  2. **No pulse handler state reset**: The `subghz_pulse_handler` static
+     `interpacket_gap` variable persisted across sessions. Starting a new RX
+     session could begin with stale decoder state.
+  3. **subghz_record_mode_flag not cleared**: Entering the Read scene after
+     a Read Raw session could leave `subghz_record_mode_flag=1`, causing the
+     event loop to skip the pulse handler path entirely.
+
+### Changed
+
+- **Sub-GHz Read scene — Flipper-consistent behavior**:
+  - RX auto-starts on scene entry (no "Press OK to listen" idle screen)
+  - L/R buttons retune frequency while actively receiving (live retune)
+  - History list auto-opens when first signal is decoded
+  - Newest signal auto-selected in history list
+  - History preserved across child scene navigation (ReceiverInfo, Config)
+  - Config accessible via DOWN during active RX (not just idle)
+  - BACK exits scene directly instead of requiring two presses (stop → exit)
+  - Bottom bar updated to show available actions contextually
+
+### Fixed
+
 - **Sub-GHz Read crash** — fixed three bugs that caused a consistent crash
   shortly after launching the Read operation in the new scene-based Sub-GHz UI:
   1. **Missing decoder init**: `subghz_decenc_init()` was never called, leaving
