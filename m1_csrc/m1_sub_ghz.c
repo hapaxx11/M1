@@ -3536,13 +3536,13 @@ static void sub_ghz_saved_draw_actions(uint8_t sel, const char *filename)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	for (uint8_t i = 0; i < SAVED_ACTION_COUNT; i++)
 	{
-		uint8_t y = 14 + i * 12;
+		uint8_t y = 14 + i * 16;
 		if (i == sel)
 		{
-			u8g2_DrawBox(&m1_u8g2, 0, y, 128, 12);
+			u8g2_DrawBox(&m1_u8g2, 0, y, 128, 16);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
-		u8g2_DrawStr(&m1_u8g2, 8, y + 10, saved_action_labels[i]);
+		u8g2_DrawStr(&m1_u8g2, 8, y + 12, saved_action_labels[i]);
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	}
 	m1_u8g2_nextpage();

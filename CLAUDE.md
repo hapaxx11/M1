@@ -354,6 +354,11 @@ to build.**
   Pass `NULL, NULL` for the left slot instead of showing a back arrow + label.
 - If a bottom bar would be entirely empty after removing "Back", that is acceptable — an
   empty bar is better than a redundant one.
+- **When adding or removing menu items, redistribute spacing.** If the item count changes,
+  recompute the row height so items fill the available vertical zone evenly.  Calculate:
+  `row_height = available_zone_height / item_count`.  The available zone is between the
+  separator line (or header bottom) and the bottom bar (y=52 if a bar is shown, y=64 if not).
+  Adjust the highlight box height and text baseline offset to match the new row height.
 
 ---
 

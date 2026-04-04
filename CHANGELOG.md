@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Emulate / Rename / Delete) no longer includes a redundant "Back" item.
 - **Documentation**: Added UI / Button Bar Rules to CLAUDE.md prohibiting
   "Back" labels in button bars and action menus.
+- **Redistributed Sub-GHz saved action menu layout** — after removing the
+  "Back" item (3 items instead of 4), increased row height to fill the
+  available vertical space evenly (13px rows in scene version, 16px in legacy).
+- **Documentation**: Added layout redistribution rule to CLAUDE.md — when
+  item count changes, recompute row height to fill the display zone evenly.
 
 ### Fixed
 

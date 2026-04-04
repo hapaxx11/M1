@@ -209,13 +209,13 @@ static void draw(SubGhzApp *app)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         for (uint8_t i = 0; i < ACTION_COUNT; i++)
         {
-            uint8_t y = 14 + i * 9;
+            uint8_t y = 13 + i * 13;
             if (i == action_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 9);
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
-            u8g2_DrawStr(&m1_u8g2, 8, y + 7, action_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 8, y + 10, action_labels[i]);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
 
