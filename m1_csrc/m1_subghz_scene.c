@@ -30,6 +30,10 @@
 
 #define M1_LOGDB_TAG  "SubGhzScene"
 
+/* Shared RX state (defined in m1_sub_ghz.c / m1_sub_ghz_decenc.c) */
+extern SubGHz_DecEnc_t subghz_decenc_ctl;
+extern uint8_t subghz_record_mode_flag;
+
 /*============================================================================*/
 /* Scene handler registry — indexed by SubGhzSceneId                          */
 /*============================================================================*/
@@ -208,6 +212,9 @@ void subghz_scene_app_run(void)
     /* Initialize radio hardware */
     menu_sub_ghz_init();
 
+    /* Initialize protocol decoder function pointers and pulse tables */
+    subghz_decenc_init();
+
     /* Push initial scene */
     subghz_scene_push(&app, SubGhzSceneMenu);
 
@@ -218,9 +225,18 @@ void subghz_scene_app_run(void)
     /* Main event loop */
     while (app.running)
     {
-        /* Wait for event with hopper-aware timeout */
-        TickType_t wait = app.hopper_active ?
-            pdMS_TO_TICKS(150) : portMAX_DELAY;
+        /* Determine if active RX needs periodic refresh */
+        bool rx_active = false;
+        SubGhzSceneId cur_scene = subghz_scene_current(&app);
+        if (cur_scene == SubGhzSceneRead && app.read_state == SubGhzReadStateRx)
+            rx_active = true;
+        else if (cur_scene == SubGhzSceneReadRaw &&
+                 app.raw_state == SubGhzReadRawStateRecording)
+            rx_active = true;
+
+        /* Wait for event: use 200ms poll during active RX for RSSI refresh */
+        TickType_t wait = (app.hopper_active || rx_active) ?
+            pdMS_TO_TICKS(200) : portMAX_DELAY;
 
         ret = xQueueReceive(main_q_hdl, &q_item, wait);
 
@@ -229,6 +245,9 @@ void subghz_scene_app_run(void)
             /* Timeout — hopper tick */
             if (app.hopper_active)
                 subghz_scene_send_event(&app, SubGhzEventHopperTick);
+            /* Periodic display refresh during active RX (RSSI update) */
+            if (rx_active)
+                app.need_redraw = true;
         }
         else
         {
@@ -240,7 +259,22 @@ void subghz_scene_app_run(void)
                     evt = translate_button();
                     break;
                 case Q_EVENT_SUBGHZ_RX:
-                    evt = SubGhzEventRxData;
+                    if (subghz_record_mode_flag)
+                    {
+                        /* Raw recording mode — pass through to scene
+                         * (ring buffer data handled by Read Raw scene) */
+                        evt = SubGhzEventRxData;
+                    }
+                    else if (subghz_decenc_ctl.subghz_pulse_handler)
+                    {
+                        /* Protocol decode mode — feed pulse to decoder */
+                        uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
+                        subghz_decenc_ctl.subghz_pulse_handler(dur);
+                        /* Only notify scene when a full decode is ready */
+                        if (subghz_decenc_ctl.subghz_data_ready &&
+                            subghz_decenc_ctl.subghz_data_ready())
+                            evt = SubGhzEventRxData;
+                    }
                     break;
                 case Q_EVENT_SUBGHZ_TX:
                     evt = SubGhzEventTxComplete;

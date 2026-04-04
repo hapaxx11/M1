@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sub-GHz Read crash** — fixed three bugs that caused a consistent crash
+  shortly after launching the Read operation in the new scene-based Sub-GHz UI:
+  1. **Missing decoder init**: `subghz_decenc_init()` was never called, leaving
+     all function pointers in `subghz_decenc_ctl` NULL. Calling
+     `subghz_decenc_read()` dereferenced a NULL function pointer → HardFault.
+  2. **Uninitialized ring buffer**: `subghz_record_mode_flag` was set to 1
+     without calling `sub_ghz_ring_buffers_init()`, causing the ISR to write
+     raw pulse data into an uninitialized ring buffer → memory corruption.
+  3. **Pulse data never fed to decoder**: `Q_EVENT_SUBGHZ_RX` events were
+     mapped to a generic scene event without extracting the pulse duration.
+     `subghz_pulse_handler()` was never called, so protocol decoders never ran.
+  - Fix adds `subghz_decenc_init()` at scene app startup, removes the
+    incorrect `subghz_record_mode_flag` usage from the Read scene, and
+    processes pulses directly in the event loop via the `subghz_pulse_handler`
+    function pointer.
+  - RSSI now updates via periodic 200ms timeout during active RX instead of
+    on every pulse event, avoiding excessive display redraws.
+
 ### Added
 
 - **Sub-GHz Playlist Player** — new scene that reads `.txt` playlist files from
