@@ -1,0 +1,23 @@
+# Doorbell Ding-Dong — Ring all known doorbell models
+# Cycles through captured doorbell signals from multiple brands.
+# Make sure the referenced .sub files exist on your SD card under /SUBGHZ/.
+#
+# Original: UberGuidoZ/Flipper (GPLv3, commit c074cebb)
+# Adapted for M1 path convention.  Large file list — only first 16 entries
+# are loaded by the M1 playlist player (firmware limit).
+sub: /SUBGHZ/Doorbells/1byone/1BYONE_ODEQH-0536.sub
+sub: /SUBGHZ/Doorbells/AVANTEK/AVANTEK_CW11.sub
+sub: /SUBGHZ/Doorbells/AVANTEK/AVANTEK_Mini_CB11_Repeating.sub
+sub: /SUBGHZ/Doorbells/Action/Action_doorbell.sub
+sub: /SUBGHZ/Doorbells/AreTech/AreTech_Doorbell.sub
+sub: /SUBGHZ/Doorbells/Byron/Byron_DB421E.sub
+sub: /SUBGHZ/Doorbells/Dollar_General_Pro_Essentials/Doorbell.sub
+sub: /SUBGHZ/Doorbells/GE_Doorbell_19297.sub
+sub: /SUBGHZ/Doorbells/Hampton_Bay.sub
+sub: /SUBGHZ/Doorbells/Sadotech_Doorbell.sub
+sub: /SUBGHZ/Doorbells/TECKNET/TECKNET_DoorBell.sub
+sub: /SUBGHZ/Doorbells/Doorbell0.sub
+sub: /SUBGHZ/Doorbells/Doorbell1.sub
+sub: /SUBGHZ/Doorbells/Doorbell2.sub
+sub: /SUBGHZ/Doorbells/Doorbell3.sub
+sub: /SUBGHZ/Doorbells/Doorbell4.sub

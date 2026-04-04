@@ -45,6 +45,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneNeedSaving]   = &subghz_scene_need_saving_handlers,
     [SubGhzSceneSaved]        = &subghz_scene_saved_handlers,
     [SubGhzSceneFreqAnalyzer] = &subghz_scene_freq_analyzer_handlers,
+    [SubGhzScenePlaylist]     = &subghz_scene_playlist_handlers,
 };
 
 /*============================================================================*/

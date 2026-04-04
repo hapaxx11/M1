@@ -521,6 +521,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_save_success.c
     ../../m1_csrc/m1_subghz_scene_need_saving.c
     ../../m1_csrc/m1_subghz_scene_freq_analyzer.c
+    ../../m1_csrc/m1_subghz_scene_playlist.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

@@ -20,6 +20,8 @@ on:
       - '.project'
       - '.cproject'
       - '.mxproject'
+      - 'ir_database/**'
+      - 'subghz_playlist/**'
   workflow_dispatch:
     inputs:
       tag:

@@ -1,0 +1,10 @@
+# Tesla Charge Port Opener — Example Playlist
+# Cycles through common Tesla charge port frequencies/modulations.
+# Make sure the referenced .sub files exist on your SD card under /SUBGHZ/.
+#
+# Original: UberGuidoZ/Flipper (GPLv3, commit c074cebb)
+# Adapted for M1 path convention.
+sub: /SUBGHZ/Vehicles/Tesla/BEST_PORT_OPENER/315MHz_AM650_Better_Tesla_Charge_Port_Opener.sub
+sub: /SUBGHZ/Vehicles/Tesla/BEST_PORT_OPENER/315MHz_AM270_Better_Tesla_Charge_Port_Opener.sub
+sub: /SUBGHZ/Vehicles/Tesla/Tesla_charge_AM650.sub
+sub: /SUBGHZ/Vehicles/Tesla/Tesla_charge_AM270.sub
