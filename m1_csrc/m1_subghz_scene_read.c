@@ -71,13 +71,9 @@ extern uint8_t sub_ghz_ring_buffers_init_ext(void);
 extern void sub_ghz_ring_buffers_deinit_ext(void);
 extern void sub_ghz_tx_raw_deinit_ext(void);
 
-/* Raw save helpers */
+/* Shared radio state */
 extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
-extern uint8_t subghz_record_mode_flag;
-
-/* Ring buffer */
-extern S_M1_RingBuffer subghz_rx_rawdata_rb;
 
 /* Decoder polling */
 extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
@@ -136,7 +132,6 @@ static void start_rx(SubGhzApp *app)
     sub_ghz_rx_init_ext();
     sub_ghz_rx_start_ext();
 
-    subghz_record_mode_flag = 1;
     app->read_state = SubGhzReadStateRx;
 
     /* LED: cyan fast blink */
@@ -150,7 +145,6 @@ static void stop_rx(SubGhzApp *app)
     sub_ghz_rx_deinit_ext();
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
-    subghz_record_mode_flag = 0;
 
     /* LED off */
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
@@ -299,7 +293,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventRxData:
-            /* Poll decoder for newly decoded signals */
+            /* Decode event — pulse handler already detected a full decode */
             if (app->read_state == SubGhzReadStateRx)
             {
                 SubGHz_Dec_Info_t decoded;
@@ -321,8 +315,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                      * (fast blink timer handles the flash duration) */
                 }
 
-                /* Update RSSI */
-                app->rssi = subghz_read_rssi_ext();
                 app->need_redraw = true;
             }
             return true;
@@ -343,6 +335,10 @@ static void scene_on_exit(SubGhzApp *app)
 static void draw(SubGhzApp *app)
 {
     char line[40];
+
+    /* Update RSSI during active RX (called periodically from event loop) */
+    if (app->read_state == SubGhzReadStateRx)
+        app->rssi = subghz_read_rssi_ext();
 
     m1_u8g2_firstpage();
 
