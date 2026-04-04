@@ -21,6 +21,8 @@ The M1 firmware is organized into the following main components:
 | `FatFs/` | FAT file system for storage |
 | `Middlewares/` | FreeRTOS |
 | `lib/furi/` | Furi compatibility layer (FuriString, FURI_LOG, furi_assert/check) |
+| `ir_database/` | Pre-built IR remote files (Flipper `.ir` format) for SD card |
+| `subghz_database/` | Curated Sub-GHz signal files (Flipper `.sub` format) for SD card |
 | `cad/step/` | Enclosure 3D CAD models (STEP format) |
 | `documentation/` | Project documentation (hardware specs, schematics, guides) |
 

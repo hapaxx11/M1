@@ -74,6 +74,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **IR database expansion** — imported 1,296 curated IR remote files from
+  [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB) (CC0 license,
+  commit `ed18b8dc`) into `ir_database/`.  Covers TVs (395), ACs (158),
+  audio receivers (102), soundbars (105), speakers (69), fans (154),
+  projectors (125), LED lighting (167), and streaming devices (25).
+  Two new categories added: `LED/` and `Streaming/`.  Existing 116 M1
+  original files preserved at top level; IRDB files live in brand
+  subdirectories.  Total IR library now 1,412 files.
+
+- **Sub-GHz signal database** — created `subghz_database/` with 313
+  curated `.sub` files from
+  [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) (GPLv3,
+  commit `c074cebb`).  Categories: outlet switches (179), doorbells (81),
+  weather stations (39), smart home remotes (10), fans (4).  Includes
+  GPLv3 LICENSE and SOURCES.md attribution.
+
 - **Enclosure STEP files** — added 6 enclosure 3D CAD models (STEP AP214,
   rev 2025-02-26) under `cad/step/`.  Includes back case, front panel,
   front shell, mid case, direction button, and mid/back button.
