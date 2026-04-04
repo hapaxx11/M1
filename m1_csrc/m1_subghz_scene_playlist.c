@@ -373,7 +373,7 @@ static void draw(SubGhzApp *app)
         m1_draw_text(&m1_u8g2, 2, 40, 124, "0:" PLAYLIST_DIR "/", TEXT_ALIGN_CENTER);
 
         subghz_button_bar_draw(
-            arrowleft_8x8, "Back",
+            NULL, NULL,
             NULL, NULL,
             NULL, "OK:Browse");
     }
@@ -464,7 +464,7 @@ static void draw(SubGhzApp *app)
         else
         {
             subghz_button_bar_draw(
-                arrowleft_8x8, "Back",
+                NULL, NULL,
                 NULL, "R-/R+",
                 NULL, "OK:Play");
         }

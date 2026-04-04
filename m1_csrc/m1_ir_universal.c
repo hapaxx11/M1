@@ -220,7 +220,7 @@ static void draw_dashboard(uint8_t selection)
 
 	/* Bottom bar */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Select", arrowright_8x8);
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Select", arrowright_8x8);
 
 	m1_u8g2_nextpage();
 } // static void draw_dashboard(uint8_t selection)

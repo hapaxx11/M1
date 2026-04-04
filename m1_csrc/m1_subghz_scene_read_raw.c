@@ -228,7 +228,7 @@ static void draw(SubGhzApp *app)
     {
         case SubGhzReadRawStateIdle:
             subghz_button_bar_draw(
-                arrowleft_8x8, "Back",
+                NULL, NULL,
                 arrowdown_8x8, "Config",
                 NULL, "OK:Rec");
             break;

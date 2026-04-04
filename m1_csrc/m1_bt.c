@@ -333,7 +333,7 @@ static void bt_scan_detail_screen(ble_scanlist_t *dev)
 			snprintf(prn_msg, sizeof(prn_msg), "RSSI:%ddBm Type:%u", dev->rssi, dev->addr_type);
 			u8g2_DrawStr(&m1_u8g2, 2, y, prn_msg);
 
-			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Save", arrowright_8x8);
+			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Save", arrowright_8x8);
 			m1_u8g2_nextpage();
 		}
 
@@ -565,7 +565,7 @@ static void bt_saved_detail_screen(uint8_t dev_idx)
 				menu_sel == 1 ? ">" : " ");
 			u8g2_DrawStr(&m1_u8g2, 2, y, prn_msg);
 
-			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "OK", arrowright_8x8);
+			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
 			m1_u8g2_nextpage();
 		}
 
@@ -664,7 +664,7 @@ void bluetooth_saved_devices(void)
 			{
 				bt_draw_title_bar("Saved Devices");
 				u8g2_DrawStr(&m1_u8g2, 2, 30, "No saved devices");
-				m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "OK", arrowright_8x8);
+				m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
 				m1_u8g2_nextpage();
 			}
 			else
@@ -826,7 +826,7 @@ void bluetooth_info(void)
 		u8g2_DrawStr(&m1_u8g2, 2, y, "Not connected");
 	}
 
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "OK", arrowright_8x8);
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
 	m1_u8g2_nextpage();
 
 	/* Wait for BACK */

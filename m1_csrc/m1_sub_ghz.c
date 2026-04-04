@@ -1189,16 +1189,12 @@ static void subghz_record_gui_update(uint8_t param)
 			if (subghz_raw_view_active)
 			{
 				/* RAW waveform mode bottom bar */
-				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
-				u8g2_DrawStr(&m1_u8g2, 12, 61, "Back");
 				u8g2_DrawXBMP(&m1_u8g2, 84, 52, 10, 10, target_10x10);
 				u8g2_DrawStr(&m1_u8g2, 96, 61, "Stop");
 			}
 			else if (subghz_history_view_active || subghz_history_detail_active)
 			{
 				/* History/Detail mode bottom bar */
-				u8g2_DrawXBMP(&m1_u8g2, 2, 53, 8, 8, arrowleft_8x8);
-				u8g2_DrawStr(&m1_u8g2, 12, 61, "Back");
 				if (subghz_history_view_active && !subghz_history_detail_active)
 				{
 					u8g2_DrawXBMP(&m1_u8g2, 74, 52, 10, 10, target_10x10);
@@ -3230,7 +3226,7 @@ static void sub_ghz_config_draw(uint8_t sel)
 		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	}
 
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Change", arrowright_8x8);
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Change", arrowright_8x8);
 	m1_u8g2_nextpage();
 }
 
@@ -3522,8 +3518,8 @@ void sub_ghz_read(void)
   *         (Emulate / Rename / Delete). Matches Flipper Zero "Saved".
   */
 /*============================================================================*/
-static const char *saved_action_labels[] = { "Emulate", "Rename", "Delete", "Back" };
-#define SAVED_ACTION_COUNT 4
+static const char *saved_action_labels[] = { "Emulate", "Rename", "Delete" };
+#define SAVED_ACTION_COUNT 3
 
 static void sub_ghz_saved_draw_actions(uint8_t sel, const char *filename)
 {
@@ -3760,8 +3756,6 @@ static void sub_ghz_saved_action_menu(const char *filepath, const char *filename
 				}
 				return;
 			}
-			else /* Back */
-				return;
 		}
 		sub_ghz_saved_draw_actions(sel, filename);
 	}
@@ -3851,7 +3845,7 @@ static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	}
 
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Select", arrowright_8x8);
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Select", arrowright_8x8);
 	m1_u8g2_nextpage();
 }
 
@@ -4292,7 +4286,7 @@ static void radio_settings_draw(uint8_t sel)
 	m1_draw_text(&m1_u8g2, 78, 50, 46, subghz_ism_regions_text[m1_device_stat.config.ism_band_region], TEXT_ALIGN_LEFT);
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Change", arrowright_8x8);
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Change", arrowright_8x8);
 	m1_u8g2_nextpage();
 }
 
