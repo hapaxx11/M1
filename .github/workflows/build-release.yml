@@ -11,6 +11,8 @@ on:
     paths-ignore:
       - '**.md'
       - 'documentation/**'
+      - 'ir_database/**'
+      - 'subghz_database/**'
       - 'LICENSE'
       - 'COPYING.txt'
       - '.vscode/**'

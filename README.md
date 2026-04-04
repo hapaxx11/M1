@@ -119,11 +119,19 @@ Download the latest release from the [qMonstatek releases page](https://github.c
 
 ## IR Remote Database
 
-The [`ir_database/`](ir_database/) directory contains pre-built infrared remote files for popular devices. Copy them to `IR/` on the M1's SD card to use with the Universal Remote feature.
+The [`ir_database/`](ir_database/) directory contains **1,412** infrared remote files for popular devices. Copy them to `IR/` on the M1's SD card to use with the Universal Remote feature.
 
-Includes remotes for: Samsung, LG, Sony, Philips, Panasonic, Vizio, TCL, Hisense, Toshiba, Sharp, Bose, Denon, and universal power codes.
+**Categories:** TV (413), AC (238), Audio — receivers, soundbars & speakers (292), Fan (155), Projector (122), LED lighting (167), Streaming devices (25).
 
-All files use the Flipper Zero `.ir` format — you can also use IR files from the [Flipper IRDB](https://github.com/Lucaslhm/Flipper-IRDB) community database.
+Top-level files per category are M1-curated "universal" remotes (tested on hardware). Brand subdirectories contain model-specific files imported from the [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB) community database (CC0 license). See [`ir_database/SOURCES.md`](ir_database/SOURCES.md) for full attribution.
+
+## Sub-GHz Signal Database
+
+The [`subghz_database/`](subghz_database/) directory contains **313** curated Sub-GHz `.sub` signal files. Copy them to `SubGHz/` on the M1's SD card for use with the Sub-GHz Saved feature.
+
+**Categories:** Outlet switches (179), Doorbells (81), Weather stations (39), Smart home remotes (10), Fans (4).
+
+Imported from the [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) community repository (GPLv3). See [`subghz_database/SOURCES.md`](subghz_database/SOURCES.md) for full attribution.
 
 ## Hardware
 
@@ -198,7 +206,7 @@ Use an ST-Link or J-Link debugger with STM32CubeIDE or OpenOCD.
 │   └── Learned/     IR signals recorded by the M1
 ├── NFC/             NFC tag .nfc files
 ├── RFID/            RFID tag .rfid files
-├── SubGHz/          Sub-GHz signal .sub files
+├── SubGHz/          Sub-GHz signal .sub files (see subghz_database/)
 ├── apps/            External .m1app applications
 ├── settings.ini     M1 settings (auto-generated)
 └── wifi_cred.ini    Saved WiFi credentials (auto-generated)
