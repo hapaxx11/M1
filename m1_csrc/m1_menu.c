@@ -119,12 +119,7 @@ S_M1_Menu_t menu_Sub_GHz_AddManually =
 
 S_M1_Menu_t menu_Sub_GHz =
 {
-    "Sub-GHz", NULL, NULL, NULL, 11, 0, menu_m1_icon_wave, NULL,
-    {&menu_Sub_GHz_Record, &menu_Sub_GHz_Saved,
-     &menu_Sub_GHz_AddManually,
-     &menu_Sub_GHz_Frequency_Reader, &menu_Sub_GHz_Spectrum, &menu_Sub_GHz_RSSI,
-     &menu_Sub_GHz_FreqScanner, &menu_Sub_GHz_Weather,
-     &menu_Sub_GHz_BruteForce, &menu_Sub_GHz_Regional_Information, &menu_Sub_GHz_Radio_Settings}
+    "Sub-GHz", sub_ghz_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_wave, NULL, {0}
 };
 
 /*----------------------------- > 125KHz RFID --------------------------------*/
