@@ -20,14 +20,14 @@ static uint8_t choice = 0;  /* 0 = Save, 1 = Discard */
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
-static void on_enter(SubGhzApp *app)
+static void scene_on_enter(SubGhzApp *app)
 {
     (void)app;
     choice = 0;
     app->need_redraw = true;
 }
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
+static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     switch (event)
     {
@@ -64,7 +64,7 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     return false;
 }
 
-static void on_exit(SubGhzApp *app)
+static void scene_on_exit(SubGhzApp *app)
 {
     (void)app;
 }
@@ -119,8 +119,8 @@ static void draw(SubGhzApp *app)
 /*============================================================================*/
 
 const SubGhzSceneHandlers subghz_scene_need_saving_handlers = {
-    .on_enter = on_enter,
-    .on_event = on_event,
-    .on_exit  = on_exit,
+    .on_enter = scene_on_enter,
+    .on_event = scene_on_event,
+    .on_exit  = scene_on_exit,
     .draw     = draw,
 };

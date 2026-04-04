@@ -50,7 +50,6 @@ extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
 
 /* Protocol name table */
-extern const char *protocol_text[];
 
 /* Hopper frequencies */
 #define READ_HOPPER_FREQ_COUNT  6
@@ -107,7 +106,7 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
-static void on_enter(SubGhzApp *app)
+static void scene_on_enter(SubGhzApp *app)
 {
     app->read_state    = SubGhzReadStateIdle;
     app->history_sel   = 0;
@@ -160,7 +159,7 @@ static void stop_rx(SubGhzApp *app)
     app->read_state = SubGhzReadStateIdle;
 }
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
+static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     switch (event)
     {
@@ -335,7 +334,7 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     return false;
 }
 
-static void on_exit(SubGhzApp *app)
+static void scene_on_exit(SubGhzApp *app)
 {
     /* Ensure radio is stopped when leaving scene */
     if (app->read_state == SubGhzReadStateRx)
@@ -507,8 +506,8 @@ static void draw(SubGhzApp *app)
 /*============================================================================*/
 
 const SubGhzSceneHandlers subghz_scene_read_handlers = {
-    .on_enter = on_enter,
-    .on_event = on_event,
-    .on_exit  = on_exit,
+    .on_enter = scene_on_enter,
+    .on_event = scene_on_event,
+    .on_exit  = scene_on_exit,
     .draw     = draw,
 };

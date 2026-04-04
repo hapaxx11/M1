@@ -21,7 +21,7 @@
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
-static void on_enter(SubGhzApp *app)
+static void scene_on_enter(SubGhzApp *app)
 {
     /* Green LED flash for success */
     m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
@@ -31,7 +31,7 @@ static void on_enter(SubGhzApp *app)
     uiScreen_timeout_start(1500, NULL);
 }
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
+static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     switch (event)
     {
@@ -48,7 +48,7 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     return false;
 }
 
-static void on_exit(SubGhzApp *app)
+static void scene_on_exit(SubGhzApp *app)
 {
     (void)app;
     uiScreen_timeout_cancel();
@@ -90,8 +90,8 @@ static void draw(SubGhzApp *app)
 /*============================================================================*/
 
 const SubGhzSceneHandlers subghz_scene_save_success_handlers = {
-    .on_enter = on_enter,
-    .on_event = on_event,
-    .on_exit  = on_exit,
+    .on_enter = scene_on_enter,
+    .on_event = scene_on_event,
+    .on_exit  = scene_on_exit,
     .draw     = draw,
 };

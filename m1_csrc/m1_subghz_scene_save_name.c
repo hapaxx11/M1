@@ -17,16 +17,16 @@
 #include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
+#include "m1_sub_ghz_decenc.h"
 #include "flipper_subghz.h"
 
-extern const char *protocol_text[];
 extern const char *subghz_freq_labels[];
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
-static void on_enter(SubGhzApp *app)
+static void scene_on_enter(SubGhzApp *app)
 {
     /* Build default filename from protocol + key */
     const SubGHz_History_Entry_t *e = subghz_history_get(&app->history, app->history_sel);
@@ -84,7 +84,7 @@ static void on_enter(SubGhzApp *app)
     }
 }
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
+static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     /* VKB is blocking so no events expected here */
     if (event == SubGhzEventBack)
@@ -95,14 +95,14 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     return false;
 }
 
-static void on_exit(SubGhzApp *app)
+static void scene_on_exit(SubGhzApp *app)
 {
     (void)app;
 }
 
 static void draw(SubGhzApp *app)
 {
-    /* VKB handles its own drawing in on_enter; this is a no-op placeholder */
+    /* VKB handles its own drawing in scene_on_enter; this is a no-op placeholder */
     (void)app;
 }
 
@@ -111,8 +111,8 @@ static void draw(SubGhzApp *app)
 /*============================================================================*/
 
 const SubGhzSceneHandlers subghz_scene_save_name_handlers = {
-    .on_enter = on_enter,
-    .on_event = on_event,
-    .on_exit  = on_exit,
+    .on_enter = scene_on_enter,
+    .on_event = scene_on_event,
+    .on_exit  = scene_on_exit,
     .draw     = draw,
 };

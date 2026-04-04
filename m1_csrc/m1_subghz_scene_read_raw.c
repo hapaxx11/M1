@@ -62,7 +62,7 @@ extern uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data);
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
-static void on_enter(SubGhzApp *app)
+static void scene_on_enter(SubGhzApp *app)
 {
     app->raw_state = SubGhzReadRawStateIdle;
     app->raw_sample_count = 0;
@@ -109,7 +109,7 @@ static void stop_raw_rx(SubGhzApp *app)
     app->raw_state = SubGhzReadRawStateStopped;
 }
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
+static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     switch (event)
     {
@@ -174,7 +174,7 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     return false;
 }
 
-static void on_exit(SubGhzApp *app)
+static void scene_on_exit(SubGhzApp *app)
 {
     if (app->raw_state == SubGhzReadRawStateRecording)
         stop_raw_rx(app);
@@ -255,8 +255,8 @@ static void draw(SubGhzApp *app)
 /*============================================================================*/
 
 const SubGhzSceneHandlers subghz_scene_read_raw_handlers = {
-    .on_enter = on_enter,
-    .on_event = on_event,
-    .on_exit  = on_exit,
+    .on_enter = scene_on_enter,
+    .on_event = scene_on_event,
+    .on_exit  = scene_on_exit,
     .draw     = draw,
 };

@@ -18,9 +18,9 @@
 #include "m1_lcd.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
+#include "m1_sub_ghz_decenc.h"
 #include "subghz_protocol_registry.h"
 
-extern const char *protocol_text[];
 extern bool subghz_protocol_is_static_ext(uint16_t protocol);
 extern bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry);
 
@@ -28,12 +28,12 @@ extern bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entr
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
-static void on_enter(SubGhzApp *app)
+static void scene_on_enter(SubGhzApp *app)
 {
     app->need_redraw = true;
 }
 
-static bool on_event(SubGhzApp *app, SubGhzEvent event)
+static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     switch (event)
     {
@@ -64,7 +64,7 @@ static bool on_event(SubGhzApp *app, SubGhzEvent event)
     return false;
 }
 
-static void on_exit(SubGhzApp *app)
+static void scene_on_exit(SubGhzApp *app)
 {
     (void)app;
 }
@@ -136,8 +136,8 @@ static void draw(SubGhzApp *app)
 /*============================================================================*/
 
 const SubGhzSceneHandlers subghz_scene_receiver_info_handlers = {
-    .on_enter = on_enter,
-    .on_event = on_event,
-    .on_exit  = on_exit,
+    .on_enter = scene_on_enter,
+    .on_event = scene_on_event,
+    .on_exit  = scene_on_exit,
     .draw     = draw,
 };
