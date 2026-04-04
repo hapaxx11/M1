@@ -2,8 +2,11 @@
 
 /**
  * @file   m1_subghz_scene_read.c
- * @brief  Sub-GHz Read Scene — protocol-aware receive with RSSI bar,
- *         scrollable history list, and decode feedback.
+ * @brief  Sub-GHz Read Scene — Flipper-consistent protocol-aware receiver.
+ *
+ * Automatically starts listening on scene entry (no manual OK press needed).
+ * Decoded signals are shown in a scrollable history list with LED + buzzer
+ * feedback on each decode.
  *
  * Layout (128x64):
  *   Row 0-9:    Status bar (freq, mod, state)
@@ -12,11 +15,11 @@
  *   Row 52-63:  Bottom bar (button hints)
  *
  * Navigation:
- *   OK    = Start listening (idle) / View detail (history) / Stop (active)
- *   BACK  = Stop (active) / Exit to menu (idle)
- *   L/R   = Cycle frequency preset (idle only)
- *   U/D   = Scroll history list (when active and history non-empty)
- *   DOWN  = Config (idle)
+ *   OK    = View detail (history) / Open history (live) / Info (detail)
+ *   BACK  = Close view layer / Exit to menu
+ *   L/R   = Cycle frequency preset (retunes live during RX)
+ *   U/D   = Scroll history list
+ *   DOWN  = Config (no signals) / Save (detail view)
  */
 
 #include <stdint.h>
@@ -74,9 +77,13 @@ extern void sub_ghz_tx_raw_deinit_ext(void);
 /* Shared radio state */
 extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
+extern uint8_t subghz_record_mode_flag;
 
 /* Decoder polling */
 extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
+
+/* Decoder state reset */
+extern void subghz_pulse_handler_reset(void);
 
 /* SI446x control */
 extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
@@ -101,21 +108,47 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
+static void start_rx(SubGhzApp *app);
+static void stop_rx(SubGhzApp *app);
+
 static void scene_on_enter(SubGhzApp *app)
 {
-    app->read_state    = SubGhzReadStateIdle;
-    app->history_sel   = 0;
+    /* Ensure we're in protocol-decode mode (not raw) regardless of previous
+     * scene state.  Without this, a stale subghz_record_mode_flag=1 causes
+     * the event loop to skip the pulse handler entirely. */
+    subghz_record_mode_flag = 0;
+
+    /* Reset view state but preserve history across child-scene navigation
+     * (ReceiverInfo, Config, SaveName).  History is only cleared on the first
+     * enter from the Menu scene (when count is 0) or can be cleared
+     * explicitly by the user. */
+    app->history_sel    = 0;
     app->history_scroll = 0;
-    app->history_view  = false;
-    app->detail_view   = false;
-    app->has_decoded   = false;
-    app->rssi          = -120;
-    subghz_history_reset(&app->history);
+    app->history_view   = false;
+    app->detail_view    = false;
+    app->rssi           = -120;
+
+    /* If history already has signals (returning from child scene),
+     * keep has_decoded and last_decoded so the display shows them.
+     * Only reset when starting fresh. */
+    if (app->history.count == 0)
+    {
+        app->has_decoded = false;
+        memset(&app->last_decoded, 0, sizeof(app->last_decoded));
+        subghz_history_reset(&app->history);
+    }
+
+    /* Auto-start RX (Flipper-consistent: entering Read immediately starts
+     * listening — no need to press OK first). */
+    start_rx(app);
     app->need_redraw = true;
 }
 
 static void start_rx(SubGhzApp *app)
 {
+    /* Reset pulse handler state to ensure clean decode session */
+    subghz_pulse_handler_reset();
+
     /* Apply config to radio */
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
 
@@ -134,7 +167,7 @@ static void start_rx(SubGhzApp *app)
 
     app->read_state = SubGhzReadStateRx;
 
-    /* LED: cyan fast blink */
+    /* LED: cyan fast blink to indicate active listening */
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
 }
 
@@ -157,123 +190,129 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     switch (event)
     {
         case SubGhzEventBack:
-            if (app->read_state == SubGhzReadStateRx)
+            if (app->detail_view)
             {
-                if (app->detail_view)
-                {
-                    app->detail_view = false;
-                    app->need_redraw = true;
-                }
-                else if (app->history_view)
-                {
-                    app->history_view = false;
-                    app->need_redraw = true;
-                }
-                else
-                {
-                    /* Stop RX */
-                    stop_rx(app);
-                    app->need_redraw = true;
-                }
+                /* Exit signal detail → back to history list */
+                app->detail_view = false;
+                app->need_redraw = true;
+            }
+            else if (app->history_view)
+            {
+                /* Exit history list → back to live view */
+                app->history_view = false;
+                app->need_redraw = true;
             }
             else
             {
-                /* Exit to menu */
+                /* Stop RX and exit to menu.
+                 * Flipper-consistent: BACK always exits the receiver scene.
+                 * RX is stopped in scene_on_exit. */
                 subghz_scene_pop(app);
             }
             return true;
 
         case SubGhzEventOk:
-            if (app->read_state == SubGhzReadStateIdle)
+            if (app->read_state == SubGhzReadStateRx)
             {
-                /* Start listening */
-                start_rx(app);
-                app->need_redraw = true;
-            }
-            else if (app->read_state == SubGhzReadStateRx)
-            {
-                if (app->history_view && !app->detail_view)
+                if (app->history_view && !app->detail_view &&
+                    app->history.count > 0)
                 {
-                    /* View detail of selected signal */
+                    /* Open detail view of selected signal */
                     app->detail_view = true;
                     app->need_redraw = true;
                 }
                 else if (app->detail_view)
                 {
-                    /* In detail view, OK = push receiver info scene */
+                    /* Push Receiver Info scene (full detail + save/send) */
                     subghz_scene_push(app, SubGhzSceneReceiverInfo);
                 }
-                else
+                else if (!app->history_view && app->has_decoded)
                 {
-                    /* Stop listening */
-                    stop_rx(app);
-                    app->need_redraw = true;
-                }
-            }
-            return true;
-
-        case SubGhzEventLeft:
-            if (app->read_state == SubGhzReadStateIdle)
-            {
-                app->freq_idx = (app->freq_idx > 0) ?
-                    app->freq_idx - 1 : SUBGHZ_FREQ_PRESET_CNT - 1;
-                app->need_redraw = true;
-            }
-            return true;
-
-        case SubGhzEventRight:
-            if (app->read_state == SubGhzReadStateIdle)
-            {
-                app->freq_idx = (app->freq_idx + 1) % SUBGHZ_FREQ_PRESET_CNT;
-                app->need_redraw = true;
-            }
-            return true;
-
-        case SubGhzEventUp:
-            if (app->read_state == SubGhzReadStateRx)
-            {
-                if (app->history_view && !app->detail_view)
-                {
-                    /* Scroll up in history */
-                    if (app->history_sel > 0)
-                        app->history_sel--;
-                    if (app->history_sel < app->history_scroll)
-                        app->history_scroll = app->history_sel;
-                    app->need_redraw = true;
-                }
-                else if (!app->history_view && app->history.count > 0)
-                {
-                    /* Open history list */
+                    /* Live decode view: OK opens history list */
                     app->history_view = true;
                     app->history_sel = 0;
                     app->history_scroll = 0;
                     app->need_redraw = true;
                 }
             }
+            else if (app->read_state == SubGhzReadStateIdle)
+            {
+                /* Restart RX (e.g., after manual stop) */
+                start_rx(app);
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventLeft:
+            /* Cycle frequency preset (works while receiving) */
+            {
+                uint8_t old_freq = app->freq_idx;
+                app->freq_idx = (app->freq_idx > 0) ?
+                    app->freq_idx - 1 : SUBGHZ_FREQ_PRESET_CNT - 1;
+                if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
+                {
+                    /* Retune live — stop/start RX with new config */
+                    stop_rx(app);
+                    start_rx(app);
+                }
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventRight:
+            /* Cycle frequency preset (works while receiving) */
+            {
+                uint8_t old_freq = app->freq_idx;
+                app->freq_idx = (app->freq_idx + 1) % SUBGHZ_FREQ_PRESET_CNT;
+                if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
+                {
+                    /* Retune live — stop/start RX with new config */
+                    stop_rx(app);
+                    start_rx(app);
+                }
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventUp:
+            if (app->history_view && !app->detail_view)
+            {
+                /* Scroll up in history */
+                if (app->history_sel > 0)
+                    app->history_sel--;
+                if (app->history_sel < app->history_scroll)
+                    app->history_scroll = app->history_sel;
+                app->need_redraw = true;
+            }
+            else if (!app->history_view && app->history.count > 0)
+            {
+                /* Open history list (Flipper: UP = scroll/open list) */
+                app->history_view = true;
+                app->history_sel = 0;
+                app->history_scroll = 0;
+                app->need_redraw = true;
+            }
             return true;
 
         case SubGhzEventDown:
-            if (app->read_state == SubGhzReadStateIdle)
+            if (app->history_view && !app->detail_view)
             {
-                /* Open config */
-                subghz_scene_push(app, SubGhzSceneConfig);
+                /* Scroll down in history */
+                if (app->history_sel + 1 < app->history.count)
+                    app->history_sel++;
+                if (app->history_sel >= app->history_scroll + HISTORY_VISIBLE)
+                    app->history_scroll = app->history_sel - HISTORY_VISIBLE + 1;
+                app->need_redraw = true;
             }
-            else if (app->read_state == SubGhzReadStateRx)
+            else if (app->detail_view)
             {
-                if (app->history_view && !app->detail_view)
-                {
-                    /* Scroll down in history */
-                    if (app->history_sel + 1 < app->history.count)
-                        app->history_sel++;
-                    if (app->history_sel >= app->history_scroll + HISTORY_VISIBLE)
-                        app->history_scroll = app->history_sel - HISTORY_VISIBLE + 1;
-                    app->need_redraw = true;
-                }
-                else if (app->detail_view)
-                {
-                    /* Save signal */
-                    subghz_scene_push(app, SubGhzSceneSaveName);
-                }
+                /* Save signal from detail view */
+                subghz_scene_push(app, SubGhzSceneSaveName);
+            }
+            else if (!app->history_view)
+            {
+                /* Open config (Flipper-consistent: config accessible during RX) */
+                subghz_scene_push(app, SubGhzSceneConfig);
             }
             return true;
 
@@ -305,6 +344,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     subghz_history_add(&app->history, &decoded, freq);
                     app->last_decoded = decoded;
                     app->has_decoded = true;
+
+                    /* Auto-switch to history view once we have signals
+                     * (Flipper-consistent: receiver always shows the list) */
+                    if (app->history.count > 0 && !app->detail_view)
+                    {
+                        app->history_view = true;
+                        /* Auto-select newest signal (at end of list) */
+                        app->history_sel = app->history.count - 1;
+                        if (app->history_sel >= HISTORY_VISIBLE)
+                            app->history_scroll = app->history_sel - HISTORY_VISIBLE + 1;
+                    }
 
                     /* Decode feedback: green LED flash + sound */
                     m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
@@ -373,15 +423,7 @@ static void draw(SubGhzApp *app)
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-    if (app->read_state == SubGhzReadStateIdle)
-    {
-        /* Idle screen: show antenna icon + instructions */
-        u8g2_DrawXBMP(&m1_u8g2, 0, 14, 50, 27, subghz_antenna_50x27);
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 54, 28, "Press OK");
-        u8g2_DrawStr(&m1_u8g2, 54, 38, "to listen");
-    }
-    else if (app->detail_view && app->history.count > 0)
+    if (app->detail_view && app->history.count > 0)
     {
         /* Signal detail view */
         const SubGHz_History_Entry_t *e = subghz_history_get(&app->history, app->history_sel);
@@ -406,8 +448,8 @@ static void draw(SubGhzApp *app)
     }
     else if (app->history_view && app->history.count > 0)
     {
-        /* History list */
-        snprintf(line, sizeof(line), "History (%d)", app->history.count);
+        /* History list (Flipper-style: shows signal count in header) */
+        snprintf(line, sizeof(line), "Signals: %d", app->history.count);
         u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 6, line);
 
         uint8_t vis = HISTORY_VISIBLE;
@@ -434,31 +476,24 @@ static void draw(SubGhzApp *app)
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
     }
-    else if (app->has_decoded)
+    else if (app->read_state == SubGhzReadStateIdle)
     {
-        /* Live decode display */
+        /* Idle screen: show antenna icon + instructions (fallback if RX failed) */
+        u8g2_DrawXBMP(&m1_u8g2, 0, 14, 50, 27, subghz_antenna_50x27);
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 10, protocol_text[app->last_decoded.protocol]);
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        snprintf(line, sizeof(line), "0x%lX %dbit",
-                 (uint32_t)app->last_decoded.key, app->last_decoded.bit_len);
-        u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 22, line);
-
-        if (app->history.count > 0)
-        {
-            snprintf(line, sizeof(line), "[%d signals]", app->history.count);
-            u8g2_DrawStr(&m1_u8g2, 80, CONTENT_Y_START + 10, line);
-        }
+        u8g2_DrawStr(&m1_u8g2, 54, 28, "Press OK");
+        u8g2_DrawStr(&m1_u8g2, 54, 38, "to listen");
     }
     else if (app->read_state == SubGhzReadStateRx)
     {
-        /* Listening, no decode yet */
+        /* Actively listening, no decode yet — show waiting indicator */
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         if (app->hopper_active)
-            u8g2_DrawStr(&m1_u8g2, 20, 34, "Scanning...");
+            u8g2_DrawStr(&m1_u8g2, 20, 30, "Scanning...");
         else
-            u8g2_DrawStr(&m1_u8g2, 20, 34, "Listening...");
+            u8g2_DrawStr(&m1_u8g2, 20, 30, "Listening...");
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 20, 42, "Waiting for signal");
     }
 
     /* --- Bottom bar --- */
@@ -480,17 +515,16 @@ static void draw(SubGhzApp *app)
     {
         subghz_button_bar_draw(
             arrowleft_8x8, "Back",
-            NULL, NULL,
+            arrowdown_8x8, "Config",
             NULL, "OK:View");
     }
     else
     {
-        /* Active RX, live view */
+        /* Active RX, no signals yet */
         subghz_button_bar_draw(
-            arrowleft_8x8, "Stop",
-            (app->history.count > 0) ? arrowup_8x8 : NULL,
-            (app->history.count > 0) ? "Hist" : NULL,
-            NULL, "OK:Stop");
+            arrowleft_8x8, "Back",
+            arrowdown_8x8, "Config",
+            NULL, NULL);
     }
 
     m1_u8g2_nextpage();

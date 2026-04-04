@@ -251,6 +251,27 @@ static bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 }
 
 
+/* File-level static so subghz_pulse_handler_reset() can clear it */
+static uint32_t pulse_handler_interpacket_gap = 0;
+
+/*============================================================================*/
+/**
+  * @brief  Reset the pulse handler's accumulated state.
+  *         Call before (re)starting RX to ensure a clean decode session.
+  */
+/*============================================================================*/
+void subghz_pulse_handler_reset(void)
+{
+    pulse_handler_interpacket_gap = 0;
+    subghz_decenc_ctl.npulsecount = 0;
+    subghz_decenc_ctl.n64_decodedvalue = 0;
+    subghz_decenc_ctl.ndecodedbitlength = 0;
+    subghz_decenc_ctl.ndecodedprotocol = 0;
+    subghz_decenc_ctl.n32_serialnumber = 0;
+    subghz_decenc_ctl.n32_rollingcode = 0;
+    subghz_decenc_ctl.n8_buttonid = 0;
+}
+
 /*============================================================================*/
 /**
   * @brief
@@ -260,7 +281,6 @@ static bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 /*============================================================================*/
 uint8_t subghz_pulse_handler(uint16_t duration)
 {
-	  static uint32_t interpacket_gap = 0;
 	  uint8_t i;
 	  int16_t rssi;
 	  struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
@@ -283,7 +303,7 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 					  }
 				  } // for(i = 0; i < subghz_protocol_registry_count; i++)
 			  } // if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN )
-			  interpacket_gap = duration; // update
+			  pulse_handler_interpacket_gap = duration; // update
 			  subghz_decenc_ctl.npulsecount = 0;
 			  // A potential interpacket gap has been detected, so it's not required to check for this condition for the next packet, if any.
 			  return PULSE_DET_EOP; // error or end of packet has been met
@@ -292,11 +312,11 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 	  else
 	  {
 		  subghz_decenc_ctl.npulsecount = 0; // reset
-		  interpacket_gap += duration;
+		  pulse_handler_interpacket_gap += duration;
 		  // Interpacket gap has been timeout for a potential packet
-		  if ( interpacket_gap > INTERPACKET_GAP_MAX )
+		  if ( pulse_handler_interpacket_gap > INTERPACKET_GAP_MAX )
 		  {
-			  interpacket_gap = 0; // reset
+			  pulse_handler_interpacket_gap = 0; // reset
 			  return PULSE_DET_IDLE; // error
 		  }
 		  else

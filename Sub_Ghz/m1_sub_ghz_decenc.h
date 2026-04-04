@@ -249,6 +249,7 @@ extern SubGHz_protocol_t *subghz_protocols_list_ptr;
 #define subghz_protocols_list  subghz_protocols_list_ptr
 
 void subghz_decenc_init(void);
+void subghz_pulse_handler_reset(void);
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);
 uint16_t get_diff(uint16_t n_a, uint16_t n_b);
 
