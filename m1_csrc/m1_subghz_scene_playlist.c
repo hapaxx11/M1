@@ -35,7 +35,7 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
 
-extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
+/* sub_ghz_replay_flipper_file() is declared in m1_sub_ghz.h */
 
 /*============================================================================*/
 /* Constants                                                                  */
@@ -395,10 +395,10 @@ static void draw(SubGhzApp *app)
             if (app->playlist_repeat_total == 0)
             {
                 if (app->playlist_running)
-                    snprintf(rep, sizeof(rep), "R:%u/\xe2\x88\x9e",
-                             app->playlist_repeat_done + 1);  /* ∞ UTF-8 */
+                    snprintf(rep, sizeof(rep), "R:%u/Inf",
+                             app->playlist_repeat_done + 1);
                 else
-                    snprintf(rep, sizeof(rep), "R:\xe2\x88\x9e");
+                    snprintf(rep, sizeof(rep), "R:Inf");
             }
             else
             {

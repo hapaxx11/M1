@@ -1,0 +1,20 @@
+# Fans Off — Turn off various ceiling/exhaust fans
+# Sends "off" commands for known fan models.
+# Make sure the referenced .sub files exist on your SD card under /SUBGHZ/.
+#
+# Original: UberGuidoZ/Flipper (GPLv3, commit c074cebb)
+# Adapted for M1 path convention.  Curated to 16 entries (firmware limit).
+sub: /SUBGHZ/Ceiling_Fans/chq8bt7030t_code1111/0_Fan_off.sub
+sub: /SUBGHZ/Ceiling_Fans/Fantasia_Viper_Plus/Fantasia_Fan_off.sub
+sub: /SUBGHZ/Ceiling_Fans/FT1211R/1.sub
+sub: /SUBGHZ/Ceiling_Fans/Generic_Ceiling_Fan_Remote.sub
+sub: /SUBGHZ/Ceiling_Fans/Hampton_Bay_Ceiling_Fan_Complete/Hampton_Bay_0/HB_off.sub
+sub: /SUBGHZ/Ceiling_Fans/Harbor_Breeze/A25-TX015/0.sub
+sub: /SUBGHZ/Ceiling_Fans/Harbor_Breeze/CHQ8BT7030T/Fan_Off.sub
+sub: /SUBGHZ/Ceiling_Fans/Harbor_Breeze/FAN-11T/Fan-off.sub
+sub: /SUBGHZ/Ceiling_Fans/HunterTX45/HunterTX45_Fan_On.sub
+sub: /SUBGHZ/Ceiling_Fans/Hunter_Ceiling_Fan_30250/Fan_off.sub
+sub: /SUBGHZ/Ceiling_Fans/Hunter_Ceiling_Fan_99110/Fan_off.sub
+sub: /SUBGHZ/Ceiling_Fans/Merwry_dl-4112_Ceiling_Fan/Fan_off.sub
+sub: /SUBGHZ/Ceiling_Fans/Minka_Ceiling_Fan_DL-4103T02/fan_off.sub
+sub: /SUBGHZ/Ceiling_Fans/Sofucor_Fan_KBS-56K001/power_off.sub

@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sub-GHz Playlist Player** — new scene that reads `.txt` playlist files from
+  `/SUBGHZ/playlist/` and transmits each referenced `.sub` file sequentially.
+  - Playlist format: one `sub: /SUBGHZ/path/to/file.sub` entry per line;
+    comments (`#`) and blank lines are ignored
+  - Flipper Zero path compatibility: `/ext/subghz/...` paths are automatically
+    remapped to `/SUBGHZ/...` so UberGuidoZ playlists work without editing
+  - Adjustable repeat count (1–9 or infinite) via L/R buttons
+  - Progress display with file list, current-file highlight, and progress bar
+  - Maximum 16 files per playlist (firmware memory constraint)
+  - Curated playlist database included (`subghz_playlist/`) from
+    UberGuidoZ/Flipper: Tesla charge port, doorbells, fans on/off
 - **Sub-GHz Scene Manager** — new Flipper-inspired scene architecture for the
   Sub-GHz UI.  Replaces the monolithic 6,456-line `m1_sub_ghz.c` state machine
   with a clean stack-based scene system where each screen owns its own

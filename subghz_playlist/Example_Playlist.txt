@@ -1,0 +1,16 @@
+# Example playlist — template for creating your own
+#
+# Place this file on your M1 SD card at:  /SUBGHZ/playlist/My_Playlist.txt
+#
+# Format:
+#   sub: /SUBGHZ/path/to/signal.sub
+#
+# Lines starting with # are comments.
+# Blank lines are ignored.
+# Flipper-style paths (/ext/subghz/...) are automatically remapped.
+# Maximum 16 entries per playlist.
+#
+# Example entries (edit these to match your files):
+sub: /SUBGHZ/sig_0001.sub
+sub: /SUBGHZ/sig_0002.sub
+sub: /SUBGHZ/sig_0003.sub
