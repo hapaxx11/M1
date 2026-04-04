@@ -6453,4 +6453,135 @@ void sub_ghz_freq_scanner(void)
     menu_sub_ghz_exit();
     xQueueReset(main_q_hdl);
     m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
+} /* end sub_ghz_freq_scanner() */
+
+
+/*============================================================================*/
+/* Scene Manager Bridge Functions                                             */
+/*                                                                            */
+/* These non-static wrappers expose internal static functions to the new      */
+/* scene-based UI files.  The _ext suffix avoids name collisions.             */
+/*============================================================================*/
+
+#include "m1_subghz_scene.h"
+
+/* Frequency & modulation label arrays for scene_config.c */
+const char *subghz_freq_labels[SUBGHZ_FREQ_PRESET_COUNT];
+const char *subghz_mod_labels[SUBGHZ_MOD_PRESET_COUNT];
+
+/* Hopper frequency array for scene_read.c */
+const uint32_t subghz_hopper_freqs_ext[SUBGHZ_HOPPER_FREQ_COUNT] = {
+	310000000, 315000000, 318000000, 390000000, 433920000, 868350000
+};
+
+static bool subghz_labels_initialized = false;
+
+static void subghz_init_labels(void)
+{
+	if (subghz_labels_initialized)
+		return;
+	for (uint8_t i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
+		subghz_freq_labels[i] = subghz_freq_presets[i].label;
+	for (uint8_t i = 0; i < SUBGHZ_MOD_PRESET_COUNT; i++)
+		subghz_mod_labels[i] = subghz_mod_presets[i].label;
+	subghz_labels_initialized = true;
+}
+
+/* RSSI read */
+int16_t subghz_read_rssi_ext(void)
+{
+	return subghz_read_rssi();
+}
+
+/* Apply config presets to radio */
+void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx)
+{
+	subghz_cfg.freq_idx = freq_idx;
+	subghz_cfg.mod_idx  = mod_idx;
+	subghz_apply_config();
+}
+
+/* Protocol static check */
+bool subghz_protocol_is_static_ext(uint16_t protocol)
+{
+	return subghz_protocol_is_static(protocol);
+}
+
+/* Transmit static signal */
+bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry)
+{
+	return subghz_transmit_static_signal(entry);
+}
+
+/* RAW waveform bridge functions */
+void subghz_raw_waveform_draw_ext(void)
+{
+	subghz_raw_waveform_draw();
+}
+
+void subghz_raw_waveform_reset_ext(void)
+{
+	subghz_raw_waveform_reset();
+}
+
+void subghz_raw_waveform_push_ext(uint16_t duration_us, uint8_t level)
+{
+	subghz_raw_waveform_push(duration_us, level);
+}
+
+/* RX control bridge functions (expose static helpers to scene files) */
+void sub_ghz_rx_init_ext(void)
+{
+	sub_ghz_rx_init();
+}
+
+void sub_ghz_rx_start_ext(void)
+{
+	sub_ghz_rx_start();
+}
+
+void sub_ghz_rx_pause_ext(void)
+{
+	sub_ghz_rx_pause();
+}
+
+void sub_ghz_rx_deinit_ext(void)
+{
+	sub_ghz_rx_deinit();
+}
+
+void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power)
+{
+	sub_ghz_set_opmode(opmode, band, channel, tx_power);
+}
+
+uint8_t sub_ghz_ring_buffers_init_ext(void)
+{
+	return sub_ghz_ring_buffers_init();
+}
+
+void sub_ghz_ring_buffers_deinit_ext(void)
+{
+	sub_ghz_ring_buffers_deinit();
+}
+
+void sub_ghz_tx_raw_deinit_ext(void)
+{
+	sub_ghz_tx_raw_deinit();
+}
+
+uint8_t sub_ghz_rx_raw_save_ext(bool header_init, bool last_data)
+{
+	return sub_ghz_rx_raw_save(header_init, last_data);
+}
+
+/*============================================================================*/
+/* Scene-based entry point — replaces the old menu items                      */
+/*============================================================================*/
+
+void sub_ghz_scene_entry(void)
+{
+	subghz_init_labels();
+	subghz_scene_app_run();
+	m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
 }

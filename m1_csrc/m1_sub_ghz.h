@@ -155,6 +155,9 @@ void sub_ghz_saved(void);
 void sub_ghz_add_manually(void);
 uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 
+/* Scene-based UI entry point (new Flipper-inspired architecture) */
+void sub_ghz_scene_entry(void);
+
 extern EXTI_HandleTypeDef 	si4463_exti_hdl;
 extern TIM_HandleTypeDef   	timerhdl_subghz_tx;
 extern TIM_HandleTypeDef   	timerhdl_subghz_rx;
