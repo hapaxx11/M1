@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-GHz Scene Manager** — new Flipper-inspired scene architecture for the
+  Sub-GHz UI.  Replaces the monolithic 6,456-line `m1_sub_ghz.c` state machine
+  with a clean stack-based scene system where each screen owns its own
+  `on_enter` / `on_event` / `on_exit` / `draw` callbacks.
+  - **Scene framework**: `m1_subghz_scene.h/.c` — scene stack push/pop/replace,
+    event dispatch, `SubGhzApp` context struct
+  - **Button bar**: `m1_subghz_button_bar.h/.c` — standardized 3-column bottom
+    bar, status bar, and RSSI bar renderers (fixed x-positions, consistent fonts)
+  - **Menu scene**: streamlined 5-item entry menu (Read, Read Raw, Saved,
+    Frequency Analyzer, Add Manually)
+  - **Read scene**: protocol-aware receive with always-visible RSSI bar,
+    scrollable signal history, green LED + beep on decode
+  - **Read Raw scene**: raw RF capture with oscilloscope waveform, IDLE →
+    RECORDING → STOPPED state machine with context-dependent bottom bar
+  - **Receiver Info scene**: full signal detail (protocol, key, bits, TE, freq,
+    RSSI, serial/rolling code) with Save and Send actions
+  - **Config scene**: consistent UP/DOWN = select, LEFT/RIGHT = change value
+    with visual `< value >` indicators; BACK always exits
+  - **Save flow**: SaveName (VKB filename entry), SaveSuccess (auto-dismiss
+    confirmation with green LED), NeedSaving ("Unsaved signals?" dialog)
+  - **Saved scene**: file browser with Emulate/Rename/Delete action menu
+  - **Freq Analyzer scene**: wrapper for existing `sub_ghz_frequency_reader()`
+- **Sub-GHz entry point**: `sub_ghz_scene_entry()` — single function called
+  from the main menu, replaces the 11-item submenu with the scene manager
+- **Bridge functions**: `*_ext()` wrappers in `m1_sub_ghz.c` expose static
+  radio control, RSSI read, protocol TX, and waveform functions to scene files
+
 ### Changed
 
 - **SiN360 fork sync** — merged sincere360/M1_SiN360 v0.9.0.4
