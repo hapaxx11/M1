@@ -6554,6 +6554,52 @@ void subghz_raw_waveform_push_ext(uint16_t duration_us, uint8_t level)
 	subghz_raw_waveform_push(duration_us, level);
 }
 
+/* RX control bridge functions (expose static helpers to scene files) */
+void sub_ghz_rx_init_ext(void)
+{
+	sub_ghz_rx_init();
+}
+
+void sub_ghz_rx_start_ext(void)
+{
+	sub_ghz_rx_start();
+}
+
+void sub_ghz_rx_pause_ext(void)
+{
+	sub_ghz_rx_pause();
+}
+
+void sub_ghz_rx_deinit_ext(void)
+{
+	sub_ghz_rx_deinit();
+}
+
+void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power)
+{
+	sub_ghz_set_opmode(opmode, band, channel, tx_power);
+}
+
+uint8_t sub_ghz_ring_buffers_init_ext(void)
+{
+	return sub_ghz_ring_buffers_init();
+}
+
+void sub_ghz_ring_buffers_deinit_ext(void)
+{
+	sub_ghz_ring_buffers_deinit();
+}
+
+void sub_ghz_tx_raw_deinit_ext(void)
+{
+	sub_ghz_tx_raw_deinit();
+}
+
+uint8_t sub_ghz_rx_raw_save_ext(bool header_init, bool last_data)
+{
+	return sub_ghz_rx_raw_save(header_init, last_data);
+}
+
 /*============================================================================*/
 /* Scene-based entry point — replaces the old menu items                      */
 /*============================================================================*/

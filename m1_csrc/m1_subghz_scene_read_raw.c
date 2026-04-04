@@ -34,14 +34,14 @@
 extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
 extern void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx);
-extern void sub_ghz_rx_init(void);
-extern void sub_ghz_rx_start(void);
-extern void sub_ghz_rx_pause(void);
-extern void sub_ghz_rx_deinit(void);
-extern void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power);
-extern uint8_t sub_ghz_ring_buffers_init(void);
-extern void sub_ghz_ring_buffers_deinit(void);
-extern void sub_ghz_tx_raw_deinit(void);
+extern void sub_ghz_rx_init_ext(void);
+extern void sub_ghz_rx_start_ext(void);
+extern void sub_ghz_rx_pause_ext(void);
+extern void sub_ghz_rx_deinit_ext(void);
+extern void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power);
+extern uint8_t sub_ghz_ring_buffers_init_ext(void);
+extern void sub_ghz_ring_buffers_deinit_ext(void);
+extern void sub_ghz_tx_raw_deinit_ext(void);
 extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern uint8_t subghz_record_mode_flag;
@@ -55,8 +55,7 @@ extern void subghz_raw_waveform_reset_ext(void);
 extern void subghz_raw_waveform_push_ext(uint16_t duration_us, uint8_t level);
 
 /* SD card manager */
-extern S_M1_SDM_DatFileInfo_t datfile_info;
-extern uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data);
+extern uint8_t sub_ghz_rx_raw_save_ext(bool header_init, bool last_data);
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -76,17 +75,17 @@ static void start_raw_rx(SubGhzApp *app)
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
 
     /* Initialize ring buffers and SD card */
-    if (sub_ghz_ring_buffers_init())
+    if (sub_ghz_ring_buffers_init_ext())
     {
         /* Memory error — stay idle */
         return;
     }
 
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
-    sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
     SI446x_Change_Modem_OOK_PDTC(0x6C);
-    sub_ghz_rx_init();
-    sub_ghz_rx_start();
+    sub_ghz_rx_init_ext();
+    sub_ghz_rx_start_ext();
 
     subghz_record_mode_flag = 1;
     app->raw_state = SubGhzReadRawStateRecording;
@@ -98,9 +97,9 @@ static void start_raw_rx(SubGhzApp *app)
 
 static void stop_raw_rx(SubGhzApp *app)
 {
-    sub_ghz_rx_pause();
-    sub_ghz_rx_deinit();
-    sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+    sub_ghz_rx_pause_ext();
+    sub_ghz_rx_deinit_ext();
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
     subghz_record_mode_flag = 0;
 
@@ -123,7 +122,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Clean up and exit */
                 if (app->raw_state == SubGhzReadRawStateStopped)
-                    sub_ghz_ring_buffers_deinit();
+                    sub_ghz_ring_buffers_deinit_ext();
                 subghz_scene_pop(app);
             }
             return true;
@@ -142,7 +141,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             else if (app->raw_state == SubGhzReadRawStateStopped)
             {
                 /* Reset and go back to idle */
-                sub_ghz_ring_buffers_deinit();
+                sub_ghz_ring_buffers_deinit_ext();
                 app->raw_state = SubGhzReadRawStateIdle;
                 app->need_redraw = true;
             }
