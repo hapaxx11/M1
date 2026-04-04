@@ -6513,31 +6513,6 @@ bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry)
 	return subghz_transmit_static_signal(entry);
 }
 
-/* Decoder polling — wraps DecEnc control block fields into a Dec_Info struct */
-bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode)
-{
-	(void)raw_mode;
-	if (!subghz_decenc_ctl.subghz_data_ready || !subghz_decenc_ctl.subghz_data_ready())
-		return false;
-
-	out->protocol       = subghz_decenc_ctl.ndecodedprotocol;
-	out->key            = subghz_decenc_ctl.n64_decodedvalue;
-	out->bit_len        = subghz_decenc_ctl.ndecodedbitlength;
-	out->te             = subghz_decenc_ctl.ndecodeddelay;
-	out->rssi           = subghz_decenc_ctl.ndecodedrssi;
-	out->serial_number  = subghz_decenc_ctl.n32_serialnumber;
-	out->rolling_code   = subghz_decenc_ctl.n32_rollingcode;
-	out->button_id      = subghz_decenc_ctl.n8_buttonid;
-	out->raw            = false;
-	out->raw_data       = NULL;
-	out->frequency      = 0;
-
-	if (subghz_decenc_ctl.subghz_reset_data)
-		subghz_decenc_ctl.subghz_reset_data();
-
-	return true;
-}
-
 /* RAW waveform bridge functions */
 void subghz_raw_waveform_draw_ext(void)
 {
