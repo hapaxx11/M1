@@ -83,8 +83,7 @@ static inline void subghz_block_decoder_reset(SubGhzBlockDecoder *decoder)
  * @param decoder  Pointer to a SubGhzBlockDecoder instance.
  * @param bit      Data bit (0 or 1).
  */
-static inline void subghz_protocol_blocks_add_bit(SubGhzBlockDecoder *decoder,
-                                                    uint8_t bit)
+static inline void subghz_protocol_blocks_add_bit(SubGhzBlockDecoder *decoder, bool bit)
 {
     decoder->decode_data = (decoder->decode_data << 1) | (bit & 1u);
     decoder->decode_count_bit++;
