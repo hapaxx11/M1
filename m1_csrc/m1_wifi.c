@@ -941,6 +941,16 @@ uint8_t wifi_sync_rtc(void)
 	return 0;
 }
 
+bool wifi_is_connected(void)
+{
+	return s_wifi_connected;
+}
+
+const char *wifi_get_connected_ssid(void)
+{
+	return s_wifi_connected ? s_connected_ssid : NULL;
+}
+
 
 #else /* M1_APP_WIFI_CONNECT_ENABLE not defined */
 
