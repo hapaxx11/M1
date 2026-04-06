@@ -70,7 +70,7 @@ uint8_t subghz_decode_oregon3(uint16_t p, uint16_t pulsecount)
     {
         uint16_t duration = subghz_decenc_ctl.pulse_times[i];
         ManchesterEvent event;
-        uint8_t bit_val;
+        bool bit_val;
         bool level = (i % 2 == 0); /* even = HIGH, odd = LOW */
 
         if (DURATION_DIFF(duration, te_short) < te_delta)
