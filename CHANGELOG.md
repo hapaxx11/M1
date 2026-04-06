@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scene exit paths (generic `m1_scene_run`, Sub-GHz scene, and the main
   menu `subfunc_handler`) now drain the button queue before returning
   control to the main menu.
+- **Sub-GHz: `uint8_t`/`bool` type mismatch compile error** — `manchester_advance()`
+  writes to a `bool *` output, but the Oregon V1 and Oregon3 decoders declared the
+  receiving variable as `uint8_t`, causing a pointer-type mismatch on strict compilers.
+  Changed `bit_val` to `bool` in both decoders and updated `subghz_protocol_blocks_add_bit()`
+  parameter from `uint8_t` to `bool` to match (the value is always 0 or 1).
 
 - **Sub-GHz Read: frequency=0 saved for non-hopper signals** — When the frequency
   hopper was not active, decoded signals were stored with frequency 0 Hz.  This broke
