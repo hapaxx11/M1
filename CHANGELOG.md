@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Sub-GHz menu: Flipper-style selection list** — Removed the full-width "OK" button bar
+  from the Sub-GHz main menu scene and replaced it with a right-edge scrollbar position
+  indicator.  All 6 menu items now display without scrolling, using the full vertical space.
+- **Sub-GHz Saved action menu** — Removed the "OK" button bar from the Emulate / Rename /
+  Delete action menu and redistributed item spacing to fill the available screen area evenly
+  (17px per item instead of 13px).
+- **Documentation**: Added scene-based application architecture guidance and updated button
+  bar rules in `CLAUDE.md` to prohibit "OK"-only button bars on selection lists.
+
 ### Fixed
 
 - **Firmware update menu overflow**: The 4th menu item ("Download") no longer

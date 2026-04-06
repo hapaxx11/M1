@@ -2,14 +2,17 @@
 
 /**
  * @file   m1_subghz_scene_menu.c
- * @brief  Sub-GHz Menu Scene — entry point with streamlined item list.
+ * @brief  Sub-GHz Menu Scene — entry point with Flipper-style item list.
  *
- * Replaces the 11-item submenu with a focused 5-item list:
+ * Displays a focused selection list with a scrollbar position indicator
+ * on the right side.  No bottom button bar — OK is implied by the list.
+ *
  *   1. Read (protocol decode) — most common, at top
  *   2. Read Raw (raw capture)
  *   3. Saved (file browser)
- *   4. Frequency Analyzer
- *   5. Add Manually
+ *   4. Playlist
+ *   5. Frequency Analyzer
+ *   6. Add Manually
  */
 
 #include <stdint.h>
@@ -19,14 +22,20 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_subghz_scene.h"
-#include "m1_subghz_button_bar.h"
 
 /*============================================================================*/
 /* Menu items                                                                 */
 /*============================================================================*/
 
 #define MENU_ITEM_COUNT    6
-#define MENU_VISIBLE       5   /* Visible items (button bar limits space) */
+#define MENU_VISIBLE       6   /* All items visible (no button bar) */
+
+/* Layout constants */
+#define MENU_AREA_TOP     12   /* Y below title + separator line      */
+#define MENU_ITEM_H        8   /* Pixel height per menu row           */
+#define SCROLLBAR_X      125   /* Scrollbar left edge (3px wide)      */
+#define SCROLLBAR_W        3   /* Scrollbar track width               */
+#define MENU_TEXT_W      124   /* Highlight / text area width          */
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -123,7 +132,7 @@ static void draw(SubGhzApp *app)
 
     /* Title */
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 9, 124, "Sub-GHz", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, "Sub-GHz", TEXT_ALIGN_CENTER);
 
     /* Draw separator line */
     u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
@@ -133,12 +142,12 @@ static void draw(SubGhzApp *app)
     for (uint8_t i = 0; i < MENU_VISIBLE && (menu_scroll + i) < MENU_ITEM_COUNT; i++)
     {
         uint8_t idx = menu_scroll + i;
-        uint8_t y = 12 + i * 8;
+        uint8_t y = MENU_AREA_TOP + i * MENU_ITEM_H;
 
         if (idx == menu_sel)
         {
-            /* Highlight selected item */
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 8);
+            /* Highlight selected item (leave room for scrollbar) */
+            u8g2_DrawBox(&m1_u8g2, 0, y, MENU_TEXT_W, MENU_ITEM_H);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
@@ -146,11 +155,20 @@ static void draw(SubGhzApp *app)
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
-    /* Bottom bar */
-    subghz_button_bar_draw(
-        NULL, NULL,
-        NULL, NULL,
-        NULL, "OK");
+    /* Scrollbar — position indicator on the right edge */
+    {
+        uint8_t sb_area_h  = MENU_VISIBLE * MENU_ITEM_H;
+        uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;
+        uint8_t sb_handle_y = MENU_AREA_TOP +
+            (uint8_t)((uint16_t)sb_area_h * menu_sel / MENU_ITEM_COUNT);
+
+        /* Track outline */
+        u8g2_DrawFrame(&m1_u8g2, SCROLLBAR_X, MENU_AREA_TOP,
+                       SCROLLBAR_W, sb_area_h);
+        /* Handle (filled) */
+        u8g2_DrawBox(&m1_u8g2, SCROLLBAR_X, sb_handle_y,
+                     SCROLLBAR_W, sb_handle_h);
+    }
 
     m1_u8g2_nextpage();
 }
