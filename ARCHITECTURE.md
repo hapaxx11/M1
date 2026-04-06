@@ -9,27 +9,33 @@ The M1 firmware is organized into the following main components:
 | Directory | Description |
 |-----------|-------------|
 | `Core/` | Application entry, FreeRTOS tasks, HAL configuration |
-| `m1_csrc/` | M1 application logic (display, NFC, RFID, IR, Sub-GHz, CAN, firmware update) |
+| `m1_csrc/` | M1 application logic (display, NFC, RFID, IR, Sub-GHz, CAN, firmware update, scenes) |
 | `Battery/` | Battery monitoring |
 | `NFC/` | NFC (13.56 MHz) support |
-| `lfrfid/` | LF RFID (125 kHz) support |
-| `Sub_Ghz/` | Sub-GHz radio support |
+| `lfrfid/` | LF RFID (125 kHz) support — 26 protocol decoders |
+| `Sub_Ghz/` | Sub-GHz radio support — 99 protocol decoders, protocol registry |
 | `Infrared/` | IR transmit/receive |
 | `Esp_spi_at/` | ESP32 SPI AT command interface |
+| `Esp32_serial_flasher/` | ESP32 firmware flashing support (UART bootloader) |
 | `USB/` | USB CDC and MSC classes |
 | `Drivers/` | STM32 HAL, CMSIS, u8g2, and other drivers |
 | `FatFs/` | FAT file system for storage |
 | `Middlewares/` | FreeRTOS |
 | `lib/furi/` | Furi compatibility layer (FuriString, FURI_LOG, furi_assert/check) |
-| `ir_database/` | Pre-built IR remote files (Flipper `.ir` format) for SD card |
-| `subghz_database/` | Curated Sub-GHz signal files (Flipper `.sub` format) for SD card |
+| `ir_database/` | Pre-built IR remote files (Flipper `.ir` format) for SD card — 1,412 files |
+| `subghz_database/` | Curated Sub-GHz signal files (Flipper `.sub` format) for SD card — 313 files |
+| `subghz_playlist/` | Sub-GHz playlist files (`.txt` format) for SD card |
 | `cad/step/` | Enclosure 3D CAD models (STEP format) |
-| `documentation/` | Project documentation (hardware specs, schematics, guides) |
+| `tools/` | Build utilities — `append_crc32.py` (CRC injection), `png_to_xbm_array.py` (logo converter) |
+| `scripts/` | Helper scripts |
+| `cmake/` | CMake build configuration modules |
+| `documentation/` | Project documentation (hardware specs, schematics, build guides) |
 
 ## Build System
 
+- **CMake + Ninja** (primary): Uses `CMakeLists.txt` and `CMakePresets.json`
 - **STM32CubeIDE:** Uses `.project` and `.cproject`
-- **VS Code / CMake:** Uses `CMakeLists.txt` and `CMakePresets.json`
+- **Make:** Uses `Makefile` (Linux)
 
 ## Scene-Based Architecture
 
@@ -40,3 +46,17 @@ All modules with submenus use a stack-based scene manager:
 - **All other modules:** Shared generic scene framework (`m1_scene.h/c`) with
   blocking delegates.  Scene files: `m1_<module>_scene.c`.
 - **BadUSB / Apps:** Single-function modules, direct function calls (no scene manager).
+
+### Module Scene Files
+
+| Module | Scene file | Items |
+|--------|-----------|-------|
+| Sub-GHz | `m1_subghz_scene.c` + 11 sub-scenes | 11 menu items |
+| RFID | `m1_rfid_scene.c` | 4–5 items |
+| NFC | `m1_nfc_scene.c` | 7 items |
+| Infrared | `m1_infrared_scene.c` | 3 items |
+| GPIO | `m1_gpio_scene.c` | 5–6 items |
+| WiFi | `m1_wifi_scene.c` | 4–6 items |
+| Bluetooth | `m1_bt_scene.c` | 3–7 items |
+| Games | `m1_games_scene.c` | 6 items |
+| Settings | `m1_settings_scene.c` | 7 items + nested sub-menus |
