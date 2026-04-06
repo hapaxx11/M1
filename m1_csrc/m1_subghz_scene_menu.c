@@ -157,8 +157,8 @@ static void draw(SubGhzApp *app)
 
     /* Scrollbar — position indicator on the right edge */
     {
-        uint8_t sb_area_h  = MENU_VISIBLE * MENU_ITEM_H;   /* 48 */
-        uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;  /*  8 */
+        uint8_t sb_area_h  = MENU_VISIBLE * MENU_ITEM_H;
+        uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;
         uint8_t sb_handle_y = MENU_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * menu_sel / MENU_ITEM_COUNT);
 
