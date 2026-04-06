@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz DMA buffer 32-byte alignment** — The front and back sample buffers
+  used by the Sub-GHz TX DMA (`subghz_front_buffer`, `subghz_back_buffer`) were
+  allocated with plain `malloc()` which only guarantees 8-byte alignment.  On the
+  STM32H573 (Cortex-M33 with D-Cache), DMA buffers must be aligned to the 32-byte
+  cache line size to prevent data corruption from cache-line sharing.  Both buffers
+  now over-allocate by 31 bytes and align the usable pointer to a 32-byte boundary,
+  with the original base pointer stored separately for correct `free()`.
 - **Main menu off-by-one: highlight and selection could diverge** — When
   returning from a scene-based module whose blocking delegates used legacy
   X_MENU operations (NFC Read, RFID Read, etc.), the `x_menu_update_init`
