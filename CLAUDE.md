@@ -120,7 +120,7 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 - **Build command**: Set PATH to include all three tool directories, then `cmake --build build`
 - **Post-build CRC + Hapax metadata**: The CMake post-build step uses `srec_cat` which is NOT installed and will fail. This is expected — the .bin/.elf/.hex files are already generated before that step. After `cmake --build` completes, run the CRC/metadata injection script. The canonical command is in `do_build.ps1` — always use it as the reference. Currently (for a local build defaulting to revision 1):
   ```
-  python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin --output build/M1_Hapax_v0.9.0.1_SD.bin --hapax-revision 1 --verbose
+  python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin --output build/M1_Hapax_v0.9.0.1_wCRC.bin --hapax-revision 1 --verbose
   ```
 - **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. The input binary name must match the CMake project name (e.g. `M1_Hapax_v0.9.0.1.bin`). CI patches only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in the header; `CMAKE_PROJECT_NAME` is derived automatically from those values at CMake configure time. Local builds use the source-file defaults.
 
@@ -252,8 +252,8 @@ If Monstatek publishes a new release in the future, re-evaluate this policy by:
 - **`Hapax` is the project codename**, NOT a version number.
 - **`M1_HAPAX_REVISION`** in `m1_fw_update_bl.h` = the Hapax fork revision. Keep in sync with `FW_VERSION_RC`. Source-file default = `1` (= local build default). **CI auto-increments** by querying the latest published release tag before each build.
 - **Display format**: `v{major}.{minor}.{build}.{rc}-Hapax.{hapax_revision}` — e.g. `v0.9.0.1-Hapax.1`, `v0.9.0.2-Hapax.2`, etc.
-- **File/tag format**: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — e.g. `M1_Hapax_v0.9.0.1_SD.bin`, tag `v0.9.0.1`. No `-Hapax.X` suffix in filenames or release tags.
-- **CMake project name** is fully dynamic: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — derived entirely at CMake configure time by reading the four `FW_VERSION_*` macros from `m1_fw_update_bl.h`. `CMakeLists.txt` is **never** patched by CI and never needs manual editing for a version bump. All output filenames (ELF, BIN, HEX, SD) derive from this automatically.
+- **File/tag format**: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — e.g. `M1_Hapax_v0.9.0.1_wCRC.bin`, tag `v0.9.0.1`. No `-Hapax.X` suffix in filenames or release tags.
+- **CMake project name** is fully dynamic: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — derived entirely at CMake configure time by reading the four `FW_VERSION_*` macros from `m1_fw_update_bl.h`. `CMakeLists.txt` is **never** patched by CI and never needs manual editing for a version bump. All output filenames (ELF, BIN, HEX, wCRC) derive from this automatically.
 - **When bumping Hapax revision manually** (e.g. for a local build): update only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in `m1_fw_update_bl.h` — `CMakeLists.txt` is not touched. The CI does this automatically.
 - **RPC protocol**: `hapax_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-Hapax.X` suffix only when `hapax_revision > 0`, so stock Monstatek firmware displays without it.
 

@@ -144,16 +144,16 @@ add_custom_command(
 )
 
 # Command to inject CRC32 + Hapax metadata into the .bin file
-# Output: ${CMAKE_PROJECT_NAME}_SD.bin  (e.g. M1_Hapax_v0.9.0.1_SD.bin)
+# Output: ${CMAKE_PROJECT_NAME}_wCRC.bin  (e.g. M1_Hapax_v0.9.0.1_wCRC.bin)
 # Matches SiN360's pattern: project name drives all output filenames.
 add_custom_command(
     TARGET ${CMAKE_PROJECT_NAME}
     POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${CMAKE_PROJECT_NAME}_SD.bin"
+    COMMAND ${CMAKE_COMMAND} -E echo "Injecting CRC + Hapax metadata into ${CMAKE_PROJECT_NAME}_wCRC.bin"
     COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/tools/append_crc32.py
         ${TARGET_BIN}
-        --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_SD.bin
+        --output ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}_wCRC.bin
         --hapax-revision ${M1_HAPAX_REVISION}
         --verbose
 )

@@ -167,7 +167,7 @@ cmake --build build
 
 # Post-build: inject CRC and Hapax metadata
 python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin \
-    --output build/M1_Hapax_v0.9.0.1_SD.bin \
+    --output build/M1_Hapax_v0.9.0.1_wCRC.bin \
     --hapax-revision 1 --verbose
 ```
 
