@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sub-GHz menu expanded to 11 items** — Added Spectrum Analyzer, RSSI Meter, Freq Scanner,
   Weather Station, Brute Force, and wired up Add Manually (was a no-op).  Now matches C3
   feature parity.  Menu scrolls with 6 visible items and scrollbar position indicator.
+- **CI: skip builds for non-compilation changes** — Added `paths-ignore` filters to
+  `ci.yml` so that PRs and pushes touching only documentation, database files, IDE
+  configs, or CI workflow files no longer trigger a firmware build.  Updated `CLAUDE.md`
+  Workflow Rules and `.github/GUIDELINES.md` to instruct agents and contributors that
+  builds are not required for such changes.
 - **Sub-GHz menu: Flipper-style selection list** — Removed the full-width "OK" button bar
   from the Sub-GHz main menu scene and replaced it with a right-edge scrollbar position
   indicator.  All 6 menu items now display without scrolling, using the full vertical space.
