@@ -489,6 +489,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_can.c
     ../../m1_csrc/m1_i2c.c
     ../../m1_csrc/m1_infrared.c
+    ../../m1_csrc/m1_infrared_scene.c
     ../../m1_csrc/m1_int_hdl.c
     ../../m1_csrc/m1_lcd.c
     ../../m1_csrc/m1_led_indicator.c
@@ -499,15 +500,19 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_md5_hash.c
     ../../m1_csrc/m1_menu.c
     ../../m1_csrc/m1_nfc.c
+    ../../m1_csrc/m1_nfc_scene.c
     ../../m1_csrc/m1_power_ctl.c
     ../../m1_csrc/m1_rf_spi.c
     ../../m1_csrc/m1_rfid.c
+    ../../m1_csrc/m1_rfid_scene.c
     ../../m1_csrc/m1_ring_buffer.c
     ../../m1_csrc/m1_sdcard.c
     ../../m1_csrc/m1_sdcard_man.c
     ../../m1_csrc/m1_settings.c
     ../../m1_csrc/m1_storage.c
     ../../m1_csrc/m1_sub_ghz.c
+    # === Generic Scene Framework ===
+    ../../m1_csrc/m1_scene.c
     # === Sub-GHz Scene UI (Flipper-inspired scene architecture) ===
     ../../m1_csrc/m1_subghz_scene.c
     ../../m1_csrc/m1_subghz_button_bar.c
@@ -558,6 +563,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_ble_spam.c
     # === Enhanced firmware: Built-in Games (Phase 9) ===
     ../../m1_csrc/m1_games.c
+    ../../m1_csrc/m1_games_scene.c
     ../../m1_csrc/game_snake.c
     ../../m1_csrc/game_tetris.c
     ../../m1_csrc/game_trex.c
