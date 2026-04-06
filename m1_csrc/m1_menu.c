@@ -125,450 +125,66 @@ S_M1_Menu_t menu_Sub_GHz =
 
 /*----------------------------- > 125KHz RFID --------------------------------*/
 
-S_M1_Menu_t menu_125KHz_RFID_Read =
-{
-    "Read", rfid_125khz_read, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_125KHz_RFID_Saved =
-{
-    "Saved", rfid_125khz_saved, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-
-S_M1_Menu_t menu_125KHz_RFID_Add_Manually =
-{
-    "Add", rfid_125khz_add_manually, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_125KHz_RFID_Utilities =
-{
-    "Utilities", rfid_125khz_utilities, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-#ifdef M1_APP_FILE_IMPORT_ENABLE
-S_M1_Menu_t menu_125KHz_RFID_Import =
-{
-    "Import .rfid", rfid_import_flipper, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void rfid_scene_entry(void);
 
 S_M1_Menu_t menu_125KHz_RFID =
 {
-    "RFID", menu_125khz_rfid_init, menu_125khz_rfid_deinit, NULL, 5, 0, menu_m1_icon_rfid, NULL,
-    {&menu_125KHz_RFID_Read, &menu_125KHz_RFID_Saved, &menu_125KHz_RFID_Add_Manually, &menu_125KHz_RFID_Import, &menu_125KHz_RFID_Utilities}
+    "RFID", rfid_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_rfid, NULL, {0}
 };
-#else
-S_M1_Menu_t menu_125KHz_RFID =
-{
-    "RFID", menu_125khz_rfid_init, menu_125khz_rfid_deinit, NULL, 4, 0, menu_m1_icon_rfid, NULL,
-    {&menu_125KHz_RFID_Read, &menu_125KHz_RFID_Saved, &menu_125KHz_RFID_Add_Manually, &menu_125KHz_RFID_Utilities}
-};
-#endif
 
 /*-------------------------------- > NFC -------------------------------------*/
 
-S_M1_Menu_t menu_NFC_Read =
-{
-    "Read", nfc_read, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_NFC_Detect_Reader =
-{
-    "Detect Reader", nfc_detect_reader, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_NFC_Saved =
-{
-    "Saved", nfc_saved, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_NFC_Extra_Actions =
-{
-    "Extra Actions", nfc_extra_actions, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_NFC_Add_Manually =
-{
-    "Add Manually", nfc_add_manually, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_NFC_Tools =
-{
-    "Tools", nfc_tools, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_NFC_Field_Detect =
-{
-    "Field Detect", nfc_rfid_detect_run, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void nfc_scene_entry(void);
 
 S_M1_Menu_t menu_NFC =
 {
-    "NFC", &menu_nfc_init, menu_nfc_deinit, NULL, 7, 0, menu_m1_icon_nfc, NULL,
-    {&menu_NFC_Read, &menu_NFC_Detect_Reader, &menu_NFC_Saved, &menu_NFC_Extra_Actions, &menu_NFC_Add_Manually, &menu_NFC_Tools, &menu_NFC_Field_Detect }
+    "NFC", nfc_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_nfc, NULL, {0}
 };
 
 /*----------------------------- > Infrared -----------------------------------*/
 
-S_M1_Menu_t menu_Infrared_Universal_Remotes =
-{
-    "Universal Remotes", infrared_universal_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Infrared_Learn_New_Remote =
-{
-    "Learn", infrared_learn_new_remote, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Infrared_Saved_Remotes =
-{
-    "Replay", infrared_saved_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void infrared_scene_entry(void);
 
 S_M1_Menu_t menu_Infrared =
 {
-    "Infrared", menu_infrared_init, NULL, NULL, 3, 0, menu_m1_icon_infrared, NULL,
-    {&menu_Infrared_Universal_Remotes, &menu_Infrared_Learn_New_Remote, &menu_Infrared_Saved_Remotes}
+    "Infrared", infrared_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_infrared, NULL, {0}
 };
 
 /*------------------------------- > GPIO -------------------------------------*/
 
-S_M1_Menu_t menu_GPIO_GPIO_Manual_Control =
-{
-    "GPIO Control", gpio_manual_control, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void gpio_scene_entry(void);
 
-S_M1_Menu_t menu_GPIO_3_3V_On_GPIO =
-{
-    "3.3V power", gpio_3_3v_on_gpio, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_GPIO_5V_On_GPIO =
-{
-    "5V power", gpio_5v_on_gpio, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_GPIO_USB_UART =
-{
-    "USB-UART bridge", gpio_usb_uart_bridge, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-#include "signal_gen.h"
-S_M1_Menu_t menu_GPIO_Signal_Gen =
-{
-    "Signal Gen", signal_gen_run, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-#ifdef M1_APP_CAN_ENABLE
-S_M1_Menu_t menu_CAN_Sniffer =
-{
-    "Sniffer", can_sniffer, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_CAN_Send =
-{
-    "Send Frame", can_send, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_CAN_Saved =
-{
-    "Saved", can_saved, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_CAN =
-{
-    "CAN Bus", menu_can_init, menu_can_deinit, NULL, 3, 0, NULL, NULL,
-    {&menu_CAN_Sniffer, &menu_CAN_Send, &menu_CAN_Saved}
-};
-#endif /* M1_APP_CAN_ENABLE */
-
-#ifdef M1_APP_CAN_ENABLE
 S_M1_Menu_t menu_GPIO =
 {
-    "GPIO", menu_gpio_init, menu_gpio_exit, gpio_xkey_handler, 6, 0, menu_m1_icon_gpio, gpio_gui_update,
-    {&menu_GPIO_GPIO_Manual_Control, &menu_GPIO_3_3V_On_GPIO, &menu_GPIO_5V_On_GPIO, &menu_GPIO_USB_UART, &menu_GPIO_Signal_Gen, &menu_CAN}
+    "GPIO", gpio_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_gpio, NULL, {0}
 };
-#else
-S_M1_Menu_t menu_GPIO =
-{
-    "GPIO", menu_gpio_init, menu_gpio_exit, gpio_xkey_handler, 5, 0, menu_m1_icon_gpio, gpio_gui_update,
-    {&menu_GPIO_GPIO_Manual_Control, &menu_GPIO_3_3V_On_GPIO, &menu_GPIO_5V_On_GPIO, &menu_GPIO_USB_UART, &menu_GPIO_Signal_Gen}
-};
-#endif /* M1_APP_CAN_ENABLE */
 
 /*------------------------------- > Settings ---------------------------------*/
 
-/*------------------------- > Settings-Storage -------------------------------*/
-
-S_M1_Menu_t menu_Setting_Storage_About =
-{
-    "About SD Card", storage_about, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Storage_Explore =
-{
-    "Explore SD Card", storage_explore, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Storage_Mount =
-{
-    "Mount SD Card", storage_mount, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Storage_Unmount =
-{
-    "Unmount SD Card", storage_unmount, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Storage_Format =
-{
-    "Format SD Card", storage_format, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-/*------------------------- > Settings-Storage-End ---------------------------*/
-
-/*------------------------- > Settings-Power ---------------------------------*/
-
-S_M1_Menu_t menu_Setting_Power_Info =
-{
-    "Battery Info", power_battery_info, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Power_Reboot =
-{
-    "Reboot", power_reboot, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Power_Off =
-{
-    "Power Off", power_off, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-/*----------------------- > Settings-Power-End -------------------------------*/
-
-
-/*---------------------- > Settings-Firmware Update --------------------------*/
-
-S_M1_Menu_t menu_Setting_Firmware_Update_Image_File =
-{
-    "Image File", firmware_update_get_image_file, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Firmware_Update_Start =
-{
-    "Firmware update", firmware_update_start, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Firmware_Swap_Banks =
-{
-    "Swap Banks", firmware_swap_banks, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Firmware_Download =
-{
-    "Download", fw_download_start, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-
-/*---------------------- > Settings-Firmware Update-End ----------------------*/
-
-
-/*---------------------- > Settings-ESP32 Update --------------------------*/
-
-S_M1_Menu_t menu_Setting_ESP32_Image_File =
-{
-    "Image File", setting_esp32_image_file, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_ESP32_Start_Address =
-{
-    "Start Address", setting_esp32_start_address, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_ESP32_Firmware_Update =
-{
-    "Firmware Update", setting_esp32_firmware_update, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-/*---------------------- > Settings-ESP32 Update-End ----------------------*/
-
-S_M1_Menu_t menu_Settings_LCD_and_Notifications =
-{
-    "LCD and Notifications", settings_lcd_and_notifications, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Settings_Storage =
-{
-    "Storage", menu_setting_storage_init, NULL, NULL, 5, 0, NULL, NULL, {&menu_Setting_Storage_About, &menu_Setting_Storage_Explore, &menu_Setting_Storage_Mount, &menu_Setting_Storage_Unmount, &menu_Setting_Storage_Format}
-};
-
-S_M1_Menu_t menu_Settings_Power =
-{
-    "Power", menu_setting_power_init, NULL, NULL, 3, 0, NULL, NULL, {&menu_Setting_Power_Info, &menu_Setting_Power_Reboot, &menu_Setting_Power_Off}
-};
-
-S_M1_Menu_t menu_Settings_System =
-{
-    "System", settings_system, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Setting_Firmware_Update =
-{
-    "Firmware update", firmware_update_init, firmware_update_exit, NULL, 4, 0, NULL, firmware_update_gui_update, {&menu_Setting_Firmware_Update_Image_File, &menu_Setting_Firmware_Update_Start, &menu_Setting_Firmware_Swap_Banks, &menu_Setting_Firmware_Download}
-};
-
-S_M1_Menu_t menu_Setting_ESP32 =
-{
-    "ESP32 update", setting_esp32_init, setting_esp32_exit, setting_esp32_xkey_handler, 3, 0, NULL, setting_esp32_gui_update, {&menu_Setting_ESP32_Image_File, &menu_Setting_ESP32_Start_Address, &menu_Setting_ESP32_Firmware_Update}
-};
-
-S_M1_Menu_t menu_Settings_About =
-{
-    "About", settings_about, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void settings_scene_entry(void);
 
 S_M1_Menu_t menu_Settings =
 {
-    "Settings", menu_settings_init, NULL, NULL, 7, 0, menu_m1_icon_setting, NULL,
-    {&menu_Settings_LCD_and_Notifications, &menu_Settings_Storage, &menu_Settings_Power, &menu_Settings_System, &menu_Setting_Firmware_Update, &menu_Setting_ESP32, &menu_Settings_About}
-};
-
-/*------------------------------ > 802.15.4 ----------------------------------*/
-
-S_M1_Menu_t menu_802154_Zigbee =
-{
-    "Zigbee Scan", zigbee_scan, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_802154_Thread =
-{
-    "Thread Scan", thread_scan, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Settings", settings_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_setting, NULL, {0}
 };
 
 /*--------------------------------- > Wifi -----------------------------------*/
 
-S_M1_Menu_t menu_Wifi_Scan_AP =
-{
-    "WiFi Scan+Connect", wifi_scan_ap, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Wifi_Config =
-{
-    "Saved Networks", wifi_config, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-S_M1_Menu_t menu_Wifi_Status =
-{
-    "Status", wifi_show_status, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Wifi_Disconnect =
-{
-    "Disconnect", wifi_disconnect, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void wifi_scene_entry(void);
 
 S_M1_Menu_t menu_Wifi =
 {
-    "Wifi", menu_wifi_init, NULL, NULL, 6, 0, menu_m1_icon_wifi, NULL,
-    {&menu_Wifi_Scan_AP, &menu_802154_Zigbee, &menu_802154_Thread, &menu_Wifi_Config, &menu_Wifi_Status, &menu_Wifi_Disconnect}
+    "Wifi", wifi_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_wifi, NULL, {0}
 };
-#else
-S_M1_Menu_t menu_Wifi =
-{
-    "Wifi", menu_wifi_init, NULL, NULL, 4, 0, menu_m1_icon_wifi, NULL,
-    {&menu_Wifi_Scan_AP, &menu_802154_Zigbee, &menu_802154_Thread, &menu_Wifi_Config}
-};
-#endif
 
 /*--------------------------------- > BT ------------------------------------*/
-S_M1_Menu_t menu_Bluetooth_Scan =
-{
-    "Scan", bluetooth_scan, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
 
-#ifdef M1_APP_BT_MANAGE_ENABLE
-S_M1_Menu_t menu_Bluetooth_Saved =
-{
-    "Saved", bluetooth_saved_devices, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Bluetooth_Advertise =
-{
-    "Advertise", bluetooth_advertise, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Bluetooth_Info =
-{
-    "BT Info", bluetooth_info, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-#ifdef M1_APP_BADBT_ENABLE
-#include "m1_badbt.h"
-
-S_M1_Menu_t menu_Bluetooth_BadBT =
-{
-    "Bad-BT", badbt_run, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Bluetooth_BTName =
-{
-    "BT Name", bluetooth_set_badbt_name, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-#endif /* M1_APP_BADBT_ENABLE */
-
-#ifdef M1_APP_BLE_SPAM_ENABLE
-#include "m1_ble_spam.h"
-
-S_M1_Menu_t menu_Bluetooth_Spam =
-{
-    "BLE Spam", ble_spam_run, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-#endif /* M1_APP_BLE_SPAM_ENABLE */
-
-#if defined(M1_APP_BADBT_ENABLE) && defined(M1_APP_BLE_SPAM_ENABLE)
-S_M1_Menu_t menu_Bluetooth =
-{
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 7, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_BadBT, &menu_Bluetooth_BTName, &menu_Bluetooth_Spam, &menu_Bluetooth_Info}
-};
-#elif defined(M1_APP_BADBT_ENABLE)
-S_M1_Menu_t menu_Bluetooth =
-{
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 6, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_BadBT, &menu_Bluetooth_BTName, &menu_Bluetooth_Info}
-};
-#elif defined(M1_APP_BLE_SPAM_ENABLE)
-S_M1_Menu_t menu_Bluetooth =
-{
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 5, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_Spam, &menu_Bluetooth_Info}
-};
-#else
-S_M1_Menu_t menu_Bluetooth =
-{
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 4, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Scan, &menu_Bluetooth_Saved, &menu_Bluetooth_Advertise, &menu_Bluetooth_Info}
-};
-#endif
-
-#else
-S_M1_Menu_t menu_Bluetooth_Config =
-{
-    "Config", bluetooth_config, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
-S_M1_Menu_t menu_Bluetooth_Advertise =
-{
-    "Advertise", bluetooth_advertise, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
+extern void bt_scene_entry(void);
 
 S_M1_Menu_t menu_Bluetooth =
 {
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 3, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Config, &menu_Bluetooth_Scan, &menu_Bluetooth_Advertise}
+    "Bluetooth", bt_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_bluetooth, NULL, {0}
 };
-#endif /* M1_APP_BT_MANAGE_ENABLE */
 
 /*-------------------------------- > BadUSB ----------------------------------*/
 #ifdef M1_APP_BADUSB_ENABLE
@@ -582,20 +198,12 @@ S_M1_Menu_t menu_BadUSB =
 
 /*-------------------------------- > Games -----------------------------------*/
 #ifdef M1_APP_GAMES_ENABLE
-#include "m1_games.h"
-#include "music_player.h"
 
-S_M1_Menu_t menu_Snake        = { "Snake",        game_snake_run,    NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_Tetris       = { "Tetris",        game_tetris_run,   NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_TRex         = { "T-Rex Runner",  game_trex_run,     NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_Pong         = { "Pong",          game_pong_run,     NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_Dice         = { "Dice Roll",     game_dice_run,     NULL, NULL, 0, 0, NULL, NULL, {NULL} };
-S_M1_Menu_t menu_MusicPlayer  = { "Music Player",  music_player_run,  NULL, NULL, 0, 0, NULL, NULL, {NULL} };
+extern void games_scene_entry(void);
 
 S_M1_Menu_t menu_Games =
 {
-    "Games", NULL, NULL, NULL, 6, 0, menu_m1_icon_games, NULL,
-    {&menu_Snake, &menu_Tetris, &menu_TRex, &menu_Pong, &menu_Dice, &menu_MusicPlayer}
+    "Games", games_scene_entry, NULL, NULL, 0, 0, menu_m1_icon_games, NULL, {0}
 };
 #endif /* M1_APP_GAMES_ENABLE */
 
