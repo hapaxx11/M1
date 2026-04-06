@@ -32,7 +32,7 @@ When porting protocols or implementing new features, agents must decide which co
 patterns and architectural conventions to follow.  Two primary references exist:
 
 1. **Monstatek/M1** — the upstream stock firmware from which this fork descends.
-2. **Flipper Zero / Flipper One and community forks** (Momentum, Unleashed, etc.) — the
+2. **Flipper Zero and community forks** (Momentum, Unleashed, etc.) — the
    ecosystem whose file formats, protocol names, and decoder algorithms M1 tracks.
 
 ### Current weighting: Flipper-first (until Monstatek > 1.0.0.0)
@@ -113,53 +113,6 @@ Use the `dev` branch or latest release tag (`mntm-XXX`).
 > **Prefer Momentum** when both have the protocol — Momentum includes bug fixes
 > and additional protocols not yet in official Flipper firmware.
 
-### Flipper One (fbtng / flipperone-mcu-firmware — do NOT push)
-
-The **Flipper One** is a new Flipper product based on a dual-CPU architecture:
-a main application processor (running Linux) and an RP2350 (Cortex-M33) MCU
-coprocessor that runs FreeRTOS and provides Sub-GHz, NFC, RFID, IR, GPIO, and
-USB services — the exact same peripherals M1 manages.
-
-This makes the Flipper One MCU firmware the **single most relevant reference**
-for a complete, production-quality Furi HAL implementation on a Cortex-M33 +
-FreeRTOS architecture.
-
-#### Key repositories
-
-| Name | URL | Purpose |
-|------|-----|---------|
-| `flipperone-mcu-firmware` | `https://github.com/flipperdevices/flipperone-mcu-firmware` | RP2350 MCU firmware — **furi_hal lives here** |
-| `fbtng` | `https://github.com/flipperdevices/fbtng` | SCons-based build system; defines HAL contract headers and target manifests |
-| `fbtng-corelibs` | `https://github.com/flipperdevices/fbtng-corelibs` | Packages `furi` core, FatFS, `bit_lib`, `mlib`, and other libraries |
-
-#### f100 target — the RP2350 HAL reference
-
-The target we are interested in is `targets/f100/` inside `flipperone-mcu-firmware`.
-It implements the Furi HAL for RP2350 (dual Cortex-M33 + RISC-V, same ISA as STM32H573).
-
-Reference commit: `29ada14951a34902bafaaad2be00e7b05774a414`  
-Direct path: `targets/f100/furi_hal/`
-
-> **All 45 source files from this path have been imported into this repository** at  
-> `documentation/furi_hal_reference/`. See the README in that directory for complete
-> porting notes mapping each RP2350 HAL module to STM32H573 equivalents.
-
-#### Sub-GHz / LF-RFID / NFC / IR in Flipper One
-
-Protocol implementations for the Flipper One follow the same pattern as Flipper Zero but
-live under a different path. When the Flipper One gains a new protocol, check here:
-
-| Area | Path in `flipperone-mcu-firmware` |
-|------|-----------------------------------|
-| Sub-GHz protocols | `lib/subghz/protocols/` (same lib as Flipper Zero, shared via `fbtng-corelibs`) |
-| LF-RFID protocols | `lib/lfrfid/protocols/` |
-| IR encoder/decoder | `lib/infrared/encoder_decoder/` |
-| NFC protocols | `lib/nfc/protocols/` |
-
-These protocol libraries are **shared between Flipper Zero and Flipper One** via the
-`fbtng-corelibs` package — protocol port names and `SUBGHZ_PROTOCOL_*_NAME` constants
-are identical between the two platforms.
-
 ### M1 (this repository)
 
 | Area | M1 path |
@@ -185,7 +138,7 @@ are identical between the two platforms.
 
 ## Furi HAL Porting Reference
 
-A complete set of Furi HAL source files from the Flipper One f100 target has been imported
+A complete set of Furi HAL source files from the `flipperone-mcu-firmware` f100 target has been imported
 at `documentation/furi_hal_reference/`.  These are **not compiled** in M1 — they are there
 so an agent can read them for API signatures, business logic, and porting guidance.
 
@@ -220,7 +173,7 @@ API call to its STM32H573 equivalent.
 ## Copied Flipper Code Inventory
 
 This section documents every file in this repository that was **directly copied or closely
-derived** from Flipper Zero or Flipper One firmware source.  It exists so that:
+derived** from Flipper Zero firmware source.  It exists so that:
 
 - The total volume of copied code is visible at a glance.
 - Agents can assess whether the submodule threshold has been reached (see below).

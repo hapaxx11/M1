@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation**: Removed all references to Flipper One from `documentation/furi_hal_reference/README.md` and `documentation/flipper_import_agent.md`. Replaced product-name references with neutral repository/target identifiers. Removed the dedicated Flipper One section from the import agent guide.
+
 ### Added
 
 - **WiFi Firmware Download**: New "Download" option in the Firmware Update menu

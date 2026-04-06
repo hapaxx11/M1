@@ -1,9 +1,9 @@
 <!-- See COPYING.txt for license details. -->
 
-# Flipper One f100 `furi_hal` Reference Sources
+# f100 `furi_hal` Reference Sources
 
 This directory contains the complete `furi_hal` hardware abstraction layer implementation
-from the **Flipper One MCU firmware**, target `f100` (RP2350 / Cortex-M33 coprocessor).
+from the **`flipperone-mcu-firmware`** repository, target `f100` (RP2350 / Cortex-M33 coprocessor).
 
 **Source repository:**  
 `https://github.com/flipperdevices/flipperone-mcu-firmware`  
@@ -122,7 +122,7 @@ On STM32H573 replace PIO I2C with a second `HAL_I2C_*` master and slave with I3C
 
 ### NVM (`furi_hal_nvm`)
 
-The `kvs` (key-value store) library is Flipper One–specific.  On M1, map to:
+The `kvs` (key-value store) library is f100-specific.  On M1, map to:
 - FatFS file in `/CONFIG/` on the SD card (already used for `m1_fw_config`)
 - Or a dedicated flash page using STM32H5 flash erase/write
 
@@ -136,7 +136,7 @@ with the underlying call sites replaced with `CDC_Transmit_FS()` / ring buffer r
 
 ## License
 
-These files are adapted from the Flipper One MCU firmware:  
+These files are adapted from the `flipperone-mcu-firmware` repository:  
 `https://github.com/flipperdevices/flipperone-mcu-firmware`  
 Copyright (C) Flipper Devices Inc. — Licensed under **GPLv3**.
 
