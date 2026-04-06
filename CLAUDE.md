@@ -354,11 +354,37 @@ to build.**
   Pass `NULL, NULL` for the left slot instead of showing a back arrow + label.
 - If a bottom bar would be entirely empty after removing "Back", that is acceptable — an
   empty bar is better than a redundant one.
+- **Selection lists MUST NOT have a button bar with "OK".** When a scene presents a list
+  of selectable items (main menus, action menus, option lists), pressing OK to select is
+  self-evident.  Do NOT draw `subghz_button_bar_draw()` or `m1_draw_bottom_bar()` with an
+  "OK" label at the bottom — it wastes 12px of vertical space and looks wrong.  Instead,
+  use that space for additional list items and draw a **scrollbar** on the right edge as a
+  position indicator.  Reference implementation: `m1_subghz_scene_menu.c`.
+- **Scrollbar pattern for selection lists**: Draw a 3px-wide track frame at x=125 spanning
+  the menu area, with a filled handle whose Y position is proportional to the selected
+  item index.  Limit the highlight-box width to 124px so it does not overlap the scrollbar.
+- **Button bars are appropriate ONLY when they convey non-obvious functionality** — e.g.
+  "OK:Browse" (tells user OK opens a file browser), "↓ Config" (tells user down opens
+  config), "Send" / "Save" (action confirmation in radio scenes).
 - **When adding or removing menu items, redistribute spacing.** If the item count changes,
   recompute the row height so items fill the available vertical zone evenly.  Calculate:
   `row_height = available_zone_height / item_count`.  The available zone is between the
   separator line (or header bottom) and the bottom bar (y=52 if a bar is shown, y=64 if not).
   Adjust the highlight box height and text baseline offset to match the new row height.
+
+---
+
+## Scene-Based Application Architecture
+
+- **Prefer scene-based architecture** whenever an application has more than one screen or
+  any non-trivial navigation (e.g. menu → action → result → back).  The scene manager
+  (`SubGhzSceneHandlers` pattern with `on_enter` / `on_event` / `on_exit` / `draw` callbacks
+  and stack-based push/pop navigation) keeps state management clean and testable.
+- **Simple single-screen utilities** (e.g. a frequency counter that only shows one view)
+  may use a flat event loop without scenes.
+- When creating a new application or porting a Flipper app, **start with the scene manager
+  skeleton** from `m1_subghz_scene.h/c` and create per-scene files following the existing
+  naming convention: `m1_<app>_scene_<name>.c`.
 
 ---
 

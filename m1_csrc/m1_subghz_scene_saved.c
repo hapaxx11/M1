@@ -196,7 +196,7 @@ static void draw(SubGhzApp *app)
     }
     else
     {
-        /* Action menu */
+        /* Action menu — no button bar, items fill available space */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
         /* Truncated filename */
         char dname[22];
@@ -206,23 +206,19 @@ static void draw(SubGhzApp *app)
 
         u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
+        /* 3 items in 52px (y=13..64) → 17px per item */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         for (uint8_t i = 0; i < ACTION_COUNT; i++)
         {
-            uint8_t y = 13 + i * 13;
+            uint8_t y = 13 + i * 17;
             if (i == action_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 17);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
-            u8g2_DrawStr(&m1_u8g2, 8, y + 10, action_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 8, y + 12, action_labels[i]);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
-
-        subghz_button_bar_draw(
-            NULL, NULL,
-            NULL, NULL,
-            NULL, "OK");
     }
 
     m1_u8g2_nextpage();
