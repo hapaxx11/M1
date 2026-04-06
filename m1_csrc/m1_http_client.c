@@ -9,16 +9,21 @@
  * M1 Project
  */
 
-#include "m1_http_client.h"
-#include "m1_wifi.h"
-#include "m1_file_browser.h"
-#include "m1_watchdog.h"
-#include "m1_log.h"
-#include "esp_app_main.h"
-#include "esp_at_list.h"
+#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "stm32h5xx_hal.h"
+#include "main.h"
+#include "m1_http_client.h"
+#include "m1_wifi.h"
+#include "m1_compile_cfg.h"
+#include "m1_file_browser.h"
+#include "m1_watchdog.h"
+#include "m1_log_debug.h"
+#include "esp_app_main.h"
+#include "esp_at_list.h"
 
 #define HTTP_TAG "HTTP"
 
@@ -36,9 +41,6 @@
 #define HTTP_DOWNLOAD_CHUNK  2048
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
-
-/* Ensure ESP32 is initialized — same pattern as wifi functions */
-extern bool wifi_ensure_esp32_ready(void);
 
 bool http_is_ready(void)
 {
