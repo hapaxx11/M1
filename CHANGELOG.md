@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Firmware update menu overflow**: The 4th menu item ("Download") no longer
+  overflows into the info box below. Switched from the tall info box (Y=32) to
+  the short info box (Y=42) and condensed the version display from three rows
+  to two (file name + compact "old > new" version line).
+
 ### Added
 
 - **WiFi Firmware Download**: New "Download" option in the Firmware Update menu
