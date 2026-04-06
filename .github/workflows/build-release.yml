@@ -20,8 +20,10 @@ on:
       - '.project'
       - '.cproject'
       - '.mxproject'
-      - 'ir_database/**'
       - 'subghz_playlist/**'
+      - '.github/workflows/**'
+      - '.github/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
     inputs:
       tag:
