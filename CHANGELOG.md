@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation overhaul** — comprehensive audit and update of all markdown files
+  for consistency with codebase state and completed PRs. README.md rewritten with
+  comparison table vs stock firmware, accurate protocol counts, missing features
+  (playlist, add manually, AES crypto, NTP sync), included databases section, and
+  expanded SD card layout. Updated DEVELOPMENT.md with full build environment and
+  architecture overview. Expanded ARCHITECTURE.md with missing directories and
+  module scene table. Fixed placeholder URLs in CONTRIBUTING.md, CODE_OF_CONDUCT.md,
+  SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
+  CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
+
+## [0.9.0.28] - 2026-04-06
+
 ### Added
 
 - **Generic scene framework** (`m1_scene.h/c`) — Shared, reusable scene manager with
@@ -412,6 +426,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reflect the registry-based workflow, added Momentum Firmware as a reference
   source, updated checklist.
 
+- **Documentation: Flipper-weighted pattern adoption policy** — added a Pattern
+  Adoption Policy section to `documentation/flipper_import_agent.md` that gives
+  Flipper and community forks (Momentum, Unleashed) higher weight than
+  Monstatek/M1 patterns for protocol decoders, struct layouts, naming, and HAL
+  decisions while the Monstatek stock firmware remains at version ≤ 1.0.0.0.
+  Added a Monstatek Pattern Deviation Log table.
+
 ### Added
 
 - **Flipper-compatible decoder building blocks** — new header files that mirror
@@ -488,19 +509,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   splash, `m1_logo_40x32` boot, `m1_logo_26x14` menu icon) with the Hapax H crossbar design,
   replacing the original V-notch mountain silhouette.
 
-## [0.9.0.7] - 2026-03-31
-
-### Changed
-
-- **Documentation: Flipper import agent — Flipper-weighted pattern adoption policy** — added a
-  Pattern Adoption Policy section to `documentation/flipper_import_agent.md` that gives Flipper
-  Zero/One and community forks (Momentum, Unleashed) higher weight than Monstatek/M1 patterns
-  for protocol decoders, struct layouts, naming, and HAL decisions while the Monstatek stock
-  firmware remains at version ≤ 1.0.0.0.  Added a Monstatek Pattern Deviation Log table to
-  track all cases where Flipper patterns were adopted over divergent Monstatek patterns, for
-  later reconciliation once Monstatek matures.  Updated Step 0 and the import checklist to
-  reflect the new policy.
-  
 ## [0.9.0.5] - 2026-03-28
 
 ### Added

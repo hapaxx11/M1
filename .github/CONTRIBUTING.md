@@ -1,6 +1,6 @@
 <!-- See COPYING.txt for license details. -->
 
-# Contributing to M1 NFC Project
+# Contributing to M1 Hapax Firmware
 
 Thank you for your interest in contributing to our M1 project! This document provides guidelines and processes for contributing to the project.
 
@@ -23,11 +23,11 @@ This project and everyone participating in it is governed by our [Code of Conduc
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/your-username/m1_01.git
+   git clone https://github.com/your-username/M1.git
    ```
 3. Add the upstream repository:
    ```bash
-   git remote add upstream https://github.com/YOUR_ORG/m1_01.git
+   git remote add upstream https://github.com/hapaxx11/M1.git
    ```
 4. Create a new branch:
    ```bash
@@ -168,8 +168,8 @@ When creating a pull request, please include:
 
 ## Questions?
 
-- Open an [Issue](https://github.com/YOUR_ORG/m1_01/issues) for support or questions
-- Use [GitHub Discussions](https://github.com/YOUR_ORG/m1_01/discussions) for community discussions
+- Open an [Issue](https://github.com/hapaxx11/M1/issues) for support or questions
+- Use [GitHub Discussions](https://github.com/hapaxx11/M1/discussions) for community discussions
 
 ## Recognition
 

@@ -82,6 +82,8 @@ compatible:
 
 ## Development Tools
 
-- STM32CubeIDE (recommended)
+- ARM GCC toolchain (14.2+, recommended: 14.3 bundled in STM32CubeIDE 2.1.0)
+- CMake + Ninja (primary build system)
+- STM32CubeIDE 1.17+ (alternative)
 - J-Link or ST-Link debugger
-- ARM GCC toolchain (14.2 or compatible)
+- Python 3 (for post-build CRC injection)

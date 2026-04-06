@@ -52,7 +52,8 @@ No security vulnerabilities in dependencies
 6. Documentation
 Keep README.md updated with accurate feature descriptions and protocol counts
 Update CHANGELOG.md for every meaningful change following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
-  - Use version label [0.8.0.0-Hapax.{revision}] matching M1_HAPAX_REVISION in m1_fw_update_bl.h
+  - Use version label [{major}.{minor}.{build}.{rc}] matching the FW_VERSION_* macros in m1_fw_update_bl.h (e.g. [0.9.0.28])
+  - Use [Unreleased] for changes that only touch non-compilation paths (docs, CI config, databases)
   - Subsections: ### Added / ### Changed / ### Fixed / ### Removed
   - New feature → ### Added; behaviour change → ### Changed; bug fix → ### Fixed
   - Append to the current version block rather than creating a duplicate heading

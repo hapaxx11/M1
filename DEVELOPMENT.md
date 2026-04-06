@@ -2,6 +2,49 @@
 
 # M1 Development Guidelines
 
+## Build Environment
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| ARM GCC | 14.2+ (14.3 recommended) | `arm-none-eabi-gcc` |
+| CMake | 3.22+ | |
+| Ninja | 1.10+ | |
+| Python 3 | 3.8+ | For CRC injection script |
+| STM32CubeIDE | 1.17+ (optional) | Includes toolchain; tested with 1.17.0 and 2.1.0 |
+
+On Debian/Ubuntu: `sudo apt install gcc-arm-none-eabi cmake ninja-build python3`
+
+### Build with CMake (recommended)
+
+```bash
+# Configure
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build build
+
+# Post-build: inject CRC and Hapax metadata (required for SD card flashing)
+python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin \
+    --output build/M1_Hapax_v0.9.0.1_wCRC.bin \
+    --hapax-revision 1 --verbose
+```
+
+The `--hapax-revision` flag is **mandatory** — without it, the dual-boot bank screen will
+not show the Hapax revision or build date. CI auto-increments the revision on each merge.
+
+See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord setup.
+
+### Output Files
+
+| File | Description |
+|------|-------------|
+| `M1_Hapax_v{ver}.elf` | ELF with debug symbols |
+| `M1_Hapax_v{ver}.bin` | Raw binary |
+| `M1_Hapax_v{ver}.hex` | Intel HEX |
+| `M1_Hapax_v{ver}_wCRC.bin` | Binary with CRC + Hapax metadata (for SD card / OTA) |
+
 ## Coding Standards
 
 - Follow STM32 HAL coding conventions
@@ -10,10 +53,39 @@
 - Use appropriate integer types (`uint8_t`, `uint16_t`, etc.)
 - Add comments for non-obvious logic
 
+## Architecture
+
+All modules with submenus use the **scene-based architecture** — a stack-based scene
+manager with `on_enter` / `on_event` / `on_exit` / `draw` callbacks. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full module table.
+
+- **Sub-GHz** has its own scene manager (`m1_subghz_scene.h/c`) with radio-specific
+  event handling.
+- **All other modules** share the generic framework (`m1_scene.h/c`) with blocking
+  delegates wrapping legacy functions.
+- **New modules** should follow the scene pattern from the start. Use
+  `m1_games_scene.c` as a minimal template.
+
+## ESP32-C6 Coprocessor
+
+The M1 communicates with the ESP32-C6 via **SPI AT commands** (not UART). Key points:
+
+- Stock Espressif UART-based AT firmware downloads **will not work**
+- ESP32 firmware must be built with `CONFIG_AT_BASE_ON_SPI=y` and `CONFIG_SPI_MODE=1`
+- Module config: `ESP32C6-SPI` (not `ESP32C6-4MB` which is UART)
+- UART is only used for firmware flashing (ROM bootloader), not runtime communication
+
 ## Branch Naming and Commit Messages
 
 See [`.github/GUIDELINES.md`](.github/GUIDELINES.md) for branch naming conventions and
 Conventional Commits format used in this repository.
+
+## CI/CD
+
+- Every push/PR to `main` triggers a firmware build check (`ci.yml`)
+- Every merge to `main` auto-creates a GitHub Release with firmware artifacts
+- Builds that only touch docs, databases, IDE configs, or CI workflow files are
+  automatically skipped (see `paths-ignore` in `ci.yml`)
 
 ## Testing
 

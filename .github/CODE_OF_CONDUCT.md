@@ -62,7 +62,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement by opening
-a [GitHub Issue](https://github.com/YOUR_ORG/m1_01/issues) (non-public) or
+a [GitHub Issue](https://github.com/hapaxx11/M1/issues) (non-public) or
 contacting the project maintainers through the repository's security contact.
 All complaints will be reviewed and investigated promptly and fairly.
 

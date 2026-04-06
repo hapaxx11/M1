@@ -9,12 +9,12 @@ currently being supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+| 0.9.x   | :white_check_mark: |
+| < 0.9   | :x:                |
 
 ## Reporting a Vulnerability
 
-Please report (suspected) security vulnerabilities through [GitHub Security Advisories](https://github.com/Monstatek/M1/security/advisories/new). Do not open public issues for security vulnerabilities. You will receive a response within 48 hours. If the issue is confirmed, we will release a patch as soon as possible depending on complexity.
+Please report (suspected) security vulnerabilities through [GitHub Security Advisories](https://github.com/hapaxx11/M1/security/advisories/new). Do not open public issues for security vulnerabilities. You will receive a response within 48 hours. If the issue is confirmed, we will release a patch as soon as possible depending on complexity.
 
 ### Security Considerations for M1 Project
 
