@@ -405,7 +405,7 @@ order, matching C3 parity.  Do not remove items, reorder, or add "Back" entries.
 | 8 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
 | 9 | Weather Station | SubGhzSceneWeatherStation | Blocking delegate → `sub_ghz_weather_station()` |
 | 10 | Brute Force | SubGhzSceneBruteForce | Blocking delegate → `sub_ghz_brute_force()` |
-| 11 | Add Manually | (special) | Handled externally |
+| 11 | Add Manually | SubGhzSceneAddManually | Blocking delegate → `sub_ghz_add_manually()` |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and
 drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in

@@ -67,7 +67,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneFreqScanner,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
-    SubGhzSceneCount,        /* Add Manually handled separately */
+    SubGhzSceneAddManually,
 };
 
 static uint8_t menu_sel = 0;
@@ -118,11 +118,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (target < SubGhzSceneCount)
             {
                 subghz_scene_push(app, target);
-            }
-            else
-            {
-                /* Add Manually — handled externally for now.
-                 * TODO: Create a dedicated AddManually scene. */
             }
             return true;
         }

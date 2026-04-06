@@ -527,6 +527,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_freq_scanner.c
     ../../m1_csrc/m1_subghz_scene_weather_station.c
     ../../m1_csrc/m1_subghz_scene_brute_force.c
+    ../../m1_csrc/m1_subghz_scene_add_manually.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

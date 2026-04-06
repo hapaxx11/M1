@@ -43,6 +43,7 @@ typedef enum {
     SubGhzSceneFreqScanner,    /**< Frequency scanner with hit list */
     SubGhzSceneWeatherStation, /**< Weather protocol decoder */
     SubGhzSceneBruteForce,     /**< Brute-force code transmitter */
+    SubGhzSceneAddManually,    /**< Manual signal entry and TX */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -271,5 +272,6 @@ extern const SubGhzSceneHandlers subghz_scene_rssi_meter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_freq_scanner_handlers;
 extern const SubGhzSceneHandlers subghz_scene_weather_station_handlers;
 extern const SubGhzSceneHandlers subghz_scene_brute_force_handlers;
+extern const SubGhzSceneHandlers subghz_scene_add_manually_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */
