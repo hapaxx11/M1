@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "stm32h5xx_hal.h"
+#include "main.h"
 #include "m1_scene.h"
 #include "m1_nfc.h"
 #include "m1_field_detect.h"

@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "stm32h5xx_hal.h"
+#include "main.h"
 #include "m1_scene.h"
 #include "m1_bt.h"
 #include "m1_lib.h"
