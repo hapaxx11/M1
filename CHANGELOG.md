@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Generic scene framework** (`m1_scene.h/c`) — Shared, reusable scene manager with
+  stack-based navigation, button event translation, generic event loop, and Flipper-style
+  scrollable menu draw helper.  All modules except Sub-GHz (radio-specific) share this
+  framework, eliminating 90% of boilerplate code.
+- **Scene-based menus for all modules** — Migrated RFID, NFC, Infrared, GPIO, WiFi,
+  Bluetooth, Games, and Settings from the legacy `S_M1_Menu_t` menu system to the
+  scene-based architecture.  Each module now uses its own scene manager with blocking
+  delegates wrapping the existing legacy functions (no rewrites needed).
+  - **RFID**: 4–5 items (Read, Saved, Add, Import, Utilities)
+  - **NFC**: 7 items (Read, Detect Reader, Saved, Extra Actions, Add Manually, Tools, Field Detect)
+  - **Infrared**: 3 items (Universal Remotes, Learn, Replay)
+  - **GPIO**: 5–6 items (GPIO Control, 3.3V, 5V, USB-UART, Signal Gen, CAN Bus sub-menu)
+  - **WiFi**: 4–6 items (Scan+Connect, Zigbee, Thread, Saved, Status, Disconnect)
+  - **Bluetooth**: 3–7 items (Scan, Saved, Advertise, Bad-BT, BT Name, BLE Spam, BT Info)
+  - **Games**: 6 items (Snake, Tetris, T-Rex Runner, Pong, Dice Roll, Music Player)
+  - **Settings**: 7 items + 4 nested sub-menus (Storage/5, Power/3, FW Update/4, ESP32/3)
 - **Sub-GHz Spectrum Analyzer** — Bar-graph spectrum display with zoom, pan, peak detection,
   and 5 preset sweep bands.  Accessible from the scene-based Sub-GHz menu.
 - **Sub-GHz RSSI Meter** — Continuous signal strength meter with bar graph, peak tracking,
@@ -24,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **m1_menu.c simplified** — Removed ~400 lines of individual submenu item definitions and
+  conditional compilation variants.  Each module entry now uses a single-line scene entry
+  point (e.g. `rfid_scene_entry`) with `num_submenu_items = 0`, matching the Sub-GHz pattern.
+  BadUSB and Apps retain direct function calls (single-function modules, no submenus).
+- **Scene-based architecture is now complete** — All 9 modules with submenus (Sub-GHz, RFID,
+  NFC, Infrared, GPIO, WiFi, Bluetooth, Games, Settings) use the scene manager.  Only BadUSB
+  and Apps (single-function leaf items) remain as direct function calls.
 - **Sub-GHz menu expanded to 11 items** — Added Spectrum Analyzer, RSSI Meter, Freq Scanner,
   Weather Station, Brute Force, and wired up Add Manually (was a no-op).  Now matches C3
   feature parity.  Menu scrolls with 6 visible items and scrollbar position indicator.
