@@ -39,17 +39,23 @@ extern uint8_t subghz_record_mode_flag;
 /*============================================================================*/
 
 static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
-    [SubGhzSceneMenu]         = &subghz_scene_menu_handlers,
-    [SubGhzSceneRead]         = &subghz_scene_read_handlers,
-    [SubGhzSceneReadRaw]      = &subghz_scene_read_raw_handlers,
-    [SubGhzSceneReceiverInfo] = &subghz_scene_receiver_info_handlers,
-    [SubGhzSceneConfig]       = &subghz_scene_config_handlers,
-    [SubGhzSceneSaveName]     = &subghz_scene_save_name_handlers,
-    [SubGhzSceneSaveSuccess]  = &subghz_scene_save_success_handlers,
-    [SubGhzSceneNeedSaving]   = &subghz_scene_need_saving_handlers,
-    [SubGhzSceneSaved]        = &subghz_scene_saved_handlers,
-    [SubGhzSceneFreqAnalyzer] = &subghz_scene_freq_analyzer_handlers,
-    [SubGhzScenePlaylist]     = &subghz_scene_playlist_handlers,
+    [SubGhzSceneMenu]             = &subghz_scene_menu_handlers,
+    [SubGhzSceneRead]             = &subghz_scene_read_handlers,
+    [SubGhzSceneReadRaw]          = &subghz_scene_read_raw_handlers,
+    [SubGhzSceneReceiverInfo]     = &subghz_scene_receiver_info_handlers,
+    [SubGhzSceneConfig]           = &subghz_scene_config_handlers,
+    [SubGhzSceneSaveName]         = &subghz_scene_save_name_handlers,
+    [SubGhzSceneSaveSuccess]      = &subghz_scene_save_success_handlers,
+    [SubGhzSceneNeedSaving]       = &subghz_scene_need_saving_handlers,
+    [SubGhzSceneSaved]            = &subghz_scene_saved_handlers,
+    [SubGhzSceneFreqAnalyzer]     = &subghz_scene_freq_analyzer_handlers,
+    [SubGhzScenePlaylist]         = &subghz_scene_playlist_handlers,
+    [SubGhzSceneSpectrumAnalyzer] = &subghz_scene_spectrum_analyzer_handlers,
+    [SubGhzSceneRssiMeter]        = &subghz_scene_rssi_meter_handlers,
+    [SubGhzSceneFreqScanner]      = &subghz_scene_freq_scanner_handlers,
+    [SubGhzSceneWeatherStation]   = &subghz_scene_weather_station_handlers,
+    [SubGhzSceneBruteForce]       = &subghz_scene_brute_force_handlers,
+    [SubGhzSceneAddManually]      = &subghz_scene_add_manually_handlers,
 };
 
 /*============================================================================*/

@@ -9,8 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-GHz Spectrum Analyzer** — Bar-graph spectrum display with zoom, pan, peak detection,
+  and 5 preset sweep bands.  Accessible from the scene-based Sub-GHz menu.
+- **Sub-GHz RSSI Meter** — Continuous signal strength meter with bar graph, peak tracking,
+  and band switching.
+- **Sub-GHz Freq Scanner** — Frequency scanner that sweeps a range, captures signal hits
+  above threshold, and displays a deduplicated hit list with RSSI and counts.
+- **Sub-GHz Weather Station** — Weather protocol decoder for 433.92 MHz stations
+  (Oregon V2, LaCrosse TX, Acurite, etc.) with temperature, humidity, and battery display.
+- **Sub-GHz Brute Force** — Brute-force RF code transmitter supporting Princeton, CAME,
+  Nice FLO, Linear, and Holtek protocols with progress display.
+
 ### Changed
 
+- **Sub-GHz menu expanded to 11 items** — Added Spectrum Analyzer, RSSI Meter, Freq Scanner,
+  Weather Station, Brute Force, and wired up Add Manually (was a no-op).  Now matches C3
+  feature parity.  Menu scrolls with 6 visible items and scrollbar position indicator.
 - **CI: skip builds for non-compilation changes** — Added `paths-ignore` filters to
   `ci.yml` so that PRs and pushes touching only documentation, database files, IDE
   configs, or CI workflow files no longer trigger a firmware build.  Updated `CLAUDE.md`
@@ -24,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (17px per item instead of 13px).
 - **Documentation**: Added scene-based application architecture guidance and updated button
   bar rules in `CLAUDE.md` to prohibit "OK"-only button bars on selection lists.
+- **Documentation**: Scene-based architecture is now **mandatory** for all modules.
+  `CLAUDE.md` includes a migration status table (Sub-GHz done, 9 modules pending),
+  step-by-step migration instructions for agents, and the blocking-delegate pattern
+  for wrapping legacy functions without rewriting them.
 
 ### Fixed
 

@@ -12,7 +12,12 @@
  *   3. Saved (file browser)
  *   4. Playlist
  *   5. Frequency Analyzer
- *   6. Add Manually
+ *   6. Spectrum Analyzer
+ *   7. RSSI Meter
+ *   8. Freq Scanner
+ *   9. Weather Station
+ *  10. Brute Force
+ *  11. Add Manually
  */
 
 #include <stdint.h>
@@ -27,8 +32,8 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT    6
-#define MENU_VISIBLE       6   /* All items visible (no button bar) */
+#define MENU_ITEM_COUNT   11
+#define MENU_VISIBLE       6   /* Items visible at once (no button bar) */
 
 /* Layout constants */
 #define MENU_AREA_TOP     12   /* Y below title + separator line      */
@@ -43,6 +48,11 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Saved",
     "Playlist",
     "Frequency Analyzer",
+    "Spectrum Analyzer",
+    "RSSI Meter",
+    "Freq Scanner",
+    "Weather Station",
+    "Brute Force",
     "Add Manually"
 };
 
@@ -52,7 +62,12 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneSaved,
     SubGhzScenePlaylist,
     SubGhzSceneFreqAnalyzer,
-    SubGhzSceneCount,        /* Add Manually handled separately */
+    SubGhzSceneSpectrumAnalyzer,
+    SubGhzSceneRssiMeter,
+    SubGhzSceneFreqScanner,
+    SubGhzSceneWeatherStation,
+    SubGhzSceneBruteForce,
+    SubGhzSceneAddManually,
 };
 
 static uint8_t menu_sel = 0;
@@ -103,11 +118,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (target < SubGhzSceneCount)
             {
                 subghz_scene_push(app, target);
-            }
-            else
-            {
-                /* Add Manually — handled externally for now.
-                 * TODO: Create a dedicated AddManually scene. */
             }
             return true;
         }
