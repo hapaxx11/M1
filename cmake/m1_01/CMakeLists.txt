@@ -486,6 +486,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_fw_update_bl.c
     ../../m1_csrc/m1_rpc.c
     ../../m1_csrc/m1_gpio.c
+    ../../m1_csrc/m1_gpio_scene.c
     ../../m1_csrc/m1_can.c
     ../../m1_csrc/m1_i2c.c
     ../../m1_csrc/m1_infrared.c
@@ -506,6 +507,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_rfid.c
     ../../m1_csrc/m1_rfid_scene.c
     ../../m1_csrc/m1_ring_buffer.c
+    ../../m1_csrc/m1_bt_scene.c
     ../../m1_csrc/m1_sdcard.c
     ../../m1_csrc/m1_sdcard_man.c
     ../../m1_csrc/m1_settings.c
@@ -540,6 +542,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_virtual_kb.c
     ../../m1_csrc/m1_watchdog.c
     ../../m1_csrc/m1_wifi.c
+    ../../m1_csrc/m1_wifi_scene.c
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
     # === Enhanced firmware: Flipper file format parsers (Phase 2) ===
