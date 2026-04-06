@@ -1,0 +1,326 @@
+/* See COPYING.txt for license details. */
+
+/**
+ * @file   m1_scene.c
+ * @brief  Generic Scene Manager — stack-based scene dispatch engine.
+ *
+ * Shared implementation for all M1 modules that use scene-based architecture
+ * (everything except Sub-GHz, which has its own radio-specific event loop).
+ * Provides push/pop/replace, button-event translation, a generic blocking
+ * event loop, and a standard Flipper-style menu draw helper.
+ */
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include "stm32h5xx_hal.h"
+#include "main.h"
+#include "m1_tasks.h"
+#include "m1_system.h"
+#include "m1_scene.h"
+#include "m1_display.h"
+#include "m1_lcd.h"
+#include "m1_lib.h"
+
+/*============================================================================*/
+/* Scene Manager API                                                          */
+/*============================================================================*/
+
+void m1_scene_init(M1SceneApp *app,
+                   const M1SceneHandlers *const *registry,
+                   uint8_t scene_count)
+{
+    memset(app, 0, sizeof(*app));
+    app->registry    = registry;
+    app->scene_count = scene_count;
+    app->running     = true;
+}
+
+static const M1SceneHandlers *get_handlers(const M1SceneApp *app, uint8_t id)
+{
+    if (id < app->scene_count && app->registry[id])
+        return app->registry[id];
+    return NULL;
+}
+
+uint8_t m1_scene_current(const M1SceneApp *app)
+{
+    if (app->scene_depth == 0)
+        return 0;  /* fallback to menu scene */
+    return app->scene_stack[app->scene_depth - 1];
+}
+
+void m1_scene_push(M1SceneApp *app, uint8_t scene)
+{
+    /* Exit current scene if any */
+    if (app->scene_depth > 0)
+    {
+        const M1SceneHandlers *cur = get_handlers(app, m1_scene_current(app));
+        if (cur && cur->on_exit)
+            cur->on_exit(app);
+    }
+
+    /* Push new scene */
+    if (app->scene_depth < M1_SCENE_STACK_MAX)
+        app->scene_stack[app->scene_depth++] = scene;
+
+    /* Enter new scene */
+    const M1SceneHandlers *next = get_handlers(app, scene);
+    if (next && next->on_enter)
+        next->on_enter(app);
+
+    app->need_redraw = true;
+}
+
+void m1_scene_pop(M1SceneApp *app)
+{
+    if (app->scene_depth == 0)
+    {
+        app->running = false;
+        return;
+    }
+
+    /* Exit current scene */
+    const M1SceneHandlers *cur = get_handlers(app, m1_scene_current(app));
+    if (cur && cur->on_exit)
+        cur->on_exit(app);
+
+    app->scene_depth--;
+
+    if (app->scene_depth == 0)
+    {
+        app->running = false;
+        return;
+    }
+
+    /* Re-enter the scene that's now on top */
+    const M1SceneHandlers *prev = get_handlers(app, m1_scene_current(app));
+    if (prev && prev->on_enter)
+        prev->on_enter(app);
+
+    app->need_redraw = true;
+}
+
+void m1_scene_replace(M1SceneApp *app, uint8_t scene)
+{
+    /* Exit current scene */
+    if (app->scene_depth > 0)
+    {
+        const M1SceneHandlers *cur = get_handlers(app, m1_scene_current(app));
+        if (cur && cur->on_exit)
+            cur->on_exit(app);
+        app->scene_stack[app->scene_depth - 1] = scene;
+    }
+    else
+    {
+        app->scene_stack[app->scene_depth++] = scene;
+    }
+
+    /* Enter replacement scene */
+    const M1SceneHandlers *next = get_handlers(app, scene);
+    if (next && next->on_enter)
+        next->on_enter(app);
+
+    app->need_redraw = true;
+}
+
+bool m1_scene_send_event(M1SceneApp *app, M1SceneEvent event)
+{
+    const M1SceneHandlers *cur = get_handlers(app, m1_scene_current(app));
+    if (cur && cur->on_event)
+        return cur->on_event(app, event);
+    return false;
+}
+
+void m1_scene_draw(M1SceneApp *app)
+{
+    const M1SceneHandlers *cur = get_handlers(app, m1_scene_current(app));
+    if (cur && cur->draw)
+        cur->draw(app);
+}
+
+/*============================================================================*/
+/* Button-event translation                                                   */
+/*============================================================================*/
+
+static M1SceneEvent translate_button(void)
+{
+    S_M1_Buttons_Status btn;
+    BaseType_t ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+    if (ret != pdTRUE)
+        return M1SceneEventNone;
+
+    if (btn.event[BUTTON_OK_KP_ID]    == BUTTON_EVENT_CLICK) return M1SceneEventOk;
+    if (btn.event[BUTTON_BACK_KP_ID]  == BUTTON_EVENT_CLICK) return M1SceneEventBack;
+    if (btn.event[BUTTON_LEFT_KP_ID]  == BUTTON_EVENT_CLICK) return M1SceneEventLeft;
+    if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK) return M1SceneEventRight;
+    if (btn.event[BUTTON_UP_KP_ID]    == BUTTON_EVENT_CLICK) return M1SceneEventUp;
+    if (btn.event[BUTTON_DOWN_KP_ID]  == BUTTON_EVENT_CLICK) return M1SceneEventDown;
+
+    return M1SceneEventNone;
+}
+
+/*============================================================================*/
+/* Generic event loop                                                         */
+/*============================================================================*/
+
+void m1_scene_run(const M1SceneHandlers *const *registry,
+                  uint8_t scene_count,
+                  void (*hw_init)(void),
+                  void (*hw_deinit)(void))
+{
+    M1SceneApp app;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+
+    /* Initialize scene manager */
+    m1_scene_init(&app, registry, scene_count);
+
+    /* Hardware init (optional) */
+    if (hw_init)
+        hw_init();
+
+    /* Push initial scene (scene 0 = module menu) */
+    m1_scene_push(&app, 0);
+    m1_scene_draw(&app);
+    app.need_redraw = false;
+
+    /* Main event loop — button events only */
+    while (app.running)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+
+        if (ret == pdTRUE)
+        {
+            M1SceneEvent evt = M1SceneEventNone;
+
+            if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+                evt = translate_button();
+
+            if (evt != M1SceneEventNone)
+                m1_scene_send_event(&app, evt);
+        }
+
+        if (app.need_redraw)
+        {
+            m1_scene_draw(&app);
+            app.need_redraw = false;
+        }
+    }
+
+    /* Hardware deinit (optional) */
+    if (hw_deinit)
+        hw_deinit();
+
+    xQueueReset(main_q_hdl);
+}
+
+/*============================================================================*/
+/* Menu drawing helper                                                        */
+/*============================================================================*/
+
+void m1_scene_draw_menu(const char *title,
+                        const char *const *labels,
+                        uint8_t count,
+                        uint8_t sel,
+                        uint8_t scroll,
+                        uint8_t visible)
+{
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+    /* Title */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, title, TEXT_ALIGN_CENTER);
+
+    /* Separator line */
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+    /* Menu items */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    for (uint8_t i = 0; i < visible && (scroll + i) < count; i++)
+    {
+        uint8_t idx = scroll + i;
+        uint8_t y = M1_MENU_AREA_TOP + i * M1_MENU_ITEM_H;
+
+        if (idx == sel)
+        {
+            /* Highlight selected item (leave room for scrollbar) */
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, M1_MENU_ITEM_H);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+        }
+
+        u8g2_DrawStr(&m1_u8g2, 4, y + 7, labels[idx]);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    }
+
+    /* Scrollbar — proportional position indicator on the right edge */
+    if (count > 0)
+    {
+        uint8_t sb_area_h   = visible * M1_MENU_ITEM_H;
+        uint8_t sb_handle_h = sb_area_h / count;
+        if (sb_handle_h < 2)
+            sb_handle_h = 2;
+        uint8_t sb_handle_y = M1_MENU_AREA_TOP +
+            (uint8_t)((uint16_t)sb_area_h * sel / count);
+
+        /* Track outline */
+        u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
+                       M1_MENU_SCROLLBAR_W, sb_area_h);
+        /* Handle (filled) */
+        u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+                     M1_MENU_SCROLLBAR_W, sb_handle_h);
+    }
+
+    m1_u8g2_nextpage();
+}
+
+/*============================================================================*/
+/* Generic menu event handler                                                 */
+/*============================================================================*/
+
+bool m1_scene_menu_event(M1SceneApp *app,
+                         M1SceneEvent event,
+                         uint8_t *sel,
+                         uint8_t *scroll,
+                         uint8_t count,
+                         uint8_t visible,
+                         const uint8_t *targets)
+{
+    switch (event)
+    {
+        case M1SceneEventBack:
+            m1_scene_pop(app);
+            return true;
+
+        case M1SceneEventUp:
+            *sel = (*sel > 0) ? *sel - 1 : count - 1;
+            /* Adjust scroll window */
+            if (*sel < *scroll)
+                *scroll = *sel;
+            else if (*sel >= *scroll + visible)
+                *scroll = *sel - visible + 1;
+            app->need_redraw = true;
+            return true;
+
+        case M1SceneEventDown:
+            *sel = (*sel + 1) % count;
+            /* Adjust scroll window */
+            if (*sel >= *scroll + visible)
+                *scroll = *sel - visible + 1;
+            /* Handle wrap-around */
+            if (*sel == 0)
+                *scroll = 0;
+            app->need_redraw = true;
+            return true;
+
+        case M1SceneEventOk:
+            if (targets && targets[*sel] < app->scene_count)
+                m1_scene_push(app, targets[*sel]);
+            return true;
+
+        default:
+            break;
+    }
+    return false;
+}

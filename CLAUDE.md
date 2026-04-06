@@ -391,23 +391,25 @@ navigation) keeps state management clean, testable, and consistent across the de
 
 ### Migration status
 
-Sub-GHz is the **reference implementation** — it has a complete scene manager
-(`m1_subghz_scene.h/c`) with 17 scenes.  All other modules still use the legacy
-`S_M1_Menu_t` menu system in `m1_menu.c`.  They must be migrated to the scene
-pattern progressively.
+**Migration is complete.**  All modules with submenus now use the scene-based
+architecture.  Sub-GHz has its own dedicated scene manager (`m1_subghz_scene.h/c`,
+17 scenes) with radio-specific event handling.  All other modules use the shared
+generic scene framework (`m1_scene.h/c`) with blocking delegates wrapping legacy
+functions.  BadUSB and Apps are single-function modules (no submenus) and do not
+need scene managers.
 
 | Module | Current | Target | Entry point |
 |--------|---------|--------|-------------|
 | **Sub-GHz** | ✅ Scene manager | Done | `sub_ghz_scene_entry()` → `m1_subghz_scene.c` |
-| **125KHz RFID** | ❌ Legacy menu | Scene manager | `m1_rfid.c` functions |
-| **NFC** | ❌ Legacy menu | Scene manager | `m1_nfc.c` functions |
-| **Infrared** | ❌ Legacy menu | Scene manager | `m1_infrared.c` functions |
-| **GPIO** | ❌ Legacy menu | Scene manager | `m1_gpio.c` functions |
-| **WiFi** | ❌ Legacy menu | Scene manager | `m1_wifi.c` functions |
-| **Bluetooth** | ❌ Legacy menu | Scene manager | `m1_bt.c` functions |
-| **BadUSB** | ❌ Legacy menu | Scene manager | `m1_badusb.c` functions |
-| **Games** | ❌ Legacy menu | Scene manager | `m1_games.c` functions |
-| **Settings** | ❌ Legacy menu | Scene manager | `m1_settings.c` functions |
+| **125KHz RFID** | ✅ Scene manager | Done | `rfid_scene_entry()` → `m1_rfid_scene.c` |
+| **NFC** | ✅ Scene manager | Done | `nfc_scene_entry()` → `m1_nfc_scene.c` |
+| **Infrared** | ✅ Scene manager | Done | `infrared_scene_entry()` → `m1_infrared_scene.c` |
+| **GPIO** | ✅ Scene manager | Done | `gpio_scene_entry()` → `m1_gpio_scene.c` |
+| **WiFi** | ✅ Scene manager | Done | `wifi_scene_entry()` → `m1_wifi_scene.c` |
+| **Bluetooth** | ✅ Scene manager | Done | `bt_scene_entry()` → `m1_bt_scene.c` |
+| **BadUSB** | — Single function | N/A | `badusb_run()` direct call (no submenus) |
+| **Games** | ✅ Scene manager | Done | `games_scene_entry()` → `m1_games_scene.c` |
+| **Settings** | ✅ Scene manager | Done | `settings_scene_entry()` → `m1_settings_scene.c` |
 
 ### Agent instructions for scene migration
 

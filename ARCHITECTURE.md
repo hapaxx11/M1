@@ -30,3 +30,13 @@ The M1 firmware is organized into the following main components:
 
 - **STM32CubeIDE:** Uses `.project` and `.cproject`
 - **VS Code / CMake:** Uses `CMakeLists.txt` and `CMakePresets.json`
+
+## Scene-Based Architecture
+
+All modules with submenus use a stack-based scene manager:
+
+- **Sub-GHz:** Custom scene manager (`m1_subghz_scene.h/c`) with 17 scenes and
+  radio-specific event handling (protocol decode, hopper, raw capture).
+- **All other modules:** Shared generic scene framework (`m1_scene.h/c`) with
+  blocking delegates.  Scene files: `m1_<module>_scene.c`.
+- **BadUSB / Apps:** Single-function modules, direct function calls (no scene manager).
