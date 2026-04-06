@@ -34,6 +34,8 @@
 
 /*************************** D E F I N E S ************************************/
 
+#define SUBGHZ_DMA_ALIGN			32 /* D-Cache line size on Cortex-M33 */
+
 #define SUBGHZ_RAW_DATA_SAMPLES_MAX			64000 // data type of sample: uint16_t
 
 #define SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT		4 // number of additional replays after the first transmit
@@ -410,6 +412,7 @@ DMA_HandleTypeDef hdma_subghz_tx;
 
 S_M1_RingBuffer subghz_rx_rawdata_rb;
 static uint16_t *subghz_front_buffer = NULL;
+static void     *subghz_front_buffer_base = NULL; // Original malloc pointer (before alignment)
 static uint16_t subghz_front_buffer_size = 0;
 static uint8_t *subghz_ring_read_buffer = NULL;
 static uint8_t *subghz_sdcard_write_buffer = NULL;
@@ -422,6 +425,7 @@ static uint16_t sdcard_dat_read_size;
 static uint16_t raw_samples_buffer_size;
 static uint16_t subghz_back_buffer_size;
 static uint16_t *subghz_back_buffer = NULL;
+static void     *subghz_back_buffer_base = NULL; // Original malloc pointer (before alignment)
 static uint16_t *double_buffer_ptr[2];
 static uint32_t sdcard_dat_file_size, sdcard_dat_buffer_end_pos;
 uint8_t subghz_tx_tc_flag;
@@ -4549,9 +4553,12 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 
 	while ( true )
 	{
-		subghz_front_buffer = malloc(subghz_front_buffer_size*sizeof(uint16_t));
-		if ( subghz_front_buffer )
+		subghz_front_buffer_base = malloc(subghz_front_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
+		if ( subghz_front_buffer_base )
+		{
+			subghz_front_buffer = (uint16_t *)(((uintptr_t)subghz_front_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
 			break;
+		}
 		subghz_front_buffer_size /= 2;
 		if ( subghz_front_buffer_size < 256 )
 			break;
@@ -4727,8 +4734,9 @@ static void sub_ghz_ring_buffers_deinit(void)
 {
 	if ( subghz_front_buffer )
 	{
-		free(subghz_front_buffer);
+		free(subghz_front_buffer_base);
 		subghz_front_buffer = NULL;
+		subghz_front_buffer_base = NULL;
 		subghz_front_buffer_size = 0;
 	} // if ( subghz_front_buffer )
 
@@ -4856,9 +4864,12 @@ static uint8_t sub_ghz_raw_samples_init(void)
 		subghz_back_buffer_size = SUBGHZ_RAW_DATA_SAMPLES_MAX;
 		while ( true )
 		{
-			subghz_back_buffer = malloc(subghz_back_buffer_size*sizeof(uint16_t));
-			if ( subghz_back_buffer )
+			subghz_back_buffer_base = malloc(subghz_back_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
+			if ( subghz_back_buffer_base )
+			{
+				subghz_back_buffer = (uint16_t *)(((uintptr_t)subghz_back_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
 				break;
+			}
 			subghz_back_buffer_size /= 2;
 			if ( subghz_back_buffer_size < 256 )
 				break;
@@ -4952,8 +4963,9 @@ static void sub_ghz_raw_samples_deinit(bool discard_samples)
 {
 	if ( subghz_back_buffer )
 	{
-		free(subghz_back_buffer);
+		free(subghz_back_buffer_base);
 		subghz_back_buffer = NULL;
+		subghz_back_buffer_base = NULL;
 	}
 	if ( sdcard_dat_buffer_base )
 	{
