@@ -54,7 +54,7 @@ static const char *s_default_config =
 	"Type: github_release\n"
 	"Owner: hapaxx11\n"
 	"Repo: M1\n"
-	"Asset_filter: _SD.bin\n"
+	"Asset_filter: _wCRC.bin\n"
 	"Exclude_filter: .elf .hex\n"
 	"Max_releases: 5\n";
 

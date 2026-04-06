@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     download sources. Ships with two defaults: Monstatek Official and Hapax Fork.
   - **Source type architecture**: Pluggable source-type system (currently supports
     `github_release`, extensible to direct URLs and other forges).
-  - **Asset filtering**: Each source specifies suffix filters (e.g., `_SD.bin` for
+  - **Asset filtering**: Each source specifies suffix filters (e.g., `_wCRC.bin` for
     Hapax, `.bin` for Monstatek) and exclusion patterns (`.elf`, `.hex`) to
     automatically select the correct firmware binary from release assets.
   - **Download progress UI**: Real-time progress bar with percentage, KB counter,
@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Renamed release binary suffix `_SD.bin` → `_wCRC.bin`** — aligns Hapax release
+  file naming with Monstatek Official (`MonstaTek_M1_v0800_wCRC.bin`) and
+  C3/bedge117 (`M1_v0800_C3.12_wCRC.bin`). Affected: CMake output filename,
+  CI workflow artifact paths, firmware download source defaults, and documentation.
 - **Removed redundant "Back" labels from all app button bars and menus** — the
   hardware back button is self-explanatory. Button bars now only show hints for
   non-obvious directional actions (Config, Save, OK:Listen, etc.), freeing

@@ -164,7 +164,7 @@ jobs:
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
           # Release file base name = project name (version is embedded in it, SiN360-style).
-          # The SD image is ${PROJECT}_SD.bin, ELF/BIN/HEX are ${PROJECT}.{ext}.
+          # The wCRC image is ${PROJECT}_wCRC.bin, ELF/BIN/HEX are ${PROJECT}.{ext}.
           RFILE="${PROJECT}"
           echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
 
@@ -173,7 +173,7 @@ jobs:
           echo "  Hapax rev:    ${HAPAX_REV}"
           echo "  Base version: ${MAJOR}.${MINOR}.${BUILD}.${RC}"
           echo "  Tag:          ${TAG}"
-          echo "  Release file: ${RFILE}_SD.bin"
+          echo "  Release file: ${RFILE}_wCRC.bin"
 
           # Auto-detect pre-release: versions with MAJOR < 1 are always
           # pre-release.  Manual dispatch can also force it via the input.
@@ -228,7 +228,7 @@ jobs:
           ELF="build/${PROJECT}.elf"
           BIN="build/${PROJECT}.bin"
           HEX="build/${PROJECT}.hex"
-          WCRC="build/${{ steps.meta.outputs.release_file_base }}_SD.bin"
+          WCRC="build/${{ steps.meta.outputs.release_file_base }}_wCRC.bin"
 
           for f in "$ELF" "$BIN" "$HEX" "$WCRC"; do
             if [ ! -f "$f" ]; then
@@ -261,7 +261,7 @@ jobs:
             build/${{ steps.meta.outputs.project_name }}.elf
             build/${{ steps.meta.outputs.project_name }}.hex
             build/${{ steps.meta.outputs.project_name }}.bin
-            build/${{ steps.meta.outputs.release_file_base }}_SD.bin
+            build/${{ steps.meta.outputs.release_file_base }}_wCRC.bin
           if-no-files-found: error
           retention-days: 90
 
@@ -294,15 +294,15 @@ jobs:
             artifacts/${{ needs.build.outputs.project_name }}.elf
             artifacts/${{ needs.build.outputs.project_name }}.hex
             artifacts/${{ needs.build.outputs.project_name }}.bin
-            artifacts/${{ needs.build.outputs.release_file_base }}_SD.bin
+            artifacts/${{ needs.build.outputs.release_file_base }}_wCRC.bin
           body: |
             ## M1 Hapax ${{ needs.build.outputs.tag }}
 
             | File | Description |
             |------|-------------|
-            | `${{ needs.build.outputs.release_file_base }}_SD.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
+            | `${{ needs.build.outputs.release_file_base }}_wCRC.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
             | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for reference / J-Link flashing) |
             | `${{ needs.build.outputs.project_name }}.hex`         | Intel HEX (ST-Link / OpenOCD) |
             | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
-            > **Flash via SD card:** copy `*_SD.bin` to the root of the SD card and use the M1 firmware update menu.
+            > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
