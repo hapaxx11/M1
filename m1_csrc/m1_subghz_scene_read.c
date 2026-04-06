@@ -64,6 +64,12 @@ extern int16_t subghz_read_rssi_ext(void);
 /* Apply config to radio hardware */
 extern void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx);
 
+/* Get frequency in Hz for a preset index */
+extern uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx);
+
+/* Live retune to arbitrary frequency (Hz) without full RX re-init */
+extern void subghz_retune_freq_hz_ext(uint32_t freq_hz);
+
 /* Radio control */
 extern void sub_ghz_rx_init_ext(void);
 extern void sub_ghz_rx_start_ext(void);
@@ -151,11 +157,17 @@ static void start_rx(SubGhzApp *app)
     /* Apply config to radio */
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
 
+    /* Track the active frequency in Hz */
+    app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
+
     /* Initialize hopper if enabled */
     app->hopper_active = app->hopping;
     app->hopper_idx = 0;
     if (app->hopper_active)
+    {
         app->hopper_freq = subghz_hopper_freqs_ext[0];
+        app->current_freq_hz = app->hopper_freq;
+    }
 
     /* Start RX */
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
@@ -248,6 +260,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 uint8_t old_freq = app->freq_idx;
                 app->freq_idx = (app->freq_idx > 0) ?
                     app->freq_idx - 1 : SUBGHZ_FREQ_PRESET_CNT - 1;
+                app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
                 if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
                 {
                     /* Retune live — stop/start RX with new config */
@@ -263,6 +276,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 uint8_t old_freq = app->freq_idx;
                 app->freq_idx = (app->freq_idx + 1) % SUBGHZ_FREQ_PRESET_CNT;
+                app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
                 if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
                 {
                     /* Retune live — stop/start RX with new config */
@@ -318,13 +332,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventHopperTick:
             if (app->hopper_active && app->read_state == SubGhzReadStateRx)
             {
-                /* Read RSSI; if below threshold, hop */
+                /* Read RSSI; if below threshold, hop to next frequency */
                 app->rssi = subghz_read_rssi_ext();
                 if (app->rssi < HOPPER_RSSI_THRESHOLD)
                 {
                     app->hopper_idx = (app->hopper_idx + 1) % READ_HOPPER_FREQ_COUNT;
                     app->hopper_freq = subghz_hopper_freqs_ext[app->hopper_idx];
-                    /* Retune radio — done by the Read scene via shared helpers */
+                    app->current_freq_hz = app->hopper_freq;
+                    /* Retune radio hardware to the new frequency */
+                    subghz_retune_freq_hz_ext(app->hopper_freq);
                 }
                 app->need_redraw = true;
             }
@@ -337,9 +353,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 SubGHz_Dec_Info_t decoded;
                 if (subghz_decenc_read(&decoded, false) && decoded.key != 0)
                 {
-                    /* Add to history */
-                    uint32_t freq = app->hopper_active ? app->hopper_freq :
-                        0; /* freq will be filled by history_add */
+                    /* Use the actual active frequency (preset or hopper) */
+                    uint32_t freq = app->current_freq_hz;
                     subghz_history_add(&app->history, &decoded, freq);
                     app->last_decoded = decoded;
                     app->has_decoded = true;
@@ -349,10 +364,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     if (app->history.count > 0 && !app->detail_view)
                     {
                         app->history_view = true;
-                        /* Auto-select newest signal (at end of list) */
-                        app->history_sel = app->history.count - 1;
-                        if (app->history_sel >= HISTORY_VISIBLE)
-                            app->history_scroll = app->history_sel - HISTORY_VISIBLE + 1;
+                        /* Auto-select newest signal (index 0 = most recent) */
+                        app->history_sel = 0;
+                        app->history_scroll = 0;
                     }
 
                     /* Decode feedback: green LED flash + sound */

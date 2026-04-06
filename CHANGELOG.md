@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sub-GHz Read: frequency=0 saved for non-hopper signals** — When the frequency
+  hopper was not active, decoded signals were stored with frequency 0 Hz.  This broke
+  saved `.sub` files (wrote `Frequency: 0`) and caused TX replay to use the wrong
+  radio band.  Now correctly stores the active preset frequency via a new
+  `subghz_get_freq_hz_ext()` helper and the `current_freq_hz` app field.
+- **Sub-GHz Read: history auto-select picked oldest signal** — After a new decode,
+  the history list selected index `count-1` (oldest, due to reversed ring-buffer
+  indexing) instead of index 0 (newest).  User had to manually scroll up after every
+  decode.  Now auto-selects the most recent signal and scrolls to the top.
+- **Sub-GHz Read: hopper never actually retuned the radio** — The hopper tick handler
+  updated `app->hopper_freq` in software but never called any radio hardware function
+  to change frequency.  The Si446x stayed on the initial frequency for the entire
+  session.  Now calls `subghz_retune_freq_hz_ext()` which mirrors the legacy
+  pause→set-freq→set-opmode→start sequence from `subghz_hopper_retune_next()`.
+- **Sub-GHz Read: `current_freq_hz` never populated** — The `SubGhzApp.current_freq_hz`
+  field (declared in header) was never assigned.  It is now set on RX start, frequency
+  preset cycling (L/R), and hopper ticks, keeping it consistent with the actual radio
+  frequency at all times.
+
 ### Changed
 
 - **Documentation overhaul** — comprehensive audit and update of all markdown files

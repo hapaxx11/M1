@@ -6507,6 +6507,29 @@ bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry)
 	return subghz_transmit_static_signal(entry);
 }
 
+/* Get frequency in Hz for a given preset index */
+uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx)
+{
+	if (freq_idx >= SUBGHZ_FREQ_PRESET_COUNT)
+		return 433920000UL;  /* safe default */
+	return subghz_freq_presets[freq_idx].freq_hz;
+}
+
+/* Retune radio to an arbitrary frequency (Hz) without full RX re-init.
+ * Used by hopper to change frequency on the fly during active RX. */
+void subghz_retune_freq_hz_ext(uint32_t freq_hz)
+{
+	sub_ghz_rx_pause();
+
+	subghz_custom_freq_hz = freq_hz;
+	subghz_scan_config.band = subghz_freq_hz_to_band(freq_hz);
+
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+	SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+
+	sub_ghz_rx_start();
+}
+
 /* RAW waveform bridge functions */
 void subghz_raw_waveform_draw_ext(void)
 {
