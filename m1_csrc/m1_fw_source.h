@@ -54,7 +54,7 @@ typedef struct {
 	char name[FW_SOURCE_NAME_LEN];
 	fw_source_type_t type;
 	fw_github_params_t github;      /* type-specific params */
-	char asset_filter[FW_SOURCE_FILTER_LEN];    /* suffix match, e.g., "_SD.bin" */
+	char asset_filter[FW_SOURCE_FILTER_LEN];    /* suffix match, e.g., "_wCRC.bin" */
 	char exclude_filter[FW_SOURCE_EXCLUDE_LEN]; /* space-separated exclusions */
 	uint8_t max_releases;
 } fw_source_t;
