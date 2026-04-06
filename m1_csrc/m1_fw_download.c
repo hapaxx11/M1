@@ -42,11 +42,12 @@
 #define DL_PROGRESS_BAR_Y   30
 #define DL_PROGRESS_BAR_W  120
 #define DL_PROGRESS_BAR_H   10
+#define DL_PROGRESS_UPDATE_BYTES  8192  /* Update display every 8KB */
 
 /* Forward declarations */
 static bool dl_show_source_list(fw_source_t *sources, uint8_t count, uint8_t *selected);
-static bool dl_show_release_list(fw_release_t *releases, uint8_t count, const char *source_name, uint8_t *selected);
-static bool dl_confirm_download(const fw_release_t *release, const char *source_name);
+static bool dl_show_release_list(fw_release_t *releases, uint8_t count, uint8_t *selected);
+static bool dl_confirm_download(const fw_release_t *release);
 static http_status_t dl_perform_download(const fw_release_t *release);
 static bool dl_progress_callback(uint32_t downloaded, uint32_t total);
 static void dl_show_result(http_status_t status, const fw_release_t *release);
@@ -235,7 +236,7 @@ static bool dl_show_source_list(fw_source_t *sources, uint8_t count, uint8_t *se
  * Show the release selection screen.
  */
 static bool dl_show_release_list(fw_release_t *releases, uint8_t count,
-                                  const char *source_name, uint8_t *selected)
+                                  uint8_t *selected)
 {
 	const char *names[FW_RELEASE_MAX];
 	char display_names[FW_RELEASE_MAX][FW_RELEASE_NAME_LEN];
@@ -256,10 +257,9 @@ static bool dl_show_release_list(fw_release_t *releases, uint8_t count,
 /*
  * Show the download confirmation screen.
  */
-static bool dl_confirm_download(const fw_release_t *release, const char *source_name)
+static bool dl_confirm_download(const fw_release_t *release)
 {
 	char size_str[24];
-	char name_str[24];
 
 	/* Format file size */
 	if (release->asset_size > 0)
@@ -277,7 +277,8 @@ static bool dl_confirm_download(const fw_release_t *release, const char *source_
 		strncpy(size_str, "Size: unknown", sizeof(size_str));
 	}
 
-	/* Truncate asset name for display */
+	/* Truncate asset name for display (max 22 chars + 2 for ".." + NUL) */
+	char name_str[25];
 	strncpy(name_str, release->asset_name, 22);
 	name_str[22] = '\0';
 	if (strlen(release->asset_name) > 22)
@@ -363,9 +364,12 @@ static bool dl_progress_callback(uint32_t downloaded, uint32_t total)
 
 	m1_wdt_reset();
 
-	/* Update display every ~8KB to avoid excessive redraws */
+	/* Update display periodically to avoid excessive redraws */
 	static uint32_t last_display_update = 0;
-	if (downloaded - last_display_update >= 8192 || downloaded == 0 || downloaded >= total)
+	if (downloaded == 0)
+		last_display_update = 0; /* reset on new download */
+	if (downloaded - last_display_update >= DL_PROGRESS_UPDATE_BYTES
+	    || downloaded == 0 || (total > 0 && downloaded >= total))
 	{
 		dl_draw_progress(downloaded, total);
 		last_display_update = downloaded;
@@ -515,11 +519,11 @@ source_selection:
 
 	/* Step 5: Show release list */
 	uint8_t rel_sel;
-	if (!dl_show_release_list(releases, release_count, sources[selected].name, &rel_sel))
+	if (!dl_show_release_list(releases, release_count, &rel_sel))
 		goto source_selection; /* BACK → return to source list */
 
 	/* Step 6: Confirm download */
-	if (!dl_confirm_download(&releases[rel_sel], sources[selected].name))
+	if (!dl_confirm_download(&releases[rel_sel]))
 		goto source_selection; /* BACK → return to source list */
 
 	/* Step 7: Download */

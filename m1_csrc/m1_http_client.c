@@ -40,6 +40,9 @@
 /* Download chunk size for CIPRECVDATA */
 #define HTTP_DOWNLOAD_CHUNK  2048
 
+/* Maximum retries per second for download polling (200ms intervals) */
+#define HTTP_RETRY_PER_SEC  5
+
 static char s_at_buf[HTTP_AT_BUF_SIZE];
 
 bool http_is_ready(void)
@@ -146,9 +149,6 @@ static bool parse_url(const char *url, char *host, uint16_t host_size,
 	const char *host_start;
 	uint16_t host_len;
 
-	*is_https = false;
-	*port = 80;
-
 	if (strncmp(p, "https://", 8) == 0)
 	{
 		*is_https = true;
@@ -157,6 +157,8 @@ static bool parse_url(const char *url, char *host, uint16_t host_size,
 	}
 	else if (strncmp(p, "http://", 7) == 0)
 	{
+		*is_https = false;
+		*port = 80;
 		p += 7;
 	}
 	else
@@ -347,7 +349,7 @@ static int tcp_wait_data(uint8_t timeout_sec)
  *
  * Returns HTTP status code (200, 301, 302, 404, etc.) or 0 on error.
  */
-static int parse_http_headers(const char *data, int data_len,
+static int parse_http_headers(const char *data, int data_len __attribute__((unused)),
                                uint32_t *content_length, char *location, uint16_t loc_size,
                                int *header_end_offset)
 {
@@ -530,6 +532,8 @@ retry_with_redirect:
 
 	/* Write any body data that arrived with the headers */
 	int body_in_first = initial_len - header_end_offset;
+	if (header_end_offset > initial_len)
+		body_in_first = 0; /* malformed headers — no body data in first chunk */
 	if (body_in_first > 0)
 	{
 		fr = f_write(&file, s_at_buf + header_end_offset, body_in_first, &bw);
@@ -571,7 +575,7 @@ retry_with_redirect:
 			/* Wait a bit and retry */
 			vTaskDelay(pdMS_TO_TICKS(200));
 			retry_count++;
-			if (retry_count > timeout_sec * 5)
+			if (retry_count > timeout_sec * HTTP_RETRY_PER_SEC)
 				break; /* timeout */
 			continue;
 		}

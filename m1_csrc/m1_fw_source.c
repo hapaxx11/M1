@@ -152,10 +152,11 @@ static bool asset_matches_filter(const char *asset_name,
                                   const char *include_filter,
                                   const char *exclude_filter)
 {
+	size_t alen = strlen(asset_name);
+
 	/* Must match include filter (suffix) */
 	if (include_filter && include_filter[0])
 	{
-		size_t alen = strlen(asset_name);
 		size_t flen = strlen(include_filter);
 		if (alen < flen)
 			return false;
@@ -173,7 +174,6 @@ static bool asset_matches_filter(const char *asset_name,
 		char *tok = strtok(excl_copy, " ");
 		while (tok)
 		{
-			size_t alen = strlen(asset_name);
 			size_t tlen = strlen(tok);
 			if (alen >= tlen && strcmp(asset_name + alen - tlen, tok) == 0)
 				return false;
@@ -223,11 +223,6 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 		const char *obj_end = json_object_end(p);
 		if (!obj_end) break;
 
-		/* Work within this object's scope (null-terminate temporarily) */
-		size_t obj_len = obj_end - p;
-		/* We can't modify s_api_buf easily, so we'll parse with boundaries.
-		 * json_get_string searches forward and stops at end of found value. */
-
 		fw_release_t *rel = &releases[count];
 		memset(rel, 0, sizeof(fw_release_t));
 
@@ -255,6 +250,7 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 				if (aname[0] && asset_matches_filter(aname, source->asset_filter, source->exclude_filter))
 				{
 					strncpy(rel->asset_name, aname, FW_RELEASE_ASSET_LEN - 1);
+					rel->asset_name[FW_RELEASE_ASSET_LEN - 1] = '\0';
 					json_get_string(ap, "browser_download_url", rel->download_url, FW_RELEASE_URL_LEN);
 					int32_t size_val = 0;
 					if (json_get_int(ap, "size", &size_val))
