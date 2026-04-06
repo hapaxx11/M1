@@ -564,6 +564,11 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_app_api.c
     ../../m1_csrc/m1_app_manager.c
     ../../m1_csrc/m1_field_detect.c
+    # === Enhanced firmware: WiFi Firmware Download ===
+    ../../m1_csrc/m1_json_mini.c
+    ../../m1_csrc/m1_http_client.c
+    ../../m1_csrc/m1_fw_source.c
+    ../../m1_csrc/m1_fw_download.c
 )
 
 target_link_directories(m1_01 INTERFACE

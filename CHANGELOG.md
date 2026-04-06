@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **WiFi Firmware Download**: New "Download" option in the Firmware Update menu
+  that allows browsing and downloading firmware images from Internet sources
+  (GitHub Releases) directly to the M1's SD card for flashing. Requires active
+  WiFi connection.
+  - **Configurable sources**: User-editable `fw_sources.txt` on SD card defines
+    download sources. Ships with two defaults: Monstatek Official and Hapax Fork.
+  - **Source type architecture**: Pluggable source-type system (currently supports
+    `github_release`, extensible to direct URLs and other forges).
+  - **Asset filtering**: Each source specifies suffix filters (e.g., `_SD.bin` for
+    Hapax, `.bin` for Monstatek) and exclusion patterns (`.elf`, `.hex`) to
+    automatically select the correct firmware binary from release assets.
+  - **Download progress UI**: Real-time progress bar with percentage, KB counter,
+    and cancel support (BACK button during download).
+  - **Reusable HTTP client** (`m1_http_client.c/h`): General-purpose module for
+    both small API requests (`AT+HTTPCLIENT`) and large file downloads
+    (`AT+CIPSTART` streaming to SD). Supports HTTPS, HTTP redirect following,
+    and progress callbacks.
+  - **Minimal JSON parser** (`m1_json_mini.c/h`): Lightweight parser for GitHub
+    API responses — extracts strings, integers, booleans, and navigates arrays
+    and nested objects without heap allocation.
+  - **ESP32 AT command extensions**: Added TCP/SSL and HTTP AT command definitions
+    (`AT+HTTPCLIENT`, `AT+CIPSTART`, `AT+CIPSEND`, `AT+CIPRECVDATA`, etc.) to
+    the host command list. No ESP32 firmware rebuild needed — these commands were
+    already compiled into the AT firmware.
+  - **WiFi state accessor**: Added `wifi_is_connected()` and
+    `wifi_get_connected_ssid()` public functions for external module use.
+
 ### Changed
 
 - **Removed redundant "Back" labels from all app button bars and menus** — the

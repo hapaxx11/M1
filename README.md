@@ -76,6 +76,8 @@ Enhanced firmware for the [Monstatek M1](https://monstatek.com) multi-tool devic
 - **Connect** — join networks with password entry
 - **Saved Networks** — manage stored WiFi credentials
 - **Status** — view connection state, IP address, signal strength
+- **Firmware Download** — browse and download firmware images from GitHub
+  Releases (Monstatek official or Hapax fork) directly to SD card for flashing
 
 ### NFC/RFID Field Detector
 - Detect external 13.56 MHz NFC reader fields and ~125 kHz RFID reader fields
@@ -202,11 +204,14 @@ Use an ST-Link or J-Link debugger with STM32CubeIDE or OpenOCD.
 ```
 0:/
 ├── BadUSB/          DuckyScript .txt files
+├── Firmware/        Downloaded firmware images (created by Download feature)
 ├── IR/              Infrared remote .ir files (see ir_database/)
 │   └── Learned/     IR signals recorded by the M1
 ├── NFC/             NFC tag .nfc files
 ├── RFID/            RFID tag .rfid files
 ├── SubGHz/          Sub-GHz signal .sub files (see subghz_database/)
+├── System/          System configuration files
+│   └── fw_sources.txt  Firmware download sources (auto-generated, user-editable)
 ├── apps/            External .m1app applications
 ├── settings.ini     M1 settings (auto-generated)
 └── wifi_cred.ini    Saved WiFi credentials (auto-generated)

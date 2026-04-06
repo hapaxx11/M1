@@ -136,4 +136,55 @@
 #define ESP32C6_AT_RES_STAIP_KEY		"+CIFSR:STAIP,"
 #define ESP32C6_AT_RES_STAMAC_KEY		"+CIFSR:STAMAC,"
 
+// ---- HTTP Client (requires CONFIG_AT_HTTP_COMMAND_SUPPORT=1 in ESP32 sdkconfig) ----
+// Syntax: AT+HTTPCLIENT=<opt>,<content-type>,<url>[,<host>][,<path>][,<transport_type>]
+//   opt: 1=HEAD, 2=GET, 3=POST, 4=PUT, 5=DELETE
+//   content-type: 0=application/x-www-form-urlencoded, 1=application/json, etc.
+//   transport_type: 1=HTTP, 2=HTTPS (no verify), 3=HTTPS (verify)
+// Response: +HTTPCLIENT:<size>,<data>\r\n  (may repeat for chunked)
+//           OK  or  ERROR
+#define ESP32C6_AT_REQ_HTTPCLIENT		"AT+HTTPCLIENT="
+#define ESP32C6_AT_RES_HTTPCLIENT_KEY	"+HTTPCLIENT:"
+
+// ---- TCP/SSL Connection (passive receive mode for streaming) ----
+// Syntax: AT+CIPSTART=<type>,<remote_host>,<remote_port>[,<keepalive>]
+//   type: "TCP", "UDP", "SSL", "TCPv6", "UDPv6", "SSLv6"
+// Response: CONNECT\r\n\r\nOK  or  ERROR
+#define ESP32C6_AT_REQ_CIPSTART			"AT+CIPSTART="
+#define ESP32C6_AT_RES_CONNECT			"CONNECT"
+
+// Send data: AT+CIPSEND=<length>
+// After ">" prompt, send <length> bytes of data
+// Response: SEND OK  or  SEND FAIL
+#define ESP32C6_AT_REQ_CIPSEND			"AT+CIPSEND="
+#define ESP32C6_AT_RES_SEND_PROMPT		">"
+#define ESP32C6_AT_RES_SEND_OK			"SEND OK"
+
+// Set passive receive mode (data buffered until read with CIPRECVDATA)
+// Syntax: AT+CIPRECVMODE=<mode>  (0=active push, 1=passive)
+#define ESP32C6_AT_REQ_CIPRECVMODE		"AT+CIPRECVMODE="
+
+// Read buffered data: AT+CIPRECVDATA=<len>
+// Response: +CIPRECVDATA:<actual_len>,<data>\r\nOK
+#define ESP32C6_AT_REQ_CIPRECVDATA		"AT+CIPRECVDATA="
+#define ESP32C6_AT_RES_CIPRECVDATA_KEY	"+CIPRECVDATA:"
+
+// Query buffered data length: AT+CIPRECVLEN?
+// Response: +CIPRECVLEN:<len>\r\nOK
+#define ESP32C6_AT_REQ_CIPRECVLEN		"AT+CIPRECVLEN?"
+#define ESP32C6_AT_RES_CIPRECVLEN_KEY	"+CIPRECVLEN:"
+
+// Close connection: AT+CIPCLOSE
+// Response: CLOSED\r\nOK
+#define ESP32C6_AT_REQ_CIPCLOSE			"AT+CIPCLOSE"
+#define ESP32C6_AT_RES_CLOSED			"CLOSED"
+
+// DNS resolution: AT+CIPDOMAIN=<domain_name>
+// Response: +CIPDOMAIN:<IP>\r\nOK
+#define ESP32C6_AT_REQ_CIPDOMAIN		"AT+CIPDOMAIN="
+#define ESP32C6_AT_RES_CIPDOMAIN_KEY	"+CIPDOMAIN:"
+
+// Unsolicited connection state change (received when remote closes)
+#define ESP32C6_AT_RES_IPD				"+IPD,"
+
 #endif /* ESP32C6_AT_LIST_H_ */

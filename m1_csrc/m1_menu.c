@@ -28,6 +28,7 @@
 #include "m1_power_ctl.h"
 #include "m1_fw_update.h"
 #include "m1_esp32_fw_update.h"
+#include "m1_fw_download.h"
 #include "m1_storage.h"
 #include "m1_wifi.h"
 #include "m1_bt.h"
@@ -363,6 +364,11 @@ S_M1_Menu_t menu_Setting_Firmware_Swap_Banks =
     "Swap Banks", firmware_swap_banks, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Setting_Firmware_Download =
+{
+    "Download", fw_download_start, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 
 /*---------------------- > Settings-Firmware Update-End ----------------------*/
 
@@ -408,7 +414,7 @@ S_M1_Menu_t menu_Settings_System =
 
 S_M1_Menu_t menu_Setting_Firmware_Update =
 {
-    "Firmware update", firmware_update_init, firmware_update_exit, NULL, 3, 0, NULL, firmware_update_gui_update, {&menu_Setting_Firmware_Update_Image_File, &menu_Setting_Firmware_Update_Start, &menu_Setting_Firmware_Swap_Banks}
+    "Firmware update", firmware_update_init, firmware_update_exit, NULL, 4, 0, NULL, firmware_update_gui_update, {&menu_Setting_Firmware_Update_Image_File, &menu_Setting_Firmware_Update_Start, &menu_Setting_Firmware_Swap_Banks, &menu_Setting_Firmware_Download}
 };
 
 S_M1_Menu_t menu_Setting_ESP32 =
