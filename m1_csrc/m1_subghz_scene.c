@@ -311,5 +311,6 @@ void subghz_scene_app_run(void)
 
     /* Cleanup */
     menu_sub_ghz_exit();
+    xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);
 }

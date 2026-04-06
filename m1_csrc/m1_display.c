@@ -342,13 +342,39 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 
 		case MENU_UPDATE_REFRESH:
+			/* Clear any stale X_MENU state left by legacy sub-functions
+			 * running inside scene-based blocking delegates. */
 			if ( x_menu_update_init )
 			{
 				x_menu_update_init = 0; // Reset
 				x_menu_level = 0;
-				disp_window_active_row = x_menu_display[0].active_disp_row; // Restore
-				disp_window_top_row = x_menu_display[0].disp_top_row;
 			} // if ( x_menu_update_init )
+			/* Verify that the display position matches sel_item.
+			 * disp_window_active_row and disp_window_top_row are 1-based,
+			 * while sel_item is 0-based.  The highlighted item should be
+			 * at run = sel_item + 1 = disp_window_top_row + disp_window_active_row - 1.
+			 * If this invariant is broken (e.g. by X_MENU operations that
+			 * modified the display state during a blocking delegate),
+			 * recalculate so the highlight matches the actual selection. */
+			{
+				uint8_t expected_run = disp_window_top_row + disp_window_active_row - 1;
+				if ( expected_run != (sel_item + 1) )
+				{
+					uint8_t win = menu_window_sizes[menu_level_id];
+					if ( (sel_item + 1) <= win )
+					{
+						disp_window_active_row = sel_item + 1;
+						disp_window_top_row = 1;
+					}
+					else
+					{
+						/* Place selected item near the bottom of the visible
+						 * window (consistent with MOVE_DOWN scroll behavior). */
+						disp_window_active_row = (win > 1) ? (win - 1) : win;
+						disp_window_top_row = (sel_item + 1) - disp_window_active_row + 1;
+					}
+				}
+			}
 			break;
 
 		case X_MENU_UPDATE_INIT:

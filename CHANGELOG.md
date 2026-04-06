@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Main menu off-by-one: highlight and selection could diverge** — When
+  returning from a scene-based module whose blocking delegates used legacy
+  X_MENU operations (NFC Read, RFID Read, etc.), the `x_menu_update_init`
+  flag was left set and `disp_window_active_row` / `disp_window_top_row`
+  could be overwritten with stale values on the next `MENU_UPDATE_REFRESH`.
+  The visual highlight then pointed to a different item than the one
+  actually selected, making it appear that pressing OK opened the item
+  below the highlighted one.  The fix clears stale X_MENU state without
+  restoring from the backup, and verifies that the display position matches
+  `sel_item` — recalculating if they diverge.
+- **Stale button events after module exit** — `button_events_q_hdl` was
+  never reset when a scene-based module exited, so a leftover button press
+  from inside the module could be consumed by the main menu handler on the
+  very next event loop iteration, causing a spurious menu movement.  All
+  scene exit paths (generic `m1_scene_run`, Sub-GHz scene, and the main
+  menu `subfunc_handler`) now drain the button queue before returning
+  control to the main menu.
 - **Sub-GHz: `uint8_t`/`bool` type mismatch compile error** — `manchester_advance()`
   writes to a `bool *` output, but the Oregon V1 and Oregon3 decoders declared the
   receiving variable as `uint8_t`, causing a pointer-type mismatch on strict compilers.
