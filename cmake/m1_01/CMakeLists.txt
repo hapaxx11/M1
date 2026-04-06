@@ -511,6 +511,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_sdcard.c
     ../../m1_csrc/m1_sdcard_man.c
     ../../m1_csrc/m1_settings.c
+    ../../m1_csrc/m1_settings_scene.c
     ../../m1_csrc/m1_storage.c
     ../../m1_csrc/m1_sub_ghz.c
     # === Generic Scene Framework ===
