@@ -38,6 +38,11 @@ typedef enum {
     SubGhzSceneSaved,          /**< Browse saved files + action menu */
     SubGhzSceneFreqAnalyzer,   /**< Frequency analyzer / scanner */
     SubGhzScenePlaylist,       /**< Sub-GHz playlist player */
+    SubGhzSceneSpectrumAnalyzer, /**< Bar-graph spectrum display */
+    SubGhzSceneRssiMeter,      /**< Continuous RSSI signal strength */
+    SubGhzSceneFreqScanner,    /**< Frequency scanner with hit list */
+    SubGhzSceneWeatherStation, /**< Weather protocol decoder */
+    SubGhzSceneBruteForce,     /**< Brute-force code transmitter */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -261,5 +266,10 @@ extern const SubGhzSceneHandlers subghz_scene_need_saving_handlers;
 extern const SubGhzSceneHandlers subghz_scene_saved_handlers;
 extern const SubGhzSceneHandlers subghz_scene_freq_analyzer_handlers;
 extern const SubGhzSceneHandlers subghz_scene_playlist_handlers;
+extern const SubGhzSceneHandlers subghz_scene_spectrum_analyzer_handlers;
+extern const SubGhzSceneHandlers subghz_scene_rssi_meter_handlers;
+extern const SubGhzSceneHandlers subghz_scene_freq_scanner_handlers;
+extern const SubGhzSceneHandlers subghz_scene_weather_station_handlers;
+extern const SubGhzSceneHandlers subghz_scene_brute_force_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

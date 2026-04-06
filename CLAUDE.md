@@ -388,6 +388,32 @@ to build.**
 
 ---
 
+## Sub-GHz Menu Structure
+
+The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 11 items** in this
+order, matching C3 parity.  Do not remove items, reorder, or add "Back" entries.
+
+| # | Label | Scene ID | Implementation |
+|---|-------|----------|----------------|
+| 1 | Read | SubGhzSceneRead | Scene-native (protocol decode) |
+| 2 | Read Raw | SubGhzSceneReadRaw | Scene-native (raw capture) |
+| 3 | Saved | SubGhzSceneSaved | Scene-native (file browser) |
+| 4 | Playlist | SubGhzScenePlaylist | Blocking delegate |
+| 5 | Frequency Analyzer | SubGhzSceneFreqAnalyzer | Blocking delegate → `sub_ghz_frequency_reader()` |
+| 6 | Spectrum Analyzer | SubGhzSceneSpectrumAnalyzer | Blocking delegate → `sub_ghz_spectrum_analyzer()` |
+| 7 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
+| 8 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
+| 9 | Weather Station | SubGhzSceneWeatherStation | Blocking delegate → `sub_ghz_weather_station()` |
+| 10 | Brute Force | SubGhzSceneBruteForce | Blocking delegate → `sub_ghz_brute_force()` |
+| 11 | Add Manually | (special) | Handled externally |
+
+**"Blocking delegate"** scenes call a legacy function that runs its own event loop and
+drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in
+`on_enter`, then pops itself when the function returns.  This integrates legacy code with
+the scene manager without rewriting each tool.
+
+---
+
 ## Remote Configuration
 
 - `origin` = hapaxx11/M1 (this fork — push here when explicitly told)

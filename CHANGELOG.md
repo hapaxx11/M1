@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-GHz Spectrum Analyzer** — Bar-graph spectrum display with zoom, pan, peak detection,
+  and 5 preset sweep bands.  Accessible from the scene-based Sub-GHz menu.
+- **Sub-GHz RSSI Meter** — Continuous signal strength meter with bar graph, peak tracking,
+  and band switching.
+- **Sub-GHz Freq Scanner** — Frequency scanner that sweeps a range, captures signal hits
+  above threshold, and displays a deduplicated hit list with RSSI and counts.
+- **Sub-GHz Weather Station** — Weather protocol decoder for 433.92 MHz stations
+  (Oregon V2, LaCrosse TX, Acurite, etc.) with temperature, humidity, and battery display.
+- **Sub-GHz Brute Force** — Brute-force RF code transmitter supporting Princeton, CAME,
+  Nice FLO, Linear, and Holtek protocols with progress display.
+
 ### Changed
 
 - **Sub-GHz menu: Flipper-style selection list** — Removed the full-width "OK" button bar
