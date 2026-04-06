@@ -196,8 +196,8 @@ void firmware_update_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     		menu_text_y += THIS_LCD_MENU_TEXT_ROW_SPACE;
     	} // for (i=0; i<n_items; i++)
 
-    	// Draw info box at the bottom
-    	m1_info_box_display_init(true);
+    	// Draw info box at the bottom (low box to avoid overlapping 4th menu item)
+    	m1_info_box_display_init(false);
 
     	switch ( sel_item )
     	{
@@ -220,10 +220,16 @@ void firmware_update_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     	    	{
     	    		case M1_FW_UPDATE_READY:
     	    			m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-        				sprintf(prn_name, "New ver. %d.%d.%d.%d", (uint8_t)(fw_version_new>>24), (uint8_t)(fw_version_new>>16), (uint8_t)(fw_version_new>>8), (uint8_t)fw_version_new);
+        				sprintf(prn_name, "%d.%d.%d.%d > %d.%d.%d.%d",
+        				        m1_device_stat.config.fw_version_major,
+        				        m1_device_stat.config.fw_version_minor,
+        				        m1_device_stat.config.fw_version_build,
+        				        m1_device_stat.config.fw_version_rc,
+        				        (uint8_t)(fw_version_new>>24),
+        				        (uint8_t)(fw_version_new>>16),
+        				        (uint8_t)(fw_version_new>>8),
+        				        (uint8_t)fw_version_new);
         				m1_info_box_display_draw(INFO_BOX_ROW_2, prn_name);
-        				sprintf(prn_name, "Old ver. %d.%d.%d.%d", m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc);
-        				m1_info_box_display_draw(INFO_BOX_ROW_3, prn_name);
     	    			break;
 
     	    		case M1_FW_IMAGE_FILE_ACCESS_ERROR:
