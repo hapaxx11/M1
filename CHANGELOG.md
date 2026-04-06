@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (GitHub Releases) directly to the M1's SD card for flashing. Requires active
   WiFi connection.
   - **Configurable sources**: User-editable `fw_sources.txt` on SD card defines
-    download sources. Ships with two defaults: Monstatek Official and Hapax Fork.
+    download sources. Ships with three defaults: Monstatek Official, Hapax Fork,
+    and C3 (bedge117).
   - **Source type architecture**: Pluggable source-type system (currently supports
     `github_release`, extensible to direct URLs and other forges).
   - **Asset filtering**: Each source specifies suffix filters (e.g., `_wCRC.bin` for
