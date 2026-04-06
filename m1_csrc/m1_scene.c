@@ -212,6 +212,9 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
     if (hw_deinit)
         hw_deinit();
 
+    /* Drain any stale button events so the main menu handler does not
+     * process a leftover press from the module that just exited. */
+    xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);
 }
 

@@ -351,6 +351,7 @@ void menu_main_handler_task(void *param)
 	                                xTaskNotify(subfunc_handler_task_hdl, 0, eNoAction);
 	                                // Wait for the sub-function to complete and notify this task from subfunc_handler_task
 	                                xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
+	                                xQueueReset(button_events_q_hdl); // Drain stale button events from module
 	                        		m1_device_stat.op_mode = M1_OPERATION_MODE_MENU_ON;
 	                                // Return from sub-function. Let update GUI.
 	                                sel_item = menu_ctl.menu_item_active;
