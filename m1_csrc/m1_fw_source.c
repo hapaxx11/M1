@@ -56,6 +56,14 @@ static const char *s_default_config =
 	"Repo: M1\n"
 	"Asset_filter: _SD.bin\n"
 	"Exclude_filter: .elf .hex\n"
+	"Max_releases: 5\n"
+	"\n"
+	"Source: C3 (bedge117)\n"
+	"Type: github_release\n"
+	"Owner: bedge117\n"
+	"Repo: M1\n"
+	"Asset_filter: _wCRC.bin\n"
+	"Exclude_filter:\n"
 	"Max_releases: 5\n";
 
 bool fw_source_create_defaults(void)
