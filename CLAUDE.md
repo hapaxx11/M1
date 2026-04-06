@@ -376,15 +376,71 @@ to build.**
 
 ## Scene-Based Application Architecture
 
-- **Prefer scene-based architecture** whenever an application has more than one screen or
-  any non-trivial navigation (e.g. menu → action → result → back).  The scene manager
-  (`SubGhzSceneHandlers` pattern with `on_enter` / `on_event` / `on_exit` / `draw` callbacks
-  and stack-based push/pop navigation) keeps state management clean and testable.
-- **Simple single-screen utilities** (e.g. a frequency counter that only shows one view)
-  may use a flat event loop without scenes.
-- When creating a new application or porting a Flipper app, **start with the scene manager
-  skeleton** from `m1_subghz_scene.h/c` and create per-scene files following the existing
-  naming convention: `m1_<app>_scene_<name>.c`.
+**The scene manager is the target architecture for ALL M1 application modules.**
+Every module that has more than one screen or any non-trivial navigation must use
+scene-based architecture.  The `SubGhzSceneHandlers` pattern
+(`on_enter` / `on_event` / `on_exit` / `draw` callbacks with stack-based push/pop
+navigation) keeps state management clean, testable, and consistent across the device.
+
+### Migration status
+
+Sub-GHz is the **reference implementation** — it has a complete scene manager
+(`m1_subghz_scene.h/c`) with 17 scenes.  All other modules still use the legacy
+`S_M1_Menu_t` menu system in `m1_menu.c`.  They must be migrated to the scene
+pattern progressively.
+
+| Module | Current | Target | Entry point |
+|--------|---------|--------|-------------|
+| **Sub-GHz** | ✅ Scene manager | Done | `sub_ghz_scene_entry()` → `m1_subghz_scene.c` |
+| **125KHz RFID** | ❌ Legacy menu | Scene manager | `m1_rfid.c` functions |
+| **NFC** | ❌ Legacy menu | Scene manager | `m1_nfc.c` functions |
+| **Infrared** | ❌ Legacy menu | Scene manager | `m1_infrared.c` functions |
+| **GPIO** | ❌ Legacy menu | Scene manager | `m1_gpio.c` functions |
+| **WiFi** | ❌ Legacy menu | Scene manager | `m1_wifi.c` functions |
+| **Bluetooth** | ❌ Legacy menu | Scene manager | `m1_bt.c` functions |
+| **BadUSB** | ❌ Legacy menu | Scene manager | `m1_badusb.c` functions |
+| **Games** | ❌ Legacy menu | Scene manager | `m1_games.c` functions |
+| **Settings** | ❌ Legacy menu | Scene manager | `m1_settings.c` functions |
+
+### Agent instructions for scene migration
+
+When an agent is tasked with **any work on a legacy-menu module** (bug fix, new
+feature, UI change), the agent **SHOULD** migrate that module to the scene
+architecture as part of the same change, if the scope is reasonable.  At minimum:
+
+1. **Create a scene manager** for the module:
+   - `m1_<module>_scene.h` — scene ID enum, event enum, app context struct,
+     handler table extern declarations.  Copy structure from `m1_subghz_scene.h`.
+   - `m1_<module>_scene.c` — scene registry, push/pop/replace, main event loop.
+     Copy structure from `m1_subghz_scene.c`.
+
+2. **Create a menu scene** (`m1_<module>_scene_menu.c`) that lists all module
+   functions using the scrollbar pattern from `m1_subghz_scene_menu.c`.
+
+3. **Wrap existing functions** as blocking-delegate scenes.  Each legacy function
+   that runs its own event loop gets a thin scene file:
+   ```c
+   static void scene_on_enter(AppContext *app) {
+       legacy_function();          /* blocking — runs own event loop */
+       app->running = true;        /* prevent premature exit */
+       module_scene_pop(app);      /* return to parent scene */
+   }
+   ```
+   This is the fastest migration path — no rewrite of the legacy function needed.
+
+4. **Update `m1_menu.c`** so the module's top-level menu entry calls the new
+   scene entry point instead of expanding the legacy sub-menu.
+
+5. **Scene-native rewrites** of individual functions can happen later, one at a
+   time.  The blocking-delegate wrapper is an acceptable permanent state until
+   someone has reason to refactor the underlying function.
+
+### Rules for all scene menus
+
+- Scene menus use the scrollbar pattern (no "OK" button bar).
+- Never add "Back" as a menu item or button bar label.
+- When item count changes, verify `MENU_VISIBLE` and scrolling math.
+- Every scene file must be added to `cmake/m1_01/CMakeLists.txt`.
 
 ---
 

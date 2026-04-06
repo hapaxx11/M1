@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz menu expanded to 11 items** — Added Spectrum Analyzer, RSSI Meter, Freq Scanner,
+  Weather Station, Brute Force, and wired up Add Manually (was a no-op).  Now matches C3
+  feature parity.  Menu scrolls with 6 visible items and scrollbar position indicator.
 - **Sub-GHz menu: Flipper-style selection list** — Removed the full-width "OK" button bar
   from the Sub-GHz main menu scene and replaced it with a right-edge scrollbar position
   indicator.  All 6 menu items now display without scrolling, using the full vertical space.
@@ -32,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (17px per item instead of 13px).
 - **Documentation**: Added scene-based application architecture guidance and updated button
   bar rules in `CLAUDE.md` to prohibit "OK"-only button bars on selection lists.
+- **Documentation**: Scene-based architecture is now **mandatory** for all modules.
+  `CLAUDE.md` includes a migration status table (Sub-GHz done, 9 modules pending),
+  step-by-step migration instructions for agents, and the blocking-delegate pattern
+  for wrapping legacy functions without rewriting them.
 
 ### Fixed
 
