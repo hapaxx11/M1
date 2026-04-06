@@ -39,6 +39,13 @@
 ## Workflow Rules
 
 - **Always build after code changes** — if you edit source code, you must build it yourself. Do not tell the user to build; just do it.
+- **Do NOT build for non-compilation changes** — if a session only modifies files that
+  do not affect compilation (`.md` files, `documentation/`, `ir_database/`,
+  `subghz_database/`, `subghz_playlist/`, `LICENSE`, `COPYING.txt`, IDE project files
+  like `.vscode/`, `.settings/`, `.project`, `.cproject`, `.mxproject`, or CI workflow
+  files in `.github/`), a firmware build is **not required**.  These paths match the
+  `paths-ignore` lists in both `ci.yml` and `build-release.yml` — CI will also skip
+  the build job for such changes.
 - **XIAO/Pico test bench: build → flash → test is YOUR job** — When working on ESP32-C6 features with the XIAO + Pico AT bridge setup, YOU are responsible for the full cycle: build the firmware, flash it to the XIAO (via COM6), and run the test script (via COM8). Do NOT stop after building and tell the user to flash/test. Only ask the user for help when something is physically outside your control (hard reset, USB replug, putting Pico in boot mode, etc.).
 - **ESP32 XIAO flashing command**: `python -m esptool --chip esp32c6 --port COM6 --baud 460800 write_flash 0x0 build/factory/factory_ESP32C6-SPI-XIAO.bin` (from `D:\M1Projects\esp32-at-hid\`). After flashing, the XIAO auto-resets — wait 3-5s before testing.
 
@@ -282,8 +289,8 @@ to build.**
   The date is the wall-clock date of the change (`YYYY-MM-DD`).
 - **`[Unreleased]` heading**: Use `## [Unreleased]` (no date) for changes that will
   NOT trigger a release build — i.e. changes that only touch paths in
-  `build-release.yml`'s `paths-ignore` list (`.md` files, `documentation/`, `LICENSE`,
-  IDE project files, CI workflow files).  When the next firmware code change merges and
+  `ci.yml` / `build-release.yml`'s `paths-ignore` lists (`.md` files, `documentation/`,
+  `LICENSE`, IDE project files, CI workflow files).  When the next firmware code change merges and
   CI auto-increments the RC, fold the `[Unreleased]` entries into that version's block.
   **Never assign a numbered version heading to a change that won't produce a build** —
   this prevents version numbers from going out of sync with actual releases.

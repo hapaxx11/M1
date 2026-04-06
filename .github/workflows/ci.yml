@@ -1,13 +1,46 @@
 name: CI Build Check
 
-# Runs on every PR targeting main and on direct pushes to main.
+# Runs on every PR targeting main and on direct pushes to main,
+# except for docs-only and non-compilation changes (see paths-ignore).
 # GitHub branch-protection rules can require this job ("build") to pass
 # before a PR is mergeable.
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'documentation/**'
+      - 'ir_database/**'
+      - 'subghz_database/**'
+      - 'LICENSE'
+      - 'COPYING.txt'
+      - '.vscode/**'
+      - '.settings/**'
+      - '.project'
+      - '.cproject'
+      - '.mxproject'
+      - 'subghz_playlist/**'
+      - '.github/workflows/**'
+      - '.github/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'documentation/**'
+      - 'ir_database/**'
+      - 'subghz_database/**'
+      - 'LICENSE'
+      - 'COPYING.txt'
+      - '.vscode/**'
+      - '.settings/**'
+      - '.project'
+      - '.cproject'
+      - '.mxproject'
+      - 'subghz_playlist/**'
+      - '.github/workflows/**'
+      - '.github/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
 
 permissions:
   contents: read

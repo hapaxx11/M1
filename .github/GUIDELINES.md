@@ -46,7 +46,7 @@ Security concerns
 All PRs must pass automated tests
 Maintain test coverage above agreed threshold (e.g., 80%)
 Automated linting must pass
-Build must succeed
+Build must succeed (skipped automatically for docs/config-only changes — see paths-ignore in ci.yml)
 No security vulnerabilities in dependencies
 
 6. Documentation
