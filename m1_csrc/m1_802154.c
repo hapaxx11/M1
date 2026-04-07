@@ -321,6 +321,21 @@ static void ieee802154_scan(char filter_proto)
         esp32_main_init();
     }
 
+    /* Drain stale button events accumulated during ESP32 init.
+     * Check if BACK was pressed — if so, exit immediately. */
+    while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+    {
+        if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+            if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                return;
+            }
+        }
+    }
+
     if (!get_esp32_main_init_status())
     {
         show_message(title, "ESP32 not ready!", "Press Back", 0);

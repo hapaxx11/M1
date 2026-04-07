@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ESP32 screen responsiveness** — Reduced AT readiness probe timeout from
+  2s→1s per probe and inter-probe delay from 500ms→200ms, cutting worst-case
+  ESP32 initialization blocking from ~25s to ~12s.  Added separate 5s timeout
+  for AT mode-set commands (AT+CWMODE, AT+BLEINIT) instead of reusing the full
+  30s/10s scan timeout, so a non-responsive ESP32 fails fast on initial setup.
+  Added stale button event draining after all blocking ESP32 init and scan
+  phases across WiFi, Bluetooth, and 802.15.4 modules so the interactive
+  result loops start with clean queues.  BACK button pressed during ESP32
+  init is now detected and exits immediately instead of being silently lost.
 - **Sub-GHz scene display cleanup** — Fixed overlapping text and tight spacing
   across multiple Sub-GHz scenes:
   - **Need Saving dialog**: Moved dialog text and choice buttons up to prevent

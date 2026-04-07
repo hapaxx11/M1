@@ -133,6 +133,21 @@ void wifi_scan_ap(void)
 		/* Fall through to event loop so user can press BACK */
 	}
 
+	/* Drain stale button events accumulated during ESP32 init.
+	 * Check if BACK was pressed — if so, exit immediately. */
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_deinit();
+				return;
+			}
+		}
+	}
+
 	list_count = 0;
 
 	m1_u8g2_firstpage();
@@ -167,6 +182,11 @@ void wifi_scan_ap(void)
 			m1_hard_delay(200);
 		}
 	} // if ( get_esp32_main_init_status() )
+
+	/* Drain stale button events accumulated during the blocking scan so the
+	 * interactive loop below starts with a clean queue. */
+	xQueueReset(button_events_q_hdl);
+	xQueueReset(main_q_hdl);
 
 	while (1 ) // Main loop of this task
 	{
@@ -707,6 +727,10 @@ void wifi_show_status(void)
 		}
 	}
 
+	/* Drain stale button events accumulated during ESP32 init. */
+	xQueueReset(button_events_q_hdl);
+	xQueueReset(main_q_hdl);
+
 	/* Query IP/MAC from ESP32 */
 	wifi_display_busy("Getting status...");
 
@@ -796,6 +820,10 @@ void wifi_disconnect(void)
 		xQueueReset(main_q_hdl);
 		return;
 	}
+
+	/* Drain stale button events accumulated during ESP32 init. */
+	xQueueReset(button_events_q_hdl);
+	xQueueReset(main_q_hdl);
 
 	if ( !s_wifi_connected )
 	{

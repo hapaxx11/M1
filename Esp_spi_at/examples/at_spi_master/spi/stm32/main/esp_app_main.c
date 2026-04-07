@@ -47,6 +47,7 @@
 #define DEFAULT_CTRL_RESP_TIMEOUT            30
 #define DEFAULT_CTRL_RESP_AP_SCAN_TIMEOUT    (60*3)
 #define DEFAULT_CTRL_RESP_CONNECT_AP_TIMEOUT (15*3)
+#define MODE_SET_RESP_TIMEOUT                5   /* AT+CWMODE / AT+BLEINIT response */
 
 QueueHandle_t esp_spi_msg_queue; // message queue used for communicating read/write start
 QueueHandle_t esp_resp_read_sem = NULL;
@@ -645,19 +646,19 @@ void esp32_main_init(void)
 	 * command processor has finished initialising (WiFi/BLE stacks, etc.).
 	 * Send bare "AT\r\n" and wait for "OK" — retry with back-off so the
 	 * first real AT command (e.g. AT+CWMODE, AT+BLEINIT) doesn't time out.
-	 * Total worst-case wait: 10 × 500 ms = 5 s. */
+	 * Total worst-case wait: 10 × (1s + 200ms) = 12 s. */
 	{
 		char probe_buf[32];
 		int probe_ok = 0;
 		for (int i = 0; i < 10; i++) {
 			probe_buf[0] = '\0';
-			spi_AT_send_recv("AT\r\n", probe_buf, sizeof(probe_buf), 2);
+			spi_AT_send_recv("AT\r\n", probe_buf, sizeof(probe_buf), 1);
 			if (strstr(probe_buf, "OK")) {
 				M1_LOG_I(TAG, "ESP32 AT ready after %d probe(s)\r\n", i + 1);
 				probe_ok = 1;
 				break;
 			}
-			HAL_Delay(500);
+			HAL_Delay(200);
 		}
 		if (!probe_ok) {
 			M1_LOG_E(TAG, "ESP32 AT not responding to probe after 10 attempts\r\n");
@@ -685,12 +686,17 @@ uint8_t wifi_ap_scan_list(ctrl_cmd_t *app_req)
 	uint32_t rx_uid;
 	uint8_t ret;
 	uint32_t tick_t0, tick_pass;
+	uint32_t saved_scan_timeout = app_req->cmd_timeout_sec;
 
 	tick_t0 = HAL_GetTick();
 	esp_queue_reset(ctrl_msg_Q);
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_WIFI_MODE, ESP32C6_WIFI_MODE_STA));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
 	app_req->cmd_len = strlen(app_req->at_cmd);
+	/* Use a short timeout for the mode-set command — the ESP32 should
+	 * respond to AT+CWMODE within seconds.  The full scan timeout is
+	 * restored before the actual AP scan command. */
+	app_req->cmd_timeout_sec = MODE_SET_RESP_TIMEOUT;
 	ret = spi_AT_app_send_command(app_req);
 	if ( ret==SUCCESS )
 	{
@@ -726,6 +732,9 @@ uint8_t wifi_ap_scan_list(ctrl_cmd_t *app_req)
 		{
 			esp_free_mem(&app_req->at_cmd);
 			esp_free_mem(&app_req->cmd_resp);
+			/* Restore full scan timeout for the actual AP list command */
+			app_req->cmd_timeout_sec = saved_scan_timeout;
+			tick_t0 = HAL_GetTick();
 			app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_LIST_AP, ""));
 			app_req->cmd_len = strlen(app_req->at_cmd);
 			app_req->cmd_resp = NULL;
@@ -898,6 +907,7 @@ uint8_t ble_scan_list_ex(ctrl_cmd_t *app_req)
 	uint32_t rx_uid;
 	uint8_t ret;
 	uint32_t tick_t0, tick_pass;
+	uint32_t saved_scan_timeout = app_req->cmd_timeout_sec;
 
 	tick_t0 = HAL_GetTick();
 	esp_queue_reset(ctrl_msg_Q);
@@ -909,6 +919,9 @@ uint8_t ble_scan_list_ex(ctrl_cmd_t *app_req)
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_MODE, ESP32C6_BLE_MODE_CLI));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
 	app_req->cmd_len = strlen(app_req->at_cmd);
+	/* Use a short timeout for the BLE init command — the ESP32 should
+	 * respond within seconds.  Full scan timeout is restored below. */
+	app_req->cmd_timeout_sec = MODE_SET_RESP_TIMEOUT;
 	ret = spi_AT_app_send_command(app_req);
 	if ( ret==SUCCESS )
 	{
@@ -942,6 +955,9 @@ uint8_t ble_scan_list_ex(ctrl_cmd_t *app_req)
 		{
 			esp_free_mem(&app_req->at_cmd);
 			esp_free_mem(&app_req->cmd_resp);
+			/* Restore full scan timeout for the actual BLE scan command */
+			app_req->cmd_timeout_sec = saved_scan_timeout;
+			tick_t0 = HAL_GetTick();
 			app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_SCAN, "3"));
 			app_req->cmd_len = strlen(app_req->at_cmd);
 			app_req->cmd_resp = NULL;
