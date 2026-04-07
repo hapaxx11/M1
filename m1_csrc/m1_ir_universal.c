@@ -32,6 +32,8 @@
 #include "irsnd.h"
 #include "flipper_ir.h"
 #include "ff.h"
+#include "m1_virtual_kb.h"
+#include "m1_file_util.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -96,6 +98,7 @@ static const char *s_dashboard_items[DASHBOARD_ITEM_COUNT] = {
 static void dashboard_screen(void);
 static void browse_directory(const char *path);
 static void show_commands(const char *ir_file_path);
+static bool ir_file_action_menu(const char *ir_file_path);
 static void transmit_command(const ir_universal_cmd_t *cmd);
 static void transmit_raw_command(const ir_universal_cmd_t *cmd);
 static void load_favorites(void);
@@ -104,7 +107,8 @@ static void add_to_recent(const char *path);
 static void load_recent(void);
 static void save_recent(void);
 static uint16_t scan_directory_page(const char *path, uint16_t page, uint16_t page_size);
-static void draw_list_screen(const char *title, uint16_t count, uint16_t selection);
+static void draw_list_screen(const char *title, uint16_t count, uint16_t selection,
+                             const char *ok_label);
 static void draw_dashboard(uint8_t selection);
 static void show_favorites_screen(void);
 static void show_recent_screen(void);
@@ -340,7 +344,8 @@ static void dashboard_screen(void)
  * Draw a generic list screen with title, items, and selection highlight
  */
 /*============================================================================*/
-static void draw_list_screen(const char *title, uint16_t count, uint16_t selection)
+static void draw_list_screen(const char *title, uint16_t count, uint16_t selection,
+                             const char *ok_label)
 {
 	uint16_t i;
 	uint16_t start_idx;
@@ -401,9 +406,23 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 	/* Bottom bar with position counter */
 	{
 		char page_info[16];
-		snprintf(page_info, sizeof(page_info), "%u/%u", (unsigned)(selection + 1), (unsigned)count);
+		const char *right_label = ok_label ? ok_label : "Open";
+		const char *left_label;
+
+		if (ok_label && strcmp(ok_label, "Send") == 0)
+		{
+			/* Command screen: LEFT = file actions, position counter as left text */
+			snprintf(page_info, sizeof(page_info), "%u/%u", (unsigned)(selection + 1), (unsigned)count);
+			left_label = "More";
+		}
+		else
+		{
+			snprintf(page_info, sizeof(page_info), "%u/%u", (unsigned)(selection + 1), (unsigned)count);
+			left_label = page_info;
+		}
+
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, page_info, "Open", arrowright_8x8);
+		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, left_label, right_label, arrowright_8x8);
 	}
 
 	m1_u8g2_nextpage();
@@ -612,7 +631,7 @@ static void browse_directory(const char *path)
 		}
 		if (*title == '\0')
 			title = "IRDB";
-		draw_list_screen(title, s_browse_count, s_browse_selection);
+		draw_list_screen(title, s_browse_count, s_browse_selection, NULL);
 	}
 
 	while (1)
@@ -725,7 +744,7 @@ static void browse_directory(const char *path)
 					}
 					if (*title == '\0')
 						title = "IRDB";
-					draw_list_screen(title, s_browse_count, s_browse_selection);
+					draw_list_screen(title, s_browse_count, s_browse_selection, NULL);
 				}
 			} /* if (q_item.q_evt_type == Q_EVENT_KEYPAD) */
 		} /* if (ret == pdTRUE) */
@@ -951,6 +970,224 @@ static uint16_t parse_ir_file(const char *filepath)
 
 /*============================================================================*/
 /*
+ * IR Saved File Action Menu — Flipper "saved_menu" pattern.
+ *
+ * Presents file-level actions (Send All, Info, Rename, Delete) after a
+ * .ir file has been loaded and its commands are in s_commands[].
+ *
+ * Returns:
+ *   true  — file still exists (caller should continue / redraw)
+ *   false — file was deleted or renamed (caller should return to browse)
+ */
+/*============================================================================*/
+
+#define IR_ACTION_COUNT   4
+#define IR_ACTION_SEND_ALL 0
+#define IR_ACTION_INFO     1
+#define IR_ACTION_RENAME   2
+#define IR_ACTION_DELETE   3
+
+static const char *ir_action_labels[IR_ACTION_COUNT] = {
+    "Send All", "Info", "Rename", "Delete"
+};
+
+static void draw_ir_action_menu(const char *filename, uint8_t sel)
+{
+    char dname[22];
+    strncpy(dname, filename, 21);
+    dname[21] = '\0';
+
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+    /* Truncated filename at top */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, dname);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    /* 4 items in 52px (y=13..64) → 13px per item */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    for (uint8_t i = 0; i < IR_ACTION_COUNT; i++)
+    {
+        uint8_t y = 13 + i * 13;
+        if (i == sel)
+        {
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+        }
+        u8g2_DrawStr(&m1_u8g2, 8, y + 10, ir_action_labels[i]);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    }
+
+    m1_u8g2_nextpage();
+}
+
+static void draw_ir_info_screen(const char *filepath)
+{
+    char line[48];
+    char fname[32];
+    uint16_t raw_count = 0, parsed_count = 0;
+
+    fu_get_filename_without_ext(filepath, fname, sizeof(fname));
+
+    for (uint16_t i = 0; i < s_cmd_count; i++)
+    {
+        if (s_commands[i].is_raw)
+            raw_count++;
+        else
+            parsed_count++;
+    }
+
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "IR File Info");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Name: %s", fname);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    snprintf(line, sizeof(line), "Commands: %u", (unsigned)s_cmd_count);
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    snprintf(line, sizeof(line), "Parsed: %u  Raw: %u",
+             (unsigned)parsed_count, (unsigned)raw_count);
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    /* Show first command's protocol as representative */
+    if (s_cmd_count > 0 && !s_commands[0].is_raw)
+    {
+        extern const char * const irmp_protocol_names[];
+        snprintf(line, sizeof(line), "Proto: %s",
+                 irmp_protocol_names[s_commands[0].protocol]);
+        u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+    }
+    else if (s_cmd_count > 0 && s_commands[0].is_raw)
+    {
+        snprintf(line, sizeof(line), "Freq: %lu Hz",
+                 (unsigned long)s_commands[0].raw_freq);
+        u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+    }
+
+    m1_u8g2_nextpage();
+}
+
+static bool ir_file_action_menu(const char *ir_file_path)
+{
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    uint8_t action_sel = 0;
+
+    const char *short_name = fu_get_filename(ir_file_path);
+
+    draw_ir_action_menu(short_name, action_sel);
+
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
+            continue;
+
+        xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+
+        if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            return true;  /* Cancel — file unchanged */
+        }
+        else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            action_sel = (action_sel > 0) ? action_sel - 1 : IR_ACTION_COUNT - 1;
+        }
+        else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            action_sel = (action_sel + 1) % IR_ACTION_COUNT;
+        }
+        else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            switch (action_sel)
+            {
+                case IR_ACTION_SEND_ALL:
+                {
+                    /* Transmit every command in the file sequentially */
+                    for (uint16_t i = 0; i < s_cmd_count; i++)
+                    {
+                        if (s_commands[i].valid)
+                        {
+                            transmit_command(&s_commands[i]);
+                            /* Wait for TX complete before next */
+                            S_M1_Main_Q_t tx_q;
+                            BaseType_t tx_ret = xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(3000));
+                            if (tx_ret == pdTRUE && tx_q.q_evt_type == Q_EVENT_IRRED_TX)
+                            {
+                                infrared_encode_sys_deinit();
+                                m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                            }
+                            vTaskDelay(pdMS_TO_TICKS(200));
+                        }
+                    }
+                    return true;  /* Done — stay in commands */
+                }
+
+                case IR_ACTION_INFO:
+                {
+                    draw_ir_info_screen(ir_file_path);
+                    /* Wait for any button to dismiss */
+                    while (1)
+                    {
+                        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+                        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+                        {
+                            xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+                            break;
+                        }
+                    }
+                    break;  /* Redraw action menu */
+                }
+
+                case IR_ACTION_RENAME:
+                {
+                    char new_name[32];
+                    char base[32];
+                    fu_get_filename_without_ext(ir_file_path, base, sizeof(base));
+
+                    if (m1_vkb_get_filename("Rename to:", base, new_name))
+                    {
+                        char dir_path[IR_UNIVERSAL_PATH_MAX_LEN];
+                        char new_path[IR_UNIVERSAL_PATH_MAX_LEN];
+                        fu_get_directory_path(ir_file_path, dir_path, sizeof(dir_path));
+                        snprintf(new_path, sizeof(new_path), "%s/%s%s",
+                                 dir_path, new_name, IR_FILE_EXTENSION);
+                        f_rename(ir_file_path, new_path);
+                    }
+                    return false;  /* File moved — return to browse */
+                }
+
+                case IR_ACTION_DELETE:
+                {
+                    uint8_t confirm = m1_message_box_choice(&m1_u8g2,
+                        "Delete file?", short_name, "", "OK  /  Cancel");
+                    if (confirm == 1)
+                    {
+                        m1_fb_delete_file(ir_file_path);
+                        return false;  /* File gone — return to browse */
+                    }
+                    break;  /* Cancelled — redraw action menu */
+                }
+            }
+        }
+
+        draw_ir_action_menu(short_name, action_sel);
+    }
+}
+
+
+
+/*============================================================================*/
+/*
  * Display the command list from a .ir file and allow the user
  * to select and transmit commands.
  */
@@ -1019,7 +1256,7 @@ static void show_commands(const char *ir_file_path)
 	strncpy(title, short_name, BROWSE_NAME_MAX_LEN - 1);
 	title[BROWSE_NAME_MAX_LEN - 1] = '\0';
 
-	draw_list_screen(title, s_browse_count, selection);
+	draw_list_screen(title, s_browse_count, selection, "Send");
 
 	while (1)
 	{
@@ -1056,15 +1293,25 @@ static void show_commands(const char *ir_file_path)
 						transmit_command(&s_commands[selection]);
 					}
 				}
+				else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					/* File action menu (Flipper saved_menu pattern) */
+					if (!ir_file_action_menu(ir_file_path))
+					{
+						/* File was renamed or deleted — exit to caller */
+						xQueueReset(main_q_hdl);
+						return;
+					}
+				}
 
-				draw_list_screen(title, s_browse_count, selection);
+				draw_list_screen(title, s_browse_count, selection, "Send");
 			} /* if (q_item.q_evt_type == Q_EVENT_KEYPAD) */
 			else if (q_item.q_evt_type == Q_EVENT_IRRED_TX)
 			{
 				/* IR TX completed — tear down hardware cleanly */
 				infrared_encode_sys_deinit();
 				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
-				draw_list_screen(title, s_browse_count, selection);
+				draw_list_screen(title, s_browse_count, selection, "Send");
 			}
 		} /* if (ret == pdTRUE) */
 	} /* while (1) */
@@ -1562,7 +1809,7 @@ static void show_favorites_screen(void)
 	}
 	s_browse_count = (s_favorite_count < BROWSE_NAMES_MAX) ? s_favorite_count : BROWSE_NAMES_MAX;
 
-	draw_list_screen("Favorites", s_browse_count, selection);
+	draw_list_screen("Favorites", s_browse_count, selection, NULL);
 
 	while (1)
 	{
@@ -1601,7 +1848,7 @@ static void show_favorites_screen(void)
 					}
 				}
 
-				draw_list_screen("Favorites", s_browse_count, selection);
+				draw_list_screen("Favorites", s_browse_count, selection, NULL);
 			} /* if (q_item.q_evt_type == Q_EVENT_KEYPAD) */
 		} /* if (ret == pdTRUE) */
 	} /* while (1) */
@@ -1663,7 +1910,7 @@ static void show_recent_screen(void)
 	}
 	s_browse_count = (s_recent_count < BROWSE_NAMES_MAX) ? s_recent_count : BROWSE_NAMES_MAX;
 
-	draw_list_screen("Recent", s_browse_count, selection);
+	draw_list_screen("Recent", s_browse_count, selection, NULL);
 
 	while (1)
 	{
@@ -1701,7 +1948,7 @@ static void show_recent_screen(void)
 					}
 				}
 
-				draw_list_screen("Recent", s_browse_count, selection);
+				draw_list_screen("Recent", s_browse_count, selection, NULL);
 			} /* if (q_item.q_evt_type == Q_EVENT_KEYPAD) */
 		} /* if (ret == pdTRUE) */
 	} /* while (1) */
