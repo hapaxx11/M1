@@ -226,12 +226,6 @@ void menu_main_handler_task(void *param)
 
 	settings_load_from_sd();  /* Load southpaw and other user settings (needs stack > sys_init) */
 
-	if (m1_esp32_auto_init)
-	{
-		m1_esp32_init();
-		esp32_main_init();
-	}
-
 	vTaskDelay(POWER_UP_SYS_CONFIG_WAIT_TIME); // Give some time to startup_config_handler() during power-up
 	while(1)
 	{

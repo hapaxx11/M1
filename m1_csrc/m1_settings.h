@@ -19,7 +19,6 @@ void menu_settings_exit(void);
 void settings_lcd_and_notifications(void);
 void settings_buzzer(void);
 void settings_power(void);
-void settings_system(void);
 void settings_about(void);
 void settings_load_from_sd(void);
 void settings_save_to_sd(void);
