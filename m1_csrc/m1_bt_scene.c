@@ -23,76 +23,9 @@
 #endif
 
 /*==========================================================================*/
-/* Simple mode (no BT_MANAGE)                                               */
+/* Scene IDs                                                                */
 /*==========================================================================*/
 
-#ifndef M1_APP_BT_MANAGE_ENABLE
-
-/* Scene IDs */
-enum {
-    BtSceneMenu = 0,
-    BtSceneConfig,
-    BtSceneScan,
-    BtSceneAdvertise,
-    BtSceneCount
-};
-
-/*--- Blocking delegates ---------------------------------------------------*/
-
-static void config_on_enter(M1SceneApp *app)
-{
-    (void)app;
-    bluetooth_config();
-    app->running = true;
-    m1_scene_pop(app);
-}
-
-static void scan_on_enter(M1SceneApp *app)
-{
-    (void)app;
-    bluetooth_scan();
-    app->running = true;
-    m1_scene_pop(app);
-}
-
-static void advertise_on_enter(M1SceneApp *app)
-{
-    (void)app;
-    bluetooth_advertise();
-    app->running = true;
-    m1_scene_pop(app);
-}
-
-/*--- Handler tables -------------------------------------------------------*/
-
-static const M1SceneHandlers config_handlers    = { .on_enter = config_on_enter    };
-static const M1SceneHandlers scan_handlers      = { .on_enter = scan_on_enter      };
-static const M1SceneHandlers advertise_handlers = { .on_enter = advertise_on_enter };
-
-/*--- Menu scene -----------------------------------------------------------*/
-
-#define MENU_ITEM_COUNT  3
-#define MENU_VISIBLE     3
-
-static const char *const menu_labels[MENU_ITEM_COUNT] = {
-    "Config",
-    "Scan",
-    "Advertise",
-};
-
-static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
-    BtSceneConfig,
-    BtSceneScan,
-    BtSceneAdvertise,
-};
-
-#else /* M1_APP_BT_MANAGE_ENABLE defined */
-
-/*==========================================================================*/
-/* Full mode (BT_MANAGE enabled)                                            */
-/*==========================================================================*/
-
-/* Scene IDs */
 enum {
     BtSceneMenu = 0,
     BtSceneScan,
@@ -227,10 +160,8 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     BtSceneInfo,
 };
 
-#endif /* M1_APP_BT_MANAGE_ENABLE */
-
 /*==========================================================================*/
-/* Menu handlers (shared by both modes)                                     */
+/* Menu handlers                                                            */
 /*==========================================================================*/
 
 static uint8_t menu_sel    = 0;
@@ -266,17 +197,6 @@ static const M1SceneHandlers menu_handlers = {
 
 /*--- Scene registry -------------------------------------------------------*/
 
-#ifndef M1_APP_BT_MANAGE_ENABLE
-
-static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
-    [BtSceneMenu]      = &menu_handlers,
-    [BtSceneConfig]    = &config_handlers,
-    [BtSceneScan]      = &scan_handlers,
-    [BtSceneAdvertise] = &advertise_handlers,
-};
-
-#else /* M1_APP_BT_MANAGE_ENABLE */
-
 static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
     [BtSceneMenu]      = &menu_handlers,
     [BtSceneScan]      = &scan_handlers,
@@ -291,8 +211,6 @@ static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
 #endif
     [BtSceneInfo]      = &info_handlers,
 };
-
-#endif /* M1_APP_BT_MANAGE_ENABLE */
 
 /*--- Entry point ----------------------------------------------------------*/
 

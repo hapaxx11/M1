@@ -130,6 +130,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `subghz_replay_play_gui_update()` (still called by live
   `sub_ghz_replay_flipper_file()`), all waveform helpers, static TX helpers, and
   all blocking delegate functions used by scene wrappers.
+- **Bluetooth legacy dead code (~300 lines)** — Removed the dead simple-mode
+  scene code in `m1_bt_scene.c` (entire `#ifndef M1_APP_BT_MANAGE_ENABLE` block),
+  the legacy `bluetooth_scan()` original implementation in the `#else` fallback
+  path of `m1_bt.c`, the empty `bluetooth_config()` function (only called from
+  removed simple-mode scene), original `ble_scan_list_validation()` and
+  `ble_scan_list_print()` helpers, and the `bluetooth_config()` declaration from
+  `m1_bt.h`. All live blocking delegates (`bluetooth_scan()`, `bluetooth_saved_devices()`,
+  `bluetooth_advertise()`, `bluetooth_info()`, `bluetooth_set_badbt_name()`) retained.
 
 ## [0.9.0.28] - 2026-04-06
 
