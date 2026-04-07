@@ -47,6 +47,7 @@
 #define DEFAULT_CTRL_RESP_TIMEOUT            30
 #define DEFAULT_CTRL_RESP_AP_SCAN_TIMEOUT    (60*3)
 #define DEFAULT_CTRL_RESP_CONNECT_AP_TIMEOUT (15*3)
+#define MODE_SET_RESP_TIMEOUT                5   /* AT+CWMODE / AT+BLEINIT response */
 
 QueueHandle_t esp_spi_msg_queue; // message queue used for communicating read/write start
 QueueHandle_t esp_resp_read_sem = NULL;
@@ -695,7 +696,7 @@ uint8_t wifi_ap_scan_list(ctrl_cmd_t *app_req)
 	/* Use a short timeout for the mode-set command — the ESP32 should
 	 * respond to AT+CWMODE within seconds.  The full scan timeout is
 	 * restored before the actual AP scan command. */
-	app_req->cmd_timeout_sec = 5;
+	app_req->cmd_timeout_sec = MODE_SET_RESP_TIMEOUT;
 	ret = spi_AT_app_send_command(app_req);
 	if ( ret==SUCCESS )
 	{
@@ -920,7 +921,7 @@ uint8_t ble_scan_list_ex(ctrl_cmd_t *app_req)
 	app_req->cmd_len = strlen(app_req->at_cmd);
 	/* Use a short timeout for the BLE init command — the ESP32 should
 	 * respond within seconds.  Full scan timeout is restored below. */
-	app_req->cmd_timeout_sec = 5;
+	app_req->cmd_timeout_sec = MODE_SET_RESP_TIMEOUT;
 	ret = spi_AT_app_send_command(app_req);
 	if ( ret==SUCCESS )
 	{
