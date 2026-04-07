@@ -696,6 +696,7 @@ void TIM1_CC_IRQHandler(void)
 		if ( SUBGHZ_RX_GPIO_PORT->IDR & SUBGHZ_RX_GPIO_PIN ) // A rising edge detected?
 		{
 			subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE; // Wake up
+			prev_ccr = __HAL_TIM_GET_COMPARE(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL);
 		}
 	} // if ( subghz_decenc_ctl.pulse_det_stat==PULSE_DET_IDLE )
 	else if ( subghz_decenc_ctl.pulse_det_stat==PULSE_DET_EOP )

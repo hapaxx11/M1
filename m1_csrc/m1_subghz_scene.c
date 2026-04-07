@@ -286,6 +286,7 @@ void subghz_scene_app_run(void)
                          * the protocol decoders. */
                         for (;;)
                         {
+                            S_M1_Main_Q_t peek;
                             uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
                             uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
 
@@ -309,14 +310,11 @@ void subghz_scene_app_run(void)
                              * it is another pulse event.  Non-pulse events
                              * (keypad, TX-complete) stay in the queue for
                              * the outer loop to handle. */
-                            {
-                                S_M1_Main_Q_t peek;
-                                if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE)
-                                    break;          /* queue empty */
-                                if (peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
-                                    break;          /* next event is not a pulse */
-                                xQueueReceive(main_q_hdl, &q_item, 0);
-                            }
+                            if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE)
+                                break;          /* queue empty */
+                            if (peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
+                                break;          /* next event is not a pulse */
+                            xQueueReceive(main_q_hdl, &q_item, 0);
                         }
                     }
                     break;
