@@ -143,6 +143,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is always defined), the `wifi_config()` redirect function (scene delegate now calls
   `wifi_saved_networks()` directly), and the unused `menu_wifi_exit()` empty function.
   Cleaned up corresponding declarations from `m1_wifi.h`.
+- **NFC dead code (~28 lines)** — Removed `#if 0` empty view tables
+  (`view_nfc_tools_table`, `view_nfc_saved_table`) and the never-compiled
+  `SEE_DUMP_MEMORY` debug block (commented-out `#define` + `#ifdef` guard) from
+  `m1_nfc.c`. RFID audited — no dead code found.
 
 ## [0.9.0.28] - 2026-04-06
 

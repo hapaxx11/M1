@@ -45,7 +45,6 @@
 
 #define NFC_INFO_LINES_PER_SCREEN   	5
 
-//#define SEE_DUMP_MEMORY //READ or Load file dump memory view
 /************************** C O N S T A N T **********************************/
 /* Menu for LIVE_CARD (including Save) */
 const char *m1_nfc_more_options[] = {
@@ -232,17 +231,6 @@ static const view_func_t view_nfc_read_table[] = {
     nfc_rename_gui_init,    // VIEW_MODE_NFC_RENAME
     nfc_saved_browse_gui_init, // VIEW_MODE_NFC_SAVED_BROWSE
 };
-#if 0
-static const view_func_t view_nfc_tools_table[] = {
-    NULL,               // Empty
-
-};
-
-static const view_func_t view_nfc_saved_table[] = {
-    NULL,               // Empty
-
-};
-#endif
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -521,23 +509,6 @@ static void nfc_read_gui_update(uint8_t param)
 		u8g2_DrawStr(&m1_u8g2, 11, 61, "Retry");
 		u8g2_DrawXBMP(&m1_u8g2, 119, 53, 8, 8, arrowright_8x8); // draw arrowright icon
 		u8g2_DrawStr(&m1_u8g2, 97, 61, "More");
-#ifdef SEE_DUMP_MEMORY
-        m1_wdt_reset();
-		nfc_run_ctx_t * c = nfc_ctx_get(); //DBG NFC Context(UID) Data 
-		platformLog("nfc_ctx[source_kind]:%d\r\n",c->file.source_kind); //LIVE_CARD   0   LOAD_FILE   1
-		platformLog("nfc_ctx[tech]:%d\r\n",c->head.tech); //enum NFC_TX_A 0, NFC_TX_B 1, NFC_TX_F 2, NFC_TX_V 3
-		platformLog("nfc_ctx[uid_len]:%d\r\n",c->head.uid_len);
-		platformLog("nfc_ctx[uid]: %s\r\n", hex2Str(c->head.uid, c->head.uid_len));
-		platformLog("nfc_ctx[atqa0]:%02X\r\n",c->head.a.atqa[0]);
-		platformLog("nfc_ctx[atqa1]:%02X\r\n",c->head.a.atqa[1]);
-		platformLog("nfc_ctx[sak]:%02X\r\n",c->head.a.sak);
-		platformLog("nfc_ctx[family]:%d\r\n",c->head.family);
-		platformLog("nfc_ctx[unit_size]:%d\r\n",c->dump.unit_size);
-		platformLog("nfc_ctx[unit_count]:%d\r\n",c->dump.unit_count);
-		platformLog("nfc_ctx[has_dump]:%d\r\n",c->dump.has_dump);
-		platformLog("nfc_ctx[max_seen_unit]:%lu\r\n",c->dump.max_seen_unit);
-		nfc_ctx_dump_t2t_pages();
-#endif
     }
 	m1_u8g2_nextpage(); // Update display RAM
 }
