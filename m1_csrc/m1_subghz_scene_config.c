@@ -104,9 +104,6 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
 
 static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
 {
-    uint8_t tx_count = subghz_get_tx_power_count_ext();
-    uint8_t tx_idx   = subghz_get_tx_power_idx_ext();
-
     switch (item)
     {
         case CFG_FREQUENCY:
@@ -130,12 +127,16 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
             app->sound = !app->sound;
             break;
         case CFG_TX_POWER:
+        {
+            uint8_t tx_count = subghz_get_tx_power_count_ext();
+            uint8_t tx_idx   = subghz_get_tx_power_idx_ext();
             if (dir > 0)
                 tx_idx = (tx_idx + 1) % tx_count;
             else
                 tx_idx = (tx_idx > 0) ? tx_idx - 1 : tx_count - 1;
             subghz_set_tx_power_idx_ext(tx_idx);
             break;
+        }
         case CFG_ISM_REGION:
             if (dir > 0)
             {
