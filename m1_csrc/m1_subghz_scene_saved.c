@@ -280,8 +280,8 @@ static void draw(SubGhzApp *app)
 
         u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
-        /* 4 items in available area (y=13..63 = 51px) → 12px per item
-         * keeps all highlight boxes within the 64px screen. */
+        /* 4 items × 12px height starting at y=14, last box ends at y=62
+         * — all highlight boxes stay within the 64px screen. */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         for (uint8_t i = 0; i < ACTION_COUNT; i++)
         {
