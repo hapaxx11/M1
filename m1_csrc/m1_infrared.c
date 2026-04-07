@@ -65,7 +65,6 @@ static uint8_t				new_remote_learned;
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 void menu_infrared_init(void);
-void menu_infrared_exit(void);
 
 void infrared_universal_remotes(void);
 void infrared_learn_new_remote(void);
@@ -95,18 +94,6 @@ void menu_infrared_init(void)
 	;
 	new_remote_learned = 0;
 } // void menu_infrared_init(void)
-
-
-
-/*============================================================================*/
-/*
- * This function will exit this sub-menu and return to the upper level menu.
- */
-/*============================================================================*/
-void menu_infrared_exit(void)
-{
-	;
-} // void menu_infrared_exit(void)
 
 
 

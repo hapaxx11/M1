@@ -147,6 +147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`view_nfc_tools_table`, `view_nfc_saved_table`) and the never-compiled
   `SEE_DUMP_MEMORY` debug block (commented-out `#define` + `#ifdef` guard) from
   `m1_nfc.c`. RFID audited — no dead code found.
+- **Infrared dead code (~10 lines)** — Removed the empty `menu_infrared_exit()`
+  function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
+  scene entry passes `NULL` as deinit; the function was never called.
 
 ## [0.9.0.28] - 2026-04-06
 
