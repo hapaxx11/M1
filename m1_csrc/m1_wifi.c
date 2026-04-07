@@ -53,10 +53,8 @@ static char s_connected_ssid[SSID_LENGTH];
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 void menu_wifi_init(void);
-void menu_wifi_exit(void);
 
 void wifi_scan_ap(void);
-void wifi_config(void);
 
 static uint16_t wifi_ap_list_print(ctrl_cmd_t *app_resp, bool up_dir);
 static uint8_t wifi_ap_list_validation(ctrl_cmd_t *app_resp);
@@ -102,13 +100,6 @@ void menu_wifi_init(void)
 {
 	;
 } // void menu_wifi_init(void)
-
-
-/*============================================================================*/
-void  menu_wifi_exit(void)
-{
-	;
-} // void  menu_wifi_exit(void)
 
 
 
@@ -549,19 +540,6 @@ static bool wifi_do_connect(const char *ssid, const char *password)
 
 /*============================================================================*/
 /**
-  * @brief WiFi config menu - now replaced by Saved Networks
-  *        Kept for backward compat with old menu structure
-  */
-/*============================================================================*/
-void wifi_config(void)
-{
-	/* Redirect to saved networks manager */
-	wifi_saved_networks();
-}
-
-
-/*============================================================================*/
-/**
   * @brief Saved networks management screen
   *        Shows list of saved WiFi credentials, allows connect/delete
   */
@@ -950,39 +928,5 @@ const char *wifi_get_connected_ssid(void)
 {
 	return s_wifi_connected ? s_connected_ssid : NULL;
 }
-
-
-#else /* M1_APP_WIFI_CONNECT_ENABLE not defined */
-
-/*============================================================================*/
-/**
-  * @brief WiFi config - stub when connect feature not enabled
-  */
-/*============================================================================*/
-void wifi_config(void)
-{
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-
-	m1_gui_let_update_fw();
-
-	while (1 )
-	{
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret==pdTRUE)
-		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			{
-				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK )
-				{
-					xQueueReset(main_q_hdl);
-					break;
-				}
-			}
-		}
-	}
-} // void wifi_config(void)
 
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */

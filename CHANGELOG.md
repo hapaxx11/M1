@@ -138,6 +138,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ble_scan_list_print()` helpers, and the `bluetooth_config()` declaration from
   `m1_bt.h`. All live blocking delegates (`bluetooth_scan()`, `bluetooth_saved_devices()`,
   `bluetooth_advertise()`, `bluetooth_info()`, `bluetooth_set_badbt_name()`) retained.
+- **WiFi legacy dead code (~50 lines)** — Removed the dead `wifi_config()` stub in
+  the `#else` fallback of `m1_wifi.c` (never compiled since `M1_APP_WIFI_CONNECT_ENABLE`
+  is always defined), the `wifi_config()` redirect function (scene delegate now calls
+  `wifi_saved_networks()` directly), and the unused `menu_wifi_exit()` empty function.
+  Cleaned up corresponding declarations from `m1_wifi.h`.
 
 ## [0.9.0.28] - 2026-04-06
 
