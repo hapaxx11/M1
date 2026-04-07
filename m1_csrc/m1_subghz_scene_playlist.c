@@ -440,9 +440,9 @@ static void draw(SubGhzApp *app)
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
 
-        /* Progress bar (below file list) */
+        /* Progress bar (below file list, above bottom bar at y=52) */
         {
-            uint8_t bar_y = 49;
+            uint8_t bar_y = 48;
             u8g2_DrawFrame(&m1_u8g2, 2, bar_y, 124, 4);
             if (app->playlist_count > 0)
             {
