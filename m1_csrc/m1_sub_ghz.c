@@ -4529,6 +4529,12 @@ uint8_t sub_ghz_rx_raw_save_ext(bool header_init, bool last_data)
 	return sub_ghz_rx_raw_save(header_init, last_data);
 }
 
+/* TX power accessors (expose static data to scene Config) */
+uint8_t subghz_get_tx_power_idx_ext(void) { return subghz_tx_power_idx; }
+void    subghz_set_tx_power_idx_ext(uint8_t idx) { if (idx < TX_POWER_LEVELS) subghz_tx_power_idx = idx; }
+const char *subghz_get_tx_power_label_ext(uint8_t idx) { return (idx < TX_POWER_LEVELS) ? tx_power_labels[idx] : "?"; }
+uint8_t subghz_get_tx_power_count_ext(void) { return TX_POWER_LEVELS; }
+
 /*============================================================================*/
 /* Scene-based entry point — replaces the old menu items                      */
 /*============================================================================*/

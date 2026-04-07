@@ -99,6 +99,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz Config scene: add TX Power and ISM Region settings** — The legacy
+  `sub_ghz_radio_settings()` screen (stock Monstatek) exposed TX Power, Modulation,
+  and ISM Region.  The scene-based Config only had Frequency, Hopping, Modulation,
+  and Sound — TX Power and ISM Region were inaccessible.  Now all 6 settings are
+  available in the scene Config screen with scrollable navigation.  ISM Region
+  changes are persisted to SD card on exit via `settings_save_to_sd()`.  TX Power
+  changes are applied via new `_ext` accessor functions that bridge the static
+  `subghz_tx_power_idx` to scene code.
 - **Documentation overhaul** — comprehensive audit and update of all markdown files
   for consistency with codebase state and completed PRs. README.md rewritten with
   comparison table vs stock firmware, accurate protocol counts, missing features
