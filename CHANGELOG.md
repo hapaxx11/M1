@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   phases across WiFi, Bluetooth, and 802.15.4 modules so the interactive
   result loops start with clean queues.  BACK button pressed during ESP32
   init is now detected and exits immediately instead of being silently lost.
+- **Sub-GHz scene display cleanup** — Fixed overlapping text and tight spacing
+  across multiple Sub-GHz scenes:
+  - **Need Saving dialog**: Moved dialog text and choice buttons up to prevent
+    the "before exiting?" text from overlapping the Save/Discard button boxes.
+  - **Saved action menu**: Reduced item height from 13px to 12px so the last
+    menu item (Delete) no longer extends past the 64px screen boundary.
+  - **Receiver Info**: Shortened frequency label and right-aligned RSSI text
+    to prevent overlap when long frequency values are displayed.
+  - **Playlist**: Moved progress bar from y=48 to y=46 for proper spacing
+    above the bottom button bar.
+  - **Read detail view**: Tightened inter-line spacing by 1px so the optional
+    "Received x#" line no longer sits at the exact button bar boundary.
+
 - **Sub-GHz Config screen layout overlap** — The 5th config row (TX Power)
   overlapped the bottom button bar because 5 rows × 9px starting at y=12
   pushed the last row into the bar area (y=52).  Removed the unnecessary

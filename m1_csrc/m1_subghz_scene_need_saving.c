@@ -78,31 +78,31 @@ static void draw(SubGhzApp *app)
 
     /* Title */
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 15, 124, "Unsaved Signals!", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 12, 124, "Unsaved Signals!", TEXT_ALIGN_CENTER);
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 28, 124, "Do you want to save", TEXT_ALIGN_CENTER);
-    m1_draw_text(&m1_u8g2, 2, 38, 124, "before exiting?", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 24, 124, "Do you want to save", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 33, 124, "before exiting?", TEXT_ALIGN_CENTER);
 
-    /* Choice buttons */
+    /* Choice buttons — centered above the bottom bar (y=52) */
     u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 
     /* Save button */
     if (choice == 0)
     {
-        u8g2_DrawBox(&m1_u8g2, 10, 40, 40, 10);
+        u8g2_DrawBox(&m1_u8g2, 10, 38, 40, 10);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     }
-    u8g2_DrawStr(&m1_u8g2, 18, 48, "Save");
+    u8g2_DrawStr(&m1_u8g2, 18, 46, "Save");
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Discard button */
     if (choice == 1)
     {
-        u8g2_DrawBox(&m1_u8g2, 68, 40, 50, 10);
+        u8g2_DrawBox(&m1_u8g2, 68, 38, 50, 10);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     }
-    u8g2_DrawStr(&m1_u8g2, 72, 48, "Discard");
+    u8g2_DrawStr(&m1_u8g2, 72, 46, "Discard");
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Bottom bar */

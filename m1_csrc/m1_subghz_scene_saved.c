@@ -280,17 +280,18 @@ static void draw(SubGhzApp *app)
 
         u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
-        /* 4 items in 52px (y=13..64) → 13px per item */
+        /* 4 items × 12px height starting at y=14, last box ends at y=62
+         * — all highlight boxes stay within the 64px screen. */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         for (uint8_t i = 0; i < ACTION_COUNT; i++)
         {
-            uint8_t y = 13 + i * 13;
+            uint8_t y = 14 + i * 12;
             if (i == action_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 12);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
-            u8g2_DrawStr(&m1_u8g2, 8, y + 10, action_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 8, y + 9, action_labels[i]);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
     }
