@@ -675,22 +675,28 @@ void TIM1_CC_IRQHandler(void)
 	S_M1_Main_Q_t q_item;
 	portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
 	static uint16_t pulse_counter = 0;
+	static uint32_t prev_ccr = 0;
 	uint8_t send_to_q;
 
 	/* Clear Capture Compare flag */
 	__HAL_TIM_CLEAR_FLAG(&timerhdl_subghz_rx, TIM_FLAG_CC1);
 
-	//cap_val =  HAL_TIM_ReadCapturedValue(htim, IR_DECODE_TIMER_RX_CHANNEL);
-	//cap_val = __HAL_TIM_GET_COMPARE(htim, IR_DECODE_TIMER_RX_CHANNEL); // read compare counter
-	//__HAL_TIM_SET_COMPARE(htim, IR_DECODE_TIMER_RX_CHANNEL, 0); // reset counter after reading, htim->Instance->CCR4 = 0x00;
-	cap_val =  __HAL_TIM_GET_COUNTER(&timerhdl_subghz_rx);
-	__HAL_TIM_SET_COUNTER(&timerhdl_subghz_rx, 0); // reset counter after reading, htim->Instance->CNT = 0x00;
+	/* Read hardware-captured CCR1 value — latched by the timer at the exact
+	 * instant of the edge, immune to ISR latency jitter.  Compute the
+	 * duration since the previous capture via unsigned subtraction, which
+	 * handles counter wrap-around (ARR overflow) correctly. */
+	{
+		uint32_t ccr = __HAL_TIM_GET_COMPARE(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL);
+		cap_val = (ccr - prev_ccr) & 0xFFFF;  /* mask to 16-bit counter width */
+		prev_ccr = ccr;
+	}
 
 	if ( subghz_decenc_ctl.pulse_det_stat==PULSE_DET_IDLE )
 	{
 		if ( SUBGHZ_RX_GPIO_PORT->IDR & SUBGHZ_RX_GPIO_PIN ) // A rising edge detected?
 		{
 			subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE; // Wake up
+			prev_ccr = __HAL_TIM_GET_COMPARE(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL);
 		}
 	} // if ( subghz_decenc_ctl.pulse_det_stat==PULSE_DET_IDLE )
 	else if ( subghz_decenc_ctl.pulse_det_stat==PULSE_DET_EOP )
@@ -705,6 +711,7 @@ void TIM1_CC_IRQHandler(void)
 			subghz_decenc_ctl.pulse_det_stat = PULSE_DET_NORMAL; // Update state
 			subghz_decenc_ctl.pulse_det_pol = PULSE_DET_RISING; // Update current edge
 			pulse_counter = 0;
+			prev_ccr = __HAL_TIM_GET_COMPARE(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL);
 		} // if ( SUBGHZ_RX_GPIO_PORT->IDR & SUBGHZ_RX_GPIO_PIN )
 		return;
 	} // if ( subghz_decenc_ctl.pulse_det_stat==PULSE_DET_ACTIVE )

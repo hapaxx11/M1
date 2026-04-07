@@ -2,7 +2,8 @@
 
 /**
  * @file   m1_subghz_scene_config.c
- * @brief  Sub-GHz Config Scene — frequency, modulation, hopping, sound settings.
+ * @brief  Sub-GHz Config Scene — frequency, modulation, hopping, sound,
+ *         TX power, and ISM region settings.
  *
  * Navigation:
  *   UP/DOWN   = select item
@@ -17,8 +18,11 @@
 #include <stdio.h>
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_sub_ghz.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
+#include "m1_settings.h"
+#include "m1_system.h"
 
 /*============================================================================*/
 /* Frequency & modulation preset tables (shared with m1_sub_ghz.c)            */
@@ -33,23 +37,38 @@
 extern const char *subghz_freq_labels[CFG_FREQ_COUNT];
 extern const char *subghz_mod_labels[CFG_MOD_COUNT];
 
+/* TX power accessors (static data in m1_sub_ghz.c) */
+extern uint8_t     subghz_get_tx_power_idx_ext(void);
+extern void        subghz_set_tx_power_idx_ext(uint8_t idx);
+extern const char *subghz_get_tx_power_label_ext(uint8_t idx);
+extern uint8_t     subghz_get_tx_power_count_ext(void);
+
+/* ISM region data (non-static globals in m1_sub_ghz.c / m1_sub_ghz.h) */
+extern const char *subghz_ism_regions_text[];
+
 /*============================================================================*/
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS      4
+#define CFG_ITEMS      6
 #define CFG_FREQUENCY  0
 #define CFG_HOPPING    1
 #define CFG_MODULATION 2
 #define CFG_SOUND      3
+#define CFG_TX_POWER   4
+#define CFG_ISM_REGION 5
 
 static uint8_t cfg_sel = 0;
+static uint8_t cfg_scroll = 0;  /* First visible item (scrolling for >5 items) */
+#define CFG_VISIBLE    5        /* Max visible rows in display area */
 
 static const char *cfg_item_labels[CFG_ITEMS] = {
     "Frequency:",
     "Hopping:",
     "Modulation:",
     "Sound:",
+    "TX Power:",
+    "ISM Region:",
 };
 
 /*============================================================================*/
@@ -74,6 +93,10 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             return "?";
         case CFG_SOUND:
             return app->sound ? "ON" : "OFF";
+        case CFG_TX_POWER:
+            return subghz_get_tx_power_label_ext(subghz_get_tx_power_idx_ext());
+        case CFG_ISM_REGION:
+            return subghz_ism_regions_text[m1_device_stat.config.ism_band_region];
         default:
             return "";
     }
@@ -103,6 +126,32 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
         case CFG_SOUND:
             app->sound = !app->sound;
             break;
+        case CFG_TX_POWER:
+        {
+            uint8_t tx_count = subghz_get_tx_power_count_ext();
+            uint8_t tx_idx   = subghz_get_tx_power_idx_ext();
+            if (dir > 0)
+                tx_idx = (tx_idx + 1) % tx_count;
+            else
+                tx_idx = (tx_idx > 0) ? tx_idx - 1 : tx_count - 1;
+            subghz_set_tx_power_idx_ext(tx_idx);
+            break;
+        }
+        case CFG_ISM_REGION:
+            if (dir > 0)
+            {
+                m1_device_stat.config.ism_band_region++;
+                if (m1_device_stat.config.ism_band_region >= SUBGHZ_ISM_BAND_REGIONS_LIST)
+                    m1_device_stat.config.ism_band_region = 0;
+            }
+            else
+            {
+                if (m1_device_stat.config.ism_band_region > 0)
+                    m1_device_stat.config.ism_band_region--;
+                else
+                    m1_device_stat.config.ism_band_region = SUBGHZ_ISM_BAND_REGIONS_LIST - 1;
+            }
+            break;
     }
 }
 
@@ -114,6 +163,7 @@ static void scene_on_enter(SubGhzApp *app)
 {
     (void)app;
     cfg_sel = 0;
+    cfg_scroll = 0;
     app->need_redraw = true;
 }
 
@@ -122,16 +172,28 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     switch (event)
     {
         case SubGhzEventBack:
+            /* Persist ISM region change to SD */
+            settings_save_to_sd();
             subghz_scene_pop(app);
             return true;
 
         case SubGhzEventUp:
             cfg_sel = (cfg_sel > 0) ? cfg_sel - 1 : CFG_ITEMS - 1;
+            /* Adjust scroll window */
+            if (cfg_sel < cfg_scroll)
+                cfg_scroll = cfg_sel;
+            if (cfg_sel == CFG_ITEMS - 1)
+                cfg_scroll = (CFG_ITEMS > CFG_VISIBLE) ? CFG_ITEMS - CFG_VISIBLE : 0;
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
             cfg_sel = (cfg_sel + 1) % CFG_ITEMS;
+            /* Adjust scroll window */
+            if (cfg_sel >= cfg_scroll + CFG_VISIBLE)
+                cfg_scroll = cfg_sel - CFG_VISIBLE + 1;
+            if (cfg_sel == 0)
+                cfg_scroll = 0;
             app->need_redraw = true;
             return true;
 
@@ -166,44 +228,60 @@ static void draw(SubGhzApp *app)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     m1_draw_text(&m1_u8g2, 2, 9, 124, "Config", TEXT_ALIGN_CENTER);
 
-    /* Config items */
+    /* Config items (scrollable) */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-    for (uint8_t i = 0; i < CFG_ITEMS; i++)
+    uint8_t visible = (CFG_ITEMS < CFG_VISIBLE) ? CFG_ITEMS : CFG_VISIBLE;
+    for (uint8_t v = 0; v < visible; v++)
     {
-        uint8_t y = 12 + i * 10;
+        uint8_t i = cfg_scroll + v;
+        if (i >= CFG_ITEMS) break;
+
+        uint8_t y = 12 + v * 9;
 
         if (i == cfg_sel)
         {
             /* Highlight selected row */
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 10);
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH - 4, 9);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
         /* Label on left */
-        u8g2_DrawStr(&m1_u8g2, 4, y + 8, cfg_item_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + 7, cfg_item_labels[i]);
 
         /* Value on right with ◀ ▶ arrows for selected item */
         const char *val = get_value_text(app, i);
         if (i == cfg_sel)
         {
-            u8g2_DrawStr(&m1_u8g2, 62, y + 8, "<");
-            u8g2_DrawStr(&m1_u8g2, 68, y + 8, val);
+            u8g2_DrawStr(&m1_u8g2, 62, y + 7, "<");
+            u8g2_DrawStr(&m1_u8g2, 68, y + 7, val);
             uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
-            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + 8, ">");
+            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + 7, ">");
         }
         else
         {
-            u8g2_DrawStr(&m1_u8g2, 68, y + 8, val);
+            u8g2_DrawStr(&m1_u8g2, 68, y + 7, val);
         }
 
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
+    /* Scrollbar (when items exceed visible area) */
+    if (CFG_ITEMS > CFG_VISIBLE)
+    {
+        uint8_t track_y = 12;
+        uint8_t track_h = visible * 9;
+        uint8_t handle_h = (track_h * CFG_VISIBLE) / CFG_ITEMS;
+        if (handle_h < 3) handle_h = 3;
+        uint8_t handle_y = track_y + (cfg_sel * (track_h - handle_h)) / (CFG_ITEMS - 1);
+        u8g2_DrawFrame(&m1_u8g2, 125, track_y, 3, track_h);
+        u8g2_DrawBox(&m1_u8g2, 125, handle_y, 3, handle_h);
+    }
+
     /* Bottom bar */
     subghz_button_bar_draw(
         NULL, NULL,
-        NULL, "LR:Change",
+        NULL, "LR:Chng",
         arrowdown_8x8, "Select");
 
     m1_u8g2_nextpage();

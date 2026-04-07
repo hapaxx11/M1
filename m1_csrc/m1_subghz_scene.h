@@ -248,7 +248,7 @@ SubGhzSceneId subghz_scene_current(const SubGhzApp *app);
 /**
  * @brief  Main entry point — runs the scene manager loop.
  *         Initializes the app, pushes SubGhzSceneMenu, and processes events
- *         until app->running becomes false.  Replaces sub_ghz_record().
+ *         until app->running becomes false.
  */
 void subghz_scene_app_run(void);
 

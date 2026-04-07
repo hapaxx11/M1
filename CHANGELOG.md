@@ -33,6 +33,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   said "Failed. Retrying..." but no retry logic existed; the device just waited
   for the user to press Back with no on-screen hint.  Changed to "Scan failed!"
   which accurately describes the state.
+- **Sub-GHz Read never recognises signals** — The scene-based Read mode queued
+  every individual radio edge as a separate FreeRTOS event, but the event loop
+  processed only one pulse per iteration (with LCD redraws in between).  At
+  433 MHz with AM650 modulation the noise floor alone generates thousands of
+  edges/sec; the 256-deep queue overflowed and real signal pulses were silently
+  dropped, so the protocol decoders never saw a complete packet.  Three changes
+  fix this:
+  1. **Batch-drain pulse events** — the event loop now processes all pending
+     `Q_EVENT_SUBGHZ_RX` items in a tight inner loop before yielding, keeping
+     the queue drained and feeding complete packets to decoders.
+  2. **Use hardware-captured CCR1 instead of free-running CNT** — the TIM1
+     input-capture ISR now reads the CCR1 register (latched at the exact edge)
+     and computes the pulse duration via unsigned subtraction from the previous
+     capture, eliminating ISR-latency jitter that corrupted timing.
+  3. **Increase RX timer period to 65535 µs** — the old 20 ms period caused
+     modular-arithmetic aliasing for inter-packet gaps near 20/40/60 ms; a
+     full 16-bit period (65.5 ms) covers virtually all OOK protocol gaps.
+  Additionally, the TIM1 Update interrupt is now disabled during RX to prevent
+  the TX-specific UP handler from executing while no transmission is active.
+- **Sub-GHz scene bottom-bar overlap cleanup** — Several Sub-GHz scene screens
+  had menu content drawn too close to (or overlapping) the 12px bottom button bar
+  at y=52.  Specific fixes:
+  - **Config scene**: Reduced config item row height from 10px to 9px so the last
+    item ("Sound") ends at y=48 with a 4px gap before the bar, and shortened the
+    center bar label from "LR:Change" to "LR:Chng" to prevent horizontal text overlap
+    with the right column.
+  - **Read scene**: Reduced `HISTORY_VISIBLE` from 4 to 3 to prevent the 4th
+    history row (y=47-54) from overlapping the bar (y=52-63).
+  - **Playlist scene**: Moved the progress bar frame up 1px (y=49→48) so its
+    bottom edge no longer collides with the bar's top edge.
+  - **NeedSaving dialog**: Moved the Save/Discard choice buttons up 2px
+    (y=42→40) to create a visible gap before the bar.
+  - **Add Manually list** (legacy): Reduced `ADDMAN_VISIBLE_ITEMS` from 5 to 4
+    so the 5th item (y=52-62) no longer draws directly on top of the bar.
+  - **Radio Settings** (legacy): Shifted the ISM Region row up 1px (y=40→39)
+    so its highlight box ends at y=50 with a 2px gap before the bar.
+
 - **Sub-GHz DMA buffer 32-byte alignment** — The front and back sample buffers
   used by the Sub-GHz TX DMA (`subghz_front_buffer`, `subghz_back_buffer`) were
   allocated with plain `malloc()` which only guarantees 8-byte alignment.  On the
@@ -84,6 +121,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz Config scene: add TX Power and ISM Region settings** — The legacy
+  `sub_ghz_radio_settings()` screen (stock Monstatek) exposed TX Power, Modulation,
+  and ISM Region.  The scene-based Config only had Frequency, Hopping, Modulation,
+  and Sound — TX Power and ISM Region were inaccessible.  Now all 6 settings are
+  available in the scene Config screen with scrollable navigation.  ISM Region
+  changes are persisted to SD card on exit via `settings_save_to_sd()`.  TX Power
+  changes are applied via new `_ext` accessor functions that bridge the static
+  `subghz_tx_power_idx` to scene code.
 - **Documentation overhaul** — comprehensive audit and update of all markdown files
   for consistency with codebase state and completed PRs. README.md rewritten with
   comparison table vs stock firmware, accurate protocol counts, missing features
@@ -93,6 +138,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   module scene table. Fixed placeholder URLs in CONTRIBUTING.md, CODE_OF_CONDUCT.md,
   SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
   CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
+
+### Removed
+
+- **Sub-GHz legacy dead code (~2,070 lines)** — Surgically removed all public
+  functions and their unique helpers that were fully superseded by the scene-based
+  architecture: `sub_ghz_record()`, `sub_ghz_replay()`, `sub_ghz_read()`,
+  `sub_ghz_saved()`, `sub_ghz_regional_information()`, `sub_ghz_radio_settings()`,
+  `sub_ghz_config_screen()`, `sub_ghz_config_draw()`, `sub_ghz_saved_action_menu()`,
+  `sub_ghz_saved_draw_actions()`, all Record GUI callbacks, all Replay Browse GUI
+  callbacks, dead Replay Play GUI callbacks, legacy menu entries in `m1_menu.c`,
+  and corresponding declarations in `m1_sub_ghz.h`. Retained
+  `subghz_replay_play_gui_update()` (still called by live
+  `sub_ghz_replay_flipper_file()`), all waveform helpers, static TX helpers, and
+  all blocking delegate functions used by scene wrappers.
+- **Bluetooth legacy dead code (~300 lines)** — Removed the dead simple-mode
+  scene code in `m1_bt_scene.c` (entire `#ifndef M1_APP_BT_MANAGE_ENABLE` block),
+  the legacy `bluetooth_scan()` original implementation in the `#else` fallback
+  path of `m1_bt.c`, the empty `bluetooth_config()` function (only called from
+  removed simple-mode scene), original `ble_scan_list_validation()` and
+  `ble_scan_list_print()` helpers, and the `bluetooth_config()` declaration from
+  `m1_bt.h`. All live blocking delegates (`bluetooth_scan()`, `bluetooth_saved_devices()`,
+  `bluetooth_advertise()`, `bluetooth_info()`, `bluetooth_set_badbt_name()`) retained.
+- **WiFi legacy dead code (~50 lines)** — Removed the dead `wifi_config()` stub in
+  the `#else` fallback of `m1_wifi.c` (never compiled since `M1_APP_WIFI_CONNECT_ENABLE`
+  is always defined), the `wifi_config()` redirect function (scene delegate now calls
+  `wifi_saved_networks()` directly), and the unused `menu_wifi_exit()` empty function.
+  Cleaned up corresponding declarations from `m1_wifi.h`.
+- **NFC dead code (~28 lines)** — Removed `#if 0` empty view tables
+  (`view_nfc_tools_table`, `view_nfc_saved_table`) and the never-compiled
+  `SEE_DUMP_MEMORY` debug block (commented-out `#define` + `#ifdef` guard) from
+  `m1_nfc.c`. RFID audited — no dead code found.
+- **Infrared dead code (~10 lines)** — Removed the empty `menu_infrared_exit()`
+  function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
+  scene entry passes `NULL` as deinit; the function was never called.
 
 ## [0.9.0.28] - 2026-04-06
 

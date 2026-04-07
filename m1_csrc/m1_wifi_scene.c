@@ -58,7 +58,7 @@ static void thread_on_enter(M1SceneApp *app)
 static void saved_on_enter(M1SceneApp *app)
 {
     (void)app;
-    wifi_config();
+    wifi_saved_networks();
     app->running = true;
     m1_scene_pop(app);
 }

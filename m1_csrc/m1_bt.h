@@ -41,7 +41,6 @@ enum
 };
 
 void menu_bluetooth_init(void);
-void bluetooth_config(void);
 void bluetooth_scan(void);
 void bluetooth_advertise(void);
 
