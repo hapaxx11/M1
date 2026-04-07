@@ -171,30 +171,30 @@ static void draw(SubGhzApp *app)
 
     for (uint8_t i = 0; i < CFG_ITEMS; i++)
     {
-        uint8_t y = 12 + i * 10;
+        uint8_t y = 12 + i * 9;
 
         if (i == cfg_sel)
         {
             /* Highlight selected row */
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 10);
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 9);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
         /* Label on left */
-        u8g2_DrawStr(&m1_u8g2, 4, y + 8, cfg_item_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + 7, cfg_item_labels[i]);
 
         /* Value on right with ◀ ▶ arrows for selected item */
         const char *val = get_value_text(app, i);
         if (i == cfg_sel)
         {
-            u8g2_DrawStr(&m1_u8g2, 62, y + 8, "<");
-            u8g2_DrawStr(&m1_u8g2, 68, y + 8, val);
+            u8g2_DrawStr(&m1_u8g2, 62, y + 7, "<");
+            u8g2_DrawStr(&m1_u8g2, 68, y + 7, val);
             uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
-            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + 8, ">");
+            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + 7, ">");
         }
         else
         {
-            u8g2_DrawStr(&m1_u8g2, 68, y + 8, val);
+            u8g2_DrawStr(&m1_u8g2, 68, y + 7, val);
         }
 
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -203,7 +203,7 @@ static void draw(SubGhzApp *app)
     /* Bottom bar */
     subghz_button_bar_draw(
         NULL, NULL,
-        NULL, "LR:Change",
+        NULL, "LR:Chng",
         arrowdown_8x8, "Select");
 
     m1_u8g2_nextpage();
