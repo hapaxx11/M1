@@ -358,7 +358,7 @@ port alignment straightforward.
 | Verb | Description | Implementation |
 |------|-------------|----------------|
 | **Emulate / Send** | Transmit or replay the saved item | Module-specific TX function |
-| **Info** | Display file metadata (protocol, frequency, key/data, file path) | Read-only info screen; BACK dismisses |
+| **Info** | Display file metadata (protocol, frequency, key/data) | Read-only info screen; BACK dismisses |
 | **Rename** | Rename file on SD via virtual keyboard | `m1_vkb_get_filename()` → `f_rename()` |
 | **Delete** | Delete file with confirmation dialog | `m1_message_box_choice()` → `m1_fb_delete_file()` or `f_unlink()` |
 

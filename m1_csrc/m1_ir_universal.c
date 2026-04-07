@@ -1112,7 +1112,10 @@ static bool ir_file_action_menu(const char *ir_file_path)
             {
                 case IR_ACTION_SEND_ALL:
                 {
-                    /* Transmit every command in the file sequentially */
+                    /* Transmit every command in the file sequentially.
+                     * Each transmit_command() calls infrared_encode_sys_init(),
+                     * so we must deinit after each TX complete event before
+                     * the next command can re-init the hardware. */
                     for (uint16_t i = 0; i < s_cmd_count; i++)
                     {
                         if (s_commands[i].valid)
@@ -1124,11 +1127,11 @@ static bool ir_file_action_menu(const char *ir_file_path)
                             if (tx_ret == pdTRUE && tx_q.q_evt_type == Q_EVENT_IRRED_TX)
                             {
                                 infrared_encode_sys_deinit();
-                                m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
                             }
                             vTaskDelay(pdMS_TO_TICKS(200));
                         }
                     }
+                    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
                     return true;  /* Done — stay in commands */
                 }
 
@@ -1161,9 +1164,11 @@ static bool ir_file_action_menu(const char *ir_file_path)
                         fu_get_directory_path(ir_file_path, dir_path, sizeof(dir_path));
                         snprintf(new_path, sizeof(new_path), "%s/%s%s",
                                  dir_path, new_name, IR_FILE_EXTENSION);
-                        f_rename(ir_file_path, new_path);
+                        FRESULT res = f_rename(ir_file_path, new_path);
+                        if (res == FR_OK)
+                            return false;  /* File moved — return to browse */
                     }
-                    return false;  /* File moved — return to browse */
+                    break;  /* Rename cancelled or failed — stay in menu */
                 }
 
                 case IR_ACTION_DELETE:
