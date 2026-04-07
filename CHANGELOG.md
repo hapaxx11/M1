@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     bottom edge no longer collides with the bar's top edge.
   - **NeedSaving dialog**: Moved the Save/Discard choice buttons up 2px
     (y=42→40) to create a visible gap before the bar.
+  - **Add Manually list** (legacy): Reduced `ADDMAN_VISIBLE_ITEMS` from 5 to 4
+    so the 5th item (y=52-62) no longer draws directly on top of the bar.
+  - **Radio Settings** (legacy): Shifted the ISM Region row up 1px (y=40→39)
+    so its highlight box ends at y=50 with a 2px gap before the bar.
 
 - **Sub-GHz DMA buffer 32-byte alignment** — The front and back sample buffers
   used by the Sub-GHz TX DMA (`subghz_front_buffer`, `subghz_back_buffer`) were
