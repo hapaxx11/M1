@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sub-GHz Config screen layout overlap** — The 5th config row (TX Power)
+  overlapped the bottom button bar because 5 rows × 9px starting at y=12
+  pushed the last row into the bar area (y=52).  Removed the unnecessary
+  button bar (the `<` `>` arrows on selected items already indicate L/R
+  changes values), added a separator line below the title, and switched to
+  8px rows matching the menu scene layout.  All 6 config items now fit
+  cleanly without scrolling.
+
 ### Added
 
 - **IR Saved File Actions menu** — Pressing LEFT on the IR commands list now opens

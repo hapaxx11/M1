@@ -20,7 +20,6 @@
 #include "m1_lcd.h"
 #include "m1_sub_ghz.h"
 #include "m1_subghz_scene.h"
-#include "m1_subghz_button_bar.h"
 #include "m1_settings.h"
 #include "m1_system.h"
 
@@ -59,8 +58,15 @@ extern const char *subghz_ism_regions_text[];
 #define CFG_ISM_REGION 5
 
 static uint8_t cfg_sel = 0;
-static uint8_t cfg_scroll = 0;  /* First visible item (scrolling for >5 items) */
-#define CFG_VISIBLE    5        /* Max visible rows in display area */
+static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
+
+/* Layout constants — aligned with menu scene (no button bar) */
+#define CFG_AREA_TOP     12   /* Y below title + separator line      */
+#define CFG_ITEM_H        8   /* Pixel height per config row          */
+#define CFG_VISIBLE       6   /* Visible rows (all items fit)         */
+#define CFG_TEXT_W      124   /* Highlight / text area width           */
+#define CFG_SCROLLBAR_X 125   /* Scrollbar left edge (3px wide)       */
+#define CFG_SCROLLBAR_W   3   /* Scrollbar track width                */
 
 static const char *cfg_item_labels[CFG_ITEMS] = {
     "Frequency:",
@@ -226,7 +232,10 @@ static void draw(SubGhzApp *app)
 
     /* Title */
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 9, 124, "Config", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, "Config", TEXT_ALIGN_CENTER);
+
+    /* Separator line (consistent with menu scene) */
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     /* Config items (scrollable) */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -237,12 +246,12 @@ static void draw(SubGhzApp *app)
         uint8_t i = cfg_scroll + v;
         if (i >= CFG_ITEMS) break;
 
-        uint8_t y = 12 + v * 9;
+        uint8_t y = CFG_AREA_TOP + v * CFG_ITEM_H;
 
         if (i == cfg_sel)
         {
-            /* Highlight selected row */
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH - 4, 9);
+            /* Highlight selected row (leave room for scrollbar) */
+            u8g2_DrawBox(&m1_u8g2, 0, y, CFG_TEXT_W, CFG_ITEM_H);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
@@ -266,23 +275,23 @@ static void draw(SubGhzApp *app)
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
-    /* Scrollbar (when items exceed visible area) */
+    /* Scrollbar — only when items exceed visible area */
     if (CFG_ITEMS > CFG_VISIBLE)
     {
-        uint8_t track_y = 12;
-        uint8_t track_h = visible * 9;
-        uint8_t handle_h = (track_h * CFG_VISIBLE) / CFG_ITEMS;
-        if (handle_h < 3) handle_h = 3;
-        uint8_t handle_y = track_y + (cfg_sel * (track_h - handle_h)) / (CFG_ITEMS - 1);
-        u8g2_DrawFrame(&m1_u8g2, 125, track_y, 3, track_h);
-        u8g2_DrawBox(&m1_u8g2, 125, handle_y, 3, handle_h);
+        uint8_t sb_area_h   = visible * CFG_ITEM_H;
+        uint8_t sb_handle_h = sb_area_h / CFG_ITEMS;
+        if (sb_handle_h < 3) sb_handle_h = 3;
+        uint8_t sb_handle_y = CFG_AREA_TOP +
+            (uint8_t)((uint16_t)sb_area_h * cfg_sel / CFG_ITEMS);
+
+        u8g2_DrawFrame(&m1_u8g2, CFG_SCROLLBAR_X, CFG_AREA_TOP,
+                       CFG_SCROLLBAR_W, sb_area_h);
+        u8g2_DrawBox(&m1_u8g2, CFG_SCROLLBAR_X, sb_handle_y,
+                     CFG_SCROLLBAR_W, sb_handle_h);
     }
 
-    /* Bottom bar */
-    subghz_button_bar_draw(
-        NULL, NULL,
-        NULL, "LR:Chng",
-        arrowdown_8x8, "Select");
+    /* No button bar — the < > arrows on selected items clearly indicate
+     * that LEFT/RIGHT changes the value.  UP/DOWN is self-evident. */
 
     m1_u8g2_nextpage();
 }
