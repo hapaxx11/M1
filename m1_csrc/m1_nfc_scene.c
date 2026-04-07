@@ -23,7 +23,6 @@ enum {
     NfcSceneSaved,
     NfcSceneExtraActions,
     NfcSceneAddManually,
-    NfcSceneTools,
     NfcSceneFieldDetect,
     NfcSceneCount
 };
@@ -70,14 +69,6 @@ static void add_manually_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
-static void tools_on_enter(M1SceneApp *app)
-{
-    (void)app;
-    nfc_tools();
-    app->running = true;
-    m1_scene_pop(app);
-}
-
 static void field_detect_on_enter(M1SceneApp *app)
 {
     (void)app;
@@ -93,12 +84,11 @@ static const M1SceneHandlers detect_reader_handlers = { .on_enter = detect_reade
 static const M1SceneHandlers saved_handlers         = { .on_enter = saved_on_enter         };
 static const M1SceneHandlers extra_actions_handlers = { .on_enter = extra_actions_on_enter };
 static const M1SceneHandlers add_manually_handlers  = { .on_enter = add_manually_on_enter  };
-static const M1SceneHandlers tools_handlers         = { .on_enter = tools_on_enter         };
 static const M1SceneHandlers field_detect_handlers  = { .on_enter = field_detect_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  6
 #define MENU_VISIBLE     6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
@@ -107,7 +97,6 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Saved",
     "Extra Actions",
     "Add Manually",
-    "Tools",
     "Field Detect",
 };
 
@@ -117,7 +106,6 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     NfcSceneSaved,
     NfcSceneExtraActions,
     NfcSceneAddManually,
-    NfcSceneTools,
     NfcSceneFieldDetect,
 };
 
@@ -161,7 +149,6 @@ static const M1SceneHandlers *const scene_registry[NfcSceneCount] = {
     [NfcSceneSaved]        = &saved_handlers,
     [NfcSceneExtraActions] = &extra_actions_handlers,
     [NfcSceneAddManually]  = &add_manually_handlers,
-    [NfcSceneTools]        = &tools_handlers,
     [NfcSceneFieldDetect]  = &field_detect_handlers,
 };
 

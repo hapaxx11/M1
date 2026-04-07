@@ -9,8 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **IR Saved File Actions menu** — Pressing LEFT on the IR commands list now opens
+  a file-level action menu with Send All (transmit every command sequentially),
+  Info (file name, command count, parsed/raw breakdown, protocol), Rename, and
+  Delete.  This brings IR in line with the Flipper `infrared_scene_saved_menu.c`
+  pattern already used by Sub-GHz, NFC, and RFID.
+- **Sub-GHz Saved Signal Info screen** — The Sub-GHz saved file action menu now
+  includes an Info item that loads the `.sub` file and displays protocol name,
+  key value, bit count, timing element, frequency, and modulation preset.
+  Supports both parsed and raw signal types.
+
 ### Changed
 
+- **Standardized Saved Item Actions pattern** — All four modules (Sub-GHz, IR,
+  NFC, RFID) now implement the core saved-item verbs: Emulate/Send, Info,
+  Rename, Delete.  Documented the canonical pattern in CLAUDE.md under
+  "Saved Item Actions Pattern" so future modules follow the same structure.
+- **Documentation: Saved Item Actions as canonical UX standard** — The Saved Item
+  Actions Pattern is now the highest-priority UX standard across all docs.
+  Updated CLAUDE.md (precedence note), ARCHITECTURE.md (new section),
+  DEVELOPMENT.md (mandatory for new modules), flipper_import_agent.md (Pattern
+  Adoption Policy table: scene UX follows Flipper), and .github/GUIDELINES.md
+  (new § 11 UX Pattern Standards).  Previously defined UX preferences (button bar
+  rules, display layout) still apply when not superseded by this pattern.
+- **IR commands bottom bar** — The bottom bar now shows "< More" (for file
+  actions) and "Send >" instead of the generic "Open" label.
+- **NFC menu: merged "Tools" into "Extra Actions"** — The top-level NFC menu
+  had both "Extra Actions" and "Tools" submenus, which is inconsistent with
+  Flipper Zero and Momentum firmware (both only have "Extra Actions").  All
+  eight former Tools items (Tag Info, Clone Emulate, NFC Fuzzer, Write UID,
+  Wipe Tag, Cyborg Detector, Read NDEF, Write URL) are now part of the
+  Extra Actions submenu.  The NFC main menu is now 6 items: Read, Detect Reader,
+  Saved, Extra Actions, Add Manually, Field Detect.
+- **NFC post-read submenu: renamed "Utils" to "Card Actions"** — The contextual
+  submenu shown after reading or loading an NFC card (More Options → Utils) has been
+  renamed to "Card Actions" for clarity, since these tools operate on the
+  currently-loaded card data.
 - **Removed ESP32 boot-time auto-init** — The `m1_esp32_auto_init` setting
   (Settings → System → "ESP32 at boot") was a Hapax addition that stock firmware
   does not have.  ESP32 is now always initialized on-demand when a WiFi, BT, or

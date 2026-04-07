@@ -5,7 +5,7 @@
  * @brief  Sub-GHz Saved Scene — browse 0:/SUBGHZ/ files with action menu.
  *
  * Uses the existing storage_browse() file browser.  After selection,
- * shows an action menu: Emulate, Rename, Delete.
+ * shows an action menu: Emulate, Info, Rename, Delete.
  */
 
 #include <stdint.h>
@@ -27,19 +27,24 @@ extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 /* Action menu                                                                */
 /*============================================================================*/
 
-#define ACTION_COUNT  3
+#define ACTION_COUNT   4
 #define ACTION_EMULATE 0
-#define ACTION_RENAME  1
-#define ACTION_DELETE  2
+#define ACTION_INFO    1
+#define ACTION_RENAME  2
+#define ACTION_DELETE  3
 
 static const char *action_labels[ACTION_COUNT] = {
-    "Emulate", "Rename", "Delete"
+    "Emulate", "Info", "Rename", "Delete"
 };
 
 static uint8_t action_sel = 0;
 static char saved_filepath[64];
 static char saved_filename[32];
 static bool in_action_menu = false;
+static bool in_info_screen = false;
+
+/* Cached .sub file metadata (loaded on Info) */
+static flipper_subghz_signal_t saved_signal;
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -49,6 +54,7 @@ static void scene_on_enter(SubGhzApp *app)
 {
     (void)app;
     in_action_menu = false;
+    in_info_screen = false;
     action_sel = 0;
     app->need_redraw = true;
 }
@@ -60,6 +66,17 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         case ACTION_EMULATE:
         {
             sub_ghz_replay_flipper_file(saved_filepath);
+            app->need_redraw = true;
+            return true;
+        }
+        case ACTION_INFO:
+        {
+            /* Load .sub file metadata and switch to info display */
+            char full_path[72];
+            snprintf(full_path, sizeof(full_path), "0:%s", saved_filepath);
+            memset(&saved_signal, 0, sizeof(saved_signal));
+            flipper_subghz_load(full_path, &saved_signal);
+            in_info_screen = true;
             app->need_redraw = true;
             return true;
         }
@@ -106,6 +123,18 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
+    if (in_info_screen)
+    {
+        /* Info screen — BACK returns to action menu */
+        if (event == SubGhzEventBack)
+        {
+            in_info_screen = false;
+            app->need_redraw = true;
+            return true;
+        }
+        return false;
+    }
+
     if (!in_action_menu)
     {
         /* File browser mode */
@@ -179,7 +208,52 @@ static void draw(SubGhzApp *app)
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    if (!in_action_menu)
+    if (in_info_screen)
+    {
+        /* Saved signal info display */
+        char line[48];
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, "Signal Info");
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+        /* Protocol / type */
+        if (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
+        {
+            snprintf(line, sizeof(line), "Proto: %s", saved_signal.protocol);
+            u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+            snprintf(line, sizeof(line), "Key: 0x%lX", (uint32_t)saved_signal.key);
+            u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+
+            snprintf(line, sizeof(line), "Bits: %lu  TE: %lu us",
+                     (unsigned long)saved_signal.bit_count,
+                     (unsigned long)saved_signal.te);
+            u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+        }
+        else
+        {
+            u8g2_DrawStr(&m1_u8g2, 2, 22, "Type: RAW");
+
+            snprintf(line, sizeof(line), "Samples: %u", saved_signal.raw_count);
+            u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+        }
+
+        /* Frequency */
+        snprintf(line, sizeof(line), "Freq: %.2f MHz",
+                 (float)saved_signal.frequency / 1000000.0f);
+        u8g2_DrawStr(&m1_u8g2, 2, 46, line);
+
+        /* Modulation preset */
+        if (saved_signal.preset[0])
+        {
+            snprintf(line, sizeof(line), "Mod: %s", saved_signal.preset);
+            u8g2_DrawStr(&m1_u8g2, 2, 54, line);
+        }
+    }
+    else if (!in_action_menu)
     {
         /* Prompt to open file browser */
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
@@ -206,17 +280,17 @@ static void draw(SubGhzApp *app)
 
         u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
-        /* 3 items in 52px (y=13..64) → 17px per item */
+        /* 4 items in 52px (y=13..64) → 13px per item */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         for (uint8_t i = 0; i < ACTION_COUNT; i++)
         {
-            uint8_t y = 13 + i * 17;
+            uint8_t y = 13 + i * 13;
             if (i == action_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 17);
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
-            u8g2_DrawStr(&m1_u8g2, 8, y + 12, action_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 8, y + 10, action_labels[i]);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
     }

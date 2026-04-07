@@ -66,6 +66,18 @@ manager with `on_enter` / `on_event` / `on_exit` / `draw` callbacks. See
 - **New modules** should follow the scene pattern from the start. Use
   `m1_games_scene.c` as a minimal template.
 
+### Saved Item Actions (mandatory for modules with saved files)
+
+Every module that loads files from SD card **must** implement the standard saved-item
+action menu following the Flipper `*_scene_saved_menu.c` pattern.  This is the
+**canonical UX standard** for the project and takes precedence over other UX
+preferences when they conflict.
+
+Required core verbs: **Emulate/Send**, **Info**, **Rename**, **Delete**.
+
+See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
+specification, optional verbs per module, and implementation examples.
+
 ## ESP32-C6 Coprocessor
 
 The M1 communicates with the ESP32-C6 via **SPI AT commands** (not UART). Key points:
