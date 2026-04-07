@@ -3826,7 +3826,7 @@ static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val)
 	f_unlink(tmp_path);
 }
 
-#define ADDMAN_VISIBLE_ITEMS  5
+#define ADDMAN_VISIBLE_ITEMS  4
 
 static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 {
@@ -4282,12 +4282,12 @@ static void radio_settings_draw(uint8_t sel)
 	/* ISM Region row */
 	if (sel == RADIO_SETTINGS_REGION)
 	{
-		u8g2_DrawBox(&m1_u8g2, 0, 40, 128, 12);
+		u8g2_DrawBox(&m1_u8g2, 0, 39, 128, 12);
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 	}
-	m1_draw_text(&m1_u8g2, 4, 50, 72, "Region:", TEXT_ALIGN_LEFT);
+	m1_draw_text(&m1_u8g2, 4, 49, 72, "Region:", TEXT_ALIGN_LEFT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-	m1_draw_text(&m1_u8g2, 78, 50, 46, subghz_ism_regions_text[m1_device_stat.config.ism_band_region], TEXT_ALIGN_LEFT);
+	m1_draw_text(&m1_u8g2, 78, 49, 46, subghz_ism_regions_text[m1_device_stat.config.ism_band_region], TEXT_ALIGN_LEFT);
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Change", arrowright_8x8);

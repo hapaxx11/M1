@@ -30,6 +30,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      full 16-bit period (65.5 ms) covers virtually all OOK protocol gaps.
   Additionally, the TIM1 Update interrupt is now disabled during RX to prevent
   the TX-specific UP handler from executing while no transmission is active.
+- **Sub-GHz scene bottom-bar overlap cleanup** — Several Sub-GHz scene screens
+  had menu content drawn too close to (or overlapping) the 12px bottom button bar
+  at y=52.  Specific fixes:
+  - **Config scene**: Reduced config item row height from 10px to 9px so the last
+    item ("Sound") ends at y=48 with a 4px gap before the bar, and shortened the
+    center bar label from "LR:Change" to "LR:Chng" to prevent horizontal text overlap
+    with the right column.
+  - **Read scene**: Reduced `HISTORY_VISIBLE` from 4 to 3 to prevent the 4th
+    history row (y=47-54) from overlapping the bar (y=52-63).
+  - **Playlist scene**: Moved the progress bar frame up 1px (y=49→48) so its
+    bottom edge no longer collides with the bar's top edge.
+  - **NeedSaving dialog**: Moved the Save/Discard choice buttons up 2px
+    (y=42→40) to create a visible gap before the bar.
+  - **Add Manually list** (legacy): Reduced `ADDMAN_VISIBLE_ITEMS` from 5 to 4
+    so the 5th item (y=52-62) no longer draws directly on top of the bar.
+  - **Radio Settings** (legacy): Shifted the ISM Region row up 1px (y=40→39)
+    so its highlight box ends at y=50 with a 2px gap before the bar.
 
 - **Sub-GHz DMA buffer 32-byte alignment** — The front and back sample buffers
   used by the Sub-GHz TX DMA (`subghz_front_buffer`, `subghz_back_buffer`) were

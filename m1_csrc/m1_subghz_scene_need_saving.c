@@ -90,19 +90,19 @@ static void draw(SubGhzApp *app)
     /* Save button */
     if (choice == 0)
     {
-        u8g2_DrawBox(&m1_u8g2, 10, 42, 40, 10);
+        u8g2_DrawBox(&m1_u8g2, 10, 40, 40, 10);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     }
-    u8g2_DrawStr(&m1_u8g2, 18, 50, "Save");
+    u8g2_DrawStr(&m1_u8g2, 18, 48, "Save");
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Discard button */
     if (choice == 1)
     {
-        u8g2_DrawBox(&m1_u8g2, 68, 42, 50, 10);
+        u8g2_DrawBox(&m1_u8g2, 68, 40, 50, 10);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     }
-    u8g2_DrawStr(&m1_u8g2, 72, 50, "Discard");
+    u8g2_DrawStr(&m1_u8g2, 72, 48, "Discard");
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Bottom bar */

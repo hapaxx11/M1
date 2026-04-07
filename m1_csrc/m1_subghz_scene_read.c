@@ -101,7 +101,7 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 #define CONTENT_Y_START   15  /* Below RSSI bar */
 #define CONTENT_Y_END     51  /* Above bottom bar */
 #define HISTORY_ROW_H      8  /* Pixels per history row */
-#define HISTORY_VISIBLE    4  /* Number of visible history items */
+#define HISTORY_VISIBLE    3  /* Number of visible history items */
 
 /* Hopper */
 #define HOPPER_RSSI_THRESHOLD  -70
