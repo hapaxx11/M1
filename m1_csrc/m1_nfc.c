@@ -65,7 +65,7 @@ const char *m1_nfc_more_options_file[] = {
 		"Delete"
 };
 
-/* Menu for NFC Tools (both top-level nfc_tools() and Utils view) */
+/* Menu for NFC Utils view (accessed after reading a card → More Options → Utils) */
 #define NFC_TOOL_OPTIONS_COUNT  8
 static const char *m1_nfc_tool_options[] = {
 	"Tag Info",
@@ -133,7 +133,6 @@ void nfc_detect_reader(void);
 void nfc_saved(void);
 void nfc_extra_actions(void);
 void nfc_add_manually(void);
-void nfc_tools(void);
 static void nfc_tool_unlock_read(void);
 static void nfc_unlock_with_reader(void);
 static uint8_t nfc_read_more_options_save(void);
@@ -179,7 +178,7 @@ static void nfc_utils_gui_update(uint8_t param);
 static int  nfc_utils_gui_message(void);
 static int nfc_utils_kp_handler(void);
 
-/* Forward declarations for NFC tools (used by nfc_utils view and nfc_tools) */
+/* Forward declarations for NFC tools (used by nfc_utils view and Extra Actions) */
 static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte);
 static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2]);
 static void nfc_tool_fuzzer(void);
@@ -3319,75 +3318,6 @@ static void nfc_tool_write_url(void)
 }
 
 
-/*============================================================================*/
-/**
- * @brief nfc_tools - NFC tools menu with Tag Info, Clone Emulate, NFC Fuzzer
- *
- * Provides a submenu of NFC utility tools accessible from the main NFC menu.
- *
- * @retval None
- */
-/*============================================================================*/
-void nfc_tools(void)
-{
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-
-	/* Drain stale events from parent menu selection */
-	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
-	{
-		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-	}
-
-	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
-	m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_RESET);
-
-	while (1)
-	{
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret != pdTRUE) continue;
-
-		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (ret != pdTRUE) continue;
-
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				xQueueReset(main_q_hdl);
-				break;
-			}
-			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				uint8_t sel = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
-				switch (sel)
-				{
-					case 0: nfc_tool_tag_info();     break;
-					case 1: nfc_tool_clone_emu();    break;
-					case 2: nfc_tool_fuzzer();       break;
-					case 3: nfc_utils_write_uid_run(); break;
-					case 4: nfc_utils_wipe_tag_run();  break;
-					case 5: nfc_tool_cyborg_detector(); break;
-					case 6: nfc_tool_read_ndef();    break;
-					case 7: nfc_tool_write_url();    break;
-					default: break;
-				}
-				/* Redraw submenu after returning from a tool */
-				m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);
-			}
-			else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_UP);
-			}
-			else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				m1_gui_submenu_update(m1_nfc_tool_options, NFC_TOOL_OPTIONS_COUNT, 0, X_MENU_UPDATE_MOVE_DOWN);
-			}
-		}
-	}
-} 
 
 /*============================================================================*/
 /**
@@ -4720,12 +4650,20 @@ static void nfc_extra_unlock_slix(void)
 }
 
 
-#define NFC_EXTRA_ACTIONS_COUNT  4
+#define NFC_EXTRA_ACTIONS_COUNT  12
 static const char *m1_nfc_extra_options[] = {
 	"Read MF Classic",
 	"Read MF Ultralight",
 	"Unlock NTAG/UL",
-	"Unlock SLIX-L"
+	"Unlock SLIX-L",
+	"Tag Info",
+	"Clone Emulate",
+	"NFC Fuzzer",
+	"Write UID",
+	"Wipe Tag",
+	"Cyborg Detector",
+	"Read NDEF",
+	"Write URL"
 };
 
 void nfc_extra_actions(void)
@@ -4776,6 +4714,14 @@ void nfc_extra_actions(void)
 					case 3: /* Unlock SLIX-L */
 						nfc_extra_unlock_slix();
 						break;
+					case 4:  nfc_tool_tag_info();       break;
+					case 5:  nfc_tool_clone_emu();      break;
+					case 6:  nfc_tool_fuzzer();         break;
+					case 7:  nfc_utils_write_uid_run(); break;
+					case 8:  nfc_utils_wipe_tag_run();  break;
+					case 9:  nfc_tool_cyborg_detector(); break;
+					case 10: nfc_tool_read_ndef();      break;
+					case 11: nfc_tool_write_url();      break;
 					default: break;
 				}
 				m1_gui_submenu_update(m1_nfc_extra_options, NFC_EXTRA_ACTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);

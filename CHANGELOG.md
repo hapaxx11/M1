@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **NFC menu: merged "Tools" into "Extra Actions"** — The top-level NFC menu
+  had both "Extra Actions" and "Tools" submenus, which is inconsistent with
+  Flipper Zero and Momentum firmware (both only have "Extra Actions").  All
+  eight former Tools items (Tag Info, Clone Emulate, NFC Fuzzer, Write UID,
+  Wipe Tag, Cyborg Detector, Read NDEF, Write URL) are now part of the
+  Extra Actions submenu.  The NFC main menu is now 6 items: Read, Detect Reader,
+  Saved, Extra Actions, Add Manually, Field Detect.
 - **Removed ESP32 boot-time auto-init** — The `m1_esp32_auto_init` setting
   (Settings → System → "ESP32 at boot") was a Hapax addition that stock firmware
   does not have.  ESP32 is now always initialized on-demand when a WiFi, BT, or
