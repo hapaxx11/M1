@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Wipe Tag, Cyborg Detector, Read NDEF, Write URL) are now part of the
   Extra Actions submenu.  The NFC main menu is now 6 items: Read, Detect Reader,
   Saved, Extra Actions, Add Manually, Field Detect.
+- **NFC post-read submenu: renamed "Utils" to "Card Actions"** — The contextual
+  submenu shown after reading or loading an NFC card (More Options → Utils) has been
+  renamed to "Card Actions" for clarity, since these tools operate on the
+  currently-loaded card data.
 - **Removed ESP32 boot-time auto-init** — The `m1_esp32_auto_init` setting
   (Settings → System → "ESP32 at boot") was a Hapax addition that stock firmware
   does not have.  ESP32 is now always initialized on-demand when a WiFi, BT, or

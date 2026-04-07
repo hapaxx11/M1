@@ -33,7 +33,7 @@
 #define M1_LOGDB_TAG					"NFC"
 
 #define NFC_READ_MORE_OPTIONS			4
-#define NFC_READ_MORE_OPTIONS_FILE    	7 // Emulate, Unlock, Edit UID, Utils, Info, Rename, Delete
+#define NFC_READ_MORE_OPTIONS_FILE    	7 // Emulate, Unlock, Edit UID, Card Actions, Info, Rename, Delete
 
 #define NFC_FILEPATH					"/NFC"
 #define NFC_FILE_EXTENSION				".nfc"
@@ -50,7 +50,7 @@
 const char *m1_nfc_more_options[] = {
 		"Save",
 		"Emulate UID",
-		"Utils",
+		"Card Actions",
 		"Info"
 };
 
@@ -59,13 +59,13 @@ const char *m1_nfc_more_options_file[] = {
 		"Emulate UID",
 		"Unlock",
 		"Edit UID",
-		"Utils",
+		"Card Actions",
 		"Info",
 		"Rename",
 		"Delete"
 };
 
-/* Menu for NFC Utils view (accessed after reading a card → More Options → Utils) */
+/* Menu for NFC Card Actions view (accessed after reading a card → More Options → Card Actions) */
 #define NFC_TOOL_OPTIONS_COUNT  8
 static const char *m1_nfc_tool_options[] = {
 	"Tag Info",
@@ -624,7 +624,7 @@ static int nfc_read_more_kp_handler(void)
 			menu_index = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE); // Get current index
 			if (is_load_file)
 			{
-				/* LOAD_FILE: Emulate, Unlock, Edit UID, Utils, Info, Rename, Delete */
+				/* LOAD_FILE: Emulate, Unlock, Edit UID, Card Actions, Info, Rename, Delete */
 				view_id = 0xFF;
 				switch ( menu_index )
 				{
