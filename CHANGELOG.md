@@ -109,6 +109,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
   CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
 
+### Removed
+
+- **Sub-GHz legacy dead code (~2,070 lines)** — Surgically removed all public
+  functions and their unique helpers that were fully superseded by the scene-based
+  architecture: `sub_ghz_record()`, `sub_ghz_replay()`, `sub_ghz_read()`,
+  `sub_ghz_saved()`, `sub_ghz_regional_information()`, `sub_ghz_radio_settings()`,
+  `sub_ghz_config_screen()`, `sub_ghz_config_draw()`, `sub_ghz_saved_action_menu()`,
+  `sub_ghz_saved_draw_actions()`, all Record GUI callbacks, all Replay Browse GUI
+  callbacks, dead Replay Play GUI callbacks, legacy menu entries in `m1_menu.c`,
+  and corresponding declarations in `m1_sub_ghz.h`. Retained
+  `subghz_replay_play_gui_update()` (still called by live
+  `sub_ghz_replay_flipper_file()`), all waveform helpers, static TX helpers, and
+  all blocking delegate functions used by scene wrappers.
+
 ## [0.9.0.28] - 2026-04-06
 
 ### Added
