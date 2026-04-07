@@ -383,6 +383,21 @@ void bluetooth_scan(void)
 		esp32_main_init();
 	}
 
+	/* Drain stale button events accumulated during ESP32 init.
+	 * Check if BACK was pressed — if so, exit immediately. */
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_deinit();
+				return;
+			}
+		}
+	}
+
 	/* Show scanning animation */
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -413,6 +428,11 @@ void bluetooth_scan(void)
 	{
 		bt_show_message("ESP32 not ready!", "Press Back", 0);
 	}
+
+	/* Drain stale button events accumulated during the blocking scan so the
+	 * interactive loop below starts with a clean queue. */
+	xQueueReset(button_events_q_hdl);
+	xQueueReset(main_q_hdl);
 
 	if (!scan_done || count == 0)
 	{
@@ -768,6 +788,10 @@ void bluetooth_info(void)
 		esp32_main_init();
 	}
 
+	/* Drain stale button events accumulated during ESP32 init. */
+	xQueueReset(button_events_q_hdl);
+	xQueueReset(main_q_hdl);
+
 	if (get_esp32_main_init_status())
 	{
 		bt_show_message("Querying...", NULL, 0);
@@ -897,6 +921,21 @@ void bluetooth_advertise(void)
 		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 18/2, M1_LCD_DISPLAY_HEIGHT/2 - 2, 18, 32, hourglass_18x32);
 		m1_u8g2_nextpage();
 		esp32_main_init();
+	}
+
+	/* Drain stale button events accumulated during ESP32 init.
+	 * Check if BACK was pressed — if so, exit immediately. */
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_deinit();
+				return;
+			}
+		}
 	}
 
 	m1_u8g2_firstpage();
