@@ -37,7 +37,6 @@ enum {
     SettingsScenePowerInfo,
     SettingsScenePowerReboot,
     SettingsScenePowerOff,
-    SettingsSceneSystem,
     SettingsSceneFwUpdateMenu,
     SettingsSceneFwUpdateImage,
     SettingsSceneFwUpdateStart,
@@ -63,14 +62,6 @@ static void lcd_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
-static void system_on_enter(M1SceneApp *app)
-{
-    (void)app;
-    settings_system();
-    app->running = true;
-    m1_scene_pop(app);
-}
-
 static void about_on_enter(M1SceneApp *app)
 {
     (void)app;
@@ -80,7 +71,6 @@ static void about_on_enter(M1SceneApp *app)
 }
 
 static const M1SceneHandlers lcd_handlers    = { .on_enter = lcd_on_enter    };
-static const M1SceneHandlers system_handlers = { .on_enter = system_on_enter };
 static const M1SceneHandlers about_handlers  = { .on_enter = about_on_enter  };
 
 /*==========================================================================*/
@@ -242,14 +232,13 @@ static const M1SceneHandlers esp32_update_handlers = { .on_enter = esp32_update_
 /* Top-level Settings menu scene                                            */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  6
 #define MENU_VISIBLE     6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "LCD and Notifications",
     "Storage",
     "Power",
-    "System",
     "Firmware update",
     "ESP32 update",
     "About",
@@ -259,7 +248,6 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     SettingsSceneLCD,
     SettingsSceneStorageMenu,
     SettingsScenePowerMenu,
-    SettingsSceneSystem,
     SettingsSceneFwUpdateMenu,
     SettingsSceneEsp32Menu,
     SettingsSceneAbout,
@@ -525,7 +513,6 @@ static const M1SceneHandlers *const scene_registry[SettingsSceneCount] = {
     /* Top-level menu */
     [SettingsSceneMenu]             = &menu_handlers,
     [SettingsSceneLCD]              = &lcd_handlers,
-    [SettingsSceneSystem]           = &system_handlers,
     [SettingsSceneAbout]            = &about_handlers,
 
     /* Storage sub-menu + delegates */

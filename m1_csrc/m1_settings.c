@@ -64,7 +64,6 @@ static const char *s_sleep_text[] = { "30s", "1 min", "5 min", "10 min", "15 min
 
 void menu_settings_init(void);
 void menu_settings_exit(void);
-void settings_system(void);
 void settings_about(void);
 static void settings_about_display_choice(uint8_t choice);
 static void settings_apply_orientation(uint8_t orient);
@@ -317,73 +316,6 @@ void settings_power(void)
   * @retval
   */
 /*============================================================================*/
-static void settings_system_draw(void)
-{
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-
-    m1_draw_text(&m1_u8g2, 2, 10, 124, "System Settings", TEXT_ALIGN_CENTER);
-
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 4, 28, 72, "ESP32 at boot:", TEXT_ALIGN_LEFT);
-
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-    m1_draw_text(&m1_u8g2, 78, 28, 46, m1_esp32_auto_init ? "ON" : "OFF", TEXT_ALIGN_LEFT);
-
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 4, 42, 120, "Init WiFi/BT on boot", TEXT_ALIGN_CENTER);
-
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Toggle", arrowright_8x8);
-    m1_u8g2_nextpage();
-}
-
-void settings_system(void)
-{
-    S_M1_Buttons_Status this_button_status;
-    S_M1_Main_Q_t q_item;
-    BaseType_t ret;
-
-    settings_system_draw();
-
-    while (1)
-    {
-        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-        if (ret != pdTRUE)
-            continue;
-
-        if (q_item.q_evt_type != Q_EVENT_KEYPAD)
-            continue;
-
-        ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-        if (ret != pdTRUE)
-            continue;
-
-        if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            xQueueReset(main_q_hdl);
-            break;
-        }
-        else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK ||
-                 this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK ||
-                 this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            m1_esp32_auto_init = m1_esp32_auto_init ? 0 : 1;
-            settings_save_to_sd();
-            settings_system_draw();
-        }
-    }
-}
-
-
-
-/*============================================================================*/
-/**
-  * @brief
-  * @param
-  * @retval
-  */
-/*============================================================================*/
 void settings_about(void)
 {
 	S_M1_Buttons_Status this_button_status;
@@ -531,9 +463,6 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "sleep_timeout=%d\n", m1_sleep_timeout_idx);
     f_write(&fp, buf, strlen(buf), &bw);
 
-    snprintf(buf, sizeof(buf), "esp32_auto_init=%d\n", m1_esp32_auto_init);
-    f_write(&fp, buf, strlen(buf), &bw);
-
     snprintf(buf, sizeof(buf), "ism_region=%d\n", m1_device_stat.config.ism_band_region);
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -616,15 +545,6 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 14) - '0');
         if (val >= 0 && val <= 5)
             m1_sleep_timeout_idx = (uint8_t)val;
-    }
-
-    /* Parse "esp32_auto_init=X" */
-    p = strstr(buf, "esp32_auto_init=");
-    if (p != NULL)
-    {
-        val = (int)(*(p + 16) - '0');
-        if (val == 0 || val == 1)
-            m1_esp32_auto_init = (uint8_t)val;
     }
 
     /* Parse "ism_region=X" */

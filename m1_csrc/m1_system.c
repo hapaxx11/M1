@@ -55,7 +55,6 @@ S_M1_Buttons_Status m1_buttons_status = {	.event= {BUTTON_EVENT_IDLE, BUTTON_EVE
 
 S_M1_Device_Status_t 	m1_device_stat = {0};
 uint8_t                 m1_southpaw_mode = 0;
-uint8_t                 m1_esp32_auto_init = 0;
 uint8_t                 m1_screen_orientation = M1_ORIENT_NORMAL;
 uint8_t                 m1_brightness_level = 4;   /* Max by default */
 uint8_t                 m1_buzzer_on = 1;
