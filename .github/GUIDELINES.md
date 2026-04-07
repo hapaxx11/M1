@@ -93,14 +93,23 @@ Write self-documenting code
 Follow DRY (Don't Repeat Yourself) principles
 Write unit tests for new features
 
-11. Repository Hygiene
+11. UX Pattern Standards
+Any module that loads saved files from SD card MUST implement the Saved Item Actions
+pattern (Emulate/Send, Info, Rename, Delete as core verbs).  This is the canonical
+UX standard for the project, modelled on Flipper Zero's *_scene_saved_menu.c
+architecture.  It supersedes any previously defined UX preferences when they conflict.
+See CLAUDE.md § "Saved Item Actions Pattern" for the full specification.
+Other Monstatek-derived UX rules (button bar guidelines, display layout, keypad mapping)
+still apply when not superseded by this pattern.
+
+12. Repository Hygiene
 Regular dependency updates
 Periodic cleanup of old branches
 Archive unused repositories
 Maintain reasonable repository size
 Regular backup procedures
 
-12. Communication
+13. Communication
 Use GitHub Discussions for technical discussions
 Keep relevant conversations in PR comments
 Use issue comments for status updates

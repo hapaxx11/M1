@@ -60,3 +60,16 @@ All modules with submenus use a stack-based scene manager:
 | Bluetooth | `m1_bt_scene.c` | 3–7 items |
 | Games | `m1_games_scene.c` | 6 items |
 | Settings | `m1_settings_scene.c` | 7 items + nested sub-menus |
+
+## Saved Item Actions
+
+Every module that loads files from SD card must provide a standardized set of
+saved-item actions following the Flipper `*_scene_saved_menu.c` pattern.  This is
+the **canonical UX standard** for the project, superseding other UX preferences
+when they conflict.
+
+**Core verbs** (required): Emulate/Send, Info, Rename, Delete.
+
+See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
+specification, optional verbs, implementation patterns per module, and rules
+for new modules.

@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   NFC, RFID) now implement the core saved-item verbs: Emulate/Send, Info,
   Rename, Delete.  Documented the canonical pattern in CLAUDE.md under
   "Saved Item Actions Pattern" so future modules follow the same structure.
+- **Documentation: Saved Item Actions as canonical UX standard** — The Saved Item
+  Actions Pattern is now the highest-priority UX standard across all docs.
+  Updated CLAUDE.md (precedence note), ARCHITECTURE.md (new section),
+  DEVELOPMENT.md (mandatory for new modules), flipper_import_agent.md (Pattern
+  Adoption Policy table: scene UX follows Flipper), and .github/GUIDELINES.md
+  (new § 11 UX Pattern Standards).  Previously defined UX preferences (button bar
+  rules, display layout) still apply when not superseded by this pattern.
 - **IR commands bottom bar** — The bottom bar now shows "< More" (for file
   actions) and "Send >" instead of the generic "Open" label.
 - **NFC menu: merged "Tools" into "Extra Actions"** — The top-level NFC menu

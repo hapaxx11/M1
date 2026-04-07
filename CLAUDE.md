@@ -349,6 +349,14 @@ to build.**
 
 ## Saved Item Actions Pattern
 
+> **This is the canonical UX standard for all M1 modules with saved files.**
+> It takes precedence over any previously defined UX preferences when they conflict.
+> The pattern aligns with Flipper Zero's `*_scene_saved_menu.c` architecture —
+> specifically, the action-menu verb set and navigation flow are modelled on Flipper
+> and Momentum firmware rather than Monstatek stock.  Monstatek UX conventions
+> (display rendering, keypad mapping, UIView framework) still apply when not
+> superseded by this pattern.
+
 Every module that loads files from SD card **MUST** provide a standard set of
 saved-item actions.  This ensures consistency across the device and makes Flipper
 port alignment straightforward.
@@ -405,6 +413,11 @@ port alignment straightforward.
 ---
 
 ## UI / Button Bar Rules
+
+> **Note:** The [Saved Item Actions Pattern](#saved-item-actions-pattern) above is the
+> highest-priority UX standard.  The rules below still apply but are subordinate —
+> if a saved-item action menu needs a specific layout, the Saved Item Actions pattern
+> wins over generic button bar guidelines.
 
 - **NEVER add "Back" as a menu item or button bar label.** The back button is self-explanatory
   — users do not need a screen element telling them that pressing back goes back. This applies

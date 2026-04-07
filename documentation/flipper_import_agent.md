@@ -48,7 +48,7 @@ than **1.0.0.0**.  Until that milestone is reached, the following weighting appl
 | HAL / driver patterns (SPI, UART, GPIO, power) | **Flipper / forks** (consult `documentation/furi_hal_reference/`) | The Furi HAL is a proven abstraction for the same peripherals M1 uses. |
 | Build system, CMake structure, FreeRTOS integration | **Monstatek/M1** | M1's build system is already established and functional. |
 | Flash layout, boot bank, CRC metadata | **Monstatek/M1** | Hardware-specific; Monstatek's implementation is validated on real M1 boards. |
-| UI framework, display rendering, keypad handling | **Monstatek/M1** | M1's UIView framework differs fundamentally from Flipper's ViewPort model. |
+| UI framework, display rendering, keypad handling | **Monstatek/M1** (low-level) / **Flipper** (scene UX) | M1's UIView framework differs from Flipper's ViewPort model, so display rendering and keypad mapping remain Monstatek. However, **scene-level UX patterns** (saved-item action menus, verb sets, navigation flow) follow the Flipper `*_scene_saved_menu.c` pattern. See CLAUDE.md "Saved Item Actions Pattern". |
 
 When a Flipper pattern conflicts with a Monstatek pattern in the protocol/decoder/HAL
 space, **adopt the Flipper pattern** and log the deviation in the
