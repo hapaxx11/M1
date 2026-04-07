@@ -78,7 +78,12 @@
 #define SUBGHZ_OTA_PULSE_BIT_MASK	0x0001 // LSB bit = 1 for Mark, using OR operator
 #define SUBGHZ_OTA_SPACE_BIT_MASK	0xFFFE // LSB bit = 0 for Space, using AND operator
 
-#define SUBGHZ_RX_TIMEOUT_TIME      20000
+/* RX timer period: use full 16-bit range (65535) so the unsigned
+ * subtraction  (current_CCR − previous_CCR) & 0xFFFF  yields the
+ * correct edge-to-edge duration for gaps up to 65.5 ms.  The old
+ * value of 20000 caused aliasing for inter-packet gaps near multiples
+ * of 20 ms.  TX timeout is kept separate. */
+#define SUBGHZ_RX_TIMEOUT_TIME      0xFFFF
 #define SUBGHZ_TX_TIMEOUT_TIME      20000
 
 // RF_Input_Level_dBm = (RSSI_value / 2) – MODEM_RSSI_COMP – 70

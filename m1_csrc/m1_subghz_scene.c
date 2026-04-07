@@ -273,21 +273,49 @@ void subghz_scene_app_run(void)
                     }
                     else if (subghz_decenc_ctl.subghz_pulse_handler)
                     {
-                        /* Protocol decode mode — feed pulse to decoder */
-                        uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
-                        uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
+                        /* Protocol decode mode — batch-drain all pending
+                         * pulse events in a tight loop.  The ISR queues
+                         * every individual edge as a separate event; at
+                         * 433 MHz with AM650 the noise floor alone can
+                         * generate thousands of edges/sec.  Processing
+                         * only one pulse per main-loop iteration cannot
+                         * keep up, the 256-deep queue overflows, and real
+                         * signal pulses are silently dropped — so nothing
+                         * ever decodes.  Draining in batch keeps the queue
+                         * from overflowing and feeds complete packets to
+                         * the protocol decoders. */
+                        for (;;)
+                        {
+                            S_M1_Main_Q_t peek;
+                            uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
+                            uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
 
-                        /* Sync ISR state machine with pulse handler output.
-                         * Without this, the ISR stays in NORMAL forever and
-                         * floods the queue with noise pulses between packets,
-                         * preventing real signals from being decoded. */
-                        if (pdet == PULSE_DET_EOP || pdet == PULSE_DET_IDLE)
-                            subghz_decenc_ctl.pulse_det_stat = pdet;
+                            /* Sync ISR state machine with pulse handler
+                             * output.  Without this, the ISR stays in
+                             * NORMAL forever and floods the queue with
+                             * noise pulses between packets. */
+                            if (pdet == PULSE_DET_EOP || pdet == PULSE_DET_IDLE)
+                                subghz_decenc_ctl.pulse_det_stat = pdet;
 
-                        /* Only notify scene when a full decode is ready */
-                        if (subghz_decenc_ctl.subghz_data_ready &&
-                            subghz_decenc_ctl.subghz_data_ready())
-                            evt = SubGhzEventRxData;
+                            /* Decode ready? Stop draining — let the scene
+                             * handle the result before processing more. */
+                            if (subghz_decenc_ctl.subghz_data_ready &&
+                                subghz_decenc_ctl.subghz_data_ready())
+                            {
+                                evt = SubGhzEventRxData;
+                                break;
+                            }
+
+                            /* Peek at next queue item; continue only if
+                             * it is another pulse event.  Non-pulse events
+                             * (keypad, TX-complete) stay in the queue for
+                             * the outer loop to handle. */
+                            if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE)
+                                break;          /* queue empty */
+                            if (peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
+                                break;          /* next event is not a pulse */
+                            xQueueReceive(main_q_hdl, &q_item, 0);
+                        }
                     }
                     break;
                 case Q_EVENT_SUBGHZ_TX:

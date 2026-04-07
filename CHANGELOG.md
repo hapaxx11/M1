@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz Read never recognises signals** — The scene-based Read mode queued
+  every individual radio edge as a separate FreeRTOS event, but the event loop
+  processed only one pulse per iteration (with LCD redraws in between).  At
+  433 MHz with AM650 modulation the noise floor alone generates thousands of
+  edges/sec; the 256-deep queue overflowed and real signal pulses were silently
+  dropped, so the protocol decoders never saw a complete packet.  Three changes
+  fix this:
+  1. **Batch-drain pulse events** — the event loop now processes all pending
+     `Q_EVENT_SUBGHZ_RX` items in a tight inner loop before yielding, keeping
+     the queue drained and feeding complete packets to decoders.
+  2. **Use hardware-captured CCR1 instead of free-running CNT** — the TIM1
+     input-capture ISR now reads the CCR1 register (latched at the exact edge)
+     and computes the pulse duration via unsigned subtraction from the previous
+     capture, eliminating ISR-latency jitter that corrupted timing.
+  3. **Increase RX timer period to 65535 µs** — the old 20 ms period caused
+     modular-arithmetic aliasing for inter-packet gaps near 20/40/60 ms; a
+     full 16-bit period (65.5 ms) covers virtually all OOK protocol gaps.
+  Additionally, the TIM1 Update interrupt is now disabled during RX to prevent
+  the TX-specific UP handler from executing while no transmission is active.
 - **Sub-GHz scene bottom-bar overlap cleanup** — Several Sub-GHz scene screens
   had menu content drawn too close to (or overlapping) the 12px bottom button bar
   at y=52.  Specific fixes:

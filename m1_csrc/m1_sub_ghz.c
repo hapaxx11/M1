@@ -4455,18 +4455,17 @@ static void sub_ghz_rx_init(void)
 	HAL_NVIC_SetPriority(SUBGHZ_RX_TIMER_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
 	HAL_NVIC_EnableIRQ(SUBGHZ_RX_TIMER_IRQn);
 
-	/* Configures the TIM Update Request Interrupt source: counter overflow */
+	/* Disable the Update interrupt during RX.  TIM1 is shared between RX
+	 * (input capture on CH1) and TX (PWM on CH4N).  The Update vector
+	 * (TIM1_UP_IRQHandler) contains TX-specific DMA / CCR4 toggling.
+	 * Firing it during RX is harmless on first glance, but if
+	 * timerhdl_subghz_tx.Instance has not yet been initialised the handler
+	 * dereferences a NULL pointer, and even when it is valid the 65 ms
+	 * overflow tick is wasted work.  Only the CC1 interrupt is needed for
+	 * input capture. */
 	__HAL_TIM_URS_ENABLE(&timerhdl_subghz_rx);
-
-	/* Clear update flag */
 	__HAL_TIM_CLEAR_FLAG( &timerhdl_subghz_rx, TIM_FLAG_UPDATE);
-
-	/* Enable TIM Update Event Interrupt Request */
-	/* Enable the CCx/CCy Interrupt Request */
-	__HAL_TIM_ENABLE_IT( &timerhdl_subghz_rx, TIM_FLAG_UPDATE);
-
-	/* Enable the timer */
-	//__HAL_TIM_ENABLE(&timerhdl_subghz_rx);
+	__HAL_TIM_DISABLE_IT( &timerhdl_subghz_rx, TIM_IT_UPDATE);
 
 } // static void sub_ghz_rx_init(void)
 
