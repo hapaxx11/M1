@@ -99,11 +99,14 @@ static void draw(SubGhzApp *app)
     snprintf(line, sizeof(line), "Bits: %d    TE: %d us", e->info.bit_len, e->info.te);
     u8g2_DrawStr(&m1_u8g2, 2, 30, line);
 
-    snprintf(line, sizeof(line), "Freq: %.2f MHz", (float)e->frequency / 1000000.0f);
+    snprintf(line, sizeof(line), "%.2f MHz", (float)e->frequency / 1000000.0f);
     u8g2_DrawStr(&m1_u8g2, 2, 38, line);
 
     snprintf(line, sizeof(line), "RSSI: %d dBm", e->info.rssi);
-    u8g2_DrawStr(&m1_u8g2, 68, 38, line);
+    {
+        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, line);
+        u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - tw - 2, 38, line);
+    }
 
     /* Serial / rolling / button if available */
     if (e->info.serial_number || e->info.rolling_code)

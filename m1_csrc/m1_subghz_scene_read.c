@@ -443,19 +443,19 @@ static void draw(SubGhzApp *app)
         if (e)
         {
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-            u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 8, protocol_text[e->info.protocol]);
+            u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 7, protocol_text[e->info.protocol]);
 
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             snprintf(line, sizeof(line), "Key: 0x%lX %dbit", (uint32_t)e->info.key, e->info.bit_len);
-            u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 18, line);
+            u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 17, line);
 
             snprintf(line, sizeof(line), "TE:%d RSSI:%ddBm", e->info.te, e->info.rssi);
-            u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 27, line);
+            u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 26, line);
 
             if (e->count > 1)
             {
                 snprintf(line, sizeof(line), "Received x%d", e->count);
-                u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 36, line);
+                u8g2_DrawStr(&m1_u8g2, 2, CONTENT_Y_START + 35, line);
             }
         }
     }
