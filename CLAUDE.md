@@ -347,6 +347,63 @@ to build.**
 
 ---
 
+## Saved Item Actions Pattern
+
+Every module that loads files from SD card **MUST** provide a standard set of
+saved-item actions.  This ensures consistency across the device and makes Flipper
+port alignment straightforward.
+
+### Core Verbs (required for ALL modules with saved files)
+
+| Verb | Description | Implementation |
+|------|-------------|----------------|
+| **Emulate / Send** | Transmit or replay the saved item | Module-specific TX function |
+| **Info** | Display file metadata (protocol, frequency, key/data, file path) | Read-only info screen; BACK dismisses |
+| **Rename** | Rename file on SD via virtual keyboard | `m1_vkb_get_filename()` → `f_rename()` |
+| **Delete** | Delete file with confirmation dialog | `m1_message_box_choice()` → `m1_fb_delete_file()` or `f_unlink()` |
+
+### Optional Verbs (module-specific)
+
+| Verb | Modules | Description |
+|------|---------|-------------|
+| **Save** | Read scenes only (live decode, not loaded files) | Save captured signal to SD |
+| **Write** | NFC, RFID | Write data to a physical tag/card |
+| **Edit** | NFC (Edit UID), RFID (Edit data) | Modify item fields in-place |
+| **Unlock** | NFC only | MF Classic key recovery / unlock |
+| **Send All** | IR only | Transmit all commands in an .ir file sequentially |
+| **Card/Tag Actions** | NFC, RFID | Context-specific tool submenu for loaded item |
+
+### Implementation Patterns
+
+**Sub-GHz** (`m1_subghz_scene_saved.c`):
+- Inline action menu with `in_action_menu` / `in_info_screen` state flags
+- Actions: Emulate, Info, Rename, Delete
+- Info loads `.sub` metadata via `flipper_subghz_load()`
+
+**Infrared** (`m1_ir_universal.c`):
+- `ir_file_action_menu()` called from `show_commands()` via LEFT button
+- Actions: Send All, Info, Rename, Delete
+- Returns `false` if file was renamed/deleted (caller exits to browse)
+
+**NFC** (`m1_nfc.c`):
+- `m1_nfc_more_options_file[]` array with view mode dispatch
+- Actions: Emulate UID, Unlock, Edit UID, Card Actions, Info, Rename, Delete
+
+**RFID** (`m1_rfid.c`):
+- `m1_rfid_save_mode_options[]` array with view mode dispatch
+- Actions: Emulate, Write, Edit, Rename, Delete, Info
+
+### Rules for New Modules
+
+1. **Always include all four core verbs** (Emulate/Send, Info, Rename, Delete)
+2. **Never add "Back" as a menu item** — the hardware BACK button handles navigation
+3. **Rename must preserve the file extension** — strip ext before VKB, re-append after
+4. **Delete must confirm** — use `m1_message_box_choice()` with "OK / Cancel"
+5. **Info screen is read-only** — dismiss on any button press (typically BACK)
+6. **After Rename or Delete, return to the file browser** — the old path is invalid
+
+---
+
 ## UI / Button Bar Rules
 
 - **NEVER add "Back" as a menu item or button bar label.** The back button is self-explanatory
