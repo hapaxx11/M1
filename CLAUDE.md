@@ -413,36 +413,29 @@ need scene managers.
 
 ### Agent instructions for scene migration
 
-When an agent is tasked with **any work on a legacy-menu module** (bug fix, new
-feature, UI change), the agent **SHOULD** migrate that module to the scene
-architecture as part of the same change, if the scope is reasonable.  At minimum:
+Scene migration is complete for all modules.  There are no more legacy-menu
+modules to migrate.  When working on **any** module, all new screens and features
+**MUST** be implemented as scenes, not as standalone event-loop functions.
 
-1. **Create a scene manager** for the module:
-   - `m1_<module>_scene.h` — scene ID enum, event enum, app context struct,
-     handler table extern declarations.  Copy structure from `m1_subghz_scene.h`.
-   - `m1_<module>_scene.c` — scene registry, push/pop/replace, main event loop.
-     Copy structure from `m1_subghz_scene.c`.
+### Legacy functions still in m1_sub_ghz.c
 
-2. **Create a menu scene** (`m1_<module>_scene_menu.c`) that lists all module
-   functions using the scrollbar pattern from `m1_subghz_scene_menu.c`.
+After the dead-code cleanup, the only legacy functions remaining in `m1_sub_ghz.c`
+are **actively called** as blocking delegates from their scene wrappers:
 
-3. **Wrap existing functions** as blocking-delegate scenes.  Each legacy function
-   that runs its own event loop gets a thin scene file:
-   ```c
-   static void scene_on_enter(AppContext *app) {
-       legacy_function();          /* blocking — runs own event loop */
-       app->running = true;        /* prevent premature exit */
-       module_scene_pop(app);      /* return to parent scene */
-   }
-   ```
-   This is the fastest migration path — no rewrite of the legacy function needed.
+| Function | Called by | Notes |
+|----------|-----------|-------|
+| `sub_ghz_frequency_reader()` | `m1_subghz_scene_freq_analyzer.c` | Blocking delegate |
+| `sub_ghz_spectrum_analyzer()` | `m1_subghz_scene_spectrum_analyzer.c` | Blocking delegate |
+| `sub_ghz_rssi_meter()` | `m1_subghz_scene_rssi_meter.c` | Blocking delegate |
+| `sub_ghz_freq_scanner()` | `m1_subghz_scene_freq_scanner.c` | Blocking delegate |
+| `sub_ghz_weather_station()` | `m1_subghz_scene_weather_station.c` | Blocking delegate |
+| `sub_ghz_brute_force()` | `m1_subghz_scene_brute_force.c` | Blocking delegate |
+| `sub_ghz_add_manually()` | `m1_subghz_scene_add_manually.c` | Blocking delegate |
+| `sub_ghz_replay_flipper_file()` | `m1_subghz_scene_saved.c` | Direct call for TX |
 
-4. **Update `m1_menu.c`** so the module's top-level menu entry calls the new
-   scene entry point instead of expanding the legacy sub-menu.
-
-5. **Scene-native rewrites** of individual functions can happen later, one at a
-   time.  The blocking-delegate wrapper is an acceptable permanent state until
-   someone has reason to refactor the underlying function.
+These are **not dead code** — they are the implementation behind scene wrappers.
+Converting them to scene-native implementations is optional and can be done
+incrementally.  Do **not** delete them.
 
 ### Rules for all scene menus
 

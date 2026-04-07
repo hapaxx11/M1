@@ -88,7 +88,6 @@ typedef enum
 } S_M1_IR_Tx_States;
 
 void menu_infrared_init(void);
-void menu_infrared_exit(void);
 
 void infrared_universal_remotes(void);
 void infrared_learn_new_remote(void);

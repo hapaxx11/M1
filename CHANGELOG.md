@@ -99,6 +99,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz Config scene: add TX Power and ISM Region settings** — The legacy
+  `sub_ghz_radio_settings()` screen (stock Monstatek) exposed TX Power, Modulation,
+  and ISM Region.  The scene-based Config only had Frequency, Hopping, Modulation,
+  and Sound — TX Power and ISM Region were inaccessible.  Now all 6 settings are
+  available in the scene Config screen with scrollable navigation.  ISM Region
+  changes are persisted to SD card on exit via `settings_save_to_sd()`.  TX Power
+  changes are applied via new `_ext` accessor functions that bridge the static
+  `subghz_tx_power_idx` to scene code.
 - **Documentation overhaul** — comprehensive audit and update of all markdown files
   for consistency with codebase state and completed PRs. README.md rewritten with
   comparison table vs stock firmware, accurate protocol counts, missing features
@@ -108,6 +116,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   module scene table. Fixed placeholder URLs in CONTRIBUTING.md, CODE_OF_CONDUCT.md,
   SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
   CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
+
+### Removed
+
+- **Sub-GHz legacy dead code (~2,070 lines)** — Surgically removed all public
+  functions and their unique helpers that were fully superseded by the scene-based
+  architecture: `sub_ghz_record()`, `sub_ghz_replay()`, `sub_ghz_read()`,
+  `sub_ghz_saved()`, `sub_ghz_regional_information()`, `sub_ghz_radio_settings()`,
+  `sub_ghz_config_screen()`, `sub_ghz_config_draw()`, `sub_ghz_saved_action_menu()`,
+  `sub_ghz_saved_draw_actions()`, all Record GUI callbacks, all Replay Browse GUI
+  callbacks, dead Replay Play GUI callbacks, legacy menu entries in `m1_menu.c`,
+  and corresponding declarations in `m1_sub_ghz.h`. Retained
+  `subghz_replay_play_gui_update()` (still called by live
+  `sub_ghz_replay_flipper_file()`), all waveform helpers, static TX helpers, and
+  all blocking delegate functions used by scene wrappers.
+- **Bluetooth legacy dead code (~300 lines)** — Removed the dead simple-mode
+  scene code in `m1_bt_scene.c` (entire `#ifndef M1_APP_BT_MANAGE_ENABLE` block),
+  the legacy `bluetooth_scan()` original implementation in the `#else` fallback
+  path of `m1_bt.c`, the empty `bluetooth_config()` function (only called from
+  removed simple-mode scene), original `ble_scan_list_validation()` and
+  `ble_scan_list_print()` helpers, and the `bluetooth_config()` declaration from
+  `m1_bt.h`. All live blocking delegates (`bluetooth_scan()`, `bluetooth_saved_devices()`,
+  `bluetooth_advertise()`, `bluetooth_info()`, `bluetooth_set_badbt_name()`) retained.
+- **WiFi legacy dead code (~50 lines)** — Removed the dead `wifi_config()` stub in
+  the `#else` fallback of `m1_wifi.c` (never compiled since `M1_APP_WIFI_CONNECT_ENABLE`
+  is always defined), the `wifi_config()` redirect function (scene delegate now calls
+  `wifi_saved_networks()` directly), and the unused `menu_wifi_exit()` empty function.
+  Cleaned up corresponding declarations from `m1_wifi.h`.
+- **NFC dead code (~28 lines)** — Removed `#if 0` empty view tables
+  (`view_nfc_tools_table`, `view_nfc_saved_table`) and the never-compiled
+  `SEE_DUMP_MEMORY` debug block (commented-out `#define` + `#ifdef` guard) from
+  `m1_nfc.c`. RFID audited — no dead code found.
+- **Infrared dead code (~10 lines)** — Removed the empty `menu_infrared_exit()`
+  function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
+  scene entry passes `NULL` as deinit; the function was never called.
 
 ## [0.9.0.28] - 2026-04-06
 
