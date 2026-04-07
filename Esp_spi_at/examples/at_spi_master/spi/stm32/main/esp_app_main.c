@@ -640,7 +640,30 @@ void esp32_main_init(void)
 	}
 
 	esp32_main_init_done = true;
-} // void app_main(void)
+
+	/* Probe ESP32 AT readiness.  The SPI transport may be up before the AT
+	 * command processor has finished initialising (WiFi/BLE stacks, etc.).
+	 * Send bare "AT\r\n" and wait for "OK" — retry with back-off so the
+	 * first real AT command (e.g. AT+CWMODE, AT+BLEINIT) doesn't time out.
+	 * Total worst-case wait: 10 × 500 ms = 5 s. */
+	{
+		char probe_buf[32];
+		int probe_ok = 0;
+		for (int i = 0; i < 10; i++) {
+			probe_buf[0] = '\0';
+			spi_AT_send_recv("AT\r\n", probe_buf, sizeof(probe_buf), 2);
+			if (strstr(probe_buf, "OK")) {
+				M1_LOG_I(TAG, "ESP32 AT ready after %d probe(s)\r\n", i + 1);
+				probe_ok = 1;
+				break;
+			}
+			HAL_Delay(500);
+		}
+		if (!probe_ok) {
+			M1_LOG_E(TAG, "ESP32 AT not responding to probe after 10 attempts\r\n");
+		}
+	}
+} // void esp32_main_init(void)
 
 
 static void esp_free_mem( char **buf_ptr)

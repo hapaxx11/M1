@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **WiFi/BT scan failure after ESP32 cold init** — After `esp32_main_init()`
+  the SPI transport layer was ready but the ESP32-C6 AT command processor had
+  not finished booting its WiFi/BLE stacks.  The first AT command
+  (`AT+CWMODE=1` for WiFi, `AT+BLEINIT` for BT) was sent before the slave
+  could process it, causing a timeout and "Failed. Retrying..." on every first
+  scan attempt.  Added an AT readiness probe loop in `esp32_main_init()` that
+  sends `AT\r\n` and waits for `OK` (up to 10 × 500 ms) before marking init
+  complete — all subsequent callers (WiFi scan, BLE scan, 802.15.4, etc.) now
+  start with a confirmed-ready ESP32.
+- **Misleading "Failed. Retrying..." WiFi message** — The scan failure screen
+  said "Failed. Retrying..." but no retry logic existed; the device just waited
+  for the user to press Back with no on-screen hint.  Changed to "Scan failed!"
+  which accurately describes the state.
 - **Sub-GHz DMA buffer 32-byte alignment** — The front and back sample buffers
   used by the Sub-GHz TX DMA (`subghz_front_buffer`, `subghz_back_buffer`) were
   allocated with plain `malloc()` which only guarantees 8-byte alignment.  On the
