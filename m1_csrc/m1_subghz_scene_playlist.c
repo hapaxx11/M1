@@ -442,7 +442,7 @@ static void draw(SubGhzApp *app)
 
         /* Progress bar (below file list, above bottom bar at y=52) */
         {
-            uint8_t bar_y = 48;
+            uint8_t bar_y = 46;
             u8g2_DrawFrame(&m1_u8g2, 2, bar_y, 124, 4);
             if (app->playlist_count > 0)
             {
