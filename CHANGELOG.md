@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **NFC Amiibo emulation — Nintendo Switch compatibility** — Fixed T2T card
+  emulation failing on Nintendo Switch (and other readers with anti-clone
+  detection).  The Switch sends HALT followed by WUPA ~1ms later; the M1
+  was not entering SLEEP_A during T2T emulation because the SLP_REQ handler
+  was guarded with `Emu_GetPersona() != EMU_PERSONA_T2T` and was unreachable
+  behind the T2T handler that forwarded ALL commands (including HALT) to
+  nfc_listener.c.  Reordered the check chain in `rfal_nfc.c` so SLP_REQ is
+  detected before the T2T persona dispatch, and added fast HALT detection in
+  `rfal_rfst25r3916.c` at the RFAL driver level to immediately transition to
+  SLEEP_A within the ISR context, meeting the Switch's tight ~1ms WUPA timing.
+  Cherry-picked from sincere360/M1_SiN360 v0.9.0.5.
 - **Sub-GHz raw recording (Read Raw)** — Fixed raw signal recording which was
   completely non-functional.  The Read Raw scene set up the radio and ISR for
   capture but never opened an SD card file, never read captured pulses from the
