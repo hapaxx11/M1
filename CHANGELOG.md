@@ -13,11 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Hapax logo — H inside diamond** — Added a Hapax "H" letterform inside the
   center diamond of the M mountain logo across all three bitmap sizes (128×64
-  splash, 40×32 boot, 26×14 status bar).  The H is drawn as two thin vertical
-  legs within the gap space between the diamond's bars, connected by the
-  diamond's existing horizontal crossbar(s).  The diamond outline (bars,
-  crossbars, slopes) is completely unchanged from stock Monstatek; only the
-  previously-empty interior gap receives the new H pixels.
+  splash, 40×32 boot, 26×14 status bar).  The diamond outline (bars, crossbars,
+  slopes) is unchanged from stock; the H is drawn by adding two vertical legs in
+  the gap between the diamond's bars and clearing the stock M center-peak pixels.
+  The diamond's existing crossbar serves as the H's horizontal bar.
 
 ### Fixed
 
