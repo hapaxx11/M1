@@ -26,8 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blocking ESP32 init and scan phases across WiFi, Bluetooth, and 802.15.4 modules
   so the interactive result loops start with clean queues.  BACK button pressed during
   ESP32 init is now detected and exits immediately instead of being silently lost.
-  result loops start with clean queues.  BACK button pressed during ESP32
-  init is now detected and exits immediately instead of being silently lost.
 - **Sub-GHz scene display cleanup** — Fixed overlapping text and tight spacing
   across multiple Sub-GHz scenes:
   - **Need Saving dialog**: Moved dialog text and choice buttons up to prevent
