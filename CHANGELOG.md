@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   phases across WiFi, Bluetooth, and 802.15.4 modules so the interactive
   result loops start with clean queues.  BACK button pressed during ESP32
   init is now detected and exits immediately instead of being silently lost.
+- **WiFi/BT scan regression** — Removed the AT readiness probe added in v0.9.0.30
+  (`spi_AT_send_recv("AT\r\n")` loop at the end of `esp32_main_init()`).  The probe
+  sent AT commands to the ESP32 during its boot sequence, before the AT command
+  processor was fully initialized; this could corrupt the SPI command/response state
+  and leave the transport unusable for subsequent mode-set commands.  Also reverted
+  the 5-second `MODE_SET_RESP_TIMEOUT` that replaced the full scan timeout for
+  `AT+CWMODE` / `AT+BLEINIT` — the short timeout gave insufficient recovery time
+  when the ESP32 was slow to respond.  Mode-set commands now use the caller's full
+  scan timeout (30 s WiFi, 10 s BLE) as in v0.9.0.29, while the actual scan command
+  still gets a fresh full timeout via the `saved_scan_timeout` + `tick_t0` reset
+  pattern.  Button event draining and queue resets (added in v0.9.0.40) are retained.
+- **ESP32 screen responsiveness** — Added stale button event draining after all
+  blocking ESP32 init and scan phases across WiFi, Bluetooth, and 802.15.4 modules
+  so the interactive result loops start with clean queues.  BACK button pressed during
+  ESP32 init is now detected and exits immediately instead of being silently lost.
 - **Sub-GHz scene display cleanup** — Fixed overlapping text and tight spacing
   across multiple Sub-GHz scenes:
   - **Need Saving dialog**: Moved dialog text and choice buttons up to prevent
