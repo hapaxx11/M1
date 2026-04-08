@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz raw recording (Read Raw)** — Fixed raw signal recording which was
+  completely non-functional.  The Read Raw scene set up the radio and ISR for
+  capture but never opened an SD card file, never read captured pulses from the
+  ring buffer, never saved data, and never updated the waveform display or
+  sample count.  Matching C3's working implementation: recording now streams
+  data to an `.sgh` file on SD card in real-time, the oscilloscope waveform
+  updates live during capture, and the sample counter tracks progress.  After
+  stopping, DOWN/Save shows the auto-generated filename.  Previously, pressing
+  Save after recording pushed to the protocol-decode save scene which
+  immediately exited because no decoded protocol data existed.
+- **ESP32 screen responsiveness** — Reduced AT readiness probe timeout from
+  2s→1s per probe and inter-probe delay from 500ms→200ms, cutting worst-case
+  ESP32 initialization blocking from ~25s to ~12s.  Added separate 5s timeout
+  for AT mode-set commands (AT+CWMODE, AT+BLEINIT) instead of reusing the full
+  30s/10s scan timeout, so a non-responsive ESP32 fails fast on initial setup.
+  Added stale button event draining after all blocking ESP32 init and scan
+  phases across WiFi, Bluetooth, and 802.15.4 modules so the interactive
+  result loops start with clean queues.  BACK button pressed during ESP32
+  init is now detected and exits immediately instead of being silently lost.
 - **WiFi/BT scan regression** — Removed the AT readiness probe added in v0.9.0.30
   (`spi_AT_send_recv("AT\r\n")` loop at the end of `esp32_main_init()`).  The probe
   sent AT commands to the ESP32 during its boot sequence, before the AT command

@@ -6,9 +6,14 @@
  *
  * States: IDLE → RECORDING → STOPPED
  * Navigation:
- *   OK   = Start recording (idle) / Stop (recording)
+ *   OK   = Start recording (idle) / Stop (recording) / Reset (stopped)
  *   BACK = Exit (idle) / Stop (recording)
  *   DOWN = Config (idle) / Save (stopped)
+ *
+ * Recording data path:
+ *   ISR → ring buffer → sub_ghz_rx_raw_save_ext() → SD card (.sgh file)
+ *   Data is streamed to SD during recording.  "Save" after stop shows
+ *   the auto-generated filename.
  */
 
 #include <stdint.h>
@@ -54,8 +59,12 @@ extern void subghz_raw_waveform_draw_ext(void);
 extern void subghz_raw_waveform_reset_ext(void);
 extern void subghz_raw_waveform_push_ext(uint16_t duration_us, uint8_t level);
 
-/* SD card manager */
-extern uint8_t sub_ghz_rx_raw_save_ext(bool header_init, bool last_data);
+/* Raw recording file management from m1_sub_ghz.c */
+extern uint8_t  sub_ghz_raw_recording_init_ext(void);
+extern uint32_t sub_ghz_raw_recording_flush_ext(void);
+extern void     sub_ghz_raw_recording_stop_ext(void);
+extern const char *sub_ghz_raw_recording_get_filename_ext(void);
+extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -74,16 +83,25 @@ static void start_raw_rx(SubGhzApp *app)
 {
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
 
-    /* Initialize ring buffers and SD card */
+    /* Initialize ring buffers */
     if (sub_ghz_ring_buffers_init_ext())
     {
         /* Memory error — stay idle */
         return;
     }
 
+    /* Initialize SD card file and write header */
+    if (sub_ghz_raw_recording_init_ext())
+    {
+        /* SD card error — clean up and stay idle */
+        sub_ghz_ring_buffers_deinit_ext();
+        return;
+    }
+
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
     SI446x_Change_Modem_OOK_PDTC(0x6C);
+    sub_ghz_tx_raw_deinit_ext();
     sub_ghz_rx_init_ext();
     sub_ghz_rx_start_ext();
 
@@ -98,13 +116,18 @@ static void start_raw_rx(SubGhzApp *app)
 static void stop_raw_rx(SubGhzApp *app)
 {
     sub_ghz_rx_pause_ext();
-    sub_ghz_rx_deinit_ext();
-    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
-    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
     subghz_record_mode_flag = 0;
 
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
 
+    /* Flush remaining ring buffer data to SD and close the file */
+    sub_ghz_raw_recording_stop_ext();
+
+    sub_ghz_rx_deinit_ext();
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
+
+    app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
     app->raw_state = SubGhzReadRawStateStopped;
 }
 
@@ -143,6 +166,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 /* Reset and go back to idle */
                 sub_ghz_ring_buffers_deinit_ext();
                 app->raw_state = SubGhzReadRawStateIdle;
+                app->raw_sample_count = 0;
                 app->need_redraw = true;
             }
             return true;
@@ -154,14 +178,34 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else if (app->raw_state == SubGhzReadRawStateStopped)
             {
-                /* Save the raw recording */
-                subghz_scene_push(app, SubGhzSceneSaveName);
+                /* Show saved filename */
+                const char *fullpath = sub_ghz_raw_recording_get_filename_ext();
+                /* Extract just the filename from the full path */
+                const char *fname = strrchr(fullpath, '/');
+                if (fname)
+                    fname++;
+                else
+                    fname = fullpath;
+                char count_str[32];
+                snprintf(count_str, sizeof(count_str), "%lu samples",
+                         (unsigned long)app->raw_sample_count);
+                m1_message_box(&m1_u8g2, "Saved to:", fname, count_str,
+                               "BACK to continue");
+                sub_ghz_ring_buffers_deinit_ext();
+                app->raw_state = SubGhzReadRawStateIdle;
+                app->raw_sample_count = 0;
+                app->need_redraw = true;
             }
             return true;
 
         case SubGhzEventRxData:
             if (app->raw_state == SubGhzReadRawStateRecording)
             {
+                /* Flush ring buffer data to SD card */
+                uint32_t flushed = sub_ghz_raw_recording_flush_ext();
+                if (flushed > 0)
+                    app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
+
                 app->rssi = subghz_read_rssi_ext();
                 app->need_redraw = true;
             }
