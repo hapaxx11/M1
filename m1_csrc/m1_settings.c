@@ -324,7 +324,7 @@ void settings_power(void)
 
 static void settings_about_draw_page(uint8_t choice)
 {
-    char prn_name[32];
+    char buf[48];
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -343,16 +343,16 @@ static void settings_about_draw_page(uint8_t choice)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
         u8g2_DrawStr(&m1_u8g2, 4, 22, "M1 by Hapax");
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        snprintf(prn_name, sizeof(prn_name), "%d.%d.%d.%d-Hapax.%d",
+        snprintf(buf, sizeof(buf), "%d.%d.%d.%d-Hapax.%d",
                  m1_device_stat.config.fw_version_major,
                  m1_device_stat.config.fw_version_minor,
                  m1_device_stat.config.fw_version_build,
                  m1_device_stat.config.fw_version_rc,
                  M1_HAPAX_REVISION);
-        u8g2_DrawStr(&m1_u8g2, 4, 34, prn_name);
-        snprintf(prn_name, sizeof(prn_name), "Active bank: %d",
+        u8g2_DrawStr(&m1_u8g2, 4, 34, buf);
+        snprintf(buf, sizeof(buf), "Active bank: %d",
                  (m1_device_stat.active_bank == BANK1_ACTIVE) ? 1 : 2);
-        u8g2_DrawStr(&m1_u8g2, 4, 46, prn_name);
+        u8g2_DrawStr(&m1_u8g2, 4, 46, buf);
         break;
 
     case 1: /* Company info */
@@ -368,9 +368,9 @@ static void settings_about_draw_page(uint8_t choice)
 
     /* Page indicator "< N/M >" at bottom right — no inverted bar */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    snprintf(prn_name, sizeof(prn_name), "< %d/%d >", choice + 1, ABOUT_PAGES);
-    uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, prn_name);
-    u8g2_DrawStr(&m1_u8g2, (M1_LCD_DISPLAY_WIDTH - tw) / 2, 62, prn_name);
+    snprintf(buf, sizeof(buf), "< %d/%d >", choice + 1, ABOUT_PAGES);
+    uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, buf);
+    u8g2_DrawStr(&m1_u8g2, (M1_LCD_DISPLAY_WIDTH - tw) / 2, 62, buf);
 
     m1_u8g2_nextpage();
 }
