@@ -1987,27 +1987,30 @@ static ReturnCode rfalNfcListenActivation( void )
                 //uint16_t rxBytes = rfalConvBitsToBytes(rxBits);
                 //platformLog("[CE][RXDBG] isDataRcvd=1 len=%u bits/%u bytes data=%s\r\n", (unsigned)rxBits, (unsigned)rxBytes, hex2Str(gNfcDev.rxBuf.rfBuf, rxBytes));
                 //osDelay(1);
-                /* Check if received data is a Sleep request */
+                /* Check for HALT/SLP_REQ first — must be handled by RFAL's
+                 * SLEEP_A state machine for proper WUPA reactivation (needed
+                 * by Nintendo Switch anti-clone detection cycle).
+                 * SLP_REQ must be checked BEFORE the T2T persona handler,
+                 * otherwise T2T mode forwards HALT to nfc_listener.c as a
+                 * command and never enters SLEEP_A, causing WUPA to fail. */
+                if( rfalNfcaListenerIsSleepReq( gNfcDev.rxBuf.rfBuf, rfalConvBitsToBytes(gNfcDev.rxLen)) )
+                {
+                    /* Set the Listen Mode in Sleep state */
+                    RFAL_EXIT_ON_ERR( ret, rfalListenSleepStart( RFAL_LM_STATE_SLEEP_A, gNfcDev.rxBuf.rfBuf, sizeof(gNfcDev.rxBuf.rfBuf), &gNfcDev.rxLen ) );
+                    platformLog("[LA] SLP_REQ -> SLEEP_A (persona=%d)\r\n", Emu_GetPersona());
+                }
 
-                /* [User Modification] T2T Emulation: Transition all commands to ACTIVATED state 
-                 * for unified handling in nfc_listener.c */
-                if( Emu_GetPersona() == EMU_PERSONA_T2T )
+                /* [User Modification] T2T Emulation: Transition non-HALT commands
+                 * to ACTIVATED state for unified handling in nfc_listener.c */
+                else if( Emu_GetPersona() == EMU_PERSONA_T2T )
                 {
                     uint16_t rxBits = gNfcDev.rxLen;
                     
                     if (rxBits < 8U) { return RFAL_ERR_BUSY; }
                     
-                    /* All T2T commands (including GET_VERSION) are transitioned to ACTIVATED state */
+                    /* All T2T commands are transitioned to ACTIVATED state */
                     /* nfc_listener.c handles all T2T commands with unified synchronous transmission */
                     return RFAL_ERR_NONE; //ACTIVATE
-                }
-
-
-                if( (Emu_GetPersona() != EMU_PERSONA_T2T) && ( rfalNfcaListenerIsSleepReq( gNfcDev.rxBuf.rfBuf, rfalConvBitsToBytes(gNfcDev.rxLen)) ))     /* Check if received data is a SLP_REQ */
-                {
-                    /* Set the Listen Mode in Sleep state */
-                    RFAL_EXIT_ON_ERR( ret, rfalListenSleepStart( RFAL_LM_STATE_SLEEP_A, gNfcDev.rxBuf.rfBuf, sizeof(gNfcDev.rxBuf.rfBuf), &gNfcDev.rxLen ) );
-                    platformLog("[LA] NFC-A SLP_REQ received, going to SLEEP_A state, ret=%d\r\n", ret);
                 }
                 
             #if RFAL_FEATURE_ISO_DEP && RFAL_FEATURE_ISO_DEP_LISTEN
