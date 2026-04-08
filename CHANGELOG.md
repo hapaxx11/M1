@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz raw recording (Read Raw)** — Fixed raw signal recording which was
+  completely non-functional.  The Read Raw scene set up the radio and ISR for
+  capture but never opened an SD card file, never read captured pulses from the
+  ring buffer, never saved data, and never updated the waveform display or
+  sample count.  Matching C3's working implementation: recording now streams
+  data to an `.sgh` file on SD card in real-time, the oscilloscope waveform
+  updates live during capture, and the sample counter tracks progress.  After
+  stopping, DOWN/Save shows the auto-generated filename.  Previously, pressing
+  Save after recording pushed to the protocol-decode save scene which
+  immediately exited because no decoded protocol data existed.
 - **ESP32 screen responsiveness** — Reduced AT readiness probe timeout from
   2s→1s per probe and inter-probe delay from 500ms→200ms, cutting worst-case
   ESP32 initialization blocking from ~25s to ~12s.  Added separate 5s timeout

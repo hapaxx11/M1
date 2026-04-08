@@ -4535,6 +4535,118 @@ void    subghz_set_tx_power_idx_ext(uint8_t idx) { if (idx < TX_POWER_LEVELS) su
 const char *subghz_get_tx_power_label_ext(uint8_t idx) { return (idx < TX_POWER_LEVELS) ? tx_power_labels[idx] : "?"; }
 uint8_t subghz_get_tx_power_count_ext(void) { return TX_POWER_LEVELS; }
 
+/* ── Raw recording file management (used by Read Raw scene) ─────────────── */
+
+/**
+ * @brief  Initialize the SD card file for raw recording and write the header.
+ *
+ * Sets up datfile_info, opens a new .sgh file via the SDM background task,
+ * writes the Flipper-compatible header (filetype, version, frequency,
+ * modulation), and resets the ring buffer.
+ *
+ * @return 0 on success, non-zero on error (SD card init failed)
+ */
+uint8_t sub_ghz_raw_recording_init_ext(void)
+{
+	uint8_t ret;
+	char infix[5];
+
+	datfile_info.dir_name    = SUB_GHZ_FILEPATH;
+	datfile_info.file_ext    = SUB_GHZ_FILE_EXTENSION;
+	datfile_info.file_prefix = SUB_GHZ_FILE_PREFIX;
+
+	strncpy(infix, subghz_freq_presets[subghz_cfg.freq_idx].label, 3);
+	infix[3] = '\0';
+	datfile_info.file_infix  = infix;
+	datfile_info.file_suffix = subghz_mod_presets[subghz_cfg.mod_idx].label;
+
+	ret = m1_sdm_file_init(&datfile_info);
+	if (ret)
+		return ret;  /* SD card error */
+
+	subghz_record_total_samples = 0;
+
+	m1_sdm_task_init();
+	m1_sdm_task_start();
+
+	/* Write header (filetype, version, frequency, modulation) */
+	sub_ghz_rx_raw_save(true, false);
+
+	/* Reset ring buffer so we start clean */
+	xQueueReset(main_q_hdl);
+	m1_ringbuffer_reset(&subghz_rx_rawdata_rb);
+
+	return 0;
+}
+
+/**
+ * @brief  Flush pending ring buffer data to SD and return the count.
+ *
+ * Called when Q_EVENT_SUBGHZ_RX arrives during raw recording.  Checks
+ * how many samples are available; if >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW,
+ * writes a batch to the SD card.
+ *
+ * @return Number of samples flushed (0 if insufficient data).
+ */
+uint32_t sub_ghz_raw_recording_flush_ext(void)
+{
+	uint32_t avail = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
+	if (avail >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW)
+	{
+		subghz_record_total_samples += avail;
+		sub_ghz_rx_raw_save(false, false);
+
+		/* Push the just-saved samples to the waveform display.
+		 * sub_ghz_rx_raw_save() left them in subghz_ring_read_buffer. */
+		{
+			uint16_t *pdata = (uint16_t *)subghz_ring_read_buffer;
+			uint16_t count = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
+			uint8_t level = 1;  /* First sample is mark (high) */
+			for (uint16_t i = 0; i < count; i++)
+			{
+				subghz_raw_waveform_push(pdata[i], level);
+				level ^= 1;
+			}
+		}
+
+		vTaskDelay(10);  /* Yield so SDM background task can write to SD */
+		return avail;
+	}
+	return 0;
+}
+
+/**
+ * @brief  Stop recording: flush remaining data and close the SD file.
+ */
+void sub_ghz_raw_recording_stop_ext(void)
+{
+	/* Flush whatever remains in the ring buffer */
+	if (ringbuffer_get_data_slots(&subghz_rx_rawdata_rb) > 0)
+		sub_ghz_rx_raw_save(false, true);
+
+	m1_sdm_task_stop();
+	m1_sdm_task_deinit();
+}
+
+/**
+ * @brief  Return the auto-generated filename from the last recording.
+ *
+ * The returned pointer is valid until the next call to
+ * sub_ghz_raw_recording_init_ext() or until the module exits.
+ */
+const char *sub_ghz_raw_recording_get_filename_ext(void)
+{
+	return (const char *)datfile_info.dat_filename;
+}
+
+/**
+ * @brief  Return total samples saved to file during last recording.
+ */
+uint32_t sub_ghz_raw_recording_get_total_samples_ext(void)
+{
+	return subghz_record_total_samples;
+}
+
 /*============================================================================*/
 /* Scene-based entry point — replaces the old menu items                      */
 /*============================================================================*/
