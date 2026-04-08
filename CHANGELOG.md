@@ -11,13 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Hapax logo redesign (H-in-diamond)** — Redesigned all three Hapax logo
-  bitmaps (128x64 splash, 26x14 status bar, 40x32 boot) to use an H drawn
-  inside the center diamond/peak of the M mountain silhouette, replacing the
-  previous H-crossbar overlay.  The H is carved as a negative-space letter
-  within the filled diamond region, with vertical legs and a horizontal
-  crossbar.  Mountain silhouette pixels outside the diamond are unchanged
-  from stock Monstatek.  The diamond portion is exactly symmetrical.
+- **Hapax logo — H inside diamond** — Added a Hapax "H" letterform inside the
+  center diamond of the M mountain logo across all three bitmap sizes (128×64
+  splash, 40×32 boot, 26×14 status bar).  The H is drawn as two thin vertical
+  legs within the gap space between the diamond's bars, connected by the
+  diamond's existing horizontal crossbar(s).  The diamond outline (bars,
+  crossbars, slopes) is completely unchanged from stock Monstatek; only the
+  previously-empty interior gap receives the new H pixels.
 
 ### Fixed
 
