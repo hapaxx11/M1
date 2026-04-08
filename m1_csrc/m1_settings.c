@@ -35,13 +35,8 @@
 #define SETTINGS_FILE_PATH        "0:/System/settings.cfg"
 #define SETTINGS_FILE_MAX_SIZE    512
 
-#define SETTING_ABOUT_CHOICES_MAX		2 //5
-
-#define ABOUT_BOX_Y_POS_ROW_1			10
-#define ABOUT_BOX_Y_POS_ROW_2			20
-#define ABOUT_BOX_Y_POS_ROW_3			30
-#define ABOUT_BOX_Y_POS_ROW_4			40
-#define ABOUT_BOX_Y_POS_ROW_5			50
+/* (ABOUT_BOX defines and SETTING_ABOUT_CHOICES_MAX removed — About screen
+ * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
 #define LCD_SETTINGS_ITEMS   5
@@ -65,8 +60,6 @@ static const char *s_sleep_text[] = { "30s", "1 min", "5 min", "10 min", "15 min
 void menu_settings_init(void);
 void menu_settings_exit(void);
 void settings_about(void);
-static void settings_about_display_choice(uint8_t choice);
-static void settings_apply_orientation(uint8_t orient);
 void settings_save_to_sd(void);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
@@ -121,10 +114,39 @@ static void settings_apply_orientation(uint8_t orient)
 
 /*============================================================================*/
 /**
-  * @brief  LCD & Notifications settings — scrollable 5-item menu
-  *         Brightness, Buzzer, LED Notify, Orientation, Sleep After
+  * @brief  LCD & Notifications settings — config-style menu matching the
+  *         SubGhz Config scene layout: no bottom bar, < > arrows on the
+  *         selected item to indicate L/R cycling, 8px rows from y=12.
   */
 /*============================================================================*/
+
+/* Layout constants — aligned with SubGhz Config scene */
+#define LCD_CFG_AREA_TOP     12   /* Y below title + separator line      */
+#define LCD_CFG_ITEM_H        8   /* Pixel height per config row          */
+#define LCD_CFG_VISIBLE       5   /* All 5 items fit without scrolling    */
+#define LCD_CFG_TEXT_W      124   /* Highlight / text area width           */
+
+static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
+    "Brightness:",
+    "Buzzer:",
+    "LED Notify:",
+    "Orientation:",
+    "Sleep After:",
+};
+
+static const char *lcd_cfg_get_value(uint8_t item)
+{
+    switch (item)
+    {
+    case LCD_SET_BRIGHTNESS: return s_brightness_text[m1_brightness_level];
+    case LCD_SET_BUZZER:     return m1_buzzer_on ? "On" : "Off";
+    case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
+    case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
+    case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
+    default:                 return "";
+    }
+}
+
 void settings_lcd_and_notifications(void)
 {
     S_M1_Buttons_Status this_button_status;
@@ -139,73 +161,54 @@ void settings_lcd_and_notifications(void)
         if (needs_redraw)
         {
             needs_redraw = 0;
-            char line[32];
 
             m1_u8g2_firstpage();
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-            m1_draw_text(&m1_u8g2, 2, 10, 124, "LCD & Notifications", TEXT_ALIGN_CENTER);
 
+            /* Title */
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 2, 9, 120, "LCD & Notifications", TEXT_ALIGN_CENTER);
+
+            /* Separator line */
+            u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+            /* Config items */
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-            /* Scrollable window: show 3 items at a time */
-            uint8_t visible_start = 0;
-            if (sel > 1 && LCD_SETTINGS_ITEMS > 3)
-                visible_start = (sel - 1 > LCD_SETTINGS_ITEMS - 3) ? LCD_SETTINGS_ITEMS - 3 : sel - 1;
-
-            for (uint8_t vi = 0; vi < 3 && (visible_start + vi) < LCD_SETTINGS_ITEMS; vi++)
+            for (uint8_t i = 0; i < LCD_SETTINGS_ITEMS; i++)
             {
-                uint8_t i = visible_start + vi;
-                uint8_t y = 24 + vi * 12;
-                const char *label = "";
-                const char *value = "";
-
-                switch (i)
-                {
-                case LCD_SET_BRIGHTNESS:
-                    label = "Brightness";
-                    value = s_brightness_text[m1_brightness_level];
-                    break;
-                case LCD_SET_BUZZER:
-                    label = "Buzzer";
-                    value = m1_buzzer_on ? "On" : "Off";
-                    break;
-                case LCD_SET_LED:
-                    label = "LED Notify";
-                    value = m1_led_notify_on ? "On" : "Off";
-                    break;
-                case LCD_SET_ORIENT:
-                    label = "Orientation";
-                    value = s_orient_text[m1_screen_orientation];
-                    break;
-                case LCD_SET_SLEEP:
-                    label = "Sleep After";
-                    value = s_sleep_text[m1_sleep_timeout_idx];
-                    break;
-                }
+                uint8_t y = LCD_CFG_AREA_TOP + i * LCD_CFG_ITEM_H;
+                const char *val = lcd_cfg_get_value(i);
 
                 if (i == sel)
                 {
-                    u8g2_DrawBox(&m1_u8g2, 0, y - 9, 128, 11);
+                    /* Highlight selected row */
+                    u8g2_DrawBox(&m1_u8g2, 0, y, LCD_CFG_TEXT_W, LCD_CFG_ITEM_H);
                     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-                    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-                    snprintf(line, sizeof(line), "< %s: %s >", label, value);
-                    u8g2_DrawStr(&m1_u8g2, 4, y, line);
-                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-                    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+                }
+
+                /* Label on left */
+                u8g2_DrawStr(&m1_u8g2, 4, y + 7, lcd_cfg_labels[i]);
+
+                /* Value on right with < > arrows for selected item */
+                if (i == sel)
+                {
+                    u8g2_DrawStr(&m1_u8g2, 68, y + 7, "<");
+                    u8g2_DrawStr(&m1_u8g2, 74, y + 7, val);
+                    uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
+                    u8g2_DrawStr(&m1_u8g2, 74 + vw + 2, y + 7, ">");
                 }
                 else
                 {
-                    snprintf(line, sizeof(line), "  %s: %s", label, value);
-                    u8g2_DrawStr(&m1_u8g2, 4, y, line);
+                    u8g2_DrawStr(&m1_u8g2, 74, y + 7, val);
                 }
+
+                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
             }
 
-            /* Bottom bar */
-            u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-            u8g2_DrawStr(&m1_u8g2, 2, 61, "U/D=Sel L/R=Change");
+            /* No button bar — the < > arrows on selected items clearly indicate
+             * that LEFT/RIGHT changes the value.  UP/DOWN is self-evident. */
+
             m1_u8g2_nextpage();
         }
 
@@ -311,119 +314,102 @@ void settings_power(void)
 
 /*============================================================================*/
 /**
-  * @brief
-  * @param
-  * @retval
+  * @brief  About screen — paginated info view without bottom bar.
+  *         L/R navigation is intuitive; a small page indicator replaces
+  *         the old Prev/Next bar to reclaim screen space.
   */
 /*============================================================================*/
+
+#define ABOUT_PAGES  3   /* FW info, Company info, M1 image */
+
+static void settings_about_draw_page(uint8_t choice)
+{
+    char buf[48];
+
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+    /* Title */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, "About", TEXT_ALIGN_CENTER);
+
+    /* Separator line */
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+    /* Page content — starts at y=20, full height available */
+    switch (choice)
+    {
+    case 0: /* FW info */
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+        u8g2_DrawStr(&m1_u8g2, 4, 22, "M1 by Hapax");
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        snprintf(buf, sizeof(buf), "%d.%d.%d.%d-Hapax.%d",
+                 m1_device_stat.config.fw_version_major,
+                 m1_device_stat.config.fw_version_minor,
+                 m1_device_stat.config.fw_version_build,
+                 m1_device_stat.config.fw_version_rc,
+                 M1_HAPAX_REVISION);
+        u8g2_DrawStr(&m1_u8g2, 4, 34, buf);
+        snprintf(buf, sizeof(buf), "Active bank: %d",
+                 (m1_device_stat.active_bank == BANK1_ACTIVE) ? 1 : 2);
+        u8g2_DrawStr(&m1_u8g2, 4, 46, buf);
+        break;
+
+    case 1: /* Company info */
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 4, 22, "MonstaTek Inc.");
+        u8g2_DrawStr(&m1_u8g2, 4, 34, "San Jose, CA, USA");
+        break;
+
+    default: /* M1 device image */
+        u8g2_DrawXBMP(&m1_u8g2, 23, 14, 82, 36, m1_device_82x36);
+        break;
+    }
+
+    /* Page indicator "< N/M >" at bottom right — no inverted bar */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    snprintf(buf, sizeof(buf), "< %d/%d >", choice + 1, ABOUT_PAGES);
+    uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, buf);
+    u8g2_DrawStr(&m1_u8g2, (M1_LCD_DISPLAY_WIDTH - tw) / 2, 62, buf);
+
+    m1_u8g2_nextpage();
+}
+
 void settings_about(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	uint8_t choice;
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    uint8_t choice = 0;
 
-	/* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	u8g2_DrawXBMP(&m1_u8g2, 1, 53, 8, 8, arrowleft_8x8); // draw arrowleft icon
-	u8g2_DrawStr(&m1_u8g2, 11, 61, "Prev.");
-	u8g2_DrawXBMP(&m1_u8g2, 119, 53, 8, 8, arrowright_8x8); // draw arrowright icon
-	u8g2_DrawStr(&m1_u8g2, 97, 61, "Next");
-	m1_u8g2_nextpage(); // Update display RAM
+    settings_about_draw_page(choice);
 
-	choice = 0;
-	settings_about_display_choice(choice);
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE) continue;
+        if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
 
-	while (1 ) // Main loop of this task
-	{
-		;
-		; // Do other parts of this task here
-		;
+        ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+        if (ret != pdTRUE) continue;
 
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret==pdTRUE)
-		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			{
-				// Notification is only sent to this task when there's any button activity,
-				// so it doesn't need to wait when reading the event from the queue
-				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK ) // user wants to exit?
-				{
-					; // Do extra tasks here if needed
-					xQueueReset(main_q_hdl); // Reset main q before return
-					break; // Exit and return to the calling task (subfunc_handler_task)
-				} // if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK )
-				else if ( this_button_status.event[BUTTON_LEFT_KP_ID]==BUTTON_EVENT_CLICK ) // Previous?
-				{
-					choice--;
-					if ( choice > SETTING_ABOUT_CHOICES_MAX )
-						choice = SETTING_ABOUT_CHOICES_MAX;
-					settings_about_display_choice(choice);
-				} // else if ( this_button_status.event[BUTTON_LEFT_KP_ID]==BUTTON_EVENT_CLICK )
-				else if ( this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK ) // Next?
-				{
-					choice++;
-					if ( choice > SETTING_ABOUT_CHOICES_MAX )
-						choice = 0;
-					settings_about_display_choice(choice);
-				} // else if ( this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK )
-			} // if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			else
-			{
-				; // Do other things for this task
-			}
-		} // if (ret==pdTRUE)
-	} // while (1 ) // Main loop of this task
-
-} // void settings_about(void)
-
-
-
-/*============================================================================*/
-/**
-  * @brief
-  * @param
-  * @retval
-  */
-/*============================================================================*/
-static void settings_about_display_choice(uint8_t choice)
-{
-	uint8_t prn_name[20];
-
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Set background color
-	u8g2_DrawBox(&m1_u8g2, 0, 0, M1_LCD_DISPLAY_WIDTH, ABOUT_BOX_Y_POS_ROW_5 + 1); // Clear old content
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // Set text color
-
-	switch (choice)
-	{
-		case 0: // FW info
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B); // Set bold font
-			u8g2_DrawStr(&m1_u8g2, 0, ABOUT_BOX_Y_POS_ROW_1, "M1 by Hapax");
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N); // Set normal font
-			sprintf(prn_name, "%d.%d.%d.%d-Hapax.%d", m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc, M1_HAPAX_REVISION);
-			u8g2_DrawStr(&m1_u8g2, 0, ABOUT_BOX_Y_POS_ROW_2, prn_name);
-			sprintf(prn_name, "Active bank: %d", (m1_device_stat.active_bank==BANK1_ACTIVE)?1:2);
-			u8g2_DrawStr(&m1_u8g2, 0, ABOUT_BOX_Y_POS_ROW_3, prn_name);
-			break;
-
-		case 1: // Company info
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N); // Set small font
-			u8g2_DrawStr(&m1_u8g2, 0, ABOUT_BOX_Y_POS_ROW_1, "MonstaTek Inc.");
-			u8g2_DrawStr(&m1_u8g2, 0, ABOUT_BOX_Y_POS_ROW_2, "San Jose, CA, USA");
-			break;
-
-		default:
-			u8g2_DrawXBMP(&m1_u8g2, 23, 1, 82, 36, m1_device_82x36);
-			break;
-	} // switch (choice)
-
-	m1_u8g2_nextpage(); // Update display RAM
-} // static void settings_about_display_choice(uint8_t choice)
+        if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            xQueueReset(main_q_hdl);
+            break;
+        }
+        else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            choice = (choice == 0) ? (ABOUT_PAGES - 1) : (choice - 1);
+            settings_about_draw_page(choice);
+        }
+        else if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            choice = (choice + 1) % ABOUT_PAGES;
+            settings_about_draw_page(choice);
+        }
+    }
+}
 
 
 /*============================================================================*/

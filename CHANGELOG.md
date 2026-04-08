@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings — LCD & Notifications menu** — Removed the bottom instruction bar
+  ("U/D=Sel L/R=Change") that wasted 12px of screen space.  Now uses the same
+  layout as the Sub-GHz Config scene: title with separator line, 8px rows showing
+  all 5 items at once (no scrolling needed), and `< value >` arrows on the selected
+  item to indicate L/R cycling.  Reclaims the bottom 12px and eliminates the
+  3-item scrolling window.
+- **Settings — About screen** — Removed the bottom Prev/Next inverted bar.
+  L/R navigation is intuitive; replaced with a subtle centered `< 1/3 >` page
+  indicator.  Added title header with separator line for visual consistency.
+  Content repositioned to use the full display area.
+
 ### Fixed
 
 - **NFC Amiibo emulation — Nintendo Switch compatibility** — Fixed T2T card
