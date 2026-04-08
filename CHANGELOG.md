@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Hapax logo redesign (H-in-diamond)** — Redesigned all three Hapax logo
+  bitmaps (128x64 splash, 26x14 status bar, 40x32 boot) to use an H drawn
+  inside the center diamond/peak of the M mountain silhouette, replacing the
+  previous H-crossbar overlay.  The H is carved as a negative-space letter
+  within the filled diamond region, with vertical legs and a horizontal
+  crossbar.  Mountain silhouette pixels outside the diamond are unchanged
+  from stock Monstatek.  The diamond portion is exactly symmetrical.
+
 ### Fixed
 
 - **Sub-GHz raw recording (Read Raw)** — Fixed raw signal recording which was
