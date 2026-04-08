@@ -181,7 +181,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 /* Show saved filename */
                 const char *fullpath = sub_ghz_raw_recording_get_filename_ext();
                 /* Extract just the filename from the full path */
-                const char *fname = strstr(fullpath + 1, "/");
+                const char *fname = strrchr(fullpath, '/');
                 if (fname)
                     fname++;
                 else

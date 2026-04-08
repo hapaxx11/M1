@@ -4549,7 +4549,7 @@ uint8_t subghz_get_tx_power_count_ext(void) { return TX_POWER_LEVELS; }
 uint8_t sub_ghz_raw_recording_init_ext(void)
 {
 	uint8_t ret;
-	char infix[5];
+	static char infix[5];  /* static: datfile_info stores a pointer to this */
 
 	datfile_info.dir_name    = SUB_GHZ_FILEPATH;
 	datfile_info.file_ext    = SUB_GHZ_FILE_EXTENSION;
