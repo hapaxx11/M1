@@ -69,7 +69,6 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             /* Restore radio to known state after replay (the replay
              * function calls menu_sub_ghz_exit which powers off the
              * SI4463). */
-            extern void menu_sub_ghz_init(void);
             menu_sub_ghz_init();
             if (ret != 0)
             {
