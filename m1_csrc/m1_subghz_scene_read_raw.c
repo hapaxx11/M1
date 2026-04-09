@@ -243,9 +243,13 @@ static void draw(SubGhzApp *app)
 
     subghz_status_bar_draw(freq, mod, state, false);
 
-    /* RSSI bar when recording */
+    /* RSSI bar when recording — read fresh RSSI on every draw cycle so the
+     * bar updates even during 200ms timeout redraws (not only on RxData). */
     if (app->raw_state == SubGhzReadRawStateRecording)
+    {
+        app->rssi = subghz_read_rssi_ext();
         subghz_rssi_bar_draw(app->rssi);
+    }
 
     /* Waveform area */
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -263,7 +267,10 @@ static void draw(SubGhzApp *app)
 
         /* Sample count in top corner */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        snprintf(line, sizeof(line), "%luk", (unsigned long)(app->raw_sample_count / 1000));
+        if (app->raw_sample_count >= 1000)
+            snprintf(line, sizeof(line), "%luk", (unsigned long)(app->raw_sample_count / 1000));
+        else
+            snprintf(line, sizeof(line), "%lu", (unsigned long)app->raw_sample_count);
         u8g2_DrawStr(&m1_u8g2, 100, 22, line);
     }
 
