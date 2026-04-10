@@ -125,6 +125,40 @@ uint8_t M1_VIRTUAL_KBS_DATA_MAX;
 
 //************************** C O N S T A N T **********************************/
 
+static void m1_vkb_draw_text_with_visible_spaces(uint8_t x_start, uint8_t y, const char *text)
+{
+	uint8_t x = x_start;
+	char key[2];
+
+	if ( text == NULL )
+	{
+		return;
+	}
+
+	key[1] = 0x00;
+	while ( *text != 0x00 )
+	{
+		if ( *text == ' ' )
+		{
+			/* Render spaces with a visible placeholder while still
+			 * storing the actual space in the buffer. */
+			u8g2_DrawBox(&m1_u8g2,
+						 x + 1,
+						 y - 1,
+						 M1_VKB_GUI_FONT_WIDTH > 2 ? (M1_VKB_GUI_FONT_WIDTH - 2) : M1_VKB_GUI_FONT_WIDTH,
+						 1);
+		}
+		else
+		{
+			key[0] = *text;
+			u8g2_DrawStr(&m1_u8g2, x, y, key);
+		}
+
+		x += M1_VKB_GUI_FONT_WIDTH;
+		text++;
+	}
+}
+
 // 'backspace key', 15x10px
 const uint8_t m1_virtual_kb_icon_backspace[] = {
 /*
@@ -505,13 +539,15 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 							{
 								len--;
 								filename[len] = 0x00; // Add NULL to the end of the string
-								x = M1_VKB_FILENAME_POS_X;
-								x += M1_VKB_GUI_FONT_WIDTH*len;
 								y = M1_VKB_FILENAME_POS_Y;
-								// Clear this character
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-								u8g2_DrawBox(&m1_u8g2, x, y - M1_VKB_GUI_FONT_HEIGHT + 2, M1_VKB_GUI_FONT_WIDTH, M1_VKB_GUI_FONT_HEIGHT);
+								u8g2_DrawBox(&m1_u8g2,
+											 M1_VKB_FILENAME_POS_X,
+											 y - M1_VKB_GUI_FONT_HEIGHT + 2,
+											 M1_VKB_GUI_FONT_WIDTH * M1_VIRTUAL_KB_FILENAME_MAX,
+											 M1_VKB_GUI_FONT_HEIGHT);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+								m1_vkb_draw_text_with_visible_spaces(M1_VKB_FILENAME_POS_X, y, filename);
 								m1_u8g2_nextpage(); // Update graphic to the display RAM
 							} // if (len)
 						}
@@ -524,24 +560,15 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 							filename[len] = key[0];
 							len++;
 							filename[len] = 0x00; // Add NULL to the end of the string
-							x = M1_VKB_FILENAME_POS_X;
-							x += M1_VKB_GUI_FONT_WIDTH*(len-1);
 							y = M1_VKB_FILENAME_POS_Y;
+							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+							u8g2_DrawBox(&m1_u8g2,
+										 M1_VKB_FILENAME_POS_X,
+										 y - M1_VKB_GUI_FONT_HEIGHT + 2,
+										 M1_VKB_GUI_FONT_WIDTH * M1_VIRTUAL_KB_FILENAME_MAX,
+										 M1_VKB_GUI_FONT_HEIGHT);
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-							if ( key[0] == ' ' )
-							{
-								/* Render spaces with a visible placeholder while
-								 * still storing the actual space in the buffer. */
-								u8g2_DrawBox(&m1_u8g2,
-											 x + 1,
-											 y - 1,
-											 M1_VKB_GUI_FONT_WIDTH > 2 ? (M1_VKB_GUI_FONT_WIDTH - 2) : M1_VKB_GUI_FONT_WIDTH,
-											 1);
-							}
-							else
-							{
-								u8g2_DrawStr(&m1_u8g2, x, y, key); // Display this character
-							}
+							m1_vkb_draw_text_with_visible_spaces(M1_VKB_FILENAME_POS_X, y, filename);
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( len < M1_VIRTUAL_KB_FILENAME_MAX )
 					} // else
