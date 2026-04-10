@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
+  `subghz_raw_waveform_draw()` from filled vertical bars to a proper
+  square-wave oscilloscope trace.  High/low signal levels are now drawn
+  as 2px-thick horizontal rails with crisp vertical transition edges.
+  Added subtle dashed grid reference lines at the high, center, and low
+  positions for visual context.  Adjusted the waveform area geometry
+  (Y=15, H=36) so it no longer overlaps the RSSI bar.
+
 ### Fixed
 
 - **802.15.4 (Zigbee/Thread) ESP32 resource leak** — Added `m1_esp32_deinit()`
