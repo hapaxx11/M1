@@ -64,6 +64,17 @@ build_lfrfid.txt
 build_lfrfid2.txt
 appsplan.md
 
+# Host-side test build output
+build-tests/
+
+# Doxygen generated documentation
+docs/html/
+docs/latex/
+
+# cppcheck reports
+cppcheck-report.txt
+misra-report.txt
+
 # Claude / AI assistant
 .claude/
 

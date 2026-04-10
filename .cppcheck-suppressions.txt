@@ -1,0 +1,41 @@
+variableScope:Drivers/*
+variableScope:Middlewares/*
+variableScope:NFC/*
+stackVariable:Sub_Ghz/protocols/*
+unusedFunction:Core/Src/stm32h5xx_hal_msp.c
+unusedFunction:Core/Src/stm32h5xx_it.c
+
+// --- Pre-existing baseline (fix incrementally, then remove) ---
+// Vendor CMSIS inline assembly pointer comparisons
+comparePointers:Drivers/CMSIS/Include/cmsis_gcc.h
+
+// printf format mismatches (uint32_t vs %lu/%lX on 32-bit ARM)
+invalidPrintfArgType_uint:m1_csrc/m1_802154.c
+invalidPrintfArgType_uint:m1_csrc/m1_esp32_fw_update.c
+invalidPrintfArgType_uint:m1_csrc/m1_lib.c
+invalidPrintfArgType_uint:m1_csrc/m1_log_debug.c
+invalidPrintfArgType_uint:m1_csrc/m1_nfc.c
+invalidPrintfArgType_uint:m1_csrc/m1_sub_ghz.c
+invalidPrintfArgType_uint:m1_csrc/m1_subghz_scene_playlist.c
+invalidPrintfArgType_uint:m1_csrc/m1_subghz_scene_read.c
+invalidPrintfArgType_uint:m1_csrc/m1_subghz_scene_receiver_info.c
+invalidPrintfArgType_uint:m1_csrc/m1_subghz_scene_saved.c
+invalidPrintfArgType_sint:m1_csrc/m1_sdcard_man.c
+
+// Uninitialized variables (context-dependent, need manual review)
+uninitvar:m1_csrc/m1_cli.c
+uninitvar:m1_csrc/m1_nfc.c
+
+// va_list opened but not closed
+va_end_missing:m1_csrc/m1_file_browser.c
+va_end_missing:m1_csrc/m1_log_debug.c
+
+// Array bounds (IR favorites/recent arrays indexed beyond declared size)
+arrayIndexOutOfBounds:m1_csrc/m1_ir_universal.c
+
+// Redundant null-pointer check
+nullPointerRedundantCheck:m1_csrc/m1_rfid.c
+
+// Identical inner condition
+identicalInnerCondition:m1_csrc/flipper_subghz.c
+identicalInnerCondition:m1_csrc/m1_watchdog.c
