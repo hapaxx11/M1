@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Virtual keyboard — text-mode layout with SPACE key** — Added
+  `m1_vkb_get_text()` function that provides a context-specific keyboard
+  layout for general text input (passwords, device names).  The text-mode
+  keyboard replaces the underscore key with a visible SPACE indicator (⎵)
+  on lowercase and uppercase pages; underscore is moved to the symbols page
+  (replacing pipe `|`).  Follows Flipper Zero's pattern of multiple keyboard
+  layouts depending on context.  WiFi password entry and Bad-BT device name
+  entry now use the text-mode keyboard.  Filename entry (`m1_vkb_get_filename`)
+  retains the original layout without space.
+
 ### Changed
 
 - **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote

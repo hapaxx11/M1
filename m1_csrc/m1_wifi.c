@@ -251,7 +251,7 @@ void wifi_scan_ap(void)
 					{
 						/* Prompt for password using virtual keyboard */
 						memset(password, 0, sizeof(password));
-						uint8_t pw_len = m1_vkb_get_filename("Password:",
+						uint8_t pw_len = m1_vkb_get_text("Password:",
 							"", password);
 						if ( pw_len > 0 )
 						{
