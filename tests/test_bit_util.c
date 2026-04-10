@@ -78,7 +78,7 @@ void test_reflect4_0x12(void)
     TEST_ASSERT_EQUAL_UINT8(0x84, reflect4(0x12));
 }
 
-void test_reflect_bytes_identity(void)
+void test_reflect_bytes_reverses_bits(void)
 {
     uint8_t msg[] = {0xFF, 0x00, 0xAA};
     uint8_t exp[] = {0xFF, 0x00, 0x55};
@@ -271,14 +271,15 @@ void test_lfsr_digest16_deterministic(void)
 void test_extract_bytes_uart_basic(void)
 {
     /* Use the same test vector as bit_util.c's built-in self-test:
-     * uart[] = {0x7F, 0xE6, 0x64} → extracts 2 bytes: 0xFF, 0x33
+     * uart[] = {0x7F, 0xD9, 0x90} → extracts 2 bytes: 0xFF, 0x33
      * The implementation uses reverse8() on extracted data bits. */
-    uint8_t uart[] = {0x7F, 0xE6, 0x64};
+    uint8_t uart[] = {0x7F, 0xD9, 0x90};
     uint8_t bytes[2] = {0};
     unsigned n = extract_bytes_uart(uart, 0, 24, bytes);
-    /* Verify we get at least 1 byte and the function doesn't crash.
-     * The exact result depends on bit packing conventions. */
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT(1, n);
+
+    TEST_ASSERT_EQUAL_UINT(2, n);
+    TEST_ASSERT_EQUAL_UINT8(0xFF, bytes[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x33, bytes[1]);
 }
 
 /* ===================================================================
@@ -299,7 +300,7 @@ int main(void)
     RUN_TEST(test_reverse32_one);
     RUN_TEST(test_reverse32_roundtrip);
     RUN_TEST(test_reflect4_0x12);
-    RUN_TEST(test_reflect_bytes_identity);
+    RUN_TEST(test_reflect_bytes_reverses_bits);
 
     /* CRC */
     RUN_TEST(test_crc8_poly31);

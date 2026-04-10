@@ -29,8 +29,12 @@ if(ENABLE_SANITIZERS AND NOT MSVC)
     message(STATUS "Address Sanitizer + UBSan enabled")
 endif()
 
-# Warnings
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic -Werror=return-type")
+# Warnings (compiler-specific)
+if(MSVC)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror=return-type)
+endif()
 
 # ------------------------------------------------------------------
 # Unity test framework (vendored — single-file drop-in)

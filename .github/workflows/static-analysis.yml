@@ -126,11 +126,13 @@ jobs:
             -I Sub_Ghz \
             -I Sub_Ghz/protocols \
             -I Infrared \
+            -I lfrfid \
             -I Battery \
             -I Core/Inc \
             -I Drivers/STM32H5xx_HAL_Driver/Inc \
             -I Drivers/CMSIS/Device/ST/STM32H5xx/Include \
             -I Drivers/CMSIS/Include \
+            -I NFC/Middlewares/ST/rfal/Inc \
             -I FatFs \
             -I lib/furi \
             m1_csrc/ \
