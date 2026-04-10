@@ -678,13 +678,19 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 
 		case SUB_GHZ_BAND_CUSTOM:
 			/* Use base configs that have GPIO2=INPUT (0x04) for direct TX.
-			 * BAND_315 for <420MHz, BAND_433_92 for 420-849MHz, BAND_915 FSK for 850+MHz.
-			 * These configs have GPIO2=0x04 so TX works without runtime GPIO fix. */
-			if (subghz_custom_freq_hz >= 850000000UL)
+			 * For FSK at ANY frequency, load the 915 FSK config and retune —
+			 * the 915 config is the only one with 2FSK modem settings.
+			 * For OOK: BAND_315 for <420MHz, BAND_433_92 for 420-849MHz,
+			 * BAND_915 for 850+MHz. */
+			if (subghz_scan_config.modulation == MODULATION_FSK)
 			{
 				init_freq = SUB_GHZ_BAND_915;
-				mod_type = (subghz_scan_config.modulation == MODULATION_FSK)
-				         ? MODEM_MOD_TYPE_FSK : MODEM_MOD_TYPE_OOK;
+				mod_type = MODEM_MOD_TYPE_FSK;
+			}
+			else if (subghz_custom_freq_hz >= 850000000UL)
+			{
+				init_freq = SUB_GHZ_BAND_915;
+				mod_type = MODEM_MOD_TYPE_OOK;
 			}
 			else if (subghz_custom_freq_hz >= 420000000UL)
 			{
@@ -706,7 +712,23 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 	} // switch(band)
 
 	radio_init_rx_tx(init_freq, mod_type, SI446x_Get_Reset_Stat());
-	SI446x_Select_Frontend((band == SUB_GHZ_BAND_CUSTOM) ? init_freq : band);
+
+	/* For CUSTOM band, select the antenna frontend based on the actual
+	 * target frequency — init_freq may differ (e.g. 915 FSK config loaded
+	 * for a 433 MHz 2FSK signal). */
+	if (band == SUB_GHZ_BAND_CUSTOM)
+	{
+		S_M1_SubGHz_Band fe_band;
+		if (subghz_custom_freq_hz >= 850000000UL)
+			fe_band = SUB_GHZ_BAND_915;
+		else if (subghz_custom_freq_hz >= 390000000UL)
+			fe_band = SUB_GHZ_BAND_433_92;
+		else
+			fe_band = SUB_GHZ_BAND_315;
+		SI446x_Select_Frontend(fe_band);
+	}
+	else
+		SI446x_Select_Frontend(band);
 
 	if (retune_freq_hz)
 	{
@@ -1829,6 +1851,12 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	subghz_replay_channel = 0;
 	/* Propagate parsed modulation so sub_ghz_set_opmode uses it for CUSTOM band */
 	subghz_scan_config.modulation = modulation;
+
+	/* Standard band configs (300–433.92 MHz) are OOK-only.  Force CUSTOM
+	 * band for FSK so the modulation-aware CUSTOM handler loads the 915
+	 * FSK radio config and retunes to the target frequency. */
+	if (modulation == MODULATION_FSK && subghz_replay_band != SUB_GHZ_BAND_CUSTOM)
+		subghz_replay_band = SUB_GHZ_BAND_CUSTOM;
 
 	/* ── 5. Set up datfile_info → temp .sgh ── */
 	strncpy((char *)datfile_info.dat_filename, FLIPPER_SUB_TMP_SGH,

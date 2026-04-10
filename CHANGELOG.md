@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz 2FSK replay at all frequencies** — Emulate now correctly uses FSK
+  modulation when replaying Flipper .sub files with `Preset: 2FSKDev238Async` (or
+  any FSK preset) at any frequency.  Previously, standard band configs (300–433.92
+  MHz) always forced OOK modulation and the CUSTOM band handler only checked FSK
+  for frequencies ≥ 850 MHz.  The fix forces CUSTOM band mode when FSK is detected,
+  loads the 915 FSK radio config, and retunes to the target frequency.
+- **Sub-GHz CUSTOM band antenna switch** — Frontend (antenna path) for CUSTOM
+  band frequencies is now selected based on the actual target frequency, not the
+  base config band.  Fixes incorrect antenna path when the radio config base band
+  differs from the target frequency (e.g. 915 FSK config loaded for 433 MHz FSK).
+- **Sub-GHz preset parser consistency** — `flipper_subghz_preset_to_modulation()`
+  now uses case-insensitive matching and recognises ASK presets, matching the replay
+  function's `stristr()` approach.
 - **Sub-GHz Read Raw — RSSI feedback during recording** — RSSI bar now updates
   on every 200ms display refresh (not only when ring-buffer flush events arrive),
   providing continuous signal-strength feedback while recording.
