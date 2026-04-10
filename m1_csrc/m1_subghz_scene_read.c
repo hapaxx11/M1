@@ -157,6 +157,13 @@ static void start_rx(SubGhzApp *app)
     /* Apply config to radio */
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
 
+    /* Ensure radio is in a clean, known state — matches the Spectrum
+     * Analyzer pattern of always doing a full radio reset + config load
+     * before starting RX.  This guarantees the SI4463 recovers properly
+     * even if a previous blocking delegate powered the radio off via
+     * menu_sub_ghz_exit(). */
+    menu_sub_ghz_init();
+
     /* Track the active frequency in Hz */
     app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
 

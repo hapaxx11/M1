@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sub-GHz Read Raw not capturing signals** — Fixed critical initialization ordering
+  bug in Read Raw scene where `sub_ghz_tx_raw_deinit_ext()` was called AFTER starting
+  the radio in RX mode.  The deinit function internally calls
+  `sub_ghz_set_opmode(ISOLATED)` which puts the SI4463 to SLEEP, completely undoing
+  the RX start.  TIM1 captured zero edges because GPIO0 outputs nothing while the
+  radio is asleep.  Moved the TX cleanup to before the RX initialization sequence.
+- **Sub-GHz Read and Read Raw radio recovery after blocking delegates** — Added
+  `menu_sub_ghz_init()` (full radio PowerUp + config reset) at the start of both
+  Read and Read Raw RX initialization, matching the Spectrum Analyzer's pattern.
+  Previously, after a blocking delegate (Spectrum Analyzer, Freq Scanner, etc.)
+  exited and powered off the radio via `menu_sub_ghz_exit()`, Read/Read Raw relied
+  on `radio_init_rx_tx()`'s retry loop to recover the powered-off SI4463.  The
+  explicit reset ensures the radio is always in a clean, known state before
+  starting RX.
+
 ### Changed
 
 - **Hapax logo — H inside diamond** — Updated all three M1 logo bitmap arrays
