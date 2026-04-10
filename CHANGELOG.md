@@ -28,8 +28,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on every PR and push that touches source files.
 - **cppcheck suppressions** — Added `.cppcheck-suppressions.txt` for vendor HAL and
   expected embedded firmware patterns.
+### Changed
+
+- **CI workflow no longer runs on push to main** — Removed the `push`
+  trigger from `ci.yml` so the CI Build Check only runs on pull requests.
+  Previously, every push to `main` triggered both CI Build Check and
+  Build and Release in parallel, producing two identical firmware builds.
+  Build and Release already validates compilation, so the CI run was
+  fully redundant.  This halves the compute usage on push-to-main events.
+- **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
+  `subghz_raw_waveform_draw()` from filled vertical bars to a proper
+  square-wave oscilloscope trace.  High/low signal levels are now drawn
+  as 2px-thick horizontal rails with crisp vertical transition edges.
+  Added subtle dashed grid reference lines at the high, center, and low
+  positions for visual context.  Adjusted the waveform area geometry
+  (Y=15, H=36) so it no longer overlaps the RSSI bar.
+- **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
+  the intermediate "Press OK to browse" prompt screen.  Entering either scene
+  now opens the SD card file browser immediately.  BACK from the action menu
+  (Saved) or playback view (Playlist) re-opens the browser; BACK from the
+  browser returns to the Sub-GHz menu.  After Rename or Delete, the file
+  browser reopens automatically per the Saved Item Actions Pattern.
+- **File browser lists directories before files** — The SD card file browser
+  now sorts entries with directories first, then files, each group sorted
+  alphabetically (case-insensitive).  This matches Flipper Zero / Momentum
+  firmware behaviour and prevents subdirectories (e.g. `playlist/`) from
+  appearing in the middle of signal files.
 
 ### Fixed
+
+- **Splash screen showing "M1 H" instead of "M1 Hapax"** — Changed
+  `M1_POWERUP_LOGO_FONT` from `u8g2_font_tenthinnerguys_tu` (uppercase only,
+  glyphs 32-95) to `u8g2_font_tenthinnerguys_tr` (restricted, glyphs 32-127)
+  so lowercase letters in "Hapax" are rendered correctly.
+- **802.15.4 (Zigbee/Thread) ESP32 resource leak** — Added `m1_esp32_deinit()`
+  to all four exit paths in `ieee802154_scan()`.  Previously, every Zigbee/Thread
+  scan left the ESP32 SPI transport initialized on exit, wasting power and
+  potentially interfering with subsequent WiFi/BT operations.
+- **BLE Spam ESP32 resource leak** — Added `m1_esp32_deinit()` to both the
+  early return (ESP32 not ready) and normal exit paths in `ble_spam_run()`.
+- **Bad-BT ESP32 resource leak** — Added `m1_esp32_deinit()` to all five exit
+  paths in `badbt_run()` (ESP32 not ready, BLE HID init failure, connection
+  timeout, SD card error, and normal exit).  Previously only `ble_hid_deinit()`
+  was called, leaving the underlying SPI transport active.
+- **WiFi disconnect early return without ESP32 deinit** — Added
+  `m1_esp32_deinit()` to the early return path in `wifi_disconnect()` when
+  `wifi_ensure_esp32_ready()` fails.  The ESP32 may have been partially
+  initialized before the failure.
+- **NFC worker ignoring Q_EVENT_NFC_STOP** — Added handler for
+  `Q_EVENT_NFC_STOP` in the NFC worker state machine's `NFC_STATE_PROCESS`
+  case.  Previously this event was silently discarded, leaving the worker
+  stuck in PROCESS state — `nfc_deinit_func()` never ran and `EN_EXT_5V`
+  was never deasserted.  Two call sites in `m1_nfc.c` (unlock read and
+  unlock with reader) send this event on user cancellation.
+- **IR Send All skipping deinit on timeout** — Changed the Send All loop in
+  `m1_ir_universal.c` to always call `infrared_encode_sys_deinit()` after
+  each command, regardless of whether `Q_EVENT_IRRED_TX` was received.
+  Previously, a 3-second timeout or unexpected event left the IR hardware
+  initialized, and the next `transmit_command()` called
+  `infrared_encode_sys_init()` on already-initialized hardware.
 
 - **Sub-GHz Read Raw not capturing signals** — Fixed critical initialization ordering
   bug in Read Raw scene where `sub_ghz_tx_raw_deinit_ext()` was called AFTER starting

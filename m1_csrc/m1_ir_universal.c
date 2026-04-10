@@ -1114,21 +1114,51 @@ static bool ir_file_action_menu(const char *ir_file_path)
                 {
                     /* Transmit every command in the file sequentially.
                      * Each transmit_command() calls infrared_encode_sys_init(),
-                     * so we must deinit after each TX complete event before
-                     * the next command can re-init the hardware. */
-                    for (uint16_t i = 0; i < s_cmd_count; i++)
+                     * so we must deinit after each TX — even on timeout —
+                     * before the next command can re-init the hardware. */
+                    bool cancelled = false;
+                    for (uint16_t i = 0; i < s_cmd_count && !cancelled; i++)
                     {
                         if (s_commands[i].valid)
                         {
                             transmit_command(&s_commands[i]);
-                            /* Wait for TX complete before next */
+
+                            /* Wait specifically for Q_EVENT_IRRED_TX, ignoring
+                             * unrelated events.  BACK cancels the loop.
+                             * Drain button_events_q_hdl when keypad events
+                             * arrive to keep the two queues in sync. */
                             S_M1_Main_Q_t tx_q;
-                            BaseType_t tx_ret = xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(3000));
-                            if (tx_ret == pdTRUE && tx_q.q_evt_type == Q_EVENT_IRRED_TX)
+                            uint32_t deadline = HAL_GetTick() + 3000;
+                            bool tx_done = false;
+                            while (!tx_done && !cancelled)
                             {
-                                infrared_encode_sys_deinit();
+                                uint32_t now = HAL_GetTick();
+                                uint32_t remaining = (now < deadline) ? (deadline - now) : 0;
+                                if (remaining == 0)
+                                    break; /* timeout */
+                                BaseType_t rx = xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(remaining));
+                                if (rx != pdTRUE)
+                                    break; /* timeout */
+                                if (tx_q.q_evt_type == Q_EVENT_IRRED_TX)
+                                {
+                                    tx_done = true;
+                                }
+                                else if (tx_q.q_evt_type == Q_EVENT_KEYPAD)
+                                {
+                                    S_M1_Buttons_Status bs;
+                                    xQueueReceive(button_events_q_hdl, &bs, 0);
+                                    if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                                        cancelled = true;
+                                }
+                                /* else: ignore other event types, loop again */
                             }
-                            vTaskDelay(pdMS_TO_TICKS(200));
+
+                            /* Always deinit — transmit_command() called
+                             * infrared_encode_sys_init(), so we must tear down
+                             * regardless of whether TX complete arrived. */
+                            infrared_encode_sys_deinit();
+                            if (!cancelled)
+                                vTaskDelay(pdMS_TO_TICKS(200));
                         }
                     }
                     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);

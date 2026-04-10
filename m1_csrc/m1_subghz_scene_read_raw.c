@@ -269,8 +269,8 @@ static void draw(SubGhzApp *app)
     if (app->raw_state == SubGhzReadRawStateIdle)
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 20, 30, "Press OK to");
-        u8g2_DrawStr(&m1_u8g2, 20, 40, "start recording");
+        u8g2_DrawStr(&m1_u8g2, 20, 32, "Press OK to");
+        u8g2_DrawStr(&m1_u8g2, 20, 42, "start recording");
     }
     else
     {

@@ -352,9 +352,11 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 
 /* RAW waveform visualization (Phase 4) */
 #define SUBGHZ_RAW_WAVEFORM_W       128  /* Display columns = display width */
-#define SUBGHZ_RAW_WAVEFORM_Y        12  /* Top Y of waveform area (below header) */
-#define SUBGHZ_RAW_WAVEFORM_H        38  /* Height of waveform area (pixels) */
+#define SUBGHZ_RAW_WAVEFORM_Y        15  /* Top Y of waveform area (below RSSI bar) */
+#define SUBGHZ_RAW_WAVEFORM_H        36  /* Height of waveform area (pixels) */
 #define SUBGHZ_RAW_WAVEFORM_MID_Y   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H / 2)
+#define SUBGHZ_RAW_WAVEFORM_Y_HIGH  (SUBGHZ_RAW_WAVEFORM_Y + 2)   /* Mark (high) rail */
+#define SUBGHZ_RAW_WAVEFORM_Y_LOW   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H - 3) /* Space (low) rail */
 #define SUBGHZ_RAW_US_PER_COL       500  /* Microseconds per display column */
 #define SUBGHZ_RAW_MAX_COLS_PER_PULSE 16 /* Clamp: max columns for a single pulse (=8ms) */
 static uint8_t  subghz_raw_waveform[SUBGHZ_RAW_WAVEFORM_W]; /* 0=low, 1=high per column */
@@ -933,16 +935,26 @@ static void subghz_raw_waveform_reset(void)
 /*============================================================================*/
 /**
   * @brief  Draw the RAW waveform onto the display.
-  *         Renders a scrolling pulse waveform in the middle display area.
-  *         Mark=high line from mid to top, Space=low line from mid to bottom.
+  *         Renders a scrolling oscilloscope-style square wave with dashed
+  *         grid reference lines at high, center, and low positions.
+  *         Mark (high) = 2px rail at top, Space (low) = 2px rail at bottom,
+  *         with vertical transition edges connecting level changes.
   */
 /*============================================================================*/
 static void subghz_raw_waveform_draw(void)
 {
-	/* Draw centre reference line (dashed) */
+	const uint8_t y_high = SUBGHZ_RAW_WAVEFORM_Y_HIGH;
+	const uint8_t y_low  = SUBGHZ_RAW_WAVEFORM_Y_LOW;
+
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	for (uint8_t x = 0; x < SUBGHZ_RAW_WAVEFORM_W; x += 4)
+
+	/* Subtle oscilloscope grid: dashed reference lines at high, center, low */
+	for (uint8_t x = 0; x < SUBGHZ_RAW_WAVEFORM_W; x += 6)
+	{
+		u8g2_DrawPixel(&m1_u8g2, x, y_high);
 		u8g2_DrawPixel(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y);
+		u8g2_DrawPixel(&m1_u8g2, x, y_low);
+	}
 
 	if (subghz_raw_wf_len == 0)
 		return;
@@ -965,24 +977,37 @@ static void subghz_raw_waveform_draw(void)
 		draw_cols = SUBGHZ_RAW_WAVEFORM_W;
 	}
 
-	/* Reserve 1px for the center reference line so waveform doesn't overlap it */
-	uint8_t half_h = SUBGHZ_RAW_WAVEFORM_H / 2 - 1;
+	/* Draw square wave with proper horizontal rails and vertical transitions */
+	uint8_t prev_level = 0xFF; /* Invalid sentinel for first column */
 
 	for (uint8_t i = 0; i < draw_cols; i++)
 	{
 		uint8_t idx = (start + i) % SUBGHZ_RAW_WAVEFORM_W;
 		uint8_t x = x_offset + i;
+		uint8_t level = subghz_raw_waveform[idx];
 
-		if (subghz_raw_waveform[idx])
+		/* Horizontal rail: 2px thick for visibility.
+		 * High rail is drawn at y_high and y_high+1.
+		 * Low rail is drawn at y_low-1 and y_low.
+		 * Each rail includes its corresponding grid reference position. */
+		if (level)
 		{
-			/* Mark (high) — draw upward from midline */
-			u8g2_DrawVLine(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y - half_h, half_h);
+			/* Mark (high) — draw at top rail */
+			u8g2_DrawVLine(&m1_u8g2, x, y_high, 2);
 		}
 		else
 		{
-			/* Space (low) — draw downward from midline */
-			u8g2_DrawVLine(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y + 1, half_h);
+			/* Space (low) — draw at bottom rail */
+			u8g2_DrawVLine(&m1_u8g2, x, y_low - 1, 2);
 		}
+
+		/* Vertical transition edge when level changes */
+		if (prev_level != 0xFF && prev_level != level)
+		{
+			u8g2_DrawVLine(&m1_u8g2, x, y_high, y_low - y_high + 1);
+		}
+
+		prev_level = level;
 	}
 }
 
