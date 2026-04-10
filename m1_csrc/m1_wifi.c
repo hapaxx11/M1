@@ -249,21 +249,123 @@ void wifi_scan_ap(void)
 					}
 					else
 					{
-						/* Prompt for password using virtual keyboard */
+						/*
+						 * Prompt for password using the virtual keyboard.
+						 *
+						 * m1_vkb_get_text() is limited by the virtual keyboard's
+						 * single-entry maximum, so collect the password in chunks
+						 * until the user finishes or the WiFi credential buffer is full.
+						 *
+						 * A full chunk is ambiguous: the password may either continue
+						 * or end exactly on the virtual keyboard boundary. Because the
+						 * current VKB API does not distinguish cancel from submit-empty,
+						 * ask the user explicitly whether to continue after each full
+						 * chunk instead of forcing a follow-up empty chunk.
+						 */
+						uint8_t total_pw_len = 0;
+						bool password_entry_cancelled = false;
+
 						memset(password, 0, sizeof(password));
-						uint8_t pw_len = m1_vkb_get_filename("Password:",
-							"", password);
-						if ( pw_len > 0 )
+
+						while ( total_pw_len < (WIFI_CRED_PASS_MAX_LEN - 1) )
 						{
-							do_connect = true;
+							char pw_chunk[M1_VIRTUAL_KB_FILENAME_MAX + 1U];
+							char pw_prompt[24];
+							uint8_t chunk_len;
+							uint8_t remaining = (WIFI_CRED_PASS_MAX_LEN - 1) - total_pw_len;
+							const uint8_t pw_chunk_entry_max_len =
+								(uint8_t)M1_VIRTUAL_KB_FILENAME_MAX;
+							const uint8_t pw_chunk_full_len =
+								(remaining < pw_chunk_entry_max_len) ? remaining : pw_chunk_entry_max_len;
+
+							memset(pw_chunk, 0, sizeof(pw_chunk));
+
+							if ( total_pw_len == 0 )
+								snprintf(pw_prompt, sizeof(pw_prompt), "Password:");
+							else
+								snprintf(pw_prompt, sizeof(pw_prompt), "Password +%u:",
+									(unsigned int)total_pw_len);
+
+							chunk_len = m1_vkb_get_text(pw_prompt, "", pw_chunk, sizeof(pw_chunk));
+
+							if ( chunk_len == 0 )
+							{
+								/*
+								 * Treat a zero-length return from the VKB consistently as
+								 * cancel. The current VKB API does not distinguish BACK
+								 * from an explicit empty submission.
+								 */
+								password_entry_cancelled = true;
+								total_pw_len = 0;
+								memset(password, 0, sizeof(password));
+								u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+								wifi_ap_list_print(NULL, false); /* reset state */
+								list_count = wifi_ap_list_print(&app_req, true);
+								break;
+							}
+
+							if ( chunk_len > remaining )
+								chunk_len = remaining;
+
+							memcpy(&password[total_pw_len], pw_chunk, chunk_len);
+							total_pw_len += chunk_len;
+							password[total_pw_len] = '\0';
+
+							/*
+							 * A short chunk means the user completed the password
+							 * without filling the virtual keyboard's per-entry limit.
+							 * A full final chunk is also complete once the credential
+							 * buffer limit is reached.
+							 */
+							if ( chunk_len < pw_chunk_full_len
+								|| total_pw_len >= (WIFI_CRED_PASS_MAX_LEN - 1) )
+							{
+								do_connect = true;
+								break;
+							}
+
+							/*
+							 * The chunk filled the VKB entry limit but the credential
+							 * buffer is not yet full.  Ask explicitly whether the
+							 * password continues so lengths that are exact multiples
+							 * of the per-entry maximum (20, 40, 60) can be completed.
+							 */
+							{
+								char pw_msg[24];
+								uint8_t choice;
+
+								snprintf(pw_msg, sizeof(pw_msg), "Entered %u chars",
+									(unsigned int)total_pw_len);
+
+								choice = m1_message_box_choice(&m1_u8g2,
+									"Password continues?",
+									pw_msg, "", "More\nDone");
+
+								if ( choice == 0 )
+								{
+									/* BACK → cancel entire password */
+									password_entry_cancelled = true;
+									total_pw_len = 0;
+									memset(password, 0, sizeof(password));
+									u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+									wifi_ap_list_print(NULL, false);
+									list_count = wifi_ap_list_print(&app_req, true);
+									break;
+								}
+
+								if ( choice == 2 )
+								{
+									/* "Done" → connect with current password */
+									do_connect = true;
+									break;
+								}
+
+								/* choice == 1 → "More" → continue loop */
+							}
 						}
-						else
-						{
-							/* User cancelled - redraw AP list */
-							u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-							wifi_ap_list_print(NULL, false); /* reset state */
-							list_count = wifi_ap_list_print(&app_req, true);
-						}
+
+						if ( password_entry_cancelled )
+							do_connect = false;
 					}
 
 					if ( do_connect )

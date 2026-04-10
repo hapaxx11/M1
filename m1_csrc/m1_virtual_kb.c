@@ -31,7 +31,7 @@
 #define M1_VIRTUAL_KEY_ENTER			0x0A
 #define M1_VIRTUAL_KEY_NONE				0x00 // NULL
 
-#define M1_VIRTUAL_KB_FILENAME_MAX		20
+/* M1_VIRTUAL_KB_FILENAME_MAX is defined in m1_virtual_kb.h */
 //#define M1_VIRTUAL_KBS_DATA_MAX			14 // 10 + 4 spaces
 uint8_t M1_VIRTUAL_KBS_DATA_MAX;
 
@@ -125,6 +125,53 @@ uint8_t M1_VIRTUAL_KBS_DATA_MAX;
 
 //************************** C O N S T A N T **********************************/
 
+static void m1_vkb_draw_text_with_visible_spaces(uint8_t x_start, uint8_t y, const char *text)
+{
+	uint8_t x = x_start;
+	char key[2];
+
+	if ( text == NULL )
+	{
+		return;
+	}
+
+	key[1] = 0x00;
+	while ( *text != 0x00 )
+	{
+		if ( *text == ' ' )
+		{
+			/* Render spaces with a visible placeholder while still
+			 * storing the actual space in the buffer. */
+			u8g2_DrawBox(&m1_u8g2,
+						 x + 1,
+						 y - 1,
+						 M1_VKB_GUI_FONT_WIDTH > 2 ? (M1_VKB_GUI_FONT_WIDTH - 2) : M1_VKB_GUI_FONT_WIDTH,
+						 1);
+		}
+		else
+		{
+			key[0] = *text;
+			u8g2_DrawStr(&m1_u8g2, x, y, key);
+		}
+
+		x += M1_VKB_GUI_FONT_WIDTH;
+		text++;
+	}
+}
+
+static void m1_vkb_draw_filename_text(uint8_t x_start, uint8_t y, const char *text)
+{
+	if ( text == NULL )
+	{
+		return;
+	}
+
+	/* Filename mode should keep the normal rendering behavior, where
+	 * spaces remain invisible instead of switching to visible
+	 * placeholders after the first edit. */
+	u8g2_DrawStr(&m1_u8g2, x_start, y, text);
+}
+
 // 'backspace key', 15x10px
 const uint8_t m1_virtual_kb_icon_backspace[] = {
 /*
@@ -187,6 +234,38 @@ const uint8_t m1_vkb_pages[M1_VKB_PAGE_COUNT][M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL
 	}
 };
 
+/*
+ * Text-mode keyboard pages (for passwords, general text).
+ * Identical to filename pages except underscore is replaced by SPACE
+ * on lowercase/uppercase pages.  Underscore is available on the symbols
+ * page (replaces pipe, which is rarely needed in text input).
+ * Follows Flipper Zero's pattern of context-specific keyboard layouts.
+ */
+static const uint8_t m1_vkb_text_pages[M1_VKB_PAGE_COUNT][M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL_KB_COLUMN_SIZE] =
+{
+	/* Page 0: lowercase (SPACE replaces _) */
+	{
+		{'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', 					'0', 					'1', '2', '3'},
+		{'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', M1_VIRTUAL_KEY_BS, 	M1_VIRTUAL_KEY_BS,		'4', '5', '6'},
+		{'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', '.', M1_VIRTUAL_KEY_ENTER, M1_VIRTUAL_KEY_ENTER, 	'7', '8', '9'}
+	},
+	/* Page 1: UPPERCASE (SPACE replaces _) */
+	{
+		{'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 					'0', 					'1', '2', '3'},
+		{'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', M1_VIRTUAL_KEY_BS, 	M1_VIRTUAL_KEY_BS,		'4', '5', '6'},
+		{'Z', 'X', 'C', 'V', 'B', 'N', 'M', ' ', '.', M1_VIRTUAL_KEY_ENTER, M1_VIRTUAL_KEY_ENTER, 	'7', '8', '9'}
+	},
+	/* Page 2: symbols (_ replaces |) */
+	{
+		{'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', 					'0', 					'1', '2', '3'},
+		{'-', '+', '=', '[', ']', '{', '}', ':', ';', M1_VIRTUAL_KEY_BS, 	M1_VIRTUAL_KEY_BS,		'4', '5', '6'},
+		{'~', '\'', '"', '<', '>', ',', '?', '/', '_', M1_VIRTUAL_KEY_ENTER, M1_VIRTUAL_KEY_ENTER, 	'7', '8', '9'}
+	}
+};
+
+/* Points to the keyboard pages currently in use (filename or text mode) */
+static const uint8_t (*s_vkb_active_pages)[M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL_KB_COLUMN_SIZE] = m1_vkb_pages;
+
 /* Alias for backward compat — points to page 0 (lowercase) */
 const uint8_t (*m1_vkb_map)[M1_VIRTUAL_KB_COLUMN_SIZE] = m1_vkb_pages[0];
 
@@ -246,10 +325,35 @@ S_M1_VKB_X_Key m1_x_keys[M1_VKB_NUM_OF_FUNCTION_KEYS] =
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name);
+uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size);
 uint8_t m1_vkbs_get_data(char *description, char *data_buffer);
 S_M1_VKB_Func_Key_ID m1_vkb_check_function_key(uint8_t kb_key);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+/*============================================================================*/
+/*
+ * Draw a single keyboard key character.  For printable chars, draws the glyph
+ * via u8g2_DrawStr.  For SPACE (' '), draws a visible ⎵ indicator since the
+ * space glyph is invisible.  The draw color must be set by the caller before
+ * calling this function.
+ */
+/*============================================================================*/
+static void vkb_draw_char(uint8_t x, uint8_t y, uint8_t ch)
+{
+	if (ch == ' ')
+	{
+		/* Draw ⎵ (open-bottom bracket) as space indicator */
+		u8g2_DrawHLine(&m1_u8g2, x, y - 1, M1_VKB_GUI_FONT_WIDTH - 1);
+		u8g2_DrawVLine(&m1_u8g2, x, y - 3, 2);
+		u8g2_DrawVLine(&m1_u8g2, x + M1_VKB_GUI_FONT_WIDTH - 2, y - 3, 2);
+	}
+	else
+	{
+		char k[2] = { (char)ch, 0 };
+		u8g2_DrawStr(&m1_u8g2, x, y, k);
+	}
+}
 
 /* Page indicator position: top-right corner */
 #define M1_VKB_PAGE_IND_X   108
@@ -270,7 +374,6 @@ static void vkb_redraw_page(uint8_t page, uint8_t row_id, uint8_t col_id,
                             S_M1_VKB_Func_Key_ID *out_xkey)
 {
 	uint8_t r, c, xp, yp;
-	char k[2] = {0, 0};
 
 	/* Clear keyboard area */
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
@@ -286,8 +389,7 @@ static void vkb_redraw_page(uint8_t page, uint8_t row_id, uint8_t col_id,
 		xp = M1_VKB_LEFT_POS_X;
 		for (c = 0; c < M1_VIRTUAL_KB_COLUMN_SIZE; c++)
 		{
-			k[0] = m1_vkb_pages[page][r][c];
-			u8g2_DrawStr(&m1_u8g2, xp, yp, k);
+			vkb_draw_char(xp, yp, s_vkb_active_pages[page][r][c]);
 			xp += M1_VKB_GUI_FONT_WIDTH + M1_VKB_FONT_WIDTH_SPACING;
 		}
 		yp += M1_VKB_GUI_FONT_HEIGHT + M1_VKB_FONT_HEIGHT_SPACING;
@@ -312,7 +414,7 @@ static void vkb_redraw_page(uint8_t page, uint8_t row_id, uint8_t col_id,
 	*out_x = M1_VKB_LEFT_POS_X + col_id * (M1_VKB_GUI_FONT_WIDTH + M1_VKB_FONT_WIDTH_SPACING);
 
 	/* Highlight current key */
-	*out_xkey = m1_vkb_check_function_key(m1_vkb_pages[page][row_id][col_id]);
+	*out_xkey = m1_vkb_check_function_key(s_vkb_active_pages[page][row_id][col_id]);
 	if (*out_xkey != M1_VKB_FUNC_UNDEFINED_KEY_ID)
 	{
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
@@ -329,8 +431,7 @@ static void vkb_redraw_page(uint8_t page, uint8_t row_id, uint8_t col_id,
 		u8g2_DrawBox(&m1_u8g2, *out_x - 1, *out_y - M1_VKB_GUI_FONT_HEIGHT,
 		             M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2);
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-		k[0] = m1_vkb_pages[page][row_id][col_id];
-		u8g2_DrawStr(&m1_u8g2, *out_x, *out_y, k);
+		vkb_draw_char(*out_x, *out_y, s_vkb_active_pages[page][row_id][col_id]);
 	}
 
 	m1_u8g2_nextpage();
@@ -387,7 +488,14 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 				filename[M1_VIRTUAL_KB_FILENAME_MAX] = 0x00;
 				len = M1_VIRTUAL_KB_FILENAME_MAX;
 			}
-			u8g2_DrawStr(&m1_u8g2, M1_VKB_FILENAME_POS_X, M1_VKB_FILENAME_POS_Y, filename);
+			if ( s_vkb_active_pages == m1_vkb_text_pages )
+			{
+				m1_vkb_draw_text_with_visible_spaces(M1_VKB_FILENAME_POS_X, M1_VKB_FILENAME_POS_Y, filename);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, M1_VKB_FILENAME_POS_X, M1_VKB_FILENAME_POS_Y, filename);
+			}
 		} // if ( len )
 
 		y = M1_VKB_FIRST_ROW_TOP_POS_Y + M1_VKB_GUI_FONT_HEIGHT;
@@ -396,8 +504,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 			x = M1_VKB_LEFT_POS_X;
 			for (col_id=0; col_id<M1_VIRTUAL_KB_COLUMN_SIZE; col_id++)
 			{
-				key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-				u8g2_DrawStr(&m1_u8g2, x, y, key);
+				vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]);
 				x += M1_VKB_GUI_FONT_WIDTH + M1_VKB_FONT_WIDTH_SPACING;
 			} // for (col_id=0; col_id<M1_VIRTUAL_KB_COLUMN_SIZE; col_id++)
 			y += M1_VKB_GUI_FONT_HEIGHT + M1_VKB_FONT_HEIGHT_SPACING;
@@ -427,7 +534,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
 				if ( this_button_status.event[BUTTON_OK_KP_ID]==BUTTON_EVENT_CLICK ) // User press OK?
 				{
-					x_key_id = m1_vkb_check_function_key(m1_vkb_pages[vkb_page][row_id][col_id]);
+					x_key_id = m1_vkb_check_function_key(s_vkb_active_pages[vkb_page][row_id][col_id]);
 
 					if ( x_key_id != M1_VKB_FUNC_UNDEFINED_KEY_ID ) // Is a function key hit?
 					{
@@ -452,13 +559,15 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 							{
 								len--;
 								filename[len] = 0x00; // Add NULL to the end of the string
-								x = M1_VKB_FILENAME_POS_X;
-								x += M1_VKB_GUI_FONT_WIDTH*len;
 								y = M1_VKB_FILENAME_POS_Y;
-								// Clear this character
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-								u8g2_DrawBox(&m1_u8g2, x, y - M1_VKB_GUI_FONT_HEIGHT + 2, M1_VKB_GUI_FONT_WIDTH, M1_VKB_GUI_FONT_HEIGHT);
+								u8g2_DrawBox(&m1_u8g2,
+											 M1_VKB_FILENAME_POS_X,
+											 y - M1_VKB_GUI_FONT_HEIGHT + 2,
+											 M1_VKB_GUI_FONT_WIDTH * M1_VIRTUAL_KB_FILENAME_MAX,
+											 M1_VKB_GUI_FONT_HEIGHT);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+								m1_vkb_draw_filename_text(M1_VKB_FILENAME_POS_X, y, filename);
 								m1_u8g2_nextpage(); // Update graphic to the display RAM
 							} // if (len)
 						}
@@ -467,15 +576,19 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 					{
 						if ( len < M1_VIRTUAL_KB_FILENAME_MAX )
 						{
-							key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
+							key[0] = s_vkb_active_pages[vkb_page][row_id][col_id];
 							filename[len] = key[0];
 							len++;
 							filename[len] = 0x00; // Add NULL to the end of the string
-							x = M1_VKB_FILENAME_POS_X;
-							x += M1_VKB_GUI_FONT_WIDTH*(len-1);
 							y = M1_VKB_FILENAME_POS_Y;
+							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+							u8g2_DrawBox(&m1_u8g2,
+										 M1_VKB_FILENAME_POS_X,
+										 y - M1_VKB_GUI_FONT_HEIGHT + 2,
+										 M1_VKB_GUI_FONT_WIDTH * M1_VIRTUAL_KB_FILENAME_MAX,
+										 M1_VKB_GUI_FONT_HEIGHT);
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-							u8g2_DrawStr(&m1_u8g2, x, y, key); // Display this character
+							m1_vkb_draw_filename_text(M1_VKB_FILENAME_POS_X, y, filename);
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( len < M1_VIRTUAL_KB_FILENAME_MAX )
 					} // else
@@ -487,7 +600,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 				}
 				else
 				{
-					x_key_id = m1_vkb_check_function_key(m1_vkb_pages[vkb_page][row_id][col_id]);
+					x_key_id = m1_vkb_check_function_key(s_vkb_active_pages[vkb_page][row_id][col_id]);
 
 					// Find the (x,y) of the current (col_id, row_id)
 					x = M1_VKB_LEFT_POS_X;
@@ -517,12 +630,11 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // set the color to Black
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key); // Restore to normal mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Restore to normal mode
 								x += M1_VKB_GUI_FONT_WIDTH + M1_VKB_FONT_WIDTH_SPACING; // Update x for the next key
 								col_id++; // Move to next key
 							} // else
-							x_key_id = m1_vkb_check_function_key(m1_vkb_pages[vkb_page][row_id][col_id]);
+							x_key_id = m1_vkb_check_function_key(s_vkb_active_pages[vkb_page][row_id][col_id]);
 							if ( x_key_id != M1_VKB_FUNC_UNDEFINED_KEY_ID ) // Next key is a function key?
 							{
 								// Invert the next function key
@@ -539,8 +651,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2); // Invert background
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key);// Draw text in inverted mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Draw in inverted mode
 							} // else
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( col_id < (M1_VIRTUAL_KB_COLUMN_SIZE - 1) )
@@ -568,12 +679,11 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // set the color to Black
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key); // Restore to normal mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Restore to normal mode
 								x -= M1_VKB_GUI_FONT_WIDTH + M1_VKB_FONT_WIDTH_SPACING; // Update x for the next key
 								col_id--; // Move to next key
 							} // else
-							x_key_id = m1_vkb_check_function_key(m1_vkb_pages[vkb_page][row_id][col_id]);
+							x_key_id = m1_vkb_check_function_key(s_vkb_active_pages[vkb_page][row_id][col_id]);
 							if ( x_key_id != M1_VKB_FUNC_UNDEFINED_KEY_ID ) // Next key is a function key?
 							{
 								// Invert the next function key
@@ -595,8 +705,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2); // Invert background
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key);// Draw text in inverted mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Draw in inverted mode
 							} // else
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( col_id > 0 )
@@ -624,12 +733,11 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // set the color to Black
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key); // Restore to normal mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Restore to normal mode
 								y += M1_VKB_GUI_FONT_HEIGHT + M1_VKB_FONT_HEIGHT_SPACING; // Update y for the next key
 								row_id++;
 							} // else
-							x_key_id = m1_vkb_check_function_key(m1_vkb_pages[vkb_page][row_id][col_id]);
+							x_key_id = m1_vkb_check_function_key(s_vkb_active_pages[vkb_page][row_id][col_id]);
 							if ( x_key_id != M1_VKB_FUNC_UNDEFINED_KEY_ID ) // Next key is a function key?
 							{
 								// Invert the next function key
@@ -647,8 +755,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2); // Invert background
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key);// Draw text in inverted mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Draw in inverted mode
 							} // else
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( row_id < (M1_VIRTUAL_KB_ROW_SIZE - 1) )
@@ -682,12 +789,11 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // set the color to Black
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key); // Restore to normal mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Restore to normal mode
 								y -= M1_VKB_GUI_FONT_HEIGHT + M1_VKB_FONT_HEIGHT_SPACING; // Update y for the next key
 								row_id--;
 							} // else
-							x_key_id = m1_vkb_check_function_key(m1_vkb_pages[vkb_page][row_id][col_id]);
+							x_key_id = m1_vkb_check_function_key(s_vkb_active_pages[vkb_page][row_id][col_id]);
 							if ( x_key_id != M1_VKB_FUNC_UNDEFINED_KEY_ID ) // Next key is a function key?
 							{
 								// Invert the next function key
@@ -705,8 +811,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 								u8g2_DrawBox(&m1_u8g2, x - 1, y - M1_VKB_GUI_FONT_HEIGHT, M1_VKB_GUI_FONT_WIDTH + 2, M1_VKB_GUI_FONT_HEIGHT + 2); // Invert background
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-								key[0] = m1_vkb_pages[vkb_page][row_id][col_id];
-								u8g2_DrawStr(&m1_u8g2, x, y, key);// Draw text in inverted mode
+								vkb_draw_char(x, y, s_vkb_active_pages[vkb_page][row_id][col_id]); // Draw in inverted mode
 							} // else
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( row_id > 0 )
@@ -739,6 +844,58 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 
 	return len;
 }// uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name)
+
+
+
+/*============================================================================*/
+/**
+ * @brief: Virtual keyboard for general text input (passwords, device names).
+ *         Uses text-mode key pages which include SPACE on lowercase/uppercase
+ *         and move underscore to the symbols page.  Follows Flipper Zero's
+ *         pattern of context-specific keyboard layouts.
+ * @param:  description   - title shown at top of screen
+ *          default_text  - pre-filled text (may be empty string)
+ *          new_text      - output buffer
+ *          new_text_size - size of the output buffer in bytes (including NUL)
+ * @retval  length of entered text, or 0 if user cancelled
+ */
+/*============================================================================*/
+uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size)
+{
+	const uint8_t (*prev_pages)[M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL_KB_COLUMN_SIZE] = s_vkb_active_pages;
+	char tmp[M1_VIRTUAL_KB_INPUT_MAX + 1];
+
+	/* Treat NULL pointers as empty strings so callers can't hard-fault. */
+	if ( description == NULL )
+		description = "";
+	if ( default_text == NULL )
+		default_text = "";
+
+	tmp[0] = '\0';
+
+	s_vkb_active_pages = m1_vkb_text_pages;
+	uint8_t result = m1_vkb_get_filename(description, default_text, tmp);
+	s_vkb_active_pages = prev_pages;
+
+	if ( new_text != NULL && new_text_size > 0 )
+	{
+		if ( result > 0 )
+		{
+			size_t copy_len = result;
+			if ( copy_len >= new_text_size )
+				copy_len = new_text_size - 1;
+			memcpy(new_text, tmp, copy_len);
+			new_text[copy_len] = '\0';
+			result = (uint8_t)copy_len;
+		}
+		else
+		{
+			new_text[0] = '\0';
+		}
+	}
+
+	return result;
+}
 
 
 

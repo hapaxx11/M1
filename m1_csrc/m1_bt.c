@@ -879,7 +879,7 @@ void bluetooth_set_badbt_name(void)
 {
 	char new_name[BADBT_NAME_MAX_LEN + 1] = {0};
 
-	uint8_t len = m1_vkb_get_filename("Bad-BT Name", m1_badbt_name, new_name);
+	uint8_t len = m1_vkb_get_text("Bad-BT Name", m1_badbt_name, new_name, sizeof(new_name));
 	if (len > 0)
 	{
 		strncpy(m1_badbt_name, new_name, BADBT_NAME_MAX_LEN);
