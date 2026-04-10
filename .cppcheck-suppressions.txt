@@ -4,7 +4,6 @@
 # Add specific file:line suppressions as the codebase is cleaned up.
 
 # FatFs and vendor HAL use non-standard patterns
-missingIncludeSystem
 
 # Vendor HAL files use intentional fallthrough and casts
 variableScope:Drivers/*
