@@ -186,11 +186,15 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	/*
 	 * Stream remaining body data until:
 	 *   a) content_length is known and we have it all, OR
-	 *   b) no new data arrives for HTTP_GET_IDLE_TIMEOUT_MS (server closed
-	 *      connection after sending the complete chunked response), OR
-	 *   c) response_buf is full (truncation — caller still gets partial data).
+	 *   b) no new data arrives for HTTP_GET_IDLE_TIMEOUT_MS ms after the last
+	 *      received byte (server closed connection after complete response), OR
+	 *   c) no data arrives at all within timeout_sec (global timeout), OR
+	 *   d) response_buf is full (truncation — caller still gets partial data).
+	 *
+	 * idle_start is reset whenever new bytes arrive so that as long as the
+	 * server is actively sending, neither timeout fires prematurely.
 	 */
-	uint32_t idle_start = HAL_GetTick();
+	uint32_t idle_start = HAL_GetTick();  /* initialized after initial body copy */
 
 	while (total < buf_size - 1)
 	{
@@ -200,21 +204,21 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 		if (content_length > 0 && (uint32_t)total >= content_length)
 			break;
 
+		/* Check timeouts once per iteration */
+		uint32_t idle_ms = HAL_GetTick() - idle_start;
+		if (total > 0 && idle_ms >= HTTP_GET_IDLE_TIMEOUT_MS)
+			break; /* server closed connection after sending complete response */
+		if (idle_ms >= (uint32_t)timeout_sec * 1000U)
+			break; /* global timeout — applies regardless of whether data arrived */
+
 		int avail = tcp_recv_available(2);
 		if (avail <= 0)
 		{
-			/* No data — check idle timeout */
-			if (total > 0 && (HAL_GetTick() - idle_start) >= HTTP_GET_IDLE_TIMEOUT_MS)
-				break; /* server finished, connection closed */
-
-			if (total == 0 && (HAL_GetTick() - idle_start) >= (uint32_t)timeout_sec * 1000U)
-				break; /* global timeout — no response at all */
-
 			vTaskDelay(pdMS_TO_TICKS(200));
 			continue;
 		}
 
-		/* Reset idle timer — data is flowing */
+		/* Data is available — reset idle timer before reading */
 		idle_start = HAL_GetTick();
 
 		int to_read = avail;
@@ -229,16 +233,14 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 		int received = tcp_recv(recv_buf, to_read, timeout_sec);
 		if (received <= 0)
 		{
-			/* Connection closed — check idle timeout once more */
-			if (total > 0 && (HAL_GetTick() - idle_start) >= HTTP_GET_IDLE_TIMEOUT_MS)
-				break;
 			vTaskDelay(pdMS_TO_TICKS(200));
 			continue;
 		}
 
 		memcpy(response_buf + total, recv_buf, received);
 		total += (uint16_t)received;
-		idle_start = HAL_GetTick();
+		/* Keep idle_start at the point we saw avail > 0 to avoid
+		 * double-reset in back-to-back fast reads. */
 	}
 
 	response_buf[total] = '\0';
