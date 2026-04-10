@@ -7,14 +7,14 @@ on:
     branches: [main]
     paths:
       - 'm1_csrc/**'
-      - 'Sub_Ghz/**'
+      - 'Sub_Ghz/protocols/**'
       - '.github/workflows/static-analysis.yml'
       - '.cppcheck-suppressions.txt'
   push:
     branches: [main]
     paths:
       - 'm1_csrc/**'
-      - 'Sub_Ghz/**'
+      - 'Sub_Ghz/protocols/**'
       - '.github/workflows/static-analysis.yml'
       - '.cppcheck-suppressions.txt'
 
@@ -39,6 +39,7 @@ jobs:
 
       - name: Run cppcheck on application code
         run: |
+          set -o pipefail
           cppcheck \
             --enable=warning,performance,portability \
             --error-exitcode=1 \
