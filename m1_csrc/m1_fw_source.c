@@ -27,8 +27,13 @@
 /* GitHub API URL template — releases list (returns JSON array) */
 #define GITHUB_API_RELEASES_FMT "https://api.github.com/repos/%s/%s/releases?per_page=%u"
 
-/* GitHub API response buffer (shared with http_get) */
-#define API_RESPONSE_BUF_SIZE  4000
+/*
+ * GitHub API response buffer.
+ * A single GitHub release JSON object is typically 2-4 KB; five releases
+ * can reach 15-20 KB.  12 KB comfortably holds 3-5 releases for the
+ * Hapax/C3/Monstatek repos whose release notes are CI-generated and brief.
+ */
+#define API_RESPONSE_BUF_SIZE  12288
 static char s_api_buf[API_RESPONSE_BUF_SIZE];
 
 /*

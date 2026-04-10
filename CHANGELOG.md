@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **OTA "Fetching releases" always returns "No releases found"** — `http_get`
+  used `AT+HTTPCLIENT` which has a 2 KB receive-buffer limit in the ESP32-C6
+  SPI AT firmware (`CONFIG_AT_HTTP_RX_BUFFER_SIZE=2048`).  A GitHub releases
+  API response is 2–20 KB depending on the number of releases and the length
+  of release notes, so the AT command either errored or returned truncated
+  JSON that could not be parsed.  A secondary bug in the `AT+HTTPCLIENT`
+  format string (`"2,0,\"%s\",,,,%d"` — one extra comma) placed the HTTPS
+  transport-type argument in the wrong parameter slot, causing the connection
+  to default to plain HTTP, which is rejected by `api.github.com`.  Fixed by
+  rewriting `http_get` to use the same raw TCP/SSL path (`AT+CIPSTART` →
+  `AT+CIPSEND` → `AT+CIPRECVDATA`) that `http_download_to_file` already uses,
+  which has no AT-layer body-size limit.  The GitHub API response buffer
+  (`s_api_buf` in `m1_fw_source.c`) was also increased from 4 KB to 12 KB to
+  hold 3–5 releases without truncation.  `http_get` now also sends the
+  mandatory `User-Agent: M1-Hapax/1.0` and `Accept: application/json` headers
+  that the GitHub API requires.
+
 ### Added
 
 - **Static analysis (on-demand)** — Added `static-analysis.yml` workflow running cppcheck
