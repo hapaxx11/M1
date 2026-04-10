@@ -300,8 +300,6 @@ to build.**
   after each successful release, and inserts a fresh empty `## [Unreleased]`
   heading above it.  There is no need to manually assign version numbers —
   CI handles the promotion.
-  **Never assign a numbered version heading to a change that won't produce a build** —
-  this prevents version numbers from going out of sync with actual releases.
 - **One entry per logical change**, not one entry per file edited.  Group related items.
 - **When to add an entry**:
   - New firmware feature, protocol, or UI screen → `### Added`
@@ -311,8 +309,6 @@ to build.**
   - Documentation / process / tooling change → `### Changed` with a "Documentation" prefix
 - **When NOT to add an entry**: Pure whitespace / formatting commits with zero functional
   effect.  Every other change needs an entry.
-- If the current version block already exists (e.g. the session is a follow-up fix for
-  `0.9.0.1`), append to it rather than creating a new heading.
 - Do **not** manually create versioned headings — always add entries under
   `## [Unreleased]` and let CI stamp the version on release.
 
