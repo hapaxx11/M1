@@ -40,6 +40,17 @@ const char m1_fb_data_types[]    = ".log.LOG.text.TEXT.txt.TXT";
 
 //************************* *S T R U C T U R E S *******************************
 
+/**
+ * @brief  Sorted directory entry for directories-first file browser display.
+ *
+ * Mirrors the Flipper / Momentum pattern: directories are listed before
+ * files, and each group is sorted alphabetically (case-insensitive).
+ */
+typedef struct {
+	char   fname[FF_LFN_BUF + 1];  /**< File/directory name          */
+	BYTE   fattrib;                  /**< FatFS file attributes        */
+} fb_sorted_entry_t;
+
 /**************************** *V A R I A B L E S ******************************/
 
 static S_M1_file_browser_hdl *pfb_hdl = NULL;
@@ -47,6 +58,10 @@ static u8g2_t *plcd_hdl;
 
 static bool fb_gui_check;
 FIL m1_log_file;
+
+/** Sorted directory listing — populated on each directory open */
+static fb_sorted_entry_t fb_sorted[FILE_BROWSER_MAX_FILES];
+static uint16_t fb_sorted_count;
 
 /******************** *F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -67,6 +82,52 @@ uint16_t m1_fb_read_from_file(FIL *pfile, char *buffer, uint16_t size);
 uint8_t m1_fb_check_low_freespace(void);
 
 /************** *F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+
+
+/******************************************************************************/
+/*
+*	Case-insensitive character comparison.
+*/
+/******************************************************************************/
+static int fb_char_lower(int c)
+{
+	return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+}
+
+/******************************************************************************/
+/*
+*	Comparator for qsort: directories first, then alphabetical.
+*
+*	Within each group (directories / files) entries are sorted
+*	alphabetically using case-insensitive comparison, matching the
+*	Flipper Zero / Momentum firmware file browser behaviour.
+*/
+/******************************************************************************/
+static int fb_entry_cmp(const void *a, const void *b)
+{
+	const fb_sorted_entry_t *ea = (const fb_sorted_entry_t *)a;
+	const fb_sorted_entry_t *eb = (const fb_sorted_entry_t *)b;
+
+	int a_dir = (ea->fattrib & AM_DIR) ? 1 : 0;
+	int b_dir = (eb->fattrib & AM_DIR) ? 1 : 0;
+
+	/* Directories come before files */
+	if (a_dir != b_dir)
+		return b_dir - a_dir;  /* dir (1) sorts before file (0) */
+
+	/* Alphabetical within the same type (case-insensitive) */
+	const char *pa = ea->fname;
+	const char *pb = eb->fname;
+	while (*pa && *pb)
+	{
+		int ca = fb_char_lower((unsigned char)*pa++);
+		int cb = fb_char_lower((unsigned char)*pb++);
+		if (ca != cb)
+			return ca - cb;
+	}
+	return (unsigned char)*pa - (unsigned char)*pb;
+}
 
 
 
@@ -560,15 +621,26 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 				pfb_hdl->row_index = pfb_hdl->row_index_buffer[pfb_hdl->dir_level];
 			}
 
-		    num_of_files = 1;
-		    while (num_of_files < FILE_BROWSER_MAX_FILES)
+		    /* Read all entries into the sorted array, then sort
+		     * (directories first, then alphabetical within each group). */
+		    fb_sorted_count = 0;
+		    while (fb_sorted_count < FILE_BROWSER_MAX_FILES)
 		    {
 		    	res = f_readdir(&directory, &file_info);
 		    	if (res || !file_info.fname[0])
 		    		break;
 		    	if (!(file_info.fattrib & (AM_HID | AM_SYS))) // Not a system or hidden file?
-		    		num_of_files++;
-		    } // while (num_of_files < FILE_BROWSER_MAX_FILES)
+		    	{
+		    		strncpy(fb_sorted[fb_sorted_count].fname, file_info.fname, FF_LFN_BUF);
+		    		fb_sorted[fb_sorted_count].fname[FF_LFN_BUF] = '\0';
+		    		fb_sorted[fb_sorted_count].fattrib = file_info.fattrib;
+		    		fb_sorted_count++;
+		    	}
+		    } // while (fb_sorted_count < FILE_BROWSER_MAX_FILES)
+
+		    qsort(fb_sorted, fb_sorted_count, sizeof(fb_sorted_entry_t), fb_entry_cmp);
+
+		    num_of_files = fb_sorted_count + 1; /* +1 for ".." entry at index 0 */
 
 			scroll_h = gui_height / num_of_files;
 
@@ -680,12 +752,9 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		} // else
 		// if (button_status==NULL)
 
-    	res = f_readdir(&directory, 0);
-    	if ( res != FR_OK)
-    	{
-    		pfb_hdl->info.status = FB_ERR_SDCARD;
-    		break;
-    	} // if ( res != FR_OK)
+    	/* Display uses the pre-sorted fb_sorted[] array instead of
+    	 * re-reading the directory, so no rewind is needed.  Index 0 is
+    	 * the ".." entry; indices 1..fb_sorted_count map to fb_sorted[]. */
 
     	// Clear GUI
     	m1_u8g2_firstpage();
@@ -698,12 +767,13 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
        		name[0] = 0;
    			if (count)
    			{
-   				res = f_readdir(&directory, &file_info);
-   				if (res || !file_info.fname[0])
+   				/* Read from sorted array (count-1 maps to fb_sorted index) */
+   				uint16_t si = count - 1;
+   				if (si >= fb_sorted_count)
    					break;
-
-   				if ((file_info.fattrib & (AM_HID | AM_SYS))) // Hidden and System file?
-   					continue;
+   				memset(&file_info, 0, sizeof(file_info));
+   				strcpy(file_info.fname, fb_sorted[si].fname);
+   				file_info.fattrib = fb_sorted[si].fattrib;
    			}
 
    			if ((count >= pfb_hdl->listing_index - pfb_hdl->row_index) &&

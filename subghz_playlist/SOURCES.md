@@ -45,7 +45,7 @@ subghz_playlist/
 2. Ensure the referenced `.sub` files also exist at the paths specified in the
    playlist.  The `.sub` files can be sourced from the
    [UberGuidoZ/Flipper Sub-GHz collection](https://github.com/UberGuidoZ/Flipper/tree/main/Sub-GHz).
-3. On the M1, navigate to **Sub-GHz → Playlist**, press OK to browse, select
+3. On the M1, navigate to **Sub-GHz → Playlist**, select
    a `.txt` file, adjust repeat count with L/R, and press OK to play.
 
 ## Original Source Categories (Not All Included)
