@@ -43,9 +43,10 @@ static const char *s_default_config =
 	"# M1 Firmware Download Sources\n"
 	"# Edit this file to add or modify download sources.\n"
 	"# Supported Type values: github_release\n"
+	"# Category: firmware (M1 STM32 firmware) or esp32 (ESP32-C6 AT firmware)\n"
 	"#\n"
 	"# Each source block starts with 'Source:' and ends at the next 'Source:' or EOF.\n"
-	"# Fields: Source, Type, Owner, Repo, Asset_filter, Exclude_filter, Max_releases\n"
+	"# Fields: Source, Type, Owner, Repo, Asset_filter, Exclude_filter, Category, Max_releases\n"
 	"\n"
 	"Source: Monstatek Official\n"
 	"Type: github_release\n"
@@ -53,6 +54,7 @@ static const char *s_default_config =
 	"Repo: M1\n"
 	"Asset_filter: .bin\n"
 	"Exclude_filter:\n"
+	"Category: firmware\n"
 	"Max_releases: 5\n"
 	"\n"
 	"Source: Hapax\n"
@@ -61,6 +63,7 @@ static const char *s_default_config =
 	"Repo: M1\n"
 	"Asset_filter: _wCRC.bin\n"
 	"Exclude_filter: .elf .hex\n"
+	"Category: firmware\n"
 	"Max_releases: 5\n"
 	"\n"
 	"Source: C3\n"
@@ -69,6 +72,25 @@ static const char *s_default_config =
 	"Repo: M1\n"
 	"Asset_filter: _wCRC.bin\n"
 	"Exclude_filter:\n"
+	"Category: firmware\n"
+	"Max_releases: 5\n"
+	"\n"
+	"Source: C3 ESP32 AT\n"
+	"Type: github_release\n"
+	"Owner: bedge117\n"
+	"Repo: esp32-at-monstatek-m1\n"
+	"Asset_filter: .bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n"
+	"\n"
+	"Source: Deauth ESP32 AT\n"
+	"Type: github_release\n"
+	"Owner: neddy299\n"
+	"Repo: esp32-at-monstatek-m1\n"
+	"Asset_filter: .bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
 	"Max_releases: 5\n";
 
 bool fw_source_create_defaults(void)
@@ -122,6 +144,9 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 
 		if (strcmp(key, "Source") == 0)
 		{
+			/* Finalize previous source: default category if empty */
+			if (cur && !cur->category[0])
+				strncpy(cur->category, "firmware", FW_SOURCE_CATEGORY_LEN - 1);
 			/* Start a new source entry */
 			cur = &sources[count];
 			memset(cur, 0, sizeof(fw_source_t));
@@ -144,6 +169,8 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 				strncpy(cur->asset_filter, val, FW_SOURCE_FILTER_LEN - 1);
 			else if (strcmp(key, "Exclude_filter") == 0)
 				strncpy(cur->exclude_filter, val, FW_SOURCE_EXCLUDE_LEN - 1);
+			else if (strcmp(key, "Category") == 0)
+				strncpy(cur->category, val, FW_SOURCE_CATEGORY_LEN - 1);
 			else if (strcmp(key, "Max_releases") == 0)
 			{
 				int n = atoi(val);
@@ -153,8 +180,34 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 		}
 	}
 
+	/* Finalize last source: default category if empty */
+	if (cur && !cur->category[0])
+		strncpy(cur->category, "firmware", FW_SOURCE_CATEGORY_LEN - 1);
+
 	ff_close(&ff);
 	return count;
+}
+
+uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *category)
+{
+	fw_source_t all[FW_SOURCE_MAX];
+	uint8_t total, out = 0;
+
+	if (!sources || !category)
+		return 0;
+
+	total = fw_source_load_config(all);
+
+	for (uint8_t i = 0; i < total && out < FW_SOURCE_MAX; i++)
+	{
+		if (strcmp(all[i].category, category) == 0)
+		{
+			memcpy(&sources[out], &all[i], sizeof(fw_source_t));
+			out++;
+		}
+	}
+
+	return out;
 }
 
 /*
