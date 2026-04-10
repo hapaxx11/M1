@@ -11,10 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Static analysis CI** — Added `static-analysis.yml` workflow running cppcheck on
-  `m1_csrc/` and `Sub_Ghz/protocols/` with `--enable=warning,performance,portability`
-  and `--error-exitcode=1`.  Also runs cppcheck MISRA-C addon in advisory mode
-  (reports but does not fail the build) so teams can ratchet compliance over time.
+- **Static analysis (on-demand)** — Added `static-analysis.yml` workflow running cppcheck
+  on `m1_csrc/` and `Sub_Ghz/protocols/` with `--enable=warning,performance,portability`.
+  Also runs cppcheck MISRA-C addon in advisory mode.  Triggered via `workflow_dispatch`
+  (Actions tab) — not a required PR check.
 - **Unit testing framework** — Added Unity test framework (v2.6.1) with host-side
   CMake build in `tests/`.  Initial test suite covers `bit_util.c` (33 tests):
   CRC-4/7/8/16, parity, reverse/reflect, XOR/add, CCITT/IBM whitening, LFSR digest,

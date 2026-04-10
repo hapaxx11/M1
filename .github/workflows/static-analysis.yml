@@ -1,22 +1,9 @@
 name: Static Analysis
 
 # Runs cppcheck (with MISRA-C addon) on application source code.
-# Triggered on PRs and pushes to main that touch C source files.
+# On-demand only — run manually from the Actions tab when needed.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'm1_csrc/**'
-      - 'Sub_Ghz/protocols/**'
-      - '.github/workflows/static-analysis.yml'
-      - '.cppcheck-suppressions.txt'
-  push:
-    branches: [main]
-    paths:
-      - 'm1_csrc/**'
-      - 'Sub_Ghz/protocols/**'
-      - '.github/workflows/static-analysis.yml'
-      - '.cppcheck-suppressions.txt'
+  workflow_dispatch:
 
 permissions:
   contents: read

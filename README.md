@@ -10,7 +10,6 @@ improvements.
 > **This is a community project and is not affiliated with or endorsed by Monstatek.**
 
 [![CI Build](https://github.com/hapaxx11/M1/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/ci.yml)
-[![Static Analysis](https://github.com/hapaxx11/M1/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/static-analysis.yml)
 [![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
 
@@ -265,8 +264,8 @@ ctest --test-dir build-tests --output-on-failure
 
 | Tool | CI Workflow | Scope | Mode |
 |------|-------------|-------|------|
-| **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | Enforced (blocks PR) |
-| **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | Advisory (reports only) |
+| **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
+| **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | On-demand (`workflow_dispatch`) |
 | **Unity + ASan/UBSan** | `tests.yml` | `bit_util.c` (expandable) | Enforced (blocks PR) |
 | **Doxygen** | `docs.yml` | Application source | Auto-deploy to Pages |
 
