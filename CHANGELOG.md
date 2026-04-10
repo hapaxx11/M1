@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **WiFi Deauther** — ported WiFi deauthentication tool from neddy299/M1 fork.
+  Accessible from WiFi → Deauther menu.  Flow: preflight AT command check →
+  AP scan → AP select → station scan → station select → attack toggle.
+  Requires custom ESP32-C6 AT firmware with `AT+DEAUTH` and `AT+STASCAN`
+  command support.  Includes hidden advanced mode (UP UP DOWN DOWN) to cycle
+  deauth attack techniques.  Adapted for Hapax conventions: scene-based menu
+  integration as blocking delegate, `m1_esp32_deinit()` on all exit paths,
+  no "Back" button bar labels.
+
 ### Fixed
 
 - **OTA "Fetching releases" always returns "No releases found"** — `http_get`

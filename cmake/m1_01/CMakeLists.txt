@@ -544,6 +544,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_watchdog.c
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
+    ../../m1_csrc/m1_deauth.c
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
     # === Enhanced firmware: Flipper file format parsers (Phase 2) ===
