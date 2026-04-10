@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Splash screen showing "M1 H" instead of "M1 Hapax"** — Changed
+  `M1_POWERUP_LOGO_FONT` from `u8g2_font_tenthinnerguys_tu` (uppercase only,
+  glyphs 32-95) to `u8g2_font_tenthinnerguys_tr` (restricted, glyphs 32-127)
+  so lowercase letters in "Hapax" are rendered correctly.
 - **802.15.4 (Zigbee/Thread) ESP32 resource leak** — Added `m1_esp32_deinit()`
   to all four exit paths in `ieee802154_scan()`.  Previously, every Zigbee/Thread
   scan left the ESP32 SPI transport initialized on exit, wasting power and

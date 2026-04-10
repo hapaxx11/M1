@@ -48,7 +48,7 @@
 #define M1_POWERUP_LOGO_WIDTH			40
 #define M1_POWERUP_LOGO_HEIGHT			32
 
-#define M1_POWERUP_LOGO_FONT			u8g2_font_tenthinnerguys_tu //u8g2_font_luBS08_tr //u8g2_font_courB10_tr // u8g2_font_fub17_tr
+#define M1_POWERUP_LOGO_FONT			u8g2_font_tenthinnerguys_tr //u8g2_font_luBS08_tr //u8g2_font_courB10_tr // u8g2_font_fub17_tr
 
 /*
 	m1_u8g2_firstpage();
