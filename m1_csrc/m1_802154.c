@@ -331,6 +331,7 @@ static void ieee802154_scan(char filter_proto)
             if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 xQueueReset(main_q_hdl);
+                m1_esp32_deinit();
                 return;
             }
         }
@@ -414,6 +415,7 @@ static void ieee802154_scan(char filter_proto)
                         /* Stop sniffer and exit */
                         spi_AT_send_recv("AT+ZIGSNIFF=0\r\n", resp_buf, sizeof(resp_buf), 5);
                         xQueueReset(main_q_hdl);
+                        m1_esp32_deinit();
                         return;
                     }
                 }
@@ -508,6 +510,7 @@ static void ieee802154_scan(char filter_proto)
     }
 
     xQueueReset(main_q_hdl);
+    m1_esp32_deinit();
     return;
 
 wait_exit:
@@ -527,6 +530,7 @@ wait_exit:
     /* Stop sniffer just in case */
     spi_AT_send_recv("AT+ZIGSNIFF=0\r\n", resp_buf, sizeof(resp_buf), 5);
     xQueueReset(main_q_hdl);
+    m1_esp32_deinit();
 }
 
 /********************* P U B L I C   E N T R Y   P O I N T S *****************/

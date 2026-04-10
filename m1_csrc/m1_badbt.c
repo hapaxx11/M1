@@ -941,6 +941,7 @@ void badbt_run(void)
     if ( !get_esp32_main_init_status() )
     {
         m1_message_box(&m1_u8g2, "Bad-BT", "ESP32 not", "ready", " OK ");
+        m1_esp32_deinit();
         return;
     }
 
@@ -950,6 +951,7 @@ void badbt_run(void)
         char step_msg[16];
         snprintf(step_msg, sizeof(step_msg), "fail step %d", init_ret);
         m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", step_msg, " OK ");
+        m1_esp32_deinit();
         return;
     }
 
@@ -962,6 +964,7 @@ void badbt_run(void)
         ble_hid_deinit(&badbt_req);
         if (!badbt_state.connected)
             m1_message_box(&m1_u8g2, "Bad-BT", "Connection", "timeout", " OK ");
+        m1_esp32_deinit();
         return;
     }
 
@@ -975,6 +978,7 @@ void badbt_run(void)
     {
         ble_hid_deinit(&badbt_req);
         m1_message_box(&m1_u8g2, "Bad-BT", "SD card not", "available", " OK ");
+        m1_esp32_deinit();
         return;
     }
 
@@ -1069,6 +1073,7 @@ void badbt_run(void)
 
     /* ---- Phase 4: Disconnect & cleanup ---- */
     ble_hid_deinit(&badbt_req);
+    m1_esp32_deinit();
 }
 
 #endif /* M1_APP_BADBT_ENABLE */

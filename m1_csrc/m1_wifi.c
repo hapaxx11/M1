@@ -817,6 +817,7 @@ void wifi_disconnect(void)
 	{
 		wifi_display_msg("ESP32", "not ready!");
 		vTaskDelay(pdMS_TO_TICKS(2000));
+		m1_esp32_deinit();
 		xQueueReset(main_q_hdl);
 		return;
 	}

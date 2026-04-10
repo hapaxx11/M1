@@ -262,6 +262,7 @@ void ble_spam_run(void)
     if (!get_esp32_main_init_status())
     {
         m1_message_box(&m1_u8g2, "BLE Spam", "ESP32 not", "ready", " OK ");
+        m1_esp32_deinit();
         return;
     }
 
@@ -315,6 +316,7 @@ void ble_spam_run(void)
 
     spam_draw_screen(payload_idx, false);
     osDelay(500);
+    m1_esp32_deinit();
 }
 
 #endif /* M1_APP_BLE_SPAM_ENABLE */
