@@ -3297,6 +3297,7 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 
 	if ( prn_buffer!=NULL )
 		free(prn_buffer);
+	return 0;
 } // static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 
 

@@ -1,0 +1,63 @@
+name: Documentation
+
+# Generates Doxygen API documentation and publishes to GitHub Pages.
+# Runs on pushes to main that touch source files or documentation config.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'm1_csrc/**'
+      - 'Sub_Ghz/**'
+      - 'Infrared/**'
+      - 'lfrfid/**'
+      - 'Battery/**'
+      - 'Core/Inc/**'
+      - 'lib/**'
+      - 'Doxyfile'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build Doxygen docs
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Doxygen
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y doxygen
+
+      - name: Generate documentation
+        run: doxygen Doxyfile
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/html
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build-docs
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

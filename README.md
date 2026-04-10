@@ -10,6 +10,7 @@ improvements.
 > **This is a community project and is not affiliated with or endorsed by Monstatek.**
 
 [![CI Build](https://github.com/hapaxx11/M1/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/ci.yml)
+[![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
 
 ## Highlights vs Stock Firmware
@@ -248,6 +249,25 @@ Output: `./artifacts/`
 
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for detailed build environment setup and
 [`documentation/mbt.md`](documentation/mbt.md) for SRecord/CRC tooling.
+
+### Running Tests
+
+Host-side unit tests run on x86 with Address Sanitizer and Undefined Behavior Sanitizer:
+
+```bash
+cmake -B build-tests -S tests -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-tests
+ctest --test-dir build-tests --output-on-failure
+```
+
+## Code Quality
+
+| Tool | CI Workflow | Scope | Mode |
+|------|-------------|-------|------|
+| **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
+| **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | On-demand (`workflow_dispatch`) |
+| **Unity + ASan/UBSan** | `tests.yml` | `bit_util.c` (expandable) | Enforced (blocks PR) |
+| **Doxygen** | `docs.yml` | Application source | Auto-deploy to Pages |
 
 ## Flashing
 
