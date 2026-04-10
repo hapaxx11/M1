@@ -227,7 +227,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 		if (total + to_read > (int)(buf_size - 1))
 			to_read = (int)(buf_size - 1) - total;
 		if (to_read <= 0)
-			break; /* buffer full */
+			return HTTP_ERR_RESPONSE_TOO_LARGE; /* buffer full: avoid treating a truncated response as success */
 
 		char recv_buf[HTTP_DOWNLOAD_CHUNK];
 		int received = tcp_recv(recv_buf, to_read, timeout_sec);
