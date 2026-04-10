@@ -188,13 +188,17 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	 *   a) content_length is known and we have it all, OR
 	 *   b) no new data arrives for HTTP_GET_IDLE_TIMEOUT_MS ms after the last
 	 *      received byte (server closed connection after complete response), OR
-	 *   c) no data arrives at all within timeout_sec (global timeout), OR
-	 *   d) response_buf is full (truncation — caller still gets partial data).
+	 *   c) the overall operation deadline (timeout_sec) expires — tracked with
+	 *      a separate start_tick that is NEVER reset, so a slow but steady
+	 *      stream cannot push the deadline past timeout_sec, OR
+	 *   d) response_buf is full — returns HTTP_ERR_RESPONSE_TOO_LARGE so the
+	 *      caller knows the JSON is truncated and cannot be parsed.
 	 *
-	 * idle_start is reset whenever new bytes arrive so that as long as the
-	 * server is actively sending, neither timeout fires prematurely.
+	 * idle_start is reset only when new bytes arrive (idle heuristic).
+	 * start_tick is captured once and never changed (hard deadline).
 	 */
-	uint32_t idle_start = HAL_GetTick();  /* initialized after initial body copy */
+	uint32_t start_tick = HAL_GetTick();  /* hard deadline — never reset */
+	uint32_t idle_start = HAL_GetTick();  /* idle-completion heuristic */
 
 	while (total < buf_size - 1)
 	{
@@ -205,11 +209,11 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 			break;
 
 		/* Check timeouts once per iteration */
-		uint32_t idle_ms = HAL_GetTick() - idle_start;
-		if (total > 0 && idle_ms >= HTTP_GET_IDLE_TIMEOUT_MS)
+		uint32_t now = HAL_GetTick();
+		if (total > 0 && (now - idle_start) >= HTTP_GET_IDLE_TIMEOUT_MS)
 			break; /* server closed connection after sending complete response */
-		if (idle_ms >= (uint32_t)timeout_sec * 1000U)
-			break; /* global timeout — applies regardless of whether data arrived */
+		if ((now - start_tick) >= (uint32_t)timeout_sec * 1000U)
+			break; /* hard deadline expired — regardless of ongoing data flow */
 
 		int avail = tcp_recv_available(2);
 		if (avail <= 0)
@@ -218,7 +222,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 			continue;
 		}
 
-		/* Data is available — reset idle timer before reading */
+		/* Data is available — reset idle timer only (not the hard deadline) */
 		idle_start = HAL_GetTick();
 
 		int to_read = avail;
@@ -227,7 +231,11 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 		if (total + to_read > (int)(buf_size - 1))
 			to_read = (int)(buf_size - 1) - total;
 		if (to_read <= 0)
-			return HTTP_ERR_RESPONSE_TOO_LARGE; /* buffer full: avoid treating a truncated response as success */
+		{
+			/* Buffer full — response is truncated; closing before returning */
+			tcp_close();
+			return HTTP_ERR_RESPONSE_TOO_LARGE;
+		}
 
 		char recv_buf[HTTP_DOWNLOAD_CHUNK];
 		int received = tcp_recv(recv_buf, to_read, timeout_sec);
@@ -239,8 +247,6 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 		memcpy(response_buf + total, recv_buf, received);
 		total += (uint16_t)received;
-		/* Keep idle_start at the point we saw avail > 0 to avoid
-		 * double-reset in back-to-back fast reads. */
 	}
 
 	response_buf[total] = '\0';
