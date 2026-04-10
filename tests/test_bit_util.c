@@ -122,10 +122,10 @@ void test_crc4_basic(void)
 
 void test_crc7_basic(void)
 {
-    uint8_t data[] = {0xAB, 0xCD, 0xEF};
-    uint8_t c1 = crc7(data, 3, 0x09, 0x00);
-    uint8_t c2 = crc7(data, 3, 0x09, 0x00);
-    TEST_ASSERT_EQUAL_UINT8(c1, c2);
+    /* CRC-7/MMC: poly=0x09, init=0x00, check for "123456789" = 0x75 */
+    uint8_t data[] = "123456789";
+    uint8_t crc = crc7(data, 9, 0x09, 0x00);
+    TEST_ASSERT_EQUAL_UINT8(0x75, crc);
 }
 
 /* ===================================================================
