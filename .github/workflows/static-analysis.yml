@@ -138,8 +138,8 @@ jobs:
             -I lib/furi \
             -I NFC/Middlewares \
             -I NFC/Middlewares/ST \
-            -I NFC/Middlewares/ST/RFAL \
-            -I NFC/Middlewares/ST/RFAL/Inc \
+            -I NFC/Middlewares/ST/rfal \
+            -I NFC/Middlewares/ST/rfal/Inc \
             m1_csrc/ \
             2>&1 | tee misra-report.txt
 
