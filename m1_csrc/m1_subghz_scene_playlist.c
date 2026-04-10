@@ -206,6 +206,38 @@ static const char *basename_from_path(const char *path)
 }
 
 /*============================================================================*/
+/* Helpers                                                                    */
+/*============================================================================*/
+
+/**
+ * @brief  Open the playlist directory browser, parse the selected file.
+ *
+ * @retval true   A valid playlist was loaded.
+ * @retval false  User cancelled or parse failed (caller should pop).
+ */
+static bool open_playlist_browser(SubGhzApp *app)
+{
+    /* Ensure playlist directory exists */
+    f_mkdir("/SUBGHZ");
+    f_mkdir(PLAYLIST_DIR);
+
+    S_M1_file_info *f_info = storage_browse("0:" PLAYLIST_DIR);
+    if (f_info && f_info->file_is_selected)
+    {
+        snprintf(app->playlist_path, sizeof(app->playlist_path),
+                 PLAYLIST_DIR "/%s", f_info->file_name);
+
+        if (playlist_parse(app, app->playlist_path))
+        {
+            browse_done = true;
+            list_scroll = 0;
+            return true;
+        }
+    }
+    return false;
+}
+
+/*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
@@ -218,143 +250,120 @@ static void scene_on_enter(SubGhzApp *app)
     app->playlist_running = false;
     app->playlist_repeat_total = 1;
     app->playlist_repeat_done = 0;
+
+    /* Open file browser immediately — no intermediate prompt screen */
+    if (!open_playlist_browser(app))
+    {
+        subghz_scene_pop(app);
+        return;
+    }
     app->need_redraw = true;
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
-    if (!browse_done)
+    /* Playback control mode (browse_done is always true when events arrive) */
+    switch (event)
     {
-        /* Browse mode — pick a .txt playlist file */
-        switch (event)
-        {
-            case SubGhzEventBack:
+        case SubGhzEventBack:
+            app->playlist_running = false;
+            /* Re-open file browser; pop if user cancels */
+            if (!open_playlist_browser(app))
+            {
                 subghz_scene_pop(app);
                 return true;
-
-            case SubGhzEventOk:
-            {
-                /* Ensure playlist directory exists */
-                f_mkdir("/SUBGHZ");
-                f_mkdir(PLAYLIST_DIR);
-
-                S_M1_file_info *f_info = storage_browse("0:" PLAYLIST_DIR);
-                if (f_info && f_info->file_is_selected)
-                {
-                    snprintf(app->playlist_path, sizeof(app->playlist_path),
-                             PLAYLIST_DIR "/%s", f_info->file_name);
-
-                    if (playlist_parse(app, app->playlist_path))
-                    {
-                        browse_done = true;
-                        list_scroll = 0;
-                    }
-                }
-                app->need_redraw = true;
-                return true;
             }
+            /* Reset playback state for the newly selected playlist */
+            app->playlist_current = 0;
+            app->playlist_repeat_done = 0;
+            app->need_redraw = true;
+            return true;
 
-            default:
-                break;
-        }
-    }
-    else
-    {
-        /* Playback control mode */
-        switch (event)
+        case SubGhzEventOk:
         {
-            case SubGhzEventBack:
-                app->playlist_running = false;
-                browse_done = false;
-                app->need_redraw = true;
-                return true;
-
-            case SubGhzEventOk:
+            if (!app->playlist_running)
             {
-                if (!app->playlist_running)
+                /* Start playback */
+                app->playlist_running = true;
+                app->playlist_repeat_done = 0;
+                app->need_redraw = true;
+
+                /* Run playlist passes */
+                bool keep_going = true;
+                while (keep_going && app->playlist_running)
                 {
-                    /* Start playback */
-                    app->playlist_running = true;
-                    app->playlist_repeat_done = 0;
+                    keep_going = playlist_run_pass(app);
+                    if (!app->playlist_running)
+                        break;
+
+                    app->playlist_repeat_done++;
                     app->need_redraw = true;
 
-                    /* Run playlist passes */
-                    bool keep_going = true;
-                    while (keep_going && app->playlist_running)
-                    {
-                        keep_going = playlist_run_pass(app);
-                        if (!app->playlist_running)
-                            break;
-
-                        app->playlist_repeat_done++;
-                        app->need_redraw = true;
-
-                        /* Check repeat limit */
-                        if (app->playlist_repeat_total > 0 &&
-                            app->playlist_repeat_done >= app->playlist_repeat_total)
-                        {
-                            break;
-                        }
-                    }
-
-                    app->playlist_running = false;
-                    app->playlist_current = 0;
-                    app->need_redraw = true;
-                }
-                else
-                {
-                    /* Stop playback */
-                    app->playlist_running = false;
-                    app->need_redraw = true;
-                }
-                return true;
-            }
-
-            case SubGhzEventLeft:
-                /* Decrease repeat count (min 1) */
-                if (!app->playlist_running)
-                {
-                    if (app->playlist_repeat_total == 0)
-                        app->playlist_repeat_total = 9;
-                    else if (app->playlist_repeat_total > 1)
-                        app->playlist_repeat_total--;
-                    app->need_redraw = true;
-                }
-                return true;
-
-            case SubGhzEventRight:
-                /* Increase repeat count (max 9, then infinite=0) */
-                if (!app->playlist_running)
-                {
+                    /* Check repeat limit */
                     if (app->playlist_repeat_total > 0 &&
-                        app->playlist_repeat_total < 9)
-                        app->playlist_repeat_total++;
-                    else if (app->playlist_repeat_total >= 9)
-                        app->playlist_repeat_total = 0; /* infinite */
-                    app->need_redraw = true;
+                        app->playlist_repeat_done >= app->playlist_repeat_total)
+                    {
+                        break;
+                    }
                 }
-                return true;
 
-            case SubGhzEventUp:
-                if (!app->playlist_running && list_scroll > 0)
-                {
-                    list_scroll--;
-                    app->need_redraw = true;
-                }
-                return true;
-
-            case SubGhzEventDown:
-                if (!app->playlist_running &&
-                    list_scroll + PLAYLIST_LIST_VISIBLE < app->playlist_count)
-                {
-                    list_scroll++;
-                    app->need_redraw = true;
-                }
-                return true;
-
-            default:
-                break;
+                app->playlist_running = false;
+                app->playlist_current = 0;
+                app->need_redraw = true;
+            }
+            else
+            {
+                /* Stop playback */
+                app->playlist_running = false;
+                app->need_redraw = true;
+            }
+            return true;
         }
+
+        case SubGhzEventLeft:
+            /* Decrease repeat count (min 1) */
+            if (!app->playlist_running)
+            {
+                if (app->playlist_repeat_total == 0)
+                    app->playlist_repeat_total = 9;
+                else if (app->playlist_repeat_total > 1)
+                    app->playlist_repeat_total--;
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventRight:
+            /* Increase repeat count (max 9, then infinite=0) */
+            if (!app->playlist_running)
+            {
+                if (app->playlist_repeat_total > 0 &&
+                    app->playlist_repeat_total < 9)
+                    app->playlist_repeat_total++;
+                else if (app->playlist_repeat_total >= 9)
+                    app->playlist_repeat_total = 0; /* infinite */
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventUp:
+            if (!app->playlist_running && list_scroll > 0)
+            {
+                list_scroll--;
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventDown:
+            if (!app->playlist_running &&
+                list_scroll + PLAYLIST_LIST_VISIBLE < app->playlist_count)
+            {
+                list_scroll++;
+                app->need_redraw = true;
+            }
+            return true;
+
+        default:
+            break;
     }
     return false;
 }
@@ -369,22 +378,7 @@ static void draw(SubGhzApp *app)
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    if (!browse_done)
-    {
-        /* Browse mode — prompt to select playlist */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        m1_draw_text(&m1_u8g2, 2, 15, 124, "Playlist", TEXT_ALIGN_CENTER);
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        m1_draw_text(&m1_u8g2, 2, 30, 124, "Press OK to browse", TEXT_ALIGN_CENTER);
-        m1_draw_text(&m1_u8g2, 2, 40, 124, "0:" PLAYLIST_DIR "/", TEXT_ALIGN_CENTER);
-
-        subghz_button_bar_draw(
-            NULL, NULL,
-            NULL, NULL,
-            NULL, "OK:Browse");
-    }
-    else
+    /* Playback mode (file browser opens directly on enter/back) */
     {
         /* Playback mode */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
