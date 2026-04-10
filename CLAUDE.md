@@ -488,9 +488,20 @@ caller is responsible for deiniting after the `Q_EVENT_IRRED_TX` event.
 **The pattern for IR TX loops (Send All, single-shot, raw):**
 ```c
 transmit_command(&cmd);
-/* Wait for TX complete — but always deinit regardless */
+/* Wait specifically for Q_EVENT_IRRED_TX, ignoring unrelated events.
+ * BACK cancels.  Always deinit regardless of outcome. */
 S_M1_Main_Q_t tx_q;
-(void)xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(3000));
+uint32_t deadline = HAL_GetTick() + 3000;
+bool tx_done = false;
+while (!tx_done) {
+    uint32_t remaining = (HAL_GetTick() < deadline) ? (deadline - HAL_GetTick()) : 0;
+    if (remaining == 0) break;
+    if (xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(remaining)) != pdTRUE) break;
+    if (tx_q.q_evt_type == Q_EVENT_IRRED_TX)
+        tx_done = true;
+    else if (tx_q.q_evt_type == Q_EVENT_KEYPAD)
+        xQueueReceive(button_events_q_hdl, &bs, 0); /* drain to keep in sync */
+}
 infrared_encode_sys_deinit();  /* ← ALWAYS, even on timeout */
 ```
 
@@ -498,6 +509,10 @@ infrared_encode_sys_deinit();  /* ← ALWAYS, even on timeout */
 - Never skip `infrared_encode_sys_deinit()` — it must be called on every
   path after `transmit_command()` / `transmit_raw_command()`, regardless
   of whether `Q_EVENT_IRRED_TX` was received.
+- When waiting for `Q_EVENT_IRRED_TX`, loop and ignore unrelated events
+  (especially `Q_EVENT_KEYPAD`) — a single `xQueueReceive` may dequeue a
+  keypad event instead.  Always drain `button_events_q_hdl` when consuming
+  a keypad event to keep the two queues in sync.
 - The event-loop single-shot TX handler already follows this pattern
   (deinit in the `Q_EVENT_IRRED_TX` handler).  The Send All loop must
   do the same for each iteration.
