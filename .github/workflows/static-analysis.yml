@@ -1,0 +1,149 @@
+name: Static Analysis
+
+# Runs cppcheck (with MISRA-C addon) on application source code.
+# On-demand only — run manually from the Actions tab when needed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck on application code
+        run: |
+          set -o pipefail
+          cppcheck \
+            --enable=warning,performance,portability \
+            --error-exitcode=1 \
+            --suppress=missingIncludeSystem \
+            --suppressions-list=.cppcheck-suppressions.txt \
+            --inline-suppr \
+            --std=c11 \
+            --platform=unix32 \
+            -DSTM32H573xx \
+            -DUSE_HAL_DRIVER \
+            -D__GNUC__=12 \
+            -D__GNUC_MINOR__=0 \
+            -D__GNUC_PATCHLEVEL__=0 \
+            -DosCMSIS=0x20001U \
+            -I m1_csrc \
+            -I Sub_Ghz \
+            -I Sub_Ghz/protocols \
+            -I Infrared \
+            -I lfrfid \
+            -I Battery \
+            -I Core/Inc \
+            -I Drivers/STM32H5xx_HAL_Driver/Inc \
+            -I Drivers/CMSIS/Device/ST/STM32H5xx/Include \
+            -I Drivers/CMSIS/Include \
+            -I NFC/Middlewares/ST/rfal/Inc \
+            -I FatFs \
+            -I lib/furi \
+            m1_csrc/ \
+            Sub_Ghz/protocols/ \
+            2>&1 | tee cppcheck-report.txt
+
+      - name: Upload cppcheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-report
+          path: cppcheck-report.txt
+          retention-days: 30
+
+  cppcheck-misra:
+    name: cppcheck MISRA-C advisory
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cppcheck python3
+
+      - name: Create MISRA addon config
+        run: |
+          # Use the MISRA addon that ships with cppcheck.
+          # We run in advisory mode (no --error-exitcode) so it reports but
+          # does not fail the build — teams can ratchet this over time.
+          MISRA_ADDON=$(find /usr -path '*/cppcheck/addons/misra.py' -print -quit 2>/dev/null || true)
+          if [ -z "$MISRA_ADDON" ]; then
+            MISRA_ADDON=$(find /usr -path '*/addons/misra.py' -print -quit 2>/dev/null || true)
+          fi
+          if [ -n "$MISRA_ADDON" ]; then
+            echo "MISRA addon: $MISRA_ADDON"
+            echo "MISRA_ADDON=$MISRA_ADDON" >> "$GITHUB_ENV"
+            echo "MISRA_ADDON_AVAILABLE=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::MISRA addon (misra.py) not found; the advisory MISRA cppcheck run will be skipped."
+            echo "MISRA_ADDON=" >> "$GITHUB_ENV"
+            echo "MISRA_ADDON_AVAILABLE=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run cppcheck with MISRA addon (advisory)
+        continue-on-error: true
+        run: |
+          if [ "${MISRA_ADDON_AVAILABLE}" != "true" ] || [ -z "${MISRA_ADDON}" ]; then
+            echo "WARNING: MISRA addon (misra.py) not found; skipping advisory MISRA cppcheck run." | tee misra-report.txt
+            exit 0
+          fi
+
+          cppcheck \
+            --addon="${MISRA_ADDON}" \
+            --suppress=missingIncludeSystem \
+            --suppressions-list=.cppcheck-suppressions.txt \
+            --inline-suppr \
+            --std=c11 \
+            --platform=unix32 \
+            -DSTM32H573xx \
+            -DUSE_HAL_DRIVER \
+            -D__GNUC__=12 \
+            -D__GNUC_MINOR__=0 \
+            -D__GNUC_PATCHLEVEL__=0 \
+            -DosCMSIS=0x20001U \
+            -I m1_csrc \
+            -I Sub_Ghz \
+            -I Sub_Ghz/protocols \
+            -I Infrared \
+            -I lfrfid \
+            -I Battery \
+            -I Core/Inc \
+            -I Drivers/STM32H5xx_HAL_Driver/Inc \
+            -I Drivers/CMSIS/Device/ST/STM32H5xx/Include \
+            -I Drivers/CMSIS/Include \
+            -I FatFs \
+            -I lib/furi \
+            -I NFC/Middlewares \
+            -I NFC/Middlewares/ST \
+            -I NFC/Middlewares/ST/rfal \
+            -I NFC/Middlewares/ST/rfal/Inc \
+            m1_csrc/ \
+            2>&1 | tee misra-report.txt
+
+      - name: Upload MISRA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: misra-report
+          path: misra-report.txt
+          retention-days: 30

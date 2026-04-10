@@ -1,0 +1,70 @@
+# Doxyfile — M1 Hapax Firmware API Documentation
+#
+# Generate with:  doxygen Doxyfile
+# Output:         docs/html/index.html
+
+PROJECT_NAME           = "M1 Hapax Firmware"
+PROJECT_BRIEF          = "STM32H573 multi-tool firmware — Hapax fork"
+PROJECT_NUMBER         =
+
+OUTPUT_DIRECTORY       = docs
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+# Input sources — only application code, not vendor HAL
+INPUT                  = m1_csrc \
+                         Sub_Ghz \
+                         Sub_Ghz/protocols \
+                         Infrared \
+                         lfrfid \
+                         Battery \
+                         lib/furi \
+                         Core/Inc
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h
+
+# Exclude vendor and generated code
+EXCLUDE_PATTERNS       = */Drivers/* \
+                         */Middlewares/* \
+                         */NFC/Middlewares/* \
+                         */Esp_spi_at/* \
+                         */Esp32_serial_flasher/* \
+                         */USB/*
+
+# Extract everything, even without full Doxygen comments
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+# Source browser
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# Graphs (if Graphviz is available)
+HAVE_DOT               = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+
+# Warnings
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+QUIET                  = YES
+
+# Optimization
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TYPEDEF_HIDES_STRUCT   = YES
+
+# Markdown support
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+
+# Other
+SORT_MEMBER_DOCS       = YES
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+HTML_COLORSTYLE        = LIGHT

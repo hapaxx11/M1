@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Static analysis (on-demand)** — Added `static-analysis.yml` workflow running cppcheck
+  on `m1_csrc/` and `Sub_Ghz/protocols/` with `--enable=warning,performance,portability`.
+  Also runs cppcheck MISRA-C addon in advisory mode.  Triggered via `workflow_dispatch`
+  (Actions tab) — not a required PR check.
+- **Unit testing framework** — Added Unity test framework (v2.6.1) with host-side
+  CMake build in `tests/`.  Initial test suite covers `bit_util.c` (33 tests):
+  CRC-4/7/8/16, parity, reverse/reflect, XOR/add, CCITT/IBM whitening, LFSR digest,
+  and UART extraction functions.
+- **Address Sanitizer builds** — Host-side test build enables `-fsanitize=address,undefined`
+  by default, catching memory bugs (buffer overflows, use-after-free, undefined behavior)
+  at test time without requiring hardware.
+- **Doxygen documentation** — Added `Doxyfile` and `docs.yml` workflow to auto-generate
+  API documentation from source comments and publish to GitHub Pages.
+- **Unit test CI** — Added `tests.yml` workflow running host-side tests with ASan+UBSan
+  on every PR and push that touches source files.
+- **cppcheck suppressions** — Added `.cppcheck-suppressions.txt` for vendor HAL and
+  expected embedded firmware patterns.
 ### Changed
 
 - **CI workflow no longer runs on push to main** — Removed the `push`
