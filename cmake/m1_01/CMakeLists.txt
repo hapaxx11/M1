@@ -586,6 +586,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_http_client.c
     ../../m1_csrc/m1_fw_source.c
     ../../m1_csrc/m1_fw_download.c
+    ../../m1_csrc/m1_esp32_fw_download.c
 )
 
 target_link_directories(m1_01 INTERFACE
