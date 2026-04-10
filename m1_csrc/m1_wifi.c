@@ -326,33 +326,41 @@ void wifi_scan_ap(void)
 
 							/*
 							 * The chunk filled the VKB entry limit but the credential
-							 * buffer is not yet full, so ask explicitly whether the
-							 * password continues. This allows passwords whose lengths
-							 * are exact multiples of the per-entry maximum.
+							 * buffer is not yet full.  Ask explicitly whether the
+							 * password continues so lengths that are exact multiples
+							 * of the per-entry maximum (20, 40, 60) can be completed.
 							 */
 							{
-								char continue_resp[2];
-								uint8_t continue_len;
+								char pw_msg[24];
+								uint8_t choice;
 
-								memset(continue_resp, 0, sizeof(continue_resp));
-								continue_len = m1_vkb_get_text("More? C=Yes", "", continue_resp, sizeof(continue_resp));
+								snprintf(pw_msg, sizeof(pw_msg), "Entered %u chars",
+									(unsigned int)total_pw_len);
 
-								if ( continue_len == 0 )
+								choice = m1_message_box_choice(&m1_u8g2,
+									"Password continues?",
+									pw_msg, "", "More\nDone");
+
+								if ( choice == 0 )
 								{
+									/* BACK → cancel entire password */
 									password_entry_cancelled = true;
 									total_pw_len = 0;
 									memset(password, 0, sizeof(password));
 									u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-									wifi_ap_list_print(NULL, false); /* reset state */
+									wifi_ap_list_print(NULL, false);
 									list_count = wifi_ap_list_print(&app_req, true);
 									break;
 								}
 
-								if ( continue_resp[0] != 'c' && continue_resp[0] != 'C' )
+								if ( choice == 2 )
 								{
+									/* "Done" → connect with current password */
 									do_connect = true;
 									break;
 								}
+
+								/* choice == 1 → "More" → continue loop */
 							}
 						}
 
