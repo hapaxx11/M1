@@ -985,9 +985,9 @@ static void subghz_raw_waveform_draw(void)
 		uint8_t level = subghz_raw_waveform[idx];
 
 		/* Horizontal rail: 2px thick for visibility.
-		 * High rail sits at y_high, y_high+1 (below reference dot).
-		 * Low rail sits at y_low-1, y_low (above reference dot).
-		 * Both are symmetric around their grid reference positions. */
+		 * High rail is drawn at y_high and y_high+1.
+		 * Low rail is drawn at y_low-1 and y_low.
+		 * Each rail includes its corresponding grid reference position. */
 		if (level)
 		{
 			/* Mark (high) — draw at top rail */
