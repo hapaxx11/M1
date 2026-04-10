@@ -128,13 +128,18 @@ jobs:
             -I Infrared \
             -I lfrfid \
             -I Battery \
+            -I Battery \
+            -I lfrfid \
             -I Core/Inc \
             -I Drivers/STM32H5xx_HAL_Driver/Inc \
             -I Drivers/CMSIS/Device/ST/STM32H5xx/Include \
             -I Drivers/CMSIS/Include \
-            -I NFC/Middlewares/ST/rfal/Inc \
             -I FatFs \
             -I lib/furi \
+            -I NFC/Middlewares \
+            -I NFC/Middlewares/ST \
+            -I NFC/Middlewares/ST/RFAL \
+            -I NFC/Middlewares/ST/RFAL/Inc \
             m1_csrc/ \
             2>&1 | tee misra-report.txt
 
