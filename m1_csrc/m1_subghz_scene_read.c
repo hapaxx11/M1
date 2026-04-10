@@ -127,11 +127,12 @@ static void scene_on_enter(SubGhzApp *app)
 
     /* Detect whether we're returning from a child scene (Config,
      * ReceiverInfo, SaveName) vs. entering fresh from the Menu.
-     * If we have history or previous decodes, this is a resume —
-     * skip the expensive full radio reset + pulse handler wipe.
-     * Edge case: if Config is opened before any decode, we do a
-     * fresh start — harmless since there's no decode state to lose. */
-    bool is_resume = (app->history.count > 0 || app->has_decoded);
+     * The explicit resume_from_child flag is set when Read pushes
+     * a child scene, ensuring we don't accidentally resume when
+     * re-entering Read from Menu (where history may still exist
+     * from a previous session). */
+    bool is_resume = app->resume_from_child;
+    app->resume_from_child = false;
 
     /* Reset view state but preserve history across child-scene navigation.
      * History is only cleared on the first enter from the Menu scene
@@ -232,9 +233,13 @@ static void resume_rx(SubGhzApp *app)
         app->current_freq_hz = app->hopper_freq;
 
     /* Start RX — radio was in SLEEP (ISOLATED) from stop_rx(),
-     * so we just need to switch back to RX mode + init capture. */
+     * so we just need to switch back to RX mode + init capture.
+     * When hopping is active, explicitly retune to the saved hopper
+     * frequency so the hardware matches the restored app/UI state. */
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+    if (app->hopper_active)
+        subghz_retune_freq_hz_ext(app->hopper_freq);
     SI446x_Change_Modem_OOK_PDTC(OOK_PDTC_VALUE);
     sub_ghz_rx_init_ext();
     sub_ghz_rx_start_ext();
@@ -298,6 +303,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 else if (app->detail_view)
                 {
                     /* Push Receiver Info scene (full detail + save/send) */
+                    app->resume_from_child = true;
                     subghz_scene_push(app, SubGhzSceneReceiverInfo);
                 }
                 else if (!app->history_view && app->has_decoded)
@@ -387,11 +393,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             else if (app->detail_view)
             {
                 /* Save signal from detail view */
+                app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneSaveName);
             }
             else if (!app->history_view)
             {
                 /* Open config (Flipper-consistent: config accessible during RX) */
+                app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
             return true;

@@ -120,7 +120,17 @@ static bool open_saved_browser(void)
         memset(&saved_signal, 0, sizeof(saved_signal));
         bool loaded = flipper_subghz_load(full_path, &saved_signal);
 
-        is_raw_file = (loaded && saved_signal.type == FLIPPER_SUBGHZ_TYPE_RAW
+        if (!loaded)
+        {
+            /* Load failed — don't enter action menu with invalid state */
+            is_raw_file = false;
+            in_action_menu = false;
+            action_count = 0;
+            action_sel = 0;
+            return false;
+        }
+
+        is_raw_file = (saved_signal.type == FLIPPER_SUBGHZ_TYPE_RAW
                        && saved_signal.raw_count > 0);
 
         if (is_raw_file)
