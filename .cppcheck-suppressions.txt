@@ -1,19 +1,6 @@
-# cppcheck suppressions for M1 firmware
-#
-# Suppress warnings that are expected in embedded firmware or vendor HAL code.
-# Add specific file:line suppressions as the codebase is cleaned up.
-
-# FatFs and vendor HAL use non-standard patterns
-
-# Vendor HAL files use intentional fallthrough and casts
 variableScope:Drivers/*
 variableScope:Middlewares/*
 variableScope:NFC/*
-
-# The protocol decoders use large stack-allocated arrays by design
-# (no heap allocation allowed per architecture rules)
 stackVariable:Sub_Ghz/protocols/*
-
-# Suppress for auto-generated CubeMX code
 unusedFunction:Core/Src/stm32h5xx_hal_msp.c
 unusedFunction:Core/Src/stm32h5xx_it.c
