@@ -31,7 +31,7 @@
 #define M1_VIRTUAL_KEY_ENTER			0x0A
 #define M1_VIRTUAL_KEY_NONE				0x00 // NULL
 
-#define M1_VIRTUAL_KB_FILENAME_MAX		20
+/* M1_VIRTUAL_KB_FILENAME_MAX is defined in m1_virtual_kb.h */
 //#define M1_VIRTUAL_KBS_DATA_MAX			14 // 10 + 4 spaces
 uint8_t M1_VIRTUAL_KBS_DATA_MAX;
 

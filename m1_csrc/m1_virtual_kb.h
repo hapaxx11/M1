@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 
+#define M1_VIRTUAL_KB_FILENAME_MAX		20
+
 uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name);
 uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text);
 uint8_t m1_vkbs_get_data(char *description, char *new_data);
