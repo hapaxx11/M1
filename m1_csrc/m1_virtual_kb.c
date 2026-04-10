@@ -475,7 +475,14 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 				filename[M1_VIRTUAL_KB_FILENAME_MAX] = 0x00;
 				len = M1_VIRTUAL_KB_FILENAME_MAX;
 			}
-			u8g2_DrawStr(&m1_u8g2, M1_VKB_FILENAME_POS_X, M1_VKB_FILENAME_POS_Y, filename);
+			if ( s_vkb_active_pages == m1_vkb_text_pages )
+			{
+				m1_vkb_draw_text_with_visible_spaces(M1_VKB_FILENAME_POS_X, M1_VKB_FILENAME_POS_Y, filename);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, M1_VKB_FILENAME_POS_X, M1_VKB_FILENAME_POS_Y, filename);
+			}
 		} // if ( len )
 
 		y = M1_VKB_FIRST_ROW_TOP_POS_Y + M1_VKB_GUI_FONT_HEIGHT;
@@ -842,12 +849,11 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 /*============================================================================*/
 uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text)
 {
-	uint8_t previous_active_pages[sizeof(s_vkb_active_pages)];
+	const uint8_t (*prev_pages)[M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL_KB_COLUMN_SIZE] = s_vkb_active_pages;
 
-	memcpy(previous_active_pages, &s_vkb_active_pages, sizeof(s_vkb_active_pages));
 	s_vkb_active_pages = m1_vkb_text_pages;
 	uint8_t result = m1_vkb_get_filename(description, default_text, new_text);
-	memcpy(&s_vkb_active_pages, previous_active_pages, sizeof(s_vkb_active_pages));
+	s_vkb_active_pages = prev_pages;
 
 	return result;
 }
