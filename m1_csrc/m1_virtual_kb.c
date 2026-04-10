@@ -841,9 +841,12 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 /*============================================================================*/
 uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text)
 {
+	__typeof__(s_vkb_active_pages) previous_active_pages = s_vkb_active_pages;
+
 	s_vkb_active_pages = m1_vkb_text_pages;
 	uint8_t result = m1_vkb_get_filename(description, default_text, new_text);
-	s_vkb_active_pages = m1_vkb_pages; /* restore default (filename mode) */
+	s_vkb_active_pages = previous_active_pages;
+
 	return result;
 }
 
