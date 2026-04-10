@@ -330,7 +330,12 @@ void nfc_worker_task(void *arg)
                         NfcState = NFC_STATE_DONE;
                         m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF); // Turn off
                         //platformLog("NFC Worker Task: Process Complete, moving to Done state\r\n");
-                    }                    
+                    }
+                    else if ( q_item.q_evt_type==Q_EVENT_NFC_STOP )
+                    {
+                        NfcState = NFC_STATE_DONE;
+                        m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                    }
                     
                 }
                 vTaskDelay(5);

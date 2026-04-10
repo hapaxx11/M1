@@ -1114,8 +1114,9 @@ static bool ir_file_action_menu(const char *ir_file_path)
                 {
                     /* Transmit every command in the file sequentially.
                      * Each transmit_command() calls infrared_encode_sys_init(),
-                     * so we must deinit after each TX complete event before
-                     * the next command can re-init the hardware. */
+                     * so we must deinit after each TX — even on timeout or
+                     * unexpected event — before the next command can re-init
+                     * the hardware. */
                     for (uint16_t i = 0; i < s_cmd_count; i++)
                     {
                         if (s_commands[i].valid)
@@ -1123,11 +1124,11 @@ static bool ir_file_action_menu(const char *ir_file_path)
                             transmit_command(&s_commands[i]);
                             /* Wait for TX complete before next */
                             S_M1_Main_Q_t tx_q;
-                            BaseType_t tx_ret = xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(3000));
-                            if (tx_ret == pdTRUE && tx_q.q_evt_type == Q_EVENT_IRRED_TX)
-                            {
-                                infrared_encode_sys_deinit();
-                            }
+                            (void)xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(3000));
+                            /* Always deinit — transmit_command() called
+                             * infrared_encode_sys_init(), so we must tear down
+                             * regardless of whether TX complete arrived. */
+                            infrared_encode_sys_deinit();
                             vTaskDelay(pdMS_TO_TICKS(200));
                         }
                     }
