@@ -77,13 +77,13 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                 snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
                 switch (ret)
                 {
-                    case 1: err = "File/IO error";           break;
-                    case 2: err = "Missing data/frequency";  break;
-                    case 3: err = "Unsupported freq";        break;
+                    case 1: err = "File/IO error";              break;
+                    case 2: err = "Missing data/frequency";     break;
+                    case 3: err = "Unsupported freq";           break;
                     case 4: /* fall through */
-                    case 5: err = "Memory error";            break;
-                    case 6: err = "Rolling code (RAW only)"; break;
-                    case 7: err = "Unsupported protocol";    break;
+                    case 5: err = "Memory error";               break;
+                    case 6: err = "Dynamic/RAW-only protocol";  break;
+                    case 7: err = "Unsupported protocol";       break;
                 }
                 m1_message_box(&m1_u8g2, "Emulate failed", err, "",
                                "BACK to return");
