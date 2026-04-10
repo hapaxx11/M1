@@ -366,6 +366,24 @@ bool flipper_subghz_save(const char *path, const flipper_subghz_signal_t *sig)
 }
 
 /*============================================================================*/
+/** @brief  Case-insensitive substring search (like POSIX strcasestr). */
+static const char *stristr(const char *haystack, const char *needle)
+{
+	if (!needle[0]) return haystack;
+	for (; *haystack; haystack++)
+	{
+		const char *h = haystack, *n = needle;
+		while (*h && *n && (tolower((unsigned char)*h) == tolower((unsigned char)*n)))
+		{
+			h++;
+			n++;
+		}
+		if (!*n) return haystack;
+	}
+	return NULL;
+}
+
+/*============================================================================*/
 /**
  * @brief  Map Flipper preset name to M1 modulation type
  * @param  preset  Flipper preset string (e.g., "FuriHalSubGhzPresetOok650Async")
@@ -376,12 +394,17 @@ uint8_t flipper_subghz_preset_to_modulation(const char *preset)
 	if (preset == NULL)
 		return (uint8_t)MODULATION_UNKNOWN;
 
-	/* OOK presets */
-	if (strstr(preset, "Ook") != NULL || strstr(preset, "OOK") != NULL)
+	/* OOK presets — e.g. FuriHalSubGhzPresetOok650Async */
+	if (stristr(preset, "OOK"))
 		return (uint8_t)MODULATION_OOK;
 
-	/* FSK presets */
-	if (strstr(preset, "2FSK") != NULL || strstr(preset, "FSK") != NULL)
+	/* ASK presets */
+	if (stristr(preset, "ASK"))
+		return (uint8_t)MODULATION_ASK;
+
+	/* FSK presets — matches 2FSK, GFSK, 4FSK, etc.
+	 * e.g. FuriHalSubGhzPreset2FSKDev238Async */
+	if (stristr(preset, "FSK"))
 		return (uint8_t)MODULATION_FSK;
 
 	return (uint8_t)MODULATION_UNKNOWN;
