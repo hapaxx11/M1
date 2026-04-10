@@ -160,6 +160,8 @@ typedef struct {
     /* --- Flags --- */
     bool     need_redraw;             /**< Scene requests display update */
     bool     running;                 /**< false = exit scene manager loop */
+    bool     resume_from_child;       /**< Set when Read pushes a child scene;
+                                           cleared after resume_rx() uses it */
 } SubGhzApp;
 
 /*============================================================================*/

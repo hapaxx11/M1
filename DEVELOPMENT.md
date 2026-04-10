@@ -104,3 +104,16 @@ Conventional Commits format used in this repository.
 - Test on hardware when possible
 - Document test scenarios and edge cases
 - Ensure NFC, RFID, and Sub-GHz functionality are verified
+- **Bug fixes require regression tests** — every bug fix **must** include one or more
+  host-side unit tests (under `tests/`) that would **fail before the fix** and **pass
+  after the fix**.  If the buggy code is a pure-logic function, test it directly.  If
+  it involves hardware-dependent code, extract the core logic into a testable helper
+  and test that.  A bug fix without a corresponding regression test is incomplete.
+
+### Running Unit Tests
+
+```bash
+cmake -B build-tests -S tests -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZERS=ON
+cmake --build build-tests
+ctest --test-dir build-tests --output-on-failure
+```

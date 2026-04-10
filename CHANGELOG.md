@@ -36,8 +36,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Category:` field (`firmware` or `esp32`) to distinguish M1 firmware
   sources from ESP32 AT firmware sources.  Existing configs without a
   `Category:` field default to `firmware`.
+- **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
+  now shows a "Decode" option (first item) for RAW `.sub` files.  Selecting it
+  feeds the raw pulse timing data through all registered protocol decoders
+  offline (no radio needed) and displays any matched protocols with key, bit
+  count, TE, and frequency.  Multiple decoded packets are shown in a scrollable
+  list with detail view.  Inspired by Momentum firmware's decode feature.
+- Documentation: added mandatory bug-fix regression test policy to CLAUDE.md,
+  DEVELOPMENT.md, and .github/GUIDELINES.md — every bug fix must include unit tests
+  that fail before the fix and pass after it
 
 ### Fixed
+
+- **Sub-GHz Read scene: unnecessary full radio reset on child scene return** —
+  Returning from Config, ReceiverInfo, or SaveName back to the Read scene
+  previously called `menu_sub_ghz_init()` (full SI4463 power-cycle + patch load)
+  and `subghz_pulse_handler_reset()` (wipes accumulated pulse state), even though
+  the radio was only in SLEEP mode.  Now uses a lightweight `resume_rx()` path
+  that skips the expensive reset and preserves decode state.
+
+- **Sub-GHz Read scene: hopper frequency resets to index 0 after Config** —
+  Opening and closing Config while frequency hopping was active would restart
+  the hopper from frequency index 0.  Now preserves the hopper position
+  (`hopper_idx` and `hopper_freq`) across child scene navigation.
+
+- **Sub-GHz Read scene: L/R frequency change power-cycles the radio** —
+  Pressing Left/Right to change frequency during active RX previously did a full
+  `stop_rx()` + `start_rx()` cycle (TIM1 deinit/init, `menu_sub_ghz_init()`,
+  pulse handler reset).  Now uses `subghz_retune_freq_hz_ext()` for a lightweight
+  retune — the same mechanism the frequency hopper uses internally — keeping the
+  capture pipeline intact.
 
 - **OTA "Fetching releases" always returns "No releases found"** — `http_get`
   used `AT+HTTPCLIENT` which has a 2 KB receive-buffer limit in the ESP32-C6

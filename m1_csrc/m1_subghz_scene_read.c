@@ -115,6 +115,7 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 /*============================================================================*/
 
 static void start_rx(SubGhzApp *app);
+static void resume_rx(SubGhzApp *app);
 static void stop_rx(SubGhzApp *app);
 
 static void scene_on_enter(SubGhzApp *app)
@@ -124,10 +125,18 @@ static void scene_on_enter(SubGhzApp *app)
      * the event loop to skip the pulse handler entirely. */
     subghz_record_mode_flag = 0;
 
-    /* Reset view state but preserve history across child-scene navigation
-     * (ReceiverInfo, Config, SaveName).  History is only cleared on the first
-     * enter from the Menu scene (when count is 0) or can be cleared
-     * explicitly by the user. */
+    /* Detect whether we're returning from a child scene (Config,
+     * ReceiverInfo, SaveName) vs. entering fresh from the Menu.
+     * The explicit resume_from_child flag is set when Read pushes
+     * a child scene, ensuring we don't accidentally resume when
+     * re-entering Read from Menu (where history may still exist
+     * from a previous session). */
+    bool is_resume = app->resume_from_child;
+    app->resume_from_child = false;
+
+    /* Reset view state but preserve history across child-scene navigation.
+     * History is only cleared on the first enter from the Menu scene
+     * (when count is 0) or can be cleared explicitly by the user. */
     app->history_sel    = 0;
     app->history_scroll = 0;
     app->history_view   = false;
@@ -137,7 +146,7 @@ static void scene_on_enter(SubGhzApp *app)
     /* If history already has signals (returning from child scene),
      * keep has_decoded and last_decoded so the display shows them.
      * Only reset when starting fresh. */
-    if (app->history.count == 0)
+    if (!is_resume)
     {
         app->has_decoded = false;
         memset(&app->last_decoded, 0, sizeof(app->last_decoded));
@@ -145,10 +154,19 @@ static void scene_on_enter(SubGhzApp *app)
 
     /* Auto-start RX (Flipper-consistent: entering Read immediately starts
      * listening — no need to press OK first). */
-    start_rx(app);
+    if (is_resume)
+        resume_rx(app);
+    else
+        start_rx(app);
     app->need_redraw = true;
 }
 
+/**
+ * @brief  Full RX start — used on first entry from Menu.
+ *
+ * Resets the pulse handler state, does a full radio power-cycle via
+ * menu_sub_ghz_init(), and initializes hopper from scratch.
+ */
 static void start_rx(SubGhzApp *app)
 {
     /* Reset pulse handler state to ensure clean decode session */
@@ -179,6 +197,49 @@ static void start_rx(SubGhzApp *app)
     /* Start RX */
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+    SI446x_Change_Modem_OOK_PDTC(OOK_PDTC_VALUE);
+    sub_ghz_rx_init_ext();
+    sub_ghz_rx_start_ext();
+
+    app->read_state = SubGhzReadStateRx;
+
+    /* LED: cyan fast blink to indicate active listening */
+    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+}
+
+/**
+ * @brief  Lightweight RX resume — used when returning from child scenes.
+ *
+ * Unlike start_rx(), this skips:
+ *   - subghz_pulse_handler_reset() — preserves partial decode state
+ *   - menu_sub_ghz_init() — expensive full radio reset is unnecessary
+ *     since stop_rx() only puts the SI4463 to SLEEP (not power-off)
+ *   - Hopper index reset — preserves position in hop sequence
+ *
+ * Config changes made in the Config scene (freq/mod) are applied via
+ * subghz_apply_config_ext() which updates the internal radio state.
+ */
+static void resume_rx(SubGhzApp *app)
+{
+    /* Apply config to radio (picks up any Config scene changes) */
+    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+
+    /* Track the active frequency in Hz */
+    app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
+
+    /* Restore hopper from saved position (not reset to 0) */
+    app->hopper_active = app->hopping;
+    if (app->hopper_active)
+        app->current_freq_hz = app->hopper_freq;
+
+    /* Start RX — radio was in SLEEP (ISOLATED) from stop_rx(),
+     * so we just need to switch back to RX mode + init capture.
+     * When hopping is active, explicitly retune to the saved hopper
+     * frequency so the hardware matches the restored app/UI state. */
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+    if (app->hopper_active)
+        subghz_retune_freq_hz_ext(app->hopper_freq);
     SI446x_Change_Modem_OOK_PDTC(OOK_PDTC_VALUE);
     sub_ghz_rx_init_ext();
     sub_ghz_rx_start_ext();
@@ -242,6 +303,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 else if (app->detail_view)
                 {
                     /* Push Receiver Info scene (full detail + save/send) */
+                    app->resume_from_child = true;
                     subghz_scene_push(app, SubGhzSceneReceiverInfo);
                 }
                 else if (!app->history_view && app->has_decoded)
@@ -270,9 +332,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
                 if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
                 {
-                    /* Retune live — stop/start RX with new config */
-                    stop_rx(app);
-                    start_rx(app);
+                    /* Lightweight retune — keep RX running, just change
+                     * frequency.  Uses the same mechanism as the hopper
+                     * (subghz_retune_freq_hz_ext) instead of a full
+                     * stop_rx()+start_rx() cycle that would power-cycle
+                     * the radio and wipe the pulse handler. */
+                    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+                    subghz_retune_freq_hz_ext(app->current_freq_hz);
                 }
                 app->need_redraw = true;
             }
@@ -286,9 +352,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
                 if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
                 {
-                    /* Retune live — stop/start RX with new config */
-                    stop_rx(app);
-                    start_rx(app);
+                    /* Lightweight retune — same as Left handler */
+                    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+                    subghz_retune_freq_hz_ext(app->current_freq_hz);
                 }
                 app->need_redraw = true;
             }
@@ -327,11 +393,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             else if (app->detail_view)
             {
                 /* Save signal from detail view */
+                app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneSaveName);
             }
             else if (!app->history_view)
             {
                 /* Open config (Flipper-consistent: config accessible during RX) */
+                app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
             return true;
