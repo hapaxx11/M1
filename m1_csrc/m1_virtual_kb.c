@@ -863,7 +863,13 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size)
 {
 	const uint8_t (*prev_pages)[M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL_KB_COLUMN_SIZE] = s_vkb_active_pages;
-	char tmp[M1_VIRTUAL_KB_FILENAME_MAX + 1];
+	char tmp[M1_VIRTUAL_KB_INPUT_MAX + 1];
+
+	/* Treat NULL pointers as empty strings so callers can't hard-fault. */
+	if ( description == NULL )
+		description = "";
+	if ( default_text == NULL )
+		default_text = "";
 
 	tmp[0] = '\0';
 
