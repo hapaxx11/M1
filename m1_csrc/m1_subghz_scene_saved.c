@@ -563,7 +563,7 @@ static void draw_decode_screen(void)
 
         if (d->serial_number != 0 || d->rolling_code != 0)
         {
-            snprintf(line, sizeof(line), "SN:%lX RC:%lX",
+            snprintf(line, sizeof(line), "SN: %lX RC: %lX",
                      (unsigned long)d->serial_number,
                      (unsigned long)d->rolling_code);
             u8g2_DrawStr(&m1_u8g2, 2, 61, line);
