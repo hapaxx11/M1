@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
+  `subghz_raw_waveform_draw()` from filled vertical bars to a proper
+  square-wave oscilloscope trace.  High/low signal levels are now drawn
+  as 2px-thick horizontal rails with crisp vertical transition edges.
+  Added subtle dashed grid reference lines at the high, center, and low
+  positions for visual context.  Adjusted the waveform area geometry
+  (Y=15, H=36) so it no longer overlaps the RSSI bar.
 - **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
   the intermediate "Press OK to browse" prompt screen.  Entering either scene
   now opens the SD card file browser immediately.  BACK from the action menu
