@@ -280,18 +280,15 @@ void wifi_scan_ap(void)
 
 							if ( chunk_len == 0 )
 							{
-								/* Empty first entry = cancel, empty later entry = done */
-								if ( total_pw_len > 0 )
-								{
-									do_connect = true;
-								}
-								else
-								{
-									/* User cancelled - redraw AP list */
-									u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-									wifi_ap_list_print(NULL, false); /* reset state */
-									list_count = wifi_ap_list_print(&app_req, true);
-								}
+								/*
+								 * Treat zero-length input consistently as cancel.
+								 * The VKB API does not distinguish an empty confirm
+								 * from BACK/cancel here, so never interpret len == 0
+								 * as "done" after partial password entry.
+								 */
+								u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+								wifi_ap_list_print(NULL, false); /* reset state */
+								list_count = wifi_ap_list_print(&app_req, true);
 								break;
 							}
 
