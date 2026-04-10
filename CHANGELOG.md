@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sub-GHz Emulate — radio state after replay** — Radio hardware is re-initialized
   after emulate returns, preventing subsequent Read/Read Raw from failing because
   the SI4463 was left powered off.
+- **IR database — Windows reserved filename** — Renamed `ir_database/AC/AUX.ir`
+  to `AUX_.ir`.  `AUX` is a reserved device name on Windows, causing
+  `error: invalid path` on checkout and reset operations.
 
 ### Changed
 
