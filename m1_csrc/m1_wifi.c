@@ -286,19 +286,11 @@ void wifi_scan_ap(void)
 							if ( chunk_len == 0 )
 							{
 								/*
-								 * A zero-length response on the initial prompt is still
-								 * treated as cancel. However, if the previous chunk filled
-								 * the VKB entry limit exactly, this prompt exists only to
-								 * determine whether the user has more password text to add.
-								 * In that forced follow-up case, interpret len == 0 as
-								 * "done" so exact-multiple chunk lengths can complete.
+								 * Treat a zero-length return from the VKB consistently as
+								 * cancel. The current VKB API does not distinguish BACK
+								 * from an explicit empty submission, so len == 0 must not
+								 * be interpreted as "done" for the forced follow-up prompt.
 								 */
-								if ( (total_pw_len > 0) && last_chunk_was_full )
-								{
-									do_connect = true;
-									break;
-								}
-
 								password_entry_cancelled = true;
 								total_pw_len = 0;
 								memset(password, 0, sizeof(password));
