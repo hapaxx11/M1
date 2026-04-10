@@ -114,11 +114,10 @@ void test_crc16_ccitt(void)
 
 void test_crc4_basic(void)
 {
+    /* CRC-4 with poly=0x03 (MSB-first), init=0x00 over {0x12, 0x34} = 0x0C */
     uint8_t data[] = {0x12, 0x34};
-    /* Just verify it doesn't crash and produces deterministic output */
-    uint8_t c1 = crc4(data, 2, 0x03, 0x00);
-    uint8_t c2 = crc4(data, 2, 0x03, 0x00);
-    TEST_ASSERT_EQUAL_UINT8(c1, c2);
+    uint8_t crc = crc4(data, 2, 0x03, 0x00);
+    TEST_ASSERT_EQUAL_UINT8(0x0C, crc);
 }
 
 void test_crc7_basic(void)
