@@ -835,7 +835,8 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
  *         pattern of context-specific keyboard layouts.
  * @param:  description   - title shown at top of screen
  *          default_text  - pre-filled text (may be empty string)
- *          new_text      - output buffer (caller must allocate ≥21 bytes)
+ *          new_text      - output buffer (caller must allocate at least
+ *                          M1_VIRTUAL_KB_FILENAME_MAX + 1 bytes)
  * @retval  length of entered text, or 0 if user cancelled
  */
 /*============================================================================*/
