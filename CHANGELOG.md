@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **IR database — Windows reserved filename** — Renamed `ir_database/AC/AUX.ir`
+  to `AUX_.ir`.  `AUX` is a reserved device name on Windows, causing
+  `error: invalid path` on checkout and reset operations.
+
 ### Changed
 
 - **Settings — LCD & Notifications menu** — Removed the bottom instruction bar
