@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
+  the intermediate "Press OK to browse" prompt screen.  Entering either scene
+  now opens the SD card file browser immediately.  BACK from the action menu
+  (Saved) or playback view (Playlist) re-opens the browser; BACK from the
+  browser returns to the Sub-GHz menu.  After Rename or Delete, the file
+  browser reopens automatically per the Saved Item Actions Pattern.
+- **File browser lists directories before files** — The SD card file browser
+  now sorts entries with directories first, then files, each group sorted
+  alphabetically (case-insensitive).  This matches Flipper Zero / Momentum
+  firmware behaviour and prevents subdirectories (e.g. `playlist/`) from
+  appearing in the middle of signal files.
+
 ### Fixed
 
 - **Splash screen showing "M1 H" instead of "M1 Hapax"** — Changed

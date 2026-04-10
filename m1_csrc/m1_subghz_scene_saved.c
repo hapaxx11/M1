@@ -47,15 +47,47 @@ static bool in_info_screen = false;
 static flipper_subghz_signal_t saved_signal;
 
 /*============================================================================*/
+/* Helpers                                                                    */
+/*============================================================================*/
+
+/**
+ * @brief  Open the 0:/SUBGHZ/ file browser and populate action menu state.
+ *
+ * @retval true   A file was selected (action menu ready).
+ * @retval false  User cancelled the browser (caller should pop the scene).
+ */
+static bool open_saved_browser(void)
+{
+    S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
+    if (f_info && f_info->file_is_selected)
+    {
+        snprintf(saved_filepath, sizeof(saved_filepath), "/SUBGHZ/%s",
+                 f_info->file_name);
+        strncpy(saved_filename, f_info->file_name, sizeof(saved_filename) - 1);
+        saved_filename[sizeof(saved_filename) - 1] = '\0';
+        in_action_menu = true;
+        action_sel = 0;
+        return true;
+    }
+    return false;
+}
+
+/*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    (void)app;
     in_action_menu = false;
     in_info_screen = false;
     action_sel = 0;
+
+    /* Open file browser immediately — no intermediate prompt screen */
+    if (!open_saved_browser())
+    {
+        subghz_scene_pop(app);
+        return;
+    }
     app->need_redraw = true;
 }
 
@@ -125,6 +157,9 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                 snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
                 f_rename(old_path, new_path);
             }
+            /* Return to file browser after rename */
+            if (!open_saved_browser())
+                subghz_scene_pop(app);
             app->need_redraw = true;
             return true;
         }
@@ -138,6 +173,9 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                 char del_path[72];
                 snprintf(del_path, sizeof(del_path), "0:%s", saved_filepath);
                 f_unlink(del_path);
+                /* Return to file browser after delete */
+                if (!open_saved_browser())
+                    subghz_scene_pop(app);
             }
             app->need_redraw = true;
             return true;
@@ -160,63 +198,32 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         return false;
     }
 
-    if (!in_action_menu)
+    /* Action menu mode */
+    switch (event)
     {
-        /* File browser mode */
-        switch (event)
-        {
-            case SubGhzEventBack:
+        case SubGhzEventBack:
+            /* Re-open file browser; pop if user cancels */
+            if (!open_saved_browser())
                 subghz_scene_pop(app);
-                return true;
+            app->need_redraw = true;
+            return true;
 
-            case SubGhzEventOk:
-            {
-                /* Open file browser (blocking call) */
-                S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
-                if (f_info && f_info->file_is_selected)
-                {
-                    snprintf(saved_filepath, sizeof(saved_filepath), "/SUBGHZ/%s",
-                             f_info->file_name);
-                    strncpy(saved_filename, f_info->file_name, sizeof(saved_filename) - 1);
-                    saved_filename[sizeof(saved_filename) - 1] = '\0';
-                    in_action_menu = true;
-                    action_sel = 0;
-                }
-                app->need_redraw = true;
-                return true;
-            }
+        case SubGhzEventUp:
+            action_sel = (action_sel > 0) ? action_sel - 1 : ACTION_COUNT - 1;
+            app->need_redraw = true;
+            return true;
 
-            default:
-                break;
-        }
-    }
-    else
-    {
-        /* Action menu mode */
-        switch (event)
-        {
-            case SubGhzEventBack:
-                in_action_menu = false;
-                app->need_redraw = true;
-                return true;
+        case SubGhzEventDown:
+            action_sel = (action_sel + 1) % ACTION_COUNT;
+            app->need_redraw = true;
+            return true;
 
-            case SubGhzEventUp:
-                action_sel = (action_sel > 0) ? action_sel - 1 : ACTION_COUNT - 1;
-                app->need_redraw = true;
-                return true;
+        case SubGhzEventOk:
+            handle_action(app, action_sel);
+            return true;
 
-            case SubGhzEventDown:
-                action_sel = (action_sel + 1) % ACTION_COUNT;
-                app->need_redraw = true;
-                return true;
-
-            case SubGhzEventOk:
-                handle_action(app, action_sel);
-                return true;
-
-            default:
-                break;
-        }
+        default:
+            break;
     }
     return false;
 }
@@ -277,21 +284,6 @@ static void draw(SubGhzApp *app)
             snprintf(line, sizeof(line), "Mod: %s", saved_signal.preset);
             u8g2_DrawStr(&m1_u8g2, 2, 54, line);
         }
-    }
-    else if (!in_action_menu)
-    {
-        /* Prompt to open file browser */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        m1_draw_text(&m1_u8g2, 2, 15, 124, "Saved Signals", TEXT_ALIGN_CENTER);
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        m1_draw_text(&m1_u8g2, 2, 30, 124, "Press OK to browse", TEXT_ALIGN_CENTER);
-        m1_draw_text(&m1_u8g2, 2, 40, 124, "0:/SUBGHZ/", TEXT_ALIGN_CENTER);
-
-        subghz_button_bar_draw(
-            NULL, NULL,
-            NULL, NULL,
-            NULL, "OK:Browse");
     }
     else
     {
