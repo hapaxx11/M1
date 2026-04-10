@@ -257,6 +257,7 @@ void wifi_scan_ap(void)
 						 * until the user finishes or the WiFi credential buffer is full.
 						 */
 						uint8_t total_pw_len = 0;
+						bool password_entry_cancelled = false;
 
 						memset(password, 0, sizeof(password));
 
@@ -289,6 +290,9 @@ void wifi_scan_ap(void)
 								 * from BACK/cancel here, so never interpret len == 0
 								 * as "done" after partial password entry.
 								 */
+								password_entry_cancelled = true;
+								total_pw_len = 0;
+								memset(password, 0, sizeof(password));
 								u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 								wifi_ap_list_print(NULL, false); /* reset state */
 								list_count = wifi_ap_list_print(&app_req, true);
@@ -313,6 +317,9 @@ void wifi_scan_ap(void)
 								break;
 							}
 						}
+
+						if ( password_entry_cancelled )
+							do_connect = false;
 					}
 
 					if ( do_connect )
