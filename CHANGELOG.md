@@ -12,11 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Hapax logo — H inside diamond** — Updated all three M1 logo bitmap arrays
-  (128×64 splash, 40×32 boot, 26×14 status bar) in `m1_display_data.c` from
-  user-edited PNG exports.  The Hapax "H" letterform is carved into the center
+  (128×64 splash, 40×32 boot, 26×14 status bar) in `m1_display_data.c` with
+  Hapax H-mark variants.  The Hapax "H" letterform is carved into the center
   diamond of the M mountain logo by clearing specific pixels to form two vertical
   legs and a horizontal crossbar.  The diamond outline and mountain slopes are
-  unchanged from stock.
+  unchanged from stock.  PNG previews extracted from the C byte arrays are in
+  `documentation/logo_previews/`.
 
 ### Fixed
 
