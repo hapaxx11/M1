@@ -269,7 +269,7 @@ void wifi_scan_ap(void)
 							uint8_t chunk_len;
 							uint8_t remaining = (WIFI_CRED_PASS_MAX_LEN - 1) - total_pw_len;
 							const uint8_t pw_chunk_entry_max_len =
-								(uint8_t)M1_VIRTUAL_KB_FILENAME_MAX;
+								(uint8_t)(sizeof(pw_chunk) - 1U);
 							const uint8_t pw_chunk_full_len =
 								(remaining < pw_chunk_entry_max_len) ? remaining : pw_chunk_entry_max_len;
 
