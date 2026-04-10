@@ -81,7 +81,20 @@ static void scene_on_enter(SubGhzApp *app)
 
 static void start_raw_rx(SubGhzApp *app)
 {
+    /* Clean up any previous TX raw state BEFORE radio RX setup.
+     * sub_ghz_tx_raw_deinit puts the radio to SLEEP via
+     * sub_ghz_set_opmode(ISOLATED) — if called AFTER starting RX it
+     * would undo the RX start, leaving TIM1 capturing zero edges. */
+    sub_ghz_tx_raw_deinit_ext();
+
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+
+    /* Ensure radio is in a clean, known state — matches the Spectrum
+     * Analyzer pattern of always doing a full radio reset + config load
+     * before starting RX.  This guarantees the SI4463 recovers properly
+     * even if a previous blocking delegate powered the radio off via
+     * menu_sub_ghz_exit(). */
+    menu_sub_ghz_init();
 
     /* Initialize ring buffers */
     if (sub_ghz_ring_buffers_init_ext())
@@ -101,7 +114,6 @@ static void start_raw_rx(SubGhzApp *app)
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
     SI446x_Change_Modem_OOK_PDTC(0x6C);
-    sub_ghz_tx_raw_deinit_ext();
     sub_ghz_rx_init_ext();
     sub_ghz_rx_start_ext();
 
