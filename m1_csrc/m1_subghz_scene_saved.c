@@ -159,10 +159,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             }
             /* Return to file browser after rename */
             if (!open_saved_browser())
-            {
-                in_action_menu = false;
                 subghz_scene_pop(app);
-            }
             app->need_redraw = true;
             return true;
         }
@@ -178,10 +175,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                 f_unlink(del_path);
                 /* Return to file browser after delete */
                 if (!open_saved_browser())
-                {
-                    in_action_menu = false;
                     subghz_scene_pop(app);
-                }
             }
             app->need_redraw = true;
             return true;

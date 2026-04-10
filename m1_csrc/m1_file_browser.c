@@ -47,8 +47,8 @@ const char m1_fb_data_types[]    = ".log.LOG.text.TEXT.txt.TXT";
  * files, and each group is sorted alphabetically (case-insensitive).
  */
 typedef struct {
-	char   fname[FF_LFN_BUF + 1];  /**< File/directory name          */
-	BYTE   fattrib;                  /**< FatFS file attributes        */
+	char	fname[FF_LFN_BUF + 1];	/**< File/directory name          */
+	BYTE	fattrib;				/**< FatFS file attributes        */
 } fb_sorted_entry_t;
 
 /**************************** *V A R I A B L E S ******************************/
