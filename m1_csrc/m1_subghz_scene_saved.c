@@ -66,11 +66,14 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         case ACTION_EMULATE:
         {
             uint8_t ret = sub_ghz_replay_flipper_file(saved_filepath);
-            /* Restore radio to known state after replay (the replay
-             * function calls menu_sub_ghz_exit which powers off the
-             * SI4463). */
-            menu_sub_ghz_init();
-            if (ret != 0)
+            if (ret == 0)
+            {
+                /* Restore radio to known state after replay (the replay
+                 * function calls menu_sub_ghz_exit which powers off the
+                 * SI4463 on success). */
+                menu_sub_ghz_init();
+            }
+            else
             {
                 char err_buf[32];
                 const char *err = err_buf;
