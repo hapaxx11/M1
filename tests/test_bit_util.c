@@ -86,6 +86,16 @@ void test_reflect_bytes_reverses_bits(void)
     TEST_ASSERT_EQUAL_UINT8_ARRAY(exp, msg, 3);
 }
 
+void test_reflect_nibbles_applies_reflect4(void)
+{
+    /* reflect_nibbles applies reflect4() to each byte.
+     * reflect4(0x12) = 0x84, reflect4(0x00) = 0x00, reflect4(0xAB) = 0x5D */
+    uint8_t msg[] = {0x12, 0x00, 0xAB};
+    uint8_t exp[] = {0x84, 0x00, 0x5D};
+    reflect_nibbles(msg, 3);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(exp, msg, 3);
+}
+
 /* ===================================================================
  * CRC functions
  * =================================================================== */
@@ -300,6 +310,7 @@ int main(void)
     RUN_TEST(test_reverse32_roundtrip);
     RUN_TEST(test_reflect4_0x12);
     RUN_TEST(test_reflect_bytes_reverses_bits);
+    RUN_TEST(test_reflect_nibbles_applies_reflect4);
 
     /* CRC */
     RUN_TEST(test_crc8_poly31);
