@@ -159,6 +159,19 @@ static void m1_vkb_draw_text_with_visible_spaces(uint8_t x_start, uint8_t y, con
 	}
 }
 
+static void m1_vkb_draw_filename_text(uint8_t x_start, uint8_t y, const char *text)
+{
+	if ( text == NULL )
+	{
+		return;
+	}
+
+	/* Filename mode should keep the normal rendering behavior, where
+	 * spaces remain invisible instead of switching to visible
+	 * placeholders after the first edit. */
+	u8g2_DrawStr(&m1_u8g2, x_start, y, text);
+}
+
 // 'backspace key', 15x10px
 const uint8_t m1_virtual_kb_icon_backspace[] = {
 /*
@@ -554,7 +567,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 											 M1_VKB_GUI_FONT_WIDTH * M1_VIRTUAL_KB_FILENAME_MAX,
 											 M1_VKB_GUI_FONT_HEIGHT);
 								u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-								m1_vkb_draw_text_with_visible_spaces(M1_VKB_FILENAME_POS_X, y, filename);
+								m1_vkb_draw_filename_text(M1_VKB_FILENAME_POS_X, y, filename);
 								m1_u8g2_nextpage(); // Update graphic to the display RAM
 							} // if (len)
 						}
@@ -575,7 +588,7 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 										 M1_VKB_GUI_FONT_WIDTH * M1_VIRTUAL_KB_FILENAME_MAX,
 										 M1_VKB_GUI_FONT_HEIGHT);
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-							m1_vkb_draw_text_with_visible_spaces(M1_VKB_FILENAME_POS_X, y, filename);
+							m1_vkb_draw_filename_text(M1_VKB_FILENAME_POS_X, y, filename);
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( len < M1_VIRTUAL_KB_FILENAME_MAX )
 					} // else
