@@ -50,6 +50,10 @@ jobs:
             --platform=unix32 \
             -DSTM32H573xx \
             -DUSE_HAL_DRIVER \
+            -D__GNUC__=12 \
+            -D__GNUC_MINOR__=0 \
+            -D__GNUC_PATCHLEVEL__=0 \
+            -DosCMSIS=0x20001U \
             -I m1_csrc \
             -I Sub_Ghz \
             -I Sub_Ghz/protocols \
@@ -126,6 +130,10 @@ jobs:
             --platform=unix32 \
             -DSTM32H573xx \
             -DUSE_HAL_DRIVER \
+            -D__GNUC__=12 \
+            -D__GNUC_MINOR__=0 \
+            -D__GNUC_PATCHLEVEL__=0 \
+            -DosCMSIS=0x20001U \
             -I m1_csrc \
             -I Sub_Ghz \
             -I Sub_Ghz/protocols \
