@@ -510,7 +510,6 @@ static void draw_menu(u8g2_t *u8g2, uint16_t selection)
         }
     }
 
-    m1_draw_bottom_bar(u8g2, NULL, NULL, "Select", arrowright_8x8);
     m1_u8g2_nextpage();
 
     s_redraw = false;
