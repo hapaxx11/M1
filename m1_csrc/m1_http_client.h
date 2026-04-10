@@ -6,9 +6,9 @@
  * Reusable HTTP client module for M1.
  * Uses ESP32-C6 AT commands for HTTP/HTTPS communication.
  *
- * Provides two modes:
- * - Small response: AT+HTTPCLIENT for API calls (≤4KB response)
- * - Large download: AT+CIPSTART streaming to SD card (~1MB)
+ * Both http_get and http_download_to_file use the raw TCP/SSL path
+ * (AT+CIPSTART / AT+CIPSEND / AT+CIPRECVDATA) — not AT+HTTPCLIENT — so
+ * there is no 2 KB receive-buffer limit from the ESP32 AT HTTP layer.
  *
  * M1 Project
  */
@@ -46,14 +46,16 @@ typedef enum {
 typedef bool (*http_progress_cb_t)(uint32_t downloaded, uint32_t total);
 
 /*
- * Perform an HTTP GET for small responses (API calls).
- * Uses AT+HTTPCLIENT which handles HTTPS and redirects automatically.
- * Response is stored in response_buf (null-terminated).
+ * Perform an HTTP GET for API-style responses.
+ * Uses raw TCP/SSL (same path as http_download_to_file) to avoid the 2 KB
+ * AT+HTTPCLIENT receive-buffer limit in the ESP32 AT firmware.
+ * Response body is stored in response_buf, null-terminated.
+ * Includes User-Agent and Accept: application/json headers automatically.
  *
  * url:          Full URL (http:// or https://)
  * response_buf: Buffer for response body
  * buf_size:     Size of response buffer
- * timeout_sec:  Timeout in seconds (0 for default 30s)
+ * timeout_sec:  Connection/response timeout in seconds (0 for default 30s)
  *
  * Returns: HTTP_OK on success, error code otherwise
  */
