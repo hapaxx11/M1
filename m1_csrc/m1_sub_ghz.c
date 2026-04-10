@@ -1555,6 +1555,8 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		{
 			if (strstr(line_buf, "Ook") || strstr(line_buf, "OOK"))
 				modulation = MODULATION_OOK;
+			else if (strstr(line_buf, "ASK") || strstr(line_buf, "Ask"))
+				modulation = MODULATION_ASK;
 			else if (strstr(line_buf, "2FSK") || strstr(line_buf, "FSK"))
 				modulation = MODULATION_FSK;
 			snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "Modulation: %s\r\n",
@@ -1566,6 +1568,8 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			/* M1 native .sgh format uses "Modulation:" instead of "Preset:" */
 			if (strstr(line_buf, "OOK"))
 				modulation = MODULATION_OOK;
+			else if (strstr(line_buf, "ASK"))
+				modulation = MODULATION_ASK;
 			else if (strstr(line_buf, "FSK"))
 				modulation = MODULATION_FSK;
 			snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "Modulation: %s\r\n",
