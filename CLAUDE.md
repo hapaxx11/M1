@@ -48,6 +48,13 @@
   the build job for such changes.
 - **XIAO/Pico test bench: build → flash → test is YOUR job** — When working on ESP32-C6 features with the XIAO + Pico AT bridge setup, YOU are responsible for the full cycle: build the firmware, flash it to the XIAO (via COM6), and run the test script (via COM8). Do NOT stop after building and tell the user to flash/test. Only ask the user for help when something is physically outside your control (hard reset, USB replug, putting Pico in boot mode, etc.).
 - **ESP32 XIAO flashing command**: `python -m esptool --chip esp32c6 --port COM6 --baud 460800 write_flash 0x0 build/factory/factory_ESP32C6-SPI-XIAO.bin` (from `D:\M1Projects\esp32-at-hid\`). After flashing, the XIAO auto-resets — wait 3-5s before testing.
+- **Bug fixes require regression tests** — every bug fix **MUST** include one or more
+  host-side unit tests (under `tests/`) that **fail before the fix and pass after it**.
+  If the buggy code is a pure-logic function that can be tested on the host, write the
+  test directly.  If the bug involves hardware-dependent code, extract the core logic
+  into a testable helper and test that.  A bug fix without a corresponding regression
+  test is incomplete — do not consider the fix done until the test exists and passes.
+  This rule applies to both human contributors and AI agents.
 
 ### Phase Checklist for Moderate-to-Complex Changes
 
