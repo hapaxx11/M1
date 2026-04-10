@@ -19,6 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deauth attack techniques.  Adapted for Hapax conventions: scene-based menu
   integration as blocking delegate, `m1_esp32_deinit()` on all exit paths,
   no "Back" button bar labels.
+- **ESP32 firmware OTA download** — new "Download" option in Settings → ESP32
+  update menu.  Downloads ESP32-C6 AT firmware (`.bin` + `.md5`) from GitHub
+  Releases to SD card (`0:/ESP32_FW/`), then user flashes via the existing
+  Image File → Firmware Update flow.  Reuses the same `fw_sources.txt`
+  configuration and GitHub Releases API infrastructure as M1 firmware download.
+  Default sources: C3 ESP32 AT (`bedge117/esp32-at-monstatek-m1`) and
+  Deauth ESP32 AT (`neddy299/esp32-at-monstatek-m1`).
+- **Documentation**: ESP32 coprocessor firmware reference
+  (`documentation/esp32_firmware.md`) — source repos, custom AT commands,
+  SPI pin mapping, flash methods, build instructions.
+
+### Changed
+
+- **Firmware download source config** — `fw_sources.txt` now supports a
+  `Category:` field (`firmware` or `esp32`) to distinguish M1 firmware
+  sources from ESP32 AT firmware sources.  Existing configs without a
+  `Category:` field default to `firmware`.
 
 ### Fixed
 
