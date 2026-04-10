@@ -345,6 +345,46 @@ to build.**
 - FreeRTOS headers must be included before stream_buffer.h / queue.h
 - Flipper parser API: functions are named `flipper_*_load()` / `flipper_*_save()`, return `bool`
 
+### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
+
+> **Every caller of a function that powers off the SI4463 MUST restore radio state
+> before using the radio again.**  This is the single most common source of
+> "radio works in tool X but not in tool Y" bugs.
+
+**Background.** `menu_sub_ghz_exit()` deasserts the SI4463 ENA pin, completely
+powering off the radio.  After this, the chip is unresponsive — SPI commands
+return garbage, RX captures zero edges, TX produces no output.
+`menu_sub_ghz_init()` calls `radio_init_rx_tx()` with a full PowerUp + patch
+load + config reset, restoring the radio to a known good state.
+
+**The pattern:**
+
+1. **Blocking delegates** (Spectrum Analyzer, Freq Scanner, RSSI Meter,
+   Weather Station, Brute Force, Add Manually, Frequency Reader) each call
+   `menu_sub_ghz_init()` at their top and `menu_sub_ghz_exit()` at their
+   bottom.  They own their own radio lifecycle — this is correct.
+
+2. **`sub_ghz_replay_flipper_file()`** calls `menu_sub_ghz_exit()` before
+   returning.  **Every call site must call `menu_sub_ghz_init()` afterwards**:
+   - `m1_subghz_scene_saved.c` — emulate action handler (line ~74)
+   - `m1_subghz_scene_playlist.c` — `playlist_transmit_next()` after each file
+
+3. **Scene-native RX starters** (`start_rx()` in Read, `start_raw_rx()` in
+   Read Raw) call `menu_sub_ghz_init()` before configuring RX, so they
+   recover from any prior powered-off state regardless of which scene
+   the user was in before.
+
+**Rules for new code:**
+- If you call `sub_ghz_replay_flipper_file()`, add `menu_sub_ghz_init()`
+  immediately after it returns.
+- If you write a new blocking delegate, call `menu_sub_ghz_init()` at the
+  top and `menu_sub_ghz_exit()` at the bottom.
+- If you write a new RX scene, call `menu_sub_ghz_init()` before starting
+  RX — never assume the radio is already powered on.
+- **Never assume radio state is preserved across scene transitions** — a
+  blocking delegate may have run and powered off the radio between the
+  user's last scene and yours.
+
 ---
 
 ## Saved Item Actions Pattern

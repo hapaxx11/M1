@@ -163,8 +163,15 @@ static bool playlist_transmit_next(SubGhzApp *app)
     if (app->playlist_current >= app->playlist_count)
         return false;
 
-    /* Transmit — this blocks until TX DMA finishes */
+    /* Transmit — this blocks until TX DMA finishes.
+     * sub_ghz_replay_flipper_file() calls menu_sub_ghz_exit() on return,
+     * which powers off the SI4463 by deasserting ENA.  We must call
+     * menu_sub_ghz_init() afterwards to restore the radio to a known
+     * powered-on state before the next file can transmit — otherwise
+     * the next replay attempt must recover from a dead radio via
+     * radio_init_rx_tx()'s retry loop, adding ~100ms latency per item. */
     sub_ghz_replay_flipper_file(app->playlist_files[app->playlist_current]);
+    menu_sub_ghz_init();
 
     app->playlist_current++;
     return true;

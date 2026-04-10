@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on `radio_init_rx_tx()`'s retry loop to recover the powered-off SI4463.  The
   explicit reset ensures the radio is always in a clean, known state before
   starting RX.
+- **Sub-GHz Playlist inter-item latency** — Added `menu_sub_ghz_init()` after each
+  `sub_ghz_replay_flipper_file()` call in the playlist transmitter.  Without this,
+  the radio was left powered off between playlist items (replay calls
+  `menu_sub_ghz_exit()`), forcing the next file's TX setup to recover from a dead
+  radio via `radio_init_rx_tx()`'s retry loop — adding ~100ms latency per item.
 
 ### Changed
 
