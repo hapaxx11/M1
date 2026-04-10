@@ -45,6 +45,19 @@
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
 
+/* Forward declarations for internal helpers used by both http_get and http_download_to_file */
+static bool parse_url(const char *url, char *host, uint16_t host_size,
+                      uint16_t *port, char *path, uint16_t path_size, bool *is_https);
+static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https, uint8_t timeout_sec);
+static void tcp_close(void);
+static http_status_t tcp_send(const char *data, uint16_t len, uint8_t timeout_sec);
+static int tcp_recv(char *buf, uint16_t max_len, uint8_t timeout_sec);
+static int tcp_recv_available(uint8_t timeout_sec);
+static int tcp_wait_data(uint8_t timeout_sec);
+static int parse_http_headers(const char *data, int data_len,
+                               uint32_t *content_length, char *location, uint16_t loc_size,
+                               int *header_end_offset);
+
 bool http_is_ready(void)
 {
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
@@ -55,22 +68,35 @@ bool http_is_ready(void)
 }
 
 /*
- * http_get() — Small response HTTP GET using AT+HTTPCLIENT.
+ * http_get() — HTTP GET for API calls (small-to-medium responses).
  *
- * AT+HTTPCLIENT=<opt>,<content-type>,"<url>"[,"<host>","<path>",<transport_type>]
- *   opt=2 (GET), content-type=0, transport_type=2 (HTTPS no cert verify)
+ * Uses the same raw TCP/SSL path as http_download_to_file so there is no
+ * AT+HTTPCLIENT receive-buffer limit (was capped at 2 KB in the ESP32 AT
+ * firmware build).  The response body is written into response_buf up to
+ * buf_size-1 bytes, null-terminated.
  *
- * Response format:
- *   +HTTPCLIENT:<length>,<data>\r\n
- *   ...may repeat...
- *   \r\nOK\r\n
+ * GitHub API requires a User-Agent header; it is included automatically.
+ *
+ * Termination heuristic for chunked responses (no Content-Length):
+ *   The loop exits as soon as the content-length is satisfied, OR when no
+ *   new bytes arrive for HTTP_GET_IDLE_TIMEOUT_MS ms (connection closed
+ *   by server after sending complete response).
  */
+
+/* Maximum idle time after last received byte before declaring API response done */
+#define HTTP_GET_IDLE_TIMEOUT_MS  3000
+
 http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, uint8_t timeout_sec)
 {
-	char cmd[512];
-	uint8_t ret;
-	char *p, *dst;
-	int chunk_len;
+	char host[128];
+	char path[256];
+	char request[512];
+	uint16_t port;
+	bool is_https;
+	http_status_t status;
+	uint32_t content_length = 0;
+	int header_end_offset = 0;
+	int status_code;
 	uint16_t total = 0;
 
 	if (!url || !response_buf || buf_size < 2)
@@ -84,56 +110,139 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
 
-	/* Determine transport type: 1=HTTP, 2=HTTPS */
-	int transport = 1;
-	if (strncmp(url, "https://", 8) == 0)
-		transport = 2;
+	/* Parse URL */
+	if (!parse_url(url, host, sizeof(host), &port, path, sizeof(path), &is_https))
+		return HTTP_ERR_INVALID_ARG;
 
-	/* Build AT command: GET, content-type=0 (not used for GET) */
-	snprintf(cmd, sizeof(cmd),
-	         ESP32C6_AT_REQ_HTTPCLIENT "2,0,\"%s\",,,,%d" ESP32C6_AT_REQ_CRLF,
-	         url, transport);
+	/* Open TCP/SSL connection */
+	status = tcp_connect(host, port, is_https, timeout_sec);
+	if (status != HTTP_OK)
+		return status;
 
-	memset(s_at_buf, 0, sizeof(s_at_buf));
-	ret = spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), timeout_sec);
-	if (ret != 0)
-		return HTTP_ERR_TIMEOUT;
+	/* Build and send HTTP GET request with required headers */
+	snprintf(request, sizeof(request),
+	         "GET %s HTTP/1.1\r\n"
+	         "Host: %s\r\n"
+	         "User-Agent: M1-Hapax/1.0\r\n"
+	         "Accept: application/json\r\n"
+	         "Connection: close\r\n"
+	         "\r\n",
+	         path, host);
 
-	/* Check for ERROR response */
-	if (strstr(s_at_buf, "ERROR"))
-		return HTTP_ERR_HTTP_ERROR;
-
-	/* Parse +HTTPCLIENT:<len>,<data> lines and concatenate data */
-	dst = response_buf;
-	p = s_at_buf;
-
-	while ((p = strstr(p, ESP32C6_AT_RES_HTTPCLIENT_KEY)) != NULL)
+	status = tcp_send(request, strlen(request), timeout_sec);
+	if (status != HTTP_OK)
 	{
-		p += strlen(ESP32C6_AT_RES_HTTPCLIENT_KEY);
+		tcp_close();
+		return status;
+	}
 
-		/* Parse chunk length */
-		chunk_len = atoi(p);
-		if (chunk_len <= 0)
+	/* Wait for the first bytes of the response */
+	if (tcp_wait_data(timeout_sec) <= 0)
+	{
+		tcp_close();
+		return HTTP_ERR_TIMEOUT;
+	}
+
+	m1_wdt_reset();
+
+	/* Read initial chunk — large enough to capture headers + start of body */
+	int initial_len = tcp_recv(s_at_buf, sizeof(s_at_buf) - 1, timeout_sec);
+	if (initial_len <= 0)
+	{
+		tcp_close();
+		return HTTP_ERR_TIMEOUT;
+	}
+	s_at_buf[initial_len] = '\0';
+
+	/* Parse HTTP response headers */
+	status_code = parse_http_headers(s_at_buf, initial_len,
+	                                  &content_length, NULL, 0,
+	                                  &header_end_offset);
+	if (status_code == 0)
+	{
+		tcp_close();
+		return HTTP_ERR_PARSE_FAIL;
+	}
+
+	if (status_code < 200 || status_code >= 300)
+	{
+		tcp_close();
+		return HTTP_ERR_HTTP_ERROR;
+	}
+
+	/* Copy body bytes that arrived with the headers */
+	int body_in_first = initial_len - header_end_offset;
+	if (header_end_offset > initial_len)
+		body_in_first = 0;
+	if (body_in_first > 0)
+	{
+		int copy = body_in_first;
+		if (copy > (int)(buf_size - 1))
+			copy = buf_size - 1;
+		memmove(response_buf, s_at_buf + header_end_offset, copy);
+		total = (uint16_t)copy;
+	}
+
+	/*
+	 * Stream remaining body data until:
+	 *   a) content_length is known and we have it all, OR
+	 *   b) no new data arrives for HTTP_GET_IDLE_TIMEOUT_MS (server closed
+	 *      connection after sending the complete chunked response), OR
+	 *   c) response_buf is full (truncation — caller still gets partial data).
+	 */
+	uint32_t idle_start = HAL_GetTick();
+
+	while (total < buf_size - 1)
+	{
+		m1_wdt_reset();
+
+		/* Done if we have all bytes indicated by Content-Length */
+		if (content_length > 0 && (uint32_t)total >= content_length)
 			break;
 
-		/* Find comma after length */
-		p = strchr(p, ',');
-		if (!p) break;
-		p++; /* past comma */
+		int avail = tcp_recv_available(2);
+		if (avail <= 0)
+		{
+			/* No data — check idle timeout */
+			if (total > 0 && (HAL_GetTick() - idle_start) >= HTTP_GET_IDLE_TIMEOUT_MS)
+				break; /* server finished, connection closed */
 
-		/* Copy data up to chunk_len or remaining buffer */
-		int copy_len = chunk_len;
-		if (total + copy_len >= buf_size - 1)
-			copy_len = buf_size - 1 - total;
-		if (copy_len <= 0)
-			break;
+			if (total == 0 && (HAL_GetTick() - idle_start) >= (uint32_t)timeout_sec * 1000U)
+				break; /* global timeout — no response at all */
 
-		memcpy(dst + total, p, copy_len);
-		total += copy_len;
-		p += chunk_len;
+			vTaskDelay(pdMS_TO_TICKS(200));
+			continue;
+		}
+
+		/* Reset idle timer — data is flowing */
+		idle_start = HAL_GetTick();
+
+		int to_read = avail;
+		if (to_read > HTTP_DOWNLOAD_CHUNK)
+			to_read = HTTP_DOWNLOAD_CHUNK;
+		if (total + to_read > (int)(buf_size - 1))
+			to_read = (int)(buf_size - 1) - total;
+		if (to_read <= 0)
+			break; /* buffer full */
+
+		char recv_buf[HTTP_DOWNLOAD_CHUNK];
+		int received = tcp_recv(recv_buf, to_read, timeout_sec);
+		if (received <= 0)
+		{
+			/* Connection closed — check idle timeout once more */
+			if (total > 0 && (HAL_GetTick() - idle_start) >= HTTP_GET_IDLE_TIMEOUT_MS)
+				break;
+			vTaskDelay(pdMS_TO_TICKS(200));
+			continue;
+		}
+
+		memcpy(response_buf + total, recv_buf, received);
+		total += (uint16_t)received;
+		idle_start = HAL_GetTick();
 	}
 
 	response_buf[total] = '\0';
+	tcp_close();
 
 	return (total > 0) ? HTTP_OK : HTTP_ERR_PARSE_FAIL;
 }
