@@ -201,6 +201,7 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 	if (!sources || !category)
 		return 0;
 
+	memset(sources, 0, sizeof(fw_source_t) * FW_SOURCE_MAX);
 	total = fw_source_load_config(all);
 
 	for (uint8_t i = 0; i < total && out < FW_SOURCE_MAX; i++)
