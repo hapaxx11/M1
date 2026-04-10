@@ -269,12 +269,12 @@ void wifi_scan_ap(void)
 
 						while ( total_pw_len < (WIFI_CRED_PASS_MAX_LEN - 1) )
 						{
-							char pw_chunk[WIFI_CRED_PASS_MAX_LEN];
+							char pw_chunk[M1_VIRTUAL_KB_FILENAME_MAX + 1U];
 							char pw_prompt[24];
 							uint8_t chunk_len;
 							uint8_t remaining = (WIFI_CRED_PASS_MAX_LEN - 1) - total_pw_len;
 							const uint8_t pw_chunk_entry_max_len =
-								(uint8_t)(sizeof(pw_chunk) - 1U);
+								(uint8_t)M1_VIRTUAL_KB_FILENAME_MAX;
 							const uint8_t pw_chunk_full_len =
 								(remaining < pw_chunk_entry_max_len) ? remaining : pw_chunk_entry_max_len;
 
