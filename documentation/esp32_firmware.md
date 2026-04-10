@@ -157,7 +157,7 @@ export ESP_AT_PROJECT_PLATFORM=PLATFORM_ESP32C6
 export ESP_AT_MODULE_NAME=ESP32C6-SPI
 
 # Build
-python esp-idf/tools/idf.py -DIDF_TARGET=esp32c6 build
+python $IDF_PATH/tools/idf.py -DIDF_TARGET=esp32c6 build
 ```
 
 The factory image is generated at `build/factory/factory_ESP32C6-SPI.bin`.
