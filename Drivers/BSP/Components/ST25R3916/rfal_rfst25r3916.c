@@ -3808,6 +3808,19 @@ static ReturnCode rfalRunListenModeWorker( void )
                     /* Retrieve received data */
                     st25r3916ReadFifo( gRFAL.Lm.rxBuf, RFAL_MIN( *gRFAL.Lm.rxLen, rfalConvBitsToBytes(gRFAL.Lm.rxBufLen) ) );                    
                     *gRFAL.Lm.rxLen   = (uint16_t)rfalConvBytesToBits( *gRFAL.Lm.rxLen );
+
+                    /* Fast HALT detection: if this is SLP_REQ (0x50 0x00) in ACTIVE_Ax,
+                     * enter SLEEP_A immediately so hardware can auto-respond to WUPA.
+                     * The Switch sends WUPA ~1ms after HALT — we must be in SLEEP_A by then. */
+                    if( (gRFAL.Lm.state == RFAL_LM_STATE_ACTIVE_Ax) &&
+                        (*gRFAL.Lm.rxLen == rfalConvBytesToBits(2U)) &&
+                        (gRFAL.Lm.rxBuf[0] == 0x50U) && (gRFAL.Lm.rxBuf[1] == 0x00U) )
+                    {
+                        rfalListenSleepStart( RFAL_LM_STATE_SLEEP_A, gRFAL.Lm.rxBuf, gRFAL.Lm.rxBufLen, gRFAL.Lm.rxLen );
+                        st25r3916DisableInterrupts( ST25R3916_IRQ_MASK_RXE );
+                        break;
+                    }
+
                     gRFAL.Lm.dataFlag = true;
                 }
                 else
