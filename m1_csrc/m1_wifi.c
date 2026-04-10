@@ -258,6 +258,7 @@ void wifi_scan_ap(void)
 						 */
 						uint8_t total_pw_len = 0;
 						bool password_entry_cancelled = false;
+						bool last_chunk_was_full = false;
 
 						memset(password, 0, sizeof(password));
 
@@ -285,11 +286,19 @@ void wifi_scan_ap(void)
 							if ( chunk_len == 0 )
 							{
 								/*
-								 * Treat zero-length input consistently as cancel.
-								 * The VKB API does not distinguish an empty confirm
-								 * from BACK/cancel here, so never interpret len == 0
-								 * as "done" after partial password entry.
+								 * A zero-length response on the initial prompt is still
+								 * treated as cancel. However, if the previous chunk filled
+								 * the VKB entry limit exactly, this prompt exists only to
+								 * determine whether the user has more password text to add.
+								 * In that forced follow-up case, interpret len == 0 as
+								 * "done" so exact-multiple chunk lengths can complete.
 								 */
+								if ( (total_pw_len > 0) && last_chunk_was_full )
+								{
+									do_connect = true;
+									break;
+								}
+
 								password_entry_cancelled = true;
 								total_pw_len = 0;
 								memset(password, 0, sizeof(password));
@@ -305,12 +314,17 @@ void wifi_scan_ap(void)
 							memcpy(&password[total_pw_len], pw_chunk, chunk_len);
 							total_pw_len += chunk_len;
 							password[total_pw_len] = '\0';
+							last_chunk_was_full =
+								(chunk_len == pw_chunk_full_len)
+								&& (total_pw_len < (WIFI_CRED_PASS_MAX_LEN - 1));
 
 							/*
 							 * A short chunk means the user completed the password
 							 * without filling the virtual keyboard's per-entry limit.
+							 * A full final chunk is also complete once the credential
+							 * buffer limit is reached.
 							 */
-							if ( chunk_len < pw_chunk_full_len
+							if ( !last_chunk_was_full
 								|| total_pw_len >= (WIFI_CRED_PASS_MAX_LEN - 1) )
 							{
 								do_connect = true;
