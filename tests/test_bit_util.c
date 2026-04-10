@@ -14,6 +14,7 @@
 #include "unity.h"
 #include "bit_util.h"
 #include <string.h>
+#include <stdio.h>
 
 /* Unity setup / teardown (required stubs) */
 void setUp(void) {}
@@ -47,8 +48,10 @@ void test_reverse8_0x0F(void)
 
 void test_reverse8_roundtrip(void)
 {
+    char msg[32];
     for (unsigned i = 0; i < 256; i++) {
-        TEST_ASSERT_EQUAL_UINT8((uint8_t)i, reverse8(reverse8((uint8_t)i)));
+        snprintf(msg, sizeof(msg), "roundtrip failed for i=%u", i);
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)i, reverse8(reverse8((uint8_t)i)), msg);
     }
 }
 
@@ -259,18 +262,24 @@ void test_ibm_whitening_involution(void)
 
 void test_lfsr_digest8_golden_vector(void)
 {
-    /* Known-answer test: zero-length input must produce a zero digest. */
+    /* Zero-length input must produce a zero digest (sum starts at 0, no iterations). */
     uint8_t msg[] = {0x01};
-    uint8_t digest = lfsr_digest8(msg, 0, 0x93, 0x5A);
-    TEST_ASSERT_EQUAL_UINT8(0x00, digest);
+    TEST_ASSERT_EQUAL_UINT8(0x00, lfsr_digest8(msg, 0, 0x93, 0x5A));
+
+    /* Non-trivial golden vector: {0x01, 0x02, 0x03} with gen=0x93, key=0x5A → 0x79 */
+    uint8_t msg2[] = {0x01, 0x02, 0x03};
+    TEST_ASSERT_EQUAL_UINT8(0x79, lfsr_digest8(msg2, 3, 0x93, 0x5A));
 }
 
 void test_lfsr_digest16_golden_vector(void)
 {
-    /* Known-answer test: zero-length input must produce a zero digest. */
+    /* Zero-length input must produce a zero digest. */
     uint8_t msg[] = {0xAA};
-    uint16_t digest = lfsr_digest16(msg, 0, 0x2D, 0x5A);
-    TEST_ASSERT_EQUAL_UINT16(0x0000, digest);
+    TEST_ASSERT_EQUAL_UINT16(0x0000, lfsr_digest16(msg, 0, 0x2D, 0x5A));
+
+    /* Non-trivial golden vector: {0xAA, 0xBB, 0xCC, 0xDD} with gen=0x2D, key=0x5A → 0x0045 */
+    uint8_t msg2[] = {0xAA, 0xBB, 0xCC, 0xDD};
+    TEST_ASSERT_EQUAL_UINT16(0x0045, lfsr_digest16(msg2, 4, 0x2D, 0x5A));
 }
 
 /* ===================================================================
@@ -340,8 +349,8 @@ int main(void)
     RUN_TEST(test_ibm_whitening_involution);
 
     /* LFSR */
-    RUN_TEST(test_lfsr_digest8_deterministic);
-    RUN_TEST(test_lfsr_digest16_deterministic);
+    RUN_TEST(test_lfsr_digest8_golden_vector);
+    RUN_TEST(test_lfsr_digest16_golden_vector);
 
     /* UART extract */
     RUN_TEST(test_extract_bytes_uart_basic);
