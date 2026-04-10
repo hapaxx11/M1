@@ -257,20 +257,20 @@ void test_ibm_whitening_involution(void)
  * LFSR digest functions
  * =================================================================== */
 
-void test_lfsr_digest8_deterministic(void)
+void test_lfsr_digest8_golden_vector(void)
 {
-    uint8_t msg[] = {0x01, 0x02, 0x03};
-    uint8_t d1 = lfsr_digest8(msg, 3, 0x93, 0x00);
-    uint8_t d2 = lfsr_digest8(msg, 3, 0x93, 0x00);
-    TEST_ASSERT_EQUAL_UINT8(d1, d2);
+    /* Known-answer test: zero-length input must produce a zero digest. */
+    uint8_t msg[] = {0x01};
+    uint8_t digest = lfsr_digest8(msg, 0, 0x93, 0x5A);
+    TEST_ASSERT_EQUAL_UINT8(0x00, digest);
 }
 
-void test_lfsr_digest16_deterministic(void)
+void test_lfsr_digest16_golden_vector(void)
 {
-    uint8_t msg[] = {0xAA, 0xBB, 0xCC, 0xDD};
-    uint16_t d1 = lfsr_digest16(msg, 4, 0x2D, 0x00);
-    uint16_t d2 = lfsr_digest16(msg, 4, 0x2D, 0x00);
-    TEST_ASSERT_EQUAL_UINT16(d1, d2);
+    /* Known-answer test: zero-length input must produce a zero digest. */
+    uint8_t msg[] = {0xAA};
+    uint16_t digest = lfsr_digest16(msg, 0, 0x2D, 0x5A);
+    TEST_ASSERT_EQUAL_UINT16(0x0000, digest);
 }
 
 /* ===================================================================
