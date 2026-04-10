@@ -1,0 +1,48 @@
+name: Unit Tests
+
+# Runs host-side unit tests (x86) with ASan + UBSan.
+# Triggered on PRs and pushes to main that touch testable source files.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'm1_csrc/**'
+      - 'Sub_Ghz/**'
+      - 'tests/**'
+      - '.github/workflows/tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'm1_csrc/**'
+      - 'Sub_Ghz/**'
+      - 'tests/**'
+      - '.github/workflows/tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Host-side unit tests (ASan + UBSan)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake gcc
+
+      - name: Configure tests
+        run: |
+          cmake -B build-tests -S tests \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DENABLE_SANITIZERS=ON
+
+      - name: Build tests
+        run: cmake --build build-tests --parallel $(nproc)
+
+      - name: Run tests
+        run: ctest --test-dir build-tests --output-on-failure --timeout 60
