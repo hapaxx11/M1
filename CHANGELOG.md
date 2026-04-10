@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `--error-exitcode=1`.  Also runs cppcheck MISRA-C addon in advisory mode
   (reports but does not fail the build) so teams can ratchet compliance over time.
 - **Unit testing framework** — Added Unity test framework (v2.6.1) with host-side
-  CMake build in `tests/`.  Initial test suite covers `bit_util.c` (32 tests):
+  CMake build in `tests/`.  Initial test suite covers `bit_util.c` (33 tests):
   CRC-4/7/8/16, parity, reverse/reflect, XOR/add, CCITT/IBM whitening, LFSR digest,
   and UART extraction functions.
 - **Address Sanitizer builds** — Host-side test build enables `-fsanitize=address,undefined`
