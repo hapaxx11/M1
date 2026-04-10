@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
+  now shows a "Decode" option (first item) for RAW `.sub` files.  Selecting it
+  feeds the raw pulse timing data through all registered protocol decoders
+  offline (no radio needed) and displays any matched protocols with key, bit
+  count, TE, and frequency.  Multiple decoded packets are shown in a scrollable
+  list with detail view.  Inspired by Momentum firmware's decode feature.
+
 ### Fixed
 
 - **OTA "Fetching releases" always returns "No releases found"** — `http_get`

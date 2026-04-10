@@ -5,13 +5,20 @@
  * @brief  Sub-GHz Saved Scene — browse 0:/SUBGHZ/ files with action menu.
  *
  * Uses the existing storage_browse() file browser.  After selection,
- * shows an action menu: Emulate, Info, Rename, Delete.
+ * shows an action menu whose contents depend on the file type:
+ *
+ *   RAW files:    Decode, Emulate, Info, Rename, Delete
+ *   Parsed files: Emulate, Info, Rename, Delete
+ *
+ * The "Decode" action (RAW only) feeds raw pulse data through the protocol
+ * decoder registry offline, similar to Momentum firmware's decode feature.
  */
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_storage.h"
@@ -19,39 +26,80 @@
 #include "m1_subghz_button_bar.h"
 #include "flipper_subghz.h"
 #include "m1_sub_ghz.h"
+#include "m1_sub_ghz_decenc.h"
+#include "subghz_protocol_registry.h"
 #include "m1_virtual_kb.h"
 
 extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
+extern SubGHz_DecEnc_t subghz_decenc_ctl;
+extern void subghz_pulse_handler_reset(void);
+extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
 
 /*============================================================================*/
-/* Action menu                                                                */
+/* Action menu — unified action IDs                                           */
 /*============================================================================*/
 
-#define ACTION_COUNT   4
-#define ACTION_EMULATE 0
-#define ACTION_INFO    1
-#define ACTION_RENAME  2
-#define ACTION_DELETE  3
-
-static const char *action_labels[ACTION_COUNT] = {
-    "Emulate", "Info", "Rename", "Delete"
+enum {
+    SAVED_ACTION_DECODE = 0,
+    SAVED_ACTION_EMULATE,
+    SAVED_ACTION_INFO,
+    SAVED_ACTION_RENAME,
+    SAVED_ACTION_DELETE,
 };
 
-static uint8_t action_sel = 0;
+static const char *raw_action_labels[]    = { "Decode", "Emulate", "Info", "Rename", "Delete" };
+static const char *parsed_action_labels[] = { "Emulate", "Info", "Rename", "Delete" };
+
+#define RAW_ACTION_COUNT    5
+#define PARSED_ACTION_COUNT 4
+
+static uint8_t action_sel  = 0;
+static uint8_t action_count = PARSED_ACTION_COUNT;
+static const char **active_labels = parsed_action_labels;
+
 static char saved_filepath[64];
 static char saved_filename[32];
-static bool in_action_menu = false;
-static bool in_info_screen = false;
+static bool in_action_menu  = false;
+static bool in_info_screen  = false;
+static bool is_raw_file     = false;
 
-/* Cached .sub file metadata (loaded on Info) */
+/* Cached .sub file metadata (loaded eagerly on file selection) */
 static flipper_subghz_signal_t saved_signal;
+
+/*============================================================================*/
+/* Decode results storage                                                     */
+/*============================================================================*/
+
+#define DECODE_MAX_RESULTS   16
+#define DECODE_VISIBLE        3   /* visible rows in decode list */
+#define DECODE_ROW_H          8
+
+static SubGHz_Dec_Info_t decode_results[DECODE_MAX_RESULTS];
+static uint8_t  decode_count       = 0;
+static uint8_t  decode_sel         = 0;
+static uint8_t  decode_scroll      = 0;
+static bool     in_decode_screen   = false;
+static bool     decode_detail_view = false;
 
 /*============================================================================*/
 /* Helpers                                                                    */
 /*============================================================================*/
 
 /**
+ * @brief  Map selected action index to unified action ID.
+ *         RAW files have Decode at index 0; parsed files skip it.
+ */
+static uint8_t map_action(uint8_t sel)
+{
+    if (is_raw_file)
+        return sel;                /* Direct mapping: 0=Decode,1=Emulate,… */
+    return sel + 1;                /* Skip Decode: 0→Emulate(1), 1→Info(2),… */
+}
+
+/**
  * @brief  Open the 0:/SUBGHZ/ file browser and populate action menu state.
+ *         On selection, eagerly loads the file metadata to determine if it
+ *         is a RAW or parsed .sub file and adjusts the action menu accordingly.
  *
  * @retval true   A file was selected (action menu ready).
  * @retval false  User cancelled the browser (caller should pop the scene).
@@ -65,6 +113,27 @@ static bool open_saved_browser(void)
                  f_info->file_name);
         strncpy(saved_filename, f_info->file_name, sizeof(saved_filename) - 1);
         saved_filename[sizeof(saved_filename) - 1] = '\0';
+
+        /* Load file metadata to determine type (RAW vs parsed) */
+        char full_path[72];
+        snprintf(full_path, sizeof(full_path), "0:%s", saved_filepath);
+        memset(&saved_signal, 0, sizeof(saved_signal));
+        bool loaded = flipper_subghz_load(full_path, &saved_signal);
+
+        is_raw_file = (loaded && saved_signal.type == FLIPPER_SUBGHZ_TYPE_RAW
+                       && saved_signal.raw_count > 0);
+
+        if (is_raw_file)
+        {
+            action_count = RAW_ACTION_COUNT;
+            active_labels = raw_action_labels;
+        }
+        else
+        {
+            action_count = PARSED_ACTION_COUNT;
+            active_labels = parsed_action_labels;
+        }
+
         in_action_menu = true;
         action_sel = 0;
         return true;
@@ -73,13 +142,125 @@ static bool open_saved_browser(void)
 }
 
 /*============================================================================*/
+/* Offline decode — feed raw pulse data through protocol decoders             */
+/*============================================================================*/
+
+/**
+ * @brief  Attempt to decode protocols from a loaded RAW .sub file.
+ *
+ * Reads the raw timing samples (alternating positive/negative int16_t values
+ * representing mark/space durations in µs), reconstructs pulse packets using
+ * inter-packet gap detection (same algorithm as the live pulse handler), and
+ * tries all registered protocol decoders on each complete packet.
+ *
+ * Results are stored in decode_results[].
+ *
+ * @retval true   At least one protocol was decoded.
+ * @retval false  No protocols found.
+ */
+static bool do_decode_raw(void)
+{
+    uint16_t i, p;
+    uint16_t pulse_count = 0;
+
+    decode_count = 0;
+
+    if (saved_signal.type != FLIPPER_SUBGHZ_TYPE_RAW || saved_signal.raw_count == 0)
+        return false;
+
+    /* Reset decoder global state for a clean session */
+    subghz_pulse_handler_reset();
+    subghz_decenc_ctl.ndecodedrssi = 0;   /* RSSI meaningless for file decode */
+
+    for (i = 0; i < saved_signal.raw_count; i++)
+    {
+        uint16_t dur = (uint16_t)abs((int)saved_signal.raw_data[i]);
+
+        if (dur < PACKET_PULSE_TIME_MIN)
+        {
+            /* Below minimum pulse — noise, reset accumulator */
+            pulse_count = 0;
+            continue;
+        }
+
+        if (dur >= INTERPACKET_GAP_MIN)
+        {
+            /* Inter-packet gap — end the current packet */
+            if (pulse_count < PACKET_PULSE_COUNT_MAX)
+                subghz_decenc_ctl.pulse_times[pulse_count++] = dur;
+
+            if (pulse_count >= PACKET_PULSE_COUNT_MIN)
+            {
+                /* Try every registered protocol decoder */
+                for (p = 0; p < subghz_protocol_registry_count; p++)
+                {
+                    const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+                    if (proto->decode && proto->decode(p, pulse_count) == 0)
+                    {
+                        /* Successful decode — read result */
+                        if (decode_count < DECODE_MAX_RESULTS)
+                        {
+                            SubGHz_Dec_Info_t info;
+                            if (subghz_decenc_read(&info, false) && info.key != 0)
+                            {
+                                info.frequency = saved_signal.frequency;
+                                info.rssi = 0;
+                                decode_results[decode_count++] = info;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            pulse_count = 0;
+        }
+        else
+        {
+            /* Normal pulse — accumulate */
+            if (pulse_count < PACKET_PULSE_COUNT_MAX)
+            {
+                subghz_decenc_ctl.pulse_times[pulse_count++] = dur;
+            }
+            else
+            {
+                pulse_count = 0;   /* overflow, reset */
+            }
+        }
+    }
+
+    /* Try to decode any remaining pulses (file may end without a final gap) */
+    if (pulse_count >= PACKET_PULSE_COUNT_MIN && decode_count < DECODE_MAX_RESULTS)
+    {
+        for (p = 0; p < subghz_protocol_registry_count; p++)
+        {
+            const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+            if (proto->decode && proto->decode(p, pulse_count) == 0)
+            {
+                SubGHz_Dec_Info_t info;
+                if (subghz_decenc_read(&info, false) && info.key != 0)
+                {
+                    info.frequency = saved_signal.frequency;
+                    info.rssi = 0;
+                    decode_results[decode_count++] = info;
+                }
+                break;
+            }
+        }
+    }
+
+    return (decode_count > 0);
+}
+
+/*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    in_action_menu = false;
-    in_info_screen = false;
+    in_action_menu     = false;
+    in_info_screen     = false;
+    in_decode_screen   = false;
+    decode_detail_view = false;
     action_sel = 0;
 
     /* Open file browser immediately — no intermediate prompt screen */
@@ -95,7 +276,19 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
 {
     switch (action)
     {
-        case ACTION_EMULATE:
+        case SAVED_ACTION_DECODE:
+        {
+            /* Offline protocol decode of RAW signal data.
+             * saved_signal was already loaded in open_saved_browser(). */
+            do_decode_raw();
+            decode_sel = 0;
+            decode_scroll = 0;
+            decode_detail_view = false;
+            in_decode_screen = true;
+            app->need_redraw = true;
+            return true;
+        }
+        case SAVED_ACTION_EMULATE:
         {
             uint8_t ret = sub_ghz_replay_flipper_file(saved_filepath);
             if (ret == 0)
@@ -126,18 +319,14 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             app->need_redraw = true;
             return true;
         }
-        case ACTION_INFO:
+        case SAVED_ACTION_INFO:
         {
-            /* Load .sub file metadata and switch to info display */
-            char full_path[72];
-            snprintf(full_path, sizeof(full_path), "0:%s", saved_filepath);
-            memset(&saved_signal, 0, sizeof(saved_signal));
-            flipper_subghz_load(full_path, &saved_signal);
+            /* saved_signal was already loaded in open_saved_browser() */
             in_info_screen = true;
             app->need_redraw = true;
             return true;
         }
-        case ACTION_RENAME:
+        case SAVED_ACTION_RENAME:
         {
             char new_name[32];
             /* Strip extension for rename prompt */
@@ -163,7 +352,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             app->need_redraw = true;
             return true;
         }
-        case ACTION_DELETE:
+        case SAVED_ACTION_DELETE:
         {
             /* Confirm deletion */
             uint8_t confirm = m1_message_box_choice(&m1_u8g2,
@@ -186,9 +375,63 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
+    /* --- Decode results screen --- */
+    if (in_decode_screen)
+    {
+        switch (event)
+        {
+            case SubGhzEventBack:
+                if (decode_detail_view)
+                {
+                    decode_detail_view = false;
+                    app->need_redraw = true;
+                }
+                else
+                {
+                    in_decode_screen = false;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            case SubGhzEventOk:
+                if (!decode_detail_view && decode_count > 0)
+                {
+                    decode_detail_view = true;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            case SubGhzEventUp:
+                if (!decode_detail_view && decode_count > 0)
+                {
+                    if (decode_sel > 0)
+                        decode_sel--;
+                    if (decode_sel < decode_scroll)
+                        decode_scroll = decode_sel;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            case SubGhzEventDown:
+                if (!decode_detail_view && decode_count > 0)
+                {
+                    if (decode_sel + 1 < decode_count)
+                        decode_sel++;
+                    if (decode_sel >= decode_scroll + DECODE_VISIBLE)
+                        decode_scroll = decode_sel - DECODE_VISIBLE + 1;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            default:
+                break;
+        }
+        return false;
+    }
+
+    /* --- Info screen --- */
     if (in_info_screen)
     {
-        /* Info screen — BACK returns to action menu */
         if (event == SubGhzEventBack)
         {
             in_info_screen = false;
@@ -198,7 +441,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         return false;
     }
 
-    /* Action menu mode */
+    /* --- Action menu --- */
     switch (event)
     {
         case SubGhzEventBack:
@@ -209,17 +452,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventUp:
-            action_sel = (action_sel > 0) ? action_sel - 1 : ACTION_COUNT - 1;
+            action_sel = (action_sel > 0) ? action_sel - 1 : action_count - 1;
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
-            action_sel = (action_sel + 1) % ACTION_COUNT;
+            action_sel = (action_sel + 1) % action_count;
             app->need_redraw = true;
             return true;
 
         case SubGhzEventOk:
-            handle_action(app, action_sel);
+            handle_action(app, map_action(action_sel));
             return true;
 
         default:
@@ -233,6 +476,158 @@ static void scene_on_exit(SubGhzApp *app)
     (void)app;
 }
 
+/*============================================================================*/
+/* Draw helpers                                                               */
+/*============================================================================*/
+
+static void draw_info_screen(void)
+{
+    char line[48];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Signal Info");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    if (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
+    {
+        snprintf(line, sizeof(line), "Proto: %s", saved_signal.protocol);
+        u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+        snprintf(line, sizeof(line), "Key: 0x%lX", (uint32_t)saved_signal.key);
+        u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+
+        snprintf(line, sizeof(line), "Bits: %lu  TE: %lu us",
+                 (unsigned long)saved_signal.bit_count,
+                 (unsigned long)saved_signal.te);
+        u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+    }
+    else
+    {
+        u8g2_DrawStr(&m1_u8g2, 2, 22, "Type: RAW");
+
+        snprintf(line, sizeof(line), "Samples: %u", saved_signal.raw_count);
+        u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+    }
+
+    snprintf(line, sizeof(line), "Freq: %.2f MHz",
+             (float)saved_signal.frequency / 1000000.0f);
+    u8g2_DrawStr(&m1_u8g2, 2, 46, line);
+
+    if (saved_signal.preset[0])
+    {
+        snprintf(line, sizeof(line), "Mod: %s", saved_signal.preset);
+        u8g2_DrawStr(&m1_u8g2, 2, 54, line);
+    }
+}
+
+static void draw_decode_screen(void)
+{
+    char line[48];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Decode Results");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    if (decode_count == 0)
+    {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 10, 32, "No protocols");
+        u8g2_DrawStr(&m1_u8g2, 10, 44, "decoded");
+        return;
+    }
+
+    if (decode_detail_view)
+    {
+        /* Detail view of selected decoded signal */
+        const SubGHz_Dec_Info_t *d = &decode_results[decode_sel];
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 24, protocol_text[d->protocol]);
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+        snprintf(line, sizeof(line), "Key: 0x%lX  %dbit",
+                 (uint32_t)d->key, d->bit_len);
+        u8g2_DrawStr(&m1_u8g2, 2, 34, line);
+
+        snprintf(line, sizeof(line), "TE: %d us", d->te);
+        u8g2_DrawStr(&m1_u8g2, 2, 43, line);
+
+        snprintf(line, sizeof(line), "Freq: %.2f MHz",
+                 (float)d->frequency / 1000000.0f);
+        u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+        if (d->serial_number != 0 || d->rolling_code != 0)
+        {
+            snprintf(line, sizeof(line), "SN:%lX RC:%lX",
+                     (unsigned long)d->serial_number,
+                     (unsigned long)d->rolling_code);
+            u8g2_DrawStr(&m1_u8g2, 2, 61, line);
+        }
+    }
+    else
+    {
+        /* List view — show decoded count + scrollable list */
+        snprintf(line, sizeof(line), "Decoded: %d", decode_count);
+        u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+        uint8_t vis = DECODE_VISIBLE;
+        if (vis > decode_count) vis = decode_count;
+
+        for (uint8_t i = 0; i < vis; i++)
+        {
+            uint8_t idx = decode_scroll + i;
+            if (idx >= decode_count) break;
+
+            const SubGHz_Dec_Info_t *d = &decode_results[idx];
+            uint8_t y = 24 + i * DECODE_ROW_H;
+
+            if (idx == decode_sel)
+            {
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, DECODE_ROW_H);
+                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+            }
+
+            snprintf(line, sizeof(line), "%s 0x%lX",
+                     protocol_text[d->protocol], (uint32_t)d->key);
+            u8g2_DrawStr(&m1_u8g2, 2, y + 6, line);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        }
+    }
+}
+
+static void draw_action_menu(void)
+{
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+    char dname[22];
+    strncpy(dname, saved_filename, 21);
+    dname[21] = '\0';
+    u8g2_DrawStr(&m1_u8g2, 2, 10, dname);
+
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    /* Compute row height: 50px available (y=14..63) */
+    uint8_t row_h = 50 / action_count;          /* 12 for 4, 10 for 5 */
+    uint8_t text_ofs = (row_h >= 12) ? 9 : 8;   /* text baseline offset */
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    for (uint8_t i = 0; i < action_count; i++)
+    {
+        uint8_t y = 14 + i * row_h;
+        if (i == action_sel)
+        {
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, row_h);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+        }
+        u8g2_DrawStr(&m1_u8g2, 8, y + text_ofs, active_labels[i]);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    }
+}
+
 static void draw(SubGhzApp *app)
 {
     (void)app;
@@ -240,78 +635,12 @@ static void draw(SubGhzApp *app)
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    if (in_info_screen)
-    {
-        /* Saved signal info display */
-        char line[48];
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-        u8g2_DrawStr(&m1_u8g2, 2, 10, "Signal Info");
-        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-
-        /* Protocol / type */
-        if (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
-        {
-            snprintf(line, sizeof(line), "Proto: %s", saved_signal.protocol);
-            u8g2_DrawStr(&m1_u8g2, 2, 22, line);
-
-            snprintf(line, sizeof(line), "Key: 0x%lX", (uint32_t)saved_signal.key);
-            u8g2_DrawStr(&m1_u8g2, 2, 30, line);
-
-            snprintf(line, sizeof(line), "Bits: %lu  TE: %lu us",
-                     (unsigned long)saved_signal.bit_count,
-                     (unsigned long)saved_signal.te);
-            u8g2_DrawStr(&m1_u8g2, 2, 38, line);
-        }
-        else
-        {
-            u8g2_DrawStr(&m1_u8g2, 2, 22, "Type: RAW");
-
-            snprintf(line, sizeof(line), "Samples: %u", saved_signal.raw_count);
-            u8g2_DrawStr(&m1_u8g2, 2, 30, line);
-        }
-
-        /* Frequency */
-        snprintf(line, sizeof(line), "Freq: %.2f MHz",
-                 (float)saved_signal.frequency / 1000000.0f);
-        u8g2_DrawStr(&m1_u8g2, 2, 46, line);
-
-        /* Modulation preset */
-        if (saved_signal.preset[0])
-        {
-            snprintf(line, sizeof(line), "Mod: %s", saved_signal.preset);
-            u8g2_DrawStr(&m1_u8g2, 2, 54, line);
-        }
-    }
+    if (in_decode_screen)
+        draw_decode_screen();
+    else if (in_info_screen)
+        draw_info_screen();
     else
-    {
-        /* Action menu — no button bar, items fill available space */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-        /* Truncated filename */
-        char dname[22];
-        strncpy(dname, saved_filename, 21);
-        dname[21] = '\0';
-        u8g2_DrawStr(&m1_u8g2, 2, 10, dname);
-
-        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
-        /* 4 items × 12px height starting at y=14, last box ends at y=62
-         * — all highlight boxes stay within the 64px screen. */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        for (uint8_t i = 0; i < ACTION_COUNT; i++)
-        {
-            uint8_t y = 14 + i * 12;
-            if (i == action_sel)
-            {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 12);
-                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-            }
-            u8g2_DrawStr(&m1_u8g2, 8, y + 9, action_labels[i]);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-        }
-    }
+        draw_action_menu();
 
     m1_u8g2_nextpage();
 }
