@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_tasks.h"
@@ -1391,6 +1392,23 @@ static uint8_t sub_ghz_file_load(void)
 
 
 /*============================================================================*/
+/** @brief  Case-insensitive substring search (like POSIX strcasestr). */
+static const char *stristr(const char *haystack, const char *needle)
+{
+	if (!needle[0]) return haystack;
+	for (; *haystack; haystack++)
+	{
+		const char *h = haystack, *n = needle;
+		while (*h && *n && (tolower((unsigned char)*h) == tolower((unsigned char)*n)))
+		{
+			h++;
+			n++;
+		}
+		if (!*n) return haystack;
+	}
+	return NULL;
+}
+
 /*============================================================================*/
 /**
   * @brief  Convert a Flipper .sub file to M1's .sgh format and replay it.
@@ -1553,11 +1571,11 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		}
 		else if (strncmp(line_buf, "Preset:", 7) == 0)
 		{
-			if (strstr(line_buf, "Ook") || strstr(line_buf, "OOK"))
+			if (stristr(line_buf, "OOK"))
 				modulation = MODULATION_OOK;
-			else if (strstr(line_buf, "ASK") || strstr(line_buf, "Ask"))
+			else if (stristr(line_buf, "ASK"))
 				modulation = MODULATION_ASK;
-			else if (strstr(line_buf, "2FSK") || strstr(line_buf, "FSK"))
+			else if (stristr(line_buf, "FSK"))
 				modulation = MODULATION_FSK;
 			snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "Modulation: %s\r\n",
 			         subghz_modulation_text[modulation]);
@@ -1566,11 +1584,11 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		else if (strncmp(line_buf, "Modulation:", 11) == 0)
 		{
 			/* M1 native .sgh format uses "Modulation:" instead of "Preset:" */
-			if (strstr(line_buf, "OOK"))
+			if (stristr(line_buf, "OOK"))
 				modulation = MODULATION_OOK;
-			else if (strstr(line_buf, "ASK"))
+			else if (stristr(line_buf, "ASK"))
 				modulation = MODULATION_ASK;
-			else if (strstr(line_buf, "FSK"))
+			else if (stristr(line_buf, "FSK"))
 				modulation = MODULATION_FSK;
 			snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "Modulation: %s\r\n",
 			         subghz_modulation_text[modulation]);
@@ -4633,7 +4651,7 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
 		}
 
 		vTaskDelay(10);  /* Yield so SDM background task can write to SD */
-		return avail;
+		return SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 	}
 	return 0;
 }
