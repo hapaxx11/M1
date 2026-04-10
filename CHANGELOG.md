@@ -18,9 +18,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Added subtle dashed grid reference lines at the high, center, and low
   positions for visual context.  Adjusted the waveform area geometry
   (Y=15, H=36) so it no longer overlaps the RSSI bar.
+- **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
+  the intermediate "Press OK to browse" prompt screen.  Entering either scene
+  now opens the SD card file browser immediately.  BACK from the action menu
+  (Saved) or playback view (Playlist) re-opens the browser; BACK from the
+  browser returns to the Sub-GHz menu.  After Rename or Delete, the file
+  browser reopens automatically per the Saved Item Actions Pattern.
+- **File browser lists directories before files** — The SD card file browser
+  now sorts entries with directories first, then files, each group sorted
+  alphabetically (case-insensitive).  This matches Flipper Zero / Momentum
+  firmware behaviour and prevents subdirectories (e.g. `playlist/`) from
+  appearing in the middle of signal files.
 
 ### Fixed
 
+- **Splash screen showing "M1 H" instead of "M1 Hapax"** — Changed
+  `M1_POWERUP_LOGO_FONT` from `u8g2_font_tenthinnerguys_tu` (uppercase only,
+  glyphs 32-95) to `u8g2_font_tenthinnerguys_tr` (restricted, glyphs 32-127)
+  so lowercase letters in "Hapax" are rendered correctly.
 - **802.15.4 (Zigbee/Thread) ESP32 resource leak** — Added `m1_esp32_deinit()`
   to all four exit paths in `ieee802154_scan()`.  Previously, every Zigbee/Thread
   scan left the ESP32 SPI transport initialized on exit, wasting power and
