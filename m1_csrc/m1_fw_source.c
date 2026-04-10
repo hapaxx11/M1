@@ -113,6 +113,13 @@ bool fw_source_create_defaults(void)
 	return (fr == FR_OK && bw == len);
 }
 
+/* Apply default category to a source that has none set */
+static void fw_source_finalize(fw_source_t *src)
+{
+	if (src && !src->category[0])
+		strncpy(src->category, "firmware", FW_SOURCE_CATEGORY_LEN - 1);
+}
+
 uint8_t fw_source_load_config(fw_source_t *sources)
 {
 	flipper_file_t ff;
@@ -145,8 +152,7 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 		if (strcmp(key, "Source") == 0)
 		{
 			/* Finalize previous source: default category if empty */
-			if (cur && !cur->category[0])
-				strncpy(cur->category, "firmware", FW_SOURCE_CATEGORY_LEN - 1);
+			fw_source_finalize(cur);
 			/* Start a new source entry */
 			cur = &sources[count];
 			memset(cur, 0, sizeof(fw_source_t));
@@ -180,9 +186,8 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 		}
 	}
 
-	/* Finalize last source: default category if empty */
-	if (cur && !cur->category[0])
-		strncpy(cur->category, "firmware", FW_SOURCE_CATEGORY_LEN - 1);
+	/* Finalize last source */
+	fw_source_finalize(cur);
 
 	ff_close(&ff);
 	return count;

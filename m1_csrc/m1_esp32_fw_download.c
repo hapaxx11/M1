@@ -287,7 +287,8 @@ static bool build_md5_url(const char *bin_url, char *md5_url, size_t md5_url_siz
 	/* Must end with ".bin" */
 	if (len < 4 || strcmp(bin_url + len - 4, ".bin") != 0)
 		return false;
-	if (len - 4 + 4 >= md5_url_size) /* ".md5" is same length as ".bin" */
+	/* Output is same length as input (".md5" == ".bin") + NUL */
+	if (len + 1 > md5_url_size)
 		return false;
 
 	memcpy(md5_url, bin_url, len - 4);
@@ -304,7 +305,7 @@ static bool build_md5_filename(const char *bin_name, char *md5_name, size_t md5_
 
 	if (len < 4 || strcmp(bin_name + len - 4, ".bin") != 0)
 		return false;
-	if (len - 4 + 4 >= md5_name_size)
+	if (len + 1 > md5_name_size)
 		return false;
 
 	memcpy(md5_name, bin_name, len - 4);
@@ -499,7 +500,7 @@ source_selection:
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 4, 30, msg);
 			u8g2_DrawStr(&m1_u8g2, 4, 42, rel->asset_name);
-			u8g2_DrawStr(&m1_u8g2, 4, 54, "Use Image File to flash");
+			u8g2_DrawStr(&m1_u8g2, 4, 54, "Flash via Image File");
 			m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "OK:Continue", NULL);
 		} while (m1_u8g2_nextpage());
 
