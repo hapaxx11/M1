@@ -528,7 +528,20 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
 							x += M1_VKB_GUI_FONT_WIDTH*(len-1);
 							y = M1_VKB_FILENAME_POS_Y;
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-							u8g2_DrawStr(&m1_u8g2, x, y, key); // Display this character
+							if ( key[0] == ' ' )
+							{
+								/* Render spaces with a visible placeholder while
+								 * still storing the actual space in the buffer. */
+								u8g2_DrawBox(&m1_u8g2,
+											 x + 1,
+											 y - 1,
+											 M1_VKB_GUI_FONT_WIDTH > 2 ? (M1_VKB_GUI_FONT_WIDTH - 2) : M1_VKB_GUI_FONT_WIDTH,
+											 1);
+							}
+							else
+							{
+								u8g2_DrawStr(&m1_u8g2, x, y, key); // Display this character
+							}
 							m1_u8g2_nextpage(); // Update graphic to the display RAM
 						} // if ( len < M1_VIRTUAL_KB_FILENAME_MAX )
 					} // else
