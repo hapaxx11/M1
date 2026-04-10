@@ -120,6 +120,10 @@ static game_button_t s_keyseq_map[KEYSEQ_MAX] = {
 static uint8_t s_keyseq_level    = 0;
 static bool    s_keyseq_unlocked = false;
 
+/* Large AT response buffer — file-scope static to avoid 8 KB stack allocation
+ * inside wifi_deauth().  Safe because only one blocking delegate runs at a time. */
+static char    s_resp_buf[AT_LARGE_RESP_BUF_SIZE];
+
 /********************* H E L P E R S ****************************************/
 
 static void check_keyseq(game_button_t btn)
@@ -582,7 +586,7 @@ static void stascan_stop(void)
 void wifi_deauth(void)
 {
     bool           esp_at_error = false;
-    char           resp_buf[AT_LARGE_RESP_BUF_SIZE];
+    char          *resp_buf = s_resp_buf;
     char           at_cmd[150];
     char           temp_title[MAX_SIZE_TITLE];
     game_button_t  btn = GAME_BTN_NONE;
@@ -638,7 +642,7 @@ void wifi_deauth(void)
                 s_failed_preflight_tests = 0;
                 for (int i = 0; i < PREFLIGHT_AT_CHECKS; i++) {
                     snprintf(at_cmd, sizeof(at_cmd), "%s\r\n", PREFLIGHT_AT_COMMANDS[i]);
-                    spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 1);
+                    spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 1);
 
                     if (strstr(resp_buf, "TIMEOUT") || strstr(resp_buf, "SEND_ERR")) {
                         esp_at_error = true;
@@ -680,14 +684,14 @@ void wifi_deauth(void)
 
                 resp_buf[0] = '\0';
                 snprintf(at_cmd, sizeof(at_cmd), "AT+DEAUTH?\r\n");
-                spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 5);
+                spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 5);
                 parse_query_deauth(resp_buf);
 
                 vTaskDelay(pdMS_TO_TICKS(MULTI_AT_CMD_INTERVAL_MS));
 
                 resp_buf[0] = '\0';
                 snprintf(at_cmd, sizeof(at_cmd), "AT+STASCAN?\r\n");
-                spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 5);
+                spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 5);
                 parse_query_stascan(resp_buf);
 
                 if (s_deauth_active)
@@ -748,16 +752,16 @@ void wifi_deauth(void)
                 show_message(TITLE_DEFAULT, "Scanning APs...", NULL, 0);
 
                 snprintf(at_cmd, sizeof(at_cmd), "AT+CWMODE=1\r\n");
-                spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 1);
+                spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 1);
                 vTaskDelay(pdMS_TO_TICKS(MULTI_AT_CMD_INTERVAL_MS));
 
                 snprintf(at_cmd, sizeof(at_cmd), "AT+CWLAPOPT=,26\r\n");
-                spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 1);
+                spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 1);
                 vTaskDelay(pdMS_TO_TICKS(MULTI_AT_CMD_INTERVAL_MS));
 
                 resp_buf[0] = '\0';
                 snprintf(at_cmd, sizeof(at_cmd), "AT+CWLAP\r\n");
-                spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 5);
+                spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 5);
                 process_apscan_response_buffer(resp_buf);
             }
 
@@ -832,12 +836,12 @@ void wifi_deauth(void)
                          "AT+STASCAN=1,%d,\"%s\"\r\n",
                          s_selected_ap.channel, s_selected_ap.address);
                 resp_buf[0] = '\0';
-                spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 1);
+                spi_AT_send_recv(at_cmd, resp_buf, AT_LARGE_RESP_BUF_SIZE, 1);
             }
 
             /* Poll for unsolicited +STASCAN responses */
             resp_buf[0] = '\0';
-            spi_AT_send_recv("AT\r\n", resp_buf, sizeof(resp_buf), 1);
+            spi_AT_send_recv("AT\r\n", resp_buf, AT_LARGE_RESP_BUF_SIZE, 1);
             if (resp_buf[0] != '\0')
                 process_stascan_response_buffer(resp_buf);
 
