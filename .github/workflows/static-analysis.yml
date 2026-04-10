@@ -8,11 +8,6 @@ on:
     paths:
       - 'm1_csrc/**'
       - 'Sub_Ghz/**'
-      - 'Infrared/**'
-      - 'lfrfid/**'
-      - 'lib/**'
-      - 'Battery/**'
-      - 'Core/Src/**'
       - '.github/workflows/static-analysis.yml'
       - '.cppcheck-suppressions.txt'
   push:
@@ -20,11 +15,6 @@ on:
     paths:
       - 'm1_csrc/**'
       - 'Sub_Ghz/**'
-      - 'Infrared/**'
-      - 'lfrfid/**'
-      - 'lib/**'
-      - 'Battery/**'
-      - 'Core/Src/**'
       - '.github/workflows/static-analysis.yml'
       - '.cppcheck-suppressions.txt'
 
@@ -128,8 +118,6 @@ jobs:
             -I Infrared \
             -I lfrfid \
             -I Battery \
-            -I Battery \
-            -I lfrfid \
             -I Core/Inc \
             -I Drivers/STM32H5xx_HAL_Driver/Inc \
             -I Drivers/CMSIS/Device/ST/STM32H5xx/Include \
