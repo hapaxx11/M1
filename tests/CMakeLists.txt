@@ -21,11 +21,12 @@ option(ENABLE_SANITIZERS "Enable ASan + UBSan" ON)
 
 # ------------------------------------------------------------------
 # Sanitizers (ASan + UBSan) — catches memory bugs at test time
+# Uses an INTERFACE library so flags are applied per-target, not globally.
 # ------------------------------------------------------------------
 if(ENABLE_SANITIZERS AND NOT MSVC)
-    set(SANITIZER_FLAGS "-fsanitize=address,undefined -fno-omit-frame-pointer")
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${SANITIZER_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${SANITIZER_FLAGS}")
+    add_library(sanitizers INTERFACE)
+    target_compile_options(sanitizers INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(sanitizers INTERFACE -fsanitize=address,undefined)
     message(STATUS "Address Sanitizer + UBSan enabled")
 endif()
 
@@ -59,6 +60,9 @@ target_include_directories(test_bit_util PRIVATE
     ${M1_ROOT}/m1_csrc
 )
 target_link_libraries(test_bit_util PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_bit_util PRIVATE sanitizers)
+endif()
 
 # ------------------------------------------------------------------
 # CTest registration
