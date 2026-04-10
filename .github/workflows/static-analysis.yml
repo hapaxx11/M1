@@ -94,17 +94,30 @@ jobs:
           # Use the MISRA addon that ships with cppcheck.
           # We run in advisory mode (no --error-exitcode) so it reports but
           # does not fail the build — teams can ratchet this over time.
-          ADDON_DIR=$(find /usr -path '*/cppcheck/addons/misra.py' -printf '%h' -quit 2>/dev/null || true)
-          if [ -z "$ADDON_DIR" ]; then
-            ADDON_DIR=$(find /usr -path '*/addons/misra.py' -printf '%h' -quit 2>/dev/null || true)
+          MISRA_ADDON=$(find /usr -path '*/cppcheck/addons/misra.py' -print -quit 2>/dev/null || true)
+          if [ -z "$MISRA_ADDON" ]; then
+            MISRA_ADDON=$(find /usr -path '*/addons/misra.py' -print -quit 2>/dev/null || true)
           fi
-          echo "MISRA addon dir: ${ADDON_DIR:-not found}"
+          if [ -n "$MISRA_ADDON" ]; then
+            echo "MISRA addon: $MISRA_ADDON"
+            echo "MISRA_ADDON=$MISRA_ADDON" >> "$GITHUB_ENV"
+            echo "MISRA_ADDON_AVAILABLE=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::MISRA addon (misra.py) not found; the advisory MISRA cppcheck run will be skipped."
+            echo "MISRA_ADDON=" >> "$GITHUB_ENV"
+            echo "MISRA_ADDON_AVAILABLE=false" >> "$GITHUB_ENV"
+          fi
 
       - name: Run cppcheck with MISRA addon (advisory)
         continue-on-error: true
         run: |
+          if [ "${MISRA_ADDON_AVAILABLE}" != "true" ] || [ -z "${MISRA_ADDON}" ]; then
+            echo "WARNING: MISRA addon (misra.py) not found; skipping advisory MISRA cppcheck run." | tee misra-report.txt
+            exit 0
+          fi
+
           cppcheck \
-            --addon=misra \
+            --addon="${MISRA_ADDON}" \
             --suppress=missingIncludeSystem \
             --suppressions-list=.cppcheck-suppressions.txt \
             --inline-suppr \
