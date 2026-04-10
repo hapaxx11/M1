@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CI workflow no longer runs on push to main** — Removed the `push`
+  trigger from `ci.yml` so the CI Build Check only runs on pull requests.
+  Previously, every push to `main` triggered both CI Build Check and
+  Build and Release in parallel, producing two identical firmware builds.
+  Build and Release already validates compilation, so the CI run was
+  fully redundant.  This halves the compute usage on push-to-main events.
 - **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
   `subghz_raw_waveform_draw()` from filled vertical bars to a proper
   square-wave oscilloscope trace.  High/low signal levels are now drawn
