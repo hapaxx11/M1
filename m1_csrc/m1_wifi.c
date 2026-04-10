@@ -286,7 +286,7 @@ void wifi_scan_ap(void)
 								snprintf(pw_prompt, sizeof(pw_prompt), "Password +%u:",
 									(unsigned int)total_pw_len);
 
-							chunk_len = m1_vkb_get_text(pw_prompt, "", pw_chunk);
+							chunk_len = m1_vkb_get_text(pw_prompt, "", pw_chunk, sizeof(pw_chunk));
 
 							if ( chunk_len == 0 )
 							{
@@ -335,7 +335,7 @@ void wifi_scan_ap(void)
 								uint8_t continue_len;
 
 								memset(continue_resp, 0, sizeof(continue_resp));
-								continue_len = m1_vkb_get_text("More? C=Yes", "", continue_resp);
+								continue_len = m1_vkb_get_text("More? C=Yes", "", continue_resp, sizeof(continue_resp));
 
 								if ( continue_len == 0 )
 								{

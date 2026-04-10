@@ -312,7 +312,7 @@ S_M1_VKB_X_Key m1_x_keys[M1_VKB_NUM_OF_FUNCTION_KEYS] =
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name);
-uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text);
+uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size);
 uint8_t m1_vkbs_get_data(char *description, char *data_buffer);
 S_M1_VKB_Func_Key_ID m1_vkb_check_function_key(uint8_t kb_key);
 
@@ -842,18 +842,38 @@ uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_nam
  *         pattern of context-specific keyboard layouts.
  * @param:  description   - title shown at top of screen
  *          default_text  - pre-filled text (may be empty string)
- *          new_text      - output buffer (caller must allocate at least
- *                          M1_VIRTUAL_KB_FILENAME_MAX + 1 bytes)
+ *          new_text      - output buffer
+ *          new_text_size - size of the output buffer in bytes (including NUL)
  * @retval  length of entered text, or 0 if user cancelled
  */
 /*============================================================================*/
-uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text)
+uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, size_t new_text_size)
 {
 	const uint8_t (*prev_pages)[M1_VIRTUAL_KB_ROW_SIZE][M1_VIRTUAL_KB_COLUMN_SIZE] = s_vkb_active_pages;
+	char tmp[M1_VIRTUAL_KB_FILENAME_MAX + 1];
+
+	tmp[0] = '\0';
 
 	s_vkb_active_pages = m1_vkb_text_pages;
-	uint8_t result = m1_vkb_get_filename(description, default_text, new_text);
+	uint8_t result = m1_vkb_get_filename(description, default_text, tmp);
 	s_vkb_active_pages = prev_pages;
+
+	if ( new_text != NULL && new_text_size > 0 )
+	{
+		if ( result > 0 )
+		{
+			size_t copy_len = result;
+			if ( copy_len >= new_text_size )
+				copy_len = new_text_size - 1;
+			memcpy(new_text, tmp, copy_len);
+			new_text[copy_len] = '\0';
+			result = (uint8_t)copy_len;
+		}
+		else
+		{
+			new_text[0] = '\0';
+		}
+	}
 
 	return result;
 }
