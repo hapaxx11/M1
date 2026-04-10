@@ -935,8 +935,10 @@ static void subghz_raw_waveform_reset(void)
 /*============================================================================*/
 /**
   * @brief  Draw the RAW waveform onto the display.
-  *         Renders a scrolling pulse waveform in the middle display area.
-  *         Mark=high line from mid to top, Space=low line from mid to bottom.
+  *         Renders a scrolling oscilloscope-style square wave with dashed
+  *         grid reference lines at high, center, and low positions.
+  *         Mark (high) = 2px rail at top, Space (low) = 2px rail at bottom,
+  *         with vertical transition edges connecting level changes.
   */
 /*============================================================================*/
 static void subghz_raw_waveform_draw(void)
