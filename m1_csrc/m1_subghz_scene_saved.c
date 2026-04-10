@@ -65,7 +65,32 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
     {
         case ACTION_EMULATE:
         {
-            sub_ghz_replay_flipper_file(saved_filepath);
+            uint8_t ret = sub_ghz_replay_flipper_file(saved_filepath);
+            if (ret == 0)
+            {
+                /* Restore radio to known state after replay (the replay
+                 * function calls menu_sub_ghz_exit which powers off the
+                 * SI4463 on success). */
+                menu_sub_ghz_init();
+            }
+            else
+            {
+                char err_buf[32];
+                const char *err = err_buf;
+                snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
+                switch (ret)
+                {
+                    case 1: err = "File/IO error";              break;
+                    case 2: err = "Missing data/frequency";     break;
+                    case 3: err = "Unsupported freq";           break;
+                    case 4: /* fall through */
+                    case 5: err = "Memory error";               break;
+                    case 6: err = "Dynamic/RAW-only protocol";  break;
+                    case 7: err = "Unsupported protocol";       break;
+                }
+                m1_message_box(&m1_u8g2, "Emulate failed", err, "",
+                               "BACK to return");
+            }
             app->need_redraw = true;
             return true;
         }

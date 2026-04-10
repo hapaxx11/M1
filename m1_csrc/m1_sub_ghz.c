@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_tasks.h"
@@ -1391,6 +1392,23 @@ static uint8_t sub_ghz_file_load(void)
 
 
 /*============================================================================*/
+/** @brief  Case-insensitive substring search (like POSIX strcasestr). */
+static const char *stristr(const char *haystack, const char *needle)
+{
+	if (!needle[0]) return haystack;
+	for (; *haystack; haystack++)
+	{
+		const char *h = haystack, *n = needle;
+		while (*h && *n && (tolower((unsigned char)*h) == tolower((unsigned char)*n)))
+		{
+			h++;
+			n++;
+		}
+		if (!*n) return haystack;
+	}
+	return NULL;
+}
+
 /*============================================================================*/
 /**
   * @brief  Convert a Flipper .sub file to M1's .sgh format and replay it.
@@ -1534,7 +1552,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 
 		if (strncmp(line_buf, "Filetype:", 9) == 0)
 		{
-			if (strstr(line_buf, "RAW"))
+			if (strstr(line_buf, "RAW") || strstr(line_buf, "NOISE"))
 				is_raw = true;
 			else if (strstr(line_buf, "Key"))
 				is_key = true;
@@ -1553,9 +1571,24 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		}
 		else if (strncmp(line_buf, "Preset:", 7) == 0)
 		{
-			if (strstr(line_buf, "Ook") || strstr(line_buf, "OOK"))
+			if (stristr(line_buf, "OOK"))
 				modulation = MODULATION_OOK;
-			else if (strstr(line_buf, "2FSK") || strstr(line_buf, "FSK"))
+			else if (stristr(line_buf, "ASK"))
+				modulation = MODULATION_ASK;
+			else if (stristr(line_buf, "FSK"))
+				modulation = MODULATION_FSK;
+			snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "Modulation: %s\r\n",
+			         subghz_modulation_text[modulation]);
+			f_puts(out_buf, &f_sgh);
+		}
+		else if (strncmp(line_buf, "Modulation:", 11) == 0)
+		{
+			/* M1 native .sgh format uses "Modulation:" instead of "Preset:" */
+			if (stristr(line_buf, "OOK"))
+				modulation = MODULATION_OOK;
+			else if (stristr(line_buf, "ASK"))
+				modulation = MODULATION_ASK;
+			else if (stristr(line_buf, "FSK"))
 				modulation = MODULATION_FSK;
 			snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "Modulation: %s\r\n",
 			         subghz_modulation_text[modulation]);
@@ -1639,6 +1672,14 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			}
 			/* If f_gets truncated this line, mark for continuation */
 			in_raw_continuation = !line_complete;
+		}
+		else if (strncmp(line_buf, "Data:", 5) == 0)
+		{
+			/* M1 native .sgh format — Data: lines already contain unsigned
+			 * values.  Pass them through to the temp file as-is. */
+			f_puts(line_buf, &f_sgh);
+			f_puts("\r\n", &f_sgh);
+			has_data = true;
 		}
 	}
 
@@ -4593,7 +4634,7 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
 	uint32_t avail = ringbuffer_get_data_slots(&subghz_rx_rawdata_rb);
 	if (avail >= SUBGHZ_RAW_DATA_SAMPLES_TO_RW)
 	{
-		subghz_record_total_samples += avail;
+		subghz_record_total_samples += SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 		sub_ghz_rx_raw_save(false, false);
 
 		/* Push the just-saved samples to the waveform display.
@@ -4610,7 +4651,7 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
 		}
 
 		vTaskDelay(10);  /* Yield so SDM background task can write to SD */
-		return avail;
+		return SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 	}
 	return 0;
 }

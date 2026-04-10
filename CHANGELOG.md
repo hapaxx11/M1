@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz Read Raw — RSSI feedback during recording** — RSSI bar now updates
+  on every 200ms display refresh (not only when ring-buffer flush events arrive),
+  providing continuous signal-strength feedback while recording.
+- **Sub-GHz Read Raw — sample count display** — Shows exact sample count when
+  below 1000 instead of always displaying "0k".
+- **Sub-GHz Read Raw — sample count accuracy** — Fixed overcounting in the flush
+  function which added the total available ring-buffer depth instead of the 512
+  samples actually consumed per flush.
+- **Sub-GHz Emulate — native .sgh file support** — Emulate now works with M1's
+  own .sgh recording files (Read Raw output), not only Flipper .sub files.  Added
+  parsing for `Modulation:` header and `Data:` lines in M1 native format.
+- **Sub-GHz Emulate — error feedback** — Emulate now displays an error message
+  box when replay fails (file not found, no data, unsupported protocol, etc.)
+  instead of silently returning to the saved menu.
+- **Sub-GHz Emulate — radio state after replay** — Radio hardware is re-initialized
+  after emulate returns, preventing subsequent Read/Read Raw from failing because
+  the SI4463 was left powered off.
 - **IR database — Windows reserved filename** — Renamed `ir_database/AC/AUX.ir`
   to `AUX_.ir`.  `AUX` is a reserved device name on Windows, causing
   `error: invalid path` on checkout and reset operations.
