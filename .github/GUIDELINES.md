@@ -92,6 +92,9 @@ Use consistent formatting (preferably automated)
 Write self-documenting code
 Follow DRY (Don't Repeat Yourself) principles
 Write unit tests for new features
+Bug fixes MUST include regression tests — add one or more host-side unit tests (under
+tests/) that fail before the fix and pass after it. A bug fix without a corresponding
+regression test is incomplete.
 
 11. UX Pattern Standards
 Any module that loads saved files from SD card MUST implement the Saved Item Actions
