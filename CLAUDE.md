@@ -385,6 +385,123 @@ load + config reset, restoring the radio to a known good state.
   blocking delegate may have run and powered off the radio between the
   user's last scene and yours.
 
+### ESP32 Coprocessor State Management — `m1_esp32_init()` / `m1_esp32_deinit()`
+
+> **Every blocking delegate that uses the ESP32 MUST call `m1_esp32_deinit()`
+> on ALL exit paths — including early returns, error paths, and normal
+> completion.**  Failing to deinit leaves the SPI transport and GPIO
+> interrupts active, wasting power and potentially interfering with
+> subsequent ESP32 operations from other modules.
+
+**Background.** The ESP32-C6 coprocessor communicates with the STM32 via SPI.
+Two initialization layers exist:
+
+1. `m1_esp32_init()` — HAL-level SPI peripheral + GPIO + interrupt setup
+   (in `m1_esp32_hal.c`).  Sets `esp32_init_done = TRUE`.
+2. `esp32_main_init()` — Creates the `spi_trans_control_task` RTOS task
+   and sets `esp32_main_init_done = true` (in `esp_app_main.c`).  The task
+   persists across init/deinit cycles — the flag prevents duplicate creation.
+
+`m1_esp32_deinit()` tears down the SPI peripheral, disables interrupts, and
+resets `esp32_init_done`.  The SPI control task remains alive but dormant
+(blocked on a queue with no interrupts firing).
+
+**The pattern for ESP32-using blocking delegates:**
+
+```c
+void my_esp32_operation(void)
+{
+    /* Init ESP32 if needed */
+    if (!m1_esp32_get_init_status())
+        m1_esp32_init();
+    if (!get_esp32_main_init_status())
+        esp32_main_init();
+
+    if (!get_esp32_main_init_status())
+    {
+        show_error("ESP32 not ready!");
+        m1_esp32_deinit();   /* ← REQUIRED even on failure */
+        return;
+    }
+
+    /* ... do work ... */
+
+    m1_esp32_deinit();       /* ← REQUIRED on every exit path */
+}
+```
+
+**Modules that follow this pattern:**
+- WiFi: `wifi_scan_ap()`, `wifi_show_status()`, `wifi_disconnect()`,
+  `wifi_ntp_sync()`
+- Bluetooth: `bluetooth_scan()`, `bluetooth_advertise()`
+- 802.15.4: `ieee802154_scan()` (Zigbee/Thread)
+- BLE Spam: `ble_spam_run()`
+- Bad-BT: `badbt_run()` — also calls `ble_hid_deinit()` before ESP32 deinit
+
+**Rules for new code:**
+- If you call `m1_esp32_init()` or `esp32_main_init()`, you MUST call
+  `m1_esp32_deinit()` on every return path — including error early returns.
+- `m1_esp32_deinit()` is safe to call even if init was not fully successful
+  (it checks `esp32_init_done` internally).
+- **Never leave the ESP32 SPI transport initialized after a blocking
+  delegate returns** — the caller's scene does not know which ESP32 mode
+  was active and cannot clean up for you.
+
+### NFC Worker State Management — `Q_EVENT_NFC_*` Events
+
+> **The NFC worker task's state machine must handle ALL stop events sent
+> to it.**  An unhandled event leaves the worker in `NFC_STATE_PROCESS`
+> indefinitely, preventing `nfc_deinit_func()` from running and leaving
+> `EN_EXT_5V` asserted.
+
+**Background.** The NFC worker runs in a dedicated RTOS task
+(`nfc_worker_task` in `nfc_driver.c`) with a 4-state machine:
+`WAIT → INITIALIZE → PROCESS → DONE → WAIT`.  Transitions from PROCESS
+to DONE are driven by events sent to `nfc_worker_q_hdl`.
+
+**Handled stop events (trigger transition to `NFC_STATE_DONE`):**
+- `Q_EVENT_NFC_READ_COMPLETE` — read operation finished
+- `Q_EVENT_NFC_EMULATE_STOP` — emulation cancelled by user
+- `Q_EVENT_NFC_STOP` — generic stop (cancel any operation in progress)
+
+**The `NFC_STATE_DONE` handler calls `nfc_deinit_func()` and deasserts
+`EN_EXT_5V`, so it is critical that every stop path reaches it.**
+
+**Rules for new code:**
+- If you add a new NFC stop event type, add a handler for it in the
+  `NFC_STATE_PROCESS` case of `nfc_worker_task`.
+- Always send a stop event to the worker before exiting an NFC blocking
+  delegate — never rely on `menu_nfc_deinit()`'s `vTaskDelete()` to clean
+  up, as that skips `nfc_deinit_func()`.
+
+### IR Hardware State Management — `infrared_encode_sys_init()` / `_deinit()`
+
+> **Every call to `infrared_encode_sys_init()` MUST be followed by
+> `infrared_encode_sys_deinit()` — even if the TX complete event is not
+> received.**  Skipping deinit on timeout leaves timer/DMA resources
+> allocated, and the next `init()` call may fail or behave unpredictably.
+
+**Background.** `transmit_command()` and `transmit_raw_command()` call
+`infrared_encode_sys_init()` internally but do NOT call deinit — the
+caller is responsible for deiniting after the `Q_EVENT_IRRED_TX` event.
+
+**The pattern for IR TX loops (Send All, single-shot, raw):**
+```c
+transmit_command(&cmd);
+/* Wait for TX complete — but always deinit regardless */
+S_M1_Main_Q_t tx_q;
+(void)xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(3000));
+infrared_encode_sys_deinit();  /* ← ALWAYS, even on timeout */
+```
+
+**Rules for new code:**
+- Never skip `infrared_encode_sys_deinit()` — it must be called on every
+  path after `transmit_command()` / `transmit_raw_command()`, regardless
+  of whether `Q_EVENT_IRRED_TX` was received.
+- The event-loop single-shot TX handler already follows this pattern
+  (deinit in the `Q_EVENT_IRRED_TX` handler).  The Send All loop must
+  do the same for each iteration.
+
 ---
 
 ## Saved Item Actions Pattern
