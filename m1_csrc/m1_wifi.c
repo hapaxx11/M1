@@ -255,10 +255,15 @@ void wifi_scan_ap(void)
 						 * m1_vkb_get_text() is limited by the virtual keyboard's
 						 * single-entry maximum, so collect the password in chunks
 						 * until the user finishes or the WiFi credential buffer is full.
+						 *
+						 * A full chunk is ambiguous: the password may either continue
+						 * or end exactly on the virtual keyboard boundary. Because the
+						 * current VKB API does not distinguish cancel from submit-empty,
+						 * ask the user explicitly whether to continue after each full
+						 * chunk instead of forcing a follow-up empty chunk.
 						 */
 						uint8_t total_pw_len = 0;
 						bool password_entry_cancelled = false;
-						bool last_chunk_was_full = false;
 
 						memset(password, 0, sizeof(password));
 
@@ -288,8 +293,7 @@ void wifi_scan_ap(void)
 								/*
 								 * Treat a zero-length return from the VKB consistently as
 								 * cancel. The current VKB API does not distinguish BACK
-								 * from an explicit empty submission, so len == 0 must not
-								 * be interpreted as "done" for the forced follow-up prompt.
+								 * from an explicit empty submission.
 								 */
 								password_entry_cancelled = true;
 								total_pw_len = 0;
@@ -306,9 +310,6 @@ void wifi_scan_ap(void)
 							memcpy(&password[total_pw_len], pw_chunk, chunk_len);
 							total_pw_len += chunk_len;
 							password[total_pw_len] = '\0';
-							last_chunk_was_full =
-								(chunk_len == pw_chunk_full_len)
-								&& (total_pw_len < (WIFI_CRED_PASS_MAX_LEN - 1));
 
 							/*
 							 * A short chunk means the user completed the password
@@ -316,11 +317,42 @@ void wifi_scan_ap(void)
 							 * A full final chunk is also complete once the credential
 							 * buffer limit is reached.
 							 */
-							if ( !last_chunk_was_full
+							if ( chunk_len < pw_chunk_full_len
 								|| total_pw_len >= (WIFI_CRED_PASS_MAX_LEN - 1) )
 							{
 								do_connect = true;
 								break;
+							}
+
+							/*
+							 * The chunk filled the VKB entry limit but the credential
+							 * buffer is not yet full, so ask explicitly whether the
+							 * password continues. This allows passwords whose lengths
+							 * are exact multiples of the per-entry maximum.
+							 */
+							{
+								char continue_resp[2];
+								uint8_t continue_len;
+
+								memset(continue_resp, 0, sizeof(continue_resp));
+								continue_len = m1_vkb_get_text("More? C=Yes", "", continue_resp);
+
+								if ( continue_len == 0 )
+								{
+									password_entry_cancelled = true;
+									total_pw_len = 0;
+									memset(password, 0, sizeof(password));
+									u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+									wifi_ap_list_print(NULL, false); /* reset state */
+									list_count = wifi_ap_list_print(&app_req, true);
+									break;
+								}
+
+								if ( continue_resp[0] != 'c' && continue_resp[0] != 'C' )
+								{
+									do_connect = true;
+									break;
+								}
 							}
 						}
 
