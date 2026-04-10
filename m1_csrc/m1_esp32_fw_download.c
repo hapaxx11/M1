@@ -234,7 +234,7 @@ static void edl_draw_progress(const char *label, uint32_t downloaded, uint32_t t
 		u8g2_DrawStr(&m1_u8g2, 4, 14, status_str);
 		u8g2_DrawFrame(&m1_u8g2, DL_PROGRESS_BAR_X, DL_PROGRESS_BAR_Y,
 		               DL_PROGRESS_BAR_W, DL_PROGRESS_BAR_H);
-		if (bar_fill > 0)
+		if (bar_fill > 2)
 			u8g2_DrawBox(&m1_u8g2, DL_PROGRESS_BAR_X + 1, DL_PROGRESS_BAR_Y + 1,
 			             bar_fill - 2, DL_PROGRESS_BAR_H - 2);
 		u8g2_DrawStr(&m1_u8g2, 4, 52, size_str);
