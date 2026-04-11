@@ -636,39 +636,92 @@ static int parse_http_headers(const char *data, int data_len __attribute__((unus
 		}
 	}
 
-	/* Detect Transfer-Encoding: chunked (case-insensitive search) */
+	/* Detect Transfer-Encoding: chunked with case-insensitive
+	 * field-name matching, per HTTP header rules. */
 	if (is_chunked)
 	{
-		/* Scan headers for Transfer-Encoding — check both common casings
-		 * and also look for "chunked" anywhere in the header value to
-		 * handle multi-value forms like "gzip, chunked". */
-		const char *te = strstr(data, "Transfer-Encoding:");
-		if (!te) te = strstr(data, "transfer-encoding:");
-		if (!te) te = strstr(data, "Transfer-encoding:");
-		if (te && te < hdr_end)
+		const char *line = data;
+		*is_chunked = false;
+
+		while (line < hdr_end)
 		{
-			te = strchr(te, ':');
-			if (te)
+			const char *line_end = line;
+			const char *colon;
+
+			while (line_end < hdr_end && *line_end != '\r' && *line_end != '\n')
+				line_end++;
+
+			colon = memchr(line, ':', (size_t)(line_end - line));
+			if (colon)
 			{
-				te++;
-				/* Search for "chunked" anywhere in the value up to EOL */
-				while (te < hdr_end && *te != '\r' && *te != '\n')
+				static const char te_name[] = "Transfer-Encoding";
+				size_t name_len = (size_t)(colon - line);
+
+				if (name_len == sizeof(te_name) - 1)
 				{
-					if ((*te == 'c' || *te == 'C') &&
-					    te + 7 <= hdr_end &&
-					    (te[1] == 'h' || te[1] == 'H') &&
-					    (te[2] == 'u' || te[2] == 'U') &&
-					    (te[3] == 'n' || te[3] == 'N') &&
-					    (te[4] == 'k' || te[4] == 'K') &&
-					    (te[5] == 'e' || te[5] == 'E') &&
-					    (te[6] == 'd' || te[6] == 'D'))
+					size_t i;
+					bool name_match = true;
+
+					for (i = 0; i < sizeof(te_name) - 1; i++)
 					{
-						*is_chunked = true;
-						break;
+						char a = line[i];
+						char b = te_name[i];
+
+						if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+						if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+
+						if (a != b)
+						{
+							name_match = false;
+							break;
+						}
 					}
-					te++;
+
+					if (name_match)
+					{
+						const char *value = colon + 1;
+
+						while (value < line_end && (*value == ' ' || *value == '\t'))
+							value++;
+
+						while (value + 7 <= line_end)
+						{
+							char c0 = value[0];
+							char c1 = value[1];
+							char c2 = value[2];
+							char c3 = value[3];
+							char c4 = value[4];
+							char c5 = value[5];
+							char c6 = value[6];
+
+							if (c0 >= 'A' && c0 <= 'Z') c0 = (char)(c0 - 'A' + 'a');
+							if (c1 >= 'A' && c1 <= 'Z') c1 = (char)(c1 - 'A' + 'a');
+							if (c2 >= 'A' && c2 <= 'Z') c2 = (char)(c2 - 'A' + 'a');
+							if (c3 >= 'A' && c3 <= 'Z') c3 = (char)(c3 - 'A' + 'a');
+							if (c4 >= 'A' && c4 <= 'Z') c4 = (char)(c4 - 'A' + 'a');
+							if (c5 >= 'A' && c5 <= 'Z') c5 = (char)(c5 - 'A' + 'a');
+							if (c6 >= 'A' && c6 <= 'Z') c6 = (char)(c6 - 'A' + 'a');
+
+							if (c0 == 'c' && c1 == 'h' && c2 == 'u' &&
+							    c3 == 'n' && c4 == 'k' && c5 == 'e' &&
+							    c6 == 'd')
+							{
+								*is_chunked = true;
+								break;
+							}
+
+							value++;
+						}
+
+						if (*is_chunked)
+							break;
+					}
 				}
 			}
+
+			if (line_end < hdr_end && *line_end == '\r') line_end++;
+			if (line_end < hdr_end && *line_end == '\n') line_end++;
+			line = line_end;
 		}
 	}
 

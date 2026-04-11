@@ -509,11 +509,11 @@ source_selection:
 	/* Step 4: Fetch releases for selected source */
 	dl_show_message("Fetching releases...", sources[selected].name);
 	m1_wdt_reset();
-	int http_err = 0;
+	http_status_t http_err = HTTP_OK;
 	release_count = fw_source_fetch_releases(&sources[selected], releases, &http_err);
 	if (release_count == 0)
 	{
-		const char *reason = http_status_str((http_status_t)http_err);
+		const char *reason = http_status_str(http_err);
 		if (!reason && http_err == HTTP_OK)
 			reason = "No matching assets";
 		dl_show_message("No releases found", reason);

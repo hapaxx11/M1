@@ -23,6 +23,7 @@
 #include "m1_json_mini.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -372,8 +373,6 @@ void test_json_truncated_release_object(void)
  * Extracted here for host-side testing (the full HTTP client has
  * hardware dependencies that prevent host compilation).
  * =================================================================== */
-
-#include <stdlib.h>
 
 static uint16_t decode_chunked_body(char *body, uint16_t body_len)
 {

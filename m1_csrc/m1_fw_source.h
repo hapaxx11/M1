@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "m1_http_client.h"
 
 /* Maximum number of configured sources */
 #define FW_SOURCE_MAX           8
@@ -108,6 +109,6 @@ bool fw_source_create_defaults(void);
  * Returns:     Number of releases found (0 on error or no releases)
  */
 uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases,
-                                  int *out_status);
+                                  http_status_t *out_status);
 
 #endif /* M1_FW_SOURCE_H_ */
