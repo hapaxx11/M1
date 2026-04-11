@@ -144,8 +144,7 @@ add_custom_command(
 )
 
 # Command to inject CRC32 + Hapax metadata into the .bin file
-# Output: ${CMAKE_PROJECT_NAME}_wCRC.bin  (e.g. M1_Hapax_v0.9.0.1_wCRC.bin)
-# Matches SiN360's pattern: project name drives all output filenames.
+# Output: ${CMAKE_PROJECT_NAME}_wCRC.bin  (version derived from m1_fw_update_bl.h)
 add_custom_command(
     TARGET ${CMAKE_PROJECT_NAME}
     POST_BUILD
