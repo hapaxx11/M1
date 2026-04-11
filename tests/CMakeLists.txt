@@ -160,6 +160,178 @@ endif()
 add_test(NAME subghz_registry COMMAND test_subghz_registry)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_history (signal history ring buffer)
+# Pure data structure — no hardware dependencies at all.
+# Tests add/get ordering, duplicate detection, circular overflow,
+# and boundary conditions.
+# ------------------------------------------------------------------
+add_executable(test_subghz_history
+    test_subghz_history.c
+    ${STUBS_DIR}/subghz_history_impl.c
+)
+target_include_directories(test_subghz_history PRIVATE
+    ${STUBS_DIR}            # stm32h5xx_hal.h, m1_io_defs.h, m1_ring_buffer.h stubs
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_history PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_history PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_history COMMAND test_subghz_history)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_key_encoder (KEY→RAW OOK PWM encoding)
+# Extracted from sub_ghz_replay_flipper_file() — pure math + registry
+# lookup.  Tests timing resolution, bit encoding, repetitions, and
+# rejection of dynamic/weather/TPMS protocols.
+# ------------------------------------------------------------------
+add_executable(test_subghz_key_encoder
+    test_subghz_key_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${STUBS_DIR}/subghz_decode_stubs.c
+)
+target_include_directories(test_subghz_key_encoder PRIVATE
+    ${STUBS_DIR}            # HAL stubs
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_key_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_key_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_key_encoder COMMAND test_subghz_key_encoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_raw_line_parser (RAW_Data line parsing)
+# Extracted from sub_ghz_replay_flipper_file() — handles signed→absolute
+# conversion, zero skipping, and cross-buffer leftover digit recombination.
+# Pure string parsing, zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_raw_line_parser
+    test_subghz_raw_line_parser.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_line_parser.c
+)
+target_include_directories(test_subghz_raw_line_parser PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_line_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_line_parser PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_line_parser COMMAND test_subghz_raw_line_parser)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_raw_decoder (offline RAW→protocol decode)
+# Extracted from m1_subghz_scene_saved.c::do_decode_raw() — reconstructs
+# pulse packets from raw timing data using gap detection, then tries
+# protocol decoders via callback.  Pure logic, zero hardware deps.
+# ------------------------------------------------------------------
+add_executable(test_subghz_raw_decoder
+    test_subghz_raw_decoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_decoder.c
+)
+target_include_directories(test_subghz_raw_decoder PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_decoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_decoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_decoder COMMAND test_subghz_raw_decoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_playlist_parser (Flipper→M1 path remapping)
+# Extracted from m1_subghz_scene_playlist.c — converts Flipper-style
+# paths (/ext/subghz/...) to M1 convention (/SUBGHZ/...).
+# Pure string manipulation, zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_playlist_parser
+    test_subghz_playlist_parser.c
+    ${M1_ROOT}/Sub_Ghz/subghz_playlist_parser.c
+)
+target_include_directories(test_subghz_playlist_parser PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_playlist_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_playlist_parser PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_playlist_parser COMMAND test_subghz_playlist_parser)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_block_decoder (bit accumulation helpers)
+# Header-only — tests the inline functions used by ALL protocol decoders
+# for bit-by-bit data accumulation (64-bit and 128-bit), plus dedup hash.
+# ------------------------------------------------------------------
+add_executable(test_subghz_block_decoder
+    test_subghz_block_decoder.c
+)
+target_include_directories(test_subghz_block_decoder PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_block_decoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_block_decoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_block_decoder COMMAND test_subghz_block_decoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_block_encoder (bit-array + upload gen)
+# Header-only — tests MSB-first bit-array set/get and NRZ-style upload
+# generation from bit arrays.  Depends on level_duration + blocks_math.
+# ------------------------------------------------------------------
+add_executable(test_subghz_block_encoder
+    test_subghz_block_encoder.c
+)
+target_include_directories(test_subghz_block_encoder PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_block_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_block_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_block_encoder COMMAND test_subghz_block_encoder)
+
+# ------------------------------------------------------------------
+# Module under test: Manchester codec (decoder + encoder state machines)
+# Header-only — tests the table-driven Manchester decoder and the
+# Manchester encoder used by Marantec, Somfy, FAAC and other protocols.
+# Includes round-trip tests (encode→decode).
+# ------------------------------------------------------------------
+add_executable(test_subghz_manchester_codec
+    test_subghz_manchester_codec.c
+)
+target_include_directories(test_subghz_manchester_codec PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_manchester_codec PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_manchester_codec PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_manchester_codec COMMAND test_subghz_manchester_codec)
+
+# ------------------------------------------------------------------
+# Module under test: datatypes_utils (hex/bin/decimal conversions)
+# Pure string/numeric conversions used in Sub-GHz parsing and UI.
+# ------------------------------------------------------------------
+add_executable(test_datatypes_utils
+    test_datatypes_utils.c
+    ${M1_ROOT}/Sub_Ghz/datatypes_utils.c
+)
+target_include_directories(test_datatypes_utils PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_datatypes_utils PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_datatypes_utils PRIVATE sanitizers)
+endif()
+add_test(NAME datatypes_utils COMMAND test_datatypes_utils)
+
+# ------------------------------------------------------------------
 # Module under test: menu layout helpers (m1_menu_item_h, m1_menu_max_visible)
 # Constants and M1_MENU_VIS() come from the production m1_scene.h header.
 # Function implementations are inlined in the test (m1_scene.c has

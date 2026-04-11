@@ -1,0 +1,97 @@
+/* See COPYING.txt for license details. */
+
+/*
+ * subghz_key_encoder.h
+ *
+ * Extract from sub_ghz_replay_flipper_file() — the KEY→RAW OOK PWM
+ * encoding logic.  Converts a protocol name + key value + bit count
+ * into raw timing samples using the protocol registry for timing lookup.
+ *
+ * This module is hardware-independent and compiles on both ARM and host.
+ *
+ * M1 Project — Hapax fork
+ */
+
+#ifndef SUBGHZ_KEY_ENCODER_H
+#define SUBGHZ_KEY_ENCODER_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/*============================================================================*/
+/* Key Encoding Parameters                                                     */
+/*============================================================================*/
+
+/** Parsed KEY file fields — input to the encoder */
+typedef struct {
+    char     protocol[32];    /**< Protocol name (e.g. "Princeton") */
+    uint64_t key_value;       /**< Key data, MSB-first */
+    uint32_t bit_count;       /**< Number of bits to encode */
+    uint32_t te;              /**< Short pulse duration override (0 = use registry default) */
+} SubGhzKeyParams;
+
+/** Timing parameters resolved from the registry + fallbacks */
+typedef struct {
+    uint32_t te_short;        /**< Short symbol duration (μs) */
+    uint32_t te_long;         /**< Long symbol duration (μs) */
+    uint32_t gap_low;         /**< Sync gap LOW duration (μs) */
+} SubGhzKeyTiming;
+
+/** Single raw timing sample: duration in microseconds */
+typedef struct {
+    uint32_t high_us;         /**< HIGH pulse duration */
+    uint32_t low_us;          /**< LOW pulse duration */
+} SubGhzRawPair;
+
+/*============================================================================*/
+/* Return codes                                                                */
+/*============================================================================*/
+
+#define SUBGHZ_KEY_OK             0   /**< Success */
+#define SUBGHZ_KEY_ERR_DYNAMIC    6   /**< Rolling-code / Weather / TPMS — cannot encode */
+#define SUBGHZ_KEY_ERR_UNSUPPORTED 7  /**< Unsupported protocol (not in registry, no fallback) */
+#define SUBGHZ_KEY_ERR_OVERFLOW   8   /**< Output buffer too small */
+
+/*============================================================================*/
+/* Functions                                                                   */
+/*============================================================================*/
+
+/**
+ * Resolve timing parameters for a KEY file's protocol.
+ *
+ * Looks up the protocol in the registry, applies strstr() fallbacks for
+ * third-party protocols, and validates that the protocol type is encodable.
+ *
+ * @param params   Input key parameters (protocol name, te override)
+ * @param timing   Output timing parameters
+ * @return SUBGHZ_KEY_OK on success, SUBGHZ_KEY_ERR_* on failure
+ */
+uint8_t subghz_key_resolve_timing(const SubGhzKeyParams *params, SubGhzKeyTiming *timing);
+
+/**
+ * Encode a key value as OOK PWM raw timing pairs.
+ *
+ * Generates one repetition of the encoded signal:
+ *   - bit_count pairs (one per bit, MSB first)
+ *   - 1 sync gap pair at the end
+ *   Total = bit_count + 1 pairs per repetition
+ *
+ * Bit encoding:
+ *   - Bit 1: HIGH=te_long, LOW=te_short
+ *   - Bit 0: HIGH=te_short, LOW=te_long
+ *   - Sync:  HIGH=te_short, LOW=gap_low
+ *
+ * @param params       Input key parameters
+ * @param timing       Resolved timing (from subghz_key_resolve_timing)
+ * @param out          Output array of raw pairs
+ * @param max_pairs    Size of output array
+ * @param repetitions  Number of full signal repetitions (typically 3)
+ * @return Number of pairs written, or 0 on error
+ */
+uint32_t subghz_key_encode(const SubGhzKeyParams *params,
+                            const SubGhzKeyTiming *timing,
+                            SubGhzRawPair *out,
+                            uint32_t max_pairs,
+                            uint8_t repetitions);
+
+#endif /* SUBGHZ_KEY_ENCODER_H */

@@ -29,6 +29,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Momentum firmware offers a comparable in-menu font/spacing toggle — this
   is a Hapax-original accessibility feature.
 
+- **SubGhz unit tests: signal history ring buffer** (`tests/test_subghz_history.c`) —
+  19 tests covering `subghz_history_add/get/reset`: duplicate detection, circular
+  overflow, RSSI update, extended fields, saturation at 255, ordering (index 0 =
+  most recent), and boundary conditions.
+
+- **SubGhz key encoder module** (`Sub_Ghz/subghz_key_encoder.c/h`) — extracted KEY→RAW
+  OOK PWM encoding logic from `sub_ghz_replay_flipper_file()`.  Provides
+  `subghz_key_resolve_timing()` (registry-based + strstr fallback timing lookup with
+  dynamic/weather/TPMS rejection) and `subghz_key_encode()` (bit-level PWM pair
+  generation with repetitions).  20 unit tests in `tests/test_subghz_key_encoder.c`.
+
+- **SubGhz raw line parser module** (`Sub_Ghz/subghz_raw_line_parser.c/h`) — extracted
+  RAW_Data line parsing from `sub_ghz_replay_flipper_file()`.  Handles Flipper's signed
+  raw data format (negative→absolute, zero skip) with cross-buffer leftover digit
+  recombination when `f_gets` truncates long lines mid-number.  16 unit tests in
+  `tests/test_subghz_raw_line_parser.c`.
+
+- **SubGhz offline RAW decoder module** (`Sub_Ghz/subghz_raw_decoder.c/h`) — extracted
+  the RAW→protocol offline decode engine from `m1_subghz_scene_saved.c::do_decode_raw()`.
+  Reconstructs pulse packets from raw timing data using inter-packet gap detection, then
+  tries protocol decoders via a callback interface (decoupled from hardware globals).
+  Handles noise filtering, pulse overflow, deduplication, zero-key rejection, and trailing
+  packets without a final gap.  20 unit tests in `tests/test_subghz_raw_decoder.c`.
+
+- **SubGhz playlist path remapper** (`Sub_Ghz/subghz_playlist_parser.c/h`) — extracted
+  the Flipper→M1 path remapping utility from `m1_subghz_scene_playlist.c`.  Converts
+  Flipper-style paths (`/ext/subghz/...`) to M1 convention (`/SUBGHZ/...`).
+  10 unit tests in `tests/test_subghz_playlist_parser.c`.
+
+- **SubGhz block decoder tests** (`tests/test_subghz_block_decoder.c`) — 15 unit tests
+  for `subghz_block_decoder.h` inline functions: bit accumulation (64-bit and 128-bit
+  with MSB overflow), decoder reset, and dedup hash computation.
+
+- **SubGhz block encoder tests** (`tests/test_subghz_block_encoder.c`) — 14 unit tests
+  for `subghz_block_encoder.h` inline functions: MSB-first bit-array set/get, round-trip
+  byte patterns, NRZ-style upload generation with consecutive-bit merging, right-align
+  mode, and buffer overflow handling.
+
+- **SubGhz Manchester codec tests** (`tests/test_subghz_manchester_codec.c`) — 22 unit
+  tests covering both `subghz_manchester_decoder.h` (table-driven state machine — all
+  valid transitions, invalid→reset, multi-bit decode sequences) and
+  `subghz_manchester_encoder.h` (step 0/1/2, same-value extra half-bit, finish symbol),
+  plus encode→decode round-trip verification.
+
+- **Datatypes utils tests** (`tests/test_datatypes_utils.c`) — 16 unit tests for
+  `datatypes_utils.c`: hex char/string→decimal conversion, dec→binary with zero-fill,
+  and `hexStrToBinStr` guard paths (NULL/empty).  Tests document a latent bug in
+  `hexStrToBinStr` where the pair counter resets each iteration.
+
+### Changed
+
+- **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
+  line parsing are now delegated to the extracted `subghz_key_encoder` and
+  `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
+  the refactored code produces identical output for all supported file formats.
+
+- **Refactored `do_decode_raw()` in Saved scene** — offline RAW decode logic is
+  now delegated to the extracted `subghz_raw_decoder` module via callback interface.
+  The scene provides a thin adapter that bridges to the global decoder state.
+
+- **Refactored `remap_flipper_path()` in Playlist scene** — path remapping logic
+  is now delegated to `subghz_remap_flipper_path()` in the extracted
+  `subghz_playlist_parser` module.
+
 - **Battery indicator on splash screen** — The boot/welcome screen now shows a
   battery icon in the top-right corner with charge percentage and fill level.
   When charging (pre-charge or fast charge), a lightning bolt overlay appears

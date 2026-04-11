@@ -319,6 +319,10 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/m1_sub_ghz_decenc.c
     ../../Sub_Ghz/subghz_protocol_registry.c
     ../../Sub_Ghz/subghz_block_generic.c
+    ../../Sub_Ghz/subghz_key_encoder.c
+    ../../Sub_Ghz/subghz_raw_line_parser.c
+    ../../Sub_Ghz/subghz_raw_decoder.c
+    ../../Sub_Ghz/subghz_playlist_parser.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
     ../../Sub_Ghz/protocols/m1_secplus_v2_decode.c
