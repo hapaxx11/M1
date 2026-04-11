@@ -12,13 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Dark Mode (LCD & Notifications)** — New "Dark Mode" toggle in Settings →
-  LCD & Notifications.  Inverts every pixel on screen via software buffer XOR
-  in `m1_u8g2_nextpage()`, giving white-on-black rendering for all content
-  including text, XBM icons, and draw primitives.  Software inversion is used
-  instead of the ST7567 hardware `0xA7` command so that RPC screen streaming
-  also reflects the inverted image.  `m1_draw_icon()` updated to route through
-  the m1 wrapper path for consistent dark mode behaviour.  Setting is persisted
-  to SD card (`dark_mode` key in `settings.cfg`).
+  LCD & Notifications.  Inverts every pixel on screen via the ST7567 hardware
+  inverse display command (`0xA7`/`0xA6`), giving white-on-black rendering for
+  all content including text, XBM icons, and draw primitives.  Hardware
+  inversion covers the full controller RAM (132×65), eliminating the light
+  pixel border that software-only XOR left at the LCD edges.  RPC screen
+  streaming independently XORs its own framebuffer copy so the desktop app
+  still sees the correct inverted image.  All rendering paths route through
+  `m1_u8g2_firstpage()`/`m1_u8g2_nextpage()` wrappers for consistent
+  behaviour.  Setting is persisted to SD card (`dark_mode` key in
+  `settings.cfg`) and applied via `m1_lcd_set_dark_mode()` on boot.
 
 - **Text Size setting (LCD & Notifications)** — New "Text Size" option with
   Small (default) and Large modes.  Large mode uses a clearer `spleen5x8`
