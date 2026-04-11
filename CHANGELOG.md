@@ -173,7 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Apple); ~100ms cycle time (was 1500ms); per-brand mode selection menu
   (Apple, Samsung, Google, Microsoft, Random); three Apple Continuity
   types (ProximityPair, NearbyAction, CustomCrash); full model databases
-  (19 Apple PP, 15 Apple NA, 80+ Google FP, 20 Samsung Buds, 28 Samsung
+  (19 Apple PP, 15 Apple NA, 80+ Google FP, 20 Samsung Buds, 30 Samsung
   Watches); Microsoft SwiftPair with random device names; live packet
   counter display.
 
