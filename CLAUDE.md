@@ -372,10 +372,13 @@ to build.**
 
 ### Font Inventory
 
-The M1 firmware compiles ~1987 u8g2 fonts in `Drivers/u8g2_csrc/u8g2_fonts.c`, but
-only **22** are actually linked by application code.  All font assignments are
-centralised in `m1_csrc/m1_display.h` (display-role macros) and
-`m1_csrc/m1_app_api.c` (BadUSB scripting API table).
+The M1 firmware compiles ~1987 u8g2 fonts in `Drivers/u8g2_csrc/u8g2_fonts.c`.
+The table below inventories fonts referenced by application code via
+`m1_csrc/m1_display.h` (display-role macros),
+`m1_csrc/m1_app_api.c` (BadUSB scripting API table), and direct
+`u8g2_SetFont()` call sites.  It may also include a separate
+"defined but unused" entry, which is not necessarily linked into the final
+binary when section garbage collection is enabled.
 
 **u8g2 font suffix meanings:**
 
