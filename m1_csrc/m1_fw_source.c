@@ -263,7 +263,8 @@ static bool asset_matches_filter(const char *asset_name,
  * Fetch releases from GitHub Releases API.
  * Parses the JSON response to extract release metadata and matching assets.
  */
-static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *releases)
+static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *releases,
+                                      http_status_t *out_status)
 {
 	char url[256];
 	uint8_t count = 0;
@@ -272,8 +273,8 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 	snprintf(url, sizeof(url), GITHUB_API_RELEASES_FMT,
 	         source->github.owner, source->github.repo, source->max_releases);
 
-	/* GitHub API requires Accept header — AT+HTTPCLIENT adds it automatically */
 	status = http_get(url, s_api_buf, sizeof(s_api_buf), 30);
+	if (out_status) *out_status = status;
 	if (status != HTTP_OK)
 		return 0;
 
@@ -282,7 +283,10 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 	const char *p = s_api_buf;
 	while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
 	if (*p != '[')
+	{
+		if (out_status) *out_status = HTTP_ERR_PARSE_FAIL;
 		return 0;
+	}
 	p++;
 
 	/* Iterate over release objects in the array */
@@ -347,7 +351,8 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 	return count;
 }
 
-uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases)
+uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases,
+                                  http_status_t *out_status)
 {
 	if (!source || !releases)
 		return 0;
@@ -357,7 +362,7 @@ uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releas
 	switch (source->type)
 	{
 		case FW_SOURCE_GITHUB_RELEASE:
-			return github_fetch_releases(source, releases);
+			return github_fetch_releases(source, releases, out_status);
 
 		default:
 			return 0;

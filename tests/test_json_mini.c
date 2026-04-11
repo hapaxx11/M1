@@ -22,6 +22,8 @@
 #include "unity.h"
 #include "m1_json_mini.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -323,6 +325,181 @@ void test_json_github_release_payload(void)
 }
 
 /* ===================================================================
+ * Truncated response — buffer filled mid-release object
+ * Verifies json_object_end returns NULL for incomplete objects,
+ * preventing partial data from being misinterpreted as valid.
+ * =================================================================== */
+
+void test_json_truncated_release_object(void)
+{
+	/* Complete first release + truncated second release */
+	const char *payload =
+		"[{\"tag_name\":\"v0.9.0.5\","
+		"\"assets\":[{\"name\":\"fw.bin\","
+		"\"browser_download_url\":\"https://example.com/fw.bin\","
+		"\"size\":100}]},"
+		"{\"tag_name\":\"v0.9.0.4\","
+		"\"assets\":[{\"name\":\"fw2.b";  /* truncated! */
+
+	const char *p = payload;
+	while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+	TEST_ASSERT_EQUAL_CHAR('[', *p);
+	p++; /* past '[' */
+
+	/* First object should be complete */
+	TEST_ASSERT_EQUAL_CHAR('{', *p);
+	const char *obj_end = json_object_end(p);
+	TEST_ASSERT_NOT_NULL(obj_end);
+
+	/* Can parse tag_name from first object */
+	char buf[64];
+	TEST_ASSERT_TRUE(json_get_string(p, "tag_name", buf, sizeof(buf)));
+	TEST_ASSERT_EQUAL_STRING("v0.9.0.5", buf);
+
+	/* Move past first object to second */
+	p = obj_end;
+	while (*p == ',' || *p == ' ' || *p == '\r' || *p == '\n') p++;
+
+	/* Second object is truncated — json_object_end must return NULL */
+	TEST_ASSERT_EQUAL_CHAR('{', *p);
+	obj_end = json_object_end(p);
+	TEST_ASSERT_NULL(obj_end); /* incomplete object — correctly detected */
+}
+
+/* ===================================================================
+ * Chunked transfer encoding decoder
+ *
+ * Mirrors decode_chunked_body() in m1_http_client.c.
+ * Extracted here for host-side testing (the full HTTP client has
+ * hardware dependencies that prevent host compilation).
+ * =================================================================== */
+
+static uint16_t decode_chunked_body(char *body, uint16_t body_len)
+{
+	char *src = body;
+	char *dst = body;
+	char *end = body + body_len;
+
+	while (src < end)
+	{
+		while (src < end && (*src == '\r' || *src == '\n'))
+			src++;
+		if (src >= end)
+			break;
+
+		char *size_end = NULL;
+		unsigned long chunk_size = strtoul(src, &size_end, 16);
+		if (size_end == src)
+			break;
+
+		/* Skip any optional chunk extensions up to the line ending */
+		src = size_end;
+		while (src < end && *src != '\r' && *src != '\n')
+			src++;
+		if (src >= end)
+			break;
+
+		/* Consume the chunk-size line ending */
+		if (*src == '\r')
+		{
+			src++;
+			if (src < end && *src == '\n')
+				src++;
+		}
+		else if (*src == '\n')
+		{
+			src++;
+		}
+		if (src >= end)
+			break;
+
+		/* Terminal chunk (size 0) — we're done */
+		if (chunk_size == 0)
+			break;
+
+		uint16_t avail = (uint16_t)(end - src);
+		if (chunk_size > avail)
+			chunk_size = avail;
+
+		memmove(dst, src, chunk_size);
+		dst += chunk_size;
+		src += chunk_size;
+	}
+
+	*dst = '\0';
+	return (uint16_t)(dst - body);
+}
+
+/* ===================================================================
+ * Chunked decoder tests
+ * =================================================================== */
+
+void test_chunked_decode_single_chunk(void)
+{
+	/* "d\r\nHello, World!\r\n0\r\n\r\n" */
+	char body[] = "d\r\nHello, World!\r\n0\r\n\r\n";
+	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
+	TEST_ASSERT_EQUAL_UINT16(13, len);
+	TEST_ASSERT_EQUAL_STRING("Hello, World!", body);
+}
+
+void test_chunked_decode_multiple_chunks(void)
+{
+	/* Two chunks: "Hello" (5 bytes) + ", World!" (8 bytes) */
+	char body[] = "5\r\nHello\r\n8\r\n, World!\r\n0\r\n\r\n";
+	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
+	TEST_ASSERT_EQUAL_UINT16(13, len);
+	TEST_ASSERT_EQUAL_STRING("Hello, World!", body);
+}
+
+void test_chunked_decode_json_array(void)
+{
+	/* Simulates a chunked GitHub API response with JSON array */
+	char body[512];
+	const char *chunk_data = "[{\"tag_name\":\"v1.0\"}]";
+	int chunk_len = (int)strlen(chunk_data);
+	/* Build chunked body: hex_size\r\ndata\r\n0\r\n\r\n */
+	snprintf(body, sizeof(body), "%x\r\n%s\r\n0\r\n\r\n", (unsigned)chunk_len, chunk_data);
+
+	uint16_t decoded_len = decode_chunked_body(body, (uint16_t)strlen(body));
+	TEST_ASSERT_EQUAL_UINT16((uint16_t)chunk_len, decoded_len);
+
+	/* Verify the JSON is now parseable */
+	TEST_ASSERT_EQUAL_CHAR('[', body[0]);
+	char buf[32];
+	TEST_ASSERT_TRUE(json_get_string(body + 1, "tag_name", buf, sizeof(buf)));
+	TEST_ASSERT_EQUAL_STRING("v1.0", buf);
+}
+
+void test_chunked_decode_truncated(void)
+{
+	/* Chunk header says 100 bytes but only 5 are present (buffer truncated) */
+	char body[] = "64\r\nHello";
+	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
+	/* Should decode whatever is available (5 bytes) */
+	TEST_ASSERT_EQUAL_UINT16(5, len);
+	TEST_ASSERT_EQUAL_STRING("Hello", body);
+}
+
+void test_chunked_decode_empty(void)
+{
+	/* Just the terminal chunk */
+	char body[] = "0\r\n\r\n";
+	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
+	TEST_ASSERT_EQUAL_UINT16(0, len);
+	TEST_ASSERT_EQUAL_CHAR('\0', body[0]);
+}
+
+void test_chunked_decode_with_extensions(void)
+{
+	/* Chunk with extension: "d;ext=value\r\nHello, World!\r\n0\r\n\r\n" */
+	char body[] = "d;ext=value\r\nHello, World!\r\n0\r\n\r\n";
+	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
+	TEST_ASSERT_EQUAL_UINT16(13, len);
+	TEST_ASSERT_EQUAL_STRING("Hello, World!", body);
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -370,6 +547,17 @@ int main(void)
 
 	/* Integration: GitHub API payload */
 	RUN_TEST(test_json_github_release_payload);
+
+	/* Truncated response handling */
+	RUN_TEST(test_json_truncated_release_object);
+
+	/* Chunked transfer encoding decoder */
+	RUN_TEST(test_chunked_decode_single_chunk);
+	RUN_TEST(test_chunked_decode_multiple_chunks);
+	RUN_TEST(test_chunked_decode_json_array);
+	RUN_TEST(test_chunked_decode_truncated);
+	RUN_TEST(test_chunked_decode_empty);
+	RUN_TEST(test_chunked_decode_with_extensions);
 
 	return UNITY_END();
 }

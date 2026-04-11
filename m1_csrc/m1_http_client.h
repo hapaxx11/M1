@@ -81,4 +81,11 @@ http_status_t http_download_to_file(const char *url, const char *sd_path,
  */
 bool http_is_ready(void);
 
+/*
+ * Return a human-readable error string for an http_status_t value.
+ * Returns NULL for HTTP_OK (no error) and unknown values.
+ * Useful for displaying error reasons in the UI.
+ */
+const char *http_status_str(http_status_t status);
+
 #endif /* M1_HTTP_CLIENT_H_ */
