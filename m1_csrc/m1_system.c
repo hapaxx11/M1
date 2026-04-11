@@ -826,7 +826,6 @@ static void startup_bu_registers_init(void)
  * This function displays the M1 welcome screen
 */
 /*============================================================================*/
-/*============================================================================*/
 /*
  * Draw a battery indicator icon with fill level and optional charging bolt.
  * Positioned at top-right corner of the display.
