@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Documentation: font inventory in CLAUDE.md** — Added a comprehensive font
+  inventory table listing all 22 u8g2 fonts compiled into the firmware, their
+  display-role macros, BadUSB API availability, ascent values, and lowercase
+  support.  Includes u8g2 suffix reference and font maintenance rules so future
+  agents keep the table current when fonts are added, removed, or reassigned.
+
 - **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
   Added per-file `COMPILE_OPTIONS` in `cmake/m1_01/CMakeLists.txt` to silence
   the harmless ISO C99 portability warning on `u8g2_fonts.c`.
