@@ -25,6 +25,7 @@
 //#include "u8x8.h"
 //#include "U8g2lib.h"
 #include "m1_compile_cfg.h"
+#include "m1_system.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -225,7 +226,6 @@ void m1_lcd_set_southpaw(uint8_t enable)
 /*============================================================================*/
 void m1_lcd_set_dark_mode(uint8_t enable)
 {
-    extern uint8_t m1_dark_mode;
     m1_dark_mode = enable ? 1 : 0;
 }
 
@@ -252,7 +252,6 @@ uint8_t m1_u8g2_nextpage(void)
 	/* Dark mode: XOR the entire frame buffer before sending so that all
 	 * content (text, XBMs, draw primitives) appears inverted on the LCD.
 	 * This also ensures RPC screen streaming sees the inverted image. */
-	extern uint8_t m1_dark_mode;
 	if (m1_dark_mode)
 	{
 		uint8_t *buf = u8g2_GetBufferPtr(&m1_u8g2);
