@@ -324,7 +324,7 @@ static size_t build_google_adv(uint8_t *buf)
     return i; /* 17 */
 }
 
-/* --- Samsung EasySetup: Buds (31-byte packet) --- */
+/* --- Samsung EasySetup: Buds (28-byte packet) --- */
 static size_t build_samsung_buds_adv(uint8_t *buf)
 {
     uint32_t model = samsung_buds_models[spam_rand(SAMSUNG_BUDS_COUNT)];
