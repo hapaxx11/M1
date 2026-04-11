@@ -179,3 +179,45 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_history PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_history COMMAND test_subghz_history)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_key_encoder (KEY→RAW OOK PWM encoding)
+# Extracted from sub_ghz_replay_flipper_file() — pure math + registry
+# lookup.  Tests timing resolution, bit encoding, repetitions, and
+# rejection of dynamic/weather/TPMS protocols.
+# ------------------------------------------------------------------
+add_executable(test_subghz_key_encoder
+    test_subghz_key_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${STUBS_DIR}/subghz_decode_stubs.c
+)
+target_include_directories(test_subghz_key_encoder PRIVATE
+    ${STUBS_DIR}            # HAL stubs
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_key_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_key_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_key_encoder COMMAND test_subghz_key_encoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_raw_line_parser (RAW_Data line parsing)
+# Extracted from sub_ghz_replay_flipper_file() — handles signed→absolute
+# conversion, zero skipping, and cross-buffer leftover digit recombination.
+# Pure string parsing, zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_raw_line_parser
+    test_subghz_raw_line_parser.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_line_parser.c
+)
+target_include_directories(test_subghz_raw_line_parser PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_line_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_line_parser PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_line_parser COMMAND test_subghz_raw_line_parser)
