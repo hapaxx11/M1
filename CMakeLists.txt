@@ -20,9 +20,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-# Derive the Hapax revision from the version defines in m1_fw_update_bl.h at
-# configure time.  Only the four #define values in that header need updating —
-# CMakeLists.txt never needs to be touched for a version bump.
+# Derive the project name and Hapax revision from the version defines in
+# m1_fw_update_bl.h at configure time. Only the four #define values in that
+# header need updating — CMakeLists.txt never needs to be touched for a version bump.
 file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_major REGEX "#define FW_VERSION_MAJOR")
 file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_minor REGEX "#define FW_VERSION_MINOR")
 file(STRINGS "m1_csrc/m1_fw_update_bl.h" _ver_build REGEX "#define FW_VERSION_BUILD")
@@ -32,10 +32,8 @@ string(REGEX MATCH "[0-9]+" FW_VERSION_MINOR "${_ver_minor}")
 string(REGEX MATCH "[0-9]+" FW_VERSION_BUILD "${_ver_build}")
 string(REGEX MATCH "[0-9]+" FW_VERSION_RC    "${_ver_rc}")
 
-# Project name — all output filenames (ELF, BIN, HEX, wCRC) derive from this.
-# Version numbers are embedded in the firmware binary via m1_fw_update_bl.h defines,
-# NOT via the filename.
-set(CMAKE_PROJECT_NAME "M1_Hapax")
+# M1_Hapax_v{MAJOR}.{MINOR}.{BUILD}.{RC} — all output filenames derive from this.
+set(CMAKE_PROJECT_NAME "M1_Hapax_v${FW_VERSION_MAJOR}.${FW_VERSION_MINOR}.${FW_VERSION_BUILD}.${FW_VERSION_RC}")
 
 # Must equal FW_VERSION_RC. Used by append_crc32.py --hapax-revision to inject
 # Hapax metadata into the SD image.
@@ -146,8 +144,7 @@ add_custom_command(
 )
 
 # Command to inject CRC32 + Hapax metadata into the .bin file
-# Output: ${CMAKE_PROJECT_NAME}_wCRC.bin  (e.g. M1_Hapax_wCRC.bin)
-# Version numbers are embedded inside the binary, not in the filename.
+# Output: ${CMAKE_PROJECT_NAME}_wCRC.bin  (version derived from m1_fw_update_bl.h)
 add_custom_command(
     TARGET ${CMAKE_PROJECT_NAME}
     POST_BUILD

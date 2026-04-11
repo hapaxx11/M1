@@ -11,11 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Build output filenames simplified** — `CMAKE_PROJECT_NAME` changed from
-  `M1_Hapax_v{MAJOR}.{MINOR}.{BUILD}.{RC}` to plain `M1_Hapax`.  Build
-  outputs are now `M1_Hapax.elf`, `M1_Hapax.bin`, `M1_Hapax.hex`, and
-  `M1_Hapax_wCRC.bin`.  Version numbers remain embedded in the firmware
-  binary via `m1_fw_update_bl.h` defines — only the filenames changed.
+- **Documentation: removed hardcoded version from build examples** — replaced
+  stale `M1_Hapax_v0.9.0.1` references in CLAUDE.md, README.md, and
+  DEVELOPMENT.md with `M1_Hapax_v<VERSION>` placeholders.  The build system
+  is unchanged — `CMAKE_PROJECT_NAME` still derives the version dynamically
+  from `m1_fw_update_bl.h`.
 
 ### Added
 

@@ -226,14 +226,13 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 # Post-build: inject CRC and Hapax metadata
-python tools/append_crc32.py build/M1_Hapax.bin \
-    --output build/M1_Hapax_wCRC.bin \
+python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin \
+    --output build/M1_Hapax_v<VERSION>_wCRC.bin \
     --hapax-revision 1 --verbose
 ```
 
-The `--hapax-revision` flag is **required** — without it, the dual-boot bank screen will
-not display the Hapax revision number or build date. CI auto-increments the revision;
-local builds default to revision 1.
+Replace `<VERSION>` with the version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
+CMake's post-build step runs this automatically.
 
 ### Build with STM32CubeIDE
 

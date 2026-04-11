@@ -26,13 +26,15 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 # Post-build: inject CRC and Hapax metadata (required for SD card flashing)
-python tools/append_crc32.py build/M1_Hapax.bin \
-    --output build/M1_Hapax_wCRC.bin \
+python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin \
+    --output build/M1_Hapax_v<VERSION>_wCRC.bin \
     --hapax-revision 1 --verbose
 ```
 
-The `--hapax-revision` flag is **mandatory** — without it, the dual-boot bank screen will
-not show the Hapax revision or build date. CI auto-increments the revision on each merge.
+Replace `<VERSION>` with the version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
+CMake's post-build step runs this automatically.  The `--hapax-revision` flag is
+**mandatory** — without it, the dual-boot bank screen will not show the Hapax revision
+or build date. CI auto-increments the revision on each merge.
 
 See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord setup.
 
@@ -40,10 +42,10 @@ See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord 
 
 | File | Description |
 |------|-------------|
-| `M1_Hapax.elf` | ELF with debug symbols |
-| `M1_Hapax.bin` | Raw binary |
-| `M1_Hapax.hex` | Intel HEX |
-| `M1_Hapax_wCRC.bin` | Binary with CRC + Hapax metadata (for SD card / OTA) |
+| `M1_Hapax_v{ver}.elf` | ELF with debug symbols |
+| `M1_Hapax_v{ver}.bin` | Raw binary |
+| `M1_Hapax_v{ver}.hex` | Intel HEX |
+| `M1_Hapax_v{ver}_wCRC.bin` | Binary with CRC + Hapax metadata (for SD card / OTA) |
 
 ## Coding Standards
 
