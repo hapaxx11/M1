@@ -875,7 +875,7 @@ static void splash_draw_battery_indicator(void)
 	if (fill_w > 0)
 		u8g2_DrawBox(&m1_u8g2, batt_x + 2, batt_y + 2, fill_w, BATT_BODY_H - 4);
 
-	/* Charging bolt overlay (drawn when pre-charging or fast charging) */
+	/* Charging bolt overlay (stat: 0=none, 1=pre-charge, 2=fast charge, 3=done) */
 	if (pwr.stat == 1 || pwr.stat == 2)
 	{
 		/* Small 5-pixel lightning bolt centered in the battery body */
@@ -896,7 +896,7 @@ static void splash_draw_battery_indicator(void)
 	}
 
 	/* Percentage text to the left of the battery icon */
-	sprintf(pct_str, "%u%%", level);
+	snprintf(pct_str, sizeof(pct_str), "%u%%", level);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	uint8_t txt_w = u8g2_GetStrWidth(&m1_u8g2, pct_str);
 	u8g2_DrawStr(&m1_u8g2, batt_x - txt_w - 2, batt_y + BATT_BODY_H - 1, pct_str);
