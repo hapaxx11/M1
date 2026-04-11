@@ -289,8 +289,8 @@ void cmd_m1_mtest_basic_system(char *pconsole, char *input_params[], uint8_t n_p
     			strcpy(pconsole, "Error: missing parameter(s)!\r\n");
     			break;
     		}
-    		u8g2_FirstPage(&m1_u8g2);
-    		u8g2_NextPage(&m1_u8g2);
+    		m1_u8g2_firstpage();
+    		m1_u8g2_nextpage();
     		break;
 
     	default:

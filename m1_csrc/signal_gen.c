@@ -82,7 +82,7 @@ void signal_gen_run(void)
             snprintf(info_str, sizeof(info_str), "Output: %s",
                      output_on ? "ON" : "OFF");
 
-            u8g2_FirstPage(&m1_u8g2);
+            m1_u8g2_firstpage();
             do {
                 u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
                 u8g2_DrawStr(&m1_u8g2, 2, 10, "Signal Generator");
@@ -111,7 +111,7 @@ void signal_gen_run(void)
                 u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
                 u8g2_DrawStr(&m1_u8g2, 2, 54, "UP/DN:Freq  OK:Toggle");
                 u8g2_DrawStr(&m1_u8g2, 2, 64, "BACK to exit");
-            } while (u8g2_NextPage(&m1_u8g2));
+            } while (m1_u8g2_nextpage());
         }
 
         /* Wait for button (100 ms timeout so display stays fresh) */

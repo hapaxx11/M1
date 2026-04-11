@@ -136,7 +136,7 @@ void storage_about(void)
     		about_ok = false;
     }
     /* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
     if ( about_ok )
     {
     	; //
@@ -520,7 +520,7 @@ void storage_mount(void)
 
     mount_ok = m1_sdcard_get_status();
     /* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
     if ( mount_ok!=SD_access_NotReady && mount_ok!=SD_access_OK && mount_ok!=SD_access_NoFS )
     {
     	mount_ok = true;
@@ -581,7 +581,7 @@ void storage_mount(void)
 				{
 					if ( mount_ok )
 					{
-						u8g2_FirstPage(&m1_u8g2); // Clear screen
+						m1_u8g2_firstpage(); // Clear screen
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 						u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 						u8g2_DrawStr(&m1_u8g2, 30, 10, "Mounting...");
@@ -644,7 +644,7 @@ void storage_unmount(void)
 	else
 		unmount_ok = false;
     /* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
     if ( unmount_ok )
     {
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -703,7 +703,7 @@ void storage_unmount(void)
 				{
 					if ( unmount_ok )
 					{
-						u8g2_FirstPage(&m1_u8g2); // Clear screen
+						m1_u8g2_firstpage(); // Clear screen
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 						u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 						u8g2_DrawStr(&m1_u8g2, 30, 10, "Unmounting...");
@@ -851,7 +851,7 @@ void storage_format(void)
 
     format_ok = false;
     /* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
     if ( m1_sdcard_get_status()!=SD_access_NotReady )
     {
     	format_ok = true;
@@ -914,7 +914,7 @@ void storage_format(void)
 						format_ok = false;
 					if ( format_ok )
 					{
-						u8g2_FirstPage(&m1_u8g2); // Clear screen
+						m1_u8g2_firstpage(); // Clear screen
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 						u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 						u8g2_DrawStr(&m1_u8g2, 30, 10, "Formatting...");
@@ -938,7 +938,7 @@ void storage_format(void)
 					} // if ( format_ok )
 					else
 					{
-						u8g2_FirstPage(&m1_u8g2);
+						m1_u8g2_firstpage();
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 						u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
 						m1_u8g2_nextpage(); // Update display RAM

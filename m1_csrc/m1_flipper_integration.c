@@ -84,12 +84,12 @@ static bool flipper_ensure_dir(const char *path);
 /*============================================================================*/
 static void flipper_show_status(const char *line1, const char *line2)
 {
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
     do {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         if (line1) u8g2_DrawStr(&m1_u8g2, 2, 12, line1);
         if (line2) u8g2_DrawStr(&m1_u8g2, 2, 28, line2);
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 }
 
 /*============================================================================*/
@@ -99,13 +99,13 @@ static void flipper_show_status(const char *line1, const char *line2)
 /*============================================================================*/
 static void flipper_show_result(const char *msg, bool success)
 {
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
     do {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 12, success ? "Success" : "Failed");
         if (msg) u8g2_DrawStr(&m1_u8g2, 2, 28, msg);
         u8g2_DrawStr(&m1_u8g2, 2, FLIPPER_STATUS_LINE_Y, "Press BACK to exit");
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 }
 
 /*============================================================================*/
@@ -376,14 +376,14 @@ void nfc_import_flipper(void)
         }
         snprintf(info_str, sizeof(info_str), "UID: %s", uid_str);
 
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 12, saved ? "NFC Saved" : "NFC Save Failed");
             u8g2_DrawStr(&m1_u8g2, 2, 28, info_str);
             u8g2_DrawStr(&m1_u8g2, 2, 44, fno.fname);
             u8g2_DrawStr(&m1_u8g2, 2, FLIPPER_STATUS_LINE_Y, "Press BACK to exit");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
     }
 
     flipper_wait_for_back();
@@ -496,14 +496,14 @@ void rfid_import_flipper(void)
         }
         snprintf(info_str, sizeof(info_str), "Data: %s", data_str);
 
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 12, saved ? "RFID Saved" : "RFID Save Failed");
             u8g2_DrawStr(&m1_u8g2, 2, 28, info_str);
             u8g2_DrawStr(&m1_u8g2, 2, 44, fno.fname);
             u8g2_DrawStr(&m1_u8g2, 2, FLIPPER_STATUS_LINE_Y, "Press BACK to exit");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
     }
 
     flipper_wait_for_back();
