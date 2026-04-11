@@ -41,12 +41,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recombination when `f_gets` truncates long lines mid-number.  16 unit tests in
   `tests/test_subghz_raw_line_parser.c`.
 
+- **SubGhz offline RAW decoder module** (`Sub_Ghz/subghz_raw_decoder.c/h`) — extracted
+  the RAW→protocol offline decode engine from `m1_subghz_scene_saved.c::do_decode_raw()`.
+  Reconstructs pulse packets from raw timing data using inter-packet gap detection, then
+  tries protocol decoders via a callback interface (decoupled from hardware globals).
+  Handles noise filtering, pulse overflow, deduplication, zero-key rejection, and trailing
+  packets without a final gap.  20 unit tests in `tests/test_subghz_raw_decoder.c`.
+
+- **SubGhz playlist path remapper** (`Sub_Ghz/subghz_playlist_parser.c/h`) — extracted
+  the Flipper→M1 path remapping utility from `m1_subghz_scene_playlist.c`.  Converts
+  Flipper-style paths (`/ext/subghz/...`) to M1 convention (`/SUBGHZ/...`).
+  10 unit tests in `tests/test_subghz_playlist_parser.c`.
+
 ### Changed
 
 - **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
   line parsing are now delegated to the extracted `subghz_key_encoder` and
   `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
   the refactored code produces identical output for all supported file formats.
+
+- **Refactored `do_decode_raw()` in Saved scene** — offline RAW decode logic is
+  now delegated to the extracted `subghz_raw_decoder` module via callback interface.
+  The scene provides a thin adapter that bridges to the global decoder state.
+
+- **Refactored `remap_flipper_path()` in Playlist scene** — path remapping logic
+  is now delegated to `subghz_remap_flipper_path()` in the extracted
+  `subghz_playlist_parser` module.
 
 - **Battery indicator on splash screen** — The boot/welcome screen now shows a
   battery icon in the top-right corner with charge percentage and fill level.

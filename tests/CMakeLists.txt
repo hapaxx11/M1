@@ -221,3 +221,41 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_raw_line_parser PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_raw_line_parser COMMAND test_subghz_raw_line_parser)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_raw_decoder (offline RAW→protocol decode)
+# Extracted from m1_subghz_scene_saved.c::do_decode_raw() — reconstructs
+# pulse packets from raw timing data using gap detection, then tries
+# protocol decoders via callback.  Pure logic, zero hardware deps.
+# ------------------------------------------------------------------
+add_executable(test_subghz_raw_decoder
+    test_subghz_raw_decoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_decoder.c
+)
+target_include_directories(test_subghz_raw_decoder PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_decoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_decoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_decoder COMMAND test_subghz_raw_decoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_playlist_parser (Flipper→M1 path remapping)
+# Extracted from m1_subghz_scene_playlist.c — converts Flipper-style
+# paths (/ext/subghz/...) to M1 convention (/SUBGHZ/...).
+# Pure string manipulation, zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_playlist_parser
+    test_subghz_playlist_parser.c
+    ${M1_ROOT}/Sub_Ghz/subghz_playlist_parser.c
+)
+target_include_directories(test_subghz_playlist_parser PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_playlist_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_playlist_parser PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_playlist_parser COMMAND test_subghz_playlist_parser)
