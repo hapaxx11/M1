@@ -308,3 +308,59 @@ jobs:
             | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
             > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
+
+  # ====================================================================== #
+  # Stamp CHANGELOG.md — replace [Unreleased] with the release version
+  # ====================================================================== #
+  update-changelog:
+    name: Stamp changelog
+    needs: [build, release]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Replace [Unreleased] with version heading
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          DATE="$(date -u +%Y-%m-%d)"
+          echo "Stamping CHANGELOG.md: [Unreleased] → [${VERSION}] - ${DATE}"
+
+          python3 - "$VERSION" "$DATE" <<'PYEOF'
+          import sys, pathlib
+
+          version, date = sys.argv[1], sys.argv[2]
+          cl = pathlib.Path("CHANGELOG.md")
+          text = cl.read_text()
+
+          old = "## [Unreleased]"
+          if old not in text:
+              print("No [Unreleased] section found — nothing to do.")
+              sys.exit(0)
+
+          new = f"## [Unreleased]\n\n## [{version}] - {date}"
+          text = text.replace(old, new, 1)
+          cl.write_text(text)
+          print(f"Replaced with: ## [{version}] - {date}")
+          PYEOF
+
+          echo "--- First 15 lines of CHANGELOG.md ---"
+          head -15 CHANGELOG.md
+
+      - name: Commit and push changelog update
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No changelog changes to commit."
+            exit 0
+          fi
+          git commit -m "changelog: stamp [Unreleased] as ${{ needs.build.outputs.tag }} [skip ci]"
+          git push origin main
