@@ -845,8 +845,7 @@ static void splash_draw_battery_indicator(void)
 	S_M1_Power_Status_t pwr;
 	char pct_str[8];
 
-	/* Read fresh battery data (may be first read after init) */
-	battery_status_update();
+	/* Use cached battery data to avoid blocking splash rendering on I2C/ADC work. */
 	battery_power_status_get(&pwr);
 
 	uint8_t level = pwr.battery_level;
