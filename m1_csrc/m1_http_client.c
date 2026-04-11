@@ -186,6 +186,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	         "Host: %s\r\n"
 	         "User-Agent: M1-Hapax/1.0\r\n"
 	         "Accept: application/json\r\n"
+	         "Connection: close\r\n"
 	         "\r\n",
 	         path, host);
 
@@ -673,6 +674,7 @@ retry_with_redirect:
 	         "Host: %s\r\n"
 	         "User-Agent: M1-Hapax/1.0\r\n"
 	         "Accept: */*\r\n"
+	         "Connection: close\r\n"
 	         "\r\n",
 	         path, host);
 
