@@ -239,7 +239,9 @@ static void parse_stascan(const char *line)
 
     const char *p = strstr(line, "+STASCAN:");
     if (!p) return;
-    p += 11; /* skip "+STASCAN:(\"" */
+    p = strchr(p + 9, '"'); /* find opening " of mac after +STASCAN:( */
+    if (!p) return;
+    p++; /* skip the opening " */
 
     const char *delim = strchr(p, '"');
     if (!delim) return;
