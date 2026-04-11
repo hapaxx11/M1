@@ -587,6 +587,14 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_fw_download.c
 )
 
+# Suppress -Woverlength-strings for vendored u8g2 font data (string literals
+# exceed the 4095-char minimum guaranteed by ISO C99, but ARM GCC handles them
+# correctly — this is a portability advisory, not a bug).
+set_source_files_properties(
+    ../../Drivers/u8g2_csrc/u8g2_fonts.c
+    PROPERTIES COMPILE_OPTIONS -Wno-overlength-strings
+)
+
 target_link_directories(m1_01 INTERFACE
 )
 

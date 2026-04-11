@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
+  Added per-file `COMPILE_OPTIONS` in `cmake/m1_01/CMakeLists.txt` to silence
+  the harmless ISO C99 portability warning on `u8g2_fonts.c`.
+
 - **CI: automatic changelog version stamping** — The `build-release.yml`
   workflow now automatically replaces `## [Unreleased]` in `CHANGELOG.md`
   with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
