@@ -544,6 +544,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_watchdog.c
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
+    ../../m1_csrc/m1_deauth.c
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
     # === Enhanced firmware: Flipper file format parsers (Phase 2) ===
@@ -585,6 +586,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_http_client.c
     ../../m1_csrc/m1_fw_source.c
     ../../m1_csrc/m1_fw_download.c
+    ../../m1_csrc/m1_esp32_fw_download.c
 )
 
 # Suppress -Woverlength-strings for vendored u8g2 font data (string literals

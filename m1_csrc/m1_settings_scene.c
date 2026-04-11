@@ -19,6 +19,7 @@
 #include "m1_fw_update.h"
 #include "m1_esp32_fw_update.h"
 #include "m1_fw_download.h"
+#include "m1_esp32_fw_download.h"
 
 /*==========================================================================*/
 /* Scene IDs                                                                */
@@ -46,6 +47,7 @@ enum {
     SettingsSceneEsp32Image,
     SettingsSceneEsp32Address,
     SettingsSceneEsp32Update,
+    SettingsSceneEsp32Download,
     SettingsSceneAbout,
     SettingsSceneCount
 };
@@ -227,6 +229,16 @@ static void esp32_update_on_enter(M1SceneApp *app)
 static const M1SceneHandlers esp32_image_handlers  = { .on_enter = esp32_image_on_enter  };
 static const M1SceneHandlers esp32_addr_handlers   = { .on_enter = esp32_addr_on_enter   };
 static const M1SceneHandlers esp32_update_handlers = { .on_enter = esp32_update_on_enter };
+
+static void esp32_download_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    esp32_fw_download_start();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static const M1SceneHandlers esp32_download_handlers = { .on_enter = esp32_download_on_enter };
 
 /*==========================================================================*/
 /* Top-level Settings menu scene                                            */
@@ -453,19 +465,21 @@ static const M1SceneHandlers fw_menu_handlers = {
 /* ESP32 Update sub-menu scene                                              */
 /*==========================================================================*/
 
-#define ESP32_ITEM_COUNT  3
-#define ESP32_VISIBLE     3
+#define ESP32_ITEM_COUNT  4
+#define ESP32_VISIBLE     4
 
 static const char *const esp32_labels[ESP32_ITEM_COUNT] = {
     "Image File",
     "Start Address",
     "Firmware Update",
+    "Download",
 };
 
 static const uint8_t esp32_targets[ESP32_ITEM_COUNT] = {
     SettingsSceneEsp32Image,
     SettingsSceneEsp32Address,
     SettingsSceneEsp32Update,
+    SettingsSceneEsp32Download,
 };
 
 static uint8_t esp32_sel    = 0;
@@ -541,6 +555,7 @@ static const M1SceneHandlers *const scene_registry[SettingsSceneCount] = {
     [SettingsSceneEsp32Image]       = &esp32_image_handlers,
     [SettingsSceneEsp32Address]     = &esp32_addr_handlers,
     [SettingsSceneEsp32Update]      = &esp32_update_handlers,
+    [SettingsSceneEsp32Download]    = &esp32_download_handlers,
 };
 
 /*==========================================================================*/
