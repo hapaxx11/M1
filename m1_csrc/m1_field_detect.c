@@ -378,13 +378,13 @@ void nfc_rfid_detect_run(void)
     nfc_ok = (rc == 0);
 
     /* Initial "Listening…" screen */
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
     do {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 12, "Field Detect");
         u8g2_DrawStr(&m1_u8g2, 2, 28, "Initialising...");
         u8g2_DrawStr(&m1_u8g2, 2, 56, "BACK to exit");
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 
     while (running)
     {
@@ -407,7 +407,7 @@ void nfc_rfid_detect_run(void)
             snprintf(rfid_str, sizeof(rfid_str), "none");
 
         /* Render display */
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 10, "Field Detect");
@@ -435,7 +435,7 @@ void nfc_rfid_detect_run(void)
                 u8g2_DrawBox(&m1_u8g2, 3, 49, 122, 4);
 
             u8g2_DrawStr(&m1_u8g2, 2, 63, "BACK to exit");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         /* Check for BACK button (non-blocking: poll already took ~50ms in NFC) */
         ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));

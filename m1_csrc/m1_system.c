@@ -909,7 +909,7 @@ void startup_info_screen_display(const char *scr_text)
 	u8g2_SetPowerSave(&m1_u8g2, false);
 
 	/* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X, M1_POWERUP_LOGO_TOP_POS_Y, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
 

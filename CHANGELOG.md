@@ -326,11 +326,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Dark mode not applied to main menu** — The main menu and generic submenu
-  renderer (`m1_gui_submenu_update()`) was calling stock `u8g2_FirstPage()`/
-  `u8g2_NextPage()` which bypass the dark mode XOR inversion in
-  `m1_u8g2_nextpage()`.  Replaced with the M1 wrapper functions so dark mode
-  now works on the main menu and all submenus rendered through this path.
+- **Dark mode: light pixel border eliminated** — Switched dark mode from
+  software framebuffer XOR to the ST7567 hardware inverse display command
+  (`0xA7`/`0xA6`).  The software XOR only inverted the 128×64 framebuffer
+  area, leaving unmapped LCD controller RAM pixels (the ST7567 has 132×65
+  RAM) in their default un-inverted state, creating a visible light border
+  around the screen.  The hardware command inverts ALL pixels on the panel,
+  eliminating the border completely.  RPC screen streaming continues to work
+  because `rpc_send_screen_frame()` independently XORs its own framebuffer
+  copy when `m1_dark_mode` is set.
+
+- **Dark mode not applied across all screens** — Replaced all remaining
+  stock `u8g2_FirstPage()`/`u8g2_NextPage()` calls with the M1 wrapper
+  functions `m1_u8g2_firstpage()`/`m1_u8g2_nextpage()` across 17 source
+  files (NFC, RFID, Sub-GHz, IR, GPIO, storage browser, power control,
+  signal generator, music player, field detect, flipper integration, CLI,
+  app manager, system splash, and display utilities).  These stock calls
+  bypassed the wrapper path, which handles RPC screen streaming
+  notifications.  With hardware LCD inversion now handling dark mode
+  visuals, dark mode renders correctly on every screen regardless of which
+  display path is used.
 
 - **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
   screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`

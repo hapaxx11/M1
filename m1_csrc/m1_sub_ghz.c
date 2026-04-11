@@ -818,7 +818,7 @@ static bool sub_ghz_custom_freq_entry(void)
 		         digits[0], digits[1], digits[2], digits[3],
 		         digits[4], digits[5], digits[6]);
 
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		do {
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 10, 12, "Enter Frequency (MHz)");
@@ -841,7 +841,7 @@ static bool sub_ghz_custom_freq_entry(void)
 			/* Controls hint */
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 0, 56, "\x18\x19:Digit L/R:Move OK:Set");
-		} while (u8g2_NextPage(&m1_u8g2));
+		} while (m1_u8g2_nextpage());
 
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
 		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
@@ -3613,7 +3613,7 @@ void sub_ghz_spectrum_analyzer(void)
         uint32_t hi_hz = lo_hz + (uint32_t)step * SPECTRUM_BAR_COUNT;
 
         /* Draw spectrum */
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
@@ -3659,7 +3659,7 @@ void sub_ghz_spectrum_analyzer(void)
             else
                 u8g2_DrawStr(&m1_u8g2, 0, 64, "\x18\x19:Zoom OK:Peak L/R:Band");
 
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         /* Check for button input (non-blocking with short timeout) */
         ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
@@ -3767,13 +3767,13 @@ void sub_ghz_weather_station(void)
     subghz_decenc_init();
 
     /* Initial display */
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
     do {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 12, "Weather Station");
         u8g2_DrawStr(&m1_u8g2, 2, 28, "Listening 433.92MHz...");
         u8g2_DrawStr(&m1_u8g2, 2, 56, "Press BACK to exit");
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 
     while (running)
     {
@@ -3799,7 +3799,7 @@ void sub_ghz_weather_station(void)
                          wx->battery_low ? "LOW" : "OK",
                          decoded_data.rssi);
 
-                u8g2_FirstPage(&m1_u8g2);
+                m1_u8g2_firstpage();
                 do {
                     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
                     u8g2_DrawStr(&m1_u8g2, 2, 12, "Weather Station");
@@ -3809,7 +3809,7 @@ void sub_ghz_weather_station(void)
                     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
                     u8g2_DrawStr(&m1_u8g2, 2, 50, line3);
                     u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
-                } while (u8g2_NextPage(&m1_u8g2));
+                } while (m1_u8g2_nextpage());
 
                 M1_LOG_I(M1_LOGDB_TAG, "WX: %s ch%d %d.%dC %d%% RSSI=%d\r\n",
                          protocol_text[decoded_data.protocol],
@@ -3900,7 +3900,7 @@ void sub_ghz_brute_force(void)
     /* Select protocol screen */
     while (running && state == 0)
     {
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 12, "Brute Force");
@@ -3912,7 +3912,7 @@ void sub_ghz_brute_force(void)
             u8g2_DrawStr(&m1_u8g2, 2, 40, line2);
             u8g2_DrawStr(&m1_u8g2, 2, 52, "UP/DN:Proto OK:Start");
             u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
         if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
@@ -3969,7 +3969,7 @@ void sub_ghz_brute_force(void)
         if ((code & 0x3F) == 0)
         {
             uint32_t pct = (code * 100) / (max_code + 1);
-            u8g2_FirstPage(&m1_u8g2);
+            m1_u8g2_firstpage();
             do {
                 u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
                 u8g2_DrawStr(&m1_u8g2, 2, 12, "Brute Force");
@@ -3982,7 +3982,7 @@ void sub_ghz_brute_force(void)
                 /* Progress bar */
                 u8g2_DrawFrame(&m1_u8g2, 2, 54, 124, 8);
                 u8g2_DrawBox(&m1_u8g2, 3, 55, (uint16_t)(pct * 122 / 100), 6);
-            } while (u8g2_NextPage(&m1_u8g2));
+            } while (m1_u8g2_nextpage());
 
             /* Check for BACK button (non-blocking) */
             ret = xQueueReceive(main_q_hdl, &q_item, 0);
@@ -4008,7 +4008,7 @@ void sub_ghz_brute_force(void)
 
     if (state == 2)
     {
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 12, "Brute Force");
@@ -4016,7 +4016,7 @@ void sub_ghz_brute_force(void)
             snprintf(line1, sizeof(line1), "%lu codes sent", max_code + 1);
             u8g2_DrawStr(&m1_u8g2, 2, 44, line1);
             u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         /* Wait for BACK */
         while (1)
@@ -4081,7 +4081,7 @@ void sub_ghz_rssi_meter(void)
         uint8_t peak_x = (uint8_t)(4 + ((peak_clamped + 120) * 120) / 90);
 
         /* Draw */
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
@@ -4119,7 +4119,7 @@ void sub_ghz_rssi_meter(void)
             /* Controls */
             u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Band OK:Reset \x18:Freq");
 
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         /* Check for button input */
         ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
@@ -4291,7 +4291,7 @@ void sub_ghz_freq_scanner(void)
         }
 
         /* Draw results */
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
@@ -4333,7 +4333,7 @@ void sub_ghz_freq_scanner(void)
             /* Bottom controls */
             u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Band OK:Clr \x18\x19:Scrl");
 
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         /* Check for button input */
         ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));

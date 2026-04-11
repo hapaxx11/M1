@@ -215,18 +215,26 @@ void m1_lcd_set_southpaw(uint8_t enable)
 
 /*============================================================================*/
 /**
-  * @brief  Enable or disable dark mode (software pixel inversion).
-  *         When enabled, m1_u8g2_nextpage() XORs the entire frame buffer
-  *         before sending, so all content (text, XBMs, draw primitives) is
-  *         inverted uniformly.  Software XOR is used instead of the ST7567
-  *         hardware 0xA7 command so that RPC screen streaming also reflects
-  *         the inverted image.
+  * @brief  Enable or disable dark mode (hardware LCD pixel inversion).
+  *         Uses the ST7567 hardware inverse display command (0xA7 / 0xA6)
+  *         so that ALL pixels on the panel are inverted, including any
+  *         controller RAM outside the 128×64 framebuffer area.  This
+  *         eliminates the light-pixel border that software-only XOR
+  *         leaves at the LCD edges.
+  *         RPC screen streaming independently applies XOR to its own
+  *         framebuffer copy (see rpc_send_screen_frame()), so the
+  *         desktop app still sees the correct inverted image.
   * @param  enable: 1=dark mode (inverted), 0=normal
   */
 /*============================================================================*/
 void m1_lcd_set_dark_mode(uint8_t enable)
 {
     m1_dark_mode = enable ? 1 : 0;
+
+    /* ST7567 commands: 0xA7 = Reverse display, 0xA6 = Normal display */
+    u8x8_cad_StartTransfer(&m1_u8g2.u8x8);
+    u8x8_cad_SendCmd(&m1_u8g2.u8x8, m1_dark_mode ? 0xA7 : 0xA6);
+    u8x8_cad_EndTransfer(&m1_u8g2.u8x8);
 }
 
 
@@ -249,37 +257,17 @@ void m1_u8g2_firstpage(void)
 /*============================================================================*/
 uint8_t m1_u8g2_nextpage(void)
 {
-	/* Dark mode: XOR the entire frame buffer before sending so that all
-	 * content (text, XBMs, draw primitives) appears inverted on the LCD.
-	 * After send, XOR again to restore the buffer to its normal
-	 * (un-inverted) state so that incremental drawing without a full
-	 * firstpage/clear operates on the correct pixel values.
-	 * RPC screen streaming handles inversion in its own copy path. */
-	uint8_t *buf = NULL;
-	uint16_t len = 0;
-
-	if (m1_dark_mode)
-	{
-		buf = u8g2_GetBufferPtr(&m1_u8g2);
-		len = (uint16_t)u8g2_GetBufferTileWidth(&m1_u8g2) * 8U
-		    * (uint16_t)u8g2_GetBufferTileHeight(&m1_u8g2);
-		for (uint16_t i = 0; i < len; i++)
-			buf[i] ^= 0xFF;
-	}
+	/* Dark mode is handled by the ST7567 hardware inverse display command
+	 * (0xA7), which inverts all pixels on the panel including any controller
+	 * RAM outside the framebuffer area.  No software XOR is needed here.
+	 * RPC screen streaming independently applies XOR to its own copy when
+	 * m1_dark_mode is set (see rpc_send_screen_frame()). */
 
 	u8g2_SendBuffer(&m1_u8g2);
 	u8x8_RefreshDisplay( u8g2_GetU8x8(&m1_u8g2) );
 
-	/* Restore buffer to un-inverted state */
-	if (m1_dark_mode)
-	{
-		for (uint16_t i = 0; i < len; i++)
-			buf[i] ^= 0xFF;
-	}
-
 #ifdef M1_APP_RPC_ENABLE
-	/* Notify the RPC task that a new frame is ready for streaming.
-	 * The RPC copy path applies dark-mode inversion to its own snapshot. */
+	/* Notify the RPC task that a new frame is ready for streaming. */
 	if (m1_rpc_screen_streaming_active())
 	{
 		m1_rpc_notify_screen_update();

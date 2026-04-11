@@ -478,7 +478,7 @@ static void nfc_read_gui_update(uint8_t param)
     nfc_uiview_gui_latest_param = param; // Update new param
 
     /* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 
     if( param==NFC_READ_DISPLAY_PARAM_READING_READY )	// reading
     {
@@ -1071,7 +1071,7 @@ static void nfc_emulate_gui_update(uint8_t param)
 		}
 		
 	    /* Graphic work starts here */
-	    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+	    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
 
@@ -1081,7 +1081,7 @@ static void nfc_emulate_gui_update(uint8_t param)
 		u8g2_DrawStr(&m1_u8g2, 50, 30, "Tag M1's Back");
 		u8g2_DrawStr(&m1_u8g2, 50, 40, "on the reader");
 
-		u8g2_NextPage(&m1_u8g2); // Update display RAM
+		m1_u8g2_nextpage(); // Update display RAM
     } // if ( param==0 )
 }
 
@@ -1147,7 +1147,7 @@ static void nfc_utils_write_uid_run(void)
 
 	if (!c || c->head.uid_len == 0)
 	{
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 		u8g2_DrawStr(&m1_u8g2, 4, 25, "No UID data");
@@ -1161,7 +1161,7 @@ static void nfc_utils_write_uid_run(void)
 	char uid_str[32];
 	snprintf(uid_str, sizeof(uid_str), "%s", hex2Str(c->head.uid, c->head.uid_len));
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write UID");
@@ -1191,7 +1191,7 @@ static void nfc_utils_write_uid_run(void)
 			if (!confirmed)
 			{
 				confirmed = 1;
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				u8g2_DrawStr(&m1_u8g2, 4, 25, "Writing UID...");
@@ -1205,7 +1205,7 @@ static void nfc_utils_write_uid_run(void)
 					err = rfalT2TPollerWrite(1, &c->head.uid[4]);
 				}
 
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				if (err == RFAL_ERR_NONE) {
@@ -1236,7 +1236,7 @@ static void nfc_utils_wipe_tag_run(void)
 	BaseType_t ret;
 	uint8_t confirmed = 0;
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 4, 12, "Wipe Tag");
@@ -1265,7 +1265,7 @@ static void nfc_utils_wipe_tag_run(void)
 			if (!confirmed)
 			{
 				confirmed = 1;
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				u8g2_DrawStr(&m1_u8g2, 4, 12, "Are you sure?");
@@ -1279,7 +1279,7 @@ static void nfc_utils_wipe_tag_run(void)
 			}
 			else
 			{
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				u8g2_DrawStr(&m1_u8g2, 4, 25, "Wiping...");
@@ -1301,7 +1301,7 @@ static void nfc_utils_wipe_tag_run(void)
 					m1_wdt_reset();
 				}
 
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				if (err == RFAL_ERR_NONE) {
@@ -1368,7 +1368,7 @@ static int nfc_utils_kp_handler(void)
 								if (info_pg == 0)
 								{
 									char line[40];
-									u8g2_FirstPage(&m1_u8g2);
+									m1_u8g2_firstpage();
 									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 									u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 									u8g2_DrawStr(&m1_u8g2, 2, 10, c->ui.title_text);
@@ -1401,7 +1401,7 @@ static int nfc_utils_kp_handler(void)
 									uint16_t total = nfc_ctx_get_t2t_page_count();
 									char line[32], header[32];
 									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-									u8g2_FirstPage(&m1_u8g2);
+									m1_u8g2_firstpage();
 									u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 									if (total == 0) {
 										u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -1476,7 +1476,7 @@ static int nfc_utils_kp_handler(void)
 						         c->dump.has_dump && c->dump.data && c->dump.unit_size == 16 && c->dump.unit_count > 0)
 							et = "Emulate";
 
-						u8g2_FirstPage(&m1_u8g2);
+						m1_u8g2_firstpage();
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 						u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
 						u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -1905,7 +1905,7 @@ static void nfc_info_drawing(void)
     }
 
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_FirstPage(&m1_u8g2); 
+    m1_u8g2_firstpage(); 
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
     u8g2_DrawStr(&m1_u8g2, 2, 12, type_str);
@@ -1986,7 +1986,7 @@ void m1_nfc_info_more_draw(void)
     }
 
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
 
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
@@ -2108,7 +2108,7 @@ static void nfc_fuzz_draw_setup(uint8_t prof_sel, const uint8_t *uid, uint8_t ui
                                 int8_t dir, uint16_t delay_ms)
 {
 	char line[32];
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 2, 10, "NFC Fuzzer Setup");
@@ -2138,7 +2138,7 @@ static void nfc_fuzz_draw_running(uint8_t prof_sel, const uint8_t *uid, uint8_t 
                                   uint32_t count)
 {
 	char line[32];
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 2, 10, "NFC Fuzzer");
@@ -2180,7 +2180,7 @@ static void nfc_tool_tag_info(void)
 	BaseType_t ret;
 
 	/* Show "Place card" screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2242,7 +2242,7 @@ static void nfc_tool_tag_info(void)
 			{
 				/* Page 0: Summary info */
 				char line[40];
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				u8g2_DrawStr(&m1_u8g2, 2, 10, c->ui.title_text);
@@ -2285,7 +2285,7 @@ static void nfc_tool_tag_info(void)
 				char header[32];
 
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 
 				if (total == 0)
@@ -2396,7 +2396,7 @@ static void nfc_tool_clone_emu(void)
 	BaseType_t ret;
 
 	/* Show "Place source card" screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2465,7 +2465,7 @@ static void nfc_tool_clone_emu(void)
 		emu_text = "Emulate";
 	}
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2687,7 +2687,7 @@ static void nfc_tool_unlock_read(void)
 	nfc_ctx_set_manual_pwd(pwd_bytes);
 
 	/* Show "Place card" screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2723,7 +2723,7 @@ static void nfc_tool_unlock_read(void)
 			nfc_run_ctx_t *c = nfc_ctx_get();
 			if (c && c->head.uid_len > 0) {
 				/* Show result */
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				u8g2_DrawStr(&m1_u8g2, 2, 12, "Unlock Read Done");
@@ -2958,7 +2958,7 @@ static void nfc_tool_cyborg_detector(void)
 	/* Turn on NFC field */
 	rfalFieldOnAndStartGT();
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 4, 12, "Cyborg Detector");
@@ -3120,7 +3120,7 @@ static void nfc_tool_read_ndef(void)
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
 	m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_READ);
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -3155,7 +3155,7 @@ static void nfc_tool_read_ndef(void)
 			nfc_tool_parse_ndef_text(ndef_text, sizeof(ndef_text));
 
 			/* Draw NDEF content */
-			u8g2_FirstPage(&m1_u8g2);
+			m1_u8g2_firstpage();
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 1, 10, "NDEF Content");
@@ -3245,7 +3245,7 @@ static void nfc_tool_write_url(void)
 		ndef_record[ndef_total++] = 0x00;
 
 	/* Show write confirmation screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write NFC URL");
@@ -3280,7 +3280,7 @@ static void nfc_tool_write_url(void)
 		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			/* Show writing screen */
-			u8g2_FirstPage(&m1_u8g2);
+			m1_u8g2_firstpage();
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 			u8g2_DrawStr(&m1_u8g2, 4, 25, "Writing URL...");
@@ -3299,7 +3299,7 @@ static void nfc_tool_write_url(void)
 			}
 
 			/* Show result */
-			u8g2_FirstPage(&m1_u8g2);
+			m1_u8g2_firstpage();
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 			if (err == RFAL_ERR_NONE) {
@@ -3400,9 +3400,9 @@ static uint8_t nfc_read_more_options_save(void)
 		// Error or user escaped
 		if (error != 3) { // Not user escape - show error
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_FirstPage(&m1_u8g2);
+			m1_u8g2_firstpage();
 			u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-			u8g2_NextPage(&m1_u8g2);
+			m1_u8g2_nextpage();
 		}
 		return error;
 	}
@@ -3411,23 +3411,23 @@ static uint8_t nfc_read_more_options_save(void)
 	c = nfc_ctx_get();
 	if (!c) {
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-		u8g2_NextPage(&m1_u8g2);
+		m1_u8g2_nextpage();
 		return 4; // Error
 	}
 
 	if (nfc_profile_save(filepath, c)) {
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, nfc_saved_63_63);
-		u8g2_NextPage(&m1_u8g2);
+		m1_u8g2_nextpage();
 		return 0; // Success
 	} else {
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-		u8g2_NextPage(&m1_u8g2);
+		m1_u8g2_nextpage();
 		return 4; // Error
 	}
 } 
@@ -3673,7 +3673,7 @@ static uint8_t nfc_read_more_options_delete(void)
 		strcpy(filename, "file");
 	}
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 2, 12, "Delete file?");
@@ -3716,7 +3716,7 @@ static uint8_t nfc_read_more_options_delete(void)
 						uint8_t delete_ret = m1_fb_delete_file(c->file.path);
 						if (delete_ret==0) {
 							// Show success message
-							u8g2_FirstPage(&m1_u8g2);
+							m1_u8g2_firstpage();
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 							u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 							u8g2_DrawStr(&m1_u8g2, 2, 12, "Delete");
@@ -3728,7 +3728,7 @@ static uint8_t nfc_read_more_options_delete(void)
 							return 0; // Exit signal
 						} else {
 							// Show error
-							u8g2_FirstPage(&m1_u8g2);
+							m1_u8g2_firstpage();
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 							u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
 							m1_u8g2_nextpage();
@@ -4155,7 +4155,7 @@ void nfc_detect_reader(void)
 			snprintf(line2, sizeof(line2), "UID: %s",
 			         hex2Str(c->head.uid, c->head.uid_len));
 
-			u8g2_FirstPage(&m1_u8g2);
+			m1_u8g2_firstpage();
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -4264,7 +4264,7 @@ static void nfc_extra_read_mfc(void)
 	BaseType_t ret;
 
 	/* Show "Place card" screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -4337,7 +4337,7 @@ static void nfc_extra_read_mfc(void)
 		snprintf(line2, sizeof(line2), "Blocks: %u/%u",
 		         (unsigned)read_blocks, (unsigned)c->dump.unit_count);
 
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 		u8g2_DrawStr(&m1_u8g2, 2, 12, "MF Classic Read");
@@ -4390,7 +4390,7 @@ static void nfc_extra_read_mfc(void)
 						m1_app_send_q_message(nfc_worker_q_hdl, Q_EVENT_NFC_START_EMULATE);
 						vTaskDelay(50);
 						{
-							u8g2_FirstPage(&m1_u8g2);
+							m1_u8g2_firstpage();
 							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 							u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_emit_48x48);
 							u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -4461,7 +4461,7 @@ static void nfc_extra_read_ul(void)
 	}
 
 	/* Show "Place card" screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -4521,7 +4521,7 @@ static void nfc_extra_read_ul(void)
 		uint16_t pages = nfc_ctx_get_t2t_page_count();
 		snprintf(line2, sizeof(line2), "Pages: %u", (unsigned)pages);
 
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 		u8g2_DrawStr(&m1_u8g2, 2, 12, c->ui.title_text);
@@ -4572,7 +4572,7 @@ static void nfc_extra_unlock_slix(void)
 	pwd_bytes[3] = (uint8_t)b3;
 
 	/* Show "Place tag" screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 48, 48, nfc_read_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);

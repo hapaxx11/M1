@@ -526,11 +526,11 @@ void m1_gui_scr_animation(void)
 		// Draw time measured approximately 14ms for a full screen
 		// CPU running at 75MHz
 		// I2C speed = 400KHz
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		do
 	    {
 			u8g2_DrawXBMP(&m1_u8g2, 0, 0, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT, menu_m1_logo_array[image_index]);
-	    } while (u8g2_NextPage(&m1_u8g2));
+	    } while (m1_u8g2_nextpage());
 	} // if ( (time_tn - time_t0) >= MENU_M1_SCR_ANI_TIMEOUT )
 } // void m1_gui_scr_animation(void)
 
@@ -669,7 +669,7 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
     if (button_cnt == 0) return 0;
 
     for (;;) {
-        u8g2_FirstPage(u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(u8g2, u8g2_font_6x10_tr);
             uint8_t line_height = u8g2_GetAscent(u8g2) - u8g2_GetDescent(u8g2);
@@ -692,7 +692,7 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
                 u8g2_DrawStr(u8g2, btn_x, 60, btn_text);
                 u8g2_SetDrawColor(u8g2, 1);
             }
-        } while (u8g2_NextPage(u8g2));
+        } while (m1_u8g2_nextpage());
 
         S_M1_Main_Q_t q_item;
         S_M1_Buttons_Status btn_status;
@@ -933,12 +933,12 @@ void m1_draw_text_box(u8g2_t *u8g2,
 void m1_gui_let_update_fw(void)
 {
     /* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
     do
     {
     	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_DrawXBMP(&m1_u8g2, 40, 2, 48, 48, fw_update_48x48); // draw firmware update icon
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 62, "Pls update firmware");
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 } // void m1_gui_let_update_fw(void)
