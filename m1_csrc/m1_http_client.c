@@ -56,7 +56,7 @@ static int tcp_recv_available(uint8_t timeout_sec);
 static int tcp_wait_data(uint8_t timeout_sec);
 static int parse_http_headers(const char *data, int data_len,
                                uint32_t *content_length, char *location, uint16_t loc_size,
-                               int *header_end_offset);
+                               int *header_end_offset, bool *is_chunked);
 
 bool http_is_ready(void)
 {
@@ -65,6 +65,29 @@ bool http_is_ready(void)
 #else
 	return false;
 #endif
+}
+
+const char *http_status_str(http_status_t status)
+{
+	switch (status)
+	{
+		case HTTP_OK:                     return NULL; /* no error */
+		case HTTP_ERR_NO_WIFI:            return "WiFi not connected";
+		case HTTP_ERR_ESP_NOT_READY:      return "ESP32 not ready";
+		case HTTP_ERR_DNS_FAIL:           return "DNS lookup failed";
+		case HTTP_ERR_CONNECT_FAIL:       return "Connection failed";
+		case HTTP_ERR_SEND_FAIL:          return "Request send failed";
+		case HTTP_ERR_TIMEOUT:            return "Server timeout";
+		case HTTP_ERR_HTTP_ERROR:         return "Server error (HTTP)";
+		case HTTP_ERR_REDIRECT_LOOP:      return "Too many redirects";
+		case HTTP_ERR_RESPONSE_TOO_LARGE: return "Response too large";
+		case HTTP_ERR_SD_WRITE_FAIL:      return "SD card write error";
+		case HTTP_ERR_SD_OPEN_FAIL:       return "Cannot open file";
+		case HTTP_ERR_CANCELLED:          return "Cancelled";
+		case HTTP_ERR_INVALID_ARG:        return "Internal request error";
+		case HTTP_ERR_PARSE_FAIL:         return "Bad response";
+		default:                          return NULL;
+	}
 }
 
 /*
@@ -86,6 +109,77 @@ bool http_is_ready(void)
 /* Maximum idle time after last received byte before declaring API response done */
 #define HTTP_GET_IDLE_TIMEOUT_MS  3000
 
+/*
+ * Decode chunked transfer encoding in-place.
+ *
+ * Chunked bodies look like:
+ *   <hex-size>\r\n<data>\r\n<hex-size>\r\n<data>\r\n0\r\n\r\n
+ *
+ * Returns the decoded body length (always <= original length since chunk
+ * markers are stripped).  The buffer is null-terminated after decoding.
+ */
+static uint16_t decode_chunked_body(char *body, uint16_t body_len)
+{
+	char *src = body;
+	char *dst = body;
+	char *end = body + body_len;
+
+	while (src < end)
+	{
+		/* Skip leading \r\n (trailing from previous chunk) */
+		while (src < end && (*src == '\r' || *src == '\n'))
+			src++;
+		if (src >= end)
+			break;
+
+		/* Read hex chunk size */
+		char *size_end = NULL;
+		unsigned long chunk_size = strtoul(src, &size_end, 16);
+
+		/* If strtoul didn't consume any characters, data is malformed */
+		if (size_end == src)
+			break;
+
+		/* Skip any optional chunk extensions up to the line ending */
+		src = size_end;
+		while (src < end && *src != '\r' && *src != '\n')
+			src++;
+		if (src >= end)
+			break;
+
+		/* Consume the chunk-size line ending */
+		if (*src == '\r')
+		{
+			src++;
+			if (src < end && *src == '\n')
+				src++;
+		}
+		else if (*src == '\n')
+		{
+			src++;
+		}
+		if (src >= end)
+			break;
+
+		/* Terminal chunk (size 0) — we're done */
+		if (chunk_size == 0)
+			break;
+
+		/* Copy chunk data — clamp to what's available */
+		uint16_t avail = (uint16_t)(end - src);
+		if (chunk_size > avail)
+			chunk_size = avail;
+
+		/* In-place safe: dst always <= src (we stripped markers) */
+		memmove(dst, src, chunk_size);
+		dst += chunk_size;
+		src += chunk_size;
+	}
+
+	*dst = '\0';
+	return (uint16_t)(dst - body);
+}
+
 http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, uint8_t timeout_sec)
 {
 	char host[128];
@@ -95,6 +189,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	bool is_https;
 	http_status_t status;
 	uint32_t content_length = 0;
+	bool chunked = false;
 	int header_end_offset = 0;
 	int status_code;
 	uint16_t total = 0;
@@ -119,9 +214,12 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	if (status != HTTP_OK)
 		return status;
 
-	/* Build and send HTTP GET request with required headers */
+	/* Build and send HTTP GET request with required headers.
+	 * Use HTTP/1.0 to prevent chunked transfer encoding — the response
+	 * must arrive with Content-Length or be terminated by connection close.
+	 * This avoids chunk-size markers corrupting the JSON body. */
 	snprintf(request, sizeof(request),
-	         "GET %s HTTP/1.1\r\n"
+	         "GET %s HTTP/1.0\r\n"
 	         "Host: %s\r\n"
 	         "User-Agent: M1-Hapax/1.0\r\n"
 	         "Accept: application/json\r\n"
@@ -145,8 +243,10 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 	m1_wdt_reset();
 
-	/* Read initial chunk — large enough to capture headers + start of body */
-	int initial_len = tcp_recv(s_at_buf, sizeof(s_at_buf) - 1, timeout_sec);
+	/* Read initial chunk — large enough to capture headers + start of body.
+	 * Cap to HTTP_DOWNLOAD_CHUNK so the AT response (+CIPRECVDATA header +
+	 * data + \r\nOK\r\n) fits within the 4KB s_at_buf without truncation. */
+	int initial_len = tcp_recv(s_at_buf, HTTP_DOWNLOAD_CHUNK, timeout_sec);
 	if (initial_len <= 0)
 	{
 		tcp_close();
@@ -157,7 +257,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	/* Parse HTTP response headers */
 	status_code = parse_http_headers(s_at_buf, initial_len,
 	                                  &content_length, NULL, 0,
-	                                  &header_end_offset);
+	                                  &header_end_offset, &chunked);
 	if (status_code == 0)
 	{
 		tcp_close();
@@ -199,6 +299,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	 */
 	uint32_t start_tick = HAL_GetTick();  /* hard deadline — never reset */
 	uint32_t idle_start = HAL_GetTick();  /* idle-completion heuristic */
+	bool hard_deadline_hit = false;
 
 	while (total < buf_size - 1)
 	{
@@ -213,7 +314,10 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 		if (total > 0 && (now - idle_start) >= HTTP_GET_IDLE_TIMEOUT_MS)
 			break; /* server closed connection after sending complete response */
 		if ((now - start_tick) >= (uint32_t)timeout_sec * 1000U)
+		{
+			hard_deadline_hit = true;
 			break; /* hard deadline expired — regardless of ongoing data flow */
+		}
 
 		int avail = tcp_recv_available(2);
 		if (avail <= 0)
@@ -252,7 +356,29 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	response_buf[total] = '\0';
 	tcp_close();
 
-	return (total > 0) ? HTTP_OK : HTTP_ERR_PARSE_FAIL;
+	/*
+	 * If the server sent chunked transfer encoding (unexpected for HTTP/1.0
+	 * but possible with non-compliant servers), decode the body in-place to
+	 * strip chunk-size markers that would otherwise corrupt JSON parsing.
+	 */
+	if (chunked && total > 0)
+		total = decode_chunked_body(response_buf, total);
+
+	if (total == 0)
+		return HTTP_ERR_PARSE_FAIL;
+
+	/* If the hard deadline expired before the response completed, report
+	 * timeout so the caller knows the body may be truncated/incomplete. */
+	if (hard_deadline_hit)
+	{
+		bool complete = false;
+		if (content_length > 0 && (uint32_t)total >= content_length)
+			complete = true;
+		if (!complete)
+			return HTTP_ERR_TIMEOUT;
+	}
+
+	return HTTP_OK;
 }
 
 /*
@@ -419,7 +545,8 @@ static int tcp_recv(char *buf, uint16_t max_len, uint8_t timeout_sec)
 	if (actual_len > max_len)
 		actual_len = max_len;
 
-	memcpy(buf, p, actual_len);
+	/* Use memmove — buf may alias s_at_buf (overlapping regions) */
+	memmove(buf, p, actual_len);
 	return actual_len;
 }
 
@@ -468,7 +595,7 @@ static int tcp_wait_data(uint8_t timeout_sec)
  */
 static int parse_http_headers(const char *data, int data_len __attribute__((unused)),
                                uint32_t *content_length, char *location, uint16_t loc_size,
-                               int *header_end_offset)
+                               int *header_end_offset, bool *is_chunked)
 {
 	const char *hdr_end;
 	const char *p;
@@ -476,6 +603,7 @@ static int parse_http_headers(const char *data, int data_len __attribute__((unus
 
 	*content_length = 0;
 	*header_end_offset = 0;
+	if (is_chunked) *is_chunked = false;
 	if (location) location[0] = '\0';
 
 	/* Find end of headers */
@@ -505,6 +633,95 @@ static int parse_http_headers(const char *data, int data_len __attribute__((unus
 			p++;
 			while (*p == ' ') p++;
 			*content_length = (uint32_t)strtoul(p, NULL, 10);
+		}
+	}
+
+	/* Detect Transfer-Encoding: chunked with case-insensitive
+	 * field-name matching, per HTTP header rules. */
+	if (is_chunked)
+	{
+		const char *line = data;
+		*is_chunked = false;
+
+		while (line < hdr_end)
+		{
+			const char *line_end = line;
+			const char *colon;
+
+			while (line_end < hdr_end && *line_end != '\r' && *line_end != '\n')
+				line_end++;
+
+			colon = memchr(line, ':', (size_t)(line_end - line));
+			if (colon)
+			{
+				static const char te_name[] = "Transfer-Encoding";
+				size_t name_len = (size_t)(colon - line);
+
+				if (name_len == sizeof(te_name) - 1)
+				{
+					size_t i;
+					bool name_match = true;
+
+					for (i = 0; i < sizeof(te_name) - 1; i++)
+					{
+						char a = line[i];
+						char b = te_name[i];
+
+						if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+						if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+
+						if (a != b)
+						{
+							name_match = false;
+							break;
+						}
+					}
+
+					if (name_match)
+					{
+						const char *value = colon + 1;
+
+						while (value < line_end && (*value == ' ' || *value == '\t'))
+							value++;
+
+						while (value + 7 <= line_end)
+						{
+							char c0 = value[0];
+							char c1 = value[1];
+							char c2 = value[2];
+							char c3 = value[3];
+							char c4 = value[4];
+							char c5 = value[5];
+							char c6 = value[6];
+
+							if (c0 >= 'A' && c0 <= 'Z') c0 = (char)(c0 - 'A' + 'a');
+							if (c1 >= 'A' && c1 <= 'Z') c1 = (char)(c1 - 'A' + 'a');
+							if (c2 >= 'A' && c2 <= 'Z') c2 = (char)(c2 - 'A' + 'a');
+							if (c3 >= 'A' && c3 <= 'Z') c3 = (char)(c3 - 'A' + 'a');
+							if (c4 >= 'A' && c4 <= 'Z') c4 = (char)(c4 - 'A' + 'a');
+							if (c5 >= 'A' && c5 <= 'Z') c5 = (char)(c5 - 'A' + 'a');
+							if (c6 >= 'A' && c6 <= 'Z') c6 = (char)(c6 - 'A' + 'a');
+
+							if (c0 == 'c' && c1 == 'h' && c2 == 'u' &&
+							    c3 == 'n' && c4 == 'k' && c5 == 'e' &&
+							    c6 == 'd')
+							{
+								*is_chunked = true;
+								break;
+							}
+
+							value++;
+						}
+
+						if (*is_chunked)
+							break;
+					}
+				}
+			}
+
+			if (line_end < hdr_end && *line_end == '\r') line_end++;
+			if (line_end < hdr_end && *line_end == '\n') line_end++;
+			line = line_end;
 		}
 	}
 
@@ -575,9 +792,11 @@ retry_with_redirect:
 	if (status != HTTP_OK)
 		return status;
 
-	/* Build and send HTTP GET request */
+	/* Build and send HTTP GET request.
+	 * Use HTTP/1.0 to prevent chunked transfer encoding — binary data
+	 * mixed with chunk-size markers would corrupt the downloaded file. */
 	snprintf(request, sizeof(request),
-	         "GET %s HTTP/1.1\r\n"
+	         "GET %s HTTP/1.0\r\n"
 	         "Host: %s\r\n"
 	         "User-Agent: M1-Hapax/1.0\r\n"
 	         "Accept: */*\r\n"
@@ -601,8 +820,9 @@ retry_with_redirect:
 
 	m1_wdt_reset();
 
-	/* Read initial data (headers + possibly some body) */
-	int initial_len = tcp_recv(s_at_buf, sizeof(s_at_buf) - 1, timeout_sec);
+	/* Read initial data (headers + possibly some body).
+	 * Cap to HTTP_DOWNLOAD_CHUNK to leave room for AT response overhead. */
+	int initial_len = tcp_recv(s_at_buf, HTTP_DOWNLOAD_CHUNK, timeout_sec);
 	if (initial_len <= 0)
 	{
 		tcp_close();
@@ -611,11 +831,21 @@ retry_with_redirect:
 	s_at_buf[initial_len] = '\0';
 
 	/* Parse HTTP headers */
+	bool dl_chunked = false;
 	status_code = parse_http_headers(s_at_buf, initial_len,
 	                                  &content_length, location, sizeof(location),
-	                                  &header_end_offset);
+	                                  &header_end_offset, &dl_chunked);
 
 	if (status_code == 0)
+	{
+		tcp_close();
+		return HTTP_ERR_PARSE_FAIL;
+	}
+
+	/* Chunked transfer encoding is not supported for file downloads.
+	 * HTTP/1.0 should prevent it, but if a non-compliant server sends
+	 * chunked anyway, fail fast rather than writing corrupt data. */
+	if (dl_chunked)
 	{
 		tcp_close();
 		return HTTP_ERR_PARSE_FAIL;

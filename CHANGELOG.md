@@ -329,6 +329,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OTA firmware download: "No releases found" with GitHub API** — HTTP GET
+  requests used HTTP/1.1, causing GitHub's API to respond with
+  `Transfer-Encoding: chunked`.  The raw TCP receive path did not decode
+  chunked encoding, so chunk-size markers (e.g. `a3f\r\n`) were mixed into
+  the JSON body, making it unparsable.  Fixed by switching to HTTP/1.0
+  (which prevents chunked responses) and adding an in-place chunked decoder
+  as a safety net in `http_get()` for non-compliant servers.
+  `http_download_to_file()` now detects chunked responses and fails fast
+  rather than writing corrupt data.
 - **Dark mode: light pixel border eliminated** — Switched dark mode from
   software framebuffer XOR to the ST7567 hardware inverse display command
   (`0xA7`/`0xA6`).  The software XOR only inverted the 128×64 framebuffer
