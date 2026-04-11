@@ -232,7 +232,7 @@ static void resume_rx(SubGhzApp *app)
     if (app->hopper_active)
         app->current_freq_hz = app->hopper_freq;
 
-    /* Start RX — radio was in SLEEP (ISOLATED) from stop_rx(),
+    /* Start RX — radio was in ISOLATED mode from stop_rx(),
      * so we just need to switch back to RX mode + init capture.
      * When hopping is active, explicitly retune to the saved hopper
      * frequency so the hardware matches the restored app/UI state. */

@@ -29,19 +29,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   When charging (pre-charge or fast charge), a lightning bolt overlay appears
   inside the battery icon.  Similar to Momentum firmware's splash screen.
 
+- **WiFi Deauther** — ported WiFi deauthentication tool from neddy299/M1 fork.
+  Accessible from WiFi → Deauther menu.  Flow: preflight AT command check →
+  AP scan → AP select → station scan → station select → attack toggle.
+  Requires custom ESP32-C6 AT firmware with `AT+DEAUTH` and `AT+STASCAN`
+  command support.  Includes hidden advanced mode (UP UP DOWN DOWN) to cycle
+  deauth attack techniques.  Adapted for Hapax conventions: scene-based menu
+  integration as blocking delegate, `m1_esp32_deinit()` on all exit paths,
+  no "Back" button bar labels.
+- **ESP32 firmware OTA download** — new "Download" option in Settings → ESP32
+  update menu.  Downloads ESP32-C6 AT firmware (`.bin` + `.md5`) from GitHub
+  Releases to SD card (`0:/ESP32_FW/`), then user flashes via the existing
+  Image File → Firmware Update flow.  Reuses the same `fw_sources.txt`
+  configuration and GitHub Releases API infrastructure as M1 firmware download.
+  Default sources: C3 ESP32 AT (`bedge117/esp32-at-monstatek-m1`) and
+  Deauth ESP32 AT (`neddy299/esp32-at-monstatek-m1`).
+- **Documentation**: ESP32 coprocessor firmware reference
+  (`documentation/esp32_firmware.md`) — source repos, custom AT commands,
+  SPI pin mapping, flash methods, build instructions.
+
+### Changed
+
+- **Firmware download source config** — `fw_sources.txt` now supports a
+  `Category:` field (`firmware` or `esp32`) to distinguish M1 firmware
+  sources from ESP32 AT firmware sources.  Existing configs without a
+  `Category:` field default to `firmware`.
 - **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
   now shows a "Decode" option (first item) for RAW `.sub` files.  Selecting it
   feeds the raw pulse timing data through all registered protocol decoders
   offline (no radio needed) and displays any matched protocols with key, bit
   count, TE, and frequency.  Multiple decoded packets are shown in a scrollable
   list with detail view.  Inspired by Momentum firmware's decode feature.
-### Changed
-
 - Documentation: added mandatory bug-fix regression test policy to CLAUDE.md,
   DEVELOPMENT.md, and .github/GUIDELINES.md — every bug fix must include unit tests
   that fail before the fix and pass after it
+- Documentation: added explicit "no duplicate subsection headings" rule to CLAUDE.md
+  and GUIDELINES.md changelog instructions — agents must scan the entire `[Unreleased]`
+  block for an existing heading before creating a new one
 
 ### Fixed
+
+- **Sub-GHz Decode: deduplicate repeated transmissions** — RAW `.sub` files
+  typically contain multiple copies of the same transmission (remotes repeat
+  3–5 times).  The offline decoder now skips duplicate protocol+key pairs so
+  the results list shows each unique signal once, making decoded output much
+  clearer.
+
+- **Sub-GHz Decode: sync `npulsecount` before calling protocol decoders** —
+  The offline decoder now sets `subghz_decenc_ctl.npulsecount` before invoking
+  protocol decoders, matching the live pulse handler path and preventing
+  potential mismatches if a decoder reads the global counter directly.
 
 - **Sub-GHz Read scene: unnecessary full radio reset on child scene return** —
   Returning from Config, ReceiverInfo, or SaveName back to the Read scene

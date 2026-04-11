@@ -11,6 +11,7 @@
 #include "main.h"
 #include "m1_scene.h"
 #include "m1_wifi.h"
+#include "m1_deauth.h"
 #include "m1_802154.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
@@ -19,6 +20,7 @@
 enum {
     WifiSceneMenu = 0,
     WifiSceneScanConnect,
+    WifiSceneDeauth,
     WifiSceneZigbee,
     WifiSceneThread,
     WifiSceneSaved,
@@ -35,6 +37,14 @@ static void scan_connect_on_enter(M1SceneApp *app)
 {
     (void)app;
     wifi_scan_ap();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static void deauth_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    wifi_deauth();
     app->running = true;
     m1_scene_pop(app);
 }
@@ -84,6 +94,7 @@ static void disconnect_on_enter(M1SceneApp *app)
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers scan_connect_handlers = { .on_enter = scan_connect_on_enter };
+static const M1SceneHandlers deauth_handlers       = { .on_enter = deauth_on_enter       };
 static const M1SceneHandlers zigbee_handlers       = { .on_enter = zigbee_on_enter       };
 static const M1SceneHandlers thread_handlers       = { .on_enter = thread_on_enter       };
 static const M1SceneHandlers saved_handlers        = { .on_enter = saved_on_enter        };
@@ -96,15 +107,16 @@ static const M1SceneHandlers disconnect_handlers = { .on_enter = disconnect_on_e
 /*--- Menu scene -----------------------------------------------------------*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define MENU_ITEM_COUNT  6
+#define MENU_ITEM_COUNT  7
 #define MENU_VISIBLE     6
 #else
-#define MENU_ITEM_COUNT  4
-#define MENU_VISIBLE     4
+#define MENU_ITEM_COUNT  5
+#define MENU_VISIBLE     5
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "WiFi Scan+Connect",
+    "Deauther",
     "Zigbee Scan",
     "Thread Scan",
     "Saved Networks",
@@ -116,6 +128,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneScanConnect,
+    WifiSceneDeauth,
     WifiSceneZigbee,
     WifiSceneThread,
     WifiSceneSaved,
@@ -161,6 +174,7 @@ static const M1SceneHandlers menu_handlers = {
 static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneMenu]        = &menu_handlers,
     [WifiSceneScanConnect] = &scan_connect_handlers,
+    [WifiSceneDeauth]      = &deauth_handlers,
     [WifiSceneZigbee]      = &zigbee_handlers,
     [WifiSceneThread]      = &thread_handlers,
     [WifiSceneSaved]       = &saved_handlers,
