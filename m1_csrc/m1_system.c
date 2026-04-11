@@ -877,7 +877,7 @@ static void splash_draw_battery_indicator(void)
 	/* Charging bolt overlay (stat: 0=none, 1=pre-charge, 2=fast charge, 3=done) */
 	if (pwr.stat == 1 || pwr.stat == 2)
 	{
-		/* Small 5-pixel lightning bolt centered in the battery body */
+		/* Small 7-pixel lightning bolt centered in the battery body */
 		uint8_t bx = batt_x + BATT_BODY_W / 2;
 		uint8_t by = batt_y + 1;
 
