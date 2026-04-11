@@ -46,6 +46,7 @@
 #define DL_PROGRESS_BAR_W  120
 #define DL_PROGRESS_BAR_H   10
 #define DL_PROGRESS_UPDATE_BYTES  8192
+#define EDL_SD_PATH_SIZE          128
 
 /* State for progress callback */
 static uint32_t s_dl_downloaded;
@@ -55,7 +56,7 @@ static uint32_t s_dl_total;
  * Safe: only one blocking delegate runs at a time. */
 static fw_source_t  s_edl_sources[FW_SOURCE_MAX];
 static fw_release_t s_edl_releases[FW_RELEASE_MAX];
-static char         s_edl_sd_path[128];
+static char         s_edl_sd_path[EDL_SD_PATH_SIZE];
 static char         s_edl_md5_url[FW_RELEASE_URL_LEN];
 static char         s_edl_md5_name[FW_RELEASE_ASSET_LEN];
 
@@ -438,7 +439,7 @@ source_selection:
 
 		m1_fb_make_dir(ESP32_FW_DOWNLOAD_DIR);
 
-		snprintf(sd_path, sizeof(s_edl_sd_path), "%s/%s",
+		snprintf(sd_path, EDL_SD_PATH_SIZE, "%s/%s",
 		         ESP32_FW_DOWNLOAD_DIR, rel->asset_name);
 
 		s_dl_downloaded = 0;
@@ -479,7 +480,7 @@ source_selection:
 			return;
 		}
 
-		snprintf(sd_path, sizeof(s_edl_sd_path), "%s/%s",
+		snprintf(sd_path, EDL_SD_PATH_SIZE, "%s/%s",
 		         ESP32_FW_DOWNLOAD_DIR, md5_name);
 
 		edl_show_message("Downloading MD5...", md5_name);

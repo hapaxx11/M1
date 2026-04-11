@@ -208,7 +208,7 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 		if (strcmp(sources[i].category, category) == 0)
 		{
 			if (out != i)
-				memcpy(&sources[out], &sources[i], sizeof(fw_source_t));
+				memmove(&sources[out], &sources[i], sizeof(fw_source_t));
 			out++;
 		}
 	}
