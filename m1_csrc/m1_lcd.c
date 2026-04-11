@@ -213,6 +213,24 @@ void m1_lcd_set_southpaw(uint8_t enable)
 
 
 /*============================================================================*/
+/**
+  * @brief  Enable or disable dark mode (software pixel inversion).
+  *         When enabled, m1_u8g2_nextpage() XORs the entire frame buffer
+  *         before sending, so all content (text, XBMs, draw primitives) is
+  *         inverted uniformly.  Software XOR is used instead of the ST7567
+  *         hardware 0xA7 command so that RPC screen streaming also reflects
+  *         the inverted image.
+  * @param  enable: 1=dark mode (inverted), 0=normal
+  */
+/*============================================================================*/
+void m1_lcd_set_dark_mode(uint8_t enable)
+{
+    extern uint8_t m1_dark_mode;
+    m1_dark_mode = enable ? 1 : 0;
+}
+
+
+/*============================================================================*/
 /*
  * This function is the equivalent of the function void u8g2_FirstPage(u8g2_t *u8g2)
  */
@@ -231,6 +249,19 @@ void m1_u8g2_firstpage(void)
 /*============================================================================*/
 uint8_t m1_u8g2_nextpage(void)
 {
+	/* Dark mode: XOR the entire frame buffer before sending so that all
+	 * content (text, XBMs, draw primitives) appears inverted on the LCD.
+	 * This also ensures RPC screen streaming sees the inverted image. */
+	extern uint8_t m1_dark_mode;
+	if (m1_dark_mode)
+	{
+		uint8_t *buf = u8g2_GetBufferPtr(&m1_u8g2);
+		uint16_t len = (uint16_t)u8g2_GetBufferTileWidth(&m1_u8g2) * 8U
+		             * (uint16_t)u8g2_GetBufferTileHeight(&m1_u8g2);
+		for (uint16_t i = 0; i < len; i++)
+			buf[i] ^= 0xFF;
+	}
+
 	u8g2_SendBuffer(&m1_u8g2);
 	u8x8_RefreshDisplay( u8g2_GetU8x8(&m1_u8g2) );
 

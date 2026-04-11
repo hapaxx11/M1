@@ -55,6 +55,7 @@ uint8_t u8x8_stm32_gpio_and_delay(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, vo
 
 void m1_lcd_init(SPI_HandleTypeDef *phspi);
 void m1_lcd_set_southpaw(uint8_t enable);
+void m1_lcd_set_dark_mode(uint8_t enable);
 void m1_u8g2_firstpage(void);
 uint8_t m1_u8g2_nextpage(void);
 void m1_lcd_cleardisplay(void);
