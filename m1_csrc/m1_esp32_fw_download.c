@@ -372,10 +372,22 @@ source_selection:
 	/* Step 4: Fetch releases */
 	edl_show_message("Fetching releases...", sources[selected].name);
 	m1_wdt_reset();
-	release_count = fw_source_fetch_releases(&sources[selected], releases);
+	int http_err = 0;
+	release_count = fw_source_fetch_releases(&sources[selected], releases, &http_err);
 	if (release_count == 0)
 	{
-		edl_show_message("No releases found", NULL);
+		const char *reason = NULL;
+		switch (http_err)
+		{
+			case HTTP_ERR_NO_WIFI:       reason = "WiFi not connected"; break;
+			case HTTP_ERR_CONNECT_FAIL:  reason = "Connection failed"; break;
+			case HTTP_ERR_TIMEOUT:       reason = "Server timeout"; break;
+			case HTTP_ERR_HTTP_ERROR:    reason = "Server error (HTTP)"; break;
+			case HTTP_ERR_PARSE_FAIL:    reason = "Bad response"; break;
+			case HTTP_OK:                reason = "No matching assets"; break;
+			default:                     reason = NULL; break;
+		}
+		edl_show_message("No releases found", reason);
 		vTaskDelay(pdMS_TO_TICKS(2000));
 		goto source_selection;
 	}

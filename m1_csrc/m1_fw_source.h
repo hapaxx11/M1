@@ -102,8 +102,10 @@ bool fw_source_create_defaults(void);
  *
  * source:    Source configuration
  * releases:  Array to fill (must have space for FW_RELEASE_MAX entries)
+ * out_http_status: Optional — receives the HTTP status code for error diagnostics
  * Returns:   Number of releases found (0 on error or no releases)
  */
-uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases);
+uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases,
+                                  int *out_http_status);
 
 #endif /* M1_FW_SOURCE_H_ */

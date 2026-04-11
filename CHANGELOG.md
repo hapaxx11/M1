@@ -326,6 +326,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OTA firmware download: "No releases found" with GitHub API** — HTTP GET
+  requests used HTTP/1.1, causing GitHub's API to respond with
+  `Transfer-Encoding: chunked`.  The raw TCP receive path did not decode
+  chunked encoding, so chunk-size markers (e.g. `a3f\r\n`) were mixed into
+  the JSON body, making it unparsable.  Fixed by switching to HTTP/1.0
+  (which prevents chunked responses) and adding an in-place chunked decoder
+  as a safety net for non-compliant servers.  Both `http_get()` and
+  `http_download_to_file()` are updated.
+
 - **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
   screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`
   to `u8g2_font_helvB08_tr`.  The old font's '1' glyph was a featureless
