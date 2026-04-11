@@ -195,7 +195,9 @@ static void parse_apscan(const char *line)
 
     const char *p = strstr(line, "+CWLAP:");
     if (!p) return;
-    p += 9; /* skip "+CWLAP:(" */
+    p = strchr(p + 7, '"'); /* find opening " of ssid after +CWLAP: */
+    if (!p) return;
+    p++; /* skip the opening " */
 
     /* Parse ssid */
     const char *delim = strchr(p, '"');
