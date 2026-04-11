@@ -60,6 +60,7 @@ uint8_t                 m1_brightness_level = 4;   /* Max by default */
 uint8_t                 m1_buzzer_on = 1;
 uint8_t                 m1_led_notify_on = 1;
 uint8_t                 m1_sleep_timeout_idx = 1;  /* 1 minute default */
+uint8_t                 m1_menu_style = 0;         /* 0=Small (compact), 1=Large (expanded) */
 #ifdef M1_APP_BADBT_ENABLE
 char                    m1_badbt_name[BADBT_NAME_MAX_LEN + 1] = "M1-BadBT";
 #endif

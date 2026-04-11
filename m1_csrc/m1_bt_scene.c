@@ -130,7 +130,7 @@ static const M1SceneHandlers info_handlers      = { .on_enter = info_on_enter   
 #define MENU_ITEM_COUNT  4
 #endif
 
-#define MENU_VISIBLE  (MENU_ITEM_COUNT < 6 ? MENU_ITEM_COUNT : 6)
+#define MENU_VISIBLE  M1_MENU_VIS(MENU_ITEM_COUNT)
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Scan",

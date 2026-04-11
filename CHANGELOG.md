@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Text Size setting (LCD & Notifications)** — New "Text Size" option with
+  Small (default) and Large modes.  Large mode uses a clearer `spleen5x8`
+  monospaced font and increases menu row height from 8px to 10px, improving
+  readability for users with vision difficulties.  Affects all scene-based
+  menus, Sub-GHz menu/config, and LCD settings.  Setting is persisted to SD
+  card (`menu_style` key in `settings.cfg`).  Neither Flipper Zero nor
+  Momentum firmware offers a comparable in-menu font/spacing toggle — this
+  is a Hapax-original accessibility feature.
+
 - **Battery indicator on splash screen** — The boot/welcome screen now shows a
   battery icon in the top-right corner with charge percentage and fill level.
   When charging (pre-charge or fast charge), a lightning bolt overlay appears
@@ -49,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deauth attack techniques.  Adapted for Hapax conventions: scene-based menu
   integration as blocking delegate, `m1_esp32_deinit()` on all exit paths,
   no "Back" button bar labels.
+
 - **ESP32 firmware OTA download** — new "Download" option in Settings → ESP32
   update menu.  Downloads ESP32-C6 AT firmware (`.bin` + `.md5`) from GitHub
   Releases to SD card (`0:/ESP32_FW/`), then user flashes via the existing
@@ -56,30 +66,208 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configuration and GitHub Releases API infrastructure as M1 firmware download.
   Default sources: C3 ESP32 AT (`bedge117/esp32-at-monstatek-m1`) and
   Deauth ESP32 AT (`neddy299/esp32-at-monstatek-m1`).
+
 - **Documentation**: ESP32 coprocessor firmware reference
   (`documentation/esp32_firmware.md`) — source repos, custom AT commands,
   SPI pin mapping, flash methods, build instructions.
 
+- **Virtual keyboard — text-mode layout with SPACE key** — Added
+  `m1_vkb_get_text()` function that provides a context-specific keyboard
+  layout for general text input (passwords, device names).  The text-mode
+  keyboard replaces the underscore key with a visible SPACE indicator (⎵)
+  on lowercase and uppercase pages; underscore is moved to the symbols page
+  (replacing pipe `|`).  Follows Flipper Zero's pattern of multiple keyboard
+  layouts depending on context.  WiFi password entry and Bad-BT device name
+  entry now use the text-mode keyboard.  Filename entry (`m1_vkb_get_filename`)
+  retains the original layout without space.
+
+- **Static analysis (on-demand)** — Added `static-analysis.yml` workflow running cppcheck
+  on `m1_csrc/` and `Sub_Ghz/protocols/` with `--enable=warning,performance,portability`.
+  Also runs cppcheck MISRA-C addon in advisory mode.  Triggered via `workflow_dispatch`
+  (Actions tab) — not a required PR check.
+
+- **Unit testing framework** — Added Unity test framework (v2.6.1) with host-side
+  CMake build in `tests/`.  Initial test suite covers `bit_util.c` (33 tests):
+  CRC-4/7/8/16, parity, reverse/reflect, XOR/add, CCITT/IBM whitening, LFSR digest,
+  and UART extraction functions.
+
+- **Address Sanitizer builds** — Host-side test build enables `-fsanitize=address,undefined`
+  by default, catching memory bugs (buffer overflows, use-after-free, undefined behavior)
+  at test time without requiring hardware.
+
+- **Doxygen documentation** — Added `Doxyfile` and `docs.yml` workflow to auto-generate
+  API documentation from source comments and publish to GitHub Pages.
+
+- **Unit test CI** — Added `tests.yml` workflow running host-side tests with ASan+UBSan
+  on every PR and push that touches source files.
+
+- **cppcheck suppressions** — Added `.cppcheck-suppressions.txt` for vendor HAL and
+  expected embedded firmware patterns.
+
+- **IR Saved File Actions menu** — Pressing LEFT on the IR commands list now opens
+  a file-level action menu with Send All (transmit every command sequentially),
+  Info (file name, command count, parsed/raw breakdown, protocol), Rename, and
+  Delete.  This brings IR in line with the Flipper `infrared_scene_saved_menu.c`
+  pattern already used by Sub-GHz, NFC, and RFID.
+
+- **Sub-GHz Saved Signal Info screen** — The Sub-GHz saved file action menu now
+  includes an Info item that loads the `.sub` file and displays protocol name,
+  key value, bit count, timing element, frequency, and modulation preset.
+  Supports both parsed and raw signal types.
+
 ### Changed
+
+- **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
+  Added per-file `COMPILE_OPTIONS` in `cmake/m1_01/CMakeLists.txt` to silence
+  the harmless ISO C99 portability warning on `u8g2_fonts.c`.
+
+- **CI: automatic changelog version stamping** — The `build-release.yml`
+  workflow now automatically replaces `## [Unreleased]` in `CHANGELOG.md`
+  with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
+  after each successful release, and inserts a fresh empty `## [Unreleased]`
+  heading.  This prevents changelog entries from accumulating indefinitely
+  under the `[Unreleased]` heading.
 
 - **Firmware download source config** — `fw_sources.txt` now supports a
   `Category:` field (`firmware` or `esp32`) to distinguish M1 firmware
   sources from ESP32 AT firmware sources.  Existing configs without a
   `Category:` field default to `firmware`.
+
 - **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
   now shows a "Decode" option (first item) for RAW `.sub` files.  Selecting it
   feeds the raw pulse timing data through all registered protocol decoders
   offline (no radio needed) and displays any matched protocols with key, bit
   count, TE, and frequency.  Multiple decoded packets are shown in a scrollable
   list with detail view.  Inspired by Momentum firmware's decode feature.
+
 - Documentation: added mandatory bug-fix regression test policy to CLAUDE.md,
   DEVELOPMENT.md, and .github/GUIDELINES.md — every bug fix must include unit tests
   that fail before the fix and pass after it
+
 - Documentation: added explicit "no duplicate subsection headings" rule to CLAUDE.md
   and GUIDELINES.md changelog instructions — agents must scan the entire `[Unreleased]`
   block for an existing heading before creating a new one
 
+- **Documentation: font inventory in CLAUDE.md** — Added a comprehensive font
+  inventory table listing the 22 u8g2 fonts linked/used by application code,
+  their display-role macros, BadUSB API availability, ascent values, and
+  lowercase support.  Includes u8g2 suffix reference and font maintenance
+  rules so future agents keep the table current when fonts are added,
+  removed, or reassigned.
+
+- **CI workflow no longer runs on push to main** — Removed the `push`
+  trigger from `ci.yml` so the CI Build Check only runs on pull requests.
+  Previously, every push to `main` triggered both CI Build Check and
+  Build and Release in parallel, producing two identical firmware builds.
+  Build and Release already validates compilation, so the CI run was
+  fully redundant.  This halves the compute usage on push-to-main events.
+
+- **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
+  `subghz_raw_waveform_draw()` from filled vertical bars to a proper
+  square-wave oscilloscope trace.  High/low signal levels are now drawn
+  as 2px-thick horizontal rails with crisp vertical transition edges.
+  Added subtle dashed grid reference lines at the high, center, and low
+  positions for visual context.  Adjusted the waveform area geometry
+  (Y=15, H=36) so it no longer overlaps the RSSI bar.
+
+- **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
+  the intermediate "Press OK to browse" prompt screen.  Entering either scene
+  now opens the SD card file browser immediately.  BACK from the action menu
+  (Saved) or playback view (Playlist) re-opens the browser; BACK from the
+  browser returns to the Sub-GHz menu.  After Rename or Delete, the file
+  browser reopens automatically per the Saved Item Actions Pattern.
+
+- **File browser lists directories before files** — The SD card file browser
+  now sorts entries with directories first, then files, each group sorted
+  alphabetically (case-insensitive).  This matches Flipper Zero / Momentum
+  firmware behaviour and prevents subdirectories (e.g. `playlist/`) from
+  appearing in the middle of signal files.
+
+- **Hapax logo — H inside diamond** — Updated all three M1 logo bitmap arrays
+  (128×64 splash, 40×32 boot, 26×14 status bar) in `m1_display_data.c` with
+  Hapax H-mark variants.  The Hapax "H" letterform is carved into the center
+  diamond of the M mountain logo by clearing specific pixels to form two vertical
+  legs and a horizontal crossbar.  The diamond outline and mountain slopes are
+  unchanged from stock.  PNG previews extracted from the C byte arrays are in
+  `documentation/logo_previews/`.
+
+- **Settings — LCD & Notifications menu** — Removed the bottom instruction bar
+  ("U/D=Sel L/R=Change") that wasted 12px of screen space.  Now uses the same
+  layout as the Sub-GHz Config scene: title with separator line, 8px rows showing
+  all 5 items at once (no scrolling needed), and `< value >` arrows on the selected
+  item to indicate L/R cycling.  Reclaims the bottom 12px and eliminates the
+  3-item scrolling window.
+
+- **Settings — About screen** — Removed the bottom Prev/Next inverted bar.
+  L/R navigation is intuitive; replaced with a subtle centered `< 1/3 >` page
+  indicator.  Added title header with separator line for visual consistency.
+  Content repositioned to use the full display area.
+
+- **Standardized Saved Item Actions pattern** — All four modules (Sub-GHz, IR,
+  NFC, RFID) now implement the core saved-item verbs: Emulate/Send, Info,
+  Rename, Delete.  Documented the canonical pattern in CLAUDE.md under
+  "Saved Item Actions Pattern" so future modules follow the same structure.
+
+- **Documentation: Saved Item Actions as canonical UX standard** — The Saved Item
+  Actions Pattern is now the highest-priority UX standard across all docs.
+  Updated CLAUDE.md (precedence note), ARCHITECTURE.md (new section),
+  DEVELOPMENT.md (mandatory for new modules), flipper_import_agent.md (Pattern
+  Adoption Policy table: scene UX follows Flipper), and .github/GUIDELINES.md
+  (new § 11 UX Pattern Standards).  Previously defined UX preferences (button bar
+  rules, display layout) still apply when not superseded by this pattern.
+
+- **IR commands bottom bar** — The bottom bar now shows "< More" (for file
+  actions) and "Send >" instead of the generic "Open" label.
+
+- **NFC menu: merged "Tools" into "Extra Actions"** — The top-level NFC menu
+  had both "Extra Actions" and "Tools" submenus, which is inconsistent with
+  Flipper Zero and Momentum firmware (both only have "Extra Actions").  All
+  eight former Tools items (Tag Info, Clone Emulate, NFC Fuzzer, Write UID,
+  Wipe Tag, Cyborg Detector, Read NDEF, Write URL) are now part of the
+  Extra Actions submenu.  The NFC main menu is now 6 items: Read, Detect Reader,
+  Saved, Extra Actions, Add Manually, Field Detect.
+
+- **NFC post-read submenu: renamed "Utils" to "Card Actions"** — The contextual
+  submenu shown after reading or loading an NFC card (More Options → Utils) has been
+  renamed to "Card Actions" for clarity, since these tools operate on the
+  currently-loaded card data.
+
+- **Removed ESP32 boot-time auto-init** — The `m1_esp32_auto_init` setting
+  (Settings → System → "ESP32 at boot") was a Hapax addition that stock firmware
+  does not have.  ESP32 is now always initialized on-demand when a WiFi, BT, or
+  802.15.4 function is first selected, matching stock Monstatek behaviour.  The
+  "System Settings" screen and its SD card persistence key (`esp32_auto_init`)
+  have been removed.  Existing settings files with the key are harmlessly ignored.
+
+- **Sub-GHz Config scene: add TX Power and ISM Region settings** — The legacy
+  `sub_ghz_radio_settings()` screen (stock Monstatek) exposed TX Power, Modulation,
+  and ISM Region.  The scene-based Config only had Frequency, Hopping, Modulation,
+  and Sound — TX Power and ISM Region were inaccessible.  Now all 6 settings are
+  available in the scene Config screen with scrollable navigation.  ISM Region
+  changes are persisted to SD card on exit via `settings_save_to_sd()`.  TX Power
+  changes are applied via new `_ext` accessor functions that bridge the static
+  `subghz_tx_power_idx` to scene code.
+
+- **Documentation overhaul** — comprehensive audit and update of all markdown files
+  for consistency with codebase state and completed PRs. README.md rewritten with
+  comparison table vs stock firmware, accurate protocol counts, missing features
+  (playlist, add manually, AES crypto, NTP sync), included databases section, and
+  expanded SD card layout. Updated DEVELOPMENT.md with full build environment and
+  architecture overview. Expanded ARCHITECTURE.md with missing directories and
+  module scene table. Fixed placeholder URLs in CONTRIBUTING.md, CODE_OF_CONDUCT.md,
+  SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
+  CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
+
 ### Fixed
+
+- **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
+  screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`
+  to `u8g2_font_helvB08_tr`.  The old font's '1' glyph was a featureless
+  2-pixel vertical bar indistinguishable from a capital I at a glance.  The
+  new font's '1' has a clear top hook, making "M1 Hapax" immediately
+  readable.  Both fonts are bold sans-serif with similar size (ascent 8 vs 9)
+  and near-identical string width (51 vs 52 px), so the overall look is
+  preserved.
 
 - **Sub-GHz Decode: deduplicate repeated transmissions** — RAW `.sub` files
   typically contain multiple copies of the same transmission (remotes repeat
@@ -128,88 +316,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mandatory `User-Agent: M1-Hapax/1.0` and `Accept: application/json` headers
   that the GitHub API requires.
 
-### Added
-
-- **Virtual keyboard — text-mode layout with SPACE key** — Added
-  `m1_vkb_get_text()` function that provides a context-specific keyboard
-  layout for general text input (passwords, device names).  The text-mode
-  keyboard replaces the underscore key with a visible SPACE indicator (⎵)
-  on lowercase and uppercase pages; underscore is moved to the symbols page
-  (replacing pipe `|`).  Follows Flipper Zero's pattern of multiple keyboard
-  layouts depending on context.  WiFi password entry and Bad-BT device name
-  entry now use the text-mode keyboard.  Filename entry (`m1_vkb_get_filename`)
-  retains the original layout without space.
-
-- **Static analysis (on-demand)** — Added `static-analysis.yml` workflow running cppcheck
-  on `m1_csrc/` and `Sub_Ghz/protocols/` with `--enable=warning,performance,portability`.
-  Also runs cppcheck MISRA-C addon in advisory mode.  Triggered via `workflow_dispatch`
-  (Actions tab) — not a required PR check.
-- **Unit testing framework** — Added Unity test framework (v2.6.1) with host-side
-  CMake build in `tests/`.  Initial test suite covers `bit_util.c` (33 tests):
-  CRC-4/7/8/16, parity, reverse/reflect, XOR/add, CCITT/IBM whitening, LFSR digest,
-  and UART extraction functions.
-- **Address Sanitizer builds** — Host-side test build enables `-fsanitize=address,undefined`
-  by default, catching memory bugs (buffer overflows, use-after-free, undefined behavior)
-  at test time without requiring hardware.
-- **Doxygen documentation** — Added `Doxyfile` and `docs.yml` workflow to auto-generate
-  API documentation from source comments and publish to GitHub Pages.
-- **Unit test CI** — Added `tests.yml` workflow running host-side tests with ASan+UBSan
-  on every PR and push that touches source files.
-- **cppcheck suppressions** — Added `.cppcheck-suppressions.txt` for vendor HAL and
-  expected embedded firmware patterns.
-### Changed
-
-- **CI workflow no longer runs on push to main** — Removed the `push`
-  trigger from `ci.yml` so the CI Build Check only runs on pull requests.
-  Previously, every push to `main` triggered both CI Build Check and
-  Build and Release in parallel, producing two identical firmware builds.
-  Build and Release already validates compilation, so the CI run was
-  fully redundant.  This halves the compute usage on push-to-main events.
-- **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
-  `subghz_raw_waveform_draw()` from filled vertical bars to a proper
-  square-wave oscilloscope trace.  High/low signal levels are now drawn
-  as 2px-thick horizontal rails with crisp vertical transition edges.
-  Added subtle dashed grid reference lines at the high, center, and low
-  positions for visual context.  Adjusted the waveform area geometry
-  (Y=15, H=36) so it no longer overlaps the RSSI bar.
-- **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
-  the intermediate "Press OK to browse" prompt screen.  Entering either scene
-  now opens the SD card file browser immediately.  BACK from the action menu
-  (Saved) or playback view (Playlist) re-opens the browser; BACK from the
-  browser returns to the Sub-GHz menu.  After Rename or Delete, the file
-  browser reopens automatically per the Saved Item Actions Pattern.
-- **File browser lists directories before files** — The SD card file browser
-  now sorts entries with directories first, then files, each group sorted
-  alphabetically (case-insensitive).  This matches Flipper Zero / Momentum
-  firmware behaviour and prevents subdirectories (e.g. `playlist/`) from
-  appearing in the middle of signal files.
-
-### Fixed
-
 - **Splash screen showing "M1 H" instead of "M1 Hapax"** — Changed
   `M1_POWERUP_LOGO_FONT` from `u8g2_font_tenthinnerguys_tu` (uppercase only,
   glyphs 32-95) to `u8g2_font_tenthinnerguys_tr` (restricted, glyphs 32-127)
   so lowercase letters in "Hapax" are rendered correctly.
+
 - **802.15.4 (Zigbee/Thread) ESP32 resource leak** — Added `m1_esp32_deinit()`
   to all four exit paths in `ieee802154_scan()`.  Previously, every Zigbee/Thread
   scan left the ESP32 SPI transport initialized on exit, wasting power and
   potentially interfering with subsequent WiFi/BT operations.
+
 - **BLE Spam ESP32 resource leak** — Added `m1_esp32_deinit()` to both the
   early return (ESP32 not ready) and normal exit paths in `ble_spam_run()`.
+
 - **Bad-BT ESP32 resource leak** — Added `m1_esp32_deinit()` to all five exit
   paths in `badbt_run()` (ESP32 not ready, BLE HID init failure, connection
   timeout, SD card error, and normal exit).  Previously only `ble_hid_deinit()`
   was called, leaving the underlying SPI transport active.
+
 - **WiFi disconnect early return without ESP32 deinit** — Added
   `m1_esp32_deinit()` to the early return path in `wifi_disconnect()` when
   `wifi_ensure_esp32_ready()` fails.  The ESP32 may have been partially
   initialized before the failure.
+
 - **NFC worker ignoring Q_EVENT_NFC_STOP** — Added handler for
   `Q_EVENT_NFC_STOP` in the NFC worker state machine's `NFC_STATE_PROCESS`
   case.  Previously this event was silently discarded, leaving the worker
   stuck in PROCESS state — `nfc_deinit_func()` never ran and `EN_EXT_5V`
   was never deasserted.  Two call sites in `m1_nfc.c` (unlock read and
   unlock with reader) send this event on user cancellation.
+
 - **IR Send All skipping deinit on timeout** — Changed the Send All loop in
   `m1_ir_universal.c` to always call `infrared_encode_sys_deinit()` after
   each command, regardless of whether `Q_EVENT_IRRED_TX` was received.
@@ -223,6 +359,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sub_ghz_set_opmode(ISOLATED)` which puts the SI4463 to SLEEP, completely undoing
   the RX start.  TIM1 captured zero edges because GPIO0 outputs nothing while the
   radio is asleep.  Moved the TX cleanup to before the RX initialization sequence.
+
 - **Sub-GHz Read and Read Raw radio recovery after blocking delegates** — Added
   `menu_sub_ghz_init()` (full radio PowerUp + config reset) at the start of both
   Read and Read Raw RX initialization, matching the Spectrum Analyzer's pattern.
@@ -231,23 +368,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on `radio_init_rx_tx()`'s retry loop to recover the powered-off SI4463.  The
   explicit reset ensures the radio is always in a clean, known state before
   starting RX.
+
 - **Sub-GHz Playlist inter-item latency** — Added `menu_sub_ghz_init()` after each
   `sub_ghz_replay_flipper_file()` call in the playlist transmitter.  Without this,
   the radio was left powered off between playlist items (replay calls
   `menu_sub_ghz_exit()`), forcing the next file's TX setup to recover from a dead
   radio via `radio_init_rx_tx()`'s retry loop — adding ~100ms latency per item.
-
-### Changed
-
-- **Hapax logo — H inside diamond** — Updated all three M1 logo bitmap arrays
-  (128×64 splash, 40×32 boot, 26×14 status bar) in `m1_display_data.c` with
-  Hapax H-mark variants.  The Hapax "H" letterform is carved into the center
-  diamond of the M mountain logo by clearing specific pixels to form two vertical
-  legs and a horizontal crossbar.  The diamond outline and mountain slopes are
-  unchanged from stock.  PNG previews extracted from the C byte arrays are in
-  `documentation/logo_previews/`.
-
-### Fixed
 
 - **Sub-GHz 2FSK replay at all frequencies** — Emulate now correctly uses FSK
   modulation when replaying Flipper .sub files with `Preset: 2FSKDev238Async` (or
@@ -255,48 +381,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MHz) always forced OOK modulation and the CUSTOM band handler only checked FSK
   for frequencies ≥ 850 MHz.  The fix forces CUSTOM band mode when FSK is detected,
   loads the 915 FSK radio config, and retunes to the target frequency.
+
 - **Sub-GHz CUSTOM band antenna switch** — Frontend (antenna path) for CUSTOM
   band frequencies is now selected based on the actual target frequency, not the
   base config band.  Fixes incorrect antenna path when the radio config base band
   differs from the target frequency (e.g. 915 FSK config loaded for 433 MHz FSK).
+
 - **Sub-GHz preset parser consistency** — `flipper_subghz_preset_to_modulation()`
   now uses case-insensitive matching and recognises ASK presets, matching the replay
   function's `stristr()` approach.
+
 - **Sub-GHz Read Raw — RSSI feedback during recording** — RSSI bar now updates
   on every 200ms display refresh (not only when ring-buffer flush events arrive),
   providing continuous signal-strength feedback while recording.
+
 - **Sub-GHz Read Raw — sample count display** — Shows exact sample count when
   below 1000 instead of always displaying "0k".
+
 - **Sub-GHz Read Raw — sample count accuracy** — Fixed overcounting in the flush
   function which added the total available ring-buffer depth instead of the 512
   samples actually consumed per flush.
+
 - **Sub-GHz Emulate — native .sgh file support** — Emulate now works with M1's
   own .sgh recording files (Read Raw output), not only Flipper .sub files.  Added
   parsing for `Modulation:` header and `Data:` lines in M1 native format.
+
 - **Sub-GHz Emulate — error feedback** — Emulate now displays an error message
   box when replay fails (file not found, no data, unsupported protocol, etc.)
   instead of silently returning to the saved menu.
+
 - **Sub-GHz Emulate — radio state after replay** — Radio hardware is re-initialized
   after emulate returns, preventing subsequent Read/Read Raw from failing because
   the SI4463 was left powered off.
+
 - **IR database — Windows reserved filename** — Renamed `ir_database/AC/AUX.ir`
   to `AUX_.ir`.  `AUX` is a reserved device name on Windows, causing
   `error: invalid path` on checkout and reset operations.
-
-### Changed
-
-- **Settings — LCD & Notifications menu** — Removed the bottom instruction bar
-  ("U/D=Sel L/R=Change") that wasted 12px of screen space.  Now uses the same
-  layout as the Sub-GHz Config scene: title with separator line, 8px rows showing
-  all 5 items at once (no scrolling needed), and `< value >` arrows on the selected
-  item to indicate L/R cycling.  Reclaims the bottom 12px and eliminates the
-  3-item scrolling window.
-- **Settings — About screen** — Removed the bottom Prev/Next inverted bar.
-  L/R navigation is intuitive; replaced with a subtle centered `< 1/3 >` page
-  indicator.  Added title header with separator line for visual consistency.
-  Content repositioned to use the full display area.
-
-### Fixed
 
 - **NFC Amiibo emulation — Nintendo Switch compatibility** — Fixed T2T card
   emulation failing on Nintendo Switch (and other readers with anti-clone
@@ -309,6 +429,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rfal_rfst25r3916.c` at the RFAL driver level to immediately transition to
   SLEEP_A within the ISR context, meeting the Switch's tight ~1ms WUPA timing.
   Cherry-picked from sincere360/M1_SiN360 v0.9.0.5.
+
 - **Sub-GHz raw recording (Read Raw)** — Fixed raw signal recording which was
   completely non-functional.  The Read Raw scene set up the radio and ISR for
   capture but never opened an SD card file, never read captured pulses from the
@@ -319,6 +440,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopping, DOWN/Save shows the auto-generated filename.  Previously, pressing
   Save after recording pushed to the protocol-decode save scene which
   immediately exited because no decoded protocol data existed.
+
 - **ESP32 screen responsiveness** — Reduced AT readiness probe timeout from
   2s→1s per probe and inter-probe delay from 500ms→200ms, cutting worst-case
   ESP32 initialization blocking from ~25s to ~12s.  Added separate 5s timeout
@@ -328,6 +450,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   phases across WiFi, Bluetooth, and 802.15.4 modules so the interactive
   result loops start with clean queues.  BACK button pressed during ESP32
   init is now detected and exits immediately instead of being silently lost.
+
 - **WiFi/BT scan regression** — Removed the AT readiness probe added in v0.9.0.30
   (`spi_AT_send_recv("AT\r\n")` loop at the end of `esp32_main_init()`).  The probe
   sent AT commands to the ESP32 during its boot sequence, before the AT command
@@ -339,10 +462,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scan timeout (30 s WiFi, 10 s BLE) as in v0.9.0.29, while the actual scan command
   still gets a fresh full timeout via the `saved_scan_timeout` + `tick_t0` reset
   pattern.  Button event draining and queue resets (added in v0.9.0.40) are retained.
+
 - **ESP32 screen responsiveness** — Added stale button event draining after all
   blocking ESP32 init and scan phases across WiFi, Bluetooth, and 802.15.4 modules
   so the interactive result loops start with clean queues.  BACK button pressed during
   ESP32 init is now detected and exits immediately instead of being silently lost.
+
 - **Sub-GHz scene display cleanup** — Fixed overlapping text and tight spacing
   across multiple Sub-GHz scenes:
   - **Need Saving dialog**: Moved dialog text and choice buttons up to prevent
@@ -364,53 +489,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   8px rows matching the menu scene layout.  All 6 config items now fit
   cleanly without scrolling.
 
-### Added
-
-- **IR Saved File Actions menu** — Pressing LEFT on the IR commands list now opens
-  a file-level action menu with Send All (transmit every command sequentially),
-  Info (file name, command count, parsed/raw breakdown, protocol), Rename, and
-  Delete.  This brings IR in line with the Flipper `infrared_scene_saved_menu.c`
-  pattern already used by Sub-GHz, NFC, and RFID.
-- **Sub-GHz Saved Signal Info screen** — The Sub-GHz saved file action menu now
-  includes an Info item that loads the `.sub` file and displays protocol name,
-  key value, bit count, timing element, frequency, and modulation preset.
-  Supports both parsed and raw signal types.
-
-### Changed
-
-- **Standardized Saved Item Actions pattern** — All four modules (Sub-GHz, IR,
-  NFC, RFID) now implement the core saved-item verbs: Emulate/Send, Info,
-  Rename, Delete.  Documented the canonical pattern in CLAUDE.md under
-  "Saved Item Actions Pattern" so future modules follow the same structure.
-- **Documentation: Saved Item Actions as canonical UX standard** — The Saved Item
-  Actions Pattern is now the highest-priority UX standard across all docs.
-  Updated CLAUDE.md (precedence note), ARCHITECTURE.md (new section),
-  DEVELOPMENT.md (mandatory for new modules), flipper_import_agent.md (Pattern
-  Adoption Policy table: scene UX follows Flipper), and .github/GUIDELINES.md
-  (new § 11 UX Pattern Standards).  Previously defined UX preferences (button bar
-  rules, display layout) still apply when not superseded by this pattern.
-- **IR commands bottom bar** — The bottom bar now shows "< More" (for file
-  actions) and "Send >" instead of the generic "Open" label.
-- **NFC menu: merged "Tools" into "Extra Actions"** — The top-level NFC menu
-  had both "Extra Actions" and "Tools" submenus, which is inconsistent with
-  Flipper Zero and Momentum firmware (both only have "Extra Actions").  All
-  eight former Tools items (Tag Info, Clone Emulate, NFC Fuzzer, Write UID,
-  Wipe Tag, Cyborg Detector, Read NDEF, Write URL) are now part of the
-  Extra Actions submenu.  The NFC main menu is now 6 items: Read, Detect Reader,
-  Saved, Extra Actions, Add Manually, Field Detect.
-- **NFC post-read submenu: renamed "Utils" to "Card Actions"** — The contextual
-  submenu shown after reading or loading an NFC card (More Options → Utils) has been
-  renamed to "Card Actions" for clarity, since these tools operate on the
-  currently-loaded card data.
-- **Removed ESP32 boot-time auto-init** — The `m1_esp32_auto_init` setting
-  (Settings → System → "ESP32 at boot") was a Hapax addition that stock firmware
-  does not have.  ESP32 is now always initialized on-demand when a WiFi, BT, or
-  802.15.4 function is first selected, matching stock Monstatek behaviour.  The
-  "System Settings" screen and its SD card persistence key (`esp32_auto_init`)
-  have been removed.  Existing settings files with the key are harmlessly ignored.
-
-### Fixed
-
 - **WiFi/BT scan failure after ESP32 cold init** — After `esp32_main_init()`
   the SPI transport layer was ready but the ESP32-C6 AT command processor had
   not finished booting its WiFi/BLE stacks.  The first AT command
@@ -420,10 +498,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sends `AT\r\n` and waits for `OK` (up to 10 × 500 ms) before marking init
   complete — all subsequent callers (WiFi scan, BLE scan, 802.15.4, etc.) now
   start with a confirmed-ready ESP32.
+
 - **Misleading "Failed. Retrying..." WiFi message** — The scan failure screen
   said "Failed. Retrying..." but no retry logic existed; the device just waited
   for the user to press Back with no on-screen hint.  Changed to "Scan failed!"
   which accurately describes the state.
+
 - **Sub-GHz Read never recognises signals** — The scene-based Read mode queued
   every individual radio edge as a separate FreeRTOS event, but the event loop
   processed only one pulse per iteration (with LCD redraws in between).  At
@@ -443,6 +523,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      full 16-bit period (65.5 ms) covers virtually all OOK protocol gaps.
   Additionally, the TIM1 Update interrupt is now disabled during RX to prevent
   the TX-specific UP handler from executing while no transmission is active.
+
 - **Sub-GHz scene bottom-bar overlap cleanup** — Several Sub-GHz scene screens
   had menu content drawn too close to (or overlapping) the 12px bottom button bar
   at y=52.  Specific fixes:
@@ -468,6 +549,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache line size to prevent data corruption from cache-line sharing.  Both buffers
   now over-allocate by 31 bytes and align the usable pointer to a 32-byte boundary,
   with the original base pointer stored separately for correct `free()`.
+
 - **Main menu off-by-one: highlight and selection could diverge** — When
   returning from a scene-based module whose blocking delegates used legacy
   X_MENU operations (NFC Read, RFID Read, etc.), the `x_menu_update_init`
@@ -478,6 +560,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   below the highlighted one.  The fix clears stale X_MENU state without
   restoring from the backup, and verifies that the display position matches
   `sel_item` — recalculating if they diverge.
+
 - **Stale button events after module exit** — `button_events_q_hdl` was
   never reset when a scene-based module exited, so a leftover button press
   from inside the module could be consumed by the main menu handler on the
@@ -485,6 +568,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scene exit paths (generic `m1_scene_run`, Sub-GHz scene, and the main
   menu `subfunc_handler`) now drain the button queue before returning
   control to the main menu.
+
 - **Sub-GHz: `uint8_t`/`bool` type mismatch compile error** — `manchester_advance()`
   writes to a `bool *` output, but the Oregon V1 and Oregon3 decoders declared the
   receiving variable as `uint8_t`, causing a pointer-type mismatch on strict compilers.
@@ -496,39 +580,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved `.sub` files (wrote `Frequency: 0`) and caused TX replay to use the wrong
   radio band.  Now correctly stores the active preset frequency via a new
   `subghz_get_freq_hz_ext()` helper and the `current_freq_hz` app field.
+
 - **Sub-GHz Read: history auto-select picked oldest signal** — After a new decode,
   the history list selected index `count-1` (oldest, due to reversed ring-buffer
   indexing) instead of index 0 (newest).  User had to manually scroll up after every
   decode.  Now auto-selects the most recent signal and scrolls to the top.
+
 - **Sub-GHz Read: hopper never actually retuned the radio** — The hopper tick handler
   updated `app->hopper_freq` in software but never called any radio hardware function
   to change frequency.  The Si446x stayed on the initial frequency for the entire
   session.  Now calls `subghz_retune_freq_hz_ext()` which mirrors the legacy
   pause→set-freq→set-opmode→start sequence from `subghz_hopper_retune_next()`.
+
 - **Sub-GHz Read: `current_freq_hz` never populated** — The `SubGhzApp.current_freq_hz`
   field (declared in header) was never assigned.  It is now set on RX start, frequency
   preset cycling (L/R), and hopper ticks, keeping it consistent with the actual radio
   frequency at all times.
-
-### Changed
-
-- **Sub-GHz Config scene: add TX Power and ISM Region settings** — The legacy
-  `sub_ghz_radio_settings()` screen (stock Monstatek) exposed TX Power, Modulation,
-  and ISM Region.  The scene-based Config only had Frequency, Hopping, Modulation,
-  and Sound — TX Power and ISM Region were inaccessible.  Now all 6 settings are
-  available in the scene Config screen with scrollable navigation.  ISM Region
-  changes are persisted to SD card on exit via `settings_save_to_sd()`.  TX Power
-  changes are applied via new `_ext` accessor functions that bridge the static
-  `subghz_tx_power_idx` to scene code.
-- **Documentation overhaul** — comprehensive audit and update of all markdown files
-  for consistency with codebase state and completed PRs. README.md rewritten with
-  comparison table vs stock firmware, accurate protocol counts, missing features
-  (playlist, add manually, AES crypto, NTP sync), included databases section, and
-  expanded SD card layout. Updated DEVELOPMENT.md with full build environment and
-  architecture overview. Expanded ARCHITECTURE.md with missing directories and
-  module scene table. Fixed placeholder URLs in CONTRIBUTING.md, CODE_OF_CONDUCT.md,
-  SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
-  CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
 
 ### Removed
 
@@ -543,6 +610,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `subghz_replay_play_gui_update()` (still called by live
   `sub_ghz_replay_flipper_file()`), all waveform helpers, static TX helpers, and
   all blocking delegate functions used by scene wrappers.
+
 - **Bluetooth legacy dead code (~300 lines)** — Removed the dead simple-mode
   scene code in `m1_bt_scene.c` (entire `#ifndef M1_APP_BT_MANAGE_ENABLE` block),
   the legacy `bluetooth_scan()` original implementation in the `#else` fallback
@@ -551,15 +619,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ble_scan_list_print()` helpers, and the `bluetooth_config()` declaration from
   `m1_bt.h`. All live blocking delegates (`bluetooth_scan()`, `bluetooth_saved_devices()`,
   `bluetooth_advertise()`, `bluetooth_info()`, `bluetooth_set_badbt_name()`) retained.
+
 - **WiFi legacy dead code (~50 lines)** — Removed the dead `wifi_config()` stub in
   the `#else` fallback of `m1_wifi.c` (never compiled since `M1_APP_WIFI_CONNECT_ENABLE`
   is always defined), the `wifi_config()` redirect function (scene delegate now calls
   `wifi_saved_networks()` directly), and the unused `menu_wifi_exit()` empty function.
   Cleaned up corresponding declarations from `m1_wifi.h`.
+
 - **NFC dead code (~28 lines)** — Removed `#if 0` empty view tables
   (`view_nfc_tools_table`, `view_nfc_saved_table`) and the never-compiled
   `SEE_DUMP_MEMORY` debug block (commented-out `#define` + `#ifdef` guard) from
   `m1_nfc.c`. RFID audited — no dead code found.
+
 - **Infrared dead code (~10 lines)** — Removed the empty `menu_infrared_exit()`
   function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
   scene entry passes `NULL` as deinit; the function was never called.
