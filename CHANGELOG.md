@@ -12,13 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Dark Mode (LCD & Notifications)** — New "Dark Mode" toggle in Settings →
-  LCD & Notifications.  Inverts every pixel on screen via software buffer XOR
-  in `m1_u8g2_nextpage()`, giving white-on-black rendering for all content
-  including text, XBM icons, and draw primitives.  Software inversion is used
-  instead of the ST7567 hardware `0xA7` command so that RPC screen streaming
-  also reflects the inverted image.  `m1_draw_icon()` updated to route through
-  the m1 wrapper path for consistent dark mode behaviour.  Setting is persisted
-  to SD card (`dark_mode` key in `settings.cfg`).
+  LCD & Notifications.  Inverts every pixel on screen via the ST7567 hardware
+  inverse display command (`0xA7`/`0xA6`), giving white-on-black rendering for
+  all content including text, XBM icons, and draw primitives.  Hardware
+  inversion covers the full controller RAM (132×65), eliminating the light
+  pixel border that software-only XOR left at the LCD edges.  RPC screen
+  streaming independently XORs its own framebuffer copy so the desktop app
+  still sees the correct inverted image.  All rendering paths route through
+  `m1_u8g2_firstpage()`/`m1_u8g2_nextpage()` wrappers for consistent
+  behaviour.  Setting is persisted to SD card (`dark_mode` key in
+  `settings.cfg`) and applied via `m1_lcd_set_dark_mode()` on boot.
 
 - **Text Size setting (LCD & Notifications)** — New "Text Size" option with
   Small (default) and Large modes.  Large mode uses a clearer `spleen5x8`
@@ -335,6 +338,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a safety net in `http_get()` for non-compliant servers.
   `http_download_to_file()` now detects chunked responses and fails fast
   rather than writing corrupt data.
+- **Dark mode: light pixel border eliminated** — Switched dark mode from
+  software framebuffer XOR to the ST7567 hardware inverse display command
+  (`0xA7`/`0xA6`).  The software XOR only inverted the 128×64 framebuffer
+  area, leaving unmapped LCD controller RAM pixels (the ST7567 has 132×65
+  RAM) in their default un-inverted state, creating a visible light border
+  around the screen.  The hardware command inverts ALL pixels on the panel,
+  eliminating the border completely.  RPC screen streaming continues to work
+  because `rpc_send_screen_frame()` independently XORs its own framebuffer
+  copy when `m1_dark_mode` is set.
+
+- **Dark mode not applied across all screens** — Replaced all remaining
+  stock `u8g2_FirstPage()`/`u8g2_NextPage()` calls with the M1 wrapper
+  functions `m1_u8g2_firstpage()`/`m1_u8g2_nextpage()` across 17 source
+  files (NFC, RFID, Sub-GHz, IR, GPIO, storage browser, power control,
+  signal generator, music player, field detect, flipper integration, CLI,
+  app manager, system splash, and display utilities).  These stock calls
+  bypassed the wrapper path, which handles RPC screen streaming
+  notifications.  With hardware LCD inversion now handling dark mode
+  visuals, dark mode renders correctly on every screen regardless of which
+  display path is used.
 
 - **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
   screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`

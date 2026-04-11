@@ -427,7 +427,7 @@ void infrared_saved_remotes(void)
 	u8g2_DrawStr(&m1_u8g2, 15, 50, ir_data);
 	sprintf(ir_data, "Command: 0x%04X", irmp_data.command);
 	u8g2_DrawStr(&m1_u8g2, 15, 60, ir_data);
-	u8g2_NextPage(&m1_u8g2); // Update display RAM
+	m1_u8g2_nextpage(); // Update display RAM
 
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
     infrared_encode_sys_init();

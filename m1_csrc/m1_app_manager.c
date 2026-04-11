@@ -331,7 +331,7 @@ static void apps_draw_list(const char *title, uint16_t count, uint16_t selection
     if (visible > LIST_VISIBLE_ITEMS)
         visible = LIST_VISIBLE_ITEMS;
 
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Title bar */
@@ -395,7 +395,7 @@ static void apps_draw_list(const char *title, uint16_t count, uint16_t selection
 /*============================================================================*/
 static void apps_draw_message(const char *line1, const char *line2)
 {
-    u8g2_FirstPage(&m1_u8g2);
+    m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Title bar */

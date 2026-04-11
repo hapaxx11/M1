@@ -657,6 +657,10 @@ apply:
     /* Apply brightness */
     lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
 
+    /* Apply dark mode — sends the ST7567 hardware inverse display command
+     * so the LCD matches the persisted m1_dark_mode value on boot. */
+    m1_lcd_set_dark_mode(m1_dark_mode);
+
     /* Apply orientation */
     settings_apply_orientation(m1_screen_orientation);
 }

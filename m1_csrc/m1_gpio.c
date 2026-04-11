@@ -174,7 +174,7 @@ void gpio_manual_control(void)
 
 	sprintf(prn_name, "%s: %s", m1_ext_gpio_label[m1_ext_gpio_id], (m1_ext_gpio_stat[m1_ext_gpio_id]==1)?"ON":"OFF");
 	m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-	u8g2_NextPage(&m1_u8g2); // Update display RAM
+	m1_u8g2_nextpage(); // Update display RAM
 
 	xQueueReset(main_q_hdl); // Reset main q before return
 } // void gpio_manual_control(void)
@@ -205,7 +205,7 @@ void gpio_3_3v_on_gpio(void)
 
 	sprintf(prn_name, "%s: %s", m1_ext_gpio_label[0], (m1_ext_gpio_stat[0]==1)?"ON":"OFF");
 	m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-	u8g2_NextPage(&m1_u8g2); // Update display RAM
+	m1_u8g2_nextpage(); // Update display RAM
 
 	xQueueReset(main_q_hdl); // Reset main q before return
 } // void gpio_3_3v_on_gpio(void)
@@ -236,7 +236,7 @@ void gpio_5v_on_gpio(void)
 
 	sprintf(prn_name, "%s: %s", m1_ext_gpio_label[1], (m1_ext_gpio_stat[1]==1)?"ON":"OFF");
 	m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-	u8g2_NextPage(&m1_u8g2); // Update display RAM
+	m1_u8g2_nextpage(); // Update display RAM
 
 	xQueueReset(main_q_hdl); // Reset main q before return
 } // void gpio_5v_on_gpio(void)

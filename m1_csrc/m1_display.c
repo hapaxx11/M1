@@ -426,7 +426,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	} // switch ( direction )
 
 	/* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	if ( n_items >= menu_window_sizes[menu_level_id] )
@@ -484,7 +484,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	// Draw the scroll bar handle
 	u8g2_DrawBox(&m1_u8g2, MENU_SCROLLBAR_POS_X, (M1_LCD_DISPLAY_HEIGHT*sel_item)/num_items, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT/num_items);
 
-	u8g2_NextPage(&m1_u8g2); // Update display RAM
+	m1_u8g2_nextpage(); // Update display RAM
 
 	// Back up
 	if ( x_menu_update_init )
@@ -526,11 +526,11 @@ void m1_gui_scr_animation(void)
 		// Draw time measured approximately 14ms for a full screen
 		// CPU running at 75MHz
 		// I2C speed = 400KHz
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		do
 	    {
 			u8g2_DrawXBMP(&m1_u8g2, 0, 0, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT, menu_m1_logo_array[image_index]);
-	    } while (u8g2_NextPage(&m1_u8g2));
+	    } while (m1_u8g2_nextpage());
 	} // if ( (time_tn - time_t0) >= MENU_M1_SCR_ANI_TIMEOUT )
 } // void m1_gui_scr_animation(void)
 
@@ -664,35 +664,40 @@ uint8_t m1_message_box(u8g2_t *u8g2, const char *title1, const char *title2, con
 
 uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *title2, const char *title3, const char *buttons)
 {
+    /* The u8g2 parameter is kept for scripting API compatibility but all
+     * rendering uses the global m1_u8g2 instance to stay consistent with
+     * the m1_u8g2_firstpage() / m1_u8g2_nextpage() wrappers. */
+    (void)u8g2;
+
     uint8_t cursor = 0;
     uint8_t button_cnt = u8x8_GetStringLineCnt(buttons);
     if (button_cnt == 0) return 0;
 
     for (;;) {
-        u8g2_FirstPage(u8g2);
+        m1_u8g2_firstpage();
         do {
-            u8g2_SetFont(u8g2, u8g2_font_6x10_tr);
-            uint8_t line_height = u8g2_GetAscent(u8g2) - u8g2_GetDescent(u8g2);
+            u8g2_SetFont(&m1_u8g2, u8g2_font_6x10_tr);
+            uint8_t line_height = u8g2_GetAscent(&m1_u8g2) - u8g2_GetDescent(&m1_u8g2);
             uint8_t y = 15;
 
-            if (title1) { u8g2_DrawStr(u8g2, 2, y, title1); y += line_height; }
-            if (title2) { u8g2_DrawStr(u8g2, 2, y, title2); y += line_height; }
-            if (title3) { u8g2_DrawStr(u8g2, 2, y, title3); y += line_height; }
+            if (title1) { u8g2_DrawStr(&m1_u8g2, 2, y, title1); y += line_height; }
+            if (title2) { u8g2_DrawStr(&m1_u8g2, 2, y, title2); y += line_height; }
+            if (title3) { u8g2_DrawStr(&m1_u8g2, 2, y, title3); y += line_height; }
 
             /* Draw buttons at the bottom */
             for (uint8_t i = 0; i < button_cnt; i++) {
                 const char *btn_text = u8x8_GetStringLineStart(i, buttons);
-                uint8_t btn_w = u8g2_GetStrWidth(u8g2, btn_text) + 4;
+                uint8_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_text) + 4;
                 uint8_t btn_x = (128 / (button_cnt + 1)) * (i + 1) - (btn_w / 2);
 
                 if (i == cursor) {
-                    u8g2_DrawBox(u8g2, btn_x - 2, 50, btn_w, 12);
-                    u8g2_SetDrawColor(u8g2, 0);
+                    u8g2_DrawBox(&m1_u8g2, btn_x - 2, 50, btn_w, 12);
+                    u8g2_SetDrawColor(&m1_u8g2, 0);
                 }
-                u8g2_DrawStr(u8g2, btn_x, 60, btn_text);
-                u8g2_SetDrawColor(u8g2, 1);
+                u8g2_DrawStr(&m1_u8g2, btn_x, 60, btn_text);
+                u8g2_SetDrawColor(&m1_u8g2, 1);
             }
-        } while (u8g2_NextPage(u8g2));
+        } while (m1_u8g2_nextpage());
 
         S_M1_Main_Q_t q_item;
         S_M1_Buttons_Status btn_status;
@@ -933,12 +938,12 @@ void m1_draw_text_box(u8g2_t *u8g2,
 void m1_gui_let_update_fw(void)
 {
     /* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
     do
     {
     	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_DrawXBMP(&m1_u8g2, 40, 2, 48, 48, fw_update_48x48); // draw firmware update icon
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 62, "Pls update firmware");
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 } // void m1_gui_let_update_fw(void)
