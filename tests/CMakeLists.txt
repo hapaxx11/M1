@@ -158,3 +158,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_registry PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_registry COMMAND test_subghz_registry)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_history (signal history ring buffer)
+# Pure data structure — no hardware dependencies at all.
+# Tests add/get ordering, duplicate detection, circular overflow,
+# and boundary conditions.
+# ------------------------------------------------------------------
+add_executable(test_subghz_history
+    test_subghz_history.c
+    ${STUBS_DIR}/subghz_history_impl.c
+)
+target_include_directories(test_subghz_history PRIVATE
+    ${STUBS_DIR}            # stm32h5xx_hal.h, m1_io_defs.h, m1_ring_buffer.h stubs
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_history PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_history PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_history COMMAND test_subghz_history)
