@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Build output filenames simplified** — `CMAKE_PROJECT_NAME` changed from
+  `M1_Hapax_v{MAJOR}.{MINOR}.{BUILD}.{RC}` to plain `M1_Hapax`.  Build
+  outputs are now `M1_Hapax.elf`, `M1_Hapax.bin`, `M1_Hapax.hex`, and
+  `M1_Hapax_wCRC.bin`.  Version numbers remain embedded in the firmware
+  binary via `m1_fw_update_bl.h` defines — only the filenames changed.
+
 ### Added
 
 - **Text Size setting (LCD & Notifications)** — New "Text Size" option with

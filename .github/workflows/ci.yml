@@ -75,17 +75,7 @@ jobs:
       # ------------------------------------------------------------------ #
       - name: Verify build artifacts
         run: |
-          # Derive project name from the header (same logic as CMakeLists.txt)
-          MAJOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MAJOR' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          MINOR=$(grep -m1 '#define[[:space:]]FW_VERSION_MINOR' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          BUILD=$(grep -m1 '#define[[:space:]]FW_VERSION_BUILD' m1_csrc/m1_fw_update_bl.h \
-                  | awk '{print $3}' | grep -Eo '^[0-9]+')
-          RC=$(grep -m1 '#define[[:space:]]FW_VERSION_RC' m1_csrc/m1_fw_update_bl.h \
-               | awk '{print $3}' | grep -Eo '^[0-9]+')
-
-          PROJECT="M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${RC}"
+          PROJECT="M1_Hapax"
 
           ELF="build/${PROJECT}.elf"
           BIN="build/${PROJECT}.bin"

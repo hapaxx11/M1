@@ -26,8 +26,8 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 # Post-build: inject CRC and Hapax metadata (required for SD card flashing)
-python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin \
-    --output build/M1_Hapax_v0.9.0.1_wCRC.bin \
+python tools/append_crc32.py build/M1_Hapax.bin \
+    --output build/M1_Hapax_wCRC.bin \
     --hapax-revision 1 --verbose
 ```
 
@@ -40,10 +40,10 @@ See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord 
 
 | File | Description |
 |------|-------------|
-| `M1_Hapax_v{ver}.elf` | ELF with debug symbols |
-| `M1_Hapax_v{ver}.bin` | Raw binary |
-| `M1_Hapax_v{ver}.hex` | Intel HEX |
-| `M1_Hapax_v{ver}_wCRC.bin` | Binary with CRC + Hapax metadata (for SD card / OTA) |
+| `M1_Hapax.elf` | ELF with debug symbols |
+| `M1_Hapax.bin` | Raw binary |
+| `M1_Hapax.hex` | Intel HEX |
+| `M1_Hapax_wCRC.bin` | Binary with CRC + Hapax metadata (for SD card / OTA) |
 
 ## Coding Standards
 

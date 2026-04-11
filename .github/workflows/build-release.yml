@@ -145,7 +145,7 @@ jobs:
                | awk '{print $3}' | grep -Eo '^[0-9]+')
           HAPAX_REV=${RC}
 
-          PROJECT="M1_Hapax_v${MAJOR}.${MINOR}.${BUILD}.${RC}"
+          PROJECT="M1_Hapax"
           echo "project_name=${PROJECT}" >> "$GITHUB_OUTPUT"
           echo "hapax_rev=${HAPAX_REV}" >> "$GITHUB_OUTPUT"
 
@@ -165,8 +165,8 @@ jobs:
           fi
           echo "release_name=${RNAME}" >> "$GITHUB_OUTPUT"
 
-          # Release file base name = project name (version is embedded in it, SiN360-style).
-          # The wCRC image is ${PROJECT}_wCRC.bin, ELF/BIN/HEX are ${PROJECT}.{ext}.
+          # Release file base name.  Build outputs are M1_Hapax.{ext} — version
+          # numbers are embedded inside the binary, not in the filename.
           RFILE="${PROJECT}"
           echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
 
