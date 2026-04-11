@@ -24,6 +24,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SubGhz unit tests: signal history ring buffer** (`tests/test_subghz_history.c`) —
+  19 tests covering `subghz_history_add/get/reset`: duplicate detection, circular
+  overflow, RSSI update, extended fields, saturation at 255, ordering (index 0 =
+  most recent), and boundary conditions.
+
+- **SubGhz key encoder module** (`Sub_Ghz/subghz_key_encoder.c/h`) — extracted KEY→RAW
+  OOK PWM encoding logic from `sub_ghz_replay_flipper_file()`.  Provides
+  `subghz_key_resolve_timing()` (registry-based + strstr fallback timing lookup with
+  dynamic/weather/TPMS rejection) and `subghz_key_encode()` (bit-level PWM pair
+  generation with repetitions).  20 unit tests in `tests/test_subghz_key_encoder.c`.
+
+- **SubGhz raw line parser module** (`Sub_Ghz/subghz_raw_line_parser.c/h`) — extracted
+  RAW_Data line parsing from `sub_ghz_replay_flipper_file()`.  Handles Flipper's signed
+  raw data format (negative→absolute, zero skip) with cross-buffer leftover digit
+  recombination when `f_gets` truncates long lines mid-number.  16 unit tests in
+  `tests/test_subghz_raw_line_parser.c`.
+
+### Changed
+
+- **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
+  line parsing are now delegated to the extracted `subghz_key_encoder` and
+  `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
+  the refactored code produces identical output for all supported file formats.
+
 - **Battery indicator on splash screen** — The boot/welcome screen now shows a
   battery icon in the top-right corner with charge percentage and fill level.
   When charging (pre-charge or fast charge), a lightning bolt overlay appears

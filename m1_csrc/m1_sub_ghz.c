@@ -25,6 +25,8 @@
 //#include "m1_sub_ghz.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_key_encoder.h"
+#include "subghz_raw_line_parser.h"
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
@@ -1483,11 +1485,12 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	bool in_raw_continuation = false;
 	float freq_mhz;
 
-	/* Leftover partial number from a truncated f_gets read.
+	/* Parser state for cross-buffer RAW_Data line handling.
 	 * When a long RAW_Data line exceeds the buffer, f_gets can split a
-	 * number at the boundary (e.g. "12345" → "123" + "45").  We save
-	 * any trailing digits here and prepend them to the next read. */
-	char leftover[16] = {0};
+	 * number at the boundary (e.g. "12345" → "123" + "45").  The parser
+	 * saves any trailing digits and recombines them on the next read. */
+	SubGhzRawLineState raw_line_state;
+	subghz_raw_line_state_init(&raw_line_state);
 
 	/* KEY file fields */
 	char key_protocol[32] = {0};
@@ -1533,65 +1536,33 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		/* Continuation of a long RAW_Data line that was split by f_gets */
 		if (in_raw_continuation)
 		{
-			const char *p = line_buf;
-			int pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
-			                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
+			uint32_t samples[64];
+			uint16_t nsamples = subghz_parse_raw_data_line(
+				line_buf, line_complete, &raw_line_state, samples, 64);
 
-			/* If we have leftover digits from previous buffer boundary,
-			 * prepend them to the first token of this buffer. */
-			if (leftover[0] != '\0')
+			if (nsamples > 0)
 			{
-				/* Find end of first numeric token */
-				const char *tok_end = p;
-				while (*tok_end && *tok_end != ' ' && *tok_end != '\r' && *tok_end != '\n')
-					tok_end++;
-				/* Build combined number: leftover + start of this buffer */
-				char combined[32];
-				snprintf(combined, sizeof(combined), "%s%.*s", leftover,
-				         (int)(tok_end - p), p);
-				leftover[0] = '\0';
-				long val = strtol(combined, NULL, 10);
-				if (val < 0) val = -val;
-				if (val != 0)
+				int pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
+				                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
+				for (uint16_t si = 0; si < nsamples; si++)
+				{
 					pos += snprintf(&out_buf[pos],
 					                (size_t)(FLIPPER_SUB_OUT_MAX - pos),
-					                " %lu", (unsigned long)val);
-				p = tok_end;
-			}
-
-			while (*p)
-			{
-				while (*p == ' ') p++;
-				if (*p == '\0') break;
-				char *endp;
-				long val = strtol(p, &endp, 10);
-				if (endp == p) break;
-				p = endp;
-				if (val < 0) val = -val;
-				if (val == 0) continue;
-				/* If we're at end of buffer and line is truncated,
-				 * this number might be incomplete — save it as leftover */
-				if (!line_complete && *p == '\0')
-				{
-					snprintf(leftover, sizeof(leftover), "%lu", (unsigned long)val);
-					break;
+					                " %lu", (unsigned long)samples[si]);
+					if (pos >= FLIPPER_SUB_OUT_MAX - 16)
+					{
+						strcat(out_buf, "\r\n");
+						f_puts(out_buf, &f_sgh);
+						pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
+						               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					}
 				}
-				pos += snprintf(&out_buf[pos],
-				                (size_t)(FLIPPER_SUB_OUT_MAX - pos),
-				                " %lu", (unsigned long)val);
-				if (pos >= FLIPPER_SUB_OUT_MAX - 16)
+				if (pos > 6) /* more than just "Data:" */
 				{
 					strcat(out_buf, "\r\n");
 					f_puts(out_buf, &f_sgh);
-					pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
-					               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					has_data = true;
 				}
-			}
-			if (pos > 6) /* more than just "Data:" */
-			{
-				strcat(out_buf, "\r\n");
-				f_puts(out_buf, &f_sgh);
-				has_data = true;
 			}
 			in_raw_continuation = !line_complete;
 			continue;
@@ -1677,45 +1648,36 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			/* Parse signed values, write absolute values as Data: lines.
 			 * Flipper RAW_Data lines can be thousands of chars —
 			 * f_gets may split them across multiple reads.
-			 * Flush output when buffer fills, start new Data: line. */
-			const char *p = line_buf + 9;
-			leftover[0] = '\0';
-			int pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
-			                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
-			while (*p)
+			 * Uses the extracted raw line parser for cross-buffer handling. */
+			subghz_raw_line_state_init(&raw_line_state);
+
+			uint32_t samples[64];
+			uint16_t nsamples = subghz_parse_raw_data_line(
+				line_buf + 9, line_complete, &raw_line_state, samples, 64);
+
+			if (nsamples > 0)
 			{
-				while (*p == ' ') p++;
-				if (*p == '\0') break;
-				char *endp;
-				long val = strtol(p, &endp, 10);
-				if (endp == p) break;   /* no more numbers */
-				p = endp;
-				if (val < 0) val = -val;
-				if (val == 0) continue; /* skip zero */
-				/* If we're at end of buffer and line is truncated,
-				 * this number might be incomplete — save as leftover */
-				if (!line_complete && *p == '\0')
+				int pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
+				                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
+				for (uint16_t si = 0; si < nsamples; si++)
 				{
-					snprintf(leftover, sizeof(leftover), "%lu", (unsigned long)val);
-					break;
+					pos += snprintf(&out_buf[pos],
+					                (size_t)(FLIPPER_SUB_OUT_MAX - pos),
+					                " %lu", (unsigned long)samples[si]);
+					if (pos >= FLIPPER_SUB_OUT_MAX - 16)
+					{
+						strcat(out_buf, "\r\n");
+						f_puts(out_buf, &f_sgh);
+						pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
+						               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					}
 				}
-				pos += snprintf(&out_buf[pos],
-				                (size_t)(FLIPPER_SUB_OUT_MAX - pos),
-				                " %lu", (unsigned long)val);
-				if (pos >= FLIPPER_SUB_OUT_MAX - 16)
+				if (pos > 6) /* more than just "Data:" */
 				{
-					/* Flush this Data: line and start a new one */
 					strcat(out_buf, "\r\n");
 					f_puts(out_buf, &f_sgh);
-					pos = snprintf(out_buf, FLIPPER_SUB_OUT_MAX, "%s",
-					               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					has_data = true;
 				}
-			}
-			if (pos > 6) /* more than just "Data:" */
-			{
-				strcat(out_buf, "\r\n");
-				f_puts(out_buf, &f_sgh);
-				has_data = true;
 			}
 			/* If f_gets truncated this line, mark for continuation */
 			in_raw_continuation = !line_complete;
@@ -1735,118 +1697,68 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	/* ── 3b. KEY file: encode protocol → raw timing ── */
 	if (is_key && key_protocol[0] != '\0' && key_bit_count > 0)
 	{
-		uint32_t te_long, gap_low;
+		/* Use the extracted key encoder for timing resolution + encoding */
+		SubGhzKeyParams key_params;
+		memset(&key_params, 0, sizeof(key_params));
+		strncpy(key_params.protocol, key_protocol, sizeof(key_params.protocol) - 1);
+		key_params.key_value = key_value;
+		key_params.bit_count = key_bit_count;
+		key_params.te        = key_te;
 
-		/* Look up the protocol in the registry to determine its type and
-		 * encoding parameters.  This replaces the previous fragile strstr()
-		 * chain with a single table-driven lookup. */
-		int16_t reg_idx = subghz_protocol_find_by_name(key_protocol);
-
-		/* Rolling-code / dynamic protocols — cannot replay from KEY data.
-		 * Also reject unknown protocols and non-decodable types. */
-		if (reg_idx >= 0) {
-			const SubGhzProtocolDef *proto = &subghz_protocol_registry[reg_idx];
-			if (proto->type == SubGhzProtocolTypeDynamic ||
-			    proto->type == SubGhzProtocolTypeWeather ||
-			    proto->type == SubGhzProtocolTypeTPMS)
-			{
-				f_close(&f_sgh);
-				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
-				return 6; /* rolling code / weather / TPMS — use RAW capture */
-			}
-		}
-
-		/* Map protocol to OOK PWM encoding parameters.
-		 * Use registry timing if available, with strstr() fallback for
-		 * protocol names that may not be in the registry (e.g. third-party
-		 * Flipper firmware captures). */
-		if (reg_idx >= 0 &&
-		    subghz_protocol_registry[reg_idx].type == SubGhzProtocolTypeStatic &&
-		    subghz_protocol_registry[reg_idx].timing.te_short > 0 &&
-		    subghz_protocol_registry[reg_idx].timing.te_long > 0)
-		{
-			/* Registry-based: compute ratio from the protocol's actual timing */
-			const SubGhzBlockConst *t = &subghz_protocol_registry[reg_idx].timing;
-			if (key_te == 0) key_te = t->te_short;
-			te_long = (uint32_t)key_te * t->te_long / t->te_short;
-			gap_low = key_te * 30;
-		}
-		else if (strstr(key_protocol, "Princeton") || strstr(key_protocol, "Gate") ||
-		         strstr(key_protocol, "Holtek") || strstr(key_protocol, "Linear") ||
-		         strstr(key_protocol, "SMC5326") || strstr(key_protocol, "Power") ||
-		         strstr(key_protocol, "iDo"))
-		{
-			/* 1:3 ratio protocols (legacy strstr fallback) */
-			if (key_te == 0) key_te = 350;
-			te_long = key_te * 3;
-			gap_low = key_te * 30;
-		}
-		else if (strstr(key_protocol, "CAME") || strstr(key_protocol, "Nice") ||
-		         strstr(key_protocol, "Ansonic"))
-		{
-			/* 1:2 ratio protocols (legacy strstr fallback) */
-			if (key_te == 0) key_te = 320;
-			te_long = key_te * 2;
-			gap_low = key_te * 36;
-		}
-		else
+		SubGhzKeyTiming key_timing;
+		uint8_t resolve_ret = subghz_key_resolve_timing(&key_params, &key_timing);
+		if (resolve_ret != SUBGHZ_KEY_OK)
 		{
 			f_close(&f_sgh);
 			f_unlink(FLIPPER_SUB_TMP_SGH);
 			free(line_buf); free(out_buf);
-			return 7; /* unsupported protocol */
+			return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
 		}
 
-		/* Clamp bit_count to 64 (uint64_t key max) */
-		if (key_bit_count > 64) key_bit_count = 64;
+		/* Encode 3 repetitions of the signal into raw timing pairs */
+		uint32_t max_pairs = (key_bit_count > 64 ? 64 : key_bit_count) + 1;
+		max_pairs *= 3; /* 3 repetitions */
+		SubGhzRawPair *pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+		if (!pairs)
+		{
+			f_close(&f_sgh);
+			f_unlink(FLIPPER_SUB_TMP_SGH);
+			free(line_buf); free(out_buf);
+			return 1;
+		}
 
-		/* Write 3 repetitions of the encoded signal.
+		uint32_t npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+
+		/* Write encoded pairs as Data: lines to the temp .sgh file.
 		 * The replay engine adds 4 more replays (SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT),
 		 * so total TX = 3 × 5 = 15 transmissions — matches a real remote button press. */
-		for (int rep = 0; rep < 3; rep++)
+		if (npairs > 0)
 		{
 			int pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
 			                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
-			uint64_t mask = 1ULL << (key_bit_count - 1);
-
-			for (uint32_t b = 0; b < key_bit_count; b++)
+			for (uint32_t pi = 0; pi < npairs; pi++)
 			{
-				if (key_value & mask)
-				{
-					/* Bit 1: long HIGH, short LOW */
-					pos += snprintf(&out_buf[pos], FLIPPER_SUB_LINE_MAX - pos,
-					                " %lu %lu", (unsigned long)te_long,
-					                (unsigned long)key_te);
-				}
-				else
-				{
-					/* Bit 0: short HIGH, long LOW */
-					pos += snprintf(&out_buf[pos], FLIPPER_SUB_LINE_MAX - pos,
-					                " %lu %lu", (unsigned long)key_te,
-					                (unsigned long)te_long);
-				}
-				mask >>= 1;
+				pos += snprintf(&out_buf[pos], FLIPPER_SUB_LINE_MAX - pos,
+				                " %lu %lu",
+				                (unsigned long)pairs[pi].high_us,
+				                (unsigned long)pairs[pi].low_us);
 
-				/* Split line if buffer getting full */
-				if (pos >= FLIPPER_SUB_LINE_MAX - 64)
+				/* Start a new Data: line at repetition boundaries
+				 * (after each sync gap = last pair of each rep) or
+				 * when the buffer is getting full */
+				bool is_rep_end = ((pi + 1) % ((key_bit_count > 64 ? 64 : key_bit_count) + 1)) == 0;
+				if (is_rep_end || pos >= FLIPPER_SUB_LINE_MAX - 64)
 				{
 					strcat(out_buf, "\r\n");
 					f_puts(out_buf, &f_sgh);
-					pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
-					               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					if (pi + 1 < npairs)
+						pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
+						               SUB_GHZ_DATAFILE_DATA_KEYWORD);
 				}
 			}
-
-			/* Sync gap: short HIGH pulse + long LOW gap */
-			pos += snprintf(&out_buf[pos], FLIPPER_SUB_LINE_MAX - pos,
-			                " %lu %lu", (unsigned long)key_te,
-			                (unsigned long)gap_low);
-
-			strcat(out_buf, "\r\n");
-			f_puts(out_buf, &f_sgh);
+			has_data = true;
 		}
-		has_data = true;
+		free(pairs);
 	}
 
 	f_close(&f_sgh);
