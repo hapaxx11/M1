@@ -4,31 +4,39 @@
  *
  * Tests m1_menu_item_h(), m1_menu_max_visible(), and the M1_MENU_VIS() macro
  * in both compact (Small) and expanded (Large) modes.
+ *
+ * Constants and the M1_MENU_VIS() macro come from the production m1_scene.h
+ * header so the tests stay in sync with any constant changes.  The three
+ * helper functions are defined locally because m1_scene.c has heavy
+ * HAL/RTOS/display dependencies that cannot be linked on the host.
  */
 
 #include "unity.h"
 #include <stdint.h>
 
-/* ---------- Minimal stubs for m1_scene.h dependencies ---------- */
+/* ---------- Minimal stubs so m1_scene.h can be included ---------- */
 
-/* We only need the display font type — provide a dummy uint8_t array */
+/* Dummy font arrays — stand in for the u8g2 font pointers */
 static const uint8_t dummy_font_small[] = { 0 };
 static const uint8_t dummy_font_large[] = { 0 };
 #define u8g2_font_NokiaSmallPlain_tf  dummy_font_small
 #define u8g2_font_spleen5x8_mf        dummy_font_large
 
-/* Provide the display macros before including the header */
+/* Display macros referenced by m1_menu_font() */
 #define M1_DISP_SUB_MENU_FONT_N    u8g2_font_NokiaSmallPlain_tf
 #define M1_DISP_FUNC_MENU_FONT_N   u8g2_font_spleen5x8_mf
+
+/* Include the production header — provides all layout constants,
+ * function declarations, and the M1_MENU_VIS() macro.              */
+#include "m1_scene.h"
 
 /* Global setting — defined in m1_system.c on target */
 uint8_t m1_menu_style = 0;
 
-/* Include only the constants/macros from m1_scene.h that we need */
-#define M1_MENU_AREA_TOP       12
-#define M1_MENU_AREA_H         52
-#define M1_MENU_ITEM_H_SMALL    8
-#define M1_MENU_ITEM_H_LARGE   10
+/* --- Function implementations (matching m1_scene.c logic) ---
+ * We cannot link m1_scene.c on the host, so we replicate the three
+ * pure-logic helpers here.  The constants they reference come from
+ * the real m1_scene.h above.                                       */
 
 uint8_t m1_menu_item_h(void)
 {
@@ -45,9 +53,6 @@ const uint8_t *m1_menu_font(void)
     return (m1_menu_style == 0) ? M1_DISP_SUB_MENU_FONT_N
                                 : M1_DISP_FUNC_MENU_FONT_N;
 }
-
-#define M1_MENU_VIS(count) \
-    ((uint8_t)((count) < m1_menu_max_visible() ? (count) : m1_menu_max_visible()))
 
 /* ================================================================ */
 /* Tests                                                            */

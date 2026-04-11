@@ -56,7 +56,6 @@ static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
 static const char *s_brightness_text[] = { "Off", "Low", "Med", "High", "Max" };
 static const char *s_orient_text[] = { "Normal", "Southpaw", "Remote" };
 static const char *s_sleep_text[] = { "30s", "1 min", "5 min", "10 min", "15 min", "Never" };
-static const char *s_text_size_text[] = { "Small", "Large" };
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -147,7 +146,7 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
-    case LCD_SET_TEXT_SIZE:   return s_text_size_text[m1_menu_style];
+    case LCD_SET_TEXT_SIZE:   return (m1_menu_style == 0) ? "Small" : "Large";
     default:                 return "";
     }
 }
@@ -293,7 +292,14 @@ void settings_lcd_and_notifications(void)
             else if (sel == LCD_SET_SLEEP)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx == 0) ? 5 : (m1_sleep_timeout_idx - 1);
             else if (sel == LCD_SET_TEXT_SIZE)
+            {
                 m1_menu_style = !m1_menu_style;
+                uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
+                if (sel >= scroll + vis)
+                    scroll = sel - vis + 1;
+                else if (LCD_SETTINGS_ITEMS <= vis)
+                    scroll = 0;
+            }
             needs_redraw = 1;
         }
 
@@ -317,7 +323,14 @@ void settings_lcd_and_notifications(void)
             else if (sel == LCD_SET_SLEEP)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx >= 5) ? 0 : (m1_sleep_timeout_idx + 1);
             else if (sel == LCD_SET_TEXT_SIZE)
+            {
                 m1_menu_style = !m1_menu_style;
+                uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
+                if (sel >= scroll + vis)
+                    scroll = sel - vis + 1;
+                else if (LCD_SETTINGS_ITEMS <= vis)
+                    scroll = 0;
+            }
             needs_redraw = 1;
         }
     }
