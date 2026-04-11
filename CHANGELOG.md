@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Battery indicator on splash screen** — The boot/welcome screen now shows a
+  battery icon in the top-right corner with charge percentage and fill level.
+  When charging (pre-charge or fast charge), a lightning bolt overlay appears
+  inside the battery icon.  Similar to Momentum firmware's splash screen.
+
 - **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
   now shows a "Decode" option (first item) for RAW `.sub` files.  Selecting it
   feeds the raw pulse timing data through all registered protocol decoders
