@@ -149,7 +149,14 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
-    case LCD_SET_TEXT_SIZE:   return s_text_size_text[m1_menu_style];
+    case LCD_SET_TEXT_SIZE:
+        switch (m1_menu_style)
+        {
+        case 1:  return s_text_size_text[1];
+        case 2:  return s_text_size_text[2];
+        case 0:
+        default: return s_text_size_text[0];
+        }
     case LCD_SET_DARK_MODE:  return m1_dark_mode ? "On" : "Off";
     default:                 return "";
     }
