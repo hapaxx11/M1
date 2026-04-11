@@ -396,7 +396,7 @@ static bool music_play_file(const char *path)
         uint8_t progress = (uint8_t)(((uint32_t)i * 122UL) / (uint32_t)note_count);
 
         /* Draw display */
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 10, "Music Player");
@@ -414,7 +414,7 @@ static bool music_play_file(const char *path)
                 u8g2_DrawBox(&m1_u8g2, 4, 51, progress, 6);
 
             u8g2_DrawStr(&m1_u8g2, 2, 64, "BACK to stop");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
 
         /* Start note or silence */
         if (freq > 0)
@@ -450,13 +450,13 @@ static bool music_play_file(const char *path)
     /* End screen */
     if (!aborted)
     {
-        u8g2_FirstPage(&m1_u8g2);
+        m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 24, "Music Player");
             u8g2_DrawStr(&m1_u8g2, 2, 40, dispname);
             u8g2_DrawStr(&m1_u8g2, 2, 56, "Finished.");
-        } while (u8g2_NextPage(&m1_u8g2));
+        } while (m1_u8g2_nextpage());
         vTaskDelay(pdMS_TO_TICKS(1500));
     }
 

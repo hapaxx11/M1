@@ -443,7 +443,7 @@ static void lfrfid_read_update(uint8_t param)
     lfrfid_uiview_gui_latest_param = param; // Update new param
 
     /* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 
     if( param==RFID_READ_DISPLAY_PARAM_READING_READY )	// reading
     {
@@ -456,7 +456,7 @@ static void lfrfid_read_update(uint8_t param)
 
 		m1_draw_text_box(&m1_u8g2, 0,50,128,10,res_string(IDS_HOLD_CARD_), TEXT_ALIGN_CENTER);
 
-		u8g2_NextPage(&m1_u8g2); // Update display RAM
+		m1_u8g2_nextpage(); // Update display RAM
     }
     else if( param==RFID_READ_DISPLAY_PARAM_READING_COMPLETE )	// read done
     {
@@ -468,7 +468,7 @@ static void lfrfid_read_update(uint8_t param)
     	lfrfid_protocol_make_menu_list(lfrfid_tag_info.protocol, szString);
 
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+		m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 		m1_draw_text(&m1_u8g2, 2, 12,124,szString, TEXT_ALIGN_LEFT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
@@ -863,7 +863,7 @@ static void lfrfid_read_emulate_update(uint8_t param)
 	const char* protocol = protocol_get_name(lfrfid_tag_info.protocol);
 	strcpy(szString, protocol);
 
-	u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
 
@@ -1490,7 +1490,7 @@ static void lfrfid_saved_emulate_update(uint8_t param)
 	const char* protocol = protocol_get_name(lfrfid_tag_info.protocol);
 	strcpy(szString, protocol);
 
-	u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
 
@@ -2057,7 +2057,7 @@ static void lfrfid_saved_delete_update(uint8_t param)
 	char *hex;
 	char szString[64];
 
-	u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 
 	if(param==0)
 	{
@@ -2208,7 +2208,7 @@ static void lfrfid_saved_info_update(uint8_t param)
 	char szString[64];
 
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 
 	strcpy(szString,res_string(IDS_NAME_));
 	fu_get_filename_without_ext(lfrfid_tag_info.filename,&szString[strlen(szString)], sizeof(szString)-strlen(szString));
@@ -2721,7 +2721,7 @@ static void lfrfid_util_clone(void)
 	char szString[64];
 
 	/* Draw initial read screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2776,7 +2776,7 @@ static void lfrfid_util_clone(void)
 				state = CLONE_ST_READ_SOURCE;
 				record_stat = RFID_READ_READING;
 
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2808,7 +2808,7 @@ static void lfrfid_util_clone(void)
 				char *hex = strtok(hex_str, "\n");
 				char *fc  = strtok(NULL, "\n");
 
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 				m1_draw_text(&m1_u8g2, 2, 12, 124, szString, TEXT_ALIGN_LEFT);
@@ -2899,7 +2899,7 @@ static void lfrfid_util_erase(void)
 	memcpy(&saved_tag, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
 
 	/* Draw ready screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2940,7 +2940,7 @@ static void lfrfid_util_erase(void)
 				writing = true;
 
 				/* Draw erasing screen */
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -2973,7 +2973,7 @@ static void lfrfid_util_erase(void)
 			else if (lfrfid_write_verify(lfrfid_tag_info_back, &lfrfid_tag_info))
 			{
 				/* Show success */
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -3029,7 +3029,7 @@ static void lfrfid_util_t5577_info(void)
 	bool tag_read = false;
 
 	/* Draw reading screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -3065,7 +3065,7 @@ static void lfrfid_util_t5577_info(void)
 				tag_read = false;
 				record_stat = RFID_READ_READING;
 
-				u8g2_FirstPage(&m1_u8g2);
+				m1_u8g2_firstpage();
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_DrawXBMP(&m1_u8g2, 1, 4, 125, 24, rfid_read_125x24);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
@@ -3111,7 +3111,7 @@ static void lfrfid_util_t5577_info(void)
 			else
 				mod_str = "Manchester";
 
-			u8g2_FirstPage(&m1_u8g2);
+			m1_u8g2_firstpage();
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 
@@ -3169,7 +3169,7 @@ static void lfrfid_fuzz_draw_setup(uint8_t proto_sel, const uint8_t uid[5],
 									int8_t dir, uint16_t delay_ms)
 {
 	char sz[64];
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	m1_draw_text(&m1_u8g2, 0, 10, 128, "RFID Fuzzer", TEXT_ALIGN_CENTER);
@@ -3193,7 +3193,7 @@ static void lfrfid_fuzz_draw_running(uint8_t proto_sel, const uint8_t uid[5],
 									  uint32_t count)
 {
 	char sz[64];
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	m1_draw_text(&m1_u8g2, 0, 10, 128, "RFID Fuzzer", TEXT_ALIGN_CENTER);
@@ -3342,7 +3342,7 @@ static void lfrfid_bf_draw(bf_state_t state, uint16_t fc, uint16_t card_num)
 {
 	char sz[32];
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	m1_draw_text(&m1_u8g2, 0, 10, 128, "Brute Force FC", TEXT_ALIGN_CENTER);
@@ -3581,7 +3581,7 @@ void rfid_125khz_utilities(void)
 /*============================================================================*/
 static void lfrfid_write_screen_draw(int param, char* filename)
 {
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 2, 8, 48, 48, nfc_emit_48x48);
 

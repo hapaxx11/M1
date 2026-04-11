@@ -283,7 +283,7 @@ static void battery_info_gui_update(uint8_t param)
 	// stc3115_cli_status();
 
     /* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage(); // This call required for page drawing in mode 1
     do
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
@@ -350,7 +350,7 @@ static void battery_info_gui_update(uint8_t param)
 			strcat(stat_msg, stat_msg2);
 			m1_draw_text(&m1_u8g2, 2, 17,120, stat_msg, TEXT_ALIGN_LEFT);
 		}
-    } while (u8g2_NextPage(&m1_u8g2));
+    } while (m1_u8g2_nextpage());
 }
 
 
@@ -473,7 +473,7 @@ static void power_reboot_gui_destroy(uint8_t param)
 static void power_reboot_gui_update(uint8_t param)
 {
 	/* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 23, 1, 82, 36, m1_device_82x36);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_WARNING_FONT_1B);
@@ -594,7 +594,7 @@ static void power_shutdown_gui_destroy(uint8_t param)
 static void power_shutdown_gui_update(uint8_t param)
 {
 	/* Graphic work starts here */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_DrawXBMP(&m1_u8g2, 23, 1, 82, 36, m1_device_82x36);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_WARNING_FONT_1B);

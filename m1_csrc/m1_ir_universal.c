@@ -187,7 +187,7 @@ static void draw_dashboard(uint8_t selection)
 	/* Update Remote Mode label to reflect current state */
 	s_dashboard_items[4] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	/* Title bar */
@@ -362,7 +362,7 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 	if (visible > LIST_VISIBLE_ITEMS)
 		visible = LIST_VISIBLE_ITEMS;
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	/* Title bar */
@@ -595,7 +595,7 @@ static void browse_directory(const char *path)
 	if (s_browse_count == 0)
 	{
 		/* Empty directory - show message */
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
@@ -1248,7 +1248,7 @@ static void show_commands(const char *ir_file_path)
 	if (s_cmd_count == 0)
 	{
 		/* No commands found */
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 32, "No IR signals");
@@ -1377,7 +1377,7 @@ static void transmit_command(const ir_universal_cmd_t *cmd)
 	/* Check for unknown/unsupported protocol */
 	if (cmd->protocol == IRMP_UNKNOWN_PROTOCOL)
 	{
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 		u8g2_DrawStr(&m1_u8g2, 10, 15, "Unsupported");
@@ -1393,7 +1393,7 @@ static void transmit_command(const ir_universal_cmd_t *cmd)
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
 
 	/* Show transmitting screen */
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 10, 15, "Transmitting...");
@@ -1449,7 +1449,7 @@ static void transmit_raw_command(const ir_universal_cmd_t *cmd)
 	/* Re-open the .ir file to read raw timing data */
 	if (!flipper_ir_open(&ff, s_raw_tx_filepath))
 	{
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 30, "File read error");
@@ -1472,7 +1472,7 @@ static void transmit_raw_command(const ir_universal_cmd_t *cmd)
 
 	if (!found || s_raw_tx_signal.raw.sample_count == 0)
 	{
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 30, "Signal not found");
@@ -1484,7 +1484,7 @@ static void transmit_raw_command(const ir_universal_cmd_t *cmd)
 	/* Show transmitting screen */
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
 
-	u8g2_FirstPage(&m1_u8g2);
+	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 10, 15, "Transmitting...");
@@ -1805,7 +1805,7 @@ static void show_favorites_screen(void)
 
 	if (s_favorite_count == 0)
 	{
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 32, "No favorites");
@@ -1906,7 +1906,7 @@ static void show_recent_screen(void)
 
 	if (s_recent_count == 0)
 	{
-		u8g2_FirstPage(&m1_u8g2);
+		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 10, 32, "No recent files");
