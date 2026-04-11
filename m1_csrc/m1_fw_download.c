@@ -513,17 +513,9 @@ source_selection:
 	release_count = fw_source_fetch_releases(&sources[selected], releases, &http_err);
 	if (release_count == 0)
 	{
-		const char *reason = NULL;
-		switch (http_err)
-		{
-			case HTTP_ERR_NO_WIFI:       reason = "WiFi not connected"; break;
-			case HTTP_ERR_CONNECT_FAIL:  reason = "Connection failed"; break;
-			case HTTP_ERR_TIMEOUT:       reason = "Server timeout"; break;
-			case HTTP_ERR_HTTP_ERROR:    reason = "Server error (HTTP)"; break;
-			case HTTP_ERR_PARSE_FAIL:    reason = "Bad response"; break;
-			case HTTP_OK:                reason = "No matching assets"; break;
-			default:                     reason = NULL; break;
-		}
+		const char *reason = http_status_str((http_status_t)http_err);
+		if (!reason && http_err == HTTP_OK)
+			reason = "No matching assets";
 		dl_show_message("No releases found", reason);
 		vTaskDelay(pdMS_TO_TICKS(2000));
 		goto source_selection;

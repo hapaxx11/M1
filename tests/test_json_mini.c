@@ -22,6 +22,7 @@
 #include "unity.h"
 #include "m1_json_mini.h"
 #include <string.h>
+#include <stdio.h>
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -391,13 +392,30 @@ static uint16_t decode_chunked_body(char *body, uint16_t body_len)
 		unsigned long chunk_size = strtoul(src, &size_end, 16);
 		if (size_end == src)
 			break;
-		if (chunk_size == 0)
+
+		/* Skip any optional chunk extensions up to the line ending */
+		src = size_end;
+		while (src < end && *src != '\r' && *src != '\n')
+			src++;
+		if (src >= end)
 			break;
 
-		src = size_end;
-		if (src < end && *src == '\r') src++;
-		if (src < end && *src == '\n') src++;
+		/* Consume the chunk-size line ending */
+		if (*src == '\r')
+		{
+			src++;
+			if (src < end && *src == '\n')
+				src++;
+		}
+		else if (*src == '\n')
+		{
+			src++;
+		}
 		if (src >= end)
+			break;
+
+		/* Terminal chunk (size 0) — we're done */
+		if (chunk_size == 0)
 			break;
 
 		uint16_t avail = (uint16_t)(end - src);
@@ -442,7 +460,7 @@ void test_chunked_decode_json_array(void)
 	const char *chunk_data = "[{\"tag_name\":\"v1.0\"}]";
 	int chunk_len = (int)strlen(chunk_data);
 	/* Build chunked body: hex_size\r\ndata\r\n0\r\n\r\n */
-	snprintf(body, sizeof(body), "%x\r\n%s\r\n0\r\n\r\n", chunk_len, chunk_data);
+	snprintf(body, sizeof(body), "%x\r\n%s\r\n0\r\n\r\n", (unsigned)chunk_len, chunk_data);
 
 	uint16_t decoded_len = decode_chunked_body(body, (uint16_t)strlen(body));
 	TEST_ASSERT_EQUAL_UINT16((uint16_t)chunk_len, decoded_len);
@@ -471,6 +489,15 @@ void test_chunked_decode_empty(void)
 	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
 	TEST_ASSERT_EQUAL_UINT16(0, len);
 	TEST_ASSERT_EQUAL_CHAR('\0', body[0]);
+}
+
+void test_chunked_decode_with_extensions(void)
+{
+	/* Chunk with extension: "d;ext=value\r\nHello, World!\r\n0\r\n\r\n" */
+	char body[] = "d;ext=value\r\nHello, World!\r\n0\r\n\r\n";
+	uint16_t len = decode_chunked_body(body, (uint16_t)(sizeof(body) - 1));
+	TEST_ASSERT_EQUAL_UINT16(13, len);
+	TEST_ASSERT_EQUAL_STRING("Hello, World!", body);
 }
 
 /* ===================================================================
@@ -531,6 +558,7 @@ int main(void)
 	RUN_TEST(test_chunked_decode_json_array);
 	RUN_TEST(test_chunked_decode_truncated);
 	RUN_TEST(test_chunked_decode_empty);
+	RUN_TEST(test_chunked_decode_with_extensions);
 
 	return UNITY_END();
 }

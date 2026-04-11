@@ -332,8 +332,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chunked encoding, so chunk-size markers (e.g. `a3f\r\n`) were mixed into
   the JSON body, making it unparsable.  Fixed by switching to HTTP/1.0
   (which prevents chunked responses) and adding an in-place chunked decoder
-  as a safety net for non-compliant servers.  Both `http_get()` and
-  `http_download_to_file()` are updated.
+  as a safety net in `http_get()` for non-compliant servers.
+  `http_download_to_file()` now detects chunked responses and fails fast
+  rather than writing corrupt data.
 
 - **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
   screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`

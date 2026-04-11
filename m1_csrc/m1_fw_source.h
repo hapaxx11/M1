@@ -100,12 +100,14 @@ bool fw_source_create_defaults(void);
  * Fetch available releases for a given source.
  * Queries the remote server (e.g., GitHub API) and populates the release list.
  *
- * source:    Source configuration
- * releases:  Array to fill (must have space for FW_RELEASE_MAX entries)
- * out_http_status: Optional — receives the HTTP status code for error diagnostics
- * Returns:   Number of releases found (0 on error or no releases)
+ * source:      Source configuration
+ * releases:    Array to fill (must have space for FW_RELEASE_MAX entries)
+ * out_status:  Optional — receives the http_status_t result for error diagnostics
+ *              (e.g. HTTP_ERR_TIMEOUT, HTTP_ERR_CONNECT_FAIL, HTTP_OK).
+ *              This is NOT the HTTP response code (200/404/etc.).
+ * Returns:     Number of releases found (0 on error or no releases)
  */
 uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases,
-                                  int *out_http_status);
+                                  int *out_status);
 
 #endif /* M1_FW_SOURCE_H_ */

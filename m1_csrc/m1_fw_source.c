@@ -264,7 +264,7 @@ static bool asset_matches_filter(const char *asset_name,
  * Parses the JSON response to extract release metadata and matching assets.
  */
 static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *releases,
-                                      int *out_http_status)
+                                      int *out_status)
 {
 	char url[256];
 	uint8_t count = 0;
@@ -274,7 +274,7 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 	         source->github.owner, source->github.repo, source->max_releases);
 
 	status = http_get(url, s_api_buf, sizeof(s_api_buf), 30);
-	if (out_http_status) *out_http_status = (int)status;
+	if (out_status) *out_status = (int)status;
 	if (status != HTTP_OK)
 		return 0;
 
@@ -349,7 +349,7 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 }
 
 uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releases,
-                                  int *out_http_status)
+                                  int *out_status)
 {
 	if (!source || !releases)
 		return 0;
@@ -359,7 +359,7 @@ uint8_t fw_source_fetch_releases(const fw_source_t *source, fw_release_t *releas
 	switch (source->type)
 	{
 		case FW_SOURCE_GITHUB_RELEASE:
-			return github_fetch_releases(source, releases, out_http_status);
+			return github_fetch_releases(source, releases, out_status);
 
 		default:
 			return 0;
