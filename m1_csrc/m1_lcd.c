@@ -251,12 +251,18 @@ uint8_t m1_u8g2_nextpage(void)
 {
 	/* Dark mode: XOR the entire frame buffer before sending so that all
 	 * content (text, XBMs, draw primitives) appears inverted on the LCD.
-	 * This also ensures RPC screen streaming sees the inverted image. */
+	 * After send, XOR again to restore the buffer to its normal
+	 * (un-inverted) state so that incremental drawing without a full
+	 * firstpage/clear operates on the correct pixel values.
+	 * RPC screen streaming handles inversion in its own copy path. */
+	uint8_t *buf = NULL;
+	uint16_t len = 0;
+
 	if (m1_dark_mode)
 	{
-		uint8_t *buf = u8g2_GetBufferPtr(&m1_u8g2);
-		uint16_t len = (uint16_t)u8g2_GetBufferTileWidth(&m1_u8g2) * 8U
-		             * (uint16_t)u8g2_GetBufferTileHeight(&m1_u8g2);
+		buf = u8g2_GetBufferPtr(&m1_u8g2);
+		len = (uint16_t)u8g2_GetBufferTileWidth(&m1_u8g2) * 8U
+		    * (uint16_t)u8g2_GetBufferTileHeight(&m1_u8g2);
 		for (uint16_t i = 0; i < len; i++)
 			buf[i] ^= 0xFF;
 	}
@@ -264,8 +270,16 @@ uint8_t m1_u8g2_nextpage(void)
 	u8g2_SendBuffer(&m1_u8g2);
 	u8x8_RefreshDisplay( u8g2_GetU8x8(&m1_u8g2) );
 
+	/* Restore buffer to un-inverted state */
+	if (m1_dark_mode)
+	{
+		for (uint16_t i = 0; i < len; i++)
+			buf[i] ^= 0xFF;
+	}
+
 #ifdef M1_APP_RPC_ENABLE
-	/* Notify the RPC task that a new frame is ready for streaming */
+	/* Notify the RPC task that a new frame is ready for streaming.
+	 * The RPC copy path applies dark-mode inversion to its own snapshot. */
 	if (m1_rpc_screen_streaming_active())
 	{
 		m1_rpc_notify_screen_update();
