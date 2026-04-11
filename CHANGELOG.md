@@ -58,8 +58,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: added mandatory bug-fix regression test policy to CLAUDE.md,
   DEVELOPMENT.md, and .github/GUIDELINES.md — every bug fix must include unit tests
   that fail before the fix and pass after it
+- Documentation: added explicit "no duplicate subsection headings" rule to CLAUDE.md
+  and GUIDELINES.md changelog instructions — agents must scan the entire `[Unreleased]`
+  block for an existing heading before creating a new one
 
 ### Fixed
+
+- **Sub-GHz Decode: deduplicate repeated transmissions** — RAW `.sub` files
+  typically contain multiple copies of the same transmission (remotes repeat
+  3–5 times).  The offline decoder now skips duplicate protocol+key pairs so
+  the results list shows each unique signal once, making decoded output much
+  clearer.
+
+- **Sub-GHz Decode: sync `npulsecount` before calling protocol decoders** —
+  The offline decoder now sets `subghz_decenc_ctl.npulsecount` before invoking
+  protocol decoders, matching the live pulse handler path and preventing
+  potential mismatches if a decoder reads the global counter directly.
 
 - **Sub-GHz Read scene: unnecessary full radio reset on child scene return** —
   Returning from Config, ReceiverInfo, or SaveName back to the Read scene

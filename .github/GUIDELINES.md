@@ -56,7 +56,7 @@ Update CHANGELOG.md for every meaningful change following [Keep a Changelog](htt
   - Use [Unreleased] for changes that only touch non-compilation paths (docs, CI config, databases)
   - Subsections: ### Added / ### Changed / ### Fixed / ### Removed
   - New feature → ### Added; behaviour change → ### Changed; bug fix → ### Fixed
-  - Append to the current version block rather than creating a duplicate heading
+  - Append to the current version block rather than creating a duplicate heading — scan the entire `[Unreleased]` block for an existing `### Fixed` / `### Added` / etc. before adding a new one
   - Create a new version heading only when bumping M1_HAPAX_REVISION
 Update documentation/flipper_import_agent.md inventory tables when Flipper-derived files are added or removed
 Document setup instructions
