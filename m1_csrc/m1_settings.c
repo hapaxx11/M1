@@ -28,6 +28,7 @@
 #include "m1_fw_update_bl.h"
 #include "m1_system.h"
 #include "m1_file_util.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -39,12 +40,13 @@
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
-#define LCD_SETTINGS_ITEMS   5
+#define LCD_SETTINGS_ITEMS   6
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
 #define LCD_SET_LED          2
 #define LCD_SET_ORIENT       3
 #define LCD_SET_SLEEP        4
+#define LCD_SET_TEXT_SIZE     5
 
 //************************** S T R U C T U R E S *******************************
 
@@ -54,6 +56,7 @@ static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
 static const char *s_brightness_text[] = { "Off", "Low", "Med", "High", "Max" };
 static const char *s_orient_text[] = { "Normal", "Southpaw", "Remote" };
 static const char *s_sleep_text[] = { "30s", "1 min", "5 min", "10 min", "15 min", "Never" };
+static const char *s_text_size_text[] = { "Small", "Large" };
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -122,9 +125,9 @@ static void settings_apply_orientation(uint8_t orient)
 
 /* Layout constants — aligned with SubGhz Config scene */
 #define LCD_CFG_AREA_TOP     12   /* Y below title + separator line      */
-#define LCD_CFG_ITEM_H        8   /* Pixel height per config row          */
-#define LCD_CFG_VISIBLE       5   /* All 5 items fit without scrolling    */
 #define LCD_CFG_TEXT_W      124   /* Highlight / text area width           */
+#define LCD_CFG_SCROLLBAR_X 125   /* Scrollbar left edge (3px wide)       */
+#define LCD_CFG_SCROLLBAR_W   3   /* Scrollbar track width                */
 
 static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "Brightness:",
@@ -132,6 +135,7 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "LED Notify:",
     "Orientation:",
     "Sleep After:",
+    "Text Size:",
 };
 
 static const char *lcd_cfg_get_value(uint8_t item)
@@ -143,6 +147,7 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
+    case LCD_SET_TEXT_SIZE:   return s_text_size_text[m1_menu_style];
     default:                 return "";
     }
 }
@@ -154,6 +159,7 @@ void settings_lcd_and_notifications(void)
     BaseType_t ret;
 
     uint8_t sel = 0;
+    uint8_t scroll = 0;
     uint8_t needs_redraw = 1;
 
     while (1)
@@ -161,6 +167,10 @@ void settings_lcd_and_notifications(void)
         if (needs_redraw)
         {
             needs_redraw = 0;
+
+            const uint8_t item_h   = m1_menu_item_h();
+            const uint8_t text_ofs = item_h - 1;
+            const uint8_t visible  = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
 
             m1_u8g2_firstpage();
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -173,41 +183,54 @@ void settings_lcd_and_notifications(void)
             u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
             /* Config items */
-            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
-            for (uint8_t i = 0; i < LCD_SETTINGS_ITEMS; i++)
+            for (uint8_t v = 0; v < visible && (scroll + v) < LCD_SETTINGS_ITEMS; v++)
             {
-                uint8_t y = LCD_CFG_AREA_TOP + i * LCD_CFG_ITEM_H;
+                uint8_t i = scroll + v;
+                uint8_t y = LCD_CFG_AREA_TOP + v * item_h;
                 const char *val = lcd_cfg_get_value(i);
 
                 if (i == sel)
                 {
                     /* Highlight selected row */
-                    u8g2_DrawBox(&m1_u8g2, 0, y, LCD_CFG_TEXT_W, LCD_CFG_ITEM_H);
+                    u8g2_DrawBox(&m1_u8g2, 0, y, LCD_CFG_TEXT_W, item_h);
                     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
                 }
 
                 /* Label on left */
-                u8g2_DrawStr(&m1_u8g2, 4, y + 7, lcd_cfg_labels[i]);
+                u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, lcd_cfg_labels[i]);
 
                 /* Value on right with < > arrows for selected item */
                 if (i == sel)
                 {
-                    u8g2_DrawStr(&m1_u8g2, 68, y + 7, "<");
-                    u8g2_DrawStr(&m1_u8g2, 74, y + 7, val);
+                    u8g2_DrawStr(&m1_u8g2, 68, y + text_ofs, "<");
+                    u8g2_DrawStr(&m1_u8g2, 74, y + text_ofs, val);
                     uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
-                    u8g2_DrawStr(&m1_u8g2, 74 + vw + 2, y + 7, ">");
+                    u8g2_DrawStr(&m1_u8g2, 74 + vw + 2, y + text_ofs, ">");
                 }
                 else
                 {
-                    u8g2_DrawStr(&m1_u8g2, 74, y + 7, val);
+                    u8g2_DrawStr(&m1_u8g2, 74, y + text_ofs, val);
                 }
 
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
             }
 
-            /* No button bar — the < > arrows on selected items clearly indicate
-             * that LEFT/RIGHT changes the value.  UP/DOWN is self-evident. */
+            /* Scrollbar — only when items exceed visible area */
+            if (LCD_SETTINGS_ITEMS > visible)
+            {
+                uint8_t sb_area_h   = visible * item_h;
+                uint8_t sb_handle_h = sb_area_h / LCD_SETTINGS_ITEMS;
+                if (sb_handle_h < 3) sb_handle_h = 3;
+                uint8_t sb_handle_y = LCD_CFG_AREA_TOP +
+                    (uint8_t)((uint16_t)sb_area_h * sel / LCD_SETTINGS_ITEMS);
+
+                u8g2_DrawFrame(&m1_u8g2, LCD_CFG_SCROLLBAR_X, LCD_CFG_AREA_TOP,
+                               LCD_CFG_SCROLLBAR_W, sb_area_h);
+                u8g2_DrawBox(&m1_u8g2, LCD_CFG_SCROLLBAR_X, sb_handle_y,
+                             LCD_CFG_SCROLLBAR_W, sb_handle_h);
+            }
 
             m1_u8g2_nextpage();
         }
@@ -227,15 +250,29 @@ void settings_lcd_and_notifications(void)
             break;
         }
 
-        /* Up/Down — navigate */
+        /* Up/Down — navigate with scroll */
         if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
         {
             sel = (sel == 0) ? (LCD_SETTINGS_ITEMS - 1) : (sel - 1);
+            if (sel < scroll)
+                scroll = sel;
+            if (sel == LCD_SETTINGS_ITEMS - 1)
+            {
+                uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
+                scroll = (LCD_SETTINGS_ITEMS > vis) ? LCD_SETTINGS_ITEMS - vis : 0;
+            }
             needs_redraw = 1;
         }
         if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
         {
             sel = (sel + 1) % LCD_SETTINGS_ITEMS;
+            {
+                uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
+                if (sel >= scroll + vis)
+                    scroll = sel - vis + 1;
+            }
+            if (sel == 0)
+                scroll = 0;
             needs_redraw = 1;
         }
 
@@ -255,6 +292,8 @@ void settings_lcd_and_notifications(void)
                 settings_apply_orientation((m1_screen_orientation == 0) ? 2 : (m1_screen_orientation - 1));
             else if (sel == LCD_SET_SLEEP)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx == 0) ? 5 : (m1_sleep_timeout_idx - 1);
+            else if (sel == LCD_SET_TEXT_SIZE)
+                m1_menu_style = !m1_menu_style;
             needs_redraw = 1;
         }
 
@@ -277,6 +316,8 @@ void settings_lcd_and_notifications(void)
                 settings_apply_orientation((m1_screen_orientation + 1) % 3);
             else if (sel == LCD_SET_SLEEP)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx >= 5) ? 0 : (m1_sleep_timeout_idx + 1);
+            else if (sel == LCD_SET_TEXT_SIZE)
+                m1_menu_style = !m1_menu_style;
             needs_redraw = 1;
         }
     }
@@ -449,6 +490,9 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "sleep_timeout=%d\n", m1_sleep_timeout_idx);
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "menu_style=%d\n", m1_menu_style);
+    f_write(&fp, buf, strlen(buf), &bw);
+
     snprintf(buf, sizeof(buf), "ism_region=%d\n", m1_device_stat.config.ism_band_region);
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -531,6 +575,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 14) - '0');
         if (val >= 0 && val <= 5)
             m1_sleep_timeout_idx = (uint8_t)val;
+    }
+
+    /* Parse "menu_style=X" */
+    p = strstr(buf, "menu_style=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 11) - '0');
+        if (val == 0 || val == 1)
+            m1_menu_style = (uint8_t)val;
     }
 
     /* Parse "ism_region=X" */

@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_scene.h"
+#include "m1_system.h"
 #include "m1_subghz_scene.h"
 
 /*============================================================================*/
@@ -33,11 +35,9 @@
 /*============================================================================*/
 
 #define MENU_ITEM_COUNT   11
-#define MENU_VISIBLE       6   /* Items visible at once (no button bar) */
 
 /* Layout constants */
 #define MENU_AREA_TOP     12   /* Y below title + separator line      */
-#define MENU_ITEM_H        8   /* Pixel height per menu row           */
 #define SCROLLBAR_X      125   /* Scrollbar left edge (3px wide)      */
 #define SCROLLBAR_W        3   /* Scrollbar track width               */
 #define MENU_TEXT_W      124   /* Highlight / text area width          */
@@ -85,6 +85,8 @@ static void scene_on_enter(SubGhzApp *app)
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
+    const uint8_t vis = M1_MENU_VIS(MENU_ITEM_COUNT);
+
     switch (event)
     {
         case SubGhzEventBack:
@@ -96,16 +98,16 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             /* Adjust scroll window */
             if (menu_sel < menu_scroll)
                 menu_scroll = menu_sel;
-            else if (menu_sel >= menu_scroll + MENU_VISIBLE)
-                menu_scroll = menu_sel - MENU_VISIBLE + 1;
+            else if (menu_sel >= menu_scroll + vis)
+                menu_scroll = menu_sel - vis + 1;
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
             menu_sel = (menu_sel + 1) % MENU_ITEM_COUNT;
             /* Adjust scroll window */
-            if (menu_sel >= menu_scroll + MENU_VISIBLE)
-                menu_scroll = menu_sel - MENU_VISIBLE + 1;
+            if (menu_sel >= menu_scroll + vis)
+                menu_scroll = menu_sel - vis + 1;
             /* Handle wrap-around */
             if (menu_sel == 0)
                 menu_scroll = 0;
@@ -137,6 +139,10 @@ static void draw(SubGhzApp *app)
 {
     (void)app;
 
+    const uint8_t item_h   = m1_menu_item_h();
+    const uint8_t text_ofs = item_h - 1;
+    const uint8_t vis      = M1_MENU_VIS(MENU_ITEM_COUNT);
+
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
@@ -148,26 +154,26 @@ static void draw(SubGhzApp *app)
     u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     /* Menu items */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    for (uint8_t i = 0; i < MENU_VISIBLE && (menu_scroll + i) < MENU_ITEM_COUNT; i++)
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
+    for (uint8_t i = 0; i < vis && (menu_scroll + i) < MENU_ITEM_COUNT; i++)
     {
         uint8_t idx = menu_scroll + i;
-        uint8_t y = MENU_AREA_TOP + i * MENU_ITEM_H;
+        uint8_t y = MENU_AREA_TOP + i * item_h;
 
         if (idx == menu_sel)
         {
             /* Highlight selected item (leave room for scrollbar) */
-            u8g2_DrawBox(&m1_u8g2, 0, y, MENU_TEXT_W, MENU_ITEM_H);
+            u8g2_DrawBox(&m1_u8g2, 0, y, MENU_TEXT_W, item_h);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
-        u8g2_DrawStr(&m1_u8g2, 4, y + 7, menu_labels[idx]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, menu_labels[idx]);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
     /* Scrollbar — position indicator on the right edge */
     {
-        uint8_t sb_area_h  = MENU_VISIBLE * MENU_ITEM_H;
+        uint8_t sb_area_h  = vis * item_h;
         uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;
         uint8_t sb_handle_y = MENU_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * menu_sel / MENU_ITEM_COUNT);

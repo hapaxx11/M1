@@ -158,3 +158,16 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_registry PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_registry COMMAND test_subghz_registry)
+
+# ------------------------------------------------------------------
+# Module under test: menu layout helpers (m1_menu_item_h, m1_menu_max_visible)
+# Pure logic — self-contained test with inlined function definitions.
+# ------------------------------------------------------------------
+add_executable(test_menu_layout
+    test_menu_layout.c
+)
+target_link_libraries(test_menu_layout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_menu_layout PRIVATE sanitizers)
+endif()
+add_test(NAME menu_layout COMMAND test_menu_layout)

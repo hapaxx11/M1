@@ -219,6 +219,26 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 }
 
 /*============================================================================*/
+/* Menu layout helpers                                                        */
+/*============================================================================*/
+
+uint8_t m1_menu_item_h(void)
+{
+    return (m1_menu_style == 0) ? M1_MENU_ITEM_H_SMALL : M1_MENU_ITEM_H_LARGE;
+}
+
+uint8_t m1_menu_max_visible(void)
+{
+    return M1_MENU_AREA_H / m1_menu_item_h();
+}
+
+const uint8_t *m1_menu_font(void)
+{
+    return (m1_menu_style == 0) ? M1_DISP_SUB_MENU_FONT_N
+                                : M1_DISP_FUNC_MENU_FONT_N;
+}
+
+/*============================================================================*/
 /* Menu drawing helper                                                        */
 /*============================================================================*/
 
@@ -229,6 +249,9 @@ void m1_scene_draw_menu(const char *title,
                         uint8_t scroll,
                         uint8_t visible)
 {
+    const uint8_t item_h   = m1_menu_item_h();
+    const uint8_t text_ofs = item_h - 1;
+
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
@@ -240,27 +263,27 @@ void m1_scene_draw_menu(const char *title,
     u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     /* Menu items */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
     for (uint8_t i = 0; i < visible && (scroll + i) < count; i++)
     {
         uint8_t idx = scroll + i;
-        uint8_t y = M1_MENU_AREA_TOP + i * M1_MENU_ITEM_H;
+        uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 
         if (idx == sel)
         {
             /* Highlight selected item (leave room for scrollbar) */
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, M1_MENU_ITEM_H);
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
-        u8g2_DrawStr(&m1_u8g2, 4, y + 7, labels[idx]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, labels[idx]);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
     /* Scrollbar — proportional position indicator on the right edge */
     if (count > 0)
     {
-        uint8_t sb_area_h   = visible * M1_MENU_ITEM_H;
+        uint8_t sb_area_h   = visible * item_h;
         uint8_t sb_handle_h = sb_area_h / count;
         if (sb_handle_h < 2)
             sb_handle_h = 2;
