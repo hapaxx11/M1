@@ -853,24 +853,24 @@ static void splash_draw_battery_indicator(void)
 		level = 100;
 
 	/* Battery icon geometry */
-	#define BATT_BODY_W   18
-	#define BATT_BODY_H   9
-	#define BATT_NUB_W    2
-	#define BATT_NUB_H    5
-	#define BATT_FILL_MAX 14  /* inner fill width: BATT_BODY_W - 4 */
+	const uint8_t batt_body_w = 18;
+	const uint8_t batt_body_h = 9;
+	const uint8_t batt_nub_w = 2;
+	const uint8_t batt_nub_h = 5;
+	const uint8_t batt_fill_max = 14;  /* inner fill width: batt_body_w - 4 */
 
 	/* Position: top-right corner with 2px margin */
-	const uint8_t batt_x = M1_LCD_DISPLAY_WIDTH - BATT_BODY_W - BATT_NUB_W - 2;
+	const uint8_t batt_x = M1_LCD_DISPLAY_WIDTH - batt_body_w - batt_nub_w - 2;
 	const uint8_t batt_y = 2;
 
 	/* Battery body outline */
-	u8g2_DrawFrame(&m1_u8g2, batt_x, batt_y, BATT_BODY_W, BATT_BODY_H);
+	u8g2_DrawFrame(&m1_u8g2, batt_x, batt_y, batt_body_w, batt_body_h);
 
 	/* Positive terminal nub */
-	u8g2_DrawBox(&m1_u8g2, batt_x + BATT_BODY_W, batt_y + 2, BATT_NUB_W, BATT_NUB_H);
+	u8g2_DrawBox(&m1_u8g2, batt_x + batt_body_w, batt_y + 2, batt_nub_w, batt_nub_h);
 
 	/* Fill bar proportional to battery level */
-	uint8_t fill_w = (uint8_t)((uint16_t)level * BATT_FILL_MAX / 100);
+	uint8_t fill_w = (uint8_t)((uint16_t)level * batt_fill_max / 100);
 	if (fill_w > 0)
 		u8g2_DrawBox(&m1_u8g2, batt_x + 2, batt_y + 2, fill_w, BATT_BODY_H - 4);
 
