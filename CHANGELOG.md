@@ -9,31 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
-  Added per-file `COMPILE_OPTIONS` in `cmake/m1_01/CMakeLists.txt` to silence
-  the harmless ISO C99 portability warning on `u8g2_fonts.c`.
-
-- **CI: automatic changelog version stamping** — The `build-release.yml`
-  workflow now automatically replaces `## [Unreleased]` in `CHANGELOG.md`
-  with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
-  after each successful release, and inserts a fresh empty `## [Unreleased]`
-  heading.  This prevents changelog entries from accumulating indefinitely
-  under the `[Unreleased]` heading.
-
-- **BLE Spam: complete rewrite with dynamic packet generation** — Ported
-  packet formats from the Flipper Zero / Momentum ble_spam app (credit:
-  @Willy-JL, @ECTO-1A, @Spooks4576) via the GhostESP reference.  Key
-  improvements: per-cycle randomisation of model IDs, battery levels,
-  colors, and encrypted payloads; MAC address rotation per packet (except
-  Apple); ~100ms cycle time (was 1500ms); per-brand mode selection menu
-  (Apple, Samsung, Google, Microsoft, Random); three Apple Continuity
-  types (ProximityPair, NearbyAction, CustomCrash); full model databases
-  (19 Apple PP, 15 Apple NA, 80+ Google FP, 20 Samsung Buds, 28 Samsung
-  Watches); Microsoft SwiftPair with random device names; live packet
-  counter display.
-
 ### Added
 
 - **Dark Mode (LCD & Notifications)** — New "Dark Mode" toggle in Settings →
@@ -125,6 +100,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Supports both parsed and raw signal types.
 
 ### Changed
+
+- **BLE Spam: complete rewrite with dynamic packet generation** — Ported
+  packet formats from the Flipper Zero / Momentum ble_spam app (credit:
+  @Willy-JL, @ECTO-1A, @Spooks4576) via the GhostESP reference.  Key
+  improvements: per-cycle randomisation of model IDs, battery levels,
+  colors, and encrypted payloads; MAC address rotation per packet (except
+  Apple); ~100ms cycle time (was 1500ms); per-brand mode selection menu
+  (Apple, Samsung, Google, Microsoft, Random); three Apple Continuity
+  types (ProximityPair, NearbyAction, CustomCrash); full model databases
+  (19 Apple PP, 15 Apple NA, 80+ Google FP, 20 Samsung Buds, 28 Samsung
+  Watches); Microsoft SwiftPair with random device names; live packet
+  counter display.
 
 - **Documentation: removed hardcoded version from build examples** — replaced
   stale `M1_Hapax_v0.9.0.1` references in CLAUDE.md, README.md, and

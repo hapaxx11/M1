@@ -361,11 +361,7 @@ static size_t build_samsung_buds_adv(uint8_t *buf)
     buf[i++] = 0x00;
     buf[i++] = 0xC7;
     buf[i++] = 0x00;
-    /* Truncated second Samsung AD record */
-    buf[i++] = 16;
-    buf[i++] = 0xFF;
-    buf[i++] = 0x75;
-    return i; /* 31 */
+    return i; /* 28 */
 }
 
 /* --- Samsung EasySetup: Watch (15-byte packet) --- */
@@ -489,7 +485,8 @@ static void draw_mode_menu(int sel)
 }
 
 /* Running screen */
-static void draw_running_screen(ble_spam_mode_t mode, uint32_t pkt_count)
+static void draw_running_screen(ble_spam_mode_t mode, uint32_t pkt_count,
+                                bool running)
 {
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -510,10 +507,11 @@ static void draw_running_screen(ble_spam_mode_t mode, uint32_t pkt_count)
     u8g2_DrawStr(&m1_u8g2, 2, 38, line);
 
     /* Status */
-    u8g2_DrawStr(&m1_u8g2, 2, 50, "Spamming...");
+    u8g2_DrawStr(&m1_u8g2, 2, 50, running ? "Spamming..." : "Stopped");
 
     /* Bottom hint */
-    m1_draw_bottom_bar(&m1_u8g2, NULL, "Stop", NULL, NULL);
+    if (running)
+        m1_draw_bottom_bar(&m1_u8g2, NULL, "Stop", NULL, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -627,7 +625,7 @@ void ble_spam_run(void)
     uint32_t last_draw = 0;
     bool stop = false;
 
-    draw_running_screen(mode, pkt_count);
+    draw_running_screen(mode, pkt_count, true);
 
     /* === Main spam loop === */
     while (!stop)
@@ -684,7 +682,7 @@ void ble_spam_run(void)
         {
             char hex_str[63]; /* 31 * 2 + 1 */
             bytes_to_hex(adv_buf, adv_len, hex_str);
-            char adv_cmd[80];
+            char adv_cmd[96];
             snprintf(adv_cmd, sizeof(adv_cmd),
                      "AT+BLEADVDATA=\"%s\"\r\n", hex_str);
             spam_at(adv_cmd);
@@ -707,7 +705,7 @@ void ble_spam_run(void)
         /* 7. Update display periodically (not every packet — too fast) */
         uint32_t now = HAL_GetTick();
         if (now - last_draw >= 500) {
-            draw_running_screen(mode, pkt_count);
+            draw_running_screen(mode, pkt_count, true);
             last_draw = now;
         }
 
@@ -721,7 +719,7 @@ void ble_spam_run(void)
     spam_at("AT+BLEADVSTOP\r\n");
     spam_at("AT+BLEINIT=0\r\n");
 
-    draw_running_screen(mode, pkt_count);
+    draw_running_screen(mode, pkt_count, false);
     osDelay(500);
     m1_esp32_deinit();
 }
