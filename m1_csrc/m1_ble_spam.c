@@ -15,7 +15,7 @@
  *   - MAC address rotation per packet (except Apple)
  *   - Fast ~100ms cycle time
  *   - Large model databases (19 Apple PP, 15 Apple NA, 80+ Google FP,
- *     20 Samsung Buds, 28 Samsung Watches)
+ *     20 Samsung Buds, 30 Samsung Watches)
  *   - Per-brand mode selection + Random mode
  *   - Three Apple Continuity types (ProximityPair, NearbyAction, CustomCrash)
  *   - Samsung Buds AND Watches
