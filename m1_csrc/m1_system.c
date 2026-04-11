@@ -823,10 +823,6 @@ static void startup_bu_registers_init(void)
 
 /*============================================================================*/
 /*
- * This function displays the M1 welcome screen
-*/
-/*============================================================================*/
-/*
  * Draw a battery indicator icon with fill level and optional charging bolt.
  * Positioned at top-right corner of the display.
  *
@@ -844,7 +840,9 @@ static void splash_draw_battery_indicator(void)
 	S_M1_Power_Status_t pwr;
 	char pct_str[8];
 
-	/* Use cached battery data to avoid blocking splash rendering on I2C/ADC work. */
+	/* Force a one-time read so the splash shows real values — battery_service_init()
+	 * only configures the ICs and does not populate power_status. */
+	battery_status_update();
 	battery_power_status_get(&pwr);
 
 	uint8_t level = pwr.battery_level;
@@ -871,13 +869,13 @@ static void splash_draw_battery_indicator(void)
 	/* Fill bar proportional to battery level */
 	uint8_t fill_w = (uint8_t)((uint16_t)level * batt_fill_max / 100);
 	if (fill_w > 0)
-		u8g2_DrawBox(&m1_u8g2, batt_x + 2, batt_y + 2, fill_w, BATT_BODY_H - 4);
+		u8g2_DrawBox(&m1_u8g2, batt_x + 2, batt_y + 2, fill_w, batt_body_h - 4);
 
 	/* Charging bolt overlay (stat: 0=none, 1=pre-charge, 2=fast charge, 3=done) */
 	if (pwr.stat == 1 || pwr.stat == 2)
 	{
 		/* Small 7-pixel lightning bolt centered in the battery body */
-		uint8_t bx = batt_x + BATT_BODY_W / 2;
+		uint8_t bx = batt_x + batt_body_w / 2;
 		uint8_t by = batt_y + 1;
 
 		/* Draw bolt by toggling pixels (XOR) so it's visible over both
@@ -897,13 +895,7 @@ static void splash_draw_battery_indicator(void)
 	snprintf(pct_str, sizeof(pct_str), "%u%%", level);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	uint8_t txt_w = u8g2_GetStrWidth(&m1_u8g2, pct_str);
-	u8g2_DrawStr(&m1_u8g2, batt_x - txt_w - 2, batt_y + BATT_BODY_H - 1, pct_str);
-
-	#undef BATT_BODY_W
-	#undef BATT_BODY_H
-	#undef BATT_NUB_W
-	#undef BATT_NUB_H
-	#undef BATT_FILL_MAX
+	u8g2_DrawStr(&m1_u8g2, batt_x - txt_w - 2, batt_y + batt_body_h - 1, pct_str);
 }
 
 
