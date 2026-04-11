@@ -132,12 +132,11 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 - **CMake**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cmake.win32_1.1.100.202601091506/tools/bin/cmake.exe`
 - **Ninja**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.ninja.win32_1.1.100.202601091506/tools/bin/ninja.exe`
 - **Build command**: Set PATH to include all three tool directories, then `cmake --build build`
-- **Post-build CRC + Hapax metadata**: The CMake post-build step uses `srec_cat` which is NOT installed and will fail. This is expected — the .bin/.elf/.hex files are already generated before that step. After `cmake --build` completes, run the CRC/metadata injection script. The canonical command is in `do_build.ps1` — always use it as the reference. Currently (for a local build defaulting to revision 1):
+- **Post-build CRC + Hapax metadata**: The CMake `POST_BUILD` step automatically runs `tools/append_crc32.py` via Python to inject the CRC32 checksum and Hapax metadata (revision number + build date) into the binary, producing `${CMAKE_PROJECT_NAME}_wCRC.bin`. No manual step is needed when building with CMake. For non-CMake builds (STM32CubeIDE, bare Makefile), run the script manually:
   ```
   python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin --output build/M1_Hapax_v<VERSION>_wCRC.bin --hapax-revision 1 --verbose
   ```
   Replace `<VERSION>` with the current version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
-  CMake's post-build step runs this automatically with the correct filename.
 - **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. CI patches only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in the header; `CMAKE_PROJECT_NAME` is derived automatically from those values at CMake configure time. Local builds use the source-file defaults.
 
 ### qMonstatek Desktop App Build
