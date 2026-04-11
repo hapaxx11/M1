@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sub-GHz Decode: deduplicate repeated transmissions** — RAW `.sub` files
+  typically contain multiple copies of the same transmission (remotes repeat
+  3–5 times).  The offline decoder now skips duplicate protocol+key pairs so
+  the results list shows each unique signal once, making decoded output much
+  clearer.
+
+- **Sub-GHz Decode: sync `npulsecount` before calling protocol decoders** —
+  The offline decoder now sets `subghz_decenc_ctl.npulsecount` before invoking
+  protocol decoders, matching the live pulse handler path and preventing
+  potential mismatches if a decoder reads the global counter directly.
+
 ### Changed
 
 - **CI: automatic changelog version stamping** — The `build-release.yml`

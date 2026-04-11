@@ -201,6 +201,11 @@ static bool do_decode_raw(void)
 
             if (pulse_count >= PACKET_PULSE_COUNT_MIN)
             {
+                /* Sync global pulse count so any decoder that reads
+                 * subghz_decenc_ctl.npulsecount directly (rather than
+                 * the passed parameter) sees the correct value. */
+                subghz_decenc_ctl.npulsecount = pulse_count;
+
                 /* Try every registered protocol decoder */
                 for (p = 0; p < subghz_protocol_registry_count; p++)
                 {
@@ -215,7 +220,22 @@ static bool do_decode_raw(void)
                             {
                                 info.frequency = saved_signal.frequency;
                                 info.rssi = 0;
-                                decode_results[decode_count++] = info;
+
+                                /* Deduplicate: skip if same protocol+key
+                                 * already recorded (RAW files often contain
+                                 * multiple repeated transmissions). */
+                                bool dup = false;
+                                for (uint8_t d = 0; d < decode_count; d++)
+                                {
+                                    if (decode_results[d].protocol == info.protocol &&
+                                        decode_results[d].key == info.key)
+                                    {
+                                        dup = true;
+                                        break;
+                                    }
+                                }
+                                if (!dup)
+                                    decode_results[decode_count++] = info;
                             }
                         }
                         break;
@@ -241,6 +261,8 @@ static bool do_decode_raw(void)
     /* Try to decode any remaining pulses (file may end without a final gap) */
     if (pulse_count >= PACKET_PULSE_COUNT_MIN && decode_count < DECODE_MAX_RESULTS)
     {
+        subghz_decenc_ctl.npulsecount = pulse_count;
+
         for (p = 0; p < subghz_protocol_registry_count; p++)
         {
             const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
@@ -251,7 +273,19 @@ static bool do_decode_raw(void)
                 {
                     info.frequency = saved_signal.frequency;
                     info.rssi = 0;
-                    decode_results[decode_count++] = info;
+
+                    bool dup = false;
+                    for (uint8_t d = 0; d < decode_count; d++)
+                    {
+                        if (decode_results[d].protocol == info.protocol &&
+                            decode_results[d].key == info.key)
+                        {
+                            dup = true;
+                            break;
+                        }
+                    }
+                    if (!dup)
+                        decode_results[decode_count++] = info;
                 }
                 break;
             }
