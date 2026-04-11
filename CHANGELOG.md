@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
+  screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`
+  to `u8g2_font_helvB08_tr`.  The old font's '1' glyph was a featureless
+  2-pixel vertical bar indistinguishable from a capital I at a glance.  The
+  new font's '1' has a clear top hook, making "M1 Hapax" immediately
+  readable.  Both fonts are bold sans-serif with similar size (ascent 8 vs 9)
+  and near-identical string width (51 vs 52 px), so the overall look is
+  preserved.
+
 ### Changed
 
 - **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
