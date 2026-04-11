@@ -294,13 +294,12 @@ to build.**
   `### Changed`, `### Fixed`, `### Removed` subsections under the current version heading.
 - **Version label**: Use `[{major}.{minor}.{build}.{rc}]` — e.g. `[0.9.0.9]`.
   The date is the wall-clock date of the change (`YYYY-MM-DD`).
-- **`[Unreleased]` heading**: Use `## [Unreleased]` (no date) for changes that will
-  NOT trigger a release build — i.e. changes that only touch paths in
-  `ci.yml` / `build-release.yml`'s `paths-ignore` lists (`.md` files, `documentation/`,
-  `LICENSE`, IDE project files, CI workflow files).  When the next firmware code change merges and
-  CI auto-increments the RC, fold the `[Unreleased]` entries into that version's block.
-  **Never assign a numbered version heading to a change that won't produce a build** —
-  this prevents version numbers from going out of sync with actual releases.
+- **`[Unreleased]` heading**: **Always** add new changelog entries under
+  `## [Unreleased]`.  The `build-release.yml` workflow automatically stamps
+  this section with the release version and date (`## [X.Y.Z.RC] - YYYY-MM-DD`)
+  after each successful release, and inserts a fresh empty `## [Unreleased]`
+  heading above it.  There is no need to manually assign version numbers —
+  CI handles the promotion.
 - **One entry per logical change**, not one entry per file edited.  Group related items.
 - **When to add an entry**:
   - New firmware feature, protocol, or UI screen → `### Added`
@@ -310,9 +309,8 @@ to build.**
   - Documentation / process / tooling change → `### Changed` with a "Documentation" prefix
 - **When NOT to add an entry**: Pure whitespace / formatting commits with zero functional
   effect.  Every other change needs an entry.
-- If the current version block already exists (e.g. the session is a follow-up fix for
-  `0.9.0.1`), append to it rather than creating a new heading.
-- If bumping `M1_HAPAX_REVISION` (e.g. a new CI release), create a **new** version heading at the top. The CI auto-increments the RC, so manually-authored changelog entries should use the next expected RC number.
+- Do **not** manually create versioned headings — always add entries under
+  `## [Unreleased]` and let CI stamp the version on release.
 
 ### README.md — update when user-visible descriptions are stale
 

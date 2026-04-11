@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CI: automatic changelog version stamping** — The `build-release.yml`
+  workflow now automatically replaces `## [Unreleased]` in `CHANGELOG.md`
+  with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
+  after each successful release, and inserts a fresh empty `## [Unreleased]`
+  heading.  This prevents changelog entries from accumulating indefinitely
+  under the `[Unreleased]` heading.
+
 ### Added
 
 - **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
