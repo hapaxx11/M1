@@ -750,10 +750,10 @@ void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext,
 /*============================================================================*/
 void m1_draw_icon(uint8_t color, u8g2_uint_t x, u8g2_uint_t y, u8g2_uint_t w, u8g2_uint_t h, const uint8_t *bitmap)
 {
+    m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, color);
-    u8g2_FirstPage(&m1_u8g2);
     u8g2_DrawXBMP(&m1_u8g2, x, y, w, h, bitmap);
-    u8g2_NextPage(&m1_u8g2);
+    m1_u8g2_nextpage();
 }
 
 /*============================================================================*/

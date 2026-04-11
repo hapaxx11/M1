@@ -844,6 +844,15 @@ static void rpc_send_screen_frame(uint8_t seq)
     need_flip = (m1_southpaw_mode == 0);   /* R2 mode → buffer is 180° rotated */
     taskEXIT_CRITICAL();
 
+    /* Dark mode: invert the RPC copy so the desktop app sees the same
+     * inverted image as the physical LCD.  The main buffer is kept
+     * un-inverted for incremental drawing. */
+    if (m1_dark_mode)
+    {
+        for (uint16_t i = 0; i < RPC_SCREEN_FB_SIZE; i++)
+            s_screen_fb_copy[i] ^= 0xFF;
+    }
+
     /* Normalize orientation so desktop always gets correct-side-up data */
     if (need_flip)
     {

@@ -40,13 +40,14 @@
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
-#define LCD_SETTINGS_ITEMS   6
+#define LCD_SETTINGS_ITEMS   7
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
 #define LCD_SET_LED          2
 #define LCD_SET_ORIENT       3
 #define LCD_SET_SLEEP        4
 #define LCD_SET_TEXT_SIZE     5
+#define LCD_SET_DARK_MODE    6
 
 //************************** S T R U C T U R E S *******************************
 
@@ -135,6 +136,7 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "Orientation:",
     "Sleep After:",
     "Text Size:",
+    "Dark Mode:",
 };
 
 static const char *lcd_cfg_get_value(uint8_t item)
@@ -147,6 +149,7 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
     case LCD_SET_TEXT_SIZE:   return (m1_menu_style == 0) ? "Small" : "Large";
+    case LCD_SET_DARK_MODE:  return m1_dark_mode ? "On" : "Off";
     default:                 return "";
     }
 }
@@ -300,6 +303,8 @@ void settings_lcd_and_notifications(void)
                 else if (LCD_SETTINGS_ITEMS <= vis)
                     scroll = 0;
             }
+            else if (sel == LCD_SET_DARK_MODE)
+                m1_lcd_set_dark_mode(!m1_dark_mode);
             needs_redraw = 1;
         }
 
@@ -331,6 +336,8 @@ void settings_lcd_and_notifications(void)
                 else if (LCD_SETTINGS_ITEMS <= vis)
                     scroll = 0;
             }
+            else if (sel == LCD_SET_DARK_MODE)
+                m1_lcd_set_dark_mode(!m1_dark_mode);
             needs_redraw = 1;
         }
     }
@@ -506,6 +513,9 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "menu_style=%d\n", m1_menu_style);
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "dark_mode=%d\n", m1_dark_mode);
+    f_write(&fp, buf, strlen(buf), &bw);
+
     snprintf(buf, sizeof(buf), "ism_region=%d\n", m1_device_stat.config.ism_band_region);
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -597,6 +607,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 11) - '0');
         if (val == 0 || val == 1)
             m1_menu_style = (uint8_t)val;
+    }
+
+    /* Parse "dark_mode=X" */
+    p = strstr(buf, "dark_mode=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 10) - '0');
+        if (val == 0 || val == 1)
+            m1_dark_mode = (uint8_t)val;
     }
 
     /* Parse "ism_region=X" */
