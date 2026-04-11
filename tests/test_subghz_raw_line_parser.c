@@ -75,6 +75,8 @@ void test_parse_mixed_sign(void)
     TEST_ASSERT_EQUAL_UINT16(4, count);
     TEST_ASSERT_EQUAL_UINT32(350,  out[0]);
     TEST_ASSERT_EQUAL_UINT32(1050, out[1]);
+    TEST_ASSERT_EQUAL_UINT32(350,  out[2]);
+    TEST_ASSERT_EQUAL_UINT32(1050, out[3]);
 }
 
 /* ===================================================================

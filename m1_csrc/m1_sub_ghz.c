@@ -1716,8 +1716,9 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		}
 
 		/* Encode 3 repetitions of the signal into raw timing pairs */
-		uint32_t max_pairs = (key_bit_count > 64 ? 64 : key_bit_count) + 1;
-		max_pairs *= 3; /* 3 repetitions */
+		uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
+		uint32_t pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
+		uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
 		SubGhzRawPair *pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
 		if (!pairs)
 		{
@@ -1746,7 +1747,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 				/* Start a new Data: line at repetition boundaries
 				 * (after each sync gap = last pair of each rep) or
 				 * when the buffer is getting full */
-				bool is_rep_end = ((pi + 1) % ((key_bit_count > 64 ? 64 : key_bit_count) + 1)) == 0;
+				bool is_rep_end = ((pi + 1) % pairs_per_rep) == 0;
 				if (is_rep_end || pos >= FLIPPER_SUB_LINE_MAX - 64)
 				{
 					strcat(out_buf, "\r\n");
