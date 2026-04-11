@@ -487,9 +487,9 @@ void fw_download_start(void)
 		return;
 	}
 
-	/* Step 2: Load source configuration */
+	/* Step 2: Load source configuration (M1 firmware sources only) */
 	dl_show_message("Loading sources...", NULL);
-	source_count = fw_source_load_config(sources);
+	source_count = fw_source_load_config_filtered(sources, "firmware");
 	if (source_count == 0)
 	{
 		dl_show_message("No sources found", "Check fw_sources.txt");

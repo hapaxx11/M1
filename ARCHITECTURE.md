@@ -15,8 +15,13 @@ The M1 firmware is organized into the following main components:
 | `lfrfid/` | LF RFID (125 kHz) support — 26 protocol decoders |
 | `Sub_Ghz/` | Sub-GHz radio support — 99 protocol decoders, protocol registry |
 | `Infrared/` | IR transmit/receive |
-| `Esp_spi_at/` | ESP32 SPI AT command interface |
+| `Esp_spi_at/` | ESP32 SPI AT command interface (host-side SPI master) |
 | `Esp32_serial_flasher/` | ESP32 firmware flashing support (UART bootloader) |
+
+> **ESP32-C6 firmware** is sourced from
+> [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1)
+> (custom SPI AT build for M1).  See
+> [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for details.
 | `USB/` | USB CDC and MSC classes |
 | `Drivers/` | STM32 HAL, CMSIS, u8g2, and other drivers |
 | `FatFs/` | FAT file system for storage |

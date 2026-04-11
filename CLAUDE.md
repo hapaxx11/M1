@@ -161,6 +161,13 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 
 ## ESP32-C6 Coprocessor
 
+### Firmware Source
+- **Source repo**: [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1) (C3 custom AT firmware)
+- **Deauth fork**: [`neddy299/esp32-at-monstatek-m1`](https://github.com/neddy299/esp32-at-monstatek-m1) (adds `AT+DEAUTH` + `AT+STASCAN`)
+- Both are forks of Espressif's official `esp-at`, customised for M1's SPI transport
+- Pre-built binaries available on the GitHub Releases pages of both repos
+- See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for the full reference
+
 ### Communication
 - M1 ↔ ESP32-C6 uses **SPI** for AT commands (NOT UART)
 - SPI Mode 1 (CPOL=0, CPHA=1) — hardcoded in `m1_esp32_hal.c:529`
