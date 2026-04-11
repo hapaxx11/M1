@@ -259,3 +259,74 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_playlist_parser PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_playlist_parser COMMAND test_subghz_playlist_parser)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_block_decoder (bit accumulation helpers)
+# Header-only — tests the inline functions used by ALL protocol decoders
+# for bit-by-bit data accumulation (64-bit and 128-bit), plus dedup hash.
+# ------------------------------------------------------------------
+add_executable(test_subghz_block_decoder
+    test_subghz_block_decoder.c
+)
+target_include_directories(test_subghz_block_decoder PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_block_decoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_block_decoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_block_decoder COMMAND test_subghz_block_decoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_block_encoder (bit-array + upload gen)
+# Header-only — tests MSB-first bit-array set/get and NRZ-style upload
+# generation from bit arrays.  Depends on level_duration + blocks_math.
+# ------------------------------------------------------------------
+add_executable(test_subghz_block_encoder
+    test_subghz_block_encoder.c
+)
+target_include_directories(test_subghz_block_encoder PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_block_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_block_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_block_encoder COMMAND test_subghz_block_encoder)
+
+# ------------------------------------------------------------------
+# Module under test: Manchester codec (decoder + encoder state machines)
+# Header-only — tests the table-driven Manchester decoder and the
+# Manchester encoder used by Marantec, Somfy, FAAC and other protocols.
+# Includes round-trip tests (encode→decode).
+# ------------------------------------------------------------------
+add_executable(test_subghz_manchester_codec
+    test_subghz_manchester_codec.c
+)
+target_include_directories(test_subghz_manchester_codec PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_manchester_codec PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_manchester_codec PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_manchester_codec COMMAND test_subghz_manchester_codec)
+
+# ------------------------------------------------------------------
+# Module under test: datatypes_utils (hex/bin/decimal conversions)
+# Pure string/numeric conversions used in Sub-GHz parsing and UI.
+# ------------------------------------------------------------------
+add_executable(test_datatypes_utils
+    test_datatypes_utils.c
+    ${M1_ROOT}/Sub_Ghz/datatypes_utils.c
+)
+target_include_directories(test_datatypes_utils PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_datatypes_utils PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_datatypes_utils PRIVATE sanitizers)
+endif()
+add_test(NAME datatypes_utils COMMAND test_datatypes_utils)

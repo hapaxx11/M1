@@ -53,6 +53,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Flipper-style paths (`/ext/subghz/...`) to M1 convention (`/SUBGHZ/...`).
   10 unit tests in `tests/test_subghz_playlist_parser.c`.
 
+- **SubGhz block decoder tests** (`tests/test_subghz_block_decoder.c`) — 15 unit tests
+  for `subghz_block_decoder.h` inline functions: bit accumulation (64-bit and 128-bit
+  with MSB overflow), decoder reset, and dedup hash computation.
+
+- **SubGhz block encoder tests** (`tests/test_subghz_block_encoder.c`) — 14 unit tests
+  for `subghz_block_encoder.h` inline functions: MSB-first bit-array set/get, round-trip
+  byte patterns, NRZ-style upload generation with consecutive-bit merging, right-align
+  mode, and buffer overflow handling.
+
+- **SubGhz Manchester codec tests** (`tests/test_subghz_manchester_codec.c`) — 22 unit
+  tests covering both `subghz_manchester_decoder.h` (table-driven state machine — all
+  valid transitions, invalid→reset, multi-bit decode sequences) and
+  `subghz_manchester_encoder.h` (step 0/1/2, same-value extra half-bit, finish symbol),
+  plus encode→decode round-trip verification.
+
+- **Datatypes utils tests** (`tests/test_datatypes_utils.c`) — 16 unit tests for
+  `datatypes_utils.c`: hex char/string→decimal conversion, dec→binary with zero-fill,
+  and `hexStrToBinStr` guard paths (NULL/empty).  Tests document a latent bug in
+  `hexStrToBinStr` where the pair counter resets each iteration.
+
 ### Changed
 
 - **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
