@@ -101,6 +101,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Documentation: removed hardcoded version from build examples** — replaced
+  stale `M1_Hapax_v0.9.0.1` references in CLAUDE.md, README.md, and
+  DEVELOPMENT.md with `M1_Hapax_v<VERSION>` placeholders.  The build system
+  is unchanged — `CMAKE_PROJECT_NAME` still derives the version dynamically
+  from `m1_fw_update_bl.h`.
+
 - **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
   Added per-file `COMPILE_OPTIONS` in `cmake/m1_01/CMakeLists.txt` to silence
   the harmless ISO C99 portability warning on `u8g2_fonts.c`.
