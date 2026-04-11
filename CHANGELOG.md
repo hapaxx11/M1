@@ -21,13 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to SD card (`dark_mode` key in `settings.cfg`).
 
 - **Text Size setting (LCD & Notifications)** — New "Text Size" option with
-  Small (default) and Large modes.  Large mode uses a clearer `spleen5x8`
-  monospaced font and increases menu row height from 8px to 10px, improving
-  readability for users with vision difficulties.  Affects all scene-based
-  menus, Sub-GHz menu/config, and LCD settings.  Setting is persisted to SD
-  card (`menu_style` key in `settings.cfg`).  Neither Flipper Zero nor
-  Momentum firmware offers a comparable in-menu font/spacing toggle — this
-  is a Hapax-original accessibility feature.
+  Small (default), Medium, and Large modes.  Medium uses a clearer `spleen5x8`
+  monospaced font at 10px row height (5 visible items).  Large uses the
+  `nine_by_five_nbp` font at 13px row height (4 visible items) for maximum
+  readability.  Affects all scene-based menus, Sub-GHz menu/config, and LCD
+  settings.  Setting is persisted to SD card (`menu_style` key in
+  `settings.cfg`).  Neither Flipper Zero nor Momentum firmware offers a
+  comparable in-menu font/spacing toggle — this is a Hapax-original
+  accessibility feature.
 
 - **SubGhz unit tests: signal history ring buffer** (`tests/test_subghz_history.c`) —
   19 tests covering `subghz_history_add/get/reset`: duplicate detection, circular
