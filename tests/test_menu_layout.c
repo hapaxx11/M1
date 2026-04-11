@@ -144,12 +144,12 @@ void test_font_expanded(void)
     TEST_ASSERT_EQUAL_PTR(dummy_font_large, m1_menu_font());
 }
 
-/* --- Edge case: invalid style value falls back to compact --- */
+/* --- Edge case: any non-zero style value gives expanded mode --- */
 
-void test_invalid_style_defaults_to_compact(void)
+void test_nonzero_style_gives_expanded(void)
 {
     m1_menu_style = 255;
-    /* Any non-zero value should give expanded (10px, 5 visible) */
+    /* Any non-zero value gives expanded (10px, 5 visible) */
     TEST_ASSERT_EQUAL_UINT8(10, m1_menu_item_h());
     TEST_ASSERT_EQUAL_UINT8(5, m1_menu_max_visible());
 }
@@ -201,7 +201,7 @@ int main(void)
 
     RUN_TEST(test_font_compact);
     RUN_TEST(test_font_expanded);
-    RUN_TEST(test_invalid_style_defaults_to_compact);
+    RUN_TEST(test_nonzero_style_gives_expanded);
 
     RUN_TEST(test_area_fits_all_items_compact);
     RUN_TEST(test_area_fits_all_items_expanded);
