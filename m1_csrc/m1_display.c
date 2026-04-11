@@ -426,7 +426,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	} // switch ( direction )
 
 	/* Graphic work starts here */
-    u8g2_FirstPage(&m1_u8g2); // This call required for page drawing in mode 1
+    m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	if ( n_items >= menu_window_sizes[menu_level_id] )
@@ -484,7 +484,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	// Draw the scroll bar handle
 	u8g2_DrawBox(&m1_u8g2, MENU_SCROLLBAR_POS_X, (M1_LCD_DISPLAY_HEIGHT*sel_item)/num_items, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT/num_items);
 
-	u8g2_NextPage(&m1_u8g2); // Update display RAM
+	m1_u8g2_nextpage(); // Update display RAM
 
 	// Back up
 	if ( x_menu_update_init )

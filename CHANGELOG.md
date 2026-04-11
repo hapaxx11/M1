@@ -326,6 +326,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dark mode not applied to main menu** — The main menu and generic submenu
+  renderer (`m1_gui_submenu_update()`) was calling stock `u8g2_FirstPage()`/
+  `u8g2_NextPage()` which bypass the dark mode XOR inversion in
+  `m1_u8g2_nextpage()`.  Replaced with the M1 wrapper functions so dark mode
+  now works on the main menu and all submenus rendered through this path.
+
 - **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
   screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`
   to `u8g2_font_helvB08_tr`.  The old font's '1' glyph was a featureless
