@@ -34,6 +34,7 @@
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
+#include "subghz_playlist_parser.h"
 
 /* sub_ghz_replay_flipper_file() is declared in m1_sub_ghz.h */
 
@@ -60,33 +61,8 @@ static bool    browse_done = false; /**< File selected, in playback view */
 /* Playlist parser                                                            */
 /*============================================================================*/
 
-/**
- * @brief  Remap a Flipper-style path to M1 convention.
- *
- * Converts "/ext/subghz/..." → "/SUBGHZ/..." so that playlist files
- * from UberGuidoZ/Flipper work without manual editing.
- *
- * @param  src   Source path (trimmed, null-terminated)
- * @param  dst   Destination buffer (at least PLAYLIST_PATH_MAX bytes)
- * @param  dlen  Size of destination buffer
- */
-static void remap_flipper_path(const char *src, char *dst, size_t dlen)
-{
-    /* Strip Flipper's /ext/ prefix: /ext/subghz/... → /subghz/... */
-    if (strncmp(src, "/ext/", 5) == 0)
-        src += 4;  /* skip "/ext" — keep the leading "/" */
-
-    /* Uppercase the directory: /subghz/ → /SUBGHZ/ */
-    if (strncmp(src, "/subghz/", 8) == 0)
-    {
-        snprintf(dst, dlen, "/SUBGHZ/%s", src + 8);
-    }
-    else
-    {
-        strncpy(dst, src, dlen - 1);
-        dst[dlen - 1] = '\0';
-    }
-}
+/* remap_flipper_path() has been extracted to subghz_playlist_parser.c/h
+ * as subghz_remap_flipper_path().  Included via subghz_playlist_parser.h. */
 
 /**
  * @brief  Parse a playlist .txt file and populate app->playlist_files[].
@@ -137,7 +113,7 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
             continue;
 
         /* Remap Flipper paths and store */
-        remap_flipper_path(p,
+        subghz_remap_flipper_path(p,
                            app->playlist_files[app->playlist_count],
                            PLAYLIST_PATH_MAX);
 

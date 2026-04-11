@@ -28,6 +28,7 @@
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_raw_decoder.h"
 #include "m1_virtual_kb.h"
 
 extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
@@ -156,12 +157,53 @@ static bool open_saved_browser(void)
 /*============================================================================*/
 
 /**
+ * @brief  ARM-side decode callback for subghz_decode_raw_offline().
+ *
+ * Copies pulse data into the global subghz_decenc_ctl buffer, then
+ * iterates through the protocol registry.  On success, reads the
+ * decoded result from the global state.
+ */
+static bool decode_try_fn(const uint16_t *pulse_buf,
+                           uint16_t pulse_count,
+                           SubGhzRawDecodeResult *out_result,
+                           void *user_ctx)
+{
+    (void)user_ctx;
+
+    /* Copy pulse data into the global buffer that decoders read from */
+    memcpy(subghz_decenc_ctl.pulse_times, pulse_buf,
+           pulse_count * sizeof(uint16_t));
+    subghz_decenc_ctl.npulsecount = pulse_count;
+
+    /* Try every registered protocol decoder */
+    for (uint16_t p = 0; p < subghz_protocol_registry_count; p++)
+    {
+        const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
+        if (proto->decode && proto->decode(p, pulse_count) == 0)
+        {
+            SubGHz_Dec_Info_t info;
+            if (subghz_decenc_read(&info, false))
+            {
+                out_result->protocol      = info.protocol;
+                out_result->key           = info.key;
+                out_result->bit_len       = info.bit_len;
+                out_result->te            = info.te;
+                out_result->serial_number = info.serial_number;
+                out_result->rolling_code  = info.rolling_code;
+                out_result->button_id     = info.button_id;
+                return true;
+            }
+            break;
+        }
+    }
+    return false;
+}
+
+/**
  * @brief  Attempt to decode protocols from a loaded RAW .sub file.
  *
- * Reads the raw timing samples (alternating positive/negative int16_t values
- * representing mark/space durations in µs), reconstructs pulse packets using
- * inter-packet gap detection (same algorithm as the live pulse handler), and
- * tries all registered protocol decoders on each complete packet.
+ * Delegates to the extracted subghz_decode_raw_offline() engine,
+ * providing an ARM-side callback that bridges to the global decoder state.
  *
  * Results are stored in decode_results[].
  *
@@ -170,9 +212,6 @@ static bool open_saved_browser(void)
  */
 static bool do_decode_raw(void)
 {
-    uint16_t i, p;
-    uint16_t pulse_count = 0;
-
     decode_count = 0;
 
     if (saved_signal.type != FLIPPER_SUBGHZ_TYPE_RAW || saved_signal.raw_count == 0)
@@ -182,115 +221,32 @@ static bool do_decode_raw(void)
     subghz_pulse_handler_reset();
     subghz_decenc_ctl.ndecodedrssi = 0;   /* RSSI meaningless for file decode */
 
-    for (i = 0; i < saved_signal.raw_count; i++)
+    SubGhzRawDecodeResult raw_results[DECODE_MAX_RESULTS];
+    uint8_t count = subghz_decode_raw_offline(
+        saved_signal.raw_data,
+        saved_signal.raw_count,
+        saved_signal.frequency,
+        raw_results,
+        DECODE_MAX_RESULTS,
+        decode_try_fn,
+        NULL);
+
+    /* Copy results into the scene-local format */
+    for (uint8_t i = 0; i < count && i < DECODE_MAX_RESULTS; i++)
     {
-        uint16_t dur = (uint16_t)abs((int)saved_signal.raw_data[i]);
-
-        if (dur < PACKET_PULSE_TIME_MIN)
-        {
-            /* Below minimum pulse — noise, reset accumulator */
-            pulse_count = 0;
-            continue;
-        }
-
-        if (dur >= INTERPACKET_GAP_MIN)
-        {
-            /* Inter-packet gap — end the current packet */
-            if (pulse_count < PACKET_PULSE_COUNT_MAX)
-                subghz_decenc_ctl.pulse_times[pulse_count++] = dur;
-
-            if (pulse_count >= PACKET_PULSE_COUNT_MIN)
-            {
-                /* Sync global pulse count so any decoder that reads
-                 * subghz_decenc_ctl.npulsecount directly (rather than
-                 * the passed parameter) sees the correct value. */
-                subghz_decenc_ctl.npulsecount = pulse_count;
-
-                /* Try every registered protocol decoder */
-                for (p = 0; p < subghz_protocol_registry_count; p++)
-                {
-                    const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
-                    if (proto->decode && proto->decode(p, pulse_count) == 0)
-                    {
-                        /* Successful decode — read result */
-                        if (decode_count < DECODE_MAX_RESULTS)
-                        {
-                            SubGHz_Dec_Info_t info;
-                            if (subghz_decenc_read(&info, false) && info.key != 0)
-                            {
-                                info.frequency = saved_signal.frequency;
-                                info.rssi = 0;
-
-                                /* Deduplicate: skip if same protocol+key
-                                 * already recorded (RAW files often contain
-                                 * multiple repeated transmissions). */
-                                bool dup = false;
-                                for (uint8_t d = 0; d < decode_count; d++)
-                                {
-                                    if (decode_results[d].protocol == info.protocol &&
-                                        decode_results[d].key == info.key)
-                                    {
-                                        dup = true;
-                                        break;
-                                    }
-                                }
-                                if (!dup)
-                                    decode_results[decode_count++] = info;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            pulse_count = 0;
-        }
-        else
-        {
-            /* Normal pulse — accumulate */
-            if (pulse_count < PACKET_PULSE_COUNT_MAX)
-            {
-                subghz_decenc_ctl.pulse_times[pulse_count++] = dur;
-            }
-            else
-            {
-                pulse_count = 0;   /* overflow, reset */
-            }
-        }
+        decode_results[i].protocol      = raw_results[i].protocol;
+        decode_results[i].key           = raw_results[i].key;
+        decode_results[i].bit_len       = raw_results[i].bit_len;
+        decode_results[i].te            = raw_results[i].te;
+        decode_results[i].frequency     = raw_results[i].frequency;
+        decode_results[i].rssi          = raw_results[i].rssi;
+        decode_results[i].serial_number = raw_results[i].serial_number;
+        decode_results[i].rolling_code  = raw_results[i].rolling_code;
+        decode_results[i].button_id     = raw_results[i].button_id;
+        decode_results[i].raw           = false;
+        decode_results[i].raw_data      = NULL;
     }
-
-    /* Try to decode any remaining pulses (file may end without a final gap) */
-    if (pulse_count >= PACKET_PULSE_COUNT_MIN && decode_count < DECODE_MAX_RESULTS)
-    {
-        subghz_decenc_ctl.npulsecount = pulse_count;
-
-        for (p = 0; p < subghz_protocol_registry_count; p++)
-        {
-            const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
-            if (proto->decode && proto->decode(p, pulse_count) == 0)
-            {
-                SubGHz_Dec_Info_t info;
-                if (subghz_decenc_read(&info, false) && info.key != 0)
-                {
-                    info.frequency = saved_signal.frequency;
-                    info.rssi = 0;
-
-                    bool dup = false;
-                    for (uint8_t d = 0; d < decode_count; d++)
-                    {
-                        if (decode_results[d].protocol == info.protocol &&
-                            decode_results[d].key == info.key)
-                        {
-                            dup = true;
-                            break;
-                        }
-                    }
-                    if (!dup)
-                        decode_results[decode_count++] = info;
-                }
-                break;
-            }
-        }
-    }
+    decode_count = count;
 
     return (decode_count > 0);
 }
