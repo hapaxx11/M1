@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Text Size setting (LCD & Notifications)** — New "Text Size" option with
+  Small (default) and Large modes.  Large mode uses a clearer `spleen5x8`
+  monospaced font and increases menu row height from 8px to 10px, improving
+  readability for users with vision difficulties.  Affects all scene-based
+  menus, Sub-GHz menu/config, and LCD settings.  Setting is persisted to SD
+  card (`menu_style` key in `settings.cfg`).  Neither Flipper Zero nor
+  Momentum firmware offers a comparable in-menu font/spacing toggle — this
+  is a Hapax-original accessibility feature.
+
 - **Battery indicator on splash screen** — The boot/welcome screen now shows a
   battery icon in the top-right corner with charge percentage and fill level.
   When charging (pre-charge or fast charge), a lightning bolt overlay appears

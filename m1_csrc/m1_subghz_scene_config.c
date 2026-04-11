@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_scene.h"
 #include "m1_sub_ghz.h"
 #include "m1_subghz_scene.h"
 #include "m1_settings.h"
@@ -62,8 +63,6 @@ static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visi
 
 /* Layout constants — aligned with menu scene (no button bar) */
 #define CFG_AREA_TOP     12   /* Y below title + separator line      */
-#define CFG_ITEM_H        8   /* Pixel height per config row          */
-#define CFG_VISIBLE       6   /* Visible rows (all items fit)         */
 #define CFG_TEXT_W      124   /* Highlight / text area width           */
 #define CFG_SCROLLBAR_X 125   /* Scrollbar left edge (3px wide)       */
 #define CFG_SCROLLBAR_W   3   /* Scrollbar track width                */
@@ -189,15 +188,21 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (cfg_sel < cfg_scroll)
                 cfg_scroll = cfg_sel;
             if (cfg_sel == CFG_ITEMS - 1)
-                cfg_scroll = (CFG_ITEMS > CFG_VISIBLE) ? CFG_ITEMS - CFG_VISIBLE : 0;
+            {
+                uint8_t vis = M1_MENU_VIS(CFG_ITEMS);
+                cfg_scroll = (CFG_ITEMS > vis) ? CFG_ITEMS - vis : 0;
+            }
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
             cfg_sel = (cfg_sel + 1) % CFG_ITEMS;
             /* Adjust scroll window */
-            if (cfg_sel >= cfg_scroll + CFG_VISIBLE)
-                cfg_scroll = cfg_sel - CFG_VISIBLE + 1;
+            {
+                uint8_t vis = M1_MENU_VIS(CFG_ITEMS);
+                if (cfg_sel >= cfg_scroll + vis)
+                    cfg_scroll = cfg_sel - vis + 1;
+            }
             if (cfg_sel == 0)
                 cfg_scroll = 0;
             app->need_redraw = true;
@@ -227,6 +232,9 @@ static void scene_on_exit(SubGhzApp *app)
 
 static void draw(SubGhzApp *app)
 {
+    const uint8_t item_h   = m1_menu_item_h();
+    const uint8_t text_ofs = item_h - 1;
+
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
@@ -238,47 +246,47 @@ static void draw(SubGhzApp *app)
     u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     /* Config items (scrollable) */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
-    uint8_t visible = (CFG_ITEMS < CFG_VISIBLE) ? CFG_ITEMS : CFG_VISIBLE;
+    uint8_t visible = M1_MENU_VIS(CFG_ITEMS);
     for (uint8_t v = 0; v < visible; v++)
     {
         uint8_t i = cfg_scroll + v;
         if (i >= CFG_ITEMS) break;
 
-        uint8_t y = CFG_AREA_TOP + v * CFG_ITEM_H;
+        uint8_t y = CFG_AREA_TOP + v * item_h;
 
         if (i == cfg_sel)
         {
             /* Highlight selected row (leave room for scrollbar) */
-            u8g2_DrawBox(&m1_u8g2, 0, y, CFG_TEXT_W, CFG_ITEM_H);
+            u8g2_DrawBox(&m1_u8g2, 0, y, CFG_TEXT_W, item_h);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
         /* Label on left */
-        u8g2_DrawStr(&m1_u8g2, 4, y + 7, cfg_item_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, cfg_item_labels[i]);
 
         /* Value on right with ◀ ▶ arrows for selected item */
         const char *val = get_value_text(app, i);
         if (i == cfg_sel)
         {
-            u8g2_DrawStr(&m1_u8g2, 62, y + 7, "<");
-            u8g2_DrawStr(&m1_u8g2, 68, y + 7, val);
+            u8g2_DrawStr(&m1_u8g2, 62, y + text_ofs, "<");
+            u8g2_DrawStr(&m1_u8g2, 68, y + text_ofs, val);
             uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
-            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + 7, ">");
+            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + text_ofs, ">");
         }
         else
         {
-            u8g2_DrawStr(&m1_u8g2, 68, y + 7, val);
+            u8g2_DrawStr(&m1_u8g2, 68, y + text_ofs, val);
         }
 
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
     /* Scrollbar — only when items exceed visible area */
-    if (CFG_ITEMS > CFG_VISIBLE)
+    if (CFG_ITEMS > visible)
     {
-        uint8_t sb_area_h   = visible * CFG_ITEM_H;
+        uint8_t sb_area_h   = visible * item_h;
         uint8_t sb_handle_h = sb_area_h / CFG_ITEMS;
         if (sb_handle_h < 3) sb_handle_h = 3;
         uint8_t sb_handle_y = CFG_AREA_TOP +

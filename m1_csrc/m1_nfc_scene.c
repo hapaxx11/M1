@@ -89,7 +89,6 @@ static const M1SceneHandlers field_detect_handlers  = { .on_enter = field_detect
 /*--- Menu scene -----------------------------------------------------------*/
 
 #define MENU_ITEM_COUNT  6
-#define MENU_VISIBLE     6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -121,7 +120,7 @@ static void menu_on_enter(M1SceneApp *app)
 static bool menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &menu_sel, &menu_scroll,
-                               MENU_ITEM_COUNT, MENU_VISIBLE, menu_targets);
+                               MENU_ITEM_COUNT, M1_MENU_VIS(MENU_ITEM_COUNT), menu_targets);
 }
 
 static void menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -130,7 +129,7 @@ static void menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("NFC", menu_labels, MENU_ITEM_COUNT,
-                       menu_sel, menu_scroll, MENU_VISIBLE);
+                       menu_sel, menu_scroll, M1_MENU_VIS(MENU_ITEM_COUNT));
 }
 
 static const M1SceneHandlers menu_handlers = {

@@ -89,10 +89,8 @@ static const M1SceneHandlers utilities_handlers = { .on_enter = utilities_on_ent
 
 #ifdef M1_APP_FILE_IMPORT_ENABLE
 #define MENU_ITEM_COUNT  5
-#define MENU_VISIBLE     5
 #else
 #define MENU_ITEM_COUNT  4
-#define MENU_VISIBLE     4
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
@@ -127,7 +125,7 @@ static void menu_on_enter(M1SceneApp *app)
 static bool menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &menu_sel, &menu_scroll,
-                               MENU_ITEM_COUNT, MENU_VISIBLE, menu_targets);
+                               MENU_ITEM_COUNT, M1_MENU_VIS(MENU_ITEM_COUNT), menu_targets);
 }
 
 static void menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -136,7 +134,7 @@ static void menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("125 kHz RFID", menu_labels, MENU_ITEM_COUNT,
-                       menu_sel, menu_scroll, MENU_VISIBLE);
+                       menu_sel, menu_scroll, M1_MENU_VIS(MENU_ITEM_COUNT));
 }
 
 static const M1SceneHandlers menu_handlers = {
