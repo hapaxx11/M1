@@ -539,10 +539,10 @@ static void generate_random_mac_str(char *out, size_t out_size)
 {
     uint8_t mac[6];
     spam_rand_bytes(mac, 6);
-    /* Static random address: top two bits = 11 */
+    /* Static random address: top two bits = 11 (BLE spec requirement) */
     mac[5] |= 0xC0;
-    /* Not all bits can be 0 */
-    if ((mac[0] | mac[1] | mac[2] | mac[3] | mac[4]) == 0)
+    /* BLE spec: lower 46 bits of a static random address must not be all zero */
+    if ((mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | (mac[5] & 0x3F)) == 0)
         mac[0] = 0x01;
     snprintf(out, out_size, "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -664,7 +664,9 @@ void ble_spam_run(void)
         /* 2. Stop any active advertisement */
         spam_at("AT+BLEADVSTOP\r\n");
 
-        /* 3. Rotate MAC address (except Apple which needs public) */
+        /* 3. Rotate MAC address — non-Apple protocols work with random
+         *    static addresses, but Apple Continuity ProximityPair requires
+         *    a public address to trigger device-pairing popups on iOS. */
         if (!this_is_apple) {
             char mac_str[18];
             generate_random_mac_str(mac_str, sizeof(mac_str));
