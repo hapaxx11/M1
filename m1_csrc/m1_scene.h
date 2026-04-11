@@ -135,27 +135,28 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 /** Menu layout constants (matching SubGhz menu pattern) */
 #define M1_MENU_AREA_TOP     12   /**< Y below title + separator line       */
 #define M1_MENU_AREA_H       52   /**< Available height for menu items (64-12) */
-#define M1_MENU_ITEM_H_SMALL  8   /**< Pixel height per row — compact mode  */
-#define M1_MENU_ITEM_H_LARGE 10   /**< Pixel height per row — expanded mode */
+#define M1_MENU_ITEM_H_SMALL  8   /**< Pixel height per row — Small mode    */
+#define M1_MENU_ITEM_H_MEDIUM 10  /**< Pixel height per row — Medium mode   */
+#define M1_MENU_ITEM_H_LARGE 13   /**< Pixel height per row — Large mode    */
 #define M1_MENU_SCROLLBAR_X  125  /**< Scrollbar left edge (3px wide)       */
 #define M1_MENU_SCROLLBAR_W    3  /**< Scrollbar track width                */
 #define M1_MENU_TEXT_W       124  /**< Highlight / text area width           */
 
 /**
  * @brief  Get current menu item height based on m1_menu_style setting.
- * @return 8 (Small/compact) or 10 (Large/expanded).
+ * @return 8 (Small), 10 (Medium), or 13 (Large).
  */
 uint8_t m1_menu_item_h(void);
 
 /**
  * @brief  Get maximum visible menu items for the standard 52px menu area.
- * @return 6 (Small) or 5 (Large).
+ * @return 6 (Small), 5 (Medium), or 4 (Large).
  */
 uint8_t m1_menu_max_visible(void);
 
 /**
  * @brief  Get the u8g2 font for menu items based on m1_menu_style.
- * @return NokiaSmallPlain (Small) or spleen5x8 (Large).
+ * @return NokiaSmallPlain (Small), spleen5x8 (Medium), or nine_by_five_nbp (Large).
  */
 const uint8_t *m1_menu_font(void);
 

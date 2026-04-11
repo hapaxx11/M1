@@ -57,6 +57,7 @@ static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
 static const char *s_brightness_text[] = { "Off", "Low", "Med", "High", "Max" };
 static const char *s_orient_text[] = { "Normal", "Southpaw", "Remote" };
 static const char *s_sleep_text[] = { "30s", "1 min", "5 min", "10 min", "15 min", "Never" };
+static const char *s_text_size_text[] = { "Small", "Medium", "Large" };
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -148,7 +149,14 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
-    case LCD_SET_TEXT_SIZE:   return (m1_menu_style == 0) ? "Small" : "Large";
+    case LCD_SET_TEXT_SIZE:
+        switch (m1_menu_style)
+        {
+        case 1:  return s_text_size_text[1];
+        case 2:  return s_text_size_text[2];
+        case 0:
+        default: return s_text_size_text[0];
+        }
     case LCD_SET_DARK_MODE:  return m1_dark_mode ? "On" : "Off";
     default:                 return "";
     }
@@ -296,7 +304,8 @@ void settings_lcd_and_notifications(void)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx == 0) ? 5 : (m1_sleep_timeout_idx - 1);
             else if (sel == LCD_SET_TEXT_SIZE)
             {
-                m1_menu_style = !m1_menu_style;
+                uint8_t menu_style = (m1_menu_style <= 2) ? m1_menu_style : 0;
+                m1_menu_style = (menu_style == 0) ? 2 : (menu_style - 1);
                 uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
                 if (sel >= scroll + vis)
                     scroll = sel - vis + 1;
@@ -329,7 +338,7 @@ void settings_lcd_and_notifications(void)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx >= 5) ? 0 : (m1_sleep_timeout_idx + 1);
             else if (sel == LCD_SET_TEXT_SIZE)
             {
-                m1_menu_style = !m1_menu_style;
+                m1_menu_style = (m1_menu_style >= 2) ? 0 : (m1_menu_style + 1);
                 uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
                 if (sel >= scroll + vis)
                     scroll = sel - vis + 1;
@@ -605,7 +614,7 @@ void settings_load_from_sd(void)
     if (p != NULL)
     {
         val = (int)(*(p + 11) - '0');
-        if (val == 0 || val == 1)
+        if (val >= 0 && val <= 2)
             m1_menu_style = (uint8_t)val;
     }
 

@@ -224,7 +224,12 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 
 uint8_t m1_menu_item_h(void)
 {
-    return (m1_menu_style == 0) ? M1_MENU_ITEM_H_SMALL : M1_MENU_ITEM_H_LARGE;
+    switch (m1_menu_style)
+    {
+    case 1:  return M1_MENU_ITEM_H_MEDIUM;
+    case 2:  return M1_MENU_ITEM_H_LARGE;
+    default: return M1_MENU_ITEM_H_SMALL;
+    }
 }
 
 uint8_t m1_menu_max_visible(void)
@@ -234,8 +239,12 @@ uint8_t m1_menu_max_visible(void)
 
 const uint8_t *m1_menu_font(void)
 {
-    return (m1_menu_style == 0) ? M1_DISP_SUB_MENU_FONT_N
-                                : M1_DISP_FUNC_MENU_FONT_N;
+    switch (m1_menu_style)
+    {
+    case 1:  return M1_DISP_FUNC_MENU_FONT_N;
+    case 2:  return M1_DISP_FUNC_MENU_FONT_N2;
+    default: return M1_DISP_SUB_MENU_FONT_N;
+    }
 }
 
 /*============================================================================*/
