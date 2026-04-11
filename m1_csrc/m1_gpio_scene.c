@@ -122,10 +122,8 @@ static const M1SceneHandlers can_saved_handlers   = { .on_enter = can_saved_on_e
 
 #ifdef M1_APP_CAN_ENABLE
 #define MENU_ITEM_COUNT  6
-#define MENU_VISIBLE     6
 #else
 #define MENU_ITEM_COUNT  5
-#define MENU_VISIBLE     5
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
@@ -162,7 +160,7 @@ static void menu_on_enter(M1SceneApp *app)
 static bool menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &menu_sel, &menu_scroll,
-                               MENU_ITEM_COUNT, MENU_VISIBLE, menu_targets);
+                               MENU_ITEM_COUNT, M1_MENU_VIS(MENU_ITEM_COUNT), menu_targets);
 }
 
 static void menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -171,7 +169,7 @@ static void menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("GPIO", menu_labels, MENU_ITEM_COUNT,
-                       menu_sel, menu_scroll, MENU_VISIBLE);
+                       menu_sel, menu_scroll, M1_MENU_VIS(MENU_ITEM_COUNT));
 }
 
 static const M1SceneHandlers menu_handlers = {
@@ -186,7 +184,6 @@ static const M1SceneHandlers menu_handlers = {
 #ifdef M1_APP_CAN_ENABLE
 
 #define CAN_MENU_ITEM_COUNT  3
-#define CAN_MENU_VISIBLE     3
 
 static const char *const can_menu_labels[CAN_MENU_ITEM_COUNT] = {
     "Sniffer",
@@ -213,7 +210,7 @@ static void can_menu_on_enter(M1SceneApp *app)
 static bool can_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &can_menu_sel, &can_menu_scroll,
-                               CAN_MENU_ITEM_COUNT, CAN_MENU_VISIBLE,
+                               CAN_MENU_ITEM_COUNT, M1_MENU_VIS(CAN_MENU_ITEM_COUNT),
                                can_menu_targets);
 }
 
@@ -227,7 +224,7 @@ static void can_menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("CAN Bus", can_menu_labels, CAN_MENU_ITEM_COUNT,
-                       can_menu_sel, can_menu_scroll, CAN_MENU_VISIBLE);
+                       can_menu_sel, can_menu_scroll, M1_MENU_VIS(CAN_MENU_ITEM_COUNT));
 }
 
 static const M1SceneHandlers can_menu_handlers = {

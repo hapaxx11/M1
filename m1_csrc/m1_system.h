@@ -170,6 +170,8 @@ extern uint8_t              m1_brightness_level;   /* 0=Off, 1=Low, 2=Med, 3=Hig
 extern uint8_t              m1_buzzer_on;          /* 0=Off, 1=On */
 extern uint8_t              m1_led_notify_on;      /* 0=Off, 1=On */
 extern uint8_t              m1_sleep_timeout_idx;   /* 0=30s, 1=1m, 2=5m, 3=10m, 4=15m, 5=Never */
+extern uint8_t              m1_menu_style;          /* 0=Small (compact 8px), 1=Large (expanded 10px) */
+extern uint8_t              m1_dark_mode;           /* 0=Off (normal), 1=On (inverted/dark display) */
 #ifdef M1_APP_BADBT_ENABLE
 #define BADBT_NAME_MAX_LEN 20
 extern char m1_badbt_name[BADBT_NAME_MAX_LEN + 1];

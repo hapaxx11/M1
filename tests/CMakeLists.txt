@@ -330,3 +330,21 @@ if(TARGET sanitizers)
     target_link_libraries(test_datatypes_utils PRIVATE sanitizers)
 endif()
 add_test(NAME datatypes_utils COMMAND test_datatypes_utils)
+
+# ------------------------------------------------------------------
+# Module under test: menu layout helpers (m1_menu_item_h, m1_menu_max_visible)
+# Constants and M1_MENU_VIS() come from the production m1_scene.h header.
+# Function implementations are inlined in the test (m1_scene.c has
+# heavy HAL/RTOS deps).
+# ------------------------------------------------------------------
+add_executable(test_menu_layout
+    test_menu_layout.c
+)
+target_include_directories(test_menu_layout PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_menu_layout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_menu_layout PRIVATE sanitizers)
+endif()
+add_test(NAME menu_layout COMMAND test_menu_layout)

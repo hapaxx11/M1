@@ -245,7 +245,6 @@ static const M1SceneHandlers esp32_download_handlers = { .on_enter = esp32_downl
 /*==========================================================================*/
 
 #define MENU_ITEM_COUNT  6
-#define MENU_VISIBLE     6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "LCD and Notifications",
@@ -277,7 +276,7 @@ static void menu_on_enter(M1SceneApp *app)
 static bool menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &menu_sel, &menu_scroll,
-                               MENU_ITEM_COUNT, MENU_VISIBLE, menu_targets);
+                               MENU_ITEM_COUNT, M1_MENU_VIS(MENU_ITEM_COUNT), menu_targets);
 }
 
 static void menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -286,7 +285,7 @@ static void menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("Settings", menu_labels, MENU_ITEM_COUNT,
-                       menu_sel, menu_scroll, MENU_VISIBLE);
+                       menu_sel, menu_scroll, M1_MENU_VIS(MENU_ITEM_COUNT));
 }
 
 static const M1SceneHandlers menu_handlers = {
@@ -301,7 +300,6 @@ static const M1SceneHandlers menu_handlers = {
 /*==========================================================================*/
 
 #define STORAGE_ITEM_COUNT  5
-#define STORAGE_VISIBLE     5
 
 static const char *const storage_labels[STORAGE_ITEM_COUNT] = {
     "About SD Card",
@@ -332,7 +330,7 @@ static void storage_menu_on_enter(M1SceneApp *app)
 static bool storage_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &storage_sel, &storage_scroll,
-                               STORAGE_ITEM_COUNT, STORAGE_VISIBLE,
+                               STORAGE_ITEM_COUNT, M1_MENU_VIS(STORAGE_ITEM_COUNT),
                                storage_targets);
 }
 
@@ -342,7 +340,7 @@ static void storage_menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("Storage", storage_labels, STORAGE_ITEM_COUNT,
-                       storage_sel, storage_scroll, STORAGE_VISIBLE);
+                       storage_sel, storage_scroll, M1_MENU_VIS(STORAGE_ITEM_COUNT));
 }
 
 static const M1SceneHandlers storage_menu_handlers = {
@@ -357,7 +355,6 @@ static const M1SceneHandlers storage_menu_handlers = {
 /*==========================================================================*/
 
 #define POWER_ITEM_COUNT  3
-#define POWER_VISIBLE     3
 
 static const char *const power_labels[POWER_ITEM_COUNT] = {
     "Battery Info",
@@ -384,7 +381,7 @@ static void power_menu_on_enter(M1SceneApp *app)
 static bool power_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &power_sel, &power_scroll,
-                               POWER_ITEM_COUNT, POWER_VISIBLE,
+                               POWER_ITEM_COUNT, M1_MENU_VIS(POWER_ITEM_COUNT),
                                power_targets);
 }
 
@@ -394,7 +391,7 @@ static void power_menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("Power", power_labels, POWER_ITEM_COUNT,
-                       power_sel, power_scroll, POWER_VISIBLE);
+                       power_sel, power_scroll, M1_MENU_VIS(POWER_ITEM_COUNT));
 }
 
 static const M1SceneHandlers power_menu_handlers = {
@@ -409,7 +406,6 @@ static const M1SceneHandlers power_menu_handlers = {
 /*==========================================================================*/
 
 #define FW_ITEM_COUNT  4
-#define FW_VISIBLE     4
 
 static const char *const fw_labels[FW_ITEM_COUNT] = {
     "Image File",
@@ -438,7 +434,7 @@ static void fw_menu_on_enter(M1SceneApp *app)
 static bool fw_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &fw_sel, &fw_scroll,
-                               FW_ITEM_COUNT, FW_VISIBLE, fw_targets);
+                               FW_ITEM_COUNT, M1_MENU_VIS(FW_ITEM_COUNT), fw_targets);
 }
 
 static void fw_menu_on_exit(M1SceneApp *app)
@@ -451,7 +447,7 @@ static void fw_menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("Firmware Update", fw_labels, FW_ITEM_COUNT,
-                       fw_sel, fw_scroll, FW_VISIBLE);
+                       fw_sel, fw_scroll, M1_MENU_VIS(FW_ITEM_COUNT));
 }
 
 static const M1SceneHandlers fw_menu_handlers = {
@@ -466,7 +462,6 @@ static const M1SceneHandlers fw_menu_handlers = {
 /*==========================================================================*/
 
 #define ESP32_ITEM_COUNT  4
-#define ESP32_VISIBLE     4
 
 static const char *const esp32_labels[ESP32_ITEM_COUNT] = {
     "Image File",
@@ -495,7 +490,7 @@ static void esp32_menu_on_enter(M1SceneApp *app)
 static bool esp32_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
     return m1_scene_menu_event(app, event, &esp32_sel, &esp32_scroll,
-                               ESP32_ITEM_COUNT, ESP32_VISIBLE,
+                               ESP32_ITEM_COUNT, M1_MENU_VIS(ESP32_ITEM_COUNT),
                                esp32_targets);
 }
 
@@ -509,7 +504,7 @@ static void esp32_menu_draw(M1SceneApp *app)
 {
     (void)app;
     m1_scene_draw_menu("ESP32 Update", esp32_labels, ESP32_ITEM_COUNT,
-                       esp32_sel, esp32_scroll, ESP32_VISIBLE);
+                       esp32_sel, esp32_scroll, M1_MENU_VIS(ESP32_ITEM_COUNT));
 }
 
 static const M1SceneHandlers esp32_menu_handlers = {

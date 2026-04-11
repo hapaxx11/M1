@@ -132,11 +132,12 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 - **CMake**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cmake.win32_1.1.100.202601091506/tools/bin/cmake.exe`
 - **Ninja**: `C:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.ninja.win32_1.1.100.202601091506/tools/bin/ninja.exe`
 - **Build command**: Set PATH to include all three tool directories, then `cmake --build build`
-- **Post-build CRC + Hapax metadata**: The CMake post-build step uses `srec_cat` which is NOT installed and will fail. This is expected — the .bin/.elf/.hex files are already generated before that step. After `cmake --build` completes, run the CRC/metadata injection script. The canonical command is in `do_build.ps1` — always use it as the reference. Currently (for a local build defaulting to revision 1):
+- **Post-build CRC + Hapax metadata**: The CMake `POST_BUILD` step automatically runs `tools/append_crc32.py` via Python to inject the CRC32 checksum and Hapax metadata (revision number + build date) into the binary, producing `${CMAKE_PROJECT_NAME}_wCRC.bin`. No manual step is needed when building with CMake. For non-CMake builds (STM32CubeIDE, bare Makefile), run the script manually:
   ```
-  python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin --output build/M1_Hapax_v0.9.0.1_wCRC.bin --hapax-revision 1 --verbose
+  python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin --output build/M1_Hapax_v<VERSION>_wCRC.bin --hapax-revision 1 --verbose
   ```
-- **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. The input binary name must match the CMake project name (e.g. `M1_Hapax_v0.9.0.1.bin`). CI patches only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in the header; `CMAKE_PROJECT_NAME` is derived automatically from those values at CMake configure time. Local builds use the source-file defaults.
+  Replace `<VERSION>` with the current version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
+- **CRITICAL: `--hapax-revision` is MANDATORY** — without it, the Hapax metadata (revision number + build date) will NOT be injected into the binary, and the dual boot bank screen will show only the base version with no `-Hapax.X` suffix or build date. This flag must ALWAYS be included. CI patches only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in the header; `CMAKE_PROJECT_NAME` is derived automatically from those values at CMake configure time. Local builds use the source-file defaults.
 
 ### qMonstatek Desktop App Build
 
@@ -273,7 +274,7 @@ If Monstatek publishes a new release in the future, re-evaluate this policy by:
 - **`Hapax` is the project codename**, NOT a version number.
 - **`M1_HAPAX_REVISION`** in `m1_fw_update_bl.h` = the Hapax fork revision. Keep in sync with `FW_VERSION_RC`. Source-file default = `1` (= local build default). **CI auto-increments** by querying the latest published release tag before each build.
 - **Display format**: `v{major}.{minor}.{build}.{rc}-Hapax.{hapax_revision}` — e.g. `v0.9.0.1-Hapax.1`, `v0.9.0.2-Hapax.2`, etc.
-- **File/tag format**: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — e.g. `M1_Hapax_v0.9.0.1_wCRC.bin`, tag `v0.9.0.1`. No `-Hapax.X` suffix in filenames or release tags.
+- **File/tag format**: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — e.g. `M1_Hapax_v{ver}_wCRC.bin`, tag `v{ver}`. No `-Hapax.X` suffix in filenames or release tags.
 - **CMake project name** is fully dynamic: `M1_Hapax_v{major}.{minor}.{build}.{rc}` — derived entirely at CMake configure time by reading the four `FW_VERSION_*` macros from `m1_fw_update_bl.h`. `CMakeLists.txt` is **never** patched by CI and never needs manual editing for a version bump. All output filenames (ELF, BIN, HEX, wCRC) derive from this automatically.
 - **When bumping Hapax revision manually** (e.g. for a local build): update only `FW_VERSION_RC` and `M1_HAPAX_REVISION` in `m1_fw_update_bl.h` — `CMakeLists.txt` is not touched. The CI does this automatically.
 - **RPC protocol**: `hapax_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-Hapax.X` suffix only when `hapax_revision > 0`, so stock Monstatek firmware displays without it.
@@ -353,6 +354,13 @@ to build.**
 - Update build commands, environment requirements, or workflow rules if they change.
 - Keep this in sync with the canonical `CLAUDE.md` build instructions.
 
+### CLAUDE.md Font Inventory — update when fonts change
+
+- When adding, removing, or changing any font in `m1_display.h` macros or the
+  `m1_app_api.c` font table, update the **Font Inventory** table in the
+  Architecture Rules section of this file.
+- See the **Font Maintenance Rules** subsection for the full checklist.
+
 ---
 
 ## Architecture Rules
@@ -362,6 +370,85 @@ to build.**
 - All Flipper file parsers use stack allocation (no heap/malloc)
 - FreeRTOS headers must be included before stream_buffer.h / queue.h
 - Flipper parser API: functions are named `flipper_*_load()` / `flipper_*_save()`, return `bool`
+
+### Font Inventory
+
+The M1 firmware compiles ~1987 u8g2 fonts in `Drivers/u8g2_csrc/u8g2_fonts.c`.
+The table below inventories fonts referenced by application code via
+`m1_csrc/m1_display.h` (display-role macros),
+`m1_csrc/m1_app_api.c` (BadUSB scripting API table), and direct
+`u8g2_SetFont()` call sites.  It may also include a separate
+"defined but unused" entry, which is not necessarily linked into the final
+binary when section garbage collection is enabled.
+
+**u8g2 font suffix meanings:**
+
+| Suffix | Charset | Notes |
+|--------|---------|-------|
+| `_tr` | Printable ASCII 32–127 (transparent mode) | Has lowercase, most common |
+| `_tf` | Printable ASCII 32–127 (filled mode) | Has lowercase, filled background |
+| `_tu` | Uppercase only 32–90 (transparent) | **No lowercase** |
+| `_tn` | Numbers + punctuation 32–57 (transparent) | Digits only |
+| `_mr` / `_mf` | Monospaced, reduced / full | Fixed-width |
+| `_8r` / `_8f` | Full 256-char set | Extended Latin |
+| `_t_all` | Full Unicode set | Large flash footprint |
+
+**Active font table — updated 2026-04-11:**
+
+| Font | Macro / API | Role | Ascent | Lowercase |
+|------|-------------|------|--------|-----------|
+| `u8g2_font_resoledmedium_tr` | `M1_DISP_MAIN_MENU_FONT_N` + API | Main menu normal text | 7 | Yes |
+| `u8g2_font_helvB08_tf` | `M1_DISP_MAIN_MENU_FONT_B` + API | Main menu bold text | 8 | Yes |
+| `u8g2_font_helvB08_tr` | `M1_POWERUP_LOGO_FONT` + API | Splash screen "M1 Hapax" | 8 | Yes |
+| `u8g2_font_NokiaSmallPlain_tf` | `M1_DISP_SUB_MENU_FONT_N` + API | Sub-menu normal text | 7 | Yes |
+| `u8g2_font_squeezed_b7_tr` | `M1_DISP_SUB_MENU_FONT_B` + API | Sub-menu bold text | 7 | Yes |
+| `u8g2_font_spleen5x8_mf` | `M1_DISP_FUNC_MENU_FONT_N` + API | Function menu monospace | 7 | Yes |
+| `u8g2_font_nine_by_five_nbp_tf` | `M1_DISP_FUNC_MENU_FONT_N2` + API | Function menu larger | 9 | Yes |
+| `u8g2_font_courB08_tf` | `M1_DISP_RUN_MENU_FONT_B` + API | Running menu bold | 6 | Yes |
+| `u8g2_font_Terminal_tr` | `M1_DISP_RUN_ERROR_FONT_1B` + API | Error messages | 9 | Yes |
+| `u8g2_font_lubB08_tf` | `M1_DISP_RUN_ERROR_FONT_2B` + API | Error messages bold | 9 | Yes |
+| `u8g2_font_victoriabold8_8r` | `M1_DISP_RUN_WARNING_FONT_1B` | Power warnings (wide bold) | 8 | Yes |
+| `u8g2_font_pcsenior_8f` | `M1_DISP_RUN_WARNING_FONT_2B` + API | Warning messages | 7 | Yes |
+| `u8g2_font_samim_10_t_all` | `M1_DISP_RUN_WARNING_FONT_3` | **Defined but unused** | — | Yes |
+| `u8g2_font_profont17_tr` | `M1_DISP_LARGE_FONT_1B` + API | Large readable text | 11 | Yes |
+| `u8g2_font_VCR_OSD_tu` | `M1_DISP_LARGE_FONT_2B` + API | Large uppercase display | 12 | **No** |
+| `u8g2_font_spleen8x16_mf` | `M1_DISP_LARGE_FONT_3B` + API | Large monospace | 11 | Yes |
+| `u8g2_font_Pixellari_tu` | `M1_MAIN_LOGO_FONT_1B` + API | Main logo / heading | 10 | **No** |
+| `u8g2_font_4x6_tr` | API only | BadUSB tiny text | 5 | Yes |
+| `u8g2_font_5x8_tr` | API only | BadUSB small text | 6 | Yes |
+| `u8g2_font_6x10_tr` | API only | BadUSB small readable | 7 | Yes |
+| `u8g2_font_10x20_mr` | API only | BadUSB large monospace | 14 | Yes |
+| `u8g2_font_finderskeepers_tf` | API only | BadUSB game-style | 7 | Yes |
+
+**Where the font is bound determines which code files must be updated when
+changing it:**
+
+- **`m1_display.h` macro** → changing the macro automatically updates all callers.
+- **`m1_app_api.c` table** → the BadUSB scripting engine looks up fonts by string
+  name at runtime.  If a font is removed from the table, existing `.m1app` scripts
+  referencing it by name will fail.
+
+### Font Maintenance Rules
+
+1. **When adding a new font**: add it to the table above, add it to the
+   `m1_app_api.c` font table if BadUSB scripts should be able to use it, and
+   verify it is declared in `u8g2_fonts.c` (all 1987 fonts are already compiled;
+   you only need to add a new entry if you bring in a font from an external
+   source).
+2. **When changing `M1_POWERUP_LOGO_FONT`**: the replacement font's `1` glyph
+   must be visually distinct from its `I` glyph — otherwise "M1" reads as "MI"
+   on the splash screen.  Prefer fonts whose `1` has a top hook or base serif.
+3. **When removing a font**: remove it from this table, from the `m1_app_api.c`
+   table, and from the `m1_display.h` macro (if applicable).  Note that removing
+   a font from `m1_app_api.c` breaks any `.m1app` scripts that reference it.
+4. **Keep this table current**: any agent session that modifies `m1_display.h`
+   font macros, `m1_app_api.c` font table entries, or introduces a new
+   `u8g2_SetFont()` call with a font not already listed here **MUST** update
+   this table before the session ends.
+5. **Suffix awareness**: when choosing a font for a context that displays
+   lowercase text (menus, filenames, version strings), **never** use a `_tu` or
+   `_tn` suffix font — those lack lowercase glyphs.  Use `_tr`, `_tf`, `_mr`,
+   or `_mf` instead.
 
 ### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
 

@@ -25,6 +25,7 @@
 //#include "u8x8.h"
 //#include "U8g2lib.h"
 #include "m1_compile_cfg.h"
+#include "m1_system.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -213,6 +214,23 @@ void m1_lcd_set_southpaw(uint8_t enable)
 
 
 /*============================================================================*/
+/**
+  * @brief  Enable or disable dark mode (software pixel inversion).
+  *         When enabled, m1_u8g2_nextpage() XORs the entire frame buffer
+  *         before sending, so all content (text, XBMs, draw primitives) is
+  *         inverted uniformly.  Software XOR is used instead of the ST7567
+  *         hardware 0xA7 command so that RPC screen streaming also reflects
+  *         the inverted image.
+  * @param  enable: 1=dark mode (inverted), 0=normal
+  */
+/*============================================================================*/
+void m1_lcd_set_dark_mode(uint8_t enable)
+{
+    m1_dark_mode = enable ? 1 : 0;
+}
+
+
+/*============================================================================*/
 /*
  * This function is the equivalent of the function void u8g2_FirstPage(u8g2_t *u8g2)
  */
@@ -231,11 +249,37 @@ void m1_u8g2_firstpage(void)
 /*============================================================================*/
 uint8_t m1_u8g2_nextpage(void)
 {
+	/* Dark mode: XOR the entire frame buffer before sending so that all
+	 * content (text, XBMs, draw primitives) appears inverted on the LCD.
+	 * After send, XOR again to restore the buffer to its normal
+	 * (un-inverted) state so that incremental drawing without a full
+	 * firstpage/clear operates on the correct pixel values.
+	 * RPC screen streaming handles inversion in its own copy path. */
+	uint8_t *buf = NULL;
+	uint16_t len = 0;
+
+	if (m1_dark_mode)
+	{
+		buf = u8g2_GetBufferPtr(&m1_u8g2);
+		len = (uint16_t)u8g2_GetBufferTileWidth(&m1_u8g2) * 8U
+		    * (uint16_t)u8g2_GetBufferTileHeight(&m1_u8g2);
+		for (uint16_t i = 0; i < len; i++)
+			buf[i] ^= 0xFF;
+	}
+
 	u8g2_SendBuffer(&m1_u8g2);
 	u8x8_RefreshDisplay( u8g2_GetU8x8(&m1_u8g2) );
 
+	/* Restore buffer to un-inverted state */
+	if (m1_dark_mode)
+	{
+		for (uint16_t i = 0; i < len; i++)
+			buf[i] ^= 0xFF;
+	}
+
 #ifdef M1_APP_RPC_ENABLE
-	/* Notify the RPC task that a new frame is ready for streaming */
+	/* Notify the RPC task that a new frame is ready for streaming.
+	 * The RPC copy path applies dark-mode inversion to its own snapshot. */
 	if (m1_rpc_screen_streaming_active())
 	{
 		m1_rpc_notify_screen_update();

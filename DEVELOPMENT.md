@@ -22,17 +22,23 @@ On Debian/Ubuntu: `sudo apt install gcc-arm-none-eabi cmake ninja-build python3`
 # Configure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-# Build
+# Build (post-build CRC injection runs automatically)
 cmake --build build
+```
 
-# Post-build: inject CRC and Hapax metadata (required for SD card flashing)
-python tools/append_crc32.py build/M1_Hapax_v0.9.0.1.bin \
-    --output build/M1_Hapax_v0.9.0.1_wCRC.bin \
+The CMake `POST_BUILD` step automatically runs `tools/append_crc32.py` to inject CRC
+and Hapax metadata into the binary.  For non-CMake builds (STM32CubeIDE), run manually:
+
+```bash
+python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin \
+    --output build/M1_Hapax_v<VERSION>_wCRC.bin \
     --hapax-revision 1 --verbose
 ```
 
-The `--hapax-revision` flag is **mandatory** — without it, the dual-boot bank screen will
-not show the Hapax revision or build date. CI auto-increments the revision on each merge.
+Replace `<VERSION>` with the version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
+The `--hapax-revision` flag is **mandatory** — without it, the dual-boot bank screen
+will not show the Hapax revision or build date. CI auto-increments the revision on each
+merge.
 
 See [`documentation/mbt.md`](documentation/mbt.md) for STM32CubeIDE and SRecord setup.
 
