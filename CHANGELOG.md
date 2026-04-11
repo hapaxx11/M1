@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: added mandatory bug-fix regression test policy to CLAUDE.md,
   DEVELOPMENT.md, and .github/GUIDELINES.md — every bug fix must include unit tests
   that fail before the fix and pass after it
+- Documentation: added explicit "no duplicate subsection headings" rule to CLAUDE.md
+  and GUIDELINES.md changelog instructions — agents must scan the entire `[Unreleased]`
+  block for an existing heading before creating a new one
 
 ### Fixed
 

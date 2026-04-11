@@ -308,6 +308,12 @@ to build.**
   heading above it.  There is no need to manually assign version numbers —
   CI handles the promotion.
 - **One entry per logical change**, not one entry per file edited.  Group related items.
+- **No duplicate subsection headings** — before adding a `### Fixed`, `### Added`,
+  `### Changed`, or `### Removed` heading, **scan the entire `[Unreleased]` block** for
+  an existing heading of the same type.  If one already exists, append your bullet(s) to
+  that existing section.  Never create a second `### Fixed` (or any other) heading under
+  the same `## [Unreleased]` block — duplicate headings confuse readers and changelog
+  tooling.
 - **When to add an entry**:
   - New firmware feature, protocol, or UI screen → `### Added`
   - Modification to existing behaviour, API, or protocol → `### Changed`
