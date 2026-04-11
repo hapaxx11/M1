@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Battery indicator on splash screen** — The boot/welcome screen now shows a
+  battery icon in the top-right corner with charge percentage and fill level.
+  When charging (pre-charge or fast charge), a lightning bolt overlay appears
+  inside the battery icon. Similar to Momentum firmware's splash screen.
+
 - **WiFi Deauther** — ported WiFi deauthentication tool from neddy299/M1 fork.
   Accessible from WiFi → Deauther menu.  Flow: preflight AT command check →
   AP scan → AP select → station scan → station select → attack toggle.
