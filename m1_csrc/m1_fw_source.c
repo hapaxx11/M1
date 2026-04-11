@@ -195,23 +195,26 @@ uint8_t fw_source_load_config(fw_source_t *sources)
 
 uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *category)
 {
-	fw_source_t all[FW_SOURCE_MAX];
 	uint8_t total, out = 0;
 
 	if (!sources || !category)
 		return 0;
 
 	memset(sources, 0, sizeof(fw_source_t) * FW_SOURCE_MAX);
-	total = fw_source_load_config(all);
+	total = fw_source_load_config(sources);
 
 	for (uint8_t i = 0; i < total && out < FW_SOURCE_MAX; i++)
 	{
-		if (strcmp(all[i].category, category) == 0)
+		if (strcmp(sources[i].category, category) == 0)
 		{
-			memcpy(&sources[out], &all[i], sizeof(fw_source_t));
+			if (out != i)
+				memcpy(&sources[out], &sources[i], sizeof(fw_source_t));
 			out++;
 		}
 	}
+
+	if (out < total)
+		memset(&sources[out], 0, sizeof(fw_source_t) * (FW_SOURCE_MAX - out));
 
 	return out;
 }

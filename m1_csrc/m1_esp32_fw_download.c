@@ -51,6 +51,14 @@
 static uint32_t s_dl_downloaded;
 static uint32_t s_dl_total;
 
+/* Large buffers in static storage to avoid stack overflow in menu task.
+ * Safe: only one blocking delegate runs at a time. */
+static fw_source_t  s_edl_sources[FW_SOURCE_MAX];
+static fw_release_t s_edl_releases[FW_RELEASE_MAX];
+static char         s_edl_sd_path[128];
+static char         s_edl_md5_url[FW_RELEASE_URL_LEN];
+static char         s_edl_md5_name[FW_RELEASE_ASSET_LEN];
+
 /*
  * Draw a two-line message on screen.
  */
@@ -318,14 +326,14 @@ static bool build_md5_filename(const char *bin_name, char *md5_name, size_t md5_
  */
 void esp32_fw_download_start(void)
 {
-	fw_source_t sources[FW_SOURCE_MAX];
-	fw_release_t releases[FW_RELEASE_MAX];
+	fw_source_t  *sources  = s_edl_sources;
+	fw_release_t *releases = s_edl_releases;
+	char         *sd_path  = s_edl_sd_path;
+	char         *md5_url  = s_edl_md5_url;
+	char         *md5_name = s_edl_md5_name;
 	uint8_t source_count, release_count;
 	uint8_t selected;
 	http_status_t dl_status;
-	char sd_path[128];
-	char md5_url[FW_RELEASE_URL_LEN];
-	char md5_name[FW_RELEASE_ASSET_LEN];
 
 	/* Step 1: Check WiFi */
 	if (!http_is_ready())
@@ -430,7 +438,7 @@ source_selection:
 
 		m1_fb_make_dir(ESP32_FW_DOWNLOAD_DIR);
 
-		snprintf(sd_path, sizeof(sd_path), "%s/%s",
+		snprintf(sd_path, sizeof(s_edl_sd_path), "%s/%s",
 		         ESP32_FW_DOWNLOAD_DIR, rel->asset_name);
 
 		s_dl_downloaded = 0;
@@ -462,8 +470,8 @@ source_selection:
 		}
 
 		/* Step 8: Download .md5 sidecar */
-		if (!build_md5_url(rel->download_url, md5_url, sizeof(md5_url)) ||
-		    !build_md5_filename(rel->asset_name, md5_name, sizeof(md5_name)))
+		if (!build_md5_url(rel->download_url, md5_url, FW_RELEASE_URL_LEN) ||
+		    !build_md5_filename(rel->asset_name, md5_name, FW_RELEASE_ASSET_LEN))
 		{
 			edl_show_message("BIN downloaded", "MD5 name error");
 			vTaskDelay(pdMS_TO_TICKS(3000));
@@ -471,7 +479,7 @@ source_selection:
 			return;
 		}
 
-		snprintf(sd_path, sizeof(sd_path), "%s/%s",
+		snprintf(sd_path, sizeof(s_edl_sd_path), "%s/%s",
 		         ESP32_FW_DOWNLOAD_DIR, md5_name);
 
 		edl_show_message("Downloading MD5...", md5_name);
