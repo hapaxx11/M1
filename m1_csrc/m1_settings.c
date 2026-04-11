@@ -304,7 +304,8 @@ void settings_lcd_and_notifications(void)
                 m1_sleep_timeout_idx = (m1_sleep_timeout_idx == 0) ? 5 : (m1_sleep_timeout_idx - 1);
             else if (sel == LCD_SET_TEXT_SIZE)
             {
-                m1_menu_style = (m1_menu_style == 0) ? 2 : (m1_menu_style - 1);
+                uint8_t menu_style = (m1_menu_style <= 2) ? m1_menu_style : 0;
+                m1_menu_style = (menu_style == 0) ? 2 : (menu_style - 1);
                 uint8_t vis = M1_MENU_VIS(LCD_SETTINGS_ITEMS);
                 if (sel >= scroll + vis)
                     scroll = sel - vis + 1;
