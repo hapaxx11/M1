@@ -71,4 +71,15 @@ static TIM_TypeDef  _stub_tim1;
 /* SPI handle type (referenced by some headers) */
 typedef struct { uint32_t dummy; } SPI_HandleTypeDef;
 
+/* Windows-style typedefs used by lfrfid.h macros */
+#ifndef BYTE
+typedef uint8_t  BYTE;
+#endif
+#ifndef WORD
+typedef uint16_t WORD;
+#endif
+#ifndef DWORD
+typedef uint32_t DWORD;
+#endif
+
 #endif /* STM32H5XX_HAL_H_STUB */
