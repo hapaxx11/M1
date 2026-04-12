@@ -54,10 +54,12 @@ extern S_M1_RingBuffer subghz_rx_rawdata_rb;
 extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 extern int16_t subghz_read_rssi_ext(void);
 
-/* RAW waveform helpers from m1_sub_ghz.c */
-extern void subghz_raw_waveform_draw_ext(void);
-extern void subghz_raw_waveform_reset_ext(void);
-extern void subghz_raw_waveform_push_ext(uint16_t duration_us, uint8_t level);
+/* RAW RSSI visualization helpers from m1_sub_ghz.c */
+extern void subghz_raw_rssi_draw_ext(void);
+extern void subghz_raw_rssi_reset_ext(void);
+extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
+extern void subghz_raw_draw_sin_ext(void);
+extern void subghz_raw_sin_advance_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
 extern uint8_t  sub_ghz_raw_recording_init_ext(void);
@@ -75,7 +77,7 @@ static void scene_on_enter(SubGhzApp *app)
     app->raw_state = SubGhzReadRawStateIdle;
     app->raw_sample_count = 0;
     app->rssi = -120;
-    subghz_raw_waveform_reset_ext();
+    subghz_raw_rssi_reset_ext();
     app->need_redraw = true;
 }
 
@@ -120,7 +122,7 @@ static void start_raw_rx(SubGhzApp *app)
     subghz_record_mode_flag = 1;
     app->raw_state = SubGhzReadRawStateRecording;
     app->raw_sample_count = 0;
-    subghz_raw_waveform_reset_ext();
+    subghz_raw_rssi_reset_ext();
 
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
 }
@@ -218,7 +220,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 if (flushed > 0)
                     app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
 
+                /* Read RSSI and push to history (trace=true advances cursor) */
                 app->rssi = subghz_read_rssi_ext();
+                subghz_raw_rssi_push_ext((float)app->rssi, true);
                 app->need_redraw = true;
             }
             return true;
@@ -255,12 +259,19 @@ static void draw(SubGhzApp *app)
 
     subghz_status_bar_draw(freq, mod, state, false);
 
-    /* RSSI bar when recording — read fresh RSSI on every draw cycle so the
-     * bar updates even during 200ms timeout redraws (not only on RxData). */
-    if (app->raw_state == SubGhzReadRawStateRecording)
+    /* Sample count in status bar area (right side, inverted text) */
+    if (app->raw_state != SubGhzReadRawStateIdle)
     {
-        app->rssi = subghz_read_rssi_ext();
-        subghz_rssi_bar_draw(app->rssi);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); /* Inverted (white on black bar) */
+        u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+        if (app->raw_sample_count >= 1000)
+            snprintf(line, sizeof(line), "%luk", (unsigned long)(app->raw_sample_count / 1000));
+        else
+            snprintf(line, sizeof(line), "%lu", (unsigned long)app->raw_sample_count);
+        /* Right-align in the status bar (leave room for state text) */
+        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, line);
+        u8g2_DrawStr(&m1_u8g2, 78 - tw, 8, line);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
     /* Waveform area */
@@ -268,22 +279,22 @@ static void draw(SubGhzApp *app)
 
     if (app->raw_state == SubGhzReadRawStateIdle)
     {
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 20, 32, "Press OK to");
-        u8g2_DrawStr(&m1_u8g2, 20, 42, "start recording");
+        /* Animated sine wave (Flipper-style Lissajous) in idle state */
+        subghz_raw_draw_sin_ext();
+        subghz_raw_sin_advance_ext();
     }
     else
     {
-        /* Draw waveform */
-        subghz_raw_waveform_draw_ext();
+        /* During recording: update current RSSI in display without advancing
+         * (trace=false just overwrites the current position for live feedback) */
+        if (app->raw_state == SubGhzReadRawStateRecording)
+        {
+            app->rssi = subghz_read_rssi_ext();
+            subghz_raw_rssi_push_ext((float)app->rssi, false);
+        }
 
-        /* Sample count in top corner */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        if (app->raw_sample_count >= 1000)
-            snprintf(line, sizeof(line), "%luk", (unsigned long)(app->raw_sample_count / 1000));
-        else
-            snprintf(line, sizeof(line), "%lu", (unsigned long)app->raw_sample_count);
-        u8g2_DrawStr(&m1_u8g2, 100, 22, line);
+        /* Draw RSSI history spectrogram */
+        subghz_raw_rssi_draw_ext();
     }
 
     /* Bottom bar */

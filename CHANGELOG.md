@@ -84,6 +84,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz Read Raw: Flipper-style RSSI spectrogram visualization** — Replaced
+  the binary square-wave waveform display with a Flipper Zero-inspired RSSI
+  history spectrogram.  Changes include: (1) RSSI values are sampled on each
+  data event and drawn as vertical bars from the bottom of the waveform area,
+  showing signal strength over time rather than mark/space pulse states;
+  (2) Timeline scale ticks along the top of the waveform area scroll with the
+  data; (3) A dashed vertical cursor with triangle indicator marks the current
+  write position; (4) "RSSI" label drawn vertically on the right edge;
+  (5) Waveform area enclosed in a proper frame (top/bottom/right borders);
+  (6) Animated Lissajous sine wave replaces static "Press OK" text in idle
+  state.  The separate thin RSSI bar below the status bar has been removed —
+  RSSI is now the primary visualization.
+
 - **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
   line parsing are now delegated to the extracted `subghz_key_encoder` and
   `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
