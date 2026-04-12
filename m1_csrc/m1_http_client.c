@@ -461,10 +461,14 @@ static void ssl_ensure_configured(void)
 	s_ssl_configured = true;
 
 	/* Enable SNTP so the ESP32 has valid time for TLS.
-	 * Fire-and-forget — sync happens in the background. */
+	 * Fire-and-forget — sync happens in the background.
+	 * If this fails (e.g. no Internet yet), SSL may still work
+	 * because CIPSSLCCONF=0 disables cert time validation. */
 	spi_AT_send_recv(
 		ESP32C6_AT_REQ_CIPSNTPCFG "1,0,\"pool.ntp.org\"" ESP32C6_AT_REQ_CRLF,
 		s_at_buf, sizeof(s_at_buf), 3);
+	if (!strstr(s_at_buf, "OK"))
+		M1_LOG_W(HTTP_TAG, "SNTP config failed: %s\n\r", s_at_buf);
 
 	/* Disable SSL certificate verification (auth_mode=0).
 	 * Without this the ESP32 attempts to verify the server certificate
@@ -473,6 +477,8 @@ static void ssl_ensure_configured(void)
 	spi_AT_send_recv(
 		ESP32C6_AT_REQ_CIPSSLCCONF "0" ESP32C6_AT_REQ_CRLF,
 		s_at_buf, sizeof(s_at_buf), 3);
+	if (!strstr(s_at_buf, "OK"))
+		M1_LOG_W(HTTP_TAG, "SSL config failed: %s\n\r", s_at_buf);
 }
 
 /*

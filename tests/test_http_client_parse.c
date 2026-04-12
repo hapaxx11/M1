@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <string.h>
 
-/* Test copy of parse_url from m1_http_client.c */
+/* Stub implementation of parse_url in tests/stubs/http_client_parse_impl.c */
 extern bool http_parse_url(const char *url, char *host, uint16_t host_size,
                            uint16_t *port, char *path, uint16_t path_size,
                            bool *is_https);
