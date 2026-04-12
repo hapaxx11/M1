@@ -18,7 +18,12 @@ bool fw_source_asset_matches_filter(const char *asset_name,
                                      const char *include_filter,
                                      const char *exclude_filter)
 {
-	size_t alen = strlen(asset_name);
+	size_t alen;
+
+	if (!asset_name || !asset_name[0])
+		return false;
+
+	alen = strlen(asset_name);
 
 	/* Must match include filter (suffix) */
 	if (include_filter && include_filter[0])
