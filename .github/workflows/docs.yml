@@ -1,7 +1,8 @@
-name: Documentation
+name: Documentation & Web Updater
 
-# Generates Doxygen API documentation and publishes to GitHub Pages.
-# Runs on pushes to main that touch source files or documentation config.
+# Generates Doxygen API documentation and deploys it along with the
+# web updater to GitHub Pages.
+# Runs on pushes to main that touch source files, docs config, or web updater.
 on:
   push:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - 'Core/Inc/**'
       - 'lib/**'
       - 'Doxyfile'
+      - 'web-updater/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -29,7 +31,7 @@ concurrency:
 
 jobs:
   build-docs:
-    name: Build Doxygen docs
+    name: Build site
     runs-on: ubuntu-24.04
 
     steps:
@@ -44,10 +46,18 @@ jobs:
       - name: Generate documentation
         run: doxygen Doxyfile
 
+      - name: Assemble Pages site
+        run: |
+          mkdir -p _site
+          # Web updater at root (update/)
+          cp -r web-updater/* _site/
+          # Doxygen docs at /docs/
+          cp -r docs/html _site/docs
+
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/html
+          path: _site
 
   deploy:
     name: Deploy to GitHub Pages
