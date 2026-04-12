@@ -360,6 +360,8 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 #define SUBGHZ_RAW_THRESHOLD_MIN   (-90.0f) /* Minimum RSSI for display mapping */
 #define SUBGHZ_RAW_RSSI_DIVIDER      2.7f /* Scale factor: dBm → pixels */
 #define SUBGHZ_RAW_SIN_AMPLITUDE      11  /* Amplitude for idle sine animation */
+#define SUBGHZ_RAW_CURSOR_SEG_W        2  /* Dashed cursor segment width (px) */
+#define SUBGHZ_RAW_RSSI_LABEL_Y       40  /* Y for vertical "RSSI" label */
 static uint8_t  subghz_raw_rssi_history[SUBGHZ_RAW_RSSI_HISTORY_SIZE + 2];
 static uint8_t  subghz_raw_rssi_current = 0; /* Current RSSI (for cursor display) */
 static uint8_t  subghz_raw_rssi_head = 0;    /* Write position in history */
@@ -1050,14 +1052,14 @@ static void subghz_raw_rssi_draw(void)
 	/* "RSSI" label drawn vertically on right side */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_SetFontDirection(&m1_u8g2, 3); /* bottom-to-top */
-	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH, 40, "RSSI");
+	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH, SUBGHZ_RAW_RSSI_LABEL_Y, "RSSI");
 	u8g2_SetFontDirection(&m1_u8g2, 0); /* restore left-to-right */
 
 	/* Timeline scale ticks */
 	subghz_raw_rssi_draw_scale();
 
 	int cursor_x;
-	const uint8_t cursor_w = 2; /* Dashed cursor segment width */
+	const uint8_t cursor_w = SUBGHZ_RAW_CURSOR_SEG_W;
 	const int bottom = SUBGHZ_RAW_BOTTOM_Y - 1; /* Bottom of drawable area */
 
 	if (!subghz_raw_rssi_history_end)
