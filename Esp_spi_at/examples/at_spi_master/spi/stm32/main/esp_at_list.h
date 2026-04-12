@@ -146,6 +146,18 @@
 #define ESP32C6_AT_REQ_HTTPCLIENT		"AT+HTTPCLIENT="
 #define ESP32C6_AT_RES_HTTPCLIENT_KEY	"+HTTPCLIENT:"
 
+// ---- SSL Configuration ----
+// Syntax (single connection): AT+CIPSSLCCONF=<auth_mode>[,<pki_number>][,<ca_number>]
+//   auth_mode: 0=no auth (default), 1=client cert, 2=server cert verify, 3=mutual
+//   Must be sent BEFORE AT+CIPSTART="SSL" — controls certificate verification
+// Syntax: AT+CIPSNTPCFG=<enable>,<timezone>[,<SNTP server1>][,<SNTP server2>]
+//   Configures SNTP time sync (needed for SSL certificate time validation)
+// Syntax: AT+CIPSNTPTIME?
+//   Query current SNTP time
+#define ESP32C6_AT_REQ_CIPSSLCCONF		"AT+CIPSSLCCONF="
+#define ESP32C6_AT_REQ_CIPSNTPCFG		"AT+CIPSNTPCFG="
+#define ESP32C6_AT_REQ_CIPSNTPTIME		"AT+CIPSNTPTIME?"
+
 // ---- TCP/SSL Connection (passive receive mode for streaming) ----
 // Syntax: AT+CIPSTART=<type>,<remote_host>,<remote_port>[,<keepalive>]
 //   type: "TCP", "UDP", "SSL", "TCPv6", "UDPv6", "SSLv6"

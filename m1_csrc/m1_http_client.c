@@ -447,6 +447,35 @@ static bool parse_url(const char *url, char *host, uint16_t host_size,
 }
 
 /*
+ * One-time SSL/SNTP setup.  Called before the first SSL connection.
+ * Configures SNTP so the ESP32 has valid system time (required by
+ * some TLS implementations even without certificate verification),
+ * and disables SSL certificate verification (the M1 does not ship
+ * a CA certificate store).
+ */
+static void ssl_ensure_configured(void)
+{
+	static bool s_ssl_configured = false;
+	if (s_ssl_configured)
+		return;
+	s_ssl_configured = true;
+
+	/* Enable SNTP so the ESP32 has valid time for TLS.
+	 * Fire-and-forget — sync happens in the background. */
+	spi_AT_send_recv(
+		ESP32C6_AT_REQ_CIPSNTPCFG "1,0,\"pool.ntp.org\"" ESP32C6_AT_REQ_CRLF,
+		s_at_buf, sizeof(s_at_buf), 3);
+
+	/* Disable SSL certificate verification (auth_mode=0).
+	 * Without this the ESP32 attempts to verify the server certificate
+	 * against a CA store that is either empty or doesn't contain the
+	 * required root CA, causing every HTTPS connection to fail. */
+	spi_AT_send_recv(
+		ESP32C6_AT_REQ_CIPSSLCCONF "0" ESP32C6_AT_REQ_CRLF,
+		s_at_buf, sizeof(s_at_buf), 3);
+}
+
+/*
  * Open a TCP/SSL connection to host:port via ESP32 AT.
  */
 static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https, uint8_t timeout_sec)
@@ -456,6 +485,10 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 	/* Set passive receive mode first */
 	snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPRECVMODE "1" ESP32C6_AT_REQ_CRLF);
 	spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), 5);
+
+	/* For SSL: configure SNTP + disable cert verification (once) */
+	if (is_https)
+		ssl_ensure_configured();
 
 	/* Open connection */
 	snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPSTART "\"%s\",\"%s\",%u" ESP32C6_AT_REQ_CRLF,
