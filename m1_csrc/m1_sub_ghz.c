@@ -352,20 +352,21 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 #define SUBGHZ_HOPPER_DWELL_MS       150  /* ms to dwell per frequency before hopping */
 #define SUBGHZ_HOPPER_RSSI_THRESHOLD -70  /* dBm: stay on freq if RSSI >= this */
 
-/* RAW waveform visualization (Phase 4) */
-#define SUBGHZ_RAW_WAVEFORM_W       128  /* Display columns = display width */
-#define SUBGHZ_RAW_WAVEFORM_Y        15  /* Top Y of waveform area (below RSSI bar) */
-#define SUBGHZ_RAW_WAVEFORM_H        36  /* Height of waveform area (pixels) */
-#define SUBGHZ_RAW_WAVEFORM_MID_Y   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H / 2)
-#define SUBGHZ_RAW_WAVEFORM_Y_HIGH  (SUBGHZ_RAW_WAVEFORM_Y + 2)   /* Mark (high) rail */
-#define SUBGHZ_RAW_WAVEFORM_Y_LOW   (SUBGHZ_RAW_WAVEFORM_Y + SUBGHZ_RAW_WAVEFORM_H - 3) /* Space (low) rail */
-#define SUBGHZ_RAW_US_PER_COL       500  /* Microseconds per display column */
-#define SUBGHZ_RAW_MAX_COLS_PER_PULSE 16 /* Clamp: max columns for a single pulse (=8ms) */
-static uint8_t  subghz_raw_waveform[SUBGHZ_RAW_WAVEFORM_W]; /* 0=low, 1=high per column */
-static uint8_t  subghz_raw_wf_head = 0;    /* Next write position (circular) */
-static uint8_t  subghz_raw_wf_len = 0;     /* Number of valid columns */
-static bool     subghz_raw_view_active = false; /* true = showing RAW waveform */
-static uint32_t subghz_raw_sample_count = 0; /* Total samples received (for display) */
+/* RAW RSSI history visualization (Flipper-style spectrogram) */
+#define SUBGHZ_RAW_RSSI_HISTORY_SIZE 100  /* Number of RSSI history entries */
+#define SUBGHZ_RAW_TOP_SCALE          14  /* Y of top border / scale ticks */
+#define SUBGHZ_RAW_BOTTOM_Y           48  /* Y of bottom border */
+#define SUBGHZ_RAW_END_SCALE         115  /* X of right border */
+#define SUBGHZ_RAW_THRESHOLD_MIN   (-90.0f) /* Minimum RSSI for display mapping */
+#define SUBGHZ_RAW_RSSI_DIVIDER      2.7f /* Scale factor: dBm → pixels */
+#define SUBGHZ_RAW_SIN_AMPLITUDE      11  /* Amplitude for idle sine animation */
+#define SUBGHZ_RAW_CURSOR_SEG_W        2  /* Dashed cursor segment width (px) */
+#define SUBGHZ_RAW_RSSI_LABEL_Y       40  /* Y for vertical "RSSI" label */
+static uint8_t  subghz_raw_rssi_history[SUBGHZ_RAW_RSSI_HISTORY_SIZE + 2];
+static uint8_t  subghz_raw_rssi_current = 0; /* Current RSSI (for cursor display) */
+static uint8_t  subghz_raw_rssi_head = 0;    /* Write position in history */
+static bool     subghz_raw_rssi_history_end = false; /* Buffer has wrapped */
+static uint8_t  subghz_raw_sin_idx = 0;      /* Sine animation index (idle state) */
 
 //************************** S T R U C T U R E S *******************************
 
@@ -512,9 +513,12 @@ static uint8_t sub_ghz_file_load(void);
 
 static bool sub_ghz_custom_freq_entry(void);
 
-/* RAW waveform & static TX helpers (defined further below, used in display/UI) */
-static void subghz_raw_waveform_push(uint16_t duration_us, uint8_t level);
-static void subghz_raw_waveform_draw(void);
+/* RAW RSSI history & static TX helpers (defined further below, used in display/UI) */
+static void subghz_raw_rssi_push(float rssi_dbm, bool trace);
+static void subghz_raw_rssi_draw(void);
+static void subghz_raw_rssi_draw_scale(void);
+static void subghz_raw_draw_frame(void);
+static void subghz_raw_draw_sin(void);
 static bool subghz_protocol_is_static(uint16_t protocol);
 
 /* Flipper-matching feature functions */
@@ -897,119 +901,246 @@ static bool sub_ghz_custom_freq_entry(void)
 
 /*============================================================================*/
 /**
-  * @brief  Push pulse data into the RAW waveform display buffer.
-  *         Each pulse duration in microseconds is mapped to one or more display
-  *         columns (one column = SUBGHZ_RAW_US_PER_COL microseconds).
-  *         Mark pulses (level=1) draw high, space pulses (level=0) draw low.
-  * @param  duration_us  pulse duration in microseconds
-  * @param  level        1 = mark (high), 0 = space (low)
+  * @brief  Sine lookup table for idle animation (Flipper-style Lissajous).
+  *         Returns values in [-127, 127] for the given angle byte.
   */
 /*============================================================================*/
-static void subghz_raw_waveform_push(uint16_t duration_us, uint8_t level)
+static int8_t subghz_raw_tab_sin(uint8_t x)
 {
-	/* How many display columns does this pulse span? */
-	uint8_t cols = (uint8_t)(duration_us / SUBGHZ_RAW_US_PER_COL);
-	if (cols == 0) cols = 1;
-	if (cols > SUBGHZ_RAW_MAX_COLS_PER_PULSE) cols = SUBGHZ_RAW_MAX_COLS_PER_PULSE;
-
-	for (uint8_t i = 0; i < cols; i++)
-	{
-		subghz_raw_waveform[subghz_raw_wf_head] = level;
-		subghz_raw_wf_head = (subghz_raw_wf_head + 1) % SUBGHZ_RAW_WAVEFORM_W;
-		if (subghz_raw_wf_len < SUBGHZ_RAW_WAVEFORM_W)
-			subghz_raw_wf_len++;
-	}
+	static const uint8_t tab[64] = {
+		0,   3,   6,   9,   12,  16,  19,  22,  25,  28,  31,  34,  37,
+		40,  43,  46,  49,  51,  54,  57,  60,  63,  65,  68,  71,  73,
+		76,  78,  81,  83,  85,  88,  90,  92,  94,  96,  98,  100, 102,
+		104, 106, 107, 109, 111, 112, 113, 115, 116, 117, 118, 120, 121,
+		122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127
+	};
+	int8_t r = (int8_t)tab[((x & 0x40) ? (uint8_t)(~x) : x) & 0x3f];
+	if (x & 0x80) return (int8_t)(-r);
+	return r;
 }
 
 /*============================================================================*/
 /**
-  * @brief  Reset the RAW waveform display buffer.
+  * @brief  Draw animated sine wave (Flipper-style Lissajous) in idle/start state.
+  *         Uses subghz_raw_sin_idx as animation counter (0-62).
   */
 /*============================================================================*/
-static void subghz_raw_waveform_reset(void)
+static void subghz_raw_draw_sin(void)
 {
-	memset(subghz_raw_waveform, 0, sizeof(subghz_raw_waveform));
-	subghz_raw_wf_head = 0;
-	subghz_raw_wf_len = 0;
-	subghz_raw_sample_count = 0;
-}
-
-/*============================================================================*/
-/**
-  * @brief  Draw the RAW waveform onto the display.
-  *         Renders a scrolling oscilloscope-style square wave with dashed
-  *         grid reference lines at high, center, and low positions.
-  *         Mark (high) = 2px rail at top, Space (low) = 2px rail at bottom,
-  *         with vertical transition edges connecting level changes.
-  */
-/*============================================================================*/
-static void subghz_raw_waveform_draw(void)
-{
-	const uint8_t y_high = SUBGHZ_RAW_WAVEFORM_Y_HIGH;
-	const uint8_t y_low  = SUBGHZ_RAW_WAVEFORM_Y_LOW;
+	uint8_t mid_y = (SUBGHZ_RAW_TOP_SCALE + SUBGHZ_RAW_BOTTOM_Y) / 2;
 
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
-	/* Subtle oscilloscope grid: dashed reference lines at high, center, low */
-	for (uint8_t x = 0; x < SUBGHZ_RAW_WAVEFORM_W; x += 6)
+	for (int i = SUBGHZ_RAW_END_SCALE - 2; i > 0; i--)
 	{
-		u8g2_DrawPixel(&m1_u8g2, x, y_high);
-		u8g2_DrawPixel(&m1_u8g2, x, SUBGHZ_RAW_WAVEFORM_MID_Y);
-		u8g2_DrawPixel(&m1_u8g2, x, y_low);
+		int y1 = (int)mid_y - subghz_raw_tab_sin((uint8_t)(i + subghz_raw_sin_idx * 16)) / SUBGHZ_RAW_SIN_AMPLITUDE;
+		int y2 = (int)mid_y + subghz_raw_tab_sin((uint8_t)((i + subghz_raw_sin_idx * 16 + 1) * 2)) / SUBGHZ_RAW_SIN_AMPLITUDE;
+
+		/* Clamp to waveform area */
+		if (y1 < SUBGHZ_RAW_TOP_SCALE + 1) y1 = SUBGHZ_RAW_TOP_SCALE + 1;
+		if (y1 > SUBGHZ_RAW_BOTTOM_Y - 1) y1 = SUBGHZ_RAW_BOTTOM_Y - 1;
+		if (y2 < SUBGHZ_RAW_TOP_SCALE + 1) y2 = SUBGHZ_RAW_TOP_SCALE + 1;
+		if (y2 > SUBGHZ_RAW_BOTTOM_Y - 1) y2 = SUBGHZ_RAW_BOTTOM_Y - 1;
+
+		u8g2_DrawLine(&m1_u8g2, i, y1, i + 1, y2);
+		u8g2_DrawLine(&m1_u8g2, i + 1, y1, i + 2, y2);
 	}
+}
 
-	if (subghz_raw_wf_len == 0)
-		return;
+/*============================================================================*/
+/**
+  * @brief  Push an RSSI reading into the history buffer.
+  *         Flipper-style: converts dBm to display pixels and stores.
+  * @param  rssi_dbm  RSSI in dBm (e.g. -80.0)
+  * @param  trace     true = advance write position (new data point);
+  *                   false = update current position only (display refresh)
+  */
+/*============================================================================*/
+static void subghz_raw_rssi_push(float rssi_dbm, bool trace)
+{
+	uint8_t u_rssi = 0;
 
-	/* Calculate the start index in the circular buffer */
-	uint8_t start;
-	uint8_t draw_cols = subghz_raw_wf_len;
-	uint8_t x_offset = 0;
+	if (rssi_dbm >= SUBGHZ_RAW_THRESHOLD_MIN)
+		u_rssi = (uint8_t)((rssi_dbm - SUBGHZ_RAW_THRESHOLD_MIN) / SUBGHZ_RAW_RSSI_DIVIDER);
 
-	if (draw_cols < SUBGHZ_RAW_WAVEFORM_W)
+	subghz_raw_rssi_current = u_rssi;
+
+	if (trace)
 	{
-		/* Not enough data to fill screen — draw right-aligned */
-		x_offset = SUBGHZ_RAW_WAVEFORM_W - draw_cols;
-		start = (subghz_raw_wf_head + SUBGHZ_RAW_WAVEFORM_W - draw_cols) % SUBGHZ_RAW_WAVEFORM_W;
+		subghz_raw_rssi_history[subghz_raw_rssi_head] = u_rssi;
+		subghz_raw_rssi_head++;
+		if (subghz_raw_rssi_head >= SUBGHZ_RAW_RSSI_HISTORY_SIZE)
+		{
+			subghz_raw_rssi_history_end = true;
+			subghz_raw_rssi_head = 0;
+		}
 	}
 	else
 	{
-		/* Full buffer — draw all 128 columns ending at head */
-		start = subghz_raw_wf_head; /* Oldest sample */
-		draw_cols = SUBGHZ_RAW_WAVEFORM_W;
+		/* Update the last committed slot without advancing */
+		uint8_t slot = (subghz_raw_rssi_head > 0)
+		             ? (subghz_raw_rssi_head - 1)
+		             : (subghz_raw_rssi_history_end ? (SUBGHZ_RAW_RSSI_HISTORY_SIZE - 1) : 0);
+		subghz_raw_rssi_history[slot] = u_rssi;
 	}
+}
 
-	/* Draw square wave with proper horizontal rails and vertical transitions */
-	uint8_t prev_level = 0xFF; /* Invalid sentinel for first column */
+/*============================================================================*/
+/**
+  * @brief  Reset the RSSI history buffer.
+  */
+/*============================================================================*/
+static void subghz_raw_rssi_reset(void)
+{
+	memset(subghz_raw_rssi_history, 0, sizeof(subghz_raw_rssi_history));
+	subghz_raw_rssi_head = 0;
+	subghz_raw_rssi_current = 0;
+	subghz_raw_rssi_history_end = false;
+	subghz_raw_sin_idx = 0;
+}
 
-	for (uint8_t i = 0; i < draw_cols; i++)
+/*============================================================================*/
+/**
+  * @brief  Draw timeline scale ticks along the top of the waveform area.
+  *         Flipper-style: major ticks every 15px, minor ticks every 5px.
+  *         Ticks scroll with the data when the buffer has wrapped.
+  */
+/*============================================================================*/
+static void subghz_raw_rssi_draw_scale(void)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	if (!subghz_raw_rssi_history_end)
 	{
-		uint8_t idx = (start + i) % SUBGHZ_RAW_WAVEFORM_W;
-		uint8_t x = x_offset + i;
-		uint8_t level = subghz_raw_waveform[idx];
-
-		/* Horizontal rail: 2px thick for visibility.
-		 * High rail is drawn at y_high and y_high+1.
-		 * Low rail is drawn at y_low-1 and y_low.
-		 * Each rail includes its corresponding grid reference position. */
-		if (level)
+		/* Not wrapped: fixed ticks from right */
+		for (int i = SUBGHZ_RAW_END_SCALE; i > 0; i -= 15)
 		{
-			/* Mark (high) — draw at top rail */
-			u8g2_DrawVLine(&m1_u8g2, x, y_high, 2);
+			u8g2_DrawVLine(&m1_u8g2, i, SUBGHZ_RAW_TOP_SCALE, 5);
+			if (i - 5 > 0)
+				u8g2_DrawVLine(&m1_u8g2, i - 5, SUBGHZ_RAW_TOP_SCALE, 3);
+			if (i - 10 > 0)
+				u8g2_DrawVLine(&m1_u8g2, i - 10, SUBGHZ_RAW_TOP_SCALE, 3);
 		}
-		else
+	}
+	else
+	{
+		/* Wrapped: ticks scroll with write position */
+		int offset = subghz_raw_rssi_head % 15;
+		for (int i = SUBGHZ_RAW_END_SCALE - offset; i > -15; i -= 15)
 		{
-			/* Space (low) — draw at bottom rail */
-			u8g2_DrawVLine(&m1_u8g2, x, y_low - 1, 2);
+			u8g2_DrawVLine(&m1_u8g2, i, SUBGHZ_RAW_TOP_SCALE, 5);
+			if (SUBGHZ_RAW_END_SCALE > i + 5 && i + 5 > 0)
+				u8g2_DrawVLine(&m1_u8g2, i + 5, SUBGHZ_RAW_TOP_SCALE, 3);
+			if (SUBGHZ_RAW_END_SCALE > i + 10 && i + 10 > 0)
+				u8g2_DrawVLine(&m1_u8g2, i + 10, SUBGHZ_RAW_TOP_SCALE, 3);
+		}
+	}
+}
+
+/*============================================================================*/
+/**
+  * @brief  Draw the waveform area frame (borders + "RSSI" label).
+  *         Called unconditionally on every draw cycle — Flipper draws the frame
+  *         even in idle/TX/sine states.
+  */
+/*============================================================================*/
+static void subghz_raw_draw_frame(void)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	/* Three border lines enclosing the waveform area */
+	u8g2_DrawHLine(&m1_u8g2, 0, SUBGHZ_RAW_TOP_SCALE, SUBGHZ_RAW_END_SCALE + 1);
+	u8g2_DrawHLine(&m1_u8g2, 0, SUBGHZ_RAW_BOTTOM_Y, SUBGHZ_RAW_END_SCALE + 1);
+	u8g2_DrawVLine(&m1_u8g2, SUBGHZ_RAW_END_SCALE, SUBGHZ_RAW_TOP_SCALE,
+	               SUBGHZ_RAW_BOTTOM_Y - SUBGHZ_RAW_TOP_SCALE + 1);
+
+	/* "RSSI" label drawn vertically on right side */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_SetFontDirection(&m1_u8g2, 3); /* bottom-to-top */
+	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH, SUBGHZ_RAW_RSSI_LABEL_Y, "RSSI");
+	u8g2_SetFontDirection(&m1_u8g2, 0); /* restore left-to-right */
+}
+
+static void subghz_raw_rssi_draw(void)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	/* Timeline scale ticks */
+	subghz_raw_rssi_draw_scale();
+
+	int cursor_x;
+	const uint8_t cursor_w = SUBGHZ_RAW_CURSOR_SEG_W;
+	const int bottom = SUBGHZ_RAW_BOTTOM_Y - 1; /* Bottom of drawable area */
+
+	if (!subghz_raw_rssi_history_end)
+	{
+		/* Not wrapped: bars left-aligned from 0 to ind_write */
+		for (int i = (int)subghz_raw_rssi_head; i >= 0; i--)
+		{
+			if (subghz_raw_rssi_history[i] > 0)
+				u8g2_DrawVLine(&m1_u8g2, i, bottom - subghz_raw_rssi_history[i],
+				               subghz_raw_rssi_history[i]);
 		}
 
-		/* Vertical transition edge when level changes */
-		if (prev_level != 0xFF && prev_level != level)
+		/* Current RSSI at write position */
+		if (subghz_raw_rssi_current > 0)
 		{
-			u8g2_DrawVLine(&m1_u8g2, x, y_high, y_low - y_high + 1);
+			u8g2_DrawVLine(&m1_u8g2, subghz_raw_rssi_head + 1,
+			               bottom - subghz_raw_rssi_current,
+			               subghz_raw_rssi_current);
 		}
 
-		prev_level = level;
+		cursor_x = (int)subghz_raw_rssi_head;
+
+		if (cursor_x > 3)
+		{
+			/* Current RSSI echo one pixel before cursor */
+			if (subghz_raw_rssi_current > 0)
+				u8g2_DrawVLine(&m1_u8g2, cursor_x - 1,
+				               bottom - subghz_raw_rssi_current,
+				               subghz_raw_rssi_current);
+
+			/* Dashed vertical cursor line */
+			for (uint8_t y = SUBGHZ_RAW_TOP_SCALE + 1; y < bottom; y += cursor_w * 2)
+				u8g2_DrawVLine(&m1_u8g2, cursor_x, y, cursor_w);
+
+			/* Small triangle at top of cursor */
+			u8g2_DrawHLine(&m1_u8g2, cursor_x - 2, SUBGHZ_RAW_TOP_SCALE - 2, 5);
+			u8g2_DrawHLine(&m1_u8g2, cursor_x - 1, SUBGHZ_RAW_TOP_SCALE - 1, 3);
+		}
+	}
+	else
+	{
+		/* Wrapped: draw all entries, oldest first */
+		int base = SUBGHZ_RAW_RSSI_HISTORY_SIZE - (int)subghz_raw_rssi_head;
+		for (int i = SUBGHZ_RAW_RSSI_HISTORY_SIZE; i > 0; i--)
+		{
+			int ind = i - base;
+			if (ind < 0) ind += SUBGHZ_RAW_RSSI_HISTORY_SIZE;
+			if (subghz_raw_rssi_history[ind] > 0)
+				u8g2_DrawVLine(&m1_u8g2, i, bottom - subghz_raw_rssi_history[ind],
+				               subghz_raw_rssi_history[ind]);
+		}
+
+		cursor_x = SUBGHZ_RAW_RSSI_HISTORY_SIZE;
+
+		/* Current RSSI at cursor */
+		if (subghz_raw_rssi_current > 0)
+		{
+			u8g2_DrawVLine(&m1_u8g2, cursor_x - 1,
+			               bottom - subghz_raw_rssi_current,
+			               subghz_raw_rssi_current);
+			u8g2_DrawVLine(&m1_u8g2, cursor_x + 1,
+			               bottom - subghz_raw_rssi_current,
+			               subghz_raw_rssi_current);
+		}
+
+		/* Dashed vertical cursor line */
+		for (uint8_t y = SUBGHZ_RAW_TOP_SCALE + 1; y < bottom; y += cursor_w * 2)
+			u8g2_DrawVLine(&m1_u8g2, cursor_x, y, cursor_w);
+
+		/* Small triangle at top of cursor */
+		u8g2_DrawHLine(&m1_u8g2, cursor_x - 2, SUBGHZ_RAW_TOP_SCALE - 2, 5);
+		u8g2_DrawHLine(&m1_u8g2, cursor_x - 1, SUBGHZ_RAW_TOP_SCALE - 1, 3);
 	}
 }
 
@@ -4475,20 +4606,36 @@ void subghz_retune_freq_hz_ext(uint32_t freq_hz)
 	sub_ghz_rx_start();
 }
 
-/* RAW waveform bridge functions */
-void subghz_raw_waveform_draw_ext(void)
+/* RAW RSSI history bridge functions */
+void subghz_raw_rssi_draw_ext(void)
 {
-	subghz_raw_waveform_draw();
+	subghz_raw_rssi_draw();
 }
 
-void subghz_raw_waveform_reset_ext(void)
+void subghz_raw_rssi_reset_ext(void)
 {
-	subghz_raw_waveform_reset();
+	subghz_raw_rssi_reset();
 }
 
-void subghz_raw_waveform_push_ext(uint16_t duration_us, uint8_t level)
+void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace)
 {
-	subghz_raw_waveform_push(duration_us, level);
+	subghz_raw_rssi_push(rssi_dbm, trace);
+}
+
+void subghz_raw_draw_sin_ext(void)
+{
+	subghz_raw_draw_sin();
+}
+
+void subghz_raw_draw_frame_ext(void)
+{
+	subghz_raw_draw_frame();
+}
+
+void subghz_raw_sin_advance_ext(void)
+{
+	if (++subghz_raw_sin_idx > 62)
+		subghz_raw_sin_idx = 0;
 }
 
 /* RX control bridge functions (expose static helpers to scene files) */
@@ -4604,18 +4751,9 @@ uint32_t sub_ghz_raw_recording_flush_ext(void)
 		subghz_record_total_samples += SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 		sub_ghz_rx_raw_save(false, false);
 
-		/* Push the just-saved samples to the waveform display.
-		 * sub_ghz_rx_raw_save() left them in subghz_ring_read_buffer. */
-		{
-			uint16_t *pdata = (uint16_t *)subghz_ring_read_buffer;
-			uint16_t count = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
-			uint8_t level = 1;  /* First sample is mark (high) */
-			for (uint16_t i = 0; i < count; i++)
-			{
-				subghz_raw_waveform_push(pdata[i], level);
-				level ^= 1;
-			}
-		}
+		/* RSSI visualization is now updated by the scene via
+		 * subghz_raw_rssi_push_ext() — no pulse-to-waveform
+		 * conversion needed here. */
 
 		vTaskDelay(10);  /* Yield so SDM background task can write to SD */
 		return SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
