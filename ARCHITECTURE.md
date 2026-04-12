@@ -78,3 +78,24 @@ when they conflict.
 See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
 specification, optional verbs, implementation patterns per module, and rules
 for new modules.
+
+## Test Architecture
+
+Host-side unit tests live in `tests/` and build via CMake with the vendored
+Unity framework (`tests/unity/`).  ASan + UBSan are enabled by default.
+
+**Structure:**
+- `tests/test_*.c` — one file per test suite (20+ suites)
+- `tests/stubs/` — minimal header stubs for HAL, RTOS, FatFS, and peripheral
+  types needed to compile firmware `.c` files on the host
+- `tests/CMakeLists.txt` — one `add_executable` + `add_test` per suite
+
+**Pattern:** Stub-based extraction — identify pure-logic functions in firmware
+source files, stub out their HAL/RTOS header dependencies, and test with Unity.
+This pattern covers file parsers (`flipper_rfid.c`, `flipper_ir.c`,
+`flipper_nfc.c`, `flipper_subghz.c`), protocol codecs (`subghz_blocks_*`,
+`lfrfid_manchester.c`), data conversion (`datatypes_utils.c`), and utility
+logic (`m1_fw_source.c` asset filtering, `m1_json_mini.c`).
+
+See [`CLAUDE.md`](CLAUDE.md) § "Preferred Unit Testing Pattern" for the full
+specification with code examples and rules.

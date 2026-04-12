@@ -157,6 +157,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`documentation/esp32_firmware.md`) — source repos, custom AT commands,
   SPI pin mapping, flash methods, build instructions.
 
+- **Documentation: Preferred Unit Testing Pattern** — Documented the stub-based
+  extraction pattern as the canonical approach for all new host-side unit tests.
+  Added to `CLAUDE.md` (full specification with code examples),
+  `DEVELOPMENT.md` (concise testing section), `.github/GUIDELINES.md` (code
+  standards), and `ARCHITECTURE.md` (test architecture overview).  Pattern
+  covers: identifying pure-logic functions, creating minimal stubs in
+  `tests/stubs/`, Unity test file structure, CMake target setup, and what
+  NOT to unit test (AT commands, GPIO, RTOS orchestration, rendering).
+
 - **Virtual keyboard — text-mode layout with SPACE key** — Added
   `m1_vkb_get_text()` function that provides a context-specific keyboard
   layout for general text input (passwords, device names).  The text-mode

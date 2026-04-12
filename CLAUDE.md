@@ -56,6 +56,87 @@
   test is incomplete — do not consider the fix done until the test exists and passes.
   This rule applies to both human contributors and AI agents.
 
+### Preferred Unit Testing Pattern — Stub-Based Extraction
+
+This is the **canonical pattern** for adding host-side unit tests to any M1 firmware
+module.  All new test suites **MUST** follow this approach.  It has been successfully
+applied to SubGhz (14 suites), Flipper file parsers (RFID/IR/NFC), the LFRFID
+Manchester decoder, and the OTA asset filter.
+
+#### The pattern
+
+1. **Identify pure-logic functions** in the firmware `.c` file — protocol mapping
+   tables, parsers, encoders/decoders, data conversion, filter logic, math.  These
+   functions take inputs and return outputs without touching hardware registers,
+   RTOS queues, or global display state.
+
+2. **Create minimal stubs** in `tests/stubs/` for any headers that the `.c` file
+   includes transitively (HAL, RTOS, FatFS).  Stubs provide only the **types,
+   constants, and struct definitions** needed for compilation — no function bodies.
+   Existing stubs to reuse:
+   - `stm32h5xx_hal.h` — GPIO/TIM/SPI types, pin macros
+   - `ff.h` — FatFS `FRESULT`, `FIL`, `FILINFO` types
+   - `app_freertos.h`, `cmsis_os.h`, `main.h` — empty stubs
+   - `FreeRTOS.h`, `queue.h`, `stream_buffer.h` — minimal type stubs
+   - `irmp.h` — IRMP protocol constants
+   - `lfrfid.h` — `LFRFIDProtocol` enum, `lfrfid_evt_t`, `FRAME_CHUNK_SIZE`
+   - `lfrfid_hal.h`, `t5577.h` — timer/encoded data types
+
+3. **If a function is `static`**, either make it non-static and declare it in the
+   header, or extract it into a new standalone `.c`/`.h` compilation unit.  For
+   functions buried in HAL-heavy files (e.g., `m1_fw_source.c`), create a
+   test-only copy in `tests/stubs/` that mirrors the production logic — document
+   the duplication in the stub file header.
+
+4. **Write the test file** as `tests/test_<module>.c` using Unity:
+   ```c
+   #include "unity.h"
+   #include "<module_header>.h"   /* or include stubs first */
+
+   void setUp(void) { }
+   void tearDown(void) { }
+
+   void test_<function>_<case>(void) {
+       TEST_ASSERT_EQUAL(...);
+   }
+
+   int main(void) {
+       UNITY_BEGIN();
+       RUN_TEST(test_<function>_<case>);
+       return UNITY_END();
+   }
+   ```
+
+5. **Add a CMake target** in `tests/CMakeLists.txt`:
+   ```cmake
+   add_executable(test_<module>
+       test_<module>.c
+       ${M1_ROOT}/path/to/<module>.c
+   )
+   target_include_directories(test_<module> PRIVATE
+       ${STUBS_DIR}
+       ${M1_ROOT}/path/to/headers
+   )
+   target_link_libraries(test_<module> PRIVATE unity)
+   if(TARGET sanitizers)
+       target_link_libraries(test_<module> PRIVATE sanitizers)
+   endif()
+   add_test(NAME <module> COMMAND test_<module>)
+   ```
+
+6. **Build and run**: `cmake -B build-tests -S tests && cmake --build build-tests
+   && ctest --test-dir build-tests --output-on-failure`
+
+#### What NOT to unit test
+
+- **AT command construction** (`m1_wifi.c`, `m1_bt.c`, `m1_ble_spam.c`) — entirely
+  ESP32 SPI communication, no pure logic to extract.
+- **Direct HAL GPIO manipulation** (`m1_gpio.c`) — hardware-only.
+- **UI rendering code** — display drawing is tightly coupled to u8g2 state.
+- **RTOS task orchestration** — queue/semaphore interactions need the real scheduler.
+
+These modules are tested via hardware integration, not host-side unit tests.
+
 ### Phase Checklist for Moderate-to-Complex Changes
 
 When a code change meets or exceeds **moderate complexity** (multiple files, multi-step logic,

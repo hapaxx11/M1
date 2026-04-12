@@ -123,3 +123,29 @@ cmake -B build-tests -S tests -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZERS=ON
 cmake --build build-tests
 ctest --test-dir build-tests --output-on-failure
 ```
+
+### Preferred Unit Testing Pattern
+
+All new unit tests must follow the **stub-based extraction** pattern:
+
+1. Identify **pure-logic functions** (protocol mappings, parsers, encoders, filters,
+   data conversion) in firmware source files.
+2. Create **minimal header stubs** in `tests/stubs/` for HAL/RTOS/FatFS dependencies —
+   provide only types and constants, not function bodies.  Reuse existing stubs where
+   possible (see `tests/stubs/` for `stm32h5xx_hal.h`, `ff.h`, `irmp.h`, `lfrfid.h`,
+   etc.).
+3. If the function is `static`, make it non-static or extract it into a separate
+   compilation unit.  For functions in HAL-heavy files, a test-only copy in
+   `tests/stubs/` is acceptable when documented.
+4. Write the test as `tests/test_<module>.c` using the vendored Unity framework.
+5. Add a CMake target in `tests/CMakeLists.txt` linking against `unity` and
+   optionally `sanitizers`.
+
+**What to test:** protocol name→enum mappings, file format parsers, data
+encode/decode, bit manipulation, string matching, filter logic.
+
+**What NOT to test on host:** AT command construction, GPIO manipulation, RTOS task
+orchestration, u8g2 rendering — these need hardware integration testing.
+
+See `CLAUDE.md` § "Preferred Unit Testing Pattern" for the full specification with
+code examples.
