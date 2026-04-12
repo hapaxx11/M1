@@ -100,6 +100,10 @@ functions, create minimal stubs in tests/stubs/ for HAL/RTOS/FatFS headers, and 
 with Unity.  Do NOT attempt to unit test AT command construction, GPIO manipulation,
 or RTOS task orchestration — those need hardware integration testing.
 See CLAUDE.md § "Preferred Unit Testing Pattern" for the full specification.
+When a source file mixes pure logic with hardware-coupled code, extract the pure
+logic into a standalone .c/.h module with a clean interface (use callbacks for
+hardware decoupling).  This improves both testability and maintainability.
+See CLAUDE.md § "Preferred Modularization Pattern" for the full specification.
 
 11. UX Pattern Standards
 Any module that loads saved files from SD card MUST implement the Saved Item Actions

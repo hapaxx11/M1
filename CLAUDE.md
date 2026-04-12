@@ -56,6 +56,62 @@
   test is incomplete — do not consider the fix done until the test exists and passes.
   This rule applies to both human contributors and AI agents.
 
+### Preferred Modularization Pattern — Extract Pure Logic
+
+When a monolithic firmware source file (scene, module, or driver) contains
+**pure-logic functions** mixed with hardware-coupled code, the preferred approach
+is to **extract the pure logic into a standalone `.c`/`.h` compilation unit**.
+This is both a code quality and testability requirement — it applies to all new
+development, refactors, and bug fixes.  This rule applies to both human
+contributors and AI agents.
+
+#### Why
+
+Monolithic files that mix parsing, protocol encoding, data conversion, and
+hardware interaction become difficult to test, review, and maintain.  Extracting
+pure logic into its own module:
+- Makes the logic **testable on the host** via the stub-based extraction pattern.
+- Reduces coupling between business logic and HAL/RTOS/display code.
+- Makes the firmware easier to review, since each module has a single concern.
+- Enables safe refactoring — the extracted module can be improved independently.
+
+#### The pattern
+
+1. **Identify extractable logic** — look for code blocks that:
+   - Take structured inputs and produce outputs without side effects.
+   - Do not directly access hardware registers, RTOS primitives, or display state.
+   - Can be described independently from the scene/module that contains them.
+   - Examples: file format parsers, protocol encode/decode, data conversion,
+     path remapping, filter/match logic, ring buffer management.
+
+2. **Create a new `.c`/`.h` pair** in the appropriate source directory (e.g.,
+   `Sub_Ghz/`, `m1_csrc/`).  Name the module after the extracted concern:
+   - `subghz_key_encoder.c/h` — KEY→RAW OOK PWM encoding
+   - `subghz_raw_line_parser.c/h` — RAW_Data line parsing
+   - `subghz_raw_decoder.c/h` — offline RAW→protocol decode engine
+   - `subghz_playlist_parser.c/h` — Flipper→M1 path remapping
+
+3. **Define a clean interface** in the header:
+   - Use opaque structs or simple parameter types.
+   - If the logic needs hardware-side operations (e.g., decoder dispatch),
+     use a **callback function pointer** to decouple.  The caller provides a
+     thin adapter; the module never touches hardware directly.
+   - Mark the module as hardware-independent in the file header comment.
+
+4. **Update the original file** to call the extracted module instead of inlining
+   the logic.  The original file becomes a thin orchestrator.
+
+5. **Add the new `.c` file to the firmware CMake build** (`cmake/m1_01/CMakeLists.txt`).
+
+6. **Write unit tests** following the stub-based extraction testing pattern below.
+
+#### What NOT to extract
+
+- **AT command strings** — construction is interleaved with SPI send/receive.
+- **Display rendering** — tightly coupled to u8g2 state and draw order.
+- **RTOS task flow** — queue/semaphore orchestration is inherently side-effectful.
+- **Trivial glue code** — one-liner dispatches aren't worth a separate module.
+
 ### Preferred Unit Testing Pattern — Stub-Based Extraction
 
 This is the **canonical pattern** for adding host-side unit tests to any M1 firmware

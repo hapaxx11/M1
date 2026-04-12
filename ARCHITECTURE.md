@@ -79,6 +79,26 @@ See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
 specification, optional verbs, implementation patterns per module, and rules
 for new modules.
 
+## Modularization Approach
+
+When firmware source files grow to mix pure logic (parsers, protocol codecs,
+data conversion, filter logic) with hardware-coupled code (HAL, RTOS, display),
+the preferred approach is to **extract the pure logic into standalone `.c`/`.h`
+compilation units** with clean interfaces.
+
+**Successful extractions:**
+- `Sub_Ghz/subghz_key_encoder.c/h` — KEY→RAW encoding from `m1_sub_ghz.c`
+- `Sub_Ghz/subghz_raw_line_parser.c/h` — RAW_Data parsing from `m1_sub_ghz.c`
+- `Sub_Ghz/subghz_raw_decoder.c/h` — offline decode from `m1_subghz_scene_saved.c`
+- `Sub_Ghz/subghz_playlist_parser.c/h` — path remapping from `m1_subghz_scene_playlist.c`
+
+**Decoupling technique:** When extracted logic needs hardware-side operations,
+use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller
+provides a thin adapter; the module never touches hardware directly.
+
+See [`CLAUDE.md`](CLAUDE.md) § "Preferred Modularization Pattern" for the full
+specification and rules.
+
 ## Test Architecture
 
 Host-side unit tests live in `tests/` and build via CMake with the vendored

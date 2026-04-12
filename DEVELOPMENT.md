@@ -124,6 +124,17 @@ cmake --build build-tests
 ctest --test-dir build-tests --output-on-failure
 ```
 
+### Preferred Modularization Pattern
+
+When a source file mixes pure logic (parsers, encoders, filters, data conversion)
+with hardware-coupled code (HAL, RTOS, display), **extract the pure logic into a
+standalone `.c`/`.h` module**.  Use callback function pointers to decouple from
+hardware when the logic needs to invoke hardware-side operations.  This makes the
+logic independently testable and easier to maintain.
+
+See `CLAUDE.md` § "Preferred Modularization Pattern" for the full specification
+with examples.
+
 ### Preferred Unit Testing Pattern
 
 All new unit tests must follow the **stub-based extraction** pattern:

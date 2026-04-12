@@ -166,6 +166,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/stubs/`, Unity test file structure, CMake target setup, and what
   NOT to unit test (AT commands, GPIO, RTOS orchestration, rendering).
 
+- **Documentation: Preferred Modularization Pattern** — Documented the
+  extract-pure-logic-to-standalone-module approach (established in PR #106)
+  as the canonical development pattern.  Added to `CLAUDE.md` (full
+  specification with examples, callback decoupling technique, what NOT to
+  extract), `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and `ARCHITECTURE.md`
+  (with list of successfully extracted modules).  This pattern applies to
+  all new development, refactors, and bug fixes where monolithic files mix
+  pure logic with hardware-coupled code.
+
 - **Virtual keyboard — text-mode layout with SPACE key** — Added
   `m1_vkb_get_text()` function that provides a context-specific keyboard
   layout for general text input (passwords, device names).  The text-mode
