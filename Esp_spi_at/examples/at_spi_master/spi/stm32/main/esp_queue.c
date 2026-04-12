@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "esp_queue.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 /* create new node */
 static q_node_t * new_q_node(void *data)
@@ -32,7 +34,10 @@ esp_queue_t* create_esp_queue(void)
 	return q;
 }
 
-/* Put element in app queue */
+/* Put element in app queue.
+ * Thread-safe: pointer updates are protected by scheduler suspension
+ * so that concurrent get/put from different tasks cannot corrupt the
+ * linked-list pointers.  malloc() runs outside the critical section. */
 int esp_queue_put(esp_queue_t* q, void *data)
 {
 	q_node_t* new_node = NULL;
@@ -48,64 +53,70 @@ int esp_queue_put(esp_queue_t* q, void *data)
 		return ESP_QUEUE_ERR_MEMORY;
 	}
 
-	/* queue empty condition */
+	vTaskSuspendAll();
 	if (q->rear == NULL) {
 		q->front = q->rear = new_node;
-		return ESP_QUEUE_SUCCESS;
+	} else {
+		q->rear->next = new_node;
+		q->rear = new_node;
 	}
-
-	q->rear->next = new_node;
-	q->rear = new_node;
+	(void)xTaskResumeAll();
 	return ESP_QUEUE_SUCCESS;
 }
 
-/* Get element in app queue */
+/* Get element in app queue.
+ * Thread-safe: pointer updates are protected by scheduler suspension;
+ * the node is freed after the critical section. */
 void *esp_queue_get(esp_queue_t* q)
 {
 	void * data = NULL;
 	q_node_t* temp = NULL;
 
-	if (!q || q->front == NULL)
+	vTaskSuspendAll();
+	if (!q || q->front == NULL) {
+		(void)xTaskResumeAll();
 		return NULL;
+	}
 
 	/* move front one node ahead */
 	temp = q->front;
-
-	if (!temp)
-		return NULL;
-
 	q->front = q->front->next;
-
-	data = temp->data;
-
-	free(temp);
-	temp = NULL;
 
 	/* If front is NULL, change rear also as NULL */
 	if (q->front == NULL)
 		q->rear = NULL;
+	(void)xTaskResumeAll();
+
+	data = temp->data;
+	free(temp);
 
 	return data;
 }
 
+/* Detach all nodes inside the critical section, then free outside. */
 void esp_queue_reset(esp_queue_t *q)
 {
 	q_node_t *temp;
+	q_node_t *list_head;
 
 	if (!q)
 		return;
 
-	while (q->front)
+	vTaskSuspendAll();
+	list_head = q->front;
+	q->front = q->rear = NULL;
+	(void)xTaskResumeAll();
+
+	while (list_head)
 	{
-		temp = q->front;
-		q->front = q->front->next;
+		temp = list_head;
+		list_head = list_head->next;
 		if (temp->data)
 		{
 			free(temp->data);
 		}
 		free(temp);
 	}
-	q->front = q->rear = NULL;
 } // void esp_queue_reset(esp_queue_t *q)
 
 

@@ -483,6 +483,12 @@ uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf, int out_buf_size, in
 } // uint8_t spi_AT_send_recv(...)
 
 
+void esp32_queue_reset(void)
+{
+	esp_queue_reset(ctrl_msg_Q);
+}
+
+
 static void init_master_hd(spi_device_handle_t* spi)
 {
 	spi_device_handle_t spi_dev;
