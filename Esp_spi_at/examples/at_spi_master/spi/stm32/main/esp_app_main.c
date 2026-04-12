@@ -485,15 +485,33 @@ uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf, int out_buf_size, in
 
 void esp32_queue_reset(void)
 {
+	q_node_t *list_head = NULL;
+	q_node_t *temp = NULL;
 	esp_queue_elem_t *elem = NULL;
 
 	if (!ctrl_msg_Q)
 		return;
 
-	while ((elem = (esp_queue_elem_t *)esp_queue_get(ctrl_msg_Q)) != NULL)
+	/* Detach the entire list atomically so the SPI transport task
+	 * cannot keep the loop running indefinitely. */
+	vTaskSuspendAll();
+	list_head = ctrl_msg_Q->front;
+	ctrl_msg_Q->front = NULL;
+	ctrl_msg_Q->rear = NULL;
+	(void)xTaskResumeAll();
+
+	/* Free detached nodes outside the critical section */
+	while (list_head != NULL)
 	{
-		free(elem->buf);
-		free(elem);
+		temp = list_head;
+		list_head = list_head->next;
+		elem = (esp_queue_elem_t *)temp->data;
+		if (elem)
+		{
+			free(elem->buf);
+			free(elem);
+		}
+		free(temp);
 	}
 }
 

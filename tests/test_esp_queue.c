@@ -116,7 +116,7 @@ void test_reset(void)
 {
     esp_queue_t *q = create_esp_queue();
     for (int i = 0; i < 10; i++)
-        esp_queue_put(q, make_int(i));
+        TEST_ASSERT_EQUAL_INT(ESP_QUEUE_SUCCESS, esp_queue_put(q, make_int(i)));
     TEST_ASSERT_TRUE(esp_queue_check(q));
 
     esp_queue_reset(q);
@@ -124,7 +124,7 @@ void test_reset(void)
     TEST_ASSERT_NULL(esp_queue_get(q));
 
     /* Queue must be reusable after reset */
-    esp_queue_put(q, make_int(99));
+    TEST_ASSERT_EQUAL_INT(ESP_QUEUE_SUCCESS, esp_queue_put(q, make_int(99)));
     void *out = esp_queue_get(q);
     TEST_ASSERT_NOT_NULL(out);
     TEST_ASSERT_EQUAL_INT(99, *(int *)out);
@@ -141,7 +141,7 @@ void test_rapid_cycles(void)
     esp_queue_t *q = create_esp_queue();
 
     for (int i = 0; i < 1000; i++) {
-        esp_queue_put(q, make_int(i));
+        TEST_ASSERT_EQUAL_INT(ESP_QUEUE_SUCCESS, esp_queue_put(q, make_int(i)));
         void *out = esp_queue_get(q);
         TEST_ASSERT_NOT_NULL(out);
         TEST_ASSERT_EQUAL_INT(i, *(int *)out);
@@ -187,8 +187,8 @@ void test_put_null_queue(void)
 void test_destroy(void)
 {
     esp_queue_t *q = create_esp_queue();
-    esp_queue_put(q, make_int(1));
-    esp_queue_put(q, make_int(2));
+    TEST_ASSERT_EQUAL_INT(ESP_QUEUE_SUCCESS, esp_queue_put(q, make_int(1)));
+    TEST_ASSERT_EQUAL_INT(ESP_QUEUE_SUCCESS, esp_queue_put(q, make_int(2)));
     esp_queue_destroy(&q);
     TEST_ASSERT_NULL(q);
 }
