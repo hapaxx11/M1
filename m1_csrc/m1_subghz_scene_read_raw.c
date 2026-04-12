@@ -58,6 +58,7 @@ extern int16_t subghz_read_rssi_ext(void);
 extern void subghz_raw_rssi_draw_ext(void);
 extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
+extern void subghz_raw_draw_frame_ext(void);
 extern void subghz_raw_draw_sin_ext(void);
 extern void subghz_raw_sin_advance_ext(void);
 
@@ -275,8 +276,8 @@ static void draw(SubGhzApp *app)
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
-    /* Waveform area */
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    /* Waveform area frame — always visible (Flipper draws frame in all states) */
+    subghz_raw_draw_frame_ext();
 
     if (app->raw_state == SubGhzReadRawStateIdle)
     {

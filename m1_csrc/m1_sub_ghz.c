@@ -518,6 +518,7 @@ static bool sub_ghz_custom_freq_entry(void);
 static void subghz_raw_rssi_push(float rssi_dbm, bool trace);
 static void subghz_raw_rssi_draw(void);
 static void subghz_raw_rssi_draw_scale(void);
+static void subghz_raw_draw_frame(void);
 static void subghz_raw_draw_sin(void);
 static bool subghz_protocol_is_static(uint16_t protocol);
 
@@ -1039,11 +1040,18 @@ static void subghz_raw_rssi_draw_scale(void)
   *         showing the current write position.
   */
 /*============================================================================*/
-static void subghz_raw_rssi_draw(void)
+/*============================================================================*/
+/**
+  * @brief  Draw the waveform area frame (borders + "RSSI" label).
+  *         Called unconditionally on every draw cycle — Flipper draws the frame
+  *         even in idle/TX/sine states.
+  */
+/*============================================================================*/
+static void subghz_raw_draw_frame(void)
 {
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-	/* Waveform area frame lines */
+	/* Three border lines enclosing the waveform area */
 	u8g2_DrawHLine(&m1_u8g2, 0, SUBGHZ_RAW_TOP_SCALE, SUBGHZ_RAW_END_SCALE + 1);
 	u8g2_DrawHLine(&m1_u8g2, 0, SUBGHZ_RAW_BOTTOM_Y, SUBGHZ_RAW_END_SCALE + 1);
 	u8g2_DrawVLine(&m1_u8g2, SUBGHZ_RAW_END_SCALE, SUBGHZ_RAW_TOP_SCALE,
@@ -1054,6 +1062,11 @@ static void subghz_raw_rssi_draw(void)
 	u8g2_SetFontDirection(&m1_u8g2, 3); /* bottom-to-top */
 	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH, SUBGHZ_RAW_RSSI_LABEL_Y, "RSSI");
 	u8g2_SetFontDirection(&m1_u8g2, 0); /* restore left-to-right */
+}
+
+static void subghz_raw_rssi_draw(void)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
 	/* Timeline scale ticks */
 	subghz_raw_rssi_draw_scale();
@@ -4616,6 +4629,11 @@ void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace)
 void subghz_raw_draw_sin_ext(void)
 {
 	subghz_raw_draw_sin();
+}
+
+void subghz_raw_draw_frame_ext(void)
+{
+	subghz_raw_draw_frame();
 }
 
 void subghz_raw_sin_advance_ext(void)
