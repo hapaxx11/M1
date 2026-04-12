@@ -49,9 +49,9 @@ jobs:
       - name: Assemble Pages site
         run: |
           mkdir -p _site
-          # Web updater at root (update/)
+          # Web updater at site root
           cp -r web-updater/* _site/
-          # Doxygen docs at /docs/
+          # Doxygen API docs at /docs/
           cp -r docs/html _site/docs
 
       - name: Upload pages artifact

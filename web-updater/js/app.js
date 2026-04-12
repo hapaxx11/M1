@@ -48,6 +48,7 @@ let seq = 0;
 let pendingResolve = null;
 let pendingReject = null;
 let pendingTimeout = null;
+let pendingExpectedCmd = null;
 let deviceInfo = null;
 let fwInfo = null;
 let releases = [];
@@ -100,23 +101,31 @@ function nextSeq() {
 
 /**
  * Send an RPC command and wait for ACK/NACK or a specific response.
+ * Only one command can be in-flight at a time — concurrent calls are rejected.
+ *
  * @param {number} cmd
  * @param {Uint8Array|null} payload
- * @param {number} [expectedCmd] - If set, wait for this response cmd instead of ACK
+ * @param {number|null} [expectedCmd] - If set, wait for this response cmd instead of ACK
  * @param {number} [timeout] - Response timeout in ms
  * @returns {Promise<{cmd: number, seq: number, payload: Uint8Array}>}
  */
 function sendCommand(cmd, payload = null, expectedCmd = null, timeout = RESPONSE_TIMEOUT_MS) {
+    if (pendingResolve !== null) {
+        return Promise.reject(new Error('Another RPC command is already in flight'));
+    }
+
     return new Promise((resolve, reject) => {
         const s = nextSeq();
         const frame = buildFrame(cmd, s, payload);
 
         pendingResolve = resolve;
         pendingReject = reject;
+        pendingExpectedCmd = expectedCmd;
 
         pendingTimeout = setTimeout(() => {
             pendingResolve = null;
             pendingReject = null;
+            pendingExpectedCmd = null;
             reject(new Error('Response timeout'));
         }, timeout);
 
@@ -124,6 +133,7 @@ function sendCommand(cmd, payload = null, expectedCmd = null, timeout = RESPONSE
             clearTimeout(pendingTimeout);
             pendingResolve = null;
             pendingReject = null;
+            pendingExpectedCmd = null;
             reject(err);
         });
     });
@@ -135,20 +145,32 @@ function sendCommand(cmd, payload = null, expectedCmd = null, timeout = RESPONSE
 function handleFrame(cmd, frameSeq, payload) {
     // Resolve pending command if this is a response
     if (pendingResolve) {
-        clearTimeout(pendingTimeout);
-        const resolve = pendingResolve;
-        const reject = pendingReject;
-        pendingResolve = null;
-        pendingReject = null;
-
+        // NACK always resolves (as rejection) regardless of expectedCmd
         if (cmd === RPC_CMD_NACK) {
+            clearTimeout(pendingTimeout);
+            const reject = pendingReject;
+            pendingResolve = null;
+            pendingReject = null;
+            pendingExpectedCmd = null;
             const errCode = payload.length > 0 ? payload[0] : 0;
             const errMsg = RPC_ERRORS[errCode] || `Unknown error (0x${errCode.toString(16)})`;
             reject(new Error(`NACK: ${errMsg}`));
-        } else {
-            resolve({ cmd, seq: frameSeq, payload });
+            return;
         }
-        return;
+
+        // If an expectedCmd is set, only resolve on that specific command.
+        // If no expectedCmd is set, resolve on ACK or any response.
+        if (pendingExpectedCmd === null || cmd === pendingExpectedCmd || cmd === RPC_CMD_ACK) {
+            clearTimeout(pendingTimeout);
+            const resolve = pendingResolve;
+            pendingResolve = null;
+            pendingReject = null;
+            pendingExpectedCmd = null;
+            resolve({ cmd, seq: frameSeq, payload });
+            return;
+        }
+
+        // Frame doesn't match expected — ignore it (could be unsolicited)
     }
 
     // Handle unsolicited frames
@@ -196,7 +218,7 @@ function updateBankInfoUI() {
             return `${label}: Empty`;
         }
         let str = `${label}: v${bank.fwVersion}`;
-        if (bank.hapaxRevision) str += ` (r${bank.hapaxRevision})`;
+        if (bank.hapaxRevision !== undefined) str += ` (r${bank.hapaxRevision})`;
         if (bank.crcValid) str += ' ✓';
         if (bank.buildDate) str += ` — ${bank.buildDate}`;
         return str;
@@ -478,9 +500,16 @@ async function flashFirmware(data, name) {
     try {
         await sendCommand(RPC_CMD_FW_BANK_SWAP);
     } catch (err) {
-        // The device reboots immediately after bank swap, so the connection
-        // will drop. A timeout or disconnect here is expected and OK.
-        if (err.message.includes('timeout') || err.message.includes('disconnect')) {
+        // The device reboots immediately after bank swap, so the serial
+        // connection drops. A timeout or read error here is expected and OK.
+        const msg = err.message || '';
+        const isExpectedDisconnect =
+            msg.includes('timeout') ||
+            msg.includes('disconnect') ||
+            msg.includes('NetworkError') ||
+            msg.includes('break') ||
+            msg.includes('The device has been lost');
+        if (isExpectedDisconnect) {
             log('Device is rebooting with new firmware...', 'success');
         } else {
             throw new Error(`FW_BANK_SWAP failed: ${err.message}`);

@@ -88,6 +88,12 @@ const CRC16_TABLE = new Uint16Array([
 
 /**
  * Compute CRC-16/CCITT over a Uint8Array.
+ *
+ * Table-driven implementation: for each byte, the upper 8 bits of the
+ * running CRC are XOR'd with the input byte to form a table index.
+ * The CRC is then shifted left by 8 and XOR'd with the table entry.
+ * This is identical to the firmware's rpc_crc16() in m1_rpc.c.
+ *
  * @param {Uint8Array} data
  * @param {number} [init=0xFFFF] - Initial CRC value (for continuation)
  * @returns {number} 16-bit CRC
