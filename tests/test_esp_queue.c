@@ -78,6 +78,12 @@ void test_fifo_order(void)
 /* Interleaved put/get — the pattern that triggers the old race         */
 /* This exercises the single-element queue case where get() must        */
 /* update both front and rear pointers atomically.                      */
+/*                                                                      */
+/* NOTE: This is a serial regression test — it cannot reproduce the     */
+/* actual race (which requires task preemption between free() and       */
+/* q->rear = NULL).  It validates the post-fix code path under ASan;   */
+/* the real concurrency guarantee comes from scheduler suspension in    */
+/* the production code.                                                 */
 /* ------------------------------------------------------------------ */
 void test_interleaved_put_get(void)
 {

@@ -363,7 +363,7 @@ add_executable(test_esp_queue
     ${M1_ROOT}/Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_queue.c
 )
 target_include_directories(test_esp_queue PRIVATE
-    ${STUBS_DIR}            # freertos_stubs.h (no-op vTaskSuspendAll/xTaskResumeAll)
+    ${STUBS_DIR}            # FreeRTOS.h, task.h (no-op vTaskSuspendAll/xTaskResumeAll)
     ${M1_ROOT}/Esp_spi_at/examples/at_spi_master/spi/stm32/main
 )
 target_link_libraries(test_esp_queue PRIVATE unity)
