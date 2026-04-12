@@ -82,12 +82,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `hexStrToBinStr` guard paths (NULL/empty).  Tests document a latent bug in
   `hexStrToBinStr` where the pair counter resets each iteration.
 
+- **Flipper RFID parser tests** (`tests/test_flipper_rfid.c`) — 40 unit tests for
+  `flipper_rfid_parse_protocol()`: validates all 30+ protocol name→enum mappings
+  including aliases (EM-Marin→EM4100, HID26→H10301, Nexkey→Nexwatch),
+  case-insensitive matching, NULL/empty input handling, and unknown protocol
+  → `LFRFIDProtocolMax` fallback.
+
+- **Flipper IR parser tests** (`tests/test_flipper_ir.c`) — 42 unit tests for
+  `flipper_ir_proto_to_irmp()` and `flipper_ir_irmp_to_proto()`: validates all 25
+  forward mappings (NEC, Samsung32, RC5, SIRC variants, etc.), reverse mappings,
+  case-insensitive matching, round-trip conversion, and unknown protocol handling.
+
+- **Flipper NFC parser tests** (`tests/test_flipper_nfc.c`) — 70 unit tests for
+  `flipper_nfc_parse_type()`: validates all ~60 NFC device type string→enum mappings
+  across 10 categories (NTAG203–216, Mifare Classic 1K/4K/Mini, DESFire EV1–3,
+  FeliCa/Suica/PASMO, ISO15693, SLIX/SLI, ST25TB/SR series), case-insensitive
+  matching, and unknown type fallback.
+
+- **LFRFID Manchester decoder tests** (`tests/test_lfrfid_manchester.c`) — 18 unit
+  tests for the generic Manchester decoder: `manch_init()` parameter setup,
+  `manch_push_bit()` MSB shift register with byte patterns and overflow,
+  `manch_get_bit()` position extraction, `manch_is_full()` completion check,
+  `manch_reset()` state clearing, and `manch_feed_events()` half/full period
+  classification with edge normalization and overflow protection.
+
+- **OTA asset filter tests** (`tests/test_fw_source_filter.c`) — 18 unit tests for
+  `fw_source_asset_matches_filter()`: validates suffix-based include filtering,
+  space-separated exclude filtering, combined include+exclude logic, and real-world
+  OTA scenarios (Hapax release matching, ESP32 exclusion, MD5 filtering).
+
 ### Changed
 
 - **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
   line parsing are now delegated to the extracted `subghz_key_encoder` and
   `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
   the refactored code produces identical output for all supported file formats.
+
+- **Extracted `asset_matches_filter()`** — The OTA asset name filtering function
+  in `m1_fw_source.c` is now non-static and declared in `m1_fw_source.h` as
+  `fw_source_asset_matches_filter()`, enabling host-side unit testing of the
+  include/exclude filter logic without firmware HAL dependencies.
 
 - **Refactored `do_decode_raw()` in Saved scene** — offline RAW decode logic is
   now delegated to the extracted `subghz_raw_decoder` module via callback interface.
@@ -122,6 +156,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation**: ESP32 coprocessor firmware reference
   (`documentation/esp32_firmware.md`) — source repos, custom AT commands,
   SPI pin mapping, flash methods, build instructions.
+
+- **Documentation: Preferred Unit Testing Pattern** — Documented the stub-based
+  extraction pattern as the canonical approach for all new host-side unit tests.
+  Added to `CLAUDE.md` (full specification with code examples),
+  `DEVELOPMENT.md` (concise testing section), `.github/GUIDELINES.md` (code
+  standards), and `ARCHITECTURE.md` (test architecture overview).  Pattern
+  covers: identifying pure-logic functions, creating minimal stubs in
+  `tests/stubs/`, Unity test file structure, CMake target setup, and what
+  NOT to unit test (AT commands, GPIO, RTOS orchestration, rendering).
+
+- **Documentation: Preferred Modularization Pattern** — Documented the
+  extract-pure-logic-to-standalone-module approach (established in PR #106)
+  as the canonical development pattern.  Added to `CLAUDE.md` (full
+  specification with examples, callback decoupling technique, what NOT to
+  extract), `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and `ARCHITECTURE.md`
+  (with list of successfully extracted modules).  This pattern applies to
+  all new development, refactors, and bug fixes where monolithic files mix
+  pure logic with hardware-coupled code.
 
 - **Virtual keyboard — text-mode layout with SPACE key** — Added
   `m1_vkb_get_text()` function that provides a context-specific keyboard

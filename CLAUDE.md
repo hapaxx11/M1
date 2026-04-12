@@ -56,6 +56,143 @@
   test is incomplete — do not consider the fix done until the test exists and passes.
   This rule applies to both human contributors and AI agents.
 
+### Preferred Modularization Pattern — Extract Pure Logic
+
+When a monolithic firmware source file (scene, module, or driver) contains
+**pure-logic functions** mixed with hardware-coupled code, the preferred approach
+is to **extract the pure logic into a standalone `.c`/`.h` compilation unit**.
+This is both a code quality and testability requirement — it applies to all new
+development, refactors, and bug fixes.  This rule applies to both human
+contributors and AI agents.
+
+#### Why
+
+Monolithic files that mix parsing, protocol encoding, data conversion, and
+hardware interaction become difficult to test, review, and maintain.  Extracting
+pure logic into its own module:
+- Makes the logic **testable on the host** via the stub-based extraction pattern.
+- Reduces coupling between business logic and HAL/RTOS/display code.
+- Makes the firmware easier to review, since each module has a single concern.
+- Enables safe refactoring — the extracted module can be improved independently.
+
+#### The pattern
+
+1. **Identify extractable logic** — look for code blocks that:
+   - Take structured inputs and produce outputs without side effects.
+   - Do not directly access hardware registers, RTOS primitives, or display state.
+   - Can be described independently from the scene/module that contains them.
+   - Examples: file format parsers, protocol encode/decode, data conversion,
+     path remapping, filter/match logic, ring buffer management.
+
+2. **Create a new `.c`/`.h` pair** in the appropriate source directory (e.g.,
+   `Sub_Ghz/`, `m1_csrc/`).  Name the module after the extracted concern:
+   - `subghz_key_encoder.c/h` — KEY→RAW OOK PWM encoding
+   - `subghz_raw_line_parser.c/h` — RAW_Data line parsing
+   - `subghz_raw_decoder.c/h` — offline RAW→protocol decode engine
+   - `subghz_playlist_parser.c/h` — Flipper→M1 path remapping
+
+3. **Define a clean interface** in the header:
+   - Use opaque structs or simple parameter types.
+   - If the logic needs hardware-side operations (e.g., decoder dispatch),
+     use a **callback function pointer** to decouple.  The caller provides a
+     thin adapter; the module never touches hardware directly.
+   - Mark the module as hardware-independent in the file header comment.
+
+4. **Update the original file** to call the extracted module instead of inlining
+   the logic.  The original file becomes a thin orchestrator.
+
+5. **Add the new `.c` file to the firmware CMake build** (`cmake/m1_01/CMakeLists.txt`).
+
+6. **Write unit tests** following the stub-based extraction testing pattern below.
+
+#### What NOT to extract
+
+- **AT command strings** — construction is interleaved with SPI send/receive.
+- **Display rendering** — tightly coupled to u8g2 state and draw order.
+- **RTOS task flow** — queue/semaphore orchestration is inherently side-effectful.
+- **Trivial glue code** — one-liner dispatches aren't worth a separate module.
+
+### Preferred Unit Testing Pattern — Stub-Based Extraction
+
+This is the **canonical pattern** for adding host-side unit tests to any M1 firmware
+module.  All new test suites **MUST** follow this approach.  It has been successfully
+applied to SubGhz (14 suites), Flipper file parsers (RFID/IR/NFC), the LFRFID
+Manchester decoder, and the OTA asset filter.
+
+#### The pattern
+
+1. **Identify pure-logic functions** in the firmware `.c` file — protocol mapping
+   tables, parsers, encoders/decoders, data conversion, filter logic, math.  These
+   functions take inputs and return outputs without touching hardware registers,
+   RTOS queues, or global display state.
+
+2. **Create minimal stubs** in `tests/stubs/` for any headers that the `.c` file
+   includes transitively (HAL, RTOS, FatFS).  Stubs provide only the **types,
+   constants, and struct definitions** needed for compilation — no function bodies.
+   Existing stubs to reuse:
+   - `stm32h5xx_hal.h` — GPIO/TIM/SPI types, pin macros
+   - `ff.h` — FatFS `FRESULT`, `FIL`, `FILINFO` types
+   - `app_freertos.h`, `cmsis_os.h`, `main.h` — empty stubs
+   - `FreeRTOS.h`, `queue.h`, `stream_buffer.h` — minimal type stubs
+   - `irmp.h` — IRMP protocol constants
+   - `lfrfid.h` — `LFRFIDProtocol` enum, `lfrfid_evt_t`, `FRAME_CHUNK_SIZE`
+   - `lfrfid_hal.h`, `t5577.h` — timer/encoded data types
+
+3. **If a function is `static`**, either make it non-static and declare it in the
+   header, or extract it into a new standalone `.c`/`.h` compilation unit.  For
+   functions buried in HAL-heavy files (e.g., `m1_fw_source.c`), create a
+   test-only copy in `tests/stubs/` that mirrors the production logic — document
+   the duplication in the stub file header.
+
+4. **Write the test file** as `tests/test_<module>.c` using Unity:
+   ```c
+   #include "unity.h"
+   #include "<module_header>.h"   /* or include stubs first */
+
+   void setUp(void) { }
+   void tearDown(void) { }
+
+   void test_<function>_<case>(void) {
+       TEST_ASSERT_EQUAL(...);
+   }
+
+   int main(void) {
+       UNITY_BEGIN();
+       RUN_TEST(test_<function>_<case>);
+       return UNITY_END();
+   }
+   ```
+
+5. **Add a CMake target** in `tests/CMakeLists.txt`:
+   ```cmake
+   add_executable(test_<module>
+       test_<module>.c
+       ${M1_ROOT}/path/to/<module>.c
+   )
+   target_include_directories(test_<module> PRIVATE
+       ${STUBS_DIR}
+       ${M1_ROOT}/path/to/headers
+   )
+   target_link_libraries(test_<module> PRIVATE unity)
+   if(TARGET sanitizers)
+       target_link_libraries(test_<module> PRIVATE sanitizers)
+   endif()
+   add_test(NAME <module> COMMAND test_<module>)
+   ```
+
+6. **Build and run**: `cmake -B build-tests -S tests && cmake --build build-tests
+   && ctest --test-dir build-tests --output-on-failure`
+
+#### What NOT to unit test
+
+- **AT command construction** (`m1_wifi.c`, `m1_bt.c`, `m1_ble_spam.c`) — entirely
+  ESP32 SPI communication, no pure logic to extract.
+- **Direct HAL GPIO manipulation** (`m1_gpio.c`) — hardware-only.
+- **UI rendering code** — display drawing is tightly coupled to u8g2 state.
+- **RTOS task orchestration** — queue/semaphore interactions need the real scheduler.
+
+These modules are tested via hardware integration, not host-side unit tests.
+
 ### Phase Checklist for Moderate-to-Complex Changes
 
 When a code change meets or exceeds **moderate complexity** (multiple files, multi-step logic,
