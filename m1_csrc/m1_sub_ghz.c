@@ -367,7 +367,6 @@ static uint8_t  subghz_raw_rssi_current = 0; /* Current RSSI (for cursor display
 static uint8_t  subghz_raw_rssi_head = 0;    /* Write position in history */
 static bool     subghz_raw_rssi_history_end = false; /* Buffer has wrapped */
 static uint8_t  subghz_raw_sin_idx = 0;      /* Sine animation index (idle state) */
-static uint32_t subghz_raw_sample_count = 0;  /* Total samples received (for display) */
 
 //************************** S T R U C T U R E S *******************************
 
@@ -967,8 +966,9 @@ static void subghz_raw_rssi_push(float rssi_dbm, bool trace)
 
 	if (trace)
 	{
-		subghz_raw_rssi_history[subghz_raw_rssi_head++] = u_rssi;
-		if (subghz_raw_rssi_head > SUBGHZ_RAW_RSSI_HISTORY_SIZE)
+		subghz_raw_rssi_history[subghz_raw_rssi_head] = u_rssi;
+		subghz_raw_rssi_head++;
+		if (subghz_raw_rssi_head >= SUBGHZ_RAW_RSSI_HISTORY_SIZE)
 		{
 			subghz_raw_rssi_history_end = true;
 			subghz_raw_rssi_head = 0;
@@ -976,7 +976,11 @@ static void subghz_raw_rssi_push(float rssi_dbm, bool trace)
 	}
 	else
 	{
-		subghz_raw_rssi_history[subghz_raw_rssi_head] = u_rssi;
+		/* Update the last committed slot without advancing */
+		uint8_t slot = (subghz_raw_rssi_head > 0)
+		             ? (subghz_raw_rssi_head - 1)
+		             : (subghz_raw_rssi_history_end ? (SUBGHZ_RAW_RSSI_HISTORY_SIZE - 1) : 0);
+		subghz_raw_rssi_history[slot] = u_rssi;
 	}
 }
 
@@ -992,7 +996,6 @@ static void subghz_raw_rssi_reset(void)
 	subghz_raw_rssi_current = 0;
 	subghz_raw_rssi_history_end = false;
 	subghz_raw_sin_idx = 0;
-	subghz_raw_sample_count = 0;
 }
 
 /*============================================================================*/
@@ -1033,13 +1036,6 @@ static void subghz_raw_rssi_draw_scale(void)
 	}
 }
 
-/*============================================================================*/
-/**
-  * @brief  Draw Flipper-style RSSI history spectrogram.
-  *         Vertical bars from bottom (y=47) up, with a scrolling cursor
-  *         showing the current write position.
-  */
-/*============================================================================*/
 /*============================================================================*/
 /**
   * @brief  Draw the waveform area frame (borders + "RSSI" label).

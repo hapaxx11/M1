@@ -269,9 +269,11 @@ static void draw(SubGhzApp *app)
             snprintf(line, sizeof(line), "%luk", (unsigned long)(app->raw_sample_count / 1000));
         else
             snprintf(line, sizeof(line), "%lu", (unsigned long)app->raw_sample_count);
-        /* Right-align in the status bar (between mod text and state indicator) */
+        /* Position to the left of the state indicator (e.g. "REC"/"DONE"),
+         * leaving a 2px gap.  This avoids overlapping the centered mod label. */
         uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, line);
-        uint8_t sample_x = (M1_LCD_DISPLAY_WIDTH / 2 + 14) - tw; /* Center-right region */
+        uint8_t state_tw = u8g2_GetStrWidth(&m1_u8g2, state);
+        uint8_t sample_x = M1_LCD_DISPLAY_WIDTH - state_tw - 2 - tw - 4;
         u8g2_DrawStr(&m1_u8g2, sample_x, 8, line);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
