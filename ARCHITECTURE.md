@@ -78,3 +78,44 @@ when they conflict.
 See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
 specification, optional verbs, implementation patterns per module, and rules
 for new modules.
+
+## Modularization Approach
+
+When firmware source files grow to mix pure logic (parsers, protocol codecs,
+data conversion, filter logic) with hardware-coupled code (HAL, RTOS, display),
+the preferred approach is to **extract the pure logic into standalone `.c`/`.h`
+compilation units** with clean interfaces.
+
+**Successful extractions:**
+- `Sub_Ghz/subghz_key_encoder.c/h` — KEY→RAW encoding from `m1_sub_ghz.c`
+- `Sub_Ghz/subghz_raw_line_parser.c/h` — RAW_Data parsing from `m1_sub_ghz.c`
+- `Sub_Ghz/subghz_raw_decoder.c/h` — offline decode from `m1_subghz_scene_saved.c`
+- `Sub_Ghz/subghz_playlist_parser.c/h` — path remapping from `m1_subghz_scene_playlist.c`
+
+**Decoupling technique:** When extracted logic needs hardware-side operations,
+use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller
+provides a thin adapter; the module never touches hardware directly.
+
+See [`CLAUDE.md`](CLAUDE.md) § "Preferred Modularization Pattern" for the full
+specification and rules.
+
+## Test Architecture
+
+Host-side unit tests live in `tests/` and build via CMake with the vendored
+Unity framework (`tests/unity/`).  ASan + UBSan are enabled by default.
+
+**Structure:**
+- `tests/test_*.c` — one file per test suite (20+ suites)
+- `tests/stubs/` — minimal header stubs for HAL, RTOS, FatFS, and peripheral
+  types needed to compile firmware `.c` files on the host
+- `tests/CMakeLists.txt` — one `add_executable` + `add_test` per suite
+
+**Pattern:** Stub-based extraction — identify pure-logic functions in firmware
+source files, stub out their HAL/RTOS header dependencies, and test with Unity.
+This pattern covers file parsers (`flipper_rfid.c`, `flipper_ir.c`,
+`flipper_nfc.c`, `flipper_subghz.c`), protocol codecs (`subghz_blocks_*`,
+`lfrfid_manchester.c`), data conversion (`datatypes_utils.c`), and utility
+logic (`m1_fw_source.c` asset filtering, `m1_json_mini.c`).
+
+See [`CLAUDE.md`](CLAUDE.md) § "Preferred Unit Testing Pattern" for the full
+specification with code examples and rules.

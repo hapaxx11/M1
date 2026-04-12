@@ -95,6 +95,15 @@ Write unit tests for new features
 Bug fixes MUST include regression tests — add one or more host-side unit tests (under
 tests/) that fail before the fix and pass after it. A bug fix without a corresponding
 regression test is incomplete.
+All unit tests must follow the stub-based extraction pattern: identify pure-logic
+functions, create minimal stubs in tests/stubs/ for HAL/RTOS/FatFS headers, and test
+with Unity.  Do NOT attempt to unit test AT command construction, GPIO manipulation,
+or RTOS task orchestration — those need hardware integration testing.
+See CLAUDE.md § "Preferred Unit Testing Pattern" for the full specification.
+When a source file mixes pure logic with hardware-coupled code, extract the pure
+logic into a standalone .c/.h module with a clean interface (use callbacks for
+hardware decoupling).  This improves both testability and maintainability.
+See CLAUDE.md § "Preferred Modularization Pattern" for the full specification.
 
 11. UX Pattern Standards
 Any module that loads saved files from SD card MUST implement the Saved Item Actions

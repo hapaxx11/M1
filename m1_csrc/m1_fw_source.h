@@ -98,6 +98,16 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 bool fw_source_create_defaults(void);
 
 /*
+ * Check if an asset name matches the include/exclude filter criteria.
+ * include_filter: suffix that asset name must end with (e.g., "_wCRC.bin")
+ * exclude_filter: space-separated suffixes that disqualify the asset
+ * Returns true if the asset should be included.
+ */
+bool fw_source_asset_matches_filter(const char *asset_name,
+                                     const char *include_filter,
+                                     const char *exclude_filter);
+
+/*
  * Fetch available releases for a given source.
  * Queries the remote server (e.g., GitHub API) and populates the release list.
  *

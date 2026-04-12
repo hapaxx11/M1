@@ -348,3 +348,117 @@ if(TARGET sanitizers)
     target_link_libraries(test_menu_layout PRIVATE sanitizers)
 endif()
 add_test(NAME menu_layout COMMAND test_menu_layout)
+
+# ------------------------------------------------------------------
+# Module under test: flipper_rfid (RFID protocol name mapping)
+# Tests flipper_rfid_parse_protocol() — maps Flipper .rfid protocol
+# names to M1 LFRFIDProtocol enum values.  Covers all 30+ protocols
+# including aliases and case-insensitive matching.
+# Stubs: ff.h, lfrfid.h (protocol enum only), FreeRTOS.h, queue.h,
+#        stream_buffer.h, stm32h5xx_hal.h
+# ------------------------------------------------------------------
+add_executable(test_flipper_rfid
+    test_flipper_rfid.c
+    ${M1_ROOT}/m1_csrc/flipper_rfid.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+)
+target_include_directories(test_flipper_rfid PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_flipper_rfid PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flipper_rfid PRIVATE sanitizers)
+endif()
+add_test(NAME flipper_rfid COMMAND test_flipper_rfid)
+
+# ------------------------------------------------------------------
+# Module under test: flipper_ir (IR protocol mapping + hex conversion)
+# Tests flipper_ir_proto_to_irmp() and flipper_ir_irmp_to_proto() —
+# bidirectional mapping between Flipper IR names and IRMP protocol IDs.
+# Stubs: ff.h, irmp.h (protocol constants only)
+# ------------------------------------------------------------------
+add_executable(test_flipper_ir
+    test_flipper_ir.c
+    ${M1_ROOT}/m1_csrc/flipper_ir.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+)
+target_include_directories(test_flipper_ir PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_flipper_ir PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flipper_ir PRIVATE sanitizers)
+endif()
+add_test(NAME flipper_ir COMMAND test_flipper_ir)
+
+# ------------------------------------------------------------------
+# Module under test: flipper_nfc (NFC device type mapping)
+# Tests flipper_nfc_parse_type() — maps ~60 Flipper NFC device type
+# strings (NTAG, Mifare Classic, DESFire, FeliCa, ISO15693, SLIX,
+# ST25TB) to flipper_nfc_type_t enum values.
+# Stubs: ff.h
+# ------------------------------------------------------------------
+add_executable(test_flipper_nfc
+    test_flipper_nfc.c
+    ${M1_ROOT}/m1_csrc/flipper_nfc.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+)
+target_include_directories(test_flipper_nfc PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_flipper_nfc PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flipper_nfc PRIVATE sanitizers)
+endif()
+add_test(NAME flipper_nfc COMMAND test_flipper_nfc)
+
+# ------------------------------------------------------------------
+# Module under test: lfrfid_manchester (LFRFID Manchester decoder)
+# Tests manch_init(), manch_push_bit(), manch_get_bit(), manch_is_full(),
+# and manch_feed_events() — the generic Manchester decoder used by
+# EM4100, Viking, FDX-B, Electra, Gallagher, etc.
+# Stubs: lfrfid.h (evt_t + FRAME_CHUNK_SIZE only), app_freertos.h,
+#        cmsis_os.h, main.h
+# The real lfrfid_manchester.c includes real lfrfid.h (same dir) which
+# chains to lfrfid_hal.h needing TIM_HandleTypeDef — force-include
+# the stm32h5xx_hal.h stub to provide it.
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_manchester
+    test_lfrfid_manchester.c
+    ${M1_ROOT}/lfrfid/lfrfid_manchester.c
+)
+target_include_directories(test_lfrfid_manchester PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/lfrfid
+)
+target_compile_options(test_lfrfid_manchester PRIVATE
+    -include ${STUBS_DIR}/stm32h5xx_hal.h
+)
+target_link_libraries(test_lfrfid_manchester PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_manchester PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
+
+# ------------------------------------------------------------------
+# Module under test: fw_source_asset_matches_filter (OTA filter logic)
+# Tests the asset name filtering function from m1_fw_source.c.
+# Pure string matching — include suffix + space-separated exclude suffixes.
+# Uses a standalone copy of the function to avoid HAL/HTTP/FatFS deps.
+# ------------------------------------------------------------------
+add_executable(test_fw_source_filter
+    test_fw_source_filter.c
+    ${STUBS_DIR}/fw_source_filter_impl.c
+)
+target_include_directories(test_fw_source_filter PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_fw_source_filter PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fw_source_filter PRIVATE sanitizers)
+endif()
+add_test(NAME fw_source_filter COMMAND test_fw_source_filter)
