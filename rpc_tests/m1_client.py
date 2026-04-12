@@ -180,19 +180,7 @@ class DeviceInfo:
         if len(payload) < 49:
             raise M1Error(f"DeviceInfo payload too short: {len(payload)} bytes")
 
-        # Unpack fixed fields matching S_RPC_DeviceInfo (packed struct)
-        (
-            self.magic,
-            self.fw_major, self.fw_minor, self.fw_build, self.fw_rc,
-            self.active_bank,
-            self.battery_level, self.battery_charging,
-            self.sd_card_present,
-            self.sd_total_kb, self.sd_free_kb,
-            self.esp32_ready,
-        ) = struct.unpack_from("<IBBBBHBBBIIBB", payload, 0)
-        # Note: extra byte from esp32_ready position shift
-
-        # Reparse with correct offsets based on packed struct
+        # Parse field-by-field matching the packed S_RPC_DeviceInfo struct
         offset = 0
         self.magic = struct.unpack_from("<I", payload, offset)[0]; offset += 4
         self.fw_major = payload[offset]; offset += 1
@@ -219,8 +207,10 @@ class DeviceInfo:
 
     @property
     def fw_version(self) -> str:
-        rc = f"-rc{self.fw_rc}" if self.fw_rc else ""
-        return f"{self.fw_major}.{self.fw_minor}.{self.fw_build}{rc}"
+        ver = f"{self.fw_major}.{self.fw_minor}.{self.fw_build}.{self.fw_rc}"
+        if self.hapax_revision > 0:
+            ver += f"-Hapax.{self.hapax_revision}"
+        return ver
 
     def __repr__(self) -> str:
         return (

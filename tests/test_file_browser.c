@@ -162,9 +162,10 @@ void test_find_ext_no_dot(void)
 
 void test_find_ext_dot_only(void)
 {
-    /* A name that starts with dot and has nothing else like ".a" has k==1 → returns 0 */
+    /* Files with a dot at position 0 (like ".a") are rejected because
+     * the extension search finds k==1, filtering out hidden/dotfiles
+     * and malformed filenames with no base name before the dot. */
     char name[] = ".a";
-    /* k will be 1 (dot at position 0), but the check is k==1 so it returns 0 */
     TEST_ASSERT_EQUAL_UINT8(0, fb_find_ext(name, ".a"));
 }
 

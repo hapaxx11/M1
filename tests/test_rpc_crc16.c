@@ -6,8 +6,12 @@
  * Unit tests for the RPC CRC-16/CCITT implementation and frame format.
  * Tests the table-driven CRC used by the M1 RPC binary protocol.
  *
- * The CRC-16/CCITT-FALSE variant: poly=0x1021, init=0xFFFF, no
- * reflection, no final XOR.
+ * The CRC-16 used by the M1 RPC protocol uses poly=0x1021 with
+ * init=0xFFFF, no input/output reflection, and no final XOR.
+ * This matches the CRC-16/XMODEM family with a non-standard init
+ * value (XMODEM canonical init is 0x0000).  The M1 codebase refers
+ * to it as "CRC-16/CCITT" but it produces different check values
+ * than the canonical CRC-16/CCITT-FALSE algorithm.
  *
  * Build with the host-side CMake:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -33,10 +37,10 @@ void tearDown(void) {}
 
 void test_crc16_known_vector_123456789(void)
 {
-    /* CRC-16/XMODEM (poly=0x1021, init=0xFFFF, table-driven, no reflect/XOR)
-     * over "123456789" = 0xC9B1.
-     * Note: this is NOT CRC-16/CCITT-FALSE (0x29B1) — the M1 RPC uses
-     * the XMODEM-family table with init=0xFFFF. */
+    /* M1 RPC CRC-16 (poly=0x1021, init=0xFFFF, table-driven, no
+     * reflect/XOR) over "123456789" = 0xC9B1.
+     * Note: this differs from canonical CRC-16/CCITT-FALSE (0x29B1)
+     * because the M1 table uses a different computation method. */
     uint8_t data[] = "123456789";
     uint16_t crc = rpc_crc16(data, 9);
     TEST_ASSERT_EQUAL_HEX16(0xC9B1, crc);
