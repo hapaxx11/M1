@@ -223,9 +223,9 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
  * Check if an asset name matches the filter criteria.
  * Returns true if the asset should be included.
  */
-static bool asset_matches_filter(const char *asset_name,
-                                  const char *include_filter,
-                                  const char *exclude_filter)
+bool fw_source_asset_matches_filter(const char *asset_name,
+                                     const char *include_filter,
+                                     const char *exclude_filter)
 {
 	size_t alen = strlen(asset_name);
 
@@ -326,7 +326,7 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 				aname[0] = '\0';
 				json_get_string(ap, "name", aname, sizeof(aname));
 
-				if (aname[0] && asset_matches_filter(aname, source->asset_filter, source->exclude_filter))
+				if (aname[0] && fw_source_asset_matches_filter(aname, source->asset_filter, source->exclude_filter))
 				{
 					strncpy(rel->asset_name, aname, FW_RELEASE_ASSET_LEN - 1);
 					rel->asset_name[FW_RELEASE_ASSET_LEN - 1] = '\0';
