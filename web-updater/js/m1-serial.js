@@ -92,21 +92,30 @@ export class M1Serial {
      * Internal read loop — runs until disconnected.
      */
     async _readLoop() {
+        let streamClosed = false;
         try {
-            while (this._reading && this.port && this.port.readable) {
-                this.reader = this.port.readable.getReader();
+            while (this._reading && this.port && this.port.readable && !streamClosed) {
+                const reader = this.port.readable.getReader();
+                this.reader = reader;
                 try {
                     while (this._reading) {
-                        const { value, done } = await this.reader.read();
-                        if (done) break;
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            streamClosed = true;
+                            break;
+                        }
                         if (value && this.onData) {
                             this.onData(value);
                         }
                     }
                 } finally {
-                    this.reader.releaseLock();
+                    try { reader.releaseLock(); } catch (_) { /* already released */ }
                     this.reader = null;
                 }
+            }
+
+            if (streamClosed && this._reading) {
+                this._handleDisconnect();
             }
         } catch (err) {
             if (this._reading) {
@@ -147,6 +156,7 @@ export class M1Serial {
         try {
             if (this.writer) {
                 await this.writer.close();
+                this.writer.releaseLock();
                 this.writer = null;
             }
         } catch (_) { /* ignore */ }

@@ -292,7 +292,7 @@ export function buildFwUpdateDataPayload(offset, chunk) {
  * @returns {object}
  */
 export function parseDeviceInfo(payload) {
-    if (payload.length < 16) return null;
+    if (payload.length < 22) return null;
     const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
     const magic = view.getUint32(0, true);
     if (magic !== 0x4D314649) return null; // "M1FI"
@@ -343,7 +343,7 @@ export function parseFwInfo(payload) {
     const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
 
     function parseBank(offset) {
-        if (payload.length < offset + 10) return null;
+        if (payload.length < offset + 13) return null;
         const bank = {
             fwVersion: `${payload[offset]}.${payload[offset+1]}.${payload[offset+2]}.${payload[offset+3]}`,
             fwMajor: payload[offset],

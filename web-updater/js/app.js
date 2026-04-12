@@ -49,6 +49,7 @@ let pendingResolve = null;
 let pendingReject = null;
 let pendingTimeout = null;
 let pendingExpectedCmd = null;
+let pendingSeq = null;
 let deviceInfo = null;
 let fwInfo = null;
 let releases = [];
@@ -121,11 +122,13 @@ function sendCommand(cmd, payload = null, expectedCmd = null, timeout = RESPONSE
         pendingResolve = resolve;
         pendingReject = reject;
         pendingExpectedCmd = expectedCmd;
+        pendingSeq = s;
 
         pendingTimeout = setTimeout(() => {
             pendingResolve = null;
             pendingReject = null;
             pendingExpectedCmd = null;
+            pendingSeq = null;
             reject(new Error('Response timeout'));
         }, timeout);
 
@@ -134,6 +137,7 @@ function sendCommand(cmd, payload = null, expectedCmd = null, timeout = RESPONSE
             pendingResolve = null;
             pendingReject = null;
             pendingExpectedCmd = null;
+            pendingSeq = null;
             reject(err);
         });
     });
@@ -143,8 +147,8 @@ function sendCommand(cmd, payload = null, expectedCmd = null, timeout = RESPONSE
  * Handle a parsed RPC frame from the device.
  */
 function handleFrame(cmd, frameSeq, payload) {
-    // Resolve pending command if this is a response
-    if (pendingResolve) {
+    // Resolve pending command if this is a response with matching seq
+    if (pendingResolve && frameSeq === pendingSeq) {
         // NACK always resolves (as rejection) regardless of expectedCmd
         if (cmd === RPC_CMD_NACK) {
             clearTimeout(pendingTimeout);
@@ -152,6 +156,7 @@ function handleFrame(cmd, frameSeq, payload) {
             pendingResolve = null;
             pendingReject = null;
             pendingExpectedCmd = null;
+            pendingSeq = null;
             const errCode = payload.length > 0 ? payload[0] : 0;
             const errMsg = RPC_ERRORS[errCode] || `Unknown error (0x${errCode.toString(16)})`;
             reject(new Error(`NACK: ${errMsg}`));
@@ -166,11 +171,12 @@ function handleFrame(cmd, frameSeq, payload) {
             pendingResolve = null;
             pendingReject = null;
             pendingExpectedCmd = null;
+            pendingSeq = null;
             resolve({ cmd, seq: frameSeq, payload });
             return;
         }
 
-        // Frame doesn't match expected — ignore it (could be unsolicited)
+        // Frame doesn't match expected cmd — ignore it (could be unsolicited)
     }
 
     // Handle unsolicited frames
@@ -504,6 +510,7 @@ async function flashFirmware(data, name) {
         // connection drops. A timeout or read error here is expected and OK.
         const msg = err.message || '';
         const isExpectedDisconnect =
+            err.code === 'DEVICE_DISCONNECTED' ||
             msg.includes('timeout') ||
             msg.includes('disconnect') ||
             msg.includes('NetworkError') ||
@@ -557,6 +564,19 @@ function init() {
     parser.onFrame = handleFrame;
     serial.onData = (data) => parser.feed(data);
     serial.onDisconnect = () => {
+        // Immediately reject any in-flight RPC command on disconnect
+        if (pendingReject) {
+            clearTimeout(pendingTimeout);
+            const reject = pendingReject;
+            pendingResolve = null;
+            pendingReject = null;
+            pendingExpectedCmd = null;
+            pendingSeq = null;
+            pendingTimeout = null;
+            const err = new Error('Device disconnected');
+            err.code = 'DEVICE_DISCONNECTED';
+            reject(err);
+        }
         log('Device disconnected', 'warn');
         updateConnectionUI(false);
     };
