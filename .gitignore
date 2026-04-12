@@ -87,3 +87,4 @@ esp32-at-hid/
 Archive-Do-Not-Reference/
 tools/__pycache__/
 tests/build/
+build_ci/
