@@ -85,7 +85,7 @@ Copy the following patterns and rules from `hapaxx11/M1`'s `CLAUDE.md`:
 ```bash
 # Recommended: use a virtual environment
 python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+source .venv/bin/activate  # or .venv\Scripts\activate.bat on Windows
 
 pip install -r requirements.txt
 ```
