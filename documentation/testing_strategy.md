@@ -1,6 +1,6 @@
-# Moonshot Testing Strategy
+# Firmware Testing Strategy
 
-Three-tier plan for comprehensive M1 firmware test coverage.
+Host-side testing strategy for M1 firmware (Hapax fork).
 
 ---
 
@@ -86,121 +86,7 @@ when `m1_csrc/`, `Sub_Ghz/`, or `tests/` change.  Runs on
 
 ---
 
-## Tier 2 — RPC-Based Hardware-in-the-Loop Tests (Requires Physical M1)
-
-**Status: ✅ Scaffolding complete — `rpc_tests/` package with M1Client + 13 pytest tests**
-
-Python harness that connects to a real M1 over USB CDC and exercises
-the full firmware through the RPC protocol.  This is **"Playwright for
-firmware"** — inject button presses, capture the 128×64 framebuffer,
-and assert on screen content.
-
-### Architecture
-
-```
-rpc_tests/
-├── __init__.py          # Package marker
-├── conftest.py          # pytest fixtures (--port, m1 client, screenshot_dir)
-├── m1_client.py         # M1Client class — full RPC protocol implementation
-├── test_basic.py        # Basic integration tests (ping, buttons, screen)
-├── requirements.txt     # pyserial, pytest, Pillow
-└── README.md            # Setup and API reference
-```
-
-### M1Client API
-
-```python
-from rpc_tests.m1_client import M1Client, Button
-
-m1 = M1Client("/dev/ttyACM0")
-m1.connect()
-
-m1.ping()                         # Verify connectivity
-info = m1.device_info()           # Firmware version, battery, SD
-m1.click(Button.OK)               # Inject button press
-img = m1.screenshot()             # Capture framebuffer (128×64 PIL.Image)
-files = m1.file_list("/SUBGHZ")   # List SD card directory
-data = m1.file_read("0:/test.sub")  # Read file contents
-m1.cli_exec("help")               # Execute CLI command
-
-m1.disconnect()
-```
-
-### RPC protocol
-
-```
-Frame: [0xAA] [CMD:1] [SEQ:1] [LEN:2 LE] [PAYLOAD:0-8192] [CRC16:2]
-```
-
-CRC-16 uses the same table as `m1_rpc.c` (poly=0x1021, init=0xFFFF,
-table-driven, no reflection).
-
-### Current test coverage
-
-| Test | What it verifies |
-|------|-----------------|
-| `test_ping` | PING → PONG round-trip |
-| `test_ping_multiple` | 10× sequential PINGs |
-| `test_device_info` | Valid firmware version + battery |
-| `test_device_info_hapax` | Hapax revision > 0 |
-| `test_screenshot_size` | 128×64 framebuffer capture |
-| `test_screenshot_not_blank` | Screen has non-zero pixels |
-| `test_screenshot_save` | PNG export works |
-| `test_click_ok` | OK button accepted |
-| `test_click_back` | BACK button accepted |
-| `test_all_buttons` | All 6 buttons accepted |
-| `test_navigate_down_changes_screen` | DOWN changes display |
-| `test_navigate_ok_and_back` | OK enters submenu, BACK returns |
-| `test_navigation_round_trip` | DOWN×3 + UP×3 = same screen |
-
-### Planned tests
-
-```python
-# Module-specific navigation
-def test_subghz_menu():
-    """Navigate to Sub-GHz, verify menu items visible."""
-    m1.click(Button.OK)        # Enter main menu
-    m1.click(Button.DOWN)      # Navigate to Sub-GHz
-    m1.click(Button.OK)        # Enter Sub-GHz
-    frame = m1.screenshot()
-    assert pixel_text_contains(frame, "Sub-GHz")
-    m1.click(Button.BACK)
-
-# Visual regression
-def test_main_menu_golden():
-    """Compare main menu to golden screenshot."""
-    m1.click(Button.OK)
-    frame = m1.screenshot()
-    golden = Image.open("golden/main_menu.png")
-    assert images_match(frame, golden, tolerance=0.01)
-
-# File operations
-def test_file_round_trip():
-    """Write a file via RPC, read it back, verify content."""
-    m1.file_write("/TEST/hello.txt", b"Hello M1!")
-    data = m1.file_read("/TEST/hello.txt")
-    assert data == b"Hello M1!"
-    m1.file_delete("/TEST/hello.txt")
-```
-
-### CI integration
-
-These tests **cannot run on GitHub Actions cloud runners** — they need
-physical hardware.  Options:
-
-1. **Self-hosted runner** with M1 connected via USB
-2. **Manual test gate** — run locally before releases
-3. **Dedicated test bench** — Raspberry Pi + M1 with auto-trigger on push
-
-```bash
-# Run manually
-pip install -r rpc_tests/requirements.txt
-pytest rpc_tests/ -v --port /dev/ttyACM0
-```
-
----
-
-## Tier 3 — Host-Side Scene Harness with u8g2 Virtual Display (CI ✅, High Effort)
+## Tier 2 — Host-Side Scene Harness with u8g2 Virtual Display (CI ✅, High Effort)
 
 **Status: 🔮 Future — not yet implemented**
 
@@ -284,23 +170,25 @@ comprehensive.
 
 ---
 
-## Priority Order
+## Hardware-in-the-Loop Tests
 
-| Priority | Tier | Effort | CI? | Coverage target |
-|----------|------|--------|-----|-----------------|
-| **1** | Host-side unit tests | Low | ✅ | Pure-logic functions: parsers, encoders, CRC, formatting |
-| **2** | RPC hardware-in-the-loop | Medium | ❌ (needs hardware) | Full system: navigation, screen content, file I/O |
-| **3** | u8g2 scene harness | High | ✅ | UI rendering: menus, scroll, layout, visual regression |
+RPC-based integration tests (Python + pytest + physical M1 device) have
+been moved to a dedicated repository: **`hapaxx11/m1-hil-tests`**.
 
-### Decision criteria for new tests
+See `documentation/m1_hil_bootstrap.md` for setup instructions for that
+repo.
+
+---
+
+## Decision Criteria for New Tests
 
 ```
 Is the function pure logic (no HAL/display/RTOS)?
   → Tier 1: Host-side unit test (stub-based extraction)
 
 Does it require the full firmware running on hardware?
-  → Tier 2: RPC integration test (pytest + M1Client)
+  → hapaxx11/m1-hil-tests: RPC integration test (pytest + M1Client)
 
 Does it involve UI rendering that should be tested in CI?
-  → Tier 3: u8g2 scene harness (when available)
+  → Tier 2: u8g2 scene harness (when available)
 ```
