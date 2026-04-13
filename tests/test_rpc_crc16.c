@@ -21,6 +21,7 @@
 #include "unity.h"
 #include "rpc_crc16_impl.h"
 #include <string.h>
+#include <stdio.h>
 
 /* RPC protocol constants — must match m1_rpc.h */
 #define RPC_SYNC_BYTE   0xAA
@@ -127,6 +128,9 @@ static uint16_t build_rpc_frame(uint8_t cmd, uint8_t seq,
                                 const uint8_t *payload, uint16_t payload_len,
                                 uint8_t *out, uint16_t out_size)
 {
+    if (payload == NULL && payload_len > 0)
+        return 0;
+
     uint16_t frame_size = RPC_HEADER_SIZE + payload_len + RPC_CRC_SIZE;
     if (frame_size > out_size)
         return 0;

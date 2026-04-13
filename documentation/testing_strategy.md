@@ -6,14 +6,14 @@ Host-side testing strategy for M1 firmware (Hapax fork).
 
 ## Tier 1 — Host-Side Unit Tests (CI ✅, Low Effort)
 
-**Status: ✅ Active — 22 suites, runs on every push**
+**Status: ✅ Active — 23 suites, runs on PRs and pushes to main**
 
 Pure-logic C functions tested on x86 with Unity + ASan/UBSan.
 Uses the stub-based extraction pattern: minimal stubs in `tests/stubs/`
 provide the types and constants each source file needs without any real
 HAL, RTOS, or FatFS.
 
-### Current suites (22)
+### Current suites (23)
 
 | Suite | Module under test |
 |-------|-------------------|
@@ -35,6 +35,7 @@ HAL, RTOS, or FatFS.
 | `test_subghz_manchester_codec` | Manchester encode/decode |
 | `test_datatypes_utils` | Generic data type helpers |
 | `test_menu_layout` | Menu scroll/selection math |
+| `test_esp_queue` | ESP32 SPI AT response queue |
 | `test_lfrfid_manchester` | LFRFID Manchester decoder |
 | `test_fw_source_filter` | OTA asset name filter |
 | `test_rpc_crc16` | RPC CRC-16 + frame builder/validator |
