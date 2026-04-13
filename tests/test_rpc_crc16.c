@@ -3,15 +3,16 @@
 /*
  * test_rpc_crc16.c
  *
- * Unit tests for the RPC CRC-16/CCITT implementation and frame format.
+ * Unit tests for the RPC CRC-16 implementation and frame format.
  * Tests the table-driven CRC used by the M1 RPC binary protocol.
  *
- * The CRC-16 used by the M1 RPC protocol uses poly=0x1021 with
- * init=0xFFFF, no input/output reflection, and no final XOR.
- * This matches the CRC-16/XMODEM family with a non-standard init
- * value (XMODEM canonical init is 0x0000).  The M1 codebase refers
- * to it as "CRC-16/CCITT" but it produces different check values
- * than the canonical CRC-16/CCITT-FALSE algorithm.
+ * The M1 RPC CRC-16 uses a custom lookup table (poly=0x1021,
+ * init=0xFFFF, no reflect, no final XOR).  The production table in
+ * m1_csrc/m1_rpc.c differs from the canonical CRC-16/CCITT-FALSE table in
+ * 46 entries, so the check value for "123456789" is 0xC9B1 — NOT
+ * the standard CCITT-FALSE result of 0x29B1.  Both the table and
+ * expected values here are copied verbatim from the production code;
+ * do NOT "correct" them to match online CRC calculators.
  *
  * Build with the host-side CMake:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -33,15 +34,15 @@ void setUp(void) {}
 void tearDown(void) {}
 
 /* ===================================================================
- * CRC-16/CCITT-FALSE known vectors
+ * CRC-16 known vectors (M1 custom table)
  * =================================================================== */
 
 void test_crc16_known_vector_123456789(void)
 {
-    /* M1 RPC CRC-16 (poly=0x1021, init=0xFFFF, table-driven, no
-     * reflect/XOR) over "123456789" = 0xC9B1.
-     * Note: this differs from canonical CRC-16/CCITT-FALSE (0x29B1)
-     * because the M1 table uses a different computation method. */
+    /* M1 RPC CRC-16 over "123456789" = 0xC9B1.
+     * The M1 lookup table differs from the canonical CRC-16/CCITT-FALSE
+     * table (which yields 0x29B1), so this value is intentionally
+     * different.  Verified against the production table in m1_csrc/m1_rpc.c. */
     uint8_t data[] = "123456789";
     uint16_t crc = rpc_crc16(data, 9);
     TEST_ASSERT_EQUAL_HEX16(0xC9B1, crc);

@@ -13,6 +13,12 @@ improvements.
 [![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
 
+> **🔧 [Flash your M1 right now — open the Web Updater](https://hapaxx11.github.io/M1/)**
+>
+> No software to install for updates or reflashing if Hapax is already installed. Plug in
+> via USB-C, open Chrome/Edge, and flash the latest firmware in seconds. For a first
+> install from stock firmware, use the DFU/qMonstatek method below.
+
 ## Highlights vs Stock Firmware
 
 | Feature | Monstatek Stock (v0.8.0.1) | Hapax |
@@ -30,6 +36,7 @@ improvements.
 | IR remote database | — | **1,412** files included |
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
+| Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
 | CI/CD auto-releases | ✗ | ✓ (every merge to main) |
 
 See also: [bedge117/M1 (C3)](https://github.com/bedge117/M1) — another active community
@@ -273,7 +280,23 @@ ctest --test-dir build-tests --output-on-failure
 
 ## Flashing
 
-### Via qMonstatek (recommended)
+### Via Web Updater (recommended for updates)
+
+The fastest way to reflash — no software to install. Requires Hapax firmware already
+running on the M1 (the Web Updater connects over USB Serial, which needs the Hapax RPC
+interface). For a first install from stock firmware, use **Via DFU Mode** below.
+
+1. Open the **[M1 Web Updater](https://hapaxx11.github.io/M1/)** in Chrome or Edge
+2. Power on the M1 normally so it boots to the regular UI
+3. Connect via USB-C
+4. Click **Connect**, select the M1 serial device, pick a firmware release, and flash
+
+Requires a browser with Web Serial support (Chrome 89+ or Edge 89+).
+Do **not** use DFU mode for the Web Updater. If the screen stays dark, the device is in DFU
+mode and will usually not appear as a serial port; use the **Via DFU Mode (recovery / first
+install)** section below instead.
+
+### Via qMonstatek
 Connect via USB and use the Firmware Update page in [qMonstatek](https://github.com/bedge117/qMonstatek).
 
 ### Via WiFi (OTA)
