@@ -172,11 +172,10 @@ comprehensive.
 
 ## Hardware-in-the-Loop Tests
 
-RPC-based integration tests (Python + pytest + physical M1 device) have
-been moved to a dedicated repository: **`hapaxx11/m1-hil-tests`**.
+RPC-based integration tests (Python + pytest + physical M1 device) live in
+a dedicated repository: **[hapaxx11/m1-hil-tests](https://github.com/hapaxx11/m1-hil-tests)**.
 
-See `documentation/m1_hil_bootstrap.md` for setup instructions for that
-repo.
+See that repo's README and CLAUDE.md for setup instructions.
 
 ---
 
