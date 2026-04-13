@@ -1,14 +1,14 @@
 /* See COPYING.txt for license details. */
 
 /*
- * rpc_crc16_impl.c — standalone copy of RPC CRC-16/CCITT for host-side tests.
+ * rpc_crc16_impl.c — standalone copy of the M1 RPC CRC-16 for host-side tests.
  *
- * The production code lives in m1_rpc.c as static functions with
+ * The production code lives in m1_csrc/m1_rpc.c as static functions with
  * heavy HAL/RTOS/USB dependencies.  This file mirrors the CRC-16
  * table and computation functions so they can be tested on the host
  * without any hardware stubs.
  *
- * Keep in sync with m1_rpc.c (rpc_crc16 / rpc_crc16_continue / table).
+ * Keep in sync with m1_csrc/m1_rpc.c (rpc_crc16 / rpc_crc16_continue / table).
  */
 
 #include "rpc_crc16_impl.h"

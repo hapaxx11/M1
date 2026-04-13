@@ -8,7 +8,7 @@
  *
  * The M1 RPC CRC-16 uses a custom lookup table (poly=0x1021,
  * init=0xFFFF, no reflect, no final XOR).  The production table in
- * m1_rpc.c differs from the canonical CRC-16/CCITT-FALSE table in
+ * m1_csrc/m1_rpc.c differs from the canonical CRC-16/CCITT-FALSE table in
  * 46 entries, so the check value for "123456789" is 0xC9B1 — NOT
  * the standard CCITT-FALSE result of 0x29B1.  Both the table and
  * expected values here are copied verbatim from the production code;
@@ -42,7 +42,7 @@ void test_crc16_known_vector_123456789(void)
     /* M1 RPC CRC-16 over "123456789" = 0xC9B1.
      * The M1 lookup table differs from the canonical CRC-16/CCITT-FALSE
      * table (which yields 0x29B1), so this value is intentionally
-     * different.  Verified against the production table in m1_rpc.c. */
+     * different.  Verified against the production table in m1_csrc/m1_rpc.c. */
     uint8_t data[] = "123456789";
     uint16_t crc = rpc_crc16(data, 9);
     TEST_ASSERT_EQUAL_HEX16(0xC9B1, crc);
