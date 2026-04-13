@@ -15,10 +15,13 @@ Think of it as **"Playwright for embedded firmware."**
 
 ---
 
-## Step 1 — Copy Files from M1 Repo
+## Step 1 — ✅ Done: Files Copied from M1 Repo
 
-Copy the entire `rpc_tests/` directory from `hapaxx11/M1` into the root of
-this repo, flattening the structure:
+The HIL test files originally lived in `rpc_tests/` in `hapaxx11/M1`.
+They have been copied into `hapaxx11/m1-hil-tests` and the `rpc_tests/`
+directory has been removed from the firmware repo.
+
+Current repo structure:
 
 ```
 m1-hil-tests/
@@ -26,22 +29,21 @@ m1-hil-tests/
 ├── conftest.py          # pytest fixtures (--port, m1 client, screenshot_dir)
 ├── test_basic.py        # Basic integration tests (ping, buttons, screen)
 ├── requirements.txt     # pyserial, pytest, Pillow
-├── README.md            # Setup and API reference (from rpc_tests/README.md)
-├── __init__.py          # Package marker (may not be needed at root level)
-├── CLAUDE.md            # Agent instructions (see below)
+├── README.md            # Setup and API reference
+├── __init__.py          # Package marker
+├── CLAUDE.md            # Agent instructions
 └── .github/
     └── workflows/       # (future) CI workflow for self-hosted runner
 ```
 
-Update imports in `conftest.py` and `test_basic.py` — they currently use
-relative imports (`from .m1_client import ...`).  Change to absolute imports
-(`from m1_client import ...`) since the package is now at the repo root.
+Imports use absolute form (`from m1_client import ...`) since the package
+is at the repo root.
 
 ---
 
-## Step 2 — Create CLAUDE.md for the New Repo
+## Step 2 — ✅ Done: CLAUDE.md Created
 
-Copy the following patterns and rules from `hapaxx11/M1`'s `CLAUDE.md`:
+The following patterns and rules were copied from `hapaxx11/M1`'s `CLAUDE.md`:
 
 ### Rules to copy verbatim
 
