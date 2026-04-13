@@ -1,11 +1,11 @@
-# Workflow intentionally disabled until a real Jekyll site directory and config are added.
-name: GitHub Pages deployment disabled until site content exists
+# This workflow is intentionally disabled.
+# GitHub Pages deployment is handled by docs.yml which combines
+# the web updater and Doxygen API documentation into a single site.
+name: GitHub Pages (see docs.yml)
 
 on:
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Minimal permissions for the informational job below.
 permissions:
   contents: read
 
@@ -13,9 +13,5 @@ jobs:
   disabled:
     runs-on: ubuntu-24.04
     steps:
-      - name: Explain why Pages deployment is disabled
-        run: |
-          echo "GitHub Pages deployment is disabled."
-          echo "This repository does not currently contain a configured Jekyll site."
-          echo "Before re-enabling Pages, add a real site directory and Jekyll config,"
-          echo "then point actions/jekyll-build-pages 'source' to that directory."
+      - name: Info
+        run: echo "Pages deployment is handled by docs.yml"
