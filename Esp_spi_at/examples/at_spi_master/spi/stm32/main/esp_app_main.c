@@ -483,6 +483,39 @@ uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf, int out_buf_size, in
 } // uint8_t spi_AT_send_recv(...)
 
 
+void esp32_queue_reset(void)
+{
+	q_node_t *list_head = NULL;
+	q_node_t *temp = NULL;
+	esp_queue_elem_t *elem = NULL;
+
+	if (!ctrl_msg_Q)
+		return;
+
+	/* Detach the entire list atomically so the SPI transport task
+	 * cannot keep the loop running indefinitely. */
+	vTaskSuspendAll();
+	list_head = ctrl_msg_Q->front;
+	ctrl_msg_Q->front = NULL;
+	ctrl_msg_Q->rear = NULL;
+	(void)xTaskResumeAll();
+
+	/* Free detached nodes outside the critical section */
+	while (list_head != NULL)
+	{
+		temp = list_head;
+		list_head = list_head->next;
+		elem = (esp_queue_elem_t *)temp->data;
+		if (elem)
+		{
+			free(elem->buf);
+			free(elem);
+		}
+		free(temp);
+	}
+}
+
+
 static void init_master_hd(spi_device_handle_t* spi)
 {
 	spi_device_handle_t spi_dev;
@@ -665,7 +698,7 @@ uint8_t wifi_ap_scan_list(ctrl_cmd_t *app_req)
 	uint32_t saved_scan_timeout = app_req->cmd_timeout_sec;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_WIFI_MODE, ESP32C6_WIFI_MODE_STA));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
 	app_req->cmd_len = strlen(app_req->at_cmd);
@@ -771,7 +804,7 @@ uint8_t ble_scan_list(ctrl_cmd_t *app_req)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_MODE, ESP32C6_BLE_MODE_CLI));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
 	app_req->cmd_len = strlen(app_req->at_cmd);
@@ -882,7 +915,7 @@ uint8_t ble_scan_list_ex(ctrl_cmd_t *app_req)
 	uint32_t saved_scan_timeout = app_req->cmd_timeout_sec;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	/* Initialize ble_scan union member */
 	app_req->u.ble_scan.count = 0;
@@ -995,7 +1028,7 @@ uint8_t esp_get_version(ctrl_cmd_t *app_req)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_GET_VERSION, ""));
 	app_req->cmd_resp = NULL;
 	app_req->cmd_len = strlen(app_req->at_cmd);
@@ -1078,7 +1111,7 @@ uint8_t ble_connect(ctrl_cmd_t *app_req, const char *addr, uint8_t addr_type)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	/* Step 1: Init BLE in client mode */
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_MODE, ESP32C6_BLE_MODE_CLI));
@@ -1201,7 +1234,7 @@ uint8_t ble_disconnect(ctrl_cmd_t *app_req)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_DISCONNECT, "0"));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
 	app_req->cmd_len = strlen(app_req->at_cmd);
@@ -1314,7 +1347,7 @@ uint8_t ble_advertise(ctrl_cmd_t *app_req)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_MODE, ESP32C6_BLE_MODE_SER));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
@@ -1426,7 +1459,7 @@ uint8_t ble_hid_init(ctrl_cmd_t *app_req, const char *device_name)
 	uint8_t ret;
 	uint8_t fail_step = 0;
 
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	// Step 1: Init BLE in server mode
 	esp_at_send_wait_ok(app_req, CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_MODE, ESP32C6_BLE_MODE_SER));
@@ -1500,7 +1533,7 @@ cleanup:
 
 uint8_t ble_hid_deinit(ctrl_cmd_t *app_req)
 {
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	// Stop advertising
 	esp_at_send_wait_ok(app_req, CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_ADV_STOP, ""));
@@ -1803,7 +1836,7 @@ uint8_t esp_dev_reset(ctrl_cmd_t *app_req)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_RESET, ""));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_READY);
 	app_req->cmd_len = strlen(app_req->at_cmd);
@@ -1881,7 +1914,7 @@ uint8_t wifi_connect_ap(ctrl_cmd_t *app_req)
 	uint8_t got_ip = 0;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	/* Step 1: Set station mode */
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_WIFI_MODE, ESP32C6_WIFI_MODE_STA));
@@ -2024,7 +2057,7 @@ uint8_t wifi_disconnect_ap(ctrl_cmd_t *app_req)
 	uint32_t tick_t0, tick_pass;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 	app_req->at_cmd = strdup(CONCAT_CMD_PARAM(ESP32C6_AT_REQ_DISCONNECT_AP, ""));
 	app_req->cmd_resp = strdup(ESP32C6_AT_RES_OK);
 	app_req->cmd_len = strlen(app_req->at_cmd);
@@ -2088,7 +2121,7 @@ uint8_t wifi_get_ip(ctrl_cmd_t *app_req)
 	size_t cp_len;
 
 	tick_t0 = HAL_GetTick();
-	esp_queue_reset(ctrl_msg_Q);
+	esp32_queue_reset();
 
 	/* Clear output fields */
 	memset(app_req->u.wifi_ap_config.status, 0, STATUS_LENGTH);

@@ -118,6 +118,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sub-GHz Read Raw: Flipper-style RSSI spectrogram visualization** — Replaced
+  the binary square-wave waveform display with a Flipper Zero-inspired RSSI
+  history spectrogram.  Changes include: (1) RSSI values are sampled on each
+  data event and drawn as vertical bars from the bottom of the waveform area,
+  showing signal strength over time rather than mark/space pulse states;
+  (2) Timeline scale ticks along the top of the waveform area scroll with the
+  data; (3) A dashed vertical cursor with triangle indicator marks the current
+  write position; (4) "RSSI" label drawn vertically on the right edge;
+  (5) Waveform area enclosed in a proper frame (top/bottom/right borders);
+  (6) Animated Lissajous sine wave replaces static "Press OK" text in idle
+  state.  The separate thin RSSI bar below the status bar has been removed —
+  RSSI is now the primary visualization.
+
 - **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
   line parsing are now delegated to the extracted `subghz_key_encoder` and
   `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
@@ -771,6 +784,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field (declared in header) was never assigned.  It is now set on RX start, frequency
   preset cycling (L/R), and hopper ticks, keeping it consistent with the actual radio
   frequency at all times.
+
+- **BLE Spam crashes** — Fixed crash caused by a race condition in the ESP32 SPI
+  transport's linked-list response queue (`esp_queue`).  `esp_queue_get()` freed the
+  dequeued node before clearing `q->rear`, creating a window where a concurrent
+  `esp_queue_put()` from the SPI transport task could dereference freed memory
+  (use-after-free → heap corruption → hard fault).  BLE spam's rapid-fire AT command
+  cycling (~5 commands per 100ms cycle) amplified the race window, making the crash
+  nearly deterministic after a few seconds of operation.  Three fixes applied:
+  1. **Thread-safe `esp_queue` operations** — `esp_queue_put()`, `esp_queue_get()`,
+     and `esp_queue_reset()` now protect linked-list pointer updates with
+     `vTaskSuspendAll()`/`xTaskResumeAll()` to prevent task preemption during the
+     critical section.  `malloc`/`free` run outside the critical section to avoid
+     blocking interrupts during allocation.
+  2. **Queue reset before BLE init** — `ble_spam_run()` now calls
+     `esp32_queue_reset()` to clear stale SPI responses before sending
+     `AT+BLEINIT`, matching the pattern used by WiFi/BT scan functions.
+  3. **Inter-command delays and error checking** — `spam_at()` now inserts a 20ms
+     delay after each AT command (matching `ble_advertise()`'s crash-avoidance
+     delays), uses a 256-byte response buffer (was 64), checks for `OK` in the
+     response, and `AT+BLEINIT=2` failure now aborts with an error message instead
+     of continuing to send BLE commands to an uninitialized stack.
 
 ### Removed
 
