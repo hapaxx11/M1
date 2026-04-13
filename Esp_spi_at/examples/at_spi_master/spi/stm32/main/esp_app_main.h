@@ -18,6 +18,7 @@
 
 bool get_esp32_main_init_status(void);
 void esp32_main_init(void);
+void esp32_queue_reset(void);
 uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf, int out_buf_size, int timeout_sec);
 uint8_t wifi_ap_scan_list(ctrl_cmd_t *app_req);
 uint8_t ble_scan_list(ctrl_cmd_t *app_req);

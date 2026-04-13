@@ -350,6 +350,29 @@ endif()
 add_test(NAME menu_layout COMMAND test_menu_layout)
 
 # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Module under test: esp_queue (linked-list queue for SPI AT transport)
+# Bug context: esp_queue_get() freed the dequeued node BEFORE clearing
+# q->rear, creating a use-after-free race when the SPI transport task
+# called esp_queue_put() concurrently.  BLE spam's rapid AT command
+# cycling amplified the race window, causing heap corruption and crash.
+# FreeRTOS stubs are provided so the module compiles on the host.
+# ------------------------------------------------------------------
+add_executable(test_esp_queue
+    test_esp_queue.c
+    ${M1_ROOT}/Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_queue.c
+)
+target_include_directories(test_esp_queue PRIVATE
+    ${STUBS_DIR}            # FreeRTOS.h, task.h (no-op vTaskSuspendAll/xTaskResumeAll)
+    ${M1_ROOT}/Esp_spi_at/examples/at_spi_master/spi/stm32/main
+)
+target_link_libraries(test_esp_queue PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp_queue PRIVATE sanitizers)
+endif()
+add_test(NAME esp_queue COMMAND test_esp_queue)
+
+# ------------------------------------------------------------------
 # Module under test: flipper_rfid (RFID protocol name mapping)
 # Tests flipper_rfid_parse_protocol() — maps Flipper .rfid protocol
 # names to M1 LFRFIDProtocol enum values.  Covers all 30+ protocols

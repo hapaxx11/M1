@@ -762,6 +762,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preset cycling (L/R), and hopper ticks, keeping it consistent with the actual radio
   frequency at all times.
 
+- **BLE Spam crashes** — Fixed crash caused by a race condition in the ESP32 SPI
+  transport's linked-list response queue (`esp_queue`).  `esp_queue_get()` freed the
+  dequeued node before clearing `q->rear`, creating a window where a concurrent
+  `esp_queue_put()` from the SPI transport task could dereference freed memory
+  (use-after-free → heap corruption → hard fault).  BLE spam's rapid-fire AT command
+  cycling (~5 commands per 100ms cycle) amplified the race window, making the crash
+  nearly deterministic after a few seconds of operation.  Three fixes applied:
+  1. **Thread-safe `esp_queue` operations** — `esp_queue_put()`, `esp_queue_get()`,
+     and `esp_queue_reset()` now protect linked-list pointer updates with
+     `vTaskSuspendAll()`/`xTaskResumeAll()` to prevent task preemption during the
+     critical section.  `malloc`/`free` run outside the critical section to avoid
+     blocking interrupts during allocation.
+  2. **Queue reset before BLE init** — `ble_spam_run()` now calls
+     `esp32_queue_reset()` to clear stale SPI responses before sending
+     `AT+BLEINIT`, matching the pattern used by WiFi/BT scan functions.
+  3. **Inter-command delays and error checking** — `spam_at()` now inserts a 20ms
+     delay after each AT command (matching `ble_advertise()`'s crash-avoidance
+     delays), uses a 256-byte response buffer (was 64), checks for `OK` in the
+     response, and `AT+BLEINIT=2` failure now aborts with an error message instead
+     of continuing to send BLE commands to an uninitialized stack.
+
 ### Removed
 
 - **Sub-GHz legacy dead code (~2,070 lines)** — Surgically removed all public
