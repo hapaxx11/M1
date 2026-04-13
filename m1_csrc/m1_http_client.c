@@ -447,18 +447,31 @@ static bool parse_url(const char *url, char *host, uint16_t host_size,
 }
 
 /*
- * One-time SSL/SNTP setup.  Called before the first SSL connection.
+ * SSL/SNTP setup state.  Cleared by http_ssl_reset() when the ESP32 is
+ * deinitialized, since a hardware reset wipes all ESP32-side AT config.
+ */
+static bool s_ssl_configured = false;
+
+void http_ssl_reset(void)
+{
+	s_ssl_configured = false;
+}
+
+/*
+ * SSL/SNTP setup.  Called before each SSL connection.
  * Configures SNTP so the ESP32 has valid system time (required by
  * some TLS implementations even without certificate verification),
  * and disables SSL certificate verification (the M1 does not ship
  * a CA certificate store).
+ *
+ * Only caches success after AT+CIPSSLCCONF returns OK — if either
+ * command fails (timeout, ESP32 busy, etc.) we retry on the next
+ * SSL connection attempt.
  */
 static void ssl_ensure_configured(void)
 {
-	static bool s_ssl_configured = false;
 	if (s_ssl_configured)
 		return;
-	s_ssl_configured = true;
 
 	/* Enable SNTP so the ESP32 has valid time for TLS.
 	 * Fire-and-forget — sync happens in the background.
@@ -477,7 +490,9 @@ static void ssl_ensure_configured(void)
 	spi_AT_send_recv(
 		ESP32C6_AT_REQ_CIPSSLCCONF "0" ESP32C6_AT_REQ_CRLF,
 		s_at_buf, sizeof(s_at_buf), 3);
-	if (!strstr(s_at_buf, "OK"))
+	if (strstr(s_at_buf, "OK"))
+		s_ssl_configured = true;
+	else
 		M1_LOG_W(HTTP_TAG, "SSL config failed: %s\n\r", s_at_buf);
 }
 
