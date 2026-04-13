@@ -15,8 +15,9 @@ improvements.
 
 > **🔧 [Flash your M1 right now — open the Web Updater](https://hapaxx11.github.io/M1/)**
 >
-> No software to install. Plug in via USB-C, open Chrome/Edge, and flash the latest
-> firmware in seconds.
+> No software to install for updates or reflashing if Hapax is already installed. Plug in
+> via USB-C, open Chrome/Edge, and flash the latest firmware in seconds. For a first
+> install from stock firmware, use the DFU/qMonstatek method below.
 
 ## Highlights vs Stock Firmware
 
