@@ -280,9 +280,11 @@ ctest --test-dir build-tests --output-on-failure
 
 ## Flashing
 
-### Via Web Updater (recommended)
+### Via Web Updater (recommended for updates)
 
-The fastest way to flash — no software to install.
+The fastest way to reflash — no software to install. Requires Hapax firmware already
+running on the M1 (the Web Updater connects over USB Serial, which needs the Hapax RPC
+interface). For a first install from stock firmware, use **Via DFU Mode** below.
 
 1. Open the **[M1 Web Updater](https://hapaxx11.github.io/M1/)** in Chrome or Edge
 2. Power on the M1 normally so it boots to the regular UI
