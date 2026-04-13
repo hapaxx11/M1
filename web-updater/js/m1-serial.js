@@ -66,10 +66,24 @@ export class M1Serial {
 
         const baudRate = options.baudRate || 115200;
 
-        // Request port — filter for STMicro VID (0x0483) if possible
-        this.port = await navigator.serial.requestPort({
-            filters: [{ usbVendorId: 0x0483 }],
-        });
+        // Request port — try STMicro VID filter first, then fall back to
+        // showing all ports.  On Android USB-OTG the VID is often not
+        // forwarded to the browser, so the filtered picker shows
+        // "No compatible devices found".  The fallback lets users pick
+        // their M1 manually.
+        try {
+            this.port = await navigator.serial.requestPort({
+                filters: [{ usbVendorId: 0x0483 }],
+            });
+        } catch (filterErr) {
+            // NotFoundError → user cancelled (possibly because no match).
+            // Retry once without a filter so every port is visible.
+            if (filterErr.name === 'NotFoundError') {
+                this.port = await navigator.serial.requestPort();
+            } else {
+                throw filterErr;
+            }
+        }
 
         await this.port.open({ baudRate });
 
