@@ -285,13 +285,14 @@ ctest --test-dir build-tests --output-on-failure
 The fastest way to flash — no software to install.
 
 1. Open the **[M1 Web Updater](https://hapaxx11.github.io/M1/)** in Chrome or Edge
-2. Power on the M1 normally
+2. Power on the M1 normally so it boots to the regular UI
 3. Connect via USB-C
-4. Click **Connect**, select your device, pick a firmware release, and flash
+4. Click **Connect**, select the M1 serial device, pick a firmware release, and flash
 
 Requires a browser with Web Serial support (Chrome 89+ or Edge 89+).
-Do **not** use DFU mode for the Web Updater; if you need recovery or a first install via DFU,
-follow the **Via DFU Mode (recovery / first install)** section below.
+Do **not** use DFU mode for the Web Updater. If the screen stays dark, the device is in DFU
+mode and will usually not appear as a serial port; use the **Via DFU Mode (recovery / first
+install)** section below instead.
 
 ### Via qMonstatek
 Connect via USB and use the Firmware Update page in [qMonstatek](https://github.com/bedge117/qMonstatek).
