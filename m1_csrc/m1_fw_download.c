@@ -454,6 +454,7 @@ static void dl_show_result(http_status_t status, const fw_release_t *release)
 		switch (status)
 		{
 			case HTTP_ERR_NO_WIFI:        err_msg = "WiFi not connected"; break;
+			case HTTP_ERR_DNS_FAIL:       err_msg = "DNS lookup failed"; break;
 			case HTTP_ERR_CONNECT_FAIL:   err_msg = "Connection failed"; break;
 			case HTTP_ERR_TIMEOUT:        err_msg = "Download timed out"; break;
 			case HTTP_ERR_HTTP_ERROR:      err_msg = "Server error"; break;

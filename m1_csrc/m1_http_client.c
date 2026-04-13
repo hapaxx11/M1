@@ -457,12 +457,25 @@ void http_ssl_reset(void)
 	s_ssl_configured = false;
 }
 
+/* Maximum SSL connection attempts (original + retries) */
+#define SSL_CONNECT_MAX_ATTEMPTS  3
+
+/* Delay between SSL connection retries (milliseconds) */
+#define SSL_CONNECT_RETRY_DELAY_MS  2000
+
+/* Maximum time to wait for SNTP time sync (milliseconds) */
+#define SSL_SNTP_SYNC_WAIT_MS  3000
+
 /*
  * SSL/SNTP setup.  Called before each SSL connection.
  * Configures SNTP so the ESP32 has valid system time (required by
  * some TLS implementations even without certificate verification),
  * and disables SSL certificate verification (the M1 does not ship
  * a CA certificate store).
+ *
+ * After enabling SNTP, waits briefly for the time to sync.  Some
+ * ESP32 AT firmware builds reject SSL handshakes when system time
+ * is at epoch (1970-01-01), even with auth_mode=0.
  *
  * Only caches success after AT+CIPSSLCCONF returns OK — if either
  * command fails (timeout, ESP32 busy, etc.) we retry on the next
@@ -473,15 +486,30 @@ static void ssl_ensure_configured(void)
 	if (s_ssl_configured)
 		return;
 
-	/* Enable SNTP so the ESP32 has valid time for TLS.
-	 * Fire-and-forget — sync happens in the background.
-	 * If this fails (e.g. no Internet yet), SSL may still work
-	 * because CIPSSLCCONF=0 disables cert time validation. */
+	/* Enable SNTP so the ESP32 has valid time for TLS. */
 	spi_AT_send_recv(
-		ESP32C6_AT_REQ_CIPSNTPCFG "1,0,\"pool.ntp.org\"" ESP32C6_AT_REQ_CRLF,
+		ESP32C6_AT_REQ_CIPSNTPCFG "1,0,\"pool.ntp.org\",\"time.google.com\"" ESP32C6_AT_REQ_CRLF,
 		s_at_buf, sizeof(s_at_buf), 3);
 	if (!strstr(s_at_buf, "OK"))
-		M1_LOG_W(HTTP_TAG, "SNTP config failed: %s\n\r", s_at_buf);
+		M1_LOG_W(HTTP_TAG, "SNTP config failed: %.64s\n\r", s_at_buf);
+
+	/* Wait for SNTP time sync.  Poll AT+CIPSNTPTIME? until the
+	 * response no longer contains "1970" (epoch = no sync yet).
+	 * Give up after SSL_SNTP_SYNC_WAIT_MS — auth_mode=0 should
+	 * still allow SSL without valid time on most firmware builds. */
+	uint32_t sntp_start = HAL_GetTick();
+	while ((HAL_GetTick() - sntp_start) < SSL_SNTP_SYNC_WAIT_MS)
+	{
+		vTaskDelay(pdMS_TO_TICKS(500));
+		spi_AT_send_recv(
+			ESP32C6_AT_REQ_CIPSNTPTIME ESP32C6_AT_REQ_CRLF,
+			s_at_buf, sizeof(s_at_buf), 2);
+		if (strstr(s_at_buf, "+CIPSNTPTIME:") && !strstr(s_at_buf, "1970"))
+		{
+			M1_LOG_I(HTTP_TAG, "SNTP synced\n\r");
+			break;
+		}
+	}
 
 	/* Disable SSL certificate verification (auth_mode=0).
 	 * Without this the ESP32 attempts to verify the server certificate
@@ -493,35 +521,83 @@ static void ssl_ensure_configured(void)
 	if (strstr(s_at_buf, "OK"))
 		s_ssl_configured = true;
 	else
-		M1_LOG_W(HTTP_TAG, "SSL config failed: %s\n\r", s_at_buf);
+		M1_LOG_W(HTTP_TAG, "SSL config failed: %.64s\n\r", s_at_buf);
 }
 
 /*
  * Open a TCP/SSL connection to host:port via ESP32 AT.
+ *
+ * For SSL connections (is_https=true):
+ *   - Closes any stale connection that might prevent AT+CIPSTART
+ *   - Resolves the hostname via AT+CIPDOMAIN first (catches DNS failures)
+ *   - Retries up to SSL_CONNECT_MAX_ATTEMPTS times with back-off delay
+ *   - Forces SSL reconfiguration (SNTP + CIPSSLCCONF) on each retry
+ *   - Logs the AT response on failure for diagnostics
  */
 static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https, uint8_t timeout_sec)
 {
 	char cmd[256];
+	int max_attempts = is_https ? SSL_CONNECT_MAX_ATTEMPTS : 1;
 
 	/* Set passive receive mode first */
 	snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPRECVMODE "1" ESP32C6_AT_REQ_CRLF);
 	spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), 5);
 
-	/* For SSL: configure SNTP + disable cert verification (once) */
+	/* For SSL: do DNS pre-resolution to catch network issues early.
+	 * AT+CIPDOMAIN is much faster than AT+CIPSTART="SSL" and gives
+	 * a clear signal when DNS is broken (vs a generic SSL timeout). */
 	if (is_https)
-		ssl_ensure_configured();
+	{
+		snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPDOMAIN "\"%s\"" ESP32C6_AT_REQ_CRLF, host);
+		spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), 10);
+		if (!strstr(s_at_buf, ESP32C6_AT_RES_CIPDOMAIN_KEY))
+		{
+			M1_LOG_E(HTTP_TAG, "DNS failed for %s: %.64s\n\r", host, s_at_buf);
+			return HTTP_ERR_DNS_FAIL;
+		}
+		M1_LOG_D(HTTP_TAG, "DNS OK: %.64s\n\r", s_at_buf);
+	}
 
-	/* Open connection */
-	snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPSTART "\"%s\",\"%s\",%u" ESP32C6_AT_REQ_CRLF,
-	         is_https ? "SSL" : "TCP", host, port);
+	for (int attempt = 0; attempt < max_attempts; attempt++)
+	{
+		if (attempt > 0)
+		{
+			M1_LOG_W(HTTP_TAG, "SSL retry %d/%d\n\r", attempt + 1, max_attempts);
+			vTaskDelay(pdMS_TO_TICKS(SSL_CONNECT_RETRY_DELAY_MS));
+			m1_wdt_reset();
+			/* Force SSL reconfiguration on retry — the previous attempt
+			 * may have left the ESP32 in an inconsistent SSL state. */
+			s_ssl_configured = false;
+		}
 
-	memset(s_at_buf, 0, sizeof(s_at_buf));
-	uint8_t ret = spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), timeout_sec);
-	if (ret != 0)
-		return HTTP_ERR_TIMEOUT;
+		/* For SSL: configure SNTP + disable cert verification */
+		if (is_https)
+			ssl_ensure_configured();
 
-	if (strstr(s_at_buf, ESP32C6_AT_RES_CONNECT) || strstr(s_at_buf, "OK"))
-		return HTTP_OK;
+		/* Close any existing connection before opening a new one.
+		 * In single-connection mode (CIPMUX=0), a stale connection
+		 * causes AT+CIPSTART to fail with "ALREADY CONNECTED". */
+		tcp_close();
+
+		/* Open connection */
+		snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPSTART "\"%s\",\"%s\",%u" ESP32C6_AT_REQ_CRLF,
+		         is_https ? "SSL" : "TCP", host, port);
+
+		memset(s_at_buf, 0, sizeof(s_at_buf));
+		uint8_t ret = spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), timeout_sec);
+		if (ret != 0)
+		{
+			M1_LOG_W(HTTP_TAG, "CIPSTART send error (attempt %d): ret=%d\n\r",
+			         attempt + 1, ret);
+			continue;
+		}
+
+		if (strstr(s_at_buf, ESP32C6_AT_RES_CONNECT) || strstr(s_at_buf, "OK"))
+			return HTTP_OK;
+
+		M1_LOG_W(HTTP_TAG, "CIPSTART failed (attempt %d): %.80s\n\r",
+		         attempt + 1, s_at_buf);
+	}
 
 	return HTTP_ERR_CONNECT_FAIL;
 }
