@@ -249,20 +249,35 @@ void m1_lcd_init(SPI_HandleTypeDef *phspi)
 
 /*============================================================================*/
 /**
+  * @brief  Change the display rotation and clear stale display RAM.
+  *
+  *         ALL rotation changes in the firmware must go through this
+  *         function (or m1_lcd_set_southpaw() which delegates here).
+  *         After u8g2_SetDisplayRotation() the x_offset shifts, moving
+  *         which 4 of the 132 RAM columns fall outside the 128-pixel
+  *         framebuffer window.  The previously-active columns now contain
+  *         stale frame data; clearing the full RAM prevents those bits
+  *         from showing as a light border in dark mode.
+  *
+  * @param  rotation  One of U8G2_R0, U8G2_R1, U8G2_R2, U8G2_R3
+  */
+/*============================================================================*/
+void m1_lcd_set_rotation(const u8g2_cb_t *rotation)
+{
+    u8g2_SetDisplayRotation(&m1_u8g2, rotation);
+    m1_lcd_clear_full_ram();
+}
+
+
+/*============================================================================*/
+/**
   * @brief  Set southpaw (left-handed) display rotation
   * @param  enable: 1=southpaw (R0), 0=normal (R2)
   */
 /*============================================================================*/
 void m1_lcd_set_southpaw(uint8_t enable)
 {
-    const u8g2_cb_t *rot = enable ? U8G2_R0 : U8G2_R2;
-    u8g2_SetDisplayRotation(&m1_u8g2, rot);
-
-    /* Orientation change shifts which 4 RAM columns are outside the
-     * 128-pixel framebuffer window.  The previously-active columns that
-     * are now unused still contain old frame data; clear the full RAM
-     * so those stale bits don't become a light border in dark mode. */
-    m1_lcd_clear_full_ram();
+    m1_lcd_set_rotation(enable ? U8G2_R0 : U8G2_R2);
 }
 
 
