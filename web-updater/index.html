@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M1 Web Updater — Hapax Firmware</title>
+    <meta name="description" content="Browser-based firmware updater for the MonstaTek M1 (Hapax fork). No software installation required — just plug in via USB and flash.">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <header>
+            <h1>🔧 <span class="accent">M1</span> Web Updater</h1>
+            <p>Flash Hapax firmware to your MonstaTek M1 directly from the browser</p>
+        </header>
+
+        <!-- Browser Warning (hidden by default, shown if Web Serial unavailable) -->
+        <div id="browser-warning" class="browser-warning hidden">
+            <h3>⚠️ Unsupported Browser</h3>
+            <p>
+                Web Serial API is required. Please use
+                <strong>Google Chrome 89+</strong> or <strong>Microsoft Edge 89+</strong>.
+                Firefox and Safari are not supported.
+            </p>
+        </div>
+
+        <!-- 1. Connection -->
+        <div class="card">
+            <h2><span class="icon">🔌</span> Connection</h2>
+            <div class="connection-row">
+                <button id="btn-connect" class="btn-primary">
+                    Connect
+                </button>
+                <button id="btn-disconnect" class="btn-secondary" disabled>
+                    Disconnect
+                </button>
+                <span id="connection-status" class="status-badge status-disconnected">Disconnected</span>
+            </div>
+        </div>
+
+        <!-- 2. Device Info (shown after connecting) -->
+        <div id="device-info-panel" class="card hidden">
+            <h2><span class="icon">📱</span> Device Info</h2>
+            <dl class="device-info-grid">
+                <dt>Firmware</dt>
+                <dd id="device-fw-version">—</dd>
+                <dt>Active Bank</dt>
+                <dd id="device-active-bank">—</dd>
+                <dt>Battery</dt>
+                <dd id="device-battery">—</dd>
+                <dt>Hapax Rev</dt>
+                <dd id="device-hapax-rev">—</dd>
+            </dl>
+            <div class="bank-info">
+                <div id="bank1-info">Bank 1: —</div>
+                <div id="bank2-info">Bank 2: —</div>
+            </div>
+        </div>
+
+        <!-- 3. Firmware Selection -->
+        <div id="release-section" class="card">
+            <h2>
+                <span class="icon">📦</span> Select Firmware
+                <button id="btn-refresh-releases" class="btn-small btn-secondary" style="margin-left: auto;">
+                    ↻ Refresh
+                </button>
+            </h2>
+            <div id="release-list" class="release-list">
+                <div class="loading">Loading releases...</div>
+            </div>
+            <div class="local-file-row">
+                <button id="btn-local-file" class="btn-small btn-secondary">
+                    📁 Local File
+                </button>
+                <span id="local-file-name" class="file-name"></span>
+                <input type="file" id="local-file-input" accept=".bin" class="hidden">
+            </div>
+        </div>
+
+        <!-- 4. Flash (shown after connecting) -->
+        <div id="flash-section" class="card hidden">
+            <h2><span class="icon">⚡</span> Flash Firmware</h2>
+            <div class="flash-actions">
+                <button id="btn-flash" class="btn-success" disabled>
+                    Install Firmware
+                </button>
+            </div>
+
+            <!-- Progress (shown during flashing) -->
+            <div id="progress-section" class="progress-container hidden">
+                <div class="progress-track">
+                    <div id="progress-bar" class="progress-fill" style="width: 0%">0%</div>
+                </div>
+                <div class="progress-label">
+                    <span id="progress-text">Ready</span>
+                    <span id="progress-detail"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. Log -->
+        <div class="card">
+            <h2><span class="icon">📋</span> Log</h2>
+            <div id="log-output" class="log-output"></div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>
+                M1 Web Updater — Hapax Fork<br>
+                <a href="https://github.com/hapaxx11/M1" target="_blank" rel="noopener">github.com/hapaxx11/M1</a>
+                · Requires Chrome or Edge · No data leaves your browser
+            </p>
+        </footer>
+
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
