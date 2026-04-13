@@ -13,6 +13,11 @@ improvements.
 [![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
 
+> **🔧 [Flash your M1 right now — open the Web Updater](https://hapaxx11.github.io/M1/)**
+>
+> No software to install. Plug in via USB-C, open Chrome/Edge, and flash the latest
+> firmware in seconds.
+
 ## Highlights vs Stock Firmware
 
 | Feature | Monstatek Stock (v0.8.0.1) | Hapax |
@@ -30,6 +35,7 @@ improvements.
 | IR remote database | — | **1,412** files included |
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
+| Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
 | CI/CD auto-releases | ✗ | ✓ (every merge to main) |
 
 See also: [bedge117/M1 (C3)](https://github.com/bedge117/M1) — another active community
@@ -273,7 +279,18 @@ ctest --test-dir build-tests --output-on-failure
 
 ## Flashing
 
-### Via qMonstatek (recommended)
+### Via Web Updater (recommended)
+
+The fastest way to flash — no software to install.
+
+1. Open the **[M1 Web Updater](https://hapaxx11.github.io/M1/)** in Chrome or Edge
+2. Put the M1 in DFU mode: power off, then hold **Up + OK** for 5 seconds (screen stays dark)
+3. Connect via USB-C
+4. Click **Connect**, select your device, pick a firmware release, and flash
+
+Requires a browser with Web Serial support (Chrome 89+ or Edge 89+).
+
+### Via qMonstatek
 Connect via USB and use the Firmware Update page in [qMonstatek](https://github.com/bedge117/qMonstatek).
 
 ### Via WiFi (OTA)
