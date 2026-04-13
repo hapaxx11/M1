@@ -487,6 +487,45 @@ endif()
 add_test(NAME fw_source_filter COMMAND test_fw_source_filter)
 
 # ------------------------------------------------------------------
+# Module under test: RPC CRC-16/CCITT (frame integrity)
+# Tests the table-driven CRC-16 used by the M1 RPC binary protocol.
+# Uses a standalone copy of the CRC functions from m1_rpc.c to avoid
+# HAL/RTOS/USB dependencies.
+# ------------------------------------------------------------------
+add_executable(test_rpc_crc16
+    test_rpc_crc16.c
+    ${STUBS_DIR}/rpc_crc16_impl.c
+)
+target_include_directories(test_rpc_crc16 PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_rpc_crc16 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rpc_crc16 PRIVATE sanitizers)
+endif()
+add_test(NAME rpc_crc16 COMMAND test_rpc_crc16)
+
+# ------------------------------------------------------------------
+# Module under test: file browser utilities (sorting, extension, path)
+# Tests pure-logic functions from m1_file_browser.c: case conversion,
+# directory-first qsort comparator, extension matching, file type
+# classification, and path concatenation.
+# Uses standalone copies to avoid u8g2/FatFS/HAL dependencies.
+# ------------------------------------------------------------------
+add_executable(test_file_browser
+    test_file_browser.c
+    ${STUBS_DIR}/file_browser_impl.c
+)
+target_include_directories(test_file_browser PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_file_browser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_file_browser PRIVATE sanitizers)
+endif()
+add_test(NAME file_browser COMMAND test_file_browser)
+
+# ------------------------------------------------------------------
 # Module under test: http_client URL parser (parse_url)
 # Tests URL decomposition into host, port, path, and is_https flag.
 # The is_https flag is critical for OTA: it triggers the SSL connection
