@@ -108,11 +108,11 @@ static void settings_apply_orientation(uint8_t orient)
     m1_southpaw_mode = (orient == M1_ORIENT_SOUTHPAW) ? 1 : 0;
 
     if (orient == M1_ORIENT_SOUTHPAW)
-        u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R0);
+        m1_lcd_set_rotation(U8G2_R0);
     else if (orient == M1_ORIENT_REMOTE)
-        u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R1);
+        m1_lcd_set_rotation(U8G2_R1);
     else
-        u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R2);
+        m1_lcd_set_rotation(U8G2_R2);
 }
 
 

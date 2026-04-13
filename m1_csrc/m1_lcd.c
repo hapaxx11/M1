@@ -32,6 +32,14 @@
 
 /*************************** D E F I N E S ************************************/
 
+/* ST7567 display RAM width — the controller has 132 segment columns,
+ * but the visible LCD panel is only 128 pixels wide.  The framebuffer
+ * written by u8g2 covers 128 columns; the remaining 4 are never
+ * touched by normal draw calls and must be explicitly zeroed so they
+ * don't produce a visible light border when hardware pixel inversion
+ * (dark mode, command 0xA7) is active. */
+#define ST7567_RAM_COLUMNS  132
+
 //************************** C O N S T A N T **********************************/
 
 //************************** S T R U C T U R E S *******************************
@@ -50,8 +58,41 @@ void m1_lcd_init(SPI_HandleTypeDef *phspi);
 void m1_u8g2_firstpage(void);
 uint8_t m1_u8g2_nextpage(void);
 void m1_lcd_cleardisplay(void);
+static void m1_lcd_clear_full_ram(void);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+/*============================================================================*/
+/**
+ * @brief  Clear the entire ST7567 display RAM (132 columns × 8 pages).
+ *
+ *         The u8g2 framebuffer only covers 128 columns.  Depending on the
+ *         current display orientation the unused 4 columns sit at one edge
+ *         of the RAM.  After power-on reset (or soft reset 0xE2) their
+ *         content is undefined.  If any of those bits are non-zero, the
+ *         hardware pixel inversion command (0xA7, dark mode) turns them
+ *         into lit pixels visible as a thin light border around the LCD.
+ *
+ *         Writing 0x00 to all 132 × 8 bytes guarantees:
+ *           - Normal mode (0xA6): unused columns are unlit (light bg) ✓
+ *           - Dark mode  (0xA7): unused columns invert to fully lit (dark bg) ✓
+ */
+/*============================================================================*/
+static void m1_lcd_clear_full_ram(void)
+{
+    uint8_t zeros[ST7567_RAM_COLUMNS];
+    memset(zeros, 0x00, sizeof(zeros));
+
+    u8x8_cad_StartTransfer(&m1_u8g2.u8x8);
+    for (uint8_t page = 0; page < 8; page++)
+    {
+        u8x8_cad_SendCmd(&m1_u8g2.u8x8, 0xB0 | page);  /* set page address  */
+        u8x8_cad_SendCmd(&m1_u8g2.u8x8, 0x10);          /* column high = 0   */
+        u8x8_cad_SendCmd(&m1_u8g2.u8x8, 0x00);          /* column low  = 0   */
+        u8x8_cad_SendData(&m1_u8g2.u8x8, ST7567_RAM_COLUMNS, zeros);
+    }
+    u8x8_cad_EndTransfer(&m1_u8g2.u8x8);
+}
 
 /*============================================================================*/
 /*
@@ -194,10 +235,38 @@ void m1_lcd_init(SPI_HandleTypeDef *phspi)
     u8x8_cad_SendArg(&m1_u8g2.u8x8, 235 >> 2);
 	u8x8_cad_EndTransfer(&m1_u8g2.u8x8);
 
+	/* Zero the full 132-column display RAM so that the 4 columns outside
+	 * the 128-pixel framebuffer are clean.  Without this, hardware pixel
+	 * inversion (dark mode 0xA7) turns undefined RAM bits into a visible
+	 * light border at the LCD edges. */
+	m1_lcd_clear_full_ram();
+
 	//Set power save mode ON to clear any unwanted objects displayed on the LCD unexpectedly after POR
 	u8g2_SetPowerSave(&m1_u8g2, true);
 
 } // void m1_lcd_init(SPI_HandleTypeDef *phspi)
+
+
+/*============================================================================*/
+/**
+  * @brief  Change the display rotation and clear stale display RAM.
+  *
+  *         ALL rotation changes in the firmware must go through this
+  *         function (or m1_lcd_set_southpaw() which delegates here).
+  *         After u8g2_SetDisplayRotation() the x_offset shifts, moving
+  *         which 4 of the 132 RAM columns fall outside the 128-pixel
+  *         framebuffer window.  The previously-active columns now contain
+  *         stale frame data; clearing the full RAM prevents those bits
+  *         from showing as a light border in dark mode.
+  *
+  * @param  rotation  One of U8G2_R0, U8G2_R1, U8G2_R2, U8G2_R3
+  */
+/*============================================================================*/
+void m1_lcd_set_rotation(const u8g2_cb_t *rotation)
+{
+    u8g2_SetDisplayRotation(&m1_u8g2, rotation);
+    m1_lcd_clear_full_ram();
+}
 
 
 /*============================================================================*/
@@ -208,8 +277,7 @@ void m1_lcd_init(SPI_HandleTypeDef *phspi)
 /*============================================================================*/
 void m1_lcd_set_southpaw(uint8_t enable)
 {
-    const u8g2_cb_t *rot = enable ? U8G2_R0 : U8G2_R2;
-    u8g2_SetDisplayRotation(&m1_u8g2, rot);
+    m1_lcd_set_rotation(enable ? U8G2_R0 : U8G2_R2);
 }
 
 
@@ -217,10 +285,11 @@ void m1_lcd_set_southpaw(uint8_t enable)
 /**
   * @brief  Enable or disable dark mode (hardware LCD pixel inversion).
   *         Uses the ST7567 hardware inverse display command (0xA7 / 0xA6)
-  *         so that ALL pixels on the panel are inverted, including any
-  *         controller RAM outside the 128×64 framebuffer area.  This
-  *         eliminates the light-pixel border that software-only XOR
-  *         leaves at the LCD edges.
+  *         so that ALL pixels on the panel are inverted uniformly.
+  *         The 4 display-RAM columns outside the 128-pixel framebuffer
+  *         are zeroed at init (and after orientation changes) by
+  *         m1_lcd_clear_full_ram(), so 0xA7 inverts them to fully-lit
+  *         pixels that blend with the dark background — no light border.
   *         RPC screen streaming independently applies XOR to its own
   *         framebuffer copy (see rpc_send_screen_frame()), so the
   *         desktop app still sees the correct inverted image.

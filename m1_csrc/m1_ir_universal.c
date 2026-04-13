@@ -288,7 +288,7 @@ static void dashboard_screen(void)
 							{
 								m1_screen_orientation = M1_ORIENT_NORMAL;
 								m1_southpaw_mode = 0;
-								u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R2);
+								m1_lcd_set_rotation(U8G2_R2);
 							}
 							const char *root = (selection == 0) ? IR_UNIVERSAL_IRDB_ROOT : IR_LEARNED_DIR;
 							strncpy(s_current_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
@@ -300,9 +300,9 @@ static void dashboard_screen(void)
 								m1_screen_orientation = saved_orient;
 								m1_southpaw_mode = (saved_orient == M1_ORIENT_SOUTHPAW) ? 1 : 0;
 								if (saved_orient == M1_ORIENT_REMOTE)
-									u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R1);
+									m1_lcd_set_rotation(U8G2_R1);
 								else if (saved_orient == M1_ORIENT_SOUTHPAW)
-									u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R0);
+									m1_lcd_set_rotation(U8G2_R0);
 							}
 							break;
 						}
@@ -317,13 +317,13 @@ static void dashboard_screen(void)
 							{
 								m1_screen_orientation = M1_ORIENT_NORMAL;
 								m1_southpaw_mode = 0;
-								u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R2);
+								m1_lcd_set_rotation(U8G2_R2);
 							}
 							else
 							{
 								m1_screen_orientation = M1_ORIENT_REMOTE;
 								m1_southpaw_mode = 0;
-								u8g2_SetDisplayRotation(&m1_u8g2, U8G2_R1);
+								m1_lcd_set_rotation(U8G2_R1);
 							}
 							break;
 						default:
