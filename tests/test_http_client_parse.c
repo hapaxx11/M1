@@ -23,30 +23,12 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
+#include "http_status_defs.h"
 
 /* Stub implementation of parse_url in tests/stubs/http_client_parse_impl.c */
 extern bool http_parse_url(const char *url, char *host, uint16_t host_size,
                            uint16_t *port, char *path, uint16_t path_size,
                            bool *is_https);
-
-/* HTTP status codes — must match m1_http_client.h */
-typedef enum {
-	HTTP_OK = 0,
-	HTTP_ERR_NO_WIFI,
-	HTTP_ERR_ESP_NOT_READY,
-	HTTP_ERR_DNS_FAIL,
-	HTTP_ERR_CONNECT_FAIL,
-	HTTP_ERR_SEND_FAIL,
-	HTTP_ERR_TIMEOUT,
-	HTTP_ERR_HTTP_ERROR,
-	HTTP_ERR_REDIRECT_LOOP,
-	HTTP_ERR_RESPONSE_TOO_LARGE,
-	HTTP_ERR_SD_WRITE_FAIL,
-	HTTP_ERR_SD_OPEN_FAIL,
-	HTTP_ERR_CANCELLED,
-	HTTP_ERR_INVALID_ARG,
-	HTTP_ERR_PARSE_FAIL,
-} http_status_t;
 
 /* Stub implementation of http_status_str in tests/stubs/http_client_parse_impl.c */
 extern const char *http_status_str(http_status_t status);
@@ -229,20 +211,11 @@ void test_status_str_connect_fail(void)
 
 void test_status_str_all_errors_have_strings(void)
 {
-	/* Every defined error code must map to a non-NULL string.
-	 * If a new error code is added without updating http_status_str(),
-	 * this test will catch it. */
-	http_status_t codes[] = {
-		HTTP_ERR_NO_WIFI, HTTP_ERR_ESP_NOT_READY, HTTP_ERR_DNS_FAIL,
-		HTTP_ERR_CONNECT_FAIL, HTTP_ERR_SEND_FAIL, HTTP_ERR_TIMEOUT,
-		HTTP_ERR_HTTP_ERROR, HTTP_ERR_REDIRECT_LOOP,
-		HTTP_ERR_RESPONSE_TOO_LARGE, HTTP_ERR_SD_WRITE_FAIL,
-		HTTP_ERR_SD_OPEN_FAIL, HTTP_ERR_CANCELLED,
-		HTTP_ERR_INVALID_ARG, HTTP_ERR_PARSE_FAIL,
-	};
-	for (int i = 0; i < (int)(sizeof(codes) / sizeof(codes[0])); i++)
+	/* Iterate across the full contiguous error-code range so newly
+	 * added HTTP_ERR_* values are covered automatically. */
+	for (int code = (int)HTTP_ERR_NO_WIFI; code <= (int)HTTP_ERR_PARSE_FAIL; code++)
 	{
-		const char *s = http_status_str(codes[i]);
+		const char *s = http_status_str((http_status_t)code);
 		TEST_ASSERT_NOT_NULL_MESSAGE(s, "Error code missing from http_status_str()");
 	}
 }

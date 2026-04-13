@@ -14,25 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
-
-/* HTTP client status codes — must match m1_http_client.h */
-typedef enum {
-	HTTP_OK = 0,
-	HTTP_ERR_NO_WIFI,
-	HTTP_ERR_ESP_NOT_READY,
-	HTTP_ERR_DNS_FAIL,
-	HTTP_ERR_CONNECT_FAIL,
-	HTTP_ERR_SEND_FAIL,
-	HTTP_ERR_TIMEOUT,
-	HTTP_ERR_HTTP_ERROR,
-	HTTP_ERR_REDIRECT_LOOP,
-	HTTP_ERR_RESPONSE_TOO_LARGE,
-	HTTP_ERR_SD_WRITE_FAIL,
-	HTTP_ERR_SD_OPEN_FAIL,
-	HTTP_ERR_CANCELLED,
-	HTTP_ERR_INVALID_ARG,
-	HTTP_ERR_PARSE_FAIL,
-} http_status_t;
+#include "http_status_defs.h"
 
 const char *http_status_str(http_status_t status)
 {

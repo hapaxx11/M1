@@ -495,12 +495,17 @@ static void ssl_ensure_configured(void)
 
 	/* Wait for SNTP time sync.  Poll AT+CIPSNTPTIME? until the
 	 * response no longer contains "1970" (epoch = no sync yet).
+	 * Query immediately once so an already-synced clock does not
+	 * incur a fixed initial delay, then wait 500 ms between retries.
 	 * Give up after SSL_SNTP_SYNC_WAIT_MS — auth_mode=0 should
 	 * still allow SSL without valid time on most firmware builds. */
 	uint32_t sntp_start = HAL_GetTick();
+	bool first_poll = true;
 	while ((HAL_GetTick() - sntp_start) < SSL_SNTP_SYNC_WAIT_MS)
 	{
-		vTaskDelay(pdMS_TO_TICKS(500));
+		if (!first_poll)
+			vTaskDelay(pdMS_TO_TICKS(500));
+		first_poll = false;
 		spi_AT_send_recv(
 			ESP32C6_AT_REQ_CIPSNTPTIME ESP32C6_AT_REQ_CRLF,
 			s_at_buf, sizeof(s_at_buf), 2);
@@ -594,6 +599,18 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 
 		if (strstr(s_at_buf, ESP32C6_AT_RES_CONNECT) || strstr(s_at_buf, "OK"))
 			return HTTP_OK;
+
+		/* Detect response timeout — spi_AT_send_recv returns SUCCESS
+		 * but places "TIMEOUT(...)" in the buffer when the ESP32 does
+		 * not respond within the deadline.  Report as HTTP_ERR_TIMEOUT
+		 * so the caller gets an accurate error instead of CONNECT_FAIL. */
+		if (strstr(s_at_buf, "TIMEOUT"))
+		{
+			M1_LOG_W(HTTP_TAG, "CIPSTART timed out (attempt %d)\n\r", attempt + 1);
+			if (attempt == max_attempts - 1)
+				return HTTP_ERR_TIMEOUT;
+			continue;
+		}
 
 		M1_LOG_W(HTTP_TAG, "CIPSTART failed (attempt %d): %.80s\n\r",
 		         attempt + 1, s_at_buf);

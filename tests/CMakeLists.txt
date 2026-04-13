@@ -541,6 +541,7 @@ add_executable(test_http_client_parse
 )
 target_include_directories(test_http_client_parse PRIVATE
     ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
 )
 target_link_libraries(test_http_client_parse PRIVATE unity)
 if(TARGET sanitizers)
