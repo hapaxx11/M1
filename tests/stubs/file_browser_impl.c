@@ -99,6 +99,8 @@ uint8_t fb_dyn_strcat(char *buffer, uint8_t num, const char *format, ...)
         k--;
     }
 
+    va_end(pargs);
+
     if (num > 1)
         len += num - 1;
 
