@@ -6,7 +6,8 @@ Host-side testing strategy for M1 firmware (Hapax fork).
 
 ## Tier 1 — Host-Side Unit Tests (CI ✅, Low Effort)
 
-**Status: ✅ Active — 24 suites, runs on PRs and pushes to main**
+**Status: ✅ Active — 24 suites, runs on PRs to main and pushes to main
+(only when `m1_csrc/`, `Sub_Ghz/`, or `tests/` paths change)**
 
 Pure-logic C functions tested on x86 with Unity + ASan/UBSan.
 Uses the stub-based extraction pattern: minimal stubs in `tests/stubs/`
