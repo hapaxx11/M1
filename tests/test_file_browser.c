@@ -57,8 +57,8 @@ static fb_sorted_entry_t make_entry(const char *name, uint8_t is_dir)
 {
     fb_sorted_entry_t e;
     memset(&e, 0, sizeof(e));
-    strncpy(e.fname, name, FB_FNAME_MAX);
-    e.fname[FB_FNAME_MAX] = '\0';
+    strncpy(e.fname, name, FB_FNAME_MAX - 1);
+    e.fname[FB_FNAME_MAX - 1] = '\0';
     e.fattrib = is_dir ? FB_AM_DIR : 0;
     return e;
 }
