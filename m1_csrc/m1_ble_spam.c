@@ -53,7 +53,14 @@
 #define BLE_SPAM_POLL_MS        50
 
 /* AT command response timeout (seconds) */
-#define BLE_SPAM_AT_TIMEOUT     3
+#define BLE_SPAM_AT_TIMEOUT     5
+
+/* Delay between AT commands to avoid SPI transport overload (ms) */
+#define BLE_SPAM_CMD_DELAY_MS   20
+
+/* Response buffer size — must fit the echo + OK of the longest command
+ * (AT+BLEADVDATA with 31 bytes = 62 hex chars) */
+#define BLE_SPAM_RESP_BUF_SIZE  256
 
 /************************** M O D E L   D A T A *******************************/
 
@@ -188,11 +195,14 @@ static void bytes_to_hex(const uint8_t *src, size_t len, char *dst)
     dst[len * 2] = '\0';
 }
 
-/* Send an AT command and ignore the response */
-static void spam_at(const char *cmd)
+/* Send an AT command and check for OK in the response.
+ * Returns true on success (OK received), false on error/timeout. */
+static bool spam_at(const char *cmd)
 {
-    char resp[64];
+    char resp[BLE_SPAM_RESP_BUF_SIZE];
     spi_AT_send_recv(cmd, resp, sizeof(resp), BLE_SPAM_AT_TIMEOUT);
+    osDelay(BLE_SPAM_CMD_DELAY_MS);
+    return (strstr(resp, "OK") != NULL);
 }
 
 /********************* P A C K E T   B U I L D E R S *************************/
@@ -594,8 +604,16 @@ void ble_spam_run(void)
         return;
     }
 
+    /* Clear stale responses before starting BLE operations */
+    esp32_queue_reset();
+
     /* Init BLE in server role */
-    spam_at("AT+BLEINIT=2\r\n");
+    if (!spam_at("AT+BLEINIT=2\r\n"))
+    {
+        m1_message_box(&m1_u8g2, "BLE Spam", "BLE init", "failed", " OK ");
+        m1_esp32_deinit();
+        return;
+    }
     osDelay(200);
 
     /* Apple uses public address type for best effect; others use random */
