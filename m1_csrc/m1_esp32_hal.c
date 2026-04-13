@@ -19,6 +19,7 @@
 #include "main.h"
 #include "m1_settings.h"
 #include "m1_esp32_hal.h"
+#include "m1_http_client.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
 
@@ -448,6 +449,10 @@ void m1_esp32_deinit(void)
 
 		esp32_init_done = FALSE;
 		esp32_uart_init_done = FALSE;
+
+		/* ESP32 reset wipes all AT config — force SSL reconfiguration
+		 * (SNTP + CIPSSLCCONF) on the next HTTPS connection. */
+		http_ssl_reset();
 	} // if ( esp32_init_done )
 
 } // void m1_esp32_deinit(void)

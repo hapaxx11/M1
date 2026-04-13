@@ -485,3 +485,26 @@ if(TARGET sanitizers)
     target_link_libraries(test_fw_source_filter PRIVATE sanitizers)
 endif()
 add_test(NAME fw_source_filter COMMAND test_fw_source_filter)
+
+# ------------------------------------------------------------------
+# Module under test: http_client URL parser (parse_url)
+# Tests URL decomposition into host, port, path, and is_https flag.
+# The is_https flag is critical for OTA: it triggers the SSL connection
+# path (AT+CIPSTART="SSL") which requires SNTP + CIPSSLCCONF setup.
+# Uses a standalone copy (http_client_parse_impl.c) because the
+# production m1_http_client.c has ESP32 SPI and HAL dependencies.
+# Bug context: OTA download "Connection failed" — SSL handshake failed
+# because tcp_connect() did not configure SNTP or SSL cert verification.
+# ------------------------------------------------------------------
+add_executable(test_http_client_parse
+    test_http_client_parse.c
+    ${STUBS_DIR}/http_client_parse_impl.c
+)
+target_include_directories(test_http_client_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_http_client_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_http_client_parse PRIVATE sanitizers)
+endif()
+add_test(NAME http_client_parse COMMAND test_http_client_parse)
