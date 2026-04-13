@@ -43,7 +43,8 @@ on:
         default: false
 
 permissions:
-  contents: write   # needed to create the release and upload assets
+  contents: write        # needed to create the release and upload assets
+  pull-requests: write   # needed to open changelog update PRs
 
 jobs:
   build:
@@ -353,14 +354,25 @@ jobs:
           echo "--- First 15 lines of CHANGELOG.md ---"
           head -15 CHANGELOG.md
 
-      - name: Commit and push changelog update
+      - name: Commit and open PR for changelog update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
+          BRANCH="changelog/stamp-${TAG}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
           git add CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No changelog changes to commit."
             exit 0
           fi
-          git commit -m "changelog: stamp [Unreleased] as ${{ needs.build.outputs.tag }} [skip ci]"
-          git push origin main
+          git commit -m "changelog: stamp [Unreleased] as ${TAG} [skip ci]"
+          git push origin "${BRANCH}"
+          gh pr create \
+            --base main \
+            --head "${BRANCH}" \
+            --title "changelog: stamp [Unreleased] as ${TAG}" \
+            --body "Automated changelog update from release workflow for \`${TAG}\`." \
+            --label "changelog" || true
