@@ -6,14 +6,14 @@ Host-side testing strategy for M1 firmware (Hapax fork).
 
 ## Tier 1 — Host-Side Unit Tests (CI ✅, Low Effort)
 
-**Status: ✅ Active — 23 suites, runs on PRs and pushes to main**
+**Status: ✅ Active — 24 suites, runs on PRs and pushes to main**
 
 Pure-logic C functions tested on x86 with Unity + ASan/UBSan.
 Uses the stub-based extraction pattern: minimal stubs in `tests/stubs/`
 provide the types and constants each source file needs without any real
 HAL, RTOS, or FatFS.
 
-### Current suites (23)
+### Current suites (24)
 
 | Suite | Module under test |
 |-------|-------------------|
@@ -40,6 +40,7 @@ HAL, RTOS, or FatFS.
 | `test_fw_source_filter` | OTA asset name filter |
 | `test_rpc_crc16` | RPC CRC-16 + frame builder/validator |
 | `test_file_browser` | Case-insensitive sort, ext matching, path concat |
+| `test_http_client_parse` | URL parser: host, port, path, is_https extraction |
 
 ### Candidates for new suites
 

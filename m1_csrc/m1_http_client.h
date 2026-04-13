@@ -82,6 +82,14 @@ http_status_t http_download_to_file(const char *url, const char *sd_path,
 bool http_is_ready(void);
 
 /*
+ * Reset cached SSL configuration state.
+ * Must be called when the ESP32 is deinitialized or reset, because a
+ * hardware reset wipes all ESP32-side AT config (SNTP, CIPSSLCCONF).
+ * The next SSL connection will re-send the configuration commands.
+ */
+void http_ssl_reset(void);
+
+/*
  * Return a human-readable error string for an http_status_t value.
  * Returns NULL for HTTP_OK (no error) and unknown values.
  * Useful for displaying error reasons in the UI.

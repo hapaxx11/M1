@@ -111,6 +111,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   space-separated exclude filtering, combined include+exclude logic, and real-world
   OTA scenarios (Hapax release matching, ESP32 exclusion, MD5 filtering).
 
+- **HTTP client URL parser tests** (`tests/test_http_client_parse.c`) — 9 unit tests
+  for `parse_url()`: validates HTTPS detection (is_https flag triggers SSL path),
+  host/port/path extraction, custom ports, default path, invalid scheme rejection,
+  buffer overflow protection, and real GitHub API URL parsing for OTA scenarios.
+
 ### Changed
 
 - **Sub-GHz Read Raw: Flipper-style RSSI spectrogram visualization** — Replaced
@@ -394,6 +399,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
 
 ### Fixed
+
+- **OTA firmware download: "Connection failed" on all HTTPS connections** —
+  `tcp_connect()` opened SSL connections via `AT+CIPSTART="SSL"` without
+  first configuring the ESP32's SSL settings.  The ESP32 AT firmware either
+  attempted certificate verification against an empty/missing CA store, or
+  failed the TLS handshake due to invalid system time (SNTP was never
+  configured before HTTP operations).  Both conditions caused the ESP32 to
+  return `ERROR` immediately, which `tcp_connect()` reported as
+  `HTTP_ERR_CONNECT_FAIL` ("Connection failed").  Fixed by adding a one-time
+  SSL setup (`ssl_ensure_configured()`) that:
+  1. Enables SNTP (`AT+CIPSNTPCFG=1,0,"pool.ntp.org"`) so the ESP32 has
+     valid system time for TLS — fire-and-forget, sync happens in background.
+  2. Disables SSL certificate verification (`AT+CIPSSLCCONF=0`) since the M1
+     does not ship a CA certificate store.
+  This setup runs once before the first SSL connection and applies to both
+  the GitHub API call (`http_get`) and the binary download
+  (`http_download_to_file`).  Added `AT+CIPSSLCCONF` and `AT+CIPSNTPCFG`
+  command definitions to `esp_at_list.h`.
 
 - **OTA firmware download: "No releases found" with GitHub API** — HTTP GET
   requests used HTTP/1.1, causing GitHub's API to respond with
