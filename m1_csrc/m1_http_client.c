@@ -46,11 +46,12 @@
 /* DNS pre-resolution retry parameters.
  * Transient DNS failures are common on WiFi (DHCP not settled,
  * ESP32 state after closing a prior connection, ISP DNS hiccup).
- * Retry a few times before giving up.  Total DNS time is capped
- * by the caller's timeout_sec so tcp_connect() never exceeds it. */
+ * Retry a few times before giving up.  The DNS pre-resolution phase
+ * is budgeted against the caller's timeout_sec; subsequent SSL
+ * connect retries are separate and may add additional time. */
 #define DNS_MAX_ATTEMPTS       3
 #define DNS_RETRY_DELAY_MS  1000
-#define DNS_RETRY_DELAY_SEC    1   /* DNS_RETRY_DELAY_MS in seconds */
+#define DNS_RETRY_DELAY_SEC   (DNS_RETRY_DELAY_MS / 1000)
 #define DNS_PER_ATTEMPT_SEC   10   /* AT+CIPDOMAIN timeout per try */
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
