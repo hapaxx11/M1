@@ -627,9 +627,9 @@ function init() {
                     log(`USB access granted for ${device.productName || 'STM32 device'}. Now tap Connect.`, 'success');
                 } catch (e) {
                     if (e.name === 'NotFoundError') {
-                        elements['usb-permission-status'].textContent = 'No device found';
-                        elements['usb-permission-status'].style.color = 'var(--warning)';
-                        log('No STM32 USB device found. Ensure M1 is connected via USB OTG cable.', 'warn');
+                        elements['usb-permission-status'].textContent = 'No device selected';
+                        elements['usb-permission-status'].style.color = 'var(--text-muted)';
+                        log('USB device chooser dismissed or no matching device selected.');
                     } else {
                         log(`USB permission request: ${e.message}`, 'warn');
                     }
