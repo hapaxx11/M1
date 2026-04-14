@@ -848,15 +848,15 @@ static void splash_draw_status_icons(void)
 	if (m1_sd_detected())
 	{
 		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_sdcard_10x10);
+		icon_x += icon_w + icon_gap;
 	}
-	icon_x += icon_w + icon_gap;
 
 	/* Bluetooth: show icon when ESP32 HAL is initialized */
 	if (m1_esp32_get_init_status())
 	{
 		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_bt_10x10);
+		icon_x += icon_w + icon_gap;
 	}
-	icon_x += icon_w + icon_gap;
 
 	/* WiFi: show icon when ESP32 HAL is initialized */
 	if (m1_esp32_get_init_status())
