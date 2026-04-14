@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Home screen battery indicator now updates while idle** — the battery percentage
+  and charging icon on the home screen (splash/welcome screen) previously showed a
+  stale snapshot taken at the time the screen was last drawn.  The home screen now
+  redraws its battery indicator every 2 seconds while the device is idle, so charge
+  level and charging state are reflected in near-real time without straining resources.
+
 ## [0.9.0.87] - 2026-04-14
 
 ### Fixed

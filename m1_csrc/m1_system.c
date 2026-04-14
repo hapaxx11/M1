@@ -475,6 +475,13 @@ static void battery_indicator_update(void)
 	{
 		batt_info_timer_count = 0;
 		battery_status_update();
+		/* If the home screen is visible, wake the menu task to redraw it */
+		if ( m1_device_stat.op_mode == M1_OPERATION_MODE_DISPLAY_ON )
+		{
+			S_M1_Main_Q_t q_item;
+			q_item.q_evt_type = Q_EVENT_BATTERY_UPDATED;
+			xQueueSend(main_q_hdl, &q_item, 0);
+		}
 	} // if ( batt_info_timer_count >= TASKDELAY_BATTERY_INFO_TIMER )
 
 	battery_power_status_get(&SystemPowerStatus);
