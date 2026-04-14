@@ -755,6 +755,11 @@ uint8_t m1_check_battery_level(uint8_t remaining_charge)
 	S_M1_Power_Status_t SystemPowerStatus;
 
 	battery_power_status_get(&SystemPowerStatus);
+
+    // Allow if actively charging (pre-charge or fast charge)
+    if ( SystemPowerStatus.stat == 1 || SystemPowerStatus.stat == 2 )
+    	return true;
+
     if ( SystemPowerStatus.battery_level >= remaining_charge)
     	return true;
 
