@@ -120,3 +120,21 @@ bool http_is_ready_check(bool wifi_connected, bool hal_init, bool task_init)
 {
 	return wifi_connected && hal_init && task_init;
 }
+
+/*
+ * http_readiness_status() — test-only copy of the layered readiness check used
+ * inside http_get() and http_download_to_file().
+ *
+ * Mirrors the split check introduced to return the correct error code:
+ *   if (!wifi_is_connected())                                   → HTTP_ERR_NO_WIFI
+ *   if (!m1_esp32_get_init_status() || !get_esp32_main_init_status()) → HTTP_ERR_ESP_NOT_READY
+ *   otherwise                                                    → HTTP_OK
+ */
+http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool task_init)
+{
+	if (!wifi_connected)
+		return HTTP_ERR_NO_WIFI;
+	if (!hal_init || !task_init)
+		return HTTP_ERR_ESP_NOT_READY;
+	return HTTP_OK;
+}

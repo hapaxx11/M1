@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **OTA download: misleading error code when ESP32 deinit** — `http_get()` and
+  `http_download_to_file()` previously returned `HTTP_ERR_NO_WIFI` for any
+  `http_is_ready()` failure, even when the real cause was a deinitialized ESP32
+  HAL (e.g. after `wifi_scan_ap()` exits).  Both functions now check WiFi and
+  ESP32 readiness separately: `HTTP_ERR_NO_WIFI` when WiFi is not connected,
+  `HTTP_ERR_ESP_NOT_READY` when the ESP32 HAL or SPI task is not initialized.
+  Five additional regression tests added to `test_http_client_parse` covering
+  the `http_readiness_status()` split-check logic.
+
 ## [0.9.0.86] - 2026-04-14
 
 ### Fixed

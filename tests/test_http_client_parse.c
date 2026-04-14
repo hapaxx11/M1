@@ -36,6 +36,9 @@ extern const char *http_status_str(http_status_t status);
 /* Stub implementation of http_is_ready logic in tests/stubs/http_client_parse_impl.c */
 extern bool http_is_ready_check(bool wifi_connected, bool hal_init, bool task_init);
 
+/* Stub for the layered readiness check used inside http_get() / http_download_to_file() */
+extern http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool task_init);
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -266,6 +269,41 @@ void test_http_is_ready_hal_deinit_blocks_download(void)
 	TEST_ASSERT_FALSE(http_is_ready_check(wifi_connected, hal_init, task_init));
 }
 
+/* ---- http_readiness_status: split error code checks ---- */
+
+void test_readiness_status_all_ready_returns_ok(void)
+{
+	TEST_ASSERT_EQUAL_INT(HTTP_OK, http_readiness_status(true, true, true));
+}
+
+void test_readiness_status_no_wifi_returns_no_wifi(void)
+{
+	/* No WiFi: must return HTTP_ERR_NO_WIFI, not HTTP_ERR_ESP_NOT_READY */
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_NO_WIFI, http_readiness_status(false, true, true));
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_NO_WIFI, http_readiness_status(false, false, false));
+}
+
+void test_readiness_status_hal_deinit_returns_esp_not_ready(void)
+{
+	/* WiFi connected but HAL deinitialized (exact post-wifi_scan_ap() state):
+	 * must return HTTP_ERR_ESP_NOT_READY, not HTTP_ERR_NO_WIFI. */
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_ESP_NOT_READY, http_readiness_status(true, false, true));
+}
+
+void test_readiness_status_task_not_init_returns_esp_not_ready(void)
+{
+	/* WiFi connected but task not running */
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_ESP_NOT_READY, http_readiness_status(true, true, false));
+}
+
+void test_readiness_status_wifi_checked_before_esp(void)
+{
+	/* When WiFi is down AND ESP32 is also down, error must be NO_WIFI
+	 * (WiFi check takes priority over ESP32 check). */
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_NO_WIFI, http_readiness_status(false, false, true));
+	TEST_ASSERT_EQUAL_INT(HTTP_ERR_NO_WIFI, http_readiness_status(false, true, false));
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -285,5 +323,10 @@ int main(void)
 	RUN_TEST(test_status_str_dns_differs_from_connect);
 	RUN_TEST(test_http_is_ready_requires_all_three_conditions);
 	RUN_TEST(test_http_is_ready_hal_deinit_blocks_download);
+	RUN_TEST(test_readiness_status_all_ready_returns_ok);
+	RUN_TEST(test_readiness_status_no_wifi_returns_no_wifi);
+	RUN_TEST(test_readiness_status_hal_deinit_returns_esp_not_ready);
+	RUN_TEST(test_readiness_status_task_not_init_returns_esp_not_ready);
+	RUN_TEST(test_readiness_status_wifi_checked_before_esp);
 	return UNITY_END();
 }

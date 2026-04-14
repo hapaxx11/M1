@@ -210,8 +210,10 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 	response_buf[0] = '\0';
 
-	if (!http_is_ready())
+	if (!wifi_is_connected())
 		return HTTP_ERR_NO_WIFI;
+	if (!m1_esp32_get_init_status() || !get_esp32_main_init_status())
+		return HTTP_ERR_ESP_NOT_READY;
 
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
@@ -978,8 +980,10 @@ http_status_t http_download_to_file(const char *url, const char *sd_path,
 	if (!url || !sd_path)
 		return HTTP_ERR_INVALID_ARG;
 
-	if (!http_is_ready())
+	if (!wifi_is_connected())
 		return HTTP_ERR_NO_WIFI;
+	if (!m1_esp32_get_init_status() || !get_esp32_main_init_status())
+		return HTTP_ERR_ESP_NOT_READY;
 
 	if (!timeout_sec)
 		timeout_sec = HTTP_DEFAULT_TIMEOUT;
