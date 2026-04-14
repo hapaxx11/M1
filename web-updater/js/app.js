@@ -63,17 +63,13 @@ const $ = (id) => document.getElementById(id);
 const elements = {};
 
 /**
- * Detect Android separately from generic mobile devices using
- * User-Agent Client Hints (preferred) with a UA string fallback.
- *
- * Use `isAndroid` for Android-specific troubleshooting or permission UI,
- * and `isMobile` only for platform-agnostic mobile behavior.
+ * Detect Android specifically — the troubleshooting panel and WebUSB
+ * permission flow only apply to Android.  iOS does not support Web Serial
+ * or WebUSB, so showing the panel there would be misleading.
+ * Prefer User-Agent Client Hints when available, fall back to UA string.
  */
 const isAndroid = (navigator.userAgentData && navigator.userAgentData.platform === 'Android')
     || /Android/i.test(navigator.userAgent);
-const isMobile = isAndroid
-    || (navigator.userAgentData && navigator.userAgentData.mobile)
-    || /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 function cacheElements() {
     const ids = [
@@ -359,8 +355,12 @@ async function handleConnect() {
             log(`FW info query failed: ${err.message}`, 'warn');
         }
     } catch (err) {
-        if (isMobile && err.name === 'NotFoundError') {
-            log('No serial device was selected, or no compatible device was found. Make sure the M1 is connected via USB OTG and tap "Grant USB Access" first, then select the device in the browser prompt.', 'warn');
+        if (err.name === 'NotFoundError') {
+            if (isAndroid) {
+                log('No device selected. If the M1 is connected via USB OTG, try "Grant USB Access" first, then tap Connect again.', 'warn');
+            } else {
+                log('No serial port selected. Make sure the M1 is connected and try again.', 'warn');
+            }
         } else {
             log(`Connection failed: ${err.message}`, 'error');
         }
@@ -614,8 +614,8 @@ function init() {
         elements['local-file-input'].click();
     });
 
-    // Android / mobile: show troubleshooting tips and USB permission button
-    if (isMobile) {
+    // Android: show troubleshooting tips and USB permission button
+    if (isAndroid) {
         elements['mobile-tips'].classList.remove('hidden');
 
         if ('usb' in navigator) {
@@ -635,7 +635,9 @@ function init() {
                     if (e.name === 'NotFoundError') {
                         elements['usb-permission-status'].textContent = 'No device selected';
                         elements['usb-permission-status'].style.color = 'var(--text-muted)';
-                        log('USB device chooser dismissed or no matching device selected.');
+                        log('USB chooser dismissed — no device selected. If M1 is connected, try again.', 'info');
+                    } else if (e.name === 'SecurityError') {
+                        log('USB permission denied by the browser.', 'warn');
                     } else {
                         log(`USB permission request: ${e.message}`, 'warn');
                     }
