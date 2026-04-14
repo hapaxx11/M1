@@ -38,6 +38,7 @@
 #define ESP32_FW_DOWNLOAD_DIR     "0:/ESP32_FW"
 
 /* Display layout constants */
+#define DL_CONFIRM_TITLE_Y   10  /* Text baseline within the 14px inverted title bar */
 #define DL_PROGRESS_BAR_X    4
 #define DL_PROGRESS_BAR_Y   30
 #define DL_PROGRESS_BAR_W  120
@@ -119,16 +120,16 @@ static bool edl_select_from_list(const char *title, const char **items,
 	if (count == 0)
 		return false;
 
+	const uint8_t visible = M1_MENU_VIS(count);
+
 	for (;;)
 	{
-		uint8_t vis = m1_menu_max_visible();
-
 		if (sel < scroll)
 			scroll = sel;
-		if (sel >= scroll + vis)
-			scroll = sel - vis + 1;
+		if (sel >= scroll + visible)
+			scroll = sel - visible + 1;
 
-		m1_scene_draw_menu(title, items, count, sel, scroll, M1_MENU_VIS(count));
+		m1_scene_draw_menu(title, items, count, sel, scroll, visible);
 
 		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE)
 		{
@@ -377,7 +378,7 @@ source_selection:
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-			u8g2_DrawStr(&m1_u8g2, 2, 10, "Download ESP32 FW");
+			u8g2_DrawStr(&m1_u8g2, 2, DL_CONFIRM_TITLE_Y, "Download ESP32 FW");
 			u8g2_DrawStr(&m1_u8g2, 4, 24, name_str);
 			u8g2_DrawStr(&m1_u8g2, 4, 34, size_str);
 			u8g2_DrawStr(&m1_u8g2, 4, 44, rel->tag);
