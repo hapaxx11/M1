@@ -50,7 +50,7 @@
 #define TASK_PRIORITY_SYS_INIT					(tskNORMAL_PRIORITY + 10) // Must be highest priority for all tasks
 
 #define TASKDELAY_SDCARD_DET_TASK				700 // ms, for SD card detection debouncing
-#define TASKDELAY_BATTERY_INFO_TIMER			2000 // ms
+#define TASKDELAY_BATTERY_INFO_TIMER			1000 // ms
 
 typedef enum
 {

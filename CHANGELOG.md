@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Home screen battery indicator now updates while idle** — the battery percentage
   and charging icon on the home screen (splash/welcome screen) previously showed a
   stale snapshot taken at the time the screen was last drawn.  The home screen now
-  redraws its battery indicator every 2 seconds while the device is idle, so charge
-  level and charging state are reflected in near-real time without straining resources.
+  redraws its battery indicator every 1 second while the device is idle (reduced from
+  2 s), and only when the battery level or charging state actually changed — matching
+  Momentum firmware's conditional-refresh pattern.  This eliminates unnecessary redraws
+  and reduces latency for charge-state changes appearing on screen.
 
 ## [0.9.0.87] - 2026-04-14
 
