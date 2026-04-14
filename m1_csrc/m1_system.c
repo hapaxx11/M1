@@ -25,6 +25,8 @@
 #include "battery.h"
 #include "m1_sdcard.h"
 #include "m1_esp32_hal.h"
+#include "m1_wifi.h"
+#include "m1_bt.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -833,13 +835,15 @@ static void startup_bu_registers_init(void)
 
 /*============================================================================*/
 /*
- *   Splash-screen status icons: SD Card, Bluetooth, WiFi
+ *   Home-screen status icons: SD Card, Bluetooth, WiFi
  *
  *   Drawn in the top-left corner, Y-aligned with the battery indicator.
  *   Each icon is 10x10 px with 2 px gap between them.
  *
- *   SD card icon is shown only when a card is physically detected.
- *   BT and WiFi icons are shown only when the ESP32 HAL is initialized.
+ *   Icons are shown only when the corresponding peripheral is active:
+ *     - SD card: card is physically detected
+ *     - Bluetooth: an active BT connection exists
+ *     - WiFi: currently associated to an AP
  */
 /*============================================================================*/
 static void splash_draw_status_icons(void)
@@ -857,18 +861,22 @@ static void splash_draw_status_icons(void)
 		icon_x += icon_w + icon_gap;
 	}
 
-	/* Bluetooth: show icon when ESP32 HAL is initialized */
-	if (m1_esp32_get_init_status())
+	/* Bluetooth: show icon only when actively connected to a device */
+#ifdef M1_APP_BT_MANAGE_ENABLE
+	if (bt_get_connection_state()->connected)
 	{
 		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_bt_10x10);
 		icon_x += icon_w + icon_gap;
 	}
+#endif /* M1_APP_BT_MANAGE_ENABLE */
 
-	/* WiFi: show icon when ESP32 HAL is initialized */
-	if (m1_esp32_get_init_status())
+	/* WiFi: show icon only when associated to an access point */
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	if (wifi_is_connected())
 	{
 		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_wifi_10x10);
 	}
+#endif /* M1_APP_WIFI_CONNECT_ENABLE */
 }
 
 
