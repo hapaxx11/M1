@@ -46,9 +46,11 @@
 /* DNS pre-resolution retry parameters.
  * Transient DNS failures are common on WiFi (DHCP not settled,
  * ESP32 state after closing a prior connection, ISP DNS hiccup).
- * Retry a few times before giving up. */
+ * Retry a few times before giving up.  Total DNS time is capped
+ * by the caller's timeout_sec so tcp_connect() never exceeds it. */
 #define DNS_MAX_ATTEMPTS       3
 #define DNS_RETRY_DELAY_MS  1000
+#define DNS_PER_ATTEMPT_SEC   10   /* AT+CIPDOMAIN timeout per try */
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
 
@@ -560,23 +562,43 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 	 * a clear signal when DNS is broken (vs a generic SSL timeout).
 	 * Retry up to DNS_MAX_ATTEMPTS times — transient failures are
 	 * common right after WiFi connect or when following redirects
-	 * (GitHub → objects.githubusercontent.com). */
+	 * (GitHub → objects.githubusercontent.com).
+	 * Total DNS time is capped to timeout_sec so we never exceed the
+	 * caller's budget. */
 	if (is_https)
 	{
 		bool dns_ok = false;
+		uint8_t dns_at_timeout = DNS_PER_ATTEMPT_SEC;
+		if (dns_at_timeout > timeout_sec)
+			dns_at_timeout = timeout_sec;
+
+		/* How many attempts fit within the caller's timeout?
+		 * Each attempt costs dns_at_timeout + DNS_RETRY_DELAY_MS/1000
+		 * (except the first which has no delay). */
+		uint8_t dns_per_attempt_cost = dns_at_timeout + (DNS_RETRY_DELAY_MS / 1000);
+		int dns_attempts = DNS_MAX_ATTEMPTS;
+		if (dns_per_attempt_cost > 0 && timeout_sec < (uint8_t)(dns_attempts * dns_per_attempt_cost))
+		{
+			dns_attempts = 1 + (timeout_sec - dns_at_timeout) / dns_per_attempt_cost;
+			if (dns_attempts < 1)
+				dns_attempts = 1;
+			if (dns_attempts > DNS_MAX_ATTEMPTS)
+				dns_attempts = DNS_MAX_ATTEMPTS;
+		}
+
 		snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPDOMAIN "\"%s\"" ESP32C6_AT_REQ_CRLF, host);
 
-		for (int dns_try = 0; dns_try < DNS_MAX_ATTEMPTS; dns_try++)
+		for (int dns_try = 0; dns_try < dns_attempts; dns_try++)
 		{
 			if (dns_try > 0)
 			{
 				M1_LOG_W(HTTP_TAG, "DNS retry %d/%d for %s\n\r",
-				         dns_try + 1, DNS_MAX_ATTEMPTS, host);
+				         dns_try + 1, dns_attempts, host);
 				vTaskDelay(pdMS_TO_TICKS(DNS_RETRY_DELAY_MS));
 				m1_wdt_reset();
 			}
 
-			spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), 10);
+			spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), dns_at_timeout);
 			if (strstr(s_at_buf, ESP32C6_AT_RES_CIPDOMAIN_KEY))
 			{
 				dns_ok = true;
@@ -591,7 +613,7 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 		if (!dns_ok)
 		{
 			M1_LOG_E(HTTP_TAG, "DNS failed for %s after %d attempts\n\r",
-			         host, DNS_MAX_ATTEMPTS);
+			         host, dns_attempts);
 			return HTTP_ERR_DNS_FAIL;
 		}
 	}
