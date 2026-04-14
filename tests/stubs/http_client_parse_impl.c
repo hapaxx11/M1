@@ -99,3 +99,42 @@ bool http_parse_url(const char *url, char *host, uint16_t host_size,
 
 	return true;
 }
+
+/*
+ * http_is_ready_check() — test-only copy of the http_is_ready() logic.
+ *
+ * Takes the three flag values as parameters (wifi connected, ESP32 HAL
+ * initialized, ESP32 SPI task initialized) instead of reading hardware state.
+ *
+ * Mirrors the production logic in m1_csrc/m1_http_client.c::http_is_ready():
+ *   return wifi_is_connected() && m1_esp32_get_init_status() && get_esp32_main_init_status();
+ *
+ * Regression: before the fix, http_is_ready() only checked wifi_connected and
+ * task_init, missing the hal_init check.  After wifi_scan_ap() exits it calls
+ * m1_esp32_deinit() which clears esp32_init_done (the HAL flag) but leaves
+ * esp32_main_init_done (the task flag) true.  The old check returned true even
+ * with the ESP32 SPI disabled, so fw_download_start() proceeded with AT commands
+ * that all timed out — manifesting as a DNS lookup failure (HTTP_ERR_DNS_FAIL).
+ */
+bool http_is_ready_check(bool wifi_connected, bool hal_init, bool task_init)
+{
+	return wifi_connected && hal_init && task_init;
+}
+
+/*
+ * http_readiness_status() — test-only copy of the layered readiness check used
+ * inside http_get() and http_download_to_file().
+ *
+ * Mirrors the split check introduced to return the correct error code:
+ *   if (!wifi_is_connected())                                   → HTTP_ERR_NO_WIFI
+ *   if (!m1_esp32_get_init_status() || !get_esp32_main_init_status()) → HTTP_ERR_ESP_NOT_READY
+ *   otherwise                                                    → HTTP_OK
+ */
+http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool task_init)
+{
+	if (!wifi_connected)
+		return HTTP_ERR_NO_WIFI;
+	if (!hal_init || !task_init)
+		return HTTP_ERR_ESP_NOT_READY;
+	return HTTP_OK;
+}

@@ -9,9 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **OTA download: misleading error code when ESP32 deinit** — `http_get()` and
+  `http_download_to_file()` previously returned `HTTP_ERR_NO_WIFI` for any
+  `http_is_ready()` failure, even when the real cause was a deinitialized ESP32
+  HAL (e.g. after `wifi_scan_ap()` exits).  Both functions now check WiFi and
+  ESP32 readiness separately: `HTTP_ERR_NO_WIFI` when WiFi is not connected,
+  `HTTP_ERR_ESP_NOT_READY` when the ESP32 HAL or SPI task is not initialized.
+  Five additional regression tests added to `test_http_client_parse` covering
+  the `http_readiness_status()` split-check logic.
+
+- **OTA download: unnecessary ESP32 init/deinit when WiFi not connected** —
+  `fw_download_start()` and `esp32_fw_download_start()` unconditionally called
+  `m1_esp32_init()` / `esp32_main_init()` at entry, even when WiFi was not
+  connected or `M1_APP_WIFI_CONNECT_ENABLE` was absent.  The block is now
+  guarded with `#ifdef M1_APP_WIFI_CONNECT_ENABLE` and gated on
+  `wifi_is_connected()`, so no hardware init/deinit side effects occur when the
+  download will immediately fail the WiFi readiness check.
+
 ## [0.9.0.86] - 2026-04-14
 
 ### Fixed
+
+- **OTA download: DNS error after WiFi connect** — `fw_download_start()` and
+  `esp32_fw_download_start()` did not initialize the ESP32 SPI interface before
+  making HTTP requests.  After `wifi_scan_ap()` exits (user presses BACK after
+  connecting), `m1_esp32_deinit()` disables the SPI hardware.  The old
+  `http_is_ready()` check only tested the task-level flag (never cleared by
+  deinit) and the WiFi connected flag, so both download functions proceeded with
+  a disabled SPI, causing all `AT+CIPDOMAIN` commands to time out and return
+  `HTTP_ERR_DNS_FAIL`.  Fix: both functions now call `m1_esp32_init()` and
+  `esp32_main_init()` (no-op if already done) before using the network, and
+  call `m1_esp32_deinit()` on all exit paths per the architecture rules.
+  `http_is_ready()` now also checks `m1_esp32_get_init_status()` (HAL-level
+  flag) as a defense-in-depth guard.  Two regression tests added to
+  `test_http_client_parse`.
 
 - **Web Updater — Flash section hidden when device info query times out.** The
   "Flash Firmware" panel was only revealed after a successful device info RPC
