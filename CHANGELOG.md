@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.86] - 2026-04-14
+
 ### Fixed
 
 - **Web Updater — Flash section hidden when device info query times out.** The
