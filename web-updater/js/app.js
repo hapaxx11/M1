@@ -360,7 +360,7 @@ async function handleConnect() {
         }
     } catch (err) {
         if (isMobile && err.name === 'NotFoundError') {
-            log('No serial device found. Make sure the M1 is connected via USB OTG and tap "Grant USB Access" first.', 'warn');
+            log('No serial device was selected, or no compatible device was found. Make sure the M1 is connected via USB OTG and tap "Grant USB Access" first, then select the device in the browser prompt.', 'warn');
         } else {
             log(`Connection failed: ${err.message}`, 'error');
         }
