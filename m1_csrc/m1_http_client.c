@@ -564,8 +564,8 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 	 * Retry up to DNS_MAX_ATTEMPTS times — transient failures are
 	 * common right after WiFi connect or when following redirects
 	 * (GitHub → objects.githubusercontent.com).
-	 * Total DNS time is capped to timeout_sec so we never exceed the
-	 * caller's budget. */
+	 * The DNS pre-resolution phase is limited using timeout_sec so
+	 * it does not consume unbounded time before the SSL connect logic. */
 	if (is_https)
 	{
 		bool dns_ok = false;
