@@ -204,6 +204,8 @@ function updateConnectionUI(connected) {
         deviceInfo = null;
         fwInfo = null;
     }
+
+    updateFlashButton();
 }
 
 function updateDeviceInfoUI() {
@@ -215,7 +217,6 @@ function updateDeviceInfoUI() {
         ? (deviceInfo.hapaxRevision === 0 ? 'Stock' : `r${deviceInfo.hapaxRevision}`)
         : 'N/A';
     elements['device-info-panel'].classList.remove('hidden');
-    elements['flash-section'].classList.remove('hidden');
 }
 
 function updateBankInfoUI() {
