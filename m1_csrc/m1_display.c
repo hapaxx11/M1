@@ -242,6 +242,11 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 
 	n_items = num_items;
 
+	if ( (direction == X_MENU_UPDATE_MOVE_DOWN) || (direction == X_MENU_UPDATE_MOVE_UP) )
+	{
+		menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
+	}
+
 	switch ( direction )
 	{
 		case X_MENU_UPDATE_MOVE_DOWN:
@@ -290,6 +295,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 
 		case X_MENU_UPDATE_MOVE_UP:
+			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			sel_item = x_menu_display[x_menu_level].sel_item;
 			if ( sel_item )
 				sel_item--;
@@ -378,6 +384,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 
 		case X_MENU_UPDATE_INIT:
+			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			x_menu_update_init = 1; // Mark as initialized
     		x_menu_level = 0; // Reset
 			x_menu_display[0].active_disp_row = disp_window_active_row; // back up
@@ -386,6 +393,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			return 0;
 
 		case X_MENU_UPDATE_RESET:
+			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			x_menu_level++;
 			if ( x_menu_level >= SUB_MENU_LEVEL_MAX )
 				x_menu_level = SUB_MENU_LEVEL_MAX - 1;
@@ -395,6 +403,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 
 		case X_MENU_UPDATE_RESTORE:
+			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			if ( x_menu_level )
 				x_menu_level--;
 			disp_window_active_row = x_menu_display[x_menu_level].active_disp_row; // previous values
@@ -411,6 +420,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 
 		case X_MENU_UPDATE_REFRESH:
+			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			sel_item = x_menu_display[x_menu_level].sel_item; // Restore from saved setting
 			break;
 

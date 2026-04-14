@@ -262,7 +262,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the harmless ISO C99 portability warning on `u8g2_fonts.c`.
 
 - **CI: automatic changelog version stamping** — The `build-release.yml`
-  workflow now automatically replaces `## [Unreleased]` in `CHANGELOG.md`
+  workflow now automatically replaces `## [Unreleased]
+
+## [0.9.0.80] - 2026-04-14
+
+## [0.9.0.79] - 2026-04-14` in `CHANGELOG.md`
   with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
   after each successful release, and inserts a fresh empty `## [Unreleased]`
   heading.  This prevents changelog entries from accumulating indefinitely
