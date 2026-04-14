@@ -7,6 +7,18 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **OTA download menus respect font size setting** — the source and release
+  selection lists in the firmware and ESP32 download flows now use
+  `m1_scene_draw_menu()` instead of a custom draw function.  This brings them
+  in line with the rest of the UI: they honour the user's Text Size preference
+  (Small/Medium/Large), display the standard proportional scrollbar, use the
+  correct `m1_menu_max_visible()` item count for the active font size, and show
+  the standard centred title with separator line.
+
 ## [0.9.0.78] - 2026-04-14
 
 ### Added
