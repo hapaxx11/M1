@@ -587,6 +587,83 @@ changing it:**
    `_tn` suffix font — those lack lowercase glyphs.  Use `_tr`, `_tf`, `_mr`,
    or `_mf` instead.
 
+### User-Configurable Font Size — `m1_menu_style`
+
+The user can change the menu text size in **Settings → LCD & Notifications → Text Size**.
+The setting is stored as `m1_menu_style` (declared in `m1_system.h`, defined in
+`m1_system.c`, persisted via `menu_style=N` in `settings.cfg`).
+
+| `m1_menu_style` | Label  | Row Height | Visible Items | Font |
+|-----------------|--------|------------|---------------|------|
+| 0 (default)     | Small  | 8 px       | 6             | `M1_DISP_SUB_MENU_FONT_N` (`NokiaSmallPlain`) |
+| 1               | Medium | 10 px      | 5             | `M1_DISP_FUNC_MENU_FONT_N` (`spleen5x8`) |
+| 2               | Large  | 13 px      | 4             | `M1_DISP_FUNC_MENU_FONT_N2` (`nine_by_five_nbp`) |
+
+**Helpers** (declared in `m1_scene.h`, defined in `m1_scene.c`):
+
+| Helper | Returns |
+|--------|---------|
+| `m1_menu_item_h()` | Row height in pixels (8, 10, or 13) |
+| `m1_menu_max_visible()` | Max items that fit in the 52px menu area (6, 5, or 4) |
+| `m1_menu_font()` | Pointer to the u8g2 font for the current style |
+| `M1_MENU_VIS(count)` | `min(count, m1_menu_max_visible())` — convenience macro |
+
+**Layout constants** (in `m1_scene.h`):
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `M1_MENU_AREA_TOP` | 12 | Y coordinate below title + separator |
+| `M1_MENU_AREA_H` | 52 | Available vertical space (64 − 12) |
+| `M1_MENU_TEXT_W` | 124 | Highlight/text area width (leaves 4px for scrollbar) |
+| `M1_MENU_SCROLLBAR_X` | 125 | Scrollbar left edge |
+| `M1_MENU_SCROLLBAR_W` | 3 | Scrollbar track width |
+
+#### Rules for all scrollable lists
+
+1. **NEVER hardcode visible item counts or row heights.**  Use `m1_menu_max_visible()`
+   and `m1_menu_item_h()` instead of `#define LIST_VISIBLE_ITEMS 4` or
+   `#define LIST_ITEM_HEIGHT 9`.
+2. **ALWAYS use `m1_menu_font()`** for list item text.  Do not hardcode
+   `M1_DISP_FUNC_MENU_FONT_N` or `M1_DISP_SUB_MENU_FONT_N` — the correct font
+   depends on the user's text size setting.
+3. **Use `M1_MENU_VIS(count)`** when computing the visible slice of a list.
+4. **The text baseline offset is `m1_menu_item_h() − 1`** — this places text
+   1px above the bottom of its row.
+5. **Highlight box width must be `M1_MENU_TEXT_W` (124px)**, not 128px, to leave
+   room for the scrollbar.
+6. **Include `m1_scene.h`** in any `.c` file that draws a scrollable list.
+
+#### Exceptions (justified hardcoded values)
+
+Some specialized displays intentionally use fixed row heights because they are
+**not** standard selectable menus — they are compact data displays with
+constrained vertical space:
+
+| File | Define | Justification |
+|------|--------|---------------|
+| `m1_subghz_scene_read.c` | `HISTORY_ROW_H 8`, `HISTORY_VISIBLE 3` | Compact RX history in split-screen (RSSI bar + history + bottom bar) |
+| `m1_subghz_scene_saved.c` | `DECODE_ROW_H 8`, `DECODE_VISIBLE 3` | Offline decode results in dual-view layout |
+| `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 5` | Frequency scanner data display, not a selectable menu |
+| `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6` | Legacy history (tiny rows for maximum density) |
+
+#### Non-compliant legacy menus (migration backlog)
+
+The following legacy modules still use hardcoded visible items and row heights.
+They should be converted to use the font-aware helpers when they are next
+modified:
+
+| File | Hardcoded Defines | Notes |
+|------|-------------------|-------|
+| `m1_ir_universal.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE_ITEMS 4` | IR remote browser list |
+| `m1_deauth.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE_ITEMS 5` | WiFi deauth AP/STA list |
+| `m1_app_manager.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE_ITEMS 4` | .m1app file browser |
+| `m1_802154.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE 4` | Zigbee/Thread device list |
+| `m1_bt.c` | `BT_LIST_ITEM_HEIGHT 9`, `BT_LIST_VISIBLE 4` | BT scan/saved list |
+| `m1_fw_download.c` | `DL_LIST_ROW_H 10`, `DL_LIST_MAX_VISIBLE 4` | FW release selector |
+| `m1_esp32_fw_download.c` | `DL_LIST_ROW_H 10`, `DL_LIST_MAX_VISIBLE 4` | ESP32 FW release selector |
+| `m1_subghz_scene_playlist.c` | `PLAYLIST_LIST_VISIBLE 4` (hardcoded 9px) | Playlist file selector |
+| `m1_display.c` | `SUB_MENU_TEXT_ITEMS 4` | Legacy `m1_gui_submenu_update()` API (used by NFC/RFID) |
+
 ### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
 
 > **Every caller of a function that powers off the SI4463 MUST restore radio state
@@ -858,10 +935,8 @@ port alignment straightforward.
   "OK:Browse" (tells user OK opens a file browser), "↓ Config" (tells user down opens
   config), "Send" / "Save" (action confirmation in radio scenes).
 - **When adding or removing menu items, redistribute spacing.** If the item count changes,
-  recompute the row height so items fill the available vertical zone evenly.  Calculate:
-  `row_height = available_zone_height / item_count`.  The available zone is between the
-  separator line (or header bottom) and the bottom bar (y=52 if a bar is shown, y=64 if not).
-  Adjust the highlight box height and text baseline offset to match the new row height.
+  use `m1_menu_item_h()` and `m1_menu_max_visible()` — do NOT manually recompute row
+  heights.  See [User-Configurable Font Size](#user-configurable-font-size--m1_menu_style).
 
 ---
 
@@ -927,6 +1002,9 @@ incrementally.  Do **not** delete them.
 - Never add "Back" as a menu item or button bar label.
 - When item count changes, verify `MENU_VISIBLE` and scrolling math.
 - Every scene file must be added to `cmake/m1_01/CMakeLists.txt`.
+- **All scrollable lists MUST use the font-aware helpers** (`m1_menu_item_h()`,
+  `m1_menu_max_visible()`, `m1_menu_font()`) — see the
+  [User-Configurable Font Size](#user-configurable-font-size--m1_menu_style) section.
 
 ---
 
