@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Five additional regression tests added to `test_http_client_parse` covering
   the `http_readiness_status()` split-check logic.
 
+- **OTA download: unnecessary ESP32 init/deinit when WiFi not connected** —
+  `fw_download_start()` and `esp32_fw_download_start()` unconditionally called
+  `m1_esp32_init()` / `esp32_main_init()` at entry, even when WiFi was not
+  connected or `M1_APP_WIFI_CONNECT_ENABLE` was absent.  The block is now
+  guarded with `#ifdef M1_APP_WIFI_CONNECT_ENABLE` and gated on
+  `wifi_is_connected()`, so no hardware init/deinit side effects occur when the
+  download will immediately fail the WiFi readiness check.
+
 ## [0.9.0.86] - 2026-04-14
 
 ### Fixed
