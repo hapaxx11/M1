@@ -195,36 +195,27 @@ static void draw_dashboard(uint8_t selection)
 	u8g2_DrawStr(&m1_u8g2, 2, 10, "Universal Remote");
 	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
 
-	/* Menu items — show up to 4 visible with scrolling */
+	/* Menu items — all 5 items fit without scrolling */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	uint8_t visible_start = 0;
-	uint8_t visible_count = 4; /* max items visible below header */
-	if (selection >= visible_count)
-		visible_start = selection - visible_count + 1;
 
-	for (i = 0; i < visible_count && (visible_start + i) < DASHBOARD_ITEM_COUNT; i++)
+	for (i = 0; i < DASHBOARD_ITEM_COUNT; i++)
 	{
-		uint8_t idx = visible_start + i;
 		uint8_t y = DASHBOARD_START_Y + (i * DASHBOARD_ITEM_HEIGHT);
 
-		if (idx == selection)
+		if (i == selection)
 		{
 			/* Draw selection highlight */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_DrawBox(&m1_u8g2, 0, y, 128, DASHBOARD_ITEM_HEIGHT);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[idx]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[i]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[idx]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[i]);
 		}
 	}
-
-	/* Bottom bar */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Select", arrowright_8x8);
 
 	m1_u8g2_nextpage();
 } // static void draw_dashboard(uint8_t selection)
