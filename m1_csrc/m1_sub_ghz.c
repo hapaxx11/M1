@@ -33,6 +33,7 @@
 #include "flipper_subghz.h"
 #include "m1_settings.h"
 #include "m1_virtual_kb.h"
+#include "m1_scene.h"
 #include "uiView.h"
 
 /*************************** D E F I N E S ************************************/
@@ -2115,27 +2116,47 @@ static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val)
 	f_unlink(tmp_path);
 }
 
-#define ADDMAN_VISIBLE_ITEMS  5
-
 static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 {
+	const uint8_t item_h   = m1_menu_item_h();
+	const uint8_t text_ofs = item_h - 1;
+	const uint8_t max_vis  = m1_menu_max_visible();
+
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_text(&m1_u8g2, 2, 10, 124, "Add Manually", TEXT_ALIGN_CENTER);
+	m1_draw_text(&m1_u8g2, 2, 9, 120, "Add Manually", TEXT_ALIGN_CENTER);
 
-	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	for (uint8_t i = 0; i < ADDMAN_VISIBLE_ITEMS && (scroll_top + i) < SUBGHZ_ADD_MANUALLY_COUNT; i++)
+	u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+	u8g2_SetFont(&m1_u8g2, m1_menu_font());
+	for (uint8_t i = 0; i < max_vis && (scroll_top + i) < SUBGHZ_ADD_MANUALLY_COUNT; i++)
 	{
 		uint8_t idx = scroll_top + i;
-		uint8_t y = 12 + i * 10;
+		uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 		if (idx == sel)
 		{
-			u8g2_DrawBox(&m1_u8g2, 0, y, 128, 10);
+			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
-		u8g2_DrawStr(&m1_u8g2, 4, y + 9, subghz_add_manually_list[idx].label);
+		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, subghz_add_manually_list[idx].label);
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	}
+
+	/* Scrollbar */
+	if (SUBGHZ_ADD_MANUALLY_COUNT > max_vis)
+	{
+		uint8_t sb_area_h   = max_vis * item_h;
+		uint8_t sb_handle_h = sb_area_h / SUBGHZ_ADD_MANUALLY_COUNT;
+		if (sb_handle_h < 2)
+			sb_handle_h = 2;
+		uint8_t sb_handle_y = M1_MENU_AREA_TOP +
+			(uint8_t)((uint16_t)sb_area_h * sel / SUBGHZ_ADD_MANUALLY_COUNT);
+
+		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
+		               M1_MENU_SCROLLBAR_W, sb_area_h);
+		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+		             M1_MENU_SCROLLBAR_W, sb_handle_h);
 	}
 
 	m1_u8g2_nextpage();
@@ -2204,17 +2225,19 @@ void sub_ghz_add_manually(void)
 		}
 		else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 		{
+			uint8_t max_vis = m1_menu_max_visible();
 			if (sel > 0) sel--;
 			else sel = SUBGHZ_ADD_MANUALLY_COUNT - 1;
 			if (sel < scroll_top) scroll_top = sel;
-			if (sel >= scroll_top + ADDMAN_VISIBLE_ITEMS) scroll_top = sel - ADDMAN_VISIBLE_ITEMS + 1;
+			if (sel >= scroll_top + max_vis) scroll_top = sel - max_vis + 1;
 		}
 		else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
 		{
+			uint8_t max_vis = m1_menu_max_visible();
 			sel++;
 			if (sel >= SUBGHZ_ADD_MANUALLY_COUNT) sel = 0;
 			if (sel < scroll_top) scroll_top = sel;
-			if (sel >= scroll_top + ADDMAN_VISIBLE_ITEMS) scroll_top = sel - ADDMAN_VISIBLE_ITEMS + 1;
+			if (sel >= scroll_top + max_vis) scroll_top = sel - max_vis + 1;
 		}
 		else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
