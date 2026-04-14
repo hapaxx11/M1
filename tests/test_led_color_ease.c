@@ -47,8 +47,8 @@ void test_ease_level_50_returns_midpoint(void)
                       0x00, 0x00, 0x00,  /* low:  0,   0,   0 */
                       &r, &g, &b);
     TEST_ASSERT_EQUAL_HEX8(0x00, r);
-    TEST_ASSERT_EQUAL_HEX8(127, g);  /* 255*50/100 = 127 */
-    TEST_ASSERT_EQUAL_HEX8(50, b);   /* 100*50/100 = 50  */
+    TEST_ASSERT_EQUAL_HEX8(0x7F, g);  /* 255*50/100 = 127 */
+    TEST_ASSERT_EQUAL_HEX8(0x32, b);   /* 100*50/100 = 50  */
 }
 
 /* ---- Default color test: #331480 ↔ ~#331480 = #CCEB7F ---- */
