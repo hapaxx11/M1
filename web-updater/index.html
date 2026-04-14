@@ -39,6 +39,21 @@
                 </button>
                 <span id="connection-status" class="status-badge status-disconnected">Disconnected</span>
             </div>
+
+            <!-- Android / mobile troubleshooting (hidden by default, shown by JS) -->
+            <div id="mobile-tips" class="mobile-tips hidden">
+                <h3>📱 Android Connection Tips</h3>
+                <ol>
+                    <li>Connect your M1 via a <strong>USB OTG</strong> adapter/cable.</li>
+                    <li>When Android prompts for USB device permission, tap <strong>OK</strong>.</li>
+                    <li>If the device still doesn't appear, tap <strong>Grant USB Access</strong>
+                        below, select the <em>STM32</em> device, then tap <strong>Connect</strong> again.</li>
+                </ol>
+                <button id="btn-usb-permission" class="btn-small btn-secondary">
+                    🔓 Grant USB Access
+                </button>
+                <span id="usb-permission-status" class="usb-permission-status"></span>
+            </div>
         </div>
 
         <!-- 2. Device Info (shown after connecting) -->

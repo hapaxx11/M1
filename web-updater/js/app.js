@@ -62,6 +62,13 @@ const $ = (id) => document.getElementById(id);
 
 const elements = {};
 
+/**
+ * Detect mobile/Android using User-Agent Client Hints (preferred)
+ * with a UA string fallback for older browsers.
+ */
+const isMobile = (navigator.userAgentData && navigator.userAgentData.mobile)
+    || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 function cacheElements() {
     const ids = [
         'btn-connect', 'btn-disconnect', 'connection-status',
@@ -75,6 +82,9 @@ function cacheElements() {
         'log-output',
         'browser-warning',
         'btn-local-file',
+        'mobile-tips',
+        'btn-usb-permission',
+        'usb-permission-status',
     ];
     for (const id of ids) {
         elements[id] = $(id);
@@ -343,7 +353,11 @@ async function handleConnect() {
             log(`FW info query failed: ${err.message}`, 'warn');
         }
     } catch (err) {
-        log(`Connection failed: ${err.message}`, 'error');
+        if (isMobile && err.name === 'NotFoundError') {
+            log('No serial device found. Make sure the M1 is connected via USB OTG and tap "Grant USB Access" first.', 'warn');
+        } else {
+            log(`Connection failed: ${err.message}`, 'error');
+        }
         updateConnectionUI(false);
     }
 }
@@ -593,6 +607,40 @@ function init() {
     elements['btn-local-file'].addEventListener('click', () => {
         elements['local-file-input'].click();
     });
+
+    // Android / mobile: show troubleshooting tips and USB permission button
+    if (isMobile) {
+        elements['mobile-tips'].classList.remove('hidden');
+
+        if ('usb' in navigator) {
+            elements['btn-usb-permission'].addEventListener('click', async () => {
+                try {
+                    const device = await navigator.usb.requestDevice({
+                        filters: [
+                            { vendorId: 0x0483, productId: 0x5750 },
+                            { vendorId: 0x0483, productId: 0x5740 },
+                            { vendorId: 0x0483, productId: 0x572A },
+                        ]
+                    });
+                    elements['usb-permission-status'].textContent = '✓ Access granted';
+                    elements['usb-permission-status'].style.color = 'var(--success)';
+                    log(`USB access granted for ${device.productName || 'STM32 device'}. Now tap Connect.`, 'success');
+                } catch (e) {
+                    if (e.name === 'NotFoundError') {
+                        elements['usb-permission-status'].textContent = 'No device found';
+                        elements['usb-permission-status'].style.color = 'var(--warning)';
+                        log('No STM32 USB device found. Ensure M1 is connected via USB OTG cable.', 'warn');
+                    } else {
+                        log(`USB permission request: ${e.message}`, 'warn');
+                    }
+                }
+            });
+        } else {
+            elements['btn-usb-permission'].disabled = true;
+            elements['usb-permission-status'].textContent = 'WebUSB not available';
+            elements['usb-permission-status'].style.color = 'var(--text-muted)';
+        }
+    }
 
     // Initial UI state
     updateConnectionUI(false);
