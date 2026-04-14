@@ -23,7 +23,7 @@
 #define M1_DISP_MAIN_MENU_FONT_B		u8g2_font_helvB08_tf
 #define M1_DISP_SUB_MENU_FONT_N			u8g2_font_NokiaSmallPlain_tf //u8g2_font_spleen5x8_mf // small normal font
 #define M1_DISP_SUB_MENU_FONT_B			u8g2_font_squeezed_b7_tr //, u8g2_font_ncenB08_tf: slightly wide bold,
-#define M1_DISP_FUNC_MENU_FONT_N		u8g2_font_spleen5x8_mf // u8g2_font_nine_by_five_nbp_tf // u8g2_font_miranda_nbp_tf // u8g2_font_5x8_tf
+#define M1_DISP_FUNC_MENU_FONT_N		u8g2_font_profont12_mr // 6x12 mono, ascent 8 — genuine step up from Small (ascent 7)
 #define M1_DISP_FUNC_MENU_FONT_N2		u8g2_font_nine_by_five_nbp_tf // larger and clear font
 
 #define M1_DISP_RUN_MENU_FONT_B			u8g2_font_courB08_tf // small bold font, //u8g2_font_resoledbold_tr: small bold font

@@ -34,6 +34,7 @@
 #include "ff.h"
 #include "m1_virtual_kb.h"
 #include "m1_file_util.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -45,9 +46,8 @@
 #define DASHBOARD_START_Y     13
 
 #define LIST_HEADER_HEIGHT    12
-#define LIST_ITEM_HEIGHT      9
 #define LIST_START_Y          (LIST_HEADER_HEIGHT + 2)
-#define LIST_VISIBLE_ITEMS    4
+#define LIST_VISIBLE_ITEMS    ((uint8_t)(38 / m1_menu_item_h()))
 
 #define IR_LEARNED_DIR        IR_UNIVERSAL_IRDB_ROOT "/Learned"
 
@@ -195,36 +195,27 @@ static void draw_dashboard(uint8_t selection)
 	u8g2_DrawStr(&m1_u8g2, 2, 10, "Universal Remote");
 	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
 
-	/* Menu items — show up to 4 visible with scrolling */
+	/* Menu items — all 5 items fit without scrolling */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	uint8_t visible_start = 0;
-	uint8_t visible_count = 4; /* max items visible below header */
-	if (selection >= visible_count)
-		visible_start = selection - visible_count + 1;
 
-	for (i = 0; i < visible_count && (visible_start + i) < DASHBOARD_ITEM_COUNT; i++)
+	for (i = 0; i < DASHBOARD_ITEM_COUNT; i++)
 	{
-		uint8_t idx = visible_start + i;
 		uint8_t y = DASHBOARD_START_Y + (i * DASHBOARD_ITEM_HEIGHT);
 
-		if (idx == selection)
+		if (i == selection)
 		{
 			/* Draw selection highlight */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_DrawBox(&m1_u8g2, 0, y, 128, DASHBOARD_ITEM_HEIGHT);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[idx]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[i]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[idx]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[i]);
 		}
 	}
-
-	/* Bottom bar */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Select", arrowright_8x8);
 
 	m1_u8g2_nextpage();
 } // static void draw_dashboard(uint8_t selection)
@@ -351,6 +342,8 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 	uint16_t start_idx;
 	uint16_t visible;
 	uint8_t y;
+	const uint8_t item_h = m1_menu_item_h();
+	const uint8_t text_ofs = item_h - 1;
 
 	/* Calculate which items are visible in the scroll window */
 	if (selection < LIST_VISIBLE_ITEMS)
@@ -371,35 +364,35 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 	u8g2_DrawHLine(&m1_u8g2, 0, LIST_HEADER_HEIGHT, 128);
 
 	/* List items */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_SetFont(&m1_u8g2, m1_menu_font());
 	for (i = 0; i < visible; i++)
 	{
 		uint16_t idx = start_idx + i;
-		y = LIST_START_Y + (i * LIST_ITEM_HEIGHT);
+		y = LIST_START_Y + (i * item_h);
 
 		if (idx == selection)
 		{
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, y, 128, LIST_ITEM_HEIGHT);
+			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_browse_names[idx]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_browse_names[idx]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_browse_names[idx]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_browse_names[idx]);
 		}
 	}
 
 	/* Scroll indicator */
 	if (count > LIST_VISIBLE_ITEMS)
 	{
-		uint8_t bar_height = (LIST_VISIBLE_ITEMS * LIST_ITEM_HEIGHT * LIST_VISIBLE_ITEMS) / count;
+		uint8_t bar_height = (LIST_VISIBLE_ITEMS * item_h * LIST_VISIBLE_ITEMS) / count;
 		uint8_t bar_y;
 
 		if (bar_height < 4)
 			bar_height = 4;
-		bar_y = LIST_START_Y + (start_idx * (LIST_VISIBLE_ITEMS * LIST_ITEM_HEIGHT - bar_height)) / (count - LIST_VISIBLE_ITEMS);
+		bar_y = LIST_START_Y + (start_idx * (LIST_VISIBLE_ITEMS * item_h - bar_height)) / (count - LIST_VISIBLE_ITEMS);
 		u8g2_DrawBox(&m1_u8g2, 126, bar_y, 2, bar_height);
 	}
 
