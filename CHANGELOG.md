@@ -264,6 +264,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI: automatic changelog version stamping** — The `build-release.yml`
   workflow now automatically replaces `## [Unreleased]
 
+## [0.9.0.80] - 2026-04-14
+
 ## [0.9.0.79] - 2026-04-14` in `CHANGELOG.md`
   with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
   after each successful release, and inserts a fresh empty `## [Unreleased]`
