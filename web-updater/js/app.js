@@ -62,6 +62,15 @@ const $ = (id) => document.getElementById(id);
 
 const elements = {};
 
+/**
+ * Detect Android specifically — the troubleshooting panel and WebUSB
+ * permission flow only apply to Android.  iOS does not support Web Serial
+ * or WebUSB, so showing the panel there would be misleading.
+ * Prefer User-Agent Client Hints when available, fall back to UA string.
+ */
+const isAndroid = (navigator.userAgentData && navigator.userAgentData.platform === 'Android')
+    || /Android/i.test(navigator.userAgent);
+
 function cacheElements() {
     const ids = [
         'btn-connect', 'btn-disconnect', 'connection-status',
@@ -75,6 +84,9 @@ function cacheElements() {
         'log-output',
         'browser-warning',
         'btn-local-file',
+        'mobile-tips',
+        'btn-usb-permission',
+        'usb-permission-status',
     ];
     for (const id of ids) {
         elements[id] = $(id);
@@ -343,7 +355,15 @@ async function handleConnect() {
             log(`FW info query failed: ${err.message}`, 'warn');
         }
     } catch (err) {
-        log(`Connection failed: ${err.message}`, 'error');
+        if (err.name === 'NotFoundError') {
+            if (isAndroid) {
+                log('No device selected. If the M1 is connected via USB OTG, try "Grant USB Access" first, then tap Connect again.', 'warn');
+            } else {
+                log('No serial port selected. Make sure the M1 is connected and try again.', 'warn');
+            }
+        } else {
+            log(`Connection failed: ${err.message}`, 'error');
+        }
         updateConnectionUI(false);
     }
 }
@@ -593,6 +613,42 @@ function init() {
     elements['btn-local-file'].addEventListener('click', () => {
         elements['local-file-input'].click();
     });
+
+    // Android: show troubleshooting tips and USB permission button
+    if (isAndroid) {
+        elements['mobile-tips'].classList.remove('hidden');
+
+        if ('usb' in navigator) {
+            elements['btn-usb-permission'].addEventListener('click', async () => {
+                try {
+                    const device = await navigator.usb.requestDevice({
+                        filters: [
+                            { vendorId: 0x0483, productId: 0x5750 },
+                            { vendorId: 0x0483, productId: 0x5740 },
+                            { vendorId: 0x0483, productId: 0x572A },
+                        ]
+                    });
+                    elements['usb-permission-status'].textContent = '✓ Access granted';
+                    elements['usb-permission-status'].style.color = 'var(--success)';
+                    log(`USB access granted for ${device.productName || 'STM32 device'}. Now tap Connect.`, 'success');
+                } catch (e) {
+                    if (e.name === 'NotFoundError') {
+                        elements['usb-permission-status'].textContent = 'No device selected';
+                        elements['usb-permission-status'].style.color = 'var(--text-muted)';
+                        log('USB chooser dismissed — no device selected. If M1 is connected, try again.', 'info');
+                    } else if (e.name === 'SecurityError') {
+                        log('USB permission denied by the browser.', 'warn');
+                    } else {
+                        log(`USB permission request: ${e.message}`, 'warn');
+                    }
+                }
+            });
+        } else {
+            elements['btn-usb-permission'].disabled = true;
+            elements['usb-permission-status'].textContent = 'WebUSB not available';
+            elements['usb-permission-status'].style.color = 'var(--text-muted)';
+        }
+    }
 
     // Initial UI state
     updateConnectionUI(false);
