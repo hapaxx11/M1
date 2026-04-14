@@ -101,9 +101,23 @@ confirmed from schematic net labels alone.  The `NFC/` source directory and the 
 ## Display
 
 - **LCD1**: 128×64 dot matrix LCD, 1/65 duty, 1/9 bias
+- Controller: **ST7567** (132-segment column RAM, 128 visible)
 - Interface connector: **J2** (LCD interface)
 - SPI-connected: `DISPLAY_CS`, `DISPLAY_RST`, `DISPLAY_D1`, `DISPLAY_SCK`
 - No touch interface signals visible in schematic sheets
+
+**Known limitation — dark mode border glow:**
+When dark mode is enabled (ST7567 hardware pixel inversion command `0xA7`), a faint
+bright border is visible around all four edges of the display.  This is a physical
+characteristic of the LCD module: the glass viewing area extends slightly beyond the
+128×64 active pixel matrix.  In normal (light-background) mode the light leakage from
+this border region blends with the bright background and is imperceptible; in dark mode
+the surrounding dark background creates contrast that makes the border visible.
+
+The firmware already zeroes all 132 controller RAM columns (including the 4 unused ones)
+via `m1_lcd_clear_full_ram()`, so the border is **not** caused by stale RAM content.
+The glow appears identically in both Normal and Southpaw orientations, confirming it is
+a hardware artefact rather than a firmware issue.  **This cannot be fixed in firmware.**
 
 ---
 
