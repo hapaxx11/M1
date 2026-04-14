@@ -35,9 +35,7 @@
 #define FW_DOWNLOAD_DIR     "0:/Firmware"
 
 /* Display layout constants */
-#define DL_TITLE_Y          10
-#define DL_LIST_Y_START     22
-#define DL_LIST_MAX_VISIBLE  ((uint8_t)(42 / m1_menu_item_h()))
+#define DL_CONFIRM_TITLE_Y   10  /* Text baseline within the 14px inverted title bar */
 #define DL_PROGRESS_BAR_X    4
 #define DL_PROGRESS_BAR_Y   30
 #define DL_PROGRESS_BAR_W  120
@@ -58,67 +56,6 @@ static bool dl_wait_ok_or_back(void);
 static uint32_t s_dl_downloaded;
 static uint32_t s_dl_total;
 static bool s_dl_cancelled;
-
-/*
- * Draw a selection list on screen. Generic helper.
- *
- * title:       Title string at top
- * items:       Array of item name strings
- * count:       Number of items
- * selected:    Currently selected index (highlighted)
- * scroll_off:  Scroll offset for lists > DL_LIST_MAX_VISIBLE
- */
-static void dl_draw_list(const char *title, const char **items, uint8_t count,
-                          uint8_t selected, uint8_t scroll_off)
-{
-	uint8_t i;
-	uint8_t y;
-	const uint8_t item_h = m1_menu_item_h();
-	const uint8_t text_ofs = item_h - 1;
-	uint8_t vis_count = count - scroll_off;
-	if (vis_count > DL_LIST_MAX_VISIBLE)
-		vis_count = DL_LIST_MAX_VISIBLE;
-
-	m1_u8g2_firstpage();
-	do {
-		/* Title bar */
-		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, DL_TITLE_Y, title);
-
-		/* List items */
-		u8g2_SetFont(&m1_u8g2, m1_menu_font());
-		for (i = 0; i < vis_count; i++)
-		{
-			uint8_t idx = scroll_off + i;
-			y = DL_LIST_Y_START + i * item_h;
-
-			if (idx == selected)
-			{
-				u8g2_DrawBox(&m1_u8g2, 0, y - item_h + 2, M1_MENU_TEXT_W, item_h);
-				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-				u8g2_DrawStr(&m1_u8g2, 4, y, items[idx]);
-				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-				u8g2_SetFont(&m1_u8g2, m1_menu_font());
-			}
-			else
-			{
-				u8g2_DrawStr(&m1_u8g2, 4, y, items[idx]);
-			}
-		}
-
-		/* Scroll indicator if needed */
-		if (count > DL_LIST_MAX_VISIBLE)
-		{
-			if (scroll_off > 0)
-				u8g2_DrawXBMP(&m1_u8g2, 120, 14, 8, 8, arrowup_8x8);
-			if (scroll_off + DL_LIST_MAX_VISIBLE < count)
-				u8g2_DrawXBMP(&m1_u8g2, 120, 52, 8, 8, arrowdown_8x8);
-		}
-	} while (m1_u8g2_nextpage());
-}
 
 /*
  * Draw a two-line message on screen.
@@ -181,15 +118,17 @@ static bool dl_select_from_list(const char *title, const char **items, uint8_t c
 	if (count == 0)
 		return false;
 
+	const uint8_t visible = M1_MENU_VIS(count);
+
 	for (;;)
 	{
 		/* Adjust scroll to keep selection visible */
 		if (sel < scroll)
 			scroll = sel;
-		if (sel >= scroll + DL_LIST_MAX_VISIBLE)
-			scroll = sel - DL_LIST_MAX_VISIBLE + 1;
+		if (sel >= scroll + visible)
+			scroll = sel - visible + 1;
 
-		dl_draw_list(title, items, count, sel, scroll);
+		m1_scene_draw_menu(title, items, count, sel, scroll, visible);
 
 		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE)
 		{
@@ -294,7 +233,7 @@ static bool dl_confirm_download(const fw_release_t *release)
 
 		/* Title */
 		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, DL_TITLE_Y, "Confirm Download");
+		u8g2_DrawStr(&m1_u8g2, 2, DL_CONFIRM_TITLE_Y, "Confirm Download");
 
 		/* File info */
 		u8g2_DrawStr(&m1_u8g2, 4, 24, name_str);
