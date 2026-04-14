@@ -27,6 +27,7 @@
 #include "m1_watchdog.h"
 #include "m1_file_browser.h"
 #include "m1_log_debug.h"
+#include "m1_scene.h"
 
 #define FW_DL_TAG "FW_DL"
 
@@ -36,8 +37,7 @@
 /* Display layout constants */
 #define DL_TITLE_Y          10
 #define DL_LIST_Y_START     22
-#define DL_LIST_ROW_H       10
-#define DL_LIST_MAX_VISIBLE  4
+#define DL_LIST_MAX_VISIBLE  ((uint8_t)(42 / m1_menu_item_h()))
 #define DL_PROGRESS_BAR_X    4
 #define DL_PROGRESS_BAR_Y   30
 #define DL_PROGRESS_BAR_W  120
@@ -73,6 +73,8 @@ static void dl_draw_list(const char *title, const char **items, uint8_t count,
 {
 	uint8_t i;
 	uint8_t y;
+	const uint8_t item_h = m1_menu_item_h();
+	const uint8_t text_ofs = item_h - 1;
 	uint8_t vis_count = count - scroll_off;
 	if (vis_count > DL_LIST_MAX_VISIBLE)
 		vis_count = DL_LIST_MAX_VISIBLE;
@@ -86,19 +88,20 @@ static void dl_draw_list(const char *title, const char **items, uint8_t count,
 		u8g2_DrawStr(&m1_u8g2, 2, DL_TITLE_Y, title);
 
 		/* List items */
+		u8g2_SetFont(&m1_u8g2, m1_menu_font());
 		for (i = 0; i < vis_count; i++)
 		{
 			uint8_t idx = scroll_off + i;
-			y = DL_LIST_Y_START + i * DL_LIST_ROW_H;
+			y = DL_LIST_Y_START + i * item_h;
 
 			if (idx == selected)
 			{
-				u8g2_DrawBox(&m1_u8g2, 0, y - DL_LIST_ROW_H + 2, M1_LCD_DISPLAY_WIDTH, DL_LIST_ROW_H);
+				u8g2_DrawBox(&m1_u8g2, 0, y - item_h + 2, M1_MENU_TEXT_W, item_h);
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
 				u8g2_DrawStr(&m1_u8g2, 4, y, items[idx]);
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+				u8g2_SetFont(&m1_u8g2, m1_menu_font());
 			}
 			else
 			{
