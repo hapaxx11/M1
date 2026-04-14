@@ -31,6 +31,7 @@
 #include "m1_games.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
+#include "m1_scene.h"
 
 #define TAG "DEAUTH"
 
@@ -46,9 +47,8 @@
 #define MAX_SIZE_TITLE   64
 
 #define LIST_HEADER_HEIGHT  12
-#define LIST_ITEM_HEIGHT    9
 #define LIST_START_Y        (LIST_HEADER_HEIGHT + 2)
-#define LIST_VISIBLE_ITEMS  5
+#define LIST_VISIBLE_ITEMS  ((uint8_t)(38 / m1_menu_item_h()))
 
 #define INPUT_POLL_DELAY    200
 
@@ -440,6 +440,8 @@ static void draw_list(u8g2_t *u8g2, char *title, uint16_t count, uint16_t select
     uint16_t start_idx;
     uint16_t visible;
     uint8_t  y;
+    const uint8_t item_h = m1_menu_item_h();
+    const uint8_t text_ofs = item_h - 1;
 
     /* Calculate which items are visible */
     if (selection < LIST_VISIBLE_ITEMS)
@@ -454,39 +456,39 @@ static void draw_list(u8g2_t *u8g2, char *title, uint16_t count, uint16_t select
     m1_u8g2_firstpage();
     draw_title_bar(title);
 
-    u8g2_SetFont(u8g2, u8g2_font_5x8_tr);
+    u8g2_SetFont(u8g2, m1_menu_font());
 
     if (count > 0 && (s_state == STATE_AP_SELECT || s_state == STATE_STA_SELECT)) {
         for (i = 0; i < visible; i++) {
             uint16_t idx = start_idx + i;
-            y = LIST_START_Y + (i * LIST_ITEM_HEIGHT);
+            y = LIST_START_Y + (i * item_h);
 
             if (idx == selection) {
                 u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
-                u8g2_DrawBox(u8g2, 0, y, 128, LIST_ITEM_HEIGHT);
+                u8g2_DrawBox(u8g2, 0, y, M1_MENU_TEXT_W, item_h);
                 u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_BG);
                 if (s_state == STATE_AP_SELECT)
-                    u8g2_DrawStr(u8g2, 4, y + 8, s_list_items[idx].name);
+                    u8g2_DrawStr(u8g2, 4, y + text_ofs, s_list_items[idx].name);
                 else
-                    u8g2_DrawStr(u8g2, 4, y + 8, s_list_items[idx].address);
+                    u8g2_DrawStr(u8g2, 4, y + text_ofs, s_list_items[idx].address);
                 u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
             } else {
                 if (s_state == STATE_AP_SELECT)
-                    u8g2_DrawStr(u8g2, 4, y + 8, s_list_items[idx].name);
+                    u8g2_DrawStr(u8g2, 4, y + text_ofs, s_list_items[idx].name);
                 else
-                    u8g2_DrawStr(u8g2, 4, y + 8, s_list_items[idx].address);
+                    u8g2_DrawStr(u8g2, 4, y + text_ofs, s_list_items[idx].address);
             }
         }
 
         /* Scroll indicator */
         if (count > LIST_VISIBLE_ITEMS) {
-            uint8_t bar_height = (LIST_VISIBLE_ITEMS * LIST_ITEM_HEIGHT * LIST_VISIBLE_ITEMS)
+            uint8_t bar_height = (LIST_VISIBLE_ITEMS * item_h * LIST_VISIBLE_ITEMS)
                                  / count;
             if (bar_height < 4)
                 bar_height = 4;
 
             uint8_t bar_y = LIST_START_Y
-                          + (start_idx * (LIST_VISIBLE_ITEMS * LIST_ITEM_HEIGHT - bar_height))
+                          + (start_idx * (LIST_VISIBLE_ITEMS * item_h - bar_height))
                             / (count - LIST_VISIBLE_ITEMS);
             u8g2_DrawBox(u8g2, 126, bar_y, 2, bar_height);
         }
@@ -500,21 +502,23 @@ static void draw_list(u8g2_t *u8g2, char *title, uint16_t count, uint16_t select
 static void draw_menu(u8g2_t *u8g2, uint16_t selection)
 {
     uint8_t y;
+    const uint8_t item_h = m1_menu_item_h();
+    const uint8_t text_ofs = item_h - 1;
 
     m1_u8g2_firstpage();
     draw_title_bar(TITLE_DEFAULT);
 
     for (int i = 0; i < MAIN_MENU_OPTS; i++) {
-        y = LIST_START_Y + (i * (LIST_ITEM_HEIGHT + 2));
+        y = LIST_START_Y + (i * (item_h + 2));
 
         if (i == (int)selection) {
             u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawBox(u8g2, 0, y, 128, LIST_ITEM_HEIGHT);
+            u8g2_DrawBox(u8g2, 0, y, M1_MENU_TEXT_W, item_h);
             u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_BG);
-            u8g2_DrawStr(u8g2, 4, y + 8, s_main_menu_options[i]);
+            u8g2_DrawStr(u8g2, 4, y + text_ofs, s_main_menu_options[i]);
             u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
         } else {
-            u8g2_DrawStr(u8g2, 4, y + 8, s_main_menu_options[i]);
+            u8g2_DrawStr(u8g2, 4, y + text_ofs, s_main_menu_options[i]);
         }
     }
 
@@ -543,7 +547,7 @@ static void draw_preflight_failed(u8g2_t *u8g2)
     int start_y = 32;
     for (int c = 0; c < PREFLIGHT_AT_CHECKS; c++) {
         if (tests & 1) {
-            u8g2_DrawStr(u8g2, 4, start_y + (i * LIST_ITEM_HEIGHT), PREFLIGHT_AT_COMMANDS[c]);
+            u8g2_DrawStr(u8g2, 4, start_y + (i * m1_menu_item_h()), PREFLIGHT_AT_COMMANDS[c]);
             i++;
         }
         tests = tests >> 1;
