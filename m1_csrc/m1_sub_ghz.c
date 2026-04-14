@@ -2115,7 +2115,7 @@ static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val)
 	f_unlink(tmp_path);
 }
 
-#define ADDMAN_VISIBLE_ITEMS  4
+#define ADDMAN_VISIBLE_ITEMS  5
 
 static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 {
@@ -2138,7 +2138,6 @@ static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	}
 
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Select", arrowright_8x8);
 	m1_u8g2_nextpage();
 }
 
