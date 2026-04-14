@@ -839,7 +839,7 @@ static void startup_bu_registers_init(void)
  *   Each icon is 10x10 px with 2 px gap between them.
  *
  *   SD card icon is shown only when a card is physically detected.
- *   BT and WiFi icons are shown only when the ESP32 HAL is initialized.
+ *   BT and WiFi icons are always shown — the ESP32-C6 is fixed hardware.
  */
 /*============================================================================*/
 static void splash_draw_status_icons(void)
@@ -857,18 +857,12 @@ static void splash_draw_status_icons(void)
 		icon_x += icon_w + icon_gap;
 	}
 
-	/* Bluetooth: show icon when ESP32 HAL is initialized */
-	if (m1_esp32_get_init_status())
-	{
-		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_bt_10x10);
-		icon_x += icon_w + icon_gap;
-	}
+	/* Bluetooth: always show — ESP32-C6 is fixed hardware on every M1 board */
+	u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_bt_10x10);
+	icon_x += icon_w + icon_gap;
 
-	/* WiFi: show icon when ESP32 HAL is initialized */
-	if (m1_esp32_get_init_status())
-	{
-		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_wifi_10x10);
-	}
+	/* WiFi: always show — ESP32-C6 is fixed hardware on every M1 board */
+	u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_wifi_10x10);
 }
 
 

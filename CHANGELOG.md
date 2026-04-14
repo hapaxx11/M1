@@ -7,6 +7,16 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Splash screen BT/WiFi icons** — Bluetooth and WiFi icons were never visible
+  on the splash screen because they were gated on `m1_esp32_get_init_status()`,
+  which is always false at boot (ESP32 is initialized lazily by apps).  Both
+  icons are now drawn unconditionally since the ESP32-C6 is fixed hardware on
+  every M1 board.
+
 ## [0.9.0.78] - 2026-04-14
 
 ### Added
