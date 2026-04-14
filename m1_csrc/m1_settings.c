@@ -1,14 +1,14 @@
 /* See COPYING.txt for license details. */
 
 /*
-*
-*  m1_settings.c
-*
-*  M1 RFID functions
-*
-* M1 Project
-*
-*/
+ *
+ *  m1_settings.c
+ *
+ *  M1 RFID functions
+ *
+ * M1 Project
+ *
+ */
 
 /*************************** I N C L U D E S **********************************/
 
@@ -52,8 +52,7 @@
 #define LCD_SET_TEXT_SIZE     7
 #define LCD_SET_DARK_MODE    8
 
-//************************** S T R U C T U R E S *******************************
-
+//************************** S T R U C T U R E S *******************************\n
 /***************************** V A R I A B L E S ******************************/
 
 static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
@@ -85,7 +84,6 @@ void menu_settings_init(void)
 } // void menu_settings_init(void)
 
 
-
 /*============================================================================*/
 /**
   * @brief
@@ -97,7 +95,6 @@ void menu_settings_exit(void)
 {
 	;
 } // void menu_settings_exit(void)
-
 
 
 /*============================================================================*/
@@ -117,7 +114,6 @@ static void settings_apply_orientation(uint8_t orient)
     else
         m1_lcd_set_rotation(U8G2_R2);
 }
-
 
 /*============================================================================*/
 /**
@@ -335,9 +331,9 @@ void settings_lcd_and_notifications(void)
                     *cr = r; *cg = g; *cb = b;
                 }
             }
-            this_button_status.event[BUTTON_OK_KP_ID] = BUTTON_EVENT_NONE;
-            this_button_status.event[BUTTON_LEFT_KP_ID] = BUTTON_EVENT_NONE;
-            this_button_status.event[BUTTON_RIGHT_KP_ID] = BUTTON_EVENT_NONE;
+            this_button_status.event[BUTTON_OK_KP_ID] = BUTTON_EVENT_IDLE;
+            this_button_status.event[BUTTON_LEFT_KP_ID] = BUTTON_EVENT_IDLE;
+            this_button_status.event[BUTTON_RIGHT_KP_ID] = BUTTON_EVENT_IDLE;
             needs_redraw = 1;
             continue;
         }
@@ -435,7 +431,6 @@ void settings_lcd_and_notifications(void)
 }
 
 
-
 /*============================================================================*/
 /**
   * @brief
@@ -449,7 +444,6 @@ void settings_buzzer(void)
 } // void settings_sound(void)
 
 
-
 /*============================================================================*/
 /**
   * @brief
@@ -461,7 +455,6 @@ void settings_power(void)
 {
 	;
 } // void settings_power(void)
-
 
 
 /*============================================================================*/
