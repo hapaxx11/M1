@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Web updater: Android "No compatible devices found"** — Added Android-specific
+  troubleshooting panel with connection tips (USB OTG requirement, system permission
+  dialog) and a "Grant USB Access" button that uses the WebUSB API to trigger
+  Android's USB device permission dialog before the Web Serial port picker is shown.
+  Improved error message when port selection fails on mobile to guide users through
+  the permission flow.
+
 - **OTA download: misleading error code when ESP32 deinit** — `http_get()` and
   `http_download_to_file()` previously returned `HTTP_ERR_NO_WIFI` for any
   `http_is_ready()` failure, even when the real cause was a deinitialized ESP32

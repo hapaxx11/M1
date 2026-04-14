@@ -428,6 +428,38 @@ footer a:hover {
     text-decoration: underline;
 }
 
+/* ── Mobile Tips ── */
+
+.mobile-tips {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: var(--radius-sm);
+}
+
+.mobile-tips h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.mobile-tips ol {
+    padding-left: 20px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.mobile-tips ol li {
+    margin-bottom: 4px;
+}
+
+.usb-permission-status {
+    font-size: 0.8rem;
+    margin-left: 8px;
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 600px) {
