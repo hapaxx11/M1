@@ -23,6 +23,8 @@
 #include "m1_fw_update_bl.h"
 #include "m1_lp5814.h"
 #include "battery.h"
+#include "m1_sdcard.h"
+#include "m1_esp32_hal.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -825,6 +827,47 @@ static void startup_bu_registers_init(void)
 
 /*============================================================================*/
 /*
+ *   Splash-screen status icons: SD Card, Bluetooth, WiFi
+ *
+ *   Drawn in the top-left corner, Y-aligned with the battery indicator.
+ *   Each icon is 10x10 px with 2 px gap between them.
+ *
+ *   SD card icon is shown only when a card is physically detected.
+ *   BT and WiFi icons are shown only when the ESP32 HAL is initialized.
+ */
+/*============================================================================*/
+static void splash_draw_status_icons(void)
+{
+	const uint8_t icon_w = 10;
+	const uint8_t icon_h = 10;
+	const uint8_t icon_gap = 2;
+	const uint8_t icon_y = 2;
+	uint8_t icon_x = 2;
+
+	/* SD card: show icon when card is physically detected */
+	if (m1_sd_detected())
+	{
+		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_sdcard_10x10);
+	}
+	icon_x += icon_w + icon_gap;
+
+	/* Bluetooth: show icon when ESP32 HAL is initialized */
+	if (m1_esp32_get_init_status())
+	{
+		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_bt_10x10);
+	}
+	icon_x += icon_w + icon_gap;
+
+	/* WiFi: show icon when ESP32 HAL is initialized */
+	if (m1_esp32_get_init_status())
+	{
+		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_wifi_10x10);
+	}
+}
+
+
+/*============================================================================*/
+/*
  * Draw a battery indicator icon with fill level and optional charging bolt.
  * Positioned at top-right corner of the display.
  *
@@ -923,6 +966,9 @@ void startup_info_screen_display(const char *scr_text)
 
 	/* Battery indicator in top-right corner */
 	splash_draw_battery_indicator();
+
+	/* Status icons (SD, BT, WiFi) in top-left corner */
+	splash_draw_status_icons();
 
 	len = strlen(scr_text);
 	x0 = (M1_LCD_DISPLAY_WIDTH - len*M1_GUI_FONT_WIDTH)/2;
