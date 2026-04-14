@@ -654,14 +654,6 @@ modified:
 
 | File | Hardcoded Defines | Notes |
 |------|-------------------|-------|
-| `m1_ir_universal.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE_ITEMS 4` | IR remote browser list |
-| `m1_deauth.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE_ITEMS 5` | WiFi deauth AP/STA list |
-| `m1_app_manager.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE_ITEMS 4` | .m1app file browser |
-| `m1_802154.c` | `LIST_ITEM_HEIGHT 9`, `LIST_VISIBLE 4` | Zigbee/Thread device list |
-| `m1_bt.c` | `BT_LIST_ITEM_HEIGHT 9`, `BT_LIST_VISIBLE 4` | BT scan/saved list |
-| `m1_fw_download.c` | `DL_LIST_ROW_H 10`, `DL_LIST_MAX_VISIBLE 4` | FW release selector |
-| `m1_esp32_fw_download.c` | `DL_LIST_ROW_H 10`, `DL_LIST_MAX_VISIBLE 4` | ESP32 FW release selector |
-| `m1_subghz_scene_playlist.c` | `PLAYLIST_LIST_VISIBLE 4` (hardcoded 9px) | Playlist file selector |
 | `m1_display.c` | `SUB_MENU_TEXT_ITEMS 4` | Legacy `m1_gui_submenu_update()` API (used by NFC/RFID) |
 
 ### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`

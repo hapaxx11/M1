@@ -82,12 +82,13 @@ static void dl_draw_list(const char *title, const char **items, uint8_t count,
 	m1_u8g2_firstpage();
 	do {
 		/* Title bar */
-		u8g2_SetFont(&m1_u8g2, m1_menu_font());
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
 		u8g2_DrawStr(&m1_u8g2, 2, DL_TITLE_Y, title);
 
 		/* List items */
+		u8g2_SetFont(&m1_u8g2, m1_menu_font());
 		for (i = 0; i < vis_count; i++)
 		{
 			uint8_t idx = scroll_off + i;

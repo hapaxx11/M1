@@ -31,6 +31,7 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_storage.h"
+#include "m1_scene.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
@@ -47,8 +48,11 @@
 #define PLAYLIST_PATH_MAX   64
 #define PLAYLIST_LINE_MAX   256
 
-/** Maximum visible items in the file list */
-#define PLAYLIST_LIST_VISIBLE  4
+/** Playlist list area: progress bar sits at y=46, so list spans y=12..45 = 34px */
+#define PLAYLIST_LIST_AREA_H   34
+
+/** Maximum visible items in the file list (font-aware) */
+#define PLAYLIST_LIST_VISIBLE  ((uint8_t)(PLAYLIST_LIST_AREA_H / m1_menu_item_h()))
 
 /*============================================================================*/
 /* Local state                                                                */
@@ -395,25 +399,27 @@ static void draw(SubGhzApp *app)
         u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
         /* File list */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        const uint8_t item_h   = m1_menu_item_h();
+        const uint8_t text_ofs = item_h - 1;
+        u8g2_SetFont(&m1_u8g2, m1_menu_font());
         for (uint8_t i = 0; i < PLAYLIST_LIST_VISIBLE &&
                             (list_scroll + i) < app->playlist_count; i++)
         {
             uint8_t idx = list_scroll + i;
-            uint8_t y = 12 + i * 9;
+            uint8_t y = M1_MENU_AREA_TOP + i * item_h;
             const char *fname = basename_from_path(app->playlist_files[idx]);
 
             /* Highlight currently transmitting file */
             if (app->playlist_running && idx == app->playlist_current)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 9);
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
 
             /* File index + name (truncated) */
             char line[26];
             snprintf(line, sizeof(line), "%u.%.20s", idx + 1, fname);
-            u8g2_DrawStr(&m1_u8g2, 2, y + 7, line);
+            u8g2_DrawStr(&m1_u8g2, 2, y + text_ofs, line);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
 
