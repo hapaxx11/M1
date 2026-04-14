@@ -401,6 +401,7 @@ void m1_app_api_init(void)
         { "u8g2_font_NokiaSmallPlain_tf",  (void *)u8g2_font_NokiaSmallPlain_tf },
         { "u8g2_font_squeezed_b7_tr",      (void *)u8g2_font_squeezed_b7_tr },
         { "u8g2_font_spleen5x8_mf",        (void *)u8g2_font_spleen5x8_mf },
+        { "u8g2_font_profont12_mr",        (void *)u8g2_font_profont12_mr },
         { "u8g2_font_spleen8x16_mf",       (void *)u8g2_font_spleen8x16_mf },
         { "u8g2_font_nine_by_five_nbp_tf", (void *)u8g2_font_nine_by_five_nbp_tf },
         { "u8g2_font_courB08_tf",          (void *)u8g2_font_courB08_tf },
