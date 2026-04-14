@@ -378,6 +378,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 
 		case X_MENU_UPDATE_INIT:
+			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			x_menu_update_init = 1; // Mark as initialized
     		x_menu_level = 0; // Reset
 			x_menu_display[0].active_disp_row = disp_window_active_row; // back up
