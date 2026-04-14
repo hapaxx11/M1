@@ -59,6 +59,9 @@ uint8_t                 m1_screen_orientation = M1_ORIENT_NORMAL;
 uint8_t                 m1_brightness_level = 4;   /* Max by default */
 uint8_t                 m1_buzzer_on = 1;
 uint8_t                 m1_led_notify_on = 1;
+uint8_t                 m1_led_color_r = 0x33;  /* #331480 default red   */
+uint8_t                 m1_led_color_g = 0x14;  /* #331480 default green */
+uint8_t                 m1_led_color_b = 0x80;  /* #331480 default blue  */
 uint8_t                 m1_sleep_timeout_idx = 1;  /* 1 minute default */
 uint8_t                 m1_menu_style = 0;         /* 0=Small, 1=Medium, 2=Large */
 uint8_t                 m1_dark_mode = 0;          /* 0=Off (normal), 1=On (inverted display) */

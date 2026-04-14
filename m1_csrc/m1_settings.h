@@ -23,5 +23,6 @@ void settings_about(void);
 void settings_load_from_sd(void);
 void settings_save_to_sd(void);
 void settings_ensure_sd_folders(void);
+uint8_t settings_parse_hex_color(const char *str, uint8_t *r, uint8_t *g, uint8_t *b);
 
 #endif /* M1_SETTINGS_H_ */

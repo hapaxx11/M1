@@ -16,6 +16,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_lp5814.h"
+#include "m1_system.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -97,7 +98,9 @@ void m1_led_indicator_on(uint8_t *params)
 {
 	active_led_func.active_led_func_id = LED_INDICATOR_ON_FN_ID;
 	lp5814_all_off_RGB();
-	lp5814_led_on_Green(LED_ON_PWM_GREEN);
+	if (m1_led_color_r) lp5814_led_on_Red(m1_led_color_r);
+	if (m1_led_color_g) lp5814_led_on_Green(m1_led_color_g);
+	if (m1_led_color_b) lp5814_led_on_Blue(m1_led_color_b);
 } // void m1_led_indicator_on(uint8_t *params)
 
 

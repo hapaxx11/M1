@@ -29,6 +29,7 @@
 #include "m1_system.h"
 #include "m1_file_util.h"
 #include "m1_scene.h"
+#include "m1_virtual_kb.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -40,14 +41,15 @@
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
-#define LCD_SETTINGS_ITEMS   7
+#define LCD_SETTINGS_ITEMS   8
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
 #define LCD_SET_LED          2
-#define LCD_SET_ORIENT       3
-#define LCD_SET_SLEEP        4
-#define LCD_SET_TEXT_SIZE     5
-#define LCD_SET_DARK_MODE    6
+#define LCD_SET_LED_COLOR    3
+#define LCD_SET_ORIENT       4
+#define LCD_SET_SLEEP        5
+#define LCD_SET_TEXT_SIZE     6
+#define LCD_SET_DARK_MODE    7
 
 //************************** S T R U C T U R E S *******************************
 
@@ -134,11 +136,14 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "Brightness:",
     "Buzzer:",
     "LED Notify:",
+    "LED Color:",
     "Orientation:",
     "Sleep After:",
     "Text Size:",
     "Dark Mode:",
 };
+
+static char led_color_buf[8]; /* "#RRGGBB" + NUL */
 
 static const char *lcd_cfg_get_value(uint8_t item)
 {
@@ -147,6 +152,10 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_BRIGHTNESS: return s_brightness_text[m1_brightness_level];
     case LCD_SET_BUZZER:     return m1_buzzer_on ? "On" : "Off";
     case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
+    case LCD_SET_LED_COLOR:
+        snprintf(led_color_buf, sizeof(led_color_buf), "#%02X%02X%02X",
+                 m1_led_color_r, m1_led_color_g, m1_led_color_b);
+        return led_color_buf;
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
     case LCD_SET_TEXT_SIZE:
@@ -161,6 +170,35 @@ static const char *lcd_cfg_get_value(uint8_t item)
     default:                 return "";
     }
 }
+
+/*============================================================================*/
+/**
+  * @brief  Parse a hex color string "#RRGGBB" or "RRGGBB" into r, g, b.
+  * @retval 1 on success, 0 on invalid input.
+  */
+/*============================================================================*/
+uint8_t settings_parse_hex_color(const char *str, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    if (str[0] == '#') str++;
+    if (strlen(str) < 6) return 0;
+
+    uint32_t val = 0;
+    for (uint8_t i = 0; i < 6; i++)
+    {
+        char c = str[i];
+        uint8_t nib;
+        if (c >= '0' && c <= '9')      nib = c - '0';
+        else if (c >= 'A' && c <= 'F')  nib = c - 'A' + 10;
+        else if (c >= 'a' && c <= 'f')  nib = c - 'a' + 10;
+        else return 0;
+        val = (val << 4) | nib;
+    }
+    *r = (val >> 16) & 0xFF;
+    *g = (val >> 8) & 0xFF;
+    *b = val & 0xFF;
+    return 1;
+}
+
 
 void settings_lcd_and_notifications(void)
 {
@@ -258,6 +296,29 @@ void settings_lcd_and_notifications(void)
             settings_save_to_sd();
             xQueueReset(main_q_hdl);
             break;
+        }
+
+        /* OK — open hex editor for LED Color */
+        if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (sel == LCD_SET_LED_COLOR)
+            {
+                char cur_hex[8];
+                char new_hex[8];
+                snprintf(cur_hex, sizeof(cur_hex), "%02X%02X%02X",
+                         m1_led_color_r, m1_led_color_g, m1_led_color_b);
+                if (m1_vkb_get_text("LED Color (hex)", cur_hex, new_hex, sizeof(new_hex)))
+                {
+                    uint8_t r, g, b;
+                    if (settings_parse_hex_color(new_hex, &r, &g, &b))
+                    {
+                        m1_led_color_r = r;
+                        m1_led_color_g = g;
+                        m1_led_color_b = b;
+                    }
+                }
+                needs_redraw = 1;
+            }
         }
 
         /* Up/Down — navigate with scroll */
@@ -513,6 +574,10 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "led_notify=%d\n", m1_led_notify_on);
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "led_color=%02X%02X%02X\n",
+             m1_led_color_r, m1_led_color_g, m1_led_color_b);
+    f_write(&fp, buf, strlen(buf), &bw);
+
     snprintf(buf, sizeof(buf), "orientation=%d\n", m1_screen_orientation);
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -589,6 +654,19 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 11) - '0');
         if (val == 0 || val == 1)
             m1_led_notify_on = (uint8_t)val;
+    }
+
+    /* Parse "led_color=RRGGBB" */
+    p = strstr(buf, "led_color=");
+    if (p != NULL)
+    {
+        uint8_t r, g, b;
+        if (settings_parse_hex_color(p + 10, &r, &g, &b))
+        {
+            m1_led_color_r = r;
+            m1_led_color_g = g;
+            m1_led_color_b = b;
+        }
     }
 
     /* Parse "orientation=X" */
