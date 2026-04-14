@@ -596,7 +596,6 @@ function init() {
 
     // Initial UI state
     updateConnectionUI(false);
-    updateFlashButton();
 
     // Load releases
     loadReleases();
