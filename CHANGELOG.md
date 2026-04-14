@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.85] - 2026-04-14
+
 ### Changed
 
 - **Home-screen status icons now reflect actual state** — The SD/BT/WiFi status
