@@ -63,11 +63,17 @@ const $ = (id) => document.getElementById(id);
 const elements = {};
 
 /**
- * Detect mobile/Android using User-Agent Client Hints (preferred)
- * with a UA string fallback for older browsers.
+ * Detect Android separately from generic mobile devices using
+ * User-Agent Client Hints (preferred) with a UA string fallback.
+ *
+ * Use `isAndroid` for Android-specific troubleshooting or permission UI,
+ * and `isMobile` only for platform-agnostic mobile behavior.
  */
-const isMobile = (navigator.userAgentData && navigator.userAgentData.mobile)
-    || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isAndroid = (navigator.userAgentData && navigator.userAgentData.platform === 'Android')
+    || /Android/i.test(navigator.userAgent);
+const isMobile = isAndroid
+    || (navigator.userAgentData && navigator.userAgentData.mobile)
+    || /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 function cacheElements() {
     const ids = [
