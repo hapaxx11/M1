@@ -313,21 +313,21 @@ void settings_lcd_and_notifications(void)
              this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK))
         {
             uint8_t *cr, *cg, *cb;
-            const char *prompt;
+            char prompt[20];
             if (sel == LCD_SET_LED_COLOR)
             {
                 cr = &m1_led_color_r; cg = &m1_led_color_g; cb = &m1_led_color_b;
-                prompt = "LED Color (hex)";
+                strcpy(prompt, "LED Color (hex)");
             }
             else
             {
                 cr = &m1_led_lowbatt_r; cg = &m1_led_lowbatt_g; cb = &m1_led_lowbatt_b;
-                prompt = "LowBatt Clr (hex)";
+                strcpy(prompt, "LowBatt Clr (hex)");
             }
             char cur_hex[8];
             char new_hex[8];
             snprintf(cur_hex, sizeof(cur_hex), "%02X%02X%02X", *cr, *cg, *cb);
-            if (m1_vkb_get_text((char *)prompt, cur_hex, new_hex, sizeof(new_hex)))
+            if (m1_vkb_get_text(prompt, cur_hex, new_hex, sizeof(new_hex)))
             {
                 uint8_t r, g, b;
                 if (settings_parse_hex_color(new_hex, &r, &g, &b))
