@@ -43,6 +43,13 @@
 /* Maximum retries per second for download polling (200ms intervals) */
 #define HTTP_RETRY_PER_SEC  5
 
+/* DNS pre-resolution retry parameters.
+ * Transient DNS failures are common on WiFi (DHCP not settled,
+ * ESP32 state after closing a prior connection, ISP DNS hiccup).
+ * Retry a few times before giving up. */
+#define DNS_MAX_ATTEMPTS       3
+#define DNS_RETRY_DELAY_MS  1000
+
 static char s_at_buf[HTTP_AT_BUF_SIZE];
 
 /* Forward declarations for internal helpers used by both http_get and http_download_to_file */
@@ -550,17 +557,43 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 
 	/* For SSL: do DNS pre-resolution to catch network issues early.
 	 * AT+CIPDOMAIN is much faster than AT+CIPSTART="SSL" and gives
-	 * a clear signal when DNS is broken (vs a generic SSL timeout). */
+	 * a clear signal when DNS is broken (vs a generic SSL timeout).
+	 * Retry up to DNS_MAX_ATTEMPTS times — transient failures are
+	 * common right after WiFi connect or when following redirects
+	 * (GitHub → objects.githubusercontent.com). */
 	if (is_https)
 	{
+		bool dns_ok = false;
 		snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPDOMAIN "\"%s\"" ESP32C6_AT_REQ_CRLF, host);
-		spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), 10);
-		if (!strstr(s_at_buf, ESP32C6_AT_RES_CIPDOMAIN_KEY))
+
+		for (int dns_try = 0; dns_try < DNS_MAX_ATTEMPTS; dns_try++)
 		{
-			M1_LOG_E(HTTP_TAG, "DNS failed for %s: %.64s\n\r", host, s_at_buf);
+			if (dns_try > 0)
+			{
+				M1_LOG_W(HTTP_TAG, "DNS retry %d/%d for %s\n\r",
+				         dns_try + 1, DNS_MAX_ATTEMPTS, host);
+				vTaskDelay(pdMS_TO_TICKS(DNS_RETRY_DELAY_MS));
+				m1_wdt_reset();
+			}
+
+			spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), 10);
+			if (strstr(s_at_buf, ESP32C6_AT_RES_CIPDOMAIN_KEY))
+			{
+				dns_ok = true;
+				M1_LOG_D(HTTP_TAG, "DNS OK: %.64s\n\r", s_at_buf);
+				break;
+			}
+
+			M1_LOG_W(HTTP_TAG, "DNS attempt %d failed for %s: %.64s\n\r",
+			         dns_try + 1, host, s_at_buf);
+		}
+
+		if (!dns_ok)
+		{
+			M1_LOG_E(HTTP_TAG, "DNS failed for %s after %d attempts\n\r",
+			         host, DNS_MAX_ATTEMPTS);
 			return HTTP_ERR_DNS_FAIL;
 		}
-		M1_LOG_D(HTTP_TAG, "DNS OK: %.64s\n\r", s_at_buf);
 	}
 
 	for (int attempt = 0; attempt < max_attempts; attempt++)
