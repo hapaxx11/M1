@@ -179,6 +179,7 @@ static const char *lcd_cfg_get_value(uint8_t item)
 /*============================================================================*/
 uint8_t settings_parse_hex_color(const char *str, uint8_t *r, uint8_t *g, uint8_t *b)
 {
+    if (str == NULL || r == NULL || g == NULL || b == NULL) return 0;
     if (str[0] == '#') str++;
     if (strlen(str) < 6) return 0;
 
