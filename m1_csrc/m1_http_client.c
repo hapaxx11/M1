@@ -50,6 +50,7 @@
  * by the caller's timeout_sec so tcp_connect() never exceeds it. */
 #define DNS_MAX_ATTEMPTS       3
 #define DNS_RETRY_DELAY_MS  1000
+#define DNS_RETRY_DELAY_SEC    1   /* DNS_RETRY_DELAY_MS in seconds */
 #define DNS_PER_ATTEMPT_SEC   10   /* AT+CIPDOMAIN timeout per try */
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
@@ -573,13 +574,13 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 			dns_at_timeout = timeout_sec;
 
 		/* How many attempts fit within the caller's timeout?
-		 * Each attempt costs dns_at_timeout + DNS_RETRY_DELAY_MS/1000
+		 * Each attempt costs dns_at_timeout + DNS_RETRY_DELAY_SEC
 		 * (except the first which has no delay). */
-		uint8_t dns_per_attempt_cost = dns_at_timeout + (DNS_RETRY_DELAY_MS / 1000);
+		int dns_per_attempt_cost = dns_at_timeout + DNS_RETRY_DELAY_SEC;
 		int dns_attempts = DNS_MAX_ATTEMPTS;
-		if (dns_per_attempt_cost > 0 && timeout_sec < (uint8_t)(dns_attempts * dns_per_attempt_cost))
+		if (dns_per_attempt_cost > 0 && (int)timeout_sec < dns_attempts * dns_per_attempt_cost)
 		{
-			dns_attempts = 1 + (timeout_sec - dns_at_timeout) / dns_per_attempt_cost;
+			dns_attempts = 1 + ((int)timeout_sec - dns_at_timeout) / dns_per_attempt_cost;
 			if (dns_attempts < 1)
 				dns_attempts = 1;
 			if (dns_attempts > DNS_MAX_ATTEMPTS)
