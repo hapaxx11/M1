@@ -22,6 +22,7 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_system.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -29,9 +30,8 @@
 #define SCAN_POLL_INTERVAL_MS   50     /* How often to poll SPI for frames */
 #define AT_RESP_BUF_SIZE        512    /* Buffer for AT responses */
 
-#define LIST_ITEM_HEIGHT        9
 #define LIST_START_Y            13
-#define LIST_VISIBLE            4
+#define LIST_VISIBLE            ((uint8_t)(39 / m1_menu_item_h()))
 
 
 /************************** S T A T I C S ************************************/
@@ -49,19 +49,20 @@ static void draw_title_bar(const char *title)
 
 static void draw_list_item(uint8_t vis_idx, const char *text, bool selected)
 {
-    uint8_t y = LIST_START_Y + vis_idx * LIST_ITEM_HEIGHT;
+    const uint8_t item_h = m1_menu_item_h();
+    uint8_t y = LIST_START_Y + vis_idx * item_h;
 
     if (selected)
     {
         u8g2_SetDrawColor(&m1_u8g2, 1);
-        u8g2_DrawBox(&m1_u8g2, 0, y, 128, LIST_ITEM_HEIGHT);
+        u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
         u8g2_SetDrawColor(&m1_u8g2, 0);
     }
 
     char buf[22];
     strncpy(buf, text, 21);
     buf[21] = '\0';
-    u8g2_DrawStr(&m1_u8g2, 2, y + 8, buf);
+    u8g2_DrawStr(&m1_u8g2, 2, y + item_h - 1, buf);
 
     if (selected)
         u8g2_SetDrawColor(&m1_u8g2, 1);
@@ -451,6 +452,8 @@ static void ieee802154_scan(char filter_proto)
 
             snprintf(page_info, sizeof(page_info), "%s (%d)", title, s_device_count);
             draw_title_bar(page_info);
+
+            u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
             /* Adjust scroll offset */
             if (selection < scroll_offset) scroll_offset = selection;

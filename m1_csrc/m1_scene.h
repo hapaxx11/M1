@@ -156,7 +156,7 @@ uint8_t m1_menu_max_visible(void);
 
 /**
  * @brief  Get the u8g2 font for menu items based on m1_menu_style.
- * @return NokiaSmallPlain (Small), spleen5x8 (Medium), or nine_by_five_nbp (Large).
+ * @return NokiaSmallPlain (Small), profont12 (Medium), or nine_by_five_nbp (Large).
  */
 const uint8_t *m1_menu_font(void);
 
