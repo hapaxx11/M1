@@ -234,7 +234,15 @@ void menu_main_handler_task(void *param)
 		if ( ret!=pdTRUE )
 			continue;
 		if ( q_item.q_evt_type!=Q_EVENT_KEYPAD )
+		{
+			/* Refresh the home screen when the battery data is updated */
+			if ( q_item.q_evt_type==Q_EVENT_BATTERY_UPDATED &&
+			     m1_device_stat.op_mode==M1_OPERATION_MODE_DISPLAY_ON )
+			{
+				m1_gui_welcome_scr();
+			}
 			continue;
+		}
 		// Notification is only sent to this task when there's any button activity,
 		// so it doesn't need to wait when reading the event from the queue
 		ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);

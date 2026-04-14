@@ -468,6 +468,7 @@ static void battery_indicator_update(void)
 	S_M1_Power_Status_t SystemPowerStatus;
 	uint8_t new_stat, running_id;
 	static uint8_t old_stat = 0xFF;
+	static uint8_t old_level = 0xFF;
 	static uint16_t batt_info_timer_count = 0;
 
 	batt_info_timer_count += SYSTEM_PERIODIC_TASK_DELAY;
@@ -475,6 +476,20 @@ static void battery_indicator_update(void)
 	{
 		batt_info_timer_count = 0;
 		battery_status_update();
+		/* Redraw the home screen only when visible data changed (level or
+		 * charging state), matching Momentum's conditional-refresh pattern. */
+		if ( m1_device_stat.op_mode == M1_OPERATION_MODE_DISPLAY_ON )
+		{
+			S_M1_Power_Status_t updated;
+			battery_power_status_get(&updated);
+			if ( updated.battery_level != old_level || updated.stat != old_stat )
+			{
+				old_level = updated.battery_level;
+				S_M1_Main_Q_t q_item;
+				q_item.q_evt_type = Q_EVENT_BATTERY_UPDATED;
+				xQueueSend(main_q_hdl, &q_item, 0);
+			}
+		}
 	} // if ( batt_info_timer_count >= TASKDELAY_BATTERY_INFO_TIMER )
 
 	battery_power_status_get(&SystemPowerStatus);
