@@ -354,7 +354,7 @@ jobs:
           echo "--- First 15 lines of CHANGELOG.md ---"
           head -15 CHANGELOG.md
 
-      - name: Commit and open PR for changelog update
+      - name: Commit, open PR, and auto-merge changelog update
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.build.outputs.tag }}
@@ -362,6 +362,13 @@ jobs:
           BRANCH="changelog/stamp-${TAG}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Delete any stale changelog stamp branches from previous releases
+          for ref in $(git ls-remote --heads origin 'changelog/stamp-*' \
+                       | awk '{print $2}'); do
+            git push origin --delete "${ref#refs/heads/}" 2>/dev/null || true
+          done
+
           git checkout -b "${BRANCH}"
           git add CHANGELOG.md
           if git diff --cached --quiet; then
@@ -370,9 +377,22 @@ jobs:
           fi
           git commit -m "changelog: stamp [Unreleased] as ${TAG} [skip ci]"
           git push origin "${BRANCH}"
-          gh pr create \
+
+          # Create the PR (no --label; the label may not exist)
+          PR_URL=$(gh pr create \
             --base main \
             --head "${BRANCH}" \
             --title "changelog: stamp [Unreleased] as ${TAG}" \
-            --body "Automated changelog update from release workflow for \`${TAG}\`." \
-            --label "changelog" || true
+            --body "Automated changelog update from release workflow for \`${TAG}\`.") \
+            || true
+
+          if [ -z "${PR_URL}" ]; then
+            echo "::warning::Failed to create changelog PR for ${TAG}"
+            exit 0
+          fi
+          echo "Created PR: ${PR_URL}"
+
+          # Try to merge immediately, then fall back to auto-merge
+          gh pr merge "${BRANCH}" --squash --delete-branch 2>/dev/null \
+            || gh pr merge "${BRANCH}" --squash --delete-branch --auto 2>/dev/null \
+            || echo "::warning::Could not merge or enable auto-merge — PR remains open for manual review"
