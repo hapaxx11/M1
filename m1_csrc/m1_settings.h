@@ -13,6 +13,8 @@
 #ifndef M1_SETTINGS_H_
 #define M1_SETTINGS_H_
 
+#include <stdint.h>
+
 void menu_settings_init(void);
 void menu_settings_exit(void);
 

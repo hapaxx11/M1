@@ -9,6 +9,7 @@
 #include "unity.h"
 #include "m1_settings.h"
 #include <string.h>
+#include <stddef.h>
 
 void setUp(void)  {}
 void tearDown(void) {}
@@ -114,6 +115,32 @@ void test_reject_spaces(void)
     TEST_ASSERT_EQUAL_UINT8(0, settings_parse_hex_color("33 480", &r, &g, &b));
 }
 
+/* ---- NULL rejection tests ---- */
+
+void test_reject_null_str(void)
+{
+    uint8_t r, g, b;
+    TEST_ASSERT_EQUAL_UINT8(0, settings_parse_hex_color(NULL, &r, &g, &b));
+}
+
+void test_reject_null_r(void)
+{
+    uint8_t g, b;
+    TEST_ASSERT_EQUAL_UINT8(0, settings_parse_hex_color("331480", NULL, &g, &b));
+}
+
+void test_reject_null_g(void)
+{
+    uint8_t r, b;
+    TEST_ASSERT_EQUAL_UINT8(0, settings_parse_hex_color("331480", &r, NULL, &b));
+}
+
+void test_reject_null_b(void)
+{
+    uint8_t r, g;
+    TEST_ASSERT_EQUAL_UINT8(0, settings_parse_hex_color("331480", &r, &g, NULL));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -130,6 +157,10 @@ int main(void)
     RUN_TEST(test_reject_hash_only);
     RUN_TEST(test_reject_invalid_char);
     RUN_TEST(test_reject_spaces);
+    RUN_TEST(test_reject_null_str);
+    RUN_TEST(test_reject_null_r);
+    RUN_TEST(test_reject_null_g);
+    RUN_TEST(test_reject_null_b);
 
     return UNITY_END();
 }

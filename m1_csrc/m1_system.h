@@ -172,6 +172,9 @@ extern uint8_t              m1_led_notify_on;      /* 0=Off, 1=On */
 extern uint8_t              m1_led_color_r;        /* Default LED red   PWM (0-255) */
 extern uint8_t              m1_led_color_g;        /* Default LED green PWM (0-255) */
 extern uint8_t              m1_led_color_b;        /* Default LED blue  PWM (0-255) */
+extern uint8_t              m1_led_lowbatt_r;      /* Low-batt LED red   PWM (0-255) */
+extern uint8_t              m1_led_lowbatt_g;      /* Low-batt LED green PWM (0-255) */
+extern uint8_t              m1_led_lowbatt_b;      /* Low-batt LED blue  PWM (0-255) */
 extern uint8_t              m1_sleep_timeout_idx;   /* 0=30s, 1=1m, 2=5m, 3=10m, 4=15m, 5=Never */
 extern uint8_t              m1_menu_style;          /* 0=Small (8px), 1=Medium (10px), 2=Large (13px) */
 extern uint8_t              m1_dark_mode;           /* 0=Off (normal), 1=On (inverted/dark display) */

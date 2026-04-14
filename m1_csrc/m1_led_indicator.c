@@ -17,6 +17,8 @@
 #include "main.h"
 #include "m1_lp5814.h"
 #include "m1_system.h"
+#include "m1_led_color.h"
+#include "battery.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -90,8 +92,8 @@ void m1_led_indicator_off(uint8_t *params)
 
 /*============================================================================*/
 /*
- * This function turns on LED indicator.
- * LED color depends on the battery charging status
+ * This function turns on LED indicator using the user-configured default
+ * LED color (m1_led_color_r/g/b).
 */
 /*============================================================================*/
 void m1_led_indicator_on(uint8_t *params)
@@ -183,28 +185,46 @@ void m1_led_fw_update_off(void)
 
 /*============================================================================*/
 /**
- * @brief Turn on LED indicator for battery charge status
+ * @brief Turn on LED indicator for battery charge status.
+ *        Color is eased between low-batt and full-charge user colors
+ *        based on the current battery level.
  */
 /*============================================================================*/
 void m1_led_batt_charged_on(uint8_t *params)
 {
 	active_led_func.active_led_func_id = LED_BATTERY_CHARGED_ON_FN_ID;
 	lp5814_all_off_RGB();
-	lp5814_led_on_Red(LED_FASTBLINK_PWM_M);
+
+	S_M1_Power_Status_t pwr;
+	battery_power_status_get(&pwr);
+	uint8_t level = pwr.battery_level;
+	if (level > 100) level = 100;
+
+	uint8_t r, g, b;
+	m1_led_color_ease(level,
+	                  m1_led_color_r, m1_led_color_g, m1_led_color_b,
+	                  m1_led_lowbatt_r, m1_led_lowbatt_g, m1_led_lowbatt_b,
+	                  &r, &g, &b);
+	if (r) lp5814_led_on_Red(r);
+	if (g) lp5814_led_on_Green(g);
+	if (b) lp5814_led_on_Blue(b);
 } // void m1_led_batt_charged_on(uint8_t *params)
 
 
 
 /*============================================================================*/
 /**
- * @brief Turn on LED indicator for battery full status
+ * @brief Turn on LED indicator for battery full status.
+ *        Uses the user-configured full-charge LED color.
  */
 /*============================================================================*/
 void m1_led_batt_full_on(uint8_t *params)
 {
 	active_led_func.active_led_func_id = LED_BATTERY_FULL_ON_FN_ID;
 	lp5814_all_off_RGB();
-	lp5814_led_on_Green(LED_FASTBLINK_PWM_M);
+	if (m1_led_color_r) lp5814_led_on_Red(m1_led_color_r);
+	if (m1_led_color_g) lp5814_led_on_Green(m1_led_color_g);
+	if (m1_led_color_b) lp5814_led_on_Blue(m1_led_color_b);
 } // void m1_led_batt_full_on(uint8_t *params)
 
 
