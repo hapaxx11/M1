@@ -299,27 +299,27 @@ void settings_lcd_and_notifications(void)
             break;
         }
 
-        /* OK — open hex editor for LED Color */
-        if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        /* LED Color editor — allow OK/LEFT/RIGHT so UI cues match behavior */
+        if (sel == LCD_SET_LED_COLOR &&
+            (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK ||
+             this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK ||
+             this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK))
         {
-            if (sel == LCD_SET_LED_COLOR)
+            char cur_hex[8];
+            char new_hex[8];
+            snprintf(cur_hex, sizeof(cur_hex), "%02X%02X%02X",
+                     m1_led_color_r, m1_led_color_g, m1_led_color_b);
+            if (m1_vkb_get_text("LED Color (hex)", cur_hex, new_hex, sizeof(new_hex)))
             {
-                char cur_hex[8];
-                char new_hex[8];
-                snprintf(cur_hex, sizeof(cur_hex), "%02X%02X%02X",
-                         m1_led_color_r, m1_led_color_g, m1_led_color_b);
-                if (m1_vkb_get_text("LED Color (hex)", cur_hex, new_hex, sizeof(new_hex)))
+                uint8_t r, g, b;
+                if (settings_parse_hex_color(new_hex, &r, &g, &b))
                 {
-                    uint8_t r, g, b;
-                    if (settings_parse_hex_color(new_hex, &r, &g, &b))
-                    {
-                        m1_led_color_r = r;
-                        m1_led_color_g = g;
-                        m1_led_color_b = b;
-                    }
+                    m1_led_color_r = r;
+                    m1_led_color_g = g;
+                    m1_led_color_b = b;
                 }
-                needs_redraw = 1;
             }
+            needs_redraw = 1;
         }
 
         /* Up/Down — navigate with scroll */
