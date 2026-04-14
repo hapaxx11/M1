@@ -862,17 +862,21 @@ static void splash_draw_status_icons(void)
 	}
 
 	/* Bluetooth: show icon only when actively connected to a device */
+#ifdef M1_APP_BT_MANAGE_ENABLE
 	if (bt_get_connection_state()->connected)
 	{
 		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_bt_10x10);
 		icon_x += icon_w + icon_gap;
 	}
+#endif /* M1_APP_BT_MANAGE_ENABLE */
 
 	/* WiFi: show icon only when associated to an access point */
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
 	if (wifi_is_connected())
 	{
 		u8g2_DrawXBMP(&m1_u8g2, icon_x, icon_y, icon_w, icon_h, splash_icon_wifi_10x10);
 	}
+#endif /* M1_APP_WIFI_CONNECT_ENABLE */
 }
 
 

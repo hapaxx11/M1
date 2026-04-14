@@ -17,8 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SD card icon already required physical detection; BT icon now only appears when
   a Bluetooth device is actively connected (`bt_get_connection_state()->connected`),
   and WiFi icon only appears when associated to an AP (`wifi_is_connected()`).
-  At boot all three icons are absent; they appear on subsequent visits to the home
-  screen once a connection is established.
+  At boot, BT and WiFi are absent until a connection is established; the SD icon
+  continues to appear whenever a card is physically detected.
 ## [0.9.0.84] - 2026-04-14
 
 ### Fixed
