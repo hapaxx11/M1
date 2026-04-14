@@ -51,7 +51,6 @@
  * connect retries are separate and may add additional time. */
 #define DNS_MAX_ATTEMPTS       3
 #define DNS_RETRY_DELAY_MS  1000
-#define DNS_RETRY_DELAY_SEC   (DNS_RETRY_DELAY_MS / 1000)
 #define DNS_PER_ATTEMPT_SEC   10   /* AT+CIPDOMAIN timeout per try */
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
@@ -565,8 +564,9 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 	 * Retry up to DNS_MAX_ATTEMPTS times — transient failures are
 	 * common right after WiFi connect or when following redirects
 	 * (GitHub → objects.githubusercontent.com).
-	 * The DNS pre-resolution phase is limited using timeout_sec so
-	 * it does not consume unbounded time before the SSL connect logic. */
+	 * The DNS pre-resolution phase uses timeout_sec to limit attempts;
+	 * note that spi_AT_send_recv() enforces the timeout per response
+	 * chunk, so actual wall time per attempt is approximate. */
 	if (is_https)
 	{
 		bool dns_ok = false;
@@ -575,9 +575,9 @@ static http_status_t tcp_connect(const char *host, uint16_t port, bool is_https,
 			dns_at_timeout = timeout_sec;
 
 		/* How many attempts fit within the caller's timeout?
-		 * Each attempt costs dns_at_timeout + DNS_RETRY_DELAY_SEC
+		 * Each attempt costs dns_at_timeout + back-off delay
 		 * (except the first which has no delay). */
-		int dns_per_attempt_cost = dns_at_timeout + DNS_RETRY_DELAY_SEC;
+		int dns_per_attempt_cost = dns_at_timeout + (DNS_RETRY_DELAY_MS / 1000);
 		int dns_attempts = DNS_MAX_ATTEMPTS;
 		if (dns_per_attempt_cost > 0 && (int)timeout_sec < dns_attempts * dns_per_attempt_cost)
 		{
