@@ -335,7 +335,11 @@ void settings_lcd_and_notifications(void)
                     *cr = r; *cg = g; *cb = b;
                 }
             }
+            this_button_status.event[BUTTON_OK_KP_ID] = BUTTON_EVENT_NONE;
+            this_button_status.event[BUTTON_LEFT_KP_ID] = BUTTON_EVENT_NONE;
+            this_button_status.event[BUTTON_RIGHT_KP_ID] = BUTTON_EVENT_NONE;
             needs_redraw = 1;
+            continue;
         }
 
         /* Up/Down — navigate with scroll */
