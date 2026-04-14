@@ -21,12 +21,12 @@ static const uint8_t dummy_font_small[]  = { 0 };
 static const uint8_t dummy_font_medium[] = { 0 };
 static const uint8_t dummy_font_large[]  = { 0 };
 #define u8g2_font_NokiaSmallPlain_tf  dummy_font_small
-#define u8g2_font_spleen5x8_mf        dummy_font_medium
+#define u8g2_font_profont12_mr         dummy_font_medium
 #define u8g2_font_nine_by_five_nbp_tf  dummy_font_large
 
 /* Display macros referenced by m1_menu_font() */
 #define M1_DISP_SUB_MENU_FONT_N    u8g2_font_NokiaSmallPlain_tf
-#define M1_DISP_FUNC_MENU_FONT_N   u8g2_font_spleen5x8_mf
+#define M1_DISP_FUNC_MENU_FONT_N   u8g2_font_profont12_mr
 #define M1_DISP_FUNC_MENU_FONT_N2  u8g2_font_nine_by_five_nbp_tf
 
 /* Include the production header — provides all layout constants,

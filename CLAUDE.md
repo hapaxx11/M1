@@ -539,7 +539,8 @@ binary when section garbage collection is enabled.
 | `u8g2_font_helvB08_tr` | `M1_POWERUP_LOGO_FONT` + API | Splash screen "M1 Hapax" | 8 | Yes |
 | `u8g2_font_NokiaSmallPlain_tf` | `M1_DISP_SUB_MENU_FONT_N` + API | Sub-menu normal text | 7 | Yes |
 | `u8g2_font_squeezed_b7_tr` | `M1_DISP_SUB_MENU_FONT_B` + API | Sub-menu bold text | 7 | Yes |
-| `u8g2_font_spleen5x8_mf` | `M1_DISP_FUNC_MENU_FONT_N` + API | Function menu monospace | 7 | Yes |
+| `u8g2_font_profont12_mr` | `M1_DISP_FUNC_MENU_FONT_N` + API | Function menu monospace (Medium) | 8 | Yes |
+| `u8g2_font_spleen5x8_mf` | API only | Legacy medium font (kept for script compat) | 6 | Yes |
 | `u8g2_font_nine_by_five_nbp_tf` | `M1_DISP_FUNC_MENU_FONT_N2` + API | Function menu larger | 9 | Yes |
 | `u8g2_font_courB08_tf` | `M1_DISP_RUN_MENU_FONT_B` + API | Running menu bold | 6 | Yes |
 | `u8g2_font_Terminal_tr` | `M1_DISP_RUN_ERROR_FONT_1B` + API | Error messages | 9 | Yes |
@@ -596,7 +597,7 @@ The setting is stored as `m1_menu_style` (declared in `m1_system.h`, defined in
 | `m1_menu_style` | Label  | Row Height | Visible Items | Font |
 |-----------------|--------|------------|---------------|------|
 | 0 (default)     | Small  | 8 px       | 6             | `M1_DISP_SUB_MENU_FONT_N` (`NokiaSmallPlain`) |
-| 1               | Medium | 10 px      | 5             | `M1_DISP_FUNC_MENU_FONT_N` (`spleen5x8`) |
+| 1               | Medium | 10 px      | 5             | `M1_DISP_FUNC_MENU_FONT_N` (`profont12`) |
 | 2               | Large  | 13 px      | 4             | `M1_DISP_FUNC_MENU_FONT_N2` (`nine_by_five_nbp`) |
 
 **Helpers** (declared in `m1_scene.h`, defined in `m1_scene.c`):
