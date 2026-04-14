@@ -9,13 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- **Splash screen BT/WiFi icons** — Bluetooth and WiFi icons were never visible
-  on the splash screen because they were gated on `m1_esp32_get_init_status()`,
-  which is always false at boot (ESP32 is initialized lazily by apps).  Both
-  icons are now drawn unconditionally since the ESP32-C6 is fixed hardware on
-  every M1 board.
+- **Home-screen status icons now reflect actual state** — The SD/BT/WiFi status
+  icons on the home screen (reachable at boot and by pressing BACK from the main
+  menu) are now gated on actual peripheral state rather than shown unconditionally.
+  SD card icon already required physical detection; BT icon now only appears when
+  a Bluetooth device is actively connected (`bt_get_connection_state()->connected`),
+  and WiFi icon only appears when associated to an AP (`wifi_is_connected()`).
+  At boot all three icons are absent; they appear on subsequent visits to the home
+  screen once a connection is established.
 
 ## [0.9.0.78] - 2026-04-14
 
