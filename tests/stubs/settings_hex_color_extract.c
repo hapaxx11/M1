@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "m1_settings.h"
 
 uint8_t settings_parse_hex_color(const char *str, uint8_t *r, uint8_t *g, uint8_t *b)
 {
