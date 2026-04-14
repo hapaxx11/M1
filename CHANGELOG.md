@@ -7,6 +7,24 @@ All notable changes to the M1 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **OTA download: DNS error after WiFi connect** — `fw_download_start()` and
+  `esp32_fw_download_start()` did not initialize the ESP32 SPI interface before
+  making HTTP requests.  After `wifi_scan_ap()` exits (user presses BACK after
+  connecting), `m1_esp32_deinit()` disables the SPI hardware.  The old
+  `http_is_ready()` check only tested the task-level flag (never cleared by
+  deinit) and the WiFi connected flag, so both download functions proceeded with
+  a disabled SPI, causing all `AT+CIPDOMAIN` commands to time out and return
+  `HTTP_ERR_DNS_FAIL`.  Fix: both functions now call `m1_esp32_init()` and
+  `esp32_main_init()` (no-op if already done) before using the network, and
+  call `m1_esp32_deinit()` on all exit paths per the architecture rules.
+  `http_is_ready()` now also checks `m1_esp32_get_init_status()` (HAL-level
+  flag) as a defense-in-depth guard.  Two regression tests added to
+  `test_http_client_parse`.
+
 ## [0.9.0.78] - 2026-04-14
 
 ### Added

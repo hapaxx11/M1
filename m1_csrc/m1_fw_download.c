@@ -20,6 +20,8 @@
 #include "m1_http_client.h"
 #include "m1_fw_update.h"
 #include "m1_fw_update_bl.h"
+#include "m1_esp32_hal.h"
+#include "esp_app_main.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_system.h"
@@ -482,12 +484,23 @@ void fw_download_start(void)
 	uint8_t selected;
 	http_status_t dl_status;
 
+	/* Re-initialize ESP32 HAL if deinitialized (e.g., after exiting the WiFi
+	 * scan scene, which calls m1_esp32_deinit() on exit).  The WiFi connection
+	 * is maintained by the ESP32 hardware independently of the STM32 SPI
+	 * interface, so re-enabling the SPI resumes communication without dropping
+	 * the association. */
+	if (!m1_esp32_get_init_status())
+		m1_esp32_init();
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+
 	/* Step 1: Check WiFi */
 	if (!http_is_ready())
 	{
 		dl_show_message("WiFi not connected", "Connect first");
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
+		m1_esp32_deinit();
 		return;
 	}
 
@@ -499,6 +512,7 @@ void fw_download_start(void)
 		dl_show_message("No sources found", "Check fw_sources.txt");
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
+		m1_esp32_deinit();
 		return;
 	}
 
@@ -507,6 +521,7 @@ source_selection:
 	if (!dl_show_source_list(sources, source_count, &selected))
 	{
 		xQueueReset(main_q_hdl);
+		m1_esp32_deinit();
 		return; /* BACK pressed */
 	}
 
@@ -541,4 +556,5 @@ source_selection:
 	dl_show_result(dl_status, &releases[rel_sel]);
 
 	xQueueReset(main_q_hdl);
+	m1_esp32_deinit();
 }

@@ -18,6 +18,7 @@
 #include "main.h"
 #include "m1_http_client.h"
 #include "m1_wifi.h"
+#include "m1_esp32_hal.h"
 #include "m1_compile_cfg.h"
 #include "m1_file_browser.h"
 #include "m1_watchdog.h"
@@ -71,7 +72,7 @@ static int parse_http_headers(const char *data, int data_len,
 bool http_is_ready(void)
 {
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-	return wifi_is_connected() && get_esp32_main_init_status();
+	return wifi_is_connected() && m1_esp32_get_init_status() && get_esp32_main_init_status();
 #else
 	return false;
 #endif
