@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.87] - 2026-04-14
+
 ### Fixed
 
 - **Web updater: Android "No compatible devices found"** — Added Android-specific
