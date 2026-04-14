@@ -49,6 +49,8 @@
 
 #define BOOT_FAIL_SIGNATURE        ((uint32_t)0xDEADBEEF)
 
+#define FW_UPDATE_MIN_BATTERY_PCT  25  // Minimum battery % to allow firmware flashing
+
 /* RAM address range for vector table validation */
 #define STM32H5_RAM_START          ((uint32_t)0x20000000)
 #define STM32H5_RAM_END            ((uint32_t)0x200A0000)  /* 640KB */

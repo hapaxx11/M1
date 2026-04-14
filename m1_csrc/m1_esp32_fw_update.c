@@ -377,11 +377,11 @@ void setting_esp32_firmware_update(void)
 	uint8_t uret, old_op_mode;
 
 	uret = M1_FW_UPDATE_NOT_READY;
-	if ( !m1_check_battery_level(25) ) // Is battery level less than 25% and not charging?
+	if ( !m1_check_battery_level(FW_UPDATE_MIN_BATTERY_PCT) ) // Battery too low and not charging?
     {
     	esp32_update_status = M1_FW_UPDATE_NOT_READY; // Force quit
     	uret = M1_FW_UPDATE_LOW_BATTERY;
-    } // if ( !m1_check_battery_level(25) )
+    } // if ( !m1_check_battery_level(FW_UPDATE_MIN_BATTERY_PCT) )
 
 	old_op_mode = m1_device_stat.op_mode;
 

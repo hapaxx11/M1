@@ -17,6 +17,12 @@ typedef enum
 	POWER_CTRL_OPT_REBOOT
 } S_M1_Power_Ctrl_t;
 
+// BQ25896 CHRG_STAT values (power_status.stat)
+#define CHRG_STAT_NOT_CHARGING  0
+#define CHRG_STAT_PRE_CHARGE    1
+#define CHRG_STAT_FAST_CHARGE   2
+#define CHRG_STAT_COMPLETE      3
+
 typedef struct
 {
 	uint8_t 	stat;					// Charge / Dis-Charge
