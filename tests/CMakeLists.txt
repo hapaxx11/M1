@@ -548,3 +548,40 @@ if(TARGET sanitizers)
     target_link_libraries(test_http_client_parse PRIVATE sanitizers)
 endif()
 add_test(NAME http_client_parse COMMAND test_http_client_parse)
+
+# ------------------------------------------------------------------
+# Module under test: settings_parse_hex_color
+# Pure function — parses "#RRGGBB" / "RRGGBB" hex string into RGB bytes.
+# Uses a standalone copy because m1_settings.c has FatFS/u8g2 dependencies.
+# ------------------------------------------------------------------
+add_executable(test_settings_hex_color
+    test_settings_hex_color.c
+    ${STUBS_DIR}/settings_hex_color_extract.c
+)
+target_include_directories(test_settings_hex_color PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_settings_hex_color PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_settings_hex_color PRIVATE sanitizers)
+endif()
+add_test(NAME settings_hex_color COMMAND test_settings_hex_color)
+
+# ------------------------------------------------------------------
+# Module under test: m1_led_color_ease
+# Pure function — linear interpolation of RGB channels by battery level.
+# Compiles directly from production source (no hardware dependencies).
+# ------------------------------------------------------------------
+add_executable(test_led_color_ease
+    test_led_color_ease.c
+    ${M1_ROOT}/m1_csrc/m1_led_color.c
+)
+target_include_directories(test_led_color_ease PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_led_color_ease PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_led_color_ease PRIVATE sanitizers)
+endif()
+add_test(NAME led_color_ease COMMAND test_led_color_ease)

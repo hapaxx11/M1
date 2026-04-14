@@ -1,14 +1,14 @@
 /* See COPYING.txt for license details. */
 
 /*
-*
-*  m1_settings.c
-*
-*  M1 RFID functions
-*
-* M1 Project
-*
-*/
+ *
+ *  m1_settings.c
+ *
+ *  M1 RFID functions
+ *
+ * M1 Project
+ *
+ */
 
 /*************************** I N C L U D E S **********************************/
 
@@ -29,6 +29,7 @@
 #include "m1_system.h"
 #include "m1_file_util.h"
 #include "m1_scene.h"
+#include "m1_virtual_kb.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -40,17 +41,18 @@
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
-#define LCD_SETTINGS_ITEMS   7
+#define LCD_SETTINGS_ITEMS   9
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
 #define LCD_SET_LED          2
-#define LCD_SET_ORIENT       3
-#define LCD_SET_SLEEP        4
-#define LCD_SET_TEXT_SIZE     5
-#define LCD_SET_DARK_MODE    6
+#define LCD_SET_LED_COLOR    3
+#define LCD_SET_LOWBATT_CLR  4
+#define LCD_SET_ORIENT       5
+#define LCD_SET_SLEEP        6
+#define LCD_SET_TEXT_SIZE     7
+#define LCD_SET_DARK_MODE    8
 
-//************************** S T R U C T U R E S *******************************
-
+//************************** S T R U C T U R E S *******************************\n
 /***************************** V A R I A B L E S ******************************/
 
 static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
@@ -82,7 +84,6 @@ void menu_settings_init(void)
 } // void menu_settings_init(void)
 
 
-
 /*============================================================================*/
 /**
   * @brief
@@ -94,7 +95,6 @@ void menu_settings_exit(void)
 {
 	;
 } // void menu_settings_exit(void)
-
 
 
 /*============================================================================*/
@@ -115,7 +115,6 @@ static void settings_apply_orientation(uint8_t orient)
         m1_lcd_set_rotation(U8G2_R2);
 }
 
-
 /*============================================================================*/
 /**
   * @brief  LCD & Notifications settings — config-style menu matching the
@@ -134,11 +133,16 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "Brightness:",
     "Buzzer:",
     "LED Notify:",
+    "LED Color:",
+    "LowBatt Clr:",
     "Orientation:",
     "Sleep After:",
     "Text Size:",
     "Dark Mode:",
 };
+
+static char led_color_buf[8]; /* "#RRGGBB" + NUL */
+static char lowbatt_color_buf[8]; /* "#RRGGBB" + NUL */
 
 static const char *lcd_cfg_get_value(uint8_t item)
 {
@@ -147,6 +151,14 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_BRIGHTNESS: return s_brightness_text[m1_brightness_level];
     case LCD_SET_BUZZER:     return m1_buzzer_on ? "On" : "Off";
     case LCD_SET_LED:        return m1_led_notify_on ? "On" : "Off";
+    case LCD_SET_LED_COLOR:
+        snprintf(led_color_buf, sizeof(led_color_buf), "#%02X%02X%02X",
+                 m1_led_color_r, m1_led_color_g, m1_led_color_b);
+        return led_color_buf;
+    case LCD_SET_LOWBATT_CLR:
+        snprintf(lowbatt_color_buf, sizeof(lowbatt_color_buf), "#%02X%02X%02X",
+                 m1_led_lowbatt_r, m1_led_lowbatt_g, m1_led_lowbatt_b);
+        return lowbatt_color_buf;
     case LCD_SET_ORIENT:     return s_orient_text[m1_screen_orientation];
     case LCD_SET_SLEEP:      return s_sleep_text[m1_sleep_timeout_idx];
     case LCD_SET_TEXT_SIZE:
@@ -161,6 +173,36 @@ static const char *lcd_cfg_get_value(uint8_t item)
     default:                 return "";
     }
 }
+
+/*============================================================================*/
+/**
+  * @brief  Parse a hex color string "#RRGGBB" or "RRGGBB" into r, g, b.
+  * @retval 1 on success, 0 on invalid input.
+  */
+/*============================================================================*/
+uint8_t settings_parse_hex_color(const char *str, uint8_t *r, uint8_t *g, uint8_t *b)
+{
+    if (str == NULL || r == NULL || g == NULL || b == NULL) return 0;
+    if (str[0] == '#') str++;
+    if (strlen(str) < 6) return 0;
+
+    uint32_t val = 0;
+    for (uint8_t i = 0; i < 6; i++)
+    {
+        char c = str[i];
+        uint8_t nib;
+        if (c >= '0' && c <= '9')      nib = c - '0';
+        else if (c >= 'A' && c <= 'F')  nib = c - 'A' + 10;
+        else if (c >= 'a' && c <= 'f')  nib = c - 'a' + 10;
+        else return 0;
+        val = (val << 4) | nib;
+    }
+    *r = (val >> 16) & 0xFF;
+    *g = (val >> 8) & 0xFF;
+    *b = val & 0xFF;
+    return 1;
+}
+
 
 void settings_lcd_and_notifications(void)
 {
@@ -260,6 +302,42 @@ void settings_lcd_and_notifications(void)
             break;
         }
 
+        /* LED Color / Low Batt Color editor — allow OK/LEFT/RIGHT so UI cues match behavior */
+        if ((sel == LCD_SET_LED_COLOR || sel == LCD_SET_LOWBATT_CLR) &&
+            (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK ||
+             this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK ||
+             this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK))
+        {
+            uint8_t *cr, *cg, *cb;
+            const char *prompt;
+            if (sel == LCD_SET_LED_COLOR)
+            {
+                cr = &m1_led_color_r; cg = &m1_led_color_g; cb = &m1_led_color_b;
+                prompt = "LED Color (hex)";
+            }
+            else
+            {
+                cr = &m1_led_lowbatt_r; cg = &m1_led_lowbatt_g; cb = &m1_led_lowbatt_b;
+                prompt = "LowBatt Clr (hex)";
+            }
+            char cur_hex[8];
+            char new_hex[8];
+            snprintf(cur_hex, sizeof(cur_hex), "%02X%02X%02X", *cr, *cg, *cb);
+            if (m1_vkb_get_text(prompt, cur_hex, new_hex, sizeof(new_hex)))
+            {
+                uint8_t r, g, b;
+                if (settings_parse_hex_color(new_hex, &r, &g, &b))
+                {
+                    *cr = r; *cg = g; *cb = b;
+                }
+            }
+            this_button_status.event[BUTTON_OK_KP_ID] = BUTTON_EVENT_IDLE;
+            this_button_status.event[BUTTON_LEFT_KP_ID] = BUTTON_EVENT_IDLE;
+            this_button_status.event[BUTTON_RIGHT_KP_ID] = BUTTON_EVENT_IDLE;
+            needs_redraw = 1;
+            continue;
+        }
+
         /* Up/Down — navigate with scroll */
         if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
         {
@@ -353,7 +431,6 @@ void settings_lcd_and_notifications(void)
 }
 
 
-
 /*============================================================================*/
 /**
   * @brief
@@ -367,7 +444,6 @@ void settings_buzzer(void)
 } // void settings_sound(void)
 
 
-
 /*============================================================================*/
 /**
   * @brief
@@ -379,7 +455,6 @@ void settings_power(void)
 {
 	;
 } // void settings_power(void)
-
 
 
 /*============================================================================*/
@@ -513,6 +588,14 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "led_notify=%d\n", m1_led_notify_on);
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "led_color=%02X%02X%02X\n",
+             m1_led_color_r, m1_led_color_g, m1_led_color_b);
+    f_write(&fp, buf, strlen(buf), &bw);
+
+    snprintf(buf, sizeof(buf), "led_lowbatt=%02X%02X%02X\n",
+             m1_led_lowbatt_r, m1_led_lowbatt_g, m1_led_lowbatt_b);
+    f_write(&fp, buf, strlen(buf), &bw);
+
     snprintf(buf, sizeof(buf), "orientation=%d\n", m1_screen_orientation);
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -589,6 +672,32 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 11) - '0');
         if (val == 0 || val == 1)
             m1_led_notify_on = (uint8_t)val;
+    }
+
+    /* Parse "led_color=RRGGBB" */
+    p = strstr(buf, "led_color=");
+    if (p != NULL)
+    {
+        uint8_t r, g, b;
+        if (settings_parse_hex_color(p + 10, &r, &g, &b))
+        {
+            m1_led_color_r = r;
+            m1_led_color_g = g;
+            m1_led_color_b = b;
+        }
+    }
+
+    /* Parse "led_lowbatt=RRGGBB" */
+    p = strstr(buf, "led_lowbatt=");
+    if (p != NULL)
+    {
+        uint8_t r, g, b;
+        if (settings_parse_hex_color(p + 12, &r, &g, &b))
+        {
+            m1_led_lowbatt_r = r;
+            m1_led_lowbatt_g = g;
+            m1_led_lowbatt_b = b;
+        }
     }
 
     /* Parse "orientation=X" */
