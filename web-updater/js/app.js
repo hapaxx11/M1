@@ -195,13 +195,17 @@ function updateConnectionUI(connected) {
     elements['connection-status'].textContent = connected ? 'Connected' : 'Disconnected';
     elements['connection-status'].className = `status-badge ${connected ? 'status-connected' : 'status-disconnected'}`;
 
-    if (!connected) {
+    if (connected) {
+        elements['flash-section'].classList.remove('hidden');
+    } else {
         elements['device-info-panel'].classList.add('hidden');
         elements['flash-section'].classList.add('hidden');
         elements['progress-section'].classList.add('hidden');
         deviceInfo = null;
         fwInfo = null;
     }
+
+    updateFlashButton();
 }
 
 function updateDeviceInfoUI() {
@@ -213,7 +217,6 @@ function updateDeviceInfoUI() {
         ? (deviceInfo.hapaxRevision === 0 ? 'Stock' : `r${deviceInfo.hapaxRevision}`)
         : 'N/A';
     elements['device-info-panel'].classList.remove('hidden');
-    elements['flash-section'].classList.remove('hidden');
 }
 
 function updateBankInfoUI() {
@@ -593,7 +596,6 @@ function init() {
 
     // Initial UI state
     updateConnectionUI(false);
-    updateFlashButton();
 
     // Load releases
     loadReleases();

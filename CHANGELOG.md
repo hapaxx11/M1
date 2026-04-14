@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Web Updater — Flash section hidden when device info query times out.** The
+  "Flash Firmware" panel was only revealed after a successful device info RPC
+  response.  If the device info query timed out (as seen on some connections),
+  the flash section stayed hidden even though the device was connected and
+  responsive.  The flash section is now shown as soon as the serial connection
+  is established, regardless of device info query outcome.
 ## [0.9.0.85] - 2026-04-14
 
 ### Changed
