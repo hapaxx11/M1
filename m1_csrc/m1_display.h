@@ -151,6 +151,9 @@ extern const uint8_t fw_update_slider_5x8[];
 extern const uint8_t m1_device_82x36[];
 extern const uint8_t error_10x10[];
 extern const uint8_t check_10x10[];
+extern const uint8_t splash_icon_sdcard_10x10[];
+extern const uint8_t splash_icon_bt_10x10[];
+extern const uint8_t splash_icon_wifi_10x10[];
 
 extern const S_M1_menu_icon_data menu_fb_icon_prev;
 extern const S_M1_menu_icon_data menu_fb_icon_dir;
