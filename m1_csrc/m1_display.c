@@ -242,10 +242,14 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 
 	n_items = num_items;
 
+	if ( (direction == X_MENU_UPDATE_MOVE_DOWN) || (direction == X_MENU_UPDATE_MOVE_UP) )
+	{
+		menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
+	}
+
 	switch ( direction )
 	{
 		case X_MENU_UPDATE_MOVE_DOWN:
-			menu_level_id = 1; // Force submenu layout (X_MENU is always a submenu)
 			sel_item = x_menu_display[x_menu_level].sel_item;
 			sel_item++;
 			if ( sel_item >= n_items )
