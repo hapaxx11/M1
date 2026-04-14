@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `http_is_ready()` now also checks `m1_esp32_get_init_status()` (HAL-level
   flag) as a defense-in-depth guard.  Two regression tests added to
   `test_http_client_parse`.
+
 ## [0.9.0.84] - 2026-04-14
 
 ### Fixed
