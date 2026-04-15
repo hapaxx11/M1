@@ -118,14 +118,40 @@ See CLAUDE.md § "Saved Item Actions Pattern" for the full specification.
 Other Monstatek-derived UX rules (button bar guidelines, display layout, keypad mapping)
 still apply when not superseded by this pattern.
 
-12. Repository Hygiene
+12. UI / Button Bar Rules
+Button bar columns MUST correspond to physical buttons: LEFT column = LEFT button,
+CENTER column = OK button, RIGHT column = RIGHT button.  Never place a DOWN action in
+the CENTER column or an OK action in the RIGHT column.
+Never add "Back" as a menu item, selectable action, or button bar label — the hardware
+BACK button handles navigation.  Selection lists MUST NOT have a button bar with "OK" —
+use a scrollbar as a position indicator instead.  Button bars are appropriate only when
+they convey non-obvious functionality (e.g. "OK:Download", "Send", "↓ Config").
+See DEVELOPMENT.md § "Button Model" and "UI / Button Bar Rules" for the full specification.
+
+13. Font-Aware Menu Implementation
+All scrollable lists MUST use the font-aware helpers from m1_scene.h instead of
+hardcoded visible item counts, row heights, or font constants.  The user-configurable
+text size setting (m1_menu_style) drives m1_menu_item_h(), m1_menu_max_visible(), and
+m1_menu_font().  A small number of justified exceptions exist for compact data displays
+that are not standard selectable menus.
+See DEVELOPMENT.md § "Font-Aware Menu Implementation" for helpers, layout constants,
+rules, and the exception table.
+
+14. Hardware State Management
+Every module that uses the SI4463 radio, ESP32 coprocessor, NFC worker, or IR
+transmitter MUST follow the corresponding init/deinit lifecycle pattern.  Failing to
+deinit on all exit paths (including errors) leaves hardware resources active and
+causes bugs in subsequent operations.
+See DEVELOPMENT.md § "Hardware State Management" for per-subsystem rules.
+
+15. Repository Hygiene
 Regular dependency updates
 Periodic cleanup of old branches
 Archive unused repositories
 Maintain reasonable repository size
 Regular backup procedures
 
-13. Communication
+16. Communication
 Use GitHub Discussions for technical discussions
 Keep relevant conversations in PR comments
 Use issue comments for status updates

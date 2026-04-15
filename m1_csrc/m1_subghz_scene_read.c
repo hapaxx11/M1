@@ -588,30 +588,31 @@ static void draw(SubGhzApp *app)
     if (app->read_state == SubGhzReadStateIdle)
     {
         subghz_button_bar_draw(
-            NULL, NULL,
             arrowdown_8x8, "Config",
-            NULL, "OK:Listen");
+            NULL, "Listen",
+            NULL, NULL);
     }
     else if (app->detail_view)
     {
         subghz_button_bar_draw(
-            NULL, NULL,
             arrowdown_8x8, "Save",
-            NULL, "OK:Info");
+            NULL, "Info",
+            NULL, NULL);
     }
     else if (app->history_view)
     {
+        /* DOWN scrolls (implicit), OK opens detail */
         subghz_button_bar_draw(
             NULL, NULL,
-            arrowdown_8x8, "Config",
-            NULL, "OK:View");
+            NULL, "View",
+            NULL, NULL);
     }
     else
     {
         /* Active RX, no signals yet */
         subghz_button_bar_draw(
-            NULL, NULL,
             arrowdown_8x8, "Config",
+            NULL, NULL,
             NULL, NULL);
     }
 

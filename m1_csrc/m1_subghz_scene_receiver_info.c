@@ -126,10 +126,9 @@ static void draw(SubGhzApp *app)
     /* Bottom bar */
     bool can_send = subghz_protocol_is_static_ext(e->info.protocol);
     subghz_button_bar_draw(
-        NULL, NULL,
         arrowdown_8x8, "Save",
-        NULL,
-        can_send ? "OK:Send" : NULL);
+        NULL, can_send ? "Send" : NULL,
+        NULL, NULL);
 
     m1_u8g2_nextpage();
 }
