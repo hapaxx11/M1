@@ -2694,6 +2694,13 @@ static bool builder_save_remote(ir_builder_slot_t *slots, uint8_t n_slots)
 	if (!flipper_ir_write_header(&ff))
 	{
 		ff_close(&ff);
+		f_unlink(out_path);
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "File write failed");
+		m1_u8g2_nextpage();
+		vTaskDelay(pdMS_TO_TICKS(1500));
 		return false;
 	}
 
