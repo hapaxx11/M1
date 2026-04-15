@@ -137,14 +137,14 @@ deinit on all exit paths (including errors) leaves hardware resources active and
 causes bugs in subsequent operations.
 See DEVELOPMENT.md § "Hardware State Management" for per-subsystem rules.
 
-12. Repository Hygiene
+15. Repository Hygiene
 Regular dependency updates
 Periodic cleanup of old branches
 Archive unused repositories
 Maintain reasonable repository size
 Regular backup procedures
 
-13. Communication
+16. Communication
 Use GitHub Discussions for technical discussions
 Keep relevant conversations in PR comments
 Use issue comments for status updates
