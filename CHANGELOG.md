@@ -24,9 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current Hapax build output name (`M1_Hapax_v0.9.0.1.bin`) with comments
   explaining the version coupling.
 - Documentation: added CI stamper safety rule to CLAUDE.md and GUIDELINES.md —
-  the literal string `[Unreleased]` must never appear in changelog body text
-  because the CI stamper uses a first-occurrence text replace that can match
-  body text instead of the heading (caused corruption at v0.9.0.78–83)
+  the exact string `## [Unreleased]` must never appear in changelog body text
+  because the CI stamper uses a first-occurrence text replace on that heading;
+  `[Unreleased]` is fine in prose, but `## [Unreleased]` in body text can be
+  matched instead of the real heading (caused corruption at v0.9.0.78–83)
 - Documentation: updated GUIDELINES.md changelog instructions — corrected
   misleading guidance that said `[Unreleased]` was only for non-compilation
   changes; all new entries go under `[Unreleased]` and CI handles version
