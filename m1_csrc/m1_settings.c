@@ -102,7 +102,7 @@ void menu_settings_exit(void)
   * @brief  Apply screen orientation and sync m1_southpaw_mode
   */
 /*============================================================================*/
-static void settings_apply_orientation(uint8_t orient)
+void settings_apply_orientation(uint8_t orient)
 {
     m1_screen_orientation = orient;
     m1_southpaw_mode = (orient == M1_ORIENT_SOUTHPAW) ? 1 : 0;

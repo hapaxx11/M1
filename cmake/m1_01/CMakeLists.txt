@@ -561,6 +561,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/flipper_rfid.c
     # === Enhanced firmware: Universal Remote + Crypto (Phase 3+5) ===
     ../../m1_csrc/m1_ir_universal.c
+    ../../m1_csrc/m1_ir_quick_remote.c
     ../../m1_csrc/m1_crypto.c
     ../../m1_csrc/m1_wifi_cred.c
     # === Enhanced firmware: Flipper integration (Phase 6) ===

@@ -22,6 +22,7 @@ void settings_lcd_and_notifications(void);
 void settings_buzzer(void);
 void settings_power(void);
 void settings_about(void);
+void settings_apply_orientation(uint8_t orient);
 void settings_load_from_sd(void);
 void settings_save_to_sd(void);
 void settings_ensure_sd_folders(void);

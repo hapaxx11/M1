@@ -35,13 +35,15 @@
 #include "m1_virtual_kb.h"
 #include "m1_file_util.h"
 #include "m1_scene.h"
+#include "m1_ir_quick_remote.h"
+#include "m1_settings.h"
 
 /*************************** D E F I N E S ************************************/
 
 #define BROWSE_NAMES_MAX     16
 #define BROWSE_NAME_MAX_LEN  64
 
-#define DASHBOARD_ITEM_COUNT  5
+#define DASHBOARD_ITEM_COUNT  11
 
 #define LIST_HEADER_HEIGHT    12
 #define LIST_START_Y          (LIST_HEADER_HEIGHT + 2)
@@ -82,8 +84,14 @@ static char s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN];
 static uint16_t s_raw_ota_buffer[IR_RAW_OTA_BUFFER_MAX];
 static flipper_ir_signal_t s_raw_tx_signal;
 
-/* Dashboard menu text (item 4 is dynamic: Remote/Normal Mode) */
+/* Dashboard menu text (item 10 is dynamic: Remote/Normal Mode) */
 static const char *s_dashboard_items[DASHBOARD_ITEM_COUNT] = {
+	"TV Remote",
+	"AC Remote",
+	"Audio Remote",
+	"Projector",
+	"Fan Remote",
+	"LED Remote",
 	"Browse IRDB",
 	"Learned",
 	"Favorites",
@@ -195,7 +203,7 @@ static void draw_dashboard(uint8_t selection)
 	}
 
 	/* Update Remote Mode label to reflect current state */
-	s_dashboard_items[4] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
+	s_dashboard_items[10] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
 
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -256,6 +264,12 @@ static void dashboard_screen(void)
 	BaseType_t ret;
 	uint8_t selection = 0;
 
+	/* Remember the caller's orientation so we can restore it on exit.
+	 * The "Toggle Remote Mode" item changes m1_screen_orientation to
+	 * M1_ORIENT_REMOTE while inside the IR dashboard; leaving without
+	 * restoring would leave the entire device in portrait mode. */
+	const uint8_t saved_orient = m1_screen_orientation;
+
 	draw_dashboard(selection);
 
 	while (1)
@@ -269,6 +283,10 @@ static void dashboard_screen(void)
 
 				if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
+					/* Restore the orientation the caller had when
+					 * entering the IR dashboard. */
+					if (m1_screen_orientation != saved_orient)
+						settings_apply_orientation(saved_orient);
 					xQueueReset(main_q_hdl);
 					break; /* Exit to caller */
 				}
@@ -292,52 +310,43 @@ static void dashboard_screen(void)
 				{
 					switch (selection)
 					{
-						case 0: /* Browse IRDB */
-						case 1: /* Learned — browse user-saved remotes */
+						case 0: /* TV Remote */
+						case 1: /* AC Remote */
+						case 2: /* Audio Remote */
+						case 3: /* Projector */
+						case 4: /* Fan Remote */
+						case 5: /* LED Remote */
+						{
+							ir_quick_remote((ir_category_t)selection);
+							break;
+						}
+						case 6: /* Browse IRDB */
+						case 7: /* Learned — browse user-saved remotes */
 						{
 							/* Temporarily switch to Normal for file browsing */
-							uint8_t saved_orient = m1_screen_orientation;
-							if (saved_orient != M1_ORIENT_NORMAL)
-							{
-								m1_screen_orientation = M1_ORIENT_NORMAL;
-								m1_southpaw_mode = 0;
-								m1_lcd_set_rotation(U8G2_R2);
-							}
-							const char *root = (selection == 0) ? IR_UNIVERSAL_IRDB_ROOT : IR_LEARNED_DIR;
+							uint8_t browse_saved_orient = m1_screen_orientation;
+							if (browse_saved_orient != M1_ORIENT_NORMAL)
+								settings_apply_orientation(M1_ORIENT_NORMAL);
+							const char *root = (selection == 6) ? IR_UNIVERSAL_IRDB_ROOT : IR_LEARNED_DIR;
 							strncpy(s_current_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 							s_current_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 							browse_directory(s_current_path);
 							/* Restore orientation */
-							if (saved_orient != M1_ORIENT_NORMAL)
-							{
-								m1_screen_orientation = saved_orient;
-								m1_southpaw_mode = (saved_orient == M1_ORIENT_SOUTHPAW) ? 1 : 0;
-								if (saved_orient == M1_ORIENT_REMOTE)
-									m1_lcd_set_rotation(U8G2_R1);
-								else if (saved_orient == M1_ORIENT_SOUTHPAW)
-									m1_lcd_set_rotation(U8G2_R0);
-							}
+							if (browse_saved_orient != M1_ORIENT_NORMAL)
+								settings_apply_orientation(browse_saved_orient);
 							break;
 						}
-						case 2: /* Favorites */
+						case 8: /* Favorites */
 							show_favorites_screen();
 							break;
-						case 3: /* Recent */
+						case 9: /* Recent */
 							show_recent_screen();
 							break;
-						case 4: /* Toggle Remote Mode */
+						case 10: /* Toggle Remote Mode */
 							if (m1_screen_orientation == M1_ORIENT_REMOTE)
-							{
-								m1_screen_orientation = M1_ORIENT_NORMAL;
-								m1_southpaw_mode = 0;
-								m1_lcd_set_rotation(U8G2_R2);
-							}
+								settings_apply_orientation(M1_ORIENT_NORMAL);
 							else
-							{
-								m1_screen_orientation = M1_ORIENT_REMOTE;
-								m1_southpaw_mode = 0;
-								m1_lcd_set_rotation(U8G2_R1);
-							}
+								settings_apply_orientation(M1_ORIENT_REMOTE);
 							break;
 						default:
 							break;
