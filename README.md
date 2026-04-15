@@ -9,7 +9,7 @@ improvements.
 
 > **This is a community project and is not affiliated with or endorsed by Monstatek.**
 
-### GitHub-First — What Makes Hapax Different
+## GitHub-First — What Makes Hapax Different
 
 Hapax is the **only M1 firmware fork built entirely around GitHub**.  Every other
 fork — Monstatek stock, C3/bedge117, SiN360 — distributes firmware as manual
