@@ -2505,6 +2505,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 			u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
 			m1_u8g2_nextpage();
 			vTaskDelay(pdMS_TO_TICKS(1000));
+			xQueueReset(main_q_hdl);
 			break; /* Back to caller */
 		}
 
