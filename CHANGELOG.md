@@ -9,8 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.0.95] - 2026-04-15
-
 ### Changed
 
 - **Documentation: ST-Link as primary debugger reference** — Release notes and
@@ -37,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-generated release notes via `.github/release.yml`; added instructions
   in CLAUDE.md and GUIDELINES.md that stamp PRs must not appear in changelogs
   or release notes
+
+## [0.9.0.95] - 2026-04-15
 
 ## [0.9.0.94] - 2026-04-15
 
