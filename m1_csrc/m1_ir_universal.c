@@ -2212,6 +2212,14 @@ static void show_search_screen(void)
 	if (qlen == 0)
 		return;
 
+	/* Show a "Searching…" screen while the IRDB tree walk runs.
+	 * The scan is synchronous and may take a moment on large databases. */
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 10, 32, "Searching...");
+	m1_u8g2_nextpage();
+
 	/* Walk the IRDB tree collecting matching .ir file paths */
 	s_search_count = 0;
 	search_ir_files(IR_UNIVERSAL_IRDB_ROOT, query);
