@@ -1326,8 +1326,7 @@ static void show_commands(const char *ir_file_path)
 	/* Copy command names into s_browse_names for the list renderer */
 	for (i = 0; i < s_cmd_count && i < BROWSE_NAMES_MAX; i++)
 	{
-		strncpy(s_browse_names[i], s_commands[i].name, BROWSE_NAME_MAX_LEN - 1);
-		s_browse_names[i][BROWSE_NAME_MAX_LEN - 1] = '\0';
+		snprintf(s_browse_names[i], BROWSE_NAME_MAX_LEN, "%s", s_commands[i].name);
 	}
 	s_browse_count = (s_cmd_count < BROWSE_NAMES_MAX) ? s_cmd_count : BROWSE_NAMES_MAX;
 
@@ -2096,8 +2095,7 @@ static const uint8_t s_tmpl_slot_counts[TMPL_COUNT] = { 8, 6, 8, 6 };
  */
 static void builder_make_label(char *dst, const char *src)
 {
-strncpy(dst, src, IR_BUILDER_LABEL_MAX - 1);
-dst[IR_BUILDER_LABEL_MAX - 1] = '\0';
+snprintf(dst, IR_BUILDER_LABEL_MAX, "%s", src);
 }
 
 
@@ -2236,9 +2234,7 @@ else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 memset(slots, 0, sizeof(ir_builder_slot_t) * (*n_slots));
 for (uint8_t i = 0; i < *n_slots; i++)
 {
-strncpy(slots[i].slot_name, s_tmpls[sel][i],
-        IR_BUILDER_SLOT_NAME_MAX - 1);
-slots[i].slot_name[IR_BUILDER_SLOT_NAME_MAX - 1] = '\0';
+snprintf(slots[i].slot_name, IR_BUILDER_SLOT_NAME_MAX, "%s", s_tmpls[sel][i]);
 slots[i].src = SLOT_SRC_NONE;
 }
 xQueueReset(main_q_hdl);
@@ -2371,8 +2367,7 @@ char title[BROWSE_NAME_MAX_LEN];
 const char *fn = filepath;
 const char *p  = filepath;
 while (*p) { if (*p == '/') fn = p + 1; p++; }
-strncpy(title, fn, BROWSE_NAME_MAX_LEN - 1);
-title[BROWSE_NAME_MAX_LEN - 1] = '\0';
+snprintf(title, BROWSE_NAME_MAX_LEN, "%s", fn);
 
 /* Parse the .ir file into s_commands[] */
 cmd_count = parse_ir_file(filepath);
@@ -2392,8 +2387,7 @@ return false;
 uint16_t disp_count = (cmd_count < BROWSE_NAMES_MAX) ? cmd_count : BROWSE_NAMES_MAX;
 for (uint16_t i = 0; i < disp_count; i++)
 {
-strncpy(s_browse_names[i], s_commands[i].name, BROWSE_NAME_MAX_LEN - 1);
-s_browse_names[i][BROWSE_NAME_MAX_LEN - 1] = '\0';
+snprintf(s_browse_names[i], BROWSE_NAME_MAX_LEN, "%s", s_commands[i].name);
 }
 s_browse_count = disp_count;
 
@@ -2423,12 +2417,8 @@ if (pick_sel < cmd_count && s_commands[pick_sel].valid)
 /* Store IRDB reference in the slot */
 slot->src        = SLOT_SRC_IRDB;
 slot->src_is_raw = s_commands[pick_sel].is_raw;
-strncpy(slot->src_filepath, filepath,
-        IR_UNIVERSAL_PATH_MAX_LEN - 1);
-slot->src_filepath[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-strncpy(slot->src_signal_name, s_commands[pick_sel].name,
-        IR_UNIVERSAL_NAME_MAX_LEN - 1);
-slot->src_signal_name[IR_UNIVERSAL_NAME_MAX_LEN - 1] = '\0';
+snprintf(slot->src_filepath, IR_UNIVERSAL_PATH_MAX_LEN, "%s", filepath);
+snprintf(slot->src_signal_name, IR_UNIVERSAL_NAME_MAX_LEN, "%s", s_commands[pick_sel].name);
 builder_make_label(slot->label, s_commands[pick_sel].name);
 xQueueReset(main_q_hdl);
 return true;
@@ -2453,8 +2443,7 @@ char child_path[IR_UNIVERSAL_PATH_MAX_LEN];
 char saved_path[IR_UNIVERSAL_PATH_MAX_LEN];
 FILINFO fno;
 
-strncpy(browse_path, IR_UNIVERSAL_IRDB_ROOT, IR_UNIVERSAL_PATH_MAX_LEN - 1);
-browse_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", IR_UNIVERSAL_IRDB_ROOT);
 
 /* Save/restore the main browse globals around this sub-browse */
 char   saved_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
@@ -2528,20 +2517,14 @@ s_browse_selection = (s_browse_selection < s_browse_count - 1)
 else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 {
 /* Build child path */
-strncpy(child_path, browse_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
-child_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-path_append(child_path, s_browse_names[s_browse_selection]);
+snprintf(child_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);path_append(child_path, s_browse_names[s_browse_selection]);
 
 if (f_stat(child_path, &fno) == FR_OK &&
     (fno.fattrib & AM_DIR))
 {
 /* Navigate into subdirectory */
-strncpy(saved_path, browse_path,
-        IR_UNIVERSAL_PATH_MAX_LEN - 1);
-saved_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-strncpy(browse_path, child_path,
-        IR_UNIVERSAL_PATH_MAX_LEN - 1);
-browse_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+snprintf(saved_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);
+snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", child_path);
 exit_dir = true;
 }
 else if (is_ir_file(s_browse_names[s_browse_selection]))
@@ -2631,8 +2614,7 @@ if (slots[i].src == SLOT_SRC_NONE)
 continue; /* Skip unassigned slots */
 
 memset(&sig, 0, sizeof(sig));
-strncpy(sig.name, slots[i].slot_name, FLIPPER_IR_NAME_MAX_LEN - 1);
-sig.name[FLIPPER_IR_NAME_MAX_LEN - 1] = '\0';
+snprintf(sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", slots[i].slot_name);
 sig.valid = true;
 
 if (slots[i].src == SLOT_SRC_LEARNED)
@@ -2680,9 +2662,7 @@ if (strcmp(raw_sig.name, slots[i].src_signal_name) == 0
     && raw_sig.valid)
 {
 /* Write under the slot name */
-strncpy(raw_sig.name, slots[i].slot_name,
-        FLIPPER_IR_NAME_MAX_LEN - 1);
-raw_sig.name[FLIPPER_IR_NAME_MAX_LEN - 1] = '\0';
+snprintf(raw_sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", slots[i].slot_name);
 flipper_ir_write_signal(&ff, &raw_sig);
 break;
 }
