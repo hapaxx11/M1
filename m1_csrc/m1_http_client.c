@@ -408,6 +408,12 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 			return HTTP_ERR_TIMEOUT;
 	}
 
+	/* Detect silent truncation: the buffer filled before the full
+	 * Content-Length was received.  The while loop exits cleanly when
+	 * total == buf_size-1 so this is not caught above. */
+	if (content_length > 0 && (uint32_t)total < content_length)
+		return HTTP_ERR_RESPONSE_TOO_LARGE;
+
 	return HTTP_OK;
 }
 
