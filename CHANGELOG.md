@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **IR Universal Remote: IRDB Search** — New "Search" option on the Universal
+  Remote dashboard (between Browse IRDB and Learned). Type a brand, model, or
+  filename fragment using the virtual keyboard; the firmware walks all 3 levels
+  of the IRDB tree (category → brand → device) and displays up to 20 matching
+  `.ir` files in a scrollable list. Selecting a result opens its command list
+  and records it in Recent history. Implements the `IR_UNIVERSAL_MODE_SEARCH`
+  placeholder that was already declared in `m1_ir_universal.h`.
+
 ## [0.9.0.99] - 2026-04-15
 
 ### Fixed

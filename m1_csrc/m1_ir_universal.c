@@ -42,7 +42,9 @@
 #define BROWSE_NAMES_MAX     16
 #define BROWSE_NAME_MAX_LEN  64
 
-#define DASHBOARD_ITEM_COUNT  5
+#define DASHBOARD_ITEM_COUNT  6
+
+#define IR_SEARCH_RESULTS_MAX 20
 
 #define LIST_HEADER_HEIGHT    12
 #define LIST_START_Y          (LIST_HEADER_HEIGHT + 2)
@@ -74,6 +76,10 @@ static uint8_t s_favorite_count;
 static char s_recent[IR_UNIVERSAL_MAX_RECENT][IR_UNIVERSAL_PATH_MAX_LEN];
 static uint8_t s_recent_count;
 
+/* Search results */
+static char s_search_results[IR_SEARCH_RESULTS_MAX][IR_UNIVERSAL_PATH_MAX_LEN];
+static uint16_t s_search_count;
+
 /* Transmit state */
 static IRMP_DATA s_tx_irmp_data;
 
@@ -86,6 +92,7 @@ static flipper_ir_signal_t s_raw_tx_signal;
 /* Dashboard menu text (item 4 is dynamic: Remote/Normal Mode) */
 static const char *s_dashboard_items[DASHBOARD_ITEM_COUNT] = {
 	"Browse IRDB",
+	"Search",
 	"Learned",
 	"Favorites",
 	"Recent",
@@ -111,6 +118,7 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 static void draw_dashboard(uint8_t selection);
 static void show_favorites_screen(void);
 static void show_recent_screen(void);
+static void show_search_screen(void);
 static bool is_ir_file(const char *fname);
 static void path_append(char *base, const char *item);
 static void path_go_up(char *path);
@@ -196,7 +204,7 @@ static void draw_dashboard(uint8_t selection)
 	}
 
 	/* Update Remote Mode label to reflect current state */
-	s_dashboard_items[4] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
+	s_dashboard_items[5] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
 
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -304,7 +312,7 @@ static void dashboard_screen(void)
 					switch (selection)
 					{
 						case 0: /* Browse IRDB */
-						case 1: /* Learned — browse user-saved remotes */
+						case 2: /* Learned — browse user-saved remotes */
 						{
 							/* Temporarily switch to Normal for file browsing */
 							uint8_t browse_saved_orient = m1_screen_orientation;
@@ -319,13 +327,16 @@ static void dashboard_screen(void)
 								settings_apply_orientation(browse_saved_orient);
 							break;
 						}
-						case 2: /* Favorites */
+						case 1: /* Search IRDB */
+							show_search_screen();
+							break;
+						case 3: /* Favorites */
 							show_favorites_screen();
 							break;
-						case 3: /* Recent */
+						case 4: /* Recent */
 							show_recent_screen();
 							break;
-						case 4: /* Toggle Remote Mode */
+						case 5: /* Toggle Remote Mode */
 							if (m1_screen_orientation == M1_ORIENT_REMOTE)
 								settings_apply_orientation(M1_ORIENT_NORMAL);
 							else
@@ -1995,3 +2006,282 @@ static void show_recent_screen(void)
 		} /* if (ret == pdTRUE) */
 	} /* while (1) */
 } // static void show_recent_screen(void)
+
+
+
+/*============================================================================*/
+/*
+ * Case-insensitive substring search.
+ * Returns true if needle is found anywhere within haystack (ASCII only).
+ * An empty needle always matches.
+ */
+/*============================================================================*/
+static bool str_contains_icase(const char *haystack, const char *needle)
+{
+	size_t hl, nl, i, j;
+	char h, n;
+
+	if (needle == NULL || needle[0] == '\0')
+		return true;
+	if (haystack == NULL)
+		return false;
+
+	hl = strlen(haystack);
+	nl = strlen(needle);
+	if (nl > hl)
+		return false;
+
+	for (i = 0; i <= hl - nl; i++)
+	{
+		bool match = true;
+		for (j = 0; j < nl; j++)
+		{
+			h = haystack[i + j];
+			n = needle[j];
+			if (h >= 'A' && h <= 'Z')
+				h = (char)(h + 32);
+			if (n >= 'A' && n <= 'Z')
+				n = (char)(n + 32);
+			if (h != n)
+			{
+				match = false;
+				break;
+			}
+		}
+		if (match)
+			return true;
+	}
+	return false;
+} // static bool str_contains_icase(...)
+
+
+
+/*============================================================================*/
+/*
+ * Walk the IRDB directory tree (3 levels: category / brand / device) and
+ * collect up to IR_SEARCH_RESULTS_MAX .ir file paths whose filenames contain
+ * the given query string (case-insensitive).  Uses three nested DIR objects
+ * instead of recursion to stay stack-friendly on FreeRTOS tasks.
+ *
+ * Results are stored in s_search_results[]; s_search_count is updated.
+ * Caller must set s_search_count = 0 before calling.
+ */
+/*============================================================================*/
+static void search_ir_files(const char *root, const char *query)
+{
+	DIR cat_dir, brand_dir, dev_dir;
+	FILINFO cat_fno, brand_fno, dev_fno;
+	FRESULT res;
+	char cat_path[IR_UNIVERSAL_PATH_MAX_LEN];
+	char brand_path[IR_UNIVERSAL_PATH_MAX_LEN];
+	char file_path[IR_UNIVERSAL_PATH_MAX_LEN];
+
+	res = f_opendir(&cat_dir, root);
+	if (res != FR_OK)
+		return;
+
+	/* Level 1: categories (or files directly in root) */
+	while (s_search_count < IR_SEARCH_RESULTS_MAX)
+	{
+		res = f_readdir(&cat_dir, &cat_fno);
+		if (res != FR_OK || cat_fno.fname[0] == '\0')
+			break;
+		if (cat_fno.fname[0] == '.')
+			continue;
+
+		strncpy(cat_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
+		cat_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+		path_append(cat_path, cat_fno.fname);
+
+		if (!(cat_fno.fattrib & AM_DIR))
+		{
+			/* .ir file directly in root */
+			if (is_ir_file(cat_fno.fname) && str_contains_icase(cat_fno.fname, query))
+			{
+				strncpy(s_search_results[s_search_count], cat_path,
+				        IR_UNIVERSAL_PATH_MAX_LEN - 1);
+				s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+				s_search_count++;
+			}
+			continue;
+		}
+
+		/* Level 2: brands (or files directly in category) */
+		res = f_opendir(&brand_dir, cat_path);
+		if (res != FR_OK)
+			continue;
+
+		while (s_search_count < IR_SEARCH_RESULTS_MAX)
+		{
+			res = f_readdir(&brand_dir, &brand_fno);
+			if (res != FR_OK || brand_fno.fname[0] == '\0')
+				break;
+			if (brand_fno.fname[0] == '.')
+				continue;
+
+			strncpy(brand_path, cat_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
+			brand_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+			path_append(brand_path, brand_fno.fname);
+
+			if (!(brand_fno.fattrib & AM_DIR))
+			{
+				/* .ir file directly in category dir */
+				if (is_ir_file(brand_fno.fname) && str_contains_icase(brand_fno.fname, query))
+				{
+					strncpy(s_search_results[s_search_count], brand_path,
+					        IR_UNIVERSAL_PATH_MAX_LEN - 1);
+					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+					s_search_count++;
+				}
+				continue;
+			}
+
+			/* Level 3: device .ir files */
+			res = f_opendir(&dev_dir, brand_path);
+			if (res != FR_OK)
+				continue;
+
+			while (s_search_count < IR_SEARCH_RESULTS_MAX)
+			{
+				res = f_readdir(&dev_dir, &dev_fno);
+				if (res != FR_OK || dev_fno.fname[0] == '\0')
+					break;
+				if (dev_fno.fname[0] == '.')
+					continue;
+
+				if (is_ir_file(dev_fno.fname) && str_contains_icase(dev_fno.fname, query))
+				{
+					strncpy(file_path, brand_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
+					file_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+					path_append(file_path, dev_fno.fname);
+					strncpy(s_search_results[s_search_count], file_path,
+					        IR_UNIVERSAL_PATH_MAX_LEN - 1);
+					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+					s_search_count++;
+				}
+			}
+			f_closedir(&dev_dir);
+		}
+		f_closedir(&brand_dir);
+	}
+	f_closedir(&cat_dir);
+} // static void search_ir_files(...)
+
+
+
+/*============================================================================*/
+/*
+ * Show the IRDB search screen.
+ * Prompts for a query via the virtual keyboard, walks the IRDB tree, and
+ * displays matching .ir file names in a scrollable list.  Selecting a result
+ * opens its command list via show_commands() and records it in recent history.
+ */
+/*============================================================================*/
+static void show_search_screen(void)
+{
+	char query[M1_VIRTUAL_KB_FILENAME_MAX + 1];
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint16_t selection = 0;
+	uint8_t i;
+	uint8_t qlen;
+
+	/* Get search query from the virtual keyboard */
+	query[0] = '\0';
+	qlen = m1_vkb_get_filename("Search IRDB", "", query);
+
+	/* Return to dashboard if user cancelled without typing anything */
+	if (qlen == 0)
+		return;
+
+	/* Walk the IRDB tree collecting matching .ir file paths */
+	s_search_count = 0;
+	search_ir_files(IR_UNIVERSAL_IRDB_ROOT, query);
+
+	/* No results found */
+	if (s_search_count == 0)
+	{
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 10, 32, "No results");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 10, 50, "Back to return");
+		m1_u8g2_nextpage();
+
+		while (1)
+		{
+			ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+			if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+				if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					xQueueReset(main_q_hdl);
+					return;
+				}
+			}
+		}
+	}
+
+	/* Populate browse names with the filename portion of each result path */
+	for (i = 0; i < s_search_count && i < BROWSE_NAMES_MAX; i++)
+	{
+		const char *fname = s_search_results[i];
+		const char *p = s_search_results[i];
+		while (*p)
+		{
+			if (*p == '/')
+				fname = p + 1;
+			p++;
+		}
+		strncpy(s_browse_names[i], fname, BROWSE_NAME_MAX_LEN - 1);
+		s_browse_names[i][BROWSE_NAME_MAX_LEN - 1] = '\0';
+	}
+	s_browse_count = (s_search_count < BROWSE_NAMES_MAX) ? s_search_count : BROWSE_NAMES_MAX;
+
+	draw_list_screen("Results", s_browse_count, selection, NULL);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret == pdTRUE)
+		{
+			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+
+				if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					xQueueReset(main_q_hdl);
+					return;
+				}
+				else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					if (selection > 0)
+						selection--;
+					else
+						selection = s_browse_count - 1;
+				}
+				else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					if (selection < s_browse_count - 1)
+						selection++;
+					else
+						selection = 0;
+				}
+				else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					if (selection < s_search_count)
+					{
+						add_to_recent(s_search_results[selection]);
+						show_commands(s_search_results[selection]);
+					}
+				}
+
+				draw_list_screen("Results", s_browse_count, selection, NULL);
+			} /* if (q_item.q_evt_type == Q_EVENT_KEYPAD) */
+		} /* if (ret == pdTRUE) */
+	} /* while (1) */
+} // static void show_search_screen(void)
