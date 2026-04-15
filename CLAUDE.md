@@ -903,6 +903,37 @@ port alignment straightforward.
 > if a saved-item action menu needs a specific layout, the Saved Item Actions pattern
 > wins over generic button bar guidelines.
 
+### Button-to-Column Mapping (3-Column Bar)
+
+The `subghz_button_bar_draw()` API provides three columns: LEFT, CENTER,
+RIGHT.  **Each column MUST correspond to its physical button:**
+
+| Column | Physical button | Typical labels |
+|--------|----------------|----------------|
+| LEFT | LEFT button | Config, Erase, Stop |
+| CENTER | OK button | REC, Stop, Send |
+| RIGHT | RIGHT button | Save |
+
+**NEVER** put a DOWN action label in the CENTER column or an OK action in
+the RIGHT column.  This creates a confusing mismatch between what the user
+sees on screen and what happens when they press a button.
+
+If an action is triggered by UP or DOWN (which have no dedicated column),
+either omit it from the button bar or use the LEFT column with a ↓ icon as
+a visual hint.
+
+#### Known violations (migration backlog)
+
+The following scenes predate this rule and still use the old convention
+(DOWN in center, OK on right).  They should be migrated when next modified:
+
+| File | Current mapping | Correct mapping |
+|------|----------------|-----------------|
+| `m1_subghz_scene_read.c` | CENTER=`↓Config`/`↓Save`, RIGHT=`OK:Listen`/`OK:View` | CENTER=`Listen`/`View`, LEFT=`↓Config`/`↓Save` |
+| `m1_subghz_scene_receiver_info.c` | CENTER=`↓Save`, RIGHT=`OK:Send` | CENTER=`Send`, RIGHT or omit `Save` |
+
+### General Button Bar Rules
+
 - **NEVER add "Back" as a menu item or button bar label.** The back button is self-explanatory
   — users do not need a screen element telling them that pressing back goes back. This applies
   to `subghz_button_bar_draw()`, `m1_draw_bottom_bar()`, hand-drawn bottom bars, and any

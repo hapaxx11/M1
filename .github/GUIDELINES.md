@@ -115,11 +115,14 @@ Other Monstatek-derived UX rules (button bar guidelines, display layout, keypad 
 still apply when not superseded by this pattern.
 
 12. UI / Button Bar Rules
+Button bar columns MUST correspond to physical buttons: LEFT column = LEFT button,
+CENTER column = OK button, RIGHT column = RIGHT button.  Never place a DOWN action in
+the CENTER column or an OK action in the RIGHT column.
 Never add "Back" as a menu item, selectable action, or button bar label — the hardware
 BACK button handles navigation.  Selection lists MUST NOT have a button bar with "OK" —
 use a scrollbar as a position indicator instead.  Button bars are appropriate only when
 they convey non-obvious functionality (e.g. "OK:Download", "Send", "↓ Config").
-See DEVELOPMENT.md § "UI / Button Bar Rules" for the full specification.
+See DEVELOPMENT.md § "Button Model" and "UI / Button Bar Rules" for the full specification.
 
 13. Font-Aware Menu Implementation
 All scrollable lists MUST use the font-aware helpers from m1_scene.h instead of

@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Management) to `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and
   `.github/CONTRIBUTING.md`.  These patterns were previously documented only
   in `CLAUDE.md` (agent instructions).
+- **Documentation**: Added button model and button-to-column mapping rule
+  to `DEVELOPMENT.md`, `CLAUDE.md`, `.github/GUIDELINES.md`, and
+  `m1_subghz_scene.h`.  Button bar columns must correspond to physical
+  buttons (LEFT=LEFT, CENTER=OK, RIGHT=RIGHT).  Identified two existing
+  violations in the migration backlog (`m1_subghz_scene_read.c`,
+  `m1_subghz_scene_receiver_info.c`).
 
 ### Fixed
 

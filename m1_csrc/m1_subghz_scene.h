@@ -9,10 +9,20 @@
  * on_event(), on_exit(), and draw() callbacks with clean separation of concerns.
  *
  * Button model (enforced across ALL scenes):
- *   OK    = primary action (start, select, confirm)
- *   BACK  = go back / exit current scene (always, no exceptions)
+ *   OK    = primary action (start, select, confirm, send)
+ *   BACK  = go back / exit current scene
  *   L/R   = change value (frequency, modulation) in selector contexts
  *   U/D   = scroll list items, navigate menu
+ *
+ * Button bar column mapping (subghz_button_bar_draw):
+ *   LEFT column  = LEFT button action
+ *   CENTER column = OK button action
+ *   RIGHT column  = RIGHT button action
+ *
+ * Exception: Read Raw intercepts BACK during Recording to stop capture
+ * and transition to Idle (preserving the file) instead of exiting the
+ * scene.  This matches Momentum firmware behaviour — exiting mid-capture
+ * would discard or corrupt the partially-written file.
  */
 
 #ifndef M1_SUBGHZ_SCENE_H_

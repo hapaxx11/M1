@@ -84,9 +84,44 @@ Required core verbs: **Emulate/Send**, **Info**, **Rename**, **Delete**.
 See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
 specification, optional verbs per module, and implementation examples.
 
+## Button Model
+
+The M1 has a 5-way directional pad (UP/DOWN/LEFT/RIGHT/OK) plus a BACK
+button.  These roles are enforced across **all** scenes:
+
+| Button | Role |
+|--------|------|
+| **OK** | Primary action — start, select, confirm, send |
+| **BACK** | Go back / exit current scene |
+| **LEFT / RIGHT** | Change value (frequency, modulation) in selector contexts |
+| **UP / DOWN** | Scroll list items, navigate menus |
+
+**Exception:** Read Raw intercepts BACK during Recording to stop capture and
+transition to Idle (preserving the file) instead of exiting.  This matches
+Momentum firmware behaviour — exiting mid-capture would corrupt the file.
+
 ## UI / Button Bar Rules
 
 These rules ensure a consistent user experience across all M1 modules.
+
+### Button-to-column mapping (3-column bar)
+
+The `subghz_button_bar_draw()` API provides three columns: LEFT, CENTER,
+and RIGHT.  **Each column must correspond to its physical button:**
+
+| Column | Physical button | Typical labels |
+|--------|----------------|----------------|
+| LEFT | LEFT button | Config, Erase, Stop |
+| CENTER | OK button | REC, Stop, Send |
+| RIGHT | RIGHT button | Save |
+
+**Never** put a DOWN action label in the CENTER column or an OK action in
+the RIGHT column — this creates a confusing mismatch between what the user
+sees and what happens when they press a button.
+
+If an action is triggered by UP or DOWN (which have no dedicated column),
+either omit it from the button bar or use the LEFT column with a ↓ icon as
+a visual hint (since DOWN is physically adjacent to LEFT on the M1 keypad).
 
 ### No "Back" labels
 
