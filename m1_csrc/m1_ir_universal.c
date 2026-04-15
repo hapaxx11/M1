@@ -2446,7 +2446,7 @@ FILINFO fno;
 snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", IR_UNIVERSAL_IRDB_ROOT);
 
 /* Save/restore the main browse globals around this sub-browse */
-char   saved_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
+char saved_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
 uint16_t saved_browse_count = s_browse_count;
 uint16_t saved_browse_page  = s_browse_page;
 uint16_t saved_browse_sel   = s_browse_selection;
@@ -2517,7 +2517,8 @@ s_browse_selection = (s_browse_selection < s_browse_count - 1)
 else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 {
 /* Build child path */
-snprintf(child_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);path_append(child_path, s_browse_names[s_browse_selection]);
+snprintf(child_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);
+path_append(child_path, s_browse_names[s_browse_selection]);
 
 if (f_stat(child_path, &fno) == FR_OK &&
     (fno.fattrib & AM_DIR))
