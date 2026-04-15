@@ -38,7 +38,6 @@
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
-#include "m1_file_browser.h"
 #include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
@@ -77,8 +76,11 @@ extern void     sub_ghz_raw_recording_stop_ext(void);
 extern const char *sub_ghz_raw_recording_get_filename_ext(void);
 extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 
-/* Path to last recorded file — kept for Send/Save/Erase after recording */
-static char raw_filepath[72];
+/* Path to last recorded file — kept for Send/Save/Erase after recording.
+ * Filesystem operations prepend "0:" to build FatFS paths, so keep
+ * raw_filepath short enough that "0:" + path fits in the derived buffers. */
+#define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
+static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /*============================================================================*/
 /* Helpers                                                                    */
@@ -169,12 +171,16 @@ static void stop_raw_rx(SubGhzApp *app)
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
 
+    /* Free ring buffers now — they are no longer needed once recording is
+     * stopped and the file is closed.  This reclaims ~128KB of RAM. */
+    sub_ghz_ring_buffers_deinit_ext();
+
     app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
 
     /* Remember the auto-generated filepath for Send/Save/Erase */
     const char *fname = sub_ghz_raw_recording_get_filename_ext();
-    strncpy(raw_filepath, fname ? fname : "", sizeof(raw_filepath) - 1);
-    raw_filepath[sizeof(raw_filepath) - 1] = '\0';
+    strncpy(raw_filepath, fname ? fname : "", RAW_FILEPATH_MAX);
+    raw_filepath[RAW_FILEPATH_MAX] = '\0';
 
     app->raw_state = SubGhzReadRawStateIdle;
 }
@@ -192,9 +198,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else
             {
-                /* Exit scene — clean up ring buffers if capture exists */
-                if (app->raw_state == SubGhzReadRawStateIdle)
-                    sub_ghz_ring_buffers_deinit_ext();
+                /* Exit scene */
                 subghz_scene_pop(app);
             }
             return true;
@@ -220,8 +224,27 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                  * unconditionally, even on failure — to restore radio state. */
                 if (raw_filepath[0] != '\0')
                 {
-                    sub_ghz_replay_flipper_file(raw_filepath);
+                    uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
                     menu_sub_ghz_init();
+
+                    if (ret != 0)
+                    {
+                        char err_buf[32];
+                        const char *err = err_buf;
+                        snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
+                        switch (ret)
+                        {
+                            case 1: err = "File/IO error";              break;
+                            case 2: err = "Missing data/frequency";     break;
+                            case 3: err = "Unsupported freq";           break;
+                            case 4: /* fall through */
+                            case 5: err = "Memory error";               break;
+                            case 6: err = "Dynamic/RAW-only protocol";  break;
+                            case 7: err = "Unsupported protocol";       break;
+                        }
+                        m1_message_box(&m1_u8g2, "Send failed", err, "",
+                                       "BACK to return");
+                    }
                 }
                 app->need_redraw = true;
             }
@@ -238,12 +261,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 /* Erase — delete the recorded file and go back to Start */
                 if (raw_filepath[0] != '\0')
                 {
-                    char del_path[72];
+                    char del_path[RAW_FILEPATH_MAX + 3]; /* "0:" + path + NUL */
                     snprintf(del_path, sizeof(del_path), "0:%s", raw_filepath);
-                    f_unlink(del_path);
+                    FRESULT fres = f_unlink(del_path);
+                    if (fres != FR_OK && fres != FR_NO_FILE)
+                    {
+                        /* Unlink failed — keep Idle state so user can retry */
+                        m1_message_box(&m1_u8g2, "Erase failed",
+                                       "Could not delete file", "",
+                                       "BACK to return");
+                        app->need_redraw = true;
+                        return true;
+                    }
                     raw_filepath[0] = '\0';
                 }
-                sub_ghz_ring_buffers_deinit_ext();
                 subghz_raw_rssi_reset_ext();
                 app->raw_state = SubGhzReadRawStateStart;
                 app->raw_sample_count = 0;
@@ -269,7 +300,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     const char *ext = strrchr(fname, '.');
                     if (!ext) ext = ".sgh";
 
-                    char old_path[72], new_path[72];
+                    char old_path[RAW_FILEPATH_MAX + 3], new_path[RAW_FILEPATH_MAX + 3];
                     snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
                     snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
                     if (f_rename(old_path, new_path) == FR_OK)
