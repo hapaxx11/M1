@@ -303,11 +303,19 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     char old_path[RAW_FILEPATH_MAX + 3], new_path[RAW_FILEPATH_MAX + 3];
                     snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
                     snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
-                    if (f_rename(old_path, new_path) == FR_OK)
+
+                    FRESULT rename_result = f_rename(old_path, new_path);
+                    if (rename_result == FR_OK)
                     {
                         /* Update stored path to the new name */
                         snprintf(raw_filepath, sizeof(raw_filepath),
                                  "/SUBGHZ/%s%s", new_name, ext);
+                    }
+                    else
+                    {
+                        /* Leave raw_filepath unchanged so the current capture remains valid. */
+                        printf("Save RAW rename failed (FRESULT=%d): '%s' -> '%s'\n",
+                               (int)rename_result, old_path, new_path);
                     }
                 }
                 app->need_redraw = true;
