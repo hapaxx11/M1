@@ -434,55 +434,67 @@ to build.**
 
 ### CHANGELOG.md — mandatory for every meaningful change
 
-- **Location**: `CHANGELOG.md` (repo root)
+- **Location**: `CHANGELOG.md` (repo root).
 - **Format**: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) — `### Added`,
-  `### Changed`, `### Fixed`, `### Removed` subsections under the current version heading.
-- **Version label**: Use `[{major}.{minor}.{build}.{rc}]` — e.g. `[0.9.0.9]`.
+  `### Changed`, `### Fixed`, `### Removed` subsections.
+- **Version label**: `[{major}.{minor}.{build}.{rc}]` — e.g. `[0.9.0.9]`.
   The date is the wall-clock date of the change (`YYYY-MM-DD`).
-- **`[Unreleased]` heading**: **Always** add new changelog entries under
-  `## [Unreleased]`.  The `build-release.yml` workflow automatically stamps
-  this section with the release version and date (`## [X.Y.Z.RC] - YYYY-MM-DD`)
-  after each successful release, and inserts a fresh empty `## [Unreleased]`
-  heading above it.  There is no need to manually assign version numbers —
-  CI handles the promotion.
-- **One entry per logical change**, not one entry per file edited.  Group related items.
-- **No duplicate subsection headings** — before adding a `### Fixed`, `### Added`,
-  `### Changed`, or `### Removed` heading, **scan the entire `[Unreleased]` block** for
-  an existing heading of the same type.  If one already exists, append your bullet(s) to
-  that existing section.  Never create a second `### Fixed` (or any other) heading under
-  the same `## [Unreleased]` block — duplicate headings confuse readers and changelog
-  tooling.
-- **When to add an entry**:
-  - New firmware feature, protocol, or UI screen → `### Added`
-  - Modification to existing behaviour, API, or protocol → `### Changed`
-  - Bug fix → `### Fixed`
-  - Removal of a feature or file → `### Removed`
-  - Documentation / process / tooling change → `### Changed` with a "Documentation" prefix
-- **When NOT to add an entry**: Pure whitespace / formatting commits with zero functional
-  effect.  Every other change needs an entry.
-- **Retroactive changelog edits** are permitted **only** when **both** of the
-  following conditions are met:
-  1. The change increases the accuracy of the changelog to better match the
-     actual content of its corresponding release build (e.g. correcting a
-     mis-attributed protocol name, fixing an incorrect version date, adding a
-     missing entry for a feature that shipped in that release).
-  2. The intent of the change is in the public interest and is non-judgemental
-     and non-harmful (e.g. factual corrections, clarifications — never
-     retroactive editorialising, blame assignment, or content that could harm
-     any individual or group).
-  If either condition is not met, the retroactive edit must not be made.
-  Retroactive edits should be limited to already-released version sections —
-  the `[Unreleased]` section is always freely editable.
-- Do **not** manually create versioned headings — always add entries under
-  `## [Unreleased]` and let CI stamp the version on release.
-- **CI stamper safety rule**: The `build-release.yml` changelog stamper uses
-  `text.replace("## [Unreleased]", …, 1)` — a simple first-occurrence text
-  replace.  **Never** write the literal string `## [Unreleased]` anywhere in
-  changelog entry body text, including inside backtick code spans, markdown
-  code blocks, or quoted descriptions.  If the stamper matches body text
-  instead of the heading, it injects version headings mid-paragraph and
-  corrupts the changelog (this happened at v0.9.0.78–83).  When referring to
-  the heading in prose, omit the `## ` prefix — write `[Unreleased]` instead.
+
+#### Fragment-based workflow (required)
+
+> **DO NOT edit `CHANGELOG.md` directly on feature branches.**  Create a
+> changelog **fragment file** instead.  This eliminates merge conflicts when
+> multiple branches are in flight simultaneously.
+
+- **Create a fragment file** in `.changelog/` for each logical change:
+  ```
+  .changelog/<short-description>.<category>.md
+  ```
+  where `<category>` is one of: `added`, `changed`, `fixed`, `removed`.
+- **File content**: the bullet-point text for the entry — one entry per file.
+  The leading `- ` dash is optional (the assembler normalises it).
+  Multi-line entries are supported; indent continuation lines by 2 spaces.
+  ```
+  # .changelog/ir-quick-remotes.added.md
+  **Infrared: Universal Remote quick-access remotes** — Momentum-style category
+    quick-remotes accessible directly from the Universal Remote dashboard.
+  ```
+- **Multiple entries** in one file are separated by a blank line.
+- **Naming**: use lowercase, hyphens, keep it short.  The description is for
+  humans browsing the directory — it does not appear in the changelog.
+- **CI assembly**: `build-release.yml` runs `scripts/assemble_changelog.py`
+  at release time, which reads all fragment files, groups entries by category,
+  merges them into the `[Unreleased]` section of `CHANGELOG.md`, deletes the
+  fragment files, then stamps the version heading.
+- **Local preview**: `python scripts/assemble_changelog.py --preview` shows
+  what the assembled output would look like without modifying any files.
+
+#### Category rules
+
+- **When to add a fragment**:
+  - New firmware feature, protocol, or UI screen → `<desc>.added.md`
+  - Modification to existing behaviour, API, or protocol → `<desc>.changed.md`
+  - Bug fix → `<desc>.fixed.md`
+  - Removal of a feature or file → `<desc>.removed.md`
+  - Documentation / process / tooling change → `<desc>.changed.md`
+    with a "Documentation:" prefix in the entry text
+- **When NOT to add a fragment**: Pure whitespace / formatting commits with
+  zero functional effect.  Every other change needs a fragment.
+- **One fragment per logical change**, not one per file edited.  Group related
+  items into a single fragment when they form a cohesive feature or fix.
+
+#### Rules that still apply
+
+- Do **not** manually create versioned headings in `CHANGELOG.md` — CI stamps
+  the version on release.
+- **Retroactive changelog edits** to already-released sections are permitted
+  **only** when the change increases accuracy of the released content AND is
+  in the public interest and non-harmful.
+- **CI stamper safety rule**: The stamper replaces the first occurrence of
+  the `[Unreleased]` heading marker.  Never write that literal markdown
+  heading string in changelog entry body text, fragment files, or code
+  spans.  When referring to the heading in prose, write `[Unreleased]`
+  (without the `## ` prefix).
 - **Changelog stamp PRs are NOT changelog-worthy.**  The CI workflow creates a
   PR titled `changelog: stamp [Unreleased] as <tag>` after every release.
   These automated stamp PRs **MUST NOT** appear in changelog entries, release
@@ -490,6 +502,13 @@ to build.**
   not represent a user-visible change.  If you see one in auto-generated
   release notes, the `.github/release.yml` label exclusion has failed and
   should be investigated.
+
+#### Backward compatibility
+
+  The assembly script also preserves any entries that already exist under
+  `[Unreleased]` in `CHANGELOG.md` (e.g. from legacy direct edits).  New
+  fragment entries are merged into the correct category sections alongside
+  existing entries.  Over time, all contributors should migrate to fragments.
 
 ### README.md — update when user-visible descriptions are stale
 
