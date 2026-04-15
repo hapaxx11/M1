@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IR Universal Remote dashboard**: Converted hardcoded `DASHBOARD_ITEM_HEIGHT`
   and `DASHBOARD_START_Y` to font-aware helpers.  Added scrollbar.  Dashboard
   now respects the user's text size setting.
+## [0.9.0.92] - 2026-04-15
+
 ## [0.9.0.91] - 2026-04-15
 
 ### Changed
