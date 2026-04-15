@@ -2199,7 +2199,7 @@ uint8_t sel)
 
 	/* Bottom hint: OK = assign, RIGHT = save */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "Assign", "Save");
+	m1_draw_bottom_bar(&m1_u8g2, NULL, "Assign", "Save", NULL);
 
 	m1_u8g2_nextpage();
 }
@@ -2541,6 +2541,29 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 				s_browse_selection = (s_browse_selection < s_browse_count - 1)
 				? s_browse_selection + 1 : 0;
 			}
+			else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				/* Next page */
+				uint16_t next_count = scan_directory_page(browse_path,
+					s_browse_page + 1, BROWSE_NAMES_MAX);
+				if (next_count > 0)
+				{
+					s_browse_page++;
+					s_browse_count = next_count;
+					s_browse_selection = 0;
+				}
+			}
+			else if (bs.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				/* Previous page */
+				if (s_browse_page > 0)
+				{
+					s_browse_page--;
+					s_browse_count = scan_directory_page(browse_path,
+						s_browse_page, BROWSE_NAMES_MAX);
+					s_browse_selection = 0;
+				}
+			}
 			else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				/* Build child path */
@@ -2552,6 +2575,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 				{
 					/* Navigate into subdirectory */
 					snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", child_path);
+					s_browse_page = 0;
 					exit_dir = true;
 				}
 				else if (is_ir_file(s_browse_names[s_browse_selection]))
@@ -2570,8 +2594,8 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 						return true;
 					}
 					/* User backed out of file — redraw dir listing */
-					s_browse_count = scan_directory_page(browse_path, 0,
-					BROWSE_NAMES_MAX);
+					s_browse_count = scan_directory_page(browse_path,
+					s_browse_page, BROWSE_NAMES_MAX);
 				}
 			}
 
