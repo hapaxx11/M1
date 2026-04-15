@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.99] - 2026-04-15
+
 ### Fixed
 
 - IR Universal Remote: exiting the dashboard with "Remote Mode" active no longer
