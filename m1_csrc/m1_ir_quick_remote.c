@@ -68,8 +68,9 @@
 
 /** Button definition for a grid cell */
 typedef struct {
-    const char *label;       /**< Display label (max 7 chars) */
-    const char *cmd_name;    /**< Command name to match in .ir file */
+    const char *label;               /**< Display label (max 7 chars) */
+    const char *cmd_name;            /**< Primary command name to match */
+    const char * const *cmd_alts;    /**< NULL-terminated list of fallback names, or NULL */
 } ir_grid_button_t;
 
 /** Category layout definition */
@@ -98,9 +99,12 @@ static const ir_grid_button_t s_tv_buttons[IR_TV_BTN_COUNT] = {
     [IR_TV_CH_DN]  = { "Ch-",    "Ch_prev"  },
 };
 
+/* Fallback candidate names for AC Power (many remotes use "Power" instead of "Off") */
+static const char * const s_ac_power_alts[] = { "Power", "Power_on", "On", NULL };
+
 /* --- AC 3×3 Grid --- */
 static const ir_grid_button_t s_ac_buttons[IR_AC_BTN_COUNT] = {
-    [IR_AC_POWER]   = { "Power",  "Off"      },
+    [IR_AC_POWER]   = { "Power",  "Off",       s_ac_power_alts },
     [IR_AC_MODE]    = { "Mode",   "Mode"     },
     [IR_AC_SWING]   = { "Swing",  "Swing"    },
     [IR_AC_TEMP_UP] = { "Temp+",  "Temp_up"  },
@@ -269,21 +273,22 @@ static bool load_last_used(ir_category_t cat, char *path, uint16_t path_len)
                 }
                 return false;
             }
-            if (ch == '\n' || ch == '\r')
+            if (ch == '\r')
             {
-                if (pos > 0)
-                {
-                    path[pos] = '\0';
-                    if (line_idx == (uint8_t)cat)
-                    {
-                        f_close(&file);
-                        return true;
-                    }
-                    line_idx++;
-                    break;
-                }
-                /* Skip empty lines or \r after \n */
+                /* Skip CR in CRLF sequences */
                 continue;
+            }
+            if (ch == '\n')
+            {
+                /* Always count newline as a line boundary, even for empty lines */
+                path[pos] = '\0';
+                if (line_idx == (uint8_t)cat)
+                {
+                    f_close(&file);
+                    return pos > 0;
+                }
+                line_idx++;
+                break;
             }
             if (line_idx == (uint8_t)cat)
                 path[pos] = ch;
@@ -325,12 +330,10 @@ static void save_last_used(ir_category_t cat, const char *path)
                 {
                     if (f_read(&file, &ch, 1, &br) != FR_OK || br == 0)
                         break;
-                    if (ch == '\n' || ch == '\r')
-                    {
-                        if (pos > 0)
-                            break;
-                        continue;
-                    }
+                    if (ch == '\r')
+                        continue;  /* skip CR in CRLF */
+                    if (ch == '\n')
+                        break;  /* always treat \n as line end, even for empty lines */
                     lines[i][pos++] = ch;
                 }
                 lines[i][pos] = '\0';
@@ -485,10 +488,81 @@ static bool load_device(const char *filepath)
     return count > 0;
 }
 
+/*
+ * Case-insensitive substring match helper.
+ * Returns true if `needle` appears anywhere within `haystack`.
+ */
+static bool ci_substr(const char *haystack, const char *needle)
+{
+    size_t hlen = strlen(haystack);
+    size_t nlen = strlen(needle);
+    size_t k;
+    size_t j;
+
+    if (nlen == 0)
+        return true;
+    if (nlen > hlen)
+        return false;
+
+    for (k = 0; k <= hlen - nlen; k++)
+    {
+        bool match = true;
+        for (j = 0; j < nlen; j++)
+        {
+            char ch = haystack[k + j];
+            char cn = needle[j];
+            if (ch >= 'A' && ch <= 'Z') ch += ('a' - 'A');
+            if (cn >= 'A' && cn <= 'Z') cn += ('a' - 'A');
+            if (ch != cn) { match = false; break; }
+        }
+        if (match)
+            return true;
+    }
+    return false;
+}
+
+/*============================================================================*/
+/*
+ * Try to map one button slot to a command index using exact then
+ * case-insensitive substring match.  Returns true if matched.
+ */
+/*============================================================================*/
+static bool try_map_name(uint8_t btn_idx, const char *target)
+{
+    uint16_t c;
+
+    if (target == NULL)
+        return false;
+
+    /* Exact match */
+    for (c = 0; c < s_qr_cmd_count; c++)
+    {
+        if (strcmp(s_qr_commands[c].name, target) == 0)
+        {
+            s_btn_to_cmd[btn_idx] = (int8_t)c;
+            return true;
+        }
+    }
+
+    /* Case-insensitive substring match */
+    for (c = 0; c < s_qr_cmd_count; c++)
+    {
+        if (ci_substr(s_qr_commands[c].name, target) ||
+            ci_substr(target, s_qr_commands[c].name))
+        {
+            s_btn_to_cmd[btn_idx] = (int8_t)c;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /*============================================================================*/
 /*
  * Map grid button slots to loaded commands by matching command names.
  * Uses case-insensitive substring matching for flexibility.
+ * If the primary cmd_name fails, tries each entry in cmd_alts in order.
  */
 /*============================================================================*/
 static void map_buttons_to_commands(const ir_category_layout_t *layout)
@@ -500,43 +574,21 @@ static void map_buttons_to_commands(const ir_category_layout_t *layout)
 
     for (b = 0; b < layout->btn_count; b++)
     {
-        const char *target = layout->buttons[b].cmd_name;
-        if (target == NULL)
+        const ir_grid_button_t *btn = &layout->buttons[b];
+
+        /* Try primary name */
+        if (try_map_name(b, btn->cmd_name))
             continue;
 
-        /* Exact match first */
-        for (uint16_t c = 0; c < s_qr_cmd_count; c++)
+        /* Try fallback alternatives if provided */
+        if (btn->cmd_alts != NULL)
         {
-            if (strcmp(s_qr_commands[c].name, target) == 0)
+            const char * const *alt = btn->cmd_alts;
+            while (*alt != NULL)
             {
-                s_btn_to_cmd[b] = (int8_t)c;
-                break;
-            }
-        }
-
-        /* If no exact match, try case-insensitive match */
-        if (s_btn_to_cmd[b] < 0)
-        {
-            for (uint16_t c = 0; c < s_qr_cmd_count; c++)
-            {
-                /* Case-insensitive prefix match */
-                const char *a = s_qr_commands[c].name;
-                const char *t = target;
-                bool match = true;
-                while (*a && *t)
-                {
-                    char ca = *a;
-                    char ct = *t;
-                    if (ca >= 'A' && ca <= 'Z') ca += ('a' - 'A');
-                    if (ct >= 'A' && ct <= 'Z') ct += ('a' - 'A');
-                    if (ca != ct) { match = false; break; }
-                    a++; t++;
-                }
-                if (match && *t == '\0')
-                {
-                    s_btn_to_cmd[b] = (int8_t)c;
+                if (try_map_name(b, *alt))
                     break;
-                }
+                alt++;
             }
         }
     }
@@ -1105,6 +1157,10 @@ void ir_brute_force_scan(ir_category_t category)
         if (!s_qr_commands[i].valid)
             continue;
 
+        /* Skip raw commands — they cannot be transmitted via the brute-force path */
+        if (s_qr_commands[i].is_raw)
+            continue;
+
         /* Draw scan progress screen */
         m1_u8g2_firstpage();
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -1133,22 +1189,18 @@ void ir_brute_force_scan(ir_category_t category)
 
         m1_u8g2_nextpage();
 
-        /* Transmit the current command */
+        /* Transmit — raw commands are already skipped above */
         {
             const ir_universal_cmd_t *cmd = &s_qr_commands[i];
-            if (!cmd->is_raw)
-            {
-                s_qr_tx_data.protocol = cmd->protocol;
-                s_qr_tx_data.address  = cmd->address;
-                s_qr_tx_data.command  = cmd->command;
-                s_qr_tx_data.flags    = cmd->flags;
+            s_qr_tx_data.protocol = cmd->protocol;
+            s_qr_tx_data.address  = cmd->address;
+            s_qr_tx_data.command  = cmd->command;
+            s_qr_tx_data.flags    = cmd->flags;
 
-                infrared_encode_sys_init();
-                irsnd_generate_tx_data(s_qr_tx_data);
-                infrared_transmit(1);
-                infrared_transmit(0);
-            }
-            /* Skip raw commands in brute-force scan for simplicity */
+            infrared_encode_sys_init();
+            irsnd_generate_tx_data(s_qr_tx_data);
+            infrared_transmit(1);
+            infrared_transmit(0);
         }
 
         /* Wait for TX complete or user input */

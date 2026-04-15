@@ -114,6 +114,13 @@ address: 57 00 00 00
 command: 00 00 00 00
 
 #
+name: Fire_TV
+type: parsed
+protocol: NEC
+address: 01 00 00 00
+command: 00 00 00 00
+
+#
 name: NEC_Generic
 type: parsed
 protocol: NEC
