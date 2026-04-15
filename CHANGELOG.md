@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Config menus (Sub-GHz Config, LCD & Notifications settings): colon at end of
+  label no longer abuts the value text in medium and large font modes.  Value
+  x-position is now computed dynamically from the widest label in the current
+  font instead of using a hardcoded pixel offset.
+
 ### Changed
 
 - Documentation: added CI stamper safety rule to CLAUDE.md and GUIDELINES.md —

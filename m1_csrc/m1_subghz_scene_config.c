@@ -248,6 +248,18 @@ static void draw(SubGhzApp *app)
     /* Config items (scrollable) */
     u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
+    /* Compute value x-position so the longest label never abuts its value.
+     * In medium/large fonts the labels are wider, so the value column
+     * shifts right automatically. */
+    uint8_t max_lw = 0;
+    for (uint8_t j = 0; j < CFG_ITEMS; j++)
+    {
+        uint8_t w = u8g2_GetStrWidth(&m1_u8g2, cfg_item_labels[j]);
+        if (w > max_lw) max_lw = w;
+    }
+    uint8_t val_x   = 4 + max_lw + 4;   /* label start + max width + gap */
+    uint8_t arrow_x = val_x - 6;        /* "<" sits one glyph-cell left  */
+
     uint8_t visible = M1_MENU_VIS(CFG_ITEMS);
     for (uint8_t v = 0; v < visible; v++)
     {
@@ -270,14 +282,14 @@ static void draw(SubGhzApp *app)
         const char *val = get_value_text(app, i);
         if (i == cfg_sel)
         {
-            u8g2_DrawStr(&m1_u8g2, 62, y + text_ofs, "<");
-            u8g2_DrawStr(&m1_u8g2, 68, y + text_ofs, val);
+            u8g2_DrawStr(&m1_u8g2, arrow_x, y + text_ofs, "<");
+            u8g2_DrawStr(&m1_u8g2, val_x, y + text_ofs, val);
             uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
-            u8g2_DrawStr(&m1_u8g2, 68 + vw + 2, y + text_ofs, ">");
+            u8g2_DrawStr(&m1_u8g2, val_x + vw + 2, y + text_ofs, ">");
         }
         else
         {
-            u8g2_DrawStr(&m1_u8g2, 68, y + text_ofs, val);
+            u8g2_DrawStr(&m1_u8g2, val_x, y + text_ofs, val);
         }
 
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);

@@ -237,6 +237,17 @@ void settings_lcd_and_notifications(void)
             /* Config items */
             u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
+            /* Compute value x-position so the longest label never abuts
+             * its value — in medium/large fonts labels are wider. */
+            uint8_t max_lw = 0;
+            for (uint8_t j = 0; j < LCD_SETTINGS_ITEMS; j++)
+            {
+                uint8_t w = u8g2_GetStrWidth(&m1_u8g2, lcd_cfg_labels[j]);
+                if (w > max_lw) max_lw = w;
+            }
+            uint8_t val_x   = 4 + max_lw + 4;   /* label start + max width + gap */
+            uint8_t arrow_x = val_x - 6;        /* "<" one glyph-cell left       */
+
             for (uint8_t v = 0; v < visible && (scroll + v) < LCD_SETTINGS_ITEMS; v++)
             {
                 uint8_t i = scroll + v;
@@ -256,14 +267,14 @@ void settings_lcd_and_notifications(void)
                 /* Value on right with < > arrows for selected item */
                 if (i == sel)
                 {
-                    u8g2_DrawStr(&m1_u8g2, 68, y + text_ofs, "<");
-                    u8g2_DrawStr(&m1_u8g2, 74, y + text_ofs, val);
+                    u8g2_DrawStr(&m1_u8g2, arrow_x, y + text_ofs, "<");
+                    u8g2_DrawStr(&m1_u8g2, val_x, y + text_ofs, val);
                     uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
-                    u8g2_DrawStr(&m1_u8g2, 74 + vw + 2, y + text_ofs, ">");
+                    u8g2_DrawStr(&m1_u8g2, val_x + vw + 2, y + text_ofs, ">");
                 }
                 else
                 {
-                    u8g2_DrawStr(&m1_u8g2, 74, y + text_ofs, val);
+                    u8g2_DrawStr(&m1_u8g2, val_x, y + text_ofs, val);
                 }
 
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
