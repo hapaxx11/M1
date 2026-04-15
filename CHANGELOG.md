@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **OTA firmware download "Bad response" error** — HTTP response headers arriving
+  in fragments over SSL (common when the ESP32 delivers data in separate SSL records)
+  caused `parse_http_headers()` to fail because the initial `tcp_recv()` did not
+  contain the complete header block (`\r\n\r\n` terminator missing).  Added a header
+  accumulation loop that reads additional data until headers are complete or timeout.
+  Also separated the SPI working buffer used by `tcp_recv()` / `tcp_recv_available()`
+  from the main `s_at_buf` so accumulated header data is not clobbered between reads.
+
 ## [0.9.0.89] - 2026-04-14
 
 ## [0.9.0.88] - 2026-04-14

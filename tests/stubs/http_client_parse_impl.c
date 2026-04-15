@@ -138,3 +138,175 @@ http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool tas
 		return HTTP_ERR_ESP_NOT_READY;
 	return HTTP_OK;
 }
+
+/*
+ * parse_http_headers() — test-only copy of the pure-logic header parser
+ * from m1_csrc/m1_http_client.c.
+ *
+ * Extracts status code, Content-Length, Location (for redirects), and
+ * Transfer-Encoding: chunked flag from raw HTTP response data.
+ * Returns HTTP status code (200, 301, etc.) or 0 if headers are
+ * incomplete (no \r\n\r\n terminator found).
+ *
+ * Key regression scenario: when SSL fragments the response so the first
+ * tcp_recv() doesn't include the full header block, parse_http_headers()
+ * must return 0 so the caller can accumulate more data before retrying.
+ *
+ * Keep in sync with m1_csrc/m1_http_client.c::parse_http_headers().
+ */
+int http_parse_headers(const char *data, int data_len,
+                       uint32_t *content_length, char *location, uint16_t loc_size,
+                       int *header_end_offset, bool *is_chunked)
+{
+	const char *hdr_end;
+	const char *p;
+	int status_code = 0;
+
+	(void)data_len;
+
+	*content_length = 0;
+	*header_end_offset = 0;
+	if (is_chunked) *is_chunked = false;
+	if (location) location[0] = '\0';
+
+	/* Find end of headers */
+	hdr_end = strstr(data, "\r\n\r\n");
+	if (!hdr_end)
+		return 0; /* headers incomplete */
+
+	*header_end_offset = (int)((hdr_end - data) + 4);
+
+	/* Parse status line: HTTP/1.x <status_code> ... */
+	p = strstr(data, "HTTP/");
+	if (!p) return 0;
+
+	p = strchr(p, ' ');
+	if (!p) return 0;
+	p++;
+	status_code = atoi(p);
+
+	/* Parse Content-Length */
+	p = strstr(data, "Content-Length:");
+	if (!p) p = strstr(data, "content-length:");
+	if (p)
+	{
+		p = strchr(p, ':');
+		if (p)
+		{
+			p++;
+			while (*p == ' ') p++;
+			*content_length = (uint32_t)strtoul(p, NULL, 10);
+		}
+	}
+
+	/* Detect Transfer-Encoding: chunked with case-insensitive
+	 * field-name matching, per HTTP header rules. */
+	if (is_chunked)
+	{
+		const char *line = data;
+		*is_chunked = false;
+
+		while (line < hdr_end)
+		{
+			const char *line_end = line;
+			const char *colon;
+
+			while (line_end < hdr_end && *line_end != '\r' && *line_end != '\n')
+				line_end++;
+
+			colon = memchr(line, ':', (size_t)(line_end - line));
+			if (colon)
+			{
+				static const char te_name[] = "Transfer-Encoding";
+				size_t name_len = (size_t)(colon - line);
+
+				if (name_len == sizeof(te_name) - 1)
+				{
+					size_t i;
+					bool name_match = true;
+
+					for (i = 0; i < sizeof(te_name) - 1; i++)
+					{
+						char a = line[i];
+						char b = te_name[i];
+
+						if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+						if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+
+						if (a != b)
+						{
+							name_match = false;
+							break;
+						}
+					}
+
+					if (name_match)
+					{
+						const char *value = colon + 1;
+
+						while (value < line_end && (*value == ' ' || *value == '\t'))
+							value++;
+
+						while (value + 7 <= line_end)
+						{
+							char c0 = value[0];
+							char c1 = value[1];
+							char c2 = value[2];
+							char c3 = value[3];
+							char c4 = value[4];
+							char c5 = value[5];
+							char c6 = value[6];
+
+							if (c0 >= 'A' && c0 <= 'Z') c0 = (char)(c0 - 'A' + 'a');
+							if (c1 >= 'A' && c1 <= 'Z') c1 = (char)(c1 - 'A' + 'a');
+							if (c2 >= 'A' && c2 <= 'Z') c2 = (char)(c2 - 'A' + 'a');
+							if (c3 >= 'A' && c3 <= 'Z') c3 = (char)(c3 - 'A' + 'a');
+							if (c4 >= 'A' && c4 <= 'Z') c4 = (char)(c4 - 'A' + 'a');
+							if (c5 >= 'A' && c5 <= 'Z') c5 = (char)(c5 - 'A' + 'a');
+							if (c6 >= 'A' && c6 <= 'Z') c6 = (char)(c6 - 'A' + 'a');
+
+							if (c0 == 'c' && c1 == 'h' && c2 == 'u' &&
+							    c3 == 'n' && c4 == 'k' && c5 == 'e' &&
+							    c6 == 'd')
+							{
+								*is_chunked = true;
+								break;
+							}
+
+							value++;
+						}
+
+						if (*is_chunked)
+							break;
+					}
+				}
+			}
+
+			if (line_end < hdr_end && *line_end == '\r') line_end++;
+			if (line_end < hdr_end && *line_end == '\n') line_end++;
+			line = line_end;
+		}
+	}
+
+	/* Parse Location header (for redirects) */
+	if (location && loc_size > 0)
+	{
+		p = strstr(data, "Location:");
+		if (!p) p = strstr(data, "location:");
+		if (p)
+		{
+			p = strchr(p, ':');
+			if (p)
+			{
+				p++;
+				while (*p == ' ') p++;
+				int i = 0;
+				while (*p && *p != '\r' && *p != '\n' && i < loc_size - 1)
+					location[i++] = *p++;
+				location[i] = '\0';
+			}
+		}
+	}
+
+	return status_code;
+}
