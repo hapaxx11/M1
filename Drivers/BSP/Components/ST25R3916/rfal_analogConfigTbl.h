@@ -399,11 +399,11 @@ const uint8_t rfalAnalogConfigDefaultSettings[] = {
                         , ST25R3916_REG_IO_CONF2,  ST25R3916_REG_IO_CONF2_aat_en, ST25R3916_REG_IO_CONF2_aat_en                                                /* Enable AAT */
                         , ST25R3916_REG_TX_DRIVER, ST25R3916_REG_TX_DRIVER_d_res_mask, 0x00                                                                    /* Set RFO resistance Active Tx */
                         , ST25R3916_REG_RES_AM_MOD, 0xFF, 0x80                                                                                                 /* Use minimum non-overlap */
-                        , ST25R3916_REG_FIELD_THRESHOLD_ACTV,   ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_mask, ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_105mV      /* Lower activation threshold (higher than deactivation)*/
-                        , ST25R3916_REG_FIELD_THRESHOLD_ACTV,   ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_mask, ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_205mV      /* Activation threshold as per DS (higher than deactivation)*/
+                        , ST25R3916_REG_FIELD_THRESHOLD_ACTV,   ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_mask, ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_75mV       /* Lower activation threshold for range extender support */
+                        , ST25R3916_REG_FIELD_THRESHOLD_ACTV,   ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_mask, ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_75mV       /* Lower activation threshold for range extender support */
                         , ST25R3916_REG_FIELD_THRESHOLD_DEACTV, ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_mask, ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_75mV   /* Lower deactivation threshold */
-                        , ST25R3916_REG_FIELD_THRESHOLD_DEACTV, ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_mask, ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_150mV  /* Lower deactivation threshold */
-                        , ST25R3916_REG_AUX_MOD, ST25R3916_REG_AUX_MOD_lm_ext, 0x00                                                                            /* Disable External Load Modulation */
+                        , ST25R3916_REG_FIELD_THRESHOLD_DEACTV, ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_mask, ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_25mV   /* Lowest deactivation threshold for range extender support */
+                        , ST25R3916_REG_AUX_MOD, ST25R3916_REG_AUX_MOD_lm_ext, ST25R3916_REG_AUX_MOD_lm_ext                                                    /* Enable External Load Modulation for range extender */
                         , ST25R3916_REG_AUX_MOD, ST25R3916_REG_AUX_MOD_lm_dri, ST25R3916_REG_AUX_MOD_lm_dri                                                    /* Use internal Load Modulation */
                         , ST25R3916_REG_PASSIVE_TARGET, ST25R3916_REG_PASSIVE_TARGET_fdel_mask, (5U<<ST25R3916_REG_PASSIVE_TARGET_fdel_shift)                  /* Adjust the FDT to be aligned with the bitgrid  */
                         , ST25R3916_REG_PT_MOD, (ST25R3916_REG_PT_MOD_ptm_res_mask | ST25R3916_REG_PT_MOD_pt_res_mask), 0x5f                                   /* Reduce RFO resistance in Modulated state */
@@ -435,10 +435,10 @@ const uint8_t rfalAnalogConfigDefaultSettings[] = {
     /****** Default Analog Configuration for Poll NFC-A Tx 106 ******/
     , MODE_ENTRY_5_REG( (RFAL_ANALOG_CONFIG_POLL | RFAL_ANALOG_CONFIG_TECH_NFCA | RFAL_ANALOG_CONFIG_BITRATE_106 | RFAL_ANALOG_CONFIG_TX)
                       , ST25R3916_REG_MODE, ST25R3916_REG_MODE_tr_am, ST25R3916_REG_MODE_tr_am_ook                                              /* Use OOK */
-                      , ST25R3916_REG_OVERSHOOT_CONF1,  0xFF, 0x40                                                                              /* Set default Overshoot Protection */
-                      , ST25R3916_REG_OVERSHOOT_CONF2,  0xFF, 0x03                                                                              /* Set default Overshoot Protection */
-                      , ST25R3916_REG_UNDERSHOOT_CONF1, 0xFF, 0x40                                                                              /* Set default Undershoot Protection */
-                      , ST25R3916_REG_UNDERSHOOT_CONF2, 0xFF, 0x03                                                                              /* Set default Undershoot Protection */
+                      , ST25R3916_REG_OVERSHOOT_CONF1,  0xFF, 0x00                                                                              /* Disable Overshoot Protection for range extender  */
+                      , ST25R3916_REG_OVERSHOOT_CONF2,  0xFF, 0x00                                                                              /* Disable Overshoot Protection for range extender  */
+                      , ST25R3916_REG_UNDERSHOOT_CONF1, 0xFF, 0x00                                                                              /* Disable Undershoot Protection for range extender */
+                      , ST25R3916_REG_UNDERSHOOT_CONF2, 0xFF, 0x00                                                                              /* Disable Undershoot Protection for range extender */
                       )
                       
     /****** Default Analog Configuration for Poll NFC-A Rx 106 ******/
@@ -456,10 +456,10 @@ const uint8_t rfalAnalogConfigDefaultSettings[] = {
                       , ST25R3916_REG_MODE, ST25R3916_REG_MODE_tr_am  , ST25R3916_REG_MODE_tr_am_am                                             /* Use AM modulation */
                       , ST25R3916_REG_AUX_MOD, (ST25R3916_REG_AUX_MOD_dis_reg_am | ST25R3916_REG_AUX_MOD_res_am), 0x88                             /* Use Resistive AM */
                       , ST25R3916_REG_RES_AM_MOD, ST25R3916_REG_RES_AM_MOD_md_res_mask, 0x7F                                      /* Set Resistive modulation */
-                      , ST25R3916_REG_OVERSHOOT_CONF1,  0xFF, 0x40                                                                              /* Set default Overshoot Protection  */
-                      , ST25R3916_REG_OVERSHOOT_CONF2,  0xFF, 0x03                                                                              /* Set default Overshoot Protection  */
-                      , ST25R3916_REG_UNDERSHOOT_CONF1, 0xFF, 0x40                                                                              /* Set default Undershoot Protection */
-                      , ST25R3916_REG_UNDERSHOOT_CONF2, 0xFF, 0x03                                                                              /* Set default Undershoot Protection */
+                      , ST25R3916_REG_OVERSHOOT_CONF1,  0xFF, 0x00                                                                              /* Disable Overshoot Protection for range extender  */
+                      , ST25R3916_REG_OVERSHOOT_CONF2,  0xFF, 0x00                                                                              /* Disable Overshoot Protection for range extender  */
+                      , ST25R3916_REG_UNDERSHOOT_CONF1, 0xFF, 0x00                                                                              /* Disable Undershoot Protection for range extender */
+                      , ST25R3916_REG_UNDERSHOOT_CONF2, 0xFF, 0x00                                                                              /* Disable Undershoot Protection for range extender */
                       )
                       
     /****** Default Analog Configuration for Poll NFC-A Rx 212 ******/
@@ -477,10 +477,10 @@ const uint8_t rfalAnalogConfigDefaultSettings[] = {
                       , ST25R3916_REG_MODE, ST25R3916_REG_MODE_tr_am  , ST25R3916_REG_MODE_tr_am_am                                             /* Use AM modulation */
                       , ST25R3916_REG_AUX_MOD, (ST25R3916_REG_AUX_MOD_dis_reg_am | ST25R3916_REG_AUX_MOD_res_am), 0x88                             /* Use Resistive AM */
                       , ST25R3916_REG_RES_AM_MOD, ST25R3916_REG_RES_AM_MOD_md_res_mask, 0x7F                                                    /* Set Resistive modulation */
-                      , ST25R3916_REG_OVERSHOOT_CONF1,  0xFF, 0x40                                                                              /* Set default Overshoot Protection  */
-                      , ST25R3916_REG_OVERSHOOT_CONF2,  0xFF, 0x03                                                                              /* Set default Overshoot Protection  */
-                      , ST25R3916_REG_UNDERSHOOT_CONF1, 0xFF, 0x40                                                                              /* Set default Undershoot Protection */
-                      , ST25R3916_REG_UNDERSHOOT_CONF2, 0xFF, 0x03                                                                              /* Set default Undershoot Protection */
+                      , ST25R3916_REG_OVERSHOOT_CONF1,  0xFF, 0x00                                                                              /* Disable Overshoot Protection for range extender  */
+                      , ST25R3916_REG_OVERSHOOT_CONF2,  0xFF, 0x00                                                                              /* Disable Overshoot Protection for range extender  */
+                      , ST25R3916_REG_UNDERSHOOT_CONF1, 0xFF, 0x00                                                                              /* Disable Undershoot Protection for range extender */
+                      , ST25R3916_REG_UNDERSHOOT_CONF2, 0xFF, 0x00                                                                              /* Disable Undershoot Protection for range extender */
                       )
 
     /****** Default Analog Configuration for Poll NFC-A Rx 424 ******/
