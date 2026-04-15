@@ -544,7 +544,11 @@ static bool try_map_name(uint8_t btn_idx, const char *target)
         }
     }
 
-    /* Case-insensitive substring match */
+    /* Case-insensitive substring match — bidirectional so that e.g.
+     * target="Vol_up" matches command="TV_Vol_up" (target in name), and
+     * target="Power" matches command="Power_on" (name in target prefix sense
+     * handled by the reverse direction).  Both are desirable for AC/audio
+     * remotes where command names vary across brands. */
     for (c = 0; c < s_qr_cmd_count; c++)
     {
         if (ci_substr(s_qr_commands[c].name, target) ||
