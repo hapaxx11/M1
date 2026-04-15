@@ -73,6 +73,8 @@
 #define START_DISCOVERY      1     /*!< Demo State:  Start Discovery        */
 #define DISCOVERY            2     /*!< Demo State:  Discovery              */
 
+#define ST25R3916_REGULATOR_CONTROL_REGE_MAX   0x0FU
+
 /*
  ******************************************************************************
  * MIFARE CLASSIC Helper Functions
@@ -636,10 +638,11 @@ bool ReadIni(void)
      */
 
     /* Boost regulated voltage to maximum for stronger RF field.
-     * Set reg_s=1 (manual regulation) with rege=0x0F (max voltage). */
+     * Set reg_s=1 (manual regulation) with rege=max voltage. */
     st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
         ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask,
-        ST25R3916_REG_REGULATOR_CONTROL_reg_s | (0x0FU << ST25R3916_REG_REGULATOR_CONTROL_rege_shift) );
+        ST25R3916_REG_REGULATOR_CONTROL_reg_s |
+            (ST25R3916_REGULATOR_CONTROL_REGE_MAX << ST25R3916_REG_REGULATOR_CONTROL_rege_shift) );
 
     /* Ensure maximum TX driver power (d_res = 0, lowest RFO resistance) */
     st25r3916ChangeRegisterBits( ST25R3916_REG_TX_DRIVER,
