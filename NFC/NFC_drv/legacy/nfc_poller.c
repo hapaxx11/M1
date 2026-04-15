@@ -652,12 +652,12 @@ bool ReadIni(void)
         ST25R3916_REG_AUX_MOD_lm_ext | ST25R3916_REG_AUX_MOD_lm_dri,
         ST25R3916_REG_AUX_MOD_lm_ext | ST25R3916_REG_AUX_MOD_lm_dri );
 
-    /* Disable overshoot/undershoot protection for maximum field strength,
-     * matching Flipper's furi_hal_nfc_poller_init_common(). */
-    st25r3916WriteRegister( ST25R3916_REG_OVERSHOOT_CONF1,  0x00 );
-    st25r3916WriteRegister( ST25R3916_REG_OVERSHOOT_CONF2,  0x00 );
-    st25r3916WriteRegister( ST25R3916_REG_UNDERSHOOT_CONF1, 0x00 );
-    st25r3916WriteRegister( ST25R3916_REG_UNDERSHOOT_CONF2, 0x00 );
+    /* Do not force overshoot/undershoot protection registers here.
+     * RFAL poller mode/bitrate initialization may overwrite these values via
+     * its analog configuration, so writing 0x00 at this stage is not reliable
+     * and would be misleading. If protection must remain disabled during
+     * polling, that needs to be done in the RFAL analog config or re-applied
+     * after each RFAL mode/bitrate initialization step. */
 
     /* Lower field detection thresholds so the reader maintains its field
      * at the weaker coupling distances a range extender introduces.
