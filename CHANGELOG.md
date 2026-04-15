@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation**: Added human-facing documentation for preferred patterns
+  (UI/Button Bar Rules, Font-Aware Menu Implementation, Hardware State
+  Management) to `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and
+  `.github/CONTRIBUTING.md`.  These patterns were previously documented only
+  in `CLAUDE.md` (agent instructions).
+
+### Fixed
+
+- **BLE Spam mode menu**: Converted hardcoded `MENU_ROW_H 9` to font-aware
+  helpers (`m1_menu_item_h()`, `m1_menu_font()`, layout constants from
+  `m1_scene.h`).  Menu now respects the user's text size setting.
+- **IR Universal Remote dashboard**: Converted hardcoded `DASHBOARD_ITEM_HEIGHT`
+  and `DASHBOARD_START_Y` to font-aware helpers.  Added scrollbar.  Dashboard
+  now respects the user's text size setting.
+
 ## [0.9.0.90] - 2026-04-15
 
 ### Fixed

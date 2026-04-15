@@ -42,8 +42,6 @@
 #define BROWSE_NAME_MAX_LEN  64
 
 #define DASHBOARD_ITEM_COUNT  5
-#define DASHBOARD_ITEM_HEIGHT 9
-#define DASHBOARD_START_Y     13
 
 #define LIST_HEADER_HEIGHT    12
 #define LIST_START_Y          (LIST_HEADER_HEIGHT + 2)
@@ -183,6 +181,8 @@ void ir_universal_run(void)
 static void draw_dashboard(uint8_t selection)
 {
 	uint8_t i;
+	const uint8_t row_h   = m1_menu_item_h();
+	const uint8_t max_vis = M1_MENU_VIS(DASHBOARD_ITEM_COUNT);
 
 	/* Update Remote Mode label to reflect current state */
 	s_dashboard_items[4] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
@@ -195,30 +195,41 @@ static void draw_dashboard(uint8_t selection)
 	u8g2_DrawStr(&m1_u8g2, 2, 10, "Universal Remote");
 	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
 
-	/* Menu items — all 5 items fit without scrolling */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	/* Menu items */
+	u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
-	for (i = 0; i < DASHBOARD_ITEM_COUNT; i++)
+	for (i = 0; i < max_vis; i++)
 	{
-		uint8_t y = DASHBOARD_START_Y + (i * DASHBOARD_ITEM_HEIGHT);
+		uint8_t y = M1_MENU_AREA_TOP + (i * row_h);
 
 		if (i == selection)
 		{
 			/* Draw selection highlight */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, y, 128, DASHBOARD_ITEM_HEIGHT);
+			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[i]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[i]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 4, y + 8, s_dashboard_items[i]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[i]);
 		}
 	}
 
+	/* Scrollbar */
+	{
+		int track_y = M1_MENU_AREA_TOP - 1;
+		int track_h = max_vis * row_h;
+		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y, M1_MENU_SCROLLBAR_W, track_h);
+		int handle_h = track_h / DASHBOARD_ITEM_COUNT;
+		if (handle_h < 3) handle_h = 3;
+		int handle_y = track_y + (selection * (track_h - handle_h)) / (DASHBOARD_ITEM_COUNT - 1);
+		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y, M1_MENU_SCROLLBAR_W, handle_h);
+	}
+
 	m1_u8g2_nextpage();
-} // static void draw_dashboard(uint8_t selection)
+}
 
 
 

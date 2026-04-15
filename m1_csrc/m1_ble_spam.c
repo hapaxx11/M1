@@ -34,6 +34,7 @@
 #include "m1_compile_cfg.h"
 #include "m1_ble_spam.h"
 #include "m1_esp32_hal.h"
+#include "m1_scene.h"
 #include "esp_app_main.h"
 #include "m1_log_debug.h"
 #include <string.h>
@@ -449,11 +450,12 @@ static size_t build_random_adv(uint8_t *buf, bool *is_apple_out)
 
 /* Mode selection menu */
 #define MENU_ITEMS  BLE_SPAM_MODE_COUNT
-#define MENU_Y0     16
-#define MENU_ROW_H  9
 
 static void draw_mode_menu(int sel)
 {
+    const uint8_t row_h   = m1_menu_item_h();
+    const uint8_t max_vis = M1_MENU_VIS(MENU_ITEMS);
+
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
@@ -463,29 +465,29 @@ static void draw_mode_menu(int sel)
     u8g2_DrawStr(&m1_u8g2, 2, 10, "BLE Spam");
 
     /* Menu items */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    for (int i = 0; i < MENU_ITEMS; i++) {
-        int y = MENU_Y0 + i * MENU_ROW_H;
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
+    for (int i = 0; i < max_vis; i++) {
+        int y = M1_MENU_AREA_TOP + i * row_h;
         if (i == sel) {
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawRBox(&m1_u8g2, 0, y - 1, 124, MENU_ROW_H, 0);
+            u8g2_DrawRBox(&m1_u8g2, 0, y - 1, M1_MENU_TEXT_W, row_h, 0);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         } else {
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
-        u8g2_DrawStr(&m1_u8g2, 4, y + 7, spam_mode_names[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, spam_mode_names[i]);
     }
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Scrollbar */
     {
-        int track_y = MENU_Y0 - 1;
-        int track_h = MENU_ITEMS * MENU_ROW_H;
-        u8g2_DrawFrame(&m1_u8g2, 125, track_y, 3, track_h);
+        int track_y = M1_MENU_AREA_TOP - 1;
+        int track_h = max_vis * row_h;
+        u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y, M1_MENU_SCROLLBAR_W, track_h);
         int handle_h = track_h / MENU_ITEMS;
         if (handle_h < 3) handle_h = 3;
         int handle_y = track_y + (sel * (track_h - handle_h)) / (MENU_ITEMS - 1);
-        u8g2_DrawBox(&m1_u8g2, 125, handle_y, 3, handle_h);
+        u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y, M1_MENU_SCROLLBAR_W, handle_h);
     }
 
     m1_u8g2_nextpage();
