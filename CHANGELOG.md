@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- IR Universal Remote: exiting the dashboard with "Remote Mode" active no longer
+  leaves the entire device stuck in portrait (90°) orientation.  The original
+  screen orientation is now saved on entry and restored on exit.
+
 ## [0.9.0.98] - 2026-04-15
 
 ### Added
