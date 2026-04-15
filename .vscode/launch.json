@@ -3,12 +3,11 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "projectName": "MonstaTek_M1_v0800",
     "configurations":[
         {
             "name": "Debug with ST-Link (IDE)",            
             "cwd": "${workspaceFolder}",
-            "executable": "./out/build/gcc-14_2_build-debug/MonstaTek_M1_v0800.elf",
+            "executable": "${command:cmake.launchTargetPath}",
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",
@@ -48,7 +47,7 @@
         {
             "name": "Debug with ST-Link (VSCode)",            
             "cwd": "${workspaceFolder}",
-            "executable": "./out/build/gcc-14_2_build-debug/MonstaTek_M1_v0800.elf",
+            "executable": "${command:cmake.launchTargetPath}",
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",
@@ -96,7 +95,7 @@
             "interface": "swd",
             "serialNumber": "",
             "runToEntryPoint": "main",
-            "executable": "./out/build/gcc-14_2_build-debug/MonstaTek_M1_v0800.elf",
+            "executable": "${command:cmake.launchTargetPath}",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "",
             "targetProcessor": 0,
