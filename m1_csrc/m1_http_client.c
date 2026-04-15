@@ -56,6 +56,14 @@
 
 static char s_at_buf[HTTP_AT_BUF_SIZE];
 
+/* Separate SPI working buffer for tcp_recv / tcp_recv_available.
+ * These functions issue AT commands via spi_AT_send_recv() which writes
+ * into the provided buffer.  If they shared s_at_buf, each call would
+ * clobber any partially-accumulated HTTP header data that the caller is
+ * building up in s_at_buf.  Using a dedicated buffer lets the caller
+ * safely accumulate data across multiple tcp_recv calls. */
+static char s_at_recv_buf[HTTP_AT_BUF_SIZE];
+
 /* Forward declarations for internal helpers used by both http_get and http_download_to_file */
 static bool parse_url(const char *url, char *host, uint16_t host_size,
                       uint16_t *port, char *path, uint16_t path_size, bool *is_https);
@@ -258,7 +266,7 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 
 	/* Read initial chunk — large enough to capture headers + start of body.
 	 * Cap to HTTP_DOWNLOAD_CHUNK so the AT response (+CIPRECVDATA header +
-	 * data + \r\nOK\r\n) fits within the 4KB s_at_buf without truncation. */
+	 * data + \r\nOK\r\n) fits within the 4KB s_at_recv_buf. */
 	int initial_len = tcp_recv(s_at_buf, HTTP_DOWNLOAD_CHUNK, timeout_sec);
 	if (initial_len <= 0)
 	{
@@ -266,6 +274,33 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 		return HTTP_ERR_TIMEOUT;
 	}
 	s_at_buf[initial_len] = '\0';
+
+	/* SSL may fragment the HTTP response across multiple records, so the
+	 * first tcp_recv may return only a partial header.  Accumulate more
+	 * data until the header terminator \r\n\r\n is found or timeout.
+	 * tcp_recv now uses s_at_recv_buf internally, so s_at_buf is safe. */
+	if (!strstr(s_at_buf, "\r\n\r\n"))
+	{
+		M1_LOG_D(HTTP_TAG, "Headers incomplete after %d bytes, accumulating\n\r", initial_len);
+		uint32_t hdr_deadline = HAL_GetTick() + (uint32_t)timeout_sec * 1000U;
+		while (!strstr(s_at_buf, "\r\n\r\n") &&
+		       initial_len < (int)(sizeof(s_at_buf) - 1))
+		{
+			if (HAL_GetTick() >= hdr_deadline)
+				break;
+			m1_wdt_reset();
+			vTaskDelay(pdMS_TO_TICKS(100));
+
+			int space = (int)(sizeof(s_at_buf) - 1) - initial_len;
+			int to_read = space > HTTP_DOWNLOAD_CHUNK ? HTTP_DOWNLOAD_CHUNK : space;
+			int received = tcp_recv(s_at_buf + initial_len, to_read, 2);
+			if (received > 0)
+			{
+				initial_len += received;
+				s_at_buf[initial_len] = '\0';
+			}
+		}
+	}
 
 	/* Parse HTTP response headers */
 	status_code = parse_http_headers(s_at_buf, initial_len,
@@ -729,13 +764,13 @@ static int tcp_recv(char *buf, uint16_t max_len, uint8_t timeout_sec)
 
 	snprintf(cmd, sizeof(cmd), ESP32C6_AT_REQ_CIPRECVDATA "%u" ESP32C6_AT_REQ_CRLF, max_len);
 
-	memset(s_at_buf, 0, sizeof(s_at_buf));
-	uint8_t ret = spi_AT_send_recv(cmd, s_at_buf, sizeof(s_at_buf), timeout_sec);
+	memset(s_at_recv_buf, 0, sizeof(s_at_recv_buf));
+	uint8_t ret = spi_AT_send_recv(cmd, s_at_recv_buf, sizeof(s_at_recv_buf), timeout_sec);
 	if (ret != 0)
 		return -1;
 
 	/* Parse +CIPRECVDATA:<actual_len>,<data> */
-	p = strstr(s_at_buf, ESP32C6_AT_RES_CIPRECVDATA_KEY);
+	p = strstr(s_at_recv_buf, ESP32C6_AT_RES_CIPRECVDATA_KEY);
 	if (!p)
 		return 0; /* no data available */
 
@@ -752,8 +787,7 @@ static int tcp_recv(char *buf, uint16_t max_len, uint8_t timeout_sec)
 	if (actual_len > max_len)
 		actual_len = max_len;
 
-	/* Use memmove — buf may alias s_at_buf (overlapping regions) */
-	memmove(buf, p, actual_len);
+	memcpy(buf, p, actual_len);
 	return actual_len;
 }
 
@@ -763,12 +797,12 @@ static int tcp_recv(char *buf, uint16_t max_len, uint8_t timeout_sec)
 static int tcp_recv_available(uint8_t timeout_sec)
 {
 	char *p;
-	memset(s_at_buf, 0, sizeof(s_at_buf));
+	memset(s_at_recv_buf, 0, sizeof(s_at_recv_buf));
 	uint8_t ret = spi_AT_send_recv(ESP32C6_AT_REQ_CIPRECVLEN ESP32C6_AT_REQ_CRLF,
-	                                s_at_buf, sizeof(s_at_buf), timeout_sec);
+	                                s_at_recv_buf, sizeof(s_at_recv_buf), timeout_sec);
 	if (ret != 0) return -1;
 
-	p = strstr(s_at_buf, ESP32C6_AT_RES_CIPRECVLEN_KEY);
+	p = strstr(s_at_recv_buf, ESP32C6_AT_RES_CIPRECVLEN_KEY);
 	if (!p) return -1;
 
 	p += strlen(ESP32C6_AT_RES_CIPRECVLEN_KEY);
@@ -1038,6 +1072,33 @@ retry_with_redirect:
 		return HTTP_ERR_TIMEOUT;
 	}
 	s_at_buf[initial_len] = '\0';
+
+	/* SSL may fragment the HTTP response across multiple records, so the
+	 * first tcp_recv may return only a partial header.  Accumulate more
+	 * data until the header terminator \r\n\r\n is found or timeout.
+	 * tcp_recv now uses s_at_recv_buf internally, so s_at_buf is safe. */
+	if (!strstr(s_at_buf, "\r\n\r\n"))
+	{
+		M1_LOG_D(HTTP_TAG, "DL headers incomplete after %d bytes, accumulating\n\r", initial_len);
+		uint32_t hdr_deadline = HAL_GetTick() + (uint32_t)timeout_sec * 1000U;
+		while (!strstr(s_at_buf, "\r\n\r\n") &&
+		       initial_len < (int)(sizeof(s_at_buf) - 1))
+		{
+			if (HAL_GetTick() >= hdr_deadline)
+				break;
+			m1_wdt_reset();
+			vTaskDelay(pdMS_TO_TICKS(100));
+
+			int space = (int)(sizeof(s_at_buf) - 1) - initial_len;
+			int to_read = space > HTTP_DOWNLOAD_CHUNK ? HTTP_DOWNLOAD_CHUNK : space;
+			int received = tcp_recv(s_at_buf + initial_len, to_read, 2);
+			if (received > 0)
+			{
+				initial_len += received;
+				s_at_buf[initial_len] = '\0';
+			}
+		}
+	}
 
 	/* Parse HTTP headers */
 	bool dl_chunked = false;
