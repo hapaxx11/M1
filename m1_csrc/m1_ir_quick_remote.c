@@ -519,14 +519,16 @@ static void map_buttons_to_commands(const ir_category_layout_t *layout)
         {
             for (uint16_t c = 0; c < s_qr_cmd_count; c++)
             {
-                /* Simple case-insensitive compare */
+                /* Case-insensitive prefix match */
                 const char *a = s_qr_commands[c].name;
                 const char *t = target;
                 bool match = true;
                 while (*a && *t)
                 {
-                    char ca = (*a >= 'A' && *a <= 'Z') ? (*a + 32) : *a;
-                    char ct = (*t >= 'A' && *t <= 'Z') ? (*t + 32) : *t;
+                    char ca = *a;
+                    char ct = *t;
+                    if (ca >= 'A' && ca <= 'Z') ca += ('a' - 'A');
+                    if (ct >= 'A' && ct <= 'Z') ct += ('a' - 'A');
                     if (ca != ct) { match = false; break; }
                     a++; t++;
                 }
@@ -774,61 +776,68 @@ static bool browse_for_device(ir_category_t cat, char *out_path, uint16_t path_l
     uint16_t sel = 0;
     FILINFO fno;
     DIR dir;
+    bool need_rescan = true;
 
     /* Start in the category subdirectory */
     snprintf(browse_path, sizeof(browse_path), "%s/%s",
              IR_UNIVERSAL_IRDB_ROOT, s_layouts[cat].irdb_subdir);
 
-browse_level:
-    /* Scan directory */
-    count = 0;
-    if (f_opendir(&dir, browse_path) == FR_OK)
-    {
-        while (count < 16)
-        {
-            if (f_readdir(&dir, &fno) != FR_OK || fno.fname[0] == '\0')
-                break;
-            if (fno.fname[0] == '.')
-                continue;
-            strncpy(names[count], fno.fname, 63);
-            names[count][63] = '\0';
-            count++;
-        }
-        f_closedir(&dir);
-    }
-
-    if (count == 0)
-    {
-        /* Empty directory */
-        m1_u8g2_firstpage();
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
-        m1_u8g2_nextpage();
-        vTaskDelay(pdMS_TO_TICKS(1500));
-        return false;
-    }
-
-    sel = 0;
-
-    /* Draw list */
-    {
-        const char *title = browse_path;
-        const char *p = browse_path;
-        while (*p) { if (*p == '/') title = p + 1; p++; }
-        if (*title == '\0') title = "Select";
-
-        /* Build label array for draw helper */
-        const char *labels[16];
-        for (uint16_t i = 0; i < count; i++)
-            labels[i] = names[i];
-
-        m1_scene_draw_menu(title, labels, (uint8_t)count, (uint8_t)sel,
-                           0, M1_MENU_VIS((uint8_t)count));
-    }
-
     while (1)
     {
+        if (need_rescan)
+        {
+            /* Scan directory */
+            count = 0;
+            if (f_opendir(&dir, browse_path) == FR_OK)
+            {
+                while (count < 16)
+                {
+                    if (f_readdir(&dir, &fno) != FR_OK || fno.fname[0] == '\0')
+                        break;
+                    if (fno.fname[0] == '.')
+                        continue;
+                    strncpy(names[count], fno.fname, 63);
+                    names[count][63] = '\0';
+                    count++;
+                }
+                f_closedir(&dir);
+            }
+
+            if (count == 0)
+            {
+                m1_u8g2_firstpage();
+                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+                u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+                u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
+                m1_u8g2_nextpage();
+                vTaskDelay(pdMS_TO_TICKS(1500));
+                return false;
+            }
+
+            sel = 0;
+            need_rescan = false;
+        }
+
+        /* Draw list */
+        {
+            const char *title = browse_path;
+            const char *p = browse_path;
+            while (*p) { if (*p == '/') title = p + 1; p++; }
+            if (*title == '\0') title = "Select";
+
+            uint8_t scroll = 0;
+            uint8_t vis = M1_MENU_VIS((uint8_t)count);
+            if (sel >= vis)
+                scroll = (uint8_t)(sel - vis + 1);
+
+            const char *labels[16];
+            for (uint16_t i = 0; i < count; i++)
+                labels[i] = names[i];
+
+            m1_scene_draw_menu(title, labels, (uint8_t)count, (uint8_t)sel,
+                               scroll, vis);
+        }
+
         ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
         if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
             continue;
@@ -850,23 +859,21 @@ browse_level:
         }
         else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
         {
-            /* Build child path */
             snprintf(child_path, sizeof(child_path), "%s/%s", browse_path, names[sel]);
 
             if (f_stat(child_path, &fno) == FR_OK)
             {
                 if (fno.fattrib & AM_DIR)
                 {
-                    /* Recurse into directory */
+                    /* Navigate into subdirectory */
                     strncpy(browse_path, child_path, sizeof(browse_path) - 1);
                     browse_path[sizeof(browse_path) - 1] = '\0';
-                    goto browse_level;
+                    need_rescan = true;
                 }
                 else
                 {
-                    /* Check for .ir extension */
                     size_t len = strlen(names[sel]);
-                    if (len >= 4 && strcmp(&names[sel][len - 3], ".ir") == 0)
+                    if (len >= 3 && strcmp(&names[sel][len - 3], ".ir") == 0)
                     {
                         strncpy(out_path, child_path, path_len - 1);
                         out_path[path_len - 1] = '\0';
@@ -875,26 +882,6 @@ browse_level:
                     }
                 }
             }
-        }
-
-        /* Redraw */
-        {
-            const char *title = browse_path;
-            const char *p = browse_path;
-            while (*p) { if (*p == '/') title = p + 1; p++; }
-            if (*title == '\0') title = "Select";
-
-            uint8_t scroll = 0;
-            uint8_t vis = M1_MENU_VIS((uint8_t)count);
-            if (sel >= vis)
-                scroll = (uint8_t)(sel - vis + 1);
-
-            const char *labels[16];
-            for (uint16_t i = 0; i < count; i++)
-                labels[i] = names[i];
-
-            m1_scene_draw_menu(title, labels, (uint8_t)count, (uint8_t)sel,
-                               scroll, vis);
         }
     }
 }
