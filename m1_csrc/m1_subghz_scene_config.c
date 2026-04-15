@@ -250,15 +250,18 @@ static void draw(SubGhzApp *app)
 
     /* Compute value x-position so the longest label never abuts its value.
      * In medium/large fonts the labels are wider, so the value column
-     * shifts right automatically. */
-    uint8_t max_lw = 0;
+     * shifts right automatically, but keep it inside the text area so
+     * long values and selected-row arrows still fit before the scrollbar. */
+    u8g2_uint_t max_lw = 0;
     for (uint8_t j = 0; j < CFG_ITEMS; j++)
     {
-        uint8_t w = u8g2_GetStrWidth(&m1_u8g2, cfg_item_labels[j]);
+        u8g2_uint_t w = u8g2_GetStrWidth(&m1_u8g2, cfg_item_labels[j]);
         if (w > max_lw) max_lw = w;
     }
-    uint8_t val_x   = 4 + max_lw + 4;   /* label start + max width + gap */
-    uint8_t arrow_x = val_x - 6;        /* "<" sits one glyph-cell left  */
+    u8g2_uint_t val_x_pref = 4 + max_lw + 4;   /* label start + max width + gap */
+    u8g2_uint_t val_x_max  = CFG_TEXT_W - 18;   /* keep value/arrows within text area */
+    u8g2_uint_t val_x      = (val_x_pref < val_x_max) ? val_x_pref : val_x_max;
+    u8g2_uint_t arrow_x    = val_x - 6;         /* "<" sits one glyph-cell left  */
 
     uint8_t visible = M1_MENU_VIS(CFG_ITEMS);
     for (uint8_t v = 0; v < visible; v++)
@@ -284,7 +287,7 @@ static void draw(SubGhzApp *app)
         {
             u8g2_DrawStr(&m1_u8g2, arrow_x, y + text_ofs, "<");
             u8g2_DrawStr(&m1_u8g2, val_x, y + text_ofs, val);
-            uint8_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
+            u8g2_uint_t vw = u8g2_GetStrWidth(&m1_u8g2, val);
             u8g2_DrawStr(&m1_u8g2, val_x + vw + 2, y + text_ofs, ">");
         }
         else

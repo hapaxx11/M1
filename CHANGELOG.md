@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   label no longer abuts the value text in medium and large font modes.  Value
   x-position is now computed dynamically from the widest label in the current
   font instead of using a hardcoded pixel offset.
+
 ## [0.9.0.95] - 2026-04-15
 
 ### Changed
