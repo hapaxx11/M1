@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **NFC: Boost power and polling rate for range extender support** — Updated the
+  RFAL analog config table (`rfal_analogConfigTbl.h`) to enable external load
+  modulation (`lm_ext`), lower field detection thresholds (75mV/75mV activation,
+  75mV/25mV deactivation), and disable overshoot/undershoot protection across all
+  Poll NFC-A TX bitrates (106/212/424/848).  Also boost regulator voltage to max
+  in `ReadIni()` and reduce polling interval from 1000ms to 500ms.  These changes
+  persist through RFAL mode/bitrate initialization and enable proper operation of
+  NFC range extender accessories.
 - **Documentation**: Added human-facing documentation for preferred patterns
   (UI/Button Bar Rules, Font-Aware Menu Implementation, Hardware State
   Management) to `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and

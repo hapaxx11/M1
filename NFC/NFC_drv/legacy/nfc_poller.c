@@ -623,37 +623,19 @@ bool ReadIni(void)
     }
     if (err != RFAL_ERR_NONE) return false;
 
-    /* Boost NFC power and polling responsiveness for range extender support.
+    /* Boost regulator voltage for range extender support.
      *
-     * This function only applies settings that are reliable at this stage:
-     *   - Boost regulator voltage for a stronger RF field
-     *   - Use a faster polling cycle later in discovery params (500ms)
+     * REGULATOR_CONTROL is not managed by the RFAL analog config table,
+     * so it persists across rfalSetMode() / bitrate changes.
      *
-     * Other analog settings sometimes used for extender operation (for example
-     * TX driver strength, AUX_MOD.lm_ext / lm_dri, field thresholds, or
-     * overshoot/undershoot tuning) are not programmed here because RFAL mode
-     * and bitrate initialization may overwrite them.
+     * All other range-extender settings (lm_ext, field thresholds,
+     * overshoot/undershoot) are applied via rfal_analogConfigTbl.h so
+     * they persist through the entire poller session.
      */
-
-    /* Boost regulated voltage to maximum for stronger RF field.
-     * Set reg_s=1 (manual regulation) with rege=max voltage. */
     err = st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
         ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask,
         ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask );
     if (err != RFAL_ERR_NONE) return false;
-
-    /* Do not force AUX_MOD, field-threshold, or overshoot/undershoot related
-     * registers here.
-     *
-     * RFAL poller mode/bitrate initialization may overwrite these values via
-     * its analog configuration, so writing them at this stage is not reliable
-     * and would be misleading. If range-extender operation requires:
-     *   - AUX_MOD.lm_ext / lm_dri
-     *   - FIELD_THRESHOLD_ACTV / FIELD_THRESHOLD_DEACTV
-     *   - OVERSHOOT / UNDERSHOOT configuration
-     * those settings must be applied in the RFAL analog config table or
-     * re-applied after each RFAL mode/bitrate initialization step so they
-     * persist for the active poller session. */
 
     /* 2) Discovery parameters: Explicitly set for Poller-only mode */
     rfalNfcDefaultDiscParams(&discParam);
