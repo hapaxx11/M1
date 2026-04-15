@@ -2604,6 +2604,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 						s_browse_count     = saved_browse_count;
 						s_browse_page      = saved_browse_page;
 						s_browse_selection = saved_browse_sel;
+						xQueueReset(main_q_hdl);
 						return true;
 					}
 					/* User backed out of file — redraw dir listing */
