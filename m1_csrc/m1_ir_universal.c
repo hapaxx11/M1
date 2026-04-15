@@ -2468,7 +2468,6 @@ S_M1_Buttons_Status bs;
 S_M1_Main_Q_t q;
 char browse_path[IR_UNIVERSAL_PATH_MAX_LEN];
 char child_path[IR_UNIVERSAL_PATH_MAX_LEN];
-char saved_path[IR_UNIVERSAL_PATH_MAX_LEN];
 FILINFO fno;
 
 snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", IR_UNIVERSAL_IRDB_ROOT);
