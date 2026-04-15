@@ -455,6 +455,13 @@ static void draw_mode_menu(int sel)
 {
     const uint8_t row_h   = m1_menu_item_h();
     const uint8_t max_vis = M1_MENU_VIS(MENU_ITEMS);
+    int scroll = 0;
+
+    if (MENU_ITEMS > max_vis) {
+        scroll = sel - max_vis + 1;
+        if (scroll < 0) scroll = 0;
+        if (scroll > MENU_ITEMS - max_vis) scroll = MENU_ITEMS - max_vis;
+    }
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -467,15 +474,21 @@ static void draw_mode_menu(int sel)
     /* Menu items */
     u8g2_SetFont(&m1_u8g2, m1_menu_font());
     for (int i = 0; i < max_vis; i++) {
+        int item_idx = scroll + i;
         int y = M1_MENU_AREA_TOP + i * row_h;
-        if (i == sel) {
+
+        if (item_idx >= MENU_ITEMS) {
+            break;
+        }
+
+        if (item_idx == sel) {
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
             u8g2_DrawRBox(&m1_u8g2, 0, y - 1, M1_MENU_TEXT_W, row_h, 0);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         } else {
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         }
-        u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, spam_mode_names[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, spam_mode_names[item_idx]);
     }
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
