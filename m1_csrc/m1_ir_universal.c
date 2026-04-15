@@ -35,6 +35,7 @@
 #include "m1_virtual_kb.h"
 #include "m1_file_util.h"
 #include "m1_scene.h"
+#include "m1_ir_quick_remote.h"
 #include "m1_settings.h"
 
 /*************************** D E F I N E S ************************************/
@@ -42,7 +43,7 @@
 #define BROWSE_NAMES_MAX     16
 #define BROWSE_NAME_MAX_LEN  64
 
-#define DASHBOARD_ITEM_COUNT  6
+#define DASHBOARD_ITEM_COUNT  12
 
 #define IR_SEARCH_RESULTS_MAX 20
 
@@ -89,8 +90,14 @@ static char s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN];
 static uint16_t s_raw_ota_buffer[IR_RAW_OTA_BUFFER_MAX];
 static flipper_ir_signal_t s_raw_tx_signal;
 
-/* Dashboard menu text (item 4 is dynamic: Remote/Normal Mode) */
+/* Dashboard menu text (item 11 is dynamic: Remote/Normal Mode) */
 static const char *s_dashboard_items[DASHBOARD_ITEM_COUNT] = {
+	"TV Remote",
+	"AC Remote",
+	"Audio Remote",
+	"Projector",
+	"Fan Remote",
+	"LED Remote",
 	"Browse IRDB",
 	"Search",
 	"Learned",
@@ -204,7 +211,7 @@ static void draw_dashboard(uint8_t selection)
 	}
 
 	/* Update Remote Mode label to reflect current state */
-	s_dashboard_items[5] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
+	s_dashboard_items[11] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
 
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -311,14 +318,24 @@ static void dashboard_screen(void)
 				{
 					switch (selection)
 					{
-						case 0: /* Browse IRDB */
-						case 2: /* Learned — browse user-saved remotes */
+						case 0: /* TV Remote */
+						case 1: /* AC Remote */
+						case 2: /* Audio Remote */
+						case 3: /* Projector */
+						case 4: /* Fan Remote */
+						case 5: /* LED Remote */
+						{
+							ir_quick_remote((ir_category_t)selection);
+							break;
+						}
+						case 6: /* Browse IRDB */
+						case 8: /* Learned — browse user-saved remotes */
 						{
 							/* Temporarily switch to Normal for file browsing */
 							uint8_t browse_saved_orient = m1_screen_orientation;
 							if (browse_saved_orient != M1_ORIENT_NORMAL)
 								settings_apply_orientation(M1_ORIENT_NORMAL);
-							const char *root = (selection == 0) ? IR_UNIVERSAL_IRDB_ROOT : IR_LEARNED_DIR;
+							const char *root = (selection == 6) ? IR_UNIVERSAL_IRDB_ROOT : IR_LEARNED_DIR;
 							strncpy(s_current_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 							s_current_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 							browse_directory(s_current_path);
@@ -327,16 +344,16 @@ static void dashboard_screen(void)
 								settings_apply_orientation(browse_saved_orient);
 							break;
 						}
-						case 1: /* Search IRDB */
+						case 7: /* Search IRDB */
 							show_search_screen();
 							break;
-						case 3: /* Favorites */
+						case 9: /* Favorites */
 							show_favorites_screen();
 							break;
-						case 4: /* Recent */
+						case 10: /* Recent */
 							show_recent_screen();
 							break;
-						case 5: /* Toggle Remote Mode */
+						case 11: /* Toggle Remote Mode */
 							if (m1_screen_orientation == M1_ORIENT_REMOTE)
 								settings_apply_orientation(M1_ORIENT_NORMAL);
 							else
