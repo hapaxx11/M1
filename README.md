@@ -16,9 +16,10 @@ fork — Monstatek stock, C3/bedge117, SiN360 — distributes firmware as manual
 builds shared on Discord or as opaque binary uploads.  Hapax treats GitHub as
 the single source of truth for everything:
 
-- **Automated CI/CD** — every merge to `main` triggers a GitHub Actions build
-  and publishes a versioned GitHub Release with firmware artifacts.  No manual
-  compilation, no "here's a .bin I built on my laptop."
+- **Automated CI/CD** — pushes/merges to `main` that touch buildable firmware
+  paths trigger a GitHub Actions build and publish a versioned GitHub Release
+  with firmware artifacts; docs-only and CI/workflow-only changes are skipped.
+  No manual compilation, no "here's a .bin I built on my laptop."
 - **[Web Updater](https://hapaxx11.github.io/M1/)** — a GitHub Pages-hosted
   browser-based flashing tool.  Plug in via USB, pick a release, and flash —
   no desktop software required.
