@@ -2479,11 +2479,11 @@ uint16_t saved_browse_page  = s_browse_page;
 uint16_t saved_browse_sel   = s_browse_selection;
 memcpy(saved_browse_names, s_browse_names, sizeof(s_browse_names));
 
+s_browse_page = 0;
 while (1)
 {
 /* Scan current directory */
-s_browse_page  = 0;
-s_browse_count = scan_directory_page(browse_path, 0, BROWSE_NAMES_MAX);
+s_browse_count = scan_directory_page(browse_path, s_browse_page, BROWSE_NAMES_MAX);
 
 if (s_browse_count == 0)
 {
