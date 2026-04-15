@@ -29,11 +29,18 @@
 
 /*
  * GitHub API response buffer.
- * A single GitHub release JSON object is typically 2-4 KB; five releases
- * can reach 15-20 KB.  12 KB comfortably holds 3-5 releases for the
- * Hapax/C3/Monstatek repos whose release notes are CI-generated and brief.
+ *
+ * Each GitHub release JSON object includes the full author/uploader objects
+ * and all release assets with download URLs.  The size varies with the
+ * number of assets per release:
+ *   - Hapax (4 assets: .elf, .bin, .hex, _wCRC.bin): ~5-6 KB per release
+ *   - C3 (1 asset: _wCRC.bin): ~3 KB per release
+ *   - Monstatek (1-2 assets): ~2-3 KB per release
+ *
+ * 32 KB comfortably holds 5 releases from any source, including Hapax's
+ * multi-asset releases with CI-generated release notes.
  */
-#define API_RESPONSE_BUF_SIZE  12288
+#define API_RESPONSE_BUF_SIZE  32768
 static char s_api_buf[API_RESPONSE_BUF_SIZE];
 
 /*
@@ -280,7 +287,12 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 
 	status = http_get(url, s_api_buf, sizeof(s_api_buf), 30);
 	if (out_status) *out_status = status;
-	if (status != HTTP_OK)
+
+	/* Accept truncated responses: if the buffer was too small for the
+	 * full GitHub API response, parse whatever complete release objects
+	 * fit.  This is better than returning 0 releases — the user sees a
+	 * shorter list rather than an error screen. */
+	if (status != HTTP_OK && status != HTTP_ERR_RESPONSE_TOO_LARGE)
 		return 0;
 
 	/* The response is a JSON array: [{...}, {...}, ...] */
@@ -352,6 +364,12 @@ static uint8_t github_fetch_releases(const fw_source_t *source, fw_release_t *re
 
 		p = obj_end;
 	}
+
+	/* If we parsed at least one release from a truncated response,
+	 * report OK to the caller so the results are shown instead of
+	 * an error message. */
+	if (count > 0 && status == HTTP_ERR_RESPONSE_TOO_LARGE && out_status)
+		*out_status = HTTP_OK;
 
 	return count;
 }

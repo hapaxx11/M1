@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Firmware Download: Hapax source showing only 1 release** — Increased the
+  GitHub API response buffer from 12 KB to 32 KB to accommodate Hapax releases
+  which have 4 assets each (~5.5 KB of JSON per release vs ~3 KB for single-asset
+  sources like C3).  Also fixed `http_get()` to detect silent buffer truncation
+  and made the release parser handle truncated responses gracefully by showing
+  whatever complete releases fit rather than an error.
 - IR Universal Remote: exiting the dashboard with "Remote Mode" active no longer
   leaves the entire device stuck in portrait (90°) orientation.  The original
   screen orientation is now saved on entry and restored on exit.
