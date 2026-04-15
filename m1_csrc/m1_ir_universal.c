@@ -2741,18 +2741,17 @@ static bool builder_save_remote(ir_builder_slot_t *slots, uint8_t n_slots)
 				flipper_file_t src_ff;
 				if (flipper_ir_open(&src_ff, slots[i].src_filepath))
 				{
-					flipper_ir_signal_t raw_sig;
 					bool found = false;
-					while (flipper_ir_read_signal(&src_ff, &raw_sig))
+					while (flipper_ir_read_signal(&src_ff, &sig))
 					{
-						if (strcmp(raw_sig.name, slots[i].src_signal_name) == 0
-						    && raw_sig.type == FLIPPER_IR_SIGNAL_RAW
-						    && raw_sig.valid)
+						if (strcmp(sig.name, slots[i].src_signal_name) == 0
+						    && sig.type == FLIPPER_IR_SIGNAL_RAW
+						    && sig.valid)
 						{
 							/* Write under the slot name */
-							snprintf(raw_sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s",
+							snprintf(sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s",
 							         slots[i].slot_name);
-							if (!flipper_ir_write_signal(&ff, &raw_sig))
+							if (!flipper_ir_write_signal(&ff, &sig))
 								write_ok = false;
 							found = true;
 							break;
