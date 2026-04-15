@@ -3051,10 +3051,12 @@ static void ir_custom_builder_run(void)
 		}
 		else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 		{
-			/* Save the remote */
-			builder_save_remote(s_builder_slots, s_builder_n_slots);
-			xQueueReset(main_q_hdl);
-			return;
+			/* Save the remote and only leave the builder on success. */
+			if (builder_save_remote(s_builder_slots, s_builder_n_slots))
+			{
+				xQueueReset(main_q_hdl);
+				return;
+			}
 		}
 
 		builder_draw_slots(s_builder_slots, s_builder_n_slots, slot_sel);
