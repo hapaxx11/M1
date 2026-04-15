@@ -43,11 +43,15 @@ Performance implications
 Security concerns
 
 5. CI/CD
+Hapax is the only M1 fork with a GitHub-first CI/CD pipeline.  All builds,
+tests, releases, and documentation deploy through GitHub Actions:
 All PRs must pass automated tests
 Maintain test coverage above agreed threshold (e.g., 80%)
 Automated linting must pass
 Build must succeed (skipped automatically for docs/config-only changes — see paths-ignore in ci.yml)
 No security vulnerabilities in dependencies
+Every merge to main auto-creates a GitHub Release with firmware artifacts
+The Web Updater (GitHub Pages) and device OTA both pull from GitHub Releases
 
 6. Documentation
 Keep README.md updated with accurate feature descriptions and protocol counts

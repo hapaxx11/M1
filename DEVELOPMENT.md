@@ -100,10 +100,24 @@ Conventional Commits format used in this repository.
 
 ## CI/CD
 
-- Every push/PR to `main` triggers a firmware build check (`ci.yml`)
-- Every merge to `main` auto-creates a GitHub Release with firmware artifacts
+Hapax is the **only M1 firmware fork with a GitHub-first CI/CD pipeline**.  Other
+forks rely on manual local builds and ad-hoc binary distribution.  Hapax treats
+GitHub Actions as the authoritative build system:
+
+- Every push/PR to `main` triggers a **firmware build check** (`ci.yml`) and
+  **unit test run** (`tests.yml`).
+- Every merge to `main` **auto-creates a GitHub Release** with firmware artifacts
+  (`build-release.yml`) — no manual compilation or upload required.
+- **Doxygen API documentation** is auto-deployed to GitHub Pages (`docs.yml`).
+- **Static analysis** (cppcheck, MISRA-C) is available on-demand via
+  `static-analysis.yml`.
+- The **[Web Updater](https://hapaxx11.github.io/M1/)** is hosted on GitHub Pages
+  and pulls firmware directly from GitHub Releases — users can flash their M1
+  from a browser with zero software installation.
+- The M1 device itself can **download firmware over WiFi** directly from GitHub
+  Releases (Settings → FW Update → Download).
 - Builds that only touch docs, databases, IDE configs, or CI workflow files are
-  automatically skipped (see `paths-ignore` in `ci.yml`)
+  automatically skipped (see `paths-ignore` in `ci.yml`).
 
 ## Testing
 

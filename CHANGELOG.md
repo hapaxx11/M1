@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation updated across README, ARCHITECTURE, DEVELOPMENT, CONTRIBUTING,
+  GUIDELINES, and Web Updater to highlight Hapax's unique GitHub-first development
+  model — automated CI/CD builds, GitHub Releases, GitHub Pages Web Updater,
+  automated testing, and transparent development all on GitHub
+
 ## [0.9.0.89] - 2026-04-14
 
 ## [0.9.0.88] - 2026-04-14
