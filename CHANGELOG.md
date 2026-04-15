@@ -1049,6 +1049,354 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
   scene entry passes `NULL` as deinit; the function was never called.
 
+## [0.9.0.77] - 2026-04-14
+
+### Fixed
+
+- OTA "Connection failed" — add SNTP time sync, DNS reachability pre-check, stale TCP connection cleanup, and SSL session retry logic
+
+### Changed
+
+- CI: create changelog-stamp PR instead of pushing directly to main
+
+## [0.9.0.76] - 2026-04-13
+
+### Fixed
+
+- Dark mode light border — clear full ST7567 display RAM (132×65) on mode change to eliminate residual lit pixels at LCD edges
+
+## [0.9.0.75] - 2026-04-13
+
+### Changed
+
+- Documentation: highlight Web Updater as recommended flashing method in README
+- Fix agent-confusing CRC comments, `va_list` undefined behavior, and CI trigger docs
+
+## [0.9.0.74] - 2026-04-13
+
+### Fixed
+
+- Web updater showing "No compatible devices found" on Android — skip WebSerial VID filter on mobile browsers
+
+### Added
+
+- Host-side unit tests, Python RPC test harness, and testing strategy documentation
+
+## [0.9.0.73] - 2026-04-13
+
+### Fixed
+
+- OTA "Connection failed" — configure SSL (`AT+CIPSSLCCONF`) before HTTPS connections
+
+## [0.9.0.72] - 2026-04-13
+
+## [0.9.0.71] - 2026-04-13
+
+### Added
+
+- Browser-based firmware updater using Web Serial API — flash firmware directly from a web page without installing desktop software
+
+### Fixed
+
+- BLE Spam crashes — thread-safe `esp_queue` linked-list operations with task suspension around critical sections
+
+## [0.9.0.70] - 2026-04-12
+
+### Added
+
+- Sub-GHz Read Raw: Flipper-style RSSI spectrogram visualization — real-time frequency-domain signal strength display during raw capture
+
+## [0.9.0.69] - 2026-04-12
+
+### Added
+
+- 5 non-Sub-GHz test suites (Flipper file parser, IR file parser, RFID file parser, NFC file parser, OTA asset filter) and preferred unit testing pattern documentation
+
+## [0.9.0.68] - 2026-04-12
+
+### Added
+
+- Large text size option — Settings → LCD & Notifications → Text Size now has Small / Medium / Large with per-size row height, font, and visible item count
+
+## [0.9.0.67] - 2026-04-11
+
+### Fixed
+
+- OTA firmware update — never actually worked due to chunked HTTP transfer encoding, response buffer aliasing, and silent error swallowing; rewrote download pipeline with streaming TCP/SSL reader
+
+## [0.9.0.66] - 2026-04-11
+
+### Fixed
+
+- Dark mode — hardware LCD inversion via ST7567 command + replaced all stock `u8g2_FirstPage()`/`u8g2_NextPage()` calls with wrapper functions that apply inversion consistently
+
+## [0.9.0.65] - 2026-04-11
+
+### Changed
+
+- BLE Spam rewrite with dynamic packet generation — ported Momentum-style per-cycle randomization of model IDs, battery levels, colors, and encrypted payloads; MAC rotation; ~100ms cycle time (was 1500ms); per-brand mode selection menu (Apple, Samsung, Google, Microsoft, Random)
+
+## [0.9.0.64] - 2026-04-11
+
+### Added
+
+- 67 new unit tests for block decoder, block encoder, Manchester codec, and datatype utilities
+- Extracted offline RAW decoder and playlist path remapper into standalone modules with 30 new tests
+
+### Changed
+
+- Refactored `sub_ghz_replay_flipper_file()` to use extracted modules (key encoder, raw line parser, RAW decoder, playlist remapper)
+
+## [0.9.0.63] - 2026-04-11
+
+### Changed
+
+- Documentation: replaced hardcoded `M1_Hapax_v0.9.0.1` references in CLAUDE.md, README.md, and DEVELOPMENT.md with `M1_Hapax_v<VERSION>` placeholders
+
+## [0.9.0.62] - 2026-04-11
+
+### Added
+
+- Dark mode (display inversion) toggle in Settings → LCD & Notifications — initial software-only implementation
+
+## [0.9.0.61] - 2026-04-11
+
+### Fixed
+
+- Splash screen "M1" reading as "MI" — switched to `helvB08_tr` font with distinct `1` glyph; documented font inventory and maintenance rules in CLAUDE.md
+
+## [0.9.0.60] - 2026-04-11
+
+### Added
+
+- Text Size setting (Small / Medium) in Settings → LCD & Notifications — adjustable menu row height and font for readability
+
+## [0.9.0.59] - 2026-04-11
+
+### Added
+
+- Battery indicator on splash screen — shows battery level during boot
+
+## [0.9.0.58] - 2026-04-11
+
+### Fixed
+
+- PR #94 review findings: deduplicate decode results in Sub-GHz Read history, sync `npulsecount` between ISR and event loop, fix stale comment
+
+### Changed
+
+- Documentation: add no-duplicate-subsection heading rule to changelog instructions
+
+## [0.9.0.57] - 2026-04-11
+
+### Added
+
+- WiFi deauthentication and station scan — `AT+DEAUTH` and `AT+STASCAN` commands for ESP32 custom AT firmware; new WiFi scene menu items (requires neddy299/esp32-at-monstatek-m1 firmware)
+
+## [0.9.0.56] - 2026-04-11
+
+### Changed
+
+- Build: suppress `-Woverlength-strings` for vendored `u8g2_fonts.c` via per-file CMake compile options
+- CI: automatic changelog `[Unreleased]` version stamping on each release build
+
+## [0.9.0.55] - 2026-04-10
+
+### Fixed
+
+- Sub-GHz Read scene: lightweight resume after child scene pop, live retune during RX, hopper state preservation across Config visits
+
+### Added
+
+- Decode action for saved RAW `.sub` files — offline protocol decode from the Saved action menu
+
+## [0.9.0.54] - 2026-04-10
+
+### Added
+
+- Regression unit tests for JSON parser, Flipper Sub-GHz parser, Flipper file parser, and protocol registry
+- Bug-fix regression test requirement added to project docs
+- GitHub Actions workflow for Jekyll / GitHub Pages deployment
+
+## [0.9.0.53] - 2026-04-10
+
+### Added
+
+- Text-mode virtual keyboard with SPACE key — enables WiFi password entry with spaces and special characters
+
+## [0.9.0.52] - 2026-04-10
+
+### Fixed
+
+- OTA release fetch — replaced `AT+HTTPCLIENT` (4 KB response limit) with raw TCP/SSL streaming in `http_get()` to handle GitHub API's large JSON responses
+
+## [0.9.0.51] - 2026-04-10
+
+### Added
+
+- Code quality infrastructure: on-demand cppcheck static analysis, Unity test framework, AddressSanitizer support, Doxygen API docs, MISRA compliance guidance
+
+### Changed
+
+- CI: removed push-to-main trigger from `ci.yml` to avoid redundant builds (release workflow handles main branch)
+
+## [0.9.0.50] - 2026-04-10
+
+### Changed
+
+- Read Raw waveform rendering polished — oscilloscope-style square wave with mark/space visualization, clamped amplitude, and smoothed transitions
+
+## [0.9.0.49] - 2026-04-10
+
+### Fixed
+
+- Splash screen: use `_tr` font variant to include lowercase characters (was `_tu` — uppercase only)
+
+### Changed
+
+- File browser: removed "Press OK to browse" prompt; directories sort before files
+
+## [0.9.0.48] - 2026-04-10
+
+### Fixed
+
+- IR Send All: wait specifically for `Q_EVENT_IRRED_TX` in transmission loop (was consuming unrelated queue events)
+- Hardware state management across ESP32, NFC, and IR modules — documented `init`/`deinit` patterns and ensured all exit paths call deinit
+
+## [0.9.0.47] - 2026-04-10
+
+### Fixed
+
+- Sub-GHz playlist radio reinit — call `menu_sub_ghz_init()` after each file replay to restore radio power; documented SI4463 radio state management pattern
+- Sub-GHz Read Raw radio sleep bug — ensure `menu_sub_ghz_init()` is called before starting RX in both Read and Read Raw scenes
+
+## [0.9.0.46] - 2026-04-10
+
+### Changed
+
+- Splash screen layout updated
+
+## [0.9.0.45] - 2026-04-10
+
+### Fixed
+
+- 2FSK replay — extended FSK modulation support to all Sub-GHz frequencies (was limited to 433 MHz band)
+
+## [0.9.0.44] - 2026-04-10
+
+### Added
+
+- Hapax H-mark logo bitmaps and PNG previews for all three display sizes
+
+### Fixed
+
+- Sub-GHz Read Raw feedback and Emulate for native `.sgh` files
+- Windows reserved filename error: renamed `ir_database/AC/AUX.ir` to `AUX_.ir`
+
+## [0.9.0.43] - 2026-04-08
+
+### Fixed
+
+- NFC Amiibo emulation for Nintendo Switch compatibility — fixed HALT response timing in T2T listener
+
+## [0.9.0.42] - 2026-04-08
+
+### Changed
+
+- Standardized Settings menus to match Sub-GHz Config layout — consistent `< value >` arrows, UP/DOWN selection, LEFT/RIGHT value change
+
+## [0.9.0.41] - 2026-04-08
+
+### Fixed
+
+- WiFi/BT scan regression — removed AT readiness probe and shortened mode-set timeout that caused false failures
+- Sub-GHz raw recording — implemented SD card streaming, waveform display, and save flow; fixed dangling pointer for datfile infix
+
+## [0.9.0.40] - 2026-04-07
+
+### Fixed
+
+- Delayed ESP32 screen response — optimized AT probe loop, added mode-set timeouts (`MODE_SET_RESP_TIMEOUT`), drained stale button events on module entry
+
+## [0.9.0.39] - 2026-04-07
+
+### Fixed
+
+- Overlapping text and tight spacing in Sub-GHz scenes — adjusted Y coordinates and row heights for clean rendering
+
+## [0.9.0.38] - 2026-04-07
+
+### Fixed
+
+- Sub-GHz config scene — removed redundant button bar, fixed row overlap, aligned layout with menu scene pattern
+
+## [0.9.0.37] - 2026-04-07
+
+### Added
+
+- Sub-GHz: Info action in saved file menu — displays protocol, key, frequency, and modulation for the selected `.sub` file
+- IR: Saved File Actions menu — Send All, Info, Rename, Delete for `.ir` files
+
+### Changed
+
+- Documentation: elevated Saved Item Actions as canonical UX standard across all modules
+
+## [0.9.0.36] - 2026-04-07
+
+### Fixed
+
+- WiFi/BT scan failure — added AT readiness probe with retry after ESP32 init to ensure SPI transport is ready before sending commands
+
+### Changed
+
+- Removed ESP32 boot-time auto-init — ESP32 is now initialized on-demand only, matching stock firmware behavior
+
+## [0.9.0.35] - 2026-04-07
+
+### Removed
+
+- Legacy dead code from Infrared (~10 lines), GPIO, NFC (~28 lines), WiFi (~50 lines), and Bluetooth (~300 lines) modules — empty functions, unused view tables, dead `#if 0` blocks, and never-compiled fallback paths
+
+## [0.9.0.34] - 2026-04-07
+
+### Fixed
+
+- Sub-GHz Read never recognising signals — batch-drain pulse events from FreeRTOS queue, use TIM1 CCR1 hardware capture instead of software delta, increase timer period to avoid rollover on long pulses
+
+## [0.9.0.33] - 2026-04-07
+
+### Fixed
+
+- Bottom-bar overlap in Sub-GHz Config, Read, Playlist, NeedSaving, Add Manually list, and Radio Settings screens — adjusted Y coordinates so button bar text does not collide with menu items
+
+## [0.9.0.32] - 2026-04-06
+
+### Fixed
+
+- Sub-GHz DMA buffers aligned to 32-byte boundary for D-Cache safety — `malloc` + manual alignment replaced with `aligned_alloc`-style wrapper
+
+## [0.9.0.31] - 2026-04-06
+
+### Fixed
+
+- Main menu off-by-one — drained stale button events on module exit and validated `disp_window_active_row` matches `sel_item` on `MENU_UPDATE_REFRESH`
+
+## [0.9.0.30] - 2026-04-06
+
+### Fixed
+
+- `uint8_t`/`bool` type mismatch in Oregon V1 and Oregon3 decoders — changed `bit_val` to `bool` and updated `subghz_protocol_blocks_add_bit()` parameter type
+
+## [0.9.0.29] - 2026-04-06
+
+### Fixed
+
+- Sub-GHz Read scene: frequency=0 saved for non-hopper signals, history auto-select picked oldest signal, hopper never actually retuned the radio, `current_freq_hz` never populated
+
+### Changed
+
+- Documentation: comprehensive audit and consistency update across CLAUDE.md, DEVELOPMENT.md, README.md, and ARCHITECTURE.md
+
 ## [0.9.0.28] - 2026-04-06
 
 ### Added
@@ -1301,6 +1649,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could cause ring-buffer overflows and device reboots under sustained RF
   activity.  Decoding still works normally in Read and Weather Station modes.
   (Ref: bedge117/M1 C3.4 crash fix.)
+
+## [0.9.0.27] - 2026-04-06
+
+### Added
+
+- 5 Sub-GHz tools added to scene menu: Spectrum Analyzer, RSSI Meter, Freq Scanner, Weather Station, Brute Force — now 11 menu items matching C3 parity
+
+### Changed
+
+- CI: skip builds for non-compilation changes (documentation, databases, IDE configs, CI workflow files)
+- Documentation: mandated scene-based architecture for all modules in CLAUDE.md, added migration guide
+
+## [0.9.0.26] - 2026-04-06
+
+### Changed
+
+- Sub-GHz menu and saved action scenes — removed "OK" button bar, added right-edge scrollbar position indicator; items fill available vertical space
+
+## [0.9.0.25] - 2026-04-06
+
+### Fixed
+
+- Firmware update menu overflow — 4th item ("Download") no longer overflows into the info box; switched to short info box layout
+
+## [0.9.0.24] - 2026-04-06
+
+### Changed
+
+- Renamed release binary suffix `_SD.bin` → `_wCRC.bin` — aligns with Monstatek Official and C3/bedge117 naming convention
+
+## [0.9.0.23] - 2026-04-06
+
+### Added
+
+- C3 (bedge117) as third default firmware download source in `fw_sources.txt`
+
+## [0.9.0.22] - 2026-04-06
+
+### Added
+
+- WiFi Firmware Download — browse and download firmware images from GitHub Releases directly to SD card; configurable sources via `fw_sources.txt`; real-time download progress bar
+- Reusable HTTP client (`m1_http_client.c/h`) for API requests and large file downloads with HTTPS, redirect following, and progress callbacks
+- Minimal JSON parser (`m1_json_mini.c/h`) for GitHub API responses — no heap allocation
+- ESP32 AT TCP/SSL and HTTP command definitions (`AT+HTTPCLIENT`, `AT+CIPSTART`, etc.)
+- WiFi state accessors: `wifi_is_connected()` and `wifi_get_connected_ssid()`
+
+## [0.9.0.21] - 2026-04-04
+
+### Changed
+
+- Removed redundant "Back" labels from all app button bars and action menus — hardware back button is self-explanatory
+- Redistributed Sub-GHz saved action menu layout for 3-item spacing after removing Back item
+
+## [0.9.0.20] - 2026-04-04
+
+### Fixed
+
+- Sub-GHz signal detection not working — synchronized ISR state machine (`PULSE_DET_EOP`/`PULSE_DET_IDLE` return values were discarded), added pulse handler state reset, cleared stale `subghz_record_mode_flag`
+
+### Changed
+
+- Sub-GHz Read scene — Flipper-consistent behavior: RX auto-starts on entry, L/R live retune, history auto-opens on first decode, BACK exits directly
+
+## [0.9.0.19] - 2026-04-04
+
+### Fixed
+
+- Sub-GHz Read crash — added missing `subghz_decenc_init()` (NULL function pointer → HardFault), fixed pulse data never fed to decoder, removed incorrect `subghz_record_mode_flag` usage from Read scene
+
+## [0.9.0.18] - 2026-04-04
+
+### Added
+
+- Sub-GHz Playlist Player — reads `.txt` playlist files from `/SUBGHZ/playlist/` and transmits each referenced `.sub` file sequentially; adjustable repeat count; Flipper path remapping; curated UberGuidoZ playlist files included
+
+## [0.9.0.17] - 2026-04-04
+
+### Added
+
+- IR database expansion — imported 1,296 curated IR remote files from Flipper-IRDB (CC0 license) into `ir_database/`; total IR library now 1,412 files
+- Sub-GHz signal database — 313 curated `.sub` files from UberGuidoZ/Flipper (GPLv3) in `subghz_database/`
+
+## [0.9.0.16] - 2026-04-04
+
+### Added
+
+- Sub-GHz Scene Manager framework — Flipper-inspired stack-based scene architecture with `on_enter`/`on_event`/`on_exit`/`draw` callbacks, button bar, status bar, and RSSI bar renderers
+- Sub-GHz scenes: Menu (5 items), Read (protocol decode + history), Read Raw (oscilloscope waveform), Receiver Info (signal detail), Config, Save flow (name → success → unsaved dialog), Saved (file browser + action menu), Freq Analyzer wrapper
+- Bridge functions (`*_ext()` wrappers) exposing static radio control, RSSI read, protocol TX, and waveform functions to scene files
+
+### Changed
+
+- SiN360 fork sync — merged sincere360/M1_SiN360 v0.9.0.4 using `ours` strategy
+
+## [0.9.0.15] - 2026-04-02
+
+### Changed
+
+- Renamed `hardware/` directory to `cad/` to avoid case-insensitive name collision with `HARDWARE.md`
+
+## [0.9.0.14] - 2026-04-02
+
+### Added
+
+- Enclosure STEP files — 6 M1 enclosure 3D CAD models (STEP AP214) under `cad/step/`
+
+## [0.9.0.13] - 2026-04-02
+
+### Added
+
+- Public Forks Tracker section in CLAUDE.md — table of all known Monstatek/M1 public forks with commit hashes, dates, and review status
+
+### Fixed
+
+- Sub-GHz recording stability — removed protocol decoder polling (`subghz_decenc_read()`) from the `Q_EVENT_SUBGHZ_RX` handler to prevent ring-buffer overflows under sustained RF activity
+
+## [0.9.0.12] - 2026-04-02
+
+### Changed
+
+- Added `[Unreleased]` changelog convention and upstream merge policy to CLAUDE.md
+- CI: skip release builds for docs-only merges to main
+
+## [0.9.0.11] - 2026-04-02
+
+### Removed
+
+- Legacy `Release/` folder — removed STM32CubeIDE v0.8.0.0 build artifacts; added `Release/` to `.gitignore`
 
 ## [0.9.0.10] - 2026-04-02
 
