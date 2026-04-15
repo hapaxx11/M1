@@ -2,18 +2,23 @@
 
 /**
  * @file   m1_subghz_scene_read_raw.c
- * @brief  Sub-GHz Read Raw Scene — raw RF capture with oscilloscope waveform.
+ * @brief  Sub-GHz Read Raw Scene — raw RF capture with RSSI waveform.
  *
- * States: IDLE → RECORDING → STOPPED
- * Navigation:
- *   OK   = Start recording (idle) / Stop (recording) / Reset (stopped)
- *   BACK = Exit (idle) / Stop (recording)
- *   DOWN = Config (idle) / Save (stopped)
+ * Momentum-aligned state machine and button layout.
+ *
+ * States: START → RECORDING → IDLE (capture on SD)
+ *
+ * Button mapping (matches physical D-pad left/OK/right):
+ *   START:     LEFT = Config  |  OK = REC    |  RIGHT = (none)
+ *   RECORDING: (none)         |  OK = Stop   |  (none)
+ *   IDLE:      LEFT = Erase   |  OK = Send   |  RIGHT = Save
+ *
+ *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
  * Recording data path:
  *   ISR → ring buffer → sub_ghz_rx_raw_save_ext() → SD card (.sgh file)
- *   Data is streamed to SD during recording.  "Save" after stop shows
- *   the auto-generated filename.
+ *   Data is streamed to SD during recording.  After stop the file exists
+ *   on SD and can be replayed (Send) or renamed (Save).
  */
 
 #include <stdint.h>
@@ -33,8 +38,11 @@
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
+#include "m1_file_browser.h"
+#include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
+#include "ff.h"
 
 extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
@@ -69,15 +77,30 @@ extern void     sub_ghz_raw_recording_stop_ext(void);
 extern const char *sub_ghz_raw_recording_get_filename_ext(void);
 extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 
+/* Path to last recorded file — kept for Send/Save/Erase after recording */
+static char raw_filepath[72];
+
+/*============================================================================*/
+/* Helpers                                                                    */
+/*============================================================================*/
+
+/** Extract bare filename (without path or extension) from a full path. */
+static const char *extract_filename(const char *fullpath)
+{
+    const char *p = strrchr(fullpath, '/');
+    return p ? p + 1 : fullpath;
+}
+
 /*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    app->raw_state = SubGhzReadRawStateIdle;
+    app->raw_state = SubGhzReadRawStateStart;
     app->raw_sample_count = 0;
     app->rssi = -120;
+    raw_filepath[0] = '\0';
     subghz_raw_rssi_reset_ext();
     app->need_redraw = true;
 }
@@ -102,14 +125,14 @@ static void start_raw_rx(SubGhzApp *app)
     /* Initialize ring buffers */
     if (sub_ghz_ring_buffers_init_ext())
     {
-        /* Memory error — stay idle */
+        /* Memory error — stay in Start */
         return;
     }
 
     /* Initialize SD card file and write header */
     if (sub_ghz_raw_recording_init_ext())
     {
-        /* SD card error — clean up and stay idle */
+        /* SD card error — clean up and stay in Start */
         sub_ghz_ring_buffers_deinit_ext();
         return;
     }
@@ -143,7 +166,13 @@ static void stop_raw_rx(SubGhzApp *app)
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
 
     app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
-    app->raw_state = SubGhzReadRawStateStopped;
+
+    /* Remember the auto-generated filepath for Send/Save/Erase */
+    const char *fname = sub_ghz_raw_recording_get_filename_ext();
+    strncpy(raw_filepath, fname ? fname : "", sizeof(raw_filepath) - 1);
+    raw_filepath[sizeof(raw_filepath) - 1] = '\0';
+
+    app->raw_state = SubGhzReadRawStateIdle;
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
@@ -153,62 +182,97 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventBack:
             if (app->raw_state == SubGhzReadRawStateRecording)
             {
+                /* Stop recording and keep capture (Momentum: BACK = stop, not exit) */
                 stop_raw_rx(app);
                 app->need_redraw = true;
             }
             else
             {
-                /* Clean up and exit */
-                if (app->raw_state == SubGhzReadRawStateStopped)
+                /* Exit scene — clean up ring buffers if capture exists */
+                if (app->raw_state == SubGhzReadRawStateIdle)
                     sub_ghz_ring_buffers_deinit_ext();
                 subghz_scene_pop(app);
             }
             return true;
 
         case SubGhzEventOk:
-            if (app->raw_state == SubGhzReadRawStateIdle)
+            if (app->raw_state == SubGhzReadRawStateStart)
             {
+                /* Start recording */
                 start_raw_rx(app);
                 app->need_redraw = true;
             }
             else if (app->raw_state == SubGhzReadRawStateRecording)
             {
+                /* Stop recording — transition to Idle (capture on SD) */
                 stop_raw_rx(app);
                 app->need_redraw = true;
             }
-            else if (app->raw_state == SubGhzReadRawStateStopped)
+            else if (app->raw_state == SubGhzReadRawStateIdle)
             {
-                /* Reset and go back to idle */
+                /* Send — replay the captured raw file (blocking delegate).
+                 * sub_ghz_replay_flipper_file() calls menu_sub_ghz_exit()
+                 * internally, so we must call menu_sub_ghz_init() after. */
+                if (raw_filepath[0] != '\0')
+                {
+                    uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
+                    if (ret == 0)
+                        menu_sub_ghz_init();
+                }
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventLeft:
+            if (app->raw_state == SubGhzReadRawStateStart)
+            {
+                /* Config */
+                subghz_scene_push(app, SubGhzSceneConfig);
+            }
+            else if (app->raw_state == SubGhzReadRawStateIdle)
+            {
+                /* Erase — delete the recorded file and go back to Start */
+                if (raw_filepath[0] != '\0')
+                {
+                    char del_path[72];
+                    snprintf(del_path, sizeof(del_path), "0:%s", raw_filepath);
+                    f_unlink(del_path);
+                    raw_filepath[0] = '\0';
+                }
                 sub_ghz_ring_buffers_deinit_ext();
-                app->raw_state = SubGhzReadRawStateIdle;
+                subghz_raw_rssi_reset_ext();
+                app->raw_state = SubGhzReadRawStateStart;
                 app->raw_sample_count = 0;
                 app->need_redraw = true;
             }
             return true;
 
-        case SubGhzEventDown:
-            if (app->raw_state == SubGhzReadRawStateIdle)
+        case SubGhzEventRight:
+            if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
             {
-                subghz_scene_push(app, SubGhzSceneConfig);
-            }
-            else if (app->raw_state == SubGhzReadRawStateStopped)
-            {
-                /* Show saved filename */
-                const char *fullpath = sub_ghz_raw_recording_get_filename_ext();
-                /* Extract just the filename from the full path */
-                const char *fname = strrchr(fullpath, '/');
-                if (fname)
-                    fname++;
-                else
-                    fname = fullpath;
-                char count_str[32];
-                snprintf(count_str, sizeof(count_str), "%lu samples",
-                         (unsigned long)app->raw_sample_count);
-                m1_message_box(&m1_u8g2, "Saved to:", fname, count_str,
-                               "BACK to continue");
-                sub_ghz_ring_buffers_deinit_ext();
-                app->raw_state = SubGhzReadRawStateIdle;
-                app->raw_sample_count = 0;
+                /* Save — rename the auto-generated file via VKB */
+                const char *fname = extract_filename(raw_filepath);
+                char base[32];
+                strncpy(base, fname, sizeof(base) - 1);
+                base[sizeof(base) - 1] = '\0';
+                char *dot = strrchr(base, '.');
+                if (dot) *dot = '\0';
+
+                char new_name[32];
+                if (m1_vkb_get_filename("Save RAW as:", base, new_name))
+                {
+                    /* Determine extension from original */
+                    const char *ext = strrchr(fname, '.');
+                    if (!ext) ext = ".sgh";
+
+                    char old_path[72], new_path[72];
+                    snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
+                    snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
+                    f_rename(old_path, new_path);
+
+                    /* Update stored path to the new name */
+                    snprintf(raw_filepath, sizeof(raw_filepath), "/SUBGHZ/%s%s", new_name, ext);
+                }
                 app->need_redraw = true;
             }
             return true;
@@ -246,44 +310,50 @@ static void draw(SubGhzApp *app)
 
     m1_u8g2_firstpage();
 
-    /* Status bar */
+    /* Status bar: freq (left), mod (center), state+samples (right) */
     const char *freq = subghz_freq_labels ? subghz_freq_labels[app->freq_idx] : "???";
     const char *mod  = subghz_mod_labels  ? subghz_mod_labels[app->mod_idx]   : "???";
-    const char *state = NULL;
+
+    /* Build the right-side status string:
+     *   START:     "RAW"
+     *   RECORDING: "REC Xk"  (compact state + sample count)
+     *   IDLE:      "Xk spl"  (sample count only) */
+    const char *right_status = NULL;
+    char right_buf[16];
 
     switch (app->raw_state)
     {
-        case SubGhzReadRawStateIdle:      state = "IDLE"; break;
-        case SubGhzReadRawStateRecording: state = "REC";  break;
-        case SubGhzReadRawStateStopped:   state = "DONE"; break;
+        case SubGhzReadRawStateStart:
+            right_status = "RAW";
+            break;
+        case SubGhzReadRawStateRecording:
+            if (app->raw_sample_count >= 1000)
+                snprintf(right_buf, sizeof(right_buf), "REC %luk",
+                         (unsigned long)(app->raw_sample_count / 1000));
+            else
+                snprintf(right_buf, sizeof(right_buf), "REC %lu",
+                         (unsigned long)app->raw_sample_count);
+            right_status = right_buf;
+            break;
+        case SubGhzReadRawStateIdle:
+            if (app->raw_sample_count >= 1000)
+                snprintf(right_buf, sizeof(right_buf), "%luk spl",
+                         (unsigned long)(app->raw_sample_count / 1000));
+            else
+                snprintf(right_buf, sizeof(right_buf), "%lu spl",
+                         (unsigned long)app->raw_sample_count);
+            right_status = right_buf;
+            break;
     }
 
-    subghz_status_bar_draw(freq, mod, state, false);
+    subghz_status_bar_draw(freq, mod, right_status, false);
 
-    /* Sample count in status bar area (right side, inverted text) */
-    if (app->raw_state != SubGhzReadRawStateIdle)
-    {
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); /* Inverted (white on black bar) */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-        if (app->raw_sample_count >= 1000)
-            snprintf(line, sizeof(line), "%luk", (unsigned long)(app->raw_sample_count / 1000));
-        else
-            snprintf(line, sizeof(line), "%lu", (unsigned long)app->raw_sample_count);
-        /* Position to the left of the state indicator (e.g. "REC"/"DONE"),
-         * leaving a 2px gap.  This avoids overlapping the centered mod label. */
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, line);
-        uint8_t state_tw = u8g2_GetStrWidth(&m1_u8g2, state);
-        uint8_t sample_x = M1_LCD_DISPLAY_WIDTH - state_tw - 2 - tw - 4;
-        u8g2_DrawStr(&m1_u8g2, sample_x, 8, line);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
-
-    /* Waveform area frame — always visible (Flipper draws frame in all states) */
+    /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    if (app->raw_state == SubGhzReadRawStateIdle)
+    if (app->raw_state == SubGhzReadRawStateStart)
     {
-        /* Animated sine wave (Flipper-style Lissajous) in idle state */
+        /* Animated sine wave (Flipper-style Lissajous) when no capture */
         subghz_raw_draw_sin_ext();
         subghz_raw_sin_advance_ext();
     }
@@ -301,26 +371,39 @@ static void draw(SubGhzApp *app)
         subghz_raw_rssi_draw_ext();
     }
 
-    /* Bottom bar */
+    /* Filename display centered in the waveform area when capture exists */
+    if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
+    {
+        const char *fname = extract_filename(raw_filepath);
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        /* Center horizontally within waveform box (x=0..115) and
+         * vertically (frame y=14..48, midpoint y=31, baseline ~y=35) */
+        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, fname);
+        uint8_t fx = (tw < 115) ? (115 - tw) / 2 : 0;
+        u8g2_DrawStr(&m1_u8g2, fx, 35, fname);
+    }
+
+    /* Bottom bar — columns match physical buttons: LEFT | OK | RIGHT */
     switch (app->raw_state)
     {
-        case SubGhzReadRawStateIdle:
+        case SubGhzReadRawStateStart:
             subghz_button_bar_draw(
-                NULL, NULL,
-                arrowdown_8x8, "Config",
-                NULL, "OK:Rec");
+                arrowleft_8x8, "Config",
+                NULL, "REC",
+                NULL, NULL);
             break;
         case SubGhzReadRawStateRecording:
             subghz_button_bar_draw(
-                arrowleft_8x8, "Stop",
                 NULL, NULL,
-                NULL, "OK:Stop");
+                NULL, "Stop",
+                NULL, NULL);
             break;
-        case SubGhzReadRawStateStopped:
+        case SubGhzReadRawStateIdle:
             subghz_button_bar_draw(
-                arrowleft_8x8, "Exit",
-                arrowdown_8x8, "Save",
-                NULL, "OK:New");
+                arrowleft_8x8, "Erase",
+                NULL, "Send",
+                arrowright_8x8, "Save");
             break;
     }
 
