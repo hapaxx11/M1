@@ -60,10 +60,10 @@ GitHub services:
 | **GitHub Releases** | Versioned firmware downloads (`.bin`, `_wCRC.bin`) | Created by `build-release.yml` |
 | **GitHub Security Advisories** | Vulnerability reporting | `.github/SECURITY.md` |
 
-Other forks (Monstatek stock, bedge117/C3, sincere360/SiN360) distribute firmware
-as manual local builds — typically shared as binary uploads on Discord or GitHub
-Releases created by hand.  None have CI/CD pipelines, automated testing, or
-browser-based flashing tools.
+The table above highlights this repository's documented delivery and maintenance
+capabilities: automated GitHub Actions workflows for builds, tests, analysis,
+and docs; a browser-based Web Updater published via GitHub Pages; versioned
+firmware releases; and a security reporting channel.
 
 ## Scene-Based Architecture
 
