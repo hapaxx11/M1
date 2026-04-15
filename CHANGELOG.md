@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **J-Link flash script updated** — `scripts/program.jlink` now references the
   default source-tree Hapax build output (`M1_Hapax_v0.9.0.1.bin`) with
   comments documenting the version coupling to `m1_fw_update_bl.h`.
+
+## [0.9.0.95] - 2026-04-15
+
+### Changed
+
 - Documentation: added CI stamper safety rule to CLAUDE.md and GUIDELINES.md —
   the [Unreleased] heading must only appear once (as the actual heading);
   writing that exact heading string in body text risks the CI stamper matching
@@ -44,8 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-generated release notes via `.github/release.yml`; added instructions
   in CLAUDE.md and GUIDELINES.md that stamp PRs must not appear in changelogs
   or release notes
-
-## [0.9.0.95] - 2026-04-15
 
 ## [0.9.0.94] - 2026-04-15
 
