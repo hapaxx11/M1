@@ -51,7 +51,7 @@ the single source of truth for everything:
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
 | Sub-GHz tools (spectrum, RSSI, scanner, weather, brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
-| WiFi firmware download | ✗ | ✓ (OTA from GitHub Releases) |
+| OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
 | AES-256 encryption API | ✗ | ✓ |
 | Bad-BT (Bluetooth HID) | ✗ | ✓ |
@@ -59,7 +59,6 @@ the single source of truth for everything:
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
 | Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
-| OTA firmware download (device WiFi) | ✗ | ✓ (downloads from GitHub Releases) |
 | CI/CD auto-releases | ✗ | ✓ (GitHub Actions, every merge to main) |
 | Automated unit tests | ✗ | ✓ (GitHub Actions, Unity + ASan/UBSan) |
 | Static analysis (cppcheck) | ✗ | ✓ (GitHub Actions, on-demand) |
