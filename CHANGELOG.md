@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   300–350 MHz band (27 presets), 387–468 MHz band (25 presets including full
   LPD433 range), and 779–928 MHz band (10 presets including 868 EU ISM
   variants). Hopper frequencies also updated to match Momentum defaults.
+
+## [0.9.0.97] - 2026-04-15
+
 ### Fixed
 
 - Config menus (Sub-GHz Config, LCD & Notifications settings): colon at end of
@@ -67,8 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-generated release notes via `.github/release.yml`; added instructions
   in CLAUDE.md and GUIDELINES.md that stamp PRs must not appear in changelogs
   or release notes
-
-## [0.9.0.94] - 2026-04-15
 
 ## [0.9.0.93] - 2026-04-15
 
@@ -114,8 +115,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IR Universal Remote dashboard**: Converted hardcoded `DASHBOARD_ITEM_HEIGHT`
   and `DASHBOARD_START_Y` to font-aware helpers.  Added scrollbar.  Dashboard
   now respects the user's text size setting.
-
-## [0.9.0.92] - 2026-04-15
 
 ## [0.9.0.91] - 2026-04-15
 
@@ -170,8 +169,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accumulation loop that reads additional data until headers are complete or timeout.
   Also separated the SPI working buffer used by `tcp_recv()` / `tcp_recv_available()`
   from the main `s_at_buf` so accumulated header data is not clobbered between reads.
-
-## [0.9.0.89] - 2026-04-14
 
 ## [0.9.0.88] - 2026-04-14
 
@@ -262,16 +259,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Small/Medium/Large), display the standard proportional scrollbar, use the
   correct `m1_menu_max_visible()` item count for the active font size, and show
   the standard centred title with separator line.
-
-## [0.9.0.83] - 2026-04-14
-
-## [0.9.0.82] - 2026-04-14
-
-## [0.9.0.81] - 2026-04-14
-
-## [0.9.0.80] - 2026-04-14
-
-## [0.9.0.79] - 2026-04-14
 
 ## [0.9.0.78] - 2026-04-14
 
@@ -1146,8 +1133,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - OTA "Connection failed" — configure SSL (`AT+CIPSSLCCONF`) before HTTPS connections
-
-## [0.9.0.72] - 2026-04-13
 
 ## [0.9.0.71] - 2026-04-13
 
