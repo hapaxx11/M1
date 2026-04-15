@@ -86,7 +86,7 @@ static char raw_filepath[RAW_FILEPATH_MAX + 1];
 /* Helpers                                                                    */
 /*============================================================================*/
 
-/** Extract bare filename (without path or extension) from a full path.
+/** Extract bare filename (with extension, without directory path) from a full path.
  *  Handles both '/' and '\\' separators. */
 static const char *extract_filename(const char *fullpath)
 {
@@ -351,8 +351,6 @@ static void scene_on_exit(SubGhzApp *app)
 
 static void draw(SubGhzApp *app)
 {
-    char line[32];
-
     m1_u8g2_firstpage();
 
     /* Status bar: freq (left), mod (center), state+samples (right) */
