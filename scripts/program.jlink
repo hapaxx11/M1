@@ -1,9 +1,12 @@
+// J-Link flash script for M1 Hapax firmware
+// Update the loadbin path below if the version or build preset changes.
+// The binary name is derived from CMakeLists.txt: M1_Hapax_v{major}.{minor}.{build}.{rc}
 si SWD
 speed auto
 device STM32H573VI
-connect 
+connect
 erase
-loadbin ./out/build/gcc-14_2_build-release/MonstaTek_M1_v0800.bin, 0x08000000
+loadbin ./out/build/gcc-14_2_build-release/M1_Hapax_v0.9.0.1.bin, 0x08000000
 r
 g
 exit

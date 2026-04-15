@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hardware docs now reference ST-Link instead of J-Link as the primary SWD
   debugger, matching the standard STM32 development workflow. J-Link remains
   listed as an alternative where appropriate (VSCode debug configs, README).
+- **VSCode: dynamic ELF path in debug configs** — All three debug
+  configurations in `launch.json` (ST-Link IDE, ST-Link VSCode, J-Link) now
+  use `${command:cmake.launchTargetPath}` instead of a hardcoded
+  `MonstaTek_M1_v0800.elf` path, matching the pattern already used by the
+  CubeProg flash tasks. Removed the stale `projectName` field.
+- **J-Link flash script updated** — `scripts/program.jlink` now references the
+  current Hapax build output name (`M1_Hapax_v0.9.0.1.bin`) with comments
+  explaining the version coupling.
 
 ## [0.9.0.93] - 2026-04-15
 
