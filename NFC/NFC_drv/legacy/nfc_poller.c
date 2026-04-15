@@ -644,32 +644,18 @@ bool ReadIni(void)
         ST25R3916_REG_REGULATOR_CONTROL_reg_s |
             (ST25R3916_REGULATOR_CONTROL_REGE_MAX << ST25R3916_REG_REGULATOR_CONTROL_rege_shift) );
 
-    /* Enable external load modulation — allows inductively coupled antennas
-     * (range extenders) to modulate the field properly.
-     * Matches Flipper's init which always enables lm_ext + lm_dri. */
-    st25r3916ChangeRegisterBits( ST25R3916_REG_AUX_MOD,
-        ST25R3916_REG_AUX_MOD_lm_ext | ST25R3916_REG_AUX_MOD_lm_dri,
-        ST25R3916_REG_AUX_MOD_lm_ext | ST25R3916_REG_AUX_MOD_lm_dri );
-
-    /* Do not force overshoot/undershoot protection registers here.
+    /* Do not force AUX_MOD, field-threshold, or overshoot/undershoot related
+     * registers here.
+     *
      * RFAL poller mode/bitrate initialization may overwrite these values via
-     * its analog configuration, so writing 0x00 at this stage is not reliable
-     * and would be misleading. If protection must remain disabled during
-     * polling, that needs to be done in the RFAL analog config or re-applied
-     * after each RFAL mode/bitrate initialization step. */
-
-    /* Lower field detection thresholds so the reader maintains its field
-     * at the weaker coupling distances a range extender introduces.
-     * Flipper uses trg=105mV/rfe=105mV for activation and trg=75mV/rfe=75mV
-     * for deactivation; we use 75mV activation thresholds to support the
-     * wider coupling gap of external range extenders. */
-    st25r3916ChangeRegisterBits( ST25R3916_REG_FIELD_THRESHOLD_ACTV,
-        ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_mask | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_mask,
-        ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_75mV );
-
-    st25r3916ChangeRegisterBits( ST25R3916_REG_FIELD_THRESHOLD_DEACTV,
-        ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_mask | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_mask,
-        ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_25mV );
+     * its analog configuration, so writing them at this stage is not reliable
+     * and would be misleading. If range-extender operation requires:
+     *   - AUX_MOD.lm_ext / lm_dri
+     *   - FIELD_THRESHOLD_ACTV / FIELD_THRESHOLD_DEACTV
+     *   - OVERSHOOT / UNDERSHOOT configuration
+     * those settings must be applied in the RFAL analog config table or
+     * re-applied after each RFAL mode/bitrate initialization step so they
+     * persist for the active poller session. */
 
     /* 2) Discovery parameters: Explicitly set for Poller-only mode */
     rfalNfcDefaultDiscParams(&discParam);
