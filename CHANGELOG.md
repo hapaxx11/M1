@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **NFC: Boost power and polling rate for range extender support** — Unconditionally
+  configure the ST25R3916 NFC frontend for maximum performance after RFAL init,
+  modelled after Flipper Zero's `furi_hal_nfc.c` init sequence.  Changes: boost
+  regulated voltage to maximum (`rege=0x0F`, `reg_s=1`), ensure max TX driver power
+  (`d_res=0`), enable external load modulation (`lm_ext`), disable overshoot/undershoot
+  protection, lower field detection thresholds for extended coupling distances, and
+  reduce polling interval from 1000ms to 500ms.  These settings enable proper
+  operation of NFC range extender accessories and improve overall NFC read
+  responsiveness.
+
 ## [0.9.0.90] - 2026-04-15
 
 ### Fixed

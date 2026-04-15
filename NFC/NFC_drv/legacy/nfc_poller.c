@@ -623,11 +623,60 @@ bool ReadIni(void)
     }
     if (err != RFAL_ERR_NONE) return false;
 
+    /* Boost NFC power and polling rate for range extender support.
+     *
+     * Modelled after Flipper Zero's furi_hal_nfc.c init sequence which
+     * unconditionally configures for maximum performance:
+     *   - d_res = 0 (max TX driver current)
+     *   - lm_ext enabled (external load modulation for extender coupling)
+     *   - Overshoot/undershoot protection disabled (cleaner signal)
+     *   - Lower field detection thresholds (maintain field at extended range)
+     *   - Boosted regulator voltage (stronger RF field)
+     *   - Faster polling cycle (500ms vs 1000ms)
+     */
+
+    /* Boost regulated voltage to maximum for stronger RF field.
+     * Set reg_s=1 (manual regulation) with rege=0x0F (max voltage). */
+    st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
+        ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask,
+        ST25R3916_REG_REGULATOR_CONTROL_reg_s | (0x0FU << ST25R3916_REG_REGULATOR_CONTROL_rege_shift) );
+
+    /* Ensure maximum TX driver power (d_res = 0, lowest RFO resistance) */
+    st25r3916ChangeRegisterBits( ST25R3916_REG_TX_DRIVER,
+        ST25R3916_REG_TX_DRIVER_d_res_mask, 0x00 );
+
+    /* Enable external load modulation — allows inductively coupled antennas
+     * (range extenders) to modulate the field properly.
+     * Matches Flipper's init which always enables lm_ext + lm_dri. */
+    st25r3916ChangeRegisterBits( ST25R3916_REG_AUX_MOD,
+        ST25R3916_REG_AUX_MOD_lm_ext | ST25R3916_REG_AUX_MOD_lm_dri,
+        ST25R3916_REG_AUX_MOD_lm_ext | ST25R3916_REG_AUX_MOD_lm_dri );
+
+    /* Disable overshoot/undershoot protection for maximum field strength,
+     * matching Flipper's furi_hal_nfc_poller_init_common(). */
+    st25r3916WriteRegister( ST25R3916_REG_OVERSHOOT_CONF1,  0x00 );
+    st25r3916WriteRegister( ST25R3916_REG_OVERSHOOT_CONF2,  0x00 );
+    st25r3916WriteRegister( ST25R3916_REG_UNDERSHOOT_CONF1, 0x00 );
+    st25r3916WriteRegister( ST25R3916_REG_UNDERSHOOT_CONF2, 0x00 );
+
+    /* Lower field detection thresholds so the reader maintains its field
+     * at the weaker coupling distances a range extender introduces.
+     * Flipper uses trg=105mV/rfe=105mV for activation and trg=75mV/rfe=75mV
+     * for deactivation; we use 75mV activation thresholds to support the
+     * wider coupling gap of external range extenders. */
+    st25r3916ChangeRegisterBits( ST25R3916_REG_FIELD_THRESHOLD_ACTV,
+        ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_mask | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_mask,
+        ST25R3916_REG_FIELD_THRESHOLD_ACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_ACTV_rfe_75mV );
+
+    st25r3916ChangeRegisterBits( ST25R3916_REG_FIELD_THRESHOLD_DEACTV,
+        ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_mask | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_mask,
+        ST25R3916_REG_FIELD_THRESHOLD_DEACTV_trg_75mV | ST25R3916_REG_FIELD_THRESHOLD_DEACTV_rfe_25mV );
+
     /* 2) Discovery parameters: Explicitly set for Poller-only mode */
     rfalNfcDefaultDiscParams(&discParam);
 
     discParam.devLimit       = 1U;
-    discParam.totalDuration  = 1000U;                      /* Discovery window (adjust if needed) */
+    discParam.totalDuration  = 500U;                           /* Faster polling for improved responsiveness */
     discParam.notifyCb       = PollerNotif;                  /* Keep if in use */
 #if defined(RFAL_COMPLIANCE_MODE_NFC)
     discParam.compMode       = RFAL_COMPLIANCE_MODE_NFC;   /* Recommended for application */
