@@ -94,7 +94,10 @@ static char    *s_capture_buf  = NULL;
 static uint16_t s_capture_size = 0;
 static uint16_t s_capture_len  = 0;
 
-/* Debug output suppress flag (used by USB-UART bridge) */
+/* Debug output suppress flag (used by USB-UART bridge).
+ * Single-word volatile access is atomic on ARM Cortex-M33, so no
+ * additional synchronisation is needed between the setter task and
+ * _write() readers. */
 static volatile bool logdb_suppressed = false;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/

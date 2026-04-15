@@ -76,11 +76,31 @@ static uint16_t display_tail;
 static void term_clear(void);
 static void term_newline(void);
 static void term_putchar(uint8_t ch);
-static void bridge_process_rx(void);
+static bool bridge_process_rx(void);
 static void bridge_draw(void);
 static void bridge_apply_baud(uint8_t new_idx);
+static uint16_t dma_rx_head(void);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+/*============================================================================*/
+/*  DMA helper                                                                */
+/*============================================================================*/
+
+/**
+ * @brief  Return the current DMA write position in the circular RX buffer.
+ *
+ * The GPDMA counter counts DOWN from M1_LOGDB_RX_BUFFER_SIZE to 0.
+ * This helper converts it to a head index in [0, M1_LOGDB_RX_BUFFER_SIZE).
+ *
+ * @pre  USART1 DMA RX must be active (guaranteed during VCP mode).
+ */
+static uint16_t dma_rx_head(void)
+{
+    return (M1_LOGDB_RX_BUFFER_SIZE
+            - __HAL_DMA_GET_COUNTER(huart_logdb.hdmarx))
+            % M1_LOGDB_RX_BUFFER_SIZE;
+}
 
 /*============================================================================*/
 /*  Terminal buffer helpers                                                   */
@@ -157,9 +177,7 @@ static void term_putchar(uint8_t ch)
  */
 static bool bridge_process_rx(void)
 {
-    uint16_t new_head = (M1_LOGDB_RX_BUFFER_SIZE
-                         - __HAL_DMA_GET_COUNTER(huart_logdb.hdmarx))
-                         % M1_LOGDB_RX_BUFFER_SIZE;
+    uint16_t new_head = dma_rx_head();
 
     if (new_head == display_tail)
         return false;
@@ -171,8 +189,11 @@ static bool bridge_process_rx(void)
     else
         avail = M1_LOGDB_RX_BUFFER_SIZE - display_tail + new_head;
 
-    /* If too far behind, DMA may have overwritten our unread data.
-     * Skip ahead to avoid displaying corrupted bytes. */
+    /* If more than 75% of the buffer is unread, the DMA has likely
+     * wrapped past our read pointer and overwritten data we haven't
+     * consumed.  Skip ahead to the current head to avoid displaying
+     * corrupted bytes.  This can happen at high baud rates when the
+     * UI poll rate cannot keep up with incoming data. */
     if (avail > (M1_LOGDB_RX_BUFFER_SIZE * 3u / 4u))
     {
         rx_count += avail;
@@ -237,9 +258,7 @@ static void bridge_apply_baud(uint8_t new_idx)
     m1_usb_cdc_comconfig();         /* deinit + reinit USART1 */
 
     /* Re-sync our read pointer to the new DMA position */
-    display_tail = (M1_LOGDB_RX_BUFFER_SIZE
-                    - __HAL_DMA_GET_COUNTER(huart_logdb.hdmarx))
-                    % M1_LOGDB_RX_BUFFER_SIZE;
+    display_tail = dma_rx_head();
 }
 
 /*============================================================================*/
@@ -270,9 +289,7 @@ void gpio_uart_bridge_run(void)
     term_clear();
 
     /* Sync our read pointer to the current DMA write position */
-    display_tail = (M1_LOGDB_RX_BUFFER_SIZE
-                    - __HAL_DMA_GET_COUNTER(huart_logdb.hdmarx))
-                    % M1_LOGDB_RX_BUFFER_SIZE;
+    display_tail = dma_rx_head();
 
     /* ── Main bridge loop ── */
     while (1)
