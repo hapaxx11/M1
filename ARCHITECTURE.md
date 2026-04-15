@@ -50,7 +50,7 @@ GitHub services:
 
 | Service | Purpose | Configuration |
 |---------|---------|---------------|
-| **GitHub Actions** — `ci.yml` | Build check on every push/PR to `main` | `.github/workflows/ci.yml` |
+| **GitHub Actions** — `ci.yml` | Build check on pull requests to `main` | `.github/workflows/ci.yml` |
 | **GitHub Actions** — `build-release.yml` | Auto-create GitHub Release with firmware artifacts on merge to `main` | `.github/workflows/build-release.yml` |
 | **GitHub Actions** — `tests.yml` | Host-side unit tests (Unity + ASan/UBSan) on every push/PR | `.github/workflows/tests.yml` |
 | **GitHub Actions** — `static-analysis.yml` | Cppcheck + MISRA analysis (on-demand) | `.github/workflows/static-analysis.yml` |
