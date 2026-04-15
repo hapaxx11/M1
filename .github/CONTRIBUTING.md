@@ -124,6 +124,25 @@ When creating a pull request, please include:
 - Follow STM32 HAL naming conventions
 - Use appropriate data types (uint8_t, uint16_t, etc.)
 
+### M1-Specific Patterns (mandatory)
+
+Before writing new code, review these project-specific standards:
+
+- **Scene-based architecture** — all modules with submenus use stack-based scene
+  managers.  New modules must follow the scene pattern from the start.
+  See [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+- **Saved Item Actions** — modules with saved files must implement
+  Emulate/Send, Info, Rename, Delete.  See [`DEVELOPMENT.md`](../DEVELOPMENT.md).
+- **Font-aware menus** — all scrollable lists must use `m1_menu_item_h()`,
+  `m1_menu_max_visible()`, and `m1_menu_font()` from `m1_scene.h`.  Never
+  hardcode visible item counts or row heights.
+  See [`DEVELOPMENT.md`](../DEVELOPMENT.md) § "Font-Aware Menu Implementation".
+- **UI / Button Bar Rules** — never add "Back" as a label; selection lists must
+  not have an "OK" button bar.  See [`DEVELOPMENT.md`](../DEVELOPMENT.md) § "UI / Button Bar Rules".
+- **Hardware state management** — follow init/deinit lifecycle patterns for
+  SI4463 radio, ESP32 coprocessor, NFC worker, and IR transmitter.
+  See [`DEVELOPMENT.md`](../DEVELOPMENT.md) § "Hardware State Management".
+
 ## Testing Guidelines
 
 - Test on actual hardware when possible

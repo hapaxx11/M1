@@ -84,6 +84,138 @@ Required core verbs: **Emulate/Send**, **Info**, **Rename**, **Delete**.
 See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
 specification, optional verbs per module, and implementation examples.
 
+## UI / Button Bar Rules
+
+These rules ensure a consistent user experience across all M1 modules.
+
+### No "Back" labels
+
+**Never** add "Back" as a menu item, selectable action, or button bar label.
+The hardware BACK button is self-explanatory — users do not need a screen
+element telling them it exists.  This applies to `subghz_button_bar_draw()`,
+`m1_draw_bottom_bar()`, and any selection list / action menu array.
+
+### No "OK" button bar on selection lists
+
+When a scene presents a list of selectable items (main menus, action menus,
+option lists), pressing OK to select is self-evident.  **Do not** draw a
+bottom bar with an "OK" label — it wastes 12px of vertical space.  Instead,
+use that space for additional list items and draw a **scrollbar** on the
+right edge as a position indicator (3px-wide track at x = 125).
+
+**Button bars are appropriate only** when they convey non-obvious functionality
+— e.g. "OK:Download" (tells user OK starts a download), "Send", "Save",
+"↓ Config" (tells user DOWN opens a config panel).
+
+### Scrollbar pattern for selection lists
+
+Draw a 3px-wide track frame at `M1_MENU_SCROLLBAR_X` (125) spanning the
+menu area, with a filled handle whose Y position is proportional to the
+selected item index.  Limit the highlight-box width to `M1_MENU_TEXT_W`
+(124px) so it does not overlap the scrollbar.
+
+## Font-Aware Menu Implementation
+
+The user can change the menu text size in **Settings → LCD & Notifications →
+Text Size**.  The setting is stored as `m1_menu_style` (declared in
+`m1_system.h`, persisted via `menu_style=N` in `settings.cfg`).
+
+| `m1_menu_style` | Label  | Row Height | Visible Items | Font |
+|-----------------|--------|------------|---------------|------|
+| 0 (default)     | Small  | 8 px       | 6             | `NokiaSmallPlain_tf` |
+| 1               | Medium | 10 px      | 5             | `profont12_mr` |
+| 2               | Large  | 13 px      | 4             | `nine_by_five_nbp_tf` |
+
+### Helper functions (declared in `m1_scene.h`)
+
+| Helper | Returns |
+|--------|---------|
+| `m1_menu_item_h()` | Row height in pixels (8, 10, or 13) |
+| `m1_menu_max_visible()` | Max items in the 52px menu area (6, 5, or 4) |
+| `m1_menu_font()` | Pointer to the u8g2 font for the current style |
+| `M1_MENU_VIS(count)` | `min(count, m1_menu_max_visible())` — convenience macro |
+
+### Layout constants (in `m1_scene.h`)
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `M1_MENU_AREA_TOP` | 12 | Y below title + separator |
+| `M1_MENU_AREA_H` | 52 | Available vertical space (64 − 12) |
+| `M1_MENU_TEXT_W` | 124 | Highlight/text width (leaves 4px for scrollbar) |
+| `M1_MENU_SCROLLBAR_X` | 125 | Scrollbar left edge |
+| `M1_MENU_SCROLLBAR_W` | 3 | Scrollbar track width |
+
+### Rules for all scrollable lists
+
+1. **Never hardcode visible item counts or row heights.** Use
+   `m1_menu_max_visible()` and `m1_menu_item_h()`.
+2. **Always use `m1_menu_font()`** for list item text — do not hardcode a
+   specific font constant.
+3. **Use `M1_MENU_VIS(count)`** when computing the visible slice of a list.
+4. **Text baseline offset is `m1_menu_item_h() − 1`** — places text 1px above
+   the bottom of its row.
+5. **Highlight box width must be `M1_MENU_TEXT_W` (124px)**, not 128px.
+6. **Include `m1_scene.h`** in any `.c` file that draws a scrollable list.
+
+### Justified exceptions
+
+Some specialized displays intentionally use fixed row heights because they
+are **not** standard selectable menus — they are compact data displays with
+constrained vertical space:
+
+| File | Define | Justification |
+|------|--------|---------------|
+| `m1_subghz_scene_read.c` | `HISTORY_ROW_H 8`, `HISTORY_VISIBLE 3` | Compact RX history in split-screen |
+| `m1_subghz_scene_saved.c` | `DECODE_ROW_H 8`, `DECODE_VISIBLE 3` | Offline decode results in dual-view |
+| `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 5` | Frequency scanner data display |
+| `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6`, `SUBGHZ_HISTORY_VISIBLE_ITEMS 5` | Legacy history (tiny rows for max density) |
+| `m1_display.c` | `SUB_MENU_TEXT_ITEMS 4` | Legacy `m1_gui_submenu_update()` API |
+
+## Hardware State Management
+
+### SI4463 Radio — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
+
+`menu_sub_ghz_exit()` powers off the SI4463 radio completely.  After this,
+the chip is unresponsive.  `menu_sub_ghz_init()` performs a full PowerUp +
+patch + config reset to restore the radio.
+
+**Rules:**
+- If you call `sub_ghz_replay_flipper_file()`, call `menu_sub_ghz_init()`
+  immediately after it returns (it calls `menu_sub_ghz_exit()` internally).
+- If you write a new **blocking delegate**, call `menu_sub_ghz_init()` at
+  the top and `menu_sub_ghz_exit()` at the bottom.
+- If you write a new **RX scene**, call `menu_sub_ghz_init()` before
+  starting RX — never assume the radio is already powered on.
+
+### ESP32 Coprocessor — `m1_esp32_init()` / `m1_esp32_deinit()`
+
+Every blocking delegate that uses the ESP32 **must** call
+`m1_esp32_deinit()` on **all** exit paths — including early returns, error
+paths, and normal completion.  Failing to deinit leaves the SPI transport
+and GPIO interrupts active.
+
+**Init pattern:**
+```c
+if (!m1_esp32_get_init_status())  m1_esp32_init();
+if (!get_esp32_main_init_status()) esp32_main_init();
+// ... do work ...
+m1_esp32_deinit();  /* ← on EVERY exit path */
+```
+
+### NFC Worker — `Q_EVENT_NFC_*` Events
+
+The NFC worker task (`nfc_worker_task`) uses a 4-state machine:
+WAIT → INITIALIZE → PROCESS → DONE → WAIT.  Always send a stop event to
+the worker before exiting an NFC blocking delegate — never rely on
+`vTaskDelete()` to clean up, as that skips `nfc_deinit_func()`.
+
+### IR Hardware — `infrared_encode_sys_init()` / `_deinit()`
+
+Every call to `infrared_encode_sys_init()` **must** be followed by
+`infrared_encode_sys_deinit()` — even if the TX complete event
+(`Q_EVENT_IRRED_TX`) is not received.  Skipping deinit on timeout leaves
+timer/DMA resources allocated.
+
 ## ESP32-C6 Coprocessor
 
 The M1 communicates with the ESP32-C6 via **SPI AT commands** (not UART). Key points:
