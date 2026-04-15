@@ -104,11 +104,13 @@ Hapax is the **only M1 firmware fork with a GitHub-first CI/CD pipeline**.  Othe
 forks rely on manual local builds and ad-hoc binary distribution.  Hapax treats
 GitHub Actions as the authoritative build system:
 
-- Every push/PR to `main` triggers a **firmware build check** (`ci.yml`) and
-  **unit test run** (`tests.yml`).
-- Every merge to `main` **auto-creates a GitHub Release** with firmware artifacts
-  (`build-release.yml`) — no manual compilation or upload required.
-- **Doxygen API documentation** is auto-deployed to GitHub Pages (`docs.yml`).
+- Pull requests targeting `main` trigger the **firmware build check** (`ci.yml`)
+  and the **unit test run** (`tests.yml`), subject to each workflow's path filters.
+- Merges/pushes to `main` trigger **release builds** that auto-create a GitHub
+  Release with firmware artifacts (`build-release.yml`) — no manual compilation
+  or upload required.
+- **Doxygen API documentation** is auto-deployed to GitHub Pages (`docs.yml`)
+  when its workflow runs for matching changes.
 - **Static analysis** (cppcheck, MISRA-C) is available on-demand via
   `static-analysis.yml`.
 - The **[Web Updater](https://hapaxx11.github.io/M1/)** is hosted on GitHub Pages
