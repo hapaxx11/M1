@@ -6,7 +6,7 @@ changelog:
     labels:
       - changelog-stamp
     authors:
-      - dependabot
+      - dependabot[bot]
   categories:
     - title: New Features
       labels:
