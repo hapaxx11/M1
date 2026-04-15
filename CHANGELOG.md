@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **J-Link flash script updated** — `scripts/program.jlink` now references the
   current Hapax build output name (`M1_Hapax_v0.9.0.1.bin`) with comments
   explaining the version coupling.
+- Documentation: added CI stamper safety rule to CLAUDE.md and GUIDELINES.md —
+  the literal string `[Unreleased]` must never appear in changelog body text
+  because the CI stamper uses a first-occurrence text replace that can match
+  body text instead of the heading (caused corruption at v0.9.0.78–83)
+- Documentation: updated GUIDELINES.md changelog instructions — corrected
+  misleading guidance that said `[Unreleased]` was only for non-compilation
+  changes; all new entries go under `[Unreleased]` and CI handles version
+  promotion automatically
+
+## [0.9.0.94] - 2026-04-15
 
 ## [0.9.0.93] - 2026-04-15
 
@@ -68,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IR Universal Remote dashboard**: Converted hardcoded `DASHBOARD_ITEM_HEIGHT`
   and `DASHBOARD_START_Y` to font-aware helpers.  Added scrollbar.  Dashboard
   now respects the user's text size setting.
+
 ## [0.9.0.92] - 2026-04-15
 
 ## [0.9.0.91] - 2026-04-15
@@ -190,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the flash section stayed hidden even though the device was connected and
   responsive.  The flash section is now shown as soon as the serial connection
   is established, regardless of device info query outcome.
+
 ## [0.9.0.85] - 2026-04-14
 
 ### Changed
@@ -202,6 +214,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and WiFi icon only appears when associated to an AP (`wifi_is_connected()`).
   At boot, BT and WiFi are absent until a connection is established; the SD icon
   continues to appear whenever a card is physically detected.
+
 ## [0.9.0.84] - 2026-04-14
 
 ### Fixed
@@ -213,6 +226,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Small/Medium/Large), display the standard proportional scrollbar, use the
   correct `m1_menu_max_visible()` item count for the active font size, and show
   the standard centred title with separator line.
+
+## [0.9.0.83] - 2026-04-14
+
+## [0.9.0.82] - 2026-04-14
+
+## [0.9.0.81] - 2026-04-14
+
+## [0.9.0.80] - 2026-04-14
+
+## [0.9.0.79] - 2026-04-14
 
 ## [0.9.0.78] - 2026-04-14
 
@@ -444,8 +467,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   key value, bit count, timing element, frequency, and modulation preset.
   Supports both parsed and raw signal types.
 
-### Changed
-
 - **BLE Spam: complete rewrite with dynamic packet generation** — Ported
   packet formats from the Flipper Zero / Momentum ble_spam app (credit:
   @Willy-JL, @ECTO-1A, @Spooks4576) via the GhostESP reference.  Key
@@ -469,21 +490,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the harmless ISO C99 portability warning on `u8g2_fonts.c`.
 
 - **CI: automatic changelog version stamping** — The `build-release.yml`
-  workflow now automatically replaces `## [Unreleased]
-
-## [0.9.0.83] - 2026-04-14
-
-## [0.9.0.82] - 2026-04-14
-
-## [0.9.0.81] - 2026-04-14
-
-## [0.9.0.80] - 2026-04-14
-
-## [0.9.0.79] - 2026-04-14` in `CHANGELOG.md`
-  with the release version and date (e.g. `## [0.9.0.56] - 2026-04-10`)
-  after each successful release, and inserts a fresh empty `## [Unreleased]`
-  heading.  This prevents changelog entries from accumulating indefinitely
-  under the `[Unreleased]` heading.
+  workflow now automatically replaces the `[Unreleased]` heading in
+  `CHANGELOG.md` with the release version and date (e.g.
+  `[0.9.0.56] - 2026-04-10`) after each successful release, and inserts a
+  fresh empty `[Unreleased]` heading above it.  This prevents changelog
+  entries from accumulating indefinitely under the `[Unreleased]` heading.
 
 - **Firmware download source config** — `fw_sources.txt` now supports a
   `Category:` field (`firmware` or `esp32`) to distinguish M1 firmware
@@ -1061,6 +1072,354 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
   scene entry passes `NULL` as deinit; the function was never called.
 
+## [0.9.0.77] - 2026-04-14
+
+### Fixed
+
+- OTA "Connection failed" — add SNTP time sync, DNS reachability pre-check, stale TCP connection cleanup, and SSL session retry logic
+
+### Changed
+
+- CI: create changelog-stamp PR instead of pushing directly to main
+
+## [0.9.0.76] - 2026-04-13
+
+### Fixed
+
+- Dark mode light border — clear full ST7567 display RAM (132×65) on mode change to eliminate residual lit pixels at LCD edges
+
+## [0.9.0.75] - 2026-04-13
+
+### Changed
+
+- Documentation: highlight Web Updater as recommended flashing method in README
+- Fix agent-confusing CRC comments, `va_list` undefined behavior, and CI trigger docs
+
+## [0.9.0.74] - 2026-04-13
+
+### Fixed
+
+- Web updater showing "No compatible devices found" on Android — skip WebSerial VID filter on mobile browsers
+
+### Added
+
+- Host-side unit tests, Python RPC test harness, and testing strategy documentation
+
+## [0.9.0.73] - 2026-04-13
+
+### Fixed
+
+- OTA "Connection failed" — configure SSL (`AT+CIPSSLCCONF`) before HTTPS connections
+
+## [0.9.0.72] - 2026-04-13
+
+## [0.9.0.71] - 2026-04-13
+
+### Added
+
+- Browser-based firmware updater using Web Serial API — flash firmware directly from a web page without installing desktop software
+
+### Fixed
+
+- BLE Spam crashes — thread-safe `esp_queue` linked-list operations with task suspension around critical sections
+
+## [0.9.0.70] - 2026-04-12
+
+### Added
+
+- Sub-GHz Read Raw: Flipper-style RSSI spectrogram visualization — real-time frequency-domain signal strength display during raw capture
+
+## [0.9.0.69] - 2026-04-12
+
+### Added
+
+- 5 non-Sub-GHz test suites (Flipper file parser, IR file parser, RFID file parser, NFC file parser, OTA asset filter) and preferred unit testing pattern documentation
+
+## [0.9.0.68] - 2026-04-12
+
+### Added
+
+- Large text size option — Settings → LCD & Notifications → Text Size now has Small / Medium / Large with per-size row height, font, and visible item count
+
+## [0.9.0.67] - 2026-04-11
+
+### Fixed
+
+- OTA firmware update — never actually worked due to chunked HTTP transfer encoding, response buffer aliasing, and silent error swallowing; rewrote download pipeline with streaming TCP/SSL reader
+
+## [0.9.0.66] - 2026-04-11
+
+### Fixed
+
+- Dark mode — hardware LCD inversion via ST7567 command + replaced all stock `u8g2_FirstPage()`/`u8g2_NextPage()` calls with wrapper functions that apply inversion consistently
+
+## [0.9.0.65] - 2026-04-11
+
+### Changed
+
+- BLE Spam rewrite with dynamic packet generation — ported Momentum-style per-cycle randomization of model IDs, battery levels, colors, and encrypted payloads; MAC rotation; ~100ms cycle time (was 1500ms); per-brand mode selection menu (Apple, Samsung, Google, Microsoft, Random)
+
+## [0.9.0.64] - 2026-04-11
+
+### Added
+
+- 67 new unit tests for block decoder, block encoder, Manchester codec, and datatype utilities
+- Extracted offline RAW decoder and playlist path remapper into standalone modules with 30 new tests
+
+### Changed
+
+- Refactored `sub_ghz_replay_flipper_file()` to use extracted modules (key encoder, raw line parser, RAW decoder, playlist remapper)
+
+## [0.9.0.63] - 2026-04-11
+
+### Changed
+
+- Documentation: replaced hardcoded `M1_Hapax_v0.9.0.1` references in CLAUDE.md, README.md, and DEVELOPMENT.md with `M1_Hapax_v<VERSION>` placeholders
+
+## [0.9.0.62] - 2026-04-11
+
+### Added
+
+- Dark mode (display inversion) toggle in Settings → LCD & Notifications — initial software-only implementation
+
+## [0.9.0.61] - 2026-04-11
+
+### Fixed
+
+- Splash screen "M1" reading as "MI" — switched to `helvB08_tr` font with distinct `1` glyph; documented font inventory and maintenance rules in CLAUDE.md
+
+## [0.9.0.60] - 2026-04-11
+
+### Added
+
+- Text Size setting (Small / Medium) in Settings → LCD & Notifications — adjustable menu row height and font for readability
+
+## [0.9.0.59] - 2026-04-11
+
+### Added
+
+- Battery indicator on splash screen — shows battery level during boot
+
+## [0.9.0.58] - 2026-04-11
+
+### Fixed
+
+- PR #94 review findings: deduplicate decode results in Sub-GHz Read history, sync `npulsecount` between ISR and event loop, fix stale comment
+
+### Changed
+
+- Documentation: add no-duplicate-subsection heading rule to changelog instructions
+
+## [0.9.0.57] - 2026-04-11
+
+### Added
+
+- WiFi deauthentication and station scan — `AT+DEAUTH` and `AT+STASCAN` commands for ESP32 custom AT firmware; new WiFi scene menu items (requires neddy299/esp32-at-monstatek-m1 firmware)
+
+## [0.9.0.56] - 2026-04-11
+
+### Changed
+
+- Build: suppress `-Woverlength-strings` for vendored `u8g2_fonts.c` via per-file CMake compile options
+- CI: automatic changelog `[Unreleased]` version stamping on each release build
+
+## [0.9.0.55] - 2026-04-10
+
+### Fixed
+
+- Sub-GHz Read scene: lightweight resume after child scene pop, live retune during RX, hopper state preservation across Config visits
+
+### Added
+
+- Decode action for saved RAW `.sub` files — offline protocol decode from the Saved action menu
+
+## [0.9.0.54] - 2026-04-10
+
+### Added
+
+- Regression unit tests for JSON parser, Flipper Sub-GHz parser, Flipper file parser, and protocol registry
+- Bug-fix regression test requirement added to project docs
+- GitHub Actions workflow for Jekyll / GitHub Pages deployment
+
+## [0.9.0.53] - 2026-04-10
+
+### Added
+
+- Text-mode virtual keyboard with SPACE key — enables WiFi password entry with spaces and special characters
+
+## [0.9.0.52] - 2026-04-10
+
+### Fixed
+
+- OTA release fetch — replaced `AT+HTTPCLIENT` (4 KB response limit) with raw TCP/SSL streaming in `http_get()` to handle GitHub API's large JSON responses
+
+## [0.9.0.51] - 2026-04-10
+
+### Added
+
+- Code quality infrastructure: on-demand cppcheck static analysis, Unity test framework, AddressSanitizer support, Doxygen API docs, MISRA compliance guidance
+
+### Changed
+
+- CI: removed push-to-main trigger from `ci.yml` to avoid redundant builds (release workflow handles main branch)
+
+## [0.9.0.50] - 2026-04-10
+
+### Changed
+
+- Read Raw waveform rendering polished — oscilloscope-style square wave with mark/space visualization, clamped amplitude, and smoothed transitions
+
+## [0.9.0.49] - 2026-04-10
+
+### Fixed
+
+- Splash screen: use `_tr` font variant to include lowercase characters (was `_tu` — uppercase only)
+
+### Changed
+
+- File browser: removed "Press OK to browse" prompt; directories sort before files
+
+## [0.9.0.48] - 2026-04-10
+
+### Fixed
+
+- IR Send All: wait specifically for `Q_EVENT_IRRED_TX` in transmission loop (was consuming unrelated queue events)
+- Hardware state management across ESP32, NFC, and IR modules — documented `init`/`deinit` patterns and ensured all exit paths call deinit
+
+## [0.9.0.47] - 2026-04-10
+
+### Fixed
+
+- Sub-GHz playlist radio reinit — call `menu_sub_ghz_init()` after each file replay to restore radio power; documented SI4463 radio state management pattern
+- Sub-GHz Read Raw radio sleep bug — ensure `menu_sub_ghz_init()` is called before starting RX in both Read and Read Raw scenes
+
+## [0.9.0.46] - 2026-04-10
+
+### Changed
+
+- Splash screen layout updated
+
+## [0.9.0.45] - 2026-04-10
+
+### Fixed
+
+- 2FSK replay — extended FSK modulation support to all Sub-GHz frequencies (was limited to 433 MHz band)
+
+## [0.9.0.44] - 2026-04-10
+
+### Added
+
+- Hapax H-mark logo bitmaps and PNG previews for all three display sizes
+
+### Fixed
+
+- Sub-GHz Read Raw feedback and Emulate for native `.sgh` files
+- Windows reserved filename error: renamed `ir_database/AC/AUX.ir` to `AUX_.ir`
+
+## [0.9.0.43] - 2026-04-08
+
+### Fixed
+
+- NFC Amiibo emulation for Nintendo Switch compatibility — fixed HALT response timing in T2T listener
+
+## [0.9.0.42] - 2026-04-08
+
+### Changed
+
+- Standardized Settings menus to match Sub-GHz Config layout — consistent `< value >` arrows, UP/DOWN selection, LEFT/RIGHT value change
+
+## [0.9.0.41] - 2026-04-08
+
+### Fixed
+
+- WiFi/BT scan regression — removed AT readiness probe and shortened mode-set timeout that caused false failures
+- Sub-GHz raw recording — implemented SD card streaming, waveform display, and save flow; fixed dangling pointer for datfile infix
+
+## [0.9.0.40] - 2026-04-07
+
+### Fixed
+
+- Delayed ESP32 screen response — optimized AT probe loop, added mode-set timeouts (`MODE_SET_RESP_TIMEOUT`), drained stale button events on module entry
+
+## [0.9.0.39] - 2026-04-07
+
+### Fixed
+
+- Overlapping text and tight spacing in Sub-GHz scenes — adjusted Y coordinates and row heights for clean rendering
+
+## [0.9.0.38] - 2026-04-07
+
+### Fixed
+
+- Sub-GHz config scene — removed redundant button bar, fixed row overlap, aligned layout with menu scene pattern
+
+## [0.9.0.37] - 2026-04-07
+
+### Added
+
+- Sub-GHz: Info action in saved file menu — displays protocol, key, frequency, and modulation for the selected `.sub` file
+- IR: Saved File Actions menu — Send All, Info, Rename, Delete for `.ir` files
+
+### Changed
+
+- Documentation: elevated Saved Item Actions as canonical UX standard across all modules
+
+## [0.9.0.36] - 2026-04-07
+
+### Fixed
+
+- WiFi/BT scan failure — added AT readiness probe with retry after ESP32 init to ensure SPI transport is ready before sending commands
+
+### Changed
+
+- Removed ESP32 boot-time auto-init — ESP32 is now initialized on-demand only, matching stock firmware behavior
+
+## [0.9.0.35] - 2026-04-07
+
+### Removed
+
+- Legacy dead code from Infrared (~10 lines), GPIO, NFC (~28 lines), WiFi (~50 lines), and Bluetooth (~300 lines) modules — empty functions, unused view tables, dead `#if 0` blocks, and never-compiled fallback paths
+
+## [0.9.0.34] - 2026-04-07
+
+### Fixed
+
+- Sub-GHz Read never recognising signals — batch-drain pulse events from FreeRTOS queue, use TIM1 CCR1 hardware capture instead of software delta, increase timer period to avoid rollover on long pulses
+
+## [0.9.0.33] - 2026-04-07
+
+### Fixed
+
+- Bottom-bar overlap in Sub-GHz Config, Read, Playlist, NeedSaving, Add Manually list, and Radio Settings screens — adjusted Y coordinates so button bar text does not collide with menu items
+
+## [0.9.0.32] - 2026-04-06
+
+### Fixed
+
+- Sub-GHz DMA buffers aligned to 32-byte boundary for D-Cache safety — `malloc` + manual alignment replaced with `aligned_alloc`-style wrapper
+
+## [0.9.0.31] - 2026-04-06
+
+### Fixed
+
+- Main menu off-by-one — drained stale button events on module exit and validated `disp_window_active_row` matches `sel_item` on `MENU_UPDATE_REFRESH`
+
+## [0.9.0.30] - 2026-04-06
+
+### Fixed
+
+- `uint8_t`/`bool` type mismatch in Oregon V1 and Oregon3 decoders — changed `bit_val` to `bool` and updated `subghz_protocol_blocks_add_bit()` parameter type
+
+## [0.9.0.29] - 2026-04-06
+
+### Fixed
+
+- Sub-GHz Read scene: frequency=0 saved for non-hopper signals, history auto-select picked oldest signal, hopper never actually retuned the radio, `current_freq_hz` never populated
+
+### Changed
+
+- Documentation: comprehensive audit and consistency update across CLAUDE.md, DEVELOPMENT.md, README.md, and ARCHITECTURE.md
+
 ## [0.9.0.28] - 2026-04-06
 
 ### Added
@@ -1092,45 +1451,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sub-GHz Brute Force** — Brute-force RF code transmitter supporting Princeton, CAME,
   Nice FLO, Linear, and Holtek protocols with progress display.
 
-### Changed
-
-- **m1_menu.c simplified** — Removed ~400 lines of individual submenu item definitions and
-  conditional compilation variants.  Each module entry now uses a single-line scene entry
-  point (e.g. `rfid_scene_entry`) with `num_submenu_items = 0`, matching the Sub-GHz pattern.
-  BadUSB and Apps retain direct function calls (single-function modules, no submenus).
-- **Scene-based architecture is now complete** — All 9 modules with submenus (Sub-GHz, RFID,
-  NFC, Infrared, GPIO, WiFi, Bluetooth, Games, Settings) use the scene manager.  Only BadUSB
-  and Apps (single-function leaf items) remain as direct function calls.
-- **Sub-GHz menu expanded to 11 items** — Added Spectrum Analyzer, RSSI Meter, Freq Scanner,
-  Weather Station, Brute Force, and wired up Add Manually (was a no-op).  Now matches C3
-  feature parity.  Menu scrolls with 6 visible items and scrollbar position indicator.
-- **CI: skip builds for non-compilation changes** — Added `paths-ignore` filters to
-  `ci.yml` so that PRs and pushes touching only documentation, database files, IDE
-  configs, or CI workflow files no longer trigger a firmware build.  Updated `CLAUDE.md`
-  Workflow Rules and `.github/GUIDELINES.md` to instruct agents and contributors that
-  builds are not required for such changes.
-- **Sub-GHz menu: Flipper-style selection list** — Removed the full-width "OK" button bar
-  from the Sub-GHz main menu scene and replaced it with a right-edge scrollbar position
-  indicator.  All 6 menu items now display without scrolling, using the full vertical space.
-- **Sub-GHz Saved action menu** — Removed the "OK" button bar from the Emulate / Rename /
-  Delete action menu and redistributed item spacing to fill the available screen area evenly
-  (17px per item instead of 13px).
-- **Documentation**: Added scene-based application architecture guidance and updated button
-  bar rules in `CLAUDE.md` to prohibit "OK"-only button bars on selection lists.
-- **Documentation**: Scene-based architecture is now **mandatory** for all modules.
-  `CLAUDE.md` includes a migration status table (Sub-GHz done, 9 modules pending),
-  step-by-step migration instructions for agents, and the blocking-delegate pattern
-  for wrapping legacy functions without rewriting them.
-
-### Fixed
-
-- **Firmware update menu overflow**: The 4th menu item ("Download") no longer
-  overflows into the info box below. Switched from the tall info box (Y=32) to
-  the short info box (Y=42) and condensed the version display from three rows
-  to two (file name + compact "old > new" version line).
-
-### Added
-
 - **WiFi Firmware Download**: New "Download" option in the Firmware Update menu
   that allows browsing and downloading firmware images from Internet sources
   (GitHub Releases) directly to the M1's SD card for flashing. Requires active
@@ -1158,77 +1478,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     already compiled into the AT firmware.
   - **WiFi state accessor**: Added `wifi_is_connected()` and
     `wifi_get_connected_ssid()` public functions for external module use.
-
-### Changed
-
-- **Renamed release binary suffix `_SD.bin` → `_wCRC.bin`** — aligns Hapax release
-  file naming with Monstatek Official (`MonstaTek_M1_v0800_wCRC.bin`) and
-  C3/bedge117 (`M1_v0800_C3.12_wCRC.bin`). Affected: CMake output filename,
-  CI workflow artifact paths, firmware download source defaults, and documentation.
-- **Removed redundant "Back" labels from all app button bars and menus** — the
-  hardware back button is self-explanatory. Button bars now only show hints for
-  non-obvious directional actions (Config, Save, OK:Listen, etc.), freeing
-  screen space on the 128px display. Affected apps: Sub-GHz (all scenes),
-  Bluetooth, 802.15.4, BadUSB, BadBT, Infrared, IR Universal, CAN, Settings.
-- **Removed "Back" from Sub-GHz saved file action menus** — the action menu
-  (Emulate / Rename / Delete) no longer includes a redundant "Back" item.
-- **Documentation**: Added UI / Button Bar Rules to CLAUDE.md prohibiting
-  "Back" labels in button bars and action menus.
-- **Redistributed Sub-GHz saved action menu layout** — after removing the
-  "Back" item (3 items instead of 4), increased row height to fill the
-  available vertical space evenly (13px rows in scene version, 16px in legacy).
-- **Documentation**: Added layout redistribution rule to CLAUDE.md — when
-  item count changes, recompute row height to fill the display zone evenly.
-
-### Fixed
-
-- **Sub-GHz signal detection not working** — fixed three issues preventing the
-  Read scene from decoding captured signals:
-  1. **ISR state machine not synchronized**: The pulse handler's return value
-     (PULSE_DET_EOP / PULSE_DET_IDLE) was discarded by the scene manager event
-     loop, leaving the ISR in NORMAL state permanently. This caused every RF
-     noise edge to flood the 256-item FreeRTOS queue, drowning actual signal
-     edges and preventing protocol decoders from accumulating enough pulses.
-  2. **No pulse handler state reset**: The `subghz_pulse_handler` static
-     `interpacket_gap` variable persisted across sessions. Starting a new RX
-     session could begin with stale decoder state.
-  3. **subghz_record_mode_flag not cleared**: Entering the Read scene after
-     a Read Raw session could leave `subghz_record_mode_flag=1`, causing the
-     event loop to skip the pulse handler path entirely.
-
-### Changed
-
-- **Sub-GHz Read scene — Flipper-consistent behavior**:
-  - RX auto-starts on scene entry (no "Press OK to listen" idle screen)
-  - L/R buttons retune frequency while actively receiving (live retune)
-  - History list auto-opens when first signal is decoded
-  - Newest signal auto-selected in history list
-  - History preserved across child scene navigation (ReceiverInfo, Config)
-  - Config accessible via DOWN during active RX (not just idle)
-  - BACK exits scene directly instead of requiring two presses (stop → exit)
-  - Bottom bar updated to show available actions contextually
-
-### Fixed
-
-- **Sub-GHz Read crash** — fixed three bugs that caused a consistent crash
-  shortly after launching the Read operation in the new scene-based Sub-GHz UI:
-  1. **Missing decoder init**: `subghz_decenc_init()` was never called, leaving
-     all function pointers in `subghz_decenc_ctl` NULL. Calling
-     `subghz_decenc_read()` dereferenced a NULL function pointer → HardFault.
-  2. **Uninitialized ring buffer**: `subghz_record_mode_flag` was set to 1
-     without calling `sub_ghz_ring_buffers_init()`, causing the ISR to write
-     raw pulse data into an uninitialized ring buffer → memory corruption.
-  3. **Pulse data never fed to decoder**: `Q_EVENT_SUBGHZ_RX` events were
-     mapped to a generic scene event without extracting the pulse duration.
-     `subghz_pulse_handler()` was never called, so protocol decoders never ran.
-  - Fix adds `subghz_decenc_init()` at scene app startup, removes the
-    incorrect `subghz_record_mode_flag` usage from the Read scene, and
-    processes pulses directly in the event loop via the `subghz_pulse_handler`
-    function pointer.
-  - RSSI now updates via periodic 200ms timeout during active RX instead of
-    on every pulse event, avoiding excessive display redraws.
-
-### Added
 
 - **Sub-GHz Playlist Player** — new scene that reads `.txt` playlist files from
   `/SUBGHZ/playlist/` and transmits each referenced `.sub` file sequentially.
@@ -1268,31 +1517,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bridge functions**: `*_ext()` wrappers in `m1_sub_ghz.c` expose static
   radio control, RSSI read, protocol TX, and waveform functions to scene files
 
-### Changed
-
-- **SiN360 fork sync** — merged sincere360/M1_SiN360 v0.9.0.4
-  (`sincere360/main`, `997c9ce`) using `ours` strategy to record ancestry.
-  SiN360 includes LCD settings with SD persistence, screen orientation,
-  IR remote mode, expanded IR protocols, SPI handshake fix, NFC tools
-  (Cyborg Detector, Fuzzer, Write URL, Utils), and IR file loader.  Many
-  features already present in Hapax or planned for cherry-pick.  No files
-  changed; merge recorded for branch comparison and future cherry-picks.
-
-- **C3 fork sync** — merged bedge117/M1 C3.12 (`bedge117/main`, `8842866`)
-  using `ours` strategy to record ancestry.  C3 includes RTC/NTP sync,
-  BadUSB forced type, PicoPass/iCLASS support, and 56 Sub-GHz protocols —
-  most already present in Hapax or planned for cherry-pick.  No files
-  changed; merge recorded for branch comparison and future cherry-picks.
-
-- **Upstream sync** — merged Monstatek/M1 upstream (`monstatek/main`) using
-  `ours` strategy to resolve GitHub's "behind" indicator.  Upstream commits
-  (`bb619f9`, `217ca99`) add documentation files and a v0.8.0.1 Release
-  binary — none applicable to the Hapax fork (ESP32 firmware is UART-based,
-  Release/ binary already gitignored, documentation superseded by Hapax
-  docs).  No files changed; merge recorded for branch comparison only.
-
-### Added
-
 - **IR database expansion** — imported 1,296 curated IR remote files from
   [Flipper-IRDB](https://github.com/Lucaslhm/Flipper-IRDB) (CC0 license,
   commit `ed18b8dc`) into `ir_database/`.  Covers TVs (395), ACs (158),
@@ -1315,11 +1539,131 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **m1_menu.c simplified** — Removed ~400 lines of individual submenu item definitions and
+  conditional compilation variants.  Each module entry now uses a single-line scene entry
+  point (e.g. `rfid_scene_entry`) with `num_submenu_items = 0`, matching the Sub-GHz pattern.
+  BadUSB and Apps retain direct function calls (single-function modules, no submenus).
+- **Scene-based architecture is now complete** — All 9 modules with submenus (Sub-GHz, RFID,
+  NFC, Infrared, GPIO, WiFi, Bluetooth, Games, Settings) use the scene manager.  Only BadUSB
+  and Apps (single-function leaf items) remain as direct function calls.
+- **Sub-GHz menu expanded to 11 items** — Added Spectrum Analyzer, RSSI Meter, Freq Scanner,
+  Weather Station, Brute Force, and wired up Add Manually (was a no-op).  Now matches C3
+  feature parity.  Menu scrolls with 6 visible items and scrollbar position indicator.
+- **CI: skip builds for non-compilation changes** — Added `paths-ignore` filters to
+  `ci.yml` so that PRs and pushes touching only documentation, database files, IDE
+  configs, or CI workflow files no longer trigger a firmware build.  Updated `CLAUDE.md`
+  Workflow Rules and `.github/GUIDELINES.md` to instruct agents and contributors that
+  builds are not required for such changes.
+- **Sub-GHz menu: Flipper-style selection list** — Removed the full-width "OK" button bar
+  from the Sub-GHz main menu scene and replaced it with a right-edge scrollbar position
+  indicator.  All 6 menu items now display without scrolling, using the full vertical space.
+- **Sub-GHz Saved action menu** — Removed the "OK" button bar from the Emulate / Rename /
+  Delete action menu and redistributed item spacing to fill the available screen area evenly
+  (17px per item instead of 13px).
+- **Documentation**: Added scene-based application architecture guidance and updated button
+  bar rules in `CLAUDE.md` to prohibit "OK"-only button bars on selection lists.
+- **Documentation**: Scene-based architecture is now **mandatory** for all modules.
+  `CLAUDE.md` includes a migration status table (Sub-GHz done, 9 modules pending),
+  step-by-step migration instructions for agents, and the blocking-delegate pattern
+  for wrapping legacy functions without rewriting them.
+
+- **Renamed release binary suffix `_SD.bin` → `_wCRC.bin`** — aligns Hapax release
+  file naming with Monstatek Official (`MonstaTek_M1_v0800_wCRC.bin`) and
+  C3/bedge117 (`M1_v0800_C3.12_wCRC.bin`). Affected: CMake output filename,
+  CI workflow artifact paths, firmware download source defaults, and documentation.
+- **Removed redundant "Back" labels from all app button bars and menus** — the
+  hardware back button is self-explanatory. Button bars now only show hints for
+  non-obvious directional actions (Config, Save, OK:Listen, etc.), freeing
+  screen space on the 128px display. Affected apps: Sub-GHz (all scenes),
+  Bluetooth, 802.15.4, BadUSB, BadBT, Infrared, IR Universal, CAN, Settings.
+- **Removed "Back" from Sub-GHz saved file action menus** — the action menu
+  (Emulate / Rename / Delete) no longer includes a redundant "Back" item.
+- **Documentation**: Added UI / Button Bar Rules to CLAUDE.md prohibiting
+  "Back" labels in button bars and action menus.
+- **Redistributed Sub-GHz saved action menu layout** — after removing the
+  "Back" item (3 items instead of 4), increased row height to fill the
+  available vertical space evenly (13px rows in scene version, 16px in legacy).
+- **Documentation**: Added layout redistribution rule to CLAUDE.md — when
+  item count changes, recompute row height to fill the display zone evenly.
+
+- **Sub-GHz Read scene — Flipper-consistent behavior**:
+  - RX auto-starts on scene entry (no "Press OK to listen" idle screen)
+  - L/R buttons retune frequency while actively receiving (live retune)
+  - History list auto-opens when first signal is decoded
+  - Newest signal auto-selected in history list
+  - History preserved across child scene navigation (ReceiverInfo, Config)
+  - Config accessible via DOWN during active RX (not just idle)
+  - BACK exits scene directly instead of requiring two presses (stop → exit)
+  - Bottom bar updated to show available actions contextually
+
+- **SiN360 fork sync** — merged sincere360/M1_SiN360 v0.9.0.4
+  (`sincere360/main`, `997c9ce`) using `ours` strategy to record ancestry.
+  SiN360 includes LCD settings with SD persistence, screen orientation,
+  IR remote mode, expanded IR protocols, SPI handshake fix, NFC tools
+  (Cyborg Detector, Fuzzer, Write URL, Utils), and IR file loader.  Many
+  features already present in Hapax or planned for cherry-pick.  No files
+  changed; merge recorded for branch comparison and future cherry-picks.
+
+- **C3 fork sync** — merged bedge117/M1 C3.12 (`bedge117/main`, `8842866`)
+  using `ours` strategy to record ancestry.  C3 includes RTC/NTP sync,
+  BadUSB forced type, PicoPass/iCLASS support, and 56 Sub-GHz protocols —
+  most already present in Hapax or planned for cherry-pick.  No files
+  changed; merge recorded for branch comparison and future cherry-picks.
+
+- **Upstream sync** — merged Monstatek/M1 upstream (`monstatek/main`) using
+  `ours` strategy to resolve GitHub's "behind" indicator.  Upstream commits
+  (`bb619f9`, `217ca99`) add documentation files and a v0.8.0.1 Release
+  binary — none applicable to the Hapax fork (ESP32 firmware is UART-based,
+  Release/ binary already gitignored, documentation superseded by Hapax
+  docs).  No files changed; merge recorded for branch comparison only.
+
 - Renamed `hardware/` directory to `cad/` to avoid case-insensitive name
   collision with `HARDWARE.md` (which upstream Monstatek/M1 places at
   repo root).
 
+- **Documentation: Public Forks Tracker** — added a "Public Forks Tracker"
+  section to `CLAUDE.md` with a table of all known Monstatek/M1 public forks,
+  their latest commit hashes/dates (UTC), last-reviewed timestamps, and
+  instructions for agents to discover new forks and keep the table current.
+
 ### Fixed
+
+- **Firmware update menu overflow**: The 4th menu item ("Download") no longer
+  overflows into the info box below. Switched from the tall info box (Y=32) to
+  the short info box (Y=42) and condensed the version display from three rows
+  to two (file name + compact "old > new" version line).
+
+- **Sub-GHz signal detection not working** — fixed three issues preventing the
+  Read scene from decoding captured signals:
+  1. **ISR state machine not synchronized**: The pulse handler's return value
+     (PULSE_DET_EOP / PULSE_DET_IDLE) was discarded by the scene manager event
+     loop, leaving the ISR in NORMAL state permanently. This caused every RF
+     noise edge to flood the 256-item FreeRTOS queue, drowning actual signal
+     edges and preventing protocol decoders from accumulating enough pulses.
+  2. **No pulse handler state reset**: The `subghz_pulse_handler` static
+     `interpacket_gap` variable persisted across sessions. Starting a new RX
+     session could begin with stale decoder state.
+  3. **subghz_record_mode_flag not cleared**: Entering the Read scene after
+     a Read Raw session could leave `subghz_record_mode_flag=1`, causing the
+     event loop to skip the pulse handler path entirely.
+
+- **Sub-GHz Read crash** — fixed three bugs that caused a consistent crash
+  shortly after launching the Read operation in the new scene-based Sub-GHz UI:
+  1. **Missing decoder init**: `subghz_decenc_init()` was never called, leaving
+     all function pointers in `subghz_decenc_ctl` NULL. Calling
+     `subghz_decenc_read()` dereferenced a NULL function pointer → HardFault.
+  2. **Uninitialized ring buffer**: `subghz_record_mode_flag` was set to 1
+     without calling `sub_ghz_ring_buffers_init()`, causing the ISR to write
+     raw pulse data into an uninitialized ring buffer → memory corruption.
+  3. **Pulse data never fed to decoder**: `Q_EVENT_SUBGHZ_RX` events were
+     mapped to a generic scene event without extracting the pulse duration.
+     `subghz_pulse_handler()` was never called, so protocol decoders never ran.
+  - Fix adds `subghz_decenc_init()` at scene app startup, removes the
+    incorrect `subghz_record_mode_flag` usage from the Read scene, and
+    processes pulses directly in the event loop via the `subghz_pulse_handler`
+    function pointer.
+  - RSSI now updates via periodic 200ms timeout during active RX instead of
+    on every pulse event, avoiding excessive display redraws.
 
 - **Sub-GHz recording stability** — removed protocol decoder polling
   (`subghz_decenc_read()`) from the `Q_EVENT_SUBGHZ_RX` handler in
@@ -1329,12 +1673,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   activity.  Decoding still works normally in Read and Weather Station modes.
   (Ref: bedge117/M1 C3.4 crash fix.)
 
+## [0.9.0.27] - 2026-04-06
+
+### Added
+
+- 5 Sub-GHz tools added to scene menu: Spectrum Analyzer, RSSI Meter, Freq Scanner, Weather Station, Brute Force — now 11 menu items matching C3 parity
+
 ### Changed
 
-- **Documentation: Public Forks Tracker** — added a "Public Forks Tracker"
-  section to `CLAUDE.md` with a table of all known Monstatek/M1 public forks,
-  their latest commit hashes/dates (UTC), last-reviewed timestamps, and
-  instructions for agents to discover new forks and keep the table current.
+- CI: skip builds for non-compilation changes (documentation, databases, IDE configs, CI workflow files)
+- Documentation: mandated scene-based architecture for all modules in CLAUDE.md, added migration guide
+
+## [0.9.0.26] - 2026-04-06
+
+### Changed
+
+- Sub-GHz menu and saved action scenes — removed "OK" button bar, added right-edge scrollbar position indicator; items fill available vertical space
+
+## [0.9.0.25] - 2026-04-06
+
+### Fixed
+
+- Firmware update menu overflow — 4th item ("Download") no longer overflows into the info box; switched to short info box layout
+
+## [0.9.0.24] - 2026-04-06
+
+### Changed
+
+- Renamed release binary suffix `_SD.bin` → `_wCRC.bin` — aligns with Monstatek Official and C3/bedge117 naming convention
+
+## [0.9.0.23] - 2026-04-06
+
+### Added
+
+- C3 (bedge117) as third default firmware download source in `fw_sources.txt`
+
+## [0.9.0.22] - 2026-04-06
+
+### Added
+
+- WiFi Firmware Download — browse and download firmware images from GitHub Releases directly to SD card; configurable sources via `fw_sources.txt`; real-time download progress bar
+- Reusable HTTP client (`m1_http_client.c/h`) for API requests and large file downloads with HTTPS, redirect following, and progress callbacks
+- Minimal JSON parser (`m1_json_mini.c/h`) for GitHub API responses — no heap allocation
+- ESP32 AT TCP/SSL and HTTP command definitions (`AT+HTTPCLIENT`, `AT+CIPSTART`, etc.)
+- WiFi state accessors: `wifi_is_connected()` and `wifi_get_connected_ssid()`
+
+## [0.9.0.21] - 2026-04-04
+
+### Changed
+
+- Removed redundant "Back" labels from all app button bars and action menus — hardware back button is self-explanatory
+- Redistributed Sub-GHz saved action menu layout for 3-item spacing after removing Back item
+
+## [0.9.0.20] - 2026-04-04
+
+### Fixed
+
+- Sub-GHz signal detection not working — synchronized ISR state machine (`PULSE_DET_EOP`/`PULSE_DET_IDLE` return values were discarded), added pulse handler state reset, cleared stale `subghz_record_mode_flag`
+
+### Changed
+
+- Sub-GHz Read scene — Flipper-consistent behavior: RX auto-starts on entry, L/R live retune, history auto-opens on first decode, BACK exits directly
+
+## [0.9.0.19] - 2026-04-04
+
+### Fixed
+
+- Sub-GHz Read crash — added missing `subghz_decenc_init()` (NULL function pointer → HardFault), fixed pulse data never fed to decoder, removed incorrect `subghz_record_mode_flag` usage from Read scene
+
+## [0.9.0.18] - 2026-04-04
+
+### Added
+
+- Sub-GHz Playlist Player — reads `.txt` playlist files from `/SUBGHZ/playlist/` and transmits each referenced `.sub` file sequentially; adjustable repeat count; Flipper path remapping; curated UberGuidoZ playlist files included
+
+## [0.9.0.17] - 2026-04-04
+
+### Added
+
+- IR database expansion — imported 1,296 curated IR remote files from Flipper-IRDB (CC0 license) into `ir_database/`; total IR library now 1,412 files
+- Sub-GHz signal database — 313 curated `.sub` files from UberGuidoZ/Flipper (GPLv3) in `subghz_database/`
+
+## [0.9.0.16] - 2026-04-04
+
+### Added
+
+- Sub-GHz Scene Manager framework — Flipper-inspired stack-based scene architecture with `on_enter`/`on_event`/`on_exit`/`draw` callbacks, button bar, status bar, and RSSI bar renderers
+- Sub-GHz scenes: Menu (5 items), Read (protocol decode + history), Read Raw (oscilloscope waveform), Receiver Info (signal detail), Config, Save flow (name → success → unsaved dialog), Saved (file browser + action menu), Freq Analyzer wrapper
+- Bridge functions (`*_ext()` wrappers) exposing static radio control, RSSI read, protocol TX, and waveform functions to scene files
+
+### Changed
+
+- SiN360 fork sync — merged sincere360/M1_SiN360 v0.9.0.4 using `ours` strategy
+
+## [0.9.0.15] - 2026-04-02
+
+### Changed
+
+- Renamed `hardware/` directory to `cad/` to avoid case-insensitive name collision with `HARDWARE.md`
+
+## [0.9.0.14] - 2026-04-02
+
+### Added
+
+- Enclosure STEP files — 6 M1 enclosure 3D CAD models (STEP AP214) under `cad/step/`
+
+## [0.9.0.13] - 2026-04-02
+
+### Added
+
+- Public Forks Tracker section in CLAUDE.md — table of all known Monstatek/M1 public forks with commit hashes, dates, and review status
+
+### Fixed
+
+- Sub-GHz recording stability — removed protocol decoder polling (`subghz_decenc_read()`) from the `Q_EVENT_SUBGHZ_RX` handler to prevent ring-buffer overflows under sustained RF activity
+
+## [0.9.0.12] - 2026-04-02
+
+### Changed
+
+- Added `[Unreleased]` changelog convention and upstream merge policy to CLAUDE.md
+- CI: skip release builds for docs-only merges to main
+
+## [0.9.0.11] - 2026-04-02
+
+### Removed
+
+- Legacy `Release/` folder — removed STM32CubeIDE v0.8.0.0 build artifacts; added `Release/` to `.gitignore`
 
 ## [0.9.0.10] - 2026-04-02
 
@@ -1687,16 +2152,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line, "v{major}.{minor}.{build}.{rc}" on the second line, and "Hapax" on the third line.
   Previously showed "M1 BY Hapax" and "v0.9.0.x-Hapax.x" (two lines only).
 
-### Fixed
-
-- **SD card firmware update now works from stock Monstatek firmware** — the `_SD.bin` binary
-  now includes a self-referential CRC at offset `0xFFC14` (the stock `FW_CRC_ADDRESS`) that
-  satisfies the stock firmware's post-flash `bl_crc_check()` verification. Previously, the
-  Hapax CRC extension magic sentinel (`0x43524332`) occupied that offset, causing the stock
-  firmware to always fail the CRC comparison with "Update failed!".
-
-### Changed
-
 - **CRC extension block shifted from offset 20 → 24** in the 1 KB reserved area. The 4-byte
   stock-compatible CRC now occupies offset 20 (`0xFFC14`), and the Hapax CRC extension block
   (CRC2 magic + size + CRC) starts at offset 24 (`0xFFC18`). Hapax metadata moved from
@@ -1714,6 +2169,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`append_crc32.py` now injects three CRC values**: the Hapax CRC (firmware-only region),
   the stock-compatible self-referential CRC (GF(2) linear solver), and the trailing file CRC.
   The self-referential CRC is verified immediately after computation to catch solver errors.
+
+### Fixed
+
+- **SD card firmware update now works from stock Monstatek firmware** — the `_SD.bin` binary
+  now includes a self-referential CRC at offset `0xFFC14` (the stock `FW_CRC_ADDRESS`) that
+  satisfies the stock firmware's post-flash `bl_crc_check()` verification. Previously, the
+  Hapax CRC extension magic sentinel (`0x43524332`) occupied that offset, causing the stock
+  firmware to always fail the CRC comparison with "Update failed!".
 
 ## [0.9.0.1] - 2026-03-27
 
@@ -1745,25 +2208,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — derive their versioned names from this variable, eliminating the separate
   `M1_RELEASE_NAME` variable.
 
-### Fixed
-
-- **`m1_fw_update_bl.c` — SD-card flash now succeeds**: `bl_flash_binary()` was calling
-  `bl_crc_check()`, which reads the "stored CRC" from `FW_CRC_ADDRESS` (`0x080FFC14`).
-  Our binary places the CRC2 magic sentinel (`0x43524332`) there, not the CRC value itself,
-  so `bl_crc_check()` always returned `BL_CODE_CHK_ERROR` and flashing appeared to succeed
-  but then reported failure. Fixed by replacing the call with `bl_verify_bank_crc()`, which
-  correctly interprets the CRC extension block (magic/size/crc at offsets 0/4/8 from
-  `FW_CRC_EXT_BASE = 0x080FFC14`).
-
-- **Documentation: `documentation/hardware_schematics.md`** — removed `NFC_CS` and `NFC_IRQ`
-  from the 125 kHz LF-RFID signal table where they were incorrectly listed; added a note
-  clarifying they belong to the 13.56 MHz HF/NFC transceiver on the main board.
-
-- **signal_gen.c**: Replace undeclared `BUTTON_EVENT_HOLD` with `BUTTON_EVENT_LCLICK` (long-press
-  enum value) for UP/DOWN navigation in the signal generator screen; fixes CI build failure.
-
-### Changed
-
 - **Documentation: `documentation/hardware_schematics.md`** — expanded from partial 2-sheet
   extract to full 7-sheet hardware inventory. Added IC designators for NFC board (U2–U7,
   Q4), crystal refs (Y1/Y2), SWD/USB-UART header pinouts, LCD1 spec (128×64, 1/65 duty),
@@ -1771,17 +2215,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   complete power-rail summary, passive component groupings (R/C/L), test points, and
   mounting holes. Capability summary updated with IR TX/RX, RGB LED, FDCAN, and corrected
   component references throughout.
-
-### Added
-
-- **CI: Manual build-and-release workflow** (`.github/workflows/build-release.yml`):
-  `workflow_dispatch`-only GitHub Actions workflow that installs the ARM GCC toolchain,
-  builds the firmware with CMake + Ninja, injects CRC32 + Hapax metadata via
-  `append_crc32.py`, and publishes a GitHub Release with `.elf`, `.hex`, raw `.bin`, and
-  `_wCRC.bin` artifacts. Tag and release title are auto-derived from source versions but
-  can be overridden as inputs.
-
-### Changed
 
 - **Renamed `--c3-revision` → `--hapax-revision`** in `tools/append_crc32.py` and all
   callers (`CMakeLists.txt`, `README.md`, `CLAUDE.md`). The old `--c3-revision` alias is
@@ -1804,8 +2237,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Buzzer continuous-tone API**: `m1_buzzer_tone_start(freq)` and `m1_buzzer_tone_stop()`
   — start/stop a tone without an auto-stop timer, used by Music Player and Signal Gen.
 
-### Changed
-
 - Documentation governance: added "Documentation Update Rules" to `CLAUDE.md` and expanded
   `.github/GUIDELINES.md` with project-specific CHANGELOG format guidance; all future agent
   sessions are required to update `CHANGELOG.md`, `README.md`, and
@@ -1814,7 +2245,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation: expanded `HARDWARE.md` with MCU specs, RAM, speed, and peripheral table;
   added secondary-reference note in `CLAUDE.md` pointing to new hardware schematics doc
 
+### Fixed
+
+- **`m1_fw_update_bl.c` — SD-card flash now succeeds**: `bl_flash_binary()` was calling
+  `bl_crc_check()`, which reads the "stored CRC" from `FW_CRC_ADDRESS` (`0x080FFC14`).
+  Our binary places the CRC2 magic sentinel (`0x43524332`) there, not the CRC value itself,
+  so `bl_crc_check()` always returned `BL_CODE_CHK_ERROR` and flashing appeared to succeed
+  but then reported failure. Fixed by replacing the call with `bl_verify_bank_crc()`, which
+  correctly interprets the CRC extension block (magic/size/crc at offsets 0/4/8 from
+  `FW_CRC_EXT_BASE = 0x080FFC14`).
+
+- **Documentation: `documentation/hardware_schematics.md`** — removed `NFC_CS` and `NFC_IRQ`
+  from the 125 kHz LF-RFID signal table where they were incorrectly listed; added a note
+  clarifying they belong to the 13.56 MHz HF/NFC transceiver on the main board.
+
+- **signal_gen.c**: Replace undeclared `BUTTON_EVENT_HOLD` with `BUTTON_EVENT_LCLICK` (long-press
+  enum value) for UP/DOWN navigation in the signal generator screen; fixes CI build failure.
+
+- Crash on RFID read caused by rogue `pulse_handler` call in `TIM1_CC` ISR
+
 ### Added
+
+- **CI: Manual build-and-release workflow** (`.github/workflows/build-release.yml`):
+  `workflow_dispatch`-only GitHub Actions workflow that installs the ARM GCC toolchain,
+  builds the firmware with CMake + Ninja, injects CRC32 + Hapax metadata via
+  `append_crc32.py`, and publishes a GitHub Release with `.elf`, `.hex`, raw `.bin`, and
+  `_wCRC.bin` artifacts. Tag and release title are auto-derived from source versions but
+  can be overridden as inputs.
 
 - `documentation/hardware_schematics.md`: schematic-derived hardware reference covering ICs,
   power subsystem, RF subsystems, interface signals, and a capability assessment table mapping
@@ -1910,13 +2367,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ESP32 serial flasher: MD5 verification, RX flush before retries, watchdog reset during TX
 - Post-build CRC + Hapax metadata injection via `tools/append_crc32.py` (`--hapax-revision`)
 
-### Fixed
-
-- Crash on RFID read caused by rogue `pulse_handler` call in `TIM1_CC` ISR
-
----
-
-## [1.0.0] - 2026-02-05
+## [0.8.0.0] - 2026-02-05
 
 ### Added
 

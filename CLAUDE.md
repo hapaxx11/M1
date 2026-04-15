@@ -460,8 +460,29 @@ to build.**
   - Documentation / process / tooling change → `### Changed` with a "Documentation" prefix
 - **When NOT to add an entry**: Pure whitespace / formatting commits with zero functional
   effect.  Every other change needs an entry.
+- **Retroactive changelog edits** are permitted **only** when **both** of the
+  following conditions are met:
+  1. The change increases the accuracy of the changelog to better match the
+     actual content of its corresponding release build (e.g. correcting a
+     mis-attributed protocol name, fixing an incorrect version date, adding a
+     missing entry for a feature that shipped in that release).
+  2. The intent of the change is in the public interest and is non-judgemental
+     and non-harmful (e.g. factual corrections, clarifications — never
+     retroactive editorialising, blame assignment, or content that could harm
+     any individual or group).
+  If either condition is not met, the retroactive edit must not be made.
+  Retroactive edits should be limited to already-released version sections —
+  the `[Unreleased]` section is always freely editable.
 - Do **not** manually create versioned headings — always add entries under
   `## [Unreleased]` and let CI stamp the version on release.
+- **CI stamper safety rule**: The `build-release.yml` changelog stamper uses
+  `text.replace("## [Unreleased]", …, 1)` — a simple first-occurrence text
+  replace.  **Never** write the literal string `## [Unreleased]` anywhere in
+  changelog entry body text, including inside backtick code spans, markdown
+  code blocks, or quoted descriptions.  If the stamper matches body text
+  instead of the heading, it injects version headings mid-paragraph and
+  corrupts the changelog (this happened at v0.9.0.78–83).  When referring to
+  the heading in prose, omit the `## ` prefix — write `[Unreleased]` instead.
 
 ### README.md — update when user-visible descriptions are stale
 
