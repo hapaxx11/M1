@@ -2134,7 +2134,7 @@ static void builder_make_label(char *dst, const char *src)
 *   sel       — currently highlighted slot index
 */
 static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
-uint8_t sel)
+	uint8_t sel)
 {
 	const uint8_t item_h  = m1_menu_item_h();
 	const uint8_t text_ofs = item_h - 1;
@@ -2145,7 +2145,7 @@ uint8_t sel)
 	{
 		scroll = sel - max_vis + 1;
 		if (scroll > n_slots - max_vis)
-		scroll = n_slots - max_vis;
+			scroll = n_slots - max_vis;
 	}
 
 	m1_u8g2_firstpage();
@@ -2175,7 +2175,7 @@ uint8_t sel)
 
 		/* Assignment label (right side) */
 		const char *lbl = (slots[idx].src == SLOT_SRC_NONE)
-		? "(empty)" : slots[idx].label;
+			? "(empty)" : slots[idx].label;
 		u8g2_uint_t lbl_w = u8g2_GetStrWidth(&m1_u8g2, lbl);
 		u8g2_DrawStr(&m1_u8g2, M1_MENU_TEXT_W - lbl_w - 2, y + text_ofs, lbl);
 
@@ -2190,11 +2190,11 @@ uint8_t sel)
 		uint8_t handle_h = (track_h * max_vis) / n_slots;
 		if (handle_h < 4) handle_h = 4;
 		uint8_t handle_y = track_y +
-		(sel * (track_h - handle_h)) / (n_slots - 1);
+			(sel * (track_h - handle_h)) / (n_slots - 1);
 		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y,
-		M1_MENU_SCROLLBAR_W, track_h);
+			M1_MENU_SCROLLBAR_W, track_h);
 		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
-		M1_MENU_SCROLLBAR_W, handle_h);
+			M1_MENU_SCROLLBAR_W, handle_h);
 	}
 
 	/* Bottom hint: OK = assign, RIGHT = save */
@@ -2243,9 +2243,9 @@ static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 	while (1)
 	{
 		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-		continue;
+			continue;
 		if (q.q_evt_type != Q_EVENT_KEYPAD)
-		continue;
+			continue;
 		xQueueReceive(button_events_q_hdl, &bs, 0);
 
 		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2255,9 +2255,9 @@ static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 		}
 
 		if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-		sel = (sel > 0) ? sel - 1 : TMPL_COUNT - 1;
+			sel = (sel > 0) ? sel - 1 : TMPL_COUNT - 1;
 		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-		sel = (sel + 1) % TMPL_COUNT;
+			sel = (sel + 1) % TMPL_COUNT;
 		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			/* Populate slot names for chosen template */
@@ -2323,9 +2323,9 @@ static bool builder_slot_action(ir_builder_slot_t *slot)
 	while (1)
 	{
 		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-		continue;
+			continue;
 		if (q.q_evt_type != Q_EVENT_KEYPAD)
-		continue;
+			continue;
 		xQueueReceive(button_events_q_hdl, &bs, 0);
 
 		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2334,9 +2334,9 @@ static bool builder_slot_action(ir_builder_slot_t *slot)
 			return false; /* User cancelled — no change */
 		}
 		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-		asel = (asel > 0) ? asel - 1 : SLOT_ACTION_COUNT - 1;
+			asel = (asel > 0) ? asel - 1 : SLOT_ACTION_COUNT - 1;
 		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-		asel = (asel + 1) % SLOT_ACTION_COUNT;
+			asel = (asel + 1) % SLOT_ACTION_COUNT;
 		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			if (asel == SLOT_ACTION_LEARN)
@@ -2351,7 +2351,7 @@ static bool builder_slot_action(ir_builder_slot_t *slot)
 					/* Build display label from protocol name */
 					extern const char * const irmp_protocol_names[];
 					builder_make_label(slot->label,
-					irmp_protocol_names[captured.protocol]);
+						irmp_protocol_names[captured.protocol]);
 					xQueueReset(main_q_hdl);
 					return true;
 				}
@@ -2427,9 +2427,9 @@ ir_builder_slot_t *slot)
 	while (1)
 	{
 		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-		continue;
+			continue;
 		if (q.q_evt_type != Q_EVENT_KEYPAD)
-		continue;
+			continue;
 		xQueueReceive(button_events_q_hdl, &bs, 0);
 
 		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2438,9 +2438,9 @@ ir_builder_slot_t *slot)
 			return false;
 		}
 		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-		pick_sel = (pick_sel > 0) ? pick_sel - 1 : disp_count - 1;
+			pick_sel = (pick_sel > 0) ? pick_sel - 1 : disp_count - 1;
 		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-		pick_sel = (pick_sel + 1) % disp_count;
+			pick_sel = (pick_sel + 1) % disp_count;
 		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			if (pick_sel < cmd_count && s_commands[pick_sel].valid)
@@ -2512,9 +2512,9 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 		while (!exit_dir)
 		{
 			if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-			continue;
+				continue;
 			if (q.q_evt_type != Q_EVENT_KEYPAD)
-			continue;
+				continue;
 			xQueueReceive(button_events_q_hdl, &bs, 0);
 
 			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2524,7 +2524,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 				{
 					/* Restore globals and return */
 					memcpy(s_browse_names, saved_browse_names,
-					sizeof(s_browse_names));
+						sizeof(s_browse_names));
 					s_browse_count     = saved_browse_count;
 					s_browse_page      = saved_browse_page;
 					s_browse_selection = saved_browse_sel;
@@ -2537,12 +2537,12 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 			else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				s_browse_selection = (s_browse_selection > 0)
-				? s_browse_selection - 1 : s_browse_count - 1;
+					? s_browse_selection - 1 : s_browse_count - 1;
 			}
 			else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				s_browse_selection = (s_browse_selection < s_browse_count - 1)
-				? s_browse_selection + 1 : 0;
+					? s_browse_selection + 1 : 0;
 			}
 			else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 			{
@@ -2574,7 +2574,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 				path_append(child_path, s_browse_names[s_browse_selection]);
 
 				if (f_stat(child_path, &fno) == FR_OK &&
-				(fno.fattrib & AM_DIR))
+					(fno.fattrib & AM_DIR))
 				{
 					/* Navigate into subdirectory */
 					snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", child_path);
@@ -2585,12 +2585,12 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 				{
 					/* Let user pick a signal from this file */
 					bool picked = builder_pick_signal_from_file(child_path,
-					slot);
+						slot);
 					if (picked)
 					{
 						/* Restore globals and return success */
 						memcpy(s_browse_names, saved_browse_names,
-						sizeof(s_browse_names));
+							sizeof(s_browse_names));
 						s_browse_count     = saved_browse_count;
 						s_browse_page      = saved_browse_page;
 						s_browse_selection = saved_browse_sel;
@@ -2598,7 +2598,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 					}
 					/* User backed out of file — redraw dir listing */
 					s_browse_count = scan_directory_page(browse_path,
-					s_browse_page, BROWSE_NAMES_MAX);
+						s_browse_page, BROWSE_NAMES_MAX);
 				}
 			}
 
@@ -2688,7 +2688,12 @@ static bool builder_save_remote(ir_builder_slot_t *slots, uint8_t n_slots)
 		return false;
 	}
 
-	/* Write each assigned slot as a signal */
+	/* Write each assigned slot as a signal.
+	 * Cache last-parsed filepath so consecutive slots from the same source
+	 * file don't redundantly re-read the SD card. */
+	char last_parsed_path[IR_UNIVERSAL_PATH_MAX_LEN] = {0};
+	uint16_t last_parsed_cnt = 0;
+
 	for (uint8_t i = 0; i < n_slots && write_ok; i++)
 	{
 		if (slots[i].src == SLOT_SRC_NONE)
@@ -2713,8 +2718,21 @@ static bool builder_save_remote(ir_builder_slot_t *slots, uint8_t n_slots)
 		{
 			if (!slots[i].src_is_raw)
 			{
-				/* Parsed IRDB signal: re-parse from source to get data */
-				uint16_t cnt = parse_ir_file(slots[i].src_filepath);
+				/* Parsed IRDB signal: re-parse from source to get data
+				 * (skip if we already parsed this file for a previous slot) */
+				uint16_t cnt;
+				if (strcmp(last_parsed_path, slots[i].src_filepath) == 0)
+				{
+					cnt = last_parsed_cnt;
+				}
+				else
+				{
+					cnt = parse_ir_file(slots[i].src_filepath);
+					snprintf(last_parsed_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s",
+						slots[i].src_filepath);
+					last_parsed_cnt = cnt;
+				}
+
 				bool found = false;
 				for (uint16_t j = 0; j < cnt; j++)
 				{
@@ -2817,14 +2835,14 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 	char h, n;
 
 	if (needle == NULL || needle[0] == '\0')
-	return true;
+		return true;
 	if (haystack == NULL)
-	return false;
+		return false;
 
 	hl = strlen(haystack);
 	nl = strlen(needle);
 	if (nl > hl)
-	return false;
+		return false;
 
 	for (i = 0; i <= hl - nl; i++)
 	{
@@ -2834,9 +2852,9 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 			h = haystack[i + j];
 			n = needle[j];
 			if (h >= 'A' && h <= 'Z')
-			h = (char)(h + 32);
+				h = (char)(h + 32);
 			if (n >= 'A' && n <= 'Z')
-			n = (char)(n + 32);
+				n = (char)(n + 32);
 			if (h != n)
 			{
 				match = false;
@@ -2844,7 +2862,7 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 			}
 		}
 		if (match)
-		return true;
+			return true;
 	}
 	return false;
 } // static bool str_contains_icase(...)
@@ -2873,16 +2891,16 @@ static void search_ir_files(const char *root, const char *query)
 
 	res = f_opendir(&cat_dir, root);
 	if (res != FR_OK)
-	return;
+		return;
 
 	/* Level 1: categories (or files directly in root) */
 	while (s_search_count < IR_SEARCH_RESULTS_MAX)
 	{
 		res = f_readdir(&cat_dir, &cat_fno);
 		if (res != FR_OK || cat_fno.fname[0] == '\0')
-		break;
+			break;
 		if (cat_fno.fname[0] == '.')
-		continue;
+			continue;
 
 		strncpy(cat_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 		cat_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
@@ -2894,7 +2912,7 @@ static void search_ir_files(const char *root, const char *query)
 			if (is_ir_file(cat_fno.fname) && str_contains_icase(cat_fno.fname, query))
 			{
 				strncpy(s_search_results[s_search_count], cat_path,
-				IR_UNIVERSAL_PATH_MAX_LEN - 1);
+					IR_UNIVERSAL_PATH_MAX_LEN - 1);
 				s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 				s_search_count++;
 			}
@@ -2904,15 +2922,15 @@ static void search_ir_files(const char *root, const char *query)
 		/* Level 2: brands (or files directly in category) */
 		res = f_opendir(&brand_dir, cat_path);
 		if (res != FR_OK)
-		continue;
+			continue;
 
 		while (s_search_count < IR_SEARCH_RESULTS_MAX)
 		{
 			res = f_readdir(&brand_dir, &brand_fno);
 			if (res != FR_OK || brand_fno.fname[0] == '\0')
-			break;
+				break;
 			if (brand_fno.fname[0] == '.')
-			continue;
+				continue;
 
 			strncpy(brand_path, cat_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 			brand_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
@@ -2924,7 +2942,7 @@ static void search_ir_files(const char *root, const char *query)
 				if (is_ir_file(brand_fno.fname) && str_contains_icase(brand_fno.fname, query))
 				{
 					strncpy(s_search_results[s_search_count], brand_path,
-					IR_UNIVERSAL_PATH_MAX_LEN - 1);
+						IR_UNIVERSAL_PATH_MAX_LEN - 1);
 					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 					s_search_count++;
 				}
@@ -2934,15 +2952,15 @@ static void search_ir_files(const char *root, const char *query)
 			/* Level 3: device .ir files */
 			res = f_opendir(&dev_dir, brand_path);
 			if (res != FR_OK)
-			continue;
+				continue;
 
 			while (s_search_count < IR_SEARCH_RESULTS_MAX)
 			{
 				res = f_readdir(&dev_dir, &dev_fno);
 				if (res != FR_OK || dev_fno.fname[0] == '\0')
-				break;
+					break;
 				if (dev_fno.fname[0] == '.')
-				continue;
+					continue;
 
 				if (is_ir_file(dev_fno.fname) && str_contains_icase(dev_fno.fname, query))
 				{
@@ -2950,7 +2968,7 @@ static void search_ir_files(const char *root, const char *query)
 					file_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 					path_append(file_path, dev_fno.fname);
 					strncpy(s_search_results[s_search_count], file_path,
-					IR_UNIVERSAL_PATH_MAX_LEN - 1);
+						IR_UNIVERSAL_PATH_MAX_LEN - 1);
 					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 					s_search_count++;
 				}
@@ -2982,7 +3000,7 @@ static void ir_custom_builder_run(void)
 
 	/* Step 1: choose a template */
 	if (!builder_pick_template(&s_builder_n_slots, s_builder_slots))
-	return; /* User cancelled */
+		return; /* User cancelled */
 
 	/* Step 2: assign signals to slots */
 	builder_draw_slots(s_builder_slots, s_builder_n_slots, slot_sel);
@@ -2990,9 +3008,9 @@ static void ir_custom_builder_run(void)
 	while (1)
 	{
 		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-		continue;
+			continue;
 		if (q.q_evt_type != Q_EVENT_KEYPAD)
-		continue;
+			continue;
 		xQueueReceive(button_events_q_hdl, &bs, 0);
 
 		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
