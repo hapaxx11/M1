@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.97] - 2026-04-15
+
 ### Fixed
 
 - Config menus (Sub-GHz Config, LCD & Notifications settings): colon at end of
