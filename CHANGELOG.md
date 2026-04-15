@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **No more clipped text**: Long labels like "OK:Stop" and "OK:New" that extended past
     the 128px display edge are replaced with concise single-word labels in the correct
     column positions.
+## [0.9.0.90] - 2026-04-15
+
 ### Fixed
 
 - **OTA firmware download "Bad response" error** — HTTP response headers arriving
