@@ -39,6 +39,11 @@ extern bool http_is_ready_check(bool wifi_connected, bool hal_init, bool task_in
 /* Stub for the layered readiness check used inside http_get() / http_download_to_file() */
 extern http_status_t http_readiness_status(bool wifi_connected, bool hal_init, bool task_init);
 
+/* Stub implementation of parse_http_headers in tests/stubs/http_client_parse_impl.c */
+extern int http_parse_headers(const char *data, int data_len,
+                              uint32_t *content_length, char *location, uint16_t loc_size,
+                              int *header_end_offset, bool *is_chunked);
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -304,6 +309,186 @@ void test_readiness_status_wifi_checked_before_esp(void)
 	TEST_ASSERT_EQUAL_INT(HTTP_ERR_NO_WIFI, http_readiness_status(false, true, false));
 }
 
+/* ---- parse_http_headers: header parsing and fragmentation ---- */
+
+/* Regression: SSL fragmentation means the first tcp_recv() may not
+ * contain the full header block (\r\n\r\n).  parse_http_headers() must
+ * return 0 in this case so the caller can accumulate more data. */
+
+void test_parse_headers_incomplete_returns_zero(void)
+{
+	/* Simulates a fragmented response: first SSL record only has part
+	 * of the headers, no \r\n\r\n terminator. */
+	const char *partial = "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\n";
+	uint32_t content_length = 0;
+	int header_end = 0;
+	bool chunked = false;
+
+	int status = http_parse_headers(partial, (int)strlen(partial),
+	                                &content_length, NULL, 0,
+	                                &header_end, &chunked);
+
+	TEST_ASSERT_EQUAL_INT(0, status);
+	TEST_ASSERT_EQUAL_INT(0, header_end);
+}
+
+void test_parse_headers_complete_returns_status(void)
+{
+	const char *response = "HTTP/1.1 200 OK\r\n"
+	                       "Content-Length: 42\r\n"
+	                       "\r\n"
+	                       "body data here";
+	uint32_t content_length = 0;
+	int header_end = 0;
+	bool chunked = false;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, &chunked);
+
+	TEST_ASSERT_EQUAL_INT(200, status);
+	TEST_ASSERT_EQUAL_UINT32(42, content_length);
+	TEST_ASSERT_FALSE(chunked);
+	/* header_end_offset should point just past \r\n\r\n */
+	TEST_ASSERT_GREATER_THAN(0, header_end);
+	TEST_ASSERT_EQUAL_STRING("body data here", response + header_end);
+}
+
+void test_parse_headers_redirect_extracts_location(void)
+{
+	const char *response = "HTTP/1.1 302 Found\r\n"
+	                       "Location: https://cdn.example.com/file.bin\r\n"
+	                       "Content-Length: 0\r\n"
+	                       "\r\n";
+	uint32_t content_length = 0;
+	char location[256] = {0};
+	int header_end = 0;
+	bool chunked = false;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, location, sizeof(location),
+	                                &header_end, &chunked);
+
+	TEST_ASSERT_EQUAL_INT(302, status);
+	TEST_ASSERT_EQUAL_STRING("https://cdn.example.com/file.bin", location);
+}
+
+void test_parse_headers_chunked_encoding_detected(void)
+{
+	const char *response = "HTTP/1.1 200 OK\r\n"
+	                       "Transfer-Encoding: chunked\r\n"
+	                       "\r\n";
+	uint32_t content_length = 0;
+	int header_end = 0;
+	bool chunked = false;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, &chunked);
+
+	TEST_ASSERT_EQUAL_INT(200, status);
+	TEST_ASSERT_TRUE(chunked);
+}
+
+void test_parse_headers_chunked_case_insensitive(void)
+{
+	const char *response = "HTTP/1.1 200 OK\r\n"
+	                       "transfer-encoding: Chunked\r\n"
+	                       "\r\n";
+	uint32_t content_length = 0;
+	int header_end = 0;
+	bool chunked = false;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, &chunked);
+
+	TEST_ASSERT_EQUAL_INT(200, status);
+	TEST_ASSERT_TRUE(chunked);
+}
+
+void test_parse_headers_null_is_chunked_accepted(void)
+{
+	/* is_chunked can be NULL when caller doesn't care about chunked */
+	const char *response = "HTTP/1.1 200 OK\r\n"
+	                       "Content-Length: 100\r\n"
+	                       "\r\n";
+	uint32_t content_length = 0;
+	int header_end = 0;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, NULL);
+
+	TEST_ASSERT_EQUAL_INT(200, status);
+	TEST_ASSERT_EQUAL_UINT32(100, content_length);
+}
+
+void test_parse_headers_404_error(void)
+{
+	const char *response = "HTTP/1.1 404 Not Found\r\n"
+	                       "Content-Length: 0\r\n"
+	                       "\r\n";
+	uint32_t content_length = 0;
+	int header_end = 0;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, NULL);
+
+	TEST_ASSERT_EQUAL_INT(404, status);
+}
+
+void test_parse_headers_github_api_like_response(void)
+{
+	/* Simulates a large GitHub API response header set — the scenario
+	 * that triggered the original SSL fragmentation bug. */
+	const char *response =
+		"HTTP/1.1 200 OK\r\n"
+		"Server: GitHub.com\r\n"
+		"Content-Type: application/json; charset=utf-8\r\n"
+		"X-RateLimit-Limit: 60\r\n"
+		"X-RateLimit-Remaining: 59\r\n"
+		"X-RateLimit-Reset: 1700000000\r\n"
+		"Cache-Control: public, max-age=60, s-maxage=60\r\n"
+		"Vary: Accept, Accept-Encoding\r\n"
+		"ETag: \"abc123def456\"\r\n"
+		"X-GitHub-Request-Id: AAAA:1234:BBBB:CCCC:DDDDDDDD\r\n"
+		"Content-Length: 8192\r\n"
+		"\r\n"
+		"[{\"tag_name\":\"v0.9.0.89\"}]";
+	uint32_t content_length = 0;
+	int header_end = 0;
+	bool chunked = false;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, &chunked);
+
+	TEST_ASSERT_EQUAL_INT(200, status);
+	TEST_ASSERT_EQUAL_UINT32(8192, content_length);
+	TEST_ASSERT_FALSE(chunked);
+	TEST_ASSERT_GREATER_THAN(0, header_end);
+	/* Body should start with the JSON array */
+	TEST_ASSERT_EQUAL_UINT8('[', response[header_end]);
+}
+
+void test_parse_headers_only_terminator(void)
+{
+	/* Minimal valid response — just status line + terminator */
+	const char *response = "HTTP/1.0 204 No Content\r\n\r\n";
+	uint32_t content_length = 0;
+	int header_end = 0;
+
+	int status = http_parse_headers(response, (int)strlen(response),
+	                                &content_length, NULL, 0,
+	                                &header_end, NULL);
+
+	TEST_ASSERT_EQUAL_INT(204, status);
+	TEST_ASSERT_EQUAL_UINT32(0, content_length);
+	TEST_ASSERT_EQUAL_INT((int)strlen(response), header_end);
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -328,5 +513,14 @@ int main(void)
 	RUN_TEST(test_readiness_status_hal_deinit_returns_esp_not_ready);
 	RUN_TEST(test_readiness_status_task_not_init_returns_esp_not_ready);
 	RUN_TEST(test_readiness_status_wifi_checked_before_esp);
+	RUN_TEST(test_parse_headers_incomplete_returns_zero);
+	RUN_TEST(test_parse_headers_complete_returns_status);
+	RUN_TEST(test_parse_headers_redirect_extracts_location);
+	RUN_TEST(test_parse_headers_chunked_encoding_detected);
+	RUN_TEST(test_parse_headers_chunked_case_insensitive);
+	RUN_TEST(test_parse_headers_null_is_chunked_accepted);
+	RUN_TEST(test_parse_headers_404_error);
+	RUN_TEST(test_parse_headers_github_api_like_response);
+	RUN_TEST(test_parse_headers_only_terminator);
 	return UNITY_END();
 }
