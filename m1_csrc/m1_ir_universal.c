@@ -2261,7 +2261,8 @@ static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			/* Populate slot names for chosen template */
-			*n_slots = s_tmpl_slot_counts[sel];
+			uint8_t tmpl_slots = s_tmpl_slot_counts[sel];
+			*n_slots = (tmpl_slots <= IR_BUILDER_MAX_SLOTS) ? tmpl_slots : IR_BUILDER_MAX_SLOTS;
 			memset(slots, 0, sizeof(ir_builder_slot_t) * (*n_slots));
 			for (uint8_t i = 0; i < *n_slots; i++)
 			{
