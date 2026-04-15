@@ -42,6 +42,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Read Raw scene rebuilt to match Momentum firmware workflow** — Complete rewrite of
+  the Sub-GHz Read Raw scene with three distinct states (Start → Recording → Idle) and
+  a Momentum-aligned button bar that correctly maps physical buttons to display columns
+  (LEFT=Config/Erase, OK=REC/Stop/Send, RIGHT=Save).  Key improvements:
+  - **Button bar fixed**: Eliminated the mismatched `↓Config` in center / `OK:Rec` on
+    right layout.  All three button bar columns now correspond to their physical buttons
+    (LEFT column ← LEFT button, CENTER column ← OK button, RIGHT column ← RIGHT button).
+  - **Post-recording actions**: After stopping a recording, users can now Send (replay
+    the captured raw signal via OK), Save (rename with virtual keyboard via RIGHT), or
+    Erase (delete and start over via LEFT) — matching Flipper/Momentum's Read Raw UX.
+  - **BACK during recording stops (not exits)**: Pressing BACK while recording now stops
+    the capture and transitions to the Idle state, preserving the recording.  Previously
+    it would exit the scene entirely.
+  - **Status bar cleaned up**: Eliminated the separate sample count and state indicator
+    that competed for space.  Now shows a single combined string on the right side of the
+    status bar (e.g. "REC 42k" during recording, "42k spl" after recording).
+  - **Filename display**: After recording, the auto-generated filename is shown centered
+    in the waveform area (matching Momentum's loaded-key display pattern).
+  - **No more clipped text**: Long labels like "OK:Stop" and "OK:New" that extended past
+    the 128px display edge are replaced with concise single-word labels in the correct
+    column positions.
 - Documentation updated across `README.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`,
   `CONTRIBUTING.md`, `GUIDELINES.md`, and the Web Updater documentation to
   highlight Hapax's unique GitHub-first development model — automated CI/CD
