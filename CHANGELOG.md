@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Infrared: Universal Remote quick-access remotes** — Momentum-style category
+  quick-remotes (TV, AC, Audio, Projector, Fan, LED) accessible directly from
+  the Universal Remote dashboard.  Each category opens a visual button grid
+  with labeled buttons arranged like a real remote (e.g., Power, Vol+/−, Ch+/−,
+  Mute, OK, Menu for TV).  Navigation with D-pad, OK sends the highlighted
+  command.  First launch prompts user to select a brand/device from IRDB;
+  subsequent launches load the last-used device instantly.  RIGHT button
+  allows switching to a different device file.
+- **Infrared: Brute-force power scan** — Iterate through all known power codes
+  from the Universal_Power.ir file for a category (TV, Audio, Projector, Fan).
+  Shows progress with brand name and progress bar.  User presses OK when
+  device responds.  Accessible via LEFT button from any category quick-remote.
+- **Infrared: Per-function universal IR files for TV** — Added
+  Universal_Vol_up.ir, Universal_Vol_dn.ir, Universal_Mute.ir,
+  Universal_Ch_next.ir, and Universal_Ch_prev.ir covering 19 major TV brands
+  each (Samsung, LG, Sony, Philips, Panasonic, Vizio, TCL, Hisense, Toshiba,
+  Sharp, JVC, Insignia, Roku, Fire TV, plus NEC/RC5/RC6 generics).
+
 ## [0.9.0.100] - 2026-04-15
 
 ## [0.9.0.99] - 2026-04-15
