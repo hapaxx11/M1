@@ -11,10 +11,9 @@ improvements.
 
 ## GitHub-First — What Makes Hapax Different
 
-Hapax is the **only M1 firmware fork built entirely around GitHub**.  Every other
-fork — Monstatek stock, C3/bedge117, SiN360 — distributes firmware as manual
-builds shared on Discord or as opaque binary uploads.  Hapax treats GitHub as
-the single source of truth for everything:
+Hapax uses a **GitHub-centered workflow** for development, releases, and
+documentation. GitHub is the primary home for source code, builds, releases,
+project discussion, and related project resources:
 
 - **Automated CI/CD** — pushes/merges to `main` trigger a GitHub Actions
   build and publish a versioned GitHub Release with firmware artifacts,
