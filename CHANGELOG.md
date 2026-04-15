@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Sub-GHz: 330 MHz frequency preset** — Added 330.00 MHz to the frequency
-  preset list, enabling read/save/replay/emulate for 330 MHz remote controls
-  commonly used in Asia. The frequency is handled via the CUSTOM band path
-  (315 MHz radio config + SI446x retune).
+- **Sub-GHz: Momentum-compatible frequency list** — Expanded the frequency
+  preset list from 18 to 62 entries, matching the Momentum firmware's default
+  Sub-GHz frequency list. Adds coverage for 330 MHz (common Asian gate remotes),
+  300–350 MHz band (27 presets), 387–468 MHz band (25 presets including full
+  LPD433 range), and 779–928 MHz band (10 presets including 868 EU ISM
+  variants). Hopper frequencies also updated to match Momentum defaults.
 ### Fixed
 
 - Config menus (Sub-GHz Config, LCD & Notifications settings): colon at end of
