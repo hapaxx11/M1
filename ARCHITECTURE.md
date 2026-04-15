@@ -42,6 +42,29 @@ The M1 firmware is organized into the following main components:
 - **STM32CubeIDE:** Uses `.project` and `.cproject`
 - **Make:** Uses `Makefile` (Linux)
 
+## GitHub Infrastructure
+
+Hapax is the only M1 firmware fork with a GitHub-first development model.  All
+build, test, release, and documentation workflows are fully automated through
+GitHub services:
+
+| Service | Purpose | Configuration |
+|---------|---------|---------------|
+| **GitHub Actions** — `ci.yml` | Build check on pull requests to `main` | `.github/workflows/ci.yml` |
+| **GitHub Actions** — `build-release.yml` | Auto-create GitHub Release with firmware artifacts on merge to `main` | `.github/workflows/build-release.yml` |
+| **GitHub Actions** — `tests.yml` | Host-side unit tests (Unity + ASan/UBSan) on push/pull request events for matching paths | `.github/workflows/tests.yml` |
+| **GitHub Actions** — `static-analysis.yml` | Cppcheck + MISRA analysis (on-demand) | `.github/workflows/static-analysis.yml` |
+| **GitHub Actions** — `docs.yml` | Auto-deploy Doxygen API docs to GitHub Pages | `.github/workflows/docs.yml` |
+| **GitHub Pages** — Web Updater | Browser-based firmware flashing tool at [`hapaxx11.github.io/M1`](https://hapaxx11.github.io/M1/) | `web-updater/` |
+| **GitHub Pages** — API Docs | Doxygen-generated documentation | Auto-deployed by `docs.yml` |
+| **GitHub Releases** | Versioned firmware downloads (`.bin`, `_wCRC.bin`) | Created by `build-release.yml` |
+| **GitHub Security Advisories** | Vulnerability reporting | `.github/SECURITY.md` |
+
+The table above highlights this repository's documented delivery and maintenance
+capabilities: automated GitHub Actions workflows for builds, tests, analysis,
+and docs; a browser-based Web Updater published via GitHub Pages; versioned
+firmware releases; and a security reporting channel.
+
 ## Scene-Based Architecture
 
 All modules with submenus use a stack-based scene manager:

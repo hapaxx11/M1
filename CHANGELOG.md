@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IR Universal Remote dashboard**: Converted hardcoded `DASHBOARD_ITEM_HEIGHT`
   and `DASHBOARD_START_Y` to font-aware helpers.  Added scrollbar.  Dashboard
   now respects the user's text size setting.
+## [0.9.0.91] - 2026-04-15
+
+### Changed
+
+- Documentation updated across `README.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`,
+  `CONTRIBUTING.md`, `GUIDELINES.md`, and the Web Updater documentation to
+  highlight Hapax's unique GitHub-first development model — automated CI/CD
+  builds, GitHub Releases, GitHub Pages Web Updater, automated testing, and
+  transparent development all on GitHub.
 
 ## [0.9.0.90] - 2026-04-15
 
