@@ -924,13 +924,7 @@ a visual hint.
 
 #### Known violations (migration backlog)
 
-The following scenes predate this rule and still use the old convention
-(DOWN in center, OK on right).  They should be migrated when next modified:
-
-| File | Current mapping | Correct mapping |
-|------|----------------|-----------------|
-| `m1_subghz_scene_read.c` | CENTER=`↓Config`/`↓Save`, RIGHT=`OK:Listen`/`OK:View` | CENTER=`Listen`/`View`, LEFT=`↓Config`/`↓Save` |
-| `m1_subghz_scene_receiver_info.c` | CENTER=`↓Save`, RIGHT=`OK:Send` | CENTER=`Send`, RIGHT or omit `Save` |
+All known button-to-column mapping violations have been fixed.
 
 ### General Button Bar Rules
 

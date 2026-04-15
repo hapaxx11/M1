@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sub-GHz Read scene button bar**: Fixed button-to-column mapping — moved
+  `↓Config`/`↓Save` (DOWN actions) from CENTER to LEFT column, moved
+  `Listen`/`Info`/`View` (OK actions) from RIGHT to CENTER column.  Also
+  removed misleading `↓Config` label in history view (DOWN scrolls there).
+- **Sub-GHz Receiver Info button bar**: Fixed button-to-column mapping — moved
+  `↓Save` (DOWN action) from CENTER to LEFT column, moved `Send` (OK action)
+  from RIGHT to CENTER column.
 - **BLE Spam mode menu**: Converted hardcoded `MENU_ROW_H 9` to font-aware
   helpers (`m1_menu_item_h()`, `m1_menu_font()`, layout constants from
   `m1_scene.h`).  Menu now respects the user's text size setting.
