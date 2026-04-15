@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and records it in Recent history. Search results list uses font-aware helpers
   (`m1_menu_font()`, `m1_menu_item_h()`) to respect user text size settings.
 
+### Changed
+
+- **Documentation: Text size compliance for imports** — Added agent instructions
+  to CLAUDE.md and `documentation/flipper_import_agent.md` requiring all imported
+  features with scrollable lists to use the Hapax font-aware helpers
+  (`m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`)
+  as a blocking merge requirement. Neither Flipper nor upstream Monstatek have
+  user-configurable text size — every imported UI must be adapted.
+
 ## [0.9.0.101] - 2026-04-15
 
 ### Added

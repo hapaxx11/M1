@@ -49,6 +49,7 @@ than **1.0.0.0**.  Until that milestone is reached, the following weighting appl
 | Build system, CMake structure, FreeRTOS integration | **Monstatek/M1** | M1's build system is already established and functional. |
 | Flash layout, boot bank, CRC metadata | **Monstatek/M1** | Hardware-specific; Monstatek's implementation is validated on real M1 boards. |
 | UI framework, display rendering, keypad handling | **Monstatek/M1** (low-level) / **Flipper** (scene UX) | M1's UIView framework differs from Flipper's ViewPort model, so display rendering and keypad mapping remain Monstatek. However, **scene-level UX patterns** (saved-item action menus, verb sets, navigation flow) follow the Flipper `*_scene_saved_menu.c` pattern. See CLAUDE.md "Saved Item Actions Pattern". |
+| Scrollable list / menu text size | **Hapax** | Hapax has a user-configurable text size setting (`m1_menu_style`). All scrollable lists **must** use `m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, and `M1_MENU_VIS()` instead of hardcoding fonts, row heights, or visible item counts. Neither Flipper nor upstream Monstatek have this feature — imported code must be adapted. See CLAUDE.md [User-Configurable Font Size](#user-configurable-font-size). |
 
 When a Flipper pattern conflicts with a Monstatek pattern in the protocol/decoder/HAL
 space, **adopt the Flipper pattern** and log the deviation in the
@@ -1038,6 +1039,7 @@ When adding a new deviation, copy this row:
 - [ ] GPLv3 attribution comment added (if porting Flipper code)
 - [ ] `README_License.md` updated (if porting Flipper code)
 - [ ] Firmware builds without errors
+- [ ] Any scrollable list / menu UI uses Hapax font-aware helpers (`m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`) — see CLAUDE.md "User-Configurable Font Size"
 - [ ] `.sub` file round-trip tested on hardware or in simulation
 
 ---
