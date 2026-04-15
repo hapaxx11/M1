@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Universal Remote dashboard.  Users choose a template (TV / AC / Audio /
   Custom), then assign each button slot a signal via:
   - **Learn** — capture a live IR signal from a physical remote (point-and-press);
-  - **Browse IRDB** — pick any command from any `.ir` file in the IRDB tree;
+  - **Browse IRDB** — browse `.ir` files in the IRDB tree and pick from the
+    commands currently listed by the browser UI;
   - **Skip** — leave the slot unmapped.
   Assigned slots display a 7-character truncated label.  After editing all slots,
   pressing RIGHT opens the virtual keyboard to name the file; the remote is saved
