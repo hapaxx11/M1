@@ -9,14 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.0.95] - 2026-04-15
-
 ### Changed
 
+- **Documentation: ST-Link as primary debugger reference** — Release notes and
+  hardware docs now reference ST-Link instead of J-Link as the primary SWD
+  debugger, matching the standard STM32 development workflow. J-Link remains
+  listed as an alternative where appropriate (VSCode debug configs, README).
+- **VSCode: dynamic ELF path in debug configs** — All three debug
+  configurations in `launch.json` (ST-Link IDE, ST-Link VSCode, J-Link) now
+  use `${command:cmake.launchTargetPath}` instead of a hardcoded
+  `MonstaTek_M1_v0800.elf` path, matching the pattern already used by the
+  CubeProg flash tasks. Removed the stale `projectName` field.
+- **J-Link flash script updated** — `scripts/program.jlink` now references the
+  default source-tree Hapax build output (`M1_Hapax_v0.9.0.1.bin`) with
+  comments documenting the version coupling to `m1_fw_update_bl.h`.
 - Documentation: added CI stamper safety rule to CLAUDE.md and GUIDELINES.md —
-  the literal string `## [Unreleased]` must never appear in changelog body text
-  because the CI stamper uses a first-occurrence text replace that can match
-  body text instead of the heading (caused corruption at v0.9.0.78–83)
+  the [Unreleased] heading must only appear once (as the actual heading);
+  writing that exact heading string in body text risks the CI stamper matching
+  body text instead of the real heading (caused corruption at v0.9.0.78–83)
 - Documentation: updated GUIDELINES.md changelog instructions — corrected
   misleading guidance that said `[Unreleased]` was only for non-compilation
   changes; all new entries go under `[Unreleased]` and CI handles version
@@ -25,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-generated release notes via `.github/release.yml`; added instructions
   in CLAUDE.md and GUIDELINES.md that stamp PRs must not appear in changelogs
   or release notes
+
+## [0.9.0.95] - 2026-04-15
 
 ## [0.9.0.94] - 2026-04-15
 
