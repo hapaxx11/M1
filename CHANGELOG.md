@@ -13,14 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **NFC: Boost power and polling rate for range extender support** — Updated the
-  RFAL analog config table (`rfal_analogConfigTbl.h`) to enable external load
-  modulation (`lm_ext`), lower field detection thresholds (75mV/75mV activation,
-  75mV/25mV deactivation), and disable overshoot/undershoot protection across all
-  Poll NFC-A TX bitrates (106/212/424/848).  Also boost regulator voltage to max
-  in `ReadIni()` and reduce polling interval from 1000ms to 500ms.  These changes
-  persist through RFAL mode/bitrate initialization and enable proper operation of
-  NFC range extender accessories.
+- **NFC: Range extender support aligned with Flipper Zero** — Updated the RFAL
+  analog config table (`rfal_analogConfigTbl.h`) to match Flipper Zero's
+  `furi_hal_nfc.c` init sequence (stock and Momentum are identical here).
+  Settings that now match Flipper: enable external load modulation (`lm_ext`),
+  enable internal load modulation (`lm_dri`), disable overshoot/undershoot
+  protection across all Poll NFC-A TX bitrates (106/212/424/848).  Intentional
+  deviations from Flipper for maximum extender range: field activation thresholds
+  lowered to 75mV (Flipper uses 105mV), deactivation rfe threshold lowered to
+  25mV (Flipper uses 75mV), regulator forced to manual max voltage (Flipper
+  auto-calibrates).  Also boost regulator voltage to max in `ReadIni()` and
+  reduce polling interval from 1000ms to 500ms.  All range-extender-sensitive
+  settings are now in the RFAL analog config table so they persist through
+  `rfalSetMode()` / bitrate changes.
 - **Documentation**: Added human-facing documentation for preferred patterns
   (UI/Button Bar Rules, Font-Aware Menu Implementation, Hardware State
   Management) to `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and
