@@ -56,12 +56,13 @@ The Web Updater (GitHub Pages) and device OTA both pull from GitHub Releases
 6. Documentation
 Keep README.md updated with accurate feature descriptions and protocol counts
 Update CHANGELOG.md for every meaningful change following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
-  - Use version label [{major}.{minor}.{build}.{rc}] matching the FW_VERSION_* macros in m1_fw_update_bl.h (e.g. [0.9.0.28])
-  - Use [Unreleased] for changes that only touch non-compilation paths (docs, CI config, databases)
+  - Use version label [{major}.{minor}.{build}.{rc}] matching the FW_VERSION_* macros in m1_fw_update_bl.h (e.g. [0.9.0.94])
+  - Always add new entries under `[Unreleased]` — CI automatically stamps the version heading on each release
   - Subsections: ### Added / ### Changed / ### Fixed / ### Removed
   - New feature → ### Added; behaviour change → ### Changed; bug fix → ### Fixed
   - Append to the current version block rather than creating a duplicate heading — scan the entire `[Unreleased]` block for an existing `### Fixed` / `### Added` / etc. before adding a new one
-  - Create a new version heading only when bumping M1_HAPAX_REVISION
+  - Do not manually create versioned headings — CI handles promotion from [Unreleased] to a version number
+  - Never write the literal string `## [Unreleased]` in changelog body text — the CI stamper matches it by simple text replace and will corrupt the file (see CLAUDE.md changelog rules)
 Update documentation/flipper_import_agent.md inventory tables when Flipper-derived files are added or removed
 Document setup instructions
 Maintain API documentation
