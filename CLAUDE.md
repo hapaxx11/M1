@@ -475,6 +475,14 @@ to build.**
   the `[Unreleased]` section is always freely editable.
 - Do **not** manually create versioned headings — always add entries under
   `## [Unreleased]` and let CI stamp the version on release.
+- **CI stamper safety rule**: The `build-release.yml` changelog stamper uses
+  `text.replace("## [Unreleased]", …, 1)` — a simple first-occurrence text
+  replace.  **Never** write the literal string `## [Unreleased]` anywhere in
+  changelog entry body text, including inside backtick code spans, markdown
+  code blocks, or quoted descriptions.  If the stamper matches body text
+  instead of the heading, it injects version headings mid-paragraph and
+  corrupts the changelog (this happened at v0.9.0.78–83).  When referring to
+  the heading in prose, omit the `## ` prefix — write `[Unreleased]` instead.
 
 ### README.md — update when user-visible descriptions are stale
 
