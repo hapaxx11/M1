@@ -483,6 +483,13 @@ to build.**
   instead of the heading, it injects version headings mid-paragraph and
   corrupts the changelog (this happened at v0.9.0.78–83).  When referring to
   the heading in prose, omit the `## ` prefix — write `[Unreleased]` instead.
+- **Changelog stamp PRs are NOT changelog-worthy.**  The CI workflow creates a
+  PR titled `changelog: stamp [Unreleased] as <tag>` after every release.
+  These automated stamp PRs **MUST NOT** appear in changelog entries, release
+  notes, or PR descriptions.  They are infrastructure housekeeping — they do
+  not represent a user-visible change.  If you see one in auto-generated
+  release notes, the `.github/release.yml` label exclusion has failed and
+  should be investigated.
 
 ### README.md — update when user-visible descriptions are stale
 
