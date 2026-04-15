@@ -19,6 +19,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   task infrastructure.  Debug logging is automatically suppressed during
   bridge operation to prevent UART data corruption.
 
+## [0.9.0.102] - 2026-04-15
+
+### Added
+
+- **IR Universal Remote: IRDB Search** — New "Search" option on the Universal
+  Remote dashboard (between Browse IRDB and Learned). Type a brand, model, or
+  filename fragment using the virtual keyboard; the firmware walks all 3 levels
+  of the IRDB tree (category → brand → device) and displays up to 16 matching
+  `.ir` files in a scrollable list. Selecting a result opens its command list
+  and records it in Recent history. Search results list uses font-aware helpers
+  (`m1_menu_font()`, `m1_menu_item_h()`) to respect user text size settings.
+
+### Changed
+
+- **Documentation: Text size compliance for imports** — Added agent instructions
+  to CLAUDE.md and `documentation/flipper_import_agent.md` requiring all imported
+  features with scrollable lists to use the Hapax font-aware helpers
+  (`m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`)
+  as a blocking merge requirement. Neither Flipper nor upstream Monstatek have
+  user-configurable text size — every imported UI must be adapted.
+
 ## [0.9.0.101] - 2026-04-15
 
 ### Added

@@ -585,3 +585,21 @@ if(TARGET sanitizers)
     target_link_libraries(test_led_color_ease PRIVATE sanitizers)
 endif()
 add_test(NAME led_color_ease COMMAND test_led_color_ease)
+
+# ------------------------------------------------------------------
+# Module under test: str_contains_icase (IR Universal Remote search helper)
+# Pure function — case-insensitive substring search used by IRDB search.
+# Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.
+# ------------------------------------------------------------------
+add_executable(test_ir_search
+    test_ir_search.c
+    ${STUBS_DIR}/ir_search_impl.c
+)
+target_include_directories(test_ir_search PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_ir_search PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_search PRIVATE sanitizers)
+endif()
+add_test(NAME ir_search COMMAND test_ir_search)
