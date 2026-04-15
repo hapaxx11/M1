@@ -2249,7 +2249,10 @@ static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 		xQueueReceive(button_events_q_hdl, &bs, 0);
 
 		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-		return false;
+		{
+			xQueueReset(main_q_hdl);
+			return false;
+		}
 
 		if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 		sel = (sel > 0) ? sel - 1 : TMPL_COUNT - 1;
