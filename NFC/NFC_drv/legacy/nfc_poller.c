@@ -73,8 +73,6 @@
 #define START_DISCOVERY      1     /*!< Demo State:  Start Discovery        */
 #define DISCOVERY            2     /*!< Demo State:  Discovery              */
 
-#define ST25R3916_REGULATOR_CONTROL_REGE_MAX   0x0FU
-
 /*
  ******************************************************************************
  * MIFARE CLASSIC Helper Functions
@@ -641,8 +639,7 @@ bool ReadIni(void)
      * Set reg_s=1 (manual regulation) with rege=max voltage. */
     st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
         ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask,
-        ST25R3916_REG_REGULATOR_CONTROL_reg_s |
-            (ST25R3916_REGULATOR_CONTROL_REGE_MAX << ST25R3916_REG_REGULATOR_CONTROL_rege_shift) );
+        ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask );
 
     /* Do not force AUX_MOD, field-threshold, or overshoot/undershoot related
      * registers here.
