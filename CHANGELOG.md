@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   misleading guidance that said `[Unreleased]` was only for non-compilation
   changes; all new entries go under `[Unreleased]` and CI handles version
   promotion automatically
+- CI: changelog stamp PRs now labeled `changelog-stamp` and excluded from
+  auto-generated release notes via `.github/release.yml`; added instructions
+  in CLAUDE.md and GUIDELINES.md that stamp PRs must not appear in changelogs
+  or release notes
 
 ## [0.9.0.94] - 2026-04-15
 
