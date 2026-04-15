@@ -825,12 +825,13 @@ static int tcp_recv_headers(int initial_len, uint8_t timeout_sec)
 		return initial_len; /* headers already complete */
 
 	M1_LOG_D(HTTP_TAG, "Headers incomplete after %d bytes, accumulating\n\r", initial_len);
-	uint32_t hdr_deadline = HAL_GetTick() + (uint32_t)timeout_sec * 1000U;
+	uint32_t start_tick = HAL_GetTick();
+	uint32_t timeout_ms = (uint32_t)timeout_sec * 1000U;
 
 	while (!strstr(s_at_buf, "\r\n\r\n") &&
 	       initial_len < (int)(sizeof(s_at_buf) - 1))
 	{
-		if (HAL_GetTick() >= hdr_deadline)
+		if ((HAL_GetTick() - start_tick) >= timeout_ms)
 			break;
 		m1_wdt_reset();
 		vTaskDelay(pdMS_TO_TICKS(100));
