@@ -2206,6 +2206,37 @@ static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
 
 
 /*
+* Draw the template selection screen.
+*/
+static void builder_draw_template_screen(uint8_t sel)
+{
+	const uint8_t item_h   = m1_menu_item_h();
+	const uint8_t text_ofs = item_h - 1;
+
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "Select Template");
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
+	u8g2_SetFont(&m1_u8g2, m1_menu_font());
+
+	for (uint8_t i = 0; i < TMPL_COUNT; i++)
+	{
+		uint8_t y = LIST_START_Y + (i * item_h);
+		if (i == sel)
+		{
+			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+		}
+		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_tmpl_names[i]);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	}
+
+	m1_u8g2_nextpage();
+}
+
+
+/*
 * Template selection screen.
 * Fills slots[] and sets *n_slots.
 * Returns true if the user confirmed, false if they cancelled.
@@ -2216,29 +2247,7 @@ static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 	S_M1_Main_Q_t q;
 	uint8_t sel = 0;
 
-	/* Draw helper */
-#define DRAW_TMPL() do { \
-	const uint8_t item_h  = m1_menu_item_h(); \
-	const uint8_t text_ofs = item_h - 1; \
-	m1_u8g2_firstpage(); \
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
-	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B); \
-	u8g2_DrawStr(&m1_u8g2, 2, 10, "Select Template"); \
-	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128); \
-	u8g2_SetFont(&m1_u8g2, m1_menu_font()); \
-	for (uint8_t _i = 0; _i < TMPL_COUNT; _i++) { \
-	uint8_t _y = LIST_START_Y + (_i * item_h); \
-	if (_i == sel) { \
-	u8g2_DrawBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h); \
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
-	} \
-	u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_tmpl_names[_i]); \
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
-	} \
-	m1_u8g2_nextpage(); \
-	} while (0)
-
-	DRAW_TMPL();
+	builder_draw_template_screen(sel);
 
 	while (1)
 	{
@@ -2272,9 +2281,8 @@ static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 			xQueueReset(main_q_hdl);
 			return true;
 		}
-		DRAW_TMPL();
+		builder_draw_template_screen(sel);
 	}
-#undef DRAW_TMPL
 }
 
 
