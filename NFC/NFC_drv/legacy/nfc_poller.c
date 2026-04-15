@@ -637,9 +637,10 @@ bool ReadIni(void)
 
     /* Boost regulated voltage to maximum for stronger RF field.
      * Set reg_s=1 (manual regulation) with rege=max voltage. */
-    st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
+    err = st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
         ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask,
         ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask );
+    if (err != RFAL_ERR_NONE) return false;
 
     /* Do not force AUX_MOD, field-threshold, or overshoot/undershoot related
      * registers here.
