@@ -19,10 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regulated voltage to maximum (`rege=0x0F`, `reg_s=1`), ensure max TX driver power
   (`d_res=0`), enable external load modulation (`lm_ext`), attempt to tune
   overshoot/undershoot handling during init (note: Poll NFC-A bitrate setup still
-  re-applies RFAL analog defaults, so this is not effectively disabled during polling),
+  re-applies RFAL analog defaults, so some of these settings are not preserved during polling),
   lower field detection thresholds for extended coupling distances, and reduce polling
-  interval from 1000ms to 500ms.  These settings enable proper operation of NFC range
-  extender accessories and improve overall NFC read responsiveness.
+  interval from 1000ms to 500ms.  These changes improve initialization-time tuning for
+  NFC range extender accessories and overall NFC read responsiveness, but some register
+  values may still be overridden once RFAL polling applies its analog defaults.
 - Documentation updated across `README.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`,
   `CONTRIBUTING.md`, `GUIDELINES.md`, and the Web Updater documentation to
   highlight Hapax's unique GitHub-first development model — automated CI/CD
