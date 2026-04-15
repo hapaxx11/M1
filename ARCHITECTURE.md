@@ -52,7 +52,7 @@ GitHub services:
 |---------|---------|---------------|
 | **GitHub Actions** — `ci.yml` | Build check on pull requests to `main` | `.github/workflows/ci.yml` |
 | **GitHub Actions** — `build-release.yml` | Auto-create GitHub Release with firmware artifacts on merge to `main` | `.github/workflows/build-release.yml` |
-| **GitHub Actions** — `tests.yml` | Host-side unit tests (Unity + ASan/UBSan) on every push/PR | `.github/workflows/tests.yml` |
+| **GitHub Actions** — `tests.yml` | Host-side unit tests (Unity + ASan/UBSan) on push/pull request events for matching paths | `.github/workflows/tests.yml` |
 | **GitHub Actions** — `static-analysis.yml` | Cppcheck + MISRA analysis (on-demand) | `.github/workflows/static-analysis.yml` |
 | **GitHub Actions** — `docs.yml` | Auto-deploy Doxygen API docs to GitHub Pages | `.github/workflows/docs.yml` |
 | **GitHub Pages** — Web Updater | Browser-based firmware flashing tool at [`hapaxx11.github.io/M1`](https://hapaxx11.github.io/M1/) | `web-updater/` |
