@@ -183,6 +183,16 @@ static void draw_dashboard(uint8_t selection)
 	uint8_t i;
 	const uint8_t row_h   = m1_menu_item_h();
 	const uint8_t max_vis = M1_MENU_VIS(DASHBOARD_ITEM_COUNT);
+	uint8_t scroll = 0;
+
+	if ((max_vis < DASHBOARD_ITEM_COUNT) && (selection >= max_vis))
+	{
+		scroll = selection - max_vis + 1;
+		if (scroll > (DASHBOARD_ITEM_COUNT - max_vis))
+		{
+			scroll = DASHBOARD_ITEM_COUNT - max_vis;
+		}
+	}
 
 	/* Update Remote Mode label to reflect current state */
 	s_dashboard_items[4] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
@@ -198,22 +208,23 @@ static void draw_dashboard(uint8_t selection)
 	/* Menu items */
 	u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
-	for (i = 0; i < max_vis; i++)
+	for (i = 0; (i < max_vis) && ((scroll + i) < DASHBOARD_ITEM_COUNT); i++)
 	{
 		uint8_t y = M1_MENU_AREA_TOP + (i * row_h);
+		uint8_t item_idx = scroll + i;
 
-		if (i == selection)
+		if (item_idx == selection)
 		{
 			/* Draw selection highlight */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[i]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[item_idx]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[i]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[item_idx]);
 		}
 	}
 
