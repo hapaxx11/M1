@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **GPIO: USB-UART Bridge** — Momentum-style USB-to-serial adapter using
+  USART1 (PA9 TX / PA10 RX) on J7 header and USB CDC virtual COM port.
+  Features configurable baud rate (9600–921600, LEFT/RIGHT to cycle),
+  on-screen scrolling terminal with ASCII and HEX display modes (OK to
+  toggle), and bidirectional USB↔UART data forwarding via the existing VCP
+  task infrastructure.  Debug logging is automatically suppressed during
+  bridge operation to prevent UART data corruption.
+
 ## [0.9.0.98] - 2026-04-15
 
 ### Added

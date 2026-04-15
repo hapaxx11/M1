@@ -94,6 +94,9 @@ static char    *s_capture_buf  = NULL;
 static uint16_t s_capture_size = 0;
 static uint16_t s_capture_len  = 0;
 
+/* Debug output suppress flag (used by USB-UART bridge) */
+static volatile bool logdb_suppressed = false;
+
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 /*
  * printf() will call _write() which will call __io_putchar() by default to send data to UART
@@ -503,6 +506,11 @@ int _write(int file, char *data, int len)
 
 	UNUSED(file);
 
+	/* When suppressed (e.g. USB-UART bridge active), silently discard
+	 * all output so debug messages don't corrupt the UART data stream. */
+	if (logdb_suppressed)
+		return len;
+
 	xSemaphoreTake(mutex_log_write_trans, portMAX_DELAY);
 
     /* If RPC CLI capture is active, also copy to capture buffer */
@@ -539,6 +547,12 @@ uint16_t m1_logdb_capture_stop(void)
     s_capture_size = 0;
     s_capture_len  = 0;
     return len;
+}
+
+
+void m1_logdb_set_suppress(bool suppress)
+{
+    logdb_suppressed = suppress;
 }
 
 
