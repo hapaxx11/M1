@@ -45,7 +45,7 @@
 
 #define DASHBOARD_ITEM_COUNT  12
 
-#define IR_SEARCH_RESULTS_MAX 20
+#define IR_SEARCH_RESULTS_MAX BROWSE_NAMES_MAX
 
 #define LIST_HEADER_HEIGHT    12
 #define LIST_START_Y          (LIST_HEADER_HEIGHT + 2)
@@ -2294,6 +2294,22 @@ static void show_search_screen(void)
 					{
 						add_to_recent(s_search_results[selection]);
 						show_commands(s_search_results[selection]);
+						/* Rebuild browse names — show_commands() clobbers the shared buffer */
+						for (i = 0; i < s_search_count && i < BROWSE_NAMES_MAX; i++)
+						{
+							const char *fn = s_search_results[i];
+							const char *q = s_search_results[i];
+							while (*q)
+							{
+								if (*q == '/')
+									fn = q + 1;
+								q++;
+							}
+							strncpy(s_browse_names[i], fn, BROWSE_NAME_MAX_LEN - 1);
+							s_browse_names[i][BROWSE_NAME_MAX_LEN - 1] = '\0';
+						}
+						s_browse_count = (s_search_count < BROWSE_NAMES_MAX)
+						                 ? s_search_count : BROWSE_NAMES_MAX;
 					}
 				}
 
