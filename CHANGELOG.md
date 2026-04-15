@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **IR Universal Remote: Custom Remote Builder** — New "Create Remote" entry in
+  the Universal Remote dashboard.  Users choose a template (TV / AC / Audio /
+  Custom), then assign each button slot a signal via:
+  - **Learn** — capture a live IR signal from a physical remote (point-and-press);
+  - **Browse IRDB** — pick any command from any `.ir` file in the IRDB tree;
+  - **Skip** — leave the slot unmapped.
+  Assigned slots display a 7-character truncated label.  After editing all slots,
+  pressing RIGHT opens the virtual keyboard to name the file; the remote is saved
+  to `0:/IR/Custom/<name>.ir` using the existing `flipper_ir_write_header()` /
+  `flipper_ir_write_signal()` primitives.  Custom remotes are accessible via
+  "Browse IRDB" → Custom/.
+- **IR infrared_capture_one_signal()** — New exported function in `m1_infrared.c`
+  that initialises the IR decoder, captures exactly one signal from a physical
+  remote, displays the result briefly, and returns the `IRMP_DATA` to the caller.
+  Used by the custom remote builder for in-builder signal learning.
+
 ## [0.9.0.99] - 2026-04-15
 
 ### Fixed
