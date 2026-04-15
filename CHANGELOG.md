@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation: ST-Link as primary debugger reference** — Release notes and
+  hardware docs now reference ST-Link instead of J-Link as the primary SWD
+  debugger, matching the standard STM32 development workflow. J-Link remains
+  listed as an alternative where appropriate (VSCode debug configs, README).
+
 ## [0.9.0.93] - 2026-04-15
 
 ### Changed

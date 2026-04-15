@@ -304,7 +304,7 @@ jobs:
             | File | Description |
             |------|-------------|
             | `${{ needs.build.outputs.release_file_base }}_wCRC.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
-            | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for reference / J-Link flashing) |
+            | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for reference / ST-Link flashing) |
             | `${{ needs.build.outputs.project_name }}.hex`         | Intel HEX (ST-Link / OpenOCD) |
             | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
