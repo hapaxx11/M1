@@ -406,6 +406,7 @@ static void dl_show_result(http_status_t status, const fw_release_t *release)
 			case HTTP_ERR_SD_WRITE_FAIL:  err_msg = "SD write error"; break;
 			case HTTP_ERR_SD_OPEN_FAIL:   err_msg = "Cannot create file"; break;
 			case HTTP_ERR_REDIRECT_LOOP:  err_msg = "Too many redirects"; break;
+			case HTTP_ERR_PARSE_FAIL:     err_msg = "Bad server response"; break;
 			default:                       err_msg = "Download failed"; break;
 		}
 		dl_show_message("Error:", err_msg);
