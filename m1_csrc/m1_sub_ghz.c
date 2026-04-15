@@ -232,10 +232,10 @@ static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
 };
 
 /*============================================================================*/
-/* Flipper Zero-compatible frequency presets (17 frequencies)                  */
+/* Flipper Zero-compatible frequency presets (18 frequencies)                  */
 /*============================================================================*/
-#define SUBGHZ_FREQ_PRESET_COUNT    17
-#define SUBGHZ_FREQ_DEFAULT_IDX     10  /* 433.92 MHz */
+#define SUBGHZ_FREQ_PRESET_COUNT    18
+#define SUBGHZ_FREQ_DEFAULT_IDX     11  /* 433.92 MHz */
 
 static const struct {
 	uint32_t freq_hz;
@@ -247,6 +247,7 @@ static const struct {
 	{ 310000000, "310.00"  },
 	{ 315000000, "315.00"  },
 	{ 318000000, "318.00"  },
+	{ 330000000, "330.00"  },
 	{ 390000000, "390.00"  },
 	{ 418000000, "418.00"  },
 	{ 433075000, "433.07"  },

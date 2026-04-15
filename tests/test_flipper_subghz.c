@@ -205,6 +205,14 @@ void test_freq_to_band_boundary_306(void)
 		flipper_subghz_freq_to_band(306000000));
 }
 
+void test_freq_to_band_330mhz(void)
+{
+	/* 330 MHz: freq_mhz=330, > 320 but <= 358 → BAND_345
+	 * 330 MHz is a common Asian gate remote frequency. */
+	TEST_ASSERT_EQUAL_UINT8(SUB_GHZ_BAND_345,
+		flipper_subghz_freq_to_band(330000000));
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -240,6 +248,7 @@ int main(void)
 	RUN_TEST(test_freq_to_band_915mhz);
 	RUN_TEST(test_freq_to_band_boundary_305);
 	RUN_TEST(test_freq_to_band_boundary_306);
+	RUN_TEST(test_freq_to_band_330mhz);
 
 	return UNITY_END();
 }

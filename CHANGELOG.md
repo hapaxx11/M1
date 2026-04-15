@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sub-GHz: 330 MHz frequency preset** — Added 330.00 MHz to the frequency
+  preset list, enabling read/save/replay/emulate for 330 MHz remote controls
+  commonly used in Asia. The frequency is handled via the CUSTOM band path
+  (315 MHz radio config + SI446x retune).
+
 ### Changed
 
 - **Documentation: ST-Link as primary debugger reference** — Release notes and
