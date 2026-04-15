@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MonstaTek_M1_v0800.elf` path, matching the pattern already used by the
   CubeProg flash tasks. Removed the stale `projectName` field.
 - **J-Link flash script updated** — `scripts/program.jlink` now references the
-  current Hapax build output (`M1_Hapax_v0.9.0.1.bin`) with comments
-  documenting the version coupling to `m1_fw_update_bl.h`.
+  default source-tree Hapax build output (`M1_Hapax_v0.9.0.1.bin`) with
+  comments documenting the version coupling to `m1_fw_update_bl.h`.
 - Documentation: added CI stamper safety rule to CLAUDE.md and GUIDELINES.md —
   the [Unreleased] heading must only appear once (as the actual heading);
   writing that exact heading string in body text risks the CI stamper matching
