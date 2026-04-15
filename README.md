@@ -24,8 +24,9 @@ the single source of truth for everything:
   no desktop software required.
 - **OTA from the device** — the M1 itself can browse GitHub Releases over WiFi,
   download firmware, and install it — all without a PC.
-- **Automated testing** — host-side unit tests, static analysis, and Doxygen
-  documentation are built and deployed by GitHub Actions on every push.
+- **Automated testing** — host-side unit tests and Doxygen documentation run
+  through GitHub Actions, while static analysis is available as a manual,
+  on-demand workflow.
 - **Transparent development** — all code, issues, pull requests, security
   advisories, and discussions live on GitHub.  Nothing is hidden behind
   invite-only servers or private channels.
