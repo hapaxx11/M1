@@ -645,7 +645,7 @@ constrained vertical space:
 | `m1_subghz_scene_read.c` | `HISTORY_ROW_H 8`, `HISTORY_VISIBLE 3` | Compact RX history in split-screen (RSSI bar + history + bottom bar) |
 | `m1_subghz_scene_saved.c` | `DECODE_ROW_H 8`, `DECODE_VISIBLE 3` | Offline decode results in dual-view layout |
 | `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 5` | Frequency scanner data display, not a selectable menu |
-| `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6` | Legacy history (tiny rows for maximum density) |
+| `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6`, `SUBGHZ_HISTORY_VISIBLE_ITEMS 5` | Legacy history (tiny rows for maximum density) |
 
 #### Non-compliant legacy menus (migration backlog)
 
@@ -902,6 +902,31 @@ port alignment straightforward.
 > highest-priority UX standard.  The rules below still apply but are subordinate —
 > if a saved-item action menu needs a specific layout, the Saved Item Actions pattern
 > wins over generic button bar guidelines.
+
+### Button-to-Column Mapping (3-Column Bar)
+
+The `subghz_button_bar_draw()` API provides three columns: LEFT, CENTER,
+RIGHT.  **Each column MUST correspond to its physical button:**
+
+| Column | Physical button | Typical labels |
+|--------|----------------|----------------|
+| LEFT | LEFT button | Config, Erase, Stop |
+| CENTER | OK button | REC, Stop, Send |
+| RIGHT | RIGHT button | Save |
+
+**NEVER** put a DOWN action label in the CENTER column or an OK action in
+the RIGHT column.  This creates a confusing mismatch between what the user
+sees on screen and what happens when they press a button.
+
+If an action is triggered by UP or DOWN (which have no dedicated column),
+either omit it from the button bar or use the LEFT column with a ↓ icon as
+a visual hint.
+
+#### Known violations (migration backlog)
+
+All known button-to-column mapping violations have been fixed.
+
+### General Button Bar Rules
 
 - **NEVER add "Back" as a menu item or button bar label.** The back button is self-explanatory
   — users do not need a screen element telling them that pressing back goes back. This applies
