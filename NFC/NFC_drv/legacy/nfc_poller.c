@@ -623,11 +623,25 @@ bool ReadIni(void)
     }
     if (err != RFAL_ERR_NONE) return false;
 
+    /* Boost regulator voltage for range extender support.
+     *
+     * REGULATOR_CONTROL is not managed by the RFAL analog config table,
+     * so it persists across rfalSetMode() / bitrate changes.
+     *
+     * All other range-extender settings (lm_ext, field thresholds,
+     * overshoot/undershoot) are applied via rfal_analogConfigTbl.h so
+     * they persist through the entire poller session.
+     */
+    err = st25r3916ChangeRegisterBits( ST25R3916_REG_REGULATOR_CONTROL,
+        ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask,
+        ST25R3916_REG_REGULATOR_CONTROL_reg_s | ST25R3916_REG_REGULATOR_CONTROL_rege_mask );
+    if (err != RFAL_ERR_NONE) return false;
+
     /* 2) Discovery parameters: Explicitly set for Poller-only mode */
     rfalNfcDefaultDiscParams(&discParam);
 
     discParam.devLimit       = 1U;
-    discParam.totalDuration  = 1000U;                      /* Discovery window (adjust if needed) */
+    discParam.totalDuration  = 500U;                           /* Faster polling for improved responsiveness */
     discParam.notifyCb       = PollerNotif;                  /* Keep if in use */
 #if defined(RFAL_COMPLIANCE_MODE_NFC)
     discParam.compMode       = RFAL_COMPLIANCE_MODE_NFC;   /* Recommended for application */

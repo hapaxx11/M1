@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **NFC: Range extender support aligned with Flipper Zero** — Updated the RFAL
+  analog config table (`rfal_analogConfigTbl.h`) to match Flipper Zero's
+  `furi_hal_nfc.c` init sequence (stock and Momentum are identical here).
+  Settings that now match Flipper: enable external load modulation (`lm_ext`),
+  enable internal load modulation (`lm_dri`), disable overshoot/undershoot
+  protection across all Poll NFC-A TX bitrates (106/212/424/848).  Intentional
+  deviations from Flipper for maximum extender range: field activation thresholds
+  lowered to 75mV (Flipper uses 105mV), deactivation rfe threshold lowered to
+  25mV (Flipper uses 75mV), regulator forced to manual max voltage (Flipper
+  auto-calibrates).  Also boost regulator voltage to max in `ReadIni()` and
+  reduce polling interval from 1000ms to 500ms.  All range-extender-sensitive
+  settings are now in the RFAL analog config table so they persist through
+  `rfalSetMode()` / bitrate changes.
 - **Documentation**: Added human-facing documentation for preferred patterns
   (UI/Button Bar Rules, Font-Aware Menu Implementation, Hardware State
   Management) to `DEVELOPMENT.md`, `.github/GUIDELINES.md`, and
@@ -46,6 +59,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **NFC: Boost power and polling rate for range extender support** — Configure the
+  ST25R3916 NFC frontend after RFAL init for improved range-extender compatibility,
+  modelled after Flipper Zero's `furi_hal_nfc.c` init sequence. Changes reflected in
+  this PR include boosting regulated voltage to maximum (`rege=0x0F`, `reg_s=1`),
+  enabling external load modulation (`lm_ext`), lowering field detection thresholds
+  for extended coupling distances, and reducing polling interval from 1000ms to
+  500ms. During polling, the ST25R3916 poller bitrate path reapplies
+  `CHIP_POLL_COMMON`, but does not rerun `CHIP_INIT`, so post-init `lm_ext` and
+  field-threshold adjustments generally persist rather than being broadly reset by
+  RFAL polling. These changes improve NFC range-extender support and overall NFC read
+  responsiveness.
 - **Read Raw scene rebuilt to match Momentum firmware workflow** — Complete rewrite of
   the Sub-GHz Read Raw scene with three distinct states (Start → Recording → Idle) and
   a Momentum-aligned button bar that correctly maps physical buttons to display columns
