@@ -30,7 +30,7 @@
 /*============================================================================*/
 
 /* Frequency preset count & labels — must match m1_sub_ghz.c */
-#define CFG_FREQ_COUNT  17
+#define CFG_FREQ_COUNT  62
 #define CFG_MOD_COUNT    4
 
 /* We need these string labels for display — pull from the same source */
