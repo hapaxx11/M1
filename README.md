@@ -9,6 +9,30 @@ improvements.
 
 > **This is a community project and is not affiliated with or endorsed by Monstatek.**
 
+## GitHub-First — What Makes Hapax Different
+
+Hapax uses a **GitHub-centered workflow** for development, releases, and
+documentation. GitHub is the primary home for source code, builds, releases,
+project discussion, and related project resources:
+
+- **Automated CI/CD** — pushes/merges to `main` trigger a GitHub Actions
+  build and publish a versioned GitHub Release with firmware artifacts,
+  except for changes excluded by the workflow's `paths-ignore` rules (for
+  example, docs/database/IDE/workflow-only updates). No manual compilation,
+  no "here's a .bin I built on my laptop."
+- **[Web Updater](https://hapaxx11.github.io/M1/)** — a GitHub Pages-hosted
+  browser-based flashing tool.  Plug in via USB, pick a release, and flash —
+  no desktop software required.
+- **OTA from the device** — the M1 itself can browse GitHub Releases over WiFi,
+  download firmware, and install it — all without a PC.
+- **Automated testing** — host-side unit tests run automatically via GitHub
+  Actions on pull requests and pushes to `main` for relevant changes; Doxygen
+  docs are deployed on source/docs updates, and static analysis is available
+  as a manual, on-demand workflow.
+- **Transparent development** — all code, issues, pull requests, security
+  advisories, and discussions live on GitHub.  Nothing is hidden behind
+  invite-only servers or private channels.
+
 [![CI Build](https://github.com/hapaxx11/M1/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/ci.yml)
 [![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
@@ -29,7 +53,7 @@ improvements.
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
 | Sub-GHz tools (spectrum, RSSI, scanner, weather, brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
-| WiFi firmware download | ✗ | ✓ (OTA from GitHub Releases) |
+| OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
 | AES-256 encryption API | ✗ | ✓ |
 | Bad-BT (Bluetooth HID) | ✗ | ✓ |
@@ -37,7 +61,10 @@ improvements.
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
 | Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
-| CI/CD auto-releases | ✗ | ✓ (every merge to main) |
+| CI/CD auto-releases | ✗ | ✓ (GitHub Actions, every merge to main) |
+| Automated unit tests | ✗ | ✓ (GitHub Actions, Unity + ASan/UBSan) |
+| Static analysis (cppcheck) | ✗ | ✓ (GitHub Actions, on-demand) |
+| Auto-deployed API docs | ✗ | ✓ (Doxygen → GitHub Pages) |
 
 See also: [bedge117/M1 (C3)](https://github.com/bedge117/M1) — another active community
 fork with 56 Sub-GHz protocols, PicoPass, and RTC/NTP support.
@@ -154,7 +181,7 @@ fork with 56 Sub-GHz protocols, PicoPass, and RTC/NTP support.
 - **Southpaw mode** — swap left/right button functions
 - **Safe NMI handler** — proper ECC fault recovery instead of hard fault
 - **Watchdog improvements** — task-level suspend/resume for long operations
-- **CI/CD pipeline** — automated build + release on every merge to `main`
+- **CI/CD pipeline** — automated build, test, and release on every merge to `main` via GitHub Actions.  Hapax is the only M1 fork with automated builds and releases.
 
 ## Companion App
 
@@ -271,6 +298,9 @@ ctest --test-dir build-tests --output-on-failure
 
 ## Code Quality
 
+Hapax is the only M1 firmware fork with automated quality checks.  All of these run
+as GitHub Actions workflows:
+
 | Tool | CI Workflow | Scope | Mode |
 |------|-------------|-------|------|
 | **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
@@ -280,11 +310,17 @@ ctest --test-dir build-tests --output-on-failure
 
 ## Flashing
 
+All firmware releases are published automatically to
+[GitHub Releases](https://github.com/hapaxx11/M1/releases) by the CI/CD pipeline.
+You never need to compile firmware yourself — just pick a method below.
+
 ### Via Web Updater (recommended for updates)
 
-The fastest way to reflash — no software to install. Requires Hapax firmware already
-running on the M1 (the Web Updater connects over USB Serial, which needs the Hapax RPC
-interface). For a first install from stock firmware, use **Via DFU Mode** below.
+The fastest way to reflash — no software to install.  The Web Updater is hosted on
+GitHub Pages and fetches firmware directly from GitHub Releases.  Requires Hapax
+firmware already running on the M1 (the Web Updater connects over USB Serial, which
+needs the Hapax RPC interface).  For a first install from stock firmware, use
+**Via DFU Mode** below.
 
 1. Open the **[M1 Web Updater](https://hapaxx11.github.io/M1/)** in Chrome or Edge
 2. Power on the M1 normally so it boots to the regular UI
