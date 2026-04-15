@@ -73,6 +73,7 @@ static http_status_t tcp_send(const char *data, uint16_t len, uint8_t timeout_se
 static int tcp_recv(char *buf, uint16_t max_len, uint8_t timeout_sec);
 static int tcp_recv_available(uint8_t timeout_sec);
 static int tcp_wait_data(uint8_t timeout_sec);
+static int tcp_recv_headers(int initial_len, uint8_t timeout_sec);
 static int parse_http_headers(const char *data, int data_len,
                                uint32_t *content_length, char *location, uint16_t loc_size,
                                int *header_end_offset, bool *is_chunked);
@@ -275,32 +276,8 @@ http_status_t http_get(const char *url, char *response_buf, uint16_t buf_size, u
 	}
 	s_at_buf[initial_len] = '\0';
 
-	/* SSL may fragment the HTTP response across multiple records, so the
-	 * first tcp_recv may return only a partial header.  Accumulate more
-	 * data until the header terminator \r\n\r\n is found or timeout.
-	 * tcp_recv now uses s_at_recv_buf internally, so s_at_buf is safe. */
-	if (!strstr(s_at_buf, "\r\n\r\n"))
-	{
-		M1_LOG_D(HTTP_TAG, "Headers incomplete after %d bytes, accumulating\n\r", initial_len);
-		uint32_t hdr_deadline = HAL_GetTick() + (uint32_t)timeout_sec * 1000U;
-		while (!strstr(s_at_buf, "\r\n\r\n") &&
-		       initial_len < (int)(sizeof(s_at_buf) - 1))
-		{
-			if (HAL_GetTick() >= hdr_deadline)
-				break;
-			m1_wdt_reset();
-			vTaskDelay(pdMS_TO_TICKS(100));
-
-			int space = (int)(sizeof(s_at_buf) - 1) - initial_len;
-			int to_read = space > HTTP_DOWNLOAD_CHUNK ? HTTP_DOWNLOAD_CHUNK : space;
-			int received = tcp_recv(s_at_buf + initial_len, to_read, 2);
-			if (received > 0)
-			{
-				initial_len += received;
-				s_at_buf[initial_len] = '\0';
-			}
-		}
-	}
+	/* Accumulate more data if headers are incomplete (SSL fragmentation). */
+	initial_len = tcp_recv_headers(initial_len, timeout_sec);
 
 	/* Parse HTTP response headers */
 	status_code = parse_http_headers(s_at_buf, initial_len,
@@ -828,6 +805,50 @@ static int tcp_wait_data(uint8_t timeout_sec)
 }
 
 /*
+ * Accumulate HTTP response headers in s_at_buf.
+ *
+ * SSL may fragment the HTTP response across multiple records, so the
+ * first tcp_recv may return only a partial header.  This helper reads
+ * additional data until the header terminator \r\n\r\n is found or
+ * timeout_sec expires.
+ *
+ * tcp_recv uses s_at_recv_buf internally, so s_at_buf is preserved
+ * across calls and safe to accumulate into.
+ *
+ * initial_len: bytes already in s_at_buf from the first tcp_recv.
+ * timeout_sec: maximum time to spend accumulating.
+ * Returns: updated total length in s_at_buf (>= initial_len).
+ */
+static int tcp_recv_headers(int initial_len, uint8_t timeout_sec)
+{
+	if (strstr(s_at_buf, "\r\n\r\n"))
+		return initial_len; /* headers already complete */
+
+	M1_LOG_D(HTTP_TAG, "Headers incomplete after %d bytes, accumulating\n\r", initial_len);
+	uint32_t hdr_deadline = HAL_GetTick() + (uint32_t)timeout_sec * 1000U;
+
+	while (!strstr(s_at_buf, "\r\n\r\n") &&
+	       initial_len < (int)(sizeof(s_at_buf) - 1))
+	{
+		if (HAL_GetTick() >= hdr_deadline)
+			break;
+		m1_wdt_reset();
+		vTaskDelay(pdMS_TO_TICKS(100));
+
+		int space = (int)(sizeof(s_at_buf) - 1) - initial_len;
+		int to_read = space > HTTP_DOWNLOAD_CHUNK ? HTTP_DOWNLOAD_CHUNK : space;
+		int received = tcp_recv(s_at_buf + initial_len, to_read, 2);
+		if (received > 0)
+		{
+			initial_len += received;
+			s_at_buf[initial_len] = '\0';
+		}
+	}
+
+	return initial_len;
+}
+
+/*
  * Parse HTTP response headers from raw data.
  * Extracts status code, Content-Length, and Location (for redirects).
  * Modifies the buffer to track consumed data.
@@ -1073,32 +1094,8 @@ retry_with_redirect:
 	}
 	s_at_buf[initial_len] = '\0';
 
-	/* SSL may fragment the HTTP response across multiple records, so the
-	 * first tcp_recv may return only a partial header.  Accumulate more
-	 * data until the header terminator \r\n\r\n is found or timeout.
-	 * tcp_recv now uses s_at_recv_buf internally, so s_at_buf is safe. */
-	if (!strstr(s_at_buf, "\r\n\r\n"))
-	{
-		M1_LOG_D(HTTP_TAG, "DL headers incomplete after %d bytes, accumulating\n\r", initial_len);
-		uint32_t hdr_deadline = HAL_GetTick() + (uint32_t)timeout_sec * 1000U;
-		while (!strstr(s_at_buf, "\r\n\r\n") &&
-		       initial_len < (int)(sizeof(s_at_buf) - 1))
-		{
-			if (HAL_GetTick() >= hdr_deadline)
-				break;
-			m1_wdt_reset();
-			vTaskDelay(pdMS_TO_TICKS(100));
-
-			int space = (int)(sizeof(s_at_buf) - 1) - initial_len;
-			int to_read = space > HTTP_DOWNLOAD_CHUNK ? HTTP_DOWNLOAD_CHUNK : space;
-			int received = tcp_recv(s_at_buf + initial_len, to_read, 2);
-			if (received > 0)
-			{
-				initial_len += received;
-				s_at_buf[initial_len] = '\0';
-			}
-		}
-	}
+	/* Accumulate more data if headers are incomplete (SSL fragmentation). */
+	initial_len = tcp_recv_headers(initial_len, timeout_sec);
 
 	/* Parse HTTP headers */
 	bool dl_chunked = false;
