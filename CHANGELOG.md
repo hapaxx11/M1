@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.102] - 2026-04-15
+
 ### Added
 
 - **IR Universal Remote: IRDB Search** — New "Search" option on the Universal
