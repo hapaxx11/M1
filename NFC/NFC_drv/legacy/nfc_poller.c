@@ -644,10 +644,6 @@ bool ReadIni(void)
         ST25R3916_REG_REGULATOR_CONTROL_reg_s |
             (ST25R3916_REGULATOR_CONTROL_REGE_MAX << ST25R3916_REG_REGULATOR_CONTROL_rege_shift) );
 
-    /* Ensure maximum TX driver power (d_res = 0, lowest RFO resistance) */
-    st25r3916ChangeRegisterBits( ST25R3916_REG_TX_DRIVER,
-        ST25R3916_REG_TX_DRIVER_d_res_mask, 0x00 );
-
     /* Enable external load modulation — allows inductively coupled antennas
      * (range extenders) to modulate the field properly.
      * Matches Flipper's init which always enables lm_ext + lm_dri. */
