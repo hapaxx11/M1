@@ -63,6 +63,7 @@ Update CHANGELOG.md for every meaningful change following [Keep a Changelog](htt
   - Append to the current version block rather than creating a duplicate heading — scan the entire `[Unreleased]` block for an existing `### Fixed` / `### Added` / etc. before adding a new one
   - Do not manually create versioned headings — CI handles promotion from [Unreleased] to a version number
   - Never write the literal string `## [Unreleased]` in changelog body text — the CI stamper matches it by simple text replace and will corrupt the file (see CLAUDE.md changelog rules)
+  - Automated "changelog: stamp [Unreleased] as ..." PRs are infrastructure housekeeping — do NOT mention them in changelog entries, release notes, or PR descriptions. They are excluded from auto-generated release notes via `.github/release.yml` and the `changelog-stamp` label.
 Update documentation/flipper_import_agent.md inventory tables when Flipper-derived files are added or removed
 Document setup instructions
 Maintain API documentation

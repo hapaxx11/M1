@@ -380,11 +380,15 @@ jobs:
           git commit -m "changelog: stamp [Unreleased] as ${TAG} [skip ci]"
           git push origin "${BRANCH}"
 
-          # Create the PR (no --label; the label may not exist)
+          # Ensure the changelog-stamp label exists (excluded from auto-generated release notes via .github/release.yml)
+          gh label create changelog-stamp --description "Automated changelog stamp PR" --color "ededed" 2>/dev/null || true
+
+          # Create the PR with the changelog-stamp label so it is excluded from release notes
           PR_URL=$(gh pr create \
             --base main \
             --head "${BRANCH}" \
             --title "changelog: stamp [Unreleased] as ${TAG}" \
+            --label "changelog-stamp" \
             --body "Automated changelog update from release workflow for \`${TAG}\`.") \
             || true
 
