@@ -623,16 +623,16 @@ bool ReadIni(void)
     }
     if (err != RFAL_ERR_NONE) return false;
 
-    /* Boost NFC power and polling rate for range extender support.
+    /* Boost NFC power and polling responsiveness for range extender support.
      *
-     * Modelled after Flipper Zero's furi_hal_nfc.c init sequence which
-     * unconditionally configures for maximum performance:
-     *   - d_res = 0 (max TX driver current)
-     *   - lm_ext enabled (external load modulation for extender coupling)
-     *   - Overshoot/undershoot protection disabled (cleaner signal)
-     *   - Lower field detection thresholds (maintain field at extended range)
-     *   - Boosted regulator voltage (stronger RF field)
-     *   - Faster polling cycle (500ms vs 1000ms)
+     * This function only applies settings that are reliable at this stage:
+     *   - Boost regulator voltage for a stronger RF field
+     *   - Use a faster polling cycle later in discovery params (500ms)
+     *
+     * Other analog settings sometimes used for extender operation (for example
+     * TX driver strength, AUX_MOD.lm_ext / lm_dri, field thresholds, or
+     * overshoot/undershoot tuning) are not programmed here because RFAL mode
+     * and bitrate initialization may overwrite them.
      */
 
     /* Boost regulated voltage to maximum for stronger RF field.
