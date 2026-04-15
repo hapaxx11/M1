@@ -120,7 +120,8 @@ GitHub Actions as the authoritative build system:
 - The M1 device itself can **download firmware over WiFi** directly from GitHub
   Releases (Settings → FW Update → Download).
 - Builds that only touch docs, databases, IDE configs, or CI workflow files are
-  automatically skipped (see `paths-ignore` in `ci.yml`).
+  automatically skipped (see `paths-ignore` in `build-release.yml` for release
+  builds and `ci.yml` for PR checks).
 
 ## Testing
 
