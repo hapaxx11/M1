@@ -329,7 +329,8 @@ jobs:
       - name: Assemble changelog fragments
         run: |
           echo "=== Assembling changelog fragments ==="
-          if [ -d .changelog ] && ls .changelog/*.md 2>/dev/null | grep -qv README.md; then
+          FRAGMENT_COUNT=$(find .changelog -maxdepth 1 -name '*.md' ! -iname 'README.md' 2>/dev/null | wc -l)
+          if [ "$FRAGMENT_COUNT" -gt 0 ]; then
             python3 scripts/assemble_changelog.py
           else
             echo "No changelog fragments found — skipping assembly."

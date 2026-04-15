@@ -272,9 +272,10 @@ class TestAssembleIntegration(unittest.TestCase):
                 self.assertEqual(rc, 0)
 
                 result = changelog.read_text()
-                # Both entries should be under ### Added
-                added_count = result.count("### Added")
-                self.assertEqual(added_count, 1, "Should merge into single ### Added section")
+                # Both entries should be under a single ### Added heading
+                import re as _re
+                added_headings = _re.findall(r"^### Added$", result, _re.MULTILINE)
+                self.assertEqual(len(added_headings), 1, "Should merge into single ### Added section")
                 self.assertIn("Existing entry", result)
                 self.assertIn("**Another feature**", result)
                 # Fragment file kept
