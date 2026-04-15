@@ -92,6 +92,7 @@ void menu_infrared_init(void);
 void infrared_universal_remotes(void);
 void infrared_learn_new_remote(void);
 void infrared_saved_remotes(void);
+bool infrared_capture_one_signal(IRMP_DATA *out_data);
 void infrared_encode_sys_init(void);
 void infrared_encode_sys_deinit(void);
 S_M1_IR_Tx_States infrared_transmit(uint8_t init);
