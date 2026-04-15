@@ -84,10 +84,14 @@ static char raw_filepath[72];
 /* Helpers                                                                    */
 /*============================================================================*/
 
-/** Extract bare filename (without path or extension) from a full path. */
+/** Extract bare filename (without path or extension) from a full path.
+ *  Handles both '/' and '\\' separators. */
 static const char *extract_filename(const char *fullpath)
 {
-    const char *p = strrchr(fullpath, '/');
+    const char *fwd = strrchr(fullpath, '/');
+    const char *bck = strrchr(fullpath, '\\');
+    const char *p = (fwd && bck) ? (fwd > bck ? fwd : bck)
+                  : (fwd ? fwd : bck);
     return p ? p + 1 : fullpath;
 }
 
@@ -212,12 +216,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Send — replay the captured raw file (blocking delegate).
                  * sub_ghz_replay_flipper_file() calls menu_sub_ghz_exit()
-                 * internally, so we must call menu_sub_ghz_init() after. */
+                 * internally, so we MUST call menu_sub_ghz_init() after —
+                 * unconditionally, even on failure — to restore radio state. */
                 if (raw_filepath[0] != '\0')
                 {
-                    uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
-                    if (ret == 0)
-                        menu_sub_ghz_init();
+                    sub_ghz_replay_flipper_file(raw_filepath);
+                    menu_sub_ghz_init();
                 }
                 app->need_redraw = true;
             }
@@ -268,10 +272,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     char old_path[72], new_path[72];
                     snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
                     snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
-                    f_rename(old_path, new_path);
-
-                    /* Update stored path to the new name */
-                    snprintf(raw_filepath, sizeof(raw_filepath), "/SUBGHZ/%s%s", new_name, ext);
+                    if (f_rename(old_path, new_path) == FR_OK)
+                    {
+                        /* Update stored path to the new name */
+                        snprintf(raw_filepath, sizeof(raw_filepath),
+                                 "/SUBGHZ/%s%s", new_name, ext);
+                    }
                 }
                 app->need_redraw = true;
             }
