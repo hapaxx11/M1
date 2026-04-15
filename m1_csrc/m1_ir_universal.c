@@ -2088,646 +2088,702 @@ static void show_recent_screen(void)
 #define TMPL_COUNT   4
 
 static const char * const s_tmpl_names[TMPL_COUNT] = {
-"TV Remote",
-"AC Remote",
-"Audio Remote",
-"Custom (blank)",
+	"TV Remote",
+	"AC Remote",
+	"Audio Remote",
+	"Custom (blank)",
 };
 
 /* TV template slots */
 static const char * const s_tmpl_tv[] = {
-"Power", "Vol+", "Vol-", "Mute", "Ch+", "Ch-", "Input", "OK"
+	"Power", "Vol+", "Vol-", "Mute", "Ch+", "Ch-", "Input", "OK"
 };
 /* AC template slots */
 static const char * const s_tmpl_ac[] = {
-"Power", "Temp+", "Temp-", "Mode", "Fan", "Swing"
+	"Power", "Temp+", "Temp-", "Mode", "Fan", "Swing"
 };
 /* Audio template slots */
 static const char * const s_tmpl_audio[] = {
-"Power", "Vol+", "Vol-", "Mute", "Play", "Next", "Prev", "Input"
+	"Power", "Vol+", "Vol-", "Mute", "Play", "Next", "Prev", "Input"
 };
 /* Custom template — generic button names */
 static const char * const s_tmpl_custom[] = {
-"Btn1", "Btn2", "Btn3", "Btn4", "Btn5", "Btn6"
+	"Btn1", "Btn2", "Btn3", "Btn4", "Btn5", "Btn6"
 };
 
 static const char * const * const s_tmpls[TMPL_COUNT] = {
-s_tmpl_tv, s_tmpl_ac, s_tmpl_audio, s_tmpl_custom
+	s_tmpl_tv, s_tmpl_ac, s_tmpl_audio, s_tmpl_custom
 };
 static const uint8_t s_tmpl_slot_counts[TMPL_COUNT] = { 8, 6, 8, 6 };
 
 
 /*
- * Truncate src into dst so that dst holds at most (IR_BUILDER_LABEL_MAX-1)
- * visible characters and is NUL-terminated.
- */
+* Truncate src into dst so that dst holds at most (IR_BUILDER_LABEL_MAX-1)
+* visible characters and is NUL-terminated.
+*/
 static void builder_make_label(char *dst, const char *src)
 {
-snprintf(dst, IR_BUILDER_LABEL_MAX, "%s", src);
+	snprintf(dst, IR_BUILDER_LABEL_MAX, "%s", src);
 }
 
 
 /*
- * Draw the builder slot list.
- *   slots     — array of slot descriptors
- *   n_slots   — number of slots
- *   sel       — currently highlighted slot index
- */
+* Draw the builder slot list.
+*   slots     — array of slot descriptors
+*   n_slots   — number of slots
+*   sel       — currently highlighted slot index
+*/
 static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
-                                uint8_t sel)
+uint8_t sel)
 {
-const uint8_t item_h  = m1_menu_item_h();
-const uint8_t text_ofs = item_h - 1;
-const uint8_t max_vis = M1_MENU_VIS((uint8_t)n_slots);
-uint8_t scroll = 0;
+	const uint8_t item_h  = m1_menu_item_h();
+	const uint8_t text_ofs = item_h - 1;
+	const uint8_t max_vis = M1_MENU_VIS((uint8_t)n_slots);
+	uint8_t scroll = 0;
 
-if ((max_vis < n_slots) && (sel >= max_vis))
-{
-scroll = sel - max_vis + 1;
-if (scroll > n_slots - max_vis)
-scroll = n_slots - max_vis;
-}
+	if ((max_vis < n_slots) && (sel >= max_vis))
+	{
+		scroll = sel - max_vis + 1;
+		if (scroll > n_slots - max_vis)
+		scroll = n_slots - max_vis;
+	}
 
-m1_u8g2_firstpage();
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-/* Title bar */
-u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-u8g2_DrawStr(&m1_u8g2, 2, 10, "Build Remote");
-u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
+	/* Title bar */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "Build Remote");
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
 
-u8g2_SetFont(&m1_u8g2, m1_menu_font());
+	u8g2_SetFont(&m1_u8g2, m1_menu_font());
 
-for (uint8_t i = 0; (i < max_vis) && ((scroll + i) < n_slots); i++)
-{
-uint8_t idx = scroll + i;
-uint8_t y   = LIST_START_Y + (i * item_h);
+	for (uint8_t i = 0; (i < max_vis) && ((scroll + i) < n_slots); i++)
+	{
+		uint8_t idx = scroll + i;
+		uint8_t y   = LIST_START_Y + (i * item_h);
 
-if (idx == sel)
-{
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-}
+		if (idx == sel)
+		{
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+		}
 
-/* Slot name (left-aligned) */
-u8g2_DrawStr(&m1_u8g2, 2, y + text_ofs, slots[idx].slot_name);
+		/* Slot name (left-aligned) */
+		u8g2_DrawStr(&m1_u8g2, 2, y + text_ofs, slots[idx].slot_name);
 
-/* Assignment label (right side) */
-const char *lbl = (slots[idx].src == SLOT_SRC_NONE)
-                  ? "(empty)" : slots[idx].label;
-u8g2_uint_t lbl_w = u8g2_GetStrWidth(&m1_u8g2, lbl);
-u8g2_DrawStr(&m1_u8g2, M1_MENU_TEXT_W - lbl_w - 2, y + text_ofs, lbl);
+		/* Assignment label (right side) */
+		const char *lbl = (slots[idx].src == SLOT_SRC_NONE)
+		? "(empty)" : slots[idx].label;
+		u8g2_uint_t lbl_w = u8g2_GetStrWidth(&m1_u8g2, lbl);
+		u8g2_DrawStr(&m1_u8g2, M1_MENU_TEXT_W - lbl_w - 2, y + text_ofs, lbl);
 
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-}
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	}
 
-/* Scrollbar */
-if (n_slots > max_vis)
-{
-uint8_t track_y = LIST_START_Y;
-uint8_t track_h = max_vis * item_h;
-uint8_t handle_h = (track_h * max_vis) / n_slots;
-if (handle_h < 4) handle_h = 4;
-uint8_t handle_y = track_y +
-    (sel * (track_h - handle_h)) / (n_slots - 1);
-u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y,
-               M1_MENU_SCROLLBAR_W, track_h);
-u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
-             M1_MENU_SCROLLBAR_W, handle_h);
-}
+	/* Scrollbar */
+	if (n_slots > max_vis)
+	{
+		uint8_t track_y = LIST_START_Y;
+		uint8_t track_h = max_vis * item_h;
+		uint8_t handle_h = (track_h * max_vis) / n_slots;
+		if (handle_h < 4) handle_h = 4;
+		uint8_t handle_y = track_y +
+		(sel * (track_h - handle_h)) / (n_slots - 1);
+		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y,
+		M1_MENU_SCROLLBAR_W, track_h);
+		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
+		M1_MENU_SCROLLBAR_W, handle_h);
+	}
 
-/* Bottom hint: OK = assign, RIGHT = save */
-u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "Assign", "Save");
+	/* Bottom hint: OK = assign, RIGHT = save */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "Assign", "Save");
 
-m1_u8g2_nextpage();
+	m1_u8g2_nextpage();
 }
 
 
 /*
- * Template selection screen.
- * Fills slots[] and sets *n_slots.
- * Returns true if the user confirmed, false if they cancelled.
- */
+* Template selection screen.
+* Fills slots[] and sets *n_slots.
+* Returns true if the user confirmed, false if they cancelled.
+*/
 static bool builder_pick_template(uint8_t *n_slots, ir_builder_slot_t slots[])
 {
-S_M1_Buttons_Status bs;
-S_M1_Main_Q_t q;
-uint8_t sel = 0;
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q;
+	uint8_t sel = 0;
 
-/* Draw helper */
+	/* Draw helper */
 #define DRAW_TMPL() do { \
-const uint8_t item_h  = m1_menu_item_h(); \
-const uint8_t text_ofs = item_h - 1; \
-m1_u8g2_firstpage(); \
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
-u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B); \
-u8g2_DrawStr(&m1_u8g2, 2, 10, "Select Template"); \
-u8g2_DrawHLine(&m1_u8g2, 0, 12, 128); \
-u8g2_SetFont(&m1_u8g2, m1_menu_font()); \
-for (uint8_t _i = 0; _i < TMPL_COUNT; _i++) { \
-uint8_t _y = LIST_START_Y + (_i * item_h); \
-if (_i == sel) { \
-u8g2_DrawBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h); \
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
-} \
-u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_tmpl_names[_i]); \
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
-} \
-m1_u8g2_nextpage(); \
-} while (0)
+	const uint8_t item_h  = m1_menu_item_h(); \
+	const uint8_t text_ofs = item_h - 1; \
+	m1_u8g2_firstpage(); \
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B); \
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "Select Template"); \
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128); \
+	u8g2_SetFont(&m1_u8g2, m1_menu_font()); \
+	for (uint8_t _i = 0; _i < TMPL_COUNT; _i++) { \
+	uint8_t _y = LIST_START_Y + (_i * item_h); \
+	if (_i == sel) { \
+	u8g2_DrawBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h); \
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
+	} \
+	u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_tmpl_names[_i]); \
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
+	} \
+	m1_u8g2_nextpage(); \
+	} while (0)
 
-DRAW_TMPL();
+	DRAW_TMPL();
 
-while (1)
-{
-if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-continue;
-if (q.q_evt_type != Q_EVENT_KEYPAD)
-continue;
-xQueueReceive(button_events_q_hdl, &bs, 0);
+	while (1)
+	{
+		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+		continue;
+		if (q.q_evt_type != Q_EVENT_KEYPAD)
+		continue;
+		xQueueReceive(button_events_q_hdl, &bs, 0);
 
-if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-return false;
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		return false;
 
-if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-sel = (sel > 0) ? sel - 1 : TMPL_COUNT - 1;
-else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-sel = (sel + 1) % TMPL_COUNT;
-else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-/* Populate slot names for chosen template */
-*n_slots = s_tmpl_slot_counts[sel];
-memset(slots, 0, sizeof(ir_builder_slot_t) * (*n_slots));
-for (uint8_t i = 0; i < *n_slots; i++)
-{
-snprintf(slots[i].slot_name, IR_BUILDER_SLOT_NAME_MAX, "%s", s_tmpls[sel][i]);
-slots[i].src = SLOT_SRC_NONE;
-}
-xQueueReset(main_q_hdl);
-return true;
-}
-DRAW_TMPL();
-}
+		if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		sel = (sel > 0) ? sel - 1 : TMPL_COUNT - 1;
+		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		sel = (sel + 1) % TMPL_COUNT;
+		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			/* Populate slot names for chosen template */
+			*n_slots = s_tmpl_slot_counts[sel];
+			memset(slots, 0, sizeof(ir_builder_slot_t) * (*n_slots));
+			for (uint8_t i = 0; i < *n_slots; i++)
+			{
+				snprintf(slots[i].slot_name, IR_BUILDER_SLOT_NAME_MAX, "%s", s_tmpls[sel][i]);
+				slots[i].src = SLOT_SRC_NONE;
+			}
+			xQueueReset(main_q_hdl);
+			return true;
+		}
+		DRAW_TMPL();
+	}
 #undef DRAW_TMPL
 }
 
 
 /*
- * Slot action menu: Learn / Browse IRDB / Skip.
- * Returns true if a signal was assigned (or skipped intentionally),
- * false if user cancelled back to the slot list without changing anything.
- */
+* Slot action menu: Learn / Browse IRDB / Skip.
+* Returns true if a signal was assigned (or skipped intentionally),
+* false if user cancelled back to the slot list without changing anything.
+*/
 #define SLOT_ACTION_LEARN   0
 #define SLOT_ACTION_BROWSE  1
 #define SLOT_ACTION_SKIP    2
 #define SLOT_ACTION_COUNT   3
 
 static const char * const s_slot_action_labels[SLOT_ACTION_COUNT] = {
-"Learn (point remote)", "Browse IRDB", "Skip (leave empty)"
+	"Learn (point remote)", "Browse IRDB", "Skip (leave empty)"
 };
 
 static bool builder_slot_action(ir_builder_slot_t *slot)
 {
-S_M1_Buttons_Status bs;
-S_M1_Main_Q_t q;
-uint8_t asel = 0;
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q;
+	uint8_t asel = 0;
 
 #define DRAW_SLOT_MENU() do { \
-const uint8_t item_h   = m1_menu_item_h(); \
-const uint8_t text_ofs = item_h - 1; \
-m1_u8g2_firstpage(); \
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
-u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B); \
-u8g2_DrawStr(&m1_u8g2, 2, 10, slot->slot_name); \
-u8g2_DrawHLine(&m1_u8g2, 0, 12, 128); \
-u8g2_SetFont(&m1_u8g2, m1_menu_font()); \
-for (uint8_t _i = 0; _i < SLOT_ACTION_COUNT; _i++) { \
-uint8_t _y = LIST_START_Y + (_i * item_h); \
-if (_i == asel) { \
-u8g2_DrawBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h); \
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
-} \
-u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_slot_action_labels[_i]); \
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
-} \
-m1_u8g2_nextpage(); \
-} while (0)
+	const uint8_t item_h   = m1_menu_item_h(); \
+	const uint8_t text_ofs = item_h - 1; \
+	m1_u8g2_firstpage(); \
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B); \
+	u8g2_DrawStr(&m1_u8g2, 2, 10, slot->slot_name); \
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128); \
+	u8g2_SetFont(&m1_u8g2, m1_menu_font()); \
+	for (uint8_t _i = 0; _i < SLOT_ACTION_COUNT; _i++) { \
+	uint8_t _y = LIST_START_Y + (_i * item_h); \
+	if (_i == asel) { \
+	u8g2_DrawBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h); \
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
+	} \
+	u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_slot_action_labels[_i]); \
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
+	} \
+	m1_u8g2_nextpage(); \
+	} while (0)
 
-DRAW_SLOT_MENU();
+	DRAW_SLOT_MENU();
 
-while (1)
-{
-if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-continue;
-if (q.q_evt_type != Q_EVENT_KEYPAD)
-continue;
-xQueueReceive(button_events_q_hdl, &bs, 0);
+	while (1)
+	{
+		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+		continue;
+		if (q.q_evt_type != Q_EVENT_KEYPAD)
+		continue;
+		xQueueReceive(button_events_q_hdl, &bs, 0);
 
-if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-xQueueReset(main_q_hdl);
-return false; /* User cancelled — no change */
-}
-else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-asel = (asel > 0) ? asel - 1 : SLOT_ACTION_COUNT - 1;
-else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-asel = (asel + 1) % SLOT_ACTION_COUNT;
-else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-if (asel == SLOT_ACTION_LEARN)
-{
-/* Capture one signal from a physical remote */
-IRMP_DATA captured;
-if (infrared_capture_one_signal(&captured))
-{
-slot->src       = SLOT_SRC_LEARNED;
-slot->irmp_data = captured;
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return false; /* User cancelled — no change */
+		}
+		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		asel = (asel > 0) ? asel - 1 : SLOT_ACTION_COUNT - 1;
+		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		asel = (asel + 1) % SLOT_ACTION_COUNT;
+		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (asel == SLOT_ACTION_LEARN)
+			{
+				/* Capture one signal from a physical remote */
+				IRMP_DATA captured;
+				if (infrared_capture_one_signal(&captured))
+				{
+					slot->src       = SLOT_SRC_LEARNED;
+					slot->irmp_data = captured;
 
-/* Build display label from protocol name */
-extern const char * const irmp_protocol_names[];
-builder_make_label(slot->label,
-    irmp_protocol_names[captured.protocol]);
-xQueueReset(main_q_hdl);
-return true;
-}
-/* Capture cancelled — redraw menu and let user retry */
-}
-else if (asel == SLOT_ACTION_BROWSE)
-{
-/* Browse IRDB and pick a signal */
-if (builder_browse_irdb_pick(slot))
-{
-xQueueReset(main_q_hdl);
-return true;
-}
-/* Browse cancelled or nothing chosen */
-}
-else /* SLOT_ACTION_SKIP */
-{
-slot->src = SLOT_SRC_NONE;
-slot->label[0] = '\0';
-xQueueReset(main_q_hdl);
-return true;
-}
-}
-DRAW_SLOT_MENU();
-}
+					/* Build display label from protocol name */
+					extern const char * const irmp_protocol_names[];
+					builder_make_label(slot->label,
+					irmp_protocol_names[captured.protocol]);
+					xQueueReset(main_q_hdl);
+					return true;
+				}
+				/* Capture cancelled — redraw menu and let user retry */
+			}
+			else if (asel == SLOT_ACTION_BROWSE)
+			{
+				/* Browse IRDB and pick a signal */
+				if (builder_browse_irdb_pick(slot))
+				{
+					xQueueReset(main_q_hdl);
+					return true;
+				}
+				/* Browse cancelled or nothing chosen */
+			}
+			else /* SLOT_ACTION_SKIP */
+			{
+				slot->src = SLOT_SRC_NONE;
+				slot->label[0] = '\0';
+				xQueueReset(main_q_hdl);
+				return true;
+			}
+		}
+		DRAW_SLOT_MENU();
+	}
 #undef DRAW_SLOT_MENU
 }
 
 
 /*
- * Show the commands from a .ir file and let the user pick one.
- * On success, fills slot with IRDB source info and returns true.
- */
+* Show the commands from a .ir file and let the user pick one.
+* On success, fills slot with IRDB source info and returns true.
+*/
 static bool builder_pick_signal_from_file(const char *filepath,
-                                          ir_builder_slot_t *slot)
+ir_builder_slot_t *slot)
 {
-S_M1_Buttons_Status bs;
-S_M1_Main_Q_t q;
-uint16_t cmd_count;
-uint16_t pick_sel = 0;
-char title[BROWSE_NAME_MAX_LEN];
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q;
+	uint16_t cmd_count;
+	uint16_t pick_sel = 0;
+	char title[BROWSE_NAME_MAX_LEN];
 
-/* Extract short filename for title */
-const char *fn = filepath;
-const char *p  = filepath;
-while (*p) { if (*p == '/') fn = p + 1; p++; }
-snprintf(title, BROWSE_NAME_MAX_LEN, "%s", fn);
+	/* Extract short filename for title */
+	const char *fn = filepath;
+	const char *p  = filepath;
+	while (*p) { if (*p == '/') fn = p + 1; p++; }
+	snprintf(title, BROWSE_NAME_MAX_LEN, "%s", fn);
 
-/* Parse the .ir file into s_commands[] */
-cmd_count = parse_ir_file(filepath);
-if (cmd_count == 0)
-{
-m1_u8g2_firstpage();
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-u8g2_DrawStr(&m1_u8g2, 10, 32, "No signals found");
-m1_u8g2_nextpage();
-vTaskDelay(pdMS_TO_TICKS(1200));
-xQueueReset(main_q_hdl);
-return false;
-}
+	/* Parse the .ir file into s_commands[] */
+	cmd_count = parse_ir_file(filepath);
+	if (cmd_count == 0)
+	{
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 10, 32, "No signals found");
+		m1_u8g2_nextpage();
+		vTaskDelay(pdMS_TO_TICKS(1200));
+		xQueueReset(main_q_hdl);
+		return false;
+	}
 
-/* Copy command names into s_browse_names[] for the list renderer */
-uint16_t disp_count = (cmd_count < BROWSE_NAMES_MAX) ? cmd_count : BROWSE_NAMES_MAX;
-for (uint16_t i = 0; i < disp_count; i++)
-{
-snprintf(s_browse_names[i], BROWSE_NAME_MAX_LEN, "%s", s_commands[i].name);
-}
-s_browse_count = disp_count;
+	/* Copy command names into s_browse_names[] for the list renderer */
+	uint16_t disp_count = (cmd_count < BROWSE_NAMES_MAX) ? cmd_count : BROWSE_NAMES_MAX;
+	for (uint16_t i = 0; i < disp_count; i++)
+	{
+		snprintf(s_browse_names[i], BROWSE_NAME_MAX_LEN, "%s", s_commands[i].name);
+	}
+	s_browse_count = disp_count;
 
-draw_list_screen(title, disp_count, pick_sel, "Pick");
+	draw_list_screen(title, disp_count, pick_sel, "Pick");
 
-while (1)
-{
-if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-continue;
-if (q.q_evt_type != Q_EVENT_KEYPAD)
-continue;
-xQueueReceive(button_events_q_hdl, &bs, 0);
+	while (1)
+	{
+		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+		continue;
+		if (q.q_evt_type != Q_EVENT_KEYPAD)
+		continue;
+		xQueueReceive(button_events_q_hdl, &bs, 0);
 
-if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-xQueueReset(main_q_hdl);
-return false;
-}
-else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-pick_sel = (pick_sel > 0) ? pick_sel - 1 : disp_count - 1;
-else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-pick_sel = (pick_sel + 1) % disp_count;
-else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-if (pick_sel < cmd_count && s_commands[pick_sel].valid)
-{
-/* Store IRDB reference in the slot */
-slot->src        = SLOT_SRC_IRDB;
-slot->src_is_raw = s_commands[pick_sel].is_raw;
-snprintf(slot->src_filepath, IR_UNIVERSAL_PATH_MAX_LEN, "%s", filepath);
-snprintf(slot->src_signal_name, IR_UNIVERSAL_NAME_MAX_LEN, "%s", s_commands[pick_sel].name);
-builder_make_label(slot->label, s_commands[pick_sel].name);
-xQueueReset(main_q_hdl);
-return true;
-}
-}
-draw_list_screen(title, disp_count, pick_sel, "Pick");
-}
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return false;
+		}
+		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		pick_sel = (pick_sel > 0) ? pick_sel - 1 : disp_count - 1;
+		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		pick_sel = (pick_sel + 1) % disp_count;
+		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (pick_sel < cmd_count && s_commands[pick_sel].valid)
+			{
+				/* Store IRDB reference in the slot */
+				slot->src        = SLOT_SRC_IRDB;
+				slot->src_is_raw = s_commands[pick_sel].is_raw;
+				snprintf(slot->src_filepath, IR_UNIVERSAL_PATH_MAX_LEN, "%s", filepath);
+				snprintf(slot->src_signal_name, IR_UNIVERSAL_NAME_MAX_LEN, "%s", s_commands[pick_sel].name);
+				builder_make_label(slot->label, s_commands[pick_sel].name);
+				xQueueReset(main_q_hdl);
+				return true;
+			}
+		}
+		draw_list_screen(title, disp_count, pick_sel, "Pick");
+	}
 }
 
 
 /*
- * Navigate the IRDB directory tree in "pick" mode.
- * When the user selects a .ir file, calls builder_pick_signal_from_file().
- * Returns true if a signal was picked, false if user backed out.
- */
+* Navigate the IRDB directory tree in "pick" mode.
+* When the user selects a .ir file, calls builder_pick_signal_from_file().
+* Returns true if a signal was picked, false if user backed out.
+*/
 static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 {
-S_M1_Buttons_Status bs;
-S_M1_Main_Q_t q;
-char browse_path[IR_UNIVERSAL_PATH_MAX_LEN];
-char child_path[IR_UNIVERSAL_PATH_MAX_LEN];
-FILINFO fno;
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q;
+	char browse_path[IR_UNIVERSAL_PATH_MAX_LEN];
+	char child_path[IR_UNIVERSAL_PATH_MAX_LEN];
+	FILINFO fno;
 
-snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", IR_UNIVERSAL_IRDB_ROOT);
+	snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", IR_UNIVERSAL_IRDB_ROOT);
 
-/* Save/restore the main browse globals around this sub-browse */
-char saved_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
-uint16_t saved_browse_count = s_browse_count;
-uint16_t saved_browse_page  = s_browse_page;
-uint16_t saved_browse_sel   = s_browse_selection;
-memcpy(saved_browse_names, s_browse_names, sizeof(s_browse_names));
+	/* Save/restore the main browse globals around this sub-browse */
+	char saved_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
+	uint16_t saved_browse_count = s_browse_count;
+	uint16_t saved_browse_page  = s_browse_page;
+	uint16_t saved_browse_sel   = s_browse_selection;
+	memcpy(saved_browse_names, s_browse_names, sizeof(s_browse_names));
 
-s_browse_page = 0;
-while (1)
-{
-/* Scan current directory */
-s_browse_count = scan_directory_page(browse_path, s_browse_page, BROWSE_NAMES_MAX);
+	s_browse_page = 0;
+	while (1)
+	{
+		/* Scan current directory */
+		s_browse_count = scan_directory_page(browse_path, s_browse_page, BROWSE_NAMES_MAX);
 
-if (s_browse_count == 0)
-{
-m1_u8g2_firstpage();
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
-m1_u8g2_nextpage();
-vTaskDelay(pdMS_TO_TICKS(1000));
-break; /* Back to caller */
-}
+		if (s_browse_count == 0)
+		{
+			m1_u8g2_firstpage();
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
+			m1_u8g2_nextpage();
+			vTaskDelay(pdMS_TO_TICKS(1000));
+			break; /* Back to caller */
+		}
 
-s_browse_selection = 0;
+		s_browse_selection = 0;
 
-/* Extract title from path */
-const char *title = browse_path;
-const char *pp    = browse_path;
-while (*pp) { if (*pp == '/') title = pp + 1; pp++; }
-if (*title == '\0') title = "IRDB";
-draw_list_screen(title, s_browse_count, s_browse_selection, NULL);
+		/* Extract title from path */
+		const char *title = browse_path;
+		const char *pp    = browse_path;
+		while (*pp) { if (*pp == '/') title = pp + 1; pp++; }
+		if (*title == '\0') title = "IRDB";
+		draw_list_screen(title, s_browse_count, s_browse_selection, NULL);
 
-bool exit_dir = false;
-while (!exit_dir)
-{
-if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-continue;
-if (q.q_evt_type != Q_EVENT_KEYPAD)
-continue;
-xQueueReceive(button_events_q_hdl, &bs, 0);
+		bool exit_dir = false;
+		while (!exit_dir)
+		{
+			if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+			continue;
+			if (q.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+			xQueueReceive(button_events_q_hdl, &bs, 0);
 
-if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-/* Go up one level or exit if already at root */
-if (strcmp(browse_path, IR_UNIVERSAL_IRDB_ROOT) == 0)
-{
-/* Restore globals and return */
-memcpy(s_browse_names, saved_browse_names,
-       sizeof(s_browse_names));
-s_browse_count     = saved_browse_count;
-s_browse_page      = saved_browse_page;
-s_browse_selection = saved_browse_sel;
-xQueueReset(main_q_hdl);
-return false;
-}
-path_go_up(browse_path);
-exit_dir = true; /* Re-scan parent */
-}
-else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-{
-s_browse_selection = (s_browse_selection > 0)
-    ? s_browse_selection - 1 : s_browse_count - 1;
-}
-else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-{
-s_browse_selection = (s_browse_selection < s_browse_count - 1)
-    ? s_browse_selection + 1 : 0;
-}
-else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-/* Build child path */
-snprintf(child_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);
-path_append(child_path, s_browse_names[s_browse_selection]);
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				/* Go up one level or exit if already at root */
+				if (strcmp(browse_path, IR_UNIVERSAL_IRDB_ROOT) == 0)
+				{
+					/* Restore globals and return */
+					memcpy(s_browse_names, saved_browse_names,
+					sizeof(s_browse_names));
+					s_browse_count     = saved_browse_count;
+					s_browse_page      = saved_browse_page;
+					s_browse_selection = saved_browse_sel;
+					xQueueReset(main_q_hdl);
+					return false;
+				}
+				path_go_up(browse_path);
+				exit_dir = true; /* Re-scan parent */
+			}
+			else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				s_browse_selection = (s_browse_selection > 0)
+				? s_browse_selection - 1 : s_browse_count - 1;
+			}
+			else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				s_browse_selection = (s_browse_selection < s_browse_count - 1)
+				? s_browse_selection + 1 : 0;
+			}
+			else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				/* Build child path */
+				snprintf(child_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);
+				path_append(child_path, s_browse_names[s_browse_selection]);
 
-if (f_stat(child_path, &fno) == FR_OK &&
-    (fno.fattrib & AM_DIR))
-{
-/* Navigate into subdirectory */
-snprintf(saved_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);
-snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", child_path);
-exit_dir = true;
-}
-else if (is_ir_file(s_browse_names[s_browse_selection]))
-{
-/* Let user pick a signal from this file */
-bool picked = builder_pick_signal_from_file(child_path,
-                                            slot);
-if (picked)
-{
-/* Restore globals and return success */
-memcpy(s_browse_names, saved_browse_names,
-       sizeof(s_browse_names));
-s_browse_count     = saved_browse_count;
-s_browse_page      = saved_browse_page;
-s_browse_selection = saved_browse_sel;
-return true;
-}
-/* User backed out of file — redraw dir listing */
-s_browse_count = scan_directory_page(browse_path, 0,
-                                     BROWSE_NAMES_MAX);
-}
-}
+				if (f_stat(child_path, &fno) == FR_OK &&
+				(fno.fattrib & AM_DIR))
+				{
+					/* Navigate into subdirectory */
+					snprintf(browse_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", child_path);
+					exit_dir = true;
+				}
+				else if (is_ir_file(s_browse_names[s_browse_selection]))
+				{
+					/* Let user pick a signal from this file */
+					bool picked = builder_pick_signal_from_file(child_path,
+					slot);
+					if (picked)
+					{
+						/* Restore globals and return success */
+						memcpy(s_browse_names, saved_browse_names,
+						sizeof(s_browse_names));
+						s_browse_count     = saved_browse_count;
+						s_browse_page      = saved_browse_page;
+						s_browse_selection = saved_browse_sel;
+						return true;
+					}
+					/* User backed out of file — redraw dir listing */
+					s_browse_count = scan_directory_page(browse_path, 0,
+					BROWSE_NAMES_MAX);
+				}
+			}
 
-if (!exit_dir)
-{
-const char *t2 = browse_path;
-const char *pp2 = browse_path;
-while (*pp2) { if (*pp2 == '/') t2 = pp2 + 1; pp2++; }
-if (*t2 == '\0') t2 = "IRDB";
-draw_list_screen(t2, s_browse_count, s_browse_selection, NULL);
-}
-}
-}
+			if (!exit_dir)
+			{
+				const char *t2 = browse_path;
+				const char *pp2 = browse_path;
+				while (*pp2) { if (*pp2 == '/') t2 = pp2 + 1; pp2++; }
+				if (*t2 == '\0') t2 = "IRDB";
+				draw_list_screen(t2, s_browse_count, s_browse_selection, NULL);
+			}
+		}
+	}
 
-/* Restore globals */
-memcpy(s_browse_names, saved_browse_names, sizeof(s_browse_names));
-s_browse_count     = saved_browse_count;
-s_browse_page      = saved_browse_page;
-s_browse_selection = saved_browse_sel;
-return false;
+	/* Restore globals */
+	memcpy(s_browse_names, saved_browse_names, sizeof(s_browse_names));
+	s_browse_count     = saved_browse_count;
+	s_browse_page      = saved_browse_page;
+	s_browse_selection = saved_browse_sel;
+	return false;
 }
 
 
 /*
- * Save the completed remote as a .ir signals file in IR_CUSTOM_DIR.
- * The user is prompted for a filename via the virtual keyboard.
- * Returns true on success.
- */
+* Save the completed remote as a .ir signals file in IR_CUSTOM_DIR.
+* The user is prompted for a filename via the virtual keyboard.
+* Returns true on success.
+*/
 static bool builder_save_remote(ir_builder_slot_t *slots, uint8_t n_slots)
 {
-char remote_name[M1_VIRTUAL_KB_FILENAME_MAX + 1];
-char out_path[IR_UNIVERSAL_PATH_MAX_LEN];
-flipper_file_t ff;
-flipper_ir_signal_t sig;
-bool ok = false;
+	char remote_name[M1_VIRTUAL_KB_FILENAME_MAX + 1];
+	char out_path[IR_UNIVERSAL_PATH_MAX_LEN];
+	flipper_file_t ff;
+	flipper_ir_signal_t sig;
+	bool write_ok = true;
 
-/* Ask the user for a name */
-if (!m1_vkb_get_filename("Remote name:", "MyRemote", remote_name))
-return false; /* Cancelled */
+	/* Ask the user for a name */
+	if (!m1_vkb_get_filename("Remote name:", "MyRemote", remote_name))
+		return false; /* Cancelled */
 
-/* Build output path */
-snprintf(out_path, sizeof(out_path), "%s/%s%s",
-         IR_CUSTOM_DIR, remote_name, IR_FILE_EXTENSION);
+	/* Sanitize: reject characters that could escape IR_CUSTOM_DIR */
+	for (const char *p = remote_name; *p; p++)
+	{
+		if (*p == '/' || *p == '\\' || *p == ':')
+		{
+			m1_u8g2_firstpage();
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 4, 30, "Invalid name");
+			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 4, 46, "No / \\ : allowed");
+			m1_u8g2_nextpage();
+			vTaskDelay(pdMS_TO_TICKS(1500));
+			return false;
+		}
+	}
+	if (strstr(remote_name, "..") != NULL)
+	{
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "Invalid name");
+		m1_u8g2_nextpage();
+		vTaskDelay(pdMS_TO_TICKS(1500));
+		return false;
+	}
 
-/* Open / create output file */
-if (!ff_open_write(&ff, out_path))
-{
-m1_u8g2_firstpage();
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-u8g2_DrawStr(&m1_u8g2, 4, 30, "File create failed");
-m1_u8g2_nextpage();
-vTaskDelay(pdMS_TO_TICKS(1500));
-return false;
-}
+	/* Build output path */
+	snprintf(out_path, sizeof(out_path), "%s/%s%s",
+	         IR_CUSTOM_DIR, remote_name, IR_FILE_EXTENSION);
 
-if (!flipper_ir_write_header(&ff))
-{
-ff_close(&ff);
-return false;
-}
+	/* Open / create output file */
+	if (!ff_open_write(&ff, out_path))
+	{
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "File create failed");
+		m1_u8g2_nextpage();
+		vTaskDelay(pdMS_TO_TICKS(1500));
+		return false;
+	}
 
-/* Write each assigned slot as a signal */
-for (uint8_t i = 0; i < n_slots; i++)
-{
-if (slots[i].src == SLOT_SRC_NONE)
-continue; /* Skip unassigned slots */
+	if (!flipper_ir_write_header(&ff))
+	{
+		ff_close(&ff);
+		return false;
+	}
 
-memset(&sig, 0, sizeof(sig));
-snprintf(sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", slots[i].slot_name);
-sig.valid = true;
+	/* Write each assigned slot as a signal */
+	for (uint8_t i = 0; i < n_slots && write_ok; i++)
+	{
+		if (slots[i].src == SLOT_SRC_NONE)
+			continue; /* Skip unassigned slots */
 
-if (slots[i].src == SLOT_SRC_LEARNED)
-{
-/* Learned signal: store as parsed */
-sig.type            = FLIPPER_IR_SIGNAL_PARSED;
-sig.parsed.protocol = slots[i].irmp_data.protocol;
-sig.parsed.address  = slots[i].irmp_data.address;
-sig.parsed.command  = slots[i].irmp_data.command;
-sig.parsed.flags    = slots[i].irmp_data.flags;
-flipper_ir_write_signal(&ff, &sig);
-}
-else if (slots[i].src == SLOT_SRC_IRDB)
-{
-if (!slots[i].src_is_raw)
-{
-/* Parsed IRDB signal: re-parse from source to get data */
-uint16_t cnt = parse_ir_file(slots[i].src_filepath);
-for (uint16_t j = 0; j < cnt; j++)
-{
-if (strcmp(s_commands[j].name, slots[i].src_signal_name) == 0
-    && !s_commands[j].is_raw && s_commands[j].valid)
-{
-sig.type            = FLIPPER_IR_SIGNAL_PARSED;
-sig.parsed.protocol = s_commands[j].protocol;
-sig.parsed.address  = s_commands[j].address;
-sig.parsed.command  = s_commands[j].command;
-sig.parsed.flags    = s_commands[j].flags;
-flipper_ir_write_signal(&ff, &sig);
-break;
-}
-}
-}
-else
-{
-/* Raw IRDB signal: read from source file via flipper_ir API */
-flipper_file_t src_ff;
-if (flipper_ir_open(&src_ff, slots[i].src_filepath))
-{
-flipper_ir_signal_t raw_sig;
-while (flipper_ir_read_signal(&src_ff, &raw_sig))
-{
-if (strcmp(raw_sig.name, slots[i].src_signal_name) == 0
-    && raw_sig.type == FLIPPER_IR_SIGNAL_RAW
-    && raw_sig.valid)
-{
-/* Write under the slot name */
-snprintf(raw_sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", slots[i].slot_name);
-flipper_ir_write_signal(&ff, &raw_sig);
-break;
-}
-}
-ff_close(&src_ff);
-}
-}
-}
-}
+		memset(&sig, 0, sizeof(sig));
+		snprintf(sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", slots[i].slot_name);
+		sig.valid = true;
 
-ff_close(&ff);
-ok = true;
+		if (slots[i].src == SLOT_SRC_LEARNED)
+		{
+			/* Learned signal: store as parsed */
+			sig.type            = FLIPPER_IR_SIGNAL_PARSED;
+			sig.parsed.protocol = slots[i].irmp_data.protocol;
+			sig.parsed.address  = slots[i].irmp_data.address;
+			sig.parsed.command  = slots[i].irmp_data.command;
+			sig.parsed.flags    = slots[i].irmp_data.flags;
+			if (!flipper_ir_write_signal(&ff, &sig))
+				write_ok = false;
+		}
+		else if (slots[i].src == SLOT_SRC_IRDB)
+		{
+			if (!slots[i].src_is_raw)
+			{
+				/* Parsed IRDB signal: re-parse from source to get data */
+				uint16_t cnt = parse_ir_file(slots[i].src_filepath);
+				bool found = false;
+				for (uint16_t j = 0; j < cnt; j++)
+				{
+					if (strcmp(s_commands[j].name, slots[i].src_signal_name) == 0
+					    && !s_commands[j].is_raw && s_commands[j].valid)
+					{
+						sig.type            = FLIPPER_IR_SIGNAL_PARSED;
+						sig.parsed.protocol = s_commands[j].protocol;
+						sig.parsed.address  = s_commands[j].address;
+						sig.parsed.command  = s_commands[j].command;
+						sig.parsed.flags    = s_commands[j].flags;
+						if (!flipper_ir_write_signal(&ff, &sig))
+							write_ok = false;
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					write_ok = false;
+			}
+			else
+			{
+				/* Raw IRDB signal: read from source file via flipper_ir API */
+				flipper_file_t src_ff;
+				if (flipper_ir_open(&src_ff, slots[i].src_filepath))
+				{
+					flipper_ir_signal_t raw_sig;
+					bool found = false;
+					while (flipper_ir_read_signal(&src_ff, &raw_sig))
+					{
+						if (strcmp(raw_sig.name, slots[i].src_signal_name) == 0
+						    && raw_sig.type == FLIPPER_IR_SIGNAL_RAW
+						    && raw_sig.valid)
+						{
+							/* Write under the slot name */
+							snprintf(raw_sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s",
+							         slots[i].slot_name);
+							if (!flipper_ir_write_signal(&ff, &raw_sig))
+								write_ok = false;
+							found = true;
+							break;
+						}
+					}
+					ff_close(&src_ff);
+					if (!found)
+						write_ok = false;
+				}
+				else
+				{
+					write_ok = false;
+				}
+			}
+		}
+	}
 
-/* Show saved confirmation */
-m1_u8g2_firstpage();
-u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-u8g2_DrawStr(&m1_u8g2, 2, 11, "Remote Saved!");
-u8g2_DrawHLine(&m1_u8g2, 0, 13, 128);
-u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-u8g2_DrawStr(&m1_u8g2, 2, 25, remote_name);
-u8g2_DrawStr(&m1_u8g2, 2, 36, "Saved to IR/Custom/");
-u8g2_DrawStr(&m1_u8g2, 2, 47, "Find via Browse IRDB");
-m1_u8g2_nextpage();
-vTaskDelay(pdMS_TO_TICKS(2000));
+	ff_close(&ff);
 
-return ok;
+	if (!write_ok)
+	{
+		/* Delete the incomplete file and show error */
+		f_unlink(out_path);
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "Write failed");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 46, "Check SD card");
+		m1_u8g2_nextpage();
+		vTaskDelay(pdMS_TO_TICKS(1500));
+		return false;
+	}
+
+	/* Show saved confirmation */
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 2, 11, "Remote Saved!");
+	u8g2_DrawHLine(&m1_u8g2, 0, 13, 128);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 25, remote_name);
+	u8g2_DrawStr(&m1_u8g2, 2, 36, "Saved to IR/Custom/");
+	u8g2_DrawStr(&m1_u8g2, 2, 47, "Find via Browse IRDB");
+	m1_u8g2_nextpage();
+	vTaskDelay(pdMS_TO_TICKS(2000));
+
+	return true;
 }
 
 
 
 /*============================================================================*/
 /*
- * Case-insensitive substring search.
- * Returns true if needle is found anywhere within haystack (ASCII only).
- * An empty needle always matches.
- */
+* Case-insensitive substring search.
+* Returns true if needle is found anywhere within haystack (ASCII only).
+* An empty needle always matches.
+*/
 /*============================================================================*/
 static bool str_contains_icase(const char *haystack, const char *needle)
 {
@@ -2735,14 +2791,14 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 	char h, n;
 
 	if (needle == NULL || needle[0] == '\0')
-		return true;
+	return true;
 	if (haystack == NULL)
-		return false;
+	return false;
 
 	hl = strlen(haystack);
 	nl = strlen(needle);
 	if (nl > hl)
-		return false;
+	return false;
 
 	for (i = 0; i <= hl - nl; i++)
 	{
@@ -2752,9 +2808,9 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 			h = haystack[i + j];
 			n = needle[j];
 			if (h >= 'A' && h <= 'Z')
-				h = (char)(h + 32);
+			h = (char)(h + 32);
 			if (n >= 'A' && n <= 'Z')
-				n = (char)(n + 32);
+			n = (char)(n + 32);
 			if (h != n)
 			{
 				match = false;
@@ -2762,7 +2818,7 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 			}
 		}
 		if (match)
-			return true;
+		return true;
 	}
 	return false;
 } // static bool str_contains_icase(...)
@@ -2771,14 +2827,14 @@ static bool str_contains_icase(const char *haystack, const char *needle)
 
 /*============================================================================*/
 /*
- * Walk the IRDB directory tree (3 levels: category / brand / device) and
- * collect up to IR_SEARCH_RESULTS_MAX .ir file paths whose filenames contain
- * the given query string (case-insensitive).  Uses three nested DIR objects
- * instead of recursion to stay stack-friendly on FreeRTOS tasks.
- *
- * Results are stored in s_search_results[]; s_search_count is updated.
- * Caller must set s_search_count = 0 before calling.
- */
+* Walk the IRDB directory tree (3 levels: category / brand / device) and
+* collect up to IR_SEARCH_RESULTS_MAX .ir file paths whose filenames contain
+* the given query string (case-insensitive).  Uses three nested DIR objects
+* instead of recursion to stay stack-friendly on FreeRTOS tasks.
+*
+* Results are stored in s_search_results[]; s_search_count is updated.
+* Caller must set s_search_count = 0 before calling.
+*/
 /*============================================================================*/
 static void search_ir_files(const char *root, const char *query)
 {
@@ -2791,16 +2847,16 @@ static void search_ir_files(const char *root, const char *query)
 
 	res = f_opendir(&cat_dir, root);
 	if (res != FR_OK)
-		return;
+	return;
 
 	/* Level 1: categories (or files directly in root) */
 	while (s_search_count < IR_SEARCH_RESULTS_MAX)
 	{
 		res = f_readdir(&cat_dir, &cat_fno);
 		if (res != FR_OK || cat_fno.fname[0] == '\0')
-			break;
+		break;
 		if (cat_fno.fname[0] == '.')
-			continue;
+		continue;
 
 		strncpy(cat_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 		cat_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
@@ -2812,7 +2868,7 @@ static void search_ir_files(const char *root, const char *query)
 			if (is_ir_file(cat_fno.fname) && str_contains_icase(cat_fno.fname, query))
 			{
 				strncpy(s_search_results[s_search_count], cat_path,
-				        IR_UNIVERSAL_PATH_MAX_LEN - 1);
+				IR_UNIVERSAL_PATH_MAX_LEN - 1);
 				s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 				s_search_count++;
 			}
@@ -2822,15 +2878,15 @@ static void search_ir_files(const char *root, const char *query)
 		/* Level 2: brands (or files directly in category) */
 		res = f_opendir(&brand_dir, cat_path);
 		if (res != FR_OK)
-			continue;
+		continue;
 
 		while (s_search_count < IR_SEARCH_RESULTS_MAX)
 		{
 			res = f_readdir(&brand_dir, &brand_fno);
 			if (res != FR_OK || brand_fno.fname[0] == '\0')
-				break;
+			break;
 			if (brand_fno.fname[0] == '.')
-				continue;
+			continue;
 
 			strncpy(brand_path, cat_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 			brand_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
@@ -2842,7 +2898,7 @@ static void search_ir_files(const char *root, const char *query)
 				if (is_ir_file(brand_fno.fname) && str_contains_icase(brand_fno.fname, query))
 				{
 					strncpy(s_search_results[s_search_count], brand_path,
-					        IR_UNIVERSAL_PATH_MAX_LEN - 1);
+					IR_UNIVERSAL_PATH_MAX_LEN - 1);
 					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 					s_search_count++;
 				}
@@ -2852,15 +2908,15 @@ static void search_ir_files(const char *root, const char *query)
 			/* Level 3: device .ir files */
 			res = f_opendir(&dev_dir, brand_path);
 			if (res != FR_OK)
-				continue;
+			continue;
 
 			while (s_search_count < IR_SEARCH_RESULTS_MAX)
 			{
 				res = f_readdir(&dev_dir, &dev_fno);
 				if (res != FR_OK || dev_fno.fname[0] == '\0')
-					break;
+				break;
 				if (dev_fno.fname[0] == '.')
-					continue;
+				continue;
 
 				if (is_ir_file(dev_fno.fname) && str_contains_icase(dev_fno.fname, query))
 				{
@@ -2868,7 +2924,7 @@ static void search_ir_files(const char *root, const char *query)
 					file_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 					path_append(file_path, dev_fno.fname);
 					strncpy(s_search_results[s_search_count], file_path,
-					        IR_UNIVERSAL_PATH_MAX_LEN - 1);
+					IR_UNIVERSAL_PATH_MAX_LEN - 1);
 					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 					s_search_count++;
 				}
@@ -2883,64 +2939,64 @@ static void search_ir_files(const char *root, const char *query)
 
 /*============================================================================*/
 /*
- * Main entry point for the custom remote builder.
- * Called from dashboard_screen() when "Create Remote" is selected.
- *
- * Flow:
- *   1. Pick a template (TV / AC / Audio / Custom)
- *   2. Assign a signal to each slot (Learn / Browse / Skip)
- *   3. Press RIGHT to save → VKB name → write .ir file
- */
+* Main entry point for the custom remote builder.
+* Called from dashboard_screen() when "Create Remote" is selected.
+*
+* Flow:
+*   1. Pick a template (TV / AC / Audio / Custom)
+*   2. Assign a signal to each slot (Learn / Browse / Skip)
+*   3. Press RIGHT to save → VKB name → write .ir file
+*/
 /*============================================================================*/
 static void ir_custom_builder_run(void)
 {
-S_M1_Buttons_Status bs;
-S_M1_Main_Q_t q;
-uint8_t slot_sel = 0;
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q;
+	uint8_t slot_sel = 0;
 
-/* Step 1: choose a template */
-if (!builder_pick_template(&s_builder_n_slots, s_builder_slots))
-return; /* User cancelled */
+	/* Step 1: choose a template */
+	if (!builder_pick_template(&s_builder_n_slots, s_builder_slots))
+	return; /* User cancelled */
 
-/* Step 2: assign signals to slots */
-builder_draw_slots(s_builder_slots, s_builder_n_slots, slot_sel);
+	/* Step 2: assign signals to slots */
+	builder_draw_slots(s_builder_slots, s_builder_n_slots, slot_sel);
 
-while (1)
-{
-if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
-continue;
-if (q.q_evt_type != Q_EVENT_KEYPAD)
-continue;
-xQueueReceive(button_events_q_hdl, &bs, 0);
+	while (1)
+	{
+		if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+		continue;
+		if (q.q_evt_type != Q_EVENT_KEYPAD)
+		continue;
+		xQueueReceive(button_events_q_hdl, &bs, 0);
 
-if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-xQueueReset(main_q_hdl);
-return; /* Abandon builder */
-}
-else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-{
-slot_sel = (slot_sel > 0) ? slot_sel - 1 : s_builder_n_slots - 1;
-}
-else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-{
-slot_sel = (slot_sel + 1) % s_builder_n_slots;
-}
-else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-{
-/* Assign a signal to the selected slot */
-builder_slot_action(&s_builder_slots[slot_sel]);
-}
-else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-{
-/* Save the remote */
-builder_save_remote(s_builder_slots, s_builder_n_slots);
-xQueueReset(main_q_hdl);
-return;
-}
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return; /* Abandon builder */
+		}
+		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			slot_sel = (slot_sel > 0) ? slot_sel - 1 : s_builder_n_slots - 1;
+		}
+		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			slot_sel = (slot_sel + 1) % s_builder_n_slots;
+		}
+		else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			/* Assign a signal to the selected slot */
+			builder_slot_action(&s_builder_slots[slot_sel]);
+		}
+		else if (bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			/* Save the remote */
+			builder_save_remote(s_builder_slots, s_builder_n_slots);
+			xQueueReset(main_q_hdl);
+			return;
+		}
 
-builder_draw_slots(s_builder_slots, s_builder_n_slots, slot_sel);
-}
+		builder_draw_slots(s_builder_slots, s_builder_n_slots, slot_sel);
+	}
 } // static void ir_custom_builder_run(void)
 
 
