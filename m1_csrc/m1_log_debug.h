@@ -13,6 +13,7 @@
 #ifndef M1_LOG_DEBUG_H_
 #define M1_LOG_DEBUG_H_
 
+#include <stdbool.h>
 #include "stm32h5xx_hal.h"
 #include "cmsis_os2.h"
 #include "app_freertos.h"
@@ -57,6 +58,12 @@ extern TaskHandle_t log_db_task_hdl;
 extern QueueHandle_t log_q_hdl;
 
 void m1_logdb_deinit(void);
+
+/* Suppress / resume debug output.
+ * While suppressed, _write() silently discards all data so that debug
+ * messages do not corrupt the UART data stream during USB-UART bridge
+ * operation.  Safe to call from any task context. */
+void m1_logdb_set_suppress(bool suppress);
 
 /* RPC CLI output capture — when enabled, _write() also copies output
  * to a side buffer so rpc_handle_cli_exec() can return it via RPC. */
