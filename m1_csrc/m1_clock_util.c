@@ -81,14 +81,21 @@ void clock_adjust_days(clock_time_t *dt, int8_t delta_days)
         else
         {
             if (dt->month > 1U)
+            {
                 dt->month--;
-            else
+                dt->day = clock_days_in_month(dt->year, dt->month);
+            }
+            else if (dt->year > 2000U)
             {
                 dt->month = 12U;
-                if (dt->year > 2000U)
-                    dt->year--;
+                dt->year--;
+                dt->day = clock_days_in_month(dt->year, dt->month);
             }
-            dt->day = clock_days_in_month(dt->year, dt->month);
+            else
+            {
+                /* Clamp at the minimum supported date: 2000-01-01. */
+                break;
+            }
         }
 
         if (dt->weekday >= 1U && dt->weekday <= 7U)
