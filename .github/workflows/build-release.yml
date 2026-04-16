@@ -326,6 +326,16 @@ jobs:
           ref: main
           fetch-depth: 1
 
+      - name: Assemble changelog fragments
+        run: |
+          echo "=== Assembling changelog fragments ==="
+          FRAGMENT_COUNT=$(find .changelog -maxdepth 1 -name '*.md' ! -iname 'README.md' 2>/dev/null | wc -l)
+          if [ "$FRAGMENT_COUNT" -gt 0 ]; then
+            python3 scripts/assemble_changelog.py
+          else
+            echo "No changelog fragments found — skipping assembly."
+          fi
+
       - name: Replace [Unreleased] with version heading
         env:
           TAG: ${{ needs.build.outputs.tag }}
@@ -374,6 +384,10 @@ jobs:
 
           git checkout -b "${BRANCH}"
           git add CHANGELOG.md
+          # Also stage deletion of assembled fragment files
+          if [ -d .changelog ]; then
+            git add .changelog/
+          fi
           if git diff --cached --quiet; then
             echo "No changelog changes to commit."
             exit 0
