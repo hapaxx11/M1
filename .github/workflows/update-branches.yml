@@ -1,0 +1,85 @@
+name: Update agent branches
+
+# Automatically merge the default branch (main) into every active
+# copilot/* branch whenever main receives new commits.  This keeps
+# long-running agent branches up-to-date and reduces merge conflicts.
+#
+# If a merge conflict arises the workflow logs an error for that branch
+# and continues with the remaining branches — it never force-pushes.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write       # needed to push merge commits to copilot/* branches
+
+jobs:
+  update-branches:
+    name: Merge main → agent branches
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.COPILOT_AGENT_APP_ID }}
+          private-key: ${{ secrets.COPILOT_AGENT_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history so merge-base works
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Merge main into each copilot/* branch
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          CURRENT_SHA=$(git rev-parse HEAD)   # tip of main we just checked out
+
+          # List all remote copilot/* branches
+          BRANCHES=$(git branch -r --list 'origin/copilot/*' | sed 's|origin/||' | xargs)
+
+          if [ -z "$BRANCHES" ]; then
+            echo "No copilot/* branches found — nothing to do."
+            exit 0
+          fi
+
+          FAILED=""
+          for BRANCH in $BRANCHES; do
+            echo "::group::Updating $BRANCH"
+
+            git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            # Skip if branch already contains the latest main commit
+            if git merge-base --is-ancestor "$CURRENT_SHA" HEAD 2>/dev/null; then
+              echo "$BRANCH is already up-to-date with main."
+              echo "::endgroup::"
+              continue
+            fi
+
+            if git merge origin/main --no-edit -m "Merge main into $BRANCH"; then
+              git push origin "$BRANCH"
+              echo "Successfully merged main into $BRANCH."
+            else
+              echo "::error::Merge conflict on $BRANCH — skipping (manual resolution needed)."
+              git merge --abort || true
+              FAILED="$FAILED $BRANCH"
+            fi
+
+            echo "::endgroup::"
+          done
+
+          if [ -n "$FAILED" ]; then
+            echo ""
+            echo "::warning::The following branches had merge conflicts:$FAILED"
+            exit 1
+          fi
