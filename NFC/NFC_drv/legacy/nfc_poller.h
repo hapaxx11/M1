@@ -22,6 +22,28 @@ bool ReadIni(void);
  */
 void ReadCycle(void);
 
+/* --- Poll profile --- */
+
+/**
+ * @brief NFC poll profile — controls which technologies are polled.
+ *
+ * NFC_POLL_PROFILE_NORMAL  : Poll all compiled-in technologies (A/B/F/V/ST25TB).
+ * NFC_POLL_PROFILE_FAST_A  : Poll NFC-A only with a shorter discovery window,
+ *                            improving detection latency for ISO14443A tags
+ *                            (MIFARE Classic, NTAG, DESFire, etc.).
+ */
+typedef enum
+{
+    NFC_POLL_PROFILE_NORMAL = 0, /**< All technologies (default) */
+    NFC_POLL_PROFILE_FAST_A,     /**< NFC-A only, shorter window  */
+} nfc_poll_profile_t;
+
+/** Set the poll profile used by the next ReadIni() call. */
+void nfc_poller_set_profile(nfc_poll_profile_t profile);
+
+/** Get the current poll profile. */
+nfc_poll_profile_t nfc_poller_get_profile(void);
+
 /* --- Extern wrappers for static poller helpers --- */
 
 /** Check if SAK indicates a MIFARE Classic variant */

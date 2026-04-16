@@ -603,3 +603,21 @@ if(TARGET sanitizers)
     target_link_libraries(test_ir_search PRIVATE sanitizers)
 endif()
 add_test(NAME ir_search COMMAND test_ir_search)
+
+# ------------------------------------------------------------------
+# Module under test: nfc_poller (mfc_is_classic_sak)
+# Pure function — SAK-to-MIFARE-Classic classifier.
+# Uses a standalone copy because nfc_poller.c has HAL/RTOS/RFAL deps.
+# ------------------------------------------------------------------
+add_executable(test_nfc_poller
+    test_nfc_poller.c
+    ${STUBS_DIR}/nfc_poller_impl.c
+)
+target_include_directories(test_nfc_poller PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_nfc_poller PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_poller PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_poller COMMAND test_nfc_poller)
