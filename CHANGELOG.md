@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.105] - 2026-04-16
+
+### Added
+
+- **CI: Auto-merge main into agent branches** — New `update-branches.yml`
+  GitHub Actions workflow that triggers on every push to `main` and
+  automatically merges main into all active `copilot/*` branches, keeping
+  long-running agent branches up-to-date and reducing merge conflicts.
+
+### Changed
+
+- **Changelog fragment system** — Replaced direct CHANGELOG.md editing with
+  fragment files in `.changelog/` to eliminate merge conflicts when multiple
+  branches are in flight.  CI assembles fragments at release time.  Documented
+  the workflow in DEVELOPMENT.md and CONTRIBUTING.md for human contributors.
 ## [0.9.0.104] - 2026-04-16
 
 ### Added
