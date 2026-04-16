@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.110] - 2026-04-16
+
+### Added
+
+- **Settings: System Dashboard** — 3-page at-a-glance status display ported from
+  dagnazty/M1_T-1000, accessible from Settings menu. Shows overview (date/time,
+  battery, voltage, uptime), I/O (SD card, USB, ESP32 status), and system info
+  (firmware version, active bank, orientation, buzzer/LED state).
 ## [0.9.0.109] - 2026-04-16
 
 ### Fixed
