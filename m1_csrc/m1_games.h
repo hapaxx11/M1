@@ -54,6 +54,8 @@ void game_trex_run(void);
 void game_pong_run(void);
 void game_dice_run(void);
 
+/* Utility apps */
+void app_hex_viewer_run(void);
 /* Clock utility */
 void app_clock_run(void);
 

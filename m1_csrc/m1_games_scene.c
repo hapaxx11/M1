@@ -28,6 +28,7 @@ enum {
     GamesScenePong,
     GamesSceneDice,
     GamesSceneMusic,
+    GamesSceneHexViewer,
     GamesSceneClock,
     GamesSceneCount
 };
@@ -82,6 +83,13 @@ static void music_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void hex_viewer_on_enter(M1SceneApp *app)
+{
+    app_hex_viewer_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 static void clock_on_enter(M1SceneApp *app)
 {
     (void)app;
@@ -92,17 +100,18 @@ static void clock_on_enter(M1SceneApp *app)
 
 /*--- Handler tables -------------------------------------------------------*/
 
-static const M1SceneHandlers snake_handlers  = { .on_enter = snake_on_enter  };
-static const M1SceneHandlers tetris_handlers = { .on_enter = tetris_on_enter };
-static const M1SceneHandlers trex_handlers   = { .on_enter = trex_on_enter   };
-static const M1SceneHandlers pong_handlers   = { .on_enter = pong_on_enter   };
-static const M1SceneHandlers dice_handlers   = { .on_enter = dice_on_enter   };
-static const M1SceneHandlers music_handlers  = { .on_enter = music_on_enter  };
+static const M1SceneHandlers snake_handlers      = { .on_enter = snake_on_enter      };
+static const M1SceneHandlers tetris_handlers     = { .on_enter = tetris_on_enter     };
+static const M1SceneHandlers trex_handlers       = { .on_enter = trex_on_enter       };
+static const M1SceneHandlers pong_handlers       = { .on_enter = pong_on_enter       };
+static const M1SceneHandlers dice_handlers       = { .on_enter = dice_on_enter       };
+static const M1SceneHandlers music_handlers      = { .on_enter = music_on_enter      };
+static const M1SceneHandlers hex_viewer_handlers = { .on_enter = hex_viewer_on_enter };
 static const M1SceneHandlers clock_handlers  = { .on_enter = clock_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  8
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Snake",
@@ -111,6 +120,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Pong",
     "Dice Roll",
     "Music Player",
+    "Hex Viewer",
     "Clock",
 };
 
@@ -121,6 +131,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     GamesScenePong,
     GamesSceneDice,
     GamesSceneMusic,
+    GamesSceneHexViewer,
     GamesSceneClock,
 };
 
@@ -158,13 +169,14 @@ static const M1SceneHandlers menu_handlers = {
 /*--- Scene registry -------------------------------------------------------*/
 
 static const M1SceneHandlers *const scene_registry[GamesSceneCount] = {
-    [GamesSceneMenu]   = &menu_handlers,
-    [GamesSceneSnake]  = &snake_handlers,
-    [GamesSceneTetris] = &tetris_handlers,
-    [GamesSceneTRex]   = &trex_handlers,
-    [GamesScenePong]   = &pong_handlers,
-    [GamesSceneDice]   = &dice_handlers,
-    [GamesSceneMusic]  = &music_handlers,
+    [GamesSceneMenu]      = &menu_handlers,
+    [GamesSceneSnake]     = &snake_handlers,
+    [GamesSceneTetris]    = &tetris_handlers,
+    [GamesSceneTRex]      = &trex_handlers,
+    [GamesScenePong]      = &pong_handlers,
+    [GamesSceneDice]      = &dice_handlers,
+    [GamesSceneMusic]     = &music_handlers,
+    [GamesSceneHexViewer] = &hex_viewer_handlers,
     [GamesSceneClock]  = &clock_handlers,
 };
 

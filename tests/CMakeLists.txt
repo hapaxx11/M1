@@ -605,6 +605,21 @@ endif()
 add_test(NAME ir_search COMMAND test_ir_search)
 
 # ------------------------------------------------------------------
+# Module under test: hex_viewer (format_row + ascii_preview)
+# Pure functions — hex/ASCII formatting with no hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_hex_viewer
+    test_hex_viewer.c
+    ${M1_ROOT}/m1_csrc/hex_viewer.c
+)
+target_include_directories(test_hex_viewer PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_hex_viewer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_hex_viewer PRIVATE sanitizers)
+endif()
+add_test(NAME hex_viewer COMMAND test_hex_viewer)
 # Module under test: nfc_poller (mfc_is_classic_sak)
 # Pure function — SAK-to-MIFARE-Classic classifier.
 # Compiles the production nfc_poller_helpers.c directly (single source of truth).
