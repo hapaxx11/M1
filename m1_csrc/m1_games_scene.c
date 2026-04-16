@@ -86,6 +86,10 @@ static void music_on_enter(M1SceneApp *app)
 static void hex_viewer_on_enter(M1SceneApp *app)
 {
     app_hex_viewer_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 static void clock_on_enter(M1SceneApp *app)
 {
     (void)app;
@@ -107,7 +111,7 @@ static const M1SceneHandlers clock_handlers  = { .on_enter = clock_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  8
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Snake",
