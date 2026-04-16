@@ -577,6 +577,8 @@ target_sources(m1_01 INTERFACE
     # === Enhanced firmware: Built-in Games (Phase 9) ===
     ../../m1_csrc/m1_games.c
     ../../m1_csrc/m1_games_scene.c
+    ../../m1_csrc/m1_clock_util.c
+    ../../m1_csrc/m1_clock.c
     ../../m1_csrc/game_snake.c
     ../../m1_csrc/game_tetris.c
     ../../m1_csrc/game_trex.c

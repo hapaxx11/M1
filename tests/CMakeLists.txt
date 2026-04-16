@@ -622,3 +622,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_nfc_poller PRIVATE sanitizers)
 endif()
 add_test(NAME nfc_poller COMMAND test_nfc_poller)
+# Module under test: m1_clock_util
+# Pure functions — leap year, days-in-month, timezone offset.
+# Compiles directly from production source (no hardware dependencies).
+# ------------------------------------------------------------------
+add_executable(test_clock
+    test_clock.c
+    ${M1_ROOT}/m1_csrc/m1_clock_util.c
+)
+target_include_directories(test_clock PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_clock PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_clock PRIVATE sanitizers)
+endif()
+add_test(NAME clock COMMAND test_clock)
