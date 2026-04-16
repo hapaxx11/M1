@@ -79,9 +79,11 @@ static void dashboard_draw_page(dashboard_page_t page)
     m1_time_t now;
     const char *usb_mode;
     const char *usb_link;
+    uint32_t battery_voltage_tenths;
 
     battery_power_status_get(&pwr);
     m1_get_localtime(&now);
+    battery_voltage_tenths = ((uint32_t)(pwr.battery_voltage + 50.0f)) / 100U;
     sd_status = m1_sdcard_get_status();
     sd_info = (sd_status == SD_access_OK) ? m1_sdcard_get_info() : NULL;
 
@@ -113,8 +115,8 @@ static void dashboard_draw_page(dashboard_page_t page)
         snprintf(line2, sizeof(line2), "Battery %u%%  %uC",
                  pwr.battery_level, pwr.battery_temp);
         snprintf(line3, sizeof(line3), "VBAT %u.%uV  %dmA",
-                 (unsigned)(pwr.battery_voltage / 1000.0f),
-                 (unsigned)((uint32_t)pwr.battery_voltage % 1000U) / 100U,
+                 (unsigned)(battery_voltage_tenths / 10U),
+                 (unsigned)(battery_voltage_tenths % 10U),
                  pwr.consumption_current);
         snprintf(line4, sizeof(line4), "Uptime %s", uptime);
     }
