@@ -12,12 +12,16 @@ on:
     branches: [main]
 
 permissions:
-  contents: write       # needed to push merge commits to copilot/* branches
+  contents: read        # checkout/push use the GitHub App token, not GITHUB_TOKEN
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   update-branches:
     name: Merge main → agent branches
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Generate GitHub App token
@@ -34,8 +38,6 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Merge main into each copilot/* branch
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -67,8 +69,13 @@ jobs:
             fi
 
             if git merge "$CURRENT_SHA" --no-edit -m "Merge main into $BRANCH"; then
-              git push origin "$BRANCH"
-              echo "Successfully merged main into $BRANCH."
+              if git push origin "$BRANCH"; then
+                echo "Successfully merged main into $BRANCH."
+              else
+                echo "::error::Push failed for $BRANCH — skipping (may need manual update)."
+                git reset --hard "origin/$BRANCH"
+                FAILED="$FAILED $BRANCH"
+              fi
             else
               echo "::error::Merge conflict on $BRANCH — skipping (manual resolution needed)."
               git merge --abort || true
