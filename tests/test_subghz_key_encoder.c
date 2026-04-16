@@ -386,6 +386,138 @@ void test_encode_msb_first(void)
 }
 
 /* ===================================================================
+ * Magellan custom encoder
+ * =================================================================== */
+
+void test_magellan_has_custom_encoder(void)
+{
+    TEST_ASSERT_TRUE(subghz_key_has_custom_encoder("Magellan"));
+    TEST_ASSERT_TRUE(subghz_key_has_custom_encoder("magellan"));   /* case-insensitive */
+    TEST_ASSERT_TRUE(subghz_key_has_custom_encoder("MAGELLAN"));
+    TEST_ASSERT_FALSE(subghz_key_has_custom_encoder("Princeton"));
+    TEST_ASSERT_FALSE(subghz_key_has_custom_encoder(NULL));
+}
+
+void test_magellan_encode_structure(void)
+{
+    /* Verify Magellan waveform structure: header + start bit + 32 data bits + stop bit */
+    SubGhzKeyParams params = make_params("Magellan", 0x77D1883F, 32, 0);
+
+    SubGhzRawPair out[60];
+    uint32_t count = subghz_key_encode_custom(&params, out, 60, 1);
+
+    /* 1 header burst + 12 header toggles + 1 header end + 1 start bit + 32 data + 1 stop = 48 */
+    TEST_ASSERT_EQUAL_UINT32(SUBGHZ_MAGELLAN_PAIRS_PER_REP, count);
+
+    /* Header burst: 800µs HIGH + 200µs LOW */
+    TEST_ASSERT_EQUAL_UINT32(800, out[0].high_us);
+    TEST_ASSERT_EQUAL_UINT32(200, out[0].low_us);
+
+    /* Header toggle pairs (indices 1-12): 200µs HIGH + 200µs LOW */
+    for (int i = 1; i <= 12; i++)
+    {
+        TEST_ASSERT_EQUAL_UINT32(200, out[i].high_us);
+        TEST_ASSERT_EQUAL_UINT32(200, out[i].low_us);
+    }
+
+    /* Header end (index 13): 200µs HIGH + 400µs LOW */
+    TEST_ASSERT_EQUAL_UINT32(200, out[13].high_us);
+    TEST_ASSERT_EQUAL_UINT32(400, out[13].low_us);
+
+    /* Start bit (index 14): 1200µs HIGH + 400µs LOW */
+    TEST_ASSERT_EQUAL_UINT32(1200, out[14].high_us);
+    TEST_ASSERT_EQUAL_UINT32(400,  out[14].low_us);
+
+    /* Data starts at index 15, ends at 46 (32 bits) */
+
+    /* Stop bit (index 47): 200µs HIGH + 40000µs LOW */
+    TEST_ASSERT_EQUAL_UINT32(200,   out[47].high_us);
+    TEST_ASSERT_EQUAL_UINT32(40000, out[47].low_us);
+}
+
+void test_magellan_encode_bit_polarity(void)
+{
+    /* Magellan uses INVERTED polarity:
+     * Bit 1: SHORT HIGH (200) + LONG LOW (400)
+     * Bit 0: LONG HIGH (400) + SHORT LOW (200) */
+    SubGhzKeyParams params = make_params("Magellan", 0xA0000000ULL, 32, 0);
+
+    SubGhzRawPair out[60];
+    subghz_key_encode_custom(&params, out, 60, 1);
+
+    /* Data starts at index 15 (after header + start bit)
+     * 0xA0000000 = 1010 0000 0000 0000 0000 0000 0000 0000
+     * First 4 bits: 1, 0, 1, 0 */
+
+    /* Bit 31 (MSB) = 1 → SHORT HIGH + LONG LOW */
+    TEST_ASSERT_EQUAL_UINT32(200, out[15].high_us);
+    TEST_ASSERT_EQUAL_UINT32(400, out[15].low_us);
+
+    /* Bit 30 = 0 → LONG HIGH + SHORT LOW */
+    TEST_ASSERT_EQUAL_UINT32(400, out[16].high_us);
+    TEST_ASSERT_EQUAL_UINT32(200, out[16].low_us);
+
+    /* Bit 29 = 1 → SHORT HIGH + LONG LOW */
+    TEST_ASSERT_EQUAL_UINT32(200, out[17].high_us);
+    TEST_ASSERT_EQUAL_UINT32(400, out[17].low_us);
+
+    /* Bit 28 = 0 → LONG HIGH + SHORT LOW */
+    TEST_ASSERT_EQUAL_UINT32(400, out[18].high_us);
+    TEST_ASSERT_EQUAL_UINT32(200, out[18].low_us);
+}
+
+void test_magellan_encode_repetitions(void)
+{
+    SubGhzKeyParams params = make_params("Magellan", 0x12345678, 32, 0);
+
+    SubGhzRawPair out[200];
+    uint32_t count = subghz_key_encode_custom(&params, out, 200, 3);
+
+    /* 3 reps × 48 pairs = 144 */
+    TEST_ASSERT_EQUAL_UINT32(144, count);
+
+    /* Each repetition should start with the same header burst */
+    TEST_ASSERT_EQUAL_UINT32(800, out[0].high_us);
+    TEST_ASSERT_EQUAL_UINT32(800, out[48].high_us);
+    TEST_ASSERT_EQUAL_UINT32(800, out[96].high_us);
+
+    /* Each repetition should end with the stop bit */
+    TEST_ASSERT_EQUAL_UINT32(40000, out[47].low_us);
+    TEST_ASSERT_EQUAL_UINT32(40000, out[95].low_us);
+    TEST_ASSERT_EQUAL_UINT32(40000, out[143].low_us);
+}
+
+void test_magellan_encode_gulf_star_door_alarm_1(void)
+{
+    /* Real signal from Gulf Star Marina issue #188:
+     * Door Alarm 1: Key: 00 00 00 00 47 AE 88 40
+     * → key_value = 0x47AE8840, bit_count = 32 */
+    SubGhzKeyParams params = make_params("Magellan", 0x47AE8840ULL, 32, 0);
+
+    SubGhzRawPair out[60];
+    uint32_t count = subghz_key_encode_custom(&params, out, 60, 1);
+    TEST_ASSERT_EQUAL_UINT32(48, count);
+
+    /* Verify first few data bits: 0x47 = 0100 0111
+     * Bit 31 = 0 → LONG HIGH + SHORT LOW
+     * Bit 30 = 1 → SHORT HIGH + LONG LOW
+     * Bit 29 = 0 → LONG HIGH + SHORT LOW
+     * Bit 28 = 0 → LONG HIGH + SHORT LOW
+     * Bit 27 = 0 → LONG HIGH + SHORT LOW
+     * Bit 26 = 1 → SHORT HIGH + LONG LOW
+     * Bit 25 = 1 → SHORT HIGH + LONG LOW
+     * Bit 24 = 1 → SHORT HIGH + LONG LOW */
+    TEST_ASSERT_EQUAL_UINT32(400, out[15].high_us);  /* bit 31 = 0 */
+    TEST_ASSERT_EQUAL_UINT32(200, out[16].high_us);  /* bit 30 = 1 */
+    TEST_ASSERT_EQUAL_UINT32(400, out[17].high_us);  /* bit 29 = 0 */
+    TEST_ASSERT_EQUAL_UINT32(400, out[18].high_us);  /* bit 28 = 0 */
+    TEST_ASSERT_EQUAL_UINT32(400, out[19].high_us);  /* bit 27 = 0 */
+    TEST_ASSERT_EQUAL_UINT32(200, out[20].high_us);  /* bit 26 = 1 */
+    TEST_ASSERT_EQUAL_UINT32(200, out[21].high_us);  /* bit 25 = 1 */
+    TEST_ASSERT_EQUAL_UINT32(200, out[22].high_us);  /* bit 24 = 1 */
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -425,6 +557,17 @@ int main(void)
     RUN_TEST(test_encode_65_bit_clamped_to_64);
     RUN_TEST(test_encode_null_params_returns_zero);
     RUN_TEST(test_encode_msb_first);
+
+    /* TE fallback and case-insensitive */
+    RUN_TEST(test_timing_unknown_with_te_fallback);
+    RUN_TEST(test_timing_case_insensitive_registry);
+
+    /* Magellan custom encoder */
+    RUN_TEST(test_magellan_has_custom_encoder);
+    RUN_TEST(test_magellan_encode_structure);
+    RUN_TEST(test_magellan_encode_bit_polarity);
+    RUN_TEST(test_magellan_encode_repetitions);
+    RUN_TEST(test_magellan_encode_gulf_star_door_alarm_1);
 
     return UNITY_END();
 }

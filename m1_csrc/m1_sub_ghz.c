@@ -1885,30 +1885,53 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		key_params.bit_count = key_bit_count;
 		key_params.te        = key_te;
 
-		SubGhzKeyTiming key_timing;
-		uint8_t resolve_ret = subghz_key_resolve_timing(&key_params, &key_timing);
-		if (resolve_ret != SUBGHZ_KEY_OK)
-		{
-			f_close(&f_sgh);
-			f_unlink(FLIPPER_SUB_TMP_SGH);
-			free(line_buf); free(out_buf);
-			return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
-		}
+		uint32_t npairs = 0;
+		SubGhzRawPair *pairs = NULL;
+		uint32_t pairs_per_rep;
 
-		/* Encode 3 repetitions of the signal into raw timing pairs */
-		uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
-		uint32_t pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
-		uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
-		SubGhzRawPair *pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
-		if (!pairs)
+		/* Protocol-specific encoders for non-standard waveforms (e.g. Magellan) */
+		if (subghz_key_has_custom_encoder(key_params.protocol))
 		{
-			f_close(&f_sgh);
-			f_unlink(FLIPPER_SUB_TMP_SGH);
-			free(line_buf); free(out_buf);
-			return 1;
+			pairs_per_rep = SUBGHZ_MAGELLAN_PAIRS_PER_REP; /* 48 for Magellan */
+			uint32_t max_pairs = pairs_per_rep * 3;
+			pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+			if (!pairs)
+			{
+				f_close(&f_sgh);
+				f_unlink(FLIPPER_SUB_TMP_SGH);
+				free(line_buf); free(out_buf);
+				return 1;
+			}
+			npairs = subghz_key_encode_custom(&key_params, pairs, max_pairs, 3);
 		}
+		else
+		{
+			/* Generic OOK PWM encoding */
+			SubGhzKeyTiming key_timing;
+			uint8_t resolve_ret = subghz_key_resolve_timing(&key_params, &key_timing);
+			if (resolve_ret != SUBGHZ_KEY_OK)
+			{
+				f_close(&f_sgh);
+				f_unlink(FLIPPER_SUB_TMP_SGH);
+				free(line_buf); free(out_buf);
+				return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
+			}
 
-		uint32_t npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+			/* Encode 3 repetitions of the signal into raw timing pairs */
+			uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
+			pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
+			uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
+			pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+			if (!pairs)
+			{
+				f_close(&f_sgh);
+				f_unlink(FLIPPER_SUB_TMP_SGH);
+				free(line_buf); free(out_buf);
+				return 1;
+			}
+
+			npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+		}
 
 		/* Write encoded pairs as Data: lines to the temp .sgh file.
 		 * The replay engine adds 4 more replays (SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT),
