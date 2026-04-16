@@ -13,6 +13,7 @@
  */
 
 #include <string.h>
+#include <strings.h>   /* strcasecmp */
 #include "subghz_key_encoder.h"
 #include "subghz_protocol_registry.h"
 
@@ -73,10 +74,12 @@ uint8_t subghz_key_resolve_timing(const SubGhzKeyParams *params, SubGhzKeyTiming
     else if (params->te > 0)
     {
         /* Generic fallback: unknown protocol, but .sub file provides TE.
-         * Use the TE value with a default 1:3 ratio (most common OOK PWM).
-         * This allows emulation of signals recorded as KEY files even when
-         * the protocol name isn't in the registry (e.g., third-party
-         * firmware protocols, regional gate systems). */
+         * Use the TE value with a 1:3 ratio — this is the default encoding
+         * ratio used by Princeton and most OOK PWM garage/gate protocols.
+         * The 1:3 ratio is a heuristic; protocols with 1:2 encoding
+         * (CAME, Nice FLO) should be added to the registry for accuracy.
+         * This fallback enables best-effort emulation of third-party
+         * firmware protocols and regional gate systems not in our registry. */
         timing->te_short = params->te;
         timing->te_long  = timing->te_short * 3;
         timing->gap_low  = timing->te_short * 30;
@@ -150,8 +153,6 @@ uint32_t subghz_key_encode(const SubGhzKeyParams *params,
 /*============================================================================*/
 /* Protocol-specific encoders                                                  */
 /*============================================================================*/
-
-#include <strings.h>   /* strcasecmp */
 
 bool subghz_key_has_custom_encoder(const char *protocol)
 {
