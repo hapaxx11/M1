@@ -124,11 +124,36 @@ void test_find_null(void)
 	TEST_ASSERT_EQUAL_INT16(-1, subghz_protocol_find_by_name(NULL));
 }
 
-/* Case sensitivity: registry uses strcmp, so case must match exactly */
-void test_find_case_sensitive(void)
+/* Case insensitivity: registry uses strcasecmp for Flipper .sub compatibility */
+void test_find_case_insensitive(void)
 {
-	/* "princeton" != "Princeton" */
-	TEST_ASSERT_EQUAL_INT16(-1, subghz_protocol_find_by_name("princeton"));
+	/* "princeton" should now match "Princeton" */
+	int16_t idx = subghz_protocol_find_by_name("princeton");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL_STRING("Princeton", proto->name);
+}
+
+void test_find_case_insensitive_mixed(void)
+{
+	/* "FAAC SLH" / "faac slh" / "Faac SLH" should all match */
+	int16_t idx1 = subghz_protocol_find_by_name("FAAC SLH");
+	int16_t idx2 = subghz_protocol_find_by_name("faac slh");
+	int16_t idx3 = subghz_protocol_find_by_name("Faac SLH");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx1);
+	TEST_ASSERT_EQUAL_INT16(idx1, idx2);
+	TEST_ASSERT_EQUAL_INT16(idx1, idx3);
+}
+
+void test_find_case_insensitive_keeloq(void)
+{
+	/* "keeloq" should match "KeeLoq" */
+	int16_t idx = subghz_protocol_find_by_name("keeloq");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeDynamic,
+		subghz_protocol_get((uint16_t)idx)->type);
 }
 
 /* ===================================================================
@@ -239,7 +264,9 @@ int main(void)
 	RUN_TEST(test_find_weather_protocol);
 	RUN_TEST(test_find_not_found);
 	RUN_TEST(test_find_null);
-	RUN_TEST(test_find_case_sensitive);
+	RUN_TEST(test_find_case_insensitive);
+	RUN_TEST(test_find_case_insensitive_mixed);
+	RUN_TEST(test_find_case_insensitive_keeloq);
 
 	/* Index-based access */
 	RUN_TEST(test_get_valid_index);

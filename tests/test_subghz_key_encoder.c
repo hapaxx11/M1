@@ -147,11 +147,38 @@ void test_timing_weather_rejected(void)
 
 void test_timing_unknown_rejected(void)
 {
+    /* Unknown protocol with no TE should still be rejected */
     SubGhzKeyParams params = make_params("TotallyUnknownProtocol", 0, 24, 0);
     SubGhzKeyTiming timing;
 
     uint8_t ret = subghz_key_resolve_timing(&params, &timing);
     TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_UNSUPPORTED, ret);
+}
+
+void test_timing_unknown_with_te_fallback(void)
+{
+    /* Unknown protocol BUT .sub file provides TE — should use generic 1:3 */
+    SubGhzKeyParams params = make_params("TotallyUnknownProtocol", 0, 24, 400);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+
+    TEST_ASSERT_EQUAL_UINT32(400, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(1200, timing.te_long);   /* 400 * 3 */
+    TEST_ASSERT_EQUAL_UINT32(12000, timing.gap_low);   /* 400 * 30 */
+}
+
+void test_timing_case_insensitive_registry(void)
+{
+    /* "princeton" (lowercase) should resolve via case-insensitive registry lookup */
+    SubGhzKeyParams params = make_params("princeton", 0, 24, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    TEST_ASSERT_EQUAL_UINT32(370, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(1140, timing.te_long);
 }
 
 void test_timing_null_params(void)

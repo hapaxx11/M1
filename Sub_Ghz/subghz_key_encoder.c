@@ -70,6 +70,17 @@ uint8_t subghz_key_resolve_timing(const SubGhzKeyParams *params, SubGhzKeyTiming
         timing->te_long  = timing->te_short * 2;
         timing->gap_low  = timing->te_short * 36;
     }
+    else if (params->te > 0)
+    {
+        /* Generic fallback: unknown protocol, but .sub file provides TE.
+         * Use the TE value with a default 1:3 ratio (most common OOK PWM).
+         * This allows emulation of signals recorded as KEY files even when
+         * the protocol name isn't in the registry (e.g., third-party
+         * firmware protocols, regional gate systems). */
+        timing->te_short = params->te;
+        timing->te_long  = timing->te_short * 3;
+        timing->gap_low  = timing->te_short * 30;
+    }
     else
     {
         return SUBGHZ_KEY_ERR_UNSUPPORTED;
