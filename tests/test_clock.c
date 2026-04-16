@@ -146,6 +146,15 @@ void test_adjust_days_backward_year_rollover(void)
     TEST_ASSERT_EQUAL_UINT8(3, dt.weekday);  /* Thu → Wed */
 }
 
+void test_adjust_days_backward_at_minimum_year_clamps(void)
+{
+    clock_time_t dt = { .year = 2000, .month = 1, .day = 1, .weekday = 6 };
+    clock_adjust_days(&dt, -1);
+    TEST_ASSERT_EQUAL_UINT8(1, dt.day);
+    TEST_ASSERT_EQUAL_UINT8(1, dt.month);
+    TEST_ASSERT_EQUAL_UINT16(2000, dt.year);
+    TEST_ASSERT_EQUAL_UINT8(6, dt.weekday);
+}
 void test_adjust_days_weekday_wraps_forward(void)
 {
     /* Sunday (7) + 1 day → Monday (1) */
