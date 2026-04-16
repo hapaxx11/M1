@@ -30,13 +30,6 @@
 #include "m1_lcd.h"
 
 /*============================================================================*/
-/* Constants                                                                  */
-/*============================================================================*/
-
-#define CLOCK_PAGE_COUNT  5U
-#define CLOCK_POLL_MS     200U
-
-/*============================================================================*/
 /* Static data                                                                */
 /*============================================================================*/
 
@@ -51,6 +44,16 @@ static const clock_zone_t clock_zones[] = {
     { "UTC+5", 5 },
     { "UTC+9", 9 },
 };
+
+/*============================================================================*/
+/* Constants (derived from data above — do not hard-code)                     */
+/*============================================================================*/
+
+/* Number of world-zone pages; add/remove entries in clock_zones[] above. */
+#define CLOCK_ZONE_COUNT  (sizeof(clock_zones) / sizeof(clock_zones[0]))
+/* Total pages: 1 local + one per zone. */
+#define CLOCK_PAGE_COUNT  (1U + CLOCK_ZONE_COUNT)
+#define CLOCK_POLL_MS     200U
 
 /*============================================================================*/
 /* Drawing                                                                    */

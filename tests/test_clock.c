@@ -313,6 +313,7 @@ int main(void)
     RUN_TEST(test_adjust_days_backward_same_month);
     RUN_TEST(test_adjust_days_backward_month_rollover);
     RUN_TEST(test_adjust_days_backward_year_rollover);
+    RUN_TEST(test_adjust_days_backward_at_minimum_year_clamps);
     RUN_TEST(test_adjust_days_weekday_wraps_forward);
     RUN_TEST(test_adjust_days_weekday_wraps_backward);
     RUN_TEST(test_adjust_days_null_safe);
