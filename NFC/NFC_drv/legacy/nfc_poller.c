@@ -43,6 +43,7 @@
  ******************************************************************************
  */
 #include "nfc_poller.h"
+#include "nfc_poller_helpers.h"
 #include "utils.h"
 #include "rfal_nfc.h"
 #include "rfal_t2t.h"
@@ -98,24 +99,7 @@ static void mfc_key_iter_close(mfc_key_iter_t *it);
 static void mfc_get_layout_from_sak(uint8_t sak, uint16_t *outSectors, uint16_t *outBlocks);
 static uint16_t mfc_sector_to_first_block(uint16_t sector);
 
-/* Returns true if SAK indicates any MIFARE Classic variant */
-static bool mfc_is_classic_sak(uint8_t sak)
-{
-    switch (sak) {
-    case 0x01: /* Classic 1K (TNP3xxx) */
-    case 0x08: /* Classic 1K */
-    case 0x09: /* MIFARE Mini */
-    case 0x10: /* Plus 2K SL2 */
-    case 0x11: /* Plus 4K SL2 */
-    case 0x18: /* Classic 4K */
-    case 0x19: /* Classic 2K */
-    case 0x28: /* Classic EV1 1K */
-    case 0x38: /* Classic EV1 4K */
-        return true;
-    default:
-        return false;
-    }
-}
+/* mfc_is_classic_sak() is provided by nfc_poller_helpers.c */
 
 /* Forward declarations for NFC-V / ST25TB reading */
 static void m1_nfcv_read(const rfalNfcDevice *dev);
@@ -134,6 +118,7 @@ extern uint8_t g_nfc_valid_bits[NFC_VALID_BITS_SIZE];
 static rfalNfcDiscoverParam discParam;
 static uint8_t              state = NOTINIT;
 static bool                 multiSel;
+static nfc_poll_profile_t   s_poll_profile = NFC_POLL_PROFILE_NORMAL;
 
 
 /* NFC-A CE config */
@@ -613,6 +598,7 @@ void ReadCycle(void)
 bool ReadIni(void)
 {
     ReturnCode err = RFAL_ERR_NONE;
+    bool fast_a_only = (s_poll_profile == NFC_POLL_PROFILE_FAST_A);
 
     /* 1) RFAL Initialize (retry 2 times) */
     for (int i = 0; i < 2; i++) {
@@ -641,7 +627,8 @@ bool ReadIni(void)
     rfalNfcDefaultDiscParams(&discParam);
 
     discParam.devLimit       = 1U;
-    discParam.totalDuration  = 500U;                           /* Faster polling for improved responsiveness */
+    discParam.totalDuration  = fast_a_only ? NFC_POLL_DURATION_FAST_A_MS
+                                           : NFC_POLL_DURATION_NORMAL_MS;
     discParam.notifyCb       = PollerNotif;                  /* Keep if in use */
 #if defined(RFAL_COMPLIANCE_MODE_NFC)
     discParam.compMode       = RFAL_COMPLIANCE_MODE_NFC;   /* Recommended for application */
@@ -653,18 +640,21 @@ bool ReadIni(void)
 #if RFAL_FEATURE_NFCA
     discParam.techs2Find    |= RFAL_NFC_POLL_TECH_A;
 #endif
+    if (!fast_a_only)
+    {
 #if RFAL_FEATURE_NFCB
-    discParam.techs2Find    |= RFAL_NFC_POLL_TECH_B;
+        discParam.techs2Find    |= RFAL_NFC_POLL_TECH_B;
 #endif
 #if RFAL_FEATURE_NFCF
-    discParam.techs2Find    |= RFAL_NFC_POLL_TECH_F;
+        discParam.techs2Find    |= RFAL_NFC_POLL_TECH_F;
 #endif
 #if RFAL_FEATURE_NFCV
-    discParam.techs2Find    |= RFAL_NFC_POLL_TECH_V;
+        discParam.techs2Find    |= RFAL_NFC_POLL_TECH_V;
 #endif
 #if RFAL_FEATURE_ST25TB
-    discParam.techs2Find    |= RFAL_NFC_POLL_TECH_ST25TB;
+        discParam.techs2Find    |= RFAL_NFC_POLL_TECH_ST25TB;
 #endif
+    }
 
     /* Never enabled (READ ONLY) */
     /* discParam.techs2Find |= RFAL_NFC_POLL_TECH_AP2P;        */
@@ -1536,6 +1526,19 @@ static void m1_st25tb_read(const rfalNfcDevice *dev)
 /*============================================================================*/
 /* Extern wrapper functions — expose static helpers for use by m1_nfc.c       */
 /*============================================================================*/
+
+void nfc_poller_set_profile(nfc_poll_profile_t profile)
+{
+    /* Must be called only when NFC polling is idle (before ReadIni()).
+     * Changing the profile while polling is active causes undefined behavior
+     * because ReadIni() caches the profile at entry and does not re-read it. */
+    s_poll_profile = profile;
+}
+
+nfc_poll_profile_t nfc_poller_get_profile(void)
+{
+    return s_poll_profile;
+}
 
 bool nfc_poller_is_classic_sak(uint8_t sak)
 {
