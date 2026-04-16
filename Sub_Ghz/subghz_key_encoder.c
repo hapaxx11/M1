@@ -218,9 +218,9 @@ static uint32_t subghz_key_encode_magellan(const SubGhzKeyParams *params,
         out[idx].low_us  = TE_LONG;
         idx++;
 
-        /* Data bits: MSB first, INVERTED polarity */
-        uint64_t mask = 1ULL << (bit_count - 1);
-        for (uint32_t b = 0; b < bit_count; b++)
+        /* Data bits: MSB first, INVERTED polarity (bit_count validated == 32 above) */
+        uint64_t mask = 1ULL << (params->bit_count - 1);
+        for (uint32_t b = 0; b < params->bit_count; b++)
         {
             if (params->key_value & mask)
             {
@@ -252,11 +252,27 @@ uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
                                    uint32_t max_pairs,
                                    uint8_t repetitions)
 {
-    if (!params || !out || max_pairs == 0 || repetitions == 0 || !params->protocol)
+    if (!params || !out || max_pairs == 0 || repetitions == 0 || params->protocol[0] == '\0')
         return 0;
 
     if (subghz_ascii_strcasecmp(params->protocol, "Magellan") == 0)
         return subghz_key_encode_magellan(params, out, max_pairs, repetitions);
+
+    return 0;  /* No custom encoder for this protocol */
+}
+
+uint32_t subghz_key_custom_required_pairs(const SubGhzKeyParams *params,
+                                           uint8_t repetitions)
+{
+    if (!params || params->protocol[0] == '\0' || repetitions == 0)
+        return 0;
+
+    if (subghz_ascii_strcasecmp(params->protocol, "Magellan") == 0)
+    {
+        if (params->bit_count != 32)
+            return 0;  /* Invalid Magellan bit count */
+        return (uint32_t)SUBGHZ_MAGELLAN_PAIRS_PER_REP * repetitions;
+    }
 
     return 0;  /* No custom encoder for this protocol */
 }

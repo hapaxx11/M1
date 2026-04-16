@@ -124,6 +124,19 @@ uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
                                    uint32_t max_pairs,
                                    uint8_t repetitions);
 
+/**
+ * Return the number of raw pairs needed by the custom encoder for @p params
+ * and @p repetitions, without writing any data.
+ *
+ * This decouples the caller from protocol-specific size constants: the
+ * caller can allocate exactly the right buffer regardless of which custom
+ * encoder is selected.
+ *
+ * Returns 0 if @p params has no custom encoder or has an invalid bit_count.
+ */
+uint32_t subghz_key_custom_required_pairs(const SubGhzKeyParams *params,
+                                           uint8_t repetitions);
+
 /** Number of pairs per Magellan repetition:
  *  1 (header burst) + 12 (header toggles) + 1 (header end) +
  *  1 (start bit) + 32 (data bits) + 1 (stop bit) = 48 */

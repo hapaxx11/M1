@@ -517,6 +517,61 @@ void test_magellan_encode_gulf_star_door_alarm_1(void)
     TEST_ASSERT_EQUAL_UINT32(200, out[22].high_us);  /* bit 24 = 1 */
 }
 
+void test_magellan_wrong_bit_count_returns_zero(void)
+{
+    /* Magellan is fixed 32-bit; any other bit_count must return 0 */
+    SubGhzKeyParams params = make_params("Magellan", 0x12345678ULL, 24, 0);
+    SubGhzRawPair out[60];
+    TEST_ASSERT_EQUAL_UINT32(0, subghz_key_encode_custom(&params, out, 60, 1));
+
+    params.bit_count = 64;
+    TEST_ASSERT_EQUAL_UINT32(0, subghz_key_encode_custom(&params, out, 60, 1));
+
+    params.bit_count = 0;
+    TEST_ASSERT_EQUAL_UINT32(0, subghz_key_encode_custom(&params, out, 60, 1));
+}
+
+void test_encode_custom_null_protocol_returns_zero(void)
+{
+    /* encode_custom with NULL protocol must return 0, not crash */
+    SubGhzKeyParams params;
+    memset(&params, 0, sizeof(params));
+    params.key_value = 0x12345678ULL;
+    params.bit_count = 32;
+    /* protocol field is zero-initialised — simulate a NULL-protocol call */
+    SubGhzRawPair out[60];
+    uint32_t count = subghz_key_encode_custom(&params, out, 60, 1);
+    /* Empty string protocol → no custom encoder found → 0 */
+    TEST_ASSERT_EQUAL_UINT32(0, count);
+}
+
+void test_custom_required_pairs_magellan(void)
+{
+    SubGhzKeyParams params = make_params("Magellan", 0x12345678ULL, 32, 0);
+
+    /* 1 rep = 48 pairs */
+    TEST_ASSERT_EQUAL_UINT32(48, subghz_key_custom_required_pairs(&params, 1));
+    /* 3 reps = 144 pairs */
+    TEST_ASSERT_EQUAL_UINT32(144, subghz_key_custom_required_pairs(&params, 3));
+}
+
+void test_custom_required_pairs_wrong_bit_count(void)
+{
+    SubGhzKeyParams params = make_params("Magellan", 0x12345678ULL, 24, 0);
+    TEST_ASSERT_EQUAL_UINT32(0, subghz_key_custom_required_pairs(&params, 3));
+}
+
+void test_custom_required_pairs_null_params(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(0, subghz_key_custom_required_pairs(NULL, 3));
+}
+
+void test_custom_required_pairs_unknown_protocol(void)
+{
+    SubGhzKeyParams params = make_params("Princeton", 0x12345678ULL, 32, 0);
+    TEST_ASSERT_EQUAL_UINT32(0, subghz_key_custom_required_pairs(&params, 3));
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -568,6 +623,14 @@ int main(void)
     RUN_TEST(test_magellan_encode_bit_polarity);
     RUN_TEST(test_magellan_encode_repetitions);
     RUN_TEST(test_magellan_encode_gulf_star_door_alarm_1);
+    RUN_TEST(test_magellan_wrong_bit_count_returns_zero);
+    RUN_TEST(test_encode_custom_null_protocol_returns_zero);
+
+    /* subghz_key_custom_required_pairs() API */
+    RUN_TEST(test_custom_required_pairs_magellan);
+    RUN_TEST(test_custom_required_pairs_wrong_bit_count);
+    RUN_TEST(test_custom_required_pairs_null_params);
+    RUN_TEST(test_custom_required_pairs_unknown_protocol);
 
     return UNITY_END();
 }

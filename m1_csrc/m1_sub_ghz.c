@@ -1892,8 +1892,15 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		/* Protocol-specific encoders for non-standard waveforms (e.g. Magellan) */
 		if (subghz_key_has_custom_encoder(key_params.protocol))
 		{
-			pairs_per_rep = SUBGHZ_MAGELLAN_PAIRS_PER_REP; /* 48 for Magellan */
-			uint32_t max_pairs = pairs_per_rep * 3;
+			uint32_t max_pairs = subghz_key_custom_required_pairs(&key_params, 3);
+			if (max_pairs == 0)
+			{
+				f_close(&f_sgh);
+				f_unlink(FLIPPER_SUB_TMP_SGH);
+				free(line_buf); free(out_buf);
+				return SUBGHZ_KEY_ERR_UNSUPPORTED;
+			}
+			pairs_per_rep = max_pairs / 3;
 			pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
 			if (!pairs)
 			{
