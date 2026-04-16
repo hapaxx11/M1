@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.109] - 2026-04-16
+
+### Fixed
+
+- **Sub-GHz: Fix Magellan protocol emulation and improve Flipper .sub compatibility** — Magellan KEY files (e.g. Gulf Star Marina alarm signals from issue #188) now transmit the correct waveform with proper preamble, start/stop bits, and inverted bit polarity matching Flipper Zero's encoder. Protocol name lookup is now case-insensitive for better .sub file compatibility. Unknown protocols with a TE field in the .sub file now use a generic 1:3 OOK PWM fallback instead of failing.
 ## [0.9.0.108] - 2026-04-16
 
 ### Added
