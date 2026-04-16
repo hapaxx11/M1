@@ -87,11 +87,13 @@ static void dashboard_draw_page(dashboard_page_t page)
     sd_status = m1_sdcard_get_status();
     sd_info = (sd_status == SD_access_OK) ? m1_sdcard_get_info() : NULL;
 
+#ifdef M1_APP_BADUSB_ENABLE
     if (m1_usb_get_current_mode() == M1_USB_MODE_HID)
     {
         usb_mode = "HID";
     }
     else
+#endif
     {
         usb_mode = (m1_usbcdc_mode == CDC_MODE_VCP) ? "VCP" : "CLI";
     }
