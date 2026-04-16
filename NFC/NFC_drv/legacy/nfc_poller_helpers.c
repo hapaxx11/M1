@@ -1,11 +1,14 @@
-/*
- * Standalone copy of mfc_is_classic_sak() from nfc_poller.c for host-side
- * unit testing.  Keep in sync with the production implementation in
- * NFC/NFC_drv/legacy/nfc_poller.c.
+/* See COPYING.txt for license details. */
+
+/**
+ * @file  nfc_poller_helpers.c
+ * @brief Pure-logic helpers extracted from nfc_poller.c.
+ *
+ * Hardware-independent — no HAL, RTOS, or RFAL dependencies.
+ * Both firmware and host-side unit tests compile this file directly.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
+#include "nfc_poller_helpers.h"
 
 bool mfc_is_classic_sak(uint8_t sak)
 {

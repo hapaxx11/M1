@@ -43,6 +43,7 @@
  ******************************************************************************
  */
 #include "nfc_poller.h"
+#include "nfc_poller_helpers.h"
 #include "utils.h"
 #include "rfal_nfc.h"
 #include "rfal_t2t.h"
@@ -98,24 +99,7 @@ static void mfc_key_iter_close(mfc_key_iter_t *it);
 static void mfc_get_layout_from_sak(uint8_t sak, uint16_t *outSectors, uint16_t *outBlocks);
 static uint16_t mfc_sector_to_first_block(uint16_t sector);
 
-/* Returns true if SAK indicates any MIFARE Classic variant */
-static bool mfc_is_classic_sak(uint8_t sak)
-{
-    switch (sak) {
-    case 0x01: /* Classic 1K (TNP3xxx) */
-    case 0x08: /* Classic 1K */
-    case 0x09: /* MIFARE Mini */
-    case 0x10: /* Plus 2K SL2 */
-    case 0x11: /* Plus 4K SL2 */
-    case 0x18: /* Classic 4K */
-    case 0x19: /* Classic 2K */
-    case 0x28: /* Classic EV1 1K */
-    case 0x38: /* Classic EV1 4K */
-        return true;
-    default:
-        return false;
-    }
-}
+/* mfc_is_classic_sak() is provided by nfc_poller_helpers.c */
 
 /* Forward declarations for NFC-V / ST25TB reading */
 static void m1_nfcv_read(const rfalNfcDevice *dev);
@@ -643,7 +627,8 @@ bool ReadIni(void)
     rfalNfcDefaultDiscParams(&discParam);
 
     discParam.devLimit       = 1U;
-    discParam.totalDuration  = fast_a_only ? 220U : 500U;      /* Shorter window for NFC-A-only profile */
+    discParam.totalDuration  = fast_a_only ? NFC_POLL_DURATION_FAST_A_MS
+                                           : NFC_POLL_DURATION_NORMAL_MS;
     discParam.notifyCb       = PollerNotif;                  /* Keep if in use */
 #if defined(RFAL_COMPLIANCE_MODE_NFC)
     discParam.compMode       = RFAL_COMPLIANCE_MODE_NFC;   /* Recommended for application */
@@ -1544,6 +1529,9 @@ static void m1_st25tb_read(const rfalNfcDevice *dev)
 
 void nfc_poller_set_profile(nfc_poll_profile_t profile)
 {
+    /* Must be called only when NFC polling is idle (before ReadIni()).
+     * Changing the profile while polling is active causes undefined behavior
+     * because ReadIni() caches the profile at entry and does not re-read it. */
     s_poll_profile = profile;
 }
 

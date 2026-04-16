@@ -4,15 +4,16 @@
  * Tests mfc_is_classic_sak() — the SAK-to-MIFARE-Classic classifier used by
  * nfc_poller_is_classic_sak() in production.
  *
- * Uses a standalone copy in tests/stubs/nfc_poller_impl.c because the
- * production nfc_poller.c has deep HAL/RTOS/RFAL dependencies.
+ * Compiles the production nfc_poller_helpers.c directly so there is a single
+ * source of truth for the function under test.
  */
 
 #include "unity.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
-/* Standalone copy of the function under test */
+/* Production function under test — provided by nfc_poller_helpers.c */
 extern bool mfc_is_classic_sak(uint8_t sak);
 
 void setUp(void) { }

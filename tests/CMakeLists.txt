@@ -607,14 +607,15 @@ add_test(NAME ir_search COMMAND test_ir_search)
 # ------------------------------------------------------------------
 # Module under test: nfc_poller (mfc_is_classic_sak)
 # Pure function — SAK-to-MIFARE-Classic classifier.
-# Uses a standalone copy because nfc_poller.c has HAL/RTOS/RFAL deps.
+# Compiles the production nfc_poller_helpers.c directly (single source of truth).
 # ------------------------------------------------------------------
 add_executable(test_nfc_poller
     test_nfc_poller.c
-    ${STUBS_DIR}/nfc_poller_impl.c
+    ${M1_ROOT}/NFC/NFC_drv/legacy/nfc_poller_helpers.c
 )
 target_include_directories(test_nfc_poller PRIVATE
     ${STUBS_DIR}
+    ${M1_ROOT}/NFC/NFC_drv/legacy
 )
 target_link_libraries(test_nfc_poller PRIVATE unity)
 if(TARGET sanitizers)
