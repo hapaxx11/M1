@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.108] - 2026-04-16
+
+### Added
+
+- **Games: Hex Viewer** — SD card hex/ASCII file viewer ported from
+  dagnazty/M1_T-1000. Browse any file and view hex dump + ASCII preview
+  with scroll navigation (UP/DOWN by row, LEFT/RIGHT by page, OK to
+  browse another file). Accessible from Games menu.
 ## [0.9.0.107] - 2026-04-16
 
 ### Added
