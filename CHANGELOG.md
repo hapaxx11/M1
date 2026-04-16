@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CI: Auto-merge main into agent branches** — New `update-branches.yml`
+  GitHub Actions workflow that triggers on every push to `main` and
+  automatically merges main into all active `copilot/*` branches, keeping
+  long-running agent branches up-to-date and reducing merge conflicts.
 - **GPIO: USB-UART Bridge** — Momentum-style USB-to-serial adapter using
   USART1 (PA9 TX / PA10 RX) on J7 header and USB CDC virtual COM port.
   Features configurable baud rate (9600–921600, LEFT/RIGHT to cycle),

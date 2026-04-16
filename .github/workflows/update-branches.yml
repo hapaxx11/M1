@@ -66,7 +66,7 @@ jobs:
               continue
             fi
 
-            if git merge origin/main --no-edit -m "Merge main into $BRANCH"; then
+            if git merge "$CURRENT_SHA" --no-edit -m "Merge main into $BRANCH"; then
               git push origin "$BRANCH"
               echo "Successfully merged main into $BRANCH."
             else
