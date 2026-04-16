@@ -28,6 +28,7 @@ enum {
     GamesScenePong,
     GamesSceneDice,
     GamesSceneMusic,
+    GamesSceneClock,
     GamesSceneCount
 };
 
@@ -81,6 +82,14 @@ static void music_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void clock_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    app_clock_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers snake_handlers  = { .on_enter = snake_on_enter  };
@@ -89,10 +98,11 @@ static const M1SceneHandlers trex_handlers   = { .on_enter = trex_on_enter   };
 static const M1SceneHandlers pong_handlers   = { .on_enter = pong_on_enter   };
 static const M1SceneHandlers dice_handlers   = { .on_enter = dice_on_enter   };
 static const M1SceneHandlers music_handlers  = { .on_enter = music_on_enter  };
+static const M1SceneHandlers clock_handlers  = { .on_enter = clock_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  6
+#define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Snake",
@@ -101,6 +111,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Pong",
     "Dice Roll",
     "Music Player",
+    "Clock",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -110,6 +121,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     GamesScenePong,
     GamesSceneDice,
     GamesSceneMusic,
+    GamesSceneClock,
 };
 
 static uint8_t menu_sel    = 0;
@@ -153,6 +165,7 @@ static const M1SceneHandlers *const scene_registry[GamesSceneCount] = {
     [GamesScenePong]   = &pong_handlers,
     [GamesSceneDice]   = &dice_handlers,
     [GamesSceneMusic]  = &music_handlers,
+    [GamesSceneClock]  = &clock_handlers,
 };
 
 /*--- Entry point ----------------------------------------------------------*/
