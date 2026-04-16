@@ -387,6 +387,95 @@ void infrared_learn_new_remote(void)
 
 
 /*============================================================================*/
+/*
+ * Capture a single IR signal for use by the custom remote builder.
+ * Shows a "Learning..." screen and waits for the user to press a button
+ * on a physical remote.  Returns true and fills out_data on success, or
+ * false if the user cancels (BACK button).
+ */
+/*============================================================================*/
+bool infrared_capture_one_signal(IRMP_DATA *out_data)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	char info[32];
+	bool captured = false;
+
+	if (out_data == NULL)
+		return false;
+
+	infrared_decode_sys_init();
+	irmp_init();
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+
+	/* Show "Learning" screen */
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 11, "Learning Signal");
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 28, "Point remote at M1");
+	u8g2_DrawStr(&m1_u8g2, 4, 39, "then press a button.");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", NULL, NULL);
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type == Q_EVENT_IRRED_RX)
+		{
+			irmp_data_sampler(q_item.q_data.ir_rx_data.ir_edge_te,
+			                  q_item.q_data.ir_rx_data.ir_edge_dir);
+
+			if (irmp_get_data(out_data))
+			{
+				m1_buzzer_notification();
+				captured = true;
+
+				/* Show "Captured" confirmation */
+				m1_u8g2_firstpage();
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+				u8g2_DrawStr(&m1_u8g2, 4, 11, "Signal Captured");
+				u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+				snprintf(info, sizeof(info), "Proto: %s",
+				         irmp_protocol_names[out_data->protocol]);
+				u8g2_DrawStr(&m1_u8g2, 4, 26, info);
+				snprintf(info, sizeof(info), "Addr:  0x%04X", out_data->address);
+				u8g2_DrawStr(&m1_u8g2, 4, 36, info);
+				snprintf(info, sizeof(info), "Cmd:   0x%04X", out_data->command);
+				u8g2_DrawStr(&m1_u8g2, 4, 46, info);
+				m1_u8g2_nextpage();
+
+				vTaskDelay(pdMS_TO_TICKS(1200));
+				break;
+			}
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				break; /* User cancelled */
+		}
+	}
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	infrared_decode_sys_deinit();
+	xQueueReset(main_q_hdl);
+	return captured;
+} // bool infrared_capture_one_signal(...)
+
+
+
+/*============================================================================*/
 /**
   * @brief
   * @param
