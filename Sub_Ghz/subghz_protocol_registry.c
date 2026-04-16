@@ -24,8 +24,29 @@
  */
 
 #include <string.h>
+#include <ctype.h>
 #include "subghz_protocol_registry.h"
 #include "m1_sub_ghz_decenc.h"
+
+/*============================================================================*/
+/* Portable case-insensitive compare (replaces POSIX strcasecmp)              */
+/*============================================================================*/
+
+int subghz_ascii_strcasecmp(const char *a, const char *b)
+{
+    unsigned char ca, cb;
+    while (*a && *b) {
+        ca = (unsigned char)tolower((unsigned char)*a);
+        cb = (unsigned char)tolower((unsigned char)*b);
+        if (ca != cb)
+            return (int)ca - (int)cb;
+        a++;
+        b++;
+    }
+    ca = (unsigned char)tolower((unsigned char)*a);
+    cb = (unsigned char)tolower((unsigned char)*b);
+    return (int)ca - (int)cb;
+}
 
 /*============================================================================*/
 /* Forward-declare ALL decoder functions so the table compiles.               */
@@ -275,7 +296,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_lacrosse_tx,
     },
     [FAAC_SLH] = {
-        .name   = "Faac SLH",
+        .name   = "FAAC SLH",
         .type   = SubGhzProtocolTypeDynamic,
         .flags  = F_ROLLING_433,
         .filter = SubGhzProtocolFilter_Auto,
@@ -1030,7 +1051,7 @@ int16_t subghz_protocol_find_by_name(const char *name)
     if (!name) return -1;
     for (uint16_t i = 0; i < subghz_protocol_registry_count; i++) {
         if (subghz_protocol_registry[i].name &&
-            strcmp(subghz_protocol_registry[i].name, name) == 0) {
+            subghz_ascii_strcasecmp(subghz_protocol_registry[i].name, name) == 0) {
             return (int16_t)i;
         }
     }

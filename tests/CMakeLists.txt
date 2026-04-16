@@ -620,3 +620,51 @@ if(TARGET sanitizers)
     target_link_libraries(test_system_dashboard PRIVATE sanitizers)
 endif()
 add_test(NAME system_dashboard COMMAND test_system_dashboard)
+# Module under test: hex_viewer (format_row + ascii_preview)
+# Pure functions — hex/ASCII formatting with no hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_hex_viewer
+    test_hex_viewer.c
+    ${M1_ROOT}/m1_csrc/hex_viewer.c
+)
+target_include_directories(test_hex_viewer PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_hex_viewer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_hex_viewer PRIVATE sanitizers)
+endif()
+add_test(NAME hex_viewer COMMAND test_hex_viewer)
+# Module under test: nfc_poller (mfc_is_classic_sak)
+# Pure function — SAK-to-MIFARE-Classic classifier.
+# Compiles the production nfc_poller_helpers.c directly (single source of truth).
+# ------------------------------------------------------------------
+add_executable(test_nfc_poller
+    test_nfc_poller.c
+    ${M1_ROOT}/NFC/NFC_drv/legacy/nfc_poller_helpers.c
+)
+target_include_directories(test_nfc_poller PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/NFC/NFC_drv/legacy
+)
+target_link_libraries(test_nfc_poller PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_poller PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_poller COMMAND test_nfc_poller)
+# Module under test: m1_clock_util
+# Pure functions — leap year, days-in-month, timezone offset.
+# Compiles directly from production source (no hardware dependencies).
+# ------------------------------------------------------------------
+add_executable(test_clock
+    test_clock.c
+    ${M1_ROOT}/m1_csrc/m1_clock_util.c
+)
+target_include_directories(test_clock PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_clock PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_clock PRIVATE sanitizers)
+endif()
+add_test(NAME clock COMMAND test_clock)

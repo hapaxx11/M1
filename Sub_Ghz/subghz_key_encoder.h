@@ -94,4 +94,52 @@ uint32_t subghz_key_encode(const SubGhzKeyParams *params,
                             uint32_t max_pairs,
                             uint8_t repetitions);
 
+/**
+ * Check if a protocol requires a protocol-specific encoder.
+ *
+ * Some protocols (e.g. Magellan) use non-standard encoding that cannot
+ * be handled by the generic OOK PWM encoder (inverted bit polarity,
+ * custom preambles, start/stop bits).
+ *
+ * @param protocol  Protocol name
+ * @return true if a protocol-specific encoder exists
+ */
+bool subghz_key_has_custom_encoder(const char *protocol);
+
+/**
+ * Encode a key value using a protocol-specific encoder.
+ *
+ * Currently supports: Magellan
+ *
+ * Call subghz_key_has_custom_encoder() first to check availability.
+ *
+ * @param params       Input key parameters (protocol, key, bit_count)
+ * @param out          Output array of raw pairs
+ * @param max_pairs    Size of output array
+ * @param repetitions  Number of full signal repetitions
+ * @return Number of pairs written, or 0 on error
+ */
+uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
+                                   SubGhzRawPair *out,
+                                   uint32_t max_pairs,
+                                   uint8_t repetitions);
+
+/**
+ * Return the number of raw pairs needed by the custom encoder for @p params
+ * and @p repetitions, without writing any data.
+ *
+ * This decouples the caller from protocol-specific size constants: the
+ * caller can allocate exactly the right buffer regardless of which custom
+ * encoder is selected.
+ *
+ * Returns 0 if @p params has no custom encoder or has an invalid bit_count.
+ */
+uint32_t subghz_key_custom_required_pairs(const SubGhzKeyParams *params,
+                                           uint8_t repetitions);
+
+/** Number of pairs per Magellan repetition:
+ *  1 (header burst) + 12 (header toggles) + 1 (header end) +
+ *  1 (start bit) + 32 (data bits) + 1 (stop bit) = 48 */
+#define SUBGHZ_MAGELLAN_PAIRS_PER_REP  48
+
 #endif /* SUBGHZ_KEY_ENCODER_H */

@@ -70,6 +70,19 @@ uint8_t subghz_key_resolve_timing(const SubGhzKeyParams *params, SubGhzKeyTiming
         timing->te_long  = timing->te_short * 2;
         timing->gap_low  = timing->te_short * 36;
     }
+    else if (params->te > 0)
+    {
+        /* Generic fallback: unknown protocol, but .sub file provides TE.
+         * Use the TE value with a 1:3 ratio — this is the default encoding
+         * ratio used by Princeton and most OOK PWM garage/gate protocols.
+         * The 1:3 ratio is a heuristic; protocols with 1:2 encoding
+         * (CAME, Nice FLO) should be added to the registry for accuracy.
+         * This fallback enables best-effort emulation of third-party
+         * firmware protocols and regional gate systems not in our registry. */
+        timing->te_short = params->te;
+        timing->te_long  = timing->te_short * 3;
+        timing->gap_low  = timing->te_short * 30;
+    }
     else
     {
         return SUBGHZ_KEY_ERR_UNSUPPORTED;
@@ -134,4 +147,132 @@ uint32_t subghz_key_encode(const SubGhzKeyParams *params,
     }
 
     return idx;
+}
+
+/*============================================================================*/
+/* Protocol-specific encoders                                                  */
+/*============================================================================*/
+
+bool subghz_key_has_custom_encoder(const char *protocol)
+{
+    if (!protocol) return false;
+    return (subghz_ascii_strcasecmp(protocol, "Magellan") == 0);
+}
+
+/*
+ * Magellan encoder — implements the Magellan alarm/sensor on-air protocol.
+ *
+ * Magellan protocol uses a unique framing (all timings in µs):
+ *   Header:    800µs HIGH + 200µs LOW, then 12× (200µs HIGH + 200µs LOW),
+ *              then 200µs HIGH + 400µs LOW
+ *   Start bit: 1200µs HIGH + 400µs LOW
+ *   Data bits: 32 bits, MSB first:
+ *     Bit 1: 200µs HIGH + 400µs LOW  (te_short + te_long) — INVERTED vs standard OOK
+ *     Bit 0: 400µs HIGH + 200µs LOW  (te_long  + te_short) — INVERTED vs standard OOK
+ *   Stop bit:  200µs HIGH + 40000µs LOW  (te_short + te_long×100)
+ *
+ * te_short=200, te_long=400
+ * Protocol is fixed 32-bit; bit_count must equal 32.
+ * Total: 1 + 12 + 1 + 1 + 32 + 1 = 48 pairs per repetition
+ */
+static uint32_t subghz_key_encode_magellan(const SubGhzKeyParams *params,
+                                            SubGhzRawPair *out,
+                                            uint32_t max_pairs,
+                                            uint8_t repetitions)
+{
+    /* Magellan protocol is fixed 32-bit; reject any other bit count */
+    if (params->bit_count != 32)
+        return 0;
+
+    const uint32_t TE_SHORT = 200;
+    const uint32_t TE_LONG  = 400;
+
+    uint32_t total_pairs = (uint32_t)SUBGHZ_MAGELLAN_PAIRS_PER_REP * repetitions;
+    if (total_pairs > max_pairs)
+        return 0;
+
+    uint32_t idx = 0;
+
+    for (uint8_t rep = 0; rep < repetitions; rep++)
+    {
+        /* Header burst: 800µs HIGH (4×te_short) + 200µs LOW */
+        out[idx].high_us = TE_SHORT * 4;
+        out[idx].low_us  = TE_SHORT;
+        idx++;
+
+        /* Header toggle: 12× (200µs HIGH + 200µs LOW) */
+        for (uint8_t i = 0; i < 12; i++)
+        {
+            out[idx].high_us = TE_SHORT;
+            out[idx].low_us  = TE_SHORT;
+            idx++;
+        }
+
+        /* Header end: 200µs HIGH + 400µs LOW */
+        out[idx].high_us = TE_SHORT;
+        out[idx].low_us  = TE_LONG;
+        idx++;
+
+        /* Start bit: 1200µs HIGH (3×te_long) + 400µs LOW */
+        out[idx].high_us = TE_LONG * 3;
+        out[idx].low_us  = TE_LONG;
+        idx++;
+
+        /* Data bits: MSB first, INVERTED polarity (bit_count validated == 32 above) */
+        uint64_t mask = 1ULL << (params->bit_count - 1);
+        for (uint32_t b = 0; b < params->bit_count; b++)
+        {
+            if (params->key_value & mask)
+            {
+                /* Bit 1: SHORT HIGH + LONG LOW (inverted vs standard OOK PWM) */
+                out[idx].high_us = TE_SHORT;
+                out[idx].low_us  = TE_LONG;
+            }
+            else
+            {
+                /* Bit 0: LONG HIGH + SHORT LOW (inverted vs standard OOK PWM) */
+                out[idx].high_us = TE_LONG;
+                out[idx].low_us  = TE_SHORT;
+            }
+            mask >>= 1;
+            idx++;
+        }
+
+        /* Stop bit: 200µs HIGH + 40000µs LOW (te_long × 100) */
+        out[idx].high_us = TE_SHORT;
+        out[idx].low_us  = TE_LONG * 100;
+        idx++;
+    }
+
+    return idx;
+}
+
+uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
+                                   SubGhzRawPair *out,
+                                   uint32_t max_pairs,
+                                   uint8_t repetitions)
+{
+    if (!params || !out || max_pairs == 0 || repetitions == 0 || params->protocol[0] == '\0')
+        return 0;
+
+    if (subghz_ascii_strcasecmp(params->protocol, "Magellan") == 0)
+        return subghz_key_encode_magellan(params, out, max_pairs, repetitions);
+
+    return 0;  /* No custom encoder for this protocol */
+}
+
+uint32_t subghz_key_custom_required_pairs(const SubGhzKeyParams *params,
+                                           uint8_t repetitions)
+{
+    if (!params || params->protocol[0] == '\0' || repetitions == 0)
+        return 0;
+
+    if (subghz_ascii_strcasecmp(params->protocol, "Magellan") == 0)
+    {
+        if (params->bit_count != 32)
+            return 0;  /* Invalid Magellan bit count */
+        return (uint32_t)SUBGHZ_MAGELLAN_PAIRS_PER_REP * repetitions;
+    }
+
+    return 0;  /* No custom encoder for this protocol */
 }

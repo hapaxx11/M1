@@ -309,6 +309,7 @@ target_sources(m1_01 INTERFACE
     ../../NFC/NFC_drv/legacy/nfc_driver.c
     ../../NFC/NFC_drv/legacy/nfc_listener.c
     ../../NFC/NFC_drv/legacy/nfc_poller.c
+    ../../NFC/NFC_drv/legacy/nfc_poller_helpers.c
     ../../NFC/NFC_drv/legacy/mfc_crypto1.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_cipher.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_poller.c
@@ -577,12 +578,16 @@ target_sources(m1_01 INTERFACE
     # === Enhanced firmware: Built-in Games (Phase 9) ===
     ../../m1_csrc/m1_games.c
     ../../m1_csrc/m1_games_scene.c
+    ../../m1_csrc/m1_clock_util.c
+    ../../m1_csrc/m1_clock.c
     ../../m1_csrc/game_snake.c
     ../../m1_csrc/game_tetris.c
     ../../m1_csrc/game_trex.c
     ../../m1_csrc/game_pong.c
     ../../m1_csrc/game_dice.c
     ../../m1_csrc/music_player.c
+    ../../m1_csrc/hex_viewer.c
+    ../../m1_csrc/app_hex_viewer.c
     ../../m1_csrc/signal_gen.c
     # === Enhanced firmware: ELF App Loader (Phase 10) ===
     ../../m1_csrc/m1_elf_loader.c
