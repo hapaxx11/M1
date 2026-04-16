@@ -14,6 +14,7 @@ typedef struct { uint32_t dummy; } TIM_TypeDef;
 typedef struct { uint32_t dummy; } TIM_HandleTypeDef;
 typedef struct { uint32_t dummy; } DMA_HandleTypeDef;
 typedef struct { uint32_t dummy; } EXTI_HandleTypeDef;
+typedef struct { uint32_t dummy; } SD_HandleTypeDef;
 
 /* GPIO pin macros */
 #define GPIO_PIN_0   ((uint16_t)0x0001)

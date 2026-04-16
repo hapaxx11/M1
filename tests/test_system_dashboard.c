@@ -4,59 +4,16 @@
  * @file   test_system_dashboard.c
  * @brief  Host-side unit tests for pure-logic helpers in m1_system_dashboard.c.
  *
- * Tests dashboard_format_uptime() and dashboard_sd_status_text() via
- * standalone copies (the production functions are static).
+ * Tests dashboard_format_uptime() and dashboard_sd_status_text() by compiling
+ * the shared m1_system_dashboard_helpers.c module directly.
  */
 
 #include "unity.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "stm32h5xx_hal.h"
 #include "m1_sdcard.h"
-
-/*============================================================================*/
-/* Standalone copies of static functions from m1_system_dashboard.c           */
-/*============================================================================*/
-
-static void dashboard_format_uptime(uint32_t uptime_ms, char *out, size_t out_len)
-{
-    uint32_t total_sec = uptime_ms / 1000U;
-    uint32_t hours = total_sec / 3600U;
-    uint32_t minutes = (total_sec / 60U) % 60U;
-    uint32_t seconds = total_sec % 60U;
-
-    if (hours >= 100U)
-    {
-        snprintf(out, out_len, "%luh %lum",
-                 (unsigned long)hours, (unsigned long)minutes);
-    }
-    else
-    {
-        snprintf(out, out_len, "%02lu:%02lu:%02lu",
-                 (unsigned long)hours,
-                 (unsigned long)minutes,
-                 (unsigned long)seconds);
-    }
-}
-
-static const char *dashboard_sd_status_text(S_M1_SDCard_Access_Status status)
-{
-    switch (status)
-    {
-        case SD_access_OK:
-            return "Ready";
-        case SD_access_NoFS:
-            return "No FS";
-        case SD_access_UnMounted:
-            return "Unmounted";
-        case SD_access_NotReady:
-            return "No Card";
-        case SD_access_NotOK:
-        default:
-            return "Error";
-    }
-}
+#include "m1_system_dashboard_helpers.h"
 
 /*============================================================================*/
 /* Tests                                                                      */

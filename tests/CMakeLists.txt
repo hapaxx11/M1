@@ -607,13 +607,15 @@ add_test(NAME ir_search COMMAND test_ir_search)
 # ------------------------------------------------------------------
 # Module under test: system_dashboard
 # Pure-logic helpers — uptime formatting, SD status text.
-# Uses standalone copies because m1_system_dashboard.c has HAL dependencies.
+# Compiles m1_system_dashboard_helpers.c directly (no HAL dependencies).
 # ------------------------------------------------------------------
 add_executable(test_system_dashboard
     test_system_dashboard.c
+    ${M1_ROOT}/m1_csrc/m1_system_dashboard_helpers.c
 )
 target_include_directories(test_system_dashboard PRIVATE
     ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
 )
 target_link_libraries(test_system_dashboard PRIVATE unity)
 if(TARGET sanitizers)

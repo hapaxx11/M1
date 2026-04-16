@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 typedef uint32_t TickType_t;
+typedef void *   TaskHandle_t;
 
 #ifndef portMAX_DELAY
 #define portMAX_DELAY 0xFFFFFFFF

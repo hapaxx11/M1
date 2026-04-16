@@ -1,6 +1,5 @@
 /* Minimal FatFS stub for host-side unit tests.
- * Only provides the types referenced by flipper_file.h — no actual
- * filesystem operations are available. */
+ * Provides the types referenced by m1_sdcard.h and flipper_file.h. */
 
 #ifndef FF_H_STUB
 #define FF_H_STUB
@@ -8,15 +7,36 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* Basic FatFS primitive types */
+typedef unsigned int    UINT;
+typedef unsigned char   BYTE;
+typedef uint32_t        DWORD;
+typedef uint64_t        QWORD;
+typedef DWORD           LBA_t;
+typedef DWORD           FSIZE_t;
+
 /* Minimal FRESULT */
 typedef enum {
 	FR_OK = 0
 } FRESULT;
 
+/* ff.h config constant needed by ff_gen_drv.h */
+#ifndef FF_VOLUMES
+#define FF_VOLUMES  1
+#endif
+
+/* Minimal FATFS filesystem object (opaque for tests) */
+typedef struct { int dummy; } FATFS;
+
 /* Minimal FIL (opaque for tests) */
 typedef struct {
 	int dummy;
 } FIL;
+
+/* FILINFO for directory listing (opaque for tests) */
+typedef struct {
+	int dummy;
+} FILINFO;
 
 /* Stub declarations so flipper_file.c compiles.
  * These are never called by the utility functions under test. */

@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include "stm32h5xx_hal.h"
 #include "m1_system_dashboard.h"
+#include "m1_system_dashboard_helpers.h"
 #include "m1_games.h"
 #include "m1_sdcard.h"
 #include "m1_esp32_hal.h"
@@ -47,8 +48,6 @@ typedef enum
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 static const char *dashboard_orientation_text(void);
-static const char *dashboard_sd_status_text(S_M1_SDCard_Access_Status status);
-static void dashboard_format_uptime(uint32_t uptime_ms, char *out, size_t out_len);
 static void dashboard_draw_page(dashboard_page_t page);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
@@ -66,48 +65,6 @@ static const char *dashboard_orientation_text(void)
             return "Normal";
     }
 }
-
-
-static const char *dashboard_sd_status_text(S_M1_SDCard_Access_Status status)
-{
-    switch (status)
-    {
-        case SD_access_OK:
-            return "Ready";
-        case SD_access_NoFS:
-            return "No FS";
-        case SD_access_UnMounted:
-            return "Unmounted";
-        case SD_access_NotReady:
-            return "No Card";
-        case SD_access_NotOK:
-        default:
-            return "Error";
-    }
-}
-
-
-static void dashboard_format_uptime(uint32_t uptime_ms, char *out, size_t out_len)
-{
-    uint32_t total_sec = uptime_ms / 1000U;
-    uint32_t hours = total_sec / 3600U;
-    uint32_t minutes = (total_sec / 60U) % 60U;
-    uint32_t seconds = total_sec % 60U;
-
-    if (hours >= 100U)
-    {
-        snprintf(out, out_len, "%luh %lum",
-                 (unsigned long)hours, (unsigned long)minutes);
-    }
-    else
-    {
-        snprintf(out, out_len, "%02lu:%02lu:%02lu",
-                 (unsigned long)hours,
-                 (unsigned long)minutes,
-                 (unsigned long)seconds);
-    }
-}
-
 
 static void dashboard_draw_page(dashboard_page_t page)
 {
@@ -155,8 +112,10 @@ static void dashboard_draw_page(dashboard_page_t page)
                  now.month, now.day, now.year % 100U);
         snprintf(line2, sizeof(line2), "Battery %u%%  %uC",
                  pwr.battery_level, pwr.battery_temp);
-        snprintf(line3, sizeof(line3), "VBAT %.1fV  %dmA",
-                 pwr.battery_voltage / 1000.0f, pwr.consumption_current);
+        snprintf(line3, sizeof(line3), "VBAT %u.%uV  %dmA",
+                 (unsigned)(pwr.battery_voltage / 1000.0f),
+                 (unsigned)((uint32_t)pwr.battery_voltage % 1000U) / 100U,
+                 pwr.consumption_current);
         snprintf(line4, sizeof(line4), "Uptime %s", uptime);
     }
     else if (page == DASHBOARD_PAGE_IO)
@@ -205,7 +164,7 @@ static void dashboard_draw_page(dashboard_page_t page)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 2, 9, "Dashboard");
     {
-        uint8_t bw = u8g2_GetStrWidth(&m1_u8g2, badge);
+        u8g2_uint_t bw = u8g2_GetStrWidth(&m1_u8g2, badge);
         u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - bw - 2, 9, badge);
     }
     u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
@@ -219,7 +178,9 @@ static void dashboard_draw_page(dashboard_page_t page)
     m1_draw_text(&m1_u8g2, 6, 32, 116, line2, TEXT_ALIGN_LEFT);
     m1_draw_text(&m1_u8g2, 6, 41, 116, line3, TEXT_ALIGN_LEFT);
     if (line4[0] != '\0')
+    {
         m1_draw_text(&m1_u8g2, 6, 50, 116, line4, TEXT_ALIGN_LEFT);
+    }
 
     /* Page indicator at bottom — matches About screen pattern */
     {
@@ -227,7 +188,7 @@ static void dashboard_draw_page(dashboard_page_t page)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         snprintf(page_ind, sizeof(page_ind), "< %u/%u >",
                  (unsigned)page + 1U, (unsigned)DASHBOARD_PAGE_COUNT);
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, page_ind);
+        u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, page_ind);
         u8g2_DrawStr(&m1_u8g2, (M1_LCD_DISPLAY_WIDTH - tw) / 2, 62, page_ind);
     }
 
