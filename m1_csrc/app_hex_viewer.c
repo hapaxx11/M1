@@ -30,9 +30,9 @@
 
 /*************************** D E F I N E S ************************************/
 
-#define HEX_VIEWER_PAGE_BYTES  24U
 #define HEX_VIEWER_ROW_BYTES    6U
 #define HEX_VIEWER_ROW_COUNT    4U
+#define HEX_VIEWER_PAGE_BYTES  (HEX_VIEWER_ROW_BYTES * HEX_VIEWER_ROW_COUNT)
 #define HEX_VIEWER_POLL_MS    120U
 
 /************************** S T R U C T U R E S *******************************/
@@ -53,18 +53,18 @@ static hex_viewer_state_t g_hex_viewer;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
-static void hex_viewer_close(void);
+static void hex_viewer_close(hex_viewer_state_t *st);
 static bool hex_viewer_pick_file(hex_viewer_state_t *st);
 static void hex_viewer_draw(hex_viewer_state_t *st);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
-static void hex_viewer_close(void)
+static void hex_viewer_close(hex_viewer_state_t *st)
 {
-    if (g_hex_viewer.file_open)
+    if (st != NULL && st->file_open)
     {
-        f_close(&g_hex_viewer.file);
-        g_hex_viewer.file_open = false;
+        f_close(&st->file);
+        st->file_open = false;
     }
 }
 
@@ -78,15 +78,24 @@ static bool hex_viewer_pick_file(hex_viewer_state_t *st)
         return false;
     }
 
-    hex_viewer_close();
+    hex_viewer_close(st);
     f_info = storage_browse(NULL);
     if (f_info == NULL || !f_info->file_is_selected)
     {
         return false;
     }
 
-    snprintf(st->path, sizeof(st->path), "%s/%s",
-             f_info->dir_name, f_info->file_name);
+    {
+        int n = snprintf(st->path, sizeof(st->path), "%s/%s",
+                         f_info->dir_name, f_info->file_name);
+        if (n < 0 || (size_t)n >= sizeof(st->path))
+        {
+            st->file_open = false;
+            st->file_size = 0U;
+            st->offset = 0U;
+            return false;
+        }
+    }
     strncpy(st->name, f_info->file_name, sizeof(st->name) - 1U);
     st->name[sizeof(st->name) - 1U] = '\0';
 
@@ -222,7 +231,7 @@ void app_hex_viewer_run(void)
 
         if (btn == GAME_BTN_BACK)
         {
-            hex_viewer_close();
+            hex_viewer_close(&g_hex_viewer);
             return;
         }
         if (btn == GAME_BTN_UP)
@@ -267,7 +276,7 @@ void app_hex_viewer_run(void)
         {
             if (!hex_viewer_pick_file(&g_hex_viewer))
             {
-                hex_viewer_close();
+                hex_viewer_close(&g_hex_viewer);
                 return;
             }
         }

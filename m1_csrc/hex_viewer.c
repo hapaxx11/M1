@@ -24,12 +24,20 @@ void hex_viewer_format_row(const uint8_t *buf, uint16_t len,
         return;
     }
 
+    out[0] = '\0';
+
+    /* Treat NULL buffer as empty — produce address-only output */
+    if (buf == NULL)
+    {
+        len = 0U;
+    }
+
     /* Address prefix — 4 hex digits + space */
     written = snprintf(out + pos, out_len - pos, "%04lX ",
                        (unsigned long)(row_offset & 0xFFFFUL));
     if (written < 0 || (size_t)written >= (out_len - pos))
     {
-        out[out_len - 1U] = '\0';
+        out[0] = '\0';
         return;
     }
     pos += (size_t)written;

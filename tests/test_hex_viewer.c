@@ -63,6 +63,16 @@ void test_format_row_zero_bytes(void)
     TEST_ASSERT_EQUAL_STRING("0010 ", out);
 }
 
+void test_format_row_null_buf_nonzero_len(void)
+{
+    char out[32];
+    memset(out, 'X', sizeof(out));
+
+    /* NULL buffer with non-zero len — treat as len = 0 (address only) */
+    hex_viewer_format_row(NULL, 4, 0x0020, out, sizeof(out));
+    TEST_ASSERT_EQUAL_STRING("0020 ", out);
+}
+
 void test_format_row_offset_wraps_16bit(void)
 {
     const uint8_t data[] = { 0x01 };
@@ -176,6 +186,7 @@ int main(void)
     RUN_TEST(test_format_row_partial_3_bytes);
     RUN_TEST(test_format_row_single_byte);
     RUN_TEST(test_format_row_zero_bytes);
+    RUN_TEST(test_format_row_null_buf_nonzero_len);
     RUN_TEST(test_format_row_offset_wraps_16bit);
     RUN_TEST(test_format_row_small_buffer);
     RUN_TEST(test_format_row_zero_buffer);
