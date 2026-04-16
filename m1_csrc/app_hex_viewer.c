@@ -55,7 +55,7 @@ static hex_viewer_state_t g_hex_viewer;
 
 static void hex_viewer_close(void);
 static bool hex_viewer_pick_file(hex_viewer_state_t *st);
-static void hex_viewer_draw(const hex_viewer_state_t *st);
+static void hex_viewer_draw(hex_viewer_state_t *st);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -105,7 +105,7 @@ static bool hex_viewer_pick_file(hex_viewer_state_t *st)
     return true;
 }
 
-static void hex_viewer_draw(const hex_viewer_state_t *st)
+static void hex_viewer_draw(hex_viewer_state_t *st)
 {
     uint8_t page_buf[HEX_VIEWER_PAGE_BYTES];
     UINT br = 0U;
@@ -116,6 +116,7 @@ static void hex_viewer_draw(const hex_viewer_state_t *st)
     uint32_t row_offset;
     uint8_t row_y;
     uint16_t row_len;
+    bool read_error = false;
 
     if (st == NULL)
     {
@@ -127,15 +128,24 @@ static void hex_viewer_draw(const hex_viewer_state_t *st)
 
     if (st->file_open)
     {
-        f_lseek((FIL *)&st->file, st->offset);
-        f_read((FIL *)&st->file, page_buf, sizeof(page_buf), &br);
+        if (f_lseek(&st->file, st->offset) != FR_OK ||
+            f_read(&st->file, page_buf, sizeof(page_buf), &br) != FR_OK)
+        {
+            br = 0U;
+            read_error = true;
+        }
     }
 
     snprintf(badge, sizeof(badge), "%04lX/%04lX",
              (unsigned long)(st->offset & 0xFFFFUL),
              (unsigned long)(st->file_size & 0xFFFFUL));
 
-    if (st->file_open)
+    if (read_error)
+    {
+        strncpy(status_buf, "Read error", sizeof(status_buf) - 1U);
+        status_buf[sizeof(status_buf) - 1U] = '\0';
+    }
+    else if (st->file_open)
     {
         strncpy(status_buf, st->name, sizeof(status_buf) - 1U);
         status_buf[sizeof(status_buf) - 1U] = '\0';

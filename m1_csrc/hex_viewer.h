@@ -15,10 +15,11 @@
 #include <stddef.h>
 
 /**
- * @brief  Format one hex-dump row: "ADDR XX XX XX XX XX XX"
+ * @brief  Format one hex-dump row: "ADDR XXXXXXXX..."
  *
  * Writes an address prefix (4 hex digits + space) followed by up to
- * @p len hex byte pairs into @p out.  The output is always NUL-terminated.
+ * @p len contiguous hex byte pairs into @p out (no spaces between bytes).
+ * The output is always NUL-terminated.
  *
  * @param buf        Source data bytes for this row.
  * @param len        Number of valid bytes in @p buf (0..row_bytes).

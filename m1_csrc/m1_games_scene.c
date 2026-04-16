@@ -84,7 +84,6 @@ static void music_on_enter(M1SceneApp *app)
 
 static void hex_viewer_on_enter(M1SceneApp *app)
 {
-    (void)app;
     app_hex_viewer_run();
     app->running = true;
     m1_scene_pop(app);
