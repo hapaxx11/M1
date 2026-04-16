@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.108] - 2026-04-16
+
+### Added
+
+- **Games: Hex Viewer** — SD card hex/ASCII file viewer ported from
+  dagnazty/M1_T-1000. Browse any file and view hex dump + ASCII preview
+  with scroll navigation (UP/DOWN by row, LEFT/RIGHT by page, OK to
+  browse another file). Accessible from Games menu.
+## [0.9.0.107] - 2026-04-16
+
+### Added
+
+- **NFC: Poll profile support** — added `nfc_poll_profile_t` enum with
+  `NFC_POLL_PROFILE_NORMAL` (all technologies) and `NFC_POLL_PROFILE_FAST_A`
+  (NFC-A only with shorter 220ms discovery window) modes, plus
+  `nfc_poller_set_profile()` / `nfc_poller_get_profile()` accessors.
+  Ported from dagnazty/M1_T-1000.
+## [0.9.0.106] - 2026-04-16
+
+### Added
+
+- **Games: World Clock utility** — standalone clock display with local time
+  + 4 world time zones (UTC, UTC+1, UTC+5, UTC+9). Large digit display,
+  leap year handling, weekday display. Pages through zones with LEFT/RIGHT.
+  Ported from dagnazty/M1_T-1000 with pure logic extracted to
+  m1_clock_util.c/h and host-side unit tests.
 ## [0.9.0.105] - 2026-04-16
 
 ### Added
