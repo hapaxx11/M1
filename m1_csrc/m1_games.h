@@ -56,6 +56,8 @@ void game_dice_run(void);
 
 /* Utility apps */
 void app_hex_viewer_run(void);
+/* Clock utility */
+void app_clock_run(void);
 
 /* SD card apps browser (Phase 2) */
 void game_apps_browser_run(void);

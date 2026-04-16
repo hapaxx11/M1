@@ -29,6 +29,7 @@ enum {
     GamesSceneDice,
     GamesSceneMusic,
     GamesSceneHexViewer,
+    GamesSceneClock,
     GamesSceneCount
 };
 
@@ -85,6 +86,10 @@ static void music_on_enter(M1SceneApp *app)
 static void hex_viewer_on_enter(M1SceneApp *app)
 {
     app_hex_viewer_run();
+static void clock_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    app_clock_run();
     app->running = true;
     m1_scene_pop(app);
 }
@@ -98,6 +103,7 @@ static const M1SceneHandlers pong_handlers       = { .on_enter = pong_on_enter  
 static const M1SceneHandlers dice_handlers       = { .on_enter = dice_on_enter       };
 static const M1SceneHandlers music_handlers      = { .on_enter = music_on_enter      };
 static const M1SceneHandlers hex_viewer_handlers = { .on_enter = hex_viewer_on_enter };
+static const M1SceneHandlers clock_handlers  = { .on_enter = clock_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
@@ -111,6 +117,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Dice Roll",
     "Music Player",
     "Hex Viewer",
+    "Clock",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -121,6 +128,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     GamesSceneDice,
     GamesSceneMusic,
     GamesSceneHexViewer,
+    GamesSceneClock,
 };
 
 static uint8_t menu_sel    = 0;
@@ -165,6 +173,7 @@ static const M1SceneHandlers *const scene_registry[GamesSceneCount] = {
     [GamesSceneDice]      = &dice_handlers,
     [GamesSceneMusic]     = &music_handlers,
     [GamesSceneHexViewer] = &hex_viewer_handlers,
+    [GamesSceneClock]  = &clock_handlers,
 };
 
 /*--- Entry point ----------------------------------------------------------*/
