@@ -491,6 +491,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_rpc.c
     ../../m1_csrc/m1_gpio.c
     ../../m1_csrc/m1_gpio_scene.c
+    ../../m1_csrc/m1_gpio_uart.c
     ../../m1_csrc/m1_can.c
     ../../m1_csrc/m1_i2c.c
     ../../m1_csrc/m1_infrared.c

@@ -9,6 +9,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.104] - 2026-04-16
+
+### Added
+
+- **GPIO: USB-UART Bridge** — Momentum-style USB-to-serial adapter using
+  USART1 (PA9 TX / PA10 RX) on J7 header and USB CDC virtual COM port.
+  Features configurable baud rate (9600–921600, LEFT/RIGHT to cycle),
+  on-screen scrolling terminal with ASCII and HEX display modes (OK to
+  toggle), and bidirectional USB↔UART data forwarding via the existing VCP
+  task infrastructure.  Debug logging is automatically suppressed during
+  bridge operation to prevent UART data corruption.
+
+## [0.9.0.103] - 2026-04-16
+
+### Added
+
+- **IR Universal Remote: Custom Remote Builder** — New "Create Remote" entry in
+  the Universal Remote dashboard.  Users choose a template (TV / AC / Audio /
+  Custom), then assign each button slot a signal via:
+  - **Learn** — capture a live IR signal from a physical remote (point-and-press);
+  - **Browse IRDB** — browse `.ir` files in the IRDB tree and pick from the
+    commands currently listed by the browser UI;
+  - **Skip** — leave the slot unmapped.
+  Assigned slots display a 7-character truncated label.  After editing all slots,
+  pressing RIGHT opens the virtual keyboard to name the file; the remote is saved
+  to `0:/IR/Custom/<name>.ir` using the existing `flipper_ir_write_header()` /
+  `flipper_ir_write_signal()` primitives.  Custom remotes are accessible via
+  "Browse IRDB" → Custom/.
+- **IR infrared_capture_one_signal()** — New exported function in `m1_infrared.c`
+  that initialises the IR decoder, captures exactly one signal from a physical
+  remote, displays the result briefly, and returns the `IRMP_DATA` to the caller.
+  Used by the custom remote builder for in-builder signal learning.
+
+## [0.9.0.102] - 2026-04-15
+
+### Added
+
+- **IR Universal Remote: IRDB Search** — New "Search" option on the Universal
+  Remote dashboard (between Browse IRDB and Learned). Type a brand, model, or
+  filename fragment using the virtual keyboard; the firmware walks all 3 levels
+  of the IRDB tree (category → brand → device) and displays up to 16 matching
+  `.ir` files in a scrollable list. Selecting a result opens its command list
+  and records it in Recent history. Search results list uses font-aware helpers
+  (`m1_menu_font()`, `m1_menu_item_h()`) to respect user text size settings.
+
+### Changed
+
+- **Documentation: Text size compliance for imports** — Added agent instructions
+  to CLAUDE.md and `documentation/flipper_import_agent.md` requiring all imported
+  features with scrollable lists to use the Hapax font-aware helpers
+  (`m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`)
+  as a blocking merge requirement. Neither Flipper nor upstream Monstatek have
+  user-configurable text size — every imported UI must be adapted.
+
 ## [0.9.0.101] - 2026-04-15
 
 ### Added
@@ -292,95 +346,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.0.78] - 2026-04-14
 
+> **Note:** Versions 0.9.0.79 through 0.9.0.83 were released during a CI
+> changelog stamper bug where the stamper matched body text instead of the
+> heading (see [0.9.0.95]).  Their entries are included in this section.
+> Detailed entries for features and fixes in the 0.9.0.28–0.9.0.77 range
+> that were previously duplicated here have been removed — see each
+> individual version section below for those entries.
+
 ### Added
-
-- **Dark Mode (LCD & Notifications)** — New "Dark Mode" toggle in Settings →
-  LCD & Notifications.  Inverts every pixel on screen via the ST7567 hardware
-  inverse display command (`0xA7`/`0xA6`), giving white-on-black rendering for
-  all content including text, XBM icons, and draw primitives.  Hardware
-  inversion covers the full controller RAM (132×65), eliminating the light
-  pixel border that software-only XOR left at the LCD edges.  RPC screen
-  streaming independently XORs its own framebuffer copy so the desktop app
-  still sees the correct inverted image.  All rendering paths route through
-  `m1_u8g2_firstpage()`/`m1_u8g2_nextpage()` wrappers for consistent
-  behaviour.  Setting is persisted to SD card (`dark_mode` key in
-  `settings.cfg`) and applied via `m1_lcd_set_dark_mode()` on boot.
-
-- **Text Size setting (LCD & Notifications)** — New "Text Size" option with
-  Small (default), Medium, and Large modes.  Medium uses a clearer `spleen5x8`
-  monospaced font at 10px row height (5 visible items).  Large uses the
-  `nine_by_five_nbp` font at 13px row height (4 visible items) for maximum
-  readability.  Affects all scene-based menus, Sub-GHz menu/config, and LCD
-  settings.  Setting is persisted to SD card (`menu_style` key in
-  `settings.cfg`).  Neither Flipper Zero nor Momentum firmware offers a
-  comparable in-menu font/spacing toggle — this is a Hapax-original
-  accessibility feature.
 
 - **SubGhz unit tests: signal history ring buffer** (`tests/test_subghz_history.c`) —
   19 tests covering `subghz_history_add/get/reset`: duplicate detection, circular
   overflow, RSSI update, extended fields, saturation at 255, ordering (index 0 =
   most recent), and boundary conditions.
-
-- **SubGhz key encoder module** (`Sub_Ghz/subghz_key_encoder.c/h`) — extracted KEY→RAW
-  OOK PWM encoding logic from `sub_ghz_replay_flipper_file()`.  Provides
-  `subghz_key_resolve_timing()` (registry-based + strstr fallback timing lookup with
-  dynamic/weather/TPMS rejection) and `subghz_key_encode()` (bit-level PWM pair
-  generation with repetitions).  20 unit tests in `tests/test_subghz_key_encoder.c`.
-
-- **SubGhz raw line parser module** (`Sub_Ghz/subghz_raw_line_parser.c/h`) — extracted
-  RAW_Data line parsing from `sub_ghz_replay_flipper_file()`.  Handles Flipper's signed
-  raw data format (negative→absolute, zero skip) with cross-buffer leftover digit
-  recombination when `f_gets` truncates long lines mid-number.  16 unit tests in
-  `tests/test_subghz_raw_line_parser.c`.
-
-- **SubGhz offline RAW decoder module** (`Sub_Ghz/subghz_raw_decoder.c/h`) — extracted
-  the RAW→protocol offline decode engine from `m1_subghz_scene_saved.c::do_decode_raw()`.
-  Reconstructs pulse packets from raw timing data using inter-packet gap detection, then
-  tries protocol decoders via a callback interface (decoupled from hardware globals).
-  Handles noise filtering, pulse overflow, deduplication, zero-key rejection, and trailing
-  packets without a final gap.  20 unit tests in `tests/test_subghz_raw_decoder.c`.
-
-- **SubGhz playlist path remapper** (`Sub_Ghz/subghz_playlist_parser.c/h`) — extracted
-  the Flipper→M1 path remapping utility from `m1_subghz_scene_playlist.c`.  Converts
-  Flipper-style paths (`/ext/subghz/...`) to M1 convention (`/SUBGHZ/...`).
-  10 unit tests in `tests/test_subghz_playlist_parser.c`.
-
-- **SubGhz block decoder tests** (`tests/test_subghz_block_decoder.c`) — 15 unit tests
-  for `subghz_block_decoder.h` inline functions: bit accumulation (64-bit and 128-bit
-  with MSB overflow), decoder reset, and dedup hash computation.
-
-- **SubGhz block encoder tests** (`tests/test_subghz_block_encoder.c`) — 14 unit tests
-  for `subghz_block_encoder.h` inline functions: MSB-first bit-array set/get, round-trip
-  byte patterns, NRZ-style upload generation with consecutive-bit merging, right-align
-  mode, and buffer overflow handling.
-
-- **SubGhz Manchester codec tests** (`tests/test_subghz_manchester_codec.c`) — 22 unit
-  tests covering both `subghz_manchester_decoder.h` (table-driven state machine — all
-  valid transitions, invalid→reset, multi-bit decode sequences) and
-  `subghz_manchester_encoder.h` (step 0/1/2, same-value extra half-bit, finish symbol),
-  plus encode→decode round-trip verification.
-
-- **Datatypes utils tests** (`tests/test_datatypes_utils.c`) — 16 unit tests for
-  `datatypes_utils.c`: hex char/string→decimal conversion, dec→binary with zero-fill,
-  and `hexStrToBinStr` guard paths (NULL/empty).  Tests document a latent bug in
-  `hexStrToBinStr` where the pair counter resets each iteration.
-
-- **Flipper RFID parser tests** (`tests/test_flipper_rfid.c`) — 40 unit tests for
-  `flipper_rfid_parse_protocol()`: validates all 30+ protocol name→enum mappings
-  including aliases (EM-Marin→EM4100, HID26→H10301, Nexkey→Nexwatch),
-  case-insensitive matching, NULL/empty input handling, and unknown protocol
-  → `LFRFIDProtocolMax` fallback.
-
-- **Flipper IR parser tests** (`tests/test_flipper_ir.c`) — 42 unit tests for
-  `flipper_ir_proto_to_irmp()` and `flipper_ir_irmp_to_proto()`: validates all 25
-  forward mappings (NEC, Samsung32, RC5, SIRC variants, etc.), reverse mappings,
-  case-insensitive matching, round-trip conversion, and unknown protocol handling.
-
-- **Flipper NFC parser tests** (`tests/test_flipper_nfc.c`) — 70 unit tests for
-  `flipper_nfc_parse_type()`: validates all ~60 NFC device type string→enum mappings
-  across 10 categories (NTAG203–216, Mifare Classic 1K/4K/Mini, DESFire EV1–3,
-  FeliCa/Suica/PASMO, ISO15693, SLIX/SLI, ST25TB/SR series), case-insensitive
-  matching, and unknown type fallback.
 
 - **LFRFID Manchester decoder tests** (`tests/test_lfrfid_manchester.c`) — 18 unit
   tests for the generic Manchester decoder: `manch_init()` parameter setup,
@@ -389,11 +367,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `manch_reset()` state clearing, and `manch_feed_events()` half/full period
   classification with edge normalization and overflow protection.
 
-- **OTA asset filter tests** (`tests/test_fw_source_filter.c`) — 18 unit tests for
-  `fw_source_asset_matches_filter()`: validates suffix-based include filtering,
-  space-separated exclude filtering, combined include+exclude logic, and real-world
-  OTA scenarios (Hapax release matching, ESP32 exclusion, MD5 filtering).
-
 - **HTTP client URL parser tests** (`tests/test_http_client_parse.c`) — 9 unit tests
   for `parse_url()`: validates HTTPS detection (is_https flag triggers SSL path),
   host/port/path extraction, custom ports, default path, invalid scheme rejection,
@@ -401,50 +374,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Sub-GHz Read Raw: Flipper-style RSSI spectrogram visualization** — Replaced
-  the binary square-wave waveform display with a Flipper Zero-inspired RSSI
-  history spectrogram.  Changes include: (1) RSSI values are sampled on each
-  data event and drawn as vertical bars from the bottom of the waveform area,
-  showing signal strength over time rather than mark/space pulse states;
-  (2) Timeline scale ticks along the top of the waveform area scroll with the
-  data; (3) A dashed vertical cursor with triangle indicator marks the current
-  write position; (4) "RSSI" label drawn vertically on the right edge;
-  (5) Waveform area enclosed in a proper frame (top/bottom/right borders);
-  (6) Animated Lissajous sine wave replaces static "Press OK" text in idle
-  state.  The separate thin RSSI bar below the status bar has been removed —
-  RSSI is now the primary visualization.
-
-- **Refactored `sub_ghz_replay_flipper_file()`** — KEY→RAW encoding and RAW_Data
-  line parsing are now delegated to the extracted `subghz_key_encoder` and
-  `subghz_raw_line_parser` modules.  No change to firmware runtime behaviour;
-  the refactored code produces identical output for all supported file formats.
-
 - **Extracted `asset_matches_filter()`** — The OTA asset name filtering function
   in `m1_fw_source.c` is now non-static and declared in `m1_fw_source.h` as
   `fw_source_asset_matches_filter()`, enabling host-side unit testing of the
   include/exclude filter logic without firmware HAL dependencies.
-
-- **Refactored `do_decode_raw()` in Saved scene** — offline RAW decode logic is
-  now delegated to the extracted `subghz_raw_decoder` module via callback interface.
-  The scene provides a thin adapter that bridges to the global decoder state.
-
-- **Refactored `remap_flipper_path()` in Playlist scene** — path remapping logic
-  is now delegated to `subghz_remap_flipper_path()` in the extracted
-  `subghz_playlist_parser` module.
-
-- **Battery indicator on splash screen** — The boot/welcome screen now shows a
-  battery icon in the top-right corner with charge percentage and fill level.
-  When charging (pre-charge or fast charge), a lightning bolt overlay appears
-  inside the battery icon. Similar to Momentum firmware's splash screen.
-
-- **WiFi Deauther** — ported WiFi deauthentication tool from neddy299/M1 fork.
-  Accessible from WiFi → Deauther menu.  Flow: preflight AT command check →
-  AP scan → AP select → station scan → station select → attack toggle.
-  Requires custom ESP32-C6 AT firmware with `AT+DEAUTH` and `AT+STASCAN`
-  command support.  Includes hidden advanced mode (UP UP DOWN DOWN) to cycle
-  deauth attack techniques.  Adapted for Hapax conventions: scene-based menu
-  integration as blocking delegate, `m1_esp32_deinit()` on all exit paths,
-  no "Back" button bar labels.
 
 - **ESP32 firmware OTA download** — new "Download" option in Settings → ESP32
   update menu.  Downloads ESP32-C6 AT firmware (`.bin` + `.md5`) from GitHub
@@ -458,15 +391,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`documentation/esp32_firmware.md`) — source repos, custom AT commands,
   SPI pin mapping, flash methods, build instructions.
 
-- **Documentation: Preferred Unit Testing Pattern** — Documented the stub-based
-  extraction pattern as the canonical approach for all new host-side unit tests.
-  Added to `CLAUDE.md` (full specification with code examples),
-  `DEVELOPMENT.md` (concise testing section), `.github/GUIDELINES.md` (code
-  standards), and `ARCHITECTURE.md` (test architecture overview).  Pattern
-  covers: identifying pure-logic functions, creating minimal stubs in
-  `tests/stubs/`, Unity test file structure, CMake target setup, and what
-  NOT to unit test (AT commands, GPIO, RTOS orchestration, rendering).
-
 - **Documentation: Preferred Modularization Pattern** — Documented the
   extract-pure-logic-to-standalone-module approach (established in PR #106)
   as the canonical development pattern.  Added to `CLAUDE.md` (full
@@ -476,98 +400,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all new development, refactors, and bug fixes where monolithic files mix
   pure logic with hardware-coupled code.
 
-- **Virtual keyboard — text-mode layout with SPACE key** — Added
-  `m1_vkb_get_text()` function that provides a context-specific keyboard
-  layout for general text input (passwords, device names).  The text-mode
-  keyboard replaces the underscore key with a visible SPACE indicator (⎵)
-  on lowercase and uppercase pages; underscore is moved to the symbols page
-  (replacing pipe `|`).  Follows Flipper Zero's pattern of multiple keyboard
-  layouts depending on context.  WiFi password entry and Bad-BT device name
-  entry now use the text-mode keyboard.  Filename entry (`m1_vkb_get_filename`)
-  retains the original layout without space.
-
-- **Static analysis (on-demand)** — Added `static-analysis.yml` workflow running cppcheck
-  on `m1_csrc/` and `Sub_Ghz/protocols/` with `--enable=warning,performance,portability`.
-  Also runs cppcheck MISRA-C addon in advisory mode.  Triggered via `workflow_dispatch`
-  (Actions tab) — not a required PR check.
-
-- **Unit testing framework** — Added Unity test framework (v2.6.1) with host-side
-  CMake build in `tests/`.  Initial test suite covers `bit_util.c` (33 tests):
-  CRC-4/7/8/16, parity, reverse/reflect, XOR/add, CCITT/IBM whitening, LFSR digest,
-  and UART extraction functions.
-
-- **Address Sanitizer builds** — Host-side test build enables `-fsanitize=address,undefined`
-  by default, catching memory bugs (buffer overflows, use-after-free, undefined behavior)
-  at test time without requiring hardware.
-
-- **Doxygen documentation** — Added `Doxyfile` and `docs.yml` workflow to auto-generate
-  API documentation from source comments and publish to GitHub Pages.
-
-- **Unit test CI** — Added `tests.yml` workflow running host-side tests with ASan+UBSan
-  on every PR and push that touches source files.
-
-- **cppcheck suppressions** — Added `.cppcheck-suppressions.txt` for vendor HAL and
-  expected embedded firmware patterns.
-
-- **IR Saved File Actions menu** — Pressing LEFT on the IR commands list now opens
-  a file-level action menu with Send All (transmit every command sequentially),
-  Info (file name, command count, parsed/raw breakdown, protocol), Rename, and
-  Delete.  This brings IR in line with the Flipper `infrared_scene_saved_menu.c`
-  pattern already used by Sub-GHz, NFC, and RFID.
-
-- **Sub-GHz Saved Signal Info screen** — The Sub-GHz saved file action menu now
-  includes an Info item that loads the `.sub` file and displays protocol name,
-  key value, bit count, timing element, frequency, and modulation preset.
-  Supports both parsed and raw signal types.
-
-- **BLE Spam: complete rewrite with dynamic packet generation** — Ported
-  packet formats from the Flipper Zero / Momentum ble_spam app (credit:
-  @Willy-JL, @ECTO-1A, @Spooks4576) via the GhostESP reference.  Key
-  improvements: per-cycle randomisation of model IDs, battery levels,
-  colors, and encrypted payloads; MAC address rotation per packet (except
-  Apple); ~100ms cycle time (was 1500ms); per-brand mode selection menu
-  (Apple, Samsung, Google, Microsoft, Random); three Apple Continuity
-  types (ProximityPair, NearbyAction, CustomCrash); full model databases
-  (19 Apple PP, 15 Apple NA, 80+ Google FP, 20 Samsung Buds, 30 Samsung
-  Watches); Microsoft SwiftPair with random device names; live packet
-  counter display.
-
-- **Documentation: removed hardcoded version from build examples** — replaced
-  stale `M1_Hapax_v0.9.0.1` references in CLAUDE.md, README.md, and
-  DEVELOPMENT.md with `M1_Hapax_v<VERSION>` placeholders.  The build system
-  is unchanged — `CMAKE_PROJECT_NAME` still derives the version dynamically
-  from `m1_fw_update_bl.h`.
-
-- **Build: suppress `-Woverlength-strings` for vendored u8g2 font data** —
-  Added per-file `COMPILE_OPTIONS` in `cmake/m1_01/CMakeLists.txt` to silence
-  the harmless ISO C99 portability warning on `u8g2_fonts.c`.
-
-- **CI: automatic changelog version stamping** — The `build-release.yml`
-  workflow now automatically replaces the `[Unreleased]` heading in
-  `CHANGELOG.md` with the release version and date (e.g.
-  `[0.9.0.56] - 2026-04-10`) after each successful release, and inserts a
-  fresh empty `[Unreleased]` heading above it.  This prevents changelog
-  entries from accumulating indefinitely under the `[Unreleased]` heading.
-
 - **Firmware download source config** — `fw_sources.txt` now supports a
   `Category:` field (`firmware` or `esp32`) to distinguish M1 firmware
   sources from ESP32 AT firmware sources.  Existing configs without a
   `Category:` field default to `firmware`.
-
-- **Sub-GHz Decode action for saved RAW files** — The Saved scene action menu
-  now shows a "Decode" option (first item) for RAW `.sub` files.  Selecting it
-  feeds the raw pulse timing data through all registered protocol decoders
-  offline (no radio needed) and displays any matched protocols with key, bit
-  count, TE, and frequency.  Multiple decoded packets are shown in a scrollable
-  list with detail view.  Inspired by Momentum firmware's decode feature.
-
-- Documentation: added mandatory bug-fix regression test policy to CLAUDE.md,
-  DEVELOPMENT.md, and .github/GUIDELINES.md — every bug fix must include unit tests
-  that fail before the fix and pass after it
-
-- Documentation: added explicit "no duplicate subsection headings" rule to CLAUDE.md
-  and GUIDELINES.md changelog instructions — agents must scan the entire `[Unreleased]`
-  block for an existing heading before creating a new one
 
 - **Documentation: font inventory in CLAUDE.md** — Added a comprehensive font
   inventory table listing the 22 u8g2 fonts linked/used by application code,
@@ -576,66 +412,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rules so future agents keep the table current when fonts are added,
   removed, or reassigned.
 
-- **CI workflow no longer runs on push to main** — Removed the `push`
-  trigger from `ci.yml` so the CI Build Check only runs on pull requests.
-  Previously, every push to `main` triggered both CI Build Check and
-  Build and Release in parallel, producing two identical firmware builds.
-  Build and Release already validates compilation, so the CI run was
-  fully redundant.  This halves the compute usage on push-to-main events.
-
-- **Sub-GHz Read Raw waveform — oscilloscope-style rendering** — Rewrote
-  `subghz_raw_waveform_draw()` from filled vertical bars to a proper
-  square-wave oscilloscope trace.  High/low signal levels are now drawn
-  as 2px-thick horizontal rails with crisp vertical transition edges.
-  Added subtle dashed grid reference lines at the high, center, and low
-  positions for visual context.  Adjusted the waveform area geometry
-  (Y=15, H=36) so it no longer overlaps the RSSI bar.
-
-- **Sub-GHz Saved / Playlist scenes skip straight to file browser** — Removed
-  the intermediate "Press OK to browse" prompt screen.  Entering either scene
-  now opens the SD card file browser immediately.  BACK from the action menu
-  (Saved) or playback view (Playlist) re-opens the browser; BACK from the
-  browser returns to the Sub-GHz menu.  After Rename or Delete, the file
-  browser reopens automatically per the Saved Item Actions Pattern.
-
-- **File browser lists directories before files** — The SD card file browser
-  now sorts entries with directories first, then files, each group sorted
-  alphabetically (case-insensitive).  This matches Flipper Zero / Momentum
-  firmware behaviour and prevents subdirectories (e.g. `playlist/`) from
-  appearing in the middle of signal files.
-
-- **Hapax logo — H inside diamond** — Updated all three M1 logo bitmap arrays
-  (128×64 splash, 40×32 boot, 26×14 status bar) in `m1_display_data.c` with
-  Hapax H-mark variants.  The Hapax "H" letterform is carved into the center
-  diamond of the M mountain logo by clearing specific pixels to form two vertical
-  legs and a horizontal crossbar.  The diamond outline and mountain slopes are
-  unchanged from stock.  PNG previews extracted from the C byte arrays are in
-  `documentation/logo_previews/`.
-
-- **Settings — LCD & Notifications menu** — Removed the bottom instruction bar
-  ("U/D=Sel L/R=Change") that wasted 12px of screen space.  Now uses the same
-  layout as the Sub-GHz Config scene: title with separator line, 8px rows showing
-  all 5 items at once (no scrolling needed), and `< value >` arrows on the selected
-  item to indicate L/R cycling.  Reclaims the bottom 12px and eliminates the
-  3-item scrolling window.
-
 - **Settings — About screen** — Removed the bottom Prev/Next inverted bar.
   L/R navigation is intuitive; replaced with a subtle centered `< 1/3 >` page
   indicator.  Added title header with separator line for visual consistency.
   Content repositioned to use the full display area.
-
-- **Standardized Saved Item Actions pattern** — All four modules (Sub-GHz, IR,
-  NFC, RFID) now implement the core saved-item verbs: Emulate/Send, Info,
-  Rename, Delete.  Documented the canonical pattern in CLAUDE.md under
-  "Saved Item Actions Pattern" so future modules follow the same structure.
-
-- **Documentation: Saved Item Actions as canonical UX standard** — The Saved Item
-  Actions Pattern is now the highest-priority UX standard across all docs.
-  Updated CLAUDE.md (precedence note), ARCHITECTURE.md (new section),
-  DEVELOPMENT.md (mandatory for new modules), flipper_import_agent.md (Pattern
-  Adoption Policy table: scene UX follows Flipper), and .github/GUIDELINES.md
-  (new § 11 UX Pattern Standards).  Previously defined UX preferences (button bar
-  rules, display layout) still apply when not superseded by this pattern.
 
 - **IR commands bottom bar** — The bottom bar now shows "< More" (for file
   actions) and "Send >" instead of the generic "Open" label.
@@ -653,13 +433,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renamed to "Card Actions" for clarity, since these tools operate on the
   currently-loaded card data.
 
-- **Removed ESP32 boot-time auto-init** — The `m1_esp32_auto_init` setting
-  (Settings → System → "ESP32 at boot") was a Hapax addition that stock firmware
-  does not have.  ESP32 is now always initialized on-demand when a WiFi, BT, or
-  802.15.4 function is first selected, matching stock Monstatek behaviour.  The
-  "System Settings" screen and its SD card persistence key (`esp32_auto_init`)
-  have been removed.  Existing settings files with the key are harmlessly ignored.
-
 - **Sub-GHz Config scene: add TX Power and ISM Region settings** — The legacy
   `sub_ghz_radio_settings()` screen (stock Monstatek) exposed TX Power, Modulation,
   and ISM Region.  The scene-based Config only had Frequency, Hopping, Modulation,
@@ -669,187 +442,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes are applied via new `_ext` accessor functions that bridge the static
   `subghz_tx_power_idx` to scene code.
 
-- **Documentation overhaul** — comprehensive audit and update of all markdown files
-  for consistency with codebase state and completed PRs. README.md rewritten with
-  comparison table vs stock firmware, accurate protocol counts, missing features
-  (playlist, add manually, AES crypto, NTP sync), included databases section, and
-  expanded SD card layout. Updated DEVELOPMENT.md with full build environment and
-  architecture overview. Expanded ARCHITECTURE.md with missing directories and
-  module scene table. Fixed placeholder URLs in CONTRIBUTING.md, CODE_OF_CONDUCT.md,
-  SECURITY.md. Fixed outdated version label in GUIDELINES.md. Consolidated duplicate
-  CHANGELOG [0.9.0.7] block. Removed completed subghz_improvement_plan.md.
-
 ### Fixed
-
-- **OTA firmware download: "Connection failed" on all HTTPS connections** —
-  `tcp_connect()` opened SSL connections via `AT+CIPSTART="SSL"` without
-  first configuring the ESP32's SSL settings.  The ESP32 AT firmware either
-  attempted certificate verification against an empty/missing CA store, or
-  failed the TLS handshake due to invalid system time (SNTP was never
-  configured before HTTP operations).  Both conditions caused the ESP32 to
-  return `ERROR` immediately, which `tcp_connect()` reported as
-  `HTTP_ERR_CONNECT_FAIL` ("Connection failed").  Fixed by adding a one-time
-  SSL setup (`ssl_ensure_configured()`) that:
-  1. Enables SNTP (`AT+CIPSNTPCFG=1,0,"pool.ntp.org"`) so the ESP32 has
-     valid system time for TLS — fire-and-forget, sync happens in background.
-  2. Disables SSL certificate verification (`AT+CIPSSLCCONF=0`) since the M1
-     does not ship a CA certificate store.
-  This setup runs once before the first SSL connection and applies to both
-  the GitHub API call (`http_get`) and the binary download
-  (`http_download_to_file`).  Added `AT+CIPSSLCCONF` and `AT+CIPSNTPCFG`
-  command definitions to `esp_at_list.h`.
-
-- **OTA firmware download: "No releases found" with GitHub API** — HTTP GET
-  requests used HTTP/1.1, causing GitHub's API to respond with
-  `Transfer-Encoding: chunked`.  The raw TCP receive path did not decode
-  chunked encoding, so chunk-size markers (e.g. `a3f\r\n`) were mixed into
-  the JSON body, making it unparsable.  Fixed by switching to HTTP/1.0
-  (which prevents chunked responses) and adding an in-place chunked decoder
-  as a safety net in `http_get()` for non-compliant servers.
-  `http_download_to_file()` now detects chunked responses and fails fast
-  rather than writing corrupt data.
-- **Dark mode: light pixel border eliminated** — Switched dark mode from
-  software framebuffer XOR to the ST7567 hardware inverse display command
-  (`0xA7`/`0xA6`).  The software XOR only inverted the 128×64 framebuffer
-  area, leaving unmapped LCD controller RAM pixels (the ST7567 has 132×65
-  RAM) in their default un-inverted state, creating a visible light border
-  around the screen.  The hardware command inverts ALL pixels on the panel,
-  eliminating the border completely.  RPC screen streaming continues to work
-  because `rpc_send_screen_frame()` independently XORs its own framebuffer
-  copy when `m1_dark_mode` is set.
-
-- **Dark mode not applied across all screens** — Replaced all remaining
-  stock `u8g2_FirstPage()`/`u8g2_NextPage()` calls with the M1 wrapper
-  functions `m1_u8g2_firstpage()`/`m1_u8g2_nextpage()` across 17 source
-  files (NFC, RFID, Sub-GHz, IR, GPIO, storage browser, power control,
-  signal generator, music player, field detect, flipper integration, CLI,
-  app manager, system splash, and display utilities).  These stock calls
-  bypassed the wrapper path, which handles RPC screen streaming
-  notifications.  With hardware LCD inversion now handling dark mode
-  visuals, dark mode renders correctly on every screen regardless of which
-  display path is used.
-
-- **Splash screen: "M1" no longer looks like "MI"** — Changed the splash
-  screen font (`M1_POWERUP_LOGO_FONT`) from `u8g2_font_tenthinnerguys_tr`
-  to `u8g2_font_helvB08_tr`.  The old font's '1' glyph was a featureless
-  2-pixel vertical bar indistinguishable from a capital I at a glance.  The
-  new font's '1' has a clear top hook, making "M1 Hapax" immediately
-  readable.  Both fonts are bold sans-serif with similar size (ascent 8 vs 9)
-  and near-identical string width (51 vs 52 px), so the overall look is
-  preserved.
-
-- **Sub-GHz Decode: deduplicate repeated transmissions** — RAW `.sub` files
-  typically contain multiple copies of the same transmission (remotes repeat
-  3–5 times).  The offline decoder now skips duplicate protocol+key pairs so
-  the results list shows each unique signal once, making decoded output much
-  clearer.
-
-- **Sub-GHz Decode: sync `npulsecount` before calling protocol decoders** —
-  The offline decoder now sets `subghz_decenc_ctl.npulsecount` before invoking
-  protocol decoders, matching the live pulse handler path and preventing
-  potential mismatches if a decoder reads the global counter directly.
-
-- **Sub-GHz Read scene: unnecessary full radio reset on child scene return** —
-  Returning from Config, ReceiverInfo, or SaveName back to the Read scene
-  previously called `menu_sub_ghz_init()` (full SI4463 power-cycle + patch load)
-  and `subghz_pulse_handler_reset()` (wipes accumulated pulse state), even though
-  the radio was only in SLEEP mode.  Now uses a lightweight `resume_rx()` path
-  that skips the expensive reset and preserves decode state.
-
-- **Sub-GHz Read scene: hopper frequency resets to index 0 after Config** —
-  Opening and closing Config while frequency hopping was active would restart
-  the hopper from frequency index 0.  Now preserves the hopper position
-  (`hopper_idx` and `hopper_freq`) across child scene navigation.
-
-- **Sub-GHz Read scene: L/R frequency change power-cycles the radio** —
-  Pressing Left/Right to change frequency during active RX previously did a full
-  `stop_rx()` + `start_rx()` cycle (TIM1 deinit/init, `menu_sub_ghz_init()`,
-  pulse handler reset).  Now uses `subghz_retune_freq_hz_ext()` for a lightweight
-  retune — the same mechanism the frequency hopper uses internally — keeping the
-  capture pipeline intact.
-
-- **OTA "Fetching releases" always returns "No releases found"** — `http_get`
-  used `AT+HTTPCLIENT` which has a 2 KB receive-buffer limit in the ESP32-C6
-  SPI AT firmware (`CONFIG_AT_HTTP_RX_BUFFER_SIZE=2048`).  A GitHub releases
-  API response is 2–20 KB depending on the number of releases and the length
-  of release notes, so the AT command either errored or returned truncated
-  JSON that could not be parsed.  A secondary bug in the `AT+HTTPCLIENT`
-  format string (`"2,0,\"%s\",,,,%d"` — one extra comma) placed the HTTPS
-  transport-type argument in the wrong parameter slot, causing the connection
-  to default to plain HTTP, which is rejected by `api.github.com`.  Fixed by
-  rewriting `http_get` to use the same raw TCP/SSL path (`AT+CIPSTART` →
-  `AT+CIPSEND` → `AT+CIPRECVDATA`) that `http_download_to_file` already uses,
-  which has no AT-layer body-size limit.  The GitHub API response buffer
-  (`s_api_buf` in `m1_fw_source.c`) was also increased from 4 KB to 12 KB to
-  hold 3–5 releases without truncation.  `http_get` now also sends the
-  mandatory `User-Agent: M1-Hapax/1.0` and `Accept: application/json` headers
-  that the GitHub API requires.
-
-- **Splash screen showing "M1 H" instead of "M1 Hapax"** — Changed
-  `M1_POWERUP_LOGO_FONT` from `u8g2_font_tenthinnerguys_tu` (uppercase only,
-  glyphs 32-95) to `u8g2_font_tenthinnerguys_tr` (restricted, glyphs 32-127)
-  so lowercase letters in "Hapax" are rendered correctly.
-
-- **802.15.4 (Zigbee/Thread) ESP32 resource leak** — Added `m1_esp32_deinit()`
-  to all four exit paths in `ieee802154_scan()`.  Previously, every Zigbee/Thread
-  scan left the ESP32 SPI transport initialized on exit, wasting power and
-  potentially interfering with subsequent WiFi/BT operations.
-
-- **BLE Spam ESP32 resource leak** — Added `m1_esp32_deinit()` to both the
-  early return (ESP32 not ready) and normal exit paths in `ble_spam_run()`.
-
-- **Bad-BT ESP32 resource leak** — Added `m1_esp32_deinit()` to all five exit
-  paths in `badbt_run()` (ESP32 not ready, BLE HID init failure, connection
-  timeout, SD card error, and normal exit).  Previously only `ble_hid_deinit()`
-  was called, leaving the underlying SPI transport active.
-
-- **WiFi disconnect early return without ESP32 deinit** — Added
-  `m1_esp32_deinit()` to the early return path in `wifi_disconnect()` when
-  `wifi_ensure_esp32_ready()` fails.  The ESP32 may have been partially
-  initialized before the failure.
-
-- **NFC worker ignoring Q_EVENT_NFC_STOP** — Added handler for
-  `Q_EVENT_NFC_STOP` in the NFC worker state machine's `NFC_STATE_PROCESS`
-  case.  Previously this event was silently discarded, leaving the worker
-  stuck in PROCESS state — `nfc_deinit_func()` never ran and `EN_EXT_5V`
-  was never deasserted.  Two call sites in `m1_nfc.c` (unlock read and
-  unlock with reader) send this event on user cancellation.
-
-- **IR Send All skipping deinit on timeout** — Changed the Send All loop in
-  `m1_ir_universal.c` to always call `infrared_encode_sys_deinit()` after
-  each command, regardless of whether `Q_EVENT_IRRED_TX` was received.
-  Previously, a 3-second timeout or unexpected event left the IR hardware
-  initialized, and the next `transmit_command()` called
-  `infrared_encode_sys_init()` on already-initialized hardware.
-
-- **Sub-GHz Read Raw not capturing signals** — Fixed critical initialization ordering
-  bug in Read Raw scene where `sub_ghz_tx_raw_deinit_ext()` was called AFTER starting
-  the radio in RX mode.  The deinit function internally calls
-  `sub_ghz_set_opmode(ISOLATED)` which puts the SI4463 to SLEEP, completely undoing
-  the RX start.  TIM1 captured zero edges because GPIO0 outputs nothing while the
-  radio is asleep.  Moved the TX cleanup to before the RX initialization sequence.
-
-- **Sub-GHz Read and Read Raw radio recovery after blocking delegates** — Added
-  `menu_sub_ghz_init()` (full radio PowerUp + config reset) at the start of both
-  Read and Read Raw RX initialization, matching the Spectrum Analyzer's pattern.
-  Previously, after a blocking delegate (Spectrum Analyzer, Freq Scanner, etc.)
-  exited and powered off the radio via `menu_sub_ghz_exit()`, Read/Read Raw relied
-  on `radio_init_rx_tx()`'s retry loop to recover the powered-off SI4463.  The
-  explicit reset ensures the radio is always in a clean, known state before
-  starting RX.
-
-- **Sub-GHz Playlist inter-item latency** — Added `menu_sub_ghz_init()` after each
-  `sub_ghz_replay_flipper_file()` call in the playlist transmitter.  Without this,
-  the radio was left powered off between playlist items (replay calls
-  `menu_sub_ghz_exit()`), forcing the next file's TX setup to recover from a dead
-  radio via `radio_init_rx_tx()`'s retry loop — adding ~100ms latency per item.
-
-- **Sub-GHz 2FSK replay at all frequencies** — Emulate now correctly uses FSK
-  modulation when replaying Flipper .sub files with `Preset: 2FSKDev238Async` (or
-  any FSK preset) at any frequency.  Previously, standard band configs (300–433.92
-  MHz) always forced OOK modulation and the CUSTOM band handler only checked FSK
-  for frequencies ≥ 850 MHz.  The fix forces CUSTOM band mode when FSK is detected,
-  loads the 915 FSK radio config, and retunes to the target frequency.
 
 - **Sub-GHz CUSTOM band antenna switch** — Frontend (antenna path) for CUSTOM
   band frequencies is now selected based on the actual target frequency, not the
@@ -860,270 +453,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now uses case-insensitive matching and recognises ASK presets, matching the replay
   function's `stristr()` approach.
 
-- **Sub-GHz Read Raw — RSSI feedback during recording** — RSSI bar now updates
-  on every 200ms display refresh (not only when ring-buffer flush events arrive),
-  providing continuous signal-strength feedback while recording.
-
-- **Sub-GHz Read Raw — sample count display** — Shows exact sample count when
-  below 1000 instead of always displaying "0k".
-
-- **Sub-GHz Read Raw — sample count accuracy** — Fixed overcounting in the flush
-  function which added the total available ring-buffer depth instead of the 512
-  samples actually consumed per flush.
-
-- **Sub-GHz Emulate — native .sgh file support** — Emulate now works with M1's
-  own .sgh recording files (Read Raw output), not only Flipper .sub files.  Added
-  parsing for `Modulation:` header and `Data:` lines in M1 native format.
-
-- **Sub-GHz Emulate — error feedback** — Emulate now displays an error message
-  box when replay fails (file not found, no data, unsupported protocol, etc.)
-  instead of silently returning to the saved menu.
-
-- **Sub-GHz Emulate — radio state after replay** — Radio hardware is re-initialized
-  after emulate returns, preventing subsequent Read/Read Raw from failing because
-  the SI4463 was left powered off.
-
-- **IR database — Windows reserved filename** — Renamed `ir_database/AC/AUX.ir`
-  to `AUX_.ir`.  `AUX` is a reserved device name on Windows, causing
-  `error: invalid path` on checkout and reset operations.
-
-- **NFC Amiibo emulation — Nintendo Switch compatibility** — Fixed T2T card
-  emulation failing on Nintendo Switch (and other readers with anti-clone
-  detection).  The Switch sends HALT followed by WUPA ~1ms later; the M1
-  was not entering SLEEP_A during T2T emulation because the SLP_REQ handler
-  was guarded with `Emu_GetPersona() != EMU_PERSONA_T2T` and was unreachable
-  behind the T2T handler that forwarded ALL commands (including HALT) to
-  nfc_listener.c.  Reordered the check chain in `rfal_nfc.c` so SLP_REQ is
-  detected before the T2T persona dispatch, and added fast HALT detection in
-  `rfal_rfst25r3916.c` at the RFAL driver level to immediately transition to
-  SLEEP_A within the ISR context, meeting the Switch's tight ~1ms WUPA timing.
-  Cherry-picked from sincere360/M1_SiN360 v0.9.0.5.
-
-- **Sub-GHz raw recording (Read Raw)** — Fixed raw signal recording which was
-  completely non-functional.  The Read Raw scene set up the radio and ISR for
-  capture but never opened an SD card file, never read captured pulses from the
-  ring buffer, never saved data, and never updated the waveform display or
-  sample count.  Matching C3's working implementation: recording now streams
-  data to an `.sgh` file on SD card in real-time, the oscilloscope waveform
-  updates live during capture, and the sample counter tracks progress.  After
-  stopping, DOWN/Save shows the auto-generated filename.  Previously, pressing
-  Save after recording pushed to the protocol-decode save scene which
-  immediately exited because no decoded protocol data existed.
-
-- **ESP32 screen responsiveness** — Reduced AT readiness probe timeout from
-  2s→1s per probe and inter-probe delay from 500ms→200ms, cutting worst-case
-  ESP32 initialization blocking from ~25s to ~12s.  Added separate 5s timeout
-  for AT mode-set commands (AT+CWMODE, AT+BLEINIT) instead of reusing the full
-  30s/10s scan timeout, so a non-responsive ESP32 fails fast on initial setup.
-  Added stale button event draining after all blocking ESP32 init and scan
-  phases across WiFi, Bluetooth, and 802.15.4 modules so the interactive
-  result loops start with clean queues.  BACK button pressed during ESP32
-  init is now detected and exits immediately instead of being silently lost.
-
-- **WiFi/BT scan regression** — Removed the AT readiness probe added in v0.9.0.30
-  (`spi_AT_send_recv("AT\r\n")` loop at the end of `esp32_main_init()`).  The probe
-  sent AT commands to the ESP32 during its boot sequence, before the AT command
-  processor was fully initialized; this could corrupt the SPI command/response state
-  and leave the transport unusable for subsequent mode-set commands.  Also reverted
-  the 5-second `MODE_SET_RESP_TIMEOUT` that replaced the full scan timeout for
-  `AT+CWMODE` / `AT+BLEINIT` — the short timeout gave insufficient recovery time
-  when the ESP32 was slow to respond.  Mode-set commands now use the caller's full
-  scan timeout (30 s WiFi, 10 s BLE) as in v0.9.0.29, while the actual scan command
-  still gets a fresh full timeout via the `saved_scan_timeout` + `tick_t0` reset
-  pattern.  Button event draining and queue resets (added in v0.9.0.40) are retained.
-
-- **ESP32 screen responsiveness** — Added stale button event draining after all
-  blocking ESP32 init and scan phases across WiFi, Bluetooth, and 802.15.4 modules
-  so the interactive result loops start with clean queues.  BACK button pressed during
-  ESP32 init is now detected and exits immediately instead of being silently lost.
-
-- **Sub-GHz scene display cleanup** — Fixed overlapping text and tight spacing
-  across multiple Sub-GHz scenes:
-  - **Need Saving dialog**: Moved dialog text and choice buttons up to prevent
-    the "before exiting?" text from overlapping the Save/Discard button boxes.
-  - **Saved action menu**: Reduced item height from 13px to 12px so the last
-    menu item (Delete) no longer extends past the 64px screen boundary.
-  - **Receiver Info**: Shortened frequency label and right-aligned RSSI text
-    to prevent overlap when long frequency values are displayed.
-  - **Playlist**: Moved progress bar from y=48 to y=46 for proper spacing
-    above the bottom button bar.
-  - **Read detail view**: Tightened inter-line spacing by 1px so the optional
-    "Received x#" line no longer sits at the exact button bar boundary.
-
-- **Sub-GHz Config screen layout overlap** — The 5th config row (TX Power)
-  overlapped the bottom button bar because 5 rows × 9px starting at y=12
-  pushed the last row into the bar area (y=52).  Removed the unnecessary
-  button bar (the `<` `>` arrows on selected items already indicate L/R
-  changes values), added a separator line below the title, and switched to
-  8px rows matching the menu scene layout.  All 6 config items now fit
-  cleanly without scrolling.
-
-- **WiFi/BT scan failure after ESP32 cold init** — After `esp32_main_init()`
-  the SPI transport layer was ready but the ESP32-C6 AT command processor had
-  not finished booting its WiFi/BLE stacks.  The first AT command
-  (`AT+CWMODE=1` for WiFi, `AT+BLEINIT` for BT) was sent before the slave
-  could process it, causing a timeout and "Failed. Retrying..." on every first
-  scan attempt.  Added an AT readiness probe loop in `esp32_main_init()` that
-  sends `AT\r\n` and waits for `OK` (up to 10 × 500 ms) before marking init
-  complete — all subsequent callers (WiFi scan, BLE scan, 802.15.4, etc.) now
-  start with a confirmed-ready ESP32.
-
 - **Misleading "Failed. Retrying..." WiFi message** — The scan failure screen
   said "Failed. Retrying..." but no retry logic existed; the device just waited
   for the user to press Back with no on-screen hint.  Changed to "Scan failed!"
   which accurately describes the state.
-
-- **Sub-GHz Read never recognises signals** — The scene-based Read mode queued
-  every individual radio edge as a separate FreeRTOS event, but the event loop
-  processed only one pulse per iteration (with LCD redraws in between).  At
-  433 MHz with AM650 modulation the noise floor alone generates thousands of
-  edges/sec; the 256-deep queue overflowed and real signal pulses were silently
-  dropped, so the protocol decoders never saw a complete packet.  Three changes
-  fix this:
-  1. **Batch-drain pulse events** — the event loop now processes all pending
-     `Q_EVENT_SUBGHZ_RX` items in a tight inner loop before yielding, keeping
-     the queue drained and feeding complete packets to decoders.
-  2. **Use hardware-captured CCR1 instead of free-running CNT** — the TIM1
-     input-capture ISR now reads the CCR1 register (latched at the exact edge)
-     and computes the pulse duration via unsigned subtraction from the previous
-     capture, eliminating ISR-latency jitter that corrupted timing.
-  3. **Increase RX timer period to 65535 µs** — the old 20 ms period caused
-     modular-arithmetic aliasing for inter-packet gaps near 20/40/60 ms; a
-     full 16-bit period (65.5 ms) covers virtually all OOK protocol gaps.
-  Additionally, the TIM1 Update interrupt is now disabled during RX to prevent
-  the TX-specific UP handler from executing while no transmission is active.
-
-- **Sub-GHz scene bottom-bar overlap cleanup** — Several Sub-GHz scene screens
-  had menu content drawn too close to (or overlapping) the 12px bottom button bar
-  at y=52.  Specific fixes:
-  - **Config scene**: Reduced config item row height from 10px to 9px so the last
-    item ("Sound") ends at y=48 with a 4px gap before the bar, and shortened the
-    center bar label from "LR:Change" to "LR:Chng" to prevent horizontal text overlap
-    with the right column.
-  - **Read scene**: Reduced `HISTORY_VISIBLE` from 4 to 3 to prevent the 4th
-    history row (y=47-54) from overlapping the bar (y=52-63).
-  - **Playlist scene**: Moved the progress bar frame up 1px (y=49→48) so its
-    bottom edge no longer collides with the bar's top edge.
-  - **NeedSaving dialog**: Moved the Save/Discard choice buttons up 2px
-    (y=42→40) to create a visible gap before the bar.
-  - **Add Manually list** (legacy): Reduced `ADDMAN_VISIBLE_ITEMS` from 5 to 4
-    so the 5th item (y=52-62) no longer draws directly on top of the bar.
-  - **Radio Settings** (legacy): Shifted the ISM Region row up 1px (y=40→39)
-    so its highlight box ends at y=50 with a 2px gap before the bar.
-
-- **Sub-GHz DMA buffer 32-byte alignment** — The front and back sample buffers
-  used by the Sub-GHz TX DMA (`subghz_front_buffer`, `subghz_back_buffer`) were
-  allocated with plain `malloc()` which only guarantees 8-byte alignment.  On the
-  STM32H573 (Cortex-M33 with D-Cache), DMA buffers must be aligned to the 32-byte
-  cache line size to prevent data corruption from cache-line sharing.  Both buffers
-  now over-allocate by 31 bytes and align the usable pointer to a 32-byte boundary,
-  with the original base pointer stored separately for correct `free()`.
-
-- **Main menu off-by-one: highlight and selection could diverge** — When
-  returning from a scene-based module whose blocking delegates used legacy
-  X_MENU operations (NFC Read, RFID Read, etc.), the `x_menu_update_init`
-  flag was left set and `disp_window_active_row` / `disp_window_top_row`
-  could be overwritten with stale values on the next `MENU_UPDATE_REFRESH`.
-  The visual highlight then pointed to a different item than the one
-  actually selected, making it appear that pressing OK opened the item
-  below the highlighted one.  The fix clears stale X_MENU state without
-  restoring from the backup, and verifies that the display position matches
-  `sel_item` — recalculating if they diverge.
-
-- **Stale button events after module exit** — `button_events_q_hdl` was
-  never reset when a scene-based module exited, so a leftover button press
-  from inside the module could be consumed by the main menu handler on the
-  very next event loop iteration, causing a spurious menu movement.  All
-  scene exit paths (generic `m1_scene_run`, Sub-GHz scene, and the main
-  menu `subfunc_handler`) now drain the button queue before returning
-  control to the main menu.
-
-- **Sub-GHz: `uint8_t`/`bool` type mismatch compile error** — `manchester_advance()`
-  writes to a `bool *` output, but the Oregon V1 and Oregon3 decoders declared the
-  receiving variable as `uint8_t`, causing a pointer-type mismatch on strict compilers.
-  Changed `bit_val` to `bool` in both decoders and updated `subghz_protocol_blocks_add_bit()`
-  parameter from `uint8_t` to `bool` to match (the value is always 0 or 1).
-
-- **Sub-GHz Read: frequency=0 saved for non-hopper signals** — When the frequency
-  hopper was not active, decoded signals were stored with frequency 0 Hz.  This broke
-  saved `.sub` files (wrote `Frequency: 0`) and caused TX replay to use the wrong
-  radio band.  Now correctly stores the active preset frequency via a new
-  `subghz_get_freq_hz_ext()` helper and the `current_freq_hz` app field.
-
-- **Sub-GHz Read: history auto-select picked oldest signal** — After a new decode,
-  the history list selected index `count-1` (oldest, due to reversed ring-buffer
-  indexing) instead of index 0 (newest).  User had to manually scroll up after every
-  decode.  Now auto-selects the most recent signal and scrolls to the top.
-
-- **Sub-GHz Read: hopper never actually retuned the radio** — The hopper tick handler
-  updated `app->hopper_freq` in software but never called any radio hardware function
-  to change frequency.  The Si446x stayed on the initial frequency for the entire
-  session.  Now calls `subghz_retune_freq_hz_ext()` which mirrors the legacy
-  pause→set-freq→set-opmode→start sequence from `subghz_hopper_retune_next()`.
-
-- **Sub-GHz Read: `current_freq_hz` never populated** — The `SubGhzApp.current_freq_hz`
-  field (declared in header) was never assigned.  It is now set on RX start, frequency
-  preset cycling (L/R), and hopper ticks, keeping it consistent with the actual radio
-  frequency at all times.
-
-- **BLE Spam crashes** — Fixed crash caused by a race condition in the ESP32 SPI
-  transport's linked-list response queue (`esp_queue`).  `esp_queue_get()` freed the
-  dequeued node before clearing `q->rear`, creating a window where a concurrent
-  `esp_queue_put()` from the SPI transport task could dereference freed memory
-  (use-after-free → heap corruption → hard fault).  BLE spam's rapid-fire AT command
-  cycling (~5 commands per 100ms cycle) amplified the race window, making the crash
-  nearly deterministic after a few seconds of operation.  Three fixes applied:
-  1. **Thread-safe `esp_queue` operations** — `esp_queue_put()`, `esp_queue_get()`,
-     and `esp_queue_reset()` now protect linked-list pointer updates with
-     `vTaskSuspendAll()`/`xTaskResumeAll()` to prevent task preemption during the
-     critical section.  `malloc`/`free` run outside the critical section to avoid
-     blocking interrupts during allocation.
-  2. **Queue reset before BLE init** — `ble_spam_run()` now calls
-     `esp32_queue_reset()` to clear stale SPI responses before sending
-     `AT+BLEINIT`, matching the pattern used by WiFi/BT scan functions.
-  3. **Inter-command delays and error checking** — `spam_at()` now inserts a 20ms
-     delay after each AT command (matching `ble_advertise()`'s crash-avoidance
-     delays), uses a 256-byte response buffer (was 64), checks for `OK` in the
-     response, and `AT+BLEINIT=2` failure now aborts with an error message instead
-     of continuing to send BLE commands to an uninitialized stack.
-
-### Removed
-
-- **Sub-GHz legacy dead code (~2,070 lines)** — Surgically removed all public
-  functions and their unique helpers that were fully superseded by the scene-based
-  architecture: `sub_ghz_record()`, `sub_ghz_replay()`, `sub_ghz_read()`,
-  `sub_ghz_saved()`, `sub_ghz_regional_information()`, `sub_ghz_radio_settings()`,
-  `sub_ghz_config_screen()`, `sub_ghz_config_draw()`, `sub_ghz_saved_action_menu()`,
-  `sub_ghz_saved_draw_actions()`, all Record GUI callbacks, all Replay Browse GUI
-  callbacks, dead Replay Play GUI callbacks, legacy menu entries in `m1_menu.c`,
-  and corresponding declarations in `m1_sub_ghz.h`. Retained
-  `subghz_replay_play_gui_update()` (still called by live
-  `sub_ghz_replay_flipper_file()`), all waveform helpers, static TX helpers, and
-  all blocking delegate functions used by scene wrappers.
-
-- **Bluetooth legacy dead code (~300 lines)** — Removed the dead simple-mode
-  scene code in `m1_bt_scene.c` (entire `#ifndef M1_APP_BT_MANAGE_ENABLE` block),
-  the legacy `bluetooth_scan()` original implementation in the `#else` fallback
-  path of `m1_bt.c`, the empty `bluetooth_config()` function (only called from
-  removed simple-mode scene), original `ble_scan_list_validation()` and
-  `ble_scan_list_print()` helpers, and the `bluetooth_config()` declaration from
-  `m1_bt.h`. All live blocking delegates (`bluetooth_scan()`, `bluetooth_saved_devices()`,
-  `bluetooth_advertise()`, `bluetooth_info()`, `bluetooth_set_badbt_name()`) retained.
-
-- **WiFi legacy dead code (~50 lines)** — Removed the dead `wifi_config()` stub in
-  the `#else` fallback of `m1_wifi.c` (never compiled since `M1_APP_WIFI_CONNECT_ENABLE`
-  is always defined), the `wifi_config()` redirect function (scene delegate now calls
-  `wifi_saved_networks()` directly), and the unused `menu_wifi_exit()` empty function.
-  Cleaned up corresponding declarations from `m1_wifi.h`.
-
-- **NFC dead code (~28 lines)** — Removed `#if 0` empty view tables
-  (`view_nfc_tools_table`, `view_nfc_saved_table`) and the never-compiled
-  `SEE_DUMP_MEMORY` debug block (commented-out `#define` + `#ifdef` guard) from
-  `m1_nfc.c`. RFID audited — no dead code found.
-
-- **Infrared dead code (~10 lines)** — Removed the empty `menu_infrared_exit()`
-  function and its declarations from `m1_infrared.c` and `m1_infrared.h`. The
-  scene entry passes `NULL` as deinit; the function was never called.
 
 ## [0.9.0.77] - 2026-04-14
 
@@ -1146,7 +479,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Documentation: highlight Web Updater as recommended flashing method in README
-- Fix agent-confusing CRC comments, `va_list` undefined behavior, and CI trigger docs
+- Documentation: CI trigger docs clarification
+
+### Fixed
+
+- Agent-confusing CRC comments and `va_list` undefined behavior in firmware source
 
 ## [0.9.0.74] - 2026-04-13
 

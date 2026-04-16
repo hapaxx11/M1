@@ -18,6 +18,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_gpio.h"
+#include "m1_gpio_uart.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -252,49 +253,7 @@ void gpio_5v_on_gpio(void)
 /*============================================================================*/
 void gpio_usb_uart_bridge(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-
-	m1_gui_let_update_fw();
-
-	while (1 ) // Main loop of this task
-	{
-		;
-		; // Do other parts of this task here
-		;
-
-		// Wait for the notification from button_event_handler_task to subfunc_handler_task.
-		// This task is the sub-task of subfunc_handler_task.
-		// The notification is given in the form of an item in the main queue.
-		// So let read the main queue.
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret==pdTRUE)
-		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			{
-				// Notification is only sent to this task when there's any button activity,
-				// so it doesn't need to wait when reading the event from the queue
-				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK ) // user wants to exit?
-				{
-					; // Do extra tasks here if needed
-
-					xQueueReset(main_q_hdl); // Reset main q before return
-					break; // Exit and return to the calling task (subfunc_handler_task)
-				} // if ( m1_buttons_status[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK )
-				else
-				{
-					; // Do other things for this task, if needed
-				}
-			} // if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			else
-			{
-				; // Do other things for this task
-			}
-		} // if (ret==pdTRUE)
-	} // while (1 ) // Main loop of this task
-
+	gpio_uart_bridge_run();
 } // void gpio_usb_uart_bridge(void)
 
 
@@ -394,7 +353,7 @@ void gpio_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     			break;
 
     		case 3:
-    	    	m1_info_box_display_draw(INFO_BOX_ROW_1, "Please update firmware!");
+    	    	m1_info_box_display_draw(INFO_BOX_ROW_1, "USB-UART Bridge");
     			break;
 
     		default: // Unknown selection

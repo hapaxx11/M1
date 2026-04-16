@@ -680,6 +680,12 @@ The setting is stored as `m1_menu_style` (declared in `m1_system.h`, defined in
 5. **Highlight box width must be `M1_MENU_TEXT_W` (124px)**, not 128px, to leave
    room for the scrollbar.
 6. **Include `m1_scene.h`** in any `.c` file that draws a scrollable list.
+7. **When importing features from other repositories** (Flipper, C3, SiN360, or any
+   fork), the imported code will almost certainly hardcode fonts and row heights.
+   These **must** be converted to the Hapax font-aware helpers before merging.
+   Neither Flipper nor upstream Monstatek have a user-configurable text size
+   feature — every imported scrollable list needs adaptation.  This is a
+   **blocking merge requirement**, not a follow-up task.
 
 #### Exceptions (justified hardcoded values)
 
