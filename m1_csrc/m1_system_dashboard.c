@@ -19,9 +19,9 @@
 #include <stdio.h>
 #include "stm32h5xx_hal.h"
 #include "m1_system_dashboard.h"
-#include "m1_system_dashboard_helpers.h"
 #include "m1_games.h"
 #include "m1_sdcard.h"
+#include "m1_system_dashboard_helpers.h"
 #include "m1_esp32_hal.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_fw_update_bl.h"
