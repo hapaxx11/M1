@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.106] - 2026-04-16
+
+### Added
+
+- **Games: World Clock utility** — standalone clock display with local time
+  + 4 world time zones (UTC, UTC+1, UTC+5, UTC+9). Large digit display,
+  leap year handling, weekday display. Pages through zones with LEFT/RIGHT.
+  Ported from dagnazty/M1_T-1000 with pure logic extracted to
+  m1_clock_util.c/h and host-side unit tests.
 ## [0.9.0.105] - 2026-04-16
 
 ### Added
