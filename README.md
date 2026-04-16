@@ -23,6 +23,9 @@ project discussion, and related project resources:
 - **[Web Updater](https://hapaxx11.github.io/M1/)** — a GitHub Pages-hosted
   browser-based flashing tool.  Plug in via USB, pick a release, and flash —
   no desktop software required.
+- **[API Documentation](https://hapaxx11.github.io/M1/docs/)** — Doxygen-generated
+  source documentation, auto-deployed on every push to `main` that touches firmware
+  source files.
 - **OTA from the device** — the M1 itself can browse GitHub Releases over WiFi,
   download firmware, and install it — all without a PC.
 - **Automated testing** — host-side unit tests run automatically via GitHub
