@@ -189,9 +189,8 @@ static void hex_viewer_draw(const hex_viewer_state_t *st)
         row_y = (uint8_t)(row_y + 8U);
     }
 
-    u8g2_DrawStr(&m1_u8g2, 8, 50,
-                 ascii_buf[0] ? ascii_buf : "ASCII preview");
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Back", "Browse",
+    u8g2_DrawStr(&m1_u8g2, 8, 50, ascii_buf);
+    m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "Browse",
                        arrowright_8x8);
     m1_u8g2_nextpage();
 }
