@@ -132,6 +132,12 @@ extern const uint16_t subghz_protocol_registry_count;
 /* Registry Lookup Helpers                                                     */
 /*============================================================================*/
 
+/**
+ * Portable ASCII case-insensitive string compare (replacement for POSIX strcasecmp).
+ * Returns 0 if equal, negative/positive if a < b / a > b.
+ */
+int subghz_ascii_strcasecmp(const char *a, const char *b);
+
 /** Find a protocol index by its Flipper-compatible name.  Returns -1 if not found. */
 int16_t subghz_protocol_find_by_name(const char *name);
 
