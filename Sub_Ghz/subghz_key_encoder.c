@@ -13,7 +13,6 @@
  */
 
 #include <string.h>
-#include <strings.h>   /* strcasecmp */
 #include "subghz_key_encoder.h"
 #include "subghz_protocol_registry.h"
 
@@ -157,13 +156,13 @@ uint32_t subghz_key_encode(const SubGhzKeyParams *params,
 bool subghz_key_has_custom_encoder(const char *protocol)
 {
     if (!protocol) return false;
-    return (strcasecmp(protocol, "Magellan") == 0);
+    return (subghz_ascii_strcasecmp(protocol, "Magellan") == 0);
 }
 
 /*
- * Magellan encoder — matches Flipper Zero's magellan.c encoder.
+ * Magellan encoder — implements the Magellan alarm/sensor on-air protocol.
  *
- * Magellan alarm/sensor protocol uses a unique framing:
+ * Magellan protocol uses a unique framing (all timings in µs):
  *   Header:    800µs HIGH + 200µs LOW, then 12× (200µs HIGH + 200µs LOW),
  *              then 200µs HIGH + 400µs LOW
  *   Start bit: 1200µs HIGH + 400µs LOW
@@ -173,22 +172,20 @@ bool subghz_key_has_custom_encoder(const char *protocol)
  *   Stop bit:  200µs HIGH + 40000µs LOW  (te_short + te_long×100)
  *
  * te_short=200, te_long=400
+ * Protocol is fixed 32-bit; bit_count must equal 32.
  * Total: 1 + 12 + 1 + 1 + 32 + 1 = 48 pairs per repetition
- *
- * Reference: https://github.com/flipperdevices/flipperzero-firmware/blob/dev/
- *            lib/subghz/protocols/magellan.c (GPLv3)
  */
 static uint32_t subghz_key_encode_magellan(const SubGhzKeyParams *params,
                                             SubGhzRawPair *out,
                                             uint32_t max_pairs,
                                             uint8_t repetitions)
 {
+    /* Magellan protocol is fixed 32-bit; reject any other bit count */
+    if (params->bit_count != 32)
+        return 0;
+
     const uint32_t TE_SHORT = 200;
     const uint32_t TE_LONG  = 400;
-
-    uint32_t bit_count = params->bit_count;
-    if (bit_count > 64) bit_count = 64;
-    if (bit_count == 0) return 0;
 
     uint32_t total_pairs = (uint32_t)SUBGHZ_MAGELLAN_PAIRS_PER_REP * repetitions;
     if (total_pairs > max_pairs)
@@ -255,10 +252,10 @@ uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
                                    uint32_t max_pairs,
                                    uint8_t repetitions)
 {
-    if (!params || !out || max_pairs == 0 || repetitions == 0)
+    if (!params || !out || max_pairs == 0 || repetitions == 0 || !params->protocol)
         return 0;
 
-    if (strcasecmp(params->protocol, "Magellan") == 0)
+    if (subghz_ascii_strcasecmp(params->protocol, "Magellan") == 0)
         return subghz_key_encode_magellan(params, out, max_pairs, repetitions);
 
     return 0;  /* No custom encoder for this protocol */
