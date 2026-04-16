@@ -132,10 +132,14 @@ static void term_putchar(uint8_t ch)
 {
     if (hex_mode)
     {
-        /* Print each byte as "XX " */
-        char hex[4];
-        snprintf(hex, sizeof(hex), "%02X ", ch);
-        for (uint8_t i = 0; hex[i]; i++)
+        /* Print each byte as "XX " using a lookup table (no snprintf) */
+        static const char hex_lut[] = "0123456789ABCDEF";
+        const char hex[3] = {
+            hex_lut[(ch >> 4) & 0x0F],
+            hex_lut[ ch       & 0x0F],
+            ' '
+        };
+        for (uint8_t i = 0; i < 3; i++)
         {
             if (term_col >= TERM_COLS)
                 term_newline();
@@ -309,7 +313,9 @@ void gpio_uart_bridge_run(void)
         if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
             continue;
 
-        xQueueReceive(button_events_q_hdl, &btn, 0);
+        ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+        if (ret != pdTRUE)
+            continue;
 
         if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
         {

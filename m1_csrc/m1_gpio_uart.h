@@ -9,7 +9,10 @@
  * data while the bidirectional bridge runs in the background via the
  * existing VCP task infrastructure.
  *
- * Hardware-independent: no direct register access — delegates to HAL/VCP.
+ * Tightly coupled to the M1 USART1 / DMA / USB CDC VCP plumbing:
+ * reads the logdb DMA circular RX buffer directly and uses
+ * __HAL_DMA_GET_COUNTER() on huart_logdb.hdmarx.  Not portable
+ * without adapting these hardware-specific paths.
  */
 
 #ifndef M1_GPIO_UART_H_
