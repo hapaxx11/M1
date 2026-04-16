@@ -123,9 +123,11 @@ def collect_fragments() -> tuple[dict[str, list[str]], list[pathlib.Path]]:
             continue
 
         new_entries = _read_entries(f)
+        fragment_files.append(f)
         if new_entries:
             entries[cat].extend(new_entries)
-            fragment_files.append(f)
+        else:
+            print(f"  warning: skipping {f.name} (empty fragment)", file=sys.stderr)
 
     return entries, fragment_files
 

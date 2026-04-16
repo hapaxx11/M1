@@ -191,6 +191,36 @@ class TestCollectFragments(unittest.TestCase):
             finally:
                 ac.CHANGELOG_DIR = orig
 
+    def test_collect_empty_fragment_tracked_for_deletion(self):
+        """Empty but correctly-named fragments are tracked for deletion and warned."""
+        import io
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            orig = ac.CHANGELOG_DIR
+            ac.CHANGELOG_DIR = pathlib.Path(d)
+            try:
+                (pathlib.Path(d) / "good.added.md").write_text("Real entry")
+                (pathlib.Path(d) / "empty.fixed.md").write_text("")
+
+                stderr = io.StringIO()
+                old_stderr = sys.stderr
+                sys.stderr = stderr
+                try:
+                    entries, files = ac.collect_fragments()
+                finally:
+                    sys.stderr = old_stderr
+
+                # Empty fragment should still be tracked for deletion
+                self.assertEqual(len(files), 2)
+                # But only the non-empty one contributes entries
+                self.assertEqual(len(entries["added"]), 1)
+                self.assertEqual(len(entries["fixed"]), 0)
+                # Warning emitted for the empty fragment
+                self.assertIn("empty.fixed.md", stderr.getvalue())
+                self.assertIn("warning", stderr.getvalue())
+            finally:
+                ac.CHANGELOG_DIR = orig
+
 
 class TestAssembleIntegration(unittest.TestCase):
     """End-to-end test: fragment files → CHANGELOG.md update."""
