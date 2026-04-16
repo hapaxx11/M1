@@ -9,6 +9,7 @@ on:
       - 'm1_csrc/**'
       - 'Sub_Ghz/**'
       - 'tests/**'
+      - 'scripts/**'
       - '.github/workflows/tests.yml'
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'm1_csrc/**'
       - 'Sub_Ghz/**'
       - 'tests/**'
+      - 'scripts/**'
       - '.github/workflows/tests.yml'
 
 permissions:
@@ -46,3 +48,14 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build-tests --output-on-failure --timeout 60
+
+  python-tests:
+    name: Python script tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Python tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v

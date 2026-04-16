@@ -83,9 +83,10 @@ This project and everyone participating in it is governed by our [Code of Conduc
 3. Make your changes
 4. Run tests and ensure they pass
 5. Update documentation as needed
-6. Commit your changes
-7. Push to your fork
-8. Create a Pull Request
+6. Add a changelog fragment in `.changelog/` (see [Changelog](../DEVELOPMENT.md#changelog))
+7. Commit your changes
+8. Push to your fork
+9. Create a Pull Request
 
 ### Pull Request Template
 
@@ -117,6 +118,7 @@ When creating a pull request, please include:
 - [ ] I have performed a self-review
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have updated the documentation
+- [ ] I have added a changelog fragment in `.changelog/` ([how?](../DEVELOPMENT.md#changelog))
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix/feature works
 - [ ] New and existing unit tests pass locally
@@ -172,7 +174,7 @@ Before writing new code, review these project-specific standards:
 - Update README.md when adding new features
 - Document all public APIs
 - Include Doxygen-style comments for functions
-- Update changelog
+- **Add a changelog fragment** (see [Changelog workflow](../DEVELOPMENT.md#changelog))
 - Add inline comments for complex logic
 - Document hardware connections and pin configurations
 

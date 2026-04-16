@@ -260,6 +260,61 @@ The M1 communicates with the ESP32-C6 via **SPI AT commands** (not UART). Key po
 - Module config: `ESP32C6-SPI` (not `ESP32C6-4MB` which is UART)
 - UART is only used for firmware flashing (ROM bootloader), not runtime communication
 
+## Changelog
+
+Every meaningful change **must** include a changelog entry.  To avoid merge
+conflicts when multiple branches are in flight, we use a **fragment-based
+workflow** — you create a small file instead of editing `CHANGELOG.md` directly.
+
+### Quick start
+
+1. Create a file in `.changelog/` named `<short-description>.<category>.md`,
+   where `<category>` is one of: `added`, `changed`, `fixed`, `removed`.
+2. Write the entry text (the leading `- ` dash is optional — the assembler adds it).
+3. Commit the fragment with your code changes.
+
+**Example:**
+
+```bash
+# .changelog/ir-quick-remotes.added.md
+echo '**Infrared: Quick-access remotes** — category remotes accessible
+  from the Universal Remote dashboard.' > .changelog/ir-quick-remotes.added.md
+```
+
+At release time, CI runs `scripts/assemble_changelog.py` to merge all fragments
+into `CHANGELOG.md`, stamps the version heading, and deletes the consumed
+fragment files.
+
+### Category mapping
+
+| Category  | Use when…                                           |
+|-----------|-----------------------------------------------------|
+| `added`   | New feature, protocol, or UI screen                 |
+| `changed` | Modified behaviour, API, or protocol                |
+| `fixed`   | Bug fix                                             |
+| `removed` | Feature or file removed                             |
+
+### Rules
+
+- **One fragment per logical change**, not one per file edited.
+- **Do NOT edit `CHANGELOG.md` directly** on feature branches — create a
+  fragment file instead.
+- **Skip fragments** only for pure whitespace / formatting commits with zero
+  functional effect.
+- Multi-line entries are supported; indent continuation lines by 2 spaces.
+
+### Local preview
+
+```bash
+python scripts/assemble_changelog.py --preview   # dry-run — shows assembled output
+python scripts/assemble_changelog.py --keep       # assemble without deleting fragments
+python scripts/assemble_changelog.py              # assemble and delete fragments
+```
+
+See [`.changelog/README.md`](.changelog/README.md) for the full reference
+and [`CLAUDE.md`](CLAUDE.md) § "CHANGELOG.md" for additional rules enforced
+by AI agents.
+
 ## Branch Naming and Commit Messages
 
 See [`.github/GUIDELINES.md`](.github/GUIDELINES.md) for branch naming conventions and
