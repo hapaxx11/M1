@@ -81,5 +81,5 @@ jobs:
           if [ -n "$FAILED" ]; then
             echo ""
             echo "::warning::The following branches had merge conflicts:$FAILED"
-            exit 1
+            exit 0
           fi
