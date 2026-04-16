@@ -20,6 +20,7 @@
 #include "m1_esp32_fw_update.h"
 #include "m1_fw_download.h"
 #include "m1_esp32_fw_download.h"
+#include "m1_system_dashboard.h"
 
 /*==========================================================================*/
 /* Scene IDs                                                                */
@@ -49,6 +50,7 @@ enum {
     SettingsSceneEsp32Update,
     SettingsSceneEsp32Download,
     SettingsSceneAbout,
+    SettingsSceneDashboard,
     SettingsSceneCount
 };
 
@@ -74,6 +76,16 @@ static void about_on_enter(M1SceneApp *app)
 
 static const M1SceneHandlers lcd_handlers    = { .on_enter = lcd_on_enter    };
 static const M1SceneHandlers about_handlers  = { .on_enter = about_on_enter  };
+
+static void dashboard_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    system_dashboard_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static const M1SceneHandlers dashboard_handlers = { .on_enter = dashboard_on_enter };
 
 /*==========================================================================*/
 /* Blocking delegates — Storage                                             */
@@ -244,9 +256,10 @@ static const M1SceneHandlers esp32_download_handlers = { .on_enter = esp32_downl
 /* Top-level Settings menu scene                                            */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  6
+#define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
+    "Dashboard",
     "LCD and Notifications",
     "Storage",
     "Power",
@@ -256,6 +269,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
+    SettingsSceneDashboard,
     SettingsSceneLCD,
     SettingsSceneStorageMenu,
     SettingsScenePowerMenu,
@@ -523,6 +537,7 @@ static const M1SceneHandlers *const scene_registry[SettingsSceneCount] = {
     [SettingsSceneMenu]             = &menu_handlers,
     [SettingsSceneLCD]              = &lcd_handlers,
     [SettingsSceneAbout]            = &about_handlers,
+    [SettingsSceneDashboard]        = &dashboard_handlers,
 
     /* Storage sub-menu + delegates */
     [SettingsSceneStorageMenu]      = &storage_menu_handlers,
