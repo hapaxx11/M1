@@ -720,3 +720,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_esl_proto PRIVATE sanitizers)
 endif()
 add_test(NAME esl_proto COMMAND test_esl_proto)
+
+# ------------------------------------------------------------------
+# Module under test: cc1101_fec (CC1101 FEC encode / decode utility)
+# Implements the rate-1/2 Viterbi convolutional codec + 4-byte block
+# interleaver used by the TI CC1101 radio when FEC is enabled.
+# Pure logic — only <stdint.h> and <string.h>; zero hardware dependencies.
+# Tests: known encode/decode vector, encode→decode roundtrips, size helpers,
+#        CRC-16/IBM, NULL-argument guards, edge cases.
+# ------------------------------------------------------------------
+add_executable(test_cc1101_fec
+    test_cc1101_fec.c
+    ${M1_ROOT}/Sub_Ghz/cc1101_fec.c
+)
+target_include_directories(test_cc1101_fec PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_cc1101_fec PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_cc1101_fec PRIVATE sanitizers)
+endif()
+add_test(NAME cc1101_fec COMMAND test_cc1101_fec)

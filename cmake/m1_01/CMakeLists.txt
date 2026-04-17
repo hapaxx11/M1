@@ -324,6 +324,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_raw_line_parser.c
     ../../Sub_Ghz/subghz_raw_decoder.c
     ../../Sub_Ghz/subghz_playlist_parser.c
+    ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
     ../../Sub_Ghz/protocols/m1_secplus_v2_decode.c
