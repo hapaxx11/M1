@@ -101,7 +101,7 @@
 // 322MHz-335.4MHz, 399.9MHz-410MHz
 //#define SUBGHZ_FCC_ISM_BAND_304_100				(float)304.10001 // FZ
 #define SUBGHZ_FCC_ISM_BAND_300_000				(float)300.00001
-#define SUBGHZ_FCC_ISM_BAND_310_000				(float)300.00001
+#define SUBGHZ_FCC_ISM_BAND_310_000				(float)310.00001
 #define SUBGHZ_FCC_ISM_BAND_321_950				(float)321.95001
 
 #define SUBGHZ_FCC_ISM_BAND_344_000				(float)344.00001
@@ -177,7 +177,7 @@ static const float subghz_band_steps[SUB_GHZ_BAND_EOL][2] =
 
 static const float subghz_fcc_ism_bands_NA[SUBGHZ_ISM_BANDS_LIST_NA][2] =
 {
-	{SUBGHZ_FCC_ISM_BAND_310_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 304.10MHz - 321.95MHz
+	{SUBGHZ_FCC_ISM_BAND_300_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 300.00MHz - 321.95MHz
 	/*{SUBGHZ_FCC_ISM_BAND_344_000, SUBGHZ_FCC_ISM_BAND_392_000},		// 344.00MHz - 392.00MHz*/
 	{SUBGHZ_FCC_ISM_BAND_433_050, SUBGHZ_FCC_ISM_BAND_434_790}, 	// 433.05MHz - 434.79MHz
 	{SUBGHZ_FCC_ISM_BAND_915_000, SUBGHZ_FCC_ISM_BAND_928_000}		// 915.00MHz - 928.00MHz
@@ -185,7 +185,7 @@ static const float subghz_fcc_ism_bands_NA[SUBGHZ_ISM_BANDS_LIST_NA][2] =
 
 static const float subghz_fcc_ism_bands_EU[SUBGHZ_ISM_BANDS_LIST_EU][2] =
 {
-	{SUBGHZ_FCC_ISM_BAND_310_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 304.10MHz - 321.95MHz
+	{SUBGHZ_FCC_ISM_BAND_300_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 300.00MHz - 321.95MHz
 	/*{SUBGHZ_FCC_ISM_BAND_344_000, SUBGHZ_FCC_ISM_BAND_392_000},		// 344.00MHz - 392.00MHz*/
 	{SUBGHZ_FCC_ISM_BAND_433_050, SUBGHZ_FCC_ISM_BAND_434_790}, 	// 433.05MHz - 434.79MHz
 	{SUBGHZ_FCC_ISM_BAND_915_000, SUBGHZ_FCC_ISM_BAND_928_000}		// 915.00MHz - 928.00MHz
@@ -193,7 +193,7 @@ static const float subghz_fcc_ism_bands_EU[SUBGHZ_ISM_BANDS_LIST_EU][2] =
 
 static const float subghz_fcc_ism_bands_ASIA[SUBGHZ_ISM_BANDS_LIST_ASIA][2] =
 {
-	{SUBGHZ_FCC_ISM_BAND_310_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 304.10MHz - 321.95MHz
+	{SUBGHZ_FCC_ISM_BAND_300_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 300.00MHz - 321.95MHz
 	/*{SUBGHZ_FCC_ISM_BAND_344_000, SUBGHZ_FCC_ISM_BAND_392_000},		// 344.00MHz - 392.00MHz*/
 	/*{SUBGHZ_FCC_ISM_BAND_433_050, SUBGHZ_FCC_ISM_BAND_434_790}, 	// 433.05MHz - 434.79MHz*/
 	{SUBGHZ_FCC_ISM_BAND_915_000, SUBGHZ_FCC_ISM_BAND_928_000}		// 915.00MHz - 928.00MHz
@@ -4117,7 +4117,26 @@ void sub_ghz_brute_force(void)
     static const uint8_t brute_protos[] = { PRINCETON, CAME_12BIT, NICE_FLO, LINEAR_10BIT, HOLTEK_HT12E };
     static const char *brute_names[] = { "Princeton", "CAME", "Nice FLO", "Linear", "Holtek" };
     static const uint8_t brute_bits[] = { 24, 12, 12, 10, 12 };
-    #define NUM_BRUTE_PROTOS 5
+    /* Radio band to use for TX — must match the protocol's operating frequency */
+    static const S_M1_SubGHz_Band brute_bands[] = {
+        SUB_GHZ_BAND_433_92,  /* Princeton */
+        SUB_GHZ_BAND_433_92,  /* CAME */
+        SUB_GHZ_BAND_433_92,  /* Nice FLO */
+        SUB_GHZ_BAND_300,     /* Linear — 300 MHz */
+        SUB_GHZ_BAND_433_92,  /* Holtek */
+    };
+    enum {
+        NUM_BRUTE_PROTOS = sizeof(brute_protos) / sizeof(brute_protos[0])
+    };
+    _Static_assert(
+        (sizeof(brute_names) / sizeof(brute_names[0])) == NUM_BRUTE_PROTOS,
+        "brute_names length must match brute_protos");
+    _Static_assert(
+        (sizeof(brute_bits) / sizeof(brute_bits[0])) == NUM_BRUTE_PROTOS,
+        "brute_bits length must match brute_protos");
+    _Static_assert(
+        (sizeof(brute_bands) / sizeof(brute_bands[0])) == NUM_BRUTE_PROTOS,
+        "brute_bands length must match brute_protos");
 
     uint32_t code = 0;
     uint32_t max_code;
@@ -4174,9 +4193,10 @@ void sub_ghz_brute_force(void)
 
     if (state == 1)
     {
-        /* Init radio for TX on 433.92 MHz */
-        radio_init_rx_tx(SUB_GHZ_BAND_433_92, MODEM_MOD_TYPE_OOK, true);
-        SI446x_Select_Frontend(SUB_GHZ_BAND_433_92);
+        /* Init radio for TX on the correct band for the selected protocol */
+        S_M1_SubGHz_Band tx_band = brute_bands[proto_idx];
+        radio_init_rx_tx(tx_band, MODEM_MOD_TYPE_OOK, true);
+        SI446x_Select_Frontend(tx_band);
         radio_set_antenna_mode(RADIO_ANTENNA_MODE_TX);
     }
 

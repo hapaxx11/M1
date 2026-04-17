@@ -53,6 +53,7 @@ typedef enum {
     SubGhzProtocolFlag_Load      = (1u << 6),
     SubGhzProtocolFlag_Save      = (1u << 7),
     SubGhzProtocolFlag_Send      = (1u << 8),
+    SubGhzProtocolFlag_300       = (1u << 9),   /**< Operates at 300 MHz band */
 } SubGhzProtocolFlag;
 
 /** Category filter (matches Flipper SubGhzProtocolFilter values) */
