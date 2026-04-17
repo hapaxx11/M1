@@ -27,6 +27,7 @@
 #include "subghz_protocol_registry.h"
 #include "subghz_key_encoder.h"
 #include "subghz_raw_line_parser.h"
+#include "subghz_secplus_v1_encoder.h"
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
@@ -4112,11 +4113,20 @@ void sub_ghz_brute_force(void)
     char line1[32], line2[32], line3[32];
     bool running = true;
 
-    /* Protocol selection — defaults */
+    /* Protocol selection — defaults.
+     * SECPLUS_PROTO_SENTINEL (0xFF) marks the SecPlus v1 counter slot — it
+     * is NOT used as a registry index; the TX loop treats it specially. */
+    static const uint8_t SECPLUS_PROTO_SENTINEL = 0xFF;
     uint8_t proto_idx = 0;
-    static const uint8_t brute_protos[] = { PRINCETON, CAME_12BIT, NICE_FLO, LINEAR_10BIT, HOLTEK_HT12E };
-    static const char *brute_names[] = { "Princeton", "CAME", "Nice FLO", "Linear", "Holtek" };
-    static const uint8_t brute_bits[] = { 24, 12, 12, 10, 12 };
+    static const uint8_t brute_protos[] = {
+        PRINCETON, CAME_12BIT, NICE_FLO, LINEAR_10BIT, HOLTEK_HT12E,
+        0xFF   /* SecPlus v1 counter — sentinel, not a registry index */
+    };
+    static const char *brute_names[] = {
+        "Princeton", "CAME", "Nice FLO", "Linear", "Holtek",
+        "SecPlus v1 Ctr"
+    };
+    static const uint8_t brute_bits[] = { 24, 12, 12, 10, 12, 32 };
     /* Radio band to use for TX — must match the protocol's operating frequency */
     static const S_M1_SubGHz_Band brute_bands[] = {
         SUB_GHZ_BAND_433_92,  /* Princeton */
@@ -4124,6 +4134,7 @@ void sub_ghz_brute_force(void)
         SUB_GHZ_BAND_433_92,  /* Nice FLO */
         SUB_GHZ_BAND_300,     /* Linear — 300 MHz */
         SUB_GHZ_BAND_433_92,  /* Holtek */
+        SUB_GHZ_BAND_315,     /* SecPlus v1 — 315 MHz (Chamberlain/LiftMaster) */
     };
     enum {
         NUM_BRUTE_PROTOS = sizeof(brute_protos) / sizeof(brute_protos[0])
@@ -4144,12 +4155,14 @@ void sub_ghz_brute_force(void)
     uint16_t pulse_count;
     uint8_t  state = 0;  /* 0=select protocol, 1=running, 2=done */
     uint16_t te_short, te_long;
+    bool is_secplus = false;  /* true when SecPlus v1 counter mode is active */
 
     menu_sub_ghz_init();
 
     /* Select protocol screen */
     while (running && state == 0)
     {
+        bool secplus_sel = (brute_protos[proto_idx] == SECPLUS_PROTO_SENTINEL);
         m1_u8g2_firstpage();
         do {
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -4157,10 +4170,15 @@ void sub_ghz_brute_force(void)
             snprintf(line1, sizeof(line1), "> %s (%d bit)",
                      brute_names[proto_idx], brute_bits[proto_idx]);
             u8g2_DrawStr(&m1_u8g2, 2, 28, line1);
-            max_code = (1UL << brute_bits[proto_idx]) - 1;
-            snprintf(line2, sizeof(line2), "Codes: 0-%lu", max_code);
-            u8g2_DrawStr(&m1_u8g2, 2, 40, line2);
-            u8g2_DrawStr(&m1_u8g2, 2, 52, "UP/DN:Proto OK:Start");
+            if (secplus_sel) {
+                u8g2_DrawStr(&m1_u8g2, 2, 40, "Counter: 0->2^32-1");
+                u8g2_DrawStr(&m1_u8g2, 2, 52, "Fixed:0x0 @ 315MHz");
+            } else {
+                max_code = (1UL << brute_bits[proto_idx]) - 1;
+                snprintf(line2, sizeof(line2), "Codes: 0-%lu", max_code);
+                u8g2_DrawStr(&m1_u8g2, 2, 40, line2);
+                u8g2_DrawStr(&m1_u8g2, 2, 52, "UP/DN:Proto OK:Start");
+            }
             u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
         } while (m1_u8g2_nextpage());
 
@@ -4184,9 +4202,19 @@ void sub_ghz_brute_force(void)
             {
                 state = 1;
                 code = 0;
-                max_code = (1UL << brute_bits[proto_idx]) - 1;
-                te_short = subghz_protocols_list[brute_protos[proto_idx]].te_short;
-                te_long  = subghz_protocols_list[brute_protos[proto_idx]].te_long;
+                is_secplus = (brute_protos[proto_idx] == SECPLUS_PROTO_SENTINEL);
+                if (!is_secplus)
+                {
+                    max_code = (1UL << brute_bits[proto_idx]) - 1;
+                    te_short = subghz_protocols_list[brute_protos[proto_idx]].te_short;
+                    te_long  = subghz_protocols_list[brute_protos[proto_idx]].te_long;
+                }
+                else
+                {
+                    max_code = 0xFFFFFFFFUL;  /* 32-bit rolling counter */
+                    te_short = 0;
+                    te_long  = 0;
+                }
             }
         }
     }
@@ -4203,10 +4231,56 @@ void sub_ghz_brute_force(void)
     /* Brute force loop */
     while (running && state == 1)
     {
-        /* Encode and transmit current code */
-        brute_force_encode_pwm(code, brute_bits[proto_idx],
-                              te_short, te_long,
-                              pulse_buf, &pulse_count);
+        if (is_secplus)
+        {
+            /* SecPlus v1 counter mode: encode ternary 2-sub-packet OOK signal.
+             * fixed code = 0 (broadcast/any fixed code), rolling = current code.
+             * The encoded packet is loaded as raw timing data into the ring buffer
+             * using the same TX path as OOK brute force. */
+            SubGhzSecPlusV1Packet sp_pkt;
+            uint16_t idx = 0;
+
+            if (subghz_secplus_v1_encode(0, code, &sp_pkt))
+            {
+                /* Sub-packet 1: 21 symbols */
+                for (uint8_t s = 0; s < SUBGHZ_SECPLUS_V1_TOTAL_SYMS / 2u + 1u; s++)
+                {
+                    /* Each symbol: LOW + HIGH pair → stored as space + mark in pulse_buf */
+                    if (idx + 1 < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
+                    {
+                        /* Mark (HIGH) */
+                        pulse_buf[idx++] = sp_pkt.symbols[s].high_us | SUBGHZ_OTA_PULSE_BIT_MASK;
+                        /* Space (LOW) */
+                        pulse_buf[idx++] = sp_pkt.symbols[s].low_us  & SUBGHZ_OTA_SPACE_BIT_MASK;
+                    }
+                }
+                /* Inter-sub-packet gap */
+                if (idx < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
+                    pulse_buf[idx++] = (uint16_t)(SUBGHZ_SECPLUS_V1_INTER_PKT_GAP_US & SUBGHZ_OTA_SPACE_BIT_MASK);
+
+                /* Sub-packet 2: 21 symbols */
+                for (uint8_t s = SUBGHZ_SECPLUS_V1_TOTAL_SYMS / 2u + 1u;
+                     s < SUBGHZ_SECPLUS_V1_TOTAL_SYMS; s++)
+                {
+                    if (idx + 1 < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
+                    {
+                        pulse_buf[idx++] = sp_pkt.symbols[s].high_us | SUBGHZ_OTA_PULSE_BIT_MASK;
+                        pulse_buf[idx++] = sp_pkt.symbols[s].low_us  & SUBGHZ_OTA_SPACE_BIT_MASK;
+                    }
+                }
+                /* End gap */
+                if (idx < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
+                    pulse_buf[idx++] = (uint16_t)(SUBGHZ_SECPLUS_V1_END_GAP_US & SUBGHZ_OTA_SPACE_BIT_MASK);
+            }
+            pulse_count = idx;
+        }
+        else
+        {
+            /* Standard OOK PWM brute force */
+            brute_force_encode_pwm(code, brute_bits[proto_idx],
+                                  te_short, te_long,
+                                  pulse_buf, &pulse_count);
+        }
 
         /* Load into ring buffer for TX (reuse existing TX path) */
         m1_ringbuffer_reset(&subghz_rx_rawdata_rb);
