@@ -83,7 +83,7 @@
 
 #define SUBGHZ_ISM_BANDS_LIST_NA			3
 #define SUBGHZ_ISM_BANDS_LIST_EU			3
-#define SUBGHZ_ISM_BANDS_LIST_ASIA			2
+#define SUBGHZ_ISM_BANDS_LIST_ASIA			3
 
 #define	SUBGHZ_FCC_BASE_FREQ_300_000			(float)300.00001
 #define	SUBGHZ_FCC_BASE_FREQ_310_000			(float)310.00001
@@ -107,6 +107,9 @@
 
 #define SUBGHZ_FCC_ISM_BAND_344_000				(float)344.00001
 #define SUBGHZ_FCC_ISM_BAND_392_000				(float)392.00001
+
+#define SUBGHZ_FCC_ISM_BAND_322_000				(float)322.00001
+#define SUBGHZ_FCC_ISM_BAND_348_000				(float)348.00001
 
 #define SUBGHZ_FCC_ISM_BAND_433_050				(float)433.05001
 #define SUBGHZ_FCC_ISM_BAND_434_790				(float)434.79001
@@ -195,6 +198,7 @@ static const float subghz_fcc_ism_bands_EU[SUBGHZ_ISM_BANDS_LIST_EU][2] =
 static const float subghz_fcc_ism_bands_ASIA[SUBGHZ_ISM_BANDS_LIST_ASIA][2] =
 {
 	{SUBGHZ_FCC_ISM_BAND_300_000, SUBGHZ_FCC_ISM_BAND_321_950}, 	// 300.00MHz - 321.95MHz
+	{SUBGHZ_FCC_ISM_BAND_322_000, SUBGHZ_FCC_ISM_BAND_348_000}, 	// 322.00MHz - 348.00MHz (APAC: 330/345 MHz gate remotes)
 	/*{SUBGHZ_FCC_ISM_BAND_344_000, SUBGHZ_FCC_ISM_BAND_392_000},		// 344.00MHz - 392.00MHz*/
 	/*{SUBGHZ_FCC_ISM_BAND_433_050, SUBGHZ_FCC_ISM_BAND_434_790}, 	// 433.05MHz - 434.79MHz*/
 	{SUBGHZ_FCC_ISM_BAND_915_000, SUBGHZ_FCC_ISM_BAND_928_000}		// 915.00MHz - 928.00MHz
@@ -2057,7 +2061,20 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	M1_LOG_I(M1_LOGDB_TAG, "Flipper replay: replay_start returned %d\r\n",
 	         subghz_replay_ret_code);
 
-	if (subghz_replay_ret_code)
+	if (subghz_replay_ret_code == 1)
+	{
+		/* ISM region blocked TX — "TX Blocked" message already shown by
+		 * sub_ghz_replay_start.  Clean up and return without entering the
+		 * TX event loop, so the user is not misled into thinking emulation
+		 * is occurring. */
+		sub_ghz_raw_samples_deinit(false);
+		sub_ghz_ring_buffers_deinit();
+		xQueueReset(main_q_hdl);
+		menu_sub_ghz_exit();
+		f_unlink(FLIPPER_SUB_TMP_SGH);
+		return 0;
+	}
+	else if (subghz_replay_ret_code)
 	{
 		double_buffer_ptr_id = 1;
 		m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M,
