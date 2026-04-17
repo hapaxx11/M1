@@ -1439,7 +1439,9 @@ static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 	if (!m1_vkb_get_filename("Save signal as:", default_name, new_name))
 		return false; /* User cancelled */
 
-	snprintf(sub_path, sizeof(sub_path), "/SUBGHZ/%s.sub", new_name);
+	uint8_t fmt = subghz_get_save_fmt_ext();
+	const char *ext = (fmt == 1) ? ".sgh" : ".sub";
+	snprintf(sub_path, sizeof(sub_path), "/SUBGHZ/%s%s", new_name, ext);
 
 	/* Populate the Flipper .sub signal structure */
 	memset(&sub_sig, 0, sizeof(sub_sig));
@@ -1454,7 +1456,9 @@ static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 	strncpy(sub_sig.protocol, protocol_text[entry->info.protocol],
 	        FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
 
-	if (flipper_subghz_save(sub_path, &sub_sig))
+	bool saved = (fmt == 1) ? flipper_subghz_save_m1native(sub_path, &sub_sig)
+	                        : flipper_subghz_save(sub_path, &sub_sig);
+	if (saved)
 	{
 		m1_message_box(&m1_u8g2, "Signal saved:", sub_path + 8, "", "BACK to continue");
 		return true;
