@@ -350,7 +350,7 @@ void test_find_marantec24(void)
 
 	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
 	TEST_ASSERT_NOT_NULL(proto);
-	/* Marantec24 is Static — must NOT be mistaken for rolling like Marantec */
+	/* Marantec24 is Static — must NOT be misidentified via substring match on "Marantec" */
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
 }
 
@@ -460,11 +460,13 @@ void test_find_acurite_606tx(void)
  * Protocol flag consistency rules
  *
  * Verify invariants that must hold across the entire registry:
- *  1. All Static protocols must have the Send flag (can be replayed).
- *  2. All Weather and TPMS protocols must NOT have the Send flag
+ *  1. All Static AM protocols must have the Send flag (can be replayed).
+ *  2. All Static AM protocols must have the Save flag.
+ *  3. All Weather and TPMS protocols must NOT have the Send flag
  *     (sensor-only, cannot be replayed as commands).
- *  3. All Dynamic (rolling-code) protocols must NOT have the Send flag.
- *  4. All decodable protocols must have min_count_bit_for_found > 0.
+ *  4. All Dynamic (rolling-code) protocols must NOT have the Send flag.
+ *  5. All decodable protocols must have min_count_bit_for_found > 0.
+ *  6. All AM protocols must declare at least one frequency band.
  * =================================================================== */
 
 void test_static_protocols_have_send_flag(void)
@@ -536,7 +538,7 @@ void test_decodable_protocols_have_nonzero_min_bits(void)
 	}
 }
 
-void test_static_protocols_have_load_and_save_flags(void)
+void test_static_protocols_have_save_flag(void)
 {
 	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
 	{
@@ -630,7 +632,7 @@ int main(void)
 	RUN_TEST(test_weather_protocols_have_no_send_flag);
 	RUN_TEST(test_dynamic_protocols_have_no_send_flag);
 	RUN_TEST(test_decodable_protocols_have_nonzero_min_bits);
-	RUN_TEST(test_static_protocols_have_load_and_save_flags);
+	RUN_TEST(test_static_protocols_have_save_flag);
 	RUN_TEST(test_am_protocols_have_frequency_flags);
 
 	return UNITY_END();
