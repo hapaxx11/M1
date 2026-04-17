@@ -813,6 +813,10 @@ After adding the protocol:
   for precedent — some names differ from naive expectations (e.g.
   `"Holtek_HT12X"` not `"Holtek"`, `"GateTX"` not `"Gate TX"`).
 - Consult `CLAUDE.md` → *Flipper compatibility* section for known name corrections.
+- If the imported feature includes any file browser, loader, info screen, or
+  playlist parser, verify it handles **both** `.sub` and `.sgh` files.  See
+  *Dual `.sub` / `.sgh` File Format Support* in the File Interoperability
+  Reference section below for the full rules.
 
 ---
 
@@ -961,6 +965,56 @@ This fixed multiple interop issues:
 - **Marantec24** — was incorrectly caught by `strstr("Marantec")` rolling-code check
 - **All Phase 2 static protocols** — Clemsa, BETT, MegaCode, Centurion, etc.
   were missing from both strstr branches
+
+### Dual `.sub` / `.sgh` File Format Support
+
+M1 has two Sub-GHz signal file formats:
+
+| Extension | Format | Description |
+|-----------|--------|-------------|
+| `.sub` | Flipper-compatible | Key-value text file; `Filetype: Flipper SubGhz Key File` or `RAW`. Preferred for cross-device interoperability. |
+| `.sgh` | M1 native | M1's internal data file with two variants: RAW/NOISE uses `Modulation:` + `Data:` with unsigned timing values; PACKET/key uses `Modulation:` + `Bits:` + `Payload:` + `BT:` and does not include timing `Data:` lines. |
+
+**`sub_ghz_replay_flipper_file()` handles both transparently** — it detects the
+format by keyword matching (`Preset:` vs `Modulation:`, `RAW_Data:` vs `Data:`,
+`Bit:` vs `Bits:`, `TE:` vs `BT:`, etc.), not by file extension.  Both formats
+are transcoded to a temporary `.sgh` and replayed identically.
+
+#### Rules for any new Sub-GHz code that loads, lists, or parses files
+
+These rules apply to any imported Sub-GHz feature that touches signal files —
+file browsers, loaders, info screens, playlist parsers, savers, etc.
+
+1. **Never filter by extension alone.** File browsers for Sub-GHz signals must
+   display both `.sub` and `.sgh` files.  `storage_browse()` has no extension
+   filter; do not add one that excludes either format.
+
+2. **Never detect format by file extension.** Always detect format by inspecting
+   file content keywords.  Any new parser must use keyword-based dispatch —
+   check for `Filetype:`, `Preset:`, `Modulation:`, `RAW_Data:`, `Data:`, etc.
+
+3. **Playlist entries accept both formats.** The `sub:` line prefix in a `.txt`
+   playlist file is a field-name tag (inherited from Flipper's playlist format)
+   — it does **not** mean the referenced path must end in `.sub`.  Both of these
+   are valid playlist entries:
+   ```
+   sub: /SUBGHZ/Tesla_AM270.sub
+   sub: /SUBGHZ/my_raw_capture.sgh
+   ```
+
+4. **Info screens must handle both formats.** When displaying file metadata
+   (protocol, frequency, key/payload), use shared loading/parsing that works on
+   both formats.  `flipper_subghz_load()` already supports both Flipper `.sub`
+   and M1-native `.sgh` files (including NOISE and PACKET variants) and parses
+   the relevant `Modulation:` / `Data:` and `Bits:` / `Payload:` / `BT:` fields
+   as applicable.  Reuse it where possible; do not add a separate `.sgh`-only
+   parser for info screens.
+
+5. **Save format is user-configurable.** The active save format is stored in
+   `subghz_cfg.save_fmt` (0 = Flipper `.sub`, 1 = M1 native `.sgh`) and toggled
+   in Settings → Sub-GHz.  New code that saves a captured signal must call
+   `subghz_get_save_fmt_ext()` to determine the correct extension and format —
+   never hardcode `.sub` or `.sgh` as the output format.
 
 ### LF-RFID `.rfid` files
 
