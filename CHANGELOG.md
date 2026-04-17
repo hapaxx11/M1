@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.113] - 2026-04-17
+
+### Fixed
+
+- **Sub-GHz Saved: M1 native .sgh files now show the action menu** — Files recorded with C3.12 (fw 0.8.x) or SiN360 (fw 0.9.x) and saved in M1 native `.sgh` format could not be opened from the Saved scene: selecting a file went straight back to the Sub-GHz menu instead of showing the Emulate/Info/Rename/Delete action menu. Root cause: `flipper_subghz_load()` only accepted Flipper `.sub` format versions "1" and "2"; M1 native files use the firmware version string (e.g. "0.8", "0.9") which the version check rejected. Fixed by saving the `Filetype:` value before reading the `Version:` line, then routing M1 native files (identified by "M1 SubGHz" in the filetype) through dedicated `m1sgh_parse_raw()` / `m1sgh_parse_packet()` body parsers. RAW `.sgh` pulse data is now also parsed for offline protocol decode (unsigned M1 durations are converted to alternating-signed Flipper-style samples).
 ## [0.9.0.112] - 2026-04-17
 
 ### Fixed
