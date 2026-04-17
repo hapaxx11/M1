@@ -343,8 +343,10 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 		return false;
 	}
 
+	const char *version_val = ff_get_value(&ff);
+
 	/* Determine file format from filetype + version strings */
-	if (strcmp(ff.value, "1") == 0 || strcmp(ff.value, "2") == 0)
+	if (strcmp(version_val, "1") == 0 || strcmp(version_val, "2") == 0)
 	{
 		/* Flipper .sub format (version 1 or 2) — re-open to check filetype */
 		ff_close(&ff);
