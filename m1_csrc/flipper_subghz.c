@@ -25,6 +25,11 @@
 #define FLIPPER_SUBGHZ_KEY_FILETYPE      "Flipper SubGhz Key File"
 #define FLIPPER_SUBGHZ_MIN_VERSION       1
 
+/* M1 native .sgh format — filetype prefix and type keywords */
+#define M1_SUBGHZ_FILETYPE_PREFIX        "M1 SubGHz"
+#define M1_SUBGHZ_NOISE_TYPE             "NOISE"    /* RAW recording */
+#define M1_SUBGHZ_PACKET_TYPE            "PACKET"   /* Decoded/key file */
+
 /* Maximum number of int32 samples to parse from a single RAW_Data line */
 #define SUBGHZ_LINE_SAMPLES_MAX          256
 
@@ -37,6 +42,8 @@
 static int subghz_strcasecmp(const char *a, const char *b);
 static bool subghz_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out);
+static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out);
+static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -178,6 +185,115 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 
 /*============================================================================*/
 /**
+ * @brief  Parse an M1 native .sgh RAW (NOISE) file body.
+ *
+ * M1 native RAW files store unsigned pulse durations in "Data:" lines.
+ * Values are converted to alternating signed format (mark/space) so the
+ * offline decode engine (which expects Flipper-style alternating int16_t)
+ * can process them.  The first sample is assumed to be a mark (positive).
+ */
+static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out)
+{
+	int32_t line_samples[SUBGHZ_LINE_SAMPLES_MAX];
+	uint16_t line_count;
+	uint16_t i;
+	bool positive = true; /* first pulse assumed to be mark (high) */
+
+	out->type = FLIPPER_SUBGHZ_TYPE_RAW;
+	out->raw_count = 0;
+
+	while (ff_read_line(ctx))
+	{
+		if (ff_is_separator(ctx))
+			continue;
+
+		if (!ff_parse_kv(ctx))
+			continue;
+
+		if (subghz_strcasecmp(ff_get_key(ctx), "Frequency") == 0)
+		{
+			out->frequency = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Modulation") == 0)
+		{
+			/* Store modulation in preset field for info screen display */
+			strncpy(out->preset, ff_get_value(ctx), FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
+			out->preset[FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1] = '\0';
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Data") == 0)
+		{
+			/* Parse unsigned pulse durations; convert to alternating signed */
+			line_count = ff_parse_int32_array(ff_get_value(ctx),
+			                                  line_samples,
+			                                  SUBGHZ_LINE_SAMPLES_MAX);
+
+			for (i = 0; i < line_count && out->raw_count < FLIPPER_SUBGHZ_RAW_MAX_SAMPLES; i++)
+			{
+				int32_t val = line_samples[i];
+				if (val < 0) val = -val;   /* ensure positive (M1 stores unsigned) */
+				if (val > 32767) val = 32767;
+
+				/* Alternate sign: positive = mark (high), negative = space (low) */
+				out->raw_data[out->raw_count++] = positive ? (int16_t)val : -(int16_t)val;
+				positive = !positive;
+			}
+		}
+	}
+
+	return (out->raw_count > 0);
+}
+
+/*============================================================================*/
+/**
+ * @brief  Parse an M1 native .sgh PACKET file body.
+ *
+ * M1 packet files use "Modulation:" (not Flipper's "Preset:"), "Bits:" (not
+ * "Bit:"), and a "Payload:" field.  Only Frequency, Modulation, Protocol, and
+ * Bits are extracted; Payload is intentionally skipped because it uses a
+ * different binary encoding than Flipper's hex Key field.
+ */
+static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out)
+{
+	out->type = FLIPPER_SUBGHZ_TYPE_PARSED;
+
+	while (ff_read_line(ctx))
+	{
+		if (ff_is_separator(ctx))
+			continue;
+
+		if (!ff_parse_kv(ctx))
+			continue;
+
+		if (subghz_strcasecmp(ff_get_key(ctx), "Frequency") == 0)
+		{
+			out->frequency = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Modulation") == 0)
+		{
+			/* M1 uses "Modulation:" where Flipper uses "Preset:" */
+			strncpy(out->preset, ff_get_value(ctx), FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
+			out->preset[FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1] = '\0';
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Protocol") == 0)
+		{
+			strncpy(out->protocol, ff_get_value(ctx), FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
+			out->protocol[FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1] = '\0';
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Bits") == 0)
+		{
+			/* M1 uses "Bits:" where Flipper uses "Bit:" */
+			out->bit_count = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
+		}
+		/* Note: M1 "Payload:", "BT:", "IT:" are not mapped to out->key here;
+		 * the emulate action uses sub_ghz_replay_flipper_file() which reads
+		 * the file directly in its native format. */
+	}
+
+	return (out->frequency > 0);
+}
+
+/*============================================================================*/
+/**
  * @brief  Load a .sub file (either RAW or Key format)
  * @param  path  file path on FatFs filesystem
  * @param  out   output signal structure
@@ -187,6 +303,7 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 {
 	flipper_file_t ff;
 	bool result = false;
+	char filetype_val[48]; /* saved before version read overwrites ff.value */
 
 	if (path == NULL || out == NULL)
 		return false;
@@ -209,6 +326,10 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 		return false;
 	}
 
+	/* Save filetype value — the next read will overwrite ff.value */
+	strncpy(filetype_val, ff_get_value(&ff), sizeof(filetype_val) - 1);
+	filetype_val[sizeof(filetype_val) - 1] = '\0';
+
 	/* Check Version line */
 	if (!ff_read_line(&ff) || !ff_parse_kv(&ff))
 	{
@@ -222,12 +343,10 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 		return false;
 	}
 
-	/* Determine file type and parse accordingly */
+	/* Determine file format from filetype + version strings */
 	if (strcmp(ff.value, "1") == 0 || strcmp(ff.value, "2") == 0)
 	{
-		/* Need to peek at Filetype to determine RAW vs Key */
-		/* We stored the filetype value earlier but need to check it */
-		/* Re-open and check filetype */
+		/* Flipper .sub format (version 1 or 2) — re-open to check filetype */
 		ff_close(&ff);
 
 		if (!ff_open(&ff, path))
@@ -260,9 +379,52 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 			result = subghz_parse_key(&ff, out);
 		}
 	}
+	else if (strstr(filetype_val, M1_SUBGHZ_FILETYPE_PREFIX) != NULL)
+	{
+		/* M1 native .sgh format — version is firmware major.minor (e.g. "0.8",
+		 * "0.9").  File type (RAW vs PACKET) is determined by the filetype value,
+		 * not the version.  The file descriptor is already positioned after the
+		 * Version: line, so body parsing continues from here. */
+		if (strstr(filetype_val, M1_SUBGHZ_NOISE_TYPE) != NULL)
+		{
+			result = m1sgh_parse_raw(&ff, out);
+		}
+		else if (strstr(filetype_val, M1_SUBGHZ_PACKET_TYPE) != NULL)
+		{
+			result = m1sgh_parse_packet(&ff, out);
+		}
+		/* else: unknown M1 format variant — result stays false */
+	}
 
 	ff_close(&ff);
 	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Test whether header strings indicate an M1 native .sgh file.
+ *
+ * This is a pure-logic helper extracted for testability.  Flipper .sub files
+ * use integer version strings ("1", "2"); M1 native .sgh files use the
+ * firmware version (e.g., "0.8", "0.9") and always contain "M1 SubGHz" in
+ * the Filetype value.
+ *
+ * @param  filetype_val  Value string from the Filetype: line
+ * @param  version_val   Value string from the Version: line
+ * @return true if the header indicates M1 native .sgh format
+ */
+bool flipper_subghz_is_m1_native_header(const char *filetype_val,
+                                         const char *version_val)
+{
+	if (filetype_val == NULL || version_val == NULL)
+		return false;
+
+	/* Flipper format uses integer version strings "1" or "2" */
+	if (strcmp(version_val, "1") == 0 || strcmp(version_val, "2") == 0)
+		return false;
+
+	/* M1 native format always has "M1 SubGHz" in the filetype */
+	return strstr(filetype_val, M1_SUBGHZ_FILETYPE_PREFIX) != NULL;
 }
 
 /*============================================================================*/
