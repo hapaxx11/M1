@@ -319,8 +319,9 @@ void test_came_has_no_flag_300(void)
 	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
 	TEST_ASSERT_NOT_NULL(proto);
 
-	/* CAME is 433/868 MHz only — no 300 MHz operation */
+	/* CAME is 433/868 MHz only — no 300 MHz or 315 MHz operation */
 	TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_300, proto->flags);
+	TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_315, proto->flags);
 	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_433, proto->flags);
 }
 
