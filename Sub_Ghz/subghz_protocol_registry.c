@@ -169,6 +169,11 @@ extern uint8_t subghz_decode_tx_8300(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon_v1(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon3(uint16_t, uint16_t);
 
+/* Phase 6: Rolling code parity additions */
+extern uint8_t subghz_decode_jarolift(uint16_t, uint16_t);
+extern uint8_t subghz_decode_beninca_arc(uint16_t, uint16_t);
+extern uint8_t subghz_decode_hormann_bisecur(uint16_t, uint16_t);
+
 /* FireCracker / CM17A home-automation RF */
 extern uint8_t subghz_decode_firecracker_cm17a(uint16_t, uint16_t);
 
@@ -204,6 +209,17 @@ extern uint8_t subghz_decode_generic_ppm(uint16_t, uint16_t);
 
 #define F_ROLLING_433 (SubGhzProtocolFlag_433 | SubGhzProtocolFlag_AM | \
                        SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save)
+
+/* OOK-PWM-replayable rolling-code protocols (no cipher, no Manchester, no FSK).
+ * These macros include SubGhzProtocolFlag_PwmKeyReplay, which tells the key
+ * encoder that a saved Key: value can be faithfully retransmitted using the
+ * registry te_short/te_long timings.  Use these instead of F_ROLLING_433 for
+ * protocols whose rolling counter carries no per-code encryption. */
+#define F_ROLLING_433_PWM (F_ROLLING_433 | SubGhzProtocolFlag_PwmKeyReplay)
+#define F_ROLLING_MULTI_PWM (SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 | \
+                             SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM | \
+                             SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save | \
+                             SubGhzProtocolFlag_PwmKeyReplay)
 
 #define F_ROLLING_MULTI (SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 | \
                          SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM | \
@@ -466,7 +482,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [CAME_TWEE] = {
         .name   = "CAME TWEE",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=260, .te_long=520, .te_tolerance_pct=20, .min_count_bit_for_found=54 },
         .decode = subghz_decode_came_twee,
@@ -474,7 +490,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [CAME_ATOMO] = {
         .name   = "CAME Atomo",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=200, .te_long=400, .te_tolerance_pct=20, .min_count_bit_for_found=62 },
         .decode = subghz_decode_came_atomo,
@@ -482,7 +498,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [NICE_FLOR_S] = {
         .name   = "Nice FloR-S",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=500, .te_long=1000, .te_tolerance_pct=20, .min_count_bit_for_found=52 },
         .decode = subghz_decode_nice_flor_s,
@@ -490,7 +506,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [ALUTECH_AT4N] = {
         .name   = "Alutech AT-4N",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_tolerance_pct=20, .min_count_bit_for_found=72 },
         .decode = subghz_decode_alutech,
@@ -506,7 +522,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [KINGGATES_STYLO] = {
         .name   = "KingGates Stylo4k",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=1200, .te_tolerance_pct=20, .min_count_bit_for_found=60 },
         .decode = subghz_decode_kinggates,
@@ -658,7 +674,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [SCHER_KHAN_MAGICAR] = {
         .name   = "Scher-Khan",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_tolerance_pct=20, .min_count_bit_for_found=64 },
         .decode = subghz_decode_scher_khan_magicar,
@@ -666,7 +682,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [SCHER_KHAN_LOGICAR] = {
         .name   = "Scher-Khan",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=1200, .te_tolerance_pct=20, .min_count_bit_for_found=64 },
         .decode = subghz_decode_scher_khan_logicar,
@@ -674,7 +690,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [TOYOTA] = {
         .name   = "Toyota",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=250, .te_long=750, .te_tolerance_pct=20, .min_count_bit_for_found=56 },
         .decode = subghz_decode_toyota,
@@ -931,7 +947,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [DITEC_GOL4] = {
         .name   = "DITEC_GOL4",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = F_ROLLING_433_PWM,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=1100, .te_delta=200, .min_count_bit_for_found=54 },
         .decode = subghz_decode_ditec_gol4,
@@ -1047,6 +1063,41 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Weather,
         .timing = { .te_short=500, .te_long=1100, .te_delta=300, .min_count_bit_for_found=32 },
         .decode = subghz_decode_oregon3,
+    },
+
+    /* ── Phase 6: Rolling code parity additions ─────────────────────────── */
+
+    [JAROLIFT] = {
+        .name   = "Jarolift",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        /* KeeLoq-based: 72-bit OOK PWM, te=400 µs, 1:2 ratio, 12 preamble pulses */
+        .timing = { .te_short=400, .te_long=800, .te_delta=167,
+                    .preamble_bits=12, .min_count_bit_for_found=72 },
+        .decode = subghz_decode_jarolift,
+    },
+    [BENINCA_ARC] = {
+        .name   = "Beninca ARC",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        /* AES-128 encrypted: 128-bit OOK PWM, te=300 µs, 1:2 ratio */
+        .timing = { .te_short=300, .te_long=600, .te_delta=155,
+                    .preamble_bits=0, .min_count_bit_for_found=128 },
+        .decode = subghz_decode_beninca_arc,
+    },
+    [HORMANN_BISECUR] = {
+        .name   = "Hormann BiSecur",
+        .type   = SubGhzProtocolTypeDynamic,
+        /* BiSecur operates at 868 MHz (OOK-Manchester) */
+        .flags  = SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        /* Manchester: 176-bit, te=208 µs, te_long=416 µs */
+        .timing = { .te_short=208, .te_long=416, .te_delta=104,
+                    .preamble_bits=0, .min_count_bit_for_found=176 },
+        .decode = subghz_decode_hormann_bisecur,
     },
 
     /* ── FireCracker / CM17A home-automation RF ─────────────────────── */

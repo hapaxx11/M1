@@ -219,6 +219,11 @@ enum {
 	OREGON_V1,
 	OREGON3,
 
+	/* --- Phase 6: Rolling code parity additions --- */
+	JAROLIFT,          /* KeeLoq-based 72-bit rolling code (detect-only) */
+	BENINCA_ARC,       /* AES-128 encrypted 128-bit rolling code (detect-only) */
+	HORMANN_BISECUR,   /* Manchester 176-bit AES rolling code at 868 MHz (detect-only) */
+
 	/* --- FireCracker / CM17A home-automation RF --- */
 	FIRECRACKER_CM17A,
 };
@@ -350,6 +355,11 @@ uint8_t subghz_decode_phoenix_v2(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_revers_rb2(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_roger(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_somfy_keytis(uint16_t p, uint16_t pulsecount);
+
+/* Phase 6: Rolling code parity additions */
+uint8_t subghz_decode_jarolift(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_beninca_arc(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_hormann_bisecur(uint16_t p, uint16_t pulsecount);
 
 /* Weather data access */
 const SubGHz_Weather_Data_t* subghz_get_weather_data(void);
