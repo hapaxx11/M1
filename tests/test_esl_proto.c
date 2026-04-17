@@ -271,6 +271,25 @@ void test_different_pages_yield_different_frames(void)
 }
 
 /* --------------------------------------------------------------------------- */
+/* CRC known-good vector                                                       */
+/* --------------------------------------------------------------------------- */
+
+void test_page_frame_crc_known_good(void)
+{
+    /*
+     * Broadcast page frame: page=2, forever=false, duration=60
+     *   Raw bytes: 0x85 0x00 0x00 0x00 0x00 0x06 0x11 0x00 0x00 0x00 0x3C
+     *   CRC16 (Pricer variant): 0x6B0E  → lo=0x0E, hi=0x6B
+     *   Full frame length: 13 bytes
+     */
+    uint8_t buf[M1_ESL_MAX_FRAME_SIZE];
+    size_t len = m1_esl_build_broadcast_page_frame(buf, 2, false, 60);
+    TEST_ASSERT_EQUAL(13U, len);
+    TEST_ASSERT_EQUAL_HEX8(0x0EU, buf[11]);  /* CRC lo byte */
+    TEST_ASSERT_EQUAL_HEX8(0x6BU, buf[12]);  /* CRC hi byte */
+}
+
+/* --------------------------------------------------------------------------- */
 /* main                                                                        */
 /* --------------------------------------------------------------------------- */
 
@@ -314,6 +333,9 @@ int main(void)
     /* determinism */
     RUN_TEST(test_page_frame_is_deterministic);
     RUN_TEST(test_different_pages_yield_different_frames);
+
+    /* CRC known-good vector */
+    RUN_TEST(test_page_frame_crc_known_good);
 
     return UNITY_END();
 }

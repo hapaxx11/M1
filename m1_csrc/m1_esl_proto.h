@@ -35,7 +35,7 @@
 #define M1_ESL_PROTO_SEG  0x84U
 
 /**
- * @brief  Decode an 18-digit Pricer ESL barcode into a 4-byte PLID address.
+ * @brief  Decode a 17-digit Pricer ESL barcode into a 4-byte PLID address.
  *
  * The barcode must be exactly 17 decimal digit characters (null-terminated).
  * Digits at positions 2–11 encode the physical layer ID.

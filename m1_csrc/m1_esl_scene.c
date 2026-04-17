@@ -42,7 +42,7 @@
 /** Default number of times each frame is re-transmitted for reliability. */
 #define ESL_DEFAULT_REPEATS      9U
 /** Millisecond gap between frame repetitions (allows OS scheduling). */
-#define ESL_INTER_REPEAT_MS      0U
+#define ESL_INTER_REPEAT_MS      1U
 /** Milliseconds to show the "Done" confirmation screen. */
 #define ESL_DONE_DISPLAY_MS   1200U
 /** Number of named broadcast commands (pages 0-7 + debug). */
@@ -300,7 +300,7 @@ static void esl_run_target(void)
                 frame_len = m1_esl_build_ping_frame(frame, plid);
                 snprintf(done_msg, sizeof(done_msg), "Ping sent");
             } else if(sel >= 1U && sel <= 8U) {
-                /* Page flip 0-7: ping first, then broadcast page */
+                /* Page flip 0-7: send broadcast page frame */
                 uint8_t page = (uint8_t)(sel - 1U);
                 frame_len = m1_esl_build_broadcast_page_frame(
                     frame, page, false, 120U);

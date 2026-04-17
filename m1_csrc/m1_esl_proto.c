@@ -66,9 +66,8 @@ bool m1_esl_barcode_to_plid(const char *barcode, uint8_t plid[4])
 {
     if(!barcode || !plid) return false;
 
-    /* Barcode must be exactly 17 characters. */
-    size_t bc_len = 0U;
-    while(barcode[bc_len] != '\0' && bc_len <= 18U) bc_len++;
+    /* Barcode must be exactly 17 characters plus a terminating NUL. */
+    size_t bc_len = strnlen(barcode, 18U);
     if(bc_len != 17U) return false;
 
     /* Positions 2–11 must be decimal digits (the two 5-digit groups that
