@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.117] - 2026-04-17
+
+### Added
+
+- **Sub-GHz: Configurable save format** — Config screen now includes a "Save Format" option (Flipper `.sub` / M1 native `.sgh`). Decoded signals are saved in the chosen format; M1 native `.sgh` PACKET files are also fully supported for emulation via the Saved file browser.
 ## [0.9.0.116] - 2026-04-17
 
 ### Added
