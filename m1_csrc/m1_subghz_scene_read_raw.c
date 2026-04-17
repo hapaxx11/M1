@@ -4,7 +4,7 @@
  * @file   m1_subghz_scene_read_raw.c
  * @brief  Sub-GHz Read Raw Scene — raw RF capture with RSSI waveform.
  *
- * Momentum-aligned state machine and button layout.
+ * Flipper/Momentum-aligned state machine and button layout.
  *
  * States: START → RECORDING → IDLE (capture on SD)
  *
@@ -15,10 +15,17 @@
  *
  *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
+ * Radio lifecycle (Flipper/Momentum pattern):
+ *   scene_on_enter → radio starts in passive listen mode immediately.
+ *   Pressing REC is therefore INSTANT (just starts ring buffer + file write).
+ *   Pressing Stop flushes the file and resumes passive listen in Idle.
+ *   scene_on_exit → radio fully stopped.
+ *
  * Recording data path:
- *   ISR → ring buffer → sub_ghz_rx_raw_save_ext() → SD card (.sgh file)
+ *   ISR → ring buffer → sub_ghz_rx_raw_save() → SD card (.sub file)
  *   Data is streamed to SD during recording.  After stop the file exists
  *   on SD and can be replayed (Send) or renamed (Save).
+ *   The saved file is Flipper-compatible (RAW_Data: signed integers).
  */
 
 #include <stdint.h>
@@ -97,6 +104,24 @@ static const char *extract_filename(const char *fullpath)
     return p ? p + 1 : fullpath;
 }
 
+/**
+ * Start the radio in passive listen mode (no recording).
+ * Called from scene_on_enter() and from the Send path after replay completes.
+ * subghz_record_mode_flag stays 0 — ISR edges are NOT written to the ring buffer.
+ */
+static void start_passive_rx(SubGhzApp *app)
+{
+    sub_ghz_tx_raw_deinit_ext();
+    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+    menu_sub_ghz_init();
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+    SI446x_Change_Modem_OOK_PDTC(0x6C);
+    sub_ghz_rx_init_ext();
+    sub_ghz_rx_start_ext();
+    /* subghz_record_mode_flag remains 0 */
+}
+
 /*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
@@ -108,48 +133,35 @@ static void scene_on_enter(SubGhzApp *app)
     app->rssi = -120;
     raw_filepath[0] = '\0';
     subghz_raw_rssi_reset_ext();
+
+    /* Start radio in passive listen mode immediately on scene entry so that
+     * pressing REC has no perceptible delay — no radio init is done on the
+     * button press itself.  This matches Flipper/Momentum Read Raw behaviour. */
+    start_passive_rx(app);
+
     app->need_redraw = true;
 }
 
+/**
+ * Start recording — radio is already listening from scene_on_enter().
+ * This function is FAST: it only allocates buffers and opens the SD file.
+ */
 static void start_raw_rx(SubGhzApp *app)
 {
-    /* Clean up any previous TX raw state BEFORE radio RX setup.
-     * sub_ghz_tx_raw_deinit puts the radio to SLEEP via
-     * sub_ghz_set_opmode(ISOLATED) — if called AFTER starting RX it
-     * would undo the RX start, leaving TIM1 capturing zero edges. */
-    sub_ghz_tx_raw_deinit_ext();
-
-    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
-
-    /* Ensure radio is in a clean, known state — matches the Spectrum
-     * Analyzer pattern of always doing a full radio reset + config load
-     * before starting RX.  This guarantees the SI4463 recovers properly
-     * even if a previous blocking delegate powered the radio off via
-     * menu_sub_ghz_exit(). */
-    menu_sub_ghz_init();
-
-    /* Initialize ring buffers */
+    /* Allocate ring buffers for edge capture */
     if (sub_ghz_ring_buffers_init_ext())
-    {
-        /* Memory error — stay in Start */
-        return;
-    }
+        return;  /* OOM — stay in Start, radio keeps listening passively */
 
-    /* Initialize SD card file and write header */
+    /* Create the output .sub file and write the Flipper-compatible header */
     if (sub_ghz_raw_recording_init_ext())
     {
-        /* SD card error — clean up and stay in Start */
         sub_ghz_ring_buffers_deinit_ext();
-        return;
+        return;  /* SD error — stay in Start, radio keeps listening passively */
     }
 
-    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
-    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
-    SI446x_Change_Modem_OOK_PDTC(0x6C);
-    sub_ghz_rx_init_ext();
-    sub_ghz_rx_start_ext();
-
+    /* Arm ISR: start inserting captured edges into the ring buffer */
     subghz_record_mode_flag = 1;
+
     app->raw_state = SubGhzReadRawStateRecording;
     app->raw_sample_count = 0;
     subghz_raw_rssi_reset_ext();
@@ -157,8 +169,13 @@ static void start_raw_rx(SubGhzApp *app)
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
 }
 
+/**
+ * Stop recording — flush to SD and return to passive listen (Idle).
+ * The radio IC stays on so RSSI is live in the Idle state.
+ */
 static void stop_raw_rx(SubGhzApp *app)
 {
+    /* Pause edge-capture timer to prevent a race condition during the flush */
     sub_ghz_rx_pause_ext();
     subghz_record_mode_flag = 0;
 
@@ -167,22 +184,22 @@ static void stop_raw_rx(SubGhzApp *app)
     /* Flush remaining ring buffer data to SD and close the file */
     sub_ghz_raw_recording_stop_ext();
 
-    sub_ghz_rx_deinit_ext();
-    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
-    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
-
-    /* Free ring buffers now — they are no longer needed once recording is
-     * stopped and the file is closed.  This reclaims ~128KB of RAM. */
+    /* Free ring buffers — reclaim ~128 KB of RAM */
     sub_ghz_ring_buffers_deinit_ext();
 
     app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
 
-    /* Remember the auto-generated filepath for Send/Save/Erase */
+    /* Remember the auto-generated filepath for Send / Save / Erase */
     const char *fname = sub_ghz_raw_recording_get_filename_ext();
     strncpy(raw_filepath, fname ? fname : "", RAW_FILEPATH_MAX);
     raw_filepath[RAW_FILEPATH_MAX] = '\0';
 
     app->raw_state = SubGhzReadRawStateIdle;
+
+    /* Resume passive listen — the timer was paused above but the radio IC
+     * is still powered on, so only a timer restart is needed. */
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+    sub_ghz_rx_start_ext();
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
@@ -206,7 +223,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventOk:
             if (app->raw_state == SubGhzReadRawStateStart)
             {
-                /* Start recording */
+                /* Start recording — fast because radio is already listening */
                 start_raw_rx(app);
                 app->need_redraw = true;
             }
@@ -219,13 +236,27 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             else if (app->raw_state == SubGhzReadRawStateIdle)
             {
                 /* Send — replay the captured raw file (blocking delegate).
-                 * sub_ghz_replay_flipper_file() calls menu_sub_ghz_exit()
-                 * internally, so we MUST call menu_sub_ghz_init() after —
-                 * unconditionally, even on failure — to restore radio state. */
+                 *
+                 * The replay path (sub_ghz_replay_flipper_file) uses TIM1 for
+                 * TX PWM, which conflicts with the RX input-capture on TIM1 CH1.
+                 * We must fully stop passive RX before calling into replay,
+                 * then restart it afterwards. */
                 if (raw_filepath[0] != '\0')
                 {
+                    sub_ghz_rx_pause_ext();
+                    sub_ghz_rx_deinit_ext();
+
                     uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
+
+                    /* menu_sub_ghz_init() resets the radio IC; then
+                     * start_passive_rx() brings RX back up. */
                     menu_sub_ghz_init();
+                    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+                    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX,
+                                          subghz_scan_config.band, 0, 0);
+                    SI446x_Change_Modem_OOK_PDTC(0x6C);
+                    sub_ghz_rx_init_ext();
+                    sub_ghz_rx_start_ext();
 
                     if (ret != 0)
                     {
@@ -253,12 +284,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventLeft:
             if (app->raw_state == SubGhzReadRawStateStart)
             {
-                /* Config */
+                /* Config — radio keeps running passively while in child scene */
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
             else if (app->raw_state == SubGhzReadRawStateIdle)
             {
-                /* Erase — delete the recorded file and go back to Start */
+                /* Erase — delete the recorded file and return to Start */
                 if (raw_filepath[0] != '\0')
                 {
                     char del_path[RAW_FILEPATH_MAX + 3]; /* "0:" + path + NUL */
@@ -296,9 +327,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 char new_name[32];
                 if (m1_vkb_get_filename("Save RAW as:", base, new_name))
                 {
-                    /* Determine extension from original */
+                    /* Preserve the original extension (.sub) */
                     const char *ext = strrchr(fname, '.');
-                    if (!ext) ext = ".sgh";
+                    if (!ext) ext = ".sub";
 
                     char old_path[RAW_FILEPATH_MAX + 3], new_path[RAW_FILEPATH_MAX + 3];
                     snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
@@ -346,7 +377,23 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 static void scene_on_exit(SubGhzApp *app)
 {
     if (app->raw_state == SubGhzReadRawStateRecording)
-        stop_raw_rx(app);
+    {
+        /* Recording was in progress — stop ISR, flush SD, free buffers */
+        sub_ghz_rx_pause_ext();
+        subghz_record_mode_flag = 0;
+        sub_ghz_raw_recording_stop_ext();
+        sub_ghz_ring_buffers_deinit_ext();
+    }
+    else
+    {
+        /* Start or Idle: radio was passively listening — just stop the timer */
+        sub_ghz_rx_pause_ext();
+    }
+
+    /* Full radio teardown — powers off SI4463 and resets STM32 timer */
+    sub_ghz_rx_deinit_ext();
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
 }
 
 static void draw(SubGhzApp *app)
@@ -396,14 +443,17 @@ static void draw(SubGhzApp *app)
 
     if (app->raw_state == SubGhzReadRawStateStart)
     {
-        /* Animated sine wave (Flipper-style Lissajous) when no capture */
+        /* Animated sine wave when not yet recording.
+         * The 200ms periodic refresh (rx_active=true for Start state in the
+         * main event loop) drives the animation at ~5 fps. */
         subghz_raw_draw_sin_ext();
         subghz_raw_sin_advance_ext();
     }
     else
     {
         /* During recording: update current RSSI in display without advancing
-         * (trace=false just overwrites the current position for live feedback) */
+         * the cursor (trace=false overwrites the current position for live
+         * feedback between actual ring-buffer flush events). */
         if (app->raw_state == SubGhzReadRawStateRecording)
         {
             app->rssi = subghz_read_rssi_ext();

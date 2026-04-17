@@ -3426,7 +3426,10 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	char *prn_buffer;
 	uint32_t freq32;
 	uint16_t count, n_samples_to_rw, *pdata;
-	char *sign_text[2] = {"+", ""};
+	/* Flipper RAW_Data format: positive values for HIGH periods, negative for LOW.
+	 * sign_text[0] = no sign (HIGH = first edge after rising-edge sync),
+	 * sign_text[1] = "-"   (LOW  = second edge). */
+	char *sign_text[2] = {"", "-"};
 	uint8_t *pfillbuffer;
 	uint8_t sign;
 
@@ -3436,25 +3439,40 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	pfillbuffer = subghz_sdcard_write_buffer;
 	if ( header_init )
 	{
-		sprintf(pfillbuffer, "%s M1 SubGHz %s\r\n", subghz_datfile_keywords[0], SUB_GHZ_DATAFILE_FILETYPE_KEYWORD);
-		sprintf(prn_buffer, "%s %d.%d\r\n", subghz_datfile_keywords[1], m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor);
-		strcat(pfillbuffer, prn_buffer);
+		/* Write a Flipper-compatible RAW file header so the capture can be
+		 * opened directly by Magellan and other Flipper-ecosystem tools. */
 		if (subghz_scan_config.band == SUB_GHZ_BAND_CUSTOM)
 			freq32 = subghz_custom_freq_hz;
 		else
-			freq32 = subghz_band_steps[subghz_scan_config.band][0]*1000000; // Convert frequency from MHz to Hz
-		sprintf(prn_buffer, "%s %lu\r\n", subghz_datfile_keywords[2], freq32);
-		strcat(pfillbuffer, prn_buffer);
-		sprintf(prn_buffer, "%s %s\r\n", subghz_datfile_keywords[3], subghz_modulation_text[subghz_scan_config.modulation]);
-		strcat(pfillbuffer, prn_buffer);
-		m1_sdm_fill_buffer(pfillbuffer, strlen(pfillbuffer));
+			freq32 = subghz_band_steps[subghz_scan_config.band][0]*1000000;
+
+		/* Map M1 modulation to the closest Flipper preset string */
+		const char *preset;
+		switch (subghz_scan_config.modulation)
+		{
+			case MODULATION_FSK:
+				preset = "FuriHalSubGhzPreset2FSKDev47_6KhzAsync";
+				break;
+			default: /* OOK, ASK */
+				preset = "FuriHalSubGhzPresetOok650Async";
+				break;
+		}
+
+		sprintf((char *)pfillbuffer, "Filetype: SubGhz RAW File\r\nVersion: 1\r\n");
+		sprintf(prn_buffer, "Frequency: %lu\r\n", freq32);
+		strcat((char *)pfillbuffer, prn_buffer);
+		sprintf(prn_buffer, "Preset: %s\r\n", preset);
+		strcat((char *)pfillbuffer, prn_buffer);
+		strcat((char *)pfillbuffer, "Protocol: RAW\r\n");
+		m1_sdm_fill_buffer(pfillbuffer, strlen((char *)pfillbuffer));
 		free(prn_buffer);
 		return 0;
 	} // if ( header_init )
 
-	sprintf(pfillbuffer, "%s", SUB_GHZ_DATAFILE_DATA_KEYWORD);
-	//m1_test_gpio_pull_high();
-	//sub_ghz_rx_pause();
+	/* Data lines use Flipper's "RAW_Data:" keyword and signed integers.
+	 * "RAW_Data:" contains "Data:" as a substring so the legacy M1 parser
+	 * (sub_ghz_parse_raw_data) still recognises it via strstr. */
+	sprintf((char *)pfillbuffer, "RAW_Data:");
 	n_samples_to_rw = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 	if ( last_data )
 	{
@@ -3463,8 +3481,6 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 			n_samples_to_rw = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 	} // if ( last_data )
 	m1_ringbuffer_read(&subghz_rx_rawdata_rb, subghz_ring_read_buffer, n_samples_to_rw);
-	//sub_ghz_rx_start();
-	//m1_test_gpio_pull_low();
 	pdata = (uint16_t *)subghz_ring_read_buffer;
 	if ( n_samples_to_rw & 0x01 ) // Odd number of samples?
 	{
@@ -3475,13 +3491,13 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	for (count=0; count<n_samples_to_rw; count++)
 	{
 		sprintf(prn_buffer, " %s%u", sign_text[sign], *pdata);
-		strcat(pfillbuffer, prn_buffer);
+		strcat((char *)pfillbuffer, prn_buffer);
 		pdata++;
 		sign ^= 1;
 	}
-	strcat(pfillbuffer, "\r\n");
+	strcat((char *)pfillbuffer, "\r\n");
 
-	m1_sdm_fill_buffer(pfillbuffer, strlen(pfillbuffer));
+	m1_sdm_fill_buffer(pfillbuffer, strlen((char *)pfillbuffer));
 
 	if ( prn_buffer!=NULL )
 		free(prn_buffer);
@@ -4952,7 +4968,7 @@ uint8_t sub_ghz_raw_recording_init_ext(void)
 	static char infix[5];  /* static: datfile_info stores a pointer to this */
 
 	datfile_info.dir_name    = SUB_GHZ_FILEPATH;
-	datfile_info.file_ext    = SUB_GHZ_FILE_EXTENSION;
+	datfile_info.file_ext    = ".sub";  /* Flipper-compatible extension */
 	datfile_info.file_prefix = SUB_GHZ_FILE_PREFIX;
 
 	strncpy(infix, subghz_freq_presets[subghz_cfg.freq_idx].label, 3);
