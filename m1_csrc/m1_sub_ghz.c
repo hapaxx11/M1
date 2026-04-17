@@ -4125,7 +4125,18 @@ void sub_ghz_brute_force(void)
         SUB_GHZ_BAND_300,     /* Linear — 300 MHz */
         SUB_GHZ_BAND_433_92,  /* Holtek */
     };
-    #define NUM_BRUTE_PROTOS 5
+    enum {
+        NUM_BRUTE_PROTOS = sizeof(brute_protos) / sizeof(brute_protos[0])
+    };
+    _Static_assert(
+        (sizeof(brute_names) / sizeof(brute_names[0])) == NUM_BRUTE_PROTOS,
+        "brute_names length must match brute_protos");
+    _Static_assert(
+        (sizeof(brute_bits) / sizeof(brute_bits[0])) == NUM_BRUTE_PROTOS,
+        "brute_bits length must match brute_protos");
+    _Static_assert(
+        (sizeof(brute_bands) / sizeof(brute_bands[0])) == NUM_BRUTE_PROTOS,
+        "brute_bands length must match brute_protos");
 
     uint32_t code = 0;
     uint32_t max_code;
