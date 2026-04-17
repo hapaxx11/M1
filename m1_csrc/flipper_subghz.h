@@ -39,8 +39,11 @@ typedef struct {
 /* Load a .sub file (Flipper format) or M1 native .sgh file */
 bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out);
 
-/* Save a .sub file */
+/* Save a Flipper-compatible .sub file */
 bool flipper_subghz_save(const char *path, const flipper_subghz_signal_t *sig);
+
+/* Save an M1 native .sgh PACKET file */
+bool flipper_subghz_save_m1native(const char *path, const flipper_subghz_signal_t *sig);
 
 /* Map Flipper preset name to M1 modulation type */
 uint8_t flipper_subghz_preset_to_modulation(const char *preset);

@@ -43,6 +43,10 @@ extern void        subghz_set_tx_power_idx_ext(uint8_t idx);
 extern const char *subghz_get_tx_power_label_ext(uint8_t idx);
 extern uint8_t     subghz_get_tx_power_count_ext(void);
 
+/* Save format accessors (static data in m1_sub_ghz.c) */
+extern uint8_t subghz_get_save_fmt_ext(void);
+extern void    subghz_set_save_fmt_ext(uint8_t fmt);
+
 /* ISM region data (non-static globals in m1_sub_ghz.c / m1_sub_ghz.h) */
 extern const char *subghz_ism_regions_text[];
 
@@ -50,13 +54,14 @@ extern const char *subghz_ism_regions_text[];
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS      6
+#define CFG_ITEMS      7
 #define CFG_FREQUENCY  0
 #define CFG_HOPPING    1
 #define CFG_MODULATION 2
 #define CFG_SOUND      3
 #define CFG_TX_POWER   4
 #define CFG_ISM_REGION 5
+#define CFG_SAVE_FMT   6
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
@@ -74,6 +79,7 @@ static const char *cfg_item_labels[CFG_ITEMS] = {
     "Sound:",
     "TX Power:",
     "ISM Region:",
+    "Save Format:",
 };
 
 /*============================================================================*/
@@ -102,6 +108,8 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             return subghz_get_tx_power_label_ext(subghz_get_tx_power_idx_ext());
         case CFG_ISM_REGION:
             return subghz_ism_regions_text[m1_device_stat.config.ism_band_region];
+        case CFG_SAVE_FMT:
+            return subghz_get_save_fmt_ext() ? "M1 (.sgh)" : "Flipper (.sub)";
         default:
             return "";
     }
@@ -156,6 +164,9 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
                 else
                     m1_device_stat.config.ism_band_region = SUBGHZ_ISM_BAND_REGIONS_LIST - 1;
             }
+            break;
+        case CFG_SAVE_FMT:
+            subghz_set_save_fmt_ext(subghz_get_save_fmt_ext() ^ 1);
             break;
     }
 }

@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.117] - 2026-04-17
+
+### Added
+
+- **Sub-GHz: Configurable save format** — Config screen now includes a "Save Format" option (Flipper `.sub` / M1 native `.sgh`). Decoded signals are saved in the chosen format; M1 native `.sgh` PACKET files are also fully supported for emulation via the Saved file browser.
+## [0.9.0.116] - 2026-04-17
+
+### Added
+
+- **Infrared: ESL Tag Tinker** — IR-based tool for Pricer Electronic Shelf Label tags,
+  inspired by github.com/i12bp8/TagTinker. Accessible via Infrared → ESL Tags.
+  Features: broadcast page flip (pages 0–7), broadcast diagnostic screen, and
+  targeted ping of a specific tag by 17-digit barcode. Uses the tag's native
+  ~1.25 MHz PP4 carrier (TIM1_CH4N, PC5) with DWT cycle-accurate symbol timing
+  scaled for the STM32H573's 250 MHz core clock.
+## [0.9.0.115] - 2026-04-17
+
+### Added
+
+- **Sub-GHz: expanded protocol compatibility tests** — Added 13 new decoder
+  roundtrip tests covering Princeton (24-bit, auto te-detect from pulse[2]/[3]),
+  Holtek_HT12X (12-bit, 1:3 ratio), and Ansonic (12-bit, 1:2 ratio).  Added 18
+  new registry validation tests verifying that all static AM protocols carry the
+  Send and Save flags, weather/TPMS protocols carry no Send flag, dynamic
+  (rolling-code) protocols carry no Send flag, all decodable protocols have
+  min_count_bit_for_found > 0, and all AM protocols declare at least one
+  frequency band.  Added presence tests for 12 Momentum-ported protocols
+  (Magellan, Marantec24, Clemsa, Centurion, BETT, Legrand, LinearDelta3,
+  CAME TWEE, Nice FloR-S, Elplast, KeyFinder, Acurite_606TX).
 ## [0.9.0.114] - 2026-04-17
 
 ### Fixed

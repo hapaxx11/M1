@@ -44,6 +44,7 @@ static bool subghz_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out);
+static const char *stristr(const char *haystack, const char *needle);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -248,9 +249,8 @@ static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out)
  * @brief  Parse an M1 native .sgh PACKET file body.
  *
  * M1 packet files use "Modulation:" (not Flipper's "Preset:"), "Bits:" (not
- * "Bit:"), and a "Payload:" field.  Only Frequency, Modulation, Protocol, and
- * Bits are extracted; Payload is intentionally skipped because it uses a
- * different binary encoding than Flipper's hex Key field.
+ * "Bit:"), and a "Payload:" field (0x-prefixed hex key) and "BT:" (bit time).
+ * All fields are extracted so callers can use key and te from the result.
  */
 static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 {
@@ -284,9 +284,16 @@ static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out
 			/* M1 uses "Bits:" where Flipper uses "Bit:" */
 			out->bit_count = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
 		}
-		/* Note: M1 "Payload:", "BT:", "IT:" are not mapped to out->key here;
-		 * the emulate action uses sub_ghz_replay_flipper_file() which reads
-		 * the file directly in its native format. */
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Payload") == 0)
+		{
+			/* 0x-prefixed big-endian hex key, e.g. "0x0000000052A12E00" */
+			out->key = (uint64_t)strtoull(ff_get_value(ctx), NULL, 16);
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "BT") == 0)
+		{
+			/* M1 uses "BT:" (bit time) where Flipper uses "TE:" */
+			out->te = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
+		}
 	}
 
 	return (out->frequency > 0);
@@ -495,6 +502,79 @@ bool flipper_subghz_save(const char *path, const flipper_subghz_signal_t *sig)
 		if (result && sig->te > 0)
 			result = ff_write_kv_uint32(&ff, "TE", sig->te);
 	}
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Save an M1 native .sgh PACKET file for a parsed (key) signal.
+ *
+ * Writes a file that can be fully loaded by flipper_subghz_load() (which now
+ * maps Payload→key and BT→te) and replayed via sub_ghz_replay_flipper_file().
+ * The format uses M1-specific field names (Bits/Payload/BT) so that legacy
+ * M1 tools can also read it.
+ *
+ * @param  path  file path on FatFs filesystem
+ * @param  sig   signal structure to save (must be FLIPPER_SUBGHZ_TYPE_PARSED
+ *               with bit_count > 0)
+ * @return true on success
+ */
+bool flipper_subghz_save_m1native(const char *path, const flipper_subghz_signal_t *sig)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char buf[32];
+
+	if (path == NULL || sig == NULL)
+		return false;
+
+	/* PACKET saves are only valid for parsed/key signals with payload bits. */
+	if (sig->type != FLIPPER_SUBGHZ_TYPE_PARSED || sig->bit_count == 0)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	/* Header */
+	result = ff_write_kv_str(&ff, "Filetype", "M1 SubGHz PACKET");
+
+	if (result)
+		result = ff_write_kv_str(&ff, "Version", "0.9");
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", sig->frequency);
+
+	/* Derive modulation label from Flipper preset name */
+	if (result)
+	{
+		const char *mod;
+		if (stristr(sig->preset, "FSK"))
+			mod = "FSK";
+		else if (stristr(sig->preset, "ASK"))
+			mod = "ASK";
+		else
+			mod = "OOK";   /* Default: OOK for most 433 MHz remotes */
+		result = ff_write_kv_str(&ff, "Modulation", mod);
+	}
+
+	if (result && sig->protocol[0] != '\0')
+		result = ff_write_kv_str(&ff, "Protocol", sig->protocol);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bits", sig->bit_count);
+
+	/* Key stored as 0x-prefixed hex (big-endian 8-byte) */
+	if (result)
+	{
+		snprintf(buf, sizeof(buf), "0x%016llX",
+		         (unsigned long long)sig->key);
+		result = ff_write_kv_str(&ff, "Payload", buf);
+	}
+
+	if (result && sig->te > 0)
+		result = ff_write_kv_uint32(&ff, "BT", sig->te);
 
 	ff_close(&ff);
 	return result;

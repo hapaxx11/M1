@@ -502,6 +502,10 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_i2c.c
     ../../m1_csrc/m1_infrared.c
     ../../m1_csrc/m1_infrared_scene.c
+    # === ESL Tag Tinker (IR-based ESL tag interaction) ===
+    ../../m1_csrc/m1_esl_proto.c
+    ../../m1_csrc/m1_esl_ir.c
+    ../../m1_csrc/m1_esl_scene.c
     ../../m1_csrc/m1_int_hdl.c
     ../../m1_csrc/m1_lcd.c
     ../../m1_csrc/m1_led_color.c
