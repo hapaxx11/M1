@@ -3530,10 +3530,12 @@ static uint8_t sub_ghz_replay_start(bool record_mode, S_M1_SubGHz_Band band, uin
 
 	if ( sub_ghz_fcc_ism_band_check(band, channel) )
 	{
-		ret_code = 1;
-		record_mode = 0;
+		/* Return 1 immediately so callers can distinguish ISM-blocked from
+		 * other errors.  The bottom-of-function remap (ret_code=1 → 0) is
+		 * intentionally bypassed here. */
 		m1_buzzer_notification();
 		m1_message_box(&m1_u8g2, "TX Blocked:", "Region restricts", "this frequency.", "Set Region to Off");
+		return 1;
 	} // if ( sub_ghz_fcc_ism_band_check(band, channel) )
 
 	if ( record_mode )
