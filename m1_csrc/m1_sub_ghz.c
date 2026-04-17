@@ -585,6 +585,9 @@ static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val);
 static uint32_t subghz_hopper_retune_next(void);
 static int16_t subghz_read_rssi(void);
 
+/* Save format accessor (defined near end of file with other config accessors) */
+uint8_t subghz_get_save_fmt_ext(void);
+
 //************************** C O N S T A N T **********************************/
 
 
@@ -1443,7 +1446,7 @@ static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 	const char *ext = (fmt == 1) ? ".sgh" : ".sub";
 	snprintf(sub_path, sizeof(sub_path), "/SUBGHZ/%s%s", new_name, ext);
 
-	/* Populate the Flipper .sub signal structure */
+	/* Populate the signal structure used for saving either .sub or M1-native .sgh output */
 	memset(&sub_sig, 0, sizeof(sub_sig));
 	sub_sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
 	sub_sig.frequency = entry->frequency;

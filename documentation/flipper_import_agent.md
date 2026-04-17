@@ -973,7 +973,7 @@ M1 has two Sub-GHz signal file formats:
 | Extension | Format | Description |
 |-----------|--------|-------------|
 | `.sub` | Flipper-compatible | Key-value text file; `Filetype: Flipper SubGhz Key File` or `RAW`. Preferred for cross-device interoperability. |
-| `.sgh` | M1 native | M1's internal data file; uses `Modulation:`, `Data:`, `Payload:`, `BT:`, `Bits:` headers with unsigned timing values. |
+| `.sgh` | M1 native | M1's internal data file with two variants: RAW/NOISE uses `Modulation:` + `Data:` with unsigned timing values; PACKET/key uses `Modulation:` + `Bits:` + `Payload:` + `BT:` and does not include timing `Data:` lines. |
 
 **`sub_ghz_replay_flipper_file()` handles both transparently** — it detects the
 format by keyword matching (`Preset:` vs `Modulation:`, `RAW_Data:` vs `Data:`,
@@ -1003,9 +1003,12 @@ file browsers, loaders, info screens, playlist parsers, savers, etc.
    ```
 
 4. **Info screens must handle both formats.** When displaying file metadata
-   (protocol, frequency, key/payload), use keyword-based parsing that works on
-   both formats.  `flipper_subghz_load()` handles `.sub`; for `.sgh` files,
-   parse `Modulation:`, `Frequency:`, `Payload:`, and `BT:` headers directly.
+   (protocol, frequency, key/payload), use shared loading/parsing that works on
+   both formats.  `flipper_subghz_load()` already supports both Flipper `.sub`
+   and M1-native `.sgh` files (including NOISE and PACKET variants) and parses
+   the relevant `Modulation:` / `Data:` and `Bits:` / `Payload:` / `BT:` fields
+   as applicable.  Reuse it where possible; do not add a separate `.sgh`-only
+   parser for info screens.
 
 5. **Save format is user-configurable.** The active save format is stored in
    `subghz_cfg.save_fmt` (0 = Flipper `.sub`, 1 = M1 native `.sgh`) and toggled
