@@ -249,9 +249,8 @@ static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out)
  * @brief  Parse an M1 native .sgh PACKET file body.
  *
  * M1 packet files use "Modulation:" (not Flipper's "Preset:"), "Bits:" (not
- * "Bit:"), and a "Payload:" field.  Only Frequency, Modulation, Protocol, and
- * Bits are extracted; Payload is intentionally skipped because it uses a
- * different binary encoding than Flipper's hex Key field.
+ * "Bit:"), and a "Payload:" field (0x-prefixed hex key) and "BT:" (bit time).
+ * All fields are extracted so callers can use key and te from the result.
  */
 static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 {
@@ -285,9 +284,16 @@ static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out
 			/* M1 uses "Bits:" where Flipper uses "Bit:" */
 			out->bit_count = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
 		}
-		/* Note: M1 "Payload:", "BT:", "IT:" are not mapped to out->key here;
-		 * the emulate action uses sub_ghz_replay_flipper_file() which reads
-		 * the file directly in its native format. */
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Payload") == 0)
+		{
+			/* 0x-prefixed big-endian hex key, e.g. "0x0000000052A12E00" */
+			out->key = (uint64_t)strtoull(ff_get_value(ctx), NULL, 16);
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "BT") == 0)
+		{
+			/* M1 uses "BT:" (bit time) where Flipper uses "TE:" */
+			out->te = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
+		}
 	}
 
 	return (out->frequency > 0);
@@ -505,12 +511,14 @@ bool flipper_subghz_save(const char *path, const flipper_subghz_signal_t *sig)
 /**
  * @brief  Save an M1 native .sgh PACKET file for a parsed (key) signal.
  *
- * Writes a file that can be loaded by flipper_subghz_load() and replayed
- * via sub_ghz_replay_flipper_file().  The format uses M1-specific field
- * names (Bits/Payload/BT) so that legacy M1 tools can also read it.
+ * Writes a file that can be fully loaded by flipper_subghz_load() (which now
+ * maps Payload→key and BT→te) and replayed via sub_ghz_replay_flipper_file().
+ * The format uses M1-specific field names (Bits/Payload/BT) so that legacy
+ * M1 tools can also read it.
  *
  * @param  path  file path on FatFs filesystem
- * @param  sig   signal structure to save (must be FLIPPER_SUBGHZ_TYPE_PARSED)
+ * @param  sig   signal structure to save (must be FLIPPER_SUBGHZ_TYPE_PARSED
+ *               with bit_count > 0)
  * @return true on success
  */
 bool flipper_subghz_save_m1native(const char *path, const flipper_subghz_signal_t *sig)
@@ -520,6 +528,10 @@ bool flipper_subghz_save_m1native(const char *path, const flipper_subghz_signal_
 	char buf[32];
 
 	if (path == NULL || sig == NULL)
+		return false;
+
+	/* PACKET saves are only valid for parsed/key signals with payload bits. */
+	if (sig->type != FLIPPER_SUBGHZ_TYPE_PARSED || sig->bit_count == 0)
 		return false;
 
 	if (!ff_open_write(&ff, path))
