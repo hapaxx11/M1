@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.123] - 2026-04-17
+
+### Fixed
+
+- **Sub-GHz: Save from read-history now respects save format setting** — `subghz_save_history_entry()` previously hardcoded `.sub` regardless of the user's configured save format. It now honours the Sub-GHz config setting and writes `.sgh` (M1 native) or `.sub` (Flipper) accordingly.
 ## [0.9.0.122] - 2026-04-17
 
 ### Fixed
