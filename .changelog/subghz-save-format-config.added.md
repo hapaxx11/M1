@@ -1,0 +1,1 @@
+**Sub-GHz: Configurable save format** — Config screen now includes a "Save Format" option (Flipper `.sub` / M1 native `.sgh`). Decoded signals are saved in the chosen format; M1 native `.sgh` PACKET files are also fully supported for emulation via the Saved file browser.
