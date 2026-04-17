@@ -36,7 +36,7 @@ typedef struct {
 	uint16_t raw_count;
 } flipper_subghz_signal_t;
 
-/* Load a .sub file */
+/* Load a .sub file (Flipper format) or M1 native .sgh file */
 bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out);
 
 /* Save a .sub file */
@@ -47,5 +47,11 @@ uint8_t flipper_subghz_preset_to_modulation(const char *preset);
 
 /* Convert frequency in Hz to closest M1 SI4463 band */
 uint8_t flipper_subghz_freq_to_band(uint32_t freq_hz);
+
+/* Pure-logic helper: returns true if filetype/version header strings indicate
+ * an M1 native .sgh file (as opposed to a Flipper .sub file).
+ * Exposed for unit testing without file I/O dependencies. */
+bool flipper_subghz_is_m1_native_header(const char *filetype_val,
+                                         const char *version_val);
 
 #endif /* FLIPPER_SUBGHZ_H_ */

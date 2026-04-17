@@ -214,6 +214,100 @@ void test_freq_to_band_330mhz(void)
 }
 
 /* ===================================================================
+ * flipper_subghz_is_m1_native_header — M1 native .sgh file detection
+ *
+ * Bug context (GitHub issue "Emulate sgh failure"):
+ *   Files saved by C3.12 (fw 0.8.x) and SiN360 (fw 0.9.x) in M1 native
+ *   .sgh format could not be selected in the Saved scene — the scene popped
+ *   back to the menu instead of showing the action menu (Emulate/Info/
+ *   Rename/Delete).
+ *
+ *   Root cause: flipper_subghz_load() only accepted Flipper .sub format
+ *   versions "1" and "2".  M1 native .sgh files use the firmware version
+ *   as the Version: field (e.g. "0.8", "0.9"), so the version check failed
+ *   and flipper_subghz_load() returned false.  open_saved_browser() treated
+ *   false as "load failed" and popped the scene.
+ *
+ *   Fix: save the Filetype: value before reading the Version: line, then
+ *   detect "M1 SubGHz" in the filetype to route to the new M1-native
+ *   parsers (m1sgh_parse_raw / m1sgh_parse_packet).
+ *
+ * These tests exercise flipper_subghz_is_m1_native_header(), the pure-logic
+ * helper that was extracted from the fixed code path for testability.
+ * All test_m1_* assertions below would have failed (returned false/true
+ * respectively) before the fix.
+ * =================================================================== */
+
+void test_m1_native_noise_v09(void)
+{
+	/* Hapax / SiN360 fw 0.9.x RAW recording — must be detected as M1 native */
+	TEST_ASSERT_TRUE(
+		flipper_subghz_is_m1_native_header("M1 SubGHz NOISE", "0.9"));
+}
+
+void test_m1_native_noise_v08(void)
+{
+	/* C3.12 fw 0.8.x RAW recording — must be detected as M1 native */
+	TEST_ASSERT_TRUE(
+		flipper_subghz_is_m1_native_header("M1 SubGHz NOISE", "0.8"));
+}
+
+void test_m1_native_packet_v08(void)
+{
+	/* M1 native PACKET file (legacy) — must be detected as M1 native */
+	TEST_ASSERT_TRUE(
+		flipper_subghz_is_m1_native_header("M1 SubGHz PACKET", "0.8"));
+}
+
+void test_m1_native_packet_v09(void)
+{
+	TEST_ASSERT_TRUE(
+		flipper_subghz_is_m1_native_header("M1 SubGHz PACKET", "0.9"));
+}
+
+void test_flipper_raw_not_m1(void)
+{
+	/* Flipper RAW .sub file (version 1) — must NOT be detected as M1 native */
+	TEST_ASSERT_FALSE(
+		flipper_subghz_is_m1_native_header("Flipper SubGhz RAW File", "1"));
+}
+
+void test_flipper_key_not_m1(void)
+{
+	/* Flipper Key .sub file (version 2) — must NOT be detected as M1 native */
+	TEST_ASSERT_FALSE(
+		flipper_subghz_is_m1_native_header("Flipper SubGhz Key File", "2"));
+}
+
+void test_flipper_raw_v2_not_m1(void)
+{
+	/* Flipper RAW .sub file (version 2) */
+	TEST_ASSERT_FALSE(
+		flipper_subghz_is_m1_native_header("Flipper SubGhz RAW File", "2"));
+}
+
+void test_m1_native_null_filetype(void)
+{
+	TEST_ASSERT_FALSE(flipper_subghz_is_m1_native_header(NULL, "0.9"));
+}
+
+void test_m1_native_null_version(void)
+{
+	TEST_ASSERT_FALSE(flipper_subghz_is_m1_native_header("M1 SubGHz NOISE", NULL));
+}
+
+void test_m1_native_both_null(void)
+{
+	TEST_ASSERT_FALSE(flipper_subghz_is_m1_native_header(NULL, NULL));
+}
+
+void test_m1_native_unknown_filetype(void)
+{
+	/* Unknown format — must return false */
+	TEST_ASSERT_FALSE(flipper_subghz_is_m1_native_header("SomeOtherFormat", "0.9"));
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -249,6 +343,19 @@ int main(void)
 	RUN_TEST(test_freq_to_band_boundary_305);
 	RUN_TEST(test_freq_to_band_boundary_306);
 	RUN_TEST(test_freq_to_band_330mhz);
+
+	/* M1 native .sgh format header detection — "Emulate sgh failure" regression */
+	RUN_TEST(test_m1_native_noise_v09);
+	RUN_TEST(test_m1_native_noise_v08);
+	RUN_TEST(test_m1_native_packet_v08);
+	RUN_TEST(test_m1_native_packet_v09);
+	RUN_TEST(test_flipper_raw_not_m1);
+	RUN_TEST(test_flipper_key_not_m1);
+	RUN_TEST(test_flipper_raw_v2_not_m1);
+	RUN_TEST(test_m1_native_null_filetype);
+	RUN_TEST(test_m1_native_null_version);
+	RUN_TEST(test_m1_native_both_null);
+	RUN_TEST(test_m1_native_unknown_filetype);
 
 	return UNITY_END();
 }
