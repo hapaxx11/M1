@@ -74,6 +74,7 @@ static void flipper_show_status(const char *line1, const char *line2);
 static void flipper_show_result(const char *msg, bool success);
 static bool flipper_wait_for_back(void);
 static bool flipper_ensure_dir(const char *path);
+static bool flipper_show_hapax_notice(const char *file_type);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -166,13 +167,59 @@ static bool flipper_ensure_dir(const char *path)
 
 
 /*============================================================================*/
-/*                                                                            */
-/*  SUB-GHZ: REPLAY FLIPPER .SUB FILES                                       */
-/*                                                                            */
+/**
+ * @brief  Show a Hapax-specific notice that the file import feature is not
+ *         normally needed on Hapax firmware, because Hapax reads Flipper files
+ *         natively.  Returns true if the user presses OK to continue, false if
+ *         they press BACK to cancel.
+ *
+ * @param  file_type  Short file-type label for the notice, e.g. ".rfid"
+ */
 /*============================================================================*/
+static bool flipper_show_hapax_notice(const char *file_type)
+{
+    S_M1_Buttons_Status bs;
+    S_M1_Main_Q_t q;
+    char line2[48];
+
+    snprintf(line2, sizeof(line2), "Load %s via Saved", file_type);
+
+    m1_u8g2_firstpage();
+    do {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2,  9, "Hapax reads Flipper");
+        u8g2_DrawStr(&m1_u8g2, 2, 18, "files natively --");
+        u8g2_DrawStr(&m1_u8g2, 2, 27, line2);
+        u8g2_DrawStr(&m1_u8g2, 2, 36, "directly. Import is");
+        u8g2_DrawStr(&m1_u8g2, 2, 45, "not needed here.");
+        u8g2_DrawStr(&m1_u8g2, 2, 56, "OK:Continue  BACK:Exit");
+    } while (m1_u8g2_nextpage());
+
+    while (1)
+    {
+        if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+            continue;
+        if (q.q_evt_type != Q_EVENT_KEYPAD)
+            continue;
+        if (xQueueReceive(button_events_q_hdl, &bs, 0) != pdTRUE)
+            continue;
+        if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+            return true;
+        if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            xQueueReset(main_q_hdl);
+            return false;
+        }
+    }
+}
+
+
 
 void sub_ghz_replay_flipper(void)
 {
+    if (!flipper_show_hapax_notice(".sub"))
+        return;
+
     DIR dir;
     FILINFO fno;
     FRESULT fr;
@@ -240,6 +287,9 @@ void sub_ghz_replay_flipper(void)
 
 void nfc_import_flipper(void)
 {
+    if (!flipper_show_hapax_notice(".nfc"))
+        return;
+
     flipper_nfc_card_t card;
 
     flipper_show_status("Import NFC", "Loading...");
@@ -398,6 +448,9 @@ void nfc_import_flipper(void)
 
 void rfid_import_flipper(void)
 {
+    if (!flipper_show_hapax_notice(".rfid"))
+        return;
+
     flipper_rfid_tag_t tag;
 
     flipper_show_status("Import RFID", "Loading...");

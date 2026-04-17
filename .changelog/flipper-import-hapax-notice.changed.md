@@ -1,0 +1,1 @@
+**Flipper import: Hapax notice screen** — The "Import .rfid / .nfc / Sub-GHz" functions now show an informational notice before proceeding, explaining that Hapax firmware reads Flipper files natively (via each module's Saved browser) and that the import step is not needed. Users can press OK to continue anyway or BACK to exit.
