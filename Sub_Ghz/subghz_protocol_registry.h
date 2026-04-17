@@ -44,16 +44,35 @@ typedef enum {
 
 /** Protocol capability / frequency flags (Flipper: SubGhzProtocolFlag) */
 typedef enum {
-    SubGhzProtocolFlag_315       = (1u << 0),
-    SubGhzProtocolFlag_433       = (1u << 1),
-    SubGhzProtocolFlag_868       = (1u << 2),
-    SubGhzProtocolFlag_AM        = (1u << 3),
-    SubGhzProtocolFlag_FM        = (1u << 4),
-    SubGhzProtocolFlag_Decodable = (1u << 5),
-    SubGhzProtocolFlag_Load      = (1u << 6),
-    SubGhzProtocolFlag_Save      = (1u << 7),
-    SubGhzProtocolFlag_Send      = (1u << 8),
-    SubGhzProtocolFlag_300       = (1u << 9),   /**< Operates at 300 MHz band */
+    SubGhzProtocolFlag_315          = (1u << 0),
+    SubGhzProtocolFlag_433          = (1u << 1),
+    SubGhzProtocolFlag_868          = (1u << 2),
+    SubGhzProtocolFlag_AM           = (1u << 3),
+    SubGhzProtocolFlag_FM           = (1u << 4),
+    SubGhzProtocolFlag_Decodable    = (1u << 5),
+    SubGhzProtocolFlag_Load         = (1u << 6),
+    SubGhzProtocolFlag_Save         = (1u << 7),
+    SubGhzProtocolFlag_Send         = (1u << 8),
+    SubGhzProtocolFlag_300          = (1u << 9),  /**< Operates at 300 MHz band */
+    /**
+     * PwmKeyReplay — set on Dynamic (rolling-code) protocols whose saved Key:
+     * value can be faithfully re-encoded as standard OOK PWM using only the
+     * registry timing (te_short / te_long).
+     *
+     * A protocol MUST have this flag set before the key encoder will attempt
+     * to produce a RAW pulse stream from it.  Protocols that lack this flag
+     * (Manchester-encoded, KeeLoq-cipher, AES-encrypted, FSK, ternary, etc.)
+     * are rejected with SUBGHZ_KEY_ERR_DYNAMIC.
+     *
+     * Research summary (2026-04-17) — see CLAUDE.md for full rationale:
+     *   CAN replay  (flag set)   : CAME Atomo, CAME TWEE, Nice FloR-S,
+     *                              Alutech AT-4N, KingGates Stylo4k, Scher-Khan
+     *                              (Magicar + Logicar), Toyota, DITEC_GOL4
+     *   CANNOT replay (Manchester): FAAC SLH, Somfy Telis, Somfy Keytis, Revers_RB2
+     *   CANNOT replay (cipher)   : KeeLoq, Star Line, Jarolift, Security+ 1.0/2.0
+     *   CANNOT replay (AES-128)  : Hormann BiSecur, Beninca ARC
+     */
+    SubGhzProtocolFlag_PwmKeyReplay = (1u << 10),
 } SubGhzProtocolFlag;
 
 /** Category filter (matches Flipper SubGhzProtocolFilter values) */

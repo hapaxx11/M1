@@ -690,6 +690,93 @@ void test_rolling_hormann_bisecur_still_rejected(void)
     TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
 }
 
+/* Manchester-encoded Dynamic protocols: no PwmKeyReplay flag → must be rejected */
+void test_rolling_faac_slh_rejected(void)
+{
+    /* FAAC SLH uses Manchester encoding — OOK PWM re-encode would produce garbage */
+    SubGhzKeyParams params = make_params("FAAC SLH", 0, 64, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_somfy_telis_rejected(void)
+{
+    /* Somfy Telis uses Manchester encoding + proprietary XOR — not OOK PWM replayable */
+    SubGhzKeyParams params = make_params("Somfy Telis", 0, 56, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_somfy_keytis_rejected(void)
+{
+    /* Somfy Keytis uses Manchester encoding — not OOK PWM replayable */
+    SubGhzKeyParams params = make_params("Somfy Keytis", 0, 80, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_revers_rb2_rejected(void)
+{
+    /* Revers_RB2 uses Manchester encoding — not OOK PWM replayable */
+    SubGhzKeyParams params = make_params("Revers_RB2", 0, 64, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_star_line_rejected(void)
+{
+    /* Star Line uses KeeLoq cipher — requires manufacturer key */
+    SubGhzKeyParams params = make_params("Star Line", 0, 64, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+/* Newly flagged OOK-PWM protocols: must be allowed */
+void test_rolling_scher_khan_magicar_allowed(void)
+{
+    SubGhzKeyParams params = make_params("Scher-Khan", 0xDEADBEEFCAFEULL, 64, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* Scher-Khan Magicar: te_short=400, te_long=800 */
+    TEST_ASSERT_EQUAL_UINT32(400, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(800, timing.te_long);
+}
+
+void test_rolling_toyota_allowed(void)
+{
+    SubGhzKeyParams params = make_params("Toyota", 0x123456789ABCULL, 56, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* Toyota: te_short=250, te_long=750 (1:3 ratio) */
+    TEST_ASSERT_EQUAL_UINT32(250, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(750, timing.te_long);
+}
+
+void test_rolling_ditec_gol4_allowed(void)
+{
+    SubGhzKeyParams params = make_params("DITEC_GOL4", 0xABCDEFULL, 54, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* DITEC_GOL4: te_short=400, te_long=1100 */
+    TEST_ASSERT_EQUAL_UINT32(400, timing.te_short);
+}
+
 void test_rolling_came_twee_encode_roundtrip(void)
 {
     /* Verify that CAME TWEE rolling code encodes the correct number of pairs */
@@ -781,6 +868,9 @@ int main(void)
     RUN_TEST(test_rolling_nice_flor_s_allowed);
     RUN_TEST(test_rolling_alutech_allowed);
     RUN_TEST(test_rolling_kinggates_allowed);
+    RUN_TEST(test_rolling_scher_khan_magicar_allowed);
+    RUN_TEST(test_rolling_toyota_allowed);
+    RUN_TEST(test_rolling_ditec_gol4_allowed);
 
     /* Phase 2: Non-OOK-PWM / encrypted rolling protocols remain rejected */
     RUN_TEST(test_rolling_keeloq_still_rejected);
@@ -789,6 +879,12 @@ int main(void)
     RUN_TEST(test_rolling_jarolift_still_rejected);
     RUN_TEST(test_rolling_beninca_arc_still_rejected);
     RUN_TEST(test_rolling_hormann_bisecur_still_rejected);
+    /* Manchester-encoded protocols — previously missing, now correctly rejected */
+    RUN_TEST(test_rolling_faac_slh_rejected);
+    RUN_TEST(test_rolling_somfy_telis_rejected);
+    RUN_TEST(test_rolling_somfy_keytis_rejected);
+    RUN_TEST(test_rolling_revers_rb2_rejected);
+    RUN_TEST(test_rolling_star_line_rejected);
 
     /* Phase 2: Rolling code encode roundtrip */
     RUN_TEST(test_rolling_came_twee_encode_roundtrip);

@@ -37,28 +37,34 @@ uint8_t subghz_key_resolve_timing(const SubGhzKeyParams *params, SubGhzKeyTiming
             return SUBGHZ_KEY_ERR_DYNAMIC;
         }
 
-        /* Rolling-code protocols: allow OOK-PWM-encodable ones to pass through.
-         * Protocols excluded from replay (not OOK-PWM re-encodable):
-         *   - KeeLoq: requires manufacturer key decryption for a valid next-counter
-         *   - Security+ 1.0: ternary (3-symbol) 2-sub-packet encoding — not OOK PWM
-         *   - Security+ 2.0: FSK-modulated rolling code — not OOK PWM
-         *   - Hormann BiSecur: Manchester-encoded, requires AES key
-         *   - Beninca ARC: AES-128 encrypted, requires manufacturer key
-         *   - Jarolift: KeeLoq-based, requires manufacturer key decryption
-         * All other Dynamic protocols use standard OOK PWM with timing from the
-         * registry, so they can be replayed as-is from a captured key value. */
+        /* Rolling-code protocols: only allow replay when the registry explicitly
+         * marks the protocol as OOK-PWM-replayable via SubGhzProtocolFlag_PwmKeyReplay.
+         *
+         * Protocols WITHOUT this flag fall through to SUBGHZ_KEY_ERR_DYNAMIC because
+         * they are one of:
+         *   - Manchester-encoded (FAAC SLH, Somfy Telis/Keytis, Revers_RB2):
+         *       the decoded Key: value cannot be re-encoded using PWM timings
+         *   - KeeLoq-cipher-based (KeeLoq, Star Line, Jarolift):
+         *       requires manufacturer key decryption; raw counter replay is invalid
+         *   - AES-128-encrypted (Hormann BiSecur, Beninca ARC):
+         *       not feasible to replay without the AES key
+         *   - Ternary / 2-sub-packet (Security+ 1.0):
+         *       has a dedicated brute-force counter mode; plain PWM re-encode is wrong
+         *   - FSK / bidirectional challenge-response (Security+ 2.0):
+         *       not OOK; receiver sends a challenge that must be answered
+         *   - Special preamble/start encoding (KIA Seed):
+         *       preamble + start-bit format is not standard OOK PWM
+         *
+         * Protocols WITH SubGhzProtocolFlag_PwmKeyReplay (CAME Atomo, Nice FloR-S,
+         * Alutech AT-4N, CAME TWEE, KingGates Stylo4k, Scher-Khan Magicar/Logicar,
+         * Toyota, DITEC_GOL4) use plain OOK PWM with a fixed te_short/te_long ratio
+         * and carry no per-code encryption, so a captured Key: value can be
+         * faithfully retransmitted. */
         if (proto->type == SubGhzProtocolTypeDynamic)
         {
-            if (subghz_ascii_strcasecmp(proto->name, "KeeLoq") == 0 ||
-                subghz_ascii_strcasecmp(proto->name, "Security+ 1.0") == 0 ||
-                subghz_ascii_strcasecmp(proto->name, "Security+ 2.0") == 0 ||
-                subghz_ascii_strcasecmp(proto->name, "Hormann BiSecur") == 0 ||
-                subghz_ascii_strcasecmp(proto->name, "Beninca ARC") == 0 ||
-                subghz_ascii_strcasecmp(proto->name, "Jarolift") == 0)
-            {
+            if (!(proto->flags & SubGhzProtocolFlag_PwmKeyReplay))
                 return SUBGHZ_KEY_ERR_DYNAMIC;
-            }
-            /* All other Dynamic protocols: fall through to registry-based timing */
+            /* PwmKeyReplay set: fall through to registry-based timing */
         }
     }
 

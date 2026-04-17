@@ -1079,6 +1079,87 @@ incrementally.  Do **not** delete them.
 
 ---
 
+## Rolling Code Protocol Replay Philosophy
+
+> **The standing preference for this project is: if a rolling code protocol can be
+> decrypted or replayed using publicly documented algorithms or known parameters,
+> it MUST be implemented.**  Every agent session that adds, modifies, or reviews
+> a rolling code protocol MUST research its replay feasibility before concluding
+> that replay is impossible.  "Search high and low for sources."
+
+### Replay Feasibility Registry (researched 2026-04-17)
+
+The `SubGhzProtocolFlag_PwmKeyReplay` bit in `subghz_protocol_registry.h` is the
+authoritative, flag-based gate for which Dynamic (rolling-code) protocols the standard
+OOK PWM key encoder can replay.  **Never gate on protocol name strings — use the flag.**
+
+| Protocol | Replay? | Reason | Flag set? |
+|----------|---------|--------|-----------|
+| **CAME Atomo** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **CAME TWEE** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **Nice FloR-S** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **Alutech AT-4N** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **KingGates Stylo4k** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **Scher-Khan Magicar** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **Scher-Khan Logicar** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **Toyota** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **DITEC_GOL4** | ✅ Yes | OOK PWM, no crypto | ✅ |
+| **Security+ 1.0** | ✅ Special | Ternary; brute-force counter mode in `m1_sub_ghz.c` | ❌ (custom path) |
+| **KeeLoq** | ⚠️ Possible | OOK PWM; KeeLoq cipher with public algorithm (see note¹) | ❌ |
+| **Jarolift** | ⚠️ Possible | KeeLoq-based OOK PWM; brand-specific MK partially researched (see note¹) | ❌ |
+| **Star Line** | ⚠️ Possible | KeeLoq-based OOK PWM; MK partially reverse-engineered (see note¹) | ❌ |
+| **FAAC SLH** | ❌ No | Manchester-encoded; algorithm not fully public (2026-04-17) | ❌ |
+| **Somfy Telis** | ❌ No | Manchester + proprietary XOR; no feasible OTA replay method | ❌ |
+| **Somfy Keytis** | ❌ No | Same RTS protocol as Telis | ❌ |
+| **Revers_RB2** | ❌ No | Manchester-encoded; no public decryption method | ❌ |
+| **KIA Seed** | ❌ No | Special preamble/start-bit encoding; not standard OOK PWM | ❌ |
+| **Security+ 2.0** | ❌ No | FSK + bidirectional challenge-response; replay not feasible | ❌ |
+| **Hormann BiSecur** | ❌ No | Manchester + AES-128; no known feasible attack | ❌ |
+| **Beninca ARC** | ❌ No | AES-128 rolling code; no known feasible attack | ❌ |
+
+> **¹ KeeLoq note:** The KeeLoq cipher is fully documented (Microchip AN66903 / 3NLF-NLFSR).
+> The attack path is: `device_key = keeloq_learn(serial, manufacturer_key)` then
+> `counter = keeloq_decrypt(encrypted_hop, device_key)` → increment → re-encrypt → transmit.
+> Some manufacturer keys have been extracted via power-analysis attacks and discussed in the
+> security research community (DarkFlippers/unleashed-firmware, academic papers).
+> **This is the highest-priority next feature.**  Research brand-specific manufacturer keys
+> for KeeLoq, Jarolift, and Star Line and implement a MK-lookup + counter mode.
+
+### Implementation Rules
+
+1. **When adding a new Dynamic protocol**, research its replay feasibility immediately.
+   Set `SubGhzProtocolFlag_PwmKeyReplay` only if the protocol uses plain OOK PWM with
+   no cipher (just a counter increment).  If it uses a known reversible cipher with a
+   public or partially-published key, add it to the ⚠️ Possible list and open a task.
+
+2. **KeeLoq counter mode is the next high-value target.**  Implement:
+   - A manufacturer-key lookup table (brand → 64-bit MK)
+   - KeeLoq decrypt: `counter = keeloq_decrypt(encrypted_hop, device_key)` where
+     `device_key = keeloq_learn(serial, manufacturer_key)`
+   - Counter-increment + re-encrypt → retransmit as OOK PWM
+
+3. **Security+ 1.0 brute-force counter mode** is already implemented in `m1_sub_ghz.c`.
+   The dedicated ternary encoder lives in `Sub_Ghz/subghz_secplus_v1_encoder.c`.
+
+4. **Never gate replay on name strings** — always use `SubGhzProtocolFlag_PwmKeyReplay`
+   or a dedicated custom encoder path.  The fragile `strcasecmp(proto->name, ...)` guard
+   has been replaced by the flag; do not reintroduce it.
+
+5. **Manchester-encoded protocols** (FAAC SLH, Somfy Telis/Keytis, Revers_RB2) must
+   NOT have `SubGhzProtocolFlag_PwmKeyReplay`.  A Manchester encoder would be needed
+   before replay could be attempted, and the receiver algorithm must also be known.
+
+6. **Research sources to check** when evaluating a new rolling code protocol:
+   - Flipper Zero firmware and Unleashed/DarkFlippers forks (Sub-GHz protocol handlers)
+   - argilo/secplus (Security+ 1.0/2.0)
+   - Academic papers: IEEE, USENIX, Black Hat EU proceedings on RFID/RF security
+   - Hackaday, RTL-SDR Blog, forum.flipper.net
+   - GitHub topics: `keeloq`, `rolling-code`, `subghz`, `rfhacking`
+   - Signal identification wiki: sigidwiki.com
+   - OpenSesame, RFCrack, GNU Radio out-of-tree modules
+
+---
+
 ## Sub-GHz Menu Structure
 
 The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 11 items** in this
