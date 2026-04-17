@@ -7,11 +7,11 @@
  * that lookup without linking the entire production registry (which would
  * require stubs for all ~100 other decoder functions).
  *
- * Also provides subghz_block_generic_commit_to_m1() — the FireCracker
- * decoder calls this on successful decode to commit results into
- * subghz_decenc_ctl.  The real implementation (subghz_block_generic.c)
- * has no extra dependencies so we include it directly via the CMake target;
- * this stub is NOT needed for that function — see CMakeLists.txt.
+ * The FireCracker decoder also calls subghz_block_generic_commit_to_m1()
+ * on successful decode to commit results into subghz_decenc_ctl, but that
+ * function is provided by the real implementation in
+ * subghz_block_generic.c, linked directly via the CMake target. This file
+ * only provides the registry and lookup stubs needed by the test.
  */
 
 #include "subghz_protocol_registry.h"

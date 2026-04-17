@@ -107,7 +107,8 @@ uint8_t subghz_decode_firecracker_cm17a(uint16_t p, uint16_t pulsecount)
     uint16_t i = 0;
 
     /* Skip preamble: look for ~9 ms HIGH followed by ~4.5 ms LOW.
-     * Accept within 4× te_delta of the nominal 9000 / 4500 µs values. */
+     * Accept within 7× te_delta for the HIGH and 5× te_delta for the LOW
+     * of the nominal 9000 / 4500 µs values (matching X10 decoder tolerances). */
     for (; i + 1 < pulsecount; i += 2)
     {
         uint16_t t_hi = subghz_decenc_ctl.pulse_times[i];

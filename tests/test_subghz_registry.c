@@ -466,9 +466,13 @@ void test_find_firecracker(void)
 	TEST_ASSERT_NOT_NULL(proto);
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
 	TEST_ASSERT_EQUAL_UINT16(40, proto->timing.min_count_bit_for_found);
-	/* Must be replayable (Static + AM) */
-	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_AM,   proto->flags);
-	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_Send, proto->flags);
+	/* CM17A/X10 uses constant-short-HIGH PWM; generic encoder is incompatible,
+	 * so Send flag is intentionally absent until a protocol-specific TX encoder
+	 * is implemented. Verify decode/save-only flags are present. */
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_AM,        proto->flags);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_Decodable, proto->flags);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_Save,      proto->flags);
+	TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_Send,       proto->flags);
 	/* Frequency: 315 and/or 433 MHz */
 	uint32_t freq_flags = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433;
 	TEST_ASSERT_TRUE_MESSAGE((proto->flags & freq_flags) != 0,
@@ -497,6 +501,10 @@ void test_static_protocols_have_send_flag(void)
 		if (proto->type != SubGhzProtocolTypeStatic) continue;
 		/* FM-only protocols (e.g. POCSAG, PCSG) are receive-only — skip */
 		if (!(proto->flags & SubGhzProtocolFlag_AM)) continue;
+		/* CM17A/X10 constant-short-HIGH PWM is incompatible with the generic
+		 * OOK PWM encoder; FireCracker is decode/save-only until a dedicated
+		 * TX encoder is added. */
+		if (proto->name && strcmp(proto->name, "FireCracker") == 0) continue;
 
 		char msg[128];
 		snprintf(msg, sizeof(msg),

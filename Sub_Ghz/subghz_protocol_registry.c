@@ -1058,12 +1058,20 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
          * Physical layer matches standard X10 RF (same OOK PWM timing).
          * Frequency: 310 MHz (North America) / 433.92 MHz (Europe)
          * Ref: https://github.com/evilpete/flipper_toolbox/raw/refs/heads/main/subghz/firecracker_spec.txt
+         *
+         * Note: SubGhzProtocolFlag_Send is intentionally omitted. The generic
+         * static TX path (subghz_encode_ook_pwm) uses standard OOK PWM where
+         * bit-0 = short-HIGH + long-LOW and bit-1 = long-HIGH + short-LOW.
+         * CM17A/X10 requires a constant short HIGH with only the LOW duration
+         * varying (bit-0 = short-LOW, bit-1 = long-LOW). A generic send would
+         * produce an incorrect waveform until a protocol-specific TX encoder
+         * is implemented. FireCracker is decode/save-only for now.
          */
         .name   = "FireCracker",
         .type   = SubGhzProtocolTypeStatic,
         .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
                   SubGhzProtocolFlag_AM  | SubGhzProtocolFlag_Decodable |
-                  SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send,
+                  SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=562, .te_long=1688, .te_delta=100,
                     .min_count_bit_for_found=40 },
