@@ -81,37 +81,22 @@ void test_barcode_valid_known_decode(void)
 
 void test_barcode_valid_max_digits(void)
 {
-    /* lo = 99999, hi = 99999
-     * id = 99999 + (99999 << 16) = 99999 + 6553534464 = 0x1869F1869F
-     * Truncated to 32 bits: 0x869F1869F & 0xFFFFFFFF = ... wait
-     * Actually: 99999 = 0x1869F
-     * hi << 16 = 99999 << 16 = 0x1869F0000
-     * lo = 0x0001869F
-     * id = 0x1869F0000 + 0x1869F = 0x1869F1869F
-     * Truncated to 32 bits (since id is uint32_t): 0x69F1869F
-     * plid[0] = (0x69F1869F >> 8) & 0xFF = 0x1869F >> ... let me recalc
-     *
-     * id (uint32_t) = (99999) + (99999U << 16)
-     * 99999 << 16 overflows uint32_t (99999 * 65536 = 6,553,534,464 > UINT32_MAX)
-     * 6553534464 mod 2^32 = 6553534464 - 4294967296 = 2258567168 = 0x86960000
-     * 2258567168 + 99999 = 2258667167 = 0x8697869F
-     *
-     * plid[0] = (0x8697869F >> 8)  & 0xFF = 0x87 & 0xFF = wait:
-     * 0x8697869F >> 8 = 0x0086978 ... 0x8697869F >> 8 = 0x008697869F >> 8:
-     * 0x8697869F >> 8 = 0x008697 86 → top byte is... let me compute:
-     * 0x8697869F in binary:
-     * 0x86 = 10000110, 0x97 = 10010111, 0x86 = 10000110, 0x9F = 10011111
-     * >> 8: 0x008697 86 → 0x008697 = wait, 32-bit: 0x8697869F >> 8 = 0x008697 86:
-     *   actually = 0x008697 86 → 0x86 (bottom byte of top 3 bytes) = 0x86
-     * plid[0] = 0x86
-     *
-     * This is getting complex. Just verify it returns true and plid is nonzero.
+    /* Use barcode: "04" + "12345" + "67890" + "00000" (17 chars total).
+     * lo = 12345 = 0x3039
+     * hi = 67890 = 0x10932
+     * hi << 16 as uint32_t: 0x10932 << 16 overflows, wraps to 0x09320000
+     * id = 0x09320000 + 0x3039 = 0x09323039
+     * plid[0] = (id >> 8)  & 0xFF = 0x30
+     * plid[1] =  id        & 0xFF = 0x39
+     * plid[2] = (id >> 24) & 0xFF = 0x09
+     * plid[3] = (id >> 16) & 0xFF = 0x32
      */
     uint8_t plid[4] = {0};
-    TEST_ASSERT_TRUE(m1_esl_barcode_to_plid("04999990999900000", plid));
-    /* At least some plid bytes should be non-zero for large inputs. */
-    uint8_t nonzero = plid[0] | plid[1] | plid[2] | plid[3];
-    TEST_ASSERT_NOT_EQUAL(0, nonzero);
+    TEST_ASSERT_TRUE(m1_esl_barcode_to_plid("04123456789000000", plid));
+    TEST_ASSERT_EQUAL_HEX8(0x30U, plid[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x39U, plid[1]);
+    TEST_ASSERT_EQUAL_HEX8(0x09U, plid[2]);
+    TEST_ASSERT_EQUAL_HEX8(0x32U, plid[3]);
 }
 
 /* --------------------------------------------------------------------------- */

@@ -71,7 +71,10 @@ bool m1_esl_barcode_to_plid(const char *barcode, uint8_t plid[4])
     while(barcode[bc_len] != '\0' && bc_len <= 18U) bc_len++;
     if(bc_len != 17U) return false;
 
-    /* Positions 2–11 must be decimal digits. */
+    /* Positions 2–11 must be decimal digits (the two 5-digit groups that
+     * encode the PLID).  Positions 0–1 ("04" manufacturer prefix) and
+     * positions 12–16 (type code + check digit) are not decoded into the
+     * PLID, so they are not digit-validated here. */
     for(int i = 2; i < 12; i++) {
         if(barcode[i] < '0' || barcode[i] > '9') return false;
     }
