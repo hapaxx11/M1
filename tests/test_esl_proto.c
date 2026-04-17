@@ -45,7 +45,7 @@ void test_barcode_too_long_returns_false(void)
 void test_barcode_non_digit_at_position_3_returns_false(void)
 {
     uint8_t plid[4];
-    /* position 2 is 'X', not a digit */
+    /* index 2 (position 3) is 'X', not a digit */
     TEST_ASSERT_FALSE(m1_esl_barcode_to_plid("04X00100020000000", plid));
 }
 
