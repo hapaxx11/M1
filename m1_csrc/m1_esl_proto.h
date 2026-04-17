@@ -4,9 +4,11 @@
  * @file   m1_esl_proto.h
  * @brief  ESL (Electronic Shelf Label) infrared protocol — frame builders.
  *
- * TagTinker (github.com/i12bp8/TagTinker) is for communicating with Pricer
- * ESL tags using IR at 4.33 MHz with Manchester encoding and a proprietary
- * protocol structure.
+ * TagTinker (github.com/i12bp8/TagTinker) communicates with Pricer ESL tags
+ * using IR at 4.33 MHz with Manchester encoding and a proprietary protocol
+ * structure.  That carrier frequency is for the Flipper Zero (64 MHz CPU);
+ * on the M1 Hapax (STM32H573VIT, 250 MHz, TIM1 APB2 at 75 MHz) the same
+ * timer prescaler yields ~1.25 MHz — see m1_esl_ir.h for hardware details.
  *
  * Builds Pricer-compatible IR frames for ESL tags using the reverse-engineered
  * protocol documented by furrtek (github.com/furrtek/PrecIR) and implemented
