@@ -4,6 +4,10 @@
  * @file   m1_esl_proto.h
  * @brief  ESL (Electronic Shelf Label) infrared protocol — frame builders.
  *
+ * TagTinker (github.com/i12bp8/TagTinker) is for communicating with Pricer
+ * ESL tags using IR at 4.33 MHz with Manchester encoding and a proprietary
+ * protocol structure.
+ *
  * Builds Pricer-compatible IR frames for ESL tags using the reverse-engineered
  * protocol documented by furrtek (github.com/furrtek/PrecIR) and implemented
  * in TagTinker (github.com/i12bp8/TagTinker).
