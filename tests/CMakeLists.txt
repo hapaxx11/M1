@@ -218,6 +218,9 @@ add_executable(test_subghz_protocol_decode
     ${M1_ROOT}/Sub_Ghz/protocols/m1_came_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_gate_tx_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_nice_flo_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_princeton_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_holtek_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_ansonic_decode.c
     ${M1_ROOT}/m1_csrc/bit_util.c
     ${STUBS_DIR}/subghz_decode_impl.c
 )

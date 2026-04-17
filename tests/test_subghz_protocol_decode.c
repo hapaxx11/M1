@@ -10,10 +10,13 @@
  * that the decoded value matches the original key.
  *
  * Protocols tested:
- *   - Magellan  (32-bit, inverted polarity + custom frame header)  ← bugfix
- *   - CAME      (12-bit, standard 1:2 OOK PWM)
- *   - GateTX    (24-bit, standard 1:2 OOK PWM)
- *   - Nice FLO  (12-bit, standard 1:2 OOK PWM)
+ *   - Magellan     (32-bit, inverted polarity + custom frame header)  ← bugfix
+ *   - CAME         (12-bit, standard 1:2 OOK PWM)
+ *   - GateTX       (24-bit, standard 1:2 OOK PWM)
+ *   - Nice FLO     (12-bit, standard 1:2 OOK PWM)
+ *   - Princeton    (24-bit, 1:3 OOK PWM, auto te-detect from pulse[2]/[3])
+ *   - Holtek_HT12X (12-bit, 1:3 OOK PWM, reads timing from protocol list)
+ *   - Ansonic      (12-bit, 1:2 OOK PWM, reads timing from protocol list)
  *
  * The Magellan tests specifically cover the bug fixed in this PR:
  *   The original decoder delegated to subghz_decode_generic_pwm() which
@@ -38,6 +41,9 @@ uint8_t subghz_decode_magellan(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_came(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_gate_tx(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_nice_flo(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_princeton(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_holtek(uint16_t p, uint16_t pulsecount);
+uint8_t subghz_decode_ansonic(uint16_t p, uint16_t pulsecount);
 
 /* ======================================================================= */
 /* Test helpers                                                             */
@@ -402,6 +408,260 @@ void test_nice_flo_roundtrip_all_ones(void)
 }
 
 /* ======================================================================= */
+/* Princeton 24-bit roundtrip tests                                         */
+/*                                                                           */
+/* Princeton is special: the decoder auto-detects te_short and te_long by   */
+/* reading pulse_times[2] and pulse_times[3] directly (the HIGH and LOW      */
+/* durations of the second pulse pair).  It does NOT use te_short/te_long   */
+/* from the protocol list — only max_bits (data_bits) and te_tolerance.      */
+/*                                                                           */
+/* The decoder validates a 1:3 ratio (te_long ≈ te_short × 3) before        */
+/* processing bits.  Princeton uses standard OOK PWM polarity:               */
+/*   bit 1 = LONG HIGH  + SHORT LOW                                          */
+/*   bit 0 = SHORT HIGH + LONG  LOW                                          */
+/* ======================================================================= */
+
+void test_princeton_roundtrip_typical_key(void)
+{
+    /* Typical 24-bit Princeton garage-door remote */
+    const uint32_t KEY  = 0xA1B2C3u;
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 370, TE_L = 1110; /* 1:3 ratio */
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_UINT16(BITS, subghz_decenc_ctl.ndecodedbitlength);
+}
+
+void test_princeton_roundtrip_all_ones(void)
+{
+    const uint32_t KEY  = 0xFFFFFFu; /* 24-bit all-ones */
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 370, TE_L = 1110;
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+void test_princeton_roundtrip_all_zeros(void)
+{
+    const uint32_t KEY  = 0x000000u;
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 370, TE_L = 1110;
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+void test_princeton_roundtrip_alternating(void)
+{
+    const uint32_t KEY  = 0xAAAAAAAAAu & 0xFFFFFFu; /* 0xAAAAAA — 24-bit */
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 370, TE_L = 1110;
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+/*
+ * Verify the 1:3 ratio check rejects invalid timing.
+ * Using te_short=500 and te_long=600 (ratio < 1:2) should cause
+ * the decoder to return 1 (failure) before processing any bits.
+ */
+void test_princeton_rejects_non_1_3_ratio(void)
+{
+    const uint32_t KEY  = 0xABCDEFu;
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 500, TE_L = 600; /* ratio ~1:1.2 — invalid for Princeton */
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(1, ret); /* must reject */
+}
+
+/* ======================================================================= */
+/* Holtek_HT12X 12-bit roundtrip tests                                     */
+/*                                                                           */
+/* Holtek uses standard OOK PWM polarity with a 1:3 te ratio:               */
+/*   bit 0 = SHORT HIGH + LONG  LOW  (te_short:te_long = 1:3)               */
+/*   bit 1 = LONG  HIGH + SHORT LOW                                          */
+/* Timing is read from subghz_protocols_list[p], NOT auto-detected.          */
+/* ======================================================================= */
+
+void test_holtek_roundtrip_typical_key(void)
+{
+    /* Holtek HT12E 12-bit remote (8-bit address + 4-bit data) */
+    const uint32_t KEY  = 0xA5Cu; /* 12-bit value (address + data fields) */
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 340, TE_L = 1020; /* 1:3 ratio */
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_holtek(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_UINT16(BITS, subghz_decenc_ctl.ndecodedbitlength);
+}
+
+void test_holtek_roundtrip_all_ones(void)
+{
+    const uint32_t KEY  = 0xFFFu;
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 340, TE_L = 1020;
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_holtek(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+void test_holtek_roundtrip_all_zeros(void)
+{
+    const uint32_t KEY  = 0x000u;
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 340, TE_L = 1020;
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_holtek(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+void test_holtek_roundtrip_real_remote(void)
+{
+    /* Ceiling fan Holtek remote — 8-bit address 0x5A, 4-bit data 0xC */
+    const uint32_t KEY  = (0x5Au << 4) | 0xCu; /* 0x5AC */
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 340, TE_L = 1020;
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_holtek(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+/* ======================================================================= */
+/* Ansonic 12-bit roundtrip tests                                           */
+/*                                                                           */
+/* Ansonic uses standard OOK PWM polarity with a 1:2 te ratio:              */
+/*   bit 0 = SHORT HIGH + LONG  LOW  (te_short:te_long = 1:2)               */
+/*   bit 1 = LONG  HIGH + SHORT LOW                                          */
+/* Timing is read from subghz_protocols_list[p].                            */
+/* ======================================================================= */
+
+void test_ansonic_roundtrip_typical_key(void)
+{
+    /* Ansonic gate opener — 12-bit fixed code */
+    const uint32_t KEY  = 0x6C3u;
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 555, TE_L = 1110; /* 1:2 ratio */
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_ansonic(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_UINT16(BITS, subghz_decenc_ctl.ndecodedbitlength);
+}
+
+void test_ansonic_roundtrip_all_ones(void)
+{
+    const uint32_t KEY  = 0xFFFu;
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 555, TE_L = 1110;
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_ansonic(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+void test_ansonic_roundtrip_all_zeros(void)
+{
+    const uint32_t KEY  = 0x000u;
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 555, TE_L = 1110;
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_ansonic(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+void test_ansonic_roundtrip_alternating(void)
+{
+    const uint32_t KEY  = 0xAAAu; /* 0b101010101010 */
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 555, TE_L = 1110;
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_ansonic(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
+
+/* ======================================================================= */
 /* main                                                                    */
 /* ======================================================================= */
 
@@ -431,6 +691,25 @@ int main(void)
     /* Nice FLO 12-bit — standard polarity verified correct */
     RUN_TEST(test_nice_flo_roundtrip_typical_key);
     RUN_TEST(test_nice_flo_roundtrip_all_ones);
+
+    /* Princeton 24-bit — 1:3 ratio, auto te-detect from pulse[2]/[3] */
+    RUN_TEST(test_princeton_roundtrip_typical_key);
+    RUN_TEST(test_princeton_roundtrip_all_ones);
+    RUN_TEST(test_princeton_roundtrip_all_zeros);
+    RUN_TEST(test_princeton_roundtrip_alternating);
+    RUN_TEST(test_princeton_rejects_non_1_3_ratio);
+
+    /* Holtek_HT12X 12-bit — 1:3 ratio, reads timing from protocol list */
+    RUN_TEST(test_holtek_roundtrip_typical_key);
+    RUN_TEST(test_holtek_roundtrip_all_ones);
+    RUN_TEST(test_holtek_roundtrip_all_zeros);
+    RUN_TEST(test_holtek_roundtrip_real_remote);
+
+    /* Ansonic 12-bit — 1:2 ratio, reads timing from protocol list */
+    RUN_TEST(test_ansonic_roundtrip_typical_key);
+    RUN_TEST(test_ansonic_roundtrip_all_ones);
+    RUN_TEST(test_ansonic_roundtrip_all_zeros);
+    RUN_TEST(test_ansonic_roundtrip_alternating);
 
     return UNITY_END();
 }
