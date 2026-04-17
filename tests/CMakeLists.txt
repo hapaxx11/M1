@@ -237,7 +237,32 @@ endif()
 add_test(NAME subghz_protocol_decode COMMAND test_subghz_protocol_decode)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_raw_line_parser (RAW_Data line parsing)
+# Module under test: firecracker_cm17a (40-bit CM17A home-automation decoder)
+# Tests validate header/footer recognition, house-code/unit/command decode,
+# and rejection of invalid or truncated packets.
+# Uses a minimal registry stub (one FireCracker entry at index 0) to avoid
+# linking all ~100 production decoders.
+# ------------------------------------------------------------------
+add_executable(test_firecracker_cm17a
+    test_firecracker_cm17a.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_firecracker_cm17a_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_block_generic.c
+    ${STUBS_DIR}/subghz_firecracker_test_registry.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_firecracker_cm17a PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_firecracker_cm17a PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_firecracker_cm17a PRIVATE sanitizers)
+endif()
+add_test(NAME firecracker_cm17a COMMAND test_firecracker_cm17a)
+
+
 # Extracted from sub_ghz_replay_flipper_file() — handles signed→absolute
 # conversion, zero skipping, and cross-buffer leftover digit recombination.
 # Pure string parsing, zero hardware dependencies.
@@ -738,3 +763,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_esl_proto PRIVATE sanitizers)
 endif()
 add_test(NAME esl_proto COMMAND test_esl_proto)
+
+# ------------------------------------------------------------------
+# Module under test: cc1101_fec (CC1101 FEC encode / decode utility)
+# Implements the rate-1/2 Viterbi convolutional codec + 4-byte block
+# interleaver used by the TI CC1101 radio when FEC is enabled.
+# Pure logic — only <stdint.h> and <string.h>; zero hardware dependencies.
+# Tests: known encode/decode vector, encode→decode roundtrips, size helpers,
+#        CRC-16/IBM, NULL-argument guards, edge cases.
+# ------------------------------------------------------------------
+add_executable(test_cc1101_fec
+    test_cc1101_fec.c
+    ${M1_ROOT}/Sub_Ghz/cc1101_fec.c
+)
+target_include_directories(test_cc1101_fec PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_cc1101_fec PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_cc1101_fec PRIVATE sanitizers)
+endif()
+add_test(NAME cc1101_fec COMMAND test_cc1101_fec)

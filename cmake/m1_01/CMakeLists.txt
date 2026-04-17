@@ -325,6 +325,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_raw_decoder.c
     ../../Sub_Ghz/subghz_playlist_parser.c
     ../../Sub_Ghz/subghz_secplus_v1_encoder.c
+    ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
     ../../Sub_Ghz/protocols/m1_secplus_v2_decode.c
@@ -417,6 +418,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_honeywell_wdb_decode.c
     ../../Sub_Ghz/protocols/m1_keyfinder_decode.c
     ../../Sub_Ghz/protocols/m1_x10_decode.c
+    ../../Sub_Ghz/protocols/m1_firecracker_cm17a_decode.c
     ../../Sub_Ghz/protocols/m1_treadmill37_decode.c
     ../../Sub_Ghz/protocols/m1_pocsag_decode.c
     ../../Sub_Ghz/protocols/m1_tpms_generic_decode.c

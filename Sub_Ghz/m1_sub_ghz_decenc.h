@@ -223,6 +223,9 @@ enum {
 	JAROLIFT,          /* KeeLoq-based 72-bit rolling code (detect-only) */
 	BENINCA_ARC,       /* AES-128 encrypted 128-bit rolling code (detect-only) */
 	HORMANN_BISECUR,   /* Manchester 176-bit AES rolling code at 868 MHz (detect-only) */
+
+	/* --- FireCracker / CM17A home-automation RF --- */
+	FIRECRACKER_CM17A,
 };
 
 /* Weather station decoded data */

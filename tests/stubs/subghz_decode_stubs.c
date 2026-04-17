@@ -37,6 +37,7 @@ uint8_t subghz_decode_elplast(uint16_t a, uint16_t b) { (void)a; (void)b; return
 uint8_t subghz_decode_elro(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_emos_e601x(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_faac_slh(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_firecracker_cm17a(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_feron(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_firefly(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_gangqi(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
