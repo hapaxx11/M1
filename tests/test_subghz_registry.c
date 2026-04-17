@@ -249,6 +249,81 @@ void test_registry_no_unintentional_duplicates(void)
  * Runner
  * =================================================================== */
 
+/* ===================================================================
+ * SubGhzProtocolFlag_300 — 300 MHz protocol flag regression
+ *
+ * Bug context (300 MHz implementation, PR #171 follow-up):
+ *   SubGhzProtocolFlag_300 was missing from the flag enum entirely.
+ *   LINEAR_10BIT and LINEAR_DELTA3 were tagged with F_STATIC_MULTI
+ *   (which implied 315 + 433 + 868 MHz) rather than being correctly
+ *   identified as 300 MHz-only protocols.  This caused the brute force
+ *   to always init the radio at 433.92 MHz even when "Linear 300" was
+ *   selected, producing no signal at the correct frequency.
+ * =================================================================== */
+
+void test_linear_has_flag_300(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Linear");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+
+	/* Linear operates at 300 MHz — flag must be set */
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_300, proto->flags);
+}
+
+void test_linear_has_no_433_flag(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Linear");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+
+	/* Linear is a 300 MHz protocol — it must NOT claim 433 MHz capability */
+	TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_433, proto->flags);
+}
+
+void test_linear_delta3_has_flag_300(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("LinearDelta3");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+
+	/* LinearDelta3 operates at 300 MHz — flag must be set */
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_300, proto->flags);
+}
+
+void test_princeton_has_flag_300(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Princeton");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+
+	/* Princeton is multi-band including 300 MHz */
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_300, proto->flags);
+	/* and still includes 433 MHz */
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_433, proto->flags);
+}
+
+void test_came_has_no_flag_300(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("CAME");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+
+	/* CAME is 433/868 MHz only — no 300 MHz operation */
+	TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_300, proto->flags);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_433, proto->flags);
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -279,6 +354,13 @@ int main(void)
 	/* Registry consistency */
 	RUN_TEST(test_registry_consistency);
 	RUN_TEST(test_registry_no_unintentional_duplicates);
+
+	/* SubGhzProtocolFlag_300 — 300 MHz flag regression */
+	RUN_TEST(test_linear_has_flag_300);
+	RUN_TEST(test_linear_has_no_433_flag);
+	RUN_TEST(test_linear_delta3_has_flag_300);
+	RUN_TEST(test_princeton_has_flag_300);
+	RUN_TEST(test_came_has_no_flag_300);
 
 	return UNITY_END();
 }
