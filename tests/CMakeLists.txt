@@ -703,3 +703,21 @@ if(TARGET sanitizers)
     target_link_libraries(test_clock PRIVATE sanitizers)
 endif()
 add_test(NAME clock COMMAND test_clock)
+# ------------------------------------------------------------------
+# Module under test: subghz_secplus_v1_encoder
+# Pure-logic ternary OOK packet encoder for Security+ 1.0 brute force.
+# ------------------------------------------------------------------
+add_executable(test_subghz_secplus_v1
+    test_subghz_secplus_v1.c
+    ${M1_ROOT}/Sub_Ghz/subghz_secplus_v1_encoder.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+)
+target_include_directories(test_subghz_secplus_v1 PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_secplus_v1 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_secplus_v1 PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_secplus_v1 COMMAND test_subghz_secplus_v1)
