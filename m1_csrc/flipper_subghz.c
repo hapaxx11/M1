@@ -304,6 +304,7 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 	flipper_file_t ff;
 	bool result = false;
 	char filetype_val[48]; /* saved before version read overwrites ff.value */
+	char version_val[16];  /* saved before next read may overwrite it */
 
 	if (path == NULL || out == NULL)
 		return false;
@@ -343,58 +344,28 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 		return false;
 	}
 
-	const char *version_val = ff_get_value(&ff);
+	/* Save version value — ff.value may be overwritten on next read */
+	strncpy(version_val, ff_get_value(&ff), sizeof(version_val) - 1);
+	version_val[sizeof(version_val) - 1] = '\0';
 
-	/* Determine file format from filetype + version strings */
+	/* Determine file format from filetype + version strings.
+	 * The cursor is now positioned after Version:, ready for body parsers.
+	 * No close/reopen needed — filetype_val already carries the sub-type. */
 	if (strcmp(version_val, "1") == 0 || strcmp(version_val, "2") == 0)
 	{
-		/* Flipper .sub format (version 1 or 2) — re-open to check filetype */
-		ff_close(&ff);
-
-		if (!ff_open(&ff, path))
-			return false;
-
-		if (!ff_read_line(&ff) || !ff_parse_kv(&ff))
-		{
-			ff_close(&ff);
-			return false;
-		}
-
-		if (strstr(ff_get_value(&ff), "RAW") != NULL)
-		{
-			/* Skip Version line */
-			if (!ff_read_line(&ff) || !ff_parse_kv(&ff))
-			{
-				ff_close(&ff);
-				return false;
-			}
+		/* Flipper .sub format — RAW vs Key is encoded in filetype_val */
+		if (strstr(filetype_val, "RAW") != NULL)
 			result = subghz_parse_raw(&ff, out);
-		}
 		else
-		{
-			/* Skip Version line */
-			if (!ff_read_line(&ff) || !ff_parse_kv(&ff))
-			{
-				ff_close(&ff);
-				return false;
-			}
 			result = subghz_parse_key(&ff, out);
-		}
 	}
-	else if (strstr(filetype_val, M1_SUBGHZ_FILETYPE_PREFIX) != NULL)
+	else if (flipper_subghz_is_m1_native_header(filetype_val, version_val))
 	{
-		/* M1 native .sgh format — version is firmware major.minor (e.g. "0.8",
-		 * "0.9").  File type (RAW vs PACKET) is determined by the filetype value,
-		 * not the version.  The file descriptor is already positioned after the
-		 * Version: line, so body parsing continues from here. */
+		/* M1 native .sgh format — sub-type (NOISE/PACKET) is in filetype_val */
 		if (strstr(filetype_val, M1_SUBGHZ_NOISE_TYPE) != NULL)
-		{
 			result = m1sgh_parse_raw(&ff, out);
-		}
 		else if (strstr(filetype_val, M1_SUBGHZ_PACKET_TYPE) != NULL)
-		{
 			result = m1sgh_parse_packet(&ff, out);
-		}
 		/* else: unknown M1 format variant — result stays false */
 	}
 
