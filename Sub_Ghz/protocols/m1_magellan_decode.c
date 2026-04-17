@@ -30,19 +30,24 @@
 
 #include "m1_sub_ghz_decenc.h"
 
-/* Fixed Magellan timings (µs).  Not overridable — the Magellan on-air
- * protocol is always 200/400 regardless of any registry TE field. */
-#define MAG_TE_SHORT   200u
-#define MAG_TE_LONG    400u
-#define MAG_DELTA       80u   /* 20 % tolerance of TE_LONG */
+/* Fixed Magellan timings (µs) — derived from the Momentum firmware reference
+ * implementation (Next-Flip/Momentum-Firmware lib/subghz/protocols/magellan.c):
+ *   te_short = 200, te_long = 400, te_delta = 100
+ * The delta (100µs) is applied uniformly to both SHORT and LONG pulse comparisons,
+ * exactly matching the Momentum reference decoder. */
+#define MAG_TE_SHORT        200u
+#define MAG_TE_LONG         400u
+#define MAG_TE_DELTA        100u   /* pulse timing tolerance — matches Momentum te_delta */
 
-/* Start bit: 3 × TE_LONG = 1200µs.  Accept [900, 1500] µs to tolerate
- * real-world drift while rejecting the 800µs header burst and 200/400µs
- * data pulses. */
-#define MAG_START_MIN   900u
-#define MAG_START_MAX  1500u
+/* Start bit: 3 × TE_LONG = 1200µs HIGH + TE_LONG LOW.
+ * Momentum uses te_delta*3 = 300µs tolerance on the HIGH phase → [900, 1500]µs,
+ * and te_delta*2 = 200µs tolerance on the LOW phase → [200, 600]µs.
+ * Both phases must match to avoid false starts on noisy captures. */
+#define MAG_START_HI_MIN    900u
+#define MAG_START_HI_MAX   1500u
+#define MAG_START_LO_TOL   (MAG_TE_DELTA * 2u)   /* = 200µs; LOW must be ≈ te_long */
 
-#define MAG_DATA_BITS    32u
+#define MAG_DATA_BITS       32u
 
 uint8_t subghz_decode_magellan(uint16_t p, uint16_t pulsecount)
 {
@@ -50,13 +55,17 @@ uint8_t subghz_decode_magellan(uint16_t p, uint16_t pulsecount)
     uint16_t data_start = 0; /* index of first data HIGH pulse */
 
     /* Step 1 — find the start bit by scanning even (HIGH-pulse) indices.
-     * The start bit is the first HIGH pulse in the range [900, 1500] µs.
-     * If no start bit is found (e.g. a bare data-only test buffer) data
-     * decoding starts from index 0. */
+     * Momentum reference: start bit is HIGH ≈ te_short*6 = 1200µs (±300µs)
+     * followed by LOW ≈ te_long = 400µs (±200µs).  Both phases must match to
+     * guard against false starts on noisy or truncated captures.
+     * Fallback: if no start bit is found the decoder starts from index 0
+     * (supports bare-data test buffers with no frame header). */
     for (i = 0; i + 1 < pulsecount; i += 2)
     {
-        uint16_t t = subghz_decenc_ctl.pulse_times[i];
-        if (t >= MAG_START_MIN && t <= MAG_START_MAX)
+        uint16_t t_hi = subghz_decenc_ctl.pulse_times[i];
+        uint16_t t_lo = subghz_decenc_ctl.pulse_times[i + 1];
+        if (t_hi >= MAG_START_HI_MIN && t_hi <= MAG_START_HI_MAX &&
+            get_diff(t_lo, MAG_TE_LONG) < MAG_START_LO_TOL)
         {
             data_start = i + 2; /* skip start-bit HIGH + LOW */
             break;
@@ -64,8 +73,9 @@ uint8_t subghz_decode_magellan(uint16_t p, uint16_t pulsecount)
     }
 
     /* Step 2 — decode 32 data bits with INVERTED Magellan polarity:
-     *   bit 1: SHORT HIGH (≈200µs) + LONG  LOW (≈400µs)
-     *   bit 0: LONG  HIGH (≈400µs) + SHORT LOW (≈200µs) */
+     *   bit 1: SHORT HIGH (≈200µs) + LONG  LOW (≈400µs)   [Momentum: te_short + te_long]
+     *   bit 0: LONG  HIGH (≈400µs) + SHORT LOW (≈200µs)   [Momentum: te_long  + te_short]
+     * Both HIGH and LOW phases are checked within MAG_TE_DELTA = 100µs (Momentum te_delta). */
     uint32_t code = 0;
     uint8_t  bits_count = 0;
 
@@ -76,13 +86,13 @@ uint8_t subghz_decode_magellan(uint16_t p, uint16_t pulsecount)
 
         code <<= 1;
 
-        if (get_diff(t_hi, MAG_TE_SHORT) < MAG_DELTA &&
-            get_diff(t_lo, MAG_TE_LONG)  < MAG_DELTA)
+        if (get_diff(t_hi, MAG_TE_SHORT) < MAG_TE_DELTA &&
+            get_diff(t_lo, MAG_TE_LONG)  < MAG_TE_DELTA)
         {
             code |= 1; /* bit 1: SHORT HIGH + LONG LOW (inverted Magellan) */
         }
-        else if (get_diff(t_hi, MAG_TE_LONG)  < MAG_DELTA &&
-                 get_diff(t_lo, MAG_TE_SHORT) < MAG_DELTA)
+        else if (get_diff(t_hi, MAG_TE_LONG)  < MAG_TE_DELTA &&
+                 get_diff(t_lo, MAG_TE_SHORT) < MAG_TE_DELTA)
         {
             /* bit 0: LONG HIGH + SHORT LOW */
         }

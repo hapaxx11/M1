@@ -7,8 +7,9 @@
  * that the decoders actually access, so they link on the host.
  *
  * Also provides an external definition for get_diff(), which is declared
- * as `inline` in m1_sub_ghz_decenc.h but whose definition (in
- * m1_sub_ghz_decenc.c) is not included in test builds.
+ * in m1_sub_ghz_decenc.h but defined in m1_sub_ghz_decenc.c (which has
+ * STM32/FreeRTOS dependencies not available in test builds).
+ * Providing the definition here allows decoders to link on the host.
  */
 
 #include <stdint.h>
@@ -35,8 +36,9 @@ const char **protocol_text_ptr = _text_storage;
 
 /* ---------------------------------------------------------------------- */
 /* get_diff — external definition required by decoders.                  */
-/* Declared `inline` in m1_sub_ghz_decenc.h / defined in decenc.c.       */
-/* We provide the external definition here for the test link unit.        */
+/* Declared as a regular function prototype in m1_sub_ghz_decenc.h;       */
+/* defined in m1_sub_ghz_decenc.c which is not linked in test builds.     */
+/* We provide the definition here for the test link unit.                 */
 /* ---------------------------------------------------------------------- */
 uint16_t get_diff(uint16_t n_a, uint16_t n_b)
 {

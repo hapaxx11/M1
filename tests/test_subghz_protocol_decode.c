@@ -157,9 +157,9 @@ static uint16_t build_magellan_full_frame(uint32_t key)
         }
     }
 
-    /* Stop bit: 200µs HIGH + 40000µs LOW (truncated to uint16 max) */
+    /* Stop bit: 200µs HIGH + 40000µs LOW (te_long * 100, fits in uint16_t) */
     subghz_decenc_ctl.pulse_times[idx++] = 200;
-    subghz_decenc_ctl.pulse_times[idx++] = 0xFFFF; /* saturate to 16-bit */
+    subghz_decenc_ctl.pulse_times[idx++] = 40000;
 
     return idx;
 }
