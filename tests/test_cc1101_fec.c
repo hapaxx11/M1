@@ -25,6 +25,7 @@
 
 #include "unity.h"
 #include "cc1101_fec.h"
+#include <string.h>
 
 /* ======================================================================= */
 /* Known test vector (from SpaceTeddy plugin source comments)              */
@@ -81,8 +82,12 @@ void test_size_symmetry_various_lengths(void)
 
 void test_decoded_size_zero_on_tiny_input(void)
 {
-    TEST_ASSERT_EQUAL_UINT16(0u, cc1101_fec_decoded_size(3u));
+    /* Inputs below 8 or not a multiple of 4 must return 0 */
     TEST_ASSERT_EQUAL_UINT16(0u, cc1101_fec_decoded_size(0u));
+    TEST_ASSERT_EQUAL_UINT16(0u, cc1101_fec_decoded_size(3u));
+    TEST_ASSERT_EQUAL_UINT16(0u, cc1101_fec_decoded_size(4u));
+    TEST_ASSERT_EQUAL_UINT16(0u, cc1101_fec_decoded_size(7u));
+    TEST_ASSERT_EQUAL_UINT16(0u, cc1101_fec_decoded_size(9u));
 }
 
 /* ======================================================================= */

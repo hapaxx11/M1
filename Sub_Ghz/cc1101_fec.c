@@ -93,7 +93,7 @@ uint16_t cc1101_fec_encoded_size(uint8_t data_len)
 
 uint16_t cc1101_fec_decoded_size(uint16_t encoded_len)
 {
-    if (encoded_len < 4u) return 0u;
+    if ((encoded_len < 8u) || ((encoded_len % 4u) != 0u)) return 0u;
     return ((encoded_len - 4u) / 2u) + 1u;
 }
 
@@ -211,18 +211,20 @@ uint16_t cc1101_fec_decode(CC1101_FEC_DecCtx_t *ctx,
     uint16_t nOutputBytes = 0u;
     uint8_t  nMinCost;
     int8_t   iBit = 6;           /* MSB-first: start at bit-pair offset 6 */
-    uint8_t  iOut, iIn;
+    uint8_t  iOut;
     const uint8_t *pIn;
 
     if ((ctx == NULL) || (pDecData == NULL) || (pInData == NULL))
         return 0u;
 
-    /* De-interleave 4 input bytes */
+    /* De-interleave 4 input bytes.  Loop uses a signed index counting down
+     * from 3 to 0 to avoid relying on unsigned underflow for termination. */
     for (iOut = 0u; iOut < 4u; iOut++) {
         uint8_t dataByte = 0u;
-        for (iIn = 3u; iIn < 4u; iIn--)  /* iIn: 3, 2, 1, 0 (wraps at 0u-1 = 255) */
+        int8_t  iInS;
+        for (iInS = 3; iInS >= 0; iInS--)
             dataByte = (uint8_t)((dataByte << 2u) |
-                       ((pInData[iIn] >> (2u * iOut)) & 0x03u));
+                       ((pInData[(uint8_t)iInS] >> (2u * iOut)) & 0x03u));
         aDeintData[iOut] = dataByte;
     }
     pIn = aDeintData;
@@ -274,20 +276,30 @@ uint16_t cc1101_fec_decode(CC1101_FEC_DecCtx_t *ctx,
 
         /* Once 32 path bits accumulated, output one byte */
         if (ctx->nPathBits == 32u) {
+            if (nRemBytes == 0u) {
+                return nOutputBytes;
+            }
             *pDecData++ = (uint8_t)((ctx->aPath[ctx->iCurrBuf][0] >> 24u) & 0xFFu);
             nOutputBytes++;
             ctx->nPathBits -= 8u;
             nRemBytes--;
+            if (nRemBytes == 0u) {
+                return nOutputBytes;
+            }
         }
 
         /* Flush remaining bytes when near end of packet (3-symbol terminator) */
         if ((nRemBytes <= 3u) &&
             (ctx->nPathBits == (uint8_t)((8u * nRemBytes) + 3u))) {
-            while (ctx->nPathBits >= 8u) {
+            while ((ctx->nPathBits >= 8u) && (nRemBytes > 0u)) {
                 *pDecData++ = (uint8_t)((ctx->aPath[ctx->iCurrBuf][0] >>
                                (ctx->nPathBits - 8u)) & 0xFFu);
                 nOutputBytes++;
                 ctx->nPathBits -= 8u;
+                nRemBytes--;
+                if (nRemBytes == 0u) {
+                    return nOutputBytes;
+                }
             }
             return nOutputBytes;
         }
@@ -347,5 +359,6 @@ uint16_t cc1101_fec_decode_packet(uint8_t       *pDecData,
         nBytes    = (nBytes > nBytesOut) ? (uint16_t)(nBytes - nBytesOut) : 0u;
     }
 
+    if ((nBytes != 0u) || (count != encoded_len)) return 0u;
     return total;
 }

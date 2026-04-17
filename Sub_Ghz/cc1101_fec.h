@@ -69,6 +69,9 @@ uint16_t cc1101_fec_encoded_size(uint8_t data_len);
  *
  * Formula: ((encoded_len - 4) / 2) + 1
  *
+ * Returns 0 if @p encoded_len is less than 8 or not a multiple of 4 — the
+ * same conditions that cc1101_fec_decode_packet() enforces.
+ *
  * The decoded output includes a leading length byte and trailing 2 CRC bytes.
  * The caller extracts the payload from decoded[1 .. decoded[0]].
  */
