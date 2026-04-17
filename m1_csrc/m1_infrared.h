@@ -90,6 +90,7 @@ typedef enum
 void menu_infrared_init(void);
 
 void infrared_universal_remotes(void);
+void esl_scene_entry(void);
 void infrared_learn_new_remote(void);
 void infrared_saved_remotes(void);
 bool infrared_capture_one_signal(IRMP_DATA *out_data);

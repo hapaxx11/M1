@@ -20,6 +20,7 @@ enum {
     InfraredSceneUniversal,
     InfraredSceneLearn,
     InfraredSceneReplay,
+    InfraredSceneEsl,
     InfraredSceneCount
 };
 
@@ -49,26 +50,37 @@ static void replay_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void esl_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    esl_scene_entry();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers universal_handlers = { .on_enter = universal_on_enter };
 static const M1SceneHandlers learn_handlers     = { .on_enter = learn_on_enter     };
 static const M1SceneHandlers replay_handlers    = { .on_enter = replay_on_enter    };
+static const M1SceneHandlers esl_handlers       = { .on_enter = esl_on_enter       };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  3
+#define MENU_ITEM_COUNT  4
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Universal Remotes",
     "Learn",
     "Replay",
+    "ESL Tags",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     InfraredSceneUniversal,
     InfraredSceneLearn,
     InfraredSceneReplay,
+    InfraredSceneEsl,
 };
 
 static uint8_t menu_sel    = 0;
@@ -109,6 +121,7 @@ static const M1SceneHandlers *const scene_registry[InfraredSceneCount] = {
     [InfraredSceneUniversal] = &universal_handlers,
     [InfraredSceneLearn]     = &learn_handlers,
     [InfraredSceneReplay]    = &replay_handlers,
+    [InfraredSceneEsl]       = &esl_handlers,
 };
 
 /*--- Entry point ----------------------------------------------------------*/

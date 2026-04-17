@@ -700,3 +700,20 @@ if(TARGET sanitizers)
     target_link_libraries(test_clock PRIVATE sanitizers)
 endif()
 add_test(NAME clock COMMAND test_clock)
+# ------------------------------------------------------------------
+# Module under test: m1_esl_proto (ESL frame builder + barcode decoder)
+# Pure logic — CRC16, barcode-to-PLID, frame construction.  Zero HAL
+# dependencies; compiles directly on the host.
+# ------------------------------------------------------------------
+add_executable(test_esl_proto
+    test_esl_proto.c
+    ${M1_ROOT}/m1_csrc/m1_esl_proto.c
+)
+target_include_directories(test_esl_proto PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esl_proto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esl_proto PRIVATE sanitizers)
+endif()
+add_test(NAME esl_proto COMMAND test_esl_proto)
