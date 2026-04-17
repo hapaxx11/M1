@@ -169,6 +169,9 @@ extern uint8_t subghz_decode_tx_8300(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon_v1(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon3(uint16_t, uint16_t);
 
+/* FireCracker / CM17A home-automation RF */
+extern uint8_t subghz_decode_firecracker_cm17a(uint16_t, uint16_t);
+
 /* Generic decoders (used as delegates by simple protocols) */
 extern uint8_t subghz_decode_generic_pwm(uint16_t, uint16_t);
 extern uint8_t subghz_decode_generic_manchester(uint16_t, uint16_t);
@@ -1044,6 +1047,35 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Weather,
         .timing = { .te_short=500, .te_long=1100, .te_delta=300, .min_count_bit_for_found=32 },
         .decode = subghz_decode_oregon3,
+    },
+
+    /* ── FireCracker / CM17A home-automation RF ─────────────────────── */
+
+    [FIRECRACKER_CM17A] = {
+        /*
+         * FireCracker (CM17A) X10 home-automation RF protocol.
+         * 40-bit packet: [0xD5AA header][16-bit data][0xAD footer]
+         * Physical layer matches standard X10 RF (same OOK PWM timing).
+         * Frequency: 310 MHz (North America) / 433.92 MHz (Europe)
+         * Ref: https://github.com/evilpete/flipper_toolbox/raw/refs/heads/main/subghz/firecracker_spec.txt
+         *
+         * Note: SubGhzProtocolFlag_Send is intentionally omitted. The generic
+         * static TX path (subghz_encode_ook_pwm) uses standard OOK PWM where
+         * bit-0 = short-HIGH + long-LOW and bit-1 = long-HIGH + short-LOW.
+         * CM17A/X10 requires a constant short HIGH with only the LOW duration
+         * varying (bit-0 = short-LOW, bit-1 = long-LOW). A generic send would
+         * produce an incorrect waveform until a protocol-specific TX encoder
+         * is implemented. FireCracker is decode/save-only for now.
+         */
+        .name   = "FireCracker",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM  | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=562, .te_long=1688, .te_delta=100,
+                    .min_count_bit_for_found=40 },
+        .decode = subghz_decode_firecracker_cm17a,
     },
 };
 
