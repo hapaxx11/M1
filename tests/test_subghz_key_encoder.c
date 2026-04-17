@@ -573,6 +573,150 @@ void test_custom_required_pairs_unknown_protocol(void)
 }
 
 /* ===================================================================
+ * Phase 2: Rolling code replay — per-protocol exclusion list
+ * OOK-PWM dynamic protocols should now resolve timing successfully.
+ * Non-OOK-PWM and encrypted protocols remain rejected.
+ * =================================================================== */
+
+void test_rolling_came_twee_allowed(void)
+{
+    /* CAME TWEE is a rolling code but uses standard OOK PWM encoding */
+    SubGhzKeyParams params = make_params("CAME TWEE", 0xABCDEF123456ULL, 54, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* CAME TWEE: te_short=260, te_long=520 */
+    TEST_ASSERT_EQUAL_UINT32(260, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(520, timing.te_long);
+}
+
+void test_rolling_nice_flor_s_allowed(void)
+{
+    /* Nice FloR-S is a rolling code but uses standard OOK PWM encoding */
+    SubGhzKeyParams params = make_params("Nice FloR-S", 0x123456789ABCULL, 52, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* Nice FloR-S: te_short=500, te_long=1000 */
+    TEST_ASSERT_EQUAL_UINT32(500, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(1000, timing.te_long);
+}
+
+void test_rolling_alutech_allowed(void)
+{
+    /* Alutech AT-4N: rolling code with standard OOK PWM */
+    SubGhzKeyParams params = make_params("Alutech AT-4N", 0xDEADBEEFULL, 72, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* Alutech: te_short=400, te_long=800 */
+    TEST_ASSERT_EQUAL_UINT32(400, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(800, timing.te_long);
+}
+
+void test_rolling_kinggates_allowed(void)
+{
+    /* KingGates Stylo4k: rolling code with standard OOK PWM */
+    SubGhzKeyParams params = make_params("KingGates Stylo4k", 0x123456ULL, 60, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, ret);
+    /* KingGates Stylo4k: te_short=400, te_long=1200 */
+    TEST_ASSERT_EQUAL_UINT32(400, timing.te_short);
+    TEST_ASSERT_EQUAL_UINT32(1200, timing.te_long);
+}
+
+void test_rolling_keeloq_still_rejected(void)
+{
+    /* KeeLoq requires manufacturer key — must remain rejected */
+    SubGhzKeyParams params = make_params("KeeLoq", 0, 66, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_secplus_v1_still_rejected(void)
+{
+    /* Security+ 1.0 uses ternary encoding — cannot be OOK PWM encoded */
+    SubGhzKeyParams params = make_params("Security+ 1.0", 0, 40, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_secplus_v2_still_rejected(void)
+{
+    /* Security+ 2.0 uses FSK modulation — cannot be OOK PWM encoded */
+    SubGhzKeyParams params = make_params("Security+ 2.0", 0, 64, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_jarolift_still_rejected(void)
+{
+    /* Jarolift requires manufacturer key — must remain rejected */
+    SubGhzKeyParams params = make_params("Jarolift", 0, 72, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_beninca_arc_still_rejected(void)
+{
+    /* Beninca ARC requires AES key — must remain rejected */
+    SubGhzKeyParams params = make_params("Beninca ARC", 0, 128, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_hormann_bisecur_still_rejected(void)
+{
+    /* Hormann BiSecur uses Manchester+AES — must remain rejected */
+    SubGhzKeyParams params = make_params("Hormann BiSecur", 0, 176, 0);
+    SubGhzKeyTiming timing;
+
+    uint8_t ret = subghz_key_resolve_timing(&params, &timing);
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_ERR_DYNAMIC, ret);
+}
+
+void test_rolling_came_twee_encode_roundtrip(void)
+{
+    /* Verify that CAME TWEE rolling code encodes the correct number of pairs */
+    SubGhzKeyParams params = make_params("CAME TWEE", 0xABCDEF123456ULL, 54, 0);
+    SubGhzKeyTiming timing;
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_KEY_OK, subghz_key_resolve_timing(&params, &timing));
+
+    /* 54 bits + 1 sync = 55 pairs per repetition, 3 reps = 165 pairs */
+    SubGhzRawPair out[200];
+    uint32_t count = subghz_key_encode(&params, &timing, out, 200, 3);
+    TEST_ASSERT_EQUAL_UINT32(165, count);
+
+    /* Verify first bit of 0xABCDEF123456 as 54-bit value.
+     * 0xABCDEF123456 is a 48-bit value; as a 54-bit word, bits 53..48 are 0.
+     * Bit 53 (MSB of 54-bit) = 0 → te_short HIGH + te_long LOW */
+    TEST_ASSERT_EQUAL_UINT32(timing.te_short, out[0].high_us);
+    TEST_ASSERT_EQUAL_UINT32(timing.te_long,  out[0].low_us);
+
+    /* Find the first '1' bit in the output to verify bit-1 encoding.
+     * 0xABCDEF123456 bit pattern starting from bit 53 down:
+     * 0,0,0,0,0,0,  1,0,1,0,1,0,1,1,...  (bits 53..48 = 0, bits 47..44 = 0xA = 1010)
+     * First '1' bit is at position 47 → output pair index 6 */
+    TEST_ASSERT_EQUAL_UINT32(timing.te_long,  out[6].high_us);
+    TEST_ASSERT_EQUAL_UINT32(timing.te_short, out[6].low_us);
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -631,6 +775,23 @@ int main(void)
     RUN_TEST(test_custom_required_pairs_wrong_bit_count);
     RUN_TEST(test_custom_required_pairs_null_params);
     RUN_TEST(test_custom_required_pairs_unknown_protocol);
+
+    /* Phase 2: Rolling code replay — OOK-PWM-encodable rolling protocols allowed */
+    RUN_TEST(test_rolling_came_twee_allowed);
+    RUN_TEST(test_rolling_nice_flor_s_allowed);
+    RUN_TEST(test_rolling_alutech_allowed);
+    RUN_TEST(test_rolling_kinggates_allowed);
+
+    /* Phase 2: Non-OOK-PWM / encrypted rolling protocols remain rejected */
+    RUN_TEST(test_rolling_keeloq_still_rejected);
+    RUN_TEST(test_rolling_secplus_v1_still_rejected);
+    RUN_TEST(test_rolling_secplus_v2_still_rejected);
+    RUN_TEST(test_rolling_jarolift_still_rejected);
+    RUN_TEST(test_rolling_beninca_arc_still_rejected);
+    RUN_TEST(test_rolling_hormann_bisecur_still_rejected);
+
+    /* Phase 2: Rolling code encode roundtrip */
+    RUN_TEST(test_rolling_came_twee_encode_roundtrip);
 
     return UNITY_END();
 }

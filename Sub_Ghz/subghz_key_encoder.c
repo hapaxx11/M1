@@ -27,22 +27,46 @@ uint8_t subghz_key_resolve_timing(const SubGhzKeyParams *params, SubGhzKeyTiming
 
     int16_t reg_idx = subghz_protocol_find_by_name(params->protocol);
 
-    /* Rolling-code / dynamic protocols — cannot replay from KEY data.
-     * Also reject weather sensors and TPMS. */
+    /* Weather sensors and TPMS — cannot encode. */
     if (reg_idx >= 0)
     {
         const SubGhzProtocolDef *proto = &subghz_protocol_registry[reg_idx];
-        if (proto->type == SubGhzProtocolTypeDynamic ||
-            proto->type == SubGhzProtocolTypeWeather ||
+        if (proto->type == SubGhzProtocolTypeWeather ||
             proto->type == SubGhzProtocolTypeTPMS)
         {
             return SUBGHZ_KEY_ERR_DYNAMIC;
         }
+
+        /* Rolling-code protocols: allow OOK-PWM-encodable ones to pass through.
+         * Protocols excluded from replay (not OOK-PWM re-encodable):
+         *   - KeeLoq: requires manufacturer key decryption for a valid next-counter
+         *   - Security+ 1.0: ternary (3-symbol) 2-sub-packet encoding — not OOK PWM
+         *   - Security+ 2.0: FSK-modulated rolling code — not OOK PWM
+         *   - Hormann BiSecur: Manchester-encoded, requires AES key
+         *   - Beninca ARC: AES-128 encrypted, requires manufacturer key
+         *   - Jarolift: KeeLoq-based, requires manufacturer key decryption
+         * All other Dynamic protocols use standard OOK PWM with timing from the
+         * registry, so they can be replayed as-is from a captured key value. */
+        if (proto->type == SubGhzProtocolTypeDynamic)
+        {
+            if (subghz_ascii_strcasecmp(proto->name, "KeeLoq") == 0 ||
+                subghz_ascii_strcasecmp(proto->name, "Security+ 1.0") == 0 ||
+                subghz_ascii_strcasecmp(proto->name, "Security+ 2.0") == 0 ||
+                subghz_ascii_strcasecmp(proto->name, "Hormann BiSecur") == 0 ||
+                subghz_ascii_strcasecmp(proto->name, "Beninca ARC") == 0 ||
+                subghz_ascii_strcasecmp(proto->name, "Jarolift") == 0)
+            {
+                return SUBGHZ_KEY_ERR_DYNAMIC;
+            }
+            /* All other Dynamic protocols: fall through to registry-based timing */
+        }
     }
 
-    /* Registry-based timing: use actual te_short / te_long from protocol */
+    /* Registry-based timing: use actual te_short / te_long from protocol.
+     * This now covers both Static and Dynamic (OOK-PWM-encodable rolling) protocols. */
     if (reg_idx >= 0 &&
-        subghz_protocol_registry[reg_idx].type == SubGhzProtocolTypeStatic &&
+        (subghz_protocol_registry[reg_idx].type == SubGhzProtocolTypeStatic ||
+         subghz_protocol_registry[reg_idx].type == SubGhzProtocolTypeDynamic) &&
         subghz_protocol_registry[reg_idx].timing.te_short > 0 &&
         subghz_protocol_registry[reg_idx].timing.te_long > 0)
     {

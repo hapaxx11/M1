@@ -48,7 +48,13 @@ typedef struct {
 /*============================================================================*/
 
 #define SUBGHZ_KEY_OK             0   /**< Success */
-#define SUBGHZ_KEY_ERR_DYNAMIC    6   /**< Rolling-code / Weather / TPMS — cannot encode */
+#define SUBGHZ_KEY_ERR_DYNAMIC    6   /**< Not re-encodable: KeeLoq (needs manufacturer key),
+                                           Security+ 1.0/2.0 (ternary/FSK encoding),
+                                           Hormann BiSecur (Manchester+AES),
+                                           Beninca ARC (AES-128), Jarolift (KeeLoq-based),
+                                           Weather sensors, TPMS.
+                                           Other Dynamic (rolling code) protocols that use
+                                           standard OOK PWM encoding are now allowed. */
 #define SUBGHZ_KEY_ERR_UNSUPPORTED 7  /**< Unsupported protocol (not in registry, no fallback) */
 #define SUBGHZ_KEY_ERR_OVERFLOW   8   /**< Output buffer too small */
 
