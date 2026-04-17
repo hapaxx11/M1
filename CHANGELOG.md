@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.120] - 2026-04-17
+
+### Added
+
+- **Sub-GHz Brute Force: Security+ 1.0 (Chamberlain) rolling-code mode** — Brute Force
+  now supports Security+ v1 / Chamberlain as a counter mode: the ternary OOK two-sub-packet
+  encoding is computed on-device from the counter value and transmitted via the existing raw
+  TX path.  A new pure-C encoder module (`subghz_secplus_v1_encoder`) implements the
+  argilo/secplus algorithm (MIT) adapted from Flipper Zero firmware (GPLv3) with 11 host-side
+  unit tests.
+
+### Changed
+
+- **Sub-GHz: Replace string-based rolling-code replay exclusion with `SubGhzProtocolFlag_PwmKeyReplay`** — Dynamic protocols that use plain OOK PWM encoding (CAME Atomo, CAME TWEE, Nice FloR-S, Alutech AT-4N, KingGates Stylo4k, Scher-Khan Magicar/Logicar, Toyota, DITEC_GOL4) are now explicitly marked replayable via a registry flag instead of fragile name-string comparisons. Manchester-encoded protocols (FAAC SLH, Somfy Telis, Somfy Keytis, Revers_RB2, Star Line) that were previously silently accepted by the key encoder and would have produced invalid OOK output are now correctly rejected.
 ## [0.9.0.119] - 2026-04-17
 
 ### Added
