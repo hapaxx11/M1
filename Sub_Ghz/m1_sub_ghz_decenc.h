@@ -218,6 +218,9 @@ enum {
 	TX_8300,
 	OREGON_V1,
 	OREGON3,
+
+	/* --- FireCracker / CM17A home-automation RF --- */
+	FIRECRACKER_CM17A,
 };
 
 /* Weather station decoded data */

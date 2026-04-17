@@ -237,7 +237,32 @@ endif()
 add_test(NAME subghz_protocol_decode COMMAND test_subghz_protocol_decode)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_raw_line_parser (RAW_Data line parsing)
+# Module under test: firecracker_cm17a (40-bit CM17A home-automation decoder)
+# Tests validate header/footer recognition, house-code/unit/command decode,
+# and rejection of invalid or truncated packets.
+# Uses a minimal registry stub (one FireCracker entry at index 0) to avoid
+# linking all ~100 production decoders.
+# ------------------------------------------------------------------
+add_executable(test_firecracker_cm17a
+    test_firecracker_cm17a.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_firecracker_cm17a_decode.c
+    ${M1_ROOT}/Sub_Ghz/subghz_block_generic.c
+    ${STUBS_DIR}/subghz_firecracker_test_registry.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_firecracker_cm17a PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_firecracker_cm17a PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_firecracker_cm17a PRIVATE sanitizers)
+endif()
+add_test(NAME firecracker_cm17a COMMAND test_firecracker_cm17a)
+
+
 # Extracted from sub_ghz_replay_flipper_file() — handles signed→absolute
 # conversion, zero skipping, and cross-buffer leftover digit recombination.
 # Pure string parsing, zero hardware dependencies.
