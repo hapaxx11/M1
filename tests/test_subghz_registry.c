@@ -456,6 +456,25 @@ void test_find_acurite_606tx(void)
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeWeather, proto->type);
 }
 
+void test_find_firecracker(void)
+{
+	/* FireCracker (CM17A) — X10 home-automation RF, 40-bit packet */
+	int16_t idx = subghz_protocol_find_by_name("FireCracker");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+	TEST_ASSERT_EQUAL_UINT16(40, proto->timing.min_count_bit_for_found);
+	/* Must be replayable (Static + AM) */
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_AM,   proto->flags);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_Send, proto->flags);
+	/* Frequency: 315 and/or 433 MHz */
+	uint32_t freq_flags = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433;
+	TEST_ASSERT_TRUE_MESSAGE((proto->flags & freq_flags) != 0,
+		"FireCracker must have at least one of 315/433 MHz flags");
+}
+
 /* ===================================================================
  * Protocol flag consistency rules
  *
@@ -626,6 +645,7 @@ int main(void)
 	RUN_TEST(test_find_elplast);
 	RUN_TEST(test_find_keyfinder);
 	RUN_TEST(test_find_acurite_606tx);
+	RUN_TEST(test_find_firecracker);
 
 	/* Protocol flag consistency rules */
 	RUN_TEST(test_static_protocols_have_send_flag);

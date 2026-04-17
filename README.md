@@ -50,7 +50,7 @@ project discussion, and related project resources:
 
 | Feature | Monstatek Stock (v0.8.0.1) | Hapax |
 |---------|---------------------------|-------|
-| Sub-GHz protocols | ~20 | **99** |
+| Sub-GHz protocols | ~20 | **100** |
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
@@ -81,7 +81,7 @@ fork with 56 Sub-GHz protocols, PicoPass, and RTC/NTP support.
 - Furi compatibility layer for near-direct protocol porting from Flipper/Momentum
 
 ### Sub-GHz Enhancements
-- **99 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, TX-8300, POCSAG pager decode, and more
+- **100 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
 - **Frequency Scanner** — sweep and find active frequencies above threshold

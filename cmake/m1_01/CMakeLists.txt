@@ -416,6 +416,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_honeywell_wdb_decode.c
     ../../Sub_Ghz/protocols/m1_keyfinder_decode.c
     ../../Sub_Ghz/protocols/m1_x10_decode.c
+    ../../Sub_Ghz/protocols/m1_firecracker_cm17a_decode.c
     ../../Sub_Ghz/protocols/m1_treadmill37_decode.c
     ../../Sub_Ghz/protocols/m1_pocsag_decode.c
     ../../Sub_Ghz/protocols/m1_tpms_generic_decode.c
