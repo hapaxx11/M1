@@ -187,7 +187,7 @@ extern uint8_t subghz_decode_generic_ppm(uint16_t, uint16_t);
                        SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save | \
                        SubGhzProtocolFlag_Send)
 
-/* 315 + 433 + 868 MHz multi-band (e.g. CAME, Nice FLO) — no 300 MHz */
+/* 315 + 433 + 868 MHz multi-band — protocols genuinely active on all three */
 #define F_STATIC_MULTI (SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 | \
                         SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM | \
                         SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save | \
@@ -252,7 +252,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [CAME_12BIT] = {
         .name   = "CAME",
         .type   = SubGhzProtocolTypeStatic,
-        .flags  = F_STATIC_MULTI,
+        .flags  = F_STATIC_433 | SubGhzProtocolFlag_868,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=320, .te_long=640, .te_tolerance_pct=20, .min_count_bit_for_found=12 },
         .decode = subghz_decode_came,
@@ -260,7 +260,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [NICE_FLO] = {
         .name   = "Nice FLO",
         .type   = SubGhzProtocolTypeStatic,
-        .flags  = F_STATIC_MULTI,
+        .flags  = F_STATIC_433 | SubGhzProtocolFlag_868,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=700, .te_long=1400, .te_tolerance_pct=20, .min_count_bit_for_found=12 },
         .decode = subghz_decode_nice_flo,
