@@ -325,6 +325,254 @@ void test_came_has_no_flag_300(void)
 	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_433, proto->flags);
 }
 
+/* ===================================================================
+ * Specific Momentum-phase protocol presence
+ *
+ * Verify that protocols added across Momentum porting phases are
+ * registered and correctly categorised.
+ * =================================================================== */
+
+void test_find_magellan(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Magellan");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_433, proto->flags);
+}
+
+void test_find_marantec24(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Marantec24");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	/* Marantec24 is Static — must NOT be mistaken for rolling like Marantec */
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_clemsa(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Clemsa");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_centurion(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Centurion");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_bett(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("BETT");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_legrand(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Legrand");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_linear_delta3(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("LinearDelta3");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_300, proto->flags);
+}
+
+void test_find_came_twee(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("CAME TWEE");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	/* CAME TWEE is rolling/dynamic */
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeDynamic, proto->type);
+}
+
+void test_find_nice_flor_s(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Nice FloR-S");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeDynamic, proto->type);
+}
+
+void test_find_elplast(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Elplast");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_keyfinder(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("KeyFinder");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+}
+
+void test_find_acurite_606tx(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Acurite_606TX");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeWeather, proto->type);
+}
+
+/* ===================================================================
+ * Protocol flag consistency rules
+ *
+ * Verify invariants that must hold across the entire registry:
+ *  1. All Static protocols must have the Send flag (can be replayed).
+ *  2. All Weather and TPMS protocols must NOT have the Send flag
+ *     (sensor-only, cannot be replayed as commands).
+ *  3. All Dynamic (rolling-code) protocols must NOT have the Send flag.
+ *  4. All decodable protocols must have min_count_bit_for_found > 0.
+ * =================================================================== */
+
+void test_static_protocols_have_send_flag(void)
+{
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
+	{
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		if (!proto) continue;
+		if (proto->type != SubGhzProtocolTypeStatic) continue;
+		/* FM-only protocols (e.g. POCSAG, PCSG) are receive-only — skip */
+		if (!(proto->flags & SubGhzProtocolFlag_AM)) continue;
+
+		char msg[128];
+		snprintf(msg, sizeof(msg),
+			"Static AM protocol '%s' is missing SubGhzProtocolFlag_Send",
+			proto->name ? proto->name : "<null>");
+		TEST_ASSERT_BITS_HIGH_MESSAGE(SubGhzProtocolFlag_Send, proto->flags, msg);
+	}
+}
+
+void test_weather_protocols_have_no_send_flag(void)
+{
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
+	{
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		if (!proto) continue;
+		if (proto->type != SubGhzProtocolTypeWeather &&
+		    proto->type != SubGhzProtocolTypeTPMS) continue;
+
+		char msg[128];
+		snprintf(msg, sizeof(msg),
+			"Weather/TPMS protocol '%s' incorrectly has SubGhzProtocolFlag_Send",
+			proto->name ? proto->name : "<null>");
+		TEST_ASSERT_BITS_LOW_MESSAGE(SubGhzProtocolFlag_Send, proto->flags, msg);
+	}
+}
+
+void test_dynamic_protocols_have_no_send_flag(void)
+{
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
+	{
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		if (!proto) continue;
+		if (proto->type != SubGhzProtocolTypeDynamic) continue;
+
+		char msg[128];
+		snprintf(msg, sizeof(msg),
+			"Dynamic protocol '%s' incorrectly has SubGhzProtocolFlag_Send",
+			proto->name ? proto->name : "<null>");
+		TEST_ASSERT_BITS_LOW_MESSAGE(SubGhzProtocolFlag_Send, proto->flags, msg);
+	}
+}
+
+void test_decodable_protocols_have_nonzero_min_bits(void)
+{
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
+	{
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		if (!proto) continue;
+		if (!(proto->flags & SubGhzProtocolFlag_Decodable)) continue;
+		if (!proto->decode) continue; /* no decoder → skip */
+
+		char msg[128];
+		snprintf(msg, sizeof(msg),
+			"Decodable protocol '%s' has min_count_bit_for_found == 0",
+			proto->name ? proto->name : "<null>");
+		TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(0,
+			proto->timing.min_count_bit_for_found, msg);
+	}
+}
+
+void test_static_protocols_have_load_and_save_flags(void)
+{
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
+	{
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		if (!proto) continue;
+		if (proto->type != SubGhzProtocolTypeStatic) continue;
+		/* FM-only protocols (e.g. POCSAG, PCSG) are receive-only — skip */
+		if (!(proto->flags & SubGhzProtocolFlag_AM)) continue;
+
+		char msg[128];
+		snprintf(msg, sizeof(msg),
+			"Static AM protocol '%s' is missing Save flag",
+			proto->name ? proto->name : "<null>");
+		TEST_ASSERT_BITS_HIGH_MESSAGE(SubGhzProtocolFlag_Save, proto->flags, msg);
+	}
+}
+
+void test_am_protocols_have_frequency_flags(void)
+{
+	/* All AM protocols must specify at least one frequency band */
+	const uint32_t any_freq = SubGhzProtocolFlag_300 | SubGhzProtocolFlag_315 |
+	                           SubGhzProtocolFlag_433 | SubGhzProtocolFlag_868;
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++)
+	{
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		if (!proto) continue;
+		if (!(proto->flags & SubGhzProtocolFlag_AM)) continue;
+
+		char msg[128];
+		snprintf(msg, sizeof(msg),
+			"AM protocol '%s' has no frequency band flag (300/315/433/868)",
+			proto->name ? proto->name : "<null>");
+		TEST_ASSERT_TRUE_MESSAGE((proto->flags & any_freq) != 0, msg);
+	}
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -362,6 +610,28 @@ int main(void)
 	RUN_TEST(test_linear_delta3_has_flag_300);
 	RUN_TEST(test_princeton_has_flag_300);
 	RUN_TEST(test_came_has_no_flag_300);
+
+	/* Momentum-phase protocol presence */
+	RUN_TEST(test_find_magellan);
+	RUN_TEST(test_find_marantec24);
+	RUN_TEST(test_find_clemsa);
+	RUN_TEST(test_find_centurion);
+	RUN_TEST(test_find_bett);
+	RUN_TEST(test_find_legrand);
+	RUN_TEST(test_find_linear_delta3);
+	RUN_TEST(test_find_came_twee);
+	RUN_TEST(test_find_nice_flor_s);
+	RUN_TEST(test_find_elplast);
+	RUN_TEST(test_find_keyfinder);
+	RUN_TEST(test_find_acurite_606tx);
+
+	/* Protocol flag consistency rules */
+	RUN_TEST(test_static_protocols_have_send_flag);
+	RUN_TEST(test_weather_protocols_have_no_send_flag);
+	RUN_TEST(test_dynamic_protocols_have_no_send_flag);
+	RUN_TEST(test_decodable_protocols_have_nonzero_min_bits);
+	RUN_TEST(test_static_protocols_have_load_and_save_flags);
+	RUN_TEST(test_am_protocols_have_frequency_flags);
 
 	return UNITY_END();
 }
