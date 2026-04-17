@@ -1087,7 +1087,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [HORMANN_BISECUR] = {
         .name   = "Hormann BiSecur",
         .type   = SubGhzProtocolTypeDynamic,
-        /* BiSecur operates at 868 MHz (FM/OOK-Manchester) */
+        /* BiSecur operates at 868 MHz (OOK-Manchester) */
         .flags  = SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM |
                   SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,

@@ -4190,7 +4190,7 @@ void sub_ghz_brute_force(void)
                      brute_names[proto_idx], brute_bits[proto_idx]);
             u8g2_DrawStr(&m1_u8g2, 2, 28, line1);
             if (secplus_sel) {
-                u8g2_DrawStr(&m1_u8g2, 2, 40, "Counter: 0->2^32-1");
+                u8g2_DrawStr(&m1_u8g2, 2, 40, "Ctr: 0->3^20-1");
                 u8g2_DrawStr(&m1_u8g2, 2, 52, "Fixed:0x0 @ 315MHz");
             } else {
                 max_code = (1UL << brute_bits[proto_idx]) - 1;
@@ -4230,7 +4230,7 @@ void sub_ghz_brute_force(void)
                 }
                 else
                 {
-                    max_code = 0xFFFFFFFFUL;  /* 32-bit rolling counter */
+                    max_code = SUBGHZ_SECPLUS_V1_MAX_ROLLING;
                     te_short = 0;
                     te_long  = 0;
                 }
@@ -4261,30 +4261,32 @@ void sub_ghz_brute_force(void)
 
             if (subghz_secplus_v1_encode(0, code, &sp_pkt))
             {
-                /* Sub-packet 1: 21 symbols */
-                for (uint8_t s = 0; s < SUBGHZ_SECPLUS_V1_TOTAL_SYMS / 2u + 1u; s++)
+                /* Sub-packet 1: symbols[0..20] (21 symbols = SYMS_PER_PKT) */
+                for (uint8_t s = 0; s < SUBGHZ_SECPLUS_V1_SYMS_PER_PKT; s++)
                 {
-                    /* Each symbol: LOW + HIGH pair → stored as space + mark in pulse_buf */
+                    /* Each symbol is a (LOW, HIGH) pair: space first, then mark */
                     if (idx + 1 < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
                     {
-                        /* Mark (HIGH) */
-                        pulse_buf[idx++] = sp_pkt.symbols[s].high_us | SUBGHZ_OTA_PULSE_BIT_MASK;
                         /* Space (LOW) */
                         pulse_buf[idx++] = sp_pkt.symbols[s].low_us  & SUBGHZ_OTA_SPACE_BIT_MASK;
+                        /* Mark (HIGH) */
+                        pulse_buf[idx++] = sp_pkt.symbols[s].high_us | SUBGHZ_OTA_PULSE_BIT_MASK;
                     }
                 }
                 /* Inter-sub-packet gap */
                 if (idx < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
                     pulse_buf[idx++] = (uint16_t)(SUBGHZ_SECPLUS_V1_INTER_PKT_GAP_US & SUBGHZ_OTA_SPACE_BIT_MASK);
 
-                /* Sub-packet 2: 21 symbols */
-                for (uint8_t s = SUBGHZ_SECPLUS_V1_TOTAL_SYMS / 2u + 1u;
+                /* Sub-packet 2: symbols[21..41] (21 symbols = SYMS_PER_PKT) */
+                for (uint8_t s = SUBGHZ_SECPLUS_V1_SYMS_PER_PKT;
                      s < SUBGHZ_SECPLUS_V1_TOTAL_SYMS; s++)
                 {
                     if (idx + 1 < sizeof(pulse_buf) / sizeof(pulse_buf[0]))
                     {
-                        pulse_buf[idx++] = sp_pkt.symbols[s].high_us | SUBGHZ_OTA_PULSE_BIT_MASK;
+                        /* Space (LOW) */
                         pulse_buf[idx++] = sp_pkt.symbols[s].low_us  & SUBGHZ_OTA_SPACE_BIT_MASK;
+                        /* Mark (HIGH) */
+                        pulse_buf[idx++] = sp_pkt.symbols[s].high_us | SUBGHZ_OTA_PULSE_BIT_MASK;
                     }
                 }
                 /* End gap */

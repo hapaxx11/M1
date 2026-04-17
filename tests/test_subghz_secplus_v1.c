@@ -81,7 +81,7 @@ void test_all_symbols_are_legal(void)
         assert_symbol_legal(&pkt.symbols[i], i);
 }
 
-void test_zero_rolling_zero_fixed_all_data_sym2(void)
+void test_zero_rolling_zero_fixed_all_data_sym0(void)
 {
     /*
      * rolling=0 → all rolling trits = 0 → da[odd]  = 0
@@ -227,7 +227,7 @@ int main(void)
     RUN_TEST(test_zero_fixed_zero_rolling_succeeds);
     RUN_TEST(test_header_symbols_correct);
     RUN_TEST(test_all_symbols_are_legal);
-    RUN_TEST(test_zero_rolling_zero_fixed_all_data_sym2);
+    RUN_TEST(test_zero_rolling_zero_fixed_all_data_sym0);
     RUN_TEST(test_rolling_1_encodes_first_trit);
     RUN_TEST(test_max_rolling_trit_value);
     RUN_TEST(test_different_rolling_produce_different_packets);

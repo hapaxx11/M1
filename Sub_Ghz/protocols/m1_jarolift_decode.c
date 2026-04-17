@@ -12,8 +12,8 @@
  *
  * OTA format (Momentum reference):
  *   Encoding: OOK PWM (same as standard KeeLoq)
- *     Bit 1: te_short HIGH + te_long  LOW  (400 + 800 µs)
- *     Bit 0: te_long  HIGH + te_short LOW  (800 + 400 µs)
+ *     Bit 0: te_short HIGH + te_long  LOW  (400 + 800 µs)
+ *     Bit 1: te_long  HIGH + te_short LOW  (800 + 400 µs)
  *   Total bits: 72 (64-bit KeeLoq frame + 8 preamble bits)
  *   Preamble: 10–12 header pulses @400 µs
  *   te_short = 400 µs, te_long = 800 µs, tolerance ±167 µs

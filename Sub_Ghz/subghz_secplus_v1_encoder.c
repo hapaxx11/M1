@@ -89,68 +89,27 @@ bool subghz_secplus_v1_encode(uint32_t fixed, uint32_t rolling,
     if (!out)
         return false;
 
+    /* Validate inputs: both fixed and rolling must fit in 20 ternary digits */
+    if (fixed > SUBGHZ_SECPLUS_V1_MAX_ROLLING || rolling > SUBGHZ_SECPLUS_V1_MAX_ROLLING)
+        return false;
+
     /*
-     * Security+ 1.0 ternary encoding:
+     * The encoder writes the same trit pairs expected by the decoder:
      *
-     * The 40-bit "code" = (fixed << 20) | rolling (both as ternary values).
-     * fixed  = 20-trit ternary number (fits in 32 bits: 3^20 = 3486784401)
-     * rolling = 20-trit ternary number (fits in 32 bits: same bound)
+     *   Packet 1 uses the first 10 trit pairs and packet 2 uses the next 10.
+     *   In each pair, the rolling trit is emitted first, then the fixed trit
+     *   is emitted in accumulated form:
      *
-     * Each is decomposed into 20 ternary digits.
+     *     out_roll = rolling_trit
+     *     acc += rolling_trit
+     *     out_fixed = (fixed_trit + acc) % 3
+     *     acc += fixed_trit
      *
-     * Encoding (inverse of Flipper decode):
-     *   data_array layout:
-     *     [0]       = PKT1_HEADER (sym 0)
-     *     [1..20]   = 20 data symbols for sub-packet 1
-     *     [21]      = PKT2_HEADER (sym 2)
-     *     [22..41]  = 20 data symbols for sub-packet 2
+     *   Packet 2 repeats the same process with acc reset to 0.
+     *   This is the direct inverse of the decoder's fixed-trit recovery step.
      *
-     *   Packet 1 data (odd+even pairs at [1..20]):
-     *     For i = 1,3,5,…,19 (using trits indexed i//2 from rolling):
-     *       data_array[i]   = rolling_trit[k]    (k = (i-1)/2, from trit[0])
-     *       acc            += rolling_trit[k]
-     *       data_array[i+1] = fixed_trit[k]      (raw trit from fixed)
-     *       acc            += data_array[i+1]    (but data_array[i+1] is raw fixed trit!)
-     *
-     * Wait — let me re-read the Flipper decode more carefully to get the
-     * exact inverse.
-     *
-     * From m1_chamberlain_decode.c reconstruct_payload():
-     *
-     *   Packet 1: for i = 1, 3, 5, …, 19 (step 2):
-     *     rolling = rolling * 3 + da[i]         → rolling_trit = da[i]
-     *     acc += da[i]
-     *     fixed_digit = (60 + da[i+1] - acc) % 3  → da[i+1] = (fixed_digit + acc) % 3
-     *     fixed  = fixed * 3 + fixed_digit
-     *     acc   += fixed_digit
-     *
-     *   Packet 2: acc = 0; for i = 22, 24, 26, …, 40 (step 2):
-     *     rolling = rolling * 3 + da[i]         → rolling_trit = da[i]
-     *     acc += da[i]
-     *     fixed_digit = (60 + da[i+1] - acc) % 3  → da[i+1] = (fixed_digit + acc) % 3
-     *     fixed  = fixed * 3 + fixed_digit
-     *     acc   += fixed_digit
-     *
-     * So to encode, we reverse this:
-     *   given rolling (MSB first = trit[0..19]) and fixed (MSB first = trit[0..19]):
-     *
-     *   Packet 1: acc = 0; for k = 0..9:
-     *     i = 1 + k*2
-     *     da[i]   = rolling_trit[k]
-     *     acc    += rolling_trit[k]
-     *     da[i+1] = (fixed_trit[k] + acc) % 3     ← encode fixed using acc
-     *     acc    += fixed_trit[k]
-     *
-     *   Packet 2: acc = 0; for k = 10..19:
-     *     i = 22 + (k-10)*2
-     *     da[i]   = rolling_trit[k]
-     *     acc    += rolling_trit[k]
-     *     da[i+1] = (fixed_trit[k] + acc) % 3
-     *     acc    += fixed_trit[k]
-     *
-     * Then:
-     *   sub-pkt 1 data: da[1..20] → 20 data symbols
-     *   sub-pkt 2 data: da[22..41] → 20 data symbols
+     *   The loops below serialize those symbols into:
+     *     [PKT1_HEADER][20 data symbols][PKT2_HEADER][20 data symbols]
      */
 
     /* Decompose fixed and rolling into 20 ternary digits each, MSB first */

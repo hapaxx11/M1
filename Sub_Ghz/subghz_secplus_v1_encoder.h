@@ -72,6 +72,9 @@ typedef struct {
 /** Total symbols in one complete packet (2 sub-packets). */
 #define SUBGHZ_SECPLUS_V1_TOTAL_SYMS    42u
 
+/** Maximum valid rolling counter value (3^20 - 1 = 3486784400). */
+#define SUBGHZ_SECPLUS_V1_MAX_ROLLING  3486784400UL
+
 /*============================================================================*/
 /* API                                                                         */
 /*============================================================================*/
@@ -82,10 +85,22 @@ typedef struct {
  * Implements the argilo/secplus encoding algorithm (MIT licence) as used in
  * Flipper Zero firmware's secplus_v1.c.
  *
- * @param fixed    40-bit fixed code (device identifier, top 8 bits usually zero)
- * @param rolling  32-bit rolling counter (LSB-first after bit-reversal)
+ * Both input values are represented as 20-trit base-3 integers, matching the
+ * existing m1_chamberlain_decode.c decoder output.
+ *
+ * NOTE: The M1 decoder exposes the rolling code after applying reverse32() to
+ * the on-air ternary value.  To replay a saved packet whose n32_rollingcode
+ * was captured by the decoder, pass reverse32(n32_rollingcode) here.  For a
+ * brute-force counter sweep (0 to SUBGHZ_SECPLUS_V1_MAX_ROLLING), pass the
+ * counter value directly — it maps to the on-air ternary rolling value.
+ *
+ * @param fixed    Fixed code as a 20-trit ternary value stored in uint32_t
+ *                 (valid range: 0 .. 3^20 - 1 = SUBGHZ_SECPLUS_V1_MAX_ROLLING)
+ * @param rolling  Rolling counter as a 20-trit ternary value stored in uint32_t
+ *                 (valid range: 0 .. 3^20 - 1 = SUBGHZ_SECPLUS_V1_MAX_ROLLING)
  * @param out      Output packet buffer (caller-allocated)
- * @return true on success, false if input is invalid (rolling > 2^20*3^10 - 1)
+ * @return true on success, false if any input is invalid
+ *         (fixed > 3^20 - 1 or rolling > 3^20 - 1) or out is NULL
  */
 bool subghz_secplus_v1_encode(uint32_t fixed, uint32_t rolling,
                                SubGhzSecPlusV1Packet *out);

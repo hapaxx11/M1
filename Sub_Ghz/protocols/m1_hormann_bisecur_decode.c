@@ -64,7 +64,14 @@ uint8_t subghz_decode_hormann_bisecur(uint16_t p, uint16_t pulsecount)
     const uint16_t te_delta = proto->timing.te_delta;  /* 104 µs */
     const uint16_t min_bits = proto->timing.min_count_bit_for_found;  /* 176 */
 
-    SubGhzBlockDecoder decoder = {0};
+    /*
+     * Use a 3-element uint64_t accumulator to collect up to 192 bits without
+     * overflow.  SubGhzBlockDecoder.decode_data is only 64 bits; accumulating
+     * 176 bits into it causes the first 112 bits to be shifted out, making
+     * field extraction from bytes 0–8 incorrect.
+     */
+    uint64_t raw[3] = {0, 0, 0};
+    uint16_t total_bits = 0;
     ManchesterState manchester_state = ManchesterStateMid1;
 
     /* Skip preamble alternating pulses — BiSecur preamble consists of
@@ -90,8 +97,8 @@ uint8_t subghz_decode_hormann_bisecur(uint16_t p, uint16_t pulsecount)
 
     if (i >= pulsecount) return 1;
 
-    /* Manchester decode the data region */
-    for (; i < pulsecount && decoder.decode_count_bit < min_bits; i++)
+    /* Manchester decode the data region into the 3-element accumulator */
+    for (; i < pulsecount && total_bits < min_bits; i++)
     {
         uint16_t dur = subghz_decenc_ctl.pulse_times[i];
         bool is_high = ((i & 1) == 0);
@@ -115,33 +122,37 @@ uint8_t subghz_decode_hormann_bisecur(uint16_t p, uint16_t pulsecount)
         bool bit_value;
         if (manchester_advance(manchester_state, event, &manchester_state, &bit_value))
         {
-            subghz_protocol_blocks_add_bit(&decoder, bit_value ? 1 : 0);
+            /* Accumulate bit MSB-first into raw[0], raw[1], or raw[2] */
+            if (total_bits < 192u)
+            {
+                uint8_t word = (uint8_t)(total_bits / 64u);
+                raw[word] = (raw[word] << 1) | (bit_value ? 1u : 0u);
+            }
+            total_bits++;
         }
     }
 
-    if (decoder.decode_count_bit >= min_bits)
+    if (total_bits >= min_bits)
     {
-        uint64_t raw = decoder.decode_data;
-
-        subghz_decenc_ctl.n64_decodedvalue = raw;
-        subghz_decenc_ctl.ndecodedbitlength = decoder.decode_count_bit;
+        /*
+         * raw[0] holds frame bits 0–63 (bytes 0–7), MSB-first:
+         *   byte 0 (message type): raw[0] bits 63–56
+         *   bytes 1–4 (serial):    raw[0] bits 55–24
+         *   bytes 5–7 (counter hi): raw[0] bits 23–0
+         * raw[1] holds frame bits 64–127 (bytes 8–15):
+         *   byte 8 (counter lo):   raw[1] bits 63–56
+         */
+        subghz_decenc_ctl.n64_decodedvalue = raw[0];
+        subghz_decenc_ctl.ndecodedbitlength = total_bits;
         subghz_decenc_ctl.ndecodeddelay = 0;
         subghz_decenc_ctl.ndecodedprotocol = p;
 
-        /* Extract fields from upper 64 bits of the 176-bit Manchester frame.
-         * Layout (byte positions in full 22-byte frame, MSB first):
-         *   Byte 0:    message type
-         *   Bytes 1-4: device serial (32 bits)
-         *   Bytes 5-8: rolling counter (32 bits)
-         *   Bytes 9+:  AES payload (not captured in 64-bit raw)
-         *
-         * From the 64-bit captured value (bits 63:0 = frame bytes 0..7):
-         *   serial  = bits [55:24]  (bytes 1-4)
-         *   counter = bits [23:0] + byte 8 partial
-         */
-        subghz_decenc_ctl.n32_serialnumber = (uint32_t)((raw >> 24) & 0xFFFFFFFF);
-        subghz_decenc_ctl.n32_rollingcode  = (uint32_t)(raw & 0xFFFFFF);
-        subghz_decenc_ctl.n8_buttonid      = (uint8_t)((raw >> 56) & 0xFF); /* message type */
+        /* Extract fields from the 3-word accumulator */
+        subghz_decenc_ctl.n8_buttonid      = (uint8_t)((raw[0] >> 56) & 0xFF);
+        subghz_decenc_ctl.n32_serialnumber = (uint32_t)((raw[0] >> 24) & 0xFFFFFFFF);
+        /* Rolling counter spans bytes 5–8: 24 bits from raw[0] + 8 bits from raw[1] */
+        subghz_decenc_ctl.n32_rollingcode  =
+            (uint32_t)(((raw[0] & 0xFFFFFFUL) << 8) | ((raw[1] >> 56) & 0xFF));
 
         M1_LOG_I(M1_LOGDB_TAG, "BiSecur serial=0x%08lX counter=0x%06lX type=0x%02X\r\n",
                  (unsigned long)subghz_decenc_ctl.n32_serialnumber,

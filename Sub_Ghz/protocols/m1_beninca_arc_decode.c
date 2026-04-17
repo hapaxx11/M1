@@ -13,8 +13,8 @@
  *
  * OTA format (Momentum reference: lib/subghz/protocols/beninca_arc.c):
  *   Encoding: OOK PWM, 1:2 ratio
- *     Bit 1: te_short HIGH + te_long  LOW  (300 + 600 µs)
- *     Bit 0: te_long  HIGH + te_short LOW  (600 + 300 µs)
+ *     Bit 0: te_short HIGH + te_long  LOW  (300 + 600 µs)
+ *     Bit 1: te_long  HIGH + te_short LOW  (600 + 300 µs)
  *   Total bits: 128
  *   te_short = 300 µs, te_long = 600 µs, te_delta = 155 µs
  *

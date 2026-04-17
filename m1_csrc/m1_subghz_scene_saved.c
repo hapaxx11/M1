@@ -310,7 +310,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                     case 3: err = "Unsupported freq";           break;
                     case 4: /* fall through */
                     case 5: err = "Memory error";               break;
-                    case 6: err = "Cannot replay: encrypted key";  break;
+                    case 6: err = "Cannot replay: dynamic key";   break;
                     case 7: err = "Unsupported protocol";       break;
                 }
                 m1_message_box(&m1_u8g2, "Emulate failed", err, "",
