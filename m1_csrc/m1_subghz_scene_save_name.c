@@ -5,7 +5,8 @@
  * @brief  Sub-GHz Save Name Scene — virtual keyboard for filename entry.
  *
  * Auto-generates a default name from protocol + key, allows user to edit
- * or accept. Saves as Flipper-compatible .sub file.
+ * or accept. Saves in the format selected by the user in Config (Flipper
+ * .sub or M1 native .sgh).
  */
 
 #include <stdint.h>
@@ -21,6 +22,7 @@
 #include "flipper_subghz.h"
 
 extern const char *subghz_freq_labels[];
+extern uint8_t subghz_get_save_fmt_ext(void);
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -57,8 +59,10 @@ static void scene_on_enter(SubGhzApp *app)
         return;
     }
 
-    /* Build full path and save */
-    snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s.sub", new_name);
+    /* Choose file extension based on user's save format preference */
+    uint8_t fmt = subghz_get_save_fmt_ext();
+    const char *ext = (fmt == 1) ? ".sgh" : ".sub";
+    snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s%s", new_name, ext);
 
     flipper_subghz_signal_t sub_sig;
     memset(&sub_sig, 0, sizeof(sub_sig));
@@ -72,7 +76,13 @@ static void scene_on_enter(SubGhzApp *app)
     strncpy(sub_sig.protocol, protocol_text[e->info.protocol],
             FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
 
-    if (flipper_subghz_save(app->file_path, &sub_sig))
+    bool saved;
+    if (fmt == 1)
+        saved = flipper_subghz_save_m1native(app->file_path, &sub_sig);
+    else
+        saved = flipper_subghz_save(app->file_path, &sub_sig);
+
+    if (saved)
     {
         /* Replace this scene with success screen */
         subghz_scene_replace(app, SubGhzSceneSaveSuccess);

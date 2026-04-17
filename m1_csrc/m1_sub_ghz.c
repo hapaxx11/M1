@@ -333,6 +333,7 @@ typedef struct {
 	bool    hopping;
 	bool    bin_raw;
 	bool    sound;
+	uint8_t save_fmt;       /* 0 = Flipper .sub, 1 = M1 native .sgh */
 } SubGHz_Config_t;
 
 static SubGHz_Config_t subghz_cfg = {
@@ -340,7 +341,8 @@ static SubGHz_Config_t subghz_cfg = {
 	.mod_idx  = 1,    /* AM650 — Flipper default */
 	.hopping  = false,
 	.bin_raw  = false,
-	.sound    = true
+	.sound    = true,
+	.save_fmt = 0     /* Default: Flipper .sub for Flipper compatibility */
 };
 
 /* Add Manually protocol entries */
@@ -1752,7 +1754,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		{
 			if (strstr(line_buf, "RAW") || strstr(line_buf, "NOISE"))
 				is_raw = true;
-			else if (strstr(line_buf, "Key"))
+			else if (strstr(line_buf, "Key") || strstr(line_buf, "PACKET"))
 				is_key = true;
 			f_puts("Filetype: M1 SubGHz NOISE\r\n", &f_sgh);
 		}
@@ -1803,6 +1805,11 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		{
 			key_bit_count = (uint32_t)strtoul(line_buf + 4, NULL, 10);
 		}
+		else if (strncmp(line_buf, "Bits:", 5) == 0)
+		{
+			/* M1 native .sgh PACKET format uses "Bits:" instead of "Bit:" */
+			key_bit_count = (uint32_t)strtoul(line_buf + 5, NULL, 10);
+		}
 		else if (strncmp(line_buf, "Key:", 4) == 0)
 		{
 			/* Parse hex bytes big-endian: "00 00 00 00 00 52 A1 2E" */
@@ -1819,8 +1826,20 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 				p = endp;
 			}
 		}
+		else if (strncmp(line_buf, "Payload:", 8) == 0)
+		{
+			/* M1 native .sgh PACKET format: "Payload: 0x0000000052A12E" */
+			const char *p = line_buf + 8;
+			while (*p == ' ') p++;
+			key_value = (uint64_t)strtoull(p, NULL, 16);
+		}
 		else if (strncmp(line_buf, "TE:", 3) == 0)
 		{
+			key_te = (uint32_t)strtoul(line_buf + 3, NULL, 10);
+		}
+		else if (strncmp(line_buf, "BT:", 3) == 0)
+		{
+			/* M1 native .sgh PACKET format uses "BT:" instead of "TE:" */
 			key_te = (uint32_t)strtoul(line_buf + 3, NULL, 10);
 		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
@@ -4809,6 +4828,10 @@ uint8_t subghz_get_tx_power_idx_ext(void) { return subghz_tx_power_idx; }
 void    subghz_set_tx_power_idx_ext(uint8_t idx) { if (idx < TX_POWER_LEVELS) subghz_tx_power_idx = idx; }
 const char *subghz_get_tx_power_label_ext(uint8_t idx) { return (idx < TX_POWER_LEVELS) ? tx_power_labels[idx] : "?"; }
 uint8_t subghz_get_tx_power_count_ext(void) { return TX_POWER_LEVELS; }
+
+/* Save format accessors (0 = Flipper .sub, 1 = M1 native .sgh) */
+uint8_t subghz_get_save_fmt_ext(void) { return subghz_cfg.save_fmt; }
+void    subghz_set_save_fmt_ext(uint8_t fmt) { if (fmt <= 1) subghz_cfg.save_fmt = fmt; }
 
 /* ── Raw recording file management (used by Read Raw scene) ─────────────── */
 

@@ -68,6 +68,10 @@ void menu_settings_exit(void);
 void settings_about(void);
 void settings_save_to_sd(void);
 
+/* Sub-GHz save format accessors (defined in m1_sub_ghz.c) */
+extern uint8_t subghz_get_save_fmt_ext(void);
+extern void    subghz_set_save_fmt_ext(uint8_t fmt);
+
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
 
@@ -626,6 +630,9 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "ism_region=%d\n", m1_device_stat.config.ism_band_region);
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "subghz_save_fmt=%d\n", subghz_get_save_fmt_ext());
+    f_write(&fp, buf, strlen(buf), &bw);
+
 #ifdef M1_APP_BADBT_ENABLE
     snprintf(buf, sizeof(buf), "badbt_name=%s\n", m1_badbt_name);
     f_write(&fp, buf, strlen(buf), &bw);
@@ -758,6 +765,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 11) - '0');
         if (val >= 0 && val <= 3)
             m1_device_stat.config.ism_band_region = (uint8_t)val;
+    }
+
+    /* Parse "subghz_save_fmt=X" */
+    p = strstr(buf, "subghz_save_fmt=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 16) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_save_fmt_ext((uint8_t)val);
     }
 
     /* Legacy: migrate "southpaw=1" if no orientation key found */
