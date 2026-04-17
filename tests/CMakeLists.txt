@@ -204,6 +204,36 @@ endif()
 add_test(NAME subghz_key_encoder COMMAND test_subghz_key_encoder)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_protocol_decode (encoder/decoder roundtrip)
+# Tests verify that key encoder output is correctly decoded by the
+# protocol-specific decoders:
+#   - Magellan: inverted polarity + frame-header skip (PR fix)
+#   - CAME 12-bit: standard 1:2 OOK PWM (verified correct)
+#   - GateTX 24-bit: standard 1:2 OOK PWM (verified correct)
+#   - Nice FLO 12-bit: standard 1:2 OOK PWM (verified correct)
+# ------------------------------------------------------------------
+add_executable(test_subghz_protocol_decode
+    test_subghz_protocol_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_magellan_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_came_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_gate_tx_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_nice_flo_decode.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_subghz_protocol_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_subghz_protocol_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_protocol_decode PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_protocol_decode COMMAND test_subghz_protocol_decode)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_raw_line_parser (RAW_Data line parsing)
 # Extracted from sub_ghz_replay_flipper_file() — handles signed→absolute
 # conversion, zero skipping, and cross-buffer leftover digit recombination.
