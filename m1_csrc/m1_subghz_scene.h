@@ -294,5 +294,6 @@ extern const SubGhzSceneHandlers subghz_scene_freq_scanner_handlers;
 extern const SubGhzSceneHandlers subghz_scene_weather_station_handlers;
 extern const SubGhzSceneHandlers subghz_scene_brute_force_handlers;
 extern const SubGhzSceneHandlers subghz_scene_add_manually_handlers;
+extern const SubGhzSceneHandlers subghz_scene_remote_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */
