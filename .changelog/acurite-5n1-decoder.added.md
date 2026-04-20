@@ -1,0 +1,1 @@
+**Sub-GHz: Acurite 5n1 weather station decoder** — Added decoder for Acurite 5-in-1 weather transmitters (64-bit OOK PWM, 433.92 MHz). Flipper `.sub` files with `Protocol: Acurite_5n1` are now recognised and displayed. Validates the 7-bit checksum; decodes both message types (0x31: wind/rain, 0x38: wind/temperature/humidity).

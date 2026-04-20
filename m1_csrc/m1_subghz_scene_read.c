@@ -104,11 +104,13 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 #define HISTORY_VISIBLE    3  /* Number of visible history items */
 
 /* Hopper */
-#define HOPPER_RSSI_THRESHOLD  -70
 #define HOPPER_DWELL_MS        150
 
 /* SI4463 config */
 #define OOK_PDTC_VALUE  0x6C
+
+/* RSSI threshold accessor (defined in m1_sub_ghz.c) */
+extern int8_t subghz_get_rssi_threshold_ext(void);
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -409,7 +411,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Read RSSI; if below threshold, hop to next frequency */
                 app->rssi = subghz_read_rssi_ext();
-                if (app->rssi < HOPPER_RSSI_THRESHOLD)
+                if (app->rssi < subghz_get_rssi_threshold_ext())
                 {
                     app->hopper_idx = (app->hopper_idx + 1) % READ_HOPPER_FREQ_COUNT;
                     app->hopper_freq = subghz_hopper_freqs_ext[app->hopper_idx];

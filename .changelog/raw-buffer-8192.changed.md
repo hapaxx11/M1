@@ -1,0 +1,1 @@
+**Sub-GHz: larger RAW offline-decode buffer** — `FLIPPER_SUBGHZ_RAW_MAX_SAMPLES` increased from 2048 to 8192 samples. The offline decode path (Saved scene) can now handle real-world Flipper captures of garage doors, TPMS bursts, and security sensors without truncation.

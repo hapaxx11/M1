@@ -16,6 +16,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
@@ -23,6 +25,7 @@
 #include "m1_subghz_scene.h"
 #include "m1_settings.h"
 #include "m1_system.h"
+#include "m1_virtual_kb.h"
 
 /*============================================================================*/
 /* Frequency & modulation preset tables (shared with m1_sub_ghz.c)            */
@@ -30,7 +33,7 @@
 /*============================================================================*/
 
 /* Frequency preset count & labels — must match m1_sub_ghz.c */
-#define CFG_FREQ_COUNT  62
+#define CFG_FREQ_COUNT  63  /* 62 real presets + 1 Custom sentinel */
 #define CFG_MOD_COUNT    4
 
 /* We need these string labels for display — pull from the same source */
@@ -52,6 +55,10 @@ extern void subghz_set_freq_idx_ext(uint8_t idx);
 extern void subghz_set_mod_idx_ext(uint8_t idx);
 extern void subghz_set_hopping_ext(bool v);
 extern void subghz_set_sound_ext(bool v);
+extern int8_t subghz_get_rssi_threshold_ext(void);
+extern void   subghz_set_rssi_threshold_ext(int8_t v);
+extern uint32_t subghz_get_user_custom_freq_ext(void);
+extern void     subghz_set_user_custom_freq_ext(uint32_t hz);
 
 /* ISM region data (non-static globals in m1_sub_ghz.c / m1_sub_ghz.h) */
 extern const char *subghz_ism_regions_text[];
@@ -60,14 +67,15 @@ extern const char *subghz_ism_regions_text[];
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS      7
-#define CFG_FREQUENCY  0
-#define CFG_HOPPING    1
-#define CFG_MODULATION 2
-#define CFG_SOUND      3
-#define CFG_TX_POWER   4
-#define CFG_ISM_REGION 5
-#define CFG_SAVE_FMT   6
+#define CFG_ITEMS       8
+#define CFG_FREQUENCY   0
+#define CFG_HOPPING     1
+#define CFG_MODULATION  2
+#define CFG_SOUND       3
+#define CFG_TX_POWER    4
+#define CFG_ISM_REGION  5
+#define CFG_SAVE_FMT    6
+#define CFG_RSSI_THRESH 7
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
@@ -86,6 +94,7 @@ static const char *cfg_item_labels[CFG_ITEMS] = {
     "TX Power:",
     "ISM Region:",
     "Save Format:",
+    "RSSI Thresh:",
 };
 
 /*============================================================================*/
@@ -99,7 +108,15 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
     {
         case CFG_FREQUENCY:
             if (subghz_freq_labels)
+            {
+                /* For Custom entry (index 62), show the stored MHz label.
+                 * subghz_set_user_custom_freq_ext() keeps freq_labels[Custom]
+                 * updated with the formatted MHz string, so we can use it
+                 * directly — falling through to the normal return path. */
+                if (app->freq_idx == CFG_FREQ_COUNT - 1)
+                    return subghz_freq_labels[app->freq_idx];
                 return subghz_freq_labels[app->freq_idx];
+            }
             snprintf(freq_buf, sizeof(freq_buf), "Preset %d", app->freq_idx);
             return freq_buf;
         case CFG_HOPPING:
@@ -116,6 +133,12 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             return subghz_ism_regions_text[m1_device_stat.config.ism_band_region];
         case CFG_SAVE_FMT:
             return subghz_get_save_fmt_ext() ? "M1 (.sgh)" : "Flipper (.sub)";
+        case CFG_RSSI_THRESH:
+        {
+            static char rssi_buf[8];
+            snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm", (int)subghz_get_rssi_threshold_ext());
+            return rssi_buf;
+        }
         default:
             return "";
     }
@@ -174,6 +197,14 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
         case CFG_SAVE_FMT:
             subghz_set_save_fmt_ext(subghz_get_save_fmt_ext() ^ 1);
             break;
+        case CFG_RSSI_THRESH:
+        {
+            /* Step in 5 dBm increments, range -50 to -100 */
+            int8_t t = subghz_get_rssi_threshold_ext();
+            t = (int8_t)(t + dir * (-5));
+            subghz_set_rssi_threshold_ext(t);
+            break;
+        }
     }
 }
 
@@ -233,7 +264,40 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventRight:
         case SubGhzEventOk:
-            change_value(app, cfg_sel, +1);
+            /* Special case: OK on the Custom frequency entry opens VKB */
+            if (cfg_sel == CFG_FREQUENCY && app->freq_idx == CFG_FREQ_COUNT - 1)
+            {
+                char mhz_str[12] = "";
+                uint32_t cur_hz = subghz_get_user_custom_freq_ext();
+                snprintf(mhz_str, sizeof(mhz_str), "%lu.%02lu",
+                         (unsigned long)(cur_hz / 1000000UL),
+                         (unsigned long)((cur_hz % 1000000UL) / 10000UL));
+
+                char new_mhz[12] = "";
+                if (m1_vkb_get_text("Freq (MHz):", mhz_str, new_mhz, sizeof(new_mhz)))
+                {
+                    /* Parse the entered value (e.g. "868.35") */
+                    char *dot = NULL;
+                    unsigned long whole = strtoul(new_mhz, &dot, 10);
+                    unsigned long frac  = 0;
+                    if (dot && *dot == '.')
+                    {
+                        char frac_buf[7] = "000000";
+                        const char *fp = dot + 1;
+                        for (uint8_t fi = 0; fi < 6 && isdigit((unsigned char)fp[fi]); fi++)
+                            frac_buf[fi] = fp[fi];
+                        frac = strtoul(frac_buf, NULL, 10);
+                    }
+                    uint32_t hz = (uint32_t)(whole * 1000000UL + frac);
+                    /* Validate SI4463 range (300–930 MHz) */
+                    if (hz >= 300000000UL && hz <= 930000000UL)
+                        subghz_set_user_custom_freq_ext(hz);
+                }
+            }
+            else
+            {
+                change_value(app, cfg_sel, +1);
+            }
             app->need_redraw = true;
             return true;
 

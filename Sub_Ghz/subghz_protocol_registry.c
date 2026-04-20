@@ -165,6 +165,7 @@ extern uint8_t subghz_decode_x10(uint16_t, uint16_t);
 /* Momentum Phase 5: Advanced weather protocols */
 extern uint8_t subghz_decode_acurite_592txr(uint16_t, uint16_t);
 extern uint8_t subghz_decode_acurite_986(uint16_t, uint16_t);
+extern uint8_t subghz_decode_acurite_5n1(uint16_t, uint16_t);
 extern uint8_t subghz_decode_tx_8300(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon_v1(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon3(uint16_t, uint16_t);
@@ -1039,6 +1040,14 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Weather,
         .timing = { .te_short=800, .te_long=1750, .te_delta=50, .min_count_bit_for_found=40 },
         .decode = subghz_decode_acurite_986,
+    },
+    [ACURITE_5N1] = {
+        .name   = "Acurite_5n1",
+        .type   = SubGhzProtocolTypeWeather,
+        .flags  = F_WEATHER,
+        .filter = SubGhzProtocolFilter_Weather,
+        .timing = { .te_short=200, .te_long=400, .te_delta=90, .min_count_bit_for_found=64 },
+        .decode = subghz_decode_acurite_5n1,
     },
     [TX_8300] = {
         .name   = "TX_8300",

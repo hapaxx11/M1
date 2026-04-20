@@ -240,8 +240,10 @@ static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
 
 /*============================================================================*/
 /* Frequency presets — matches Momentum firmware's default list (62 entries)   */
+/* plus one synthetic "Custom" sentinel at index 62 for user-entered MHz.     */
 /*============================================================================*/
-#define SUBGHZ_FREQ_PRESET_COUNT    62
+#define SUBGHZ_FREQ_PRESET_COUNT    62  /* Number of real presets */
+#define SUBGHZ_FREQ_PRESET_CUSTOM   62  /* Sentinel index for user-entered custom freq */
 #define SUBGHZ_FREQ_DEFAULT_IDX     39  /* 433.92 MHz */
 
 static const struct {
@@ -341,15 +343,17 @@ typedef struct {
 	bool    bin_raw;
 	bool    sound;
 	uint8_t save_fmt;       /* 0 = Flipper .sub, 1 = M1 native .sgh */
+	int8_t  rssi_threshold; /* Hopper RSSI threshold (dBm, -50 to -100) */
 } SubGHz_Config_t;
 
 static SubGHz_Config_t subghz_cfg = {
-	.freq_idx = SUBGHZ_FREQ_DEFAULT_IDX,
-	.mod_idx  = 1,    /* AM650 — Flipper default */
-	.hopping  = false,
-	.bin_raw  = false,
-	.sound    = true,
-	.save_fmt = 0     /* Default: Flipper .sub for Flipper compatibility */
+	.freq_idx       = SUBGHZ_FREQ_DEFAULT_IDX,
+	.mod_idx        = 1,    /* AM650 — Flipper default */
+	.hopping        = false,
+	.bin_raw        = false,
+	.sound          = true,
+	.save_fmt       = 0,    /* Default: Flipper .sub for Flipper compatibility */
+	.rssi_threshold = -70   /* dBm: stay on freq if RSSI >= this (Flipper default) */
 };
 
 /* Add Manually protocol entries */
@@ -389,6 +393,12 @@ static uint8_t subghz_tx_power_idx = 3;  /* Default: Max */
 
 /* Custom frequency for SUB_GHZ_BAND_CUSTOM mode */
 static uint32_t subghz_custom_freq_hz = 433920000UL;
+
+/* User-entered custom frequency (persisted, shown in Config under "Custom" preset) */
+static uint32_t subghz_user_custom_freq_hz = 433920000UL;
+
+/* Label string for the "Custom" preset (updated when user enters a value) */
+static char subghz_custom_freq_label[12] = "Custom";
 
 /* Last decoded protocol info during Record (for overlay + .sub save) */
 static SubGHz_Dec_Info_t subghz_record_last_decoded;
@@ -531,7 +541,15 @@ static S_M1_SubGHz_Band subghz_freq_hz_to_band(uint32_t freq_hz)
 /* Helper: set subghz_custom_freq_hz + scan_config from config preset */
 static void subghz_apply_config(void)
 {
-	subghz_custom_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+	if (subghz_cfg.freq_idx == SUBGHZ_FREQ_PRESET_CUSTOM)
+	{
+		/* Use user-entered custom frequency */
+		subghz_custom_freq_hz = subghz_user_custom_freq_hz;
+	}
+	else
+	{
+		subghz_custom_freq_hz = subghz_freq_presets[subghz_cfg.freq_idx].freq_hz;
+	}
 	subghz_scan_config.band = subghz_freq_hz_to_band(subghz_custom_freq_hz);
 	subghz_scan_config.modulation = subghz_mod_presets[subghz_cfg.mod_idx].mod;
 }
@@ -4979,7 +4997,7 @@ void sub_ghz_freq_scanner(void)
 #include "m1_subghz_scene.h"
 
 /* Frequency & modulation label arrays for scene_config.c */
-const char *subghz_freq_labels[SUBGHZ_FREQ_PRESET_COUNT];
+const char *subghz_freq_labels[SUBGHZ_FREQ_PRESET_COUNT + 1];  /* +1 for Custom entry */
 const char *subghz_mod_labels[SUBGHZ_MOD_PRESET_COUNT];
 
 /* Hopper frequency array for scene_read.c */
@@ -4995,6 +5013,8 @@ static void subghz_init_labels(void)
 		return;
 	for (uint8_t i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
 		subghz_freq_labels[i] = subghz_freq_presets[i].label;
+	/* Add the "Custom" sentinel label at index 62 */
+	subghz_freq_labels[SUBGHZ_FREQ_PRESET_CUSTOM] = subghz_custom_freq_label;
 	for (uint8_t i = 0; i < SUBGHZ_MOD_PRESET_COUNT; i++)
 		subghz_mod_labels[i] = subghz_mod_presets[i].label;
 	subghz_labels_initialized = true;
@@ -5029,6 +5049,8 @@ bool subghz_transmit_static_signal_ext(const SubGHz_History_Entry_t *entry)
 /* Get frequency in Hz for a given preset index */
 uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx)
 {
+	if (freq_idx == SUBGHZ_FREQ_PRESET_CUSTOM)
+		return subghz_user_custom_freq_hz;
 	if (freq_idx >= SUBGHZ_FREQ_PRESET_COUNT)
 		return 433920000UL;  /* safe default */
 	return subghz_freq_presets[freq_idx].freq_hz;
@@ -5137,9 +5159,41 @@ uint8_t subghz_get_tx_power_count_ext(void) { return TX_POWER_LEVELS; }
 uint8_t subghz_get_save_fmt_ext(void) { return subghz_cfg.save_fmt; }
 void    subghz_set_save_fmt_ext(uint8_t fmt) { if (fmt <= 1) subghz_cfg.save_fmt = fmt; }
 
+/* RSSI threshold accessor (dBm, -50 to -100; -70 is the Flipper default) */
+int8_t  subghz_get_rssi_threshold_ext(void)  { return subghz_cfg.rssi_threshold; }
+void    subghz_set_rssi_threshold_ext(int8_t v)
+{
+    if (v > -50)  v = -50;
+    if (v < -100) v = -100;
+    subghz_cfg.rssi_threshold = v;
+}
+
 /* Radio config accessors — used by settings_save/load and scene init */
 uint8_t subghz_get_freq_idx_ext(void)        { return subghz_cfg.freq_idx; }
-void    subghz_set_freq_idx_ext(uint8_t idx) { if (idx < SUBGHZ_FREQ_PRESET_COUNT) subghz_cfg.freq_idx = idx; }
+void    subghz_set_freq_idx_ext(uint8_t idx)
+{
+    /* Accept both real presets (0..61) and the Custom sentinel (62) */
+    if (idx <= SUBGHZ_FREQ_PRESET_CUSTOM)
+        subghz_cfg.freq_idx = idx;
+}
+
+/* User custom frequency (persisted; used when freq_idx == SUBGHZ_FREQ_PRESET_CUSTOM) */
+uint32_t subghz_get_user_custom_freq_ext(void)       { return subghz_user_custom_freq_hz; }
+void     subghz_set_user_custom_freq_ext(uint32_t hz)
+{
+    /* Clamp to SI4463 operating range (300–930 MHz) */
+    if (hz < 300000000UL)  hz = 300000000UL;
+    if (hz > 930000000UL)  hz = 930000000UL;
+    subghz_user_custom_freq_hz = hz;
+    /* Refresh display label */
+    snprintf(subghz_custom_freq_label, sizeof(subghz_custom_freq_label),
+             "%lu.%02lu",
+             (unsigned long)(hz / 1000000UL),
+             (unsigned long)((hz % 1000000UL) / 10000UL));
+    /* Propagate to freq_labels table if already initialised */
+    if (subghz_labels_initialized)
+        subghz_freq_labels[SUBGHZ_FREQ_PRESET_CUSTOM] = subghz_custom_freq_label;
+}
 uint8_t subghz_get_mod_idx_ext(void)         { return subghz_cfg.mod_idx; }
 void    subghz_set_mod_idx_ext(uint8_t idx)  { if (idx < SUBGHZ_MOD_PRESET_COUNT) subghz_cfg.mod_idx = idx; }
 bool    subghz_get_hopping_ext(void)         { return subghz_cfg.hopping; }

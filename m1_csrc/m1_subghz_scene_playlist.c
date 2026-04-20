@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "ff.h"
+#include "app_freertos.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_storage.h"
@@ -83,6 +84,10 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
 
     app->playlist_count = 0;
 
+    /* Clear any leftover delay values from a previously loaded playlist */
+    for (uint8_t i = 0; i < PLAYLIST_MAX_FILES; i++)
+        app->playlist_delays[i] = 0;
+
     /* Create playlist directory on demand */
     f_mkdir("/SUBGHZ");
     f_mkdir(PLAYLIST_DIR);
@@ -100,9 +105,24 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
         while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == '\n'))
             line[--len] = '\0';
 
-        /* Skip blank lines and comments */
-        if (len == 0 || line[0] == '#')
+        /* Skip blank lines */
+        if (len == 0)
             continue;
+
+        /* Check for delay directive: "# delay: <ms>"
+         * The delay applies to the NEXT entry added after this line.
+         * If multiple delay lines appear consecutively, the last one wins. */
+        if (line[0] == '#')
+        {
+            uint16_t dms = 0;
+            if (subghz_playlist_parse_delay(line, &dms))
+            {
+                /* Record as the delay for the next sub: entry */
+                if (app->playlist_count < PLAYLIST_MAX_FILES)
+                    app->playlist_delays[app->playlist_count] = dms;
+            }
+            continue;
+        }
 
         /* Look for "sub:" prefix */
         if (strncmp(line, "sub:", 4) != 0)
@@ -152,6 +172,19 @@ static bool playlist_transmit_next(SubGhzApp *app)
      * radio_init_rx_tx()'s retry loop, adding ~100ms latency per item. */
     sub_ghz_replay_flipper_file(app->playlist_files[app->playlist_current]);
     menu_sub_ghz_init();
+
+    /* Apply inter-signal delay (from "# delay: <ms>" playlist directive).
+     * Delays are recorded on the next playlist entry during parsing, so
+     * after transmitting the current signal we must consume the next
+     * entry's delay, if there is a next entry.  This also guarantees
+     * there is no delay after the final signal. */
+    uint8_t next_index = app->playlist_current + 1;
+    if (next_index < app->playlist_count)
+    {
+        uint16_t delay_ms = app->playlist_delays[next_index];
+        if (delay_ms > 0)
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+    }
 
     app->playlist_current++;
     return true;
@@ -230,6 +263,8 @@ static void scene_on_enter(SubGhzApp *app)
     app->playlist_running = false;
     app->playlist_repeat_total = 1;
     app->playlist_repeat_done = 0;
+    for (uint8_t i = 0; i < PLAYLIST_MAX_FILES; i++)
+        app->playlist_delays[i] = 0;
 
     /* Open file browser immediately — no intermediate prompt screen */
     if (!open_playlist_browser(app))
