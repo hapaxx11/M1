@@ -13,7 +13,7 @@ The M1 firmware is organized into the following main components:
 | `Battery/` | Battery monitoring |
 | `NFC/` | NFC (13.56 MHz) support |
 | `lfrfid/` | LF RFID (125 kHz) support — 26 protocol decoders |
-| `Sub_Ghz/` | Sub-GHz radio support — 99 protocol decoders, protocol registry |
+| `Sub_Ghz/` | Sub-GHz radio support — 100 protocol decoders, protocol registry |
 | `Infrared/` | IR transmit/receive |
 | `Esp_spi_at/` | ESP32 SPI AT command interface (host-side SPI master) |
 | `Esp32_serial_flasher/` | ESP32 firmware flashing support (UART bootloader) |

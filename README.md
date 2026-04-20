@@ -69,9 +69,6 @@ project discussion, and related project resources:
 | Static analysis (cppcheck) | ✗ | ✓ (GitHub Actions, on-demand) |
 | Auto-deployed API docs | ✗ | ✓ (Doxygen → GitHub Pages) |
 
-See also: [bedge117/M1 (C3)](https://github.com/bedge117/M1) — another active community
-fork with 56 Sub-GHz protocols, PicoPass, and RTC/NTP support.
-
 ## What's New in Hapax
 
 ### Flipper Zero Compatibility
@@ -188,17 +185,11 @@ fork with 56 Sub-GHz protocols, PicoPass, and RTC/NTP support.
 
 ## Companion App
 
-**[qMonstatek](https://github.com/bedge117/qMonstatek)** — Desktop companion app for Windows. Connect your M1 via USB to:
+**[qMonstatek](https://github.com/bedge117/qMonstatek)** — community-maintained Windows desktop app (developed by bedge117; not part of Hapax). Connect your M1 via USB to mirror the device screen, manage SD card files, configure WiFi, update the ESP32 coprocessor firmware, and flash firmware over USB — including DFU mode for first-time installation from stock firmware.
 
-- View device info, battery status, firmware version
-- Flash firmware updates over USB
-- Flash via DFU mode (works with stock firmware)
-- Mirror the M1's screen on your PC
-- Browse and manage SD card files
-- Manage WiFi networks
-- Update the ESP32 coprocessor firmware
+For firmware updates on a device already running Hapax, the browser-based **[Web Updater](https://hapaxx11.github.io/M1/)** requires no software at all. qMonstatek is the recommended path for first-time installation from stock or for users who prefer a desktop UI.
 
-Download the latest release from the [qMonstatek releases page](https://github.com/bedge117/qMonstatek/releases).
+Download from the [qMonstatek releases page](https://github.com/bedge117/qMonstatek/releases).
 
 ## Included Databases
 
@@ -383,9 +374,6 @@ Requires a browser with Web Serial support (Chrome 89+ or Edge 89+).
 Do **not** use DFU mode for the Web Updater. If the screen stays dark, the device is in DFU
 mode and will usually not appear as a serial port; use the **Via DFU Mode (recovery / first
 install)** section below instead.
-
-### Via qMonstatek
-Connect via USB and use the Firmware Update page in [qMonstatek](https://github.com/bedge117/qMonstatek).
 
 ### Via WiFi (OTA)
 Connect to WiFi, then go to **Settings → FW Update → Download** to browse and install
