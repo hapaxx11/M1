@@ -44,8 +44,9 @@ static int ci_strcmp(const char *a, const char *b)
 }
 
 /**
- * Parse a hex string into a uint64_t (big-endian, up to 16 hex digits).
- * Returns false if the string contains non-hex characters.
+ * Parse a hex string into a uint64_t (big-endian, exactly 16 hex digits).
+ * Returns false if the string does not contain exactly 16 hex digits
+ * followed immediately by a ':' separator.
  */
 static bool parse_hex64(const char *p, uint64_t *out)
 {
@@ -61,7 +62,8 @@ static bool parse_hex64(const char *p, uint64_t *out)
         v = (v << 4) | nibble;
         digits++;
     }
-    if (digits == 0) return false;
+    /* Must have exactly 16 hex digits followed by ':' */
+    if (digits != 16 || *p != ':') return false;
     *out = v;
     return true;
 }
@@ -108,16 +110,16 @@ bool keeloq_mfkeys_load(void)
             strncmp(line, "Encryption:", 11) == 0)
             continue;
 
-        /* Expected format: AABBCCDDEEFFAABB:TYPE:Name */
+        /* Expected format: AABBCCDDEEFFAABB:TYPE:Name
+         * parse_hex64 consumes exactly 16 hex digits and verifies the ':' follows. */
         char *p = line;
 
-        /* Parse 64-bit hex key */
+        /* Parse 64-bit hex key; p still points at the first char of the key */
         uint64_t mfr_key = 0;
         if (!parse_hex64(p, &mfr_key)) continue;
 
-        /* Advance past the hex digits */
-        while (*p && *p != ':') p++;
-        if (*p != ':') continue;
+        /* Advance p past the 16 hex digits to the first ':' */
+        p += 16;
         p++;  /* skip ':' */
 
         /* Parse learn type digit */

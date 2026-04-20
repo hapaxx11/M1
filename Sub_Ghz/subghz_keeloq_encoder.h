@@ -13,10 +13,14 @@
  *   5. Encodes the resulting packet as OOK PWM timing pairs.
  *
  * Supported protocols:
- *   - KeeLoq (Bit: 64 Flipper format)
- *   - Star Line (Bit: 64 Flipper format)
- *   - Jarolift (Bit: 72 M1 format — HOP high 24 bits only; replay of
- *     Flipper-captured 64-bit Jarolift packets is fully supported)
+ *   - KeeLoq (Bit: 64 Flipper format — FIX[63:32] = (button<<28)|serial, HOP[31:0])
+ *   - Star Line (Bit: 64 Flipper format — HOP[63:32], serial[31:4], button[3:0])
+ *   - Jarolift (Bit: 64 Flipper format — same layout as KeeLoq)
+ *
+ * Note: M1-native Bit:66 (KeeLoq) and Bit:72 (Jarolift) captures are NOT
+ * supported — the M1 decoder accumulates these into a uint64 via left-shift,
+ * losing the low-order HOP bits and making decryption unreliable.
+ * Only Flipper-captured Bit:64 files are accepted.
  *
  * Key format (64-bit, Flipper SubGhz Key File compatible):
  *   bits [63:32] = FIX = (button[3:0] << 28) | serial[27:0]
@@ -59,16 +63,11 @@ typedef enum {
 #define KEELOQ_PREAMBLE_PULSES  12U
 
 /*============================================================================*/
-/* SubGhzRawPair compatibility shim                                            */
+/* SubGhzRawPair — from subghz_key_encoder.h                                  */
 /*============================================================================*/
 
-#ifndef SUBGHZ_RAW_PAIR_DEFINED
-#define SUBGHZ_RAW_PAIR_DEFINED
-typedef struct {
-    uint32_t high_us;   /**< HIGH pulse duration in µs */
-    uint32_t low_us;    /**< LOW pulse duration in µs */
-} SubGhzRawPair;
-#endif
+/* Include the shared pair type from the key encoder — avoids double-typedef. */
+#include "subghz_key_encoder.h"
 
 /*============================================================================*/
 /* Packet parameter struct                                                     */
@@ -90,17 +89,15 @@ typedef struct {
  * @brief  Encode a KeeLoq counter-mode replay packet into OOK PWM pairs.
  *
  * Looks up the manufacturer key by name in the loaded keystore, derives the
- * device key, increments the hop counter, re-encrypts, and fills @p pairs
- * with the OOK PWM timing output.
+ * device key, increments the hop counter, re-encrypts, and writes @p reps
+ * repetitions of the OOK PWM waveform into a dynamically allocated pair buffer.
  *
- * Call this function for each repetition.  The function encodes exactly one
- * repetition (preamble + data bits).  Allocates @p pairs dynamically if
- * @p pairs_out is non-NULL; the caller must free the buffer.
+ * The returned buffer must be freed by the caller.
  *
  * @param[in]  params      Packet parameters.
- * @param[out] pairs_out   Set to a malloc'd array of timing pairs.
- * @param[out] npairs_out  Number of pairs written.
- * @param[in]  reps        Number of repetitions to encode.
+ * @param[out] pairs_out   Set to a malloc'd array of timing pairs (caller must free).
+ * @param[out] npairs_out  Number of pairs written into the buffer.
+ * @param[in]  reps        Number of complete waveform repetitions to encode.
  * @return KEELOQ_ENC_OK on success, error code otherwise.
  */
 KeeLoqEncResult keeloq_encode_replay(

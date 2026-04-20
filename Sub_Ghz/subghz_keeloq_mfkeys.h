@@ -52,7 +52,7 @@ typedef struct {
 /*============================================================================*/
 
 /** Path on the SD card where the keystore file is located. */
-#define KEELOQ_MFKEYS_PATH  "/SUBGHZ/keeloq_mfcodes"
+#define KEELOQ_MFKEYS_PATH  "0:/SUBGHZ/keeloq_mfcodes"
 
 /*============================================================================*/
 /* API                                                                        */
