@@ -90,12 +90,12 @@ static void clock_draw_page(uint8_t page)
 
     if (page == 0U)
     {
-        /* Local time — show user's configured timezone label */
-        zone_time = now;
+        /* Local time — apply user's UTC offset to the RTC (UTC) value */
+        clock_apply_offset(&now, m1_clock_tz_offset, &zone_time);
         snprintf(date_line, sizeof(date_line), "%s %02u/%02u/%04u",
                  weekday, zone_time.month, zone_time.day, zone_time.year);
 
-        /* Build "Local (UTC+N)" title */
+        /* Build "Local UTC+N" title */
         {
             char tz_buf[8];
             static char local_title[16];
@@ -106,11 +106,10 @@ static void clock_draw_page(uint8_t page)
     }
     else
     {
-        /* World zone — first convert local time to UTC, then apply zone offset */
+        /* World zone — RTC value is UTC; apply zone offset directly */
         const clock_zone_t *zone = &clock_zones[page - 1U];
         title = zone->label;
-        int16_t rel = (int16_t)zone->offset_hours - (int16_t)m1_clock_tz_offset;
-        clock_apply_offset(&now, (int8_t)rel, &zone_time);
+        clock_apply_offset(&now, zone->offset_hours, &zone_time);
         snprintf(date_line, sizeof(date_line), "%02u/%02u/%04u",
                  zone_time.month, zone_time.day, zone_time.year);
     }

@@ -870,8 +870,12 @@ void settings_load_from_sd(void)
     {
         char *end;
         long lval = strtol(p + 16, &end, 10);
-        if (end != p + 16 && lval >= -12 && lval <= 14)
+        if (end != p + 16 &&
+            (*end == '\n' || *end == '\0') &&
+            lval >= -12 && lval <= 14)
+        {
             m1_clock_tz_offset = (int8_t)lval;
+        }
     }
 
     /* Legacy: migrate "southpaw=1" if no orientation key found */
