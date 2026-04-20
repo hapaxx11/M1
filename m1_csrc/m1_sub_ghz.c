@@ -2060,26 +2060,71 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		 * so total TX = 3 × 5 = 15 transmissions — matches a real remote button press. */
 		if (npairs > 0)
 		{
-			int pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
+			const size_t out_buf_cap = FLIPPER_SUB_OUT_MAX;
+			int pos = snprintf(out_buf, out_buf_cap, "%s",
 			                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
+			if (pos < 0)
+			{
+				pos = 0;
+				out_buf[0] = '\0';
+			}
+			else if ((size_t)pos >= out_buf_cap)
+			{
+				pos = (int)(out_buf_cap - 1);
+			}
+
 			for (uint32_t pi = 0; pi < npairs; pi++)
 			{
-				pos += snprintf(&out_buf[pos], FLIPPER_SUB_LINE_MAX - pos,
-				                " %lu %lu",
-				                (unsigned long)pairs[pi].high_us,
-				                (unsigned long)pairs[pi].low_us);
+				char pair_buf[32];
+				int pair_len = snprintf(pair_buf, sizeof(pair_buf),
+				                        " %lu %lu",
+				                        (unsigned long)pairs[pi].high_us,
+				                        (unsigned long)pairs[pi].low_us);
+
+				if (pair_len < 0)
+					continue;
+
+				/* Flush before appending if the next pair would exceed out_buf. */
+				if (((size_t)pos + (size_t)pair_len + 3) > out_buf_cap)
+				{
+					pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "\r\n");
+					f_puts(out_buf, &f_sgh);
+					pos = snprintf(out_buf, out_buf_cap, "%s",
+					               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					if (pos < 0)
+					{
+						pos = 0;
+						out_buf[0] = '\0';
+					}
+					else if ((size_t)pos >= out_buf_cap)
+					{
+						pos = (int)(out_buf_cap - 1);
+					}
+				}
+
+				pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "%s", pair_buf);
 
 				/* Start a new Data: line at repetition boundaries
-				 * (after each sync gap = last pair of each rep) or
-				 * when the buffer is getting full */
+				 * (after each sync gap = last pair of each rep). */
 				bool is_rep_end = ((pi + 1) % pairs_per_rep) == 0;
-				if (is_rep_end || pos >= FLIPPER_SUB_LINE_MAX - 64)
+				if (is_rep_end)
 				{
-					strcat(out_buf, "\r\n");
+					pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "\r\n");
 					f_puts(out_buf, &f_sgh);
 					if (pi + 1 < npairs)
-						pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
+					{
+						pos = snprintf(out_buf, out_buf_cap, "%s",
 						               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+						if (pos < 0)
+						{
+							pos = 0;
+							out_buf[0] = '\0';
+						}
+						else if ((size_t)pos >= out_buf_cap)
+						{
+							pos = (int)(out_buf_cap - 1);
+						}
+					}
 				}
 			}
 			has_data = true;
