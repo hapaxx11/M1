@@ -511,8 +511,10 @@ static void draw_info_screen(void)
         u8g2_DrawStr(&m1_u8g2, 2, 30, line);
     }
 
-    snprintf(line, sizeof(line), "Freq: %.2f MHz",
-             (float)saved_signal.frequency / 1000000.0f);
+    /* Use integer arithmetic — embedded printf (nano.specs) has no %f support */
+    snprintf(line, sizeof(line), "Freq: %lu.%02lu MHz",
+             (unsigned long)(saved_signal.frequency / 1000000UL),
+             (unsigned long)((saved_signal.frequency % 1000000UL) / 10000UL));
     u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 
     if (saved_signal.preset[0])
@@ -557,8 +559,10 @@ static void draw_decode_screen(void)
         snprintf(line, sizeof(line), "TE: %d us", d->te);
         u8g2_DrawStr(&m1_u8g2, 2, 43, line);
 
-        snprintf(line, sizeof(line), "Freq: %.2f MHz",
-                 (float)d->frequency / 1000000.0f);
+        /* Use integer arithmetic — embedded printf (nano.specs) has no %f support */
+        snprintf(line, sizeof(line), "Freq: %lu.%02lu MHz",
+                 (unsigned long)(d->frequency / 1000000UL),
+                 (unsigned long)((d->frequency % 1000000UL) / 10000UL));
         u8g2_DrawStr(&m1_u8g2, 2, 52, line);
 
         if (d->serial_number != 0 || d->rolling_code != 0)

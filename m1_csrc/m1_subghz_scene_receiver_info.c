@@ -99,7 +99,10 @@ static void draw(SubGhzApp *app)
     snprintf(line, sizeof(line), "Bits: %d    TE: %d us", e->info.bit_len, e->info.te);
     u8g2_DrawStr(&m1_u8g2, 2, 30, line);
 
-    snprintf(line, sizeof(line), "%.2f MHz", (float)e->frequency / 1000000.0f);
+    /* Use integer arithmetic — embedded printf (nano.specs) has no %f support */
+    snprintf(line, sizeof(line), "%lu.%02lu MHz",
+             (unsigned long)(e->frequency / 1000000UL),
+             (unsigned long)((e->frequency % 1000000UL) / 10000UL));
     u8g2_DrawStr(&m1_u8g2, 2, 38, line);
 
     snprintf(line, sizeof(line), "RSSI: %d dBm", e->info.rssi);
