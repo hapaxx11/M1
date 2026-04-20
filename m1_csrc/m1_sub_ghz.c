@@ -96,9 +96,6 @@
 #define	SUBGHZ_FCC_BASE_FREQ_433_000			(float)433.00001
 #define	SUBGHZ_FCC_BASE_FREQ_433_920			(float)433.92001
 #define SUBGHZ_FCC_BASE_FREQ_915_000			(float)915.00001
-#define SUBGHZ_FCC_BASE_FREQ_150_000			(float)150.00001
-#define SUBGHZ_FCC_BASE_FREQ_200_000			(float)200.00001
-#define SUBGHZ_FCC_BASE_FREQ_250_000			(float)250.00001
 
 // Reference: FCC 15.205 Restricted bands of operation
 // 322MHz-335.4MHz, 399.9MHz-410MHz
@@ -146,10 +143,7 @@ static const char *subghz_band_text[] =
 	"390.000",
 	"433.000",
 	"433.920",
-	"915.000",
-	"150.000",
-	"200.000",
-	"250.000"
+	"915.000"
 };
 
 static const char *subghz_datfile_keywords[SUB_GHZ_DATAFILE_KEY_FORMAT_N] =
@@ -176,9 +170,6 @@ static const float subghz_band_steps[SUB_GHZ_BAND_EOL][2] =
 	{SUBGHZ_FCC_BASE_FREQ_433_000, 3},	// 433.000 - 435.000 // 8
 	{SUBGHZ_FCC_BASE_FREQ_433_920, 2}, 	// 433.920 - not used // 0
 	{SUBGHZ_FCC_BASE_FREQ_915_000, 4}, 	// 915.000 - 916.000 // 4
-	{SUBGHZ_FCC_BASE_FREQ_150_000, 4},	// 150.000 - 151.000
-	{SUBGHZ_FCC_BASE_FREQ_200_000, 4},	// 200.000 - 201.000
-	{SUBGHZ_FCC_BASE_FREQ_250_000, 4}	// 250.000 - 251.000
 };
 
 static const float subghz_fcc_ism_bands_NA[SUBGHZ_ISM_BANDS_LIST_NA][2] =
@@ -230,9 +221,8 @@ const S_M1_SUBGHZ_ISM_REGIONS_t subghz_regions_list[SUBGHZ_ISM_BAND_REGIONS_LIST
 };
 
 /* Frequency-sorted band order for UI navigation (L/R buttons) */
-#define SUBGHZ_BAND_ORDER_COUNT		12
+#define SUBGHZ_BAND_ORDER_COUNT		9
 static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
-	SUB_GHZ_BAND_150, SUB_GHZ_BAND_200, SUB_GHZ_BAND_250,
 	SUB_GHZ_BAND_300, SUB_GHZ_BAND_310, SUB_GHZ_BAND_315,
 	SUB_GHZ_BAND_345, SUB_GHZ_BAND_372, SUB_GHZ_BAND_390,
 	SUB_GHZ_BAND_433, SUB_GHZ_BAND_433_92, SUB_GHZ_BAND_915
@@ -745,24 +735,6 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 			mod_type = MODEM_MOD_TYPE_FSK;
 			break;
 
-		case SUB_GHZ_BAND_150:
-			init_freq = SUB_GHZ_BAND_300;
-			retune_freq_hz = 150000000UL;
-			mod_type = MODEM_MOD_TYPE_OOK;
-			break;
-
-		case SUB_GHZ_BAND_200:
-			init_freq = SUB_GHZ_BAND_300;
-			retune_freq_hz = 200000000UL;
-			mod_type = MODEM_MOD_TYPE_OOK;
-			break;
-
-		case SUB_GHZ_BAND_250:
-			init_freq = SUB_GHZ_BAND_300;
-			retune_freq_hz = 250000000UL;
-			mod_type = MODEM_MOD_TYPE_OOK;
-			break;
-
 		case SUB_GHZ_BAND_CUSTOM:
 			/* Use base configs that have GPIO2=INPUT (0x04) for direct TX.
 			 * For FSK at ANY frequency, load the 915 FSK config and retune —
@@ -954,7 +926,7 @@ static bool sub_ghz_custom_freq_entry(void)
 				uint32_t new_khz = digits[4]*100 + digits[5]*10 + digits[6];
 				uint32_t new_freq = new_mhz * 1000000UL + new_khz * 1000UL;
 
-				if (new_freq >= 142000000UL && new_freq <= 1050000000UL)
+				if (new_freq >= 300000000UL && new_freq <= 928000000UL)
 				{
 					subghz_custom_freq_hz = new_freq;
 					accepted = true;
@@ -963,7 +935,7 @@ static bool sub_ghz_custom_freq_entry(void)
 				else
 				{
 					/* Out of range — flash error */
-					m1_message_box(&m1_u8g2, "Out of range!", "142.000 - 1050.000 MHz", "", "BACK to retry");
+					m1_message_box(&m1_u8g2, "Out of range!", "300.000 - 928.000 MHz", "", "BACK to retry");
 				}
 			}
 			else if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2166,7 +2138,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	subghz_replay_freq = freq_mhz;
 	subghz_replay_mod  = modulation;
 
-	if (frequency < 142000000UL || frequency > 1050000000UL)
+	if (frequency < 300000000UL || frequency > 928000000UL)
 	{
 		f_unlink(FLIPPER_SUB_TMP_SGH);
 		return 3; /* unsupported frequency */
@@ -4037,16 +4009,14 @@ void sub_ghz_spectrum_analyzer(void)
         370000000UL,  /* 345-395 MHz */
         435000000UL,  /* 430-440 MHz */
         915000000UL,  /* 910-920 MHz */
-        200000000UL,  /* 142-258 MHz (extended low) */
     };
     static const uint32_t sweep_spans[] = {
         15000000UL,
         50000000UL,
         10000000UL,
         10000000UL,
-        116000000UL,
     };
-    #define NUM_SWEEP_RANGES  5
+    #define NUM_SWEEP_RANGES  4
 
     /* Start with first preset */
     center_freq = sweep_centers[band_idx];
