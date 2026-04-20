@@ -9,6 +9,7 @@ uint8_t subghz_decode_acurite_592txr(uint16_t a, uint16_t b) { (void)a; (void)b;
 uint8_t subghz_decode_acurite_606tx(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_acurite_609txc(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_acurite_986(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_acurite_5n1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_alutech(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_ambient_weather(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_ansonic(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }

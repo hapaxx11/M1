@@ -429,6 +429,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_pcsg_generic_decode.c
     ../../Sub_Ghz/protocols/m1_acurite_592txr_decode.c
     ../../Sub_Ghz/protocols/m1_acurite_986_decode.c
+    ../../Sub_Ghz/protocols/m1_acurite_5n1_decode.c
     ../../Sub_Ghz/protocols/m1_tx_8300_decode.c
     ../../Sub_Ghz/protocols/m1_oregon_v1_decode.c
     ../../Sub_Ghz/protocols/m1_oregon3_decode.c
@@ -560,6 +561,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_weather_station.c
     ../../m1_csrc/m1_subghz_scene_brute_force.c
     ../../m1_csrc/m1_subghz_scene_add_manually.c
+    ../../m1_csrc/m1_subghz_scene_remote.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

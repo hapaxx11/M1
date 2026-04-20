@@ -215,6 +215,7 @@ enum {
 	/* --- Momentum Phase 5: Advanced weather protocols --- */
 	ACURITE_592TXR,
 	ACURITE_986,
+	ACURITE_5N1,
 	TX_8300,
 	OREGON_V1,
 	OREGON3,

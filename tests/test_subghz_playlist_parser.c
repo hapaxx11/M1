@@ -4,7 +4,8 @@
  * test_subghz_playlist_parser.c
  *
  * Unit tests for subghz_playlist_parser — the Flipper→M1 path remapping
- * utility extracted from m1_subghz_scene_playlist.c.
+ * utility extracted from m1_subghz_scene_playlist.c, plus the new
+ * subghz_playlist_parse_delay() function.
  *
  * Tests cover:
  *   - Standard Flipper path remapping (/ext/subghz/... → /SUBGHZ/...)
@@ -14,6 +15,7 @@
  *   - Buffer size boundary conditions
  *   - Nested subdirectories preserved
  *   - Case sensitivity
+ *   - Delay directive parsing ("# delay: N")
  *
  * Build:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -129,6 +131,85 @@ void test_empty_string(void)
 }
 
 /*============================================================================*/
+/* Tests: Delay directive parsing                                             */
+/*============================================================================*/
+
+void test_delay_basic(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_TRUE(subghz_playlist_parse_delay("# delay: 500", &ms));
+    TEST_ASSERT_EQUAL_UINT16(500, ms);
+}
+
+void test_delay_no_space_after_colon(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_TRUE(subghz_playlist_parse_delay("# delay:1000", &ms));
+    TEST_ASSERT_EQUAL_UINT16(1000, ms);
+}
+
+void test_delay_uppercase_D(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_TRUE(subghz_playlist_parse_delay("# Delay: 250", &ms));
+    TEST_ASSERT_EQUAL_UINT16(250, ms);
+}
+
+void test_delay_zero(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_TRUE(subghz_playlist_parse_delay("# delay: 0", &ms));
+    TEST_ASSERT_EQUAL_UINT16(0, ms);
+}
+
+void test_delay_max_clamped(void)
+{
+    uint16_t ms = 0;
+    TEST_ASSERT_TRUE(subghz_playlist_parse_delay("# delay: 99999", &ms));
+    TEST_ASSERT_EQUAL_UINT16(60000, ms);
+}
+
+void test_delay_not_a_comment(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_FALSE(subghz_playlist_parse_delay("delay: 500", &ms));
+    TEST_ASSERT_EQUAL_UINT16(9999, ms);  /* unchanged */
+}
+
+void test_delay_non_delay_comment(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_FALSE(subghz_playlist_parse_delay("# UberGuidoZ playlist v1", &ms));
+    TEST_ASSERT_EQUAL_UINT16(9999, ms);
+}
+
+void test_delay_sub_line_not_delay(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_FALSE(subghz_playlist_parse_delay("sub: /SUBGHZ/foo.sub", &ms));
+    TEST_ASSERT_EQUAL_UINT16(9999, ms);
+}
+
+void test_delay_null_output(void)
+{
+    /* Should not crash with NULL output pointer */
+    TEST_ASSERT_FALSE(subghz_playlist_parse_delay("# delay: 500", NULL));
+}
+
+void test_delay_null_line(void)
+{
+    uint16_t ms = 9999;
+    TEST_ASSERT_FALSE(subghz_playlist_parse_delay(NULL, &ms));
+}
+
+void test_delay_whitespace_before_hash(void)
+{
+    /* Whitespace before '#' means it's not a comment line */
+    uint16_t ms = 9999;
+    TEST_ASSERT_FALSE(subghz_playlist_parse_delay("  # delay: 300", &ms));
+}
+
+/*============================================================================*/
 /* Main                                                                       */
 /*============================================================================*/
 
@@ -157,6 +238,19 @@ int main(void)
 
     /* Empty string */
     RUN_TEST(test_empty_string);
+
+    /* Delay directive parsing */
+    RUN_TEST(test_delay_basic);
+    RUN_TEST(test_delay_no_space_after_colon);
+    RUN_TEST(test_delay_uppercase_D);
+    RUN_TEST(test_delay_zero);
+    RUN_TEST(test_delay_max_clamped);
+    RUN_TEST(test_delay_not_a_comment);
+    RUN_TEST(test_delay_non_delay_comment);
+    RUN_TEST(test_delay_sub_line_not_delay);
+    RUN_TEST(test_delay_null_output);
+    RUN_TEST(test_delay_null_line);
+    RUN_TEST(test_delay_whitespace_before_hash);
 
     return UNITY_END();
 }

@@ -34,7 +34,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT   11
+#define MENU_ITEM_COUNT   12
 
 /* Layout constants */
 #define MENU_AREA_TOP     12   /* Y below title + separator line      */
@@ -53,7 +53,8 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Freq Scanner",
     "Weather Station",
     "Brute Force",
-    "Add Manually"
+    "Add Manually",
+    "Remote",
 };
 
 static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
@@ -68,6 +69,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
     SubGhzSceneAddManually,
+    SubGhzSceneRemote,
 };
 
 static uint8_t menu_sel = 0;

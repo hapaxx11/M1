@@ -1,0 +1,1 @@
+**Sub-GHz Config: configurable hopper RSSI threshold** — A new "RSSI Thresh" row in the Sub-GHz Config screen lets the user choose the hopping threshold between −50 and −100 dBm (5 dBm steps; default −70 dBm, matching Flipper). The value is persisted in `settings.cfg` as `subghz_rssi_threshold=`. Previously the threshold was hardcoded at −70 dBm.

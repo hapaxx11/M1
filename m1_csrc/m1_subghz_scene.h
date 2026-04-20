@@ -54,8 +54,15 @@ typedef enum {
     SubGhzSceneWeatherStation, /**< Weather protocol decoder */
     SubGhzSceneBruteForce,     /**< Brute-force code transmitter */
     SubGhzSceneAddManually,    /**< Manual signal entry and TX */
+    SubGhzSceneRemote,         /**< Multi-button RF remote control */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
+
+/*============================================================================*/
+/* Constants                                                                  */
+/*============================================================================*/
+
+#define SUBGHZ_REMOTE_BUTTON_COUNT  5   /**< UP / DOWN / LEFT / RIGHT / OK */
 
 /*============================================================================*/
 /* Custom events (inter-scene communication)                                  */
@@ -161,11 +168,18 @@ typedef struct {
     /* --- Playlist state --- */
     char     playlist_path[64];       /**< Path to current .txt playlist */
     char     playlist_files[16][64];  /**< Up to 16 .sub file paths */
+    uint16_t playlist_delays[16];     /**< Per-entry delay in ms (0 = no delay) */
     uint8_t  playlist_count;          /**< Number of entries loaded */
     uint8_t  playlist_current;        /**< Index of file being transmitted */
     uint8_t  playlist_repeat_total;   /**< Total repeats (0 = infinite) */
     uint8_t  playlist_repeat_done;    /**< Completed repeat passes */
     bool     playlist_running;        /**< Playback active */
+
+    /* --- Remote state (SubGHz Remote scene) --- */
+    char remote_path[64];             /**< Path to loaded .rem manifest */
+    char remote_label[SUBGHZ_REMOTE_BUTTON_COUNT][24];  /**< Button label */
+    char remote_files[SUBGHZ_REMOTE_BUTTON_COUNT][64];  /**< .sub path per button */
+    bool remote_loaded;               /**< true if a manifest is loaded **/
 
     /* --- Flags --- */
     bool     need_redraw;             /**< Scene requests display update */
@@ -285,5 +299,6 @@ extern const SubGhzSceneHandlers subghz_scene_freq_scanner_handlers;
 extern const SubGhzSceneHandlers subghz_scene_weather_station_handlers;
 extern const SubGhzSceneHandlers subghz_scene_brute_force_handlers;
 extern const SubGhzSceneHandlers subghz_scene_add_manually_handlers;
+extern const SubGhzSceneHandlers subghz_scene_remote_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */
