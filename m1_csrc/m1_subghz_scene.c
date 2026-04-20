@@ -34,6 +34,13 @@
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern uint8_t subghz_record_mode_flag;
 
+/* Persisted radio config accessors (defined in m1_sub_ghz.c) */
+extern uint8_t subghz_get_freq_idx_ext(void);
+extern uint8_t subghz_get_mod_idx_ext(void);
+extern bool    subghz_get_hopping_ext(void);
+extern bool    subghz_get_sound_ext(void);
+extern uint8_t subghz_get_tx_power_idx_ext(void);
+
 /*============================================================================*/
 /* Scene handler registry — indexed by SubGhzSceneId                          */
 /*============================================================================*/
@@ -66,12 +73,13 @@ void subghz_scene_init(SubGhzApp *app)
 {
     memset(app, 0, sizeof(*app));
 
-    /* Default radio config */
-    app->freq_idx     = SUBGHZ_FREQ_DEFAULT_ID;
-    app->mod_idx      = 1;       /* AM650 */
-    app->hopping      = false;
-    app->sound        = true;
-    app->tx_power_idx = 3;       /* Max */
+    /* Load persisted radio config (set at boot from settings.cfg,
+     * defaults to compile-time values if settings file is absent) */
+    app->freq_idx     = subghz_get_freq_idx_ext();
+    app->mod_idx      = subghz_get_mod_idx_ext();
+    app->hopping      = subghz_get_hopping_ext();
+    app->sound        = subghz_get_sound_ext();
+    app->tx_power_idx = subghz_get_tx_power_idx_ext();
 
     app->running      = true;
     app->scene_depth  = 0;

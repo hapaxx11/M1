@@ -4951,6 +4951,16 @@ uint8_t subghz_get_tx_power_count_ext(void) { return TX_POWER_LEVELS; }
 uint8_t subghz_get_save_fmt_ext(void) { return subghz_cfg.save_fmt; }
 void    subghz_set_save_fmt_ext(uint8_t fmt) { if (fmt <= 1) subghz_cfg.save_fmt = fmt; }
 
+/* Radio config accessors — used by settings_save/load and scene init */
+uint8_t subghz_get_freq_idx_ext(void)        { return subghz_cfg.freq_idx; }
+void    subghz_set_freq_idx_ext(uint8_t idx) { if (idx < SUBGHZ_FREQ_PRESET_COUNT) subghz_cfg.freq_idx = idx; }
+uint8_t subghz_get_mod_idx_ext(void)         { return subghz_cfg.mod_idx; }
+void    subghz_set_mod_idx_ext(uint8_t idx)  { if (idx < SUBGHZ_MOD_PRESET_COUNT) subghz_cfg.mod_idx = idx; }
+bool    subghz_get_hopping_ext(void)         { return subghz_cfg.hopping; }
+void    subghz_set_hopping_ext(bool v)       { subghz_cfg.hopping = v; }
+bool    subghz_get_sound_ext(void)           { return subghz_cfg.sound; }
+void    subghz_set_sound_ext(bool v)         { subghz_cfg.sound = v; }
+
 /* ── Raw recording file management (used by Read Raw scene) ─────────────── */
 
 /**

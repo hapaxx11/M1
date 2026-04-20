@@ -47,6 +47,12 @@ extern uint8_t     subghz_get_tx_power_count_ext(void);
 extern uint8_t subghz_get_save_fmt_ext(void);
 extern void    subghz_set_save_fmt_ext(uint8_t fmt);
 
+/* Radio config accessors (static data in m1_sub_ghz.c) */
+extern void subghz_set_freq_idx_ext(uint8_t idx);
+extern void subghz_set_mod_idx_ext(uint8_t idx);
+extern void subghz_set_hopping_ext(bool v);
+extern void subghz_set_sound_ext(bool v);
+
 /* ISM region data (non-static globals in m1_sub_ghz.c / m1_sub_ghz.h) */
 extern const char *subghz_ism_regions_text[];
 
@@ -188,7 +194,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     switch (event)
     {
         case SubGhzEventBack:
-            /* Persist ISM region change to SD */
+            /* Sync app state to persistent subghz_cfg fields */
+            subghz_set_freq_idx_ext(app->freq_idx);
+            subghz_set_mod_idx_ext(app->mod_idx);
+            subghz_set_hopping_ext(app->hopping);
+            subghz_set_sound_ext(app->sound);
+            subghz_set_tx_power_idx_ext(app->tx_power_idx);
+            /* Persist all settings to SD */
             settings_save_to_sd();
             subghz_scene_pop(app);
             return true;
