@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.132] - 2026-04-20
+
+### Added
+
+- **Games/Splash: main splash screen shows current local time** — the back-button idle
+  screen now displays the current time ("HH:MM") centered horizontally at the top of
+  the screen.  When the user's UTC offset is non-zero (configured in Settings → LCD &
+  Notifications → Local TZ), the offset label (e.g. "UTC+5") is shown underneath the
+  time in a smaller font.  The M1 logo and version text block have been shifted down
+  and centered horizontally to accommodate the time display without obscuring any
+  existing content.
+
+### Fixed
+
+- **Games: World Clock — local timezone setting** — the world clock now uses the
+  user's configured UTC offset (Settings → LCD & Notifications → Local TZ) to
+  correctly derive world-zone times from local RTC time.  The Local page now
+  displays the configured timezone label (e.g. "Local UTC+5").  The offset is
+  persisted in `settings.cfg` as `clock_tz_offset` and survives reboots.
 ## [0.9.0.131] - 2026-04-20
 
 ### Fixed
