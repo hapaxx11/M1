@@ -144,7 +144,7 @@ void test_normal_learning_different_serials(void)
     uint64_t dk1 = keeloq_learn_normal(0x0000001UL, mfr_key);
     uint64_t dk2 = keeloq_learn_normal(0x0000002UL, mfr_key);
 
-    TEST_ASSERT_NOT_EQUAL(dk1, dk2);
+    TEST_ASSERT_NOT_EQUAL_UINT64(dk1, dk2);
 }
 
 void test_normal_learning_different_mfr_keys(void)
@@ -153,7 +153,7 @@ void test_normal_learning_different_mfr_keys(void)
     uint64_t dk1 = keeloq_learn_normal(serial, 0xAABBCCDDEEFF0011ULL);
     uint64_t dk2 = keeloq_learn_normal(serial, 0x1122334455667788ULL);
 
-    TEST_ASSERT_NOT_EQUAL(dk1, dk2);
+    TEST_ASSERT_NOT_EQUAL_UINT64(dk1, dk2);
 }
 
 void test_simple_learning_deterministic(void)
@@ -176,7 +176,7 @@ void test_simple_vs_normal_learning_differ(void)
     uint64_t dk_normal = keeloq_learn_normal(serial, mfr_key);
 
     /* Different learning modes should produce different device keys */
-    TEST_ASSERT_NOT_EQUAL(dk_simple, dk_normal);
+    TEST_ASSERT_NOT_EQUAL_UINT64(dk_simple, dk_normal);
 }
 
 /*============================================================================*/
