@@ -325,6 +325,16 @@ void esp32_fw_download_start(void)
 	source_count = fw_source_load_config_filtered(sources, "esp32");
 	if (source_count == 0)
 	{
+		/*
+		 * The file exists (fw_source_load_config creates it if missing)
+		 * but has no 'esp32' category entries — it predates category
+		 * support.  Append the defaults non-destructively and retry.
+		 */
+		fw_source_append_category_defaults("esp32");
+		source_count = fw_source_load_config_filtered(sources, "esp32");
+	}
+	if (source_count == 0)
+	{
 		edl_show_message("No ESP32 sources", "Check fw_sources.txt");
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);

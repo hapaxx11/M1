@@ -387,13 +387,22 @@ function handleLocalFile(event) {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-        selectedFirmware = {
-            data: new Uint8Array(e.target.result),
-            name: file.name,
-        };
+    reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        selectedFirmware = { data, name: file.name };
         elements['local-file-name'].textContent = `${file.name} (${formatSize(file.size)})`;
         log(`Local file loaded: ${file.name} (${formatSize(file.size)})`);
+
+        // Compute SHA-256 for manual integrity verification (best-effort).
+        try {
+            const hash = await computeSHA256(data);
+            if (hash) {
+                log(`SHA-256: ${hash}`);
+                log('Verify this hash matches the expected value before flashing.');
+            }
+        } catch (_) {
+            /* SHA-256 unavailable — not fatal, proceed without hash */
+        }
 
         // Deselect any release radio
         for (const radio of document.querySelectorAll('input[name="release"]')) {
@@ -442,6 +451,17 @@ async function handleFlash() {
             log(`Download failed: ${err.message}`, 'error');
             elements['progress-section'].classList.add('hidden');
             return;
+        }
+
+        // Compute SHA-256 (best-effort — does not block flashing on failure).
+        try {
+            const hash = await computeSHA256(firmware.data);
+            if (hash) {
+                log(`SHA-256: ${hash}`);
+                log('Compare this hash against the GitHub release page to confirm the file is unchanged.');
+            }
+        } catch (_) {
+            /* SHA-256 unavailable — not fatal */
         }
     }
 
@@ -556,6 +576,25 @@ async function flashFirmware(data, name) {
 }
 
 /* ── Utility Functions ── */
+
+/**
+ * Compute the SHA-256 digest of a Uint8Array and return it as a lowercase
+ * hex string.  Uses the built-in Web Crypto API (no external dependencies).
+ *
+ * Returns null when Web Crypto is unavailable (insecure context or old browser).
+ *
+ * @param {Uint8Array} data
+ * @returns {Promise<string|null>} 64-character hex digest, or null if unavailable
+ */
+async function computeSHA256(data) {
+    if (!globalThis.crypto?.subtle) {
+        return null; /* Web Crypto unavailable — insecure context or old browser */
+    }
+    const hashBuf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
 
 function formatSize(bytes) {
     if (bytes === 0) return '0 B';

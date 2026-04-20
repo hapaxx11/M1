@@ -302,6 +302,34 @@ button:disabled {
     font-size: 0.85rem;
 }
 
+/* ── Proxy Notice ── */
+
+.proxy-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.proxy-notice-icon {
+    flex-shrink: 0;
+    line-height: 1.5;
+}
+
+.proxy-notice a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.proxy-notice a:hover {
+    text-decoration: underline;
+}
+
 /* ── Flash Section ── */
 
 .flash-actions {

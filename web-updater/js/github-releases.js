@@ -9,6 +9,48 @@
 
 const GITHUB_API = 'https://api.github.com';
 
+/*
+ * CORS proxy for GitHub release asset downloads.
+ *
+ * The GitHub API (api.github.com) responds with proper CORS headers and is
+ * fetched directly.  However, `browser_download_url` points to either
+ * github.com or objects.githubusercontent.com — both of which redirect to a
+ * CDN that does NOT send Access-Control-Allow-Origin headers.  Any direct
+ * browser fetch of these URLs is blocked by CORS policy.
+ *
+ * Routing asset downloads through a CORS-capable proxy adds the required
+ * headers so the browser can receive the binary data.
+ *
+ * corsproxy.io is a widely-used, open-source CORS proxy.
+ * Format: CORS_PROXY + encodeURIComponent(url).
+ */
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+/** Hostnames whose fetch responses are blocked by CORS policy. */
+const CORS_BLOCKED_HOSTS = new Set([
+    'objects.githubusercontent.com',
+    'github.com',
+]);
+
+/**
+ * Wrap a URL in the CORS proxy when it targets GitHub's download CDN.
+ * API calls (api.github.com) are not proxied — they already have CORS headers.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function proxify(url) {
+    try {
+        const { hostname } = new URL(url);
+        if (CORS_BLOCKED_HOSTS.has(hostname)) {
+            return CORS_PROXY + encodeURIComponent(url);
+        }
+    } catch (_) {
+        /* malformed URL — pass through unchanged */
+    }
+    return url;
+}
+
 /**
  * Fetch available firmware releases from a GitHub repository.
  *
@@ -74,7 +116,8 @@ export async function fetchReleases(owner, repo, options = {}) {
  * @returns {Promise<Uint8Array>} Firmware binary data
  */
 export async function downloadFirmware(url, onProgress = null) {
-    const resp = await fetch(url);
+    const proxyUrl = proxify(url);
+    const resp = await fetch(proxyUrl);
     if (!resp.ok) {
         throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
     }

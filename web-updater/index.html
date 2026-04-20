@@ -93,6 +93,17 @@
                 <span id="local-file-name" class="file-name"></span>
                 <input type="file" id="local-file-input" accept=".bin" class="hidden">
             </div>
+            <div class="proxy-notice">
+                <span class="proxy-notice-icon" role="img" aria-label="Information">ℹ️</span>
+                <span>
+                    Release downloads are routed through
+                    <a href="https://corsproxy.io/" target="_blank" rel="noopener">corsproxy.io</a>
+                    (a widely-used open-source CORS proxy) so your browser can receive the file.
+                    A SHA-256 hash is shown in the log after each download — you can
+                    <a href="https://github.com/hapaxx11/M1/releases" target="_blank" rel="noopener">check it against the GitHub release page</a>
+                    if you'd like to confirm the file is unchanged.
+                </span>
+            </div>
         </div>
 
         <!-- 4. Flash (shown after connecting) -->
@@ -129,7 +140,7 @@
                 Firmware builds, releases, and this updater are all powered by GitHub<br>
                 <a href="https://github.com/hapaxx11/M1" target="_blank" rel="noopener">github.com/hapaxx11/M1</a>
                 · <a href="https://hapaxx11.github.io/M1/docs/" target="_blank" rel="noopener">API Docs</a>
-                · Requires Chrome or Edge (desktop/Android) · No data leaves your browser
+                · Requires Chrome or Edge (desktop/Android)
             </p>
         </footer>
 
