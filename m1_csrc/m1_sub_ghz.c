@@ -2573,19 +2573,23 @@ void sub_ghz_add_manually(void)
 
 void sub_ghz_frequency_reader(void)
 {
-    /* Band descriptor table — covers common ISM ranges */
+    /* Band descriptor table — covers common ISM ranges.
+     * The 850 MHz boundary matches sub_ghz_set_opmode()'s CUSTOM mapping:
+     * <850 MHz uses 433-style config/frontend; >=850 MHz uses 915-style. */
     static const struct {
-        uint32_t    start_hz;
-        uint32_t    end_hz;
-        uint32_t    step_hz;
-        const char *label;
-        bool        use_915;   /* true: init with SUB_GHZ_BAND_915 frontend */
+        uint32_t            start_hz;
+        uint32_t            end_hz;
+        uint32_t            step_hz;
+        const char         *label;
+        bool                use_915;   /* true: use 915-style radio config + frontend */
+        S_M1_SubGHz_Band    frontend;  /* frontend switch position */
     } bands[] = {
-        { 300000000UL, 316000000UL,  50000UL, "300-316MHz", false },
-        { 387000000UL, 464000000UL, 200000UL, "387-464MHz", false },
-        { 779000000UL, 928000000UL, 400000UL, "779-928MHz", true  },
+        { 300000000UL, 316000000UL,  50000UL, "300-316MHz", false, SUB_GHZ_BAND_315     },
+        { 387000000UL, 464000000UL, 200000UL, "387-464MHz", false, SUB_GHZ_BAND_433_92  },
+        { 779000000UL, 849000000UL, 400000UL, "779-849MHz", false, SUB_GHZ_BAND_433_92  },
+        { 850000000UL, 928000000UL, 400000UL, "850-928MHz", true,  SUB_GHZ_BAND_915     },
     };
-    #define FREQAN_BAND_COUNT  3
+    #define FREQAN_BAND_COUNT  4
 
     S_M1_Buttons_Status btn;
     S_M1_Main_Q_t       q_item;
@@ -2603,6 +2607,7 @@ void sub_ghz_frequency_reader(void)
 
     menu_sub_ghz_init();
     radio_init_rx_tx(SUB_GHZ_BAND_433, MODEM_MOD_TYPE_OOK, true);
+    SI446x_Select_Frontend(bands[band_idx].frontend);
     radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
 
     while (running)
@@ -2628,6 +2633,11 @@ void sub_ghz_frequency_reader(void)
 
                 if (r > sw_best) { sw_best = r; sw_freq = freq; }
                 freq += step;
+
+                /* Check queue non-blocking — break early if a key was pressed */
+                if (xQueuePeek(main_q_hdl, &q_item, 0) == pdTRUE &&
+                    q_item.q_evt_type == Q_EVENT_KEYPAD)
+                    break;
             }
 
             best_hz    = sw_freq;
@@ -2650,7 +2660,7 @@ void sub_ghz_frequency_reader(void)
         if (tc < FREQAN_RSSI_FLOOR) tc = FREQAN_RSSI_FLOOR;
         if (tc > FREQAN_RSSI_CEIL)  tc = FREQAN_RSSI_CEIL;
         uint8_t thr_x = (uint8_t)(FREQAN_BAR_X +
-            ((int32_t)(tc - FREQAN_RSSI_FLOOR) * FREQAN_BAR_W) /
+            ((int32_t)(tc - FREQAN_RSSI_FLOOR) * (FREQAN_BAR_W - 1)) /
             (FREQAN_RSSI_CEIL - FREQAN_RSSI_FLOOR));
 
         m1_u8g2_firstpage();
@@ -2728,6 +2738,7 @@ void sub_ghz_frequency_reader(void)
             radio_init_rx_tx(
                 bands[band_idx].use_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
                 MODEM_MOD_TYPE_OOK, true);
+            SI446x_Select_Frontend(bands[band_idx].frontend);
             radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
         }
         else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2738,6 +2749,7 @@ void sub_ghz_frequency_reader(void)
             radio_init_rx_tx(
                 bands[band_idx].use_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
                 MODEM_MOD_TYPE_OOK, true);
+            SI446x_Select_Frontend(bands[band_idx].frontend);
             radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
         }
         else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
