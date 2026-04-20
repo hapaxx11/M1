@@ -707,6 +707,7 @@ static void browse_directory(const char *path)
 			u8g2_DrawStr(&m1_u8g2, 4, 38, "Copy .ir files to");
 			u8g2_DrawStr(&m1_u8g2, 4, 50, "0:/IR/ on SD card.");
 		}
+		u8g2_DrawStr(&m1_u8g2, 4, 62, "Back to return");
 		m1_u8g2_nextpage();
 
 		/* Wait for BACK press */
