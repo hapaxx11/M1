@@ -499,7 +499,7 @@ static void draw(SubGhzApp *app)
         snprintf(line, sizeof(line), "%lu.%02lu",
                  (unsigned long)(app->hopper_freq / 1000000UL),
                  (unsigned long)((app->hopper_freq % 1000000UL) / 10000UL));
-        subghz_status_bar_draw(line, mod, state, true);
+        subghz_status_bar_draw(line, mod, state, false);
     }
     else
     {

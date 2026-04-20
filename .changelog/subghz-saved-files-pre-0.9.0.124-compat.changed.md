@@ -1,6 +1,6 @@
 **Sub-GHz: ⚠ Migration note — Sub-GHz files saved before v0.9.0.124 must be recaptured** —
   Any `.sub` or `.sgh` signal file that was **saved by the Hapax firmware itself** in a
-  build earlier than v0.9.0.124 contains a zeroed key value (`Key: 0x0 00 00 00 00 00 00 00`)
+  build earlier than v0.9.0.124 contains a zeroed key value (`Key: 00 00 00 00 00 00 00 00`)
   and a missing frequency field. These files will load and display without error, but
   **emulation will fail silently** because the key that drives the OOK PWM waveform is zero.
 
