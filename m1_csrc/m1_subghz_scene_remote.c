@@ -170,9 +170,7 @@ static bool remote_parse(SubGhzApp *app, const char *path)
 
 static void remote_fire(SubGhzApp *app, uint8_t btn_idx)
 {
-    if (btn_idx >= SUBGHZ_REMOTE_BUTTON_COUNT)
-        return;
-    if (app->remote_files[btn_idx][0] == '\0')
+    if (btn_idx >= SUBGHZ_REMOTE_BUTTON_COUNT || app->remote_files[btn_idx][0] == '\0')
         return;
 
     char fat_path[72];
@@ -184,6 +182,18 @@ static void remote_fire(SubGhzApp *app, uint8_t btn_idx)
     rem_tx_last  = btn_idx;
     rem_tx_flash = REM_TX_FLASH_TICKS;
     app->need_redraw = true;
+}
+
+static bool remote_load_manifest(SubGhzApp *app)
+{
+    S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
+    if (f_info && f_info->file_is_selected)
+    {
+        snprintf(app->remote_path, sizeof(app->remote_path),
+                 "/SUBGHZ/%s", f_info->file_name);
+        return remote_parse(app, app->remote_path);
+    }
+    return false;
 }
 
 /*============================================================================*/
@@ -276,15 +286,7 @@ static void scene_on_enter(SubGhzApp *app)
     /* If no manifest loaded yet, auto-launch file browser */
     if (!app->remote_loaded)
     {
-        S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
-        if (f_info && f_info->file_is_selected)
-        {
-            snprintf(app->remote_path, sizeof(app->remote_path),
-                     "/SUBGHZ/%s", f_info->file_name);
-            char fat_path[72];
-            snprintf(fat_path, sizeof(fat_path), "0:%s", app->remote_path);
-            app->remote_loaded = remote_parse(app, app->remote_path);
-        }
+        app->remote_loaded = remote_load_manifest(app);
         if (!app->remote_loaded)
         {
             /* User cancelled or file invalid — pop back to menu */
@@ -324,13 +326,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (!app->remote_loaded)
             {
                 /* Browse for a .rem file */
-                S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
-                if (f_info && f_info->file_is_selected)
-                {
-                    snprintf(app->remote_path, sizeof(app->remote_path),
-                             "/SUBGHZ/%s", f_info->file_name);
-                    app->remote_loaded = remote_parse(app, app->remote_path);
-                }
+                app->remote_loaded = remote_load_manifest(app);
             }
             else
             {

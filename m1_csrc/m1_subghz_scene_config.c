@@ -283,7 +283,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     {
                         char frac_buf[7] = "000000";
                         const char *fp = dot + 1;
-                        for (uint8_t fi = 0; fi < 6 && fp[fi] >= '0' && fp[fi] <= '9'; fi++)
+                        for (uint8_t fi = 0; fi < 6 && isdigit((unsigned char)fp[fi]); fi++)
                             frac_buf[fi] = fp[fi];
                         frac = strtoul(frac_buf, NULL, 10);
                     }

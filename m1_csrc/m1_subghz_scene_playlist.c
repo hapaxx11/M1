@@ -169,7 +169,8 @@ static bool playlist_transmit_next(SubGhzApp *app)
     sub_ghz_replay_flipper_file(app->playlist_files[app->playlist_current]);
     menu_sub_ghz_init();
 
-    /* Apply inter-signal delay (from "# delay: <ms>" playlist directive) */
+    /* Apply inter-signal delay (from "# delay: <ms>" playlist directive).
+     * Applied after the current signal; no delay after the final signal. */
     uint16_t delay_ms = app->playlist_delays[app->playlist_current];
     if (delay_ms > 0)
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
