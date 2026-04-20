@@ -108,6 +108,12 @@ static const char *extract_filename(const char *fullpath)
  * Start the radio in passive listen mode (no recording).
  * Called from scene_on_enter() and from the Send path after replay completes.
  * subghz_record_mode_flag stays 0 — ISR edges are NOT written to the ring buffer.
+ *
+ * TIM1 input-capture is NOT started here.  Starting it in passive mode would
+ * cause the ISR to enqueue a Q_EVENT_SUBGHZ_RX for every noise edge (thousands/sec
+ * at 433 MHz), flooding the main queue and preventing the 200 ms timeout that
+ * drives RSSI refreshes and the sine-wave animation.  The timer is deferred to
+ * start_raw_rx() so interrupts only fire when recording is actually in progress.
  */
 static void start_passive_rx(SubGhzApp *app)
 {
@@ -118,7 +124,7 @@ static void start_passive_rx(SubGhzApp *app)
     sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
     SI446x_Change_Modem_OOK_PDTC(0x6C);
     sub_ghz_rx_init_ext();
-    sub_ghz_rx_start_ext();
+    /* TIM1 ISR deliberately NOT started here — deferred to start_raw_rx(). */
     /* subghz_record_mode_flag remains 0 */
 }
 
@@ -159,7 +165,9 @@ static void start_raw_rx(SubGhzApp *app)
         return;  /* SD error — stay in Start, radio keeps listening passively */
     }
 
-    /* Arm ISR: start inserting captured edges into the ring buffer */
+    /* Arm ISR: start TIM1 input-capture then flag ring-buffer writes */
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+    sub_ghz_rx_start_ext();
     subghz_record_mode_flag = 1;
 
     app->raw_state = SubGhzReadRawStateRecording;
@@ -196,10 +204,8 @@ static void stop_raw_rx(SubGhzApp *app)
 
     app->raw_state = SubGhzReadRawStateIdle;
 
-    /* Resume passive listen — the timer was paused above but the radio IC
-     * is still powered on, so only a timer restart is needed. */
-    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
-    sub_ghz_rx_start_ext();
+    /* Timer remains paused.  Passive listen does not run TIM1 so the queue
+     * is not flooded by noise edges while in the Idle state. */
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
@@ -239,24 +245,21 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                  *
                  * The replay path (sub_ghz_replay_flipper_file) uses TIM1 for
                  * TX PWM, which conflicts with the RX input-capture on TIM1 CH1.
-                 * We must fully stop passive RX before calling into replay,
-                 * then restart it afterwards. */
+                 * In Idle state the timer is already paused (stop_raw_rx() left it
+                 * in READY state without restarting), so only de-init is needed
+                 * before replay; we must not call sub_ghz_rx_pause_ext() again or
+                 * HAL will error on a timer that is already stopped. */
                 if (raw_filepath[0] != '\0')
                 {
-                    sub_ghz_rx_pause_ext();
                     sub_ghz_rx_deinit_ext();
 
                     uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
 
-                    /* menu_sub_ghz_init() resets the radio IC; then
-                     * start_passive_rx() brings RX back up. */
-                    menu_sub_ghz_init();
-                    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
-                    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX,
-                                          subghz_scan_config.band, 0, 0);
-                    SI446x_Change_Modem_OOK_PDTC(0x6C);
-                    sub_ghz_rx_init_ext();
-                    sub_ghz_rx_start_ext();
+                    /* Restart passive RX using the user-selected config.
+                     * start_passive_rx() re-applies app->freq_idx/mod_idx so the
+                     * scene returns to the correct band/modulation even if replay
+                     * mutated subghz_scan_config for a CUSTOM band. */
+                    start_passive_rx(app);
 
                     if (ret != 0)
                     {
@@ -378,17 +381,14 @@ static void scene_on_exit(SubGhzApp *app)
 {
     if (app->raw_state == SubGhzReadRawStateRecording)
     {
-        /* Recording was in progress — stop ISR, flush SD, free buffers */
-        sub_ghz_rx_pause_ext();
-        subghz_record_mode_flag = 0;
-        sub_ghz_raw_recording_stop_ext();
-        sub_ghz_ring_buffers_deinit_ext();
+        /* Recording was in progress — use the normal stop path so all
+         * recording side effects are cleaned up, including LED blink state.
+         * stop_raw_rx() pauses the timer (without restarting it) and flushes
+         * the file; the teardown below then de-initialises the timer. */
+        stop_raw_rx(app);
     }
-    else
-    {
-        /* Start or Idle: radio was passively listening — just stop the timer */
-        sub_ghz_rx_pause_ext();
-    }
+    /* In Start or Idle: TIM1 was never started (deferred to start_raw_rx), so
+     * no pause is needed — sub_ghz_rx_deinit_ext() handles cleanup directly. */
 
     /* Full radio teardown — powers off SI4463 and resets STM32 timer */
     sub_ghz_rx_deinit_ext();

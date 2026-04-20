@@ -3470,8 +3470,8 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	} // if ( header_init )
 
 	/* Data lines use Flipper's "RAW_Data:" keyword and signed integers.
-	 * "RAW_Data:" contains "Data:" as a substring so the legacy M1 parser
-	 * (sub_ghz_parse_raw_data) still recognises it via strstr. */
+	 * This format is explicitly handled by the M1 raw-data parser via
+	 * strncmp("RAW_Data:", 9) in sub_ghz_rx_raw_save(). */
 	sprintf((char *)pfillbuffer, "RAW_Data:");
 	n_samples_to_rw = SUBGHZ_RAW_DATA_SAMPLES_TO_RW;
 	if ( last_data )
@@ -4956,7 +4956,7 @@ void    subghz_set_save_fmt_ext(uint8_t fmt) { if (fmt <= 1) subghz_cfg.save_fmt
 /**
  * @brief  Initialize the SD card file for raw recording and write the header.
  *
- * Sets up datfile_info, opens a new .sgh file via the SDM background task,
+ * Sets up datfile_info, opens a new .sub file via the SDM background task,
  * writes the Flipper-compatible header (filetype, version, frequency,
  * modulation), and resets the ring buffer.
  *
