@@ -71,6 +71,25 @@ enable_testing()
 add_test(NAME bit_util COMMAND test_bit_util)
 
 # ------------------------------------------------------------------
+# Module under test: battery_soc_estimate
+# Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
+# Bug context: "Asian M1" fuel gauge reports 0% SoC while device is
+# still functional; voltage-based correction provides a realistic floor.
+# ------------------------------------------------------------------
+add_executable(test_battery_soc
+    test_battery_soc.c
+    ${M1_ROOT}/Battery/battery_soc_estimate.c
+)
+target_include_directories(test_battery_soc PRIVATE
+    ${M1_ROOT}/Battery
+)
+target_link_libraries(test_battery_soc PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_battery_soc PRIVATE sanitizers)
+endif()
+add_test(NAME battery_soc COMMAND test_battery_soc)
+
+# ------------------------------------------------------------------
 # Stubs directory — provides minimal HAL/FatFS/RTOS stubs so firmware
 # source files compile on the host without hardware dependencies.
 # ------------------------------------------------------------------
