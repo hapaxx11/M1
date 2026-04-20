@@ -373,6 +373,39 @@ Use an ST-Link or J-Link debugger with STM32CubeIDE or OpenOCD.
 └── wifi_cred.ini    Saved WiFi credentials (AES-256 encrypted, auto-generated)
 ```
 
+## Upgrading & Compatibility
+
+### Sub-GHz saved files — pre-v0.9.0.124 files are not emulatable
+
+> ⚠ **If you saved Sub-GHz signals using any Hapax firmware build earlier than
+> v0.9.0.124, those files must be deleted and recaptured.**
+
+Any `.sub` or `.sgh` file that was saved by the Hapax firmware **before v0.9.0.124**
+contains a zeroed key (`Key: 0x0`) and a blank frequency field due to two bugs that
+were fixed together in v0.9.0.124:
+
+1. **Zero key bug** — the legacy save code path did not copy the decoded key value
+   into the signal struct before writing to disk. Every file it produced has
+   `Key: 00 00 00 00 00 00 00 00`, which causes emulation to transmit all-zero
+   pulses — the gate or remote will not respond.
+2. **Blank frequency bug** — `snprintf("%.2f MHz", ...)` is a no-op under
+   `--specs=nano.specs` (newlib-nano) without `-u _printf_float`, so the
+   `Freq:` field in the Signal Info screen was empty and the saved value was not
+   useful for diagnosis.
+
+**Files NOT affected by this:**
+
+| File source | Status |
+|---|---|
+| Captured and saved on **Hapax v0.9.0.124 or later** | ✅ Correct — key, bits, TE, and frequency all written correctly |
+| `.sub` / `.sgh` files from **C3.12 or SiN360** firmware | ✅ Correct — those firmwares had working save paths; load and emulate fine on Hapax |
+| **Stock Monstatek v0.8.0.x** — files captured on-device | ✅ If the stock firmware wrote a file at all, the key field is correct |
+| Files from the bundled **`subghz_database/`** signal library | ✅ Pre-validated Flipper `.sub` format; unaffected |
+| Files captured and saved on **Hapax before v0.9.0.124** | ❌ Key is 0x0 — delete and recapture using v0.9.0.124+ |
+
+**How to check a file:** Open Sub-GHz → Saved, select the file, press OK → Info.
+If "Key: 0x0" appears, the file is corrupted by this bug and must be recaptured.
+
 ## Contributing
 
 Contributions are welcome. Please see [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) for guidelines.
