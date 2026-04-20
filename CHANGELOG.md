@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.136] - 2026-04-20
+
+### Added
+
+- **Sub-GHz: Acurite 5n1 weather station decoder** — Added decoder for Acurite 5-in-1 weather transmitters (64-bit OOK PWM, 433.92 MHz). Flipper `.sub` files with `Protocol: Acurite_5n1` are now recognised and displayed. Validates the 7-bit checksum; decodes both message types (0x31: wind/rain, 0x38: wind/temperature/humidity).
+- **Sub-GHz Config: configurable hopper RSSI threshold** — A new "RSSI Thresh" row in the Sub-GHz Config screen lets the user choose the hopping threshold between −50 and −100 dBm (5 dBm steps; default −70 dBm, matching Flipper). The value is persisted in `settings.cfg` as `subghz_rssi_threshold=`. Previously the threshold was hardcoded at −70 dBm.
+- **Sub-GHz Config: custom frequency entry** — A "Custom" option (index 62) has been added after the 62 standard frequency presets. Selecting it and pressing OK opens the virtual keyboard to type a frequency in MHz (e.g. `433.92`). The value is validated to the SI4463 operating range (300–930 MHz) and persisted in `settings.cfg` as `subghz_custom_freq=`. This closes the last meaningful UX gap vs Flipper's frequency config screen.
+- **Sub-GHz Playlist: inter-signal delay support** — Playlist `.txt` files now support `# delay: <ms>` comment directives (e.g. `# delay: 500`). When present, the player waits the specified number of milliseconds between signals. Compatible with UberGuidoZ and RocketGod playlist collections that rely on inter-signal gaps to avoid double-triggering devices. Delays are per-entry and are applied after the preceding signal transmits. Valid range: 0–60000 ms.
+- Documentation: **Sub-GHz Emulation Status reference** — new
+  `documentation/subghz_emulation_status.md` tracking every Dynamic protocol's
+  emulation capability, blocking reason, and research pointers for future work.
+- **Sub-GHz Remote** — New "Remote" scene in the Sub-GHz menu. Load a `.rem` manifest file that maps the five hardware buttons (UP / DOWN / LEFT / RIGHT / OK) to individual `.sub` signal files. Pressing a mapped button fires that signal immediately, making the M1 act as a multi-button RF remote control. Manifest format is plain text with `up:`, `down:`, `left:`, `right:`, and `ok:` directives pointing to `.sub` paths; Flipper-style `/ext/subghz/` paths are remapped automatically. This is a Momentum-parity feature not present in upstream Monstatek firmware.
+
+### Changed
+
+- **Sub-GHz: larger RAW offline-decode buffer** — `FLIPPER_SUBGHZ_RAW_MAX_SAMPLES` increased from 2048 to 8192 samples. The offline decode path (Saved scene) can now handle real-world Flipper captures of garage doors, TPMS bursts, and security sensors without truncation.
+
+### Fixed
+
+- **Battery: voltage-based SoC correction for miscalibrated fuel gauges** — When
+  the BQ27421 fuel gauge reports 0% (or ≤5%) state of charge but the measured
+  battery voltage indicates meaningful charge remains (above the configured
+  terminate threshold), a piecewise-linear voltage-to-SoC estimate is applied
+  as a floor.  This prevents the "Asian M1" hardware variant — where the device
+  stays powered and fully functional at a reported 0% — from incorrectly blocking
+  firmware updates that require ≥25% battery.
+- **Tests: add missing CI path filters for NFC and Esp_spi_at** — `test_nfc_poller`
+  (sources in `NFC/`) and `test_esp_queue` (sources in `Esp_spi_at/`) were not
+  triggering on CI when their source directories changed. Added `NFC/**` and
+  `Esp_spi_at/**` to the `tests.yml` path filter. Also documented the CI path
+  filter maintenance rule in `DEVELOPMENT.md` and `CLAUDE.md` so future agents
+  keep the filter in sync when adding new tests.
+- Documentation: Fixed `python3` snippet in `CLAUDE.md` Quick audit section — switched from `python3 -c "..."` (indented code caused `IndentationError`) to `python3 - <<'PY' ... PY` heredoc style and corrected the regex backslash escaping accordingly.
+- **Tests: fix lfrfid_manchester test infrastructure** — correct `lfrfid_evt_t` stub
+  to use `uint16_t edge` matching the production struct; add `lfrfid/**` to the
+  `tests.yml` CI path filter so changes to LFRFID source files automatically
+  trigger the unit test suite.
 ## [0.9.0.134] - 2026-04-20
 
 ### Changed

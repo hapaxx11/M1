@@ -1,1 +1,0 @@
-Documentation: Fixed `python3` snippet in `CLAUDE.md` Quick audit section — switched from `python3 -c "..."` (indented code caused `IndentationError`) to `python3 - <<'PY' ... PY` heredoc style and corrected the regex backslash escaping accordingly.
