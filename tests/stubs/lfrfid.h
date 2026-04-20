@@ -16,10 +16,11 @@ typedef enum {
 	LFRFID_EDGE_FALL
 } lfrfid_edge_t;
 
-/* Timing event from the capture timer ISR */
+/* Timing event from the capture timer ISR.
+ * Must match lfrfid/lfrfid.h exactly — edge is uint16_t in production. */
 typedef struct {
 	uint16_t t_us;   /* period in microseconds */
-	uint8_t  edge;   /* 0=falling, 1=rising    */
+	uint16_t edge;   /* 0=falling, 1=rising    */
 } lfrfid_evt_t;
 
 /* Batch size for edge buffering */

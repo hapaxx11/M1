@@ -8,6 +8,7 @@ on:
     paths:
       - 'm1_csrc/**'
       - 'Sub_Ghz/**'
+      - 'lfrfid/**'
       - 'tests/**'
       - 'scripts/**'
       - '.github/workflows/tests.yml'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'm1_csrc/**'
       - 'Sub_Ghz/**'
+      - 'lfrfid/**'
       - 'tests/**'
       - 'scripts/**'
       - '.github/workflows/tests.yml'
