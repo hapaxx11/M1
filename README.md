@@ -226,6 +226,55 @@ The [`subghz_playlist/`](subghz_playlist/) directory contains ready-to-use Sub-G
 
 Imported from [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) (GPLv3). See [`subghz_playlist/SOURCES.md`](subghz_playlist/SOURCES.md) for attribution.
 
+### KeeLoq Manufacturer Key Setup (Rolling-Code Replay)
+
+KeeLoq, Jarolift, and Star Line `.sub` files that include a `Manufacture:` field can
+be **replayed** by the M1 using counter-mode re-encryption — but this requires the
+manufacturer's 64-bit master key to be present on the SD card.
+
+Place a file named `keeloq_mfcodes` at `SUBGHZ/keeloq_mfcodes` on the M1's SD card.
+The M1 accepts two file formats:
+
+**Compact format** (one entry per line):
+```
+0123456789ABCDEF:1:BFT
+FEDCBA9876543210:2:CAME
+```
+Where the first field is the 64-bit master key in uppercase hex, the second is the
+learning type (1 = Simple, 2 = Normal, 3 = Secure), and the third is the manufacturer
+name exactly as it appears in the `.sub` file's `Manufacture:` field.
+
+**RocketGod SubGHz Toolkit format** (multi-line, direct copy supported):
+```
+Manufacturer: BFT
+Key (Hex):    0123456789ABCDEF
+Key (Dec):    81985529216486895
+Type:         1
+------------------------------------
+```
+The M1 parser accepts this format directly — you can copy the `keeloq_keys.txt`
+output from the toolkit and rename it to `keeloq_mfcodes`.
+
+#### How to get the keys
+
+**Option A — RocketGod SubGHz Toolkit (Flipper Zero required):**
+1. Install [RocketGod's SubGHz Toolkit](https://github.com/RocketGod-git/RocketGods-SubGHz-Toolkit) on your Flipper Zero.
+2. Open the toolkit → *Decrypt KeeLoq Manufacturer Codes* → export `keeloq_keys.txt`.
+3. Either copy `keeloq_keys.txt` directly to `SUBGHZ/keeloq_mfcodes` on the M1's SD card,
+   **or** convert it to compact format using the included script:
+   ```bash
+   python3 scripts/convert_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes
+   ```
+   Then copy `keeloq_mfcodes` to `SUBGHZ/` on the M1's SD card.
+
+**Option B — Manual / community-sourced keys:**
+Create a plain-text file in compact format with the manufacturer keys you need and place
+it at `SUBGHZ/keeloq_mfcodes` on the SD card.
+
+> **Note:** The M1 loads `keeloq_mfcodes` at the start of each Sub-GHz session.
+> If the file is absent, KeeLoq rolling-code `.sub` files are still decoded and displayed
+> but cannot be replayed (the device will show "No MFR Key" in the signal info screen).
+
 ## Hardware
 
 - **MCU:** STM32H573VIT6 (Cortex-M33, 250 MHz, 2 MB dual-bank flash, 640 KB RAM)
@@ -365,6 +414,7 @@ Use an ST-Link or J-Link debugger with STM32CubeIDE or OpenOCD.
 ├── NFC/             NFC tag .nfc files
 ├── RFID/            RFID tag .rfid files
 ├── SubGHz/          Sub-GHz signal .sub files (see subghz_database/)
+│   ├── keeloq_mfcodes  KeeLoq manufacturer key store (optional, see above)
 │   └── playlist/    Playlist .txt files (see subghz_playlist/)
 ├── System/          System configuration files
 │   └── fw_sources.txt  Firmware download sources (auto-generated, user-editable)
