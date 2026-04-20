@@ -24,7 +24,7 @@
  *
  * Both formats may coexist in the same file.  Use
  * ``scripts/convert_keeloq_keys.py`` to convert RocketGod toolkit output to
- * compact format for use without the conversion step.
+ * compact format.
  *
  * Where AABBCCDDEEFFAABB is the 64-bit manufacturer key in big-endian hex.
  * The type field matches the Flipper SubGhz Keystore File format used by the
@@ -75,8 +75,9 @@ typedef struct {
  *
  * Reads KEELOQ_MFKEYS_PATH and parses each valid line into the internal
  * table.  Both compact (``HEX:TYPE:NAME``) and RocketGod multi-line formats
- * are supported.  Lines that exceed the name length limit or have a malformed
- * key hex are silently skipped.  The previous table (if any) is freed first.
+ * are supported.  Manufacturer names longer than 47 characters are silently
+ * truncated.  Lines with a malformed hex key or out-of-range type are silently
+ * skipped.  The previous table (if any) is freed first.
  *
  * @return true if the file was opened and at least zero lines were parsed,
  *         false if the SD card or file could not be accessed.

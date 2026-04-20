@@ -562,6 +562,56 @@ void test_load_text_mixed_formats(void)
 }
 
 /*============================================================================*/
+/* keeloq_mfkeys_load_text() — input validation edge cases                   */
+/*============================================================================*/
+
+void test_load_text_rg_type_multi_digit_invalid_skipped(void)
+{
+    /* "Type: 12" — multi-digit type out of range 1-3, must be skipped */
+    const char *text =
+        "Manufacturer: Bad\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    0\n"
+        "Type:         12\n"
+        "------------------------------------\n"
+        "Manufacturer: Good\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    0\n"
+        "Type:         2\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("Bad",  &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Good", &e));
+}
+
+void test_load_text_rg_key_17_digits_skipped(void)
+{
+    /* Key (Hex) with 17 hex digits — must be rejected */
+    const char *text =
+        "Manufacturer: TooLong\n"
+        "Key (Hex):    0123456789ABCDEF0\n"  /* 17 digits */
+        "Key (Dec):    0\n"
+        "Type:         1\n"
+        "------------------------------------\n"
+        "Manufacturer: Good\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    0\n"
+        "Type:         2\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("TooLong", &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Good",    &e));
+}
+
+/*============================================================================*/
 /* Encoder tests                                                               */
 /*============================================================================*/
 
@@ -722,6 +772,10 @@ int main(void)
 
     /* load_text() — mixed formats */
     RUN_TEST(test_load_text_mixed_formats);
+
+    /* load_text() — input validation edge cases */
+    RUN_TEST(test_load_text_rg_type_multi_digit_invalid_skipped);
+    RUN_TEST(test_load_text_rg_key_17_digits_skipped);
 
     /* Encoder */
     RUN_TEST(test_is_keeloq_protocol_positive);

@@ -232,7 +232,7 @@ KeeLoq, Jarolift, and Star Line `.sub` files that include a `Manufacture:` field
 be **replayed** by the M1 using counter-mode re-encryption — but this requires the
 manufacturer's 64-bit master key to be present on the SD card.
 
-Place a file named `keeloq_mfcodes` at `SUBGHZ/keeloq_mfcodes` on the M1's SD card.
+Place a file named `keeloq_mfcodes` at `SubGHz/keeloq_mfcodes` on the M1's SD card.
 The M1 accepts two file formats:
 
 **Compact format** (one entry per line):
@@ -260,16 +260,16 @@ output from the toolkit and rename it to `keeloq_mfcodes`.
 **Option A — RocketGod SubGHz Toolkit (Flipper Zero required):**
 1. Install [RocketGod's SubGHz Toolkit](https://github.com/RocketGod-git/RocketGods-SubGHz-Toolkit) on your Flipper Zero.
 2. Open the toolkit → *Decrypt KeeLoq Manufacturer Codes* → export `keeloq_keys.txt`.
-3. Either copy `keeloq_keys.txt` directly to `SUBGHZ/keeloq_mfcodes` on the M1's SD card,
+3. Either copy `keeloq_keys.txt` directly to `SubGHz/keeloq_mfcodes` on the M1's SD card,
    **or** convert it to compact format using the included script:
    ```bash
    python3 scripts/convert_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes
    ```
-   Then copy `keeloq_mfcodes` to `SUBGHZ/` on the M1's SD card.
+   Then copy `keeloq_mfcodes` to `SubGHz/` on the M1's SD card.
 
 **Option B — Manual / community-sourced keys:**
 Create a plain-text file in compact format with the manufacturer keys you need and place
-it at `SUBGHZ/keeloq_mfcodes` on the SD card.
+it at `SubGHz/keeloq_mfcodes` on the SD card.
 
 > **Note:** The M1 loads `keeloq_mfcodes` at the start of each Sub-GHz session.
 > If the file is absent, KeeLoq rolling-code `.sub` files are still decoded and displayed
