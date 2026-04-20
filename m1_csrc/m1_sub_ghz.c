@@ -28,6 +28,8 @@
 #include "subghz_key_encoder.h"
 #include "subghz_raw_line_parser.h"
 #include "subghz_secplus_v1_encoder.h"
+#include "subghz_keeloq_encoder.h"
+#include "subghz_keeloq_mfkeys.h"
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
@@ -1688,6 +1690,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 
 	/* KEY file fields */
 	char key_protocol[32] = {0};
+	char key_manufacture[48] = {0};
 	uint64_t key_value = 0;
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
@@ -1854,6 +1857,23 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			/* M1 native .sgh PACKET format uses "BT:" instead of "TE:" */
 			key_te = (uint32_t)strtoul(line_buf + 3, NULL, 10);
 		}
+		else if (strncmp(line_buf, "Manufacture:", 12) == 0)
+		{
+			/* Flipper SubGhz Key File: manufacturer name used for KeeLoq MK lookup */
+			const char *p = line_buf + 12;
+			while (*p == ' ') p++;
+			/* Guard: skip if no name follows the field prefix */
+			if (*p == '\0') continue;
+			strncpy(key_manufacture, p, sizeof(key_manufacture) - 1);
+			key_manufacture[sizeof(key_manufacture) - 1] = '\0';
+			{
+				size_t len = strlen(key_manufacture);
+				while (len > 0 && isspace((unsigned char)key_manufacture[len - 1]))
+				{
+					key_manufacture[--len] = '\0';
+				}
+			}
+		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
 			/* Parse signed values, write absolute values as Data: lines.
@@ -1949,26 +1969,90 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			uint8_t resolve_ret = subghz_key_resolve_timing(&key_params, &key_timing);
 			if (resolve_ret != SUBGHZ_KEY_OK)
 			{
-				f_close(&f_sgh);
-				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
-				return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
-			}
+				/*
+				 * KeeLoq counter-mode replay: when the timing resolver
+				 * returns ERR_DYNAMIC (6) for a KeeLoq-family protocol AND
+				 * a Manufacture name is present in the .sub file, attempt
+				 * to look up the manufacturer master key and encode a
+				 * counter-incremented hop word.
+				 *
+				 * The keystore is loaded lazily from:
+				 *   0:/SUBGHZ/keeloq_mfcodes
+				 * Export this file from a Flipper Zero using RocketGod's
+				 * SubGHz Toolkit app.
+				 */
+				if (resolve_ret == SUBGHZ_KEY_ERR_DYNAMIC &&
+				    keeloq_is_keeloq_protocol(key_params.protocol) &&
+				    key_manufacture[0] != '\0')
+				{
+					/* Lazy-load the manufacturer key table */
+					if (keeloq_mfkeys_count() == 0)
+						keeloq_mfkeys_load();
 
-			/* Encode 3 repetitions of the signal into raw timing pairs */
-			uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
-			pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
-			uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
-			pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
-			if (!pairs)
+					KeeLoqEncParams kl_params;
+					kl_params.protocol    = key_params.protocol;
+					kl_params.manufacture = key_manufacture;
+					kl_params.key_value   = key_value;
+					kl_params.bit_count   = key_bit_count;
+					kl_params.te          = key_te;
+
+					SubGhzRawPair *kl_pairs  = NULL;
+					uint32_t       kl_npairs = 0;
+
+					KeeLoqEncResult kl_res = keeloq_encode_replay(
+					    &kl_params, &kl_pairs, &kl_npairs, 3);
+
+					if (kl_res == KEELOQ_ENC_OK && kl_pairs && kl_npairs > 0)
+					{
+						pairs          = kl_pairs;
+						npairs         = kl_npairs;
+						pairs_per_rep  = keeloq_pairs_per_rep(
+						                     KEELOQ_PREAMBLE_PULSES, 64U);
+					}
+					else
+					{
+						uint8_t ret_code = SUBGHZ_KEY_ERR_DYNAMIC;
+
+						/*
+						 * Preserve the existing dynamic-error behavior for
+						 * "no key found"/generic encode failures, but surface
+						 * allocation failure distinctly so callers/UI do not
+						 * misreport it as a dynamic-code issue.
+						 */
+						if (kl_res == KEELOQ_ENC_NOMEM)
+							ret_code = 1;
+
+						f_close(&f_sgh);
+						f_unlink(FLIPPER_SUB_TMP_SGH);
+						free(line_buf); free(out_buf);
+						return ret_code;
+					}
+				}
+				else
+				{
+					f_close(&f_sgh);
+					f_unlink(FLIPPER_SUB_TMP_SGH);
+					free(line_buf); free(out_buf);
+					return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
+				}
+			}
+			else
 			{
-				f_close(&f_sgh);
-				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
-				return 1;
-			}
+				/* Encode 3 repetitions of the signal into raw timing pairs */
+				uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
+				pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
+				uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
+				pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+				if (!pairs)
+				{
+					f_close(&f_sgh);
+					f_unlink(FLIPPER_SUB_TMP_SGH);
+					free(line_buf); free(out_buf);
+					return 1;
+				}
 
-			npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+				npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+			}
 		}
 
 		/* Write encoded pairs as Data: lines to the temp .sgh file.
@@ -1976,26 +2060,71 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 		 * so total TX = 3 × 5 = 15 transmissions — matches a real remote button press. */
 		if (npairs > 0)
 		{
-			int pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
+			const size_t out_buf_cap = FLIPPER_SUB_OUT_MAX;
+			int pos = snprintf(out_buf, out_buf_cap, "%s",
 			                   SUB_GHZ_DATAFILE_DATA_KEYWORD);
+			if (pos < 0)
+			{
+				pos = 0;
+				out_buf[0] = '\0';
+			}
+			else if ((size_t)pos >= out_buf_cap)
+			{
+				pos = (int)(out_buf_cap - 1);
+			}
+
 			for (uint32_t pi = 0; pi < npairs; pi++)
 			{
-				pos += snprintf(&out_buf[pos], FLIPPER_SUB_LINE_MAX - pos,
-				                " %lu %lu",
-				                (unsigned long)pairs[pi].high_us,
-				                (unsigned long)pairs[pi].low_us);
+				char pair_buf[32];
+				int pair_len = snprintf(pair_buf, sizeof(pair_buf),
+				                        " %lu %lu",
+				                        (unsigned long)pairs[pi].high_us,
+				                        (unsigned long)pairs[pi].low_us);
+
+				if (pair_len < 0)
+					continue;
+
+				/* Flush before appending if the next pair would exceed out_buf. */
+				if (((size_t)pos + (size_t)pair_len + 3) > out_buf_cap)
+				{
+					pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "\r\n");
+					f_puts(out_buf, &f_sgh);
+					pos = snprintf(out_buf, out_buf_cap, "%s",
+					               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+					if (pos < 0)
+					{
+						pos = 0;
+						out_buf[0] = '\0';
+					}
+					else if ((size_t)pos >= out_buf_cap)
+					{
+						pos = (int)(out_buf_cap - 1);
+					}
+				}
+
+				pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "%s", pair_buf);
 
 				/* Start a new Data: line at repetition boundaries
-				 * (after each sync gap = last pair of each rep) or
-				 * when the buffer is getting full */
+				 * (after each sync gap = last pair of each rep). */
 				bool is_rep_end = ((pi + 1) % pairs_per_rep) == 0;
-				if (is_rep_end || pos >= FLIPPER_SUB_LINE_MAX - 64)
+				if (is_rep_end)
 				{
-					strcat(out_buf, "\r\n");
+					pos += snprintf(&out_buf[pos], out_buf_cap - (size_t)pos, "\r\n");
 					f_puts(out_buf, &f_sgh);
 					if (pi + 1 < npairs)
-						pos = snprintf(out_buf, FLIPPER_SUB_LINE_MAX, "%s",
+					{
+						pos = snprintf(out_buf, out_buf_cap, "%s",
 						               SUB_GHZ_DATAFILE_DATA_KEYWORD);
+						if (pos < 0)
+						{
+							pos = 0;
+							out_buf[0] = '\0';
+						}
+						else if ((size_t)pos >= out_buf_cap)
+						{
+							pos = (int)(out_buf_cap - 1);
+						}
+					}
 				}
 			}
 			has_data = true;

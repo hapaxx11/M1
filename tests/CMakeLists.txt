@@ -784,3 +784,25 @@ if(TARGET sanitizers)
     target_link_libraries(test_cc1101_fec PRIVATE sanitizers)
 endif()
 add_test(NAME cc1101_fec COMMAND test_cc1101_fec)
+# ------------------------------------------------------------------
+# Module under test: subghz_keeloq (cipher + keystore + encoder)
+# KeeLoq 528-round NLFSR cipher, normal/simple learning derivation,
+# counter-mode hop increment, manufacturer key store (ff.h stubbed),
+# and OOK PWM packet encoder for counter-mode replay.
+# Pure logic — no HAL dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_keeloq
+    test_subghz_keeloq.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_encoder.c
+)
+target_include_directories(test_subghz_keeloq PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_keeloq PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_keeloq PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_keeloq COMMAND test_subghz_keeloq)
