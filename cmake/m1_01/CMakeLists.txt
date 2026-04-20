@@ -428,6 +428,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_pcsg_generic_decode.c
     ../../Sub_Ghz/protocols/m1_acurite_592txr_decode.c
     ../../Sub_Ghz/protocols/m1_acurite_986_decode.c
+    ../../Sub_Ghz/protocols/m1_acurite_5n1_decode.c
     ../../Sub_Ghz/protocols/m1_tx_8300_decode.c
     ../../Sub_Ghz/protocols/m1_oregon_v1_decode.c
     ../../Sub_Ghz/protocols/m1_oregon3_decode.c

@@ -456,6 +456,17 @@ void test_find_acurite_606tx(void)
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeWeather, proto->type);
 }
 
+void test_find_acurite_5n1(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Acurite_5n1");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_EQUAL(SubGhzProtocolTypeWeather, proto->type);
+	TEST_ASSERT_EQUAL_UINT16(64, proto->timing.min_count_bit_for_found);
+}
+
 void test_find_firecracker(void)
 {
 	/* FireCracker (CM17A) — X10 home-automation RF, 40-bit packet */
@@ -653,6 +664,7 @@ int main(void)
 	RUN_TEST(test_find_elplast);
 	RUN_TEST(test_find_keyfinder);
 	RUN_TEST(test_find_acurite_606tx);
+	RUN_TEST(test_find_acurite_5n1);
 	RUN_TEST(test_find_firecracker);
 
 	/* Protocol flag consistency rules */

@@ -8,8 +8,8 @@
 
 ### Phase 1 — Acurite 5n1 decoder
 - **Description**: Port Acurite 5n1 weather station decoder (64-bit OOK PWM, 433.92 MHz). Add enum, decoder .c, registry entry, CMakeLists, and test.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `feat: add Acurite 5n1 weather station decoder`
 
 ### Phase 2 — Playlist delay support
 - **Description**: Parse `# delay: <ms>` lines in playlist .txt files. Apply vTaskDelay() between signals. Update SubGhzApp struct, playlist parser, and scene. Add tests for delay parsing.
