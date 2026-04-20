@@ -1866,6 +1866,13 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			if (*p == '\0') continue;
 			strncpy(key_manufacture, p, sizeof(key_manufacture) - 1);
 			key_manufacture[sizeof(key_manufacture) - 1] = '\0';
+			{
+				size_t len = strlen(key_manufacture);
+				while (len > 0 && isspace((unsigned char)key_manufacture[len - 1]))
+				{
+					key_manufacture[--len] = '\0';
+				}
+			}
 		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
