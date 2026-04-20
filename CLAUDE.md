@@ -882,6 +882,59 @@ infrared_encode_sys_deinit();  /* ← ALWAYS, even on timeout */
   (deinit in the `Q_EVENT_IRRED_TX` handler).  The Send All loop must
   do the same for each iteration.
 
+### Read Raw Scene State Management — TIM1 ISR / `start_passive_rx()` / `start_raw_rx()`
+
+> **TIM1 input-capture MUST NOT be started during passive listen mode.**
+> Starting it while `subghz_record_mode_flag == 0` causes the ISR to enqueue
+> a `Q_EVENT_SUBGHZ_RX` for every noise edge (thousands per second at 433 MHz),
+> flooding the main queue and preventing the 200 ms timeout that drives RSSI
+> refreshes and the sine-wave animation.
+
+**Background.** The Read Raw scene uses two radio states:
+
+- **Passive listen** (Start / Idle) — SI4463 in RX for live RSSI; TIM1 ISR is
+  NOT started.  The 200 ms queue timeout fires reliably and drives animations /
+  RSSI updates.
+- **Recording** — TIM1 ISR armed so captured edges flow into the ring buffer.
+
+**The canonical timer lifecycle:**
+```
+scene_on_enter
+  └─ start_passive_rx()          ← sub_ghz_rx_init_ext() only, NO rx_start
+OK pressed (Start → Recording)
+  └─ start_raw_rx()              ← sub_ghz_rx_start_ext() THEN record_mode_flag = 1
+OK / BACK pressed (Recording → Idle)
+  └─ stop_raw_rx()               ← sub_ghz_rx_pause_ext() + flush; NO rx_start at end
+scene_on_exit
+  └─ (recording) stop_raw_rx()   ← same cleanup including LED blink-off
+  └─ (always)   sub_ghz_rx_deinit_ext() + opmode ISOLATED
+```
+
+**Rules for new code in or around the Read Raw scene:**
+
+1. **Never call `sub_ghz_rx_start_ext()` inside `start_passive_rx()`.**  The
+   timer must only be started when recording actually begins.
+2. **In `start_raw_rx()`, set `subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE`
+   and call `sub_ghz_rx_start_ext()` *before* setting `subghz_record_mode_flag = 1`.**
+   This ensures the ISR state machine is initialised before any edge is captured.
+3. **`stop_raw_rx()` pauses the timer but must NOT restart it.**  Passive Idle
+   mode does not need TIM1 running.
+4. **Never call `sub_ghz_rx_pause_ext()` in `scene_on_exit()` for Start/Idle.**
+   The timer was never started in those states; calling pause on a stopped timer
+   can trigger `Error_Handler()` via `HAL_TIM_IC_Stop_IT()`.  Call
+   `sub_ghz_rx_deinit_ext()` directly — it checks `timerhdl_subghz_rx.State`
+   before de-initialising and is safe regardless of run state.
+5. **Use `stop_raw_rx()` on ALL exit paths when recording is active** (including
+   scene exit), not inline teardown code.  `stop_raw_rx()` turns off the LED
+   fast-blink — inline code that omits `m1_led_fast_blink(... OFF)` leaves the
+   RGB LED blinking after leaving the scene.
+6. **After `sub_ghz_replay_flipper_file()`, always call `start_passive_rx(app)`**
+   (not an inline restart block).  Replay can mutate `subghz_scan_config.band`
+   for CUSTOM-band files; `start_passive_rx()` re-applies `app->freq_idx/mod_idx`
+   via `subghz_apply_config_ext()` to restore the user-selected config.  An
+   inline restart that reads `subghz_scan_config.band` directly may resume on
+   the wrong band after replay.
+
 ---
 
 ## Saved Item Actions Pattern

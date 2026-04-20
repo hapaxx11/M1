@@ -1,1 +1,0 @@
-**Sub-GHz: Save from read-history now respects save format setting** — `subghz_save_history_entry()` previously hardcoded `.sub` regardless of the user's configured save format. It now honours the Sub-GHz config setting and writes `.sgh` (M1 native) or `.sub` (Flipper) accordingly.

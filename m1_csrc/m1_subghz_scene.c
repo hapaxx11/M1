@@ -237,8 +237,9 @@ void subghz_scene_app_run(void)
         if (cur_scene == SubGhzSceneRead && app.read_state == SubGhzReadStateRx)
             rx_active = true;
         else if (cur_scene == SubGhzSceneReadRaw &&
-                 app.raw_state == SubGhzReadRawStateRecording)
-            rx_active = true;
+                 (app.raw_state == SubGhzReadRawStateRecording ||
+                  app.raw_state == SubGhzReadRawStateStart))
+            rx_active = true;  /* animate sine wave in Start; update RSSI in Recording */
 
         /* Wait for event: use 200ms poll during active RX for RSSI refresh */
         TickType_t wait = (app.hopper_active || rx_active) ?
