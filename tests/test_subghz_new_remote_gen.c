@@ -228,35 +228,34 @@ void test_gen_file_base_starts_with_newremote(void)
     TEST_ASSERT_TRUE(strncmp(p.file_base, "NewRemote_", 10) == 0);
 }
 
-/* ─── All protocols produce distinct keys from the same seed ─────────────── */
+/* ─── All protocols produce valid results from the same seed ────────────── */
 
-void test_gen_all_protocols_distinct(void)
+void test_gen_all_protocols_succeed(void)
 {
     uint64_t seed  = 0x42424242DEADBEEFULL;
-    uint64_t keys[BW_PROTO_COUNT];
     NewRemoteParams p;
 
     for (int i = 0; i < (int)BW_PROTO_COUNT; i++)
     {
-        TEST_ASSERT_TRUE(subghz_new_remote_gen((BindWizardProto)i, seed, &p));
-        keys[i] = p.key;
-    }
+        TEST_ASSERT_TRUE_MESSAGE(
+            subghz_new_remote_gen((BindWizardProto)i, seed, &p),
+            "gen returned false for a valid protocol");
 
-    /* All keys should be distinct (different bit widths guarantee masking
-     * differences; splitmix64 further separates them) */
-    for (int i = 0; i < (int)BW_PROTO_COUNT; i++)
-    {
-        for (int j = i + 1; j < (int)BW_PROTO_COUNT; j++)
+        /* Key must fit within bit_count bits */
+        if (p.bit_count < 64)
         {
-            /* Note: all protocols use the same seed value so their raw PRNG
-             * output is identical, but the bit-masks differ.  CAME Atomo (62 bit)
-             * and Nice FloR-S (52 bit) may share lower bits.  The test is weaker
-             * here: just verify the output is within range for each protocol. */
-            (void)keys[i];
-            (void)keys[j];
+            uint64_t max_key = (1ULL << p.bit_count) - 1ULL;
+            TEST_ASSERT_TRUE_MESSAGE(
+                p.key <= max_key,
+                "key exceeds bit_count mask");
         }
+
+        /* All required fields are filled */
+        TEST_ASSERT_TRUE_MESSAGE(p.proto_name[0] != '\0', "proto_name empty");
+        TEST_ASSERT_TRUE_MESSAGE(p.freq_hz > 0,           "freq_hz is zero");
+        TEST_ASSERT_TRUE_MESSAGE(p.bit_count > 0,         "bit_count is zero");
+        TEST_ASSERT_TRUE_MESSAGE(p.file_base[0] != '\0',  "file_base empty");
     }
-    /* If we got here without assert failures, all generated successfully */
 }
 
 /* ─── Zero seed is valid ─────────────────────────────────────────────────── */
@@ -317,7 +316,7 @@ int main(void)
     RUN_TEST(test_gen_file_base_starts_with_newremote);
 
     /* All protocols */
-    RUN_TEST(test_gen_all_protocols_distinct);
+    RUN_TEST(test_gen_all_protocols_succeed);
 
     return UNITY_END();
 }

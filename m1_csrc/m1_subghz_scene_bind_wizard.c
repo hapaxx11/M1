@@ -256,6 +256,7 @@ static uint8_t   bw_proto_sel;   /* selected index in BIND_PROTO_COUNT */
 static uint8_t   bw_proto_scroll;
 static uint8_t   bw_step;       /* current step index (0-based) */
 static uint32_t  bw_countdown_start; /* HAL_GetTick() when countdown began */
+static bool      bw_tx_failed;  /* true if last TX step failed */
 static NewRemoteParams bw_params;
 static char      bw_filepath[72]; /* "0:/SUBGHZ/<file_base>.sub" */
 
@@ -279,14 +280,24 @@ static const BindStep *current_step(void)
 /** Generate key and save .sub file.  Returns true on success. */
 static bool bw_generate_and_save(void)
 {
-    /* Entropy: HAL_GetTick XOR'd with itself shifted to mix bits */
-    uint32_t t = HAL_GetTick();
-    uint64_t seed = ((uint64_t)t << 32) ^ (uint64_t)(t * 1664525u + 1013904223u);
+    /* Entropy: mix HAL_GetTick() with STM32H5 unique device ID words
+     * (three 32-bit read-once OTP registers at 0x08FFF800..08) to ensure
+     * each device produces different serials even at the same boot time.
+     * This matches the seeding strategy in m1_crypto.c. */
+    uint32_t t    = HAL_GetTick();
+    uint32_t uid0 = *(volatile uint32_t *)(0x08FFF800UL);
+    uint32_t uid1 = *(volatile uint32_t *)(0x08FFF804UL);
+    uint32_t uid2 = *(volatile uint32_t *)(0x08FFF808UL);
+    uint64_t seed = ((uint64_t)(uid0 ^ t) << 32)
+                  ^ ((uint64_t)(uid1 ^ uid2))
+                  ^ ((uint64_t)t * 6364136223846793005ULL);
 
     if (!subghz_new_remote_gen(current_proto()->proto_id, seed, &bw_params))
         return false;
 
-    /* Build SD path */
+    /* Build SD path.  file_base is produced by subghz_new_remote_gen which
+     * is unit-tested to contain no path separators or spaces; the trust
+     * boundary is between this scene and that pure module. */
     snprintf(bw_filepath, sizeof(bw_filepath),
              "0:/SUBGHZ/%s.sub", bw_params.file_base);
 
@@ -437,7 +448,10 @@ static void draw_step(void)
     else
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 4, 63, st->tx_step ? "OK=Send" : "OK=Next");
+        if (bw_tx_failed)
+            u8g2_DrawStr(&m1_u8g2, 4, 63, "TX fail-retry OK");
+        else
+            u8g2_DrawStr(&m1_u8g2, 4, 63, st->tx_step ? "OK=Send" : "OK=Next");
     }
 
     m1_u8g2_nextpage();
@@ -478,6 +492,7 @@ static void scene_on_enter(SubGhzApp *app)
     bw_proto_sel    = 0;
     bw_proto_scroll = 0;
     bw_step         = 0;
+    bw_tx_failed    = false;
     memset(&bw_params, 0, sizeof(bw_params));
     bw_filepath[0]  = '\0';
     app->need_redraw = true;
@@ -592,6 +607,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Previous step, or exit to proto sel on step 0 */
                 app->hopper_active = false;
+                bw_tx_failed       = false;
 
                 if (bw_step > 0)
                 {
@@ -612,7 +628,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Fire TX if this is a TX step */
                 if (st->tx_step)
-                    bw_transmit(); /* ignore rc — note in instruction text */
+                {
+                    if (!bw_transmit())
+                    {
+                        /* TX failed — stay on this step; show error hint */
+                        bw_tx_failed     = true;
+                        app->need_redraw = true;
+                        return true;
+                    }
+                }
+
+                bw_tx_failed = false;
 
                 /* Advance to next step or done screen */
                 app->hopper_active = false;
