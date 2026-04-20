@@ -72,6 +72,7 @@ uint8_t                 m1_led_lowbatt_b = (uint8_t)~0x80;  /* ~#331480 default 
 uint8_t                 m1_sleep_timeout_idx = 1;  /* 1 minute default */
 uint8_t                 m1_menu_style = 0;         /* 0=Small, 1=Medium, 2=Large */
 uint8_t                 m1_dark_mode = 0;          /* 0=Off (normal), 1=On (inverted display) */
+int8_t                  m1_clock_tz_offset = 0;    /* Local UTC offset in hours, -12..+14 */
 #ifdef M1_APP_BADBT_ENABLE
 char                    m1_badbt_name[BADBT_NAME_MAX_LEN + 1] = "M1-BadBT";
 #endif

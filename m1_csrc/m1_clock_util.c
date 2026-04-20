@@ -9,6 +9,7 @@
 
 #include "m1_clock_util.h"
 #include <stddef.h>
+#include <stdio.h>
 
 /*============================================================================*/
 /* Leap year                                                                  */
@@ -133,4 +134,21 @@ void clock_apply_offset(const clock_time_t *src, int8_t offset_hours,
     }
 
     dst->hour = (uint8_t)hour;
+}
+
+/*============================================================================*/
+/* Format UTC offset label                                                    */
+/*============================================================================*/
+
+void clock_tz_label(int8_t offset_hours, char *buf, uint8_t buf_size)
+{
+    if (buf == NULL || buf_size < 2U)
+        return;
+
+    if (offset_hours == 0)
+        snprintf(buf, buf_size, "UTC");
+    else if (offset_hours > 0)
+        snprintf(buf, buf_size, "UTC+%d", (int)offset_hours);
+    else
+        snprintf(buf, buf_size, "UTC%d", (int)offset_hours);  /* negative sign already in value */
 }
