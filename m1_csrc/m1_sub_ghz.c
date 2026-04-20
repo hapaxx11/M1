@@ -2550,172 +2550,212 @@ void sub_ghz_add_manually(void)
 
 
 /*============================================================================*/
-/**
-  * @brief
-  * @param
-  * @retval
-  */
+/*                                                                            */
+/*  FREQUENCY ANALYZER                                                        */
+/*  Momentum-style: sweep a band range each pass, find the strongest signal, */
+/*  display with large frequency readout, RSSI bar, and threshold marker.    */
+/*  L/R: cycle band  UP/DN: adjust threshold  OK: hold/resume  BACK: exit   */
+/*                                                                            */
 /*============================================================================*/
+
+/* Bar-graph geometry */
+#define FREQAN_RSSI_FLOOR   (-120)  /* dBm lower bound on bar scale */
+#define FREQAN_RSSI_CEIL    (-30)   /* dBm upper bound on bar scale */
+#define FREQAN_BAR_X         3      /* bar frame left edge (px) */
+#define FREQAN_BAR_W        122     /* bar frame width (px) */
+#define FREQAN_BAR_Y         38     /* bar frame top edge (px) */
+#define FREQAN_BAR_H         8      /* bar frame height (px) */
+/* Threshold defaults */
+#define FREQAN_THR_DEFAULT  (-75)   /* initial threshold (dBm) */
+#define FREQAN_THR_MIN     (-100)   /* minimum threshold (dBm) */
+#define FREQAN_THR_MAX      (-50)   /* maximum threshold (dBm) */
+#define FREQAN_THR_STEP       5     /* threshold step per key press (dBm) */
+
 void sub_ghz_frequency_reader(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	int16_t rssi, rssi_max, rssi_avg, freq_step;
-	int16_t avg_noisefloor[SUB_GHZ_BAND_EOL][3];
-	uint8_t active_band_id, i, j, asf_sample_count, detection_count;
-	float freq_found;
-	uint8_t prn_buffer[30], float_buffer[10];
-	struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
+    /* Band descriptor table — covers common ISM ranges */
+    static const struct {
+        uint32_t    start_hz;
+        uint32_t    end_hz;
+        uint32_t    step_hz;
+        const char *label;
+        bool        use_915;   /* true: init with SUB_GHZ_BAND_915 frontend */
+    } bands[] = {
+        { 300000000UL, 316000000UL,  50000UL, "300-316MHz", false },
+        { 387000000UL, 464000000UL, 200000UL, "387-464MHz", false },
+        { 779000000UL, 928000000UL, 400000UL, "779-928MHz", true  },
+    };
+    #define FREQAN_BAND_COUNT  3
 
-	m1_u8g2_firstpage();
-	 // This call required for page drawing in mode 1
-    do
-    {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 1, 10, "Frequency Reader");
-		u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_2B);
-		u8g2_DrawStr(&m1_u8g2, 10, 30, "000.000");
-		u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_1B);
-		u8g2_DrawStr(&m1_u8g2, 100, 28, "MHz");
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 1, INFO_BOX_Y_POS_ROW_1, "000.000MHz");
-		u8g2_DrawStr(&m1_u8g2, 1, INFO_BOX_Y_POS_ROW_2, "000.000MHz");
-		u8g2_DrawStr(&m1_u8g2, 1, INFO_BOX_Y_POS_ROW_3, "000.000MHz");
-    } while (m1_u8g2_nextpage());
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t       q_item;
+    BaseType_t          ret;
+    struct si446x_reply_GET_MODEM_STATUS_map *pstat;
+    char    str[40];
+    bool    running    = true;
 
-    for (i=0; i<SUB_GHZ_BAND_EOL; i++)
-    {
-    	for (j=0; j<3; j++)
-    		avg_noisefloor[i][j] = NOISE_FLOOR_RSSI_THRESHOLD;
-    }
-
-    active_band_id = SUB_GHZ_BAND_300;
-    freq_step = CHANNEL_STEPS_MAX + 1;
-    detection_count = 0;
-    asf_sample_count = 0;
+    uint8_t  band_idx  = 1;                        /* default: 387-464 MHz (covers 433.92) */
+    int16_t  threshold = FREQAN_THR_DEFAULT;
+    uint32_t best_hz   = 0;
+    int16_t  best_rssi = FREQAN_RSSI_FLOOR;
+    bool     has_signal = false;
+    bool     hold       = false;
 
     menu_sub_ghz_init();
+    radio_init_rx_tx(SUB_GHZ_BAND_433, MODEM_MOD_TYPE_OOK, true);
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
 
-    while (1 ) // Main loop of this task
-	{
-		;
-		; // Do other parts of this task here
-		;
-	    if ( freq_step <= subghz_band_steps[active_band_id][1] )
-	    {
-	    	SI446x_Start_Rx(freq_step); // Change channel
-	    } // if ( freq_step <= subghz_band_steps[active_band_id] )
-	    else
-	    {
-	    	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, active_band_id, 0, 0); // Process time: ~27.57ms (with reset) - ~4.5ms (optimized)
-	    	if ( subghz_band_steps[active_band_id][1] > 1 ) // There're other channels to retry
-	    		freq_step = 0; // Let start with channel 1 in next round
-	    } // else
-		// Read INTs, clear pending ones
-		SI446x_Get_IntStatus(0, 0, 0);
-		rssi_max = -255;
-		for ( i=0; i<2; i++)
-		{
-			//vTaskDelay(3); // Give the radio chip some time to do its task
-			pmodemstat = SI446x_Get_ModemStatus(0x00); // Process time: ~99.7us
-			// RF_Input_Level_dBm = (RSSI_value / 2) – MODEM_RSSI_COMP – 70
-			// MODEM_RSSI_COMP = 0x40 = 64d is appropriate for most applications.
-			rssi = pmodemstat->CURR_RSSI/2 - MODEM_RSSI_COMP - 70;
-			if ( rssi > rssi_max )
-				rssi_max = rssi;
-			vTaskDelay(1);
-		} // for ( i=0; i<2; i++)
+    while (running)
+    {
+        /* ---- Sweep phase (skipped when held) ---- */
+        if (!hold)
+        {
+            uint32_t freq     = bands[band_idx].start_hz;
+            uint32_t freq_end = bands[band_idx].end_hz;
+            uint32_t step     = bands[band_idx].step_hz;
+            int16_t  sw_best  = FREQAN_RSSI_FLOOR;
+            uint32_t sw_freq  = freq;
 
-		rssi_avg = 0;
-		for (i=0; i<3; i++)
-			rssi_avg += avg_noisefloor[active_band_id][i];
-		rssi_avg /= 3; // Get average noise floor of the current frequency
-		if ( rssi_max >= (rssi_avg + SIGNAL_TO_NOISE_RATIO) ) // SNR matches the condition?
-		{
-			m1_buzzer_notification();
-			freq_found = subghz_band_steps[active_band_id][0];
-			if ( freq_step <= CHANNEL_STEPS_MAX )
-				freq_found += freq_step*CHANNEL_STEP;
-			m1_float_to_string(float_buffer, freq_found, 3);
+            while (freq <= freq_end)
+            {
+                SI446x_Set_Frequency(freq);
+                SI446x_Start_Rx(0);
+                HAL_Delay(2);   /* let AGC settle */
 
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawBox(&m1_u8g2, 10, 14, 90, 17); // Clear old content
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_2B);
-			u8g2_DrawStr(&m1_u8g2, 10, 30, float_buffer);
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-			u8g2_DrawBox(&m1_u8g2, 1, INFO_BOX_Y_POS_ROW_1 + detection_count*10 - 9, M1_LCD_DISPLAY_WIDTH, 10); // Clear old content
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			sprintf(prn_buffer, "%sMHz RSSI%ddBm", float_buffer, rssi);
-			u8g2_DrawStr(&m1_u8g2, 1, INFO_BOX_Y_POS_ROW_1 + detection_count*10, prn_buffer);
-			m1_u8g2_nextpage(); // Update display RAM
+                SI446x_Get_IntStatus(0, 0, 0);
+                pstat = SI446x_Get_ModemStatus(0x00);
+                int16_t r = (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
 
-			M1_LOG_N(M1_LOGDB_TAG, float_buffer);
-			M1_LOG_N(M1_LOGDB_TAG, " RSSI: %ddBm\r\n", rssi);
-			detection_count++;
-			if ( detection_count >= 3 )
-				detection_count = 0;
-		} // if ( rssi_max >= (rssi_avg + SIGNAL_TO_NOISE_RATIO) )
-		else
-		{
-			avg_noisefloor[active_band_id][asf_sample_count] = rssi_max;
-		}
+                if (r > sw_best) { sw_best = r; sw_freq = freq; }
+                freq += step;
+            }
 
-		if ( ++freq_step > subghz_band_steps[active_band_id][1] ) // All channels have been completed?
-		{
-			freq_step = CHANNEL_STEPS_MAX + 1; // Reset
-			while (true)
-			{
-				active_band_id++;
-				if ( active_band_id >= SUB_GHZ_BAND_EOL)
-				{
-					active_band_id = SUB_GHZ_BAND_300;
-					asf_sample_count++;
-					if ( asf_sample_count >= 3 )
-						asf_sample_count = 0;
-					vTaskDelay(20); // Return time to system to do its job
-				} // if ( active_band_id >= SUB_GHZ_BAND_EOL)
-				if ( subghz_band_steps[active_band_id][1] != 0 ) // Change to this band if it is not disabled
-					break;
-			} // while (true)
-		} // if ( ++freq_step > subghz_band_steps[active_band_id][1] )
-		// Wait for the notification from button_event_handler_task to subfunc_handler_task.
-		// This task is the sub-task of subfunc_handler_task.
-		// The notification is given in the form of an item in the main queue.
-		// So let read the main queue.
-		ret = xQueueReceive(main_q_hdl, &q_item, 0/*portMAX_DELAY*/);
-		if (ret==pdTRUE)
-		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			{
-				// Notification is only sent to this task when there's any button activity,
-				// so it doesn't need to wait when reading the event from the queue
-				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK ) // user wants to exit?
-				{
-					; // Do extra tasks here if needed
-					sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_300, 0, 0);
-					menu_sub_ghz_exit();
+            best_hz    = sw_freq;
+            best_rssi  = sw_best;
+            has_signal = (best_rssi >= threshold);
+            if (has_signal) m1_buzzer_notification();
+        }
 
-					xQueueReset(main_q_hdl); // Reset main q before return
-					break; // Exit and return to the calling task (subfunc_handler_task)
-				} // if ( m1_buttons_status[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK )
-				else
-				{
-					; // Do other things for this task, if needed
-				}
-			} // if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			else
-			{
-				; // Do other things for this task
-			}
-		} // if (ret==pdTRUE)
-	} // while (1 ) // Main loop of this task
+        /* ---- Draw phase ---- */
+        /* Bar fill and threshold-marker pixel positions */
+        int16_t rc = best_rssi;
+        if (rc < FREQAN_RSSI_FLOOR) rc = FREQAN_RSSI_FLOOR;
+        if (rc > FREQAN_RSSI_CEIL)  rc = FREQAN_RSSI_CEIL;
+        uint8_t bar_fill = (uint8_t)(
+            ((int32_t)(rc - FREQAN_RSSI_FLOOR) * (FREQAN_BAR_W - 2)) /
+            (FREQAN_RSSI_CEIL - FREQAN_RSSI_FLOOR));
 
-} // void sub_ghz_frequency_reader(void)
+        int16_t tc = threshold;
+        if (tc < FREQAN_RSSI_FLOOR) tc = FREQAN_RSSI_FLOOR;
+        if (tc > FREQAN_RSSI_CEIL)  tc = FREQAN_RSSI_CEIL;
+        uint8_t thr_x = (uint8_t)(FREQAN_BAR_X +
+            ((int32_t)(tc - FREQAN_RSSI_FLOOR) * FREQAN_BAR_W) /
+            (FREQAN_RSSI_CEIL - FREQAN_RSSI_FLOOR));
+
+        m1_u8g2_firstpage();
+        do {
+            /* Title row */
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            u8g2_DrawStr(&m1_u8g2, 0, 9,
+                         hold ? "Freq Analyzer [HOLD]" : "Frequency Analyzer");
+            u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
+
+            /* Best frequency — large font */
+            u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_1B);
+            if (best_hz > 0)
+                snprintf(str, sizeof(str), "%lu.%03lu MHz",
+                         best_hz / 1000000UL,
+                         (best_hz % 1000000UL) / 1000UL);
+            else
+                snprintf(str, sizeof(str), "---.--- MHz");
+            u8g2_DrawStr(&m1_u8g2, 0, 25, str);
+
+            /* RSSI reading + optional signal indicator */
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            snprintf(str, sizeof(str), "%d dBm%s",
+                     (int)best_rssi, has_signal ? "  Signal!" : "");
+            u8g2_DrawStr(&m1_u8g2, 0, 35, str);
+
+            /* Bar: outline frame */
+            u8g2_DrawFrame(&m1_u8g2, FREQAN_BAR_X, FREQAN_BAR_Y,
+                           FREQAN_BAR_W, FREQAN_BAR_H);
+
+            /* Bar: fill proportional to RSSI */
+            if (bar_fill > 0)
+                u8g2_DrawBox(&m1_u8g2,
+                             FREQAN_BAR_X + 1, FREQAN_BAR_Y + 1,
+                             bar_fill, FREQAN_BAR_H - 2);
+
+            /* Threshold marker: vertical line through bar */
+            u8g2_DrawVLine(&m1_u8g2, thr_x,
+                           FREQAN_BAR_Y - 2, FREQAN_BAR_H + 4);
+
+            /* Threshold value and active band label */
+            snprintf(str, sizeof(str), "Thr:%d  %s",
+                     (int)threshold, bands[band_idx].label);
+            u8g2_DrawStr(&m1_u8g2, 0, 54, str);
+
+            /* Controls hint */
+            u8g2_DrawStr(&m1_u8g2, 0, 63, "L/R:Band \x18\x19:Thr OK:Hold");
+
+        } while (m1_u8g2_nextpage());
+
+        /* ---- Input phase (50 ms timeout keeps display refreshing) ---- */
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+        xQueueReceive(button_events_q_hdl, &btn, 0);
+
+        if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            running = false;
+        }
+        else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            hold = !hold;
+            if (!hold)
+            {
+                best_hz    = 0;
+                best_rssi  = FREQAN_RSSI_FLOOR;
+                has_signal = false;
+            }
+        }
+        else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            band_idx = (band_idx + 1) % FREQAN_BAND_COUNT;
+            best_hz = 0; best_rssi = FREQAN_RSSI_FLOOR;
+            has_signal = false; hold = false;
+            radio_init_rx_tx(
+                bands[band_idx].use_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                MODEM_MOD_TYPE_OOK, true);
+            radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+        }
+        else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            band_idx = (band_idx + FREQAN_BAND_COUNT - 1) % FREQAN_BAND_COUNT;
+            best_hz = 0; best_rssi = FREQAN_RSSI_FLOOR;
+            has_signal = false; hold = false;
+            radio_init_rx_tx(
+                bands[band_idx].use_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                MODEM_MOD_TYPE_OOK, true);
+            radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+        }
+        else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (threshold < FREQAN_THR_MAX) threshold += FREQAN_THR_STEP;
+        }
+        else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (threshold > FREQAN_THR_MIN) threshold -= FREQAN_THR_STEP;
+        }
+    } /* while (running) */
+
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_ISOLATED);
+    SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
+    menu_sub_ghz_exit();
+    xQueueReset(main_q_hdl);
+    m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
+
+} /* sub_ghz_frequency_reader() */
 
 
 /*============================================================================*/
