@@ -230,12 +230,16 @@ typedef struct {
     uint8_t           step_count;
 } BindProtoDef;
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
+#endif
+
 static const BindProtoDef bind_protos[] = {
-    { BW_PROTO_CAME_ATOMO,       steps_came_atomo,  4 },
-    { BW_PROTO_NICE_FLOR_S,      steps_nice_flors,  5 },
-    { BW_PROTO_ALUTECH_AT4N,     steps_alutech,     6 },
-    { BW_PROTO_DITEC_GOL4,       steps_ditec_gol4,  4 },
-    { BW_PROTO_KINGGATES_STYLO4K,steps_kinggates,   4 },
+    { BW_PROTO_CAME_ATOMO,        steps_came_atomo, ARRAY_SIZE(steps_came_atomo) },
+    { BW_PROTO_NICE_FLOR_S,       steps_nice_flors, ARRAY_SIZE(steps_nice_flors) },
+    { BW_PROTO_ALUTECH_AT4N,      steps_alutech,    ARRAY_SIZE(steps_alutech) },
+    { BW_PROTO_DITEC_GOL4,        steps_ditec_gol4, ARRAY_SIZE(steps_ditec_gol4) },
+    { BW_PROTO_KINGGATES_STYLO4K, steps_kinggates,  ARRAY_SIZE(steps_kinggates) },
 };
 
 #define BIND_PROTO_COUNT  ((uint8_t)(sizeof(bind_protos) / sizeof(bind_protos[0])))
@@ -249,6 +253,7 @@ typedef enum {
     BW_STATE_GENERATING,    /* "Generating…" (1 tick) */
     BW_STATE_STEP,          /* Instruction step N     */
     BW_STATE_DONE,          /* Final success screen   */
+    BW_STATE_SAVE_ERROR,    /* SD/save failure screen */
 } BwState;
 
 static BwState   bw_state;
@@ -308,10 +313,13 @@ static bool bw_generate_and_save(void)
         return false;
 
     /* Build SD path.  file_base is produced by subghz_new_remote_gen which
-     * is unit-tested to contain no path separators or spaces; assert the
+     * is unit-tested to contain no path separators, spaces, or tabs; assert the
      * trust boundary at runtime to catch any future regressions. */
-    if (strchr(bw_params.file_base, '/') || strchr(bw_params.file_base, '\\'))
+    if (strchr(bw_params.file_base, '/') || strchr(bw_params.file_base, '\\') ||
+        strchr(bw_params.file_base, ' ')  || strchr(bw_params.file_base, '\t'))
         return false; /* Defensive: should never happen */
+    /* Ensure the SUBGHZ directory exists (safe to call even if it already does) */
+    f_mkdir("0:/SUBGHZ");
     snprintf(bw_filepath, sizeof(bw_filepath),
              "0:/SUBGHZ/%s.sub", bw_params.file_base);
 
@@ -415,6 +423,21 @@ static void draw_generating(void)
     m1_u8g2_nextpage();
 }
 
+static void draw_save_error(void)
+{
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 0, 9, "Save Failed");
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 4, 28, "Check SD card.");
+    u8g2_DrawStr(&m1_u8g2, 4, 40, "0:/SUBGHZ/ must");
+    u8g2_DrawStr(&m1_u8g2, 4, 52, "be writable.");
+    u8g2_DrawStr(&m1_u8g2, 4, 63, "BACK=Retry");
+    m1_u8g2_nextpage();
+}
+
 static void draw_step(void)
 {
     const BindProtoDef *pd  = current_proto();
@@ -452,12 +475,15 @@ static void draw_step(void)
         if (bar_w > 0)
             u8g2_DrawBox(&m1_u8g2, 4, 51, bar_w, 5);
 
-        /* Time remaining */
+        /* Time remaining + action/failure hint */
         char cd[8];
         snprintf(cd, sizeof(cd), "%us", (unsigned)((remaining_ms + 999u) / 1000u));
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 4, 63, cd);
-        u8g2_DrawStr(&m1_u8g2, 70, 63, st->tx_step ? "OK=Send" : "OK=Next");
+        if (bw_tx_failed && st->tx_step)
+            u8g2_DrawStr(&m1_u8g2, 46, 63, "TX fail-retry OK");
+        else
+            u8g2_DrawStr(&m1_u8g2, 70, 63, st->tx_step ? "OK=Send" : "OK=Next");
     }
     else
     {
@@ -484,7 +510,7 @@ static void draw_done(void)
 
     /* Show the filename (just the base + extension, not the full path) */
     char fname[44];
-    /* Truncate to sizeof(fname) - strlen(".sub") - 1 = 38 chars of base */
+    /* Truncate to sizeof(fname) - sizeof(".sub") = 39 chars of base */
     snprintf(fname, sizeof(fname), "%.*s.sub",
              (int)(sizeof(fname) - sizeof(".sub")), bw_params.file_base);
     u8g2_DrawStr(&m1_u8g2, 2, 22, fname);
@@ -580,8 +606,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
                 if (!bw_generate_and_save())
                 {
-                    /* Save failed — back to proto sel with error */
-                    bw_state = BW_STATE_PROTO_SEL;
+                    /* Save failed — show error screen */
+                    bw_state         = BW_STATE_SAVE_ERROR;
                     app->need_redraw = true;
                     return true;
                 }
@@ -685,6 +711,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             break;
 
+        /* ── Save error screen ───────────────────────────────────────────── */
+        case BW_STATE_SAVE_ERROR:
+            if (event == SubGhzEventBack || event == SubGhzEventOk)
+            {
+                /* Return to protocol selection so the user can retry */
+                bw_state         = BW_STATE_PROTO_SEL;
+                app->need_redraw = true;
+                return true;
+            }
+            break;
+
         default:
             break;
     }
@@ -704,10 +741,11 @@ static void scene_draw(SubGhzApp *app)
 
     switch (bw_state)
     {
-        case BW_STATE_PROTO_SEL:  draw_proto_sel(); break;
-        case BW_STATE_GENERATING: draw_generating(); break;
-        case BW_STATE_STEP:       draw_step();       break;
-        case BW_STATE_DONE:       draw_done();       break;
+        case BW_STATE_PROTO_SEL:  draw_proto_sel();    break;
+        case BW_STATE_GENERATING: draw_generating();   break;
+        case BW_STATE_STEP:       draw_step();         break;
+        case BW_STATE_DONE:       draw_done();         break;
+        case BW_STATE_SAVE_ERROR: draw_save_error();   break;
         default:                  break;
     }
 }

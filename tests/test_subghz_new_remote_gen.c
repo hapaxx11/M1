@@ -262,10 +262,18 @@ void test_gen_all_protocols_succeed(void)
 
 void test_gen_zero_seed_valid(void)
 {
-    NewRemoteParams p;
-    TEST_ASSERT_TRUE(subghz_new_remote_gen(BW_PROTO_CAME_ATOMO, 0ULL, &p));
-    /* splitmix64(0) is defined and non-zero */
-    TEST_ASSERT_NOT_EQUAL(0, p.key);
+    NewRemoteParams p1;
+    NewRemoteParams p2;
+
+    TEST_ASSERT_TRUE(subghz_new_remote_gen(BW_PROTO_CAME_ATOMO, 0ULL, &p1));
+    TEST_ASSERT_TRUE(subghz_new_remote_gen(BW_PROTO_CAME_ATOMO, 0ULL, &p2));
+
+    /* Zero seed must still be deterministic */
+    TEST_ASSERT_EQUAL_UINT64(p1.key, p2.key);
+
+    /* Generated key must respect the declared bit width */
+    if (p1.bit_count < 64U)
+        TEST_ASSERT_EQUAL_UINT64(0ULL, p1.key >> p1.bit_count);
 }
 
 /*============================================================================*/

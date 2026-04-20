@@ -78,7 +78,7 @@ const char *subghz_new_remote_proto_label(BindWizardProto proto);
  * @param proto  Target protocol (must be < BW_PROTO_COUNT).
  * @param seed   64-bit entropy seed.
  * @param out    Output structure (must not be NULL).
- * @return       true on success, false if proto is out of range.
+ * @return       true on success, false if @p proto is out of range or @p out is NULL.
  */
 bool subghz_new_remote_gen(BindWizardProto proto, uint64_t seed, NewRemoteParams *out);
 

@@ -18,6 +18,8 @@
  *   9. Weather Station
  *  10. Brute Force
  *  11. Add Manually
+ *  12. Remote
+ *  13. Bind Remote
  */
 
 #include <stdint.h>
