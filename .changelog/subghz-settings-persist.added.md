@@ -1,0 +1,1 @@
+**Sub-GHz: persist radio config across sessions** — frequency, modulation, hopping, sound, and TX power settings are now saved to `settings.cfg` when the Config screen is exited. On next launch the Sub-GHz app restores the last-used values instead of resetting to defaults.

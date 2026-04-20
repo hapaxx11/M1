@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
@@ -71,6 +72,18 @@ void settings_save_to_sd(void);
 /* Sub-GHz save format accessors (defined in m1_sub_ghz.c) */
 extern uint8_t subghz_get_save_fmt_ext(void);
 extern void    subghz_set_save_fmt_ext(uint8_t fmt);
+
+/* Sub-GHz radio config accessors (defined in m1_sub_ghz.c) */
+extern uint8_t subghz_get_freq_idx_ext(void);
+extern void    subghz_set_freq_idx_ext(uint8_t idx);
+extern uint8_t subghz_get_mod_idx_ext(void);
+extern void    subghz_set_mod_idx_ext(uint8_t idx);
+extern bool    subghz_get_hopping_ext(void);
+extern void    subghz_set_hopping_ext(bool v);
+extern bool    subghz_get_sound_ext(void);
+extern void    subghz_set_sound_ext(bool v);
+extern uint8_t subghz_get_tx_power_idx_ext(void);
+extern void    subghz_set_tx_power_idx_ext(uint8_t idx);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -633,6 +646,21 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "subghz_save_fmt=%d\n", subghz_get_save_fmt_ext());
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "subghz_freq_idx=%d\n", subghz_get_freq_idx_ext());
+    f_write(&fp, buf, strlen(buf), &bw);
+
+    snprintf(buf, sizeof(buf), "subghz_mod_idx=%d\n", subghz_get_mod_idx_ext());
+    f_write(&fp, buf, strlen(buf), &bw);
+
+    snprintf(buf, sizeof(buf), "subghz_hopping=%d\n", subghz_get_hopping_ext() ? 1 : 0);
+    f_write(&fp, buf, strlen(buf), &bw);
+
+    snprintf(buf, sizeof(buf), "subghz_sound=%d\n", subghz_get_sound_ext() ? 1 : 0);
+    f_write(&fp, buf, strlen(buf), &bw);
+
+    snprintf(buf, sizeof(buf), "subghz_tx_power=%d\n", subghz_get_tx_power_idx_ext());
+    f_write(&fp, buf, strlen(buf), &bw);
+
 #ifdef M1_APP_BADBT_ENABLE
     snprintf(buf, sizeof(buf), "badbt_name=%s\n", m1_badbt_name);
     f_write(&fp, buf, strlen(buf), &bw);
@@ -774,6 +802,52 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 16) - '0');
         if (val == 0 || val == 1)
             subghz_set_save_fmt_ext((uint8_t)val);
+    }
+
+    /* Parse "subghz_freq_idx=NN" (0–61) */
+    p = strstr(buf, "subghz_freq_idx=");
+    if (p != NULL)
+    {
+        char *end;
+        long lval = strtol(p + 16, &end, 10);
+        if (end != p + 16 && (*end == '\n' || *end == '\r' || *end == '\0' || *end == ' '))
+            subghz_set_freq_idx_ext((uint8_t)lval);  /* bounds enforced by setter */
+    }
+
+    /* Parse "subghz_mod_idx=X" (0–3) */
+    p = strstr(buf, "subghz_mod_idx=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 15) - '0');
+        if (val >= 0 && val <= 3)
+            subghz_set_mod_idx_ext((uint8_t)val);
+    }
+
+    /* Parse "subghz_hopping=X" (0 or 1) */
+    p = strstr(buf, "subghz_hopping=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 15) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_hopping_ext(val == 1);
+    }
+
+    /* Parse "subghz_sound=X" (0 or 1) */
+    p = strstr(buf, "subghz_sound=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 13) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_sound_ext(val == 1);
+    }
+
+    /* Parse "subghz_tx_power=X" (0–3) */
+    p = strstr(buf, "subghz_tx_power=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 16) - '0');
+        if (val >= 0 && val <= 3)
+            subghz_set_tx_power_idx_ext((uint8_t)val);
     }
 
     /* Legacy: migrate "southpaw=1" if no orientation key found */
