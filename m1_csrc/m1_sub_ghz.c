@@ -4485,9 +4485,13 @@ void sub_ghz_rssi_meter(void)
                 snprintf(info_str, sizeof(info_str), "RSSI Meter");
             u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
 
-            /* Current and peak dBm */
-            snprintf(info_str, sizeof(info_str), "%ddBm  Pk:%ddBm", rssi, peak_rssi);
+            /* Current dBm — left-aligned, fixed anchor */
+            snprintf(info_str, sizeof(info_str), "%d dBm", rssi);
             u8g2_DrawStr(&m1_u8g2, 0, 22, info_str);
+
+            /* Peak dBm — "Pk:" label at a fixed X so it never shifts */
+            snprintf(info_str, sizeof(info_str), "Pk:%d dBm", peak_rssi);
+            u8g2_DrawStr(&m1_u8g2, 68, 22, info_str);
 
             /* Bar graph background */
             u8g2_DrawFrame(&m1_u8g2, 3, 26, 122, 14);
@@ -4509,8 +4513,8 @@ void sub_ghz_rssi_meter(void)
 
         } while (m1_u8g2_nextpage());
 
-        /* Check for button input */
-        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
+        /* Check for button input — 150 ms timeout gives ~6 Hz refresh, readable without flicker */
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(150));
         if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
         {
             xQueueReceive(button_events_q_hdl, &this_button_status, 0);
