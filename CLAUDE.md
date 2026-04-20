@@ -192,15 +192,15 @@ Manchester decoder, and the OTA asset filter.
 
    **Quick audit** (run from the repo root after editing `tests/CMakeLists.txt`):
    ```bash
-   python3 -c "
+   python3 - <<'PY'
    import re
    content = open('tests/CMakeLists.txt').read()
    for m in re.finditer(r'add_executable\((\w+)(.*?)add_test\(NAME (\w+)', content, re.DOTALL):
-       refs = re.findall(r'\\\$\{M1_ROOT\}/([^\s\)\$]+)', m.group(2))
+       refs = re.findall(r'\$\{M1_ROOT\}/([^\s\)\$]+)', m.group(2))
        dirs = sorted(set(r.split('/')[0] for r in refs))
        if dirs:
            print(m.group(3), '->', dirs)
-   "
+   PY
    ```
    Compare output against the `paths:` list; add any new directory before committing.
 
