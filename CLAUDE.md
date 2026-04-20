@@ -1158,9 +1158,9 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
 | **Toyota** | ✅ Yes | OOK PWM, no crypto | ✅ |
 | **DITEC_GOL4** | ✅ Yes | OOK PWM, no crypto | ✅ |
 | **Security+ 1.0** | ✅ Special | Ternary; brute-force counter mode in `m1_sub_ghz.c` | ❌ (custom path) |
-| **KeeLoq** | ⚠️ Possible | OOK PWM; KeeLoq cipher with public algorithm (see note¹) | ❌ |
-| **Jarolift** | ⚠️ Possible | KeeLoq-based OOK PWM; brand-specific MK partially researched (see note¹) | ❌ |
-| **Star Line** | ⚠️ Possible | KeeLoq-based OOK PWM; MK partially reverse-engineered (see note¹) | ❌ |
+| **KeeLoq** | ✅ Yes | OOK PWM; counter-mode with Normal/Simple Learning; requires MK from `keeloq_mfcodes` | ✅ (counter-mode encoder) |
+| **Jarolift** | ✅ Yes | KeeLoq-based OOK PWM; requires MK from `keeloq_mfcodes`; Flipper Bit:64 format fully supported | ✅ (counter-mode encoder) |
+| **Star Line** | ✅ Yes | KeeLoq-based OOK PWM; requires MK from `keeloq_mfcodes`; Flipper Bit:64 format fully supported | ✅ (counter-mode encoder) |
 | **FAAC SLH** | ❌ No | Manchester-encoded; algorithm not fully public (2026-04-17) | ❌ |
 | **Somfy Telis** | ❌ No | Manchester + proprietary XOR; no feasible OTA replay method | ❌ |
 | **Somfy Keytis** | ❌ No | Same RTS protocol as Telis | ❌ |
@@ -1170,13 +1170,12 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
 | **Hormann BiSecur** | ❌ No | Manchester + AES-128; no known feasible attack | ❌ |
 | **Beninca ARC** | ❌ No | AES-128 rolling code; no known feasible attack | ❌ |
 
-> **¹ KeeLoq note:** The KeeLoq cipher is fully documented (Microchip AN66903 / 3NLF-NLFSR).
-> The attack path is: `device_key = keeloq_learn(serial, manufacturer_key)` then
-> `counter = keeloq_decrypt(encrypted_hop, device_key)` → increment → re-encrypt → transmit.
-> Some manufacturer keys have been extracted via power-analysis attacks and discussed in the
-> security research community (DarkFlippers/unleashed-firmware, academic papers).
-> **This is the highest-priority next feature.**  Research brand-specific manufacturer keys
-> for KeeLoq, Jarolift, and Star Line and implement a MK-lookup + counter mode.
+> **¹ KeeLoq note:** The KeeLoq cipher is fully implemented in `Sub_Ghz/subghz_keeloq.c`
+> (528-round NLFSR, Normal Learning, Simple Learning, counter-mode increment).
+> Manufacturer keys are loaded at runtime from `0:/SUBGHZ/keeloq_mfcodes` on the SD card.
+> Export this file from a Flipper Zero using RocketGod's SubGHz Toolkit app.
+> Once keys are on the SD card, `.sub` files with the `Manufacture:` field are replayed
+> automatically via counter-mode: decrypt → increment → re-encrypt → transmit.
 
 ### Implementation Rules
 
@@ -1185,11 +1184,14 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
    no cipher (just a counter increment).  If it uses a known reversible cipher with a
    public or partially-published key, add it to the ⚠️ Possible list and open a task.
 
-2. **KeeLoq counter mode is the next high-value target.**  Implement:
-   - A manufacturer-key lookup table (brand → 64-bit MK)
-   - KeeLoq decrypt: `counter = keeloq_decrypt(encrypted_hop, device_key)` where
-     `device_key = keeloq_learn(serial, manufacturer_key)`
-   - Counter-increment + re-encrypt → retransmit as OOK PWM
+2. **KeeLoq counter mode is implemented** (`Sub_Ghz/subghz_keeloq*.c/h`).  Manufacturer
+   keys are loaded from `0:/SUBGHZ/keeloq_mfcodes` (Flipper-compatible keystore format).
+   Export the keystore from a Flipper Zero using RocketGod's SubGHz Toolkit.
+   The counter-mode encoder:
+   - Derives the device key via Normal or Simple Learning
+   - Decrypts the captured hop word using the full KeeLoq cipher
+   - Increments the 16-bit rolling counter
+   - Re-encrypts and transmits as OOK PWM
 
 3. **Security+ 1.0 brute-force counter mode** is already implemented in `m1_sub_ghz.c`.
    The dedicated ternary encoder lives in `Sub_Ghz/subghz_secplus_v1_encoder.c`.

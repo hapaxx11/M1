@@ -28,6 +28,8 @@
 #include "subghz_key_encoder.h"
 #include "subghz_raw_line_parser.h"
 #include "subghz_secplus_v1_encoder.h"
+#include "subghz_keeloq_encoder.h"
+#include "subghz_keeloq_mfkeys.h"
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
@@ -1688,6 +1690,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 
 	/* KEY file fields */
 	char key_protocol[32] = {0};
+	char key_manufacture[48] = {0};
 	uint64_t key_value = 0;
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
@@ -1854,6 +1857,16 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			/* M1 native .sgh PACKET format uses "BT:" instead of "TE:" */
 			key_te = (uint32_t)strtoul(line_buf + 3, NULL, 10);
 		}
+		else if (strncmp(line_buf, "Manufacture:", 12) == 0)
+		{
+			/* Flipper SubGhz Key File: manufacturer name used for KeeLoq MK lookup */
+			const char *p = line_buf + 12;
+			while (*p == ' ') p++;
+			/* Guard: skip if no name follows the field prefix */
+			if (*p == '\0') continue;
+			strncpy(key_manufacture, p, sizeof(key_manufacture) - 1);
+			key_manufacture[sizeof(key_manufacture) - 1] = '\0';
+		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
 			/* Parse signed values, write absolute values as Data: lines.
@@ -1949,26 +1962,80 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 			uint8_t resolve_ret = subghz_key_resolve_timing(&key_params, &key_timing);
 			if (resolve_ret != SUBGHZ_KEY_OK)
 			{
-				f_close(&f_sgh);
-				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
-				return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
-			}
+				/*
+				 * KeeLoq counter-mode replay: when the timing resolver
+				 * returns ERR_DYNAMIC (6) for a KeeLoq-family protocol AND
+				 * a Manufacture name is present in the .sub file, attempt
+				 * to look up the manufacturer master key and encode a
+				 * counter-incremented hop word.
+				 *
+				 * The keystore is loaded lazily from:
+				 *   0:/SUBGHZ/keeloq_mfcodes
+				 * Export this file from a Flipper Zero using RocketGod's
+				 * SubGHz Toolkit app.
+				 */
+				if (resolve_ret == SUBGHZ_KEY_ERR_DYNAMIC &&
+				    keeloq_is_keeloq_protocol(key_params.protocol) &&
+				    key_manufacture[0] != '\0')
+				{
+					/* Lazy-load the manufacturer key table */
+					if (keeloq_mfkeys_count() == 0)
+						keeloq_mfkeys_load();
 
-			/* Encode 3 repetitions of the signal into raw timing pairs */
-			uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
-			pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
-			uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
-			pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
-			if (!pairs)
+					KeeLoqEncParams kl_params;
+					kl_params.protocol    = key_params.protocol;
+					kl_params.manufacture = key_manufacture;
+					kl_params.key_value   = key_value;
+					kl_params.bit_count   = key_bit_count;
+					kl_params.te          = key_te;
+
+					SubGhzRawPair *kl_pairs  = NULL;
+					uint32_t       kl_npairs = 0;
+
+					KeeLoqEncResult kl_res = keeloq_encode_replay(
+					    &kl_params, &kl_pairs, &kl_npairs, 3);
+
+					if (kl_res == KEELOQ_ENC_OK && kl_pairs && kl_npairs > 0)
+					{
+						pairs          = kl_pairs;
+						npairs         = kl_npairs;
+						pairs_per_rep  = keeloq_pairs_per_rep(
+						                     KEELOQ_PREAMBLE_PULSES, 64U);
+					}
+					else
+					{
+						/* No key found or encode failed — return dynamic error */
+						f_close(&f_sgh);
+						f_unlink(FLIPPER_SUB_TMP_SGH);
+						free(line_buf); free(out_buf);
+						return SUBGHZ_KEY_ERR_DYNAMIC;
+					}
+				}
+				else
+				{
+					f_close(&f_sgh);
+					f_unlink(FLIPPER_SUB_TMP_SGH);
+					free(line_buf); free(out_buf);
+					return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
+				}
+			}
+			else
 			{
-				f_close(&f_sgh);
-				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
-				return 1;
-			}
+				/* Encode 3 repetitions of the signal into raw timing pairs */
+				uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
+				pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
+				uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
+				pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+				if (!pairs)
+				{
+					f_close(&f_sgh);
+					f_unlink(FLIPPER_SUB_TMP_SGH);
+					free(line_buf); free(out_buf);
+					return 1;
+				}
 
-			npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+				npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+			}
 		}
 
 		/* Write encoded pairs as Data: lines to the temp .sgh file.
