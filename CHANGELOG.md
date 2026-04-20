@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.128] - 2026-04-20
+
+### Added
+
+- **Sub-GHz: persist radio config across sessions** — frequency, modulation, hopping, sound, and TX power settings are now saved to `settings.cfg` when the Config screen is exited. On next launch the Sub-GHz app restores the last-used values instead of resetting to defaults.
 ## [0.9.0.127] - 2026-04-20
 
 ### Fixed
