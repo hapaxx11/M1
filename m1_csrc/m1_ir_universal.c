@@ -226,6 +226,22 @@ void ir_universal_run(void)
 
 /*============================================================================*/
 /*
+ * Browse directly to the Learned files directory.
+ * Called from infrared_saved_remotes() in m1_infrared.c so that "Replay"
+ * goes straight to saved/learned .ir files instead of the full dashboard.
+ */
+/*============================================================================*/
+void ir_universal_run_learned(void)
+{
+	strncpy(s_current_path, IR_LEARNED_DIR, IR_UNIVERSAL_PATH_MAX_LEN - 1);
+	s_current_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+	browse_directory(s_current_path);
+} // void ir_universal_run_learned(void)
+
+
+
+/*============================================================================*/
+/*
  * Draw the dashboard menu on the 128x64 display
  */
 /*============================================================================*/
@@ -674,13 +690,23 @@ static void browse_directory(const char *path)
 
 	if (s_browse_count == 0)
 	{
-		/* Empty directory - show message */
+		/* Empty directory — show a context-sensitive message */
+		bool is_learned = (strstr(path, "Learned") != NULL);
 		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
+		u8g2_DrawStr(&m1_u8g2, 10, 25, "No files found");
 		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 10, 50, "Back to return");
+		if (is_learned)
+		{
+			u8g2_DrawStr(&m1_u8g2, 4, 38, "Use 'Learn' to capture");
+			u8g2_DrawStr(&m1_u8g2, 4, 50, "and save IR signals.");
+		}
+		else
+		{
+			u8g2_DrawStr(&m1_u8g2, 4, 38, "Copy .ir files to");
+			u8g2_DrawStr(&m1_u8g2, 4, 50, "0:/IR/ on SD card.");
+		}
 		m1_u8g2_nextpage();
 
 		/* Wait for BACK press */

@@ -485,11 +485,9 @@ bool infrared_capture_one_signal(IRMP_DATA *out_data)
 void infrared_saved_remotes(void)
 {
 #ifdef M1_APP_FILE_IMPORT_ENABLE
-	/* Use the Universal Remote infrastructure to browse saved .ir files.
-	 * This replaces the broken inline replay that only worked if a remote
-	 * was learned in the current session. */
+	/* Browse directly to the Learned files directory, not the full dashboard. */
 	ir_universal_init();
-	ir_universal_run();
+	ir_universal_run_learned();
 	ir_universal_deinit();
 	return;
 #else

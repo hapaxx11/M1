@@ -861,12 +861,35 @@ static bool browse_for_device(ir_category_t cat, char *out_path, uint16_t path_l
 
             if (count == 0)
             {
+                /* Category directory is empty — fall back to IRDB root
+                 * so the user can browse any .ir files on the SD card. */
+                if (strcmp(browse_path, IR_UNIVERSAL_IRDB_ROOT) != 0)
+                {
+                    strncpy(browse_path, IR_UNIVERSAL_IRDB_ROOT,
+                            sizeof(browse_path) - 1);
+                    browse_path[sizeof(browse_path) - 1] = '\0';
+                    /* Show a brief hint before re-scanning */
+                    m1_u8g2_firstpage();
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+                    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+                    u8g2_DrawStr(&m1_u8g2, 4, 20, "No category files.");
+                    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+                    u8g2_DrawStr(&m1_u8g2, 4, 34, "Browsing all IR");
+                    u8g2_DrawStr(&m1_u8g2, 4, 46, "files on SD card.");
+                    m1_u8g2_nextpage();
+                    vTaskDelay(pdMS_TO_TICKS(1200));
+                    continue; /* re-scan the root */
+                }
+                /* Still nothing at root — no IR files at all */
                 m1_u8g2_firstpage();
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
                 u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-                u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
+                u8g2_DrawStr(&m1_u8g2, 4, 20, "No IR files found.");
+                u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+                u8g2_DrawStr(&m1_u8g2, 4, 34, "Copy .ir files to");
+                u8g2_DrawStr(&m1_u8g2, 4, 46, "0:/IR/ on SD card.");
                 m1_u8g2_nextpage();
-                vTaskDelay(pdMS_TO_TICKS(1500));
+                vTaskDelay(pdMS_TO_TICKS(2000));
                 return false;
             }
 
