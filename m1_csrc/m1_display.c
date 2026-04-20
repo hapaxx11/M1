@@ -529,9 +529,29 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	} // if ( menu_level_id==0 )
 
 	// Draw the scroll bar
-	u8g2_DrawXBMP(&m1_u8g2, MENU_SCROLLBAR_POS_X, MENU_SCROLLBAR_POS_Y, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT, menu_scroll_bar_4x64);
-	// Draw the scroll bar handle
-	u8g2_DrawBox(&m1_u8g2, MENU_SCROLLBAR_POS_X, (M1_LCD_DISPLAY_HEIGHT*sel_item)/num_items, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT/num_items);
+	if ( menu_level_id == 1 )
+	{
+		/* Submenu: scrollbar confined to the menu item area (M1_MENU_AREA_TOP..63),
+		 * matching the scene-style scrollbar used by all other modules. */
+		const uint8_t sb_area_h = (uint8_t)M1_MENU_AREA_H;
+		uint8_t sb_handle_h = (num_items > 0) ? (sb_area_h / num_items) : sb_area_h;
+		if ( sb_handle_h < 2 )
+			sb_handle_h = 2;
+		const uint8_t sb_handle_y = (uint8_t)M1_MENU_AREA_TOP +
+		    (num_items > 0 ? (uint8_t)((uint16_t)sb_area_h * sel_item / num_items) : 0);
+		/* Track outline */
+		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, (uint8_t)M1_MENU_AREA_TOP,
+		               (uint8_t)M1_MENU_SCROLLBAR_W, sb_area_h);
+		/* Handle (filled) */
+		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+		             (uint8_t)M1_MENU_SCROLLBAR_W, sb_handle_h);
+	}
+	else
+	{
+		/* Main menu: legacy full-screen scrollbar (unchanged) */
+		u8g2_DrawXBMP(&m1_u8g2, MENU_SCROLLBAR_POS_X, MENU_SCROLLBAR_POS_Y, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT, menu_scroll_bar_4x64);
+		u8g2_DrawBox(&m1_u8g2, MENU_SCROLLBAR_POS_X, (M1_LCD_DISPLAY_HEIGHT*sel_item)/num_items, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT/num_items);
+	}
 
 	m1_u8g2_nextpage(); // Update display RAM
 
