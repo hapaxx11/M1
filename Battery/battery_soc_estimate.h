@@ -18,17 +18,22 @@
 #include <stdint.h>
 
 /*
- * Threshold below which a fuel-gauge SoC reading is considered suspect and
- * the voltage-based estimate is checked as a floor.
+ * Battery SoC estimation constants.
+ *
+ * BATT_SOC_VOLTAGE_FALLBACK_THRESHOLD: fuel-gauge readings at or below this
+ *   percent are considered suspect; the voltage-based estimate is applied as
+ *   a floor.
+ *
+ * BATT_TERMINATE_MV / BATT_FULL_MV: lower and upper voltage bounds of the
+ *   piecewise-linear estimation curve (millivolts).  These are the curve
+ *   endpoints — battery_voltage_to_soc() returns 0% at or below TERMINATE
+ *   and 100% at or above FULL.
  */
-#define BATT_SOC_VOLTAGE_FALLBACK_THRESHOLD  5u  /* percent */
-
-/*
- * Battery voltage limits used for the piecewise-linear curve (millivolts).
- * These match the terminate voltage configured in battery_service_init().
- */
-#define BATT_TERMINATE_MV  3200u  /* 0%   — configured terminate voltage */
-#define BATT_FULL_MV       4200u  /* 100% — typical Li-Ion full charge    */
+enum {
+    BATT_SOC_VOLTAGE_FALLBACK_THRESHOLD = 5,   /* percent */
+    BATT_TERMINATE_MV                   = 3200, /* 0%   — estimation curve lower bound */
+    BATT_FULL_MV                        = 4200  /* 100% — typical Li-Ion full charge   */
+};
 
 /**
  * @brief  Estimate battery state of charge from terminal voltage.

@@ -39,11 +39,11 @@ uint8_t battery_voltage_to_soc(uint16_t voltage_mv)
 {
     /* Above the highest breakpoint → full */
     if (voltage_mv >= soc_curve[0].voltage_mv)
-        return 100u;
+        return soc_curve[0].soc_percent;
 
     /* Below (or at) the lowest breakpoint → empty */
     if (voltage_mv <= soc_curve[SOC_CURVE_LEN - 1].voltage_mv)
-        return 0u;
+        return soc_curve[SOC_CURVE_LEN - 1].soc_percent;
 
     /* Find the segment [i, i-1] that brackets voltage_mv */
     for (uint8_t i = 1u; i < SOC_CURVE_LEN; i++) {

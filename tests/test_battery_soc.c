@@ -122,10 +122,12 @@ void test_soc_3500mv_well_above_zero(void)
 
 void test_soc_3700mv_above_firmware_update_threshold(void)
 {
-    /* 3700 mV is a healthy battery; the estimated SoC must clear the 25% minimum
-     * needed for firmware updates (FW_UPDATE_MIN_BATTERY_PCT). */
+    const uint8_t fw_update_min_pct = 25u;
+
+    /* 3700 mV is a healthy battery; the estimated SoC must clear the minimum
+     * needed for firmware updates. */
     uint8_t soc = battery_voltage_to_soc(3700u);
-    TEST_ASSERT_TRUE(soc >= 25u);
+    TEST_ASSERT_TRUE(soc >= fw_update_min_pct);
 }
 
 int main(void)
