@@ -335,11 +335,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             app->need_redraw = true;
             return true;
 
-        case SubGhzEventTick:
-            if (rem_tx_flash > 0)
-                app->need_redraw = true;
-            return true;
-
         default:
             break;
     }
