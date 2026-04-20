@@ -284,6 +284,52 @@ void test_apply_offset_feb_leap_year_rollover(void)
 }
 
 /*============================================================================*/
+/* clock_tz_label                                                             */
+/*============================================================================*/
+
+void test_tz_label_zero(void)
+{
+    char buf[8];
+    clock_tz_label(0, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("UTC", buf);
+}
+
+void test_tz_label_positive(void)
+{
+    char buf[8];
+    clock_tz_label(5, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("UTC+5", buf);
+}
+
+void test_tz_label_positive_max(void)
+{
+    char buf[8];
+    clock_tz_label(14, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("UTC+14", buf);
+}
+
+void test_tz_label_negative(void)
+{
+    char buf[8];
+    clock_tz_label(-8, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("UTC-8", buf);
+}
+
+void test_tz_label_negative_min(void)
+{
+    char buf[8];
+    clock_tz_label(-12, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("UTC-12", buf);
+}
+
+void test_tz_label_null_safe(void)
+{
+    /* Should not crash */
+    clock_tz_label(0, NULL, 8);
+    clock_tz_label(5, NULL, 0);
+}
+
+/*============================================================================*/
 /* Main                                                                       */
 /*============================================================================*/
 
@@ -329,6 +375,14 @@ int main(void)
     RUN_TEST(test_apply_offset_null_safe);
     RUN_TEST(test_apply_offset_midnight_boundary);
     RUN_TEST(test_apply_offset_feb_leap_year_rollover);
+
+    /* Timezone label */
+    RUN_TEST(test_tz_label_zero);
+    RUN_TEST(test_tz_label_positive);
+    RUN_TEST(test_tz_label_positive_max);
+    RUN_TEST(test_tz_label_negative);
+    RUN_TEST(test_tz_label_negative_min);
+    RUN_TEST(test_tz_label_null_safe);
 
     return UNITY_END();
 }

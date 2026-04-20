@@ -31,6 +31,7 @@
 #include "m1_file_util.h"
 #include "m1_scene.h"
 #include "m1_virtual_kb.h"
+#include "m1_clock_util.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -42,7 +43,7 @@
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
-#define LCD_SETTINGS_ITEMS   9
+#define LCD_SETTINGS_ITEMS   10
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
 #define LCD_SET_LED          2
@@ -50,8 +51,9 @@
 #define LCD_SET_LOWBATT_CLR  4
 #define LCD_SET_ORIENT       5
 #define LCD_SET_SLEEP        6
-#define LCD_SET_TEXT_SIZE     7
+#define LCD_SET_TEXT_SIZE    7
 #define LCD_SET_DARK_MODE    8
+#define LCD_SET_TZ_OFFSET    9
 
 //************************** S T R U C T U R E S *******************************\n
 /***************************** V A R I A B L E S ******************************/
@@ -156,10 +158,12 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "Sleep After:",
     "Text Size:",
     "Dark Mode:",
+    "Local TZ:",
 };
 
 static char led_color_buf[8]; /* "#RRGGBB" + NUL */
 static char lowbatt_color_buf[8]; /* "#RRGGBB" + NUL */
+static char tz_label_buf[8]; /* "UTC+14" + NUL */
 
 static const char *lcd_cfg_get_value(uint8_t item)
 {
@@ -187,6 +191,9 @@ static const char *lcd_cfg_get_value(uint8_t item)
         default: return s_text_size_text[0];
         }
     case LCD_SET_DARK_MODE:  return m1_dark_mode ? "On" : "Off";
+    case LCD_SET_TZ_OFFSET:
+        clock_tz_label(m1_clock_tz_offset, tz_label_buf, sizeof(tz_label_buf));
+        return tz_label_buf;
     default:                 return "";
     }
 }
@@ -424,6 +431,8 @@ void settings_lcd_and_notifications(void)
             }
             else if (sel == LCD_SET_DARK_MODE)
                 m1_lcd_set_dark_mode(!m1_dark_mode);
+            else if (sel == LCD_SET_TZ_OFFSET)
+                m1_clock_tz_offset = (m1_clock_tz_offset <= -12) ? 14 : (int8_t)(m1_clock_tz_offset - 1);
             needs_redraw = 1;
         }
 
@@ -457,6 +466,8 @@ void settings_lcd_and_notifications(void)
             }
             else if (sel == LCD_SET_DARK_MODE)
                 m1_lcd_set_dark_mode(!m1_dark_mode);
+            else if (sel == LCD_SET_TZ_OFFSET)
+                m1_clock_tz_offset = (m1_clock_tz_offset >= 14) ? -12 : (int8_t)(m1_clock_tz_offset + 1);
             needs_redraw = 1;
         }
     }
@@ -661,6 +672,9 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "subghz_tx_power=%d\n", subghz_get_tx_power_idx_ext());
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
+    f_write(&fp, buf, strlen(buf), &bw);
+
 #ifdef M1_APP_BADBT_ENABLE
     snprintf(buf, sizeof(buf), "badbt_name=%s\n", m1_badbt_name);
     f_write(&fp, buf, strlen(buf), &bw);
@@ -848,6 +862,20 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 16) - '0');
         if (val >= 0 && val <= 3)
             subghz_set_tx_power_idx_ext((uint8_t)val);
+    }
+
+    /* Parse "clock_tz_offset=N" (-12..+14) */
+    p = strstr(buf, "clock_tz_offset=");
+    if (p != NULL)
+    {
+        char *end;
+        long lval = strtol(p + 16, &end, 10);
+        if (end != p + 16 &&
+            (*end == '\n' || *end == '\0') &&
+            lval >= -12 && lval <= 14)
+        {
+            m1_clock_tz_offset = (int8_t)lval;
+        }
     }
 
     /* Legacy: migrate "southpaw=1" if no orientation key found */

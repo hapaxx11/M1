@@ -27,6 +27,7 @@
 #include "m1_esp32_hal.h"
 #include "m1_wifi.h"
 #include "m1_bt.h"
+#include "m1_clock_util.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -72,6 +73,7 @@ uint8_t                 m1_led_lowbatt_b = (uint8_t)~0x80;  /* ~#331480 default 
 uint8_t                 m1_sleep_timeout_idx = 1;  /* 1 minute default */
 uint8_t                 m1_menu_style = 0;         /* 0=Small, 1=Medium, 2=Large */
 uint8_t                 m1_dark_mode = 0;          /* 0=Off (normal), 1=On (inverted display) */
+int8_t                  m1_clock_tz_offset = 0;    /* Local UTC offset in hours, -12..+14 */
 #ifdef M1_APP_BADBT_ENABLE
 char                    m1_badbt_name[BADBT_NAME_MAX_LEN + 1] = "M1-BadBT";
 #endif
@@ -976,22 +978,97 @@ static void splash_draw_battery_indicator(void)
 void startup_info_screen_display(const char *scr_text)
 {
 	char fw_ver[20];
+	char time_str[8];  /* "HH:MM" */
+	char tz_buf[8];    /* "UTC", "UTC+N", "UTC-N" */
 	uint8_t len, x0;
+
+	/* Format firmware version string */
+	snprintf(fw_ver, sizeof(fw_ver), "v%d.%d.%d.%d",
+	         m1_device_stat.config.fw_version_major,
+	         m1_device_stat.config.fw_version_minor,
+	         m1_device_stat.config.fw_version_build,
+	         m1_device_stat.config.fw_version_rc);
+
+	/* Read RTC and apply user's local UTC offset to get display time */
+	{
+		m1_time_t raw;
+		clock_time_t ct, lt;
+		m1_get_datetime(&raw);
+		ct.year = raw.year;  ct.month  = raw.month;  ct.day     = raw.day;
+		ct.hour = raw.hour;  ct.minute = raw.minute;  ct.second  = raw.second;
+		ct.weekday = raw.weekday;
+		clock_apply_offset(&ct, m1_clock_tz_offset, &lt);
+		snprintf(time_str, sizeof(time_str), "%02u:%02u", lt.hour, lt.minute);
+	}
+	clock_tz_label(m1_clock_tz_offset, tz_buf, sizeof(tz_buf));
 
 	u8g2_SetPowerSave(&m1_u8g2, false);
 
 	/* Graphic work starts here */
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_DrawXBMP(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X, M1_POWERUP_LOGO_TOP_POS_Y, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
 
-	sprintf(fw_ver, "v%d.%d.%d.%d", m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor, m1_device_stat.config.fw_version_build, m1_device_stat.config.fw_version_rc);
-	len = strlen(fw_ver);
+	/* --- Time display (top area, immediately below status bar) ---
+	 *
+	 * Screen layout (128×64 display):
+	 *   y= 0..11  Status bar (icons left, battery right)
+	 *   y=12..20  "HH:MM" time, centered (helvB08_tr ascent=8, baseline=20)
+	 *   y=21..27  "UTC+N" TZ label, centered (NokiaSmallPlain ascent=7, baseline=28)
+	 *             — only drawn when tz_offset != 0; glyph pixels end at y=27,
+	 *               so they do not overlap the logo which starts at y=28.
+	 *   y=28..60  Logo (40×32), horizontally centered with text block
+	 *   y=43/53/63 Text lines alongside logo
+	 *   y=62       scr_text (status message, empty for normal idle screen)
+	 */
+
+	/* Time "HH:MM" — centered, baseline y=20 */
 	u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
-	u8g2_DrawStr(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X + M1_POWERUP_LOGO_WIDTH + 3, M1_POWERUP_LOGO_TOP_POS_Y + 15, "M1 Hapax");
+	{
+		u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, time_str);
+		u8g2_DrawStr(&m1_u8g2,
+		             (u8g2_uint_t)((M1_LCD_DISPLAY_WIDTH - tw) / 2U),
+		             20, time_str);
+	}
+
+	/* TZ offset label — centered, baseline y=28 (only when not UTC) */
+	if (m1_clock_tz_offset != 0)
+	{
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+		u8g2_uint_t tzw = u8g2_GetStrWidth(&m1_u8g2, tz_buf);
+		u8g2_DrawStr(&m1_u8g2,
+		             (u8g2_uint_t)((M1_LCD_DISPLAY_WIDTH - tzw) / 2U),
+		             28, tz_buf);
+	}
+
+	/* --- Logo + text block: shifted down to y=28 and centered horizontally ---
+	 * Centering: measure the widest text string (two different fonts) to compute
+	 * the total block width, then derive logo_x and text_x. */
+	uint8_t logo_x, text_x;
+	{
+		u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
+		u8g2_uint_t w1 = u8g2_GetStrWidth(&m1_u8g2, "M1 Hapax");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_uint_t w2 = u8g2_GetStrWidth(&m1_u8g2, fw_ver);
+		u8g2_uint_t w3 = u8g2_GetStrWidth(&m1_u8g2, "Hapax");
+		u8g2_uint_t max_w = (w1 > w2) ? w1 : w2;
+		if (w3 > max_w) max_w = w3;
+		uint8_t block_w = (uint8_t)(M1_POWERUP_LOGO_WIDTH + 3U + max_w);
+		logo_x = (block_w < M1_LCD_DISPLAY_WIDTH)
+		         ? (uint8_t)((M1_LCD_DISPLAY_WIDTH - block_w) / 2U) : 0U;
+		text_x = logo_x + M1_POWERUP_LOGO_WIDTH + 3U;
+	}
+
+	/* Logo bitmap — moved down to y=28 (was M1_POWERUP_LOGO_TOP_POS_Y=15) */
+	u8g2_DrawXBMP(&m1_u8g2, logo_x, 28, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
+
+	/* "M1 Hapax" title — baseline y=43 (logo_top+15) */
+	u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
+	u8g2_DrawStr(&m1_u8g2, text_x, 43, "M1 Hapax");
+
+	/* Firmware version and project tag — baselines y=53 and y=63 */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X + M1_POWERUP_LOGO_WIDTH + 3, M1_POWERUP_LOGO_TOP_POS_Y + 25, fw_ver);
-	u8g2_DrawStr(&m1_u8g2, M1_POWERUP_LOGO_LEFT_POS_X + M1_POWERUP_LOGO_WIDTH + 3, M1_POWERUP_LOGO_TOP_POS_Y + 35, "Hapax");
+	u8g2_DrawStr(&m1_u8g2, text_x, 53, fw_ver);
+	u8g2_DrawStr(&m1_u8g2, text_x, 63, "Hapax");
 
 	/* Battery indicator in top-right corner */
 	splash_draw_battery_indicator();
@@ -999,6 +1076,7 @@ void startup_info_screen_display(const char *scr_text)
 	/* Status icons (SD, BT, WiFi) in top-left corner */
 	splash_draw_status_icons();
 
+	/* Bottom status message (empty "" for the normal idle/welcome screen) */
 	len = strlen(scr_text);
 	x0 = (M1_LCD_DISPLAY_WIDTH - len*M1_GUI_FONT_WIDTH)/2;
 	if ( x0 >= M1_GUI_FONT_WIDTH )

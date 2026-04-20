@@ -90,14 +90,23 @@ static void clock_draw_page(uint8_t page)
 
     if (page == 0U)
     {
-        /* Local time */
-        zone_time = now;
+        /* Local time — apply user's UTC offset to the RTC (UTC) value */
+        clock_apply_offset(&now, m1_clock_tz_offset, &zone_time);
         snprintf(date_line, sizeof(date_line), "%s %02u/%02u/%04u",
                  weekday, zone_time.month, zone_time.day, zone_time.year);
+
+        /* Build "Local UTC+N" title */
+        {
+            char tz_buf[8];
+            static char local_title[16];
+            clock_tz_label(m1_clock_tz_offset, tz_buf, sizeof(tz_buf));
+            snprintf(local_title, sizeof(local_title), "Local %s", tz_buf);
+            title = local_title;
+        }
     }
     else
     {
-        /* World zone */
+        /* World zone — RTC value is UTC; apply zone offset directly */
         const clock_zone_t *zone = &clock_zones[page - 1U];
         title = zone->label;
         clock_apply_offset(&now, zone->offset_hours, &zone_time);
