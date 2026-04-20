@@ -2004,11 +2004,21 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 					}
 					else
 					{
-						/* No key found or encode failed — return dynamic error */
+						uint8_t ret_code = SUBGHZ_KEY_ERR_DYNAMIC;
+
+						/*
+						 * Preserve the existing dynamic-error behavior for
+						 * "no key found"/generic encode failures, but surface
+						 * allocation failure distinctly so callers/UI do not
+						 * misreport it as a dynamic-code issue.
+						 */
+						if (kl_res == KEELOQ_ENC_NOMEM)
+							ret_code = 1;
+
 						f_close(&f_sgh);
 						f_unlink(FLIPPER_SUB_TMP_SGH);
 						free(line_buf); free(out_buf);
-						return SUBGHZ_KEY_ERR_DYNAMIC;
+						return ret_code;
 					}
 				}
 				else
