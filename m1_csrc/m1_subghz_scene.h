@@ -55,6 +55,7 @@ typedef enum {
     SubGhzSceneBruteForce,     /**< Brute-force code transmitter */
     SubGhzSceneAddManually,    /**< Manual signal entry and TX */
     SubGhzSceneRemote,         /**< Multi-button RF remote control */
+    SubGhzSceneBindWizard,     /**< Bind New Remote step-by-step wizard */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -300,5 +301,6 @@ extern const SubGhzSceneHandlers subghz_scene_weather_station_handlers;
 extern const SubGhzSceneHandlers subghz_scene_brute_force_handlers;
 extern const SubGhzSceneHandlers subghz_scene_add_manually_handlers;
 extern const SubGhzSceneHandlers subghz_scene_remote_handlers;
+extern const SubGhzSceneHandlers subghz_scene_bind_wizard_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

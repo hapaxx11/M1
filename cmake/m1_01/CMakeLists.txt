@@ -329,6 +329,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_keeloq.c
     ../../Sub_Ghz/subghz_keeloq_mfkeys.c
     ../../Sub_Ghz/subghz_keeloq_encoder.c
+    ../../Sub_Ghz/subghz_new_remote_gen.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
@@ -562,6 +563,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_brute_force.c
     ../../m1_csrc/m1_subghz_scene_add_manually.c
     ../../m1_csrc/m1_subghz_scene_remote.c
+    ../../m1_csrc/m1_subghz_scene_bind_wizard.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

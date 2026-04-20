@@ -18,6 +18,8 @@
  *   9. Weather Station
  *  10. Brute Force
  *  11. Add Manually
+ *  12. Remote
+ *  13. Bind Remote
  */
 
 #include <stdint.h>
@@ -34,7 +36,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT   12
+#define MENU_ITEM_COUNT   13
 
 /* Layout constants */
 #define MENU_AREA_TOP     12   /* Y below title + separator line      */
@@ -55,6 +57,7 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Brute Force",
     "Add Manually",
     "Remote",
+    "Bind Remote",
 };
 
 static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
@@ -70,6 +73,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneBruteForce,
     SubGhzSceneAddManually,
     SubGhzSceneRemote,
+    SubGhzSceneBindWizard,
 };
 
 static uint8_t menu_sel = 0;

@@ -825,3 +825,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_keeloq PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_keeloq COMMAND test_subghz_keeloq)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_new_remote_gen (Bind New Remote key gen)
+# Pure-logic random remote key generator: given a seed, produces a
+# valid key, protocol name, frequency, bit count, TE, and filename
+# base for each of the five OOK-PWM-replayable rolling-code protocols
+# supported by the Bind New Remote wizard.
+# Zero hardware dependencies — splitmix64 PRNG only.
+# ------------------------------------------------------------------
+add_executable(test_subghz_new_remote_gen
+    test_subghz_new_remote_gen.c
+    ${M1_ROOT}/Sub_Ghz/subghz_new_remote_gen.c
+)
+target_include_directories(test_subghz_new_remote_gen PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_new_remote_gen PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_new_remote_gen PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_new_remote_gen COMMAND test_subghz_new_remote_gen)
