@@ -183,6 +183,27 @@ Manchester decoder, and the OTA asset filter.
 6. **Build and run**: `cmake -B build-tests -S tests && cmake --build build-tests
    && ctest --test-dir build-tests --output-on-failure`
 
+7. **Update the CI path filter** — open `.github/workflows/tests.yml` and check
+   that every top-level source directory referenced by your new test's
+   `add_executable` block already appears in the `paths:` list under both the
+   `pull_request` and `push` triggers.  If a directory is missing, add it.
+   Without this step, changes to that directory will never trigger CI, and
+   regressions will go undetected.
+
+   **Quick audit** (run from the repo root after editing `tests/CMakeLists.txt`):
+   ```bash
+   python3 -c "
+   import re
+   content = open('tests/CMakeLists.txt').read()
+   for m in re.finditer(r'add_executable\((\w+)(.*?)add_test\(NAME (\w+)', content, re.DOTALL):
+       refs = re.findall(r'\\\$\{M1_ROOT\}/([^\s\)\$]+)', m.group(2))
+       dirs = sorted(set(r.split('/')[0] for r in refs))
+       if dirs:
+           print(m.group(3), '->', dirs)
+   "
+   ```
+   Compare output against the `paths:` list; add any new directory before committing.
+
 #### What NOT to unit test
 
 - **AT command construction** (`m1_wifi.c`, `m1_bt.c`, `m1_ble_spam.c`) — entirely

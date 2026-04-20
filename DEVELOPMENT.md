@@ -399,3 +399,43 @@ orchestration, u8g2 rendering — these need hardware integration testing.
 
 See `CLAUDE.md` § "Preferred Unit Testing Pattern" for the full specification with
 code examples.
+
+### CI Path Filter — Mandatory Rule
+
+The `tests.yml` workflow only runs when files in certain directories change.
+**Every time you add a test that compiles source files from a new top-level
+directory, you MUST add that directory to the `paths:` list in both the
+`pull_request` and `push` sections of `.github/workflows/tests.yml`.**
+
+If you forget, changes to that directory will never trigger the unit test job on CI,
+and regressions will go undetected.
+
+**Current directories in `tests.yml` path filter:**
+
+| Directory | Tests that depend on it |
+|-----------|------------------------|
+| `m1_csrc/**` | bit_util, json_mini, flipper_subghz, flipper_file, subghz_key_encoder, subghz_protocol_decode, flipper_rfid, flipper_ir, flipper_nfc, menu_layout, fw_source_filter, led_color_ease, ir_search, system_dashboard, hex_viewer, clock, esl_proto, http_client_parse, settings_hex_color, subghz_secplus_v1 |
+| `Sub_Ghz/**` | subghz_registry, subghz_history, subghz_key_encoder, subghz_protocol_decode, firecracker_cm17a, subghz_raw_line_parser, subghz_raw_decoder, subghz_playlist_parser, subghz_block_decoder, subghz_block_encoder, subghz_manchester_codec, datatypes_utils, subghz_secplus_v1, cc1101_fec, subghz_keeloq |
+| `lfrfid/**` | lfrfid_manchester |
+| `NFC/**` | nfc_poller |
+| `Esp_spi_at/**` | esp_queue |
+| `tests/**` | all (test files themselves) |
+| `scripts/**` | assemble_changelog (Python), convert_keeloq_keys (Python) |
+| `.github/workflows/tests.yml` | all (the workflow file itself) |
+
+**How to audit:** after adding a test to `tests/CMakeLists.txt`, run:
+
+```bash
+python3 -c "
+import re
+content = open('tests/CMakeLists.txt').read()
+for m in re.finditer(r'add_executable\((\w+)(.*?)add_test\(NAME (\w+)', content, re.DOTALL):
+    refs = re.findall(r'\\\$\{M1_ROOT\}/([^\s\)\$]+)', m.group(2))
+    dirs = sorted(set(r.split('/')[0] for r in refs))
+    if dirs:
+        print(m.group(3), '->', dirs)
+"
+```
+
+Compare the output against the `paths:` list in `tests.yml` and add any missing
+directories before committing.
