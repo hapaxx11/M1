@@ -300,6 +300,318 @@ void test_mfkeys_free_safe_when_not_loaded(void)
 }
 
 /*============================================================================*/
+/* keeloq_mfkeys_load_text() — compact format                                */
+/*============================================================================*/
+
+void test_load_text_null_returns_false(void)
+{
+    TEST_ASSERT_FALSE(keeloq_mfkeys_load_text(NULL));
+}
+
+void test_load_text_empty_string_succeeds(void)
+{
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(""));
+    TEST_ASSERT_EQUAL_UINT32(0, keeloq_mfkeys_count());
+}
+
+void test_load_text_compact_single_entry(void)
+{
+    const char *text = "0123456789ABCDEF:1:BFT\n";
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT", &e));
+    TEST_ASSERT_EQUAL_UINT64(0x0123456789ABCDEFULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_SIMPLE, e.learn_type);
+}
+
+void test_load_text_compact_multiple_entries(void)
+{
+    const char *text =
+        "0123456789ABCDEF:1:BFT\n"
+        "FEDCBA9876543210:2:CAME\n"
+        "AABBCCDDEEFF0011:3:Nice\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(3, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT",  &e));
+    TEST_ASSERT_EQUAL_UINT64(0x0123456789ABCDEFULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_SIMPLE, e.learn_type);
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("CAME", &e));
+    TEST_ASSERT_EQUAL_UINT64(0xFEDCBA9876543210ULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_NORMAL, e.learn_type);
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Nice", &e));
+    TEST_ASSERT_EQUAL_UINT64(0xAABBCCDDEEFF0011ULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_SECURE, e.learn_type);
+}
+
+void test_load_text_compact_case_insensitive_lookup(void)
+{
+    const char *text = "0123456789ABCDEF:1:BFT\n";
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("bft",  &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT",  &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Bft",  &e));
+}
+
+void test_load_text_compact_comment_lines_skipped(void)
+{
+    const char *text =
+        "# This is a comment\n"
+        "0123456789ABCDEF:1:BFT\n"
+        "# Another comment\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+}
+
+void test_load_text_compact_flipper_header_skipped(void)
+{
+    const char *text =
+        "Filetype: Flipper SubGhz Key File\n"
+        "Version: 1\n"
+        "Encryption: 1\n"
+        "0123456789ABCDEF:1:BFT\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+}
+
+void test_load_text_compact_invalid_type_skipped(void)
+{
+    const char *text =
+        "0123456789ABCDEF:0:BadType0\n"
+        "0123456789ABCDEF:4:BadType4\n"
+        "FEDCBA9876543210:2:CAME\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("BadType0", &e));
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("BadType4", &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("CAME",      &e));
+}
+
+void test_load_text_compact_malformed_hex_skipped(void)
+{
+    const char *text =
+        "ZZZZZZZZZZZZZZZZ:1:BadHex\n"
+        "FEDCBA9876543210:2:CAME\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+}
+
+/*============================================================================*/
+/* keeloq_mfkeys_load_text() — RocketGod multi-line format                  */
+/*============================================================================*/
+
+void test_load_text_rg_single_entry(void)
+{
+    const char *text =
+        "Manufacturer: BFT\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    81985529216486895\n"
+        "Type:         1\n"
+        "------------------------------------\n"
+        "\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT", &e));
+    TEST_ASSERT_EQUAL_UINT64(0x0123456789ABCDEFULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_SIMPLE, e.learn_type);
+}
+
+void test_load_text_rg_multiple_entries(void)
+{
+    const char *text =
+        "Manufacturer: BFT\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    81985529216486895\n"
+        "Type:         1\n"
+        "------------------------------------\n"
+        "\n"
+        "Manufacturer: CAME\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    18364758544493064720\n"
+        "Type:         2\n"
+        "------------------------------------\n"
+        "\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(2, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT",  &e));
+    TEST_ASSERT_EQUAL_UINT64(0x0123456789ABCDEFULL, e.key);
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("CAME", &e));
+    TEST_ASSERT_EQUAL_UINT64(0xFEDCBA9876543210ULL, e.key);
+}
+
+void test_load_text_rg_with_toolkit_header(void)
+{
+    const char *text =
+        "====================================\n"
+        "  Flipper SubGhz KeeLoq Mfcodes\n"
+        "  Decrypted by SubGhz Toolkit\n"
+        "  RocketGod | betaskynet.com\n"
+        "====================================\n"
+        "\n"
+        "Total Keys: 1\n"
+        "\n"
+        "Manufacturer: BFT\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    81985529216486895\n"
+        "Type:         1\n"
+        "------------------------------------\n"
+        "\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT", &e));
+}
+
+void test_load_text_rg_no_trailing_separator(void)
+{
+    /* Entry without trailing "---" line — should still be emitted */
+    const char *text =
+        "Manufacturer: BFT\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    81985529216486895\n"
+        "Type:         1\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+}
+
+void test_load_text_rg_missing_key_skipped(void)
+{
+    const char *text =
+        "Manufacturer: Incomplete\n"
+        "Key (Dec):    0\n"
+        "Type:         1\n"
+        "------------------------------------\n"
+        "Manufacturer: CAME\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    0\n"
+        "Type:         2\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("Incomplete", &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("CAME",        &e));
+}
+
+void test_load_text_rg_name_with_spaces(void)
+{
+    const char *text =
+        "Manufacturer: Scher-Khan Magicar\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    0\n"
+        "Type:         1\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Scher-Khan Magicar", &e));
+}
+
+/*============================================================================*/
+/* keeloq_mfkeys_load_text() — mixed formats                                 */
+/*============================================================================*/
+
+void test_load_text_mixed_formats(void)
+{
+    /* Both compact and RocketGod format entries in the same file */
+    const char *text =
+        "# Compact format entry\n"
+        "0123456789ABCDEF:1:BFT\n"
+        "\n"
+        "# RocketGod format entry\n"
+        "Manufacturer: CAME\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    0\n"
+        "Type:         2\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(2, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("BFT",  &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("CAME", &e));
+}
+
+/*============================================================================*/
+/* keeloq_mfkeys_load_text() — input validation edge cases                   */
+/*============================================================================*/
+
+void test_load_text_rg_type_multi_digit_invalid_skipped(void)
+{
+    /* "Type: 12" — multi-digit type out of range 1-3, must be skipped */
+    const char *text =
+        "Manufacturer: Bad\n"
+        "Key (Hex):    0123456789ABCDEF\n"
+        "Key (Dec):    0\n"
+        "Type:         12\n"
+        "------------------------------------\n"
+        "Manufacturer: Good\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    0\n"
+        "Type:         2\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("Bad",  &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Good", &e));
+}
+
+void test_load_text_rg_key_17_digits_skipped(void)
+{
+    /* Key (Hex) with 17 hex digits — must be rejected */
+    const char *text =
+        "Manufacturer: TooLong\n"
+        "Key (Hex):    0123456789ABCDEF0\n"  /* 17 digits */
+        "Key (Dec):    0\n"
+        "Type:         1\n"
+        "------------------------------------\n"
+        "Manufacturer: Good\n"
+        "Key (Hex):    FEDCBA9876543210\n"
+        "Key (Dec):    0\n"
+        "Type:         2\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("TooLong", &e));
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Good",    &e));
+}
+
+/*============================================================================*/
 /* Encoder tests                                                               */
 /*============================================================================*/
 
@@ -438,6 +750,32 @@ int main(void)
     RUN_TEST(test_mfkeys_find_null_name);
     RUN_TEST(test_mfkeys_find_null_entry);
     RUN_TEST(test_mfkeys_free_safe_when_not_loaded);
+
+    /* load_text() — compact format */
+    RUN_TEST(test_load_text_null_returns_false);
+    RUN_TEST(test_load_text_empty_string_succeeds);
+    RUN_TEST(test_load_text_compact_single_entry);
+    RUN_TEST(test_load_text_compact_multiple_entries);
+    RUN_TEST(test_load_text_compact_case_insensitive_lookup);
+    RUN_TEST(test_load_text_compact_comment_lines_skipped);
+    RUN_TEST(test_load_text_compact_flipper_header_skipped);
+    RUN_TEST(test_load_text_compact_invalid_type_skipped);
+    RUN_TEST(test_load_text_compact_malformed_hex_skipped);
+
+    /* load_text() — RocketGod format */
+    RUN_TEST(test_load_text_rg_single_entry);
+    RUN_TEST(test_load_text_rg_multiple_entries);
+    RUN_TEST(test_load_text_rg_with_toolkit_header);
+    RUN_TEST(test_load_text_rg_no_trailing_separator);
+    RUN_TEST(test_load_text_rg_missing_key_skipped);
+    RUN_TEST(test_load_text_rg_name_with_spaces);
+
+    /* load_text() — mixed formats */
+    RUN_TEST(test_load_text_mixed_formats);
+
+    /* load_text() — input validation edge cases */
+    RUN_TEST(test_load_text_rg_type_multi_digit_invalid_skipped);
+    RUN_TEST(test_load_text_rg_key_17_digits_skipped);
 
     /* Encoder */
     RUN_TEST(test_is_keeloq_protocol_positive);
