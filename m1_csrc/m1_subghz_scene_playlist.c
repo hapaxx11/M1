@@ -84,6 +84,10 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
 
     app->playlist_count = 0;
 
+    /* Clear any leftover delay values from a previously loaded playlist */
+    for (uint8_t i = 0; i < PLAYLIST_MAX_FILES; i++)
+        app->playlist_delays[i] = 0;
+
     /* Create playlist directory on demand */
     f_mkdir("/SUBGHZ");
     f_mkdir(PLAYLIST_DIR);
@@ -170,10 +174,17 @@ static bool playlist_transmit_next(SubGhzApp *app)
     menu_sub_ghz_init();
 
     /* Apply inter-signal delay (from "# delay: <ms>" playlist directive).
-     * Applied after the current signal; no delay after the final signal. */
-    uint16_t delay_ms = app->playlist_delays[app->playlist_current];
-    if (delay_ms > 0)
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+     * Delays are recorded on the next playlist entry during parsing, so
+     * after transmitting the current signal we must consume the next
+     * entry's delay, if there is a next entry.  This also guarantees
+     * there is no delay after the final signal. */
+    uint8_t next_index = app->playlist_current + 1;
+    if (next_index < app->playlist_count)
+    {
+        uint16_t delay_ms = app->playlist_delays[next_index];
+        if (delay_ms > 0)
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+    }
 
     app->playlist_current++;
     return true;
@@ -252,7 +263,7 @@ static void scene_on_enter(SubGhzApp *app)
     app->playlist_running = false;
     app->playlist_repeat_total = 1;
     app->playlist_repeat_done = 0;
-    for (uint8_t i = 0; i < 16; i++)
+    for (uint8_t i = 0; i < PLAYLIST_MAX_FILES; i++)
         app->playlist_delays[i] = 0;
 
     /* Open file browser immediately — no intermediate prompt screen */

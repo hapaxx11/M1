@@ -59,6 +59,12 @@ typedef enum {
 } SubGhzSceneId;
 
 /*============================================================================*/
+/* Constants                                                                  */
+/*============================================================================*/
+
+#define SUBGHZ_REMOTE_BUTTON_COUNT  5   /**< UP / DOWN / LEFT / RIGHT / OK */
+
+/*============================================================================*/
 /* Custom events (inter-scene communication)                                  */
 /*============================================================================*/
 
@@ -170,7 +176,6 @@ typedef struct {
     bool     playlist_running;        /**< Playback active */
 
     /* --- Remote state (SubGHz Remote scene) --- */
-#define SUBGHZ_REMOTE_BUTTON_COUNT  5   /**< UP / DOWN / LEFT / RIGHT / OK */
     char remote_path[64];             /**< Path to loaded .rem manifest */
     char remote_label[SUBGHZ_REMOTE_BUTTON_COUNT][24];  /**< Button label */
     char remote_files[SUBGHZ_REMOTE_BUTTON_COUNT][64];  /**< .sub path per button */

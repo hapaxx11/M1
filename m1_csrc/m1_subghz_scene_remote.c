@@ -41,6 +41,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include "ff.h"
 #include "m1_display.h"
@@ -68,7 +69,7 @@
 
 static uint8_t  rem_tx_flash = 0;     /* Countdown for "Sent!" overlay */
 static uint8_t  rem_tx_last  = 0xFF;  /* Which button was last pressed */
-static bool     rem_browsing = false; /* true while file browser is open */
+
 
 /*============================================================================*/
 /* Helpers — extern declarations                                              */
@@ -117,7 +118,7 @@ static bool remote_parse(SubGhzApp *app, const char *path)
         if (len == 0 || line[0] == '#')
             continue;
 
-        /* Parse "key: path  # optional label" */
+        /* Parse "key: path" (label is derived from the file basename) */
         uint8_t btn_idx = 0xFF;
         const char *pfx = NULL;
 
@@ -279,7 +280,6 @@ static void scene_draw(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    rem_browsing = false;
     rem_tx_flash = 0;
     rem_tx_last  = 0xFF;
 

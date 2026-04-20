@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
@@ -108,12 +109,12 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
         case CFG_FREQUENCY:
             if (subghz_freq_labels)
             {
-                /* For Custom entry (index 62), show "Custom" + stored MHz value */
+                /* For Custom entry (index 62), show the stored MHz label.
+                 * subghz_set_user_custom_freq_ext() keeps freq_labels[Custom]
+                 * updated with the formatted MHz string, so we can use it
+                 * directly — falling through to the normal return path. */
                 if (app->freq_idx == CFG_FREQ_COUNT - 1)
-                {
-                    snprintf(freq_buf, sizeof(freq_buf), "Custom");
-                    return freq_buf;
-                }
+                    return subghz_freq_labels[app->freq_idx];
                 return subghz_freq_labels[app->freq_idx];
             }
             snprintf(freq_buf, sizeof(freq_buf), "Preset %d", app->freq_idx);
