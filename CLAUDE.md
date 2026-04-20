@@ -1216,6 +1216,10 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
    before replay could be attempted, and the receiver algorithm must also be known.
 
 6. **Research sources to check** when evaluating a new rolling code protocol:
+   - **DarkFlippers/Unleashed SubGHzRemoteProg.md** — authoritative step-by-step binding
+     procedures for all major rolling-code systems.  **Always consult this document before
+     modifying or extending the Bind New Remote wizard:**
+     `https://github.com/DarkFlippers/unleashed-firmware/raw/refs/heads/dev/documentation/SubGHzRemoteProg.md`
    - Flipper Zero firmware and Unleashed/DarkFlippers forks (Sub-GHz protocol handlers)
    - argilo/secplus (Security+ 1.0/2.0)
    - Academic papers: IEEE, USENIX, Black Hat EU proceedings on RFID/RF security
@@ -1226,10 +1230,77 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
 
 ---
 
+## Bind New Remote Wizard — Agent Rules
+
+The Bind New Remote wizard (`SubGhzSceneBindWizard`, `m1_subghz_scene_bind_wizard.c`) is a
+guided step-by-step tool for creating and binding **brand-new** rolling-code remotes to
+receivers.  It is distinct from the Add Manually scene (which handles static OOK protocols
+with manually-entered hex keys) and from the Saved → Emulate path (which replays a
+previously captured key).
+
+### Primary reference — DarkFlippers SubGHzRemoteProg.md
+
+> **MANDATORY: Every agent session that modifies, extends, or reviews the Bind New Remote
+> wizard MUST consult this document before making any changes:**
+>
+> `https://github.com/DarkFlippers/unleashed-firmware/raw/refs/heads/dev/documentation/SubGHzRemoteProg.md`
+>
+> This document is the authoritative source for:
+> - The exact receiver programming button sequences for each protocol
+> - The timing windows and step ordering required for successful binding
+> - Which protocols support new-remote creation vs. clone-only
+> - Receiver board variant differences (especially Doorhan)
+>
+> Fetch the document at the start of any Bind New Remote work session.  Do **not** rely
+> solely on the step text already embedded in the wizard source — the DarkFlippers document
+> may have been updated with corrected sequences or new protocol variants since the last
+> wizard edit.
+
+### Architecture
+
+| File | Role |
+|------|------|
+| `m1_csrc/m1_subghz_scene_bind_wizard.c` | Wizard scene — protocol picker, step engine, countdown bars, inline TX |
+| `Sub_Ghz/subghz_new_remote_gen.c/h` | Pure key generator — splitmix64 PRNG seeded from HAL_GetTick + STM32H5 UID registers; hardware-independent and host-testable |
+| `tests/test_subghz_new_remote_gen.c` | Unit tests for the key generator |
+
+### Supported protocols (current implementation)
+
+All five are OOK PWM with `SubGhzProtocolFlag_PwmKeyReplay` — the M1 can bind them
+**and** replay them indefinitely from Saved without any cipher keys.
+
+| Protocol | Bits | File prefix | Steps |
+|----------|------|-------------|-------|
+| CAME Atomo 433 | 62 | `CameAtomo` | 4 |
+| Nice FloR-S 433 | 52 | `NiceFlors` | 5 |
+| Alutech AT-4N 433 | 64 | `Alutech` | 6 |
+| DITEC GOL4 433 | 54 | `DitecGol4` | 4 |
+| KingGates Stylo4k 433 | 60 | `KingGates` | 4 |
+
+Generated files are saved to `0:/SUBGHZ/NewRemote_<prefix>_<12-hex>.sub`.
+
+### Rules for adding new protocols to the wizard
+
+1. **Fetch SubGHzRemoteProg.md first** — transcribe step text directly from that document
+   into the `BindStep` array.  Do not invent steps from memory.
+2. **Verify PwmKeyReplay** — check `subghz_protocol_registry.c` for
+   `SubGhzProtocolFlag_PwmKeyReplay`.  Protocols without it cannot be replayed from Saved
+   after binding and must display a note on the done screen (see KeeLoq note pattern).
+3. **Add to `subghz_new_remote_gen.h/c`** — add a new `BW_PROTO_*` enum value and fill in
+   the `ProtoSpec` table entry (label, proto_name, freq_hz, bit_count, te, file_prefix).
+4. **Add to `bind_protos[]`** in `m1_subghz_scene_bind_wizard.c` — reference the new step
+   array and step count.
+5. **Add unit tests** in `tests/test_subghz_new_remote_gen.c` — verify proto_name,
+   freq_hz, bit_count, te, key masking, and file_base format.
+6. **Do not add Somfy Telis/Keytis** — these have no feasible OTA replay method; the M1
+   cannot use the remote after binding.  Document any request to add them as out-of-scope.
+
+---
+
 ## Sub-GHz Menu Structure
 
-The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 11 items** in this
-order, matching C3 parity.  Do not remove items, reorder, or add "Back" entries.
+The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 13 items** in this
+order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
 |---|-------|----------|----------------|
@@ -1244,6 +1315,8 @@ order, matching C3 parity.  Do not remove items, reorder, or add "Back" entries.
 | 9 | Weather Station | SubGhzSceneWeatherStation | Blocking delegate → `sub_ghz_weather_station()` |
 | 10 | Brute Force | SubGhzSceneBruteForce | Blocking delegate → `sub_ghz_brute_force()` |
 | 11 | Add Manually | SubGhzSceneAddManually | Blocking delegate → `sub_ghz_add_manually()` |
+| 12 | Remote | SubGhzSceneRemote | Scene-native (multi-button .rem remote control) |
+| 13 | Bind Remote | SubGhzSceneBindWizard | Scene-native (guided rolling-code binding wizard) |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and
 drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in
