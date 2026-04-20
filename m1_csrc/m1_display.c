@@ -19,6 +19,7 @@
 #include "m1_io_defs.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -227,6 +228,20 @@ void m1_gui_menu_update(const S_M1_Menu_t *phmenu, uint8_t sel_item, uint8_t dir
 
 /*============================================================================*/
 /**
+ * @brief Returns the effective visible-row count for the current menu level.
+ *
+ * For submenus (menu_level_id == 1) this honours the user's text-size
+ * preference via m1_menu_max_visible().  For the main menu (level 0) the
+ * static table value is kept unchanged.
+ */
+/*============================================================================*/
+static uint8_t subgui_win_size(void)
+{
+	return (menu_level_id == 1) ? m1_menu_max_visible() : menu_window_sizes[0];
+}
+
+/*============================================================================*/
+/**
   * @brief This function updates the sub-menu content on the display
   * @param
   * @retval None
@@ -257,13 +272,13 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			// No break here!
 
 		case MENU_UPDATE_MOVE_DOWN: // moving down
-			if ( n_items > menu_window_sizes[menu_level_id] )
+			if ( n_items > subgui_win_size() )
 			{
-				if ( disp_window_active_row < (menu_window_sizes[menu_level_id] - 1) )
+				if ( disp_window_active_row < (subgui_win_size() - 1) )
 				{
 					disp_window_active_row++;
 				}
-				else if ( disp_window_active_row==(menu_window_sizes[menu_level_id] - 1) )
+				else if ( disp_window_active_row==(subgui_win_size() - 1) )
 				{
 					if ( sel_item==(n_items-1) ) // reach end of the menu items list?
 					{
@@ -274,14 +289,14 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 						// move display window down
 						disp_window_top_row++;
 					}
-				} // else if ( disp_window_active_row==(menu_window_sizes[menu_level_id] - 1) )
-				else // disp_window_active_row==menu_window_sizes[menu_level_id]
+				} // else if ( disp_window_active_row==(subgui_win_size() - 1) )
+				else // disp_window_active_row==subgui_win_size()
 				{
 					disp_window_active_row = 1; // reset to the first row
 					disp_window_top_row = 1;
 				} // else
-			} // if ( n_items > menu_window_sizes[menu_level_id] )
-			else // n_items <= menu_window_sizes[menu_level_id]
+			} // if ( n_items > subgui_win_size() )
+			else // n_items <= subgui_win_size()
 			{
 				if ( disp_window_active_row < n_items )
 				{
@@ -304,7 +319,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			// No break here!
 
 		case MENU_UPDATE_MOVE_UP: // moving up
-			if ( n_items >= menu_window_sizes[menu_level_id] )
+			if ( n_items >= subgui_win_size() )
 			{
 				if ( disp_window_active_row > 2 )
 				{
@@ -324,11 +339,11 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 				} // else if ( disp_window_active_row==2 )
 				else // being at the first row
 				{
-					disp_window_active_row = menu_window_sizes[menu_level_id]; // move to the last row
-					disp_window_top_row = n_items - (menu_window_sizes[menu_level_id] - 1);
+					disp_window_active_row = subgui_win_size(); // move to the last row
+					disp_window_top_row = n_items - (subgui_win_size() - 1);
 				} // else
-			} // if ( n_items >= menu_window_sizes[menu_level_id] )
-			else // n_items < menu_window_sizes[menu_level_id]
+			} // if ( n_items >= subgui_win_size() )
+			else // n_items < subgui_win_size()
 			{
 				if ( disp_window_active_row > 1 )
 				{
@@ -366,7 +381,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 				uint8_t expected_run = disp_window_top_row + disp_window_active_row - 1;
 				if ( expected_run != (sel_item + 1) )
 				{
-					uint8_t win = menu_window_sizes[menu_level_id];
+					uint8_t win = subgui_win_size();
 					if ( (sel_item + 1) <= win )
 					{
 						disp_window_active_row = sel_item + 1;
@@ -435,20 +450,44 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			break;
 	} // switch ( direction )
 
+	/* Rendering layout values.
+	 * For submenus (menu_level_id == 1) use font-aware helpers so the menu
+	 * respects the user's text-size preference.  For the main menu (level 0)
+	 * the original static table values are kept unchanged. */
+	const uint8_t eff_item_h   = (menu_level_id == 1)
+	                             ? m1_menu_item_h()
+	                             : menu_text_frame_h[0];
+	const uint8_t eff_frame_y0 = (menu_level_id == 1)
+	                             ? (uint8_t)M1_MENU_AREA_TOP
+	                             : menu_text_frame_top_pos_y[0];
+	const uint8_t eff_text_y0  = (menu_level_id == 1)
+	                             ? (uint8_t)(M1_MENU_AREA_TOP + eff_item_h - 1)
+	                             : menu_text_top_pos_y[0];
+	const uint8_t *eff_font_n  = (menu_level_id == 1)
+	                             ? m1_menu_font()
+	                             : menu_text_font_n[0];
+	const uint8_t *eff_font_b  = (menu_level_id == 1)
+	                             ? m1_menu_font()
+	                             : menu_text_font_b[0];
+
 	/* Graphic work starts here */
     m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-	if ( n_items >= menu_window_sizes[menu_level_id] )
-		disp_window_bottom_row = disp_window_top_row + (menu_window_sizes[menu_level_id] - 1); // full window display
+	/* Separator line at top of the menu area (submenus only) */
+	if ( menu_level_id == 1 )
+		u8g2_DrawHLine(&m1_u8g2, 0, M1_MENU_AREA_TOP - 2, M1_LCD_DISPLAY_WIDTH);
+
+	if ( n_items >= subgui_win_size() )
+		disp_window_bottom_row = disp_window_top_row + (subgui_win_size() - 1); // full window display
 	else
 		disp_window_bottom_row = disp_window_top_row + (n_items - 1); // partial window display
 	active_item = disp_window_top_row;
 	active_item += disp_window_active_row - 1;
-	menu_frame_y = menu_text_frame_top_pos_y[menu_level_id];
-	menu_text_y = menu_text_top_pos_y[menu_level_id];
+	menu_frame_y = eff_frame_y0;
+	menu_text_y = eff_text_y0;
 
-	u8g2_SetFont(&m1_u8g2, menu_text_font_n[menu_level_id]);
+	u8g2_SetFont(&m1_u8g2, eff_font_n);
 	for (run=disp_window_top_row; run<=disp_window_bottom_row; run++)
 	{
 		if ( run==active_item )
@@ -456,17 +495,17 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			if ( menu_level_id==0 )
 			{
 		   		// Draw frame for selected menu item
-				u8g2_DrawXBMP(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], menu_text_frame_h[menu_level_id], m1_frame_75x16);
+				u8g2_DrawXBMP(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h, m1_frame_75x16);
 			} // if ( menu_level_id==0 )
 			else
 			{
-				u8g2_DrawBox(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], menu_text_frame_h[menu_level_id]);
+				u8g2_DrawBox(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h);
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
 			} // else
-			u8g2_SetFont(&m1_u8g2, menu_text_font_b[menu_level_id]);
+			u8g2_SetFont(&m1_u8g2, eff_font_b);
     		u8g2_DrawStr(&m1_u8g2, menu_text_left_pos_x[menu_level_id], menu_text_y, phmenu[run - 1]);
     		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // return the color to Black
-    		u8g2_SetFont(&m1_u8g2, menu_text_font_n[menu_level_id]);
+    		u8g2_SetFont(&m1_u8g2, eff_font_n);
 		} // if ( run==active_item )
 		else
 		{
@@ -477,8 +516,8 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			// Draw icons for main menu items
 			u8g2_DrawXBMP(&m1_u8g2, MAIN_MENU_ICON_LEFT_POS_X, menu_frame_y + 1, MAIN_MENU_ICON_WIDTH, MAIN_MENU_ICON_HEIGHT, this_gui_menu->submenu[run - 1]->icon_ptr);
 		}
-		menu_frame_y += menu_text_frame_h[menu_level_id];
-		menu_text_y += menu_text_spacing_vert[menu_level_id];
+		menu_frame_y += eff_item_h;
+		menu_text_y += eff_item_h;
 	} // for (run=disp_window_top_row; run<=disp_window_bottom_row; run++)
 
 	if ( menu_level_id==0 )
