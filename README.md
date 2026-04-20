@@ -87,7 +87,6 @@ project discussion, and related project resources:
 - **Playlist Player** — load `.txt` playlist files from `SubGHz/playlist/` and transmit each `.sub` file sequentially; supports repeat count, progress display, and Flipper path remapping
 - **Add Manually** — select a protocol, enter a hex key, and transmit a single-burst RF signal
 - **Radio Settings** — adjustable TX power, custom frequency entry
-- **Extended band support** — 150, 200, 250 MHz bands added
 
 ### NFC Enhancements
 - **Tag Info** — manufacturer lookup, SAK decode, technology identification
