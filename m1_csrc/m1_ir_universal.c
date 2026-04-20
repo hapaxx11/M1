@@ -233,15 +233,11 @@ void ir_universal_run(void)
 /*============================================================================*/
 void ir_universal_run_learned(void)
 {
-	char learned_path[IR_UNIVERSAL_PATH_MAX_LEN];
-	m1_orientation_t previous_orientation = m1_lcd_get_orientation();
+	uint8_t previous_orientation = m1_screen_orientation;
 
-	strncpy(learned_path, IR_LEARNED_DIR, IR_UNIVERSAL_PATH_MAX_LEN - 1);
-	learned_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-
-	m1_lcd_set_orientation(M1_ORIENT_NORMAL);
-	browse_directory(learned_path);
-	m1_lcd_set_orientation(previous_orientation);
+	settings_apply_orientation(M1_ORIENT_NORMAL);
+	browse_directory(IR_LEARNED_DIR);
+	settings_apply_orientation(previous_orientation);
 } // void ir_universal_run_learned(void)
 
 
