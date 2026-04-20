@@ -277,6 +277,9 @@ static char      bw_filepath[72]; /* "0:/SUBGHZ/<file_base>.sub" */
 
 /* Return visible items using the font-aware helper. */
 #define BW_PROTO_VIS   M1_MENU_VIS(BIND_PROTO_COUNT)
+
+/* Return the currently-selected protocol entry. */
+static const BindProtoDef *current_proto(void)
 {
     return &bind_protos[bw_proto_sel];
 }
