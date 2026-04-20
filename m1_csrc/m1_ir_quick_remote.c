@@ -878,6 +878,10 @@ static bool browse_for_device(ir_category_t cat, char *out_path, uint16_t path_l
                     u8g2_DrawStr(&m1_u8g2, 4, 46, "files on SD card.");
                     m1_u8g2_nextpage();
                     vTaskDelay(pdMS_TO_TICKS(1200));
+                    /* Discard key events entered during the hint so they
+                     * cannot be applied immediately by the next browser view. */
+                    xQueueReset(main_q_hdl);
+                    xQueueReset(button_events_q_hdl);
                     continue; /* re-scan the root */
                 }
                 /* Still nothing at root — no IR files at all */
