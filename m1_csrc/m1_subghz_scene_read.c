@@ -494,9 +494,12 @@ static void draw(SubGhzApp *app)
 
     if (app->hopper_active && app->read_state == SubGhzReadStateRx)
     {
-        /* Show current hopper frequency instead of preset */
-        snprintf(line, sizeof(line), "%.2f", (float)app->hopper_freq / 1000000.0f);
-        subghz_status_bar_draw(line, mod, state, true);
+        /* Show current hopper frequency instead of preset.
+         * Use integer arithmetic — embedded printf (nano.specs) has no %f support. */
+        snprintf(line, sizeof(line), "%lu.%02lu",
+                 (unsigned long)(app->hopper_freq / 1000000UL),
+                 (unsigned long)((app->hopper_freq % 1000000UL) / 10000UL));
+        subghz_status_bar_draw(line, mod, state, false);
     }
     else
     {
