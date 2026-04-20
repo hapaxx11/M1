@@ -199,7 +199,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             subghz_set_mod_idx_ext(app->mod_idx);
             subghz_set_hopping_ext(app->hopping);
             subghz_set_sound_ext(app->sound);
-            subghz_set_tx_power_idx_ext(app->tx_power_idx);
+            /* TX power is already updated via its accessor when changed. */
             /* Persist all settings to SD */
             settings_save_to_sd();
             subghz_scene_pop(app);

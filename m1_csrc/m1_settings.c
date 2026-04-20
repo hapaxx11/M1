@@ -808,9 +808,10 @@ void settings_load_from_sd(void)
     p = strstr(buf, "subghz_freq_idx=");
     if (p != NULL)
     {
-        val = atoi(p + 16);
-        if (val >= 0 && val <= 61)
-            subghz_set_freq_idx_ext((uint8_t)val);
+        char *end;
+        long lval = strtol(p + 16, &end, 10);
+        if (end != p + 16 && (*end == '\n' || *end == '\r' || *end == '\0' || *end == ' '))
+            subghz_set_freq_idx_ext((uint8_t)lval);  /* bounds enforced by setter */
     }
 
     /* Parse "subghz_mod_idx=X" (0–3) */
