@@ -387,13 +387,16 @@ function handleLocalFile(event) {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-        selectedFirmware = {
-            data: new Uint8Array(e.target.result),
-            name: file.name,
-        };
+    reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        selectedFirmware = { data, name: file.name };
         elements['local-file-name'].textContent = `${file.name} (${formatSize(file.size)})`;
         log(`Local file loaded: ${file.name} (${formatSize(file.size)})`);
+
+        // Compute SHA-256 for manual integrity verification.
+        const hash = await computeSHA256(data);
+        log(`SHA-256: ${hash}`);
+        log('Verify this hash matches the expected value before flashing.');
 
         // Deselect any release radio
         for (const radio of document.querySelectorAll('input[name="release"]')) {
@@ -438,6 +441,12 @@ async function handleFlash() {
             });
             firmware = { data, name: release.fwAsset.name };
             log(`Downloaded ${firmware.name} (${formatSize(firmware.data.length)})`);
+
+            // Compute SHA-256 so the user can verify the file was not modified
+            // in transit through the CORS proxy.
+            const hash = await computeSHA256(data);
+            log(`SHA-256: ${hash}`);
+            log('Compare this hash against the GitHub release page to confirm the file is unchanged.');
         } catch (err) {
             log(`Download failed: ${err.message}`, 'error');
             elements['progress-section'].classList.add('hidden');
@@ -556,6 +565,20 @@ async function flashFirmware(data, name) {
 }
 
 /* ── Utility Functions ── */
+
+/**
+ * Compute the SHA-256 digest of a Uint8Array and return it as a lowercase
+ * hex string.  Uses the built-in Web Crypto API (no external dependencies).
+ *
+ * @param {Uint8Array} data
+ * @returns {Promise<string>} 64-character hex digest
+ */
+async function computeSHA256(data) {
+    const hashBuf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
 
 function formatSize(bytes) {
     if (bytes === 0) return '0 B';
