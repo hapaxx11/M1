@@ -7,36 +7,23 @@
 ## Phases
 
 ### Phase 1 — Acurite 5n1 decoder
-- **Description**: Port Acurite 5n1 weather station decoder (64-bit OOK PWM, 433.92 MHz). Add enum, decoder .c, registry entry, CMakeLists, and test.
 - **Status**: ✅ Complete
 - **Commit**: `feat: add Acurite 5n1 weather station decoder`
 
 ### Phase 2 — Playlist delay support
-- **Description**: Parse `# delay: <ms>` lines in playlist .txt files. Apply vTaskDelay() between signals. Update SubGhzApp struct, playlist parser, and scene. Add tests for delay parsing.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
 
-### Phase 3 — Raw offline-decode buffer increase
-- **Description**: Bump FLIPPER_SUBGHZ_RAW_MAX_SAMPLES from 2048 to 8192 in flipper_subghz.h. Update test that checks the limit.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+### Phase 3 — Raw offline-decode buffer increase (2048→8192)
+- **Status**: ✅ Complete
 
 ### Phase 4 — Configurable RSSI threshold
-- **Description**: Add rssi_threshold to subghz_cfg struct. Add getter/setter accessors. Add config row to Config scene. Persist in settings.cfg.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
 
-### Phase 5 — Custom frequency entry
-- **Description**: Add 63rd "Custom" preset. When selected+OK, invoke VKB for MHz input. Store and persist user custom frequency. Handle in subghz_apply_config().
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+### Phase 5 — Custom frequency entry via VKB
+- **Status**: ✅ Complete
 
 ### Phase 6 — SubGHz Remote scene
-- **Description**: New SubGHz Remote scene. Manifest .rem format (5 button assignments). Add to Sub-GHz menu. Implement on_enter/on_event/draw/on_exit.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
 
-### Phase 7 — Changelog fragment
-- **Description**: Add .changelog fragments for all 6 features.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+### Phase 7 — Changelog fragments
+- **Status**: ✅ Complete

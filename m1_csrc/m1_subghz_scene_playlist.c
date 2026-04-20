@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "ff.h"
+#include "app_freertos.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_storage.h"
@@ -100,9 +101,24 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
         while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == '\n'))
             line[--len] = '\0';
 
-        /* Skip blank lines and comments */
-        if (len == 0 || line[0] == '#')
+        /* Skip blank lines */
+        if (len == 0)
             continue;
+
+        /* Check for delay directive: "# delay: <ms>"
+         * The delay applies to the NEXT entry added after this line.
+         * If multiple delay lines appear consecutively, the last one wins. */
+        if (line[0] == '#')
+        {
+            uint16_t dms = 0;
+            if (subghz_playlist_parse_delay(line, &dms))
+            {
+                /* Record as the delay for the next sub: entry */
+                if (app->playlist_count < PLAYLIST_MAX_FILES)
+                    app->playlist_delays[app->playlist_count] = dms;
+            }
+            continue;
+        }
 
         /* Look for "sub:" prefix */
         if (strncmp(line, "sub:", 4) != 0)
@@ -152,6 +168,11 @@ static bool playlist_transmit_next(SubGhzApp *app)
      * radio_init_rx_tx()'s retry loop, adding ~100ms latency per item. */
     sub_ghz_replay_flipper_file(app->playlist_files[app->playlist_current]);
     menu_sub_ghz_init();
+
+    /* Apply inter-signal delay (from "# delay: <ms>" playlist directive) */
+    uint16_t delay_ms = app->playlist_delays[app->playlist_current];
+    if (delay_ms > 0)
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
 
     app->playlist_current++;
     return true;
@@ -230,6 +251,8 @@ static void scene_on_enter(SubGhzApp *app)
     app->playlist_running = false;
     app->playlist_repeat_total = 1;
     app->playlist_repeat_done = 0;
+    for (uint8_t i = 0; i < 16; i++)
+        app->playlist_delays[i] = 0;
 
     /* Open file browser immediately — no intermediate prompt screen */
     if (!open_playlist_browser(app))

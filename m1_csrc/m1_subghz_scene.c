@@ -63,6 +63,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneWeatherStation]   = &subghz_scene_weather_station_handlers,
     [SubGhzSceneBruteForce]       = &subghz_scene_brute_force_handlers,
     [SubGhzSceneAddManually]      = &subghz_scene_add_manually_handlers,
+    [SubGhzSceneRemote]           = &subghz_scene_remote_handlers,
 };
 
 /*============================================================================*/

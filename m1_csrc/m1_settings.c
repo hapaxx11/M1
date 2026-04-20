@@ -86,6 +86,10 @@ extern bool    subghz_get_sound_ext(void);
 extern void    subghz_set_sound_ext(bool v);
 extern uint8_t subghz_get_tx_power_idx_ext(void);
 extern void    subghz_set_tx_power_idx_ext(uint8_t idx);
+extern int8_t  subghz_get_rssi_threshold_ext(void);
+extern void    subghz_set_rssi_threshold_ext(int8_t v);
+extern uint32_t subghz_get_user_custom_freq_ext(void);
+extern void     subghz_set_user_custom_freq_ext(uint32_t hz);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -672,6 +676,12 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "subghz_tx_power=%d\n", subghz_get_tx_power_idx_ext());
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "subghz_rssi_threshold=%d\n", (int)subghz_get_rssi_threshold_ext());
+    f_write(&fp, buf, strlen(buf), &bw);
+
+    snprintf(buf, sizeof(buf), "subghz_custom_freq=%lu\n", (unsigned long)subghz_get_user_custom_freq_ext());
+    f_write(&fp, buf, strlen(buf), &bw);
+
     snprintf(buf, sizeof(buf), "clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -862,6 +872,34 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 16) - '0');
         if (val >= 0 && val <= 3)
             subghz_set_tx_power_idx_ext((uint8_t)val);
+    }
+
+    /* Parse "subghz_rssi_threshold=N" (-50 to -100) */
+    p = strstr(buf, "subghz_rssi_threshold=");
+    if (p != NULL)
+    {
+        char *end;
+        long lval = strtol(p + 22, &end, 10);
+        if (end != p + 22 &&
+            (*end == '\n' || *end == '\r' || *end == '\0') &&
+            lval >= -100 && lval <= -50)
+        {
+            subghz_set_rssi_threshold_ext((int8_t)lval);
+        }
+    }
+
+    /* Parse "subghz_custom_freq=N" (Hz, 300000000–930000000) */
+    p = strstr(buf, "subghz_custom_freq=");
+    if (p != NULL)
+    {
+        char *end;
+        unsigned long uval = strtoul(p + 19, &end, 10);
+        if (end != p + 19 &&
+            (*end == '\n' || *end == '\r' || *end == '\0') &&
+            uval >= 300000000UL && uval <= 930000000UL)
+        {
+            subghz_set_user_custom_freq_ext((uint32_t)uval);
+        }
     }
 
     /* Parse "clock_tz_offset=N" (-12..+14) */
