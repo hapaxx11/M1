@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.129] - 2026-04-20
+
+### Changed
+
+- **Display: legacy submenu menus now honour user text-size preference** — `m1_gui_submenu_update()` (used by NFC and RFID action menus) now uses the font-aware helpers `m1_menu_max_visible()`, `m1_menu_item_h()`, and `m1_menu_font()` instead of a hardcoded 4-row / 16 px layout, so all menus in the system respond correctly to Settings → LCD & Notifications → Text Size.
 ## [0.9.0.128] - 2026-04-20
 
 ### Added
