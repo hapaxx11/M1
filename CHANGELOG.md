@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.125] - 2026-04-20
+
+### Fixed
+
+- **ESP32 OTA / M1 FW Download: auto-upgrade stale `fw_sources.txt`** — Users who upgraded from an older Hapax build that predates the ESP32 OTA download feature (or the category system) would see "No ESP32 sources / Check fw_sources.txt" immediately. The downloader now detects this by regenerating `fw_sources.txt` with current defaults on the first "no sources" result, then retrying — making the ESP32 and M1 firmware download screens work out-of-the-box after an upgrade without any manual SD card edits.
+- **Web Updater: fix CORS policy block on firmware download** — The web updater was blocked by the browser's CORS policy when trying to download firmware binaries directly from GitHub's CDN (`objects.githubusercontent.com`), which does not send `Access-Control-Allow-Origin` headers. Release asset downloads are now routed through the corsproxy.io CORS proxy, resolving the `ERR_FAILED` / "CORS policy" error in the browser console. The GitHub API calls (release listing) are unaffected — they already respond with correct CORS headers and are not proxied. Closes #251.
+- **Web Updater: SHA-256 verification + proxy notice** — After every firmware download (from GitHub releases or a local file), the web updater now computes and displays the SHA-256 hash of the binary in the log so users can optionally verify it against the GitHub release page. A calm informational note is also shown in the "Select Firmware" panel explaining that downloads are routed through the corsproxy.io CORS proxy (a widely-used open-source proxy) and linking to the release page for verification.
 ## [0.9.0.124] - 2026-04-20
 
 ### Fixed
