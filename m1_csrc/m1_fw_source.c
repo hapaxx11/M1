@@ -46,7 +46,7 @@ static char s_api_buf[API_RESPONSE_BUF_SIZE];
 /*
  * Default source configuration written when fw_sources.txt is missing.
  */
-static const char *s_default_config =
+static const char s_default_config[] =
 	"# M1 Firmware Download Sources\n"
 	"# Edit this file to add or modify download sources.\n"
 	"# Supported Type values: github_release\n"
@@ -115,6 +115,91 @@ bool fw_source_create_defaults(void)
 
 	uint16_t len = strlen(s_default_config);
 	fr = f_write(&file, s_default_config, len, &bw);
+	f_close(&file);
+
+	return (fr == FR_OK && bw == len);
+}
+
+/*
+ * Per-category default source blocks appended to an existing fw_sources.txt
+ * that predates category support.  FA_OPEN_APPEND is used so the existing
+ * content (including any user customisations) is never overwritten.
+ */
+static const char s_default_firmware_append[] =
+	"\n"
+	"# Auto-added: 'firmware' category defaults\n"
+	"Source: Monstatek Official\n"
+	"Type: github_release\n"
+	"Owner: Monstatek\n"
+	"Repo: M1\n"
+	"Asset_filter: .bin\n"
+	"Exclude_filter:\n"
+	"Category: firmware\n"
+	"Max_releases: 5\n"
+	"\n"
+	"Source: Hapax\n"
+	"Type: github_release\n"
+	"Owner: hapaxx11\n"
+	"Repo: M1\n"
+	"Asset_filter: _wCRC.bin\n"
+	"Exclude_filter: .elf .hex\n"
+	"Category: firmware\n"
+	"Max_releases: 5\n"
+	"\n"
+	"Source: C3\n"
+	"Type: github_release\n"
+	"Owner: bedge117\n"
+	"Repo: M1\n"
+	"Asset_filter: _wCRC.bin\n"
+	"Exclude_filter:\n"
+	"Category: firmware\n"
+	"Max_releases: 5\n";
+
+static const char s_default_esp32_append[] =
+	"\n"
+	"# Auto-added: 'esp32' category defaults\n"
+	"Source: C3 ESP32 AT\n"
+	"Type: github_release\n"
+	"Owner: bedge117\n"
+	"Repo: esp32-at-monstatek-m1\n"
+	"Asset_filter: .bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n"
+	"\n"
+	"Source: Deauth ESP32 AT\n"
+	"Type: github_release\n"
+	"Owner: neddy299\n"
+	"Repo: esp32-at-monstatek-m1\n"
+	"Asset_filter: .bin\n"
+	"Exclude_filter:\n"
+	"Category: esp32\n"
+	"Max_releases: 5\n";
+
+bool fw_source_append_category_defaults(const char *category)
+{
+	FIL file;
+	FRESULT fr;
+	UINT bw;
+	const char *text = NULL;
+	uint16_t len;
+
+	if (!category)
+		return false;
+
+	if (strcmp(category, "firmware") == 0)
+		text = s_default_firmware_append;
+	else if (strcmp(category, "esp32") == 0)
+		text = s_default_esp32_append;
+	else
+		return false;
+
+	fr = f_open(&file, FW_SOURCES_CONFIG_PATH, FA_OPEN_APPEND | FA_WRITE);
+	if (fr != FR_OK)
+		return false;
+
+	len = (uint16_t)strlen(text);
+	fr = f_write(&file, text, len, &bw);
 	f_close(&file);
 
 	return (fr == FR_OK && bw == len);
