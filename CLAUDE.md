@@ -700,16 +700,6 @@ constrained vertical space:
 | `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 5` | Frequency scanner data display, not a selectable menu |
 | `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6`, `SUBGHZ_HISTORY_VISIBLE_ITEMS 5` | Legacy history (tiny rows for maximum density) |
 
-#### Non-compliant legacy menus (migration backlog)
-
-The following legacy modules still use hardcoded visible items and row heights.
-They should be converted to use the font-aware helpers when they are next
-modified:
-
-| File | Hardcoded Defines | Notes |
-|------|-------------------|-------|
-| `m1_display.c` | `SUB_MENU_TEXT_ITEMS 4` | Legacy `m1_gui_submenu_update()` API (used by NFC/RFID) |
-
 ### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
 
 > **Every caller of a function that powers off the SI4463 MUST restore radio state
