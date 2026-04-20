@@ -21,6 +21,7 @@
 #include "m1_esp32_hal.h"
 #include "uiView.h"
 #include "battery.h"
+#include "battery_soc_estimate.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -195,6 +196,18 @@ void battery_status_update(void)
 
 	power_status.battery_level = bat_info.soc_percent;
 	power_status.battery_health = bat_info.soh_percent;
+
+	/* Voltage-based SoC correction: if the fuel gauge reports a suspiciously
+	 * low SoC, use the voltage-derived estimate as a floor when it indicates
+	 * more charge remains. This handles miscalibrated or drifted fuel gauges
+	 * (e.g. "Asian M1" hardware variant where the device continues to operate
+	 * normally at a reported 0%). The terminate-voltage behavior is owned by
+	 * battery_voltage_to_soc(), so this path does not duplicate that threshold. */
+	if (power_status.battery_level <= BATT_SOC_VOLTAGE_FALLBACK_THRESHOLD) {
+		uint8_t v_soc = battery_voltage_to_soc(bat_info.voltage_mV);
+		if (v_soc > power_status.battery_level)
+			power_status.battery_level = v_soc;
+	}
 
 	////////////////////////////////////////
 	// Battery Charger

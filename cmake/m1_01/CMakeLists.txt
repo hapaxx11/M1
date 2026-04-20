@@ -70,6 +70,7 @@ target_include_directories(m1_01 INTERFACE
 
 target_sources(m1_01 INTERFACE
     ../../Battery/battery.c
+    ../../Battery/battery_soc_estimate.c
     ../../Core/Src/FreeRTOS_CLI.c
     ../../Core/Src/app_freertos.c
     ../../Core/Src/cli_app.c
