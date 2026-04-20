@@ -325,8 +325,12 @@ void esp32_fw_download_start(void)
 	source_count = fw_source_load_config_filtered(sources, "esp32");
 	if (source_count == 0)
 	{
-		/* Config may predate the esp32 category — regenerate defaults and retry. */
-		fw_source_create_defaults();
+		/*
+		 * The file exists (fw_source_load_config creates it if missing)
+		 * but has no 'esp32' category entries — it predates category
+		 * support.  Append the defaults non-destructively and retry.
+		 */
+		fw_source_append_category_defaults("esp32");
 		source_count = fw_source_load_config_filtered(sources, "esp32");
 	}
 	if (source_count == 0)

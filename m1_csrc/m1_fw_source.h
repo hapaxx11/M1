@@ -98,6 +98,19 @@ uint8_t fw_source_load_config_filtered(fw_source_t *sources, const char *categor
 bool fw_source_create_defaults(void);
 
 /*
+ * Append default source entries for a specific category to an existing
+ * fw_sources.txt without overwriting user customisations.
+ *
+ * Use this when fw_source_load_config_filtered() returns 0 on a file that
+ * already exists — it means the file predates category support and needs
+ * the new default entries appended (non-destructive upgrade path).
+ *
+ * category: "firmware" or "esp32"
+ * Returns:  true if the entries were written successfully, false otherwise.
+ */
+bool fw_source_append_category_defaults(const char *category);
+
+/*
  * Check if an asset name matches the include/exclude filter criteria.
  * include_filter: suffix that asset name must end with (e.g., "_wCRC.bin")
  * exclude_filter: space-separated suffixes that disqualify the asset
