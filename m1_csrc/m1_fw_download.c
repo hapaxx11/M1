@@ -459,6 +459,12 @@ void fw_download_start(void)
 	source_count = fw_source_load_config_filtered(sources, "firmware");
 	if (source_count == 0)
 	{
+		/* Config may predate categories — regenerate defaults and retry. */
+		fw_source_create_defaults();
+		source_count = fw_source_load_config_filtered(sources, "firmware");
+	}
+	if (source_count == 0)
+	{
 		dl_show_message("No sources found", "Check fw_sources.txt");
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
