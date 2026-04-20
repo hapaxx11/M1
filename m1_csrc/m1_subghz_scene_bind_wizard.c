@@ -264,10 +264,19 @@ static char      bw_filepath[72]; /* "0:/SUBGHZ/<file_base>.sub" */
 /* Helpers                                                                    */
 /*============================================================================*/
 
+/* STM32H5 unique device ID register addresses (see RM0481 §53) */
+#define STM32H5_UID0_ADDR   (0x08FFF800UL)
+#define STM32H5_UID1_ADDR   (0x08FFF804UL)
+#define STM32H5_UID2_ADDR   (0x08FFF808UL)
+
+/* LCG multiplier (Knuth MMIX) used to further mix tick entropy */
+#define BW_LCG_MUL   (6364136223846793005ULL)
+
+/* Line height in pixels for instruction text (NokiaSmallPlain ascent=7) */
+#define STEP_TEXT_LINE_H    9
+
 /* Return visible items using the font-aware helper. */
 #define BW_PROTO_VIS   M1_MENU_VIS(BIND_PROTO_COUNT)
-
-static const BindProtoDef *current_proto(void)
 {
     return &bind_protos[bw_proto_sel];
 }
@@ -285,19 +294,21 @@ static bool bw_generate_and_save(void)
      * each device produces different serials even at the same boot time.
      * This matches the seeding strategy in m1_crypto.c. */
     uint32_t t    = HAL_GetTick();
-    uint32_t uid0 = *(volatile uint32_t *)(0x08FFF800UL);
-    uint32_t uid1 = *(volatile uint32_t *)(0x08FFF804UL);
-    uint32_t uid2 = *(volatile uint32_t *)(0x08FFF808UL);
+    uint32_t uid0 = *(volatile uint32_t *)(STM32H5_UID0_ADDR);
+    uint32_t uid1 = *(volatile uint32_t *)(STM32H5_UID1_ADDR);
+    uint32_t uid2 = *(volatile uint32_t *)(STM32H5_UID2_ADDR);
     uint64_t seed = ((uint64_t)(uid0 ^ t) << 32)
                   ^ ((uint64_t)(uid1 ^ uid2))
-                  ^ ((uint64_t)t * 6364136223846793005ULL);
+                  ^ ((uint64_t)t * BW_LCG_MUL);
 
     if (!subghz_new_remote_gen(current_proto()->proto_id, seed, &bw_params))
         return false;
 
     /* Build SD path.  file_base is produced by subghz_new_remote_gen which
-     * is unit-tested to contain no path separators or spaces; the trust
-     * boundary is between this scene and that pure module. */
+     * is unit-tested to contain no path separators or spaces; assert the
+     * trust boundary at runtime to catch any future regressions. */
+    if (strchr(bw_params.file_base, '/') || strchr(bw_params.file_base, '\\'))
+        return false; /* Defensive: should never happen */
     snprintf(bw_filepath, sizeof(bw_filepath),
              "0:/SUBGHZ/%s.sub", bw_params.file_base);
 
@@ -421,7 +432,7 @@ static void draw_step(void)
 
     /* Instruction text */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    m1_draw_text_box(&m1_u8g2, 2, 20, 124, 9, st->text, TEXT_ALIGN_LEFT);
+    m1_draw_text_box(&m1_u8g2, 2, 20, 124, STEP_TEXT_LINE_H, st->text, TEXT_ALIGN_LEFT);
 
     /* Countdown bar + hints */
     if (st->countdown_sec > 0)
@@ -470,7 +481,9 @@ static void draw_done(void)
 
     /* Show the filename (just the base + extension, not the full path) */
     char fname[44];
-    snprintf(fname, sizeof(fname), "%.38s.sub", bw_params.file_base);
+    /* Truncate to sizeof(fname) - strlen(".sub") - 1 = 38 chars of base */
+    snprintf(fname, sizeof(fname), "%.*s.sub",
+             (int)(sizeof(fname) - sizeof(".sub")), bw_params.file_base);
     u8g2_DrawStr(&m1_u8g2, 2, 22, fname);
 
     u8g2_DrawStr(&m1_u8g2, 2, 33, "Saved to 0:/SUBGHZ/");

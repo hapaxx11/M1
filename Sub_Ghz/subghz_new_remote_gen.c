@@ -125,7 +125,7 @@ bool subghz_new_remote_gen(BindWizardProto proto, uint64_t seed, NewRemoteParams
      * Using 12 hex digits (48 bits) significantly reduces collision
      * probability compared to 8 digits (32 bits / birthday ~77k keys). */
     snprintf(out->file_base, sizeof(out->file_base),
-             "NewRemote_%s_%012llX", s->file_prefix,
+             "NewRemote_%s_%012llx", s->file_prefix,
              (unsigned long long)(key & 0xFFFFFFFFFFFFULL));
 
     return true;
