@@ -228,10 +228,10 @@ KeeLoqEncResult keeloq_encode_replay(
         device_key = keeloq_learn_simple(serial, mfr.key);
         break;
     case KEELOQ_LEARN_SECURE:
-        /* Secure learning requires a seed — not available from file alone.
-         * Fall back to normal learning as a best-effort attempt. */
-        device_key = keeloq_learn_normal(serial, mfr.key);
-        break;
+        /* Secure learning requires a seed, which is not available from the
+         * encoded file data handled here. Refuse to generate an invalid hop
+         * word instead of silently falling back to normal learning. */
+        return KEELOQ_ENC_BAD_PROTOCOL;
     default:
         return KEELOQ_ENC_BAD_PROTOCOL;
     }
