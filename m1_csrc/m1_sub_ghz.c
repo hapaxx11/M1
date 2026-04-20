@@ -2644,6 +2644,7 @@ void sub_ghz_frequency_reader(void)
         uint8_t bar_fill = (uint8_t)(
             ((int32_t)(rc - FREQAN_RSSI_FLOOR) * (FREQAN_BAR_W - 2)) /
             (FREQAN_RSSI_CEIL - FREQAN_RSSI_FLOOR));
+        if (bar_fill > FREQAN_BAR_W - 2) bar_fill = FREQAN_BAR_W - 2;
 
         int16_t tc = threshold;
         if (tc < FREQAN_RSSI_FLOOR) tc = FREQAN_RSSI_FLOOR;
@@ -2695,7 +2696,7 @@ void sub_ghz_frequency_reader(void)
                      (int)threshold, bands[band_idx].label);
             u8g2_DrawStr(&m1_u8g2, 0, 54, str);
 
-            /* Controls hint */
+            /* Controls hint (\x18\x19 = up/down arrow glyphs in the font) */
             u8g2_DrawStr(&m1_u8g2, 0, 63, "L/R:Band \x18\x19:Thr OK:Hold");
 
         } while (m1_u8g2_nextpage());
