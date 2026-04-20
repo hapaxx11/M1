@@ -226,6 +226,24 @@ void ir_universal_run(void)
 
 /*============================================================================*/
 /*
+ * Browse directly to the Learned files directory.
+ * Called from infrared_saved_remotes() in m1_infrared.c so that "Replay"
+ * goes straight to saved/learned .ir files instead of the full dashboard.
+ */
+/*============================================================================*/
+void ir_universal_run_learned(void)
+{
+	uint8_t previous_orientation = m1_screen_orientation;
+
+	settings_apply_orientation(M1_ORIENT_NORMAL);
+	browse_directory(IR_LEARNED_DIR);
+	settings_apply_orientation(previous_orientation);
+} // void ir_universal_run_learned(void)
+
+
+
+/*============================================================================*/
+/*
  * Draw the dashboard menu on the 128x64 display
  */
 /*============================================================================*/
@@ -674,13 +692,30 @@ static void browse_directory(const char *path)
 
 	if (s_browse_count == 0)
 	{
-		/* Empty directory - show message */
+		/* Empty directory — show a context-sensitive message.
+		 * Match IR_LEARNED_DIR exactly or one of its subdirectories only,
+		 * so similarly-prefixed sibling folders (for example "Learned2")
+		 * are not treated as learned content. */
+		size_t learned_dir_len = strlen(IR_LEARNED_DIR);
+		bool is_learned =
+			(strncmp(path, IR_LEARNED_DIR, learned_dir_len) == 0) &&
+			(path[learned_dir_len] == '\0' || path[learned_dir_len] == '/');
 		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 10, 32, "No files found");
+		u8g2_DrawStr(&m1_u8g2, 10, 25, "No files found");
 		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 10, 50, "Back to return");
+		if (is_learned)
+		{
+			u8g2_DrawStr(&m1_u8g2, 4, 38, "Use 'Learn' to capture");
+			u8g2_DrawStr(&m1_u8g2, 4, 50, "and save IR signals.");
+		}
+		else
+		{
+			u8g2_DrawStr(&m1_u8g2, 4, 38, "Copy .ir files to");
+			u8g2_DrawStr(&m1_u8g2, 4, 50, "0:/IR/ on SD card.");
+		}
+		u8g2_DrawStr(&m1_u8g2, 4, 62, "Back to return");
 		m1_u8g2_nextpage();
 
 		/* Wait for BACK press */

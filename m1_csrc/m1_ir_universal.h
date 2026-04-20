@@ -51,6 +51,9 @@ typedef struct {
 /* Main entry point - called from m1_infrared.c */
 void ir_universal_run(void);
 
+/* Browse directly to learned files - called from infrared_saved_remotes() */
+void ir_universal_run_learned(void);
+
 /* Initialize/cleanup */
 void ir_universal_init(void);
 void ir_universal_deinit(void);
