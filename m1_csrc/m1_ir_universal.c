@@ -696,8 +696,10 @@ static void browse_directory(const char *path)
 
 	if (s_browse_count == 0)
 	{
-		/* Empty directory — show a context-sensitive message */
-		bool is_learned = (strstr(path, "Learned") != NULL);
+		/* Empty directory — show a context-sensitive message.
+		 * Use a prefix match against IR_LEARNED_DIR so the check is deterministic
+		 * and won't misclassify unrelated folders whose names contain "Learned". */
+		bool is_learned = (strncmp(path, IR_LEARNED_DIR, strlen(IR_LEARNED_DIR)) == 0);
 		m1_u8g2_firstpage();
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
