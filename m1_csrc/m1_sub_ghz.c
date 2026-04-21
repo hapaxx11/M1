@@ -2502,9 +2502,13 @@ void sub_ghz_frequency_reader(void)
         { 850000000UL, 928000000UL, "850-928MHz", true,  SUB_GHZ_BAND_915     },
     };
     #define FREQAN_BAND_COUNT  4
-    /* Fine-scan parameters (Momentum-style two-stage approach) */
-    #define FREQAN_FINE_RANGE_HZ  300000UL  /* ±300 kHz around coarse peak */
-    #define FREQAN_FINE_STEP_HZ    20000UL  /* 20 kHz step → ~30 points per side */
+    /* Fine-scan parameters (Momentum-style two-stage approach).
+     * Using static const avoids preprocessor-scope leakage of in-function #defines. */
+    static const uint32_t FREQAN_FINE_RANGE_HZ = 300000UL; /* ±300 kHz around coarse peak */
+    static const uint32_t FREQAN_FINE_STEP_HZ  =  20000UL; /* 20 kHz → 31 pts total (15/side + centre) */
+    /* Coarse grid step: covers inter-preset gaps so non-preset signals are detected.
+     * 2 MHz step gives ~40 grid points per 80 MHz band; harmless overlap with presets. */
+    static const uint32_t FREQAN_COARSE_STEP_HZ = 2000000UL;
 
     S_M1_Buttons_Status btn;
     S_M1_Main_Q_t       q_item;
@@ -2536,39 +2540,74 @@ void sub_ghz_frequency_reader(void)
             uint32_t sw_freq = 0;
             bool     key_hit = false;
 
-            /* Stage 1 (coarse): scan preset frequencies within the active band.
-             * Iterating the preset table guarantees exact known frequencies are
-             * checked (e.g. 433.920 MHz, 330.000 MHz) regardless of step size.
-             * ~25 entries × 2 ms ≈ 50 ms per coarse pass. */
-            for (int i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
+            /* Stage 1 (coarse): dual-source scan over the active band.
+             * Part A — preset table: exact known protocol frequencies (e.g. 433.920 MHz,
+             *   330.000 MHz) are always checked regardless of grid alignment.
+             * Part B — coarse grid at FREQAN_COARSE_STEP_HZ: covers inter-preset gaps so
+             *   signals at non-preset frequencies (e.g. 800 MHz in the 779-849 band) can
+             *   still be found. Overlap with presets is harmless — a 2ms re-check costs
+             *   little and the fine scan corrects the exact peak afterwards.
+             * Both parts update the same sw_best / sw_freq accumulators. */
+            for (int pass = 0; pass < 2 && !key_hit; pass++)
             {
-                uint32_t f = subghz_freq_presets[i].freq_hz;
-                if (f < band_lo || f > band_hi) continue;
+                if (pass == 0)
+                {
+                    /* Part A: preset table */
+                    for (int i = 0; i < SUBGHZ_FREQ_PRESET_COUNT && !key_hit; i++)
+                    {
+                        uint32_t f = subghz_freq_presets[i].freq_hz;
+                        if (f < band_lo || f > band_hi) continue;
 
-                SI446x_Set_Frequency(f);
-                SI446x_Start_Rx(0);
-                HAL_Delay(2);   /* let AGC settle */
+                        SI446x_Set_Frequency(f);
+                        SI446x_Start_Rx(0);
+                        HAL_Delay(2);
 
-                SI446x_Get_IntStatus(0, 0, 0);
-                pstat = SI446x_Get_ModemStatus(0x00);
-                int16_t r = (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
+                        SI446x_Get_IntStatus(0, 0, 0);
+                        pstat = SI446x_Get_ModemStatus(0x00);
+                        int16_t r = (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
 
-                if (r > sw_best) { sw_best = r; sw_freq = f; }
+                        if (r > sw_best) { sw_best = r; sw_freq = f; }
 
-                if (xQueuePeek(main_q_hdl, &q_item, 0) == pdTRUE &&
-                    q_item.q_evt_type == Q_EVENT_KEYPAD)
-                    { key_hit = true; break; }
+                        if (xQueuePeek(main_q_hdl, &q_item, 0) == pdTRUE &&
+                            q_item.q_evt_type == Q_EVENT_KEYPAD)
+                            key_hit = true;
+                    }
+                }
+                else
+                {
+                    /* Part B: coarse grid — fills gaps between presets */
+                    for (uint32_t f = band_lo; f <= band_hi && !key_hit;
+                         f += FREQAN_COARSE_STEP_HZ)
+                    {
+                        SI446x_Set_Frequency(f);
+                        SI446x_Start_Rx(0);
+                        HAL_Delay(2);
+
+                        SI446x_Get_IntStatus(0, 0, 0);
+                        pstat = SI446x_Get_ModemStatus(0x00);
+                        int16_t r = (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
+
+                        if (r > sw_best) { sw_best = r; sw_freq = f; }
+
+                        if (xQueuePeek(main_q_hdl, &q_item, 0) == pdTRUE &&
+                            q_item.q_evt_type == Q_EVENT_KEYPAD)
+                            key_hit = true;
+                    }
+                }
             }
 
             /* Stage 2 (fine): ±300 kHz at 20 kHz step around the coarse peak.
-             * Only runs when the coarse peak meets the signal threshold.
-             * ~30 steps × 2 ms ≈ 60 ms. Total cycle ≈ 110 ms. */
+             * Clamped to [band_lo, band_hi] so the sweep cannot wander outside
+             * the selected band or across a radio-config/frontend boundary.
+             * Only runs when coarse peak meets the signal threshold.
+             * 31 pts total (15/side + centre) × 2 ms ≈ 62 ms. */
             if (!key_hit && sw_best >= threshold && sw_freq > 0)
             {
                 uint32_t fine_lo = (sw_freq > FREQAN_FINE_RANGE_HZ)
-                                 ? sw_freq - FREQAN_FINE_RANGE_HZ : SUBGHZ_MIN_FREQ_HZ;
+                                 ? sw_freq - FREQAN_FINE_RANGE_HZ : band_lo;
                 uint32_t fine_hi = sw_freq + FREQAN_FINE_RANGE_HZ;
-                if (fine_hi > SUBGHZ_MAX_FREQ_HZ) fine_hi = SUBGHZ_MAX_FREQ_HZ;
+                if (fine_lo < band_lo) fine_lo = band_lo;
+                if (fine_hi > band_hi) fine_hi = band_hi;
 
                 int16_t  fine_best = FREQAN_RSSI_FLOOR;
                 uint32_t fine_freq = sw_freq;
