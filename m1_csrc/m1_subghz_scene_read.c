@@ -109,9 +109,6 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 /* SI4463 config */
 #define OOK_PDTC_VALUE  0x6C
 
-/* RSSI threshold accessor (defined in m1_sub_ghz.c) */
-extern int8_t subghz_get_rssi_threshold_ext(void);
-
 /*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/
@@ -409,16 +406,14 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventHopperTick:
             if (app->hopper_active && app->read_state == SubGhzReadStateRx)
             {
-                /* Read RSSI; if below threshold, hop to next frequency */
-                app->rssi = subghz_read_rssi_ext();
-                if (app->rssi < subghz_get_rssi_threshold_ext())
-                {
-                    app->hopper_idx = (app->hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
-                    app->hopper_freq = subghz_get_hopper_freqs_ext()[app->hopper_idx];
-                    app->current_freq_hz = app->hopper_freq;
-                    /* Retune radio hardware to the new frequency */
-                    subghz_retune_freq_hz_ext(app->hopper_freq);
-                }
+                /* Always advance to the next hopper frequency unconditionally.
+                 * Cycling is time-based (200 ms dwell per frequency) so the
+                 * frequency display always rotates through the hop list,
+                 * regardless of ambient RSSI. */
+                app->hopper_idx = (app->hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
+                app->hopper_freq = subghz_get_hopper_freqs_ext()[app->hopper_idx];
+                app->current_freq_hz = app->hopper_freq;
+                subghz_retune_freq_hz_ext(app->hopper_freq);
                 app->need_redraw = true;
             }
             return true;

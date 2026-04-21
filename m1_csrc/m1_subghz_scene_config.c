@@ -83,6 +83,22 @@ extern const char *subghz_ism_regions_text[];
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
+static bool    cfg_hide_hopping = false;  /* true when opened from Read Raw */
+
+/* Effective item count and display→real item index mapping.
+ * When hopping is hidden (Read Raw context), the Hopping row is
+ * skipped so display indices above it are shifted down by one. */
+static uint8_t cfg_count(void)
+{
+    return cfg_hide_hopping ? CFG_ITEMS - 1 : CFG_ITEMS;
+}
+
+static uint8_t cfg_real(uint8_t display_idx)
+{
+    if (!cfg_hide_hopping || display_idx < CFG_HOPPING)
+        return display_idx;
+    return display_idx + 1;  /* skip the hidden Hopping slot */
+}
 
 /* Layout constants — aligned with menu scene (no button bar) */
 #define CFG_AREA_TOP     12   /* Y below title + separator line      */
@@ -218,9 +234,15 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    (void)app;
     cfg_sel = 0;
     cfg_scroll = 0;
+    /* Hopping is not meaningful in Read Raw — hide it when Config is
+     * opened from that scene so the user cannot accidentally enable it.
+     * scene_depth reflects the post-push state, so the current scene (Config)
+     * is at [depth-1] and the parent is at [depth-2].  depth >= 2 guarantees
+     * depth-2 >= 0, which is always a valid zero-based stack index. */
+    cfg_hide_hopping = (app->scene_depth >= 2 &&
+        app->scene_stack[app->scene_depth - 2] == SubGhzSceneReadRaw);
     app->need_redraw = true;
 }
 
@@ -241,23 +263,23 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventUp:
-            cfg_sel = (cfg_sel > 0) ? cfg_sel - 1 : CFG_ITEMS - 1;
+            cfg_sel = (cfg_sel > 0) ? cfg_sel - 1 : cfg_count() - 1;
             /* Adjust scroll window */
             if (cfg_sel < cfg_scroll)
                 cfg_scroll = cfg_sel;
-            if (cfg_sel == CFG_ITEMS - 1)
+            if (cfg_sel == cfg_count() - 1)
             {
-                uint8_t vis = M1_MENU_VIS(CFG_ITEMS);
-                cfg_scroll = (CFG_ITEMS > vis) ? CFG_ITEMS - vis : 0;
+                uint8_t vis = M1_MENU_VIS(cfg_count());
+                cfg_scroll = (cfg_count() > vis) ? cfg_count() - vis : 0;
             }
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
-            cfg_sel = (cfg_sel + 1) % CFG_ITEMS;
+            cfg_sel = (cfg_sel + 1) % cfg_count();
             /* Adjust scroll window */
             {
-                uint8_t vis = M1_MENU_VIS(CFG_ITEMS);
+                uint8_t vis = M1_MENU_VIS(cfg_count());
                 if (cfg_sel >= cfg_scroll + vis)
                     cfg_scroll = cfg_sel - vis + 1;
             }
@@ -269,7 +291,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventRight:
         case SubGhzEventOk:
             /* Special case: OK on the Custom frequency entry opens VKB */
-            if (cfg_sel == CFG_FREQUENCY && app->freq_idx == CFG_FREQ_COUNT - 1)
+            if (cfg_real(cfg_sel) == CFG_FREQUENCY && app->freq_idx == CFG_FREQ_COUNT - 1)
             {
                 char mhz_str[12] = "";
                 uint32_t cur_hz = subghz_get_user_custom_freq_ext();
@@ -300,13 +322,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else
             {
-                change_value(app, cfg_sel, +1);
+                change_value(app, cfg_real(cfg_sel), +1);
             }
             app->need_redraw = true;
             return true;
 
         case SubGhzEventLeft:
-            change_value(app, cfg_sel, -1);
+            change_value(app, cfg_real(cfg_sel), -1);
             app->need_redraw = true;
             return true;
 
@@ -344,9 +366,9 @@ static void draw(SubGhzApp *app)
      * shifts right automatically, but keep it inside the text area so
      * long values and selected-row arrows still fit before the scrollbar. */
     u8g2_uint_t max_lw = 0;
-    for (uint8_t j = 0; j < CFG_ITEMS; j++)
+    for (uint8_t j = 0; j < cfg_count(); j++)
     {
-        u8g2_uint_t w = u8g2_GetStrWidth(&m1_u8g2, cfg_item_labels[j]);
+        u8g2_uint_t w = u8g2_GetStrWidth(&m1_u8g2, cfg_item_labels[cfg_real(j)]);
         if (w > max_lw) max_lw = w;
     }
     u8g2_uint_t val_x_pref = 4 + max_lw + 4;   /* label start + max width + gap */
@@ -354,11 +376,12 @@ static void draw(SubGhzApp *app)
     u8g2_uint_t val_x      = (val_x_pref < val_x_max) ? val_x_pref : val_x_max;
     u8g2_uint_t arrow_x    = val_x - 6;         /* "<" sits one glyph-cell left  */
 
-    uint8_t visible = M1_MENU_VIS(CFG_ITEMS);
+    uint8_t visible = M1_MENU_VIS(cfg_count());
     for (uint8_t v = 0; v < visible; v++)
     {
         uint8_t i = cfg_scroll + v;
-        if (i >= CFG_ITEMS) break;
+        if (i >= cfg_count()) break;
+        uint8_t ri = cfg_real(i);  /* real item index for labels/values */
 
         uint8_t y = CFG_AREA_TOP + v * item_h;
 
@@ -370,10 +393,10 @@ static void draw(SubGhzApp *app)
         }
 
         /* Label on left */
-        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, cfg_item_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, cfg_item_labels[ri]);
 
         /* Value on right with ◀ ▶ arrows for selected item */
-        const char *val = get_value_text(app, i);
+        const char *val = get_value_text(app, ri);
         if (i == cfg_sel)
         {
             u8g2_DrawStr(&m1_u8g2, arrow_x, y + text_ofs, "<");
@@ -390,13 +413,13 @@ static void draw(SubGhzApp *app)
     }
 
     /* Scrollbar — only when items exceed visible area */
-    if (CFG_ITEMS > visible)
+    if (cfg_count() > visible)
     {
         uint8_t sb_area_h   = visible * item_h;
-        uint8_t sb_handle_h = sb_area_h / CFG_ITEMS;
+        uint8_t sb_handle_h = sb_area_h / cfg_count();
         if (sb_handle_h < 3) sb_handle_h = 3;
         uint8_t sb_handle_y = CFG_AREA_TOP +
-            (uint8_t)((uint16_t)sb_area_h * cfg_sel / CFG_ITEMS);
+            (uint8_t)((uint16_t)sb_area_h * cfg_sel / cfg_count());
 
         u8g2_DrawFrame(&m1_u8g2, CFG_SCROLLBAR_X, CFG_AREA_TOP,
                        CFG_SCROLLBAR_W, sb_area_h);
