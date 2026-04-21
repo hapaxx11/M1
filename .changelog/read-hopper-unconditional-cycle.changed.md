@@ -1,1 +1,0 @@
-**Sub-GHz Read: frequency display cycles unconditionally when hopping** — The hopper now advances to the next frequency on every 200 ms tick regardless of RSSI level, so the status bar always visually cycles through the hopper frequencies. Previously the hop was RSSI-gated and the display could get stuck on one frequency if the ambient noise floor was above the threshold.
