@@ -665,7 +665,7 @@ static const ProtoFreqEntry known_proto_freqs[] = {
 	{ "Magellan",        319500000UL, "NA security sensor (319.5 MHz)" },
 	{ "Magellan",        433920000UL, "EU security sensor" },
 	/* 868 MHz EU ISM */
-	{ "Somfy Telis",     433920000UL, "Somfy EU roller shutters" },
+	{ "Somfy Telis",     433420000UL, "Somfy EU roller shutters" },
 	/* 300-band */
 	{ "Linear",          300000000UL, "Linear 300 MHz" },
 };

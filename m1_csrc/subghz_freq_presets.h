@@ -43,10 +43,14 @@
 /* ── SI4463 hardware limits ────────────────────────────────────────────────── */
 
 /** Lower PLL bound (Hz) — below this the synthesizer cannot lock. */
+#ifndef SUBGHZ_MIN_FREQ_HZ
 #define SUBGHZ_MIN_FREQ_HZ   300000000UL   /* 300.000 MHz */
+#endif
 
 /** Upper ISM edge (Hz). */
+#ifndef SUBGHZ_MAX_FREQ_HZ
 #define SUBGHZ_MAX_FREQ_HZ   928000000UL   /* 928.000 MHz */
+#endif
 
 /* ── Type definition ────────────────────────────────────────────────────────── */
 

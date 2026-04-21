@@ -196,6 +196,11 @@ extern uint8_t subghz_decode_generic_ppm(uint16_t, uint16_t);
                        SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save | \
                        SubGhzProtocolFlag_Send)
 
+/* 315 + 433 MHz dual-band — no 868 variant (e.g. Magellan/GE sensors) */
+#define F_STATIC_315_433 (SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 | \
+                          SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable | \
+                          SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send)
+
 /* 315 + 433 + 868 MHz multi-band — protocols genuinely active on all three */
 #define F_STATIC_MULTI (SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 | \
                         SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM | \
@@ -790,7 +795,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [MAGELLAN] = {
         .name   = "Magellan",
         .type   = SubGhzProtocolTypeStatic,
-        .flags  = F_STATIC_MULTI,
+        .flags  = F_STATIC_315_433,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=200, .te_long=400, .te_tolerance_pct=20, .min_count_bit_for_found=32 },
         .decode = subghz_decode_magellan,

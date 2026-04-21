@@ -5126,7 +5126,10 @@ uint8_t sub_ghz_raw_recording_init_ext(void)
 	datfile_info.file_ext    = ".sub";  /* Flipper-compatible extension */
 	datfile_info.file_prefix = SUB_GHZ_FILE_PREFIX;
 
-	strncpy(infix, subghz_freq_presets[subghz_cfg.freq_idx].label, 3);
+	if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
+		strncpy(infix, subghz_freq_presets[subghz_cfg.freq_idx].label, 3);
+	else
+		strncpy(infix, "cst", 3);  /* Custom frequency — no label in preset table */
 	infix[3] = '\0';
 	datfile_info.file_infix  = infix;
 	datfile_info.file_suffix = subghz_mod_presets[subghz_cfg.mod_idx].label;

@@ -26,14 +26,18 @@
 #include "m1_settings.h"
 #include "m1_system.h"
 #include "m1_virtual_kb.h"
+#include "subghz_freq_presets.h"
 
 /*============================================================================*/
 /* Frequency & modulation preset tables (shared with m1_sub_ghz.c)            */
 /* These are defined in m1_sub_ghz.c — we reference them via extern.          */
 /*============================================================================*/
 
-/* Frequency preset count & labels — must match m1_sub_ghz.c */
-#define CFG_FREQ_COUNT  63  /* 62 real presets + 1 Custom sentinel */
+/* Frequency preset count & labels — derived from subghz_freq_presets.h so
+ * the Config scene stays in sync if the preset table grows.
+ * SUBGHZ_FREQ_PRESET_COUNT real entries (indices 0..COUNT-1) + 1 Custom entry
+ * at index SUBGHZ_FREQ_PRESET_CUSTOM (== COUNT). */
+#define CFG_FREQ_COUNT  (SUBGHZ_FREQ_PRESET_COUNT + 1)
 #define CFG_MOD_COUNT    4
 
 /* We need these string labels for display — pull from the same source */
