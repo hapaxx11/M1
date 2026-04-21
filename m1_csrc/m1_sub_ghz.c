@@ -4589,13 +4589,16 @@ void sub_ghz_rssi_meter(void)
                 snprintf(info_str, sizeof(info_str), "RSSI Meter");
             u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
 
-            /* Current dBm — left-aligned, fixed anchor */
-            snprintf(info_str, sizeof(info_str), "%d dBm", rssi);
+            /* Current dBm — value at X=0, "dBm" label anchored at X=25 */
+            snprintf(info_str, sizeof(info_str), "%d", rssi);
             u8g2_DrawStr(&m1_u8g2, 0, 22, info_str);
+            u8g2_DrawStr(&m1_u8g2, 25, 22, "dBm");
 
-            /* Peak dBm — "Pk:" label at a fixed X so it never shifts */
-            snprintf(info_str, sizeof(info_str), "Pk:%d dBm", peak_rssi);
-            u8g2_DrawStr(&m1_u8g2, 68, 22, info_str);
+            /* Peak dBm — "Pk:" anchored at X=68, value at X=83, "dBm" at X=102 */
+            u8g2_DrawStr(&m1_u8g2, 68, 22, "Pk:");
+            snprintf(info_str, sizeof(info_str), "%d", peak_rssi);
+            u8g2_DrawStr(&m1_u8g2, 83, 22, info_str);
+            u8g2_DrawStr(&m1_u8g2, 102, 22, "dBm");
 
             /* Bar graph background */
             u8g2_DrawFrame(&m1_u8g2, 3, 26, 122, 14);
