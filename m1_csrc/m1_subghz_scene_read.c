@@ -406,9 +406,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventHopperTick:
             if (app->hopper_active && app->read_state == SubGhzReadStateRx)
             {
-                /* Read RSSI for the RSSI bar — still updated on every tick. */
-                app->rssi = subghz_read_rssi_ext();
-
                 /* Always advance to the next hopper frequency unconditionally.
                  * Cycling is time-based (200 ms dwell per frequency) so the
                  * frequency display always rotates through the hop list,
