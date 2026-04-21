@@ -230,11 +230,11 @@ static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
 
 /*============================================================================*/
 /* Frequency presets — matches Momentum firmware's default list (62 entries)   */
-/* plus one synthetic "Custom" sentinel at index 62 for user-entered MHz.     */
+/* plus one synthetic "Custom" sentinel at index 63 for user-entered MHz.     */
 /*============================================================================*/
-#define SUBGHZ_FREQ_PRESET_COUNT    62  /* Number of real presets */
-#define SUBGHZ_FREQ_PRESET_CUSTOM   62  /* Sentinel index for user-entered custom freq */
-#define SUBGHZ_FREQ_DEFAULT_IDX     39  /* 433.92 MHz */
+#define SUBGHZ_FREQ_PRESET_COUNT    63  /* Number of real presets */
+#define SUBGHZ_FREQ_PRESET_CUSTOM   63  /* Sentinel index for user-entered custom freq */
+#define SUBGHZ_FREQ_DEFAULT_IDX     40  /* 433.92 MHz */
 
 static const struct {
 	uint32_t freq_hz;
@@ -262,6 +262,7 @@ static const struct {
 	{ 314980000, "314.98"  },
 	{ 315000000, "315.00"  },
 	{ 318000000, "318.00"  },
+	{ 319500000, "319.50"  },
 	{ 320000000, "320.00"  },
 	{ 320150000, "320.15"  },
 	{ 330000000, "330.00"  },

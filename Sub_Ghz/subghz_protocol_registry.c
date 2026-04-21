@@ -790,7 +790,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [MAGELLAN] = {
         .name   = "Magellan",
         .type   = SubGhzProtocolTypeStatic,
-        .flags  = F_STATIC_433,
+        .flags  = F_STATIC_MULTI,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=200, .te_long=400, .te_tolerance_pct=20, .min_count_bit_for_found=32 },
         .decode = subghz_decode_magellan,
