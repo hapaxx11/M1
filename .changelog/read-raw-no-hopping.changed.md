@@ -1,1 +1,0 @@
-**Sub-GHz Read Raw: Hopping option hidden from Config** — The Hopping setting is no longer shown in the Config screen when accessed from Read Raw, since frequency hopping is not applicable during raw capture. Hopping continues to work normally in the Read (protocol decode) scene.

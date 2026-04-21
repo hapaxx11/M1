@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.142] - 2026-04-21
+
+### Changed
+
+- **Sub-GHz Read: frequency display cycles unconditionally when hopping** — The hopper now advances to the next frequency on every 200 ms tick regardless of RSSI level, so the status bar always visually cycles through the hopper frequencies. Previously the hop was RSSI-gated and the display could get stuck on one frequency if the ambient noise floor was above the threshold.
+- **Sub-GHz Read Raw: Hopping option hidden from Config** — The Hopping setting is no longer shown in the Config screen when accessed from Read Raw, since frequency hopping is not applicable during raw capture. Hopping continues to work normally in the Read (protocol decode) scene.
+
+### Fixed
+
+- **IR and Sub-GHz databases now included in GitHub releases** — added `SD_Assets.zip`
+  to every release artifact.  Extracting this archive to the root of the SD card
+  places `IR/` (1,412 IR remote files) and `SubGHz/` (313 signal files + playlists)
+  in the correct locations so **Infrared → Saved**, **Infrared → Universal Remote**,
+  **Sub-GHz → Saved**, and **Sub-GHz → Playlist** work immediately after flashing
+  without any manual file copying.
 ## [0.9.0.141] - 2026-04-21
 
 ### Added
