@@ -100,10 +100,6 @@ typedef enum
 	SUB_GHZ_BAND_433,
 	SUB_GHZ_BAND_433_92,
 	SUB_GHZ_BAND_915,
-	/* Extended bands below 300 MHz (init with 300 config, retune via SI446x_Set_Frequency) */
-	SUB_GHZ_BAND_150,
-	SUB_GHZ_BAND_200,
-	SUB_GHZ_BAND_250,
 	SUB_GHZ_BAND_EOL,
 	/* Arbitrary frequency via SI446x_Set_Frequency() */
 	SUB_GHZ_BAND_CUSTOM = 0x80
