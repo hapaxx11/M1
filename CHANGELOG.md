@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.143] - 2026-04-21
+
+### Fixed
+
+- **Sub-GHz RSSI Meter: anchored "dBm" labels** — The "dBm" unit label now stays at a
+  fixed pixel position for both the current and peak readings. Previously the label
+  shifted horizontally as the numeric value changed digit count (e.g. -9 → -100).
+  All five display elements (current value, "dBm", "Pk:", peak value, "dBm") are now
+  drawn at independent, fixed X coordinates.
 ## [0.9.0.142] - 2026-04-21
 
 ### Changed
