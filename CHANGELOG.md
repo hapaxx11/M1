@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.138] - 2026-04-21
+
+### Changed
+
+- **Documentation: README and ARCHITECTURE cleanup** — Clarified that qMonstatek is a
+  community-maintained companion app (not a Hapax project); removed redundant standalone
+  flashing method in favour of the Web Updater and DFU sections; removed stale bedge117/M1
+  cross-reference from the highlights table; synced Sub-GHz protocol count in ARCHITECTURE.md.
+
+### Removed
+
+- **Sub-GHz: removed non-functional 150/200/250 MHz bands** — The Si4463 radio
+  config and antenna matching network on the M1 are designed for 300–928 MHz.
+  The 150/200/250 MHz band options were initialising the radio with the 300 MHz
+  config and retuning the VCO, which does not produce correct output at those
+  frequencies. The bands have been removed from the firmware UI, the spectrum
+  analyser sweep presets, and the README.
 ## [0.9.0.137] - 2026-04-20
 
 ### Added
