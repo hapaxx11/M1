@@ -1,0 +1,77 @@
+name: Update SD Assets on database change
+
+# Triggers when database files change without a firmware code change.
+# Re-packages SD_Assets.zip and uploads it to the latest GitHub release.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ir_database/**'
+      - 'subghz_database/**'
+      - 'subghz_playlist/**'
+
+permissions:
+  contents: write
+
+jobs:
+  update-sd-assets:
+    name: Repackage and upload SD_Assets.zip
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package SD card assets
+        run: |
+          mkdir -p sd_staging/IR
+          mkdir -p sd_staging/SubGHz/playlist
+
+          # IR database: copy subdirectories only (skip README.txt, SOURCES.md)
+          for d in ir_database/*/; do
+            [ -d "$d" ] && cp -r "$d" sd_staging/IR/
+          done
+
+          # SubGHz signal database: copy subdirectories only (skip SOURCES.md, LICENSE)
+          for d in subghz_database/*/; do
+            [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/
+          done
+
+          # SubGHz playlists: copy subdirectories and example file
+          for d in subghz_playlist/*/; do
+            [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/playlist/
+          done
+          [ -f subghz_playlist/Example_Playlist.txt ] && \
+            cp subghz_playlist/Example_Playlist.txt sd_staging/SubGHz/playlist/
+
+          echo "Total files: $(find sd_staging -type f | wc -l)"
+
+          cd sd_staging
+          zip -r ../SD_Assets.zip .
+          cd ..
+          echo "SD_Assets.zip size: $(du -h SD_Assets.zip | cut -f1)"
+
+      - name: Upload SD_Assets.zip to latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_TAG=$(gh release list \
+            --repo "$GITHUB_REPOSITORY" \
+            --limit 1 \
+            --json tagName \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          print(data[0]['tagName'] if data else '')
+          ")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No published releases found — skipping upload."
+            exit 0
+          fi
+
+          echo "Uploading SD_Assets.zip to release ${LATEST_TAG}"
+          # Delete existing asset if present, then re-upload
+          gh release delete-asset "${LATEST_TAG}" SD_Assets.zip --yes 2>/dev/null || true
+          gh release upload "${LATEST_TAG}" SD_Assets.zip --clobber
+          echo "Done."
