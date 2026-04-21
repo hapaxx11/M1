@@ -926,7 +926,7 @@ static bool sub_ghz_custom_freq_entry(void)
 				uint32_t new_khz = digits[4]*100 + digits[5]*10 + digits[6];
 				uint32_t new_freq = new_mhz * 1000000UL + new_khz * 1000UL;
 
-				if (new_freq >= 300000000UL && new_freq <= 928000000UL)
+				if (new_freq >= SUBGHZ_MIN_FREQ_HZ && new_freq <= SUBGHZ_MAX_FREQ_HZ)
 				{
 					subghz_custom_freq_hz = new_freq;
 					accepted = true;
@@ -2138,7 +2138,7 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	subghz_replay_freq = freq_mhz;
 	subghz_replay_mod  = modulation;
 
-	if (frequency < 300000000UL || frequency > 928000000UL)
+	if (frequency < SUBGHZ_MIN_FREQ_HZ || frequency > SUBGHZ_MAX_FREQ_HZ)
 	{
 		f_unlink(FLIPPER_SUB_TMP_SGH);
 		return 3; /* unsupported frequency */
@@ -3977,8 +3977,8 @@ void sub_ghz_display(SubGHz_Dec_Info_t decoded_data)
 #define SPECTRUM_BAR_HEIGHT     34  /* pixels for bar area (rows 11..44) */
 #define SPECTRUM_MIN_SPAN   500000UL   /* 0.5 MHz minimum zoom */
 #define SPECTRUM_MAX_SPAN   200000000UL /* 200 MHz maximum zoom */
-#define SPECTRUM_MIN_FREQ   300000000UL /* Si4463 + frontend lower limit */
-#define SPECTRUM_MAX_FREQ   928000000UL /* Si4463 upper limit */
+#define SPECTRUM_MIN_FREQ   SUBGHZ_MIN_FREQ_HZ /* Si4463 + frontend lower limit */
+#define SPECTRUM_MAX_FREQ   SUBGHZ_MAX_FREQ_HZ /* Si4463 upper limit */
 
 void sub_ghz_spectrum_analyzer(void)
 {
@@ -5164,9 +5164,9 @@ void    subghz_set_freq_idx_ext(uint8_t idx)
 uint32_t subghz_get_user_custom_freq_ext(void)       { return subghz_user_custom_freq_hz; }
 void     subghz_set_user_custom_freq_ext(uint32_t hz)
 {
-    /* Clamp to SI4463 operating range (300–930 MHz) */
-    if (hz < 300000000UL)  hz = 300000000UL;
-    if (hz > 930000000UL)  hz = 930000000UL;
+    /* Clamp to SI4463 operating range (300–928 MHz) */
+    if (hz < SUBGHZ_MIN_FREQ_HZ)  hz = SUBGHZ_MIN_FREQ_HZ;
+    if (hz > SUBGHZ_MAX_FREQ_HZ)  hz = SUBGHZ_MAX_FREQ_HZ;
     subghz_user_custom_freq_hz = hz;
     /* Refresh display label */
     snprintf(subghz_custom_freq_label, sizeof(subghz_custom_freq_label),
