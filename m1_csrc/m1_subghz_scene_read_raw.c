@@ -445,20 +445,21 @@ static void draw(SubGhzApp *app)
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    /* Live RSSI refresh in Start and Recording states.
+    /* Live RSSI refresh during recording only.
      * trace=false: the cursor position does NOT advance — the cursor only
      * moves right when actual ring-buffer data arrives (SubGhzEventRxData
-     * with trace=true).  In Start state (passive listen) this keeps the
-     * cursor stationary at the left edge, matching Flipper/Momentum. */
-    if (app->raw_state == SubGhzReadRawStateStart ||
-        app->raw_state == SubGhzReadRawStateRecording)
+     * with trace=true).  Start state is completely static (empty frame). */
+    if (app->raw_state == SubGhzReadRawStateRecording)
     {
         app->rssi = subghz_read_rssi_ext();
         subghz_raw_rssi_push_ext((float)app->rssi, false);
     }
 
-    /* Draw RSSI history spectrogram for all states */
-    subghz_raw_rssi_draw_ext();
+    /* Draw RSSI history spectrogram for Recording and Idle states.
+     * Start state: buffer is empty after reset so draw shows only the
+     * scale frame — no bars, no animation. */
+    if (app->raw_state != SubGhzReadRawStateStart)
+        subghz_raw_rssi_draw_ext();
 
     /* Filename display centered in the waveform area when capture exists */
     if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
