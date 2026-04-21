@@ -828,7 +828,7 @@ void settings_load_from_sd(void)
             subghz_set_save_fmt_ext((uint8_t)val);
     }
 
-    /* Parse "subghz_freq_idx=NN" (0–61) */
+    /* Parse "subghz_freq_idx=NN" (0–63, including Custom sentinel) */
     p = strstr(buf, "subghz_freq_idx=");
     if (p != NULL)
     {

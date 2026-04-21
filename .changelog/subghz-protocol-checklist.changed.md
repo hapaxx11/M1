@@ -1,0 +1,1 @@
+**Documentation: Sub-GHz New Protocol Checklist** — added mandatory agent checklist to CLAUDE.md that prevents "missing frequency preset" bugs when porting new protocols from Flipper/Momentum. Covers frequency preset audit, band flag audit, Flipper vs M1 clock/frequency distinction, and required test commands. Motivated by the Magellan/GE 319.5 MHz bug.

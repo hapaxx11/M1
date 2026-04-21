@@ -54,9 +54,9 @@ extern const char *subghz_mod_labels[];
 
 /* Protocol name table */
 
-/* Hopper frequencies */
-#define READ_HOPPER_FREQ_COUNT  6
-extern const uint32_t subghz_hopper_freqs_ext[];
+/* Hopper: region-aware frequency getter (reads ism_band_region at runtime) */
+#include "subghz_freq_presets.h"   /* SUBGHZ_HOPPER_FREQ_COUNT, subghz_get_hopper_freqs() */
+extern const uint32_t *subghz_get_hopper_freqs_ext(void);
 
 /* RSSI read helper */
 extern int16_t subghz_read_rssi_ext(void);
@@ -192,7 +192,7 @@ static void start_rx(SubGhzApp *app)
     app->hopper_idx = 0;
     if (app->hopper_active)
     {
-        app->hopper_freq = subghz_hopper_freqs_ext[0];
+        app->hopper_freq = subghz_get_hopper_freqs_ext()[0];
         app->current_freq_hz = app->hopper_freq;
     }
 
@@ -413,8 +413,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->rssi = subghz_read_rssi_ext();
                 if (app->rssi < subghz_get_rssi_threshold_ext())
                 {
-                    app->hopper_idx = (app->hopper_idx + 1) % READ_HOPPER_FREQ_COUNT;
-                    app->hopper_freq = subghz_hopper_freqs_ext[app->hopper_idx];
+                    app->hopper_idx = (app->hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
+                    app->hopper_freq = subghz_get_hopper_freqs_ext()[app->hopper_idx];
                     app->current_freq_hz = app->hopper_freq;
                     /* Retune radio hardware to the new frequency */
                     subghz_retune_freq_hz_ext(app->hopper_freq);

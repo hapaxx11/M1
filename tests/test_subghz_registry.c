@@ -25,6 +25,7 @@
 
 #include "unity.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_freq_presets.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -340,7 +341,13 @@ void test_find_magellan(void)
 	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
 	TEST_ASSERT_NOT_NULL(proto);
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
+	/* Magellan exists in both NA (319.5 MHz, within the 315-band) and
+	 * EU (433 MHz) variants — both band flags are required.
+	 * Regression: previously flagged 433-only, causing M1 to omit
+	 * it from the 315-band picker and miss 319.5 MHz NA signals. */
 	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_433, proto->flags);
+	TEST_ASSERT_BITS_HIGH_MESSAGE(SubGhzProtocolFlag_315, proto->flags,
+		"Magellan must have Flag_315: NA sensors operate at 319.5 MHz (315-band)");
 }
 
 void test_find_marantec24(void)
@@ -613,6 +620,80 @@ void test_am_protocols_have_frequency_flags(void)
 	}
 }
 
+/* ===================================================================
+ * Protocol frequency-to-preset coverage check
+ *
+ * Root cause of the Magellan/319.5 MHz bug: a protocol's nominal
+ * operating frequency was not in the freq preset table, so the user
+ * had no way to tune the M1 radio to that channel.
+ *
+ * The test below checks a curated table of known protocol↔frequency
+ * mappings and verifies that every frequency in the table is present
+ * in subghz_freq_presets[].  Adding a new protocol that operates at
+ * an exotic frequency without adding the preset will fail here.
+ * =================================================================== */
+
+/* Helper: search for hz in the preset table, return index or -1 */
+static int registry_test_find_preset(uint32_t hz)
+{
+	for (uint32_t i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
+	{
+		if (subghz_freq_presets[i].freq_hz == hz)
+			return (int)i;
+	}
+	return -1;
+}
+
+typedef struct {
+	const char *protocol_name;
+	uint32_t    freq_hz;
+	const char *note;
+} ProtoFreqEntry;
+
+/* Well-known protocol→frequency pairs.  If a protocol's nominal
+ * frequency is not in the preset table, M1 cannot receive or emulate
+ * Flipper .sub files for that protocol.
+ *
+ * Add entries here when porting new protocols. */
+static const ProtoFreqEntry known_proto_freqs[] = {
+	/* NA 315-band garage/gate */
+	{ "Princeton",       315000000UL, "NA garage remotes" },
+	{ "CAME",            433920000UL, "EU gate" },
+	{ "Nice FLO",        433920000UL, "EU gate" },
+	{ "KeeLoq",          433920000UL, "EU KeeLoq remotes" },
+	/* Magellan/GE/Interlogix NA security sensors */
+	{ "Magellan",        319500000UL, "NA security sensor (319.5 MHz)" },
+	{ "Magellan",        433920000UL, "EU security sensor" },
+	/* 868 MHz EU ISM */
+	{ "Somfy Telis",     433420000UL, "Somfy EU roller shutters" },
+	/* 300-band */
+	{ "Linear",          300000000UL, "Linear 300 MHz" },
+};
+
+void test_known_protocol_freqs_have_presets(void)
+{
+	uint32_t entry_count = (uint32_t)(
+		sizeof(known_proto_freqs) / sizeof(known_proto_freqs[0]));
+
+	for (uint32_t i = 0; i < entry_count; i++)
+	{
+		const ProtoFreqEntry *e = &known_proto_freqs[i];
+
+		/* Only check protocols that are actually registered */
+		if (subghz_protocol_find_by_name(e->protocol_name) < 0)
+			continue;
+
+		char msg[160];
+		snprintf(msg, sizeof(msg),
+			"Protocol '%s' (%s) requires freq %lu Hz which is NOT in the "
+			"preset table — users cannot tune to this frequency",
+			e->protocol_name, e->note, (unsigned long)e->freq_hz);
+
+		int preset_idx = registry_test_find_preset(e->freq_hz);
+		TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, preset_idx, msg);
+	}
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -674,6 +755,9 @@ int main(void)
 	RUN_TEST(test_decodable_protocols_have_nonzero_min_bits);
 	RUN_TEST(test_static_protocols_have_save_flag);
 	RUN_TEST(test_am_protocols_have_frequency_flags);
+
+	/* Protocol-to-freq-preset coverage — prevents "missing frequency" bugs */
+	RUN_TEST(test_known_protocol_freqs_have_presets);
 
 	return UNITY_END();
 }

@@ -1228,6 +1228,58 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
    - Signal identification wiki: sigidwiki.com
    - OpenSesame, RFCrack, GNU Radio out-of-tree modules
 
+### New Protocol Checklist — Mandatory Before Merging Any Protocol Port
+
+> **This checklist exists because of a real bug**: Magellan/GE/Interlogix North American
+> security sensors operate at 319.5 MHz.  The M1 preset list skipped from 318.00 to
+> 320.00, so the frequency could never be tuned to.  The Magellan protocol was also
+> incorrectly flagged as 433-only despite having an NA variant at 319.5 MHz (315-band).
+> The Flipper emulated .sub files correctly but M1 could never receive them — a bug that
+> looks like a timing or decoder problem but is actually a missing frequency preset.
+>
+> **Run `ctest --test-dir tests/build-tests -R subghz_freq_presets` after every protocol
+> addition.  The structural invariants will catch missing presets, sort errors, and
+> count mismatches before the firmware is even built.**
+
+When porting any Sub-GHz protocol from Flipper/Momentum/Unleashed:
+
+1. **Frequency preset audit** — for every frequency at which the protocol operates
+   (not just the most common one), check that the exact Hz value is present in
+   `m1_csrc/subghz_freq_presets.c`.  Open the file and search for the value.
+   - North American 315-band devices often use non-round frequencies: 302.757 MHz,
+     303.875 MHz, 313.85 MHz, **319.5 MHz** (Magellan NA), 345 MHz, etc.
+   - EU 433-band devices can use 433.075, 433.42, 433.92, 434.07, 434.42 MHz, etc.
+   - If a required frequency is absent, insert it in sorted order, increment
+     `SUBGHZ_FREQ_PRESET_COUNT`, update `SUBGHZ_FREQ_PRESET_CUSTOM` to match,
+     and recheck `SUBGHZ_FREQ_DEFAULT_IDX` (must still point to 433.92 MHz).
+   - Add the new protocol↔frequency pair to the `known_proto_freqs[]` table in
+     `tests/test_subghz_registry.c` so it is checked in CI forever.
+
+2. **Band flag audit** — set `SubGhzProtocolFlag_315`, `_433`, `_868`, and/or `_300`
+   to cover every band where the protocol is *actually used in the real world*,
+   not just the most common one.  A sensor that operates at 319.5 MHz belongs in
+   the 315-band and must have `SubGhzProtocolFlag_315`.  A missing band flag means
+   "Add Manually" will not show the protocol in that band's picker.
+   - **Rule**: if the protocol has any variant below 400 MHz → needs `_315` (or `_300`).
+   - **Rule**: if the protocol has any variant in 430–470 MHz → needs `_433`.
+   - **Rule**: if the protocol has any variant in 860–870 MHz → needs `_868`.
+
+3. **Flipper vs M1 clock speed** — Flipper's CC1101 and M1's SI4463 both synthesize
+   RF frequency from a crystal oscillator, but they do so differently.  A .sub file
+   records the frequency Flipper used.  If M1's preset list does not contain that
+   exact frequency, M1 cannot retune to it, even if the decoder would otherwise work.
+   **Clock speed does not affect decoding; frequency availability does.**  Always
+   check the .sub file's `Frequency:` field against the preset table.
+
+4. **Run the tests** after adding the frequency and registering the protocol:
+   ```bash
+   cmake -B tests/build-tests -S tests && cmake --build tests/build-tests
+   ctest --test-dir tests/build-tests --output-on-failure -R "subghz_freq_presets|subghz_registry"
+   ```
+   The `test_subghz_freq_presets` suite enforces: count consistency, sort order,
+   no duplicates, range validity, and specific frequency regression guards.
+   The `test_subghz_registry` suite enforces: band flags, known protocol↔freq coverage.
+
 ---
 
 ## Bind New Remote Wizard — Agent Rules

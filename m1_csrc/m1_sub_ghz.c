@@ -228,90 +228,11 @@ static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
 	SUB_GHZ_BAND_433, SUB_GHZ_BAND_433_92, SUB_GHZ_BAND_915
 };
 
-/*============================================================================*/
-/* Frequency presets — matches Momentum firmware's default list (62 entries)   */
-/* plus one synthetic "Custom" sentinel at index 62 for user-entered MHz.     */
-/*============================================================================*/
-#define SUBGHZ_FREQ_PRESET_COUNT    62  /* Number of real presets */
-#define SUBGHZ_FREQ_PRESET_CUSTOM   62  /* Sentinel index for user-entered custom freq */
-#define SUBGHZ_FREQ_DEFAULT_IDX     39  /* 433.92 MHz */
-
-static const struct {
-	uint32_t freq_hz;
-	const char *label;
-} subghz_freq_presets[SUBGHZ_FREQ_PRESET_COUNT] = {
-	/* 300 – 350 MHz */
-	{ 300000000, "300.00"  },
-	{ 302757000, "302.75"  },
-	{ 303000000, "303.00"  },
-	{ 303875000, "303.87"  },
-	{ 303900000, "303.90"  },
-	{ 304250000, "304.25"  },
-	{ 307000000, "307.00"  },
-	{ 307500000, "307.50"  },
-	{ 307800000, "307.80"  },
-	{ 309000000, "309.00"  },
-	{ 310000000, "310.00"  },
-	{ 312000000, "312.00"  },
-	{ 312100000, "312.10"  },
-	{ 312200000, "312.20"  },
-	{ 313000000, "313.00"  },
-	{ 313850000, "313.85"  },
-	{ 314000000, "314.00"  },
-	{ 314350000, "314.35"  },
-	{ 314980000, "314.98"  },
-	{ 315000000, "315.00"  },
-	{ 318000000, "318.00"  },
-	{ 320000000, "320.00"  },
-	{ 320150000, "320.15"  },
-	{ 330000000, "330.00"  },
-	{ 345000000, "345.00"  },
-	{ 348000000, "348.00"  },
-	{ 350000000, "350.00"  },
-	/* 387 – 468 MHz */
-	{ 387000000, "387.00"  },
-	{ 390000000, "390.00"  },
-	{ 418000000, "418.00"  },
-	{ 430000000, "430.00"  },
-	{ 430500000, "430.50"  },
-	{ 431000000, "431.00"  },
-	{ 431500000, "431.50"  },
-	{ 433075000, "433.07"  },
-	{ 433220000, "433.22"  },
-	{ 433420000, "433.42"  },
-	{ 433657070, "433.65"  },
-	{ 433889000, "433.88"  },
-	{ 433920000, "433.92"  },
-	{ 434075000, "434.07"  },
-	{ 434176948, "434.17"  },
-	{ 434190000, "434.19"  },
-	{ 434390000, "434.39"  },
-	{ 434420000, "434.42"  },
-	{ 434620000, "434.62"  },
-	{ 434775000, "434.77"  },
-	{ 438900000, "438.90"  },
-	{ 440175000, "440.17"  },
-	{ 462750000, "462.75"  },
-	{ 464000000, "464.00"  },
-	{ 467750000, "467.75"  },
-	/* 779 – 928 MHz */
-	{ 779000000, "779.00"  },
-	{ 868350000, "868.35"  },
-	{ 868400000, "868.40"  },
-	{ 868460000, "868.46"  },
-	{ 868800000, "868.80"  },
-	{ 868950000, "868.95"  },
-	{ 906400000, "906.40"  },
-	{ 915000000, "915.00"  },
-	{ 925000000, "925.00"  },
-	{ 928000000, "928.00"  }
-};
-
-/* Hopper frequencies (Momentum firmware default) */
-#define SUBGHZ_HOPPER_FREQ_COUNT    6
-static const uint32_t subghz_hopper_freqs[SUBGHZ_HOPPER_FREQ_COUNT] = {
-	315000000, 390000000, 430500000, 433920000, 434420000, 868350000
-};
+/* Frequency preset table, dimensions, and default index are defined in
+ * subghz_freq_presets.h / subghz_freq_presets.c (hardware-independent
+ * pure data, directly tested by tests/test_subghz_freq_presets.c).
+ * Per-region hopper tables and subghz_get_hopper_freqs() live there too. */
+#include "subghz_freq_presets.h"
 
 /* Flipper-style modulation presets */
 #define SUBGHZ_MOD_PRESET_COUNT     4
@@ -608,7 +529,7 @@ uint8_t subghz_get_save_fmt_ext(void);
 static uint32_t subghz_hopper_retune_next(void)
 {
 	subghz_hopper_idx = (subghz_hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
-	uint32_t freq = subghz_hopper_freqs[subghz_hopper_idx];
+	uint32_t freq = subghz_get_hopper_freqs(m1_device_stat.config.ism_band_region)[subghz_hopper_idx];
 
 	sub_ghz_rx_pause();
 
@@ -4983,10 +4904,11 @@ void sub_ghz_freq_scanner(void)
 const char *subghz_freq_labels[SUBGHZ_FREQ_PRESET_COUNT + 1];  /* +1 for Custom entry */
 const char *subghz_mod_labels[SUBGHZ_MOD_PRESET_COUNT];
 
-/* Hopper frequency array for scene_read.c */
-const uint32_t subghz_hopper_freqs_ext[SUBGHZ_HOPPER_FREQ_COUNT] = {
-	315000000, 390000000, 430500000, 433920000, 434420000, 868350000
-};
+/* Hopper frequency getter for scene_read.c — reads ism_band_region at runtime */
+const uint32_t *subghz_get_hopper_freqs_ext(void)
+{
+	return subghz_get_hopper_freqs(m1_device_stat.config.ism_band_region);
+}
 
 static bool subghz_labels_initialized = false;
 
@@ -5204,7 +5126,10 @@ uint8_t sub_ghz_raw_recording_init_ext(void)
 	datfile_info.file_ext    = ".sub";  /* Flipper-compatible extension */
 	datfile_info.file_prefix = SUB_GHZ_FILE_PREFIX;
 
-	strncpy(infix, subghz_freq_presets[subghz_cfg.freq_idx].label, 3);
+	if (subghz_cfg.freq_idx < SUBGHZ_FREQ_PRESET_COUNT)
+		strncpy(infix, subghz_freq_presets[subghz_cfg.freq_idx].label, 3);
+	else
+		strncpy(infix, "cst", 3);  /* Custom frequency — no label in preset table */
 	infix[3] = '\0';
 	datfile_info.file_infix  = infix;
 	datfile_info.file_suffix = subghz_mod_presets[subghz_cfg.mod_idx].label;
