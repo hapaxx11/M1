@@ -1,1 +1,0 @@
-**Sub-GHz Read Raw: replace Start-state sine wave with static empty waveform frame** — Start state now shows a completely static waveform frame (matching Flipper/Momentum Read Raw). No animation of any kind is shown until REC is pressed; the RSSI spectrogram and cursor only appear once recording has begun and actual RF edges are captured.
