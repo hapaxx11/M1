@@ -64,7 +64,7 @@ static void scene_on_enter(SubGhzApp *app)
     const char *ext = (fmt == 1) ? ".sgh" : ".sub";
     snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s%s", new_name, ext);
 
-    flipper_subghz_signal_t sub_sig;
+    static flipper_subghz_signal_t sub_sig;
     memset(&sub_sig, 0, sizeof(sub_sig));
     sub_sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
     sub_sig.frequency = e->frequency;

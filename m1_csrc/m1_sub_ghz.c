@@ -1338,7 +1338,7 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 /*============================================================================*/
 static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 {
-	flipper_subghz_signal_t sub_sig;
+	static flipper_subghz_signal_t sub_sig;
 	char sub_path[64];
 	char default_name[32];
 	char new_name[32];
@@ -2257,7 +2257,7 @@ static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val)
 	const uint8_t ratio = subghz_add_manually_list[proto_idx].ratio;
 
 	/* Build a .sub KEY file and use existing replay engine */
-	flipper_subghz_signal_t sig;
+	static flipper_subghz_signal_t sig;
 	memset(&sig, 0, sizeof(sig));
 	sig.type = FLIPPER_SUBGHZ_TYPE_PARSED;
 	sig.frequency = freq_hz;

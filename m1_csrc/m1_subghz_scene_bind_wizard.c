@@ -324,7 +324,7 @@ static bool bw_generate_and_save(void)
              "0:/SUBGHZ/%s.sub", bw_params.file_base);
 
     /* Build signal struct and save */
-    flipper_subghz_signal_t sig;
+    static flipper_subghz_signal_t sig;
     memset(&sig, 0, sizeof(sig));
 
     sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
