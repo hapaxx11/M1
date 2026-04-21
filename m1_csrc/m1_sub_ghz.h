@@ -59,6 +59,10 @@
 #define SUBGHZ_ISM_BAND_REGION					SUBGHZ_ISM_BAND_REGION_NORTH_AMERICA
 // End - Defines for ISM bands regions
 
+/* SI4463 operating range — single source of truth for all frequency validators */
+#define SUBGHZ_MIN_FREQ_HZ    300000000UL   /* 300.000 MHz — PLL lower bound with outdiv=12 */
+#define SUBGHZ_MAX_FREQ_HZ    928000000UL   /* 928.000 MHz — ISM upper edge */
+
 // SUBGHZ_GPIO_0(RX)	PORTE.9	<--> TIM1_CH1
 // SUBGHZ_GPIO_2(TX) 	PORTD.5	<--> TIM1_CH4N
 #define SUBGHZ_RX_GPIO_PORT         SI4463_GPIO0_GPIO_Port
