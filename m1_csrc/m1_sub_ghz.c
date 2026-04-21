@@ -3977,6 +3977,8 @@ void sub_ghz_display(SubGHz_Dec_Info_t decoded_data)
 #define SPECTRUM_BAR_HEIGHT     34  /* pixels for bar area (rows 11..44) */
 #define SPECTRUM_MIN_SPAN   500000UL   /* 0.5 MHz minimum zoom */
 #define SPECTRUM_MAX_SPAN   200000000UL /* 200 MHz maximum zoom */
+#define SPECTRUM_MIN_FREQ   300000000UL /* Si4463 + frontend lower limit */
+#define SPECTRUM_MAX_FREQ   928000000UL /* Si4463 upper limit */
 
 void sub_ghz_spectrum_analyzer(void)
 {
@@ -4043,6 +4045,17 @@ void sub_ghz_spectrum_analyzer(void)
 
         step = span / SPECTRUM_BAR_COUNT;
         if (step == 0) step = 1;
+
+        /* Clamp center_freq to the supported hardware range so zoom-out/pan
+         * in custom_view cannot sweep into frequencies the Si4463 and antenna
+         * frontend cannot handle (<300 MHz or >928 MHz). */
+        {
+            uint32_t half = span / 2;
+            if (center_freq < SPECTRUM_MIN_FREQ + half)
+                center_freq = SPECTRUM_MIN_FREQ + half;
+            if (center_freq > SPECTRUM_MAX_FREQ - half)
+                center_freq = SPECTRUM_MAX_FREQ - half;
+        }
 
         /* Sweep and find peak */
         freq = center_freq - span / 2;
