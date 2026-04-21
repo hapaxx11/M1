@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.141] - 2026-04-21
+
+### Added
+
+- **Sub-GHz: add 319.50 MHz frequency preset** — Magellan/GE/Interlogix security sensors (common in North American installations) operate at 319.5 MHz. The preset was missing from the frequency list, making it impossible to receive these signals or verify Flipper-emulated Magellan .sub files. 319.50 MHz is now selectable in the Sub-GHz Read/Read Raw/Config scenes. The Magellan protocol flags have also been corrected from 433 MHz-only to include the 315 MHz band, so the protocol appears in Add Manually at both 315 and 433 MHz.
+- **Sub-GHz: host-side unit tests for frequency preset table** — extracted the Sub-GHz frequency preset table from `m1_sub_ghz.c` into a hardware-independent module (`m1_csrc/subghz_freq_presets.c/.h`) and added `tests/test_subghz_freq_presets.c` with 13 tests enforcing: array length matches `SUBGHZ_FREQ_PRESET_COUNT`, custom sentinel equals count, default index points to 433.92 MHz, all presets within SI4463 operating range, sorted ascending, no duplicates, non-null labels, and regression guards for 319.5 MHz / 315.0 MHz / 433.92 MHz / 868.35 MHz. Also added a protocol-band-vs-preset coverage test to `test_subghz_registry.c` that verifies known protocol operating frequencies are present in the preset table — future protocol ports that omit a required frequency will fail CI.
+
+### Changed
+
+- **Sub-GHz Read: frequency hopper is now region-aware** — The hopper used by the
+  Read scene now selects its 6 dwell frequencies based on the user's ISM Region
+  setting (Sub-GHz → Config → Region) rather than using a single global list.
+  North America hops 315/345/390/433.92/434.42/915 MHz; Europe hops the SRD 433
+  cluster and 868 MHz; Asia/APAC adds 330/345 MHz gate-remote frequencies; Region
+  Off uses a wide cross-region fallback covering every major global band.
+  No settings UI change is needed — the existing Region selector already controls
+  the behaviour.
+- **Documentation: Sub-GHz New Protocol Checklist** — added mandatory agent checklist to CLAUDE.md that prevents "missing frequency preset" bugs when porting new protocols from Flipper/Momentum. Covers frequency preset audit, band flag audit, Flipper vs M1 clock/frequency distinction, and required test commands. Motivated by the Magellan/GE 319.5 MHz bug.
 ## [0.9.0.140] - 2026-04-21
 
 ### Fixed
