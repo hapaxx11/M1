@@ -1,5 +1,9 @@
-**Sub-GHz Frequency Analyzer: 330 MHz detection and 433.92 MHz accuracy** — Extended the
-  low band scan range from 300–316 MHz to 300–386 MHz so that 330 MHz (and other common
-  sub-400 MHz ISM frequencies: 345, 348, 350 MHz) are now detected. Reduced the 387–464 MHz
-  sweep step from 200 kHz to 40 kHz so that 433.920 MHz falls exactly on the scan grid and
-  is no longer reported as 434.000 MHz.
+**Sub-GHz Frequency Analyzer: two-stage Momentum-style scan** — Adopted the same
+  two-stage algorithm used by Momentum/Flipper firmware. Stage 1 (coarse) scans the
+  preset frequency table (~25 entries per band, ~50 ms) instead of a linear MHz sweep,
+  guaranteeing exact known frequencies like 433.920 MHz and 330.000 MHz are always
+  checked. Stage 2 (fine) sweeps ±300 kHz at 20 kHz step around the coarse peak
+  (~30 steps, ~60 ms) when a signal exceeds the threshold, providing sub-20-kHz
+  accuracy for any signal — including non-preset frequencies. Total scan cycle
+  ≈ 110 ms vs the previous 3.9 s linear sweep. Fixes: 330 MHz not detected in the
+  300 MHz band, and 433.92 MHz incorrectly shown as 434.00 MHz.

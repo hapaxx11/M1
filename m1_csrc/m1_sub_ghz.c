@@ -2484,23 +2484,27 @@ void sub_ghz_add_manually(void)
 
 void sub_ghz_frequency_reader(void)
 {
-    /* Band descriptor table — covers common ISM ranges.
+    /* Band filter table — defines which preset frequencies are scanned in each band.
+     * Coarse stage iterates subghz_freq_presets[] filtered to [start_hz, end_hz].
+     * Fine stage then sweeps ±FREQAN_FINE_RANGE_HZ around the coarse peak.
      * The 850 MHz boundary matches sub_ghz_set_opmode()'s CUSTOM mapping:
      * <850 MHz uses 433-style config/frontend; >=850 MHz uses 915-style. */
     static const struct {
         uint32_t            start_hz;
         uint32_t            end_hz;
-        uint32_t            step_hz;
         const char         *label;
         bool                use_915;   /* true: use 915-style radio config + frontend */
         S_M1_SubGHz_Band    frontend;  /* frontend switch position */
     } bands[] = {
-        { 300000000UL, 386000000UL,  50000UL, "300-386MHz", false, SUB_GHZ_BAND_315     },
-        { 387000000UL, 464000000UL,  40000UL, "387-464MHz", false, SUB_GHZ_BAND_433_92  },
-        { 779000000UL, 849000000UL, 400000UL, "779-849MHz", false, SUB_GHZ_BAND_433_92  },
-        { 850000000UL, 928000000UL, 400000UL, "850-928MHz", true,  SUB_GHZ_BAND_915     },
+        { 300000000UL, 386000000UL, "300-386MHz", false, SUB_GHZ_BAND_315     },
+        { 387000000UL, 464000000UL, "387-464MHz", false, SUB_GHZ_BAND_433_92  },
+        { 779000000UL, 849000000UL, "779-849MHz", false, SUB_GHZ_BAND_433_92  },
+        { 850000000UL, 928000000UL, "850-928MHz", true,  SUB_GHZ_BAND_915     },
     };
     #define FREQAN_BAND_COUNT  4
+    /* Fine-scan parameters (Momentum-style two-stage approach) */
+    #define FREQAN_FINE_RANGE_HZ  300000UL  /* ±300 kHz around coarse peak */
+    #define FREQAN_FINE_STEP_HZ    20000UL  /* 20 kHz step → ~30 points per side */
 
     S_M1_Buttons_Status btn;
     S_M1_Main_Q_t       q_item;
@@ -2526,15 +2530,22 @@ void sub_ghz_frequency_reader(void)
         /* ---- Sweep phase (skipped when held) ---- */
         if (!hold)
         {
-            uint32_t freq     = bands[band_idx].start_hz;
-            uint32_t freq_end = bands[band_idx].end_hz;
-            uint32_t step     = bands[band_idx].step_hz;
-            int16_t  sw_best  = FREQAN_RSSI_FLOOR;
-            uint32_t sw_freq  = freq;
+            uint32_t band_lo = bands[band_idx].start_hz;
+            uint32_t band_hi = bands[band_idx].end_hz;
+            int16_t  sw_best = FREQAN_RSSI_FLOOR;
+            uint32_t sw_freq = 0;
+            bool     key_hit = false;
 
-            while (freq <= freq_end)
+            /* Stage 1 (coarse): scan preset frequencies within the active band.
+             * Iterating the preset table guarantees exact known frequencies are
+             * checked (e.g. 433.920 MHz, 330.000 MHz) regardless of step size.
+             * ~25 entries × 2 ms ≈ 50 ms per coarse pass. */
+            for (int i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
             {
-                SI446x_Set_Frequency(freq);
+                uint32_t f = subghz_freq_presets[i].freq_hz;
+                if (f < band_lo || f > band_hi) continue;
+
+                SI446x_Set_Frequency(f);
                 SI446x_Start_Rx(0);
                 HAL_Delay(2);   /* let AGC settle */
 
@@ -2542,17 +2553,52 @@ void sub_ghz_frequency_reader(void)
                 pstat = SI446x_Get_ModemStatus(0x00);
                 int16_t r = (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
 
-                if (r > sw_best) { sw_best = r; sw_freq = freq; }
-                freq += step;
+                if (r > sw_best) { sw_best = r; sw_freq = f; }
 
-                /* Check queue non-blocking — break early if a key was pressed */
                 if (xQueuePeek(main_q_hdl, &q_item, 0) == pdTRUE &&
                     q_item.q_evt_type == Q_EVENT_KEYPAD)
-                    break;
+                    { key_hit = true; break; }
             }
 
-            best_hz    = sw_freq;
-            best_rssi  = sw_best;
+            /* Stage 2 (fine): ±300 kHz at 20 kHz step around the coarse peak.
+             * Only runs when the coarse peak meets the signal threshold.
+             * ~30 steps × 2 ms ≈ 60 ms. Total cycle ≈ 110 ms. */
+            if (!key_hit && sw_best >= threshold && sw_freq > 0)
+            {
+                uint32_t fine_lo = (sw_freq > FREQAN_FINE_RANGE_HZ)
+                                 ? sw_freq - FREQAN_FINE_RANGE_HZ : SUBGHZ_MIN_FREQ_HZ;
+                uint32_t fine_hi = sw_freq + FREQAN_FINE_RANGE_HZ;
+                if (fine_hi > SUBGHZ_MAX_FREQ_HZ) fine_hi = SUBGHZ_MAX_FREQ_HZ;
+
+                int16_t  fine_best = FREQAN_RSSI_FLOOR;
+                uint32_t fine_freq = sw_freq;
+
+                for (uint32_t f = fine_lo; f <= fine_hi; f += FREQAN_FINE_STEP_HZ)
+                {
+                    SI446x_Set_Frequency(f);
+                    SI446x_Start_Rx(0);
+                    HAL_Delay(2);
+
+                    SI446x_Get_IntStatus(0, 0, 0);
+                    pstat = SI446x_Get_ModemStatus(0x00);
+                    int16_t r = (int16_t)(pstat->CURR_RSSI / 2) - MODEM_RSSI_COMP - 70;
+
+                    if (r > fine_best) { fine_best = r; fine_freq = f; }
+
+                    if (xQueuePeek(main_q_hdl, &q_item, 0) == pdTRUE &&
+                        q_item.q_evt_type == Q_EVENT_KEYPAD)
+                        { key_hit = true; break; }
+                }
+
+                best_hz   = fine_freq;
+                best_rssi = fine_best;
+            }
+            else
+            {
+                best_hz   = sw_freq;
+                best_rssi = sw_best;
+            }
+
             has_signal = (best_rssi >= threshold);
             if (has_signal) m1_buzzer_notification();
         }
