@@ -1,0 +1,1 @@
+**Sub-GHz Read Raw: replace idle sine wave with live RSSI spectrogram** — Start state now shows the waveform frame with a live RSSI bar at the leftmost cursor position (matching Flipper/Momentum Read Raw), rather than the animated sine wave. The cursor only advances to the right when actual RF edges are captured during recording.

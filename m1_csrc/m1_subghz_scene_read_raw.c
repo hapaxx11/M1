@@ -15,7 +15,13 @@
  *
  *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
- * Radio lifecycle (Flipper/Momentum pattern):
+ * Display:
+ *   START:     RSSI spectrogram frame with live RSSI bar at cursor=0 (left).
+ *              Cursor stays at x=0 until REC is pressed.  Matches Flipper/Momentum.
+ *   RECORDING: Cursor slides right as captured edges arrive (Q_EVENT_SUBGHZ_RX).
+ *              Periodic 200ms refresh updates the live RSSI bar without advancing.
+ *   IDLE:      Spectrogram shows captured data.  Filename displayed in waveform area.
+ *
  *   scene_on_enter → radio starts in passive listen mode immediately.
  *   Pressing REC is therefore INSTANT (just starts ring buffer + file write).
  *   Pressing Stop flushes the file and resumes passive listen in Idle.
@@ -73,8 +79,6 @@ extern void subghz_raw_rssi_draw_ext(void);
 extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
 extern void subghz_raw_draw_frame_ext(void);
-extern void subghz_raw_draw_sin_ext(void);
-extern void subghz_raw_sin_advance_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
 extern uint8_t  sub_ghz_raw_recording_init_ext(void);
@@ -441,28 +445,20 @@ static void draw(SubGhzApp *app)
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    if (app->raw_state == SubGhzReadRawStateStart)
+    /* Live RSSI refresh in Start and Recording states.
+     * trace=false: the cursor position does NOT advance — the cursor only
+     * moves right when actual ring-buffer data arrives (SubGhzEventRxData
+     * with trace=true).  In Start state (passive listen) this keeps the
+     * cursor stationary at the left edge, matching Flipper/Momentum. */
+    if (app->raw_state == SubGhzReadRawStateStart ||
+        app->raw_state == SubGhzReadRawStateRecording)
     {
-        /* Animated sine wave when not yet recording.
-         * The 200ms periodic refresh (rx_active=true for Start state in the
-         * main event loop) drives the animation at ~5 fps. */
-        subghz_raw_draw_sin_ext();
-        subghz_raw_sin_advance_ext();
+        app->rssi = subghz_read_rssi_ext();
+        subghz_raw_rssi_push_ext((float)app->rssi, false);
     }
-    else
-    {
-        /* During recording: update current RSSI in display without advancing
-         * the cursor (trace=false overwrites the current position for live
-         * feedback between actual ring-buffer flush events). */
-        if (app->raw_state == SubGhzReadRawStateRecording)
-        {
-            app->rssi = subghz_read_rssi_ext();
-            subghz_raw_rssi_push_ext((float)app->rssi, false);
-        }
 
-        /* Draw RSSI history spectrogram */
-        subghz_raw_rssi_draw_ext();
-    }
+    /* Draw RSSI history spectrogram for all states */
+    subghz_raw_rssi_draw_ext();
 
     /* Filename display centered in the waveform area when capture exists */
     if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
