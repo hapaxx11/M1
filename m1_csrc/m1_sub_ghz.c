@@ -4674,13 +4674,28 @@ void sub_ghz_rssi_meter(void)
                 snprintf(info_str, sizeof(info_str), "RSSI Meter");
             u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
 
-            /* Current dBm — left-aligned, fixed anchor */
-            snprintf(info_str, sizeof(info_str), "%d dBm", rssi);
+            /* Current dBm — value at X=0, "dBm" label anchored at X=25 */
+            snprintf(info_str, sizeof(info_str), "%d", rssi);
             u8g2_DrawStr(&m1_u8g2, 0, 22, info_str);
+            u8g2_DrawStr(&m1_u8g2, 25, 22, "dBm");
 
-            /* Peak dBm — "Pk:" label at a fixed X so it never shifts */
-            snprintf(info_str, sizeof(info_str), "Pk:%d dBm", peak_rssi);
-            u8g2_DrawStr(&m1_u8g2, 68, 22, info_str);
+            /* Peak dBm — derive value/unit positions from rendered widths to avoid overlap */
+            {
+                const char *peak_label = "Pk:";
+                const char *dbm_label = "dBm";
+                const uint8_t peak_label_x = 68;
+                const uint8_t peak_section_gap = 2;
+                uint8_t peak_value_x;
+                uint8_t peak_dbm_x;
+
+                snprintf(info_str, sizeof(info_str), "%d", peak_rssi);
+                peak_value_x = peak_label_x + u8g2_GetStrWidth(&m1_u8g2, peak_label) + peak_section_gap;
+                peak_dbm_x = peak_value_x + u8g2_GetStrWidth(&m1_u8g2, info_str) + peak_section_gap;
+
+                u8g2_DrawStr(&m1_u8g2, peak_label_x, 22, peak_label);
+                u8g2_DrawStr(&m1_u8g2, peak_value_x, 22, info_str);
+                u8g2_DrawStr(&m1_u8g2, peak_dbm_x, 22, dbm_label);
+            }
 
             /* Bar graph background */
             u8g2_DrawFrame(&m1_u8g2, 3, 26, 122, 14);
