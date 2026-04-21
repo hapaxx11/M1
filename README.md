@@ -194,7 +194,7 @@ Download from the [qMonstatek releases page](https://github.com/bedge117/qMonsta
 
 ### IR Remote Database
 
-The [`ir_database/`](ir_database/) directory contains **1,412** infrared remote files for popular devices. Copy them to `IR/` on the M1's SD card to use with the Universal Remote feature.
+The [`ir_database/`](ir_database/) directory contains **1,412** infrared remote files for popular devices.
 
 **Categories:** TV (413), AC (238), Audio — receivers, soundbars & speakers (292), Fan (155), Projector (122), LED lighting (167), Streaming devices (25).
 
@@ -202,7 +202,7 @@ Top-level files per category are M1-curated "universal" remotes (tested on hardw
 
 ### Sub-GHz Signal Database
 
-The [`subghz_database/`](subghz_database/) directory contains **313** curated Sub-GHz `.sub` signal files. Copy them to `SubGHz/` on the M1's SD card for use with the Sub-GHz Saved feature.
+The [`subghz_database/`](subghz_database/) directory contains **313** curated Sub-GHz `.sub` signal files.
 
 **Categories:** Outlet switches (179), Doorbells (81), Weather stations (39), Smart home remotes (10), Fans (4).
 
@@ -210,11 +210,25 @@ Imported from the [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) co
 
 ### Sub-GHz Playlist Database
 
-The [`subghz_playlist/`](subghz_playlist/) directory contains ready-to-use Sub-GHz playlist files. Copy them to `SubGHz/playlist/` on the SD card for use with the Playlist Player.
+The [`subghz_playlist/`](subghz_playlist/) directory contains ready-to-use Sub-GHz playlist files.
 
 **Categories:** Tesla charge port openers, Doorbells, Fans.
 
 Imported from [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) (GPLv3). See [`subghz_playlist/SOURCES.md`](subghz_playlist/SOURCES.md) for attribution.
+
+### Getting the databases onto your SD card
+
+Every [GitHub Release](https://github.com/hapaxx11/M1/releases/latest) includes `SD_Assets.zip` — a ready-to-use archive that contains all three databases pre-arranged in the correct SD card directory structure.
+
+**Quick setup:**
+1. Download `SD_Assets.zip` from the latest release.
+2. Extract it to the **root** of your M1's SD card.
+3. This creates `IR/` and `SubGHz/` with all bundled files in the right places.
+
+The IR database powers **Infrared → Universal Remote** and **Infrared → Saved**.
+The Sub-GHz database powers **Sub-GHz → Saved** and **Sub-GHz → Playlist**.
+
+Advanced users can also copy the directories manually: `ir_database/` contents → `IR/`, `subghz_database/` contents → `SubGHz/`, `subghz_playlist/` contents → `SubGHz/playlist/`.
 
 ### KeeLoq Manufacturer Key Setup (Rolling-Code Replay)
 

@@ -203,7 +203,8 @@ jobs:
             binutils-arm-none-eabi \
             cmake \
             ninja-build \
-            python3
+            python3 \
+            zip
 
       # ------------------------------------------------------------------ #
       # 5. Configure CMake
@@ -255,7 +256,53 @@ jobs:
           arm-none-eabi-size "$ELF"
 
       # ------------------------------------------------------------------ #
-      # 8. Upload artifacts for the release job
+      # 8. Package SD card assets (IR + SubGHz databases)
+      # ------------------------------------------------------------------ #
+      - name: Package SD card assets
+        run: |
+          mkdir -p sd_staging/IR
+          mkdir -p sd_staging/SubGHz/playlist
+
+          # IR database: copy subdirectories and attribution files
+          for d in ir_database/*/; do
+            [ -d "$d" ] && cp -r "$d" sd_staging/IR/
+          done
+          [ -f ir_database/README.txt ] && \
+            cp ir_database/README.txt sd_staging/IR/
+          [ -f ir_database/SOURCES.md ] && \
+            cp ir_database/SOURCES.md sd_staging/IR/
+
+          # SubGHz signal database: copy subdirectories and include top-level notices
+          for d in subghz_database/*/; do
+            [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/
+          done
+          [ -f subghz_database/LICENSE ] && \
+            cp subghz_database/LICENSE sd_staging/SubGHz/
+          [ -f subghz_database/SOURCES.md ] && \
+            cp subghz_database/SOURCES.md sd_staging/SubGHz/
+
+          # SubGHz playlists: copy subdirectories, example file, and top-level notices
+          for d in subghz_playlist/*/; do
+            [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/playlist/
+          done
+          [ -f subghz_playlist/Example_Playlist.txt ] && \
+            cp subghz_playlist/Example_Playlist.txt sd_staging/SubGHz/playlist/
+          [ -f subghz_playlist/LICENSE ] && \
+            cp subghz_playlist/LICENSE sd_staging/SubGHz/playlist/
+          [ -f subghz_playlist/SOURCES.md ] && \
+            cp subghz_playlist/SOURCES.md sd_staging/SubGHz/playlist/
+
+          echo "--- SD card asset tree ---"
+          find sd_staging -type f | sort | head -40
+          echo "Total files: $(find sd_staging -type f | wc -l)"
+
+          cd sd_staging
+          zip -r ../SD_Assets.zip .
+          cd ..
+          echo "SD_Assets.zip size: $(du -h SD_Assets.zip | cut -f1)"
+
+      # ------------------------------------------------------------------ #
+      # 9. Upload artifacts for the release job
       # ------------------------------------------------------------------ #
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
@@ -266,6 +313,14 @@ jobs:
             build/${{ steps.meta.outputs.project_name }}.hex
             build/${{ steps.meta.outputs.project_name }}.bin
             build/${{ steps.meta.outputs.release_file_base }}_wCRC.bin
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload SD card assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sd-assets-${{ steps.meta.outputs.tag }}
+          path: SD_Assets.zip
           if-no-files-found: error
           retention-days: 90
 
@@ -284,6 +339,12 @@ jobs:
           name: firmware-${{ needs.build.outputs.tag }}
           path: artifacts/
 
+      - name: Download SD card assets artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sd-assets-${{ needs.build.outputs.tag }}
+          path: artifacts/
+
       - name: List release assets
         run: ls -lh artifacts/
 
@@ -299,17 +360,24 @@ jobs:
             artifacts/${{ needs.build.outputs.project_name }}.hex
             artifacts/${{ needs.build.outputs.project_name }}.bin
             artifacts/${{ needs.build.outputs.release_file_base }}_wCRC.bin
+            artifacts/SD_Assets.zip
           body: |
             ## M1 Hapax ${{ needs.build.outputs.tag }}
 
             | File | Description |
             |------|-------------|
             | `${{ needs.build.outputs.release_file_base }}_wCRC.bin` | **SD-card / OTA update image** (CRC + Hapax metadata injected) |
+            | `SD_Assets.zip` | **SD card databases** — IR remotes (1,412 files) + Sub-GHz signals (313 files) + playlists |
             | `${{ needs.build.outputs.project_name }}.bin`         | Raw binary (no CRC — for direct flashing / reference) |
             | `${{ needs.build.outputs.project_name }}.hex`         | Intel HEX (ST-Link / OpenOCD) |
             | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
             > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
+            >
+            > **First-time setup:** extract `SD_Assets.zip` to the root of the SD card.
+            > This places `IR/` and `SubGHz/` directories with all bundled remote and signal files.
+            > The IR database powers **Infrared → Universal Remote** and **Infrared → Saved**.
+            > The Sub-GHz database powers **Sub-GHz → Saved** and **Sub-GHz → Playlist**.
 
   # ====================================================================== #
   # Stamp CHANGELOG.md — replace [Unreleased] with the release version
