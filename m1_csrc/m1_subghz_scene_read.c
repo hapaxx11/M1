@@ -109,8 +109,6 @@ extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 /* SI4463 config */
 #define OOK_PDTC_VALUE  0x6C
 
-/* RSSI threshold accessor (defined in m1_sub_ghz.c) — used by Config scene */
-
 /*============================================================================*/
 /* Scene callbacks                                                            */
 /*============================================================================*/

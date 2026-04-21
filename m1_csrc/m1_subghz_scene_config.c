@@ -237,7 +237,10 @@ static void scene_on_enter(SubGhzApp *app)
     cfg_sel = 0;
     cfg_scroll = 0;
     /* Hopping is not meaningful in Read Raw — hide it when Config is
-     * opened from that scene so the user cannot accidentally enable it. */
+     * opened from that scene so the user cannot accidentally enable it.
+     * scene_depth reflects the post-push state, so the current scene (Config)
+     * is at [depth-1] and the parent is at [depth-2].  depth >= 2 guarantees
+     * depth-2 >= 0, which is always a valid zero-based stack index. */
     cfg_hide_hopping = (app->scene_depth >= 2 &&
         app->scene_stack[app->scene_depth - 2] == SubGhzSceneReadRaw);
     app->need_redraw = true;
