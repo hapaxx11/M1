@@ -2,6 +2,11 @@ name: Update SD Assets on database change
 
 # Triggers when database files change without a firmware code change.
 # Re-packages SD_Assets.zip and uploads it to the latest GitHub release.
+#
+# Guard: if the push also touches non-database paths (e.g. firmware source,
+# workflow files) the build-release.yml workflow will produce a new release
+# that includes a fresh SD_Assets.zip — this workflow should not run in that
+# case to avoid clobbering the previous release's asset prematurely.
 on:
   push:
     branches: [main]
@@ -21,28 +26,71 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need parent commit to compute changed-file list
+
+      - name: Check for database-only change
+        id: guard
+        run: |
+          # List all files changed in this push vs the previous commit.
+          # If any changed file falls outside the three database directories,
+          # a firmware/workflow build will also be triggered and will produce a
+          # new release with a fresh SD_Assets.zip — skip this job.
+          NON_DB=$(git diff --name-only HEAD~1 HEAD \
+            | grep -vE '^(ir_database|subghz_database|subghz_playlist)/' \
+            || true)
+          if [ -n "$NON_DB" ]; then
+            echo "Non-database files changed — skipping (build-release.yml handles this):"
+            echo "$NON_DB"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Database-only change confirmed."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify required tools
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          sudo apt-get update -y -q
+          sudo apt-get install -y -q zip
+          zip --version
+          gh --version
+          python3 --version
 
       - name: Package SD card assets
+        if: steps.guard.outputs.skip == 'false'
         run: |
           mkdir -p sd_staging/IR
           mkdir -p sd_staging/SubGHz/playlist
 
-          # IR database: copy subdirectories only (skip README.txt, SOURCES.md)
+          # IR database: copy subdirectories and attribution files
           for d in ir_database/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/IR/
           done
+          [ -f ir_database/README.txt ] && \
+            cp ir_database/README.txt sd_staging/IR/
+          [ -f ir_database/SOURCES.md ] && \
+            cp ir_database/SOURCES.md sd_staging/IR/
 
-          # SubGHz signal database: copy subdirectories only (skip SOURCES.md, LICENSE)
+          # SubGHz signal database: copy subdirectories and include top-level notices
           for d in subghz_database/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/
           done
+          [ -f subghz_database/SOURCES.md ] && \
+            cp subghz_database/SOURCES.md sd_staging/SubGHz/
+          [ -f subghz_database/LICENSE ] && \
+            cp subghz_database/LICENSE sd_staging/SubGHz/
 
-          # SubGHz playlists: copy subdirectories and example file
+          # SubGHz playlists: copy subdirectories, example file, and license
           for d in subghz_playlist/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/playlist/
           done
           [ -f subghz_playlist/Example_Playlist.txt ] && \
             cp subghz_playlist/Example_Playlist.txt sd_staging/SubGHz/playlist/
+          [ -f subghz_playlist/LICENSE ] && \
+            cp subghz_playlist/LICENSE sd_staging/SubGHz/playlist/
+          [ -f subghz_playlist/SOURCES.md ] && \
+            cp subghz_playlist/SOURCES.md sd_staging/SubGHz/playlist/
 
           echo "Total files: $(find sd_staging -type f | wc -l)"
 
@@ -52,6 +100,7 @@ jobs:
           echo "SD_Assets.zip size: $(du -h SD_Assets.zip | cut -f1)"
 
       - name: Upload SD_Assets.zip to latest release
+        if: steps.guard.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -203,7 +203,8 @@ jobs:
             binutils-arm-none-eabi \
             cmake \
             ninja-build \
-            python3
+            python3 \
+            zip
 
       # ------------------------------------------------------------------ #
       # 5. Configure CMake
@@ -262,22 +263,34 @@ jobs:
           mkdir -p sd_staging/IR
           mkdir -p sd_staging/SubGHz/playlist
 
-          # IR database: copy subdirectories only (skip README.txt, SOURCES.md)
+          # IR database: copy subdirectories and attribution files
           for d in ir_database/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/IR/
           done
+          [ -f ir_database/README.txt ] && \
+            cp ir_database/README.txt sd_staging/IR/
+          [ -f ir_database/SOURCES.md ] && \
+            cp ir_database/SOURCES.md sd_staging/IR/
 
-          # SubGHz signal database: copy subdirectories only (skip SOURCES.md, LICENSE)
+          # SubGHz signal database: copy subdirectories and include top-level notices
           for d in subghz_database/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/
           done
+          [ -f subghz_database/LICENSE ] && \
+            cp subghz_database/LICENSE sd_staging/SubGHz/
+          [ -f subghz_database/SOURCES.md ] && \
+            cp subghz_database/SOURCES.md sd_staging/SubGHz/
 
-          # SubGHz playlists: copy subdirectories and example file
+          # SubGHz playlists: copy subdirectories, example file, and top-level notices
           for d in subghz_playlist/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/playlist/
           done
           [ -f subghz_playlist/Example_Playlist.txt ] && \
             cp subghz_playlist/Example_Playlist.txt sd_staging/SubGHz/playlist/
+          [ -f subghz_playlist/LICENSE ] && \
+            cp subghz_playlist/LICENSE sd_staging/SubGHz/playlist/
+          [ -f subghz_playlist/SOURCES.md ] && \
+            cp subghz_playlist/SOURCES.md sd_staging/SubGHz/playlist/
 
           echo "--- SD card asset tree ---"
           find sd_staging -type f | sort | head -40
