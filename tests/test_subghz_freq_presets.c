@@ -250,6 +250,61 @@ void test_319_5mhz_position(void)
 }
 
 /* ================================================================
+ * 14–17. Per-region hopper tables: all entries exist in the preset table.
+ *
+ * If a hopper frequency is ever added that is not in subghz_freq_presets[],
+ * the radio cannot tune to it from the preset picker and the hopper will
+ * silently retune to a frequency the UI does not recognise.  These tests
+ * catch that class of mistake at CI time.
+ * ================================================================ */
+
+static void assert_hopper_table_in_presets(const uint32_t *table, uint8_t count,
+                                            const char *region_name)
+{
+	for (uint8_t i = 0; i < count; i++)
+	{
+		char msg[80];
+		snprintf(msg, sizeof(msg),
+			"%s hopper[%u] = %lu Hz not found in subghz_freq_presets[]",
+			region_name, (unsigned)i, (unsigned long)table[i]);
+		TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, find_freq(table[i]), msg);
+	}
+}
+
+void test_hopper_NA_in_presets(void)
+{
+	assert_hopper_table_in_presets(subghz_hopper_freqs_NA, SUBGHZ_HOPPER_FREQ_COUNT, "NA");
+}
+
+void test_hopper_EU_in_presets(void)
+{
+	assert_hopper_table_in_presets(subghz_hopper_freqs_EU, SUBGHZ_HOPPER_FREQ_COUNT, "EU");
+}
+
+void test_hopper_ASIA_in_presets(void)
+{
+	assert_hopper_table_in_presets(subghz_hopper_freqs_ASIA, SUBGHZ_HOPPER_FREQ_COUNT, "ASIA");
+}
+
+void test_hopper_OFF_in_presets(void)
+{
+	assert_hopper_table_in_presets(subghz_hopper_freqs_OFF, SUBGHZ_HOPPER_FREQ_COUNT, "OFF");
+}
+
+/* ================================================================
+ * 18. subghz_get_hopper_freqs() returns the correct table per region.
+ * ================================================================ */
+void test_get_hopper_freqs_returns_correct_table(void)
+{
+	TEST_ASSERT_EQUAL_PTR(subghz_hopper_freqs_NA,   subghz_get_hopper_freqs(0));
+	TEST_ASSERT_EQUAL_PTR(subghz_hopper_freqs_EU,   subghz_get_hopper_freqs(1));
+	TEST_ASSERT_EQUAL_PTR(subghz_hopper_freqs_ASIA, subghz_get_hopper_freqs(2));
+	/* 3 = Off, any other value → Off */
+	TEST_ASSERT_EQUAL_PTR(subghz_hopper_freqs_OFF,  subghz_get_hopper_freqs(3));
+	TEST_ASSERT_EQUAL_PTR(subghz_hopper_freqs_OFF,  subghz_get_hopper_freqs(255));
+}
+
+/* ================================================================
  * Main
  * ================================================================ */
 int main(void)
@@ -272,6 +327,13 @@ int main(void)
 	RUN_TEST(test_433_92mhz_present);
 	RUN_TEST(test_868_35mhz_present);
 	RUN_TEST(test_319_5mhz_position);
+
+	/* Per-region hopper table integrity */
+	RUN_TEST(test_hopper_NA_in_presets);
+	RUN_TEST(test_hopper_EU_in_presets);
+	RUN_TEST(test_hopper_ASIA_in_presets);
+	RUN_TEST(test_hopper_OFF_in_presets);
+	RUN_TEST(test_get_hopper_freqs_returns_correct_table);
 
 	return UNITY_END();
 }

@@ -23,6 +23,47 @@
 
 #include "subghz_freq_presets.h"
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Per-region hopper frequency tables
+ *
+ * MAINTENANCE: every entry here MUST also exist in subghz_freq_presets[].
+ * The unit test test_subghz_hopper_freqs_in_presets() enforces this.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* North America: NA garage/gate remotes (315/345/390 MHz), 433.92, 434.42, NA ISM 915 */
+const uint32_t subghz_hopper_freqs_NA[SUBGHZ_HOPPER_FREQ_COUNT] = {
+	315000000, 345000000, 390000000, 433920000, 434420000, 915000000
+};
+
+/* Europe: EU SRD 433 cluster + EU 868 MHz SRD band */
+const uint32_t subghz_hopper_freqs_EU[SUBGHZ_HOPPER_FREQ_COUNT] = {
+	433420000, 433920000, 434075000, 434420000, 868350000, 868950000
+};
+
+/* Asia/APAC: gate remotes (330/345 MHz), global 433, 868 */
+const uint32_t subghz_hopper_freqs_ASIA[SUBGHZ_HOPPER_FREQ_COUNT] = {
+	315000000, 330000000, 345000000, 433920000, 434420000, 868350000
+};
+
+/* Off (region disabled): wide cross-region fallback — every major global band */
+const uint32_t subghz_hopper_freqs_OFF[SUBGHZ_HOPPER_FREQ_COUNT] = {
+	315000000, 390000000, 433920000, 434420000, 868350000, 915000000
+};
+
+const uint32_t *subghz_get_hopper_freqs(uint8_t ism_region)
+{
+	switch (ism_region) {
+	case 0:  return subghz_hopper_freqs_NA;    /* SUBGHZ_ISM_BAND_REGION_NORTH_AMERICA  */
+	case 1:  return subghz_hopper_freqs_EU;    /* SUBGHZ_ISM_BAND_REGION_EUROPE_REGION_1 */
+	case 2:  return subghz_hopper_freqs_ASIA;  /* SUBGHZ_ISM_BAND_REGION_ASIA           */
+	default: return subghz_hopper_freqs_OFF;   /* Off or unknown — wide cross-region     */
+	}
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Frequency preset table
+ * ───────────────────────────────────────────────────────────────────────────── */
+
 const SubGhzFreqPreset subghz_freq_presets[SUBGHZ_FREQ_PRESET_COUNT] = {
 	/* 300 – 350 MHz */
 	{ 300000000, "300.00"  },

@@ -230,14 +230,9 @@ static const S_M1_SubGHz_Band subghz_band_order[SUBGHZ_BAND_ORDER_COUNT] = {
 
 /* Frequency preset table, dimensions, and default index are defined in
  * subghz_freq_presets.h / subghz_freq_presets.c (hardware-independent
- * pure data, directly tested by tests/test_subghz_freq_presets.c). */
+ * pure data, directly tested by tests/test_subghz_freq_presets.c).
+ * Per-region hopper tables and subghz_get_hopper_freqs() live there too. */
 #include "subghz_freq_presets.h"
-
-/* Hopper frequencies (Momentum firmware default) */
-#define SUBGHZ_HOPPER_FREQ_COUNT    6
-static const uint32_t subghz_hopper_freqs[SUBGHZ_HOPPER_FREQ_COUNT] = {
-	315000000, 390000000, 430500000, 433920000, 434420000, 868350000
-};
 
 /* Flipper-style modulation presets */
 #define SUBGHZ_MOD_PRESET_COUNT     4
@@ -534,7 +529,7 @@ uint8_t subghz_get_save_fmt_ext(void);
 static uint32_t subghz_hopper_retune_next(void)
 {
 	subghz_hopper_idx = (subghz_hopper_idx + 1) % SUBGHZ_HOPPER_FREQ_COUNT;
-	uint32_t freq = subghz_hopper_freqs[subghz_hopper_idx];
+	uint32_t freq = subghz_get_hopper_freqs(m1_device_stat.config.ism_band_region)[subghz_hopper_idx];
 
 	sub_ghz_rx_pause();
 
@@ -4909,10 +4904,11 @@ void sub_ghz_freq_scanner(void)
 const char *subghz_freq_labels[SUBGHZ_FREQ_PRESET_COUNT + 1];  /* +1 for Custom entry */
 const char *subghz_mod_labels[SUBGHZ_MOD_PRESET_COUNT];
 
-/* Hopper frequency array for scene_read.c */
-const uint32_t subghz_hopper_freqs_ext[SUBGHZ_HOPPER_FREQ_COUNT] = {
-	315000000, 390000000, 430500000, 433920000, 434420000, 868350000
-};
+/* Hopper frequency getter for scene_read.c — reads ism_band_region at runtime */
+const uint32_t *subghz_get_hopper_freqs_ext(void)
+{
+	return subghz_get_hopper_freqs(m1_device_stat.config.ism_band_region);
+}
 
 static bool subghz_labels_initialized = false;
 

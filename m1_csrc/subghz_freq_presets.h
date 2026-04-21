@@ -61,4 +61,35 @@ typedef struct {
 /** The frequency preset table (SUBGHZ_FREQ_PRESET_COUNT entries). */
 extern const SubGhzFreqPreset subghz_freq_presets[SUBGHZ_FREQ_PRESET_COUNT];
 
+/* ── Frequency hopper tables ────────────────────────────────────────────────── */
+
+/**
+ * Number of frequencies in each per-region hopper table.
+ * Do not change — dwell-time math and the UI display are calibrated around 6.
+ */
+#define SUBGHZ_HOPPER_FREQ_COUNT  6
+
+/**
+ * Per-region hopper frequency tables.
+ * All entries must be present in subghz_freq_presets[] — enforced by
+ * test_subghz_hopper_freqs_in_presets() in test_subghz_freq_presets.c.
+ */
+extern const uint32_t subghz_hopper_freqs_NA[SUBGHZ_HOPPER_FREQ_COUNT];
+extern const uint32_t subghz_hopper_freqs_EU[SUBGHZ_HOPPER_FREQ_COUNT];
+extern const uint32_t subghz_hopper_freqs_ASIA[SUBGHZ_HOPPER_FREQ_COUNT];
+extern const uint32_t subghz_hopper_freqs_OFF[SUBGHZ_HOPPER_FREQ_COUNT];
+
+/**
+ * Return the hopper frequency table for the given ISM region index:
+ *   0 → North America   (315/345/390/433.92/434.42/915 MHz)
+ *   1 → Europe          (433.42/433.92/434.07/434.42/868.35/868.95 MHz)
+ *   2 → Asia/APAC       (315/330/345/433.92/434.42/868.35 MHz)
+ *   3/other → Off       (wide cross-region fallback)
+ *
+ * This function is hardware-independent and reads no globals; the caller
+ * supplies the region index (from m1_device_stat.config.ism_band_region).
+ * Hopping reads ism_band_region at runtime via subghz_get_hopper_freqs_ext().
+ */
+const uint32_t *subghz_get_hopper_freqs(uint8_t ism_region);
+
 #endif /* SUBGHZ_FREQ_PRESETS_H */
