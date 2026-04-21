@@ -539,6 +539,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_system_dashboard.c
     ../../m1_csrc/m1_system_dashboard_helpers.c
     ../../m1_csrc/m1_storage.c
+    ../../m1_csrc/subghz_freq_presets.c
     ../../m1_csrc/m1_sub_ghz.c
     # === Generic Scene Framework ===
     ../../m1_csrc/m1_scene.c

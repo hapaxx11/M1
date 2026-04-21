@@ -161,10 +161,13 @@ add_test(NAME flipper_file COMMAND test_flipper_file)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —
 # Cham_Code, Marantec24, and all new static protocols were missed.
+# Also links subghz_freq_presets.c so the registry test can verify
+# that every protocol's band flags match the available freq presets.
 # ------------------------------------------------------------------
 add_executable(test_subghz_registry
     test_subghz_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_registry PRIVATE
@@ -177,6 +180,28 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_registry PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_registry COMMAND test_subghz_registry)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_freq_presets
+# Pure data — no HAL or RTOS dependencies; links nothing but the
+# preset table itself.  Enforces structural invariants (count,
+# sort order, range, no duplicates) and regression guards for
+# specific frequencies (319.5 MHz, 315.0 MHz, 433.92 MHz, 868.35 MHz).
+# Bug context: 319.5 MHz (Magellan/GE NA) was missing, causing
+# M1 to receive nothing when Flipper emulated Magellan .sub files.
+# ------------------------------------------------------------------
+add_executable(test_subghz_freq_presets
+    test_subghz_freq_presets.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
+)
+target_include_directories(test_subghz_freq_presets PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_freq_presets PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_freq_presets PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_freq_presets COMMAND test_subghz_freq_presets)
 
 # ------------------------------------------------------------------
 # Module under test: subghz_history (signal history ring buffer)
