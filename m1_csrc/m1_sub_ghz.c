@@ -2495,8 +2495,8 @@ void sub_ghz_frequency_reader(void)
         bool                use_915;   /* true: use 915-style radio config + frontend */
         S_M1_SubGHz_Band    frontend;  /* frontend switch position */
     } bands[] = {
-        { 300000000UL, 316000000UL,  50000UL, "300-316MHz", false, SUB_GHZ_BAND_315     },
-        { 387000000UL, 464000000UL, 200000UL, "387-464MHz", false, SUB_GHZ_BAND_433_92  },
+        { 300000000UL, 386000000UL,  50000UL, "300-386MHz", false, SUB_GHZ_BAND_315     },
+        { 387000000UL, 464000000UL,  40000UL, "387-464MHz", false, SUB_GHZ_BAND_433_92  },
         { 779000000UL, 849000000UL, 400000UL, "779-849MHz", false, SUB_GHZ_BAND_433_92  },
         { 850000000UL, 928000000UL, 400000UL, "850-928MHz", true,  SUB_GHZ_BAND_915     },
     };
