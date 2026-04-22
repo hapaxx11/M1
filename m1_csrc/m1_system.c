@@ -979,7 +979,6 @@ void startup_info_screen_display(const char *scr_text)
 {
 	char fw_ver[20];
 	char time_str[8];  /* "HH:MM" */
-	char tz_buf[8];    /* "UTC", "UTC+N", "UTC-N" */
 	uint8_t len, x0;
 
 	/* Format firmware version string */
@@ -1000,7 +999,6 @@ void startup_info_screen_display(const char *scr_text)
 		clock_apply_offset(&ct, m1_clock_tz_offset, &lt);
 		snprintf(time_str, sizeof(time_str), "%02u:%02u", lt.hour, lt.minute);
 	}
-	clock_tz_label(m1_clock_tz_offset, tz_buf, sizeof(tz_buf));
 
 	u8g2_SetPowerSave(&m1_u8g2, false);
 
@@ -1008,39 +1006,24 @@ void startup_info_screen_display(const char *scr_text)
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-	/* --- Time display (top area, immediately below status bar) ---
-	 *
-	 * Screen layout (128×64 display):
-	 *   y= 0..11  Status bar (icons left, battery right)
-	 *   y=12..20  "HH:MM" time, centered (helvB08_tr ascent=8, baseline=20)
-	 *   y=21..27  "UTC+N" TZ label, centered (NokiaSmallPlain ascent=7, baseline=28)
-	 *             — only drawn when tz_offset != 0; glyph pixels end at y=27,
-	 *               so they do not overlap the logo which starts at y=28.
-	 *   y=28..60  Logo (40×32), horizontally centered with text block
-	 *   y=43/53/63 Text lines alongside logo
+	/* Screen layout (128×64 display):
+	 *   y= 0..11  Status bar — icons left, "HH:MM" centered, battery right
+	 *             Clock: helvB08_tr ascent=8, baseline=9 → glyph y=1..9
+	 *   y=12..43  Logo (40×32), horizontally centered with text block
+	 *   y=27/37/47 Text lines alongside logo
 	 *   y=62       scr_text (status message, empty for normal idle screen)
 	 */
 
-	/* Time "HH:MM" — centered, baseline y=20 */
+	/* Time "HH:MM" — centered horizontally in the status bar, baseline y=9 */
 	u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
 	{
 		u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, time_str);
 		u8g2_DrawStr(&m1_u8g2,
 		             (u8g2_uint_t)((M1_LCD_DISPLAY_WIDTH - tw) / 2U),
-		             20, time_str);
+		             9, time_str);
 	}
 
-	/* TZ offset label — centered, baseline y=28 (only when not UTC) */
-	if (m1_clock_tz_offset != 0)
-	{
-		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-		u8g2_uint_t tzw = u8g2_GetStrWidth(&m1_u8g2, tz_buf);
-		u8g2_DrawStr(&m1_u8g2,
-		             (u8g2_uint_t)((M1_LCD_DISPLAY_WIDTH - tzw) / 2U),
-		             28, tz_buf);
-	}
-
-	/* --- Logo + text block: shifted down to y=28 and centered horizontally ---
+	/* --- Logo + text block: starts at y=12 and centered horizontally ---
 	 * Centering: measure the widest text string (two different fonts) to compute
 	 * the total block width, then derive logo_x and text_x. */
 	uint8_t logo_x, text_x;
@@ -1058,17 +1041,17 @@ void startup_info_screen_display(const char *scr_text)
 		text_x = logo_x + M1_POWERUP_LOGO_WIDTH + 3U;
 	}
 
-	/* Logo bitmap — moved down to y=28 (was M1_POWERUP_LOGO_TOP_POS_Y=15) */
-	u8g2_DrawXBMP(&m1_u8g2, logo_x, 28, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
+	/* Logo bitmap — top at y=12 (immediately below the status bar) */
+	u8g2_DrawXBMP(&m1_u8g2, logo_x, 12, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
 
-	/* "M1 Hapax" title — baseline y=43 (logo_top+15) */
+	/* "M1 Hapax" title — baseline y=27 (logo_top+15) */
 	u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
-	u8g2_DrawStr(&m1_u8g2, text_x, 43, "M1 Hapax");
+	u8g2_DrawStr(&m1_u8g2, text_x, 27, "M1 Hapax");
 
-	/* Firmware version and project tag — baselines y=53 and y=63 */
+	/* Firmware version and project tag — baselines y=37 and y=47 */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, text_x, 53, fw_ver);
-	u8g2_DrawStr(&m1_u8g2, text_x, 63, "Hapax");
+	u8g2_DrawStr(&m1_u8g2, text_x, 37, fw_ver);
+	u8g2_DrawStr(&m1_u8g2, text_x, 47, "Hapax");
 
 	/* Battery indicator in top-right corner */
 	splash_draw_battery_indicator();
