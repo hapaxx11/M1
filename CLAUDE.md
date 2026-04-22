@@ -628,6 +628,38 @@ to build.**
 - FreeRTOS headers must be included before stream_buffer.h / queue.h
 - Flipper parser API: functions are named `flipper_*_load()` / `flipper_*_save()`, return `bool`
 
+### Heap-Allocation Init Functions — Idempotency Rule
+
+> **Every `foo_init()` that only allocates heap memory and sets pointers MUST call
+> `foo_deinit()` as its very first statement.**  Without this, calling `init()` twice in
+> a row (e.g. after a missed deinit on an error path) leaks the first allocation and
+> attempts a second `malloc` on an already-fragmented heap.
+
+**The rule:**
+- `foo_init()` calls `foo_deinit()` unconditionally at entry, then proceeds with `malloc`.
+- `foo_deinit()` must be a no-op when pointers are NULL (guarded `free()` + NULL the pointer).
+  That makes the deinit-at-entry call free for the common case where nothing is allocated.
+
+**Canonical example** — `sub_ghz_ring_buffers_init()` in `m1_csrc/m1_sub_ghz.c`:
+
+```c
+static uint8_t sub_ghz_ring_buffers_init(void)
+{
+    /* Guard: release any stale buffers from a prior operation that was not
+     * cleanly deinit'd.  deinit() is a no-op when pointers are NULL. */
+    sub_ghz_ring_buffers_deinit();
+
+    /* ... malloc, initialise, return 0 on success or 1 on failure ... */
+}
+```
+
+**This pattern does NOT apply to hardware peripheral or RTOS init functions**
+(`menu_sub_ghz_init()`, `m1_esp32_init()`, `infrared_encode_sys_init()`, etc.).
+Those functions carry their own guards (status flags, HAL state checks, or strict
+caller-owned lifecycle rules) and an unconditional deinit at entry would power off
+a peripheral that is legitimately active.  See the state-management sections below
+for the correct patterns for each hardware subsystem.
+
 ### Font Inventory
 
 The M1 firmware compiles ~1987 u8g2 fonts in `Drivers/u8g2_csrc/u8g2_fonts.c`.
