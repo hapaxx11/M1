@@ -27,6 +27,7 @@
 #include "m1_system.h"
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
+#include "m1_clock_util.h"
 #include "m1_wifi_cred.h"
 #include "m1_virtual_kb.h"
 #endif
@@ -645,11 +646,15 @@ static bool wifi_do_connect(const char *ssid, const char *password)
 		wifi_display_busy("Syncing time...");
 		if ( wifi_sync_rtc() )
 		{
-			m1_time_t now;
-			char time_str[12];
-			m1_get_datetime(&now);
-			snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d UTC",
-			         now.hour, now.minute, now.second);
+			m1_time_t       utc;
+			clock_time_t    local;
+			char            time_str[20];
+			char            tz_buf[10];
+			m1_get_datetime(&utc);
+			clock_apply_offset((const clock_time_t *)&utc, m1_clock_tz_offset, &local);
+			clock_tz_label(m1_clock_tz_offset, tz_buf, sizeof(tz_buf));
+			snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d %s",
+			         local.hour, local.minute, local.second, tz_buf);
 			M1_LOG_I(M1_LOGDB_TAG, "NTP sync OK: %s\n\r", time_str);
 			wifi_display_msg("Time synced:", time_str);
 		}
