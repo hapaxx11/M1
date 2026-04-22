@@ -23,6 +23,7 @@
 
 #include "unity.h"
 #include "m1_sub_ghz.h"
+#include <stdio.h>
 
 /* Declaration from flipper_subghz.h — we include the header directly */
 #include "flipper_subghz.h"
@@ -308,6 +309,384 @@ void test_m1_native_unknown_filetype(void)
 }
 
 /* ===================================================================
+ * flipper_subghz_load() — is_m1_native flag and file parsing
+ *
+ * These tests write temporary files to /tmp and exercise the full
+ * flipper_subghz_load() path, which requires the stdio-backed ff.h stub.
+ *
+ * Bug context (fixed in this PR):
+ *   C3.12 and SiN360 .sgh NOISE files caused "Memory error" (error 5)
+ *   when Emulate was chosen in the Saved scene because they were always
+ *   routed through sub_ghz_replay_flipper_file(), which wrote a temp file
+ *   and then tried to parse it via sub_ghz_raw_samples_init().  The fix is
+ *   to set is_m1_native = true during flipper_subghz_load() and use
+ *   sub_ghz_replay_datafile() (direct path, no temp file) for these files.
+ * =================================================================== */
+
+/* Helper: write a string to a temp file */
+static void write_tmp(const char *path, const char *content)
+{
+	FILE *f = fopen(path, "w");
+	if (f) { fputs(content, f); fclose(f); }
+}
+
+void test_load_m1_native_noise_sets_flag(void)
+{
+	/* C3.12 / SiN360 style M1 native NOISE file with CRLF line endings */
+	const char *path = "/tmp/test_m1_noise.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz NOISE\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Data: 100 200 300 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_RAW, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_UINT16(4, sig.raw_count); /* 4 unsigned values loaded */
+
+	remove(path);
+}
+
+void test_load_m1_native_noise_lf_only(void)
+{
+	/* C3.12-style file with LF-only line endings (as produced on Linux).
+	 * flipper_subghz_load() must parse this correctly (the stdio ff_read_line
+	 * path handles LF-only; the sub_ghz_raw_samples_init CRLF fix handles
+	 * the streaming engine path). */
+	const char *path = "/tmp/test_m1_noise_lf.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz NOISE\n"
+	    "Version: 0.8\n"
+	    "Frequency: 315000000\n"
+	    "Modulation: OOK\n"
+	    "Data: 500 600 700 800 900\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_RAW, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(315000000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_UINT16(5, sig.raw_count);
+
+	remove(path);
+}
+
+void test_load_flipper_raw_not_m1_native(void)
+{
+	/* Flipper .sub RAW file — must NOT set is_m1_native */
+	const char *path = "/tmp/test_flipper_raw.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz RAW File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: RAW\r\n"
+	    "RAW_Data: 100 -200 300 -400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_FALSE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_RAW, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+
+	remove(path);
+}
+
+void test_load_flipper_key_packet_fields(void)
+{
+	/* Flipper Key .sub file — PACKET round-trip: key, bits, TE must survive */
+	const char *path = "/tmp/test_flipper_key.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bit: 24\r\n"
+	    "Key: 00 00 00 00 00 52 A1 2E\r\n"
+	    "TE: 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_FALSE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_PARSED, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_UINT32(24, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT32(400, sig.te);
+	TEST_ASSERT_EQUAL_UINT64(0x52A12EULL, sig.key);
+
+	remove(path);
+}
+
+void test_load_m1_native_packet_not_noise(void)
+{
+	/* M1 native PACKET file — is_m1_native true, but is NOT a NOISE file.
+	 * The dispatch in the saved scene must not use sub_ghz_replay_datafile()
+	 * for PACKET files (the key encoder path handles them). */
+	const char *path = "/tmp/test_m1_packet.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bits: 24\r\n"
+	    "Payload: 0x000000000052A12E\r\n"
+	    "BT: 400\r\n"
+	    "IT: 0\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_TRUE(sig.is_m1_native);            /* is native */
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_PARSED, sig.type); /* but NOT RAW */
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_UINT32(24, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT32(400, sig.te);
+
+	remove(path);
+}
+
+/* ===================================================================
+ * flipper_subghz_probe() — lightweight header probe
+ *
+ * Verifies that probe() extracts is_m1_native, is_noise, frequency, and
+ * modulation without loading any Data: samples.
+ * =================================================================== */
+
+void test_probe_m1_native_noise(void)
+{
+	const char *path = "/tmp/test_probe_noise.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz NOISE\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Data: 100 200 300\r\n");
+
+	flipper_subghz_probe_t probe;
+	bool ok = flipper_subghz_probe(path, &probe);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_TRUE(probe.is_m1_native);
+	TEST_ASSERT_TRUE(probe.is_noise);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, probe.frequency);
+	TEST_ASSERT_EQUAL_UINT8(MODULATION_OOK, probe.modulation);
+
+	remove(path);
+}
+
+void test_probe_flipper_raw_not_m1(void)
+{
+	const char *path = "/tmp/test_probe_flipper.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz RAW File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 868350000\r\n"
+	    "Preset: FuriHalSubGhzPreset2FSKDev238Async\r\n"
+	    "Protocol: RAW\r\n"
+	    "RAW_Data: 100 -200\r\n");
+
+	flipper_subghz_probe_t probe;
+	bool ok = flipper_subghz_probe(path, &probe);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_FALSE(probe.is_m1_native);
+	TEST_ASSERT_TRUE(probe.is_noise); /* Flipper RAW = noise */
+	TEST_ASSERT_EQUAL_UINT32(868350000UL, probe.frequency);
+	TEST_ASSERT_EQUAL_UINT8(MODULATION_FSK, probe.modulation);
+
+	remove(path);
+}
+
+void test_probe_nonexistent_file(void)
+{
+	flipper_subghz_probe_t probe;
+	bool ok = flipper_subghz_probe("/tmp/does_not_exist_xyz.sgh", &probe);
+	TEST_ASSERT_FALSE(ok);
+}
+
+/* ===================================================================
+ * flipper_subghz_emulate_path() — dispatch gate for the Emulate action
+ *
+ * This is the most important test suite in this file.  It directly
+ * asserts the contract that prevents the "Memory error" regression:
+ *
+ *   An M1 native .sgh NOISE file MUST use FLIPPER_SUBGHZ_EMULATE_DIRECT
+ *   (sub_ghz_replay_datafile) and MUST NOT use FLIPPER_SUBGHZ_EMULATE_CONVERT
+ *   (sub_ghz_replay_flipper_file).
+ *
+ * The dispatch logic lives in flipper_subghz_emulate_path(), an inline
+ * pure function in flipper_subghz.h.  Both the Saved scene and the Playlist
+ * scene call it, so a single test suite covers both callers.
+ *
+ * WHY EXTRACT THE DISPATCH FUNCTION?
+ *   The actual dispatch in m1_subghz_scene_saved.c::handle_action() cannot
+ *   be called in a host test (it requires the display, queues, and radio).
+ *   Encoding the decision as a named pure function decouples the policy
+ *   (which files bypass conversion) from the mechanism (which function to
+ *   call), making the policy testable in isolation.  This is the preferred
+ *   pattern for all routing/dispatch decisions that would otherwise be buried
+ *   inside hardware-coupled code.
+ *
+ * REGRESSION GUARD:
+ *   If anyone removes is_m1_native from flipper_subghz_signal_t, stops
+ *   setting it in flipper_subghz_load(), or changes the dispatch condition
+ *   in flipper_subghz_emulate_path(), THESE TESTS WILL FAIL — providing
+ *   immediate, deterministic feedback before any hardware is involved.
+ * =================================================================== */
+
+void test_emulate_path_sgh_noise_is_direct(void)
+{
+	/* Core regression test: an M1 native .sgh NOISE file loaded from disk
+	 * MUST produce DIRECT replay, bypassing sub_ghz_replay_flipper_file().
+	 * This is the exact condition that previously caused "Memory error". */
+	const char *path = "/tmp/test_emulate_dispatch.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz NOISE\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Data: 100 200 300 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+
+	bool is_raw = (sig.type == FLIPPER_SUBGHZ_TYPE_RAW);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_DIRECT,
+	    flipper_subghz_emulate_path(is_raw, sig.is_m1_native));
+
+	remove(path);
+}
+
+void test_emulate_path_flipper_sub_raw_is_convert(void)
+{
+	/* A Flipper .sub RAW file must use the CONVERT path — it needs sign-strip
+	 * conversion to remove negative values before the streaming engine can
+	 * process it.  Bypassing conversion for these files would produce garbage. */
+	const char *path = "/tmp/test_emulate_dispatch.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz RAW File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: RAW\r\n"
+	    "RAW_Data: 100 -200 300 -400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+
+	bool is_raw = (sig.type == FLIPPER_SUBGHZ_TYPE_RAW);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_CONVERT,
+	    flipper_subghz_emulate_path(is_raw, sig.is_m1_native));
+
+	remove(path);
+}
+
+void test_emulate_path_native_packet_is_convert(void)
+{
+	/* An M1 native PACKET file — is_m1_native is true, but the type is
+	 * PARSED (not RAW), so it must use the CONVERT path which invokes the
+	 * key encoder.  Direct replay only applies to NOISE recordings. */
+	const char *path = "/tmp/test_emulate_dispatch_packet.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bits: 24\r\n"
+	    "Payload: 0x000000000052A12E\r\n"
+	    "BT: 400\r\n"
+	    "IT: 0\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+
+	bool is_raw = (sig.type == FLIPPER_SUBGHZ_TYPE_RAW);
+	TEST_ASSERT_FALSE_MESSAGE(is_raw, "PACKET file must not be typed as RAW");
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_CONVERT,
+	    flipper_subghz_emulate_path(is_raw, sig.is_m1_native));
+
+	remove(path);
+}
+
+void test_emulate_path_flipper_key_is_convert(void)
+{
+	/* Flipper Key .sub file → always CONVERT regardless of modulation */
+	const char *path = "/tmp/test_emulate_dispatch_key.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bit: 24\r\n"
+	    "Key: 00 00 00 00 00 52 A1 2E\r\n"
+	    "TE: 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+
+	bool is_raw = (sig.type == FLIPPER_SUBGHZ_TYPE_RAW);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_CONVERT,
+	    flipper_subghz_emulate_path(is_raw, sig.is_m1_native));
+
+	remove(path);
+}
+
+/* Pure-logic variants — no file I/O, test the dispatch function directly.
+ * These verify each branch of flipper_subghz_emulate_path() without
+ * depending on the file loading stack at all. */
+
+void test_emulate_path_direct_when_raw_and_native(void)
+{
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_DIRECT,
+	    flipper_subghz_emulate_path(true, true));
+}
+
+void test_emulate_path_convert_when_raw_not_native(void)
+{
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_CONVERT,
+	    flipper_subghz_emulate_path(true, false));
+}
+
+void test_emulate_path_convert_when_not_raw_native(void)
+{
+	/* PACKET + native → CONVERT (key encoder handles it) */
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_CONVERT,
+	    flipper_subghz_emulate_path(false, true));
+}
+
+void test_emulate_path_convert_when_not_raw_not_native(void)
+{
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_CONVERT,
+	    flipper_subghz_emulate_path(false, false));
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -356,6 +735,30 @@ int main(void)
 	RUN_TEST(test_m1_native_null_version);
 	RUN_TEST(test_m1_native_both_null);
 	RUN_TEST(test_m1_native_unknown_filetype);
+
+	/* flipper_subghz_load() with actual files — is_m1_native flag and CRLF/LF */
+	RUN_TEST(test_load_m1_native_noise_sets_flag);
+	RUN_TEST(test_load_m1_native_noise_lf_only);
+	RUN_TEST(test_load_flipper_raw_not_m1_native);
+	RUN_TEST(test_load_flipper_key_packet_fields);
+	RUN_TEST(test_load_m1_native_packet_not_noise);
+
+	/* flipper_subghz_probe() — lightweight header probe */
+	RUN_TEST(test_probe_m1_native_noise);
+	RUN_TEST(test_probe_flipper_raw_not_m1);
+	RUN_TEST(test_probe_nonexistent_file);
+
+	/* flipper_subghz_emulate_path() — dispatch gate (no conversion for native NOISE)
+	 * File-loading variants verify the end-to-end chain from disk to dispatch. */
+	RUN_TEST(test_emulate_path_sgh_noise_is_direct);
+	RUN_TEST(test_emulate_path_flipper_sub_raw_is_convert);
+	RUN_TEST(test_emulate_path_native_packet_is_convert);
+	RUN_TEST(test_emulate_path_flipper_key_is_convert);
+	/* Pure-logic variants — no file I/O */
+	RUN_TEST(test_emulate_path_direct_when_raw_and_native);
+	RUN_TEST(test_emulate_path_convert_when_raw_not_native);
+	RUN_TEST(test_emulate_path_convert_when_not_raw_native);
+	RUN_TEST(test_emulate_path_convert_when_not_raw_not_native);
 
 	return UNITY_END();
 }

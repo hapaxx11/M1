@@ -541,10 +541,11 @@ static void draw_preflight_failed(u8g2_t *u8g2)
     u8g2_DrawHLine(u8g2, 0, LIST_HEADER_HEIGHT, 128);
 
     u8g2_SetFont(u8g2, u8g2_font_4x6_tr);
-    u8g2_DrawStr(u8g2, 4, 22, "Missing AT Cmds: update ESP32");
+    u8g2_DrawStr(u8g2, 4, 22, "Need Deauth ESP32 AT firmware.");
+    u8g2_DrawStr(u8g2, 4, 30, "Settings>ESP32 Update>Download");
 
     int i = 0;
-    int start_y = 32;
+    int start_y = 40;
     for (int c = 0; c < PREFLIGHT_AT_CHECKS; c++) {
         if (tests & 1) {
             u8g2_DrawStr(u8g2, 4, start_y + (i * m1_menu_item_h()), PREFLIGHT_AT_COMMANDS[c]);
@@ -572,7 +573,8 @@ static void deauth_start(uint8_t channel, const char *bssid, const char *mac)
     resp_buf[0] = '\0';
     spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 3);
 
-    s_deauth_active = true;
+    if (strstr(resp_buf, "OK\r\n"))
+        s_deauth_active = true;
 }
 
 static void deauth_stop(void)
