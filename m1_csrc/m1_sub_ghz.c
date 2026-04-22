@@ -3294,12 +3294,16 @@ static uint8_t sub_ghz_raw_samples_init(void)
 	uint8_t i, error, key_len, *token;
 	uint8_t *psdcard_dat_buffer = NULL;
 
+	/* Guard: release any stale buffers and attempt to clean up file state
+	 * from a prior call that was not cleanly deinit'd. */
+	sub_ghz_raw_samples_deinit(false);
+
 	do
 	{
 		error = m1_sdm_get_logging_error();
 		if ( error )
 			break;
-		sdcard_dat_buffer_base = m1_malloc(M1_SDM_MIN_BUFFER_SIZE);
+		sdcard_dat_buffer_base = malloc(M1_SDM_MIN_BUFFER_SIZE);
 		if (sdcard_dat_buffer_base==NULL)
 		{
 			error = 1;

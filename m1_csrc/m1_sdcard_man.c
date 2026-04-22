@@ -299,6 +299,10 @@ void HAL_PWR_PVDCallback(void)
 /*============================================================================*/
 static uint8_t m1_sdm_memory_init(void)
 {
+	/* Guard: release any stale buffer from a prior call that was not cleanly
+	 * deinit'd.  deinit() is a no-op when the pointer is NULL. */
+	m1_sdm_memory_deinit();
+
 	dev_sd_hdl.sdWriteBufferSize = M1_SDM_MIN_BUFFER_SIZE;
 
 	dev_sd_hdl.buff_info.sd_write_buffer_idx = 0;
