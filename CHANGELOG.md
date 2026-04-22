@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.148] - 2026-04-22
+
+### Changed
+
+- **Home screen: clock moved to status bar, UTC offset label removed** — "HH:MM" local time is now drawn centered in the top status bar row (between the status icons and battery indicator), matching the user's configured timezone offset. The UTC offset label that previously appeared below the time has been removed. The logo and version text block shift up to fill the freed space.
+- **WiFi: automatic NTP time sync on connect** — RTC is now synchronized via NTP immediately after any successful WiFi connection (from Scan+Connect or Saved Networks). The connection screen shows "Syncing time…" while the sync runs, then "Time synced" or "Time sync failed" before returning to the menu.
 ## [0.9.0.147] - 2026-04-22
 
 ### Added
