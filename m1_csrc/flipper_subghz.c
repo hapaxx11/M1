@@ -494,8 +494,7 @@ bool flipper_subghz_probe(const char *path, flipper_subghz_probe_t *out)
 				out->modulation = MODULATION_OOK;
 			done_mod = true;
 		}
-		else if (subghz_strcasecmp(key, "Protocol") == 0 ||
-		         subghz_strcasecmp(key, "Key") == 0 ||
+		else if (subghz_strcasecmp(key, "Key") == 0 ||
 		         subghz_strcasecmp(key, "Data") == 0 ||
 		         subghz_strcasecmp(key, "RAW_Data") == 0)
 		{

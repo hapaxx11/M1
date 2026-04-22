@@ -1583,6 +1583,7 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 	}
 	if (sub_ghz_raw_samples_init())
 	{
+		sub_ghz_raw_samples_deinit(false);
 		sub_ghz_ring_buffers_deinit();
 		if (unlink_path) f_unlink(unlink_path);
 		return 5;
@@ -3023,6 +3024,7 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 		return 0;
 	} // while ( subghz_front_buffer )
 
+	sub_ghz_ring_buffers_deinit();
 	return 1;
 } // static uint8_t sub_ghz_ring_buffers_init(void)
 

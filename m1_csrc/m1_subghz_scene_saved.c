@@ -31,8 +31,6 @@
 #include "subghz_raw_decoder.h"
 #include "m1_virtual_kb.h"
 
-extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
-extern uint8_t sub_ghz_replay_datafile(const char *sgh_path, uint32_t frequency, uint8_t modulation);
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
 extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
