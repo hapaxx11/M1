@@ -94,14 +94,12 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * raw_filepath short enough that "0:" + path fits in the derived buffers. */
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
 
-/* RSSI threshold used in the Start state to decide whether to advance the
- * RSSI history cursor.  Below this level the cursor freezes (noise floor
- * — no bars drawn, no scrolling), above it the cursor advances and bars
- * appear.  Intentionally matches SUBGHZ_RAW_THRESHOLD_MIN in m1_sub_ghz.c
- * so the first visible pixel and the first cursor advance happen at the
- * same RSSI level.  Changing this value shifts the signal-detection
- * sensitivity of the pre-record display. */
-#define SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM  (-90.0f)
+/* RSSI threshold for cursor advancement in the Start state.
+ * Matches SUBGHZ_RAW_DETECT_THRESHOLD_DBM (m1_sub_ghz.h) — the same level
+ * at which the horizontal dashed line is drawn in the spectrogram.  Using the
+ * same value means the cursor starts moving at exactly the moment the signal
+ * crosses the visible threshold line. */
+#define SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM  SUBGHZ_RAW_DETECT_THRESHOLD_DBM
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /*============================================================================*/

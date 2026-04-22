@@ -1114,6 +1114,24 @@ static void subghz_raw_rssi_draw(void)
 		u8g2_DrawHLine(&m1_u8g2, cursor_x - 2, SUBGHZ_RAW_TOP_SCALE - 2, 5);
 		u8g2_DrawHLine(&m1_u8g2, cursor_x - 1, SUBGHZ_RAW_TOP_SCALE - 1, 3);
 	}
+
+	/* Dashed horizontal threshold line — spans the full waveform width.
+	 * Drawn last so it is always visible as a reference even when bars reach
+	 * or exceed this level.  The Y position maps SUBGHZ_RAW_DETECT_THRESHOLD_DBM
+	 * through the same scale used for bar heights:
+	 *   thresh_h = (threshold_dbm - min_dbm) / divider
+	 *   thresh_y  = bottom - thresh_h
+	 * At -73 dBm with min=-90 and divider=2.7: thresh_h≈6 px, thresh_y=41. */
+	{
+		uint8_t thresh_h = (uint8_t)((SUBGHZ_RAW_DETECT_THRESHOLD_DBM - SUBGHZ_RAW_THRESHOLD_MIN)
+		                             / SUBGHZ_RAW_RSSI_DIVIDER);
+		int thresh_y = bottom - (int)thresh_h;
+		if (thresh_y > SUBGHZ_RAW_TOP_SCALE && thresh_y < SUBGHZ_RAW_BOTTOM_Y)
+		{
+			for (int x = 1; x < SUBGHZ_RAW_END_SCALE; x += 4)
+				u8g2_DrawHLine(&m1_u8g2, x, thresh_y, 2);
+		}
+	}
 }
 
 
