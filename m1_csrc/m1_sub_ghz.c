@@ -2986,6 +2986,13 @@ static void sub_ghz_rx_deinit(void)
 /*============================================================================*/
 static uint8_t sub_ghz_ring_buffers_init(void)
 {
+	/* Guard: release any stale buffers from a prior operation that was not
+	 * cleanly deinit'd.  Without this, calling init() twice in a row leaks
+	 * the first allocation and attempts a second malloc on a fragmented heap,
+	 * which is the mechanism behind the heap-exhaustion failure path described
+	 * in the original bug report.  deinit() is a no-op when pointers are NULL. */
+	sub_ghz_ring_buffers_deinit();
+
 	subghz_front_buffer_size = SUBGHZ_RAW_DATA_SAMPLES_MAX;
 
 	while ( true )
