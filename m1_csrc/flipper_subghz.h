@@ -34,7 +34,29 @@ typedef struct {
 	/* For raw data */
 	int16_t  raw_data[FLIPPER_SUBGHZ_RAW_MAX_SAMPLES];
 	uint16_t raw_count;
+	/* Set to true when the file was loaded from an M1 native .sgh format
+	 * (not a Flipper .sub file).  Used to select the direct replay path
+	 * which feeds the original file into the streaming engine without any
+	 * temp-file conversion. */
+	bool     is_m1_native;
 } flipper_subghz_signal_t;
+
+/*
+ * Lightweight header probe — reads only the first few header lines of a
+ * .sgh/.sub file to determine format and extract frequency/modulation without
+ * loading any raw sample data.  Used by the playlist scene to dispatch each
+ * playlist entry without the 16 KB overhead of a full flipper_subghz_signal_t.
+ */
+typedef struct {
+	bool    is_m1_native;   /* true = M1 native .sgh format */
+	bool    is_noise;       /* true = RAW/NOISE recording, false = PACKET/Key */
+	uint32_t frequency;     /* Hz, from header */
+	uint8_t modulation;     /* MODULATION_OOK / MODULATION_FSK / MODULATION_ASK */
+} flipper_subghz_probe_t;
+
+/* Probe just the header of a .sgh/.sub file (no Data: lines loaded).
+ * Returns false if the file cannot be opened or frequency is missing. */
+bool flipper_subghz_probe(const char *path, flipper_subghz_probe_t *out);
 
 /* Load a .sub file (Flipper format) or M1 native .sgh file */
 bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out);
@@ -70,5 +92,46 @@ uint8_t flipper_subghz_freq_to_band(uint32_t freq_hz);
  * Exposed for unit testing without file I/O dependencies. */
 bool flipper_subghz_is_m1_native_header(const char *filetype_val,
                                          const char *version_val);
+
+/*
+ * Emulate replay path selector — pure dispatch logic.
+ *
+ * Encoding the decision as a named function (rather than an inline
+ * comparison) makes the dispatch gate testable in isolation, documents
+ * the contract precisely, and prevents silent regressions: if anyone
+ * changes the dispatch rule the corresponding unit test will fail.
+ *
+ * DIRECT   → sub_ghz_replay_datafile()    — feeds the original .sgh file
+ *             straight into the streaming engine; no conversion, no temp file.
+ *             Used for M1 native NOISE recordings from Hapax, C3.12, SiN360.
+ *
+ * CONVERT  → sub_ghz_replay_flipper_file() — converts to temp .sgh before
+ *             streaming.  Used for Flipper .sub RAW files (need sign-strip)
+ *             and all PACKET/key files (need the key encoder path).
+ */
+typedef enum {
+	FLIPPER_SUBGHZ_EMULATE_DIRECT,  /* sub_ghz_replay_datafile()      */
+	FLIPPER_SUBGHZ_EMULATE_CONVERT, /* sub_ghz_replay_flipper_file()  */
+} flipper_subghz_emulate_path_t;
+
+/**
+ * @brief  Choose the replay path for a loaded signal.
+ *
+ * @param  is_raw       true when the loaded file is a RAW/NOISE recording
+ *                      (FLIPPER_SUBGHZ_TYPE_RAW), false for PACKET/key files.
+ * @param  is_m1_native true when flipper_subghz_load() set is_m1_native
+ *                      (M1 native .sgh format), false for Flipper .sub files.
+ * @return DIRECT when the file can stream without conversion; CONVERT otherwise.
+ */
+static inline flipper_subghz_emulate_path_t
+flipper_subghz_emulate_path(bool is_raw, bool is_m1_native)
+{
+	/* Only M1 native NOISE files skip conversion.
+	 * PACKET files (even native) always need the key encoder path.
+	 * Flipper .sub RAW files always need the sign-strip conversion. */
+	return (is_raw && is_m1_native)
+	       ? FLIPPER_SUBGHZ_EMULATE_DIRECT
+	       : FLIPPER_SUBGHZ_EMULATE_CONVERT;
+}
 
 #endif /* FLIPPER_SUBGHZ_H_ */

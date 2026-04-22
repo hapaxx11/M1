@@ -154,6 +154,21 @@ void sub_ghz_freq_scanner(void);
 void sub_ghz_add_manually(void);
 uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 
+/**
+ * @brief  Replay an M1 native .sgh NOISE file directly without conversion.
+ *
+ * Bypasses the temp-file conversion path used by sub_ghz_replay_flipper_file()
+ * and feeds the original .sgh file straight into the streaming engine.
+ * Use this whenever flipper_subghz_signal_t::is_m1_native is true and the
+ * type is FLIPPER_SUBGHZ_TYPE_RAW.
+ *
+ * @param  sgh_path   Path to the .sgh NOISE file (e.g. "/SUBGHZ/foo.sgh")
+ * @param  frequency  Carrier frequency in Hz (from the loaded signal metadata)
+ * @param  modulation MODULATION_OOK / MODULATION_FSK / MODULATION_ASK
+ * @retval 0 = success, non-zero = error code
+ */
+uint8_t sub_ghz_replay_datafile(const char *sgh_path, uint32_t frequency, uint8_t modulation);
+
 /* Scene-based UI entry point (new Flipper-inspired architecture) */
 void sub_ghz_scene_entry(void);
 
