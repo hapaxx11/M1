@@ -64,23 +64,17 @@ static void scene_on_enter(SubGhzApp *app)
     const char *ext = (fmt == 1) ? ".sgh" : ".sub";
     snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s%s", new_name, ext);
 
-    flipper_subghz_signal_t sub_sig;
-    memset(&sub_sig, 0, sizeof(sub_sig));
-    sub_sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
-    sub_sig.frequency = e->frequency;
-    sub_sig.bit_count = e->info.bit_len;
-    sub_sig.key       = e->info.key;
-    sub_sig.te        = e->info.te;
-    strncpy(sub_sig.preset, "FuriHalSubGhzPresetOok650Async",
-            FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
-    strncpy(sub_sig.protocol, protocol_text[e->info.protocol],
-            FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
-
     bool saved;
     if (fmt == 1)
-        saved = flipper_subghz_save_m1native(app->file_path, &sub_sig);
+        saved = flipper_subghz_save_m1native_key(app->file_path,
+                    e->frequency, "FuriHalSubGhzPresetOok650Async",
+                    protocol_text[e->info.protocol],
+                    e->info.bit_len, e->info.key, e->info.te);
     else
-        saved = flipper_subghz_save(app->file_path, &sub_sig);
+        saved = flipper_subghz_save_key(app->file_path,
+                    e->frequency, "FuriHalSubGhzPresetOok650Async",
+                    protocol_text[e->info.protocol],
+                    e->info.bit_len, e->info.key, e->info.te);
 
     if (saved)
     {

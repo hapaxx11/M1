@@ -45,6 +45,20 @@ bool flipper_subghz_save(const char *path, const flipper_subghz_signal_t *sig);
 /* Save an M1 native .sgh PACKET file */
 bool flipper_subghz_save_m1native(const char *path, const flipper_subghz_signal_t *sig);
 
+/*
+ * Lightweight key-only save helpers — write a parsed (decoded) signal directly
+ * from its individual fields without requiring a flipper_subghz_signal_t on the
+ * caller's stack.  Use these in any save path that deals with key/protocol
+ * signals (never RAW); doing so avoids a ~16 KB stack or BSS allocation.
+ */
+bool flipper_subghz_save_key(const char *path, uint32_t frequency,
+                              const char *preset, const char *protocol,
+                              uint32_t bit_count, uint64_t key, uint32_t te);
+
+bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
+                                       const char *preset, const char *protocol,
+                                       uint32_t bit_count, uint64_t key, uint32_t te);
+
 /* Map Flipper preset name to M1 modulation type */
 uint8_t flipper_subghz_preset_to_modulation(const char *preset);
 

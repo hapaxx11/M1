@@ -323,25 +323,10 @@ static bool bw_generate_and_save(void)
     snprintf(bw_filepath, sizeof(bw_filepath),
              "0:/SUBGHZ/%s.sub", bw_params.file_base);
 
-    /* Build signal struct and save */
-    flipper_subghz_signal_t sig;
-    memset(&sig, 0, sizeof(sig));
-
-    sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
-    sig.frequency = bw_params.freq_hz;
-    sig.bit_count = bw_params.bit_count;
-    sig.key       = bw_params.key;
-    sig.te        = (uint32_t)bw_params.te;
-
-    strncpy(sig.preset, "FuriHalSubGhzPresetOok650Async",
-            sizeof(sig.preset) - 1);
-    sig.preset[sizeof(sig.preset) - 1] = '\0';
-
-    strncpy(sig.protocol, bw_params.proto_name,
-            sizeof(sig.protocol) - 1);
-    sig.protocol[sizeof(sig.protocol) - 1] = '\0';
-
-    return flipper_subghz_save(bw_filepath, &sig);
+    return flipper_subghz_save_key(bw_filepath,
+               bw_params.freq_hz, "FuriHalSubGhzPresetOok650Async",
+               bw_params.proto_name,
+               bw_params.bit_count, bw_params.key, (uint32_t)bw_params.te);
 }
 
 /** Fire TX of the generated file.  Returns true on success. */

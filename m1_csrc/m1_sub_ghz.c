@@ -1338,7 +1338,6 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 /*============================================================================*/
 static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 {
-	flipper_subghz_signal_t sub_sig;
 	char sub_path[64];
 	char default_name[32];
 	char new_name[32];
@@ -1359,21 +1358,15 @@ static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 	const char *ext = (fmt == 1) ? ".sgh" : ".sub";
 	snprintf(sub_path, sizeof(sub_path), "/SUBGHZ/%s%s", new_name, ext);
 
-	/* Populate the signal structure used for saving either .sub or M1-native .sgh output */
-	memset(&sub_sig, 0, sizeof(sub_sig));
-	sub_sig.type      = FLIPPER_SUBGHZ_TYPE_PARSED;
-	sub_sig.frequency = entry->frequency;
-	sub_sig.bit_count = entry->info.bit_len;
-	sub_sig.key       = entry->info.key;
-	sub_sig.te        = entry->info.te;
-
-	strncpy(sub_sig.preset, "FuriHalSubGhzPresetOok650Async",
-	        FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
-	strncpy(sub_sig.protocol, protocol_text[entry->info.protocol],
-	        FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
-
-	bool saved = (fmt == 1) ? flipper_subghz_save_m1native(sub_path, &sub_sig)
-	                        : flipper_subghz_save(sub_path, &sub_sig);
+	bool saved = (fmt == 1)
+	    ? flipper_subghz_save_m1native_key(sub_path,
+	          entry->frequency, "FuriHalSubGhzPresetOok650Async",
+	          protocol_text[entry->info.protocol],
+	          entry->info.bit_len, entry->info.key, entry->info.te)
+	    : flipper_subghz_save_key(sub_path,
+	          entry->frequency, "FuriHalSubGhzPresetOok650Async",
+	          protocol_text[entry->info.protocol],
+	          entry->info.bit_len, entry->info.key, entry->info.te);
 	if (saved)
 	{
 		m1_message_box(&m1_u8g2, "Signal saved:", sub_path + 8, "", "BACK to continue");
@@ -2256,24 +2249,16 @@ static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val)
 	const uint16_t te = subghz_add_manually_list[proto_idx].te;
 	const uint8_t ratio = subghz_add_manually_list[proto_idx].ratio;
 
-	/* Build a .sub KEY file and use existing replay engine */
-	flipper_subghz_signal_t sig;
-	memset(&sig, 0, sizeof(sig));
-	sig.type = FLIPPER_SUBGHZ_TYPE_PARSED;
-	sig.frequency = freq_hz;
-	strncpy(sig.preset, "FuriHalSubGhzPresetOok650Async", FLIPPER_SUBGHZ_PRESET_MAX_LEN - 1);
-
-	/* Protocol name from label (before space) */
-	strncpy(sig.protocol, subghz_add_manually_list[proto_idx].label, FLIPPER_SUBGHZ_PROTO_MAX_LEN - 1);
-	char *sp = strchr(sig.protocol, ' ');
+	/* Build protocol name: strip suffix after first space (e.g. "Princeton 24" → "Princeton") */
+	char proto_name[FLIPPER_SUBGHZ_PROTO_MAX_LEN];
+	strncpy(proto_name, subghz_add_manually_list[proto_idx].label, sizeof(proto_name) - 1);
+	proto_name[sizeof(proto_name) - 1] = '\0';
+	char *sp = strchr(proto_name, ' ');
 	if (sp) *sp = '\0';
 
-	sig.bit_count = bits;
-	sig.key = key_val;
-	sig.te = te;
-
 	char tmp_path[48] = "/SUBGHZ/_addman_tmp.sub";
-	flipper_subghz_save(tmp_path, &sig);
+	flipper_subghz_save_key(tmp_path, freq_hz,
+	    "FuriHalSubGhzPresetOok650Async", proto_name, bits, key_val, te);
 	sub_ghz_replay_flipper_file(tmp_path);
 	f_unlink(tmp_path);
 }
