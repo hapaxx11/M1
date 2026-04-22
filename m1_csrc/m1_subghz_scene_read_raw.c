@@ -79,6 +79,8 @@ extern void subghz_raw_rssi_draw_ext(void);
 extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
 extern void subghz_raw_draw_frame_ext(void);
+extern void subghz_raw_draw_sin_ext(void);
+extern void subghz_raw_sin_advance_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
 extern uint8_t  sub_ghz_raw_recording_init_ext(void);
@@ -445,21 +447,34 @@ static void draw(SubGhzApp *app)
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    /* Live RSSI refresh during recording only.
+    /* Live RSSI refresh during recording.
      * trace=false: the cursor position does NOT advance — the cursor only
      * moves right when actual ring-buffer data arrives (SubGhzEventRxData
-     * with trace=true).  Start state is completely static (empty frame). */
+     * with trace=true). */
     if (app->raw_state == SubGhzReadRawStateRecording)
     {
         app->rssi = subghz_read_rssi_ext();
         subghz_raw_rssi_push_ext((float)app->rssi, false);
     }
 
-    /* Draw RSSI history spectrogram for Recording and Idle states.
-     * Start state: buffer is empty after reset so draw shows only the
-     * scale frame — no bars, no animation. */
-    if (app->raw_state != SubGhzReadRawStateStart)
-        subghz_raw_rssi_draw_ext();
+    /* Waveform content per state:
+     *   Start:     Sine-wave animation — visual "listening" feedback.
+     *              Advances once per 200 ms draw tick (driven by rx_active
+     *              timeout in the scene event loop).
+     *   Recording: RSSI spectrogram scrolling left as captured edges arrive.
+     *   Idle:      Frozen spectrogram of the captured data. */
+    switch (app->raw_state)
+    {
+        case SubGhzReadRawStateStart:
+            subghz_raw_sin_advance_ext();
+            subghz_raw_draw_sin_ext();
+            break;
+        case SubGhzReadRawStateRecording:
+        case SubGhzReadRawStateIdle:
+        default:
+            subghz_raw_rssi_draw_ext();
+            break;
+    }
 
     /* Filename display centered in the waveform area when capture exists */
     if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')

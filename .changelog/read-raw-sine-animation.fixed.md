@@ -1,0 +1,1 @@
+**Sub-GHz Read Raw: Start state now shows animated sine wave and gets 200 ms periodic refresh** — before recording begins the scene was completely static (no animation, no periodic redraw), making it appear broken. The radio is now confirmed to be passively listening via a scrolling sine-wave animation that advances every 200 ms, matching Flipper/Momentum Read Raw behaviour.
