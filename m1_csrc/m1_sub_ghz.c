@@ -3304,7 +3304,7 @@ static uint8_t sub_ghz_raw_samples_init(void)
 		error = m1_sdm_get_logging_error();
 		if ( error )
 			break;
-		sdcard_dat_buffer_base = m1_malloc(M1_SDM_MIN_BUFFER_SIZE);
+		sdcard_dat_buffer_base = malloc(M1_SDM_MIN_BUFFER_SIZE);
 		if (sdcard_dat_buffer_base==NULL)
 		{
 			error = 1;
