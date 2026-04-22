@@ -141,7 +141,7 @@ static uint8_t s_builder_n_slots;
 
 static void dashboard_screen(void);
 static void browse_directory(const char *path);
-static void ir_browse_with_fb(const char *start_dir, uint16_t start_level);
+static void ir_browse_with_fb(const char *start_dir, uint8_t start_level);
 static void show_commands(const char *ir_file_path);
 static bool ir_file_action_menu(const char *ir_file_path);
 static void transmit_command(const ir_universal_cmd_t *cmd);
@@ -258,19 +258,22 @@ void ir_universal_run_learned(void)
  * Pressing BACK at any depth exits the browser entirely.
  */
 /*============================================================================*/
-static void ir_browse_with_fb(const char *start_dir, uint16_t start_level)
+static void ir_browse_with_fb(const char *start_dir, uint8_t start_level)
 {
 	S_M1_Buttons_Status this_button_status;
 	S_M1_Main_Q_t q_item;
 	S_M1_file_browser_hdl *fb;
 	S_M1_file_info *f_info;
 	BaseType_t ret;
-	uint16_t i;
+	uint8_t i;
 	char filepath[IR_UNIVERSAL_PATH_MAX_LEN];
 
 	/* Initialise file browser and point it at start_dir.
 	 * m1_fb_set_dir() creates the directory if it does not exist. */
 	fb = m1_fb_init(&m1_u8g2);
+	if (!fb)
+		return;
+
 	m1_fb_set_dir(start_dir);
 
 	/* Set dir_level so ".." navigates upward from start_dir.
@@ -278,9 +281,9 @@ static void ir_browse_with_fb(const char *start_dir, uint16_t start_level)
 	fb->dir_level = start_level;
 	{
 		uint16_t *tmp_listing = (uint16_t *)realloc(
-			fb->listing_index_buffer, (start_level + 1) * sizeof(uint16_t));
+			fb->listing_index_buffer, ((uint16_t)start_level + 1) * sizeof(uint16_t));
 		uint16_t *tmp_row = (uint16_t *)realloc(
-			fb->row_index_buffer, (start_level + 1) * sizeof(uint16_t));
+			fb->row_index_buffer, ((uint16_t)start_level + 1) * sizeof(uint16_t));
 		if (!tmp_listing || !tmp_row)
 		{
 			/* Heap exhausted — bail out cleanly */
@@ -303,7 +306,13 @@ static void ir_browse_with_fb(const char *start_dir, uint16_t start_level)
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	m1_u8g2_nextpage();
-	m1_fb_display(NULL);
+	f_info = m1_fb_display(NULL);
+	if (f_info->status != FB_OK)
+	{
+		m1_fb_deinit();
+		m1_message_box(&m1_u8g2, "Infrared", "SD card not", "available", " OK ");
+		return;
+	}
 
 	while (1)
 	{
@@ -339,8 +348,15 @@ static void ir_browse_with_fb(const char *start_dir, uint16_t start_level)
 				add_to_recent(filepath);
 				show_commands(filepath);
 			}
-			/* Redisplay the browser at the same position after returning */
-			m1_fb_display(NULL);
+			/* Redisplay the browser at the same position after returning.
+			 * If the SD card is no longer available, bail out cleanly. */
+			f_info = m1_fb_display(NULL);
+			if (f_info->status != FB_OK)
+			{
+				m1_fb_deinit();
+				m1_message_box(&m1_u8g2, "Infrared", "SD card not", "available", " OK ");
+				return;
+			}
 		}
 	}
 
