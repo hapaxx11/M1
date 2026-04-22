@@ -31,7 +31,6 @@
 #include "subghz_raw_decoder.h"
 #include "m1_virtual_kb.h"
 
-extern uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
 extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
@@ -290,7 +289,29 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_EMULATE:
         {
-            uint8_t ret = sub_ghz_replay_flipper_file(saved_filepath);
+            uint8_t ret;
+
+            /* M1 native NOISE files (.sgh) are already in the streaming format
+             * expected by the raw replay engine.  Bypass the conversion/temp-file
+             * path and feed the original file directly.  This fixes "Memory error"
+             * failures when emulating C3.12/SiN360-produced .sgh recordings.
+             *
+             * The dispatch logic is encapsulated in flipper_subghz_emulate_path()
+             * so that it can be verified in isolation by host-side unit tests. */
+            if (flipper_subghz_emulate_path(is_raw_file, saved_signal.is_m1_native)
+                    == FLIPPER_SUBGHZ_EMULATE_DIRECT)
+            {
+                uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
+                if (mod == MODULATION_UNKNOWN)
+                    mod = MODULATION_OOK;
+                ret = sub_ghz_replay_datafile(saved_filepath,
+                                              saved_signal.frequency, mod);
+            }
+            else
+            {
+                ret = sub_ghz_replay_flipper_file(saved_filepath);
+            }
+
             if (ret == 0)
             {
                 /* Restore radio to known state after replay (the replay
