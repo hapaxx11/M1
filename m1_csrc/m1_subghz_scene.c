@@ -238,6 +238,13 @@ void subghz_scene_app_run(void)
     subghz_scene_draw(&app);
     app.need_redraw = false;
 
+    /* Time-based hopper tick: tracks wall-clock time so the hopper advances
+     * every 200 ms even when the queue is saturated with Q_EVENT_SUBGHZ_RX
+     * noise pulses.  At 315/433 MHz the RF noise floor generates thousands of
+     * edges per second, keeping xQueueReceive() returning pdTRUE continuously
+     * and preventing the queue-timeout path from ever firing. */
+    uint32_t last_hop_tick_ms = HAL_GetTick();
+
     /* Main event loop */
     while (app.running)
     {
@@ -258,9 +265,6 @@ void subghz_scene_app_run(void)
 
         if (ret != pdTRUE)
         {
-            /* Timeout — hopper tick */
-            if (app.hopper_active)
-                subghz_scene_send_event(&app, SubGhzEventHopperTick);
             /* Periodic display refresh during active RX (RSSI update) */
             if (rx_active)
                 app.need_redraw = true;
@@ -337,6 +341,25 @@ void subghz_scene_app_run(void)
 
             if (evt != SubGhzEventNone)
                 subghz_scene_send_event(&app, evt);
+        }
+
+        /* Time-based hopper tick: fire every 200 ms of real wall-clock time.
+         * This runs after every queue receive (or timeout), so the hopper
+         * advances correctly even when the queue is saturated with noise. */
+        if (app.hopper_active)
+        {
+            uint32_t now = HAL_GetTick();
+            if ((now - last_hop_tick_ms) >= 200U)
+            {
+                last_hop_tick_ms = now;
+                subghz_scene_send_event(&app, SubGhzEventHopperTick);
+            }
+        }
+        else
+        {
+            /* Reset timer while hopper is inactive so the first hop after
+             * re-enabling always waits a full 200 ms dwell period. */
+            last_hop_tick_ms = HAL_GetTick();
         }
 
         /* Redraw if needed */
