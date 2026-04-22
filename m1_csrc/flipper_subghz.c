@@ -581,6 +581,146 @@ bool flipper_subghz_save_m1native(const char *path, const flipper_subghz_signal_
 }
 
 /*============================================================================*/
+/**
+ * @brief  Lightweight .sub KEY save — writes from individual fields.
+ *
+ * Equivalent to flipper_subghz_save() for a PARSED signal but avoids the
+ * need for a flipper_subghz_signal_t at the call site (and its ~16 KB
+ * raw_data[] array).  All four save-path callers deal only with decoded
+ * key signals and never need the raw buffer, so this is the preferred helper.
+ *
+ * @param  path      FatFs path for the output file
+ * @param  frequency Carrier frequency in Hz
+ * @param  preset    Flipper preset name (e.g. "FuriHalSubGhzPresetOok650Async")
+ * @param  protocol  Protocol name string
+ * @param  bit_count Number of data bits
+ * @param  key       Decoded key value
+ * @param  te        Timing element (0 to omit)
+ * @return true on success
+ */
+bool flipper_subghz_save_key(const char *path, uint32_t frequency,
+                              const char *preset, const char *protocol,
+                              uint32_t bit_count, uint64_t key, uint32_t te)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != '\0')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result && protocol && protocol[0] != '\0')
+		result = ff_write_kv_str(&ff, "Protocol", protocol);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Lightweight M1 native .sgh PACKET save — writes from individual fields.
+ *
+ * Equivalent to flipper_subghz_save_m1native() but avoids the need for a
+ * flipper_subghz_signal_t at the call site.
+ *
+ * @param  path      FatFs path for the output file
+ * @param  frequency Carrier frequency in Hz
+ * @param  preset    Flipper preset name (used to derive OOK/ASK/FSK label)
+ * @param  protocol  Protocol name string
+ * @param  bit_count Number of data bits
+ * @param  key       Decoded key value
+ * @param  te        Timing element (0 to omit)
+ * @return true on success
+ */
+bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
+                                       const char *preset, const char *protocol,
+                                       uint32_t bit_count, uint64_t key, uint32_t te)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char buf[32];
+
+	if (path == NULL || bit_count == 0)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", "M1 SubGHz PACKET");
+
+	if (result)
+		result = ff_write_kv_str(&ff, "Version", "0.9");
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result)
+	{
+		const char *mod;
+		if (preset && stristr(preset, "FSK"))
+			mod = "FSK";
+		else if (preset && stristr(preset, "ASK"))
+			mod = "ASK";
+		else
+			mod = "OOK";
+		result = ff_write_kv_str(&ff, "Modulation", mod);
+	}
+
+	if (result && protocol && protocol[0] != '\0')
+		result = ff_write_kv_str(&ff, "Protocol", protocol);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bits", bit_count);
+
+	if (result)
+	{
+		snprintf(buf, sizeof(buf), "0x%016llX", (unsigned long long)key);
+		result = ff_write_kv_str(&ff, "Payload", buf);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "BT", te);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
 /** @brief  Case-insensitive substring search (like POSIX strcasestr). */
 static const char *stristr(const char *haystack, const char *needle)
 {
