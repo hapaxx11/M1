@@ -639,7 +639,21 @@ static bool wifi_do_connect(const char *ssid, const char *password)
 		}
 		m1_u8g2_nextpage();
 		M1_LOG_I(M1_LOGDB_TAG, "Connected to %s, IP: %s\n\r", ssid, ip_req.u.wifi_ap_config.status);
-		vTaskDelay(pdMS_TO_TICKS(2500));
+		vTaskDelay(pdMS_TO_TICKS(800));
+
+		/* Auto-sync RTC via NTP now that we have internet access */
+		wifi_display_busy("Syncing time...");
+		if ( wifi_sync_rtc() )
+		{
+			M1_LOG_I(M1_LOGDB_TAG, "NTP sync OK\n\r");
+			wifi_display_msg("Connected!", "Time synced");
+		}
+		else
+		{
+			M1_LOG_W(M1_LOGDB_TAG, "NTP sync failed\n\r");
+			wifi_display_msg("Connected!", "Time sync failed");
+		}
+		vTaskDelay(pdMS_TO_TICKS(1500));
 		return true;
 	}
 	else
