@@ -242,8 +242,14 @@ void subghz_scene_app_run(void)
      * every 200 ms even when the queue is saturated with Q_EVENT_SUBGHZ_RX
      * noise pulses.  At 315/433 MHz the RF noise floor generates thousands of
      * edges per second, keeping xQueueReceive() returning pdTRUE continuously
-     * and preventing the queue-timeout path from ever firing. */
+     * and preventing the queue-timeout path from ever firing.
+     *
+     * prev_hopper_active tracks the last iteration's state so we can detect
+     * the false→true activation edge and reset the dwell timer, preventing
+     * an immediate first tick when hopping is enabled after a period of
+     * portMAX_DELAY blocking (during which the else branch never ran). */
     uint32_t last_hop_tick_ms = HAL_GetTick();
+    bool     prev_hopper_active = false;
 
     /* Main event loop */
     while (app.running)
@@ -345,22 +351,24 @@ void subghz_scene_app_run(void)
 
         /* Time-based hopper tick: fire every 200 ms of real wall-clock time.
          * This runs after every queue receive (or timeout), so the hopper
-         * advances correctly even when the queue is saturated with noise. */
+         * advances correctly even when the queue is saturated with noise.
+         * On the false→true activation edge the timer is reset to now so
+         * the first hop always waits a full 200 ms dwell. */
         if (app.hopper_active)
         {
             uint32_t now = HAL_GetTick();
-            if ((now - last_hop_tick_ms) >= 200U)
+            if (!prev_hopper_active)
+            {
+                /* Fresh activation edge — start the dwell interval from now */
+                last_hop_tick_ms = now;
+            }
+            else if ((now - last_hop_tick_ms) >= 200U)
             {
                 last_hop_tick_ms = now;
                 subghz_scene_send_event(&app, SubGhzEventHopperTick);
             }
         }
-        else
-        {
-            /* Reset timer while hopper is inactive so the first hop after
-             * re-enabling always waits a full 200 ms dwell period. */
-            last_hop_tick_ms = HAL_GetTick();
-        }
+        prev_hopper_active = app.hopper_active;
 
         /* Redraw if needed */
         if (app.need_redraw)
