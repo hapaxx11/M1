@@ -34,7 +34,29 @@ typedef struct {
 	/* For raw data */
 	int16_t  raw_data[FLIPPER_SUBGHZ_RAW_MAX_SAMPLES];
 	uint16_t raw_count;
+	/* Set to true when the file was loaded from an M1 native .sgh format
+	 * (not a Flipper .sub file).  Used to select the direct replay path
+	 * which feeds the original file into the streaming engine without any
+	 * temp-file conversion. */
+	bool     is_m1_native;
 } flipper_subghz_signal_t;
+
+/*
+ * Lightweight header probe — reads only the first few header lines of a
+ * .sgh/.sub file to determine format and extract frequency/modulation without
+ * loading any raw sample data.  Used by the playlist scene to dispatch each
+ * playlist entry without the 16 KB overhead of a full flipper_subghz_signal_t.
+ */
+typedef struct {
+	bool    is_m1_native;   /* true = M1 native .sgh format */
+	bool    is_noise;       /* true = RAW/NOISE recording, false = PACKET/Key */
+	uint32_t frequency;     /* Hz, from header */
+	uint8_t modulation;     /* MODULATION_OOK / MODULATION_FSK / MODULATION_ASK */
+} flipper_subghz_probe_t;
+
+/* Probe just the header of a .sgh/.sub file (no Data: lines loaded).
+ * Returns false if the file cannot be opened or frequency is missing. */
+bool flipper_subghz_probe(const char *path, flipper_subghz_probe_t *out);
 
 /* Load a .sub file (Flipper format) or M1 native .sgh file */
 bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out);

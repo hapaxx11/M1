@@ -374,6 +374,10 @@ bool flipper_subghz_load(const char *path, flipper_subghz_signal_t *out)
 		else if (strstr(filetype_val, M1_SUBGHZ_PACKET_TYPE) != NULL)
 			result = m1sgh_parse_packet(&ff, out);
 		/* else: unknown M1 format variant — result stays false */
+
+		/* Mark as native so callers can bypass the conversion/temp-file path */
+		if (result)
+			out->is_m1_native = true;
 	}
 
 	ff_close(&ff);
@@ -409,11 +413,101 @@ bool flipper_subghz_is_m1_native_header(const char *filetype_val,
 
 /*============================================================================*/
 /**
- * @brief  Save a .sub file
+ * @brief  Lightweight header probe — reads only the first few header lines.
+ *
+ * Opens the file, reads Filetype/Version (to detect M1-native vs Flipper),
+ * then scans subsequent lines for Frequency and Preset/Modulation.  Closes
+ * the file immediately after; no Data: lines are loaded.
+ *
+ * This is used by the playlist scene so that each entry can be classified
+ * without the 16 KB overhead of a full flipper_subghz_signal_t.
+ *
  * @param  path  file path on FatFs filesystem
- * @param  sig   signal structure to save
- * @return true on success
+ * @param  out   probe result (set to zero on failure)
+ * @return true if the file was opened and a valid frequency was found
  */
+bool flipper_subghz_probe(const char *path, flipper_subghz_probe_t *out)
+{
+	flipper_file_t ff;
+	char filetype_val[48];
+	char version_val[16];
+	bool done_freq = false;
+	bool done_mod  = false;
+
+	if (path == NULL || out == NULL)
+		return false;
+
+	memset(out, 0, sizeof(*out));
+	out->modulation = MODULATION_OOK; /* safe default */
+
+	if (!ff_open(&ff, path))
+		return false;
+
+	/* Filetype line */
+	if (!ff_read_line(&ff) || !ff_parse_kv(&ff) ||
+	    strcmp(ff_get_key(&ff), "Filetype") != 0)
+	{
+		ff_close(&ff);
+		return false;
+	}
+	strncpy(filetype_val, ff_get_value(&ff), sizeof(filetype_val) - 1);
+	filetype_val[sizeof(filetype_val) - 1] = '\0';
+
+	/* Version line */
+	if (!ff_read_line(&ff) || !ff_parse_kv(&ff) ||
+	    strcmp(ff_get_key(&ff), "Version") != 0)
+	{
+		ff_close(&ff);
+		return false;
+	}
+	strncpy(version_val, ff_get_value(&ff), sizeof(version_val) - 1);
+	version_val[sizeof(version_val) - 1] = '\0';
+
+	out->is_m1_native = flipper_subghz_is_m1_native_header(filetype_val, version_val);
+	/* NOISE: M1 "NOISE" or Flipper "RAW" */
+	out->is_noise = (strstr(filetype_val, M1_SUBGHZ_NOISE_TYPE) != NULL ||
+	                 strstr(filetype_val, "RAW") != NULL);
+
+	/* Scan remaining header lines for Frequency and Preset/Modulation.
+	 * Stop at the first Data/RAW_Data/Key line (body data). */
+	while (ff_read_line(&ff) && !(done_freq && done_mod))
+	{
+		if (ff_is_separator(&ff))
+			continue;
+
+		if (!ff_parse_kv(&ff))
+			continue;
+
+		const char *key = ff_get_key(&ff);
+		const char *val = ff_get_value(&ff);
+
+		if (!done_freq && subghz_strcasecmp(key, "Frequency") == 0)
+		{
+			out->frequency = (uint32_t)strtoul(val, NULL, 10);
+			done_freq = true;
+		}
+		else if (!done_mod && (subghz_strcasecmp(key, "Preset") == 0 ||
+		                       subghz_strcasecmp(key, "Modulation") == 0))
+		{
+			out->modulation = flipper_subghz_preset_to_modulation(val);
+			if (out->modulation == MODULATION_UNKNOWN)
+				out->modulation = MODULATION_OOK;
+			done_mod = true;
+		}
+		else if (subghz_strcasecmp(key, "Protocol") == 0 ||
+		         subghz_strcasecmp(key, "Key") == 0 ||
+		         subghz_strcasecmp(key, "Data") == 0 ||
+		         subghz_strcasecmp(key, "RAW_Data") == 0)
+		{
+			break; /* entered body — stop scanning */
+		}
+	}
+
+	ff_close(&ff);
+	return (out->frequency > 0);
+}
+
+
 bool flipper_subghz_save(const char *path, const flipper_subghz_signal_t *sig)
 {
 	flipper_file_t ff;

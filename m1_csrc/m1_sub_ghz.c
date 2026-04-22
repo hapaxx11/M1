@@ -1558,6 +1558,223 @@ static const char *stristr(const char *haystack, const char *needle)
 	return NULL;
 }
 
+
+/*============================================================================*/
+/**
+ * @brief  Shared TX event loop for raw signal replay.
+ *
+ * Preconditions (caller must set before calling):
+ *   - datfile_info.dat_filename  set to the .sgh file to stream
+ *   - subghz_replay_freq, subghz_replay_mod, subghz_replay_band,
+ *     subghz_replay_channel, subghz_custom_freq_hz, subghz_scan_config set
+ *
+ * @param  unlink_path  If non-NULL, f_unlink() this path after TX completes.
+ *                      Pass the temp file path for converter-path callers,
+ *                      NULL for the direct-replay path (no file to delete).
+ * @retval 0 = success, non-zero = error code
+ */
+static uint8_t subghz_run_raw_replay(const char *unlink_path)
+{
+	/* ── Init buffers and open the file for streaming ── */
+	if (sub_ghz_ring_buffers_init())
+	{
+		if (unlink_path) f_unlink(unlink_path);
+		return 4;
+	}
+	if (sub_ghz_raw_samples_init())
+	{
+		sub_ghz_ring_buffers_deinit();
+		if (unlink_path) f_unlink(unlink_path);
+		return 5;
+	}
+
+	/* ── Draw replay screen and start first TX ── */
+	menu_sub_ghz_init();
+	subghz_replay_play_gui_update(SUBGHZ_REPLAY_DISPLAY_PARAM_ACTIVE);
+
+	M1_LOG_I(M1_LOGDB_TAG, "SGH replay: band=%d freq=%lu samples_init OK\r\n",
+	         subghz_replay_band, subghz_custom_freq_hz);
+
+	subghz_replay_ret_code = sub_ghz_replay_start(false, subghz_replay_band,
+	                                              subghz_replay_channel, 255);
+
+	M1_LOG_I(M1_LOGDB_TAG, "SGH replay: replay_start returned %d\r\n",
+	         subghz_replay_ret_code);
+
+	if (subghz_replay_ret_code == 1)
+	{
+		/* ISM region blocked TX */
+		sub_ghz_raw_samples_deinit(false);
+		sub_ghz_ring_buffers_deinit();
+		xQueueReset(main_q_hdl);
+		menu_sub_ghz_exit();
+		if (unlink_path) f_unlink(unlink_path);
+		return 0;
+	}
+	else if (subghz_replay_ret_code)
+	{
+		double_buffer_ptr_id = 1;
+		m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M,
+		                  LED_FASTBLINK_ONTIME_M);
+		subghz_replay_play_gui_update(SUBGHZ_REPLAY_DISPLAY_PARAM_PLAY);
+	}
+	else
+	{
+		char err_msg[48];
+		snprintf(err_msg, sizeof(err_msg), "Band:%d Freq:%lu",
+		         subghz_replay_band, subghz_custom_freq_hz);
+		m1_message_box(&m1_u8g2, "Replay failed!", err_msg, "", "BACK to return");
+	}
+
+	/* ── Self-contained event loop (blocks until BACK) ── */
+	{
+		S_M1_Main_Q_t q_item;
+		S_M1_Buttons_Status btn;
+		BaseType_t qret;
+		bool running = true;
+
+		while (running)
+		{
+			qret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+			if (qret != pdTRUE)
+				continue;
+
+			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				qret = xQueueReceive(button_events_q_hdl, &btn, 0);
+				if (qret != pdTRUE)
+					continue;
+
+				if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					m1_led_fast_blink(LED_BLINK_ON_RGB,
+					                  LED_FASTBLINK_PWM_OFF,
+					                  LED_FASTBLINK_ONTIME_OFF);
+					sub_ghz_raw_samples_deinit(false);
+					sub_ghz_ring_buffers_deinit();
+					sub_ghz_tx_raw_deinit();
+					running = false;
+				}
+				else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					/* Replay again */
+					if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
+					{
+						sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
+						                   subghz_replay_band,
+						                   subghz_replay_channel,
+						                   tx_power_values[subghz_tx_power_idx]);
+						subghz_replay_ret_code = sub_ghz_raw_replay_init();
+						if (subghz_replay_ret_code != 1)
+						{
+							double_buffer_ptr_id = 1;
+							subghz_decenc_ctl.ntx_raw_repeat =
+							    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
+							m1_led_fast_blink(LED_BLINK_ON_RGB,
+							                  LED_FASTBLINK_PWM_M,
+							                  LED_FASTBLINK_ONTIME_M);
+						}
+						else
+						{
+							sub_ghz_raw_tx_stop();
+							sub_ghz_raw_samples_deinit(false);
+							sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED,
+							                   SUB_GHZ_BAND_EOL, 0, 0);
+							subghz_replay_play_gui_update(
+							    SUBGHZ_REPLAY_DISPLAY_PARAM_SYS_ERROR);
+						}
+					}
+				}
+			}
+			else if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
+			{
+				/* Continue double-buffered TX streaming */
+				subghz_replay_ret_code =
+				    sub_ghz_replay_continue(subghz_replay_ret_code);
+				if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
+				{
+					/* Auto-restart: loop continuously until BACK */
+					sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
+					                   subghz_replay_band,
+					                   subghz_replay_channel,
+					                   tx_power_values[subghz_tx_power_idx]);
+					subghz_replay_ret_code = sub_ghz_raw_replay_init();
+					if (subghz_replay_ret_code != 1)
+					{
+						double_buffer_ptr_id = 1;
+						subghz_decenc_ctl.ntx_raw_repeat =
+						    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
+					}
+					else
+					{
+						/* Restart failed — stop */
+						m1_led_fast_blink(LED_BLINK_ON_RGB,
+						                  LED_FASTBLINK_PWM_OFF,
+						                  LED_FASTBLINK_ONTIME_OFF);
+						subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE;
+					}
+				}
+			}
+		} /* while (running) */
+	}
+
+	xQueueReset(main_q_hdl);
+	menu_sub_ghz_exit();
+
+	if (unlink_path) f_unlink(unlink_path);
+	return 0;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Replay an M1 native .sgh NOISE file directly — no conversion.
+ *
+ * For M1 native NOISE files the original .sgh is already in the streaming
+ * format expected by sub_ghz_raw_samples_init().  This function skips the
+ * temp-file conversion path entirely and feeds the file straight into the
+ * streaming engine, eliminating the "Memory error" failure that occurred when
+ * C3.12/SiN360-produced .sgh files were routed through sub_ghz_replay_flipper_file().
+ *
+ * Callers obtain `frequency` and `modulation` from the already-loaded
+ * flipper_subghz_signal_t (saved scene) or from flipper_subghz_probe()
+ * (playlist scene), so no additional file I/O is required here.
+ *
+ * @param  sgh_path   Path to the M1 native .sgh NOISE file on the SD card
+ * @param  frequency  Carrier frequency in Hz (from the file header)
+ * @param  modulation MODULATION_OOK / MODULATION_FSK / MODULATION_ASK
+ * @retval 0 = success, non-zero = error code (same as sub_ghz_replay_flipper_file)
+ */
+uint8_t sub_ghz_replay_datafile(const char *sgh_path,
+                                 uint32_t    frequency,
+                                 uint8_t     modulation)
+{
+	if (sgh_path == NULL || frequency == 0)
+		return 1;
+
+	if (frequency < SUBGHZ_MIN_FREQ_HZ || frequency > SUBGHZ_MAX_FREQ_HZ)
+		return 3;
+
+	/* Set globals used by the shared event loop and radio setup */
+	subghz_replay_freq    = (float)frequency / 1000000.0f;
+	subghz_replay_mod     = modulation;
+	subghz_custom_freq_hz = frequency;
+	subghz_replay_band    = subghz_freq_hz_to_band(frequency);
+	subghz_replay_channel = 0;
+	subghz_scan_config.modulation = modulation;
+
+	/* Force CUSTOM band for FSK (same logic as sub_ghz_replay_flipper_file) */
+	if (modulation == MODULATION_FSK && subghz_replay_band != SUB_GHZ_BAND_CUSTOM)
+		subghz_replay_band = SUB_GHZ_BAND_CUSTOM;
+
+	/* Point the streaming engine at the original file — no temp file needed */
+	strncpy((char *)datfile_info.dat_filename, sgh_path,
+	        sizeof(datfile_info.dat_filename) - 1);
+	datfile_info.dat_filename[sizeof(datfile_info.dat_filename) - 1] = '\0';
+
+	/* Run the shared event loop; pass NULL so no file is unlinked on exit */
+	return subghz_run_raw_replay(NULL);
+}
+
 /*============================================================================*/
 /**
   * @brief  Convert a Flipper .sub file to M1's .sgh format and replay it.
@@ -2075,162 +2292,12 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	        sizeof(datfile_info.dat_filename) - 1);
 	datfile_info.dat_filename[sizeof(datfile_info.dat_filename) - 1] = '\0';
 
-	/* ── 6. Init buffers and open the file for streaming ── */
-	if (sub_ghz_ring_buffers_init())
-	{
-		f_unlink(FLIPPER_SUB_TMP_SGH);
-		return 4;
-	}
-	if (sub_ghz_raw_samples_init())
-	{
-		sub_ghz_ring_buffers_deinit();
-		f_unlink(FLIPPER_SUB_TMP_SGH);
-		return 5;
-	}
-
-	/* ── 7. Draw replay screen and start first TX ── */
-	menu_sub_ghz_init();
-	subghz_replay_play_gui_update(SUBGHZ_REPLAY_DISPLAY_PARAM_ACTIVE);
-
-	M1_LOG_I(M1_LOGDB_TAG, "Flipper replay: band=%d freq=%lu samples_init OK\r\n",
-	         subghz_replay_band, subghz_custom_freq_hz);
-
-	subghz_replay_ret_code = sub_ghz_replay_start(false, subghz_replay_band,
-	                                              subghz_replay_channel, 255);
-
-	M1_LOG_I(M1_LOGDB_TAG, "Flipper replay: replay_start returned %d\r\n",
-	         subghz_replay_ret_code);
-
-	if (subghz_replay_ret_code == 1)
-	{
-		/* ISM region blocked TX — "TX Blocked" message already shown by
-		 * sub_ghz_replay_start.  Clean up and return without entering the
-		 * TX event loop, so the user is not misled into thinking emulation
-		 * is occurring. */
-		sub_ghz_raw_samples_deinit(false);
-		sub_ghz_ring_buffers_deinit();
-		xQueueReset(main_q_hdl);
-		menu_sub_ghz_exit();
-		f_unlink(FLIPPER_SUB_TMP_SGH);
-		return 0;
-	}
-	else if (subghz_replay_ret_code)
-	{
-		double_buffer_ptr_id = 1;
-		m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M,
-		                  LED_FASTBLINK_ONTIME_M);
-		subghz_replay_play_gui_update(SUBGHZ_REPLAY_DISPLAY_PARAM_PLAY);
-	}
-	else
-	{
-		char err_msg[48];
-		snprintf(err_msg, sizeof(err_msg), "Band:%d Freq:%lu",
-		         subghz_replay_band, subghz_custom_freq_hz);
-		m1_message_box(&m1_u8g2, "Replay failed!", err_msg, "", "BACK to return");
-	}
-
-	/* ── 8. Self-contained event loop (blocks until BACK) ── */
-	{
-		S_M1_Main_Q_t q_item;
-		S_M1_Buttons_Status btn;
-		BaseType_t qret;
-		bool running = true;
-
-		while (running)
-		{
-			qret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-			if (qret != pdTRUE)
-				continue;
-
-			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
-			{
-				qret = xQueueReceive(button_events_q_hdl, &btn, 0);
-				if (qret != pdTRUE)
-					continue;
-
-				if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					/* Stop TX, cleanup, exit */
-					m1_led_fast_blink(LED_BLINK_ON_RGB,
-					                  LED_FASTBLINK_PWM_OFF,
-					                  LED_FASTBLINK_ONTIME_OFF);
-					sub_ghz_raw_samples_deinit(false);
-					sub_ghz_ring_buffers_deinit();
-					sub_ghz_tx_raw_deinit();
-					running = false;
-				}
-				else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					/* Replay again */
-					if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
-					{
-						sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
-						                   subghz_replay_band,
-						                   subghz_replay_channel,
-						                   tx_power_values[subghz_tx_power_idx]);
-						subghz_replay_ret_code = sub_ghz_raw_replay_init();
-						if (subghz_replay_ret_code != 1)
-						{
-							double_buffer_ptr_id = 1;
-							subghz_decenc_ctl.ntx_raw_repeat =
-							    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
-							m1_led_fast_blink(LED_BLINK_ON_RGB,
-							                  LED_FASTBLINK_PWM_M,
-							                  LED_FASTBLINK_ONTIME_M);
-						}
-						else
-						{
-							sub_ghz_raw_tx_stop();
-							sub_ghz_raw_samples_deinit(false);
-							sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED,
-							                   SUB_GHZ_BAND_EOL, 0, 0);
-							subghz_replay_play_gui_update(
-							    SUBGHZ_REPLAY_DISPLAY_PARAM_SYS_ERROR);
-						}
-					}
-				}
-			}
-			else if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
-			{
-				/* Continue double-buffered TX streaming */
-				subghz_replay_ret_code =
-				    sub_ghz_replay_continue(subghz_replay_ret_code);
-				if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
-				{
-					/* Auto-restart: loop continuously until BACK */
-					sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
-					                   subghz_replay_band,
-					                   subghz_replay_channel,
-					                   tx_power_values[subghz_tx_power_idx]);
-					subghz_replay_ret_code = sub_ghz_raw_replay_init();
-					if (subghz_replay_ret_code != 1)
-					{
-						double_buffer_ptr_id = 1;
-						subghz_decenc_ctl.ntx_raw_repeat =
-						    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
-					}
-					else
-					{
-						/* Restart failed — stop */
-						m1_led_fast_blink(LED_BLINK_ON_RGB,
-						                  LED_FASTBLINK_PWM_OFF,
-						                  LED_FASTBLINK_ONTIME_OFF);
-						subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE;
-					}
-				}
-			}
-		} /* while (running) */
-	}
-
-	xQueueReset(main_q_hdl);
-	menu_sub_ghz_exit();
-
-	/* ── 9. Cleanup temp file ── */
-	f_unlink(FLIPPER_SUB_TMP_SGH);
-	return 0;
+	/* ── 6. Init buffers, stream, and run TX event loop via shared helper ── */
+	return subghz_run_raw_replay(FLIPPER_SUB_TMP_SGH);
 
 #undef FLIPPER_SUB_TMP_SGH
 #undef FLIPPER_SUB_LINE_MAX
+#undef FLIPPER_SUB_OUT_MAX
 } // uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 
 
@@ -3299,7 +3366,14 @@ static uint8_t sub_ghz_raw_samples_init(void)
 		{
 			if ( strstr(token, subghz_datfile_keywords[i])==NULL )
 				break;
-			sdcard_buffer_run_ptr += strlen(token) + 2; // 2 for "\r\n"
+			/* Advance past this keyword line in the original buffer.
+			 * Scan past the token text, then skip any CR/LF characters so
+			 * both CRLF (Windows/M1) and LF-only (Unix/C3.12) files work.
+			 * The old "strlen(token) + 2" hard-coded CRLF and mis-positioned
+			 * sdcard_buffer_run_ptr for LF-only files, corrupting data reads. */
+			sdcard_buffer_run_ptr += strlen(token);
+			while (*sdcard_buffer_run_ptr == '\r' || *sdcard_buffer_run_ptr == '\n')
+				sdcard_buffer_run_ptr++;
 			if ( ++i >= key_len )
 				break;
 			token = strtok(NULL, "\r\n");

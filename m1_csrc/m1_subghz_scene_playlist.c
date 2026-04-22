@@ -37,8 +37,9 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
 #include "subghz_playlist_parser.h"
+#include "flipper_subghz.h"
 
-/* sub_ghz_replay_flipper_file() is declared in m1_sub_ghz.h */
+/* sub_ghz_replay_flipper_file() and sub_ghz_replay_datafile() are declared in m1_sub_ghz.h */
 
 /*============================================================================*/
 /* Constants                                                                  */
@@ -155,22 +156,39 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
 /**
  * @brief  Transmit the next file in the playlist.
  *
- * Calls sub_ghz_replay_flipper_file() which is synchronous (blocks until
- * TX complete).  Returns false when the playlist pass is finished.
+ * For M1 native NOISE .sgh files (produced by C3.12, SiN360, or Hapax),
+ * uses sub_ghz_replay_datafile() to stream the original file directly —
+ * no temp-file conversion needed.  For all other files (Flipper .sub RAW,
+ * any PACKET/key file), falls back to sub_ghz_replay_flipper_file() which
+ * handles the conversion transparently.
+ *
+ * Returns false when the playlist pass is finished.
  */
 static bool playlist_transmit_next(SubGhzApp *app)
 {
     if (app->playlist_current >= app->playlist_count)
         return false;
 
-    /* Transmit — this blocks until TX DMA finishes.
-     * sub_ghz_replay_flipper_file() calls menu_sub_ghz_exit() on return,
-     * which powers off the SI4463 by deasserting ENA.  We must call
-     * menu_sub_ghz_init() afterwards to restore the radio to a known
-     * powered-on state before the next file can transmit — otherwise
-     * the next replay attempt must recover from a dead radio via
-     * radio_init_rx_tx()'s retry loop, adding ~100ms latency per item. */
-    sub_ghz_replay_flipper_file(app->playlist_files[app->playlist_current]);
+    const char *path = app->playlist_files[app->playlist_current];
+
+    /* Probe file header to choose the most efficient replay path.
+     * This reads only the first few lines (no Data: samples), so it is
+     * cheap even when called for every entry in a large playlist. */
+    flipper_subghz_probe_t probe;
+    if (flipper_subghz_probe(path, &probe) && probe.is_m1_native && probe.is_noise)
+    {
+        /* M1 native NOISE file — direct replay, no conversion */
+        sub_ghz_replay_datafile(path, probe.frequency, probe.modulation);
+    }
+    else
+    {
+        /* Flipper .sub or PACKET/key file — convert via temp file */
+        sub_ghz_replay_flipper_file(path);
+    }
+
+    /* sub_ghz_replay_*() calls menu_sub_ghz_exit() on return, which powers
+     * off the SI4463 by deasserting ENA.  Restore the radio before the next
+     * file transmits — otherwise recovery adds ~100ms latency per item. */
     menu_sub_ghz_init();
 
     /* Apply inter-signal delay (from "# delay: <ms>" playlist directive).
