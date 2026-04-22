@@ -141,6 +141,7 @@ static uint8_t s_builder_n_slots;
 
 static void dashboard_screen(void);
 static void browse_directory(const char *path);
+static void ir_browse_with_fb(const char *start_dir, uint16_t start_level);
 static void show_commands(const char *ir_file_path);
 static bool ir_file_action_menu(const char *ir_file_path);
 static void transmit_command(const ir_universal_cmd_t *cmd);
@@ -226,9 +227,9 @@ void ir_universal_run(void)
 
 /*============================================================================*/
 /*
- * Browse directly to the Learned files directory.
+ * Browse directly to the Learned files directory using m1_file_browser.
  * Called from infrared_saved_remotes() in m1_infrared.c so that "Replay"
- * goes straight to saved/learned .ir files instead of the full dashboard.
+ * goes straight to saved/learned .ir files with full ".." navigation support.
  */
 /*============================================================================*/
 void ir_universal_run_learned(void)
@@ -236,7 +237,8 @@ void ir_universal_run_learned(void)
 	uint8_t previous_orientation = m1_screen_orientation;
 
 	settings_apply_orientation(M1_ORIENT_NORMAL);
-	browse_directory(IR_LEARNED_DIR);
+	/* start_level = 2: user can navigate ".." up to "0:/IR", then to "0:/" */
+	ir_browse_with_fb(IR_LEARNED_DIR, 2);
 	settings_apply_orientation(previous_orientation);
 } // void ir_universal_run_learned(void)
 
@@ -244,8 +246,111 @@ void ir_universal_run_learned(void)
 
 /*============================================================================*/
 /*
- * Draw the dashboard menu on the 128x64 display
+ * Browse .ir files using the stock m1_file_browser (matching Monstatek pattern).
+ *
+ * start_dir   — directory to open initially (created if absent).
+ * start_level — how many ".." hops the user can make before reaching the SD
+ *               drive root.  Use 1 for "0:/IR" and 2 for "0:/IR/Learned".
+ *               Setting this correctly means the user is never stuck in an
+ *               empty folder; they can always navigate up to find files.
+ *
+ * When a .ir file is selected, its commands are shown via show_commands().
+ * Pressing BACK at any depth exits the browser entirely.
  */
+/*============================================================================*/
+static void ir_browse_with_fb(const char *start_dir, uint16_t start_level)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	S_M1_file_browser_hdl *fb;
+	S_M1_file_info *f_info;
+	BaseType_t ret;
+	uint16_t i;
+	char filepath[IR_UNIVERSAL_PATH_MAX_LEN];
+
+	/* Initialise file browser and point it at start_dir.
+	 * m1_fb_set_dir() creates the directory if it does not exist. */
+	fb = m1_fb_init(&m1_u8g2);
+	m1_fb_set_dir(start_dir);
+
+	/* Set dir_level so ".." navigates upward from start_dir.
+	 * The buffers must hold one entry per level (0 … start_level). */
+	fb->dir_level = start_level;
+	{
+		uint16_t *tmp_listing = (uint16_t *)realloc(
+			fb->listing_index_buffer, (start_level + 1) * sizeof(uint16_t));
+		uint16_t *tmp_row = (uint16_t *)realloc(
+			fb->row_index_buffer, (start_level + 1) * sizeof(uint16_t));
+		if (!tmp_listing || !tmp_row)
+		{
+			/* Heap exhausted — bail out cleanly */
+			if (tmp_listing) fb->listing_index_buffer = tmp_listing;
+			if (tmp_row)     fb->row_index_buffer     = tmp_row;
+			m1_fb_deinit();
+			return;
+		}
+		fb->listing_index_buffer = tmp_listing;
+		fb->row_index_buffer     = tmp_row;
+	}
+	for (i = 0; i <= start_level; i++)
+	{
+		fb->listing_index_buffer[i] = 0;
+		fb->row_index_buffer[i]     = 0;
+	}
+
+	/* Initial render */
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	m1_u8g2_nextpage();
+	m1_fb_display(NULL);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+		if (ret != pdTRUE)
+			continue;
+
+		/* BACK exits the file browser at any depth */
+		if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			m1_fb_deinit();
+			return;
+		}
+
+		/* Forward all other button events to the file browser */
+		f_info = m1_fb_display(&this_button_status);
+
+		if (f_info->status == FB_OK && f_info->file_is_selected)
+		{
+			if (is_ir_file(f_info->file_name))
+			{
+				/* Build full path and open command viewer */
+				snprintf(filepath, sizeof(filepath), "%s/%s",
+				         f_info->dir_name, f_info->file_name);
+				add_to_recent(filepath);
+				show_commands(filepath);
+			}
+			/* Redisplay the browser at the same position after returning */
+			m1_fb_display(NULL);
+		}
+	}
+
+	/* Unreachable in normal operation */
+	m1_fb_deinit();
+} // static void ir_browse_with_fb(...)
+
+
+
+
 /*============================================================================*/
 static void draw_dashboard(uint8_t selection)
 {
@@ -384,14 +489,17 @@ static void dashboard_screen(void)
 						case 6: /* Browse IRDB */
 						case 8: /* Learned — browse user-saved remotes */
 						{
-							/* Temporarily switch to Normal for file browsing */
+							/* Use m1_file_browser (stock Monstatek pattern) so the user
+							 * can always navigate up via ".." even when the target folder
+							 * is empty.  start_level encodes how many levels deep the
+							 * starting directory sits relative to the SD drive root. */
 							uint8_t browse_saved_orient = m1_screen_orientation;
 							if (browse_saved_orient != M1_ORIENT_NORMAL)
 								settings_apply_orientation(M1_ORIENT_NORMAL);
-							const char *root = (selection == 6) ? IR_UNIVERSAL_IRDB_ROOT : IR_LEARNED_DIR;
-							strncpy(s_current_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
-							s_current_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-							browse_directory(s_current_path);
+							if (selection == 6)
+								ir_browse_with_fb(IR_UNIVERSAL_IRDB_ROOT, 1);
+							else
+								ir_browse_with_fb(IR_LEARNED_DIR, 2);
 							/* Restore orientation */
 							if (browse_saved_orient != M1_ORIENT_NORMAL)
 								settings_apply_orientation(browse_saved_orient);
