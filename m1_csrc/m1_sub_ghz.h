@@ -153,6 +153,7 @@ void sub_ghz_rssi_meter(void);
 void sub_ghz_freq_scanner(void);
 void sub_ghz_add_manually(void);
 uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
+uint8_t sub_ghz_replay_datafile(const char *dat_path, uint32_t frequency, uint8_t modulation);
 
 /* Scene-based UI entry point (new Flipper-inspired architecture) */
 void sub_ghz_scene_entry(void);

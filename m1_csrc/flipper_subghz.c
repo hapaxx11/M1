@@ -409,6 +409,21 @@ bool flipper_subghz_is_m1_native_header(const char *filetype_val,
 
 /*============================================================================*/
 /**
+ * @brief  Test whether header strings indicate an M1 native RAW/NOISE .sgh.
+ * @param  filetype_val  Value string from the Filetype: line
+ * @param  version_val   Value string from the Version: line
+ * @return true if the header indicates M1 native NOISE format
+ */
+bool flipper_subghz_is_m1_native_raw_header(const char *filetype_val,
+                                             const char *version_val)
+{
+	return flipper_subghz_is_m1_native_header(filetype_val, version_val) &&
+	       filetype_val != NULL &&
+	       strstr(filetype_val, M1_SUBGHZ_NOISE_TYPE) != NULL;
+}
+
+/*============================================================================*/
+/**
  * @brief  Save a .sub file
  * @param  path  file path on FatFs filesystem
  * @param  sig   signal structure to save

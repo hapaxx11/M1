@@ -290,7 +290,25 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_EMULATE:
         {
-            uint8_t ret = sub_ghz_replay_flipper_file(saved_filepath);
+            uint8_t ret;
+            const char *ext = strrchr(saved_filename, '.');
+            bool is_native_raw_sgh = is_raw_file &&
+                                     ext != NULL &&
+                                     strcmp(ext, ".sgh") == 0;
+
+            if (is_native_raw_sgh)
+            {
+                uint8_t modulation = flipper_subghz_preset_to_modulation(saved_signal.preset);
+                if (modulation == MODULATION_UNKNOWN)
+                    modulation = MODULATION_OOK;
+                ret = sub_ghz_replay_datafile(saved_filepath,
+                                              saved_signal.frequency,
+                                              modulation);
+            }
+            else
+            {
+                ret = sub_ghz_replay_flipper_file(saved_filepath);
+            }
             if (ret == 0)
             {
                 /* Restore radio to known state after replay (the replay

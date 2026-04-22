@@ -265,6 +265,30 @@ void test_m1_native_packet_v09(void)
 		flipper_subghz_is_m1_native_header("M1 SubGHz PACKET", "0.9"));
 }
 
+void test_m1_native_raw_header_v08(void)
+{
+	TEST_ASSERT_TRUE(
+		flipper_subghz_is_m1_native_raw_header("M1 SubGHz NOISE", "0.8"));
+}
+
+void test_m1_native_raw_header_v09(void)
+{
+	TEST_ASSERT_TRUE(
+		flipper_subghz_is_m1_native_raw_header("M1 SubGHz NOISE", "0.9"));
+}
+
+void test_m1_native_packet_not_raw_header(void)
+{
+	TEST_ASSERT_FALSE(
+		flipper_subghz_is_m1_native_raw_header("M1 SubGHz PACKET", "0.9"));
+}
+
+void test_flipper_raw_not_native_raw_header(void)
+{
+	TEST_ASSERT_FALSE(
+		flipper_subghz_is_m1_native_raw_header("Flipper SubGhz RAW File", "1"));
+}
+
 void test_flipper_raw_not_m1(void)
 {
 	/* Flipper RAW .sub file (version 1) — must NOT be detected as M1 native */
@@ -349,6 +373,10 @@ int main(void)
 	RUN_TEST(test_m1_native_noise_v08);
 	RUN_TEST(test_m1_native_packet_v08);
 	RUN_TEST(test_m1_native_packet_v09);
+	RUN_TEST(test_m1_native_raw_header_v08);
+	RUN_TEST(test_m1_native_raw_header_v09);
+	RUN_TEST(test_m1_native_packet_not_raw_header);
+	RUN_TEST(test_flipper_raw_not_native_raw_header);
 	RUN_TEST(test_flipper_raw_not_m1);
 	RUN_TEST(test_flipper_key_not_m1);
 	RUN_TEST(test_flipper_raw_v2_not_m1);

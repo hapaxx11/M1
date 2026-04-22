@@ -1,0 +1,1 @@
+**Sub-GHz: fixed Saved → Emulate for native raw `.sgh` files from C3.12 / SiN360 and other M1 firmware builds** — raw `M1 SubGHz NOISE` recordings now replay directly from the original `.sgh` file instead of being re-converted through the Flipper `.sub` compatibility path first, avoiding the erroneous “Memory error” failure when emulating compatible third-party M1 captures.

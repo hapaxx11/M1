@@ -71,4 +71,9 @@ uint8_t flipper_subghz_freq_to_band(uint32_t freq_hz);
 bool flipper_subghz_is_m1_native_header(const char *filetype_val,
                                          const char *version_val);
 
+/* Pure-logic helper: returns true only for M1 native RAW/NOISE .sgh headers.
+ * Used to route Saved → Emulate through the direct raw replay path. */
+bool flipper_subghz_is_m1_native_raw_header(const char *filetype_val,
+                                             const char *version_val);
+
 #endif /* FLIPPER_SUBGHZ_H_ */
