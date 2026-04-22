@@ -139,6 +139,10 @@ static int fb_entry_cmp(const void *a, const void *b)
 /******************************************************************************/
 S_M1_file_browser_hdl *m1_fb_init(u8g2_t *lcd_hdl)
 {
+	/* Guard: release any stale handle from a prior call that was not cleanly
+	 * deinit'd.  deinit() is a no-op when pfb_hdl is NULL. */
+	m1_fb_deinit();
+
 	pfb_hdl = (S_M1_file_browser_hdl*)calloc(1, sizeof(S_M1_file_browser_hdl));
 
 	pfb_hdl->listing_index_buffer = (uint16_t *)calloc(1, sizeof(uint16_t));

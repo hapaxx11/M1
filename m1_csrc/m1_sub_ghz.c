@@ -3294,6 +3294,11 @@ static uint8_t sub_ghz_raw_samples_init(void)
 	uint8_t i, error, key_len, *token;
 	uint8_t *psdcard_dat_buffer = NULL;
 
+	/* Guard: release any stale buffers and close any open file from a prior
+	 * call that was not cleanly deinit'd.  deinit(false) is a no-op when
+	 * pointers are NULL and the file handle is not open. */
+	sub_ghz_raw_samples_deinit(false);
+
 	do
 	{
 		error = m1_sdm_get_logging_error();
