@@ -645,8 +645,13 @@ static bool wifi_do_connect(const char *ssid, const char *password)
 		wifi_display_busy("Syncing time...");
 		if ( wifi_sync_rtc() )
 		{
-			M1_LOG_I(M1_LOGDB_TAG, "NTP sync OK\n\r");
-			wifi_display_msg("Connected!", "Time synced");
+			m1_time_t now;
+			char time_str[12];
+			m1_get_datetime(&now);
+			snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d UTC",
+			         now.hour, now.minute, now.second);
+			M1_LOG_I(M1_LOGDB_TAG, "NTP sync OK: %s\n\r", time_str);
+			wifi_display_msg("Time synced:", time_str);
 		}
 		else
 		{
