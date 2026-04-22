@@ -573,7 +573,7 @@ static void deauth_start(uint8_t channel, const char *bssid, const char *mac)
     resp_buf[0] = '\0';
     spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 3);
 
-    if (strstr(resp_buf, "OK"))
+    if (strstr(resp_buf, "OK\r\n"))
         s_deauth_active = true;
 }
 
