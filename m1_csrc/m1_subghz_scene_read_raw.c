@@ -79,8 +79,6 @@ extern void subghz_raw_rssi_draw_ext(void);
 extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
 extern void subghz_raw_draw_frame_ext(void);
-extern void subghz_raw_draw_sin_ext(void);
-extern void subghz_raw_sin_advance_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
 extern uint8_t  sub_ghz_raw_recording_init_ext(void);
@@ -447,34 +445,34 @@ static void draw(SubGhzApp *app)
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    /* Live RSSI refresh during recording.
-     * trace=false: the cursor position does NOT advance — the cursor only
-     * moves right when actual ring-buffer data arrives (SubGhzEventRxData
-     * with trace=true). */
-    if (app->raw_state == SubGhzReadRawStateRecording)
+    /* Live RSSI update per draw tick.
+     *
+     * Start:     trace=true  — cursor slides right on every 200 ms refresh,
+     *                          showing ambient RF energy before recording.
+     *                          Matching Flipper/Momentum: the graph scrolls
+     *                          so users can see signal activity and know when
+     *                          to press REC.
+     * Recording: trace=false — cursor only advances on RxData events (ring
+     *                          buffer flush), not on periodic RSSI reads.
+     *                          The RSSI bar at the cursor tracks the live
+     *                          signal strength without pushing the history.
+     */
+    if (app->raw_state == SubGhzReadRawStateStart)
+    {
+        app->rssi = subghz_read_rssi_ext();
+        subghz_raw_rssi_push_ext((float)app->rssi, true);
+    }
+    else if (app->raw_state == SubGhzReadRawStateRecording)
     {
         app->rssi = subghz_read_rssi_ext();
         subghz_raw_rssi_push_ext((float)app->rssi, false);
     }
 
-    /* Waveform content per state:
-     *   Start:     Sine-wave animation — visual "listening" feedback.
-     *              Advances once per 200 ms draw tick (driven by rx_active
-     *              timeout in the scene event loop).
-     *   Recording: RSSI spectrogram scrolling left as captured edges arrive.
-     *   Idle:      Frozen spectrogram of the captured data. */
-    switch (app->raw_state)
-    {
-        case SubGhzReadRawStateStart:
-            subghz_raw_sin_advance_ext();
-            subghz_raw_draw_sin_ext();
-            break;
-        case SubGhzReadRawStateRecording:
-        case SubGhzReadRawStateIdle:
-        default:
-            subghz_raw_rssi_draw_ext();
-            break;
-    }
+    /* Draw the RSSI spectrogram for all states.
+     * Start:     Scrolling live ambient RSSI (built above).
+     * Recording: Captured edges with cursor advancing on RxData.
+     * Idle:      Frozen spectrogram of the completed capture. */
+    subghz_raw_rssi_draw_ext();
 
     /* Filename display centered in the waveform area when capture exists */
     if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')

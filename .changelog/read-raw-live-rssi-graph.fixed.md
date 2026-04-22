@@ -1,0 +1,1 @@
+**Sub-GHz Read Raw: Start state now shows a live scrolling RSSI spectrogram before recording begins** — matching Flipper/Momentum behaviour. The RSSI graph advances every 200 ms, showing ambient RF signal activity so users can see when a signal is present and know when to press REC. The cursor slides right in real time; pressing OK resets the graph and begins recording.
