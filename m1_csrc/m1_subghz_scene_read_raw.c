@@ -16,8 +16,10 @@
  *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
  * Display:
- *   START:     RSSI spectrogram frame with live RSSI bar at cursor=0 (left).
- *              Cursor stays at x=0 until REC is pressed.  Matches Flipper/Momentum.
+ *   START:     RSSI spectrogram — cursor advances only when RSSI exceeds the
+ *              noise floor (signal present), pauses during silence.  The radio
+ *              polls RSSI every 200 ms so signals are detected immediately.
+ *              Pressing REC resets the graph and begins recording.
  *   RECORDING: Cursor slides right as captured edges arrive (Q_EVENT_SUBGHZ_RX).
  *              Periodic 200ms refresh updates the live RSSI bar without advancing.
  *   IDLE:      Spectrogram shows captured data.  Filename displayed in waveform area.
@@ -91,6 +93,15 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * Filesystem operations prepend "0:" to build FatFS paths, so keep
  * raw_filepath short enough that "0:" + path fits in the derived buffers. */
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
+
+/* RSSI threshold used in the Start state to decide whether to advance the
+ * RSSI history cursor.  Below this level the cursor freezes (noise floor
+ * — no bars drawn, no scrolling), above it the cursor advances and bars
+ * appear.  Intentionally matches SUBGHZ_RAW_THRESHOLD_MIN in m1_sub_ghz.c
+ * so the first visible pixel and the first cursor advance happen at the
+ * same RSSI level.  Changing this value shifts the signal-detection
+ * sensitivity of the pre-record display. */
+#define SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM  (-90.0f)
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /*============================================================================*/
@@ -447,20 +458,23 @@ static void draw(SubGhzApp *app)
 
     /* Live RSSI update per draw tick.
      *
-     * Start:     trace=true  — cursor slides right on every 200 ms refresh,
-     *                          showing ambient RF energy before recording.
-     *                          Matching Flipper/Momentum: the graph scrolls
-     *                          so users can see signal activity and know when
-     *                          to press REC.
+     * Start:     Advance cursor ONLY when a signal is detected above the
+     *            noise floor (RSSI > SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM).
+     *            During silence the cursor freezes so the graph shows
+     *            only actual RF bursts — matching Flipper/Momentum Read Raw:
+     *            the waveform area scrolls when signal is present and pauses
+     *            when it is not.  The radio keeps polling RSSI every 200 ms
+     *            throughout, so arriving signals are detected immediately.
      * Recording: trace=false — cursor only advances on RxData events (ring
-     *                          buffer flush), not on periodic RSSI reads.
-     *                          The RSSI bar at the cursor tracks the live
-     *                          signal strength without pushing the history.
+     *            buffer flush every 512 captured edges), not on the periodic
+     *            RSSI reads.  The RSSI bar at the cursor tracks live signal
+     *            strength without pushing the history forward.
      */
     if (app->raw_state == SubGhzReadRawStateStart)
     {
         app->rssi = subghz_read_rssi_ext();
-        subghz_raw_rssi_push_ext((float)app->rssi, true);
+        bool signal_present = ((float)app->rssi > SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM);
+        subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
     }
     else if (app->raw_state == SubGhzReadRawStateRecording)
     {
