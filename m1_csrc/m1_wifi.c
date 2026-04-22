@@ -647,11 +647,15 @@ static bool wifi_do_connect(const char *ssid, const char *password)
 		if ( wifi_sync_rtc() )
 		{
 			m1_time_t       utc;
+			clock_time_t    utc_clock;
 			clock_time_t    local;
 			char            time_str[20];
 			char            tz_buf[10];
 			m1_get_datetime(&utc);
-			clock_apply_offset((const clock_time_t *)&utc, m1_clock_tz_offset, &local);
+			_Static_assert(sizeof(clock_time_t) == sizeof(m1_time_t),
+			               "clock_time_t and m1_time_t must remain the same size");
+			memcpy(&utc_clock, &utc, sizeof(utc_clock));
+			clock_apply_offset(&utc_clock, m1_clock_tz_offset, &local);
 			clock_tz_label(m1_clock_tz_offset, tz_buf, sizeof(tz_buf));
 			snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d %s",
 			         local.hour, local.minute, local.second, tz_buf);
