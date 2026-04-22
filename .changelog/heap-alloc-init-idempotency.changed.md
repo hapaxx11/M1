@@ -1,1 +1,0 @@
-**Code quality: heap-allocation init functions now call deinit at entry** — `m1_sdm_memory_init()`, `sub_ghz_raw_samples_init()`, and `m1_fb_init()` each call their paired deinit as the very first statement, preventing a memory leak if init is called twice without an intervening deinit.
