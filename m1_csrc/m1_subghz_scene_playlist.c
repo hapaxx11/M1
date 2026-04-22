@@ -172,10 +172,12 @@ static bool playlist_transmit_next(SubGhzApp *app)
     const char *path = app->playlist_files[app->playlist_current];
 
     /* Probe file header to choose the most efficient replay path.
-     * This reads only the first few lines (no Data: samples), so it is
-     * cheap even when called for every entry in a large playlist. */
-    flipper_subghz_probe_t probe;
-    if (flipper_subghz_probe(path, &probe) && probe.is_m1_native && probe.is_noise)
+     * flipper_subghz_emulate_path() encodes the same decision used by the
+     * saved scene's handle_action() so both callers always agree. */
+    flipper_subghz_probe_t probe = {0};
+    if (flipper_subghz_probe(path, &probe) &&
+        flipper_subghz_emulate_path(probe.is_noise, probe.is_m1_native)
+            == FLIPPER_SUBGHZ_EMULATE_DIRECT)
     {
         /* M1 native NOISE file — direct replay, no conversion */
         sub_ghz_replay_datafile(path, probe.frequency, probe.modulation);

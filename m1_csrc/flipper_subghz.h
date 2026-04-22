@@ -93,4 +93,45 @@ uint8_t flipper_subghz_freq_to_band(uint32_t freq_hz);
 bool flipper_subghz_is_m1_native_header(const char *filetype_val,
                                          const char *version_val);
 
+/*
+ * Emulate replay path selector — pure dispatch logic.
+ *
+ * Encoding the decision as a named function (rather than an inline
+ * comparison) makes the dispatch gate testable in isolation, documents
+ * the contract precisely, and prevents silent regressions: if anyone
+ * changes the dispatch rule the corresponding unit test will fail.
+ *
+ * DIRECT   → sub_ghz_replay_datafile()    — feeds the original .sgh file
+ *             straight into the streaming engine; no conversion, no temp file.
+ *             Used for M1 native NOISE recordings from Hapax, C3.12, SiN360.
+ *
+ * CONVERT  → sub_ghz_replay_flipper_file() — converts to temp .sgh before
+ *             streaming.  Used for Flipper .sub RAW files (need sign-strip)
+ *             and all PACKET/key files (need the key encoder path).
+ */
+typedef enum {
+	FLIPPER_SUBGHZ_EMULATE_DIRECT,  /* sub_ghz_replay_datafile()      */
+	FLIPPER_SUBGHZ_EMULATE_CONVERT, /* sub_ghz_replay_flipper_file()  */
+} flipper_subghz_emulate_path_t;
+
+/**
+ * @brief  Choose the replay path for a loaded signal.
+ *
+ * @param  is_raw       true when the loaded file is a RAW/NOISE recording
+ *                      (FLIPPER_SUBGHZ_TYPE_RAW), false for PACKET/key files.
+ * @param  is_m1_native true when flipper_subghz_load() set is_m1_native
+ *                      (M1 native .sgh format), false for Flipper .sub files.
+ * @return DIRECT when the file can stream without conversion; CONVERT otherwise.
+ */
+static inline flipper_subghz_emulate_path_t
+flipper_subghz_emulate_path(bool is_raw, bool is_m1_native)
+{
+	/* Only M1 native NOISE files skip conversion.
+	 * PACKET files (even native) always need the key encoder path.
+	 * Flipper .sub RAW files always need the sign-strip conversion. */
+	return (is_raw && is_m1_native)
+	       ? FLIPPER_SUBGHZ_EMULATE_DIRECT
+	       : FLIPPER_SUBGHZ_EMULATE_CONVERT;
+}
+
 #endif /* FLIPPER_SUBGHZ_H_ */

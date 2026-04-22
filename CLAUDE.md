@@ -214,6 +214,58 @@ Manchester decoder, and the OTA asset filter.
 
 These modules are tested via hardware integration, not host-side unit tests.
 
+#### Dispatch / routing logic — extract and test the decision, not the action
+
+When firmware code chooses between two hardware-coupled paths based on input
+properties (e.g. "use this replay function for format A, that replay function for
+format B"), the *dispatch condition* should be extracted into a **named pure
+function in the header** and tested in isolation.  This is distinct from testing
+the hardware actions on either side of the branch (which cannot run on the host).
+
+**Why this matters:** The actual branching code typically lives inside a scene
+`on_event` handler that requires display, queues, and radio — untestable on the
+host.  If the dispatch condition is just an inline `if (a && b)` in that handler,
+any regression in *a* or *b* (e.g. a flag being dropped, a type changing) will
+only be caught during hardware testing.  Naming and exporting the condition gates
+it with a deterministic CI check.
+
+**The canonical example** in this codebase is `flipper_subghz_emulate_path()`:
+
+```c
+/* flipper_subghz.h */
+typedef enum {
+    FLIPPER_SUBGHZ_EMULATE_DIRECT,   /* sub_ghz_replay_datafile()     */
+    FLIPPER_SUBGHZ_EMULATE_CONVERT,  /* sub_ghz_replay_flipper_file() */
+} flipper_subghz_emulate_path_t;
+
+static inline flipper_subghz_emulate_path_t
+flipper_subghz_emulate_path(bool is_raw, bool is_m1_native)
+{
+    return (is_raw && is_m1_native)
+           ? FLIPPER_SUBGHZ_EMULATE_DIRECT
+           : FLIPPER_SUBGHZ_EMULATE_CONVERT;
+}
+```
+
+The function is called by both `m1_subghz_scene_saved.c` and
+`m1_subghz_scene_playlist.c`.  The tests in `tests/test_flipper_subghz.c`
+verify every branch — including end-to-end file-loading variants that confirm
+the flags are set correctly by `flipper_subghz_load()`.  This means: if anyone
+accidentally routes `.sgh` files through the conversion path again, CI fails
+before the firmware is even built.
+
+**Rules for new dispatch logic:**
+
+1. Any `if (condition) call_A() else call_B()` where `call_A/B` are
+   hardware-coupled functions **must** have the `condition` extractable.
+2. Put the extracted condition in the relevant `.h` as a `static inline` or
+   as a named non-static function.  Keep it pure (no side effects).
+3. Write both pure-logic tests (no file I/O, cover all four `(T,T)/(T,F)/(F,T)/(F,F)`
+   combinations) and end-to-end load+dispatch tests that confirm the flags
+   propagate correctly from real file content.
+4. Both callers must call the same dispatch function — never two separate
+   inline checks that can drift apart.
+
 ### Phase Checklist for Moderate-to-Complex Changes
 
 When a code change meets or exceeds **moderate complexity** (multiple files, multi-step logic,

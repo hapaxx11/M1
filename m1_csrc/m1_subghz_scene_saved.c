@@ -296,8 +296,12 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             /* M1 native NOISE files (.sgh) are already in the streaming format
              * expected by the raw replay engine.  Bypass the conversion/temp-file
              * path and feed the original file directly.  This fixes "Memory error"
-             * failures when emulating C3.12/SiN360-produced .sgh recordings. */
-            if (is_raw_file && saved_signal.is_m1_native)
+             * failures when emulating C3.12/SiN360-produced .sgh recordings.
+             *
+             * The dispatch logic is encapsulated in flipper_subghz_emulate_path()
+             * so that it can be verified in isolation by host-side unit tests. */
+            if (flipper_subghz_emulate_path(is_raw_file, saved_signal.is_m1_native)
+                    == FLIPPER_SUBGHZ_EMULATE_DIRECT)
             {
                 uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
                 if (mod == MODULATION_UNKNOWN)
