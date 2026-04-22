@@ -1,0 +1,1 @@
+**Home screen: clock moved to status bar, UTC offset label removed** — "HH:MM" local time is now drawn centered in the top status bar row (between the status icons and battery indicator), matching the user's configured timezone offset. The UTC offset label that previously appeared below the time has been removed. The logo and version text block shift up to fill the freed space.

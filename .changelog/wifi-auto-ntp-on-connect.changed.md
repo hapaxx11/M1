@@ -1,0 +1,1 @@
+**WiFi: automatic NTP time sync on connect** — RTC is now synchronized via NTP immediately after any successful WiFi connection (from Scan+Connect or Saved Networks). The connection screen shows "Syncing time…" while the sync runs, then "Time synced" or "Time sync failed" before returning to the menu.

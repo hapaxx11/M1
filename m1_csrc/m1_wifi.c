@@ -27,6 +27,7 @@
 #include "m1_system.h"
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
+#include "m1_clock_util.h"
 #include "m1_wifi_cred.h"
 #include "m1_virtual_kb.h"
 #endif
@@ -639,7 +640,34 @@ static bool wifi_do_connect(const char *ssid, const char *password)
 		}
 		m1_u8g2_nextpage();
 		M1_LOG_I(M1_LOGDB_TAG, "Connected to %s, IP: %s\n\r", ssid, ip_req.u.wifi_ap_config.status);
-		vTaskDelay(pdMS_TO_TICKS(2500));
+		vTaskDelay(pdMS_TO_TICKS(800));
+
+		/* Auto-sync RTC via NTP now that we have internet access */
+		wifi_display_busy("Syncing time...");
+		if ( wifi_sync_rtc() )
+		{
+			m1_time_t       utc;
+			clock_time_t    utc_clock;
+			clock_time_t    local;
+			char            time_str[20];
+			char            tz_buf[10];
+			m1_get_datetime(&utc);
+			_Static_assert(sizeof(clock_time_t) == sizeof(m1_time_t),
+			               "clock_time_t and m1_time_t must remain the same size");
+			memcpy(&utc_clock, &utc, sizeof(utc_clock));
+			clock_apply_offset(&utc_clock, m1_clock_tz_offset, &local);
+			clock_tz_label(m1_clock_tz_offset, tz_buf, sizeof(tz_buf));
+			snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d %s",
+			         local.hour, local.minute, local.second, tz_buf);
+			M1_LOG_I(M1_LOGDB_TAG, "NTP sync OK: %s\n\r", time_str);
+			wifi_display_msg("Time synced:", time_str);
+		}
+		else
+		{
+			M1_LOG_W(M1_LOGDB_TAG, "NTP sync failed\n\r");
+			wifi_display_msg("Connected!", "Time sync failed");
+		}
+		vTaskDelay(pdMS_TO_TICKS(1500));
 		return true;
 	}
 	else
