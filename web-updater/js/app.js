@@ -13,6 +13,9 @@ import {
     buildFrame,
     buildFwUpdateStartPayload,
     buildFwUpdateDataPayload,
+    buildFileWriteStartPayload,
+    buildFileWriteDataPayload,
+    buildFileMkdirPayload,
     parseDeviceInfo,
     parseFwInfo,
     RPC_CMD_PING,
@@ -27,15 +30,21 @@ import {
     RPC_CMD_FW_UPDATE_DATA,
     RPC_CMD_FW_UPDATE_FINISH,
     RPC_CMD_FW_BANK_SWAP,
+    RPC_CMD_FILE_WRITE_START,
+    RPC_CMD_FILE_WRITE_DATA,
+    RPC_CMD_FILE_WRITE_FINISH,
+    RPC_CMD_FILE_MKDIR,
     RPC_ERRORS,
 } from './m1-rpc.js';
-import { fetchReleases, downloadFirmware } from './github-releases.js';
+import { fetchReleases, downloadFirmware, downloadSdAssets } from './github-releases.js';
+import { unzip as fflateUnzip } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
 
 /* ── Configuration ── */
 
 const REPO_OWNER = 'hapaxx11';
 const REPO_NAME  = 'M1';
-const FW_CHUNK_SIZE = 1024;  // Must match RPC_FW_CHUNK_SIZE on device
+const FW_CHUNK_SIZE = 1024;      // Must match RPC_FW_CHUNK_SIZE on device
+const SD_FILE_CHUNK_SIZE = 4096; // Max data bytes per FILE_WRITE_DATA frame
 const RESPONSE_TIMEOUT_MS = 10000;  // 10s timeout for RPC responses
 const ERASE_TIMEOUT_MS = 30000;     // 30s timeout for FW_UPDATE_START (flash erase)
 
@@ -80,6 +89,7 @@ function cacheElements() {
         'release-section', 'release-list', 'btn-refresh-releases',
         'local-file-input', 'local-file-name',
         'btn-flash', 'flash-section',
+        'chk-skip-sd-assets',
         'progress-section', 'progress-bar', 'progress-text', 'progress-detail',
         'log-output',
         'browser-warning',
@@ -293,6 +303,7 @@ function renderReleases() {
                 <span class="release-name">${escapeHtml(r.name)}</span>
                 <span class="release-meta">
                     ${r.prerelease ? '<span class="badge badge-pre">pre-release</span>' : ''}
+                    ${r.sdAsset ? '<span class="badge badge-sd">+ SD assets</span>' : ''}
                     <span class="release-date">${new Date(r.publishedAt).toLocaleDateString()}</span>
                     <span class="release-size">${formatSize(r.fwAsset.size)}</span>
                 </span>
@@ -463,6 +474,42 @@ async function handleFlash() {
         } catch (_) {
             /* SHA-256 unavailable — not fatal */
         }
+
+        // Copy SD card assets before flashing (release-based updates only)
+        const skipSd = elements['chk-skip-sd-assets'].checked;
+        if (!skipSd && release.sdAsset) {
+            log(`Downloading SD card assets (${formatSize(release.sdAsset.size)})...`);
+            updateProgress(0, 'Downloading SD assets...');
+
+            try {
+                const zipData = await downloadSdAssets(release.sdAsset.downloadUrl, (loaded, total) => {
+                    const pct = total > 0 ? (loaded / total) * 100 : 0;
+                    updateProgress(pct, 'Downloading SD assets...', `${formatSize(loaded)} / ${formatSize(total)}`);
+                });
+
+                log('Decompressing SD assets...');
+                updateProgress(0, 'Decompressing SD assets...');
+                const files = await unzipAsync(zipData);
+
+                const filePaths = Object.keys(files).filter(n => !n.endsWith('/'));
+                log(`Writing ${filePaths.length} file(s) to SD card...`);
+
+                const { written, failed } = await writeFilesToSd(files, (i, total, filename) => {
+                    const pct = total > 0 ? (i / total) * 100 : 0;
+                    updateProgress(pct, 'Copying SD assets...', `${i + 1}/${total}: ${filename}`);
+                });
+
+                const result = `${written} file(s) written${failed > 0 ? `, ${failed} failed` : ''}`;
+                log(`SD assets: ${result}`, failed > 0 ? 'warn' : 'success');
+                updateProgress(100, 'SD assets done');
+            } catch (err) {
+                log(`SD assets copy failed: ${err.message} — continuing with firmware flash`, 'warn');
+            }
+        } else if (skipSd) {
+            log('Skipping SD card assets');
+        } else {
+            log('No SD assets in this release — skipping');
+        }
     }
 
     // Start flashing
@@ -573,6 +620,109 @@ async function flashFirmware(data, name) {
     setTimeout(() => {
         updateConnectionUI(false);
     }, 2000);
+}
+
+/* ── SD Card File Writing ── */
+
+/**
+ * Promisified wrapper for fflate.unzip.
+ *
+ * @param {Uint8Array} data - ZIP archive bytes
+ * @returns {Promise<Object.<string, Uint8Array>>} Map of filename → content
+ */
+function unzipAsync(data) {
+    return new Promise((resolve, reject) => {
+        fflateUnzip(data, (err, files) => {
+            if (err) reject(err);
+            else resolve(files);
+        });
+    });
+}
+
+/**
+ * Recursively ensure a directory path exists on the SD card.
+ * Creates each path component in turn; skips components already sent.
+ * The firmware ACKs FILE_MKDIR even when the directory already exists.
+ *
+ * @param {string}    dirPath     - Directory path (e.g. "IR/TVs")
+ * @param {Set<string>} createdDirs - Set of paths already created this session
+ */
+async function ensureDir(dirPath, createdDirs) {
+    const parts = dirPath.split('/');
+    let accumulated = '';
+    for (const part of parts) {
+        if (!part) continue;
+        accumulated = accumulated ? `${accumulated}/${part}` : part;
+        if (!createdDirs.has(accumulated)) {
+            try {
+                await sendCommand(RPC_CMD_FILE_MKDIR, buildFileMkdirPayload(accumulated));
+            } catch (_) {
+                /* Ignore — directory may already exist from a previous update */
+            }
+            createdDirs.add(accumulated);
+        }
+    }
+}
+
+/**
+ * Write all files from a decompressed ZIP archive to the SD card via RPC.
+ *
+ * For each file:
+ *   1. Ensure every parent directory exists (FILE_MKDIR, idempotent)
+ *   2. FILE_WRITE_START — open / truncate the file on SD
+ *   3. Repeated FILE_WRITE_DATA — send data in SD_FILE_CHUNK_SIZE chunks
+ *   4. FILE_WRITE_FINISH — flush and close
+ *
+ * Individual file failures are caught and counted; writing continues for
+ * the remaining files.
+ *
+ * @param {Object.<string, Uint8Array>} files       - fflate output (path → bytes)
+ * @param {function(number,number,string)} [onProgress] - (fileIndex, total, filename)
+ * @returns {Promise<{written: number, failed: number}>}
+ */
+async function writeFilesToSd(files, onProgress = null) {
+    const createdDirs = new Set();
+    const filePaths = Object.keys(files).filter(name => !name.endsWith('/'));
+    const total = filePaths.length;
+    let written = 0;
+    let failed = 0;
+
+    for (let i = 0; i < filePaths.length; i++) {
+        const path = filePaths[i];
+        const data = files[path];
+
+        if (onProgress) onProgress(i, total, path);
+
+        try {
+            // Create parent directories
+            const lastSlash = path.lastIndexOf('/');
+            if (lastSlash > 0) {
+                await ensureDir(path.substring(0, lastSlash), createdDirs);
+            }
+
+            // Open file for writing
+            await sendCommand(RPC_CMD_FILE_WRITE_START,
+                buildFileWriteStartPayload(data.length, path));
+
+            // Send data in chunks
+            let offset = 0;
+            while (offset < data.length) {
+                const end = Math.min(offset + SD_FILE_CHUNK_SIZE, data.length);
+                await sendCommand(RPC_CMD_FILE_WRITE_DATA,
+                    buildFileWriteDataPayload(offset, data.slice(offset, end)));
+                offset = end;
+            }
+
+            // Close file
+            await sendCommand(RPC_CMD_FILE_WRITE_FINISH);
+            written++;
+        } catch (err) {
+            log(`SD write failed for ${path}: ${err.message}`, 'warn');
+            failed++;
+        }
+    }
+
+    return { written, failed };
 }
 
 /* ── Utility Functions ── */

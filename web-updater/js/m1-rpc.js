@@ -28,6 +28,14 @@ export const RPC_CMD_REBOOT          = 0x05;
 export const RPC_CMD_ACK             = 0x06;
 export const RPC_CMD_NACK            = 0x07;
 
+/* File / SD Commands */
+export const RPC_CMD_FILE_WRITE_START  = 0x34;
+export const RPC_CMD_FILE_WRITE_DATA   = 0x35;
+export const RPC_CMD_FILE_WRITE_FINISH = 0x36;
+export const RPC_CMD_FILE_MKDIR        = 0x38;
+export const RPC_CMD_SD_UNMOUNT        = 0x3B;
+export const RPC_CMD_SD_MOUNT          = 0x3C;
+
 /* Firmware Commands */
 export const RPC_CMD_FW_INFO         = 0x40;
 export const RPC_CMD_FW_INFO_RESP    = 0x41;
@@ -284,6 +292,60 @@ export function buildFwUpdateDataPayload(offset, chunk) {
     buf[3] = (offset >>> 24) & 0xFF;
     buf.set(chunk, 4);
     return buf;
+}
+
+/**
+ * Build FILE_WRITE_START payload.
+ * Payload: [total_size:4 LE] [path string (UTF-8, no null terminator)]
+ *
+ * The firmware prepends "0:/" automatically when the path does not start with
+ * a drive prefix, so paths like "IR/foo.ir" or "SubGHz/bar.sub" are correct.
+ *
+ * @param {number} totalSize - File size in bytes
+ * @param {string} path      - Destination path on SD card (e.g. "IR/TVs/foo.ir")
+ * @returns {Uint8Array}
+ */
+export function buildFileWriteStartPayload(totalSize, path) {
+    const pathBytes = new TextEncoder().encode(path);
+    const buf = new Uint8Array(4 + pathBytes.length);
+    buf[0] = totalSize & 0xFF;
+    buf[1] = (totalSize >>> 8) & 0xFF;
+    buf[2] = (totalSize >>> 16) & 0xFF;
+    buf[3] = (totalSize >>> 24) & 0xFF;
+    buf.set(pathBytes, 4);
+    return buf;
+}
+
+/**
+ * Build FILE_WRITE_DATA payload.
+ * Payload: [offset:4 LE] [data:N]
+ *
+ * @param {number}     offset - Write offset within the file
+ * @param {Uint8Array} chunk  - Data chunk (≤ RPC_MAX_PAYLOAD − 4 bytes)
+ * @returns {Uint8Array}
+ */
+export function buildFileWriteDataPayload(offset, chunk) {
+    const buf = new Uint8Array(4 + chunk.length);
+    buf[0] = offset & 0xFF;
+    buf[1] = (offset >>> 8) & 0xFF;
+    buf[2] = (offset >>> 16) & 0xFF;
+    buf[3] = (offset >>> 24) & 0xFF;
+    buf.set(chunk, 4);
+    return buf;
+}
+
+/**
+ * Build FILE_MKDIR payload.
+ * Payload: [path string (UTF-8, no null terminator)]
+ *
+ * The firmware treats FR_EXIST as success, so calling mkdir on an existing
+ * directory is safe and returns ACK.
+ *
+ * @param {string} path - Directory path on SD card (e.g. "IR/TVs")
+ * @returns {Uint8Array}
+ */
+export function buildFileMkdirPayload(path) {
+    return new TextEncoder().encode(path);
 }
 
 /**

@@ -109,6 +109,12 @@
         <!-- 4. Flash (shown after connecting) -->
         <div id="flash-section" class="card hidden">
             <h2><span class="icon">⚡</span> Flash Firmware</h2>
+            <div class="flash-option">
+                <label>
+                    <input type="checkbox" id="chk-skip-sd-assets">
+                    Skip SD card assets <span class="flash-option-note">(IR/SubGHz files — release updates only)</span>
+                </label>
+            </div>
             <div class="flash-actions">
                 <button id="btn-flash" class="btn-success" disabled>
                     Install Firmware
