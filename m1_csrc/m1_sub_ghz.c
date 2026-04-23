@@ -1114,6 +1114,30 @@ static void subghz_raw_rssi_draw(void)
 		u8g2_DrawHLine(&m1_u8g2, cursor_x - 2, SUBGHZ_RAW_TOP_SCALE - 2, 5);
 		u8g2_DrawHLine(&m1_u8g2, cursor_x - 1, SUBGHZ_RAW_TOP_SCALE - 1, 3);
 	}
+
+	/* Dashed horizontal threshold line — spans the full waveform width.
+	 * Drawn last so it is always visible as a reference even when bars reach
+	 * or exceed this level.  The Y position maps the user-configured RSSI
+	 * threshold (subghz_cfg.rssi_threshold) through the same scale used for
+	 * bar heights: thresh_h = (threshold_dbm - min_dbm) / divider,
+	 * thresh_y = bottom - thresh_h. */
+	{
+		/* Clamp threshold to the drawable range before converting.
+		 * If rssi_threshold < SUBGHZ_RAW_THRESHOLD_MIN the subtraction
+		 * yields a negative float; casting that to uint8_t wraps to a
+		 * large value and thresh_y falls off the top of the display. */
+		float thresh_dbm = (float)subghz_cfg.rssi_threshold;
+		if (thresh_dbm < SUBGHZ_RAW_THRESHOLD_MIN)
+			thresh_dbm = SUBGHZ_RAW_THRESHOLD_MIN;
+		uint8_t thresh_h = (uint8_t)((thresh_dbm - SUBGHZ_RAW_THRESHOLD_MIN)
+		                             / SUBGHZ_RAW_RSSI_DIVIDER);
+		int thresh_y = bottom - (int)thresh_h;
+		if (thresh_y > SUBGHZ_RAW_TOP_SCALE && thresh_y < SUBGHZ_RAW_BOTTOM_Y)
+		{
+			for (int x = 1; x < SUBGHZ_RAW_END_SCALE; x += 4)
+				u8g2_DrawHLine(&m1_u8g2, x, thresh_y, 2);
+		}
+	}
 }
 
 
@@ -5162,6 +5186,17 @@ void subghz_raw_rssi_reset_ext(void)
 void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace)
 {
 	subghz_raw_rssi_push(rssi_dbm, trace);
+}
+
+void subghz_raw_rssi_set_current_ext(float rssi_dbm)
+{
+	/* Update the live RSSI cursor indicator without mutating the history
+	 * buffer.  Used in Start state during silence so captured burst bars
+	 * are not erased when RSSI drops back below threshold. */
+	uint8_t u_rssi = 0;
+	if (rssi_dbm >= SUBGHZ_RAW_THRESHOLD_MIN)
+		u_rssi = (uint8_t)((rssi_dbm - SUBGHZ_RAW_THRESHOLD_MIN) / SUBGHZ_RAW_RSSI_DIVIDER);
+	subghz_raw_rssi_current = u_rssi;
 }
 
 void subghz_raw_draw_sin_ext(void)

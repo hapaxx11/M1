@@ -16,8 +16,10 @@
  *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
  * Display:
- *   START:     RSSI spectrogram frame with live RSSI bar at cursor=0 (left).
- *              Cursor stays at x=0 until REC is pressed.  Matches Flipper/Momentum.
+ *   START:     RSSI spectrogram — cursor advances only when RSSI exceeds the
+ *              noise floor (signal present), pauses during silence.  The radio
+ *              polls RSSI every 200 ms so signals are detected immediately.
+ *              Pressing REC resets the graph and begins recording.
  *   RECORDING: Cursor slides right as captured edges arrive (Q_EVENT_SUBGHZ_RX).
  *              Periodic 200ms refresh updates the live RSSI bar without advancing.
  *   IDLE:      Spectrogram shows captured data.  Filename displayed in waveform area.
@@ -73,11 +75,13 @@ extern uint8_t subghz_record_mode_flag;
 extern S_M1_RingBuffer subghz_rx_rawdata_rb;
 extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 extern int16_t subghz_read_rssi_ext(void);
+extern int8_t  subghz_get_rssi_threshold_ext(void);
 
 /* RAW RSSI visualization helpers from m1_sub_ghz.c */
 extern void subghz_raw_rssi_draw_ext(void);
 extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
+extern void subghz_raw_rssi_set_current_ext(float rssi_dbm);
 extern void subghz_raw_draw_frame_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
@@ -91,6 +95,11 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * Filesystem operations prepend "0:" to build FatFS paths, so keep
  * raw_filepath short enough that "0:" + path fits in the derived buffers. */
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
+
+/* RSSI threshold for cursor advancement in the Start state.
+ * Uses the user-configurable value (subghz_get_rssi_threshold_ext()) so the
+ * cursor starts scrolling at exactly the moment the signal crosses the
+ * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /*============================================================================*/
@@ -445,21 +454,38 @@ static void draw(SubGhzApp *app)
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    /* Live RSSI refresh during recording only.
-     * trace=false: the cursor position does NOT advance — the cursor only
-     * moves right when actual ring-buffer data arrives (SubGhzEventRxData
-     * with trace=true).  Start state is completely static (empty frame). */
-    if (app->raw_state == SubGhzReadRawStateRecording)
+    /* Live RSSI update per draw tick.
+     *
+     * Start:     Advance cursor (trace=true) ONLY when a signal is detected
+     *            above the noise floor (RSSI > user-configured threshold).
+     *            During silence only the live cursor indicator is refreshed
+     *            via subghz_raw_rssi_set_current_ext() — the history buffer
+     *            is left untouched so captured burst bars are never erased.
+     * Recording: trace=false — cursor only advances on RxData events (ring
+     *            buffer flush every 512 captured edges), not on the periodic
+     *            RSSI reads.  The RSSI bar at the cursor tracks live signal
+     *            strength without pushing the history forward.
+     */
+    if (app->raw_state == SubGhzReadRawStateStart)
+    {
+        app->rssi = subghz_read_rssi_ext();
+        bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
+        if (signal_present)
+            subghz_raw_rssi_push_ext((float)app->rssi, true);   /* advance history */
+        else
+            subghz_raw_rssi_set_current_ext((float)app->rssi);  /* cursor only, preserve history */
+    }
+    else if (app->raw_state == SubGhzReadRawStateRecording)
     {
         app->rssi = subghz_read_rssi_ext();
         subghz_raw_rssi_push_ext((float)app->rssi, false);
     }
 
-    /* Draw RSSI history spectrogram for Recording and Idle states.
-     * Start state: buffer is empty after reset so draw shows only the
-     * scale frame — no bars, no animation. */
-    if (app->raw_state != SubGhzReadRawStateStart)
-        subghz_raw_rssi_draw_ext();
+    /* Draw the RSSI spectrogram for all states.
+     * Start:     Scrolling live ambient RSSI (built above).
+     * Recording: Captured edges with cursor advancing on RxData.
+     * Idle:      Frozen spectrogram of the completed capture. */
+    subghz_raw_rssi_draw_ext();
 
     /* Filename display centered in the waveform area when capture exists */
     if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
