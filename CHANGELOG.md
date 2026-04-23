@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.154] - 2026-04-23
+
+### Changed
+
+- **Home/Splash screen: vertically center logo and text block** — The M1 Hapax logo and the three text lines are now vertically centered in the area below the status bar instead of being flush to the top. The logo is centered in the 52px available area (y=22), and the firmware version line (middle text) is aligned with the logo's vertical center.
 ## [0.9.0.153] - 2026-04-23
 
 ### Changed
