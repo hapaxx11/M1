@@ -445,8 +445,8 @@ static void draw(SubGhzApp *app)
 
     /* Build the right-side status string:
      *   START:     "RAW"
-     *   RECORDING: "Xk spl"  (incrementing sample count, matches Momentum)
-     *   IDLE:      "Xk spl"  (frozen sample count) */
+     *   RECORDING: "N spl."  (full integer, trailing period — matches Momentum)
+     *   IDLE:      "N spl."  (frozen) */
     const char *right_status = NULL;
     char right_buf[16];
 
@@ -456,21 +456,13 @@ static void draw(SubGhzApp *app)
             right_status = "RAW";
             break;
         case SubGhzReadRawStateRecording:
-            if (app->raw_sample_count >= 1000)
-                snprintf(right_buf, sizeof(right_buf), "%luk spl",
-                         (unsigned long)(app->raw_sample_count / 1000));
-            else
-                snprintf(right_buf, sizeof(right_buf), "%lu spl",
-                         (unsigned long)app->raw_sample_count);
+            snprintf(right_buf, sizeof(right_buf), "%lu spl.",
+                     (unsigned long)app->raw_sample_count);
             right_status = right_buf;
             break;
         case SubGhzReadRawStateIdle:
-            if (app->raw_sample_count >= 1000)
-                snprintf(right_buf, sizeof(right_buf), "%luk spl",
-                         (unsigned long)(app->raw_sample_count / 1000));
-            else
-                snprintf(right_buf, sizeof(right_buf), "%lu spl",
-                         (unsigned long)app->raw_sample_count);
+            snprintf(right_buf, sizeof(right_buf), "%lu spl.",
+                     (unsigned long)app->raw_sample_count);
             right_status = right_buf;
             break;
     }
