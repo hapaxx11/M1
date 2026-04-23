@@ -130,6 +130,23 @@
                         </label>
                     </div>
                 </div>
+                <div class="flash-option" id="keeloq-option">
+                    <label>
+                        <input type="checkbox" id="chk-install-keeloq">
+                        <span>Install KeeLoq manufacturer keys</span>
+                        <span class="flash-option-note">(writes SUBGHZ/keeloq_mfcodes — enables rolling-code replay)</span>
+                    </label>
+                    <div class="flash-suboption keeloq-file-row hidden" id="keeloq-file-row">
+                        <button id="btn-keeloq-file" class="btn-small btn-secondary">
+                            📁 Select keeloq_keys.txt
+                        </button>
+                        <span id="keeloq-file-name" class="keeloq-key-count"></span>
+                        <input type="file" id="keeloq-file-input" accept=".txt" class="hidden">
+                    </div>
+                    <div class="flash-suboption hidden" id="keeloq-privacy-note">
+                        <span class="flash-option-note keeloq-privacy">🔒 Your key file never leaves your browser — conversion happens locally.</span>
+                    </div>
+                </div>
             </div>
             <div class="flash-actions">
                 <button id="btn-flash" class="btn-success" disabled>
