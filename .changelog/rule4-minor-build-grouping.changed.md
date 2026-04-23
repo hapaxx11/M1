@@ -1,1 +1,0 @@
-**Release retention Rule 4: group by minor.build instead of minor** — When a new major version is released, the pruning of the immediately preceding major now keeps the most recent release per distinct `[minor].[build]` combination rather than per distinct `[minor]` alone. This preserves more granular history when multiple build numbers exist within the same minor series.

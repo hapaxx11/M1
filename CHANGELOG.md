@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.155] - 2026-04-23
+
+### Added
+
+- **Release retention policy** — after each successful release, old releases are automatically pruned according to a four-tier policy: up to 10 releases kept within the same major.minor.build group; up to 5 within the same major.minor group; up to 3 within the same major group; and on a new major version, the previous major is trimmed to the single most-recent release per distinct minor.build combination.
+
+### Changed
+
+- **Release retention Rule 4: group by minor.build instead of minor** — When a new major version is released, the pruning of the immediately preceding major now keeps the most recent release per distinct `[minor].[build]` combination rather than per distinct `[minor]` alone. This preserves more granular history when multiple build numbers exist within the same minor series.
 ## [0.9.0.154] - 2026-04-23
 
 ### Changed
