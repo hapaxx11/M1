@@ -28,6 +28,19 @@ export const RPC_CMD_REBOOT          = 0x05;
 export const RPC_CMD_ACK             = 0x06;
 export const RPC_CMD_NACK            = 0x07;
 
+/* File / SD Commands */
+export const RPC_CMD_FILE_LIST         = 0x30;
+export const RPC_CMD_FILE_LIST_RESP    = 0x31;
+export const RPC_CMD_FILE_READ         = 0x32;
+export const RPC_CMD_FILE_READ_DATA    = 0x33;
+export const RPC_CMD_FILE_WRITE_START  = 0x34;
+export const RPC_CMD_FILE_WRITE_DATA   = 0x35;
+export const RPC_CMD_FILE_WRITE_FINISH = 0x36;
+export const RPC_CMD_FILE_DELETE       = 0x37;
+export const RPC_CMD_FILE_MKDIR        = 0x38;
+export const RPC_CMD_SD_UNMOUNT        = 0x3B;
+export const RPC_CMD_SD_MOUNT          = 0x3C;
+
 /* Firmware Commands */
 export const RPC_CMD_FW_INFO         = 0x40;
 export const RPC_CMD_FW_INFO_RESP    = 0x41;
@@ -284,6 +297,94 @@ export function buildFwUpdateDataPayload(offset, chunk) {
     buf[3] = (offset >>> 24) & 0xFF;
     buf.set(chunk, 4);
     return buf;
+}
+
+/**
+ * Build FILE_WRITE_START payload.
+ * Payload: [total_size:4 LE] [path string (UTF-8, no null terminator)]
+ *
+ * The firmware prepends "0:/" automatically when the path does not start with
+ * a drive prefix, so paths like "IR/foo.ir" or "SubGHz/bar.sub" are correct.
+ *
+ * @param {number} totalSize - File size in bytes
+ * @param {string} path      - Destination path on SD card (e.g. "IR/TVs/foo.ir")
+ * @returns {Uint8Array}
+ */
+export function buildFileWriteStartPayload(totalSize, path) {
+    const pathBytes = new TextEncoder().encode(path);
+    const buf = new Uint8Array(4 + pathBytes.length);
+    buf[0] = totalSize & 0xFF;
+    buf[1] = (totalSize >>> 8) & 0xFF;
+    buf[2] = (totalSize >>> 16) & 0xFF;
+    buf[3] = (totalSize >>> 24) & 0xFF;
+    buf.set(pathBytes, 4);
+    return buf;
+}
+
+/**
+ * Build FILE_WRITE_DATA payload.
+ * Payload: [offset:4 LE] [data:N]
+ *
+ * @param {number}     offset - Write offset within the file
+ * @param {Uint8Array} chunk  - Data chunk (≤ RPC_MAX_PAYLOAD − 4 bytes)
+ * @returns {Uint8Array}
+ */
+export function buildFileWriteDataPayload(offset, chunk) {
+    const buf = new Uint8Array(4 + chunk.length);
+    buf[0] = offset & 0xFF;
+    buf[1] = (offset >>> 8) & 0xFF;
+    buf[2] = (offset >>> 16) & 0xFF;
+    buf[3] = (offset >>> 24) & 0xFF;
+    buf.set(chunk, 4);
+    return buf;
+}
+
+/**
+ * Build FILE_MKDIR payload.
+ * Payload: [path string (UTF-8, no null terminator)]
+ *
+ * The firmware treats FR_EXIST as success, so calling mkdir on an existing
+ * directory is safe and returns ACK.
+ *
+ * @param {string} path - Directory path on SD card (e.g. "IR/TVs")
+ * @returns {Uint8Array}
+ */
+export function buildFileMkdirPayload(path) {
+    return new TextEncoder().encode(path);
+}
+
+/**
+ * Build FILE_LIST payload.
+ * Payload: [path string (UTF-8, no null terminator)], or empty for the root.
+ *
+ * The firmware responds with a single FILE_LIST_RESP frame whose payload is:
+ *   [path string (null-terminated)]
+ *   Repeated: [is_dir:1] [size:4 LE] [date:2 LE] [time:2 LE] [name:N + null]
+ * NACK 0x05 if the directory does not exist, NACK 0x04 if the SD is not ready.
+ *
+ * @param {string} [path] - Directory path on SD card (e.g. "IR/TVs"), or empty for root
+ * @returns {Uint8Array}
+ */
+export function buildFileListPayload(path = '') {
+    return new TextEncoder().encode(path);
+}
+
+/**
+ * Build FILE_READ payload.
+ * Payload: [path string (UTF-8, no null terminator)]
+ *
+ * The firmware responds with one or more FILE_READ_DATA frames containing the
+ * file's contents. It does not send a final ACK when the read completes.
+ * Instead, callers must treat FILE_READ_DATA as a multi-frame response and
+ * track SEQ across chunks: the first FILE_READ_DATA uses the request SEQ, and
+ * each subsequent FILE_READ_DATA increments SEQ by 1. If the file does not
+ * exist, the device responds with NACK 0x05.
+ *
+ * @param {string} path - File path on SD card (e.g. "IR/TVs/Samsung.ir")
+ * @returns {Uint8Array}
+ */
+export function buildFileReadPayload(path) {
+    return new TextEncoder().encode(path);
 }
 
 /**
