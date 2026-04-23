@@ -1,0 +1,84 @@
+# KeeLoq manufacturer key file — EXAMPLE / TEMPLATE
+#
+# This file documents the format used by the M1 firmware to look up KeeLoq
+# manufacturer (master) keys for counter-mode re-encryption replay.
+#
+# ============================================================================
+# HOW TO GET THE REAL KEYS
+# ============================================================================
+#
+# The actual manufacturer keys are proprietary and cannot be distributed
+# publicly.  You must extract them from your own Flipper Zero device:
+#
+#   1. Install RocketGod's SubGHz Toolkit on your Flipper Zero:
+#        https://github.com/RocketGod-git/RocketGods-SubGHz-Toolkit
+#
+#   2. On the Flipper, run the toolkit and choose:
+#        "Decrypt KeeLoq Manufacturer Codes"
+#      This exports a file called keeloq_keys.txt to the Flipper's SD card.
+#
+#   3. Copy keeloq_keys.txt from your Flipper to your PC.
+#
+#   4. Convert to M1 format using the bundled script:
+#        python3 convert_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes
+#      (The convert_keeloq_keys.py script is included in this folder.)
+#
+#   5. Copy the resulting keeloq_mfcodes file to your M1 SD card at:
+#        SUBGHZ/keeloq_mfcodes
+#
+# Once the file is in place, any captured .sub file whose Manufacture: field
+# matches a loaded key will be replayed automatically via counter-mode
+# re-encryption (KeeLoq, Jarolift, Star Line protocols).
+#
+# ============================================================================
+# FILE FORMAT
+# ============================================================================
+#
+# One entry per line.  Lines beginning with '#' are comments and are ignored.
+# Blank lines are also ignored.
+#
+# Each entry has three colon-separated fields:
+#
+#   KEY_HEX:TYPE:MANUFACTURER_NAME
+#
+#   KEY_HEX          — 64-bit master key, exactly 16 uppercase hex digits
+#   TYPE             — Learning type: 1 = Simple, 2 = Normal, 3 = Secure
+#   MANUFACTURER_NAME — Free-form name (matched case-insensitively against
+#                       the Manufacture: field in .sub files)
+#
+# Example entries (keys are illustrative placeholders — NOT real keys):
+#
+#   0123456789ABCDEF:1:ExampleCorp
+#   FEDCBA9876543210:2:AnotherBrand
+#   AABBCCDDEEFF0011:3:ThirdManufacturer
+#
+# ============================================================================
+# BOTH FORMATS ACCEPTED
+# ============================================================================
+#
+# The M1 firmware also accepts the RocketGod multi-line format directly,
+# so you can place keeloq_keys.txt on the SD card as keeloq_mfcodes without
+# running the conversion script if you prefer.  Both formats may even be
+# mixed in the same file.
+#
+#   Manufacturer: ExampleCorp
+#   Key (Hex):    0123456789ABCDEF
+#   Key (Dec):    81985529216486895
+#   Type:         1
+#   ------------------------------------
+#
+# ============================================================================
+# RENAME THIS FILE
+# ============================================================================
+#
+# This is an example file.  To activate KeeLoq replay on the M1:
+#   - Replace the placeholder entries below with real entries from your
+#     Flipper Zero (see "How to get the real keys" above).
+#   - Save the file as:  SUBGHZ/keeloq_mfcodes  (no .example extension)
+#
+# ----------------------------------------------------------------------------
+# Add your real entries below this line (delete or keep examples as desired):
+# ----------------------------------------------------------------------------
+
+# 0123456789ABCDEF:1:ExampleCorp
+# FEDCBA9876543210:2:AnotherBrand
