@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.157] - 2026-04-23
+
+### Added
+
+- **Sub-GHz SD assets: KeeLoq manufacturer key setup bundle** — Added `subghz_database/keeloq/`
+  to the SD card assets package. Includes `keeloq_mfcodes.example` (commented format template
+  and step-by-step key-extraction guide), `convert_keeloq_keys.py` (RocketGod toolkit output
+  converter, bundled directly on the SD card for convenience), and `SubGHz/README.md`
+  (top-level guide covering KeeLoq rolling-code replay setup and signal file attribution).
+  The actual manufacturer keys remain the user's responsibility to extract from their own
+  Flipper Zero via RocketGod's SubGHz Toolkit.
+- **Web Updater: KeeLoq manufacturer keys install** — the Install card now has an optional
+  "Install KeeLoq manufacturer keys" step. Select a `keeloq_keys.txt` file produced by
+  RocketGod's SubGHz Toolkit; the browser converts it in real-time (no server involved)
+  and writes the result to `SUBGHZ/keeloq_mfcodes` on the SD card, enabling automatic
+  counter-mode replay of KeeLoq, Jarolift, and Star Line rolling-code `.sub` files.
 ## [0.9.0.156] - 2026-04-23
 
 ### Fixed
