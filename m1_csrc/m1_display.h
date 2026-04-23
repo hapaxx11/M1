@@ -43,7 +43,7 @@
 
 #define M1_MAIN_LOGO_FONT_1B			u8g2_font_Pixellari_tu // 10 pixel
 
-#define M1_POWERUP_LOGO_TOP_POS_Y		15
+#define M1_POWERUP_LOGO_TOP_POS_Y		22
 #define M1_POWERUP_LOGO_LEFT_POS_X		0
 #define M1_POWERUP_LOGO_WIDTH			40
 #define M1_POWERUP_LOGO_HEIGHT			32
