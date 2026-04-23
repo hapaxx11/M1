@@ -18,8 +18,8 @@ Rules are applied hierarchically — the first matching rule wins:
 
   Rule 4 — new major (no existing release shares major, Rules 1–3 did not apply):
       For the immediately preceding major (current − 1), keep only the
-      most recent release for each distinct minor version.  All other
-      majors are untouched.
+      most recent release for each distinct [minor].[build] combination.
+      All other majors are untouched.
 
 Tags that do not match the expected vMAJOR.MINOR.BUILD.RC pattern are
 silently ignored and never deleted.
@@ -218,7 +218,7 @@ def apply_retention(repo: str, new_tag: str, dry_run: bool = False) -> None:
         return
 
     # -----------------------------------------------------------------------
-    # Rule 4 — new major: prune previous major to one release per minor
+    # Rule 4 — new major: prune previous major to one release per minor.build
     # -----------------------------------------------------------------------
     prev_major = new_major - 1
     if prev_major < 0:
@@ -235,13 +235,14 @@ def apply_retention(repo: str, new_tag: str, dry_run: bool = False) -> None:
 
     print(
         f"Rule 4: new major {new_major} — pruning major {prev_major} to "
-        f"most-recent release per minor ({len(prev_releases)} releases found)."
+        f"most-recent release per minor.build ({len(prev_releases)} releases found)."
     )
-    seen_minors: set[int] = set()
+    seen_minor_builds: set[tuple[int, int]] = set()
     for r in prev_releases:  # already sorted most-recent first
-        if r.minor not in seen_minors:
-            seen_minors.add(r.minor)
-            print(f"  keep  {r.tag}  (most recent for minor {r.minor})")
+        key = (r.minor, r.build)
+        if key not in seen_minor_builds:
+            seen_minor_builds.add(key)
+            print(f"  keep  {r.tag}  (most recent for minor.build {r.minor}.{r.build})")
         else:
             delete_release(repo, r.tag, dry_run)
 
