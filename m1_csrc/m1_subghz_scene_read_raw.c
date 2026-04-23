@@ -9,9 +9,9 @@
  * States: START → RECORDING → IDLE (capture on SD)
  *
  * Button mapping (matches physical D-pad left/OK/right):
- *   START:     LEFT = Config  |  OK = REC    |  RIGHT = (none)
- *   RECORDING: (none)         |  OK = Stop   |  (none)
- *   IDLE:      LEFT = Erase   |  OK = Send   |  RIGHT = Save
+ *   START:     LEFT = Config  |  OK = ⊙ REC  |  RIGHT = (none)
+ *   RECORDING: (none)         |  OK = ⊙ Stop  |  (none)
+ *   IDLE:      LEFT = Erase   |  OK = ⊙ Send  |  RIGHT = Save
  *
  *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
@@ -27,8 +27,8 @@
  *              columns between successive bursts within a single recording session.
  *              The raw_rx_pending flag prevents the periodic draw tick from adding
  *              a duplicate column while the signal is still active.
- *   IDLE:      Spectrogram frozen; "X spl" sample count, filename in waveform area.
- *              LEFT = Erase, OK = Send (replay), RIGHT = Save (rename via VKB).
+ *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
+ *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
  *
  *   scene_on_enter → radio starts in passive listen mode immediately so that
  *   pressing REC has no perceptible delay.  Pressing Stop flushes the file and
@@ -555,19 +555,19 @@ static void draw(SubGhzApp *app)
         case SubGhzReadRawStateStart:
             subghz_button_bar_draw(
                 arrowleft_8x8, "Config",
-                NULL, "REC",
+                ok_circle_8x8, "REC",
                 NULL, NULL);
             break;
         case SubGhzReadRawStateRecording:
             subghz_button_bar_draw(
                 NULL, NULL,
-                NULL, "Stop",
+                ok_circle_8x8, "Stop",
                 NULL, NULL);
             break;
         case SubGhzReadRawStateIdle:
             subghz_button_bar_draw(
                 arrowleft_8x8, "Erase",
-                NULL, "Send",
+                ok_circle_8x8, "Send",
                 arrowright_8x8, "Save");
             break;
     }

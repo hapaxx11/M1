@@ -133,6 +133,7 @@ extern const uint8_t arrowright_8x8[];
 extern const uint8_t arrowleft_8x8[];
 extern const uint8_t arrowdown_8x8[];
 extern const uint8_t arrowup_8x8[];
+extern const uint8_t ok_circle_8x8[];
 extern const uint8_t fb_m1_icon_folder[];
 extern const uint8_t fb_m1_icon_file[];
 extern const uint8_t remote_48x25[];
