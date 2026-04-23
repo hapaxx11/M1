@@ -130,6 +130,15 @@ function nextSeq() {
  * Send an RPC command and wait for ACK/NACK or a specific response.
  * Only one command can be in-flight at a time — concurrent calls are rejected.
  *
+ * When `expectedCmd` is set the Promise resolves on the **first** frame whose
+ * command byte matches `expectedCmd` **and** whose sequence number matches the
+ * one assigned to this call.  Any subsequent frames from the device carrying the
+ * same sequence number (e.g. additional FILE_READ_DATA chunks sent by the
+ * firmware before its final ACK) are silently dropped by `handleFrame` because
+ * `pendingResolve` is cleared as soon as the first matching frame is received.
+ * Frames from future commands (different sequence numbers) are therefore never
+ * confused with stale frames from an earlier multi-response command.
+ *
  * @param {number} cmd
  * @param {Uint8Array|null} payload
  * @param {number|null} [expectedCmd] - If set, wait for this response cmd instead of ACK
@@ -546,7 +555,7 @@ async function handleFlash() {
                     log(`SD assets: ${parts.join(', ')}`, failed > 0 ? 'warn' : 'success');
                     updateProgress(100, 'SD assets done');
                 } catch (err) {
-                    log(`SD assets copy failed: ${err.message}${installFw ? ' — continuing with firmware flash' : ''}`, 'warn');
+                    log(`SD assets copy failed: ${err.message}${installFw ? ' (firmware flash will proceed)' : ''}`, 'warn');
                 }
             }
         }
