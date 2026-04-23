@@ -81,6 +81,7 @@ extern int8_t  subghz_get_rssi_threshold_ext(void);
 extern void subghz_raw_rssi_draw_ext(void);
 extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
+extern void subghz_raw_rssi_set_current_ext(float rssi_dbm);
 extern void subghz_raw_draw_frame_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
@@ -455,13 +456,11 @@ static void draw(SubGhzApp *app)
 
     /* Live RSSI update per draw tick.
      *
-     * Start:     Advance cursor ONLY when a signal is detected above the
-     *            noise floor (RSSI > user-configured threshold).
-     *            During silence the cursor freezes so the graph shows
-     *            only actual RF bursts — matching Flipper/Momentum Read Raw:
-     *            the waveform area scrolls when signal is present and pauses
-     *            when it is not.  The radio keeps polling RSSI every 200 ms
-     *            throughout, so arriving signals are detected immediately.
+     * Start:     Advance cursor (trace=true) ONLY when a signal is detected
+     *            above the noise floor (RSSI > user-configured threshold).
+     *            During silence only the live cursor indicator is refreshed
+     *            via subghz_raw_rssi_set_current_ext() — the history buffer
+     *            is left untouched so captured burst bars are never erased.
      * Recording: trace=false — cursor only advances on RxData events (ring
      *            buffer flush every 512 captured edges), not on the periodic
      *            RSSI reads.  The RSSI bar at the cursor tracks live signal
@@ -471,7 +470,10 @@ static void draw(SubGhzApp *app)
     {
         app->rssi = subghz_read_rssi_ext();
         bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
-        subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
+        if (signal_present)
+            subghz_raw_rssi_push_ext((float)app->rssi, true);   /* advance history */
+        else
+            subghz_raw_rssi_set_current_ext((float)app->rssi);  /* cursor only, preserve history */
     }
     else if (app->raw_state == SubGhzReadRawStateRecording)
     {

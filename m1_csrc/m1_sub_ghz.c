@@ -5181,6 +5181,17 @@ void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace)
 	subghz_raw_rssi_push(rssi_dbm, trace);
 }
 
+void subghz_raw_rssi_set_current_ext(float rssi_dbm)
+{
+	/* Update the live RSSI cursor indicator without mutating the history
+	 * buffer.  Used in Start state during silence so captured burst bars
+	 * are not erased when RSSI drops back below threshold. */
+	uint8_t u_rssi = 0;
+	if (rssi_dbm >= SUBGHZ_RAW_THRESHOLD_MIN)
+		u_rssi = (uint8_t)((rssi_dbm - SUBGHZ_RAW_THRESHOLD_MIN) / SUBGHZ_RAW_RSSI_DIVIDER);
+	subghz_raw_rssi_current = u_rssi;
+}
+
 void subghz_raw_draw_sin_ext(void)
 {
 	subghz_raw_draw_sin();
