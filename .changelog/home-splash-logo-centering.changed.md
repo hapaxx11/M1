@@ -1,0 +1,1 @@
+**Home/Splash screen: vertically center logo and text block** — The M1 Hapax logo and the three text lines are now vertically centered in the area below the status bar instead of being flush to the top. The logo is centered in the 52px available area (y=22), and the firmware version line (middle text) is aligned with the logo's vertical center.
