@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.152] - 2026-04-23
+
+### Fixed
+
+- **Sub-GHz Read Raw: RSSI spectrogram correctly pauses during silence** — in the Start state (before pressing REC) the RSSI graph cursor now freezes when the signal drops below the noise floor and only advances when a signal is present, matching Flipper/Momentum behaviour. The radio continues polling RSSI every 200 ms throughout so arriving signals are detected instantly. In Recording state the graph was already data-driven (cursor advances only when captured edges flush to the SD card), so the spectrogram and the saved file naturally correlate — no data is recorded or displayed during silent periods.
+- **Sub-GHz Read Raw spectrogram UI improvements** — dashed horizontal threshold line (at the configured RSSI threshold) drawn across the waveform area as a permanent visual reference; cursor-advancement detection in Start state now also uses that same configured threshold so the cursor begins scrolling at exactly the moment the signal crosses the visible line. Frequency and modulation are confirmed present in the inverted status bar; the dashed vertical cursor was already correctly aligned to the most-recent-edge position.
+- **Sub-GHz Read Raw: honor saved RSSI threshold** — the dashed reference line and cursor-advancement gate in the Read Raw scene now both use the user-configured RSSI threshold (set in Sub-GHz Config) instead of a hardcoded −73 dBm constant, matching Momentum's behaviour.
 ## [0.9.0.151] - 2026-04-22
 
 ### Fixed
