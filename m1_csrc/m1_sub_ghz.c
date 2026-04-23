@@ -1122,7 +1122,14 @@ static void subghz_raw_rssi_draw(void)
 	 * bar heights: thresh_h = (threshold_dbm - min_dbm) / divider,
 	 * thresh_y = bottom - thresh_h. */
 	{
-		uint8_t thresh_h = (uint8_t)(((float)subghz_cfg.rssi_threshold - SUBGHZ_RAW_THRESHOLD_MIN)
+		/* Clamp threshold to the drawable range before converting.
+		 * If rssi_threshold < SUBGHZ_RAW_THRESHOLD_MIN the subtraction
+		 * yields a negative float; casting that to uint8_t wraps to a
+		 * large value and thresh_y falls off the top of the display. */
+		float thresh_dbm = (float)subghz_cfg.rssi_threshold;
+		if (thresh_dbm < SUBGHZ_RAW_THRESHOLD_MIN)
+			thresh_dbm = SUBGHZ_RAW_THRESHOLD_MIN;
+		uint8_t thresh_h = (uint8_t)((thresh_dbm - SUBGHZ_RAW_THRESHOLD_MIN)
 		                             / SUBGHZ_RAW_RSSI_DIVIDER);
 		int thresh_y = bottom - (int)thresh_h;
 		if (thresh_y > SUBGHZ_RAW_TOP_SCALE && thresh_y < SUBGHZ_RAW_BOTTOM_Y)
