@@ -884,17 +884,115 @@ static bool browse_for_device(ir_category_t cat, char *out_path, uint16_t path_l
                     xQueueReset(button_events_q_hdl);
                     continue; /* re-scan the root */
                 }
-                /* Still nothing at root — no IR files at all */
-                m1_u8g2_firstpage();
-                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-                u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-                u8g2_DrawStr(&m1_u8g2, 4, 20, "No IR files found.");
-                u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-                u8g2_DrawStr(&m1_u8g2, 4, 34, "Copy .ir files to");
-                u8g2_DrawStr(&m1_u8g2, 4, 46, "0:/IR/ on SD card.");
-                m1_u8g2_nextpage();
-                vTaskDelay(pdMS_TO_TICKS(2000));
-                return false;
+                /* Still nothing at root — fall back to m1_file_browser so
+                 * the user can navigate the SD card freely instead of hitting
+                 * a dead-end.  This mirrors the ir_browse_with_fb() approach
+                 * used for "Browse IRDB" and "Learned" in the dashboard. */
+                {
+                    uint8_t fb_i;
+                    const uint8_t fb_level = 1; /* "0:/IR" is 1 level deep */
+                    S_M1_file_browser_hdl *fb;
+                    S_M1_file_info *f_info;
+                    S_M1_Main_Q_t fb_q;
+                    S_M1_Buttons_Status fb_btn;
+                    BaseType_t fb_ret;
+
+                    /* Brief informational screen before launching browser */
+                    m1_u8g2_firstpage();
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+                    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+                    u8g2_DrawStr(&m1_u8g2, 4, 20, "No IR files found.");
+                    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+                    u8g2_DrawStr(&m1_u8g2, 4, 34, "Browsing SD card.");
+                    m1_u8g2_nextpage();
+                    vTaskDelay(pdMS_TO_TICKS(1200));
+                    xQueueReset(main_q_hdl);
+                    xQueueReset(button_events_q_hdl);
+
+                    fb = m1_fb_init(&m1_u8g2);
+                    if (!fb)
+                        return false;
+
+                    m1_fb_set_dir(IR_UNIVERSAL_IRDB_ROOT);
+                    fb->dir_level = fb_level;
+
+                    /* Resize navigation buffers for the starting depth */
+                    {
+                        uint16_t *tmp_l = (uint16_t *)realloc(
+                            fb->listing_index_buffer,
+                            ((uint16_t)fb_level + 1) * sizeof(uint16_t));
+                        uint16_t *tmp_r = (uint16_t *)realloc(
+                            fb->row_index_buffer,
+                            ((uint16_t)fb_level + 1) * sizeof(uint16_t));
+                        if (!tmp_l || !tmp_r)
+                        {
+                            if (tmp_l) fb->listing_index_buffer = tmp_l;
+                            if (tmp_r) fb->row_index_buffer     = tmp_r;
+                            m1_fb_deinit();
+                            return false;
+                        }
+                        fb->listing_index_buffer = tmp_l;
+                        fb->row_index_buffer     = tmp_r;
+                    }
+                    for (fb_i = 0; fb_i <= fb_level; fb_i++)
+                    {
+                        fb->listing_index_buffer[fb_i] = 0;
+                        fb->row_index_buffer[fb_i]     = 0;
+                    }
+
+                    /* Initial render */
+                    m1_u8g2_firstpage();
+                    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+                    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+                    m1_u8g2_nextpage();
+                    f_info = m1_fb_display(NULL);
+                    if (f_info->status != FB_OK)
+                    {
+                        m1_fb_deinit();
+                        return false;
+                    }
+
+                    while (1)
+                    {
+                        fb_ret = xQueueReceive(main_q_hdl, &fb_q, portMAX_DELAY);
+                        if (fb_ret != pdTRUE)
+                            continue;
+                        if (fb_q.q_evt_type != Q_EVENT_KEYPAD)
+                            continue;
+                        fb_ret = xQueueReceive(button_events_q_hdl, &fb_btn, 0);
+                        if (fb_ret != pdTRUE)
+                            continue;
+
+                        if (fb_btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                        {
+                            xQueueReset(main_q_hdl);
+                            m1_fb_deinit();
+                            return false;
+                        }
+
+                        f_info = m1_fb_display(&fb_btn);
+                        if (f_info->status == FB_OK && f_info->file_is_selected)
+                        {
+                            size_t name_len = strlen(f_info->file_name);
+                            if (name_len >= 3 &&
+                                strcmp(&f_info->file_name[name_len - 3], ".ir") == 0)
+                            {
+                                snprintf(out_path, path_len, "%s/%s",
+                                         f_info->dir_name, f_info->file_name);
+                                xQueueReset(main_q_hdl);
+                                m1_fb_deinit();
+                                return true;
+                            }
+                            /* Non-.ir file selected — redisplay */
+                            f_info = m1_fb_display(NULL);
+                            if (f_info->status != FB_OK)
+                            {
+                                m1_fb_deinit();
+                                return false;
+                            }
+                        }
+                    }
+                }
             }
 
             sel = 0;
