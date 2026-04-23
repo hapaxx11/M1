@@ -44,7 +44,7 @@ import { unzip as fflateUnzip } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/
 const REPO_OWNER = 'hapaxx11';
 const REPO_NAME  = 'M1';
 const FW_CHUNK_SIZE = 1024;      // Must match RPC_FW_CHUNK_SIZE on device
-const SD_FILE_CHUNK_SIZE = 4096; // Max data bytes per FILE_WRITE_DATA frame
+const SD_FILE_CHUNK_SIZE = 4096; // Data bytes per FILE_WRITE_DATA chunk (RPC_MAX_PAYLOAD=8192, offset=4; 4096 is well within limits)
 const RESPONSE_TIMEOUT_MS = 10000;  // 10s timeout for RPC responses
 const ERASE_TIMEOUT_MS = 30000;     // 30s timeout for FW_UPDATE_START (flash erase)
 
