@@ -50,6 +50,7 @@ const FW_CHUNK_SIZE = 1024;      // Must match RPC_FW_CHUNK_SIZE on device
 const SD_FILE_CHUNK_SIZE = 4096; // Data bytes per FILE_WRITE_DATA chunk (RPC_MAX_PAYLOAD=8192, offset=4; 4096 is well within limits)
 const RESPONSE_TIMEOUT_MS = 10000;  // 10s timeout for RPC responses
 const ERASE_TIMEOUT_MS = 30000;     // 30s timeout for FW_UPDATE_START (flash erase)
+const KEELOQ_SD_PATH = 'SubGHz/keeloq_mfcodes'; // SD card path for KeeLoq manufacturer key file
 
 /* ── Application State ── */
 
@@ -509,9 +510,8 @@ function convertKeeloqLines(lines) {
             keyType = null;
 
         } else if (line.startsWith('Key (Hex):')) {
-            // Strip field name; the raw label in the toolkit is "Key (Hex):  VALUE"
-            const rest = line.slice('Key (Hex)'.length).replace(/^\s*\)\s*:/, '').replace(/^:/, '').trim();
-            keyHex = rest || null;
+            // The full field label is "Key (Hex):" — slice it off and trim whitespace.
+            keyHex = line.slice('Key (Hex):'.length).trim() || null;
 
         } else if (line.startsWith('Type:')) {
             keyType = line.slice('Type:'.length).trim();
@@ -523,14 +523,14 @@ function convertKeeloqLines(lines) {
             keyHex = null;
             keyType = null;
 
-        } else if (!line.startsWith('Key (Dec):') && line.includes(':')) {
+        } else if (/^[0-9A-Fa-f]{8,16}:/.test(line)) {
             // Compact pass-through: "HEX:TYPE:NAME"
             const parts = line.split(':');
             if (parts.length >= 3) {
                 const h = parts[0].trim();
                 const t = parseInt(parts[1].trim(), 10);
                 const name = parts.slice(2).join(':').trim();
-                if (!isNaN(t) && t >= 1 && t <= 3 && name && /^[0-9a-fA-F]{1,16}$/.test(h)) {
+                if (!isNaN(t) && t >= 1 && t <= 3 && name) {
                     let k;
                     try { k = BigInt('0x' + h); } catch (_) { continue; }
                     if (k >= 0n && k <= MAX_KEY) {
@@ -699,10 +699,11 @@ async function handleFlash() {
                 log(`Writing KeeLoq manufacturer keys to SUBGHZ/keeloq_mfcodes (${keeloqEntryCount} entries)...`);
                 updateProgress(0, 'Writing KeeLoq keys...');
                 try {
+                    const keeloqDir = KEELOQ_SD_PATH.substring(0, KEELOQ_SD_PATH.lastIndexOf('/'));
                     const createdDirs = new Set();
-                    await ensureDir('SubGHz', createdDirs);
+                    await ensureDir(keeloqDir, createdDirs);
                     await sendCommand(RPC_CMD_FILE_WRITE_START,
-                        buildFileWriteStartPayload(keeloqMfcodesData.length, 'SubGHz/keeloq_mfcodes'));
+                        buildFileWriteStartPayload(keeloqMfcodesData.length, KEELOQ_SD_PATH));
 
                     let offset = 0;
                     while (offset < keeloqMfcodesData.length) {
@@ -717,7 +718,7 @@ async function handleFlash() {
 
                     await sendCommand(RPC_CMD_FILE_WRITE_FINISH);
                     const noun = keeloqEntryCount === 1 ? 'entry' : 'entries';
-                    log(`KeeLoq: wrote ${keeloqEntryCount} ${noun} to SUBGHZ/keeloq_mfcodes`, 'success');
+                    log(`KeeLoq: wrote ${keeloqEntryCount} ${noun} to ${KEELOQ_SD_PATH}`, 'success');
                     updateProgress(100, 'KeeLoq keys written');
                 } catch (err) {
                     log(`KeeLoq keys write failed: ${err.message}${installFw ? ' (firmware flash will proceed)' : ''}`, 'warn');
