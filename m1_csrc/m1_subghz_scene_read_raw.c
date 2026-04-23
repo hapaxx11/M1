@@ -483,7 +483,9 @@ static void draw(SubGhzApp *app)
      *            raw_rx_pending prevents the draw tick from adding a duplicate
      *            column while the signal is active.  When RxData stops arriving
      *            the same debounce mechanism inserts gap columns for
-     *            RAW_DEBOUNCE_MAX ticks, then the cursor is refreshed only.
+     *            RAW_DEBOUNCE_MAX ticks; after that, the trace no longer
+     *            advances and the last committed column continues to be
+     *            updated with the live RSSI value.
      */
     if (app->raw_state == SubGhzReadRawStateStart)
     {
