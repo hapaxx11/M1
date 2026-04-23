@@ -158,6 +158,8 @@ typedef struct {
     /* --- Read Raw state --- */
     SubGhzReadRawState raw_state;
     uint32_t raw_sample_count;        /**< Total RAW samples received */
+    uint8_t  raw_debounce;            /**< Gap countdown after signal trail (200ms ticks) */
+    bool     raw_rx_pending;          /**< RxData arrived since last draw tick (RECORDING only) */
 
     /* --- Save flow --- */
     char     file_path[64];           /**< Current file path for save */
