@@ -142,6 +142,57 @@ def delete_release(repo: str, tag: str, dry_run: bool) -> None:
 # Core retention logic
 # ---------------------------------------------------------------------------
 
+def compute_deletions(new_tag: str, all_releases: list[Release]) -> list[str]:
+    """
+    Pure-logic retention classifier.
+
+    Given the newly published *new_tag* and the full *all_releases* list
+    (sorted most-recent first, as returned by ``fetch_all_releases``),
+    returns the list of tag strings that should be deleted according to the
+    four-tier retention policy.  No I/O or subprocess calls are made.
+    """
+    parsed = parse_tag(new_tag)
+    if parsed is None:
+        return []
+    new_major, new_minor, new_build, _ = parsed
+
+    # Rule 1 — same major.minor.build: keep newest 10
+    same_mmb = [
+        r for r in all_releases
+        if r.major == new_major and r.minor == new_minor and r.build == new_build
+    ]
+    if len(same_mmb) > 1:
+        return [r.tag for r in same_mmb[10:]]
+
+    # Rule 2 — same major.minor, different build: keep newest 5
+    same_mm = [
+        r for r in all_releases
+        if r.major == new_major and r.minor == new_minor
+    ]
+    if len(same_mm) > 1:
+        return [r.tag for r in same_mm[5:]]
+
+    # Rule 3 — same major, different minor: keep newest 3
+    same_m = [r for r in all_releases if r.major == new_major]
+    if len(same_m) > 1:
+        return [r.tag for r in same_m[3:]]
+
+    # Rule 4 — new major: prune previous major to one per (minor, build)
+    prev_major = new_major - 1
+    if prev_major < 0:
+        return []
+    prev_releases = [r for r in all_releases if r.major == prev_major]
+    deletions: list[str] = []
+    seen_minor_builds: set[tuple[int, int]] = set()
+    for r in prev_releases:  # already sorted most-recent first
+        key = (r.minor, r.build)
+        if key in seen_minor_builds:
+            deletions.append(r.tag)
+        else:
+            seen_minor_builds.add(key)
+    return deletions
+
+
 def apply_retention(repo: str, new_tag: str, dry_run: bool = False) -> None:
     """
     Apply the four-tier retention policy for *new_tag* in *repo*.
