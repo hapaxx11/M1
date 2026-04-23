@@ -380,6 +380,28 @@ jobs:
             > The Sub-GHz database powers **Sub-GHz → Saved** and **Sub-GHz → Playlist**.
 
   # ====================================================================== #
+  # Apply release retention policy
+  # ====================================================================== #
+  retention:
+    name: Apply release retention policy
+    needs: [build, release]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run retention policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/release_retention.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag  "${{ needs.build.outputs.tag }}"
+
+  # ====================================================================== #
   # Stamp CHANGELOG.md — replace [Unreleased] with the release version
   # ====================================================================== #
   update-changelog:
