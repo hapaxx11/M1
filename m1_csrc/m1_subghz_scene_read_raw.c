@@ -510,16 +510,27 @@ static void draw(SubGhzApp *app)
     else if (app->raw_state == SubGhzReadRawStateRecording)
     {
         app->rssi = subghz_read_rssi_ext();
+        bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
         if (app->raw_rx_pending)
         {
             /* RxData fired since last draw — signal is active.
-             * The event handler already pushed a column; just refresh cursor. */
+             * The event handler already pushed a column; just refresh cursor and
+             * keep debounce primed for the eventual end-of-burst gap. */
             app->raw_rx_pending = false;
+            app->raw_debounce = RAW_DEBOUNCE_MAX;
+            subghz_raw_rssi_set_current_ext((float)app->rssi);
+        }
+        else if (signal_present)
+        {
+            /* No RxData batch yet, but RSSI is still above threshold.
+             * Hold debounce so slow/long bursts are not split by synthetic gaps. */
+            app->raw_debounce = RAW_DEBOUNCE_MAX;
             subghz_raw_rssi_set_current_ext((float)app->rssi);
         }
         else if (app->raw_debounce > 0)
         {
-            /* Signal just ended — push gap column then count down */
+            /* RSSI dropped below threshold and no RxData arrived — signal ended.
+             * Push gap column then count down debounce. */
             app->raw_debounce--;
             subghz_raw_rssi_push_ext((float)app->rssi, true);
         }
