@@ -1009,8 +1009,10 @@ void startup_info_screen_display(const char *scr_text)
 	/* Screen layout (128×64 display):
 	 *   y= 0..11  Status bar — icons left, "HH:MM" centered, battery right
 	 *             Clock: helvB08_tr ascent=8, baseline=9 → glyph y=1..9
-	 *   y=22..53  Logo (40×32), vertically centered in the 52px area below the status bar
-	 *   y=32/42/52 Text lines alongside logo; middle line center aligned with logo center (y=38)
+	 *   y=M1_POWERUP_LOGO_TOP_POS_Y .. +M1_POWERUP_LOGO_HEIGHT-1
+	 *             Logo (40×32), vertically centered in the 52px area below the status bar
+	 *   logo_top+10 / +20 / +30  Text baselines alongside logo;
+	 *             middle line (+20) center-aligned with the logo's vertical mid-point
 	 *   y=62       scr_text (status message, empty for normal idle screen)
 	 */
 
@@ -1041,18 +1043,18 @@ void startup_info_screen_display(const char *scr_text)
 		text_x = logo_x + M1_POWERUP_LOGO_WIDTH + 3U;
 	}
 
-	/* Logo bitmap — top at y=22 (vertically centered in the 52px area below the status bar) */
-	u8g2_DrawXBMP(&m1_u8g2, logo_x, 22, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
+	/* Logo bitmap — top at M1_POWERUP_LOGO_TOP_POS_Y (vertically centered in the 52px area below the status bar) */
+	u8g2_DrawXBMP(&m1_u8g2, logo_x, M1_POWERUP_LOGO_TOP_POS_Y, M1_POWERUP_LOGO_WIDTH, M1_POWERUP_LOGO_HEIGHT, m1_logo_40x32);
 
-	/* "M1 Hapax" title — baseline y=32 */
+	/* "M1 Hapax" title — baseline at logo_top+10 */
 	u8g2_SetFont(&m1_u8g2, M1_POWERUP_LOGO_FONT);
-	u8g2_DrawStr(&m1_u8g2, text_x, 32, "M1 Hapax");
+	u8g2_DrawStr(&m1_u8g2, text_x, M1_POWERUP_LOGO_TOP_POS_Y + 10, "M1 Hapax");
 
-	/* Firmware version and project tag — baselines y=42 and y=52
-	 * The middle line (fw_ver) is centered on the logo center (y=38). */
+	/* Firmware version and project tag — baselines at logo_top+20 and logo_top+30
+	 * The middle line (fw_ver) is vertically centered on the logo center. */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, text_x, 42, fw_ver);
-	u8g2_DrawStr(&m1_u8g2, text_x, 52, "Hapax");
+	u8g2_DrawStr(&m1_u8g2, text_x, M1_POWERUP_LOGO_TOP_POS_Y + 20, fw_ver);
+	u8g2_DrawStr(&m1_u8g2, text_x, M1_POWERUP_LOGO_TOP_POS_Y + 30, "Hapax");
 
 	/* Battery indicator in top-right corner */
 	splash_draw_battery_indicator();
