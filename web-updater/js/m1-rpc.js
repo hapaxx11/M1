@@ -29,9 +29,14 @@ export const RPC_CMD_ACK             = 0x06;
 export const RPC_CMD_NACK            = 0x07;
 
 /* File / SD Commands */
+export const RPC_CMD_FILE_LIST         = 0x30;
+export const RPC_CMD_FILE_LIST_RESP    = 0x31;
+export const RPC_CMD_FILE_READ         = 0x32;
+export const RPC_CMD_FILE_READ_DATA    = 0x33;
 export const RPC_CMD_FILE_WRITE_START  = 0x34;
 export const RPC_CMD_FILE_WRITE_DATA   = 0x35;
 export const RPC_CMD_FILE_WRITE_FINISH = 0x36;
+export const RPC_CMD_FILE_DELETE       = 0x37;
 export const RPC_CMD_FILE_MKDIR        = 0x38;
 export const RPC_CMD_SD_UNMOUNT        = 0x3B;
 export const RPC_CMD_SD_MOUNT          = 0x3C;
@@ -345,6 +350,21 @@ export function buildFileWriteDataPayload(offset, chunk) {
  * @returns {Uint8Array}
  */
 export function buildFileMkdirPayload(path) {
+    return new TextEncoder().encode(path);
+}
+
+/**
+ * Build FILE_READ payload.
+ * Payload: [path string (UTF-8, no null terminator)]
+ *
+ * The firmware will respond with one or more FILE_READ_DATA frames containing
+ * the file's contents, followed by an ACK on completion, or NACK 0x05 if the
+ * file does not exist.  This can be used as a lightweight file-existence probe.
+ *
+ * @param {string} path - File path on SD card (e.g. "IR/TVs/Samsung.ir")
+ * @returns {Uint8Array}
+ */
+export function buildFileReadPayload(path) {
     return new TextEncoder().encode(path);
 }
 

@@ -22,7 +22,10 @@ project discussion, and related project resources:
   no "here's a .bin I built on my laptop."
 - **[Web Updater](https://hapaxx11.github.io/M1/)** — a GitHub Pages-hosted
   browser-based flashing tool.  Plug in via USB, pick a release, and flash —
-  no desktop software required.
+  no desktop software required.  **Hapax original:** the updater also
+  automatically installs SD card assets (IR/SubGHz signal databases, 1,700+
+  files) directly to the device over USB — skip, overwrite, or cherry-pick
+  what gets installed.  No ZIP extraction, no SD card reader needed.
 - **[API Documentation](https://hapaxx11.github.io/M1/docs/)** — Doxygen-generated
   source documentation, auto-deployed on every push to `main` that touches firmware
   source files.
@@ -64,6 +67,7 @@ project discussion, and related project resources:
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
 | Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
+| Browser SD card population (no reader needed) | ✗ | ✓ (Hapax original) |
 | CI/CD auto-releases | ✗ | ✓ (GitHub Actions, every merge to main) |
 | Automated unit tests | ✗ | ✓ (GitHub Actions, Unity + ASan/UBSan) |
 | Static analysis (cppcheck) | ✗ | ✓ (GitHub Actions, on-demand) |
@@ -220,7 +224,15 @@ Imported from [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) (GPLv3
 
 Every [GitHub Release](https://github.com/hapaxx11/M1/releases/latest) includes `SD_Assets.zip` — a ready-to-use archive that contains all three databases pre-arranged in the correct SD card directory structure.
 
-**Quick setup:**
+**Easiest: use the Web Updater (Hapax original feature):**
+1. Open the [Web Updater](https://hapaxx11.github.io/M1/), connect your M1, and select a release.
+2. Make sure **"Install SD card assets"** is checked (it is by default).
+3. Click **Install** — the updater downloads the ZIP, decompresses it in the browser,
+   and writes all files to your SD card over USB.  Existing files are skipped by default
+   so your customisations are preserved.  Tick **"Overwrite existing files"** to force a
+   full refresh.
+
+**Manual setup:**
 1. Download `SD_Assets.zip` from the latest release.
 2. Extract it to the **root** of your M1's SD card.
 3. This creates `IR/` and `SubGHz/` with all bundled files in the right places.

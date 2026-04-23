@@ -16,6 +16,7 @@ import {
     buildFileWriteStartPayload,
     buildFileWriteDataPayload,
     buildFileMkdirPayload,
+    buildFileReadPayload,
     parseDeviceInfo,
     parseFwInfo,
     RPC_CMD_PING,
@@ -30,6 +31,8 @@ import {
     RPC_CMD_FW_UPDATE_DATA,
     RPC_CMD_FW_UPDATE_FINISH,
     RPC_CMD_FW_BANK_SWAP,
+    RPC_CMD_FILE_READ,
+    RPC_CMD_FILE_READ_DATA,
     RPC_CMD_FILE_WRITE_START,
     RPC_CMD_FILE_WRITE_DATA,
     RPC_CMD_FILE_WRITE_FINISH,
@@ -89,7 +92,8 @@ function cacheElements() {
         'release-section', 'release-list', 'btn-refresh-releases',
         'local-file-input', 'local-file-name',
         'btn-flash', 'flash-section',
-        'chk-skip-sd-assets',
+        'chk-install-firmware', 'chk-install-sd', 'chk-sd-overwrite',
+        'sd-assets-option', 'sd-overwrite-option',
         'progress-section', 'progress-bar', 'progress-text', 'progress-detail',
         'log-output',
         'browser-warning',
@@ -267,9 +271,18 @@ function updateProgress(percent, text, detail = '') {
 }
 
 function updateFlashButton() {
-    const hasFirmware = selectedFirmware !== null ||
-        document.querySelector('input[name="release"]:checked') !== null;
-    elements['btn-flash'].disabled = !serial.connected || !hasFirmware || isFlashing;
+    const hasRelease = document.querySelector('input[name="release"]:checked') !== null;
+    const hasLocalFile = selectedFirmware !== null;
+    const installFw = elements['chk-install-firmware']?.checked ?? true;
+    const installSd = elements['chk-install-sd']?.checked ?? true;
+
+    // The flash button is enabled when there is at least one meaningful action.
+    // Firmware install: requires a release or local file to be selected.
+    // SD install: requires a release (no local file source for SD assets).
+    const canFw = installFw && (hasRelease || hasLocalFile);
+    const canSd = installSd && hasRelease;
+
+    elements['btn-flash'].disabled = !serial.connected || (!canFw && !canSd) || isFlashing;
 }
 
 /* ── Release List ── */
@@ -316,6 +329,8 @@ function renderReleases() {
         radio.addEventListener('change', () => {
             selectedFirmware = null;  // Clear local file selection
             elements['local-file-name'].textContent = '';
+            // Show SD assets option — SD content comes from releases
+            elements['sd-assets-option'].classList.remove('hidden');
             updateFlashButton();
         });
     }
@@ -419,6 +434,8 @@ function handleLocalFile(event) {
         for (const radio of document.querySelectorAll('input[name="release"]')) {
             radio.checked = false;
         }
+        // Local files have no associated SD assets — hide that option
+        elements['sd-assets-option'].classList.add('hidden');
         updateFlashButton();
     };
     reader.readAsArrayBuffer(file);
@@ -433,95 +450,116 @@ async function handleFlash() {
         return;
     }
 
-    let firmware;
+    const installFw = elements['chk-install-firmware'].checked;
+    const installSd = elements['chk-install-sd'].checked;
+    const sdOverwrite = elements['chk-sd-overwrite'].checked;
+
+    if (!installFw && !installSd) {
+        log('Select at least one option: Install firmware and/or Install SD assets', 'warn');
+        return;
+    }
+
+    // Determine source: local .bin file (firmware only) vs GitHub release (firmware + SD)
+    let release = null;
+    let firmware = null;
 
     if (selectedFirmware) {
         firmware = selectedFirmware;
     } else {
-        // Get selected release
         const radio = document.querySelector('input[name="release"]:checked');
-        if (!radio) {
-            log('No firmware selected', 'error');
-            return;
-        }
-        const release = releases[parseInt(radio.value, 10)];
-
-        // Download firmware
-        log(`Downloading ${release.fwAsset.name}...`);
-        elements['progress-section'].classList.remove('hidden');
-        updateProgress(0, 'Downloading firmware...');
-
-        try {
-            const data = await downloadFirmware(release.fwAsset.downloadUrl, (loaded, total) => {
-                const pct = total > 0 ? (loaded / total) * 100 : 0;
-                updateProgress(pct, 'Downloading firmware...', `${formatSize(loaded)} / ${formatSize(total)}`);
-            });
-            firmware = { data, name: release.fwAsset.name };
-            log(`Downloaded ${firmware.name} (${formatSize(firmware.data.length)})`);
-        } catch (err) {
-            log(`Download failed: ${err.message}`, 'error');
-            elements['progress-section'].classList.add('hidden');
-            return;
-        }
-
-        // Compute SHA-256 (best-effort — does not block flashing on failure).
-        try {
-            const hash = await computeSHA256(firmware.data);
-            if (hash) {
-                log(`SHA-256: ${hash}`);
-                log('Compare this hash against the GitHub release page to confirm the file is unchanged.');
-            }
-        } catch (_) {
-            /* SHA-256 unavailable — not fatal */
-        }
-
-        // Copy SD card assets before flashing (release-based updates only)
-        const skipSd = elements['chk-skip-sd-assets'].checked;
-        if (!skipSd && release.sdAsset) {
-            log(`Downloading SD card assets (${formatSize(release.sdAsset.size)})...`);
-            updateProgress(0, 'Downloading SD assets...');
-
-            try {
-                const zipData = await downloadSdAssets(release.sdAsset.downloadUrl, (loaded, total) => {
-                    const pct = total > 0 ? (loaded / total) * 100 : 0;
-                    updateProgress(pct, 'Downloading SD assets...', `${formatSize(loaded)} / ${formatSize(total)}`);
-                });
-
-                log('Decompressing SD assets...');
-                updateProgress(0, 'Decompressing SD assets...');
-                const files = await unzipAsync(zipData);
-
-                const filePaths = Object.keys(files).filter(n => !n.endsWith('/'));
-                log(`Writing ${filePaths.length} file(s) to SD card...`);
-
-                const { written, failed } = await writeFilesToSd(files, (i, total, filename) => {
-                    const pct = total > 0 ? (i / total) * 100 : 0;
-                    updateProgress(pct, 'Copying SD assets...', `${i + 1}/${total}: ${filename}`);
-                });
-
-                const result = `${written} file(s) written${failed > 0 ? `, ${failed} failed` : ''}`;
-                log(`SD assets: ${result}`, failed > 0 ? 'warn' : 'success');
-                updateProgress(100, 'SD assets done');
-            } catch (err) {
-                log(`SD assets copy failed: ${err.message} — continuing with firmware flash`, 'warn');
-            }
-        } else if (skipSd) {
-            log('Skipping SD card assets');
-        } else {
-            log('No SD assets in this release — skipping');
+        if (radio) {
+            release = releases[parseInt(radio.value, 10)];
         }
     }
 
-    // Start flashing
+    // Validate: if firmware install is requested, we need a source
+    if (installFw && !firmware && !release) {
+        log('No firmware selected', 'error');
+        return;
+    }
+
     isFlashing = true;
     updateFlashButton();
     elements['progress-section'].classList.remove('hidden');
 
     try {
-        await flashFirmware(firmware.data, firmware.name);
-    } catch (err) {
-        log(`Flash failed: ${err.message}`, 'error');
-        updateProgress(0, 'Flash failed!', err.message);
+        // ── Phase 1: Download firmware binary (release-based only) ──
+        if (installFw && !firmware && release) {
+            log(`Downloading ${release.fwAsset.name}...`);
+            updateProgress(0, 'Downloading firmware...');
+
+            try {
+                const data = await downloadFirmware(release.fwAsset.downloadUrl, (loaded, total) => {
+                    const pct = total > 0 ? (loaded / total) * 100 : 0;
+                    updateProgress(pct, 'Downloading firmware...', `${formatSize(loaded)} / ${formatSize(total)}`);
+                });
+                firmware = { data, name: release.fwAsset.name };
+                log(`Downloaded ${firmware.name} (${formatSize(firmware.data.length)})`);
+            } catch (err) {
+                log(`Firmware download failed: ${err.message}`, 'error');
+                return;
+            }
+
+            // Compute SHA-256 (best-effort — does not block flashing on failure).
+            try {
+                const hash = await computeSHA256(firmware.data);
+                if (hash) {
+                    log(`SHA-256: ${hash}`);
+                    log('Compare this hash against the GitHub release page to confirm the file is unchanged.');
+                }
+            } catch (_) {
+                /* SHA-256 unavailable — not fatal */
+            }
+        }
+
+        // ── Phase 2: Install SD card assets (release-based only) ──
+        if (installSd) {
+            if (!release) {
+                log('SD assets are not available for local file uploads — skipping', 'warn');
+            } else if (!release.sdAsset) {
+                log('No SD assets in this release — skipping', 'info');
+            } else {
+                log(`Downloading SD card assets (${formatSize(release.sdAsset.size)})...`);
+                updateProgress(0, 'Downloading SD assets...');
+
+                try {
+                    const zipData = await downloadSdAssets(release.sdAsset.downloadUrl, (loaded, total) => {
+                        const pct = total > 0 ? (loaded / total) * 100 : 0;
+                        updateProgress(pct, 'Downloading SD assets...', `${formatSize(loaded)} / ${formatSize(total)}`);
+                    });
+
+                    log('Decompressing SD assets...');
+                    updateProgress(0, 'Decompressing SD assets...');
+                    const files = await unzipAsync(zipData);
+
+                    const filePaths = Object.keys(files).filter(n => !n.endsWith('/'));
+                    log(`Writing ${filePaths.length} file(s) to SD card${sdOverwrite ? '' : ' (skipping existing)'}...`);
+
+                    const { written, skipped, failed } = await writeFilesToSd(files, (i, total, filename) => {
+                        const pct = total > 0 ? (i / total) * 100 : 0;
+                        updateProgress(pct, 'Copying SD assets...', `${i + 1}/${total}: ${filename}`);
+                    }, sdOverwrite);
+
+                    const parts = [`${written} written`];
+                    if (skipped > 0) parts.push(`${skipped} skipped`);
+                    if (failed > 0) parts.push(`${failed} failed`);
+                    log(`SD assets: ${parts.join(', ')}`, failed > 0 ? 'warn' : 'success');
+                    updateProgress(100, 'SD assets done');
+                } catch (err) {
+                    log(`SD assets copy failed: ${err.message}${installFw ? ' — continuing with firmware flash' : ''}`, 'warn');
+                }
+            }
+        }
+
+        // ── Phase 3: Flash firmware ──
+        if (installFw && firmware) {
+            try {
+                await flashFirmware(firmware.data, firmware.name);
+            } catch (err) {
+                log(`Flash failed: ${err.message}`, 'error');
+                updateProgress(0, 'Flash failed!', err.message);
+            }
+        }
     } finally {
         isFlashing = false;
         updateFlashButton();
@@ -665,26 +703,53 @@ async function ensureDir(dirPath, createdDirs) {
 }
 
 /**
+ * Probe whether a file already exists on the SD card.
+ *
+ * Uses FILE_READ (0x32) as a lightweight existence check:
+ * - NACK 0x05 ("File not found") → file does not exist
+ * - FILE_READ_DATA response       → file exists
+ *
+ * Any FILE_READ_DATA frames beyond the first are silently consumed because
+ * they carry the old sequence number, which no longer matches the pending
+ * command once it has been resolved.
+ *
+ * @param {string} path - File path on SD card
+ * @returns {Promise<boolean>}
+ */
+async function fileExistsOnSd(path) {
+    try {
+        await sendCommand(RPC_CMD_FILE_READ, buildFileReadPayload(path), RPC_CMD_FILE_READ_DATA);
+        return true;
+    } catch (_) {
+        return false; // NACK "File not found" → does not exist
+    }
+}
+
+/**
  * Write all files from a decompressed ZIP archive to the SD card via RPC.
  *
  * For each file:
- *   1. Ensure every parent directory exists (FILE_MKDIR, idempotent)
- *   2. FILE_WRITE_START — open / truncate the file on SD
- *   3. Repeated FILE_WRITE_DATA — send data in SD_FILE_CHUNK_SIZE chunks
- *   4. FILE_WRITE_FINISH — flush and close
+ *   1. Optionally probe existence via FILE_READ; skip when overwrite=false and
+ *      the file already exists.
+ *   2. Ensure every parent directory exists (FILE_MKDIR, idempotent)
+ *   3. FILE_WRITE_START — open / truncate the file on SD
+ *   4. Repeated FILE_WRITE_DATA — send data in SD_FILE_CHUNK_SIZE chunks
+ *   5. FILE_WRITE_FINISH — flush and close
  *
  * Individual file failures are caught and counted; writing continues for
  * the remaining files.
  *
  * @param {Object.<string, Uint8Array>} files       - fflate output (path → bytes)
  * @param {function(number,number,string)} [onProgress] - (fileIndex, total, filename)
- * @returns {Promise<{written: number, failed: number}>}
+ * @param {boolean} [overwrite=true] - When false, skip files already on the SD card
+ * @returns {Promise<{written: number, skipped: number, failed: number}>}
  */
-async function writeFilesToSd(files, onProgress = null) {
+async function writeFilesToSd(files, onProgress = null, overwrite = true) {
     const createdDirs = new Set();
     const filePaths = Object.keys(files).filter(name => !name.endsWith('/'));
     const total = filePaths.length;
     let written = 0;
+    let skipped = 0;
     let failed = 0;
 
     for (let i = 0; i < filePaths.length; i++) {
@@ -694,6 +759,12 @@ async function writeFilesToSd(files, onProgress = null) {
         if (onProgress) onProgress(i, total, path);
 
         try {
+            // Skip-if-exists check (when overwrite is false)
+            if (!overwrite && await fileExistsOnSd(path)) {
+                skipped++;
+                continue;
+            }
+
             // Create parent directories
             const lastSlash = path.lastIndexOf('/');
             if (lastSlash > 0) {
@@ -722,7 +793,7 @@ async function writeFilesToSd(files, onProgress = null) {
         }
     }
 
-    return { written, failed };
+    return { written, skipped, failed };
 }
 
 /* ── Utility Functions ── */
@@ -801,6 +872,14 @@ function init() {
     elements['local-file-input'].addEventListener('change', handleLocalFile);
     elements['btn-local-file'].addEventListener('click', () => {
         elements['local-file-input'].click();
+    });
+
+    // Flash option checkboxes
+    elements['chk-install-firmware'].addEventListener('change', updateFlashButton);
+    elements['chk-install-sd'].addEventListener('change', () => {
+        // Show/hide the overwrite sub-option based on whether SD install is enabled
+        elements['sd-overwrite-option'].classList.toggle('hidden', !elements['chk-install-sd'].checked);
+        updateFlashButton();
     });
 
     // Android: show troubleshooting tips and USB permission button
