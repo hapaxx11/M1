@@ -70,7 +70,7 @@ class Release:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def parse_tag(tag: str) -> Optional[tuple]:
+def parse_tag(tag: str) -> Optional[tuple[int, int, int, int]]:
     """Return (major, minor, build, rc) ints or None if the tag doesn't match."""
     m = VERSION_RE.match(tag)
     if not m:
@@ -78,7 +78,7 @@ def parse_tag(tag: str) -> Optional[tuple]:
     return int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
 
 
-def fetch_all_releases(repo: str) -> list:
+def fetch_all_releases(repo: str) -> list[Release]:
     """
     Return all versioned GitHub releases, sorted most-recent first.
 
@@ -237,7 +237,7 @@ def apply_retention(repo: str, new_tag: str, dry_run: bool = False) -> None:
         f"Rule 4: new major {new_major} — pruning major {prev_major} to "
         f"most-recent release per minor ({len(prev_releases)} releases found)."
     )
-    seen_minors: set = set()
+    seen_minors: set[int] = set()
     for r in prev_releases:  # already sorted most-recent first
         if r.minor not in seen_minors:
             seen_minors.add(r.minor)
