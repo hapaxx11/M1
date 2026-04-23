@@ -1117,13 +1117,12 @@ static void subghz_raw_rssi_draw(void)
 
 	/* Dashed horizontal threshold line — spans the full waveform width.
 	 * Drawn last so it is always visible as a reference even when bars reach
-	 * or exceed this level.  The Y position maps SUBGHZ_RAW_DETECT_THRESHOLD_DBM
-	 * through the same scale used for bar heights:
-	 *   thresh_h = (threshold_dbm - min_dbm) / divider
-	 *   thresh_y  = bottom - thresh_h
-	 * At -73 dBm with min=-90 and divider=2.7: thresh_h≈6 px, thresh_y=41. */
+	 * or exceed this level.  The Y position maps the user-configured RSSI
+	 * threshold (subghz_cfg.rssi_threshold) through the same scale used for
+	 * bar heights: thresh_h = (threshold_dbm - min_dbm) / divider,
+	 * thresh_y = bottom - thresh_h. */
 	{
-		uint8_t thresh_h = (uint8_t)((SUBGHZ_RAW_DETECT_THRESHOLD_DBM - SUBGHZ_RAW_THRESHOLD_MIN)
+		uint8_t thresh_h = (uint8_t)(((float)subghz_cfg.rssi_threshold - SUBGHZ_RAW_THRESHOLD_MIN)
 		                             / SUBGHZ_RAW_RSSI_DIVIDER);
 		int thresh_y = bottom - (int)thresh_h;
 		if (thresh_y > SUBGHZ_RAW_TOP_SCALE && thresh_y < SUBGHZ_RAW_BOTTOM_Y)

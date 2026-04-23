@@ -1,0 +1,1 @@
+**Sub-GHz Read Raw: honor saved RSSI threshold** — the dashed reference line and cursor-advancement gate in the Read Raw scene now both use the user-configured RSSI threshold (set in Sub-GHz Config) instead of a hardcoded −73 dBm constant, matching Momentum's behaviour.

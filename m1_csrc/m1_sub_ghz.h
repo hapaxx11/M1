@@ -63,12 +63,6 @@
 #define SUBGHZ_MIN_FREQ_HZ    300000000UL   /* 300.000 MHz — PLL lower bound with outdiv=12 */
 #define SUBGHZ_MAX_FREQ_HZ    928000000UL   /* 928.000 MHz — ISM upper edge */
 
-/* RSSI detection threshold for the Read Raw scene.
- * Used in two places — must stay in sync:
- *   m1_sub_ghz.c         — draws a dashed horizontal reference line in the spectrogram
- *   m1_subghz_scene_read_raw.c — gates Start-state cursor advancement (signal present?)
- * Value -73 dBm matches Flipper/Momentum's typical OOK detection threshold. */
-#define SUBGHZ_RAW_DETECT_THRESHOLD_DBM  (-73.0f)
 
 // SUBGHZ_GPIO_0(RX)	PORTE.9	<--> TIM1_CH1
 // SUBGHZ_GPIO_2(TX) 	PORTD.5	<--> TIM1_CH4N

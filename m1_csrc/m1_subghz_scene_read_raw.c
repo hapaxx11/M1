@@ -75,6 +75,7 @@ extern uint8_t subghz_record_mode_flag;
 extern S_M1_RingBuffer subghz_rx_rawdata_rb;
 extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
 extern int16_t subghz_read_rssi_ext(void);
+extern int8_t  subghz_get_rssi_threshold_ext(void);
 
 /* RAW RSSI visualization helpers from m1_sub_ghz.c */
 extern void subghz_raw_rssi_draw_ext(void);
@@ -95,11 +96,9 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
 
 /* RSSI threshold for cursor advancement in the Start state.
- * Matches SUBGHZ_RAW_DETECT_THRESHOLD_DBM (m1_sub_ghz.h) — the same level
- * at which the horizontal dashed line is drawn in the spectrogram.  Using the
- * same value means the cursor starts moving at exactly the moment the signal
- * crosses the visible threshold line. */
-#define SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM  SUBGHZ_RAW_DETECT_THRESHOLD_DBM
+ * Uses the user-configurable value (subghz_get_rssi_threshold_ext()) so the
+ * cursor starts scrolling at exactly the moment the signal crosses the
+ * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /*============================================================================*/
@@ -457,7 +456,7 @@ static void draw(SubGhzApp *app)
     /* Live RSSI update per draw tick.
      *
      * Start:     Advance cursor ONLY when a signal is detected above the
-     *            noise floor (RSSI > SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM).
+     *            noise floor (RSSI > user-configured threshold).
      *            During silence the cursor freezes so the graph shows
      *            only actual RF bursts — matching Flipper/Momentum Read Raw:
      *            the waveform area scrolls when signal is present and pauses
@@ -471,7 +470,7 @@ static void draw(SubGhzApp *app)
     if (app->raw_state == SubGhzReadRawStateStart)
     {
         app->rssi = subghz_read_rssi_ext();
-        bool signal_present = ((float)app->rssi > SUBGHZ_RAW_SIGNAL_THRESHOLD_DBM);
+        bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
         subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
     }
     else if (app->raw_state == SubGhzReadRawStateRecording)
