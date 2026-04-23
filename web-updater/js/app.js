@@ -16,7 +16,7 @@ import {
     buildFileWriteStartPayload,
     buildFileWriteDataPayload,
     buildFileMkdirPayload,
-    buildFileReadPayload,
+    buildFileListPayload,
     parseDeviceInfo,
     parseFwInfo,
     RPC_CMD_PING,
@@ -31,8 +31,8 @@ import {
     RPC_CMD_FW_UPDATE_DATA,
     RPC_CMD_FW_UPDATE_FINISH,
     RPC_CMD_FW_BANK_SWAP,
-    RPC_CMD_FILE_READ,
-    RPC_CMD_FILE_READ_DATA,
+    RPC_CMD_FILE_LIST,
+    RPC_CMD_FILE_LIST_RESP,
     RPC_CMD_FILE_WRITE_START,
     RPC_CMD_FILE_WRITE_DATA,
     RPC_CMD_FILE_WRITE_FINISH,
@@ -132,12 +132,15 @@ function nextSeq() {
  *
  * When `expectedCmd` is set the Promise resolves on the **first** frame whose
  * command byte matches `expectedCmd` **and** whose sequence number matches the
- * one assigned to this call.  Any subsequent frames from the device carrying the
- * same sequence number (e.g. additional FILE_READ_DATA chunks sent by the
- * firmware before its final ACK) are silently dropped by `handleFrame` because
- * `pendingResolve` is cleared as soon as the first matching frame is received.
- * Frames from future commands (different sequence numbers) are therefore never
- * confused with stale frames from an earlier multi-response command.
+ * one assigned to this call.  `pendingResolve` is cleared immediately after
+ * resolution, so no further frames from the same response stream are processed
+ * as a response to this call.
+ *
+ * Note: commands that produce multi-frame responses (such as FILE_READ, which
+ * emits multiple FILE_READ_DATA frames with incrementing SEQ values) must not
+ * be used with this helper unless the caller drains all response frames first.
+ * Leftover frames with incremented SEQ values can collide with a subsequent
+ * command's SEQ and cause it to resolve prematurely.
  *
  * @param {number} cmd
  * @param {Uint8Array|null} payload
@@ -712,38 +715,122 @@ async function ensureDir(dirPath, createdDirs) {
 }
 
 /**
+ * Parse a FILE_LIST_RESP payload and return a Set of filenames in that
+ * directory (names only, not full paths).
+ *
+ * FILE_LIST_RESP layout:
+ *   [path string (null-terminated)]
+ *   Repeated: [is_dir:1] [size:4 LE] [date:2 LE] [time:2 LE] [name:N + null]
+ *
+ * @param {Uint8Array} payload
+ * @returns {Set<string>}
+ */
+function parseFileListNames(payload) {
+    const names = new Set();
+    let offset = 0;
+    // Skip the path string (null-terminated)
+    while (offset < payload.length && payload[offset] !== 0) offset++;
+    offset++; // consume null
+
+    const decoder = new TextDecoder();
+    while (offset < payload.length) {
+        // Each entry: is_dir(1) + size(4) + date(2) + time(2) + name(N+null)
+        if (offset + 1 + 4 + 2 + 2 > payload.length) break;
+        offset++;     // is_dir
+        offset += 4;  // size
+        offset += 2;  // date
+        offset += 2;  // time
+        const nameStart = offset;
+        while (offset < payload.length && payload[offset] !== 0) offset++;
+        if (offset < payload.length) {
+            names.add(decoder.decode(payload.subarray(nameStart, offset)));
+            offset++; // consume null
+        }
+    }
+    return names;
+}
+
+/**
+ * Validate and normalize a ZIP entry path for safe SD card writing.
+ *
+ * Rejects paths that contain:
+ * - Drive prefixes (e.g. "0:/")
+ * - ".." segments (directory traversal)
+ * - Backslashes (normalized first, then rejected if they produce traversal)
+ *
+ * Leading slashes are stripped so relative paths extracted from the ZIP map
+ * cleanly onto SD card paths.
+ *
+ * @param {string} rawPath
+ * @returns {string|null} Normalized path, or null if the path must be rejected
+ */
+function normalizeSdPath(rawPath) {
+    // Reject drive prefixes (e.g. "0:/", "C:\")
+    if (/^[0-9a-zA-Z]:/.test(rawPath)) return null;
+    // Normalize backslashes
+    let p = rawPath.replace(/\\/g, '/');
+    // Strip leading slashes
+    p = p.replace(/^\/+/, '');
+    // Reject any '..' segment
+    if (p.split('/').some(seg => seg === '..')) return null;
+    // Reject empty result
+    if (!p) return null;
+    return p;
+}
+
+/**
+ * Per-directory listing cache used by fileExistsOnSd().
+ * Keyed by directory path (empty string = root), value = Set of filenames.
+ * Cleared at the start of each writeFilesToSd() call.
+ * @type {Map<string, Set<string>>}
+ */
+let dirListingCache = new Map();
+
+/**
  * Probe whether a file already exists on the SD card.
  *
- * Uses FILE_READ (0x32) as a lightweight existence check:
- * - NACK 0x05 ("File not found") → file does not exist
- * - FILE_READ_DATA response       → file exists
+ * Uses FILE_LIST to enumerate the file's parent directory, then checks whether
+ * the filename appears in the results.  Directory listings are cached to avoid
+ * a separate RPC round-trip for every file in the same directory.
  *
- * Any FILE_READ_DATA frames beyond the first are silently consumed because
- * they carry the old sequence number, which no longer matches the pending
- * command once it has been resolved.
+ * NACK or any error (directory absent, SD not ready) is treated as "file does
+ * not exist" so this function never throws.
  *
- * @param {string} path - File path on SD card
+ * @param {string} path - File path on SD card (e.g. "IR/TVs/Samsung.ir")
  * @returns {Promise<boolean>}
  */
 async function fileExistsOnSd(path) {
-    try {
-        await sendCommand(RPC_CMD_FILE_READ, buildFileReadPayload(path), RPC_CMD_FILE_READ_DATA);
-        return true;
-    } catch (_) {
-        return false; // NACK "File not found" → does not exist
+    const lastSlash = path.lastIndexOf('/');
+    const dir      = lastSlash > 0 ? path.substring(0, lastSlash) : '';
+    const filename = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+
+    if (!dirListingCache.has(dir)) {
+        try {
+            const result = await sendCommand(
+                RPC_CMD_FILE_LIST,
+                buildFileListPayload(dir),
+                RPC_CMD_FILE_LIST_RESP
+            );
+            dirListingCache.set(dir, parseFileListNames(result.payload));
+        } catch (_) {
+            // Directory doesn't exist or SD error — treat all files as absent
+            dirListingCache.set(dir, new Set());
+        }
     }
+    return dirListingCache.get(dir).has(filename);
 }
 
 /**
  * Write all files from a decompressed ZIP archive to the SD card via RPC.
  *
  * For each file:
- *   1. Optionally probe existence via FILE_READ; skip when overwrite=false and
+ *   1. Validate and normalize the ZIP entry path; skip unsafe paths.
+ *   2. Optionally probe existence via FILE_LIST; skip when overwrite=false and
  *      the file already exists.
- *   2. Ensure every parent directory exists (FILE_MKDIR, idempotent)
- *   3. FILE_WRITE_START — open / truncate the file on SD
- *   4. Repeated FILE_WRITE_DATA — send data in SD_FILE_CHUNK_SIZE chunks
- *   5. FILE_WRITE_FINISH — flush and close
+ *   3. Ensure every parent directory exists (FILE_MKDIR, idempotent)
+ *   4. FILE_WRITE_START — open / truncate the file on SD
+ *   5. Repeated FILE_WRITE_DATA — send data in SD_FILE_CHUNK_SIZE chunks
+ *   6. FILE_WRITE_FINISH — flush and close
  *
  * Individual file failures are caught and counted; writing continues for
  * the remaining files.
@@ -754,6 +841,9 @@ async function fileExistsOnSd(path) {
  * @returns {Promise<{written: number, skipped: number, failed: number}>}
  */
 async function writeFilesToSd(files, onProgress = null, overwrite = true) {
+    // Reset the per-directory listing cache so this batch sees fresh SD state
+    dirListingCache = new Map();
+
     const createdDirs = new Set();
     const filePaths = Object.keys(files).filter(name => !name.endsWith('/'));
     const total = filePaths.length;
@@ -762,8 +852,17 @@ async function writeFilesToSd(files, onProgress = null, overwrite = true) {
     let failed = 0;
 
     for (let i = 0; i < filePaths.length; i++) {
-        const path = filePaths[i];
-        const data = files[path];
+        const rawPath = filePaths[i];
+
+        // Validate and normalize path before touching the SD card
+        const path = normalizeSdPath(rawPath);
+        if (!path) {
+            log(`Skipped unsafe ZIP path: ${rawPath}`, 'warn');
+            skipped++;
+            continue;
+        }
+
+        const data = files[rawPath];
 
         if (onProgress) onProgress(i, total, path);
 
@@ -784,12 +883,12 @@ async function writeFilesToSd(files, onProgress = null, overwrite = true) {
             await sendCommand(RPC_CMD_FILE_WRITE_START,
                 buildFileWriteStartPayload(data.length, path));
 
-            // Send data in chunks
+            // Send data in chunks (subarray avoids copying)
             let offset = 0;
             while (offset < data.length) {
                 const end = Math.min(offset + SD_FILE_CHUNK_SIZE, data.length);
                 await sendCommand(RPC_CMD_FILE_WRITE_DATA,
-                    buildFileWriteDataPayload(offset, data.slice(offset, end)));
+                    buildFileWriteDataPayload(offset, data.subarray(offset, end)));
                 offset = end;
             }
 

@@ -354,12 +354,31 @@ export function buildFileMkdirPayload(path) {
 }
 
 /**
+ * Build FILE_LIST payload.
+ * Payload: [path string (UTF-8, no null terminator)], or empty for the root.
+ *
+ * The firmware responds with a single FILE_LIST_RESP frame whose payload is:
+ *   [path string (null-terminated)]
+ *   Repeated: [is_dir:1] [size:4 LE] [date:2 LE] [time:2 LE] [name:N + null]
+ * NACK 0x05 if the directory does not exist, NACK 0x04 if the SD is not ready.
+ *
+ * @param {string} [path] - Directory path on SD card (e.g. "IR/TVs"), or empty for root
+ * @returns {Uint8Array}
+ */
+export function buildFileListPayload(path = '') {
+    return new TextEncoder().encode(path);
+}
+
+/**
  * Build FILE_READ payload.
  * Payload: [path string (UTF-8, no null terminator)]
  *
- * The firmware will respond with one or more FILE_READ_DATA frames containing
- * the file's contents, followed by an ACK on completion, or NACK 0x05 if the
- * file does not exist.  This can be used as a lightweight file-existence probe.
+ * The firmware responds with one or more FILE_READ_DATA frames containing the
+ * file's contents. It does not send a final ACK when the read completes.
+ * Instead, callers must treat FILE_READ_DATA as a multi-frame response and
+ * track SEQ across chunks: the first FILE_READ_DATA uses the request SEQ, and
+ * each subsequent FILE_READ_DATA increments SEQ by 1. If the file does not
+ * exist, the device responds with NACK 0x05.
  *
  * @param {string} path - File path on SD card (e.g. "IR/TVs/Samsung.ir")
  * @returns {Uint8Array}
