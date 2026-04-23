@@ -5,6 +5,18 @@
 
 ---
 
+## Glossary
+
+Terminology used when communicating with the agent about the M1 UI.
+
+| Term | Definition |
+|------|------------|
+| **Main Menu** | The top-level navigation screen that lists the major modules — Sub-GHz, RFID, NFC, Infrared, WiFi, Bluetooth, GPIO, Games, Settings, etc. |
+| **Splash Screen** | The boot animation / logo screen shown exactly once at startup before the device is fully initialized. |
+| **Home Screen** | The screen displayed when the user presses BACK from the Main Menu. Visually similar to the Splash Screen but may show additional status indicators (battery, SD card, radio state, etc.) because the hardware is now initialized. |
+
+---
+
 ## ABSOLUTE RULES (NEVER VIOLATE)
 
 ### 1. NO Co-Author Attribution
