@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.159] - 2026-04-24
+
+### Changed
+
+- **Infrared: quick-remote button grid now automatically uses portrait (remote-control) orientation** — TV, AC, Audio, Projector, Fan and LED quick-remote grids now switch to portrait mode on entry and restore the previous orientation on exit. The grid layout adapts dynamically to display dimensions: 2-column layout with correctly-sized cells in portrait (64×128), and the category's original layout in landscape. File-browser screens (Right: browse device) temporarily switch to landscape while the list is shown.
 ## [0.9.0.158] - 2026-04-24
 
 ### Fixed
