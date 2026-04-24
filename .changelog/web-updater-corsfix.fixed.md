@@ -1,1 +1,0 @@
-**Web Updater: switch CORS proxy from corsproxy.io to corsfix.com** — corsproxy.io requires a paid subscription when requests originate from GitHub Pages, causing firmware downloads to fail with a 402 error. Replaced with corsfix.com, a free CORS proxy that works from GitHub Pages with no account or cost required. Closes #253.

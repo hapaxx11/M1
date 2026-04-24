@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.158] - 2026-04-24
+
+### Fixed
+
+- **Web Updater: switch CORS proxy from corsproxy.io to corsfix.com** — corsproxy.io requires a paid subscription when requests originate from GitHub Pages, causing firmware downloads to fail with a 402 error. Replaced with corsfix.com, a free CORS proxy that works from GitHub Pages with no account or cost required. Closes #253.
 ## [0.9.0.157] - 2026-04-23
 
 ### Added
