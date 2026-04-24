@@ -1216,10 +1216,14 @@ void ir_quick_remote(ir_category_t category)
             else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 /* Browse for a different device file.
-                 * The file-browser list uses landscape-sized constants, so
-                 * temporarily restore the caller's orientation for the browse,
-                 * then switch back to portrait when done. */
-                settings_apply_orientation(M1_ORIENT_NORMAL);
+                 * The file-browser list uses landscape-sized constants (124 px
+                 * highlight width, 125 px scrollbar), so we need a landscape
+                 * orientation during the browse.  Use the caller's orientation
+                 * if it is already landscape; fall back to NORMAL otherwise. */
+                uint8_t browse_orient = (saved_orient != M1_ORIENT_REMOTE)
+                                        ? saved_orient
+                                        : M1_ORIENT_NORMAL;
+                settings_apply_orientation(browse_orient);
                 char selected_path[QR_PATH_MAX];
                 if (browse_for_device(category, selected_path, QR_PATH_MAX))
                 {
@@ -1340,9 +1344,10 @@ void ir_brute_force_scan(ir_category_t category)
             }
             else
             {
-                /* Portrait: split to two lines */
+                /* Portrait (64 px wide): two lines within the 128 px height.
+                 * Second line is 10 px below the first (NokiaSmall line height). */
                 u8g2_DrawStr(&m1_u8g2, 4, 58, "OK: Found");
-                u8g2_DrawStr(&m1_u8g2, 4, 68, "Back: Stop");
+                u8g2_DrawStr(&m1_u8g2, 4, 58 + 10, "Back: Stop");
             }
         }
 
