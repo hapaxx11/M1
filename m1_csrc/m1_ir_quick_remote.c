@@ -37,23 +37,17 @@
 #include "flipper_ir.h"
 #include "irsnd.h"
 #include "ff.h"
+#include "m1_settings.h"
 
 /*************************** D E F I N E S ************************************/
 
-/** Grid layout: 3 columns × 3 rows in the 128×64 display */
-#define GRID_COLS      3
-#define GRID_ROWS      3
-#define GRID_TOP_Y     13     /* Below title bar (12px + 1px separator) */
-#define GRID_AREA_H    42     /* Grid area height (leaving 10px for bottom bar) */
-#define GRID_CELL_W    42     /* 128 / 3 ≈ 42 px per column */
-#define GRID_CELL_H    14     /* 42 / 3 = 14 px per row */
-#define GRID_BOTTOM_Y  (GRID_TOP_Y + GRID_AREA_H)
-
-/** 2-column × 2-row grid for smaller categories (Fan, LED) */
-#define GRID2_COLS     2
-#define GRID2_ROWS     2
-#define GRID2_CELL_W   64
-#define GRID2_CELL_H   21
+/** Grid layout — dimensions are computed dynamically per orientation. */
+#define GRID_COLS          3  /* Standard logical grid width (3×3) */
+#define GRID_ROWS          3  /* Standard logical grid height (3×3) */
+#define GRID2_COLS         2  /* Compact logical grid width (2×2) */
+#define GRID2_ROWS         2  /* Compact logical grid height (2×2) */
+#define GRID_TOP_Y         13 /* Below title bar (12px + 1px separator) */
+#define GRID_BOTTOM_BAR_H  10 /* Reserved for navigation hints at bottom */
 
 /** Last-used device persistence file */
 #define IR_LAST_USED_FILE  "0:/System/ir_last_used.txt"
@@ -600,26 +594,35 @@ static void map_buttons_to_commands(const ir_category_layout_t *layout)
 
 /*============================================================================*/
 /*
- * Draw the visual button grid on the 128×64 display.
+ * Return the number of grid columns to use given the current display orientation.
+ * In portrait mode (display width < height) we always use 2 columns so that
+ * button labels have enough horizontal room.  In landscape the layout's own
+ * column count is used.
+ */
+/*============================================================================*/
+static uint8_t effective_cols(const ir_category_layout_t *layout)
+{
+    if (u8g2_GetDisplayWidth(&m1_u8g2) < u8g2_GetDisplayHeight(&m1_u8g2))
+        return 2;
+    return layout->cols;
+}
+
+
+/*============================================================================*/
+/*
+ * Draw the visual button grid, orientation-aware (landscape or portrait).
  */
 /*============================================================================*/
 static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
                       const char *device_name, bool transmitting)
 {
-    uint8_t cols = layout->cols;
-    uint8_t rows = layout->rows;
-    uint8_t cell_w, cell_h;
-
-    if (cols == 2)
-    {
-        cell_w = GRID2_CELL_W;
-        cell_h = GRID2_CELL_H;
-    }
-    else
-    {
-        cell_w = GRID_CELL_W;
-        cell_h = GRID_CELL_H;
-    }
+    u8g2_uint_t disp_w    = u8g2_GetDisplayWidth(&m1_u8g2);
+    uint8_t     disp_h    = (uint8_t)u8g2_GetDisplayHeight(&m1_u8g2);
+    uint8_t     eff_cols  = effective_cols(layout);
+    uint8_t     eff_rows  = (layout->btn_count + eff_cols - 1) / eff_cols;
+    uint8_t     grid_area = (uint8_t)(disp_h - GRID_TOP_Y - GRID_BOTTOM_BAR_H);
+    uint8_t     cell_w    = (uint8_t)(disp_w / eff_cols);
+    uint8_t     cell_h    = grid_area / eff_rows;
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -634,15 +637,15 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
             snprintf(title, sizeof(title), "%s", layout->title);
         u8g2_DrawStr(&m1_u8g2, 2, 9, title);
     }
-    u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
+    u8g2_DrawHLine(&m1_u8g2, 0, 11, disp_w);
 
     /* Draw grid buttons */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
     for (uint8_t b = 0; b < layout->btn_count; b++)
     {
-        uint8_t col = b % cols;
-        uint8_t row = b / cols;
+        uint8_t col = b % eff_cols;
+        uint8_t row = b / eff_cols;
         uint8_t x = col * cell_w;
         uint8_t y = GRID_TOP_Y + row * cell_h;
 
@@ -695,9 +698,9 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
     {
         const char *left_hint = layout->universal_file ? "< Scan" : "";
         const char *right_hint = "> File";
-        u8g2_DrawStr(&m1_u8g2, 1, 63, left_hint);
+        u8g2_DrawStr(&m1_u8g2, 1, (u8g2_uint_t)(disp_h - 1), left_hint);
         u8g2_uint_t rw = u8g2_GetStrWidth(&m1_u8g2, right_hint);
-        u8g2_DrawStr(&m1_u8g2, 128 - rw - 1, 63, right_hint);
+        u8g2_DrawStr(&m1_u8g2, disp_w - rw - 1, (u8g2_uint_t)(disp_h - 1), right_hint);
     }
 
     m1_u8g2_nextpage();
@@ -1109,6 +1112,7 @@ void ir_quick_remote(ir_category_t category)
     char device_name[32];
     bool transmitting = false;
     const ir_category_layout_t *layout;
+    const uint8_t saved_orient = m1_screen_orientation;
 
     if ((uint8_t)category >= IR_CAT_COUNT)
         return;
@@ -1153,6 +1157,14 @@ void ir_quick_remote(ir_category_t category)
     if (!device_loaded)
         return;  /* User cancelled browse */
 
+    /* Switch to portrait (remote-control) orientation for the button grid.
+     * The caller's orientation is saved in saved_orient and restored on exit. */
+    settings_apply_orientation(M1_ORIENT_REMOTE);
+
+    /* Effective column count and row count for portrait navigation */
+    uint8_t eff_cols = effective_cols(layout);
+    uint8_t eff_rows = (layout->btn_count + eff_cols - 1) / eff_cols;
+
     /* Draw initial grid */
     draw_grid(layout, sel, device_name, false);
 
@@ -1170,17 +1182,18 @@ void ir_quick_remote(ir_category_t category)
             if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 xQueueReset(main_q_hdl);
+                settings_apply_orientation(saved_orient);
                 return;
             }
             else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                if (sel >= layout->cols)
-                    sel -= layout->cols;
+                if (sel >= eff_cols)
+                    sel -= eff_cols;
                 else
                 {
                     /* Wrap to last row */
-                    uint8_t last_row_start = (layout->rows - 1) * layout->cols;
-                    uint8_t target = last_row_start + (sel % layout->cols);
+                    uint8_t last_row_start = (eff_rows - 1) * eff_cols;
+                    uint8_t target = last_row_start + (sel % eff_cols);
                     if (target >= layout->btn_count)
                         target = layout->btn_count - 1;
                     sel = target;
@@ -1188,25 +1201,33 @@ void ir_quick_remote(ir_category_t category)
             }
             else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                if (sel + layout->cols < layout->btn_count)
-                    sel += layout->cols;
+                if (sel + eff_cols < layout->btn_count)
+                    sel += eff_cols;
                 else
                 {
                     /* Wrap to first row */
-                    sel = sel % layout->cols;
+                    sel = sel % eff_cols;
                 }
             }
             else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 if (layout->universal_file)
                 {
-                    /* Launch brute-force scan */
+                    /* Launch brute-force scan (stays in portrait) */
                     ir_brute_force_scan(category);
                 }
             }
             else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                /* Browse for a different device file */
+                /* Browse for a different device file.
+                 * The file-browser list uses landscape-sized constants (124 px
+                 * highlight width, 125 px scrollbar), so we need a landscape
+                 * orientation during the browse.  Use the caller's orientation
+                 * if it is already landscape; fall back to NORMAL otherwise. */
+                uint8_t browse_orient = (saved_orient != M1_ORIENT_REMOTE)
+                                        ? saved_orient
+                                        : M1_ORIENT_NORMAL;
+                settings_apply_orientation(browse_orient);
                 char selected_path[QR_PATH_MAX];
                 if (browse_for_device(category, selected_path, QR_PATH_MAX))
                 {
@@ -1220,6 +1241,9 @@ void ir_quick_remote(ir_category_t category)
                         device_loaded = true;
                     }
                 }
+                settings_apply_orientation(M1_ORIENT_REMOTE);
+                eff_cols = effective_cols(layout);
+                eff_rows = (layout->btn_count + eff_cols - 1) / eff_cols;
             }
             else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
             {
@@ -1296,25 +1320,40 @@ void ir_brute_force_scan(ir_category_t category)
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
         u8g2_DrawStr(&m1_u8g2, 2, 9, "Power Scan");
-        u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-
-        snprintf(info, sizeof(info), "Trying: %s", s_qr_commands[i].name);
-        u8g2_DrawStr(&m1_u8g2, 4, 24, info);
-
-        snprintf(info, sizeof(info), "%u / %u", (unsigned)(i + 1), (unsigned)s_qr_cmd_count);
-        u8g2_DrawStr(&m1_u8g2, 4, 36, info);
-
-        /* Progress bar */
         {
-            uint8_t bar_w = (uint8_t)((uint16_t)120 * (i + 1) / s_qr_cmd_count);
-            u8g2_DrawFrame(&m1_u8g2, 4, 40, 120, 8);
-            u8g2_DrawBox(&m1_u8g2, 4, 40, bar_w, 8);
-        }
+            u8g2_uint_t dw = u8g2_GetDisplayWidth(&m1_u8g2);
+            u8g2_DrawHLine(&m1_u8g2, 0, 11, dw);
 
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 4, 58, "OK:Found  Back:Cancel");
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+            snprintf(info, sizeof(info), "Trying: %s", s_qr_commands[i].name);
+            u8g2_DrawStr(&m1_u8g2, 4, 24, info);
+
+            snprintf(info, sizeof(info), "%u / %u", (unsigned)(i + 1), (unsigned)s_qr_cmd_count);
+            u8g2_DrawStr(&m1_u8g2, 4, 36, info);
+
+            /* Progress bar — width fitted to display */
+            {
+                u8g2_uint_t bar_total = dw - 8;  /* 4 px margin each side */
+                uint8_t bar_w = (uint8_t)((uint32_t)bar_total * (i + 1) / s_qr_cmd_count);
+                u8g2_DrawFrame(&m1_u8g2, 4, 40, bar_total, 8);
+                u8g2_DrawBox(&m1_u8g2, 4, 40, bar_w, 8);
+            }
+
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            if (u8g2_GetDisplayWidth(&m1_u8g2) >= u8g2_GetDisplayHeight(&m1_u8g2))
+            {
+                /* Landscape: one line fits */
+                u8g2_DrawStr(&m1_u8g2, 4, 58, "OK:Found  Back:Cancel");
+            }
+            else
+            {
+                /* Portrait (64 px wide): two lines within the 128 px height.
+                 * Second line is 10 px below the first (NokiaSmall line height). */
+                u8g2_DrawStr(&m1_u8g2, 4, 58, "OK: Found");
+                u8g2_DrawStr(&m1_u8g2, 4, 58 + 10, "Back: Stop");
+            }
+        }
 
         m1_u8g2_nextpage();
 
