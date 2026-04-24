@@ -42,7 +42,11 @@
 /*************************** D E F I N E S ************************************/
 
 /** Grid layout — dimensions are computed dynamically per orientation. */
-#define GRID_TOP_Y     13     /* Below title bar (12px + 1px separator) */
+#define GRID_COLS          3  /* Standard logical grid width (3×3) */
+#define GRID_ROWS          3  /* Standard logical grid height (3×3) */
+#define GRID2_COLS         2  /* Compact logical grid width (2×2) */
+#define GRID2_ROWS         2  /* Compact logical grid height (2×2) */
+#define GRID_TOP_Y         13 /* Below title bar (12px + 1px separator) */
 #define GRID_BOTTOM_BAR_H  10 /* Reserved for navigation hints at bottom */
 
 /** Last-used device persistence file */
@@ -1337,7 +1341,7 @@ void ir_brute_force_scan(ir_category_t category)
             }
 
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            if (dw >= 100)
+            if (u8g2_GetDisplayWidth(&m1_u8g2) >= u8g2_GetDisplayHeight(&m1_u8g2))
             {
                 /* Landscape: one line fits */
                 u8g2_DrawStr(&m1_u8g2, 4, 58, "OK:Found  Back:Cancel");
