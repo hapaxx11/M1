@@ -21,10 +21,10 @@ const GITHUB_API = 'https://api.github.com';
  * Routing asset downloads through a CORS-capable proxy adds the required
  * headers so the browser can receive the binary data.
  *
- * corsproxy.io is a widely-used, open-source CORS proxy.
- * Format: CORS_PROXY + encodeURIComponent(url).
+ * corsfix.com is a free CORS proxy that works from GitHub Pages.
+ * Format: CORS_PROXY + url  (raw URL appended directly, no encoding needed).
  */
-const CORS_PROXY = 'https://corsproxy.io/?url=';
+const CORS_PROXY = 'https://corsfix.com/';
 
 /** Hostnames whose fetch responses are blocked by CORS policy. */
 const CORS_BLOCKED_HOSTS = new Set([
@@ -43,7 +43,7 @@ function proxify(url) {
     try {
         const { hostname } = new URL(url);
         if (CORS_BLOCKED_HOSTS.has(hostname)) {
-            return CORS_PROXY + encodeURIComponent(url);
+            return CORS_PROXY + url;
         }
     } catch (_) {
         /* malformed URL — pass through unchanged */
