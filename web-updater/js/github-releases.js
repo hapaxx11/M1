@@ -24,11 +24,16 @@ const GITHUB_API = 'https://api.github.com';
  * Multiple proxies are listed in priority order.  If a proxy returns any
  * non-2xx response or the fetch itself rejects (network error), the download
  * retries with the next proxy in the list.
- * Format for each proxy: prefix + raw_url  (no encoding needed).
+ *
+ * Each entry:
+ *   prefix — URL prefix to prepend (the target URL follows immediately)
+ *   encode — true: target URL is percent-encoded before appending
+ *            false: target URL is appended raw
  */
 const CORS_PROXIES = [
-    'https://corsproxy.io/?',
-    'https://proxy.corsfix.com/?',
+    { prefix: 'https://api.allorigins.win/raw?url=', encode: true  },
+    { prefix: 'https://corsproxy.io/?url=',          encode: true  },
+    { prefix: 'https://proxy.corsfix.com/?',         encode: false },
 ];
 
 /** Hostnames whose fetch responses are blocked by CORS policy. */
@@ -132,9 +137,10 @@ export async function downloadFirmware(url, onProgress = null) {
     let resp;
     if (needsProxy(url)) {
         let lastError;
-        for (const proxy of CORS_PROXIES) {
+        for (const { prefix, encode } of CORS_PROXIES) {
+            const proxyUrl = prefix + (encode ? encodeURIComponent(url) : url);
             try {
-                resp = await fetch(proxy + url);
+                resp = await fetch(proxyUrl);
                 if (resp.ok) break;
                 lastError = new Error(`Download failed: ${resp.status} ${resp.statusText}`);
                 // Cancel the body to free the connection before trying the next proxy.
