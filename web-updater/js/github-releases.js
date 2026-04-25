@@ -21,8 +21,9 @@ const GITHUB_API = 'https://api.github.com';
  * Routing asset downloads through a CORS-capable proxy adds the required
  * headers so the browser can receive the binary data.
  *
- * Multiple proxies are listed in priority order.  If the first proxy returns
- * a 4xx/5xx error the download retries with the next one.
+ * Multiple proxies are listed in priority order.  If a proxy returns any
+ * non-2xx response or the fetch itself rejects (network error), the download
+ * retries with the next proxy in the list.
  * Format for each proxy: prefix + raw_url  (no encoding needed).
  */
 const CORS_PROXIES = [
@@ -136,6 +137,8 @@ export async function downloadFirmware(url, onProgress = null) {
                 resp = await fetch(proxy + url);
                 if (resp.ok) break;
                 lastError = new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+                // Cancel the body to free the connection before trying the next proxy.
+                resp.body?.cancel();
             } catch (err) {
                 lastError = err;
             }
