@@ -64,6 +64,9 @@ static uint8_t current_recv_seq = 0;
 
 static bool esp32_main_init_done = false;
 
+/* Forward declaration — defined below ble_advertise(). */
+static uint8_t esp_at_send_wait_ok(ctrl_cmd_t *app_req, const char *at_cmd_str);
+
 /* uid to link between requests and responses
  * uids are incrementing values from 1 onwards. */
 static int32_t uid = 0;
@@ -916,6 +919,12 @@ uint8_t ble_scan_list_ex(ctrl_cmd_t *app_req)
 
 	tick_t0 = HAL_GetTick();
 	esp32_queue_reset();
+
+	/* Deinitialize BLE if it was left active from a previous scan or BLE operation.
+	 * AT+BLEINIT=0 is idempotent — returns OK even when BLE is already in mode 0.
+	 * Without this, AT+BLEINIT=1 returns ERROR on any repeat scan, causing a
+	 * 10-second timeout before showing "Scan failed!". */
+	esp_at_send_wait_ok(app_req, CONCAT_CMD_PARAM(ESP32C6_AT_REQ_BLE_MODE, ESP32C6_BLE_MODE_NULL));
 
 	/* Initialize ble_scan union member */
 	app_req->u.ble_scan.count = 0;
