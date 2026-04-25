@@ -64,6 +64,9 @@ static uint8_t current_recv_seq = 0;
 
 static bool esp32_main_init_done = false;
 
+/* Forward declaration — defined below ble_advertise(). */
+static uint8_t esp_at_send_wait_ok(ctrl_cmd_t *app_req, const char *at_cmd_str);
+
 /* uid to link between requests and responses
  * uids are incrementing values from 1 onwards. */
 static int32_t uid = 0;
