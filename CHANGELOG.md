@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.162] - 2026-04-25
+
+### Fixed
+
+- **Web Updater: CORS proxy fix (invalid_origin)** — replaced the `corsproxy.io` + `proxy.corsfix.com`
+  proxy pair (both blocked or rejecting requests) with `api.allorigins.win` (primary, percent-encoded
+  URL format) → `corsproxy.io` (secondary, percent-encoded) → `proxy.corsfix.com` (last-resort, raw
+  URL); also corrected the `corsproxy.io` URL format to use the required `?url=ENCODED` query
+  parameter that was missing from the previous fix.
 ## [0.9.0.161] - 2026-04-25
 
 ### Fixed
