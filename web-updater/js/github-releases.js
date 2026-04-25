@@ -10,7 +10,7 @@
 const GITHUB_API = 'https://api.github.com';
 
 /*
- * CORS proxy for GitHub release asset downloads.
+ * CORS proxies for GitHub release asset downloads.
  *
  * The GitHub API (api.github.com) responds with proper CORS headers and is
  * fetched directly.  However, `browser_download_url` points to either
@@ -21,10 +21,14 @@ const GITHUB_API = 'https://api.github.com';
  * Routing asset downloads through a CORS-capable proxy adds the required
  * headers so the browser can receive the binary data.
  *
- * corsfix.com is a free CORS proxy that works from GitHub Pages.
- * Format: CORS_PROXY + url  (raw URL appended directly, no encoding needed).
+ * Multiple proxies are listed in priority order.  If the first proxy returns
+ * a 4xx/5xx error the download retries with the next one.
+ * Format for each proxy: prefix + raw_url  (no encoding needed).
  */
-const CORS_PROXY = 'https://proxy.corsfix.com/?';
+const CORS_PROXIES = [
+    'https://corsproxy.io/?',
+    'https://proxy.corsfix.com/?',
+];
 
 /** Hostnames whose fetch responses are blocked by CORS policy. */
 const CORS_BLOCKED_HOSTS = new Set([
@@ -33,22 +37,19 @@ const CORS_BLOCKED_HOSTS = new Set([
 ]);
 
 /**
- * Wrap a URL in the CORS proxy when it targets GitHub's download CDN.
+ * Return true when the URL targets a host that requires a CORS proxy.
  * API calls (api.github.com) are not proxied — they already have CORS headers.
  *
  * @param {string} url
- * @returns {string}
+ * @returns {boolean}
  */
-function proxify(url) {
+function needsProxy(url) {
     try {
         const { hostname } = new URL(url);
-        if (CORS_BLOCKED_HOSTS.has(hostname)) {
-            return CORS_PROXY + url;
-        }
+        return CORS_BLOCKED_HOSTS.has(hostname);
     } catch (_) {
-        /* malformed URL — pass through unchanged */
+        return false;
     }
-    return url;
 }
 
 /**
@@ -118,15 +119,35 @@ export async function fetchReleases(owner, repo, options = {}) {
 /**
  * Download a firmware binary from a release asset URL.
  *
+ * When the URL requires a CORS proxy, each proxy in CORS_PROXIES is tried in
+ * order.  The first proxy that returns a successful response wins.  If every
+ * proxy returns an error, the last error is thrown.
+ *
  * @param {string}   url          - Direct download URL
  * @param {function} [onProgress] - Callback(loaded, total) for progress
  * @returns {Promise<Uint8Array>} Firmware binary data
  */
 export async function downloadFirmware(url, onProgress = null) {
-    const proxyUrl = proxify(url);
-    const resp = await fetch(proxyUrl);
-    if (!resp.ok) {
-        throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+    let resp;
+    if (needsProxy(url)) {
+        let lastError;
+        for (const proxy of CORS_PROXIES) {
+            try {
+                resp = await fetch(proxy + url);
+                if (resp.ok) break;
+                lastError = new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+            } catch (err) {
+                lastError = err;
+            }
+        }
+        if (!resp || !resp.ok) {
+            throw lastError || new Error('Download failed: all proxies exhausted');
+        }
+    } else {
+        resp = await fetch(url);
+        if (!resp.ok) {
+            throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+        }
     }
 
     const contentLength = parseInt(resp.headers.get('Content-Length') || '0', 10);
