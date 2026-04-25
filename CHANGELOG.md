@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.161] - 2026-04-25
+
+### Fixed
+
+- **Web Updater: CORS proxy fallback** — firmware downloads now try `corsproxy.io` first and
+  fall back to `proxy.corsfix.com` if the primary proxy returns an error, fixing the 403
+  failure seen when downloading release assets.
 ## [0.9.0.160] - 2026-04-25
 
 ## [0.9.0.159] - 2026-04-24
