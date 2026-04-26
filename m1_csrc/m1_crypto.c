@@ -47,8 +47,12 @@ typedef struct {
 
 //****************************** V A R I A B L E S *****************************/
 
-/* Static PRNG counter for IV uniqueness (monotonically increasing) */
+/* Static PRNG counter for IV uniqueness (monotonically increasing).
+ * Only used inside m1_crypto_generate_iv(), which is excluded when
+ * M1_CRYPTO_SKIP_UID_FUNCTIONS is defined. */
+#ifndef M1_CRYPTO_SKIP_UID_FUNCTIONS
 static uint32_t s_iv_counter = 0;
+#endif
 
 /* Rijndael S-box */
 static const uint8_t s_sbox[256] = {
@@ -144,7 +148,10 @@ static void add_round_key(uint8_t state[AES_BLOCK_SIZE], const uint32_t *rk);
 static uint8_t gf_mul(uint8_t a, uint8_t b);
 static uint32_t sub_word(uint32_t w);
 static uint32_t rot_word(uint32_t w);
+/* splitmix64 is only used by the UID-dependent key/IV derivation functions */
+#ifndef M1_CRYPTO_SKIP_UID_FUNCTIONS
 static uint64_t splitmix64(uint64_t *state);
+#endif
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -207,8 +214,11 @@ static uint32_t rot_word(uint32_t w)
 /*
  * splitmix64 PRNG for key derivation and IV generation.
  * Produces good avalanche from sequential seeds.
+ * Only referenced by m1_crypto_derive_key() and m1_crypto_generate_iv(),
+ * which are excluded when M1_CRYPTO_SKIP_UID_FUNCTIONS is defined.
  */
 /*============================================================================*/
+#ifndef M1_CRYPTO_SKIP_UID_FUNCTIONS
 static uint64_t splitmix64(uint64_t *state)
 {
 	uint64_t z;
@@ -220,6 +230,7 @@ static uint64_t splitmix64(uint64_t *state)
 	z = z ^ (z >> 31);
 	return z;
 } // static uint64_t splitmix64(...)
+#endif /* M1_CRYPTO_SKIP_UID_FUNCTIONS */
 
 
 
@@ -511,6 +522,18 @@ static void aes256_decrypt_block(const aes256_ctx_t *ctx, const uint8_t in[AES_B
 
 /*============================================================================*/
 /*
+ * UID-dependent functions.
+ *
+ * Guard with -DM1_CRYPTO_SKIP_UID_FUNCTIONS to exclude these from the build.
+ * The test stub (tests/stubs/m1_crypto_stub.c) provides deterministic
+ * replacements so the AES engine can be exercised on the host without
+ * access to the STM32H5 unique-ID registers or HAL_GetTick().
+ */
+/*============================================================================*/
+#ifndef M1_CRYPTO_SKIP_UID_FUNCTIONS
+
+/*============================================================================*/
+/*
  * Derive a device-specific 256-bit encryption key from STM32H5 UID.
  * Uses splitmix64 to expand the 96-bit UID + magic constant into 32 bytes.
  */
@@ -590,6 +613,8 @@ void m1_crypto_generate_iv(uint8_t iv[M1_CRYPTO_IV_SIZE])
 	iv[14] = (uint8_t)(val >> 8);
 	iv[15] = (uint8_t)(val);
 } // void m1_crypto_generate_iv(...)
+
+#endif /* M1_CRYPTO_SKIP_UID_FUNCTIONS */
 
 
 

@@ -4,10 +4,23 @@
  * @file  subghz_keeloq_mfkeys.h
  * @brief KeeLoq manufacturer (master) key store — SD-card backed lookup.
  *
- * Manufacturer keys are loaded at runtime from the SD card file:
+ * The preferred keystore format is an AES-256-CBC encrypted binary file:
+ *   0:/SUBGHZ/keeloq_mfcodes.enc
+ *
+ * Use ``scripts/encrypt_keeloq_keys.py`` to produce this file from
+ * RocketGod's SubGHz Toolkit output or from compact plaintext — then copy
+ * only the ``.enc`` file to the SD card (the plaintext never needs to be
+ * placed on the card).
+ *
+ * **Automatic migration**: if only a plaintext ``keeloq_mfcodes`` file
+ * exists (legacy workflow), ``keeloq_mfkeys_load()`` will load it, write
+ * the encrypted file, and delete the plaintext automatically.
+ *
+ * **Plaintext fallback** (legacy, still accepted):
  *   0:/SUBGHZ/keeloq_mfcodes
  *
- * Two file formats are accepted:
+ * Two text formats are accepted inside the encrypted payload (and in the
+ * plaintext fallback file):
  *
  * **Compact format** (one entry per line, '#' comments ignored):
  *   AABBCCDDEEFFAABB:1:ManufacturerName   (Simple Learning)
@@ -23,12 +36,8 @@
  *   ------------------------------------
  *
  * Both formats may coexist in the same file.  Use
- * ``scripts/convert_keeloq_keys.py`` to convert RocketGod toolkit output to
- * compact format.
- *
- * Where AABBCCDDEEFFAABB is the 64-bit manufacturer key in big-endian hex.
- * The type field matches the Flipper SubGhz Keystore File format used by the
- * Unleashed and Momentum firmwares.
+ * ``scripts/encrypt_keeloq_keys.py`` to convert and encrypt in one step.
+ * ``scripts/convert_keeloq_keys.py`` is kept for backward compatibility.
  *
  * Usage:
  *   1. Call keeloq_mfkeys_load() once at startup (or on demand).
@@ -60,11 +69,28 @@ typedef struct {
 } KeeLoqMfrEntry;
 
 /*============================================================================*/
-/* SD-card keystore path                                                      */
+/* SD-card keystore paths                                                     */
 /*============================================================================*/
 
-/** Path on the SD card where the keystore file is located. */
+/**
+ * Path on the SD card where the AES-256-CBC encrypted keystore is stored.
+ * This is the preferred format — use scripts/encrypt_keeloq_keys.py to
+ * produce this file from RocketGod toolkit output or compact plaintext.
+ * Override at compile time (e.g. for host-side tests) with -D.
+ */
+#ifndef KEELOQ_MFKEYS_ENC_PATH
+#define KEELOQ_MFKEYS_ENC_PATH  "0:/SUBGHZ/keeloq_mfcodes.enc"
+#endif
+
+/**
+ * Path on the SD card where the legacy plaintext keystore is located.
+ * Accepted as a fallback; automatically migrated to the encrypted format
+ * by keeloq_mfkeys_load() and then deleted.
+ * Override at compile time (e.g. for host-side tests) with -D.
+ */
+#ifndef KEELOQ_MFKEYS_PATH
 #define KEELOQ_MFKEYS_PATH  "0:/SUBGHZ/keeloq_mfcodes"
+#endif
 
 /*============================================================================*/
 /* API                                                                        */
@@ -73,16 +99,37 @@ typedef struct {
 /**
  * @brief  Load the manufacturer key table from the SD card.
  *
- * Reads KEELOQ_MFKEYS_PATH and parses each valid line into the internal
- * table.  Both compact (``HEX:TYPE:NAME``) and RocketGod multi-line formats
- * are supported.  Manufacturer names longer than 47 characters are silently
- * truncated.  Lines with a malformed hex key or out-of-range type are silently
- * skipped.  The previous table (if any) is freed first.
+ * Tries the encrypted keystore (keeloq_mfcodes.enc) first.  If not found,
+ * falls back to the legacy plaintext keeloq_mfcodes file and automatically
+ * migrates it: saves an encrypted copy and deletes the plaintext.
  *
- * @return true if the file was opened and at least zero lines were parsed,
- *         false if the SD card or file could not be accessed.
+ * @return true if any key source was opened and parsed (even if 0 entries
+ *         were found); false if neither file could be accessed.
  */
 bool keeloq_mfkeys_load(void);
+
+/**
+ * @brief  Load the manufacturer key table from the encrypted keystore.
+ *
+ * Opens KEELOQ_MFKEYS_ENC_PATH, validates the "M1KL" magic and version,
+ * decrypts the AES-256-CBC payload with the built-in product key, and
+ * feeds the result to keeloq_mfkeys_load_text().
+ *
+ * @return true on success (even if 0 entries were found after decryption),
+ *         false if the file is absent, corrupt, or decryption fails.
+ */
+bool keeloq_mfkeys_load_encrypted(void);
+
+/**
+ * @brief  Save the currently loaded key table as an encrypted keystore.
+ *
+ * Serialises the in-memory table to compact "HEX:TYPE:NAME\n" text,
+ * encrypts it with AES-256-CBC using the built-in product key, and writes
+ * the binary to KEELOQ_MFKEYS_ENC_PATH.
+ *
+ * @return true on success, false if nothing is loaded or the write fails.
+ */
+bool keeloq_mfkeys_save_encrypted(void);
 
 /**
  * @brief  Parse a null-terminated text string into the manufacturer key table.

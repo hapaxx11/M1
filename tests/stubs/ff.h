@@ -55,7 +55,10 @@ typedef struct {
 static inline FRESULT f_open(FIL *fp, const char *path, unsigned char mode)
 {
 	if (!fp || !path) return FR_DISK_ERR;
-	const char *m = ((mode & FA_WRITE) || (mode & FA_CREATE_ALWAYS)) ? "w" : "r";
+	/* Use binary mode so f_read / f_write work correctly for binary files.
+	 * On Linux, "rb"/"wb" and "r"/"w" are identical, so existing text-mode
+	 * tests are unaffected. */
+	const char *m = ((mode & FA_WRITE) || (mode & FA_CREATE_ALWAYS)) ? "wb" : "rb";
 	fp->f = fopen(path, m);
 	return fp->f ? FR_OK : FR_DISK_ERR;
 }
@@ -64,6 +67,26 @@ static inline FRESULT f_close(FIL *fp)
 {
 	if (fp && fp->f) { fclose(fp->f); fp->f = NULL; }
 	return FR_OK;
+}
+
+static inline FRESULT f_read(FIL *fp, void *buf, UINT btr, UINT *br)
+{
+	if (!fp || !fp->f || !buf || !br) return FR_DISK_ERR;
+	*br = (UINT)fread(buf, 1, btr, fp->f);
+	return FR_OK;
+}
+
+static inline FRESULT f_write(FIL *fp, const void *buf, UINT btw, UINT *bw)
+{
+	if (!fp || !fp->f || !buf || !bw) return FR_DISK_ERR;
+	*bw = (UINT)fwrite(buf, 1, btw, fp->f);
+	return (*bw == btw) ? FR_OK : FR_DISK_ERR;
+}
+
+static inline FRESULT f_unlink(const char *path)
+{
+	if (!path) return FR_DISK_ERR;
+	return (remove(path) == 0) ? FR_OK : FR_DISK_ERR;
 }
 
 static inline char *f_gets(char *buf, int len, FIL *fp)
