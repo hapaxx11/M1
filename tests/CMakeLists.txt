@@ -96,6 +96,32 @@ add_test(NAME battery_soc COMMAND test_battery_soc)
 set(STUBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 
 # ------------------------------------------------------------------
+# Module under test: bq27421_init pure-logic helpers
+#
+# Regression for v0.9.0.166 crash: bq27421_init() entered the full
+# CFGUPDATE path for the first time (taper rate change + new
+# DEFAULT_DESIGN_CAP check), revealing two bugs:
+#   1. Checksum comparison casts the wrong operand, always returning
+#      false even when the block write succeeded.
+#   2. BQ27421 left in CFGUPMODE indefinitely on the false-return path.
+#
+# The test does NOT link against m1_bq27421.c (too many I2C/HAL deps).
+# It tests only the static inline pure helpers declared in m1_bq27421.h.
+# ------------------------------------------------------------------
+add_executable(test_bq27421_init
+    test_bq27421_init.c
+)
+target_include_directories(test_bq27421_init PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_bq27421_init PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_bq27421_init PRIVATE sanitizers)
+endif()
+add_test(NAME bq27421_init COMMAND test_bq27421_init)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"
