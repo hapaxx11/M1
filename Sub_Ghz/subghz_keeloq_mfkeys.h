@@ -2,22 +2,22 @@
 
 /**
  * @file  subghz_keeloq_mfkeys.h
- * @brief KeeLoq manufacturer (master) key store — SD-card backed lookup.
+ * @brief KeeLoq manufacturer (master) key store — built-in flash and SD-card fallback.
  *
- * The preferred keystore format is an AES-256-CBC encrypted binary file:
+ * **Primary path** (built-in flash):
+ *   Keys are embedded directly into the firmware binary at build time via
+ *   ``scripts/gen_keeloq_mfkeys_builtin.py`` and the GitHub Actions secret
+ *   ``KEELOQ_KEY_VAULT``.  When built-in keys are present,
+ *   ``keeloq_mfkeys_load()`` uses them directly and does NOT consult the SD
+ *   card.
+ *
+ * **Fallback path 1** — AES-256-CBC encrypted SD-card keystore (optional):
  *   0:/SUBGHZ/keeloq_mfcodes.enc
  *
- * Use ``scripts/encrypt_keeloq_keys.py`` to produce this file from
- * RocketGod's SubGHz Toolkit output or from compact plaintext — then copy
- * only the ``.enc`` file to the SD card (the plaintext never needs to be
- * placed on the card).
- *
- * **Automatic migration**: if only a plaintext ``keeloq_mfcodes`` file
- * exists (legacy workflow), ``keeloq_mfkeys_load()`` will load it, write
- * the encrypted file, and delete the plaintext automatically.
- *
- * **Plaintext fallback** (legacy, still accepted):
+ * **Fallback path 2** — legacy plaintext SD-card keystore (auto-migrated):
  *   0:/SUBGHZ/keeloq_mfcodes
+ *   ``keeloq_mfkeys_load()`` will load it, write the encrypted file, and
+ *   delete the plaintext automatically.
  *
  * Two text formats are accepted inside the encrypted payload (and in the
  * plaintext fallback file):
@@ -35,9 +35,7 @@
  *   Type:         1
  *   ------------------------------------
  *
- * Both formats may coexist in the same file.  Use
- * ``scripts/encrypt_keeloq_keys.py`` to convert and encrypt in one step.
- * ``scripts/convert_keeloq_keys.py`` is kept for backward compatibility.
+ * Both formats may coexist in the same file.
  *
  * Usage:
  *   1. Call keeloq_mfkeys_load() once at startup (or on demand).
@@ -95,8 +93,7 @@ extern const uint32_t     keeloq_mfkeys_builtin_len;
 
 /**
  * Path on the SD card where the AES-256-CBC encrypted keystore is stored.
- * This is the preferred format — use scripts/encrypt_keeloq_keys.py to
- * produce this file from RocketGod toolkit output or compact plaintext.
+ * SD card lookup is a fallback — built-in flash keys take priority.
  * Override at compile time (e.g. for host-side tests) with -D.
  */
 #ifndef KEELOQ_MFKEYS_ENC_PATH

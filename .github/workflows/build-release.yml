@@ -311,11 +311,6 @@ jobs:
           [ -f subghz_database/README.md ] && \
             cp subghz_database/README.md sd_staging/SubGHz/
 
-          # KeeLoq: bundle the key-conversion helper script alongside the example file
-          mkdir -p sd_staging/SubGHz/keeloq
-          [ -f scripts/convert_keeloq_keys.py ] && \
-            cp scripts/convert_keeloq_keys.py sd_staging/SubGHz/keeloq/
-
           # SubGHz playlists: copy subdirectories, example file, and top-level notices
           for d in subghz_playlist/*/; do
             [ -d "$d" ] && cp -r "$d" sd_staging/SubGHz/playlist/

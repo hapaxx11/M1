@@ -30,7 +30,8 @@
  *      Key (Dec):    <decimal — ignored>
  *      Type:         TYPE
  *      ------------------------------------
- *    Use scripts/encrypt_keeloq_keys.py to convert and encrypt in one step.
+ *    Use the RocketGod multi-line format directly or convert to compact
+ *    format first.
  */
 
 #include "subghz_keeloq_mfkeys.h"
@@ -66,8 +67,6 @@
  *
  * This key is the same on every M1 unit — it provides file-at-rest
  * obfuscation (the plaintext is never on the SD card), NOT device binding.
- * The companion script scripts/encrypt_keeloq_keys.py uses the identical
- * constant so that files can be prepared offline.
  *
  * It is intentionally NOT a secret: the threat model is casual inspection
  * of the SD card, not a targeted key-extraction attack.

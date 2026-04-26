@@ -68,7 +68,9 @@ Type:         2
 ------------------------------------
 ```
 
-Use `scripts/convert_keeloq_keys.py` to convert RocketGod output to compact format.
+Manufacturer keys are embedded at build time via `scripts/gen_keeloq_mfkeys_builtin.py`
+and the `KEELOQ_KEY_VAULT` CI secret, or can be loaded from the SD card as a fallback
+(`0:/SUBGHZ/keeloq_mfcodes.enc` or `0:/SUBGHZ/keeloq_mfcodes`).
 
 | Protocol | Bits | Cipher / Learning | Notes |
 |----------|------|-------------------|-------|

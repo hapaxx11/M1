@@ -479,25 +479,6 @@ button:disabled {
     color: var(--text-secondary);
 }
 
-/* ── KeeLoq File Row ── */
-
-.keeloq-file-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.keeloq-key-count {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-}
-
-.keeloq-privacy {
-    color: var(--text-muted);
-    font-style: italic;
-}
-
 /* ── Utilities ── */
 
 .hidden {
