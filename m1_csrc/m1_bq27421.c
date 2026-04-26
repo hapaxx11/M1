@@ -18,6 +18,7 @@
 #include <string.h>
 #include "m1_bq27421.h"
 #include "m1_i2c.h"
+#include "m1_wdt_hw.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -27,11 +28,6 @@
  * Must be strictly less than IWDG_RELOAD (4000 ms) so the watchdog is
  * always kicked before the hardware window expires. */
 #define BQ27421_CFGUPMODE_TIMEOUT_MS   3000U
-
-/* m1_wdt_reset() — forward declaration.
- * Including m1_watchdog.h would pull in FreeRTOS types (TickType_t) that are
- * not otherwise needed here.  A bare extern is safer for this low-level driver. */
-extern void m1_wdt_reset(void);
 
 // ==== BlockData offsets (Extended Data - "Gas Gauging" subclass ???? ????) ====
 #define OFFS_DESIGN_CAP_MSB      10
@@ -568,12 +564,13 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
         {
             m1_wdt_reset();
             bq27421_i2c_command_read( BQ27421_FLAGS_LOW, &flags );
-            if( !(flags & BQ27421_FLAG_CFGUPMODE) )
+            if( flags & BQ27421_FLAG_CFGUPMODE )    // Still in CFGUPMODE — keep waiting
             {
                 HAL_Delay( 1 );
             }
             if ( (HAL_GetTick() - t0) >= BQ27421_CFGUPMODE_TIMEOUT_MS )
             {
+                bq27421_i2c_control_write( BQ27421_CONTROL_SOFT_RESET );
                 bq27421_i2c_control_write( BQ27421_CONTROL_SEALED );
                 return false;
             }
