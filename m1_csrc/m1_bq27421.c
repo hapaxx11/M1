@@ -25,8 +25,8 @@
 #define BQ27241_I2C_TIMEOUT	(2000)
 
 /* Maximum time to wait for CFGUPMODE to set or clear.
- * Must be strictly less than IWDG_RELOAD (4000 ms) so the watchdog is
- * always kicked before the hardware window expires. */
+ * Bounds the polling loop so a non-responsive gauge cannot
+ * block the caller indefinitely. */
 #define BQ27421_CFGUPMODE_TIMEOUT_MS   3000U
 
 // ==== BlockData offsets (Extended Data - "Gas Gauging" subclass ???? ????) ====
