@@ -126,6 +126,13 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
+/* Forward declaration — draw() is defined after the scene callbacks but is
+ * called from scene_on_event() (OK handler in Sending state) to force one
+ * display frame before the blocking TX call.  Without this forward declaration
+ * the compiler sees the call site first, creates an implicit non-static
+ * declaration, and then rejects the later static definition. */
+static void draw(SubGhzApp *app);
+
 /*============================================================================*/
 /* Helpers                                                                    */
 /*============================================================================*/
