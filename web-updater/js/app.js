@@ -50,8 +50,6 @@ const FW_CHUNK_SIZE = 1024;      // Must match RPC_FW_CHUNK_SIZE on device
 const SD_FILE_CHUNK_SIZE = 4096; // Data bytes per FILE_WRITE_DATA chunk (RPC_MAX_PAYLOAD=8192, offset=4; 4096 is well within limits)
 const RESPONSE_TIMEOUT_MS = 10000;  // 10s timeout for RPC responses
 const ERASE_TIMEOUT_MS = 30000;     // 30s timeout for FW_UPDATE_START (flash erase)
-const KEELOQ_SD_PATH = 'SubGHz/keeloq_mfcodes'; // SD card path for KeeLoq manufacturer key file
-
 /* ── Application State ── */
 
 const serial = new M1Serial();
@@ -68,8 +66,6 @@ let fwInfo = null;
 let releases = [];
 let selectedFirmware = null;  // { data: Uint8Array, name: string }
 let isFlashing = false;
-let keeloqMfcodesData = null;  // Uint8Array of converted keeloq_mfcodes content, or null
-let keeloqEntryCount = 0;      // Number of valid entries in keeloqMfcodesData
 
 /* ── DOM Elements ── */
 
@@ -97,8 +93,6 @@ function cacheElements() {
         'btn-flash', 'flash-section',
         'chk-install-firmware', 'chk-install-sd', 'chk-sd-overwrite',
         'sd-assets-option', 'sd-overwrite-option',
-        'chk-install-keeloq', 'keeloq-file-row', 'btn-keeloq-file',
-        'keeloq-file-input', 'keeloq-file-name', 'keeloq-privacy-note',
         'progress-section', 'progress-bar', 'progress-text', 'progress-detail',
         'log-output',
         'browser-warning',
@@ -458,128 +452,6 @@ function handleLocalFile(event) {
     reader.readAsArrayBuffer(file);
 }
 
-/* ── KeeLoq Key Conversion ── */
-
-/**
- * Convert RocketGod SubGHz Toolkit keeloq_keys.txt lines to M1 format.
- *
- * Accepts two input styles:
- *   1. RocketGod multi-block:
- *        Manufacturer: BFT
- *        Key (Hex):    0123456789ABCDEF
- *        Type:         1
- *        ---
- *   2. Compact pass-through (already in output format):
- *        0123456789ABCDEF:1:BFT
- *
- * Returns an array of "AABBCCDDEEFFAABB:T:Name" strings (one per valid entry).
- * Entries with an invalid hex key, out-of-range type (1–3), or missing fields
- * are silently skipped — matching the behaviour of convert_keeloq_keys.py.
- *
- * Uses BigInt for hex parsing so that all 64-bit KeeLoq keys are handled with
- * full precision (Number/parseInt only supports 53 significant bits).
- *
- * @param {string[]} lines - Lines from the input file
- * @returns {string[]}
- */
-function convertKeeloqLines(lines) {
-    const MAX_KEY = BigInt('0xFFFFFFFFFFFFFFFF');
-    const output = [];
-    let manufacturer = null;
-    let keyHex = null;
-    let keyType = null;
-
-    function tryEmit() {
-        if (!(manufacturer && keyHex && keyType !== null)) return;
-        let k;
-        try { k = BigInt('0x' + keyHex); } catch (_) { return; }
-        const t = parseInt(keyType, 10);
-        if (isNaN(t) || t < 1 || t > 3) return;
-        if (k < 0n || k > MAX_KEY) return;
-        const hex = k.toString(16).toUpperCase().padStart(16, '0');
-        output.push(`${hex}:${t}:${manufacturer}`);
-    }
-
-    for (const raw of lines) {
-        const line = raw.replace(/[\r\n]+$/, '').trim();
-
-        if (line.startsWith('Manufacturer:')) {
-            // New block starts — emit any pending entry first
-            manufacturer = line.slice('Manufacturer:'.length).trim();
-            keyHex = null;
-            keyType = null;
-
-        } else if (line.startsWith('Key (Hex):')) {
-            // The full field label is "Key (Hex):" — slice it off and trim whitespace.
-            keyHex = line.slice('Key (Hex):'.length).trim() || null;
-
-        } else if (line.startsWith('Type:')) {
-            keyType = line.slice('Type:'.length).trim();
-
-        } else if (line.startsWith('---')) {
-            // End-of-block separator
-            tryEmit();
-            manufacturer = null;
-            keyHex = null;
-            keyType = null;
-
-        } else if (/^[0-9A-Fa-f]{8,16}:/.test(line)) {
-            // Compact pass-through: "HEX:TYPE:NAME"
-            const parts = line.split(':');
-            if (parts.length >= 3) {
-                const h = parts[0].trim();
-                const t = parseInt(parts[1].trim(), 10);
-                const name = parts.slice(2).join(':').trim();
-                if (!isNaN(t) && t >= 1 && t <= 3 && name) {
-                    let k;
-                    try { k = BigInt('0x' + h); } catch (_) { continue; }
-                    if (k >= 0n && k <= MAX_KEY) {
-                        const hex = k.toString(16).toUpperCase().padStart(16, '0');
-                        output.push(`${hex}:${t}:${name}`);
-                    }
-                }
-            }
-        }
-    }
-
-    // Emit any final entry not terminated by a separator
-    tryEmit();
-
-    return output;
-}
-
-/**
- * Handle selection of a KeeLoq keys file (keeloq_keys.txt).
- * Reads the file, converts it in-place, and stores the result ready for flashing.
- */
-function handleKeeloqFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const text = e.target.result;
-        const lines = text.split('\n');
-        const entries = convertKeeloqLines(lines);
-
-        if (entries.length === 0) {
-            log('KeeLoq: no valid entries found. Make sure the file was produced by RocketGod\'s SubGHz Toolkit (Decrypt KeeLoq Manufacturer Codes → keeloq_keys.txt).', 'warn');
-            keeloqMfcodesData = null;
-            keeloqEntryCount = 0;
-            elements['keeloq-file-name'].textContent = `${file.name} — 0 entries (check format)`;
-            return;
-        }
-
-        const content = entries.join('\n') + '\n';
-        keeloqMfcodesData = new TextEncoder().encode(content);
-        keeloqEntryCount = entries.length;
-        const noun = entries.length === 1 ? 'entry' : 'entries';
-        elements['keeloq-file-name'].textContent = `${file.name} — ${entries.length} ${noun} loaded`;
-        log(`KeeLoq: loaded ${entries.length} manufacturer ${noun} from ${file.name}`);
-    };
-    reader.readAsText(file, 'utf-8');
-}
-
 /* ── Firmware Flashing ── */
 
 async function handleFlash() {
@@ -592,10 +464,9 @@ async function handleFlash() {
     const installFw = elements['chk-install-firmware'].checked;
     const installSd = elements['chk-install-sd'].checked;
     const sdOverwrite = elements['chk-sd-overwrite'].checked;
-    const installKeeloq = elements['chk-install-keeloq'].checked;
 
-    if (!installFw && !installSd && !installKeeloq) {
-        log('Select at least one option: Install firmware, Install SD assets, and/or Install KeeLoq keys', 'warn');
+    if (!installFw && !installSd) {
+        log('Select at least one option: Install firmware or Install SD assets', 'warn');
         return;
     }
 
@@ -691,42 +562,7 @@ async function handleFlash() {
             }
         }
 
-        // ── Phase 3: Install KeeLoq manufacturer keys ──
-        if (installKeeloq) {
-            if (!keeloqMfcodesData) {
-                log('KeeLoq: no key file loaded — skipping', 'warn');
-            } else {
-                log(`Writing KeeLoq manufacturer keys to SUBGHZ/keeloq_mfcodes (${keeloqEntryCount} entries)...`);
-                updateProgress(0, 'Writing KeeLoq keys...');
-                try {
-                    const keeloqDir = KEELOQ_SD_PATH.substring(0, KEELOQ_SD_PATH.lastIndexOf('/'));
-                    const createdDirs = new Set();
-                    await ensureDir(keeloqDir, createdDirs);
-                    await sendCommand(RPC_CMD_FILE_WRITE_START,
-                        buildFileWriteStartPayload(keeloqMfcodesData.length, KEELOQ_SD_PATH));
-
-                    let offset = 0;
-                    while (offset < keeloqMfcodesData.length) {
-                        const end = Math.min(offset + SD_FILE_CHUNK_SIZE, keeloqMfcodesData.length);
-                        await sendCommand(RPC_CMD_FILE_WRITE_DATA,
-                            buildFileWriteDataPayload(offset, keeloqMfcodesData.subarray(offset, end)));
-                        offset = end;
-                        const pct = (offset / keeloqMfcodesData.length) * 100;
-                        updateProgress(pct, 'Writing KeeLoq keys...',
-                            `${formatSize(offset)} / ${formatSize(keeloqMfcodesData.length)}`);
-                    }
-
-                    await sendCommand(RPC_CMD_FILE_WRITE_FINISH);
-                    const noun = keeloqEntryCount === 1 ? 'entry' : 'entries';
-                    log(`KeeLoq: wrote ${keeloqEntryCount} ${noun} to ${KEELOQ_SD_PATH}`, 'success');
-                    updateProgress(100, 'KeeLoq keys written');
-                } catch (err) {
-                    log(`KeeLoq keys write failed: ${err.message}${installFw ? ' (firmware flash will proceed)' : ''}`, 'warn');
-                }
-            }
-        }
-
-        // ── Phase 4: Flash firmware ──
+        // ── Phase 3: Flash firmware ──
         if (installFw && firmware) {
             try {
                 await flashFirmware(firmware.data, firmware.name);
@@ -1144,22 +980,12 @@ function init() {
     elements['btn-local-file'].addEventListener('click', () => {
         elements['local-file-input'].click();
     });
-    elements['keeloq-file-input'].addEventListener('change', handleKeeloqFile);
-    elements['btn-keeloq-file'].addEventListener('click', () => {
-        elements['keeloq-file-input'].click();
-    });
 
     // Flash option checkboxes
     elements['chk-install-firmware'].addEventListener('change', updateFlashButton);
     elements['chk-install-sd'].addEventListener('change', () => {
         // Show/hide the overwrite sub-option based on whether SD install is enabled
         elements['sd-overwrite-option'].classList.toggle('hidden', !elements['chk-install-sd'].checked);
-        updateFlashButton();
-    });
-    elements['chk-install-keeloq'].addEventListener('change', () => {
-        const checked = elements['chk-install-keeloq'].checked;
-        elements['keeloq-file-row'].classList.toggle('hidden', !checked);
-        elements['keeloq-privacy-note'].classList.toggle('hidden', !checked);
         updateFlashButton();
     });
 

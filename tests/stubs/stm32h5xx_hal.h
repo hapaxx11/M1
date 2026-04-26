@@ -72,6 +72,9 @@ static TIM_TypeDef  _stub_tim1;
 /* SPI handle type (referenced by some headers) */
 typedef struct { uint32_t dummy; } SPI_HandleTypeDef;
 
+/* HAL tick counter — returns 0 in host-side tests (no real timer) */
+static inline uint32_t HAL_GetTick(void) { return 0; }
+
 /* Windows-style typedefs used by lfrfid.h macros */
 #ifndef BYTE
 typedef uint8_t  BYTE;

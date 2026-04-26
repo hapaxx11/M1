@@ -839,17 +839,60 @@ add_executable(test_subghz_keeloq
     test_subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_encoder.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${STUBS_DIR}/m1_crypto_stub.c
 )
 target_include_directories(test_subghz_keeloq PRIVATE
     ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
     ${STUBS_DIR}
+)
+target_compile_definitions(test_subghz_keeloq PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
 )
 target_link_libraries(test_subghz_keeloq PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_subghz_keeloq PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_keeloq COMMAND test_subghz_keeloq)
+
+# ------------------------------------------------------------------
+# Module under test: keeloq_mfkeys_enc (encrypted keystore)
+# Tests for keeloq_mfkeys_save_encrypted(), keeloq_mfkeys_load_encrypted(),
+# and the auto-migration path in keeloq_mfkeys_load().
+#
+# m1_crypto.c is compiled with -DM1_CRYPTO_SKIP_UID_FUNCTIONS so the
+# UID register accesses and HAL_GetTick() calls are excluded.
+# m1_crypto_stub.c supplies deterministic replacements.
+#
+# File paths are overridden via compile definitions so that tests use
+# /tmp/ rather than the production "0:/SUBGHZ/" SD card paths.
+# ------------------------------------------------------------------
+add_executable(test_keeloq_mfkeys_enc
+    test_keeloq_mfkeys_enc.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+)
+target_include_directories(test_keeloq_mfkeys_enc PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_keeloq_mfkeys_enc PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+    KEELOQ_MFKEYS_PATH="/tmp/keeloq_mfcodes_test"
+    KEELOQ_MFKEYS_ENC_PATH="/tmp/keeloq_mfcodes_test.enc"
+)
+target_link_libraries(test_keeloq_mfkeys_enc PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_keeloq_mfkeys_enc PRIVATE sanitizers)
+endif()
+add_test(NAME keeloq_mfkeys_enc COMMAND test_keeloq_mfkeys_enc)
 
 # ------------------------------------------------------------------
 # Module under test: subghz_new_remote_gen (Bind New Remote key gen)
@@ -871,3 +914,38 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_new_remote_gen PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_new_remote_gen COMMAND test_subghz_new_remote_gen)
+
+# ------------------------------------------------------------------
+# Module under test: keeloq_mfkeys_builtin (build-time key embedding)
+# Verifies that keeloq_mfkeys_load() uses compiled-in builtin keys
+# (Flipper parity) and does NOT fall back to the SD card when builtin
+# data is present.
+#
+# This test links with keeloq_builtin_test_data.c (a populated stub)
+# instead of subghz_keeloq_mfkeys_builtin.c (the NULL stub in the
+# public repo).  SD card paths are redirected to /tmp/ so the test
+# can confirm the SD is not consulted when builtin is non-empty.
+# ------------------------------------------------------------------
+add_executable(test_keeloq_mfkeys_builtin
+    test_keeloq_mfkeys_builtin.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+    ${STUBS_DIR}/keeloq_builtin_test_data.c
+)
+target_include_directories(test_keeloq_mfkeys_builtin PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_keeloq_mfkeys_builtin PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+    KEELOQ_MFKEYS_PATH="/tmp/keeloq_builtin_sd_test"
+    KEELOQ_MFKEYS_ENC_PATH="/tmp/keeloq_builtin_sd_test.enc"
+)
+target_link_libraries(test_keeloq_mfkeys_builtin PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_keeloq_mfkeys_builtin PRIVATE sanitizers)
+endif()
+add_test(NAME keeloq_mfkeys_builtin COMMAND test_keeloq_mfkeys_builtin)

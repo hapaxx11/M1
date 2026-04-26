@@ -420,7 +420,7 @@ and regressions will go undetected.
 | `NFC/**` | nfc_poller |
 | `Esp_spi_at/**` | esp_queue |
 | `tests/**` | all (test files themselves) |
-| `scripts/**` | assemble_changelog (Python), convert_keeloq_keys (Python) |
+| `scripts/**` | assemble_changelog (Python) |
 | `.github/workflows/tests.yml` | all (the workflow file itself) |
 
 **How to audit:** after adding a test to `tests/CMakeLists.txt`, run:
