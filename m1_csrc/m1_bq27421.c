@@ -28,6 +28,8 @@
 #define OFFS_DESIGN_CAP_LSB      11
 #define OFFS_DESIGN_EN_MSB       12
 #define OFFS_DESIGN_EN_LSB       13
+#define OFFS_DEFAULT_CAP_MSB     14
+#define OFFS_DEFAULT_CAP_LSB     15
 #define OFFS_TERM_VOLT_MSB       16
 #define OFFS_TERM_VOLT_LSB       17
 #define OFFS_TAPER_RATE_MSB      27
@@ -387,9 +389,11 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
     //
     // write 0x52
     //
-    // Update design capacity
+    // Update design capacity (and its default seed used by Qmax on first-ever init)
     block[BQ27421_STATE_OFFSET_DESIGN_CAPACITY] = (uint8_t)( designCapacity_mAh >> 8 );
     block[BQ27421_STATE_OFFSET_DESIGN_CAPACITY+1] = (uint8_t)( designCapacity_mAh & 0x00FF );
+    block[BQ27421_STATE_OFFSET_DEFAULT_DESIGN_CAP] = (uint8_t)( designCapacity_mAh >> 8 );
+    block[BQ27421_STATE_OFFSET_DEFAULT_DESIGN_CAP+1] = (uint8_t)( designCapacity_mAh & 0x00FF );
     // Update design energy
     block[BQ27421_STATE_OFFSET_DESIGN_ENERGY] = (uint8_t)( designEnergy_mWh >> 8 );
     block[BQ27421_STATE_OFFSET_DESIGN_ENERGY+1] = (uint8_t)( designEnergy_mWh & 0x00FF );
@@ -1032,13 +1036,16 @@ bool bq27421_applyConfigIfMatches(uint16_t designCapacity_mAh,
         // Blockdata
         const uint16_t tmp_designCapacity_mAh  = rd16_be(Blockdata, OFFS_DESIGN_CAP_MSB,  OFFS_DESIGN_CAP_LSB);
         const uint16_t tmp_designEnergy_mWh    = rd16_be(Blockdata, OFFS_DESIGN_EN_MSB,   OFFS_DESIGN_EN_LSB);
+        const uint16_t tmp_defaultDesignCap    = rd16_be(Blockdata, OFFS_DEFAULT_CAP_MSB, OFFS_DEFAULT_CAP_LSB);
         const uint16_t tmp_terminateVoltage_mV = rd16_be(Blockdata, OFFS_TERM_VOLT_MSB,   OFFS_TERM_VOLT_LSB);
         const uint16_t tmp_taperRate           = rd16_be(Blockdata, OFFS_TAPER_RATE_MSB,  OFFS_TAPER_RATE_LSB);
 
-        //
+        // Also check DEFAULT_DESIGN_CAP so a stale TI factory seed (1000 mAh)
+        // forces a full rewrite even when the other params already match.
         const bool matches =
             (tmp_designCapacity_mAh  == designCapacity_mAh)  &&
             (tmp_designEnergy_mWh    == designEnergy_mWh)    &&
+            (tmp_defaultDesignCap    == designCapacity_mAh)  &&
             (tmp_terminateVoltage_mV == terminateVoltage_mV) &&
             (tmp_taperRate           == taperRate);
 
