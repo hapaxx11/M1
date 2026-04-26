@@ -32,15 +32,7 @@
 enum {
     BATT_SOC_VOLTAGE_FALLBACK_THRESHOLD = 5,   /* percent */
     BATT_TERMINATE_MV                   = 3200, /* 0%   — estimation curve lower bound */
-    BATT_FULL_MV                        = 4200, /* 100% — typical Li-Ion full charge   */
-
-    /* Maximum SoC change per display update period (1 second).
-     * The BQ27421 can jump several percent in one reading when
-     * transitioning between charge/discharge; this cap prevents those
-     * raw gauge recalibration steps from appearing as sudden jumps on
-     * screen.  Real decisions (battery-level checks, firmware update
-     * guard) use the unsmoothed battery_level field. */
-    BATT_DISPLAY_MAX_DELTA_PCT          = 1     /* percent per update */
+    BATT_FULL_MV                        = 4200  /* 100% — typical Li-Ion full charge   */
 };
 
 /**
@@ -63,19 +55,5 @@ enum {
  * @return             Estimated SoC in percent (0–100, clamped)
  */
 uint8_t battery_voltage_to_soc(uint16_t voltage_mv);
-
-/**
- * @brief  Rate-limit the displayed battery SoC toward a new raw reading.
- *
- * Prevents sudden gauge recalibration jumps from appearing on screen.
- * The displayed value moves toward raw_pct by at most
- * BATT_DISPLAY_MAX_DELTA_PCT percent in a single call.  Call once per
- * battery_status_update() cycle (nominally every 1 second).
- *
- * @param  displayed_pct  Current displayed SoC (previous return value)
- * @param  raw_pct        Raw SoC from the fuel gauge (0–100)
- * @return                New displayed SoC (0–100)
- */
-uint8_t battery_soc_smooth(uint8_t displayed_pct, uint8_t raw_pct);
 
 #endif /* BATTERY_SOC_ESTIMATE_H_ */

@@ -30,8 +30,7 @@ typedef struct
 	float 		charge_voltage;			// bus voltage
 	uint16_t	charge_current;			// 0 ~ xxxx mA
 
-	uint8_t		battery_level;			// 0 ~ 100% (raw fuel-gauge reading; used for decisions)
-	uint8_t		displayed_battery_level;// 0 ~ 100% (rate-limited for smooth display)
+	uint8_t		battery_level;			// 0 ~ 100%
 	uint8_t		battery_temp;			// 0 ~ 80 deg
 	float 		battery_voltage;		// battery voltage
 	uint8_t		battery_health;			// 0 ~ 100 %

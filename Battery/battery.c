@@ -209,15 +209,6 @@ void battery_status_update(void)
 			power_status.battery_level = v_soc;
 	}
 
-	/* Display smoothing: rate-limit the displayed percentage so that fuel-gauge
-	 * recalibration jumps (e.g. 2–8% per second when plugging in) appear as a
-	 * gradual increment rather than sudden jumps.  battery_level retains the
-	 * unsmoothed value for real decisions (firmware update guard, etc.).
-	 * displayed_battery_level is used by all display code paths. */
-	power_status.displayed_battery_level =
-	    battery_soc_smooth(power_status.displayed_battery_level,
-	                       power_status.battery_level);
-
 	////////////////////////////////////////
 	// Battery Charger
 	// Charge Voltage, Bus voltage

@@ -197,7 +197,7 @@ void m1_led_batt_charged_on(uint8_t *params)
 
 	S_M1_Power_Status_t pwr;
 	battery_power_status_get(&pwr);
-	uint8_t level = pwr.displayed_battery_level;
+	uint8_t level = pwr.battery_level;
 	if (level > 100) level = 100;
 
 	uint8_t r, g, b;

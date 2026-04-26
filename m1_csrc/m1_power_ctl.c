@@ -303,7 +303,7 @@ static void battery_info_gui_update(uint8_t param)
 
         // 16 x 6
         m1_draw_text(&m1_u8g2, 7, 47,18, res_string(IDS_L), TEXT_ALIGN_CENTER);
-        sprintf(stat_msg, "%u%%", SystemPowerStatus.displayed_battery_level);
+        sprintf(stat_msg, "%u%%", SystemPowerStatus.battery_level);
         m1_draw_text(&m1_u8g2, 1, 60, 30, stat_msg, TEXT_ALIGN_CENTER);
 
         m1_draw_text(&m1_u8g2, 39, 47,18, res_string(IDS_T), TEXT_ALIGN_CENTER);

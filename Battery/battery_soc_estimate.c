@@ -63,26 +63,3 @@ uint8_t battery_voltage_to_soc(uint16_t voltage_mv)
 
     return 0u; /* unreachable, but satisfies compiler */
 }
-
-/*============================================================================*/
-/**
- * @brief  Rate-limit the displayed battery SoC toward a new raw reading.
- *         See battery_soc_estimate.h for full documentation.
- */
-/*============================================================================*/
-uint8_t battery_soc_smooth(uint8_t displayed_pct, uint8_t raw_pct)
-{
-    if (raw_pct > displayed_pct) {
-        uint8_t delta = raw_pct - displayed_pct;
-        return (delta <= BATT_DISPLAY_MAX_DELTA_PCT)
-               ? raw_pct
-               : (uint8_t)(displayed_pct + BATT_DISPLAY_MAX_DELTA_PCT);
-    }
-    if (raw_pct < displayed_pct) {
-        uint8_t delta = displayed_pct - raw_pct;
-        return (delta <= BATT_DISPLAY_MAX_DELTA_PCT)
-               ? raw_pct
-               : (uint8_t)(displayed_pct - BATT_DISPLAY_MAX_DELTA_PCT);
-    }
-    return displayed_pct;
-}

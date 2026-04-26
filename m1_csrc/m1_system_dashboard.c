@@ -115,7 +115,7 @@ static void dashboard_draw_page(dashboard_page_t page)
                  now.hour, now.minute, now.second,
                  now.month, now.day, now.year % 100U);
         snprintf(line2, sizeof(line2), "Battery %u%%  %uC",
-                 pwr.displayed_battery_level, pwr.battery_temp);
+                 pwr.battery_level, pwr.battery_temp);
         snprintf(line3, sizeof(line3), "VBAT %u.%uV  %dmA",
                  (unsigned)(battery_voltage_tenths / 10U),
                  (unsigned)(battery_voltage_tenths % 10U),

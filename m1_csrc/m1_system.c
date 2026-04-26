@@ -484,9 +484,9 @@ static void battery_indicator_update(void)
 		{
 			S_M1_Power_Status_t updated;
 			battery_power_status_get(&updated);
-			if ( updated.displayed_battery_level != old_level || updated.stat != old_stat )
+			if ( updated.battery_level != old_level || updated.stat != old_stat )
 			{
-				old_level = updated.displayed_battery_level;
+				old_level = updated.battery_level;
 				S_M1_Main_Q_t q_item;
 				q_item.q_evt_type = Q_EVENT_BATTERY_UPDATED;
 				xQueueSend(main_q_hdl, &q_item, 0);
@@ -921,7 +921,7 @@ static void splash_draw_battery_indicator(void)
 	battery_status_update();
 	battery_power_status_get(&pwr);
 
-	uint8_t level = pwr.displayed_battery_level;
+	uint8_t level = pwr.battery_level;
 	if (level > 100)
 		level = 100;
 
