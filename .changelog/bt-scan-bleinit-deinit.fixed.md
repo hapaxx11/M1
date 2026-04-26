@@ -1,1 +1,0 @@
-**Bluetooth: BLE scan no longer fails after the first attempt** — `AT+BLEINIT=0` is now sent before `AT+BLEINIT=1` in the scan sequence. Espressif's AT firmware returns ERROR (not OK) when BLE is already initialized in any mode, causing every scan after the first to time out for 10 s and show "Scan failed!". The deinit step is idempotent and adds no delay on first use.
