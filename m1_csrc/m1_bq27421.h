@@ -320,11 +320,14 @@ static inline uint8_t bq27421_calc_block_checksum(const uint8_t *block, uint8_t 
  * (integer division, matching the formula in bq27421_init())
  *
  * @param capacity_mah   Design capacity in mAh.
- * @param taper_ma       Taper current in mA (must be non-zero).
- * @return               Taper rate value written to the State subclass block.
+ * @param taper_ma       Taper current in mA.
+ * @return               Taper rate value written to the State subclass block,
+ *                       or 0 if @p taper_ma is 0.
  */
 static inline uint16_t bq27421_calc_taper_rate(uint16_t capacity_mah, uint16_t taper_ma)
 {
+    if (taper_ma == 0u)
+        return 0u;
     return (uint16_t)(10u * (uint32_t)capacity_mah / taper_ma);
 }
 
@@ -338,7 +341,7 @@ static inline uint16_t bq27421_calc_taper_rate(uint16_t capacity_mah, uint16_t t
  */
 static inline uint16_t bq27421_calc_design_energy(uint16_t capacity_mah)
 {
-    return (uint16_t)(3.7f * capacity_mah);
+    return (uint16_t)(3.7 * capacity_mah);
 }
 
 #ifdef __cplusplus

@@ -104,17 +104,25 @@ void test_checksum_wrap_arithmetic(void)
 
 void test_checksum_round_trip(void)
 {
-    /* If we know the expected checksum, appending that byte should make the
-     * new sum's low byte == 0xFF, meaning 0xFF - sum = 0x00.
-     * This validates the chip's checksum verification logic in software. */
+    /* Property: appending the checksum byte to the 32-byte block makes the
+     * sum of all 33 bytes equal 0xFF (low byte), and calc_block_checksum over
+     * 33 bytes returns 0x00. */
     uint8_t block[32];
+    uint8_t extended[33];
     memset(block, 0x42, sizeof(block));
     uint8_t csum = bq27421_calc_block_checksum(block, 32);
 
-    /* Simulate: if we change one byte and recompute, we get a different csum */
-    block[5] = 0x55;
-    uint8_t csum2 = bq27421_calc_block_checksum(block, 32);
-    TEST_ASSERT_NOT_EQUAL(csum, csum2);
+    memcpy(extended, block, sizeof(block));
+    extended[32] = csum;
+
+    /* Sum of all 33 bytes (low byte) must be 0xFF */
+    uint16_t sum = 0;
+    for (size_t i = 0; i < sizeof(extended); i++)
+        sum += extended[i];
+    TEST_ASSERT_EQUAL_HEX8(0xFF, (uint8_t)sum);
+
+    /* calc over 33 bytes must be 0x00 */
+    TEST_ASSERT_EQUAL_HEX8(0x00, bq27421_calc_block_checksum(extended, 33));
 }
 
 void test_checksum_single_byte(void)
@@ -212,6 +220,13 @@ void test_taper_rate_values_differ(void)
     uint16_t r166 = bq27421_calc_taper_rate(2100u, 256u);
     uint16_t r163 = bq27421_calc_taper_rate(2100u, 240u);
     TEST_ASSERT_NOT_EQUAL(r166, r163);
+}
+
+void test_taper_rate_zero_divisor_returns_zero(void)
+{
+    /* Guard added per reviewer feedback: dividing by zero is UB; helper must
+     * return 0 safely instead of crashing. */
+    TEST_ASSERT_EQUAL_UINT16(0u, bq27421_calc_taper_rate(2100u, 0u));
 }
 
 /* ---- bq27421_calc_design_energy() ---------------------------------------- */
@@ -322,6 +337,7 @@ int main(void)
     RUN_TEST(test_taper_rate_standard_config);
     RUN_TEST(test_taper_rate_old_config);
     RUN_TEST(test_taper_rate_values_differ);
+    RUN_TEST(test_taper_rate_zero_divisor_returns_zero);
 
     /* Design energy formula */
     RUN_TEST(test_design_energy_2100mah);
