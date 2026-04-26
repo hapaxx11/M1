@@ -18,10 +18,16 @@
 #include <string.h>
 #include "m1_bq27421.h"
 #include "m1_i2c.h"
+#include "m1_wdt_hw.h"
 
 /*************************** D E F I N E S ************************************/
 
 #define BQ27241_I2C_TIMEOUT	(2000)
+
+/* Maximum time to wait for CFGUPMODE to set or clear.
+ * Bounds the polling loop so a non-responsive gauge cannot
+ * block the caller indefinitely. */
+#define BQ27421_CFGUPMODE_TIMEOUT_MS   3000U
 
 // ==== BlockData offsets (Extended Data - "Gas Gauging" subclass ???? ????) ====
 #define OFFS_DESIGN_CAP_MSB      10
@@ -340,16 +346,28 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
     // Send CFG_UPDATE
     bq27421_i2c_control_write( BQ27421_CONTROL_SET_CFGUPDATE );
 
-    // Poll flags
-    do
+    // Poll flags — wait for CFGUPMODE to SET.
+    // Kick the IWDG on every iteration: this loop runs before m1_wdt_init()
+    // creates the watchdog task, so the hardware watchdog is the only guard.
     {
-        bq27421_i2c_command_read( BQ27421_FLAGS_LOW, &flags );
-        if( !(flags & BQ27421_FLAG_CFGUPMODE) )	// CFGUPMODE ?
+        uint32_t t0 = HAL_GetTick();
+        do
         {
-            HAL_Delay( 1 );
+            m1_wdt_reset();
+            bq27421_i2c_command_read( BQ27421_FLAGS_LOW, &flags );
+            if( !(flags & BQ27421_FLAG_CFGUPMODE) )	// CFGUPMODE not set yet?
+            {
+                HAL_Delay( 1 );
+            }
+            if ( (HAL_GetTick() - t0) >= BQ27421_CFGUPMODE_TIMEOUT_MS )
+            {
+                bq27421_i2c_control_write( BQ27421_CONTROL_SOFT_RESET );
+                bq27421_i2c_control_write( BQ27421_CONTROL_SEALED );
+                return false;
+            }
         }
+        while( !(flags & BQ27421_FLAG_CFGUPMODE) );
     }
-    while( !(flags & BQ27421_FLAG_CFGUPMODE) );
 
     //
     // read 0x52
@@ -537,16 +555,28 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
     // Send Soft Reset
     bq27421_i2c_control_write( BQ27421_CONTROL_SOFT_RESET );
 
-    // Poll flags
-    do
+    // Poll flags — wait for CFGUPMODE to CLEAR after SOFT_RESET.
+    // Kick the IWDG on every iteration: this loop runs before m1_wdt_init()
+    // creates the watchdog task, so the hardware watchdog is the only guard.
     {
-        bq27421_i2c_command_read( BQ27421_FLAGS_LOW, &flags );
-        if( !(flags & BQ27421_FLAG_CFGUPMODE) )
+        uint32_t t0 = HAL_GetTick();
+        do
         {
-            HAL_Delay( 1 );
+            m1_wdt_reset();
+            bq27421_i2c_command_read( BQ27421_FLAGS_LOW, &flags );
+            if( flags & BQ27421_FLAG_CFGUPMODE )    // Still in CFGUPMODE — keep waiting
+            {
+                HAL_Delay( 1 );
+            }
+            if ( (HAL_GetTick() - t0) >= BQ27421_CFGUPMODE_TIMEOUT_MS )
+            {
+                bq27421_i2c_control_write( BQ27421_CONTROL_SOFT_RESET );
+                bq27421_i2c_control_write( BQ27421_CONTROL_SEALED );
+                return false;
+            }
         }
+        while( (flags & BQ27421_FLAG_CFGUPMODE) );
     }
-    while( (flags & BQ27421_FLAG_CFGUPMODE) );
 
     // Seal gauge
     bq27421_i2c_control_write( BQ27421_CONTROL_SEALED );

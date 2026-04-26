@@ -21,6 +21,7 @@
 #include "m1_fw_update_bl.h"
 #include "m1_storage.h"
 #include "m1_power_ctl.h"
+#include "m1_wdt_hw.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -367,6 +368,7 @@ void firmware_update_get_image_file(void)
 			sum = image_size;
 			while ( sum )
 			{
+				m1_wdt_reset(); // firmware_update_get_image_file() blocks the main task; kick IWDG each chunk
 				count = m1_fb_read_from_file(&hfile_fw, fw_payload, FW_IMAGE_CHUNK_SIZE);
 				if ( !count || (count % 4 != 0) ) // Read failed?
 				{
