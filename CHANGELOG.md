@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.170] - 2026-04-26
+
+### Fixed
+
+- **Sub-GHz Read Raw: add Loaded state for pre-recorded RAW files** — Emulating a RAW `.sub` or `.sgh` file from the Saved browser now pushes into the Read Raw scene in Loaded state (Momentum's `LoadKeyIDLE`), giving a proper waveform viewer with Send / New buttons and the filename shown in the waveform area. Previously, the replay was a blind inline one-shot from the Saved scene with no way to repeat or start a fresh recording afterwards. The send path correctly selects between direct streaming replay (`.sgh` native files) and Flipper-format replay (`.sub` files) as before.
+- **Sub-GHz Read Raw: add missing Sending state** — the Read Raw scene was missing the
+  TX/Sending state present in Momentum firmware. When the user pressed Send (OK in Idle),
+  the blocking replay call ran while the screen still showed the Idle button bar
+  (Erase/Send/Save). The screen now transitions to a dedicated Sending state before the
+  blocking call, showing "TX..." in the waveform area and no action buttons — matching
+  Momentum's TX state concept adapted for the M1's blocking-TX architecture.
 ## [0.9.0.169] - 2026-04-26
 
 ### Fixed
