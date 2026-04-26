@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.164] - 2026-04-26
+
+### Added
+
+- **Sub-GHz KeeLoq: build-time manufacturer key embedding** — KeeLoq manufacturer
+  keys can now be baked into the firmware binary at build time from a private key
+  vault (Flipper-compatible approach). When a `KEELOQ_KEY_VAULT` GitHub Actions
+  secret is configured, `scripts/gen_keeloq_mfkeys_builtin.py` embeds the keys
+  directly into flash before compilation; `keeloq_mfkeys_load()` uses them without
+  ever consulting the SD card, so the keys are never visible as a file on removable
+  media. Builds without the secret fall back to the existing SD card keystore
+  (`keeloq_mfcodes.enc`).
+- **KeeLoq keystore: AES-256-CBC encrypted SD fallback** — When manufacturer
+  keys are not embedded at build time, the firmware can load them from an
+  AES-256-CBC encrypted binary (`0:/SUBGHZ/keeloq_mfcodes.enc`) on the SD
+  card so that keys are not exposed as plain text.  The firmware decrypts the
+  file on load using a fixed product key.  Legacy plaintext
+  `0:/SUBGHZ/keeloq_mfcodes` files are automatically migrated to the
+  encrypted format on the next boot (encrypted copy created, plaintext deleted
+  — no manual step needed).  Both compact `HEX:TYPE:NAME` lines and RocketGod
+  SubGHz Toolkit multi-line format are accepted inside the encrypted payload.
+
+### Removed
+
+- **KeeLoq: removed SD card key delivery/bundling** — manufacturer keys are now
+  embedded directly into the firmware binary at build time via the GitHub
+  Actions secret `KEELOQ_KEY_VAULT`.  The bundled/distributed
+  `SubGHz/keeloq_mfcodes` SD card file, the web updater's "Install KeeLoq
+  keys" option, `scripts/convert_keeloq_keys.py`,
+  `scripts/encrypt_keeloq_keys.py`, and the bundled `keeloq_mfcodes.example`
+  template file have all been removed.  Manual SD card installation
+  (`0:/SUBGHZ/keeloq_mfcodes` or `0:/SUBGHZ/keeloq_mfcodes.enc`) is still
+  supported as a fallback for users without the vault secret.
+  `scripts/gen_keeloq_mfkeys_builtin.py` (the build-time key embedder) is
+  retained.
 ## [0.9.0.163] - 2026-04-25
 
 ### Fixed
