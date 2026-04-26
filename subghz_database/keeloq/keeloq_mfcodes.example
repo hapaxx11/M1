@@ -19,19 +19,31 @@
 #
 #   3. Copy keeloq_keys.txt from your Flipper to your PC.
 #
-#   4. Convert to M1 format using the bundled script:
-#        python3 convert_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes
-#      (The convert_keeloq_keys.py script is included in this folder.)
+#   4. Encrypt for the M1 using the bundled script (RECOMMENDED):
+#        python3 scripts/encrypt_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes.enc
 #
-#   5. Copy the resulting keeloq_mfcodes file to your M1 SD card at:
-#        SUBGHZ/keeloq_mfcodes
+#   5. Copy the resulting keeloq_mfcodes.enc file to your M1 SD card at:
+#        SUBGHZ/keeloq_mfcodes.enc
 #
-# Once the file is in place, any captured .sub file whose Manufacture: field
-# matches a loaded key will be replayed automatically via counter-mode
-# re-encryption (KeeLoq, Jarolift, Star Line protocols).
+#   The firmware decrypts the file automatically — the plaintext never
+#   needs to be on the SD card.
 #
 # ============================================================================
-# FILE FORMAT
+# ALTERNATIVE: PLAINTEXT FALLBACK (auto-migrated)
+# ============================================================================
+#
+# If you already have a plaintext keeloq_mfcodes file on the SD card, the
+# firmware will load it, automatically create the encrypted keeloq_mfcodes.enc,
+# and delete the plaintext on the next boot.  No manual migration is needed.
+#
+# You can also create the plaintext file manually (see format below) and let
+# the firmware migrate it.  Or use the older convert script:
+#
+#   python3 scripts/convert_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes
+#   # then copy keeloq_mfcodes (no extension) to SUBGHZ/ on the SD card
+#
+# ============================================================================
+# FILE FORMAT (plain-text fallback / inside the encrypted payload)
 # ============================================================================
 #
 # One entry per line.  Lines beginning with '#' are comments and are ignored.
@@ -53,13 +65,11 @@
 #   AABBCCDDEEFF0011:3:ThirdManufacturer
 #
 # ============================================================================
-# BOTH FORMATS ACCEPTED
+# ROCKETGOD FORMAT ALSO ACCEPTED
 # ============================================================================
 #
-# The M1 firmware also accepts the RocketGod multi-line format directly,
-# so you can place keeloq_keys.txt on the SD card as keeloq_mfcodes without
-# running the conversion script if you prefer.  Both formats may even be
-# mixed in the same file.
+# The M1 firmware (and both scripts) also accept the RocketGod multi-line
+# format directly.  Both formats may be mixed in the same file:
 #
 #   Manufacturer: ExampleCorp
 #   Key (Hex):    0123456789ABCDEF
@@ -68,13 +78,16 @@
 #   ------------------------------------
 #
 # ============================================================================
-# RENAME THIS FILE
+# QUICK-START SUMMARY
 # ============================================================================
 #
-# This is an example file.  To activate KeeLoq replay on the M1:
-#   - Replace the placeholder entries below with real entries from your
-#     Flipper Zero (see "How to get the real keys" above).
-#   - Save the file as:  SUBGHZ/keeloq_mfcodes  (no .example extension)
+#  Recommended (encrypted):
+#    python3 scripts/encrypt_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes.enc
+#    → copy keeloq_mfcodes.enc to SUBGHZ/keeloq_mfcodes.enc on the SD card
+#
+#  Legacy (plaintext, auto-migrated on boot):
+#    python3 scripts/convert_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes
+#    → copy keeloq_mfcodes to SUBGHZ/keeloq_mfcodes on the SD card
 #
 # ----------------------------------------------------------------------------
 # Add your real entries below this line (delete or keep examples as desired):

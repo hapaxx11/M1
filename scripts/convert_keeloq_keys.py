@@ -3,6 +3,18 @@
 """
 convert_keeloq_keys.py — Convert RocketGod SubGHz Toolkit output to M1 format.
 
+.. note::
+
+    **This script is kept for backward compatibility.**  The recommended
+    workflow is now to use ``encrypt_keeloq_keys.py`` instead, which
+    produces an encrypted ``keeloq_mfcodes.enc`` file in one step::
+
+        python3 scripts/encrypt_keeloq_keys.py keeloq_keys.txt keeloq_mfcodes.enc
+
+    The plaintext file produced by this script can still be placed on the
+    SD card — the firmware accepts it as a fallback and will automatically
+    migrate it to the encrypted format on the next boot.
+
 RocketGod's SubGHz Toolkit (https://github.com/RocketGod-git/RocketGods-SubGHz-Toolkit)
 decrypts the Flipper Zero KeeLoq manufacturer keystore and exports it as a human-readable
 text file (``keeloq_keys.txt``).  This script converts that output to the plain-text

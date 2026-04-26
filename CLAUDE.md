@@ -1265,9 +1265,9 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
 | **Toyota** | ✅ Yes | OOK PWM, no crypto | ✅ |
 | **DITEC_GOL4** | ✅ Yes | OOK PWM, no crypto | ✅ |
 | **Security+ 1.0** | ✅ Special | Ternary; brute-force counter mode in `m1_sub_ghz.c` | ❌ (custom path) |
-| **KeeLoq** | ✅ Yes | OOK PWM; counter-mode with Normal/Simple Learning; requires MK from `keeloq_mfcodes` | ✅ (counter-mode encoder) |
-| **Jarolift** | ✅ Yes | KeeLoq-based OOK PWM; requires MK from `keeloq_mfcodes`; Flipper Bit:64 format fully supported | ✅ (counter-mode encoder) |
-| **Star Line** | ✅ Yes | KeeLoq-based OOK PWM; requires MK from `keeloq_mfcodes`; Flipper Bit:64 format fully supported | ✅ (counter-mode encoder) |
+| **KeeLoq** | ✅ Yes | OOK PWM; counter-mode with Normal/Simple Learning; requires MK from `keeloq_mfcodes.enc` | ✅ (counter-mode encoder) |
+| **Jarolift** | ✅ Yes | KeeLoq-based OOK PWM; requires MK from `keeloq_mfcodes.enc`; Flipper Bit:64 format fully supported | ✅ (counter-mode encoder) |
+| **Star Line** | ✅ Yes | KeeLoq-based OOK PWM; requires MK from `keeloq_mfcodes.enc`; Flipper Bit:64 format fully supported | ✅ (counter-mode encoder) |
 | **FAAC SLH** | ❌ No | Manchester-encoded; algorithm not fully public (2026-04-17) | ❌ |
 | **Somfy Telis** | ❌ No | Manchester + proprietary XOR; no feasible OTA replay method | ❌ |
 | **Somfy Keytis** | ❌ No | Same RTS protocol as Telis | ❌ |
@@ -1279,8 +1279,11 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
 
 > **¹ KeeLoq note:** The KeeLoq cipher is fully implemented in `Sub_Ghz/subghz_keeloq.c`
 > (528-round NLFSR, Normal Learning, Simple Learning, counter-mode increment).
-> Manufacturer keys are loaded at runtime from `0:/SUBGHZ/keeloq_mfcodes` on the SD card.
-> Export this file from a Flipper Zero using RocketGod's SubGHz Toolkit app.
+> Manufacturer keys are loaded at runtime from the SD card.  The preferred format
+> is an AES-256-CBC encrypted binary at `0:/SUBGHZ/keeloq_mfcodes.enc` — use
+> `scripts/encrypt_keeloq_keys.py` to create it from RocketGod's SubGHz Toolkit output.
+> A legacy plaintext `0:/SUBGHZ/keeloq_mfcodes` file is also accepted; the firmware
+> automatically migrates it to the encrypted format on first load.
 > Once keys are on the SD card, `.sub` files with the `Manufacture:` field are replayed
 > automatically via counter-mode: decrypt → increment → re-encrypt → transmit.
 
@@ -1292,8 +1295,11 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
    public or partially-published key, add it to the ⚠️ Possible list and open a task.
 
 2. **KeeLoq counter mode is implemented** (`Sub_Ghz/subghz_keeloq*.c/h`).  Manufacturer
-   keys are loaded from `0:/SUBGHZ/keeloq_mfcodes` (Flipper-compatible keystore format).
-   Export the keystore from a Flipper Zero using RocketGod's SubGHz Toolkit.
+   keys are loaded from the SD card as an AES-256-CBC encrypted binary
+   (`0:/SUBGHZ/keeloq_mfcodes.enc`) or from a legacy plaintext
+   `0:/SUBGHZ/keeloq_mfcodes` file (auto-migrated on first load).
+   Use `scripts/encrypt_keeloq_keys.py` to prepare the encrypted file from
+   RocketGod's SubGHz Toolkit export.
    The counter-mode encoder:
    - Derives the device key via Normal or Simple Learning
    - Decrypts the captured hop word using the full KeeLoq cipher
