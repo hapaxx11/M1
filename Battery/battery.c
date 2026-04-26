@@ -115,7 +115,10 @@ void battery_service_init(void)
 	bq_25896_init();
 	bq25896_SetDefaultConfig();
 
-	bq27421_init( 2100, 3200, 256); // Capacity(mA), terminate voltage(mV), taper current = BQ25896 ITERM (256mA)
+	if (!bq27421_init(2100, 3200, 256)) // Capacity(mAh), terminate voltage(mV), taper current = BQ25896 ITERM (256mA)
+	{
+		M1_LOG_E(M1_LOGDB_TAG, "bq27421_init failed");
+	}
 }
 
 
