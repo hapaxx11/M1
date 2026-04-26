@@ -387,9 +387,11 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
     //
     // write 0x52
     //
-    // Update design capacity
+    // Update design capacity (and its default seed used by Qmax on first-ever init)
     block[BQ27421_STATE_OFFSET_DESIGN_CAPACITY] = (uint8_t)( designCapacity_mAh >> 8 );
     block[BQ27421_STATE_OFFSET_DESIGN_CAPACITY+1] = (uint8_t)( designCapacity_mAh & 0x00FF );
+    block[BQ27421_STATE_OFFSET_DEFAULT_DESIGN_CAP] = (uint8_t)( designCapacity_mAh >> 8 );
+    block[BQ27421_STATE_OFFSET_DEFAULT_DESIGN_CAP+1] = (uint8_t)( designCapacity_mAh & 0x00FF );
     // Update design energy
     block[BQ27421_STATE_OFFSET_DESIGN_ENERGY] = (uint8_t)( designEnergy_mWh >> 8 );
     block[BQ27421_STATE_OFFSET_DESIGN_ENERGY+1] = (uint8_t)( designEnergy_mWh & 0x00FF );
