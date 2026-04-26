@@ -1,0 +1,1 @@
+**Sub-GHz Read Raw: auto-start recording on scene entry** — pressing OK once now transitions directly from the waveform display to the Idle (Erase/Send/Save) state, matching Momentum Read Raw behaviour. LEFT button is now also available during recording to access Config (stops the current capture first).

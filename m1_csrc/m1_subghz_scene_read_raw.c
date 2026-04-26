@@ -6,17 +6,24 @@
  *
  * Momentum-aligned state machine and button layout.
  *
- * States: START → RECORDING → IDLE (capture on SD) → SENDING (blocking TX)
+ * States: RECORDING → IDLE (capture on SD) → SENDING (blocking TX)
+ *         START (fallback: recording init failed, or after Erase) → RECORDING → IDLE...
  *         LOADED (pre-existing file from Saved browser) → SENDING (blocking TX)
+ *
+ * On fresh entry the scene auto-starts recording (matches Momentum Read Raw): the
+ * radio is initialised and TIM1 armed before the first frame is drawn, so pressing
+ * OK once transitions directly from the waveform display to the Idle (Erase/Send/Save)
+ * state.  If recording init fails (OOM or SD error) the scene falls back to START so
+ * the user can configure and retry.
  *
  * Button mapping (matches physical D-pad left/OK/right):
  *   START:     LEFT = Config  |  OK = ⊙ REC  |  RIGHT = (none)
- *   RECORDING: (none)         |  OK = ⊙ Stop  |  (none)
+ *   RECORDING: LEFT = Config  |  OK = ⊙ Stop  |  (none)
  *   IDLE:      LEFT = Erase   |  OK = ⊙ Send  |  RIGHT = Save
  *   LOADED:    LEFT = New     |  OK = ⊙ Send  |  RIGHT = (none)
  *   SENDING:   (none)         |  (none)        |  (none)   [TX blocking; returns to IDLE or LOADED]
  *
- *   BACK = Exit (START/IDLE/LOADED) or Stop recording (RECORDING)
+ *   BACK = Exit (START/IDLE/LOADED) or Stop recording (RECORDING → IDLE)
  *
  * Display:
  *   START:     RSSI spectrogram.  Cursor advances (trace=true) when RSSI is above
@@ -44,9 +51,9 @@
  *              This matches Momentum's TX/TXRepeat and LoadKeyTX/LoadKeyTXRepeat
  *              state concepts, adapted for M1's blocking-TX architecture.
  *
- *   scene_on_enter → radio starts in passive listen mode immediately so that
- *   pressing REC has no perceptible delay.  Pressing Stop flushes the file and
- *   returns to Idle.  scene_on_exit → radio fully stopped.
+ *   scene_on_enter → recording auto-starts immediately (Momentum-aligned).
+ *   Pressing OK once stops recording and enters Idle with Erase/Send/Save.
+ *   scene_on_exit → radio fully stopped.
  *
  * Recording data path:
  *   ISR → ring buffer → sub_ghz_rx_raw_save() → SD card (.sub file)
@@ -196,6 +203,8 @@ static void scene_on_enter(SubGhzApp *app)
         app->raw_load_path[0] = '\0';
         /* Keep raw_load_is_native / raw_load_freq_hz / raw_load_mod — consumed by TX handler */
         app->raw_state = SubGhzReadRawStateLoaded;
+        /* Radio in passive listen for the Loaded state (statusbar shows live freq/mod) */
+        start_passive_rx(app);
     }
     else
     {
@@ -204,20 +213,24 @@ static void scene_on_enter(SubGhzApp *app)
         app->raw_load_is_native = false;
         app->raw_load_freq_hz = 0;
         app->raw_load_mod = 0;
-    }
 
-    /* Start radio in passive listen mode immediately on scene entry so that
-     * pressing REC has no perceptible delay — no radio init is done on the
-     * button press itself.  This matches Flipper/Momentum Read Raw behaviour.
-     * Also needed for the Loaded state so the statusbar shows live freq/mod. */
-    start_passive_rx(app);
+        /* Momentum-aligned: auto-start recording immediately on scene entry so
+         * pressing OK once transitions directly to Idle (Erase/Send/Save).
+         * start_passive_rx() initialises the radio; start_raw_rx() arms TIM1
+         * and opens the SD file, then sets raw_state = RECORDING on success.
+         * If recording init fails (OOM or SD error) raw_state stays as Start
+         * so the user can configure with LEFT and retry with OK. */
+        start_passive_rx(app);
+        start_raw_rx(app);
+    }
 
     app->need_redraw = true;
 }
 
 /**
- * Start recording — radio is already listening from scene_on_enter().
- * This function is FAST: it only allocates buffers and opens the SD file.
+ * Arm recording — radio is already initialised by start_passive_rx().
+ * On success sets raw_state = RECORDING.  On failure (OOM / SD error)
+ * returns early without changing raw_state (stays as Start).
  */
 static void start_raw_rx(SubGhzApp *app)
 {
@@ -395,6 +408,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 /* Config — radio keeps running passively while in child scene */
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
+            else if (app->raw_state == SubGhzReadRawStateRecording)
+            {
+                /* Config during recording: stop the current capture (it will be
+                 * in Idle so the user can Erase if they don't want it), then
+                 * push the Config scene.  On return the user is in Idle; pressing
+                 * Erase (LEFT) returns to Start, then OK starts a new recording
+                 * on the updated frequency/modulation. */
+                stop_raw_rx(app);
+                subghz_scene_push(app, SubGhzSceneConfig);
+                app->need_redraw = true;
+            }
             else if (app->raw_state == SubGhzReadRawStateIdle)
             {
                 /* Erase — delete the recorded file and return to Start */
@@ -514,8 +538,9 @@ static void scene_on_exit(SubGhzApp *app)
          * the file; the teardown below then de-initialises the timer. */
         stop_raw_rx(app);
     }
-    /* In Start or Idle: TIM1 was never started (deferred to start_raw_rx), so
-     * no pause is needed — sub_ghz_rx_deinit_ext() handles cleanup directly. */
+    /* In Start or Idle: TIM1 is either never started (Start fallback) or
+     * already paused by stop_raw_rx() (Idle).  sub_ghz_rx_deinit_ext()
+     * checks the timer state before de-initialising and is safe either way. */
 
     /* Full radio teardown — powers off SI4463 and resets STM32 timer */
     sub_ghz_rx_deinit_ext();
@@ -677,7 +702,7 @@ static void draw(SubGhzApp *app)
             break;
         case SubGhzReadRawStateRecording:
             subghz_button_bar_draw(
-                NULL, NULL,
+                arrowleft_8x8, "Config",
                 ok_circle_8x8, "Stop",
                 NULL, NULL);
             break;
