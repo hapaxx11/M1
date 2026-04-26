@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.169] - 2026-04-26
+
+### Fixed
+
+- **BQ27421: fixed IWDG reset loop after SD-card firmware update** — `bq27421_init()`
+  ran two infinite CFGUPMODE polling loops before the watchdog task existed and at
+  the highest FreeRTOS task priority, so nothing refreshed the 4-second IWDG.
+  Added per-iteration `m1_wdt_reset()` calls and a 3-second hard timeout to both
+  loops; the device no longer reboots continuously after flashing a new release.
+- **Firmware update: fixed IWDG reset during SD-card flash CRC validation** — the
+  pre-flash CRC loop in `firmware_update_get_image_file()` read the entire firmware
+  image (~1 MB) in chunks without ever kicking the hardware watchdog, causing the
+  device to reboot mid-validation on a 4-second IWDG window.  Added a
+  `m1_wdt_reset()` call on each chunk iteration; the device now flashes reliably
+  without spurious reboots.
 ## [0.9.0.168] - 2026-04-26
 
 ### Fixed
