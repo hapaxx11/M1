@@ -1,1 +1,0 @@
-**USB device name: renamed from `MTEKM1` to `HapaxM1`** — the product string presented to the host OS and the Web Updater port picker now reads `HapaxM1_MSC_CDC FS/HS` instead of `MTEKM1_MSC_CDC FS/HS`, reflecting the Hapax fork identity.
