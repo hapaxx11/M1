@@ -290,6 +290,60 @@ bool bq27421_i2c_control_read( uint16_t subcommand, uint16_t *data );
 bool bq27421_i2c_write_data_block( uint8_t offset, uint8_t *data, uint8_t bytes );
 bool bq27421_i2c_read_data_block( uint8_t offset, uint8_t *data, uint8_t bytes );
 
+/*============================================================================*/
+/* Pure-logic helpers — hardware-independent, usable in host-side unit tests  */
+/*============================================================================*/
+
+/**
+ * @brief Compute the BQ27421 block data checksum.
+ *
+ * The BQ27421 block checksum is 0xFF minus the 8-bit sum of all bytes in the
+ * 32-byte data block (wrapping arithmetic, same as a simple two's-complement
+ * complement).  This is a pure calculation with no hardware dependencies.
+ *
+ * @param block  Pointer to the 32-byte block.
+ * @param n      Number of bytes to sum (always 32 for a full block).
+ * @return       8-bit block checksum.
+ */
+static inline uint8_t bq27421_calc_block_checksum(const uint8_t *block, uint8_t n)
+{
+    uint8_t s = 0;
+    for (uint8_t i = 0; i < n; i++)
+        s += block[i];
+    return (uint8_t)(0xFF - s);
+}
+
+/**
+ * @brief Compute the taper rate parameter from capacity and taper current.
+ *
+ * taperRate = 10 * designCapacity_mAh / taperCurrent_mA
+ * (integer division, matching the formula in bq27421_init())
+ *
+ * @param capacity_mah   Design capacity in mAh.
+ * @param taper_ma       Taper current in mA.
+ * @return               Taper rate value written to the State subclass block,
+ *                       or 0 if @p taper_ma is 0.
+ */
+static inline uint16_t bq27421_calc_taper_rate(uint16_t capacity_mah, uint16_t taper_ma)
+{
+    if (taper_ma == 0u)
+        return 0u;
+    return (uint16_t)(10u * (uint32_t)capacity_mah / taper_ma);
+}
+
+/**
+ * @brief Compute the design energy from design capacity.
+ *
+ * designEnergy_mWh = 3.7 * designCapacity_mAh  (truncated to uint16_t)
+ *
+ * @param capacity_mah   Design capacity in mAh.
+ * @return               Design energy in mWh.
+ */
+static inline uint16_t bq27421_calc_design_energy(uint16_t capacity_mah)
+{
+    return (uint16_t)(3.7 * capacity_mah);
+}
+
 #ifdef __cplusplus
 }
 #endif

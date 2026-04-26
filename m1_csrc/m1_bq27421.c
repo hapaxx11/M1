@@ -438,9 +438,12 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
     // Read block checksum
     bq27421_i2c_command_read( BQ27421_BLOCK_DATA_CHECKSUM, &checksumRead );
 
-    // Verify
-    if( checksumRead != (uint8_t)checksumNew )
+    // Verify — cast LHS to uint8_t: bq27421_i2c_command_read() reads 2 bytes
+    // (regs 0x60 + 0x61), so checksumRead high byte may be non-zero.
+    if( (uint8_t)checksumRead != checksumNew )
     {
+        bq27421_i2c_control_write( BQ27421_CONTROL_SOFT_RESET );
+        bq27421_i2c_control_write( BQ27421_CONTROL_SEALED );
         return false;
     }
 
@@ -518,9 +521,12 @@ bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, ui
     // Read block checksum
     bq27421_i2c_command_read( BQ27421_BLOCK_DATA_CHECKSUM, &checksumRead );
 
-    // Verify
-    if( checksumRead != (uint8_t)checksumNew )
+    // Verify — cast LHS to uint8_t: bq27421_i2c_command_read() reads 2 bytes
+    // (regs 0x60 + 0x61), so checksumRead high byte may be non-zero.
+    if( (uint8_t)checksumRead != checksumNew )
     {
+        bq27421_i2c_control_write( BQ27421_CONTROL_SOFT_RESET );
+        bq27421_i2c_control_write( BQ27421_CONTROL_SEALED );
         return false;
     }
 
