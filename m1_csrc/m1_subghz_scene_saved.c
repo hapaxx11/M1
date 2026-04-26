@@ -10,6 +10,13 @@
  *   RAW files:    Decode, Emulate, Info, Rename, Delete
  *   Parsed files: Emulate, Info, Rename, Delete
  *
+ * "Emulate" for RAW files pushes into the Read Raw scene in Loaded state
+ * (Momentum's LoadKeyIDLE), giving the user a waveform viewer with Send/New
+ * buttons rather than a blind one-shot inline replay.
+ *
+ * "Emulate" for parsed files performs an inline blocking replay from this scene
+ * (unchanged from the original behaviour).
+ *
  * The "Decode" action (RAW only) feeds raw pulse data through the protocol
  * decoder registry offline, similar to Momentum firmware's decode feature.
  */
@@ -289,56 +296,80 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_EMULATE:
         {
-            uint8_t ret;
-
-            /* M1 native NOISE files (.sgh) are already in the streaming format
-             * expected by the raw replay engine.  Bypass the conversion/temp-file
-             * path and feed the original file directly.  This fixes "Memory error"
-             * failures when emulating C3.12/SiN360-produced .sgh recordings.
-             *
-             * The dispatch logic is encapsulated in flipper_subghz_emulate_path()
-             * so that it can be verified in isolation by host-side unit tests. */
-            if (flipper_subghz_emulate_path(is_raw_file, saved_signal.is_m1_native)
-                    == FLIPPER_SUBGHZ_EMULATE_DIRECT)
+            if (is_raw_file)
             {
-                uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
-                if (mod == MODULATION_UNKNOWN)
-                    mod = MODULATION_OOK;
-                ret = sub_ghz_replay_datafile(saved_filepath,
-                                              saved_signal.frequency, mod);
-            }
-            else
-            {
-                ret = sub_ghz_replay_flipper_file(saved_filepath);
-            }
-
-            if (ret == 0)
-            {
-                /* Restore radio to known state after replay (the replay
-                 * function calls menu_sub_ghz_exit which powers off the
-                 * SI4463 on success). */
-                menu_sub_ghz_init();
-            }
-            else
-            {
-                char err_buf[32];
-                const char *err = err_buf;
-                snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
-                switch (ret)
+                /* RAW files: open in the Read Raw scene in Loaded state.
+                 * This is Momentum's LoadKeyIDLE path — the user gets a proper
+                 * waveform viewer with Send / New buttons rather than a blind
+                 * one-shot replay that returns immediately.
+                 *
+                 * Pass replay metadata via app context so Read Raw knows which
+                 * replay function to use (direct for .sgh, flipper for .sub). */
+                strncpy(app->raw_load_path, saved_filepath, sizeof(app->raw_load_path) - 1);
+                app->raw_load_path[sizeof(app->raw_load_path) - 1] = '\0';
+                app->raw_load_is_native = saved_signal.is_m1_native;
+                app->raw_load_freq_hz   = saved_signal.frequency;
                 {
-                    case 1: err = "File/IO error";              break;
-                    case 2: err = "Missing data/frequency";     break;
-                    case 3: err = "Unsupported freq";           break;
-                    case 4: /* fall through */
-                    case 5: err = "Memory error";               break;
-                    case 6: err = "Cannot replay: dynamic key";   break;
-                    case 7: err = "Unsupported protocol";       break;
+                    uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
+                    app->raw_load_mod = (mod == MODULATION_UNKNOWN) ? MODULATION_OOK : mod;
                 }
-                m1_message_box(&m1_u8g2, "Emulate failed", err, "",
-                               "BACK to return");
+                subghz_scene_push(app, SubGhzSceneReadRaw);
+                return true;
             }
-            app->need_redraw = true;
-            return true;
+
+            /* Parsed (static-key) files: inline blocking replay in this scene */
+            {
+                uint8_t ret;
+
+                /* M1 native NOISE files (.sgh) are already in the streaming format
+                 * expected by the raw replay engine.  Bypass the conversion/temp-file
+                 * path and feed the original file directly.  This fixes "Memory error"
+                 * failures when emulating C3.12/SiN360-produced .sgh recordings.
+                 *
+                 * The dispatch logic is encapsulated in flipper_subghz_emulate_path()
+                 * so that it can be verified in isolation by host-side unit tests. */
+                if (flipper_subghz_emulate_path(is_raw_file, saved_signal.is_m1_native)
+                        == FLIPPER_SUBGHZ_EMULATE_DIRECT)
+                {
+                    uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
+                    if (mod == MODULATION_UNKNOWN)
+                        mod = MODULATION_OOK;
+                    ret = sub_ghz_replay_datafile(saved_filepath,
+                                                  saved_signal.frequency, mod);
+                }
+                else
+                {
+                    ret = sub_ghz_replay_flipper_file(saved_filepath);
+                }
+
+                if (ret == 0)
+                {
+                    /* Restore radio to known state after replay (the replay
+                     * function calls menu_sub_ghz_exit which powers off the
+                     * SI4463 on success). */
+                    menu_sub_ghz_init();
+                }
+                else
+                {
+                    char err_buf[32];
+                    const char *err = err_buf;
+                    snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
+                    switch (ret)
+                    {
+                        case 1: err = "File/IO error";              break;
+                        case 2: err = "Missing data/frequency";     break;
+                        case 3: err = "Unsupported freq";           break;
+                        case 4: /* fall through */
+                        case 5: err = "Memory error";               break;
+                        case 6: err = "Cannot replay: dynamic key";   break;
+                        case 7: err = "Unsupported protocol";       break;
+                    }
+                    m1_message_box(&m1_u8g2, "Emulate failed", err, "",
+                                   "BACK to return");
+                }
+                app->need_redraw = true;
+                return true;
+            }
         }
         case SAVED_ACTION_INFO:
         {

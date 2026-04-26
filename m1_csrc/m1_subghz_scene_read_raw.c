@@ -7,14 +7,16 @@
  * Momentum-aligned state machine and button layout.
  *
  * States: START → RECORDING → IDLE (capture on SD) → SENDING (blocking TX)
+ *         LOADED (pre-existing file from Saved browser) → SENDING (blocking TX)
  *
  * Button mapping (matches physical D-pad left/OK/right):
  *   START:     LEFT = Config  |  OK = ⊙ REC  |  RIGHT = (none)
  *   RECORDING: (none)         |  OK = ⊙ Stop  |  (none)
  *   IDLE:      LEFT = Erase   |  OK = ⊙ Send  |  RIGHT = Save
- *   SENDING:   (none)         |  (none)        |  (none)   [TX blocking; returns to IDLE]
+ *   LOADED:    LEFT = New     |  OK = ⊙ Send  |  RIGHT = (none)
+ *   SENDING:   (none)         |  (none)        |  (none)   [TX blocking; returns to IDLE or LOADED]
  *
- *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
+ *   BACK = Exit (START/IDLE/LOADED) or Stop recording (RECORDING)
  *
  * Display:
  *   START:     RSSI spectrogram.  Cursor advances (trace=true) when RSSI is above
@@ -30,12 +32,17 @@
  *              a duplicate column while the signal is still active.
  *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
  *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
+ *   LOADED:    Spectrogram reset (empty); "RAW" status, filename in waveform area.
+ *              LEFT = New (discard loaded file, start fresh), ⊙ OK = Send (replay).
+ *              This is Momentum's LoadKeyIDLE state — entered when a pre-recorded
+ *              RAW file is opened from the Saved browser.
  *   SENDING:   Spectrogram frozen; "TX..." label in waveform area; no button bar.
- *              Entered just before the blocking sub_ghz_replay_flipper_file() call;
+ *              Entered from either IDLE or LOADED just before the blocking replay;
  *              draw() is forced once so the display shows the TX indicator for the
- *              entire duration of the blocking send.  Automatically returns to IDLE.
- *              This matches Momentum's TX/TXRepeat state concept adapted for the
- *              M1's blocking-TX architecture.
+ *              entire duration of the blocking send.  Returns to whichever state
+ *              triggered the send (IDLE → IDLE, LOADED → LOADED).
+ *              This matches Momentum's TX/TXRepeat and LoadKeyTX/LoadKeyTXRepeat
+ *              state concepts, adapted for M1's blocking-TX architecture.
  *
  *   scene_on_enter → radio starts in passive listen mode immediately so that
  *   pressing REC has no perceptible delay.  Pressing Stop flushes the file and
@@ -164,17 +171,38 @@ static void start_passive_rx(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    app->raw_state = SubGhzReadRawStateStart;
     app->raw_sample_count = 0;
     app->raw_debounce = 0;
     app->raw_rx_pending = false;
     app->rssi = -120;
-    raw_filepath[0] = '\0';
     subghz_raw_rssi_reset_ext();
+
+    /* If the Saved scene pre-loaded a file path, enter in Loaded state.
+     * This is Momentum's LoadKeyIDLE path — the user opened a pre-recorded
+     * RAW file from the Saved browser and wants to review / replay it.
+     * raw_load_path is consumed here and cleared so subsequent scene
+     * entries start fresh. */
+    if (app->raw_load_path[0] != '\0')
+    {
+        strncpy(raw_filepath, app->raw_load_path, RAW_FILEPATH_MAX);
+        raw_filepath[RAW_FILEPATH_MAX] = '\0';
+        app->raw_load_path[0] = '\0';
+        /* Keep raw_load_is_native / raw_load_freq_hz / raw_load_mod — consumed by TX handler */
+        app->raw_state = SubGhzReadRawStateLoaded;
+    }
+    else
+    {
+        app->raw_state = SubGhzReadRawStateStart;
+        raw_filepath[0] = '\0';
+        app->raw_load_is_native = false;
+        app->raw_load_freq_hz = 0;
+        app->raw_load_mod = 0;
+    }
 
     /* Start radio in passive listen mode immediately on scene entry so that
      * pressing REC has no perceptible delay — no radio init is done on the
-     * button press itself.  This matches Flipper/Momentum Read Raw behaviour. */
+     * button press itself.  This matches Flipper/Momentum Read Raw behaviour.
+     * Also needed for the Loaded state so the statusbar shows live freq/mod. */
     start_passive_rx(app);
 
     app->need_redraw = true;
@@ -276,23 +304,30 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 stop_raw_rx(app);
                 app->need_redraw = true;
             }
-            else if (app->raw_state == SubGhzReadRawStateIdle)
+            else if (app->raw_state == SubGhzReadRawStateIdle ||
+                     app->raw_state == SubGhzReadRawStateLoaded)
             {
-                /* Send — replay the captured raw file (blocking delegate).
+                /* Send — replay the raw file (blocking delegate).
+                 *
+                 * Works for both freshly-recorded (Idle) and pre-loaded (Loaded)
+                 * files.  After TX, returns to whichever state triggered the send:
+                 *   Idle   → Idle   (Momentum: TX   → IDLE)
+                 *   Loaded → Loaded (Momentum: LoadKeyTX → LoadKeyIDLE)
                  *
                  * Transition to Sending state and force a draw() call so the
                  * display shows the TX indicator BEFORE the blocking replay call.
-                 * This is the M1 analogue of Momentum's TX/TXRepeat state — the
-                 * difference is that our TX is blocking so there is no animation,
-                 * but the correct UI state (no action buttons, "TX..." label) is
-                 * shown for the entire duration of the send.
+                 * This is the M1 analogue of Momentum's TX/TXRepeat and
+                 * LoadKeyTX/LoadKeyTXRepeat states — the difference is that M1's
+                 * TX is blocking so there is no animation, but the correct UI
+                 * state (no action buttons, "TX..." label) is shown for the
+                 * entire duration of the send.
                  *
                  * The replay path (sub_ghz_replay_flipper_file) uses TIM1 for
                  * TX PWM, which conflicts with the RX input-capture on TIM1 CH1.
-                 * In Idle state the timer is already paused (stop_raw_rx() left it
-                 * in READY state without restarting), so only de-init is needed
-                 * before replay; we must not call sub_ghz_rx_pause_ext() again or
-                 * HAL will error on a timer that is already stopped. */
+                 * In Idle/Loaded state the timer is already paused (stop_raw_rx()
+                 * left it in READY state, or it was never started in Loaded state),
+                 * so only de-init is needed before replay. */
+                bool from_loaded = (app->raw_state == SubGhzReadRawStateLoaded);
                 if (raw_filepath[0] != '\0')
                 {
                     app->raw_state = SubGhzReadRawStateSending;
@@ -300,7 +335,19 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
                     sub_ghz_rx_deinit_ext();
 
-                    uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
+                    uint8_t ret;
+                    if (from_loaded && app->raw_load_is_native && app->raw_load_freq_hz != 0)
+                    {
+                        /* M1 native .sgh file — use direct streaming replay */
+                        ret = sub_ghz_replay_datafile(raw_filepath,
+                                                      app->raw_load_freq_hz,
+                                                      app->raw_load_mod);
+                    }
+                    else
+                    {
+                        /* Flipper-format .sub RAW file or freshly-recorded capture */
+                        ret = sub_ghz_replay_flipper_file(raw_filepath);
+                    }
 
                     /* Restart passive RX using the user-selected config.
                      * start_passive_rx() re-applies app->freq_idx/mod_idx so the
@@ -308,8 +355,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                      * mutated subghz_scan_config for a CUSTOM band. */
                     start_passive_rx(app);
 
-                    /* TX complete — return to Idle (Momentum: TX → IDLE transition) */
-                    app->raw_state = SubGhzReadRawStateIdle;
+                    /* TX complete — return to the originating state */
+                    app->raw_state = from_loaded ? SubGhzReadRawStateLoaded
+                                                 : SubGhzReadRawStateIdle;
 
                     if (ret != 0)
                     {
@@ -359,6 +407,19 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     }
                     raw_filepath[0] = '\0';
                 }
+                subghz_raw_rssi_reset_ext();
+                app->raw_state = SubGhzReadRawStateStart;
+                app->raw_sample_count = 0;
+                app->raw_debounce = 0;
+                app->raw_rx_pending = false;
+                app->need_redraw = true;
+            }
+            else if (app->raw_state == SubGhzReadRawStateLoaded)
+            {
+                /* New — discard the loaded file (without deleting from SD) and
+                 * return to Start so the user can make a fresh recording.
+                 * This mirrors Momentum's "New" action in LoadKeyIDLE state. */
+                raw_filepath[0] = '\0';
                 subghz_raw_rssi_reset_ext();
                 app->raw_state = SubGhzReadRawStateStart;
                 app->raw_sample_count = 0;
@@ -465,6 +526,7 @@ static void draw(SubGhzApp *app)
 
     /* Build the right-side status string:
      *   START:     "RAW"
+     *   LOADED:    "RAW"
      *   RECORDING: "N spl."  (full integer, trailing period — matches Momentum)
      *   IDLE:      "N spl."  (frozen)
      *   SENDING:   "N spl."  (frozen, TX in progress) */
@@ -474,6 +536,7 @@ static void draw(SubGhzApp *app)
     switch (app->raw_state)
     {
         case SubGhzReadRawStateStart:
+        case SubGhzReadRawStateLoaded:
             right_status = "RAW";
             break;
         case SubGhzReadRawStateRecording:
@@ -572,8 +635,8 @@ static void draw(SubGhzApp *app)
     subghz_raw_rssi_draw_ext();
 
     /* Text overlay in the waveform area.
-     * Idle:    Filename centered (so the user knows which capture they have).
-     * Sending: "TX..." centered (Momentum TX state equivalent — no action buttons). */
+     * Idle/Loaded: Filename centered (so the user knows which capture they have).
+     * Sending:     "TX..." centered (Momentum TX state equivalent — no action buttons). */
     if (app->raw_state == SubGhzReadRawStateSending)
     {
         const char *lbl = "TX...";
@@ -583,7 +646,8 @@ static void draw(SubGhzApp *app)
         uint8_t fx = (tw < 115) ? (115 - tw) / 2 : 0;
         u8g2_DrawStr(&m1_u8g2, fx, 35, lbl);
     }
-    else if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
+    else if ((app->raw_state == SubGhzReadRawStateIdle ||
+              app->raw_state == SubGhzReadRawStateLoaded) && raw_filepath[0] != '\0')
     {
         const char *fname = extract_filename(raw_filepath);
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -615,6 +679,14 @@ static void draw(SubGhzApp *app)
                 arrowleft_8x8, "Erase",
                 ok_circle_8x8, "Send",
                 arrowright_8x8, "Save");
+            break;
+        case SubGhzReadRawStateLoaded:
+            /* Momentum's LoadKeyIDLE: "New" = start fresh, "Send" = replay loaded file.
+             * No right button (M1 has no MoreRAW scene). */
+            subghz_button_bar_draw(
+                arrowleft_8x8, "New",
+                ok_circle_8x8, "Send",
+                NULL, NULL);
             break;
         case SubGhzReadRawStateSending:
             /* No button bar during blocking TX — matches Momentum's TX state which
