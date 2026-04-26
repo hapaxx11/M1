@@ -112,6 +112,7 @@ typedef enum {
     SubGhzReadRawStateStart = 0,   /**< Fresh entry — no capture exists */
     SubGhzReadRawStateRecording,   /**< Actively recording raw RF data */
     SubGhzReadRawStateIdle,        /**< Recording done — capture file on SD */
+    SubGhzReadRawStateSending,     /**< Blocking replay TX in progress (Momentum: TX/TXRepeat) */
 } SubGhzReadRawState;
 
 /*============================================================================*/

@@ -6,12 +6,13 @@
  *
  * Momentum-aligned state machine and button layout.
  *
- * States: START → RECORDING → IDLE (capture on SD)
+ * States: START → RECORDING → IDLE (capture on SD) → SENDING (blocking TX)
  *
  * Button mapping (matches physical D-pad left/OK/right):
  *   START:     LEFT = Config  |  OK = ⊙ REC  |  RIGHT = (none)
  *   RECORDING: (none)         |  OK = ⊙ Stop  |  (none)
  *   IDLE:      LEFT = Erase   |  OK = ⊙ Send  |  RIGHT = Save
+ *   SENDING:   (none)         |  (none)        |  (none)   [TX blocking; returns to IDLE]
  *
  *   BACK = Exit (START/IDLE) or Stop recording (RECORDING)
  *
@@ -29,6 +30,12 @@
  *              a duplicate column while the signal is still active.
  *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
  *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
+ *   SENDING:   Spectrogram frozen; "TX..." label in waveform area; no button bar.
+ *              Entered just before the blocking sub_ghz_replay_flipper_file() call;
+ *              draw() is forced once so the display shows the TX indicator for the
+ *              entire duration of the blocking send.  Automatically returns to IDLE.
+ *              This matches Momentum's TX/TXRepeat state concept adapted for the
+ *              M1's blocking-TX architecture.
  *
  *   scene_on_enter → radio starts in passive listen mode immediately so that
  *   pressing REC has no perceptible delay.  Pressing Stop flushes the file and
@@ -273,6 +280,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Send — replay the captured raw file (blocking delegate).
                  *
+                 * Transition to Sending state and force a draw() call so the
+                 * display shows the TX indicator BEFORE the blocking replay call.
+                 * This is the M1 analogue of Momentum's TX/TXRepeat state — the
+                 * difference is that our TX is blocking so there is no animation,
+                 * but the correct UI state (no action buttons, "TX..." label) is
+                 * shown for the entire duration of the send.
+                 *
                  * The replay path (sub_ghz_replay_flipper_file) uses TIM1 for
                  * TX PWM, which conflicts with the RX input-capture on TIM1 CH1.
                  * In Idle state the timer is already paused (stop_raw_rx() left it
@@ -281,6 +295,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                  * HAL will error on a timer that is already stopped. */
                 if (raw_filepath[0] != '\0')
                 {
+                    app->raw_state = SubGhzReadRawStateSending;
+                    draw(app);  /* Force one frame showing TX indicator before blocking */
+
                     sub_ghz_rx_deinit_ext();
 
                     uint8_t ret = sub_ghz_replay_flipper_file(raw_filepath);
@@ -290,6 +307,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                      * scene returns to the correct band/modulation even if replay
                      * mutated subghz_scan_config for a CUSTOM band. */
                     start_passive_rx(app);
+
+                    /* TX complete — return to Idle (Momentum: TX → IDLE transition) */
+                    app->raw_state = SubGhzReadRawStateIdle;
 
                     if (ret != 0)
                     {
@@ -446,7 +466,8 @@ static void draw(SubGhzApp *app)
     /* Build the right-side status string:
      *   START:     "RAW"
      *   RECORDING: "N spl."  (full integer, trailing period — matches Momentum)
-     *   IDLE:      "N spl."  (frozen) */
+     *   IDLE:      "N spl."  (frozen)
+     *   SENDING:   "N spl."  (frozen, TX in progress) */
     const char *right_status = NULL;
     char right_buf[16];
 
@@ -461,6 +482,7 @@ static void draw(SubGhzApp *app)
             right_status = right_buf;
             break;
         case SubGhzReadRawStateIdle:
+        case SubGhzReadRawStateSending:
             snprintf(right_buf, sizeof(right_buf), "%lu spl.",
                      (unsigned long)app->raw_sample_count);
             right_status = right_buf;
@@ -549,8 +571,19 @@ static void draw(SubGhzApp *app)
      * Idle:      Frozen spectrogram of the completed capture. */
     subghz_raw_rssi_draw_ext();
 
-    /* Filename display centered in the waveform area when capture exists */
-    if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
+    /* Text overlay in the waveform area.
+     * Idle:    Filename centered (so the user knows which capture they have).
+     * Sending: "TX..." centered (Momentum TX state equivalent — no action buttons). */
+    if (app->raw_state == SubGhzReadRawStateSending)
+    {
+        const char *lbl = "TX...";
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, lbl);
+        uint8_t fx = (tw < 115) ? (115 - tw) / 2 : 0;
+        u8g2_DrawStr(&m1_u8g2, fx, 35, lbl);
+    }
+    else if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
     {
         const char *fname = extract_filename(raw_filepath);
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -582,6 +615,10 @@ static void draw(SubGhzApp *app)
                 arrowleft_8x8, "Erase",
                 ok_circle_8x8, "Send",
                 arrowright_8x8, "Save");
+            break;
+        case SubGhzReadRawStateSending:
+            /* No button bar during blocking TX — matches Momentum's TX state which
+             * hides all action buttons and shows only the sine wave animation. */
             break;
     }
 
