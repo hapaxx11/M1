@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.168] - 2026-04-26
+
+### Fixed
+
+- **Battery / BQ27421: fix crash on SubGHz Read scene after firmware update** — `bq27421_init()` entered the full CFGUPDATE rewrite path for the first time on devices upgrading from v0.9.0.163 (taper rate change 240→256 mA plus new `DEFAULT_DESIGN_CAP` field in `applyConfigIfMatches`). Two bugs in that path caused the device to crash a few seconds into SubGHz Read:
+  1. Checksum comparison casts the wrong operand (`checksumRead != (uint8_t)checksumNew`): `bq27421_i2c_command_read()` reads 2 bytes so the high byte contaminates the uint16_t comparison, making the check always fail even on a successful write. Fixed: `(uint8_t)checksumRead != checksumNew`.
+  2. BQ27421 left in CFGUPMODE indefinitely on the false-return paths: added `SOFT_RESET` + `SEALED` before every early return inside the CFGUPDATE session so the chip is always left in a known state.
 ## [0.9.0.167] - 2026-04-26
 
 ### Fixed
