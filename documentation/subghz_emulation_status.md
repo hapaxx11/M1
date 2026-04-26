@@ -16,7 +16,7 @@ in the future.
 | Status | Count | Notes |
 |--------|-------|-------|
 | ✅ **Replayable** — plain OOK PWM, no cipher | 9 | No key material needed; direct OOK PWM re-encode |
-| 🔑 **Replayable with manufacturer key** | 3 | Requires `0:/SUBGHZ/keeloq_mfcodes` on SD card |
+| 🔑 **Replayable with manufacturer key** | 3 | Keys embedded at build time; SD card fallback supported |
 | 🔒 **Custom path — special encoder** | 1 | Security+ 1.0 ternary brute-force counter mode |
 | ❌ **Not emulatable** — cipher or protocol barrier | 8 | See per-protocol notes below |
 
@@ -51,7 +51,12 @@ manufacturer's 64-bit master key.  M1 implements full counter-mode replay:
 decrypt the captured hop word → increment the 16-bit rolling counter →
 re-encrypt → transmit as OOK PWM.
 
-**Keystore file:** `0:/SUBGHZ/keeloq_mfcodes` on the SD card.
+**Key delivery:** Manufacturer keys are embedded directly into the firmware at build time
+via `scripts/gen_keeloq_mfkeys_builtin.py` and the `KEELOQ_KEY_VAULT` GitHub Actions
+secret (Flipper-compatible — keys never appear on the SD card).  When no built-in keys
+are present (public/CI builds without the vault), the firmware falls back to the SD card:
+`0:/SUBGHZ/keeloq_mfcodes.enc` (AES-256-CBC encrypted) or the legacy plaintext
+`0:/SUBGHZ/keeloq_mfcodes` (auto-migrated on first load).
 
 **Supported file formats** (both may coexist in the same file):
 
@@ -85,14 +90,21 @@ and the `KEELOQ_KEY_VAULT` CI secret, or can be loaded from the SD card as a fal
 
 ### Where to get manufacturer keys
 
+Keys are delivered at **build time** via the `KEELOQ_KEY_VAULT` GitHub Actions secret —
+set this secret to the full text of a key file (RocketGod format or compact
+`HEX:TYPE:NAME` format) and `scripts/gen_keeloq_mfkeys_builtin.py` will embed the keys
+directly into the firmware binary.  Keys embedded this way never appear on the SD card.
+
+The following sources provide key files that can be loaded into `KEELOQ_KEY_VAULT`:
+
 1. **RocketGod's SubGHz Toolkit** (Flipper Zero app store) — exports a `keeloq_mfcodes`
    file containing all community-sourced manufacturer keys in the format M1 already
    parses.  This is the primary source.
    - App: `Applications > Sub-GHz > SubGHz Toolkit`
    - Output file: `SD:/subghz/assets/keeloq_mfcodes`
-   - Copy to M1 SD card at: `0:/SUBGHZ/keeloq_mfcodes`
+   - Paste the file contents into the `KEELOQ_KEY_VAULT` repository secret.
 
-2. **Flipper Zero Unleashed firmware** keystore:
+2. **Flipper Zero firmware keystores** (community-maintained):
    - [`flipperdevices/flipperzero-firmware` — `assets/subghz/keeloq_mfcodes`](https://github.com/flipperdevices/flipperzero-firmware)
    - [`DarkFlippers/unleashed-firmware` — `assets/subghz/keeloq_mfcodes`](https://github.com/DarkFlippers/unleashed-firmware)
    - [`Next-Flip/Momentum-Firmware` — `assets/subghz/keeloq_mfcodes`](https://github.com/Next-Flip/Momentum-Firmware)
@@ -101,6 +113,11 @@ and the `KEELOQ_KEY_VAULT` CI secret, or can be loaded from the SD card as a fal
    expansions with 100+ manufacturer entries covering BFT, CAME, Nice, Faac (non-SLH),
    Roger, Beninca (non-ARC), Aprimatic, Ditec, Gibidi, Doorhan, AEHS, Allmatic, Erreka,
    Mpower, Marantec (KeeLoq-variant products), etc.
+
+**SD card fallback** (for users without the vault secret): place a key file at
+`0:/SUBGHZ/keeloq_mfcodes.enc` (AES-256-CBC encrypted) or `0:/SUBGHZ/keeloq_mfcodes`
+(plaintext — auto-migrated to encrypted on first load).  This path is supported but not
+recommended for production builds.
 
 ---
 
@@ -256,7 +273,7 @@ when a new Flipper/Momentum firmware release is published):
 1. **Check Momentum `lib/subghz/protocols/`** — look for new `*_encoder.c` files for any
    protocol listed as ❌ above.  If found, assess portability to M1.
 2. **Check Unleashed firmware diff** since last review date — same directory.
-3. **Update `keeloq_mfcodes`** on the SD card from RocketGod toolkit to pick up new
-   manufacturer entries added by the community.
+3. **Update `KEELOQ_KEY_VAULT`** from the latest RocketGod toolkit export to pick up new
+   manufacturer entries added by the community, then trigger a release build.
 4. **Update the "Last reviewed" date** at the top of this file.
 5. **Move any newly-emulatable protocol** from ❌ to the appropriate ✅ or 🔑 section.
