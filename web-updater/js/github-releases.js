@@ -10,20 +10,20 @@
 const GITHUB_API = 'https://api.github.com';
 
 /*
- * CORS proxies for GitHub release asset downloads.
+ * CORS proxies for GitHub release asset downloads — last-resort fallback only.
  *
- * The GitHub API (api.github.com) responds with proper CORS headers and is
- * fetched directly.  However, `browser_download_url` points to either
- * github.com or objects.githubusercontent.com — both of which redirect to a
- * CDN that does NOT send Access-Control-Allow-Origin headers.  Any direct
- * browser fetch of these URLs is blocked by CORS policy.
+ * The primary download path uses the GitHub REST API asset endpoint:
+ *   GET https://api.github.com/repos/{owner}/{repo}/releases/assets/{id}
+ *   Accept: application/octet-stream
  *
- * Routing asset downloads through a CORS-capable proxy adds the required
- * headers so the browser can receive the binary data.
+ * api.github.com always sends proper Access-Control-Allow-Origin headers, and
+ * the CDN redirect target (objects.githubusercontent.com) does too, so no
+ * proxy is needed when the download URL is an api.github.com URL.
  *
- * Multiple proxies are listed in priority order.  If a proxy returns any
- * non-2xx response or the fetch itself rejects (network error), the download
- * retries with the next proxy in the list.
+ * These proxies are kept as a fallback only for the case where a raw
+ * browser_download_url (github.com / objects.githubusercontent.com) is passed
+ * directly.  They are tried in priority order; the first proxy that returns a
+ * successful response wins.
  *
  * Each entry:
  *   prefix — URL prefix to prepend (the target URL follows immediately)
@@ -31,9 +31,8 @@ const GITHUB_API = 'https://api.github.com';
  *            false: target URL is appended raw
  */
 const CORS_PROXIES = [
-    { prefix: 'https://api.allorigins.win/raw?url=', encode: true  },
-    { prefix: 'https://corsproxy.io/?url=',          encode: true  },
-    { prefix: 'https://proxy.corsfix.com/?',         encode: false },
+    { prefix: 'https://corsproxy.io/?',      encode: true  },
+    { prefix: 'https://proxy.corsfix.com/?', encode: false },
 ];
 
 /** Hostnames whose fetch responses are blocked by CORS policy. */
@@ -95,6 +94,11 @@ export async function fetchReleases(owner, repo, options = {}) {
             // Find SD card assets archive
             const sdAsset = r.assets.find(a => a.name === 'SD_Assets.zip');
 
+            // Use the GitHub API asset endpoint for downloads — it has proper
+            // CORS headers (Access-Control-Allow-Origin: *) so no proxy is needed.
+            const apiAssetUrl = (id) =>
+                `${GITHUB_API}/repos/${owner}/${repo}/releases/assets/${id}`;
+
             return {
                 id: r.id,
                 tagName: r.tag_name,
@@ -105,17 +109,17 @@ export async function fetchReleases(owner, repo, options = {}) {
                 fwAsset: fwAsset ? {
                     name: fwAsset.name,
                     size: fwAsset.size,
-                    downloadUrl: fwAsset.browser_download_url,
+                    downloadUrl: apiAssetUrl(fwAsset.id),
                 } : null,
                 rawAsset: rawAsset ? {
                     name: rawAsset.name,
                     size: rawAsset.size,
-                    downloadUrl: rawAsset.browser_download_url,
+                    downloadUrl: apiAssetUrl(rawAsset.id),
                 } : null,
                 sdAsset: sdAsset ? {
                     name: sdAsset.name,
                     size: sdAsset.size,
-                    downloadUrl: sdAsset.browser_download_url,
+                    downloadUrl: apiAssetUrl(sdAsset.id),
                 } : null,
             };
         })
@@ -125,17 +129,38 @@ export async function fetchReleases(owner, repo, options = {}) {
 /**
  * Download a firmware binary from a release asset URL.
  *
- * When the URL requires a CORS proxy, each proxy in CORS_PROXIES is tried in
- * order.  The first proxy that returns a successful response wins.  If every
- * proxy returns an error, the last error is thrown.
+ * When the URL is a GitHub REST API asset endpoint (api.github.com), it is
+ * fetched directly with Accept: application/octet-stream.  api.github.com
+ * responds with proper CORS headers on the 302 redirect, and the CDN target
+ * (objects.githubusercontent.com) also sends Access-Control-Allow-Origin: *,
+ * so the browser can read the binary without any proxy.
  *
- * @param {string}   url          - Direct download URL
+ * When the URL targets github.com or objects.githubusercontent.com directly
+ * (e.g. a browser_download_url passed externally), each proxy in CORS_PROXIES
+ * is tried in order.  The first proxy that returns a successful response wins.
+ * If every proxy returns an error, the last error is thrown.
+ *
+ * @param {string}   url          - Download URL (API asset URL or direct CDN URL)
  * @param {function} [onProgress] - Callback(loaded, total) for progress
  * @returns {Promise<Uint8Array>} Firmware binary data
  */
 export async function downloadFirmware(url, onProgress = null) {
     let resp;
-    if (needsProxy(url)) {
+
+    if (url.startsWith(`${GITHUB_API}/`)) {
+        // Primary path: GitHub REST API asset endpoint — no proxy needed.
+        // api.github.com sends Access-Control-Allow-Origin on both the 302
+        // redirect response and the CDN destination.
+        resp = await fetch(url, {
+            headers: {
+                'Accept': 'application/octet-stream',
+                'X-GitHub-Api-Version': '2022-11-28',
+            },
+        });
+        if (!resp.ok) {
+            throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+        }
+    } else if (needsProxy(url)) {
         let lastError;
         for (const { prefix, encode } of CORS_PROXIES) {
             const proxyUrl = prefix + (encode ? encodeURIComponent(url) : url);
