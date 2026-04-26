@@ -130,6 +130,73 @@ void test_soc_3700mv_above_firmware_update_threshold(void)
     TEST_ASSERT_TRUE(soc >= fw_update_min_pct);
 }
 
+/* ---- battery_soc_smooth() — rate-limiter tests ---- */
+
+void test_smooth_no_change(void)
+{
+    /* Same value → no movement */
+    TEST_ASSERT_EQUAL_UINT8(50u, battery_soc_smooth(50u, 50u));
+}
+
+void test_smooth_increase_within_limit(void)
+{
+    /* raw exactly at limit above displayed → snap to raw */
+    TEST_ASSERT_EQUAL_UINT8(51u, battery_soc_smooth(50u, 51u));
+}
+
+void test_smooth_increase_exceeds_limit(void)
+{
+    /* raw > displayed + BATT_DISPLAY_MAX_DELTA_PCT → clamp to displayed+1 */
+    TEST_ASSERT_EQUAL_UINT8(51u, battery_soc_smooth(50u, 55u));
+    TEST_ASSERT_EQUAL_UINT8(21u, battery_soc_smooth(20u, 28u)); /* large jump, e.g. plug-in */
+}
+
+void test_smooth_decrease_within_limit(void)
+{
+    /* raw exactly at limit below displayed → snap to raw */
+    TEST_ASSERT_EQUAL_UINT8(49u, battery_soc_smooth(50u, 49u));
+}
+
+void test_smooth_decrease_exceeds_limit(void)
+{
+    /* raw < displayed - BATT_DISPLAY_MAX_DELTA_PCT → clamp to displayed-1 */
+    TEST_ASSERT_EQUAL_UINT8(49u, battery_soc_smooth(50u, 45u));
+}
+
+void test_smooth_convergence_from_below(void)
+{
+    /* Simulate gauge jumping from 20 to 28: 8 update calls → displayed reaches 28 */
+    uint8_t displayed = 20u;
+    const uint8_t raw = 28u;
+    for (int i = 0; i < 8; i++)
+        displayed = battery_soc_smooth(displayed, raw);
+    TEST_ASSERT_EQUAL_UINT8(28u, displayed);
+}
+
+void test_smooth_convergence_from_above(void)
+{
+    /* Simulate gauge dropping from 50 to 45: 5 update calls → displayed reaches 45 */
+    uint8_t displayed = 50u;
+    const uint8_t raw = 45u;
+    for (int i = 0; i < 5; i++)
+        displayed = battery_soc_smooth(displayed, raw);
+    TEST_ASSERT_EQUAL_UINT8(45u, displayed);
+}
+
+void test_smooth_boundary_zero(void)
+{
+    /* Never goes below 0 */
+    TEST_ASSERT_EQUAL_UINT8(0u, battery_soc_smooth(0u, 0u));
+    TEST_ASSERT_EQUAL_UINT8(0u, battery_soc_smooth(1u, 0u));
+}
+
+void test_smooth_boundary_hundred(void)
+{
+    /* Never goes above 100 */
+    TEST_ASSERT_EQUAL_UINT8(100u, battery_soc_smooth(100u, 100u));
+    TEST_ASSERT_EQUAL_UINT8(100u, battery_soc_smooth(99u, 100u));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -150,6 +217,16 @@ int main(void)
     RUN_TEST(test_soc_monotonically_increasing);
     RUN_TEST(test_soc_3500mv_well_above_zero);
     RUN_TEST(test_soc_3700mv_above_firmware_update_threshold);
+
+    RUN_TEST(test_smooth_no_change);
+    RUN_TEST(test_smooth_increase_within_limit);
+    RUN_TEST(test_smooth_increase_exceeds_limit);
+    RUN_TEST(test_smooth_decrease_within_limit);
+    RUN_TEST(test_smooth_decrease_exceeds_limit);
+    RUN_TEST(test_smooth_convergence_from_below);
+    RUN_TEST(test_smooth_convergence_from_above);
+    RUN_TEST(test_smooth_boundary_zero);
+    RUN_TEST(test_smooth_boundary_hundred);
 
     return UNITY_END();
 }
