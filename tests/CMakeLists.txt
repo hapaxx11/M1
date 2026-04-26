@@ -839,6 +839,7 @@ add_executable(test_subghz_keeloq
     test_subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_encoder.c
     ${M1_ROOT}/m1_csrc/m1_crypto.c
     ${STUBS_DIR}/m1_crypto_stub.c
@@ -872,6 +873,7 @@ add_test(NAME subghz_keeloq COMMAND test_subghz_keeloq)
 add_executable(test_keeloq_mfkeys_enc
     test_keeloq_mfkeys_enc.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/m1_csrc/m1_crypto.c
     ${STUBS_DIR}/m1_crypto_stub.c
@@ -912,3 +914,38 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_new_remote_gen PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_new_remote_gen COMMAND test_subghz_new_remote_gen)
+
+# ------------------------------------------------------------------
+# Module under test: keeloq_mfkeys_builtin (build-time key embedding)
+# Verifies that keeloq_mfkeys_load() uses compiled-in builtin keys
+# (Flipper parity) and does NOT fall back to the SD card when builtin
+# data is present.
+#
+# This test links with keeloq_builtin_test_data.c (a populated stub)
+# instead of subghz_keeloq_mfkeys_builtin.c (the NULL stub in the
+# public repo).  SD card paths are redirected to /tmp/ so the test
+# can confirm the SD is not consulted when builtin is non-empty.
+# ------------------------------------------------------------------
+add_executable(test_keeloq_mfkeys_builtin
+    test_keeloq_mfkeys_builtin.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_mfkeys.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+    ${STUBS_DIR}/keeloq_builtin_test_data.c
+)
+target_include_directories(test_keeloq_mfkeys_builtin PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_keeloq_mfkeys_builtin PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+    KEELOQ_MFKEYS_PATH="/tmp/keeloq_builtin_sd_test"
+    KEELOQ_MFKEYS_ENC_PATH="/tmp/keeloq_builtin_sd_test.enc"
+)
+target_link_libraries(test_keeloq_mfkeys_builtin PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_keeloq_mfkeys_builtin PRIVATE sanitizers)
+endif()
+add_test(NAME keeloq_mfkeys_builtin COMMAND test_keeloq_mfkeys_builtin)

@@ -542,11 +542,18 @@ bool keeloq_mfkeys_load_encrypted(void)
 
 bool keeloq_mfkeys_load(void)
 {
-    /* 1. Try the encrypted keystore first */
+    /* 1. Build-time embedded keys — highest priority (Flipper parity).
+     *    If the firmware was compiled with a private key vault, the keys are
+     *    baked into flash and the SD card is never consulted.  This means
+     *    the manufacturer keys are not accessible as any file on the SD card. */
+    if (keeloq_mfkeys_builtin_len > 0 && keeloq_mfkeys_builtin_text != NULL)
+        return keeloq_mfkeys_load_text(keeloq_mfkeys_builtin_text);
+
+    /* 2. Try the encrypted SD card keystore */
     if (keeloq_mfkeys_load_encrypted())
         return true;
 
-    /* 2. Fall back to the legacy plaintext file */
+    /* 3. Fall back to the legacy plaintext file */
     FIL f;
     FRESULT fr = f_open(&f, KEELOQ_MFKEYS_PATH, FA_READ);
     if (fr != FR_OK)

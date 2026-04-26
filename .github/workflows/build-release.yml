@@ -207,6 +207,34 @@ jobs:
             zip
 
       # ------------------------------------------------------------------ #
+      # 4a. Embed KeeLoq manufacturer keys from private vault (optional)
+      #
+      # Set the KEELOQ_KEY_VAULT repository secret to the full contents of
+      # a KeeLoq key file (RocketGod format or compact HEX:TYPE:NAME).
+      # When the secret is present, the generator script overwrites
+      # Sub_Ghz/subghz_keeloq_mfkeys_builtin.c with the real keys before
+      # the firmware is compiled — the keys are baked into the binary and
+      # never appear as a file on the SD card (Flipper-compatible approach).
+      #
+      # When the secret is absent, the committed NULL stub is used and
+      # keeloq_mfkeys_load() falls back to the SD card keystore at runtime.
+      # ------------------------------------------------------------------ #
+      - name: Embed KeeLoq manufacturer keys
+        env:
+          KEELOQ_KEY_VAULT: ${{ secrets.KEELOQ_KEY_VAULT }}
+        run: |
+          if [ -n "${KEELOQ_KEY_VAULT}" ]; then
+            printf '%s' "${KEELOQ_KEY_VAULT}" > /tmp/keeloq_vault.txt
+            python3 scripts/gen_keeloq_mfkeys_builtin.py \
+              /tmp/keeloq_vault.txt \
+              Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
+            rm -f /tmp/keeloq_vault.txt
+            echo "KeeLoq manufacturer keys embedded from vault."
+          else
+            echo "KEELOQ_KEY_VAULT secret not set — using NULL stub (SD card fallback)."
+          fi
+
+      # ------------------------------------------------------------------ #
       # 5. Configure CMake
       # ------------------------------------------------------------------ #
       - name: Configure CMake
