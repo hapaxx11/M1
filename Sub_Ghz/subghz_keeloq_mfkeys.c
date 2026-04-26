@@ -16,7 +16,9 @@
  *   Byte  4:    Version 0x01
  *   Bytes 5–8:  payload_len (uint32 little-endian)
  *   Bytes 9+:   AES-256-CBC ciphertext = [IV (16 bytes)] + [padded plaintext]
- *               Decrypted payload is compact "HEX:TYPE:NAME\n" text.
+ *               Decrypted payload is text parsed by keeloq_mfkeys_load_text();
+ *               both compact "HEX:TYPE:NAME\n" records and RocketGod
+ *               multi-line records are accepted.
  *
  * Supported text formats (inside ciphertext or in plaintext fallback):
  *
@@ -381,43 +383,46 @@ bool keeloq_mfkeys_save_encrypted(void)
     if (!s_table || s_count == 0)
         return false;
 
-    /* Compute buffer sizes.
-     * encrypt_with_key works in-place: it needs room for the IV prefix and
-     * PKCS7-padded ciphertext, so the buffer must be larger than the
-     * plaintext. */
-    uint32_t enc_max = M1_CRYPTO_IV_SIZE +
-                       ((KEELOQ_SERIAL_BUF_MAX / M1_CRYPTO_AES_BLOCK_SIZE) + 1)
-                       * M1_CRYPTO_AES_BLOCK_SIZE;
+    /* Compute buffer sizes based on s_count (actual entries, not worst-case
+     * maximum).  encrypt_with_key works in-place: the buffer must hold the IV
+     * prefix and PKCS7-padded ciphertext, so allocate plaintext + one extra
+     * AES block for padding + IV. */
+    uint32_t plain_max = (uint32_t)s_count * KEELOQ_LINE_SERIAL_MAX;
+    uint32_t enc_max   = M1_CRYPTO_IV_SIZE +
+                         ((plain_max / M1_CRYPTO_AES_BLOCK_SIZE) + 1)
+                         * M1_CRYPTO_AES_BLOCK_SIZE;
 
     uint8_t *buf = (uint8_t *)malloc(enc_max);
     if (!buf)
         return false;
 
+    /* Declare all locals before the first goto to avoid C99 jump-over issues. */
+    bool     ok       = false;
+    bool     file_open = false;
+    uint32_t text_len = 0;
+    uint32_t enc_len  = 0;
+    uint8_t  header[KEELOQ_ENC_HDR_LEN];
+    FIL      f;
+    UINT     bw;
+    FRESULT  wfr;
+
     /* Serialise the table into the start of the buffer */
-    uint32_t text_len = serialize_table((char *)buf, enc_max);
-    if (text_len == 0) {
-        free(buf);
-        return false;
-    }
+    text_len = serialize_table((char *)buf, enc_max);
+    if (text_len == 0)
+        goto cleanup;
 
     /* Encrypt in-place (buf expands: [text] → [IV][ciphertext]) */
-    uint32_t enc_len = m1_crypto_encrypt_with_key(buf, text_len, enc_max,
-                                                   s_keeloq_product_key);
-    if (enc_len == 0) {
-        free(buf);
-        return false;
-    }
+    enc_len = m1_crypto_encrypt_with_key(buf, text_len, enc_max,
+                                         s_keeloq_product_key);
+    if (enc_len == 0)
+        goto cleanup;
 
     /* Open output file */
-    FIL f;
-    FRESULT fr = f_open(&f, KEELOQ_MFKEYS_ENC_PATH, FA_WRITE | FA_CREATE_ALWAYS);
-    if (fr != FR_OK) {
-        free(buf);
-        return false;
-    }
+    if (f_open(&f, KEELOQ_MFKEYS_ENC_PATH, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+        goto cleanup;
+    file_open = true;
 
     /* Write header: magic(4) + version(1) + payload_len(4 LE) */
-    uint8_t header[KEELOQ_ENC_HDR_LEN];
     header[0] = KEELOQ_ENC_MAGIC_0;
     header[1] = KEELOQ_ENC_MAGIC_1;
     header[2] = KEELOQ_ENC_MAGIC_2;
@@ -428,22 +433,21 @@ bool keeloq_mfkeys_save_encrypted(void)
     header[7] = (uint8_t)((enc_len >> 16) & 0xFF);
     header[8] = (uint8_t)((enc_len >> 24) & 0xFF);
 
-    UINT bw;
-    FRESULT wfr = f_write(&f, header, sizeof(header), &bw);
-    if (wfr != FR_OK || bw != sizeof(header)) {
-        f_close(&f);
-        free(buf);
-        return false;
-    }
+    wfr = f_write(&f, header, sizeof(header), &bw);
+    if (wfr != FR_OK || bw != sizeof(header))
+        goto cleanup;
 
     wfr = f_write(&f, buf, enc_len, &bw);
-    f_close(&f);
+    ok = (wfr == FR_OK && bw == enc_len);
 
-    /* Clear sensitive key material from the heap buffer */
+cleanup:
+    if (file_open)
+        f_close(&f);
+    /* Always wipe the heap buffer — it may contain plaintext or encrypted
+     * key material regardless of which path we took. */
     memset(buf, 0, enc_max);
     free(buf);
-
-    return (wfr == FR_OK && bw == enc_len);
+    return ok;
 }
 
 /*============================================================================*/
