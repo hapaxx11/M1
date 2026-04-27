@@ -466,6 +466,116 @@ void test_load_m1_native_packet_not_noise(void)
 }
 
 /* ===================================================================
+ * Issue #248 regression — corrupted Payload field (fw 0.9.0.122 bug)
+ *
+ * The save routine in fw 0.9.0.122 used a broken printf format that
+ * produced "Payload: 0x000000000000000lX" instead of a real hex key.
+ * strtoull stops at 'l' → key=0.  The loader must return true (frequency
+ * is present) and set key=0 rather than crashing or returning false.
+ *
+ * Both files from issue #248 were Princeton signals:
+ *  - 330.00 MHz  (Asia/APAC gate remote band)
+ *  - 433.92 MHz  (global ISM gate remote band)
+ *
+ * The third test ("valid_key") shows what a correctly-saved 330 MHz
+ * Princeton file looks like after the format bug was fixed, and validates
+ * the end-to-end load path for that frequency.
+ * =================================================================== */
+
+void test_issue248_corrupted_payload_330mhz(void)
+{
+	/* Exact content from the 330 MHz .sgh file attached to issue #248.
+	 * "Payload: 0x000000000000000lX" is the literal string written by
+	 * the buggy fw 0.9.0.122 saver. */
+	const char *path = "/tmp/test_issue248_330.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 330000000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bits: 24\r\n"
+	    "Payload: 0x000000000000000lX\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	/* File is structurally valid (frequency present) — must not return false */
+	TEST_ASSERT_TRUE(ok);
+	/* Frequency must be preserved exactly (330 MHz = Asia/APAC gate band) */
+	TEST_ASSERT_EQUAL_UINT32(330000000UL, sig.frequency);
+	/* Protocol and bit-count must be parsed even though payload is corrupt */
+	TEST_ASSERT_EQUAL_STRING("Princeton", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT32(24, sig.bit_count);
+	/* strtoull stops at 'l' → key resolves to 0 */
+	TEST_ASSERT_EQUAL_UINT64(0ULL, sig.key);
+	/* File is M1 native format */
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+
+	remove(path);
+}
+
+void test_issue248_corrupted_payload_433mhz(void)
+{
+	/* Same corrupted format, but from the 433.92 MHz file in issue #248. */
+	const char *path = "/tmp/test_issue248_433.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bits: 24\r\n"
+	    "Payload: 0x000000000000000lX\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_STRING("Princeton", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT32(24, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT64(0ULL, sig.key);
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+
+	remove(path);
+}
+
+void test_load_330mhz_princeton_valid_key(void)
+{
+	/* Correctly-formed 330 MHz Princeton PACKET file — what the issue #248
+	 * files would look like if re-captured and saved with the fixed firmware
+	 * (which uses "0x%016llX").  Validates the full load path for the
+	 * Asia/APAC gate-remote frequency. */
+	const char *path = "/tmp/test_330mhz_valid.sgh";
+	write_tmp(path,
+	    "Filetype: M1 SubGHz PACKET\r\n"
+	    "Version: 0.9\r\n"
+	    "Frequency: 330000000\r\n"
+	    "Modulation: OOK\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bits: 24\r\n"
+	    "Payload: 0x000000000052A12E\r\n"
+	    "BT: 370\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL_UINT32(330000000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_STRING("Princeton", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT32(24, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT64(0x52A12EULL, sig.key);
+	TEST_ASSERT_EQUAL_UINT32(370, sig.te);
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+
+	remove(path);
+}
+
+/* ===================================================================
  * flipper_subghz_probe() — lightweight header probe
  *
  * Verifies that probe() extracts is_m1_native, is_noise, frequency, and
@@ -742,6 +852,13 @@ int main(void)
 	RUN_TEST(test_load_flipper_raw_not_m1_native);
 	RUN_TEST(test_load_flipper_key_packet_fields);
 	RUN_TEST(test_load_m1_native_packet_not_noise);
+
+	/* Issue #248 regression — corrupted Payload field (fw 0.9.0.122 save bug)
+	 * Both files were Princeton signals from an Asia/APAC gate remote.
+	 * 330 MHz is the Asia/APAC gate-remote band; 433.92 MHz is global ISM. */
+	RUN_TEST(test_issue248_corrupted_payload_330mhz);
+	RUN_TEST(test_issue248_corrupted_payload_433mhz);
+	RUN_TEST(test_load_330mhz_princeton_valid_key);
 
 	/* flipper_subghz_probe() — lightweight header probe */
 	RUN_TEST(test_probe_m1_native_noise);
