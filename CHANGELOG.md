@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.171] - 2026-04-27
+
+### Changed
+
+- **Sub-GHz Read Raw: Config access from recording state** — pressing LEFT while recording now stops the current capture and opens the Config scene; captured data is preserved and the scene returns to Idle (Erase/Send/Save) on return. Previously LEFT was a no-op during recording.
 ## [0.9.0.170] - 2026-04-26
 
 ### Fixed

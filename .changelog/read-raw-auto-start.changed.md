@@ -1,1 +1,0 @@
-**Sub-GHz Read Raw: Config access from recording state** — pressing LEFT while recording now stops the current capture and opens the Config scene; captured data is preserved and the scene returns to Idle (Erase/Send/Save) on return. Previously LEFT was a no-op during recording.
