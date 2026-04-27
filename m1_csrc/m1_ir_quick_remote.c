@@ -691,13 +691,12 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
-    /* Bottom bar: navigation hints */
+    /* Bottom bar: navigation hints (long-press L/R for Scan/File) */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-    /* Show "Scan" hint on left if universal file exists, device name on right */
     {
-        const char *left_hint = layout->universal_file ? "< Scan" : "";
-        const char *right_hint = "> File";
+        const char *left_hint = layout->universal_file ? "H<:Scan" : "";
+        const char *right_hint = "H>:File";
         u8g2_DrawStr(&m1_u8g2, 1, (u8g2_uint_t)(disp_h - 1), left_hint);
         u8g2_uint_t rw = u8g2_GetStrWidth(&m1_u8g2, right_hint);
         u8g2_DrawStr(&m1_u8g2, disp_w - rw - 1, (u8g2_uint_t)(disp_h - 1), right_hint);
@@ -1211,6 +1210,17 @@ void ir_quick_remote(ir_category_t category)
             }
             else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
             {
+                /* Navigate to previous column within the current row */
+                uint8_t cur_col = sel % eff_cols;
+                if (cur_col > 0)
+                    sel -= 1;
+                else
+                    sel += (eff_cols - 1);  /* wrap to last column, same row */
+                if (sel >= layout->btn_count)
+                    sel = layout->btn_count - 1;
+            }
+            else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_LCLICK)
+            {
                 if (layout->universal_file)
                 {
                     /* Launch brute-force scan (stays in portrait) */
@@ -1218,6 +1228,16 @@ void ir_quick_remote(ir_category_t category)
                 }
             }
             else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                /* Navigate to next column within the current row */
+                uint8_t cur_col = sel % eff_cols;
+                uint8_t next    = sel + 1;
+                if (cur_col < eff_cols - 1 && next < layout->btn_count)
+                    sel = next;
+                else
+                    sel -= cur_col;  /* wrap to first column, same row */
+            }
+            else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_LCLICK)
             {
                 /* Browse for a different device file.
                  * The file-browser list uses landscape-sized constants (124 px

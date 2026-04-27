@@ -1,0 +1,1 @@
+**IR Quick Remote: fix left/right navigation in portrait mode** — LEFT/RIGHT now moves the selection between columns within the current row. Scan (LEFT long-press) and File browse (RIGHT long-press) retain their functions via long-press; bottom bar hints updated to `H<:Scan` / `H>:File`.
