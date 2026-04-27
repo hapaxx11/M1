@@ -6,14 +6,15 @@
  *
  * Momentum-aligned state machine and button layout.
  *
- * States: RECORDING → IDLE (capture on SD) → SENDING (blocking TX)
- *         START (fallback: recording init failed, or after Erase) → RECORDING → IDLE...
+ * States: START (passive listen, radio on) → RECORDING (SD file open, TIM1 armed)
+ *         → IDLE (capture on SD) → SENDING (blocking TX)
+ *         START is also re-entered after Erase.
  *         LOADED (pre-existing file from Saved browser) → SENDING (blocking TX)
  *
- * On fresh entry the scene auto-starts recording (matches Momentum Read Raw): the
- * radio is initialised and TIM1 armed before the first frame is drawn, so pressing
- * OK once transitions directly from the waveform display to the Idle (Erase/Send/Save)
- * state.  If recording init fails (OOM or SD error) the scene falls back to START so
+ * On fresh entry the scene enters START state with the radio in passive listen.
+ * Pressing OK begins recording (opens the SD file, arms TIM1 ISR).
+ * Pressing OK again stops recording and enters IDLE (Erase/Send/Save).
+ * If recording init fails (OOM or SD error) the scene stays in START so
  * the user can configure and retry.
  *
  * Button mapping (matches physical D-pad left/OK/right):
@@ -134,11 +135,10 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
-/* Forward declarations — both functions are defined after scene_on_enter() but
+/* Forward declarations — these functions are defined after scene_on_enter() but
  * called from it.  Without these, the compiler creates implicit non-static
  * declarations that conflict with the actual static definitions. */
 static void draw(SubGhzApp *app);
-static void start_passive_rx(SubGhzApp *app);
 static void start_raw_rx(SubGhzApp *app);
 
 /*============================================================================*/
