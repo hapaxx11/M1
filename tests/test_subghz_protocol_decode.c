@@ -512,11 +512,13 @@ void test_princeton_rejects_non_1_3_ratio(void)
  * one point.  The te reference detected at pulse_times[2]/[3] is clean
  * (355H / 138L → te_short=138, te_long=355 after swap).
  *
- * With te_tolerance=20 %: acceptable te_short range = 138±27.6 = 110–166µs.
+ * With te_tolerance=20 %: (138 * 20) / 100 truncates to 27, and the strict
+ * comparison logic yields an effective accepted te_short range of 112–164µs.
  * The 104µs gaps are below the lower bound → decoder breaks at bit 6 → FAIL.
  *
- * With te_tolerance=30 %: acceptable range = 138±41.4 = 97–179µs.
- * All jittered gaps pass → full 24 bits decoded → SUCCESS, code=0x555503.
+ * With te_tolerance=30 %: (138 * 30) / 100 truncates to 41, yielding an
+ * effective accepted range of 98–178µs. All jittered gaps pass → full
+ * 24 bits decoded → SUCCESS, code=0x555503.
  *
  * Returns the number of pulse entries written (48 = 24 bit-pairs).
  */
@@ -557,7 +559,8 @@ static uint16_t build_flipper_princeton_frame(void)
 /*
  * Regression anchor: with the original 20% tolerance the jittered Princeton
  * frame CANNOT be decoded.  The decoder breaks at bit 6 (pulse_times[11]=104
- * is below the te_short lower bound of 110µs) and returns failure.
+ * is below the te_short lower bound of 112µs — (138*20)/100 truncates to 27,
+ * so accepted range is 112–164µs) and returns failure.
  *
  * This test must PASS both before and after the fix — it confirms that 20%
  * tolerance is genuinely too tight for Flipper-replayed Princeton signals.
@@ -573,8 +576,9 @@ void test_princeton_flipper_jitter_rejects_at_20pct(void)
 
 /*
  * Fix verification: with 30% tolerance the same jittered frame decodes
- * successfully.  te_short=138 ± 41.4µs → range 97–179µs covers the 104µs
- * and 106µs jittered gaps.  The decoded key must equal 0x555503.
+ * successfully.  (138 * 30) / 100 truncates to 41, yielding an effective
+ * accepted te_short range of 98–178µs — covers the 104µs and 106µs jittered
+ * gaps.  The decoded key must equal 0x555503.
  */
 void test_princeton_flipper_jitter_decodes_at_30pct(void)
 {

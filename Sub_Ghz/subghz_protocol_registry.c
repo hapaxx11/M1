@@ -263,7 +263,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_300_MULTI,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=370, .te_long=1140, .te_tolerance_pct=30, .min_count_bit_for_found=24 },
+        .timing = { .te_short=370, .te_long=1140, .te_tolerance_pct=20, .min_count_bit_for_found=24 },
         .decode = subghz_decode_princeton,
     },
     [SECURITY_PLUS_20] = {
