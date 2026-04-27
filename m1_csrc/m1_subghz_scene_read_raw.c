@@ -51,8 +51,9 @@
  *              This matches Momentum's TX/TXRepeat and LoadKeyTX/LoadKeyTXRepeat
  *              state concepts, adapted for M1's blocking-TX architecture.
  *
- *   scene_on_enter → recording auto-starts immediately (Momentum-aligned).
- *   Pressing OK once stops recording and enters Idle with Erase/Send/Save.
+ *   scene_on_enter → START state (passive listen, radio on, no file open).
+ *   OK → RECORDING (opens SD file, arms TIM1 ISR).
+ *   OK → IDLE (Erase / Send / Save).
  *   scene_on_exit → radio fully stopped.
  *
  * Recording data path:
@@ -204,15 +205,11 @@ static void scene_on_enter(SubGhzApp *app)
         app->rssi            = -120;
 
         /* Restart passive RX (radio was torn down by scene_on_exit when the
-         * child scene was pushed).  State and filepath are preserved. */
+         * child scene was pushed).  State and filepath are preserved.
+         * Stay in whatever state we left — the user presses OK to start
+         * recording if we returned to START, or has a capture to work with
+         * if we returned to IDLE/LOADED. */
         start_passive_rx(app);
-
-        /* If we returned to START (e.g. Config pushed from the Start fallback
-         * state), auto-start recording on the newly-configured frequency — the
-         * same behaviour as a fresh entry.  If we returned to IDLE or LOADED,
-         * the user has an existing capture to work with; stay in that state. */
-        if (app->raw_state == SubGhzReadRawStateStart)
-            start_raw_rx(app);
 
         app->need_redraw = true;
         return;
@@ -250,14 +247,9 @@ static void scene_on_enter(SubGhzApp *app)
         app->raw_load_freq_hz = 0;
         app->raw_load_mod = 0;
 
-        /* Momentum-aligned: auto-start recording immediately on scene entry so
-         * pressing OK once transitions directly to Idle (Erase/Send/Save).
-         * start_passive_rx() initialises the radio; start_raw_rx() arms TIM1
-         * and opens the SD file, then sets raw_state = RECORDING on success.
-         * If recording init fails (OOM or SD error) raw_state stays as Start
-         * so the user can configure with LEFT and retry with OK. */
+        /* START state: radio in passive listen.  User presses OK to begin
+         * recording.  start_raw_rx() is called from the OK handler. */
         start_passive_rx(app);
-        start_raw_rx(app);
     }
 
     app->need_redraw = true;
@@ -442,7 +434,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (app->raw_state == SubGhzReadRawStateStart)
             {
                 /* Config — scene_on_exit tears down RX; scene_on_enter re-inits
-                 * on return via the resume path (auto-starts recording again). */
+                 * on return via the resume path.  User presses OK to start
+                 * recording on the newly-configured frequency. */
                 app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
