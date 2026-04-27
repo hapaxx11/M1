@@ -625,10 +625,12 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
     uint8_t     cell_h    = grid_area / eff_rows;
 
     m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    /* Title bar: category + truncated device name */
+    /* ── Inverted title bar (Momentum-style filled header) ── */
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_DrawBox(&m1_u8g2, 0, 0, disp_w, GRID_TOP_Y - 1);
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     {
         char title[32];
         if (device_name && device_name[0])
@@ -637,9 +639,9 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
             snprintf(title, sizeof(title), "%s", layout->title);
         u8g2_DrawStr(&m1_u8g2, 2, 9, title);
     }
-    u8g2_DrawHLine(&m1_u8g2, 0, 11, disp_w);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    /* Draw grid buttons */
+    /* ── Button grid ── */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
     for (uint8_t b = 0; b < layout->btn_count; b++)
@@ -649,55 +651,56 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
         uint8_t x = col * cell_w;
         uint8_t y = GRID_TOP_Y + row * cell_h;
 
-        bool is_selected = (b == sel);
-        bool is_mapped = (s_btn_to_cmd[b] >= 0);
+        bool is_selected     = (b == sel);
+        bool is_mapped       = (s_btn_to_cmd[b] >= 0);
         bool is_transmitting = transmitting && is_selected;
+
+        /* Button rect with 1 px gap on every side for a discrete-button look */
+        u8g2_uint_t bx = (u8g2_uint_t)(x + 1);
+        u8g2_uint_t by = (u8g2_uint_t)(y + 1);
+        u8g2_uint_t bw = (u8g2_uint_t)(cell_w > 2u ? cell_w - 2u : cell_w);
+        u8g2_uint_t bh = (u8g2_uint_t)(cell_h > 2u ? cell_h - 2u : cell_h);
+        uint8_t     r  = (bw < 6u || bh < 6u) ? 0u : 2u; /* corner radius */
 
         if (is_selected)
         {
-            /* Draw filled box for selection */
+            /* Filled rounded box — inverted for clear selection */
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawBox(&m1_u8g2, x, y, cell_w, cell_h);
+            u8g2_DrawRBox(&m1_u8g2, bx, by, bw, bh, r);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+        }
+        else if (is_mapped)
+        {
+            /* Rounded frame for mapped (available) buttons */
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+            u8g2_DrawRFrame(&m1_u8g2, bx, by, bw, bh, r);
         }
         else
         {
-            /* Draw frame for each button cell */
+            /* Square frame for unmapped slots — visually distinct from rounded */
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawFrame(&m1_u8g2, x, y, cell_w, cell_h);
+            u8g2_DrawFrame(&m1_u8g2, bx, by, bw, bh);
         }
 
-        /* Draw label */
-        {
-            const char *label = layout->buttons[b].label;
-            if (is_transmitting)
-                label = ">>>";
+        /* Label — horizontally and vertically centred in the cell.
+         * NokiaSmallPlain ascent ≈ 7 px; formula: baseline = y + cell_h/2 + 3 */
+        const char *label = layout->buttons[b].label;
+        if (is_transmitting)
+            label = ">>>";
+        u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, label);
+        u8g2_uint_t tx = (u8g2_uint_t)(x + (cell_w - tw) / 2u);
+        u8g2_uint_t ty = (u8g2_uint_t)(y + cell_h / 2u + 3u);
+        u8g2_DrawStr(&m1_u8g2, tx, ty, label);
 
-            /* Center text in the cell */
-            u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, label);
-            u8g2_uint_t tx = x + (cell_w - tw) / 2;
-            u8g2_uint_t ty = y + cell_h - 3;
-
-            if (!is_mapped && !is_selected)
-            {
-                /* Dim unmapped buttons by drawing dotted */
-                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            }
-
-            u8g2_DrawStr(&m1_u8g2, tx, ty, label);
-        }
-
-        /* Reset color after selected item */
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
-    /* Bottom bar: navigation hints */
+    /* ── Bottom bar: separator + navigation hints ── */
+    u8g2_DrawHLine(&m1_u8g2, 0, (u8g2_uint_t)(disp_h - GRID_BOTTOM_BAR_H), disp_w);
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-
-    /* Show "Scan" hint on left if universal file exists, device name on right */
     {
-        const char *left_hint = layout->universal_file ? "< Scan" : "";
-        const char *right_hint = "> File";
+        const char *left_hint  = layout->universal_file ? "H<:Scan" : "";
+        const char *right_hint = "H>:File";
         u8g2_DrawStr(&m1_u8g2, 1, (u8g2_uint_t)(disp_h - 1), left_hint);
         u8g2_uint_t rw = u8g2_GetStrWidth(&m1_u8g2, right_hint);
         u8g2_DrawStr(&m1_u8g2, disp_w - rw - 1, (u8g2_uint_t)(disp_h - 1), right_hint);
@@ -1211,6 +1214,17 @@ void ir_quick_remote(ir_category_t category)
             }
             else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
             {
+                /* Navigate to previous column within the current row */
+                uint8_t cur_col = sel % eff_cols;
+                if (cur_col > 0)
+                    sel -= 1;
+                else
+                    sel += (eff_cols - 1);  /* wrap to last column, same row */
+                if (sel >= layout->btn_count)
+                    sel = layout->btn_count - 1;
+            }
+            else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_LCLICK)
+            {
                 if (layout->universal_file)
                 {
                     /* Launch brute-force scan (stays in portrait) */
@@ -1218,6 +1232,16 @@ void ir_quick_remote(ir_category_t category)
                 }
             }
             else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                /* Navigate to next column within the current row */
+                uint8_t cur_col = sel % eff_cols;
+                uint8_t next    = sel + 1;
+                if (cur_col < eff_cols - 1 && next < layout->btn_count)
+                    sel = next;
+                else
+                    sel -= cur_col;  /* wrap to first column, same row */
+            }
+            else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_LCLICK)
             {
                 /* Browse for a different device file.
                  * The file-browser list uses landscape-sized constants (124 px
