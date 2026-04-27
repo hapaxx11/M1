@@ -133,12 +133,12 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
-/* Forward declaration — draw() is defined after the scene callbacks but is
- * called from scene_on_event() (OK handler in Sending state) to force one
- * display frame before the blocking TX call.  Without this forward declaration
- * the compiler sees the call site first, creates an implicit non-static
- * declaration, and then rejects the later static definition. */
+/* Forward declarations — both functions are defined after scene_on_enter() but
+ * called from it.  Without these, the compiler creates implicit non-static
+ * declarations that conflict with the actual static definitions. */
 static void draw(SubGhzApp *app);
+static void start_passive_rx(SubGhzApp *app);
+static void start_raw_rx(SubGhzApp *app);
 
 /*============================================================================*/
 /* Helpers                                                                    */
@@ -185,6 +185,42 @@ static void start_passive_rx(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Detect whether we're returning from a child scene (Config) vs. entering
+     * fresh from the Menu.  The flag is set by event handlers before they push
+     * a child scene; it ensures we don't reset state on return.
+     * Consume the flag immediately so it does not persist to future entries. */
+    bool is_resume = app->resume_from_child;
+    app->resume_from_child = false;
+
+    /* ------------------------------------------------------------------ */
+    /* Resume path: returning from a child scene (Config).                 */
+    /* Preserve raw_state and raw_filepath — do NOT reset or auto-restart. */
+    /* Just bring the radio back up in passive listen and leave state as-is.*/
+    /* ------------------------------------------------------------------ */
+    if (is_resume)
+    {
+        app->raw_debounce    = 0;
+        app->raw_rx_pending  = false;
+        app->rssi            = -120;
+
+        /* Restart passive RX (radio was torn down by scene_on_exit when the
+         * child scene was pushed).  State and filepath are preserved. */
+        start_passive_rx(app);
+
+        /* If we returned to START (e.g. Config pushed from the Start fallback
+         * state), auto-start recording on the newly-configured frequency — the
+         * same behaviour as a fresh entry.  If we returned to IDLE or LOADED,
+         * the user has an existing capture to work with; stay in that state. */
+        if (app->raw_state == SubGhzReadRawStateStart)
+            start_raw_rx(app);
+
+        app->need_redraw = true;
+        return;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Fresh entry path.                                                   */
+    /* ------------------------------------------------------------------ */
     app->raw_sample_count = 0;
     app->raw_debounce = 0;
     app->raw_rx_pending = false;
@@ -405,17 +441,19 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventLeft:
             if (app->raw_state == SubGhzReadRawStateStart)
             {
-                /* Config — radio keeps running passively while in child scene */
+                /* Config — scene_on_exit tears down RX; scene_on_enter re-inits
+                 * on return via the resume path (auto-starts recording again). */
+                app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
             else if (app->raw_state == SubGhzReadRawStateRecording)
             {
-                /* Config during recording: stop the current capture (it will be
-                 * in Idle so the user can Erase if they don't want it), then
-                 * push the Config scene.  On return the user is in Idle; pressing
-                 * Erase (LEFT) returns to Start, then OK starts a new recording
-                 * on the updated frequency/modulation. */
+                /* Config during recording: stop the current capture (→ Idle),
+                 * then push Config.  On return, scene_on_enter sees is_resume=true
+                 * and raw_state=Idle, so it restarts passive RX and preserves
+                 * the capture — the user can Send/Save/Erase it. */
                 stop_raw_rx(app);
+                app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneConfig);
                 app->need_redraw = true;
             }
