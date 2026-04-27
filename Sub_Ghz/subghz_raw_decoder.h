@@ -33,7 +33,7 @@
 #define INTERPACKET_GAP_MIN         1500   /* µs */
 #endif
 #ifndef PACKET_PULSE_TIME_MIN
-#define PACKET_PULSE_TIME_MIN       120    /* µs */
+#define PACKET_PULSE_TIME_MIN       80     /* µs — keep in sync with m1_sub_ghz_decenc.h */
 #endif
 #ifndef PACKET_PULSE_COUNT_MIN
 #define PACKET_PULSE_COUNT_MIN      40

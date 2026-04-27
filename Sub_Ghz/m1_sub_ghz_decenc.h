@@ -20,7 +20,9 @@
 
 #define INTERPACKET_GAP_MIN					1500 // uS
 #define INTERPACKET_GAP_MAX					80000//5000 // uS
-#define PACKET_PULSE_TIME_MIN				120 // uS
+#define PACKET_PULSE_TIME_MIN				80  // uS — was 120; lowered to handle Princeton
+                                                //   variants with te≈125µs whose Flipper-recorded
+                                                //   RAW files contain jitter-shortened gaps (~104µs)
 /* Minimum pulse count to trigger decode.  Set to 40 so that Security+ 1.0
  * sub-packets (41-42 pulses each) are captured.  Princeton 24-bit generates
  * 48 pulses so is unaffected.  Shorter protocols (CAME 12-bit = 24 pulses)
