@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.172] - 2026-04-27
+
+### Fixed
+
+- **Sub-GHz: Issue #248 regression tests** — added three host-side unit tests to
+  `tests/test_flipper_subghz.c` covering the fw 0.9.0.122 payload-format bug: the
+  corrupted `Payload: 0x000000000000000lX` (a `%lX` format artifact) is now confirmed
+  to be parsed gracefully (key=0, no crash) for both the 330 MHz Asia/APAC gate-remote
+  file and the 433.92 MHz file from the issue. A third test validates the full load
+  path for a correctly-saved 330 MHz Princeton file.
+- **Sub-GHz Princeton: fix Flipper RAW replay not decoded** — Flipper Zero records Princeton te≈125µs remotes with CC1101 timing jitter that shortens some "1"-bit LOW gaps to ~104µs. Two changes eliminate the failure: (1) `PACKET_PULSE_TIME_MIN` lowered from 120µs to 80µs so the pulse accumulator no longer resets on these short gaps, and (2) Princeton `te_tolerance_pct` raised from 20% to 30% so the per-bit match window (±41µs around te_short=138µs) covers the jittered values. The actual remote continues to work unchanged; Flipper-replayed `.sub` RAW files now decode correctly.
 ## [0.9.0.171] - 2026-04-27
 
 ### Changed
