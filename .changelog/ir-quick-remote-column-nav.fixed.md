@@ -1,3 +1,0 @@
-**IR Quick Remote: fix left/right navigation in portrait mode** — LEFT/RIGHT now moves the selection between columns within the current row. Scan (LEFT long-press) and File browse (RIGHT long-press) retain their functions via long-press; bottom bar hints updated to `H<:Scan` / `H>:File`.
-
-**IR Quick Remote: Momentum-style UI refresh** — inverted filled title bar (inverted header and text); rounded-rectangle button frames (`DrawRFrame`/`DrawRBox`, 2 px radius) with 1 px gap between cells; unmapped slots use a square frame for visual distinction; label text is now vertically centred in each cell; separator line added above the bottom hint bar.
