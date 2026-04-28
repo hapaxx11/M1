@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.174] - 2026-04-28
+
+### Fixed
+
+- **Web Updater: fix firmware download blocked by CORS policy** — GitHub's CDN changed
+  from `objects.githubusercontent.com` to `release-assets.githubusercontent.com`; the new
+  CDN does not include `Access-Control-Allow-Origin` headers. The web updater now catches
+  the resulting CORS block and automatically retries the download through its CORS proxy
+  list (`corsproxy.io` → `proxy.corsfix.com`).
 ## [0.9.0.173] - 2026-04-27
 
 ### Fixed
