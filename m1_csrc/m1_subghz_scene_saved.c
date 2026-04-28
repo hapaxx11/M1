@@ -317,30 +317,15 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                 return true;
             }
 
-            /* Parsed (static-key) files: inline blocking replay in this scene */
+            /* Parsed (static-key) files: inline blocking replay in this scene.
+             * NOISE (RAW) files always take the if (is_raw_file) branch above
+             * and open the Read Raw scene — they never reach this path.
+             * Here we only handle PACKET/key files which need the key encoder
+             * to reconstruct the OOK waveform from protocol + key fields. */
             {
                 uint8_t ret;
 
-                /* M1 native NOISE files (.sgh) are already in the streaming format
-                 * expected by the raw replay engine.  Bypass the conversion/temp-file
-                 * path and feed the original file directly.  This fixes "Memory error"
-                 * failures when emulating C3.12/SiN360-produced .sgh recordings.
-                 *
-                 * The dispatch logic is encapsulated in flipper_subghz_emulate_path()
-                 * so that it can be verified in isolation by host-side unit tests. */
-                if (flipper_subghz_emulate_path(is_raw_file, saved_signal.is_m1_native)
-                        == FLIPPER_SUBGHZ_EMULATE_DIRECT)
-                {
-                    uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
-                    if (mod == MODULATION_UNKNOWN)
-                        mod = MODULATION_OOK;
-                    ret = sub_ghz_replay_datafile(saved_filepath,
-                                                  saved_signal.frequency, mod);
-                }
-                else
-                {
-                    ret = sub_ghz_replay_flipper_file(saved_filepath);
-                }
+                ret = sub_ghz_replay_flipper_file(saved_filepath);
 
                 if (ret == 0)
                 {
