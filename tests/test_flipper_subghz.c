@@ -381,6 +381,53 @@ void test_load_m1_native_noise_lf_only(void)
 	remove(path);
 }
 
+void test_load_m1_native_noise_long_data_line(void)
+{
+	/* Regression test for issue #262: C3.12/SiN360 .sgh files with very long
+	 * Data: lines (typically 2000+ chars) caused "Memory error" when Emulate
+	 * was chosen because the file was routed through sub_ghz_replay_flipper_file()
+	 * instead of sub_ghz_replay_datafile().
+	 *
+	 * FF_LINE_BUF_LEN (512) causes ff_read_line() to truncate long lines, so
+	 * flipper_subghz_load() only parses ~90 samples from the first chunk.
+	 * This is acceptable: raw_count > 0 still ensures is_raw_file = true, which
+	 * triggers the DIRECT replay path that streams the full original file without
+	 * truncation.  The key assertions are is_m1_native and raw_count > 0. */
+	const char *path = "/tmp/test_c3_long_line.sgh";
+	FILE *f = fopen(path, "wb"); /* binary: \r\n written literally */
+	TEST_ASSERT_NOT_NULL(f);
+	fputs("Filetype: M1 SubGHz NOISE\r\n", f);
+	fputs("Version: 0.8\r\n", f);
+	fputs("Frequency: 433920000\r\n", f);
+	fputs("Modulation: OOK\r\n", f);
+	/* Write 150 values on one Data: line — line is ~616 chars, well over
+	 * FF_LINE_BUF_LEN (512), matching the C3.12 per-line sample density. */
+	fputs("Data:", f);
+	for (int i = 0; i < 150; i++)
+		fprintf(f, " %d", 100 + (i % 50));
+	fputs("\r\n", f);
+	fclose(f);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_RAW, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	/* At least some samples must be parsed from the truncated first read
+	 * so open_saved_browser() sets is_raw_file = true. */
+	TEST_ASSERT_TRUE(sig.raw_count > 0);
+
+	/* The emulate path for this file must be DIRECT — bypass conversion */
+	bool is_raw = (sig.type == FLIPPER_SUBGHZ_TYPE_RAW);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_EMULATE_DIRECT,
+	    flipper_subghz_emulate_path(is_raw, sig.is_m1_native));
+
+	remove(path);
+}
+
 void test_load_flipper_raw_not_m1_native(void)
 {
 	/* Flipper .sub RAW file — must NOT set is_m1_native */
@@ -849,6 +896,7 @@ int main(void)
 	/* flipper_subghz_load() with actual files — is_m1_native flag and CRLF/LF */
 	RUN_TEST(test_load_m1_native_noise_sets_flag);
 	RUN_TEST(test_load_m1_native_noise_lf_only);
+	RUN_TEST(test_load_m1_native_noise_long_data_line);
 	RUN_TEST(test_load_flipper_raw_not_m1_native);
 	RUN_TEST(test_load_flipper_key_packet_fields);
 	RUN_TEST(test_load_m1_native_packet_not_noise);
