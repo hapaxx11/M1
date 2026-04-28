@@ -257,6 +257,16 @@ S_M1_Menu_t menu_Setting_ESP32_Firmware_Update =
     "Firmware Update", setting_esp32_firmware_update, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Setting_ESP32_Backup =
+{
+    "Backup Flash", setting_esp32_backup_flash, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Setting_ESP32_Info =
+{
+    "ESP32 Info", setting_esp32_check_info, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 /*---------------------- > Settings-ESP32 Update-End ----------------------*/
 
 S_M1_Menu_t menu_Settings_LCD_and_Notifications =
@@ -286,7 +296,7 @@ S_M1_Menu_t menu_Setting_Firmware_Update =
 
 S_M1_Menu_t menu_Setting_ESP32 =
 {
-    "ESP32 update", setting_esp32_init, setting_esp32_exit, setting_esp32_xkey_handler, 3, 0, NULL, setting_esp32_gui_update, {&menu_Setting_ESP32_Image_File, &menu_Setting_ESP32_Start_Address, &menu_Setting_ESP32_Firmware_Update}
+    "ESP32 update", setting_esp32_init, setting_esp32_exit, setting_esp32_xkey_handler, 5, 0, NULL, setting_esp32_gui_update, {&menu_Setting_ESP32_Image_File, &menu_Setting_ESP32_Start_Address, &menu_Setting_ESP32_Firmware_Update, &menu_Setting_ESP32_Backup, &menu_Setting_ESP32_Info}
 };
 
 S_M1_Menu_t menu_Settings_About =
@@ -307,23 +317,249 @@ S_M1_Menu_t menu_Settings =
 
 /*--------------------------------- > Wifi -----------------------------------*/
 
-S_M1_Menu_t menu_Wifi_Config =
-{
-    "Config", wifi_config, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
 S_M1_Menu_t menu_Wifi_Scan_AP =
 {
     "Scan AP", wifi_scan_ap, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-S_M1_Menu_t menu_Wifi =
+S_M1_Menu_t menu_Wifi_Scan_Stations =
 {
-    "Wifi", menu_wifi_init, NULL, NULL, 2, 0, menu_m1_icon_wifi, NULL,
-    {&menu_Wifi_Config, &menu_Wifi_Scan_AP}
+    "Scan Stations", wifi_station_scan, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
-/*--------------------------------- > Wifi -----------------------------------*/
+/*------------------------- > Wifi-Sniffers submenu --------------------------*/
+
+S_M1_Menu_t menu_Wifi_Sniff_All =
+{
+    "All Packets", wifi_sniff_all, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniff_Beacon =
+{
+    "Beacons", wifi_sniff_beacon, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniff_Probe =
+{
+    "Probe Requests", wifi_sniff_probe, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniff_Deauth =
+{
+    "Deauth", wifi_sniff_deauth, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniff_EAPOL =
+{
+    "EAPOL/Handshake", wifi_sniff_eapol, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniff_Pwnagotchi =
+{
+    "Pwnagotchi", wifi_sniff_pwnagotchi, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniff_SAE =
+{
+    "SAE/WPA3", wifi_sniff_sae, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Signal_Monitor =
+{
+    "Signal Monitor", wifi_signal_monitor, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Sniffers =
+{
+    "Sniffers", NULL, NULL, NULL, 8, 0, NULL, NULL,
+    {&menu_Wifi_Sniff_All, &menu_Wifi_Sniff_Beacon, &menu_Wifi_Sniff_Probe,
+     &menu_Wifi_Sniff_Deauth, &menu_Wifi_Sniff_EAPOL, &menu_Wifi_Sniff_Pwnagotchi,
+     &menu_Wifi_Sniff_SAE, &menu_Wifi_Signal_Monitor}
+};
+
+/*------------------------- > Wifi-Sniffers end ------------------------------*/
+
+/*------------------------- > Wifi-Scanners submenu --------------------------*/
+
+S_M1_Menu_t menu_Wifi_Scanner_SSH =
+{
+    "SSH Scan", wifi_scan_ssh, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Scanner_Telnet =
+{
+    "Telnet Scan", wifi_scan_telnet, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Scanner_Ports =
+{
+    "Port Scan", wifi_scan_ports, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Scanners =
+{
+    "Scanners", NULL, NULL, NULL, 3, 0, NULL, NULL,
+    {&menu_Wifi_Scanner_SSH, &menu_Wifi_Scanner_Telnet, &menu_Wifi_Scanner_Ports}
+};
+
+/*------------------------- > Wifi-Scanners end ------------------------------*/
+
+/*------------------------- > Wifi-Config submenu ----------------------------*/
+
+S_M1_Menu_t menu_Wifi_Config_View_AP =
+{
+    "View AP Info", wifi_general_view_ap_info, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Select_APs =
+{
+    "Select APs", wifi_general_select_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Select_Stations =
+{
+    "Select Stations", wifi_general_select_stations, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Save_APs =
+{
+    "Save APs", wifi_general_save_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Load_APs =
+{
+    "Load APs", wifi_general_load_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Clear_APs =
+{
+    "Clear APs", wifi_general_clear_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Load_SSIDs =
+{
+    "Load SSIDs", wifi_general_load_ssids, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Clear_SSIDs =
+{
+    "Clear SSIDs", wifi_general_clear_ssids, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Portal_SSID =
+{
+    "Portal SSID", wifi_general_set_ep_ssid, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_EP_HTML =
+{
+    "EP HTML File", wifi_general_select_ep_html, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Portal =
+{
+    "Portal", NULL, NULL, NULL, 2, 0, NULL, NULL,
+    {&menu_Wifi_Config_Portal_SSID, &menu_Wifi_Config_EP_HTML}
+};
+
+S_M1_Menu_t menu_Wifi_Config_Join =
+{
+    "Join WiFi", wifi_general_join_wifi, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Set_MACs =
+{
+    "Set MACs", wifi_general_set_macs, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Set_Channel =
+{
+    "Set Channel", wifi_general_set_channel, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Shutdown =
+{
+    "Shutdown WiFi", wifi_general_shutdown_wifi, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Radio =
+{
+    "Radio", NULL, NULL, NULL, 4, 0, NULL, NULL,
+    {&menu_Wifi_Config_Join, &menu_Wifi_Config_Set_MACs,
+     &menu_Wifi_Config_Set_Channel, &menu_Wifi_Config_Shutdown}
+};
+
+S_M1_Menu_t menu_Wifi_Config =
+{
+    "Config", NULL, NULL, NULL, 10, 0, NULL, NULL,
+    {&menu_Wifi_Config_View_AP, &menu_Wifi_Config_Select_APs, &menu_Wifi_Config_Select_Stations,
+     &menu_Wifi_Config_Save_APs, &menu_Wifi_Config_Load_APs, &menu_Wifi_Config_Clear_APs,
+     &menu_Wifi_Config_Load_SSIDs, &menu_Wifi_Config_Clear_SSIDs,
+     &menu_Wifi_Config_Portal, &menu_Wifi_Config_Radio}
+};
+
+/*------------------------- > Wifi-Config end --------------------------------*/
+
+/*------------------------- > Wifi-Attacks submenu --------------------------*/
+
+S_M1_Menu_t menu_Wifi_Attack_Deauth =
+{
+    "Deauth", wifi_attack_deauth, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Beacon =
+{
+    "Beacon Spam", wifi_attack_beacon, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_AP_Clone =
+{
+    "AP Clone", wifi_attack_ap_clone, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Rickroll =
+{
+    "Rickroll", wifi_attack_rickroll, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Evil_Portal =
+{
+    "Evil Portal", wifi_evil_portal, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Probe_Flood =
+{
+    "Probe Flood", wifi_probe_flood, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Karma =
+{
+    "Karma", wifi_attack_karma, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Karma_Portal =
+{
+    "Karma Portal", wifi_attack_karma_portal, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attacks =
+{
+    "Attacks", NULL, NULL, NULL, 8, 0, NULL, NULL,
+    {&menu_Wifi_Attack_Deauth, &menu_Wifi_Attack_Beacon, &menu_Wifi_Attack_AP_Clone,
+     &menu_Wifi_Attack_Rickroll, &menu_Wifi_Attack_Evil_Portal, &menu_Wifi_Attack_Probe_Flood,
+     &menu_Wifi_Attack_Karma, &menu_Wifi_Attack_Karma_Portal}
+};
+
+/*------------------------- > Wifi-Attacks end ------------------------------*/
+
+S_M1_Menu_t menu_Wifi =
+{
+    "Wifi", menu_wifi_init, NULL, NULL, 6, 0, menu_m1_icon_wifi, NULL,
+    {&menu_Wifi_Scan_AP, &menu_Wifi_Scan_Stations, &menu_Wifi_Sniffers, &menu_Wifi_Scanners,
+     &menu_Wifi_Attacks, &menu_Wifi_Config}
+};
+
+/*------------------------------- > Bluetooth --------------------------------*/
 S_M1_Menu_t menu_Bluetooth_Config =
 {
     "Config", bluetooth_config, NULL, NULL, 0, 0, NULL, NULL, NULL
@@ -339,10 +575,117 @@ S_M1_Menu_t menu_Bluetooth_Advertise =
     "Advertise", bluetooth_advertise, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_BT_Sniff_Analyzer =
+{
+    "BT Analyzer", ble_sniff_analyzer, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Sniff_Generic =
+{
+    "BT Sniffer", ble_sniff_generic, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Sniff_Flipper =
+{
+    "Flipper Sniff", ble_sniff_flipper, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Sniff_Airtag =
+{
+    "Airtag Sniff", ble_sniff_airtag, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Monitor_Airtag =
+{
+    "Airtag Monitor", ble_monitor_airtag, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Detect_Skimmers =
+{
+    "Detect Skimmers", ble_detect_skimmers, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Sniff_Flock =
+{
+    "Flock Sniff", ble_sniff_flock, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Detect_Meta =
+{
+    "Meta Detect", ble_detect_meta, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Sniffers =
+{
+    "Sniffers", NULL, NULL, NULL, 8, 0, NULL, NULL,
+    {&menu_BT_Sniff_Analyzer, &menu_BT_Sniff_Generic, &menu_BT_Sniff_Flipper,
+     &menu_BT_Sniff_Airtag, &menu_BT_Monitor_Airtag, &menu_BT_Detect_Skimmers,
+     &menu_BT_Sniff_Flock, &menu_BT_Detect_Meta}
+};
+
+S_M1_Menu_t menu_BT_Wardrive =
+{
+    "BT Wardrive", ble_wardrive, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Wardrive_Cont =
+{
+    "Wardrive Cont", ble_wardrive_continuous, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Wardrive_Flock =
+{
+    "Flock Wardrive", ble_wardrive_flock, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Wardriving =
+{
+    "Wardrive", NULL, NULL, NULL, 3, 0, NULL, NULL,
+    {&menu_BT_Wardrive, &menu_BT_Wardrive_Cont, &menu_BT_Wardrive_Flock}
+};
+
+S_M1_Menu_t menu_BLE_Sour_Apple =
+{
+    "Sour Apple", ble_spam_sour_apple, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BLE_Swiftpair =
+{
+    "Swiftpair Spam", ble_spam_swiftpair, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BLE_Samsung =
+{
+    "Samsung Spam", ble_spam_samsung, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BLE_Flipper =
+{
+    "Flipper Spam", ble_spam_flipper, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BLE_Spam_All =
+{
+    "BT Spam All", ble_spam_all, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BLE_Spoof_Airtag =
+{
+    "Spoof Airtag", ble_spoof_airtag, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_Attacks =
+{
+    "Attacks", NULL, NULL, NULL, 6, 0, NULL, NULL,
+    {&menu_BLE_Sour_Apple, &menu_BLE_Swiftpair, &menu_BLE_Samsung,
+     &menu_BLE_Flipper, &menu_BLE_Spam_All, &menu_BLE_Spoof_Airtag}
+};
+
 S_M1_Menu_t menu_Bluetooth =
 {
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 3, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Config, &menu_Bluetooth_Scan, &menu_Bluetooth_Advertise}
+    "Bluetooth", menu_bluetooth_init, NULL, NULL, 6, 0, menu_m1_icon_bluetooth, NULL,
+    {&menu_Bluetooth_Scan, &menu_Bluetooth_Advertise, &menu_BT_Sniffers,
+     &menu_BT_Wardriving, &menu_BT_Attacks, &menu_Bluetooth_Config}
 };
 
 /*------------------------------- > MAIN MENU --------------------------------*/

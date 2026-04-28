@@ -824,8 +824,9 @@ static void  USBD_CMPSIT_HIDMouseDesc(USBD_HandleTypeDef *pdev, uint32_t pConf,
   static USBD_HIDDescTypeDef *pHidMouseDesc;
 
   /* Append HID Interface descriptor to Configuration descriptor */
+  /* Class=0x03 (HID), SubClass=0x01 (Boot), Protocol=0x01 (Keyboard) */
   __USBD_CMPSIT_SET_IF(pdev->tclasslist[pdev->classId].Ifs[0], 0U, \
-                       (uint8_t)(pdev->tclasslist[pdev->classId].NumEps), 0x03U, 0x01U, 0x02U, 0U);
+                       (uint8_t)(pdev->tclasslist[pdev->classId].NumEps), 0x03U, 0x01U, 0x01U, 0U);
 
   /* Append HID Functional descriptor to Configuration descriptor */
   pHidMouseDesc = ((USBD_HIDDescTypeDef *)(pConf + *Sze));

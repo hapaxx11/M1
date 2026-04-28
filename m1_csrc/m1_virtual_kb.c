@@ -13,6 +13,7 @@
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
@@ -32,6 +33,7 @@
 #define M1_VIRTUAL_KEY_NONE				0x00 // NULL
 
 #define M1_VIRTUAL_KB_FILENAME_MAX		20
+#define M1_VIRTUAL_TEXT_MAX				63
 //#define M1_VIRTUAL_KBS_DATA_MAX			14 // 10 + 4 spaces
 uint8_t M1_VIRTUAL_KBS_DATA_MAX;
 
@@ -123,6 +125,27 @@ uint8_t M1_VIRTUAL_KBS_DATA_MAX;
 
 #define M1_VKBS_NUM_OF_FUNCTION_KEYS		2
 
+// Defines for full text keyboard
+#define M1_VKBT_COLUMN_SIZE					12
+#define M1_VKBT_ROW_SIZE					3
+#define M1_VKBT_LAYER_COUNT					4
+#define M1_VKBT_KEY_STEP_X					10
+#define M1_VKBT_ROW_STEP_Y					10
+#define M1_VKBT_LEFT_POS_X					3
+#define M1_VKBT_FIRST_ROW_POS_Y				36
+#define M1_VKBT_DESCRIPTION_POS_X			2
+#define M1_VKBT_DESCRIPTION_POS_Y			9
+#define M1_VKBT_TEXT_POS_X					2
+#define M1_VKBT_TEXT_POS_Y					22
+#define M1_VKBT_TEXT_FRAME_POS_Y			12
+#define M1_VKBT_TEXT_FRAME_HEIGHT			13
+#define M1_VKBT_TEXT_VISIBLE_CHARS			25
+
+#define M1_VKBT_KEY_SHIFT					0x80
+#define M1_VKBT_KEY_NUM						0x81
+#define M1_VKBT_KEY_SYM						0x82
+#define M1_VKBT_KEY_SPACE					0x83
+
 //************************** C O N S T A N T **********************************/
 
 // 'backspace key', 15x10px
@@ -170,6 +193,29 @@ const uint8_t m1_vkbs_map[M1_VIRTUAL_KBS_ROW_SIZE][M1_VIRTUAL_KBS_COLUMN_SIZE] =
 		{'6', '7', '8', '9', '0', 'D', 'E', 'F', M1_VIRTUAL_KEY_ENTER}
 };
 
+const uint8_t m1_vkbt_map[M1_VKBT_LAYER_COUNT][M1_VKBT_ROW_SIZE][M1_VKBT_COLUMN_SIZE] =
+{
+	{
+		{'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', M1_VKBT_KEY_SHIFT, M1_VIRTUAL_KEY_BS},
+		{'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '-', M1_VKBT_KEY_NUM, M1_VIRTUAL_KEY_ENTER},
+		{'z', 'x', 'c', 'v', 'b', 'n', 'm', '_', '.', '/', M1_VKBT_KEY_SYM, M1_VKBT_KEY_SPACE}
+	},
+	{
+		{'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', M1_VKBT_KEY_SHIFT, M1_VIRTUAL_KEY_BS},
+		{'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '-', M1_VKBT_KEY_NUM, M1_VIRTUAL_KEY_ENTER},
+		{'Z', 'X', 'C', 'V', 'B', 'N', 'M', '_', '.', '/', M1_VKBT_KEY_SYM, M1_VKBT_KEY_SPACE}
+	},
+	{
+		{'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', M1_VKBT_KEY_SHIFT, M1_VIRTUAL_KEY_BS},
+		{'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', M1_VKBT_KEY_NUM, M1_VIRTUAL_KEY_ENTER},
+		{'-', '_', '=', '+', '[', ']', '{', '}', '.', ',', M1_VKBT_KEY_SYM, M1_VKBT_KEY_SPACE}
+	},
+	{
+		{'!', '@', '#', '$', '%', '^', '&', '*', '(', ')', M1_VKBT_KEY_SHIFT, M1_VIRTUAL_KEY_BS},
+		{'-', '_', '=', '+', '[', ']', '{', '}', '\\', '|', M1_VKBT_KEY_NUM, M1_VIRTUAL_KEY_ENTER},
+		{';', ':', '\'', '"', ',', '.', '<', '>', '?', '/', M1_VKBT_KEY_SYM, M1_VKBT_KEY_SPACE}
+	}
+};
 
 const uint8_t m1_vkb_func_key_codes[M1_VKB_NUM_OF_FUNCTION_KEYS] = {M1_VIRTUAL_KEY_BS, M1_VIRTUAL_KEY_ENTER};
 
@@ -191,6 +237,14 @@ typedef enum
 	M1_VKB_FUNC_ENTER_KEY_ID,
 	M1_VKB_FUNC_UNDEFINED_KEY_ID
 } S_M1_VKB_Func_Key_ID;
+
+typedef enum
+{
+	M1_VKBT_LAYER_LOWER = 0,
+	M1_VKBT_LAYER_UPPER,
+	M1_VKBT_LAYER_NUM,
+	M1_VKBT_LAYER_SYM
+} S_M1_VKBT_Layer;
 
 /***************************** V A R I A B L E S ******************************/
 S_M1_VKB_X_Key m1_x_keys[M1_VKB_NUM_OF_FUNCTION_KEYS] =
@@ -220,10 +274,249 @@ S_M1_VKB_X_Key m1_x_keys[M1_VKB_NUM_OF_FUNCTION_KEYS] =
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 uint8_t m1_vkb_get_filename(char *description, char *default_name, char *new_name);
+uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, uint8_t max_len);
 uint8_t m1_vkbs_get_data(char *description, char *data_buffer);
 S_M1_VKB_Func_Key_ID m1_vkb_check_function_key(uint8_t kb_key);
+static void m1_vkbt_draw(char *description, char *text, uint8_t len, uint8_t max_len, uint8_t row_id, uint8_t col_id, S_M1_VKBT_Layer layer);
+static void m1_vkbt_key_label(uint8_t kb_key, S_M1_VKBT_Layer layer, char label[3]);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
+
+
+/*============================================================================*/
+/**
+ * @brief: This function displays a full text keyboard for passwords and labels
+ * @param: max_len may be up to 63 bytes
+ * @retval 0 if user cancels or accepts an empty value, otherwise text length
+ */
+/*============================================================================*/
+uint8_t m1_vkb_get_text(char *description, char *default_text, char *new_text, uint8_t max_len)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	S_M1_VKBT_Layer layer = M1_VKBT_LAYER_LOWER;
+	uint8_t row_id = 0;
+	uint8_t col_id = 0;
+	uint8_t len = 0;
+	uint8_t exit_ok = 0;
+	char text[M1_VIRTUAL_TEXT_MAX + 1];
+
+	if (new_text == NULL || max_len == 0)
+	{
+		return 0;
+	}
+	if (max_len > M1_VIRTUAL_TEXT_MAX)
+	{
+		max_len = M1_VIRTUAL_TEXT_MAX;
+	}
+
+	memset(text, 0, sizeof(text));
+	if (default_text != NULL)
+	{
+		strncpy(text, default_text, max_len);
+		text[max_len] = '\0';
+		len = (uint8_t)strnlen(text, max_len);
+	}
+
+	m1_vkbt_draw(description, text, len, max_len, row_id, col_id, layer);
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret==pdTRUE && q_item.q_evt_type==Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (ret != pdTRUE)
+			{
+				continue;
+			}
+
+			if (this_button_status.event[BUTTON_OK_KP_ID]==BUTTON_EVENT_CLICK)
+			{
+				uint8_t kb_key = m1_vkbt_map[layer][row_id][col_id];
+
+				if (kb_key == M1_VIRTUAL_KEY_ENTER)
+				{
+					exit_ok = 1;
+					strcpy(new_text, text);
+				}
+				else if (kb_key == M1_VIRTUAL_KEY_BS)
+				{
+					if (len)
+					{
+						len--;
+						text[len] = '\0';
+					}
+				}
+				else if (kb_key == M1_VKBT_KEY_SHIFT)
+				{
+					layer = (layer == M1_VKBT_LAYER_UPPER) ? M1_VKBT_LAYER_LOWER : M1_VKBT_LAYER_UPPER;
+				}
+				else if (kb_key == M1_VKBT_KEY_NUM)
+				{
+					layer = (layer == M1_VKBT_LAYER_NUM) ? M1_VKBT_LAYER_LOWER : M1_VKBT_LAYER_NUM;
+				}
+				else if (kb_key == M1_VKBT_KEY_SYM)
+				{
+					layer = (layer == M1_VKBT_LAYER_SYM) ? M1_VKBT_LAYER_LOWER : M1_VKBT_LAYER_SYM;
+				}
+				else if (kb_key == M1_VKBT_KEY_SPACE)
+				{
+					if (len < max_len)
+					{
+						text[len++] = ' ';
+						text[len] = '\0';
+					}
+				}
+				else if (len < max_len)
+				{
+					text[len++] = (char)kb_key;
+					text[len] = '\0';
+				}
+			}
+			else if (this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK)
+			{
+				exit_ok = 1;
+				len = 0;
+				new_text[0] = '\0';
+			}
+			else if (this_button_status.event[BUTTON_RIGHT_KP_ID]==BUTTON_EVENT_CLICK)
+			{
+				col_id++;
+				if (col_id >= M1_VKBT_COLUMN_SIZE) col_id = 0;
+			}
+			else if (this_button_status.event[BUTTON_LEFT_KP_ID]==BUTTON_EVENT_CLICK)
+			{
+				col_id = (col_id == 0) ? M1_VKBT_COLUMN_SIZE - 1 : col_id - 1;
+			}
+			else if (this_button_status.event[BUTTON_DOWN_KP_ID]==BUTTON_EVENT_CLICK)
+			{
+				row_id++;
+				if (row_id >= M1_VKBT_ROW_SIZE) row_id = 0;
+			}
+			else if (this_button_status.event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK)
+			{
+				row_id = (row_id == 0) ? M1_VKBT_ROW_SIZE - 1 : row_id - 1;
+			}
+
+			if (exit_ok)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			m1_vkbt_draw(description, text, len, max_len, row_id, col_id, layer);
+		}
+	}
+
+	return len;
+}
+
+
+static void m1_vkbt_draw(char *description, char *text, uint8_t len, uint8_t max_len, uint8_t row_id, uint8_t col_id, S_M1_VKBT_Layer layer)
+{
+	char line[M1_VKBT_TEXT_VISIBLE_CHARS + 1];
+	char label[3];
+	uint8_t y;
+	const char *visible_text = text;
+
+	if (len > M1_VKBT_TEXT_VISIBLE_CHARS)
+	{
+		visible_text = &text[len - M1_VKBT_TEXT_VISIBLE_CHARS];
+	}
+	strncpy(line, visible_text, M1_VKBT_TEXT_VISIBLE_CHARS);
+	line[M1_VKBT_TEXT_VISIBLE_CHARS] = '\0';
+
+	m1_u8g2_firstpage();
+	do
+	{
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, u8g2_font_5x8_tf);
+		if (description != NULL)
+		{
+			char desc[22];
+			strncpy(desc, description, sizeof(desc) - 1);
+			desc[sizeof(desc) - 1] = '\0';
+			u8g2_DrawStr(&m1_u8g2, M1_VKBT_DESCRIPTION_POS_X, M1_VKBT_DESCRIPTION_POS_Y, desc);
+		}
+		snprintf(line, sizeof(line), "%d/%d", len, max_len);
+		u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - (strlen(line) * 5), M1_VKBT_DESCRIPTION_POS_Y, line);
+
+		u8g2_DrawFrame(&m1_u8g2, 0, M1_VKBT_TEXT_FRAME_POS_Y, M1_LCD_DISPLAY_WIDTH, M1_VKBT_TEXT_FRAME_HEIGHT);
+		if (len > M1_VKBT_TEXT_VISIBLE_CHARS)
+		{
+			visible_text = &text[len - M1_VKBT_TEXT_VISIBLE_CHARS];
+		}
+		else
+		{
+			visible_text = text;
+		}
+		strncpy(line, visible_text, M1_VKBT_TEXT_VISIBLE_CHARS);
+		line[M1_VKBT_TEXT_VISIBLE_CHARS] = '\0';
+		u8g2_DrawStr(&m1_u8g2, M1_VKBT_TEXT_POS_X, M1_VKBT_TEXT_POS_Y, line);
+
+		for (uint8_t row = 0; row < M1_VKBT_ROW_SIZE; row++)
+		{
+			y = M1_VKBT_FIRST_ROW_POS_Y + row * M1_VKBT_ROW_STEP_Y;
+			for (uint8_t col = 0; col < M1_VKBT_COLUMN_SIZE; col++)
+			{
+				uint8_t x = M1_VKBT_LEFT_POS_X + col * M1_VKBT_KEY_STEP_X;
+				m1_vkbt_key_label(m1_vkbt_map[layer][row][col], layer, label);
+
+				if (row == row_id && col == col_id)
+				{
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+					u8g2_DrawBox(&m1_u8g2, x - 1, y - 8, 10, 9);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+					u8g2_DrawStr(&m1_u8g2, x, y, label);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				}
+				else
+				{
+					u8g2_DrawStr(&m1_u8g2, x, y, label);
+				}
+			}
+		}
+	} while (m1_u8g2_nextpage());
+}
+
+
+static void m1_vkbt_key_label(uint8_t kb_key, S_M1_VKBT_Layer layer, char label[3])
+{
+	label[0] = '\0';
+	label[1] = '\0';
+	label[2] = '\0';
+
+	if (kb_key == M1_VIRTUAL_KEY_BS)
+	{
+		strcpy(label, "BS");
+	}
+	else if (kb_key == M1_VIRTUAL_KEY_ENTER)
+	{
+		strcpy(label, "OK");
+	}
+	else if (kb_key == M1_VKBT_KEY_SHIFT)
+	{
+		strcpy(label, (layer == M1_VKBT_LAYER_UPPER) ? "aa" : "Aa");
+	}
+	else if (kb_key == M1_VKBT_KEY_NUM)
+	{
+		strcpy(label, (layer == M1_VKBT_LAYER_NUM) ? "ab" : "12");
+	}
+	else if (kb_key == M1_VKBT_KEY_SYM)
+	{
+		strcpy(label, (layer == M1_VKBT_LAYER_SYM) ? "ab" : "#+");
+	}
+	else if (kb_key == M1_VKBT_KEY_SPACE)
+	{
+		strcpy(label, "SP");
+	}
+	else
+	{
+		label[0] = (char)kb_key;
+		label[1] = '\0';
+	}
+}
 
 
 /*============================================================================*/
@@ -1060,4 +1353,3 @@ uint8_t m1_vkbs_get_data(char *description, char *data_buffer)
 
 	return len;
 }// uint8_t m1_vkbs_get_data(char *description, char *data_buffer)
-

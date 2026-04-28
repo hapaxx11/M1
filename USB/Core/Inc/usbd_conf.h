@@ -59,9 +59,9 @@ extern "C" {
    * Compisite CDC+MSC
    *
   **/
-#define USBD_MAX_NUM_INTERFACES                     5u //1U
+#define USBD_MAX_NUM_INTERFACES                     6u //1U
 #define USBD_MAX_NUM_CONFIGURATION                  1U
-#define USBD_MAX_SUPPORTED_CLASS                    2U
+#define USBD_MAX_SUPPORTED_CLASS                    3U
 #define USBD_MAX_CLASS_ENDPOINTS                    3U
 #define USBD_MAX_CLASS_INTERFACES                   2U
 #define USBD_MAX_STR_DESC_SIZ                       0x200U
@@ -82,6 +82,7 @@ extern "C" {
 /* Activate CDC and MSC classes in composite builder */
 #define USBD_CMPSIT_ACTIVATE_CDC                    1U
 #define USBD_CMPSIT_ACTIVATE_MSC                    1U
+#define USBD_CMPSIT_ACTIVATE_HID                    1U
 
 #define MSC_IN_EP                                   0x81U   /* Bulk IN, MSC */
 #define MSC_OUT_EP                                  0x01U   /* Bulk OUT, MSC */
@@ -89,6 +90,7 @@ extern "C" {
 #define CDC_IN_EP                                   0x82U   /* Bulk IN, CDC */
 #define CDC_OUT_EP                                  0x02U   /* Bulk OUT, CDC */
 #define CDC_CMD_EP                                  0x83U   /* Interrupt, CDC commands */
+#define HID_IN_EP                                   0x84U   /* Interrupt IN, HID keyboard */
 
 #elif M1_USB_MODE == M1_CFG_USB_MSC
   /*

@@ -46,8 +46,8 @@
 
 #define MAIN_MENU_LOGO_TOP_POS_Y			24
 #define MAIN_MENU_LOGO_LEFT_POS_X			0
-#define MAIN_MENU_LOGO_WIDTH				26
-#define MAIN_MENU_LOGO_HEIGHT				14
+#define MAIN_MENU_LOGO_WIDTH				46
+#define MAIN_MENU_LOGO_HEIGHT				38
 
 #define MAIN_MENU_LOGO_FONT					M1_MAIN_LOGO_FONT_1B
 
@@ -448,9 +448,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	if ( menu_level_id==0 )
 	{
 		// Draw logo for main menu
-		u8g2_DrawXBMP(&m1_u8g2, MAIN_MENU_LOGO_LEFT_POS_X, MAIN_MENU_LOGO_TOP_POS_Y, MAIN_MENU_LOGO_WIDTH, MAIN_MENU_LOGO_HEIGHT, m1_logo_26x14);
-		u8g2_SetFont(&m1_u8g2, MAIN_MENU_LOGO_FONT);
-		u8g2_DrawStr(&m1_u8g2, MAIN_MENU_LOGO_LEFT_POS_X + MAIN_MENU_LOGO_WIDTH + 1, MAIN_MENU_LOGO_TOP_POS_Y + MAIN_MENU_LOGO_HEIGHT, "M1");
+		u8g2_DrawXBMP(&m1_u8g2, MAIN_MENU_LOGO_LEFT_POS_X, MAIN_MENU_LOGO_TOP_POS_Y, MAIN_MENU_LOGO_WIDTH, MAIN_MENU_LOGO_HEIGHT, m1_menu_logo);
 	} // if ( menu_level_id==0 )
 
 	// Draw the scroll bar

@@ -1,59 +1,7 @@
-# STM32CubeIDE generated files
-Debug/
-Release/*.o
-Release/*.d
-Release/*.su
-Release/*.cyclo
-*.launch
-
-# Build files
-*.o
-*.d
-*.su
-
-# IDE specific files
-*.swp
-*.swo
-*~
-
-# Dependencies
-Drivers/*.o
-Drivers/*.d
-Drivers/*.su
-Drivers/*.cyclo
-Middlewares/*.o
-Middlewares/*.d
-Middlewares/*.su
-Middlewares/*.cyclo
-
-# Documentation
-*.pdf
-*.doc
-*.docx
-*.xls
-*.xlsx
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.backup
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Build output (contains machine-specific paths)
-out/
-
-# Generated compile database (contains local paths)
-compile_commands.json
+.codex
+PROJECT_HANDOFF.md
 build/
-/.cache
-/artifacts
-Release/
-*.bin
+artifacts/
+out/
+*.bak
+*.tmp

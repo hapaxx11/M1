@@ -76,15 +76,18 @@ esp_loader_error_t loader_port_read(uint8_t *data, uint16_t size, uint32_t timeo
     }
 #else
 	size_t to = HAL_GetTick();
-	uint16_t read_n = 0;
-	while ( !read_n )
+	uint16_t total_read = 0;
+	while ( total_read < size )
 	{
-		read_n = m1_ringbuffer_read(& esp32_rb_hdl, data, size);
+		uint16_t n = m1_ringbuffer_read(&esp32_rb_hdl, data + total_read, size - total_read);
+		total_read += n;
+		if ( total_read >= size )
+			break;
 		if ( (HAL_GetTick() - to) > timeout )
 			break;
-		HAL_Delay(10); // Give time for other tasks
-	} // while ( !read_n )
-	if ( read_n )
+		HAL_Delay(1); // Give time for other tasks
+	}
+	if ( total_read >= size )
 	{
 #if SERIAL_FLASHER_DEBUG_TRACE
         transfer_debug_print(data, size, false);
@@ -158,6 +161,12 @@ esp_loader_error_t loader_port_change_transmission_rate(uint32_t baudrate)
     if ( HAL_UART_Init(uart) != HAL_OK ) {
         return ESP_LOADER_ERROR_FAIL;
     }
+
+    /* HAL_UART_Init resets the peripheral and disables custom interrupts.
+       Re-enable RXFNE interrupt so the ring buffer receives data. */
+    __HAL_UART_ENABLE_IT(uart, UART_IT_RXFNE);
+    __HAL_UART_ENABLE_IT(uart, UART_IT_ORE);
+    __HAL_UART_ENABLE_IT(uart, UART_IT_ERR);
 
     return ESP_LOADER_SUCCESS;
 }

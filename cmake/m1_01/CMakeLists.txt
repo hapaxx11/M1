@@ -57,6 +57,7 @@ target_include_directories(m1_01 INTERFACE
     ../../USB
     ../../USB/Class/CDC/Inc
     ../../USB/Class/CDC/Scr
+    ../../USB/Class/HID/Inc
     ../../USB/Class/CompositeBuilder/Inc
     ../../USB/Class/CompositeBuilder/Src
     ../../USB/Class/MSC/Inc
@@ -313,6 +314,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_secplus_v2_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
+    ../../USB/Class/HID/Src/usbd_hid.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c
     ../../USB/Class/MSC/Src/usbd_msc.c
     ../../USB/Class/MSC/Src/usbd_msc_bot.c
@@ -345,6 +347,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_display_data.c
     ../../m1_csrc/m1_esp32_fw_update.c
     ../../m1_csrc/m1_esp32_hal.c
+    ../../m1_csrc/m1_esp32_cmd.c
     ../../m1_csrc/m1_esp_hosted_dummy.c
     ../../m1_csrc/m1_file_browser.c
     ../../m1_csrc/m1_file_util.c

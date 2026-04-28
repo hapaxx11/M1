@@ -514,6 +514,342 @@ static esp_loader_error_t m1_fw_app(FIL *hfile)
 
 /******************************************************************************/
 /**
+  * @brief  Backup ESP32 flash to SD card.
+  *         Connects to ESP32 in download mode, reads 4MB flash, writes to
+  *         /esp32_backup.bin on SD card.
+  * @param  None
+  * @retval None
+  */
+/******************************************************************************/
+void setting_esp32_backup_flash(void)
+{
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+	esp_loader_error_t err;
+	static FIL hfile;
+	FRESULT fres;
+	uint8_t old_op_mode;
+	static uint8_t buffer[ESP32_IMAGE_CHUNK_SIZE];
+	const uint32_t flash_size = 0x400000; /* 4MB */
+	uint32_t offset = 0;
+	UINT bw;
+
+	old_op_mode = m1_device_stat.op_mode;
+	m1_device_stat.op_mode = M1_OPERATION_MODE_FIRMWARE_UPDATE;
+
+	loader_stm32_config_t config = {
+		.huart = &huart_esp,
+		.port_io0 = ESP32_IO9_GPIO_Port,
+		.pin_num_io0 = ESP32_IO9_Pin,
+		.port_rst = ESP32_RESET_GPIO_Port,
+		.pin_num_rst = ESP32_RESET_Pin,
+	};
+
+	/* Clear info box area and show debug status */
+	#define BACKUP_DBG_CLEAR() do { \
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
+		u8g2_DrawBox(&m1_u8g2, 0, INFO_BOX_Y_POS_ROW_1 - M1_SUB_MENU_FONT_HEIGHT, 128, 30); \
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); \
+	} while(0)
+
+	BACKUP_DBG_CLEAR();
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "1:UART deinit");
+	m1_u8g2_nextpage();
+	HAL_Delay(1000);
+
+	esp32_UART_deinit();
+
+	BACKUP_DBG_CLEAR();
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "2:loader init");
+	m1_u8g2_nextpage();
+	HAL_Delay(1000);
+
+	loader_port_stm32_init(&config);
+	esp32_UART_init();
+
+	BACKUP_DBG_CLEAR();
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "3:IO9 setup");
+	m1_u8g2_nextpage();
+	HAL_Delay(1000);
+
+	/* Configure IO9 as output (shared with BUTTON_RIGHT) */
+	GPIO_InitStruct.Pin = ESP32_IO9_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(ESP32_IO9_GPIO_Port, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(ESP32_IO9_GPIO_Port, ESP32_IO9_Pin, GPIO_PIN_SET);
+
+	BACKUP_DBG_CLEAR();
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "4:Connecting+Stub");
+	m1_u8g2_nextpage();
+	HAL_Delay(1000);
+
+	err = connect_to_target_with_stub(ESP32_UART_BAUDRATE, ESP32_UART_BAUDRATE);
+	if (err != ESP_LOADER_SUCCESS)
+	{
+		BACKUP_DBG_CLEAR();
+		m1_info_box_display_draw(INFO_BOX_ROW_1, "5:Connect FAIL!");
+		m1_u8g2_nextpage();
+		HAL_Delay(5000);
+		goto cleanup;
+	}
+
+	BACKUP_DBG_CLEAR();
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "6:Connected OK");
+	m1_u8g2_nextpage();
+	HAL_Delay(1000);
+
+	/* Open output file on SD card */
+	fres = f_open(&hfile, "/esp32_backup.bin", FA_CREATE_ALWAYS | FA_WRITE);
+	if (fres != FR_OK)
+	{
+		uint8_t sdmsg[30];
+		sprintf(sdmsg, "SD open err:%d", (int)fres);
+		BACKUP_DBG_CLEAR();
+		m1_info_box_display_draw(INFO_BOX_ROW_1, sdmsg);
+		m1_u8g2_nextpage();
+		HAL_Delay(5000);
+		goto cleanup;
+	}
+
+	/* Clear ring buffer before flash operations */
+	m1_ringbuffer_reset(&esp32_rb_hdl);
+
+	/* Test: try init_flash_params separately to isolate failure */
+	BACKUP_DBG_CLEAR();
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "7:Flash detect..");
+	m1_u8g2_nextpage();
+
+	{
+		/* Manually call flash detect to see if it works */
+		uint32_t detected_size = 0;
+		err = esp_loader_flash_detect_size(&detected_size);
+		uint8_t dbgmsg[30];
+		if (err == ESP_LOADER_SUCCESS)
+			sprintf(dbgmsg, "8:Flash=%luMB", detected_size/(1024*1024));
+		else
+			sprintf(dbgmsg, "8:Detect err:%d", (int)err);
+		BACKUP_DBG_CLEAR();
+		m1_info_box_display_draw(INFO_BOX_ROW_1, dbgmsg);
+		m1_u8g2_nextpage();
+		HAL_Delay(3000);
+
+		if (err != ESP_LOADER_SUCCESS)
+		{
+			f_close(&hfile);
+			goto cleanup;
+		}
+	}
+
+	image_size = flash_size;
+	progress_percent_count = 0;
+
+	while (offset < flash_size)
+	{
+		uint32_t chunk = ESP32_IMAGE_CHUNK_SIZE;
+		if (offset + chunk > flash_size)
+			chunk = flash_size - offset;
+
+		err = esp_loader_flash_read(buffer, offset, chunk);
+		if (err != ESP_LOADER_SUCCESS)
+		{
+			{
+				uint8_t errmsg[30];
+				sprintf(errmsg, "Read err:%d @%luK", (int)err, offset/1024);
+				BACKUP_DBG_CLEAR();
+				m1_info_box_display_draw(INFO_BOX_ROW_1, errmsg);
+				m1_u8g2_nextpage();
+			}
+			HAL_Delay(5000);
+			f_close(&hfile);
+			goto cleanup;
+		}
+
+		fres = f_write(&hfile, buffer, chunk, &bw);
+		if (fres != FR_OK || bw != chunk)
+		{
+			uint8_t sdmsg[30];
+			sprintf(sdmsg, "SD wr err:%d bw:%lu", (int)fres, (unsigned long)bw);
+			BACKUP_DBG_CLEAR();
+			m1_info_box_display_draw(INFO_BOX_ROW_1, sdmsg);
+			m1_u8g2_nextpage();
+			HAL_Delay(5000);
+			f_close(&hfile);
+			goto cleanup;
+		}
+
+		offset += chunk;
+		fw_gui_progress_update(flash_size - offset);
+	}
+
+	f_close(&hfile);
+	{
+		uint8_t donemsg[30];
+		sprintf(donemsg, "Done! %luKB", offset/1024);
+		BACKUP_DBG_CLEAR();
+		m1_info_box_display_draw(INFO_BOX_ROW_1, donemsg);
+		m1_u8g2_nextpage();
+	}
+	HAL_Delay(5000);
+
+cleanup:
+	/* Restore IO9 to input */
+	GPIO_InitStruct.Pin = ESP32_IO9_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(ESP32_IO9_GPIO_Port, &GPIO_InitStruct);
+
+	/* Reset ESP32 back to normal boot */
+	esp_loader_reset_target();
+	HAL_Delay(100);
+	esp32_UART_change_baudrate(ESP32_UART_BAUDRATE);
+	m1_ringbuffer_reset(&esp32_rb_hdl);
+	esp32_UART_deinit();
+
+	m1_device_stat.op_mode = old_op_mode;
+	xQueueReset(main_q_hdl);
+} // void setting_esp32_backup_flash(void)
+
+
+/******************************************************************************/
+/**
+  * @brief  Display ESP32 boot info by resetting the ESP32 and reading UART output
+  * @param  None
+  * @retval None
+  */
+/******************************************************************************/
+void setting_esp32_check_info(void)
+{
+	uint8_t line[GUI_DISP_LINE_LEN_MAX + 1];
+	uint16_t n, total = 0;
+	uint16_t buf_size = 8192;
+	uint8_t *buf = (uint8_t *)malloc(buf_size);
+	if (!buf)
+	{
+		m1_info_box_display_draw(INFO_BOX_ROW_1, "malloc failed");
+		m1_u8g2_nextpage();
+		HAL_Delay(3000);
+		return;
+	}
+
+	/* Show "Resetting..." */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, INFO_BOX_Y_POS_ROW_1 - M1_SUB_MENU_FONT_HEIGHT, 128, 40);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	m1_info_box_display_draw(INFO_BOX_ROW_1, "Resetting ESP32..");
+	m1_u8g2_nextpage();
+
+	/* Init UART, reset ESP32, wait for boot messages */
+	esp32_UART_deinit();
+	esp32_UART_init();
+	m1_ringbuffer_reset(&esp32_rb_hdl);
+
+	/* Toggle EN pin to reset ESP32 */
+	HAL_GPIO_WritePin(ESP32_RESET_GPIO_Port, ESP32_RESET_Pin, GPIO_PIN_RESET);
+	HAL_Delay(100);
+	HAL_GPIO_WritePin(ESP32_RESET_GPIO_Port, ESP32_RESET_Pin, GPIO_PIN_SET);
+
+	/* Capture all boot output for 6 seconds */
+	total = 0;
+	for (int wait = 0; wait < 60; wait++)
+	{
+		HAL_Delay(100);
+		n = m1_ringbuffer_read(&esp32_rb_hdl, buf + total, buf_size - 1 - total);
+		total += n;
+		if (total >= buf_size - 1) break;
+	}
+	buf[total] = '\0';
+	n = total;
+
+	/* Clear display area */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, INFO_BOX_Y_POS_ROW_1 - M1_SUB_MENU_FONT_HEIGHT, 128, 40);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	if (n == 0)
+	{
+		m1_info_box_display_draw(INFO_BOX_ROW_1, "No response");
+		m1_u8g2_nextpage();
+		HAL_Delay(3000);
+		free(buf);
+		esp32_UART_deinit();
+		xQueueReset(main_q_hdl);
+		return;
+	}
+
+	/* Search for our firmware identifier "M1 ESP32" in the boot output */
+	/* Show the last 3 printable lines (app logs come after ROM/bootloader) */
+	uint16_t line_starts[128];
+	uint16_t line_lens[128];
+	uint8_t line_count = 0;
+	uint16_t i = 0;
+	while (i < n && line_count < 128)
+	{
+		while (i < n && (buf[i] < 0x20 || buf[i] == '\r' || buf[i] == '\n'))
+			i++;
+		if (i >= n) break;
+
+		uint16_t start = i;
+		while (i < n && buf[i] != '\r' && buf[i] != '\n')
+			i++;
+		line_starts[line_count] = start;
+		line_lens[line_count] = i - start;
+		line_count++;
+	}
+
+	if (line_count == 0)
+	{
+		m1_info_box_display_draw(INFO_BOX_ROW_1, "No printable data");
+		m1_u8g2_nextpage();
+		HAL_Delay(3000);
+		free(buf);
+		esp32_UART_deinit();
+		xQueueReset(main_q_hdl);
+		return;
+	}
+
+	/* Row 1: stats + first line preview */
+	{
+		char hdr[25];
+		uint16_t flen = line_lens[0];
+		if (flen > 12) flen = 12;
+		memcpy(line, &buf[line_starts[0]], flen);
+		line[flen] = '\0';
+		sprintf(hdr, "%d/%dL %s", n, line_count, (char*)line);
+		hdr[GUI_DISP_LINE_LEN_MAX] = '\0';
+		m1_info_box_display_draw(INFO_BOX_ROW_1, hdr);
+	}
+	/* Row 2: second-to-last line */
+	if (line_count >= 2)
+	{
+		uint8_t li = line_count - 2;
+		uint16_t len = line_lens[li];
+		if (len > GUI_DISP_LINE_LEN_MAX) len = GUI_DISP_LINE_LEN_MAX;
+		memcpy(line, &buf[line_starts[li]], len);
+		line[len] = '\0';
+		m1_info_box_display_draw(INFO_BOX_ROW_2, (char *)line);
+	}
+	/* Row 3: last line */
+	{
+		uint8_t li = line_count - 1;
+		uint16_t len = line_lens[li];
+		if (len > GUI_DISP_LINE_LEN_MAX) len = GUI_DISP_LINE_LEN_MAX;
+		memcpy(line, &buf[line_starts[li]], len);
+		line[len] = '\0';
+		m1_info_box_display_draw(INFO_BOX_ROW_3, (char *)line);
+	}
+
+	m1_u8g2_nextpage();
+	HAL_Delay(8000);
+	free(buf);
+	esp32_UART_deinit();
+	xQueueReset(main_q_hdl);
+} // void setting_esp32_check_info(void)
+
+
+/******************************************************************************/
+/**
   * @brief
   * @param None
   * @retval None
@@ -644,16 +980,43 @@ void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
 	uint8_t prn_name[GUI_DISP_LINE_LEN_MAX + 1] = {0};
 	uint16_t msg_len, msg_id;
 	uint8_t *pboot_info;
+	uint8_t win_start, win_end;
+	const uint8_t max_visible = 3;
 
 	n_items = phmenu->num_submenu_items;
+
+	/* Compute scroll window: show max 3 items, scroll to keep sel_item visible */
+	if ( n_items <= max_visible )
+	{
+		win_start = 0;
+		win_end = n_items;
+	}
+	else
+	{
+		if ( sel_item < max_visible )
+		{
+			win_start = 0;
+		}
+		else
+		{
+			win_start = sel_item - max_visible + 1;
+		}
+		win_end = win_start + max_visible;
+		if ( win_end > n_items )
+		{
+			win_end = n_items;
+			win_start = win_end - max_visible;
+		}
+	}
+
 	menu_text_y = THIS_LCD_MENU_TEXT_FIRST_ROW_Y;
 
 	/* Graphic work starts here */
 	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
-    do
-    {
-    	for (i=0; i<n_items; i++)
-    	{
+	do
+	{
+		for (i=win_start; i<win_end; i++)
+		{
     		if ( i==sel_item )
     		{
     			// Draw box for selected menu item with text color
@@ -663,9 +1026,9 @@ void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, phmenu->submenu[i]->title);
     			if ( i==1 ) // Index of the Start Address field
     			{
-    		    	// Draw arrows left and right
-    		    	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 40, THIS_LCD_MENU_TEXT_FIRST_ROW_Y + 2, 10, 10, arrowleft_10x10);
-    		    	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 20, THIS_LCD_MENU_TEXT_FIRST_ROW_Y + 2, 10, 10, arrowright_10x10);
+				// Draw arrows left and right
+				u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 40, menu_text_y + 2, 10, 10, arrowleft_10x10);
+				u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 20, menu_text_y + 2, 10, 10, arrowright_10x10);
     			}
     			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // return to text color
     			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N); // return to default font
@@ -675,7 +1038,7 @@ void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, phmenu->submenu[i]->title);
     		}
     		menu_text_y += THIS_LCD_MENU_TEXT_ROW_SPACE;
-    	} // for (i=0; i<n_items; i++)
+		} // for (i=win_start; i<win_end; i++)
 
     	// Draw info box at the bottom
     	m1_info_box_display_init(true);
@@ -788,10 +1151,17 @@ void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     			} // switch ( esp32_update_status )
     			break;
 
+		case 3: // Backup flash
+			m1_info_box_display_draw(INFO_BOX_ROW_1, "Backup ESP32 flash");
+			break;
+
+		case 4: // ESP32 Info
+			m1_info_box_display_draw(INFO_BOX_ROW_1, "Read ESP32 boot info");
+			break;
+
     		default: // Unknown selection
     			break;
     	} // switch ( sel_item )
     } while (m1_u8g2_nextpage());
 
 } // void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
-

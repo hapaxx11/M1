@@ -43,10 +43,10 @@
 
 #define M1_MAIN_LOGO_FONT_1B			u8g2_font_Pixellari_tu // 10 pixel
 
-#define M1_POWERUP_LOGO_TOP_POS_Y		15
+#define M1_POWERUP_LOGO_TOP_POS_Y		8
 #define M1_POWERUP_LOGO_LEFT_POS_X		0
-#define M1_POWERUP_LOGO_WIDTH			40
-#define M1_POWERUP_LOGO_HEIGHT			32
+#define M1_POWERUP_LOGO_WIDTH			64
+#define M1_POWERUP_LOGO_HEIGHT			42
 
 #define M1_POWERUP_LOGO_FONT			u8g2_font_tenthinnerguys_tu //u8g2_font_luBS08_tr //u8g2_font_courB10_tr // u8g2_font_fub17_tr
 
@@ -116,8 +116,8 @@ extern const uint8_t menu_m1_icon_wave[];
 extern const uint8_t menu_m1_icon_setting[];
 extern const uint8_t menu_m1_icon_wifi[];
 extern const uint8_t menu_m1_icon_M1_logo_1[];
-extern const uint8_t m1_logo_26x14[];
-extern const uint8_t m1_logo_40x32[];
+extern const uint8_t m1_menu_logo[];
+extern const uint8_t m1_boot_logo[];
 extern const uint8_t menu_scroll_bar_4x64[];
 extern const uint8_t m1_frame_75x16[];
 extern const uint8_t m1_frame_128_14[];

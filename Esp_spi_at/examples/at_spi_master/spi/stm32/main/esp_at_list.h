@@ -41,7 +41,7 @@
 #define ESP32C6_AT_RES_BLE_SCAN_KEY		"+BLESCAN:"
 
 #define ESP32C6_AT_REQ_ADVERTISE		"AT+BLEADVDATAEX=" // AT+BLEADVDATAEX=<dev_name>,<uuid>,<manufacturer_data>,<include_power>
-#define ESP32C6_AT_REQ_ADV_DATA			"\"MONSTATEK-M1\",\"A000\",\"1A2B3C4D5E\",1"
+#define ESP32C6_AT_REQ_ADV_DATA			"\"SiN360-M1\",\"A000\",\"1A2B3C4D5E\",1"
 
 #define ESP32C6_AT_RESET				"AT+RST"
 

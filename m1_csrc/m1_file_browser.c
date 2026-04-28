@@ -377,7 +377,8 @@ uint8_t m1_fb_open_log_file(const char *filename)
 	{
 		return 1;
 	}
-	if (f_write(&m1_log_file, "MonstaTek M1 log file.\r\n", 24, (void *)&byteswritten) != FR_OK)
+	const char *header = "SiN360 M1 log file.\r\n";
+	if (f_write(&m1_log_file, header, strlen(header), (void *)&byteswritten) != FR_OK)
 	{
 		return 1;
 	}
@@ -998,4 +999,3 @@ uint8_t m1_fb_dyn_strcat(char *buffer, uint8_t num, const char *format, ...)
 
 	return strlen(buffer);
 } // uint8_t m1_fb_dyn_strcat(char *buffer, uint8_t num, const char *format, ...)
-

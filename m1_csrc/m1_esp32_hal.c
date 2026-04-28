@@ -32,7 +32,7 @@
 #define ESP32_HANDSHAKE_EXTI_IRQn   EXTI7_IRQn
 
 #define ESP32_DMA_RX_BUFFER_LEN 	128
-#define ESP32_RX_BUFFER_LEN			192
+#define ESP32_RX_BUFFER_LEN			4096
 
 #define M1_LOGDB_TAG				"ESP32"
 
@@ -596,6 +596,8 @@ void esp32_UART_deinit(void)
 	// (test_disable_heartbeat(); unregister_event_callbacks();	control_path_platform_deinit();	deinit_hosted_control_lib();)
 	//
 //	esp32_disable();
+
+	esp32_uart_init_done = FALSE;
 } // void esp32_UART_deinit(void)
 
 

@@ -132,6 +132,10 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef *pdev)
   pma_address += 64;
   HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData, CDC_CMD_EP, PCD_SNG_BUF, pma_address);   // Interrupt, 0x83
 
+  /* HID Endpoint */
+  pma_address += 64;
+  HAL_PCDEx_PMAConfig((PCD_HandleTypeDef*)pdev->pData, HID_IN_EP, PCD_SNG_BUF, pma_address);    // Interrupt IN, 0x84
+
 #elif M1_USB_MODE == M1_CFG_USB_MSC
   // MSC Only
 

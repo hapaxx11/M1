@@ -1,191 +1,209 @@
-> **WARNING:** This is custom third-party firmware. Use at your own risk. The developer assumes no responsibility for bricked devices, hardware damage, fires, data loss, or any other issues that may result from flashing this firmware. If you don't want to take that risk, wait for official firmware from Monstatek. If something goes wrong, don't come crying or complaining -- you were warned. Always have an ST-Link programmer available to recover your device. By flashing this firmware, you accept full responsibility for any outcome.
+> **WARNING:** This is custom third-party firmware. Use at your own risk. The developer assumes no responsibility for bricked devices, hardware damage, fires, data loss, or any other issues that may result from flashing this firmware. Always have an ST-Link programmer available to recover your device. By flashing this firmware, you accept full responsibility for any outcome.
 
 ---
 
 # M1 SiN360 Firmware
 
-Custom firmware for the Monstatek M1 multi-protocol security research device, built on STM32H5.
+Custom firmware for the Monstatek M1 multi-protocol security research device, built on STM32H5 with an ESP32-C6 wireless coprocessor.
 
-Forked from the original Monstatek M1 firmware (v0.8) with completed feature stubs, new tools, and build system fixes.
+This project started as a fork of the original Monstatek M1 firmware and adds completed feature stubs, a working SD-card update flow, expanded NFC/RFID/IR tools, and a growing WiFi/BLE toolset backed by companion ESP32-C6 firmware.
 
-## What's New in SiN360 v0.9.0.5
+## Current Release
 
-### NFC Amiibo Emulation
-- **NTAG215 Amiibo card emulation** -- Emulate Amiibo .nfc and .bin dump files. Tested working with registration and in-game use
+**SiN360 v0.9.0.6**
 
-> **Note:** Tested and confirmed working on Switch firmware 17.0.1. Firmware 22.0.0 has stricter anti-emulation checks and may not detect emulated tags.
+This release focuses on the WiFi/BLE foundation, ESP32 update support, UI polish, and branding refresh.
 
-### Previous Release (v0.9.0.4)
+### Branding
 
-#### Completed Features (formerly stubs)
-- **USB-UART Bridge** -- Full runtime CDC mode switching with status screen, transparent bridge operation
-- **Sub-GHz Radio Settings** -- Configurable frequency band (300-915 MHz), modulation (OOK/ASK/FSK), TX power (4 levels)
-- **Sub-GHz Recording** -- Live signal feedback during recording
-- **125 kHz RFID Utilities**
-  - **Clone Card** -- Quick read-to-write flow for T5577 without saving to SD
-  - **Brute Force FC** -- Cycle H10301 facility codes 0-255 with progress bar, pause/resume
-- **IR Universal Remote** -- Built-in database with 15 TV brands (Samsung, LG, Sony, Philips, Panasonic, Vizio, TCL/Roku, Hisense, Toshiba, Sharp, Insignia, Sanyo, Magnavox, and 2 generic NEC profiles), 8-14 commands per brand
-- **Switch Bank** -- Swap between two firmware banks from Settings menu with confirmation screen, enabling dual-firmware setups with other community developers
-- **IR File Loader** -- Load Flipper-compatible .ir files from SD card, browse and transmit any command. Supports NEC, Samsung32, Samsung48, RC5, RC6, SIRCS, Kaseikyo, Denon/Sharp, JVC, BOSE, LG protocols
-- **NFC Cyborg Detector** -- Continuous NFC field to illuminate body implant LEDs
-- **NFC Mifare Fuzzer** -- Cycles sequential UIDs emulating Mifare Classic 1K to test reader responses
-- **NFC Write URL** -- Write custom URLs as NDEF to NTAG tags (NFC business cards)
-- **NFC Utils** -- Write UID to magic cards, Wipe T2T tags
-- **Screen Orientation** -- Normal, Southpaw (180° flip), Remote (90°) with automatic button remapping
-- **IR Remote Mode** -- Toggle 90° orientation from Universal Remote menu for pointing IR at devices
-- **IR File Loader improvements** -- Subfolder browsing, expanded protocol support
-- **LCD & Notifications Settings** -- Backlight brightness (Off/Low/Med/High/Max), Buzzer On/Off, LED Notify On/Off, Screen Orientation (Normal/Southpaw/Remote). Settings persist to SD card. Note: settings apply on first visit to Settings > LCD & Notifications after power-on.
+- Firmware version bumped to `0.9.0.6`
+- Boot screen now uses SiN360 branding with the firmware version underneath
+- Boot and main-menu logos updated with custom monochrome artwork
+- Default BLE advertising name changed to `SiN360-M1`
 
-### Build System Fixes
-- **Fixed CRC generation** -- Replaced broken srec_cat CRC with correct STM32 hardware CRC32 append via Python script
-- **SD card updates now work reliably** -- Users with original firmware can update via SD card without CRC failures
-- **Clean build output** -- Single firmware binary with correct naming
+### ESP32-C6 Companion Firmware
 
-### Compatibility Fixes
-- **SPI handshake race condition fix** -- Prevents deadlock when using third-party ESP32 firmware such as Bad-BT. Backward compatible with stock ESP32 firmware (credit: cd3daddy)
+The WiFi and BLE features require matching ESP32-C6 companion firmware. The STM32 and ESP32 sides communicate over a 64-byte binary SPI protocol, so both firmwares must be kept in sync.
 
-### Boot Screen
-- Shows "SiN360" branding below version number
+If you add or change a command ID, update both protocol headers:
 
-## Dual Firmware Setup
+- STM32: `m1_csrc/m1_esp32_cmd.h`
+- ESP32: `main/m1_protocol.h` in the ESP32 firmware project
 
-The M1 has two flash banks. You can run a different firmware on each bank and switch between them. No ST-Link required.
+Detailed user how-tos are coming later.
 
-### Initial Setup (no ST-Link needed)
+### WiFi
 
-1. Start with any working firmware on your M1
-2. Put the first custom firmware .bin on the SD card
-3. Settings > Firmware Update > select the file > update completes and reboots
-4. You are now on Bank 2 with the first custom firmware
-5. Put the second custom firmware .bin on the SD card
-6. Settings > Firmware Update > select the file > update completes and reboots
-7. You are now on Bank 1 with the second custom firmware
-8. Both banks now have custom firmware
+- AP scanning with scrollable results
+- Station scanning and AP/station target selection
+- Packet monitor/sniffers for beacon, probe, deauth, EAPOL, SAE commit, Pwnagotchi detection, and raw packet counts
+- Deauth attack with selected AP/station target plumbing
+- Beacon Spam from SD-card `.txt`/`.lst` SSID lists
+- Beacon Spam modes: all in order, shuffle all, random subset
+- Rickroll beacon preset
+- AP Clone beacon spam, using selected APs first when marked
+- Probe Request Flood
+- Evil Portal with captive portal DNS/HTTP and credential capture
+- Custom Evil Portal HTML upload from SD card
+- Karma and Karma Portal modes
+- WiFi radio controls: join WiFi, set MACs, set channel, shutdown WiFi
+- AP cache save/load/clear and SSID pool load/clear
+- TCP scanners for SSH, Telnet, and common ports over the joined WiFi network
 
-#### Switching Between Firmwares
+### Bluetooth / BLE
 
-Each firmware may have a different way to switch banks. For SiN360:
-- **From Settings menu:** Settings > Switch Bank > OK > OK to confirm > device reboots to other bank
-- **From boot (safety fallback):** Hold BACK + DOWN during power-up to rollback to the other bank
+- BLE device scanning
+- BLE advertising with configurable name saved to SD card
+- Full text keyboard support for BLE names
+- BLE raw advertisement command support on ESP32
+- BLE spam payload groups:
+  - Sour Apple
+  - Swiftpair
+  - Samsung BLE
+  - Flipper BLE
+  - Spam All
+- Basic raw-advertisement analyzer and starter detection screens for AirTag/Flipper-style payloads
 
-For other community firmwares, follow their instructions for switching banks.
+### UI And Input
 
-### Updating One Firmware
+- Full text keyboard for WiFi passwords, Portal SSID, and BLE advertising names
+- Keyboard supports lowercase, uppercase, numbers, symbols, spaces, backspace, and up to 63-byte WiFi passwords
+- Existing filename keyboard remains for file/path style entry
+- File browser is used for SD-card SSID lists, AP caches, IR files, NFC files, and portal HTML files
 
-The SD card update always writes to the **inactive** bank. To update a specific firmware:
+### Existing Tooling
 
-1. **Switch to the firmware you are NOT updating** (the one you want to keep)
-2. SD card update with the new .bin file
-3. It writes to the inactive bank and reboots into the updated firmware
+- NFC read/write/emulate features, including NTAG215 Amiibo support
+- NFC utilities: Cyborg Detector, Mifare Fuzzer, Write URL, UID write, T2T wipe
+- 125 kHz RFID read/write/emulate and T5577 clone flow
+- Sub-GHz RX/TX with configurable radio settings
+- Infrared TX/RX, Universal Remote, and Flipper `.ir` file loading
+- GPIO controls
+- USB CDC + MSC composite mode
+- STM32 firmware update from SD card
+- ESP32 firmware update from SD card using merged ESP32 binary plus uppercase MD5 sidecar
+- Dual-bank firmware switching
 
-Example: To update SiN360 while keeping OtherFW:
-1. Switch to OtherFW (Settings > Switch Bank)
-2. SD card update with new SiN360 .bin
-3. Device reboots into updated SiN360 on the other bank
+## Status
 
-### Fixing Broken CRC Files
+Still in progress:
 
-If another developer's firmware .bin has CRC issues (fails SD card update), you can fix it:
-
-```
-# Strip the bad CRC (last 4 bytes) and re-append correct CRC
-head -c -4 broken_firmware_wCRC.bin > firmware_raw.bin
-python3 append_crc.py firmware_raw.bin firmware_fixed.bin
-```
-
-Or if you have the raw .bin without any CRC:
-
-```
-python3 append_crc.py firmware_raw.bin firmware_fixed.bin
-```
-
-## Roadmap
-
-- **Phase 1** (in progress): NFC Tools, Amiibo emulation, Settings menus, Bluetooth config
-- **Phase 2**: WiFi attack suite via ESP32-C6 (deauth, beacon spam, evil portal, packet monitor)
-- **Phase 3**: BadUSB HID keyboard with DuckyScript interpreter
-- **Phase 4**: BadUSB over BLE
-- **Phase 5**: Favorites, logging, file manager, OTA updates, Lua scripting engine
+- Detailed user how-tos and screenshots
+- More BLE detection signatures and payload tuning
+- WiFi scanner expansion, including ping/ARP scan
+- Evil Portal persistence polish
+- BadUSB/HID UI and scripting
+- GPS, logging, wardrive exports, and other advanced features
 
 ## Hardware
 
-- **MCU**: STM32H573VIT6 (Cortex-M33, 2MB Flash, 640KB RAM)
-- **Sub-GHz**: Si446x radio (300-915 MHz)
-- **NFC**: ST25R3916 (13.56 MHz)
-- **LF RFID**: 125 kHz read/write/emulate (EM4100, H10301, T5577)
-- **IR**: IRMP/IRSND library (NEC, Samsung32, RC5, SIRCS, Kaseikyo + more)
-- **Wireless**: ESP32-C6 co-processor (WiFi + BLE)
-- **Display**: ST7586s ERC240160 (128x64)
-- **USB**: CDC + MSC composite device
-- **Hardware revision**: 2.x
+- **MCU:** STM32H573VIT6, ARM Cortex-M33, 250 MHz
+- **Wireless coprocessor:** ESP32-C6-MINI-1, WiFi 6 + BLE 5
+- **Sub-GHz:** Si446x radio, 300-915 MHz
+- **NFC:** ST25R3916, 13.56 MHz
+- **LF RFID:** 125 kHz read/write/emulate, EM4100/H10301/T5577
+- **IR:** IRMP/IRSND protocol library
+- **Display:** 128x64 OLED through u8g2
+- **USB:** CDC + MSC composite device
+- **Storage:** SD card through FatFS
 
-See HARDWARE.md for pin mapping and schematic details.
+See `HARDWARE.md` for pin mapping and schematic details.
 
-## Building
+## Building STM32 Firmware
 
 ### Prerequisites
 
-- [ARM GCC toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (arm-none-eabi-gcc 14.2+) -- must be in PATH
+- ARM GCC toolchain, `arm-none-eabi-gcc` 14.2 or newer
 - CMake 3.22+
-- [Ninja](https://ninja-build.org/) build system
-- Python 3 (for CRC generation)
+- Ninja
+- Python 3
 
-### Linux (command line)
+### Linux Command Line
 
-```
+```bash
 make
 ```
 
-Output: ./artifacts/M1_SiN360_v0.9.0.5.bin (SD card update file with CRC)
+Output:
 
-### VS Code (Windows/Linux/macOS)
+```text
+artifacts/M1_SiN360_v0.9.0.6.bin
+```
 
-1. Install all prerequisites above and ensure they are in your PATH
-2. Install VS Code extensions: **CMake Tools**, **Cortex-Debug**
-3. Open the project folder in VS Code
-4. If on Windows, the CMakePresets.json compiler path should work with the default ARM GCC install location. On Linux/macOS, update the compiler paths in CMakePresets.json to match your install, or remove them to use PATH
-5. CMake Tools: select the **gcc-14_2_build-release** preset
-6. Build via the CMake Build button (or `Ctrl+Shift+B`)
+### VS Code
 
-Output: ./out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.5_SD.bin
+1. Install the prerequisites above.
+2. Install the VS Code **CMake Tools** and **Cortex-Debug** extensions.
+3. Open the project folder.
+4. Select the release CMake preset.
+5. Build from the CMake panel or with the configured build task.
 
-### STM32CubeIDE
+Output is normally:
 
-Open the project and build in the IDE.
+```text
+out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.6_SD.bin
+```
 
-## Flashing
+## Building ESP32 Firmware
 
-### Via ST-Link (development)
+The ESP32-C6 companion firmware is built with ESP-IDF v5.5.
+
+```bash
+cd ~/Documents/m1_esp32
+. ~/Documents/esp-idf/export.sh
+idf.py build
+```
+
+For SD-card ESP32 firmware updates, generate a merged image and an uppercase, no-newline MD5 sidecar:
+
+```bash
+idf.py merge-bin -o m1_esp32_merged.bin
+md5sum build/m1_esp32_merged.bin | awk '{print toupper($1)}' | tr -d '\n' > build/m1_esp32_merged.md5
+```
+
+Copy both files to the SD card:
+
+```text
+build/m1_esp32_merged.bin
+build/m1_esp32_merged.md5
+```
+
+The `.md5` file must be exactly 32 uppercase hex characters with no newline.
+
+## Flashing STM32 Firmware
+
+### Via SD Card
+
+1. Copy `M1_SiN360_v0.9.0.6.bin` to the M1 SD card.
+2. On the M1, open **Settings > Firmware Update**.
+3. Select the firmware file.
+4. Wait for the update to complete and reboot.
+
+### Via ST-Link
 
 Connect ST-Link V2 to the M1 GPIO header:
-- Pin 10 (PA14) -> SWCLK
-- Pin 11 (PA13) -> SWDIO
-- Pin 8 or 18 (GND) -> GND
 
+- Pin 10, PA14 -> SWCLK
+- Pin 11, PA13 -> SWDIO
+- Pin 8 or 18 -> GND
+
+```bash
+st-flash write M1_SiN360_v0.9.0.6.bin 0x08000000
 ```
-st-flash write M1_SiN360_v0.9.0.5.bin 0x08000000
-```
 
-### Via SD Card (recommended for users)
+## Dual Firmware Banks
 
-1. Copy M1_SiN360_v0.9.0.5.bin to your M1's SD card
-2. On the M1: Settings > Firmware Update
-3. Browse to the file and select it
-4. Wait for "UPDATE COMPLETED" and reboot
+The M1 has two flash banks. SD-card firmware updates write to the inactive bank, which makes it possible to keep two firmware builds installed and switch between them.
 
-Works from original Monstatek firmware or any previous SiN360 version.
-
-## Contributing
-
-Contributions are welcome. See CONTRIBUTING.md and the Code of Conduct.
-
-## License
-
-See LICENSE for details.
+SiN360 supports switching from **Settings > Switch Bank**. A safety fallback is available by holding **BACK + DOWN** during power-up to roll back to the other bank.
 
 ## Credits
 
 - **Monstatek** -- Original M1 hardware and base firmware
 - **SiN360** -- Custom firmware development, feature completion, build fixes
 - **IRMP/IRSND** -- IR protocol library by Frank Meyer
-- **Flipper Zero community** -- IR code database references
+- **Flipper Zero community** -- IR code database references and inspiration
+
+## License
+
+See `LICENSE` and `README_License.md` for details.

@@ -12,6 +12,7 @@
 /* Utils includes. */
 
 #include "m1_usb_cdc_msc.h"
+#include "usbd_hid.h"
 #include "stm32h5xx.h"
 #include "main.h"
 #include "diskio.h"
@@ -108,6 +109,7 @@ volatile int8_t m1_USB_MSC_ready = -1; // 0 = ready, -1=not ready
 #if M1_USB_MODE == M1_CFG_USB_CDC_MSC
 uint8_t MSC_EpAdd_Inst[2] = {MSC_IN_EP, MSC_OUT_EP};              /* MSC Endpoint Addresses array */
 uint8_t CDC_EpAdd_Inst[3] = {CDC_IN_EP, CDC_OUT_EP, CDC_CMD_EP};  /* CDC Endpoint Addresses array */
+uint8_t HID_EpAdd_Inst[1] = {HID_IN_EP};                          /* HID Endpoint Addresses array */
 #elif M1_USB_MODE == M1_CFG_USB_MSC
 uint8_t MSC_EpAdd_Inst[2] = {MSC_IN_EP, MSC_OUT_EP};              /* MSC Endpoint Addresses array */
 #elif M1_USB_MODE == M1_CFG_USB_CDC
@@ -116,6 +118,7 @@ uint8_t CDC_EpAdd_Inst[3] = {CDC_IN_EP, CDC_OUT_EP, CDC_CMD_EP};  /* CDC Endpoin
 
 uint8_t CDC_InstID = 0;
 uint8_t MSC_InstID = 0;
+uint8_t HID_InstID = 0;
 
 enCdcMode m1_usbcdc_mode = CDC_MODE_LOG_CLI;
 
@@ -834,6 +837,13 @@ void MX_USB_PCD_Init(void)
 
   /* Register CDC Class hUsbDeviceFS.classId++ */
   if(USBD_RegisterClassComposite(&hUsbDeviceFS, USBD_CDC_CLASS, CLASS_TYPE_CDC, CDC_EpAdd_Inst) != USBD_OK)
+    Error_Handler();
+
+  /* Store the HID Class ID */
+  HID_InstID = hUsbDeviceFS.classId;
+
+  /* Register HID Class hUsbDeviceFS.classId++ */
+  if(USBD_RegisterClassComposite(&hUsbDeviceFS, USBD_HID_CLASS, CLASS_TYPE_HID, HID_EpAdd_Inst) != USBD_OK)
     Error_Handler();
 
   /* Add MSC Media interface */
