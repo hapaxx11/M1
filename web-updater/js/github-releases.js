@@ -10,20 +10,23 @@
 const GITHUB_API = 'https://api.github.com';
 
 /*
- * CORS proxies for GitHub release asset downloads — last-resort fallback only.
+ * CORS proxies for GitHub release asset downloads.
  *
  * The primary download path uses the GitHub REST API asset endpoint:
  *   GET https://api.github.com/repos/{owner}/{repo}/releases/assets/{id}
  *   Accept: application/octet-stream
  *
- * api.github.com always sends proper Access-Control-Allow-Origin headers, and
- * the CDN redirect target (objects.githubusercontent.com) does too, so no
- * proxy is needed when the download URL is an api.github.com URL.
+ * api.github.com responds with a 302 redirect to a GitHub CDN host.
+ * The CDN historically was objects.githubusercontent.com (CORS-safe), but
+ * GitHub now redirects to release-assets.githubusercontent.com which does NOT
+ * include Access-Control-Allow-Origin headers, causing browsers to block the
+ * response.  downloadFirmware() therefore wraps the direct api.github.com
+ * fetch in a try/catch and falls back to these proxies on any failure.
  *
- * These proxies are kept as a fallback only for the case where a raw
- * browser_download_url (github.com / objects.githubusercontent.com) is passed
- * directly.  They are tried in priority order; the first proxy that returns a
- * successful response wins.
+ * They are also used for any raw browser_download_url
+ * (github.com / objects.githubusercontent.com / release-assets.githubusercontent.com)
+ * passed directly.  They are tried in priority order; the first proxy that
+ * returns a successful response wins.
  *
  * Each entry:
  *   prefix — URL prefix to prepend (the target URL follows immediately)
@@ -38,6 +41,7 @@ const CORS_PROXIES = [
 /** Hostnames whose fetch responses are blocked by CORS policy. */
 const CORS_BLOCKED_HOSTS = new Set([
     'objects.githubusercontent.com',
+    'release-assets.githubusercontent.com',
     'github.com',
 ]);
 
@@ -94,8 +98,9 @@ export async function fetchReleases(owner, repo, options = {}) {
             // Find SD card assets archive
             const sdAsset = r.assets.find(a => a.name === 'SD_Assets.zip');
 
-            // Use the GitHub API asset endpoint for downloads — it has proper
-            // CORS headers (Access-Control-Allow-Origin: *) so no proxy is needed.
+            // Use the GitHub API asset endpoint for downloads.
+            // downloadFirmware() will try direct first and fall back to a
+            // CORS proxy if GitHub's CDN redirect target lacks CORS headers.
             const apiAssetUrl = (id) =>
                 `${GITHUB_API}/repos/${owner}/${repo}/releases/assets/${id}`;
 
@@ -130,15 +135,20 @@ export async function fetchReleases(owner, repo, options = {}) {
  * Download a firmware binary from a release asset URL.
  *
  * When the URL is a GitHub REST API asset endpoint (api.github.com), it is
- * fetched directly with Accept: application/octet-stream.  api.github.com
- * responds with proper CORS headers on the 302 redirect, and the CDN target
- * (objects.githubusercontent.com) also sends Access-Control-Allow-Origin: *,
- * so the browser can read the binary without any proxy.
+ * fetched directly first with Accept: application/octet-stream.  GitHub's CDN
+ * historically redirected to objects.githubusercontent.com (CORS-safe), but
+ * now redirects to release-assets.githubusercontent.com which does NOT include
+ * Access-Control-Allow-Origin headers.  If the direct fetch fails for any
+ * reason (including a CORS block, which the browser surfaces as a TypeError),
+ * each proxy in CORS_PROXIES is tried in order.
  *
- * When the URL targets github.com or objects.githubusercontent.com directly
- * (e.g. a browser_download_url passed externally), each proxy in CORS_PROXIES
- * is tried in order.  The first proxy that returns a successful response wins.
- * If every proxy returns an error, the last error is thrown.
+ * When the URL targets github.com, objects.githubusercontent.com, or
+ * release-assets.githubusercontent.com directly (e.g. a browser_download_url
+ * passed externally), the proxy list is tried immediately without a direct
+ * attempt.
+ *
+ * The first proxy that returns a successful response wins.  If every proxy
+ * also fails, the last error is thrown.
  *
  * @param {string}   url          - Download URL (API asset URL or direct CDN URL)
  * @param {function} [onProgress] - Callback(loaded, total) for progress
@@ -148,17 +158,54 @@ export async function downloadFirmware(url, onProgress = null) {
     let resp;
 
     if (url.startsWith(`${GITHUB_API}/`)) {
-        // Primary path: GitHub REST API asset endpoint — no proxy needed.
-        // api.github.com sends Access-Control-Allow-Origin on both the 302
-        // redirect response and the CDN destination.
-        resp = await fetch(url, {
-            headers: {
-                'Accept': 'application/octet-stream',
-                'X-GitHub-Api-Version': '2022-11-28',
-            },
-        });
-        if (!resp.ok) {
-            throw new Error(`Download failed: ${resp.status} ${resp.statusText}`);
+        // Primary path: GitHub REST API asset endpoint.
+        // api.github.com responds with a 302 redirect to a GitHub CDN host.
+        // Historically the CDN was objects.githubusercontent.com (CORS-safe),
+        // but GitHub now redirects to release-assets.githubusercontent.com
+        // which does NOT include Access-Control-Allow-Origin headers.
+        // A browser CORS block surfaces as a TypeError ("Failed to fetch"),
+        // not as an HTTP error code, so we must try/catch the whole fetch.
+        // On any failure we fall through to the CORS proxy list.
+        let directErr;
+        try {
+            resp = await fetch(url, {
+                headers: {
+                    'Accept': 'application/octet-stream',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                },
+            });
+            if (!resp.ok) {
+                directErr = new Error(`${resp.status} ${resp.statusText}`);
+                resp.body?.cancel();
+                resp = null;
+            }
+        } catch (err) {
+            directErr = err;
+            resp = null;
+        }
+
+        if (!resp) {
+            // Direct fetch failed (likely CORS block on the CDN redirect).
+            // Try each proxy in turn.
+            let lastError = directErr;
+            for (const { prefix, encode } of CORS_PROXIES) {
+                const proxyUrl = prefix + (encode ? encodeURIComponent(url) : url);
+                try {
+                    resp = await fetch(proxyUrl, {
+                        headers: { 'Accept': 'application/octet-stream' },
+                    });
+                    if (resp.ok) { lastError = null; break; }
+                    lastError = new Error(`${resp.status} ${resp.statusText}`);
+                    resp.body?.cancel();
+                    resp = null;
+                } catch (err) {
+                    lastError = err;
+                    resp = null;
+                }
+            }
+            if (!resp) {
+                throw new Error(`Download failed: ${lastError?.message ?? 'all proxies exhausted'}`);
+            }
         }
     } else if (needsProxy(url)) {
         let lastError;
