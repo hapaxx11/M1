@@ -820,7 +820,7 @@ constrained vertical space:
 ### Sub-GHz File Format Taxonomy and Replay Paths
 
 > **Every agent session that adds, modifies, or reviews Sub-GHz emulation or
-> replay code MUST understand the three file types and the two replay functions.
+> replay code MUST understand the four file types and the two replay functions.
 > Conflating them is the single most common source of "Memory error" / "Emulate
 > failed" bugs.**
 
@@ -857,14 +857,22 @@ flipper_subghz_emulate_path(bool is_raw, bool is_m1_native);
 // Returns CONVERT otherwise                       → use sub_ghz_replay_flipper_file()
 ```
 
-#### Why M1 native NOISE must NOT go through sub_ghz_replay_flipper_file()
+#### Why M1 native NOISE should prefer the DIRECT path
 
-`sub_ghz_replay_flipper_file()` parses `RAW_Data:` key (Flipper format).
-M1 NOISE files use `Data:` instead, with unsigned values.  If a NOISE file is
-routed through the Flipper conversion path, the parser finds no `RAW_Data:` key,
-writes an empty temp file, and `sub_ghz_raw_samples_init()` fails with error
-code 4 or 5 ("Memory error").  This was the root cause of issue #262 (C3.12 /
-SiN360 `.sgh` emulation failure in fw 0.9.0.142).
+In the current implementation, `sub_ghz_replay_flipper_file()` handles both
+Flipper-style `RAW_Data:` and M1-style `Data:` lines, and sets `has_data`
+accordingly.  If replay data or frequency is missing, it returns error code 2
+("no data or missing frequency") rather than falling through to a memory-error
+path.
+
+M1 native NOISE should still prefer the DIRECT path via
+`sub_ghz_replay_datafile()`, but for a different reason: it avoids an
+unnecessary Flipper-format temp-file conversion step for data that is already
+in the firmware's native representation.  That keeps the replay path simpler
+and avoids edge cases around very long `Data:` payloads, including possible
+truncation or line-continuation issues during conversion.  DIRECT is the
+correct native fast path; CONVERT is retained for compatibility with non-native
+inputs.
 
 #### Emulate dispatch in the Saved scene (`m1_subghz_scene_saved.c`)
 
