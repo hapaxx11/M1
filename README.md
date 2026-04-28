@@ -25,11 +25,6 @@ This release focuses on the WiFi/BLE foundation, ESP32 update support, UI polish
 
 The WiFi and BLE features require matching ESP32-C6 companion firmware. The STM32 and ESP32 sides communicate over a 64-byte binary SPI protocol, so both firmwares must be kept in sync.
 
-If you add or change a command ID, update both protocol headers:
-
-- STM32: `m1_csrc/m1_esp32_cmd.h`
-- ESP32: `main/m1_protocol.h` in the ESP32 firmware project
-
 Detailed user how-tos are coming later.
 
 ### WiFi
