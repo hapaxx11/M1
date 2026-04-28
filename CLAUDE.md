@@ -817,6 +817,98 @@ constrained vertical space:
 | `m1_sub_ghz.c` | `FREQ_SCANNER_VISIBLE_ROWS 5` | Frequency scanner data display, not a selectable menu |
 | `m1_sub_ghz.c` | `SUBGHZ_HISTORY_ROW_HEIGHT 6`, `SUBGHZ_HISTORY_VISIBLE_ITEMS 5` | Legacy history (tiny rows for maximum density) |
 
+### Sub-GHz File Format Taxonomy and Replay Paths
+
+> **Every agent session that adds, modifies, or reviews Sub-GHz emulation or
+> replay code MUST understand the three file types and the two replay functions.
+> Conflating them is the single most common source of "Memory error" / "Emulate
+> failed" bugs.**
+
+#### File types
+
+| File type | Extension | Filetype header | Version | Subtype field | Description |
+|-----------|-----------|-----------------|---------|---------------|-------------|
+| **M1 native NOISE** | `.sgh` | `M1 SubGHz NOISE` | `0.8` or `0.9` | — | Raw pulse recording by M1, C3.12, or SiN360 — **unsigned** durations on `Data:` lines |
+| **M1 native PACKET** | `.sgh` | `M1 SubGHz PACKET` | `0.8` or `0.9` | — | Decoded/static key recorded by M1, C3.12, or SiN360 — uses `Payload:`, `Bits:`, `BT:`, `Modulation:` |
+| **Flipper RAW** | `.sub` | `Flipper SubGhz RAW File` | `1` or `2` | `Protocol: RAW` | Raw pulse recording from Flipper — **signed** mark/space on `RAW_Data:` lines |
+| **Flipper Key** | `.sub` | `Flipper SubGhz Key File` | `1` or `2` | any protocol | Decoded/static key from Flipper — uses `Key:`, `Bit:`, `TE:`, `Preset:` |
+
+`flipper_subghz_load()` and `flipper_subghz_probe()` in `flipper_subghz.c`
+detect the format automatically.  After loading, `flipper_subghz_signal_t`
+carries two discriminator fields:
+
+- **`type`** — `FLIPPER_SUBGHZ_TYPE_RAW` (NOISE / Flipper RAW) or `FLIPPER_SUBGHZ_TYPE_PARSED` (PACKET / Flipper Key)
+- **`is_m1_native`** — `true` for `.sgh` files (M1 NOISE and PACKET), `false` for Flipper `.sub` files
+
+#### The two replay functions
+
+| Function | Used for | What it does |
+|----------|----------|--------------|
+| `sub_ghz_replay_datafile(path, freq, mod)` | M1 native NOISE `.sgh` only | Sets up radio, points the streaming engine (`sub_ghz_raw_samples_init`) directly at the original `.sgh` file — **no temp file, no conversion**. Caller provides freq+mod from the already-loaded header. |
+| `sub_ghz_replay_flipper_file(path)` | Flipper RAW `.sub`, Flipper Key `.sub`, M1 native PACKET `.sgh` | Reads the source file, **writes a temp `.sgh`** at `/SUBGHZ/_flipper_tmp.sgh`, then streams it. For RAW/NOISE types it strip-converts signed Flipper samples to unsigned M1 format. For Key/PACKET types it invokes the OOK PWM key encoder to synthesize a waveform. |
+
+The dispatch decision is encoded as a pure function so it is testable:
+
+```c
+/* flipper_subghz.h */
+flipper_subghz_emulate_path_t
+flipper_subghz_emulate_path(bool is_raw, bool is_m1_native);
+// Returns DIRECT  when (is_raw && is_m1_native)  → use sub_ghz_replay_datafile()
+// Returns CONVERT otherwise                       → use sub_ghz_replay_flipper_file()
+```
+
+#### Why M1 native NOISE must NOT go through sub_ghz_replay_flipper_file()
+
+`sub_ghz_replay_flipper_file()` parses `RAW_Data:` key (Flipper format).
+M1 NOISE files use `Data:` instead, with unsigned values.  If a NOISE file is
+routed through the Flipper conversion path, the parser finds no `RAW_Data:` key,
+writes an empty temp file, and `sub_ghz_raw_samples_init()` fails with error
+code 4 or 5 ("Memory error").  This was the root cause of issue #262 (C3.12 /
+SiN360 `.sgh` emulation failure in fw 0.9.0.142).
+
+#### Emulate dispatch in the Saved scene (`m1_subghz_scene_saved.c`)
+
+The Saved scene's `handle_action(SAVED_ACTION_EMULATE)` has two branches:
+
+1. **RAW files** (`is_raw_file == true`, i.e. `type == RAW && raw_count > 0`):
+   Pushes into the **Read Raw scene** in `SubGhzReadRawStateLoaded` state,
+   passing replay metadata via `app->raw_load_path`, `app->raw_load_is_native`,
+   `app->raw_load_freq_hz`, `app->raw_load_mod`.  The Read Raw scene then
+   dispatches to `sub_ghz_replay_datafile()` (when `raw_load_is_native = true`)
+   or `sub_ghz_replay_flipper_file()` (Flipper `.sub` RAW) when the user presses
+   Send.  This gives a waveform viewer with Send / New buttons rather than a
+   blind one-shot inline replay.
+
+2. **PACKET/Key files** (`is_raw_file == false`): Performs an inline blocking
+   replay directly in the Saved scene by calling `sub_ghz_replay_flipper_file()`.
+   This handles M1 native PACKET files, Flipper Key files, and Flipper RAW files
+   that parsed as PACKET (e.g. because they decoded to a known protocol).
+   After the call, `menu_sub_ghz_init()` restores radio state.
+
+#### Emulate dispatch in the Playlist scene (`m1_subghz_scene_playlist.c`)
+
+`playlist_transmit_next()` calls `flipper_subghz_probe()` (header-only, no
+sample loading) then `flipper_subghz_emulate_path(probe.is_noise, probe.is_m1_native)`
+to choose the replay function.  After every file, `menu_sub_ghz_init()` is called
+to restore radio state before the next transmission.
+
+#### Rules for new emulation code
+
+1. **Never call `sub_ghz_replay_flipper_file()` on an M1 native NOISE `.sgh` file.**
+   Check `is_m1_native && type == RAW` and use `sub_ghz_replay_datafile()` instead.
+2. **Never call `sub_ghz_replay_datafile()` on a PACKET or Flipper `.sub` file.**
+   Those need the key encoder or Flipper-format conversion in `sub_ghz_replay_flipper_file()`.
+3. **Always use `flipper_subghz_emulate_path()`** to encode the dispatch decision.
+   Do not inline `if (is_m1_native && type == RAW)` in new scenes — call the shared
+   function so tests catch any change to the dispatch rule.
+4. **After any call to `sub_ghz_replay_datafile()` or `sub_ghz_replay_flipper_file()`**,
+   call `menu_sub_ghz_init()` before the radio is used again (both functions call
+   `menu_sub_ghz_exit()` internally which powers off the SI4463).
+5. **When loading metadata** for dispatch, prefer `flipper_subghz_probe()` (header only,
+   low overhead) over the full `flipper_subghz_load()` when sample data is not needed
+   (playlist, one-shot batch TX).  Use `flipper_subghz_load()` when the sample data
+   or key fields are also needed (info screen, offline decode, saved scene).
+
 ### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
 
 > **Every caller of a function that powers off the SI4463 MUST restore radio state
@@ -836,10 +928,12 @@ load + config reset, restoring the radio to a known good state.
    `menu_sub_ghz_init()` at their top and `menu_sub_ghz_exit()` at their
    bottom.  They own their own radio lifecycle — this is correct.
 
-2. **`sub_ghz_replay_flipper_file()`** calls `menu_sub_ghz_exit()` before
-   returning.  **Every call site must call `menu_sub_ghz_init()` afterwards**:
-   - `m1_subghz_scene_saved.c` — emulate action handler (line ~74)
+2. **`sub_ghz_replay_flipper_file()`** and **`sub_ghz_replay_datafile()`** both
+   call `menu_sub_ghz_exit()` before returning.  **Every call site must call
+   `menu_sub_ghz_init()` afterwards**:
+   - `m1_subghz_scene_saved.c` — PACKET/key emulate handler
    - `m1_subghz_scene_playlist.c` — `playlist_transmit_next()` after each file
+   - `m1_subghz_scene_read_raw.c` — Send action in the Loaded state (Read Raw scene)
 
 3. **Scene-native RX starters** (`start_rx()` in Read, `start_raw_rx()` in
    Read Raw) call `menu_sub_ghz_init()` before configuring RX, so they
@@ -847,8 +941,8 @@ load + config reset, restoring the radio to a known good state.
    the user was in before.
 
 **Rules for new code:**
-- If you call `sub_ghz_replay_flipper_file()`, add `menu_sub_ghz_init()`
-  immediately after it returns.
+- If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()`, add
+  `menu_sub_ghz_init()` immediately after it returns.
 - If you write a new blocking delegate, call `menu_sub_ghz_init()` at the
   top and `menu_sub_ghz_exit()` at the bottom.
 - If you write a new RX scene, call `menu_sub_ghz_init()` before starting
@@ -1221,7 +1315,7 @@ are **actively called** as blocking delegates from their scene wrappers:
 | `sub_ghz_weather_station()` | `m1_subghz_scene_weather_station.c` | Blocking delegate |
 | `sub_ghz_brute_force()` | `m1_subghz_scene_brute_force.c` | Blocking delegate |
 | `sub_ghz_add_manually()` | `m1_subghz_scene_add_manually.c` | Blocking delegate |
-| `sub_ghz_replay_flipper_file()` | `m1_subghz_scene_saved.c` | Direct call for TX |
+| `sub_ghz_replay_flipper_file()` | `m1_subghz_scene_saved.c` (PACKET/key emulate path) and `m1_subghz_scene_playlist.c` | Direct call for TX; RAW files go through Read Raw scene instead |
 
 These are **not dead code** — they are the implementation behind scene wrappers.
 Converting them to scene-native implementations is optional and can be done
