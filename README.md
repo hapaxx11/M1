@@ -25,6 +25,14 @@ This release focuses on the WiFi/BLE foundation, ESP32 update support, UI polish
 
 The WiFi and BLE features require matching ESP32-C6 companion firmware. The STM32 and ESP32 sides communicate over a 64-byte binary SPI protocol, so both firmwares must be kept in sync.
 
+ESP32 firmware repo:
+
+<https://github.com/sincere360/M1_SiN360_ESP32>
+
+Matching ESP32 `v0.9.0.6` release:
+
+<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.6>
+
 Detailed user how-tos are coming later.
 
 ### WiFi
