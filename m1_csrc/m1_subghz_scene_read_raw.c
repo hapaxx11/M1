@@ -19,7 +19,7 @@
  *
  * Button mapping (matches physical D-pad left/OK/right):
  *   START:     LEFT = Config  |  OK = ⊙ REC  |  RIGHT = (none)
- *   RECORDING: LEFT = Config  |  OK = ⊙ Stop  |  (none)
+ *   RECORDING: (none)         |  OK = ⊙ Stop  |  (none)
  *   IDLE:      LEFT = Erase   |  OK = ⊙ Send  |  RIGHT = Save
  *   LOADED:    LEFT = New     |  OK = ⊙ Send  |  RIGHT = (none)
  *   SENDING:   (none)         |  (none)        |  (none)   [TX blocking; returns to IDLE or LOADED]
@@ -439,17 +439,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
-            else if (app->raw_state == SubGhzReadRawStateRecording)
-            {
-                /* Config during recording: stop the current capture (→ Idle),
-                 * then push Config.  On return, scene_on_enter sees is_resume=true
-                 * and raw_state=Idle, so it restarts passive RX and preserves
-                 * the capture — the user can Send/Save/Erase it. */
-                stop_raw_rx(app);
-                app->resume_from_child = true;
-                subghz_scene_push(app, SubGhzSceneConfig);
-                app->need_redraw = true;
-            }
             else if (app->raw_state == SubGhzReadRawStateIdle)
             {
                 /* Erase — delete the recorded file and return to Start */
@@ -733,7 +722,7 @@ static void draw(SubGhzApp *app)
             break;
         case SubGhzReadRawStateRecording:
             subghz_button_bar_draw(
-                arrowleft_8x8, "Config",
+                NULL, NULL,
                 ok_circle_8x8, "Stop",
                 NULL, NULL);
             break;
