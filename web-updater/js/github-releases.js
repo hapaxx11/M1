@@ -162,40 +162,45 @@ export async function downloadFirmware(url, onProgress = null) {
     if (url.startsWith(`${GITHUB_API}/`)) {
         // Primary path: GitHub REST API asset endpoint.
         // api.github.com responds with a 302 redirect to a GitHub CDN host.
-        // Historically the CDN was objects.githubusercontent.com (CORS-safe),
+        // The CDN historically was objects.githubusercontent.com (CORS-safe),
         // but GitHub now redirects to release-assets.githubusercontent.com
         // which does NOT include Access-Control-Allow-Origin headers.
         // A browser CORS block surfaces as a TypeError ("Failed to fetch"),
-        // not as an HTTP error code, so we must try/catch the whole fetch.
-        // On any failure we fall through to the CORS proxy list.
+        // NOT as an HTTP error code.  We therefore catch TypeError specifically
+        // and fall back to the CORS proxy list only in that case.
+        // Real HTTP errors (4xx/5xx) are thrown immediately — a proxy cannot
+        // fix an authentication or authorization failure from GitHub.
+        const apiHeaders = {
+            'Accept': 'application/octet-stream',
+            'X-GitHub-Api-Version': '2022-11-28',
+        };
         let directErr;
+        let isCorsFailure = false;
         try {
-            resp = await fetch(url, {
-                headers: {
-                    'Accept': 'application/octet-stream',
-                    'X-GitHub-Api-Version': '2022-11-28',
-                },
-            });
+            resp = await fetch(url, { headers: apiHeaders });
             if (!resp.ok) {
-                directErr = new Error(`${resp.status} ${resp.statusText}`);
-                resp.body?.cancel();
-                resp = null;
+                // Real HTTP error — surface it immediately; no proxy retry.
+                throw new Error(`${resp.status} ${resp.statusText}`);
             }
         } catch (err) {
+            // TypeError = network/CORS failure (browser blocked CDN redirect).
+            // Any other Error type = the HTTP error we threw above.
+            isCorsFailure = err instanceof TypeError;
             directErr = err;
             resp = null;
         }
 
         if (!resp) {
-            // Direct fetch failed (likely CORS block on the CDN redirect).
-            // Try each proxy in turn.
+            if (!isCorsFailure) {
+                throw new Error(`Download failed: ${directErr?.message ?? 'unknown error'}`);
+            }
+            // CORS/network failure — try each proxy in turn.
+            // Include the same headers for consistency with the direct request.
             let lastError = directErr;
             for (const { prefix, encode } of CORS_PROXIES) {
                 const proxyUrl = prefix + (encode ? encodeURIComponent(url) : url);
                 try {
-                    resp = await fetch(proxyUrl, {
-                        headers: { 'Accept': 'application/octet-stream' },
-                    });
+                    resp = await fetch(proxyUrl, { headers: apiHeaders });
                     if (resp.ok) { lastError = null; break; }
                     lastError = new Error(`${resp.status} ${resp.statusText}`);
                     resp.body?.cancel();
