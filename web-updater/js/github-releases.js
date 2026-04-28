@@ -47,7 +47,9 @@ const CORS_BLOCKED_HOSTS = new Set([
 
 /**
  * Return true when the URL targets a host that requires a CORS proxy.
- * API calls (api.github.com) are not proxied — they already have CORS headers.
+ * api.github.com URLs are handled by downloadFirmware() separately — they
+ * attempt a direct fetch first and fall back to a proxy if the CDN redirect
+ * is blocked; they do not go through this function.
  *
  * @param {string} url
  * @returns {boolean}
