@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.175] - 2026-04-28
+
+### Fixed
+
+- **Sub-GHz Read Raw: remove Config button during recording** — pressing LEFT while recording no longer stops the capture and opens the Config scene. The button bar during recording now shows only the Stop (OK) action, matching Momentum's Read Raw workflow.
 ## [0.9.0.174] - 2026-04-28
 
 ### Fixed
