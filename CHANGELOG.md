@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.178] - 2026-04-29
+
+### Added
+
+- **Sub-GHz Read Raw: MoreRAW submenu (Decode / Rename / Delete)** — mirrors
+  Momentum's LoadKeyIDLE + MoreRAW scene pattern.  After recording stops and the
+  file is named (Right = Save → VKB), the scene now transitions to Loaded state
+  exposing a Right = "More" button.  Opening a saved RAW file from the browser also
+  exposes "More".  The submenu provides: **Decode** (offline protocol decode using
+  the same engine as the Saved scene, with scrollable list and detail views),
+  **Rename** (VKB rename without leaving the scene), and **Delete** (with
+  confirmation dialog, returns to Start).
+
+### Fixed
+
+- **Sub-GHz Read Raw: waveform no longer scrolls in the initial Ready state** — in passive-listen mode (before pressing OK to record) the cursor is frozen so the graph only fills during an active recording. This removes the ambiguity where a scrolling waveform and a "REC" button appeared simultaneously, making users think recording had already started. A "Record failed — Check SD card" error is now shown if pressing OK fails to open the capture file.
 ## [0.9.0.177] - 2026-04-29
 
 ### Fixed
