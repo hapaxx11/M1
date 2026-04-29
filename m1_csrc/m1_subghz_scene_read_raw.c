@@ -358,47 +358,6 @@ static void stop_raw_rx(SubGhzApp *app)
 /*============================================================================*/
 
 /**
- * @brief  ARM-side decode callback for subghz_decode_raw_offline().
- *
- * Copies one packet of pulse timings into the global subghz_decenc_ctl
- * buffer and runs every registered protocol decoder against it.  On the
- * first decoder that succeeds, fills *out_result and returns true.
- * Identical to the version in m1_subghz_scene_saved.c.
- */
-static bool rr_decode_try_fn(const uint16_t *pulse_buf,
-                              uint16_t        pulse_count,
-                              SubGhzRawDecodeResult *out_result,
-                              void           *user_ctx)
-{
-    (void)user_ctx;
-
-    memcpy(subghz_decenc_ctl.pulse_times, pulse_buf,
-           pulse_count * sizeof(uint16_t));
-    subghz_decenc_ctl.npulsecount = pulse_count;
-
-    for (uint16_t p = 0; p < subghz_protocol_registry_count; p++)
-    {
-        const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
-        if (proto->decode && proto->decode(p, pulse_count) == 0)
-        {
-            SubGHz_Dec_Info_t info;
-            if (subghz_decenc_read(&info, false))
-            {
-                out_result->protocol      = info.protocol;
-                out_result->key           = info.key;
-                out_result->bit_len       = info.bit_len;
-                out_result->te            = info.te;
-                out_result->serial_number = info.serial_number;
-                out_result->rolling_code  = info.rolling_code;
-                out_result->button_id     = info.button_id;
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-/**
  * @brief  Load raw_filepath and run offline protocol decode.
  *
  * Sets rr_in_decode = true so draw() shows the results overlay.
@@ -436,7 +395,7 @@ static void do_rr_decode(void)
     rr_decode_count = subghz_decode_raw_offline(
         sig.raw_data, sig.raw_count, sig.frequency,
         rr_decode_results, RR_DECODE_MAX,
-        rr_decode_try_fn, NULL);
+        subghz_registry_decode_try_fn, NULL);
 }
 
 /**

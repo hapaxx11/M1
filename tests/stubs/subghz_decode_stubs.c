@@ -111,3 +111,13 @@ uint8_t subghz_decode_tx_8300(uint16_t a, uint16_t b) { (void)a; (void)b; return
 uint8_t subghz_decode_vauno_en8822c(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_wendox_w6726(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_x10(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+
+/* Stubs for ARM-only globals referenced by subghz_registry_decode_try_fn().
+ * These are never called from host-side unit tests; they exist only to
+ * satisfy the linker. */
+#include "subghz_raw_decoder.h"
+#include "m1_sub_ghz_decenc.h"
+
+SubGHz_DecEnc_t subghz_decenc_ctl;
+
+bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw) { (void)out; (void)raw; return false; }
