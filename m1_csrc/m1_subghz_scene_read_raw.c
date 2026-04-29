@@ -700,7 +700,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     /* start_raw_rx() failed silently (OOM or SD error).
                      * Show a blocking error so the user knows why nothing happened. */
                     m1_message_box(&m1_u8g2, "Record failed",
-                                   "Check SD card", "", "BACK to return");
+                                   "Check SD card or free memory", "", "BACK to return");
                 }
                 app->need_redraw = true;
             }
