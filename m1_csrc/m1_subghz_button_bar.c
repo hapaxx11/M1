@@ -30,9 +30,9 @@
 #define BTN_W          42   /* Width of each button */
 #define BTN_GAP         1   /* Gap between buttons (background color shows through) */
 #define BTN_R           2   /* Corner radius */
-#define BTN_0_X         0   /* Left button X */
-#define BTN_1_X        43   /* Center button X (0 + 42 + 1) */
-#define BTN_2_X        86   /* Right button X (43 + 42 + 1) */
+#define BTN_0_X         0                         /* Left button X */
+#define BTN_1_X        (BTN_0_X + BTN_W + BTN_GAP) /* Center button X */
+#define BTN_2_X        (BTN_1_X + BTN_W + BTN_GAP) /* Right button X */
 
 /* Status bar */
 #define STATUS_BAR_H   10   /* Height of top status bar */
@@ -127,17 +127,18 @@ void subghz_status_bar_draw(
     /* Center: modulation */
     if (mod_text)
     {
-        /* Center the modulation text */
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, mod_text);
-        uint8_t cx = (M1_LCD_DISPLAY_WIDTH - tw) / 2;
+        /* Centre the modulation text — use u8g2_uint_t to avoid truncation */
+        u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, mod_text);
+        u8g2_uint_t cx = tw < M1_LCD_DISPLAY_WIDTH ? (M1_LCD_DISPLAY_WIDTH - tw) / 2u : 0u;
         u8g2_DrawStr(&m1_u8g2, cx, 8, mod_text);
     }
 
     /* Right side: state indicator */
     if (state_text)
     {
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, state_text);
-        u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - tw - 2, 8, state_text);
+        u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, state_text);
+        u8g2_uint_t x  = tw + 2u < M1_LCD_DISPLAY_WIDTH ? M1_LCD_DISPLAY_WIDTH - tw - 2u : 0u;
+        u8g2_DrawStr(&m1_u8g2, x, 8, state_text);
     }
 
     /* Separator line at bottom of status bar */
