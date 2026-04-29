@@ -27,12 +27,11 @@
  *   BACK = Exit (START/IDLE/LOADED) or Stop recording (RECORDING → IDLE)
  *
  * Display:
- *   START:     RSSI spectrogram.  Cursor advances (trace=true) when RSSI is above
- *              the noise threshold; when signal drops away a short debounce window
- *              (RAW_DEBOUNCE_MAX × 200ms) of low-RSSI columns is still pushed so
- *              that successive signal bursts are visually separated by a gap — the
- *              same behaviour as Momentum Read Raw.  After debounce expires the
- *              cursor freezes and only the live RSSI indicator is refreshed.
+ *   START:     RSSI spectrogram.  Cursor does NOT advance in this state — the live
+ *              RSSI level is shown at the current (frozen) cursor position so the
+ *              user can judge signal strength before pressing OK to start recording.
+ *              This makes the visual distinction unambiguous: a filling/scrolling
+ *              waveform always means RECORDING is in progress (button = "Stop").
  *   RECORDING: Cursor slides right as captured edges arrive (SubGhzEventRxData).
  *              When the signal ends, the same debounce mechanism inserts gap
  *              columns between successive bursts within a single recording session.
@@ -344,6 +343,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Start recording — fast because radio is already listening */
                 start_raw_rx(app);
+                if (app->raw_state != SubGhzReadRawStateRecording)
+                {
+                    /* start_raw_rx() failed silently (OOM or SD error).
+                     * Show a blocking error so the user knows why nothing happened. */
+                    m1_message_box(&m1_u8g2, "Record failed",
+                                   "Check SD card", "", "BACK to return");
+                }
                 app->need_redraw = true;
             }
             else if (app->raw_state == SubGhzReadRawStateRecording)
@@ -611,11 +617,10 @@ static void draw(SubGhzApp *app)
 
     /* Live RSSI update per draw tick.
      *
-     * Start:     Advance cursor (trace=true) when signal exceeds threshold.
-     *            After signal drops, a debounce window of RAW_DEBOUNCE_MAX
-     *            ticks (each ~200ms) pushes low-RSSI columns with trace=true
-     *            to create a visible gap before the cursor freezes.  This
-     *            matches Momentum's visual separation between signal bursts.
+     * Start:     Cursor is FROZEN — only the live RSSI indicator at the current
+     *            cursor position is refreshed.  The graph does not scroll in this
+     *            state so a filling waveform unambiguously signals that RECORDING
+     *            is in progress (button = "Stop"), not passive listen (button = "REC").
      * Recording: RxData events push columns with trace=true (cursor advances).
      *            raw_rx_pending prevents the draw tick from adding a duplicate
      *            column while the signal is active.  When RxData stops arriving
@@ -627,24 +632,16 @@ static void draw(SubGhzApp *app)
     if (app->raw_state == SubGhzReadRawStateStart)
     {
         app->rssi = subghz_read_rssi_ext();
-        bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
-        if (signal_present)
-        {
-            /* Signal above threshold — push bar and keep debounce primed */
-            app->raw_debounce = RAW_DEBOUNCE_MAX;
-            subghz_raw_rssi_push_ext((float)app->rssi, true);
-        }
-        else if (app->raw_debounce > 0)
-        {
-            /* Signal just ended — push low-RSSI gap column then count down */
-            app->raw_debounce--;
-            subghz_raw_rssi_push_ext((float)app->rssi, true);
-        }
-        else
-        {
-            /* Silence: update cursor indicator only, preserve history */
-            subghz_raw_rssi_set_current_ext((float)app->rssi);
-        }
+        /* In Start state the cursor must NOT advance — the waveform should only
+         * scroll during an active recording (RECORDING state, button = "Stop").
+         * Advancing the cursor in passive-listen mode makes the waveform look
+         * identical to an active capture, which is the exact confusion shown in
+         * issue #377: the user sees the graph filling and assumes recording has
+         * started, while the button still reads "REC".
+         *
+         * Keeping the cursor frozen here means: if the graph is scrolling, the
+         * user is definitely in RECORDING state and the button says "Stop". */
+        subghz_raw_rssi_set_current_ext((float)app->rssi);
     }
     else if (app->raw_state == SubGhzReadRawStateRecording)
     {
@@ -681,7 +678,7 @@ static void draw(SubGhzApp *app)
     }
 
     /* Draw the RSSI spectrogram for all states.
-     * Start:     Scrolling live ambient RSSI (built above).
+     * Start:     Live RSSI at frozen cursor (no scroll).
      * Recording: Captured edges with cursor advancing on RxData.
      * Idle:      Frozen spectrogram of the completed capture. */
     subghz_raw_rssi_draw_ext();
