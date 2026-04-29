@@ -64,6 +64,25 @@ static void scene_on_enter(SubGhzApp *app)
     const char *ext = (fmt == 1) ? ".sgh" : ".sub";
     snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s%s", new_name, ext);
 
+    /* Ensure the SUBGHZ directory exists before attempting to save.
+     * FR_EXIST is only acceptable if the existing path is actually a directory. */
+    FRESULT mkdir_res = f_mkdir("/SUBGHZ");
+    if (mkdir_res == FR_EXIST)
+    {
+        FILINFO dir_info;
+        FRESULT stat_res = f_stat("/SUBGHZ", &dir_info);
+        if ((stat_res != FR_OK) || !(dir_info.fattrib & AM_DIR))
+        {
+            subghz_scene_pop(app);
+            return;
+        }
+    }
+    else if (mkdir_res != FR_OK)
+    {
+        subghz_scene_pop(app);
+        return;
+    }
+
     bool saved;
     if (fmt == 1)
         saved = flipper_subghz_save_m1native_key(app->file_path,

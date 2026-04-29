@@ -17,6 +17,12 @@
 #define FLIPPER_SUBGHZ_PROTO_MAX_LEN     32
 #define FLIPPER_SUBGHZ_PRESET_MAX_LEN    48
 
+/* Canonical Filetype: header string for Flipper-compatible RAW recordings
+ * (.sub files with Protocol: RAW).  Used when writing files and kept here so
+ * any module that emits Flipper-compatible RAW headers (e.g. m1_sub_ghz.c)
+ * can share the constant without hardcoding the string. */
+#define FLIPPER_SUBGHZ_RAW_FILETYPE      "Flipper SubGhz RAW File"
+
 typedef enum {
 	FLIPPER_SUBGHZ_TYPE_RAW = 0,
 	FLIPPER_SUBGHZ_TYPE_PARSED

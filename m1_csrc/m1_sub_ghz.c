@@ -3732,7 +3732,7 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 				break;
 		}
 
-		sprintf((char *)pfillbuffer, "Filetype: SubGhz RAW File\r\nVersion: 1\r\n");
+		sprintf((char *)pfillbuffer, "Filetype: " FLIPPER_SUBGHZ_RAW_FILETYPE "\r\nVersion: 1\r\n");
 		sprintf(prn_buffer, "Frequency: %lu\r\n", freq32);
 		strcat((char *)pfillbuffer, prn_buffer);
 		sprintf(prn_buffer, "Preset: %s\r\n", preset);
