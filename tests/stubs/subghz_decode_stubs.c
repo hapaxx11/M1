@@ -114,8 +114,10 @@ uint8_t subghz_decode_x10(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; 
 
 /* Stubs for ARM-only globals referenced by subghz_registry_decode_try_fn().
  * These are never called from host-side unit tests; they exist only to
- * satisfy the linker. */
-#include "subghz_raw_decoder.h"
+ * satisfy the linker when subghz_protocol_registry.c is compiled in tests
+ * that also link subghz_decode_try_fn.c.
+ * Include m1_sub_ghz_decenc.h first so its unconditional macro definitions
+ * take priority over the #ifndef-guarded ones in subghz_raw_decoder.h. */
 #include "m1_sub_ghz_decenc.h"
 
 SubGHz_DecEnc_t subghz_decenc_ctl;

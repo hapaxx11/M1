@@ -193,6 +193,7 @@ add_test(NAME flipper_file COMMAND test_flipper_file)
 add_executable(test_subghz_registry
     test_subghz_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
@@ -260,6 +261,7 @@ add_executable(test_subghz_key_encoder
     test_subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_key_encoder PRIVATE
@@ -368,6 +370,36 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_raw_decoder PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_raw_decoder COMMAND test_subghz_raw_decoder)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_registry_decode_try_fn
+# Canonical SubGhzRawDecodeTryFn bridge extracted from
+# subghz_decode_try_fn.c.  Tests cover:
+#   - pulse_buf copy into subghz_decenc_ctl (pulse_times + npulsecount)
+#   - all decoders are scanned when none match
+#   - continue scanning when decode() succeeds but subghz_decenc_read() fails
+#   - correct result fields when both decode() and decenc_read() succeed
+#   - early return (no further scan) after first successful match
+#   - NULL user_ctx is accepted
+#
+# The test file provides a 3-entry mini registry + controllable stubs
+# for subghz_decenc_ctl and subghz_decenc_read instead of the full
+# production registry, so each control-flow branch can be driven in isolation.
+# ------------------------------------------------------------------
+add_executable(test_subghz_decode_try_fn
+    test_subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+)
+target_include_directories(test_subghz_decode_try_fn PRIVATE
+    ${STUBS_DIR}            # stm32h5xx_hal.h, m1_io_defs.h
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_decode_try_fn PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_decode_try_fn PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_decode_try_fn COMMAND test_subghz_decode_try_fn)
 
 # ------------------------------------------------------------------
 # Module under test: subghz_playlist_parser (Flipper→M1 path remapping)
