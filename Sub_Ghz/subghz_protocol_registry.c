@@ -27,6 +27,7 @@
 #include <ctype.h>
 #include "subghz_protocol_registry.h"
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_raw_decoder.h"
 
 /*============================================================================*/
 /* Portable case-insensitive compare (replaces POSIX strcasecmp)              */
@@ -1184,3 +1185,8 @@ const char* subghz_protocol_get_name(uint16_t index)
     if (index >= subghz_protocol_registry_count) return NULL;
     return subghz_protocol_registry[index].name;
 }
+
+/* subghz_registry_decode_try_fn() has been extracted to subghz_decode_try_fn.c
+ * to enable isolated unit testing with a minimal stub registry.  The function
+ * is declared in subghz_raw_decoder.h and linked from either this production
+ * build or from subghz_decode_try_fn.c. */

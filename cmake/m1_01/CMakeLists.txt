@@ -320,6 +320,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/m1_sub_ghz_api.c
     ../../Sub_Ghz/m1_sub_ghz_decenc.c
     ../../Sub_Ghz/subghz_protocol_registry.c
+    ../../Sub_Ghz/subghz_decode_try_fn.c
     ../../Sub_Ghz/subghz_block_generic.c
     ../../Sub_Ghz/subghz_key_encoder.c
     ../../Sub_Ghz/subghz_raw_line_parser.c

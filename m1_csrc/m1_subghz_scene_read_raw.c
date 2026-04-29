@@ -21,18 +21,17 @@
  *   START:     LEFT = Config  |  OK = ⊙ REC  |  RIGHT = (none)
  *   RECORDING: (none)         |  OK = ⊙ Stop  |  (none)
  *   IDLE:      LEFT = Erase   |  OK = ⊙ Send  |  RIGHT = Save
- *   LOADED:    LEFT = New     |  OK = ⊙ Send  |  RIGHT = (none)
+ *   LOADED:    LEFT = New     |  OK = ⊙ Send  |  RIGHT = More
  *   SENDING:   (none)         |  (none)        |  (none)   [TX blocking; returns to IDLE or LOADED]
  *
  *   BACK = Exit (START/IDLE/LOADED) or Stop recording (RECORDING → IDLE)
  *
  * Display:
- *   START:     RSSI spectrogram.  Cursor advances (trace=true) when RSSI is above
- *              the noise threshold; when signal drops away a short debounce window
- *              (RAW_DEBOUNCE_MAX × 200ms) of low-RSSI columns is still pushed so
- *              that successive signal bursts are visually separated by a gap — the
- *              same behaviour as Momentum Read Raw.  After debounce expires the
- *              cursor freezes and only the live RSSI indicator is refreshed.
+ *   START:     RSSI spectrogram.  Cursor does NOT advance in this state — the live
+ *              RSSI level is shown at the current (frozen) cursor position so the
+ *              user can judge signal strength before pressing OK to start recording.
+ *              This makes the visual distinction unambiguous: a filling/scrolling
+ *              waveform always means RECORDING is in progress (button = "Stop").
  *   RECORDING: Cursor slides right as captured edges arrive (SubGhzEventRxData).
  *              When the signal ends, the same debounce mechanism inserts gap
  *              columns between successive bursts within a single recording session.
@@ -41,9 +40,11 @@
  *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
  *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
  *   LOADED:    Spectrogram reset (empty); "RAW" status, filename in waveform area.
- *              LEFT = New (discard loaded file, start fresh), ⊙ OK = Send (replay).
- *              This is Momentum's LoadKeyIDLE state — entered when a pre-recorded
- *              RAW file is opened from the Saved browser.
+ *              LEFT = New (discard loaded file, start fresh), ⊙ OK = Send (replay),
+ *              RIGHT = More → MoreRAW submenu (Decode / Rename / Delete).
+ *              This is Momentum's LoadKeyIDLE + MoreRAW pattern — entered when a
+ *              pre-recorded RAW file is opened from the Saved browser OR when the
+ *              user renames a freshly recorded file (IDLE → Loaded after Save).
  *   SENDING:   Spectrogram frozen; "TX..." label in waveform area; no button bar.
  *              Entered from either IDLE or LOADED just before the blocking replay;
  *              draw() is forced once so the display shows the TX indicator for the
@@ -85,6 +86,9 @@
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "ff.h"
+#include "flipper_subghz.h"
+#include "subghz_protocol_registry.h"
+#include "subghz_raw_decoder.h"
 
 extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
@@ -125,21 +129,43 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
 
 /* Number of 200ms draw ticks spent pushing low-RSSI "gap" columns after the
- * signal drops below threshold.  This creates visible empty space between
- * successive signal bursts in the waveform, matching Momentum Read Raw. */
+ * signal drops below threshold during RECORDING.  This creates a visible
+ * ~800ms tail of empty space between consecutive signal bursts, making burst
+ * boundaries visually clear.  Momentum instead immediately freezes the cursor
+ * when RSSI drops below threshold; this debounce tail is an intentional M1
+ * improvement that gives better burst separation on the waveform. */
 #define RAW_DEBOUNCE_MAX  4    /* ~800 ms of gap columns */
 
-/* RSSI threshold for cursor advancement in the Start state.
- * Uses the user-configurable value (subghz_get_rssi_threshold_ext()) so the
- * cursor starts scrolling at exactly the moment the signal crosses the
- * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
+
+/* ============================================================================
+ * MoreRAW state — Momentum-aligned submenu for the Loaded state.
+ * Right button opens a 3-item menu: Decode / Rename / Delete.
+ * ============================================================================ */
+static bool    rr_in_more_menu = false;
+static uint8_t rr_more_sel     = 0;
+
+/* Offline decode results — populated by do_rr_decode(), displayed while
+ * rr_in_decode is true.  Stored as file-scope statics (not stack) because
+ * flipper_subghz_signal_t contains an 8192-element int16_t array (16 KB). */
+#define RR_DECODE_MAX   16   /* max distinct protocols shown */
+#define RR_DECODE_VIS    3   /* list rows visible at once */
+#define RR_DECODE_ROW_H  8   /* px per list row */
+static SubGhzRawDecodeResult rr_decode_results[RR_DECODE_MAX];
+static uint8_t  rr_decode_count  = 0;
+static uint8_t  rr_decode_sel    = 0;
+static uint8_t  rr_decode_scroll = 0;
+static bool     rr_in_decode     = false;
+static bool     rr_decode_detail = false;
 
 /* Forward declarations — these functions are defined after scene_on_enter() but
  * called from it.  Without these, the compiler creates implicit non-static
  * declarations that conflict with the actual static definitions. */
 static void draw(SubGhzApp *app);
 static void start_raw_rx(SubGhzApp *app);
+static void draw_rr_more_menu(void);
+static void draw_rr_decode(void);
+static void do_rr_decode(void);
 
 /*============================================================================*/
 /* Helpers                                                                    */
@@ -223,6 +249,12 @@ static void scene_on_enter(SubGhzApp *app)
     app->raw_rx_pending = false;
     app->rssi = -120;
     subghz_raw_rssi_reset_ext();
+
+    /* Reset MoreRAW and decode state on every fresh entry */
+    rr_in_more_menu = false;
+    rr_more_sel     = 0;
+    rr_in_decode    = false;
+    rr_decode_count = 0;
 
     /* If the Saved scene pre-loaded a file path, enter in Loaded state.
      * This is Momentum's LoadKeyIDLE path — the user opened a pre-recorded
@@ -321,8 +353,327 @@ static void stop_raw_rx(SubGhzApp *app)
      * is not flooded by noise edges while in the Idle state. */
 }
 
+/*============================================================================*/
+/* MoreRAW — Decode / Rename / Delete                                         */
+/*============================================================================*/
+
+/**
+ * @brief  Load raw_filepath and run offline protocol decode.
+ *
+ * Sets rr_in_decode = true so draw() shows the results overlay.
+ * Uses a static signal buffer to avoid a 16 KB stack allocation.
+ */
+static void do_rr_decode(void)
+{
+    rr_decode_count  = 0;
+    rr_decode_sel    = 0;
+    rr_decode_scroll = 0;
+    rr_decode_detail = false;
+    rr_in_decode     = true;          /* enable overlay — even on failure shows "No protocols" */
+
+    if (raw_filepath[0] == '\0')
+        return;
+
+    char full_path[RAW_FILEPATH_MAX + 3];
+    snprintf(full_path, sizeof(full_path), "0:%s", raw_filepath);
+
+    /* Static to avoid a 16 KB stack allocation (raw_data[8192] lives inside
+     * the struct).  This function is only ever called from the main RTOS task
+     * while the scene is active; the blocking VKB / message-box calls above
+     * prevent any re-entry, so the non-reentrancy of a static local is safe. */
+    static flipper_subghz_signal_t sig;
+    memset(&sig, 0, sizeof(sig));
+    if (!flipper_subghz_load(full_path, &sig))
+        return;
+
+    if (sig.type != FLIPPER_SUBGHZ_TYPE_RAW || sig.raw_count == 0)
+        return;
+
+    subghz_pulse_handler_reset();
+    subghz_decenc_ctl.ndecodedrssi = 0;
+
+    rr_decode_count = subghz_decode_raw_offline(
+        sig.raw_data, sig.raw_count, sig.frequency,
+        rr_decode_results, RR_DECODE_MAX,
+        subghz_registry_decode_try_fn, NULL);
+}
+
+/**
+ * @brief  Render the MoreRAW submenu overlay (Decode / Rename / Delete).
+ */
+static void draw_rr_more_menu(void)
+{
+    static const char * const items[] = { "Decode", "Rename", "Delete" };
+
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+
+    /* Title: truncated filename */
+    char title[22];
+    const char *fname = (raw_filepath[0] != '\0')
+                        ? extract_filename(raw_filepath) : "RAW";
+    strncpy(title, fname, 21);
+    title[21] = '\0';
+    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    const uint8_t row_h    = 50 / 3;        /* ~16 px each */
+    const uint8_t text_ofs = (row_h >= 12) ? 9 : 8;
+
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        uint8_t y = 14 + i * row_h;
+        if (i == rr_more_sel)
+        {
+            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, row_h);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+        }
+        u8g2_DrawStr(&m1_u8g2, 8, y + text_ofs, items[i]);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    }
+}
+
+/**
+ * @brief  Render the decode results overlay.
+ *
+ * List view: scrollable list of matched protocols with key values.
+ * Detail view (OK): full info for the selected entry.
+ * Both match the layout used by the Saved scene's decode screen.
+ */
+static void draw_rr_decode(void)
+{
+    char line[48];
+
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Decode Results");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    if (rr_decode_count == 0)
+    {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 10, 32, "No protocols");
+        u8g2_DrawStr(&m1_u8g2, 10, 44, "decoded");
+        return;
+    }
+
+    if (rr_decode_detail)
+    {
+        /* Detail view — full info for the selected result */
+        const SubGhzRawDecodeResult *d = &rr_decode_results[rr_decode_sel];
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 24, protocol_text[d->protocol]);
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+        snprintf(line, sizeof(line), "Key: 0x%lX  %dbit",
+                 (uint32_t)d->key, d->bit_len);
+        u8g2_DrawStr(&m1_u8g2, 2, 34, line);
+
+        snprintf(line, sizeof(line), "TE: %d us", d->te);
+        u8g2_DrawStr(&m1_u8g2, 2, 43, line);
+
+        /* Integer arithmetic — embedded nano.specs has no %f */
+        snprintf(line, sizeof(line), "Freq: %lu.%02lu MHz",
+                 (unsigned long)(d->frequency / 1000000UL),
+                 (unsigned long)((d->frequency % 1000000UL) / 10000UL));
+        u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+        if (d->serial_number != 0 || d->rolling_code != 0)
+        {
+            snprintf(line, sizeof(line), "SN: %lX RC: %lX",
+                     (unsigned long)d->serial_number,
+                     (unsigned long)d->rolling_code);
+            u8g2_DrawStr(&m1_u8g2, 2, 61, line);
+        }
+    }
+    else
+    {
+        /* List view */
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+        snprintf(line, sizeof(line), "Decoded: %d", rr_decode_count);
+        u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+        uint8_t vis = (rr_decode_count < RR_DECODE_VIS)
+                      ? rr_decode_count : RR_DECODE_VIS;
+        for (uint8_t i = 0; i < vis; i++)
+        {
+            uint8_t idx = rr_decode_scroll + i;
+            if (idx >= rr_decode_count) break;
+
+            const SubGhzRawDecodeResult *d = &rr_decode_results[idx];
+            uint8_t y = 24 + i * RR_DECODE_ROW_H;
+
+            if (idx == rr_decode_sel)
+            {
+                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, RR_DECODE_ROW_H);
+                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+            }
+
+            snprintf(line, sizeof(line), "%s 0x%lX",
+                     protocol_text[d->protocol], (uint32_t)d->key);
+            u8g2_DrawStr(&m1_u8g2, 2, y + 6, line);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        }
+    }
+}
+
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
+    /* ---- Decode results overlay ----------------------------------------- */
+    if (rr_in_decode)
+    {
+        switch (event)
+        {
+            case SubGhzEventBack:
+                if (rr_decode_detail)
+                    rr_decode_detail = false;
+                else
+                    rr_in_decode = false;
+                app->need_redraw = true;
+                return true;
+
+            case SubGhzEventOk:
+                if (!rr_decode_detail && rr_decode_count > 0)
+                {
+                    rr_decode_detail = true;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            case SubGhzEventUp:
+                if (!rr_decode_detail && rr_decode_count > 0)
+                {
+                    if (rr_decode_sel > 0) rr_decode_sel--;
+                    if (rr_decode_sel < rr_decode_scroll)
+                        rr_decode_scroll = rr_decode_sel;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            case SubGhzEventDown:
+                if (!rr_decode_detail && rr_decode_count > 0)
+                {
+                    if (rr_decode_sel + 1 < rr_decode_count) rr_decode_sel++;
+                    if (rr_decode_sel >= rr_decode_scroll + RR_DECODE_VIS)
+                        rr_decode_scroll = rr_decode_sel - RR_DECODE_VIS + 1;
+                    app->need_redraw = true;
+                }
+                return true;
+
+            default:
+                break;
+        }
+        return false;
+    }
+
+    /* ---- MoreRAW submenu ------------------------------------------------- */
+    if (rr_in_more_menu)
+    {
+        switch (event)
+        {
+            case SubGhzEventBack:
+                rr_in_more_menu  = false;
+                app->need_redraw = true;
+                return true;
+
+            case SubGhzEventUp:
+                if (rr_more_sel > 0) rr_more_sel--;
+                app->need_redraw = true;
+                return true;
+
+            case SubGhzEventDown:
+                if (rr_more_sel < 2) rr_more_sel++;
+                app->need_redraw = true;
+                return true;
+
+            case SubGhzEventOk:
+            {
+                const uint8_t sel = rr_more_sel;
+                rr_in_more_menu = false;
+
+                if (sel == 0)  /* Decode */
+                {
+                    do_rr_decode();
+                    app->need_redraw = true;
+                }
+                else if (sel == 1)  /* Rename */
+                {
+                    const char *fname = extract_filename(raw_filepath);
+                    char base[32];
+                    strncpy(base, fname, sizeof(base) - 1);
+                    base[sizeof(base) - 1] = '\0';
+                    char *dot = strrchr(base, '.');
+                    if (dot) *dot = '\0';
+
+                    char new_name[32];
+                    if (m1_vkb_get_filename("Rename to:", base, new_name))
+                    {
+                        const char *ext = strrchr(fname, '.');
+                        if (!ext) ext = ".sub";
+                        char old_path[RAW_FILEPATH_MAX + 3];
+                        char new_path[RAW_FILEPATH_MAX + 3];
+                        snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
+                        snprintf(new_path, sizeof(new_path),
+                                 "0:/SUBGHZ/%s%s", new_name, ext);
+                        FRESULT res = f_rename(old_path, new_path);
+                        if (res == FR_OK)
+                        {
+                            snprintf(raw_filepath, sizeof(raw_filepath),
+                                     "/SUBGHZ/%s%s", new_name, ext);
+                        }
+                        else
+                        {
+                            m1_message_box(&m1_u8g2, "Rename failed",
+                                           "Could not rename file", "", "BACK");
+                        }
+                    }
+                    app->need_redraw = true;
+                }
+                else  /* Delete */
+                {
+                    char short_name[32];
+                    strncpy(short_name, extract_filename(raw_filepath),
+                            sizeof(short_name) - 1);
+                    short_name[sizeof(short_name) - 1] = '\0';
+
+                    uint8_t confirm = m1_message_box_choice(
+                        &m1_u8g2, "Delete file?", short_name, "", "OK  /  Cancel");
+                    if (confirm == 1)
+                    {
+                        char del_path[RAW_FILEPATH_MAX + 3];
+                        snprintf(del_path, sizeof(del_path), "0:%s", raw_filepath);
+                        FRESULT res = f_unlink(del_path);
+                        if ((res == FR_OK) || (res == FR_NO_FILE))
+                        {
+                            raw_filepath[0]       = '\0';
+                            subghz_raw_rssi_reset_ext();
+                            app->raw_state        = SubGhzReadRawStateStart;
+                            app->raw_sample_count = 0;
+                            app->raw_debounce     = 0;
+                            app->raw_rx_pending   = false;
+                        }
+                        else
+                        {
+                            m1_message_box(&m1_u8g2, "Delete failed",
+                                           "Could not delete file", "", "BACK");
+                        }
+                    }
+                    app->need_redraw = true;
+                }
+                return true;
+            }
+
+            default:
+                break;
+        }
+        return false;
+    }
+
+    /* ---- Normal ReadRaw event handling ----------------------------------- */
     switch (event)
     {
         case SubGhzEventBack:
@@ -344,6 +695,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 /* Start recording — fast because radio is already listening */
                 start_raw_rx(app);
+                if (app->raw_state != SubGhzReadRawStateRecording)
+                {
+                    /* start_raw_rx() failed silently (OOM or SD error).
+                     * Show a blocking error so the user knows why nothing happened. */
+                    m1_message_box(&m1_u8g2, "Record failed",
+                                   "Check SD card or free memory", "", "BACK to return");
+                }
                 app->need_redraw = true;
             }
             else if (app->raw_state == SubGhzReadRawStateRecording)
@@ -505,9 +863,23 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     FRESULT rename_result = f_rename(old_path, new_path);
                     if (rename_result == FR_OK)
                     {
-                        /* Update stored path to the new name */
                         snprintf(raw_filepath, sizeof(raw_filepath),
                                  "/SUBGHZ/%s%s", new_name, ext);
+                        /* Momentum: after naming, transition IDLE → Loaded
+                         * (mirrors IDLE → LoadKeyIDLE) to expose the MoreRAW
+                         * submenu (Decode / Rename / Delete) via Right = "More". */
+                        app->raw_state          = SubGhzReadRawStateLoaded;
+                        /* Freshly recorded files are Flipper .sub format, so
+                         * raw_load_is_native stays false.  The Send handler uses
+                         * sub_ghz_replay_flipper_file(), which does not need
+                         * raw_load_freq_hz / raw_load_mod — those are only read
+                         * when raw_load_is_native is true (M1 native .sgh path). */
+                        app->raw_load_is_native = false;
+                        app->raw_load_freq_hz   = 0;
+                        app->raw_load_mod       = 0;
+                        rr_in_more_menu         = false;
+                        rr_in_decode            = false;
+                        rr_decode_count         = 0;
                     }
                     else
                     {
@@ -516,6 +888,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                                (int)rename_result, old_path, new_path);
                     }
                 }
+                app->need_redraw = true;
+            }
+            else if (app->raw_state == SubGhzReadRawStateLoaded && raw_filepath[0] != '\0')
+            {
+                /* More — open the MoreRAW submenu (Decode / Rename / Delete).
+                 * Momentum's LoadKeyIDLE → MoreRAW scene, adapted for M1's
+                 * blocking architecture as an inline overlay. */
+                rr_more_sel      = 0;
+                rr_in_more_menu  = true;
                 app->need_redraw = true;
             }
             return true;
@@ -550,6 +931,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
+    rr_in_more_menu = false;
+    rr_in_decode    = false;
+
     if (app->raw_state == SubGhzReadRawStateRecording)
     {
         /* Recording was in progress — use the normal stop path so all
@@ -571,6 +955,20 @@ static void scene_on_exit(SubGhzApp *app)
 static void draw(SubGhzApp *app)
 {
     m1_u8g2_firstpage();
+
+    /* MoreRAW overlays — render and return immediately when active */
+    if (rr_in_decode)
+    {
+        draw_rr_decode();
+        m1_u8g2_nextpage();
+        return;
+    }
+    if (rr_in_more_menu)
+    {
+        draw_rr_more_menu();
+        m1_u8g2_nextpage();
+        return;
+    }
 
     /* Status bar: freq (left), mod (center), state+samples (right) */
     const char *freq = subghz_freq_labels ? subghz_freq_labels[app->freq_idx] : "???";
@@ -611,11 +1009,10 @@ static void draw(SubGhzApp *app)
 
     /* Live RSSI update per draw tick.
      *
-     * Start:     Advance cursor (trace=true) when signal exceeds threshold.
-     *            After signal drops, a debounce window of RAW_DEBOUNCE_MAX
-     *            ticks (each ~200ms) pushes low-RSSI columns with trace=true
-     *            to create a visible gap before the cursor freezes.  This
-     *            matches Momentum's visual separation between signal bursts.
+     * Start:     Cursor is FROZEN — only the live RSSI indicator at the current
+     *            cursor position is refreshed.  The graph does not scroll in this
+     *            state so a filling waveform unambiguously signals that RECORDING
+     *            is in progress (button = "Stop"), not passive listen (button = "REC").
      * Recording: RxData events push columns with trace=true (cursor advances).
      *            raw_rx_pending prevents the draw tick from adding a duplicate
      *            column while the signal is active.  When RxData stops arriving
@@ -627,24 +1024,16 @@ static void draw(SubGhzApp *app)
     if (app->raw_state == SubGhzReadRawStateStart)
     {
         app->rssi = subghz_read_rssi_ext();
-        bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
-        if (signal_present)
-        {
-            /* Signal above threshold — push bar and keep debounce primed */
-            app->raw_debounce = RAW_DEBOUNCE_MAX;
-            subghz_raw_rssi_push_ext((float)app->rssi, true);
-        }
-        else if (app->raw_debounce > 0)
-        {
-            /* Signal just ended — push low-RSSI gap column then count down */
-            app->raw_debounce--;
-            subghz_raw_rssi_push_ext((float)app->rssi, true);
-        }
-        else
-        {
-            /* Silence: update cursor indicator only, preserve history */
-            subghz_raw_rssi_set_current_ext((float)app->rssi);
-        }
+        /* In Start state the cursor must NOT advance — the waveform should only
+         * scroll during an active recording (RECORDING state, button = "Stop").
+         * Advancing the cursor in passive-listen mode makes the waveform look
+         * identical to an active capture, which is the exact confusion shown in
+         * issue #377: the user sees the graph filling and assumes recording has
+         * started, while the button still reads "REC".
+         *
+         * Keeping the cursor frozen here means: if the graph is scrolling, the
+         * user is definitely in RECORDING state and the button says "Stop". */
+        subghz_raw_rssi_set_current_ext((float)app->rssi);
     }
     else if (app->raw_state == SubGhzReadRawStateRecording)
     {
@@ -681,7 +1070,7 @@ static void draw(SubGhzApp *app)
     }
 
     /* Draw the RSSI spectrogram for all states.
-     * Start:     Scrolling live ambient RSSI (built above).
+     * Start:     Live RSSI at frozen cursor (no scroll).
      * Recording: Captured edges with cursor advancing on RxData.
      * Idle:      Frozen spectrogram of the completed capture. */
     subghz_raw_rssi_draw_ext();
@@ -733,12 +1122,12 @@ static void draw(SubGhzApp *app)
                 arrowright_8x8, "Save");
             break;
         case SubGhzReadRawStateLoaded:
-            /* Momentum's LoadKeyIDLE: "New" = start fresh, "Send" = replay loaded file.
-             * No right button (M1 has no MoreRAW scene). */
+            /* Momentum's LoadKeyIDLE + MoreRAW: "New" = start fresh, "Send" = replay,
+             * "More" = MoreRAW submenu (Decode / Rename / Delete). */
             subghz_button_bar_draw(
                 arrowleft_8x8, "New",
                 ok_circle_8x8, "Send",
-                NULL, NULL);
+                arrowright_8x8, "More");
             break;
         case SubGhzReadRawStateSending:
             /* No button bar during blocking TX — matches Momentum's TX state which

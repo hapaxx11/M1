@@ -40,7 +40,6 @@
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
-extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
 
 /*============================================================================*/
 /* Action menu — unified action IDs                                           */
@@ -163,49 +162,6 @@ static bool open_saved_browser(void)
 /*============================================================================*/
 
 /**
- * @brief  ARM-side decode callback for subghz_decode_raw_offline().
- *
- * Copies pulse data into the global subghz_decenc_ctl buffer, then
- * iterates through the protocol registry.  On success, reads the
- * decoded result from the global state.
- */
-static bool decode_try_fn(const uint16_t *pulse_buf,
-                           uint16_t pulse_count,
-                           SubGhzRawDecodeResult *out_result,
-                           void *user_ctx)
-{
-    (void)user_ctx;
-
-    /* Copy pulse data into the global buffer that decoders read from */
-    memcpy(subghz_decenc_ctl.pulse_times, pulse_buf,
-           pulse_count * sizeof(uint16_t));
-    subghz_decenc_ctl.npulsecount = pulse_count;
-
-    /* Try every registered protocol decoder */
-    for (uint16_t p = 0; p < subghz_protocol_registry_count; p++)
-    {
-        const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
-        if (proto->decode && proto->decode(p, pulse_count) == 0)
-        {
-            SubGHz_Dec_Info_t info;
-            if (subghz_decenc_read(&info, false))
-            {
-                out_result->protocol      = info.protocol;
-                out_result->key           = info.key;
-                out_result->bit_len       = info.bit_len;
-                out_result->te            = info.te;
-                out_result->serial_number = info.serial_number;
-                out_result->rolling_code  = info.rolling_code;
-                out_result->button_id     = info.button_id;
-                return true;
-            }
-            break;
-        }
-    }
-    return false;
-}
-
-/**
  * @brief  Attempt to decode protocols from a loaded RAW .sub file.
  *
  * Delegates to the extracted subghz_decode_raw_offline() engine,
@@ -234,7 +190,7 @@ static bool do_decode_raw(void)
         saved_signal.frequency,
         raw_results,
         DECODE_MAX_RESULTS,
-        decode_try_fn,
+        subghz_registry_decode_try_fn,
         NULL);
 
     /* Copy results into the scene-local format */
