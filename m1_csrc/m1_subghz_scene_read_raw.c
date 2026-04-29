@@ -124,14 +124,13 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
 
 /* Number of 200ms draw ticks spent pushing low-RSSI "gap" columns after the
- * signal drops below threshold.  This creates visible empty space between
- * successive signal bursts in the waveform, matching Momentum Read Raw. */
+ * signal drops below threshold during RECORDING.  This creates a visible
+ * ~800ms tail of empty space between consecutive signal bursts, making burst
+ * boundaries visually clear.  Momentum instead immediately freezes the cursor
+ * when RSSI drops below threshold; this debounce tail is an intentional M1
+ * improvement that gives better burst separation on the waveform. */
 #define RAW_DEBOUNCE_MAX  4    /* ~800 ms of gap columns */
 
-/* RSSI threshold for cursor advancement in the Start state.
- * Uses the user-configurable value (subghz_get_rssi_threshold_ext()) so the
- * cursor starts scrolling at exactly the moment the signal crosses the
- * horizontal dashed line that is drawn at the same threshold. */
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /* Forward declarations — these functions are defined after scene_on_enter() but
