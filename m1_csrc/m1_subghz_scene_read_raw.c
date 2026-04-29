@@ -687,13 +687,21 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     {
                         char del_path[RAW_FILEPATH_MAX + 3];
                         snprintf(del_path, sizeof(del_path), "0:%s", raw_filepath);
-                        f_unlink(del_path);
-                        raw_filepath[0]       = '\0';
-                        subghz_raw_rssi_reset_ext();
-                        app->raw_state        = SubGhzReadRawStateStart;
-                        app->raw_sample_count = 0;
-                        app->raw_debounce     = 0;
-                        app->raw_rx_pending   = false;
+                        FRESULT res = f_unlink(del_path);
+                        if ((res == FR_OK) || (res == FR_NO_FILE))
+                        {
+                            raw_filepath[0]       = '\0';
+                            subghz_raw_rssi_reset_ext();
+                            app->raw_state        = SubGhzReadRawStateStart;
+                            app->raw_sample_count = 0;
+                            app->raw_debounce     = 0;
+                            app->raw_rx_pending   = false;
+                        }
+                        else
+                        {
+                            m1_message_box(&m1_u8g2, "Delete failed",
+                                           "Could not delete file", "", "BACK");
+                        }
                     }
                     app->need_redraw = true;
                 }
