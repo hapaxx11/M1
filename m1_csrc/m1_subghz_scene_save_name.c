@@ -64,6 +64,11 @@ static void scene_on_enter(SubGhzApp *app)
     const char *ext = (fmt == 1) ? ".sgh" : ".sub";
     snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s%s", new_name, ext);
 
+    /* Ensure the SUBGHZ directory exists — f_mkdir returns FR_EXIST if already
+     * present, which is not an error.  Without this, f_open(FA_CREATE_ALWAYS)
+     * returns FR_NO_PATH on a fresh SD card and the save fails silently. */
+    f_mkdir("/SUBGHZ");
+
     bool saved;
     if (fmt == 1)
         saved = flipper_subghz_save_m1native_key(app->file_path,

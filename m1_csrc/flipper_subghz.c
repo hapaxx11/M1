@@ -21,7 +21,7 @@
 
 /*************************** D E F I N E S ************************************/
 
-#define FLIPPER_SUBGHZ_RAW_FILETYPE      "Flipper SubGhz RAW File"
+/* FLIPPER_SUBGHZ_RAW_FILETYPE is defined in flipper_subghz.h */
 #define FLIPPER_SUBGHZ_KEY_FILETYPE      "Flipper SubGhz Key File"
 #define FLIPPER_SUBGHZ_MIN_VERSION       1
 
