@@ -112,14 +112,16 @@ uint8_t subghz_decode_raw_offline(const int16_t *raw_data,
 /*============================================================================*/
 
 /**
- * Standard ARM bridge implementing SubGhzRawDecodeTryFn.
+ * Standard firmware bridge implementing SubGhzRawDecodeTryFn.
  *
  * Copies one packet of pulse timings into the global subghz_decenc_ctl
  * buffer and runs every registered protocol decoder against it.  On the
  * first decoder that succeeds and whose result can be read via
  * subghz_decenc_read(), fills *out_result and returns true.
  *
- * Implemented in subghz_protocol_registry.c (ARM firmware only).
+ * Implemented in subghz_protocol_registry.c.  This is the canonical
+ * callback used by firmware code, while host-side tests may also build
+ * that file with stubs to satisfy platform-specific dependencies.
  * Pass this directly to subghz_decode_raw_offline() instead of writing
  * a local static callback in each scene file.
  */
