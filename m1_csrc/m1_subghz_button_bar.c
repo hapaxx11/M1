@@ -17,18 +17,22 @@
 /* Layout constants                                                           */
 /*============================================================================*/
 
-/* Bottom bar: 3-column layout on a 128px wide display */
+/* Bottom bar: 3-column layout on a 128px wide display.
+ * Momentum style: three individual rounded-corner buttons with 1px gaps.
+ *   42 + 1 + 42 + 1 + 42 = 128 px (exact fill, no remainder).
+ */
 #define BAR_Y_TOP      52   /* Top of bottom bar area (12px high) */
 #define BAR_H          12   /* Height of bottom bar */
-#define BAR_ICON_Y     53   /* Y for 8x8 icons */
+#define BAR_ICON_Y     54   /* Y for 8x8 icons (1px from bar top for centering) */
 #define BAR_TEXT_Y     61   /* Y baseline for text */
 
-#define COL_LEFT_X      2   /* Left column icon X */
-#define COL_LEFT_TX    12   /* Left column text X */
-#define COL_CENTER_X   48   /* Center column icon X */
-#define COL_CENTER_TX  58   /* Center column text X */
-#define COL_RIGHT_X    96   /* Right column icon X */
-#define COL_RIGHT_TX  106   /* Right column text X */
+/* Button geometry */
+#define BTN_W          42   /* Width of each button */
+#define BTN_GAP         1   /* Gap between buttons (background color shows through) */
+#define BTN_R           2   /* Corner radius */
+#define BTN_0_X         0                         /* Left button X */
+#define BTN_1_X        (BTN_0_X + BTN_W + BTN_GAP) /* Center button X */
+#define BTN_2_X        (BTN_1_X + BTN_W + BTN_GAP) /* Right button X */
 
 /* Status bar */
 #define STATUS_BAR_H   10   /* Height of top status bar */
@@ -44,34 +48,57 @@
 /* Bottom bar                                                                 */
 /*============================================================================*/
 
+/* Draw one Momentum-style button: filled rounded box, white content inside.
+ * The combined icon+text block is centred horizontally within the button.
+ * icon_on_right: false = icon left of text (left/center slots),
+ *                true  = text left of icon (right slot). */
+static void draw_btn(uint8_t bx,
+                     const uint8_t *icon, const char *text,
+                     bool icon_on_right)
+{
+    /* Filled rounded box */
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_DrawRBox(&m1_u8g2, bx, BAR_Y_TOP, BTN_W, BAR_H, BTN_R);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+
+    /* Measure content and centre it within the button.
+     * Use u8g2_uint_t to avoid uint8_t truncation when text is wide. */
+    u8g2_uint_t text_w    = text ? u8g2_GetStrWidth(&m1_u8g2, text) : 0u;
+    u8g2_uint_t icon_w    = icon ? 8u : 0u;
+    u8g2_uint_t gap       = (icon && text) ? 2u : 0u;
+    u8g2_uint_t content_w = icon_w + gap + text_w;
+    u8g2_uint_t cx = (u8g2_uint_t)bx + (content_w < BTN_W ? (BTN_W - content_w) / 2u : 1u);
+
+    if (!icon_on_right)
+    {
+        /* Left/center slot: icon first (left of text) */
+        if (icon) u8g2_DrawXBMP(&m1_u8g2, (u8g2_uint_t)cx,              BAR_ICON_Y, 8, 8, icon);
+        if (text) u8g2_DrawStr( &m1_u8g2, (u8g2_uint_t)(cx + icon_w + gap), BAR_TEXT_Y, text);
+    }
+    else
+    {
+        /* Right slot: text first, icon to its right */
+        if (text) u8g2_DrawStr( &m1_u8g2, (u8g2_uint_t)cx,                     BAR_TEXT_Y, text);
+        if (icon) u8g2_DrawXBMP(&m1_u8g2, (u8g2_uint_t)(cx + text_w + gap), BAR_ICON_Y, 8, 8, icon);
+    }
+}
+
 void subghz_button_bar_draw(
     const uint8_t *left_icon,   const char *left_text,
     const uint8_t *center_icon, const char *center_text,
     const uint8_t *right_icon,  const char *right_text)
 {
-    /* Draw inverted background bar */
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_DrawBox(&m1_u8g2, 0, BAR_Y_TOP, M1_LCD_DISPLAY_WIDTH, BAR_H);
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    /* Use slim font for button labels */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
-    /* Left column */
-    if (left_icon)
-        u8g2_DrawXBMP(&m1_u8g2, COL_LEFT_X, BAR_ICON_Y, 8, 8, left_icon);
-    if (left_text)
-        u8g2_DrawStr(&m1_u8g2, COL_LEFT_TX, BAR_TEXT_Y, left_text);
-
-    /* Center column */
-    if (center_icon)
-        u8g2_DrawXBMP(&m1_u8g2, COL_CENTER_X, BAR_ICON_Y, 8, 8, center_icon);
-    if (center_text)
-        u8g2_DrawStr(&m1_u8g2, COL_CENTER_TX, BAR_TEXT_Y, center_text);
-
-    /* Right column */
-    if (right_icon)
-        u8g2_DrawXBMP(&m1_u8g2, COL_RIGHT_X, BAR_ICON_Y, 8, 8, right_icon);
-    if (right_text)
-        u8g2_DrawStr(&m1_u8g2, COL_RIGHT_TX, BAR_TEXT_Y, right_text);
+    /* Draw each occupied slot as an individual rounded button.
+     * Positions are fixed so gaps always appear between buttons. */
+    if (left_icon   || left_text)
+        draw_btn(BTN_0_X, left_icon,   left_text,   false);
+    if (center_icon || center_text)
+        draw_btn(BTN_1_X, center_icon, center_text, false);
+    if (right_icon  || right_text)
+        draw_btn(BTN_2_X, right_icon,  right_text,  true);
 
     /* Restore draw color */
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -87,12 +114,8 @@ void subghz_status_bar_draw(
     const char *state_text,
     bool hopping)
 {
-    char line[32];
-
-    /* Draw inverted background */
+    /* Black text on white background — matches Momentum/Flipper header style */
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_DrawBox(&m1_u8g2, 0, STATUS_BAR_Y, M1_LCD_DISPLAY_WIDTH, STATUS_BAR_H);
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 
     /* Left side: frequency or "Hopping" */
@@ -104,21 +127,22 @@ void subghz_status_bar_draw(
     /* Center: modulation */
     if (mod_text)
     {
-        /* Center the modulation text */
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, mod_text);
-        uint8_t cx = (M1_LCD_DISPLAY_WIDTH - tw) / 2;
+        /* Centre the modulation text — use u8g2_uint_t to avoid truncation */
+        u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, mod_text);
+        u8g2_uint_t cx = tw < M1_LCD_DISPLAY_WIDTH ? (M1_LCD_DISPLAY_WIDTH - tw) / 2u : 0u;
         u8g2_DrawStr(&m1_u8g2, cx, 8, mod_text);
     }
 
     /* Right side: state indicator */
     if (state_text)
     {
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, state_text);
-        u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - tw - 2, 8, state_text);
+        u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, state_text);
+        u8g2_uint_t x  = tw + 2u < M1_LCD_DISPLAY_WIDTH ? M1_LCD_DISPLAY_WIDTH - tw - 2u : 0u;
+        u8g2_DrawStr(&m1_u8g2, x, 8, state_text);
     }
 
-    /* Restore draw color */
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    /* Separator line at bottom of status bar */
+    u8g2_DrawHLine(&m1_u8g2, 0, STATUS_BAR_H, M1_LCD_DISPLAY_WIDTH);
 }
 
 /*============================================================================*/

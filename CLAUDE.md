@@ -1218,6 +1218,47 @@ port alignment straightforward.
 > if a saved-item action menu needs a specific layout, the Saved Item Actions pattern
 > wins over generic button bar guidelines.
 
+### Visual Standard: Momentum-style button bars and headers
+
+All M1 scene UI must follow the **Momentum / Flipper-inspired visual standard**:
+
+#### Bottom action bars (button bars)
+
+- **Individual rounded-corner buttons** — each action slot is a separate filled
+  rounded box (`u8g2_DrawRBox` with r=2), **not** a single solid bar spanning the
+  full display width.
+- **1 px gap between buttons** (background color shows through) so they appear
+  visually distinct.
+- **Inverted colours within each button** — filled dark box, white (background-colour)
+  text and icons.
+- **Slim font inside buttons** — use `M1_DISP_SUB_MENU_FONT_N`
+  (`u8g2_font_NokiaSmallPlain_tf`) for button labels, never the heavy bold fonts.
+- **Icon/text content is centered within each populated button**:
+  - **LEFT slot**: center the combined icon+text block; icon first, text to its right.
+  - **CENTER slot (OK)**: center the combined icon+text block; icon first, text to its right.
+  - **RIGHT slot**: center the combined text+icon block; text first, icon to its right.
+- **3-column bar** (`subghz_button_bar_draw`): each button is 42 px wide.
+  Layout: `[42 px][1 px gap][42 px][1 px gap][42 px]` = 128 px.
+- **2-column bar** (`m1_draw_bottom_bar`): each button is 63 px wide.
+  Layout: `[63 px][2 px gap][63 px]` = 128 px.
+- Draw a button only for **populated slots** — if both icon and text are NULL for a
+  slot, leave that column empty (no empty box).
+
+#### Scene header / status bars
+
+- **Black text on white background** — scene title headers and status bars (including
+  the Sub-GHz frequency/modulation/state bar) use normal draw colour (black) on the
+  default white background, **never** an inverted dark-filled background bar.
+- A **1 px separator line** at the bottom of every header/status bar visually
+  separates it from the scene body.
+- **Scene menu titles** (`m1_scene_draw_menu`, `m1_subghz_scene_menu.c`, etc.) already
+  follow this standard — they draw text in black and a `DrawHLine` separator at y=10.
+- **Sub-GHz status bar** (`subghz_status_bar_draw`): draws black text (frequency,
+  modulation, sample count) directly on white background with a `DrawHLine` at y=10.
+  No inverted `DrawBox` is drawn.
+- **Any scene that previously used an inverted title bar** (dark filled box + white
+  text) must be updated to the non-inverted pattern before merging.
+
 ### Button-to-Column Mapping (3-Column Bar)
 
 The `subghz_button_bar_draw()` API provides three columns: LEFT, CENTER,
