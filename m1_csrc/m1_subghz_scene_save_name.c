@@ -64,10 +64,24 @@ static void scene_on_enter(SubGhzApp *app)
     const char *ext = (fmt == 1) ? ".sgh" : ".sub";
     snprintf(app->file_path, sizeof(app->file_path), "/SUBGHZ/%s%s", new_name, ext);
 
-    /* Ensure the SUBGHZ directory exists — f_mkdir returns FR_EXIST if already
-     * present, which is not an error.  Without this, f_open(FA_CREATE_ALWAYS)
-     * returns FR_NO_PATH on a fresh SD card and the save fails silently. */
-    f_mkdir("/SUBGHZ");
+    /* Ensure the SUBGHZ directory exists before attempting to save.
+     * FR_EXIST is only acceptable if the existing path is actually a directory. */
+    FRESULT mkdir_res = f_mkdir("/SUBGHZ");
+    if (mkdir_res == FR_EXIST)
+    {
+        FILINFO dir_info;
+        FRESULT stat_res = f_stat("/SUBGHZ", &dir_info);
+        if ((stat_res != FR_OK) || !(dir_info.fattrib & AM_DIR))
+        {
+            subghz_scene_pop(app);
+            return;
+        }
+    }
+    else if (mkdir_res != FR_OK)
+    {
+        subghz_scene_pop(app);
+        return;
+    }
 
     bool saved;
     if (fmt == 1)
