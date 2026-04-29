@@ -805,14 +805,49 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
 /*============================================================================*/
 void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext, const char *rtext, const uint8_t *rbitmap)
 {
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
+    /* Momentum-style: two individual rounded buttons with a 2px gap.
+     * Left button  (x=0..62,  63px): lbitmap on left, ltext to its right.
+     * Right button (x=65..127, 63px): rtext on left, rbitmap on right edge. */
+    (void)u8g2; /* always uses global m1_u8g2 */
 
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-	u8g2_DrawXBMP(&m1_u8g2, 1, 54, 8, 8, lbitmap); // draw arrowleft icon
-	m1_draw_text(&m1_u8g2, 11, 61, 50,ltext, TEXT_ALIGN_LEFT);
-	u8g2_DrawXBMP(&m1_u8g2, 119, 54, 8, 8, rbitmap); // draw arrowright icon
-	m1_draw_text(&m1_u8g2, 67, 61, 50,rtext, TEXT_ALIGN_RIGHT);
+    bool has_left  = lbitmap || ltext;
+    bool has_right = rtext || rbitmap;
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    if (has_left)
+    {
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        u8g2_DrawRBox(&m1_u8g2, 0, 52, 63, 12, 2);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+
+        uint8_t text_w    = ltext ? u8g2_GetStrWidth(&m1_u8g2, ltext) : 0;
+        uint8_t icon_w    = lbitmap ? 8u : 0u;
+        uint8_t gap       = (lbitmap && ltext) ? 2u : 0u;
+        uint8_t content_w = icon_w + gap + text_w;
+        uint8_t cx        = content_w < 63u ? (63u - content_w) / 2u : 1u;
+
+        if (lbitmap) u8g2_DrawXBMP(&m1_u8g2, cx,                    54, 8, 8, lbitmap);
+        if (ltext)   u8g2_DrawStr( &m1_u8g2, cx + icon_w + gap, 61,        ltext);
+    }
+
+    if (has_right)
+    {
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        u8g2_DrawRBox(&m1_u8g2, 65, 52, 63, 12, 2);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+
+        uint8_t text_w    = rtext ? u8g2_GetStrWidth(&m1_u8g2, rtext) : 0;
+        uint8_t icon_w    = rbitmap ? 8u : 0u;
+        uint8_t gap       = (rtext && rbitmap) ? 2u : 0u;
+        uint8_t content_w = text_w + gap + icon_w;
+        uint8_t cx        = 65u + (content_w < 63u ? (63u - content_w) / 2u : 1u);
+
+        if (rtext)   u8g2_DrawStr( &m1_u8g2, cx,                    61,        rtext);
+        if (rbitmap) u8g2_DrawXBMP(&m1_u8g2, cx + text_w + gap, 54, 8, 8, rbitmap);
+    }
+
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 }
 
 /*============================================================================*/
