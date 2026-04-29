@@ -49,8 +49,9 @@
 /*============================================================================*/
 
 /* Draw one Momentum-style button: filled rounded box, white content inside.
+ * The combined icon+text block is centred horizontally within the button.
  * icon_on_right: false = icon left of text (left/center slots),
- *                true  = text left of icon (right slot, arrow on edge). */
+ *                true  = text left of icon (right slot). */
 static void draw_btn(uint8_t bx,
                      const uint8_t *icon, const char *text,
                      bool icon_on_right)
@@ -60,24 +61,25 @@ static void draw_btn(uint8_t bx,
     u8g2_DrawRBox(&m1_u8g2, bx, BAR_Y_TOP, BTN_W, BAR_H, BTN_R);
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 
-    /* Measure content to center it within the button */
-    uint8_t text_w    = text ? u8g2_GetStrWidth(&m1_u8g2, text) : 0;
-    uint8_t icon_w    = icon ? 8u : 0u;
-    uint8_t gap       = (icon && text) ? 2u : 0u;
-    uint8_t content_w = icon_w + gap + text_w;
-    uint8_t cx = bx + (BTN_W > content_w ? (BTN_W - content_w) / 2u : 1u);
+    /* Measure content and centre it within the button.
+     * Use u8g2_uint_t to avoid uint8_t truncation when text is wide. */
+    u8g2_uint_t text_w    = text ? u8g2_GetStrWidth(&m1_u8g2, text) : 0u;
+    u8g2_uint_t icon_w    = icon ? 8u : 0u;
+    u8g2_uint_t gap       = (icon && text) ? 2u : 0u;
+    u8g2_uint_t content_w = icon_w + gap + text_w;
+    u8g2_uint_t cx = (u8g2_uint_t)bx + (content_w < BTN_W ? (BTN_W - content_w) / 2u : 1u);
 
     if (!icon_on_right)
     {
-        /* Left/center slot: icon on left edge, text to the right */
-        if (icon) u8g2_DrawXBMP(&m1_u8g2, cx, BAR_ICON_Y, 8, 8, icon);
-        if (text) u8g2_DrawStr(&m1_u8g2, cx + icon_w + gap, BAR_TEXT_Y, text);
+        /* Left/center slot: icon first (left of text) */
+        if (icon) u8g2_DrawXBMP(&m1_u8g2, (u8g2_uint_t)cx,              BAR_ICON_Y, 8, 8, icon);
+        if (text) u8g2_DrawStr( &m1_u8g2, (u8g2_uint_t)(cx + icon_w + gap), BAR_TEXT_Y, text);
     }
     else
     {
-        /* Right slot: text first, then icon on right edge */
-        if (text) u8g2_DrawStr(&m1_u8g2, cx, BAR_TEXT_Y, text);
-        if (icon) u8g2_DrawXBMP(&m1_u8g2, cx + text_w + gap, BAR_ICON_Y, 8, 8, icon);
+        /* Right slot: text first, icon to its right */
+        if (text) u8g2_DrawStr( &m1_u8g2, (u8g2_uint_t)cx,                     BAR_TEXT_Y, text);
+        if (icon) u8g2_DrawXBMP(&m1_u8g2, (u8g2_uint_t)(cx + text_w + gap), BAR_ICON_Y, 8, 8, icon);
     }
 }
 

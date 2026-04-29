@@ -1233,10 +1233,10 @@ All M1 scene UI must follow the **Momentum / Flipper-inspired visual standard**:
   text and icons.
 - **Slim font inside buttons** — use `M1_DISP_SUB_MENU_FONT_N`
   (`u8g2_font_NokiaSmallPlain_tf`) for button labels, never the heavy bold fonts.
-- **Icon positioning follows the physical button**:
-  - **LEFT slot**: icon on the LEFT edge of the button, text to its right.
-  - **CENTER slot (OK)**: icon on the LEFT edge of the button, text to its right.
-  - **RIGHT slot**: text on the LEFT side, icon on the RIGHT edge.
+- **Icon/text content is centered within each populated button**:
+  - **LEFT slot**: center the combined icon+text block; icon first, text to its right.
+  - **CENTER slot (OK)**: center the combined icon+text block; icon first, text to its right.
+  - **RIGHT slot**: center the combined text+icon block; text first, icon to its right.
 - **3-column bar** (`subghz_button_bar_draw`): each button is 42 px wide.
   Layout: `[42 px][1 px gap][42 px][1 px gap][42 px]` = 128 px.
 - **2-column bar** (`m1_draw_bottom_bar`): each button is 63 px wide.

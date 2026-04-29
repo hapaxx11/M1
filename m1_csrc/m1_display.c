@@ -821,14 +821,15 @@ void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext,
         u8g2_DrawRBox(&m1_u8g2, 0, 52, 63, 12, 2);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 
-        uint8_t text_w    = ltext ? u8g2_GetStrWidth(&m1_u8g2, ltext) : 0;
-        uint8_t icon_w    = lbitmap ? 8u : 0u;
-        uint8_t gap       = (lbitmap && ltext) ? 2u : 0u;
-        uint8_t content_w = icon_w + gap + text_w;
-        uint8_t cx        = content_w < 63u ? (63u - content_w) / 2u : 1u;
+        /* Use u8g2_uint_t to avoid uint8_t truncation for wide strings */
+        u8g2_uint_t text_w    = ltext   ? u8g2_GetStrWidth(&m1_u8g2, ltext) : 0u;
+        u8g2_uint_t icon_w    = lbitmap ? 8u : 0u;
+        u8g2_uint_t gap       = (lbitmap && ltext) ? 2u : 0u;
+        u8g2_uint_t content_w = icon_w + gap + text_w;
+        u8g2_uint_t cx        = content_w < 63u ? (63u - content_w) / 2u : 1u;
 
-        if (lbitmap) u8g2_DrawXBMP(&m1_u8g2, cx,                    54, 8, 8, lbitmap);
-        if (ltext)   u8g2_DrawStr( &m1_u8g2, cx + icon_w + gap, 61,        ltext);
+        if (lbitmap) u8g2_DrawXBMP(&m1_u8g2, cx,                54, 8, 8, lbitmap);
+        if (ltext)   u8g2_DrawStr( &m1_u8g2, cx + icon_w + gap, 61,       ltext);
     }
 
     if (has_right)
@@ -837,13 +838,14 @@ void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext,
         u8g2_DrawRBox(&m1_u8g2, 65, 52, 63, 12, 2);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 
-        uint8_t text_w    = rtext ? u8g2_GetStrWidth(&m1_u8g2, rtext) : 0;
-        uint8_t icon_w    = rbitmap ? 8u : 0u;
-        uint8_t gap       = (rtext && rbitmap) ? 2u : 0u;
-        uint8_t content_w = text_w + gap + icon_w;
-        uint8_t cx        = 65u + (content_w < 63u ? (63u - content_w) / 2u : 1u);
+        /* Use u8g2_uint_t to avoid uint8_t truncation for wide strings */
+        u8g2_uint_t text_w    = rtext   ? u8g2_GetStrWidth(&m1_u8g2, rtext) : 0u;
+        u8g2_uint_t icon_w    = rbitmap ? 8u : 0u;
+        u8g2_uint_t gap       = (rtext && rbitmap) ? 2u : 0u;
+        u8g2_uint_t content_w = text_w + gap + icon_w;
+        u8g2_uint_t cx        = 65u + (content_w < 63u ? (63u - content_w) / 2u : 1u);
 
-        if (rtext)   u8g2_DrawStr( &m1_u8g2, cx,                    61,        rtext);
+        if (rtext)   u8g2_DrawStr( &m1_u8g2, cx,                61,       rtext);
         if (rbitmap) u8g2_DrawXBMP(&m1_u8g2, cx + text_w + gap, 54, 8, 8, rbitmap);
     }
 
