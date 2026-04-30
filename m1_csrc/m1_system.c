@@ -1113,9 +1113,15 @@ static void home_screen_draw_content(const char *scr_text)
  * — use startup_home_screen_refresh() instead.
  */
 /*============================================================================*/
+/* Preserved text for background redraws via startup_home_screen_refresh(). */
+static char s_home_scr_text[32];
+
 void startup_info_screen_display(const char *scr_text)
 {
-	home_screen_draw_content(scr_text);
+	strncpy(s_home_scr_text, scr_text ? scr_text : "", sizeof(s_home_scr_text) - 1);
+	s_home_scr_text[sizeof(s_home_scr_text) - 1] = '\0';
+
+	home_screen_draw_content(s_home_scr_text);
 
 	lp5814_backlight_on(M1_BACKLIGHT_BRIGHTNESS); // Turn on backlight
 
@@ -1138,7 +1144,7 @@ void startup_info_screen_display(const char *scr_text)
 /*============================================================================*/
 void startup_home_screen_refresh(void)
 {
-	home_screen_draw_content("");
+	home_screen_draw_content(s_home_scr_text);
 } // void startup_home_screen_refresh(void)
 
 

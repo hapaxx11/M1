@@ -1190,6 +1190,21 @@ sequence, firmware update messages, user presses BACK from the main menu).  They
    `active_timestamp` outside of a button-press event will extend the backlight
    timeout by the full configured period, defeating the saver.
 
+**Implementation note — `s_home_scr_text` — preserving status text across background redraws:**
+`startup_home_screen_refresh()` must redraw with the *same* text that was last passed to
+`startup_info_screen_display()`, not an empty string.  Passing `""` would silently erase
+user-visible messages such as "UPDATE COMPLETED!" or "ROLLBACK COMPLETED!" whenever the
+battery/clock refresh fires in the background.  The implementation uses a 32-byte static
+buffer `s_home_scr_text` in `m1_system.c`:
+- `startup_info_screen_display(msg)` copies `msg` into `s_home_scr_text` (null-guarded
+  `strncpy`) before drawing.
+- `startup_home_screen_refresh()` calls `home_screen_draw_content(s_home_scr_text)`,
+  replaying whatever text was last set by the wake path.
+- On a fresh boot `s_home_scr_text` is zero-initialised (BSS), so the refresh draws an
+  empty status line — correct for the normal idle screen.
+- The buffer is **only** written by `startup_info_screen_display()`; the refresh path
+  is read-only with respect to the buffer.
+
 **Implementation note — `old_stat` ownership in `battery_indicator_update()`:**
 The `old_stat` static variable in `battery_indicator_update()` is shared between the
 1 s battery-refresh timer block and the 25 ms LED indicator state machine that runs
