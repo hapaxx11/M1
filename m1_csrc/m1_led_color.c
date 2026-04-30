@@ -8,6 +8,20 @@
 #include <math.h>
 #include "m1_led_color.h"
 
+/*
+ * Precomputed Gaussian constants (avoid expf(-1) on every call).
+ *   GAUSS_EMPTY = e^(-1)     ≈ 0.36787944
+ *   GAUSS_DENOM = 1 - e^(-1) ≈ 0.63212056
+ */
+static const float GAUSS_EMPTY = 0.36787944117f;
+static const float GAUSS_DENOM = 0.63212055883f;
+
+/*
+ * Battery level at and above which the LED color is held constant at the
+ * full-charge color (no easing applied).
+ */
+#define LED_EASE_THRESHOLD 90
+
 /**
  * @brief  Interpolate a single channel by weight (0–100).
  *         result = low + (full - low) * weight / 100
@@ -26,30 +40,34 @@ void m1_led_color_ease(uint8_t level,
 {
     if (level > 100) level = 100;
 
-    /*
-     * Gaussian drop-off easing.
-     *
-     * d = depletion fraction = (100 - level) / 100  (0 = full, 1 = empty)
-     *
-     * Raw Gaussian:  g(d) = e^(-d^2)
-     *   g(0) = 1.0   (full battery  → full color)
-     *   g(1) = e^-1  (empty battery → not quite zero, so normalize)
-     *
-     * Normalized to span [0, 100]:
-     *   weight = 100 * (g(d) - g(1)) / (g(0) - g(1))
-     *          = 100 * (e^(-d^2) - e^(-1)) / (1 - e^(-1))
-     *
-     * Results:
-     *   level = 100 (full)  → weight = 100  → full color
-     *   level =   0 (empty) → weight =   0  → low-battery color
-     *   Color stays near full across most of the range, then drops
-     *   off toward the low-battery color with Gaussian curvature.
-     */
-    float d = (100.0f - (float)level) / 100.0f;
-    float gauss_raw   = expf(-d * d);
-    float gauss_empty = expf(-1.0f);          /* g(1) ≈ 0.36788 */
-    float weight_f    = 100.0f * (gauss_raw - gauss_empty) / (1.0f - gauss_empty);
-    uint8_t weight    = (uint8_t)(weight_f + 0.5f);
+    uint8_t weight;
+
+    if (level >= LED_EASE_THRESHOLD)
+    {
+        /*
+         * Above the threshold the LED holds at the full-battery color —
+         * no easing, no floating-point work.
+         */
+        weight = 100;
+    }
+    else
+    {
+        /*
+         * Gaussian drop-off below LED_EASE_THRESHOLD %.
+         *
+         * d = depletion fraction within the eased range:
+         *     d = (LED_EASE_THRESHOLD - level) / LED_EASE_THRESHOLD
+         *     d = 0 at level == threshold (seam — matches weight 100)
+         *     d = 1 at level == 0         (weight 0 → low-battery color)
+         *
+         * Normalized Gaussian:
+         *   weight = 100 * (e^(-d^2) - GAUSS_EMPTY) / GAUSS_DENOM
+         */
+        float d         = (float)(LED_EASE_THRESHOLD - level) / (float)LED_EASE_THRESHOLD;
+        float gauss_raw = expf(-d * d);
+        float weight_f  = 100.0f * (gauss_raw - GAUSS_EMPTY) / GAUSS_DENOM;
+        weight          = (uint8_t)(weight_f + 0.5f);
+    }
 
     if (out_r) *out_r = lerp_channel(low_r, full_r, weight);
     if (out_g) *out_g = lerp_channel(low_g, full_g, weight);
