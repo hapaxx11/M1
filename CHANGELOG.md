@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.182] - 2026-04-30
+
+### Changed
+
+- **LED color easing: Gaussian drop-off below 90% charge** — replaced linear interpolation with a two-region curve. Above 90% battery the LED holds at the user-selected color (no easing). Below 90% a normalized Gaussian drop-off takes over (`100×(e^(-d²)−e^(-1))/(1−e^(-1))`, d = depletion within the 0–90% window), fading toward the low-battery color. Boundary conditions are preserved: 0% → low-battery color, ≥90% → full user color. Gaussian constants are precomputed as `static const` to avoid a redundant `expf` call on every LED update.
 ## [0.9.0.181] - 2026-04-30
 
 ### Fixed
