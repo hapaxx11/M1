@@ -10,13 +10,13 @@ This project started as a fork of the original Monstatek M1 firmware and adds co
 
 ## Current Release
 
-**SiN360 v0.9.0.6**
+**SiN360 v0.9.0.7**
 
-This release focuses on the WiFi/BLE foundation, ESP32 update support, UI polish, and branding refresh.
+This release focuses on WiFi scanner coverage, Evil Portal custom-page capture improvements, BLE foundation work, ESP32 update support, UI polish, and branding refresh.
 
 ### Branding
 
-- Firmware version bumped to `0.9.0.6`
+- Firmware version bumped to `0.9.0.7`
 - Boot screen now uses SiN360 branding with the firmware version underneath
 - Boot and main-menu logos updated with custom monochrome artwork
 - Default BLE advertising name changed to `SiN360-M1`
@@ -29,9 +29,9 @@ ESP32 firmware repo:
 
 <https://github.com/sincere360/M1_SiN360_ESP32>
 
-Matching ESP32 `v0.9.0.6` release:
+Matching ESP32 `v0.9.0.7` release:
 
-<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.6>
+<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.7>
 
 Detailed user how-tos are coming later.
 
@@ -46,12 +46,15 @@ Detailed user how-tos are coming later.
 - Rickroll beacon preset
 - AP Clone beacon spam, using selected APs first when marked
 - Probe Request Flood
-- Evil Portal with captive portal DNS/HTTP and credential capture
-- Custom Evil Portal HTML upload from SD card
-- Karma and Karma Portal modes
+- Evil Portal with captive portal DNS/HTTP, credential capture, JSON/form handling, and custom page helper injection
+- Custom Evil Portal HTML upload from SD card with a 32KB limit
+- Karma and Karma Portal modes, including active SSID placeholder support for custom portal pages
 - WiFi radio controls: join WiFi, set MACs, set channel, shutdown WiFi
 - AP cache save/load/clear and SSID pool load/clear
 - TCP scanners for SSH, Telnet, and common ports over the joined WiFi network
+- Ping Scan and ARP Scan over the joined WiFi network
+- Wardrive and Station Wardrive CSV exports to SD card
+- MAC Track for monitoring selected devices
 
 ### Bluetooth / BLE
 
@@ -87,16 +90,35 @@ Detailed user how-tos are coming later.
 - ESP32 firmware update from SD card using merged ESP32 binary plus uppercase MD5 sidecar
 - Dual-bank firmware switching
 
+## Evil Portal Custom HTML
+
+Custom Evil Portal pages are loaded from SD card through the WiFi portal configuration flow. Use `.html` or `.htm` files and keep each page at or below `32768` bytes. Inline CSS and JavaScript work best because captive portal clients may not load external `http` or `https` assets reliably.
+
+Use `{{SSID}}` anywhere in custom HTML to show the active portal SSID. This also works with Karma Portal, so a page can display the current probe-followed SSID instead of a stale configured name.
+
+For the most reliable credential capture, use a normal POST form:
+
+```html
+<form method="POST" action="/login">
+  <input name="ssid" placeholder="Network name">
+  <input name="password" type="password" placeholder="Password">
+  <button type="submit">Continue</button>
+</form>
+```
+
+The portal accepts common username/network field names: `user`, `username`, `email`, `login`, `identity`, `ssid`, `wifi`, `wifi_name`, `network`, and `network_name`. Password fields can be named `pass`, `password`, or `pwd`.
+
+Custom pages also get an injected capture helper. It mirrors JavaScript form submissions and `fetch()` POST bodies to `/login`, so pages that call `preventDefault()` can still capture as long as the form fields use the supported names. JSON POST bodies are accepted too, including common `/sendJSON` style pages.
+
 ## Status
 
 Still in progress:
 
 - Detailed user how-tos and screenshots
 - More BLE detection signatures and payload tuning
-- WiFi scanner expansion, including ping/ARP scan
-- Evil Portal persistence polish
+- More Evil Portal polish and a dedicated portal authoring document
 - BadUSB/HID UI and scripting
-- GPS, logging, wardrive exports, and other advanced features
+- GPS and other advanced features
 
 ## Hardware
 
@@ -130,7 +152,7 @@ make
 Output:
 
 ```text
-artifacts/M1_SiN360_v0.9.0.6.bin
+artifacts/M1_SiN360_v0.9.0.7.bin
 ```
 
 ### VS Code
@@ -144,7 +166,7 @@ artifacts/M1_SiN360_v0.9.0.6.bin
 Output is normally:
 
 ```text
-out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.6_SD.bin
+out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.7_SD.bin
 ```
 
 ## Building ESP32 Firmware
@@ -177,7 +199,7 @@ The `.md5` file must be exactly 32 uppercase hex characters with no newline.
 
 ### Via SD Card
 
-1. Copy `M1_SiN360_v0.9.0.6.bin` to the M1 SD card.
+1. Copy `M1_SiN360_v0.9.0.7.bin` to the M1 SD card.
 2. On the M1, open **Settings > Firmware Update**.
 3. Select the firmware file.
 4. Wait for the update to complete and reboot.
@@ -191,7 +213,7 @@ Connect ST-Link V2 to the M1 GPIO header:
 - Pin 8 or 18 -> GND
 
 ```bash
-st-flash write M1_SiN360_v0.9.0.6.bin 0x08000000
+st-flash write M1_SiN360_v0.9.0.7.bin 0x08000000
 ```
 
 ## Dual Firmware Banks

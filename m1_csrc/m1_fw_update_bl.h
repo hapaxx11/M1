@@ -37,7 +37,7 @@
 #define FW_VERSION_MAJOR   			0
 #define FW_VERSION_MINOR   			9
 #define FW_VERSION_BUILD   			0
-#define FW_VERSION_RC   			6
+#define FW_VERSION_RC   			7
 
 #define FW_CONFIG_MAGIC_NUMBER_1	((uint32_t)0x4D493235)
 #define FW_CONFIG_MAGIC_NUMBER_2    ((uint32_t)0x534A1F41)

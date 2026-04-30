@@ -777,11 +777,6 @@ void wifi_signal_monitor(void)
 	}
 }
 
-
-/*============================================================================*/
-/*  Station Scan UI                                                          */
-/*============================================================================*/
-
 typedef struct {
 	uint8_t  mac[6];
 	int8_t   rssi;
@@ -797,6 +792,299 @@ typedef struct {
 static wifi_sta_t *sta_list_data = NULL;
 static uint16_t sta_total = 0;
 static uint16_t sta_view_idx = 0;
+
+static bool wifi_mac_is_zero(const uint8_t mac[6])
+{
+	for (uint8_t i = 0; i < 6; i++)
+	{
+		if (mac[i]) return false;
+	}
+	return true;
+}
+
+static void wifi_format_mac(const uint8_t mac[6], char *out, size_t out_len)
+{
+	snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+static bool wifi_mac_match(const uint8_t *a, const uint8_t *b)
+{
+	return memcmp(a, b, 6) == 0;
+}
+
+static bool wifi_mac_track_pick_selected(uint8_t target[6], char *label, size_t label_len)
+{
+	if (sta_list_data)
+	{
+		for (uint16_t i = 0; i < sta_total; i++)
+		{
+			if (!sta_list_data[i].selected) continue;
+			memcpy(target, sta_list_data[i].mac, 6);
+			snprintf(label, label_len, "STA %d/%d", i + 1, sta_total);
+			return true;
+		}
+	}
+
+	if (ap_list)
+	{
+		for (uint16_t i = 0; i < ap_count; i++)
+		{
+			if (!ap_list[i].selected) continue;
+			memcpy(target, ap_list[i].bssid, 6);
+			snprintf(label, label_len, "AP %d/%d", i + 1, ap_count);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool wifi_mac_track_pick_manual(uint8_t target[6], char *label, size_t label_len)
+{
+	char data[18] = "00 00 00 00 00 00";
+
+	if (m1_vkbs_get_data("Track MAC:", data) == 0)
+	{
+		return false;
+	}
+
+	memset(target, 0, 6);
+	if (m1_strtob_with_base(data, target, 6, 16) != 6 || wifi_mac_is_zero(target))
+	{
+		wifi_show_message("MAC Track", "Need 6 bytes", "Example: AA BB...");
+		return false;
+	}
+
+	snprintf(label, label_len, "Manual");
+	return true;
+}
+
+static bool wifi_mac_track_resp_match(const m1_resp_t *resp, const uint8_t target[6],
+	const char **ptype_out, const char **role_out, int8_t *rssi_out, uint8_t *ch_out)
+{
+	uint8_t ptype;
+	uint8_t dlen;
+	const uint8_t *d;
+
+	if (!resp || resp->payload_len < 4)
+	{
+		return false;
+	}
+
+	ptype = resp->payload[0];
+	dlen = resp->payload[3];
+	d = &resp->payload[4];
+	if (rssi_out) *rssi_out = (int8_t)resp->payload[1];
+	if (ch_out) *ch_out = resp->payload[2];
+	if (ptype_out) *ptype_out = "Other";
+	if (role_out) *role_out = "Seen";
+
+	switch (ptype)
+	{
+	case SNIFF_BEACON:
+	case SNIFF_PWNAGOTCHI:
+		if (ptype_out) *ptype_out = (ptype == SNIFF_PWNAGOTCHI) ? "Pwnagotchi" : "Beacon";
+		if (dlen >= 6 && wifi_mac_match(&d[0], target))
+		{
+			if (role_out) *role_out = "BSSID";
+			return true;
+		}
+		break;
+
+	case SNIFF_PROBE_REQ:
+		if (ptype_out) *ptype_out = "Probe";
+		if (dlen >= 6 && wifi_mac_match(&d[0], target))
+		{
+			if (role_out) *role_out = "Client";
+			return true;
+		}
+		break;
+
+	case SNIFF_DEAUTH:
+		if (ptype_out) *ptype_out = "Deauth";
+		if (dlen >= 12)
+		{
+			if (wifi_mac_match(&d[0], target))
+			{
+				if (role_out) *role_out = "Source";
+				return true;
+			}
+			if (wifi_mac_match(&d[6], target))
+			{
+				if (role_out) *role_out = "Dest";
+				return true;
+			}
+		}
+		break;
+
+	case SNIFF_EAPOL:
+		if (ptype_out) *ptype_out = "EAPOL";
+		if (dlen >= 18)
+		{
+			if (wifi_mac_match(&d[0], target))
+			{
+				if (role_out) *role_out = "Source";
+				return true;
+			}
+			if (wifi_mac_match(&d[6], target))
+			{
+				if (role_out) *role_out = "Dest";
+				return true;
+			}
+			if (wifi_mac_match(&d[12], target))
+			{
+				if (role_out) *role_out = "BSSID";
+				return true;
+			}
+		}
+		break;
+
+	case SNIFF_SAE:
+		if (ptype_out) *ptype_out = "SAE";
+		if (dlen >= 18)
+		{
+			if (wifi_mac_match(&d[0], target))
+			{
+				if (role_out) *role_out = "Source";
+				return true;
+			}
+			if (wifi_mac_match(&d[6], target))
+			{
+				if (role_out) *role_out = "Dest";
+				return true;
+			}
+			if (wifi_mac_match(&d[12], target))
+			{
+				if (role_out) *role_out = "BSSID";
+				return true;
+			}
+		}
+		break;
+
+	default:
+		if (ptype_out) *ptype_out = "Raw";
+		if (dlen >= 13)
+		{
+			if (wifi_mac_match(&d[1], target))
+			{
+				if (role_out) *role_out = "Source";
+				return true;
+			}
+			if (wifi_mac_match(&d[7], target))
+			{
+				if (role_out) *role_out = "Dest";
+				return true;
+			}
+		}
+		break;
+	}
+
+	return false;
+}
+
+void wifi_mac_track(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	uint8_t target[6] = {0};
+	char target_str[18];
+	char target_label[18];
+	char ln[26];
+	const char *last_type = "None";
+	const char *last_role = "";
+	int8_t last_rssi = 0;
+	uint8_t last_ch = 0;
+	uint32_t start_tick;
+	uint32_t packets = 0;
+	uint32_t hits = 0;
+	int spi_ret;
+
+	ensure_esp32_ready();
+
+	if (!wifi_mac_track_pick_selected(target, target_label, sizeof(target_label)))
+	{
+		if (!wifi_mac_track_pick_manual(target, target_label, sizeof(target_label)))
+		{
+			return;
+		}
+	}
+	wifi_format_mac(target, target_str, sizeof(target_str));
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.magic = M1_CMD_MAGIC;
+	cmd.cmd_id = CMD_PKTMON_START;
+	cmd.payload_len = 3;
+	cmd.payload[0] = SNIFF_ALL;
+	cmd.payload[1] = 0;
+	cmd.payload[2] = 3; /* faster hop for tracking */
+
+	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+	if (spi_ret != 0 || resp.status != RESP_OK)
+	{
+		wifi_show_message("MAC Track", "Start failed", "Flash ESP32 FW?");
+		return;
+	}
+
+	start_tick = HAL_GetTick();
+
+	while (1)
+	{
+		uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
+
+		m1_u8g2_firstpage();
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "MAC TRACK");
+
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		snprintf(ln, sizeof(ln), "%s", target_str);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+		snprintf(ln, sizeof(ln), "Hits:%lu Pkts:%lu",
+			(unsigned long)hits, (unsigned long)packets);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "%s %s", last_type, last_role);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "CH:%u RSSI:%ddBm", last_ch, last_rssi);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "%s %lus", target_label, (unsigned long)elapsed);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 4 * SF_Y_STEP, ln);
+		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+		m1_u8g2_nextpage();
+
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(SNIFF_POLL_MS));
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+		}
+
+		spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
+		if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
+		{
+			continue;
+		}
+
+		packets++;
+		if (wifi_mac_track_resp_match(&resp, target, &last_type, &last_role, &last_rssi, &last_ch))
+		{
+			hits++;
+		}
+	}
+}
+
+
+/*============================================================================*/
+/*  Station Scan UI                                                          */
+/*============================================================================*/
 
 static void sta_list_free(void)
 {
@@ -1038,11 +1326,15 @@ void wifi_sniff_sae(void)        { wifi_sniffer_run(SNIFF_SAE, "SAE/WPA3"); }
 #define NETSCAN_MODE_SSH    0
 #define NETSCAN_MODE_TELNET 1
 #define NETSCAN_MODE_COMMON 2
+#define NETSCAN_MODE_PING   3
+#define NETSCAN_MODE_ARP    4
 #define NETSCAN_RESULTS_MAX 32
 
 typedef struct {
 	uint8_t ip[4];
 	uint16_t port;
+	uint8_t mac[6];
+	bool has_mac;
 } wifi_netscan_result_t;
 
 static void wifi_netscan_run(uint8_t mode, const char *title)
@@ -1068,7 +1360,7 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 	cmd.magic = M1_CMD_MAGIC;
 	cmd.cmd_id = CMD_NETSCAN_START;
 	cmd.payload[0] = mode;
-	cmd.payload[1] = 80; /* per-port TCP timeout in ms */
+	cmd.payload[1] = (mode == NETSCAN_MODE_PING || mode == NETSCAN_MODE_ARP) ? 150 : 80;
 	cmd.payload_len = 2;
 
 	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
@@ -1094,6 +1386,11 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 				{
 					memcpy(results[result_count].ip, &resp.payload[1], 4);
 					results[result_count].port = resp.payload[5] | ((uint16_t)resp.payload[6] << 8);
+					if (resp.payload_len >= 16 && resp.payload[9])
+					{
+						results[result_count].has_mac = true;
+						memcpy(results[result_count].mac, &resp.payload[10], 6);
+					}
 					result_count++;
 				}
 				progress = resp.payload[8];
@@ -1132,16 +1429,38 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
 			}
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP,
-				done ? "No open ports" : "Waiting...");
+				done ? ((mode == NETSCAN_MODE_SSH || mode == NETSCAN_MODE_TELNET ||
+					mode == NETSCAN_MODE_COMMON) ? "No open ports" : "No hosts found") : "Waiting...");
 		}
 		else
 		{
-			for (uint8_t i = 0; i < 3 && view_idx + i < result_count; i++)
+			if (mode == NETSCAN_MODE_ARP && results[view_idx].has_mac)
 			{
-				wifi_netscan_result_t *r = &results[view_idx + i];
-				snprintf(ln, sizeof(ln), "%d.%d.%d.%d:%d",
-					r->ip[0], r->ip[1], r->ip[2], r->ip[3], r->port);
-				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + (i + 1) * SF_Y_STEP, ln);
+				wifi_netscan_result_t *r = &results[view_idx];
+				snprintf(ln, sizeof(ln), "%d.%d.%d.%d",
+					r->ip[0], r->ip[1], r->ip[2], r->ip[3]);
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+				snprintf(ln, sizeof(ln), "%02X:%02X:%02X:%02X:%02X:%02X",
+					r->mac[0], r->mac[1], r->mac[2], r->mac[3], r->mac[4], r->mac[5]);
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+			}
+			else
+			{
+				for (uint8_t i = 0; i < 3 && view_idx + i < result_count; i++)
+				{
+					wifi_netscan_result_t *r = &results[view_idx + i];
+					if (mode == NETSCAN_MODE_PING || mode == NETSCAN_MODE_ARP)
+					{
+						snprintf(ln, sizeof(ln), "%d.%d.%d.%d",
+							r->ip[0], r->ip[1], r->ip[2], r->ip[3]);
+					}
+					else
+					{
+						snprintf(ln, sizeof(ln), "%d.%d.%d.%d:%d",
+							r->ip[0], r->ip[1], r->ip[2], r->ip[3], r->port);
+					}
+					u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + (i + 1) * SF_Y_STEP, ln);
+				}
 			}
 		}
 
@@ -1170,6 +1489,8 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 	}
 }
 
+void wifi_scan_ping(void)   { wifi_netscan_run(NETSCAN_MODE_PING, "PING SCAN"); }
+void wifi_scan_arp(void)    { wifi_netscan_run(NETSCAN_MODE_ARP, "ARP SCAN"); }
 void wifi_scan_ssh(void)    { wifi_netscan_run(NETSCAN_MODE_SSH, "SSH SCAN"); }
 void wifi_scan_telnet(void) { wifi_netscan_run(NETSCAN_MODE_TELNET, "TELNET SCAN"); }
 void wifi_scan_ports(void)  { wifi_netscan_run(NETSCAN_MODE_COMMON, "PORT SCAN"); }
@@ -2189,7 +2510,7 @@ void wifi_attack_beacon(void)
 #define WIFI_AP_CACHE_FILE "wifi/aps.tsv"
 #define WIFI_AP_CACHE_LINE_MAX 128
 #define WIFI_JOIN_PASS_MAX 63
-#define EP_HTML_MAX_BYTES 4096
+#define EP_HTML_MAX_BYTES 32768
 #define EP_HTML_CHUNK_BYTES M1_MAX_PAYLOAD
 
 static char wifi_portal_ssid[33] = "Free WiFi";
@@ -2237,6 +2558,142 @@ static void wifi_sanitize_field(char *dst, const char *src, size_t dst_len)
 		dst[i] = (c == '\t' || c == '\r' || c == '\n') ? ' ' : c;
 	}
 	dst[i] = '\0';
+}
+
+static void wifi_csv_quote_field(char *dst, const char *src, size_t dst_len)
+{
+	size_t di = 0;
+	if (!dst || dst_len == 0)
+	{
+		return;
+	}
+
+	dst[di++] = '"';
+	for (size_t si = 0; src && src[si] && di + 2 < dst_len; si++)
+	{
+		char c = src[si];
+		if (c == '\r' || c == '\n')
+		{
+			c = ' ';
+		}
+		if (c == '"')
+		{
+			if (di + 3 >= dst_len) break;
+			dst[di++] = '"';
+			dst[di++] = '"';
+		}
+		else
+		{
+			dst[di++] = c;
+		}
+	}
+	dst[di++] = '"';
+	dst[di] = '\0';
+}
+
+#define WIFI_WARDRIVE_AP_FILE      "wifi/wardrive_aps.csv"
+#define WIFI_WARDRIVE_STA_FILE     "wifi/wardrive_stations.csv"
+
+static bool wifi_append_header_if_new(FIL *fil, const char *path, const char *header)
+{
+	FILINFO info;
+	UINT bw;
+	bool new_file = (f_stat(path, &info) != FR_OK || info.fsize == 0);
+
+	if (f_open(fil, path, FA_WRITE | FA_OPEN_APPEND) != FR_OK)
+	{
+		return false;
+	}
+
+	if (new_file && header)
+	{
+		f_write(fil, header, strlen(header), &bw);
+	}
+
+	return true;
+}
+
+void wifi_wardrive(void)
+{
+	FIL fil;
+	UINT bw;
+	char line[160];
+	char ssid[70];
+
+	ensure_esp32_ready();
+	wifi_show_message("Wardrive", "Scanning APs...", NULL);
+	if (wifi_do_scan() == 0)
+	{
+		wifi_show_message("Wardrive", "No APs found", NULL);
+		return;
+	}
+
+	f_mkdir(WIFI_AP_CACHE_DIR);
+	if (!wifi_append_header_if_new(&fil, WIFI_WARDRIVE_AP_FILE,
+		"ssid,bssid,channel,rssi,auth\r\n"))
+	{
+		wifi_show_message("Wardrive", "File open failed", NULL);
+		return;
+	}
+
+	for (uint16_t i = 0; i < ap_count; i++)
+	{
+		wifi_csv_quote_field(ssid, ap_list[i].ssid[0] ? ap_list[i].ssid : "*hidden*", sizeof(ssid));
+		int len = snprintf(line, sizeof(line), "%s,%s,%u,%d,%u\r\n",
+			ssid, ap_list[i].bssid_str, ap_list[i].channel,
+			ap_list[i].rssi, ap_list[i].auth_mode);
+		if (len > 0)
+		{
+			f_write(&fil, line, len, &bw);
+		}
+	}
+	f_close(&fil);
+
+	snprintf(line, sizeof(line), "Saved %d APs", ap_count);
+	wifi_show_message("Wardrive", line, WIFI_WARDRIVE_AP_FILE);
+}
+
+void wifi_station_wardrive(void)
+{
+	FIL fil;
+	UINT bw;
+	char line[180];
+	char ssid[70];
+
+	ensure_esp32_ready();
+	if (sta_do_scan() == 0)
+	{
+		wifi_show_message("Station Wardrive", "No stations found", NULL);
+		return;
+	}
+
+	f_mkdir(WIFI_AP_CACHE_DIR);
+	if (!wifi_append_header_if_new(&fil, WIFI_WARDRIVE_STA_FILE,
+		"mac,bssid,channel,rssi,ssid\r\n"))
+	{
+		wifi_show_message("Station Wardrive", "File open failed", NULL);
+		return;
+	}
+
+	for (uint16_t i = 0; i < sta_total; i++)
+	{
+		wifi_csv_quote_field(ssid, sta_list_data[i].ssid[0] ? sta_list_data[i].ssid : "", sizeof(ssid));
+		int len = snprintf(line, sizeof(line),
+			"%s,%02X:%02X:%02X:%02X:%02X:%02X,%u,%d,%s\r\n",
+			sta_list_data[i].mac_str,
+			sta_list_data[i].bssid[0], sta_list_data[i].bssid[1],
+			sta_list_data[i].bssid[2], sta_list_data[i].bssid[3],
+			sta_list_data[i].bssid[4], sta_list_data[i].bssid[5],
+			sta_list_data[i].channel, sta_list_data[i].rssi, ssid);
+		if (len > 0)
+		{
+			f_write(&fil, line, len, &bw);
+		}
+	}
+	f_close(&fil);
+
+	snprintf(line, sizeof(line), "Saved %d STAs", sta_total);
+	wifi_show_message("Station Wardrive", line, WIFI_WARDRIVE_STA_FILE);
 }
 
 static bool wifi_parse_bssid(const char *s, uint8_t bssid[6])
@@ -3182,7 +3639,7 @@ void wifi_general_select_ep_html(void)
 	if (f_size(&fil) > EP_HTML_MAX_BYTES)
 	{
 		f_close(&fil);
-		wifi_show_message("EP HTML", "File too large", "Max 4096 bytes");
+		wifi_show_message("EP HTML", "File too large", "Max 32KB");
 		return;
 	}
 

@@ -369,12 +369,28 @@ S_M1_Menu_t menu_Wifi_Signal_Monitor =
     "Signal Monitor", wifi_signal_monitor, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_MAC_Track =
+{
+    "MAC Track", wifi_mac_track, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Wardrive =
+{
+    "Wardrive", wifi_wardrive, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Station_Wardrive =
+{
+    "Station Wardrive", wifi_station_wardrive, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Wifi_Sniffers =
 {
-    "Sniffers", NULL, NULL, NULL, 8, 0, NULL, NULL,
+    "Sniffers", NULL, NULL, NULL, 11, 0, NULL, NULL,
     {&menu_Wifi_Sniff_All, &menu_Wifi_Sniff_Beacon, &menu_Wifi_Sniff_Probe,
      &menu_Wifi_Sniff_Deauth, &menu_Wifi_Sniff_EAPOL, &menu_Wifi_Sniff_Pwnagotchi,
-     &menu_Wifi_Sniff_SAE, &menu_Wifi_Signal_Monitor}
+     &menu_Wifi_Sniff_SAE, &menu_Wifi_Signal_Monitor, &menu_Wifi_MAC_Track,
+     &menu_Wifi_Wardrive, &menu_Wifi_Station_Wardrive}
 };
 
 /*------------------------- > Wifi-Sniffers end ------------------------------*/
@@ -384,6 +400,16 @@ S_M1_Menu_t menu_Wifi_Sniffers =
 S_M1_Menu_t menu_Wifi_Scanner_SSH =
 {
     "SSH Scan", wifi_scan_ssh, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Scanner_Ping =
+{
+    "Ping Scan", wifi_scan_ping, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Scanner_ARP =
+{
+    "ARP Scan", wifi_scan_arp, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
 S_M1_Menu_t menu_Wifi_Scanner_Telnet =
@@ -398,8 +424,9 @@ S_M1_Menu_t menu_Wifi_Scanner_Ports =
 
 S_M1_Menu_t menu_Wifi_Scanners =
 {
-    "Scanners", NULL, NULL, NULL, 3, 0, NULL, NULL,
-    {&menu_Wifi_Scanner_SSH, &menu_Wifi_Scanner_Telnet, &menu_Wifi_Scanner_Ports}
+    "Scanners", NULL, NULL, NULL, 5, 0, NULL, NULL,
+    {&menu_Wifi_Scanner_Ping, &menu_Wifi_Scanner_ARP, &menu_Wifi_Scanner_SSH,
+     &menu_Wifi_Scanner_Telnet, &menu_Wifi_Scanner_Ports}
 };
 
 /*------------------------- > Wifi-Scanners end ------------------------------*/

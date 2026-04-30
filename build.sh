@@ -3,7 +3,7 @@ set -e
 
 BUILD_DIR="build"
 OUTPUT_DIR="artifacts"
-FW_NAME="M1_SiN360_v0.9.0.6"
+FW_NAME="M1_SiN360_v0.9.0.7"
 mkdir -p $BUILD_DIR $OUTPUT_DIR
 
 echo "Configuring CMake..."

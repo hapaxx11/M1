@@ -31,8 +31,13 @@ void wifi_sniff_eapol(void);
 void wifi_sniff_pwnagotchi(void);
 void wifi_sniff_sae(void);
 void wifi_signal_monitor(void);
+void wifi_mac_track(void);
+void wifi_wardrive(void);
+void wifi_station_wardrive(void);
 
 /* Network scanners */
+void wifi_scan_ping(void);
+void wifi_scan_arp(void);
 void wifi_scan_ssh(void);
 void wifi_scan_telnet(void);
 void wifi_scan_ports(void);
