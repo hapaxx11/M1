@@ -168,8 +168,8 @@ static void draw(SubGhzApp *app)
 
         if (idx == menu_sel)
         {
-            /* Highlight selected item (leave room for scrollbar) */
-            u8g2_DrawBox(&m1_u8g2, 0, y, MENU_TEXT_W, item_h);
+            /* Highlight selected item — rounded corners, leave room for scrollbar */
+            u8g2_DrawRBox(&m1_u8g2, 0, y, MENU_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
@@ -184,12 +184,12 @@ static void draw(SubGhzApp *app)
         uint8_t sb_handle_y = MENU_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * menu_sel / MENU_ITEM_COUNT);
 
-        /* Track outline */
-        u8g2_DrawFrame(&m1_u8g2, SCROLLBAR_X, MENU_AREA_TOP,
-                       SCROLLBAR_W, sb_area_h);
-        /* Handle (filled) */
-        u8g2_DrawBox(&m1_u8g2, SCROLLBAR_X, sb_handle_y,
-                     SCROLLBAR_W, sb_handle_h);
+        /* Track — single centerline pixel */
+        u8g2_DrawVLine(&m1_u8g2, SCROLLBAR_X + SCROLLBAR_W / 2,
+                       MENU_AREA_TOP, sb_area_h);
+        /* Handle — filled rounded rectangle */
+        u8g2_DrawRBox(&m1_u8g2, SCROLLBAR_X, sb_handle_y,
+                      SCROLLBAR_W, sb_handle_h, 1);
     }
 
     m1_u8g2_nextpage();

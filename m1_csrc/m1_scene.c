@@ -280,8 +280,8 @@ void m1_scene_draw_menu(const char *title,
 
         if (idx == sel)
         {
-            /* Highlight selected item (leave room for scrollbar) */
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+            /* Highlight selected item — rounded corners, leave room for scrollbar */
+            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
@@ -299,12 +299,12 @@ void m1_scene_draw_menu(const char *title,
         uint8_t sb_handle_y = M1_MENU_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * sel / count);
 
-        /* Track outline */
-        u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
-                       M1_MENU_SCROLLBAR_W, sb_area_h);
-        /* Handle (filled) */
-        u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
-                     M1_MENU_SCROLLBAR_W, sb_handle_h);
+        /* Track — single centerline pixel */
+        u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+                       M1_MENU_AREA_TOP, sb_area_h);
+        /* Handle — filled rounded rectangle */
+        u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+                      M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
     }
 
     m1_u8g2_nextpage();

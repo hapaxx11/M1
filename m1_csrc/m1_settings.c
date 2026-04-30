@@ -288,8 +288,8 @@ void settings_lcd_and_notifications(void)
 
                 if (i == sel)
                 {
-                    /* Highlight selected row */
-                    u8g2_DrawBox(&m1_u8g2, 0, y, LCD_CFG_TEXT_W, item_h);
+                    /* Highlight selected row — rounded corners */
+                    u8g2_DrawRBox(&m1_u8g2, 0, y, LCD_CFG_TEXT_W, item_h, 2);
                     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
                 }
 
@@ -321,10 +321,10 @@ void settings_lcd_and_notifications(void)
                 uint8_t sb_handle_y = LCD_CFG_AREA_TOP +
                     (uint8_t)((uint16_t)sb_area_h * sel / LCD_SETTINGS_ITEMS);
 
-                u8g2_DrawFrame(&m1_u8g2, LCD_CFG_SCROLLBAR_X, LCD_CFG_AREA_TOP,
-                               LCD_CFG_SCROLLBAR_W, sb_area_h);
-                u8g2_DrawBox(&m1_u8g2, LCD_CFG_SCROLLBAR_X, sb_handle_y,
-                             LCD_CFG_SCROLLBAR_W, sb_handle_h);
+                u8g2_DrawVLine(&m1_u8g2, LCD_CFG_SCROLLBAR_X + LCD_CFG_SCROLLBAR_W / 2,
+                               LCD_CFG_AREA_TOP, sb_area_h);
+                u8g2_DrawRBox(&m1_u8g2, LCD_CFG_SCROLLBAR_X, sb_handle_y,
+                              LCD_CFG_SCROLLBAR_W, sb_handle_h, 1);
             }
 
             m1_u8g2_nextpage();

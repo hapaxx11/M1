@@ -364,10 +364,10 @@ static void draw_proto_sel(void)
 
         if (idx == bw_proto_sel)
         {
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-            u8g2_DrawBox(&m1_u8g2, 0, M1_MENU_AREA_TOP + (uint8_t)(i * item_h),
-                         M1_MENU_TEXT_W, item_h);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+            u8g2_DrawRBox(&m1_u8g2, 0, M1_MENU_AREA_TOP + (uint8_t)(i * item_h),
+                         M1_MENU_TEXT_W, item_h, 2);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             u8g2_SetFont(&m1_u8g2, m1_menu_font());
         }
 
@@ -387,10 +387,10 @@ static void draw_proto_sel(void)
         uint8_t handle_y = (uint8_t)(M1_MENU_AREA_TOP +
                            (uint8_t)((uint16_t)bw_proto_scroll * (track_h - handle_h)
                                      / (BIND_PROTO_COUNT - vis)));
-        u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
-                       M1_MENU_SCROLLBAR_W, track_h);
-        u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
-                     M1_MENU_SCROLLBAR_W, handle_h);
+        u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+                       M1_MENU_AREA_TOP, track_h);
+        u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
+                      M1_MENU_SCROLLBAR_W, handle_h, 1);
     }
 
     m1_u8g2_nextpage();

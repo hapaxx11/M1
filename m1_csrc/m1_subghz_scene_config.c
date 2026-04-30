@@ -387,8 +387,8 @@ static void draw(SubGhzApp *app)
 
         if (i == cfg_sel)
         {
-            /* Highlight selected row (leave room for scrollbar) */
-            u8g2_DrawBox(&m1_u8g2, 0, y, CFG_TEXT_W, item_h);
+            /* Highlight selected row — rounded corners, leave room for scrollbar */
+            u8g2_DrawRBox(&m1_u8g2, 0, y, CFG_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
@@ -421,10 +421,10 @@ static void draw(SubGhzApp *app)
         uint8_t sb_handle_y = CFG_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * cfg_sel / cfg_count());
 
-        u8g2_DrawFrame(&m1_u8g2, CFG_SCROLLBAR_X, CFG_AREA_TOP,
-                       CFG_SCROLLBAR_W, sb_area_h);
-        u8g2_DrawBox(&m1_u8g2, CFG_SCROLLBAR_X, sb_handle_y,
-                     CFG_SCROLLBAR_W, sb_handle_h);
+        u8g2_DrawVLine(&m1_u8g2, CFG_SCROLLBAR_X + CFG_SCROLLBAR_W / 2,
+                       CFG_AREA_TOP, sb_area_h);
+        u8g2_DrawRBox(&m1_u8g2, CFG_SCROLLBAR_X, sb_handle_y,
+                      CFG_SCROLLBAR_W, sb_handle_h, 1);
     }
 
     /* No button bar — the < > arrows on selected items clearly indicate

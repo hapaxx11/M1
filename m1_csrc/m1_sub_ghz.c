@@ -2375,7 +2375,7 @@ static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 		uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 		if (idx == sel)
 		{
-			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
 		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, subghz_add_manually_list[idx].label);
@@ -2392,10 +2392,10 @@ static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 		uint8_t sb_handle_y = M1_MENU_AREA_TOP +
 			(uint8_t)((uint16_t)sb_area_h * sel / SUBGHZ_ADD_MANUALLY_COUNT);
 
-		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
-		               M1_MENU_SCROLLBAR_W, sb_area_h);
-		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
-		             M1_MENU_SCROLLBAR_W, sb_handle_h);
+		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+		               M1_MENU_AREA_TOP, sb_area_h);
+		u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+		             M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
 	}
 
 	m1_u8g2_nextpage();

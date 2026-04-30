@@ -405,9 +405,9 @@ static void draw_dashboard(uint8_t selection)
 
 		if (item_idx == selection)
 		{
-			/* Draw selection highlight */
+			/* Draw selection highlight — rounded corners */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h);
+			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[item_idx]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -422,11 +422,12 @@ static void draw_dashboard(uint8_t selection)
 	{
 		int track_y = M1_MENU_AREA_TOP - 1;
 		int track_h = max_vis * row_h;
-		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y, M1_MENU_SCROLLBAR_W, track_h);
+		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+		               track_y, track_h);
 		int handle_h = track_h / DASHBOARD_ITEM_COUNT;
 		if (handle_h < 3) handle_h = 3;
 		int handle_y = track_y + (selection * (track_h - handle_h)) / (DASHBOARD_ITEM_COUNT - 1);
-		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y, M1_MENU_SCROLLBAR_W, handle_h);
+		u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y, M1_MENU_SCROLLBAR_W, handle_h, 1);
 	}
 
 	m1_u8g2_nextpage();
@@ -602,7 +603,7 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 		if (idx == selection)
 		{
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_browse_names[idx]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -622,7 +623,7 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 		if (bar_height < 4)
 			bar_height = 4;
 		bar_y = LIST_START_Y + (start_idx * (LIST_VISIBLE_ITEMS * item_h - bar_height)) / (count - LIST_VISIBLE_ITEMS);
-		u8g2_DrawBox(&m1_u8g2, 126, bar_y, 2, bar_height);
+		u8g2_DrawRBox(&m1_u8g2, 126, bar_y, 2, bar_height, 1);
 	}
 
 	/* Bottom bar with position counter */
@@ -1251,7 +1252,7 @@ static void draw_ir_action_menu(const char *filename, uint8_t sel)
         uint8_t y = 13 + i * 13;
         if (i == sel)
         {
-            u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13);
+            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
         u8g2_DrawStr(&m1_u8g2, 8, y + 10, ir_action_labels[i]);
@@ -2325,7 +2326,7 @@ static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
 		if (idx == sel)
 		{
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
 
@@ -2350,10 +2351,10 @@ static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
 		if (handle_h < 4) handle_h = 4;
 		uint8_t handle_y = track_y +
 			(sel * (track_h - handle_h)) / (n_slots - 1);
-		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y,
-			M1_MENU_SCROLLBAR_W, track_h);
-		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
-			M1_MENU_SCROLLBAR_W, handle_h);
+		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+			track_y, track_h);
+		u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
+			M1_MENU_SCROLLBAR_W, handle_h, 1);
 	}
 
 	/* Bottom hint: OK = assign, RIGHT = save */
@@ -2384,7 +2385,7 @@ static void builder_draw_template_screen(uint8_t sel)
 		uint8_t y = LIST_START_Y + (i * item_h);
 		if (i == sel)
 		{
-			u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
 		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_tmpl_names[i]);
@@ -2477,7 +2478,7 @@ static bool builder_slot_action(ir_builder_slot_t *slot)
 	for (uint8_t _i = 0; _i < SLOT_ACTION_COUNT; _i++) { \
 	uint8_t _y = LIST_START_Y + (_i * item_h); \
 	if (_i == asel) { \
-	u8g2_DrawBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h); \
+	u8g2_DrawRBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h, 2); \
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
 	} \
 	u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_slot_action_labels[_i]); \
