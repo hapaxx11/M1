@@ -499,8 +499,11 @@ static void battery_indicator_update(void)
 			     cur_minute != old_minute )
 			{
 				old_level  = updated.battery_level;
-				old_stat   = updated.stat;
 				old_minute = cur_minute;
+				/* Note: old_stat is intentionally NOT updated here.  It is
+				 * maintained by the LED indicator section below (which runs
+				 * every 25 ms) so that the LED state machine always fires on
+				 * a charging-status change regardless of the 1 s timer boundary. */
 				S_M1_Main_Q_t q_item;
 				q_item.q_evt_type = Q_EVENT_BATTERY_UPDATED;
 				xQueueSend(main_q_hdl, &q_item, 0);
