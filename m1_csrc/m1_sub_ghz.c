@@ -2676,9 +2676,12 @@ void sub_ghz_frequency_reader(void)
             /* Stage 2 (fine): ±300 kHz at 20 kHz step around the coarse peak.
              * Clamped to [band_lo, band_hi] so the sweep cannot wander outside
              * the selected band or across a radio-config/frontend boundary.
-             * Only runs when coarse peak meets the signal threshold.
+             * Always runs when a valid coarse peak exists — the threshold only
+             * controls the buzzer / "Signal!" indicator, not frequency precision.
+             * Removing the threshold gate here fixes the bug where the decimal
+             * part always displayed ".000" (coarse-grid peaks are exact MHz).
              * 31 pts total (15/side + centre) × 2 ms ≈ 62 ms. */
-            if (!key_hit && sw_best >= threshold && sw_freq > 0)
+            if (!key_hit && sw_freq > 0)
             {
                 uint32_t fine_lo = (sw_freq > FREQAN_FINE_RANGE_HZ)
                                  ? sw_freq - FREQAN_FINE_RANGE_HZ : band_lo;
