@@ -235,11 +235,12 @@ void menu_main_handler_task(void *param)
 			continue;
 		if ( q_item.q_evt_type!=Q_EVENT_KEYPAD )
 		{
-			/* Refresh the home screen when the battery data is updated */
+			/* Refresh home screen content (battery/clock changed) without
+			 * waking the backlight or resetting the inactivity timer. */
 			if ( q_item.q_evt_type==Q_EVENT_BATTERY_UPDATED &&
 			     m1_device_stat.op_mode==M1_OPERATION_MODE_DISPLAY_ON )
 			{
-				m1_gui_welcome_scr();
+				startup_home_screen_refresh();
 			}
 			continue;
 		}

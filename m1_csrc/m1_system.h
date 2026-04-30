@@ -195,6 +195,7 @@ void startup_device_init(void);
 void startup_config_handler(void);
 void startup_config_write(uint8_t config_byte, uint8_t config_val);
 void startup_info_screen_display(const char *scr_text);
+void startup_home_screen_refresh(void);
 
 typedef struct {
     uint16_t year;    /* 2024..2099 */
