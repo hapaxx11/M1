@@ -579,7 +579,7 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	S_M1_file_browser_ext f_ext;
 	static uint16_t num_of_files;
 	static uint16_t gui_max_column, gui_max_row;
-	static uint16_t gui_width, gui_height;
+	static uint16_t gui_width;
 	uint16_t count, len;
 	uint16_t l, k;
 	uint8_t disp_max_column, ext_len;
@@ -604,7 +604,6 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		}
 
 		gui_width = gui_max_column*pfb_hdl->font_w;
-		gui_height = gui_max_row*pfb_hdl->font_h;
 		gui_max_row -= 1; // Need room for row spacing
 		fb_gui_check = TRUE;
 	} // if (!fb_gui_check)

@@ -533,8 +533,9 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 		uint8_t sb_handle_h = (num_items > 0) ? (sb_area_h / num_items) : sb_area_h;
 		if ( sb_handle_h < 6 )
 			sb_handle_h = 6;
+		/* Clamp handle so it cannot exceed the track bottom */
 		const uint8_t sb_handle_y = (uint8_t)M1_MENU_AREA_TOP +
-		    (num_items > 0 ? (uint8_t)((uint16_t)sb_area_h * sel_item / num_items) : 0);
+		    ((num_items > 1) ? (uint8_t)((uint16_t)(sb_area_h - sb_handle_h) * sel_item / (num_items - 1)) : 0);
 		/* Track — single centerline pixel */
 		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + (uint8_t)M1_MENU_SCROLLBAR_W / 2,
 		               (uint8_t)M1_MENU_AREA_TOP, sb_area_h);

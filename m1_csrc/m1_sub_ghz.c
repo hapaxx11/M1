@@ -2389,8 +2389,10 @@ static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 		uint8_t sb_handle_h = sb_area_h / SUBGHZ_ADD_MANUALLY_COUNT;
 		if (sb_handle_h < 6)
 			sb_handle_h = 6;
-		uint8_t sb_handle_y = M1_MENU_AREA_TOP +
-			(uint8_t)((uint16_t)sb_area_h * sel / SUBGHZ_ADD_MANUALLY_COUNT);
+		uint8_t sb_handle_ofs_max = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
+		uint8_t sb_handle_y = M1_MENU_AREA_TOP;
+		if (SUBGHZ_ADD_MANUALLY_COUNT > 1)
+			sb_handle_y += (uint8_t)((uint16_t)sb_handle_ofs_max * sel / (SUBGHZ_ADD_MANUALLY_COUNT - 1));
 
 		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
 		               M1_MENU_AREA_TOP, sb_area_h);
