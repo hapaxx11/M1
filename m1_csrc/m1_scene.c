@@ -294,8 +294,8 @@ void m1_scene_draw_menu(const char *title,
     {
         uint8_t sb_area_h   = visible * item_h;
         uint8_t sb_handle_h = sb_area_h / count;
-        if (sb_handle_h < 2)
-            sb_handle_h = 2;
+        if (sb_handle_h < 6)
+            sb_handle_h = 6;
         uint8_t sb_handle_y = M1_MENU_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * sel / count);
 

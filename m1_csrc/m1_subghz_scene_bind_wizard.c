@@ -383,7 +383,7 @@ static void draw_proto_sel(void)
     {
         uint8_t track_h  = (uint8_t)(vis * item_h);
         uint8_t handle_h = track_h / BIND_PROTO_COUNT;
-        if (handle_h < 3) handle_h = 3;
+        if (handle_h < 6) handle_h = 6;
         uint8_t handle_y = (uint8_t)(M1_MENU_AREA_TOP +
                            (uint8_t)((uint16_t)bw_proto_scroll * (track_h - handle_h)
                                      / (BIND_PROTO_COUNT - vis)));

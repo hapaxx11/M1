@@ -181,6 +181,7 @@ static void draw(SubGhzApp *app)
     {
         uint8_t sb_area_h  = vis * item_h;
         uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;
+        if (sb_handle_h < 6) sb_handle_h = 6;
         uint8_t sb_handle_y = MENU_AREA_TOP +
             (uint8_t)((uint16_t)sb_area_h * menu_sel / MENU_ITEM_COUNT);
 

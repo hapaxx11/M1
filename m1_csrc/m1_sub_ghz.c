@@ -2387,8 +2387,8 @@ static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
 	{
 		uint8_t sb_area_h   = max_vis * item_h;
 		uint8_t sb_handle_h = sb_area_h / SUBGHZ_ADD_MANUALLY_COUNT;
-		if (sb_handle_h < 2)
-			sb_handle_h = 2;
+		if (sb_handle_h < 6)
+			sb_handle_h = 6;
 		uint8_t sb_handle_y = M1_MENU_AREA_TOP +
 			(uint8_t)((uint16_t)sb_area_h * sel / SUBGHZ_ADD_MANUALLY_COUNT);
 
