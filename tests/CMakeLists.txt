@@ -730,7 +730,7 @@ add_test(NAME settings_hex_color COMMAND test_settings_hex_color)
 
 # ------------------------------------------------------------------
 # Module under test: m1_led_color_ease
-# Pure function — linear interpolation of RGB channels by battery level.
+# Pure function — Gaussian drop-off easing of RGB channels by battery level.
 # Compiles directly from production source (no hardware dependencies).
 # ------------------------------------------------------------------
 add_executable(test_led_color_ease
@@ -741,6 +741,9 @@ target_include_directories(test_led_color_ease PRIVATE
     ${M1_ROOT}/m1_csrc
 )
 target_link_libraries(test_led_color_ease PRIVATE unity)
+if(NOT MSVC)
+    target_link_libraries(test_led_color_ease PRIVATE m)
+endif()
 if(TARGET sanitizers)
     target_link_libraries(test_led_color_ease PRIVATE sanitizers)
 endif()

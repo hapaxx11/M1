@@ -3,7 +3,7 @@
 /*
  * m1_led_color.h — LED color easing (pure logic, hardware-independent)
  *
- * Provides battery-level-based linear interpolation between the user's
+ * Provides battery-level-based Gaussian drop-off easing between the user's
  * chosen LED color and a low-battery LED color.
  */
 
@@ -15,11 +15,18 @@
 /**
  * @brief  Compute eased RGB color between low-battery and full-battery colors.
  *
- * Uses linear interpolation:
- *   result = low + (full - low) * level / 100
+ * Uses a normalized Gaussian drop-off active only below 90% charge:
  *
- * At level == 0   → returns the low-battery color.
- * At level == 100 → returns the full-battery color.
+ *   level >= 90 → weight = 100 (full color; no easing)
+ *   level <  90 → d = (90 - level) / 90
+ *                 weight = 100 * (e^(-d^2) - e^(-1)) / (1 - e^(-1))
+ *
+ * The color is held at the full-battery color while charge is above 90%,
+ * then drops off toward the low-battery color with Gaussian curvature
+ * as charge falls from 90% to 0%.
+ *
+ * At level == 0   → returns the low-battery color  (weight = 0).
+ * At level >= 90  → returns the full-battery color  (weight = 100).
  *
  * @param  level       Battery percentage (0–100, clamped internally)
  * @param  full_r/g/b  Full-charge (user-selected) LED color
