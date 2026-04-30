@@ -15,11 +15,16 @@
 /**
  * @brief  Compute eased RGB color between low-battery and full-battery colors.
  *
- * Uses linear interpolation:
- *   result = low + (full - low) * level / 100
+ * Uses a normalized Gaussian drop-off:
+ *   d      = (100 - level) / 100          (depletion fraction)
+ *   weight = 100 * (e^(-d^2) - e^(-1)) / (1 - e^(-1))
  *
- * At level == 0   → returns the low-battery color.
- * At level == 100 → returns the full-battery color.
+ * The color stays close to the full-battery color across most of the
+ * battery's range, then drops off toward the low-battery color with
+ * Gaussian curvature as charge is depleted.
+ *
+ * At level == 0   → returns the low-battery color  (weight = 0).
+ * At level == 100 → returns the full-battery color  (weight = 100).
  *
  * @param  level       Battery percentage (0–100, clamped internally)
  * @param  full_r/g/b  Full-charge (user-selected) LED color

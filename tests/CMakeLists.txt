@@ -740,7 +740,7 @@ add_executable(test_led_color_ease
 target_include_directories(test_led_color_ease PRIVATE
     ${M1_ROOT}/m1_csrc
 )
-target_link_libraries(test_led_color_ease PRIVATE unity)
+target_link_libraries(test_led_color_ease PRIVATE unity m)
 if(TARGET sanitizers)
     target_link_libraries(test_led_color_ease PRIVATE sanitizers)
 endif()

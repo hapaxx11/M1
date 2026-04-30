@@ -1,8 +1,15 @@
 /*
  * test_led_color_ease.c — Unit tests for m1_led_color_ease()
  *
- * Pure-logic function: linear interpolation between two RGB colors
+ * Pure-logic function: Gaussian drop-off easing between two RGB colors
  * based on battery level (0–100).  No hardware dependencies.
+ *
+ * Easing formula (normalized Gaussian):
+ *   d      = (100 - level) / 100
+ *   weight = 100 * (e^(-d^2) - e^(-1)) / (1 - e^(-1))
+ *
+ * Boundary values: weight(0)=0 → low color; weight(100)=100 → full color.
+ * Intermediate values follow the Gaussian drop-off curve.
  */
 
 #include "unity.h"
@@ -38,17 +45,23 @@ void test_ease_level_100_returns_full_color(void)
     TEST_ASSERT_EQUAL_HEX8(0x80, b);
 }
 
-void test_ease_level_50_returns_midpoint(void)
+void test_ease_level_50_returns_gaussian_blend(void)
 {
     uint8_t r, g, b;
-    /* low=0x00, full=0xFF  → mid = 0x00 + (0xFF-0x00)*50/100 = 127 */
+    /*
+     * level=50: d=0.5, gauss weight ≈ 65
+     * full=(0,255,100), low=(0,0,0)
+     *   r = 0 + (0-0)*65/100 = 0
+     *   g = 0 + 255*65/100  = 165
+     *   b = 0 + 100*65/100  = 65
+     */
     m1_led_color_ease(50,
                       0x00, 0xFF, 0x64,  /* full: 0, 255, 100 */
                       0x00, 0x00, 0x00,  /* low:  0,   0,   0 */
                       &r, &g, &b);
     TEST_ASSERT_EQUAL_HEX8(0x00, r);
-    TEST_ASSERT_EQUAL_HEX8(0x7F, g);  /* 255*50/100 = 127 */
-    TEST_ASSERT_EQUAL_HEX8(0x32, b);   /* 100*50/100 = 50  */
+    TEST_ASSERT_EQUAL_HEX8(165,  g);  /* 255*65/100 = 165 */
+    TEST_ASSERT_EQUAL_HEX8(65,   b);  /* 100*65/100 = 65  */
 }
 
 /* ---- Default color test: #331480 ↔ ~#331480 = #CCEB7F ---- */
@@ -91,7 +104,7 @@ void test_ease_same_color(void)
     TEST_ASSERT_EQUAL_HEX8(0xCC, b);
 }
 
-/* ---- Clamping: level > 100 is treated as 100 ---- */
+/* ---- Clamping: level > 100 is treated as 100 → returns full color ---- */
 
 void test_ease_level_above_100_clamps(void)
 {
@@ -110,10 +123,15 @@ void test_ease_level_above_100_clamps(void)
 void test_ease_null_output_r(void)
 {
     uint8_t g, b;
+    /*
+     * level=50: gauss weight ≈ 65
+     * full=(0xFF,0xFF,0xFF), low=(0,0,0)
+     *   g = b = 0 + 255*65/100 = 165
+     */
     m1_led_color_ease(50, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00,
                       NULL, &g, &b);
-    TEST_ASSERT_EQUAL_HEX8(127, g);
-    TEST_ASSERT_EQUAL_HEX8(127, b);
+    TEST_ASSERT_EQUAL_HEX8(165, g);
+    TEST_ASSERT_EQUAL_HEX8(165, b);
 }
 
 void test_ease_null_output_all(void)
@@ -127,6 +145,11 @@ void test_ease_null_output_all(void)
 
 void test_ease_monotonic(void)
 {
+    /*
+     * Gaussian weight increases with level, so each channel moves
+     * toward the full color as level increases.
+     * level=25 → weight≈32, level=50 → weight≈65, level=75 → weight≈90
+     */
     uint8_t r25, r50, r75;
     uint8_t g_dummy, b_dummy;
     m1_led_color_ease(25, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -145,7 +168,7 @@ int main(void)
 
     RUN_TEST(test_ease_level_0_returns_low_color);
     RUN_TEST(test_ease_level_100_returns_full_color);
-    RUN_TEST(test_ease_level_50_returns_midpoint);
+    RUN_TEST(test_ease_level_50_returns_gaussian_blend);
     RUN_TEST(test_ease_default_colors_level_0);
     RUN_TEST(test_ease_default_colors_level_100);
     RUN_TEST(test_ease_same_color);
