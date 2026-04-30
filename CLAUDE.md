@@ -1144,6 +1144,76 @@ scene_on_exit
    inline restart that reads `subghz_scan_config.band` directly may resume on
    the wrong band after replay.
 
+### Home Screen Backlight — Do Not Wake on Background Refresh
+
+> **Never call `startup_info_screen_display()` or `m1_gui_welcome_scr()` from a
+> background update path (battery, clock, SD card, or any periodic event).
+> Both functions turn the backlight on and reset the inactivity timer, which
+> wakes the screen without user interaction and prevents the saver timeout from
+> ever expiring.**
+
+**Background.** `startup_info_screen_display()` has two hardware side effects at the
+end of every call:
+1. `lp5814_backlight_on(M1_BACKLIGHT_BRIGHTNESS)` — turns the backlight on regardless
+   of the current saver state.
+2. `m1_device_stat.active_timestamp = HAL_GetTick()` — resets the inactivity timer,
+   effectively restarting the full backlight timeout.
+
+Both side effects are intentional for the call sites that **wake** the device (power-up
+sequence, firmware update messages, user presses BACK from the main menu).  They are
+**wrong** for background refresh paths.
+
+**The two functions and when to use each:**
+
+| Function | Use for | Backlight | Timer |
+|----------|---------|-----------|-------|
+| `startup_info_screen_display(msg)` | Power-up, FW update messages, user-initiated navigation to home | ON | Reset |
+| `startup_home_screen_refresh()` | Background redraw — battery level/state changed, clock minute advanced | ✗ unchanged | ✗ unchanged |
+
+**Rules for new code that redraws the home screen:**
+
+1. **If the redraw is triggered by user input** (pressing BACK from the menu, completing
+   a module and returning to home), use `startup_info_screen_display("")` or the
+   `m1_gui_welcome_scr()` wrapper — these legitimately wake the display.
+2. **If the redraw is triggered by a background event** (`Q_EVENT_BATTERY_UPDATED`,
+   a clock tick, an SD-card state change, or any other periodic event), use
+   `startup_home_screen_refresh()` only.  Do NOT call `m1_gui_welcome_scr()` or
+   `startup_info_screen_display()`.
+3. **Never reset `m1_device_stat.active_timestamp` in a background redraw.**  The
+   inactivity timer must only advance from actual user keypresses (set in
+   `system_periodic_task()` when `event_change & BUTTON_EVENT_ACTIVE` fires).
+4. **The `Q_EVENT_BATTERY_UPDATED` handler in `m1_menu.c`** is the canonical
+   example of the correct pattern — it calls `startup_home_screen_refresh()`.
+   Any new event type that causes a home screen redraw must follow the same pattern.
+5. **`lcd_saver_update()` in `m1_system.c`** controls the backlight based solely on
+   `HAL_GetTick() - m1_device_stat.active_timestamp`.  Any code path that sets
+   `active_timestamp` outside of a button-press event will extend the backlight
+   timeout by the full configured period, defeating the saver.
+
+**Implementation note — `s_home_scr_text` — preserving status text across background redraws:**
+`startup_home_screen_refresh()` must redraw with the *same* text that was last passed to
+`startup_info_screen_display()`, not an empty string.  Passing `""` would silently erase
+user-visible messages such as "UPDATE COMPLETED!" or "ROLLBACK COMPLETED!" whenever the
+battery/clock refresh fires in the background.  The implementation uses a 32-byte static
+buffer `s_home_scr_text` in `m1_system.c`:
+- `startup_info_screen_display(msg)` copies `msg` into `s_home_scr_text` (null-guarded
+  `strncpy`) before drawing.
+- `startup_home_screen_refresh()` calls `home_screen_draw_content(s_home_scr_text)`,
+  replaying whatever text was last set by the wake path.
+- On a fresh boot `s_home_scr_text` is zero-initialised (BSS), so the refresh draws an
+  empty status line — correct for the normal idle screen.
+- The buffer is **only** written by `startup_info_screen_display()`; the refresh path
+  is read-only with respect to the buffer.
+
+**Implementation note — `old_stat` ownership in `battery_indicator_update()`:**
+The `old_stat` static variable in `battery_indicator_update()` is shared between the
+1 s battery-refresh timer block and the 25 ms LED indicator state machine that runs
+immediately after in the same function.  **Do not update `old_stat` inside the 1 s
+timer block.**  If you do, the LED state machine sees no change on the same tick and
+skips the LED transition when charging state changes on a timer boundary.  Only
+`old_level` and `old_minute` are updated in the timer block; `old_stat` is exclusively
+maintained by the LED section at the bottom of `battery_indicator_update()`.
+
 ---
 
 ## Saved Item Actions Pattern

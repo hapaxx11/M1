@@ -95,6 +95,8 @@ void startup_config_handler(void);
 void HAL_Delay(uint32_t Delay);
 static void startup_bu_registers_init(void);
 void startup_info_screen_display(const char *scr_text);
+void startup_home_screen_refresh(void);
+static void home_screen_draw_content(const char *scr_text);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -471,6 +473,7 @@ static void battery_indicator_update(void)
 	uint8_t new_stat, running_id;
 	static uint8_t old_stat = 0xFF;
 	static uint8_t old_level = 0xFF;
+	static uint8_t old_minute = 0xFF;
 	static uint16_t batt_info_timer_count = 0;
 
 	batt_info_timer_count += SYSTEM_PERIODIC_TASK_DELAY;
@@ -478,15 +481,29 @@ static void battery_indicator_update(void)
 	{
 		batt_info_timer_count = 0;
 		battery_status_update();
-		/* Redraw the home screen only when visible data changed (level or
-		 * charging state), matching Momentum's conditional-refresh pattern. */
+		/* Redraw the home screen only when visible data changed (battery
+		 * level/state or clock minute), matching Momentum's conditional-refresh
+		 * pattern.  The refresh function does NOT touch the backlight or reset
+		 * the inactivity timer — see startup_home_screen_refresh(). */
 		if ( m1_device_stat.op_mode == M1_OPERATION_MODE_DISPLAY_ON )
 		{
 			S_M1_Power_Status_t updated;
 			battery_power_status_get(&updated);
-			if ( updated.battery_level != old_level || updated.stat != old_stat )
+
+			/* Check if the displayed minute has changed */
+			m1_time_t now;
+			m1_get_localtime(&now);
+			uint8_t cur_minute = now.minute;
+
+			if ( updated.battery_level != old_level || updated.stat != old_stat ||
+			     cur_minute != old_minute )
 			{
-				old_level = updated.battery_level;
+				old_level  = updated.battery_level;
+				old_minute = cur_minute;
+				/* Note: old_stat is intentionally NOT updated here.  It is
+				 * maintained by the LED indicator section below (which runs
+				 * every 25 ms) so that the LED state machine always fires on
+				 * a charging-status change regardless of the 1 s timer boundary. */
 				S_M1_Main_Q_t q_item;
 				q_item.q_evt_type = Q_EVENT_BATTERY_UPDATED;
 				xQueueSend(main_q_hdl, &q_item, 0);
@@ -975,7 +992,16 @@ static void splash_draw_battery_indicator(void)
 }
 
 
-void startup_info_screen_display(const char *scr_text)
+/*============================================================================*/
+/**
+ * @brief  Render the home screen content to display RAM.
+ *
+ * Pure drawing helper — no backlight or timestamp side effects.
+ * Callers that need to wake the display must call lp5814_backlight_on()
+ * and reset active_timestamp themselves.
+ */
+/*============================================================================*/
+static void home_screen_draw_content(const char *scr_text)
 {
 	char fw_ver[20];
 	char time_str[8];  /* "HH:MM" */
@@ -1072,12 +1098,54 @@ void startup_info_screen_display(const char *scr_text)
 	u8g2_DrawStr(&m1_u8g2, x0, 62, scr_text);
 
 	m1_u8g2_nextpage(); // Update display RAM
+} // static void home_screen_draw_content(const char *scr_text)
+
+
+/*============================================================================*/
+/**
+ * @brief  Display the home screen and wake the backlight.
+ *
+ * Use for power-up, firmware update messages, and user-initiated navigation.
+ * Turns on the backlight, marks the device as display-on, and resets the
+ * inactivity timer so the full backlight timeout runs from this moment.
+ *
+ * Do NOT call this from background refresh paths (battery/clock updates)
+ * — use startup_home_screen_refresh() instead.
+ */
+/*============================================================================*/
+/* Preserved text for background redraws via startup_home_screen_refresh(). */
+static char s_home_scr_text[32];
+
+void startup_info_screen_display(const char *scr_text)
+{
+	strncpy(s_home_scr_text, scr_text ? scr_text : "", sizeof(s_home_scr_text) - 1);
+	s_home_scr_text[sizeof(s_home_scr_text) - 1] = '\0';
+
+	home_screen_draw_content(s_home_scr_text);
 
 	lp5814_backlight_on(M1_BACKLIGHT_BRIGHTNESS); // Turn on backlight
 
 	m1_device_stat.op_mode = M1_OPERATION_MODE_DISPLAY_ON; // update new state
 	m1_device_stat.active_timestamp = HAL_GetTick(); // reset timeout
 } // void startup_info_screen_display(const char *scr_text)
+
+
+/*============================================================================*/
+/**
+ * @brief  Refresh the home screen display without waking the backlight.
+ *
+ * Use for background updates (battery level/state change, clock minute tick)
+ * while the device is in DISPLAY_ON mode.  Does NOT turn on the backlight and
+ * does NOT reset the inactivity timer, so the screen-saver timeout is
+ * unaffected.  If the backlight is already off (saver mode), the updated
+ * content is written to display RAM and will be visible the next time the
+ * user wakes the screen.
+ */
+/*============================================================================*/
+void startup_home_screen_refresh(void)
+{
+	home_screen_draw_content(s_home_scr_text);
+} // void startup_home_screen_refresh(void)
 
 
 
