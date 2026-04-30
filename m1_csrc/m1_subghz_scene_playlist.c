@@ -467,7 +467,7 @@ static void draw(SubGhzApp *app)
             /* Highlight currently transmitting file */
             if (app->playlist_running && idx == app->playlist_current)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+                u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
 

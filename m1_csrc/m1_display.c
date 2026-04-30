@@ -499,7 +499,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			} // if ( menu_level_id==0 )
 			else
 			{
-				u8g2_DrawBox(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h);
+				u8g2_DrawRBox(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h, 2);
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
 			} // else
 			u8g2_SetFont(&m1_u8g2, eff_font_b);
@@ -539,12 +539,12 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 			sb_handle_h = 2;
 		const uint8_t sb_handle_y = (uint8_t)M1_MENU_AREA_TOP +
 		    (num_items > 0 ? (uint8_t)((uint16_t)sb_area_h * sel_item / num_items) : 0);
-		/* Track outline */
-		u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, (uint8_t)M1_MENU_AREA_TOP,
-		               (uint8_t)M1_MENU_SCROLLBAR_W, sb_area_h);
-		/* Handle (filled) */
-		u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
-		             (uint8_t)M1_MENU_SCROLLBAR_W, sb_handle_h);
+		/* Track — single centerline pixel */
+		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + (uint8_t)M1_MENU_SCROLLBAR_W / 2,
+		               (uint8_t)M1_MENU_AREA_TOP, sb_area_h);
+		/* Handle — filled rounded rectangle */
+		u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+		              (uint8_t)M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
 	}
 	else
 	{

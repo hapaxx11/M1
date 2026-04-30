@@ -55,7 +55,7 @@ static void draw_list_item(uint8_t vis_idx, const char *text, bool selected)
     if (selected)
     {
         u8g2_SetDrawColor(&m1_u8g2, 1);
-        u8g2_DrawBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+        u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
         u8g2_SetDrawColor(&m1_u8g2, 0);
     }
 

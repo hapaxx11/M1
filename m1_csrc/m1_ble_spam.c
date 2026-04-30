@@ -483,7 +483,7 @@ static void draw_mode_menu(int sel)
 
         if (item_idx == sel) {
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawRBox(&m1_u8g2, 0, y - 1, M1_MENU_TEXT_W, row_h, 0);
+            u8g2_DrawRBox(&m1_u8g2, 0, y - 1, M1_MENU_TEXT_W, row_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         } else {
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -496,11 +496,12 @@ static void draw_mode_menu(int sel)
     {
         int track_y = M1_MENU_AREA_TOP - 1;
         int track_h = max_vis * row_h;
-        u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, track_y, M1_MENU_SCROLLBAR_W, track_h);
+        u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+                       track_y, track_h);
         int handle_h = track_h / MENU_ITEMS;
         if (handle_h < 3) handle_h = 3;
         int handle_y = track_y + (sel * (track_h - handle_h)) / (MENU_ITEMS - 1);
-        u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y, M1_MENU_SCROLLBAR_W, handle_h);
+        u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y, M1_MENU_SCROLLBAR_W, handle_h, 1);
     }
 
     m1_u8g2_nextpage();

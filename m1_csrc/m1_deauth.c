@@ -465,7 +465,7 @@ static void draw_list(u8g2_t *u8g2, char *title, uint16_t count, uint16_t select
 
             if (idx == selection) {
                 u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
-                u8g2_DrawBox(u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+                u8g2_DrawRBox(u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
                 u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_BG);
                 if (s_state == STATE_AP_SELECT)
                     u8g2_DrawStr(u8g2, 4, y + text_ofs, s_list_items[idx].name);
@@ -490,7 +490,7 @@ static void draw_list(u8g2_t *u8g2, char *title, uint16_t count, uint16_t select
             uint8_t bar_y = LIST_START_Y
                           + (start_idx * (LIST_VISIBLE_ITEMS * item_h - bar_height))
                             / (count - LIST_VISIBLE_ITEMS);
-            u8g2_DrawBox(u8g2, 126, bar_y, 2, bar_height);
+            u8g2_DrawRBox(u8g2, 126, bar_y, 2, bar_height, 1);
         }
     }
 
@@ -513,7 +513,7 @@ static void draw_menu(u8g2_t *u8g2, uint16_t selection)
 
         if (i == (int)selection) {
             u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawBox(u8g2, 0, y, M1_MENU_TEXT_W, item_h);
+            u8g2_DrawRBox(u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_BG);
             u8g2_DrawStr(u8g2, 4, y + text_ofs, s_main_menu_options[i]);
             u8g2_SetDrawColor(u8g2, M1_DISP_DRAW_COLOR_TXT);
