@@ -951,6 +951,119 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	break; // End this loop
 	} // while (1) // Not an endless loop
 
+	return &pfb_hdl->info;
+
+} // S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
+
+
+
+
+/******************************************************************************/
+/*
+*	This function displays files and folders to the console for CLI
+*
+*/
+/******************************************************************************/
+FRESULT m1_fb_listing(const char *dir_name)
+{
+	char name[FF_MAX_LFN + 1];
+	FRESULT res;
+	DIR directory;
+	FILINFO file_info, this_file;
+	uint16_t num_of_files;
+	uint16_t count, len;
+	bool flag;
+
+	while (1) // Not an endless loop
+	{
+		res = f_opendir(&directory, dir_name);
+		if (res != FR_OK)
+		{
+			break;
+		}
+	    num_of_files = 1;
+	    while (num_of_files < FILE_BROWSER_MAX_FILES)
+	    {
+	    	res = f_readdir(&directory, &file_info);
+	    	if (res || !file_info.fname[0])
+	    		break;
+	    	if (!(file_info.fattrib & (AM_HID | AM_SYS))) // Not a system or hidden file?
+	    		num_of_files++;
+	    } // while (num_of_files < FILE_BROWSER_MAX_FILES)
+
+    	res = f_readdir(&directory, 0);
+    	if ( res != FR_OK)
+    	{
+    		break;
+    	} // if ( res != FR_OK)
+
+    	count = 0;
+       	while (count < num_of_files)
+       	{
+       		name[0] = 0;
+   			if (count)
+   			{
+   				res = f_readdir(&directory, &file_info);
+   				if (res || !file_info.fname[0])
+   					break;
+
+   				if ((file_info.fattrib & (AM_HID | AM_SYS))) // Hidden and System file?
+   					continue;
+   			} // if (count)
+
+			if (!count)
+			{
+				strcpy(name, "..");
+			}
+			else
+			{
+				if (strlen(file_info.fname) <= FILENAME_LEN_ON_CLI_MAX)
+				{
+					strcpy(name, file_info.fname);
+				}
+				else
+				{
+					if (file_info.fattrib & AM_DIR)
+					{
+						strncpy(name, file_info.fname, FILENAME_LEN_ON_CLI_MAX);
+						name[FILENAME_LEN_ON_CLI_MAX] = 0;
+						strcat(name, "..");
+					}
+					else
+					{
+						len = strlen(file_info.fname);
+						flag = FALSE;
+						while (len)
+						{
+							if (file_info.fname[len-1]=='.')
+							{
+								flag = TRUE;
+								break;
+							}
+							len--;
+						}
+						if (!flag || len==1)
+						{
+							strncpy(name, file_info.fname, FILENAME_LEN_ON_CLI_MAX);
+							name[FILENAME_LEN_ON_CLI_MAX] = 0;
+							strcat(name, "..");
+						}
+						else
+						{
+							strncpy(name, file_info.fname, FILENAME_LEN_ON_CLI_MAX - strlen(file_info.fname + len));
+							strncat(name, "..", FILENAME_LEN_ON_CLI_MAX - (strlen(name) + strlen(file_info.fname + len)));
+							strncat(name, file_info.fname + len, FILENAME_LEN_ON_CLI_MAX - strlen(name));
+						}
+					} // else
+				} // else
+   			} // else
+					// if (!count)
+			M1_LOG_N(M1_LOGDB_TAG, "%s\r\n", name);
+   			count++;
+       	} // while (count < num_of_files)
+       	break; // End this loop
+	} // while (1) // Not an endless loop
+
 	return res;
 } // FRESULT m1_fb_listing(const char *dir_name)
 
