@@ -130,11 +130,11 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 
 /* Number of 200ms draw ticks spent pushing low-RSSI "gap" columns after the
  * signal drops below threshold during RECORDING.  This creates a visible
- * ~800ms tail of empty space between consecutive signal bursts, making burst
+ * ~400ms tail of empty space between consecutive signal bursts, making burst
  * boundaries visually clear.  Momentum instead immediately freezes the cursor
  * when RSSI drops below threshold; this debounce tail is an intentional M1
  * improvement that gives better burst separation on the waveform. */
-#define RAW_DEBOUNCE_MAX  4    /* ~800 ms of gap columns */
+#define RAW_DEBOUNCE_MAX  2    /* ~400 ms of gap columns */
 
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
@@ -1051,8 +1051,12 @@ static void draw(SubGhzApp *app)
         else if (signal_present)
         {
             /* No RxData batch yet, but RSSI is still above threshold.
-             * Hold debounce so slow/long bursts are not split by synthetic gaps. */
-            app->raw_debounce = RAW_DEBOUNCE_MAX;
+             * Only keep debounce primed if it was already active — do NOT
+             * start the counter from RSSI alone.  Starting it here would cause
+             * the cursor to advance immediately after entering RECORDING if
+             * background noise momentarily pushes RSSI above the threshold. */
+            if (app->raw_debounce > 0)
+                app->raw_debounce = RAW_DEBOUNCE_MAX;
             subghz_raw_rssi_set_current_ext((float)app->rssi);
         }
         else if (app->raw_debounce > 0)
