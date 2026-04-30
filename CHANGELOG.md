@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.181] - 2026-04-30
+
+### Fixed
+
+- **Sub-GHz Read Raw: halved gap debounce and fixed premature cursor movement** — reduced the post-signal gap debounce from ~800 ms to ~400 ms; fixed the dashed cursor bar advancing immediately on entering RECORDING state by ensuring the debounce counter is only started by actual received signal data (RxData events), not by background RSSI noise crossing the threshold.
 ## [0.9.0.180] - 2026-04-30
 
 ### Fixed
