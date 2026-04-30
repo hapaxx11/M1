@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.184] - 2026-04-30
+
+### Changed
+
+- **UI: Momentum-style menu polish** — selected item highlight now uses rounded corners (`DrawRBox r=2`) across all scrollable menus; scrollbar track switched to a centerline approach (single vertical line) instead of a bounding-box frame; scrollbar position indicator uses rounded corners (`DrawRBox r=1`). Applied consistently to Sub-GHz, IR, BT, WiFi deauth, App Manager, Settings, Sub-GHz Config, Bind Wizard, Playlist, and all generic scene menus.
 ## [0.9.0.183] - 2026-04-30
 
 ### Fixed
