@@ -46,9 +46,7 @@
 #define APPS_NAME_MAX_LEN     40
 #define APPS_PATH_MAX_LEN     128
 
-#define LIST_HEADER_HEIGHT    12
-#define LIST_START_Y          (LIST_HEADER_HEIGHT + 2)
-#define LIST_VISIBLE_ITEMS    ((uint8_t)(38 / m1_menu_item_h()))
+#define LIST_VISIBLE_ITEMS    ((uint8_t)m1_menu_max_visible())
 
 /* App task priority — same level as subfunc handler */
 #define APP_TASK_PRIORITY     (tskIDLE_PRIORITY + 5)
@@ -316,41 +314,41 @@ static bool apps_read_manifest_name(const char *path, char *name_out, uint16_t n
 /*============================================================================*/
 static void apps_draw_list(const char *title, uint16_t count, uint16_t selection)
 {
-    uint16_t i;
-    uint16_t start_idx;
-    uint16_t visible;
-    uint8_t y;
-    const uint8_t item_h = m1_menu_item_h();
+    const uint8_t item_h   = m1_menu_item_h();
     const uint8_t text_ofs = item_h - 1;
+    const uint8_t visible  = LIST_VISIBLE_ITEMS;
+    uint16_t start_idx;
+    uint16_t draw_visible;
+    uint16_t i;
+    uint8_t y;
 
     /* Calculate which items are visible */
-    if (selection < LIST_VISIBLE_ITEMS)
+    if (selection < visible)
         start_idx = 0;
     else
-        start_idx = selection - LIST_VISIBLE_ITEMS + 1;
+        start_idx = selection - visible + 1;
 
-    visible = count - start_idx;
-    if (visible > LIST_VISIBLE_ITEMS)
-        visible = LIST_VISIBLE_ITEMS;
+    draw_visible = count - start_idx;
+    if (draw_visible > visible)
+        draw_visible = visible;
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    /* Title bar */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
-    u8g2_DrawHLine(&m1_u8g2, 0, LIST_HEADER_HEIGHT, 128);
+    /* Title — centered, matching m1_scene_draw_menu */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, title, TEXT_ALIGN_CENTER);
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     /* List items */
     u8g2_SetFont(&m1_u8g2, m1_menu_font());
-    for (i = 0; i < visible; i++)
+    for (i = 0; i < draw_visible; i++)
     {
         uint16_t idx = start_idx + i;
-        y = LIST_START_Y + (i * item_h);
+        y = M1_MENU_AREA_TOP + (i * item_h);
 
         if (idx == selection)
         {
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
             u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_app_list[idx].display_name);
@@ -362,26 +360,22 @@ static void apps_draw_list(const char *title, uint16_t count, uint16_t selection
         }
     }
 
-    /* Scroll indicator */
-    if (count > LIST_VISIBLE_ITEMS)
+    /* Scrollbar — proportional handle, matching m1_scene_draw_menu */
+    if (count > 0)
     {
-        uint8_t bar_height = (LIST_VISIBLE_ITEMS * item_h * LIST_VISIBLE_ITEMS) / count;
-        uint8_t bar_y;
+        uint8_t sb_area_h   = visible * item_h;
+        uint8_t sb_handle_h = (uint8_t)((uint16_t)sb_area_h / count);
+        if (sb_handle_h < 6)
+            sb_handle_h = 6;
+        uint8_t sb_travel_h = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
+        uint8_t sb_handle_y = M1_MENU_AREA_TOP;
+        if (count > 1)
+            sb_handle_y += (uint8_t)((uint16_t)sb_travel_h * selection / (count - 1));
 
-        if (bar_height < 4)
-            bar_height = 4;
-
-        bar_y = LIST_START_Y + (start_idx * (LIST_VISIBLE_ITEMS * item_h - bar_height))
-                / (count - LIST_VISIBLE_ITEMS);
-        u8g2_DrawRBox(&m1_u8g2, 126, bar_y, 2, bar_height, 1);
-    }
-
-    /* Bottom bar */
-    {
-        char page_info[16];
-        snprintf(page_info, sizeof(page_info), "%u/%u", (unsigned)(selection + 1), (unsigned)count);
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, page_info, "Run", arrowright_8x8);
+        u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+                       M1_MENU_AREA_TOP, sb_area_h);
+        u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+                      M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
     }
 
     m1_u8g2_nextpage();
@@ -400,22 +394,20 @@ static void apps_draw_message(const char *line1, const char *line2)
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    /* Title bar */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 2, 10, "Apps");
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, 128);
-
-    /* Message lines centered */
+    /* Title — centered, matching m1_scene_draw_menu */
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, "Apps", TEXT_ALIGN_CENTER);
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+    /* Message lines centered in the 52px menu area */
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
     if (line1 != NULL)
     {
-        uint16_t w = (uint16_t)u8g2_GetStrWidth(&m1_u8g2, line1);
-        u8g2_DrawStr(&m1_u8g2, (128 - w) / 2, 32, line1);
+        m1_draw_text(&m1_u8g2, 0, 34, M1_LCD_DISPLAY_WIDTH, line1, TEXT_ALIGN_CENTER);
     }
     if (line2 != NULL)
     {
-        uint16_t w = (uint16_t)u8g2_GetStrWidth(&m1_u8g2, line2);
-        u8g2_DrawStr(&m1_u8g2, (128 - w) / 2, 44, line2);
+        m1_draw_text(&m1_u8g2, 0, 46, M1_LCD_DISPLAY_WIDTH, line2, TEXT_ALIGN_CENTER);
     }
 
     m1_u8g2_nextpage();
