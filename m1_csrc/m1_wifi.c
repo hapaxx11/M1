@@ -902,6 +902,7 @@ void wifi_show_status(void)
 	{
 		u8g2_DrawStr(&m1_u8g2, 2, y_offset, "IP: N/A");
 		s_wifi_connected = false;
+		s_last_ntp_sync_tick = 0;   /* connection lost; reset so reconnect gets a fresh sync */
 	}
 	y_offset += M1_GUI_FONT_HEIGHT;
 
@@ -978,6 +979,7 @@ void wifi_disconnect(void)
 	{
 		s_wifi_connected = false;
 		s_connected_ssid[0] = '\0';
+		s_last_ntp_sync_tick = 0;   /* clear so reconnect gets a fresh 30-min window */
 		wifi_display_msg("WiFi", "Disconnected");
 		M1_LOG_I(M1_LOGDB_TAG, "WiFi disconnected\n\r");
 	}
@@ -1117,8 +1119,10 @@ const char *wifi_get_connected_ssid(void)
   */
 /*============================================================================*/
 
-/* Minimum interval between background NTP re-syncs: 30 minutes */
-#define WIFI_NTP_RESYNC_INTERVAL_MS  (30UL * 60UL * 1000UL)
+/* Minimum interval between background NTP re-syncs on success: 30 minutes */
+#define WIFI_NTP_RESYNC_INTERVAL_MS       (30UL * 60UL * 1000UL)
+/* Backoff after a failed attempt: 5 minutes (avoids blocking the menu task every minute) */
+#define WIFI_NTP_RETRY_BACKOFF_MS         (5UL * 60UL * 1000UL)
 
 void wifi_ntp_background_sync(void)
 {
@@ -1127,8 +1131,18 @@ void wifi_ntp_background_sync(void)
 		return;
 
 	uint32_t now = HAL_GetTick();
+
+	/* Rate-limit: skip if the last *successful* sync is recent (30 min window)
+	 * OR if the last *attempt* (succeeded or failed) is too recent (5 min backoff).
+	 * Using both guards means: up to 30-min between successful re-syncs, but also
+	 * at most one retry per 5 minutes if the ESP32 is temporarily not responding —
+	 * so a continuous failure never blocks the menu task every battery tick. */
+	static uint32_t s_last_attempt_tick = 0;
 	if (s_last_ntp_sync_tick != 0 &&
 	    (now - s_last_ntp_sync_tick) < WIFI_NTP_RESYNC_INTERVAL_MS)
+		return;
+	if (s_last_attempt_tick != 0 &&
+	    (now - s_last_attempt_tick) < WIFI_NTP_RETRY_BACKOFF_MS)
 		return;
 
 	/* If a WiFi-using scene (scan/status/disconnect) called m1_esp32_deinit()
@@ -1140,6 +1154,8 @@ void wifi_ntp_background_sync(void)
 		esp32_main_init();
 	if (!get_esp32_main_init_status())
 		return;   /* ESP32 is genuinely unavailable; skip silently */
+
+	s_last_attempt_tick = now;   /* record attempt before the AT command */
 
 	/* Single query — SNTP already configured, so ESP32 has a cached result.
 	 * 1-second timeout is generous; cached responses arrive in milliseconds. */

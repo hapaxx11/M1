@@ -188,6 +188,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
+  /* BDCR (LSE drive) is in the backup domain — requires write access before the
+   * macro can take effect.  HAL_RCC_OscConfig() also enables DBP internally, but
+   * only after this call site; enable it here so the drive config lands correctly.
+   * __HAL_RCC_LSEDRIVE_CONFIG writes RCC->BDCR directly (no DBP guard in macro). */
+  HAL_PWR_EnableBkUpAccess();
   /* Set LSE drive strength before enabling; must be done prior to HAL_RCC_OscConfig.
    * RCC_OscInitTypeDef on STM32H5 has no LSEDrive field — use the direct macro. */
   __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
