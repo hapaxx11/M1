@@ -201,10 +201,6 @@ HANDLERS(status);
 HANDLERS(disconnect);
 #endif
 
-/* ---- Shared submenu state ----------------------------------------------- */
-static uint8_t smenu_sel;
-static uint8_t smenu_scroll;
-
 /* ---- Sniffers submenu --------------------------------------------------- */
 #define SNIFFER_ITEM_COUNT  7
 static const char *const sniffer_labels[SNIFFER_ITEM_COUNT] = {
@@ -217,7 +213,7 @@ static const uint8_t sniffer_targets[SNIFFER_ITEM_COUNT] = {
     WifiSceneSniffSae,
 };
 static uint8_t sniffer_sel = 0, sniffer_scroll = 0;
-static void sniffer_menu_enter(M1SceneApp *app) { (void)app; smenu_sel = sniffer_sel; smenu_scroll = sniffer_scroll; app->need_redraw = true; }
+static void sniffer_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
 static bool sniffer_menu_event(M1SceneApp *app, M1SceneEvent ev) {
     return m1_scene_menu_event(app, ev, &sniffer_sel, &sniffer_scroll,
                                SNIFFER_ITEM_COUNT, M1_MENU_VIS(SNIFFER_ITEM_COUNT), sniffer_targets);

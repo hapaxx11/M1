@@ -27,6 +27,7 @@ void ble_monitor_airtag(void);
 void ble_wardrive(void);
 void ble_wardrive_continuous(void);
 void ble_detect_skimmers(void);
+void ble_detect_flock(void);
 void ble_sniff_flock(void);
 void ble_wardrive_flock(void);
 void ble_detect_meta(void);

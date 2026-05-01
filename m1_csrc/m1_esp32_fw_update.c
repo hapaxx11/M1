@@ -606,7 +606,7 @@ void setting_esp32_backup_flash(void)
 	FRESULT fres;
 	uint8_t old_op_mode;
 	static uint8_t buffer[ESP32_IMAGE_CHUNK_SIZE];
-	const uint32_t flash_size = 0x400000; /* 4MB */
+	uint32_t flash_size = 0; /* Filled in by flash-size detection below */
 	uint32_t offset = 0;
 	UINT bw;
 
@@ -719,6 +719,7 @@ void setting_esp32_backup_flash(void)
 			f_close(&hfile);
 			goto backup_cleanup;
 		}
+		flash_size = detected_size; /* Use actual detected size for read loop */
 	}
 
 	image_size = flash_size;

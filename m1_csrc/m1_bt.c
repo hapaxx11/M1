@@ -1036,6 +1036,11 @@ void ble_detect_skimmers(void)
     ble_show_pending("SKIMMER DETECT", "Needs adv pattern DB", "ESP32 cmd next");
 }
 
+void ble_detect_flock(void)
+{
+    ble_show_pending("FLOCK DETECT", "Needs signature set", "ESP32 cmd next");
+}
+
 void ble_sniff_flock(void)
 {
     ble_show_pending("FLOCK SNIFF", "Needs signature set", "ESP32 cmd next");

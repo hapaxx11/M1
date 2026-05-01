@@ -18,7 +18,13 @@
 #define M1_CMD_MAGIC   0xAB
 #define M1_RESP_MAGIC  0xCD
 
-#define M1_MAX_PAYLOAD 60
+/* Payload sizes (both structs are 64 bytes):
+ *   m1_cmd_t:  64 - magic(1) - cmd_id(1) - payload_len(1)         = 61 bytes
+ *   m1_resp_t: 64 - magic(1) - cmd_id(1) - status(1) - payload_len(1) = 60 bytes */
+#define M1_MAX_CMD_PAYLOAD   61
+#define M1_MAX_RESP_PAYLOAD  60
+/* Backward-compat alias for response payload */
+#define M1_MAX_PAYLOAD  M1_MAX_RESP_PAYLOAD
 
 /* ---- Command IDs ---- */
 
@@ -108,7 +114,7 @@ typedef struct {
     uint8_t  magic;           /* M1_CMD_MAGIC (0xAB) */
     uint8_t  cmd_id;
     uint8_t  payload_len;
-    uint8_t  payload[61];
+    uint8_t  payload[M1_MAX_CMD_PAYLOAD];
 } __attribute__((packed)) m1_cmd_t;
 
 /* Response: ESP32 -> STM32 */
@@ -117,7 +123,7 @@ typedef struct {
     uint8_t  cmd_id;
     uint8_t  status;
     uint8_t  payload_len;
-    uint8_t  payload[M1_MAX_PAYLOAD];
+    uint8_t  payload[M1_MAX_RESP_PAYLOAD];
 } __attribute__((packed)) m1_resp_t;
 
 /* ---- API ---- */

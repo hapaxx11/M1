@@ -104,7 +104,7 @@ DELEGATE(spam_all,        ble_spam_all)
 DELEGATE(spoof_airtag,    ble_spoof_airtag)
 
 DELEGATE(detect_skimmers, ble_detect_skimmers)
-DELEGATE(detect_flock,    ble_sniff_flock)
+DELEGATE(detect_flock,    ble_detect_flock)
 DELEGATE(detect_meta,     ble_detect_meta)
 
 #ifdef M1_APP_BADBT_ENABLE
@@ -228,9 +228,9 @@ static const M1SceneHandlers detect_menu_handlers = {
 
 /* ---- Top-level menu ----------------------------------------------------- */
 #if defined(M1_APP_BADBT_ENABLE) && defined(M1_APP_BT_MANAGE_ENABLE)
-#define MENU_ITEM_COUNT  11
+#define MENU_ITEM_COUNT  13
 #elif defined(M1_APP_BADBT_ENABLE) || defined(M1_APP_BT_MANAGE_ENABLE)
-#define MENU_ITEM_COUNT  10
+#define MENU_ITEM_COUNT  11
 #else
 #define MENU_ITEM_COUNT  9
 #endif
