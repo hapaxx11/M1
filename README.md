@@ -63,6 +63,8 @@ project discussion, and related project resources:
 | PicoPass / iCLASS NFC | ✗ | ✓ |
 | AES-256 encryption API | ✗ | ✓ |
 | Bad-BT (Bluetooth HID) | ✗ | ✓ |
+| WiFi packet sniffers & attacks (SiN360 ESP32 required) | ✗ | ✓ (17 tools) |
+| BLE sniffers, wardrive, spam & detectors (SiN360 ESP32 required) | ✗ | ✓ (16 tools) |
 | IR remote database | — | **1,412** files included |
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
@@ -118,13 +120,6 @@ project discussion, and related project resources:
 - Supports `STRING`, `DELAY`, `GUI`, `CTRL`, `ALT`, `SHIFT`, key combos, and `REPEAT`
 - Place `.txt` scripts in `BadUSB/` on the SD card
 
-### Bad-BT (Bluetooth HID)
-- **Wireless DuckyScript** — same scripting as BadUSB but over Bluetooth HID
-- Pairs with target device wirelessly, no cable needed
-
-> **Note:** Bad-BT is under active development. Bluetooth pairing and keystroke delivery
-> depend on the target device's BLE HID support.
-
 ### CAN Bus (FDCAN)
 - **CAN Commander** — sniff, send, and analyse CAN bus traffic via the J7 (X10) header
 - **Sniffer** — real-time CAN frame display with baud rate cycling (125 k / 250 k / 500 k / 1 Mbps)
@@ -144,14 +139,23 @@ project discussion, and related project resources:
 - **Music Player** — plays Flipper Music Format (`.fmf`) files from `SD:/Music/`
 
 ### WiFi
-- **Scan** — discover nearby access points
-- **Connect** — join networks with password entry
-- **Saved Networks** — manage stored WiFi credentials (AES-256 encrypted on SD card)
-- **Status** — view connection state, IP address, signal strength
-- **NTP Time Sync** — automatic time synchronization via `pool.ntp.org` on WiFi connect
-- **Firmware Download** — browse and download firmware images from GitHub Releases
-  (Monstatek Official, Hapax Fork, or C3/bedge117) directly to SD card for flashing.
-  Sources are user-configurable via `System/fw_sources.txt`.
+
+> **Requires [SiN360 ESP32 firmware](https://github.com/sincere360/M1_SiN360_ESP32/releases)** — see ESP32 note above.
+
+**Sniffers:**
+- Packet sniffers: All, Beacon, Probe, Deauth, EAPOL, SAE/WPA3, Pwnagotchi
+- Signal Monitor, Station Scan, MAC Tracker, Wardrive, Station Wardrive
+
+**Attacks:**
+- Deauth, Beacon Spam, AP Clone, Rickroll, Evil Portal, Probe Flood, Karma, Karma+Portal
+
+**Network Scanners:**
+- Ping, ARP, SSH, Telnet, Port Scan
+
+**General:**
+- Scan nearby access points, Status, Saved Networks (AES-256 encrypted on SD card)
+- Firmware Download — browse and download Hapax releases directly to SD card
+- Set SSID/MAC/channel, Evil Portal HTML config, save/load/clear AP lists
 
 ### NFC/RFID Field Detector
 - Detect external 13.56 MHz NFC reader fields and ~125 kHz RFID reader fields
@@ -163,9 +167,26 @@ project discussion, and related project resources:
 - 18 frequency presets from 200 Hz to 8 kHz; UP/DOWN to change, OK to toggle on/off
 - Accessible from the **GPIO → Signal Gen** menu entry
 
-### Bluetooth Device Manager
-- Scan, save, and manage BLE devices
-- View device info and connection details
+### Bluetooth & BLE
+
+> **Requires [SiN360 ESP32 firmware](https://github.com/sincere360/M1_SiN360_ESP32/releases)** — see ESP32 note above.
+
+**BLE Sniffers:** Analyzer, Generic, Flipper, AirTag Sniff/Monitor, Flock
+
+**BLE Wardrive:** Regular, Continuous, Flock
+
+**BLE Spam:** Sour Apple, SwiftPair, Samsung, Flipper, All, AirTag Spoof
+
+**BLE Detectors:** Skimmers, Flock, Meta
+
+**BLE Config:** Advertise, BLE settings
+
+**Bad-BT (Bluetooth HID):**
+- **Wireless DuckyScript** — same scripting as BadUSB but over Bluetooth HID
+- Pairs with target device wirelessly, no cable needed
+
+> **Note:** Bad-BT (HID) is under active development. Bluetooth pairing and keystroke delivery
+> depend on the target device's BLE HID support.
 
 ### Dual Boot
 - Two firmware banks with safe boot validation
@@ -246,7 +267,7 @@ Advanced users can also copy the directories manually: `ir_database/` contents �
 
 - **MCU:** STM32H573VIT6 (Cortex-M33, 250 MHz, 2 MB dual-bank flash, 640 KB RAM)
 - **Display:** 128×64 monochrome (ST7586s)
-- **WiFi/BT:** ESP32-C6 coprocessor (SPI AT interface — not UART)
+- **WiFi/BT:** ESP32-C6 coprocessor (binary SPI protocol — see ESP32 firmware note below)
 - **RF:** Si4463 sub-GHz transceiver (300–928 MHz)
 - **NFC:** ST25R3916 (13.56 MHz)
 - **RFID:** 125 kHz ASK/PSK reader with T5577 write support
@@ -256,10 +277,9 @@ Advanced users can also copy the directories manually: `ir_database/` contents �
 - **Storage:** microSD card
 - **Hardware revision:** 2.x
 
-> **ESP32 note:** The ESP32-C6 communicates with the STM32 via **SPI** AT commands at
-> runtime, not UART. Stock Espressif UART-based AT firmware downloads will **not** work.
-> The ESP32 firmware must be built with `CONFIG_AT_BASE_ON_SPI=y`. See
-> [`DEVELOPMENT.md`](DEVELOPMENT.md) for details.
+> **ESP32 firmware required:** As of v0.9.1, Hapax uses the **[sincere360/M1_SiN360_ESP32](https://github.com/sincere360/M1_SiN360_ESP32)** binary SPI firmware for the ESP32-C6 coprocessor. This firmware must be installed for WiFi, Bluetooth, and BLE features to work. Flash it via **Settings → ESP32 Update** (OTA over SPI) or via esptool — no hardware changes required. The stock Espressif AT firmware and older SPI-AT builds are **not** compatible with v0.9.1+.
+>
+> Download the latest `factory_ESP32C6-SPI-XIAO.bin` from the [SiN360 ESP32 releases page](https://github.com/sincere360/M1_SiN360_ESP32/releases).
 
 ## Building
 

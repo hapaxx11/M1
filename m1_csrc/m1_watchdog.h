@@ -13,6 +13,7 @@
 #ifndef M1_WATCHDOG_H_
 #define M1_WATCHDOG_H_
 
+#include "FreeRTOS.h"
 #include "m1_wdt_hw.h"
 
 typedef enum

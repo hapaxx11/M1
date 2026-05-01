@@ -385,11 +385,26 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 ## ESP32-C6 Coprocessor
 
 ### Firmware Source
+
+> **Two distinct ESP32 firmware variants are supported.  Choose based on which features you need.**
+
+#### AT-command firmware (legacy — bedge117 / neddy299)
 - **Source repo**: [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1) (C3 custom AT firmware)
 - **Deauth fork**: [`neddy299/esp32-at-monstatek-m1`](https://github.com/neddy299/esp32-at-monstatek-m1) (adds `AT+DEAUTH` + `AT+STASCAN`)
 - Both are forks of Espressif's official `esp-at`, customised for M1's SPI transport
 - Pre-built binaries available on the GitHub Releases pages of both repos
+- Enables: WiFi connect/disconnect, NTP sync, Bad-BT / BLE HID, BLE Spam, 802.15.4
+- Does NOT support: WiFi sniffing, BLE wardrive, deauth attacks, evil portal, network scanners
 - See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for the full reference
+
+#### Binary SPI firmware (recommended — sincere360 / SiN360)
+- **Source repo**: [`sincere360/M1_SiN360_ESP32`](https://github.com/sincere360/M1_SiN360_ESP32) (NimBLE binary SPI slave)
+- Pre-built binaries on the Releases page (`factory_ESP32C6-SPI-XIAO.bin` + `.md5`)
+- **Enables** (vs AT firmware): WiFi packet sniffers (All/Beacon/Probe/Deauth/EAPOL/SAE/Pwnagotchi), signal monitor, station scan, MAC tracker, wardrive, BLE wardrive (regular/continuous/Flock), BLE sniffers (Analyzer/Generic/Flipper/AirTag/Flock), BLE Spam (SourApple/SwiftPair/Samsung/Flipper/All/AirTag Spoof), BLE Detectors (Skimmers/Flock/Meta), WiFi attacks (Deauth/Beacon/Clone/Rickroll/Evil Portal/Probe Flood/Karma/Karma+Portal), network scanners (Ping/ARP/SSH/Telnet/Port scan)
+- **Disables** (vs AT firmware): WiFi connect/NTP sync (stub returns "not available"), Bad-BT/BLE HID, 802.15.4 scan — AT-layer modules still compile and these features will be restored once the SiN360 ESP32 firmware gains equivalent support
+- Uses a 64-byte binary SPI packet protocol (`m1_esp32_cmd.c/h`) — NOT AT text commands
+- Handshake via HANDSHAKE pin (PD7) after each TX; CS on PB10 (ESP32_SPI3_NSS)
+- Same SPI3 Mode 1 hardware as AT firmware — no hardware changes required to switch between variants
 
 ### Communication
 - M1 ↔ ESP32-C6 uses **SPI** for AT commands (NOT UART)
@@ -1713,7 +1728,7 @@ a fresh analysis is warranted.  All timestamps are **UTC**.
 |------|-------|----------|---------------------|--------------------------|------------------------|-------|
 | [Monstatek/M1](https://github.com/Monstatek/M1) | Monstatek | **Active** (upstream) | `217ca99b` | 2026-04-01 16:38 | 2026-04-20 13:18 | Original upstream. Was stale at v0.8.0.0 for months; pushed v0.8.0.1 binary-only release. No new source commits since 2026-04-01. Cherry-pick only. |
 | [bedge117/M1](https://github.com/bedge117/M1) | bedge117 | **Active** | `8842866048f7` | 2026-03-26 05:17 | 2026-04-20 13:18 | C3 enhanced firmware (C3.12). All features fully imported: PicoPass, 56 protocols (Hapax has 100+), NFC overhaul, SI4463 32MHz fix, RTC/NTP, BadUSB forced type, AES custom key, choice dialog, ISM persistence, SD RPC, Bad-BT/BLE HID (m1_badbt.c/h). Nothing outstanding. |
-| [sincere360/M1_SiN360](https://github.com/sincere360/M1_SiN360) | sincere360 | **Active** | `9fdf2ff9e2` | 2026-04-04 14:57 | 2026-04-20 13:18 | v0.9 lineage — LCD settings, IR remote, screen orientation. Hapax version scheme derived from SiN360. v0.9.0.5 NFC Amiibo/Switch HALT fix cherry-picked. No new commits since 2026-04-04. |
+| [sincere360/M1_SiN360](https://github.com/sincere360/M1_SiN360) | sincere360 | **Active** | `9fdf2ff9e2` | 2026-04-04 14:57 | 2026-05-01 04:38 | v0.9 lineage — LCD settings, IR remote, screen orientation. Hapax version scheme derived from SiN360. v0.9.0.5 NFC Amiibo/Switch HALT fix cherry-picked. v0.9.0.6/0.7 binary SPI WiFi/BLE subsystem (`m1_esp32_cmd`, new `m1_wifi.c`, new `m1_bt.c`, SiN360 ESP32 firmware) integrated 2026-05-01. |
 | [rgomez31UAQ/Monstatek-M1_STM32H573VIT6_Firmware](https://github.com/rgomez31UAQ/Monstatek-M1_STM32H573VIT6_Firmware) | rgomez31UAQ | Inactive | `024b4c16` | 2026-02-27 19:25 | 2026-04-02 03:21 | Fork of stock + build doc PR. No custom firmware work. |
 | [steveAG/monstatek-m1](https://github.com/steveAG/monstatek-m1) | steveAG | Inactive | `2df97efc` | 2026-02-20 21:22 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
 | [fengjuan0/Monstatek-M1](https://github.com/fengjuan0/Monstatek-M1) | fengjuan0 | Inactive | `2df97efc` | 2026-02-24 03:45 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |

@@ -29,7 +29,7 @@
 #include "m1_display.h"
 #include "m1_scene.h"
 #include "battery.h"
-#include "esp_app_main.h"
+/* #include "esp_app_main.h"  -- replaced by binary SPI protocol (m1_esp32_cmd.h) */
 
 /*************************** D E F I N E S ************************************/
 
@@ -139,9 +139,8 @@ static void dashboard_draw_page(dashboard_page_t page)
             snprintf(line2, sizeof(line2), "Use Mount or check card");
         }
         snprintf(line3, sizeof(line3), "USB %s  %s", usb_mode, usb_link);
-        snprintf(line4, sizeof(line4), "ESP32 %s / %s",
-                 m1_esp32_get_init_status() ? "HAL" : "Off",
-                 get_esp32_main_init_status() ? "AT Ready" : "AT Idle");
+        snprintf(line4, sizeof(line4), "ESP32 %s / Binary SPI",
+                 m1_esp32_get_init_status() ? "HAL" : "Off");
     }
     else /* DASHBOARD_PAGE_SYSTEM */
     {
