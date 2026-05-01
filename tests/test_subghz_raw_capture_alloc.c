@@ -1,3 +1,18 @@
+/* See COPYING.txt for license details. */
+
+/*
+ * test_subghz_raw_capture_alloc.c
+ *
+ * Unit tests for subghz_raw_capture_alloc — the pure-logic heap reserve probe
+ * used by Sub-GHz Read Raw capture startup before starting the SD writer.
+ *
+ * Tests verify:
+ *   - Successful reserve probes free the temporary allocation
+ *   - Failed reserve allocation is reported without calling free
+ *   - Missing callbacks are rejected
+ *   - Zero-byte probes do not require callbacks or allocation
+ */
+
 #include "unity.h"
 #include "subghz_raw_capture_alloc.h"
 

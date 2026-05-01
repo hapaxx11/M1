@@ -3039,9 +3039,10 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 		subghz_sdcard_write_buffer = malloc(SUBGHZ_FORTMATTED_DATA_SAMPLES_TO_RW);
 		if ( !subghz_sdcard_write_buffer )
 			goto retry_smaller_capture_buffer;
-		/* The SD manager allocates its write queue after these capture
-		 * buffers.  Probe that reserve now so Read Raw does not accept a
-		 * capture buffer size that immediately makes file startup fail. */
+		/* The SD manager still needs heap for its write-buffer reserve after
+		 * these capture buffers are allocated. Probe that reserve now so Read
+		 * Raw does not accept a capture buffer size that makes SD startup fail
+		 * in m1_sdm_memory_init(). */
 		if ( !subghz_raw_capture_reserve_heap(M1_SDM_MIN_BUFFER_SIZE*M1_SDM_BUFFER_ARRAY_SIZE, malloc, free) )
 			goto retry_smaller_capture_buffer;
 		m1_ringbuffer_init(&subghz_rx_rawdata_rb, (uint8_t *)subghz_front_buffer, subghz_front_buffer_size, sizeof(uint16_t));
