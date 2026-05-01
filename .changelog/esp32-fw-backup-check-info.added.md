@@ -1,1 +1,0 @@
-**ESP32 Update: Backup Flash and Check Info tools** — ported from SiN360; "Backup Flash" reads the full 4 MB ESP32 flash to `/esp32_backup.bin` on SD using the stub loader; "Check Info" resets the ESP32 and displays the last lines of UART boot output to identify the running firmware version. Both appear in Settings → ESP32 Update.
