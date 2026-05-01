@@ -33,10 +33,10 @@
  *              This makes the visual distinction unambiguous: a filling/scrolling
  *              waveform always means RECORDING is in progress (button = "Stop").
  *   RECORDING: Cursor slides right as captured edges arrive (SubGhzEventRxData).
- *              When the signal ends, the same debounce mechanism inserts gap
- *              columns between successive bursts within a single recording session.
- *              The raw_rx_pending flag prevents the periodic draw tick from adding
- *              a duplicate column while the signal is still active.
+ *              On each 200ms draw tick, RSSI is sampled: above threshold →
+ *              push_ext(rssi, true) advances the cursor; below threshold →
+ *              push_ext(rssi, false) freezes the cursor immediately.
+ *              This is Momentum's tick-only pattern — no debounce counter.
  *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
  *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
  *   LOADED:    Spectrogram reset (empty); "RAW" status, filename in waveform area.
@@ -128,13 +128,6 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * raw_filepath short enough that "0:" + path fits in the derived buffers. */
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
 
-/* Number of 200ms draw ticks spent pushing low-RSSI "gap" columns after the
- * signal drops below threshold during RECORDING.  This creates a visible
- * ~400ms tail of empty space between consecutive signal bursts, making burst
- * boundaries visually clear.  Momentum instead immediately freezes the cursor
- * when RSSI drops below threshold; this debounce tail is an intentional M1
- * improvement that gives better burst separation on the waveform. */
-#define RAW_DEBOUNCE_MAX  2    /* ~400 ms of gap columns */
 
 static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
@@ -226,8 +219,6 @@ static void scene_on_enter(SubGhzApp *app)
     /* ------------------------------------------------------------------ */
     if (is_resume)
     {
-        app->raw_debounce    = 0;
-        app->raw_rx_pending  = false;
         app->rssi            = -120;
 
         /* Restart passive RX (radio was torn down by scene_on_exit when the
@@ -245,8 +236,6 @@ static void scene_on_enter(SubGhzApp *app)
     /* Fresh entry path.                                                   */
     /* ------------------------------------------------------------------ */
     app->raw_sample_count = 0;
-    app->raw_debounce = 0;
-    app->raw_rx_pending = false;
     app->rssi = -120;
     subghz_raw_rssi_reset_ext();
 
@@ -312,8 +301,6 @@ static void start_raw_rx(SubGhzApp *app)
 
     app->raw_state = SubGhzReadRawStateRecording;
     app->raw_sample_count = 0;
-    app->raw_debounce = 0;
-    app->raw_rx_pending = false;
     subghz_raw_rssi_reset_ext();
 
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
@@ -345,9 +332,6 @@ static void stop_raw_rx(SubGhzApp *app)
     raw_filepath[RAW_FILEPATH_MAX] = '\0';
 
     app->raw_state = SubGhzReadRawStateIdle;
-
-    app->raw_debounce = 0;
-    app->raw_rx_pending = false;
 
     /* Timer remains paused.  Passive listen does not run TIM1 so the queue
      * is not flooded by noise edges while in the Idle state. */
@@ -653,8 +637,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                             subghz_raw_rssi_reset_ext();
                             app->raw_state        = SubGhzReadRawStateStart;
                             app->raw_sample_count = 0;
-                            app->raw_debounce     = 0;
-                            app->raw_rx_pending   = false;
                         }
                         else
                         {
@@ -819,8 +801,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 subghz_raw_rssi_reset_ext();
                 app->raw_state = SubGhzReadRawStateStart;
                 app->raw_sample_count = 0;
-                app->raw_debounce = 0;
-                app->raw_rx_pending = false;
                 app->need_redraw = true;
             }
             else if (app->raw_state == SubGhzReadRawStateLoaded)
@@ -832,8 +812,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 subghz_raw_rssi_reset_ext();
                 app->raw_state = SubGhzReadRawStateStart;
                 app->raw_sample_count = 0;
-                app->raw_debounce = 0;
-                app->raw_rx_pending = false;
                 app->need_redraw = true;
             }
             return true;
@@ -908,26 +886,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 uint32_t flushed = sub_ghz_raw_recording_flush_ext();
                 if (flushed > 0)
                     app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
-
-                /* Read RSSI and gate cursor advance on threshold.
-                 * The ISR fires on every captured edge, including noise edges
-                 * after the real signal has ended.  Once SUBGHZ_RAW_DATA_SAMPLES_TO_RW
-                 * noise pulses accumulate a Q_EVENT_SUBGHZ_RX is posted and this
-                 * handler runs even though RSSI is below threshold.  Without the
-                 * gate, the unconditional push(trace=true) and debounce reset here
-                 * bypass the draw()-tick debounce logic entirely, so the progress
-                 * bar never stops.  Only advance the cursor and prime the debounce
-                 * when RSSI is genuinely above threshold; otherwise let the 200 ms
-                 * draw-tick debounce path run down normally. */
-                app->rssi = subghz_read_rssi_ext();
-                bool signal_active = ((float)app->rssi >
-                                      (float)subghz_get_rssi_threshold_ext());
-                if (signal_active)
-                {
-                    subghz_raw_rssi_push_ext((float)app->rssi, true);
-                    app->raw_debounce   = RAW_DEBOUNCE_MAX;
-                    app->raw_rx_pending = true;
-                }
 
                 app->need_redraw = true;
             }
@@ -1017,19 +975,16 @@ static void draw(SubGhzApp *app)
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
 
-    /* Live RSSI update per draw tick.
+    /* Live RSSI update per draw tick — Momentum-aligned pattern.
      *
      * Start:     Cursor is FROZEN — only the live RSSI indicator at the current
      *            cursor position is refreshed.  The graph does not scroll in this
      *            state so a filling waveform unambiguously signals that RECORDING
      *            is in progress (button = "Stop"), not passive listen (button = "REC").
-     * Recording: RxData events push columns with trace=true (cursor advances).
-     *            raw_rx_pending prevents the draw tick from adding a duplicate
-     *            column while the signal is active.  When RxData stops arriving
-     *            the same debounce mechanism inserts gap columns for
-     *            RAW_DEBOUNCE_MAX ticks; after that, the trace no longer
-     *            advances and the last committed column continues to be
-     *            updated with the live RSSI value.
+     * Recording: On every tick, sample RSSI and call push_ext with trace=true when
+     *            RSSI is above threshold (cursor advances) or trace=false when below
+     *            (cursor freezes in-place immediately).  Single decision point, no
+     *            debounce counter, no pending flag — identical to Momentum's pattern.
      */
     if (app->raw_state == SubGhzReadRawStateStart)
     {
@@ -1049,38 +1004,9 @@ static void draw(SubGhzApp *app)
     {
         app->rssi = subghz_read_rssi_ext();
         bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
-        if (app->raw_rx_pending)
-        {
-            /* RxData fired since last draw — signal is active.
-             * The event handler already pushed a column; just refresh cursor and
-             * keep debounce primed for the eventual end-of-burst gap. */
-            app->raw_rx_pending = false;
-            app->raw_debounce = RAW_DEBOUNCE_MAX;
-            subghz_raw_rssi_set_current_ext((float)app->rssi);
-        }
-        else if (signal_present)
-        {
-            /* No RxData batch yet, but RSSI is still above threshold.
-             * Only keep debounce primed if it was already active — do NOT
-             * start the counter from RSSI alone.  Starting it here would cause
-             * the cursor to advance immediately after entering RECORDING if
-             * background noise momentarily pushes RSSI above the threshold. */
-            if (app->raw_debounce > 0)
-                app->raw_debounce = RAW_DEBOUNCE_MAX;
-            subghz_raw_rssi_set_current_ext((float)app->rssi);
-        }
-        else if (app->raw_debounce > 0)
-        {
-            /* RSSI dropped below threshold and no RxData arrived — signal ended.
-             * Push gap column then count down debounce. */
-            app->raw_debounce--;
-            subghz_raw_rssi_push_ext((float)app->rssi, true);
-        }
-        else
-        {
-            /* No signal — refresh cursor display without advancing */
-            subghz_raw_rssi_push_ext((float)app->rssi, false);
-        }
+        /* Advance cursor when signal is above threshold; freeze immediately when not.
+         * trace=false updates the current column height without incrementing ind_write. */
+        subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
     }
 
     /* Draw the RSSI spectrogram for all states.
