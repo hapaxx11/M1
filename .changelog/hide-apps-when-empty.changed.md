@@ -1,0 +1,1 @@
+**Apps: hide from main menu when no apps are installed** — the Apps entry is now omitted from the main menu when the `/apps/` directory contains no `.m1app` files. The entry reappears automatically the next time the menu is opened after apps are added to the SD card.
