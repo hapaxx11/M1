@@ -160,8 +160,6 @@ typedef struct {
     /* --- Read Raw state --- */
     SubGhzReadRawState raw_state;
     uint32_t raw_sample_count;        /**< Total RAW samples received */
-    uint8_t  raw_debounce;            /**< Gap countdown after signal trail (200ms ticks) */
-    bool     raw_rx_pending;          /**< RxData arrived since last draw tick (RECORDING only) */
     char     raw_load_path[72];       /**< Pre-loaded filepath for Loaded state (set by Saved scene) */
     bool     raw_load_is_native;      /**< true = .sgh (use sub_ghz_replay_datafile) */
     uint32_t raw_load_freq_hz;        /**< Frequency for native replay */
