@@ -293,13 +293,6 @@ static void wifi_show_message(const char *title, const char *line1, const char *
   *        the connect command (e.g. SiN360 binary firmware).
   */
 /*============================================================================*/
-/**
-  * @brief Attempt to connect to the currently-selected AP.
-  *        Prompts for a password, then sends CMD_WIFI_JOIN.
-  *        Shows an informative message if the ESP firmware does not support
-  *        the connect command (e.g. SiN360 binary firmware).
-  */
-/*============================================================================*/
 static void wifi_connect_selected_ap(void)
 {
 	char password[WIFI_JOIN_PASS_MAX + 1];
@@ -345,7 +338,13 @@ static void wifi_connect_selected_ap(void)
 
 	wifi_show_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
-	if (ret != 0 || resp.status == RESP_ERR)
+	if (ret != 0)
+	{
+		memset(password, 0, sizeof(password));
+		wifi_show_message("Connect", "No ESP32 response", "Flash ESP32 FW?");
+		return;
+	}
+	if (resp.status == RESP_ERR)
 	{
 		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connect failed", "Check password");
@@ -361,7 +360,8 @@ static void wifi_connect_selected_ap(void)
 
 	/* Successful connect — save credentials and update state */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-	wifi_cred_save(ap_list[ap_view_idx].ssid, password);
+	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
+		wifi_show_message("Connect", "Warning", "Credentials not saved");
 	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
 	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
 	s_wifi_stub_connected = true;
@@ -3476,7 +3476,8 @@ void wifi_general_join_wifi(void)
 
 	/* Successful connect — save credentials and update state */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-	wifi_cred_save(ap_list[ap_view_idx].ssid, password);
+	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
+		wifi_show_message("Join WiFi", "Warning", "Credentials not saved");
 	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
 	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
 	s_wifi_stub_connected = true;
@@ -4633,17 +4634,20 @@ void wifi_saved_networks(void)
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			}
 
-			/* Scrollbar */
+			/* Scrollbar — standard track + rounded handle (matches m1_scene_draw_menu) */
 			if (count > vis)
 			{
-				uint8_t track_h = M1_MENU_AREA_H;
-				uint8_t handle_h = (uint8_t)(track_h * vis / count);
-				if (handle_h < 4) handle_h = 4;
-				uint8_t handle_y = (uint8_t)(M1_MENU_AREA_TOP + (uint8_t)((track_h - handle_h) * scroll / (count - vis)));
-				u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
-				               M1_MENU_SCROLLBAR_W, track_h);
-				u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
-				             M1_MENU_SCROLLBAR_W, handle_h);
+				uint8_t sb_area_h   = (uint8_t)(vis * item_h);
+				uint8_t sb_handle_h = sb_area_h / count;
+				if (sb_handle_h < 6) sb_handle_h = 6;
+				uint8_t sb_travel_h = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
+				uint8_t sb_handle_y = M1_MENU_AREA_TOP;
+				if (count > 1)
+					sb_handle_y += (uint8_t)((uint16_t)sb_travel_h * scroll / (count - 1));
+				u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+				               M1_MENU_AREA_TOP, sb_area_h);
+				u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
+				              M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
 			}
 
 			m1_u8g2_nextpage();
@@ -4722,10 +4726,10 @@ void wifi_show_status(void)
 
 void wifi_disconnect(void)
 {
-m1_resp_t resp;
-m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
-s_wifi_stub_connected = false;
-memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
+	m1_resp_t resp;
+	m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
+	s_wifi_stub_connected = false;
+	memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
 }
 
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */
