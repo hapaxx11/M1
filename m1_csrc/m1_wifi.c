@@ -44,6 +44,7 @@
 #define WIFI_AP_MAX	64
 #define DEAUTH_MULTI_MAX_TARGETS 4
 #define DEAUTH_MULTI_TARGET_BYTES 14
+#define WIFI_JOIN_PASS_MAX 63
 
 //************************** S T R U C T U R E S *******************************
 
@@ -84,6 +85,9 @@ static void wifi_ap_list_free(void);
 static void wifi_draw_ap_info(void);
 static uint16_t wifi_selected_ap_count(void);
 static uint16_t wifi_selected_sta_count(void);
+static bool wifi_join_choose_password(char *password, size_t password_len);
+static void wifi_connect_selected_ap(void);
+static void ensure_esp32_ready(void);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -242,8 +246,8 @@ static uint16_t wifi_ap_list_print(bool up_dir)
 	sprintf(prn_msg, "Auth mode: %d", ap_list[ap_view_idx].auth_mode);
 	u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
 
-	/* Bottom hint: OK to attack */
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "Deauth", NULL, NULL);
+	/* Bottom hint: OK to connect */
+	m1_draw_bottom_bar(&m1_u8g2, NULL, "Connect", NULL, NULL);
 
 	m1_u8g2_nextpage();
 
@@ -271,6 +275,101 @@ static void wifi_show_message(const char *title, const char *line1, const char *
 	if (line2) u8g2_DrawStr(&m1_u8g2, 6, 42, line2);
 	m1_u8g2_nextpage();
 	HAL_Delay(1800);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief Attempt to connect to the currently-selected AP.
+  *        Prompts for a password, then sends CMD_WIFI_JOIN.
+  *        Shows an informative message if the ESP firmware does not support
+  *        the connect command (e.g. SiN360 binary firmware).
+  */
+/*============================================================================*/
+/**
+  * @brief Attempt to connect to the currently-selected AP.
+  *        Prompts for a password, then sends CMD_WIFI_JOIN.
+  *        Shows an informative message if the ESP firmware does not support
+  *        the connect command (e.g. SiN360 binary firmware).
+  */
+/*============================================================================*/
+static void wifi_connect_selected_ap(void)
+{
+	char password[WIFI_JOIN_PASS_MAX + 1];
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	char line[26];
+	uint8_t ssid_len;
+	uint8_t pass_len;
+	int ret;
+
+	if (!ap_list || ap_view_idx >= ap_count)
+		return;
+
+	if (ap_list[ap_view_idx].ssid[0] == '\0')
+	{
+		wifi_show_message("Connect", "Hidden SSID", "not supported");
+		return;
+	}
+
+	if (!wifi_join_choose_password(password, sizeof(password)))
+		return;
+
+	ssid_len = (uint8_t)strnlen(ap_list[ap_view_idx].ssid, 32);
+	pass_len = (uint8_t)strnlen(password, WIFI_JOIN_PASS_MAX);
+
+	if ((uint16_t)2 + ssid_len + pass_len > M1_MAX_CMD_PAYLOAD)
+	{
+		wifi_show_message("Connect", "Credentials too long", NULL);
+		memset(password, 0, sizeof(password));
+		return;
+	}
+
+	ensure_esp32_ready();
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.magic = M1_CMD_MAGIC;
+	cmd.cmd_id = CMD_WIFI_JOIN;
+	cmd.payload[0] = ssid_len;
+	cmd.payload[1] = pass_len;
+	memcpy(&cmd.payload[2], ap_list[ap_view_idx].ssid, ssid_len);
+	memcpy(&cmd.payload[2 + ssid_len], password, pass_len);
+	cmd.payload_len = 2 + ssid_len + pass_len;
+
+	memset(password, 0, sizeof(password)); /* clear sensitive data before blocking */
+
+	wifi_show_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
+	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
+	if (ret != 0 || resp.status == RESP_ERR)
+	{
+		wifi_show_message("Connect", "Not available", "Use AT firmware");
+		return;
+	}
+
+	if (resp.status == RESP_BUSY)
+	{
+		wifi_show_message("Connect", "Connecting...", "Check Status later");
+		return;
+	}
+
+	if (resp.payload_len >= 2)
+	{
+		snprintf(line, sizeof(line), "CH:%d RSSI:%ddBm",
+			resp.payload[0], (int8_t)resp.payload[1]);
+		wifi_show_message("Connect", "Connected!", line);
+	}
+	else
+	{
+		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
+	}
+
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	/* Sync RTC via NTP if supported by the current ESP firmware.
+	 * wifi_sync_rtc() is gated by M1_APP_WIFI_CONNECT_ENABLE in m1_wifi.h;
+	 * this guard keeps the call site consistent.  With SiN360 firmware the
+	 * stub is a no-op; with AT firmware it performs the actual NTP sync. */
+	wifi_sync_rtc();
+#endif
 }
 
 
@@ -358,10 +457,8 @@ void wifi_scan_ap(void)
 				{
 					if (list_count && ap_list && ap_view_idx < ap_count)
 					{
-						wifi_deauth_run(ap_list[ap_view_idx].bssid,
-							ap_list[ap_view_idx].channel,
-							ap_list[ap_view_idx].ssid);
-						/* Redraw AP list after returning from deauth */
+						wifi_connect_selected_ap();
+						/* Redraw AP list after returning from connect */
 						wifi_ap_list_print(true);
 						wifi_ap_list_print(false);
 					}
@@ -2509,7 +2606,6 @@ void wifi_attack_beacon(void)
 #define WIFI_AP_CACHE_DIR  "wifi"
 #define WIFI_AP_CACHE_FILE "wifi/aps.tsv"
 #define WIFI_AP_CACHE_LINE_MAX 128
-#define WIFI_JOIN_PASS_MAX 63
 #define EP_HTML_MAX_BYTES 32768
 #define EP_HTML_CHUNK_BYTES M1_MAX_PAYLOAD
 

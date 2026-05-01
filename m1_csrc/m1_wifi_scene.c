@@ -321,7 +321,7 @@ static const M1SceneHandlers general_menu_handlers = {
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
-    "WiFi Scan",
+    "Scan & Connect",
     "Station Scan",
     "Sniffers",
     "Attacks",
