@@ -1,0 +1,1 @@
+**WiFi: remove background NTP clock sync** — `wifi_ntp_background_sync()` and its call site have been removed. The SiN360 binary SPI firmware does not support NTP; the function was already a no-op and is no longer needed.

@@ -76,7 +76,6 @@ void wifi_general_select_ep_html(void);
 bool wifi_is_connected(void);
 const char *wifi_get_connected_ssid(void);
 uint8_t wifi_sync_rtc(void);
-void wifi_ntp_background_sync(void);
 void wifi_saved_networks(void);
 void wifi_show_status(void);
 void wifi_disconnect(void);

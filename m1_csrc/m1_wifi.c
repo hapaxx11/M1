@@ -4374,11 +4374,6 @@ uint8_t wifi_sync_rtc(void)
 return 1; /* not connected — callers treat non-zero as "sync skipped" */
 }
 
-void wifi_ntp_background_sync(void)
-{
-/* no-op: binary SPI firmware does not yet support NTP */
-}
-
 void wifi_saved_networks(void)
 {
 u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
