@@ -904,7 +904,6 @@ void setting_esp32_check_info(void)
 		memcpy(line, &buf[line_starts[0]], flen);
 		line[flen] = '\0';
 		snprintf(hdr, sizeof(hdr), "%d/%dL %s", n, line_count, (char *)line);
-		hdr[sizeof(hdr) - 1] = '\0';
 		m1_info_box_display_draw(INFO_BOX_ROW_1, hdr);
 	}
 	/* Row 2: second-to-last line */
