@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.185] - 2026-05-01
+
+### Changed
+
+- **UI: Unified modern design for main menu, file browser, and scrollbar handle** — Main menu now uses filled rounded-box selection with inverted icon and text (matching all other scenes). File browser gains a directory title bar and the same modern RBox selection highlight. All scrollbar handles have a minimum height of 6 px so the handle remains usable even with long lists.
 ## [0.9.0.184] - 2026-04-30
 
 ### Changed
