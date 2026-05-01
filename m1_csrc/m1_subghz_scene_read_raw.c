@@ -985,7 +985,7 @@ static void draw(SubGhzApp *app)
      * Recording: On every tick, sample RSSI and call push_ext with trace=true when
      *            RSSI is above threshold (cursor advances) or trace=false when below
      *            (cursor freezes in-place immediately).  Single decision point, no
-     *            debounce counter, no pending flag — identical to Momentum's pattern.
+     *            trailing state, no auxiliary flags — identical to Momentum's pattern.
      */
     if (app->raw_state == SubGhzReadRawStateStart)
     {
