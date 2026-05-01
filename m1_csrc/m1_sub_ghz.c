@@ -3025,17 +3025,14 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 	sub_ghz_ring_buffers_deinit();
 
 	subghz_front_buffer_size = SUBGHZ_RAW_DATA_SAMPLES_MAX;
+	uint16_t next_front_buffer_size;
 
 	while ( subghz_front_buffer_size >= 256 )
 	{
-		uint16_t next_front_buffer_size;
-
 		subghz_front_buffer_base = malloc(subghz_front_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
-		if ( subghz_front_buffer_base )
-			subghz_front_buffer = (uint16_t *)(((uintptr_t)subghz_front_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
-
-		if ( !subghz_front_buffer )
+		if ( !subghz_front_buffer_base )
 			goto retry_smaller_capture_buffer;
+		subghz_front_buffer = (uint16_t *)(((uintptr_t)subghz_front_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
 		subghz_ring_read_buffer = malloc(SUBGHZ_RAW_DATA_SAMPLES_TO_RW*2); // Each sample has a 2-byte value
 		if ( !subghz_ring_read_buffer )
 			goto retry_smaller_capture_buffer;
