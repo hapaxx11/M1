@@ -364,7 +364,7 @@ static void apps_draw_list(const char *title, uint16_t count, uint16_t selection
     if (count > 0)
     {
         uint8_t sb_area_h   = visible * item_h;
-        uint8_t sb_handle_h = sb_area_h / (uint8_t)count;
+        uint8_t sb_handle_h = (uint8_t)((uint16_t)sb_area_h / count);
         if (sb_handle_h < 6)
             sb_handle_h = 6;
         uint8_t sb_travel_h = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
@@ -403,13 +403,11 @@ static void apps_draw_message(const char *line1, const char *line2)
     u8g2_SetFont(&m1_u8g2, m1_menu_font());
     if (line1 != NULL)
     {
-        uint16_t w = (uint16_t)u8g2_GetStrWidth(&m1_u8g2, line1);
-        u8g2_DrawStr(&m1_u8g2, (128 - w) / 2, 34, line1);
+        m1_draw_text(&m1_u8g2, 0, 34, M1_LCD_DISPLAY_WIDTH, line1, TEXT_ALIGN_CENTER);
     }
     if (line2 != NULL)
     {
-        uint16_t w = (uint16_t)u8g2_GetStrWidth(&m1_u8g2, line2);
-        u8g2_DrawStr(&m1_u8g2, (128 - w) / 2, 46, line2);
+        m1_draw_text(&m1_u8g2, 0, 46, M1_LCD_DISPLAY_WIDTH, line2, TEXT_ALIGN_CENTER);
     }
 
     m1_u8g2_nextpage();
