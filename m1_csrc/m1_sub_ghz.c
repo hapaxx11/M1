@@ -32,6 +32,7 @@
 #include "subghz_keeloq_encoder.h"
 #include "subghz_keeloq_mfkeys.h"
 #include "m1_ring_buffer.h"
+#include "m1_core_config.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
 #include "flipper_subghz.h"
@@ -3043,7 +3044,7 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 		 * these capture buffers are allocated. Probe that reserve now so Read
 		 * Raw does not accept a capture buffer size that makes SD startup fail
 		 * in m1_sdm_memory_init(). */
-		if ( !subghz_raw_capture_reserve_heap(M1_SDM_MIN_BUFFER_SIZE*M1_SDM_BUFFER_ARRAY_SIZE, malloc, free) )
+		if ( !subghz_raw_capture_reserve_heap((size_t)M1_SDM_MIN_BUFFER_SIZE*M1_SDM_BUFFER_ARRAY_SIZE, m1_malloc, m1_free) )
 			goto retry_smaller_capture_buffer;
 		m1_ringbuffer_init(&subghz_rx_rawdata_rb, (uint8_t *)subghz_front_buffer, subghz_front_buffer_size, sizeof(uint16_t));
 
