@@ -2445,7 +2445,7 @@ void wifi_attack_beacon(void)
 		return;
 	}
 
-	f_info = storage_browse();
+	f_info = storage_browse(NULL);
 	if (!f_info || !f_info->file_is_selected)
 	{
 		return;
@@ -3026,7 +3026,7 @@ void wifi_general_load_aps(void)
 	wifi_ap_t *new_list;
 	uint16_t new_count = 0;
 
-	f_info = storage_browse();
+	f_info = storage_browse(NULL);
 	if (!f_info || !f_info->file_is_selected)
 	{
 		return;
@@ -3135,7 +3135,7 @@ void wifi_general_load_ssids(void)
 
 	ensure_esp32_ready();
 
-	f_info = storage_browse();
+	f_info = storage_browse(NULL);
 	if (!f_info || !f_info->file_is_selected)
 	{
 		return;
@@ -3638,7 +3638,7 @@ void wifi_general_select_ep_html(void)
 	UINT br = 0;
 	int ret;
 
-	f_info = storage_browse();
+	f_info = storage_browse(NULL);
 	if (!f_info || !f_info->file_is_selected)
 	{
 		return;
