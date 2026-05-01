@@ -1,1 +1,0 @@
-**UI: Unified modern design for main menu, file browser, and scrollbar handle** — Main menu now uses filled rounded-box selection with inverted icon and text (matching all other scenes). File browser gains a directory title bar and the same modern RBox selection highlight. All scrollbar handles have a minimum height of 6 px so the handle remains usable even with long lists.
