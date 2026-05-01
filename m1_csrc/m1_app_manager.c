@@ -102,6 +102,48 @@ void m1_app_manager_init(void)
 
 /*============================================================================*/
 /*
+ * @brief  Quick check: returns true if at least one .m1app file exists in
+ *         the apps directory.  Stops at the first match so it is cheap
+ *         enough to call from menu_main_init() on every menu open.
+ */
+/*============================================================================*/
+bool m1_apps_any_available(void)
+{
+    DIR     dir;
+    FILINFO fno;
+    FRESULT res;
+    uint16_t ext_len = (uint16_t)strlen(APPS_EXTENSION);
+
+    res = f_opendir(&dir, APPS_DIR);
+    if (res != FR_OK)
+        return false;
+
+    while (1)
+    {
+        res = f_readdir(&dir, &fno);
+        if (res != FR_OK || fno.fname[0] == '\0')
+            break;
+
+        if (fno.fattrib & AM_DIR)
+            continue;
+
+        uint16_t name_len = (uint16_t)strlen(fno.fname);
+
+        if (name_len > ext_len &&
+            strcmp(&fno.fname[name_len - ext_len], APPS_EXTENSION) == 0)
+        {
+            f_closedir(&dir);
+            return true;
+        }
+    }
+
+    f_closedir(&dir);
+    return false;
+}
+
+
+/*============================================================================*/
+/*
  * @brief  Scan the apps directory for .m1app files
  * @retval uint16_t  Number of apps found
  */

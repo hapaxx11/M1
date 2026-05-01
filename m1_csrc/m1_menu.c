@@ -154,22 +154,27 @@ S_M1_Menu_t menu_Apps =
 
 /*------------------------------- > MAIN MENU --------------------------------*/
 
+/* When the Apps ELF loader is disabled at compile time, use a lightweight
+ * static constant menu.  The dynamic builder below handles the APPS case. */
+#ifndef M1_APP_APPS_ENABLE
 const S_M1_Menu_t menu_Main =
 {
-#if defined(M1_APP_BADUSB_ENABLE) && defined(M1_APP_GAMES_ENABLE) && defined(M1_APP_APPS_ENABLE)
-    "Main Menu", NULL, NULL, NULL, 11, 0, NULL, NULL,
-    {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_BadUSB, &menu_Games, &menu_Apps, &menu_Settings}
-#elif defined(M1_APP_BADUSB_ENABLE)
+#if defined(M1_APP_BADUSB_ENABLE)
     "Main Menu", NULL, NULL, NULL, 9, 0, NULL, NULL,
     {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_BadUSB, &menu_Settings}
-#elif defined(M1_APP_GAMES_ENABLE) && defined(M1_APP_APPS_ENABLE)
-    "Main Menu", NULL, NULL, NULL, 10, 0, NULL, NULL,
-    {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_Games, &menu_Apps, &menu_Settings}
 #else
     "Main Menu", NULL, NULL, NULL, 8, 0, NULL, NULL,
     {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_Settings}
 #endif
 };
+#endif /* !M1_APP_APPS_ENABLE */
+
+/* When Apps is enabled, build the menu at runtime so the Apps entry can be
+ * hidden when the /apps/ directory contains no .m1app files. */
+#ifdef M1_APP_APPS_ENABLE
+static S_M1_Menu_t menu_Main_dynamic;
+static void menu_main_build(void);
+#endif /* M1_APP_APPS_ENABLE */
 
 
 /***************************** V A R I A B L E S ******************************/
@@ -187,6 +192,49 @@ void subfunc_handler_task(void *param);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
+#ifdef M1_APP_APPS_ENABLE
+/*============================================================================*/
+/*
+ * Build the dynamic main menu, conditionally including the Apps entry when
+ * at least one .m1app file is present in the /apps/ directory.  Called from
+ * menu_main_init() every time the user opens the main menu so that apps
+ * added or removed between sessions are reflected immediately.
+ */
+/*============================================================================*/
+static void menu_main_build(void)
+{
+    uint8_t idx = 0;
+    bool show_apps = m1_apps_any_available();
+
+    strncpy(menu_Main_dynamic.title, "Main Menu", MENU_TITLE_LEN - 1);
+    menu_Main_dynamic.title[MENU_TITLE_LEN - 1] = '\0';
+    menu_Main_dynamic.sub_func        = NULL;
+    menu_Main_dynamic.deinit_func     = NULL;
+    menu_Main_dynamic.xkey_handler    = NULL;
+    menu_Main_dynamic.icon_ptr        = NULL;
+    menu_Main_dynamic.gui_menu_update = NULL;
+    menu_Main_dynamic.reserved        = 0;
+
+    menu_Main_dynamic.submenu[idx++] = &menu_Sub_GHz;
+    menu_Main_dynamic.submenu[idx++] = &menu_125KHz_RFID;
+    menu_Main_dynamic.submenu[idx++] = &menu_NFC;
+    menu_Main_dynamic.submenu[idx++] = &menu_Infrared;
+    menu_Main_dynamic.submenu[idx++] = &menu_GPIO;
+    menu_Main_dynamic.submenu[idx++] = &menu_Wifi;
+    menu_Main_dynamic.submenu[idx++] = &menu_Bluetooth;
+#ifdef M1_APP_BADUSB_ENABLE
+    menu_Main_dynamic.submenu[idx++] = &menu_BadUSB;
+#endif
+#ifdef M1_APP_GAMES_ENABLE
+    menu_Main_dynamic.submenu[idx++] = &menu_Games;
+#endif
+    if (show_apps)
+        menu_Main_dynamic.submenu[idx++] = &menu_Apps;
+    menu_Main_dynamic.submenu[idx++] = &menu_Settings;
+    menu_Main_dynamic.num_submenu_items = idx;
+}
+#endif /* M1_APP_APPS_ENABLE */
+
 /*============================================================================*/
 /*
  * This function initializes the main menu.
@@ -194,10 +242,15 @@ void subfunc_handler_task(void *param);
 /*============================================================================*/
 static void menu_main_init(void)
 {
+#ifdef M1_APP_APPS_ENABLE
+    menu_main_build();
+    menu_ctl.main_menu_ptr[0] = &menu_Main_dynamic; // dynamic menu (Apps shown only when present)
+#else
+    menu_ctl.main_menu_ptr[0] = &menu_Main; // static compile-time menu
+#endif
     menu_ctl.menu_level = 0; // main menu
     menu_ctl.menu_item_active = 0; // first menu item
     menu_ctl.last_selected_items[0] = 0; // last selected item is the current active item
-    menu_ctl.main_menu_ptr[0] = &menu_Main; // level 0 should be the main menu
     menu_ctl.num_menu_items = menu_ctl.main_menu_ptr[0]->num_submenu_items;
 
     assert(menu_ctl.num_menu_items >= 3);

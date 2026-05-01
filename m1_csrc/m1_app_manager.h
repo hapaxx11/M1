@@ -19,6 +19,10 @@
 /* Initialize the app manager (call once at startup) */
 void m1_app_manager_init(void);
 
+/* Quick check: returns true if at least one .m1app file exists in /apps/.
+ * Cheap (stops at the first match) — safe to call from menu_main_init(). */
+bool m1_apps_any_available(void);
+
 /* Browse and run apps from SD card — called as menu sub_func */
 void game_apps_browser_run(void);
 
