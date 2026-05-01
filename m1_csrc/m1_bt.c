@@ -25,6 +25,7 @@
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -205,7 +206,6 @@ static void ble_show_pending(const char *title, const char *line1, const char *l
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     if (line1) u8g2_DrawStr(&m1_u8g2, 2, 26, line1);
     if (line2) u8g2_DrawStr(&m1_u8g2, 2, 38, line2);
-    u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Exit");
     m1_u8g2_nextpage();
 
     while (1)
@@ -592,7 +592,6 @@ static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
         u8g2_DrawStr(&m1_u8g2, 2, y, "No matches found");
     }
 
-    u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Exit");
     m1_u8g2_nextpage();
 
     ble_wait_back();
@@ -715,7 +714,6 @@ void bluetooth_advertise(void)
     {
         u8g2_DrawStr(&m1_u8g2, 6, 28, "Broadcasting as:");
         u8g2_DrawStr(&m1_u8g2, 6, 40, adv_name);
-        u8g2_DrawStr(&m1_u8g2, 6, 55, "[BACK] to stop");
     }
     else
     {
@@ -801,7 +799,6 @@ static void ble_spam_run_loop(const char *title,
         snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
         u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 
-        u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
         m1_u8g2_nextpage();
 
         ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
@@ -983,7 +980,6 @@ void ble_spam_all(void)
         snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
         u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 
-        u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
         m1_u8g2_nextpage();
 
         ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
@@ -1089,7 +1085,7 @@ void bluetooth_config(void)
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 26, "Adv Name:");
             u8g2_DrawStr(&m1_u8g2, 2, 38, ble_adv_name);
-            u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Edit [BACK]Exit");
+            m1_draw_bottom_bar(&m1_u8g2, NULL, "Edit", NULL, NULL);
             m1_u8g2_nextpage();
         }
 

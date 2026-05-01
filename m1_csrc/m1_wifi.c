@@ -30,6 +30,7 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_compile_cfg.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -242,8 +243,7 @@ static uint16_t wifi_ap_list_print(bool up_dir)
 	u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
 
 	/* Bottom hint: OK to attack */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK] Deauth");
+	m1_draw_bottom_bar(&m1_u8g2, NULL, "Deauth", NULL, NULL);
 
 	m1_u8g2_nextpage();
 
@@ -1055,7 +1055,6 @@ void wifi_mac_track(void)
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
 		snprintf(ln, sizeof(ln), "%s %lus", target_label, (unsigned long)elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 4 * SF_Y_STEP, ln);
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(SNIFF_POLL_MS));
@@ -1245,7 +1244,7 @@ static uint16_t sta_list_print(bool up_dir)
 		sta_list_data[sta_view_idx].channel);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 
-	u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Sel [BACK]Exit");
+	m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 	return sta_total;
 }
@@ -1467,7 +1466,6 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 			}
 		}
 
-		u8g2_DrawStr(&m1_u8g2, 2, 63, done ? "[BACK] Exit [^v]View" : "[BACK] Stop [^v]View");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(400));
@@ -1755,7 +1753,6 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 		sprintf(ln, "Time: %lus", elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -1900,7 +1897,6 @@ static void wifi_deauth_selected_run(void)
 		}
 		snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -2164,7 +2160,6 @@ static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_
 			u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 		}
 
-		u8g2_DrawStr(&m1_u8g2, 2, 63, auto_scroll ? "[BACK]Stop Auto" : "[BACK]Stop [^v]Scroll");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -2375,31 +2370,33 @@ static bool beacon_select_mode(beacon_list_mode_t *mode)
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
 	uint8_t selected = 0;
+	const uint8_t n = 3;
 
 	while (1)
 	{
-		m1_u8g2_firstpage();
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
-				"BEACON SPAM");
+		const uint8_t item_h   = m1_menu_item_h();
+		const uint8_t text_ofs = item_h - 1;
+		const uint8_t max_vis  = m1_menu_max_visible();
 
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		for (uint8_t i = 0; i < 3; i++)
+		m1_draw_text(&m1_u8g2, 2, 9, 120, "BEACON SPAM", TEXT_ALIGN_CENTER);
+		u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+		u8g2_SetFont(&m1_u8g2, m1_menu_font());
+		for (uint8_t i = 0; i < max_vis && i < n; i++)
 		{
-			uint8_t y = 24 + i * 11;
+			uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 			if (i == selected)
 			{
-				u8g2_DrawBox(&m1_u8g2, 0, y - 8, 128, 10);
+				u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			}
-			u8g2_DrawStr(&m1_u8g2, 4, y, items[i]);
+			u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);
 			if (i == selected)
-			{
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			}
 		}
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Pick [BACK]Exit");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
@@ -2768,7 +2765,7 @@ static void wifi_draw_ap_select(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count());
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Sel [BACK]Exit");
+	m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -2803,7 +2800,7 @@ static void wifi_draw_sta_select(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count());
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Sel [BACK]Exit");
+	m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -2932,7 +2929,6 @@ static void wifi_draw_ap_info(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Auth:%d", ap_list[ap_view_idx].auth_mode);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK]Exit [^v]Move");
 	m1_u8g2_nextpage();
 }
 
@@ -3199,16 +3195,32 @@ static bool wifi_join_choose_password(char *password, size_t password_len)
 		if (redraw)
 		{
 			redraw = false;
-			m1_u8g2_firstpage();
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-			u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "JOIN WIFI");
+			{
+				static const char *pw_items[] = {"Open / no pass", "Enter password"};
+				const uint8_t item_h   = m1_menu_item_h();
+				const uint8_t text_ofs = item_h - 1;
 
-			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-			u8g2_DrawStr(&m1_u8g2, 2, 26, sel == 0 ? "> Open/no pass" : "  Open/no pass");
-			u8g2_DrawStr(&m1_u8g2, 2, 38, sel == 1 ? "> Enter pass" : "  Enter pass");
-			u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Select [BACK]Exit");
-			m1_u8g2_nextpage();
+				m1_u8g2_firstpage();
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				m1_draw_text(&m1_u8g2, 2, 9, 120, "JOIN WIFI", TEXT_ALIGN_CENTER);
+				u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+				u8g2_SetFont(&m1_u8g2, m1_menu_font());
+				for (uint8_t i = 0; i < 2; i++)
+				{
+					uint8_t y = M1_MENU_AREA_TOP + i * item_h;
+					if (i == (uint8_t)sel)
+					{
+						u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+					}
+					u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, pw_items[i]);
+					if (i == (uint8_t)sel)
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				}
+				m1_u8g2_nextpage();
+			}
 		}
 
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
@@ -3442,20 +3454,32 @@ void wifi_general_set_macs(void)
 		if (redraw)
 		{
 			redraw = false;
-			m1_u8g2_firstpage();
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-			u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "SET MACS");
-
-			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-			for (uint8_t i = 0; i < 4; i++)
 			{
-				char line[26];
-				snprintf(line, sizeof(line), "%c %s", (i == sel) ? '>' : ' ', items[i]);
-				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + i * SF_Y_STEP, line);
+				const uint8_t item_h   = m1_menu_item_h();
+				const uint8_t text_ofs = item_h - 1;
+				const uint8_t max_vis  = m1_menu_max_visible();
+
+				m1_u8g2_firstpage();
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+				m1_draw_text(&m1_u8g2, 2, 9, 120, "SET MACS", TEXT_ALIGN_CENTER);
+				u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+				u8g2_SetFont(&m1_u8g2, m1_menu_font());
+				for (uint8_t i = 0; i < max_vis && i < 4; i++)
+				{
+					uint8_t y = M1_MENU_AREA_TOP + i * item_h;
+					if (i == sel)
+					{
+						u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+					}
+					u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);
+					if (i == sel)
+						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+				}
+				m1_u8g2_nextpage();
 			}
-			u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Set [BACK]Exit");
-			m1_u8g2_nextpage();
 		}
 
 		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
@@ -3516,7 +3540,7 @@ void wifi_general_set_channel(void)
 			snprintf(line, sizeof(line), "Channel: %d", channel);
 			u8g2_DrawStr(&m1_u8g2, 2, 28, line);
 			u8g2_DrawStr(&m1_u8g2, 2, 42, "UP/DOWN change");
-			u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Set [BACK]Exit");
+			m1_draw_bottom_bar(&m1_u8g2, NULL, "Set", NULL, NULL);
 			m1_u8g2_nextpage();
 		}
 
@@ -3855,7 +3879,6 @@ void wifi_evil_portal(void)
 			u8g2_DrawStr(&m1_u8g2, 2, y, "Waiting for clients...");
 		}
 
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -3938,7 +3961,6 @@ void wifi_probe_flood(void)
 		snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -4028,7 +4050,6 @@ void wifi_attack_karma(void)
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
 		snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -4138,7 +4159,6 @@ void wifi_attack_karma_portal(void)
 
 		snprintf(ln, sizeof(ln), "Time:%lus", elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
