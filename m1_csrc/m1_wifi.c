@@ -49,6 +49,9 @@
 static uint16_t s_current_ap_index = 0;
 static bool s_wifi_connected = false;
 static char s_connected_ssid[SSID_LENGTH];
+/* Tick count of the last successful NTP sync (0 = never synced this session).
+ * Updated by wifi_sync_rtc() and wifi_ntp_background_sync(). */
+static uint32_t s_last_ntp_sync_tick = 0;
 #endif
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -899,6 +902,7 @@ void wifi_show_status(void)
 	{
 		u8g2_DrawStr(&m1_u8g2, 2, y_offset, "IP: N/A");
 		s_wifi_connected = false;
+		s_last_ntp_sync_tick = 0;   /* connection lost; reset so reconnect gets a fresh sync */
 	}
 	y_offset += M1_GUI_FONT_HEIGHT;
 
@@ -975,6 +979,7 @@ void wifi_disconnect(void)
 	{
 		s_wifi_connected = false;
 		s_connected_ssid[0] = '\0';
+		s_last_ntp_sync_tick = 0;   /* clear so reconnect gets a fresh 30-min window */
 		wifi_display_msg("WiFi", "Disconnected");
 		M1_LOG_I(M1_LOGDB_TAG, "WiFi disconnected\n\r");
 	}
@@ -1008,6 +1013,60 @@ void wifi_disconnect(void)
 
 /*============================================================================*/
 /**
+  * @brief Parse a +CIPSNTPTIME response string and apply it to the RTC.
+  * @param resp  Buffer containing the raw AT response (nul-terminated).
+  * @retval 1 on success (RTC updated), 0 if response is absent or invalid.
+  *
+  * Expects the format: +CIPSNTPTIME:Mon Mar 23 12:34:56 2026
+  */
+/*============================================================================*/
+static uint8_t parse_sntp_response(const char *resp)
+{
+	static const char *months[]    = {"Jan","Feb","Mar","Apr","May","Jun",
+	                                  "Jul","Aug","Sep","Oct","Nov","Dec"};
+	static const char *days_names[] = {"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
+
+	char month_str[4];
+	char day_name[4];
+	int  day, year, hour, min, sec;
+	m1_time_t dt;
+
+	const char *p = strstr(resp, "+CIPSNTPTIME:");
+	if (!p)
+		return 0;
+
+	p += 13;
+	if (sscanf(p, "%3s %3s %d %d:%d:%d %d",
+	           day_name, month_str, &day, &hour, &min, &sec, &year) != 7)
+		return 0;
+
+	dt.year   = (uint16_t)year;
+	dt.day    = (uint8_t)day;
+	dt.hour   = (uint8_t)hour;
+	dt.minute = (uint8_t)min;
+	dt.second = (uint8_t)sec;
+
+	dt.month = 0;
+	for (int m = 0; m < 12; m++)
+		if (strcmp(month_str, months[m]) == 0) { dt.month = (uint8_t)(m + 1); break; }
+
+	dt.weekday = 0;
+	for (int d = 0; d < 7; d++)
+		if (strcmp(day_name, days_names[d]) == 0) { dt.weekday = (uint8_t)(d + 1); break; }
+
+	if (dt.month == 0 || dt.weekday == 0 ||
+	    dt.year < 2024 || dt.year > 2099 ||
+	    dt.day < 1 || dt.day > 31 ||
+	    dt.hour > 23 || dt.minute > 59 || dt.second > 59)
+		return 0;
+
+	m1_set_datetime(&dt);
+	s_last_ntp_sync_tick = HAL_GetTick();
+	return 1;
+}
+
+/*============================================================================*/
+/**
   * @brief Sync system RTC with WiFi NTP
   * @retval 1 on success, 0 on failure
   */
@@ -1015,13 +1074,6 @@ void wifi_disconnect(void)
 uint8_t wifi_sync_rtc(void)
 {
 	char resp[128];
-	char month_str[4];
-	char day_name[4];
-	int day, year, hour, min, sec;
-	m1_time_t dt;
-	const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-	const char *days_names[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 
 	if ( !wifi_ensure_esp32_ready() ) return 0;
 
@@ -1036,44 +1088,8 @@ uint8_t wifi_sync_rtc(void)
 		spi_AT_send_recv("AT+CIPSNTPTIME?\r\n", resp, sizeof(resp), 2);
 
 		/* Expecting: +CIPSNTPTIME:Mon Mar 23 12:34:56 2026 */
-		char *p = strstr(resp, "+CIPSNTPTIME:");
-		if ( p )
-		{
-			p += 13;
-			if ( sscanf(p, "%3s %3s %d %d:%d:%d %d",
-			            day_name, month_str, &day, &hour, &min, &sec, &year) == 7 )
-			{
-				dt.year = (uint16_t)year;
-				dt.day = (uint8_t)day;
-				dt.hour = (uint8_t)hour;
-				dt.minute = (uint8_t)min;
-				dt.second = (uint8_t)sec;
-
-				dt.month = 0;
-				for (int m = 0; m < 12; m++) {
-					if (strcmp(month_str, months[m]) == 0) {
-						dt.month = m + 1;
-						break;
-					}
-				}
-
-				dt.weekday = 0;
-				for (int d = 0; d < 7; d++) {
-					if (strcmp(day_name, days_names[d]) == 0) {
-						dt.weekday = d + 1;
-						break;
-					}
-				}
-
-				if (dt.month > 0 && dt.weekday > 0 &&
-				    dt.year >= 2024 && dt.year <= 2099 &&
-				    dt.day >= 1 && dt.day <= 31 &&
-				    dt.hour <= 23 && dt.minute <= 59 && dt.second <= 59) {
-					m1_set_datetime(&dt);
-					return 1;
-				}
-			}
-		}
+		if (parse_sntp_response(resp))
+			return 1;
 	}
 	return 0;
 }
@@ -1088,4 +1104,70 @@ const char *wifi_get_connected_ssid(void)
 	return s_wifi_connected ? s_connected_ssid : NULL;
 }
 
+
+/*============================================================================*/
+/**
+  * @brief Background NTP re-sync — called periodically from the menu task.
+  *
+  * Silently corrects RTC drift once every WIFI_NTP_RESYNC_INTERVAL_MS while
+  * WiFi is connected.  This is a lightweight single-query helper (no retry
+  * loop, no CIPSNTPCFG) because SNTP was already configured by wifi_sync_rtc()
+  * at connect time and the ESP32 caches the result.
+  *
+  * Must be called from the menu-task context (same task as all blocking
+  * delegates) so that AT commands are never interleaved with other modules.
+  */
+/*============================================================================*/
+
+/* Minimum interval between background NTP re-syncs on success: 30 minutes */
+#define WIFI_NTP_RESYNC_INTERVAL_MS       (30UL * 60UL * 1000UL)
+/* Backoff after a failed attempt: 5 minutes (avoids blocking the menu task every minute) */
+#define WIFI_NTP_RETRY_BACKOFF_MS         (5UL * 60UL * 1000UL)
+
+void wifi_ntp_background_sync(void)
+{
+	/* Only attempt when WiFi is known to be connected. */
+	if (!s_wifi_connected)
+		return;
+
+	uint32_t now = HAL_GetTick();
+
+	/* Rate-limit: skip if the last *successful* sync is recent (30 min window)
+	 * OR if the last *attempt* (succeeded or failed) is too recent (5 min backoff).
+	 * Using both guards means: up to 30-min between successful re-syncs, but also
+	 * at most one retry per 5 minutes if the ESP32 is temporarily not responding —
+	 * so a continuous failure never blocks the menu task every battery tick. */
+	static uint32_t s_last_attempt_tick = 0;
+	if (s_last_ntp_sync_tick != 0 &&
+	    (now - s_last_ntp_sync_tick) < WIFI_NTP_RESYNC_INTERVAL_MS)
+		return;
+	if (s_last_attempt_tick != 0 &&
+	    (now - s_last_attempt_tick) < WIFI_NTP_RETRY_BACKOFF_MS)
+		return;
+
+	/* If a WiFi-using scene (scan/status/disconnect) called m1_esp32_deinit()
+	 * on exit but the connection is still active, transparently re-initialise
+	 * the SPI interface so the background query can proceed. */
+	if (!m1_esp32_get_init_status())
+		m1_esp32_init();
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+	if (!get_esp32_main_init_status())
+		return;   /* ESP32 is genuinely unavailable; skip silently */
+
+	s_last_attempt_tick = now;   /* record attempt before the AT command */
+
+	/* Single query — SNTP already configured, so ESP32 has a cached result.
+	 * 1-second timeout is generous; cached responses arrive in milliseconds. */
+	char resp[128];
+	memset(resp, 0, sizeof(resp));
+	spi_AT_send_recv("AT+CIPSNTPTIME?\r\n", resp, sizeof(resp), 1);
+
+	if (parse_sntp_response(resp))
+		M1_LOG_I(M1_LOGDB_TAG, "Background NTP sync OK\n\r");
+	else
+		M1_LOG_W(M1_LOGDB_TAG, "Background NTP sync failed\n\r");
+}
+
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */
+

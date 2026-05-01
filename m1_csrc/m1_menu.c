@@ -241,6 +241,12 @@ void menu_main_handler_task(void *param)
 			     m1_device_stat.op_mode==M1_OPERATION_MODE_DISPLAY_ON )
 			{
 				startup_home_screen_refresh();
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+				/* Silently re-sync RTC via NTP once every 30 minutes while
+				 * WiFi is connected.  Must run here (menu-task context) so
+				 * AT commands are never interleaved with other modules. */
+				wifi_ntp_background_sync();
+#endif
 			}
 			continue;
 		}
