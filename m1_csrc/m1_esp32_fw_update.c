@@ -26,6 +26,7 @@
 #include "m1_md5_hash.h"
 #include "m1_fw_update_bl.h"
 #include "m1_power_ctl.h"
+#include "m1_display.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -37,7 +38,6 @@
 #define ESP32_RESET_Pin							ESP32_EN_Pin
 
 #define THIS_LCD_MENU_TEXT_FIRST_ROW_Y			11
-#define THIS_LCD_MENU_TEXT_FRAME_FIRST_ROW_Y	1
 #define THIS_LCD_MENU_TEXT_ROW_SPACE			10
 
 #define	ESP32_BOOT_MESSAGE_LF					0x0A
@@ -73,8 +73,6 @@ static FIL hfile_fw;
 
 void setting_esp32_init(void);
 void setting_esp32_exit(void);
-void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item);
-void setting_esp32_xkey_handler(S_M1_Key_Event event, uint8_t button_id, uint8_t sel_item);
 void setting_esp32_image_file(void);
 void setting_esp32_start_address(void);
 void setting_esp32_firmware_update(void);
@@ -131,54 +129,6 @@ void setting_esp32_exit(void)
 	}
 	esp32_UART_deinit();
 } // void setting_esp32_exit(void)
-
-
-
-/******************************************************************************/
-/**
-  * @brief
-  * @param None
-  * @retval None
-  */
-/******************************************************************************/
-void setting_esp32_xkey_handler(S_M1_Key_Event event, uint8_t button_id, uint8_t sel_item)
-{
-	uint8_t prn_name[GUI_DISP_LINE_LEN_MAX + 1] = {0};
-
-	if ( sel_item != 1) // Not the Start Address?
-		return;
-
-	if ( event==BUTTON_EVENT_CLICK )
-	{
-		if ( button_id==BUTTON_LEFT_KP_ID ) // Left arrow key to decrease the start address
-		{
-			if ( start_address )
-			{
-				if ( start_address > ESP32_START_ADDRESS_DEF ) // High address range?
-					start_address -= ESP32_START_ADDRESS_HI_INC; // High decrement
-				else
-					start_address -= ESP32_START_ADDRESS_LO_INC; // Low decrement
-			} // if ( start_address )
-		} // if ( button_id==BUTTON_LEFT_KP_ID )
-		else if ( button_id==BUTTON_RIGHT_KP_ID ) // Right arrow key to increase the start address
-		{
-			if ( start_address < ESP32_START_ADDRESS_MAX )
-			{
-				if ( start_address >= ESP32_START_ADDRESS_DEF ) // High address range?
-					start_address += ESP32_START_ADDRESS_HI_INC; // High increment
-				else
-					start_address += ESP32_START_ADDRESS_LO_INC; // Low increment
-			} // if ( start_address < ESP32_START_ADDRESS_MAX )
-		}
-    	// Display start address
-    	sprintf(prn_name, "0x%06lX:", start_address);
-    	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set to background color
-    	u8g2_DrawBox(&m1_u8g2, 4, INFO_BOX_Y_POS_ROW_1 - M1_SUB_MENU_FONT_HEIGHT, 120, M1_SUB_MENU_FONT_HEIGHT + 1);
-    	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // set to text color
-    	m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-    	m1_u8g2_nextpage();
-	} // if ( event==BUTTON_EVENT_CLICK )
-} // void setting_esp32_xkey_handler(S_M1_Key_Event event, uint8_t button_id, uint8_t)
 
 
 
@@ -634,171 +584,8 @@ static uint16_t esp32_get_boot_info(uint8_t *boot_msg, uint16_t boot_msg_len, ui
 
 
 
-/******************************************************************************/
-/**
-  * @brief
-  * @param None
-  * @retval None
-  */
-/******************************************************************************/
-void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
-{
-	uint8_t i, n_items;
-	uint8_t menu_text_y;
-	bool trunc;
-	uint8_t prn_name[GUI_DISP_LINE_LEN_MAX + 1] = {0};
-	uint16_t msg_len, msg_id;
-	uint8_t *pboot_info;
 
-	n_items = phmenu->num_submenu_items;
-	menu_text_y = THIS_LCD_MENU_TEXT_FIRST_ROW_Y;
 
-	/* Graphic work starts here */
-	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
-    do
-    {
-    	for (i=0; i<n_items; i++)
-    	{
-    		if ( i==sel_item )
-    		{
-    			// Draw box for selected menu item with text color
-    			u8g2_DrawBox(&m1_u8g2, 0, menu_text_y - THIS_LCD_MENU_TEXT_ROW_SPACE + 2, M1_LCD_SUB_MENU_TEXT_FRAME_W, THIS_LCD_MENU_TEXT_ROW_SPACE);
-    			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set to background color
-    			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-    			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, phmenu->submenu[i]->title);
-    			if ( i==1 ) // Index of the Start Address field
-    			{
-    		    	// Draw arrows left and right
-    		    	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 40, THIS_LCD_MENU_TEXT_FIRST_ROW_Y + 2, 10, 10, arrowleft_10x10);
-    		    	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 20, THIS_LCD_MENU_TEXT_FIRST_ROW_Y + 2, 10, 10, arrowright_10x10);
-    			}
-    			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // return to text color
-    			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N); // return to default font
-    		}
-    		else
-    		{
-    			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, phmenu->submenu[i]->title);
-    		}
-    		menu_text_y += THIS_LCD_MENU_TEXT_ROW_SPACE;
-    	} // for (i=0; i<n_items; i++)
-
-    	// Draw info box at the bottom
-    	m1_info_box_display_init(true);
-
-    	switch ( sel_item )
-    	{
-    		case 0: // Image file
-    	    	if ( f_info && f_info->file_is_selected )
-    	    	{
-    	    		if ( strlen(f_info->file_name) > GUI_DISP_LINE_LEN_MAX )
-    	    		{
-    	    			strncpy(prn_name, f_info->file_name, GUI_DISP_LINE_LEN_MAX - 2);
-    	    			prn_name[GUI_DISP_LINE_LEN_MAX - 2] = 0;
-    	    			strcat(prn_name, "..");
-    	    		}
-    	    		else
-    	    		{
-    	    			strcpy(prn_name, f_info->file_name);
-    	    		}
-    	    	} // if ( f_info && f_info->file_is_selected )
-
-    			switch ( esp32_update_status )
-    			{
-    				case M1_FW_UPDATE_READY:
-    					m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-    					break;
-
-    				case M1_FW_IMAGE_FILE_ACCESS_ERROR:
-    					m1_info_box_display_draw(INFO_BOX_ROW_1, "Image file error!");
-    					break;
-
-    				case M1_FW_CRC_FILE_ACCESS_ERROR:
-    					m1_info_box_display_draw(INFO_BOX_ROW_1, "MD5 file error!");
-    					break;
-
-    				case M1_FW_CRC_FILE_INVALID:
-		    			m1_info_box_display_draw(INFO_BOX_ROW_1, "Invalid MD5 file!");
-						break;
-
-    				case M1_FW_IMAGE_FILE_TYPE_ERROR:
-    				case M1_FW_IMAGE_SIZE_INVALID:
-		    			m1_info_box_display_draw(INFO_BOX_ROW_1, "Invalid image file!");
-		    			break;
-
-		    		case M1_FW_CRC_CHECKSUM_UNMATCHED:
-		    			m1_info_box_display_draw(INFO_BOX_ROW_1, "Checksum failed!");
-		    			break;
-
-    				default:
-    					break;
-    			} // switch ( esp32_update_status )
-    			break;
-
-    		case 1: // Start address
-    	    	sprintf(prn_name, "0x%06lX:", start_address);
-    	    	m1_info_box_display_draw(INFO_BOX_ROW_1, prn_name);
-    			break;
-
-    		case 2: // Firmware update
-    			switch ( esp32_update_status )
-    			{
-    				case M1_FW_UPDATE_READY:
-    					m1_info_box_display_draw(INFO_BOX_ROW_1, "Ready to flash!");
-    					break;
-
-		    		case M1_FW_UPDATE_SUCCESS:
-		    			m1_info_box_display_draw(INFO_BOX_ROW_1, "Update successfully!");
-		    			esp32_update_status = M1_FW_UPDATE_NOT_READY; // Reset after process complete
-		    			i = 0;
-		    			msg_len = m1_ringbuffer_get_read_len(&esp32_rb_hdl);
-		    			while ( msg_len )
-		    			{
-		    				pboot_info = m1_ringbuffer_get_read_address(&esp32_rb_hdl);
-		    				msg_id = esp32_get_boot_info(pboot_info, msg_len, &msg_len);
-		    				if ( msg_id )
-		    				{
-		    					if ( !i ) // First boot message
-		    					{
-		    						// Read part of the info message
-		    						strncpy(prn_name, pboot_info + msg_id, msg_len - msg_id);
-		    						m1_info_box_display_draw(INFO_BOX_ROW_2, prn_name);
-		    						i++; // Move to next boot message
-		    					} // if ( !i )
-		    					else
-		    					{
-		    						// Read full info message
-		    						msg_len = (msg_len <= GUI_DISP_LINE_LEN_MAX)?msg_len:GUI_DISP_LINE_LEN_MAX;
-		    						strncpy(prn_name, pboot_info, msg_len);
-		    						m1_info_box_display_draw(INFO_BOX_ROW_3, prn_name);
-		    						break; // Having read enough info messages, let break
-		    					} // else
-		    				} // if ( msg_id )
-		    				else
-		    					break; // Do nothing if nothing found
-		    				m1_ringbuffer_advance_read(&esp32_rb_hdl, msg_len); // Skip old message
-		    				msg_len = m1_ringbuffer_get_read_len(&esp32_rb_hdl);
-		    			} // while ( msg_len )
-		    			break;
-
-		    		case M1_FW_UPDATE_FAILED:
-		    	    	m1_info_box_display_draw(INFO_BOX_ROW_1, "Update failed!");
-		    			break;
-
-		    		case M1_FW_UPDATE_LOW_BATTERY:
-		    			m1_info_box_display_draw(INFO_BOX_ROW_1, "Battery < 25%, plug in!");
-		    			break;
-
-    				default:
-    					break;
-    			} // switch ( esp32_update_status )
-    			break;
-
-    		default: // Unknown selection
-    			break;
-    	} // switch ( sel_item )
-    } while (m1_u8g2_nextpage());
-
-} // void setting_esp32_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
 
 
 
