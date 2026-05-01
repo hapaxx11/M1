@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.187] - 2026-05-01
+
+### Fixed
+
+- **Read Raw: RSSI cursor now freezes immediately when signal drops below threshold** — removed the ~400ms debounce tail that kept advancing the waveform cursor after signal end. The draw tick is now the single decision point for cursor advancement (Momentum-aligned pattern): RSSI above threshold advances the cursor, RSSI below threshold freezes it in-place on the same tick. Eliminated `raw_debounce` and `raw_rx_pending` state variables and simplified the `SubGhzEventRxData` handler to only flush ring buffer data to SD.
+- **Sub-GHz Read Raw: progress bar freezes immediately when signal drops below RSSI threshold** — cursor
+  advancement was previously driven by post-signal activity even after the real transmission had
+  ended. Cursor advancement is now gated by RSSI on each tick, so the bar stops moving
+  immediately once the signal falls below the configured threshold.
 ## [0.9.0.186] - 2026-05-01
 
 ### Changed
