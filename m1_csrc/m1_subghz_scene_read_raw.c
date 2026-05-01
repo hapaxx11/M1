@@ -909,15 +909,25 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 if (flushed > 0)
                     app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
 
-                /* Read RSSI and push to history (trace=true advances cursor) */
+                /* Read RSSI and gate cursor advance on threshold.
+                 * The ISR fires on every captured edge, including noise edges
+                 * after the real signal has ended.  Once SUBGHZ_RAW_DATA_SAMPLES_TO_RW
+                 * noise pulses accumulate a Q_EVENT_SUBGHZ_RX is posted and this
+                 * handler runs even though RSSI is below threshold.  Without the
+                 * gate, the unconditional push(trace=true) and debounce reset here
+                 * bypass the draw()-tick debounce logic entirely, so the progress
+                 * bar never stops.  Only advance the cursor and prime the debounce
+                 * when RSSI is genuinely above threshold; otherwise let the 200 ms
+                 * draw-tick debounce path run down normally. */
                 app->rssi = subghz_read_rssi_ext();
-                subghz_raw_rssi_push_ext((float)app->rssi, true);
-
-                /* Signal is active: reset the debounce gap timer and mark
-                 * raw_rx_pending so the next draw() tick does not push an
-                 * additional column on top of what we just pushed here. */
-                app->raw_debounce = RAW_DEBOUNCE_MAX;
-                app->raw_rx_pending = true;
+                bool signal_active = ((float)app->rssi >
+                                      (float)subghz_get_rssi_threshold_ext());
+                if (signal_active)
+                {
+                    subghz_raw_rssi_push_ext((float)app->rssi, true);
+                    app->raw_debounce   = RAW_DEBOUNCE_MAX;
+                    app->raw_rx_pending = true;
+                }
 
                 app->need_redraw = true;
             }
