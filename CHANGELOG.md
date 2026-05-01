@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.188] - 2026-05-01
+
+### Added
+
+- **WiFi: automatic background NTP re-sync every 30 minutes** — while WiFi remains
+  connected the RTC is silently re-synchronised once every 30 minutes via a lightweight
+  single `AT+CIPSNTPTIME?` query (no UI, no retry loop).  The home-screen clock updates
+  on its next 1-minute refresh.  The initial NTP sync at connect time also stamps the
+  re-sync timer so the first background sync is deferred a full 30 minutes.
+
+### Fixed
+
+- **RTC clock source switched from LSI to LSE** — the 32.768 kHz crystal (Y2) that is
+  physically present on the board was not being used; the RTC was running from the internal
+  RC oscillator (LSI, ±1–5% accuracy = up to 72 min/day drift).  Enabling LSE reduces
+  drift to ±20–50 ppm (1–4 s/day).  No hardware change required.
 ## [0.9.0.187] - 2026-05-01
 
 ### Fixed
