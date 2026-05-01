@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.3] - 2026-05-01
+
+### Added
+
+- **WiFi: Restore encrypted credential save/load** — `wifi_saved_networks()` now shows a
+  scrollable list of saved networks (up to 8), allows one-tap reconnect using the stored
+  password (no prompt), and supports LEFT-button deletion with a confirmation dialog.
+  Credentials are AES-256-CBC encrypted and stored in `0:/System/wifi_creds.bin` via the
+  existing `m1_wifi_cred` module. Successful connects from both Scan & Connect and
+  General → Join WiFi now automatically save credentials. `wifi_show_status()` now
+  displays the actual connected SSID instead of a placeholder message.
+  `wifi_disconnect()` also clears the in-memory SSID on disconnect.
+
+### Changed
+
+- **WiFi: Restore Scan & Connect screen** — "Scan & Connect" (top-level WiFi menu) now
+  scans for APs and, when OK is pressed, prompts for a password and attempts to connect,
+  restoring the original scan+connect workflow. With SiN360 ESP32 firmware the connect
+  command is not yet supported; the screen shows "Not available / Use AT firmware" rather
+  than silently launching a deauth attack. Deauth remains available under WiFi → Attacks → Deauth.
+
+### Fixed
+
+- **WiFi: MAC Track, Wardrive, and Station Wardrive now reachable** — three fully-implemented
+  WiFi tools (`wifi_mac_track`, `wifi_wardrive`, `wifi_station_wardrive`) were accidentally
+  omitted from the top-level WiFi scene menu during the SiN360 port; they had handlers and
+  implementations but were completely unreachable via the UI. All three are now listed in
+  the WiFi menu between "Station Scan" and "Sniffers".
+
+### Removed
+
+- **Remove dead AT-layer modules** — `m1_deauth.c/h` (AT+DEAUTH/AT+STASCAN deauther,
+  replaced by `wifi_attack_deauth()` via binary SPI) and `m1_ble_spam.c/h` (AT+BLEADVDATA
+  BLE spam, replaced by `ble_spam_*()` functions in `m1_bt.c` via binary SPI) were still
+  compiled but never called after the SiN360 adoption. Both files and their CMakeLists
+  entries removed.
 ## [0.9.1.2] - 2026-05-01
 
 ### Fixed
