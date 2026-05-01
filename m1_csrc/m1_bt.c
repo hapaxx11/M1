@@ -1137,6 +1137,15 @@ u8g2_DrawStr(&m1_u8g2, 6, 30, "Use BLE Config");
 m1_u8g2_nextpage();
 HAL_Delay(2000);
 }
+
+bt_connection_state_t *bt_get_connection_state(void)
+{
+	/* SiN360 binary-SPI firmware does not support legacy AT BT management.
+	 * Return a stub state that is always disconnected so the home-screen
+	 * BT icon remains hidden. */
+	static bt_connection_state_t state = { .connected = false };
+	return &state;
+}
 #endif /* M1_APP_BT_MANAGE_ENABLE */
 
 #ifdef M1_APP_BADBT_ENABLE

@@ -621,6 +621,10 @@ void setting_esp32_backup_flash(void)
 		.pin_num_rst = ESP32_RESET_Pin,
 	};
 
+	/* Set info-box position so m1_info_box_display_draw() places text
+	 * at the correct y coordinates (INFO_BOX_Y_POS_ROW_1 = 42). */
+	m1_info_box_display_init(true);
+
 	/* Clear info box area and show debug status */
 	#define BACKUP_DBG_CLEAR() do { \
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
@@ -766,6 +770,8 @@ void setting_esp32_backup_flash(void)
 	}
 	HAL_Delay(5000);
 
+	#undef BACKUP_DBG_CLEAR
+
 backup_cleanup:
 	/* Restore IO9 to input */
 	GPIO_InitStruct.Pin = ESP32_IO9_Pin;
@@ -801,6 +807,11 @@ void setting_esp32_check_info(void)
 	/* 4KB is more than enough for a few seconds of ESP32 boot output */
 	uint16_t buf_size = 4096;
 	uint8_t *buf = (uint8_t *)malloc(buf_size);
+
+	/* Set info-box position so m1_info_box_display_draw() places text
+	 * at the correct y coordinates (INFO_BOX_Y_POS_ROW_1 = 42). */
+	m1_info_box_display_init(true);
+
 	if (!buf)
 	{
 		m1_info_box_display_draw(INFO_BOX_ROW_1, "malloc failed");
@@ -887,13 +898,13 @@ void setting_esp32_check_info(void)
 
 	/* Row 1: byte count + line count + first line preview */
 	{
-		char hdr[25];
+		char hdr[GUI_DISP_LINE_LEN_MAX + 1];
 		uint16_t flen = line_lens[0];
 		if (flen > 12) flen = 12;
 		memcpy(line, &buf[line_starts[0]], flen);
 		line[flen] = '\0';
-		sprintf(hdr, "%d/%dL %s", n, line_count, (char *)line);
-		hdr[GUI_DISP_LINE_LEN_MAX] = '\0';
+		snprintf(hdr, sizeof(hdr), "%d/%dL %s", n, line_count, (char *)line);
+		hdr[sizeof(hdr) - 1] = '\0';
 		m1_info_box_display_draw(INFO_BOX_ROW_1, hdr);
 	}
 	/* Row 2: second-to-last line */

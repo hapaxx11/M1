@@ -127,7 +127,11 @@ typedef struct {
  * @param cmd  Pointer to the command to send (64 bytes)
  * @param resp Pointer to buffer for the response (64 bytes)
  * @param timeout_ms Maximum time to wait for response (ms)
- * @return 0 on success, -1 on SPI error, -2 on timeout, -3 on bad response magic
+ * @return 0 on success;
+ *         -2 on handshake timeout (no response ready signal);
+ *         -3 on bad response magic;
+ *         -(10 + HAL_StatusTypeDef) on TX SPI error (e.g. -11=ERROR, -12=BUSY, -13=TIMEOUT);
+ *         -(20 + HAL_StatusTypeDef) on RX SPI error (e.g. -21=ERROR, -22=BUSY, -23=TIMEOUT)
  */
 int m1_esp32_send_cmd(const m1_cmd_t *cmd, m1_resp_t *resp, uint32_t timeout_ms);
 
