@@ -31,6 +31,7 @@
 #include "m1_lcd.h"
 #include "m1_compile_cfg.h"
 #include "m1_scene.h"
+#include "m1_wifi_cred.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -64,6 +65,12 @@ typedef struct {
 static wifi_ap_t *ap_list = NULL;
 static uint16_t ap_count = 0;
 static uint16_t ap_view_idx = 0;
+
+/* Connected-state tracking (stub; populated on successful CMD_WIFI_JOIN) */
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+static bool s_wifi_stub_connected = false;
+static char s_wifi_stub_ssid[33] = {0};
+#endif
 
 typedef struct {
 	const char *stage;
@@ -336,21 +343,30 @@ static void wifi_connect_selected_ap(void)
 	memcpy(&cmd.payload[2 + ssid_len], password, pass_len);
 	cmd.payload_len = 2 + ssid_len + pass_len;
 
-	memset(password, 0, sizeof(password)); /* clear sensitive data before blocking */
-
 	wifi_show_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
+		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connect failed", "Check password");
 		return;
 	}
 
 	if (resp.status == RESP_BUSY)
 	{
+		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connecting...", "Check Status later");
 		return;
 	}
+
+	/* Successful connect — save credentials and update state */
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	wifi_cred_save(ap_list[ap_view_idx].ssid, password);
+	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
+	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
+	s_wifi_stub_connected = true;
+#endif
+	memset(password, 0, sizeof(password));
 
 	if (resp.payload_len >= 2)
 	{
@@ -3447,14 +3463,25 @@ void wifi_general_join_wifi(void)
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
+		memset(password, 0, sizeof(password));
 		wifi_show_message("Join WiFi", "Connect failed", "Check password");
 		return;
 	}
 	if (resp.status == RESP_BUSY)
 	{
+		memset(password, 0, sizeof(password));
 		wifi_show_message("Join WiFi", "Still connecting", "Try status later");
 		return;
 	}
+
+	/* Successful connect — save credentials and update state */
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	wifi_cred_save(ap_list[ap_view_idx].ssid, password);
+	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
+	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
+	s_wifi_stub_connected = true;
+#endif
+	memset(password, 0, sizeof(password));
 
 	if (resp.payload_len >= 2)
 	{
@@ -4452,9 +4479,6 @@ void wifi_attack_rickroll(void)
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 
-static bool s_wifi_stub_connected = false;
-static char s_wifi_stub_ssid[33] = {0};
-
 bool wifi_is_connected(void)
 {
 return s_wifi_stub_connected;
@@ -4475,25 +4499,225 @@ void wifi_ntp_background_sync(void)
 /* no-op: binary SPI firmware does not yet support NTP */
 }
 
+/*============================================================================*/
+/*
+ * Connect to a network using stored credentials (no password prompt).
+ * Called from wifi_saved_networks() when user selects a saved entry.
+ */
+/*============================================================================*/
+static void wifi_connect_from_saved(const wifi_credential_t *cred)
+{
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	char line[26];
+	uint8_t ssid_len;
+	uint8_t pass_len;
+	int ret;
+
+	if (cred == NULL || !cred->valid || cred->ssid[0] == '\0')
+		return;
+
+	ssid_len = (uint8_t)strnlen(cred->ssid, 32);
+	pass_len = (uint8_t)strnlen(cred->password, WIFI_JOIN_PASS_MAX);
+
+	if ((uint16_t)2 + ssid_len + pass_len > M1_MAX_CMD_PAYLOAD)
+	{
+		wifi_show_message("Connect", "Credentials too long", NULL);
+		return;
+	}
+
+	ensure_esp32_ready();
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.magic = M1_CMD_MAGIC;
+	cmd.cmd_id = CMD_WIFI_JOIN;
+	cmd.payload[0] = ssid_len;
+	cmd.payload[1] = pass_len;
+	memcpy(&cmd.payload[2], cred->ssid, ssid_len);
+	memcpy(&cmd.payload[2 + ssid_len], cred->password, pass_len);
+	cmd.payload_len = 2 + ssid_len + pass_len;
+
+	wifi_show_message("Connect", "Connecting...", cred->ssid);
+	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
+	if (ret != 0 || resp.status == RESP_ERR)
+	{
+		wifi_show_message("Connect", "Connect failed", "Check password");
+		return;
+	}
+
+	if (resp.status == RESP_BUSY)
+	{
+		wifi_show_message("Connect", "Connecting...", "Check Status later");
+		return;
+	}
+
+	/* Success — update connected state */
+	strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
+	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
+	s_wifi_stub_connected = true;
+
+	if (resp.payload_len >= 2)
+	{
+		snprintf(line, sizeof(line), "CH:%d RSSI:%ddBm",
+			resp.payload[0], (int8_t)resp.payload[1]);
+		wifi_show_message("Connect", "Connected!", line);
+	}
+	else
+	{
+		wifi_show_message("Connect", "Connected!", cred->ssid);
+	}
+
+	wifi_sync_rtc();
+}
+
+/*============================================================================*/
+/*
+ * Saved Networks — browse, connect to, or delete encrypted WiFi credentials.
+ */
+/*============================================================================*/
 void wifi_saved_networks(void)
 {
-u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-m1_u8g2_firstpage();
-u8g2_DrawStr(&m1_u8g2, 6, 15, "Saved Networks");
-u8g2_DrawStr(&m1_u8g2, 6, 30, "Not available");
-u8g2_DrawStr(&m1_u8g2, 6, 45, "with SiN360 FW");
-m1_u8g2_nextpage();
-HAL_Delay(2000);
+	wifi_credential_t creds[WIFI_CRED_MAX_STORED];
+	uint8_t count;
+	uint8_t sel = 0;
+	uint8_t scroll = 0;
+	bool redraw = true;
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	count = wifi_cred_load_all(creds, WIFI_CRED_MAX_STORED);
+
+	if (count == 0)
+	{
+		wifi_show_message("Saved Networks", "No saved networks", "Use Scan & Connect");
+		memset(creds, 0, sizeof(creds));
+		return;
+	}
+
+	while (1)
+	{
+		if (redraw)
+		{
+			redraw = false;
+			const uint8_t item_h  = m1_menu_item_h();
+			const uint8_t vis     = m1_menu_max_visible();
+			const uint8_t text_ofs = item_h - 1;
+
+			/* Keep scroll window in sync with selection */
+			if (sel < scroll)
+				scroll = sel;
+			if (sel >= scroll + vis)
+				scroll = sel - vis + 1;
+
+			m1_u8g2_firstpage();
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			m1_draw_text(&m1_u8g2, 2, 9, 120, "Saved Networks", TEXT_ALIGN_CENTER);
+			u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+			u8g2_SetFont(&m1_u8g2, m1_menu_font());
+			for (uint8_t i = 0; i < vis; i++)
+			{
+				uint8_t idx = scroll + i;
+				if (idx >= count)
+					break;
+				uint8_t y = (uint8_t)(M1_MENU_AREA_TOP + i * item_h);
+				if (idx == sel)
+				{
+					u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+				}
+				u8g2_DrawStr(&m1_u8g2, 4, (uint8_t)(y + text_ofs), creds[idx].ssid);
+				if (idx == sel)
+					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			}
+
+			/* Scrollbar */
+			if (count > vis)
+			{
+				uint8_t track_h = M1_MENU_AREA_H;
+				uint8_t handle_h = (uint8_t)(track_h * vis / count);
+				if (handle_h < 4) handle_h = 4;
+				uint8_t handle_y = (uint8_t)(M1_MENU_AREA_TOP + (uint8_t)((track_h - handle_h) * scroll / (count - vis)));
+				u8g2_DrawFrame(&m1_u8g2, M1_MENU_SCROLLBAR_X, M1_MENU_AREA_TOP,
+				               M1_MENU_SCROLLBAR_W, track_h);
+				u8g2_DrawBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
+				             M1_MENU_SCROLLBAR_W, handle_h);
+			}
+
+			m1_u8g2_nextpage();
+		}
+
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+
+		xQueueReceive(button_events_q_hdl, &btn, 0);
+
+		if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			break;
+		}
+		else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (sel > 0) { sel--; redraw = true; }
+		}
+		else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (sel < count - 1) { sel++; redraw = true; }
+		}
+		else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			/* Connect using stored password — no prompt */
+			wifi_connect_from_saved(&creds[sel]);
+			redraw = true;
+		}
+		else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			/* Delete with confirmation */
+			uint8_t choice = m1_message_box_choice(&m1_u8g2,
+			                     "Delete credential?",
+			                     creds[sel].ssid, NULL,
+			                     "OK\nCancel");
+			if (choice == 1)
+			{
+				wifi_cred_delete(creds[sel].ssid);
+				count = wifi_cred_load_all(creds, WIFI_CRED_MAX_STORED);
+				if (count == 0)
+				{
+					xQueueReset(main_q_hdl);
+					break;
+				}
+				if (sel >= count)
+					sel = count - 1;
+			}
+			redraw = true;
+		}
+	}
+
+	memset(creds, 0, sizeof(creds));
 }
 
 void wifi_show_status(void)
 {
-u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-m1_u8g2_firstpage();
-u8g2_DrawStr(&m1_u8g2, 6, 15, "WiFi Status");
-u8g2_DrawStr(&m1_u8g2, 6, 30, "Use General menu");
-m1_u8g2_nextpage();
-HAL_Delay(2000);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	m1_u8g2_firstpage();
+	u8g2_DrawStr(&m1_u8g2, 6, 12, "WiFi Status");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	if (s_wifi_stub_connected && s_wifi_stub_ssid[0] != '\0')
+	{
+		u8g2_DrawStr(&m1_u8g2, 6, 28, "Connected:");
+		u8g2_DrawStr(&m1_u8g2, 6, 40, s_wifi_stub_ssid);
+	}
+	else
+	{
+		u8g2_DrawStr(&m1_u8g2, 6, 28, "Disconnected");
+		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Scan & Connect");
+	}
+	m1_u8g2_nextpage();
+	HAL_Delay(2000);
 }
 
 void wifi_disconnect(void)
@@ -4501,6 +4725,7 @@ void wifi_disconnect(void)
 m1_resp_t resp;
 m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
 s_wifi_stub_connected = false;
+memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
 }
 
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */
