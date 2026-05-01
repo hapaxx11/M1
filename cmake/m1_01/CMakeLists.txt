@@ -577,7 +577,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_watchdog.c
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
-    ../../m1_csrc/m1_deauth.c
+
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
     # === Enhanced firmware: Flipper file format parsers (Phase 2) ===
@@ -598,8 +598,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_badusb.c
     # === Enhanced firmware: Bad-BT (Phase 8) ===
     ../../m1_csrc/m1_badbt.c
-    # === Enhanced firmware: BLE Beacon Spam ===
-    ../../m1_csrc/m1_ble_spam.c
+
     # === Enhanced firmware: Built-in Games (Phase 9) ===
     ../../m1_csrc/m1_games.c
     ../../m1_csrc/m1_games_scene.c

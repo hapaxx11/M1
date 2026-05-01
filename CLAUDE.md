@@ -1024,7 +1024,7 @@ void my_esp32_operation(void)
   `wifi_ntp_sync()`
 - Bluetooth: `bluetooth_scan()`, `bluetooth_advertise()`
 - 802.15.4: `ieee802154_scan()` (Zigbee/Thread)
-- BLE Spam: `ble_spam_run()`
+- BLE Spam: `ble_spam_*()` functions in `m1_bt.c` (SiN360 binary SPI path)
 - Bad-BT: `badbt_run()` — also calls `ble_hid_deinit()` before ESP32 deinit
 
 **Rules for new code:**
