@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0.186] - 2026-05-01
+
+### Changed
+
+- **Apps browser: adopt standard Hapax UI conventions** — aligned the app list screen with all other scene menus: centered title using the standard scene font, separator at y=10, full 52 px menu area (M1_MENU_AREA_TOP / M1_MENU_AREA_H), font-aware item height and visible-item count, standard 3 px proportional scrollbar at x=125, 124 px highlight width, and removed the non-standard bottom bar. Message screens (Scanning, No apps, Load Error) received the same header fix and now use the user-configured menu font for body text.
 ## [0.9.0.185] - 2026-05-01
 
 ### Changed
