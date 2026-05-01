@@ -1,4 +1,4 @@
-**Sub-GHz Read Raw: progress bar now freezes after signal drops below RSSI threshold** — the cursor
-  advancement was previously driven by every ISR edge event including post-signal noise, bypassing
-  the debounce logic. Cursor advance and debounce reset are now gated on RSSI being above the
-  configured threshold so the bar stops moving once the signal ends (plus the debounce tail).
+**Sub-GHz Read Raw: progress bar freezes immediately when signal drops below RSSI threshold** — cursor
+  advancement was previously driven by post-signal activity even after the real transmission had
+  ended. Cursor advancement is now gated by RSSI on each tick, so the bar stops moving
+  immediately once the signal falls below the configured threshold.

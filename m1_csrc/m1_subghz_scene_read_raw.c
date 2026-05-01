@@ -32,11 +32,12 @@
  *              user can judge signal strength before pressing OK to start recording.
  *              This makes the visual distinction unambiguous: a filling/scrolling
  *              waveform always means RECORDING is in progress (button = "Stop").
- *   RECORDING: Cursor slides right as captured edges arrive (SubGhzEventRxData).
- *              On each 200ms draw tick, RSSI is sampled: above threshold →
- *              push_ext(rssi, true) advances the cursor; below threshold →
- *              push_ext(rssi, false) freezes the cursor immediately.
- *              This is Momentum's tick-only pattern — no debounce counter.
+ *   RECORDING: Cursor advancement is driven entirely by the 200ms draw tick —
+ *              NOT by SubGhzEventRxData.  On each tick, RSSI is sampled:
+ *              above threshold → push_ext(rssi, true) advances the cursor;
+ *              below threshold → push_ext(rssi, false) freezes the cursor
+ *              immediately.  This is Momentum's tick-only pattern — cursor
+ *              ownership belongs to the draw tick, not to incoming edge events.
  *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
  *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
  *   LOADED:    Spectrogram reset (empty); "RAW" status, filename in waveform area.
