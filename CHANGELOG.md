@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.4] - 2026-05-01
+
+### Changed
+
+- **Apps: hide from main menu when no apps are installed** — the Apps entry is now omitted from the main menu when the `/apps/` directory contains no `.m1app` files. The entry reappears automatically the next time the menu is opened after apps are added to the SD card.
 ## [0.9.1.3] - 2026-05-01
 
 ### Added
