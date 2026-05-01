@@ -315,14 +315,17 @@ static const M1SceneHandlers general_menu_handlers = {
 
 /* ---- Top-level menu ----------------------------------------------------- */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define MENU_ITEM_COUNT  12
+#define MENU_ITEM_COUNT  15
 #else
-#define MENU_ITEM_COUNT  9
+#define MENU_ITEM_COUNT  12
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
-    "WiFi Scan",
+    "Scan & Connect",
     "Station Scan",
+    "MAC Track",
+    "Wardrive",
+    "Station Wardrive",
     "Sniffers",
     "Attacks",
     "Net Scan",
@@ -340,6 +343,9 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneScanConnect,
     WifiSceneStationScan,
+    WifiSceneMacTrack,
+    WifiSceneWardrive,
+    WifiSceneStationWardrive,
     WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
     WifiSceneNetMenu,
