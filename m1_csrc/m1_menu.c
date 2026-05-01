@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 //#include "mui.h"
@@ -159,9 +160,15 @@ S_M1_Menu_t menu_Apps =
 #ifndef M1_APP_APPS_ENABLE
 const S_M1_Menu_t menu_Main =
 {
-#if defined(M1_APP_BADUSB_ENABLE)
+#if defined(M1_APP_BADUSB_ENABLE) && defined(M1_APP_GAMES_ENABLE)
+    "Main Menu", NULL, NULL, NULL, 10, 0, NULL, NULL,
+    {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_BadUSB, &menu_Games, &menu_Settings}
+#elif defined(M1_APP_BADUSB_ENABLE)
     "Main Menu", NULL, NULL, NULL, 9, 0, NULL, NULL,
     {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_BadUSB, &menu_Settings}
+#elif defined(M1_APP_GAMES_ENABLE)
+    "Main Menu", NULL, NULL, NULL, 9, 0, NULL, NULL,
+    {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_Games, &menu_Settings}
 #else
     "Main Menu", NULL, NULL, NULL, 8, 0, NULL, NULL,
     {&menu_Sub_GHz, &menu_125KHz_RFID, &menu_NFC, &menu_Infrared, &menu_GPIO, &menu_Wifi, &menu_Bluetooth, &menu_Settings}
