@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.2] - 2026-05-01
+
+### Fixed
+
+- **Sub-GHz Read Raw:** prevent capture startup from greedily consuming heap that the SD writer needs, avoiding false "Record failed" errors on valid SD cards.
 ## [0.9.1.1] - 2026-05-01
 
 ### Added
