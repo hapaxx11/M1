@@ -342,7 +342,7 @@ static void wifi_connect_selected_ap(void)
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
-		wifi_show_message("Connect", "Not available", "Use AT firmware");
+		wifi_show_message("Connect", "Connect failed", "Check password");
 		return;
 	}
 
