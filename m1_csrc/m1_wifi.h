@@ -26,6 +26,7 @@ void wifi_saved_networks(void);
 void wifi_show_status(void);
 void wifi_disconnect(void);
 uint8_t wifi_sync_rtc(void);
+void wifi_ntp_background_sync(void);
 bool wifi_is_connected(void);
 const char *wifi_get_connected_ssid(void);
 #endif
