@@ -179,10 +179,17 @@ static void draw(SubGhzApp *app)
 
     /* Scrollbar — position indicator on the right edge */
     {
-        uint8_t sb_area_h  = vis * item_h;
+        uint8_t sb_area_h   = vis * item_h;
         uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;
-        uint8_t sb_handle_y = MENU_AREA_TOP +
-            (uint8_t)((uint16_t)sb_area_h * menu_sel / MENU_ITEM_COUNT);
+        if (sb_handle_h < 6) sb_handle_h = 6;
+
+        uint8_t sb_travel_h = (sb_handle_h < sb_area_h) ? (sb_area_h - sb_handle_h) : 0;
+        uint8_t sb_handle_y = MENU_AREA_TOP;
+        if (MENU_ITEM_COUNT > 1)
+        {
+            sb_handle_y +=
+                (uint8_t)((uint16_t)sb_travel_h * menu_sel / (MENU_ITEM_COUNT - 1));
+        }
 
         /* Track — single centerline pixel */
         u8g2_DrawVLine(&m1_u8g2, SCROLLBAR_X + SCROLLBAR_W / 2,

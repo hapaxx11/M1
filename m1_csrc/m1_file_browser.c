@@ -19,6 +19,8 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_sdcard.h"
+#include "m1_display.h"
+#include "m1_scene.h"
 
 /************************** *D E F I N E S ************************************/
 
@@ -162,9 +164,9 @@ S_M1_file_browser_hdl *m1_fb_init(u8g2_t *lcd_hdl)
 	plcd_hdl = lcd_hdl;
 
 	pfb_hdl->x = 0;
-	pfb_hdl->y = 0;
+	pfb_hdl->y = M1_MENU_AREA_TOP;
 	pfb_hdl->gui_width = plcd_hdl->width;
-	pfb_hdl->gui_height = plcd_hdl->height;
+	pfb_hdl->gui_height = M1_MENU_AREA_H;
 
 	fb_gui_check = FALSE;
 
@@ -577,11 +579,10 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	S_M1_file_browser_ext f_ext;
 	static uint16_t num_of_files;
 	static uint16_t gui_max_column, gui_max_row;
-	static uint16_t gui_width, gui_height;
-	static uint16_t scroll_h;
-	uint16_t scroll_y, count, len;
+	static uint16_t gui_width;
+	uint16_t count, len;
 	uint16_t l, k;
-	uint8_t y_offset, disp_max_column, ext_len;
+	uint8_t disp_max_column, ext_len;
 	static uint8_t spacing;
 	static bool scroll_ok;
 	bool flag;
@@ -603,7 +604,6 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		}
 
 		gui_width = gui_max_column*pfb_hdl->font_w;
-		gui_height = gui_max_row*pfb_hdl->font_h;
 		gui_max_row -= 1; // Need room for row spacing
 		fb_gui_check = TRUE;
 	} // if (!fb_gui_check)
@@ -645,11 +645,6 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		    qsort(fb_sorted, fb_sorted_count, sizeof(fb_sorted_entry_t), fb_entry_cmp);
 
 		    num_of_files = fb_sorted_count + 1; /* +1 for ".." entry at index 0 */
-
-			scroll_h = gui_height / num_of_files;
-
-			if (scroll_h < pfb_hdl->font_h)
-				scroll_h = pfb_hdl->font_h;
 
 			scroll_ok = FALSE;
 			if ((num_of_files > gui_max_row) && (gui_max_column > 3))
@@ -756,145 +751,203 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		} // else
 		// if (button_status==NULL)
 
-    	/* Display uses the pre-sorted fb_sorted[] array instead of
-    	 * re-reading the directory, so no rewind is needed.  Index 0 is
-    	 * the ".." entry; indices 1..fb_sorted_count map to fb_sorted[]. */
+	/* Display uses the pre-sorted fb_sorted[] array instead of
+	 * re-reading the directory, so no rewind is needed.  Index 0 is
+	 * the ".." entry; indices 1..fb_sorted_count map to fb_sorted[]. */
 
-    	// Clear GUI
-    	m1_u8g2_firstpage();
-    	//m1_lcd_cleardisplay();
+	// Clear GUI
+	m1_u8g2_firstpage();
 
-    	count = 0;
-    	y_offset = 0;
-       	while (count < num_of_files)
-       	{
-       		name[0] = 0;
-   			if (count)
-   			{
-   				/* Read from sorted array (count-1 maps to fb_sorted index) */
-   				uint16_t si = count - 1;
-   				if (si >= fb_sorted_count)
-   					break;
-   				memset(&file_info, 0, sizeof(file_info));
-   				strcpy(file_info.fname, fb_sorted[si].fname);
-   				file_info.fattrib = fb_sorted[si].fattrib;
-   			}
+	/* Title bar: show the leaf directory name with a separator line */
+	{
+		const char *dir_name = pfb_hdl->info.dir_name;
+		const char *dir_end  = dir_name + strlen(dir_name);
+		char        dir_title[FF_LFN_BUF + 1];
+		const char *dir_leaf;
+		const char *scan;
+		size_t      title_len;
 
-   			if ((count >= pfb_hdl->listing_index - pfb_hdl->row_index) &&
-   				(count < pfb_hdl->listing_index - pfb_hdl->row_index + gui_max_row))
-   			{
-   				if (!count)
-   				{
-   					strcpy(name, "..");
-   					fb_icon = &menu_fb_icon_prev;
-   				}
-   				else
-  				{
-   					len = strlen(file_info.fname);
-   					disp_max_column = gui_max_column - 1 - scroll_ok;
-   					if (len <= disp_max_column)
-   					{
-   						strcpy(name, file_info.fname);
-   					}
-   					else
-   					{
-   						if (file_info.fattrib & AM_DIR)
-   						{
-   							strncpy(name, file_info.fname, disp_max_column - 2);
-   							name[disp_max_column - 2] = 0;
-   							strcat(name, "..");
-   						}
-   						else
-   						{
-   							flag = FALSE;
-   							while (len)
-   							{
-   								if (file_info.fname[len-1]=='.')
-   								{
-   									flag = TRUE;
-   									break;
-   								}
-   								len--;
-   							}
-   							if (!flag) // filename without extension
-   							{
-   								strncpy(name, file_info.fname, disp_max_column - 2);
-   								name[disp_max_column - 2] = 0;
-   								strcat(name, "..");
-   							}
-   							else
-   							{
-   								ext_len = strlen(&file_info.fname[len - 1]);
-   								if ( ext_len > 4 ) // the dot (.) + extension
-   									ext_len = 4;
-   								if ( len > disp_max_column )
-   								{
-   	   								strncpy(name, file_info.fname, disp_max_column - 2 - ext_len);
-   	   								name[disp_max_column - 2 - ext_len] = 0;
-   	   								strcat(name, "..");
-   	   								strncat(name, &file_info.fname[len - 1], ext_len);
-   								}
-   								else
-   								{
-   	   								strncpy(name, file_info.fname, disp_max_column);
-   	   								name[disp_max_column] = 0;
-   								}
-   							} // else
-   						} // else
-   					} // else
+		/* Trim any trailing '/' so "0:/" gives leaf "0:" rather than "". */
+		while ((dir_end > dir_name + 1) && (*(dir_end - 1) == '/'))
+			dir_end--;
 
-       				if (file_info.fattrib & AM_DIR)
-       				{
-       					fb_icon = &menu_fb_icon_dir;
-       				}
-       				else
-       				{
-       					f_ext = m1_fb_get_file_type(file_info.fname);
-       					if (f_ext==F_EXT_DATA)
-       						fb_icon = &menu_fb_icon_data;
-       					else
-       						fb_icon = &menu_fb_icon_other;
-       				}
+		/* Find the last '/' within the trimmed range. */
+		dir_leaf = dir_name;
+		for (scan = dir_name; scan < dir_end; scan++)
+		{
+			if (*scan == '/')
+				dir_leaf = scan + 1;
+		}
 
-       				if (count==pfb_hdl->listing_index)
-       				{
-       					memcpy(&this_file, &file_info, sizeof(FILINFO));
-       				}
-       			} // else
-   					// if (!count)
+		/* If no non-empty leaf remains, fall back to "/" */
+		if (dir_leaf >= dir_end)
+		{
+			dir_title[0] = '/';
+			dir_title[1] = '\0';
+		}
+		else
+		{
+			title_len = (size_t)(dir_end - dir_leaf);
+			if (title_len >= sizeof(dir_title))
+				title_len = sizeof(dir_title) - 1;
+			memcpy(dir_title, dir_leaf, title_len);
+			dir_title[title_len] = '\0';
+		}
 
-   				y_offset += spacing;
-   				// Draw icon of folder or file
-   				u8g2_DrawXBMP(plcd_hdl, pfb_hdl->x, pfb_hdl->y + y_offset + (pfb_hdl->font_h - fb_icon->icon_h), fb_icon->icon_w, fb_icon->icon_h, fb_icon->pdata);
+		u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(plcd_hdl, M1_DISP_FUNC_MENU_FONT_N);
+		m1_draw_text(plcd_hdl, 2, 9, M1_MENU_TEXT_W, dir_title, TEXT_ALIGN_CENTER);
+		u8g2_DrawHLine(plcd_hdl, 0, 10, M1_LCD_DISPLAY_WIDTH);
+	}
 
-    			y_offset += pfb_hdl->font_h;
-    			// Draw text of file name or folder name
-   				u8g2_DrawStr(plcd_hdl, pfb_hdl->x + fb_icon->icon_w + 2, pfb_hdl->y + y_offset, name);
-       		} // if ((count >= pfb_hdl->listing_index - pfb_hdl->row_index) &&
-				// (count < pfb_hdl->listing_index - pfb_hdl->row_index + gui_max_row))
-   			count++;
-       	} // while (count < num_of_files)
+	/* Item list */
+	u8g2_SetFont(plcd_hdl, M1_DISP_SUB_MENU_FONT_N);
+	count = 0;
+	uint8_t vis_row_idx = 0;
+	while (count < num_of_files)
+	{
+		name[0] = 0;
+		if (count)
+		{
+			/* Read from sorted array (count-1 maps to fb_sorted index) */
+			uint16_t si = count - 1;
+			if (si >= fb_sorted_count)
+				break;
+			memset(&file_info, 0, sizeof(file_info));
+			strcpy(file_info.fname, fb_sorted[si].fname);
+			file_info.fattrib = fb_sorted[si].fattrib;
+		}
 
-       	// Draw a frame around the selected file/sub-directory
-       	u8g2_DrawFrame(plcd_hdl, pfb_hdl->x, pfb_hdl->y + pfb_hdl->row_index * (pfb_hdl->font_h + spacing) + spacing/2,
-						      pfb_hdl->x + gui_width - scroll_ok*GUI_SCROLLBAR_WIDTH + 2,
-							  pfb_hdl->font_h + spacing + 2
-       					);
+		if ((count >= pfb_hdl->listing_index - pfb_hdl->row_index) &&
+			(count < pfb_hdl->listing_index - pfb_hdl->row_index + gui_max_row))
+		{
+			if (!count)
+			{
+				strcpy(name, "..");
+				fb_icon = &menu_fb_icon_prev;
+			}
+			else
+			{
+				len = strlen(file_info.fname);
+				disp_max_column = gui_max_column - 1 - scroll_ok;
+				if (len <= disp_max_column)
+				{
+					strcpy(name, file_info.fname);
+				}
+				else
+				{
+					if (file_info.fattrib & AM_DIR)
+					{
+						strncpy(name, file_info.fname, disp_max_column - 2);
+						name[disp_max_column - 2] = 0;
+						strcat(name, "..");
+					}
+					else
+					{
+						flag = FALSE;
+						while (len)
+						{
+							if (file_info.fname[len-1]=='.')
+							{
+								flag = TRUE;
+								break;
+							}
+							len--;
+						}
+						if (!flag) // filename without extension
+						{
+							strncpy(name, file_info.fname, disp_max_column - 2);
+							name[disp_max_column - 2] = 0;
+							strcat(name, "..");
+						}
+						else
+						{
+							ext_len = strlen(&file_info.fname[len - 1]);
+							if ( ext_len > 4 ) // the dot (.) + extension
+								ext_len = 4;
+							if ( len > disp_max_column )
+							{
+								strncpy(name, file_info.fname, disp_max_column - 2 - ext_len);
+								name[disp_max_column - 2 - ext_len] = 0;
+								strcat(name, "..");
+								strncat(name, &file_info.fname[len - 1], ext_len);
+							}
+							else
+							{
+								strncpy(name, file_info.fname, disp_max_column);
+								name[disp_max_column] = 0;
+							}
+						} // else
+					} // else
+				} // else
 
-       	// Scroll bar is active if the number of files/directories > maximum number of rows
-       	if (scroll_ok)
-       	{
-       		// Scroll bar position
-       		scroll_y = (pfb_hdl->listing_index - pfb_hdl->row_index) * (M1_LCD_DISPLAY_HEIGHT - scroll_h) / (num_of_files - gui_max_row);
-       		// Scroll bar
-       		u8g2_DrawFrame(plcd_hdl, pfb_hdl->x + M1_LCD_DISPLAY_WIDTH - GUI_SCROLLBAR_WIDTH, pfb_hdl->y, GUI_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT);
-       		// Scroll bar slider
-       		u8g2_DrawBox(plcd_hdl, pfb_hdl->x + M1_LCD_DISPLAY_WIDTH - GUI_SCROLLBAR_WIDTH, pfb_hdl->y + scroll_y, GUI_SCROLLBAR_WIDTH, scroll_h);
-       	} // if (scroll_ok)
+				if (file_info.fattrib & AM_DIR)
+				{
+					fb_icon = &menu_fb_icon_dir;
+				}
+				else
+				{
+					f_ext = m1_fb_get_file_type(file_info.fname);
+					if (f_ext==F_EXT_DATA)
+						fb_icon = &menu_fb_icon_data;
+					else
+						fb_icon = &menu_fb_icon_other;
+				}
 
-       	m1_u8g2_nextpage(); // Now let update display RAM with contents written above
+				if (count==pfb_hdl->listing_index)
+				{
+					memcpy(&this_file, &file_info, sizeof(FILINFO));
+				}
+			} // else (!count)
 
-       	break; // End this loop
+			/* Compute layout for this visible row */
+			uint8_t row_top  = pfb_hdl->y + (uint8_t)(vis_row_idx * (pfb_hdl->font_h + spacing) + spacing / 2);
+			uint8_t row_h    = pfb_hdl->font_h + spacing + 2;
+			uint8_t icon_y   = pfb_hdl->y + (uint8_t)(vis_row_idx * (pfb_hdl->font_h + spacing) + spacing + (pfb_hdl->font_h - fb_icon->icon_h));
+			uint8_t text_y   = pfb_hdl->y + (uint8_t)(vis_row_idx * (pfb_hdl->font_h + spacing) + spacing + pfb_hdl->font_h);
+			bool is_selected = (count == pfb_hdl->listing_index);
+
+			/* Selection highlight — filled rounded box + inverted colours */
+			if (is_selected)
+			{
+				uint8_t sel_w = gui_width - (scroll_ok ? M1_MENU_SCROLLBAR_W + 1 : 0);
+				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
+				u8g2_DrawRBox(plcd_hdl, pfb_hdl->x, row_top, sel_w, row_h, 2);
+				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_BG);
+			}
+
+			/* Icon and text */
+			u8g2_DrawXBMP(plcd_hdl, pfb_hdl->x, icon_y, fb_icon->icon_w, fb_icon->icon_h, fb_icon->pdata);
+			u8g2_DrawStr(plcd_hdl, pfb_hdl->x + fb_icon->icon_w + 2, text_y, name);
+
+			if (is_selected)
+				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
+
+			vis_row_idx++;
+		} // if visible row
+		count++;
+	} // while (count < num_of_files)
+
+	/* Modern scrollbar — VLine track + RBox handle */
+	if (scroll_ok)
+	{
+		uint8_t  sb_area_h = (uint8_t)((uint16_t)gui_max_row * (pfb_hdl->font_h + spacing));
+		uint8_t  sb_h      = (num_of_files > 0) ? (sb_area_h / num_of_files) : sb_area_h;
+		if (sb_h < 6) sb_h = 6;
+		uint16_t sb_pos    = pfb_hdl->listing_index - pfb_hdl->row_index;
+		uint16_t sb_max    = (num_of_files > gui_max_row) ? (num_of_files - gui_max_row) : 1;
+		uint8_t  sb_y      = pfb_hdl->y + (uint8_t)((uint16_t)sb_pos * (sb_area_h - sb_h) / sb_max);
+		uint8_t  sb_x      = pfb_hdl->x + M1_LCD_DISPLAY_WIDTH - M1_MENU_SCROLLBAR_W;
+		u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
+		/* Track */
+		u8g2_DrawVLine(plcd_hdl, sb_x + M1_MENU_SCROLLBAR_W / 2, pfb_hdl->y, sb_area_h);
+		/* Handle */
+		u8g2_DrawRBox(plcd_hdl, sb_x, sb_y, M1_MENU_SCROLLBAR_W, sb_h, 1);
+	} // if (scroll_ok)
+
+	m1_u8g2_nextpage(); // Now let update display RAM with contents written above
+
+	break; // End this loop
 	} // while (1) // Not an endless loop
 
 	return &pfb_hdl->info;

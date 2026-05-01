@@ -317,9 +317,11 @@ void settings_lcd_and_notifications(void)
             {
                 uint8_t sb_area_h   = visible * item_h;
                 uint8_t sb_handle_h = sb_area_h / LCD_SETTINGS_ITEMS;
-                if (sb_handle_h < 3) sb_handle_h = 3;
-                uint8_t sb_handle_y = LCD_CFG_AREA_TOP +
-                    (uint8_t)((uint16_t)sb_area_h * sel / LCD_SETTINGS_ITEMS);
+                if (sb_handle_h < 6) sb_handle_h = 6;
+                uint8_t sb_travel_h = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
+                uint8_t sb_handle_y = LCD_CFG_AREA_TOP;
+                if (LCD_SETTINGS_ITEMS > 1)
+                    sb_handle_y += (uint8_t)((uint16_t)sb_travel_h * sel / (LCD_SETTINGS_ITEMS - 1));
 
                 u8g2_DrawVLine(&m1_u8g2, LCD_CFG_SCROLLBAR_X + LCD_CFG_SCROLLBAR_W / 2,
                                LCD_CFG_AREA_TOP, sb_area_h);

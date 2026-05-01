@@ -294,10 +294,12 @@ void m1_scene_draw_menu(const char *title,
     {
         uint8_t sb_area_h   = visible * item_h;
         uint8_t sb_handle_h = sb_area_h / count;
-        if (sb_handle_h < 2)
-            sb_handle_h = 2;
-        uint8_t sb_handle_y = M1_MENU_AREA_TOP +
-            (uint8_t)((uint16_t)sb_area_h * sel / count);
+        if (sb_handle_h < 6)
+            sb_handle_h = 6;
+        uint8_t sb_travel_h = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
+        uint8_t sb_handle_y = M1_MENU_AREA_TOP;
+        if (count > 1)
+            sb_handle_y += (uint8_t)((uint16_t)sb_travel_h * sel / (count - 1));
 
         /* Track — single centerline pixel */
         u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,

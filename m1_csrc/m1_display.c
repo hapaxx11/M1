@@ -492,16 +492,9 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	{
 		if ( run==active_item )
 		{
-			if ( menu_level_id==0 )
-			{
-		   		// Draw frame for selected menu item
-				u8g2_DrawXBMP(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h, m1_frame_75x16);
-			} // if ( menu_level_id==0 )
-			else
-			{
-				u8g2_DrawRBox(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h, 2);
-				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set the color to White
-			} // else
+			// Draw filled rounded highlight for selected item (both level 0 and level 1)
+			u8g2_DrawRBox(&m1_u8g2, menu_text_frame_left_pos_x[menu_level_id], menu_frame_y, menu_text_frame_w[menu_level_id], eff_item_h, 2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // inverted text
 			u8g2_SetFont(&m1_u8g2, eff_font_b);
     		u8g2_DrawStr(&m1_u8g2, menu_text_left_pos_x[menu_level_id], menu_text_y, phmenu[run - 1]);
     		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // return the color to Black
@@ -513,8 +506,11 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 		} // else
 		if ( menu_level_id==0 )
 		{
-			// Draw icons for main menu items
+			// Draw icons for main menu items — inverted colour when selected
+			if ( run==active_item )
+				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawXBMP(&m1_u8g2, MAIN_MENU_ICON_LEFT_POS_X, menu_frame_y + 1, MAIN_MENU_ICON_WIDTH, MAIN_MENU_ICON_HEIGHT, this_gui_menu->submenu[run - 1]->icon_ptr);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		}
 		menu_frame_y += eff_item_h;
 		menu_text_y += eff_item_h;
@@ -535,10 +531,11 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 		 * matching the scene-style scrollbar used by all other modules. */
 		const uint8_t sb_area_h = (uint8_t)M1_MENU_AREA_H;
 		uint8_t sb_handle_h = (num_items > 0) ? (sb_area_h / num_items) : sb_area_h;
-		if ( sb_handle_h < 2 )
-			sb_handle_h = 2;
+		if ( sb_handle_h < 6 )
+			sb_handle_h = 6;
+		/* Clamp handle so it cannot exceed the track bottom */
 		const uint8_t sb_handle_y = (uint8_t)M1_MENU_AREA_TOP +
-		    (num_items > 0 ? (uint8_t)((uint16_t)sb_area_h * sel_item / num_items) : 0);
+		    ((num_items > 1) ? (uint8_t)((uint16_t)(sb_area_h - sb_handle_h) * sel_item / (num_items - 1)) : 0);
 		/* Track — single centerline pixel */
 		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + (uint8_t)M1_MENU_SCROLLBAR_W / 2,
 		               (uint8_t)M1_MENU_AREA_TOP, sb_area_h);
@@ -548,9 +545,20 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 	}
 	else
 	{
-		/* Main menu: legacy full-screen scrollbar (unchanged) */
-		u8g2_DrawXBMP(&m1_u8g2, MENU_SCROLLBAR_POS_X, MENU_SCROLLBAR_POS_Y, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT, menu_scroll_bar_4x64);
-		u8g2_DrawBox(&m1_u8g2, MENU_SCROLLBAR_POS_X, (M1_LCD_DISPLAY_HEIGHT*sel_item)/num_items, MENU_SCROLLBAR_WIDTH, M1_LCD_DISPLAY_HEIGHT/num_items);
+		/* Main menu: modern full-screen scrollbar — VLine track + RBox handle */
+		const uint8_t sb_area_h = M1_LCD_DISPLAY_HEIGHT;
+		uint8_t sb_handle_h = (num_items > 0) ? (sb_area_h / num_items) : sb_area_h;
+		if ( sb_handle_h < 6 )
+			sb_handle_h = 6;
+		/* Clamp handle so it cannot exceed the track bottom */
+		const uint8_t sb_handle_y = (num_items > 1)
+		    ? (uint8_t)((uint16_t)(sb_area_h - sb_handle_h) * sel_item / (num_items - 1)) : 0;
+		/* Track — single centerline pixel spanning full display height */
+		u8g2_DrawVLine(&m1_u8g2, MENU_SCROLLBAR_POS_X + MENU_SCROLLBAR_WIDTH / 2,
+		               0, sb_area_h);
+		/* Handle — filled rounded rectangle */
+		u8g2_DrawRBox(&m1_u8g2, MENU_SCROLLBAR_POS_X, sb_handle_y,
+		              MENU_SCROLLBAR_WIDTH, sb_handle_h, 1);
 	}
 
 	m1_u8g2_nextpage(); // Update display RAM
