@@ -1122,14 +1122,24 @@ const char *wifi_get_connected_ssid(void)
 
 void wifi_ntp_background_sync(void)
 {
-	/* Only attempt when WiFi is connected and the ESP32 SPI is initialised. */
-	if (!s_wifi_connected || !m1_esp32_get_init_status())
+	/* Only attempt when WiFi is known to be connected. */
+	if (!s_wifi_connected)
 		return;
 
 	uint32_t now = HAL_GetTick();
 	if (s_last_ntp_sync_tick != 0 &&
 	    (now - s_last_ntp_sync_tick) < WIFI_NTP_RESYNC_INTERVAL_MS)
 		return;
+
+	/* If a WiFi-using scene (scan/status/disconnect) called m1_esp32_deinit()
+	 * on exit but the connection is still active, transparently re-initialise
+	 * the SPI interface so the background query can proceed. */
+	if (!m1_esp32_get_init_status())
+		m1_esp32_init();
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+	if (!get_esp32_main_init_status())
+		return;   /* ESP32 is genuinely unavailable; skip silently */
 
 	/* Single query — SNTP already configured, so ESP32 has a cached result.
 	 * 1-second timeout is generous; cached responses arrive in milliseconds. */
