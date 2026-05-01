@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.1] - 2026-05-01
+
+### Added
+
+- **ESP32 Update: Backup Flash and Check Info tools** — ported from SiN360; "Backup Flash" reads the full 4 MB ESP32 flash to `/esp32_backup.bin` on SD using the stub loader; "Check Info" resets the ESP32 and displays the last lines of UART boot output to identify the running firmware version. Both appear in Settings → ESP32 Update.
+- **WiFi & Bluetooth: SiN360 binary SPI subsystem** — Ported sincere360/M1_SiN360
+  v0.9.0.6/0.7 WiFi and BLE features using a new 64-byte binary SPI command protocol
+  (`m1_esp32_cmd.c/h`). Requires the `sincere360/M1_SiN360_ESP32` ESP32 companion
+  firmware (flash via OTA updater or esptool, no hardware changes).
+-   **New WiFi tools** (via WiFi → Sniffers / Attacks / Net Scan / General):
+  - Packet sniffers: All, Beacon, Probe, Deauth, EAPOL, SAE/WPA3, Pwnagotchi
+  - Signal Monitor, Station Scan, MAC Track, Wardrive, Station Wardrive
+  - Attacks: Deauth, Beacon Spam, AP Clone, Rickroll, Evil Portal, Probe Flood, Karma, Karma+Portal
+  - Network scanners: Ping, ARP, SSH, Telnet, Port Scan
+  - General config: join WiFi, set MACs/channel, EP SSID/HTML, save/load/clear AP lists
+-   **New BLE tools** (via Bluetooth → Sniffers / Spam / Wardrive / Detectors):
+  - BLE Sniffers: Analyzer, Generic, Flipper, AirTag Sniff/Monitor, Flock
+  - BLE Wardrive (regular, continuous, Flock), BLE Spam (Sour Apple, SwiftPair,
+    Samsung, Flipper, All, AirTag Spoof), Detectors (Skimmers, Flock, Meta)
+  - BLE Advertise and BLE Config retained; Bad-BT (HID) unchanged
+-   WiFi connect, NTP sync, and Bad-BT show a "not available with SiN360 FW"
+  message — these will be restored once the SiN360 ESP32 firmware adds support.
+
+### Changed
+
+- **Settings: Firmware Update and ESP32 Update scene polish** — removed dead legacy
+  `*_gui_update()` / `*_xkey_handler()` functions that were never called by the
+  scene manager; removed unused `FLASH_BL_ADDRESS`, `pFunction` typedef, and
+  orphaned forward declarations; fixed `Swap Banks` screen to use the standard
+  Momentum-style header (`M1_DISP_FUNC_MENU_FONT_N`, centered title, 1px separator
+  line) consistent with all other Settings scenes.
+- **v0.9.1 milestone: SiN360 binary SPI ESP32 firmware adopted as standard** — The
+  sincere360/M1_SiN360_ESP32 binary SPI firmware is now the required ESP32 coprocessor
+  firmware for all WiFi, Bluetooth, and BLE features. Flash via Settings → ESP32 Update
+  or esptool; no hardware changes required. Version series bumped from 0.9.0.x to 0.9.1.x
+  to mark this as a significant architectural milestone. See README for required firmware
+  download link and full feature list.
+- **WiFi/BT UI: Conform selection menus and bottom bars to Hapax design standards** — `m1_wifi.c` and `m1_bt.c` updated to use font-aware helpers (`m1_menu_item_h()`, `m1_menu_max_visible()`, `m1_menu_font()`) for all selection menus (Beacon Spam, Join WiFi, Set MACs); all plain-text `[BACK]/[OK]` bottom hints replaced with `m1_draw_bottom_bar()` calls or removed per the running-tool-screen rule; includes `m1_scene.h` in both files.
 ## [0.9.0.188] - 2026-05-01
 
 ### Added
