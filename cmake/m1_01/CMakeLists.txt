@@ -323,6 +323,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_decode_try_fn.c
     ../../Sub_Ghz/subghz_block_generic.c
     ../../Sub_Ghz/subghz_key_encoder.c
+    ../../Sub_Ghz/subghz_raw_capture_alloc.c
     ../../Sub_Ghz/subghz_raw_line_parser.c
     ../../Sub_Ghz/subghz_raw_decoder.c
     ../../Sub_Ghz/subghz_playlist_parser.c

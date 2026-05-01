@@ -27,10 +27,12 @@
 #include "subghz_protocol_registry.h"
 #include "subghz_key_encoder.h"
 #include "subghz_raw_line_parser.h"
+#include "subghz_raw_capture_alloc.h"
 #include "subghz_secplus_v1_encoder.h"
 #include "subghz_keeloq_encoder.h"
 #include "subghz_keeloq_mfkeys.h"
 #include "m1_ring_buffer.h"
+#include "m1_core_config.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
 #include "flipper_subghz.h"
@@ -3024,34 +3026,39 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 	sub_ghz_ring_buffers_deinit();
 
 	subghz_front_buffer_size = SUBGHZ_RAW_DATA_SAMPLES_MAX;
+	uint16_t next_front_buffer_size;
 
-	while ( true )
+	while ( subghz_front_buffer_size >= 256 )
 	{
 		subghz_front_buffer_base = malloc(subghz_front_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
-		if ( subghz_front_buffer_base )
-		{
-			subghz_front_buffer = (uint16_t *)(((uintptr_t)subghz_front_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
-			break;
-		}
-		subghz_front_buffer_size /= 2;
-		if ( subghz_front_buffer_size < 256 )
-			break;
-	} // while ( true )
-
-	while ( subghz_front_buffer )
-	{
+		if ( !subghz_front_buffer_base )
+			goto retry_smaller_capture_buffer;
+		subghz_front_buffer = (uint16_t *)(((uintptr_t)subghz_front_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
 		subghz_ring_read_buffer = malloc(SUBGHZ_RAW_DATA_SAMPLES_TO_RW*2); // Each sample has a 2-byte value
 		if ( !subghz_ring_read_buffer )
-			break;
+			goto retry_smaller_capture_buffer;
 		subghz_sdcard_write_buffer = malloc(SUBGHZ_FORTMATTED_DATA_SAMPLES_TO_RW);
 		if ( !subghz_sdcard_write_buffer )
-			break;
+			goto retry_smaller_capture_buffer;
+		/* The SD manager still needs heap for its write-buffer reserve after
+		 * these capture buffers are allocated. Probe that reserve now so Read
+		 * Raw does not accept a capture buffer size that makes SD startup fail
+		 * in m1_sdm_memory_init(). */
+		if ( !subghz_raw_capture_reserve_heap((size_t)M1_SDM_MIN_BUFFER_SIZE*M1_SDM_BUFFER_ARRAY_SIZE, m1_malloc, m1_free) )
+			goto retry_smaller_capture_buffer;
 		m1_ringbuffer_init(&subghz_rx_rawdata_rb, (uint8_t *)subghz_front_buffer, subghz_front_buffer_size, sizeof(uint16_t));
 
 		M1_LOG_I(M1_LOGDB_TAG, "sub_ghz_ring_buffers_init %d\r\n", subghz_front_buffer_size);
 
 		return 0;
-	} // while ( subghz_front_buffer )
+
+retry_smaller_capture_buffer:
+		next_front_buffer_size = subghz_front_buffer_size / 2;
+		sub_ghz_ring_buffers_deinit();
+		if ( next_front_buffer_size < 256 )
+			break;
+		subghz_front_buffer_size = next_front_buffer_size;
+	} // while ( subghz_front_buffer_size >= 256 )
 
 	sub_ghz_ring_buffers_deinit();
 	return 1;

@@ -183,6 +183,26 @@ endif()
 add_test(NAME flipper_file COMMAND test_flipper_file)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_raw_capture_alloc
+# Pure allocation-probe helper for Read Raw capture startup.
+# Bug context: the capture ring buffer could greedily consume heap,
+# leaving no room for the SD writer and causing "Record failed" even
+# with a valid SD card.
+# ------------------------------------------------------------------
+add_executable(test_subghz_raw_capture_alloc
+    test_subghz_raw_capture_alloc.c
+    ${M1_ROOT}/Sub_Ghz/subghz_raw_capture_alloc.c
+)
+target_include_directories(test_subghz_raw_capture_alloc PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_raw_capture_alloc PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_raw_capture_alloc PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_raw_capture_alloc COMMAND test_subghz_raw_capture_alloc)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_protocol_registry (lookup functions)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —
