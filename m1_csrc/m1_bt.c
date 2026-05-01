@@ -2,1038 +2,1155 @@
 *
 * m1_bt.c
 *
-* Source for M1 bluetooth
+* Source for M1 bluetooth (NimBLE binary SPI protocol)
 *
 * M1 Project
 *
 */
-/*
- * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Unlicense OR CC0-1.0
- */
-
-/********************************************************************************
-*
-* This file is for BLE management: scan, saved devices, connect, info.
-*
-*********************************************************************************/
 
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
-#include "spi_master.h"
-#include "esp_app_main.h"
-#include "esp_at_list.h"
+#include "m1_esp32_cmd.h"
+#include "m1_virtual_kb.h"
+#include "ff.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
-#include "m1_virtual_kb.h"
-#include "m1_settings.h"
-#include "m1_system.h"
-#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
-#define M1_LOGDB_TAG				"BLE"
+#define M1_LOGDB_TAG            "BLE"
 
-#define M1_GUI_ROW_SPACING			1
+#define M1_GUI_ROW_SPACING      1
 
-#define M1_BLE_SCANNING_TIME		10 // seconds
+#define BLE_SCAN_TIMEOUT_MS     8000
+#define BLE_CMD_TIMEOUT_MS      2000
+#define BLE_NEXT_TIMEOUT_MS     1000
 
-#ifdef M1_APP_BT_MANAGE_ENABLE
-
-#define BT_DEVICES_DIR				"0:/BT"
-#define BT_DEVICES_FILE				"0:/BT/devices.txt"
-#define BT_MAX_SAVED				20
-
-#define BT_LIST_START_Y				13
-#define BT_LIST_VISIBLE				((uint8_t)(39 / m1_menu_item_h()))
-
-
-#endif /* M1_APP_BT_MANAGE_ENABLE */
-
+#define BLE_DEV_MAX             32
+#define BLE_ADV_NAME_MAX        29
+#define BLE_CFG_FILE            "bt.cfg"
 
 //************************** S T R U C T U R E S *******************************
 
-#ifdef M1_APP_BT_MANAGE_ENABLE
 typedef struct {
-	char addr[BSSID_STR_SIZE];
-	char name[SSID_LENGTH];
-	uint8_t addr_type;
-} bt_saved_device_t;
-#endif
+    uint8_t  addr[6];
+    uint8_t  addr_type;
+    int8_t   rssi;
+    char     name[30];
+    char     addr_str[18]; /* "XX:XX:XX:XX:XX:XX" */
+} ble_dev_t;
 
 /***************************** V A R I A B L E S ******************************/
 
-#ifdef M1_APP_BT_MANAGE_ENABLE
-static bt_saved_device_t s_saved_devices[BT_MAX_SAVED];
-static uint8_t s_saved_count = 0;
-static bt_connection_state_t s_bt_conn_state = {0};
-#endif
-
+static ble_dev_t *ble_list = NULL;
+static uint16_t ble_count = 0;
+static uint16_t ble_view_idx = 0;
+static char ble_adv_name[BLE_ADV_NAME_MAX + 1] = "SiN360-M1";
+static bool ble_adv_name_loaded = false;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 void menu_bluetooth_init(void);
+void bluetooth_config(void);
 void bluetooth_scan(void);
 void bluetooth_advertise(void);
 
-extern void  esp32_main_init(void);
+static void ble_list_free(void);
+static uint16_t ble_list_print(bool up_dir);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
-/*============================================================================*/
-/*
- * This function initializes display for this sub-menu item.
- */
-/*============================================================================*/
 void menu_bluetooth_init(void)
 {
-	;
-} // void menu_bluetooth_init(void)
+    ;
+}
 
-
-
-/******************************************************************************/
-/*                      S A V E D   D E V I C E S                             */
-/******************************************************************************/
-
-static void bt_load_devices(void)
+static void ble_trim_line(char *s)
 {
-	FIL fil;
-	FRESULT res;
-	char line[80];
-	char *p, *p2;
+    size_t len;
 
-	s_saved_count = 0;
-	f_mkdir(BT_DEVICES_DIR);
+    if (!s) return;
+    len = strlen(s);
+    while (len > 0 && (s[len - 1] == '\r' || s[len - 1] == '\n' || s[len - 1] == ' '))
+    {
+        s[len - 1] = '\0';
+        len--;
+    }
+}
 
-	res = f_open(&fil, BT_DEVICES_FILE, FA_READ);
-	if (res != FR_OK) return;
-
-	while (s_saved_count < BT_MAX_SAVED)
-	{
-		if (f_gets(line, sizeof(line), &fil) == NULL) break;
-
-		/* Strip trailing newline */
-		p = strstr(line, "\r");
-		if (p) *p = '\0';
-		p = strstr(line, "\n");
-		if (p) *p = '\0';
-
-		if (strlen(line) < 5) continue; /* skip empty/short lines */
-
-		/* Parse: MAC,Name,AddrType */
-		p = strchr(line, ',');
-		if (!p) continue;
-		*p = '\0';
-
-		strncpy(s_saved_devices[s_saved_count].addr, line, BSSID_STR_SIZE - 1);
-		s_saved_devices[s_saved_count].addr[BSSID_STR_SIZE - 1] = '\0';
-
-		p++; /* start of name */
-		p2 = strchr(p, ',');
-		if (p2)
-		{
-			*p2 = '\0';
-			strncpy(s_saved_devices[s_saved_count].name, p, SSID_LENGTH - 1);
-			s_saved_devices[s_saved_count].name[SSID_LENGTH - 1] = '\0';
-			s_saved_devices[s_saved_count].addr_type = (uint8_t)strtol(p2 + 1, NULL, 10);
-		}
-		else
-		{
-			strncpy(s_saved_devices[s_saved_count].name, p, SSID_LENGTH - 1);
-			s_saved_devices[s_saved_count].name[SSID_LENGTH - 1] = '\0';
-			s_saved_devices[s_saved_count].addr_type = 0;
-		}
-
-		s_saved_count++;
-	}
-
-	f_close(&fil);
-} // static void bt_load_devices(void)
-
-
-static bool bt_save_devices(void)
+static bool ble_adv_name_valid_char(char c)
 {
-	FIL fil;
-	FRESULT res;
-	char line[80];
-	uint8_t i;
+    return (c >= 32 && c <= 126);
+}
 
-	f_mkdir(BT_DEVICES_DIR);
-	res = f_open(&fil, BT_DEVICES_FILE, FA_CREATE_ALWAYS | FA_WRITE);
-	if (res != FR_OK) return false;
-
-	for (i = 0; i < s_saved_count; i++)
-	{
-		snprintf(line, sizeof(line), "%s,%s,%u\n",
-			s_saved_devices[i].addr,
-			s_saved_devices[i].name,
-			s_saved_devices[i].addr_type);
-		f_puts(line, &fil);
-	}
-
-	f_close(&fil);
-	return true;
-} // static bool bt_save_devices(void)
-
-
-static bool bt_add_device(const char *addr, const char *name, uint8_t addr_type)
+static void ble_adv_name_set(const char *name)
 {
-	uint8_t i;
+    uint8_t out = 0;
 
-	/* Check if already exists by MAC */
-	for (i = 0; i < s_saved_count; i++)
-	{
-		if (strcmp(s_saved_devices[i].addr, addr) == 0)
-		{
-			/* Update name if provided */
-			if (name && name[0])
-				strncpy(s_saved_devices[i].name, name, SSID_LENGTH - 1);
-			s_saved_devices[i].addr_type = addr_type;
-			return bt_save_devices();
-		}
-	}
+    if (!name || name[0] == '\0') return;
 
-	if (s_saved_count >= BT_MAX_SAVED) return false;
+    for (uint8_t i = 0; name[i] && out < BLE_ADV_NAME_MAX; i++)
+    {
+        if (ble_adv_name_valid_char(name[i]))
+        {
+            ble_adv_name[out++] = name[i];
+        }
+    }
 
-	strncpy(s_saved_devices[s_saved_count].addr, addr, BSSID_STR_SIZE - 1);
-	s_saved_devices[s_saved_count].addr[BSSID_STR_SIZE - 1] = '\0';
-	if (name && name[0])
-		strncpy(s_saved_devices[s_saved_count].name, name, SSID_LENGTH - 1);
-	else
-		s_saved_devices[s_saved_count].name[0] = '\0';
-	s_saved_devices[s_saved_count].name[SSID_LENGTH - 1] = '\0';
-	s_saved_devices[s_saved_count].addr_type = addr_type;
-	s_saved_count++;
+    if (out > 0)
+    {
+        ble_adv_name[out] = '\0';
+    }
+}
 
-	return bt_save_devices();
-} // static bool bt_add_device(...)
-
-
-static bool bt_remove_device(uint8_t index)
+static void ble_adv_name_load(void)
 {
-	if (index >= s_saved_count) return false;
+    FIL fil;
+    char line[48];
 
-	/* Shift remaining devices down */
-	for (uint8_t i = index; i < s_saved_count - 1; i++)
-	{
-		s_saved_devices[i] = s_saved_devices[i + 1];
-	}
-	s_saved_count--;
+    if (ble_adv_name_loaded) return;
+    ble_adv_name_loaded = true;
 
-	return bt_save_devices();
-} // static bool bt_remove_device(uint8_t index)
+    if (f_open(&fil, BLE_CFG_FILE, FA_READ) != FR_OK)
+    {
+        return;
+    }
 
+    while (f_gets(line, sizeof(line), &fil) != NULL)
+    {
+        ble_trim_line(line);
+        if (strncmp(line, "adv_name=", 9) == 0)
+        {
+            ble_adv_name_set(&line[9]);
+            break;
+        }
+    }
 
-/******************************************************************************/
-/*               D I S P L A Y   H E L P E R S                               */
-/******************************************************************************/
+    f_close(&fil);
+}
 
-static void bt_draw_title_bar(const char *title)
+static void ble_adv_name_save(void)
 {
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+    FIL fil;
+    UINT bw;
+    char line[48];
+
+    if (f_open(&fil, BLE_CFG_FILE, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    {
+        return;
+    }
+
+    snprintf(line, sizeof(line), "adv_name=%s\n", ble_adv_name);
+    f_write(&fil, line, strlen(line), &bw);
+    f_close(&fil);
+}
+
+static const char *ble_adv_name_get(void)
+{
+    ble_adv_name_load();
+    return ble_adv_name;
 }
 
 
-static void bt_draw_list_item(uint8_t vis_idx, const char *text, bool selected)
+/* ---- ESP32 init helper (same pattern as WiFi) ---- */
+static void ble_ensure_esp32_ready(void)
 {
-	const uint8_t item_h = m1_menu_item_h();
-	uint8_t y = BT_LIST_START_Y + vis_idx * item_h;
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    if (!m1_esp32_get_init_status())
+    {
+        m1_esp32_init();
+        m1_u8g2_firstpage();
+        u8g2_DrawStr(&m1_u8g2, 6, 15, "Starting ESP32...");
+        m1_u8g2_nextpage();
 
-	if (selected)
-	{
-		u8g2_SetDrawColor(&m1_u8g2, 1);
-		u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
-		u8g2_SetDrawColor(&m1_u8g2, 0);
-	}
-
-	/* Truncate text to fit screen (20 chars at 6px font) */
-	char buf[22];
-	strncpy(buf, text, 21);
-	buf[21] = '\0';
-	u8g2_DrawStr(&m1_u8g2, 2, y + item_h - 1, buf);
-
-	if (selected)
-		u8g2_SetDrawColor(&m1_u8g2, 1);
+        HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
+        HAL_Delay(200);
+        HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
+        HAL_Delay(2000);
+    }
 }
 
 
-static void bt_show_message(const char *line1, const char *line2, uint16_t delay_ms)
+static void ble_list_free(void)
 {
-	m1_u8g2_firstpage();
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	bt_draw_title_bar("Bluetooth");
-	if (line1)
-		u8g2_DrawStr(&m1_u8g2, 2, 28, line1);
-	if (line2)
-		u8g2_DrawStr(&m1_u8g2, 2, 40, line2);
-	m1_u8g2_nextpage();
-	if (delay_ms)
-		vTaskDelay(pdMS_TO_TICKS(delay_ms));
+    if (ble_list)
+    {
+        free(ble_list);
+        ble_list = NULL;
+    }
+    ble_count = 0;
+    ble_view_idx = 0;
+}
+
+static void ble_show_pending(const char *title, const char *line1, const char *line2)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    if (line1) u8g2_DrawStr(&m1_u8g2, 2, 26, line1);
+    if (line2) u8g2_DrawStr(&m1_u8g2, 2, 38, line2);
+    u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Exit");
+    m1_u8g2_nextpage();
+
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
 }
 
 
-/******************************************************************************/
-/*               B L E   S C A N   ( E N H A N C E D )                       */
-/******************************************************************************/
-
-static void bt_scan_detail_screen(ble_scanlist_t *dev)
+/*============================================================================*/
+/**
+  * @brief Perform BLE scan using the binary SPI protocol
+  * @retval Number of devices found, 0 on error
+  */
+/*============================================================================*/
+static uint16_t ble_do_scan(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	char prn_msg[25];
-	bool redraw = true;
+    m1_resp_t resp;
+    int ret;
 
-	while (1)
-	{
-		if (redraw)
-		{
-			redraw = false;
-			m1_u8g2_firstpage();
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			bt_draw_title_bar("Device Info");
+    ble_list_free();
 
-			uint8_t y = 24;
-			/* Name */
-			if (dev->name[0])
-			{
-				char nbuf[22];
-				strncpy(nbuf, (char *)dev->name, 21);
-				nbuf[21] = '\0';
-				u8g2_DrawStr(&m1_u8g2, 2, y, nbuf);
-			}
-			else
-				u8g2_DrawStr(&m1_u8g2, 2, y, "(No name)");
-			y += 10;
+    /* BLE_SCAN_START blocks on ESP32 for ~5s (NimBLE scan duration) */
+    ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
+    if (ret != 0 || resp.status != RESP_OK)
+    {
+        M1_LOG_I(M1_LOGDB_TAG, "BLE scan start failed: ret=%d status=%d\n\r", ret, resp.status);
+        return 0;
+    }
 
-			/* MAC */
-			u8g2_DrawStr(&m1_u8g2, 2, y, (char *)dev->addr);
-			y += 10;
+    uint16_t count = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
+    if (count == 0)
+        return 0;
 
-			/* RSSI + addr_type */
-			snprintf(prn_msg, sizeof(prn_msg), "RSSI:%ddBm Type:%u", dev->rssi, dev->addr_type);
-			u8g2_DrawStr(&m1_u8g2, 2, y, prn_msg);
+    if (count > BLE_DEV_MAX)
+        count = BLE_DEV_MAX;
 
-			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Save", arrowright_8x8);
-			m1_u8g2_nextpage();
-		}
+    ble_list = (ble_dev_t *)malloc(count * sizeof(ble_dev_t));
+    if (!ble_list)
+        return 0;
 
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				break;
-			}
-			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
-			      || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				/* Save device */
-				bool saved = bt_add_device((char *)dev->addr, (char *)dev->name, dev->addr_type);
-				bt_show_message(saved ? "Saved!" : "Save failed!", NULL, 1500);
-				break;
-			}
-		}
-	}
-} // static void bt_scan_detail_screen(...)
+    memset(ble_list, 0, count * sizeof(ble_dev_t));
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT, &resp, BLE_NEXT_TIMEOUT_MS);
+        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9)
+            break;
+
+        /* Unpack: [0]=rssi, [1]=addr_type, [2..7]=addr, [8]=name_len, [9..]=name */
+        ble_list[i].rssi = (int8_t)resp.payload[0];
+        ble_list[i].addr_type = resp.payload[1];
+        memcpy(ble_list[i].addr, &resp.payload[2], 6);
+        uint8_t name_len = resp.payload[8];
+        if (name_len > 29) name_len = 29;
+        if (name_len > 0)
+            memcpy(ble_list[i].name, &resp.payload[9], name_len);
+        ble_list[i].name[name_len] = '\0';
+
+        snprintf(ble_list[i].addr_str, sizeof(ble_list[i].addr_str),
+            "%02X:%02X:%02X:%02X:%02X:%02X",
+            ble_list[i].addr[0], ble_list[i].addr[1], ble_list[i].addr[2],
+            ble_list[i].addr[3], ble_list[i].addr[4], ble_list[i].addr[5]);
+
+        ble_count++;
+    }
+
+    return ble_count;
+}
 
 
+/*============================================================================*/
+/**
+  * @brief Display one BLE device from the list, scroll up/down
+  */
+/*============================================================================*/
+static uint16_t ble_list_print(bool up_dir)
+{
+    char prn_msg[25];
+    uint8_t y_offset;
+
+    if (ble_count == 0 || !ble_list)
+        return 0;
+
+    if (up_dir)
+    {
+        if (ble_view_idx == 0)
+            ble_view_idx = ble_count - 1;
+        else
+            ble_view_idx--;
+    }
+    else
+    {
+        ble_view_idx++;
+        if (ble_view_idx >= ble_count)
+            ble_view_idx = 0;
+    }
+
+    ble_dev_t *d = &ble_list[ble_view_idx];
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "BLE Devices:");
+
+    snprintf(prn_msg, sizeof(prn_msg), "%d/%d", ble_view_idx + 1, ble_count);
+    u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH,
+        M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, prn_msg);
+
+    y_offset = 14 + M1_GUI_FONT_HEIGHT - 1;
+
+    /* Name or "(no name)" */
+    if (d->name[0])
+        u8g2_DrawStr(&m1_u8g2, 2, y_offset, d->name);
+    else
+        u8g2_DrawStr(&m1_u8g2, 2, y_offset, "(no name)");
+
+    y_offset += M1_GUI_FONT_HEIGHT + M1_GUI_ROW_SPACING;
+
+    /* Address */
+    u8g2_DrawStr(&m1_u8g2, 2, y_offset, d->addr_str);
+    y_offset += M1_GUI_FONT_HEIGHT;
+
+    /* RSSI and address type */
+    snprintf(prn_msg, sizeof(prn_msg), "RSSI:%ddBm Type:%d", d->rssi, d->addr_type);
+    u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
+
+    m1_u8g2_nextpage();
+
+    return ble_count;
+}
+
+typedef enum {
+    BLE_RAW_ANALYZER = 0,
+    BLE_RAW_AIRTAG,
+    BLE_RAW_FLIPPER,
+} ble_raw_mode_t;
+
+static bool ble_adv_next_field(const uint8_t *adv, uint8_t adv_len, uint8_t *idx,
+    uint8_t *type, const uint8_t **data, uint8_t *data_len)
+{
+    while (*idx < adv_len)
+    {
+        uint8_t field_len = adv[*idx];
+        (*idx)++;
+
+        if (field_len == 0) continue;
+        if (*idx + field_len > adv_len) return false;
+
+        *type = adv[*idx];
+        *data = &adv[*idx + 1];
+        *data_len = field_len - 1;
+        *idx += field_len;
+        return true;
+    }
+
+    return false;
+}
+
+static char ble_ascii_lower(char c)
+{
+    if (c >= 'A' && c <= 'Z') return c + ('a' - 'A');
+    return c;
+}
+
+static bool ble_bytes_contains_text(const uint8_t *data, uint8_t data_len, const char *needle)
+{
+    uint8_t needle_len = (uint8_t)strlen(needle);
+
+    if (!needle_len || data_len < needle_len) return false;
+
+    for (uint8_t i = 0; i <= data_len - needle_len; i++)
+    {
+        bool match = true;
+        for (uint8_t j = 0; j < needle_len; j++)
+        {
+            if (ble_ascii_lower((char)data[i + j]) != ble_ascii_lower(needle[j]))
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match) return true;
+    }
+
+    return false;
+}
+
+static bool ble_adv_name_contains(const uint8_t *adv, uint8_t adv_len, const char *needle)
+{
+    uint8_t idx = 0;
+    uint8_t type;
+    const uint8_t *data;
+    uint8_t data_len;
+
+    while (ble_adv_next_field(adv, adv_len, &idx, &type, &data, &data_len))
+    {
+        if ((type == 0x08 || type == 0x09) &&
+            ble_bytes_contains_text(data, data_len, needle))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool ble_adv_get_name(const uint8_t *adv, uint8_t adv_len, char *name, uint8_t name_len)
+{
+    uint8_t idx = 0;
+    uint8_t type;
+    const uint8_t *data;
+    uint8_t data_len;
+
+    if (!name || name_len == 0) return false;
+    name[0] = '\0';
+
+    while (ble_adv_next_field(adv, adv_len, &idx, &type, &data, &data_len))
+    {
+        if (type == 0x08 || type == 0x09)
+        {
+            if (data_len >= name_len) data_len = name_len - 1;
+            memcpy(name, data, data_len);
+            name[data_len] = '\0';
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool ble_adv_is_airtag_like(const uint8_t *adv, uint8_t adv_len)
+{
+    uint8_t idx = 0;
+    uint8_t type;
+    const uint8_t *data;
+    uint8_t data_len;
+
+    while (ble_adv_next_field(adv, adv_len, &idx, &type, &data, &data_len))
+    {
+        if (type == 0xFF && data_len >= 3 &&
+            data[0] == 0x4C && data[1] == 0x00 && data[2] == 0x12)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void ble_wait_back(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+}
+
+static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
+{
+    m1_resp_t resp;
+    int ret;
+    uint16_t expected;
+    uint16_t total = 0;
+    uint16_t matches = 0;
+    uint16_t apple_count = 0;
+    uint16_t flipper_count = 0;
+    uint16_t named_count = 0;
+    char first_addr[18] = "";
+    char first_name[20] = "";
+    int8_t first_rssi = 0;
+    char ln[26];
+
+    ble_ensure_esp32_ready();
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    m1_u8g2_firstpage();
+    u8g2_DrawStr(&m1_u8g2, 6, 15, title);
+    u8g2_DrawStr(&m1_u8g2, 6, 30, "Scanning raw adv...");
+    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
+        M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
+    m1_u8g2_nextpage();
+
+    ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
+    if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2)
+    {
+        ble_show_pending(title, "Scan failed", "Check ESP32 FW");
+        return;
+    }
+
+    expected = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
+    if (expected > BLE_DEV_MAX) expected = BLE_DEV_MAX;
+
+    for (uint16_t i = 0; i < expected; i++)
+    {
+        ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT_RAW, &resp, BLE_NEXT_TIMEOUT_MS);
+        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9) break;
+
+        uint8_t adv_len = resp.payload[8];
+        if (adv_len > resp.payload_len - 9) adv_len = resp.payload_len - 9;
+
+        const uint8_t *adv = &resp.payload[9];
+        bool has_name = ble_adv_get_name(adv, adv_len, ln, sizeof(ln));
+        bool is_airtag = ble_adv_is_airtag_like(adv, adv_len);
+        bool is_flipper = ble_adv_name_contains(adv, adv_len, "flipper");
+        bool is_match = (mode == BLE_RAW_ANALYZER) ||
+            (mode == BLE_RAW_AIRTAG && is_airtag) ||
+            (mode == BLE_RAW_FLIPPER && is_flipper);
+
+        total++;
+        if (has_name) named_count++;
+        if (is_airtag) apple_count++;
+        if (is_flipper) flipper_count++;
+
+        if (is_match)
+        {
+            matches++;
+            if (first_addr[0] == '\0')
+            {
+                snprintf(first_addr, sizeof(first_addr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                    resp.payload[2], resp.payload[3], resp.payload[4],
+                    resp.payload[5], resp.payload[6], resp.payload[7]);
+                first_rssi = (int8_t)resp.payload[0];
+                if (has_name)
+                {
+                    strncpy(first_name, ln, sizeof(first_name) - 1);
+                    first_name[sizeof(first_name) - 1] = '\0';
+                }
+            }
+        }
+    }
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    uint8_t y = 22;
+    snprintf(ln, sizeof(ln), "Total:%d Match:%d", total, matches);
+    u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+    if (mode == BLE_RAW_ANALYZER)
+    {
+        snprintf(ln, sizeof(ln), "Name:%d Apple:%d", named_count, apple_count);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+        snprintf(ln, sizeof(ln), "Flipper:%d", flipper_count);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+    }
+    else if (matches > 0)
+    {
+        u8g2_DrawStr(&m1_u8g2, 2, y, first_addr); y += 9;
+        if (first_name[0]) u8g2_DrawStr(&m1_u8g2, 2, y, first_name);
+        else
+        {
+            snprintf(ln, sizeof(ln), "RSSI:%ddBm", first_rssi);
+            u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+        }
+    }
+    else
+    {
+        u8g2_DrawStr(&m1_u8g2, 2, y, "No matches found");
+    }
+
+    u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Exit");
+    m1_u8g2_nextpage();
+
+    ble_wait_back();
+}
+
+
+/*============================================================================*/
+/**
+  * @brief BLE scan: scan for devices and display results
+  */
+/*============================================================================*/
 void bluetooth_scan(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	ctrl_cmd_t app_req = CTRL_CMD_DEFAULT_REQ();
-	int16_t selection = 0;
-	int16_t scroll_offset = 0;
-	int16_t count = 0;
-	ble_scanlist_t *list = NULL;
-	bool redraw = true;
-	bool scan_done = false;
-	char page_info[16];
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    uint16_t list_count;
 
-	/* Init ESP32 if needed */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	if (!m1_esp32_get_init_status())
-	{
-		m1_esp32_init();
-	}
-	if (!get_esp32_main_init_status())
-	{
-		m1_u8g2_firstpage();
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		bt_draw_title_bar("Bluetooth");
-		u8g2_DrawStr(&m1_u8g2, 6, 28, "Initializing...");
-		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 18/2, 32, 18, 32, hourglass_18x32);
-		m1_u8g2_nextpage();
-		esp32_main_init();
-	}
+    ble_ensure_esp32_ready();
 
-	/* Drain stale button events accumulated during ESP32 init.
-	 * Check if BACK was pressed — if so, exit immediately. */
-	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
-	{
-		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				m1_esp32_deinit();
-				return;
-			}
-		}
-	}
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    m1_u8g2_firstpage();
+    u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning BLE...");
+    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
+        M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
+    m1_u8g2_nextpage();
 
-	/* Show scanning animation */
-	m1_u8g2_firstpage();
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	bt_draw_title_bar("Bluetooth");
-	u8g2_DrawStr(&m1_u8g2, 6, 28, "Scanning BLE...");
-	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 18/2, 32, 18, 32, hourglass_18x32);
-	m1_u8g2_nextpage();
+    list_count = ble_do_scan();
 
-	if (get_esp32_main_init_status())
-	{
-		app_req.cmd_timeout_sec = M1_BLE_SCANNING_TIME;
-		app_req.msg_id = CTRL_RESP_GET_BLE_SCAN_LIST;
-		ret = ble_scan_list_ex(&app_req);
+    if (list_count == 0)
+    {
+        m1_u8g2_firstpage();
+        u8g2_DrawStr(&m1_u8g2, 6, 15, "BLE Scan");
+        u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,
+            M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
+        u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+            "No devices found!");
+        m1_u8g2_nextpage();
+    }
+    else
+    {
+        ble_view_idx = 1;
+        ble_list_print(true);
+    }
 
-		if (ret == SUCCESS && app_req.msg_type == CTRL_RESP &&
-			app_req.resp_event_status == SUCCESS)
-		{
-			count = app_req.u.ble_scan.count;
-			list = app_req.u.ble_scan.out_list;
-			scan_done = true;
-		}
-		else
-		{
-			bt_show_message("Scan failed!", "Press Back", 0);
-		}
-	}
-	else
-	{
-		bt_show_message("ESP32 not ready!", "Press Back", 0);
-	}
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret == pdTRUE)
+        {
+            if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+            {
+                ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
 
-	/* Drain stale button events accumulated during the blocking scan so the
-	 * interactive loop below starts with a clean queue. */
-	xQueueReset(button_events_q_hdl);
-	xQueueReset(main_q_hdl);
-
-	if (!scan_done || count == 0)
-	{
-		if (scan_done)
-			bt_show_message("No devices found", "Press Back", 0);
-
-		/* Wait for BACK to exit */
-		while (1)
-		{
-			ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-			if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-			{
-				xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
-				 || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-					break;
-			}
-		}
-		if (list) free(list);
-		xQueueReset(main_q_hdl);
-		m1_esp32_deinit();
-		return;
-	}
-
-	/* Display scrollable list */
-	while (1)
-	{
-		if (redraw)
-		{
-			redraw = false;
-			m1_u8g2_firstpage();
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-
-			snprintf(page_info, sizeof(page_info), "BLE Scan (%d)", count);
-			bt_draw_title_bar(page_info);
-
-			u8g2_SetFont(&m1_u8g2, m1_menu_font());
-
-			/* Adjust scroll offset */
-			if (selection < scroll_offset) scroll_offset = selection;
-			if (selection >= scroll_offset + BT_LIST_VISIBLE)
-				scroll_offset = selection - BT_LIST_VISIBLE + 1;
-
-			/* Draw visible items */
-			for (int i = 0; i < BT_LIST_VISIBLE && scroll_offset + i < count; i++)
-			{
-				int idx = scroll_offset + i;
-				const char *display_name;
-				if (list[idx].name[0])
-					display_name = (const char *)list[idx].name;
-				else
-					display_name = (const char *)list[idx].addr;
-
-				bt_draw_list_item(i, display_name, (idx == selection));
-			}
-
-			snprintf(page_info, sizeof(page_info), "%d/%d", selection + 1, count);
-			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, page_info, "Info", arrowright_8x8);
-			m1_u8g2_nextpage();
-		}
-
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				break;
-			}
-			else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				if (selection > 0) selection--;
-				else selection = count - 1;
-				redraw = true;
-			}
-			else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				if (selection < count - 1) selection++;
-				else selection = 0;
-				redraw = true;
-			}
-			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
-			      || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				bt_scan_detail_screen(&list[selection]);
-				redraw = true;
-			}
-		}
-	}
-
-	if (list) free(list);
-	xQueueReset(main_q_hdl);
-	m1_esp32_deinit();
-} // void bluetooth_scan(void)
+                if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                {
+                    ble_list_free();
+                    xQueueReset(main_q_hdl);
+                    break;
+                }
+                else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+                {
+                    if (list_count)
+                        ble_list_print(true);
+                }
+                else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+                {
+                    if (list_count)
+                        ble_list_print(false);
+                }
+                else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+                {
+                    ;
+                }
+            }
+        }
+    }
+}
 
 
-
-/******************************************************************************/
-/*               S A V E D   D E V I C E S   S C R E E N                     */
-/******************************************************************************/
-
-static void bt_saved_detail_screen(uint8_t dev_idx)
+/*============================================================================*/
+/**
+  * @brief BLE advertise using binary SPI protocol
+  */
+/*============================================================================*/
+void bluetooth_advertise(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	char prn_msg[25];
-	uint8_t menu_sel = 0;  /* 0=Connect, 1=Delete */
-	bool redraw = true;
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    m1_cmd_t cmd;
+    m1_resp_t resp;
+    int spi_ret;
 
-	while (1)
-	{
-		if (redraw)
-		{
-			if (dev_idx >= s_saved_count) break; /* safety check */
+    ble_ensure_esp32_ready();
 
-			redraw = false;
-			m1_u8g2_firstpage();
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			bt_draw_title_bar("Saved Device");
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    m1_u8g2_firstpage();
+    u8g2_DrawStr(&m1_u8g2, 6, 15, "BLE Advertise");
+    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
+        M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
+    m1_u8g2_nextpage();
 
-			uint8_t y = 24;
-			/* Name */
-			if (s_saved_devices[dev_idx].name[0])
-			{
-				char nbuf[22];
-				strncpy(nbuf, s_saved_devices[dev_idx].name, 21);
-				nbuf[21] = '\0';
-				u8g2_DrawStr(&m1_u8g2, 2, y, nbuf);
-			}
-			else
-				u8g2_DrawStr(&m1_u8g2, 2, y, "(No name)");
-			y += 10;
+    /* Send BLE_ADV_START with the configured device name. */
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic = M1_CMD_MAGIC;
+    cmd.cmd_id = CMD_BLE_ADV_START;
+    const char *adv_name = ble_adv_name_get();
+    uint8_t name_len = (uint8_t)strlen(adv_name);
+    if (name_len > BLE_ADV_NAME_MAX) name_len = BLE_ADV_NAME_MAX;
+    memcpy(cmd.payload, adv_name, name_len);
+    cmd.payload_len = name_len;
 
-			/* MAC */
-			u8g2_DrawStr(&m1_u8g2, 2, y, s_saved_devices[dev_idx].addr);
-			y += 10;
+    spi_ret = m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS);
 
-			/* Options */
-			snprintf(prn_msg, sizeof(prn_msg), "%sConnect  %sDelete",
-				menu_sel == 0 ? ">" : " ",
-				menu_sel == 1 ? ">" : " ");
-			u8g2_DrawStr(&m1_u8g2, 2, y, prn_msg);
+    m1_u8g2_firstpage();
+    u8g2_DrawStr(&m1_u8g2, 6, 15, "BLE Advertise");
 
-			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
-			m1_u8g2_nextpage();
-		}
+    if (spi_ret == 0 && resp.status == RESP_OK)
+    {
+        u8g2_DrawStr(&m1_u8g2, 6, 28, "Broadcasting as:");
+        u8g2_DrawStr(&m1_u8g2, 6, 40, adv_name);
+        u8g2_DrawStr(&m1_u8g2, 6, 55, "[BACK] to stop");
+    }
+    else
+    {
+        u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,
+            M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
+        u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+            "Failed to start!");
+    }
+    m1_u8g2_nextpage();
 
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				break;
-			}
-			else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK ||
-					 this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				menu_sel = menu_sel ? 0 : 1;
-				redraw = true;
-			}
-			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
-			      || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				if (menu_sel == 1) /* Delete */
-				{
-					bt_remove_device(dev_idx);
-					bt_show_message("Deleted!", NULL, 1000);
-					break;
-				}
-				else /* Connect */
-				{
-					/* Init ESP32 if needed */
-					if (!m1_esp32_get_init_status())
-					{
-						m1_esp32_init();
-					}
-					if (!get_esp32_main_init_status())
-					{
-						bt_show_message("Initializing...", NULL, 0);
-						esp32_main_init();
-					}
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret == pdTRUE)
+        {
+            if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+            {
+                ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
 
-					if (get_esp32_main_init_status())
-					{
-						bt_show_message("Connecting...", s_saved_devices[dev_idx].addr, 0);
-						ctrl_cmd_t conn_req = CTRL_CMD_DEFAULT_REQ();
-						conn_req.cmd_timeout_sec = 15;
-						uint8_t cret = ble_connect(&conn_req,
-							s_saved_devices[dev_idx].addr,
-							s_saved_devices[dev_idx].addr_type);
-
-						if (cret == SUCCESS)
-						{
-							s_bt_conn_state.connected = true;
-							strncpy(s_bt_conn_state.addr, s_saved_devices[dev_idx].addr, BSSID_STR_SIZE - 1);
-							strncpy(s_bt_conn_state.name, s_saved_devices[dev_idx].name, SSID_LENGTH - 1);
-							bt_show_message("Connected!", NULL, 1500);
-						}
-						else
-						{
-							bt_show_message("Connect failed!", "Not supported?", 2000);
-						}
-					}
-					else
-					{
-						bt_show_message("ESP32 not ready!", NULL, 1500);
-					}
-					redraw = true;
-				}
-			}
-		}
-	}
-} // static void bt_saved_detail_screen(...)
+                if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                {
+                    m1_esp32_simple_cmd(CMD_BLE_ADV_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+                    xQueueReset(main_q_hdl);
+                    break;
+                }
+            }
+        }
+    }
+}
 
 
+/*============================================================================*/
+/*  BLE raw adv helper — send raw bytes, show running screen, cycle payloads */
+/*============================================================================*/
+
+static void ble_raw_adv_send(const uint8_t *data, uint8_t len)
+{
+    m1_cmd_t cmd;
+    m1_resp_t resp;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic = M1_CMD_MAGIC;
+    cmd.cmd_id = CMD_BLE_ADV_RAW;
+    if (len > 31) len = 31;
+    memcpy(cmd.payload, data, len);
+    cmd.payload_len = len;
+    m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS);
+}
+
+static void ble_spam_run_loop(const char *title,
+    const uint8_t payloads[][31], const uint8_t *lengths, uint8_t count)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    m1_resp_t resp;
+    char ln[26];
+    uint32_t start_tick = HAL_GetTick();
+    uint8_t idx = 0;
+    uint32_t pkt_count = 0;
+
+    while (1)
+    {
+        ble_raw_adv_send(payloads[idx], lengths[idx]);
+        idx = (idx + 1) % count;
+        pkt_count++;
+
+        uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
+
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        uint8_t y = 22;
+
+        snprintf(ln, sizeof(ln), "Packets: %lu", pkt_count);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        snprintf(ln, sizeof(ln), "Payloads: %d", count);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+
+        u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                m1_esp32_simple_cmd(CMD_BLE_ADV_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+}
+
+
+/*============================================================================*/
+/*  Sour Apple — iOS BLE proximity notifications                             */
+/*============================================================================*/
+
+static const uint8_t sour_apple_payloads[][31] = {
+    { 0x02, 0x01, 0x06, 0x11, 0xFF, 0x4C, 0x00, 0x0F, 0x05, 0xC1,
+      0x01, 0x60, 0x4C, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 },
+    { 0x02, 0x01, 0x06, 0x11, 0xFF, 0x4C, 0x00, 0x0F, 0x05, 0xC1,
+      0x06, 0x60, 0x4C, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 },
+    { 0x02, 0x01, 0x06, 0x11, 0xFF, 0x4C, 0x00, 0x0F, 0x05, 0xC1,
+      0x20, 0x60, 0x4C, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 },
+    { 0x02, 0x01, 0x06, 0x11, 0xFF, 0x4C, 0x00, 0x0F, 0x05, 0xC1,
+      0x0B, 0x60, 0x4C, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00 },
+};
+static const uint8_t sour_apple_lens[] = { 20, 20, 20, 20 };
+
+void ble_spam_sour_apple(void)
+{
+    ble_ensure_esp32_ready();
+    ble_spam_run_loop("SOUR APPLE",
+        sour_apple_payloads, sour_apple_lens, 4);
+}
+
+
+/*============================================================================*/
+/*  Swiftpair — Windows BLE pairing notifications                            */
+/*============================================================================*/
+
+static const uint8_t swiftpair_payloads[][31] = {
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0xFF, 0x06, 0x00, 0x03, 0x80, 0x00 },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0xFF, 0x06, 0x00, 0x03, 0x80, 0x01 },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0xFF, 0x06, 0x00, 0x03, 0x80, 0x02 },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0xFF, 0x06, 0x00, 0x03, 0x80, 0x03 },
+};
+static const uint8_t swiftpair_lens[] = { 14, 14, 14, 14 };
+
+void ble_spam_swiftpair(void)
+{
+    ble_ensure_esp32_ready();
+    ble_spam_run_loop("SWIFTPAIR",
+        swiftpair_payloads, swiftpair_lens, 4);
+}
+
+
+/*============================================================================*/
+/*  Samsung BLE — Galaxy device pairing notifications                        */
+/*============================================================================*/
+
+static const uint8_t samsung_payloads[][31] = {
+    { 0x02, 0x01, 0x06, 0x1B, 0xFF, 0x75, 0x00, 0x42, 0x09, 0x01,
+      0x02, 0xA0, 0x01, 0x50, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x11,
+      0x06, 0xEE, 0x7D, 0x21, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
+    { 0x02, 0x01, 0x06, 0x1B, 0xFF, 0x75, 0x00, 0x42, 0x09, 0x01,
+      0x02, 0xA0, 0x02, 0x50, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x11,
+      0x06, 0xEE, 0x7D, 0x21, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02 },
+    { 0x02, 0x01, 0x06, 0x1B, 0xFF, 0x75, 0x00, 0x42, 0x09, 0x01,
+      0x02, 0xA0, 0x03, 0x50, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x11,
+      0x06, 0xEE, 0x7D, 0x21, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03 },
+    { 0x02, 0x01, 0x06, 0x1B, 0xFF, 0x75, 0x00, 0x42, 0x09, 0x01,
+      0x02, 0xA0, 0x04, 0x50, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x11,
+      0x06, 0xEE, 0x7D, 0x21, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04 },
+};
+static const uint8_t samsung_lens[] = { 31, 31, 31, 31 };
+
+void ble_spam_samsung(void)
+{
+    ble_ensure_esp32_ready();
+    ble_spam_run_loop("SAMSUNG BLE",
+        samsung_payloads, samsung_lens, 4);
+}
+
+
+/*============================================================================*/
+/*  Flipper BLE Spam — name advertisements                                   */
+/*============================================================================*/
+
+static const uint8_t flipper_payloads[][31] = {
+    { 0x02, 0x01, 0x06, 0x0D, 0x09, 'F', 'l', 'i', 'p', 'p', 'e', 'r',
+      ' ', 'Z', 'e', 'r', 'o' },
+    { 0x02, 0x01, 0x06, 0x0C, 0x09, 'F', 'l', 'i', 'p', 'p', 'e', 'r',
+      ' ', 'B', 'L', 'E' },
+    { 0x02, 0x01, 0x06, 0x0C, 0x09, 'F', 'l', 'i', 'p', 'p', 'e', 'r',
+      '_', 'Z', 'e', 'r' },
+    { 0x02, 0x01, 0x06, 0x08, 0x09, 'F', 'l', 'i', 'p', 'p', 'e', 'r' },
+};
+static const uint8_t flipper_lens[] = { 17, 16, 16, 12 };
+
+void ble_spam_flipper(void)
+{
+    ble_ensure_esp32_ready();
+    ble_spam_run_loop("FLIPPER BLE",
+        flipper_payloads, flipper_lens, 4);
+}
+
+
+/*============================================================================*/
+/*  BLE Spam All — cycle through all payload types                           */
+/*============================================================================*/
+
+void ble_spam_all(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    m1_resp_t resp;
+    char ln[26];
+    uint32_t start_tick;
+    uint32_t pkt_count = 0;
+    uint8_t type_idx = 0;
+
+    ble_ensure_esp32_ready();
+    start_tick = HAL_GetTick();
+
+    while (1)
+    {
+        uint8_t sent_type = type_idx;
+
+        switch (type_idx)
+        {
+        case 0:
+            for (uint8_t i = 0; i < 4; i++)
+                ble_raw_adv_send(sour_apple_payloads[i], sour_apple_lens[i]);
+            break;
+        case 1:
+            for (uint8_t i = 0; i < 4; i++)
+                ble_raw_adv_send(swiftpair_payloads[i], swiftpair_lens[i]);
+            break;
+        case 2:
+            for (uint8_t i = 0; i < 4; i++)
+                ble_raw_adv_send(samsung_payloads[i], samsung_lens[i]);
+            break;
+        case 3:
+            for (uint8_t i = 0; i < 4; i++)
+                ble_raw_adv_send(flipper_payloads[i], flipper_lens[i]);
+            break;
+        }
+        type_idx = (type_idx + 1) % 4;
+        pkt_count += 4;
+
+        uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
+
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+            "BLE SPAM ALL");
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        uint8_t y = 22;
+
+        snprintf(ln, sizeof(ln), "Packets: %lu", pkt_count);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        const char *names[] = {"Apple", "Windows", "Samsung", "Flipper"};
+        snprintf(ln, sizeof(ln), "Current: %s", names[sent_type]);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+
+        u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                m1_esp32_simple_cmd(CMD_BLE_ADV_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+}
+
+void ble_sniff_analyzer(void)
+{
+    ble_raw_scan_report("BT ANALYZER", BLE_RAW_ANALYZER);
+}
+
+void ble_sniff_generic(void)
+{
+    bluetooth_scan();
+}
+
+void ble_sniff_flipper(void)
+{
+    ble_raw_scan_report("FLIPPER SNIFF", BLE_RAW_FLIPPER);
+}
+
+void ble_sniff_airtag(void)
+{
+    ble_raw_scan_report("AIRTAG SNIFF", BLE_RAW_AIRTAG);
+}
+
+void ble_monitor_airtag(void)
+{
+    ble_show_pending("AIRTAG MONITOR", "Continuous scan mode", "ESP32 cmd next");
+}
+
+void ble_wardrive(void)
+{
+    ble_show_pending("BLE WARDRIVE", "Needs SD logging", "and raw adv fields");
+}
+
+void ble_wardrive_continuous(void)
+{
+    ble_show_pending("BLE WARD CONT", "Needs background scan", "and SD logging");
+}
+
+void ble_detect_skimmers(void)
+{
+    ble_show_pending("SKIMMER DETECT", "Needs adv pattern DB", "ESP32 cmd next");
+}
+
+void ble_sniff_flock(void)
+{
+    ble_show_pending("FLOCK SNIFF", "Needs signature set", "ESP32 cmd next");
+}
+
+void ble_wardrive_flock(void)
+{
+    ble_show_pending("FLOCK WDRIVE", "Needs SD logging", "ESP32 cmd next");
+}
+
+void ble_detect_meta(void)
+{
+    ble_show_pending("META DETECT", "Needs mfg data match", "ESP32 cmd next");
+}
+
+void ble_spoof_airtag(void)
+{
+    ble_show_pending("SPOOF AIRTAG", "Needs Find My payload", "not raw name adv");
+}
+
+
+/*============================================================================*/
+/**
+  * @brief BLE config placeholder
+  */
+/*============================================================================*/
+void bluetooth_config(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    char new_name[BLE_ADV_NAME_MAX + 1];
+    bool redraw = true;
+
+    ble_adv_name_load();
+
+    while (1)
+    {
+        if (redraw)
+        {
+            redraw = false;
+            m1_u8g2_firstpage();
+            u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+            u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+            u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "BT CONFIG");
+
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+            u8g2_DrawStr(&m1_u8g2, 2, 26, "Adv Name:");
+            u8g2_DrawStr(&m1_u8g2, 2, 38, ble_adv_name);
+            u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Edit [BACK]Exit");
+            m1_u8g2_nextpage();
+        }
+
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+
+        xQueueReceive(button_events_q_hdl, &btn, 0);
+        if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            xQueueReset(main_q_hdl);
+            break;
+        }
+        else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            memset(new_name, 0, sizeof(new_name));
+            if (m1_vkb_get_text("BLE adv name:", ble_adv_name, new_name, BLE_ADV_NAME_MAX) > 0)
+            {
+                ble_adv_name_set(new_name);
+                ble_adv_name_save();
+            }
+            redraw = true;
+        }
+    }
+}
+
+/*==========================================================================*/
+/* Legacy AT-layer stubs — remain compilable for m1_bt_scene.c callers      */
+/* while AT firmware is not used.                                            */
+/*==========================================================================*/
+
+#ifdef M1_APP_BT_MANAGE_ENABLE
 void bluetooth_saved_devices(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	int16_t selection = 0;
-	int16_t scroll_offset = 0;
-	bool redraw = true;
-	char page_info[16];
-
-	bt_load_devices();
-
-	while (1)
-	{
-		if (redraw)
-		{
-			redraw = false;
-			m1_u8g2_firstpage();
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-
-			if (s_saved_count == 0)
-			{
-				bt_draw_title_bar("Saved Devices");
-				u8g2_DrawStr(&m1_u8g2, 2, 30, "No saved devices");
-				m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
-				m1_u8g2_nextpage();
-			}
-			else
-			{
-				snprintf(page_info, sizeof(page_info), "Saved (%d)", s_saved_count);
-				bt_draw_title_bar(page_info);
-
-				u8g2_SetFont(&m1_u8g2, m1_menu_font());
-
-				if (selection >= s_saved_count) selection = s_saved_count - 1;
-				if (selection < 0) selection = 0;
-				if (selection < scroll_offset) scroll_offset = selection;
-				if (selection >= scroll_offset + BT_LIST_VISIBLE)
-					scroll_offset = selection - BT_LIST_VISIBLE + 1;
-
-				for (int i = 0; i < BT_LIST_VISIBLE && scroll_offset + i < s_saved_count; i++)
-				{
-					int idx = scroll_offset + i;
-					const char *display_name;
-					if (s_saved_devices[idx].name[0])
-						display_name = s_saved_devices[idx].name;
-					else
-						display_name = s_saved_devices[idx].addr;
-
-					bt_draw_list_item(i, display_name, (idx == selection));
-				}
-
-				snprintf(page_info, sizeof(page_info), "%d/%d", selection + 1, s_saved_count);
-				m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, page_info, "Open", arrowright_8x8);
-				m1_u8g2_nextpage();
-			}
-		}
-
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				xQueueReset(main_q_hdl);
-				break;
-			}
-			else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				if (s_saved_count > 0)
-				{
-					if (selection > 0) selection--;
-					else selection = s_saved_count - 1;
-					redraw = true;
-				}
-			}
-			else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				if (s_saved_count > 0)
-				{
-					if (selection < s_saved_count - 1) selection++;
-					else selection = 0;
-					redraw = true;
-				}
-			}
-			else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
-			      || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				if (s_saved_count > 0)
-				{
-					bt_saved_detail_screen(selection);
-					bt_load_devices(); /* Reload in case device was deleted */
-					if (selection >= s_saved_count && s_saved_count > 0)
-						selection = s_saved_count - 1;
-					redraw = true;
-				}
-				else
-				{
-					xQueueReset(main_q_hdl);
-					break;
-				}
-			}
-		}
-	}
-} // void bluetooth_saved_devices(void)
-
-
-
-/******************************************************************************/
-/*               B T   I N F O   S C R E E N                                 */
-/******************************************************************************/
+u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+m1_u8g2_firstpage();
+u8g2_DrawStr(&m1_u8g2, 6, 15, "Saved Devices");
+u8g2_DrawStr(&m1_u8g2, 6, 30, "Not available");
+u8g2_DrawStr(&m1_u8g2, 6, 45, "with SiN360 FW");
+m1_u8g2_nextpage();
+HAL_Delay(2000);
+}
 
 void bluetooth_info(void)
 {
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	ctrl_cmd_t app_req = CTRL_CMD_DEFAULT_REQ();
-	char version_str[STATUS_LENGTH];
-	uint8_t y;
-
-	memset(version_str, 0, sizeof(version_str));
-
-	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-
-	/* Init ESP32 if needed */
-	if (!m1_esp32_get_init_status())
-	{
-		m1_esp32_init();
-	}
-	if (!get_esp32_main_init_status())
-	{
-		bt_show_message("Initializing...", NULL, 0);
-		esp32_main_init();
-	}
-
-	/* Drain stale button events accumulated during ESP32 init. */
-	xQueueReset(button_events_q_hdl);
-	xQueueReset(main_q_hdl);
-
-	if (get_esp32_main_init_status())
-	{
-		bt_show_message("Querying...", NULL, 0);
-		app_req.cmd_timeout_sec = 10;
-		app_req.msg_id = CTRL_RESP_GET_VERSION;
-		ret = esp_get_version(&app_req);
-		if (ret == SUCCESS)
-		{
-			strncpy(version_str, app_req.u.wifi_ap_config.status, STATUS_LENGTH - 1);
-		}
-		else
-		{
-			strncpy(version_str, "Unknown", sizeof(version_str) - 1);
-		}
-	}
-	else
-	{
-		strncpy(version_str, "ESP32 offline", sizeof(version_str) - 1);
-	}
-
-	/* Draw info screen */
-	m1_u8g2_firstpage();
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	bt_draw_title_bar("BT Info");
-
-	y = 24;
-	u8g2_DrawStr(&m1_u8g2, 2, y, "ESP32 AT FW:");
-	y += 10;
-	u8g2_DrawStr(&m1_u8g2, 4, y, version_str);
-	y += 12;
-
-	if (s_bt_conn_state.connected)
-	{
-		u8g2_DrawStr(&m1_u8g2, 2, y, "Connected:");
-		y += 10;
-		if (s_bt_conn_state.name[0])
-		{
-			char nbuf[22];
-			strncpy(nbuf, s_bt_conn_state.name, 21);
-			nbuf[21] = '\0';
-			u8g2_DrawStr(&m1_u8g2, 4, y, nbuf);
-		}
-		else
-			u8g2_DrawStr(&m1_u8g2, 4, y, s_bt_conn_state.addr);
-	}
-	else
-	{
-		u8g2_DrawStr(&m1_u8g2, 2, y, "Not connected");
-	}
-
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "OK", arrowright_8x8);
-	m1_u8g2_nextpage();
-
-	/* Wait for BACK */
-	while (1)
-	{
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
-			 || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-				break;
-		}
-	}
-
-	xQueueReset(main_q_hdl);
-	m1_esp32_deinit();
-} // void bluetooth_info(void)
-
-
-bt_connection_state_t *bt_get_connection_state(void)
-{
-	return &s_bt_conn_state;
+u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+m1_u8g2_firstpage();
+u8g2_DrawStr(&m1_u8g2, 6, 15, "BT Info");
+u8g2_DrawStr(&m1_u8g2, 6, 30, "Use BLE Config");
+m1_u8g2_nextpage();
+HAL_Delay(2000);
 }
-
-
-
+#endif /* M1_APP_BT_MANAGE_ENABLE */
 
 #ifdef M1_APP_BADBT_ENABLE
 void bluetooth_set_badbt_name(void)
 {
-	char new_name[BADBT_NAME_MAX_LEN + 1] = {0};
-
-	uint8_t len = m1_vkb_get_text("Bad-BT Name", m1_badbt_name, new_name, sizeof(new_name));
-	if (len > 0)
-	{
-		strncpy(m1_badbt_name, new_name, BADBT_NAME_MAX_LEN);
-		m1_badbt_name[BADBT_NAME_MAX_LEN] = '\0';
-		settings_save_to_sd();
-
-		bt_show_message("Name saved:", m1_badbt_name, 1500);
-	}
+u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+m1_u8g2_firstpage();
+u8g2_DrawStr(&m1_u8g2, 6, 15, "BT Name");
+u8g2_DrawStr(&m1_u8g2, 6, 30, "Use BLE Config");
+m1_u8g2_nextpage();
+HAL_Delay(2000);
 }
 #endif /* M1_APP_BADBT_ENABLE */
-
-
-
-/*============================================================================*/
-/*
- * This function initializes the server mode and starts the advertising mode.
- */
-/*============================================================================*/
-void bluetooth_advertise(void)
-{
-	S_M1_Buttons_Status this_button_status;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	ctrl_cmd_t app_req = CTRL_CMD_DEFAULT_REQ();
-	char *index, *start_index, *next_index;
-	char prn_buffer[25], prn_cnt;
-	uint8_t cp_len;
-
-    /* Graphic work starts here */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	if ( !m1_esp32_get_init_status() )
-	{
-		m1_esp32_init();
-	}
-	if ( !get_esp32_main_init_status() )
-	{
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Initializing...");
-		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 18/2, M1_LCD_DISPLAY_HEIGHT/2 - 2, 18, 32, hourglass_18x32);
-		m1_u8g2_nextpage();
-		esp32_main_init();
-	}
-
-	/* Drain stale button events accumulated during ESP32 init.
-	 * Check if BACK was pressed — if so, exit immediately. */
-	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
-	{
-		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
-		{
-			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-			{
-				m1_esp32_deinit();
-				return;
-			}
-		}
-	}
-
-	m1_u8g2_firstpage();
-	if ( get_esp32_main_init_status() )
-	{
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Advertising...");
-		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 18/2, M1_LCD_DISPLAY_HEIGHT/2 - 2, 18, 32, hourglass_18x32);
-		m1_u8g2_nextpage();
-
-		app_req.cmd_timeout_sec = M1_BLE_SCANNING_TIME;
-		app_req.msg_id = CTRL_RESP_SET_BLE_RESET;
-		ret = esp_dev_reset(&app_req);
-		app_req.msg_id = CTRL_RESP_SET_BLE_ADVERTISE;
-		ret = ble_advertise(&app_req);
-
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-		u8g2_DrawBox(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 18/2, M1_LCD_DISPLAY_HEIGHT/2 - 2, 18, 32);
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
-		if ( !ret )
-		{
-			u8g2_DrawStr(&m1_u8g2, 100, 15, "Done");
-			index = ESP32C6_AT_REQ_ADV_DATA;
-			if ( index )
-			{
-				prn_cnt = 0;
-				while (true)
-				{
-					start_index = strstr(index, "\"");
-					if ( !start_index )
-						break;
-					next_index = strstr(&start_index[1], "\"");
-					cp_len = next_index - start_index - 1;
-					strncpy(prn_buffer, &start_index[1], cp_len);
-					prn_buffer[cp_len] = '\0';
-					u8g2_DrawStr(&m1_u8g2, 2, 35 + prn_cnt*10, prn_buffer);
-					index = &next_index[1];
-					prn_cnt++;
-					if ( prn_cnt >= 3)
-						break;
-				}
-			}
-			else
-			{
-				u8g2_DrawStr(&m1_u8g2, 6, 25, "Done");
-				m1_u8g2_nextpage();
-			}
-			m1_u8g2_nextpage();
-		}
-		else
-		{
-			u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH/2 - 32/2, M1_LCD_DISPLAY_HEIGHT/2 - 2, 32, 32, wifi_error_32x32);
-			u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "Failed. Retrying...");
-			m1_u8g2_nextpage();
-			esp32_disable();
-			m1_hard_delay(1);
-			esp32_enable();
-			m1_hard_delay(200);
-		}
-	}
-	else
-	{
-		u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "ESP32 not ready!");
-		m1_u8g2_nextpage();
-	}
-
-	while (1 )
-	{
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret==pdTRUE)
-		{
-			if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
-			{
-				ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-				if ( this_button_status.event[BUTTON_BACK_KP_ID]==BUTTON_EVENT_CLICK
-				  || this_button_status.event[BUTTON_LEFT_KP_ID]==BUTTON_EVENT_CLICK )
-				{
-					u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 18*2, M1_LCD_DISPLAY_HEIGHT/2 - 2, 18, 32, hourglass_18x32);
-					m1_u8g2_nextpage();
-
-					app_req.cmd_timeout_sec = M1_BLE_SCANNING_TIME;
-					app_req.msg_id = CTRL_RESP_SET_BLE_RESET;
-					ret = esp_dev_reset(&app_req);
-
-					xQueueReset(main_q_hdl);
-					m1_esp32_deinit();
-					break;
-				}
-			}
-			else
-			{
-				;
-			}
-		}
-	}
-} // void bluetooth_advertise(void)
