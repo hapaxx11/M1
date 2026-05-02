@@ -15,6 +15,7 @@
 #include "m1_scene.h"
 #include "m1_wifi.h"
 #include "m1_802154.h"
+#include "m1_esp32_hal.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -94,7 +95,7 @@ enum {
 /* ---- Macro: simple blocking-delegate scene builder ---------------------- */
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); app->running = true; m1_scene_pop(app); }
+        (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 DELEGATE(scan_connect,         wifi_scan_ap)
 DELEGATE(station_scan,         wifi_station_scan)

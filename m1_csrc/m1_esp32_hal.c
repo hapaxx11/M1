@@ -596,6 +596,12 @@ void esp32_UART_deinit(void)
 		pesp32_rx = NULL;
 	} // if ( pesp32_rx )
 
+	if ( sem_esp32_trans )
+	{
+		vSemaphoreDelete(sem_esp32_trans);
+		sem_esp32_trans = NULL;
+	}
+
 	esp32_uart_init_done = FALSE;
 
 	// Temporarily comment out esp32_disable() to not to disable the ESP module after the task is done.

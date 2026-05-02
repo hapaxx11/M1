@@ -203,6 +203,23 @@ endif()
 add_test(NAME subghz_raw_capture_alloc COMMAND test_subghz_raw_capture_alloc)
 
 # ------------------------------------------------------------------
+# Source invariant: ESP32 transport must be quiesced around Sub-GHz.
+# Bug context: SiN360 ESP32 tools can leave SPI3/EXTI active; Sub-GHz
+# Read/Read Raw depend on timing-sensitive SI4463/TIM1 capture.
+# ------------------------------------------------------------------
+add_executable(test_esp32_subghz_lifecycle
+    test_esp32_subghz_lifecycle.c
+)
+target_compile_definitions(test_esp32_subghz_lifecycle PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_esp32_subghz_lifecycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_subghz_lifecycle PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_subghz_lifecycle COMMAND test_esp32_subghz_lifecycle)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_protocol_registry (lookup functions)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —
