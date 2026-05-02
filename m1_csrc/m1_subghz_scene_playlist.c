@@ -416,15 +416,15 @@ static void draw(SubGhzApp *app)
     /* Playback mode (file browser opens directly on enter/back) */
     {
         /* Playback mode */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 
         /* Header: playlist name + repeat info */
         {
             const char *pname = basename_from_path(app->playlist_path);
             char header[28];
             /* Truncate name to fit */
-            snprintf(header, sizeof(header), "%.18s", pname);
-            u8g2_DrawStr(&m1_u8g2, 2, 8, header);
+            snprintf(header, sizeof(header), "%.13s", pname);  /* 13 × 6px ≤ 78px; counter at x=90 */
+            u8g2_DrawStr(&m1_u8g2, 2, 9, header);
         }
 
         /* Repeat counter on right side of header */
@@ -448,7 +448,7 @@ static void draw(SubGhzApp *app)
                     snprintf(rep, sizeof(rep), "R:%u",
                              app->playlist_repeat_total);
             }
-            u8g2_DrawStr(&m1_u8g2, 90, 8, rep);
+            u8g2_DrawStr(&m1_u8g2, 90, 9, rep);
         }
 
         u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
