@@ -10,13 +10,13 @@ This project started as a fork of the original Monstatek M1 firmware and adds co
 
 ## Current Release
 
-**SiN360 v0.9.0.7**
+**SiN360 v0.9.0.8**
 
 This release focuses on WiFi scanner coverage, Evil Portal custom-page capture improvements, BLE foundation work, ESP32 update support, UI polish, and branding refresh.
 
 ### Branding
 
-- Firmware version bumped to `0.9.0.7`
+- Firmware version bumped to `0.9.0.8`
 - Boot screen now uses SiN360 branding with the firmware version underneath
 - Boot and main-menu logos updated with custom monochrome artwork
 - Default BLE advertising name changed to `SiN360-M1`
@@ -29,23 +29,26 @@ ESP32 firmware repo:
 
 <https://github.com/sincere360/M1_SiN360_ESP32>
 
-Matching ESP32 `v0.9.0.7` release:
+Matching ESP32 `v0.9.0.8` release:
 
-<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.7>
+<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.8>
 
-Detailed user how-tos are coming later.
+Workflow guides:
+
+- [WiFi Test Workflows](docs/WIFI_WORKFLOWS.md)
+- [Bluetooth / BLE Test Workflows](docs/BLE_WORKFLOWS.md)
 
 ### WiFi
 
 - AP scanning with scrollable results
 - Station scanning and AP/station target selection
-- Packet monitor/sniffers for beacon, probe, deauth, EAPOL, SAE commit, Pwnagotchi detection, and raw packet counts
+- Packet monitor/sniffers for beacon, probe, deauth, EAPOL, SAE commit, Pwnagotchi detection, raw packet counts, and optional PCAP export under `pcap/`
 - Deauth attack with selected AP/station target plumbing
 - Beacon Spam from SD-card `.txt`/`.lst` SSID lists
 - Beacon Spam modes: all in order, shuffle all, random subset
 - Rickroll beacon preset
 - AP Clone beacon spam, using selected APs first when marked
-- Probe Request Flood
+- Probe Flood
 - Evil Portal with captive portal DNS/HTTP, credential capture, JSON/form handling, and custom page helper injection
 - Custom Evil Portal HTML upload from SD card with a 32KB limit
 - Karma and Karma Portal modes, including active SSID placeholder support for custom portal pages
@@ -55,6 +58,7 @@ Detailed user how-tos are coming later.
 - Ping Scan and ARP Scan over the joined WiFi network
 - Wardrive and Station Wardrive CSV exports to SD card
 - MAC Track for monitoring selected devices
+- WiFi capture controls for PCAP logging, PMKID capture, probe capture, and portal deauth assist
 
 ### Bluetooth / BLE
 
@@ -62,13 +66,20 @@ Detailed user how-tos are coming later.
 - BLE advertising with configurable name saved to SD card
 - Full text keyboard support for BLE names
 - BLE raw advertisement command support on ESP32
+- BLE GATT Discovery with services, characteristics, descriptors, short readable values, characteristic write tools, notification viewing, and CSV export to `bt/gatt.csv`
+- BLE raw-advertisement analyzer and starter detection screens for AirTag/Flipper/skimmer/Flock/Meta-style payloads, with detail views and `bt/detect.csv` export
+- BLE Wardrive and Flock Wardrive CSV exports to SD card under `bt/`
+- BLE/Flock wardrive logs are saved without GPS coordinates for now
+- BLE AirTag Monitor continuous scan view
+- BLE spam config controls for random MAC and Fast/Normal/Slow spam speed
 - BLE spam payload groups:
   - Sour Apple
   - Swiftpair
-  - Samsung BLE
-  - Flipper BLE
+  - Samsung Spam
+  - Google Fast Pair
+  - Flipper Spam
   - Spam All
-- Basic raw-advertisement analyzer and starter detection screens for AirTag/Flipper-style payloads
+- AirTag-like spoof advertisements
 
 ### UI And Input
 
@@ -87,7 +98,7 @@ Detailed user how-tos are coming later.
 - GPIO controls
 - USB CDC + MSC composite mode
 - STM32 firmware update from SD card
-- ESP32 firmware update from SD card using merged ESP32 binary plus uppercase MD5 sidecar
+- ESP32 firmware update from SD card
 - Dual-bank firmware switching
 
 ## Evil Portal Custom HTML
@@ -108,15 +119,18 @@ For the most reliable credential capture, use a normal POST form:
 
 The portal accepts common username/network field names: `user`, `username`, `email`, `login`, `identity`, `ssid`, `wifi`, `wifi_name`, `network`, and `network_name`. Password fields can be named `pass`, `password`, or `pwd`.
 
+Simple GET forms also work for imported pages, including forms that submit to paths such as `/get`, as long as the fields use the supported names.
+
 Custom pages also get an injected capture helper. It mirrors JavaScript form submissions and `fetch()` POST bodies to `/login`, so pages that call `preventDefault()` can still capture as long as the form fields use the supported names. JSON POST bodies are accepted too, including common `/sendJSON` style pages.
 
 ## Status
 
 Still in progress:
 
-- Detailed user how-tos and screenshots
+- Screenshots and deeper how-to documents
 - More BLE detection signatures and payload tuning
 - More Evil Portal polish and a dedicated portal authoring document
+- Field tuning for advanced raw WiFi management-frame attacks across more chipsets
 - BadUSB/HID UI and scripting
 - GPS and other advanced features
 
@@ -152,7 +166,7 @@ make
 Output:
 
 ```text
-artifacts/M1_SiN360_v0.9.0.7.bin
+artifacts/M1_SiN360_v0.9.0.8.bin
 ```
 
 ### VS Code
@@ -166,7 +180,7 @@ artifacts/M1_SiN360_v0.9.0.7.bin
 Output is normally:
 
 ```text
-out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.7_SD.bin
+out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.8_SD.bin
 ```
 
 ## Building ESP32 Firmware
@@ -174,32 +188,20 @@ out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.7_SD.bin
 The ESP32-C6 companion firmware is built with ESP-IDF v5.5.
 
 ```bash
-cd ~/Documents/m1_esp32
-. ~/Documents/esp-idf/export.sh
+cd M1_SiN360_ESP32
+. /path/to/esp-idf/export.sh
 idf.py build
 ```
 
-For SD-card ESP32 firmware updates, generate a merged image and an uppercase, no-newline MD5 sidecar:
+For SD-card ESP32 firmware updates, use the matching release files from the companion ESP32 repository.
 
-```bash
-idf.py merge-bin -o m1_esp32_merged.bin
-md5sum build/m1_esp32_merged.bin | awk '{print toupper($1)}' | tr -d '\n' > build/m1_esp32_merged.md5
-```
-
-Copy both files to the SD card:
-
-```text
-build/m1_esp32_merged.bin
-build/m1_esp32_merged.md5
-```
-
-The `.md5` file must be exactly 32 uppercase hex characters with no newline.
+Copy the ESP32 update files to the SD card, then use **Settings > ESP32 > Firmware Update** on the M1.
 
 ## Flashing STM32 Firmware
 
 ### Via SD Card
 
-1. Copy `M1_SiN360_v0.9.0.7.bin` to the M1 SD card.
+1. Copy `M1_SiN360_v0.9.0.8.bin` to the M1 SD card.
 2. On the M1, open **Settings > Firmware Update**.
 3. Select the firmware file.
 4. Wait for the update to complete and reboot.
@@ -213,7 +215,7 @@ Connect ST-Link V2 to the M1 GPIO header:
 - Pin 8 or 18 -> GND
 
 ```bash
-st-flash write M1_SiN360_v0.9.0.7.bin 0x08000000
+st-flash write M1_SiN360_v0.9.0.8.bin 0x08000000
 ```
 
 ## Dual Firmware Banks

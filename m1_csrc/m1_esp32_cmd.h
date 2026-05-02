@@ -44,6 +44,13 @@
 #define CMD_BLE_ADV_STOP      0x24
 #define CMD_BLE_ADV_RAW       0x25
 #define CMD_BLE_SCAN_NEXT_RAW 0x26
+#define CMD_BLE_ADV_RAW_EX    0x27
+#define CMD_BLE_GATT_START    0x28
+#define CMD_BLE_GATT_NEXT     0x29
+#define CMD_BLE_GATT_STOP     0x2A
+#define CMD_BLE_GATT_WRITE    0x2B
+#define CMD_BLE_GATT_SUB      0x2C
+#define CMD_BLE_GATT_NOTIF    0x2D
 
 /* WiFi attacks */
 #define CMD_DEAUTH_START      0x30
@@ -58,12 +65,15 @@
 #define CMD_DEAUTH_MULTI      0x39
 #define CMD_KARMA_STATUS      0x3A
 #define CMD_KARMA_PORTAL_START 0x3B
+#define CMD_WIFI_RAW_ATTACK_START 0x3C
+#define CMD_WIFI_RAW_ATTACK_STOP  0x3D
 
 /* Packet monitor / sniffer */
 #define CMD_PKTMON_START      0x40
 #define CMD_PKTMON_NEXT       0x41
 #define CMD_PKTMON_STOP       0x42
 #define CMD_PKTMON_SET_CHAN   0x43
+#define CMD_PKTMON_RAW_NEXT   0x44
 
 /* Sniffer type constants (pktmon_start payload[0]) */
 #define SNIFF_ALL             0x00

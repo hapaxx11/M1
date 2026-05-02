@@ -327,11 +327,21 @@ S_M1_Menu_t menu_Wifi_Scan_Stations =
     "Scan Stations", wifi_station_scan, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_Scan_All =
+{
+    "Scan All", wifi_scan_all, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 /*------------------------- > Wifi-Sniffers submenu --------------------------*/
 
-S_M1_Menu_t menu_Wifi_Sniff_All =
+S_M1_Menu_t menu_Wifi_Packet_Monitor =
 {
-    "All Packets", wifi_sniff_all, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Packet Monitor", wifi_packet_monitor, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Packet_Count =
+{
+    "Packet Count", wifi_packet_count, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
 S_M1_Menu_t menu_Wifi_Sniff_Beacon =
@@ -364,6 +374,16 @@ S_M1_Menu_t menu_Wifi_Sniff_SAE =
     "SAE/WPA3", wifi_sniff_sae, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_Raw_Sniff =
+{
+    "Raw Sniff", wifi_raw_sniff, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Channel_Analyzer =
+{
+    "Channel Analyzer", wifi_channel_analyzer, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Wifi_Signal_Monitor =
 {
     "Signal Monitor", wifi_signal_monitor, NULL, NULL, 0, 0, NULL, NULL, NULL
@@ -386,11 +406,11 @@ S_M1_Menu_t menu_Wifi_Station_Wardrive =
 
 S_M1_Menu_t menu_Wifi_Sniffers =
 {
-    "Sniffers", NULL, NULL, NULL, 11, 0, NULL, NULL,
-    {&menu_Wifi_Sniff_All, &menu_Wifi_Sniff_Beacon, &menu_Wifi_Sniff_Probe,
+    "Sniffers", NULL, NULL, NULL, 14, 0, NULL, NULL,
+    {&menu_Wifi_Packet_Monitor, &menu_Wifi_Packet_Count, &menu_Wifi_Sniff_Beacon, &menu_Wifi_Sniff_Probe,
      &menu_Wifi_Sniff_Deauth, &menu_Wifi_Sniff_EAPOL, &menu_Wifi_Sniff_Pwnagotchi,
-     &menu_Wifi_Sniff_SAE, &menu_Wifi_Signal_Monitor, &menu_Wifi_MAC_Track,
-     &menu_Wifi_Wardrive, &menu_Wifi_Station_Wardrive}
+     &menu_Wifi_Sniff_SAE, &menu_Wifi_Raw_Sniff, &menu_Wifi_Channel_Analyzer, &menu_Wifi_Signal_Monitor,
+     &menu_Wifi_MAC_Track, &menu_Wifi_Wardrive, &menu_Wifi_Station_Wardrive}
 };
 
 /*------------------------- > Wifi-Sniffers end ------------------------------*/
@@ -424,14 +444,19 @@ S_M1_Menu_t menu_Wifi_Scanner_Ports =
 
 S_M1_Menu_t menu_Wifi_Scanners =
 {
-    "Scanners", NULL, NULL, NULL, 5, 0, NULL, NULL,
-    {&menu_Wifi_Scanner_Ping, &menu_Wifi_Scanner_ARP, &menu_Wifi_Scanner_SSH,
+    "Scanners", NULL, NULL, NULL, 6, 0, NULL, NULL,
+    {&menu_Wifi_Scan_All, &menu_Wifi_Scanner_Ping, &menu_Wifi_Scanner_ARP, &menu_Wifi_Scanner_SSH,
      &menu_Wifi_Scanner_Telnet, &menu_Wifi_Scanner_Ports}
 };
 
 /*------------------------- > Wifi-Scanners end ------------------------------*/
 
 /*------------------------- > Wifi-Config submenu ----------------------------*/
+
+S_M1_Menu_t menu_Wifi_Config_Status =
+{
+    "Status", wifi_general_status, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
 
 S_M1_Menu_t menu_Wifi_Config_View_AP =
 {
@@ -443,9 +468,44 @@ S_M1_Menu_t menu_Wifi_Config_Select_APs =
     "Select APs", wifi_general_select_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_Config_Select_All_APs =
+{
+    "Select All APs", wifi_general_select_all_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Clear_AP_Sel =
+{
+    "Clear AP Sel", wifi_general_clear_ap_selection, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Wifi_Config_Select_Stations =
 {
     "Select Stations", wifi_general_select_stations, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Select_All_Stations =
+{
+    "Select All Stations", wifi_general_select_all_stations, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Clear_Station_Sel =
+{
+    "Clear Sta Sel", wifi_general_clear_station_selection, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Save_Stations =
+{
+    "Save Stations", wifi_general_save_stations, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Load_Stations =
+{
+    "Load Stations", wifi_general_load_stations, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Clear_Stations =
+{
+    "Clear Stations", wifi_general_clear_stations, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
 S_M1_Menu_t menu_Wifi_Config_Save_APs =
@@ -463,6 +523,38 @@ S_M1_Menu_t menu_Wifi_Config_Clear_APs =
     "Clear APs", wifi_general_clear_aps, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_Config_APs =
+{
+    "APs", NULL, NULL, NULL, 7, 0, NULL, NULL,
+    {&menu_Wifi_Config_View_AP, &menu_Wifi_Config_Select_APs,
+     &menu_Wifi_Config_Select_All_APs, &menu_Wifi_Config_Clear_AP_Sel,
+     &menu_Wifi_Config_Save_APs, &menu_Wifi_Config_Load_APs,
+     &menu_Wifi_Config_Clear_APs}
+};
+
+S_M1_Menu_t menu_Wifi_Config_Stations =
+{
+    "Stations", NULL, NULL, NULL, 6, 0, NULL, NULL,
+    {&menu_Wifi_Config_Select_Stations, &menu_Wifi_Config_Select_All_Stations,
+     &menu_Wifi_Config_Clear_Station_Sel, &menu_Wifi_Config_Save_Stations,
+     &menu_Wifi_Config_Load_Stations, &menu_Wifi_Config_Clear_Stations}
+};
+
+S_M1_Menu_t menu_Wifi_Config_Add_SSID =
+{
+    "Add SSID", wifi_general_add_ssid, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Gen_SSIDs =
+{
+    "Generate SSIDs", wifi_general_generate_ssids, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Save_SSIDs =
+{
+    "Save SSIDs", wifi_general_save_ssids, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Wifi_Config_Load_SSIDs =
 {
     "Load SSIDs", wifi_general_load_ssids, NULL, NULL, 0, 0, NULL, NULL, NULL
@@ -471,6 +563,14 @@ S_M1_Menu_t menu_Wifi_Config_Load_SSIDs =
 S_M1_Menu_t menu_Wifi_Config_Clear_SSIDs =
 {
     "Clear SSIDs", wifi_general_clear_ssids, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_SSIDs =
+{
+    "SSIDs", NULL, NULL, NULL, 5, 0, NULL, NULL,
+    {&menu_Wifi_Config_Add_SSID, &menu_Wifi_Config_Gen_SSIDs,
+     &menu_Wifi_Config_Save_SSIDs, &menu_Wifi_Config_Load_SSIDs,
+     &menu_Wifi_Config_Clear_SSIDs}
 };
 
 S_M1_Menu_t menu_Wifi_Config_Portal_SSID =
@@ -483,10 +583,27 @@ S_M1_Menu_t menu_Wifi_Config_EP_HTML =
     "EP HTML File", wifi_general_select_ep_html, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_Config_EP_HTML_Reload =
+{
+    "Reload HTML", wifi_general_reload_ep_html, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_EP_HTML_Clear =
+{
+    "Clear HTML", wifi_general_clear_ep_html, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_EP_HTML_Status =
+{
+    "HTML Status", wifi_general_ep_html_status, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Wifi_Config_Portal =
 {
-    "Portal", NULL, NULL, NULL, 2, 0, NULL, NULL,
-    {&menu_Wifi_Config_Portal_SSID, &menu_Wifi_Config_EP_HTML}
+    "Portal", NULL, NULL, NULL, 5, 0, NULL, NULL,
+    {&menu_Wifi_Config_Portal_SSID, &menu_Wifi_Config_EP_HTML,
+     &menu_Wifi_Config_EP_HTML_Reload, &menu_Wifi_Config_EP_HTML_Clear,
+     &menu_Wifi_Config_EP_HTML_Status}
 };
 
 S_M1_Menu_t menu_Wifi_Config_Join =
@@ -516,13 +633,45 @@ S_M1_Menu_t menu_Wifi_Config_Radio =
      &menu_Wifi_Config_Set_Channel, &menu_Wifi_Config_Shutdown}
 };
 
+S_M1_Menu_t menu_Wifi_Config_Capture_Status =
+{
+    "Status", wifi_general_capture_status, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Save_PCAP =
+{
+    "SavePCAP", wifi_general_toggle_save_pcap, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Force_PMKID =
+{
+    "ForcePMKID", wifi_general_toggle_force_pmkid, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Force_Probe =
+{
+    "ForceProbe", wifi_general_toggle_force_probe, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_EP_Deauth =
+{
+    "EPDeauth", wifi_general_toggle_ep_deauth, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Config_Capture =
+{
+    "Capture", NULL, NULL, NULL, 5, 0, NULL, NULL,
+    {&menu_Wifi_Config_Capture_Status, &menu_Wifi_Config_Save_PCAP,
+     &menu_Wifi_Config_Force_PMKID, &menu_Wifi_Config_Force_Probe,
+     &menu_Wifi_Config_EP_Deauth}
+};
+
 S_M1_Menu_t menu_Wifi_Config =
 {
-    "Config", NULL, NULL, NULL, 10, 0, NULL, NULL,
-    {&menu_Wifi_Config_View_AP, &menu_Wifi_Config_Select_APs, &menu_Wifi_Config_Select_Stations,
-     &menu_Wifi_Config_Save_APs, &menu_Wifi_Config_Load_APs, &menu_Wifi_Config_Clear_APs,
-     &menu_Wifi_Config_Load_SSIDs, &menu_Wifi_Config_Clear_SSIDs,
-     &menu_Wifi_Config_Portal, &menu_Wifi_Config_Radio}
+    "Config", NULL, NULL, NULL, 7, 0, NULL, NULL,
+    {&menu_Wifi_Config_Status, &menu_Wifi_Config_APs, &menu_Wifi_Config_Stations,
+     &menu_Wifi_Config_SSIDs, &menu_Wifi_Config_Portal, &menu_Wifi_Config_Radio,
+     &menu_Wifi_Config_Capture}
 };
 
 /*------------------------- > Wifi-Config end --------------------------------*/
@@ -569,12 +718,45 @@ S_M1_Menu_t menu_Wifi_Attack_Karma_Portal =
     "Karma Portal", wifi_attack_karma_portal, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Wifi_Attack_SAE_Commit =
+{
+    "SAE Commit", wifi_attack_sae_commit, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Channel_Switch =
+{
+    "Channel Switch", wifi_attack_channel_switch, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Quiet_Time =
+{
+    "Quiet Time", wifi_attack_quiet_time, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Sleep =
+{
+    "Sleep Attack", wifi_attack_sleep, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Bad_Msg =
+{
+    "Bad Msg", wifi_attack_bad_msg, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Wifi_Attack_Advanced =
+{
+    "Advanced", NULL, NULL, NULL, 5, 0, NULL, NULL,
+    {&menu_Wifi_Attack_SAE_Commit, &menu_Wifi_Attack_Channel_Switch,
+     &menu_Wifi_Attack_Quiet_Time, &menu_Wifi_Attack_Sleep,
+     &menu_Wifi_Attack_Bad_Msg}
+};
+
 S_M1_Menu_t menu_Wifi_Attacks =
 {
-    "Attacks", NULL, NULL, NULL, 8, 0, NULL, NULL,
+    "Attacks", NULL, NULL, NULL, 9, 0, NULL, NULL,
     {&menu_Wifi_Attack_Deauth, &menu_Wifi_Attack_Beacon, &menu_Wifi_Attack_AP_Clone,
      &menu_Wifi_Attack_Rickroll, &menu_Wifi_Attack_Evil_Portal, &menu_Wifi_Attack_Probe_Flood,
-     &menu_Wifi_Attack_Karma, &menu_Wifi_Attack_Karma_Portal}
+     &menu_Wifi_Attack_Advanced, &menu_Wifi_Attack_Karma, &menu_Wifi_Attack_Karma_Portal}
 };
 
 /*------------------------- > Wifi-Attacks end ------------------------------*/
@@ -600,6 +782,11 @@ S_M1_Menu_t menu_Bluetooth_Scan =
 S_M1_Menu_t menu_Bluetooth_Advertise =
 {
     "Advertise", bluetooth_advertise, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_BT_GATT_Discovery =
+{
+    "GATT Discovery", ble_gatt_discovery, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
 S_M1_Menu_t menu_BT_Sniff_Analyzer =
@@ -686,6 +873,11 @@ S_M1_Menu_t menu_BLE_Samsung =
     "Samsung Spam", ble_spam_samsung, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_BLE_Google =
+{
+    "Google FP Spam", ble_spam_google_fastpair, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_BLE_Flipper =
 {
     "Flipper Spam", ble_spam_flipper, NULL, NULL, 0, 0, NULL, NULL, NULL
@@ -703,15 +895,15 @@ S_M1_Menu_t menu_BLE_Spoof_Airtag =
 
 S_M1_Menu_t menu_BT_Attacks =
 {
-    "Attacks", NULL, NULL, NULL, 6, 0, NULL, NULL,
+    "Attacks", NULL, NULL, NULL, 7, 0, NULL, NULL,
     {&menu_BLE_Sour_Apple, &menu_BLE_Swiftpair, &menu_BLE_Samsung,
-     &menu_BLE_Flipper, &menu_BLE_Spam_All, &menu_BLE_Spoof_Airtag}
+     &menu_BLE_Google, &menu_BLE_Flipper, &menu_BLE_Spam_All, &menu_BLE_Spoof_Airtag}
 };
 
 S_M1_Menu_t menu_Bluetooth =
 {
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 6, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Scan, &menu_Bluetooth_Advertise, &menu_BT_Sniffers,
+    "Bluetooth", menu_bluetooth_init, NULL, NULL, 7, 0, menu_m1_icon_bluetooth, NULL,
+    {&menu_Bluetooth_Scan, &menu_Bluetooth_Advertise, &menu_BT_GATT_Discovery, &menu_BT_Sniffers,
      &menu_BT_Wardriving, &menu_BT_Attacks, &menu_Bluetooth_Config}
 };
 

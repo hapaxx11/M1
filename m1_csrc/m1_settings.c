@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_settings.h"
@@ -42,6 +43,13 @@ static uint8_t s_buzzer_on = 1;
 static uint8_t s_led_on = 1;
 static uint8_t s_orientation = 0;
 
+static uint8_t settings_parse_bounded(int val, uint8_t max, uint8_t fallback)
+{
+    if (val < 0 || val > max)
+        return fallback;
+    return (uint8_t)val;
+}
+
 static void settings_save(void)
 {
     FIL fil;
@@ -64,10 +72,10 @@ static void settings_load(void)
     while (f_gets(line, sizeof(line), &fil) != NULL)
     {
         int val;
-        if (sscanf(line, "brightness=%d", &val) == 1) s_brightness_level = (val > 4) ? 4 : val;
-        else if (sscanf(line, "buzzer=%d", &val) == 1) s_buzzer_on = val ? 1 : 0;
-        else if (sscanf(line, "led=%d", &val) == 1) s_led_on = val ? 1 : 0;
-        else if (sscanf(line, "orient=%d", &val) == 1) s_orientation = (val > 2) ? 0 : val;
+        if (sscanf(line, "brightness=%d", &val) == 1) s_brightness_level = settings_parse_bounded(val, 4, 4);
+        else if (sscanf(line, "buzzer=%d", &val) == 1) s_buzzer_on = settings_parse_bounded(val, 1, 1);
+        else if (sscanf(line, "led=%d", &val) == 1) s_led_on = settings_parse_bounded(val, 1, 1);
+        else if (sscanf(line, "orient=%d", &val) == 1) s_orientation = settings_parse_bounded(val, M1_ORIENT_REMOTE, M1_ORIENT_NORMAL);
     }
     f_close(&fil);
 }
@@ -189,7 +197,7 @@ void settings_lcd_and_notifications(void)
                 if (i == LCD_SET_BRIGHTNESS) value = brightness_text[brightness_level];
                 else if (i == LCD_SET_BUZZER) value = buzzer_on ? "On" : "Off";
                 else if (i == LCD_SET_LED) value = led_on ? "On" : "Off";
-                else if (i == LCD_SET_ORIENT) value = orient_text[m1_screen_orientation];
+                else if (i == LCD_SET_ORIENT) value = orient_text[(m1_screen_orientation <= M1_ORIENT_REMOTE) ? m1_screen_orientation : M1_ORIENT_NORMAL];
 
                 if (i == sel)
                 {

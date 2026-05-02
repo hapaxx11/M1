@@ -18,11 +18,15 @@ void menu_wifi_init(void);
 void menu_wifi_exit(void);
 
 void wifi_scan_ap(void);
+void wifi_scan_all(void);
 
 /* Station scan (client discovery) */
 void wifi_station_scan(void);
 
 /* Sniffer modes */
+void wifi_packet_monitor(void);
+void wifi_packet_count(void);
+void wifi_raw_sniff(void);
 void wifi_sniff_all(void);
 void wifi_sniff_beacon(void);
 void wifi_sniff_probe(void);
@@ -30,6 +34,7 @@ void wifi_sniff_deauth(void);
 void wifi_sniff_eapol(void);
 void wifi_sniff_pwnagotchi(void);
 void wifi_sniff_sae(void);
+void wifi_channel_analyzer(void);
 void wifi_signal_monitor(void);
 void wifi_mac_track(void);
 void wifi_wardrive(void);
@@ -51,14 +56,30 @@ void wifi_evil_portal(void);
 void wifi_probe_flood(void);
 void wifi_attack_karma(void);
 void wifi_attack_karma_portal(void);
+void wifi_attack_sae_commit(void);
+void wifi_attack_channel_switch(void);
+void wifi_attack_quiet_time(void);
+void wifi_attack_sleep(void);
+void wifi_attack_bad_msg(void);
 
 /* WiFi General / Config */
+void wifi_general_status(void);
 void wifi_general_view_ap_info(void);
 void wifi_general_select_aps(void);
+void wifi_general_select_all_aps(void);
+void wifi_general_clear_ap_selection(void);
 void wifi_general_select_stations(void);
+void wifi_general_select_all_stations(void);
+void wifi_general_clear_station_selection(void);
+void wifi_general_save_stations(void);
+void wifi_general_load_stations(void);
+void wifi_general_clear_stations(void);
 void wifi_general_save_aps(void);
 void wifi_general_load_aps(void);
 void wifi_general_clear_aps(void);
+void wifi_general_add_ssid(void);
+void wifi_general_generate_ssids(void);
+void wifi_general_save_ssids(void);
 void wifi_general_load_ssids(void);
 void wifi_general_clear_ssids(void);
 void wifi_general_join_wifi(void);
@@ -67,5 +88,13 @@ void wifi_general_set_channel(void);
 void wifi_general_shutdown_wifi(void);
 void wifi_general_set_ep_ssid(void);
 void wifi_general_select_ep_html(void);
+void wifi_general_reload_ep_html(void);
+void wifi_general_clear_ep_html(void);
+void wifi_general_ep_html_status(void);
+void wifi_general_capture_status(void);
+void wifi_general_toggle_save_pcap(void);
+void wifi_general_toggle_force_pmkid(void);
+void wifi_general_toggle_force_probe(void);
+void wifi_general_toggle_ep_deauth(void);
 
 #endif /* M1_WIFI_H_ */

