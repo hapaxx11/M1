@@ -16,6 +16,7 @@
 #include "m1_wifi.h"
 #include "m1_802154.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -97,6 +98,14 @@ enum {
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
+/* Capability-gated delegate: shows "not supported" screen and pops immediately
+ * when the required ESP32 capability is absent. */
+#define DELEGATE_CAPPED(name, fn, cap, label) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        if (m1_esp32_require_cap((cap), (label))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
 DELEGATE(scan_connect,         wifi_scan_ap)
 DELEGATE(station_scan,         wifi_station_scan)
 DELEGATE(mac_track,            wifi_mac_track)
@@ -146,9 +155,9 @@ DELEGATE(zigbee,               zigbee_scan)
 DELEGATE(thread,               thread_scan)
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-DELEGATE(saved,                wifi_saved_networks)
-DELEGATE(status,               wifi_show_status)
-DELEGATE(disconnect,           wifi_disconnect)
+DELEGATE_CAPPED(saved,      wifi_saved_networks, M1_ESP32_CAP_WIFI_CONNECT, "Saved Networks")
+DELEGATE_CAPPED(status,     wifi_show_status,    M1_ESP32_CAP_WIFI_CONNECT, "WiFi Status")
+DELEGATE_CAPPED(disconnect, wifi_disconnect,     M1_ESP32_CAP_WIFI_CONNECT, "Disconnect WiFi")
 #endif
 
 /* ---- Handler table helpers ---------------------------------------------- */
