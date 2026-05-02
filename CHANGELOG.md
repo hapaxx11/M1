@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.9] - 2026-05-02
+
+### Fixed
+
+- **Sub-GHz Bind New Remote: protocol picker styling** — title now uses the standard
+  centered function-menu font; scrollbar always visible with handle tracking selected
+  item; item text indented to match other Sub-GHz selection lists.
+- **UI styling sweep** — fixed UX convention violations found across multiple scenes:
+  bind wizard step/result screens (wrong font + left-aligned title), saved-file action
+  menu (highlight width 128→124, item indent 8→4), remote control scene (wrong title
+  font + left-aligned), IR quick-remote grid (wrong title font + left-aligned), and
+  playlist header (wrong font + y=8→9).
 ## [0.9.1.8] - 2026-05-02
 
 ### Fixed
