@@ -585,7 +585,7 @@ static void draw_decode_screen(void)
 
             if (idx == decode_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, DECODE_ROW_H);
+                u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, DECODE_ROW_H, 2);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
 
