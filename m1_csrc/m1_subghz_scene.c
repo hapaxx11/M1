@@ -22,6 +22,7 @@
 #include "m1_sub_ghz_api.h"
 #include "m1_sub_ghz_decenc.h"
 #include "m1_subghz_scene.h"
+#include "m1_esp32_hal.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_lp5814.h"
@@ -228,6 +229,11 @@ void subghz_scene_app_run(void)
 
     /* Initialize scene manager and app context */
     subghz_scene_init(&app);
+
+    /* Sub-GHz is timing-sensitive and does not use the ESP32.  If a prior
+     * WiFi/BLE tool left the ESP32 SPI/EXTI transport active, tear it down
+     * before arming the SI4463/TIM1 capture path. */
+    m1_esp32_deinit();
 
     /* Initialize radio hardware */
     menu_sub_ghz_init();

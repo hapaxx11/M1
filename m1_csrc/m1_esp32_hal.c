@@ -425,7 +425,14 @@ void m1_esp32_deinit(void)
 
 	if ( esp32_init_done )
 	{
-		HAL_SPI_DeInit(&hspi_esp);
+		HAL_NVIC_DisableIRQ(SPI3_IRQn);
+		HAL_NVIC_ClearPendingIRQ(SPI3_IRQn);
+
+		if ( hspi_esp.Instance==SPI3 )
+		{
+			(void)HAL_SPI_Abort(&hspi_esp);
+			HAL_SPI_DeInit(&hspi_esp);
+		}
 	    __HAL_RCC_SPI3_CLK_DISABLE();
 
 		GPIO_InitStruct.Pin = ESP32_DATAREADY_Pin;
@@ -440,8 +447,19 @@ void m1_esp32_deinit(void)
 		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 		HAL_GPIO_Init(ESP32_HANDSHAKE_GPIO_Port, &GPIO_InitStruct);
 
+		GPIO_InitStruct.Pin = ESP32_SPI3_MOSI_Pin;
+		HAL_GPIO_Init(ESP32_SPI3_MOSI_GPIO_Port, &GPIO_InitStruct);
+
+		GPIO_InitStruct.Pin = ESP32_SPI3_NSS_Pin;
+		HAL_GPIO_Init(ESP32_SPI3_NSS_GPIO_Port, &GPIO_InitStruct);
+
+		GPIO_InitStruct.Pin = ESP32_SPI3_SCK_Pin|ESP32_SPI3_MISO_Pin;
+		HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
 		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
 		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
+		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
+		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
 #ifndef ESP32_UART_DISABLE
 		esp32_UART_deinit();
 #endif // #ifndef ESP32_UART_DISABLE
@@ -573,8 +591,23 @@ void esp32_UART_deinit(void)
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-	/* Enable Peripheral clock */
-	__HAL_RCC_UART4_CLK_DISABLE();
+	HAL_NVIC_DisableIRQ(ESP32_UART_DMA_Tx_IRQn);
+	HAL_NVIC_ClearPendingIRQ(ESP32_UART_DMA_Tx_IRQn);
+
+	if ( huart_esp.Instance==UART4 )
+		ATOMIC_CLEAR_BIT(huart_esp.Instance->CR3, USART_CR3_DMAT);
+
+	if ( hgpdma1_channel5_tx.Instance==GPDMA1_Channel5 )
+	{
+		__HAL_DMA_DISABLE_IT(&hgpdma1_channel5_tx, DMA_IT_TC | DMA_IT_DTE | DMA_IT_ULE |
+		                     DMA_IT_USE | DMA_IT_TO);
+		(void)HAL_DMA_Abort(&hgpdma1_channel5_tx);
+		__HAL_DMA_CLEAR_FLAG(&hgpdma1_channel5_tx, DMA_FLAG_TC | DMA_FLAG_HT | DMA_FLAG_DTE |
+		                      DMA_FLAG_ULE | DMA_FLAG_USE | DMA_FLAG_SUSP | DMA_FLAG_TO);
+		HAL_DMA_DeInit(&hgpdma1_channel5_tx);
+	}
+
+	HAL_NVIC_ClearPendingIRQ(ESP32_UART_DMA_Tx_IRQn);
 
 	/* UART4 GPIO Configuration
 	PA0    ------> UART4_TX (alias ESP32_RX)
@@ -589,12 +622,19 @@ void esp32_UART_deinit(void)
 	if ( huart_esp.Instance==UART4 )
 		HAL_UART_DeInit(&huart_esp);
 	HAL_NVIC_DisableIRQ(ESP32_UART_IRQn);
+	__HAL_RCC_UART4_CLK_DISABLE();
 
 	if ( pesp32_rx )
 	{
 		free(pesp32_rx);
 		pesp32_rx = NULL;
 	} // if ( pesp32_rx )
+
+	if ( sem_esp32_trans )
+	{
+		vSemaphoreDelete(sem_esp32_trans);
+		sem_esp32_trans = NULL;
+	}
 
 	esp32_uart_init_done = FALSE;
 

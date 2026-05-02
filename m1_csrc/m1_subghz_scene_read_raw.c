@@ -86,6 +86,7 @@
 #include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
+#include "m1_esp32_hal.h"
 #include "ff.h"
 #include "flipper_subghz.h"
 #include "subghz_protocol_registry.h"
@@ -284,6 +285,8 @@ static void scene_on_enter(SubGhzApp *app)
  */
 static void start_raw_rx(SubGhzApp *app)
 {
+    m1_esp32_deinit();
+
     /* Allocate ring buffers for edge capture */
     if (sub_ghz_ring_buffers_init_ext())
         return;  /* OOM — stay in Start, radio keeps listening passively */

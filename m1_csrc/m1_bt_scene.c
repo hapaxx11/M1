@@ -15,6 +15,7 @@
 #include "main.h"
 #include "m1_scene.h"
 #include "m1_bt.h"
+#include "m1_esp32_hal.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -79,7 +80,7 @@ enum {
 /* ---- Blocking delegate macro -------------------------------------------- */
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; fn(); app->running = true; m1_scene_pop(app); }
+        (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 DELEGATE(scan,            bluetooth_scan)
 DELEGATE(advertise,       bluetooth_advertise)
