@@ -425,8 +425,11 @@ void GPDMA1_Channel5_IRQHandler(void)
     	{
     		; // Do something here if necessary
     	}
-    	xSemaphoreGiveFromISR(sem_esp32_trans, &xHigherPriorityTaskWoken);
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    	if ( sem_esp32_trans )
+    	{
+    		xSemaphoreGiveFromISR(sem_esp32_trans, &xHigherPriorityTaskWoken);
+			portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    	}
     } // if ( (__HAL_DMA_GET_FLAG(&hgpdma1_channel5_tx, DMA_FLAG_TC) != 0U) )
 
 	HAL_DMA_IRQHandler(&hgpdma1_channel5_tx);

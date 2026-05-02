@@ -94,7 +94,19 @@ void test_esp32_uart_deinit_releases_transport_semaphore(void)
 {
     char *content = read_file("m1_csrc/m1_esp32_hal.c");
 
+    assert_ordered(content, "HAL_NVIC_DisableIRQ(ESP32_UART_DMA_Tx_IRQn);", "vSemaphoreDelete(sem_esp32_trans);");
+    assert_ordered(content, "HAL_DMA_Abort(&hgpdma1_channel5_tx);", "vSemaphoreDelete(sem_esp32_trans);");
+    assert_ordered(content, "HAL_NVIC_ClearPendingIRQ(ESP32_UART_DMA_Tx_IRQn);", "vSemaphoreDelete(sem_esp32_trans);");
     assert_ordered(content, "vSemaphoreDelete(sem_esp32_trans);", "sem_esp32_trans = NULL;");
+
+    free(content);
+}
+
+void test_esp32_uart_tx_dma_isr_guards_deleted_semaphore(void)
+{
+    char *content = read_file("m1_csrc/m1_int_hdl.c");
+
+    assert_ordered(content, "if ( sem_esp32_trans )", "xSemaphoreGiveFromISR(sem_esp32_trans");
 
     free(content);
 }
@@ -105,5 +117,6 @@ int main(void)
     RUN_TEST(test_subghz_entry_deinitializes_esp32_before_radio_init);
     RUN_TEST(test_wifi_and_bt_delegates_deinitialize_esp32_before_scene_pop);
     RUN_TEST(test_esp32_uart_deinit_releases_transport_semaphore);
+    RUN_TEST(test_esp32_uart_tx_dma_isr_guards_deleted_semaphore);
     return UNITY_END();
 }
