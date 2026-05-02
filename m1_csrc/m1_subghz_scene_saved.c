@@ -29,6 +29,7 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_storage.h"
+#include "m1_scene.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "flipper_subghz.h"
