@@ -2957,7 +2957,7 @@ static void sub_ghz_rx_start(void)
 	 * resume_rx() when hopping is active: subghz_retune_freq_hz_ext() is
 	 * called before sub_ghz_rx_init_ext(), so the TIM1 clock is still
 	 * disabled from the prior stop_rx() → sub_ghz_rx_deinit() call. */
-	if (TIM_CHANNEL_STATE_GET(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL)
+	if (HAL_TIM_GetChannelState(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL)
 	        != HAL_TIM_CHANNEL_STATE_READY)
 		return;
 
@@ -2984,7 +2984,7 @@ static void sub_ghz_rx_pause(void)
 	 * disabled (after sub_ghz_rx_deinit) any register access causes a
 	 * HardFault.  The RESET/READY cases are safe to skip — the timer is
 	 * either not initialised or already stopped. */
-	if (TIM_CHANNEL_STATE_GET(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL)
+	if (HAL_TIM_GetChannelState(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL)
 	        != HAL_TIM_CHANNEL_STATE_BUSY)
 		return;
 
