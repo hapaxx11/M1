@@ -2950,6 +2950,17 @@ static void sub_ghz_rx_init(void)
 /*============================================================================*/
 static void sub_ghz_rx_start(void)
 {
+	/* Guard: only start if the channel is in READY state.
+	 * Starting from RESET (TIM1 clock off, happens when called before
+	 * sub_ghz_rx_init) or BUSY (already running) returns HAL_ERROR which
+	 * triggers Error_Handler and a hard crash.  The RESET case occurs in
+	 * resume_rx() when hopping is active: subghz_retune_freq_hz_ext() is
+	 * called before sub_ghz_rx_init_ext(), so the TIM1 clock is still
+	 * disabled from the prior stop_rx() → sub_ghz_rx_deinit() call. */
+	if (TIM_CHANNEL_STATE_GET(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL)
+	        != HAL_TIM_CHANNEL_STATE_READY)
+		return;
+
 	if (HAL_TIM_IC_Start_IT(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL) != HAL_OK)
 	{
 		//_Error_Handler(__FILE__, __LINE__);
@@ -2968,6 +2979,15 @@ static void sub_ghz_rx_start(void)
 /*============================================================================*/
 static void sub_ghz_rx_pause(void)
 {
+	/* Guard: only pause if the channel is actively running (BUSY).
+	 * HAL_TIM_IC_Stop_IT accesses TIM1 registers; if the TIM1 clock is
+	 * disabled (after sub_ghz_rx_deinit) any register access causes a
+	 * HardFault.  The RESET/READY cases are safe to skip — the timer is
+	 * either not initialised or already stopped. */
+	if (TIM_CHANNEL_STATE_GET(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL)
+	        != HAL_TIM_CHANNEL_STATE_BUSY)
+		return;
+
 	if (HAL_TIM_IC_Stop_IT(&timerhdl_subghz_rx, SUBGHZ_RX_TIMER_RX_CHANNEL) != HAL_OK)
 	{
 		//_Error_Handler(__FILE__, __LINE__);
