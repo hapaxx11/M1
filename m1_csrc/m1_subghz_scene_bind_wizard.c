@@ -401,8 +401,8 @@ static void draw_generating(void)
 {
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 0, 9, "Bind New Remote");
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 124, "Bind New Remote", TEXT_ALIGN_CENTER);
     u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 10, 36, "Generating key...");
@@ -413,8 +413,8 @@ static void draw_save_error(void)
 {
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 0, 9, "Save Failed");
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 124, "Save Failed", TEXT_ALIGN_CENTER);
     u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 4, 28, "Check SD card.");
@@ -433,7 +433,7 @@ static void draw_step(void)
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
     /* Title: "Step N of M" */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     {
         char title[24];
         snprintf(title, sizeof(title), "Step %u of %u",
@@ -488,8 +488,8 @@ static void draw_done(void)
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 0, 9, "Binding Complete!");
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 124, "Binding Complete!", TEXT_ALIGN_CENTER);
     u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);

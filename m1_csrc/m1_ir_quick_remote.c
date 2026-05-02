@@ -628,14 +628,14 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
 
     /* ── Title bar: black text on white background with separator line ── */
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     {
         char title[32];
         if (device_name && device_name[0])
             snprintf(title, sizeof(title), "%s", device_name);
         else
             snprintf(title, sizeof(title), "%s", layout->title);
-        u8g2_DrawStr(&m1_u8g2, 2, 9, title);
+        m1_draw_text(&m1_u8g2, 2, 9, 124, title, TEXT_ALIGN_CENTER);
     }
     u8g2_DrawHLine(&m1_u8g2, 0, GRID_TOP_Y - 1, disp_w);
 
