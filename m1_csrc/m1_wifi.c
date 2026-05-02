@@ -217,16 +217,16 @@ static uint16_t wifi_ap_list_print(bool up_dir)
 	}
 
 	m1_u8g2_firstpage();
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "Total AP:");
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "Total AP:");
 
 	sprintf(prn_msg, "%d", ap_count);
 	u8g2_DrawStr(&m1_u8g2, 2 + strlen("Total AP: ") * M1_GUI_FONT_WIDTH + 2,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, prn_msg);
+		10, prn_msg);
 
 	sprintf(prn_msg, "%d/%d", ap_view_idx + 1, ap_count);
 	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, prn_msg);
+		10, prn_msg);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 	y_offset = 14 + M1_GUI_FONT_HEIGHT - 1;
 
@@ -529,12 +529,12 @@ static void sniffer_draw_packet(const m1_resp_t *resp, const char *title,
 
 	/* Title bar */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+	u8g2_DrawStr(&m1_u8g2, 2, 10,
 		paused ? "[PAUSED]" : title);
 	sprintf(ln, "#%d", count);
 	u8g2_DrawStr(&m1_u8g2, 128 - strlen(ln) * M1_GUI_FONT_WIDTH,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+		10, ln);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 	/* Content with smaller font */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
@@ -730,8 +730,8 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 	/* Show waiting for packets */
 	m1_u8g2_firstpage();
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 2, 35, "Listening...");
 	m1_u8g2_nextpage();
@@ -858,9 +858,9 @@ void wifi_signal_monitor(void)
 		/* Draw */
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
 			"Signal Monitor");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		uint8_t y = SF_Y_START;
@@ -1153,8 +1153,8 @@ void wifi_mac_track(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "MAC TRACK");
+		u8g2_DrawStr(&m1_u8g2, 2, 10, "MAC TRACK");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		snprintf(ln, sizeof(ln), "%s", target_str);
@@ -1311,16 +1311,16 @@ static uint16_t sta_list_print(bool up_dir)
 
 	m1_u8g2_firstpage();
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "Stations:");
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "Stations:");
 
 	sprintf(ln, "%d", sta_total);
 	u8g2_DrawStr(&m1_u8g2, 2 + strlen("Stations: ") * M1_GUI_FONT_WIDTH + 2,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+		10, ln);
 
 	sprintf(ln, "%s%d/%d", sta_list_data[sta_view_idx].selected ? "*" : "", sta_view_idx + 1, sta_total);
 	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+		10, ln);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	y = SF_Y_START;
@@ -1528,8 +1528,8 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+		u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		snprintf(ln, sizeof(ln), "%s F:%d H:%d", done ? "Done" : "Scan", result_count, progress);
@@ -1711,8 +1711,9 @@ void wifi_sniff_eapol(void)
 	}
 
 	m1_u8g2_firstpage();
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "EAPOL");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "EAPOL");
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 2, 35, "Listening for handshakes..");
 	m1_u8g2_nextpage();
@@ -1759,12 +1760,12 @@ void wifi_sniff_eapol(void)
 		/* Draw with PMKID counter in title */
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
 			paused ? "[PAUSED]" : "EAPOL");
 		sprintf(ln, "#%d", pkt_count);
 		u8g2_DrawStr(&m1_u8g2, 128 - strlen(ln) * M1_GUI_FONT_WIDTH,
-			M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+			10, ln);
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		uint8_t y = SF_Y_START;
@@ -1838,9 +1839,9 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
 			"DEAUTH ACTIVE");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		uint8_t y = SF_Y_START;
@@ -1991,9 +1992,9 @@ static void wifi_deauth_selected_run(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
 			"DEAUTH SELECTED");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		snprintf(ln, sizeof(ln), "Targets:%d/%d", target_count, selected_total);
@@ -2257,8 +2258,8 @@ static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+		u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		uint8_t y = SF_Y_START;
@@ -2854,12 +2855,12 @@ static void wifi_draw_ap_select(void)
 
 	m1_u8g2_firstpage();
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "SELECT AP");
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "SELECT AP");
 	snprintf(ln, sizeof(ln), "%s%d/%d", ap_list[ap_view_idx].selected ? "*" : "",
 		ap_view_idx + 1, ap_count);
 	u8g2_DrawStr(&m1_u8g2, 128 - strlen(ln) * M1_GUI_FONT_WIDTH,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+		10, ln);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	y = SF_Y_START;
@@ -2889,12 +2890,12 @@ static void wifi_draw_sta_select(void)
 
 	m1_u8g2_firstpage();
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "SELECT STA");
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "SELECT STA");
 	snprintf(ln, sizeof(ln), "%s%d/%d", sta_list_data[sta_view_idx].selected ? "*" : "",
 		sta_view_idx + 1, sta_total);
 	u8g2_DrawStr(&m1_u8g2, 128 - strlen(ln) * M1_GUI_FONT_WIDTH,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+		10, ln);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	y = SF_Y_START;
@@ -3015,11 +3016,11 @@ static void wifi_draw_ap_info(void)
 
 	m1_u8g2_firstpage();
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-	u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-	u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "AP INFO");
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "AP INFO");
 	snprintf(ln, sizeof(ln), "%d/%d", ap_view_idx + 1, ap_count);
 	u8g2_DrawStr(&m1_u8g2, 128 - strlen(ln) * M1_GUI_FONT_WIDTH,
-		M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+		10, ln);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	y = SF_Y_START;
@@ -3657,8 +3658,8 @@ void wifi_general_set_channel(void)
 
 			m1_u8g2_firstpage();
 			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-			u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-			u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "SET CHANNEL");
+			u8g2_DrawStr(&m1_u8g2, 2, 10, "SET CHANNEL");
+			u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 			snprintf(line, sizeof(line), "Channel: %d", channel);
@@ -3976,9 +3977,9 @@ void wifi_evil_portal(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
 			"EVIL PORTAL");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		uint8_t y = SF_Y_START;
@@ -4070,9 +4071,9 @@ void wifi_probe_flood(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
 			"PROBE FLOOD");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		uint8_t y = SF_Y_START;
@@ -4156,8 +4157,8 @@ void wifi_attack_karma(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "KARMA");
+		u8g2_DrawStr(&m1_u8g2, 2, 10, "KARMA");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Probe-driven AP");
@@ -4252,8 +4253,8 @@ void wifi_attack_karma_portal(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-		u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "KARMA PORTAL");
+		u8g2_DrawStr(&m1_u8g2, 2, 10, "KARMA PORTAL");
+		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		if (latest_ssid[0])

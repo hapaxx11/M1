@@ -1,0 +1,1 @@
+**WiFi/BT UI: replace decorative frame headers with Hapax standard header** — removed `u8g2_DrawXBMP` frame bitmap from all 20 WiFi and 6 Bluetooth screen headers; replaced with plain title text at y=10 and a 1px `DrawHLine` separator at y=12, matching the Hapax standard header pattern used in Sub-GHz, RFID, NFC, IR, and Settings scenes.
