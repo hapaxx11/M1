@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.5] - 2026-05-02
+
+### Fixed
+
+- **Sub-GHz: fix hard crash when entering any Sub-GHz scene** — `SubGhzApp` (5 KB) was
+  allocated on the menu task's 4 KB stack, causing a guaranteed stack overflow on every
+  entry. Moved to static storage (BSS) so it no longer touches the stack.
 ## [0.9.1.4] - 2026-05-01
 
 ### Changed
