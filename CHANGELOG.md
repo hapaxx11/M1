@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.6] - 2026-05-02
+
+### Changed
+
+- **File browser: wrap-around navigation** — Pressing DOWN on the last item wraps to the first item, and pressing UP on the first item wraps to the last item.
 ## [0.9.1.5] - 2026-05-02
 
 ### Fixed
