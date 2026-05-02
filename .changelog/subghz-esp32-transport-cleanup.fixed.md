@@ -1,1 +1,1 @@
-**Sub-GHz:** tear down stale ESP32 SPI/EXTI transport before entering Sub-GHz and after WiFi/BLE delegates return, preventing SiN360 ESP32 activity from interfering with timing-sensitive Sub-GHz Read and Read Raw capture.
+**Sub-GHz:** tear down stale ESP32 SPI/EXTI transport before entering Sub-GHz, before Read Raw allocates capture buffers, and after WiFi/BLE delegates return, preventing SiN360 ESP32 activity from interfering with timing-sensitive Sub-GHz Read and Read Raw capture.

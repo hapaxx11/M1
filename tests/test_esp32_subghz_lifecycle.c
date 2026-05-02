@@ -76,6 +76,16 @@ void test_subghz_entry_deinitializes_esp32_before_radio_init(void)
     free(content);
 }
 
+void test_read_raw_recording_rechecks_esp32_quiesced_before_allocating_capture_buffers(void)
+{
+    char *content = read_file("m1_csrc/m1_subghz_scene_read_raw.c");
+
+    assert_contains(content, "#include \"m1_esp32_hal.h\"");
+    assert_ordered(content, "m1_esp32_deinit();", "sub_ghz_ring_buffers_init_ext()");
+
+    free(content);
+}
+
 void test_wifi_and_bt_delegates_deinitialize_esp32_before_scene_pop(void)
 {
     char *wifi = read_file("m1_csrc/m1_wifi_scene.c");
@@ -94,6 +104,9 @@ void test_esp32_uart_deinit_releases_transport_semaphore(void)
 {
     char *content = read_file("m1_csrc/m1_esp32_hal.c");
 
+    assert_ordered(content, "HAL_NVIC_DisableIRQ(SPI3_IRQn);", "HAL_SPI_DeInit(&hspi_esp);");
+    assert_ordered(content, "HAL_NVIC_ClearPendingIRQ(SPI3_IRQn);", "__HAL_RCC_SPI3_CLK_DISABLE();");
+    assert_ordered(content, "HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));", "http_ssl_reset();");
     assert_ordered(content, "HAL_NVIC_DisableIRQ(ESP32_UART_DMA_Tx_IRQn);", "vSemaphoreDelete(sem_esp32_trans);");
     assert_ordered(content, "HAL_DMA_Abort(&hgpdma1_channel5_tx);", "vSemaphoreDelete(sem_esp32_trans);");
     assert_ordered(content, "HAL_NVIC_ClearPendingIRQ(ESP32_UART_DMA_Tx_IRQn);", "vSemaphoreDelete(sem_esp32_trans);");
@@ -115,6 +128,7 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_subghz_entry_deinitializes_esp32_before_radio_init);
+    RUN_TEST(test_read_raw_recording_rechecks_esp32_quiesced_before_allocating_capture_buffers);
     RUN_TEST(test_wifi_and_bt_delegates_deinitialize_esp32_before_scene_pop);
     RUN_TEST(test_esp32_uart_deinit_releases_transport_semaphore);
     RUN_TEST(test_esp32_uart_tx_dma_isr_guards_deleted_semaphore);
