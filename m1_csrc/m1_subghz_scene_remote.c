@@ -212,7 +212,7 @@ static void scene_draw(SubGhzApp *app)
     const char *rname = strrchr(app->remote_path, '/');
     rname = rname ? rname + 1 : app->remote_path;
     char title_buf[32];
-    snprintf(title_buf, sizeof(title_buf), "Remote: %.20s", rname);
+    snprintf(title_buf, sizeof(title_buf), "Remote: %.12s", rname);  /* "Remote: "=8 + 12 = 20 chars ≤ 120px */
     /* Strip .rem extension */
     char *dot = strrchr(title_buf, '.');
     if (dot)

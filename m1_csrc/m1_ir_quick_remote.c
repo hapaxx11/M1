@@ -632,9 +632,9 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
     {
         char title[32];
         if (device_name && device_name[0])
-            snprintf(title, sizeof(title), "%s", device_name);
+            snprintf(title, sizeof(title), "%.20s", device_name);  /* 20 × 6px ≤ 120px */
         else
-            snprintf(title, sizeof(title), "%s", layout->title);
+            snprintf(title, sizeof(title), "%.20s", layout->title);
         m1_draw_text(&m1_u8g2, 2, 9, 124, title, TEXT_ALIGN_CENTER);
     }
     u8g2_DrawHLine(&m1_u8g2, 0, GRID_TOP_Y - 1, disp_w);

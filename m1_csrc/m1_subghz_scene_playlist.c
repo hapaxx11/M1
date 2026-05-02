@@ -423,7 +423,7 @@ static void draw(SubGhzApp *app)
             const char *pname = basename_from_path(app->playlist_path);
             char header[28];
             /* Truncate name to fit */
-            snprintf(header, sizeof(header), "%.18s", pname);
+            snprintf(header, sizeof(header), "%.13s", pname);  /* 13 × 6px ≤ 78px; counter at x=90 */
             u8g2_DrawStr(&m1_u8g2, 2, 9, header);
         }
 
