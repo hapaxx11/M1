@@ -208,16 +208,16 @@ static void scene_draw(SubGhzApp *app)
     u8g2_ClearBuffer(&m1_u8g2);
 
     /* Title */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     const char *rname = strrchr(app->remote_path, '/');
     rname = rname ? rname + 1 : app->remote_path;
     char title_buf[32];
-    snprintf(title_buf, sizeof(title_buf), "Remote: %.20s", rname);
+    snprintf(title_buf, sizeof(title_buf), "Remote: %.12s", rname);  /* "Remote: "=8 + 12 = 20 chars ≤ 120px */
     /* Strip .rem extension */
     char *dot = strrchr(title_buf, '.');
     if (dot)
         *dot = '\0';
-    u8g2_DrawStr(&m1_u8g2, 0, 9, title_buf);
+    m1_draw_text(&m1_u8g2, 2, 9, 124, title_buf, TEXT_ALIGN_CENTER);
     u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
 
     if (!app->remote_loaded)
