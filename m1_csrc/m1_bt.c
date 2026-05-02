@@ -201,8 +201,8 @@ static void ble_show_pending(const char *title, const char *line1, const char *l
 
     m1_u8g2_firstpage();
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     if (line1) u8g2_DrawStr(&m1_u8g2, 2, 26, line1);
     if (line2) u8g2_DrawStr(&m1_u8g2, 2, 38, line2);
@@ -317,12 +317,12 @@ static uint16_t ble_list_print(bool up_dir)
 
     m1_u8g2_firstpage();
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "BLE Devices:");
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "BLE Devices:");
 
     snprintf(prn_msg, sizeof(prn_msg), "%d/%d", ble_view_idx + 1, ble_count);
     u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH,
-        M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, prn_msg);
+        10, prn_msg);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
     y_offset = 14 + M1_GUI_FONT_HEIGHT - 1;
 
@@ -562,8 +562,8 @@ static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
 
     m1_u8g2_firstpage();
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     uint8_t y = 22;
@@ -784,8 +784,8 @@ static void ble_spam_run_loop(const char *title,
 
         m1_u8g2_firstpage();
         u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, title);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         uint8_t y = 22;
@@ -963,9 +963,9 @@ void ble_spam_all(void)
 
         m1_u8g2_firstpage();
         u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+        u8g2_DrawStr(&m1_u8g2, 2, 10,
             "BLE SPAM ALL");
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         uint8_t y = 22;
@@ -1084,8 +1084,8 @@ void bluetooth_config(void)
             redraw = false;
             m1_u8g2_firstpage();
             u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-            u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-            u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "BT CONFIG");
+            u8g2_DrawStr(&m1_u8g2, 2, 10, "BT CONFIG");
+            u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 26, "Adv Name:");

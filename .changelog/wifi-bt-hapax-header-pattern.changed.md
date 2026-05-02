@@ -1,0 +1,3 @@
+**WiFi/BT/802.15.4/ESP32 FW UI: replace decorative frame headers with Hapax standard header** — removed `u8g2_DrawXBMP` frame bitmap from all 20 WiFi, 6 Bluetooth, 1 Zigbee/Thread, and 1 ESP32 firmware-download screen headers; replaced with plain title text at y=10 and a 1px `DrawHLine` separator at y=12, matching the Hapax standard header pattern used in Sub-GHz, RFID, NFC, IR, and Settings scenes.
+
+**Sub-GHz: decode and history selection highlights now use rounded corners** — changed `u8g2_DrawBox` to `u8g2_DrawRBox(r=2)` in the Read Raw offline decode results list, the Saved scene decode results list, and the Read scene RX history list, consistent with all other selection highlights on the device.

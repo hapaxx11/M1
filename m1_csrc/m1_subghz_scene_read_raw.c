@@ -494,7 +494,7 @@ static void draw_rr_decode(void)
 
             if (idx == rr_decode_sel)
             {
-                u8g2_DrawBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, RR_DECODE_ROW_H);
+                u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, RR_DECODE_ROW_H, 2);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
 

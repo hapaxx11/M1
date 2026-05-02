@@ -43,8 +43,9 @@ static int s_device_count = 0;
 
 static void draw_title_bar(const char *title)
 {
-    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
-    u8g2_DrawStr(&m1_u8g2, 2, 1 + 10, title);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 }
 
 static void draw_list_item(uint8_t vis_idx, const char *text, bool selected)
