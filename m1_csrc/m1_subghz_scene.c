@@ -218,7 +218,11 @@ static SubGhzEvent translate_button(void)
 
 void subghz_scene_app_run(void)
 {
-    SubGhzApp app;
+    /* SubGhzApp is 5+ KB — far larger than the menu task's 4 KB stack.
+     * Declare it static so it lives in BSS instead of on the stack.
+     * subghz_scene_init() calls memset(app, 0, sizeof(*app)) on every
+     * entry, so stale state from a previous session is never a concern. */
+    static SubGhzApp app;
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
 
