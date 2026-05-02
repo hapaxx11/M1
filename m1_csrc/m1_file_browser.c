@@ -663,6 +663,11 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       				pfb_hdl->row_index--;
 	       			pfb_hdl->listing_index++;
 	       		} // if ( pfb_hdl->listing_index < (num_of_files - 1) )
+	       		else /* Wrap around: last item → first item */
+	       		{
+	       			pfb_hdl->listing_index = 0;
+	       			pfb_hdl->row_index = 0;
+	       		}
 	       	} // if ( button_status->event[BUTTON_DOWN_KP_ID]==BUTTON_EVENT_CLICK )
 
 	       	else if ( button_status->event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )
@@ -674,6 +679,12 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       				pfb_hdl->row_index--;
 
 	       		} // if ( pfb_hdl->listing_index > 0 )
+	       		else /* Wrap around: first item → last item */
+	       		{
+	       			pfb_hdl->listing_index = num_of_files - 1;
+	       			pfb_hdl->row_index = (num_of_files <= gui_max_row) ?
+	       					num_of_files - 1 : gui_max_row - 1;
+	       		}
 	       	} // else if ( button_status->event[BUTTON_UP_KP_ID]==BUTTON_EVENT_CLICK )
 
 	       	else if ( button_status->event[BUTTON_OK_KP_ID]==BUTTON_EVENT_CLICK )
