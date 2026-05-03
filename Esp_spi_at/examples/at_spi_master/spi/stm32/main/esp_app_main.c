@@ -649,6 +649,8 @@ bool get_esp32_main_init_status(void)
 /******************************************************************************/
 void esp32_main_deinit(void)
 {
+	BaseType_t notified;
+
 	if (!esp32_main_init_done)
 		return;
 
@@ -667,7 +669,23 @@ void esp32_main_deinit(void)
 
 		/* Wait up to 500 ms for the task to notify us that it has freed
 		 * trans_data and is about to call vTaskDelete(NULL). */
-		(void)xTaskNotifyWait(0, 0, NULL, pdMS_TO_TICKS(500));
+		notified = xTaskNotifyWait(0, 0, NULL, pdMS_TO_TICKS(500));
+
+		if (notified != pdTRUE)
+		{
+			/* xTaskNotifyWait timed out — the task has not acknowledged
+			 * shutdown.  We cannot safely delete shared RTOS objects
+			 * (queue, semaphores) while the task may still be blocked on
+			 * them; doing so is undefined behaviour.  Leave all shared
+			 * objects allocated and return.  The stop flag remains set so
+			 * the task will self-delete when it next runs; the next
+			 * esp32_main_deinit() call will find esp32_main_init_done still
+			 * true and retry. */
+			s_deinit_caller = NULL;
+			return;
+		}
+
+		/* Task confirmed exit — safe to free shared objects. */
 		s_deinit_caller = NULL;
 		s_spi_task_handle = NULL;
 	}
@@ -718,6 +736,8 @@ void esp32_main_deinit(void)
 	current_send_seq = 0;
 	current_recv_seq = 0;
 
+	/* Clear the stop flag only after all shared objects have been freed, so
+	 * a late-waking task cannot re-enter normal SPI operation on freed memory. */
 	s_esp32_stop_task = false;
 	esp32_main_init_done = false;
 } // void esp32_main_deinit(void)

@@ -426,6 +426,18 @@ void m1_esp32_deinit(void)
 
 	if ( esp32_init_done )
 	{
+#ifndef ESP32_UART_DISABLE
+		/* UART first: prevents UART-driven DMA callbacks from firing into
+		 * the semaphores that esp32_main_deinit() is about to free. */
+		esp32_UART_deinit();
+#endif // #ifndef ESP32_UART_DISABLE
+
+		/* Stop and join the legacy AT-over-SPI task BEFORE tearing down
+		 * the SPI3 peripheral it uses (spi_device_polling_transmit /
+		 * hspi_esp).  No-op if esp32_main_init() was never called. */
+		if (get_esp32_main_init_status())
+			esp32_main_deinit();
+
 		HAL_NVIC_DisableIRQ(SPI3_IRQn);
 		HAL_NVIC_ClearPendingIRQ(SPI3_IRQn);
 
@@ -461,16 +473,7 @@ void m1_esp32_deinit(void)
 		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
 		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
 		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-#ifndef ESP32_UART_DISABLE
-		esp32_UART_deinit();
-#endif // #ifndef ESP32_UART_DISABLE
 //		esp32_disable();
-
-		/* Tear down the legacy AT-over-SPI task and reclaim its heap (~17 KB).
-		 * This is a no-op if esp32_main_init() was never called (e.g. when only
-		 * the binary SPI / SiN360 path was used). */
-		if (get_esp32_main_init_status())
-			esp32_main_deinit();
 
 		esp32_init_done = FALSE;
 		esp32_uart_init_done = FALSE;

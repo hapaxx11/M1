@@ -148,6 +148,18 @@ void test_esp32_main_deinit_waits_for_task_notification(void)
      * private allocation and is ready to self-delete. */
     assert_contains(content, "xTaskNotifyWait(0, 0, NULL,");
 
+    /* The return value of xTaskNotifyWait must be checked.  If the wait times
+     * out, shared RTOS objects (queue, semaphores) must NOT be deleted while
+     * the task may still be blocked on them — doing so is undefined behaviour.
+     * Deinit must return early without freeing on timeout. */
+    assert_contains(content, "notified != pdTRUE");
+
+    /* The stop flag must be cleared AFTER all shared RTOS objects have been
+     * freed, not before.  This prevents a late-waking task from re-entering
+     * normal SPI operation after its queue/semaphores have already been freed.
+     * Anchor on the unique comment that immediately precedes the assignment. */
+    assert_ordered(content, "vQueueDelete(esp_spi_msg_queue)", "Clear the stop flag only after all shared objects");
+
     free(content);
 }
 
@@ -223,6 +235,20 @@ void test_m1_esp32_deinit_calls_main_deinit_after_uart_deinit(void)
     free(content);
 }
 
+void test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_hal.c");
+
+    /* The AT-over-SPI task uses spi_device_polling_transmit() on hspi_esp.
+     * The task MUST be stopped (esp32_main_deinit) before the SPI3 peripheral
+     * is deinitialized, otherwise a mid-transaction could race against
+     * HAL_SPI_DeInit() / __HAL_RCC_SPI3_CLK_DISABLE(). */
+    assert_ordered(content, "esp32_main_deinit();", "HAL_SPI_DeInit(&hspi_esp)");
+    assert_ordered(content, "esp32_main_deinit();", "__HAL_RCC_SPI3_CLK_DISABLE()");
+
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -235,5 +261,6 @@ int main(void)
     RUN_TEST(test_esp32_main_deinit_resets_init_flag);
     RUN_TEST(test_m1_esp32_deinit_calls_esp32_main_deinit);
     RUN_TEST(test_m1_esp32_deinit_calls_main_deinit_after_uart_deinit);
+    RUN_TEST(test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown);
     return UNITY_END();
 }
