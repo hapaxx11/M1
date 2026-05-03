@@ -124,6 +124,20 @@ void test_esp32_uart_tx_dma_isr_guards_deleted_semaphore(void)
     free(content);
 }
 
+void test_m1_esp32_deinit_calls_esp32_main_deinit_to_reclaim_task_heap(void)
+{
+    /* Regression: Read Raw "Record failed" after Bad-BT/Zigbee/FW-update.
+     * esp32_main_init() creates ~17 KB of FreeRTOS objects that were never
+     * freed.  m1_esp32_deinit() must call esp32_main_deinit() so that heap
+     * is reclaimed before Sub-GHz allocates its 128 KB capture buffer. */
+    char *content = read_file("m1_csrc/m1_esp32_hal.c");
+
+    assert_contains(content, "get_esp32_main_init_status()");
+    assert_contains(content, "esp32_main_deinit();");
+
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -132,5 +146,6 @@ int main(void)
     RUN_TEST(test_wifi_and_bt_delegates_deinitialize_esp32_before_scene_pop);
     RUN_TEST(test_esp32_uart_deinit_releases_transport_semaphore);
     RUN_TEST(test_esp32_uart_tx_dma_isr_guards_deleted_semaphore);
+    RUN_TEST(test_m1_esp32_deinit_calls_esp32_main_deinit_to_reclaim_task_heap);
     return UNITY_END();
 }

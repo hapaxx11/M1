@@ -22,6 +22,7 @@
 #include "m1_http_client.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
+#include "esp_app_main.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -464,6 +465,12 @@ void m1_esp32_deinit(void)
 		esp32_UART_deinit();
 #endif // #ifndef ESP32_UART_DISABLE
 //		esp32_disable();
+
+		/* Tear down the legacy AT-over-SPI task and reclaim its heap (~17 KB).
+		 * This is a no-op if esp32_main_init() was never called (e.g. when only
+		 * the binary SPI / SiN360 path was used). */
+		if (get_esp32_main_init_status())
+			esp32_main_deinit();
 
 		esp32_init_done = FALSE;
 		esp32_uart_init_done = FALSE;

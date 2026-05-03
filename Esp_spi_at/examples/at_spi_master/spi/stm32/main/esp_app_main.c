@@ -64,6 +64,11 @@ static uint8_t current_recv_seq = 0;
 
 static bool esp32_main_init_done = false;
 
+/* Graceful task-exit support for esp32_main_deinit() */
+static volatile bool s_esp32_stop_task = false;
+static TaskHandle_t s_spi_task_handle = NULL;
+static TaskHandle_t s_deinit_caller = NULL;
+
 /* Forward declaration — defined below ble_advertise(). */
 static uint8_t esp_at_send_wait_ok(ctrl_cmd_t *app_req, const char *at_cmd_str);
 
@@ -223,6 +228,13 @@ static void spi_trans_control_task(void* arg)
     while (1)
     {
         xQueueReceive(esp_spi_msg_queue, (void*)&trans_msg, (TickType_t)portMAX_DELAY);
+
+        /* Graceful-exit sentinel: deinit caller set the stop flag and sent a
+         * dummy message to wake us.  Free private heap and exit before doing
+         * any SPI work — hardware may already be deInit'd at this point. */
+        if (s_esp32_stop_task)
+            break;
+
         spi_mutex_lock();
         spi_recv_opt_t recv_opt = query_slave_data_trans_info();
 
@@ -341,6 +353,11 @@ static void spi_trans_control_task(void* arg)
     } // while (1)
 
     free(trans_data);
+    /* Notify the deinit caller (if any) that trans_data is freed and we are
+     * about to self-delete.  The caller can then safely release the remaining
+     * RTOS objects (queues, stream buffer, semaphores, device handle). */
+    if (s_deinit_caller)
+        xTaskNotify(s_deinit_caller, 0, eNoAction);
     vTaskDelete(NULL);
 }
 
@@ -617,6 +634,95 @@ bool get_esp32_main_init_status(void)
 } // bool get_esp32_main_init_status(void)
 
 
+/******************************************************************************/
+/**
+  * @brief Tear down the legacy AT-over-SPI task and release all heap it holds.
+  *
+  * Signals spi_trans_control_task to exit, waits for it to free its private
+  * trans_data buffer, then releases the RTOS objects and device handle that
+  * were allocated by init_master_hd().  Safe to call from any task context.
+  * No-op when esp32_main_init() was never called.
+  *
+  * Must be called while the FreeRTOS scheduler is running and from a task
+  * context (not from an ISR).
+  */
+/******************************************************************************/
+void esp32_main_deinit(void)
+{
+	if (!esp32_main_init_done)
+		return;
+
+	/* Signal the SPI control task to exit.  Place the sentinel at the FRONT
+	 * of the queue so it is received before any stale notification messages,
+	 * and the task never attempts SPI work after the hardware is deInit'd. */
+	if (s_spi_task_handle != NULL)
+	{
+		spi_master_msg_t sentinel = { .slave_notify_flag = false };
+		s_deinit_caller = xTaskGetCurrentTaskHandle();
+		s_esp32_stop_task = true;
+		/* Best-effort: wait up to 100 ms for a queue slot.  Even if this
+		 * times out, the task will see s_esp32_stop_task on its next dequeue
+		 * iteration and still exit — just without the explicit wake-up. */
+		(void)xQueueSendToFront(esp_spi_msg_queue, &sentinel, pdMS_TO_TICKS(100));
+
+		/* Wait up to 500 ms for the task to notify us that it has freed
+		 * trans_data and is about to call vTaskDelete(NULL). */
+		(void)xTaskNotifyWait(0, 0, NULL, pdMS_TO_TICKS(500));
+		s_deinit_caller = NULL;
+		s_spi_task_handle = NULL;
+	}
+
+	/* Release all RTOS objects and device-handle memory that were allocated
+	 * by init_master_hd().  The task has already freed its own trans_data. */
+	if (esp_spi_msg_queue)
+	{
+		vQueueDelete(esp_spi_msg_queue);
+		esp_spi_msg_queue = NULL;
+	}
+	if (spi_master_tx_ring_buf)
+	{
+		vStreamBufferDelete(spi_master_tx_ring_buf);
+		spi_master_tx_ring_buf = NULL;
+	}
+	if (pxMutex)
+	{
+		vSemaphoreDelete(pxMutex);
+		pxMutex = NULL;
+	}
+	if (esp_ctrl_req_sem)
+	{
+		vSemaphoreDelete(esp_ctrl_req_sem);
+		esp_ctrl_req_sem = NULL;
+	}
+	if (esp_resp_read_sem)
+	{
+		vSemaphoreDelete(esp_resp_read_sem);
+		esp_resp_read_sem = NULL;
+	}
+	if (spi_dev_handle)
+	{
+		if (spi_dev_handle->host)
+		{
+			vPortFree(spi_dev_handle->host);
+			spi_dev_handle->host = NULL;
+		}
+		vPortFree(spi_dev_handle);
+		spi_dev_handle = NULL;
+	}
+	/* Drain and free the ctrl_msg_Q linked list */
+	esp_queue_destroy(&ctrl_msg_Q);
+
+	/* Reset sequencing state so the next init cycle starts clean */
+	initiative_send_flag = 0;
+	plan_send_len = 0;
+	current_send_seq = 0;
+	current_recv_seq = 0;
+
+	s_esp32_stop_task = false;
+	esp32_main_init_done = false;
+} // void esp32_main_deinit(void)
+
+
 /**
   * @brief Delay without context switch
   * @param  x in ms approximately
@@ -659,10 +765,15 @@ void esp32_main_init(void)
 	if ( esp32_main_init_done )
 		return;
 
+	/* Reset graceful-exit state from any prior deinit cycle */
+	s_esp32_stop_task = false;
+	s_spi_task_handle = NULL;
+	s_deinit_caller = NULL;
+
 	reset_slave();
 
 	init_master_hd(&spi_dev_handle);
-    ret = xTaskCreate(spi_trans_control_task, "spi_trans_control_task", M1_TASK_STACK_SIZE_2048, NULL, TASK_PRIORITY_ESP32_TASKS, NULL);
+    ret = xTaskCreate(spi_trans_control_task, "spi_trans_control_task", M1_TASK_STACK_SIZE_2048, NULL, TASK_PRIORITY_ESP32_TASKS, &s_spi_task_handle);
 	assert(ret==pdPASS);
 	free_heap = xPortGetFreeHeapSize(); // xPortGetMinimumEverFreeHeapSize()
 	assert(free_heap >= M1_LOW_FREE_HEAP_WARNING_SIZE);
