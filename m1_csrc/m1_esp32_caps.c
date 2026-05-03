@@ -92,6 +92,15 @@ void m1_esp32_caps_init(void)
     if (s_queried)
         return;  /* Already cached from a previous call */
 
+    /* Require the SPI HAL transport to be active before sending CMD_GET_STATUS.
+     * If the ESP32 has not been initialised yet (or was deinitialized), return
+     * without caching so the next call retries once the transport is ready.
+     * Probing an uninitialised transport would time out and cache the
+     * compile-flag fallback, potentially granting capabilities that the
+     * connected firmware does not actually support. */
+    if (!m1_esp32_get_init_status())
+        return;
+
     /* Attempt to query the ESP32 for its capability descriptor */
     ret = m1_esp32_simple_cmd(CMD_GET_STATUS, &resp, CAPS_QUERY_TIMEOUT_MS);
 
@@ -124,19 +133,30 @@ void m1_esp32_caps_reset(void)
 
 bool m1_esp32_has_cap(uint32_t cap)
 {
-    /* Lazily initialise when queried without an explicit caps_init call.
-     * This handles callers that skip the explicit init path. */
     if (!s_queried)
+    {
+        /* Don't probe (and don't cache the fallback) when the ESP32 HAL
+         * has not been initialised.  Probing an uninitialised transport
+         * would time out, cache the compile-flag fallback, and potentially
+         * grant capabilities the connected firmware does not support. */
+        if (!m1_esp32_get_init_status())
+            return false;
         m1_esp32_caps_init();
-
+    }
     return (s_bitmap & cap) != 0u;
 }
 
 const char *m1_esp32_caps_fw_name(void)
 {
     if (!s_queried)
+    {
+        /* Return "offline" immediately — without probing or caching —
+         * when the ESP32 HAL transport is not active.  This keeps the
+         * RPC device-info response accurate for disconnected devices. */
+        if (!m1_esp32_get_init_status())
+            return "offline";
         m1_esp32_caps_init();
-
+    }
     return s_fw_name[0] != '\0' ? s_fw_name : "Unknown";
 }
 
