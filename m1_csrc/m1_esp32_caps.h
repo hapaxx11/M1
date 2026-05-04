@@ -93,6 +93,42 @@
      M1_ESP32_CAP_WIFI_ATTACK)
 
 /* =========================================================================
+ * Fallback memory-footprint estimates (compile-flag fallback path)
+ *
+ * When the connected firmware does not implement CMD_GET_STATUS the
+ * bss_bytes / free_heap_bytes fields cannot be measured directly.  These
+ * constants provide best-guess values derived from source-code analysis of
+ * the publicly available Hapax-fork ESP32 firmware releases:
+ *
+ *   SiN360 (sincere360/M1_SiN360_ESP32 v0.9.0.8, ESP-IDF 5.5.4):
+ *     - NimBLE with MSYS_BUF_FROM_HEAP=y (msys buffers from heap, not BSS)
+ *     - 10 × 1600-byte static WiFi RX buffers + coexistence state
+ *     - Application static arrays: ap_records[64] ≈ 14 KB, BLE/sta tables
+ *     - Estimated BSS ≈ 200 KB; free heap after WiFi+NimBLE init ≈ 160 KB
+ *
+ *   AT/C3 (bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0):
+ *     - Full AT command infrastructure with SPI ring-buffer transport
+ *     - BLE HID + IEEE 802.15.4 sniffer extensions add further static state
+ *     - Estimated BSS ≈ 284 KB; free heap after init ≈ 112 KB
+ *
+ * Profile discriminator used in the fallback path:
+ *   M1_ESP32_CAP_WIFI_CONNECT present → AT profile (bedge117)
+ *   M1_ESP32_CAP_WIFI_CONNECT absent  → SiN360 profile
+ *
+ * These values are overridden by the live measurements in CMD_GET_STATUS
+ * whenever compatible firmware is connected.
+ * =========================================================================*/
+
+/** Estimated BSS segment size for SiN360 binary-SPI firmware (~200 KB) */
+#define M1_ESP32_FALLBACK_BSS_SIN360   (200u * 1024u)
+/** Estimated free heap after init for SiN360 binary-SPI firmware (~160 KB) */
+#define M1_ESP32_FALLBACK_HEAP_SIN360  (160u * 1024u)
+/** Estimated BSS segment size for bedge117 AT firmware (~284 KB) */
+#define M1_ESP32_FALLBACK_BSS_AT       (284u * 1024u)
+/** Estimated free heap after init for bedge117 AT firmware (~112 KB) */
+#define M1_ESP32_FALLBACK_HEAP_AT      (112u * 1024u)
+
+/* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
  *
  * The ESP32 firmware returns this in the 60-byte resp.payload[] when it

@@ -254,6 +254,27 @@ flags.  SiN360 binary-SPI capabilities (scan, sniff, attack, BLE spam/sniff) are
 always included in the fallback.  This preserves current behaviour exactly — no
 feature silently disappears when the runtime handshake fails.
 
+The `bss_bytes` and `free_heap_bytes` fields are also estimated in the fallback
+path based on the detected profile (see `M1_ESP32_FALLBACK_*` constants in
+`m1_csrc/m1_esp32_caps.h`):
+
+| Profile | `bss_bytes` estimate | `free_heap_bytes` estimate | Source |
+|---------|---------------------|---------------------------|--------|
+| **SiN360** (no `WIFI_CONNECT` in bitmap) | ≈ 200 KB | ≈ 160 KB | sincere360/M1_SiN360_ESP32 v0.9.0.8 source + sdkconfig |
+| **AT/C3** (`WIFI_CONNECT` present in bitmap) | ≈ 284 KB | ≈ 112 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
+
+**SiN360 estimate rationale:** NimBLE with `MSYS_BUF_FROM_HEAP=y` (msys buffers are
+heap-allocated, not in BSS), 10 × 1600-byte static WiFi RX buffers, coexistence state,
+and application-layer static arrays (`ap_records[64]` ≈ 14 KB, BLE result tables, station
+tracking).  Total BSS ≈ 200 KB; free heap after WiFi + NimBLE init ≈ 160 KB.
+
+**AT/C3 estimate rationale:** Full ESP-AT command infrastructure adds large SPI ring buffers
+and AT parameter buffers in BSS; BLE HID and IEEE 802.15.4 sniffer extensions add further
+static state.  Total BSS ≈ 284 KB; free heap after init ≈ 112 KB.
+
+These estimates are superseded by the live measurements from `CMD_GET_STATUS` whenever
+compatible firmware reports them.
+
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 
 Respond to opcode `0x02` with a 45-byte `m1_esp32_status_payload_t` payload,

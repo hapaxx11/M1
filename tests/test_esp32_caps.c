@@ -401,6 +401,39 @@ void test_parse_zero_bss_and_heap_are_valid(void)
 }
 
 /* =========================================================================
+ * Fallback estimate constants: sanity checks
+ *
+ * These tests are compile-time assertions expressed as runtime Unity tests
+ * so they appear in the CI report and any regression is immediately obvious.
+ * The actual numeric values are derived from source-code analysis of
+ * sincere360/M1_SiN360_ESP32 v0.9.0.8 (ESP-IDF 5.5.4) and
+ * bedge117/esp32-at-monstatek-m1 v2.0.2 (ESP-AT v4.0.0.0).
+ * =========================================================================*/
+
+void test_fallback_constants_are_nonzero(void)
+{
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, M1_ESP32_FALLBACK_BSS_SIN360);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, M1_ESP32_FALLBACK_HEAP_SIN360);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, M1_ESP32_FALLBACK_BSS_AT);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, M1_ESP32_FALLBACK_HEAP_AT);
+}
+
+void test_fallback_at_bss_exceeds_sin360(void)
+{
+    /* AT firmware carries full AT command infrastructure + SPI ring buffers
+     * + BLE HID + 802.15.4 state → larger static footprint than SiN360. */
+    TEST_ASSERT_GREATER_THAN_UINT32(M1_ESP32_FALLBACK_BSS_SIN360,
+                                    M1_ESP32_FALLBACK_BSS_AT);
+}
+
+void test_fallback_sin360_heap_exceeds_at(void)
+{
+    /* SiN360's smaller static footprint leaves more runtime heap free. */
+    TEST_ASSERT_GREATER_THAN_UINT32(M1_ESP32_FALLBACK_HEAP_AT,
+                                    M1_ESP32_FALLBACK_HEAP_SIN360);
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 
@@ -425,6 +458,9 @@ int main(void)
     RUN_TEST(test_parse_bss_heap_little_endian);
     RUN_TEST(test_payload_struct_size);
     RUN_TEST(test_parse_zero_bss_and_heap_are_valid);
+    RUN_TEST(test_fallback_constants_are_nonzero);
+    RUN_TEST(test_fallback_at_bss_exceeds_sin360);
+    RUN_TEST(test_fallback_sin360_heap_exceeds_at);
 
     return UNITY_END();
 }

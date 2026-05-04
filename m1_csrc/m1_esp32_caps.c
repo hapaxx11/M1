@@ -125,6 +125,22 @@ void m1_esp32_caps_init(void)
         s_bitmap = caps_build_fallback_bitmap();
         strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+
+        /* Populate memory-footprint estimates based on the detected profile.
+         * The discriminator: AT firmware adds M1_ESP32_CAP_WIFI_CONNECT;
+         * SiN360 does not.  Values are static compile-time estimates derived
+         * from source analysis of the known Hapax-fork ESP32 firmware releases.
+         * Live measurements (from CMD_GET_STATUS) take priority when available. */
+        if ((s_bitmap & M1_ESP32_CAP_WIFI_CONNECT) != 0u)
+        {
+            s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
+            s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
+        }
+        else
+        {
+            s_bss_bytes       = M1_ESP32_FALLBACK_BSS_SIN360;
+            s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_SIN360;
+        }
     }
 
     s_queried = true;
