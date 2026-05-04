@@ -184,13 +184,28 @@ first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
 
 ### CMD_GET_STATUS payload format (protocol version 1)
 
-The 37-byte response payload returned by supporting ESP32 firmware:
+The 45-byte response payload returned by supporting ESP32 firmware:
 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
 | 0 | 1 | `proto_ver` | Must be `0x01` |
 | 1 | 4 | `cap_bitmap` | Capability bits (little-endian `uint32_t`) |
 | 5 | 32 | `fw_name` | Null-terminated firmware identifier string |
+| 37 | 4 | `bss_bytes` | ESP32 BSS segment size in bytes (little-endian `uint32_t`); see note below |
+| 41 | 4 | `free_heap_bytes` | Runtime free heap in bytes at response time (little-endian `uint32_t`); see note below |
+
+> **`bss_bytes`** — The size of the ESP32 firmware's BSS (zero-initialised static data)
+> segment.  This is a compile-time constant; compute it from your linker symbols:
+> `(&__bss_end - &__bss_start) * sizeof(int)` or use the `ld` `-Map` output.
+> Report `0` if your build system does not expose these symbols.
+> Useful for comparing memory footprints across firmware variants — a larger BSS
+> leaves less heap for runtime feature allocations.
+>
+> **`free_heap_bytes`** — The ESP32's available heap at the moment the
+> `CMD_GET_STATUS` response is assembled.  On ESP-IDF, call
+> `esp_get_free_heap_size()`.  Report `0` if unavailable.  Useful for diagnosing
+> silent OOM failures in memory-intensive features (BLE sniffers, packet captures).
+> The STM32 may display this value on a diagnostics screen.
 
 ### Capability bit assignments (permanent — never reassigned)
 
@@ -241,9 +256,11 @@ feature silently disappears when the runtime handshake fails.
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 
-Respond to opcode `0x02` with a 37-byte `m1_esp32_status_payload_t` payload,
+Respond to opcode `0x02` with a 45-byte `m1_esp32_status_payload_t` payload,
 `proto_ver = 1`, `cap_bitmap` set to the capabilities your firmware actually
-implements, and `fw_name` as a short version string (e.g. `"SiN360-0.9.7"`).
+implements, `fw_name` as a short version string (e.g. `"SiN360-0.9.7"`),
+`bss_bytes` as your firmware's BSS segment size (or `0` if unavailable), and
+`free_heap_bytes` as the current free heap from `esp_get_free_heap_size()` (or `0`).
 
 > **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
 > on a capability bit (`m1_esp32_require_cap` / `m1_esp32_has_cap`), **not** on a

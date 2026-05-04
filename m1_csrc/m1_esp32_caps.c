@@ -32,9 +32,11 @@ extern uint8_t m1_esp32_get_init_status(void);
 
 /*************************** V A R I A B L E S ********************************/
 
-static uint32_t s_bitmap     = 0u;
-static bool     s_queried    = false;
-static char     s_fw_name[32] = "Unknown";
+static uint32_t s_bitmap          = 0u;
+static bool     s_queried         = false;
+static char     s_fw_name[32]     = "Unknown";
+static uint32_t s_bss_bytes       = 0u;
+static uint32_t s_free_heap_bytes = 0u;
 
 /*************** I N T E R N A L   H E L P E R S *****************************/
 
@@ -86,8 +88,10 @@ void m1_esp32_caps_init(void)
 {
     m1_resp_t resp;
     int       ret;
-    uint32_t  bitmap    = 0u;
-    char      fw_name[32] = {0};
+    uint32_t  bitmap        = 0u;
+    uint32_t  bss_bytes     = 0u;
+    uint32_t  free_heap     = 0u;
+    char      fw_name[32]   = {0};
 
     if (s_queried)
         return;  /* Already cached from a previous call */
@@ -106,10 +110,12 @@ void m1_esp32_caps_init(void)
 
     if (ret == 0 && resp.status == RESP_OK &&
         m1_esp32_caps_parse_payload(resp.payload, resp.payload_len,
-                                    &bitmap, fw_name))
+                                    &bitmap, fw_name, &bss_bytes, &free_heap))
     {
         /* Successful handshake — use the firmware-reported capabilities */
-        s_bitmap = bitmap;
+        s_bitmap          = bitmap;
+        s_bss_bytes       = bss_bytes;
+        s_free_heap_bytes = free_heap;
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }
@@ -126,9 +132,11 @@ void m1_esp32_caps_init(void)
 
 void m1_esp32_caps_reset(void)
 {
-    s_bitmap  = 0u;
-    s_queried = false;
-    s_fw_name[0] = '\0';
+    s_bitmap          = 0u;
+    s_queried         = false;
+    s_bss_bytes       = 0u;
+    s_free_heap_bytes = 0u;
+    s_fw_name[0]      = '\0';
 }
 
 bool m1_esp32_has_cap(uint32_t cap)
@@ -191,4 +199,14 @@ bool m1_esp32_require_cap(uint32_t cap, const char *feature_name)
     HAL_Delay(2000);
 
     return false;
+}
+
+uint32_t m1_esp32_caps_bss_bytes(void)
+{
+    return s_queried ? s_bss_bytes : 0u;
+}
+
+uint32_t m1_esp32_caps_free_heap(void)
+{
+    return s_queried ? s_free_heap_bytes : 0u;
 }
