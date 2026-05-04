@@ -32,7 +32,7 @@ extern uint8_t m1_esp32_get_init_status(void);
 
 /*************************** V A R I A B L E S ********************************/
 
-static uint32_t s_bitmap          = 0u;
+static uint64_t s_bitmap          = 0u;
 static bool     s_queried         = false;
 static char     s_fw_name[32]     = "Unknown";
 static uint32_t s_bss_bytes       = 0u;
@@ -52,9 +52,9 @@ static uint32_t s_free_heap_bytes = 0u;
  * base of the current build).  AT-layer features are included only when
  * the corresponding compile flag was set.
  */
-static uint32_t caps_build_fallback_bitmap(void)
+static uint64_t caps_build_fallback_bitmap(void)
 {
-    uint32_t caps = 0u;
+    uint64_t caps = 0u;
 
     /* SiN360 binary-SPI capabilities — present in all current builds */
     caps |= M1_ESP32_CAP_WIFI_SCAN;
@@ -88,7 +88,7 @@ void m1_esp32_caps_init(void)
 {
     m1_resp_t resp;
     int       ret;
-    uint32_t  bitmap        = 0u;
+    uint64_t  bitmap        = 0u;
     uint32_t  bss_bytes     = 0u;
     uint32_t  free_heap     = 0u;
     char      fw_name[32]   = {0};
@@ -139,7 +139,7 @@ void m1_esp32_caps_reset(void)
     s_fw_name[0]      = '\0';
 }
 
-bool m1_esp32_has_cap(uint32_t cap)
+bool m1_esp32_has_cap(uint64_t cap)
 {
     if (!s_queried)
     {
@@ -168,7 +168,7 @@ const char *m1_esp32_caps_fw_name(void)
     return s_fw_name[0] != '\0' ? s_fw_name : "Unknown";
 }
 
-bool m1_esp32_require_cap(uint32_t cap, const char *feature_name)
+bool m1_esp32_require_cap(uint64_t cap, const char *feature_name)
 {
     char fw_line[22];  /* fits on 128px display with main-menu font */
 

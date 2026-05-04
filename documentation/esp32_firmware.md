@@ -184,15 +184,15 @@ first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
 
 ### CMD_GET_STATUS payload format (protocol version 1)
 
-The 45-byte response payload returned by supporting ESP32 firmware:
+The 49-byte response payload returned by supporting ESP32 firmware:
 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
 | 0 | 1 | `proto_ver` | Must be `0x01` |
-| 1 | 4 | `cap_bitmap` | Capability bits (little-endian `uint32_t`) |
-| 5 | 32 | `fw_name` | Null-terminated firmware identifier string |
-| 37 | 4 | `bss_bytes` | ESP32 BSS segment size in bytes (little-endian `uint32_t`); see note below |
-| 41 | 4 | `free_heap_bytes` | Runtime free heap in bytes at response time (little-endian `uint32_t`); see note below |
+| 1 | 8 | `cap_bitmap` | Capability bits (little-endian `uint64_t`) |
+| 9 | 32 | `fw_name` | Null-terminated firmware identifier string |
+| 41 | 4 | `bss_bytes` | ESP32 BSS segment size in bytes (little-endian `uint32_t`); see note below |
+| 45 | 4 | `free_heap_bytes` | Runtime free heap in bytes at response time (little-endian `uint32_t`); see note below |
 
 > **`bss_bytes`** — The size of the ESP32 firmware's BSS (zero-initialised static data)
 > segment.  This is a compile-time constant; compute it from your linker symbols:
@@ -225,7 +225,7 @@ The 45-byte response payload returned by supporting ESP32 firmware:
 | 11 | `M1_ESP32_CAP_BLE_HID` | BLE HID keyboard (Bad-BT) |
 | 12 | `M1_ESP32_CAP_BT_MANAGE` | BT device management (AT-layer) |
 | 13 | `M1_ESP32_CAP_802154` | IEEE 802.15.4 / Zigbee / Thread |
-| 14-31 | — | Reserved for future use |
+| 14-63 | — | Reserved for future use |
 
 ### Capability matrix by firmware variant
 
@@ -256,7 +256,7 @@ feature silently disappears when the runtime handshake fails.
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 
-Respond to opcode `0x02` with a 45-byte `m1_esp32_status_payload_t` payload,
+Respond to opcode `0x02` with a 49-byte `m1_esp32_status_payload_t` payload,
 `proto_ver = 1`, `cap_bitmap` set to the capabilities your firmware actually
 implements, `fw_name` as a short version string (e.g. `"SiN360-0.9.7"`),
 `bss_bytes` as your firmware's BSS segment size (or `0` if unavailable), and

@@ -30,33 +30,33 @@
 #include <string.h>   /* strncpy used in inline parse helper */
 
 /* =========================================================================
- * Capability Bits (uint32_t bitmap — bits 0-31)
+ * Capability Bits (uint64_t bitmap — bits 0-63)
  *
  * Assignment is permanent: once a bit is published it NEVER changes meaning.
  * Unknown bits from a future firmware response are silently ignored (= 0).
  * =========================================================================*/
 
 /* WiFi capabilities */
-#define M1_ESP32_CAP_WIFI_SCAN        (1u <<  0)  /* Basic AP scan */
-#define M1_ESP32_CAP_WIFI_STA_SCAN    (1u <<  1)  /* Client/station discovery */
-#define M1_ESP32_CAP_WIFI_SNIFF       (1u <<  2)  /* Packet monitor / sniffer */
-#define M1_ESP32_CAP_WIFI_ATTACK      (1u <<  3)  /* Deauth, beacon, karma, etc. */
-#define M1_ESP32_CAP_WIFI_NETSCAN     (1u <<  4)  /* Ping / ARP / SSH / port scan */
-#define M1_ESP32_CAP_WIFI_EVIL_PORTAL (1u <<  5)  /* Evil portal (subset of attack) */
-#define M1_ESP32_CAP_WIFI_CONNECT     (1u <<  6)  /* Connect, saved networks, NTP sync */
+#define M1_ESP32_CAP_WIFI_SCAN        (UINT64_C(1) <<  0)  /* Basic AP scan */
+#define M1_ESP32_CAP_WIFI_STA_SCAN    (UINT64_C(1) <<  1)  /* Client/station discovery */
+#define M1_ESP32_CAP_WIFI_SNIFF       (UINT64_C(1) <<  2)  /* Packet monitor / sniffer */
+#define M1_ESP32_CAP_WIFI_ATTACK      (UINT64_C(1) <<  3)  /* Deauth, beacon, karma, etc. */
+#define M1_ESP32_CAP_WIFI_NETSCAN     (UINT64_C(1) <<  4)  /* Ping / ARP / SSH / port scan */
+#define M1_ESP32_CAP_WIFI_EVIL_PORTAL (UINT64_C(1) <<  5)  /* Evil portal (subset of attack) */
+#define M1_ESP32_CAP_WIFI_CONNECT     (UINT64_C(1) <<  6)  /* Connect, saved networks, NTP sync */
 
 /* BLE / Bluetooth capabilities */
-#define M1_ESP32_CAP_BLE_SCAN         (1u <<  7)  /* BLE device scan */
-#define M1_ESP32_CAP_BLE_ADV          (1u <<  8)  /* BLE advertise */
-#define M1_ESP32_CAP_BLE_SPAM         (1u <<  9)  /* BLE beacon spam variants */
-#define M1_ESP32_CAP_BLE_SNIFF        (1u << 10)  /* BLE packet sniffers */
-#define M1_ESP32_CAP_BLE_HID          (1u << 11)  /* BLE HID keyboard (Bad-BT) */
-#define M1_ESP32_CAP_BT_MANAGE        (1u << 12)  /* BT device management (AT-layer) */
+#define M1_ESP32_CAP_BLE_SCAN         (UINT64_C(1) <<  7)  /* BLE device scan */
+#define M1_ESP32_CAP_BLE_ADV          (UINT64_C(1) <<  8)  /* BLE advertise */
+#define M1_ESP32_CAP_BLE_SPAM         (UINT64_C(1) <<  9)  /* BLE beacon spam variants */
+#define M1_ESP32_CAP_BLE_SNIFF        (UINT64_C(1) << 10)  /* BLE packet sniffers */
+#define M1_ESP32_CAP_BLE_HID          (UINT64_C(1) << 11)  /* BLE HID keyboard (Bad-BT) */
+#define M1_ESP32_CAP_BT_MANAGE        (UINT64_C(1) << 12)  /* BT device management (AT-layer) */
 
 /* Other capabilities */
-#define M1_ESP32_CAP_802154           (1u << 13)  /* IEEE 802.15.4 / Zigbee / Thread */
+#define M1_ESP32_CAP_802154           (UINT64_C(1) << 13)  /* IEEE 802.15.4 / Zigbee / Thread */
 
-/* Bits 14-31 reserved for future use */
+/* Bits 14-63 reserved for future use */
 
 /* =========================================================================
  * Composite profiles
@@ -105,7 +105,7 @@
 
 /**
  * Packed layout of the CMD_GET_STATUS response payload.
- * Total: 45 bytes — well within the 60-byte payload limit.
+ * Total: 49 bytes — well within the 60-byte payload limit.
  *
  * Field notes:
  *   bss_bytes      — Size of the ESP32 firmware's BSS segment in bytes.
@@ -122,7 +122,7 @@
  */
 typedef struct __attribute__((packed)) {
     uint8_t  proto_ver;       /**< M1_ESP32_CAPS_PROTO_VER (1) */
-    uint32_t cap_bitmap;      /**< Capability bits, little-endian */
+    uint64_t cap_bitmap;      /**< Capability bits, little-endian */
     char     fw_name[32];     /**< Firmware identifier string, null-terminated */
     uint32_t bss_bytes;       /**< ESP32 BSS segment size in bytes (little-endian) */
     uint32_t free_heap_bytes; /**< ESP32 runtime free heap in bytes (little-endian) */
@@ -146,7 +146,7 @@ typedef struct __attribute__((packed)) {
  */
 static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
                                                 uint8_t        len,
-                                                uint32_t      *bitmap_out,
+                                                uint64_t      *bitmap_out,
                                                 char           fw_name_out[32],
                                                 uint32_t      *bss_bytes_out,
                                                 uint32_t      *free_heap_out)
@@ -192,7 +192,7 @@ void m1_esp32_caps_reset(void);
  * Return true if the ESP32 firmware supports the requested capability.
  * @param cap  One of the M1_ESP32_CAP_* bit constants
  */
-bool m1_esp32_has_cap(uint32_t cap);
+bool m1_esp32_has_cap(uint64_t cap);
 
 /**
  * Return a null-terminated string describing the active ESP32 firmware.
@@ -210,7 +210,7 @@ const char *m1_esp32_caps_fw_name(void);
  * @return true if capability is present (caller may proceed),
  *         false if capability is absent (screen has been shown, caller must abort)
  */
-bool m1_esp32_require_cap(uint32_t cap, const char *feature_name);
+bool m1_esp32_require_cap(uint64_t cap, const char *feature_name);
 
 /**
  * Return the ESP32 firmware's BSS segment size in bytes, as reported by
