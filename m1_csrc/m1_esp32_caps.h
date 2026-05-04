@@ -105,12 +105,27 @@
 
 /**
  * Packed layout of the CMD_GET_STATUS response payload.
- * Total: 37 bytes — well within the 60-byte payload limit.
+ * Total: 45 bytes — well within the 60-byte payload limit.
+ *
+ * Field notes:
+ *   bss_bytes      — Size of the ESP32 firmware's BSS segment in bytes.
+ *                    This is a compile-time constant (computed from linker
+ *                    symbols, e.g. (&__bss_end - &__bss_start) * sizeof(int)).
+ *                    Useful for comparing memory footprints across firmware
+ *                    variants (larger BSS → less heap available for features).
+ *                    Report 0 if the linker symbols are not accessible.
+ *   free_heap_bytes — Runtime free heap on the ESP32 at the moment the
+ *                    CMD_GET_STATUS response is assembled.  On ESP-IDF call
+ *                    esp_get_free_heap_size(); on other RTOSes use the
+ *                    equivalent.  Useful for diagnosing OOM-induced feature
+ *                    failures.  Report 0 if unavailable.
  */
 typedef struct __attribute__((packed)) {
-    uint8_t  proto_ver;    /**< M1_ESP32_CAPS_PROTO_VER (1) */
-    uint32_t cap_bitmap;   /**< Capability bits, little-endian */
-    char     fw_name[32];  /**< Firmware identifier string, null-terminated */
+    uint8_t  proto_ver;       /**< M1_ESP32_CAPS_PROTO_VER (1) */
+    uint32_t cap_bitmap;      /**< Capability bits, little-endian */
+    char     fw_name[32];     /**< Firmware identifier string, null-terminated */
+    uint32_t bss_bytes;       /**< ESP32 BSS segment size in bytes (little-endian) */
+    uint32_t free_heap_bytes; /**< ESP32 runtime free heap in bytes (little-endian) */
 } m1_esp32_status_payload_t;
 
 /* =========================================================================
@@ -120,17 +135,21 @@ typedef struct __attribute__((packed)) {
 /**
  * Parse a raw CMD_GET_STATUS response payload into a bitmap and name string.
  *
- * @param payload     Raw payload bytes from m1_resp_t.payload[]
- * @param len         Length of valid payload bytes (resp.payload_len)
- * @param bitmap_out  Receives the parsed capability bitmap
- * @param fw_name_out 32-byte buffer receives null-terminated firmware name
+ * @param payload          Raw payload bytes from m1_resp_t.payload[]
+ * @param len              Length of valid payload bytes (resp.payload_len)
+ * @param bitmap_out       Receives the parsed capability bitmap
+ * @param fw_name_out      32-byte buffer receives null-terminated firmware name
+ * @param bss_bytes_out    Receives the ESP32 BSS segment size in bytes
+ * @param free_heap_out    Receives the ESP32 runtime free heap in bytes
  * @return true on success, false if payload is too short or protocol
  *         version is unrecognised
  */
 static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
                                                 uint8_t        len,
                                                 uint32_t      *bitmap_out,
-                                                char           fw_name_out[32])
+                                                char           fw_name_out[32],
+                                                uint32_t      *bss_bytes_out,
+                                                uint32_t      *free_heap_out)
 {
     if (len < (uint8_t)sizeof(m1_esp32_status_payload_t))
         return false;
@@ -141,7 +160,9 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
     if (p->proto_ver != M1_ESP32_CAPS_PROTO_VER)
         return false;
 
-    *bitmap_out = p->cap_bitmap;
+    *bitmap_out    = p->cap_bitmap;
+    *bss_bytes_out = p->bss_bytes;
+    *free_heap_out = p->free_heap_bytes;
     strncpy(fw_name_out, p->fw_name, 31);
     fw_name_out[31] = '\0';
     return true;
@@ -190,5 +211,19 @@ const char *m1_esp32_caps_fw_name(void);
  *         false if capability is absent (screen has been shown, caller must abort)
  */
 bool m1_esp32_require_cap(uint32_t cap, const char *feature_name);
+
+/**
+ * Return the ESP32 firmware's BSS segment size in bytes, as reported by
+ * CMD_GET_STATUS.  Returns 0 if the firmware did not report a value (fallback
+ * path) or if m1_esp32_caps_init() has not been called yet.
+ */
+uint32_t m1_esp32_caps_bss_bytes(void);
+
+/**
+ * Return the ESP32 runtime free heap in bytes at the time CMD_GET_STATUS
+ * was last answered.  Returns 0 if the firmware did not report a value
+ * (fallback path) or if m1_esp32_caps_init() has not been called yet.
+ */
+uint32_t m1_esp32_caps_free_heap(void);
 
 #endif /* M1_ESP32_CAPS_H_ */

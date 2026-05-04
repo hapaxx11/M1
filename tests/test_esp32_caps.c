@@ -38,7 +38,9 @@ void tearDown(void) {}
 static void make_payload(uint8_t  buf[64],
                          uint8_t  proto_ver,
                          uint32_t bitmap,
-                         const char *fw_name)
+                         const char *fw_name,
+                         uint32_t bss_bytes,
+                         uint32_t free_heap_bytes)
 {
     memset(buf, 0, 64);
     buf[0] = proto_ver;
@@ -50,6 +52,16 @@ static void make_payload(uint8_t  buf[64],
     /* fw_name at bytes 5-36 */
     if (fw_name)
         strncpy((char *)&buf[5], fw_name, 31);
+    /* bss_bytes at bytes 37-40 (little-endian) */
+    buf[37] = (uint8_t)(bss_bytes        & 0xFFu);
+    buf[38] = (uint8_t)((bss_bytes >>  8) & 0xFFu);
+    buf[39] = (uint8_t)((bss_bytes >> 16) & 0xFFu);
+    buf[40] = (uint8_t)((bss_bytes >> 24) & 0xFFu);
+    /* free_heap_bytes at bytes 41-44 (little-endian) */
+    buf[41] = (uint8_t)(free_heap_bytes        & 0xFFu);
+    buf[42] = (uint8_t)((free_heap_bytes >>  8) & 0xFFu);
+    buf[43] = (uint8_t)((free_heap_bytes >> 16) & 0xFFu);
+    buf[44] = (uint8_t)((free_heap_bytes >> 24) & 0xFFu);
 }
 
 /* =========================================================================
@@ -60,47 +72,60 @@ void test_parse_valid_sin360(void)
 {
     uint8_t buf[64];
     make_payload(buf, M1_ESP32_CAPS_PROTO_VER,
-                 M1_ESP32_CAP_PROFILE_SIN360, "SiN360-0.9.6");
+                 M1_ESP32_CAP_PROFILE_SIN360, "SiN360-0.9.6",
+                 0x00020000u, 0x0002C000u);
 
     uint32_t bitmap = 0;
     char     fw_name[32];
+    uint32_t bss = 0, heap = 0;
     bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &bitmap, fw_name);
+                                          &bitmap, fw_name, &bss, &heap);
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_UINT32(M1_ESP32_CAP_PROFILE_SIN360, bitmap);
     TEST_ASSERT_EQUAL_STRING("SiN360-0.9.6", fw_name);
+    TEST_ASSERT_EQUAL_UINT32(0x00020000u, bss);
+    TEST_ASSERT_EQUAL_UINT32(0x0002C000u, heap);
 }
 
 void test_parse_valid_at_c3(void)
 {
     uint8_t buf[64];
     make_payload(buf, M1_ESP32_CAPS_PROTO_VER,
-                 M1_ESP32_CAP_PROFILE_AT_C3, "AT-bedge117-2.0.2");
+                 M1_ESP32_CAP_PROFILE_AT_C3, "AT-bedge117-2.0.2",
+                 0x00018000u, 0x00030000u);
 
     uint32_t bitmap = 0;
     char     fw_name[32];
+    uint32_t bss = 0, heap = 0;
     bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &bitmap, fw_name);
+                                          &bitmap, fw_name, &bss, &heap);
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_UINT32(M1_ESP32_CAP_PROFILE_AT_C3, bitmap);
     TEST_ASSERT_EQUAL_STRING("AT-bedge117-2.0.2", fw_name);
+    TEST_ASSERT_EQUAL_UINT32(0x00018000u, bss);
+    TEST_ASSERT_EQUAL_UINT32(0x00030000u, heap);
 }
 
 void test_parse_valid_all_caps(void)
 {
     uint8_t buf[64];
-    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, 0xFFFFFFFFu, "future-fw-1.0");
+    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, 0xFFFFFFFFu, "future-fw-1.0",
+                 0u, 0u);
 
     uint32_t bitmap = 0;
     char     fw_name[32];
+    uint32_t bss = 1, heap = 1;
     bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &bitmap, fw_name);
+                                          &bitmap, fw_name, &bss, &heap);
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_UINT32(0xFFFFFFFFu, bitmap);
     TEST_ASSERT_EQUAL_STRING("future-fw-1.0", fw_name);
+    /* Zero values must round-trip correctly */
+    TEST_ASSERT_EQUAL_UINT32(0u, bss);
+    TEST_ASSERT_EQUAL_UINT32(0u, heap);
 }
 
 /* =========================================================================
@@ -110,18 +135,23 @@ void test_parse_valid_all_caps(void)
 void test_parse_too_short_returns_false(void)
 {
     uint8_t buf[64];
-    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
+    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw",
+                 0u, 0u);
 
     uint32_t bitmap   = 0xDEADBEEFu;
     char     fw_name[32] = "unchanged";
+    uint32_t bss = 0xABCDu, heap = 0x1234u;
     /* Pass length one byte short of the required struct */
     uint8_t short_len = (uint8_t)(sizeof(m1_esp32_status_payload_t) - 1u);
-    bool ok = m1_esp32_caps_parse_payload(buf, short_len, &bitmap, fw_name);
+    bool ok = m1_esp32_caps_parse_payload(buf, short_len, &bitmap, fw_name,
+                                          &bss, &heap);
 
     TEST_ASSERT_FALSE(ok);
     /* Outputs must not have been modified */
     TEST_ASSERT_EQUAL_UINT32(0xDEADBEEFu, bitmap);
     TEST_ASSERT_EQUAL_STRING("unchanged", fw_name);
+    TEST_ASSERT_EQUAL_UINT32(0xABCDu, bss);
+    TEST_ASSERT_EQUAL_UINT32(0x1234u, heap);
 }
 
 void test_parse_zero_length_returns_false(void)
@@ -129,8 +159,9 @@ void test_parse_zero_length_returns_false(void)
     uint8_t buf[64] = {0};
     uint32_t bitmap = 0xDEADBEEFu;
     char     fw_name[32] = "unchanged";
+    uint32_t bss = 1u, heap = 1u;
 
-    bool ok = m1_esp32_caps_parse_payload(buf, 0, &bitmap, fw_name);
+    bool ok = m1_esp32_caps_parse_payload(buf, 0, &bitmap, fw_name, &bss, &heap);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_UINT32(0xDEADBEEFu, bitmap);
 }
@@ -139,12 +170,13 @@ void test_parse_wrong_proto_ver_returns_false(void)
 {
     uint8_t buf[64];
     make_payload(buf, (uint8_t)(M1_ESP32_CAPS_PROTO_VER + 1u),
-                 M1_ESP32_CAP_WIFI_SCAN, "fw");
+                 M1_ESP32_CAP_WIFI_SCAN, "fw", 0u, 0u);
 
     uint32_t bitmap   = 0xDEADBEEFu;
     char     fw_name[32] = "unchanged";
+    uint32_t bss = 0u, heap = 0u;
     bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &bitmap, fw_name);
+                                          &bitmap, fw_name, &bss, &heap);
 
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_UINT32(0xDEADBEEFu, bitmap);
@@ -158,7 +190,7 @@ void test_parse_fw_name_always_null_terminated(void)
 {
     uint8_t buf[64];
     /* Fill fw_name field with 31 printable chars + no NUL */
-    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, 0u, NULL);
+    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, 0u, NULL, 0u, 0u);
     /* bytes 5-35 = 31 'A' chars; byte 36 (last of the 32-byte field) = 'B'
      * This simulates a firmware that forgot the NUL terminator */
     memset(&buf[5], 'A', 31);
@@ -166,8 +198,9 @@ void test_parse_fw_name_always_null_terminated(void)
 
     uint32_t bitmap = 0;
     char     fw_name[32];
+    uint32_t bss = 0, heap = 0;
     bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &bitmap, fw_name);
+                                          &bitmap, fw_name, &bss, &heap);
 
     TEST_ASSERT_TRUE(ok);
     /* strncpy(dst, src, 31) + forced NUL at [31] must ensure termination */
@@ -294,10 +327,77 @@ void test_parse_bitmap_little_endian(void)
 
     uint32_t bitmap = 0;
     char     fw_name[32];
+    uint32_t bss = 0, heap = 0;
     bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &bitmap, fw_name);
+                                          &bitmap, fw_name, &bss, &heap);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_UINT32(0x01020304u, bitmap);
+}
+
+/* =========================================================================
+ * New fields: bss_bytes and free_heap_bytes
+ * =========================================================================*/
+
+void test_parse_bss_and_heap_round_trip(void)
+{
+    uint8_t buf[64];
+    /* Use representative values: ~128 KB BSS, ~180 KB free heap */
+    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN,
+                 "SiN360-test", 0x00020000u, 0x0002D000u);
+
+    uint32_t bitmap = 0;
+    char     fw_name[32];
+    uint32_t bss = 0, heap = 0;
+    bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
+                                          &bitmap, fw_name, &bss, &heap);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_UINT32(0x00020000u, bss);
+    TEST_ASSERT_EQUAL_UINT32(0x0002D000u, heap);
+}
+
+void test_parse_bss_heap_little_endian(void)
+{
+    /* Manually build a payload and verify byte-order interpretation */
+    uint8_t buf[64];
+    memset(buf, 0, sizeof(buf));
+    buf[0] = M1_ESP32_CAPS_PROTO_VER;
+    /* bss_bytes = 0x04030201 at bytes 37-40 LE */
+    buf[37] = 0x01; buf[38] = 0x02; buf[39] = 0x03; buf[40] = 0x04;
+    /* free_heap = 0x08070605 at bytes 41-44 LE */
+    buf[41] = 0x05; buf[42] = 0x06; buf[43] = 0x07; buf[44] = 0x08;
+
+    uint32_t bitmap = 0;
+    char     fw_name[32];
+    uint32_t bss = 0, heap = 0;
+    bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
+                                          &bitmap, fw_name, &bss, &heap);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_UINT32(0x04030201u, bss);
+    TEST_ASSERT_EQUAL_UINT32(0x08070605u, heap);
+}
+
+void test_payload_struct_size(void)
+{
+    /* Confirm the packed struct is exactly 45 bytes:
+     * 1 (proto_ver) + 4 (cap_bitmap) + 32 (fw_name) + 4 (bss) + 4 (heap) */
+    TEST_ASSERT_EQUAL_UINT32(45u, (uint32_t)sizeof(m1_esp32_status_payload_t));
+}
+
+void test_parse_zero_bss_and_heap_are_valid(void)
+{
+    /* Report-0-if-unavailable is explicitly documented; zero must round-trip */
+    uint8_t buf[64];
+    make_payload(buf, M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_BLE_SCAN,
+                 "fw-minimal", 0u, 0u);
+
+    uint32_t bitmap = 0;
+    char     fw_name[32];
+    uint32_t bss = 0xFFFFu, heap = 0xFFFFu;
+    bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
+                                          &bitmap, fw_name, &bss, &heap);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_UINT32(0u, bss);
+    TEST_ASSERT_EQUAL_UINT32(0u, heap);
 }
 
 /* =========================================================================
@@ -321,6 +421,10 @@ int main(void)
     RUN_TEST(test_at_c3_profile_has_expected_caps);
     RUN_TEST(test_neddy299_profile_extends_at_c3);
     RUN_TEST(test_parse_bitmap_little_endian);
+    RUN_TEST(test_parse_bss_and_heap_round_trip);
+    RUN_TEST(test_parse_bss_heap_little_endian);
+    RUN_TEST(test_payload_struct_size);
+    RUN_TEST(test_parse_zero_bss_and_heap_are_valid);
 
     return UNITY_END();
 }
