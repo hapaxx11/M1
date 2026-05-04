@@ -19,6 +19,7 @@
 #include "main.h"
 #include "m1_settings.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
 #include "m1_http_client.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
@@ -482,6 +483,11 @@ void m1_esp32_deinit(void)
 
 		esp32_init_done = FALSE;
 		esp32_uart_init_done = FALSE;
+
+		/* Reset capability cache so the next m1_esp32_init() re-queries
+		 * CMD_GET_STATUS — the firmware variant may have changed since
+		 * the last power-up (e.g. an OTA flash of the ESP32). */
+		m1_esp32_caps_reset();
 
 		/* ESP32 reset wipes all AT config — force SSL reconfiguration
 		 * (SNTP + CIPSSLCCONF) on the next HTTPS connection. */

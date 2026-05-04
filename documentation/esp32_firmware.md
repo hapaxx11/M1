@@ -173,3 +173,97 @@ with open('build/factory/factory_ESP32C6-SPI.md5', 'wb') as f:
 
 See `CLAUDE.md` § "ESP32 Build — How to Build from Claude Code" for the
 Windows/PowerShell build procedure.
+
+---
+
+## Runtime Capability Detection
+
+Starting from Hapax v0.9.0 (firmware build that includes `m1_esp32_caps.c`),
+the M1 queries the connected ESP32 firmware for its capability descriptor at
+first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
+
+### CMD_GET_STATUS payload format (protocol version 1)
+
+The 37-byte response payload returned by supporting ESP32 firmware:
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 1 | `proto_ver` | Must be `0x01` |
+| 1 | 4 | `cap_bitmap` | Capability bits (little-endian `uint32_t`) |
+| 5 | 32 | `fw_name` | Null-terminated firmware identifier string |
+
+### Capability bit assignments (permanent — never reassigned)
+
+| Bit | Constant | Feature |
+|-----|----------|---------|
+| 0 | `M1_ESP32_CAP_WIFI_SCAN` | Basic WiFi AP scan |
+| 1 | `M1_ESP32_CAP_WIFI_STA_SCAN` | Client/station discovery |
+| 2 | `M1_ESP32_CAP_WIFI_SNIFF` | Packet monitor / sniffer modes |
+| 3 | `M1_ESP32_CAP_WIFI_ATTACK` | Deauth, beacon spam, karma, etc. |
+| 4 | `M1_ESP32_CAP_WIFI_NETSCAN` | Ping / ARP / SSH / port scanners |
+| 5 | `M1_ESP32_CAP_WIFI_EVIL_PORTAL` | Evil portal (subset of attack) |
+| 6 | `M1_ESP32_CAP_WIFI_CONNECT` | Connect, saved networks, NTP sync |
+| 7 | `M1_ESP32_CAP_BLE_SCAN` | BLE device scan |
+| 8 | `M1_ESP32_CAP_BLE_ADV` | BLE advertise |
+| 9 | `M1_ESP32_CAP_BLE_SPAM` | BLE beacon spam variants |
+| 10 | `M1_ESP32_CAP_BLE_SNIFF` | BLE packet sniffers |
+| 11 | `M1_ESP32_CAP_BLE_HID` | BLE HID keyboard (Bad-BT) |
+| 12 | `M1_ESP32_CAP_BT_MANAGE` | BT device management (AT-layer) |
+| 13 | `M1_ESP32_CAP_802154` | IEEE 802.15.4 / Zigbee / Thread |
+| 14-31 | — | Reserved for future use |
+
+### Capability matrix by firmware variant
+
+| Feature | SiN360 | bedge117 C3 | neddy299 |
+|---------|:------:|:-----------:|:--------:|
+| WiFi AP scan | ✅ | ✅ | ✅ |
+| Station scan | ✅ | — | ✅ |
+| Packet sniffer | ✅ | — | — |
+| Attacks (deauth/beacon/karma) | ✅ | — | ✅ |
+| Network scanners | ✅ | — | — |
+| Evil portal | ✅ | — | — |
+| **WiFi connect / NTP** | — | ✅ | ✅ |
+| BLE scan / advertise | ✅ | — | — |
+| BLE spam variants | ✅ | — | — |
+| BLE sniffers | ✅ | — | — |
+| **Bad-BT / BLE HID** | — | ✅ | ✅ |
+| **BT device management** | — | ✅ | ✅ |
+| **IEEE 802.15.4** | — | ✅ | ✅ |
+
+### Fallback behaviour (older firmware without CMD_GET_STATUS)
+
+If the ESP32 firmware returns `RESP_ERR` or times out on `CMD_GET_STATUS`,
+the M1 assumes a capability bitmap derived from the compile-time
+`M1_APP_WIFI_CONNECT_ENABLE` / `M1_APP_BADBT_ENABLE` / `M1_APP_BT_MANAGE_ENABLE`
+flags.  SiN360 binary-SPI capabilities (scan, sniff, attack, BLE spam/sniff) are
+always included in the fallback.  This preserves current behaviour exactly — no
+feature silently disappears when the runtime handshake fails.
+
+### Memory footprint estimates — for developer use only
+
+`bss_bytes` and `free_heap_bytes` are **not** part of the CMD_GET_STATUS wire
+protocol.  Instead, the M1 always derives them from compile-time constants
+(`M1_ESP32_FALLBACK_*` in `m1_csrc/m1_esp32_caps.h`) based on source-code
+analysis of the known Hapax-fork ESP32 firmware releases.
+
+| Profile | BSS estimate | Free heap estimate | Source |
+|---------|-------------|---------------------|--------|
+| **SiN360** (no `WIFI_CONNECT` in bitmap) | ≈ 200 KB | ≈ 160 KB | sincere360/M1_SiN360_ESP32 v0.9.0.8 source + sdkconfig |
+| **AT/C3** (`WIFI_CONNECT` present in bitmap) | ≈ 284 KB | ≈ 112 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
+
+These values are accessible at runtime via `m1_esp32_caps_bss_bytes()` and
+`m1_esp32_caps_free_heap()` and are intended for developer diagnostics (OOM
+triage, buffer sizing decisions) — not user-visible display.  See
+`CLAUDE.md` § "Memory Footprint Estimates" for guidance on updating them
+when new firmware releases are analysed.
+
+### Adding CMD_GET_STATUS to a custom ESP32 firmware
+
+Respond to opcode `0x02` with a 37-byte `m1_esp32_status_payload_t` payload,
+`proto_ver = 1`, `cap_bitmap` set to the capabilities your firmware actually
+implements, and `fw_name` as a short version string (e.g. `"SiN360-0.9.7"`).
+
+> **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
+> on a capability bit (`m1_esp32_require_cap` / `m1_esp32_has_cap`), **not** on a
+> compile flag or firmware name string.  See `m1_csrc/m1_esp32_caps.h` for the API.
+
