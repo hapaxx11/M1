@@ -420,6 +420,71 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 - Full setup script (submodules + tools + build): `D:\M1Projects\esp32-at-hid\build_spi_at.bat`
 - ESP-IDF cannot build from Git Bash (MSYSTEM detection) — use cmd.exe or PowerShell
 
+### Memory Footprint Estimates — `M1_ESP32_FALLBACK_*`
+
+> **For firmware developers and debugging agents only** — these values are not
+> transmitted over the SPI wire protocol and are not visible to users.
+
+`bss_bytes` and `free_heap_bytes` are not part of the `CMD_GET_STATUS` response
+payload.  The M1 derives them from compile-time constants in
+`m1_csrc/m1_esp32_caps.h` (`M1_ESP32_FALLBACK_*`) for use in OOM diagnostics
+and buffer-sizing decisions when investigating SubGhz Read Raw, BLE sniff, or
+other memory-intensive features.
+
+#### How the estimate is selected
+
+After `m1_esp32_caps_init()` resolves the capability bitmap (either from a live
+`CMD_GET_STATUS` parse or the compile-flag fallback), it selects the profile:
+- **`M1_ESP32_CAP_WIFI_CONNECT` present** → AT profile (bedge117/C3.12)
+- **`M1_ESP32_CAP_WIFI_CONNECT` absent**  → SiN360 profile
+
+The selected constants are written to `s_bss_bytes` and `s_free_heap_bytes` and
+returned by `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`.
+
+#### Current estimates and their derivation
+
+| Profile | Constant | Value | Source |
+|---------|----------|-------|--------|
+| SiN360 | `M1_ESP32_FALLBACK_BSS_SIN360` | 200 KB | sincere360/M1_SiN360_ESP32 v0.9.0.8, ESP-IDF 5.5.4 |
+| SiN360 | `M1_ESP32_FALLBACK_HEAP_SIN360` | 160 KB | NimBLE with `MSYS_BUF_FROM_HEAP=y`; 10×1600 B static WiFi RX; `ap_records[64]` ≈ 14 KB |
+| AT/C3 | `M1_ESP32_FALLBACK_BSS_AT` | 284 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
+| AT/C3 | `M1_ESP32_FALLBACK_HEAP_AT` | 112 KB | Full AT infrastructure + SPI ring buffers + BLE HID + 802.15.4 |
+
+#### How to update estimates when a new firmware release appears
+
+1. **Fetch the firmware repository** (sincere360/M1_SiN360_ESP32 or
+   bedge117/esp32-at-monstatek-m1) and check out the new release tag.
+
+2. **Measure BSS from the map file**: after a build, open the `.map` file
+   and sum all BSS-section contributions, or use the linker symbols:
+   ```python
+   # ESP-IDF: from the elf file
+   $ xtensa-esp32c6-elf-size -A build/<name>.elf | grep -E '\.bss|\.noinit'
+   ```
+   Alternatively, subtract `(_ebss - _sbss)` from the IDA/Ghidra BSS view.
+
+3. **Measure free heap from a running device**:
+   - Flash the new firmware to the XIAO test bench.
+   - After boot, send `AT+GMR\r\n` (for AT builds) or a known status command to
+     let the firmware settle.
+   - Read `esp_get_free_heap_size()` — for AT builds this is reported by
+     `AT+SYSRAMINFO`; for SiN360 it appears in the boot log on the UART console.
+
+4. **Update the four constants** in `m1_csrc/m1_esp32_caps.h` with the new
+   measured values (round down to the nearest KB for conservatism):
+   ```c
+   #define M1_ESP32_FALLBACK_BSS_SIN360   (NNN * 1024u)
+   #define M1_ESP32_FALLBACK_HEAP_SIN360  (NNN * 1024u)
+   ```
+
+5. **Update the invariant tests** in `tests/test_esp32_caps.c`:
+   - `test_fallback_at_bss_exceeds_sin360` — must still pass (AT BSS > SiN360 BSS)
+   - `test_fallback_sin360_heap_exceeds_at` — must still pass (SiN360 heap > AT heap)
+   If a new firmware reverses either invariant, update the test and the comment.
+
+6. **Update this table** and the table in `documentation/esp32_firmware.md`
+   with the new values and their source (firmware version + analysis method).
+
 ### ESP32 Build — How to Build from Claude Code
 
 **CRITICAL: `cmd.exe /C` piped through Git Bash loses all output and fails silently with batch files.

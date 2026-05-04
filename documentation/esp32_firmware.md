@@ -184,28 +184,13 @@ first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
 
 ### CMD_GET_STATUS payload format (protocol version 1)
 
-The 45-byte response payload returned by supporting ESP32 firmware:
+The 37-byte response payload returned by supporting ESP32 firmware:
 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
 | 0 | 1 | `proto_ver` | Must be `0x01` |
 | 1 | 4 | `cap_bitmap` | Capability bits (little-endian `uint32_t`) |
 | 5 | 32 | `fw_name` | Null-terminated firmware identifier string |
-| 37 | 4 | `bss_bytes` | ESP32 BSS segment size in bytes (little-endian `uint32_t`); see note below |
-| 41 | 4 | `free_heap_bytes` | Runtime free heap in bytes at response time (little-endian `uint32_t`); see note below |
-
-> **`bss_bytes`** — The size of the ESP32 firmware's BSS (zero-initialised static data)
-> segment.  This is a compile-time constant; compute it from your linker symbols:
-> `(&__bss_end - &__bss_start) * sizeof(int)` or use the `ld` `-Map` output.
-> Report `0` if your build system does not expose these symbols.
-> Useful for comparing memory footprints across firmware variants — a larger BSS
-> leaves less heap for runtime feature allocations.
->
-> **`free_heap_bytes`** — The ESP32's available heap at the moment the
-> `CMD_GET_STATUS` response is assembled.  On ESP-IDF, call
-> `esp_get_free_heap_size()`.  Report `0` if unavailable.  Useful for diagnosing
-> silent OOM failures in memory-intensive features (BLE sniffers, packet captures).
-> The STM32 may display this value on a diagnostics screen.
 
 ### Capability bit assignments (permanent — never reassigned)
 
@@ -254,34 +239,29 @@ flags.  SiN360 binary-SPI capabilities (scan, sniff, attack, BLE spam/sniff) are
 always included in the fallback.  This preserves current behaviour exactly — no
 feature silently disappears when the runtime handshake fails.
 
-The `bss_bytes` and `free_heap_bytes` fields are also estimated in the fallback
-path based on the detected profile (see `M1_ESP32_FALLBACK_*` constants in
-`m1_csrc/m1_esp32_caps.h`):
+### Memory footprint estimates — for developer use only
 
-| Profile | `bss_bytes` estimate | `free_heap_bytes` estimate | Source |
-|---------|---------------------|---------------------------|--------|
+`bss_bytes` and `free_heap_bytes` are **not** part of the CMD_GET_STATUS wire
+protocol.  Instead, the M1 always derives them from compile-time constants
+(`M1_ESP32_FALLBACK_*` in `m1_csrc/m1_esp32_caps.h`) based on source-code
+analysis of the known Hapax-fork ESP32 firmware releases.
+
+| Profile | BSS estimate | Free heap estimate | Source |
+|---------|-------------|---------------------|--------|
 | **SiN360** (no `WIFI_CONNECT` in bitmap) | ≈ 200 KB | ≈ 160 KB | sincere360/M1_SiN360_ESP32 v0.9.0.8 source + sdkconfig |
 | **AT/C3** (`WIFI_CONNECT` present in bitmap) | ≈ 284 KB | ≈ 112 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
 
-**SiN360 estimate rationale:** NimBLE with `MSYS_BUF_FROM_HEAP=y` (msys buffers are
-heap-allocated, not in BSS), 10 × 1600-byte static WiFi RX buffers, coexistence state,
-and application-layer static arrays (`ap_records[64]` ≈ 14 KB, BLE result tables, station
-tracking).  Total BSS ≈ 200 KB; free heap after WiFi + NimBLE init ≈ 160 KB.
-
-**AT/C3 estimate rationale:** Full ESP-AT command infrastructure adds large SPI ring buffers
-and AT parameter buffers in BSS; BLE HID and IEEE 802.15.4 sniffer extensions add further
-static state.  Total BSS ≈ 284 KB; free heap after init ≈ 112 KB.
-
-These estimates are superseded by the live measurements from `CMD_GET_STATUS` whenever
-compatible firmware reports them.
+These values are accessible at runtime via `m1_esp32_caps_bss_bytes()` and
+`m1_esp32_caps_free_heap()` and are intended for developer diagnostics (OOM
+triage, buffer sizing decisions) — not user-visible display.  See
+`CLAUDE.md` § "Memory Footprint Estimates" for guidance on updating them
+when new firmware releases are analysed.
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 
-Respond to opcode `0x02` with a 45-byte `m1_esp32_status_payload_t` payload,
+Respond to opcode `0x02` with a 37-byte `m1_esp32_status_payload_t` payload,
 `proto_ver = 1`, `cap_bitmap` set to the capabilities your firmware actually
-implements, `fw_name` as a short version string (e.g. `"SiN360-0.9.7"`),
-`bss_bytes` as your firmware's BSS segment size (or `0` if unavailable), and
-`free_heap_bytes` as the current free heap from `esp_get_free_heap_size()` (or `0`).
+implements, and `fw_name` as a short version string (e.g. `"SiN360-0.9.7"`).
 
 > **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
 > on a capability bit (`m1_esp32_require_cap` / `m1_esp32_has_cap`), **not** on a

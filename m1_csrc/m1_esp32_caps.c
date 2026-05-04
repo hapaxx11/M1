@@ -88,10 +88,8 @@ void m1_esp32_caps_init(void)
 {
     m1_resp_t resp;
     int       ret;
-    uint32_t  bitmap        = 0u;
-    uint32_t  bss_bytes     = 0u;
-    uint32_t  free_heap     = 0u;
-    char      fw_name[32]   = {0};
+    uint32_t  bitmap      = 0u;
+    char      fw_name[32] = {0};
 
     if (s_queried)
         return;  /* Already cached from a previous call */
@@ -110,12 +108,10 @@ void m1_esp32_caps_init(void)
 
     if (ret == 0 && resp.status == RESP_OK &&
         m1_esp32_caps_parse_payload(resp.payload, resp.payload_len,
-                                    &bitmap, fw_name, &bss_bytes, &free_heap))
+                                    &bitmap, fw_name))
     {
         /* Successful handshake — use the firmware-reported capabilities */
-        s_bitmap          = bitmap;
-        s_bss_bytes       = bss_bytes;
-        s_free_heap_bytes = free_heap;
+        s_bitmap = bitmap;
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }
@@ -125,22 +121,21 @@ void m1_esp32_caps_init(void)
         s_bitmap = caps_build_fallback_bitmap();
         strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+    }
 
-        /* Populate memory-footprint estimates based on the detected profile.
-         * The discriminator: AT firmware adds M1_ESP32_CAP_WIFI_CONNECT;
-         * SiN360 does not.  Values are static compile-time estimates derived
-         * from source analysis of the known Hapax-fork ESP32 firmware releases.
-         * Live measurements (from CMD_GET_STATUS) take priority when available. */
-        if ((s_bitmap & M1_ESP32_CAP_WIFI_CONNECT) != 0u)
-        {
-            s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
-            s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
-        }
-        else
-        {
-            s_bss_bytes       = M1_ESP32_FALLBACK_BSS_SIN360;
-            s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_SIN360;
-        }
+    /* Estimate memory footprint from profile.  bss_bytes/free_heap_bytes are
+     * not part of the CMD_GET_STATUS wire format; we always derive them from
+     * compile-time constants for developer diagnostics and OOM triage.
+     * Discriminator: AT firmware (bedge117) sets WIFI_CONNECT; SiN360 does not. */
+    if ((s_bitmap & M1_ESP32_CAP_WIFI_CONNECT) != 0u)
+    {
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
+    }
+    else
+    {
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_SIN360;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_SIN360;
     }
 
     s_queried = true;

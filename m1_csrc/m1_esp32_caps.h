@@ -93,12 +93,13 @@
      M1_ESP32_CAP_WIFI_ATTACK)
 
 /* =========================================================================
- * Fallback memory-footprint estimates (compile-flag fallback path)
+ * Memory-footprint estimates
  *
- * When the connected firmware does not implement CMD_GET_STATUS the
- * bss_bytes / free_heap_bytes fields cannot be measured directly.  These
- * constants provide best-guess values derived from source-code analysis of
- * the publicly available Hapax-fork ESP32 firmware releases:
+ * bss_bytes and free_heap_bytes are NOT transmitted over the CMD_GET_STATUS
+ * wire protocol.  Instead, the M1 firmware always derives them from these
+ * compile-time constants, which are best-guess values from source-code
+ * analysis of the publicly available Hapax-fork ESP32 firmware releases.
+ * They are used for developer diagnostics and OOM triage on the STM32 side.
  *
  *   SiN360 (sincere360/M1_SiN360_ESP32 v0.9.0.8, ESP-IDF 5.5.4):
  *     - NimBLE with MSYS_BUF_FROM_HEAP=y (msys buffers from heap, not BSS)
@@ -111,12 +112,11 @@
  *     - BLE HID + IEEE 802.15.4 sniffer extensions add further static state
  *     - Estimated BSS ≈ 284 KB; free heap after init ≈ 112 KB
  *
- * Profile discriminator used in the fallback path:
+ * Profile discriminator (applied after bitmap is known from either parse or fallback):
  *   M1_ESP32_CAP_WIFI_CONNECT present → AT profile (bedge117)
  *   M1_ESP32_CAP_WIFI_CONNECT absent  → SiN360 profile
  *
- * These values are overridden by the live measurements in CMD_GET_STATUS
- * whenever compatible firmware is connected.
+ * See CLAUDE.md § "Memory Footprint Estimates" for update instructions.
  * =========================================================================*/
 
 /** Estimated BSS segment size for SiN360 binary-SPI firmware (~200 KB) */
@@ -141,27 +141,12 @@
 
 /**
  * Packed layout of the CMD_GET_STATUS response payload.
- * Total: 45 bytes — well within the 60-byte payload limit.
- *
- * Field notes:
- *   bss_bytes      — Size of the ESP32 firmware's BSS segment in bytes.
- *                    This is a compile-time constant (computed from linker
- *                    symbols, e.g. (&__bss_end - &__bss_start) * sizeof(int)).
- *                    Useful for comparing memory footprints across firmware
- *                    variants (larger BSS → less heap available for features).
- *                    Report 0 if the linker symbols are not accessible.
- *   free_heap_bytes — Runtime free heap on the ESP32 at the moment the
- *                    CMD_GET_STATUS response is assembled.  On ESP-IDF call
- *                    esp_get_free_heap_size(); on other RTOSes use the
- *                    equivalent.  Useful for diagnosing OOM-induced feature
- *                    failures.  Report 0 if unavailable.
+ * Total: 37 bytes — well within the 60-byte payload limit.
  */
 typedef struct __attribute__((packed)) {
     uint8_t  proto_ver;       /**< M1_ESP32_CAPS_PROTO_VER (1) */
     uint32_t cap_bitmap;      /**< Capability bits, little-endian */
     char     fw_name[32];     /**< Firmware identifier string, null-terminated */
-    uint32_t bss_bytes;       /**< ESP32 BSS segment size in bytes (little-endian) */
-    uint32_t free_heap_bytes; /**< ESP32 runtime free heap in bytes (little-endian) */
 } m1_esp32_status_payload_t;
 
 /* =========================================================================
@@ -175,17 +160,13 @@ typedef struct __attribute__((packed)) {
  * @param len              Length of valid payload bytes (resp.payload_len)
  * @param bitmap_out       Receives the parsed capability bitmap
  * @param fw_name_out      32-byte buffer receives null-terminated firmware name
- * @param bss_bytes_out    Receives the ESP32 BSS segment size in bytes
- * @param free_heap_out    Receives the ESP32 runtime free heap in bytes
  * @return true on success, false if payload is too short or protocol
  *         version is unrecognised
  */
 static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
                                                 uint8_t        len,
                                                 uint32_t      *bitmap_out,
-                                                char           fw_name_out[32],
-                                                uint32_t      *bss_bytes_out,
-                                                uint32_t      *free_heap_out)
+                                                char           fw_name_out[32])
 {
     if (len < (uint8_t)sizeof(m1_esp32_status_payload_t))
         return false;
@@ -196,9 +177,7 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
     if (p->proto_ver != M1_ESP32_CAPS_PROTO_VER)
         return false;
 
-    *bitmap_out    = p->cap_bitmap;
-    *bss_bytes_out = p->bss_bytes;
-    *free_heap_out = p->free_heap_bytes;
+    *bitmap_out = p->cap_bitmap;
     strncpy(fw_name_out, p->fw_name, 31);
     fw_name_out[31] = '\0';
     return true;
@@ -249,16 +228,20 @@ const char *m1_esp32_caps_fw_name(void);
 bool m1_esp32_require_cap(uint32_t cap, const char *feature_name);
 
 /**
- * Return the ESP32 firmware's BSS segment size in bytes, as reported by
- * CMD_GET_STATUS.  Returns 0 if the firmware did not report a value (fallback
- * path) or if m1_esp32_caps_init() has not been called yet.
+ * Return the estimated BSS segment size for the connected ESP32 firmware, in bytes.
+ * Always returns a non-zero estimate based on the detected profile (SiN360 or AT)
+ * using the M1_ESP32_FALLBACK_BSS_* compile-time constants.
+ * Intended for developer diagnostics only — not a live measurement.
+ * Returns 0 if m1_esp32_caps_init() has not been called yet.
  */
 uint32_t m1_esp32_caps_bss_bytes(void);
 
 /**
- * Return the ESP32 runtime free heap in bytes at the time CMD_GET_STATUS
- * was last answered.  Returns 0 if the firmware did not report a value
- * (fallback path) or if m1_esp32_caps_init() has not been called yet.
+ * Return the estimated free heap for the connected ESP32 firmware, in bytes.
+ * Always returns a non-zero estimate based on the detected profile (SiN360 or AT)
+ * using the M1_ESP32_FALLBACK_HEAP_* compile-time constants.
+ * Intended for developer diagnostics only — not a live measurement.
+ * Returns 0 if m1_esp32_caps_init() has not been called yet.
  */
 uint32_t m1_esp32_caps_free_heap(void);
 
