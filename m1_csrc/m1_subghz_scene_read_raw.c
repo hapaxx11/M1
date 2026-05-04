@@ -153,11 +153,18 @@ static uint8_t  rr_decode_scroll = 0;
 static bool     rr_in_decode     = false;
 static bool     rr_decode_detail = false;
 
+/* Error codes returned by start_raw_rx() */
+typedef enum {
+    RAW_START_OK      = 0,
+    RAW_START_ERR_OOM = 1,  /* ring-buffer malloc failed          */
+    RAW_START_ERR_SD  = 2,  /* SD file or write-buffer init failed */
+} raw_start_err_t;
+
 /* Forward declarations — these functions are defined after scene_on_enter() but
  * called from it.  Without these, the compiler creates implicit non-static
  * declarations that conflict with the actual static definitions. */
 static void draw(SubGhzApp *app);
-static void start_raw_rx(SubGhzApp *app);
+static raw_start_err_t start_raw_rx(SubGhzApp *app, size_t *heap_at_fail);
 static void draw_rr_more_menu(void);
 static void draw_rr_decode(void);
 static void do_rr_decode(void);
@@ -278,29 +285,35 @@ static void scene_on_enter(SubGhzApp *app)
     app->need_redraw = true;
 }
 
-/* Error codes returned by start_raw_rx() */
-typedef enum {
-    RAW_START_OK      = 0,
-    RAW_START_ERR_OOM = 1,  /* ring-buffer malloc failed          */
-    RAW_START_ERR_SD  = 2,  /* SD file or write-buffer init failed */
-} raw_start_err_t;
-
 /**
  * Arm recording — radio is already initialised by start_passive_rx().
  * On success sets raw_state = RECORDING.  On failure returns an error
  * code and raw_state stays as Start.
+ *
+ * @param heap_at_fail  If non-NULL, populated with the free heap at the
+ *                      exact point of failure (before any cleanup frees).
+ *                      This gives the caller a meaningful value to display
+ *                      rather than the post-cleanup inflated heap size.
  */
-static raw_start_err_t start_raw_rx(SubGhzApp *app)
+static raw_start_err_t start_raw_rx(SubGhzApp *app, size_t *heap_at_fail)
 {
     m1_esp32_deinit();
 
     /* Allocate ring buffers for edge capture */
     if (sub_ghz_ring_buffers_init_ext())
+    {
+        /* Sample heap here — no ring buffers were allocated so this is the
+         * true heap at the OOM point. */
+        if (heap_at_fail) *heap_at_fail = xPortGetFreeHeapSize();
         return RAW_START_ERR_OOM;  /* OOM — stay in Start, radio keeps listening passively */
+    }
 
     /* Create the output .sub file and write the Flipper-compatible header */
     if (sub_ghz_raw_recording_init_ext())
     {
+        /* Sample heap BEFORE freeing ring buffers so we reflect the memory
+         * pressure that caused the SD init to fail, not the post-cleanup state. */
+        if (heap_at_fail) *heap_at_fail = xPortGetFreeHeapSize();
         sub_ghz_ring_buffers_deinit_ext();
         return RAW_START_ERR_SD;  /* SD error — stay in Start, radio keeps listening passively */
     }
@@ -688,23 +701,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (app->raw_state == SubGhzReadRawStateStart)
             {
                 /* Start recording — fast because radio is already listening */
-                raw_start_err_t err = start_raw_rx(app);
+                size_t heap_at_fail = 0;
+                raw_start_err_t err = start_raw_rx(app, &heap_at_fail);
                 if (err != RAW_START_OK)
                 {
                     char detail[32];
                     const char *line1;
                     if (err == RAW_START_ERR_OOM)
-                    {
                         line1 = "Low memory";
-                        snprintf(detail, sizeof(detail), "Heap free: %lu B",
-                                 (unsigned long)xPortGetFreeHeapSize());
-                    }
                     else
-                    {
                         line1 = "SD card error";
-                        snprintf(detail, sizeof(detail), "Check card / heap: %lu B",
-                                 (unsigned long)xPortGetFreeHeapSize());
-                    }
+                    /* heap_at_fail was captured inside start_raw_rx() at the
+                     * exact moment of failure, before any cleanup freed buffers. */
+                    snprintf(detail, sizeof(detail), "Heap free: %lu B",
+                             (unsigned long)heap_at_fail);
                     m1_message_box(&m1_u8g2, "Record failed",
                                    line1, detail, "BACK to return");
                 }
