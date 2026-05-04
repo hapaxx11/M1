@@ -33,6 +33,9 @@
 ����Battery
 �       battery.c
 �       battery.h
+�       battery_log.c
+�       bq27421_golden_image.h
+�       golden_image_0330.h
 �       
 ����build
 ����cmake
@@ -579,6 +582,11 @@
 �           st_readme.txt
 �           
 ����Infrared
+�   �   m1_ir_remotes.c
+�   �   m1_ir_remotes.h
+�   �   m1_ir_signals.c
+�   �   m1_ir_signals.h
+�   �   
 �   ����irmp-irsnd
 �       �   irmp.c
 �       �   irmp.h

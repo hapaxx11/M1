@@ -59,6 +59,7 @@
 									<listOptionValue builtIn="false" value="../Drivers/u8g2_csrc"/>
 									<listOptionValue builtIn="false" value="../Drivers/u8g2_cppsrc"/>
 									<listOptionValue builtIn="false" value="../m1_csrc"/>
+									<listOptionValue builtIn="false" value="../Infrared"/>
 									<listOptionValue builtIn="false" value="../Infrared/irmp-irsnd"/>
 									<listOptionValue builtIn="false" value="../FatFs/R015"/>
 									<listOptionValue builtIn="false" value="../Sub_Ghz"/>
@@ -221,6 +222,7 @@
 									<listOptionValue builtIn="false" value="../Drivers/u8g2_csrc"/>
 									<listOptionValue builtIn="false" value="../Drivers/u8g2_cppsrc"/>
 									<listOptionValue builtIn="false" value="../m1_csrc"/>
+									<listOptionValue builtIn="false" value="../Infrared"/>
 									<listOptionValue builtIn="false" value="../Infrared/irmp-irsnd"/>
 									<listOptionValue builtIn="false" value="../FatFs/R015"/>
 									<listOptionValue builtIn="false" value="../Sub_Ghz"/>

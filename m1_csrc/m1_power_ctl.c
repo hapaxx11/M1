@@ -739,6 +739,9 @@ void m1_power_down(void)
 
 	m1_system_drivers_disable();
 
+	//Set boot mode in backup registers, if any
+	startup_config_write(BK_REGS_SELECT_DEV_OP_STAT, DEV_OP_STATUS_NO_OP);
+
 	HAL_PWR_EnterSTANDBYMode(); // Enter Standby mode
 } // void m1_power_down(void)
 

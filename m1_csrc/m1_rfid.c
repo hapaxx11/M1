@@ -730,7 +730,7 @@ static void lfrfid_read_save_update(uint8_t param)
 {
 	char data_buffer[64];
 	BaseType_t ret;
-	const uint8_t *pBitmap;
+	uint8_t error;
 
 	ret = lfrfid_save_file_keyboard(data_buffer);
 	if ( ret==3 ) // user escaped?
@@ -739,15 +739,16 @@ static void lfrfid_read_save_update(uint8_t param)
 	}
 	else
 	{
-		pBitmap = micro_sd_card_error;
-
+		error = 1;
 		if (ret==0)
 		{
 			if(lfrfid_profile_save(data_buffer, &lfrfid_tag_info))
-				pBitmap = nfc_saved_63_63;
+				error = 0;
 		}
-
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		if ( error )
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
+		else
+			m1_image_message(nfc_saved_63_63, 63, 63, "");
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 	}
 }
@@ -1768,8 +1769,7 @@ static void lfrfid_saved_edit_update(uint8_t param)
 {
 	char data_buffer[64];
 	uint8_t data_size;
-	uint8_t val;
-	const uint8_t *pBitmap;
+	uint8_t val, error;
 
 	data_size = protocol_get_data_size(lfrfid_tag_info.protocol);
 
@@ -1787,11 +1787,14 @@ static void lfrfid_saved_edit_update(uint8_t param)
 
 		fu_path_combine(data_buffer, sizeof(data_buffer),lfrfid_tag_info.filepath , lfrfid_tag_info.filename);
 
-		pBitmap = micro_sd_card_error;
-		if(lfrfid_profile_save(data_buffer, &lfrfid_tag_info))
-			pBitmap = nfc_saved_63_63;
+		error = 1;
+		if( lfrfid_profile_save(data_buffer, &lfrfid_tag_info) )
+			error = 0;
 
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		if ( error )
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
+		else
+			m1_image_message(nfc_saved_63_63, 63, 63, "");
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 		//vTaskDelay(2000);
 		//m1_uiView_display_switch(VIEW_MODE_LFRFID_SAVED_BROWSE, 0);
@@ -1904,7 +1907,7 @@ static void lfrfid_saved_rename_update(uint8_t param)
 	char new_file[64];
 	char old_file[64];
 	BaseType_t ret;
-	const uint8_t *pBitmap;
+	uint8_t error;
 
 	ret = lfrfid_save_file_keyboard(new_file);
 	if ( ret==3 ) // user escaped?
@@ -1913,21 +1916,23 @@ static void lfrfid_saved_rename_update(uint8_t param)
 	}
 	else
 	{
-		pBitmap = micro_sd_card_error;
-
+		error = 1;
 		if (ret==0)
 		{
 			fu_path_combine(old_file, sizeof(old_file), lfrfid_tag_info.filepath, lfrfid_tag_info.filename);
 			if(f_rename(old_file,new_file)==FR_OK)
 			{
-				pBitmap = nfc_saved_63_63;
+				error = 0;
 				fu_get_directory_path(new_file, lfrfid_tag_info.filepath, sizeof(lfrfid_tag_info.filepath));
 				const char *pbuff = fu_get_filename(new_file);
 				strncpy(lfrfid_tag_info.filename, pbuff, sizeof(lfrfid_tag_info.filename));
 			}
 		}
 
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		if ( error )
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
+		else
+			m1_image_message(nfc_saved_63_63, 63, 63, "");
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 		//vTaskDelay(2000);
 		//m1_uiView_display_switch(VIEW_MODE_LFRFID_SAVED_BROWSE, 0);
@@ -2616,7 +2621,7 @@ static void lfrfid_addm_save_update(uint8_t param)
 {
 	char data_buffer[64];
 	BaseType_t ret;
-	const uint8_t *pBitmap;
+	uint8_t error;
 
 	ret = lfrfid_save_file_keyboard(data_buffer);
 	if ( ret==3 ) // user escaped?
@@ -2625,15 +2630,18 @@ static void lfrfid_addm_save_update(uint8_t param)
 	}
 	else
 	{
-		pBitmap = micro_sd_card_error;
+		error = 1;
 
 		if (ret==0)
 		{
 			if(lfrfid_profile_save(data_buffer, &lfrfid_tag_info))
-				pBitmap = nfc_saved_63_63;
+				error = 0;
 		}
 
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		if ( error )
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
+		else
+			m1_image_message(nfc_saved_63_63, 63, 63, "");
 
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 		//vTaskDelay(2000);

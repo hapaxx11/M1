@@ -30,6 +30,7 @@
 #include "m1_storage.h"
 #include "m1_wifi.h"
 #include "m1_bt.h"
+#include "m1_ir_remotes.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -124,9 +125,30 @@ S_M1_Menu_t menu_NFC =
 
 /*----------------------------- > Infrared -----------------------------------*/
 
+S_M1_Menu_t menu_Infrared_Universal_TVs =
+{
+    "TV remotes", infrared_universal_tv_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Infrared_Universal_Audios =
+{
+    "Audio player remotes", infrared_universal_audio_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Infrared_Universal_Projectors =
+{
+    "Projector remotes", infrared_universal_projector_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Infrared_Universal_ACs =
+{
+    "AC remotes", infrared_universal_ac_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Infrared_Universal_Remotes =
 {
-    "Universal Remotes", infrared_universal_remotes, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Universal Remotes", NULL, NULL, NULL, 4, 0, NULL, NULL,
+	{&menu_Infrared_Universal_TVs, &menu_Infrared_Universal_Audios, &menu_Infrared_Universal_Projectors, &menu_Infrared_Universal_ACs}
 };
 
 S_M1_Menu_t menu_Infrared_Learn_New_Remote =
@@ -302,11 +324,6 @@ S_M1_Menu_t menu_Settings =
 
 /*--------------------------------- > Wifi -----------------------------------*/
 
-S_M1_Menu_t menu_Wifi_Config =
-{
-    "Config", wifi_config, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
-
 S_M1_Menu_t menu_Wifi_Scan_AP =
 {
     "Scan AP", wifi_scan_ap, NULL, NULL, 0, 0, NULL, NULL, NULL
@@ -314,15 +331,11 @@ S_M1_Menu_t menu_Wifi_Scan_AP =
 
 S_M1_Menu_t menu_Wifi =
 {
-    "Wifi", menu_wifi_init, NULL, NULL, 2, 0, menu_m1_icon_wifi, NULL,
-    {&menu_Wifi_Config, &menu_Wifi_Scan_AP}
+    "Wifi", menu_wifi_init, NULL, NULL, 1, 0, menu_m1_icon_wifi, NULL,
+    {&menu_Wifi_Scan_AP}
 };
 
 /*--------------------------------- > Wifi -----------------------------------*/
-S_M1_Menu_t menu_Bluetooth_Config =
-{
-    "Config", bluetooth_config, NULL, NULL, 0, 0, NULL, NULL, NULL
-};
 
 S_M1_Menu_t menu_Bluetooth_Scan =
 {
@@ -336,8 +349,8 @@ S_M1_Menu_t menu_Bluetooth_Advertise =
 
 S_M1_Menu_t menu_Bluetooth =
 {
-    "Bluetooth", menu_bluetooth_init, NULL, NULL, 3, 0, menu_m1_icon_bluetooth, NULL,
-    {&menu_Bluetooth_Config, &menu_Bluetooth_Scan, &menu_Bluetooth_Advertise}
+    "Bluetooth", menu_bluetooth_init, NULL, NULL, 2, 0, menu_m1_icon_bluetooth, NULL,
+    {&menu_Bluetooth_Scan, &menu_Bluetooth_Advertise}
 };
 
 /*------------------------------- > MAIN MENU --------------------------------*/
@@ -402,6 +415,7 @@ void menu_main_handler_task(void *param)
 	BaseType_t ret;
 
 	vTaskDelay(POWER_UP_SYS_CONFIG_WAIT_TIME); // Give some time to startup_config_handler() during power-up
+
 	while(1)
 	{
 		menu_update_stat = MENU_UPDATE_NONE;

@@ -1752,10 +1752,7 @@ static uint8_t nfc_read_more_options_save(void)
 	if (error != 0) {
 		// Error or user escaped
 		if (error != 3) { // Not user escape - show error
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_FirstPage(&m1_u8g2);
-			u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-			u8g2_NextPage(&m1_u8g2);
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 		}
 		return error;
 	}
@@ -1763,24 +1760,15 @@ static uint8_t nfc_read_more_options_save(void)
 	// Save NFC profile to file
 	c = nfc_ctx_get();
 	if (!c) {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-		u8g2_NextPage(&m1_u8g2);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 		return 4; // Error
 	}
 
 	if (nfc_profile_save(filepath, c)) {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, nfc_saved_63_63);
-		u8g2_NextPage(&m1_u8g2);
+		m1_image_message(nfc_saved_63_63, 63, 63, "");
 		return 0; // Success
 	} else {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_FirstPage(&m1_u8g2);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-		u8g2_NextPage(&m1_u8g2);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 		return 4; // Error
 	}
 } 
@@ -1858,8 +1846,7 @@ static void nfc_edit_uid_gui_update(uint8_t param)
 {
 	char data_buffer[64];
 	uint8_t data_size;
-	uint8_t val;
-	const uint8_t *pBitmap;
+	uint8_t val, error;
 
 	// param==0일 때만 실행 (한 번만 실행되도록)
 	if (param != 0 || s_edit_uid_started) {
@@ -1905,8 +1892,7 @@ static void nfc_edit_uid_gui_update(uint8_t param)
 		// Validate length matches original
 		if (converted != data_size) {
 			// Show error
-			pBitmap = micro_sd_card_error;
-			m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 			uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 			m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 			return;
@@ -1917,19 +1903,21 @@ static void nfc_edit_uid_gui_update(uint8_t param)
 		c->head.uid_len = data_size;
 		nfc_ctx_refresh_ui();
 
+		error = 1;
 		// Save to existing file
-		if (c->file.path[0] != '\0') {
+		if (c->file.path[0] != '\0')
+		{
 			// Use nfc_profile_save to save updated data
-			if (nfc_profile_save(c->file.path, c)) {
-				pBitmap = nfc_saved_63_63;
-			} else {
-				pBitmap = micro_sd_card_error;
+			if (nfc_profile_save(c->file.path, c))
+			{
+				error = 0;
 			}
-		} else {
-			pBitmap = micro_sd_card_error;
 		}
 
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		if ( error )
+			m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
+		else
+			m1_image_message(nfc_saved_63_63, 63, 63, "");
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 		m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 	} else {
@@ -2081,10 +2069,7 @@ static uint8_t nfc_read_more_options_delete(void)
 							return 0; // Exit signal
 						} else {
 							// Show error
-							u8g2_FirstPage(&m1_u8g2);
-							u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-							u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-							m1_u8g2_nextpage();
+							m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 							uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 
 							return 1;
@@ -2175,6 +2160,12 @@ static void nfc_rename_gui_destroy(uint8_t param)
 /*============================================================================*/
 static void nfc_rename_gui_update(uint8_t param)
 {
+	char new_file[256];  // Increased buffer size to avoid truncation warning
+	char old_file[128];
+	char fname[50];
+	char dname[50];
+	uint8_t ret, error;
+
 	nfc_run_ctx_t* c = nfc_ctx_get();
 	if (!c || c->file.source_kind != LOAD_FILE) {
 		m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
@@ -2185,13 +2176,6 @@ static void nfc_rename_gui_update(uint8_t param)
 		m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 		return;
 	}
-
-	char new_file[256];  // Increased buffer size to avoid truncation warning
-	char old_file[128];
-	char fname[50];
-	char dname[50];
-	uint8_t ret;
-	const uint8_t *pBitmap;
 
 	// Extract current filename without extension
 	// fu_get_filename_without_ext takes full path and extracts filename without extension
@@ -2222,8 +2206,7 @@ static void nfc_rename_gui_update(uint8_t param)
 	int snprintf_ret = snprintf(new_file, sizeof(new_file), "%s/%s%s", dir_path, fname, NFC_FILE_EXTENSION);
 	if (snprintf_ret < 0 || snprintf_ret >= (int)sizeof(new_file)) {
 		// Path truncated or error occurred
-		pBitmap = micro_sd_card_error;
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 		m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 		return;
@@ -2232,24 +2215,26 @@ static void nfc_rename_gui_update(uint8_t param)
 	// Check if new file already exists
 	if (m1_fb_check_existence(new_file)) {
 		// Show error - file exists
-		pBitmap = micro_sd_card_error;
-		m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 		uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 		m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 		return;
 	}
 
 	// Rename file
-	pBitmap = micro_sd_card_error;
+	error = 1;
 	FRESULT res = f_rename(old_file, new_file);
 	if (res==FR_OK) {
-		pBitmap = nfc_saved_63_63;
+		error = 0;
 		// Update context with new path
 		strncpy(c->file.path, new_file, sizeof(c->file.path) - 1);
 		c->file.path[sizeof(c->file.path) - 1] = '\0';
 	}
 
-	m1_draw_icon(M1_DISP_DRAW_COLOR_TXT, 32, 0, 63, 63, pBitmap);
+	if (error)
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
+	else
+		m1_image_message(nfc_saved_63_63, 63, 63, "");
 	uiScreen_timeout_start(UI_SCREEN_TIMEOUT, NULL);
 	m1_uiView_display_switch(VIEW_MODE_NFC_READ_MORE, X_MENU_UPDATE_REFRESH);
 }

@@ -1,10 +1,15 @@
 /* See COPYING.txt for license details. */
 
 /*
- * battery.c
- *
- *      Author: thomas
- */
+*
+* battery.c
+*
+* Battery functions for M1
+*
+* M1 Project
+*
+*/
+
 /*************************** I N C L U D E S **********************************/
 #include "app_freertos.h"
 #include "cmsis_os.h"
@@ -21,6 +26,7 @@
 #include "m1_esp32_hal.h"
 #include "uiView.h"
 #include "battery.h"
+#include "m1_io_defs.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -72,7 +78,7 @@
 #define BQ2589X_VCHG_DEFAULT_IDX		 VCHG_4208mV // Default index of the Charge voltage array, 4208mV
 #define BQ2589X_ICHG_DEFAULT_IDX		 ICHG_1024mA // Default index of the Charge current array, 1536mA
 #define BQ2589X_IPRECHG_DEFAULT_IDX		 IPRECHG_128mA // Default index of the Pre-charge current array, 128mA
-#define BQ2589X_ITERCHG_DEFAULT_IDX		 ITERCHG_256mA // Default index of the Termination current array, 256mA
+#define BQ2589X_ITERCHG_DEFAULT_IDX		 ITERCHG_128mA //ITERCHG_256mA // Default index of the Termination current array, 256mA
 #define BQ2589X_IINLIM_DEFAULT_IDX		 IINLIM_1500mA // Default index of the Input current array, 1500mA
 #define BQ2589X_VOTG_DEFAULT_IDX		 VOTG_5062mV // Default index of the Boost voltage array, 5062mV
 #define BQ2589X_IOTG_DEFAULT_IDX		 IOTG_1200mA // Default index of the Boost current array, 1200mA
@@ -91,7 +97,6 @@ static const uint16_t bq2589x_IOTG[5] = {500, 750, 1200, 1650, 2150}; // Boost c
 
 /***************************** V A R I A B L E S ******************************/
 S_M1_Power_Status_t power_status;
-TaskHandle_t		battery_task_hdl;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -99,7 +104,7 @@ TaskHandle_t		battery_task_hdl;
 void battery_service_init(void);
 uint32_t battery_power_status_get(S_M1_Power_Status_t *pSystemPowerStatus);
 void battery_status_update(void);
-static void bq25896_SetDefaultConfig(void);
+static void bq25896_set_default_config(void);
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
 /*============================================================================*/
@@ -112,9 +117,10 @@ static void bq25896_SetDefaultConfig(void);
 void battery_service_init(void)
 {
 	bq_25896_init();
-	bq25896_SetDefaultConfig();
+	bq25896_set_default_config();
 
-	bq27421_init( 2100, 3200, 240); // Capacity(mA), terminate voltage(mV), taper current(mA, may be terminal current)
+	bq27421_init(); //bq27421_init( 2100, 3200, 240); // Capacity(mA), terminate voltage(mV), taper current(mA, may be terminal current)
+	power_status.battery_health = 100;
 }
 
 
@@ -125,7 +131,7 @@ void battery_service_init(void)
   * @retval
   */
 /*============================================================================*/
-static void bq25896_SetDefaultConfig(void)
+static void bq25896_set_default_config(void)
 {
 	//bq_disableWATCHDOG();
 	//bq_oneShotADC();
@@ -159,11 +165,35 @@ static void bq25896_SetDefaultConfig(void)
 /*============================================================================*/
 uint32_t battery_power_status_get(S_M1_Power_Status_t *pSystemPowerStatus)
 {
-	*pSystemPowerStatus = power_status; //data cpy
+	*pSystemPowerStatus = power_status; //data copy
 
 	return TRUE;
 }
 
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void battery_access_disable(void)
+{
+	power_status.enable = false;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void battery_access_enable(void)
+{
+	power_status.enable = true;
+}
 
 /*============================================================================*/
 /**
@@ -175,6 +205,10 @@ uint32_t battery_power_status_get(S_M1_Power_Status_t *pSystemPowerStatus)
 void battery_status_update(void)
 {
 	bq27421_info bat_info={0,};
+
+	if (power_status.enable==false)
+		return;
+
 	bq27421_update(&bat_info);
 	////////////////////////////////////////
 	// Battery Charger fault
@@ -193,9 +227,29 @@ void battery_status_update(void)
 	power_status.flags = bat_info.flags;
 	power_status.status = bat_info.status;
 
-	power_status.battery_level = bat_info.soc_percent;
-	power_status.battery_health = bat_info.soh_percent;
+	power_status.isCritical = bat_info.isCritical;
+	power_status.isLow = bat_info.isLow;
+	power_status.isFull = bat_info.isFull;
 
+	power_status.isCharging = bat_info.isCharging;
+	power_status.isDischarging = bat_info.isDischarging;
+
+	if (power_status.status & BQ27421_STATUS_INITCOMP)
+		power_status.battery_level = bat_info.soc_percent;
+
+	if (power_status.soh_state==3)
+	{
+		if ((power_status.status & (BQ27421_STATUS_QMAX_UP | BQ27421_STATUS_RES_UP))
+		   ==(BQ27421_STATUS_QMAX_UP | BQ27421_STATUS_RES_UP))
+		{
+			if (bat_info.soh_percent > 95)
+				power_status.battery_health = bat_info.soh_percent;
+		}
+	}
+
+	power_status.fullChargeCapacity_mAh = bat_info.fullChargeCapacity_mAh;
+	power_status.remainingCapacity_mAh = bat_info.remainingCapacity_mAh;
+	power_status.designCapacity_mAh = bat_info.designCapacity_mAh;
 	////////////////////////////////////////
 	// Battery Charger
 	// Charge Voltage, Bus voltage
@@ -208,9 +262,8 @@ void battery_status_update(void)
 	power_status.charge_current = bq_getICHGR();
 
 	// battery temperature
-	//power_status.battery_temp = (int)bq_getTSPCT();
+	//power_status.battery_temp = bq_getTSPCT();
 
 	bq_stopADC();
+
 }
-
-

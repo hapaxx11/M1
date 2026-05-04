@@ -3,13 +3,12 @@
 /*
  * battery.h
  *
- *  Created on: Oct 31, 2025
- *      Author: thomas
  */
 
 #ifndef BATTERY_H_
 #define BATTERY_H_
 
+#define DELAY_BEFORE_POWER_REBOOT		1000 // ms
 
 typedef enum
 {
@@ -30,14 +29,29 @@ typedef struct
 	uint8_t		battery_health;			// 0 ~ 100 %
 	int			consumption_current;	// 0 ~ xxx mA
 
+    bool        isCritical;
+    bool        isLow;
+    bool        isFull;
+    bool		isDischarging;
+    bool		isCharging;
+
 	uint8_t     soh_state;
 	uint16_t    flags;
 	uint16_t    status;
+
+	bool		enable;
+
+    uint16_t    designCapacity_mAh;
+    uint16_t    remainingCapacity_mAh;
+    uint16_t    fullChargeCapacity_mAh;
 } S_M1_Power_Status_t;
 
 //extern S_M1_Power_Status_t power_status;
 uint32_t battery_power_status_get(S_M1_Power_Status_t *pSystemPowerStatus);
 void battery_status_update(void);
 void battery_service_init(void);
+
+void battery_access_disable(void);
+void battery_access_enable(void);
 
 #endif /* BATTERY_H_ */

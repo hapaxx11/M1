@@ -42,11 +42,11 @@
 // more protocols, enable here!                 Enable  Remarks                 F_INTERRUPTS            Program Space
 #define IRSND_SUPPORT_DENON_PROTOCOL            0       // DENON, Sharp         >= 10000                 ~200 bytes
 #define IRSND_SUPPORT_RC5_PROTOCOL              1       // RC5                  >= 10000                 ~150 bytes
-#define IRSND_SUPPORT_RC6_PROTOCOL              0       // RC6                  >= 10000                 ~250 bytes
+#define IRSND_SUPPORT_RC6_PROTOCOL              1       // RC6                  >= 10000                 ~250 bytes
 #define IRSND_SUPPORT_RC6A_PROTOCOL             0       // RC6A                 >= 10000                 ~250 bytes
 #define IRSND_SUPPORT_JVC_PROTOCOL              0       // JVC                  >= 10000                 ~150 bytes
-#define IRSND_SUPPORT_NEC16_PROTOCOL            0       // NEC16                >= 10000                 ~150 bytes
-#define IRSND_SUPPORT_NEC42_PROTOCOL            0       // NEC42                >= 10000                 ~150 bytes
+#define IRSND_SUPPORT_NEC16_PROTOCOL            1       // NEC16                >= 10000                 ~150 bytes
+#define IRSND_SUPPORT_NEC42_PROTOCOL            1       // NEC42                >= 10000                 ~150 bytes
 #define IRSND_SUPPORT_IR60_PROTOCOL             0       // IR60 (SDA2008)       >= 10000                 ~250 bytes
 #define IRSND_SUPPORT_GRUNDIG_PROTOCOL          0       // Grundig              >= 10000                 ~300 bytes
 #define IRSND_SUPPORT_SIEMENS_PROTOCOL          0       // Siemens, Gigaset     >= 15000                 ~150 bytes
@@ -153,7 +153,7 @@
 #elif defined (ARM_STM32_HAL)                                           // IRSND_Transmit_GPIO_Port & IRSND_Transmit_Pin must be defined in STM32Cube
 #  define IRSND_PORT_LETTER                     IRSND_Transmit_GPIO_Port//Port of Transmit PWM Pin e.g.
 #  define IRSND_BIT_NUMBER                      IRSND_Transmit_Pin      //Pim of Transmit PWM Pin e.g.
-#  define IRSND_TIMER_HANDLER                   Timerhdl_IrCarrier      //Handler of Timer e.g. htim (see tim.h)
+#  define IRSND_TIMER_HANDLER                   timerhdl_ir_carrier      //Handler of Timer e.g. htim (see tim.h)
 #  define IRSND_TIMER_CHANNEL_NUMBER            IR_ENCODE_TIMER_TX_CHANNEL //Channel of the used Timer PWM Pin e.g. TIM_CHANNEL_2
 #  define IRSND_TIMER_SPEED_APBX                64000000                //Speed of the corresponding APBx. (see STM32CubeMX: Clock Configuration)
 

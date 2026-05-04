@@ -25,71 +25,83 @@
  * IR protocols:
  *---------------------------------------------------------------------------------------------------------------------------------------------------
  */
-#define IRMP_UNKNOWN_PROTOCOL                    0              // unknown protocol
-#define IRMP_SIRCS_PROTOCOL                      1              // Sony
-#define IRMP_NEC_PROTOCOL                        2              // NEC, Pioneer, JVC, Toshiba, NoName etc.
-#define IRMP_SAMSUNG_PROTOCOL                    3              // Samsung
-#define IRMP_MATSUSHITA_PROTOCOL                 4              // Matsushita
-#define IRMP_KASEIKYO_PROTOCOL                   5              // Kaseikyo (Panasonic etc)
-#define IRMP_RECS80_PROTOCOL                     6              // Philips, Thomson, Nordmende, Telefunken, Saba
-#define IRMP_RC5_PROTOCOL                        7              // Philips etc
-#define IRMP_DENON_PROTOCOL                      8              // Denon, Sharp
-#define IRMP_RC6_PROTOCOL                        9              // Philips etc
-#define IRMP_SAMSUNG32_PROTOCOL                 10              // Samsung32: no sync pulse at bit 16, length 32 instead of 37
-#define IRMP_APPLE_PROTOCOL                     11              // Apple, very similar to NEC
-#define IRMP_RECS80EXT_PROTOCOL                 12              // Philips, Technisat, Thomson, Nordmende, Telefunken, Saba
-#define IRMP_NUBERT_PROTOCOL                    13              // Nubert
-#define IRMP_BANG_OLUFSEN_PROTOCOL              14              // Bang & Olufsen
-#define IRMP_GRUNDIG_PROTOCOL                   15              // Grundig
-#define IRMP_NOKIA_PROTOCOL                     16              // Nokia
-#define IRMP_SIEMENS_PROTOCOL                   17              // Siemens, e.g. Gigaset
-#define IRMP_FDC_PROTOCOL                       18              // FDC keyboard
-#define IRMP_RCCAR_PROTOCOL                     19              // RC Car
-#define IRMP_JVC_PROTOCOL                       20              // JVC (NEC with 16 bits)
-#define IRMP_RC6A_PROTOCOL                      21              // RC6A, e.g. Kathrein, XBOX
-#define IRMP_NIKON_PROTOCOL                     22              // Nikon
-#define IRMP_RUWIDO_PROTOCOL                    23              // Ruwido, e.g. T-Home Mediareceiver
-#define IRMP_IR60_PROTOCOL                      24              // IR60 (SDA2008)
-#define IRMP_KATHREIN_PROTOCOL                  25              // Kathrein
-#define IRMP_NETBOX_PROTOCOL                    26              // Netbox keyboard (bitserial)
-#define IRMP_NEC16_PROTOCOL                     27              // NEC with 16 bits (incl. sync)
-#define IRMP_NEC42_PROTOCOL                     28              // NEC with 42 bits
-#define IRMP_LEGO_PROTOCOL                      29              // LEGO Power Functions RC
-#define IRMP_THOMSON_PROTOCOL                   30              // Thomson
-#define IRMP_BOSE_PROTOCOL                      31              // BOSE
-#define IRMP_A1TVBOX_PROTOCOL                   32              // A1 TV Box
-#define IRMP_ORTEK_PROTOCOL                     33              // ORTEK - Hama
-#define IRMP_TELEFUNKEN_PROTOCOL                34              // Telefunken (1560)
-#define IRMP_ROOMBA_PROTOCOL                    35              // iRobot Roomba vacuum cleaner
-#define IRMP_RCMM32_PROTOCOL                    36              // Fujitsu-Siemens (Activy remote control)
-#define IRMP_RCMM24_PROTOCOL                    37              // Fujitsu-Siemens (Activy keyboard)
-#define IRMP_RCMM12_PROTOCOL                    38              // Fujitsu-Siemens (Activy keyboard)
-#define IRMP_SPEAKER_PROTOCOL                   39              // Another loudspeaker protocol, similar to Nubert
-#define IRMP_LGAIR_PROTOCOL                     40              // LG air conditioner
-#define IRMP_SAMSUNG48_PROTOCOL                 41              // air conditioner with SAMSUNG protocol (48 bits)
-#define IRMP_MERLIN_PROTOCOL                    42              // Merlin (Pollin 620 185)
-#define IRMP_PENTAX_PROTOCOL                    43              // Pentax camera
-#define IRMP_FAN_PROTOCOL                       44              // FAN (ventilator), very similar to NUBERT, but last bit is data bit instead of stop bit
-#define IRMP_S100_PROTOCOL                      45              // very similar to RC5, but 14 instead of 13 data bits
-#define IRMP_ACP24_PROTOCOL                     46              // Stiebel Eltron ACP24 air conditioner
-#define IRMP_TECHNICS_PROTOCOL                  47              // Technics, similar to Matsushita, but 22 instead of 24 bits
-#define IRMP_PANASONIC_PROTOCOL                 48              // Panasonic (Beamer), start bits similar to KASEIKYO
-#define IRMP_MITSU_HEAVY_PROTOCOL               49              // Mitsubishi-Heavy Aircondition, similar timing as Panasonic beamer
-#define IRMP_VINCENT_PROTOCOL                   50              // Vincent
-#define IRMP_SAMSUNGAH_PROTOCOL                 51              // SAMSUNG AH
-#define IRMP_IRMP16_PROTOCOL                    52              // IRMP specific protocol for data transfer, e.g. between two microcontrollers via IR
-#define IRMP_GREE_PROTOCOL                      53              // Gree climate
-#define IRMP_RCII_PROTOCOL                      54              // RC II Infra Red Remote Control Protocol for FM8
-#define IRMP_METZ_PROTOCOL                      55              // METZ
-#define IRMP_ONKYO_PROTOCOL                     56
+typedef enum
+{
+	IRMP_UNKNOWN_PROTOCOL = 0,      // unknown protocol
+	IRMP_SIRCS_PROTOCOL,			// Sony
+	IRMP_NEC_PROTOCOL,              // NEC, Pioneer, JVC, Toshiba, NoName etc.
+	IRMP_SAMSUNG_PROTOCOL,	        // Samsung
+	IRMP_MATSUSHITA_PROTOCOL,       // Matsushita
+	IRMP_KASEIKYO_PROTOCOL,	        // Kaseikyo (Panasonic etc)
+	IRMP_RECS80_PROTOCOL,           // Philips, Thomson, Nordmende, Telefunken, Saba
+	IRMP_RC5_PROTOCOL,              // Philips etc
+	IRMP_DENON_PROTOCOL,            // Denon, Sharp
+	IRMP_RC6_PROTOCOL,              // Philips etc
+	IRMP_SAMSUNG32_PROTOCOL,        // Samsung32: no sync pulse at bit 16, length 32 instead of 37
+	IRMP_APPLE_PROTOCOL,            // Apple, very similar to NEC
+	IRMP_RECS80EXT_PROTOCOL,        // Philips, Technisat, Thomson, Nordmende, Telefunken, Saba
+	IRMP_NUBERT_PROTOCOL,           // Nubert
+	IRMP_BANG_OLUFSEN_PROTOCOL,     // Bang & Olufsen
+	IRMP_GRUNDIG_PROTOCOL,          // Grundig
+	IRMP_NOKIA_PROTOCOL,            // Nokia
+	IRMP_SIEMENS_PROTOCOL,          // Siemens, e.g. Gigaset
+	IRMP_FDC_PROTOCOL,              // FDC keyboard
+	IRMP_RCCAR_PROTOCOL,            // RC Car
+	IRMP_JVC_PROTOCOL,              // JVC (NEC with 16 bits)
+	IRMP_RC6A_PROTOCOL,             // RC6A, e.g. Kathrein, XBOX
+	IRMP_NIKON_PROTOCOL,            // Nikon
+	IRMP_RUWIDO_PROTOCOL,           // Ruwido, e.g. T-Home Mediareceiver
+	IRMP_IR60_PROTOCOL,             // IR60 (SDA2008)
+	IRMP_KATHREIN_PROTOCOL,         // Kathrein
+	IRMP_NETBOX_PROTOCOL,           // Netbox keyboard (bitserial)
+	IRMP_NEC16_PROTOCOL,            // NEC with 16 bits (incl. sync)
+	IRMP_NEC42_PROTOCOL,            // NEC with 42 bits
+	IRMP_LEGO_PROTOCOL,             // LEGO Power Functions RC
+	IRMP_THOMSON_PROTOCOL,          // Thomson
+	IRMP_BOSE_PROTOCOL,             // BOSE
+	IRMP_A1TVBOX_PROTOCOL,          // A1 TV Box
+	IRMP_ORTEK_PROTOCOL,            // ORTEK - Hama
+	IRMP_TELEFUNKEN_PROTOCOL,       // Telefunken (1560)
+	IRMP_ROOMBA_PROTOCOL,           // iRobot Roomba vacuum cleaner
+	IRMP_RCMM32_PROTOCOL,           // Fujitsu-Siemens (Activy remote control)
+	IRMP_RCMM24_PROTOCOL,           // Fujitsu-Siemens (Activy keyboard)
+	IRMP_RCMM12_PROTOCOL,           // Fujitsu-Siemens (Activy keyboard)
+	IRMP_SPEAKER_PROTOCOL,          // Another loudspeaker protocol, similar to Nubert
+	IRMP_LGAIR_PROTOCOL,            // LG air conditioner
+	IRMP_SAMSUNG48_PROTOCOL,        // air conditioner with SAMSUNG protocol (48 bits)
+	IRMP_MERLIN_PROTOCOL,           // Merlin (Pollin 620 185)
+	IRMP_PENTAX_PROTOCOL,           // Pentax camera
+	IRMP_FAN_PROTOCOL,              // FAN (ventilator), very similar to NUBERT, but last bit is data bit instead of stop bit
+	IRMP_S100_PROTOCOL,             // very similar to RC5, but 14 instead of 13 data bits
+	IRMP_ACP24_PROTOCOL,            // Stiebel Eltron ACP24 air conditioner
+	IRMP_TECHNICS_PROTOCOL,         // Technics, similar to Matsushita, but 22 instead of 24 bits
+	IRMP_PANASONIC_PROTOCOL,        // Panasonic (Beamer), start bits similar to KASEIKYO
+	IRMP_MITSU_HEAVY_PROTOCOL,      // Mitsubishi-Heavy Aircondition, similar timing as Panasonic beamer
+	IRMP_VINCENT_PROTOCOL,          // Vincent
+	IRMP_SAMSUNGAH_PROTOCOL,        // SAMSUNG AH
+	IRMP_IRMP16_PROTOCOL,           // IRMP specific protocol for data transfer, e.g. between two microcontrollers via IR
+	IRMP_GREE_PROTOCOL,             // Gree climate
+	IRMP_RCII_PROTOCOL,             // RC II Infra Red Remote Control Protocol for FM8
+	IRMP_METZ_PROTOCOL,     	    // METZ
+	IRMP_ONKYO_PROTOCOL,
 
-#define RF_GEN24_PROTOCOL                       57              // RF Generic, 24 Bits (Pollin 550666, EAN 4049702006022 and many other similar RF remote controls))
-#define RF_X10_PROTOCOL                         58              // RF PC X10 Remote Control (Medion, Pollin 721815)
-#define RF_MEDION_PROTOCOL                      59              // RF PC Medion Remote Control (Medion)
+	RF_GEN24_PROTOCOL,  	        // RF Generic, 24 Bits (Pollin 550666, EAN 4049702006022 and many other similar RF remote controls))
+	RF_X10_PROTOCOL,	            // RF PC X10 Remote Control (Medion, Pollin 721815)
+	RF_MEDION_PROTOCOL,             // RF PC Medion Remote Control (Medion)
 
-#define IRMP_MELINERA_PROTOCOL                  60
+	IRMP_MELINERA_PROTOCOL,
 
-#define IRMP_N_PROTOCOLS                        60              // number of supported protocols
+// Add on
+	IRMP_NEC8_PROTOCOL,             // NEC8
+	IRMP_RCA_PROTOCOL,				// RCA
+	IRMP_PIONEER_PROTOCOL,			// Pioneer
+	IRMP_SIRCS15_PROTOCOL,	        // Sony
+	IRMP_SIRCS20_PROTOCOL,	        // Sony
+	IRMP_RC5X_PROTOCOL,             // RC5 extended
+	IRMP_RAW_PROTOCOL              // Protocol with raw data, must be at the end of the list
+} S_M1_IR_Protocol_Def_t;
+
+#define IRMP_N_PROTOCOLS           	IRMP_RAW_PROTOCOL // Number of supported protocols
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------
  * timing constants:
@@ -218,8 +230,8 @@ typedef uint16_t     PAUSE_LEN;
 #define SAMSUNG_START_BIT_PULSE_TIME            4500                       // 4500 usec pulse
 #define SAMSUNG_START_BIT_PAUSE_TIME            4500                       // 4500 usec pause
 #define SAMSUNG_PULSE_TIME                       550                       //  550 usec pulse
-#define SAMSUNG_1_PAUSE_TIME                    1500                       // 1550 usec pause
-#define SAMSUNG_0_PAUSE_TIME                     500                       //  500 usec pause
+#define SAMSUNG_1_PAUSE_TIME                    1650                       // 1550 usec pause //1650
+#define SAMSUNG_0_PAUSE_TIME                     550                       //  500 usec pause //550
 
 #define SAMSUNG_FRAME_REPEAT_PAUSE_TIME         25000                       // frame repeat after 25ms
 #define SAMSUNG_ADDRESS_OFFSET                   0                              // skip 0 bits
@@ -1142,6 +1154,59 @@ typedef uint16_t     PAUSE_LEN;
 #define RF_MEDION_STOP_BIT                       1                               // has stop bit
 #define RF_MEDION_LSB                            0                               // MSB...LSB
 #define RF_MEDION_FLAGS                          0                               // flags
+
+/*---------------------------------------------------------------------------------------------------------------------------------------------------
+ * RCA:
+ *---------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+#define RCA_START_BIT_PULSE_TIME                4000                       	// 4000 usec pulse
+#define RCA_START_BIT_PAUSE_TIME                4000                       	// 4500 usec pause
+#define RCA_REPEAT_START_BIT_PAUSE_TIME         2250                       	// 2250 usec pause (?)
+#define RCA_PULSE_TIME                          500                       	//  500 usec pulse
+#define RCA_1_PAUSE_TIME                        2000                       	// 2000 usec pause
+#define RCA_0_PAUSE_TIME                        500                       	//  500 usec pause
+#define RCA_FRAME_REPEAT_PAUSE_TIME				64000                       // frame repeat after 64ms
+#define RCA_ADDRESS_OFFSET                      0                              // skip 0 bits
+#define RCA_ADDRESS_LEN                         4                              // read 4 address bits
+#define RCA_COMMAND_OFFSET                      4                              // skip 4 bits (4 address)
+#define RCA_COMMAND_LEN                         8                              // read 8 bits (8 command)
+#define RCA_COMPLETE_DATA_LEN                   24                              // complete length
+#define RCA_STOP_BIT                            1                               // has stop bit
+#define RCA_LSB                                 0                               // MSB...LSB
+#define RCA_FLAGS                               0                               // flags
+
+/*---------------------------------------------------------------------------------------------------------------------------------------------------
+ * Pioneer:
+ *---------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+#define PIONEER_START_BIT_PULSE_TIME    		8500
+#define PIONEER_START_BIT_PAUSE_TIME     		4225
+#define PIONEER_PULSE_TIME         				500
+#define PIONEER_1_PAUSE_TIME         			1500
+#define PIONEER_0_PAUSE_TIME         			500
+#define PIONEER_FRAME_REPEAT_PAUSE_TIME			26000
+#define PIONEER_ADDRESS_OFFSET                  0                              // skip 0 bits
+#define PIONEER_ADDRESS_LEN                     8                              // read 8 address bits
+#define PIONEER_COMMAND_OFFSET                  16                             // skip 16 bits (8 address + 8 /address)
+#define PIONEER_COMMAND_LEN                     8                              // read 8 bits (8 command)
+#define PIONEER_COMPLETE_DATA_LEN               32                              // complete length
+#define PIONEER_STOP_BIT                        1                               // has stop bit
+#define PIONEER_LSB                             1                               // LSB...MSB
+#define PIONEER_FLAGS                           0                               // flags
+
+
+#define SAMSUNG_ADDRESS_LEN                     16                              // read 16 address bits
+#define SAMSUNG_ID_OFFSET                       17                              // skip 16 + 1 sync bit
+#define SAMSUNG_ID_LEN                          4                               // read 4 id bits
+#define SAMSUNG_COMMAND_OFFSET                  21                              // skip 16 + 1 sync + 4 data bits
+#define SAMSUNG_COMMAND_LEN                     16                              // read 16 command bits
+
+/*---------------------------------------------------------------------------------------------------------------------------------------------------
+ * General protocol: // Add on
+ *---------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+#define GENERAL_PROTOCOL_ADDRESS_LEN           8
+#define GENERAL_PROTOCOL_COMMAND_LEN           8
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------
  * Frame Repetitions:

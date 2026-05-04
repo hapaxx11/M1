@@ -87,6 +87,9 @@ static const uint8_t menu_text_frame_left_pos_x[] = {MAIN_MENU_TEXT_FRAME_LEFT_P
 static const uint8_t *menu_text_font_n[] = {M1_DISP_MAIN_MENU_FONT_N, M1_DISP_SUB_MENU_FONT_N};
 static const uint8_t *menu_text_font_b[] = {M1_DISP_MAIN_MENU_FONT_B, M1_DISP_SUB_MENU_FONT_B};
 
+const char sdcard_access_error_message[] = "Access error";
+const char sdcard_db_error_message[] = "Database error";
+
 //************************** S T R U C T U R E S *******************************
 
 typedef struct
@@ -118,7 +121,6 @@ void m1_info_box_display_clear(void);
 void m1_info_box_display_draw(uint8_t box_row, const uint8_t *ptext);
 uint8_t m1_message_box(u8g2_t *u8g2, const char *title1, const char *title2, const char *title3, const char *buttons);
 void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext, const char *rtext, const uint8_t *rbitmap);
-void m1_draw_icon(uint8_t color, u8g2_uint_t x, u8g2_uint_t y, u8g2_uint_t w, u8g2_uint_t h, const uint8_t *bitmap);
 void m1_draw_text(u8g2_t *u8g2,
                  int x, int y,
                  int max_width,
@@ -130,6 +132,7 @@ void m1_draw_text_box(u8g2_t *u8g2,
                     int line_height,        // 줄 간격(px)
                     const char *text,
                     S_M1_text_align_t align);
+void m1_image_message(const uint8_t *pimage, uint8_t image_w, uint8_t image_h, const char *message);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -654,20 +657,6 @@ void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext,
 	m1_draw_text(&m1_u8g2, 67, 61, 50,rtext, TEXT_ALIGN_RIGHT);
 }
 
-/*============================================================================*/
-/**
-  * @brief
-  * @param
-  * @retval
-  */
-/*============================================================================*/
-void m1_draw_icon(uint8_t color, u8g2_uint_t x, u8g2_uint_t y, u8g2_uint_t w, u8g2_uint_t h, const uint8_t *bitmap)
-{
-    u8g2_SetDrawColor(&m1_u8g2, color);
-    u8g2_FirstPage(&m1_u8g2);
-    u8g2_DrawXBMP(&m1_u8g2, x, y, w, h, bitmap);
-    u8g2_NextPage(&m1_u8g2);
-}
 
 /*============================================================================*/
 /**
@@ -839,6 +828,70 @@ void m1_draw_text_box(u8g2_t *u8g2,
 /*============================================================================*/
 /**
   * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+#define M1_IMAGE_MESSAGE_FONT			M1_DISP_FUNC_MENU_FONT_N
+#define M1_IMAGE_MESSAGE_FONT_WIDTH		5
+#define M1_IMAGE_MESSAGE_FONT_HEIGHT	8
+#define M1_IMAGE_MESSAGE_FONT_SPACE		3 // Space from image bottom to the top of the message
+
+void m1_image_message(const uint8_t *pimage, uint8_t image_w, uint8_t image_h, const char *message)
+{
+	uint8_t msg_len, txt_width;
+	uint8_t image_x0, image_y0, msg_x0, msg_y0;
+	uint8_t clr_box_x, clr_box_y, clr_box_w, clr_box_h;
+
+	msg_len = strlen(message);
+	txt_width = msg_len*M1_IMAGE_MESSAGE_FONT_WIDTH;
+
+	image_x0 = (M1_LCD_DISPLAY_WIDTH - image_w)/2;
+	image_y0 = (M1_LCD_DISPLAY_HEIGHT - image_h)/2;
+	msg_x0 = (M1_LCD_DISPLAY_WIDTH - txt_width)/2 + 1;
+	msg_y0 = M1_LCD_DISPLAY_HEIGHT - (M1_LCD_DISPLAY_HEIGHT - image_h)/2 + M1_IMAGE_MESSAGE_FONT_HEIGHT + M1_IMAGE_MESSAGE_FONT_SPACE;
+	if ( msg_y0 >= M1_LCD_DISPLAY_HEIGHT )
+	{
+		msg_y0 = M1_LCD_DISPLAY_HEIGHT - 1; // Move to the bottom of the LCD
+	}
+	clr_box_x = (msg_x0 < image_x0)?msg_x0:image_x0; // Get the left most position of x
+	if ( clr_box_x )
+		clr_box_x--; // Expand one pixel to the left
+	clr_box_y = image_y0;
+	if ( clr_box_y )
+		clr_box_y--; // Expand one pixel to the top
+	clr_box_w = (txt_width > image_w)?txt_width:image_w; // Get the max width
+	clr_box_w += 2; // Expand the clear box width
+	if ( clr_box_w >= M1_LCD_DISPLAY_WIDTH )
+	{
+		clr_box_w = M1_LCD_DISPLAY_WIDTH;
+	}
+	clr_box_h = msg_y0 - image_y0;
+	clr_box_h += 2; // Expand the clear box height
+	if ( clr_box_h >= M1_LCD_DISPLAY_HEIGHT )
+	{
+		clr_box_h = M1_LCD_DISPLAY_HEIGHT;
+	}
+
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set to background color
+	// Draw solid box to clear existing content
+	u8g2_DrawBox(&m1_u8g2, clr_box_x, clr_box_y, clr_box_w, clr_box_h);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // Set to text color
+	// Draw image
+	u8g2_DrawXBMP(&m1_u8g2, image_x0, image_y0, image_w, image_h, pimage);
+	u8g2_SetFont(&m1_u8g2, M1_IMAGE_MESSAGE_FONT);
+	// Draw message
+	u8g2_DrawStr(&m1_u8g2, msg_x0, msg_y0, message);
+
+	m1_u8g2_nextpage();	 // Update display RAM
+
+} // void m1_image_message(const uint8_t *pimage, uint8_t image_w, uint8_t image_h, const char *message)
+
+
+
+/*============================================================================*/
+/**
+  * @brief
   * @param  None
   * @retval None
   */
@@ -852,6 +905,6 @@ void m1_gui_let_update_fw(void)
     	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_DrawXBMP(&m1_u8g2, 40, 2, 48, 48, fw_update_48x48); // draw firmware update icon
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 10, 62, "Pls update firmware");
+		u8g2_DrawStr(&m1_u8g2, 30, 62, "Coming soon");
     } while (u8g2_NextPage(&m1_u8g2));
 } // void m1_gui_let_update_fw(void)

@@ -25,8 +25,8 @@
 #define PE5_GPIO_Port						GPIOE
 #define PE6_Pin								GPIO_PIN_6
 #define PE6_GPIO_Port						GPIOE
-#define BUTTON_BACK_Pin 					GPIO_PIN_13
-#define BUTTON_BACK_GPIO_Port				GPIOC
+#define BUTTON_BACK_Pin 					GPIO_PIN_10
+#define BUTTON_BACK_GPIO_Port				GPIOE
 #define NFC_CS_Pin 							GPIO_PIN_0
 #define NFC_CS_GPIO_Port 					GPIOC
 #define ESP32_DATAREADY_Pin 				GPIO_PIN_1
@@ -63,8 +63,8 @@
 #define SI4463_GPIO1_GPIO_Port 				GPIOE
 #define SI4463_GPIO0_Pin 					GPIO_PIN_9
 #define SI4463_GPIO0_GPIO_Port 				GPIOE
-#define BUTTON_OK_Pin 						GPIO_PIN_10
-#define BUTTON_OK_GPIO_Port 				GPIOE
+#define BUTTON_OK_Pin 						GPIO_PIN_13
+#define BUTTON_OK_GPIO_Port 				GPIOC
 #define BUTTON_UP_Pin 						GPIO_PIN_11
 #define BUTTON_UP_GPIO_Port 				GPIOE
 #define BUTTON_LEFT_Pin 					GPIO_PIN_12

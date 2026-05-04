@@ -38,6 +38,7 @@ Esp_spi_at/esp-idf/components/esp_driver_spi/src/gpspi \
 Esp_spi_at/examples/at_spi_master/spi/stm32/main \
 FatFs/R015 \
 Infrared/irmp-irsnd \
+Infrared \
 Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 \
 Middlewares/Third_Party/FreeRTOS/Source \
 Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM33_NTZ/non_secure \

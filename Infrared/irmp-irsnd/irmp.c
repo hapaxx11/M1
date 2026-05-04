@@ -735,10 +735,21 @@ static const char proto_rf_x10[]        = "RF_X10";
 static const char proto_rf_medion[]     = "RF_MEDION";
 static const char proto_melinera[]      = "MELINERA";
 
+static const char proto_nec8[]      	= "NEC8";
+static const char proto_rca[]      		= "RCA";
+static const char proto_pioneer[]      	= "PIONEER";
+static const char proto_sircs15[]       = "SIRCS15";
+static const char proto_sircs20[]       = "SIRCS20";
+static const char proto_rc5x[]          = "RC5X";
+static const char proto_raw[]      		= "RAW";
+
+/*
+ * This list order must match that of the enum S_M1_IR_Protocol_Def_t
+ */
 const char * const
 irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
 {
-    proto_unknown,
+    proto_unknown, // 0
     proto_sircs,
     proto_nec,
     proto_samsung,
@@ -748,7 +759,7 @@ irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
     proto_rc5,
     proto_denon,
     proto_rc6,
-    proto_samsung32,
+    proto_samsung32, // 10
     proto_apple,
     proto_recs80ext,
     proto_nubert,
@@ -758,7 +769,7 @@ irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
     proto_siemens,
     proto_fdc,
     proto_rccar,
-    proto_jvc,
+    proto_jvc, // 20
     proto_rc6a,
     proto_nikon,
     proto_ruwido,
@@ -768,7 +779,7 @@ irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
     proto_nec16,
     proto_nec42,
     proto_lego,
-    proto_thomson,
+    proto_thomson, // 30
     proto_bose,
     proto_a1tvbox,
     proto_ortek,
@@ -778,7 +789,7 @@ irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
     proto_rcmm24,
     proto_rcmm12,
     proto_speaker,
-    proto_lgair,
+    proto_lgair, // 40
     proto_samsung48,
     proto_merlin,
     proto_pentax,
@@ -788,18 +799,25 @@ irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
     proto_technics,
     proto_panasonic,
     proto_mitsu_heavy,
-    proto_vincent,
+    proto_vincent, // 50
     proto_samsungah,
     proto_irmp16,
     proto_gree,
     proto_rcii,
     proto_metz,
     proto_onkyo,
-
     proto_rf_gen24,
     proto_rf_x10,
     proto_rf_medion,
-    proto_melinera
+    proto_melinera, // 60
+// Add on
+	proto_nec8,
+	proto_rca,
+	proto_pioneer,
+	proto_sircs15,
+	proto_sircs20,
+	proto_rc5x,
+	proto_raw
 };
 
 #endif // #if defined(UNIX_OR_WINDOWS) || IRMP_PROTOCOL_NAMES==1

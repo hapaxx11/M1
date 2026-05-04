@@ -18,6 +18,7 @@
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
+
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_bq25896.h"
@@ -1010,7 +1011,7 @@ float bq_getVBUSV(void)
 /*============================================================================*/
 int bq_getVBUS_GD(void)
 {
-	return bq_readRegister(REG11_ADDR) & REG11_VBUS_GD >> 7;
+	return (bq_readRegister(REG11_ADDR) & REG11_VBUS_GD) >> 7;
 } // int bq_getVBUS_GD(void)
 
 

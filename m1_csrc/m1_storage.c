@@ -147,16 +147,15 @@ void storage_about(void)
 		u8g2_DrawStr(&m1_u8g2, 2, 20, "Type: ");
 		u8g2_DrawStr(&m1_u8g2, 32, 20, sdcard_fat_sys_defs[info->fs_type]);
 		u8g2_DrawStr(&m1_u8g2, 2, 30, "Total: ");
-		sprintf(info_str, "%uGB", info->total_cap_kb/1024);
+		sprintf(info_str, "%uGB", info->total_cap_kb/(1024*1024));
 		u8g2_DrawStr(&m1_u8g2, 37, 30, info_str);
 		u8g2_DrawStr(&m1_u8g2, 2, 40, "Free: ");
-		sprintf(info_str, "%uGB", info->free_cap_kb/1024);
+		sprintf(info_str, "%uGB", info->free_cap_kb/(1024*1024));
 		u8g2_DrawStr(&m1_u8g2, 32, 40, info_str);
     } // if ( about_ok )
     else
     {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
     }
 	m1_u8g2_nextpage(); // Update display RAM
 
@@ -423,10 +422,7 @@ S_M1_file_info *storage_browse(void)
 	} // if ( !error_stat )
     if ( error_stat==1 )
 	{
-		; // Update GUI if necessary
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-		m1_u8g2_nextpage();
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 	} // if ( error_stat==1 )
 	M1_LOG_I(M1_LOGDB_TAG, "Init status: %s\r\n", m1_sd_error_msg(m1_sdcard_get_status()));
 
@@ -455,10 +451,7 @@ S_M1_file_info *storage_browse(void)
 						continue;
 					if ( m1_sdcard_get_status() != SD_access_OK )
 					{
-						; // Update GUI if necessary
-						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-						u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-						m1_u8g2_nextpage();
+						m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 						continue; // Skip doing tasks, wait for exit or new SD card access status
 					} // if ( m1_sdcard_get_status() != SD_access_OK )
 					f_info = m1_fb_display(&this_button_status);
@@ -481,10 +474,7 @@ S_M1_file_info *storage_browse(void)
 					} // if (f_info->status==FB_OK)
 					else
 					{
-						; // Update GUI if necessary
-						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-						u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-						m1_u8g2_nextpage();
+						m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 					} // else
 				} // else
 			} // if ( q_item.q_evt_type==Q_EVENT_KEYPAD )
@@ -537,8 +527,7 @@ void storage_mount(void)
     else
     {
     	mount_ok = false;
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
     }
 	m1_u8g2_nextpage(); // Update display RAM
 
@@ -659,8 +648,7 @@ void storage_unmount(void)
     } // if ( unmount_ok )
     else
     {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
     }
 	m1_u8g2_nextpage(); // Update display RAM
 
@@ -866,8 +854,7 @@ void storage_format(void)
     } // if ( m1_sdcard_get_status()!=SD_access_NotReady )
     else
     {
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-		u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
+		m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
     }
 	m1_u8g2_nextpage(); // Update display RAM
 
@@ -934,10 +921,7 @@ void storage_format(void)
 					} // if ( format_ok )
 					else
 					{
-						u8g2_FirstPage(&m1_u8g2);
-						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-						u8g2_DrawXBMP(&m1_u8g2, 32, 0, 63, 63, micro_sd_card_error);
-						m1_u8g2_nextpage(); // Update display RAM
+						m1_image_message(sd_card_error_46x36, SDCARD_ERROR_IMAGE_WIDTH, SDCARD_ERROR_IMAGE_HEIGHT, sdcard_access_error_message);
 					}
 				} // else if ( this_button_status.event[BUTTON_RIGT_KP_ID]==BUTTON_EVENT_CLICK )
 				else

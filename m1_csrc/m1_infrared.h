@@ -44,12 +44,23 @@
 #define IR_ENCODE_CARRIER_FREQ_30_KHZ			(uint32_t)30000
 #define IR_ENCODE_CARRIER_FREQ_32_KHZ           (uint32_t)32000
 #define IR_ENCODE_CARRIER_FREQ_36_KHZ           (uint32_t)36000
+#define IR_ENCODE_CARRIER_FREQ_36_045_KHZ       (uint32_t)36045
+#define IR_ENCODE_CARRIER_FREQ_36_700_KHZ       (uint32_t)36700
 #define IR_ENCODE_CARRIER_FREQ_38_KHZ           (uint32_t)38000
 #define IR_ENCODE_CARRIER_FREQ_40_KHZ           (uint32_t)40000
 #define IR_ENCODE_CARRIER_FREQ_56_KHZ           (uint32_t)56000
 #define IR_ENCODE_CARRIER_FREQ_455_KHZ          (uint32_t)455000
 
-#define IR_ENCODE_CARRIER_PRESCALE_FACTOR		10
+#define IR_ENCODE_CARRIER_FREQ_MIN_KHZ          (uint32_t)10000
+#define IR_ENCODE_CARRIER_FREQ_MAX_KHZ          (uint32_t)100000
+
+#define IR_ENCODE_CARRIER_FREQ_LIST_MAX			9
+
+
+#define IR_ENCODE_CARRIER_PRESCALE_FACTOR		50
+#define IR_ENCODE_BASEBAND_PRESCALE_FACTOR		10
+
+#define IR_ENCODE_BASEBAND_PULSE_ERROR_TIME		10	// uS
 
 #define IR_ENC_HPERIOD_RC5      ((uint32_t)1333)        /*!< RC5 Encoder modulation frequency base period */
 #define IR_ENC_LPERIOD_RC5      ((uint32_t)46630)       /*!< RC5 Encoder pulse base period */
@@ -67,9 +78,6 @@
 
 #define TIM_FORCED_ACTIVE      ((uint16_t)0x0050)
 #define TIM_FORCED_INACTIVE    ((uint16_t)0x0040)
-
-#define IR_OTA_PULSE_BIT_MASK	0x0001 // LSB bit = 1 for Mark, using OR operator
-#define IR_OTA_SPACE_BIT_MASK	0xFFFE // LSB bit = 0 for Space, using AND operator
 
 typedef enum {
 	EDGE_DET_FALLING = 0,
@@ -95,20 +103,26 @@ void infrared_learn_new_remote(void);
 void infrared_saved_remotes(void);
 void infrared_encode_sys_init(void);
 void infrared_encode_sys_deinit(void);
-S_M1_IR_Tx_States infrared_transmit(uint8_t init);
+S_M1_IR_Tx_States infrared_transmit(uint8_t init, uint8_t tx_protocol);
 
 extern uint32_t TIM_GetCounterCLKValue(uint16_t prescaler);
 extern void HAL_TIM_PeriodElapsedCallback_IR(TIM_HandleTypeDef *htim);
 
-extern volatile S_M1_IR_Det IrRx_Edge_Det;
+extern volatile S_M1_IR_Det ir_rx_edge_det;
 
-extern TIM_HandleTypeDef    Timerhdl_IrCarrier;
-extern TIM_HandleTypeDef    Timerhdl_IrTx;
-extern TIM_HandleTypeDef    Timerhdl_IrRx;
+extern TIM_HandleTypeDef    timerhdl_ir_carrier;
+extern TIM_HandleTypeDef    timerhdl_ir_tx;
+extern TIM_HandleTypeDef    timerhdl_ir_rx;
 
 extern volatile uint8_t ir_ota_data_tx_active;
-extern uint8_t ir_ota_data_tx_len;
-extern volatile uint8_t ir_ota_data_tx_counter;
+extern volatile uint8_t ir_ota_data_is_a_mark;
+extern uint16_t ir_ota_data_tx_len;
+extern volatile uint16_t ir_ota_data_tx_counter;
 extern uint16_t *pir_ota_data_tx_buffer;
+extern const uint32_t ir_carrier_frequency_list[];
+
+#ifdef M1_DEBUG_IR_RX_DATA_BUFFER_ENABLE
+extern uint32_t m1_ir_rx_data_buffer[];
+#endif // #ifdef M1_DEBUG_IR_RX_DATA_BUFFER_ENABLE
 
 #endif /* M1_INFRARED_H_ */

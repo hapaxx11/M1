@@ -586,10 +586,10 @@ static void MX_GPIO_Init(void)
                           |PD3_Pin|SI4463_GPIO2_Pin|BAT_OTG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PE2_Pin PE4_Pin PE5_Pin PE6_Pin
-                           SI4463_GPIO1_Pin SI4463_GPIO0_Pin BUTTON_OK_Pin BUTTON_UP_Pin
+                           SI4463_GPIO1_Pin SI4463_GPIO0_Pin BUTTON_BACK_Pin BUTTON_UP_Pin
                            BUTTON_LEFT_Pin BUTTON_RIGHT_Pin BUTTON_DOWN_Pin */
   GPIO_InitStruct.Pin = PE2_Pin|PE4_Pin|PE5_Pin|PE6_Pin
-                          |SI4463_GPIO1_Pin|SI4463_GPIO0_Pin|BUTTON_OK_Pin|BUTTON_UP_Pin
+                          |SI4463_GPIO1_Pin|SI4463_GPIO0_Pin|BUTTON_BACK_Pin|BUTTON_UP_Pin
                           |BUTTON_LEFT_Pin|BUTTON_RIGHT_Pin|BUTTON_DOWN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -601,8 +601,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(FG_INT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BUTTON_BACK_Pin ESP32_DATAREADY_Pin IR_RX_Pin */
-  GPIO_InitStruct.Pin = BUTTON_BACK_Pin|ESP32_DATAREADY_Pin|IR_RX_Pin;
+  /*Configure GPIO pins : BUTTON_OK_Pin ESP32_DATAREADY_Pin IR_RX_Pin */
+  GPIO_InitStruct.Pin = BUTTON_OK_Pin|ESP32_DATAREADY_Pin|IR_RX_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -771,7 +771,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
   /* USER CODE BEGIN Callback 1 */
 
-  if ( (htim == &Timerhdl_IrRx) || (htim == &Timerhdl_IrTx) )
+  if ( (htim == &timerhdl_ir_rx) || (htim == &timerhdl_ir_tx) )
 	  HAL_TIM_PeriodElapsedCallback_IR(htim);
   /* USER CODE END Callback 1 */
 }

@@ -26,6 +26,19 @@
 #define M1_DISP_FUNC_MENU_FONT_N		u8g2_font_spleen5x8_mf // u8g2_font_nine_by_five_nbp_tf // u8g2_font_miranda_nbp_tf // u8g2_font_5x8_tf
 #define M1_DISP_FUNC_MENU_FONT_N2		u8g2_font_nine_by_five_nbp_tf // larger and clear font
 
+#define M1_DISP_IR_REMOTES_FONT_N		u8g2_font_squeezed_r6_tr //u8g2_font_tom_thumb_4x6_tf
+#define M1_DISP_IR_REMOTES_FONT_1		u8g2_font_tiny5_tf // + 4x5
+#define M1_DISP_IR_REMOTES_FONT_2		u8g2_font_tinytim_tf // +, 5x5
+#define M1_DISP_IR_REMOTES_FONT_3		u8g2_font_tinyunicode_tf // +
+#define M1_DISP_IR_REMOTES_FONT_4		u8g2_font_fivepx_tr // + - round
+#define M1_DISP_IR_REMOTES_FONT_5		u8g2_font_wedge_tr // + - bold
+#define M1_DISP_IR_REMOTES_FONT_6		u8g2_font_baby_tf // + +
+#define M1_DISP_IR_REMOTES_FONT_7		u8g2_font_chikita_tf // +, 5x5
+#define M1_DISP_IR_REMOTES_FONT_B1		u8g2_font_squeezed_b7_tr // +, 5x7 bold
+#define M1_DISP_IR_REMOTES_FONT_B2		u8g2_font_resoledbold_tr // +, 6x7
+#define M1_DISP_IR_REMOTES_FONT_S1		u8g2_font_3x3basic_tr // +, 3x3
+#define M1_DISP_IR_REMOTES_FONT_S2		u8g2_font_u8glib_4_tr // height 4
+
 #define M1_DISP_RUN_MENU_FONT_B			u8g2_font_courB08_tf // small bold font, //u8g2_font_resoledbold_tr: small bold font
 
 #define M1_DISP_RUN_ERROR_FONT_1B		u8g2_font_Terminal_tr // bold larger clear
@@ -84,6 +97,9 @@
 #define INFO_BOX_Y_POS_ROW_2			52
 #define INFO_BOX_Y_POS_ROW_3			62
 
+#define SDCARD_ERROR_IMAGE_WIDTH		46
+#define SDCARD_ERROR_IMAGE_HEIGHT		36
+
 typedef struct
 {
 	const uint8_t *pdata;
@@ -123,6 +139,8 @@ extern const uint8_t m1_frame_75x16[];
 extern const uint8_t m1_frame_128_14[];
 extern const uint8_t m1_frame_128x32[];
 extern const uint8_t m1_frame_128x22[];
+extern const uint8_t m1_frame_64x76[];
+extern const uint8_t m1_progress_60x10[];
 extern const uint8_t hourglass_18x32[];
 extern const uint8_t arrowleft_10x10[];
 extern const uint8_t arrowright_10x10[];
@@ -131,20 +149,44 @@ extern const uint8_t arrowleft_8x8[];
 extern const uint8_t arrowdown_8x8[];
 extern const uint8_t fb_m1_icon_folder[];
 extern const uint8_t fb_m1_icon_file[];
+extern const uint8_t ir_button_frame_21x21[];
+extern const uint8_t button_power_18x18[];
+extern const uint8_t button_mute_18x18[];
+extern const uint8_t button_up_18x18[];
+extern const uint8_t button_down_18x18[];
+extern const uint8_t button_plus_18x18[];
+extern const uint8_t button_minus_18x18[];
+extern const uint8_t button_previous_18x18[];
+extern const uint8_t button_next_18x18[];
+extern const uint8_t button_play_18x18[];
+extern const uint8_t button_pause_18x18[];
+extern const uint8_t ir_button_frame_up_21x21[];
+extern const uint8_t ir_button_frame_down_21x21[];
+extern const uint8_t ir_button_frame_up_i_21x21[];
+extern const uint8_t ir_button_frame_down_i_21x21[];
+extern const uint8_t button_power_off_18x18[];
+extern const uint8_t weather_dry_18x18[];
+extern const uint8_t weather_cold_20x20[];
+extern const uint8_t weather_hot_20x20[];
+extern const uint8_t return_10x10[];
 extern const uint8_t remote_48x25[];
 extern const uint8_t subghz_antenna_50x27[];
 extern const uint8_t fw_update_48x48[];
 extern const uint8_t target_10x10[];
+extern const uint8_t target_i_10x10[];
 extern const uint8_t wifi_error_32x32[];
-extern const uint8_t micro_sd_card_error[];
+extern const uint8_t sd_card_error_46x36[];
 extern const uint8_t micro_sd_card_error_format[];
 extern const uint8_t nfc_read_48x48[];
 extern const uint8_t nfc_saved_63_63[];
 extern const uint8_t nfc_emit_48x48[];
 extern const uint8_t rfid_read_125x24[];
+extern const uint8_t subghz_transmission_64_30[];
 extern const uint8_t fw_update_slide_strip_126x14[];
 extern const uint8_t fw_update_slider_5x8[];
 extern const uint8_t m1_device_82x36[];
+extern const uint8_t battery_meter_46_36[];
+extern const uint8_t xtal_10x10[];
 extern const uint8_t error_10x10[];
 extern const uint8_t check_10x10[];
 
@@ -153,6 +195,9 @@ extern const S_M1_menu_icon_data menu_fb_icon_dir;
 extern const S_M1_menu_icon_data menu_fb_icon_text;
 extern const S_M1_menu_icon_data menu_fb_icon_data;
 extern const S_M1_menu_icon_data menu_fb_icon_other;
+
+extern const char sdcard_access_error_message[];
+extern const char sdcard_db_error_message[];
 
 void m1_gui_init(void);
 void m1_gui_welcome_scr(void);
@@ -165,7 +210,6 @@ void m1_info_box_display_clear(void);
 void m1_info_box_display_draw(uint8_t box_row, const uint8_t *ptext);
 uint8_t m1_message_box(u8g2_t *u8g2, const char *title1, const char *title2, const char *title3, const char *buttons);
 void m1_draw_bottom_bar(u8g2_t *u8g2, const uint8_t *lbitmap, const char *ltext, const char *rtext, const uint8_t *rbitmap);
-void m1_draw_icon(uint8_t color, u8g2_uint_t x, u8g2_uint_t y, u8g2_uint_t w, u8g2_uint_t h, const uint8_t *bitmap);
 void m1_draw_text(u8g2_t *u8g2,
                  int x, int y,
                  int max_width,
@@ -177,5 +221,6 @@ void m1_draw_text_box(u8g2_t *u8g2,
                     int line_height,        // 줄 간격(px)
                     const char *text,
                     S_M1_text_align_t align);
+void m1_image_message(const uint8_t *pimage, uint8_t image_w, uint8_t image_h, const char *message);
 
 #endif /* M1_DISPLAY_H_ */

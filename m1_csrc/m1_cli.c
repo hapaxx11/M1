@@ -655,7 +655,7 @@ void cmd_m1_mtest_infrared(char *pconsole, char *input_params[], uint8_t n_param
     		// must be in this order
     		infrared_encode_sys_init();
     		irsnd_generate_tx_data(irmp_data); // make ota data
-    		infrared_transmit(1); // initialize the tx
+    		infrared_transmit(1, irmp_data.protocol); // initialize the tx
     		force_quit = 0;
 
     		while (1 )
@@ -667,7 +667,7 @@ void cmd_m1_mtest_infrared(char *pconsole, char *input_params[], uint8_t n_param
     			ret = pdFALSE;
     			force_quit = 0;
     			q_item.q_evt_type = 0;
-    			if ( infrared_transmit(0)==IR_TX_ACTIVE ) // Transmit with no error?
+    			if ( infrared_transmit(0, 0)==IR_TX_ACTIVE ) // Transmit with no error?
     			{
     				// ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
     				while ( ir_ota_data_tx_active )
@@ -681,7 +681,7 @@ void cmd_m1_mtest_infrared(char *pconsole, char *input_params[], uint8_t n_param
     			{
     				if ( q_item.q_evt_type==Q_EVENT_IRRED_TX || force_quit ) // Transmit completed?
     				{
-    					if ( infrared_transmit(0)==IR_TX_ACTIVE ) // There's still repeated packet to transmit?
+    					if ( infrared_transmit(0, 0)==IR_TX_ACTIVE ) // There's still repeated packet to transmit?
     						continue; // Let repeat
 
     					if ( pir_ota_data_tx_buffer!=NULL )

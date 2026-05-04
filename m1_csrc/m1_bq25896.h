@@ -1,7 +1,7 @@
 /* See COPYING.txt for license details. */
 
 /*
- * m1_bq25896.c
+ * m1_bq25896.h
  *
  * Driver for Texas Instruments BQ25896
  *

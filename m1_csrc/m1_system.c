@@ -22,6 +22,7 @@
 #include "m1_power_ctl.h"
 #include "m1_fw_update_bl.h"
 #include "m1_lp5814.h"
+#include "m1_bq25896.h"
 #include "battery.h"
 
 /*************************** D E F I N E S ************************************/
@@ -69,6 +70,7 @@ uint32_t TIM_GetCounterCLKValue(uint16_t prescaler);
 static void battery_indicator_update(void);
 static void lcd_saver_update(void);
 void startup_config_handler(void);
+void power_on_button_check(void);
 void HAL_Delay(uint32_t Delay);
 static void startup_bu_registers_init(void);
 void startup_info_screen_display(const char *scr_text);
@@ -90,6 +92,15 @@ void system_periodic_task(void *param)
 	// Create Queue.
     button_events_q_hdl = xQueueCreate(1, sizeof(S_M1_Buttons_Status));
     assert(button_events_q_hdl!=NULL);
+
+	// After power on, let wait here until user releases the OK button if it's the case!
+	while ( true )
+	{
+		if ( HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port, BUTTON_OK_Pin)==GPIO_PIN_SET ) // Button released?
+			break;
+		vTaskDelay(100); // Return some time to the system
+        m1_wdt_send_report(M1_REPORT_ID_BUTTONS_HANDLER_TASK, 100);
+	} // while ( true )
 
     while (TRUE)
     {
@@ -803,6 +814,67 @@ void startup_info_screen_display(const char *scr_text)
 	m1_device_stat.op_mode = M1_OPERATION_MODE_DISPLAY_ON; // update new state
 	m1_device_stat.active_timestamp = HAL_GetTick(); // reset timeout
 } // void startup_info_screen_display(const char *scr_text)
+
+
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void power_on_button_check(void)
+{
+	uint32_t reset_source;
+	uint16_t tick_acc;
+	int vbus_gd;
+
+	vTaskDelay(50);
+
+	bq_startADC();
+	bq_oneShotADC();
+
+	vbus_gd = bq_getVBUS_GD();
+
+	bq_stopADC();
+
+	reset_source = HAL_RCC_GetResetSource();
+	reset_source &= (RCC_RESET_FLAG_SW + RCC_RESET_FLAG_IWDG + RCC_RESET_FLAG_WWDG);
+	if ( reset_source ) // Not power on by normal cause?
+		return;
+
+	if ( vbus_gd==0 ) // No Vbus present?
+	{
+		if ( HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port, BUTTON_OK_Pin)==GPIO_PIN_SET )
+		{
+			m1_power_down();
+		}
+	}
+
+	// Device turns on by normal cause
+	if ( m1_device_stat.bu_regs.device_op_status==DEV_OP_STATUS_NO_OP )
+	{
+		tick_acc = 0;
+		while ( tick_acc < POWER_ON_LONG_PRESS )
+		{
+			vTaskDelay(100);
+			if ( HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port, BUTTON_OK_Pin)==GPIO_PIN_SET ) // Button released?
+				break;
+			tick_acc += 100;
+			m1_wdt_reset(); // Reset watchdog
+		} // while ( tick_acc < POWER_ON_LONG_PRESS )
+		if ( tick_acc < POWER_ON_LONG_PRESS ) // Button released too soon?
+		{
+			if ( vbus_gd==0 ) // No Vbus present?
+			{
+				m1_power_down(); // Shut down again
+			}
+		} // if ( tick_acc < POWER_ON_LONG_PRESS )
+	} // if ( m1_device_stat.bu_regs.device_op_status==DEV_OP_STATUS_NO_OP )
+
+} // void power_on_button_check(void)
 
 
 

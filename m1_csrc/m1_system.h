@@ -32,6 +32,8 @@
 #define LONG_PRESS_4000     4000
 #define LONG_PRESS_5000     5000
 
+#define POWER_ON_LONG_PRESS LONG_PRESS_2000
+
 #define BUTTON_DEBOUNCE_MS  		50 // ms
 //#define BUTTON_DBC_MIDDLE   		500 // maximum interval between two clicks for double click recognition
 #define BUTTON_DBC_MIDDLE   		300
@@ -169,6 +171,7 @@ uint8_t m1_button_pressed_check(uint8_t button_id);
 void m1_buttons_status_reset(void);
 void startup_device_init(void);
 void startup_config_handler(void);
+void power_on_button_check(void);
 void startup_config_write(uint8_t config_byte, uint8_t config_val);
 void startup_info_screen_display(const char *scr_text);
 

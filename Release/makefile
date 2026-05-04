@@ -26,6 +26,7 @@ RM := rm -rf
 -include Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/subdir.mk
 -include Middlewares/Third_Party/FreeRTOS/Source/subdir.mk
 -include Infrared/irmp-irsnd/subdir.mk
+-include Infrared/subdir.mk
 -include FatFs/R015/subdir.mk
 -include Esp_spi_at/examples/at_spi_master/spi/stm32/main/subdir.mk
 -include Esp_spi_at/esp-idf/components/esp_driver_spi/src/gpspi/subdir.mk
@@ -94,8 +95,8 @@ all:
 main-build: MonstaTek_M1_v0800.elf secondary-outputs
 
 # Tool invocations
-MonstaTek_M1_v0800.elf MonstaTek_M1_v0800.map: $(OBJS) $(USER_OBJS) C:\Working\MONSTATEK\Firmware_Codes\Backup\v0_8_Feb_19_2026_OS\STM32H573VITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "MonstaTek_M1_v0800.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m33 -T"C:\Working\MONSTATEK\Firmware_Codes\Backup\v0_8_Feb_19_2026_OS\STM32H573VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="MonstaTek_M1_v0800.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+MonstaTek_M1_v0800.elf MonstaTek_M1_v0800.map: $(OBJS) $(USER_OBJS) C:\Working\MONSTATEK\Firmware_Codes\Backup\v0_8_Apr_21_2026_OS\STM32H573VITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "MonstaTek_M1_v0800.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m33 -T"C:\Working\MONSTATEK\Firmware_Codes\Backup\v0_8_Apr_21_2026_OS\STM32H573VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="MonstaTek_M1_v0800.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

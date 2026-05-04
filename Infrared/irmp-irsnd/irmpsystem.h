@@ -42,6 +42,8 @@ typedef struct IRMP_PACKED_STRUCT
     uint16_t                            address;                                    // address
     uint16_t                            command;                                    // command
     uint8_t                             flags;                                      // flags, e.g. repetition
+	uint8_t 							duty_cycle;									// duty cycle, add on
+	uint32_t							frequency;									// frequency, add on
 } IRMP_DATA;
 
 #endif // _IRMPSYSTEM_H_

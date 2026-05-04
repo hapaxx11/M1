@@ -29,6 +29,7 @@ target_include_directories(m1_01 INTERFACE
     ../../Drivers/u8g2_csrc
     ../../Drivers/u8g2_cppsrc
     ../../m1_csrc
+    ../../Infrared    
     ../../Infrared/irmp-irsnd
     ../../FatFs/R015
     ../../Sub_Ghz
@@ -67,6 +68,7 @@ target_include_directories(m1_01 INTERFACE
 
 target_sources(m1_01 INTERFACE
     ../../Battery/battery.c
+    ../../Battery/battery_log.c
     ../../Core/Src/FreeRTOS_CLI.c
     ../../Core/Src/app_freertos.c
     ../../Core/Src/cli_app.c
@@ -267,6 +269,8 @@ target_sources(m1_01 INTERFACE
     ../../FatFs/R015/ffsystem_baremetal.c
     ../../FatFs/R015/ffsystem_cmsis_os.c
     ../../FatFs/R015/ffunicode.c
+    ../../Infrared/m1_ir_remotes.c
+    ../../Infrared/m1_ir_signals.c    
     ../../Infrared/irmp-irsnd/irmp.c
     ../../Infrared/irmp-irsnd/irmpextlog.c
     ../../Infrared/irmp-irsnd/irsnd.c

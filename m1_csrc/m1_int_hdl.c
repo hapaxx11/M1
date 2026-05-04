@@ -212,7 +212,7 @@ void EXTI12_IRQHandler(void)
 /*============================================================================*/
 void TIM2_IRQHandler(void)
 {
-	HAL_TIM_IRQHandler(&Timerhdl_IrRx);
+	HAL_TIM_IRQHandler(&timerhdl_ir_rx);
 } // void TIM2_IRQHandler(void)
 
 
@@ -225,7 +225,7 @@ void TIM2_IRQHandler(void)
 /*============================================================================*/
 void TIM16_IRQHandler(void)
 {
-	HAL_TIM_IRQHandler(&Timerhdl_IrTx);
+	HAL_TIM_IRQHandler(&timerhdl_ir_tx);
 } // void TIM16_IRQHandler(void)
 
 
@@ -484,33 +484,28 @@ void SDMMC1_IRQHandler(void)
 /*============================================================================*/
 void HAL_TIM_PeriodElapsedCallback_IR(TIM_HandleTypeDef *htim)
 {
-	uint32_t cap_val;
 	S_M1_Main_Q_t q_item;
 	portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
+	uint32_t cap_val;
 
-	if (htim == &Timerhdl_IrTx )
+	if (htim == &timerhdl_ir_tx )
 	{
 		if ( ir_ota_data_tx_active )
 		{
 			if ( ir_ota_data_tx_counter < ir_ota_data_tx_len )
 			{
-				cap_val = pir_ota_data_tx_buffer[ir_ota_data_tx_counter - 1]; // Take the transmitted data
-				if ( Timerhdl_IrTx.Instance->ARR & 0x0001 ) // Tx data of this period (this bit) is a Mark
-				{
-					if ( !(cap_val & 0x0001) ) // Previous tx_ed is a Space?
-						irsnd_on(); // Let turn on the Carrier
-				}
-				else // Tx data for this period (this bit) is a Space
-				{
-					if ( cap_val & 0x0001 ) // Previous tx_ed is a Mark?
-						irsnd_off(); // Let turn off the Carrier
-				}
+				ir_ota_data_is_a_mark ^= 1; // Toggle the mark/space flag
+				irsnd_toggle(ir_ota_data_is_a_mark);
 				// Update reload value for the next bit (next period)
-				Timerhdl_IrTx.Instance->ARR = pir_ota_data_tx_buffer[++ir_ota_data_tx_counter];
+				timerhdl_ir_tx.Instance->ARR = pir_ota_data_tx_buffer[++ir_ota_data_tx_counter];
+				if ( !ir_ota_data_is_a_mark )
+				{
+					timerhdl_ir_tx.Instance->ARR -= IR_ENCODE_BASEBAND_PULSE_ERROR_TIME/IR_ENCODE_BASEBAND_PRESCALE_FACTOR;
+				}
 			} // if ( ir_ota_data_tx_counter <= ir_ota_data_tx_len )
 			else
 			{
-				irsnd_off(); // Let turn off the Carrier
+				irsnd_off(); // Let turn off the carrier
 				ir_ota_data_tx_active = FALSE;
 				q_item.q_data.ir_tx_data = 1; // any value, not used
 				q_item.q_evt_type = Q_EVENT_IRRED_TX;
@@ -518,17 +513,17 @@ void HAL_TIM_PeriodElapsedCallback_IR(TIM_HandleTypeDef *htim)
 				portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 			}
 		} // if ( ir_ota_data_tx_active )
-	} // if (htim == &Timerhdl_IrTx )
+	} // if (htim == &timerhdl_ir_tx )
 
-	else if (htim == &Timerhdl_IrRx )
+	else if (htim == &timerhdl_ir_rx )
 	{
 		cap_val = __HAL_TIM_GET_COUNTER(htim); // get the timeout counter
 		__HAL_TIM_SET_COUNTER(htim, 0); // reset counter after reading, htim->Instance->CNT = 0x00;
-		IrRx_Edge_Det = EDGE_DET_IDLE; // timeout case, let reset this flag
+		ir_rx_edge_det = EDGE_DET_IDLE; // timeout case, let reset this flag
 		if ( irmp_start_bit_is_detected() )
 		{
 			//cap_val = IRMP_TIMEOUT_TIME + 1;
-			cap_val = Timerhdl_IrRx.Init.Period + 1; // Plus 1 for the timeout condition to be met
+			cap_val = timerhdl_ir_rx.Init.Period + 1; // Plus 1 for the timeout condition to be met
 			q_item.q_evt_type = Q_EVENT_IRRED_RX;
 			q_item.q_data.ir_rx_data.ir_edge_te = cap_val;
 			q_item.q_data.ir_rx_data.ir_edge_dir = (IR_RX_GPIO_Port->IDR & IR_RX_Pin)?1:0; // edge: '1' for Rising  or '0' for falling edge
@@ -575,25 +570,25 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		//__HAL_TIM_SET_COMPARE(htim, IR_DECODE_TIMER_RX_CHANNEL, 0); // reset counter after reading, htim->Instance->CCR4 = 0x00;
 		cap_val =  __HAL_TIM_GET_COUNTER(htim);
 		__HAL_TIM_SET_COUNTER(htim, 0); // reset counter after reading, htim->Instance->CNT = 0x00;
-		if ( IrRx_Edge_Det==EDGE_DET_IDLE )
+		if ( ir_rx_edge_det==EDGE_DET_IDLE )
 		{
 			if ((IR_RX_GPIO_Port->IDR & IR_RX_Pin) == 0U) // A falling edge just happened?
 			{
-				IrRx_Edge_Det = EDGE_DET_FALLING; // Update current edge
+				ir_rx_edge_det = EDGE_DET_FALLING; // Update current edge
 				q_item.q_data.ir_rx_data.ir_edge_te = 0;
 				q_item.q_data.ir_rx_data.ir_edge_dir = EDGE_DET_FALLING; // edge: '1' for Rising  or '0' for falling edge
 			}
 			return; // Do nothing
-		} // if ( IrRx_Edge_Det==EDGE_DET_IDLE )
-		if ( IrRx_Edge_Det==EDGE_DET_FALLING ) // Previous edge was falling?
+		} // if ( ir_rx_edge_det==EDGE_DET_IDLE )
+		if ( ir_rx_edge_det==EDGE_DET_FALLING ) // Previous edge was falling?
 		{
-			IrRx_Edge_Det = EDGE_DET_RISING; // Update current edge
+			ir_rx_edge_det = EDGE_DET_RISING; // Update current edge
 			q_item.q_data.ir_rx_data.ir_edge_te = cap_val;
 			q_item.q_data.ir_rx_data.ir_edge_dir = EDGE_DET_RISING; // edge: '1' for Rising  or '0' for falling edge
-		} // if ( IrRx_Edge_Det==EDGE_DET_IDLE )
+		} // if ( ir_rx_edge_det==EDGE_DET_IDLE )
 		else // Previous edge was rising. This edge is falling
 		{
-			IrRx_Edge_Det = EDGE_DET_FALLING; // Update current edge
+			ir_rx_edge_det = EDGE_DET_FALLING; // Update current edge
 			q_item.q_data.ir_rx_data.ir_edge_te = cap_val;
 			q_item.q_data.ir_rx_data.ir_edge_dir = EDGE_DET_FALLING; // edge: '1' for Rising  or '0' for falling edge
 		}

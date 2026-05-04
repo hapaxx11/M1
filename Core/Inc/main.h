@@ -84,8 +84,8 @@ void Error_Handler(void);
 #define PE5_GPIO_Port GPIOE
 #define PE6_Pin GPIO_PIN_6
 #define PE6_GPIO_Port GPIOE
-#define BUTTON_BACK_Pin GPIO_PIN_13
-#define BUTTON_BACK_GPIO_Port GPIOC
+#define BUTTON_BACK_Pin GPIO_PIN_10
+#define BUTTON_BACK_GPIO_Port GPIOE
 #define NFC_CS_Pin GPIO_PIN_0
 #define NFC_CS_GPIO_Port GPIOC
 #define ESP32_DATAREADY_Pin GPIO_PIN_1
@@ -122,8 +122,8 @@ void Error_Handler(void);
 #define SI4463_GPIO1_GPIO_Port GPIOE
 #define SI4463_GPIO0_Pin GPIO_PIN_9
 #define SI4463_GPIO0_GPIO_Port GPIOE
-#define BUTTON_OK_Pin GPIO_PIN_10
-#define BUTTON_OK_GPIO_Port GPIOE
+#define BUTTON_OK_Pin GPIO_PIN_13
+#define BUTTON_OK_GPIO_Port GPIOC
 #define BUTTON_UP_Pin GPIO_PIN_11
 #define BUTTON_UP_GPIO_Port GPIOE
 #define BUTTON_LEFT_Pin GPIO_PIN_12
@@ -243,7 +243,7 @@ extern SPI_HandleTypeDef 	hspi1;
 extern SPI_HandleTypeDef 	hspi2;
 extern SPI_HandleTypeDef 	hspi4;
 extern SD_HandleTypeDef 	hsd1;
-extern TIM_HandleTypeDef	Timerhdl_IrRx;
+extern TIM_HandleTypeDef	timerhdl_ir_rx;
 extern RTC_HandleTypeDef 	hrtc;
 
 extern EXTI_HandleTypeDef H_EXTI_0;
