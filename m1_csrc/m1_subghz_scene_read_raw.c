@@ -278,24 +278,31 @@ static void scene_on_enter(SubGhzApp *app)
     app->need_redraw = true;
 }
 
+/* Error codes returned by start_raw_rx() */
+typedef enum {
+    RAW_START_OK      = 0,
+    RAW_START_ERR_OOM = 1,  /* ring-buffer malloc failed          */
+    RAW_START_ERR_SD  = 2,  /* SD file or write-buffer init failed */
+} raw_start_err_t;
+
 /**
  * Arm recording — radio is already initialised by start_passive_rx().
- * On success sets raw_state = RECORDING.  On failure (OOM / SD error)
- * returns early without changing raw_state (stays as Start).
+ * On success sets raw_state = RECORDING.  On failure returns an error
+ * code and raw_state stays as Start.
  */
-static void start_raw_rx(SubGhzApp *app)
+static raw_start_err_t start_raw_rx(SubGhzApp *app)
 {
     m1_esp32_deinit();
 
     /* Allocate ring buffers for edge capture */
     if (sub_ghz_ring_buffers_init_ext())
-        return;  /* OOM — stay in Start, radio keeps listening passively */
+        return RAW_START_ERR_OOM;  /* OOM — stay in Start, radio keeps listening passively */
 
     /* Create the output .sub file and write the Flipper-compatible header */
     if (sub_ghz_raw_recording_init_ext())
     {
         sub_ghz_ring_buffers_deinit_ext();
-        return;  /* SD error — stay in Start, radio keeps listening passively */
+        return RAW_START_ERR_SD;  /* SD error — stay in Start, radio keeps listening passively */
     }
 
     /* Arm ISR: start TIM1 input-capture then flag ring-buffer writes */
@@ -308,6 +315,7 @@ static void start_raw_rx(SubGhzApp *app)
     subghz_raw_rssi_reset_ext();
 
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+    return RAW_START_OK;
 }
 
 /**
@@ -680,13 +688,25 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (app->raw_state == SubGhzReadRawStateStart)
             {
                 /* Start recording — fast because radio is already listening */
-                start_raw_rx(app);
-                if (app->raw_state != SubGhzReadRawStateRecording)
+                raw_start_err_t err = start_raw_rx(app);
+                if (err != RAW_START_OK)
                 {
-                    /* start_raw_rx() failed silently (OOM or SD error).
-                     * Show a blocking error so the user knows why nothing happened. */
+                    char detail[32];
+                    const char *line1;
+                    if (err == RAW_START_ERR_OOM)
+                    {
+                        line1 = "Low memory";
+                        snprintf(detail, sizeof(detail), "Heap free: %lu B",
+                                 (unsigned long)xPortGetFreeHeapSize());
+                    }
+                    else
+                    {
+                        line1 = "SD card error";
+                        snprintf(detail, sizeof(detail), "Check card / heap: %lu B",
+                                 (unsigned long)xPortGetFreeHeapSize());
+                    }
                     m1_message_box(&m1_u8g2, "Record failed",
-                                   "Check SD card or free memory", "", "BACK to return");
+                                   line1, detail, "BACK to return");
                 }
                 app->need_redraw = true;
             }

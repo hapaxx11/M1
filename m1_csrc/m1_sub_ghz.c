@@ -3081,6 +3081,8 @@ retry_smaller_capture_buffer:
 	} // while ( subghz_front_buffer_size >= 256 )
 
 	sub_ghz_ring_buffers_deinit();
+	M1_LOG_I(M1_LOGDB_TAG, "sub_ghz_ring_buffers_init FAILED heap_free=%lu\r\n",
+	         (unsigned long)xPortGetFreeHeapSize());
 	return 1;
 } // static uint8_t sub_ghz_ring_buffers_init(void)
 

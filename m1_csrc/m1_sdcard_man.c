@@ -310,7 +310,9 @@ static uint8_t m1_sdm_memory_init(void)
 
 	if (dev_sd_hdl.buff_info.sd_write_buffer==NULL)
 	{
-		M1_LOG_I(M1_LOGDB_TAG, "Mem alloc error:%ld %d@%s\r\n", dev_sd_hdl.sdWriteBufferSize*M1_SDM_BUFFER_ARRAY_SIZE, __LINE__, __FILE__);
+		M1_LOG_I(M1_LOGDB_TAG, "Mem alloc error:%ld heap_free=%lu %d@%s\r\n",
+		         dev_sd_hdl.sdWriteBufferSize*M1_SDM_BUFFER_ARRAY_SIZE,
+		         (unsigned long)xPortGetFreeHeapSize(), __LINE__, __FILE__);
 		return 1;
 	}
 	else
