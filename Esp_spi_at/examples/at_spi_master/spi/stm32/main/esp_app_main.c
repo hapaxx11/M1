@@ -670,8 +670,12 @@ void esp32_main_deinit(void)
 		s_esp32_stop_task = true;
 		/* Best-effort: wait up to 100 ms for a queue slot.  Even if this
 		 * times out, the task will see s_esp32_stop_task on its next dequeue
-		 * iteration and still exit — just without the explicit wake-up. */
-		(void)xQueueSendToFront(esp_spi_msg_queue, &sentinel, pdMS_TO_TICKS(100));
+		 * iteration and still exit — just without the explicit wake-up.
+		 * Guard against NULL: init_master_hd() may have failed to create
+		 * the queue (e.g. under low-memory conditions), in which case the
+		 * task relies solely on the stop flag. */
+		if (esp_spi_msg_queue != NULL)
+			(void)xQueueSendToFront(esp_spi_msg_queue, &sentinel, pdMS_TO_TICKS(100));
 
 		/* Wait up to 500 ms for the task to give s_deinit_sync_sem, confirming
 		 * it has freed trans_data and is about to self-delete.  A dedicated
