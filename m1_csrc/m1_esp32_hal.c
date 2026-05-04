@@ -23,6 +23,7 @@
 #include "m1_http_client.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
+#include "esp_app_main.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -426,6 +427,27 @@ void m1_esp32_deinit(void)
 
 	if ( esp32_init_done )
 	{
+		/* Disable and clear the EXTI lines that feed esp_spi_msg_queue from the
+		 * ISR (ESP32_GPIO_EXTI_Callback).  Do this FIRST, before any task or
+		 * queue teardown, so the ISR cannot enqueue into a queue handle that is
+		 * about to be freed. */
+		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
+		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
+		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
+		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
+
+#ifndef ESP32_UART_DISABLE
+		/* UART next: prevents UART-driven DMA callbacks from firing into
+		 * the semaphores that esp32_main_deinit() is about to free. */
+		esp32_UART_deinit();
+#endif // #ifndef ESP32_UART_DISABLE
+
+		/* Stop and join the legacy AT-over-SPI task BEFORE tearing down
+		 * the SPI3 peripheral it uses (spi_device_polling_transmit /
+		 * hspi_esp).  No-op if esp32_main_init() was never called. */
+		if (get_esp32_main_init_status())
+			esp32_main_deinit();
+
 		HAL_NVIC_DisableIRQ(SPI3_IRQn);
 		HAL_NVIC_ClearPendingIRQ(SPI3_IRQn);
 
@@ -457,13 +479,6 @@ void m1_esp32_deinit(void)
 		GPIO_InitStruct.Pin = ESP32_SPI3_SCK_Pin|ESP32_SPI3_MISO_Pin;
 		HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-#ifndef ESP32_UART_DISABLE
-		esp32_UART_deinit();
-#endif // #ifndef ESP32_UART_DISABLE
 //		esp32_disable();
 
 		esp32_init_done = FALSE;
