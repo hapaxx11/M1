@@ -129,12 +129,20 @@ void test_spi_task_notifies_deinit_caller_before_self_delete(void)
     char *content = read_file(
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
-    /* Task notifies the deinit caller BEFORE vTaskDelete so the caller can
-     * safely clean up RTOS objects once trans_data is freed. */
-    assert_ordered(content, "xTaskNotify(s_deinit_caller", "vTaskDelete(NULL)");
+    /* Task gives the dedicated join semaphore BEFORE vTaskDelete so the
+     * deinit caller can safely clean up RTOS objects once trans_data is
+     * freed.  xSemaphoreGive is used instead of xTaskNotify so that an
+     * unrelated pending notification on the caller's task cannot be
+     * mistaken for our exit signal. */
+    assert_ordered(content, "xSemaphoreGive(s_deinit_sync_sem)", "vTaskDelete(NULL)");
 
     /* trans_data must be freed before the notification */
-    assert_ordered(content, "free(trans_data);", "xTaskNotify(s_deinit_caller");
+    assert_ordered(content, "free(trans_data);", "xSemaphoreGive(s_deinit_sync_sem)");
+
+    /* The give must be guarded against a NULL semaphore handle (creation can
+     * fail under low-memory conditions).  Without the guard, giving a NULL
+     * handle crashes the scheduler. */
+    assert_contains(content, "if (s_deinit_sync_sem)");
 
     free(content);
 }
@@ -144,21 +152,24 @@ void test_esp32_main_deinit_waits_for_task_notification(void)
     char *content = read_file(
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
-    /* Deinit must call xTaskNotifyWait to block until the task has freed its
-     * private allocation and is ready to self-delete. */
-    assert_contains(content, "xTaskNotifyWait(0, 0, NULL,");
+    /* Deinit must use a dedicated binary semaphore for the task join.
+     * xSemaphoreTake blocks until the task gives s_deinit_sync_sem, which is
+     * a distinct primitive from xTaskNotify so unrelated task notifications
+     * cannot cause a spurious early return. */
+    assert_contains(content, "xSemaphoreTake(s_deinit_sync_sem,");
 
-    /* The return value of xTaskNotifyWait must be checked.  If the wait times
-     * out, shared RTOS objects (queue, semaphores) must NOT be deleted while
-     * the task may still be blocked on them — doing so is undefined behaviour.
-     * Deinit must return early without freeing on timeout. */
-    assert_contains(content, "notified != pdTRUE");
+    /* The return value must be checked.  If the take times out the task has
+     * not acknowledged shutdown; shared RTOS objects must NOT be deleted. */
+    assert_contains(content, "joined != pdTRUE");
 
     /* The stop flag must be cleared AFTER all shared RTOS objects have been
      * freed, not before.  This prevents a late-waking task from re-entering
      * normal SPI operation after its queue/semaphores have already been freed.
-     * Anchor on the unique comment that immediately precedes the assignment. */
-    assert_ordered(content, "vQueueDelete(esp_spi_msg_queue)", "Clear the stop flag only after all shared objects");
+     * Anchor the first arg on the queue-local-delete, and the second on the
+     * unique block-opening comment (including the C comment start) so the
+     * variable-initialiser `= false` at the top of the file is not matched. */
+    assert_ordered(content, "vQueueDelete(q)",
+                   "/* Clear the stop flag only after all shared objects");
 
     free(content);
 }
@@ -170,8 +181,11 @@ void test_esp32_main_deinit_frees_all_rtos_objects(void)
     char *content = read_file(
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
-    /* FreeRTOS queue used for SPI interrupt notifications */
-    assert_contains(content, "vQueueDelete(esp_spi_msg_queue)");
+    /* FreeRTOS queue: NULL the global BEFORE delete (via local copy 'q') so
+     * the ISR NULL-guard in ESP32_GPIO_EXTI_Callback sees NULL before the
+     * handle is freed.  Check both the NULL assignment and the local delete. */
+    assert_contains(content, "esp_spi_msg_queue = NULL;");
+    assert_contains(content, "vQueueDelete(q)");
     /* Stream buffer for AT command transmit */
     assert_contains(content, "vStreamBufferDelete(spi_master_tx_ring_buf)");
     /* Mutex protecting SPI transactions */
@@ -179,6 +193,8 @@ void test_esp32_main_deinit_frees_all_rtos_objects(void)
     /* Request and response semaphores */
     assert_contains(content, "vSemaphoreDelete(esp_ctrl_req_sem)");
     assert_contains(content, "vSemaphoreDelete(esp_resp_read_sem)");
+    /* Join semaphore freed once the task has confirmed exit */
+    assert_contains(content, "vSemaphoreDelete(s_deinit_sync_sem)");
     /* SPI device handle and host struct (pvPortMalloc in init_master_hd) */
     assert_contains(content, "vPortFree(spi_dev_handle->host)");
     assert_contains(content, "vPortFree(spi_dev_handle)");
@@ -249,6 +265,47 @@ void test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown(void)
     free(content);
 }
 
+/* ----- esp_app_main.c: ISR-safe queue teardown ---------------------------- */
+
+void test_esp32_main_deinit_nulls_queue_before_delete(void)
+{
+    char *content = read_file(
+        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+
+    /* The global queue handle must be NULLed BEFORE vQueueDelete() so that
+     * a concurrent ISR (ESP32_GPIO_EXTI_Callback) that reads the global and
+     * then calls xQueueSendFromISR() will hit the NULL guard and skip the
+     * send rather than touching a freed handle.  The actual delete uses a
+     * local copy of the handle. */
+    /* Local copy must be taken BEFORE the global is NULLed, so the handle
+     * remains valid for the vQueueDelete(q) call. */
+    assert_ordered(content, "QueueHandle_t q = esp_spi_msg_queue;",
+                   "esp_spi_msg_queue = NULL;");
+    assert_ordered(content, "esp_spi_msg_queue = NULL;", "vQueueDelete(q)");
+
+    free(content);
+}
+
+/* ----- m1_esp32_hal.c: EXTI disabled before queue teardown ---------------- */
+
+void test_m1_esp32_deinit_disables_exti_before_task_deinit(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_hal.c");
+
+    /* The ESP32 EXTI IRQ lines feed esp_spi_msg_queue from the ISR.
+     * Both DATAREADY and HANDSHAKE lines MUST be disabled before
+     * esp32_main_deinit() deletes the queue, otherwise a concurrent ISR
+     * can enqueue into a freed handle. */
+    assert_ordered(content,
+                   "HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn))",
+                   "esp32_main_deinit();");
+    assert_ordered(content,
+                   "HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn))",
+                   "esp32_main_deinit();");
+
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -262,5 +319,7 @@ int main(void)
     RUN_TEST(test_m1_esp32_deinit_calls_esp32_main_deinit);
     RUN_TEST(test_m1_esp32_deinit_calls_main_deinit_after_uart_deinit);
     RUN_TEST(test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown);
+    RUN_TEST(test_esp32_main_deinit_nulls_queue_before_delete);
+    RUN_TEST(test_m1_esp32_deinit_disables_exti_before_task_deinit);
     return UNITY_END();
 }

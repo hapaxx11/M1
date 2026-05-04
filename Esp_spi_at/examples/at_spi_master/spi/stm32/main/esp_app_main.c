@@ -67,7 +67,12 @@ static bool esp32_main_init_done = false;
 /* Graceful task-exit support for esp32_main_deinit() */
 static volatile bool s_esp32_stop_task = false;
 static TaskHandle_t s_spi_task_handle = NULL;
-static TaskHandle_t s_deinit_caller = NULL;
+/* Binary semaphore used as a task-join barrier.  Created in esp32_main_init()
+ * before the task is created, given by the task on exit, taken by deinit with
+ * a timeout.  Using a dedicated semaphore instead of xTaskNotify avoids the
+ * race where an unrelated pending notification causes xTaskNotifyWait to return
+ * immediately, making deinit free shared objects while the task is still alive. */
+static SemaphoreHandle_t s_deinit_sync_sem = NULL;
 
 /* Forward declaration — defined below ble_advertise(). */
 static uint8_t esp_at_send_wait_ok(ctrl_cmd_t *app_req, const char *at_cmd_str);
@@ -353,11 +358,13 @@ static void spi_trans_control_task(void* arg)
     } // while (1)
 
     free(trans_data);
-    /* Notify the deinit caller (if any) that trans_data is freed and we are
-     * about to self-delete.  The caller can then safely release the remaining
-     * RTOS objects (queues, stream buffer, semaphores, device handle). */
-    if (s_deinit_caller)
-        xTaskNotify(s_deinit_caller, 0, eNoAction);
+    /* Signal the deinit caller that trans_data is freed and we are about to
+     * self-delete.  xSemaphoreGive is unconditional — the deinit side uses a
+     * dedicated binary semaphore rather than xTaskNotify so that an unrelated
+     * pending task notification on the deinit caller's task cannot be mistaken
+     * for our exit signal. */
+    if (s_deinit_sync_sem)
+        xSemaphoreGive(s_deinit_sync_sem);
     vTaskDelete(NULL);
 }
 
@@ -649,7 +656,7 @@ bool get_esp32_main_init_status(void)
 /******************************************************************************/
 void esp32_main_deinit(void)
 {
-	BaseType_t notified;
+	BaseType_t joined;
 
 	if (!esp32_main_init_done)
 		return;
@@ -660,20 +667,24 @@ void esp32_main_deinit(void)
 	if (s_spi_task_handle != NULL)
 	{
 		spi_master_msg_t sentinel = { .slave_notify_flag = false };
-		s_deinit_caller = xTaskGetCurrentTaskHandle();
 		s_esp32_stop_task = true;
 		/* Best-effort: wait up to 100 ms for a queue slot.  Even if this
 		 * times out, the task will see s_esp32_stop_task on its next dequeue
 		 * iteration and still exit — just without the explicit wake-up. */
 		(void)xQueueSendToFront(esp_spi_msg_queue, &sentinel, pdMS_TO_TICKS(100));
 
-		/* Wait up to 500 ms for the task to notify us that it has freed
-		 * trans_data and is about to call vTaskDelete(NULL). */
-		notified = xTaskNotifyWait(0, 0, NULL, pdMS_TO_TICKS(500));
+		/* Wait up to 500 ms for the task to give s_deinit_sync_sem, confirming
+		 * it has freed trans_data and is about to self-delete.  A dedicated
+		 * binary semaphore is used instead of xTaskNotifyWait() to avoid the
+		 * race where an unrelated pending notification on the calling task's
+		 * notification value causes the wait to return immediately. */
+		joined = (s_deinit_sync_sem != NULL)
+		       ? xSemaphoreTake(s_deinit_sync_sem, pdMS_TO_TICKS(500))
+		       : pdFALSE;
 
-		if (notified != pdTRUE)
+		if (joined != pdTRUE)
 		{
-			/* xTaskNotifyWait timed out — the task has not acknowledged
+			/* xSemaphoreTake timed out — the task has not acknowledged
 			 * shutdown.  We cannot safely delete shared RTOS objects
 			 * (queue, semaphores) while the task may still be blocked on
 			 * them; doing so is undefined behaviour.  Leave all shared
@@ -681,21 +692,33 @@ void esp32_main_deinit(void)
 			 * the task will self-delete when it next runs; the next
 			 * esp32_main_deinit() call will find esp32_main_init_done still
 			 * true and retry. */
-			s_deinit_caller = NULL;
 			return;
 		}
 
 		/* Task confirmed exit — safe to free shared objects. */
-		s_deinit_caller = NULL;
 		s_spi_task_handle = NULL;
 	}
 
+	/* Release the join semaphore itself now that the task is gone. */
+	if (s_deinit_sync_sem)
+	{
+		vSemaphoreDelete(s_deinit_sync_sem);
+		s_deinit_sync_sem = NULL;
+	}
+
 	/* Release all RTOS objects and device-handle memory that were allocated
-	 * by init_master_hd().  The task has already freed its own trans_data. */
+	 * by init_master_hd().  The task has already freed its own trans_data.
+	 *
+	 * IMPORTANT: for the queue, NULL the global handle BEFORE vQueueDelete so
+	 * that any concurrent ISR that calls xQueueSendFromISR() after seeing a
+	 * non-NULL pointer (but before the delete completes) hits the NULL guard in
+	 * ESP32_GPIO_EXTI_Callback() and skips the send rather than touching a
+	 * freed handle.  Use a local copy for the actual deletion. */
 	if (esp_spi_msg_queue)
 	{
-		vQueueDelete(esp_spi_msg_queue);
-		esp_spi_msg_queue = NULL;
+		QueueHandle_t q = esp_spi_msg_queue;
+		esp_spi_msg_queue = NULL;  /* ISR NULL-guard: visible before vQueueDelete */
+		vQueueDelete(q);
 	}
 	if (spi_master_tx_ring_buf)
 	{
@@ -788,11 +811,19 @@ void esp32_main_init(void)
 	/* Reset graceful-exit state from any prior deinit cycle */
 	s_esp32_stop_task = false;
 	s_spi_task_handle = NULL;
-	s_deinit_caller = NULL;
+	s_deinit_sync_sem = NULL;
 
 	reset_slave();
 
 	init_master_hd(&spi_dev_handle);
+
+	/* Create the join semaphore BEFORE the task so it is ready the moment
+	 * the task gives it on exit.  A binary semaphore is created in the taken
+	 * (empty) state, so xSemaphoreTake in deinit will block until the task
+	 * calls xSemaphoreGive — no spurious wake from unrelated notifications. */
+	s_deinit_sync_sem = xSemaphoreCreateBinary();
+	assert(s_deinit_sync_sem != NULL);
+
     ret = xTaskCreate(spi_trans_control_task, "spi_trans_control_task", M1_TASK_STACK_SIZE_2048, NULL, TASK_PRIORITY_ESP32_TASKS, &s_spi_task_handle);
 	assert(ret==pdPASS);
 	free_heap = xPortGetFreeHeapSize(); // xPortGetMinimumEverFreeHeapSize()

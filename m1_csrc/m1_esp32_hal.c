@@ -426,8 +426,17 @@ void m1_esp32_deinit(void)
 
 	if ( esp32_init_done )
 	{
+		/* Disable and clear the EXTI lines that feed esp_spi_msg_queue from the
+		 * ISR (ESP32_GPIO_EXTI_Callback).  Do this FIRST, before any task or
+		 * queue teardown, so the ISR cannot enqueue into a queue handle that is
+		 * about to be freed. */
+		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
+		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
+		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
+		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
+
 #ifndef ESP32_UART_DISABLE
-		/* UART first: prevents UART-driven DMA callbacks from firing into
+		/* UART next: prevents UART-driven DMA callbacks from firing into
 		 * the semaphores that esp32_main_deinit() is about to free. */
 		esp32_UART_deinit();
 #endif // #ifndef ESP32_UART_DISABLE
