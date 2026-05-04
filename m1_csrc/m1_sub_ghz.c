@@ -3050,14 +3050,22 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 
 	while ( subghz_front_buffer_size >= 256 )
 	{
-		subghz_front_buffer_base = malloc(subghz_front_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
+		/* Allocate from the FreeRTOS heap (pvPortMalloc / vPortFree).
+		 * The newlib heap (_sbrk-backed) is much smaller and is shared with
+		 * the SD-manager write buffer and other C-library allocations.  The
+		 * FreeRTOS heap has ample free space (typically >180 KB) for the
+		 * large front-buffer without starving those other allocators.
+		 * NOTE: the base pointer is over-allocated by SUBGHZ_DMA_ALIGN-1 so
+		 * the aligned subghz_front_buffer pointer stays within the allocation;
+		 * always free subghz_front_buffer_base, never the aligned pointer. */
+		subghz_front_buffer_base = pvPortMalloc(subghz_front_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
 		if ( !subghz_front_buffer_base )
 			goto retry_smaller_capture_buffer;
 		subghz_front_buffer = (uint16_t *)(((uintptr_t)subghz_front_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
-		subghz_ring_read_buffer = malloc(SUBGHZ_RAW_DATA_SAMPLES_TO_RW*2); // Each sample has a 2-byte value
+		subghz_ring_read_buffer = pvPortMalloc(SUBGHZ_RAW_DATA_SAMPLES_TO_RW*2); // Each sample has a 2-byte value
 		if ( !subghz_ring_read_buffer )
 			goto retry_smaller_capture_buffer;
-		subghz_sdcard_write_buffer = malloc(SUBGHZ_FORTMATTED_DATA_SAMPLES_TO_RW);
+		subghz_sdcard_write_buffer = pvPortMalloc(SUBGHZ_FORTMATTED_DATA_SAMPLES_TO_RW);
 		if ( !subghz_sdcard_write_buffer )
 			goto retry_smaller_capture_buffer;
 		/* The SD manager still needs heap for its write-buffer reserve after
@@ -3081,7 +3089,7 @@ retry_smaller_capture_buffer:
 	} // while ( subghz_front_buffer_size >= 256 )
 
 	sub_ghz_ring_buffers_deinit();
-	M1_LOG_I(M1_LOGDB_TAG, "sub_ghz_ring_buffers_init FAILED heap_free=%lu\r\n",
+	M1_LOG_I(M1_LOGDB_TAG, "sub_ghz_ring_buffers_init FAILED freertos_heap_free=%lu\r\n",
 	         (unsigned long)xPortGetFreeHeapSize());
 	return 1;
 } // static uint8_t sub_ghz_ring_buffers_init(void)
@@ -3238,7 +3246,8 @@ static void sub_ghz_ring_buffers_deinit(void)
 {
 	if ( subghz_front_buffer )
 	{
-		free(subghz_front_buffer_base);
+		/* Must use vPortFree — allocated with pvPortMalloc in ring_buffers_init */
+		vPortFree(subghz_front_buffer_base);
 		subghz_front_buffer = NULL;
 		subghz_front_buffer_base = NULL;
 		subghz_front_buffer_size = 0;
@@ -3246,13 +3255,13 @@ static void sub_ghz_ring_buffers_deinit(void)
 
 	if ( subghz_ring_read_buffer )
 	{
-		free(subghz_ring_read_buffer);
+		vPortFree(subghz_ring_read_buffer);
 		subghz_ring_read_buffer = NULL;
 	} // if ( subghz_ring_read_buffer )
 
 	if ( subghz_sdcard_write_buffer )
 	{
-		free(subghz_sdcard_write_buffer);
+		vPortFree(subghz_sdcard_write_buffer);
 		subghz_sdcard_write_buffer = NULL;
 	}
 	subghz_record_mode_flag = false;
