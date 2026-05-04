@@ -220,6 +220,28 @@ endif()
 add_test(NAME esp32_subghz_lifecycle COMMAND test_esp32_subghz_lifecycle)
 
 # ------------------------------------------------------------------
+# Source invariant: esp32_main_deinit() releases all heap held by the
+# legacy AT-over-SPI plumbing (task stack, trans_data, stream buffer,
+# semaphores, device handle).
+# Bug context: Sub-GHz Read Raw failed after any ESP32-dependent feature
+# (Bad-BT, Zigbee scan, FW update) because esp32_main_init() allocated
+# ~17 KB that was never freed, leaving insufficient heap for the 128 KB
+# capture buffer + 28 KB SD-writer reserve.
+# ------------------------------------------------------------------
+add_executable(test_esp32_main_deinit_releases_legacy_task
+    test_esp32_main_deinit_releases_legacy_task.c
+)
+target_compile_definitions(test_esp32_main_deinit_releases_legacy_task PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_esp32_main_deinit_releases_legacy_task PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_main_deinit_releases_legacy_task PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_main_deinit_releases_legacy_task
+    COMMAND test_esp32_main_deinit_releases_legacy_task)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_protocol_registry (lookup functions)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —
