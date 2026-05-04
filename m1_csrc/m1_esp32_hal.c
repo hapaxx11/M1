@@ -478,10 +478,6 @@ void m1_esp32_deinit(void)
 		GPIO_InitStruct.Pin = ESP32_SPI3_SCK_Pin|ESP32_SPI3_MISO_Pin;
 		HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-		HAL_NVIC_DisableIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
-		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_DATAREADY_EXTI_IRQn));
-		HAL_NVIC_ClearPendingIRQ((IRQn_Type)(ESP32_HANDSHAKE_EXTI_IRQn));
 //		esp32_disable();
 
 		esp32_init_done = FALSE;
