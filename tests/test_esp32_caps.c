@@ -195,10 +195,10 @@ void test_parse_fw_name_always_null_terminated(void)
     uint8_t buf[64];
     /* Fill fw_name field with 31 printable chars + no NUL */
     make_payload(buf, M1_ESP32_CAPS_PROTO_VER, 0u, NULL, 0u, 0u);
-    /* bytes 5-35 = 31 'A' chars; byte 36 (last of the 32-byte field) = 'B'
+    /* bytes 9-39 = 31 'A' chars; byte 40 (last of the 32-byte fw_name field) = 'B'
      * This simulates a firmware that forgot the NUL terminator */
-    memset(&buf[5], 'A', 31);
-    buf[36] = 'B';
+    memset(&buf[9], 'A', 31);
+    buf[40] = 'B';
 
     uint64_t bitmap = 0;
     char     fw_name[32];
@@ -323,7 +323,8 @@ void test_parse_bitmap_little_endian(void)
     uint8_t buf[64];
     memset(buf, 0, sizeof(buf));
     buf[0] = M1_ESP32_CAPS_PROTO_VER;
-    /* Manually write 0x0102030405060708 in LE at bytes 1-8 */
+    /* Manually write 0x0102030405060708 in LE at bytes 1-8:
+     * byte 1 = LSB (0x08), byte 8 = MSB (0x01) */
     buf[1] = 0x08; buf[2] = 0x07; buf[3] = 0x06; buf[4] = 0x05;
     buf[5] = 0x04; buf[6] = 0x03; buf[7] = 0x02; buf[8] = 0x01;
 
