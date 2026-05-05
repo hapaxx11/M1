@@ -184,68 +184,41 @@ first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
 
 ### CMD_GET_STATUS payload format (protocol version 1)
 
-The 45-byte response payload returned by supporting ESP32 firmware:
+The 41-byte response payload returned by supporting ESP32 firmware:
 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
 | 0 | 1 | `proto_ver` | Must be `0x01` |
-| 1 | 8 | `at_cmd_bitmap` | Standard AT command bits (little-endian `uint64_t`) |
-| 9 | 4 | `ext_bitmap` | Binary-SPI extension bits (little-endian `uint32_t`) |
-| 13 | 32 | `fw_name` | Null-terminated firmware identifier string |
+| 1 | 8 | `cap_bitmap` | `M1_ESP32_CAP_*` capability bits (little-endian `uint64_t`) |
+| 9 | 32 | `fw_name` | Null-terminated firmware identifier string |
 
-The two bitmaps serve different roles:
+The `cap_bitmap` field carries `M1_ESP32_CAP_*` bits **directly** — no derivation
+step is needed on the STM32 side.  Any firmware variant, whether it implements
+features through binary-SPI extensions or AT text commands, sets the same bit for
+the same capability.  This means a feature always has exactly one flag position,
+regardless of how the ESP32 implements it internally.
 
-- **`at_cmd_bitmap`** — each bit represents one standard ESP-AT text command that the
-  firmware supports (`M1_AT_CMD_*` constants, see below).  Set the bit if the firmware
-  responds to that command; leave it clear if not.
-- **`ext_bitmap`** — each bit represents a binary-SPI-only extension command that has no
-  equivalent in the stock AT command set (`M1_EXT_CMD_*` constants, see below).  SiN360
-  and future binary-SPI firmwares use this field; AT-only firmwares leave it zero.
+### Wire bits — `cap_bitmap`
 
-The STM32 calls `m1_esp32_caps_derive(at_cmd_bitmap, ext_bitmap)` internally to map
-these two wire bitmaps to the high-level `M1_ESP32_CAP_*` capability bits used by the
-rest of the firmware.
+Set the bit for each feature your firmware supports; leave all other bits clear.
 
-### Wire bits — standard AT commands (`at_cmd_bitmap`)
-
-| Bit | Constant | AT command(s) |
-|-----|----------|---------------|
-| 0 | `M1_AT_CMD_AT` | `AT` — basic connectivity check |
-| 1 | `M1_AT_CMD_GMR` | `AT+GMR` — firmware version |
-| 2 | `M1_AT_CMD_CWMODE` | `AT+CWMODE` — WiFi station/AP/dual mode |
-| 3 | `M1_AT_CMD_CWLAP` | `AT+CWLAP` — WiFi AP scan → `M1_ESP32_CAP_WIFI_SCAN` |
-| 4 | `M1_AT_CMD_CWJAP` | `AT+CWJAP` — WiFi connect → `M1_ESP32_CAP_WIFI_CONNECT` |
-| 5 | `M1_AT_CMD_CWQAP` | `AT+CWQAP` — WiFi disconnect |
-| 6 | `M1_AT_CMD_CIPSTAMAC` | `AT+CIPSTAMAC` — query MAC address |
-| 7 | `M1_AT_CMD_CWSTARTSMART` | `AT+CWSTARTSMART` — SmartConfig start |
-| 8 | `M1_AT_CMD_CWSTOPSMART` | `AT+CWSTOPSMART` — SmartConfig stop |
-| 9 | `M1_AT_CMD_BLEINIT` | `AT+BLEINIT` — BLE initialisation |
-| 10 | `M1_AT_CMD_BLESCANPARAM` | `AT+BLESCANPARAM` — BLE scan parameters |
-| 11 | `M1_AT_CMD_BLESCAN` | `AT+BLESCAN` — BLE device scan → `M1_ESP32_CAP_BLE_SCAN` |
-| 12 | `M1_AT_CMD_BLEGAPADV` | `AT+BLEGAPADV` — BLE GAP advertise params → `M1_ESP32_CAP_BLE_ADV` |
-| 13 | `M1_AT_CMD_BLEADVSTART` | `AT+BLEADVSTART` — start BLE advertising |
-| 14 | `M1_AT_CMD_BLEADVSTOP` | `AT+BLEADVSTOP` — stop BLE advertising |
-| 15 | `M1_AT_CMD_BLEGATTCPRIMSRV` | `AT+BLEGATTCPRIMSRV` — GATT primary services |
-| 16 | `M1_AT_CMD_BLEGATTCCHAR` | `AT+BLEGATTCCHAR` — GATT characteristics |
-| 17 | `M1_AT_CMD_BLEGATTCWR` | `AT+BLEGATTCWR` — GATT write |
-| 18 | `M1_AT_CMD_BLEGATTCNTFY` | `AT+BLEGATTCNTFY` — GATT notify |
-| 19-63 | — | Reserved for future use |
-
-### Wire bits — binary-SPI extensions (`ext_bitmap`)
-
-| Bit | Constant | Feature | High-level cap derived |
-|-----|----------|---------|------------------------|
-| 0 | `M1_EXT_CMD_STA_SCAN` | WiFi station discovery | `M1_ESP32_CAP_WIFI_STA_SCAN` |
-| 1 | `M1_EXT_CMD_WIFI_SNIFF` | Packet monitor / sniffer | `M1_ESP32_CAP_WIFI_SNIFF` |
-| 2 | `M1_EXT_CMD_WIFI_ATTACK` | Deauth, beacon spam, karma | `M1_ESP32_CAP_WIFI_ATTACK` |
-| 3 | `M1_EXT_CMD_WIFI_NETSCAN` | Ping / ARP / SSH / port scan | `M1_ESP32_CAP_WIFI_NETSCAN` |
-| 4 | `M1_EXT_CMD_WIFI_PORTAL` | Evil portal | `M1_ESP32_CAP_WIFI_EVIL_PORTAL` |
-| 5 | `M1_EXT_CMD_BLE_SPAM` | BLE beacon spam variants | `M1_ESP32_CAP_BLE_SPAM` |
-| 6 | `M1_EXT_CMD_BLE_SNIFF` | BLE packet sniffers | `M1_ESP32_CAP_BLE_SNIFF` |
-| 7 | `M1_EXT_CMD_BLE_HID` | BLE HID keyboard (Bad-BT) | `M1_ESP32_CAP_BLE_HID` |
-| 8 | `M1_EXT_CMD_BT_MANAGE` | BT device management | `M1_ESP32_CAP_BT_MANAGE` |
-| 9 | `M1_EXT_CMD_802154` | IEEE 802.15.4 / Zigbee / Thread | `M1_ESP32_CAP_802154` |
-| 10-31 | — | Reserved for future use | — |
+| Bit | `M1_ESP32_CAP_*` constant | Feature |
+|-----|--------------------------|---------|
+| 0 | `M1_ESP32_CAP_WIFI_SCAN` | WiFi AP scan |
+| 1 | `M1_ESP32_CAP_WIFI_STA_SCAN` | WiFi station discovery |
+| 2 | `M1_ESP32_CAP_WIFI_SNIFF` | Packet monitor / sniffer |
+| 3 | `M1_ESP32_CAP_WIFI_ATTACK` | Deauth, beacon spam, karma, evil portal attacks |
+| 4 | `M1_ESP32_CAP_WIFI_NETSCAN` | Ping / ARP / SSH / port scan |
+| 5 | `M1_ESP32_CAP_WIFI_EVIL_PORTAL` | Evil portal |
+| 6 | `M1_ESP32_CAP_WIFI_CONNECT` | WiFi station connect / NTP sync |
+| 7 | `M1_ESP32_CAP_BLE_SCAN` | BLE device scan |
+| 8 | `M1_ESP32_CAP_BLE_ADV` | BLE advertising (GAP) |
+| 9 | `M1_ESP32_CAP_BLE_SPAM` | BLE beacon spam variants |
+| 10 | `M1_ESP32_CAP_BLE_SNIFF` | BLE packet sniffers |
+| 11 | `M1_ESP32_CAP_BLE_HID` | BLE HID keyboard (Bad-BT) |
+| 12 | `M1_ESP32_CAP_BT_MANAGE` | Classic BT device management |
+| 13 | `M1_ESP32_CAP_802154` | IEEE 802.15.4 / Zigbee / Thread |
+| 14-63 | — | Reserved for future use |
 
 ### Capability matrix by firmware variant
 
@@ -276,18 +249,15 @@ feature silently disappears when the runtime handshake fails.
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 
-Respond to opcode `0x02` with a 45-byte `m1_esp32_status_payload_t` payload:
+Respond to opcode `0x02` with a 41-byte `m1_esp32_status_payload_t` payload:
 
 - `proto_ver = 1`
-- `at_cmd_bitmap` — set the `M1_AT_CMD_*` bit for each standard AT command your
-  firmware actually handles; leave all other bits clear.
-- `ext_bitmap` — set the `M1_EXT_CMD_*` bit for each binary-SPI extension your
-  firmware supports; leave all other bits clear.
+- `cap_bitmap` — set the `M1_ESP32_CAP_*` bit for each feature your firmware
+  supports; leave all other bits clear.  Use the same bit position for the same
+  feature regardless of whether your implementation uses AT text commands or
+  binary SPI extensions internally.
 - `fw_name` — a short null-terminated version string (e.g. `"SiN360-0.9.7"` or
   `"AT-bedge117-2.0.2"`); unused bytes are zero-padded.
-
-The STM32 host automatically maps these two bitmaps to the internal
-`M1_ESP32_CAP_*` capability bits via `m1_esp32_caps_derive()`.
 
 > **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
 > on a capability bit (`m1_esp32_require_cap` / `m1_esp32_has_cap`), **not** on a
