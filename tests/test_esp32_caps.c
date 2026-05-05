@@ -96,78 +96,91 @@ void test_derive_cwjap_gives_wifi_connect(void)
 {
     uint64_t caps = m1_esp32_caps_derive(M1_AT_CMD_CWJAP, 0u);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_CONNECT);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_WIFI_CONNECT);
 }
 
 void test_derive_blescan_gives_ble_scan(void)
 {
     uint64_t caps = m1_esp32_caps_derive(M1_AT_CMD_BLESCAN, 0u);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_BLE_SCAN);
 }
 
 void test_derive_blegapadv_gives_ble_adv(void)
 {
     uint64_t caps = m1_esp32_caps_derive(M1_AT_CMD_BLEGAPADV, 0u);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_ADV);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_BLE_ADV);
 }
 
 void test_derive_ext_sta_scan(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_STA_SCAN);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_STA_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_WIFI_STA_SCAN);
 }
 
 void test_derive_ext_wifi_sniff(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_WIFI_SNIFF);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_SNIFF);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_WIFI_SNIFF);
 }
 
 void test_derive_ext_wifi_attack(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_WIFI_ATTACK);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_ATTACK);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_WIFI_ATTACK);
 }
 
 void test_derive_ext_wifi_netscan(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_WIFI_NETSCAN);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_NETSCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_WIFI_NETSCAN);
 }
 
 void test_derive_ext_wifi_portal(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_WIFI_PORTAL);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_EVIL_PORTAL);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_WIFI_EVIL_PORTAL);
 }
 
 void test_derive_ext_ble_spam(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_BLE_SPAM);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_SPAM);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_BLE_SPAM);
 }
 
 void test_derive_ext_ble_sniff(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_BLE_SNIFF);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_SNIFF);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_BLE_SNIFF);
 }
 
 void test_derive_ext_ble_hid(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_BLE_HID);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_BLE_HID);
 }
 
 void test_derive_ext_bt_manage(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_BT_MANAGE);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BT_MANAGE);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_BT_MANAGE);
 }
 
 void test_derive_ext_802154(void)
 {
     uint64_t caps = m1_esp32_caps_derive(0u, M1_EXT_CMD_802154);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_802154);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps & ~M1_ESP32_CAP_802154);
 }
 
 /* =========================================================================

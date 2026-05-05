@@ -278,7 +278,7 @@ static inline uint64_t m1_esp32_caps_derive(uint64_t at_cmd, uint32_t ext)
     if (ext & M1_EXT_CMD_BT_MANAGE)    caps |= M1_ESP32_CAP_BT_MANAGE;
 
     /* IEEE 802.15.4 */
-    if (ext & M1_EXT_CMD_802154)        caps |= M1_ESP32_CAP_802154;
+    if (ext & M1_EXT_CMD_802154)       caps |= M1_ESP32_CAP_802154;
 
     return caps;
 }
