@@ -74,10 +74,10 @@ void m1_esp32_caps_init(void)
     else
     {
         /* No CMD_GET_STATUS support or timeout — use compile-flag fallback.
-         * AT firmware (bedge117, neddy299) also times out here — it does not
-         * understand binary SPI opcodes.  Both cases fall back to the SiN360
-         * profile, which is the only variant the M1 binary SPI transport can
-         * actually query. */
+         * This covers firmware that predates CMD_GET_STATUS support.
+         * Firmware that has implemented CMD_GET_STATUS (SiN360 binary-SPI,
+         * AT firmware with feat/cmd_get_status) will have taken the success
+         * path above and self-reported its capabilities. */
         s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
         strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';

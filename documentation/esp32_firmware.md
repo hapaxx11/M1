@@ -222,6 +222,11 @@ Set the bit for each feature your firmware supports; leave all other bits clear.
 
 ### Capability matrix by firmware variant
 
+Both SiN360 and AT firmware variants respond to CMD_GET_STATUS and self-report
+their capabilities.  The table below shows the expected `cap_bitmap` for each
+variant.  AT firmware without `feat/cmd_get_status` triggers the fallback path
+and is treated as SiN360-equivalent (see below).
+
 | Feature | SiN360 | bedge117 C3 | neddy299 |
 |---------|:------:|:-----------:|:--------:|
 | WiFi AP scan | ✅ | ✅ | ✅ |
@@ -238,14 +243,15 @@ Set the bit for each feature your firmware supports; leave all other bits clear.
 | **BT device management** | — | ✅ | ✅ |
 | **IEEE 802.15.4** | — | ✅ | ✅ |
 
-### Fallback behaviour (older firmware without CMD_GET_STATUS)
+### Fallback behaviour (firmware without CMD_GET_STATUS)
 
-If the ESP32 firmware returns `RESP_ERR` or times out on `CMD_GET_STATUS`,
-the M1 derives a capability bitmap from the compile-time
-`M1_APP_WIFI_CONNECT_ENABLE` / `M1_APP_BADBT_ENABLE` / `M1_APP_BT_MANAGE_ENABLE`
-flags.  SiN360 binary-SPI capabilities (scan, sniff, attack, BLE spam/sniff) are
-always included in the fallback.  This preserves current behaviour exactly — no
-feature silently disappears when the runtime handshake fails.
+If the ESP32 firmware returns `RESP_ERR` or times out on `CMD_GET_STATUS`, the
+M1 falls back to `M1_ESP32_CAP_PROFILE_SIN360` (WiFi scan/sniff/attack, BLE
+scan/spam/sniff) as the capability bitmap.  This applies to firmware that
+predates `CMD_GET_STATUS` support.  Firmware that has implemented the command —
+including SiN360 binary-SPI and AT firmware with `feat/cmd_get_status` — will
+have taken the success path above and self-reported its capabilities; no
+AT-specific profile defaults are needed on the STM32 side.
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 

@@ -22,9 +22,10 @@
  * Wire protocol note:
  *   CMD_GET_STATUS (0x02) on the binary SPI channel.  The response carries
  *   M1_ESP32_CAP_* bits directly in a single cap_bitmap field — no
- *   derivation step is needed on the STM32 side.  Only SiN360-style binary
- *   firmware responds; stock ESP-AT firmware does not understand binary
- *   opcodes and will time out, triggering the fallback path.
+ *   derivation step is needed on the STM32 side.  Any firmware variant that
+ *   implements CMD_GET_STATUS (SiN360 binary-SPI or AT firmware with the
+ *   feat/cmd_get_status extension) can respond; firmware that does not
+ *   implement CMD_GET_STATUS will time out, triggering the fallback path.
  *
  * M1 Project
  */
@@ -72,10 +73,10 @@
  * Compile-time fallback profile
  *
  * Used as the CMD_GET_STATUS fallback when the connected firmware does not
- * implement CMD_GET_STATUS (e.g. older SiN360 firmware that predates that
- * command).  Only SiN360 binary-SPI firmware can respond to CMD_GET_STATUS;
- * stock ESP-AT firmware does not understand binary SPI opcodes and will time
- * out, triggering this fallback.
+ * implement CMD_GET_STATUS (e.g. older SiN360 or AT firmware that predates
+ * that command).  Firmware that supports CMD_GET_STATUS — including SiN360
+ * binary-SPI firmware and AT firmware with the feat/cmd_get_status extension
+ * — self-reports its capabilities; no profile macro is needed for those.
  * =========================================================================*/
 
 /** SiN360 binary-SPI firmware (sincere360/M1_SiN360_ESP32) */
@@ -95,8 +96,8 @@
  * CMD_GET_STATUS payload structure (protocol version 1)
  *
  * The ESP32 firmware returns this in the 60-byte resp.payload[] when it
- * receives CMD_GET_STATUS (0x02).  Older firmware that does not implement
- * CMD_GET_STATUS will return RESP_ERR or a timeout, triggering the
+ * receives CMD_GET_STATUS (0x02).  Firmware that does not implement
+ * CMD_GET_STATUS will return RESP_ERR or time out, triggering the
  * compile-flag fallback.
  *
  * The single cap_bitmap field carries M1_ESP32_CAP_* bits directly.
@@ -104,11 +105,6 @@
  * bit for the same capability.  There is no derivation step on the STM32
  * side; a feature has exactly one flag regardless of how the ESP32 firmware
  * implements it internally.
- *
- * Only SiN360-style binary-SPI firmware responds to CMD_GET_STATUS on the
- * binary SPI channel.  Stock ESP-AT firmware does not understand binary
- * opcodes; it will time out, and the host uses M1_ESP32_CAP_PROFILE_SIN360
- * as the fallback.
  * =========================================================================*/
 
 #define M1_ESP32_CAPS_PROTO_VER  1u
