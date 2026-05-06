@@ -39,45 +39,18 @@ static char     s_fw_name[32]     = "Unknown";
 /*************** I N T E R N A L   H E L P E R S *****************************/
 
 /**
- * Derive a capability bitmap from compile-time feature flags.
+ * Return the compile-time fallback capability bitmap.
  *
- * This is the fallback used when the ESP32 firmware does not implement
- * CMD_GET_STATUS.  It exactly mirrors the feature set that was compiled in,
- * preserving the behaviour that existed before the runtime cap layer was
- * added — no feature silently disappears.
- *
- * SiN360 binary-SPI features are always assumed available (they form the
- * base of the current build).  AT-layer features are included only when
- * the corresponding compile flag was set.
+ * Used when the connected firmware does not respond to CMD_GET_STATUS
+ * (e.g. older SiN360 that predates the command).  AT-based firmware
+ * (bedge117, neddy299) also cannot respond — it uses text AT commands and
+ * does not understand binary SPI opcodes.  The fallback therefore always
+ * reflects the SiN360 feature set, which is the only firmware variant that
+ * the M1 binary SPI transport can query at all.
  */
 static uint64_t caps_build_fallback_bitmap(void)
 {
-    uint64_t caps = 0u;
-
-    /* SiN360 binary-SPI capabilities — present in all current builds */
-    caps |= M1_ESP32_CAP_WIFI_SCAN;
-    caps |= M1_ESP32_CAP_WIFI_STA_SCAN;
-    caps |= M1_ESP32_CAP_WIFI_SNIFF;
-    caps |= M1_ESP32_CAP_WIFI_ATTACK;
-    caps |= M1_ESP32_CAP_WIFI_NETSCAN;
-    caps |= M1_ESP32_CAP_WIFI_EVIL_PORTAL;
-    caps |= M1_ESP32_CAP_BLE_SCAN;
-    caps |= M1_ESP32_CAP_BLE_ADV;
-    caps |= M1_ESP32_CAP_BLE_SPAM;
-    caps |= M1_ESP32_CAP_BLE_SNIFF;
-
-    /* AT-layer capabilities — only when compile flags say they are built in */
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-    caps |= M1_ESP32_CAP_WIFI_CONNECT;
-#endif
-#ifdef M1_APP_BADBT_ENABLE
-    caps |= M1_ESP32_CAP_BLE_HID;
-#endif
-#ifdef M1_APP_BT_MANAGE_ENABLE
-    caps |= M1_ESP32_CAP_BT_MANAGE;
-#endif
-
-    return caps;
+    return M1_ESP32_CAP_PROFILE_SIN360;
 }
 
 /*************** P U B L I C   A P I ******************************************/

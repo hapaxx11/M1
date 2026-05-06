@@ -10,7 +10,6 @@
  *
  * Tests cover:
  *   - Valid payload with SiN360 cap profile → correct caps and fw_name
- *   - Valid payload with AT/C3 cap profile  → correct caps and fw_name
  *   - Valid payload with zero cap_bitmap    → zero caps
  *   - Payload too short → parse returns false, outputs unchanged
  *   - Wrong protocol version → parse returns false
@@ -83,27 +82,6 @@ void test_parse_valid_sin360(void)
     TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
                               caps & M1_ESP32_CAP_PROFILE_SIN360);
     TEST_ASSERT_EQUAL_STRING("SiN360-0.9.6", fw_name);
-}
-
-void test_parse_valid_at_c3(void)
-{
-    uint8_t buf[64];
-    make_payload(buf, M1_ESP32_CAPS_PROTO_VER,
-                 M1_ESP32_CAP_PROFILE_AT_C3,
-                 "AT-bedge117-2.0.2");
-
-    uint64_t caps = 0;
-    char     fw_name[32];
-    bool ok = m1_esp32_caps_parse_payload(buf, sizeof(m1_esp32_status_payload_t),
-                                          &caps, fw_name);
-
-    TEST_ASSERT_TRUE(ok);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_SCAN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_WIFI_CONNECT);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BT_MANAGE);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_802154);
-    TEST_ASSERT_EQUAL_STRING("AT-bedge117-2.0.2", fw_name);
 }
 
 void test_parse_empty_cap_gives_zero_caps(void)
@@ -282,29 +260,6 @@ void test_sin360_cap_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
 }
 
-void test_at_c3_cap_profile_has_expected_caps(void)
-{
-    const uint64_t p = M1_ESP32_CAP_PROFILE_AT_C3;
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_CONNECT);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
-    /* AT/C3 does NOT support SiN360 sniffers or attacks */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SNIFF);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_ATTACK);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SPAM);
-}
-
-void test_neddy299_cap_profile_extends_at_c3(void)
-{
-    const uint64_t c3     = M1_ESP32_CAP_PROFILE_AT_C3;
-    const uint64_t neddy  = M1_ESP32_CAP_PROFILE_AT_NEDDY299;
-    /* neddy299 is a strict superset of AT_C3 */
-    TEST_ASSERT_EQUAL_UINT64(c3, neddy & c3);
-    /* Adds station scan and attack */
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), neddy & M1_ESP32_CAP_WIFI_STA_SCAN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), neddy & M1_ESP32_CAP_WIFI_ATTACK);
-}
-
 /* =========================================================================
  * main
  * =========================================================================*/
@@ -315,7 +270,6 @@ int main(void)
 
     /* Parse: valid payload */
     RUN_TEST(test_parse_valid_sin360);
-    RUN_TEST(test_parse_valid_at_c3);
     RUN_TEST(test_parse_empty_cap_gives_zero_caps);
 
     /* Parse: error paths */
@@ -335,8 +289,6 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_cap_profile_has_expected_caps);
-    RUN_TEST(test_at_c3_cap_profile_has_expected_caps);
-    RUN_TEST(test_neddy299_cap_profile_extends_at_c3);
 
     return UNITY_END();
 }

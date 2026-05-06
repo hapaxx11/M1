@@ -69,12 +69,13 @@
 /* Bits 14-63 reserved for future use */
 
 /* =========================================================================
- * Composite high-level profiles
+ * Compile-time fallback profile
  *
- * These express the capability set of each known firmware variant in terms
- * of M1_ESP32_CAP_* bits.  Used as the CMD_GET_STATUS fallback when no
- * binary-SPI handshake is possible (e.g. older SiN360 firmware that predates
- * CMD_GET_STATUS support, or a non-binary firmware path).
+ * Used as the CMD_GET_STATUS fallback when the connected firmware does not
+ * implement CMD_GET_STATUS (e.g. older SiN360 firmware that predates that
+ * command).  Only SiN360 binary-SPI firmware can respond to CMD_GET_STATUS;
+ * stock ESP-AT firmware does not understand binary SPI opcodes and will time
+ * out, triggering this fallback.
  * =========================================================================*/
 
 /** SiN360 binary-SPI firmware (sincere360/M1_SiN360_ESP32) */
@@ -89,20 +90,6 @@
      M1_ESP32_CAP_BLE_ADV          | \
      M1_ESP32_CAP_BLE_SPAM         | \
      M1_ESP32_CAP_BLE_SNIFF)
-
-/** bedge117 / C3.12 AT firmware (WiFi-connect + BLE-HID + 802.15.4) */
-#define M1_ESP32_CAP_PROFILE_AT_C3 \
-    (M1_ESP32_CAP_WIFI_SCAN    | \
-     M1_ESP32_CAP_WIFI_CONNECT | \
-     M1_ESP32_CAP_BLE_HID      | \
-     M1_ESP32_CAP_BT_MANAGE    | \
-     M1_ESP32_CAP_802154)
-
-/** neddy299 deauth fork (C3 + deauth + station scan) */
-#define M1_ESP32_CAP_PROFILE_AT_NEDDY299 \
-    (M1_ESP32_CAP_PROFILE_AT_C3 | \
-     M1_ESP32_CAP_WIFI_STA_SCAN | \
-     M1_ESP32_CAP_WIFI_ATTACK)
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
