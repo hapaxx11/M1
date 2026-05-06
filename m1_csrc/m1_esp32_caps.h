@@ -70,16 +70,30 @@
 /* Bits 14-63 reserved for future use */
 
 /* =========================================================================
- * Compile-time fallback profile
+ * Compile-time fallback profiles
  *
  * Used as the CMD_GET_STATUS fallback when the connected firmware does not
- * implement CMD_GET_STATUS (e.g. older SiN360 or AT firmware that predates
- * that command).  Firmware that supports CMD_GET_STATUS — including SiN360
- * binary-SPI firmware and AT firmware with the feat/cmd_get_status extension
- * — self-reports its capabilities; no profile macro is needed for those.
+ * implement CMD_GET_STATUS.  SiN360 binary-SPI firmware has supported
+ * CMD_GET_STATUS since its initial integration in Hapax and always
+ * self-reports; it therefore never triggers the fallback path.  AT firmware
+ * variants (bedge117, neddy299, dag) that predate the feat/cmd_get_status
+ * extension trigger the fallback — M1_ESP32_CAP_PROFILE_AT_BEDGE117 is
+ * used as the default.  Firmware that implements CMD_GET_STATUS will always
+ * take the self-reporting success path.
+ *
+ * Profile caps reflect features that currently work with each firmware
+ * variant via the M1's implementation:
+ *   - M1_ESP32_CAP_BLE_HID: Bad-BT uses esp32_main_init() + AT commands
+ *     (m1_badbt.c), which works on all AT variants.
+ *   - M1_ESP32_CAP_802154: Zigbee/Thread uses spi_AT_send_recv() AT commands
+ *     (m1_802154.c); note these delegates are non-capped so this bit is
+ *     informational only.
+ *   - WiFi connect / BT manage are excluded: those features use binary SPI
+ *     commands in m1_wifi.c / m1_bt.c that AT firmware does not support.
  * =========================================================================*/
 
-/** SiN360 binary-SPI firmware (sincere360/M1_SiN360_ESP32) */
+/** SiN360 binary-SPI firmware (sincere360/M1_SiN360_ESP32).
+ *  Retained for reference and testing; not used as the active fallback. */
 #define M1_ESP32_CAP_PROFILE_SIN360 \
     (M1_ESP32_CAP_WIFI_SCAN        | \
      M1_ESP32_CAP_WIFI_STA_SCAN    | \
@@ -91,6 +105,18 @@
      M1_ESP32_CAP_BLE_ADV          | \
      M1_ESP32_CAP_BLE_SPAM         | \
      M1_ESP32_CAP_BLE_SNIFF)
+
+/** bedge117 / dag AT firmware (base AT feature set).
+ *  Active fallback for firmware without CMD_GET_STATUS support. */
+#define M1_ESP32_CAP_PROFILE_AT_BEDGE117 \
+    (M1_ESP32_CAP_BLE_HID | \
+     M1_ESP32_CAP_802154)
+
+/** neddy299 AT firmware (base + WiFi station scan + deauth). */
+#define M1_ESP32_CAP_PROFILE_AT_NEDDY299 \
+    (M1_ESP32_CAP_PROFILE_AT_BEDGE117 | \
+     M1_ESP32_CAP_WIFI_STA_SCAN       | \
+     M1_ESP32_CAP_WIFI_ATTACK)
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)

@@ -99,10 +99,13 @@ enum {
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated delegate: shows "not supported" screen and pops immediately
- * when the required ESP32 capability is absent. */
+ * when the required ESP32 capability is absent.
+ * m1_esp32_init() is called first so CMD_GET_STATUS can be queried even when
+ * the transport was deinitialized by the previous delegate. */
 #define DELEGATE_CAPPED(name, fn, cap, label) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
+        if (!m1_esp32_get_init_status()) m1_esp32_init(); \
         if (m1_esp32_require_cap((cap), (label))) { fn(); } \
         m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 

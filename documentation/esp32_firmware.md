@@ -18,6 +18,7 @@ with the M1.  A custom SPI-configured build is required.
 |-----------|-------------|
 | [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **Primary** — C3 custom ESP32-C6 SPI AT firmware for M1 |
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | Fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
+| [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | Fork (dag) — additional AT command extensions |
 
 Both repos are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
@@ -37,6 +38,12 @@ SPI transport and pin mapping.
 | Version | Features |
 |---------|----------|
 | **v1.0.1** | WiFi deauthentication (`AT+DEAUTH`), station scanning (`AT+STASCAN`) |
+
+### dagnazty (dag) releases
+
+| Version | Features |
+|---------|----------|
+| See [GitHub Releases](https://github.com/dagnazty/esp32-at-monstatek-m1/releases) | Additional AT command extensions on top of bedge117 base |
 
 ## Custom AT Commands
 
@@ -225,33 +232,38 @@ Set the bit for each feature your firmware supports; leave all other bits clear.
 Both SiN360 and AT firmware variants respond to CMD_GET_STATUS and self-report
 their capabilities.  The table below shows the expected `cap_bitmap` for each
 variant.  AT firmware without `feat/cmd_get_status` triggers the fallback path
-and is treated as SiN360-equivalent (see below).
+(see below).
 
-| Feature | SiN360 | bedge117 C3 | neddy299 |
-|---------|:------:|:-----------:|:--------:|
-| WiFi AP scan | ✅ | ✅ | ✅ |
+| Feature | SiN360 | bedge117 / dag | neddy299 |
+|---------|:------:|:--------------:|:--------:|
+| WiFi AP scan | ✅ | — | — |
 | Station scan | ✅ | — | ✅ |
 | Packet sniffer | ✅ | — | — |
 | Attacks (deauth/beacon/karma) | ✅ | — | ✅ |
 | Network scanners | ✅ | — | — |
 | Evil portal | ✅ | — | — |
-| **WiFi connect / NTP** | — | ✅ | ✅ |
+| WiFi connect / NTP | — | — | — |
 | BLE scan / advertise | ✅ | — | — |
 | BLE spam variants | ✅ | — | — |
 | BLE sniffers | ✅ | — | — |
 | **Bad-BT / BLE HID** | — | ✅ | ✅ |
-| **BT device management** | — | ✅ | ✅ |
 | **IEEE 802.15.4** | — | ✅ | ✅ |
+| Classic BT management | — | — | — |
+
+> **Note:** WiFi connect and classic BT management use binary SPI commands in
+> the M1 firmware (`m1_wifi.c`, `m1_bt.c`) that AT firmware does not handle.
+> Those features will be restored once the implementation is ported to the AT
+> command layer.
 
 ### Fallback behaviour (firmware without CMD_GET_STATUS)
 
 If the ESP32 firmware returns `RESP_ERR` or times out on `CMD_GET_STATUS`, the
-M1 falls back to `M1_ESP32_CAP_PROFILE_SIN360` (WiFi scan/sniff/attack, BLE
-scan/spam/sniff) as the capability bitmap.  This applies to firmware that
-predates `CMD_GET_STATUS` support.  Firmware that has implemented the command —
-including SiN360 binary-SPI and AT firmware with `feat/cmd_get_status` — will
-have taken the success path above and self-reported its capabilities; no
-AT-specific profile defaults are needed on the STM32 side.
+M1 applies the **AT baseline fallback** (`M1_ESP32_CAP_PROFILE_AT_BEDGE117`:
+`BLE_HID` + `802154`).  SiN360 binary-SPI firmware has supported CMD_GET_STATUS
+since its initial Hapax integration and always self-reports; a CMD_GET_STATUS
+failure therefore indicates an AT firmware variant (bedge117, neddy299, dag)
+that predates the `feat/cmd_get_status` extension.  The AT fallback ensures
+Bad-BT and IEEE 802.15.4 remain accessible on those older builds.
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 

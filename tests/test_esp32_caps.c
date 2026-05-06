@@ -260,6 +260,50 @@ void test_sin360_cap_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
 }
 
+void test_at_bedge117_cap_profile_has_expected_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_AT_BEDGE117;
+    /* AT firmware: Bad-BT (BLE HID) and 802.15.4 work via AT commands */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    /* bedge117 AT does NOT expose binary-SPI-only features */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_CONNECT);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SPAM);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
+}
+
+void test_at_neddy299_cap_profile_has_expected_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_AT_NEDDY299;
+    /* neddy299 is a superset of bedge117 */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    /* neddy299 adds station scan and WiFi attacks (AT+STASCAN / AT+DEAUTH) */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_STA_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_ATTACK);
+    /* Still no binary-SPI-only features */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_CONNECT);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
+}
+
+void test_at_neddy299_is_superset_of_bedge117(void)
+{
+    const uint64_t base  = M1_ESP32_CAP_PROFILE_AT_BEDGE117;
+    const uint64_t neddy = M1_ESP32_CAP_PROFILE_AT_NEDDY299;
+    TEST_ASSERT_EQUAL_UINT64(base, neddy & base);
+}
+
+void test_at_and_sin360_profiles_are_disjoint(void)
+{
+    /* AT and SiN360 fallback profiles share no bits — they represent
+     * completely different firmware capabilities */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0),
+        M1_ESP32_CAP_PROFILE_AT_BEDGE117 & M1_ESP32_CAP_PROFILE_SIN360);
+}
+
 /* =========================================================================
  * main
  * =========================================================================*/
@@ -289,6 +333,10 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_cap_profile_has_expected_caps);
+    RUN_TEST(test_at_bedge117_cap_profile_has_expected_caps);
+    RUN_TEST(test_at_neddy299_cap_profile_has_expected_caps);
+    RUN_TEST(test_at_neddy299_is_superset_of_bedge117);
+    RUN_TEST(test_at_and_sin360_profiles_are_disjoint);
 
     return UNITY_END();
 }

@@ -73,13 +73,14 @@ void m1_esp32_caps_init(void)
     }
     else
     {
-        /* No CMD_GET_STATUS support or timeout — use compile-flag fallback.
-         * This covers firmware that predates CMD_GET_STATUS support.
-         * Firmware that has implemented CMD_GET_STATUS (SiN360 binary-SPI,
-         * AT firmware with feat/cmd_get_status) will have taken the success
-         * path above and self-reported its capabilities. */
-        s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
-        strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
+        /* No CMD_GET_STATUS support or timeout.
+         * SiN360 binary-SPI firmware has supported CMD_GET_STATUS since its
+         * initial Hapax integration and always self-reports above.  A failure
+         * here therefore indicates an AT firmware variant (bedge117, neddy299,
+         * dag) that predates the feat/cmd_get_status extension.  Apply the AT
+         * baseline fallback so Bad-BT and 802.15.4 remain accessible. */
+        s_bitmap = M1_ESP32_CAP_PROFILE_AT_BEDGE117;
+        strncpy(s_fw_name, "Unknown AT (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }
 
