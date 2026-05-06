@@ -298,10 +298,25 @@ void test_at_neddy299_is_superset_of_bedge117(void)
 
 void test_at_and_sin360_profiles_are_disjoint(void)
 {
-    /* AT and SiN360 fallback profiles share no bits — they represent
+    /* AT bedge117 and SiN360 fallback profiles share no bits — they represent
      * completely different firmware capabilities */
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0),
         M1_ESP32_CAP_PROFILE_AT_BEDGE117 & M1_ESP32_CAP_PROFILE_SIN360);
+}
+
+void test_at_neddy299_shares_wifi_bits_with_sin360(void)
+{
+    /* neddy299 adds WIFI_STA_SCAN and WIFI_ATTACK (via AT+STASCAN / AT+DEAUTH).
+     * SiN360 also supports these features via binary SPI.  The two profiles
+     * intentionally share those bits — this is expected, not a collision. */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0),
+        M1_ESP32_CAP_PROFILE_AT_NEDDY299 & M1_ESP32_CAP_WIFI_STA_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0),
+        M1_ESP32_CAP_PROFILE_AT_NEDDY299 & M1_ESP32_CAP_WIFI_ATTACK);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0),
+        M1_ESP32_CAP_PROFILE_SIN360 & M1_ESP32_CAP_WIFI_STA_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0),
+        M1_ESP32_CAP_PROFILE_SIN360 & M1_ESP32_CAP_WIFI_ATTACK);
 }
 
 /* =========================================================================
@@ -337,6 +352,7 @@ int main(void)
     RUN_TEST(test_at_neddy299_cap_profile_has_expected_caps);
     RUN_TEST(test_at_neddy299_is_superset_of_bedge117);
     RUN_TEST(test_at_and_sin360_profiles_are_disjoint);
+    RUN_TEST(test_at_neddy299_shares_wifi_bits_with_sin360);
 
     return UNITY_END();
 }
