@@ -38,21 +38,6 @@ static char     s_fw_name[32]     = "Unknown";
 
 /*************** I N T E R N A L   H E L P E R S *****************************/
 
-/**
- * Return the compile-time fallback capability bitmap.
- *
- * Used when the connected firmware does not respond to CMD_GET_STATUS
- * (e.g. older SiN360 that predates the command).  AT-based firmware
- * (bedge117, neddy299) also cannot respond — it uses text AT commands and
- * does not understand binary SPI opcodes.  The fallback therefore always
- * reflects the SiN360 feature set, which is the only firmware variant that
- * the M1 binary SPI transport can query at all.
- */
-static uint64_t caps_build_fallback_bitmap(void)
-{
-    return M1_ESP32_CAP_PROFILE_SIN360;
-}
-
 /*************** P U B L I C   A P I ******************************************/
 
 void m1_esp32_caps_init(void)
@@ -89,8 +74,11 @@ void m1_esp32_caps_init(void)
     else
     {
         /* No CMD_GET_STATUS support or timeout — use compile-flag fallback.
-         * This covers older SiN360 firmware that predates CMD_GET_STATUS. */
-        s_bitmap = caps_build_fallback_bitmap();
+         * AT firmware (bedge117, neddy299) also times out here — it does not
+         * understand binary SPI opcodes.  Both cases fall back to the SiN360
+         * profile, which is the only variant the M1 binary SPI transport can
+         * actually query. */
+        s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
         strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }
