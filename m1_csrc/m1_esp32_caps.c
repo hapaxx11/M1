@@ -23,8 +23,11 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 
-/* Forward declaration — implemented in m1_esp32_hal.c */
+/* Forward declarations — implemented in m1_esp32_hal.c and esp_app_main.c */
 extern uint8_t m1_esp32_get_init_status(void);
+extern bool    get_esp32_main_init_status(void);
+extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
+                                int out_buf_size, int timeout_sec);
 
 /*************************** D E F I N E S ************************************/
 
@@ -73,12 +76,43 @@ void m1_esp32_caps_init(void)
     }
     else
     {
-        /* No CMD_GET_STATUS support or timeout.
+        /* Binary CMD_GET_STATUS failed or timed out.
+         *
          * SiN360 binary-SPI firmware has supported CMD_GET_STATUS since its
          * initial Hapax integration and always self-reports above.  A failure
          * here therefore indicates an AT firmware variant (bedge117, neddy299,
-         * dag) that predates the feat/cmd_get_status extension.  Apply the AT
-         * baseline fallback so Bad-BT and 802.15.4 remain accessible. */
+         * dag) that may or may not implement the feat/cmd_get_status extension.
+         *
+         * Attempt a secondary probe via the AT text command "AT+GETSTATUSHEX"
+         * (AT-Custom-Status).  AT firmware variants that implement this
+         * extension return a hex-encoded m1_esp32_status_payload_t so the
+         * same capability bitmap and firmware name can be extracted without
+         * a binary SPI opcode response. */
+        if (get_esp32_main_init_status())
+        {
+            char at_resp[100] = {0};
+            uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
+
+            if (spi_AT_send_recv("AT+GETSTATUSHEX\r\n", at_resp,
+                                 (int)sizeof(at_resp), 2) == 0 &&
+                m1_esp32_caps_parse_at_hex(at_resp, decoded,
+                                           (uint8_t)sizeof(decoded)) &&
+                m1_esp32_caps_parse_payload(decoded,
+                                            (uint8_t)sizeof(m1_esp32_status_payload_t),
+                                            &bitmap, fw_name))
+            {
+                s_bitmap = bitmap;
+                strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+                s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                s_queried = true;
+                return;
+            }
+        }
+
+        /* Neither binary CMD_GET_STATUS nor AT+GETSTATUSHEX succeeded.
+         * Apply the AT baseline fallback so Bad-BT and 802.15.4 remain
+         * accessible on AT firmware variants without the feat/cmd_get_status
+         * extension. */
         s_bitmap = M1_ESP32_CAP_PROFILE_AT_BEDGE117;
         strncpy(s_fw_name, "Unknown AT (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';

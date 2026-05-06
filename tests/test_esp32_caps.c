@@ -320,6 +320,160 @@ void test_at_neddy299_shares_wifi_bits_with_sin360(void)
 }
 
 /* =========================================================================
+ * AT hex response parser: m1_esp32_caps_parse_at_hex()
+ * =========================================================================*/
+
+/* Helper: build a "+GETSTATUSHEX:<hex>\r\nOK\r\n" response string from
+ * the same payload produced by make_payload().  hex_out must be at least
+ * 82+1 bytes.  resp_out must be at least strlen("+GETSTATUSHEX:") + 82 + 8. */
+static void make_at_hex_resp(char *resp_out, size_t resp_sz,
+                              uint8_t proto_ver, uint64_t cap, const char *fw_name)
+{
+    uint8_t buf[64];
+    char    hex[83] = {0};
+    make_payload(buf, proto_ver, cap, fw_name);
+    for (int i = 0; i < (int)sizeof(m1_esp32_status_payload_t); i++)
+        snprintf(&hex[i * 2], 3, "%02X", buf[i]);
+    snprintf(resp_out, resp_sz, "+GETSTATUSHEX:%s\r\n\r\nOK\r\n", hex);
+}
+
+void test_at_hex_parse_valid_sin360(void)
+{
+    char resp[200];
+    make_at_hex_resp(resp, sizeof(resp),
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_PROFILE_SIN360,
+                     "SiN360-0.9.6");
+
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
+    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded,
+                                         (uint8_t)sizeof(decoded));
+    TEST_ASSERT_TRUE(ok);
+
+    /* Now parse the decoded bytes */
+    uint64_t caps = 0;
+    char     fw_name[32];
+    bool ok2 = m1_esp32_caps_parse_payload(decoded,
+                                           (uint8_t)sizeof(m1_esp32_status_payload_t),
+                                           &caps, fw_name);
+    TEST_ASSERT_TRUE(ok2);
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
+                              caps & M1_ESP32_CAP_PROFILE_SIN360);
+    TEST_ASSERT_EQUAL_STRING("SiN360-0.9.6", fw_name);
+}
+
+void test_at_hex_parse_valid_at_bedge117(void)
+{
+    char resp[200];
+    make_at_hex_resp(resp, sizeof(resp),
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_PROFILE_AT_BEDGE117,
+                     "AT-bedge117-2.0.2");
+
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
+    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded,
+                                         (uint8_t)sizeof(decoded));
+    TEST_ASSERT_TRUE(ok);
+
+    uint64_t caps = 0;
+    char     fw_name[32];
+    bool ok2 = m1_esp32_caps_parse_payload(decoded,
+                                           (uint8_t)sizeof(m1_esp32_status_payload_t),
+                                           &caps, fw_name);
+    TEST_ASSERT_TRUE(ok2);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_802154);
+    TEST_ASSERT_EQUAL_STRING("AT-bedge117-2.0.2", fw_name);
+}
+
+void test_at_hex_parse_no_prefix_returns_false(void)
+{
+    /* Response without the "+GETSTATUSHEX:" prefix */
+    const char *bad = "\r\nOK\r\n";
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
+    bool ok = m1_esp32_caps_parse_at_hex(bad, decoded, (uint8_t)sizeof(decoded));
+    TEST_ASSERT_FALSE(ok);
+}
+
+void test_at_hex_parse_truncated_hex_returns_false(void)
+{
+    /* Prefix present but hex string is too short (only 10 chars, not 82) */
+    const char *bad = "+GETSTATUSHEX:0102030405\r\nOK\r\n";
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
+    bool ok = m1_esp32_caps_parse_at_hex(bad, decoded, (uint8_t)sizeof(decoded));
+    TEST_ASSERT_FALSE(ok);
+}
+
+void test_at_hex_parse_invalid_hex_char_returns_false(void)
+{
+    /* Build a valid response then corrupt one hex character */
+    char resp[200];
+    make_at_hex_resp(resp, sizeof(resp),
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN,
+                     "test-fw");
+    /* Corrupt the 5th hex char (position 14 + 4 = 18) to a non-hex char */
+    resp[18] = 'G';
+
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
+    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
+    TEST_ASSERT_FALSE(ok);
+}
+
+void test_at_hex_parse_lowercase_hex_accepted(void)
+{
+    /* Build response, convert hex to lowercase, verify still parsed */
+    char resp[200];
+    make_at_hex_resp(resp, sizeof(resp),
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_BLE_HID,
+                     "dag-fw");
+    /* Convert hex portion to lowercase */
+    const size_t pfx_len = 14u;  /* strlen("+GETSTATUSHEX:") */
+    for (size_t i = pfx_len; i < pfx_len + 82u && resp[i]; i++)
+        if (resp[i] >= 'A' && resp[i] <= 'F')
+            resp[i] = (char)(resp[i] - 'A' + 'a');
+
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
+    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
+    TEST_ASSERT_TRUE(ok);
+
+    uint64_t caps = 0;
+    char     fw_name[32];
+    bool ok2 = m1_esp32_caps_parse_payload(decoded,
+                                           (uint8_t)sizeof(m1_esp32_status_payload_t),
+                                           &caps, fw_name);
+    TEST_ASSERT_TRUE(ok2);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
+}
+
+void test_at_hex_parse_prefix_with_leading_content(void)
+{
+    /* Prefix may appear after some leading content in the response */
+    char resp[200];
+    snprintf(resp, sizeof(resp), "\r\nsome preamble\r\n");
+    const size_t pfx_offset = strlen(resp);
+
+    char hex_resp[200];
+    make_at_hex_resp(hex_resp, sizeof(hex_resp),
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
+    /* Append to the preamble */
+    strncat(resp, hex_resp, sizeof(resp) - pfx_offset - 1u);
+
+    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
+    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
+    TEST_ASSERT_TRUE(ok);
+}
+
+void test_at_hex_parse_small_output_buffer_returns_false(void)
+{
+    char resp[200];
+    make_at_hex_resp(resp, sizeof(resp),
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
+
+    /* Output buffer one byte too small */
+    uint8_t decoded[40];  /* sizeof(m1_esp32_status_payload_t) - 1 == 40 */
+    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
+    TEST_ASSERT_FALSE(ok);
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 
@@ -353,6 +507,16 @@ int main(void)
     RUN_TEST(test_at_neddy299_is_superset_of_bedge117);
     RUN_TEST(test_at_and_sin360_profiles_are_disjoint);
     RUN_TEST(test_at_neddy299_shares_wifi_bits_with_sin360);
+
+    /* AT hex response parser */
+    RUN_TEST(test_at_hex_parse_valid_sin360);
+    RUN_TEST(test_at_hex_parse_valid_at_bedge117);
+    RUN_TEST(test_at_hex_parse_no_prefix_returns_false);
+    RUN_TEST(test_at_hex_parse_truncated_hex_returns_false);
+    RUN_TEST(test_at_hex_parse_invalid_hex_char_returns_false);
+    RUN_TEST(test_at_hex_parse_lowercase_hex_accepted);
+    RUN_TEST(test_at_hex_parse_prefix_with_leading_content);
+    RUN_TEST(test_at_hex_parse_small_output_buffer_returns_false);
 
     return UNITY_END();
 }

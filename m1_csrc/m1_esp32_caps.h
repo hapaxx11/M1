@@ -184,6 +184,60 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
     return true;
 }
 
+/**
+ * Parse an AT+GETSTATUSHEX response and extract the raw payload bytes.
+ *
+ * AT firmware variants that implement the feat/cmd_get_status extension
+ * respond to "AT+GETSTATUSHEX\r\n" with a line of the form:
+ *
+ *   +GETSTATUSHEX:<82 uppercase hex chars>\r\n\r\nOK\r\n
+ *
+ * The 82 hex characters encode the same 41-byte m1_esp32_status_payload_t
+ * that binary-SPI firmware returns for CMD_GET_STATUS (0x02).  The decoded
+ * bytes can be passed directly to m1_esp32_caps_parse_payload().
+ *
+ * @param resp_buf    Buffer containing the full AT response string
+ * @param decoded_out Receives the decoded raw bytes
+ * @param decoded_len Capacity of decoded_out (must be >= sizeof(m1_esp32_status_payload_t))
+ * @return true on success, false if the prefix was not found, the hex string
+ *         is too short, or a non-hex character is encountered
+ */
+static inline bool m1_esp32_caps_parse_at_hex(const char *resp_buf,
+                                               uint8_t    *decoded_out,
+                                               uint8_t     decoded_len)
+{
+    /* Locate the response prefix */
+    const char *pfx = "+GETSTATUSHEX:";
+    const char *hex_start = strstr(resp_buf, pfx);
+    if (!hex_start)
+        return false;
+    hex_start += 14u;  /* strlen("+GETSTATUSHEX:") == 14 */
+
+    if (decoded_len < (uint8_t)sizeof(m1_esp32_status_payload_t))
+        return false;
+
+    const uint8_t n = (uint8_t)sizeof(m1_esp32_status_payload_t);  /* 41 */
+    for (uint8_t i = 0u; i < n; i++)
+    {
+        char hi = hex_start[(uint8_t)(i * 2u)];
+        char lo = hex_start[(uint8_t)(i * 2u + 1u)];
+        if (!hi || !lo)
+            return false;
+
+        uint8_t hi_v = (hi >= '0' && hi <= '9') ? (uint8_t)(hi - '0') :
+                       (hi >= 'A' && hi <= 'F') ? (uint8_t)(hi - 'A' + 10u) :
+                       (hi >= 'a' && hi <= 'f') ? (uint8_t)(hi - 'a' + 10u) : 0xFFu;
+        uint8_t lo_v = (lo >= '0' && lo <= '9') ? (uint8_t)(lo - '0') :
+                       (lo >= 'A' && lo <= 'F') ? (uint8_t)(lo - 'A' + 10u) :
+                       (lo >= 'a' && lo <= 'f') ? (uint8_t)(lo - 'a' + 10u) : 0xFFu;
+        if (hi_v == 0xFFu || lo_v == 0xFFu)
+            return false;
+
+        decoded_out[i] = (uint8_t)((hi_v << 4u) | lo_v);
+    }
+    return true;
+}
+
 /* =========================================================================
  * Public API
  * =========================================================================*/
