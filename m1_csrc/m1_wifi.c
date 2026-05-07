@@ -281,6 +281,59 @@ static void wifi_show_message(const char *title, const char *line1, const char *
 	HAL_Delay(1800);
 }
 
+static uint32_t wifi_u32_le(const uint8_t *p)
+{
+	return (uint32_t)p[0] |
+		((uint32_t)p[1] << 8) |
+		((uint32_t)p[2] << 16) |
+		((uint32_t)p[3] << 24);
+}
+
+static void wifi_show_deauth_stop_stats(const m1_resp_t *resp)
+{
+	char line[26];
+
+	if (resp && resp->status == RESP_OK && resp->payload_len >= 8)
+	{
+		uint32_t tx_ok = wifi_u32_le(&resp->payload[0]);
+		uint32_t tx_err = wifi_u32_le(&resp->payload[4]);
+
+		m1_u8g2_firstpage();
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 6, 12, "Deauth stopped");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		snprintf(line, sizeof(line), "TX:%lu/%lu", (unsigned long)tx_ok,
+			(unsigned long)tx_err);
+		u8g2_DrawStr(&m1_u8g2, 2, 25, line);
+
+		if (resp->payload_len >= 40)
+		{
+			uint32_t d_ok = wifi_u32_le(&resp->payload[8]);
+			uint32_t d_err = wifi_u32_le(&resp->payload[12]);
+			uint32_t a_ok = wifi_u32_le(&resp->payload[16]);
+			uint32_t a_err = wifi_u32_le(&resp->payload[20]);
+			uint32_t b_ok = wifi_u32_le(&resp->payload[24]);
+			uint32_t b_err = wifi_u32_le(&resp->payload[28]);
+			uint32_t n_ok = wifi_u32_le(&resp->payload[32]);
+			uint32_t n_err = wifi_u32_le(&resp->payload[36]);
+			snprintf(line, sizeof(line), "D:%lu/%lu", (unsigned long)d_ok,
+				(unsigned long)d_err);
+			u8g2_DrawStr(&m1_u8g2, 2, 36, line);
+			snprintf(line, sizeof(line), "A:%lu/%lu", (unsigned long)a_ok,
+				(unsigned long)a_err);
+			u8g2_DrawStr(&m1_u8g2, 2, 47, line);
+			snprintf(line, sizeof(line), "B:%lu/%lu N:%lu/%lu", (unsigned long)b_ok,
+				(unsigned long)b_err, (unsigned long)n_ok, (unsigned long)n_err);
+			u8g2_DrawStr(&m1_u8g2, 2, 58, line);
+		}
+		m1_u8g2_nextpage();
+		HAL_Delay(3500);
+		return;
+	}
+
+	wifi_show_message("Deauth stopped", "No TX stats", NULL);
+}
+
 
 /*============================================================================*/
 /**
@@ -2316,6 +2369,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
+				wifi_show_deauth_stop_stats(&resp);
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -2495,6 +2549,7 @@ static void wifi_deauth_selected_run(void)
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
+				wifi_show_deauth_stop_stats(&resp);
 				xQueueReset(main_q_hdl);
 				break;
 			}

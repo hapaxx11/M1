@@ -414,12 +414,13 @@ void lfrfid_rxThread(void *param)
 
             for(int protoIdx=LFRFIDProtocolEM4100; protoIdx<LFRFIDProtocolMax; protoIdx++)
             {
-             	if(lfrfid_decoder_execute(protoIdx, &p[i], events_to_process))
-               	{
-              		lfrfid_tag_info.protocol = protoIdx;
+                if(lfrfid_decoder_execute(protoIdx, &p[i], events_to_process))
+                {
+                    lfrfid_tag_info.protocol = protoIdx;
 
-               		m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_LFRFID_TAG_DETECTED);
-               	}
+                    m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_LFRFID_TAG_DETECTED);
+                    break;
+                }
             }
         }
 

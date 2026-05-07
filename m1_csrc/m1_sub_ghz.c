@@ -26,6 +26,7 @@
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
+#include "m1_virtual_kb.h"
 #include "uiView.h"
 
 /*************************** D E F I N E S ************************************/
@@ -42,6 +43,10 @@
 #define CHANNEL_STEPS_MAX				256
 #define CHANNEL_STEP					(float)0.25 // MHz
 
+#define SUBGHZ_RSSI_BAR_MIN_DBM		-120
+#define SUBGHZ_RSSI_BAR_MAX_DBM		-40
+#define SUBGHZ_SPECTRUM_BARS			16
+
 #define SUB_GHZ_433_92_NEW_PDTC			0x6C // Attack and decay times of the OOK Peak Detector - Default: 0x28
 
 #define M1_LOGDB_TAG				"Sub-GHz"
@@ -49,6 +54,16 @@
 #define SUB_GHZ_FILEPATH			"/SUBGHZ"
 #define SUB_GHZ_FILE_EXTENSION		".sgh"
 #define SUB_GHZ_FILE_PREFIX			"sghz_"
+#define SUB_GHZ_PLAYLIST_EXTENSION	".txt"
+#define SUB_GHZ_PLAYLIST_LINE_MAX	96
+#define SUB_GHZ_UI_NAME_MAX			18
+
+#define SUBGHZ_PRINCETON_BITS		24
+#define SUBGHZ_PRINCETON_PULSES		52
+#define SUBGHZ_PRINCETON_TE_SHORT	370
+#define SUBGHZ_PRINCETON_TE_LONG	1140
+#define SUBGHZ_PRINCETON_SYNC		11100
+#define SUBGHZ_MANUAL_REPEAT_MAX	99
 
 #define SUB_GHZ_DATAFILE_KEY_FORMAT_N		9
 #define SUB_GHZ_DATAFILE_RAW_FORMAT_N		4
@@ -56,6 +71,9 @@
 #define SUB_GHZ_DATAFILE_FILETYPE_NOISE		"NOISE"
 #define SUB_GHZ_DATAFILE_FILETYPE_PACKET	"PACKET"
 #define SUB_GHZ_DATAFILE_FILETYPE_KEYWORD	SUB_GHZ_DATAFILE_FILETYPE_NOISE
+
+/* TX power levels (SI4463 PA_PWR_LVL register, 7-bit, 0-127) */
+#define RADIO_POWER_LEVELS  4
 
 #define SUB_GHZ_RAW_DATA_PARSER_ERROR_MASK	0x80
 #define SUB_GHZ_RAW_DATA_PARSER_ERROR_L1	0x81
@@ -128,6 +146,10 @@ static const char *subghz_band_text[] =
 	"433.920",
 	"915.000"
 };
+
+static const uint8_t radio_power_values[RADIO_POWER_LEVELS] = {1, 20, 64, 127};
+static const char *radio_power_text[RADIO_POWER_LEVELS] = {
+	"Low", "Med-Low", "Med-High", "Max"};
 
 static const char *subghz_datfile_keywords[SUB_GHZ_DATAFILE_KEY_FORMAT_N] =
 {
@@ -269,6 +291,10 @@ static uint8_t subghz_replay_ret_code;
 static uint8_t subghz_replay_mod;
 static uint8_t subghz_replay_band, subghz_replay_channel;
 static float subghz_replay_freq;
+static uint8_t subghz_radio_power_idx = 1;
+static uint8_t subghz_custom_freq_enabled = 0;
+static float subghz_custom_freq_mhz = 433.920f;
+static uint8_t subghz_region_check_enabled = 1;
 static S_M1_file_info *f_info = NULL;
 static S_M1_SDM_DatFileInfo_t datfile_info;
 S_M1_Q_Union_t *subghz_rx_q = NULL;
@@ -286,7 +312,12 @@ void menu_sub_ghz_exit(void);
 void sub_ghz_init(void);
 void sub_ghz_record(void);
 void sub_ghz_replay(void);
+void sub_ghz_rssi_meter(void);
 void sub_ghz_frequency_reader(void);
+void sub_ghz_spectrum_analyzer(void);
+void sub_ghz_playlist_player(void);
+void sub_ghz_add_manually(void);
+void sub_ghz_brute_force(void);
 void sub_ghz_regional_information(void);
 void sub_ghz_radio_settings(void);
 
@@ -314,6 +345,27 @@ static uint8_t sub_ghz_fcc_ism_band_check(uint8_t band, uint8_t channel);
 static void sub_ghz_buffer_rotate(S_M1_RingBuffer *prb_handle);
 static uint8_t sub_ghz_parse_raw_data(uint8_t buffer_ptr_id);
 static uint8_t sub_ghz_file_load(void);
+static uint8_t sub_ghz_file_load_path(const char *path);
+static uint8_t sub_ghz_has_extension(const char *path, const char *ext);
+static void sub_ghz_short_name(const char *path, char *out, size_t out_size);
+static int sub_ghz_strncasecmp(const char *a, const char *b, size_t n);
+static int sub_ghz_strcasecmp(const char *a, const char *b);
+static float sub_ghz_frequency_for(uint8_t band, uint8_t channel);
+static float sub_ghz_effective_frequency(uint8_t band, uint8_t channel);
+static uint8_t sub_ghz_custom_applies(uint8_t band, uint8_t channel);
+static uint32_t sub_ghz_frequency_hz(float freq_mhz);
+static uint8_t sub_ghz_custom_frequency_select(float req_mhz, uint8_t *band, uint8_t *channel);
+static uint8_t sub_ghz_mod_type_from_setting(S_M1_SubGHz_Modulation modulation);
+static void sub_ghz_format_frequency(float freq_mhz, char *out, size_t out_size);
+static int16_t sub_ghz_read_rssi_dbm(void);
+static uint8_t sub_ghz_rssi_bar_width(int16_t rssi, uint8_t width);
+static uint8_t sub_ghz_playlist_normalize_path(const char *line, char *out, size_t out_size);
+static uint8_t sub_ghz_princeton_band_ok(void);
+static int sub_ghz_hex_value(char c);
+static uint8_t sub_ghz_parse_hex_u32(const char *in, uint32_t max_value, uint32_t *out);
+static uint16_t sub_ghz_princeton_build(uint32_t key, uint16_t *out, size_t out_len);
+static void sub_ghz_manual_draw(const char *title, uint32_t key, uint32_t current, uint32_t total);
+static uint8_t sub_ghz_wait_tx_done(const char *title, uint32_t key, uint32_t current, uint32_t total);
 
 static void subghz_record_gui_init(void);
 static void subghz_record_gui_create(uint8_t param);
@@ -430,7 +482,18 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 {
 	uint8_t mod_type;
 	S_M1_SubGHz_Band freq;
+	uint8_t custom_mode = sub_ghz_custom_applies(band, channel);
 	//struct si446x_reply_PART_INFO_map *pinfo;
+
+	if (custom_mode)
+	{
+		if (!sub_ghz_custom_frequency_select(subghz_custom_freq_mhz, &band, &channel))
+		{
+			band = SUB_GHZ_BAND_433_92;
+			channel = 0;
+		}
+		mod_type = sub_ghz_mod_type_from_setting(subghz_scan_config.modulation);
+	}
 
 	switch(band)
 	{
@@ -443,12 +506,14 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 		case SUB_GHZ_BAND_433:
 		case SUB_GHZ_BAND_433_92:
 			freq = band;
-			mod_type = MODEM_MOD_TYPE_OOK;
+			if (!custom_mode)
+				mod_type = MODEM_MOD_TYPE_OOK;
 			break;
 
 		case SUB_GHZ_BAND_915:
 			freq = band;
-			mod_type = MODEM_MOD_TYPE_FSK;
+			if (!custom_mode)
+				mod_type = MODEM_MOD_TYPE_FSK;
 			break;
 
 		default:
@@ -459,6 +524,12 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 
 	radio_init_rx_tx(freq, mod_type, SI446x_Get_Reset_Stat());
 	SI446x_Select_Frontend(freq);
+	if (custom_mode)
+	{
+		uint32_t custom_hz = sub_ghz_frequency_hz(subghz_custom_freq_mhz);
+		if (!SI446x_Set_Frequency_Hz(custom_hz))
+			M1_LOG_N(M1_LOGDB_TAG, "Custom frequency rejected: %lu Hz\r\n", custom_hz);
+	}
 
 	//pinfo = SI446x_PartInfo();
 	//M1_LOG_I(M1_LOGDB_TAG, "Init done.\r\nPart %d Rev. %d Rom ID %d\r\n", pinfo->PART, pinfo->CHIPREV, pinfo->ROMID);
@@ -496,6 +567,368 @@ static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, ui
 	} // switch (opmode)
 
 } // static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power)
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static float sub_ghz_frequency_for(uint8_t band, uint8_t channel)
+{
+	if (band >= SUB_GHZ_BAND_EOL)
+		band = SUB_GHZ_BAND_300;
+
+	if (channel > (uint8_t)subghz_band_steps[band][1])
+		channel = (uint8_t)subghz_band_steps[band][1];
+
+	return subghz_band_steps[band][0] + ((float)channel * CHANNEL_STEP);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_custom_applies(uint8_t band, uint8_t channel)
+{
+	return (subghz_custom_freq_enabled &&
+	        band == (uint8_t)subghz_scan_config.band &&
+	        channel == subghz_scan_config.channel);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static float sub_ghz_effective_frequency(uint8_t band, uint8_t channel)
+{
+	if (sub_ghz_custom_applies(band, channel))
+		return subghz_custom_freq_mhz;
+	return sub_ghz_frequency_for(band, channel);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint32_t sub_ghz_frequency_hz(float freq_mhz)
+{
+	if (freq_mhz <= 0.0f)
+		return 0;
+	return (uint32_t)((freq_mhz * 1000000.0f) + 0.5f);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_custom_frequency_select(float req_mhz, uint8_t *band, uint8_t *channel)
+{
+	if (req_mhz < 300.0f || req_mhz > 928.0f)
+		return 0;
+
+	if (req_mhz < 305.0f)
+		*band = SUB_GHZ_BAND_300;
+	else if (req_mhz < 330.0f)
+		*band = SUB_GHZ_BAND_310;
+	else if (req_mhz < 360.0f)
+		*band = SUB_GHZ_BAND_345;
+	else if (req_mhz < 420.0f)
+		*band = SUB_GHZ_BAND_390;
+	else if (req_mhz < 705.0f)
+		*band = SUB_GHZ_BAND_433_92;
+	else
+		*band = SUB_GHZ_BAND_915;
+
+	if (channel)
+		*channel = 0;
+	return 1;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_mod_type_from_setting(S_M1_SubGHz_Modulation modulation)
+{
+	switch (modulation)
+	{
+		case MODULATION_FSK:
+			return MODEM_MOD_TYPE_FSK;
+		case MODULATION_ASK:
+		case MODULATION_OOK:
+		default:
+			return MODEM_MOD_TYPE_OOK;
+	}
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static void sub_ghz_format_frequency(float freq_mhz, char *out, size_t out_size)
+{
+	char fbuf[12];
+
+	if (!out || out_size == 0)
+		return;
+
+	m1_float_to_string(fbuf, freq_mhz, 3);
+	snprintf(out, out_size, "%s", fbuf);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static int16_t sub_ghz_read_rssi_dbm(void)
+{
+	struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
+
+	pmodemstat = SI446x_Get_ModemStatus(0x00);
+	if (!pmodemstat)
+		return SUBGHZ_RSSI_BAR_MIN_DBM;
+
+	return (int16_t)(pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_rssi_bar_width(int16_t rssi, uint8_t width)
+{
+	int16_t span = SUBGHZ_RSSI_BAR_MAX_DBM - SUBGHZ_RSSI_BAR_MIN_DBM;
+	int16_t pos = rssi - SUBGHZ_RSSI_BAR_MIN_DBM;
+
+	if (pos < 0)
+		pos = 0;
+	if (pos > span)
+		pos = span;
+
+	return (uint8_t)((pos * width) / span);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static char sub_ghz_ascii_upper(char c)
+{
+	if (c >= 'a' && c <= 'z')
+		return (char)(c - 'a' + 'A');
+	return c;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static int sub_ghz_strncasecmp(const char *a, const char *b, size_t n)
+{
+	for (size_t i = 0; i < n; i++)
+	{
+		char ca = sub_ghz_ascii_upper(a[i]);
+		char cb = sub_ghz_ascii_upper(b[i]);
+		if (ca != cb || ca == '\0' || cb == '\0')
+			return (int)((unsigned char)ca - (unsigned char)cb);
+	}
+	return 0;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static int sub_ghz_strcasecmp(const char *a, const char *b)
+{
+	size_t max_len = strlen(a);
+	size_t b_len = strlen(b);
+
+	if (b_len > max_len)
+		max_len = b_len;
+	return sub_ghz_strncasecmp(a, b, max_len + 1);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_has_extension(const char *path, const char *ext)
+{
+	size_t path_len;
+	size_t ext_len;
+
+	if (!path || !ext)
+		return 0;
+
+	path_len = strlen(path);
+	ext_len = strlen(ext);
+	if (path_len < ext_len)
+		return 0;
+
+	return (sub_ghz_strcasecmp(&path[path_len - ext_len], ext) == 0);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static void sub_ghz_short_name(const char *path, char *out, size_t out_size)
+{
+	const char *name = path;
+	size_t len;
+
+	if (!out || out_size == 0)
+		return;
+
+	out[0] = '\0';
+	if (!path)
+		return;
+
+	const char *slash = strrchr(path, '/');
+	if (slash && slash[1])
+		name = slash + 1;
+
+	len = strlen(name);
+	if (len < out_size)
+	{
+		snprintf(out, out_size, "%s", name);
+		return;
+	}
+
+	if (out_size <= 4)
+	{
+		snprintf(out, out_size, "%s", name);
+		return;
+	}
+
+	snprintf(out, out_size, "%.*s...", (int)(out_size - 4), name);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_playlist_normalize_path(const char *line, char *out, size_t out_size)
+{
+	const char *src;
+	const char *name;
+	char tmp[SUB_GHZ_PLAYLIST_LINE_MAX];
+	char *nl;
+
+	if (!line || !out || out_size == 0)
+		return 0;
+
+	while (*line == ' ' || *line == '\t')
+		line++;
+	if (*line == '\0' || *line == '#' || *line == ';')
+		return 0;
+
+	snprintf(tmp, sizeof(tmp), "%s", line);
+	nl = strpbrk(tmp, "\r\n");
+	if (nl) *nl = '\0';
+	while (strlen(tmp) > 0 && (tmp[strlen(tmp) - 1] == ' ' || tmp[strlen(tmp) - 1] == '\t'))
+		tmp[strlen(tmp) - 1] = '\0';
+	if (tmp[0] == '\0')
+		return 0;
+
+	src = tmp;
+	if (strncmp(src, "0:/", 3) == 0)
+		src += 2;
+	if (sub_ghz_strncasecmp(src, "/ext/subghz/", 12) == 0)
+		src += 12;
+	if (sub_ghz_strncasecmp(src, "/subghz/", 8) == 0)
+		src += 8;
+	if (sub_ghz_strncasecmp(src, "subghz/", 7) == 0)
+		src += 7;
+
+	name = strrchr(src, '/');
+	if (name)
+		name++;
+	else
+		name = src;
+
+	if (name[0] == '\0')
+		return 0;
+
+	if (src[0] == '/')
+	{
+		if (snprintf(out, out_size, "%s", src) >= (int)out_size)
+			return 0;
+	}
+	else
+	{
+		if (snprintf(out, out_size, "%s/%s", SUB_GHZ_FILEPATH, name) >= (int)out_size)
+			return 0;
+	}
+
+	if (sub_ghz_has_extension(out, ".sub"))
+	{
+		size_t len = strlen(out);
+		snprintf(&out[len - 4], out_size - (len - 4), "%s", SUB_GHZ_FILE_EXTENSION);
+	}
+
+	return sub_ghz_has_extension(out, SUB_GHZ_FILE_EXTENSION);
+}
 
 
 
@@ -586,6 +1019,8 @@ static void subghz_record_gui_destroy(uint8_t param)
 /*============================================================================*/
 static void subghz_record_gui_update(uint8_t param)
 {
+	char freq_text[16];
+
 	switch (param)
 	{
 		case SUBGHZ_RECORD_DISPLAY_PARAM_READY:
@@ -609,7 +1044,10 @@ static void subghz_record_gui_update(uint8_t param)
 	//		u8g2_DrawStr(&m1_u8g2, 56, 30, "Receiving...");
 
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawStr(&m1_u8g2, 60, 18, subghz_band_text[subghz_scan_config.band]);
+			sub_ghz_format_frequency(sub_ghz_effective_frequency(subghz_scan_config.band,
+			                                                     subghz_scan_config.channel),
+			                         freq_text, sizeof(freq_text));
+			u8g2_DrawStr(&m1_u8g2, 54, 18, freq_text);
 			u8g2_DrawStr(&m1_u8g2, 108, 18, subghz_modulation_text[subghz_scan_config.modulation]);
 
 			u8g2_DrawXBMP(&m1_u8g2, 0, 5, 50, 27, subghz_antenna_50x27);
@@ -937,6 +1375,7 @@ static int subghz_record_kp_handler(void)
 					subghz_scan_config.band = SUB_GHZ_BAND_915;
 					subghz_scan_config.modulation = MODULATION_FSK;
 				}
+				subghz_custom_freq_enabled = 0;
 				//sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX, subghz_scan_config.band, 0, 255);
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 				//m1_ringbuffer_reset(&subghz_rx_rawdata_rb); // Reset rx buffer for new frequency
@@ -964,6 +1403,7 @@ static int subghz_record_kp_handler(void)
 					subghz_scan_config.band = SUB_GHZ_BAND_300;
 					subghz_scan_config.modulation = MODULATION_OOK;
 				}
+				subghz_custom_freq_enabled = 0;
 				//sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX, subghz_scan_config.band, 0, 255);
 				m1_uiView_display_update(SUBGHZ_RECORD_DISPLAY_PARAM_READY);
 				//m1_ringbuffer_reset(&subghz_rx_rawdata_rb); // Reset rx buffer for new frequency
@@ -1313,46 +1753,67 @@ static int subghz_replay_play_kp_handler(void)
 /*============================================================================*/
 static uint8_t sub_ghz_file_load(void)
 {
-	uint8_t uret, sys_error, key_len;
+	char path[sizeof(datfile_info.dat_filename)];
+
+	if (!f_info || !f_info->file_name || !f_info->dir_name)
+		return 1;
+
+	snprintf(path, sizeof(path), "%s/%s", f_info->dir_name, f_info->file_name);
+	return sub_ghz_file_load_path(path);
+} // static uint8_t sub_ghz_file_load(void)
+
+
+/*============================================================================*/
+/**
+  * @brief  Load Sub-GHz data file from SD card path
+  * @param
+  * @retval 0 if success
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_file_load_path(const char *path)
+{
+	uint8_t sys_error, ring_ready, raw_started;
 	char *token, *str, *end_ptr;
 	float freq_min, freq_max;
 
 	sys_error = 1;
+	ring_ready = 0;
+	raw_started = 0;
 	do
 	{
-		uret = strlen(f_info->file_name);
-		if ( !uret )
+		if (!path || !path[0])
 			break;
-		key_len = 0;
-		while ( uret )
-		{
-			key_len++;
-			if ( f_info->file_name[--uret]=='.' ) // Find the dot starting from the last character
-				break;
-		} // while ( uret )
-		if ( !uret || (key_len!=4) ) // key_len==length of SUB_GHZ_FILE_EXTENSION
+		if (!sub_ghz_has_extension(path, SUB_GHZ_FILE_EXTENSION))
 			break;
-		if ( strcmp(&f_info->file_name[uret], SUB_GHZ_FILE_EXTENSION) )
+		if (strlen(path) >= sizeof(datfile_info.dat_filename))
 			break;
-		sprintf(datfile_info.dat_filename, "%s/%s", f_info->dir_name, f_info->file_name);
+		snprintf((char*)datfile_info.dat_filename, sizeof(datfile_info.dat_filename), "%s", path);
 
 		sys_error = sub_ghz_ring_buffers_init();
 		if ( sys_error )
 			break;
+		ring_ready = 1;
+		raw_started = 1;
 		sys_error = sub_ghz_raw_samples_init();
 		if ( sys_error )
 			break;
 
-		token = strtok(sdcard_dat_buffer, "\r\n"); // Filetype
-		key_len = SUB_GHZ_DATAFILE_RAW_FORMAT_N;
+		token = strtok((char*)sdcard_dat_buffer, "\r\n"); // Filetype
+		if (!token)
+			break;
 		if ( strstr(token, SUB_GHZ_DATAFILE_FILETYPE_PACKET) )
 		{
-			key_len = SUB_GHZ_DATAFILE_RAW_FORMAT_N;
 			break; // Not support for now.
 		} // if ( strstr(token, SUB_GHZ_DATAFILE_FILETYPE_PACKET) )
 		token = strtok(NULL, "\r\n"); // Version
+		if (!token)
+			break;
 		token = strtok(NULL, "\r\n"); // Frequency
+		if (!token)
+			break;
 		str = strstr(token, ":");
+		if (!str)
+			break;
 		str += 1; // Move to the frequency value
 		subghz_replay_freq = strtol(str, &end_ptr, 10);
 		if ( subghz_replay_freq==0 )
@@ -1375,8 +1836,10 @@ static uint8_t sub_ghz_file_load(void)
 			subghz_replay_channel++;
 		} // while ( subghz_replay_freq > freq_min )
 
-		token = strtok(NULL, "\r\n"); // Modulation
-		m1_strtoupper(token);
+			token = strtok(NULL, "\r\n"); // Modulation
+			if (!token)
+				break;
+			m1_strtoupper(token);
 		for (subghz_replay_mod=0; subghz_replay_mod<SUBGHZ_MODULATION_LIST; subghz_replay_mod++)
 		{
 			if ( strstr(token, subghz_modulation_text[subghz_replay_mod]) )
@@ -1387,8 +1850,16 @@ static uint8_t sub_ghz_file_load(void)
 		sys_error = 0; // Reset, no error
 	} while (0);
 
+	if (sys_error)
+	{
+		if (raw_started)
+			sub_ghz_raw_samples_deinit(false);
+		if (ring_ready)
+			sub_ghz_ring_buffers_deinit();
+	}
+
 	return sys_error;
-} // static uint8_t sub_ghz_file_load(void)
+} // static uint8_t sub_ghz_file_load_path(const char *path)
 
 
 /*============================================================================*/
@@ -1413,6 +1884,99 @@ void sub_ghz_replay(void)
 		;
 	}
 } // void sub_ghz_replay(void)
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void sub_ghz_rssi_meter(void)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	int16_t rssi = SUBGHZ_RSSI_BAR_MIN_DBM;
+	int16_t peak = SUBGHZ_RSSI_BAR_MIN_DBM;
+	char freq_text[16];
+	char line[32];
+	uint8_t redraw = 1;
+
+	menu_sub_ghz_init();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, subghz_scan_config.channel, 0);
+	SI446x_Get_IntStatus(0, 0, 0);
+
+	while (1)
+	{
+		rssi = sub_ghz_read_rssi_dbm();
+		if (rssi > peak)
+			peak = rssi;
+
+		if (redraw)
+		{
+			uint8_t bar_w = sub_ghz_rssi_bar_width(rssi, 118);
+			uint8_t peak_x = sub_ghz_rssi_bar_width(peak, 118);
+
+			sub_ghz_format_frequency(sub_ghz_effective_frequency(subghz_scan_config.band,
+			                                                     subghz_scan_config.channel),
+			                         freq_text, sizeof(freq_text));
+			u8g2_FirstPage(&m1_u8g2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 1, 10, "RSSI Meter");
+			snprintf(line, sizeof(line), "%s MHz", freq_text);
+			u8g2_DrawStr(&m1_u8g2, 1, 22, line);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_1B);
+			snprintf(line, sizeof(line), "%d dBm", rssi);
+			u8g2_DrawStr(&m1_u8g2, 24, 38, line);
+			u8g2_DrawFrame(&m1_u8g2, 4, 43, 120, 10);
+			u8g2_DrawBox(&m1_u8g2, 5, 44, bar_w, 8);
+			u8g2_DrawVLine(&m1_u8g2, 5 + peak_x, 41, 14);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			snprintf(line, sizeof(line), "Peak %d  OK reset", peak);
+			u8g2_DrawStr(&m1_u8g2, 2, 63, line);
+			m1_u8g2_nextpage();
+			redraw = 0;
+		}
+
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
+		redraw = 1;
+		if (ret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+		if (ret != pdTRUE)
+			continue;
+
+		if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
+			menu_sub_ghz_exit();
+			xQueueReset(main_q_hdl);
+			break;
+		}
+		if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			peak = SUBGHZ_RSSI_BAR_MIN_DBM;
+		}
+		if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK ||
+		    this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+				subghz_scan_config.band = (subghz_scan_config.band == 0) ? (SUB_GHZ_BAND_EOL - 1) : (subghz_scan_config.band - 1);
+			else
+				subghz_scan_config.band = (subghz_scan_config.band + 1) % SUB_GHZ_BAND_EOL;
+			subghz_scan_config.channel = 0;
+			peak = SUBGHZ_RSSI_BAR_MIN_DBM;
+			sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, subghz_scan_config.channel, 0);
+		}
+	}
+}
 
 
 
@@ -1441,7 +2005,7 @@ void sub_ghz_frequency_reader(void)
     {
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 1, 10, "Frequency Reader");
+		u8g2_DrawStr(&m1_u8g2, 1, 10, "Frequency Scanner");
 		u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_2B);
 		u8g2_DrawStr(&m1_u8g2, 10, 30, "000.000");
 		u8g2_SetFont(&m1_u8g2, M1_DISP_LARGE_FONT_1B);
@@ -1585,6 +2149,680 @@ void sub_ghz_frequency_reader(void)
 } // void sub_ghz_frequency_reader(void)
 
 
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void sub_ghz_spectrum_analyzer(void)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	int16_t rssi_bins[SUBGHZ_SPECTRUM_BARS];
+	int16_t peak = SUBGHZ_RSSI_BAR_MIN_DBM;
+	uint8_t active_band_id = subghz_scan_config.band;
+	uint8_t start_channel = subghz_scan_config.channel;
+	char freq_text[16];
+	char line[32];
+
+	for (uint8_t i = 0; i < SUBGHZ_SPECTRUM_BARS; i++)
+		rssi_bins[i] = SUBGHZ_RSSI_BAR_MIN_DBM;
+
+	if (start_channel > (uint8_t)subghz_band_steps[active_band_id][1])
+		start_channel = 0;
+
+	menu_sub_ghz_init();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, active_band_id, start_channel, 0);
+	SI446x_Get_IntStatus(0, 0, 0);
+
+	while (1)
+	{
+		uint8_t max_ch = (uint8_t)subghz_band_steps[active_band_id][1];
+		uint8_t visible = (max_ch + 1 < SUBGHZ_SPECTRUM_BARS) ? (max_ch + 1) : SUBGHZ_SPECTRUM_BARS;
+
+		if (start_channel > max_ch)
+			start_channel = 0;
+
+		for (uint8_t i = 0; i < visible; i++)
+		{
+			uint8_t ch = start_channel + i;
+			if (ch > max_ch)
+				ch = max_ch;
+
+			SI446x_Start_Rx(ch);
+			vTaskDelay(pdMS_TO_TICKS(2));
+			rssi_bins[i] = sub_ghz_read_rssi_dbm();
+			if (rssi_bins[i] > peak)
+				peak = rssi_bins[i];
+		}
+
+		sub_ghz_format_frequency(sub_ghz_frequency_for(active_band_id, start_channel), freq_text, sizeof(freq_text));
+		u8g2_FirstPage(&m1_u8g2);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 1, 10, "Spectrum Analyzer");
+		snprintf(line, sizeof(line), "%s MHz  Peak %d", freq_text, peak);
+		u8g2_DrawStr(&m1_u8g2, 1, 20, line);
+		u8g2_DrawHLine(&m1_u8g2, 3, 55, 122);
+		for (uint8_t i = 0; i < visible; i++)
+		{
+			uint8_t h = sub_ghz_rssi_bar_width(rssi_bins[i], 32);
+			uint8_t x = 5 + i * 7;
+			if (h > 32) h = 32;
+			u8g2_DrawBox(&m1_u8g2, x, 54 - h, 5, h);
+		}
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 2, 63, "L/R band U/D pan");
+		m1_u8g2_nextpage();
+
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(80));
+		if (ret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+		if (ret != pdTRUE)
+			continue;
+
+		if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			subghz_scan_config.band = active_band_id;
+			subghz_scan_config.channel = start_channel;
+			sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, active_band_id, 0, 0);
+			menu_sub_ghz_exit();
+			xQueueReset(main_q_hdl);
+			break;
+		}
+		if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			peak = SUBGHZ_RSSI_BAR_MIN_DBM;
+		}
+		if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK ||
+		    this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+				active_band_id = (active_band_id == 0) ? (SUB_GHZ_BAND_EOL - 1) : (active_band_id - 1);
+			else
+				active_band_id = (active_band_id + 1) % SUB_GHZ_BAND_EOL;
+			start_channel = 0;
+			peak = SUBGHZ_RSSI_BAR_MIN_DBM;
+			sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, active_band_id, start_channel, 0);
+		}
+		if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			uint8_t max_ch = (uint8_t)subghz_band_steps[active_band_id][1];
+			if (start_channel + SUBGHZ_SPECTRUM_BARS <= max_ch)
+				start_channel++;
+		}
+		if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			if (start_channel > 0)
+				start_channel--;
+		}
+	}
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static void sub_ghz_playlist_draw(const char *title, const char *path, uint16_t item, uint16_t total, uint8_t repeat, uint8_t pass)
+{
+	char line[32];
+	char name[SUB_GHZ_UI_NAME_MAX];
+
+	sub_ghz_short_name(path, name, sizeof(name));
+
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 1, 10, title ? title : "Playlist");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+		if (name[0])
+			u8g2_DrawStr(&m1_u8g2, 2, 24, name);
+	snprintf(line, sizeof(line), "Item %u/%u", item, total);
+	u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+	snprintf(line, sizeof(line), "Repeat %u/%u", pass, repeat);
+	u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 63, "Back=Stop");
+	m1_u8g2_nextpage();
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_playlist_play_path(const char *path, uint16_t item, uint16_t total, uint8_t repeat, uint8_t pass)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	uint8_t ret_code;
+
+	sub_ghz_playlist_draw("Playing", path, item, total, repeat, pass);
+	if (sub_ghz_file_load_path(path))
+		return 1;
+
+	menu_sub_ghz_init();
+	ret_code = sub_ghz_replay_start(false, subghz_replay_band, subghz_replay_channel, radio_power_values[subghz_radio_power_idx]);
+	if (!ret_code)
+		return 1;
+
+	double_buffer_ptr_id = 1;
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+
+	while (ret_code != SUB_GHZ_RAW_DATA_PARSER_IDLE)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
+		if (ret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
+		{
+			ret_code = sub_ghz_replay_continue(ret_code);
+		}
+		else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+			if (ret == pdTRUE && this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				subghz_decenc_ctl.ntx_raw_repeat = 0;
+				sub_ghz_raw_tx_stop();
+				sub_ghz_raw_samples_deinit(false);
+				sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
+				m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+				xQueueReset(main_q_hdl);
+				return 2;
+			}
+		}
+	}
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	return 0;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void sub_ghz_playlist_player(void)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	FIL playlist_file;
+	S_M1_file_info *playlist_info;
+	char playlist_path[64];
+	char line[SUB_GHZ_PLAYLIST_LINE_MAX];
+	char signal_path[64];
+	uint16_t total = 0;
+	uint8_t repeat = 1;
+	uint8_t start = 0;
+	uint8_t stop = 0;
+
+	while (1)
+	{
+		playlist_info = storage_browse();
+		if (!playlist_info || !playlist_info->file_is_selected)
+			return;
+
+		snprintf(playlist_path, sizeof(playlist_path), "%s/%s", playlist_info->dir_name, playlist_info->file_name);
+		if (sub_ghz_has_extension(playlist_path, SUB_GHZ_PLAYLIST_EXTENSION))
+			break;
+
+		m1_message_box(&m1_u8g2, "Playlist error", "Select a .txt", "", "BACK to return");
+	}
+
+		while (!start)
+		{
+			char repeat_line[24];
+			char playlist_name[SUB_GHZ_UI_NAME_MAX];
+			sub_ghz_short_name(playlist_info->file_name, playlist_name, sizeof(playlist_name));
+			u8g2_FirstPage(&m1_u8g2);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 1, 10, "Playlist");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 2, 26, playlist_name);
+		snprintf(repeat_line, sizeof(repeat_line), "Repeats: %u", repeat);
+		u8g2_DrawStr(&m1_u8g2, 2, 42, repeat_line);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 2, 63, "OK Start  U/D Rep");
+		m1_u8g2_nextpage();
+
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+		ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+		if (ret != pdTRUE)
+			continue;
+
+		if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return;
+		}
+		if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			start = 1;
+		if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK && repeat < 10)
+			repeat++;
+		if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK && repeat > 1)
+			repeat--;
+	}
+
+	if (m1_fb_open_file(&playlist_file, playlist_path))
+	{
+		m1_message_box(&m1_u8g2, "Playlist error", "Open failed", "", "BACK to return");
+		return;
+	}
+
+	while (f_gets(line, sizeof(line), &playlist_file))
+	{
+		if (sub_ghz_playlist_normalize_path(line, signal_path, sizeof(signal_path)))
+			total++;
+	}
+
+	if (total == 0)
+	{
+		m1_fb_close_file(&playlist_file);
+		m1_message_box(&m1_u8g2, "Playlist empty", "Add .sgh paths", "", "BACK to return");
+		return;
+	}
+
+	for (uint8_t pass = 1; pass <= repeat && !stop; pass++)
+	{
+		uint16_t item = 0;
+		f_lseek(&playlist_file, 0);
+		while (f_gets(line, sizeof(line), &playlist_file))
+		{
+			uint8_t play_result;
+
+			if (!sub_ghz_playlist_normalize_path(line, signal_path, sizeof(signal_path)))
+				continue;
+
+			item++;
+			play_result = sub_ghz_playlist_play_path(signal_path, item, total, repeat, pass);
+			if (play_result == 2)
+			{
+				stop = 1;
+				break;
+			}
+			if (play_result == 1)
+			{
+				sub_ghz_playlist_draw("Skipped", signal_path, item, total, repeat, pass);
+				vTaskDelay(pdMS_TO_TICKS(700));
+			}
+		}
+	}
+
+	m1_fb_close_file(&playlist_file);
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
+	if (!stop)
+		m1_message_box(&m1_u8g2, "Playlist done", "", "", "BACK to return");
+	xQueueReset(main_q_hdl);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static int sub_ghz_hex_value(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_parse_hex_u32(const char *in, uint32_t max_value, uint32_t *out)
+{
+	uint32_t value = 0;
+	uint8_t digits = 0;
+
+	if (!in || !out)
+		return 0;
+
+	while (*in == ' ' || *in == '\t')
+		in++;
+	if (in[0] == '0' && (in[1] == 'x' || in[1] == 'X'))
+		in += 2;
+
+	while (*in)
+	{
+		int v;
+
+		if (*in == ' ' || *in == '\t' || *in == ':' || *in == '-' || *in == '_')
+		{
+			in++;
+			continue;
+		}
+
+		v = sub_ghz_hex_value(*in);
+		if (v < 0)
+			return 0;
+		if (value > ((max_value - (uint32_t)v) >> 4))
+			return 0;
+
+		value = (value << 4) | (uint32_t)v;
+		digits++;
+		in++;
+	}
+
+	if (digits == 0 || value > max_value)
+		return 0;
+
+	*out = value;
+	return 1;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_princeton_band_ok(void)
+{
+	return (subghz_scan_config.band != SUB_GHZ_BAND_915);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static uint16_t sub_ghz_princeton_build(uint32_t key, uint16_t *out, size_t out_len)
+{
+	uint16_t idx = 0;
+
+	if (!out || out_len < SUBGHZ_PRINCETON_PULSES)
+		return 0;
+
+	out[idx++] = SUBGHZ_PRINCETON_TE_SHORT;
+	out[idx++] = SUBGHZ_PRINCETON_SYNC;
+	for (int8_t bit = SUBGHZ_PRINCETON_BITS - 1; bit >= 0; bit--)
+	{
+		if (key & (1UL << bit))
+		{
+			out[idx++] = SUBGHZ_PRINCETON_TE_LONG;
+			out[idx++] = SUBGHZ_PRINCETON_TE_SHORT;
+		}
+		else
+		{
+			out[idx++] = SUBGHZ_PRINCETON_TE_SHORT;
+			out[idx++] = SUBGHZ_PRINCETON_TE_LONG;
+		}
+	}
+	out[idx++] = SUBGHZ_PRINCETON_TE_SHORT;
+	out[idx++] = SUBGHZ_PRINCETON_SYNC;
+
+	return idx;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+static void sub_ghz_manual_draw(const char *title, uint32_t key, uint32_t current, uint32_t total)
+{
+	char line[32];
+	char freq_text[16];
+
+	sub_ghz_format_frequency(sub_ghz_effective_frequency(subghz_scan_config.band, subghz_scan_config.channel),
+	                         freq_text, sizeof(freq_text));
+	u8g2_FirstPage(&m1_u8g2);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 1, 10, title ? title : "Sub-GHz TX");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	snprintf(line, sizeof(line), "Princeton %sMHz", freq_text);
+	u8g2_DrawStr(&m1_u8g2, 2, 24, line);
+	snprintf(line, sizeof(line), "Key %06lX", (unsigned long)(key & 0xFFFFFFUL));
+	u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+	if (total)
+		snprintf(line, sizeof(line), "%lu/%lu", (unsigned long)current, (unsigned long)total);
+	else
+		snprintf(line, sizeof(line), "Ready");
+	u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 63, "Back=Stop");
+	m1_u8g2_nextpage();
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval 0 if TX complete, 1 if aborted
+  */
+/*============================================================================*/
+static uint8_t sub_ghz_wait_tx_done(const char *title, uint32_t key, uint32_t current, uint32_t total)
+{
+	S_M1_Buttons_Status this_button_status;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+
+	sub_ghz_manual_draw(title, key, current, total);
+	while (1)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
+		if (ret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
+			return 0;
+
+		if (q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+
+		ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+		if (ret == pdTRUE && this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			return 1;
+	}
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void sub_ghz_add_manually(void)
+{
+	char key_input[16] = {0};
+	char repeat_input[8] = {0};
+	uint32_t key;
+	uint8_t repeats;
+	uint16_t pulses[SUBGHZ_PRINCETON_PULSES];
+	uint16_t pulse_count;
+	uint8_t aborted = 0;
+
+	if (m1_vkb_get_text("Princeton key:", "000000", key_input, sizeof(key_input) - 1) == 0)
+		return;
+	if (!sub_ghz_parse_hex_u32(key_input, 0xFFFFFFUL, &key))
+	{
+		m1_message_box(&m1_u8g2, "Sub-GHz TX", "Invalid hex key", "", "BACK to return");
+		return;
+	}
+	if (m1_vkb_get_text("Repeats:", "5", repeat_input, sizeof(repeat_input) - 1) == 0)
+		return;
+	repeats = (uint8_t)atoi(repeat_input);
+	if (repeats == 0)
+		repeats = 1;
+	if (repeats > SUBGHZ_MANUAL_REPEAT_MAX)
+		repeats = SUBGHZ_MANUAL_REPEAT_MAX;
+
+	pulse_count = sub_ghz_princeton_build(key, pulses, sizeof(pulses) / sizeof(pulses[0]));
+	if (!pulse_count || !sub_ghz_princeton_band_ok() ||
+	    sub_ghz_fcc_ism_band_check(subghz_scan_config.band, subghz_scan_config.channel))
+	{
+		m1_message_box(&m1_u8g2, "Sub-GHz TX", "Frequency blocked", "", "BACK to return");
+		return;
+	}
+
+	xQueueReset(main_q_hdl);
+	sub_ghz_tx_raw_init();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX, subghz_scan_config.band, subghz_scan_config.channel,
+	                   radio_power_values[subghz_radio_power_idx]);
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	for (uint8_t i = 1; i <= repeats; i++)
+	{
+		if (i == 1)
+			sub_ghz_transmit_raw((uint32_t)pulses, (uint32_t)&timerhdl_subghz_tx.Instance->ARR, pulse_count, 0);
+		else
+			sub_ghz_transmit_raw_restart((uint32_t)pulses, pulse_count);
+		aborted = sub_ghz_wait_tx_done("Add Manually", key, i, repeats);
+		if (aborted)
+			break;
+		vTaskDelay(pdMS_TO_TICKS(25));
+	}
+	sub_ghz_raw_tx_stop();
+	sub_ghz_tx_raw_deinit();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	if (!aborted)
+		m1_message_box(&m1_u8g2, "Sub-GHz TX", "Done", "", "BACK to return");
+	xQueueReset(main_q_hdl);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+/*============================================================================*/
+void sub_ghz_brute_force(void)
+{
+	char start_input[16] = {0};
+	char end_input[16] = {0};
+	char repeat_input[8] = {0};
+	uint32_t start_key;
+	uint32_t end_key;
+	uint32_t total;
+	uint8_t repeats;
+	uint8_t aborted = 0;
+	uint8_t first_tx = 1;
+	uint16_t pulses[SUBGHZ_PRINCETON_PULSES];
+	uint16_t pulse_count;
+
+	if (m1_vkb_get_text("Start key:", "000000", start_input, sizeof(start_input) - 1) == 0)
+		return;
+	if (!sub_ghz_parse_hex_u32(start_input, 0xFFFFFFUL, &start_key))
+	{
+		m1_message_box(&m1_u8g2, "Brute Force", "Invalid start", "", "BACK to return");
+		return;
+	}
+	if (m1_vkb_get_text("End key:", "0000FF", end_input, sizeof(end_input) - 1) == 0)
+		return;
+	if (!sub_ghz_parse_hex_u32(end_input, 0xFFFFFFUL, &end_key) || end_key < start_key)
+	{
+		m1_message_box(&m1_u8g2, "Brute Force", "Invalid end", "", "BACK to return");
+		return;
+	}
+	if (m1_vkb_get_text("Repeats/key:", "1", repeat_input, sizeof(repeat_input) - 1) == 0)
+		return;
+	repeats = (uint8_t)atoi(repeat_input);
+	if (repeats == 0)
+		repeats = 1;
+	if (repeats > SUBGHZ_MANUAL_REPEAT_MAX)
+		repeats = SUBGHZ_MANUAL_REPEAT_MAX;
+
+	if (!sub_ghz_princeton_band_ok() ||
+	    sub_ghz_fcc_ism_band_check(subghz_scan_config.band, subghz_scan_config.channel))
+	{
+		m1_message_box(&m1_u8g2, "Brute Force", "Frequency blocked", "", "BACK to return");
+		return;
+	}
+
+	total = ((end_key - start_key) + 1UL) * repeats;
+	xQueueReset(main_q_hdl);
+	sub_ghz_tx_raw_init();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX, subghz_scan_config.band, subghz_scan_config.channel,
+	                   radio_power_values[subghz_radio_power_idx]);
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	for (uint32_t key = start_key; key <= end_key && !aborted; key++)
+	{
+		pulse_count = sub_ghz_princeton_build(key, pulses, sizeof(pulses) / sizeof(pulses[0]));
+		if (!pulse_count)
+			break;
+
+		for (uint8_t rep = 1; rep <= repeats; rep++)
+		{
+			uint32_t current = ((key - start_key) * repeats) + rep;
+			if (first_tx)
+			{
+				sub_ghz_transmit_raw((uint32_t)pulses, (uint32_t)&timerhdl_subghz_tx.Instance->ARR, pulse_count, 0);
+				first_tx = 0;
+			}
+			else
+			{
+				sub_ghz_transmit_raw_restart((uint32_t)pulses, pulse_count);
+			}
+
+			aborted = sub_ghz_wait_tx_done("Brute Force", key, current, total);
+			if (aborted)
+				break;
+			vTaskDelay(pdMS_TO_TICKS(20));
+		}
+
+		if (key == 0xFFFFFFUL)
+			break;
+	}
+	sub_ghz_raw_tx_stop();
+	sub_ghz_tx_raw_deinit();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	if (!aborted)
+		m1_message_box(&m1_u8g2, "Brute Force", "Done", "", "BACK to return");
+	xQueueReset(main_q_hdl);
+}
+
+
 
 /*============================================================================*/
 /**
@@ -1669,7 +2907,7 @@ void sub_ghz_regional_information(void)
 /*============================================================================*/
 /*============================================================================*/
 /**
- * @brief  Radio Settings menu — allows the user to adjust frequency band,
+ * @brief  Radio Settings menu — allows the user to adjust frequency,
  *         modulation type, and TX power level for the SI4463 radio.
  *
  *         Navigation:
@@ -1683,16 +2921,12 @@ void sub_ghz_regional_information(void)
 /*============================================================================*/
 
 /* Number of configurable settings rows */
-#define RADIO_SETTINGS_ROWS  3
-#define RADIO_SETTINGS_ROW_BAND  0
-#define RADIO_SETTINGS_ROW_MOD   1
-#define RADIO_SETTINGS_ROW_POWER 2
-
-/* TX power levels (SI4463 PA_PWR_LVL register, 7-bit, 0-127) */
-#define RADIO_POWER_LEVELS  4
-static const uint8_t radio_power_values[RADIO_POWER_LEVELS] = {1, 20, 64, 127};
-static const char *radio_power_text[RADIO_POWER_LEVELS] = {
-    "Low", "Med-Low", "Med-High", "Max"};
+#define RADIO_SETTINGS_ROWS        5
+#define RADIO_SETTINGS_ROW_FREQ    0
+#define RADIO_SETTINGS_ROW_MOD     1
+#define RADIO_SETTINGS_ROW_POWER   2
+#define RADIO_SETTINGS_ROW_CUSTOM  3
+#define RADIO_SETTINGS_ROW_CHECK   4
 
 void sub_ghz_radio_settings(void)
 {
@@ -1701,18 +2935,25 @@ void sub_ghz_radio_settings(void)
 	BaseType_t ret;
 	uint8_t sel_row = 0;
 	uint8_t cur_band = (uint8_t)subghz_scan_config.band;
+	uint8_t cur_channel = subghz_scan_config.channel;
 	uint8_t cur_mod  = (uint8_t)subghz_scan_config.modulation;
-	uint8_t cur_pwr  = 1; /* default Med-Low */
+	uint8_t cur_pwr  = subghz_radio_power_idx;
+	uint8_t custom_enabled = subghz_custom_freq_enabled;
+	float custom_freq = subghz_custom_freq_mhz;
+	uint8_t check_enabled = subghz_region_check_enabled;
 	uint8_t needs_redraw = 1;
+	char freq_value[16];
+	char custom_value[16];
+	const char *check_value;
 
 	#define RS_DRAW_ROW(row_idx, label, value) do {                            \
-		uint8_t _y = 22 + (row_idx) * 12;                                     \
+		uint8_t _y = 18 + (row_idx) * 9;                                      \
 		u8g2_SetFont(&m1_u8g2, (sel_row == (row_idx))                         \
 		             ? M1_DISP_SUB_MENU_FONT_B : M1_DISP_SUB_MENU_FONT_N);   \
 		u8g2_DrawStr(&m1_u8g2, 2, _y, (label));                               \
-		u8g2_DrawStr(&m1_u8g2, 70, _y, (value));                              \
+		u8g2_DrawStr(&m1_u8g2, 58, _y, (value));                              \
 		if (sel_row == (row_idx)) {                                            \
-			u8g2_DrawStr(&m1_u8g2, 60, _y, "<");                              \
+			u8g2_DrawStr(&m1_u8g2, 50, _y, "<");                              \
 			u8g2_DrawStr(&m1_u8g2, 122, _y, ">");                             \
 		}                                                                      \
 	} while(0)
@@ -1721,16 +2962,25 @@ void sub_ghz_radio_settings(void)
 	{
 		if (needs_redraw)
 		{
+			sub_ghz_format_frequency(sub_ghz_frequency_for(cur_band, cur_channel), freq_value, sizeof(freq_value));
+			if (custom_enabled)
+				sub_ghz_format_frequency(custom_freq, custom_value, sizeof(custom_value));
+			else
+				snprintf(custom_value, sizeof(custom_value), "Off");
+			check_value = check_enabled ? "On" : "Off";
+
 			needs_redraw = 0;
 			u8g2_FirstPage(&m1_u8g2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 1, 10, "Radio Settings");
-			RS_DRAW_ROW(RADIO_SETTINGS_ROW_BAND, "Freq:", subghz_band_text[cur_band]);
+			RS_DRAW_ROW(RADIO_SETTINGS_ROW_FREQ, "Freq:", freq_value);
 			RS_DRAW_ROW(RADIO_SETTINGS_ROW_MOD, "Mod:", subghz_modulation_text[cur_mod]);
 			RS_DRAW_ROW(RADIO_SETTINGS_ROW_POWER, "Power:", radio_power_text[cur_pwr]);
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-			u8g2_DrawStr(&m1_u8g2, 2, 62, "OK=Apply  Back=Cancel");
+			RS_DRAW_ROW(RADIO_SETTINGS_ROW_CUSTOM, "Custom:", custom_value);
+			RS_DRAW_ROW(RADIO_SETTINGS_ROW_CHECK, "Check:", check_value);
+			u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+			u8g2_DrawStr(&m1_u8g2, 2, 63, "OK Apply");
 			m1_u8g2_nextpage();
 		}
 
@@ -1748,7 +2998,12 @@ void sub_ghz_radio_settings(void)
 		if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			subghz_scan_config.band       = (S_M1_SubGHz_Band)cur_band;
+			subghz_scan_config.channel    = cur_channel;
 			subghz_scan_config.modulation = (S_M1_SubGHz_Modulation)cur_mod;
+			subghz_radio_power_idx = cur_pwr;
+			subghz_custom_freq_enabled = custom_enabled;
+			subghz_custom_freq_mhz = custom_freq;
+			subghz_region_check_enabled = check_enabled;
 			SI446x_Set_Tx_Power(radio_power_values[cur_pwr]);
 			m1_buzzer_notification();
 			xQueueReset(main_q_hdl);
@@ -1767,8 +3022,10 @@ void sub_ghz_radio_settings(void)
 		if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			switch (sel_row) {
-			case RADIO_SETTINGS_ROW_BAND:
+			case RADIO_SETTINGS_ROW_FREQ:
 				cur_band = (cur_band == 0) ? (SUB_GHZ_BAND_EOL - 1) : (cur_band - 1);
+				cur_channel = 0;
+				custom_enabled = 0;
 				cur_mod = (cur_band == SUB_GHZ_BAND_915)
 				          ? (uint8_t)MODULATION_FSK : (uint8_t)MODULATION_OOK;
 				break;
@@ -1778,14 +3035,41 @@ void sub_ghz_radio_settings(void)
 			case RADIO_SETTINGS_ROW_POWER:
 				cur_pwr = (cur_pwr == 0) ? (RADIO_POWER_LEVELS - 1) : (cur_pwr - 1);
 				break;
+			case RADIO_SETTINGS_ROW_CUSTOM:
+			{
+				char input[16];
+				char def[16];
+				uint8_t band;
+				uint8_t channel;
+				sub_ghz_format_frequency(custom_freq, def, sizeof(def));
+				if (m1_vkb_get_text("SubGHz MHz:", def, input, sizeof(input) - 1) > 0)
+				{
+					float requested = atof(input);
+					if (sub_ghz_custom_frequency_select(requested, &band, &channel))
+					{
+						cur_band = band;
+						cur_channel = channel;
+						custom_freq = requested;
+						custom_enabled = 1;
+						cur_mod = (cur_band == SUB_GHZ_BAND_915)
+						          ? (uint8_t)MODULATION_FSK : (uint8_t)MODULATION_OOK;
+					}
+				}
+				break;
+			}
+			case RADIO_SETTINGS_ROW_CHECK:
+				check_enabled ^= 1;
+				break;
 			}
 			needs_redraw = 1;
 		}
 		if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			switch (sel_row) {
-			case RADIO_SETTINGS_ROW_BAND:
+			case RADIO_SETTINGS_ROW_FREQ:
 				cur_band = (cur_band + 1) % SUB_GHZ_BAND_EOL;
+				cur_channel = 0;
+				custom_enabled = 0;
 				cur_mod = (cur_band == SUB_GHZ_BAND_915)
 				          ? (uint8_t)MODULATION_FSK : (uint8_t)MODULATION_OOK;
 				break;
@@ -1794,6 +3078,31 @@ void sub_ghz_radio_settings(void)
 				break;
 			case RADIO_SETTINGS_ROW_POWER:
 				cur_pwr = (cur_pwr + 1) % RADIO_POWER_LEVELS;
+				break;
+			case RADIO_SETTINGS_ROW_CUSTOM:
+			{
+				char input[16];
+				char def[16];
+				uint8_t band;
+				uint8_t channel;
+				sub_ghz_format_frequency(custom_freq, def, sizeof(def));
+				if (m1_vkb_get_text("SubGHz MHz:", def, input, sizeof(input) - 1) > 0)
+				{
+					float requested = atof(input);
+					if (sub_ghz_custom_frequency_select(requested, &band, &channel))
+					{
+						cur_band = band;
+						cur_channel = channel;
+						custom_freq = requested;
+						custom_enabled = 1;
+						cur_mod = (cur_band == SUB_GHZ_BAND_915)
+						          ? (uint8_t)MODULATION_FSK : (uint8_t)MODULATION_OOK;
+					}
+				}
+				break;
+			}
+			case RADIO_SETTINGS_ROW_CHECK:
+				check_enabled ^= 1;
 				break;
 			}
 			needs_redraw = 1;
@@ -2656,7 +3965,8 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 		sprintf(pfillbuffer, "%s M1 SubGHz %s\r\n", subghz_datfile_keywords[0], SUB_GHZ_DATAFILE_FILETYPE_KEYWORD);
 		sprintf(prn_buffer, "%s %d.%d\r\n", subghz_datfile_keywords[1], m1_device_stat.config.fw_version_major, m1_device_stat.config.fw_version_minor);
 		strcat(pfillbuffer, prn_buffer);
-		freq32 = subghz_band_steps[subghz_scan_config.band][0]*1000000; // Convert frequency from MHz to Hz
+		freq32 = sub_ghz_frequency_hz(sub_ghz_effective_frequency(subghz_scan_config.band,
+		                                                          subghz_scan_config.channel));
 		sprintf(prn_buffer, "%s %lu\r\n", subghz_datfile_keywords[2], freq32);
 		strcat(pfillbuffer, prn_buffer);
 		sprintf(prn_buffer, "%s %s\r\n", subghz_datfile_keywords[3], subghz_modulation_text[subghz_scan_config.modulation]);
@@ -2872,10 +4182,12 @@ static uint8_t sub_ghz_fcc_ism_band_check(uint8_t band, uint8_t channel)
 	float freq;
 	uint8_t i, ret;
 
+	if (!subghz_region_check_enabled)
+		return 0;
+
 	ret = 1;
 
-	freq = subghz_band_steps[band][0];
-	freq += channel*CHANNEL_STEP;
+	freq = sub_ghz_effective_frequency(band, channel);
 	for (i=0; i<subghz_regions_list[m1_device_stat.config.ism_band_region].bands_list; i++)
 	{
 		if ( (freq >= subghz_regions_list[m1_device_stat.config.ism_band_region].this_region[i][0]) &&
@@ -2949,24 +4261,54 @@ static void sub_ghz_buffer_rotate(S_M1_RingBuffer *prb_handle)
 void sub_ghz_display(SubGHz_Dec_Info_t decoded_data)
 {
     char hexString[64];
-    uint32_t value;
+    uint64_t value;
 
     value = decoded_data.key;
-    if (value)
+    if (value || decoded_data.key_hi)
     {
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         u8g2_DrawBox(&m1_u8g2, 2, 42, 126, 22); // Clear existing content
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-        u8g2_DrawStr(&m1_u8g2, 22, 42, protocol_text[decoded_data.protocol]);
+        u8g2_DrawStr(&m1_u8g2, 2, 42, protocol_text[decoded_data.protocol]);
     	if ( decoded_data.protocol==SECURITY_PLUS_20 )
     	{
     		value = subghz_decenc_ctl.n32_rollingcode;
     		sprintf(hexString, "SN 0x%lX Id 0x%X\r\n", subghz_decenc_ctl.n32_serialnumber, subghz_decenc_ctl.n8_buttonid);
     		u8g2_DrawStr(&m1_u8g2, 2, 62, hexString);
     	}
-        sprintf(hexString, "0x%lX %ddBm\r\n", value, decoded_data.rssi);
-        u8g2_DrawStr(&m1_u8g2, 22, 52, hexString);
+        if (decoded_data.detail_line1[0])
+        {
+            u8g2_DrawStr(&m1_u8g2, 2, 52, decoded_data.detail_line1);
+            if (decoded_data.detail_line2[0])
+            {
+                u8g2_DrawStr(&m1_u8g2, 2, 62, decoded_data.detail_line2);
+            }
+            if (decoded_data.detail_line3[0])
+            {
+                M1_LOG_I(M1_LOGDB_TAG, "%s\r\n", decoded_data.detail_line3);
+            }
+            snprintf(hexString, sizeof(hexString), "%s %s\r\n", decoded_data.detail_line1, decoded_data.detail_line2);
+        }
+        else if (decoded_data.key_hi)
+        {
+            sprintf(hexString, "H:%08lX%08lX\r\n",
+                (uint32_t)(decoded_data.key_hi >> 32),
+                (uint32_t)decoded_data.key_hi);
+            u8g2_DrawStr(&m1_u8g2, 2, 52, hexString);
+            sprintf(hexString, "L:%08lX%08lX\r\n",
+                (uint32_t)(decoded_data.key >> 32),
+                (uint32_t)decoded_data.key);
+            u8g2_DrawStr(&m1_u8g2, 2, 62, hexString);
+        }
+        else
+        {
+            sprintf(hexString, "0x%08lX%08lX %ddBm\r\n",
+                (uint32_t)(value >> 32),
+                (uint32_t)value,
+                decoded_data.rssi);
+            u8g2_DrawStr(&m1_u8g2, 2, 52, hexString);
+        }
 		m1_u8g2_nextpage(); // Update display
 		M1_LOG_I(M1_LOGDB_TAG, hexString);
         //display_info(decoded_data, 1, raw);

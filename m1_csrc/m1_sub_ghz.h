@@ -136,7 +136,12 @@ void menu_sub_ghz_exit(void);
 void sub_ghz_init(void);
 void sub_ghz_record(void);
 void sub_ghz_replay(void);
+void sub_ghz_rssi_meter(void);
 void sub_ghz_frequency_reader(void);
+void sub_ghz_spectrum_analyzer(void);
+void sub_ghz_playlist_player(void);
+void sub_ghz_add_manually(void);
+void sub_ghz_brute_force(void);
 void sub_ghz_regional_information(void);
 void sub_ghz_radio_settings(void);
 

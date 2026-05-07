@@ -96,6 +96,7 @@ void SI446x_Get_IntStatus(uint8_t PH_CLR_PEND, uint8_t MODEM_CLR_PEND, uint8_t C
 void SI446x_Change_State(uint8_t NEXT_STATE1);
 void SI446x_Start_Rx(uint8_t channel);
 void SI446x_Change_Radio_Setting(uint8_t mode, uint8_t pa_power);
+uint8_t SI446x_Set_Frequency_Hz(uint32_t frequency_hz);
 void SI446x_Set_Tx_Power(uint8_t power);
 void SI446x_Select_Frontend(S_M1_SubGHz_Band network);
 void SI446x_Start_Tx_CW(uint16_t channel, uint8_t radio_mod_type);

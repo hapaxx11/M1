@@ -110,7 +110,7 @@ typedef struct {
 
 typedef struct
 {
-	uint8_t 	uid[5];
+	uint8_t 	uid[16];
 	uint8_t     protocol;
 	uint16_t	bitrate;
 	uint8_t		modulation;
@@ -155,5 +155,6 @@ void bytes_to_u32_array(BitOrder order, const uint8_t in_data[], uint32_t out_da
 //#include "lfrfid_protocol_detect.h"
 #include "lfrfid_protocol_em4100.h"
 #include "lfrfid_protocol_h10301.h"
+#include "lfrfid_protocol_extra.h"
 
 #endif /* LFRFID_H_ */

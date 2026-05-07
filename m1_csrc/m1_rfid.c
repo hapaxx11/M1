@@ -2482,7 +2482,7 @@ static void lfrfid_addm_edit_destroy(uint8_t param)
 /*============================================================================*/
 static void lfrfid_addm_edit_update(uint8_t param)
 {
-	char data_buffer[20];
+	char data_buffer[64];
 	uint8_t data_size;
 	uint8_t val, menu_index;
 
@@ -2705,12 +2705,16 @@ void lfrfid_addm_save_init(void)
 /*============================================================================*/
 
 /* ---- Utilities submenu items ---- */
-#define UTIL_MENU_ITEMS     2
+#define UTIL_MENU_ITEMS     4
 #define UTIL_IDX_CLONE      0
-#define UTIL_IDX_BRUTEFC    1
+#define UTIL_IDX_FUZZER     1
+#define UTIL_IDX_BLANK      2
+#define UTIL_IDX_BRUTEFC    3
 
 static const char *util_menu_labels[UTIL_MENU_ITEMS] = {
     "Clone Card",
+    "RFID Fuzzer",
+    "Blank T5577",
     "Brute Force FC"
 };
 
@@ -2731,27 +2735,45 @@ typedef enum {
     BF_STATE_DONE,
 } bf_state_t;
 
+typedef enum {
+    FUZZ_STATE_IDLE,
+    FUZZ_STATE_RUNNING,
+    FUZZ_STATE_PAUSED,
+} fuzz_state_t;
+
+typedef enum {
+    BLANK_STATE_CONFIRM,
+    BLANK_STATE_WRITING,
+    BLANK_STATE_DONE,
+} blank_state_t;
+
 /* ---- Helper: draw the utilities submenu ---- */
 static void util_submenu_draw(uint8_t sel)
 {
+    uint8_t visible_start = 0;
+
+    if (sel > 1 && UTIL_MENU_ITEMS > 3)
+        visible_start = (sel - 1 > UTIL_MENU_ITEMS - 3) ? UTIL_MENU_ITEMS - 3 : sel - 1;
+
     u8g2_FirstPage(&m1_u8g2);
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 1, 10, "125kHz Utilities");
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    for (uint8_t i = 0; i < UTIL_MENU_ITEMS; i++)
+    for (uint8_t i = 0; i < 3 && (visible_start + i) < UTIL_MENU_ITEMS; i++)
     {
+        uint8_t ci = visible_start + i;
         uint8_t y = 24 + i * 12;
-        if (i == sel) {
+        if (ci == sel) {
             u8g2_DrawBox(&m1_u8g2, 0, y - 9, 128, 11);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-            u8g2_DrawStr(&m1_u8g2, 4, y, util_menu_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 4, y, util_menu_labels[ci]);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         } else {
-            u8g2_DrawStr(&m1_u8g2, 4, y, util_menu_labels[i]);
+            u8g2_DrawStr(&m1_u8g2, 4, y, util_menu_labels[ci]);
         }
     }
     m1_u8g2_nextpage();
@@ -2873,6 +2895,68 @@ static void util_bf_draw(bf_state_t state, uint16_t fc, uint16_t card_num)
     m1_u8g2_nextpage();
 }
 
+static void util_fuzzer_draw(fuzz_state_t state, uint16_t fc, uint16_t card_num, uint32_t count)
+{
+    char line[32];
+
+    u8g2_FirstPage(&m1_u8g2);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 1, 10, "RFID Fuzzer");
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    snprintf(line, sizeof(line), "H10301 FC:%03u", fc);
+    u8g2_DrawStr(&m1_u8g2, 4, 24, line);
+    snprintf(line, sizeof(line), "Card:%05u Cnt:%lu", card_num, (unsigned long)count);
+    u8g2_DrawStr(&m1_u8g2, 4, 36, line);
+
+    u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+    if (state == FUZZ_STATE_RUNNING)
+        u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Pause Back=Stop");
+    else if (state == FUZZ_STATE_PAUSED)
+        u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Resume Back=Exit");
+    else
+        u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Start Back=Exit");
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    m1_u8g2_nextpage();
+}
+
+static void util_blank_draw(blank_state_t state)
+{
+    u8g2_FirstPage(&m1_u8g2);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 1, 10, "Blank T5577");
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    if (state == BLANK_STATE_CONFIRM)
+    {
+        u8g2_DrawStr(&m1_u8g2, 4, 25, "Writes blank EM4100");
+        u8g2_DrawStr(&m1_u8g2, 4, 37, "to T5577 card");
+    }
+    else if (state == BLANK_STATE_WRITING)
+    {
+        u8g2_DrawStr(&m1_u8g2, 4, 28, "Writing...");
+        u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold T5577 to coil");
+    }
+    else
+    {
+        u8g2_DrawStr(&m1_u8g2, 4, 30, "Done");
+    }
+
+    u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12);
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+    if (state == BLANK_STATE_CONFIRM)
+        u8g2_DrawStr(&m1_u8g2, 2, 61, "OK=Write Back=Exit");
+    else if (state == BLANK_STATE_WRITING)
+        u8g2_DrawStr(&m1_u8g2, 2, 61, "Back=Stop");
+    else
+        u8g2_DrawStr(&m1_u8g2, 2, 61, "Back=Exit");
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    m1_u8g2_nextpage();
+}
+
 /* ==== Clone sub-function ==== */
 static void util_clone_run(void)
 {
@@ -2989,6 +3073,163 @@ static void util_clone_run(void)
     }
 }
 
+static void util_fuzzer_run(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    fuzz_state_t state = FUZZ_STATE_IDLE;
+    uint16_t fc = 0;
+    uint16_t card_num = 1;
+    uint32_t count = 0;
+
+    util_fuzzer_draw(state, fc, card_num, count);
+
+    while (1)
+    {
+        if (state == FUZZ_STATE_RUNNING)
+        {
+            lfrfid_tag_info.protocol = LFRFIDProtocolH10301;
+            lfrfid_tag_info.uid[0] = (uint8_t)(fc & 0xFF);
+            lfrfid_tag_info.uid[1] = (uint8_t)((card_num >> 8) & 0xFF);
+            lfrfid_tag_info.uid[2] = (uint8_t)(card_num & 0xFF);
+
+            util_fuzzer_draw(state, fc, card_num, count);
+            m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE);
+
+            ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(750));
+            m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_EMULATE_STOP);
+            vTaskDelay(pdMS_TO_TICKS(40));
+
+            if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+            {
+                ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+                if (ret == pdTRUE)
+                {
+                    if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                    {
+                        m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                        xQueueReset(main_q_hdl);
+                        return;
+                    }
+                    if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+                    {
+                        state = FUZZ_STATE_PAUSED;
+                        util_fuzzer_draw(state, fc, card_num, count);
+                        m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                        continue;
+                    }
+                }
+            }
+
+            count++;
+            card_num++;
+            if (card_num == 0)
+            {
+                card_num = 1;
+                fc = (fc + 1U) & 0x00FFU;
+            }
+            continue;
+        }
+
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
+            continue;
+
+        ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+        if (ret != pdTRUE)
+            continue;
+
+        if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            xQueueReset(main_q_hdl);
+            return;
+        }
+        if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            state = FUZZ_STATE_RUNNING;
+            m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+        }
+        if (state == FUZZ_STATE_IDLE || state == FUZZ_STATE_PAUSED)
+        {
+            uint8_t redraw = 0;
+            if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                card_num = (card_num < 65535) ? card_num + 1 : 1;
+                redraw = 1;
+            }
+            if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                card_num = (card_num > 1) ? card_num - 1 : 65535;
+                redraw = 1;
+            }
+            if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                fc = (fc + 1U) & 0x00FFU;
+                redraw = 1;
+            }
+            if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                fc = (fc == 0) ? 255 : fc - 1U;
+                redraw = 1;
+            }
+            if (redraw)
+                util_fuzzer_draw(state, fc, card_num, count);
+        }
+    }
+}
+
+static void util_blank_t5577_run(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    blank_state_t state = BLANK_STATE_CONFIRM;
+
+    util_blank_draw(state);
+
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE)
+            continue;
+
+        if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            ret = xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (ret != pdTRUE)
+                continue;
+
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (state == BLANK_STATE_WRITING)
+                    m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE_STOP);
+                m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                xQueueReset(main_q_hdl);
+                return;
+            }
+            if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK && state == BLANK_STATE_CONFIRM)
+            {
+                memset(&lfrfid_tag_info, 0, sizeof(lfrfid_tag_info));
+                lfrfid_tag_info.protocol = LFRFIDProtocolEM4100;
+                memcpy(lfrfid_tag_info_back, &lfrfid_tag_info, sizeof(LFRFID_TAG_INFO));
+                lfrfid_write_count = 0;
+                state = BLANK_STATE_WRITING;
+                util_blank_draw(state);
+                m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+                m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
+            }
+        }
+        else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_WRITE_DONE && state == BLANK_STATE_WRITING)
+        {
+            state = BLANK_STATE_DONE;
+            m1_buzzer_notification();
+            m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+            util_blank_draw(state);
+        }
+    }
+}
+
 /* ==== Brute Force FC sub-function ==== */
 static void util_bruteforce_fc_run(void)
 {
@@ -3019,7 +3260,6 @@ static void util_bruteforce_fc_run(void)
             m1_app_send_q_message(lfrfid_q_hdl, Q_EVENT_UI_LFRFID_WRITE);
 
             /* Wait for write complete or user abort */
-            uint8_t write_ok = 0;
             while (1)
             {
                 ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(5000));
@@ -3042,12 +3282,10 @@ static void util_bruteforce_fc_run(void)
                 }
                 else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_WRITE_DONE)
                 {
-                    write_ok = 1;
                     break;
                 }
                 else if (q_item.q_evt_type == Q_EVENT_LFRFID_TAG_DETECTED)
                 {
-                    write_ok = 1;
                     break;
                 }
                 else if (q_item.q_evt_type == Q_EVENT_UI_LFRFID_READ_TIMEOUT)
@@ -3185,6 +3423,14 @@ void rfid_125khz_utilities(void)
                 util_clone_run();
                 needs_redraw = 1;
                 break;
+            case UTIL_IDX_FUZZER:
+                util_fuzzer_run();
+                needs_redraw = 1;
+                break;
+            case UTIL_IDX_BLANK:
+                util_blank_t5577_run();
+                needs_redraw = 1;
+                break;
             case UTIL_IDX_BRUTEFC:
                 util_bruteforce_fc_run();
                 needs_redraw = 1;
@@ -3257,5 +3503,3 @@ static void lfrfid_write_screen_draw(int param, char* filename)
     }
 
 } // static void rfid_read_more_options_write(void)
-
-

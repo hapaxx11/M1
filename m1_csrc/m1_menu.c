@@ -49,9 +49,34 @@ S_M1_Menu_t menu_Sub_GHz_Replay =
     "Replay", sub_ghz_replay, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
+S_M1_Menu_t menu_Sub_GHz_RSSI_Meter =
+{
+    "RSSI Meter", sub_ghz_rssi_meter, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
 S_M1_Menu_t menu_Sub_GHz_Frequency_Reader =
 {
-    "Frequency Reader", sub_ghz_frequency_reader, NULL, NULL, 0, 0, NULL, NULL, NULL
+    "Frequency Scanner", sub_ghz_frequency_reader, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Sub_GHz_Spectrum_Analyzer =
+{
+    "Spectrum Analyzer", sub_ghz_spectrum_analyzer, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Sub_GHz_Playlist =
+{
+    "Playlist", sub_ghz_playlist_player, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Sub_GHz_Add_Manually =
+{
+    "Add Manually", sub_ghz_add_manually, NULL, NULL, 0, 0, NULL, NULL, NULL
+};
+
+S_M1_Menu_t menu_Sub_GHz_Brute_Force =
+{
+    "Brute Force", sub_ghz_brute_force, NULL, NULL, 0, 0, NULL, NULL, NULL
 };
 
 S_M1_Menu_t menu_Sub_GHz_Regional_Information =
@@ -66,8 +91,8 @@ S_M1_Menu_t menu_Sub_GHz_Radio_Settings =
 
 S_M1_Menu_t menu_Sub_GHz =
 {
-    "Sub-GHz", NULL, NULL, NULL, 5, 0, menu_m1_icon_wave, NULL,
-    {&menu_Sub_GHz_Record, &menu_Sub_GHz_Replay, &menu_Sub_GHz_Frequency_Reader, &menu_Sub_GHz_Regional_Information, &menu_Sub_GHz_Radio_Settings}
+    "Sub-GHz", NULL, NULL, NULL, 10, 0, menu_m1_icon_wave, NULL,
+    {&menu_Sub_GHz_Record, &menu_Sub_GHz_Replay, &menu_Sub_GHz_RSSI_Meter, &menu_Sub_GHz_Frequency_Reader, &menu_Sub_GHz_Spectrum_Analyzer, &menu_Sub_GHz_Playlist, &menu_Sub_GHz_Add_Manually, &menu_Sub_GHz_Brute_Force, &menu_Sub_GHz_Regional_Information, &menu_Sub_GHz_Radio_Settings}
 };
 
 /*----------------------------- > 125KHz RFID --------------------------------*/

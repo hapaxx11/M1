@@ -10,40 +10,41 @@ This project started as a fork of the original Monstatek M1 firmware and adds co
 
 ## Current Release
 
-**SiN360 v0.9.0.8**
+**SiN360 v0.9.0.9**
 
-This release focuses on WiFi scanner coverage, Evil Portal custom-page capture improvements, BLE foundation work, ESP32 update support, UI polish, and branding refresh.
+This release rolls up the latest WiFi, BLE, NFC, Sub-GHz, and LF RFID work. It pairs with the `v0.9.0.9` ESP32-C6 companion firmware for the current WiFi/BLE command set and deauth fix.
 
 ### Branding
 
-- Firmware version bumped to `0.9.0.8`
+- Firmware version: `0.9.0.9`
 - Boot screen now uses SiN360 branding with the firmware version underneath
 - Boot and main-menu logos updated with custom monochrome artwork
 - Default BLE advertising name changed to `SiN360-M1`
 
 ### ESP32-C6 Companion Firmware
 
-The WiFi and BLE features require matching ESP32-C6 companion firmware. The STM32 and ESP32 sides communicate over a 64-byte binary SPI protocol, so both firmwares must be kept in sync.
+The WiFi and BLE features require compatible ESP32-C6 companion firmware. The STM32 and ESP32 sides communicate over a 64-byte binary SPI protocol, so update the ESP32 side when a release changes WiFi/BLE commands.
 
 ESP32 firmware repo:
 
 <https://github.com/sincere360/M1_SiN360_ESP32>
 
-Matching ESP32 `v0.9.0.8` release:
+Current compatible ESP32 release: `v0.9.0.9`
 
-<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.8>
+<https://github.com/sincere360/M1_SiN360_ESP32/releases/tag/v0.9.0.9>
 
 Workflow guides:
 
 - [WiFi Test Workflows](docs/WIFI_WORKFLOWS.md)
 - [Bluetooth / BLE Test Workflows](docs/BLE_WORKFLOWS.md)
+- [Sub-GHz and RFID Features](docs/SUBGHZ_RFID.md)
 
 ### WiFi
 
 - AP scanning with scrollable results
 - Station scanning and AP/station target selection
 - Packet monitor/sniffers for beacon, probe, deauth, EAPOL, SAE commit, Pwnagotchi detection, raw packet counts, and optional PCAP export under `pcap/`
-- Deauth attack with selected AP/station target plumbing
+- Deauth attack with selected AP/station target plumbing and ESP32-C6 deauth fix
 - Beacon Spam from SD-card `.txt`/`.lst` SSID lists
 - Beacon Spam modes: all in order, shuffle all, random subset
 - Rickroll beacon preset
@@ -88,12 +89,14 @@ Workflow guides:
 - Existing filename keyboard remains for file/path style entry
 - File browser is used for SD-card SSID lists, AP caches, IR files, NFC files, and portal HTML files
 
-### Existing Tooling
+### Sub-GHz, RFID, NFC, And Core Tools
 
-- NFC read/write/emulate features, including NTAG215 Amiibo support
-- NFC utilities: Cyborg Detector, Mifare Fuzzer, Write URL, UID write, T2T wipe
-- 125 kHz RFID read/write/emulate and T5577 clone flow
-- Sub-GHz RX/TX with configurable radio settings
+- Sub-GHz RX/TX on 300-928 MHz with preset bands and exact custom frequency entry
+- Sub-GHz RSSI meter, frequency scanner, spectrum analyzer, playlist player, expanded protocol decoding, Princeton add-manually, and Princeton/CAME/Nice FLO/Linear/Holtek brute-force helpers
+- Sub-GHz radio settings for TX power, region check, modulation, and custom frequency
+- 125 kHz RFID read/write/emulate with expanded protocol coverage and T5577 clone/write tools
+- NFC read/write/emulate features, including NTAG215 Amiibo support and improved Type 2 Tag URL writing
+- NFC utilities: Tag Info, Type 2 page dump, Field Test, Cyborg Detector, Mifare Fuzzer, Write URL, Write Tag, UID write, and T2T wipe
 - Infrared TX/RX, Universal Remote, and Flipper `.ir` file loading
 - GPIO controls
 - USB CDC + MSC composite mode
@@ -131,6 +134,7 @@ Still in progress:
 - More BLE detection signatures and payload tuning
 - More Evil Portal polish and a dedicated portal authoring document
 - Field tuning for advanced raw WiFi management-frame attacks across more chipsets
+- Field tuning for advanced Sub-GHz/RFID protocols and NFC range-extender behavior
 - BadUSB/HID UI and scripting
 - GPS and other advanced features
 
@@ -138,9 +142,9 @@ Still in progress:
 
 - **MCU:** STM32H573VIT6, ARM Cortex-M33, 250 MHz
 - **Wireless coprocessor:** ESP32-C6-MINI-1, WiFi 6 + BLE 5
-- **Sub-GHz:** Si446x radio, 300-915 MHz
+- **Sub-GHz:** Si446x radio, 300-928 MHz
 - **NFC:** ST25R3916, 13.56 MHz
-- **LF RFID:** 125 kHz read/write/emulate, EM4100/H10301/T5577
+- **LF RFID:** 125 kHz read/write/emulate with T5577 write support for compatible formats
 - **IR:** IRMP/IRSND protocol library
 - **Display:** 128x64 OLED through u8g2
 - **USB:** CDC + MSC composite device
@@ -166,7 +170,7 @@ make
 Output:
 
 ```text
-artifacts/M1_SiN360_v0.9.0.8.bin
+artifacts/M1_SiN360_v0.9.0.9.bin
 ```
 
 ### VS Code
@@ -180,7 +184,7 @@ artifacts/M1_SiN360_v0.9.0.8.bin
 Output is normally:
 
 ```text
-out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.8_SD.bin
+out/build/gcc-14_2_build-release/M1_SiN360_v0.9.0.9_SD.bin
 ```
 
 ## Building ESP32 Firmware
@@ -193,7 +197,7 @@ cd M1_SiN360_ESP32
 idf.py build
 ```
 
-For SD-card ESP32 firmware updates, use the matching release files from the companion ESP32 repository.
+For SD-card ESP32 firmware updates, use a compatible release from the companion ESP32 repository.
 
 Copy the ESP32 update files to the SD card, then use **Settings > ESP32 > Firmware Update** on the M1.
 
@@ -201,7 +205,7 @@ Copy the ESP32 update files to the SD card, then use **Settings > ESP32 > Firmwa
 
 ### Via SD Card
 
-1. Copy `M1_SiN360_v0.9.0.8.bin` to the M1 SD card.
+1. Copy `M1_SiN360_v0.9.0.9_SD.bin` to the M1 SD card.
 2. On the M1, open **Settings > Firmware Update**.
 3. Select the firmware file.
 4. Wait for the update to complete and reboot.
@@ -215,7 +219,7 @@ Connect ST-Link V2 to the M1 GPIO header:
 - Pin 8 or 18 -> GND
 
 ```bash
-st-flash write M1_SiN360_v0.9.0.8.bin 0x08000000
+st-flash write M1_SiN360_v0.9.0.9.bin 0x08000000
 ```
 
 ## Dual Firmware Banks
@@ -227,7 +231,7 @@ SiN360 supports switching from **Settings > Switch Bank**. A safety fallback is 
 ## Credits
 
 - **Monstatek** -- Original M1 hardware and base firmware
-- **SiN360** -- Custom firmware development, feature completion, build fixes
+- **neddy299** -- Deauth patch
 - **IRMP/IRSND** -- IR protocol library by Frank Meyer
 - **Flipper Zero community** -- IR code database references and inspiration
 

@@ -47,6 +47,26 @@ const LFRFIDProtocolBase* lfrfid_protocols[] = {
     [LFRFIDProtocolEM4100_32] = &protocol_em4100_32,
     [LFRFIDProtocolEM4100_16] = &protocol_em4100_16,
     [LFRFIDProtocolH10301] = &protocol_h10301,
+    [LFRFIDProtocolHidGeneric] = &protocol_hid_generic,
+    [LFRFIDProtocolHidExGeneric] = &protocol_hid_ex_generic,
+    [LFRFIDProtocolIOProxXSF] = &protocol_io_prox_xsf,
+    [LFRFIDProtocolAwid] = &protocol_awid,
+    [LFRFIDProtocolFDXA] = &protocol_fdx_a,
+    [LFRFIDProtocolPyramid] = &protocol_pyramid,
+    [LFRFIDProtocolIndala26] = &protocol_indala26,
+    [LFRFIDProtocolIdteck] = &protocol_idteck,
+    [LFRFIDProtocolKeri] = &protocol_keri,
+    [LFRFIDProtocolNexwatch] = &protocol_nexwatch,
+    [LFRFIDProtocolJablotron] = &protocol_jablotron,
+    [LFRFIDProtocolViking] = &protocol_viking,
+    [LFRFIDProtocolParadox] = &protocol_paradox,
+    [LFRFIDProtocolPACStanley] = &protocol_pac_stanley,
+    [LFRFIDProtocolNoralsy] = &protocol_noralsy,
+    [LFRFIDProtocolFDXB] = &protocol_fdx_b,
+    [LFRFIDProtocolGProxII] = &protocol_gproxii,
+    [LFRFIDProtocolSecurakey] = &protocol_securakey,
+    [LFRFIDProtocolGallagher] = &protocol_gallagher,
+    [LFRFIDProtocolElectra] = &protocol_electra,
 };
 
 //************************** S T R U C T U R E S *******************************
@@ -280,7 +300,7 @@ void protocol_render_data(uint16_t protocol_index, char* szstring)
 /*============================================================================*/
 void lfrfid_GetTagInfo(PLFRFID_TAG_INFO pTaginfo)
 {
-	memcpy(pTaginfo->uid, lfrfid_tag_info.uid,5);
+	memcpy(pTaginfo->uid, lfrfid_tag_info.uid, sizeof(pTaginfo->uid));
 	pTaginfo->bitrate = lfrfid_tag_info.bitrate;
 	pTaginfo->protocol = lfrfid_tag_info.protocol;
 }
@@ -322,4 +342,3 @@ bool lfrfid_write_verify(LFRFID_TAG_INFO* write, LFRFID_TAG_INFO* readback)
 
 	return result;
 }
-

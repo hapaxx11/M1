@@ -28,7 +28,7 @@ extern void lfrfid_isr_init(void);
 //***************************************************************************
 // emulation
 //***************************************************************************
-#define ENCODED_DATA_MAX 1200
+#define ENCODED_DATA_MAX 4096
 
 typedef struct
 {

@@ -4,11 +4,11 @@ Use these workflows in a controlled lab with devices you own or have permission 
 
 ## Firmware Pairing
 
-1. Flash the STM32 `M1_SiN360_v0.9.0.8_SD.bin`.
-2. Flash the matching ESP32-C6 `v0.9.0.8` firmware.
-3. Reboot the M1 after both updates.
+1. Flash the STM32 `M1_SiN360_v0.9.0.9_SD.bin`.
+2. Flash a compatible ESP32-C6 firmware. ESP32 `v0.9.0.9` is compatible with this STM32 release.
+3. Reboot the M1 after firmware updates.
 
-BLE features live on the ESP32-C6, so matching ESP32 firmware is required.
+BLE features live on the ESP32-C6, so compatible ESP32 firmware is required.
 
 ## Basic BLE Scan
 
@@ -94,7 +94,7 @@ BLE wardrive logs do not include GPS coordinates yet. They are signal and advert
 
 You should see: continuous scan cycles append repeated observations over time.
 
-Continuous wardrive appends repeated BLE observations without location fields. GPS-backed latitude and longitude columns are planned for future GPS support.
+Continuous wardrive appends repeated BLE observations without location fields.
 
 ## Flock Wardrive
 

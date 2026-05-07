@@ -21,8 +21,8 @@
 #define INTERPACKET_GAP_MIN					1500 // uS
 #define INTERPACKET_GAP_MAX					80000//5000 // uS
 #define PACKET_PULSE_TIME_MIN				120 // uS
-#define PACKET_PULSE_COUNT_MIN				48 // 24 bits
-#define PACKET_PULSE_COUNT_MAX				128 // 64 bits
+#define PACKET_PULSE_COUNT_MIN				20 // 10 bits
+#define PACKET_PULSE_COUNT_MAX				256 // 128 bits
 
 #define PACKET_PULSE_TIME_TOLERANCE20		20 // percentage
 #define PACKET_PULSE_TIME_TOLERANCE25		25
@@ -44,6 +44,7 @@ typedef struct
     bool (*subghz_raw_data_ready)(void);
     void (*subghz_reset_data)(void);
     uint64_t (*subghz_get_decoded_value)(void);
+    uint64_t (*subghz_get_decoded_value_hi)(void);
     uint16_t (*subghz_get_decoded_bitlength)(void);
     uint16_t (*subghz_get_decoded_delay)(void);
     uint16_t (*subghz_get_decoded_protocol)(void);
@@ -53,6 +54,7 @@ typedef struct
     bool (*subghz_decode_protocol)(const uint16_t p, uint16_t changeCount);
 
     uint64_t n64_decodedvalue;
+    uint64_t n64_decodedvalue_hi;
     uint32_t n32_serialnumber;
     uint32_t n32_rollingcode;
     uint8_t n8_buttonid;
@@ -65,6 +67,9 @@ typedef struct
     uint32_t ntx_raw_len;
     uint32_t ntx_raw_src;
     uint32_t ntx_raw_dest;
+    char detail_line1[32];
+    char detail_line2[32];
+    char detail_line3[32];
     volatile uint8_t pulse_det_stat; // Updated in interrupt
     volatile uint8_t pulse_det_pol; // Updated in interrupt
     uint16_t pulse_times[PACKET_PULSE_COUNT_MAX];
@@ -74,17 +79,65 @@ typedef struct
 {
     uint32_t frequency;
     uint64_t key;
+    uint64_t key_hi;
     uint16_t protocol;
     int16_t rssi;
     uint16_t *raw_data;
     uint16_t te;
     uint16_t bit_len;
+    char detail_line1[32];
+    char detail_line2[32];
+    char detail_line3[32];
     bool raw;
 } SubGHz_Dec_Info_t;
 
 enum {
 	PRINCETON = 0,
-	SECURITY_PLUS_20
+	SECURITY_PLUS_20,
+	SECURITY_PLUS_10,
+	CAME,
+	NICE_FLO,
+	LINEAR,
+	HOLTEK,
+	HORMANN,
+	DOITRAND,
+	DOOYA,
+	CAME_ATOMO,
+	CAME_TWEE,
+	ANSONIC,
+	BETT,
+	CLEMSA,
+	GATE_TX,
+	MARANTEC,
+	MASTERCODE,
+	SMC5326,
+	HOLTEK_HT12X,
+	NERO_RADIO,
+	NICE_FLOR_S,
+	ALUTECH_AT_4N,
+	KINGGATES_STYLO_4K,
+	HONEYWELL_WDB,
+	MEGACODE,
+	CHAMBERLAIN_CODE,
+	LINEAR_DELTA3,
+	FERON,
+	GANGQI,
+	HAY21,
+	MARANTEC24,
+	ROGER,
+	HOLLARM,
+	KEELOQ,
+	STAR_LINE,
+	FAAC_SLH,
+	PHOENIX_V2,
+	MAGELLAN,
+	LEGRAND,
+	DICKERT_MAHS,
+	KIA,
+	SCHER_KHAN,
+	IDO,
+	NERO_SKETCH,
+	INTERTECHNO_V3,
 };
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;

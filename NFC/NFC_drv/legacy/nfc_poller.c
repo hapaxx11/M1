@@ -49,6 +49,7 @@
 
 #include "st25r3916.h"
 #include "st25r3916_com.h"
+#include "rfal_chip.h"
 #include "rfal_utils.h"
 
 #include "rfal_analogConfig.h"
@@ -67,6 +68,9 @@
 #define NOTINIT              0     /*!< Demo State:  Not initialized        */
 #define START_DISCOVERY      1     /*!< Demo State:  Start Discovery        */
 #define DISCOVERY            2     /*!< Demo State:  Discovery              */
+
+#define NFC_POLLER_DISCOVERY_MS       50U
+#define NFC_POLLER_MAX_RFO_DRIVE      0x00U
 
 /*
  ******************************************************************************
@@ -114,6 +118,19 @@ static rfalNfcDiscoverParam discParam;
 static uint8_t              state = NOTINIT;
 static bool                 multiSel;
 
+typedef struct {
+    bool active;
+    bool done;
+    bool require_ntag215;
+    uint8_t start_page;
+    uint8_t failed_page;
+    uint16_t len;
+    uint16_t page_count;
+    const uint8_t *data;
+    ReturnCode result;
+} nfc_t2t_pending_write_t;
+
+static nfc_t2t_pending_write_t s_t2t_write;
 
 /* NFC-A CE config */
 /* 4-byte UIDs with first byte 0x08 would need random number for the subsequent 3 bytes.
@@ -122,7 +139,9 @@ static bool                 multiSel;
 
 /*------------------------------------------------------------------------------------------*/
 static void PollerNotif( rfalNfcState st );
+static void nfc_poller_apply_range_tuning(void);
 static void m1_t2t_read_ntag(const rfalNfcDevice *dev);
+static void nfc_poller_run_pending_t2t_write(void);
 static ReturnCode GetVersion_Ntag(uint8_t *rxBuf, uint16_t rxBufLen, uint16_t *rcvLen);
 static uint16_t LogParsedNtagVersion(const uint8_t *version, uint16_t len);
 static ReturnCode PwdAuth_Ntag(const uint8_t pwd[4], uint8_t pack[2]);
@@ -154,6 +173,123 @@ static bool mfclassic_is_magic_backdoor_supported(void) {
     return false;
 #endif
 }
+
+static void nfc_poller_apply_range_tuning(void)
+{
+    uint8_t rfo = 0;
+
+    if ((rfalChipSetRFO(NFC_POLLER_MAX_RFO_DRIVE) == RFAL_ERR_NONE) &&
+        (rfalChipGetRFO(&rfo) == RFAL_ERR_NONE)) {
+        platformLog("[NFC] poller RFO drive=0x%02X\r\n", rfo);
+    }
+}
+
+bool NfcT2tWritePrepare(uint8_t start_page, const uint8_t *data, uint16_t len, bool require_ntag215)
+{
+    if (!data || len == 0U || (len & 0x03U) != 0U) {
+        return false;
+    }
+
+    uint16_t pages = len / 4U;
+    if (pages == 0U || ((uint16_t)start_page + pages) > 256U) {
+        return false;
+    }
+
+    memset(&s_t2t_write, 0, sizeof(s_t2t_write));
+    s_t2t_write.active = true;
+    s_t2t_write.done = false;
+    s_t2t_write.require_ntag215 = require_ntag215;
+    s_t2t_write.start_page = start_page;
+    s_t2t_write.failed_page = start_page;
+    s_t2t_write.len = len;
+    s_t2t_write.data = data;
+    s_t2t_write.result = RFAL_ERR_BUSY;
+    return true;
+}
+
+ReturnCode NfcT2tWriteGetResult(uint16_t *page_count, uint8_t *failed_page)
+{
+    if (page_count) {
+        *page_count = s_t2t_write.page_count;
+    }
+    if (failed_page) {
+        *failed_page = s_t2t_write.failed_page;
+    }
+    if (!s_t2t_write.active) {
+        return RFAL_ERR_NOTFOUND;
+    }
+    if (!s_t2t_write.done) {
+        return RFAL_ERR_BUSY;
+    }
+    return s_t2t_write.result;
+}
+
+void NfcT2tWriteClear(void)
+{
+    memset(&s_t2t_write, 0, sizeof(s_t2t_write));
+}
+
+static void nfc_poller_run_pending_t2t_write(void)
+{
+    if (!s_t2t_write.active || s_t2t_write.done) {
+        return;
+    }
+
+    uint16_t page_count = 0;
+    uint8_t version[8] = {0};
+    uint16_t rcvLen = 0;
+    ReturnCode ver_err = GetVersion_Ntag(version, sizeof(version), &rcvLen);
+    if (ver_err == RFAL_ERR_NONE && rcvLen == sizeof(version)) {
+        page_count = LogParsedNtagVersion(version, rcvLen);
+        nfc_ctx_set_t2t_version(version, (uint8_t)rcvLen);
+    } else {
+        page_count = nfc_ctx_get_t2t_page_count();
+    }
+    s_t2t_write.page_count = page_count;
+
+    if (s_t2t_write.require_ntag215 && page_count < 135U) {
+        s_t2t_write.result = RFAL_ERR_NOTSUPP;
+        s_t2t_write.done = true;
+        return;
+    }
+
+    uint16_t write_pages = s_t2t_write.len / 4U;
+    uint16_t end_page = (uint16_t)s_t2t_write.start_page + write_pages;
+    if ((page_count > 0U && end_page > page_count) || end_page > 256U) {
+        s_t2t_write.result = RFAL_ERR_PARAM;
+        s_t2t_write.done = true;
+        return;
+    }
+
+    ReturnCode err = RFAL_ERR_NONE;
+    for (uint16_t p = 0; p < write_pages; p++) {
+        uint8_t page = (uint8_t)(s_t2t_write.start_page + p);
+        const uint8_t *page_data = &s_t2t_write.data[p * 4U];
+
+        err = RFAL_ERR_WRITE;
+        for (uint8_t attempt = 0; attempt < 3U; attempt++) {
+            if (attempt > 0U) {
+                osDelay(6);
+            }
+            err = rfalT2TPollerWrite(page, page_data);
+            if (err == RFAL_ERR_NONE) {
+                break;
+            }
+        }
+
+        if (err != RFAL_ERR_NONE) {
+            s_t2t_write.failed_page = page;
+            break;
+        }
+
+        m1_wdt_reset();
+        osDelay(5);
+    }
+
+    s_t2t_write.result = err;
+    s_t2t_write.done = true;
+}
+
 /*============================================================================*/
 /**
  * @brief nfc_a_fill_uid_and_family - Fill NFC-A UID and Family (SAK/ATQA priority → type as auxiliary)
@@ -258,6 +394,7 @@ void ReadCycle(void)
 /********************************** State : DISCOVERY *************************************/
     case START_DISCOVERY:
         rfalNfcDeactivate(RFAL_NFC_DEACTIVATE_IDLE);
+        nfc_poller_apply_range_tuning();
         rfalNfcDiscover(&discParam);
 
         multiSel = false;
@@ -345,7 +482,11 @@ void ReadCycle(void)
                             platformLog("NFC Type 1 Tag Read More\r\n");
                         else if (nfcDevice->dev.nfca.type == RFAL_NFCA_T2T) {
                             platformLog("NFC Type 2 Tag Read More\r\n");
-                            m1_t2t_read_ntag(nfcDevice); // Improve to t2t
+                            if (s_t2t_write.active && !s_t2t_write.done) {
+                                nfc_poller_run_pending_t2t_write();
+                            } else {
+                                m1_t2t_read_ntag(nfcDevice); // Improve to t2t
+                            }
                         }
                         else if (nfcDevice->dev.nfca.type == RFAL_NFCA_T4T)
                             platformLog("NFC Type 4 Tag Read More\r\n");
@@ -419,6 +560,11 @@ void ReadCycle(void)
                     break;
             } /* switch(nfcDevice->type) */
 
+            if (s_t2t_write.active && !s_t2t_write.done) {
+                s_t2t_write.result = RFAL_ERR_NOTSUPP;
+                s_t2t_write.done = true;
+            }
+
             /* Common: Update UID buffer and length */
             strcpy(NFC_UID, hex2Str(nfcDevice->nfcid, nfcDevice->nfcidLen));
             NFC_ID_LEN = nfcDevice->nfcidLen;
@@ -491,7 +637,7 @@ bool ReadIni(void)
     rfalNfcDefaultDiscParams(&discParam);
 
     discParam.devLimit       = 1U;
-    discParam.totalDuration  = 1000U;                      /* Discovery window (adjust if needed) */
+    discParam.totalDuration  = NFC_POLLER_DISCOVERY_MS;
     discParam.notifyCb       = PollerNotif;                  /* Keep if in use */
 #if defined(RFAL_COMPLIANCE_MODE_NFC)
     discParam.compMode       = RFAL_COMPLIANCE_MODE_NFC;   /* Recommended for application */
@@ -525,8 +671,11 @@ bool ReadIni(void)
     discParam.isoDepFS       = RFAL_ISODEP_FSXI_128; /* ST25R95 Limit */
 #endif
 
+    nfc_poller_apply_range_tuning();
+
     /* 3) Verify configuration is valid by calling Discover once, then deactivate to Idle */
     err = rfalNfcDiscover(&discParam);
+    nfc_poller_apply_range_tuning();
     rfalNfcDeactivate(RFAL_NFC_DEACTIVATE_IDLE);
     if (err != RFAL_ERR_NONE) {
         platformLog("rfalNfcDiscover() check failed: %d\r\n", err);

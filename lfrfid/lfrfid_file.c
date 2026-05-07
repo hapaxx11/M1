@@ -106,6 +106,8 @@ bool lfrfid_profile_load(const S_M1_file_info *f, const char* ext)
 
 		GetPrivateProfileHex(&data,RFID_DATAFILE_DATA_KEYWORD, file_path);
 
+		if(data.v.hex.out_len > (int)sizeof(lfrfid_tag_info.uid))
+			return false;
 		memcpy(lfrfid_tag_info.uid, data.buf, data.v.hex.out_len);
 
 		if(lfrfid_tag_info.protocol == 0)
@@ -133,7 +135,7 @@ bool lfrfid_profile_load(const S_M1_file_info *f, const char* ext)
 /*============================================================================*/
 bool lfrfid_profile_save(const char *fp, const PLFRFID_TAG_INFO data)
 {
-    char szString[32];
+    char szString[64];
 
     int uid_size = protocol_get_data_size(data->protocol);
     const char *protocol = protocol_get_name(data->protocol);
@@ -250,4 +252,3 @@ uint8_t lfrfid_save_file_keyboard(char *filepath)
 
 	return error;
 } // static uint8_t rfid_read_more_options_save(void)
-

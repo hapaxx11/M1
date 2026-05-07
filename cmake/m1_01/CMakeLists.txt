@@ -332,6 +332,7 @@ target_sources(m1_01 INTERFACE
     ../../lfrfid/lfrfid_protocol.c
     ../../lfrfid/lfrfid_protocol_em4100.c
     ../../lfrfid/lfrfid_protocol_h10301.c
+    ../../lfrfid/lfrfid_protocol_extra.c
     ../../lfrfid/t5577.c
     ../../m1_csrc/res_string.c
     ../../m1_csrc/bit_util.c
@@ -397,5 +398,4 @@ target_link_libraries(m1_01 INTERFACE
 if(CMAKE_C_STANDARD LESS 11)
     message(ERROR "Generated code requires C11 or higher")
 endif()
-
 

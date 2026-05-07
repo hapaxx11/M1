@@ -147,6 +147,7 @@ void SI446x_Write_TxFiFo(uint8_t numBytes, uint8_t *pTxData);
 void SI446x_Change_ModType(uint8_t NEW_MOD_TYPE);
 void SI446x_Change_Modem_OOK_PDTC(uint8_t NEW_PDTC);
 void SI446x_Change_Radio_Setting(uint8_t mode, uint8_t pa_power);
+uint8_t SI446x_Set_Frequency_Hz(uint32_t frequency_hz);
 void SI446x_Set_Tx_Power(uint8_t power);
 void SI446x_Select_Frontend(S_M1_SubGHz_Band network);
 void SI446x_Start_Tx_CW(uint16_t channel, uint8_t radio_mod_type);
@@ -154,6 +155,9 @@ void radio_init_rx_tx(S_M1_SubGHz_Band freq, uint8_t mod_type, bool do_reset);
 void radio_patch_init(void);
 uint8_t radio_get_init_state(void);
 void radio_set_antenna_mode(tRadioAntennaMode mode);
+static uint8_t SI446x_Calc_Frequency_Params(uint32_t frequency_hz, uint8_t *clkgen_band,
+                                            uint8_t *inte, uint32_t *frac,
+                                            uint16_t *step, uint8_t *vcocnt_rx_adj);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -867,6 +871,118 @@ void SI446x_Change_Radio_Setting(uint8_t mode, uint8_t pa_power)
             break;
     } // switch (mode)
 } // void SI446x_Change_Radio_Setting(uint8_t mode, uint8_t pa_power)
+
+
+
+/******************************************************************************/
+/*
+ * Calculate SI4463 frequency-control properties for a carrier frequency.
+ */
+/******************************************************************************/
+static uint8_t SI446x_Calc_Frequency_Params(uint32_t frequency_hz, uint8_t *clkgen_band,
+                                            uint8_t *inte, uint32_t *frac,
+                                            uint16_t *step, uint8_t *vcocnt_rx_adj)
+{
+    uint8_t outdiv;
+    uint32_t whole;
+    uint64_t scaled_hz;
+    uint64_t rem;
+    uint64_t frac_calc;
+
+    if (frequency_hz < 300000000UL || frequency_hz > 928000000UL)
+        return FALSE;
+
+    if (frequency_hz < 330000000UL)
+    {
+        outdiv = 12;
+        *clkgen_band = 0x0B;
+        *vcocnt_rx_adj = 0xFD;
+    }
+    else if (frequency_hz < 420000000UL)
+    {
+        outdiv = 10;
+        *clkgen_band = 0x09;
+        *vcocnt_rx_adj = 0xFE;
+    }
+    else if (frequency_hz < 525000000UL)
+    {
+        outdiv = 8;
+        *clkgen_band = 0x0A;
+        *vcocnt_rx_adj = 0xFE;
+    }
+    else if (frequency_hz < 705000000UL)
+    {
+        outdiv = 6;
+        *clkgen_band = 0x0C;
+        *vcocnt_rx_adj = 0xFF;
+    }
+    else
+    {
+        outdiv = 4;
+        *clkgen_band = 0x08;
+        *vcocnt_rx_adj = 0xFF;
+    }
+
+    scaled_hz = (uint64_t)frequency_hz * outdiv;
+    whole = (uint32_t)(scaled_hz / 64000000ULL);
+    if (whole == 0)
+        return FALSE;
+
+    rem = scaled_hz - ((uint64_t)whole * 64000000ULL);
+    *inte = (uint8_t)(whole - 1UL);
+    frac_calc = 524288ULL + (((rem * 524288ULL) + 32000000ULL) / 64000000ULL);
+    if (frac_calc >= 1048576ULL)
+    {
+        (*inte)++;
+        frac_calc -= 524288ULL;
+    }
+
+    *frac = (uint32_t)(frac_calc & 0x0FFFFFUL);
+    *step = 0;
+    return TRUE;
+}
+
+
+
+/******************************************************************************/
+/*
+ * Set an exact carrier frequency after a base radio configuration is loaded.
+ */
+/******************************************************************************/
+uint8_t SI446x_Set_Frequency_Hz(uint32_t frequency_hz)
+{
+    uint8_t clkgen_band;
+    uint8_t inte;
+    uint32_t frac;
+    uint16_t step;
+    uint8_t vcocnt_rx_adj;
+
+    if (!SI446x_Calc_Frequency_Params(frequency_hz, &clkgen_band, &inte, &frac, &step, &vcocnt_rx_adj))
+        return FALSE;
+
+    si446x_cmd_buffer[0] = SI446X_CMD_ID_SET_PROPERTY;
+    si446x_cmd_buffer[1] = SI446X_GROUP_MODEM;
+    si446x_cmd_buffer[2] = 0x01;
+    si446x_cmd_buffer[3] = 0x51;
+    si446x_cmd_buffer[4] = clkgen_band;
+    SI446x_Send_Cmd(5, si446x_cmd_buffer);
+
+    si446x_cmd_buffer[0] = SI446X_CMD_ID_SET_PROPERTY;
+    si446x_cmd_buffer[1] = 0x40;
+    si446x_cmd_buffer[2] = 0x08;
+    si446x_cmd_buffer[3] = 0x00;
+    si446x_cmd_buffer[4] = inte;
+    si446x_cmd_buffer[5] = (uint8_t)((frac >> 16) & 0x0F);
+    si446x_cmd_buffer[6] = (uint8_t)((frac >> 8) & 0xFF);
+    si446x_cmd_buffer[7] = (uint8_t)(frac & 0xFF);
+    si446x_cmd_buffer[8] = (uint8_t)(step >> 8);
+    si446x_cmd_buffer[9] = (uint8_t)(step & 0xFF);
+    si446x_cmd_buffer[10] = 0x20;
+    si446x_cmd_buffer[11] = vcocnt_rx_adj;
+    SI446x_Send_Cmd(12, si446x_cmd_buffer);
+
+    return TRUE;
+}
 
 
 

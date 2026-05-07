@@ -64,7 +64,7 @@ const char* fu_get_file_extension(const char *filename)
  * This function removes both the directory path and the file extension.
  * For example:
  *   "C:\\folder\\test.txt"   → "test"
- *   "/home/user/archive.gz" → "archive"
+ *   "/path/to/archive.gz"  → "archive"
  *   "no_extension"          → "no_extension"
  *
  * @param path     Full file path to process.
@@ -133,7 +133,7 @@ void fu_get_filename_without_ext(const char *path, char *outName, size_t outSize
  */
 /*
  * const char *name;
- * name = fu_get_filename("/home/user/data/test.bin");
+ * name = fu_get_filename("/path/to/data/test.bin");
  * result : "test.bin"
  *
  */
@@ -481,4 +481,3 @@ void fu_path_combine(char *out, size_t outSize, const char *path, const char *fi
 
     strncat(out, fname, outSize - strlen(out) - 1);
 }
-

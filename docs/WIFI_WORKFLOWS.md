@@ -4,11 +4,11 @@ Use these workflows in a controlled lab with networks and clients you own or hav
 
 ## Firmware Pairing
 
-1. Flash the STM32 `M1_SiN360_v0.9.0.8_SD.bin`.
-2. Flash the matching ESP32-C6 `v0.9.0.8` firmware.
-3. Reboot the M1 after both updates.
+1. Flash the STM32 `M1_SiN360_v0.9.0.9_SD.bin`.
+2. Flash a compatible ESP32-C6 firmware. ESP32 `v0.9.0.9` is compatible with this STM32 release.
+3. Reboot the M1 after firmware updates.
 
-STM32 and ESP32 firmware must match because WiFi and BLE commands use a shared binary SPI protocol.
+STM32 and ESP32 firmware need compatible WiFi/BLE commands because they use a shared binary SPI protocol.
 
 ## Basic WiFi Health Check
 
@@ -81,13 +81,14 @@ You should see: if APs are selected, clone spam uses selected AP names first. Ot
 ## Deauth Lab Test
 
 1. Use only a lab AP and client you own.
-2. Run `WiFi > Scan AP`.
-3. Mark the lab AP in `WiFi > Config > APs > Select APs`.
-4. Optionally run `WiFi > Scan Stations` and mark the lab client.
-5. Open `WiFi > Attacks > Deauth`.
-6. Press `BACK` to stop.
+2. Use a 2.4 GHz WPA2-Personal test network with PMF/802.11w disabled.
+3. Run `WiFi > Scan AP`.
+4. Mark the lab AP in `WiFi > Config > APs > Select APs`.
+5. Run `WiFi > Scan Stations` and mark the lab client.
+6. Open `WiFi > Attacks > Deauth`.
+7. Press `BACK` to stop.
 
-You should see: selected AP/station targets are used first. If no targets are selected, the UI falls back to AP picking.
+You should see: selected AP/station targets are used first. The stop screen shows raw TX counters for deauth, disassoc, BSS transition, and null-data frames.
 
 ## Probe Flood
 
