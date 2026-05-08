@@ -18,6 +18,7 @@ with the M1.  A custom SPI-configured build is required.
 |-----------|-------------|
 | [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **Primary** — C3 custom ESP32-C6 SPI AT firmware for M1 |
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | Fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
+| [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | Fork (dag) — additional AT command extensions |
 
 Both repos are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
@@ -37,6 +38,12 @@ SPI transport and pin mapping.
 | Version | Features |
 |---------|----------|
 | **v1.0.1** | WiFi deauthentication (`AT+DEAUTH`), station scanning (`AT+STASCAN`) |
+
+### dagnazty (dag) releases
+
+| Version | Features |
+|---------|----------|
+| See [GitHub Releases](https://github.com/dagnazty/esp32-at-monstatek-m1/releases) | Additional AT command extensions on top of bedge117 base |
 
 ## Custom AT Commands
 
@@ -173,3 +180,160 @@ with open('build/factory/factory_ESP32C6-SPI.md5', 'wb') as f:
 
 See `CLAUDE.md` § "ESP32 Build — How to Build from Claude Code" for the
 Windows/PowerShell build procedure.
+
+---
+
+## Runtime Capability Detection
+
+Starting from Hapax v0.9.0 (firmware build that includes `m1_esp32_caps.c`),
+the M1 queries the connected ESP32 firmware for its capability descriptor at
+first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
+
+### CMD_GET_STATUS payload format (protocol version 1)
+
+The 41-byte response payload returned by supporting ESP32 firmware:
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 1 | `proto_ver` | Must be `0x01` |
+| 1 | 8 | `cap_bitmap` | `M1_ESP32_CMD_*` command capability bits (little-endian `uint64_t`) |
+| 9 | 32 | `fw_name` | Null-terminated firmware identifier string |
+
+The `cap_bitmap` field carries `M1_ESP32_CMD_*` bits **directly** — each bit
+corresponds to a specific command family (START, STOP, NEXT, and related
+variants).  Call sites on the STM32 side check the exact bits for the commands
+they will send, so the check is never over-broad.
+
+### Wire bits — `cap_bitmap`
+
+Set the bit for each command family your firmware supports; leave all other bits clear.
+
+| Bit | `M1_ESP32_CMD_*` constant | Commands covered |
+|-----|--------------------------|-----------------|
+| 0 | `M1_ESP32_CMD_WIFI_SCAN` | `CMD_WIFI_SCAN_START/NEXT/STOP` |
+| 1 | `M1_ESP32_CMD_STA_SCAN` | `CMD_STA_SCAN_START/NEXT/STOP` |
+| 2 | `M1_ESP32_CMD_BLE_SCAN` | `CMD_BLE_SCAN_START/NEXT/STOP/NEXT_RAW` |
+| 3 | `M1_ESP32_CMD_BLE_ADV` | `CMD_BLE_ADV_START/STOP/RAW` |
+| 4 | `M1_ESP32_CMD_DEAUTH` | `CMD_DEAUTH_START/STOP/MULTI` |
+| 5 | `M1_ESP32_CMD_BEACON` | `CMD_BEACON_START/STOP/SET_FLAGS` |
+| 6 | `M1_ESP32_CMD_PROBE_FLOOD` | `CMD_PROBE_FLOOD_START/STOP` |
+| 7 | `M1_ESP32_CMD_KARMA` | `CMD_KARMA_START/STOP/STATUS/PORTAL_START` |
+| 8 | `M1_ESP32_CMD_PKTMON` | `CMD_PKTMON_START/NEXT/STOP/SET_CHAN` |
+| 9 | `M1_ESP32_CMD_PORTAL` | `CMD_PORTAL_*` + `CMD_SSID_*` |
+| 10 | `M1_ESP32_CMD_WIFI_JOIN` | `CMD_WIFI_JOIN/DISCONNECT` |
+| 11 | `M1_ESP32_CMD_WIFI_SET_MAC` | `CMD_WIFI_SET_MAC` |
+| 12 | `M1_ESP32_CMD_WIFI_SET_CHAN` | `CMD_WIFI_SET_CHANNEL` |
+| 13 | `M1_ESP32_CMD_NETSCAN` | `CMD_NETSCAN_START/NEXT/STOP` |
+| 14 | `M1_ESP32_CMD_AT_BLE_HID` | AT BLE HID keyboard (Bad-BT) |
+| 15 | `M1_ESP32_CMD_AT_BT_MANAGE` | AT BT device management |
+| 16 | `M1_ESP32_CMD_AT_802154` | AT IEEE 802.15.4 / Zigbee / Thread |
+| 17-63 | — | Reserved for future use |
+
+### Capability matrix by firmware variant
+
+Both SiN360 and AT firmware variants with the `feat/cmd_get_status` extension
+respond to one of the two capability probes and self-report their capabilities.
+The table below shows the expected `cap_bitmap` for each variant.  AT firmware
+**without** `feat/cmd_get_status` triggers the fallback path (see below).
+
+| Command family | SiN360 | bedge117 / dag | neddy299 |
+|----------------|:------:|:--------------:|:--------:|
+| WiFi AP scan | ✅ | — | — |
+| Station scan | ✅ | — | ✅ |
+| Packet monitor | ✅ | — | — |
+| Deauth | ✅ | — | ✅ |
+| Beacon spam | ✅ | — | — |
+| Probe flood | ✅ | — | — |
+| Karma | ✅ | — | — |
+| Portal | ✅ | — | — |
+| Network scanners | ✅ | — | — |
+| WiFi join/disconnect | — | — | — |
+| BLE scan / advertise | ✅ | — | — |
+| **BLE HID (Bad-BT)** | — | ✅ | ✅ |
+| **IEEE 802.15.4** | — | ✅ | ✅ |
+| Classic BT management | — | — | — |
+
+### Probe sequence and fallback behaviour
+
+When the M1 initialises the ESP32, it performs a two-step capability probe:
+
+1. **Binary CMD_GET_STATUS** (opcode `0x02`): tried first.  SiN360 binary-SPI
+   firmware always responds.  AT firmware does not understand binary opcodes and
+   will time out or return `RESP_ERR`.
+
+2. **AT+GETSTATUSHEX** (AT text command): tried only when step 1 fails and the AT
+   task (`get_esp32_main_init_status()`) is active.  AT firmware variants that
+   implement the `feat/cmd_get_status` extension will respond here with a
+   hex-encoded capability payload.
+
+3. **Fallback** (`M1_ESP32_CMD_PROFILE_AT_FALLBACK`): applied when both steps 1
+   and 2 fail.  This ensures Bad-BT and IEEE 802.15.4 remain accessible on AT
+   firmware variants without the `feat/cmd_get_status` extension (bedge117 ≤
+   v2.0.2, neddy299 ≤ v1.0.1, dag pre-AT-Custom-Status).
+
+The capability cache is reset by `m1_esp32_caps_reset()` (called from
+`m1_esp32_deinit()`) so the next `m1_esp32_init()` / `esp32_main_init()` cycle
+re-queries the connected firmware.
+
+### Adding CMD_GET_STATUS to a custom ESP32 firmware
+
+Respond to opcode `0x02` with a 41-byte `m1_esp32_status_payload_t` payload:
+
+- `proto_ver = 1`
+- `cap_bitmap` — set the `M1_ESP32_CMD_*` bit for each command family your
+  firmware supports; leave all other bits clear.  Use bits 0-13 for binary SPI
+  command families and bits 14-16 for AT text command groups.
+- `fw_name` — a short null-terminated version string (e.g. `"SiN360-0.9.7"` or
+  `"AT-bedge117-2.0.2"`); unused bytes are zero-padded.
+
+> **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
+> on the exact command-family bits they will send (`m1_esp32_require_cap` /
+> `m1_esp32_has_cap` with one or more `M1_ESP32_CMD_*` bits OR'd together),
+> **not** on a compile flag or firmware name string.
+> See `m1_csrc/m1_esp32_caps.h` for the full API.
+
+### AT-Custom-Status (`AT+GETSTATUSHEX`) — alternative for AT firmware
+
+AT-based firmware variants cannot respond to binary SPI opcodes.  Instead, AT
+firmware that implements the `feat/cmd_get_status` extension provides the same
+capability information via an AT text command:
+
+```
+AT+GETSTATUSHEX
++GETSTATUSHEX:01<16-hex-chars-cap_bitmap><64-hex-chars-fw_name>
+OK
+```
+
+The M1 automatically tries `AT+GETSTATUSHEX` as a secondary probe when the binary
+`CMD_GET_STATUS` request fails.  The probe uses `spi_AT_send_recv()` to send the
+AT command and `m1_esp32_caps_parse_at_hex()` (a pure-logic header helper) to
+decode the hex response into the standard 41-byte `m1_esp32_status_payload_t`
+layout, which is then parsed by the same `m1_esp32_caps_parse_payload()` used for
+binary responses.
+
+**AT+GETSTATUSHEX response format:**
+
+The hex string encodes the same 41-byte structure as the binary payload:
+
+| Hex chars | Field | Description |
+|-----------|-------|-------------|
+| `[0..1]` | `proto_ver` | Must be `01` (1 byte) |
+| `[2..17]` | `cap_bitmap` | `M1_ESP32_CMD_*` bits, little-endian `uint64_t` (8 bytes) |
+| `[18..81]` | `fw_name` | Firmware identifier, null-padded to 32 bytes |
+
+Both uppercase and lowercase hex characters are accepted by the M1 parser.
+
+**For AT firmware authors:** implement `AT+GETSTATUSHEX` to return a
+hex-encoded `m1_esp32_status_payload_t`.  Set `cap_bitmap` to a `uint64_t`
+little-endian using the `M1_ESP32_CMD_*` bit positions from the table above.
+Refer to the `at_custom_status.c` in the `feat/cmd_get_status` branch
+of [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1)
+as a reference implementation (note: update the `cap_bitmap` field from `uint32_t`
+to `uint64_t` and use `M1_ESP32_CMD_*` bit positions to match protocol version 1).
+
+> **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
+> on the exact command-family bits they will send (`m1_esp32_require_cap` /
+> `m1_esp32_has_cap` with one or more `M1_ESP32_CMD_*` bits OR'd together),
+> **not** on a compile flag or firmware name string.
+> See `m1_csrc/m1_esp32_caps.h` for the full API.
+

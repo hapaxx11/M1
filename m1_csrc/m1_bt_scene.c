@@ -16,6 +16,7 @@
 #include "m1_scene.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -82,6 +83,17 @@ enum {
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
+/* Capability-gated delegate: shows "not supported" screen and pops immediately
+ * when the required ESP32 capability is absent.
+ * m1_esp32_ensure_init() is called first so CMD_GET_STATUS can be queried even
+ * when the transport was deinitialized by the previous delegate. */
+#define DELEGATE_CAPPED(name, fn, cap, label) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap((cap), (label))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
 DELEGATE(scan,            bluetooth_scan)
 DELEGATE(advertise,       bluetooth_advertise)
 DELEGATE(config,          bluetooth_config)
@@ -109,13 +121,13 @@ DELEGATE(detect_flock,    ble_detect_flock)
 DELEGATE(detect_meta,     ble_detect_meta)
 
 #ifdef M1_APP_BADBT_ENABLE
-DELEGATE(badbt,           badbt_run)
-DELEGATE(btname,          bluetooth_set_badbt_name)
+DELEGATE_CAPPED(badbt,  badbt_run,                M1_ESP32_CMD_AT_BLE_HID, "Bad-BT")
+DELEGATE_CAPPED(btname, bluetooth_set_badbt_name, M1_ESP32_CMD_AT_BLE_HID, "BT Name")
 #endif
 
 #ifdef M1_APP_BT_MANAGE_ENABLE
-DELEGATE(saved,           bluetooth_saved_devices)
-DELEGATE(info,            bluetooth_info)
+DELEGATE_CAPPED(saved, bluetooth_saved_devices, M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices")
+DELEGATE_CAPPED(info,  bluetooth_info,          M1_ESP32_CMD_AT_BT_MANAGE, "BT Info")
 #endif
 
 /* ---- Handler tables ----------------------------------------------------- */

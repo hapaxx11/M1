@@ -40,6 +40,7 @@
 #include "usbd_cdc_if.h"
 #include "battery.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
 #include "esp_loader.h"
 #include "stm32_port.h"
 #include "app_common.h"
@@ -685,10 +686,9 @@ static void rpc_handle_get_device_info(const S_RPC_Frame *f)
 
     /* ESP32 */
     info.esp32_ready = m1_esp32_get_init_status();
-    /* ESP32 version string: not readily available from HAL.
-     * Set to build-time constant for now. */
+    /* Use the runtime-queried firmware name from the capability cache */
     strncpy(info.esp32_version,
-            info.esp32_ready ? "AT ready" : "offline",
+            m1_esp32_caps_fw_name(),
             sizeof(info.esp32_version) - 1);
 
     /* Operation mode & settings */

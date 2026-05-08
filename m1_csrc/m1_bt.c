@@ -23,6 +23,7 @@
 #include "m1_virtual_kb.h"
 #include "ff.h"
 #include "m1_compile_cfg.h"
+#include "m1_esp32_caps.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
@@ -1118,29 +1119,20 @@ void bluetooth_config(void)
 
 /*==========================================================================*/
 /* Legacy AT-layer stubs — remain compilable for m1_bt_scene.c callers      */
-/* while AT firmware is not used.                                            */
+/* while AT firmware is not used.  These functions are now reached only when */
+/* the compile flag is set; the capability check in the scene delegate        */
+/* (DELEGATE_CAPPED) further gates them at runtime.                          */
 /*==========================================================================*/
 
 #ifdef M1_APP_BT_MANAGE_ENABLE
 void bluetooth_saved_devices(void)
 {
-u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-m1_u8g2_firstpage();
-u8g2_DrawStr(&m1_u8g2, 6, 15, "Saved Devices");
-u8g2_DrawStr(&m1_u8g2, 6, 30, "Not available");
-u8g2_DrawStr(&m1_u8g2, 6, 45, "with SiN360 FW");
-m1_u8g2_nextpage();
-HAL_Delay(2000);
+    m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices");
 }
 
 void bluetooth_info(void)
 {
-u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-m1_u8g2_firstpage();
-u8g2_DrawStr(&m1_u8g2, 6, 15, "BT Info");
-u8g2_DrawStr(&m1_u8g2, 6, 30, "Use BLE Config");
-m1_u8g2_nextpage();
-HAL_Delay(2000);
+    m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "BT Info");
 }
 
 bt_connection_state_t *bt_get_connection_state(void)
@@ -1156,11 +1148,6 @@ bt_connection_state_t *bt_get_connection_state(void)
 #ifdef M1_APP_BADBT_ENABLE
 void bluetooth_set_badbt_name(void)
 {
-u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-m1_u8g2_firstpage();
-u8g2_DrawStr(&m1_u8g2, 6, 15, "BT Name");
-u8g2_DrawStr(&m1_u8g2, 6, 30, "Use BLE Config");
-m1_u8g2_nextpage();
-HAL_Delay(2000);
+    m1_esp32_require_cap(M1_ESP32_CMD_AT_BLE_HID, "BT Name");
 }
 #endif /* M1_APP_BADBT_ENABLE */
