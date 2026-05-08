@@ -3,27 +3,33 @@
 /*
  * m1_esp32_caps.h
  *
- * Runtime capability descriptor for the ESP32-C6 coprocessor.
+ * Runtime command-capability descriptor for the ESP32-C6 coprocessor.
  *
  * Multiple ESP32 firmware variants are supported (SiN360 binary-SPI,
  * bedge117 AT, neddy299 AT-deauth, and future variants).  Each exposes
- * a different feature set.  This module provides:
+ * a different set of commands.  This module provides:
  *
- *   1. A capability bitmap queried at runtime via CMD_GET_STATUS.
- *   2. A backward-compatible fallback derived from compile-time flags
- *      when the connected firmware does not implement CMD_GET_STATUS.
+ *   1. A command-capability bitmap queried at runtime via CMD_GET_STATUS.
+ *      Each bit corresponds to a specific command family the ESP32 supports.
+ *   2. A backward-compatible fallback bitmap when the connected firmware
+ *      does not implement CMD_GET_STATUS.
  *   3. A standard "feature not supported" UI helper so call sites never
  *      need to hard-code firmware-specific strings.
  *
- * Rule: new ESP32-dependent features MUST gate on a capability bit
- * (m1_esp32_require_cap / m1_esp32_has_cap), NOT on a compile flag or
- * firmware name string.
+ * Design principle: call sites specify exactly which commands they need.
+ * There are no high-level feature groupings in this header — the system
+ * does not define "WiFi attack" as a concept; instead CMD_DEAUTH, CMD_BEACON,
+ * CMD_KARMA, etc. are separate bits.  This ensures the capability check is
+ * never ambiguous or over-broad.
+ *
+ * Rule: new ESP32-dependent features MUST gate on m1_esp32_require_cap()
+ * using the M1_ESP32_CMD_* bit(s) for the specific command(s) they will send.
+ * Never gate on a compile flag or firmware name string.
  *
  * Wire protocol note:
  *   CMD_GET_STATUS (0x02) on the binary SPI channel.  The response carries
- *   M1_ESP32_CAP_* bits directly in a single cap_bitmap field — no
- *   derivation step is needed on the STM32 side.  Any firmware variant that
- *   implements CMD_GET_STATUS (SiN360 binary-SPI or AT firmware with the
+ *   M1_ESP32_CMD_* bits in a single cap_bitmap field.  Any firmware variant
+ *   that implements CMD_GET_STATUS (SiN360 binary-SPI or AT firmware with the
  *   feat/cmd_get_status extension) can respond; firmware that does not
  *   implement CMD_GET_STATUS will time out, triggering the fallback path.
  *
@@ -38,85 +44,119 @@
 #include <string.h>   /* strncpy used in inline parse helper */
 
 /* =========================================================================
- * High-level capability bits (internal — used by m1_esp32_has_cap() callers)
+ * Command capability bits — one bit per command family
  *
- * These are stable identifiers for features.  They are DERIVED from the
- * two wire-format bitmaps (at_cmd_bitmap + ext_bitmap) by the parse helper
- * below and are NEVER sent over the wire.
+ * The cap_bitmap in CMD_GET_STATUS carries these bits.  Each bit reports
+ * that the ESP32 firmware supports the named command family (START, STOP,
+ * NEXT, and related variants listed in each comment).
+ *
+ * Call sites use these directly.  Example:
+ *
+ *   // Check a single command family before using it:
+ *   if (!m1_esp32_require_cap(M1_ESP32_CMD_DEAUTH, "WiFi Deauth"))
+ *       return;
+ *
+ *   // Require multiple command families to all be available:
+ *   if (!m1_esp32_require_cap(M1_ESP32_CMD_KARMA | M1_ESP32_CMD_PORTAL,
+ *                             "Karma Portal"))
+ *       return;
  *
  * Assignment is permanent once published.
  * =========================================================================*/
 
-/* WiFi capabilities */
-#define M1_ESP32_CAP_WIFI_SCAN        (UINT64_C(1) <<  0)  /* Basic AP scan */
-#define M1_ESP32_CAP_WIFI_STA_SCAN    (UINT64_C(1) <<  1)  /* Client/station discovery */
-#define M1_ESP32_CAP_WIFI_SNIFF       (UINT64_C(1) <<  2)  /* Packet monitor / sniffer */
-#define M1_ESP32_CAP_WIFI_ATTACK      (UINT64_C(1) <<  3)  /* Deauth, beacon, karma, etc. */
-#define M1_ESP32_CAP_WIFI_NETSCAN     (UINT64_C(1) <<  4)  /* Ping / ARP / SSH / port scan */
-#define M1_ESP32_CAP_WIFI_EVIL_PORTAL (UINT64_C(1) <<  5)  /* Evil portal (subset of attack) */
-#define M1_ESP32_CAP_WIFI_CONNECT     (UINT64_C(1) <<  6)  /* Connect, saved networks, NTP sync */
+/* ---- Binary SPI command families ---- */
 
-/* BLE / Bluetooth capabilities */
-#define M1_ESP32_CAP_BLE_SCAN         (UINT64_C(1) <<  7)  /* BLE device scan */
-#define M1_ESP32_CAP_BLE_ADV          (UINT64_C(1) <<  8)  /* BLE advertise */
-#define M1_ESP32_CAP_BLE_SPAM         (UINT64_C(1) <<  9)  /* BLE beacon spam variants */
-#define M1_ESP32_CAP_BLE_SNIFF        (UINT64_C(1) << 10)  /* BLE packet sniffers */
-#define M1_ESP32_CAP_BLE_HID          (UINT64_C(1) << 11)  /* BLE HID keyboard (Bad-BT) */
-#define M1_ESP32_CAP_BT_MANAGE        (UINT64_C(1) << 12)  /* BT device management (AT-layer) */
+/** CMD_WIFI_SCAN_START/NEXT/STOP (0x10–0x12) */
+#define M1_ESP32_CMD_WIFI_SCAN      (UINT64_C(1) <<  0)
 
-/* Other capabilities */
-#define M1_ESP32_CAP_802154           (UINT64_C(1) << 13)  /* IEEE 802.15.4 / Zigbee / Thread */
+/** CMD_STA_SCAN_START/NEXT/STOP (0x13–0x15) */
+#define M1_ESP32_CMD_STA_SCAN       (UINT64_C(1) <<  1)
 
-/* Bits 14-63 reserved for future use */
+/** CMD_BLE_SCAN_START/NEXT/STOP/NEXT_RAW (0x20–0x22, 0x26) */
+#define M1_ESP32_CMD_BLE_SCAN       (UINT64_C(1) <<  2)
+
+/** CMD_BLE_ADV_START/STOP/RAW (0x23–0x25) */
+#define M1_ESP32_CMD_BLE_ADV        (UINT64_C(1) <<  3)
+
+/** CMD_DEAUTH_START/STOP/MULTI (0x30–0x31, 0x39) */
+#define M1_ESP32_CMD_DEAUTH         (UINT64_C(1) <<  4)
+
+/** CMD_BEACON_START/STOP/SET_FLAGS (0x32–0x33, 0x36) */
+#define M1_ESP32_CMD_BEACON         (UINT64_C(1) <<  5)
+
+/** CMD_PROBE_FLOOD_START/STOP (0x34–0x35) */
+#define M1_ESP32_CMD_PROBE_FLOOD    (UINT64_C(1) <<  6)
+
+/** CMD_KARMA_START/STOP/STATUS/PORTAL_START (0x37–0x38, 0x3A–0x3B) */
+#define M1_ESP32_CMD_KARMA          (UINT64_C(1) <<  7)
+
+/** CMD_PKTMON_START/NEXT/STOP/SET_CHAN (0x40–0x43) */
+#define M1_ESP32_CMD_PKTMON         (UINT64_C(1) <<  8)
+
+/** CMD_PORTAL_* + CMD_SSID_* (0x50–0x57) */
+#define M1_ESP32_CMD_PORTAL         (UINT64_C(1) <<  9)
+
+/** CMD_WIFI_JOIN/DISCONNECT (0x58–0x59) */
+#define M1_ESP32_CMD_WIFI_JOIN      (UINT64_C(1) << 10)
+
+/** CMD_WIFI_SET_MAC (0x5A) */
+#define M1_ESP32_CMD_WIFI_SET_MAC   (UINT64_C(1) << 11)
+
+/** CMD_WIFI_SET_CHANNEL (0x5B) */
+#define M1_ESP32_CMD_WIFI_SET_CHAN  (UINT64_C(1) << 12)
+
+/** CMD_NETSCAN_START/NEXT/STOP (0x5C–0x5E) */
+#define M1_ESP32_CMD_NETSCAN        (UINT64_C(1) << 13)
+
+/* ---- AT text command groups (AT firmware only — no binary cmd id) ---- */
+
+/** AT BLE HID keyboard / Bad-BT (AT+BLEHIDINIT, AT+BLEHIDKEYBOARD, ...) */
+#define M1_ESP32_CMD_AT_BLE_HID     (UINT64_C(1) << 14)
+
+/** AT BT device management (AT+BTSCANNAME, AT+BTCONNINIT, ...) */
+#define M1_ESP32_CMD_AT_BT_MANAGE   (UINT64_C(1) << 15)
+
+/** AT IEEE 802.15.4 / Zigbee / Thread (AT+IEEE802154TX, ...) */
+#define M1_ESP32_CMD_AT_802154      (UINT64_C(1) << 16)
+
+/* Bits 17-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time fallback profiles
  *
  * Used as the CMD_GET_STATUS fallback when the connected firmware does not
  * implement CMD_GET_STATUS.  SiN360 binary-SPI firmware has supported
- * CMD_GET_STATUS since its initial integration in Hapax and always
+ * CMD_GET_STATUS since its initial Hapax integration and always
  * self-reports; it therefore never triggers the fallback path.  AT firmware
  * variants (bedge117, neddy299, dag) that predate the feat/cmd_get_status
- * extension trigger the fallback — M1_ESP32_CAP_PROFILE_AT_BEDGE117 is
+ * extension trigger the fallback — M1_ESP32_CMD_PROFILE_AT_FALLBACK is
  * used as the default.  Firmware that implements CMD_GET_STATUS will always
  * take the self-reporting success path.
- *
- * Profile caps reflect features that currently work with each firmware
- * variant via the M1's implementation:
- *   - M1_ESP32_CAP_BLE_HID: Bad-BT uses esp32_main_init() + AT commands
- *     (m1_badbt.c), which works on all AT variants.
- *   - M1_ESP32_CAP_802154: Zigbee/Thread uses spi_AT_send_recv() AT commands
- *     (m1_802154.c); note these delegates are non-capped so this bit is
- *     informational only.
- *   - WiFi connect / BT manage are excluded: those features use binary SPI
- *     commands in m1_wifi.c / m1_bt.c that AT firmware does not support.
  * =========================================================================*/
 
 /** SiN360 binary-SPI firmware (sincere360/M1_SiN360_ESP32).
- *  Retained for reference and testing; not used as the active fallback. */
-#define M1_ESP32_CAP_PROFILE_SIN360 \
-    (M1_ESP32_CAP_WIFI_SCAN        | \
-     M1_ESP32_CAP_WIFI_STA_SCAN    | \
-     M1_ESP32_CAP_WIFI_SNIFF       | \
-     M1_ESP32_CAP_WIFI_ATTACK      | \
-     M1_ESP32_CAP_WIFI_NETSCAN     | \
-     M1_ESP32_CAP_WIFI_EVIL_PORTAL | \
-     M1_ESP32_CAP_BLE_SCAN         | \
-     M1_ESP32_CAP_BLE_ADV          | \
-     M1_ESP32_CAP_BLE_SPAM         | \
-     M1_ESP32_CAP_BLE_SNIFF)
+ *  Retained for reference; not used as the active fallback (SiN360 always
+ *  responds to CMD_GET_STATUS and self-reports). */
+#define M1_ESP32_CMD_PROFILE_SIN360 \
+    (M1_ESP32_CMD_WIFI_SCAN    | \
+     M1_ESP32_CMD_STA_SCAN     | \
+     M1_ESP32_CMD_BLE_SCAN     | \
+     M1_ESP32_CMD_BLE_ADV      | \
+     M1_ESP32_CMD_DEAUTH       | \
+     M1_ESP32_CMD_BEACON       | \
+     M1_ESP32_CMD_PROBE_FLOOD  | \
+     M1_ESP32_CMD_KARMA        | \
+     M1_ESP32_CMD_PKTMON       | \
+     M1_ESP32_CMD_PORTAL       | \
+     M1_ESP32_CMD_NETSCAN)
 
-/** bedge117 / dag AT firmware (base AT feature set).
- *  Active fallback for firmware without CMD_GET_STATUS support. */
-#define M1_ESP32_CAP_PROFILE_AT_BEDGE117 \
-    (M1_ESP32_CAP_BLE_HID | \
-     M1_ESP32_CAP_802154)
-
-/** neddy299 AT firmware (base + WiFi station scan + deauth). */
-#define M1_ESP32_CAP_PROFILE_AT_NEDDY299 \
-    (M1_ESP32_CAP_PROFILE_AT_BEDGE117 | \
-     M1_ESP32_CAP_WIFI_STA_SCAN       | \
-     M1_ESP32_CAP_WIFI_ATTACK)
+/** AT firmware fallback (bedge117 / neddy299 / dag without CMD_GET_STATUS).
+ *  Active fallback for firmware that does not implement CMD_GET_STATUS.
+ *  AT firmware responds via AT text commands; Bad-BT and 802.15.4 are
+ *  accessible on the M1 AT path regardless of firmware self-reporting. */
+#define M1_ESP32_CMD_PROFILE_AT_FALLBACK \
+    (M1_ESP32_CMD_AT_BLE_HID | \
+     M1_ESP32_CMD_AT_802154)
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
@@ -140,12 +180,12 @@
  * Total: 41 bytes — well within the 60-byte payload limit.
  *
  * Field order matches the ESP32 firmware's m1_protocol.h exactly.
- *   cap_bitmap — uint64_t, LE — M1_ESP32_CAP_* bits.
+ *   cap_bitmap — uint64_t, LE — M1_ESP32_CMD_* command capability bits.
  *   fw_name    — null-terminated ASCII firmware identifier.
  */
 typedef struct __attribute__((packed)) {
     uint8_t  proto_ver;   /**< M1_ESP32_CAPS_PROTO_VER (1) */
-    uint64_t cap_bitmap;  /**< M1_ESP32_CAP_* bits, little-endian */
+    uint64_t cap_bitmap;  /**< M1_ESP32_CMD_* command capability bits, little-endian */
     char     fw_name[32]; /**< Firmware identifier string, null-terminated */
 } m1_esp32_status_payload_t;
 
@@ -159,7 +199,7 @@ typedef struct __attribute__((packed)) {
  *
  * @param payload      Raw payload bytes from m1_resp_t.payload[]
  * @param len          Length of valid payload bytes (resp.payload_len)
- * @param caps_out     Receives the M1_ESP32_CAP_* capability bitmap
+ * @param caps_out     Receives the M1_ESP32_CMD_* command capability bitmap
  * @param fw_name_out  32-byte buffer receives null-terminated firmware name
  * @return true on success, false if payload is too short or protocol
  *         version is unrecognised
@@ -259,8 +299,9 @@ void m1_esp32_caps_init(void);
 void m1_esp32_caps_reset(void);
 
 /**
- * Return true if the ESP32 firmware supports the requested capability.
- * @param cap  One of the M1_ESP32_CAP_* bit constants
+ * Return true if the ESP32 firmware supports all requested commands.
+ * @param cap  One or more M1_ESP32_CMD_* bits OR'd together.
+ *             Returns true only when every requested bit is set.
  */
 bool m1_esp32_has_cap(uint64_t cap);
 
@@ -272,13 +313,14 @@ bool m1_esp32_has_cap(uint64_t cap);
 const char *m1_esp32_caps_fw_name(void);
 
 /**
- * Check a capability and, if absent, draw a standard "Feature not
- * supported" screen (2 s) so the user knows why nothing happened.
+ * Check that all required commands are supported; if any are absent, draw a
+ * standard "Feature not supported" screen (2 s) so the user knows why
+ * nothing happened.
  *
- * @param cap           Capability bit to check
+ * @param cap           One or more M1_ESP32_CMD_* bits OR'd together
  * @param feature_name  Short human-readable feature name (e.g. "Saved Networks")
- * @return true if capability is present (caller may proceed),
- *         false if capability is absent (screen has been shown, caller must abort)
+ * @return true if all requested commands are supported (caller may proceed),
+ *         false if any are absent (screen has been shown, caller must abort)
  */
 bool m1_esp32_require_cap(uint64_t cap, const char *feature_name);
 

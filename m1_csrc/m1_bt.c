@@ -1127,12 +1127,12 @@ void bluetooth_config(void)
 #ifdef M1_APP_BT_MANAGE_ENABLE
 void bluetooth_saved_devices(void)
 {
-    m1_esp32_require_cap(M1_ESP32_CAP_BT_MANAGE, "Saved Devices");
+    m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices");
 }
 
 void bluetooth_info(void)
 {
-    m1_esp32_require_cap(M1_ESP32_CAP_BT_MANAGE, "BT Info");
+    m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "BT Info");
 }
 
 bt_connection_state_t *bt_get_connection_state(void)
@@ -1148,6 +1148,6 @@ bt_connection_state_t *bt_get_connection_state(void)
 #ifdef M1_APP_BADBT_ENABLE
 void bluetooth_set_badbt_name(void)
 {
-    m1_esp32_require_cap(M1_ESP32_CAP_BLE_HID, "BT Name");
+    m1_esp32_require_cap(M1_ESP32_CMD_AT_BLE_HID, "BT Name");
 }
 #endif /* M1_APP_BADBT_ENABLE */

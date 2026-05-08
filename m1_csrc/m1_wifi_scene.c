@@ -158,9 +158,9 @@ DELEGATE(zigbee,               zigbee_scan)
 DELEGATE(thread,               thread_scan)
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-DELEGATE_CAPPED(saved,      wifi_saved_networks, M1_ESP32_CAP_WIFI_CONNECT, "Saved Networks")
-DELEGATE_CAPPED(status,     wifi_show_status,    M1_ESP32_CAP_WIFI_CONNECT, "WiFi Status")
-DELEGATE_CAPPED(disconnect, wifi_disconnect,     M1_ESP32_CAP_WIFI_CONNECT, "Disconnect WiFi")
+DELEGATE_CAPPED(saved,      wifi_saved_networks, M1_ESP32_CMD_WIFI_JOIN, "Saved Networks")
+DELEGATE_CAPPED(status,     wifi_show_status,    M1_ESP32_CMD_WIFI_JOIN, "WiFi Status")
+DELEGATE_CAPPED(disconnect, wifi_disconnect,     M1_ESP32_CMD_WIFI_JOIN, "Disconnect WiFi")
 #endif
 
 /* ---- Handler table helpers ---------------------------------------------- */

@@ -113,7 +113,7 @@ void m1_esp32_caps_init(void)
          * Apply the AT baseline fallback so Bad-BT and 802.15.4 remain
          * accessible on AT firmware variants without the feat/cmd_get_status
          * extension. */
-        s_bitmap = M1_ESP32_CAP_PROFILE_AT_BEDGE117;
+        s_bitmap = M1_ESP32_CMD_PROFILE_AT_FALLBACK;
         strncpy(s_fw_name, "Unknown AT (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }
