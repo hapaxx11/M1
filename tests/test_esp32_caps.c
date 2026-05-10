@@ -4,19 +4,7 @@
  * test_esp32_caps.c
  *
  * Unit tests for the pure-logic helpers in m1_esp32_caps.h:
- *   m1_esp32_caps_parse_payload() — raw bytes → M1_ESP32_CMD_* bitmap + fw_name
- *
- * Both functions are static inlines in the header — zero hardware deps.
- *
- * Tests cover:
- *   - Valid payload with SiN360 cmd profile → correct cmds and fw_name
- *   - Valid payload with zero cap_bitmap    → zero caps
- *   - Payload too short → parse returns false, outputs unchanged
- *   - Wrong protocol version → parse returns false
- *   - fw_name is always null-terminated (even when payload fills all 32 bytes)
- *   - Payload struct is exactly 41 bytes
- *   - M1_ESP32_CMD_* bit constants do not overlap
- *   - Composite profile macros contain expected M1_ESP32_CMD_* bits
+ *   m1_esp32_caps_parse_payload() — raw bytes → M1_ESP32_CAP_* bitmap + fw_name
  *
  * Build with the host-side CMake:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -70,7 +58,7 @@ void test_parse_valid_sin360(void)
 {
     uint8_t buf[64];
     make_payload(buf, M1_ESP32_CAPS_PROTO_VER,
-                 M1_ESP32_CMD_PROFILE_SIN360,
+                 M1_ESP32_CAP_PROFILE_SIN360,
                  "SiN360-0.9.6");
 
     uint64_t caps = 0;
@@ -79,8 +67,8 @@ void test_parse_valid_sin360(void)
                                           &caps, fw_name);
 
     TEST_ASSERT_TRUE(ok);
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CMD_PROFILE_SIN360,
-                              caps & M1_ESP32_CMD_PROFILE_SIN360);
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
+                              caps & M1_ESP32_CAP_PROFILE_SIN360);
     TEST_ASSERT_EQUAL_STRING("SiN360-0.9.6", fw_name);
 }
 
@@ -106,7 +94,7 @@ void test_parse_too_short_returns_false(void)
 {
     uint8_t buf[64];
     make_payload(buf, M1_ESP32_CAPS_PROTO_VER,
-                 M1_ESP32_CMD_WIFI_SCAN, "fw");
+                 M1_ESP32_CAP_WIFI_SCAN, "fw");
 
     uint64_t caps    = UINT64_C(0xDEADBEEFDEADBEEF);
     char     fw_name[32] = "unchanged";
@@ -135,7 +123,7 @@ void test_parse_wrong_proto_ver_returns_false(void)
 {
     uint8_t buf[64];
     make_payload(buf, (uint8_t)(M1_ESP32_CAPS_PROTO_VER + 1u),
-                 M1_ESP32_CMD_WIFI_SCAN, "fw");
+                 M1_ESP32_CAP_WIFI_SCAN, "fw");
 
     uint64_t caps    = UINT64_C(0xDEADBEEFDEADBEEF);
     char     fw_name[32] = "unchanged";
@@ -187,23 +175,23 @@ void test_payload_struct_size(void)
 void test_cap_bits_are_unique(void)
 {
     const uint64_t caps[] = {
-        M1_ESP32_CMD_WIFI_SCAN,
-        M1_ESP32_CMD_STA_SCAN,
-        M1_ESP32_CMD_BLE_SCAN,
-        M1_ESP32_CMD_BLE_ADV,
-        M1_ESP32_CMD_DEAUTH,
-        M1_ESP32_CMD_BEACON,
-        M1_ESP32_CMD_PROBE_FLOOD,
-        M1_ESP32_CMD_KARMA,
-        M1_ESP32_CMD_PKTMON,
-        M1_ESP32_CMD_PORTAL,
-        M1_ESP32_CMD_WIFI_JOIN,
-        M1_ESP32_CMD_WIFI_SET_MAC,
-        M1_ESP32_CMD_WIFI_SET_CHAN,
-        M1_ESP32_CMD_NETSCAN,
-        M1_ESP32_CMD_AT_BLE_HID,
-        M1_ESP32_CMD_AT_BT_MANAGE,
-        M1_ESP32_CMD_AT_802154,
+        M1_ESP32_CAP_WIFI_SCAN,
+        M1_ESP32_CAP_STA_SCAN,
+        M1_ESP32_CAP_BLE_SCAN,
+        M1_ESP32_CAP_BLE_ADV,
+        M1_ESP32_CAP_DEAUTH,
+        M1_ESP32_CAP_BEACON,
+        M1_ESP32_CAP_PROBE_FLOOD,
+        M1_ESP32_CAP_KARMA,
+        M1_ESP32_CAP_PKTMON,
+        M1_ESP32_CAP_PORTAL,
+        M1_ESP32_CAP_WIFI_JOIN,
+        M1_ESP32_CAP_WIFI_SET_MAC,
+        M1_ESP32_CAP_WIFI_SET_CHAN,
+        M1_ESP32_CAP_NETSCAN,
+        M1_ESP32_CAP_BLE_HID,
+        M1_ESP32_CAP_BT_MANAGE,
+        M1_ESP32_CAP_802154,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -212,7 +200,7 @@ void test_cap_bits_are_unique(void)
         for (size_t j = i + 1; j < ncaps; j++)
         {
             TEST_ASSERT_EQUAL_UINT64_MESSAGE(UINT64_C(0), caps[i] & caps[j],
-                "Two M1_ESP32_CMD_* bits share a bit position");
+                "Two M1_ESP32_CAP_* bits share a bit position");
         }
     }
 }
@@ -220,23 +208,23 @@ void test_cap_bits_are_unique(void)
 void test_cap_bits_are_single_bit_powers_of_two(void)
 {
     const uint64_t caps[] = {
-        M1_ESP32_CMD_WIFI_SCAN,
-        M1_ESP32_CMD_STA_SCAN,
-        M1_ESP32_CMD_BLE_SCAN,
-        M1_ESP32_CMD_BLE_ADV,
-        M1_ESP32_CMD_DEAUTH,
-        M1_ESP32_CMD_BEACON,
-        M1_ESP32_CMD_PROBE_FLOOD,
-        M1_ESP32_CMD_KARMA,
-        M1_ESP32_CMD_PKTMON,
-        M1_ESP32_CMD_PORTAL,
-        M1_ESP32_CMD_WIFI_JOIN,
-        M1_ESP32_CMD_WIFI_SET_MAC,
-        M1_ESP32_CMD_WIFI_SET_CHAN,
-        M1_ESP32_CMD_NETSCAN,
-        M1_ESP32_CMD_AT_BLE_HID,
-        M1_ESP32_CMD_AT_BT_MANAGE,
-        M1_ESP32_CMD_AT_802154,
+        M1_ESP32_CAP_WIFI_SCAN,
+        M1_ESP32_CAP_STA_SCAN,
+        M1_ESP32_CAP_BLE_SCAN,
+        M1_ESP32_CAP_BLE_ADV,
+        M1_ESP32_CAP_DEAUTH,
+        M1_ESP32_CAP_BEACON,
+        M1_ESP32_CAP_PROBE_FLOOD,
+        M1_ESP32_CAP_KARMA,
+        M1_ESP32_CAP_PKTMON,
+        M1_ESP32_CAP_PORTAL,
+        M1_ESP32_CAP_WIFI_JOIN,
+        M1_ESP32_CAP_WIFI_SET_MAC,
+        M1_ESP32_CAP_WIFI_SET_CHAN,
+        M1_ESP32_CAP_NETSCAN,
+        M1_ESP32_CAP_BLE_HID,
+        M1_ESP32_CAP_BT_MANAGE,
+        M1_ESP32_CAP_802154,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -245,7 +233,7 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
         uint64_t c = caps[i];
         TEST_ASSERT_NOT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c, "Cmd bit is zero");
         TEST_ASSERT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c & (c - UINT64_C(1)),
-            "M1_ESP32_CMD_* bit is not a power of two");
+            "M1_ESP32_CAP_* bit is not a power of two");
     }
 }
 
@@ -253,51 +241,49 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
  * Composite profile macros: sanity checks
  * =========================================================================*/
 
-void test_sin360_cmd_profile_has_expected_cmds(void)
+void test_sin360_profile_has_expected_caps(void)
 {
-    const uint64_t p = M1_ESP32_CMD_PROFILE_SIN360;
-    /* SiN360 supports all binary SPI command families */
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_WIFI_SCAN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_STA_SCAN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_BLE_SCAN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_BLE_ADV);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_DEAUTH);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_BEACON);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_PROBE_FLOOD);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_KARMA);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_PKTMON);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_PORTAL);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_NETSCAN);
-    /* SiN360 does NOT support AT text command groups */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_WIFI_JOIN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_AT_BLE_HID);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_AT_BT_MANAGE);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_AT_802154);
+    const uint64_t p = M1_ESP32_CAP_PROFILE_SIN360;
+    /* SiN360 profile includes all scan/attack/sniffer capabilities */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_STA_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_ADV);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BEACON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PROBE_FLOOD);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_KARMA);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PKTMON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PORTAL);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_NETSCAN);
+    /* SiN360 profile does NOT include BLE HID, BT manage, 802.15.4, or WiFi join */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
 }
 
-void test_at_fallback_profile_has_expected_cmds(void)
+void test_legacy_fallback_profile_has_expected_caps(void)
 {
-    const uint64_t p = M1_ESP32_CMD_PROFILE_AT_FALLBACK;
-    /* AT firmware fallback: only Bad-BT (BLE HID) and 802.15.4 via AT cmds */
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_AT_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_AT_802154);
-    /* AT firmware does NOT expose binary-SPI-only command families */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_WIFI_SCAN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_WIFI_JOIN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_BLE_SCAN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_DEAUTH);
-    /* AT_BT_MANAGE is intentionally absent: AT BT management was never
-     * supported by bedge117/neddy299/dag on the M1 AT path; classic BT
-     * device management requires binary-SPI commands in m1_bt.c. */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CMD_AT_BT_MANAGE);
+    const uint64_t p = M1_ESP32_CAP_PROFILE_LEGACY;
+    /* Legacy fallback: BLE HID and 802.15.4 */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    /* Legacy fallback does not include scan/attack/sniffer capabilities */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
+    /* BT_MANAGE is intentionally absent: Bluetooth device management was
+     * never supported by bedge117/neddy299/dag on the M1 AT path. */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
 }
 
-void test_at_fallback_and_sin360_profiles_are_disjoint(void)
+void test_legacy_fallback_and_sin360_profiles_are_disjoint(void)
 {
-    /* AT fallback (bits 14-16) and SiN360 (bits 0-13) share no bits —
-     * they represent completely different command families */
+    /* Legacy fallback (bits 14-16) and SiN360 (bits 0-13) share no bits */
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0),
-        M1_ESP32_CMD_PROFILE_AT_FALLBACK & M1_ESP32_CMD_PROFILE_SIN360);
+        M1_ESP32_CAP_PROFILE_LEGACY & M1_ESP32_CAP_PROFILE_SIN360);
 }
 
 /* =========================================================================
@@ -322,7 +308,7 @@ void test_at_hex_parse_valid_sin360(void)
 {
     char resp[200];
     make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CMD_PROFILE_SIN360,
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_PROFILE_SIN360,
                      "SiN360-0.9.6");
 
     uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
@@ -337,8 +323,8 @@ void test_at_hex_parse_valid_sin360(void)
                                            (uint8_t)sizeof(m1_esp32_status_payload_t),
                                            &caps, fw_name);
     TEST_ASSERT_TRUE(ok2);
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CMD_PROFILE_SIN360,
-                              caps & M1_ESP32_CMD_PROFILE_SIN360);
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
+                              caps & M1_ESP32_CAP_PROFILE_SIN360);
     TEST_ASSERT_EQUAL_STRING("SiN360-0.9.6", fw_name);
 }
 
@@ -346,7 +332,7 @@ void test_at_hex_parse_valid_at_fallback(void)
 {
     char resp[200];
     make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CMD_PROFILE_AT_FALLBACK,
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_PROFILE_LEGACY,
                      "AT-bedge117-2.0.2");
 
     uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
@@ -360,8 +346,8 @@ void test_at_hex_parse_valid_at_fallback(void)
                                            (uint8_t)sizeof(m1_esp32_status_payload_t),
                                            &caps, fw_name);
     TEST_ASSERT_TRUE(ok2);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CMD_AT_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CMD_AT_802154);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_802154);
     TEST_ASSERT_EQUAL_STRING("AT-bedge117-2.0.2", fw_name);
 }
 
@@ -388,7 +374,7 @@ void test_at_hex_parse_invalid_hex_char_returns_false(void)
     /* Build a valid response then corrupt one hex character */
     char resp[200];
     make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CMD_WIFI_SCAN,
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN,
                      "test-fw");
     /* Corrupt the 5th hex char (position 14 + 4 = 18) to a non-hex char */
     resp[18] = 'G';
@@ -403,7 +389,7 @@ void test_at_hex_parse_lowercase_hex_accepted(void)
     /* Build response, convert hex to lowercase, verify still parsed */
     char resp[200];
     make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CMD_AT_BLE_HID,
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_BLE_HID,
                      "dag-fw");
     /* Convert hex portion to lowercase */
     const size_t pfx_len = 14u;  /* strlen("+GETSTATUSHEX:") */
@@ -421,7 +407,7 @@ void test_at_hex_parse_lowercase_hex_accepted(void)
                                            (uint8_t)sizeof(m1_esp32_status_payload_t),
                                            &caps, fw_name);
     TEST_ASSERT_TRUE(ok2);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CMD_AT_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
 }
 
 void test_at_hex_parse_prefix_with_leading_content(void)
@@ -433,7 +419,7 @@ void test_at_hex_parse_prefix_with_leading_content(void)
 
     char hex_resp[200];
     make_at_hex_resp(hex_resp, sizeof(hex_resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CMD_WIFI_SCAN, "fw");
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
     /* Append to the preamble */
     strncat(resp, hex_resp, sizeof(resp) - pfx_offset - 1u);
 
@@ -446,7 +432,7 @@ void test_at_hex_parse_small_output_buffer_returns_false(void)
 {
     char resp[200];
     make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CMD_WIFI_SCAN, "fw");
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
 
     /* Output buffer one byte too small */
     uint8_t decoded[40];  /* sizeof(m1_esp32_status_payload_t) - 1 == 40 */
@@ -482,9 +468,9 @@ int main(void)
     RUN_TEST(test_cap_bits_are_single_bit_powers_of_two);
 
     /* Profile macros */
-    RUN_TEST(test_sin360_cmd_profile_has_expected_cmds);
-    RUN_TEST(test_at_fallback_profile_has_expected_cmds);
-    RUN_TEST(test_at_fallback_and_sin360_profiles_are_disjoint);
+    RUN_TEST(test_sin360_profile_has_expected_caps);
+    RUN_TEST(test_legacy_fallback_profile_has_expected_caps);
+    RUN_TEST(test_legacy_fallback_and_sin360_profiles_are_disjoint);
 
     /* AT hex response parser */
     RUN_TEST(test_at_hex_parse_valid_sin360);

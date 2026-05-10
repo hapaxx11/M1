@@ -113,11 +113,11 @@ DELEGATE(detect_skimmers, ble_detect_skimmers)
 DELEGATE(detect_flock,    ble_detect_flock)
 DELEGATE(detect_meta,     ble_detect_meta)
 
-DELEGATE_CAPPED(badbt,  badbt_run,                M1_ESP32_CMD_AT_BLE_HID, "Bad-BT")
-DELEGATE_CAPPED(btname, bluetooth_set_badbt_name, M1_ESP32_CMD_AT_BLE_HID, "BT Name")
+DELEGATE_CAPPED(badbt,  badbt_run,                M1_ESP32_CAP_BLE_HID,   "Bad-BT")
+DELEGATE_CAPPED(btname, bluetooth_set_badbt_name, M1_ESP32_CAP_BLE_HID,   "BT Name")
 
-DELEGATE_CAPPED(saved, bluetooth_saved_devices, M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices")
-DELEGATE_CAPPED(info,  bluetooth_info,          M1_ESP32_CMD_AT_BT_MANAGE, "BT Info")
+DELEGATE_CAPPED(saved, bluetooth_saved_devices, M1_ESP32_CAP_BT_MANAGE, "Saved Devices")
+DELEGATE_CAPPED(info,  bluetooth_info,          M1_ESP32_CAP_BT_MANAGE, "BT Info")
 
 /* ---- Handler tables ----------------------------------------------------- */
 #define HANDLERS(name) static const M1SceneHandlers name##_handlers = { .on_enter = name##_on_enter }

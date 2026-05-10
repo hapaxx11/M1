@@ -1118,19 +1118,19 @@ void bluetooth_config(void)
 }
 
 /*==========================================================================*/
-/* Legacy AT-layer stubs — runtime-gated via M1_ESP32_CMD_AT_* bits.       */
+/* Legacy AT-layer stubs — runtime-gated via M1_ESP32_CAP_* bits.          */
 /* DELEGATE_CAPPED in m1_bt_scene.c calls m1_esp32_require_cap() before    */
 /* reaching these; the second check here is redundant but harmless.         */
 /*==========================================================================*/
 
 void bluetooth_saved_devices(void)
 {
-    m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices");
+    m1_esp32_require_cap(M1_ESP32_CAP_BT_MANAGE, "Saved Devices");
 }
 
 void bluetooth_info(void)
 {
-    m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "BT Info");
+    m1_esp32_require_cap(M1_ESP32_CAP_BT_MANAGE, "BT Info");
 }
 
 bt_connection_state_t *bt_get_connection_state(void)
@@ -1144,5 +1144,5 @@ bt_connection_state_t *bt_get_connection_state(void)
 
 void bluetooth_set_badbt_name(void)
 {
-    m1_esp32_require_cap(M1_ESP32_CMD_AT_BLE_HID, "BT Name");
+    m1_esp32_require_cap(M1_ESP32_CAP_BLE_HID, "BT Name");
 }
