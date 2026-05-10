@@ -1118,13 +1118,11 @@ void bluetooth_config(void)
 }
 
 /*==========================================================================*/
-/* Legacy AT-layer stubs — remain compilable for m1_bt_scene.c callers      */
-/* while AT firmware is not used.  These functions are now reached only when */
-/* the compile flag is set; the capability check in the scene delegate        */
-/* (DELEGATE_CAPPED) further gates them at runtime.                          */
+/* Legacy AT-layer stubs — runtime-gated via M1_ESP32_CMD_AT_* bits.       */
+/* DELEGATE_CAPPED in m1_bt_scene.c calls m1_esp32_require_cap() before    */
+/* reaching these; the second check here is redundant but harmless.         */
 /*==========================================================================*/
 
-#ifdef M1_APP_BT_MANAGE_ENABLE
 void bluetooth_saved_devices(void)
 {
     m1_esp32_require_cap(M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices");
@@ -1143,11 +1141,8 @@ bt_connection_state_t *bt_get_connection_state(void)
 	static bt_connection_state_t state = { .connected = false };
 	return &state;
 }
-#endif /* M1_APP_BT_MANAGE_ENABLE */
 
-#ifdef M1_APP_BADBT_ENABLE
 void bluetooth_set_badbt_name(void)
 {
     m1_esp32_require_cap(M1_ESP32_CMD_AT_BLE_HID, "BT Name");
 }
-#endif /* M1_APP_BADBT_ENABLE */

@@ -20,10 +20,7 @@
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
-
-#ifdef M1_APP_BADBT_ENABLE
 #include "m1_badbt.h"
-#endif
 
 /* ---- Scene IDs ---------------------------------------------------------- */
 enum {
@@ -64,16 +61,12 @@ enum {
     BtSceneDetectMeta,
 
     /* Bad-BT */
-#ifdef M1_APP_BADBT_ENABLE
     BtSceneBadBt,
     BtSceneBtName,
-#endif
 
     /* Saved / Info stubs */
-#ifdef M1_APP_BT_MANAGE_ENABLE
     BtSceneSaved,
     BtSceneInfo,
-#endif
 
     BtSceneCount
 };
@@ -120,15 +113,11 @@ DELEGATE(detect_skimmers, ble_detect_skimmers)
 DELEGATE(detect_flock,    ble_detect_flock)
 DELEGATE(detect_meta,     ble_detect_meta)
 
-#ifdef M1_APP_BADBT_ENABLE
 DELEGATE_CAPPED(badbt,  badbt_run,                M1_ESP32_CMD_AT_BLE_HID, "Bad-BT")
 DELEGATE_CAPPED(btname, bluetooth_set_badbt_name, M1_ESP32_CMD_AT_BLE_HID, "BT Name")
-#endif
 
-#ifdef M1_APP_BT_MANAGE_ENABLE
 DELEGATE_CAPPED(saved, bluetooth_saved_devices, M1_ESP32_CMD_AT_BT_MANAGE, "Saved Devices")
 DELEGATE_CAPPED(info,  bluetooth_info,          M1_ESP32_CMD_AT_BT_MANAGE, "BT Info")
-#endif
 
 /* ---- Handler tables ----------------------------------------------------- */
 #define HANDLERS(name) static const M1SceneHandlers name##_handlers = { .on_enter = name##_on_enter }
@@ -154,14 +143,10 @@ HANDLERS(spoof_airtag);
 HANDLERS(detect_skimmers);
 HANDLERS(detect_flock);
 HANDLERS(detect_meta);
-#ifdef M1_APP_BADBT_ENABLE
 HANDLERS(badbt);
 HANDLERS(btname);
-#endif
-#ifdef M1_APP_BT_MANAGE_ENABLE
 HANDLERS(saved);
 HANDLERS(info);
-#endif
 
 /* ---- Sniffers submenu --------------------------------------------------- */
 #define SNIFFER_ITEM_COUNT  6
@@ -240,13 +225,7 @@ static const M1SceneHandlers detect_menu_handlers = {
 };
 
 /* ---- Top-level menu ----------------------------------------------------- */
-#if defined(M1_APP_BADBT_ENABLE) && defined(M1_APP_BT_MANAGE_ENABLE)
 #define MENU_ITEM_COUNT  13
-#elif defined(M1_APP_BADBT_ENABLE) || defined(M1_APP_BT_MANAGE_ENABLE)
-#define MENU_ITEM_COUNT  11
-#else
-#define MENU_ITEM_COUNT  9
-#endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "BLE Scan",
@@ -258,14 +237,10 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Wardrive Cont.",
     "Wardrive Flock",
     "Detectors",
-#ifdef M1_APP_BADBT_ENABLE
     "Bad-BT",
     "BT Name",
-#endif
-#ifdef M1_APP_BT_MANAGE_ENABLE
     "Saved Devices",
     "BT Info",
-#endif
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -278,14 +253,10 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     BtSceneWardriveContinu,
     BtSceneWardriveFlock,
     BtSceneDetectMenu,
-#ifdef M1_APP_BADBT_ENABLE
     BtSceneBadBt,
     BtSceneBtName,
-#endif
-#ifdef M1_APP_BT_MANAGE_ENABLE
     BtSceneSaved,
     BtSceneInfo,
-#endif
 };
 
 static uint8_t menu_sel    = 0;
@@ -347,14 +318,10 @@ static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
     [BtSceneDetectFlock]    = &detect_flock_handlers,
     [BtSceneDetectMeta]     = &detect_meta_handlers,
 
-#ifdef M1_APP_BADBT_ENABLE
     [BtSceneBadBt]          = &badbt_handlers,
     [BtSceneBtName]         = &btname_handlers,
-#endif
-#ifdef M1_APP_BT_MANAGE_ENABLE
     [BtSceneSaved]          = &saved_handlers,
     [BtSceneInfo]           = &info_handlers,
-#endif
 };
 
 /* ---- Entry point -------------------------------------------------------- */
