@@ -251,6 +251,11 @@ The table below shows the expected `cap_bitmap` for each variant.
 | **IEEE 802.15.4** | — | ✅ | ✅ |
 | Classic BT management | — | — | — |
 
+AT capability mapping audit (tracked firmware set): the only AT-side commands
+currently mapped to capability bits are `AT+CWJAP` (WiFi join),
+`AT+BLEHID*` (BLE HID), `AT+ZIGSNIFF` (802.15.4), plus neddy299's
+`AT+DEAUTH` and `AT+STASCAN`.
+
 ### Probe sequence
 
 When the M1 initialises the ESP32, it performs a two-step capability probe:

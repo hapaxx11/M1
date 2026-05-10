@@ -276,6 +276,22 @@ void test_tracked_fallback_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
 }
 
+void test_at_bedge_dag_profile_exact_caps(void)
+{
+    const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN |
+                              M1_ESP32_CAP_BLE_HID  |
+                              M1_ESP32_CAP_802154;
+    TEST_ASSERT_EQUAL_UINT64(expected, M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG);
+}
+
+void test_at_neddy299_profile_exact_caps(void)
+{
+    const uint64_t expected = M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG |
+                              M1_ESP32_CAP_DEAUTH |
+                              M1_ESP32_CAP_STA_SCAN;
+    TEST_ASSERT_EQUAL_UINT64(expected, M1_ESP32_CAP_PROFILE_AT_NEDDY299);
+}
+
 /* =========================================================================
  * AT hex response parser: m1_esp32_caps_parse_at_hex()
  * =========================================================================*/
@@ -460,6 +476,8 @@ int main(void)
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);
     RUN_TEST(test_tracked_fallback_profile_has_expected_caps);
+    RUN_TEST(test_at_bedge_dag_profile_exact_caps);
+    RUN_TEST(test_at_neddy299_profile_exact_caps);
 
     /* AT hex response parser */
     RUN_TEST(test_at_hex_parse_valid_sin360);
