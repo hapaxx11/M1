@@ -146,9 +146,10 @@
      M1_ESP32_CAP_PORTAL       | \
      M1_ESP32_CAP_NETSCAN)
 
-/** AT fallback profile (bedge117 / dag): BLE HID + 802.15.4. */
+/** AT fallback profile (bedge117 / dag): WiFi join + BLE HID + 802.15.4. */
 #define M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG \
-    (M1_ESP32_CAP_BLE_HID | \
+    (M1_ESP32_CAP_WIFI_JOIN | \
+     M1_ESP32_CAP_BLE_HID | \
      M1_ESP32_CAP_802154)
 
 /** AT fallback profile (neddy299): bedge/dag + deauth + station scan. */

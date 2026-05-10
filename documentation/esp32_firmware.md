@@ -245,7 +245,7 @@ The table below shows the expected `cap_bitmap` for each variant.
 | Karma | ✅ | — | — |
 | Portal | ✅ | — | — |
 | Network scanners | ✅ | — | — |
-| WiFi join/disconnect | — | — | — |
+| WiFi join/disconnect | — | ✅ | ✅ |
 | BLE scan / advertise | ✅ | — | — |
 | **BLE HID (Bad-BT)** | — | ✅ | ✅ |
 | **IEEE 802.15.4** | — | ✅ | ✅ |
@@ -268,7 +268,7 @@ When the M1 initialises the ESP32, it performs a two-step capability probe:
    uses `M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK`, which is the union of
    currently tracked ESP32 firmware capabilities:
    - `M1_ESP32_CAP_PROFILE_SIN360` (SiN360 binary-SPI feature set)
-   - `M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG` (AT BLE HID + 802.15.4)
+   - `M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG` (AT WiFi join + BLE HID + 802.15.4)
 
 The capability cache is reset by `m1_esp32_caps_reset()` (called from
 `m1_esp32_deinit()`) so the next `m1_esp32_init()` / `esp32_main_init()` cycle
