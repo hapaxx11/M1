@@ -146,6 +146,23 @@
      M1_ESP32_CAP_PORTAL       | \
      M1_ESP32_CAP_NETSCAN)
 
+/** AT fallback profile (bedge117 / dag): BLE HID + 802.15.4. */
+#define M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG \
+    (M1_ESP32_CAP_BLE_HID | \
+     M1_ESP32_CAP_802154)
+
+/** AT fallback profile (neddy299): bedge/dag + deauth + station scan. */
+#define M1_ESP32_CAP_PROFILE_AT_NEDDY299 \
+    (M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG | \
+     M1_ESP32_CAP_DEAUTH | \
+     M1_ESP32_CAP_STA_SCAN)
+
+/** Known-firmware fallback used when capability probing is unavailable.
+ *  Union of currently tracked ESP32 firmware capabilities. */
+#define M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK \
+    (M1_ESP32_CAP_PROFILE_SIN360 | \
+     M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG)
+
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
  *

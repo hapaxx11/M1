@@ -264,9 +264,11 @@ When the M1 initialises the ESP32, it performs a two-step capability probe:
    implement the `feat/cmd_get_status` extension will respond here with a
    hex-encoded capability payload.
 
-3. **Fail-closed fallback**: applied when both steps 1 and 2 fail.  The M1
-   advertises no capabilities (`cap_bitmap = 0`) and gates all ESP32-dependent
-   features until a successful capability probe.
+3. **Known-firmware fallback**: applied when both steps 1 and 2 fail.  The M1
+   uses `M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK`, which is the union of
+   currently tracked ESP32 firmware capabilities:
+   - `M1_ESP32_CAP_PROFILE_SIN360` (SiN360 binary-SPI feature set)
+   - `M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG` (AT BLE HID + 802.15.4)
 
 The capability cache is reset by `m1_esp32_caps_reset()` (called from
 `m1_esp32_deinit()`) so the next `m1_esp32_init()` / `esp32_main_init()` cycle

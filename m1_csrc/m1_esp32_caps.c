@@ -110,8 +110,8 @@ void m1_esp32_caps_init(void)
         }
 
         /* Neither binary CMD_GET_STATUS nor AT+GETSTATUSHEX succeeded.
-         * Fail closed: advertise no capabilities. */
-        s_bitmap = 0u;
+         * Fall back to the union of currently tracked firmware capabilities. */
+        s_bitmap = M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK;
         strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }

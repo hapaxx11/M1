@@ -263,6 +263,19 @@ void test_sin360_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
 }
 
+void test_tracked_fallback_profile_has_expected_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK;
+    /* Tracked fallback should include all SiN360 bits plus AT BLE HID + 802.15.4 */
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
+                              p & M1_ESP32_CAP_PROFILE_SIN360);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    /* Not currently tracked on any known firmware */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
+}
+
 /* =========================================================================
  * AT hex response parser: m1_esp32_caps_parse_at_hex()
  * =========================================================================*/
@@ -446,6 +459,7 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);
+    RUN_TEST(test_tracked_fallback_profile_has_expected_caps);
 
     /* AT hex response parser */
     RUN_TEST(test_at_hex_parse_valid_sin360);
