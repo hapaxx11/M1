@@ -263,29 +263,6 @@ void test_sin360_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
 }
 
-void test_legacy_fallback_profile_has_expected_caps(void)
-{
-    const uint64_t p = M1_ESP32_CAP_PROFILE_LEGACY;
-    /* Legacy fallback: BLE HID and 802.15.4 */
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
-    /* Legacy fallback does not include scan/attack/sniffer capabilities */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
-    /* BT_MANAGE is intentionally absent: Bluetooth device management was
-     * never supported by bedge117/neddy299/dag on the M1 AT path. */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
-}
-
-void test_legacy_fallback_and_sin360_profiles_are_disjoint(void)
-{
-    /* Legacy fallback (bits 14-16) and SiN360 (bits 0-13) share no bits */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0),
-        M1_ESP32_CAP_PROFILE_LEGACY & M1_ESP32_CAP_PROFILE_SIN360);
-}
-
 /* =========================================================================
  * AT hex response parser: m1_esp32_caps_parse_at_hex()
  * =========================================================================*/
@@ -332,7 +309,7 @@ void test_at_hex_parse_valid_at_fallback(void)
 {
     char resp[200];
     make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_PROFILE_LEGACY,
+                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_BLE_HID | M1_ESP32_CAP_802154,
                      "AT-bedge117-2.0.2");
 
     uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
@@ -469,8 +446,6 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);
-    RUN_TEST(test_legacy_fallback_profile_has_expected_caps);
-    RUN_TEST(test_legacy_fallback_and_sin360_profiles_are_disjoint);
 
     /* AT hex response parser */
     RUN_TEST(test_at_hex_parse_valid_sin360);

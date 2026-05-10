@@ -232,8 +232,7 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 
 Both SiN360 and AT firmware variants with the `feat/cmd_get_status` extension
 respond to one of the two capability probes and self-report their capabilities.
-The table below shows the expected `cap_bitmap` for each variant.  AT firmware
-**without** `feat/cmd_get_status` triggers the fallback path (see below).
+The table below shows the expected `cap_bitmap` for each variant.
 
 | Command family | SiN360 | bedge117 / dag | neddy299 |
 |----------------|:------:|:--------------:|:--------:|
@@ -252,7 +251,7 @@ The table below shows the expected `cap_bitmap` for each variant.  AT firmware
 | **IEEE 802.15.4** | — | ✅ | ✅ |
 | Classic BT management | — | — | — |
 
-### Probe sequence and fallback behaviour
+### Probe sequence
 
 When the M1 initialises the ESP32, it performs a two-step capability probe:
 
@@ -265,10 +264,9 @@ When the M1 initialises the ESP32, it performs a two-step capability probe:
    implement the `feat/cmd_get_status` extension will respond here with a
    hex-encoded capability payload.
 
-3. **Fallback** (`M1_ESP32_CAP_PROFILE_LEGACY`): applied when both steps 1
-   and 2 fail.  This ensures Bad-BT and IEEE 802.15.4 remain accessible on AT
-   firmware variants without the `feat/cmd_get_status` extension (bedge117 ≤
-   v2.0.2, neddy299 ≤ v1.0.1, dag pre-AT-Custom-Status).
+3. **Fail-closed fallback**: applied when both steps 1 and 2 fail.  The M1
+   advertises no capabilities (`cap_bitmap = 0`) and gates all ESP32-dependent
+   features until a successful capability probe.
 
 The capability cache is reset by `m1_esp32_caps_reset()` (called from
 `m1_esp32_deinit()`) so the next `m1_esp32_init()` / `esp32_main_init()` cycle
@@ -336,4 +334,3 @@ to `uint64_t` and use `M1_ESP32_CAP_*` bit positions to match protocol version 1
 > `m1_esp32_has_cap` with one or more `M1_ESP32_CAP_*` bits OR'd together),
 > **not** on a compile flag or firmware name string.
 > See `m1_csrc/m1_esp32_caps.h` for the full API.
-

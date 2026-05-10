@@ -126,11 +126,8 @@
  * Used as the CMD_GET_STATUS fallback when the connected firmware does not
  * implement CMD_GET_STATUS.  SiN360 firmware has supported CMD_GET_STATUS
  * since its initial Hapax integration and always self-reports; it therefore
- * never triggers the fallback path.  Legacy AT firmware variants (bedge117,
- * neddy299, dag) that predate the feat/cmd_get_status extension trigger the
- * fallback — M1_ESP32_CAP_PROFILE_LEGACY is used as the default.  Any
- * firmware that implements CMD_GET_STATUS will always take the self-reporting
- * success path.
+ * never triggers the fallback path in normal operation.  Any firmware that
+ * implements CMD_GET_STATUS will always take the self-reporting success path.
  * =========================================================================*/
 
 /** SiN360 firmware profile (sincere360/M1_SiN360_ESP32).
@@ -148,13 +145,6 @@
      M1_ESP32_CAP_PKTMON       | \
      M1_ESP32_CAP_PORTAL       | \
      M1_ESP32_CAP_NETSCAN)
-
-/** Legacy fallback (bedge117 / neddy299 / dag without CMD_GET_STATUS).
- *  Active fallback for firmware that does not implement CMD_GET_STATUS.
- *  Bad-BT (BLE HID) and 802.15.4 remain accessible on legacy firmware. */
-#define M1_ESP32_CAP_PROFILE_LEGACY \
-    (M1_ESP32_CAP_BLE_HID | \
-     M1_ESP32_CAP_802154)
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)

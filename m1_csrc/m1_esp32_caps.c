@@ -110,11 +110,9 @@ void m1_esp32_caps_init(void)
         }
 
         /* Neither binary CMD_GET_STATUS nor AT+GETSTATUSHEX succeeded.
-         * Apply the legacy fallback so Bad-BT and 802.15.4 remain
-         * accessible on legacy firmware variants without CMD_GET_STATUS
-         * support. */
-        s_bitmap = M1_ESP32_CAP_PROFILE_LEGACY;
-        strncpy(s_fw_name, "Unknown AT (fallback)", sizeof(s_fw_name) - 1);
+         * Fail closed: advertise no capabilities. */
+        s_bitmap = 0u;
+        strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     }
 
