@@ -260,7 +260,7 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
     for (size_t i = 0; i < ncaps; i++)
     {
         uint64_t c = caps[i];
-        TEST_ASSERT_NOT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c, "Cmd bit is zero");
+        TEST_ASSERT_NOT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c, "Cap bit is zero");
         TEST_ASSERT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c & (c - UINT64_C(1)),
             "M1_ESP32_CAP_* bit is not a power of two");
     }

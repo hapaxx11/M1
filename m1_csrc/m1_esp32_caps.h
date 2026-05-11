@@ -245,7 +245,9 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
      * test hosts. */
     uint64_t cap = 0u;
     memcpy(&cap, payload + 1, sizeof(uint64_t));
-    *caps_out = cap;   /* wire format is LE; STM32 and x86 need no swap */
+    *caps_out = cap;   /* wire format is LE; on LE hosts (STM32/x86) memcpy
+                        * preserves the encoding correctly.  On a BE host a
+                        * bswap64 would be needed here. */
 
     /* fw_name is at offset 9 (1 proto_ver + 8 cap_bitmap) */
     strncpy(fw_name_out, (const char *)(payload + 9), 31);
