@@ -157,6 +157,31 @@
  * `s_at_cmd_cap_map[]` table in `m1_esp32_caps.c`. */
 
 /* =========================================================================
+ * Memory footprint estimates — for developer / diagnostic use only
+ *
+ * bss_bytes and free_heap_bytes are NOT part of the CMD_GET_STATUS wire
+ * protocol.  They are derived from compile-time constants (below) that
+ * reflect source-code analysis of the known Hapax-fork ESP32 firmware
+ * releases.  m1_esp32_caps_bss_bytes() and m1_esp32_caps_free_heap() are
+ * developer-diagnostic accessors — not user-visible.
+ *
+ * Profile discriminator: M1_ESP32_CAP_WIFI_JOIN present in bitmap →
+ * AT/C3 profile (bedge117/neddy299); absent → SiN360 profile.
+ *
+ * Sources (see documentation/esp32_firmware.md for derivation rationale):
+ *   SiN360  BSS : sincere360/M1_SiN360_ESP32 v0.9.0.8, ESP-IDF 5.5.4
+ *   SiN360  heap: NimBLE with MSYS_BUF_FROM_HEAP=y; 10×1600 B static WiFi
+ *                 RX; ap_records[64] ≈ 14 KB
+ *   AT/C3   BSS : bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0
+ *   AT/C3   heap: Full AT infrastructure + SPI ring buffers + BLE HID +
+ *                 802.15.4
+ * =========================================================================*/
+#define M1_ESP32_FALLBACK_BSS_SIN360   (200u * 1024u)  /**< ≈200 KB BSS */
+#define M1_ESP32_FALLBACK_HEAP_SIN360  (160u * 1024u)  /**< ≈160 KB free heap */
+#define M1_ESP32_FALLBACK_BSS_AT       (284u * 1024u)  /**< ≈284 KB BSS */
+#define M1_ESP32_FALLBACK_HEAP_AT      (112u * 1024u)  /**< ≈112 KB free heap */
+
+/* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
  *
  * The ESP32 firmware returns this in the 60-byte resp.payload[] when it
@@ -220,7 +245,9 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
      * test hosts. */
     uint64_t cap = 0u;
     memcpy(&cap, payload + 1, sizeof(uint64_t));
-    *caps_out = cap;   /* wire format is LE; STM32 and x86 need no swap */
+    *caps_out = cap;   /* wire format is LE; on LE hosts (STM32/x86) memcpy
+                        * preserves the encoding correctly.  On a BE host a
+                        * bswap64 would be needed here. */
 
     /* fw_name is at offset 9 (1 proto_ver + 8 cap_bitmap) */
     strncpy(fw_name_out, (const char *)(payload + 9), 31);
@@ -372,6 +399,20 @@ const char *m1_esp32_caps_fw_name(void);
  *         false if any are absent (screen has been shown, caller must abort)
  */
 bool m1_esp32_require_cap(uint64_t cap, const char *feature_name);
+
+/**
+ * Return the estimated BSS footprint of the connected ESP32 firmware in bytes.
+ * Derived from M1_ESP32_FALLBACK_BSS_* compile-time constants — never
+ * transmitted over the wire.  For developer / OOM diagnostic use only.
+ */
+uint32_t m1_esp32_caps_bss_bytes(void);
+
+/**
+ * Return the estimated free heap of the connected ESP32 firmware in bytes.
+ * Derived from M1_ESP32_FALLBACK_HEAP_* compile-time constants — never
+ * transmitted over the wire.  For developer / OOM diagnostic use only.
+ */
+uint32_t m1_esp32_caps_free_heap(void);
 
 
 #endif /* M1_ESP32_CAPS_H_ */

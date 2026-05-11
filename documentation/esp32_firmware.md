@@ -416,3 +416,21 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 > `m1_esp32_has_cap` with one or more `M1_ESP32_CAP_*` bits OR'd together),
 > **not** on a compile flag or firmware name string.
 > See `m1_csrc/m1_esp32_caps.h` for the full API.
+
+### Memory footprint estimates — for developer use only
+
+`bss_bytes` and `free_heap_bytes` are **not** part of the `CMD_GET_STATUS` wire
+protocol.  Instead, the M1 always derives them from compile-time constants
+(`M1_ESP32_FALLBACK_*` in `m1_csrc/m1_esp32_caps.h`) based on source-code
+analysis of the known Hapax-fork ESP32 firmware releases.
+
+| Profile | BSS estimate | Free heap estimate | Source |
+|---------|-------------|---------------------|--------|
+| **SiN360** (no `M1_ESP32_CAP_WIFI_JOIN` in bitmap) | ≈ 200 KB | ≈ 160 KB | sincere360/M1_SiN360_ESP32 v0.9.0.8 source + sdkconfig |
+| **AT/C3** (`M1_ESP32_CAP_WIFI_JOIN` present in bitmap) | ≈ 284 KB | ≈ 112 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
+
+These values are accessible at runtime via `m1_esp32_caps_bss_bytes()` and
+`m1_esp32_caps_free_heap()` and are intended for developer diagnostics (OOM
+triage, buffer sizing decisions) — not user-visible display.  See
+`CLAUDE.md` § "Memory Footprint Estimates" for guidance on updating them
+when new firmware releases are analysed.

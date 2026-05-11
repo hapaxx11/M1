@@ -21,6 +21,35 @@ void setUp(void)    {}
 void tearDown(void) {}
 
 /* =========================================================================
+ * M1_ESP32_FALLBACK_* constant sanity checks
+ * =========================================================================*/
+
+void test_fallback_constants_are_nonzero(void)
+{
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_SIN360);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_SIN360);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_AT);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_AT);
+}
+
+void test_fallback_at_bss_exceeds_sin360(void)
+{
+    /* AT firmware (bedge117) has larger BSS than SiN360:
+     * full AT infrastructure + SPI ring buffers vs. NimBLE-only. */
+    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_BSS_SIN360,
+                             M1_ESP32_FALLBACK_BSS_AT);
+}
+
+void test_fallback_sin360_heap_exceeds_at(void)
+{
+    /* SiN360 has more free heap than AT firmware:
+     * NimBLE uses less runtime RAM than the full AT stack + BLE HID. */
+    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_HEAP_AT,
+                             M1_ESP32_FALLBACK_HEAP_SIN360);
+}
+
+
+/* =========================================================================
  * Helper: build a well-formed 41-byte status payload
  *
  * Layout (matches m1_esp32_status_payload_t):
@@ -231,7 +260,7 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
     for (size_t i = 0; i < ncaps; i++)
     {
         uint64_t c = caps[i];
-        TEST_ASSERT_NOT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c, "Cmd bit is zero");
+        TEST_ASSERT_NOT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c, "Cap bit is zero");
         TEST_ASSERT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c & (c - UINT64_C(1)),
             "M1_ESP32_CAP_* bit is not a power of two");
     }
@@ -465,6 +494,11 @@ int main(void)
     RUN_TEST(test_at_cmd_parse_substring_in_text_does_not_match);
     RUN_TEST(test_at_cmd_response_valid_detector);
     RUN_TEST(test_at_cmd_parse_arbitrary_line_order);
+
+    /* M1_ESP32_FALLBACK_* constant invariants */
+    RUN_TEST(test_fallback_constants_are_nonzero);
+    RUN_TEST(test_fallback_at_bss_exceeds_sin360);
+    RUN_TEST(test_fallback_sin360_heap_exceeds_at);
 
     return UNITY_END();
 }

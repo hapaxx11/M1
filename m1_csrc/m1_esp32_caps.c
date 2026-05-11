@@ -54,6 +54,8 @@ extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
 static uint64_t s_bitmap          = 0u;
 static bool     s_queried         = false;
 static char     s_fw_name[32]     = "Unknown";
+static uint32_t s_bss_bytes       = 0u;
+static uint32_t s_free_heap_bytes = 0u;
 
 /* =========================================================================
  * AT command → capability bit mapping table
@@ -85,6 +87,26 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
     (sizeof(s_at_cmd_cap_map) / sizeof(s_at_cmd_cap_map[0]))
 
 /*************** I N T E R N A L   H E L P E R S *****************************/
+
+/**
+ * Set memory footprint estimates based on the resolved capability bitmap.
+ * Uses M1_ESP32_CAP_WIFI_JOIN as the profile discriminator:
+ *   present  → AT/C3 profile (bedge117/neddy299)
+ *   absent   → SiN360 profile
+ */
+static void caps_apply_footprint_estimates(uint64_t bitmap)
+{
+    if (bitmap & M1_ESP32_CAP_WIFI_JOIN)
+    {
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
+    }
+    else
+    {
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_SIN360;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_SIN360;
+    }
+}
 
 /*************** P U B L I C   A P I ******************************************/
 
@@ -119,6 +141,7 @@ void m1_esp32_caps_init(void)
         s_bitmap = bitmap;
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+        caps_apply_footprint_estimates(s_bitmap);
         s_queried = true;
         return;
     }
@@ -161,6 +184,7 @@ void m1_esp32_caps_init(void)
                 at_resp, s_at_cmd_cap_map, S_AT_CMD_CAP_MAP_N);
             strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
             s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+            caps_apply_footprint_estimates(s_bitmap);
             s_queried = true;
             vPortFree(at_resp);
             return;
@@ -177,14 +201,17 @@ void m1_esp32_caps_init(void)
     s_bitmap = 0u;
     strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
     s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+    caps_apply_footprint_estimates(0u);
     s_queried = true;
 }
 
 void m1_esp32_caps_reset(void)
 {
-    s_bitmap     = 0u;
-    s_queried    = false;
-    s_fw_name[0] = '\0';
+    s_bitmap          = 0u;
+    s_bss_bytes       = 0u;
+    s_free_heap_bytes = 0u;
+    s_queried         = false;
+    s_fw_name[0]      = '\0';
 }
 
 bool m1_esp32_has_cap(uint64_t cap)
@@ -246,4 +273,18 @@ bool m1_esp32_require_cap(uint64_t cap, const char *feature_name)
     HAL_Delay(2000);
 
     return false;
+}
+
+uint32_t m1_esp32_caps_bss_bytes(void)
+{
+    if (!s_queried && m1_esp32_get_init_status())
+        m1_esp32_caps_init();
+    return s_bss_bytes;
+}
+
+uint32_t m1_esp32_caps_free_heap(void)
+{
+    if (!s_queried && m1_esp32_get_init_status())
+        m1_esp32_caps_init();
+    return s_free_heap_bytes;
 }
