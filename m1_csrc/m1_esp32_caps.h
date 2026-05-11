@@ -161,8 +161,9 @@
  *
  * The ESP32 firmware returns this in the 60-byte resp.payload[] when it
  * receives CMD_GET_STATUS (0x02).  Firmware that does not implement
- * CMD_GET_STATUS will return RESP_ERR or time out, triggering the
- * compile-flag fallback.
+ * CMD_GET_STATUS (e.g. AT-based variants) will return RESP_ERR or time
+ * out, triggering the stock `AT+CMD?` secondary probe.  If that also
+ * fails, the capability bitmap is left at zero (fail-closed).
  *
  * The single cap_bitmap field carries M1_ESP32_CAP_* bits directly.
  * Any firmware variant — binary-SPI or AT text commands — sets the same

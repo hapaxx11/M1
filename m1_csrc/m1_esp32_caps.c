@@ -163,8 +163,9 @@ void m1_esp32_caps_init(void)
         /* If pvPortMalloc returned NULL (FreeRTOS heap exhausted), we
          * intentionally fall through to the fail-closed default below.
          * Recording a partial bitmap based on an unprobed firmware would
-         * be worse than reporting "Unknown (fallback)" — the next call to
-         * m1_esp32_caps_init() (after a deinit/reset cycle) will retry. */
+         * be worse than reporting "Unknown (fallback)".  Because s_queried
+         * is not set, the next call to m1_esp32_caps_init() will retry
+         * automatically. */
     }
 
     /* Both probes failed — fail closed.  Feature gates that check specific
@@ -189,10 +190,9 @@ bool m1_esp32_has_cap(uint64_t cap)
 {
     if (!s_queried)
     {
-        /* Don't probe (and don't cache the fallback) when the ESP32 HAL
-         * has not been initialised.  Probing an uninitialised transport
-         * would time out, cache the compile-flag fallback, and potentially
-         * grant capabilities the connected firmware does not support. */
+        /* Don't probe when the ESP32 HAL has not been initialised.  Probing
+         * an uninitialised transport would time out and potentially cache a
+         * fail-closed result that prevents legitimate capabilities later. */
         if (!m1_esp32_get_init_status())
             return false;
         m1_esp32_caps_init();
