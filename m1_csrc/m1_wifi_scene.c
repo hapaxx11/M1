@@ -99,10 +99,13 @@ enum {
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated delegate: shows "not supported" screen and pops immediately
- * when the required ESP32 capability is absent. */
+ * when the required ESP32 capability is absent.
+ * m1_esp32_ensure_init() is called first so CMD_GET_STATUS can be queried even
+ * when the transport was deinitialized by the previous delegate. */
 #define DELEGATE_CAPPED(name, fn, cap, label) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
+        m1_esp32_ensure_init(); \
         if (m1_esp32_require_cap((cap), (label))) { fn(); } \
         m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
@@ -155,9 +158,9 @@ DELEGATE(zigbee,               zigbee_scan)
 DELEGATE(thread,               thread_scan)
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-DELEGATE_CAPPED(saved,      wifi_saved_networks, M1_ESP32_CAP_WIFI_CONNECT, "Saved Networks")
-DELEGATE_CAPPED(status,     wifi_show_status,    M1_ESP32_CAP_WIFI_CONNECT, "WiFi Status")
-DELEGATE_CAPPED(disconnect, wifi_disconnect,     M1_ESP32_CAP_WIFI_CONNECT, "Disconnect WiFi")
+DELEGATE_CAPPED(saved,      wifi_saved_networks, M1_ESP32_CAP_WIFI_JOIN, "Saved Networks")
+DELEGATE_CAPPED(status,     wifi_show_status,    M1_ESP32_CAP_WIFI_JOIN, "WiFi Status")
+DELEGATE_CAPPED(disconnect, wifi_disconnect,     M1_ESP32_CAP_WIFI_JOIN, "Disconnect WiFi")
 #endif
 
 /* ---- Handler table helpers ---------------------------------------------- */

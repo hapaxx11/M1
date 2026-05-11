@@ -388,13 +388,14 @@ small edits), the agent **MUST** create and maintain a temporary phase-tracking 
 
 > **Two distinct ESP32 firmware variants are supported.  Choose based on which features you need.**
 
-#### AT-command firmware (legacy — bedge117 / neddy299)
+#### AT-command firmware (legacy — bedge117 / neddy299 / dag)
 - **Source repo**: [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1) (C3 custom AT firmware)
 - **Deauth fork**: [`neddy299/esp32-at-monstatek-m1`](https://github.com/neddy299/esp32-at-monstatek-m1) (adds `AT+DEAUTH` + `AT+STASCAN`)
-- Both are forks of Espressif's official `esp-at`, customised for M1's SPI transport
-- Pre-built binaries available on the GitHub Releases pages of both repos
-- Enables: WiFi connect/disconnect, NTP sync, Bad-BT / BLE HID, BLE Spam, 802.15.4
-- Does NOT support: WiFi sniffing, BLE wardrive, deauth attacks, evil portal, network scanners
+- **dag fork**: [`dagnazty/esp32-at-monstatek-m1`](https://github.com/dagnazty/esp32-at-monstatek-m1) (additional AT command extensions)
+- All are forks of Espressif's official `esp-at`, customised for M1's SPI transport
+- Pre-built binaries available on the GitHub Releases pages of each repo
+- Enables: Bad-BT / BLE HID, 802.15.4 (Zigbee/Thread)
+- Does NOT support (current firmware): WiFi sniffing, BLE wardrive, deauth attacks, evil portal, network scanners, WiFi connect/NTP sync (binary SPI; AT implementations pending), BT device management (binary SPI)
 - See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for the full reference
 
 #### Binary SPI firmware (recommended — sincere360 / SiN360)

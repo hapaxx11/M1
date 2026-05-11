@@ -690,6 +690,7 @@ static void rpc_handle_get_device_info(const S_RPC_Frame *f)
     strncpy(info.esp32_version,
             m1_esp32_caps_fw_name(),
             sizeof(info.esp32_version) - 1);
+    info.esp32_version[sizeof(info.esp32_version) - 1] = '\0';
 
     /* Operation mode & settings */
     info.ism_band_region = m1_fw_config.ism_band_region;

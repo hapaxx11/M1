@@ -45,4 +45,17 @@ void esp32_UART_init(void);
 void esp32_UART_deinit(void);
 void esp32_UART_change_baudrate(uint32_t baudrate);
 
+/**
+ * Ensure the ESP32 HAL is initialised.
+ * Calls m1_esp32_init() only when the transport is not already up.
+ * Use this in scene delegates that need the transport before querying
+ * capabilities, so a previous delegate's deinit does not prevent the
+ * capability check from running.
+ */
+static inline void m1_esp32_ensure_init(void)
+{
+    if (!m1_esp32_get_init_status())
+        m1_esp32_init();
+}
+
 #endif /* M1_ESP32_HAL_H_ */
