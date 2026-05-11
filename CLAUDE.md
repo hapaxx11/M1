@@ -436,8 +436,8 @@ other memory-intensive features.
 
 After `m1_esp32_caps_init()` resolves the capability bitmap (either from a live
 `CMD_GET_STATUS` parse or the compile-flag fallback), it selects the profile:
-- **`M1_ESP32_CAP_WIFI_CONNECT` present** → AT profile (bedge117/C3.12)
-- **`M1_ESP32_CAP_WIFI_CONNECT` absent**  → SiN360 profile
+- **`M1_ESP32_CAP_WIFI_JOIN` present** → AT profile (bedge117/C3.12)
+- **`M1_ESP32_CAP_WIFI_JOIN` absent**  → SiN360 profile
 
 The selected constants are written to `s_bss_bytes` and `s_free_heap_bytes` and
 returned by `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`.

@@ -4,4 +4,4 @@
   from compile-time estimates based on source analysis of the known Hapax-fork ESP32
   firmware releases (SiN360 ≈ 200 KB BSS / 160 KB heap; AT/C3 ≈ 284 KB BSS / 112 KB
   heap) and are accessible via `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`
-  for OOM diagnostics.  The `CMD_GET_STATUS` wire payload is now 37 bytes (down from 45).
+  for OOM diagnostics.  The `CMD_GET_STATUS` wire payload is 41 bytes (down from 45).
