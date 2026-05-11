@@ -19,8 +19,9 @@ with the M1.  A custom SPI-configured build is required.
 | [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **Primary** — C3 custom ESP32-C6 SPI AT firmware for M1 |
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | Fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
 | [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | Fork (dag) — additional AT command extensions |
+| [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | Fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
 
-Both repos are forks of Espressif's official
+All repos are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
 SPI transport and pin mapping.
 
@@ -38,6 +39,12 @@ SPI transport and pin mapping.
 | Version | Features |
 |---------|----------|
 | **v1.0.1** | WiFi deauthentication (`AT+DEAUTH`), station scanning (`AT+STASCAN`) |
+
+### hapaxx11 (neddy299 fork, CMD_GET_STATUS) releases
+
+| Version | Features |
+|---------|----------|
+| **v1.0.1-caps** | All neddy299 v1.0.1 features + `CMD_GET_STATUS` binary opcode (opcode `0x02`) — self-reports `cap_bitmap = 0x14412` (`STA_SCAN` \| `DEAUTH` \| `WIFI_JOIN` \| `BLE_HID` \| `802154`), `fw_name = "AT-neddy299-1.0.1"` |
 
 ### dagnazty (dag) releases
 
@@ -231,12 +238,13 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 ### Capability matrix by firmware variant
 
 Both SiN360 (via `CMD_GET_STATUS`) and AT firmware (via the stock `AT+CMD?`
-listing) self-report their capabilities at runtime — no custom AT extension is
-required on the ESP32 side.  The table below shows the expected `cap_bitmap`
-for each tracked variant.
+listing) self-report their capabilities at runtime.  The table below shows the
+expected `cap_bitmap` for each tracked variant.  The hapaxx11 fork of neddy299
+implements `CMD_GET_STATUS` directly, so it self-reports via probe 1 and the
+`AT+CMD?` fallback (probe 2) is not needed for it.
 
-| Command family | SiN360 | bedge117 / dag | neddy299 |
-|----------------|:------:|:--------------:|:--------:|
+| Command family | SiN360 | bedge117 / dag | neddy299 (hapaxx11 fork) |
+|----------------|:------:|:--------------:|:------------------------:|
 | WiFi AP scan | ✅ | — | — |
 | Station scan | ✅ | — | ✅ |
 | Packet monitor | ✅ | — | — |
@@ -264,15 +272,18 @@ mapping is a single-line edit to `s_at_cmd_cap_map[]` in
 When the M1 initialises the ESP32, it performs a two-step capability probe:
 
 1. **Binary CMD_GET_STATUS** (opcode `0x02`): tried first.  SiN360 binary-SPI
-   firmware always responds.  AT firmware does not understand binary opcodes and
-   will time out or return `RESP_ERR`.
+   firmware and AT-based firmware that implements the binary extension (e.g.
+   `hapaxx11/esp32-at-monstatek-m1`, a fork of neddy299) respond here with the
+   41-byte capability payload.  Unextended AT firmware (bedge117, dag, stock
+   neddy299) does not implement this opcode and will time out or return
+   `RESP_ERR`.
 
-2. **Stock `AT+CMD?`** (AT text command): tried only when step 1 fails and the
-   AT task (`get_esp32_main_init_status()`) is active.  `AT+CMD?` is part of
-   the standard ESP-AT command set
+2. **Stock `AT+CMD?`** (AT text command): tried only when step 1 fails — i.e.
+   for AT firmware that does not implement the binary extension (bedge117, dag)
+   and the AT task (`get_esp32_main_init_status()`) is active.  `AT+CMD?` is
+   part of the standard ESP-AT command set
    ([reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd))
-   and is supported unchanged by every tracked AT firmware variant (bedge117,
-   dag, neddy299) — no custom extension is required on the ESP32 side.
+   and is supported unchanged by every tracked AT firmware variant.
 
    The response lists every AT command the firmware understands.  A small
    mapping table on the STM32 (`s_at_cmd_cap_map[]` in `m1_esp32_caps.c`)
@@ -316,7 +327,16 @@ Respond to opcode `0x02` with a 41-byte `m1_esp32_status_payload_t` payload:
   set the same bit regardless of whether the feature uses binary SPI opcodes or
   AT text commands.
 - `fw_name` — a short null-terminated version string (e.g. `"SiN360-0.9.7"` or
-  `"AT-bedge117-2.0.2"`); unused bytes are zero-padded.
+  `"AT-neddy299-1.0.1"`); unused bytes are zero-padded.
+
+A complete reference implementation for AT-based firmware is in
+[`hapaxx11/esp32-at-monstatek-m1`](https://github.com/hapaxx11/esp32-at-monstatek-m1):
+the portable header `main/include/at_m1_status.h` defines the constants, struct,
+and `at_m1_status_build_payload()` helper; the SPI receive loop in
+`main/interface/spi/at_spi_task_esp32_series.c` intercepts opcode `0x02` before
+the AT framework sees it.  Other AT firmware variants can copy `at_m1_status.h`,
+adjust `M1_ESP32_THIS_FW_CAP_BITMAP` and `M1_ESP32_THIS_FW_NAME`, and add the
+same opcode check to their SPI receive loop.
 
 > **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
 > on the exact capability bits they need (`m1_esp32_require_cap` /
@@ -326,12 +346,12 @@ Respond to opcode `0x02` with a 41-byte `m1_esp32_status_payload_t` payload:
 
 ### `AT+CMD?` — runtime probe for AT firmware
 
-AT-based firmware variants cannot respond to binary SPI opcodes.  Instead, the
-M1 leverages the stock ESP-AT command `AT+CMD?` to enumerate every AT command
-the firmware advertises and then maps a small set of known commands to
-`M1_ESP32_CAP_*` capability bits.  This works against any tracked AT firmware
-variant — stock ESP-AT, bedge117, dag, neddy299 — without requiring a custom
-extension on the ESP32 side.
+AT-based firmware variants that do not implement the `CMD_GET_STATUS` binary
+extension (probe 1) fall through to this step.  The M1 leverages the stock
+ESP-AT command `AT+CMD?` to enumerate every AT command the firmware advertises
+and maps a small set of known commands to `M1_ESP32_CAP_*` capability bits.
+This works against unextended AT firmware — stock ESP-AT, bedge117, dag — without
+requiring any custom extension on the ESP32 side.
 
 **Response format** (from the ESP-AT
 [reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd)):
@@ -358,8 +378,8 @@ OK
 1. Allocates an 8 KB response buffer from the FreeRTOS heap.  Stock ESP-AT
    advertises ~150 commands at roughly 30–50 bytes each (~4.5–7.5 KB total);
    8 KB leaves margin for future command additions and for the custom
-   commands added by tracked AT firmware variants (bedge117 / dag /
-   neddy299).  The buffer is sized to fit the full `AT+CMD?` listing before
+   commands added by tracked AT firmware variants (bedge117 / dag).
+   The buffer is sized to fit the full `AT+CMD?` listing before
    `spi_AT_send_recv()` stops at the trailing `OK\r\n`.
 2. Calls `spi_AT_send_recv("AT+CMD?\r\n", ...)`.
 3. Confirms the response is well-formed via

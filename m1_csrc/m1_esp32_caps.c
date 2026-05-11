@@ -106,8 +106,9 @@ void m1_esp32_caps_init(void)
         return;
 
     /* Probe 1: binary CMD_GET_STATUS (0x02).  SiN360 binary-SPI firmware
-     * always responds here.  AT firmware does not understand binary opcodes
-     * and will return RESP_ERR or time out. */
+     * always responds here.  AT firmware that implements the binary extension
+     * (e.g. hapaxx11/esp32-at-monstatek-m1) also responds here.  Unextended
+     * AT firmware (bedge117, dag) will return RESP_ERR or time out. */
     ret = m1_esp32_simple_cmd(CMD_GET_STATUS, &resp, CAPS_QUERY_TIMEOUT_MS);
 
     if (ret == 0 && resp.status == RESP_OK &&
