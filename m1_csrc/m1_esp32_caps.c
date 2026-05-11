@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
@@ -129,44 +130,43 @@ void m1_esp32_caps_init(void)
      * firmware understands; we OR in capability bits for each command our
      * mapping table recognises.
      *
+     * The AT task must be running before we can issue AT text commands.
+     * If it has not been started yet, return without caching so the next
+     * call retries once the task is ready.
+     *
      * The response can be several KB, so the buffer is allocated from the
-     * FreeRTOS heap rather than the caller's stack.  Allocation failure
-     * is treated identically to probe failure — fall through to the
-     * fail-closed default below. */
-    if (get_esp32_main_init_status())
+     * FreeRTOS heap rather than the caller's stack.  If the heap is
+     * exhausted, return without caching so the next call retries. */
+    if (!get_esp32_main_init_status())
+        return;
+
     {
         char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
-        if (at_resp)
+        if (!at_resp)
+            return;  /* Heap exhausted — retry on next call */
+
+        at_resp[0] = '\0';
+        (void)spi_AT_send_recv("AT+CMD?\r\n", at_resp,
+                               (int)AT_CMD_RESP_BUF_SZ,
+                               AT_CMD_PROBE_TIMEOUT_S);
+
+        if (m1_esp32_caps_at_cmd_response_valid(at_resp))
         {
-            at_resp[0] = '\0';
-            (void)spi_AT_send_recv("AT+CMD?\r\n", at_resp,
-                                   (int)AT_CMD_RESP_BUF_SZ,
-                                   AT_CMD_PROBE_TIMEOUT_S);
-
-            if (m1_esp32_caps_at_cmd_response_valid(at_resp))
-            {
-                /* Probe succeeded — OR in every tracked AT command the
-                 * firmware advertised.  A response that contains "+CMD:"
-                 * lines but none of our tracked names is still a successful
-                 * probe; the bitmap simply reflects that the firmware has
-                 * no features we currently recognise. */
-                s_bitmap = m1_esp32_caps_parse_at_cmd_list(
-                    at_resp, s_at_cmd_cap_map, S_AT_CMD_CAP_MAP_N);
-                strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
-                s_fw_name[sizeof(s_fw_name) - 1] = '\0';
-                s_queried = true;
-                vPortFree(at_resp);
-                return;
-            }
-
+            /* Probe succeeded — OR in every tracked AT command the
+             * firmware advertised.  A response that contains "+CMD:"
+             * lines but none of our tracked names is still a successful
+             * probe; the bitmap simply reflects that the firmware has
+             * no features we currently recognise. */
+            s_bitmap = m1_esp32_caps_parse_at_cmd_list(
+                at_resp, s_at_cmd_cap_map, S_AT_CMD_CAP_MAP_N);
+            strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
+            s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+            s_queried = true;
             vPortFree(at_resp);
+            return;
         }
-        /* If pvPortMalloc returned NULL (FreeRTOS heap exhausted), we
-         * intentionally fall through to the fail-closed default below.
-         * Recording a partial bitmap based on an unprobed firmware would
-         * be worse than reporting "Unknown (fallback)".  Because s_queried
-         * is not set, the next call to m1_esp32_caps_init() will retry
-         * automatically. */
+
+        vPortFree(at_resp);
     }
 
     /* Both probes failed — fail closed.  Feature gates that check specific
@@ -198,7 +198,7 @@ bool m1_esp32_has_cap(uint64_t cap)
             return false;
         m1_esp32_caps_init();
     }
-    return (s_bitmap & cap) != 0u;
+    return (s_bitmap & cap) == cap;
 }
 
 const char *m1_esp32_caps_fw_name(void)

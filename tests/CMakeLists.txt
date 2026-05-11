@@ -71,22 +71,24 @@ enable_testing()
 add_test(NAME bit_util COMMAND test_bit_util)
 
 # ------------------------------------------------------------------
-# Module under test: m1_esp32_caps (parse payload + capability bits + AT hex parser)
+# Module under test: m1_esp32_caps (parse payload + capability bits + AT+CMD? parser)
 #
 # Tests the static-inline helpers in m1_esp32_caps.h which have zero hardware
 # dependencies:
 #   - m1_esp32_caps_parse_payload(): raw bytes → M1_ESP32_CAP_* bitmap + fw_name
-#   - m1_esp32_caps_parse_at_hex(): AT+GETSTATUSHEX response → raw payload bytes
+#   - m1_esp32_caps_parse_at_cmd_list(): AT+CMD? response → M1_ESP32_CAP_* bits
+#   - m1_esp32_caps_at_cmd_response_valid(): sanity-checks the AT+CMD? response
 # No firmware source file is compiled — only the header is exercised.
 # Verifies:
-#   - Valid SiN360 / AT-C3 payloads parse correctly via binary and AT paths
+#   - Valid SiN360 payload parses correctly via binary path
 #   - Short / wrong-proto-version payloads are rejected
 #   - fw_name is always null-terminated
 #   - All cap bit constants are unique powers-of-two
 #   - Composite profile macros contain the expected bit sets
 #   - Bitmap is decoded little-endian
-#   - AT+GETSTATUSHEX response parsing: prefix detection, hex decode,
-#     lowercase hex, truncated/invalid input, buffer-too-small guard
+#   - AT+CMD? response parsing: stock/bedge-dag/neddy299 responses,
+#     quoted-substring anchoring, empty/NULL inputs, unordered commands,
+#     validity detector
 # ------------------------------------------------------------------
 add_executable(test_esp32_caps
     test_esp32_caps.c

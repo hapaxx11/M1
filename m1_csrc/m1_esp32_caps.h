@@ -208,17 +208,22 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
                                                 uint64_t      *caps_out,
                                                 char           fw_name_out[32])
 {
-    if (len < (uint8_t)sizeof(m1_esp32_status_payload_t))
+    if (!payload || len < (uint8_t)sizeof(m1_esp32_status_payload_t))
         return false;
 
-    const m1_esp32_status_payload_t *p =
-        (const m1_esp32_status_payload_t *)(const void *)payload;
-
-    if (p->proto_ver != M1_ESP32_CAPS_PROTO_VER)
+    if (payload[0] != M1_ESP32_CAPS_PROTO_VER)
         return false;
 
-    *caps_out = p->cap_bitmap;
-    strncpy(fw_name_out, p->fw_name, 31);
+    /* cap_bitmap is at offset 1 — potentially unaligned on Cortex-M.
+     * Use memcpy to avoid a fault and to handle the little-endian wire
+     * format correctly on both LE targets (STM32/x86) and potential BE
+     * test hosts. */
+    uint64_t cap = 0u;
+    memcpy(&cap, payload + 1, sizeof(uint64_t));
+    *caps_out = cap;   /* wire format is LE; STM32 and x86 need no swap */
+
+    /* fw_name is at offset 9 (1 proto_ver + 8 cap_bitmap) */
+    strncpy(fw_name_out, (const char *)(payload + 9), 31);
     fw_name_out[31] = '\0';
     return true;
 }

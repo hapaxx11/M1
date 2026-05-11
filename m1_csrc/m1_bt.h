@@ -38,7 +38,7 @@ void ble_spam_flipper(void);
 void ble_spam_all(void);
 void ble_spoof_airtag(void);
 
-/* Legacy AT-layer stubs — runtime-gated via M1_ESP32_CMD_AT_* capability bits */
+/* Legacy AT-layer stubs — runtime-gated via M1_ESP32_CAP_* capability bits */
 typedef struct {
     bool connected;
     char addr[18];  /* MAC address string: "AA:BB:CC:DD:EE:FF\0" */
