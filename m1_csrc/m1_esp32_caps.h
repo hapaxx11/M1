@@ -330,7 +330,14 @@ void m1_esp32_caps_init(void);
 
 /**
  * Reset the capability cache.
- * Called from m1_esp32_deinit() so the next init re-queries the firmware.
+ *
+ * The capability cache normally persists for the lifetime of the STM32
+ * firmware — capabilities are a property of the ESP32 firmware variant
+ * and cannot change across a routine ESP32 deinit/init cycle.  This
+ * function exists only for cases where the connected ESP32 firmware may
+ * have changed since the last probe (e.g. immediately after an in-field
+ * OTA reflash of the coprocessor).  Most callers should NOT invoke this
+ * function — the cache is cleared automatically on STM32 reset.
  */
 void m1_esp32_caps_reset(void);
 

@@ -296,9 +296,15 @@ When the M1 initialises the ESP32, it performs a two-step capability probe:
    supported" UI will appear.  Granting capabilities we cannot verify risks
    crashing on firmware that does not implement the underlying command.
 
-The capability cache is reset by `m1_esp32_caps_reset()` (called from
-`m1_esp32_deinit()`) so the next `m1_esp32_init()` / `esp32_main_init()` cycle
-re-queries the connected firmware.
+The capability cache persists for the lifetime of the STM32 firmware.  ESP32
+capabilities are a property of the firmware variant installed on the
+coprocessor and cannot change across a routine `m1_esp32_deinit()` /
+`m1_esp32_init()` cycle, so probing once per STM32 boot avoids paying the
+`AT+CMD?` timeout (~5 s on AT firmware that does not respond to
+`CMD_GET_STATUS`) on every entry into a WiFi/BT/IEEE scene.  The cache is
+cleared automatically on STM32 reset; `m1_esp32_caps_reset()` is exposed for
+callers that need to force a re-probe (e.g. immediately after an in-field
+OTA reflash of the ESP32 coprocessor).
 
 ### Adding CMD_GET_STATUS to a custom ESP32 firmware
 
