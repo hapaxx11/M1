@@ -19,6 +19,7 @@
 #include "main.h"
 #include "m1_settings.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
 #include "m1_http_client.h"
 //#include "spi_drv.h"
 #include "m1_ring_buffer.h"
@@ -482,6 +483,17 @@ void m1_esp32_deinit(void)
 
 		esp32_init_done = FALSE;
 		esp32_uart_init_done = FALSE;
+
+		/* NOTE: capability cache is intentionally NOT reset here.
+		 * ESP32 capabilities are a property of the firmware variant
+		 * installed on the coprocessor and cannot change across a
+		 * routine deinit/init cycle within a single STM32 power-up.
+		 * Probing once per STM32 boot avoids a ~5 s AT+CMD? timeout
+		 * every time the user enters a WiFi/BT/IEEE scene against
+		 * AT firmware.  The cache is cleared automatically on STM32
+		 * reset; an OTA reflash of the ESP32 requires a manual STM32
+		 * reboot (or an explicit call to m1_esp32_caps_reset()) to
+		 * re-probe. */
 
 		/* ESP32 reset wipes all AT config — force SSL reconfiguration
 		 * (SNTP + CIPSSLCCONF) on the next HTTPS connection. */

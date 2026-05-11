@@ -71,6 +71,38 @@ enable_testing()
 add_test(NAME bit_util COMMAND test_bit_util)
 
 # ------------------------------------------------------------------
+# Module under test: m1_esp32_caps (parse payload + capability bits + AT+CMD? parser)
+#
+# Tests the static-inline helpers in m1_esp32_caps.h which have zero hardware
+# dependencies:
+#   - m1_esp32_caps_parse_payload(): raw bytes → M1_ESP32_CAP_* bitmap + fw_name
+#   - m1_esp32_caps_parse_at_cmd_list(): AT+CMD? response → M1_ESP32_CAP_* bits
+#   - m1_esp32_caps_at_cmd_response_valid(): sanity-checks the AT+CMD? response
+# No firmware source file is compiled — only the header is exercised.
+# Verifies:
+#   - Valid SiN360 payload parses correctly via binary path
+#   - Short / wrong-proto-version payloads are rejected
+#   - fw_name is always null-terminated
+#   - All cap bit constants are unique powers-of-two
+#   - Composite profile macros contain the expected bit sets
+#   - Bitmap is decoded little-endian
+#   - AT+CMD? response parsing: stock/bedge-dag/neddy299 responses,
+#     quoted-substring anchoring, empty/NULL inputs, unordered commands,
+#     validity detector
+# ------------------------------------------------------------------
+add_executable(test_esp32_caps
+    test_esp32_caps.c
+)
+target_include_directories(test_esp32_caps PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_caps PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_caps PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_caps COMMAND test_esp32_caps)
+
+# ------------------------------------------------------------------
 # Module under test: battery_soc_estimate
 # Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
 # Bug context: "Asian M1" fuel gauge reports 0% SoC while device is
