@@ -29,11 +29,18 @@
  * Never gate on a compile flag or firmware name string.
  *
  * Wire protocol note:
- *   CMD_GET_STATUS (0x02) on the binary SPI channel.  The response carries
- *   M1_ESP32_CAP_* bits in a single cap_bitmap field.  Any firmware variant
- *   that implements CMD_GET_STATUS (SiN360 binary-SPI or AT firmware with the
- *   feat/cmd_get_status extension) can respond; firmware that does not
- *   implement CMD_GET_STATUS will time out, triggering the fallback path.
+ *   Two probes are issued in sequence:
+ *     1. Binary `CMD_GET_STATUS` (0x02) — SiN360 binary-SPI firmware (and any
+ *        AT firmware that implements this extension) self-reports the full
+ *        capability bitmap and firmware name.
+ *     2. Stock AT `AT+CMD?` — when the binary probe fails, the AT task is
+ *        queried for its supported-command list, and a small mapping table
+ *        in `m1_esp32_caps.c` translates the presence of specific AT
+ *        commands into M1_ESP32_CAP_* bits.  This probe works against any
+ *        stock or custom ESP-AT firmware without requiring our own
+ *        extensions.
+ *   If both probes fail, the capability bitmap is left at zero and feature
+ *   gates fail closed.
  *
  * M1 Project
  */
@@ -43,7 +50,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>   /* strncpy used in inline parse helper */
+#include <stddef.h>   /* size_t for parse helper */
+#include <string.h>   /* strncpy/strstr/strlen used in inline parse helpers */
 
 /* =========================================================================
  * Capability bits — one bit per named feature
@@ -121,18 +129,15 @@
 /* Bits 17-63 reserved for future use */
 
 /* =========================================================================
- * Compile-time fallback profiles
+ * Compile-time profile reference
  *
- * Used as the CMD_GET_STATUS fallback when the connected firmware does not
- * implement CMD_GET_STATUS.  SiN360 firmware has supported CMD_GET_STATUS
- * since its initial Hapax integration and always self-reports; it therefore
- * never triggers the fallback path in normal operation.  Any firmware that
- * implements CMD_GET_STATUS will always take the self-reporting success path.
+ * SiN360 binary-SPI firmware self-reports its capabilities via CMD_GET_STATUS
+ * and never relies on this macro.  It is retained as documentation of the
+ * SiN360 feature set and as a reference value for unit tests; runtime
+ * detection always takes the firmware-reported path.
  * =========================================================================*/
 
-/** SiN360 firmware profile (sincere360/M1_SiN360_ESP32).
- *  Retained for reference; not used as the active fallback (SiN360 always
- *  responds to CMD_GET_STATUS and self-reports). */
+/** SiN360 firmware profile (sincere360/M1_SiN360_ESP32) — reference only. */
 #define M1_ESP32_CAP_PROFILE_SIN360 \
     (M1_ESP32_CAP_WIFI_SCAN    | \
      M1_ESP32_CAP_STA_SCAN     | \
@@ -146,23 +151,10 @@
      M1_ESP32_CAP_PORTAL       | \
      M1_ESP32_CAP_NETSCAN)
 
-/** AT fallback profile (bedge117 / dag): WiFi join + BLE HID + 802.15.4. */
-#define M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG \
-    (M1_ESP32_CAP_WIFI_JOIN | \
-     M1_ESP32_CAP_BLE_HID | \
-     M1_ESP32_CAP_802154)
-
-/** AT fallback profile (neddy299): bedge/dag + deauth + station scan. */
-#define M1_ESP32_CAP_PROFILE_AT_NEDDY299 \
-    (M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG | \
-     M1_ESP32_CAP_DEAUTH | \
-     M1_ESP32_CAP_STA_SCAN)
-
-/** Known-firmware fallback used when capability probing is unavailable.
- *  Union of currently tracked ESP32 firmware capabilities. */
-#define M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK \
-    (M1_ESP32_CAP_PROFILE_SIN360 | \
-     M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG)
+/* AT firmware is detected at runtime via the stock `AT+CMD?` probe — no
+ * curated AT fallback profile macros are defined here.  Adding a new AT
+ * command to the runtime probe is a single-line edit to the
+ * `s_at_cmd_cap_map[]` table in `m1_esp32_caps.c`. */
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
@@ -231,57 +223,86 @@ static inline bool m1_esp32_caps_parse_payload(const uint8_t *payload,
 }
 
 /**
- * Parse an AT+GETSTATUSHEX response and extract the raw payload bytes.
- *
- * AT firmware variants that implement the feat/cmd_get_status extension
- * respond to "AT+GETSTATUSHEX\r\n" with a line of the form:
- *
- *   +GETSTATUSHEX:<82 uppercase hex chars>\r\n\r\nOK\r\n
- *
- * The 82 hex characters encode the same 41-byte m1_esp32_status_payload_t
- * that binary-SPI firmware returns for CMD_GET_STATUS (0x02).  The decoded
- * bytes can be passed directly to m1_esp32_caps_parse_payload().
- *
- * @param resp_buf    Buffer containing the full AT response string
- * @param decoded_out Receives the decoded raw bytes
- * @param decoded_len Capacity of decoded_out (must be >= sizeof(m1_esp32_status_payload_t))
- * @return true on success, false if the prefix was not found, the hex string
- *         is too short, or a non-hex character is encountered
+ * One entry in the AT-command → capability-bit mapping table consulted by
+ * `m1_esp32_caps_parse_at_cmd_list()`.  Each entry maps the full AT command
+ * name (including the "AT+" prefix, e.g. "AT+CWJAP") to the M1_ESP32_CAP_*
+ * bit that should be set when the connected ESP32 firmware advertises that
+ * command in its `AT+CMD?` response.
  */
-static inline bool m1_esp32_caps_parse_at_hex(const char *resp_buf,
-                                               uint8_t    *decoded_out,
-                                               uint8_t     decoded_len)
+typedef struct {
+    const char *at_cmd_name;  /**< Full AT command name including "AT+" prefix */
+    uint64_t    cap_bit;      /**< M1_ESP32_CAP_* bit to set when present */
+} m1_esp32_at_cmd_cap_entry_t;
+
+/**
+ * Parse the response from a stock ESP-AT `AT+CMD?` probe and assemble a
+ * capability bitmap from the commands the firmware advertises.
+ *
+ * `AT+CMD?` is part of the stock ESP-AT command set (see
+ * https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd)
+ * and returns one line per supported command of the form:
+ *
+ *   +CMD:<index>,"<full command name>",<test>,<query>,<set>,<exec>\r\n
+ *   ...
+ *   OK\r\n
+ *
+ * The full command name (e.g. `"AT+CWJAP"`) appears in double quotes.  This
+ * parser scans for `"<name>"` exact matches against each entry of the
+ * caller-supplied table and OR's in the corresponding capability bit when
+ * found.  Command names that the firmware does not list contribute nothing.
+ *
+ * @param resp_buf  Null-terminated buffer containing the full AT+CMD? response
+ * @param table     Mapping of AT command name to M1_ESP32_CAP_* bit
+ * @param table_n   Number of entries in @p table
+ * @return          OR'd M1_ESP32_CAP_* bitmap of all matched commands.
+ *                  Returns 0 if @p resp_buf or @p table is NULL.
+ */
+static inline uint64_t
+m1_esp32_caps_parse_at_cmd_list(const char *resp_buf,
+                                 const m1_esp32_at_cmd_cap_entry_t *table,
+                                 size_t table_n)
 {
-    /* Locate the response prefix */
-    const char *pfx = "+GETSTATUSHEX:";
-    const char *hex_start = strstr(resp_buf, pfx);
-    if (!hex_start)
-        return false;
-    hex_start += 14u;  /* strlen("+GETSTATUSHEX:") == 14 */
+    uint64_t caps = 0u;
 
-    if (decoded_len < (uint8_t)sizeof(m1_esp32_status_payload_t))
-        return false;
+    if (!resp_buf || !table)
+        return 0u;
 
-    const uint8_t n = (uint8_t)sizeof(m1_esp32_status_payload_t);  /* 41 */
-    for (uint8_t i = 0u; i < n; i++)
+    for (size_t i = 0u; i < table_n; i++)
     {
-        char hi = hex_start[(uint8_t)(i * 2u)];
-        char lo = hex_start[(uint8_t)(i * 2u + 1u)];
-        if (!hi || !lo)
-            return false;
+        const char *name = table[i].at_cmd_name;
+        if (!name || !name[0])
+            continue;
 
-        uint8_t hi_v = (hi >= '0' && hi <= '9') ? (uint8_t)(hi - '0') :
-                       (hi >= 'A' && hi <= 'F') ? (uint8_t)(hi - 'A' + 10u) :
-                       (hi >= 'a' && hi <= 'f') ? (uint8_t)(hi - 'a' + 10u) : 0xFFu;
-        uint8_t lo_v = (lo >= '0' && lo <= '9') ? (uint8_t)(lo - '0') :
-                       (lo >= 'A' && lo <= 'F') ? (uint8_t)(lo - 'A' + 10u) :
-                       (lo >= 'a' && lo <= 'f') ? (uint8_t)(lo - 'a' + 10u) : 0xFFu;
-        if (hi_v == 0xFFu || lo_v == 0xFFu)
-            return false;
+        /* Build the quoted needle: e.g. "AT+CWJAP" → \"AT+CWJAP\".
+         * The longest tracked command name is well under 30 bytes; the
+         * 40-byte buffer leaves room for both quotes and the terminator.
+         * Names that would not fit are silently skipped (caps unaffected). */
+        char needle[40];
+        size_t nlen = strlen(name);
+        if (nlen + 3u > sizeof(needle))
+            continue;
 
-        decoded_out[i] = (uint8_t)((hi_v << 4u) | lo_v);
+        needle[0] = '"';
+        for (size_t k = 0u; k < nlen; k++)
+            needle[1u + k] = name[k];
+        needle[1u + nlen]      = '"';
+        needle[1u + nlen + 1u] = '\0';
+
+        if (strstr(resp_buf, needle) != NULL)
+            caps |= table[i].cap_bit;
     }
-    return true;
+
+    return caps;
+}
+
+/**
+ * Quick sanity check that a buffer looks like a real `AT+CMD?` response —
+ * i.e. contains at least one `+CMD:` line.  Used to distinguish "probe
+ * succeeded but no tracked commands matched" from "probe failed entirely".
+ */
+static inline bool m1_esp32_caps_at_cmd_response_valid(const char *resp_buf)
+{
+    return resp_buf && strstr(resp_buf, "+CMD:") != NULL;
 }
 
 /* =========================================================================
@@ -289,12 +310,18 @@ static inline bool m1_esp32_caps_parse_at_hex(const char *resp_buf,
  * =========================================================================*/
 
 /**
- * Query CMD_GET_STATUS and cache the capability descriptor.
+ * Probe the connected ESP32 firmware and cache its capability descriptor.
  * Must be called after m1_esp32_init() + esp32_main_init().
- * Falls back to a compile-flag-derived bitmap if the ESP32 firmware does
- * not implement CMD_GET_STATUS.
- * Safe to call multiple times — subsequent calls are no-ops if already
- * queried successfully.
+ *
+ * Two probes are attempted in order:
+ *   1. Binary CMD_GET_STATUS (0x02) — SiN360 / extension-aware firmware.
+ *   2. Stock AT command `AT+CMD?` — translated against the
+ *      `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.
+ *
+ * If both probes fail, the capability bitmap is left at zero (feature
+ * gates fail closed) and the firmware name is reported as
+ * "Unknown (fallback)".  Safe to call multiple times — subsequent calls
+ * are no-ops once a probe has succeeded.
  */
 void m1_esp32_caps_init(void);
 
@@ -313,7 +340,7 @@ bool m1_esp32_has_cap(uint64_t cap);
 
 /**
  * Return a null-terminated string describing the active ESP32 firmware.
- * Examples: "SiN360-0.9.6", "AT-bedge117-2.0.2", "Unknown (fallback)".
+ * Examples: "SiN360-0.9.6", "AT (probed)", "Unknown (fallback)".
  * Never returns NULL.
  */
 const char *m1_esp32_caps_fw_name(void);

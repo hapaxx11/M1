@@ -4,7 +4,7 @@
   sites now specify exactly which commands they need (`M1_ESP32_CMD_WIFI_JOIN`,
   `M1_ESP32_CMD_AT_BLE_HID`, `M1_ESP32_CMD_AT_802154`, etc.) rather than
   aggregate labels like `WIFI_ATTACK` or `BLE_SPAM`.  The single-bitmap
-  `CMD_GET_STATUS` protocol (41-byte payload, `uint64_t cap_bitmap`) and the
-  AT secondary probe (`AT+GETSTATUSHEX`) remain unchanged.  Firmware that
-  implements `CMD_GET_STATUS` sets the same `M1_ESP32_CMD_*` bits regardless of
-  whether it uses binary SPI commands or AT text commands internally.
+  `CMD_GET_STATUS` protocol (41-byte payload, `uint64_t cap_bitmap`) is
+  unchanged.  Firmware that implements `CMD_GET_STATUS` sets the same
+  `M1_ESP32_CMD_*` bits regardless of whether it uses binary SPI commands or
+  AT text commands internally.

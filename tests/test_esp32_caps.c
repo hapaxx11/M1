@@ -263,187 +263,158 @@ void test_sin360_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
 }
 
-void test_tracked_fallback_profile_has_expected_caps(void)
+/* =========================================================================
+ * AT+CMD? response parser: m1_esp32_caps_parse_at_cmd_list()
+ *
+ * The runtime AT secondary probe issues `AT+CMD?` to the connected ESP32 and
+ * parses the response against a small (at_cmd_name → cap_bit) mapping table.
+ * These tests use a representative mapping that mirrors the production
+ * s_at_cmd_cap_map[] in m1_esp32_caps.c.
+ * =========================================================================*/
+
+static const m1_esp32_at_cmd_cap_entry_t k_test_at_cmd_map[] = {
+    { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
+    { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
+    { "AT+ZIGSNIFF",   M1_ESP32_CAP_802154    },
+    { "AT+DEAUTH",     M1_ESP32_CAP_DEAUTH    },
+    { "AT+STASCAN",    M1_ESP32_CAP_STA_SCAN  },
+};
+static const size_t k_test_at_cmd_map_n =
+    sizeof(k_test_at_cmd_map) / sizeof(k_test_at_cmd_map[0]);
+
+/* Stock ESP-AT AT+CMD? response excerpt (alphabetical, abbreviated). */
+static const char *k_resp_stock_at =
+    "+CMD:0,\"AT\",0,0,0,1\r\n"
+    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
+    "+CMD:2,\"AT+CWMODE\",1,1,1,0\r\n"
+    "+CMD:3,\"AT+GMR\",0,0,0,1\r\n"
+    "+CMD:4,\"AT+RST\",0,0,0,1\r\n"
+    "\r\nOK\r\n";
+
+/* bedge117/dag custom AT firmware: stock + BLE HID + 802.15.4 */
+static const char *k_resp_bedge_dag =
+    "+CMD:0,\"AT\",0,0,0,1\r\n"
+    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
+    "+CMD:2,\"AT+BLEHIDINIT\",1,1,1,1\r\n"
+    "+CMD:3,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
+    "\r\nOK\r\n";
+
+/* neddy299 / dag-deauth: stock + BLE HID + 802.15.4 + deauth + stascan */
+static const char *k_resp_neddy299 =
+    "+CMD:0,\"AT\",0,0,0,1\r\n"
+    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
+    "+CMD:2,\"AT+BLEHIDINIT\",1,1,1,1\r\n"
+    "+CMD:3,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
+    "+CMD:4,\"AT+DEAUTH\",1,1,1,0\r\n"
+    "+CMD:5,\"AT+STASCAN\",1,1,1,0\r\n"
+    "\r\nOK\r\n";
+
+void test_at_cmd_parse_stock_at_only_wifi_join(void)
 {
-    const uint64_t p = M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK;
-    /* Tracked fallback should include all SiN360 bits plus AT WiFi join/BLE HID/802.15.4 */
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
-                              p & M1_ESP32_CAP_PROFILE_SIN360);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
-    /* Not currently tracked on any known firmware */
-    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        k_resp_stock_at, k_test_at_cmd_map, k_test_at_cmd_map_n);
+
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_JOIN, caps);
 }
 
-void test_at_bedge_dag_profile_exact_caps(void)
+void test_at_cmd_parse_bedge_dag_caps(void)
 {
     const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN |
                               M1_ESP32_CAP_BLE_HID  |
                               M1_ESP32_CAP_802154;
-    TEST_ASSERT_EQUAL_UINT64(expected, M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG);
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        k_resp_bedge_dag, k_test_at_cmd_map, k_test_at_cmd_map_n);
+
+    TEST_ASSERT_EQUAL_UINT64(expected, caps);
 }
 
-void test_at_neddy299_profile_exact_caps(void)
+void test_at_cmd_parse_neddy299_caps(void)
 {
-    const uint64_t expected = M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG |
-                              M1_ESP32_CAP_DEAUTH |
+    const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN |
+                              M1_ESP32_CAP_BLE_HID  |
+                              M1_ESP32_CAP_802154   |
+                              M1_ESP32_CAP_DEAUTH   |
                               M1_ESP32_CAP_STA_SCAN;
-    TEST_ASSERT_EQUAL_UINT64(expected, M1_ESP32_CAP_PROFILE_AT_NEDDY299);
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        k_resp_neddy299, k_test_at_cmd_map, k_test_at_cmd_map_n);
+
+    TEST_ASSERT_EQUAL_UINT64(expected, caps);
 }
 
-/* =========================================================================
- * AT hex response parser: m1_esp32_caps_parse_at_hex()
- * =========================================================================*/
-
-/* Helper: build a "+GETSTATUSHEX:<hex>\r\nOK\r\n" response string from
- * the same payload produced by make_payload().  hex_out must be at least
- * 82+1 bytes.  resp_out must be at least strlen("+GETSTATUSHEX:") + 82 + 8. */
-static void make_at_hex_resp(char *resp_out, size_t resp_sz,
-                              uint8_t proto_ver, uint64_t cap, const char *fw_name)
+void test_at_cmd_parse_empty_response_returns_zero(void)
 {
-    uint8_t buf[64];
-    char    hex[83] = {0};
-    make_payload(buf, proto_ver, cap, fw_name);
-    for (int i = 0; i < (int)sizeof(m1_esp32_status_payload_t); i++)
-        snprintf(&hex[i * 2], 3, "%02X", buf[i]);
-    snprintf(resp_out, resp_sz, "+GETSTATUSHEX:%s\r\n\r\nOK\r\n", hex);
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        "", k_test_at_cmd_map, k_test_at_cmd_map_n);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps);
 }
 
-void test_at_hex_parse_valid_sin360(void)
+void test_at_cmd_parse_null_inputs_return_zero(void)
 {
-    char resp[200];
-    make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_PROFILE_SIN360,
-                     "SiN360-0.9.6");
+    TEST_ASSERT_EQUAL_UINT64(
+        UINT64_C(0),
+        m1_esp32_caps_parse_at_cmd_list(NULL, k_test_at_cmd_map, k_test_at_cmd_map_n));
 
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
-    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded,
-                                         (uint8_t)sizeof(decoded));
-    TEST_ASSERT_TRUE(ok);
-
-    /* Now parse the decoded bytes */
-    uint64_t caps = 0;
-    char     fw_name[32];
-    bool ok2 = m1_esp32_caps_parse_payload(decoded,
-                                           (uint8_t)sizeof(m1_esp32_status_payload_t),
-                                           &caps, fw_name);
-    TEST_ASSERT_TRUE(ok2);
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PROFILE_SIN360,
-                              caps & M1_ESP32_CAP_PROFILE_SIN360);
-    TEST_ASSERT_EQUAL_STRING("SiN360-0.9.6", fw_name);
+    TEST_ASSERT_EQUAL_UINT64(
+        UINT64_C(0),
+        m1_esp32_caps_parse_at_cmd_list(k_resp_stock_at, NULL, 0));
 }
 
-void test_at_hex_parse_valid_at_fallback(void)
+void test_at_cmd_parse_requires_quoted_match(void)
 {
-    char resp[200];
-    make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_BLE_HID | M1_ESP32_CAP_802154,
-                     "AT-bedge117-2.0.2");
+    /* A name appearing as a prefix of another command must not match.
+     * "AT+CWJAP" is a substring of "AT+CWJAPCFG" / "AT+CWJAPSOMETHING"
+     * but only the exact quoted form should count. */
+    const char *resp =
+        "+CMD:0,\"AT+CWJAPCFG\",1,1,1,0\r\n"
+        "\r\nOK\r\n";
 
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
-    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded,
-                                         (uint8_t)sizeof(decoded));
-    TEST_ASSERT_TRUE(ok);
-
-    uint64_t caps = 0;
-    char     fw_name[32];
-    bool ok2 = m1_esp32_caps_parse_payload(decoded,
-                                           (uint8_t)sizeof(m1_esp32_status_payload_t),
-                                           &caps, fw_name);
-    TEST_ASSERT_TRUE(ok2);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_802154);
-    TEST_ASSERT_EQUAL_STRING("AT-bedge117-2.0.2", fw_name);
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        resp, k_test_at_cmd_map, k_test_at_cmd_map_n);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps);
 }
 
-void test_at_hex_parse_no_prefix_returns_false(void)
+void test_at_cmd_parse_substring_in_text_does_not_match(void)
 {
-    /* Response without the "+GETSTATUSHEX:" prefix */
-    const char *bad = "\r\nOK\r\n";
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
-    bool ok = m1_esp32_caps_parse_at_hex(bad, decoded, (uint8_t)sizeof(decoded));
-    TEST_ASSERT_FALSE(ok);
+    /* If the command appears unquoted (e.g. in a comment-like line), it
+     * must not match because the parser anchors on the surrounding quotes. */
+    const char *resp =
+        "+CMD:0,\"AT\",0,0,0,1\r\n"
+        "Some leading line mentioning AT+DEAUTH without quotes\r\n"
+        "\r\nOK\r\n";
+
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        resp, k_test_at_cmd_map, k_test_at_cmd_map_n);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), caps);
 }
 
-void test_at_hex_parse_truncated_hex_returns_false(void)
+void test_at_cmd_response_valid_detector(void)
 {
-    /* Prefix present but hex string is too short (only 10 chars, not 82) */
-    const char *bad = "+GETSTATUSHEX:0102030405\r\nOK\r\n";
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
-    bool ok = m1_esp32_caps_parse_at_hex(bad, decoded, (uint8_t)sizeof(decoded));
-    TEST_ASSERT_FALSE(ok);
+    /* A real AT+CMD? response always contains at least one "+CMD:" line. */
+    TEST_ASSERT_TRUE(m1_esp32_caps_at_cmd_response_valid(k_resp_stock_at));
+    TEST_ASSERT_TRUE(m1_esp32_caps_at_cmd_response_valid(k_resp_neddy299));
+
+    /* Plain ERROR / OK responses or NULL should be rejected. */
+    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid("\r\nERROR\r\n"));
+    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid("\r\nOK\r\n"));
+    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid(""));
+    TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid(NULL));
 }
 
-void test_at_hex_parse_invalid_hex_char_returns_false(void)
+void test_at_cmd_parse_arbitrary_line_order(void)
 {
-    /* Build a valid response then corrupt one hex character */
-    char resp[200];
-    make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN,
-                     "test-fw");
-    /* Corrupt the 5th hex char (position 14 + 4 = 18) to a non-hex char */
-    resp[18] = 'G';
+    /* The probe must work regardless of ordering in the response. */
+    const char *resp =
+        "+CMD:42,\"AT+STASCAN\",1,1,1,0\r\n"
+        "+CMD:11,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
+        "+CMD:7,\"AT+CWJAP\",1,1,1,1\r\n"
+        "\r\nOK\r\n";
 
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
-    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
-    TEST_ASSERT_FALSE(ok);
-}
-
-void test_at_hex_parse_lowercase_hex_accepted(void)
-{
-    /* Build response, convert hex to lowercase, verify still parsed */
-    char resp[200];
-    make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_BLE_HID,
-                     "dag-fw");
-    /* Convert hex portion to lowercase */
-    const size_t pfx_len = 14u;  /* strlen("+GETSTATUSHEX:") */
-    for (size_t i = pfx_len; i < pfx_len + 82u && resp[i]; i++)
-        if (resp[i] >= 'A' && resp[i] <= 'F')
-            resp[i] = (char)(resp[i] - 'A' + 'a');
-
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
-    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
-    TEST_ASSERT_TRUE(ok);
-
-    uint64_t caps = 0;
-    char     fw_name[32];
-    bool ok2 = m1_esp32_caps_parse_payload(decoded,
-                                           (uint8_t)sizeof(m1_esp32_status_payload_t),
-                                           &caps, fw_name);
-    TEST_ASSERT_TRUE(ok2);
-    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), caps & M1_ESP32_CAP_BLE_HID);
-}
-
-void test_at_hex_parse_prefix_with_leading_content(void)
-{
-    /* Prefix may appear after some leading content in the response */
-    char resp[200];
-    snprintf(resp, sizeof(resp), "\r\nsome preamble\r\n");
-    const size_t pfx_offset = strlen(resp);
-
-    char hex_resp[200];
-    make_at_hex_resp(hex_resp, sizeof(hex_resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
-    /* Append to the preamble */
-    strncat(resp, hex_resp, sizeof(resp) - pfx_offset - 1u);
-
-    uint8_t decoded[sizeof(m1_esp32_status_payload_t)];
-    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
-    TEST_ASSERT_TRUE(ok);
-}
-
-void test_at_hex_parse_small_output_buffer_returns_false(void)
-{
-    char resp[200];
-    make_at_hex_resp(resp, sizeof(resp),
-                     M1_ESP32_CAPS_PROTO_VER, M1_ESP32_CAP_WIFI_SCAN, "fw");
-
-    /* Output buffer one byte too small */
-    uint8_t decoded[40];  /* sizeof(m1_esp32_status_payload_t) - 1 == 40 */
-    bool ok = m1_esp32_caps_parse_at_hex(resp, decoded, (uint8_t)sizeof(decoded));
-    TEST_ASSERT_FALSE(ok);
+    const uint64_t expected = M1_ESP32_CAP_STA_SCAN |
+                              M1_ESP32_CAP_802154   |
+                              M1_ESP32_CAP_WIFI_JOIN;
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        resp, k_test_at_cmd_map, k_test_at_cmd_map_n);
+    TEST_ASSERT_EQUAL_UINT64(expected, caps);
 }
 
 /* =========================================================================
@@ -475,19 +446,17 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);
-    RUN_TEST(test_tracked_fallback_profile_has_expected_caps);
-    RUN_TEST(test_at_bedge_dag_profile_exact_caps);
-    RUN_TEST(test_at_neddy299_profile_exact_caps);
 
-    /* AT hex response parser */
-    RUN_TEST(test_at_hex_parse_valid_sin360);
-    RUN_TEST(test_at_hex_parse_valid_at_fallback);
-    RUN_TEST(test_at_hex_parse_no_prefix_returns_false);
-    RUN_TEST(test_at_hex_parse_truncated_hex_returns_false);
-    RUN_TEST(test_at_hex_parse_invalid_hex_char_returns_false);
-    RUN_TEST(test_at_hex_parse_lowercase_hex_accepted);
-    RUN_TEST(test_at_hex_parse_prefix_with_leading_content);
-    RUN_TEST(test_at_hex_parse_small_output_buffer_returns_false);
+    /* AT+CMD? response parser */
+    RUN_TEST(test_at_cmd_parse_stock_at_only_wifi_join);
+    RUN_TEST(test_at_cmd_parse_bedge_dag_caps);
+    RUN_TEST(test_at_cmd_parse_neddy299_caps);
+    RUN_TEST(test_at_cmd_parse_empty_response_returns_zero);
+    RUN_TEST(test_at_cmd_parse_null_inputs_return_zero);
+    RUN_TEST(test_at_cmd_parse_requires_quoted_match);
+    RUN_TEST(test_at_cmd_parse_substring_in_text_does_not_match);
+    RUN_TEST(test_at_cmd_response_valid_detector);
+    RUN_TEST(test_at_cmd_parse_arbitrary_line_order);
 
     return UNITY_END();
 }

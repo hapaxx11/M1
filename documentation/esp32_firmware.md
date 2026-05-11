@@ -230,9 +230,10 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 
 ### Capability matrix by firmware variant
 
-Both SiN360 and AT firmware variants with the `feat/cmd_get_status` extension
-respond to one of the two capability probes and self-report their capabilities.
-The table below shows the expected `cap_bitmap` for each variant.
+Both SiN360 (via `CMD_GET_STATUS`) and AT firmware (via the stock `AT+CMD?`
+listing) self-report their capabilities at runtime — no custom AT extension is
+required on the ESP32 side.  The table below shows the expected `cap_bitmap`
+for each tracked variant.
 
 | Command family | SiN360 | bedge117 / dag | neddy299 |
 |----------------|:------:|:--------------:|:--------:|
@@ -251,10 +252,12 @@ The table below shows the expected `cap_bitmap` for each variant.
 | **IEEE 802.15.4** | — | ✅ | ✅ |
 | Classic BT management | — | — | — |
 
-AT capability mapping audit (tracked firmware set): the only AT-side commands
-currently mapped to capability bits are `AT+CWJAP` (WiFi join),
-`AT+BLEHID*` (BLE HID), `AT+ZIGSNIFF` (802.15.4), plus neddy299's
-`AT+DEAUTH` and `AT+STASCAN`.
+AT capability mapping audit (tracked firmware set): the AT commands currently
+mapped to capability bits by the runtime `AT+CMD?` probe are `AT+CWJAP`
+(WiFi join), `AT+BLEHIDINIT` (BLE HID), `AT+ZIGSNIFF` (802.15.4),
+`AT+DEAUTH` (deauth), and `AT+STASCAN` (station scan).  Adding a new
+mapping is a single-line edit to `s_at_cmd_cap_map[]` in
+`m1_csrc/m1_esp32_caps.c`.
 
 ### Probe sequence
 
@@ -264,16 +267,34 @@ When the M1 initialises the ESP32, it performs a two-step capability probe:
    firmware always responds.  AT firmware does not understand binary opcodes and
    will time out or return `RESP_ERR`.
 
-2. **AT+GETSTATUSHEX** (AT text command): tried only when step 1 fails and the AT
-   task (`get_esp32_main_init_status()`) is active.  AT firmware variants that
-   implement the `feat/cmd_get_status` extension will respond here with a
-   hex-encoded capability payload.
+2. **Stock `AT+CMD?`** (AT text command): tried only when step 1 fails and the
+   AT task (`get_esp32_main_init_status()`) is active.  `AT+CMD?` is part of
+   the standard ESP-AT command set
+   ([reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd))
+   and is supported unchanged by every tracked AT firmware variant (bedge117,
+   dag, neddy299) — no custom extension is required on the ESP32 side.
 
-3. **Known-firmware fallback**: applied when both steps 1 and 2 fail.  The M1
-   uses `M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK`, which is the union of
-   currently tracked ESP32 firmware capabilities:
-   - `M1_ESP32_CAP_PROFILE_SIN360` (SiN360 binary-SPI feature set)
-   - `M1_ESP32_CAP_PROFILE_AT_BEDGE_DAG` (AT WiFi join + BLE HID + 802.15.4)
+   The response lists every AT command the firmware understands.  A small
+   mapping table on the STM32 (`s_at_cmd_cap_map[]` in `m1_esp32_caps.c`)
+   translates the presence of specific commands into `M1_ESP32_CAP_*` bits:
+
+   | AT command | Capability bit |
+   |------------|----------------|
+   | `AT+CWJAP` | `M1_ESP32_CAP_WIFI_JOIN` |
+   | `AT+BLEHIDINIT` | `M1_ESP32_CAP_BLE_HID` |
+   | `AT+ZIGSNIFF` | `M1_ESP32_CAP_802154` |
+   | `AT+DEAUTH` | `M1_ESP32_CAP_DEAUTH` |
+   | `AT+STASCAN` | `M1_ESP32_CAP_STA_SCAN` |
+
+   Adding support for a new AT-side feature is a single-line edit to this
+   table — no curated fallback profile macros are required.
+
+3. **Fail-closed default**: applied when both steps 1 and 2 fail.  The
+   capability bitmap is left at zero and the firmware name is reported as
+   `"Unknown (fallback)"`.  Feature gates that check specific
+   `M1_ESP32_CAP_*` bits will all return false and the "Feature not
+   supported" UI will appear.  Granting capabilities we cannot verify risks
+   crashing on firmware that does not implement the underlying command.
 
 The capability cache is reset by `m1_esp32_caps_reset()` (called from
 `m1_esp32_deinit()`) so the next `m1_esp32_init()` / `esp32_main_init()` cycle
@@ -297,44 +318,70 @@ Respond to opcode `0x02` with a 41-byte `m1_esp32_status_payload_t` payload:
 > **not** on a compile flag or firmware name string.
 > See `m1_csrc/m1_esp32_caps.h` for the full API.
 
-### AT-Custom-Status (`AT+GETSTATUSHEX`) — alternative for AT firmware
+### `AT+CMD?` — runtime probe for AT firmware
 
-AT-based firmware variants cannot respond to binary SPI opcodes.  Instead, AT
-firmware that implements the `feat/cmd_get_status` extension provides the same
-capability information via an AT text command:
+AT-based firmware variants cannot respond to binary SPI opcodes.  Instead, the
+M1 leverages the stock ESP-AT command `AT+CMD?` to enumerate every AT command
+the firmware advertises and then maps a small set of known commands to
+`M1_ESP32_CAP_*` capability bits.  This works against any tracked AT firmware
+variant — stock ESP-AT, bedge117, dag, neddy299 — without requiring a custom
+extension on the ESP32 side.
+
+**Response format** (from the ESP-AT
+[reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd)):
 
 ```
-AT+GETSTATUSHEX
-+GETSTATUSHEX:01<16-hex-chars-cap_bitmap><64-hex-chars-fw_name>
++CMD:<index>,"<command name>",<test>,<query>,<set>,<exec>
+...
 OK
 ```
 
-The M1 automatically tries `AT+GETSTATUSHEX` as a secondary probe when the binary
-`CMD_GET_STATUS` request fails.  The probe uses `spi_AT_send_recv()` to send the
-AT command and `m1_esp32_caps_parse_at_hex()` (a pure-logic header helper) to
-decode the hex response into the standard 41-byte `m1_esp32_status_payload_t`
-layout, which is then parsed by the same `m1_esp32_caps_parse_payload()` used for
-binary responses.
+Example (abbreviated):
 
-**AT+GETSTATUSHEX response format:**
+```
++CMD:0,"AT",0,0,0,1
++CMD:1,"AT+CWJAP",1,1,1,1
++CMD:2,"AT+BLEHIDINIT",1,1,1,1
++CMD:3,"AT+ZIGSNIFF",1,1,1,0
+...
+OK
+```
 
-The hex string encodes the same 41-byte structure as the binary payload:
+**Implementation** — the M1:
 
-| Hex chars | Field | Description |
-|-----------|-------|-------------|
-| `[0..1]` | `proto_ver` | Must be `01` (1 byte) |
-| `[2..17]` | `cap_bitmap` | `M1_ESP32_CAP_*` bits, little-endian `uint64_t` (8 bytes) |
-| `[18..81]` | `fw_name` | Firmware identifier, null-padded to 32 bytes |
+1. Allocates an 8 KB response buffer from the FreeRTOS heap.  Stock ESP-AT
+   advertises ~150 commands at roughly 30–50 bytes each; 8 KB is generous
+   enough to capture the full list before `spi_AT_send_recv()` stops at the
+   trailing `OK\r\n`.
+2. Calls `spi_AT_send_recv("AT+CMD?\r\n", ...)`.
+3. Confirms the response is well-formed via
+   `m1_esp32_caps_at_cmd_response_valid()` (looks for at least one `+CMD:`
+   line).
+4. Walks `s_at_cmd_cap_map[]` and, for each entry, searches the response for
+   the quoted command name (e.g. `"AT+CWJAP"`).  The surrounding quotes are
+   significant — they prevent prefix collisions such as `AT+CWJAP` matching
+   `AT+CWJAPCFG`.
+5. Frees the response buffer.
+6. Records the firmware name as `"AT (probed)"` and the OR'd bitmap.
 
-Both uppercase and lowercase hex characters are accepted by the M1 parser.
+The parser (`m1_esp32_caps_parse_at_cmd_list()`) is a pure-logic, header-inline
+helper that takes the response buffer and the mapping table as inputs — fully
+host-testable with no transport dependencies.
 
-**For AT firmware authors:** implement `AT+GETSTATUSHEX` to return a
-hex-encoded `m1_esp32_status_payload_t`.  Set `cap_bitmap` to a `uint64_t`
-little-endian using the `M1_ESP32_CAP_*` bit positions from the table above.
-Refer to the `at_custom_status.c` in the `feat/cmd_get_status` branch
-of [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1)
-as a reference implementation (note: update the `cap_bitmap` field from `uint32_t`
-to `uint64_t` and use `M1_ESP32_CAP_*` bit positions to match protocol version 1).
+**Adding a new AT-side capability** is a single-line addition to
+`s_at_cmd_cap_map[]` in `m1_csrc/m1_esp32_caps.c`:
+
+```c
+static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
+    { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
+    { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
+    { "AT+ZIGSNIFF",   M1_ESP32_CAP_802154    },
+    { "AT+DEAUTH",     M1_ESP32_CAP_DEAUTH    },
+    { "AT+STASCAN",    M1_ESP32_CAP_STA_SCAN  },
+    /* Add new entries here.  The command name must include the "AT+" prefix
+     * and match exactly the string the firmware emits in the AT+CMD? response. */
+};
+```
 
 > **Rule for STM32 firmware contributors:** new ESP32-dependent features MUST gate
 > on the exact capability bits they need (`m1_esp32_require_cap` /

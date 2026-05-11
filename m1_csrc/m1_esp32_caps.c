@@ -14,9 +14,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <string.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
+#include "FreeRTOS.h"
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
 #include "m1_compile_cfg.h"
@@ -33,11 +35,53 @@ extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
 
 #define CAPS_QUERY_TIMEOUT_MS  500u   /* Brief: ESP32 is already running */
 
+/* Buffer for the AT+CMD? response.  Stock ESP-AT lists ~150-200 commands at
+ * roughly 30-50 bytes per line, so ~8KB is generous enough to capture the
+ * full list before spi_AT_send_recv() stops at "OK\r\n".  Allocated from the
+ * FreeRTOS heap to avoid stacking ~8KB inside a caller's task stack and to
+ * sidestep the newlib heap (which has been observed too small for incidental
+ * allocations post-SiN360 integration). */
+#define AT_CMD_RESP_BUF_SZ     8192u
+
+/* AT+CMD? probe needs a few seconds for the ESP32 to assemble and stream the
+ * full command list.  5 s is the standard "long" timeout used elsewhere in
+ * the AT bridge (e.g. spi_AT_send_recv 5 s in m1_http_client / m1_802154). */
+#define AT_CMD_PROBE_TIMEOUT_S 5
+
 /*************************** V A R I A B L E S ********************************/
 
 static uint64_t s_bitmap          = 0u;
 static bool     s_queried         = false;
 static char     s_fw_name[32]     = "Unknown";
+
+/* =========================================================================
+ * AT command → capability bit mapping table
+ *
+ * Consulted by m1_esp32_caps_parse_at_cmd_list() against the response of a
+ * stock ESP-AT `AT+CMD?` probe.  Each entry maps the full AT command name
+ * (including the "AT+" prefix) to the M1_ESP32_CAP_* bit that should be set
+ * when the connected ESP32 firmware advertises that command.
+ *
+ * Adding support for a new AT-side feature is a single-line edit to this
+ * table — no curated fallback profile macros are required.
+ *
+ * Currently mapped commands:
+ *   - "AT+CWJAP"      — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
+ *   - "AT+BLEHIDINIT" — stock ESP-AT (BLE HID example) → CAP_BLE_HID
+ *   - "AT+ZIGSNIFF"   — bedge117/dag/neddy299 custom    → CAP_802154
+ *   - "AT+DEAUTH"     — dag/neddy299 at_custom_deauth   → CAP_DEAUTH
+ *   - "AT+STASCAN"    — neddy299 at_custom_stascan      → CAP_STA_SCAN
+ * =========================================================================*/
+static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
+    { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
+    { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
+    { "AT+ZIGSNIFF",   M1_ESP32_CAP_802154    },
+    { "AT+DEAUTH",     M1_ESP32_CAP_DEAUTH    },
+    { "AT+STASCAN",    M1_ESP32_CAP_STA_SCAN  },
+};
+
+#define S_AT_CMD_CAP_MAP_N \
+    (sizeof(s_at_cmd_cap_map) / sizeof(s_at_cmd_cap_map[0]))
 
 /*************** I N T E R N A L   H E L P E R S *****************************/
 
@@ -57,65 +101,75 @@ void m1_esp32_caps_init(void)
      * If the ESP32 has not been initialised yet (or was deinitialized), return
      * without caching so the next call retries once the transport is ready.
      * Probing an uninitialised transport would time out and cache the
-     * compile-flag fallback, potentially granting capabilities that the
-     * connected firmware does not actually support. */
+     * fallback, potentially mis-attributing capabilities. */
     if (!m1_esp32_get_init_status())
         return;
 
-    /* Attempt to query the ESP32 for its capability descriptor */
+    /* Probe 1: binary CMD_GET_STATUS (0x02).  SiN360 binary-SPI firmware
+     * always responds here.  AT firmware does not understand binary opcodes
+     * and will return RESP_ERR or time out. */
     ret = m1_esp32_simple_cmd(CMD_GET_STATUS, &resp, CAPS_QUERY_TIMEOUT_MS);
 
     if (ret == 0 && resp.status == RESP_OK &&
         m1_esp32_caps_parse_payload(resp.payload, resp.payload_len,
                                     &bitmap, fw_name))
     {
-        /* Successful handshake — use the firmware-reported capabilities */
         s_bitmap = bitmap;
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+        s_queried = true;
+        return;
     }
-    else
-    {
-        /* Binary CMD_GET_STATUS failed or timed out.
-         *
-         * SiN360 binary-SPI firmware has supported CMD_GET_STATUS since its
-         * initial Hapax integration and always self-reports above.  A failure
-         * here therefore indicates an AT firmware variant (bedge117, neddy299,
-         * dag) that may or may not implement the feat/cmd_get_status extension.
-         *
-         * Attempt a secondary probe via the AT text command "AT+GETSTATUSHEX"
-         * (AT-Custom-Status).  AT firmware variants that implement this
-         * extension return a hex-encoded m1_esp32_status_payload_t so the
-         * same capability bitmap and firmware name can be extracted without
-         * a binary SPI opcode response. */
-        if (get_esp32_main_init_status())
-        {
-            char at_resp[100] = {0};
-            uint8_t decoded[sizeof(m1_esp32_status_payload_t)] = {0};
 
-            if (spi_AT_send_recv("AT+GETSTATUSHEX\r\n", at_resp,
-                                 (int)sizeof(at_resp), 2) == 0 &&
-                m1_esp32_caps_parse_at_hex(at_resp, decoded,
-                                           (uint8_t)sizeof(decoded)) &&
-                m1_esp32_caps_parse_payload(decoded,
-                                            (uint8_t)sizeof(m1_esp32_status_payload_t),
-                                            &bitmap, fw_name))
+    /* Probe 2: stock ESP-AT `AT+CMD?`.  This command is part of the basic
+     * ESP-AT command set and is supported by all tracked AT firmware
+     * variants (bedge117, dag, neddy299) without requiring any custom
+     * extension on the ESP32 side.  The response lists every AT command the
+     * firmware understands; we OR in capability bits for each command our
+     * mapping table recognises.
+     *
+     * The response can be several KB, so the buffer is allocated from the
+     * FreeRTOS heap rather than the caller's stack.  Allocation failure
+     * is treated identically to probe failure — fall through to the
+     * fail-closed default below. */
+    if (get_esp32_main_init_status())
+    {
+        char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
+        if (at_resp)
+        {
+            at_resp[0] = '\0';
+            (void)spi_AT_send_recv("AT+CMD?\r\n", at_resp,
+                                   (int)AT_CMD_RESP_BUF_SZ,
+                                   AT_CMD_PROBE_TIMEOUT_S);
+
+            if (m1_esp32_caps_at_cmd_response_valid(at_resp))
             {
-                s_bitmap = bitmap;
-                strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+                /* Probe succeeded — OR in every tracked AT command the
+                 * firmware advertised.  A response that contains "+CMD:"
+                 * lines but none of our tracked names is still a successful
+                 * probe; the bitmap simply reflects that the firmware has
+                 * no features we currently recognise. */
+                s_bitmap = m1_esp32_caps_parse_at_cmd_list(
+                    at_resp, s_at_cmd_cap_map, S_AT_CMD_CAP_MAP_N);
+                strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
                 s_fw_name[sizeof(s_fw_name) - 1] = '\0';
                 s_queried = true;
+                vPortFree(at_resp);
                 return;
             }
-        }
 
-        /* Neither binary CMD_GET_STATUS nor AT+GETSTATUSHEX succeeded.
-         * Fall back to the union of currently tracked firmware capabilities. */
-        s_bitmap = M1_ESP32_CAP_PROFILE_TRACKED_FALLBACK;
-        strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
-        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+            vPortFree(at_resp);
+        }
     }
 
+    /* Both probes failed — fail closed.  Feature gates that check specific
+     * M1_ESP32_CAP_* bits will all return false and the "Feature not
+     * supported" UI will appear.  This is intentional: granting capabilities
+     * we cannot verify risks crashing on firmware that does not implement
+     * the underlying command. */
+    s_bitmap = 0u;
+    strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
+    s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     s_queried = true;
 }
 
