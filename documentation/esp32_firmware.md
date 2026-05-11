@@ -350,9 +350,11 @@ OK
 **Implementation** — the M1:
 
 1. Allocates an 8 KB response buffer from the FreeRTOS heap.  Stock ESP-AT
-   advertises ~150 commands at roughly 30–50 bytes each; 8 KB is generous
-   enough to capture the full list before `spi_AT_send_recv()` stops at the
-   trailing `OK\r\n`.
+   advertises ~150 commands at roughly 30–50 bytes each (~4.5–7.5 KB total);
+   8 KB leaves margin for future command additions and for the custom
+   commands added by tracked AT firmware variants (bedge117 / dag /
+   neddy299).  The buffer is sized to fit the full `AT+CMD?` listing before
+   `spi_AT_send_recv()` stops at the trailing `OK\r\n`.
 2. Calls `spi_AT_send_recv("AT+CMD?\r\n", ...)`.
 3. Confirms the response is well-formed via
    `m1_esp32_caps_at_cmd_response_valid()` (looks for at least one `+CMD:`

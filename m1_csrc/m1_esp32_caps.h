@@ -274,9 +274,12 @@ m1_esp32_caps_parse_at_cmd_list(const char *resp_buf,
             continue;
 
         /* Build the quoted needle: e.g. "AT+CWJAP" → \"AT+CWJAP\".
-         * The longest tracked command name is well under 30 bytes; the
-         * 40-byte buffer leaves room for both quotes and the terminator.
-         * Names that would not fit are silently skipped (caps unaffected). */
+         * The needle buffer holds: 1 leading quote + name + 1 trailing
+         * quote + 1 null = nlen + 3 bytes.  40 bytes accommodates names up
+         * to 37 chars, comfortably larger than the longest tracked command
+         * ("AT+BLEHIDINIT" = 13 chars).  Names that would not fit are
+         * silently skipped (caps unaffected) rather than risking a stack
+         * overflow or truncated needle that could mis-match. */
         char needle[40];
         size_t nlen = strlen(name);
         if (nlen + 3u > sizeof(needle))

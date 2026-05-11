@@ -160,6 +160,11 @@ void m1_esp32_caps_init(void)
 
             vPortFree(at_resp);
         }
+        /* If pvPortMalloc returned NULL (FreeRTOS heap exhausted), we
+         * intentionally fall through to the fail-closed default below.
+         * Recording a partial bitmap based on an unprobed firmware would
+         * be worse than reporting "Unknown (fallback)" — the next call to
+         * m1_esp32_caps_init() (after a deinit/reset cycle) will retry. */
     }
 
     /* Both probes failed — fail closed.  Feature gates that check specific

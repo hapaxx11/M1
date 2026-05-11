@@ -272,6 +272,14 @@ void test_sin360_profile_has_expected_caps(void)
  * s_at_cmd_cap_map[] in m1_esp32_caps.c.
  * =========================================================================*/
 
+/* AT command name → capability bit mapping used by the parser tests.
+ *
+ * NOTE: This is intentionally a separate copy of the production table in
+ * `m1_csrc/m1_esp32_caps.c` (`s_at_cmd_cap_map[]`) — the test deliberately
+ * does not link in the production .c file (it would pull in FreeRTOS / HAL
+ * headers and the SPI transport).  When the production table changes, this
+ * test table must be updated in lockstep to keep the AT+CMD? parser
+ * coverage in sync with the firmware behaviour. */
 static const m1_esp32_at_cmd_cap_entry_t k_test_at_cmd_map[] = {
     { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
     { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
