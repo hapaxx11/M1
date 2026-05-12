@@ -260,6 +260,13 @@ typedef enum {
 } soh_measure;
 
 bool bq27421_init( uint16_t designCapacity_mAh, uint16_t terminateVoltage_mV, uint16_t taperCurrent_mA );
+
+typedef struct
+{
+    uint8_t subclass;
+    uint8_t block;
+    uint8_t data[32];
+} BQ27421_DataBlock;
 bool bq27421_update( bq27421_info *battery );
 bool bq27421_readDeviceType( uint16_t *deviceType );
 bool bq27421_readDeviceFWver( uint16_t *deviceFWver );

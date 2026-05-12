@@ -1,0 +1,1 @@
+**Battery: diagnostic CSV logger (`battery_log.c`)** — cherry-picked from Monstatek v0.8.0.2. Logs BQ27421 gauge state (voltage, SOC, SOH, current, capacity) to timestamped CSV files on the SD card. Also adds `bq27421_golden_image.h` / `golden_image_0330.h` calibration data headers and the `BQ27421_DataBlock` type to `m1_bq27421.h`.
