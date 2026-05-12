@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.14] - 2026-05-11
+
+### Added
+
+- **ESP32 capability layer: developer-only memory footprint accessors** —
+  `m1_esp32_caps_bss_bytes()` and `m1_esp32_caps_free_heap()` return compile-time
+  BSS and free-heap estimates (`M1_ESP32_FALLBACK_*` constants) for OOM diagnostics
+  and buffer-sizing decisions.  Profile is selected at runtime from the resolved
+  capability bitmap (`M1_ESP32_CAP_WIFI_JOIN` present → AT/C3; absent → SiN360).
+  These fields are **not** carried over the wire — `CMD_GET_STATUS` payload remains
+  41 bytes (`proto_ver` + `cap_bitmap` uint64_t + `fw_name[32]`).
+
+### Changed
+
+- **ESP32 capability layer: memory footprint estimates** — `bss_bytes` and `free_heap_bytes`
+  are now maintained as internal developer constants (`M1_ESP32_FALLBACK_*` in
+  `m1_csrc/m1_esp32_caps.h`) rather than wire-protocol fields.  They are always populated
+  from compile-time estimates based on source analysis of the known Hapax-fork ESP32
+  firmware releases (SiN360 ≈ 200 KB BSS / 160 KB heap; AT/C3 ≈ 284 KB BSS / 112 KB
+  heap) and are accessible via `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`
+  for OOM diagnostics.  The `CMD_GET_STATUS` wire payload is 41 bytes (down from 45).
+
+### Fixed
+
+- **Sub-GHz Read Raw: fixed "Record failed / Low memory" OOM on SiN360 firmware** — ring
+  buffer allocations (front-buffer up to 128 KB, ring-read 1 KB, SD-write 3.75 KB)
+  switched from the newlib heap (`malloc`) to the FreeRTOS heap (`pvPortMalloc`).
+  The SiN360 binary-SPI integration enlarged the firmware's BSS significantly,
+  leaving the newlib heap too small to hold the capture buffers; the FreeRTOS heap
+  retains >180 KB free and absorbs the allocation without issue.  The on-screen
+  "Heap free" counter now correctly reflects the pool actually used for recording
+  buffers.
 ## [0.9.1.13] - 2026-05-11
 
 ### Added
