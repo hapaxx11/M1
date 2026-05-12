@@ -13,6 +13,8 @@
 #ifndef BQ27421_GOLDEN_IMAGE_H_
 #define BQ27421_GOLDEN_IMAGE_H_
 
+#include <stdint.h>
+
 #define BQ27421_GI_DATA_SIZE   32U
 
 #define BIE_EN 		(1<<5)

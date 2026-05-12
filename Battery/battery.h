@@ -40,9 +40,9 @@ typedef struct
 	uint16_t    flags;
 	uint16_t    status;
 
-    uint16_t    designCapacity_mAh;
-    uint16_t    remainingCapacity_mAh;
-    uint16_t    fullChargeCapacity_mAh;
+	uint16_t    designCapacity_mAh;
+	uint16_t    remainingCapacity_mAh;
+	uint16_t    fullChargeCapacity_mAh;
 } S_M1_Power_Status_t;
 
 //extern S_M1_Power_Status_t power_status;

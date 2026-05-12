@@ -200,6 +200,10 @@ void battery_status_update(void)
 	power_status.battery_level = bat_info.soc_percent;
 	power_status.battery_health = bat_info.soh_percent;
 
+	power_status.designCapacity_mAh    = bat_info.designCapacity_mAh;
+	power_status.remainingCapacity_mAh = bat_info.remainingCapacity_mAh;
+	power_status.fullChargeCapacity_mAh = bat_info.fullChargeCapacity_mAh;
+
 	/* Voltage-based SoC correction: if the fuel gauge reports a suspiciously
 	 * low SoC, use the voltage-derived estimate as a floor when it indicates
 	 * more charge remains. This handles miscalibrated or drifted fuel gauges

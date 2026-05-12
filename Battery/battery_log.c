@@ -48,9 +48,15 @@ static bool battery_log_GenerateFileName(char *out, size_t len)
     {
         snprintf(out, len, "%s%03d%s", LOG_FILE_PREFIX, i, LOG_FILE_EXT);
 
-        if (f_stat(out, &fno) != FR_OK)
+        FRESULT fr = f_stat(out, &fno);
+        if (fr == FR_NO_FILE || fr == FR_NO_PATH)
         {
             return true;
+        }
+        if (fr != FR_OK)
+        {
+            /* SD error (not-ready, disk error, etc.) — abort search */
+            return false;
         }
     }
 
@@ -70,11 +76,20 @@ static FRESULT battery_log_WriteHeader(FIL *fp, const S_M1_Power_Status_t *log)
     if (len <= 0 || len >= (int)sizeof(line))
         return FR_INT_ERR;
 
-    strcat(line, header);
+    size_t header_len = strlen(header);
+    if ((size_t)len + header_len >= sizeof(line))
+        return FR_INT_ERR;
+    memcpy(line + len, header, header_len + 1u); /* +1 copies the NUL */
 
     s_logCount = 1;
 
-    return f_write(fp, line, strlen(line), &bw);
+    size_t total = (size_t)len + header_len;
+    FRESULT fr = f_write(fp, line, (UINT)total, &bw);
+    if (fr != FR_OK)
+        return fr;
+    if (bw != (UINT)total)
+        return FR_DENIED;
+    return FR_OK;
 }
 
 static FRESULT battery_log_WriteLine(FIL *fp, const S_M1_Power_Status_t *log)
@@ -83,8 +98,8 @@ static FRESULT battery_log_WriteLine(FIL *fp, const S_M1_Power_Status_t *log)
     UINT bw;
 
     int len = snprintf(line, sizeof(line),
-                       "%u,0x%04X,0x%04X,%u,%u,%u,%u,%+d,%u,%u,%u\r\n",
-				   s_logCount++,
+                       "%u,0x%04X,0x%04X,%u,%d,%u,%u,%+d,%u,%u,%u\r\n",
+                       (unsigned)s_logCount++,
                        log->status,
                        log->flags,
                        log->battery_temp,
@@ -99,12 +114,20 @@ static FRESULT battery_log_WriteLine(FIL *fp, const S_M1_Power_Status_t *log)
     if (len <= 0 || len >= (int)sizeof(line))
         return FR_INT_ERR;
 
-    return f_write(fp, line, len, &bw);
+    FRESULT fr = f_write(fp, line, (UINT)len, &bw);
+    if (fr != FR_OK)
+        return fr;
+    if (bw != (UINT)len)
+        return FR_DENIED;
+    return FR_OK;
 }
 
 bool battery_log_OpenNewFile(const S_M1_Power_Status_t *log)
 {
     FRESULT fr;
+
+    if (log == NULL)
+        return false;
 
     if (s_logOpened)
         return true;
@@ -143,10 +166,6 @@ bool battery_log_Save(const S_M1_Power_Status_t *log)
         if (!battery_log_OpenNewFile(log))
             return false;
     }
-
-    fr = f_lseek(&s_logFile, f_size(&s_logFile));
-    if (fr != FR_OK)
-        return false;
 
     fr = battery_log_WriteLine(&s_logFile, log);
     if (fr != FR_OK)
@@ -218,7 +237,7 @@ int WriteGoldenImage(const char *filename,
 
     fr = f_open(&s_giFile, filename, FA_CREATE_ALWAYS | FA_WRITE);
     if (fr != FR_OK)
-        return false;
+        return -1;
 
     f_printf(&s_giFile, "static const BQ27421_DataBlock bq27421_golden_image[] = {\n");
 

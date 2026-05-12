@@ -14,6 +14,7 @@
 #define GOLDEN_IMAGE_0330_H_
 
 #include "bq27421_golden_image.h"
+#include "m1_bq27421.h"
 
 static const BQ27421_DataBlock bq27421_golden_image[] = {
 
