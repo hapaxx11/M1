@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.15] - 2026-05-12
+
+### Added
+
+- **Battery: diagnostic CSV logger (`battery_log.c`)** — cherry-picked from Monstatek v0.8.0.2. Logs BQ27421 gauge state (voltage, SOC, SOH, current, capacity) to auto-numbered CSV files on the SD card (`battery_log_000.csv`, `battery_log_001.csv`, …). Also adds `bq27421_golden_image.h` / `golden_image_0330.h` calibration data headers and the `BQ27421_DataBlock` type to `m1_bq27421.h`.
 ## [0.9.1.14] - 2026-05-11
 
 ### Added
