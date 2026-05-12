@@ -22,6 +22,7 @@
 #include "uiView.h"
 #include "battery.h"
 #include "battery_soc_estimate.h"
+#include "bq27421_golden_image.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -115,7 +116,9 @@ void battery_service_init(void)
 	bq_25896_init();
 	bq25896_SetDefaultConfig();
 
-	if (!bq27421_init(2100, 3200, 256)) // Capacity(mAh), terminate voltage(mV), taper current = BQ25896 ITERM (256mA)
+	if (!bq27421_init(M1_BATT_DESIGN_CAPACITY,
+	                   BATT_TERMINATE_MV,
+	                   bq2589x_ITERCHG[BQ2589X_ITERCHG_DEFAULT_IDX])) // taper = BQ25896 ITERM
 	{
 		M1_LOG_E(M1_LOGDB_TAG, "bq27421_init failed");
 	}
