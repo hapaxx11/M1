@@ -1597,11 +1597,13 @@ uint8_t sub_ghz_replay_start_async(void)
 	if (subghz_replay_ret_code == 1)
 	{
 		/* ISM region blocked TX — sub_ghz_replay_start already showed the
-		 * user message box.  Full teardown: free buffers, drain queue, power
-		 * off radio.  Do NOT set s_replay_async_active = true. */
+		 * user message box.  Full teardown: free buffers and power off radio.
+		 * Do NOT reset the shared main event queue here, because this async
+		 * start path can run while the Read Raw scene is still active and
+		 * pending keypad/scene events must be preserved.  Do NOT set
+		 * s_replay_async_active = true. */
 		sub_ghz_raw_samples_deinit(false);
 		sub_ghz_ring_buffers_deinit();
-		xQueueReset(main_q_hdl);
 		menu_sub_ghz_exit();
 		return 1;
 	}
