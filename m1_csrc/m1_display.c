@@ -28,7 +28,7 @@
 #define MENU_M1_LOGO_ARRAY_LEN 		1
 #define MENU_M1_SCR_ANI_TIMEOUT		1000 // animation timeout in millisecond
 
-#define MENU_SCROLLBAR_POS_X				124
+#define MENU_SCROLLBAR_POS_X				123
 #define MENU_SCROLLBAR_POS_Y				0
 #define MENU_SCROLLBAR_WIDTH				3
 
@@ -38,7 +38,7 @@
 #define MAIN_MENU_TXT_TOP_POS_Y				12
 #define MAIN_MENU_TXT_SPACING_VERT			16
 #define MAIN_MENU_TEXT_FRAME_H				16
-#define MAIN_MENU_TEXT_FRAME_W				75
+#define MAIN_MENU_TEXT_FRAME_W				74
 #define MAIN_MENU_TEXT_FRAME_LEFT_POS_X		48
 
 #define MAIN_MENU_ICON_LEFT_POS_X			50
