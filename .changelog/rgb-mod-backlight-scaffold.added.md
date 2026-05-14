@@ -1,1 +1,0 @@
-Settings: add initial **RGB Backlight** support scaffold for the upcoming M1 RGB Mod, including a compile-gated driver API (`M1_HAS_RGB_BACKLIGHT`), a user-facing settings app (mode/brightness/color/installed), `settings.cfg` persistence keys, and host-side RGB animation/color-conversion tests.
