@@ -1783,7 +1783,10 @@ static uint8_t subghz_replay_run_blocking(void)
 		 * Allocation failures (4/5) were historically surfaced so callers
 		 * could show "Memory error"; preserve that behavior. */
 		if (start_ret == 4 || start_ret == 5)
+		{
+			subghz_replay_blocking_reset_queue();
 			return start_ret;
+		}
 		subghz_replay_blocking_reset_queue();
 		return 0;
 	}
@@ -2477,7 +2480,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 uint8_t sub_ghz_replay_prepare_flipper(const char *sub_path,
                                        const char **out_tmp_path)
 {
-	if (!out_tmp_path)
+	if (!sub_path || !out_tmp_path)
 		return 1;
 
 	uint8_t ret = subghz_replay_flipper_to_tmp(sub_path);

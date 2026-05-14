@@ -163,6 +163,10 @@ void test_blocking_wrapper_flushes_main_queue_before_returning(void)
                                  "blocking replay queue-reset helper must flush main_q_hdl");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(wrapper_norm, "subghz_replay_blocking_reset_queue();"),
                                  "blocking replay wrapper must flush queued events");
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(wrapper_norm,
+               "if (start_ret == 4 || start_ret == 5) { subghz_replay_blocking_reset_queue(); return start_ret; }"),
+        "blocking replay wrapper must flush main_q_hdl before surfacing allocation errors");
 
     free(wrapper_norm);
     free(helper_norm);
@@ -172,10 +176,28 @@ void test_blocking_wrapper_flushes_main_queue_before_returning(void)
     free(content);
 }
 
+void test_prepare_flipper_validates_source_and_output_pointers(void)
+{
+    char *content = read_file("m1_csrc/m1_sub_ghz.c");
+    char *prepare = slice_between(content,
+                                  "uint8_t sub_ghz_replay_prepare_flipper(",
+                                  "uint8_t sub_ghz_replay_flipper_file(");
+    char *prepare_norm = normalize_ws(prepare);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(prepare_norm, "if (!sub_path || !out_tmp_path) return 1;"),
+        "prepare_flipper must reject NULL source path and NULL out_tmp_path");
+
+    free(prepare_norm);
+    free(prepare);
+    free(content);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_async_abort_does_not_reset_main_queue);
     RUN_TEST(test_blocking_wrapper_flushes_main_queue_before_returning);
+    RUN_TEST(test_prepare_flipper_validates_source_and_output_pointers);
     return UNITY_END();
 }
