@@ -130,6 +130,10 @@ void test_async_abort_does_not_reset_main_queue(void)
 
     TEST_ASSERT_NULL_MESSAGE(strstr(abort_norm, "xQueueReset(main_q_hdl);"),
                              "async abort must not reset the shared main queue");
+    TEST_ASSERT_NULL_MESSAGE(strstr(abort_norm, "sub_ghz_tx_raw_deinit();"),
+                             "async abort must not call the resetting raw TX deinit wrapper");
+    TEST_ASSERT_NULL_MESSAGE(strstr(abort_norm, "sub_ghz_tx_raw_deinit_impl(true);"),
+                             "async abort must not invoke raw TX deinit with queue reset enabled");
 
     free(abort_norm);
     free(abort_fn);
