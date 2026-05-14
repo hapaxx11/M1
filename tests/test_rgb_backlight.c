@@ -54,6 +54,26 @@ void test_rainbow_color_advances_with_phase(void)
     TEST_ASSERT_FALSE((r0 == r1) && (g0 == g1) && (b0 == b1));
 }
 
+void test_rainbow_color_hits_known_hues(void)
+{
+    uint8_t r, g, b;
+
+    rgb_backlight_rainbow_color(0, 3600, 255, 255, &r, &g, &b);
+    TEST_ASSERT_EQUAL_UINT8(255, r);
+    TEST_ASSERT_EQUAL_UINT8(0, g);
+    TEST_ASSERT_EQUAL_UINT8(0, b);
+
+    rgb_backlight_rainbow_color(1200, 3600, 255, 255, &r, &g, &b);
+    TEST_ASSERT_EQUAL_UINT8(0, r);
+    TEST_ASSERT_EQUAL_UINT8(255, g);
+    TEST_ASSERT_EQUAL_UINT8(0, b);
+
+    rgb_backlight_rainbow_color(2400, 3600, 255, 255, &r, &g, &b);
+    TEST_ASSERT_EQUAL_UINT8(0, r);
+    TEST_ASSERT_EQUAL_UINT8(0, g);
+    TEST_ASSERT_EQUAL_UINT8(255, b);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -61,5 +81,6 @@ int main(void)
     RUN_TEST(test_rgb_to_grb_packing);
     RUN_TEST(test_breathing_profile_endpoints);
     RUN_TEST(test_rainbow_color_advances_with_phase);
+    RUN_TEST(test_rainbow_color_hits_known_hues);
     return UNITY_END();
 }

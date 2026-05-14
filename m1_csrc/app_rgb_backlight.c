@@ -223,14 +223,12 @@ void app_rgb_backlight_run(void)
         if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
         {
             sel = (uint8_t)((sel + 1U) % RGB_APP_ITEMS);
+            uint8_t vis = M1_MENU_VIS(RGB_APP_ITEMS);
+            if (sel >= (uint8_t)(scroll + vis))
             {
-                uint8_t vis = M1_MENU_VIS(RGB_APP_ITEMS);
-                if (sel >= (uint8_t)(scroll + vis))
-                {
-                    scroll = (uint8_t)(sel - vis + 1U);
-                }
-                if (sel == 0U) scroll = 0U;
+                scroll = (uint8_t)(sel - vis + 1U);
             }
+            if (sel == 0U) scroll = 0U;
             redraw = true;
             continue;
         }

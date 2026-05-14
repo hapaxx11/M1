@@ -42,6 +42,7 @@
 #define SETTINGS_TAG              "SETT"
 #define SETTINGS_FILE_PATH        "0:/System/settings.cfg"
 #define SETTINGS_FILE_MAX_SIZE    512
+#define RGB_BACKLIGHT_COLOR_KEY   "rgb_backlight_color="
 
 /* (ABOUT_BOX defines and SETTING_ABOUT_CHOICES_MAX removed — About screen
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
@@ -1009,11 +1010,11 @@ void settings_load_from_sd(void)
         }
     }
 
-    p = strstr(buf, "rgb_backlight_color=");
+    p = strstr(buf, RGB_BACKLIGHT_COLOR_KEY);
     if (p != NULL)
     {
         uint8_t r, g, b;
-        if (settings_parse_hex_color(p + 20, &r, &g, &b))
+        if (settings_parse_hex_color(p + strlen(RGB_BACKLIGHT_COLOR_KEY), &r, &g, &b))
         {
             rgb_backlight_set_color(r, g, b);
         }
