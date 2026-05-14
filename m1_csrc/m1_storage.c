@@ -20,14 +20,11 @@
 #include "main.h"
 #include "m1_sdcard.h"
 #include "m1_storage.h"
+#include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
 
 #define M1_LOGDB_TAG	"Storage"
-
-#define THIS_LCD_MENU_TEXT_FIRST_ROW_Y			11
-#define THIS_LCD_MENU_TEXT_FRAME_FIRST_ROW_Y	1
-#define THIS_LCD_MENU_TEXT_ROW_SPACE			10
 
 #define BROWSE_GUI_DISP_LINE_LEN_MAX			(M1_LCD_DISPLAY_WIDTH/M1_SUB_MENU_SFONT_WIDTH - 3)
 
@@ -312,8 +309,8 @@ void storage_explore(void)
 						if ( !sel_active )
 						{
 							browse_info_box_update(INFO_BOX_Y_POS_ROW_3, "RIGHT key to confirm");
-						    //u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 40, menu_text_y - THIS_LCD_MENU_TEXT_ROW_SPACE + 2, 10, 10, arrowleft_10x10);
-						    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 20, INFO_BOX_Y_POS_ROW_3 - THIS_LCD_MENU_TEXT_ROW_SPACE + 1, 10, 10, arrowright_10x10);
+						    //u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 40, menu_text_y - m1_menu_item_h() + 2, 10, 10, arrowleft_10x10);
+						    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 20, INFO_BOX_Y_POS_ROW_3 - m1_menu_item_h() + 1, 10, 10, arrowright_10x10);
 						    m1_u8g2_nextpage(); // Update display RAM
 						    sel_active = 1;
 						} // if ( !sel_active )
@@ -733,37 +730,38 @@ void storage_unmount(void)
 static void browse_gui_update(uint8_t sel_item, char *file_name)
 {
 	uint8_t prn_name[BROWSE_GUI_DISP_LINE_LEN_MAX + 1] = {0};
-	uint8_t i, len, menu_text_y;
+	uint8_t i, len;
 	char *print_ptr;
+	const uint8_t item_h   = m1_menu_item_h();
+	const uint8_t text_ofs = item_h - 1;
 
-	menu_text_y = THIS_LCD_MENU_TEXT_FIRST_ROW_Y;
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-	/* Graphic work starts here */
-	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
-	for (i=0; i<SDCARD_EXPLORE_FUNCTIONS_N; i++)
+	/* Title */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	m1_draw_text(&m1_u8g2, 2, 9, 120, "Files", TEXT_ALIGN_CENTER);
+	u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+	/* Menu items — scene-style rounded highlight */
+	u8g2_SetFont(&m1_u8g2, m1_menu_font());
+	for (i = 0; i < SDCARD_EXPLORE_FUNCTIONS_N; i++)
 	{
-		if ( i==sel_item )
+		uint8_t y = M1_MENU_AREA_TOP + i * item_h;
+		if (i == sel_item)
 		{
-			// Draw box for selected menu item with text color
-			u8g2_DrawBox(&m1_u8g2, 1, menu_text_y - THIS_LCD_MENU_TEXT_ROW_SPACE + 2, M1_LCD_SUB_MENU_TEXT_FRAME_W - 1, THIS_LCD_MENU_TEXT_ROW_SPACE);
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set to background color
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, sdcard_explore_options[i]);
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT); // return to text color
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N); // return to default font
+			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
-		else
-		{
-			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, sdcard_explore_options[i]);
-		}
-		menu_text_y += THIS_LCD_MENU_TEXT_ROW_SPACE;
-	} // for (i=0; i<SDCARD_EXPLORE_FUNCTIONS_N; i++)
+		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, sdcard_explore_options[i]);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	}
 
-	// Draw info box at the bottom
+	/* Info box at the bottom — current filename */
 	m1_info_box_display_init(true);
 	print_ptr = file_name;
 	len = strlen(file_name);
-	if ( len >= BROWSE_GUI_DISP_LINE_LEN_MAX )
+	if (len >= BROWSE_GUI_DISP_LINE_LEN_MAX)
 	{
 		strncpy(prn_name, file_name, BROWSE_GUI_DISP_LINE_LEN_MAX);
 		strcpy(&prn_name[BROWSE_GUI_DISP_LINE_LEN_MAX - 3], "...");
@@ -771,7 +769,7 @@ static void browse_gui_update(uint8_t sel_item, char *file_name)
 	}
 	m1_info_box_display_draw(INFO_BOX_ROW_1, print_ptr);
 
-    m1_u8g2_nextpage(); // Update display RAM
+	m1_u8g2_nextpage();
 
 } // static void browse_gui_update(uint8_t sel_item, char *file_name)
 
