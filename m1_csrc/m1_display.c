@@ -28,7 +28,7 @@
 #define MENU_M1_LOGO_ARRAY_LEN 		1
 #define MENU_M1_SCR_ANI_TIMEOUT		1000 // animation timeout in millisecond
 
-#define MENU_SCROLLBAR_POS_X				124
+#define MENU_SCROLLBAR_POS_X				123
 #define MENU_SCROLLBAR_POS_Y				0
 #define MENU_SCROLLBAR_WIDTH				3
 
@@ -38,7 +38,7 @@
 #define MAIN_MENU_TXT_TOP_POS_Y				12
 #define MAIN_MENU_TXT_SPACING_VERT			16
 #define MAIN_MENU_TEXT_FRAME_H				16
-#define MAIN_MENU_TEXT_FRAME_W				75
+#define MAIN_MENU_TEXT_FRAME_W				74
 #define MAIN_MENU_TEXT_FRAME_LEFT_POS_X		48
 
 #define MAIN_MENU_ICON_LEFT_POS_X			50
@@ -58,8 +58,8 @@
 #define SUB_MENU_TEXT_TOP_POS_Y				12
 #define SUB_MENU_TEXT_SPACING_VERT			16
 #define SUB_MENU_TEXT_FRAME_H				16
-#define SUB_MENU_TEXT_FRAME_W				(M1_LCD_DISPLAY_WIDTH - MENU_SCROLLBAR_WIDTH - 1)
-#define SUB_MENU_TEXT_FRAME_LEFT_POS_X		0
+#define SUB_MENU_TEXT_FRAME_LEFT_POS_X		1
+#define SUB_MENU_TEXT_FRAME_W				(M1_MENU_SCROLLBAR_X - SUB_MENU_TEXT_FRAME_LEFT_POS_X - 1)
 
 
 //************************** C O N S T A N T **********************************/

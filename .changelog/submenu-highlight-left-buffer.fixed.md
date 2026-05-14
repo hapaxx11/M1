@@ -1,0 +1,1 @@
+**Sub-menu selection highlight and scrollbar spacing polish** — The sub-menu selection highlight no longer extends to the very leftmost pixel, the scrollbar track/handle are shifted 1 px left so the handle no longer touches the rightmost display pixel, and the standard scene-list highlight width is reduced by 1 px to preserve a gap between highlight and scrollbar in dark mode.
