@@ -16,6 +16,8 @@
 
 #if defined(STM32H573xx)
 #include "stm32h5xx_hal.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #endif
 
 #define RGB_BACKLIGHT_DEFAULT_LED_COUNT     2U
@@ -29,7 +31,6 @@ typedef struct {
     rgb_backlight_color_t static_color;
     rgb_backlight_hw_config_t hw;
     uint32_t frame_phase_ms;
-    uint8_t frame[RGB_BACKLIGHT_MAX_LEDS * 3U];
 } rgb_backlight_state_t;
 
 static rgb_backlight_state_t s_rgb = {
@@ -50,26 +51,17 @@ __attribute__((weak)) void rgb_backlight_hw_write(const uint8_t *data, uint16_t 
     (void)len;
 }
 
-static uint32_t rgb_backlight_lock(void)
+static void rgb_backlight_lock(void)
 {
-#if defined(STM32H573xx) && defined(__arm__)
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    return primask;
-#else
-    return 0U;
+#if defined(STM32H573xx)
+    taskENTER_CRITICAL();
 #endif
 }
 
-static void rgb_backlight_unlock(uint32_t key)
+static void rgb_backlight_unlock(void)
 {
-#if defined(STM32H573xx) && defined(__arm__)
-    if ((key & 1U) == 0U)
-    {
-        __enable_irq();
-    }
-#else
-    (void)key;
+#if defined(STM32H573xx)
+    taskEXIT_CRITICAL();
 #endif
 }
 
@@ -100,23 +92,6 @@ static uint8_t clamp_led_count(uint8_t led_count)
         return RGB_BACKLIGHT_MAX_LEDS;
     }
     return led_count;
-}
-
-static void frame_set_pixel(uint8_t idx, uint8_t r, uint8_t g, uint8_t b)
-{
-    uint8_t base = (uint8_t)(idx * 3U);
-    if (s_rgb.hw.color_order == RGB_BACKLIGHT_ORDER_GRB)
-    {
-        s_rgb.frame[base + 0U] = g;
-        s_rgb.frame[base + 1U] = r;
-        s_rgb.frame[base + 2U] = b;
-    }
-    else
-    {
-        s_rgb.frame[base + 0U] = r;
-        s_rgb.frame[base + 1U] = g;
-        s_rgb.frame[base + 2U] = b;
-    }
 }
 
 void rgb_backlight_hsv_to_rgb(uint16_t hue_deg, uint8_t sat, uint8_t val,
@@ -187,13 +162,13 @@ void rgb_backlight_rainbow_color(uint32_t phase_ms,
 
 void rgb_backlight_set_config(const rgb_backlight_hw_config_t *cfg)
 {
-    uint32_t lock = rgb_backlight_lock();
+    rgb_backlight_lock();
     if (cfg)
     {
         s_rgb.hw.led_count = clamp_led_count(cfg->led_count);
         s_rgb.hw.color_order = cfg->color_order;
     }
-    rgb_backlight_unlock(lock);
+    rgb_backlight_unlock();
 }
 
 rgb_backlight_hw_config_t rgb_backlight_get_config(void)
@@ -203,9 +178,9 @@ rgb_backlight_hw_config_t rgb_backlight_get_config(void)
 
 void rgb_backlight_set_installed(bool installed)
 {
-    uint32_t lock = rgb_backlight_lock();
+    rgb_backlight_lock();
     s_rgb.installed = installed;
-    rgb_backlight_unlock(lock);
+    rgb_backlight_unlock();
 }
 
 bool rgb_backlight_is_installed(void)
@@ -215,22 +190,21 @@ bool rgb_backlight_is_installed(void)
 
 void rgb_backlight_init(void)
 {
-    uint32_t lock = rgb_backlight_lock();
+    rgb_backlight_lock();
     s_rgb.hw.led_count = clamp_led_count(s_rgb.hw.led_count);
     s_rgb.frame_phase_ms = 0U;
-    memset(s_rgb.frame, 0, sizeof(s_rgb.frame));
-    rgb_backlight_unlock(lock);
+    rgb_backlight_unlock();
 
     rgb_backlight_update();
 }
 
 void rgb_backlight_set_color(uint8_t r, uint8_t g, uint8_t b)
 {
-    uint32_t lock = rgb_backlight_lock();
+    rgb_backlight_lock();
     s_rgb.static_color.r = r;
     s_rgb.static_color.g = g;
     s_rgb.static_color.b = b;
-    rgb_backlight_unlock(lock);
+    rgb_backlight_unlock();
 }
 
 rgb_backlight_color_t rgb_backlight_get_color(void)
@@ -240,9 +214,9 @@ rgb_backlight_color_t rgb_backlight_get_color(void)
 
 void rgb_backlight_set_brightness(uint8_t brightness)
 {
-    uint32_t lock = rgb_backlight_lock();
+    rgb_backlight_lock();
     s_rgb.brightness = brightness;
-    rgb_backlight_unlock(lock);
+    rgb_backlight_unlock();
 }
 
 uint8_t rgb_backlight_get_brightness(void)
@@ -252,9 +226,9 @@ uint8_t rgb_backlight_get_brightness(void)
 
 void rgb_backlight_set_mode(rgb_backlight_mode_t mode)
 {
-    uint32_t lock = rgb_backlight_lock();
+    rgb_backlight_lock();
     s_rgb.mode = (mode < RGB_BACKLIGHT_MODE_COUNT) ? mode : RGB_BACKLIGHT_MODE_OFF;
-    rgb_backlight_unlock(lock);
+    rgb_backlight_unlock();
 }
 
 rgb_backlight_mode_t rgb_backlight_get_mode(void)
@@ -269,16 +243,22 @@ void rgb_backlight_update(void)
     rgb_backlight_color_t color;
     uint8_t brightness;
     bool installed;
+    rgb_backlight_color_order_t color_order;
+    uint8_t local_frame[RGB_BACKLIGHT_MAX_LEDS * 3U];
     uint32_t now_ms;
 
-    uint32_t lock = rgb_backlight_lock();
+    now_ms = rgb_backlight_now_ms();
+
+    /* Narrow critical section: snapshot mutable state and advance phase */
+    rgb_backlight_lock();
     led_count = s_rgb.hw.led_count;
+    color_order = s_rgb.hw.color_order;
     mode = s_rgb.mode;
     color = s_rgb.static_color;
     brightness = s_rgb.brightness;
     installed = s_rgb.installed;
-    now_ms = rgb_backlight_now_ms();
     s_rgb.frame_phase_ms = now_ms;
+    rgb_backlight_unlock();
 
     if (led_count > RGB_BACKLIGHT_MAX_LEDS)
     {
@@ -287,9 +267,8 @@ void rgb_backlight_update(void)
 
     if (!installed || mode == RGB_BACKLIGHT_MODE_OFF || brightness == 0U)
     {
-        memset(s_rgb.frame, 0, led_count * 3U);
-        rgb_backlight_unlock(lock);
-        rgb_backlight_hw_write(s_rgb.frame, (uint16_t)(led_count * 3U));
+        memset(local_frame, 0, led_count * 3U);
+        rgb_backlight_hw_write(local_frame, (uint16_t)(led_count * 3U));
         return;
     }
 
@@ -321,9 +300,20 @@ void rgb_backlight_update(void)
 
     for (uint8_t i = 0U; i < led_count; i++)
     {
-        frame_set_pixel(i, color.r, color.g, color.b);
+        uint8_t base = (uint8_t)(i * 3U);
+        if (color_order == RGB_BACKLIGHT_ORDER_GRB)
+        {
+            local_frame[base + 0U] = color.g;
+            local_frame[base + 1U] = color.r;
+            local_frame[base + 2U] = color.b;
+        }
+        else
+        {
+            local_frame[base + 0U] = color.r;
+            local_frame[base + 1U] = color.g;
+            local_frame[base + 2U] = color.b;
+        }
     }
 
-    rgb_backlight_unlock(lock);
-    rgb_backlight_hw_write(s_rgb.frame, (uint16_t)(led_count * 3U));
+    rgb_backlight_hw_write(local_frame, (uint16_t)(led_count * 3U));
 }

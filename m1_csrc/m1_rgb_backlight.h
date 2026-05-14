@@ -45,6 +45,12 @@ void rgb_backlight_set_color(uint8_t r, uint8_t g, uint8_t b);
 void rgb_backlight_set_brightness(uint8_t brightness);
 void rgb_backlight_update(void);
 
+/**
+ * Hardware transport hook — override this in the platform backend to
+ * drive the actual LED strip.  The default (weak) implementation is a no-op.
+ */
+void rgb_backlight_hw_write(const uint8_t *data, uint16_t len);
+
 void rgb_backlight_set_mode(rgb_backlight_mode_t mode);
 rgb_backlight_mode_t rgb_backlight_get_mode(void);
 

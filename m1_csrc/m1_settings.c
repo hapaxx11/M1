@@ -1081,7 +1081,6 @@ apply:
 
 #if M1_HAS_RGB_BACKLIGHT
     rgb_backlight_init();
-    rgb_backlight_update();
 #endif
 
     /* Apply dark mode — sends the ST7567 hardware inverse display command
