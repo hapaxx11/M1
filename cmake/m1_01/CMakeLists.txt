@@ -509,6 +509,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_fw_update.c
     ../../m1_csrc/m1_fw_update_bl.c
     ../../m1_csrc/m1_rpc.c
+    ../../m1_csrc/m1_rgb_backlight.c
     ../../m1_csrc/m1_gpio.c
     ../../m1_csrc/m1_gpio_scene.c
     ../../m1_csrc/m1_gpio_uart.c
@@ -545,6 +546,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_system_dashboard.c
     ../../m1_csrc/m1_system_dashboard_helpers.c
     ../../m1_csrc/m1_storage.c
+    ../../m1_csrc/app_rgb_backlight.c
     ../../m1_csrc/subghz_freq_presets.c
     ../../m1_csrc/m1_sub_ghz.c
     # === Generic Scene Framework ===
@@ -639,5 +641,4 @@ target_link_libraries(m1_01 INTERFACE
 if(CMAKE_C_STANDARD LESS 11)
     message(ERROR "Generated code requires C11 or higher")
 endif()
-
 

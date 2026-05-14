@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include "m1_compile_cfg.h"
 #include "stm32h5xx_hal.h"
 #include "app_freertos.h"
 #include "m1_tasks.h"
@@ -28,6 +29,9 @@
 #include "m1_wifi.h"
 #include "m1_bt.h"
 #include "m1_clock_util.h"
+#if M1_HAS_RGB_BACKLIGHT
+#include "m1_rgb_backlight.h"
+#endif
 
 /*************************** D E F I N E S ************************************/
 
@@ -333,6 +337,9 @@ void system_periodic_task(void *param)
         	} // if ( event_change & BUTTON_EVENT_ACTIVE )
         	battery_indicator_update();
         	lcd_saver_update();
+#if M1_HAS_RGB_BACKLIGHT
+            rgb_backlight_update();
+#endif
         } // if ( m1_device_stat.op_mode != M1_OPERATION_MODE_FIRMWARE_UPDATE )
 
         vTaskDelay(pdMS_TO_TICKS(SYSTEM_PERIODIC_TASK_DELAY));
