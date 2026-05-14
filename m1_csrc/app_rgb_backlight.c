@@ -3,8 +3,10 @@
 /*
  * app_rgb_backlight.c
  *
- * User-facing RGB backlight settings app for the upcoming M1 RGB Mod.
- * Uses a compact config menu with font-aware helpers.
+ * User-facing RGB backlight settings app for the M1 RGB Mod (SK6805-1515,
+ * 2 LEDs on PD3).  Hardware presence is auto-detected at init; the Installed
+ * row reflects the last detected state and may be toggled manually for the
+ * current session.
  */
 
 #include <stdint.h>

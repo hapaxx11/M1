@@ -3,9 +3,9 @@
 /*
  * m1_rgb_backlight.h
  *
- * RGB backlight state/animation driver for the upcoming M1 RGB Mod.
- * Hardware transport is intentionally abstracted because final accessory
- * pinout/protocol details are still in flux.
+ * RGB backlight driver for the M1 RGB Mod (SK6805-1515 NeoPixel, 2 LEDs on PD3).
+ * State/animation logic is platform-independent; the hardware transport backend
+ * in m1_rgb_backlight.c drives the SK6805 via GPIO bit-bang on STM32H573.
  */
 
 #ifndef M1_RGB_BACKLIGHT_H_
@@ -46,8 +46,17 @@ void rgb_backlight_set_brightness(uint8_t brightness);
 void rgb_backlight_update(void);
 
 /**
- * Hardware transport hook — override this in the platform backend to
- * drive the actual LED strip.  The default (weak) implementation is a no-op.
+ * Probe for a connected SK6805 chain by temporarily driving PD3 low through
+ * a pull-down and reading the line level.  Returns true if a chain is detected.
+ * After calling this function PD3 is left in input mode; call
+ * rgb_backlight_init() to restore it to the SK6805 output configuration.
+ */
+bool rgb_backlight_detect(void);
+
+/**
+ * Hardware transport — writes one GRB frame to the SK6805 chain via GPIO
+ * bit-bang on PD3.  Interrupts are fully disabled for the duration of the
+ * transmission so the tight NeoPixel timing is not disturbed.
  */
 void rgb_backlight_hw_write(const uint8_t *data, uint16_t len);
 
