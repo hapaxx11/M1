@@ -15,6 +15,7 @@
 
 #include "m1_io_defs.h"
 #include "m1_ring_buffer.h"
+#include <stdbool.h>
 
 #define SUBGHZ_RX_TIMER                 TIM1        /*!< Timer used for Sub-GHz decoding */
 /* TIM prescaler is computed to have 1 μs as time base. TIM frequency (in MHz) / (prescaler+1) */
@@ -168,6 +169,130 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
  * @retval 0 = success, non-zero = error code
  */
 uint8_t sub_ghz_replay_datafile(const char *sgh_path, uint32_t frequency, uint8_t modulation);
+
+/* ========================================================================== *
+ * Async TX replay primitives (Phase 1 of #384).
+ *
+ * Use these from a scene's on_event handler to run TX without blocking the
+ * main task.  The Q_EVENT_SUBGHZ_TX consumer must be the scene's own event
+ * handler — it calls sub_ghz_replay_continue_async() on every completion event.
+ *
+ * Typical scene usage:
+ *
+ *   1. prepare_datafile()  OR  prepare_flipper(&tmp_path)  to set globals.
+ *      If prepare_flipper() succeeded, store *tmp_path in scene state so the
+ *      scene can f_unlink() the temp file after the TX completes or is aborted.
+ *   2. sub_ghz_replay_start_async()   — arms TIM1+DMA and returns immediately.
+ *   3. On every Q_EVENT_SUBGHZ_TX received in the scene's on_event:
+ *        sub_ghz_replay_continue_async(false)
+ *      Returning SUBGHZ_REPLAY_ASYNC_DONE or _ERROR means teardown completed
+ *      internally — the scene transitions back to its pre-TX state.
+ *   4. On BACK (or scene exit) during TX:
+ *        sub_ghz_replay_abort()
+ *      Synchronous teardown.  A late Q_EVENT_SUBGHZ_TX arriving after this
+ *      call is safe — continue_async() returns DONE immediately when no replay
+ *      is active.
+ *
+ * Blocking wrappers (sub_ghz_replay_flipper_file / sub_ghz_replay_datafile)
+ * are reimplemented on top of these primitives plus a private mini event
+ * loop, so the Saved-PACKET emulate path and Playlist behaviour are
+ * unchanged.
+ * ========================================================================== */
+
+/** Async TX status returned by sub_ghz_replay_continue_async(). */
+typedef enum {
+    SUBGHZ_REPLAY_ASYNC_RUNNING = 0, /**< TX still in progress — more events pending */
+    SUBGHZ_REPLAY_ASYNC_DONE,        /**< TX completed cleanly — teardown done */
+    SUBGHZ_REPLAY_ASYNC_ERROR,       /**< TX failed — teardown done */
+} sub_ghz_replay_async_status_t;
+
+/**
+ * @brief  Prepare globals for an M1 native .sgh stream.  Validates inputs and
+ *         sets the replay frequency/band/modulation globals plus
+ *         datfile_info.dat_filename so a subsequent sub_ghz_replay_start_async()
+ *         call streams from the given path.
+ *
+ * No hardware is touched here.  No temp file is created.
+ *
+ * @retval 0 = success, 1 = invalid args, 3 = unsupported frequency
+ */
+uint8_t sub_ghz_replay_prepare_datafile(const char *sgh_path,
+                                        uint32_t frequency, uint8_t modulation);
+
+/**
+ * @brief  Convert a Flipper .sub file (or M1 PACKET .sgh) into a temp .sgh
+ *         and prepare globals for streaming.
+ *
+ * On success, *out_tmp_path is set to a static string giving the path of the
+ * temp file on the SD card.  Ownership of that file transfers to the caller:
+ * the caller MUST f_unlink() it after the TX completes or is aborted.
+ *
+ * On failure, the temp file (if any was created) has already been unlinked.
+ *
+ * @param  sub_path      Path to the source Flipper .sub / M1 PACKET file.
+ * @param  out_tmp_path  Optional; if non-NULL, *out_tmp_path is filled in on
+ *                       success with the temp .sgh path.  May be NULL when
+ *                       the caller does not need to manage the temp file.
+ *
+ * @retval 0 = success, non-zero = same error code set as
+ *         sub_ghz_replay_flipper_file()
+ */
+uint8_t sub_ghz_replay_prepare_flipper(const char *sub_path,
+                                       const char **out_tmp_path);
+
+/**
+ * @brief  Arm the radio for async TX after a prepare_* call.
+ *
+ * Allocates ring buffers, opens the streaming file, calls menu_sub_ghz_init(),
+ * and starts the first TIM1+DMA TX burst.  Returns immediately; further work
+ * happens in the DMA TC ISR which posts Q_EVENT_SUBGHZ_TX.
+ *
+ * On failure, all internal resources have been released and the radio is
+ * powered off — the caller does NOT need to call abort.
+ *
+ * @retval 0 = success (TX armed and running), non-zero = error code:
+ *         1 = ISM-restricted (handled internally with a user message), 4 =
+ *         ring-buffer OOM, 5 = streaming sample OOM, other = TX init error.
+ */
+uint8_t sub_ghz_replay_start_async(void);
+
+/**
+ * @brief  Advance the async TX on a Q_EVENT_SUBGHZ_TX completion event.
+ *
+ * @param  repeat_on_idle  true  → auto-restart on natural end (continuous
+ *                                  emulation; matches the legacy blocking
+ *                                  loop's auto-restart-until-BACK behaviour).
+ *                         false → return DONE on first natural end (one-shot;
+ *                                  the scene's TX state expects this).
+ *
+ * On DONE or ERROR, all teardown is performed internally before returning.
+ * Subsequent calls return DONE immediately.
+ *
+ * Safe to call when no replay is active — returns DONE.
+ */
+sub_ghz_replay_async_status_t sub_ghz_replay_continue_async(bool repeat_on_idle);
+
+/**
+ * @brief  Abort any in-progress async replay synchronously.
+ *
+ * Performs full teardown: stops TX DMA, frees ring buffers and streaming
+ * samples, turns the RGB blink off, deasserts SI4463 ENA via
+ * menu_sub_ghz_exit().  Safe to call when no replay is active (no-op).
+ *
+ * A late Q_EVENT_SUBGHZ_TX arriving after this returns is safe:
+ * continue_async() detects the inactive state and returns DONE without
+ * touching hardware.
+ */
+void sub_ghz_replay_abort(void);
+
+/**
+ * @brief  True iff an async replay is currently armed/running.
+ *
+ * The Read Raw scene uses this to decide whether a BACK event during a TX
+ * state should call abort, and to gate late Q_EVENT_SUBGHZ_TX events that
+ * may race the abort.
+ */
+bool sub_ghz_replay_async_is_active(void);
 
 /* Scene-based UI entry point (new Flipper-inspired architecture) */
 void sub_ghz_scene_entry(void);

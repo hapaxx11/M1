@@ -1526,167 +1526,263 @@ static const char *stristr(const char *haystack, const char *needle)
 
 
 /*============================================================================*/
-/**
- * @brief  Shared TX event loop for raw signal replay.
- *
- * Preconditions (caller must set before calling):
- *   - datfile_info.dat_filename  set to the .sgh file to stream
- *   - subghz_replay_freq, subghz_replay_mod, subghz_replay_band,
- *     subghz_replay_channel, subghz_custom_freq_hz, subghz_scan_config set
- *
- * @param  unlink_path  If non-NULL, f_unlink() this path after TX completes.
- *                      Pass the temp file path for converter-path callers,
- *                      NULL for the direct-replay path (no file to delete).
- * @retval 0 = success, non-zero = error code
+/* Async TX replay state                                                       */
+/*============================================================================*/
+/*
+ * Path of the temporary M1 NOISE .sgh file produced by the Flipper-format
+ * converter (sub_ghz_replay_prepare_flipper).  File-scope so it can be
+ * returned to scene callers via out_tmp_path.
  */
-static uint8_t subghz_run_raw_replay(const char *unlink_path)
+#define FLIPPER_SUB_TMP_SGH   "/SUBGHZ/_flipper_tmp.sgh"
+
+/*
+ * Tracks whether sub_ghz_replay_start_async() has armed TX and whether
+ * a Q_EVENT_SUBGHZ_TX completion is still pending.  Set true on a
+ * successful start, cleared on every teardown path (natural completion,
+ * error, abort, ISM-block).  Late completion events arriving after a teardown
+ * are filtered by this flag in sub_ghz_replay_continue_async().
+ */
+static volatile bool s_replay_async_active = false;
+
+/* Forward declaration of the internal teardown shared by completion / abort
+ * / start-failure paths.  Defined below alongside the async primitives. */
+static void subghz_replay_async_teardown(void);
+
+/*============================================================================*/
+/**
+ * @brief  Arm the radio for an async TX after a prepare_* call.
+ *
+ * See doc in m1_sub_ghz.h.
+ *
+ * On success the SI4463 is powered up, TIM1+DMA is armed, the LED fast-blink
+ * is on, and the DMA TC ISR will post Q_EVENT_SUBGHZ_TX events.
+ *
+ * Failure paths fully tear down internal resources before returning so the
+ * caller does NOT need to call abort.
+ *
+ * @retval 0 = success, 1 = ISM-restricted (user already informed via message
+ *         box), 4 = ring-buffer OOM, 5 = streaming sample init failed,
+ *         6 = TX init / sub_ghz_replay_start internal error.
+ */
+/*============================================================================*/
+uint8_t sub_ghz_replay_start_async(void)
 {
-	/* ── Init buffers and open the file for streaming ── */
+	/* Defensive: clear any stale "active" flag from a prior aborted run.
+	 * subghz_replay_async_teardown() is a safe no-op when nothing is held. */
+	if (s_replay_async_active)
+		subghz_replay_async_teardown();
+
 	if (sub_ghz_ring_buffers_init())
-	{
-		if (unlink_path) f_unlink(unlink_path);
 		return 4;
-	}
+
 	if (sub_ghz_raw_samples_init())
 	{
 		sub_ghz_raw_samples_deinit(false);
 		sub_ghz_ring_buffers_deinit();
-		if (unlink_path) f_unlink(unlink_path);
 		return 5;
 	}
 
-	/* ── Start first TX ──
-	 *
-	 * Keep a minimal replay-safe draw here before entering the blocking replay.
-	 * Some scene-based callers do not force an immediate TX frame first
-	 * (for example, some only set a redraw flag just before calling into this
-	 * function), and their scene loop cannot process that redraw until this
-	 * replay returns.  Preserving this local init prevents stale UI during TX.
-	 *
-	 * The legacy antenna/freq/"Press OK to replay" overlay was removed because
-	 * it overwrote the scene's display with a non-conformant inverted
-	 * full-width bottom bar (issue: "Emulate Subghz workflow").  The event
-	 * loop below auto-restarts the TX on Q_EVENT_SUBGHZ_TX completion, so
-	 * manual OK-to-replay is unnecessary; BACK still exits. */
 	menu_sub_ghz_init();
 
-	M1_LOG_I(M1_LOGDB_TAG, "SGH replay: band=%d freq=%lu samples_init OK\r\n",
+	M1_LOG_I(M1_LOGDB_TAG, "SGH replay (async): band=%d freq=%lu samples_init OK\r\n",
 	         subghz_replay_band, subghz_custom_freq_hz);
 
 	subghz_replay_ret_code = sub_ghz_replay_start(false, subghz_replay_band,
 	                                              subghz_replay_channel, 255);
 
-	M1_LOG_I(M1_LOGDB_TAG, "SGH replay: replay_start returned %d\r\n",
+	M1_LOG_I(M1_LOGDB_TAG, "SGH replay (async): replay_start returned %d\r\n",
 	         subghz_replay_ret_code);
 
 	if (subghz_replay_ret_code == 1)
 	{
-		/* ISM region blocked TX */
+		/* ISM region blocked TX — sub_ghz_replay_start already showed the
+		 * user message box.  Full teardown: free buffers, drain queue, power
+		 * off radio.  Do NOT set s_replay_async_active = true. */
 		sub_ghz_raw_samples_deinit(false);
 		sub_ghz_ring_buffers_deinit();
 		xQueueReset(main_q_hdl);
 		menu_sub_ghz_exit();
-		if (unlink_path) f_unlink(unlink_path);
-		return 0;
+		return 1;
 	}
-	else if (subghz_replay_ret_code)
+	else if (subghz_replay_ret_code == 0)
 	{
-		double_buffer_ptr_id = 1;
-		m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M,
-		                  LED_FASTBLINK_ONTIME_M);
-		/* Scene-rendered "TX..." indicator is preserved on screen; no legacy
-		 * "Press OK to replay" bar is drawn here.  Auto-restart on
-		 * Q_EVENT_SUBGHZ_TX (below) replays continuously until BACK. */
-	}
-	else
-	{
+		/* TX init failed inside sub_ghz_replay_start without ISM block.
+		 * Surface a generic error and tear down. */
 		char err_msg[48];
 		snprintf(err_msg, sizeof(err_msg), "Band:%d Freq:%lu",
 		         subghz_replay_band, subghz_custom_freq_hz);
 		m1_message_box(&m1_u8g2, "Replay failed!", err_msg, "", "BACK to return");
+		sub_ghz_raw_samples_deinit(false);
+		sub_ghz_ring_buffers_deinit();
+		sub_ghz_tx_raw_deinit();
+		menu_sub_ghz_exit();
+		return 6;
 	}
 
-	/* ── Self-contained event loop (blocks until BACK) ── */
-	{
-		S_M1_Main_Q_t q_item;
-		S_M1_Buttons_Status btn;
-		BaseType_t qret;
-		bool running = true;
+	/* Success — first DMA burst is in flight, completion will arrive as
+	 * Q_EVENT_SUBGHZ_TX.  Arm LED blink and flip the active flag last so
+	 * a racing completion event sees a fully-consistent state. */
+	double_buffer_ptr_id = 1;
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M,
+	                  LED_FASTBLINK_ONTIME_M);
+	s_replay_async_active = true;
+	return 0;
+}
 
-		while (running)
+/*============================================================================*/
+/**
+ * @brief  Internal teardown for async replay.
+ *
+ * Idempotent: safe to call multiple times.  Frees buffers, stops TX DMA,
+ * turns off LED blink, drains the main queue, and powers down the SI4463.
+ * Leaves s_replay_async_active = false.
+ */
+/*============================================================================*/
+static void subghz_replay_async_teardown(void)
+{
+	if (!s_replay_async_active)
+		return;
+	s_replay_async_active = false;
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+	sub_ghz_raw_tx_stop();
+	sub_ghz_raw_samples_deinit(false);
+	sub_ghz_ring_buffers_deinit();
+	sub_ghz_tx_raw_deinit();
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
+	subghz_decenc_ctl.ntx_raw_repeat = 0;
+
+	/* Drain any pending Q_EVENT_SUBGHZ_TX so they do not race the next user
+	 * action.  Keypad events live on a different queue and are preserved. */
+	xQueueReset(main_q_hdl);
+	menu_sub_ghz_exit();
+}
+
+/*============================================================================*/
+/**
+ * @brief  Advance the async TX on a Q_EVENT_SUBGHZ_TX completion event.
+ *         See doc in m1_sub_ghz.h.
+ */
+/*============================================================================*/
+sub_ghz_replay_async_status_t sub_ghz_replay_continue_async(bool repeat_on_idle)
+{
+	/* Late or stray completion: nothing armed.  This branch is the safety
+	 * net for late Q_EVENT_SUBGHZ_TX events arriving after sub_ghz_replay_abort(). */
+	if (!s_replay_async_active)
+		return SUBGHZ_REPLAY_ASYNC_DONE;
+
+	subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
+
+	if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
+	{
+		if (repeat_on_idle)
 		{
-			qret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+			/* Continuous emulation — auto-restart for one more cycle.  Used
+			 * by the legacy blocking wrappers (Saved-PACKET / Playlist). */
+			sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
+			                   subghz_replay_band,
+			                   subghz_replay_channel,
+			                   tx_power_values[subghz_tx_power_idx]);
+			subghz_replay_ret_code = sub_ghz_raw_replay_init();
+			if (subghz_replay_ret_code != 1)
+			{
+				double_buffer_ptr_id = 1;
+				subghz_decenc_ctl.ntx_raw_repeat =
+				    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
+				return SUBGHZ_REPLAY_ASYNC_RUNNING;
+			}
+			/* Restart failed — fall through to teardown */
+			subghz_replay_async_teardown();
+			return SUBGHZ_REPLAY_ASYNC_ERROR;
+		}
+
+		/* One-shot — natural completion. */
+		subghz_replay_async_teardown();
+		return SUBGHZ_REPLAY_ASYNC_DONE;
+	}
+
+	return SUBGHZ_REPLAY_ASYNC_RUNNING;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Abort an in-progress async replay synchronously.
+ *         See doc in m1_sub_ghz.h.
+ */
+/*============================================================================*/
+void sub_ghz_replay_abort(void)
+{
+	subghz_replay_async_teardown();
+}
+
+bool sub_ghz_replay_async_is_active(void)
+{
+	return s_replay_async_active;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Private mini event loop used by the legacy blocking wrappers
+ *         (sub_ghz_replay_flipper_file / sub_ghz_replay_datafile).
+ *
+ * Runs entirely on top of the async primitives — receives main_q_hdl events,
+ * drives sub_ghz_replay_continue_async(true) on every Q_EVENT_SUBGHZ_TX, and
+ * exits when the user presses BACK (calling sub_ghz_replay_abort()) or when
+ * an error tears the replay down naturally.
+ *
+ * The auto-restart-until-BACK semantics of the legacy loop are preserved by
+ * passing repeat_on_idle=true to continue_async.  This keeps the Saved-PACKET
+ * emulate path and Playlist behaviour unchanged.
+ *
+ * Preconditions: a sub_ghz_replay_prepare_* call has set the globals.
+ *
+ * @retval 0 = always (matches legacy behaviour where ISM-block / TX init error
+ *         were absorbed and a message box was shown to the user).
+ */
+/*============================================================================*/
+static uint8_t subghz_replay_run_blocking(void)
+{
+	uint8_t start_ret = sub_ghz_replay_start_async();
+	if (start_ret != 0)
+	{
+		/* ISM block (1) and TX init error (6) already showed a message box
+		 * and tore everything down.  Return 0 to match the legacy contract:
+		 * blocking wrappers absorb these and treat them as completed. */
+		return 0;
+	}
+
+	S_M1_Main_Q_t q_item;
+	S_M1_Buttons_Status btn;
+	BaseType_t qret;
+	bool running = true;
+
+	while (running)
+	{
+		qret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (qret != pdTRUE)
+			continue;
+
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			qret = xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (qret != pdTRUE)
 				continue;
 
-			if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				qret = xQueueReceive(button_events_q_hdl, &btn, 0);
-				if (qret != pdTRUE)
-					continue;
-
-				if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					m1_led_fast_blink(LED_BLINK_ON_RGB,
-					                  LED_FASTBLINK_PWM_OFF,
-					                  LED_FASTBLINK_ONTIME_OFF);
-					sub_ghz_raw_samples_deinit(false);
-					sub_ghz_ring_buffers_deinit();
-					sub_ghz_tx_raw_deinit();
-					running = false;
-				}
-				else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					/* Replay again */
-					if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
-					{
-						sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
-						                   subghz_replay_band,
-						                   subghz_replay_channel,
-						                   tx_power_values[subghz_tx_power_idx]);
-						subghz_replay_ret_code = sub_ghz_raw_replay_init();
-						if (subghz_replay_ret_code != 1)
-						{
-							double_buffer_ptr_id = 1;
-							subghz_decenc_ctl.ntx_raw_repeat =
-							    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
-							m1_led_fast_blink(LED_BLINK_ON_RGB,
-							                  LED_FASTBLINK_PWM_M,
-							                  LED_FASTBLINK_ONTIME_M);
-						}
-						else
-						{
-							sub_ghz_raw_tx_stop();
-							sub_ghz_raw_samples_deinit(false);
-							sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED,
-							                   SUB_GHZ_BAND_EOL, 0, 0);
-							/* Manual retry failed — surface the error via the
-							 * standard message box (which matches the rest of
-							 * this codebase) instead of drawing a legacy
-							 * inverted bottom bar that conflicts with the
-							 * caller scene's UI.  After dismissal, exit the
-							 * loop so the scene can redraw cleanly. */
-							m1_led_fast_blink(LED_BLINK_ON_RGB,
-							                  LED_FASTBLINK_PWM_OFF,
-							                  LED_FASTBLINK_ONTIME_OFF);
-							sub_ghz_ring_buffers_deinit();
-							sub_ghz_tx_raw_deinit();
-							m1_message_box(&m1_u8g2, "Replay failed!",
-							               "TX init error", "",
-							               "BACK to return");
-							running = false;
-						}
-					}
-				}
+				sub_ghz_replay_abort();
+				running = false;
 			}
-			else if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
+			else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				/* Continue double-buffered TX streaming */
-				subghz_replay_ret_code =
-				    sub_ghz_replay_continue(subghz_replay_ret_code);
+				/* OK in the blocking wrapper is a manual retry hook for the
+				 * (rare) case where the TX engine stalled in IDLE between
+				 * completion events.  With repeat_on_idle=true in
+				 * continue_async, the engine restarts itself, so this is
+				 * primarily defensive and matches the legacy event loop. */
 				if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
 				{
-					/* Auto-restart: loop continuously until BACK */
 					sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
 					                   subghz_replay_band,
 					                   subghz_replay_channel,
@@ -1697,24 +1793,37 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 						double_buffer_ptr_id = 1;
 						subghz_decenc_ctl.ntx_raw_repeat =
 						    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
+						m1_led_fast_blink(LED_BLINK_ON_RGB,
+						                  LED_FASTBLINK_PWM_M,
+						                  LED_FASTBLINK_ONTIME_M);
 					}
 					else
 					{
-						/* Restart failed — stop */
-						m1_led_fast_blink(LED_BLINK_ON_RGB,
-						                  LED_FASTBLINK_PWM_OFF,
-						                  LED_FASTBLINK_ONTIME_OFF);
-						subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE;
+						sub_ghz_replay_abort();
+						m1_message_box(&m1_u8g2, "Replay failed!",
+						               "TX init error", "",
+						               "BACK to return");
+						running = false;
 					}
 				}
 			}
-		} /* while (running) */
+		}
+		else if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
+		{
+			sub_ghz_replay_async_status_t st =
+			    sub_ghz_replay_continue_async(true);
+			if (st != SUBGHZ_REPLAY_ASYNC_RUNNING)
+			{
+				/* Auto-restart failed or replay completed.  Teardown done. */
+				running = false;
+			}
+		}
 	}
 
-	xQueueReset(main_q_hdl);
-	menu_sub_ghz_exit();
+	/* Safety net: ensure full teardown.  No-op when already torn down. */
+	if (s_replay_async_active)
+		sub_ghz_replay_abort();
 
-	if (unlink_path) f_unlink(unlink_path);
 	return 0;
 }
 
@@ -1741,13 +1850,31 @@ uint8_t sub_ghz_replay_datafile(const char *sgh_path,
                                  uint32_t    frequency,
                                  uint8_t     modulation)
 {
+	uint8_t ret = sub_ghz_replay_prepare_datafile(sgh_path, frequency, modulation);
+	if (ret != 0)
+		return ret;
+	return subghz_replay_run_blocking();
+}
+
+/*============================================================================*/
+/**
+ * @brief  Prepare globals for an async M1 native .sgh stream.
+ *         Shared by the blocking wrapper and the Read Raw scene's async path.
+ *
+ * See doc in m1_sub_ghz.h.
+ */
+/*============================================================================*/
+uint8_t sub_ghz_replay_prepare_datafile(const char *sgh_path,
+                                        uint32_t frequency,
+                                        uint8_t modulation)
+{
 	if (sgh_path == NULL || frequency == 0)
 		return 1;
 
 	if (frequency < SUBGHZ_MIN_FREQ_HZ || frequency > SUBGHZ_MAX_FREQ_HZ)
 		return 3;
 
-	/* Set globals used by the shared event loop and radio setup */
+	/* Set globals used by the shared start_async path */
 	subghz_replay_freq    = (float)frequency / 1000000.0f;
 	subghz_replay_mod     = modulation;
 	subghz_custom_freq_hz = frequency;
@@ -1764,22 +1891,28 @@ uint8_t sub_ghz_replay_datafile(const char *sgh_path,
 	        sizeof(datfile_info.dat_filename) - 1);
 	datfile_info.dat_filename[sizeof(datfile_info.dat_filename) - 1] = '\0';
 
-	/* Run the shared event loop; pass NULL so no file is unlinked on exit */
-	return subghz_run_raw_replay(NULL);
+	return 0;
 }
 
 /*============================================================================*/
 /**
-  * @brief  Convert a Flipper .sub file to M1's .sgh format and replay it.
-  *         Handles RAW type .sub files.  Streams via a temp file on SD card
-  *         so there is no sample-count limit.
-  * @param  sub_path  Path to the .sub file on the SD card
-  * @retval 0 = success, non-zero = error
-  */
+ * @brief  Convert a Flipper .sub file to a temp M1 .sgh and set up globals.
+ *         Internal helper shared by both the blocking wrapper
+ *         (sub_ghz_replay_flipper_file) and the async scene path
+ *         (sub_ghz_replay_prepare_flipper).
+ *
+ *         Handles RAW type .sub files and M1 PACKET .sgh files.  Streams
+ *         via a temp file on SD card so there is no sample-count limit.
+ *
+ *         On failure all temp files have been unlinked already; the caller
+ *         does NOT need to clean up.
+ *
+ * @param  sub_path  Path to the .sub / .sgh source file on the SD card
+ * @retval 0 = success, non-zero = error
+ */
 /*============================================================================*/
-uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
+static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 {
-#define FLIPPER_SUB_TMP_SGH   "/SUBGHZ/_flipper_tmp.sgh"
 #define FLIPPER_SUB_LINE_MAX  4096
 #define FLIPPER_SUB_OUT_MAX   256
 
@@ -2285,13 +2418,58 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	        sizeof(datfile_info.dat_filename) - 1);
 	datfile_info.dat_filename[sizeof(datfile_info.dat_filename) - 1] = '\0';
 
-	/* ── 6. Init buffers, stream, and run TX event loop via shared helper ── */
-	return subghz_run_raw_replay(FLIPPER_SUB_TMP_SGH);
+	/* Conversion done; globals set.  Caller is responsible for driving TX
+	 * (sub_ghz_replay_start_async + continue_async) and for unlinking the
+	 * temp .sgh after completion / abort. */
+	return 0;
 
-#undef FLIPPER_SUB_TMP_SGH
 #undef FLIPPER_SUB_LINE_MAX
 #undef FLIPPER_SUB_OUT_MAX
-} // uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
+} // subghz_replay_flipper_to_tmp
+
+/*============================================================================*/
+/**
+ * @brief  Public converter API used by the Read Raw scene's async path.
+ *         See doc in m1_sub_ghz.h.
+ */
+/*============================================================================*/
+uint8_t sub_ghz_replay_prepare_flipper(const char *sub_path,
+                                       const char **out_tmp_path)
+{
+	uint8_t ret = subghz_replay_flipper_to_tmp(sub_path);
+	if (ret != 0)
+		return ret;
+	if (out_tmp_path)
+		*out_tmp_path = FLIPPER_SUB_TMP_SGH;
+	return 0;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Blocking wrapper used by the Saved-PACKET emulate path and the
+ *         Playlist scene.  Reimplemented on top of the async primitives plus
+ *         the private mini event loop in subghz_replay_run_blocking().
+ *
+ * @param  sub_path  Source .sub / .sgh file path.
+ * @retval 0 = success, non-zero = converter error.
+ */
+/*============================================================================*/
+uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
+{
+	uint8_t ret = subghz_replay_flipper_to_tmp(sub_path);
+	if (ret != 0)
+		return ret;
+
+	ret = subghz_replay_run_blocking();
+
+	/* Temp file ownership ends with this call.  The blocking wrapper is the
+	 * temp-file owner (the legacy path on which Saved-PACKET / Playlist
+	 * depends).  Scene callers that want async TX must use
+	 * sub_ghz_replay_prepare_flipper() + sub_ghz_replay_start_async() and
+	 * unlink the temp file from their own scene state. */
+	f_unlink(FLIPPER_SUB_TMP_SGH);
+	return ret;
+}
 
 
 /*============================================================================*/
