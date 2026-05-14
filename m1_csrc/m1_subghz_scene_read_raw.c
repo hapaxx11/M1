@@ -105,7 +105,6 @@ extern void sub_ghz_rx_deinit_ext(void);
 extern void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power);
 extern uint8_t sub_ghz_ring_buffers_init_ext(void);
 extern void sub_ghz_ring_buffers_deinit_ext(void);
-extern void sub_ghz_tx_raw_deinit_ext(void);
 extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern uint8_t subghz_record_mode_flag;
@@ -146,9 +145,9 @@ static char raw_filepath[RAW_FILEPATH_MAX + 1];
  * SubGhzEventTxComplete (natural end), SubGhzEventBack (user abort), or
  * scene_on_exit (forced abort).
  *
- * tx_origin_state tracks the state we entered TX from so the post-TX path
- * can return to either Idle (freshly-recorded) or Loaded (pre-existing file).
- * Computed via subghz_read_raw_state_after_tx() from the current raw_state. */
+ * Post-TX return state is derived from the current raw_state via
+ * subghz_read_raw_state_after_tx() so TX always returns to Idle
+ * (freshly-recorded) or Loaded (pre-existing file). */
 static char tx_unlink_path[RAW_FILEPATH_MAX + 4]; /* "0:" + path + NUL */
 
 /* ============================================================================
@@ -215,7 +214,6 @@ static const char *extract_filename(const char *fullpath)
  */
 static void start_passive_rx(SubGhzApp *app)
 {
-    sub_ghz_tx_raw_deinit_ext();
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
     menu_sub_ghz_init();
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
@@ -866,11 +864,18 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     uint8_t start_ret = sub_ghz_replay_start_async();
                     if (start_ret != 0)
                     {
-                        /* ISM-block (1) showed a message box internally; other
-                         * codes mean TX init failed before any DMA was armed.
+                        /* ISM-block (1) and generic TX-init failure (6) show a
+                         * message box internally; other codes mean TX setup
+                         * failed before any DMA was armed.
                          * In either case, the async driver has fully torn
                          * down internal resources.  Clean up scene-local
                          * temp file and restore passive RX. */
+                        if (start_ret == 4 || start_ret == 5)
+                        {
+                            m1_message_box(&m1_u8g2, "Send failed",
+                                           "Memory error", "",
+                                           "BACK to return");
+                        }
                         if (tx_unlink_path[0] != '\0')
                         {
                             f_unlink(tx_unlink_path);

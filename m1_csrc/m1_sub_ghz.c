@@ -1734,8 +1734,9 @@ bool sub_ghz_replay_async_is_active(void)
  *
  * Preconditions: a sub_ghz_replay_prepare_* call has set the globals.
  *
- * @retval 0 = always (matches legacy behaviour where ISM-block / TX init error
- *         were absorbed and a message box was shown to the user).
+ * @retval 0 = completed or internally-handled failure (legacy behaviour for
+ *         ISM-block / generic TX init errors), 4/5 = allocation failures
+ *         surfaced to callers so scenes can show "Memory error".
  */
 /*============================================================================*/
 static uint8_t subghz_replay_run_blocking(void)
@@ -1745,7 +1746,12 @@ static uint8_t subghz_replay_run_blocking(void)
 	{
 		/* ISM block (1) and TX init error (6) already showed a message box
 		 * and tore everything down.  Return 0 to match the legacy contract:
-		 * blocking wrappers absorb these and treat them as completed. */
+		 * blocking wrappers absorb these and treat them as completed.
+		 *
+		 * Allocation failures (4/5) were historically surfaced so callers
+		 * could show "Memory error"; preserve that behavior. */
+		if (start_ret == 4 || start_ret == 5)
+			return start_ret;
 		return 0;
 	}
 
@@ -2433,11 +2439,13 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 uint8_t sub_ghz_replay_prepare_flipper(const char *sub_path,
                                        const char **out_tmp_path)
 {
+	if (!out_tmp_path)
+		return 1;
+
 	uint8_t ret = subghz_replay_flipper_to_tmp(sub_path);
 	if (ret != 0)
 		return ret;
-	if (out_tmp_path)
-		*out_tmp_path = FLIPPER_SUB_TMP_SGH;
+	*out_tmp_path = FLIPPER_SUB_TMP_SGH;
 	return 0;
 }
 

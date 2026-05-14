@@ -230,11 +230,11 @@ uint8_t sub_ghz_replay_prepare_datafile(const char *sgh_path,
  * On failure, the temp file (if any was created) has already been unlinked.
  *
  * @param  sub_path      Path to the source Flipper .sub / M1 PACKET file.
- * @param  out_tmp_path  Optional; if non-NULL, *out_tmp_path is filled in on
- *                       success with the temp .sgh path.  May be NULL when
- *                       the caller does not need to manage the temp file.
+ * @param  out_tmp_path  Required; *out_tmp_path is filled in on success with
+ *                       the temp .sgh path so the caller can unlink it after
+ *                       TX completion / abort.
  *
- * @retval 0 = success, non-zero = same error code set as
+ * @retval 0 = success, 1 = invalid args, non-zero otherwise = same error code set as
  *         sub_ghz_replay_flipper_file()
  */
 uint8_t sub_ghz_replay_prepare_flipper(const char *sub_path,
