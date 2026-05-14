@@ -384,12 +384,6 @@ typedef enum {
 	SUBGHZ_RECORD_DISPLAY_PARAM_SYS_ERROR
 } S_M1_SubGHz_Record_Display_Param_t;
 
-typedef enum {
-	SUBGHZ_REPLAY_DISPLAY_PARAM_ACTIVE = 0,
-	SUBGHZ_REPLAY_DISPLAY_PARAM_PLAY,
-	SUBGHZ_REPLAY_DISPLAY_PARAM_SYS_ERROR
-} S_M1_SubGHz_Replay_Display_Param_t;
-
 /***************************** V A R I A B L E S ******************************/
 
 TIM_HandleTypeDef   timerhdl_subghz_tx;
@@ -419,7 +413,6 @@ uint8_t subghz_tx_tc_flag;
 static uint8_t subghz_tx_start_high = 1; // 1 = next buffer starts HIGH (mark), 0 = LOW (space)
 uint8_t subghz_record_mode_flag = 0;
 static uint32_t subghz_record_total_samples = 0;  /* Total samples saved to file during recording */
-static uint8_t subghz_uiview_gui_latest_param;
 static uint8_t subghz_replay_ret_code;
 static uint8_t subghz_replay_mod;
 static uint8_t subghz_replay_band, subghz_replay_channel;
@@ -1408,59 +1401,6 @@ static bool subghz_save_history_entry(const SubGHz_History_Entry_t *entry)
 
 /*============================================================================*/
 /**
-  * @brief
-  * @param
-  * @retval
-  */
-/*============================================================================*/
-static void subghz_replay_play_gui_update(uint8_t param)
-{
-	uint8_t freq_text[20];
-
-	switch (param)
-	{
-		case SUBGHZ_REPLAY_DISPLAY_PARAM_ACTIVE:
-			// This call required for page drawing in mode 1
-			m1_u8g2_firstpage();
-			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			m1_float_to_string(freq_text, subghz_replay_freq, 3);
-			strcat(freq_text, "MHz ");
-			strcat(freq_text, subghz_modulation_text[subghz_replay_mod]);
-			u8g2_DrawStr(&m1_u8g2, 40, 10, freq_text);
-
-			u8g2_DrawXBMP(&m1_u8g2, 0, 5, 50, 27, subghz_antenna_50x27);
-			break;
-
-		case SUBGHZ_REPLAY_DISPLAY_PARAM_PLAY:
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-			u8g2_DrawXBMP(&m1_u8g2, 2, 52, 10, 10, target_10x10); // draw TARGET icon
-			u8g2_DrawStr(&m1_u8g2, 14, 61, "Press OK to replay");
-			break;
-
-		case SUBGHZ_REPLAY_DISPLAY_PARAM_SYS_ERROR:
-			// Display error message on screen
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-			u8g2_DrawXBMP(&m1_u8g2, 2, 52, 10, 10, error_10x10); // draw ERROR icon
-			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-			u8g2_DrawStr(&m1_u8g2, 14, 61, "File error! BACK to return");
-			break;
-
-		default:
-			break;
-	} // switch (param)
-
-	m1_u8g2_nextpage(); // Update display RAM
-    subghz_uiview_gui_latest_param = param; // Update new param
-} // static void subghz_replay_play_gui_update(uint8_t param)
-
-
-/*============================================================================*/
-/**
   * @brief  Load Sub-GHz data file from SD card
   * @param
   * @retval 0 if success
@@ -1615,9 +1555,17 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 		return 5;
 	}
 
-	/* ── Draw replay screen and start first TX ── */
+	/* ── Start first TX ──
+	 *
+	 * No GUI is drawn here.  Callers are scene-based (Read Raw, Saved, Playlist,
+	 * Bind Wizard) and already render their own "TX..." indicator before
+	 * invoking this blocking replay.  The legacy antenna/freq/"Press OK to
+	 * replay" overlay was removed because it overwrote the scene's display
+	 * with a non-conformant inverted full-width bottom bar (issue: "Emulate
+	 * Subghz workflow").  The event loop below auto-restarts the TX on
+	 * Q_EVENT_SUBGHZ_TX completion, so manual OK-to-replay is unnecessary;
+	 * BACK still exits. */
 	menu_sub_ghz_init();
-	subghz_replay_play_gui_update(SUBGHZ_REPLAY_DISPLAY_PARAM_ACTIVE);
 
 	M1_LOG_I(M1_LOGDB_TAG, "SGH replay: band=%d freq=%lu samples_init OK\r\n",
 	         subghz_replay_band, subghz_custom_freq_hz);
@@ -1643,7 +1591,9 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 		double_buffer_ptr_id = 1;
 		m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M,
 		                  LED_FASTBLINK_ONTIME_M);
-		subghz_replay_play_gui_update(SUBGHZ_REPLAY_DISPLAY_PARAM_PLAY);
+		/* Scene-rendered "TX..." indicator is preserved on screen; no legacy
+		 * "Press OK to replay" bar is drawn here.  Auto-restart on
+		 * Q_EVENT_SUBGHZ_TX (below) replays continuously until BACK. */
 	}
 	else
 	{
@@ -1707,8 +1657,21 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 							sub_ghz_raw_samples_deinit(false);
 							sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED,
 							                   SUB_GHZ_BAND_EOL, 0, 0);
-							subghz_replay_play_gui_update(
-							    SUBGHZ_REPLAY_DISPLAY_PARAM_SYS_ERROR);
+							/* Manual retry failed — surface the error via the
+							 * standard message box (which matches the rest of
+							 * this codebase) instead of drawing a legacy
+							 * inverted bottom bar that conflicts with the
+							 * caller scene's UI.  After dismissal, exit the
+							 * loop so the scene can redraw cleanly. */
+							m1_led_fast_blink(LED_BLINK_ON_RGB,
+							                  LED_FASTBLINK_PWM_OFF,
+							                  LED_FASTBLINK_ONTIME_OFF);
+							sub_ghz_ring_buffers_deinit();
+							sub_ghz_tx_raw_deinit();
+							m1_message_box(&m1_u8g2, "Replay failed!",
+							               "TX init error", "",
+							               "BACK to return");
+							running = false;
 						}
 					}
 				}
