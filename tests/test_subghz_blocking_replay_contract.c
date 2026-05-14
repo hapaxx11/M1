@@ -146,23 +146,29 @@ void test_blocking_wrapper_flushes_main_queue_before_returning(void)
     /* The end marker intentionally brackets the whole blocking-wrapper region.
      * If helper ordering changes, update these markers so the test keeps
      * checking the wrapper contract instead of silently widening its scope. */
+    char *helper = slice_between(content,
+                                 "static void subghz_replay_blocking_reset_queue(void)",
+                                 "static uint8_t subghz_replay_run_blocking(void)");
     char *wrapper = slice_between(content,
                                   "static uint8_t subghz_replay_run_blocking(void)",
                                   "uint8_t sub_ghz_replay_datafile(");
     char *content_norm = normalize_ws(content);
+    char *helper_norm = normalize_ws(helper);
     char *wrapper_norm = normalize_ws(wrapper);
 
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(content_norm,
                                         "static void subghz_replay_blocking_reset_queue(void)"),
                                  "missing blocking replay queue-reset helper definition");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(content_norm, "xQueueReset(main_q_hdl);"),
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(helper_norm, "xQueueReset(main_q_hdl);"),
                                  "blocking replay queue-reset helper must flush main_q_hdl");
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(wrapper_norm, "subghz_replay_blocking_reset_queue();"),
                                  "blocking replay wrapper must flush queued events");
 
     free(wrapper_norm);
+    free(helper_norm);
     free(content_norm);
     free(wrapper);
+    free(helper);
     free(content);
 }
 
