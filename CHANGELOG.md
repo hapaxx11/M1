@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.18] - 2026-05-14
+
+### Added
+
+- Settings: add initial **RGB Backlight** support scaffold for the upcoming M1 RGB Mod, including a compile-gated driver API (`M1_HAS_RGB_BACKLIGHT`), a user-facing settings app (mode/brightness/color/installed), `settings.cfg` persistence keys, and host-side RGB animation/color-conversion tests.
+- **RGB Mod: SK6805-1515 hardware backend finalised** — replaced the placeholder `rgb_backlight_hw_write()` with a real GPIO bit-bang driver targeting PD3 (GPIOD).
+  Hardware is auto-detected at boot via a pull-down probe on PD3 (HIGH = chain present).
+  Timing constants calibrated for 250 MHz Cortex-M33: T1H 720 ns / T0H 240 ns / reset 60 µs via DWT busy-wait.
+  Interrupts are fully disabled during frame transmission to preserve strict NeoPixel waveform timing.
 ## [0.9.1.17] - 2026-05-14
 
 ### Changed
