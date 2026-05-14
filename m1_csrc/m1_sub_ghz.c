@@ -1557,14 +1557,17 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 
 	/* ── Start first TX ──
 	 *
-	 * No GUI is drawn here.  Callers are scene-based (Read Raw, Saved, Playlist,
-	 * Bind Wizard) and already render their own "TX..." indicator before
-	 * invoking this blocking replay.  The legacy antenna/freq/"Press OK to
-	 * replay" overlay was removed because it overwrote the scene's display
-	 * with a non-conformant inverted full-width bottom bar (issue: "Emulate
-	 * Subghz workflow").  The event loop below auto-restarts the TX on
-	 * Q_EVENT_SUBGHZ_TX completion, so manual OK-to-replay is unnecessary;
-	 * BACK still exits. */
+	 * Keep a minimal replay-safe draw here before entering the blocking replay.
+	 * Some scene-based callers do not force an immediate TX frame first
+	 * (for example, some only set a redraw flag just before calling into this
+	 * function), and their scene loop cannot process that redraw until this
+	 * replay returns.  Preserving this local init prevents stale UI during TX.
+	 *
+	 * The legacy antenna/freq/"Press OK to replay" overlay was removed because
+	 * it overwrote the scene's display with a non-conformant inverted
+	 * full-width bottom bar (issue: "Emulate Subghz workflow").  The event
+	 * loop below auto-restarts the TX on Q_EVENT_SUBGHZ_TX completion, so
+	 * manual OK-to-replay is unnecessary; BACK still exits. */
 	menu_sub_ghz_init();
 
 	M1_LOG_I(M1_LOGDB_TAG, "SGH replay: band=%d freq=%lu samples_init OK\r\n",
