@@ -532,6 +532,30 @@ static void draw_rr_decode(void)
     }
 }
 
+/**
+ * @brief  Tear down an in-flight async TX and restore the originating state.
+ *
+ * Consolidates the shared cleanup for the three sites that need it:
+ *   1. BACK pressed during a TX state
+ *   2. SubGhzEventTxComplete with cycle done and OK released
+ *   3. SubGhzEventTxComplete after a failed hold-to-repeat _async_restart()
+ *
+ * The third site MUST set `do_abort = false` because the engine was already
+ * torn down by the failed _async_restart() (per the API contract).  The first
+ * two sites set `do_abort = true` so the active engine is cleanly aborted.
+ *
+ * Returns the app to passive RX on the user-selected freq/mod and sets
+ * `app->raw_state` to whichever state initiated the TX (Idle or Loaded).
+ */
+static void readraw_finish_tx(SubGhzApp *app, bool do_abort)
+{
+    SubGhzReadRawState prior = subghz_readraw_prior_state_for_tx(app->raw_state);
+    if (do_abort)
+        sub_ghz_replay_async_abort();
+    start_passive_rx(app);
+    app->raw_state = prior;
+}
+
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     /* ---- Decode results overlay ----------------------------------------- */
@@ -698,11 +722,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                  * passive RX, and return to the originating state (Idle or
                  * Loaded).  BACK never exits the scene mid-TX — the user must
                  * press BACK again from the post-TX state to exit. */
-                SubGhzReadRawState prior =
-                    subghz_readraw_prior_state_for_tx(app->raw_state);
-                sub_ghz_replay_async_abort();
-                start_passive_rx(app);
-                app->raw_state = prior;
+                readraw_finish_tx(app, /*do_abort=*/true);
                 app->need_redraw = true;
             }
             else
@@ -750,21 +770,14 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     else
                     {
                         /* Restart failed — engine torn down by the API.  Restore
-                         * passive RX and the originating state. */
-                        SubGhzReadRawState prior =
-                            subghz_readraw_prior_state_for_tx(app->raw_state);
-                        start_passive_rx(app);
-                        app->raw_state = prior;
+                         * passive RX and the originating state.  No abort needed. */
+                        readraw_finish_tx(app, /*do_abort=*/false);
                     }
                 }
                 else
                 {
                     /* TX cycle done, no repeat requested — clean up. */
-                    SubGhzReadRawState prior =
-                        subghz_readraw_prior_state_for_tx(app->raw_state);
-                    sub_ghz_replay_async_abort();
-                    start_passive_rx(app);
-                    app->raw_state = prior;
+                    readraw_finish_tx(app, /*do_abort=*/true);
                 }
             }
             app->need_redraw = true;
