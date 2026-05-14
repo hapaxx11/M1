@@ -921,12 +921,24 @@ carries two discriminator fields:
 - **`type`** — `FLIPPER_SUBGHZ_TYPE_RAW` (NOISE / Flipper RAW) or `FLIPPER_SUBGHZ_TYPE_PARSED` (PACKET / Flipper Key)
 - **`is_m1_native`** — `true` for `.sgh` files (M1 NOISE and PACKET), `false` for Flipper `.sub` files
 
-#### The two replay functions
+#### The replay API — blocking wrappers and async primitives
+
+**Blocking wrappers** (legacy one-shot replay callers):
 
 | Function | Used for | What it does |
 |----------|----------|--------------|
 | `sub_ghz_replay_datafile(path, freq, mod)` | M1 native NOISE `.sgh` only | Sets up radio, points the streaming engine (`sub_ghz_raw_samples_init`) directly at the original `.sgh` file — **no temp file, no conversion**. Caller provides freq+mod from the already-loaded header. |
 | `sub_ghz_replay_flipper_file(path)` | Flipper RAW `.sub`, Flipper Key `.sub`, M1 native PACKET `.sgh` | Reads the source file, **writes a temp `.sgh`** at `/SUBGHZ/_flipper_tmp.sgh`, then streams it. For RAW/NOISE types it strip-converts signed Flipper samples to unsigned M1 format. For Key/PACKET types it invokes the OOK PWM key encoder to synthesize a waveform. |
+
+**Async prepare functions** (Read Raw scene):
+
+| Function | Used for | What it does |
+|----------|----------|--------------|
+| `sub_ghz_replay_prepare_datafile(path, freq, mod)` | M1 native NOISE `.sgh` only | Populates streaming globals for the native file — same as the blocking wrapper but returns immediately without arming TX. |
+| `sub_ghz_replay_prepare_flipper(sub_path, &out_tmp_path)` | Flipper RAW `.sub`, Flipper Key `.sub`, M1 native PACKET `.sgh` | Converts source to temp `.sgh`; returns the temp path via `out_tmp_path` for scene-local unlink. |
+| `sub_ghz_replay_start_async()` | After either prepare call | Arms TIM1+DMA and returns immediately; completion events arrive as `Q_EVENT_SUBGHZ_TX`. |
+| `sub_ghz_replay_continue_async(repeat)` | Read Raw scene `SubGhzEventTxComplete` handler | Advances streaming or tears down; returns `RUNNING`, `DONE`, or `ERROR`. |
+| `sub_ghz_replay_abort()` | BACK / scene exit | Synchronous teardown; safe to call even after natural completion. |
 
 The dispatch decision is encoded as a pure function so it is testable:
 
@@ -962,11 +974,12 @@ The Saved scene's `handle_action(SAVED_ACTION_EMULATE)` has two branches:
 1. **RAW files** (`is_raw_file == true`, i.e. `type == RAW && raw_count > 0`):
    Pushes into the **Read Raw scene** in `SubGhzReadRawStateLoaded` state,
    passing replay metadata via `app->raw_load_path`, `app->raw_load_is_native`,
-   `app->raw_load_freq_hz`, `app->raw_load_mod`.  The Read Raw scene then
-   dispatches to `sub_ghz_replay_datafile()` (when `raw_load_is_native = true`)
-   or `sub_ghz_replay_flipper_file()` (Flipper `.sub` RAW) when the user presses
-   Send.  This gives a waveform viewer with Send / New buttons rather than a
-   blind one-shot inline replay.
+   `app->raw_load_freq_hz`, `app->raw_load_mod`.  When the user presses Send,
+   the Read Raw scene calls `sub_ghz_replay_prepare_datafile()` (native `.sgh`)
+   or `sub_ghz_replay_prepare_flipper()` (Flipper `.sub` RAW), then arms TX via
+   `sub_ghz_replay_start_async()` — fully async with sine-wave animation and
+   hold-to-repeat (LoadKeyTX / LoadKeyTXRepeat states).  This gives a waveform
+   viewer with Send / New buttons rather than a blind one-shot inline replay.
 
 2. **PACKET/Key files** (`is_raw_file == false`): Performs an inline blocking
    replay directly in the Saved scene by calling `sub_ghz_replay_flipper_file()`.
@@ -984,15 +997,20 @@ to restore radio state before the next transmission.
 #### Rules for new emulation code
 
 1. **Never call `sub_ghz_replay_flipper_file()` on an M1 native NOISE `.sgh` file.**
-   Check `is_m1_native && type == RAW` and use `sub_ghz_replay_datafile()` instead.
+   For blocking callers (Saved PACKET path, Playlist), check `is_m1_native && type == RAW`
+   and use `sub_ghz_replay_datafile()` instead.  For the Read Raw async path, use
+   `sub_ghz_replay_prepare_datafile()` + `sub_ghz_replay_start_async()`.
 2. **Never call `sub_ghz_replay_datafile()` on a PACKET or Flipper `.sub` file.**
-   Those need the key encoder or Flipper-format conversion in `sub_ghz_replay_flipper_file()`.
+   For blocking callers, use `sub_ghz_replay_flipper_file()`.  For the Read Raw async
+   path, use `sub_ghz_replay_prepare_flipper()` + `sub_ghz_replay_start_async()`.
 3. **Always use `flipper_subghz_emulate_path()`** to encode the dispatch decision.
    Do not inline `if (is_m1_native && type == RAW)` in new scenes — call the shared
    function so tests catch any change to the dispatch rule.
-4. **After any call to `sub_ghz_replay_datafile()` or `sub_ghz_replay_flipper_file()`**,
+4. **After any blocking call to `sub_ghz_replay_datafile()` or `sub_ghz_replay_flipper_file()`**,
    call `menu_sub_ghz_init()` before the radio is used again (both functions call
-   `menu_sub_ghz_exit()` internally which powers off the SI4463).
+   `menu_sub_ghz_exit()` internally which powers off the SI4463).  The Read Raw scene
+   uses the async path and restores radio state via `start_passive_rx()` — it does **not**
+   call the blocking wrappers directly for its own TX.
 5. **When loading metadata** for dispatch, prefer `flipper_subghz_probe()` (header only,
    low overhead) over the full `flipper_subghz_load()` when sample data is not needed
    (playlist, one-shot batch TX).  Use `flipper_subghz_load()` when the sample data
@@ -1110,68 +1128,61 @@ These pieces are already in place and should be used by any new async work:
 | Scene draw tick | `m1_subghz_scene.c`, `m1_scene.c` | Periodic `draw()` invocation while waiting on `xQueueReceive` |
 | `app->need_redraw` | `SubGhzApp` and generic scene context | Coalesced redraw flag — set in handlers, cleared by the scene loop |
 
-The DMA-TC → ISR → queue plumbing for Sub-GHz TX **already exists end-to-end**.
-What is currently missing for the Read Raw scene is that the consumer of
-`Q_EVENT_SUBGHZ_TX` lives inside `subghz_run_raw_replay()`'s private event loop
-(`m1_csrc/m1_sub_ghz.c`) rather than in the Read Raw scene's `on_event`
-handler.  That private loop does not call the scene's `draw()`, which is why
-the "TX..." indicator is static rather than animated.
+The DMA-TC → ISR → queue plumbing for Sub-GHz TX **exists end-to-end**, and
+the Read Raw scene consumes `Q_EVENT_SUBGHZ_TX` directly in its `on_event`
+handler (implemented in PR #470), enabling live sine-wave animation and
+hold-to-repeat TX.
 
-#### Open async-conversion work in the Sub-GHz subsystem
+#### Async TX state machine (completed — PR #470)
 
-This is the canonical follow-up to issue *"Sub-GHz: Async TX state machine
-(Momentum LoadKeyTX / TXRepeat parity)"*.  Any agent that picks up the work
-should follow this plan rather than re-deriving it:
+The Read Raw scene uses a fully async, non-blocking TX architecture with four
+explicit Momentum-aligned states defined in `m1_subghz_read_raw_state.h`:
 
-1. **Split `SubGhzReadRawStateSending`** in `m1_subghz_scene.h` into four explicit
-   states matching Momentum:
-   - `SubGhzReadRawStateTX` — TX from a freshly-recorded capture (Idle → TX → Idle).
-   - `SubGhzReadRawStateTXRepeat` — hold-to-repeat from Idle.
-   - `SubGhzReadRawStateLoadKeyTX` — TX from a pre-loaded RAW file (Loaded → LoadKeyTX → Loaded).
-   - `SubGhzReadRawStateLoadKeyTXRepeat` — hold-to-repeat from Loaded.
+- `SubGhzReadRawStateTX` — one-shot TX from a freshly-recorded capture (Idle → TX → Idle).
+- `SubGhzReadRawStateTXRepeat` — hold-to-repeat from Idle (TX → TXRepeat while OK held).
+- `SubGhzReadRawStateLoadKeyTX` — one-shot TX from a pre-loaded file (Loaded → LoadKeyTX → Loaded).
+- `SubGhzReadRawStateLoadKeyTXRepeat` — hold-to-repeat from Loaded.
 
-   Keep `SubGhzReadRawStateSending` as a backward-compat alias **only** until
-   every reference is updated; do not introduce new callers of it.
+The async TX API (declared in `m1_sub_ghz.h`):
 
-2. **Move the `Q_EVENT_SUBGHZ_TX` consumer out of `subghz_run_raw_replay()`** and
-   into the Read Raw scene's `on_event` handler.  Split the function into:
-   - `sub_ghz_replay_start_async()` — arm TIM1+DMA, return immediately.
-   - `sub_ghz_replay_continue_async()` — called from the scene handler on
-     `Q_EVENT_SUBGHZ_TX`; either advances streaming or transitions to idle.
-   - `sub_ghz_replay_abort()` — synchronous teardown for BACK / scene exit.
+- `sub_ghz_replay_prepare_datafile(path, freq, mod)` — populate streaming globals for a
+  native `.sgh` file; no conversion, no temp file.
+- `sub_ghz_replay_prepare_flipper(sub_path, &out_tmp_path)` — convert a Flipper/PACKET
+  source to a temp `.sgh` at `/SUBGHZ/_flipper_tmp.sgh`; returns the path via
+  `out_tmp_path` so the scene can track and unlink it.
+- `sub_ghz_replay_start_async()` — arm TIM1+DMA and return immediately;
+  `Q_EVENT_SUBGHZ_TX` events drive subsequent steps from the scene's `on_event`.
+- `sub_ghz_replay_continue_async(repeat_on_idle)` — called from the scene's
+  `SubGhzEventTxComplete` handler; returns `SUBGHZ_REPLAY_ASYNC_RUNNING` (more bursts
+  to come), `SUBGHZ_REPLAY_ASYNC_DONE`, or `SUBGHZ_REPLAY_ASYNC_ERROR`.
+- `sub_ghz_replay_abort()` — synchronous teardown for BACK / scene exit; safe to call
+  even after natural completion.
 
-   Retain the existing blocking wrappers (`sub_ghz_replay_flipper_file()`,
-   `sub_ghz_replay_datafile()`) for the Saved-scene PACKET/key emulate path and
-   the Playlist scene — those callers do not need cancel-mid-TX or animation, so
-   converting them would only add complexity.  Implement the blocking wrappers
-   in terms of the new async primitives + a private mini event loop, **not** the
-   other way around.
+**Blocking wrappers retained for legacy one-shot replay callers:**
+`sub_ghz_replay_flipper_file()` and `sub_ghz_replay_datafile()` remain for the
+Saved scene's PACKET/key emulate path, Playlist transmissions, Remote button TX,
+Bind Wizard TX steps, Add Manually TX, and Flipper integration replay. These
+callers do not need cancel-mid-TX or animation; the blocking wrappers run a private
+mini event loop internally and are implemented in terms of the async primitives.  The temp file
+`/SUBGHZ/_flipper_tmp.sgh` lifetime is managed internally by these wrappers.  For the
+Read Raw scene, the temp file (when produced by `sub_ghz_replay_prepare_flipper()`) is
+tracked via a scene-local `tx_unlink_path` buffer and unlinked on TX completion, abort,
+or scene exit.
 
-3. **Render the sine-wave animation** in `draw()` for any of the four TX states.
-   A 32-entry lookup table indexed by a free-running phase counter is sufficient
-   — no float math, no per-tick `sin()` call.  Bound the animation to the
-   existing `subghz_raw_draw_frame_ext()` waveform box.
+**TIM1 sharing discipline:** Read Raw must call `sub_ghz_rx_deinit_ext()` before
+`sub_ghz_replay_start_async()` so the TX arming path cannot race the prior RX
+input-capture configuration.  `sub_ghz_replay_start_async()` assumes this gate is
+already done by the caller.  When Read Raw stays in-scene after TX completes
+(`continue_async()` returns DONE/ERROR) or after a BACK abort, it restores listening
+mode via `start_passive_rx()`.  On `scene_on_exit()`, it aborts and then performs
+full radio teardown instead of restarting passive RX.
 
-4. **Hold-to-repeat**: on `Q_EVENT_SUBGHZ_TX` completion, peek the OK button
-   state (do **not** consume keypad events from the queue).  If OK is still
-   held, transition `TX → TXRepeat` (or `LoadKeyTX → LoadKeyTXRepeat`) and
-   re-arm.  Otherwise transition back to Idle / Loaded.
-
-5. **Temp-file lifetime**: the temp file `/SUBGHZ/_flipper_tmp.sgh` created by
-   `sub_ghz_replay_flipper_file()` must be unlinked by the completion or abort
-   path, not the caller.  Track ownership in a scene-local field, not a global.
-
-6. **TIM1 sharing discipline**: scene-state transitions that move between RX
-   (input-capture on CH1) and TX (PWM output) must `sub_ghz_rx_deinit_ext()`
-   before the TX arm and `sub_ghz_rx_init_ext()` (via `start_passive_rx()`)
-   after the TX completes or aborts.  Never reconfigure TIM1 while the previous
-   mode's DMA burst could still be in flight — gate every transition on an
-   explicit "idle" state.
-
-Until this work lands, the current Read Raw TX path is **intentionally blocking**
-(see the comment block above the call in `m1_subghz_scene_read_raw.c`'s
-`scene_on_event` OK handler).  Agents touching that file should not regress
-that comment without delivering the async migration in the same PR.
+**Hold-to-repeat:** On `Q_EVENT_SUBGHZ_TX` completion, the scene peeks the OK button
+state via `HAL_GPIO_ReadPin` (no FreeRTOS queue side effects).  If OK is still held, the
+state transitions to the repeat variant (TX → TXRepeat, LoadKeyTX → LoadKeyTXRepeat)
+and `continue_async(true)` re-arms the next burst.  When OK is released or the
+one-shot completes without a held press, `continue_async(false)` drives the final
+teardown and the scene returns to Idle or Loaded.
 
 ---
 
@@ -1195,11 +1206,19 @@ load + config reset, restoring the radio to a known good state.
    bottom.  They own their own radio lifecycle — this is correct.
 
 2. **`sub_ghz_replay_flipper_file()`** and **`sub_ghz_replay_datafile()`** both
-   call `menu_sub_ghz_exit()` before returning.  **Every call site must call
-   `menu_sub_ghz_init()` afterwards**:
-   - `m1_subghz_scene_saved.c` — PACKET/key emulate handler
-   - `m1_subghz_scene_playlist.c` — `playlist_transmit_next()` after each file
-   - `m1_subghz_scene_read_raw.c` — Send action in the Loaded state (Read Raw scene)
+   call `menu_sub_ghz_exit()` before returning.  **Any caller that performs
+   additional direct radio operations after the wrapper returns must call
+   `menu_sub_ghz_init()` first.**  Current wrapper users include:
+   - `m1_subghz_scene_saved.c` — PACKET/key emulate handler (immediate re-init)
+   - `m1_subghz_scene_playlist.c` — `playlist_transmit_next()` (immediate re-init)
+   - `m1_subghz_scene_remote.c` — remote button TX helper (immediate re-init)
+   - `m1_subghz_scene_bind_wizard.c` — bind-step TX helper (immediate re-init)
+   - `m1_sub_ghz.c` — Add Manually replay path
+   - `m1_flipper_integration.c` — Flipper `.sub` replay integration
+
+   The Read Raw scene no longer calls these blocking wrappers for TX — it uses
+   the async API (`sub_ghz_replay_prepare_*/start_async`) and restores radio
+   state via `start_passive_rx()` after TX completion or abort.
 
 3. **Scene-native RX starters** (`start_rx()` in Read, `start_raw_rx()` in
    Read Raw) call `menu_sub_ghz_init()` before configuring RX, so they
@@ -1207,8 +1226,8 @@ load + config reset, restoring the radio to a known good state.
    the user was in before.
 
 **Rules for new code:**
-- If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()`, add
-  `menu_sub_ghz_init()` immediately after it returns.
+- If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()`, call
+  `menu_sub_ghz_init()` before any subsequent direct radio operation outside the wrapper.
 - If you write a new blocking delegate, call `menu_sub_ghz_init()` at the
   top and `menu_sub_ghz_exit()` at the bottom.
 - If you write a new RX scene, call `menu_sub_ghz_init()` before starting
@@ -1395,12 +1414,17 @@ scene_on_exit
    scene exit), not inline teardown code.  `stop_raw_rx()` turns off the LED
    fast-blink — inline code that omits `m1_led_fast_blink(... OFF)` leaves the
    RGB LED blinking after leaving the scene.
-6. **After `sub_ghz_replay_flipper_file()`, always call `start_passive_rx(app)`**
-   (not an inline restart block).  Replay can mutate `subghz_scan_config.band`
-   for CUSTOM-band files; `start_passive_rx()` re-applies `app->freq_idx/mod_idx`
-   via `subghz_apply_config_ext()` to restore the user-selected config.  An
-   inline restart that reads `subghz_scan_config.band` directly may resume on
-   the wrong band after replay.
+6. **When staying in the Read Raw scene after TX completion or BACK abort, restore
+   radio via `start_passive_rx(app)`** (not an inline restart block).  The scene calls
+   `start_passive_rx(app)` from its `SubGhzEventTxComplete` handler (when
+   `sub_ghz_replay_continue_async()` returns DONE/ERROR) and from its BACK handler
+   (after `sub_ghz_replay_abort()`).  On `scene_on_exit()`, the scene aborts and then
+   performs full teardown (`sub_ghz_rx_deinit_ext()` + isolated opmode), so it must
+   **not** restart passive RX there. `sub_ghz_replay_prepare_flipper()` can mutate
+   `subghz_custom_freq_hz`, `subghz_replay_band`, and `subghz_scan_config.modulation`;
+   `start_passive_rx()` re-applies `app->freq_idx/mod_idx` via `subghz_apply_config_ext()`
+   to restore the user-selected config.  An inline restart that reuses mutated replay
+   globals can resume on the wrong frequency/modulation context after replay.
 
 ### Home Screen Backlight — Do Not Wake on Background Refresh
 

@@ -225,8 +225,13 @@ the chip is unresponsive.  `menu_sub_ghz_init()` performs a full PowerUp +
 patch + config reset to restore the radio.
 
 **Rules:**
-- If you call `sub_ghz_replay_flipper_file()`, call `menu_sub_ghz_init()`
-  immediately after it returns (it calls `menu_sub_ghz_exit()` internally).
+- If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()` (blocking
+  wrappers used by Saved, Playlist, Remote, Bind Wizard, Add Manually, and Flipper
+  integration replay paths), call `menu_sub_ghz_init()` before any subsequent direct
+  radio operation outside the wrapper (both call `menu_sub_ghz_exit()` internally).
+- The Read Raw scene uses the async API (`sub_ghz_replay_prepare_*/start_async`) and
+  restores radio state via `start_passive_rx()` — it does **not** call the blocking
+  wrappers directly for its own TX.
 - If you write a new **blocking delegate**, call `menu_sub_ghz_init()` at
   the top and `menu_sub_ghz_exit()` at the bottom.
 - If you write a new **RX scene**, call `menu_sub_ghz_init()` before
