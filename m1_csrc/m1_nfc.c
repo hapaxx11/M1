@@ -1179,7 +1179,8 @@ static void nfc_utils_write_uid_run(void)
 		if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			return;
 
-		if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+		    || btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			if (!confirmed)
 			{
@@ -1251,7 +1252,8 @@ static void nfc_utils_wipe_tag_run(void)
 		if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			return;
 
-		if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+		    || btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			if (!confirmed)
 			{
@@ -1375,7 +1377,7 @@ static int nfc_utils_kp_handler(void)
 										u8g2_DrawStr(&m1_u8g2, 2, 40, line);
 										snprintf(line, sizeof(line), "Type: %s",
 										         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
-										u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+										u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 									}
 									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 									m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "More", arrowright_8x8);
@@ -2131,8 +2133,6 @@ static void nfc_fuzz_draw_running(uint8_t prof_sel, const uint8_t *uid, uint8_t 
 	snprintf(line, sizeof(line), "Count: %lu", (unsigned long)count);
 	u8g2_DrawStr(&m1_u8g2, 2, 42, line);
 
-	u8g2_DrawStr(&m1_u8g2, 2, 50, "Emulating...");
-
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Stop", NULL, NULL);
 
@@ -2240,7 +2240,7 @@ static void nfc_tool_tag_info(void)
 
 					snprintf(line, sizeof(line), "Type: %s",
 					         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
-					u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+					u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 				}
 
 				/* Bottom bar */
@@ -2822,7 +2822,8 @@ static void nfc_unlock_with_reader(void)
 		if (ret != pdTRUE) continue;
 		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			return;
-		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+		    || bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 			break;
 	}
 
@@ -2878,7 +2879,8 @@ static void nfc_unlock_with_reader(void)
 					if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
 					ret = xQueueReceive(button_events_q_hdl, &bs, 0);
 					if (ret != pdTRUE) continue;
-					if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK) {
+					if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+					    || bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK) {
 						nfc_read_more_options_save();
 						break;
 					}
@@ -3234,7 +3236,8 @@ static void nfc_tool_write_url(void)
 			xQueueReset(main_q_hdl);
 			return;
 		}
-		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+		    || bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			/* Show writing screen */
 			m1_u8g2_firstpage();
