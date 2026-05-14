@@ -757,7 +757,12 @@ static void browse_gui_update(uint8_t sel_item, char *file_name)
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	}
 
-	/* Info box at the bottom — current filename */
+	/* Info box at the bottom — current filename.
+	 * Reset to the fixed small font; info-box geometry (BROWSE_GUI_DISP_LINE_LEN_MAX,
+	 * M1_SUB_MENU_FONT_HEIGHT) is sized for M1_DISP_SUB_MENU_FONT_N.  Without this
+	 * reset, text would render in whatever m1_menu_font() returned above, which can
+	 * overflow the box or leave uncleared pixels in medium/large menu-style modes. */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	m1_info_box_display_init(true);
 	print_ptr = file_name;
 	len = strlen(file_name);
@@ -784,6 +789,8 @@ static void browse_gui_update(uint8_t sel_item, char *file_name)
 /*============================================================================*/
 void browse_info_box_update(uint8_t box_y, char *new_info)
 {
+	// Info-box geometry (M1_SUB_MENU_FONT_HEIGHT) requires the small fixed font.
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	// Clear old content
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set to background color
 	u8g2_DrawBox(&m1_u8g2, 4, box_y - M1_SUB_MENU_FONT_HEIGHT - 1, 120, M1_SUB_MENU_FONT_HEIGHT + 2);
