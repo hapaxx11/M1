@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.22] - 2026-05-14
+
+### Changed
+
+- Documentation: Added an *Async / Non-Blocking RTOS Best Practices* section to
+  `CLAUDE.md` documenting the project preference for event-driven, non-blocking
+  patterns in scene handlers and ISRs, the canonical `xQueueSendFromISR` →
+  `Q_EVENT_*` → scene-loop pattern, forbidden patterns
+  (`vTaskDelay`/`HAL_Delay`/spin-wait inside `on_event`), and the canonical
+  follow-up plan for the Sub-GHz Read Raw async TX state machine
+  (TX / TXRepeat / LoadKeyTX / LoadKeyTXRepeat — Momentum parity).
+- **Sub-GHz Read Raw: async TX driver** — Read Raw TX is now non-blocking.
+  The main task continues to process events (BACK to cancel, redraw ticks)
+  during transmission.  Introduces `sub_ghz_replay_start_async()` /
+  `sub_ghz_replay_continue_async()` / `sub_ghz_replay_abort()` primitives,
+  splits the Sending state into TX / TXRepeat / LoadKeyTX / LoadKeyTXRepeat
+  (Momentum-aligned), and gives the Read Raw scene direct ownership of
+  the temp `.sgh` file lifetime via a scene-local path.  TIM1 RX↔TX
+  transitions are now gated on an explicit idle state.  Saved-PACKET
+  emulate, Playlist, Remote, and Bind Wizard TX paths continue to use
+  the existing blocking wrappers, which are reimplemented on top of the
+  new async primitives plus a private mini event loop.
+- **Sub-GHz Read Raw: async TX phase 2** — sine-wave animation in the
+  waveform area during TX/LoadKeyTX (and their hold-to-repeat counterparts),
+  and Momentum-style hold-to-repeat: continuing to hold OK at the end of a
+  burst transitions `TX → TXRepeat` / `LoadKeyTX → LoadKeyTXRepeat` and the
+  async driver auto-rearms; releasing OK returns to Idle / Loaded.  The OK
+  button state is peeked via direct GPIO read in the
+  `SubGhzEventTxComplete` handler so keypad events queued behind the
+  completion are not consumed.  Implements phase 2 of #468.
+
+### Fixed
+
+- Sub-GHz Read Raw async TX teardown and passive RX restore no longer reset the shared main event queue, preserving queued keypad/scene events after TX completion, abort, and start-failure recovery.
+- Sub-GHz async replay now enforces temp-file ownership by requiring `out_tmp_path` in `sub_ghz_replay_prepare_flipper()`, and re-surfaces async start allocation failures (codes 4/5) so callers can show a memory error.
+- Legacy blocking Sub-GHz replay wrappers now flush the shared main event queue before returning, so keypad or late TX-complete events captured by their private event loop do not leak into the caller scene.
+- Sub-GHz replay: `sub_ghz_replay_prepare_flipper()` now rejects NULL `sub_path` as invalid arguments instead of passing it to file-open conversion.
+- Sub-GHz replay: blocking wrapper now flushes `main_q_hdl` before returning surfaced allocation errors (`4/5`), preserving the documented legacy queue-flush contract on all return paths.
 ## [0.9.1.21] - 2026-05-14
 
 ### Changed
