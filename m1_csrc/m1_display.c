@@ -59,7 +59,7 @@
 #define SUB_MENU_TEXT_SPACING_VERT			16
 #define SUB_MENU_TEXT_FRAME_H				16
 #define SUB_MENU_TEXT_FRAME_LEFT_POS_X		1
-#define SUB_MENU_TEXT_FRAME_W				(M1_MENU_SCROLLBAR_X - SUB_MENU_TEXT_FRAME_LEFT_POS_X)
+#define SUB_MENU_TEXT_FRAME_W				(M1_MENU_SCROLLBAR_X - SUB_MENU_TEXT_FRAME_LEFT_POS_X - 1)
 
 
 //************************** C O N S T A N T **********************************/
