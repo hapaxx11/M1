@@ -1671,6 +1671,12 @@ sub_ghz_replay_async_status_t sub_ghz_replay_continue_async(bool repeat_on_idle)
 
 	subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
 
+	if ((subghz_replay_ret_code & SUB_GHZ_RAW_DATA_PARSER_ERROR_MASK) != 0)
+	{
+		subghz_replay_async_teardown();
+		return SUBGHZ_REPLAY_ASYNC_ERROR;
+	}
+
 	if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
 	{
 		if (repeat_on_idle)
