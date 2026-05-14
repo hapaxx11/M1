@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.19] - 2026-05-14
+
+### Fixed
+
+- **Main menu: fix asymmetric scrollbar handle** — the handle now paints the same number of pixels on each side of the center track line (changed scrollbar width from 4 to 3 px to match the odd-width submenu scrollbar).
 ## [0.9.1.18] - 2026-05-14
 
 ### Added

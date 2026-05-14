@@ -1,1 +1,0 @@
-**Main menu: fix asymmetric scrollbar handle** — the handle now paints the same number of pixels on each side of the center track line (changed scrollbar width from 4 to 3 px to match the odd-width submenu scrollbar).
