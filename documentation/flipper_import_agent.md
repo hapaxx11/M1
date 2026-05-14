@@ -51,6 +51,19 @@ than **1.0.0.0**.  Until that milestone is reached, the following weighting appl
 | UI framework, display rendering, keypad handling | **Monstatek/M1** (low-level) / **Flipper** (scene UX) | M1's UIView framework differs from Flipper's ViewPort model, so display rendering and keypad mapping remain Monstatek. However, **scene-level UX patterns** (saved-item action menus, verb sets, navigation flow) follow the Flipper `*_scene_saved_menu.c` pattern. See CLAUDE.md "Saved Item Actions Pattern". |
 | Scrollable list / menu text size | **Hapax** | Hapax has a user-configurable text size setting (`m1_menu_style`). All scrollable lists **must** use `m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, and `M1_MENU_VIS()` instead of hardcoding fonts, row heights, or visible item counts. Neither Flipper nor upstream Monstatek have this feature — imported code must be adapted. See CLAUDE.md [User-Configurable Font Size](#user-configurable-font-size). |
 
+### Menu architecture import gate (mandatory)
+
+If imported code includes a legacy submenu/event-loop menu implementation, it is
+not mergeable as-is. Port it to the scene architecture first:
+
+1. Add/extend the module scene file (`m1_<module>_scene.c` or Sub-GHz scene set).
+2. Move imported screens into scene handlers (`on_enter`, `on_event`, `on_exit`,
+   `draw`).
+3. Keep any unavoidable legacy function only as a scene-invoked blocking
+   delegate during transition.
+4. Ensure `m1_menu.c` uses scene entry points for the module (no new legacy
+   submenu arrays or non-zero submenu item counts).
+
 When a Flipper pattern conflicts with a Monstatek pattern in the protocol/decoder/HAL
 space, **adopt the Flipper pattern** and log the deviation in the
 [Monstatek Pattern Deviation Log](#monstatek-pattern-deviation-log) below.
