@@ -1501,6 +1501,24 @@ Scene migration is complete for all modules.  There are no more legacy-menu
 modules to migrate.  When working on **any** module, all new screens and features
 **MUST** be implemented as scenes, not as standalone event-loop functions.
 
+#### Mandatory import conversion plan (legacy menu code from other repos)
+
+When importing UI code (Monstatek, Flipper, Momentum, SiN360, C3, or any fork),
+do **not** preserve legacy submenu loops.  Convert imported menu flows to scene
+style before merging:
+
+1. Create/update the module `m1_<module>_scene.c` entry and scene ID enum.
+2. Split each imported screen into `on_enter` / `on_event` / `on_exit` / `draw`
+   handlers.
+3. Keep hardware-heavy legacy functions only as blocking delegates called from
+   scene wrappers until a full rewrite is justified.
+4. Replace hardcoded list UI values with Hapax helpers (`m1_menu_font()`,
+   `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`).
+5. Add new scene files to `cmake/m1_01/CMakeLists.txt` and host tests for any
+   extracted pure logic touched by the import.
+6. Verify no module regresses to legacy submenu definitions in `m1_menu.c`
+   (`num_submenu_items` must remain `0` for scene-entry modules).
+
 ### Legacy functions still in m1_sub_ghz.c
 
 After the dead-code cleanup, the only legacy functions remaining in `m1_sub_ghz.c`

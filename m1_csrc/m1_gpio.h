@@ -29,7 +29,5 @@ void gpio_usb_uart_bridge(void);
 
 void ext_power_5V_set(uint8_t set_mode);
 void ext_power_3V_set(uint8_t set_mode);
-void gpio_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item);
-void gpio_xkey_handler(S_M1_Key_Event event, uint8_t button_id, uint8_t sel_item);
 
 #endif /* M1_GPIO_H_ */

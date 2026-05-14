@@ -72,6 +72,17 @@ manager with `on_enter` / `on_event` / `on_exit` / `draw` callbacks. See
 - **New modules** should follow the scene pattern from the start. Use
   `m1_games_scene.c` as a minimal template.
 
+### Importing code from other forks
+
+Imported menu logic must be converted to scene style before merge. Do not keep
+legacy submenu/event-loop menus from upstream forks.
+
+- Add or extend the module scene entry (`*_scene_entry`) and scene ID table.
+- Convert each imported screen into scene handlers.
+- Keep heavy legacy code only behind scene wrappers as blocking delegates.
+- Adapt imported lists to Hapax font-aware menu helpers (`m1_menu_font()`,
+  `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`).
+
 ### Saved Item Actions (mandatory for modules with saved files)
 
 Every module that loads files from SD card **must** implement the standard saved-item
