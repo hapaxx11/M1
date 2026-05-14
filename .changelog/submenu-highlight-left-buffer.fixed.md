@@ -1,0 +1,1 @@
+**Sub-menu selection highlight: 1 px left buffer** — The selection highlight in sub-menus (Settings, GPIO, SD card) no longer extends to the very leftmost pixel of the display, improving the visual appearance especially in dark mode.

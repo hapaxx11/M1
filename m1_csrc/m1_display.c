@@ -58,8 +58,8 @@
 #define SUB_MENU_TEXT_TOP_POS_Y				12
 #define SUB_MENU_TEXT_SPACING_VERT			16
 #define SUB_MENU_TEXT_FRAME_H				16
-#define SUB_MENU_TEXT_FRAME_W				(M1_LCD_DISPLAY_WIDTH - MENU_SCROLLBAR_WIDTH - 1)
-#define SUB_MENU_TEXT_FRAME_LEFT_POS_X		0
+#define SUB_MENU_TEXT_FRAME_W				(M1_LCD_DISPLAY_WIDTH - MENU_SCROLLBAR_WIDTH - 2)
+#define SUB_MENU_TEXT_FRAME_LEFT_POS_X		1
 
 
 //************************** C O N S T A N T **********************************/

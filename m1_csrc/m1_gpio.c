@@ -312,7 +312,7 @@ void gpio_gui_update(const S_M1_Menu_t *phmenu, uint8_t sel_item)
     		if ( i==sel_item )
     		{
     			// Draw box for selected menu item with text color
-    			u8g2_DrawBox(&m1_u8g2, 0, menu_text_y - THIS_LCD_MENU_TEXT_ROW_SPACE + 2, M1_LCD_SUB_MENU_TEXT_FRAME_W, THIS_LCD_MENU_TEXT_ROW_SPACE);
+    			u8g2_DrawBox(&m1_u8g2, 1, menu_text_y - THIS_LCD_MENU_TEXT_ROW_SPACE + 2, M1_LCD_SUB_MENU_TEXT_FRAME_W - 1, THIS_LCD_MENU_TEXT_ROW_SPACE);
     			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // set to background color
     			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
     			u8g2_DrawStr(&m1_u8g2, 4, menu_text_y, phmenu->submenu[i]->title);
