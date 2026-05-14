@@ -112,9 +112,84 @@ typedef enum {
     SubGhzReadRawStateStart = 0,   /**< Fresh entry — no capture exists */
     SubGhzReadRawStateRecording,   /**< Actively recording raw RF data */
     SubGhzReadRawStateIdle,        /**< Recording done — capture file on SD */
-    SubGhzReadRawStateSending,     /**< Blocking replay TX in progress (Momentum: TX/TXRepeat) */
     SubGhzReadRawStateLoaded,      /**< Pre-existing RAW file loaded from Saved browser (Momentum: LoadKeyIDLE) */
+    SubGhzReadRawStateTX,             /**< Transmitting from a freshly-recorded capture (Idle → TX) */
+    SubGhzReadRawStateTXRepeat,       /**< Hold-to-repeat from Idle (Momentum: TXRepeat) */
+    SubGhzReadRawStateLoadKeyTX,      /**< Transmitting from a pre-loaded RAW file (Loaded → LoadKeyTX) */
+    SubGhzReadRawStateLoadKeyTXRepeat,/**< Hold-to-repeat from Loaded (Momentum: LoadKeyTXRepeat) */
+
+    /* Backward-compat alias for legacy code paths.  New code MUST use the
+     * four explicit states above.  Removed once all callers are updated. */
+    SubGhzReadRawStateSending = SubGhzReadRawStateTX,
 } SubGhzReadRawState;
+
+/**
+ * @brief  Pure-logic dispatch decision: which TX state follows the given prior state?
+ *
+ * Encodes the (Idle → TX) and (Loaded → LoadKeyTX) edges of the Read Raw
+ * state machine.  Extracted as a function so the host test suite can pin
+ * the mapping and catch regressions before firmware build.
+ *
+ * @param prior  Prior state — MUST be SubGhzReadRawStateIdle or
+ *               SubGhzReadRawStateLoaded; any other state is treated as Idle.
+ * @return       SubGhzReadRawStateLoadKeyTX when prior == Loaded;
+ *               SubGhzReadRawStateTX otherwise.
+ */
+static inline SubGhzReadRawState
+subghz_readraw_tx_state_for_prior(SubGhzReadRawState prior)
+{
+    return (prior == SubGhzReadRawStateLoaded)
+           ? SubGhzReadRawStateLoadKeyTX
+           : SubGhzReadRawStateTX;
+}
+
+/**
+ * @brief  Which repeat-TX state corresponds to the given TX state?
+ *
+ * @param tx_state  MUST be a TX state.  Any other value returns the input.
+ * @return          LoadKeyTXRepeat for LoadKeyTX, TXRepeat for TX, else input.
+ */
+static inline SubGhzReadRawState
+subghz_readraw_repeat_state_for_tx(SubGhzReadRawState tx_state)
+{
+    if (tx_state == SubGhzReadRawStateTX)        return SubGhzReadRawStateTXRepeat;
+    if (tx_state == SubGhzReadRawStateLoadKeyTX) return SubGhzReadRawStateLoadKeyTXRepeat;
+    return tx_state;
+}
+
+/**
+ * @brief  Which prior (post-TX) state corresponds to the given TX or repeat state?
+ *
+ * Used when a TX cycle completes and no hold-to-repeat is in effect — the
+ * scene returns to the originating state (Idle or Loaded).
+ */
+static inline SubGhzReadRawState
+subghz_readraw_prior_state_for_tx(SubGhzReadRawState tx_state)
+{
+    switch (tx_state) {
+    case SubGhzReadRawStateTX:
+    case SubGhzReadRawStateTXRepeat:
+        return SubGhzReadRawStateIdle;
+    case SubGhzReadRawStateLoadKeyTX:
+    case SubGhzReadRawStateLoadKeyTXRepeat:
+        return SubGhzReadRawStateLoaded;
+    default:
+        return tx_state;
+    }
+}
+
+/**
+ * @brief  True when the given state is any TX state (TX / TXRepeat /
+ *         LoadKeyTX / LoadKeyTXRepeat).
+ */
+static inline bool
+subghz_readraw_state_is_tx(SubGhzReadRawState s)
+{
+    return (s == SubGhzReadRawStateTX) ||
+           (s == SubGhzReadRawStateTXRepeat) ||
+           (s == SubGhzReadRawStateLoadKeyTX) ||
+           (s == SubGhzReadRawStateLoadKeyTXRepeat);
+}
 
 /*============================================================================*/
 /* Application context — replaces scattered globals                           */

@@ -349,6 +349,24 @@ static uint8_t  subghz_raw_rssi_head = 0;    /* Write position in history */
 static bool     subghz_raw_rssi_history_end = false; /* Buffer has wrapped */
 static uint8_t  subghz_raw_sin_idx = 0;      /* Sine animation index (idle state) */
 
+/* ------------------------------------------------------------------------- *
+ *  Async replay state (issue #469 — non-blocking TX state machine)
+ *
+ *  These fields are valid only while s_async_replay_active == true.  The
+ *  Read Raw scene drives the state machine by:
+ *    - calling sub_ghz_replay_flipper_file_async_start() or
+ *      sub_ghz_replay_datafile_async_start() (arms first TX, returns now)
+ *    - calling sub_ghz_replay_async_step() on every Q_EVENT_SUBGHZ_TX event
+ *    - calling sub_ghz_replay_async_restart() to repeat after a cycle ended
+ *    - calling sub_ghz_replay_async_abort() on BACK / scene exit
+ *
+ *  The blocking wrappers (sub_ghz_replay_flipper_file / sub_ghz_replay_datafile)
+ *  still drive their own private event loop and do NOT touch these fields.
+ * ------------------------------------------------------------------------- */
+static bool     s_async_mode_request = false; /* request flag: next subghz_run_raw_replay() returns after first-TX arm */
+static bool     s_async_replay_active = false;
+static char     s_async_unlink_path[80] = {0}; /* "" = no temp file to unlink */
+
 //************************** S T R U C T U R E S *******************************
 
 typedef enum {
@@ -1527,12 +1545,82 @@ static const char *stristr(const char *haystack, const char *needle)
 
 /*============================================================================*/
 /**
+ * @brief  Re-arm a TX cycle from the IDLE state.
+ *
+ * Shared by the blocking event loop (OK retry, auto-restart on IDLE) and
+ * by the async API (sub_ghz_replay_async_restart()) for hold-to-repeat.
+ *
+ * Returns 0 on success (TX armed, subghz_replay_ret_code is the new parser
+ * state); 1 on failure (engine state has been torn down to OPMODE_ISOLATED,
+ * subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE).
+ */
+static uint8_t subghz_replay_engine_rearm(void)
+{
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
+	                   subghz_replay_band,
+	                   subghz_replay_channel,
+	                   tx_power_values[subghz_tx_power_idx]);
+	subghz_replay_ret_code = sub_ghz_raw_replay_init();
+	if (subghz_replay_ret_code != 1)
+	{
+		double_buffer_ptr_id = 1;
+		subghz_decenc_ctl.ntx_raw_repeat =
+		    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
+		m1_led_fast_blink(LED_BLINK_ON_RGB,
+		                  LED_FASTBLINK_PWM_M,
+		                  LED_FASTBLINK_ONTIME_M);
+		return 0;
+	}
+
+	/* Re-arm failed — release peripherals so the radio is left idle. */
+	sub_ghz_raw_tx_stop();
+	sub_ghz_raw_samples_deinit(false);
+	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
+	m1_led_fast_blink(LED_BLINK_ON_RGB,
+	                  LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+	subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE;
+	return 1;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Tear down the replay engine — buffers, radio, temp file.
+ *
+ * Shared by the blocking BACK path and the async abort.  Idempotent: safe
+ * to call twice; the deinit helpers tolerate already-freed state.
+ *
+ * @param  unlink_path  If non-NULL, f_unlink() this path.  Pass NULL for
+ *                      direct-replay paths that have no temp file.
+ */
+static void subghz_replay_engine_teardown(const char *unlink_path)
+{
+	m1_led_fast_blink(LED_BLINK_ON_RGB,
+	                  LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+	sub_ghz_raw_samples_deinit(false);
+	sub_ghz_ring_buffers_deinit();
+	sub_ghz_tx_raw_deinit();
+	xQueueReset(main_q_hdl);
+	menu_sub_ghz_exit();
+	if (unlink_path && unlink_path[0] != '\0')
+		f_unlink(unlink_path);
+}
+
+/*============================================================================*/
+/**
  * @brief  Shared TX event loop for raw signal replay.
  *
  * Preconditions (caller must set before calling):
  *   - datfile_info.dat_filename  set to the .sgh file to stream
  *   - subghz_replay_freq, subghz_replay_mod, subghz_replay_band,
  *     subghz_replay_channel, subghz_custom_freq_hz, subghz_scan_config set
+ *
+ * Behaviour is governed by the file-static s_async_mode_request flag, set
+ * by the public *_async_start() wrappers.  When the flag is true, the
+ * function arms the first TX cycle and returns immediately (the Read Raw
+ * scene drives the event loop).  When false, the legacy private event loop
+ * runs to completion (used by Saved-scene PACKET emulate and Playlist).
  *
  * @param  unlink_path  If non-NULL, f_unlink() this path after TX completes.
  *                      Pass the temp file path for converter-path callers,
@@ -1541,6 +1629,9 @@ static const char *stristr(const char *haystack, const char *needle)
  */
 static uint8_t subghz_run_raw_replay(const char *unlink_path)
 {
+	const bool async = s_async_mode_request;
+	s_async_mode_request = false;  /* one-shot */
+
 	/* ── Init buffers and open the file for streaming ── */
 	if (sub_ghz_ring_buffers_init())
 	{
@@ -1600,10 +1691,34 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 	}
 	else
 	{
+		if (async)
+		{
+			/* Async: surface the failure as an error code; the scene will
+			 * draw its own indicator and the user dismisses with BACK. */
+			subghz_replay_engine_teardown(unlink_path);
+			return 6;
+		}
 		char err_msg[48];
 		snprintf(err_msg, sizeof(err_msg), "Band:%d Freq:%lu",
 		         subghz_replay_band, subghz_custom_freq_hz);
 		m1_message_box(&m1_u8g2, "Replay failed!", err_msg, "", "BACK to return");
+	}
+
+	if (async)
+	{
+		/* First TX is armed (or the start_message_box above ran).  Stash the
+		 * unlink path so sub_ghz_replay_async_abort() can clean it up later,
+		 * and return now so the scene's event loop can process Q_EVENT_SUBGHZ_TX
+		 * events from the DMA-TC ISR. */
+		s_async_unlink_path[0] = '\0';
+		if (unlink_path)
+		{
+			strncpy(s_async_unlink_path, unlink_path,
+			        sizeof(s_async_unlink_path) - 1);
+			s_async_unlink_path[sizeof(s_async_unlink_path) - 1] = '\0';
+		}
+		s_async_replay_active = true;
+		return 0;
 	}
 
 	/* ── Self-contained event loop (blocks until BACK) ── */
@@ -1640,35 +1755,10 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 					/* Replay again */
 					if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
 					{
-						sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
-						                   subghz_replay_band,
-						                   subghz_replay_channel,
-						                   tx_power_values[subghz_tx_power_idx]);
-						subghz_replay_ret_code = sub_ghz_raw_replay_init();
-						if (subghz_replay_ret_code != 1)
+						if (subghz_replay_engine_rearm() != 0)
 						{
-							double_buffer_ptr_id = 1;
-							subghz_decenc_ctl.ntx_raw_repeat =
-							    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
-							m1_led_fast_blink(LED_BLINK_ON_RGB,
-							                  LED_FASTBLINK_PWM_M,
-							                  LED_FASTBLINK_ONTIME_M);
-						}
-						else
-						{
-							sub_ghz_raw_tx_stop();
-							sub_ghz_raw_samples_deinit(false);
-							sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED,
-							                   SUB_GHZ_BAND_EOL, 0, 0);
-							/* Manual retry failed — surface the error via the
-							 * standard message box (which matches the rest of
-							 * this codebase) instead of drawing a legacy
-							 * inverted bottom bar that conflicts with the
-							 * caller scene's UI.  After dismissal, exit the
-							 * loop so the scene can redraw cleanly. */
-							m1_led_fast_blink(LED_BLINK_ON_RGB,
-							                  LED_FASTBLINK_PWM_OFF,
-							                  LED_FASTBLINK_ONTIME_OFF);
+							/* Manual retry failed — surface the error via
+							 * the standard message box, then exit. */
 							sub_ghz_ring_buffers_deinit();
 							sub_ghz_tx_raw_deinit();
 							m1_message_box(&m1_u8g2, "Replay failed!",
@@ -1687,25 +1777,9 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 				if (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE)
 				{
 					/* Auto-restart: loop continuously until BACK */
-					sub_ghz_set_opmode(SUB_GHZ_OPMODE_TX,
-					                   subghz_replay_band,
-					                   subghz_replay_channel,
-					                   tx_power_values[subghz_tx_power_idx]);
-					subghz_replay_ret_code = sub_ghz_raw_replay_init();
-					if (subghz_replay_ret_code != 1)
-					{
-						double_buffer_ptr_id = 1;
-						subghz_decenc_ctl.ntx_raw_repeat =
-						    SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT;
-					}
-					else
-					{
-						/* Restart failed — stop */
-						m1_led_fast_blink(LED_BLINK_ON_RGB,
-						                  LED_FASTBLINK_PWM_OFF,
-						                  LED_FASTBLINK_ONTIME_OFF);
-						subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE;
-					}
+					(void)subghz_replay_engine_rearm();
+					/* If rearm failed, subghz_replay_ret_code is now IDLE and
+					 * the next BACK / OK will gracefully exit. */
 				}
 			}
 		} /* while (running) */
@@ -1716,6 +1790,124 @@ static uint8_t subghz_run_raw_replay(const char *unlink_path)
 
 	if (unlink_path) f_unlink(unlink_path);
 	return 0;
+}
+
+/*============================================================================*/
+/* Async replay API — issue #469                                              */
+/*============================================================================*/
+
+/**
+ * @brief  True while an async replay session is in progress.
+ *
+ * Used by the Read Raw scene to gate on/off TX-state behaviour.  Safe to
+ * call from the main task at any time (no locking — fields are only
+ * mutated from the main task path).
+ */
+bool sub_ghz_replay_async_is_active(void)
+{
+	return s_async_replay_active;
+}
+
+/**
+ * @brief  Process one Q_EVENT_SUBGHZ_TX during async replay.
+ *
+ * @param  cycle_complete  Out: set true if the current TX cycle finished
+ *                          (parser entered IDLE).  Caller decides whether
+ *                          to restart (hold-to-repeat) or abort.
+ *
+ * @retval false  Engine no longer active (caller had not started one, or a
+ *                prior call already drained it).  *cycle_complete = true.
+ * @retval true   Engine processed the event.  *cycle_complete tells whether
+ *                more events are expected (false) or the cycle just ended (true).
+ */
+bool sub_ghz_replay_async_step(bool *cycle_complete)
+{
+	if (cycle_complete) *cycle_complete = true;
+	if (!s_async_replay_active)
+		return false;
+
+	subghz_replay_ret_code = sub_ghz_replay_continue(subghz_replay_ret_code);
+	if (cycle_complete)
+		*cycle_complete = (subghz_replay_ret_code == SUB_GHZ_RAW_DATA_PARSER_IDLE);
+	return true;
+}
+
+/**
+ * @brief  Re-arm TX after a completed cycle (hold-to-repeat).
+ *
+ * Must be called only when sub_ghz_replay_async_step() returned with
+ * *cycle_complete == true.  Returns 0 on success, 1 on init failure (the
+ * engine is torn down on failure and the caller must NOT call abort()).
+ */
+uint8_t sub_ghz_replay_async_restart(void)
+{
+	if (!s_async_replay_active)
+		return 1;
+
+	if (subghz_replay_engine_rearm() != 0)
+	{
+		/* Re-arm failed — release everything and drop async state */
+		sub_ghz_ring_buffers_deinit();
+		sub_ghz_tx_raw_deinit();
+		xQueueReset(main_q_hdl);
+		menu_sub_ghz_exit();
+		if (s_async_unlink_path[0] != '\0')
+			f_unlink(s_async_unlink_path);
+		s_async_unlink_path[0] = '\0';
+		s_async_replay_active = false;
+		return 1;
+	}
+	return 0;
+}
+
+/**
+ * @brief  Abort the async replay and tear down the engine.
+ *
+ * Safe to call from any state (idle or mid-burst).  Cancels TX, releases
+ * memory, powers off the radio, and unlinks the temp file if any.  No-op
+ * if no async session is active.
+ */
+void sub_ghz_replay_async_abort(void)
+{
+	if (!s_async_replay_active)
+		return;
+
+	subghz_replay_engine_teardown(s_async_unlink_path);
+	s_async_unlink_path[0] = '\0';
+	s_async_replay_active = false;
+	subghz_replay_ret_code = SUB_GHZ_RAW_DATA_PARSER_IDLE;
+}
+
+/**
+ * @brief  Start an async replay of a Flipper .sub file (RAW or key/PACKET).
+ *
+ * Returns immediately after the first TX burst is armed.  Same conversion
+ * semantics as sub_ghz_replay_flipper_file(); see that function for the
+ * full error code table.
+ */
+uint8_t sub_ghz_replay_flipper_file_async_start(const char *sub_path)
+{
+	s_async_mode_request = true;
+	uint8_t r = sub_ghz_replay_flipper_file(sub_path);
+	/* On error the wrapper already cleared the flag and tore down engine. */
+	s_async_mode_request = false;
+	return r;
+}
+
+/**
+ * @brief  Start an async replay of an M1 native .sgh NOISE file (direct path).
+ *
+ * Returns immediately after the first TX burst is armed.  Same call shape
+ * as sub_ghz_replay_datafile() (no conversion required).
+ */
+uint8_t sub_ghz_replay_datafile_async_start(const char *sgh_path,
+                                            uint32_t    frequency,
+                                            uint8_t     modulation)
+{
+	s_async_mode_request = true;
+	uint8_t r = sub_ghz_replay_datafile(sgh_path, frequency, modulation);
+	s_async_mode_request = false;
+	return r;
 }
 
 /*============================================================================*/

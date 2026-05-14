@@ -117,6 +117,8 @@ extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
 extern void subghz_raw_rssi_set_current_ext(float rssi_dbm);
 extern void subghz_raw_draw_frame_ext(void);
+extern void subghz_raw_draw_sin_ext(void);
+extern void subghz_raw_sin_advance_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
 extern uint8_t  sub_ghz_raw_recording_init_ext(void);
@@ -690,12 +692,84 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 stop_raw_rx(app);
                 app->need_redraw = true;
             }
+            else if (subghz_readraw_state_is_tx(app->raw_state))
+            {
+                /* Cancel mid-TX (issue #469): abort the async replay, restore
+                 * passive RX, and return to the originating state (Idle or
+                 * Loaded).  BACK never exits the scene mid-TX — the user must
+                 * press BACK again from the post-TX state to exit. */
+                SubGhzReadRawState prior =
+                    subghz_readraw_prior_state_for_tx(app->raw_state);
+                sub_ghz_replay_async_abort();
+                start_passive_rx(app);
+                app->raw_state = prior;
+                app->need_redraw = true;
+            }
             else
             {
                 /* Exit scene */
                 subghz_scene_pop(app);
             }
             return true;
+
+        case SubGhzEventTxComplete:
+        {
+            /* Async TX cycle completed (issue #469).  Drive the state machine:
+             *   - cycle not done yet  → keep streaming (next event resumes)
+             *   - cycle done, OK held → restart (hold-to-repeat)
+             *   - cycle done, OK off  → return to Idle/Loaded
+             *
+             * Only relevant while in a TX state; ignore otherwise (stray event
+             * arriving after a BACK abort, etc.). */
+            if (!subghz_readraw_state_is_tx(app->raw_state))
+                return false;
+
+            bool cycle_done = true;
+            sub_ghz_replay_async_step(&cycle_done);
+
+            if (cycle_done)
+            {
+                /* Peek OK button state without consuming any queue events.
+                 * BUTTON_IS_PRESSED / BUTTON_IS_LPRESSED both indicate the
+                 * button is currently held; BUTTON_IS_IDLE means released. */
+                uint8_t ok_status = buttons_ctl[BUTTON_OK_KP_ID].status;
+                bool    ok_held   = (ok_status == BUTTON_IS_PRESSED) ||
+                                    (ok_status == BUTTON_IS_LPRESSED);
+
+                if (ok_held)
+                {
+                    /* Hold-to-repeat: rearm TX and transition to the repeat variant.
+                     * The repeat-variant state is purely cosmetic in the current
+                     * implementation — there is no behavioural difference, but the
+                     * separation matches Momentum's state names and lets the UI
+                     * differentiate first-shot TX from a held repeat in the future. */
+                    if (sub_ghz_replay_async_restart() == 0)
+                    {
+                        app->raw_state = subghz_readraw_repeat_state_for_tx(app->raw_state);
+                    }
+                    else
+                    {
+                        /* Restart failed — engine torn down by the API.  Restore
+                         * passive RX and the originating state. */
+                        SubGhzReadRawState prior =
+                            subghz_readraw_prior_state_for_tx(app->raw_state);
+                        start_passive_rx(app);
+                        app->raw_state = prior;
+                    }
+                }
+                else
+                {
+                    /* TX cycle done, no repeat requested — clean up. */
+                    SubGhzReadRawState prior =
+                        subghz_readraw_prior_state_for_tx(app->raw_state);
+                    sub_ghz_replay_async_abort();
+                    start_passive_rx(app);
+                    app->raw_state = prior;
+                }
+            }
+            app->need_redraw = true;
+            return true;
+        }
 
         case SubGhzEventOk:
             if (app->raw_state == SubGhzReadRawStateStart)
@@ -729,20 +803,19 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             else if (app->raw_state == SubGhzReadRawStateIdle ||
                      app->raw_state == SubGhzReadRawStateLoaded)
             {
-                /* Send — replay the raw file (blocking delegate).
+                /* Send — async replay the raw file (non-blocking — issue #469).
                  *
                  * Works for both freshly-recorded (Idle) and pre-loaded (Loaded)
                  * files.  After TX, returns to whichever state triggered the send:
-                 *   Idle   → Idle   (Momentum: TX   → IDLE)
+                 *   Idle   → Idle   (Momentum: TX        → IDLE)
                  *   Loaded → Loaded (Momentum: LoadKeyTX → LoadKeyIDLE)
                  *
-                 * Transition to Sending state and force a draw() call so the
-                 * display shows the TX indicator BEFORE the blocking replay call.
-                 * This is the M1 analogue of Momentum's TX/TXRepeat and
-                 * LoadKeyTX/LoadKeyTXRepeat states — the difference is that M1's
-                 * TX is blocking so there is no animation, but the correct UI
-                 * state (no action buttons, "TX..." label) is shown for the
-                 * entire duration of the send.
+                 * Transition to the appropriate TX state (TX or LoadKeyTX) and
+                 * arm the async replay engine.  Subsequent Q_EVENT_SUBGHZ_TX
+                 * events are translated into SubGhzEventTxComplete by the scene
+                 * manager and processed below, which:
+                 *   - On cycle complete with OK still held → restart (TXRepeat / LoadKeyTXRepeat)
+                 *   - On cycle complete with OK released   → abort + return to prior
                  *
                  * The replay path (sub_ghz_replay_flipper_file) uses TIM1 for
                  * TX PWM, which conflicts with the RX input-capture on TIM1 CH1.
@@ -752,8 +825,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 bool from_loaded = (app->raw_state == SubGhzReadRawStateLoaded);
                 if (raw_filepath[0] != '\0')
                 {
-                    app->raw_state = SubGhzReadRawStateSending;
-                    draw(app);  /* Force one frame showing TX indicator before blocking */
+                    SubGhzReadRawState tx_state =
+                        subghz_readraw_tx_state_for_prior(app->raw_state);
+                    app->raw_state = tx_state;
 
                     sub_ghz_rx_deinit_ext();
 
@@ -761,28 +835,26 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     if (from_loaded && app->raw_load_is_native && app->raw_load_freq_hz != 0)
                     {
                         /* M1 native .sgh file — use direct streaming replay */
-                        ret = sub_ghz_replay_datafile(raw_filepath,
-                                                      app->raw_load_freq_hz,
-                                                      app->raw_load_mod);
+                        ret = sub_ghz_replay_datafile_async_start(raw_filepath,
+                                                                  app->raw_load_freq_hz,
+                                                                  app->raw_load_mod);
                     }
                     else
                     {
                         /* Flipper-format .sub RAW file or freshly-recorded capture */
-                        ret = sub_ghz_replay_flipper_file(raw_filepath);
+                        ret = sub_ghz_replay_flipper_file_async_start(raw_filepath);
                     }
-
-                    /* Restart passive RX using the user-selected config.
-                     * start_passive_rx() re-applies app->freq_idx/mod_idx so the
-                     * scene returns to the correct band/modulation even if replay
-                     * mutated subghz_scan_config for a CUSTOM band. */
-                    start_passive_rx(app);
-
-                    /* TX complete — return to the originating state */
-                    app->raw_state = from_loaded ? SubGhzReadRawStateLoaded
-                                                 : SubGhzReadRawStateIdle;
 
                     if (ret != 0)
                     {
+                        /* Async start failed — engine torn down by the wrapper.
+                         * Restore passive RX and the prior state, then surface
+                         * the error.  start_passive_rx() re-applies the user's
+                         * freq_idx/mod_idx in case the replay setup mutated
+                         * subghz_scan_config for a CUSTOM band. */
+                        start_passive_rx(app);
+                        app->raw_state = subghz_readraw_prior_state_for_tx(tx_state);
+
                         char err_buf[32];
                         const char *err = err_buf;
                         snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
@@ -799,6 +871,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                         m1_message_box(&m1_u8g2, "Send failed", err, "",
                                        "BACK to return");
                     }
+                    /* On success: scene's event loop drives TX state machine
+                     * via SubGhzEventTxComplete (no inline blocking). */
                 }
                 app->need_redraw = true;
             }
@@ -944,9 +1018,16 @@ static void scene_on_exit(SubGhzApp *app)
          * the file; the teardown below then de-initialises the timer. */
         stop_raw_rx(app);
     }
-    /* In Start or Idle: TIM1 is either never started (Start fallback) or
-     * already paused by stop_raw_rx() (Idle).  sub_ghz_rx_deinit_ext()
-     * checks the timer state before de-initialising and is safe either way. */
+    else if (subghz_readraw_state_is_tx(app->raw_state))
+    {
+        /* Async TX was in progress — cancel it so the radio is left idle
+         * and the temp file is unlinked (issue #469).  Safe to call even if
+         * the engine has already drained. */
+        sub_ghz_replay_async_abort();
+    }
+    /* In Start, Idle, or Loaded: TIM1 is either never started or already
+     * paused by stop_raw_rx().  sub_ghz_rx_deinit_ext() checks the timer
+     * state before de-initialising and is safe either way. */
 
     /* Full radio teardown — powers off SI4463 and resets STM32 timer */
     sub_ghz_rx_deinit_ext();
@@ -997,10 +1078,17 @@ static void draw(SubGhzApp *app)
             right_status = right_buf;
             break;
         case SubGhzReadRawStateIdle:
-        case SubGhzReadRawStateSending:
+        case SubGhzReadRawStateTX:
+        case SubGhzReadRawStateTXRepeat:
             snprintf(right_buf, sizeof(right_buf), "%lu spl.",
                      (unsigned long)app->raw_sample_count);
             right_status = right_buf;
+            break;
+        case SubGhzReadRawStateLoadKeyTX:
+        case SubGhzReadRawStateLoadKeyTXRepeat:
+            /* Loaded variants: show "RAW" — sample count for a loaded file is
+             * not tracked in app->raw_sample_count (the file came from disk). */
+            right_status = "RAW";
             break;
     }
 
@@ -1051,15 +1139,13 @@ static void draw(SubGhzApp *app)
 
     /* Text overlay in the waveform area.
      * Idle/Loaded: Filename centered (so the user knows which capture they have).
-     * Sending:     "TX..." centered (Momentum TX state equivalent — no action buttons). */
-    if (app->raw_state == SubGhzReadRawStateSending)
+     * TX states:   Animated sine wave (Momentum parity — issue #469).  The TX
+     *              state machine drives this animation by advancing the
+     *              shared subghz_raw_sin_idx counter once per draw tick. */
+    if (subghz_readraw_state_is_tx(app->raw_state))
     {
-        const char *lbl = "TX...";
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, lbl);
-        uint8_t fx = (tw < 115) ? (115 - tw) / 2 : 0;
-        u8g2_DrawStr(&m1_u8g2, fx, 35, lbl);
+        subghz_raw_sin_advance_ext();
+        subghz_raw_draw_sin_ext();
     }
     else if ((app->raw_state == SubGhzReadRawStateIdle ||
               app->raw_state == SubGhzReadRawStateLoaded) && raw_filepath[0] != '\0')
@@ -1103,9 +1189,12 @@ static void draw(SubGhzApp *app)
                 ok_circle_8x8, "Send",
                 arrowright_8x8, "More");
             break;
-        case SubGhzReadRawStateSending:
-            /* No button bar during blocking TX — matches Momentum's TX state which
-             * hides all action buttons and shows only the sine wave animation. */
+        case SubGhzReadRawStateTX:
+        case SubGhzReadRawStateTXRepeat:
+        case SubGhzReadRawStateLoadKeyTX:
+        case SubGhzReadRawStateLoadKeyTXRepeat:
+            /* No button bar during async TX — matches Momentum's TX states
+             * which hide all action buttons and show only the sine wave. */
             break;
     }
 

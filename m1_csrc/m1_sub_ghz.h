@@ -13,6 +13,7 @@
 #ifndef M1_SUB_GHZ_H_
 #define M1_SUB_GHZ_H_
 
+#include <stdbool.h>
 #include "m1_io_defs.h"
 #include "m1_ring_buffer.h"
 
@@ -168,6 +169,69 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
  * @retval 0 = success, non-zero = error code
  */
 uint8_t sub_ghz_replay_datafile(const char *sgh_path, uint32_t frequency, uint8_t modulation);
+
+/*============================================================================*/
+/* Async replay API — issue #469                                              */
+/*============================================================================*/
+
+/**
+ * @brief  Start an async replay of a Flipper .sub file (RAW or key/PACKET).
+ *
+ * Same conversion semantics as sub_ghz_replay_flipper_file(); returns
+ * immediately after arming the first TX burst.  The caller (scene event
+ * handler) MUST then drive the state machine:
+ *   - On Q_EVENT_SUBGHZ_TX, call sub_ghz_replay_async_step()
+ *   - To repeat after a cycle ended, call sub_ghz_replay_async_restart()
+ *   - To cancel (e.g. BACK), call sub_ghz_replay_async_abort()
+ *
+ * @retval 0     Async TX armed; expect Q_EVENT_SUBGHZ_TX events
+ * @retval !=0   Init failure (see sub_ghz_replay_flipper_file).  The engine
+ *               is fully torn down on failure; do NOT call abort().
+ */
+uint8_t sub_ghz_replay_flipper_file_async_start(const char *sub_path);
+
+/**
+ * @brief  Start an async replay of an M1 native .sgh NOISE file.
+ *
+ * Same call shape as sub_ghz_replay_datafile().  See
+ * sub_ghz_replay_flipper_file_async_start() for the lifecycle contract.
+ */
+uint8_t sub_ghz_replay_datafile_async_start(const char *sgh_path,
+                                            uint32_t    frequency,
+                                            uint8_t     modulation);
+
+/**
+ * @brief  Process one Q_EVENT_SUBGHZ_TX event during async replay.
+ *
+ * @param  cycle_complete  Out-only.  Set to true when the current TX cycle
+ *                          finished (parser entered IDLE state); set to false
+ *                          while streaming continues.  Caller decides whether
+ *                          to restart (hold-to-repeat) or abort.
+ * @retval false  No async session active (caller's bookkeeping is stale).
+ * @retval true   Event processed; *cycle_complete tells next action.
+ */
+bool sub_ghz_replay_async_step(bool *cycle_complete);
+
+/**
+ * @brief  Re-arm TX after a completed cycle.
+ *
+ * Call only when sub_ghz_replay_async_step() set *cycle_complete = true.
+ * @retval 0     TX re-armed; expect more Q_EVENT_SUBGHZ_TX events.
+ * @retval !=0   Re-arm failed; engine torn down (do NOT call abort()).
+ */
+uint8_t sub_ghz_replay_async_restart(void);
+
+/**
+ * @brief  Abort the async replay and tear down the engine.
+ *
+ * Safe to call from any state (idle or mid-burst).  No-op if no session.
+ */
+void sub_ghz_replay_async_abort(void);
+
+/**
+ * @brief  True while an async replay session is in progress.
+ */
+bool sub_ghz_replay_async_is_active(void);
 
 /* Scene-based UI entry point (new Flipper-inspired architecture) */
 void sub_ghz_scene_entry(void);

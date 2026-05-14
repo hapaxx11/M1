@@ -195,6 +195,22 @@ endif()
 add_test(NAME flipper_subghz COMMAND test_flipper_subghz)
 
 # ------------------------------------------------------------------
+# Module under test: Read Raw TX state-machine helpers (issue #469)
+# Pure-logic inlines from m1_subghz_scene.h that encode the async TX
+# state-dispatch decision.  Test mirrors the enum + helpers to avoid
+# pulling in HAL/FreeRTOS headers; if the canonical source changes
+# the mirror MUST be kept in sync (see test file header comment).
+# ------------------------------------------------------------------
+add_executable(test_subghz_readraw_states
+    test_subghz_readraw_states.c
+)
+target_link_libraries(test_subghz_readraw_states PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_readraw_states PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_readraw_states COMMAND test_subghz_readraw_states)
+
+# ------------------------------------------------------------------
 # Module under test: flipper_file (hex/int32 parsers + kv parser)
 # Stubs needed: ff.h (FatFS types only — no actual I/O in test)
 # Bug context: Flipper .sub/.rfid/.nfc/.ir file import had parsing
