@@ -476,6 +476,7 @@ static uint8_t sub_ghz_ring_buffers_init(void);
 static void sub_ghz_ring_buffers_deinit(void);
 static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data);
 static void sub_ghz_tx_raw_init(void);
+static void sub_ghz_tx_raw_deinit_impl(bool reset_main_q);
 static void sub_ghz_tx_raw_deinit(void);
 
 static void sub_ghz_set_opmode(uint8_t opmode, uint8_t band, uint8_t channel, uint8_t tx_power);
@@ -1634,7 +1635,7 @@ uint8_t sub_ghz_replay_start_async(void)
  * @brief  Internal teardown for async replay.
  *
  * Idempotent: safe to call multiple times.  Frees buffers, stops TX DMA,
- * turns off LED blink, drains the main queue, and powers down the SI4463.
+ * turns off LED blink and powers down the SI4463.
  * Leaves s_replay_async_active = false.
  */
 /*============================================================================*/
@@ -1649,13 +1650,9 @@ static void subghz_replay_async_teardown(void)
 	sub_ghz_raw_tx_stop();
 	sub_ghz_raw_samples_deinit(false);
 	sub_ghz_ring_buffers_deinit();
-	sub_ghz_tx_raw_deinit();
+	sub_ghz_tx_raw_deinit_impl(false);
 	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
 	subghz_decenc_ctl.ntx_raw_repeat = 0;
-
-	/* Drain any pending Q_EVENT_SUBGHZ_TX so they do not race the next user
-	 * action.  Keypad events live on a different queue and are preserved. */
-	xQueueReset(main_q_hdl);
 	menu_sub_ghz_exit();
 }
 
@@ -3420,7 +3417,7 @@ static void sub_ghz_ring_buffers_deinit(void)
   * @retval None
   */
 /*============================================================================*/
-static void sub_ghz_tx_raw_deinit(void)
+static void sub_ghz_tx_raw_deinit_impl(bool reset_main_q)
 {
 	GPIO_InitTypeDef gpio_init_struct = {0};
 
@@ -3452,8 +3449,13 @@ static void sub_ghz_tx_raw_deinit(void)
 	//SI446x_Set_Tx_Power(12);
 	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
 
-	if ( main_q_hdl != NULL )
+	if (reset_main_q && main_q_hdl != NULL)
 		xQueueReset(main_q_hdl);
+}
+
+static void sub_ghz_tx_raw_deinit(void)
+{
+	sub_ghz_tx_raw_deinit_impl(true);
 } // static void sub_ghz_tx_raw_deinit(void)
 
 
