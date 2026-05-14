@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.20] - 2026-05-14
+
+### Fixed
+
+- **Sub-menu selection highlight and scrollbar spacing polish** — The sub-menu selection highlight no longer extends to the very leftmost pixel, the scrollbar track/handle are shifted 1 px left so the handle no longer touches the rightmost display pixel, and the standard scene-list highlight width is reduced by 1 px to preserve a gap between highlight and scrollbar in dark mode.
 ## [0.9.1.19] - 2026-05-14
 
 ### Fixed
