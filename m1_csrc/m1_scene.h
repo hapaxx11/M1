@@ -132,7 +132,9 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 /* Menu drawing helper                                                        */
 /*============================================================================*/
 
-/** Menu layout constants (matching SubGhz menu pattern) */
+/** Menu layout constants — 1px left inset on highlight, 1px gap before scrollbar.
+ *  Note: Sub-GHz and config-style menus use their own local constants (SCROLLBAR_X=125,
+ *  TEXT_W=124) and intentionally differ from these shared scene values. */
 #define M1_MENU_AREA_TOP     12   /**< Y below title + separator line       */
 #define M1_MENU_AREA_H       52   /**< Available height for menu items (64-12) */
 #define M1_MENU_ITEM_H_SMALL  8   /**< Pixel height per row — Small mode    */
