@@ -226,8 +226,9 @@ patch + config reset to restore the radio.
 
 **Rules:**
 - If you call `sub_ghz_replay_flipper_file()` or `sub_ghz_replay_datafile()` (blocking
-  wrappers used by the Saved PACKET path and Playlist), call `menu_sub_ghz_init()`
-  immediately after it returns (both call `menu_sub_ghz_exit()` internally).
+  wrappers used by Saved, Playlist, Remote, Bind Wizard, Add Manually, and Flipper
+  integration replay paths), call `menu_sub_ghz_init()` before any subsequent direct
+  radio operation outside the wrapper (both call `menu_sub_ghz_exit()` internally).
 - The Read Raw scene uses the async API (`sub_ghz_replay_prepare_*/start_async`) and
   restores radio state via `start_passive_rx()` — it does **not** call the blocking
   wrappers directly for its own TX.
