@@ -108,13 +108,13 @@ typedef enum {
 /* Read Raw sub-states                                                        */
 /*============================================================================*/
 
-typedef enum {
-    SubGhzReadRawStateStart = 0,   /**< Fresh entry — no capture exists */
-    SubGhzReadRawStateRecording,   /**< Actively recording raw RF data */
-    SubGhzReadRawStateIdle,        /**< Recording done — capture file on SD */
-    SubGhzReadRawStateSending,     /**< Blocking replay TX in progress (Momentum: TX/TXRepeat) */
-    SubGhzReadRawStateLoaded,      /**< Pre-existing RAW file loaded from Saved browser (Momentum: LoadKeyIDLE) */
-} SubGhzReadRawState;
+/* Read Raw state enum + pure-logic helpers live in their own header so they
+ * can be unit-tested on the host without pulling in the full scene context. */
+#include "m1_subghz_read_raw_state.h"
+
+/* The legacy SubGhzReadRawStateSending alias was removed once all callers
+ * migrated to the explicit four-state TX enum.  Do not reintroduce it —
+ * see CLAUDE.md "Async / Non-Blocking RTOS Best Practices". */
 
 /*============================================================================*/
 /* Application context — replaces scattered globals                           */
