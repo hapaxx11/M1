@@ -26,11 +26,14 @@
 static char *read_file(const char *relpath)
 {
     char path[512];
+    int written;
     FILE *fp;
     long size;
     char *buf;
 
-    snprintf(path, sizeof(path), "%s/%s", M1_ROOT, relpath);
+    written = snprintf(path, sizeof(path), "%s/%s", M1_ROOT, relpath);
+    TEST_ASSERT_TRUE_MESSAGE(written > 0 && (size_t)written < sizeof(path),
+                             "source path exceeded fixed test buffer");
     fp = fopen(path, "rb");
     TEST_ASSERT_NOT_NULL_MESSAGE(fp, path);
 
@@ -54,6 +57,10 @@ static char *slice_between(const char *content, const char *start, const char *e
     size_t len;
     char *slice;
 
+    /* This suite is intentionally source-level: the production contract is
+     * "async abort preserves main_q_hdl, blocking wrapper flushes it".  The
+     * TX path is hardware-coupled, so we pin the relevant function regions in
+     * source instead of attempting to execute the STM32-only code on host. */
     TEST_ASSERT_NOT_NULL_MESSAGE(p_start, start);
     p_end = strstr(p_start, end);
     TEST_ASSERT_NOT_NULL_MESSAGE(p_end, end);

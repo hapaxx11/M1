@@ -1732,6 +1732,18 @@ bool sub_ghz_replay_async_is_active(void)
 	return s_replay_async_active;
 }
 
+/*============================================================================*/
+/**
+ * @brief  Flush the shared main queue when a legacy blocking replay wrapper
+ *         returns control to its caller scene.
+ *
+ * The async Read Raw scene must preserve queued events, but Saved / Playlist /
+ * Remote / Bind Wizard temporarily own main_q_hdl via their private blocking
+ * replay loop.  They flush on return so queued keypad or late TX-complete
+ * events do not leak into the caller scene.  main_q_hdl is null-guarded for
+ * early init / teardown paths.
+ */
+/*============================================================================*/
 static void subghz_replay_blocking_reset_queue(void)
 {
 	if (main_q_hdl != NULL)
