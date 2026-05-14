@@ -1610,13 +1610,20 @@ uint8_t sub_ghz_replay_start_async(void)
 	else if (subghz_replay_ret_code == 0)
 	{
 		/* TX init failed inside sub_ghz_replay_start without ISM block.
-		 * Surface a generic error and tear down using the same non-resetting
-		 * async cleanup path, so unrelated queued scene/keypad input is kept. */
+		 * Surface a generic error and tear down with a non-resetting cleanup
+		 * sequence, so unrelated queued scene/keypad input is kept. */
 		char err_msg[48];
 		snprintf(err_msg, sizeof(err_msg), "Band:%d Freq:%lu",
 		         subghz_replay_band, subghz_custom_freq_hz);
 		m1_message_box(&m1_u8g2, "Replay failed!", err_msg, "", "BACK to return");
-		subghz_replay_async_teardown();
+
+		/* Start failed before s_replay_async_active was set, so call explicit
+		 * no-queue-reset cleanup here instead of subghz_replay_async_teardown(). */
+		sub_ghz_raw_samples_deinit(false);
+		sub_ghz_ring_buffers_deinit();
+		sub_ghz_tx_raw_deinit_impl(false);
+		sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, SUB_GHZ_BAND_EOL, 0, 0);
+		subghz_decenc_ctl.ntx_raw_repeat = 0;
 		menu_sub_ghz_exit();
 		return 6;
 	}
