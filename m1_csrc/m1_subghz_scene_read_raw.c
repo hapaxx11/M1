@@ -47,15 +47,18 @@
  *              This is Momentum's LoadKeyIDLE + MoreRAW pattern — entered when a
  *              pre-recorded RAW file is opened from the Saved browser OR when the
  *              user renames a freshly recorded file (IDLE → Loaded after Save).
- *   TX / LoadKeyTX: Spectrogram frozen; "TX..." label in waveform area; no
+ *   TX / LoadKeyTX: Spectrogram replaced by an animated sine wave inside
+ *              the waveform box (Momentum-style live-TX indicator); no
  *              button bar.  Entered from either IDLE (→ TX) or LOADED
  *              (→ LoadKeyTX).  TX runs asynchronously: the DMA TC ISR posts
  *              Q_EVENT_SUBGHZ_TX which is delivered here as
- *              SubGhzEventTxComplete.  BACK aborts the in-flight TX
- *              synchronously and returns to the originating state
- *              (TX → IDLE, LoadKeyTX → LOADED).  Sine-wave animation and
- *              hold-to-repeat (TXRepeat / LoadKeyTXRepeat) are reserved
- *              for Phase 2 of the async TX work.
+ *              SubGhzEventTxComplete.  Hold-to-repeat: if the OK button is
+ *              still held when a burst completes, the scene transitions
+ *              TX → TXRepeat (or LoadKeyTX → LoadKeyTXRepeat) and the
+ *              async driver auto-rearms.  Releasing OK returns to
+ *              IDLE/LOADED.  BACK aborts the in-flight TX synchronously
+ *              and returns to the originating state (TX/TXRepeat → IDLE,
+ *              LoadKeyTX/LoadKeyTXRepeat → LOADED).
  *
  *   scene_on_enter → START state (passive listen, radio on, no file open).
  *   OK → RECORDING (opens SD file, arms TIM1 ISR).
@@ -119,6 +122,8 @@ extern void subghz_raw_rssi_reset_ext(void);
 extern void subghz_raw_rssi_push_ext(float rssi_dbm, bool trace);
 extern void subghz_raw_rssi_set_current_ext(float rssi_dbm);
 extern void subghz_raw_draw_frame_ext(void);
+extern void subghz_raw_draw_sin_ext(void);
+extern void subghz_raw_sin_advance_ext(void);
 
 /* Raw recording file management from m1_sub_ghz.c */
 extern uint8_t  sub_ghz_raw_recording_init_ext(void);
@@ -893,7 +898,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else if (subghz_read_raw_state_is_tx(app->raw_state))
             {
-                /* OK during TX is a no-op in Phase 1 (hold-to-repeat is Phase 2). */
+                /* OK during TX is a no-op here — hold-to-repeat is driven
+                 * by the GPIO peek inside SubGhzEventTxComplete, not by
+                 * BUTTON_EVENT_CLICK on the keypad queue.  This branch
+                 * just absorbs the click so it does not propagate. */
             }
             return true;
 
@@ -1024,12 +1032,46 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
              * Only meaningful in a TX state; ignored otherwise (defensive —
              * a late event can arrive after sub_ghz_replay_abort() ran, and
              * continue_async() handles that case but we still don't want to
-             * change scene state). */
+             * change scene state).
+             *
+             * Phase 2 hold-to-repeat:  Peek the OK button GPIO directly —
+             * we MUST NOT consume keypad events from button_events_q_hdl
+             * because the user might just be tapping OK and we still need
+             * the next translate_button() to deliver SubGhzEventOk to other
+             * scene logic.  GPIO read is a true peek: no FreeRTOS state
+             * mutation, no queue side effects.
+             *
+             * If OK is still held at completion, transition to the matching
+             * repeat state (TX → TXRepeat, LoadKeyTX → LoadKeyTXRepeat) and
+             * call continue_async(true) so the async driver auto-restarts
+             * the next burst.  Otherwise (one-shot end or repeat release)
+             * call continue_async(false) and return to Idle/Loaded. */
             if (subghz_read_raw_state_is_tx(app->raw_state))
             {
+                bool ok_held = (HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port,
+                                                 BUTTON_OK_Pin)
+                                 == BUTTON_PRESS_STATE);
                 sub_ghz_replay_async_status_t st =
-                    sub_ghz_replay_continue_async(false);
-                if (st != SUBGHZ_REPLAY_ASYNC_RUNNING)
+                    sub_ghz_replay_continue_async(ok_held);
+                if (st == SUBGHZ_REPLAY_ASYNC_RUNNING)
+                {
+                    if (ok_held)
+                    {
+                        /* Promote to the repeat state.  Idempotent when we
+                         * are already in TXRepeat / LoadKeyTXRepeat. */
+                        SubGhzReadRawState next =
+                            subghz_read_raw_state_to_repeat(app->raw_state);
+                        if (next != app->raw_state)
+                        {
+                            app->raw_state = next;
+                            app->need_redraw = true;
+                        }
+                    }
+                    /* else: running but not held — driver is finishing the
+                     * already-armed burst; stay in current TX state until
+                     * the next completion event arrives. */
+                }
+                else
                 {
                     /* DONE or ERROR — teardown already finished inside the
                      * async driver.  Clean up scene-local temp file and
@@ -1180,27 +1222,32 @@ static void draw(SubGhzApp *app)
         subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
     }
 
-    /* Draw the RSSI spectrogram for all states.
+    /* Draw the RSSI spectrogram for non-TX states.
      * Start:     Live RSSI at frozen cursor (no scroll).
      * Recording: Captured edges with cursor advancing on RxData.
-     * Idle:      Frozen spectrogram of the completed capture. */
-    subghz_raw_rssi_draw_ext();
+     * Idle:      Frozen spectrogram of the completed capture.
+     *
+     * TX / LoadKeyTX (and their Repeat variants): replace the spectrogram
+     * with an animated sine wave to indicate live transmission.  The phase
+     * counter advances once per draw() so the wave moves at the scene's
+     * draw tick rate (≥5 fps thanks to the 200 ms queue timeout that the
+     * scene loop applies to TX states). */
+    if (subghz_read_raw_state_is_tx(app->raw_state))
+    {
+        subghz_raw_draw_sin_ext();
+        subghz_raw_sin_advance_ext();
+    }
+    else
+    {
+        subghz_raw_rssi_draw_ext();
+    }
 
     /* Text overlay in the waveform area.
      * Idle/Loaded:    Filename centered (so the user knows which capture they have).
-     * TX/LoadKeyTX:   "TX..." centered (Momentum TX state — no action buttons).
-     *                  Phase 1 has no sine animation; that lands in Phase 2. */
-    if (subghz_read_raw_state_is_tx(app->raw_state))
-    {
-        const char *lbl = "TX...";
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-        uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, lbl);
-        uint8_t fx = (tw < 115) ? (115 - tw) / 2 : 0;
-        u8g2_DrawStr(&m1_u8g2, fx, 35, lbl);
-    }
-    else if ((app->raw_state == SubGhzReadRawStateIdle ||
-              app->raw_state == SubGhzReadRawStateLoaded) && raw_filepath[0] != '\0')
+     * TX/LoadKeyTX:   No overlay — the animated sine wave itself is the TX indicator. */
+    if (!subghz_read_raw_state_is_tx(app->raw_state) &&
+        (app->raw_state == SubGhzReadRawStateIdle ||
+         app->raw_state == SubGhzReadRawStateLoaded) && raw_filepath[0] != '\0')
     {
         const char *fname = extract_filename(raw_filepath);
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -1246,7 +1293,9 @@ static void draw(SubGhzApp *app)
         case SubGhzReadRawStateLoadKeyTX:
         case SubGhzReadRawStateLoadKeyTXRepeat:
             /* No button bar during async TX — matches Momentum's TX state which
-             * hides all action buttons.  Sine wave animation is Phase 2. */
+             * hides all action buttons.  The animated sine wave drawn in the
+             * waveform area indicates live transmission; releasing OK at the
+             * end of a burst returns to Idle/Loaded (holding OK re-arms). */
             break;
     }
 

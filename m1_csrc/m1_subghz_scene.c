@@ -271,8 +271,9 @@ void subghz_scene_app_run(void)
             rx_active = true;
         else if (cur_scene == SubGhzSceneReadRaw &&
                  (app.raw_state == SubGhzReadRawStateRecording ||
-                  app.raw_state == SubGhzReadRawStateStart))
-            rx_active = true;  /* periodic refresh: RSSI bar in Recording; signal-detection poll in Start */
+                  app.raw_state == SubGhzReadRawStateStart ||
+                  subghz_read_raw_state_is_tx(app.raw_state)))
+            rx_active = true;  /* periodic refresh: RSSI bar in Recording; signal-detection poll in Start; sine-wave animation in TX states */
 
         /* Wait for event: use 200ms poll during active RX for RSSI refresh */
         TickType_t wait = (app.hopper_active || rx_active) ?

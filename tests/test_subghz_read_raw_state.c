@@ -99,6 +99,67 @@ void test_every_tx_state_returns_to_idle_or_loaded(void)
     }
 }
 
+/*============================================================================*/
+/* subghz_read_raw_state_to_repeat                                            */
+/*============================================================================*/
+
+void test_to_repeat_promotes_tx_to_tx_repeat(void)
+{
+    /* Fresh-recorded TX → TXRepeat when OK is still held. */
+    TEST_ASSERT_EQUAL(SubGhzReadRawStateTXRepeat,
+                      subghz_read_raw_state_to_repeat(SubGhzReadRawStateTX));
+}
+
+void test_to_repeat_promotes_loadkeytx_to_loadkeytx_repeat(void)
+{
+    /* Pre-loaded LoadKeyTX → LoadKeyTXRepeat when OK is still held. */
+    TEST_ASSERT_EQUAL(SubGhzReadRawStateLoadKeyTXRepeat,
+                      subghz_read_raw_state_to_repeat(SubGhzReadRawStateLoadKeyTX));
+}
+
+void test_to_repeat_is_idempotent_in_repeat_states(void)
+{
+    /* Already repeating — staying in repeat is the correct hold-down path. */
+    TEST_ASSERT_EQUAL(SubGhzReadRawStateTXRepeat,
+                      subghz_read_raw_state_to_repeat(SubGhzReadRawStateTXRepeat));
+    TEST_ASSERT_EQUAL(SubGhzReadRawStateLoadKeyTXRepeat,
+                      subghz_read_raw_state_to_repeat(SubGhzReadRawStateLoadKeyTXRepeat));
+}
+
+void test_to_repeat_leaves_non_tx_states_unchanged(void)
+{
+    /* Defensive: must never promote a non-TX state into a TX-side state. */
+    SubGhzReadRawState non_tx[] = {
+        SubGhzReadRawStateStart,
+        SubGhzReadRawStateRecording,
+        SubGhzReadRawStateIdle,
+        SubGhzReadRawStateLoaded,
+    };
+    for (unsigned i = 0; i < sizeof(non_tx) / sizeof(non_tx[0]); i++)
+        TEST_ASSERT_EQUAL(non_tx[i], subghz_read_raw_state_to_repeat(non_tx[i]));
+}
+
+void test_to_repeat_result_is_always_a_tx_state_when_input_is(void)
+{
+    /* Cross-helper consistency: promoting any TX state must yield a TX state. */
+    SubGhzReadRawState tx_states[] = {
+        SubGhzReadRawStateTX,
+        SubGhzReadRawStateTXRepeat,
+        SubGhzReadRawStateLoadKeyTX,
+        SubGhzReadRawStateLoadKeyTXRepeat,
+    };
+    for (unsigned i = 0; i < sizeof(tx_states) / sizeof(tx_states[0]); i++)
+    {
+        SubGhzReadRawState repeated = subghz_read_raw_state_to_repeat(tx_states[i]);
+        TEST_ASSERT_TRUE(subghz_read_raw_state_is_tx(repeated));
+        /* And the post-TX target is preserved across the repeat promotion —
+         * TX/TXRepeat both return to Idle; LoadKeyTX/LoadKeyTXRepeat both
+         * return to Loaded. */
+        TEST_ASSERT_EQUAL(subghz_read_raw_state_after_tx(tx_states[i]),
+                          subghz_read_raw_state_after_tx(repeated));
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -108,5 +169,10 @@ int main(void)
     RUN_TEST(test_after_tx_loaded_file_returns_to_loaded);
     RUN_TEST(test_after_tx_non_tx_state_is_safe_idle_fallthrough);
     RUN_TEST(test_every_tx_state_returns_to_idle_or_loaded);
+    RUN_TEST(test_to_repeat_promotes_tx_to_tx_repeat);
+    RUN_TEST(test_to_repeat_promotes_loadkeytx_to_loadkeytx_repeat);
+    RUN_TEST(test_to_repeat_is_idempotent_in_repeat_states);
+    RUN_TEST(test_to_repeat_leaves_non_tx_states_unchanged);
+    RUN_TEST(test_to_repeat_result_is_always_a_tx_state_when_input_is);
     return UNITY_END();
 }
