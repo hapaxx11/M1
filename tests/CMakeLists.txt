@@ -1106,6 +1106,23 @@ endif()
 add_test(NAME subghz_read_raw_state COMMAND test_subghz_read_raw_state)
 
 # ------------------------------------------------------------------
+# Source invariant: async replay abort must preserve the shared main
+# queue, while the private blocking replay wrapper must still flush it
+# before returning to Saved / Playlist / Remote / Bind Wizard callers.
+# ------------------------------------------------------------------
+add_executable(test_subghz_blocking_replay_contract
+    test_subghz_blocking_replay_contract.c
+)
+target_compile_definitions(test_subghz_blocking_replay_contract PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_subghz_blocking_replay_contract PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_blocking_replay_contract PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_blocking_replay_contract COMMAND test_subghz_blocking_replay_contract)
+
+# ------------------------------------------------------------------
 # Module under test: keeloq_mfkeys_builtin (build-time key embedding)
 # Verifies that keeloq_mfkeys_load() uses compiled-in builtin keys
 # (Flipper parity) and does NOT fall back to the SD card when builtin

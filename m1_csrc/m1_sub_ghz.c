@@ -1732,6 +1732,12 @@ bool sub_ghz_replay_async_is_active(void)
 	return s_replay_async_active;
 }
 
+static void subghz_replay_blocking_reset_queue(void)
+{
+	if (main_q_hdl != NULL)
+		xQueueReset(main_q_hdl);
+}
+
 /*============================================================================*/
 /**
  * @brief  Private mini event loop used by the legacy blocking wrappers
@@ -1766,6 +1772,7 @@ static uint8_t subghz_replay_run_blocking(void)
 		 * could show "Memory error"; preserve that behavior. */
 		if (start_ret == 4 || start_ret == 5)
 			return start_ret;
+		subghz_replay_blocking_reset_queue();
 		return 0;
 	}
 
@@ -1840,6 +1847,11 @@ static uint8_t subghz_replay_run_blocking(void)
 	/* Safety net: ensure full teardown.  No-op when already torn down. */
 	if (s_replay_async_active)
 		sub_ghz_replay_abort();
+
+	/* Legacy blocking callers own the main loop while replay is active, so any
+	 * queued keypad or late TX-complete events from that private loop must not
+	 * leak back into the caller scene after we return. */
+	subghz_replay_blocking_reset_queue();
 
 	return 0;
 }
