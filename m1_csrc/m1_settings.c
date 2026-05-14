@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "m1_compile_cfg.h"
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_settings.h"
@@ -32,18 +33,26 @@
 #include "m1_scene.h"
 #include "m1_virtual_kb.h"
 #include "m1_clock_util.h"
+#if M1_HAS_RGB_BACKLIGHT
+#include "m1_rgb_backlight.h"
+#endif
 
 /*************************** D E F I N E S ************************************/
 
 #define SETTINGS_TAG              "SETT"
 #define SETTINGS_FILE_PATH        "0:/System/settings.cfg"
 #define SETTINGS_FILE_MAX_SIZE    512
+#define RGB_BACKLIGHT_COLOR_KEY   "rgb_backlight_color="
 
 /* (ABOUT_BOX defines and SETTING_ABOUT_CHOICES_MAX removed — About screen
  * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
+#if M1_HAS_RGB_BACKLIGHT
+#define LCD_SETTINGS_ITEMS   11
+#else
 #define LCD_SETTINGS_ITEMS   10
+#endif
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
 #define LCD_SET_LED          2
@@ -54,6 +63,9 @@
 #define LCD_SET_TEXT_SIZE    7
 #define LCD_SET_DARK_MODE    8
 #define LCD_SET_TZ_OFFSET    9
+#if M1_HAS_RGB_BACKLIGHT
+#define LCD_SET_RGB_BACKLIGHT 10
+#endif
 
 //************************** S T R U C T U R E S *******************************\n
 /***************************** V A R I A B L E S ******************************/
@@ -70,6 +82,9 @@ void menu_settings_init(void);
 void menu_settings_exit(void);
 void settings_about(void);
 void settings_save_to_sd(void);
+#if M1_HAS_RGB_BACKLIGHT
+void app_rgb_backlight_run(void);
+#endif
 
 /* Sub-GHz save format accessors (defined in m1_sub_ghz.c) */
 extern uint8_t subghz_get_save_fmt_ext(void);
@@ -163,6 +178,9 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
     "Text Size:",
     "Dark Mode:",
     "Local TZ:",
+#if M1_HAS_RGB_BACKLIGHT
+    "RGB Backlight:",
+#endif
 };
 
 static char led_color_buf[8]; /* "#RRGGBB" + NUL */
@@ -198,6 +216,10 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_TZ_OFFSET:
         clock_tz_label(m1_clock_tz_offset, tz_label_buf, sizeof(tz_label_buf));
         return tz_label_buf;
+#if M1_HAS_RGB_BACKLIGHT
+    case LCD_SET_RGB_BACKLIGHT:
+        return rgb_backlight_is_installed() ? "Configured" : "Not found";
+#endif
     default:                 return "";
     }
 }
@@ -382,6 +404,17 @@ void settings_lcd_and_notifications(void)
             needs_redraw = 1;
             continue;
         }
+
+#if M1_HAS_RGB_BACKLIGHT
+        if (sel == LCD_SET_RGB_BACKLIGHT &&
+            this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            app_rgb_backlight_run();
+            this_button_status.event[BUTTON_OK_KP_ID] = BUTTON_EVENT_IDLE;
+            needs_redraw = 1;
+            continue;
+        }
+#endif
 
         /* Up/Down — navigate with scroll */
         if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
@@ -687,6 +720,29 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
     f_write(&fp, buf, strlen(buf), &bw);
 
+#if M1_HAS_RGB_BACKLIGHT
+    {
+        rgb_backlight_color_t c = rgb_backlight_get_color();
+        rgb_backlight_hw_config_t cfg = rgb_backlight_get_config();
+        snprintf(buf, sizeof(buf), "rgb_backlight_installed=%d\n",
+                 rgb_backlight_is_installed() ? 1 : 0);
+        f_write(&fp, buf, strlen(buf), &bw);
+        snprintf(buf, sizeof(buf), "rgb_backlight_mode=%d\n",
+                 (int)rgb_backlight_get_mode());
+        f_write(&fp, buf, strlen(buf), &bw);
+        snprintf(buf, sizeof(buf), "rgb_backlight_brightness=%u\n",
+                 (unsigned)rgb_backlight_get_brightness());
+        f_write(&fp, buf, strlen(buf), &bw);
+        snprintf(buf, sizeof(buf), "rgb_backlight_color=%02X%02X%02X\n",
+                 c.r, c.g, c.b);
+        f_write(&fp, buf, strlen(buf), &bw);
+        snprintf(buf, sizeof(buf), "rgb_backlight_leds=%u\n", (unsigned)cfg.led_count);
+        f_write(&fp, buf, strlen(buf), &bw);
+        snprintf(buf, sizeof(buf), "rgb_backlight_order=%d\n", (int)cfg.color_order);
+        f_write(&fp, buf, strlen(buf), &bw);
+    }
+#endif
+
 #ifdef M1_APP_BADBT_ENABLE
     snprintf(buf, sizeof(buf), "badbt_name=%s\n", m1_badbt_name);
     f_write(&fp, buf, strlen(buf), &bw);
@@ -918,6 +974,81 @@ void settings_load_from_sd(void)
         }
     }
 
+#if M1_HAS_RGB_BACKLIGHT
+    p = strstr(buf, "rgb_backlight_installed=");
+    if (p != NULL)
+    {
+        char *end;
+        long lval = strtol(p + 24, &end, 10);
+        if (end != p + 24 && (*end == '\n' || *end == '\r' || *end == '\0'))
+        {
+            rgb_backlight_set_installed(lval == 1);
+        }
+    }
+
+    p = strstr(buf, "rgb_backlight_mode=");
+    if (p != NULL)
+    {
+        char *end;
+        long lval = strtol(p + 19, &end, 10);
+        if (end != p + 19 && (*end == '\n' || *end == '\r' || *end == '\0') &&
+            lval >= 0 && lval < RGB_BACKLIGHT_MODE_COUNT)
+        {
+            rgb_backlight_set_mode((rgb_backlight_mode_t)lval);
+        }
+    }
+
+    p = strstr(buf, "rgb_backlight_brightness=");
+    if (p != NULL)
+    {
+        char *end;
+        long lval = strtol(p + 25, &end, 10);
+        if (end != p + 25 && (*end == '\n' || *end == '\r' || *end == '\0') &&
+            lval >= 0 && lval <= 255)
+        {
+            rgb_backlight_set_brightness((uint8_t)lval);
+        }
+    }
+
+    p = strstr(buf, RGB_BACKLIGHT_COLOR_KEY);
+    if (p != NULL)
+    {
+        uint8_t r, g, b;
+        if (settings_parse_hex_color(p + strlen(RGB_BACKLIGHT_COLOR_KEY), &r, &g, &b))
+        {
+            rgb_backlight_set_color(r, g, b);
+        }
+    }
+
+    p = strstr(buf, "rgb_backlight_leds=");
+    if (p != NULL)
+    {
+        rgb_backlight_hw_config_t cfg = rgb_backlight_get_config();
+        char *end;
+        long lval = strtol(p + 19, &end, 10);
+        if (end != p + 19 && (*end == '\n' || *end == '\r' || *end == '\0') &&
+            lval >= 1 && lval <= RGB_BACKLIGHT_MAX_LEDS)
+        {
+            cfg.led_count = (uint8_t)lval;
+            rgb_backlight_set_config(&cfg);
+        }
+    }
+
+    p = strstr(buf, "rgb_backlight_order=");
+    if (p != NULL)
+    {
+        rgb_backlight_hw_config_t cfg = rgb_backlight_get_config();
+        char *end;
+        long lval = strtol(p + 20, &end, 10);
+        if (end != p + 20 && (*end == '\n' || *end == '\r' || *end == '\0') &&
+            (lval == RGB_BACKLIGHT_ORDER_GRB || lval == RGB_BACKLIGHT_ORDER_RGB))
+        {
+            cfg.color_order = (rgb_backlight_color_order_t)lval;
+            rgb_backlight_set_config(&cfg);
+        }
+    }
+#endif
+
     /* Legacy: migrate "southpaw=1" if no orientation key found */
     if (strstr(buf, "orientation=") == NULL)
     {
@@ -947,6 +1078,10 @@ void settings_load_from_sd(void)
 apply:
     /* Apply brightness */
     lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
+
+#if M1_HAS_RGB_BACKLIGHT
+    rgb_backlight_init();
+#endif
 
     /* Apply dark mode — sends the ST7567 hardware inverse display command
      * so the LCD matches the persisted m1_dark_mode value on boot. */

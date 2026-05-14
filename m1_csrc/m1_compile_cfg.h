@@ -85,4 +85,8 @@ extern void assert_failed();
 #define M1_APP_APPS_ENABLE             /* Enable Apps menu (ELF loader from SD card) */
 #define M1_APP_CAN_ENABLE              /* Enable CAN bus (FDCAN1) on J7 X10 connector */
 
+#ifndef M1_HAS_RGB_BACKLIGHT
+#define M1_HAS_RGB_BACKLIGHT 1         /* Compile RGB Mod support (set to 0 to disable) */
+#endif
+
 #endif /* M1_COMPILE_CFG_H_ */
