@@ -998,6 +998,183 @@ to restore radio state before the next transmission.
    (playlist, one-shot batch TX).  Use `flipper_subghz_load()` when the sample data
    or key fields are also needed (info screen, offline decode, saved scene).
 
+### Async / Non-Blocking RTOS Best Practices
+
+> **For every new feature or refactor, prefer event-driven / non-blocking patterns
+> over blocking patterns wherever the hardware permits.  Reach for a blocking
+> delegate only when the alternative is significantly more complex AND the
+> blocking duration is bounded and short.  When in doubt, design for async.**
+
+This is the canonical RTOS hygiene rule for the M1 codebase.  It is independent of —
+and takes precedence over — the "Blocking delegate" wrapper pattern documented in the
+[Scene-Based Application Architecture](#scene-based-application-architecture)
+section.  That section describes how *existing* legacy event-loops are integrated
+into scenes; **new code should not add new blocking delegates** without justification.
+
+#### Why async/non-blocking
+
+The M1 main task is a single FreeRTOS task that owns the UI, button input, the
+event queue (`main_q_hdl`), and most module dispatch.  When a scene handler blocks
+this task:
+
+- **The scene `draw()` callback stops running** — no animation, no live status,
+  no progress indicator.  The display freezes on the last frame drawn before the
+  block began.
+- **`Q_EVENT_KEYPAD` events queue up but are not processed**, so BACK does not
+  cancel mid-operation and the user must wait for the blocking call to return.
+- **Other periodic work stalls** — battery indicator refresh, RGB LED state
+  machine, LCD inactivity saver — all share the main task.
+- **Hardware completion ISRs that post events become irrelevant** — the events
+  sit in `main_q_hdl` until the blocking code finally calls `xQueueReceive` (or
+  the blocking code has its own private receive loop, in which case the *outer*
+  scene loop is starved instead).
+
+Async patterns avoid every one of these symptoms.
+
+#### The canonical async pattern
+
+For any hardware operation that finishes via an interrupt (DMA TC, timer expire,
+GPIO edge, SPI completion):
+
+1. **In the ISR**: post a typed event to `main_q_hdl` using `xQueueSendFromISR`
+   and yield with `portYIELD_FROM_ISR(xHigherPriorityTaskWoken)`.  Do **not** call
+   any non-ISR-safe FreeRTOS API, do **not** touch heap allocations, do **not**
+   `printf`.  Existing canonical example: `TIM1_UP_IRQHandler` in
+   `m1_csrc/m1_int_hdl.c` posts `Q_EVENT_SUBGHZ_TX` on DMA completion.
+
+2. **In the scene `on_event` handler**: handle the new event type.  Update scene
+   state, set `app->need_redraw = true` if visible state changed, and return.
+   Never block waiting for a *second* completion — chain by re-arming the
+   hardware and returning, so the next completion event flows through the same
+   handler.
+
+3. **In the scene `draw()`**: render based on `app->raw_state` (or equivalent).
+   The scene manager calls `draw()` on its draw tick (≥5 fps), so animations
+   advance naturally as long as the main task is not blocked.
+
+4. **Resource cleanup**: ownership of any heap allocation, temp file, or peripheral
+   that outlives the *start* call must be released by the *completion* event
+   handler, not by the caller of the start function.  A common bug is freeing a
+   DMA source buffer in the caller while the DMA is still mid-transfer.
+
+5. **Cancellation**: a BACK event in the scene handler must call a synchronous
+   `_abort()` function that disables the timer / DMA / radio and returns the
+   peripheral to a known-idle state.  After the abort, the scene transitions to
+   its pre-operation state.  Any subsequent completion event (raced past the
+   abort) must be a no-op when scene state is no longer "operation in progress".
+
+#### When blocking is acceptable
+
+A blocking pattern is acceptable when **all** of the following are true:
+
+- The operation completes in **bounded, short** wall time (typically <50 ms) —
+  short enough that no animation frame is visibly skipped.
+- The operation does not depend on an external event that could fail to arrive
+  (e.g. waiting for an ESP32 SPI response with no built-in timeout is **not**
+  short and bounded — wrap it).
+- Re-architecting as async would require duplicating substantial state across
+  multiple `on_event` invocations with no concrete UX benefit (no animation
+  needed, no cancel button, no concurrent work to do).
+
+When you choose a blocking pattern despite this rule, document the choice with a
+comment near the blocking call site explaining which of the above conditions
+holds.
+
+#### Forbidden patterns
+
+- **Never `vTaskDelay()` inside a scene `on_event` handler.**  Use a redraw tick
+  or a software timer if you need a delayed action; use a state-machine
+  transition if you need to "wait" for a hardware event.
+- **Never spin-wait on a flag set by an ISR** (e.g. `while (!subghz_tx_tc_flag);`).
+  The ISR should post a queue event; the consumer should receive it.
+- **Never call `HAL_Delay()` from a scene handler.**  `HAL_Delay()` blocks the
+  whole task and breaks the watchdog discipline.
+- **Never receive on the main queue from inside a blocking delegate** unless that
+  delegate has fully replaced the scene's event loop — partial replacement
+  starves the scene of events when the delegate returns control.
+- **Never allocate memory in an ISR** or call any FreeRTOS function whose name
+  does not end in `FromISR`.
+
+#### Current async-ready infrastructure
+
+These pieces are already in place and should be used by any new async work:
+
+| Infrastructure | Where | What it does |
+|----------------|-------|--------------|
+| `main_q_hdl` | `m1_tasks.h`, `m1_main_task.c` | Main task event queue (`S_M1_Main_Q_t`) |
+| `Q_EVENT_SUBGHZ_TX` | `m1_tasks.h`, `m1_int_hdl.c` | Posted by TIM1 UP ISR after DMA TC + final pulses |
+| `Q_EVENT_SUBGHZ_RX` | `m1_tasks.h`, `m1_int_hdl.c` | Posted by TIM1 CC ISR per captured edge |
+| `Q_EVENT_KEYPAD` | `m1_tasks.h`, button driver | Posted by the keypad driver on button transitions |
+| `Q_EVENT_NFC_*`   | `m1_tasks.h`, `nfc_driver.c` | NFC worker state-machine event family |
+| `Q_EVENT_IRRED_TX` | `m1_tasks.h`, IR driver | Posted on IR transmission completion |
+| Scene draw tick | `m1_subghz_scene.c`, `m1_scene.c` | Periodic `draw()` invocation while waiting on `xQueueReceive` |
+| `app->need_redraw` | `SubGhzApp` and generic scene context | Coalesced redraw flag — set in handlers, cleared by the scene loop |
+
+The DMA-TC → ISR → queue plumbing for Sub-GHz TX **already exists end-to-end**.
+What is currently missing for the Read Raw scene is that the consumer of
+`Q_EVENT_SUBGHZ_TX` lives inside `subghz_run_raw_replay()`'s private event loop
+(`m1_csrc/m1_sub_ghz.c`) rather than in the Read Raw scene's `on_event`
+handler.  That private loop does not call the scene's `draw()`, which is why
+the "TX..." indicator is static rather than animated.
+
+#### Open async-conversion work in the Sub-GHz subsystem
+
+This is the canonical follow-up to issue *"Sub-GHz: Async TX state machine
+(Momentum LoadKeyTX / TXRepeat parity)"*.  Any agent that picks up the work
+should follow this plan rather than re-deriving it:
+
+1. **Split `SubGhzReadRawStateSending`** in `m1_subghz_scene.h` into four explicit
+   states matching Momentum:
+   - `SubGhzReadRawStateTX` — TX from a freshly-recorded capture (Idle → TX → Idle).
+   - `SubGhzReadRawStateTXRepeat` — hold-to-repeat from Idle.
+   - `SubGhzReadRawStateLoadKeyTX` — TX from a pre-loaded RAW file (Loaded → LoadKeyTX → Loaded).
+   - `SubGhzReadRawStateLoadKeyTXRepeat` — hold-to-repeat from Loaded.
+
+   Keep `SubGhzReadRawStateSending` as a backward-compat alias **only** until
+   every reference is updated; do not introduce new callers of it.
+
+2. **Move the `Q_EVENT_SUBGHZ_TX` consumer out of `subghz_run_raw_replay()`** and
+   into the Read Raw scene's `on_event` handler.  Split the function into:
+   - `sub_ghz_replay_start_async()` — arm TIM1+DMA, return immediately.
+   - `sub_ghz_replay_continue_async()` — called from the scene handler on
+     `Q_EVENT_SUBGHZ_TX`; either advances streaming or transitions to idle.
+   - `sub_ghz_replay_abort()` — synchronous teardown for BACK / scene exit.
+
+   Retain the existing blocking wrappers (`sub_ghz_replay_flipper_file()`,
+   `sub_ghz_replay_datafile()`) for the Saved-scene PACKET/key emulate path and
+   the Playlist scene — those callers do not need cancel-mid-TX or animation, so
+   converting them would only add complexity.  Implement the blocking wrappers
+   in terms of the new async primitives + a private mini event loop, **not** the
+   other way around.
+
+3. **Render the sine-wave animation** in `draw()` for any of the four TX states.
+   A 32-entry lookup table indexed by a free-running phase counter is sufficient
+   — no float math, no per-tick `sin()` call.  Bound the animation to the
+   existing `subghz_raw_draw_frame_ext()` waveform box.
+
+4. **Hold-to-repeat**: on `Q_EVENT_SUBGHZ_TX` completion, peek the OK button
+   state (do **not** consume keypad events from the queue).  If OK is still
+   held, transition `TX → TXRepeat` (or `LoadKeyTX → LoadKeyTXRepeat`) and
+   re-arm.  Otherwise transition back to Idle / Loaded.
+
+5. **Temp-file lifetime**: the temp file `/SUBGHZ/_flipper_tmp.sgh` created by
+   `sub_ghz_replay_flipper_file()` must be unlinked by the completion or abort
+   path, not the caller.  Track ownership in a scene-local field, not a global.
+
+6. **TIM1 sharing discipline**: scene-state transitions that move between RX
+   (input-capture on CH1) and TX (PWM output) must `sub_ghz_rx_deinit_ext()`
+   before the TX arm and `sub_ghz_rx_init_ext()` (via `start_passive_rx()`)
+   after the TX completes or aborts.  Never reconfigure TIM1 while the previous
+   mode's DMA burst could still be in flight — gate every transition on an
+   explicit "idle" state.
+
+Until this work lands, the current Read Raw TX path is **intentionally blocking**
+(see the comment block above the call in `m1_subghz_scene_read_raw.c`'s
+`scene_on_event` OK handler).  Agents touching that file should not regress
+that comment without delivering the async migration in the same PR.
+
+---
+
 ### SI4463 Radio State Management — `menu_sub_ghz_init()` / `menu_sub_ghz_exit()`
 
 > **Every caller of a function that powers off the SI4463 MUST restore radio state
