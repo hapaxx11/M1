@@ -138,9 +138,9 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 #define M1_MENU_ITEM_H_SMALL  8   /**< Pixel height per row — Small mode    */
 #define M1_MENU_ITEM_H_MEDIUM 10  /**< Pixel height per row — Medium mode   */
 #define M1_MENU_ITEM_H_LARGE 13   /**< Pixel height per row — Large mode    */
-#define M1_MENU_SCROLLBAR_X  125  /**< Scrollbar left edge (3px wide)       */
+#define M1_MENU_SCROLLBAR_X  124  /**< Scrollbar left edge (3px wide)       */
 #define M1_MENU_SCROLLBAR_W    3  /**< Scrollbar track width                */
-#define M1_MENU_TEXT_W       124  /**< Highlight / text area width           */
+#define M1_MENU_TEXT_W       123  /**< Highlight / text area width           */
 
 /**
  * @brief  Get current menu item height based on m1_menu_style setting.
