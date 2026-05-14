@@ -841,6 +841,23 @@ endif()
 add_test(NAME led_color_ease COMMAND test_led_color_ease)
 
 # ------------------------------------------------------------------
+# Module under test: m1_rgb_backlight
+# Pure helpers — HSV/RGB conversion and animation math.
+# ------------------------------------------------------------------
+add_executable(test_rgb_backlight
+    test_rgb_backlight.c
+    ${M1_ROOT}/m1_csrc/m1_rgb_backlight.c
+)
+target_include_directories(test_rgb_backlight PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_rgb_backlight PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rgb_backlight PRIVATE sanitizers)
+endif()
+add_test(NAME rgb_backlight COMMAND test_rgb_backlight)
+
+# ------------------------------------------------------------------
 # Module under test: str_contains_icase (IR Universal Remote search helper)
 # Pure function — case-insensitive substring search used by IRDB search.
 # Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.
