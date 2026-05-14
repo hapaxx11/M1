@@ -31,6 +31,10 @@ static char *read_file(const char *relpath)
     long size;
     char *buf;
 
+    TEST_ASSERT_NOT_NULL(relpath);
+    TEST_ASSERT_NOT_EQUAL('/', relpath[0]);
+    TEST_ASSERT_NULL_MESSAGE(strstr(relpath, ".."),
+                             "test helper only accepts repo-relative source paths");
     written = snprintf(path, sizeof(path), "%s/%s", M1_ROOT, relpath);
     TEST_ASSERT_TRUE_MESSAGE(written > 0 && (size_t)written < sizeof(path),
                              "source path exceeded fixed test buffer");
@@ -85,7 +89,7 @@ static char *normalize_ws(const char *input)
 
     for (size_t i = 0; i < len; i++)
     {
-        unsigned char ch = (unsigned char)input[i];
+        int ch = (unsigned char)input[i];
         if (isspace(ch))
         {
             if (!prev_space)
