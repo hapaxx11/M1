@@ -531,12 +531,7 @@ void storage_mount(void)
 		u8g2_DrawStr(&m1_u8g2, 18, 30, "SD card will be");
 		u8g2_DrawStr(&m1_u8g2, 18, 40, "accessible");
 
-		u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-		u8g2_DrawXBMP(&m1_u8g2, 1, 53, 8, 8, arrowleft_8x8); // draw arrowleft icon
-		u8g2_DrawStr(&m1_u8g2, 11, 61, "Cancel");
-		u8g2_DrawXBMP(&m1_u8g2, 119, 53, 8, 8, arrowright_8x8); // draw arrowright icon
-		u8g2_DrawStr(&m1_u8g2, 92, 61, "Mount");
+		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", "Mount", arrowright_8x8);
     } // if ( mount_ok!=SD_access_NotReady && mount_ok!=SD_access_OK && mount_ok!=SD_access_NoFS )
     else
     {
@@ -654,12 +649,7 @@ void storage_unmount(void)
 		u8g2_DrawStr(&m1_u8g2, 18, 30, "SD card will be");
 		u8g2_DrawStr(&m1_u8g2, 18, 40, "inaccessible");
 
-		u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-		u8g2_DrawXBMP(&m1_u8g2, 1, 53, 8, 8, arrowleft_8x8); // draw arrowleft icon
-		u8g2_DrawStr(&m1_u8g2, 11, 61, "Cancel");
-		u8g2_DrawXBMP(&m1_u8g2, 119, 53, 8, 8, arrowright_8x8); // draw arrowright icon
-		u8g2_DrawStr(&m1_u8g2, 84, 61, "Unmount");
+		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", "Unmount", arrowright_8x8);
     } // if ( unmount_ok )
     else
     {
@@ -861,12 +851,7 @@ void storage_format(void)
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 18, 30, "Data will be lost!");
 
-		u8g2_DrawBox(&m1_u8g2, 0, 52, 128, 12); // Draw an inverted bar at the bottom to display options
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); // Write text in inverted color
-		u8g2_DrawXBMP(&m1_u8g2, 1, 53, 8, 8, arrowleft_8x8); // draw arrowleft icon
-		u8g2_DrawStr(&m1_u8g2, 11, 61, "Cancel");
-		u8g2_DrawXBMP(&m1_u8g2, 119, 53, 8, 8, arrowright_8x8); // draw arrowright icon
-		u8g2_DrawStr(&m1_u8g2, 87, 61, "Format");
+		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", "Format", arrowright_8x8);
     } // if ( m1_sdcard_get_status()!=SD_access_NotReady )
     else
     {
