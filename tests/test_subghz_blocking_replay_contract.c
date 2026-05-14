@@ -116,6 +116,9 @@ void tearDown(void)
 void test_async_abort_does_not_reset_main_queue(void)
 {
     char *content = read_file("m1_csrc/m1_sub_ghz.c");
+    /* Keep the end marker aligned with the helper order in m1_sub_ghz.c.
+     * If these functions move during refactoring, update both markers rather
+     * than weakening the source-level contract this test is pinning. */
     char *abort_fn = slice_between(content,
                                    "void sub_ghz_replay_abort(void)",
                                    "bool sub_ghz_replay_async_is_active(void)");
@@ -132,6 +135,9 @@ void test_async_abort_does_not_reset_main_queue(void)
 void test_blocking_wrapper_flushes_main_queue_before_returning(void)
 {
     char *content = read_file("m1_csrc/m1_sub_ghz.c");
+    /* The end marker intentionally brackets the whole blocking-wrapper region.
+     * If helper ordering changes, update these markers so the test keeps
+     * checking the wrapper contract instead of silently widening its scope. */
     char *wrapper = slice_between(content,
                                   "static uint8_t subghz_replay_run_blocking(void)",
                                   "uint8_t sub_ghz_replay_datafile(");
