@@ -790,9 +790,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 bool from_loaded = (app->raw_state == SubGhzReadRawStateLoaded);
                 if (raw_filepath[0] != '\0')
                 {
-                    /* Prepare globals based on file type.  prepare_flipper()
-                     * may produce a temp .sgh that this scene owns; track it
-                     * so we can unlink it on completion/abort. */
+                    /* Prepare globals based on file type.  Only the Flipper
+                     * path produces a temp .sgh; the native datfile path
+                     * streams the original file in place.  We clear
+                     * tx_unlink_path unconditionally and only set it in the
+                     * Flipper branch, so the post-TX unlink (completion,
+                     * BACK, scene_on_exit) is a no-op for native files
+                     * (empty string check).  This keeps the cleanup paths
+                     * uniform without conditionally touching the global
+                     * temp file owned by the legacy blocking wrapper. */
                     tx_unlink_path[0] = '\0';
                     uint8_t prep_ret;
                     if (from_loaded && app->raw_load_is_native &&
