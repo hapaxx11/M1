@@ -383,8 +383,51 @@ firmware images from GitHub Releases directly to SD card.
 
 To exit DFU mode without flashing, hold **Right + Back** to reboot.
 
-### Via SWD
-Use an ST-Link or J-Link debugger with STM32CubeIDE or OpenOCD.
+### ST-Link Connection
+
+Connect to the GPIO header (pins 1-18):
+
+| ST-Link | M1 GPIO Pin | Function |
+|---------|-------------|----------|
+| VCC (3.3V) | Pin 9 (+3.3v) | Power |
+| GND | Pin 8 or 18 (GND) | Ground |
+| SWDIO | Pin 11 (PA13) | Data |
+| SWCLK | Pin 10 (PA14) | Clock |
+
+### Quick Development Workflow
+
+1. **Connect ST-Link** to GPIO pins
+2. **Connect USB** for power and serial console
+3. **Open serial terminal** (PuTTY/Tera Term) at **9600 baud** - keep open for logs
+4. **Build firmware:**
+   ```bash
+   ./build
+   ```
+5. **Flash with STM32CubeProgrammer:**
+    - Click **"Connect"**
+    - Click **"Open File"** → Select `distribution/M1_v*.hex`
+    - Click **"Program"**
+6. **Reset via ST-Link:**
+   - Click **"Reset"** button in STM32CubeProgrammer
+   - **OR** use CLI command `reboot` in serial terminal
+
+**Pro tip:** Keep the serial terminal open during testing to see debug messages in real-time.
+
+If the device does not boot after programming:
+- Use **Under Reset + Hardware reset** connect mode in STM32CubeProgrammer.
+- If PC reads near `0xFFFFFFFE`, the mapped boot vector is invalid (often from flashing an image that does not match post-build CRC metadata). Rebuild with `./build clean` and reflash `distribution/M1_v*.hex`.
+
+## Entering DFU Mode (Hardware Strap)
+
+If you need to flash the firmware directly via USB using STM32CubeProgrammer (without an ST-Link), you must boot the device into DFU Mode using the hardware strap. The software menu option has been removed for reliability.
+
+1. **Unplug the USB cable** from the M1.
+2. **Press and hold the UP button** on the D-pad.
+3. While holding UP, **plug the USB cable back in**.
+4. You will hear a loud **"tick"** from the speaker. This confirms the hardware strap was detected and the device is now in DFU mode.
+5. In STM32CubeProgrammer, select **USB** from the dropdown menu and click Connect.
+
+**To exit DFU mode:** Simply unplug the USB cable and plug it back in without holding any buttons to boot into normal firmware.
 
 ## SD Card Layout
 
