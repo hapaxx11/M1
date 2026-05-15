@@ -192,6 +192,15 @@ void m1_system_init_task(void *param)
 			m1_tasks_init();
 			startup_config_handler();
 			M1_LOG_I(M1_LOGDB_TAG, "Power-up init done!\r\n");
+			/* Refresh IWDG one last time before this task ends.  The WDT
+			 * handler task is at TASK_PRIORITY_WDT_HANDLER (tskIDLE+1) and
+			 * cannot preempt this task (TASK_PRIORITY_SYS_INIT, NORMAL+10),
+			 * so the IWDG would not be reloaded between the last reset
+			 * inside startup_config_handler (welcome screen draw, optional
+			 * info-screen render after FW update/rollback, vTaskDelay) and
+			 * the moment the WDT task is first scheduled.  Kicking here
+			 * guarantees a fresh 4s budget when the WDT task takes over. */
+			m1_wdt_reset();
 			vTaskDelete(NULL); // Delete this task
 		} // if (osKernelGetState()==osKernelRunning)
 		else

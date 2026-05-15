@@ -114,6 +114,22 @@ static void m1_wdt_handler_task(void *param)
 	static uint32_t run_time = 0;
 
 	M1_LOG_I(M1_LOGDB_TAG, "WDT task started\r\n");
+
+	/* Reload the IWDG counter immediately on first scheduling of this task,
+	 * BEFORE the initial 2s vTaskDelay below.  The IWDG 4s countdown started
+	 * way back in MX_IWDG_Init() (in main(), before the kernel even starts).
+	 * Without this initial reload, the budget has to cover:
+	 *   - all of main()'s hardware init + osKernelStart latency
+	 *   - everything in m1_system_init_task() up to vTaskDelete(NULL)
+	 *     (LCD init, SD card mount, logdb init, tasks init, welcome screen,
+	 *      etc.  Some of those have their own m1_wdt_reset() calls, but
+	 *      startup_config_handler runs AFTER the last reset.)
+	 *   - PLUS the full 2s of vTaskDelay below before m1_wdt_checkout()
+	 *     would otherwise perform the first reload.
+	 * On devices with slow SD cards / displays, this combined window
+	 * exceeds 4s and triggers an infinite boot loop (issue #478). */
+	__HAL_IWDG_RELOAD_COUNTER(&hiwdg);
+
 	while (1)
 	{
 		m1_wdt_checkin();
