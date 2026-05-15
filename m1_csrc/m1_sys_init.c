@@ -23,6 +23,7 @@
 #include "m1_i2c.h"
 #include "m1_rf_spi.h"
 #include "m1_sdcard.h"
+#include "m1_wdt_hw.h"
 #include "m1_esp32_hal.h"
 #include "esp_app_main.h"
 #include "battery.h"
@@ -174,7 +175,11 @@ void m1_system_init_task(void *param)
 			battery_service_init();
 			lp5814_init();
 			m1_lcd_init(&hspi1);
+			m1_wdt_reset(); /* LCD init sequence can take >500ms on some hardware */
 			m1_sdcard_init(&hsd1);
+			m1_wdt_reset(); /* SD card mount can take 1-2s on slower cards; refresh
+			                   before the WDT task takes over so the IWDG (4s from
+			                   MX_IWDG_Init in main()) does not expire first */
 
 			/* USART1 default config */
 			huart_logdb.Init.BaudRate = LOG_DEBUG_UART_BAUD;
