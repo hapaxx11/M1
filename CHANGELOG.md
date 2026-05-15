@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.16] - 2026-05-15
+
+### Changed
+
+- **Documentation: Sub-GHz async TX architecture** — Updated CLAUDE.md and DEVELOPMENT.md
+  to reflect the completed async TX state machine from PR #470. Replaced the open
+  "async-conversion" TODO section with completed architecture docs covering the four
+  Momentum-aligned TX states, the new async prepare/start/continue/abort API, scene-local
+  temp-file ownership, and TIM1 sharing rules. Updated the replay API table, emulate
+  dispatch descriptions, emulation code rules, and SI4463 radio management section to
+  remove stale references to the intentionally-blocking Read Raw TX path.
+
+### Fixed
+
+- **Boot loop on first power-on after OTA flash** — Added IWDG kick calls after the LCD and SD card initialization steps in `m1_system_init_task()`. The IWDG 4-second timeout begins in `main()` before FreeRTOS starts; on devices with slower SD cards the combined hardware init time plus the WDT task's initial 2-second delay could exceed 4 seconds, causing the device to reboot in a loop that appears as the splash screen cycling every 1–2 seconds with no way out.
 ## [0.9.1.22] - 2026-05-14
 
 ### Changed
