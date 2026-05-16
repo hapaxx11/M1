@@ -191,6 +191,19 @@ void m1_system_init_task(void *param)
 			m1_wdt_init();
 			m1_tasks_init();
 			startup_config_handler();
+			/* Refresh IWDG immediately after startup_config_handler() and
+			 * before any further logging.  The last reset in this task is
+			 * the post-SD-card kick above; startup_config_handler() itself
+			 * does NOT call m1_wdt_reset().  startup_config_handler() can
+			 * consume significant time (100 ms key-press wait, welcome screen
+			 * draw, optional info-screen render after FW update/rollback).
+			 * The WDT handler task is at TASK_PRIORITY_WDT_HANDLER
+			 * (tskIDLE+1) and cannot preempt this task (NORMAL+10), so the
+			 * IWDG would not be reloaded between here and the moment the WDT
+			 * task is first scheduled.  Kicking here — before m1_logdb
+			 * logging which can block on the log mutex — guarantees a fresh
+			 * 4s budget when the WDT task takes over. */
+			m1_wdt_reset();
 			M1_LOG_I(M1_LOGDB_TAG, "Power-up init done!\r\n");
 			vTaskDelete(NULL); // Delete this task
 		} // if (osKernelGetState()==osKernelRunning)
