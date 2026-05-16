@@ -14,6 +14,7 @@
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_watchdog.h"
@@ -24,6 +25,14 @@
 
 #define M1_WDT_TIMEOUT					IWDG_RELOAD
 #define M1_WDT_SYSTEM_CHECK_TIMEOUT		(2*M1_WDT_TIMEOUT)
+
+/* Boot-loop escape hatch — RTC backup register used to count consecutive
+ * IWDG resets.  DR2 is the first slot after S_M1_BK_REGS_t (which uses
+ * DR0..DR1: magic_number[31:0] at DR0, device_op_status[7:0]+reserved
+ * at DR1).  The counter survives chip reset (backup domain) but is
+ * cleared by a full power-off. */
+#define M1_WDT_BKP_LOOP_CTR_REG	RTC_BKP_DR2
+#define M1_WDT_BOOT_LOOP_MAX		3U   /* suppress IWDG after this many consecutive WDT resets */
 
 //************************** C O N S T A N T **********************************/
 
@@ -66,6 +75,8 @@ void m1_wdt_init(void)
 {
 	BaseType_t ret;
 	size_t free_heap;
+	uint32_t loop_ctr;
+	bool was_wdt_reset;
 
 	/*
 	 * Freeze the IWDG counter when the CPU is halted by the debugger.
@@ -73,6 +84,8 @@ void m1_wdt_init(void)
 	 * making debugging impossible with ST-Link/J-Link.
 	 * This only has effect when the debug port is connected; in production
 	 * (no debugger attached), this bit is ignored by the hardware.
+	 * m1_system_GPIO_init() already sets this bit; repeating here is
+	 * harmless (idempotent) and ensures it is set before we arm the IWDG.
 	 */
 #if defined(__HAL_DBGMCU_FREEZE_IWDG)
 	__HAL_DBGMCU_FREEZE_IWDG();
@@ -80,17 +93,83 @@ void m1_wdt_init(void)
 	SET_BIT(DBGMCU->APB1FZR1, DBGMCU_APB1FZR1_DBG_IWDG_STOP);
 #endif
 
-	if(__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST)) // Watchdog caused reset?
+	was_wdt_reset = (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) != 0);
+	if(was_wdt_reset)
 	{
 		m1_device_stat.dev_reset_by_wdt = true;
-		M1_LOG_I(M1_LOGDB_TAG, "Device reset by Watchdog!\r\n");
+		M1_LOG_W(M1_LOGDB_TAG, "Device reset by Watchdog!\r\n");
 	}
-	else // Reset by normal cause
+	else
 	{
 		m1_device_stat.dev_reset_by_wdt = false;
 		M1_LOG_I(M1_LOGDB_TAG, "Device reset by normal cause\r\n");
 	}
 	__HAL_RCC_CLEAR_RESET_FLAGS(); // clears reset flags
+
+	/*
+	 * Boot-loop escape hatch.
+	 *
+	 * TAMP backup register DR2 holds a counter of consecutive IWDG resets.
+	 * It survives chip reset (backup domain is reset-persistent) but is
+	 * cleared by a full power-off (Vbat removed).  startup_device_init()
+	 * already called HAL_PWR_EnableBkUpAccess(), so direct read/write is safe.
+	 *
+	 * On each IWDG reset, the counter is incremented.  On any non-IWDG reset
+	 * (user power-cycle, clean reset), the counter is cleared.  When the
+	 * counter reaches M1_WDT_BOOT_LOOP_MAX, we skip arming the IWDG and skip
+	 * creating the WDT handler task for this one boot, then clear the counter.
+	 * This lets the device always reach the main menu so the user can update
+	 * firmware, reformat the SD card, or remove a problematic file — without
+	 * needing a debugger.
+	 *
+	 * DR2 is the first backup register after S_M1_BK_REGS_t, which uses
+	 * DR0..DR1 (sizeof = 8 bytes = 2 x 32-bit words).
+	 */
+	HAL_PWR_EnableBkUpAccess(); /* safe to call again; no-op if already enabled */
+	loop_ctr = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_CTR_REG);
+	if (was_wdt_reset)
+	{
+		loop_ctr++;
+	}
+	else
+	{
+		loop_ctr = 0;
+	}
+	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, loop_ctr);
+
+	if (loop_ctr >= M1_WDT_BOOT_LOOP_MAX)
+	{
+		/* Clear the counter so the *next* boot starts fresh. */
+		HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, 0);
+		M1_LOG_W(M1_LOGDB_TAG,
+		         "Boot loop detected (%lu consecutive WDT resets). "
+		         "IWDG disabled for this boot.\r\n",
+		         (unsigned long)loop_ctr);
+		/* Display a recovery banner on the home screen. */
+		startup_info_screen_display("WDT DISABLED - BOOT LOOP");
+		/* Return without arming IWDG or creating the WDT task.
+		 * The device boots normally to the main menu without watchdog
+		 * protection for this session, giving the user a chance to
+		 * update firmware, reformat the SD card, or remove a bad file. */
+		return;
+	}
+
+	/*
+	 * Arm the IWDG.  Deliberately deferred from MX_IWDG_Init() in main.c
+	 * so the timeout countdown does not start until ALL slow init is done
+	 * (LCD, SD card, logdb, startup_config_handler).  The hiwdg struct was
+	 * pre-configured by MX_IWDG_Init(); we only need to call HAL_IWDG_Init()
+	 * to start the hardware counter.
+	 *
+	 * With IWDG_PRESCALER_128 and IWDG_RELOAD=4000 (LSI ~32 kHz):
+	 *   timeout = 128 / 32000 * 4000 = 16 s.
+	 * The WDT handler task reloads every M1_WDT_TIMEOUT/2 = 2000 ms,
+	 * giving 8x steady-state margin inside the 16 s window.
+	 */
+	if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+	{
+		Error_Handler();
+	}
 
 	m1_wdt_report_init();
 
@@ -114,21 +193,14 @@ static void m1_wdt_handler_task(void *param)
 	static uint32_t run_time = 0;
 
 	/* Reload the IWDG counter immediately on first scheduling of this task,
-	 * BEFORE the initial 2s vTaskDelay below.  The IWDG 4s countdown started
-	 * way back in MX_IWDG_Init() (in main(), before the kernel even starts).
-	 * Without this initial reload, the budget has to cover:
-	 *   - all of main()'s hardware init + osKernelStart latency
-	 *   - everything in m1_system_init_task() up to vTaskDelete(NULL)
-	 *     (LCD init, SD card mount, logdb init, tasks init, welcome screen,
-	 *      etc.  Some of those have their own m1_wdt_reset() calls, but
-	 *      startup_config_handler runs AFTER the last reset.)
-	 *   - PLUS the full 2s of vTaskDelay below before m1_wdt_checkout()
-	 *     would otherwise perform the first reload.
-	 * On devices with slow SD cards / displays, this combined window
-	 * exceeds 4s and triggers an infinite boot loop (issue #478).
-	 * This reload must come before any logging: m1_logdb_printf() can
-	 * allocate and block on the log mutex, adding unpredictable latency
-	 * at a point where the budget may already be nearly exhausted. */
+	 * BEFORE the initial 2s vTaskDelay below.  The IWDG is now armed inside
+	 * m1_wdt_init() (deferred from MX_IWDG_Init in main.c) so the countdown
+	 * starts only after all slow init completes.  This initial reload is
+	 * belt-and-suspenders: the only time remaining after m1_wdt_init() returns
+	 * is m1_tasks_init() + startup_config_handler() + a final m1_wdt_reset()
+	 * kick, all of which complete well within the 16 s IWDG window.  Still,
+	 * this reload must come before any logging: m1_logdb_printf() can
+	 * allocate and block on the log mutex, adding unpredictable latency. */
 	__HAL_IWDG_RELOAD_COUNTER(&hiwdg);
 
 	M1_LOG_I(M1_LOGDB_TAG, "WDT task started\r\n");

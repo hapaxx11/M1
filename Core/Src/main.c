@@ -366,16 +366,18 @@ static void MX_IWDG_Init(void)
 
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_32;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_128;
   hiwdg.Init.Window = IWDG_WINDOW;
   hiwdg.Init.Reload = IWDG_RELOAD;
   hiwdg.Init.EWI = 0;
-  if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN IWDG_Init 2 */
-
+  /* HAL_IWDG_Init() is intentionally NOT called here.
+   * Arming the IWDG this early (before the RTOS, SD card, LCD, and
+   * startup_config_handler) creates a hard deadline that slow hardware
+   * cannot always meet, resulting in an infinite boot loop (issue #478).
+   * The IWDG is armed inside m1_wdt_init() instead, after all slow init
+   * has completed and the WDT handler task is about to take over.
+   * The hiwdg struct configured above is used by that deferred call. */
   /* USER CODE END IWDG_Init 2 */
 
 }
