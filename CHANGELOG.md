@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.16] - 2026-05-16
+
+### Fixed
+
+- **Boot loop still occurring after PR #475** — Reload the IWDG counter at the top of the WDT handler task (before its initial 2-second `vTaskDelay`) and once more in `m1_system_init_task()` just before `vTaskDelete(NULL)`.  Previously, even with the SD card / LCD watchdog kicks added in PR #475, the WDT task waited a full 2 s before its first IWDG reload via `m1_wdt_checkout()`, and `startup_config_handler()` (welcome screen draw, optional FW-update info screen, 100 ms key-press wait) runs after the last reset in sys-init.  Combined with kernel-start latency and any slow hardware init, the cumulative window from `MX_IWDG_Init()` to the first IWDG reload could exceed the 4-second IWDG timeout, causing the splash screen to cycle every 1–2 seconds with no recovery.
 ## [0.9.1.16] - 2026-05-15
 
 ### Changed
