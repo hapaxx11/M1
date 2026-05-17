@@ -238,9 +238,9 @@ void Error_Handler(void);
  * 4000 ticks x 4 ms = 16,000 ms (16 s) IWDG timeout.
  * The WDT handler task reloads every M1_WDT_TIMEOUT/2 = 2000 ms,
  * giving 8x steady-state margin.
- * The 16 s pre-RTOS window (between HAL_IWDG_Init in m1_wdt_init()
- * and the first WDT task reload) is never actually used — all slow
- * init completes before m1_wdt_init() is called. */
+ * The early-boot 16 s window (between HAL_IWDG_Init in m1_wdt_init()
+ * and the first WDT task reload) still covers startup_config_handler()
+ * and task handoff scheduling inside m1_system_init_task(). */
 #define IWDG_RELOAD 	4000 // 4000 x 4ms = 16,000ms (prescaler 128, LSI ~32kHz)
 
 extern IWDG_HandleTypeDef 	hiwdg;

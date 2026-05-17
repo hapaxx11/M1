@@ -156,10 +156,11 @@ void m1_wdt_init(void)
 
 	/*
 	 * Arm the IWDG.  Deliberately deferred from MX_IWDG_Init() in main.c
-	 * so the timeout countdown does not start until ALL slow init is done
-	 * (LCD, SD card, logdb, startup_config_handler).  The hiwdg struct was
-	 * pre-configured by MX_IWDG_Init(); we only need to call HAL_IWDG_Init()
-	 * to start the hardware counter.
+	 * so the timeout countdown starts after the early init block
+	 * (LCD, SD card, logdb) instead of in main().  The remaining early-boot
+	 * work (startup_config_handler() and scheduler handoff to the WDT task)
+	 * still runs inside this watchdog window.  The hiwdg struct was
+	 * pre-configured by MX_IWDG_Init(); HAL_IWDG_Init() starts the counter.
 	 *
 	 * With IWDG_PRESCALER_128 and IWDG_RELOAD=4000 (LSI ~32 kHz):
 	 *   timeout = 128 / 32000 * 4000 = 16 s.
@@ -194,8 +195,8 @@ static void m1_wdt_handler_task(void *param)
 
 	/* Reload the IWDG counter immediately on first scheduling of this task,
 	 * BEFORE the initial 2s vTaskDelay below.  The IWDG is now armed inside
-	 * m1_wdt_init() (deferred from MX_IWDG_Init in main.c) so the countdown
-	 * starts only after all slow init completes.  This initial reload is
+	 * m1_wdt_init() (deferred from MX_IWDG_Init in main.c), after pre-RTOS
+	 * early init but before startup_config_handler().  This initial reload is
 	 * belt-and-suspenders: the only time remaining after m1_wdt_init() returns
 	 * is m1_tasks_init() + startup_config_handler() + a final m1_wdt_reset()
 	 * kick, all of which complete well within the 16 s IWDG window.  Still,
