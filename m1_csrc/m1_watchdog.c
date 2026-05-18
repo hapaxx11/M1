@@ -23,8 +23,15 @@
 
 #define M1_LOGDB_TAG	"Watchdog"
 
-#define M1_WDT_TIMEOUT					IWDG_RELOAD
-#define M1_WDT_SYSTEM_CHECK_TIMEOUT		(2*M1_WDT_TIMEOUT)
+/* M1_WDT_TASK_PERIOD_MS is the FreeRTOS IWDG handler task period in
+ * milliseconds, defined separately from IWDG_RELOAD to avoid a unit
+ * confusion: IWDG_RELOAD is a hardware counter value (ticks, not ms).
+ * With prescaler 128 and LSI ~32 kHz, 1 IWDG tick ≈ 4 ms, so the full
+ * IWDG timeout is IWDG_RELOAD (4000) × 4 ms = 16,000 ms (16 s).
+ * The WDT task fires every 2,000 ms — 1/8 of the IWDG timeout —
+ * giving 8× steady-state margin. */
+#define M1_WDT_TASK_PERIOD_MS			2000U  /* WDT handler task reload period (ms) */
+#define M1_WDT_SYSTEM_CHECK_TIMEOUT		(4U * M1_WDT_TASK_PERIOD_MS) /* 8 s system-check interval */
 
 /* Boot-loop escape hatch — RTC backup register used to count consecutive
  * IWDG resets.  DR2 is the first slot after S_M1_BK_REGS_t (which uses
@@ -127,6 +134,15 @@ void m1_wdt_init(void)
 	 */
 	HAL_PWR_EnableBkUpAccess(); /* safe to call again; no-op if already enabled */
 	loop_ctr = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_CTR_REG);
+	/* Clamp: backup register DR2 can hold stale or garbage data if the
+	 * backup domain was retained while VBAT was present (e.g. across a
+	 * firmware flash without a full power-off).  Any value above the
+	 * maximum threshold is treated as 0 so a single subsequent IWDG
+	 * reset cannot instantly trip the boot-loop suppressor. */
+	if (loop_ctr > M1_WDT_BOOT_LOOP_MAX)
+	{
+		loop_ctr = 0;
+	}
 	if (was_wdt_reset)
 	{
 		loop_ctr++;
@@ -164,7 +180,7 @@ void m1_wdt_init(void)
 	 *
 	 * With IWDG_PRESCALER_128 and IWDG_RELOAD=4000 (LSI ~32 kHz):
 	 *   timeout = 128 / 32000 * 4000 = 16 s.
-	 * The WDT handler task reloads every M1_WDT_TIMEOUT/2 = 2000 ms,
+	 * The WDT handler task reloads every M1_WDT_TASK_PERIOD_MS = 2000 ms,
 	 * giving 8x steady-state margin inside the 16 s window.
 	 */
 	if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
@@ -209,8 +225,8 @@ static void m1_wdt_handler_task(void *param)
 	while (1)
 	{
 		m1_wdt_checkin();
-		vTaskDelay(pdMS_TO_TICKS(M1_WDT_TIMEOUT/2));
-		run_time += M1_WDT_TIMEOUT/2;
+		vTaskDelay(pdMS_TO_TICKS(M1_WDT_TASK_PERIOD_MS));
+		run_time += M1_WDT_TASK_PERIOD_MS;
 		m1_wdt_checkout();
 		if ( run_time >= M1_WDT_SYSTEM_CHECK_TIMEOUT )
 		{
