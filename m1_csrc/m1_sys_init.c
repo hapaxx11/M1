@@ -178,8 +178,8 @@ void m1_system_init_task(void *param)
 			m1_wdt_reset(); /* LCD init sequence can take >500ms on some hardware */
 			m1_sdcard_init(&hsd1);
 			m1_wdt_reset(); /* SD card mount can take 1-2s on slower cards; refresh
-			                   before the WDT task takes over so the IWDG (4s from
-			                   MX_IWDG_Init in main()) does not expire first */
+			                   before the WDT task takes over so the deferred IWDG
+			                   window (16s with prescaler 128/reload 4000) stays fresh */
 
 			/* USART1 default config */
 			huart_logdb.Init.BaudRate = LOG_DEBUG_UART_BAUD;
@@ -202,7 +202,7 @@ void m1_system_init_task(void *param)
 			 * IWDG would not be reloaded between here and the moment the WDT
 			 * task is first scheduled.  Kicking here — before m1_logdb
 			 * logging which can block on the log mutex — guarantees a fresh
-			 * 4s budget when the WDT task takes over. */
+			 * 16s budget when the WDT task takes over. */
 			m1_wdt_reset();
 			M1_LOG_I(M1_LOGDB_TAG, "Power-up init done!\r\n");
 			vTaskDelete(NULL); // Delete this task
@@ -213,4 +213,3 @@ void m1_system_init_task(void *param)
 		}
 	} // while (1)
 } // void m1_system_init_task(void *param)
-

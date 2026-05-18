@@ -234,7 +234,14 @@ void Error_Handler(void);
 #define ST25R3916 // manually added for STM32 NFC to support X-NUCLEO-NFC06A1 (for ST25R3916) instead of X-NUCLEO-NFC08A1 (for ST25R3916B)
 
 #define IWDG_WINDOW 	IWDG_WINDOW_DISABLE
-#define IWDG_RELOAD 	4000 // 4000 x 1ms = 4,000ms /*(uwLsiFreq / 32)*/
+/* With LSI ~32 kHz and prescaler 128: tick = 128/32000 = 4 ms.
+ * 4000 ticks x 4 ms = 16,000 ms (16 s) IWDG timeout.
+ * The WDT handler task reloads every M1_WDT_TIMEOUT/2 = 2000 ms,
+ * giving 8x steady-state margin.
+ * The early-boot 16 s window (between HAL_IWDG_Init in m1_wdt_init()
+ * and the first WDT task reload) still covers startup_config_handler()
+ * and task handoff scheduling inside m1_system_init_task(). */
+#define IWDG_RELOAD 	4000 // 4000 x 4ms = 16,000ms (prescaler 128, LSI ~32kHz)
 
 extern IWDG_HandleTypeDef 	hiwdg;
 extern RTC_HandleTypeDef 	hrtc;
