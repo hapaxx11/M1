@@ -323,40 +323,18 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventLeft:
-            /* Cycle frequency preset (works while receiving) */
+            /* Open Config (consistent with Read Raw scene UX: LEFT button
+             * with arrowleft icon opens Config).  Available whenever
+             * we're not already in a sub-view. */
+            if (!app->history_view && !app->detail_view)
             {
-                uint8_t old_freq = app->freq_idx;
-                app->freq_idx = (app->freq_idx > 0) ?
-                    app->freq_idx - 1 : SUBGHZ_FREQ_PRESET_CNT - 1;
-                app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
-                if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
-                {
-                    /* Lightweight retune — keep RX running, just change
-                     * frequency.  Uses the same mechanism as the hopper
-                     * (subghz_retune_freq_hz_ext) instead of a full
-                     * stop_rx()+start_rx() cycle that would power-cycle
-                     * the radio and wipe the pulse handler. */
-                    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
-                    subghz_retune_freq_hz_ext(app->current_freq_hz);
-                }
-                app->need_redraw = true;
+                app->resume_from_child = true;
+                subghz_scene_push(app, SubGhzSceneConfig);
             }
             return true;
 
         case SubGhzEventRight:
-            /* Cycle frequency preset (works while receiving) */
-            {
-                uint8_t old_freq = app->freq_idx;
-                app->freq_idx = (app->freq_idx + 1) % SUBGHZ_FREQ_PRESET_CNT;
-                app->current_freq_hz = subghz_get_freq_hz_ext(app->freq_idx);
-                if (app->freq_idx != old_freq && app->read_state == SubGhzReadStateRx)
-                {
-                    /* Lightweight retune — same as Left handler */
-                    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
-                    subghz_retune_freq_hz_ext(app->current_freq_hz);
-                }
-                app->need_redraw = true;
-            }
+            /* Unused — frequency selection is via Config (LEFT button) */
             return true;
 
         case SubGhzEventUp:
@@ -395,12 +373,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneSaveName);
             }
-            else if (!app->history_view)
-            {
-                /* Open config (Flipper-consistent: config accessible during RX) */
-                app->resume_from_child = true;
-                subghz_scene_push(app, SubGhzSceneConfig);
-            }
+            /* In live view: DOWN is unused — Config is on LEFT */
             return true;
 
         case SubGhzEventHopperTick:
@@ -588,7 +561,7 @@ static void draw(SubGhzApp *app)
     if (app->read_state == SubGhzReadStateIdle)
     {
         subghz_button_bar_draw(
-            arrowdown_8x8, "Config",
+            arrowleft_8x8, "Config",
             NULL, "Listen",
             NULL, NULL);
     }
@@ -611,7 +584,7 @@ static void draw(SubGhzApp *app)
     {
         /* Active RX, no signals yet */
         subghz_button_bar_draw(
-            arrowdown_8x8, "Config",
+            arrowleft_8x8, "Config",
             NULL, NULL,
             NULL, NULL);
     }

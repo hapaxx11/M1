@@ -5396,16 +5396,46 @@ uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx)
 }
 
 /* Retune radio to an arbitrary frequency (Hz) without full RX re-init.
- * Used by hopper to change frequency on the fly during active RX. */
+ * Used by hopper to change frequency on the fly during active RX.
+ *
+ * Lightweight path: keeps the previously-loaded radio config and modem
+ * mode intact and only retunes the synthesizer + frontend antenna mux.
+ * Same approach as the Frequency Analyzer / Spectrum Analyzer fast-sweep
+ * code (see SI446x_Set_Frequency() call sites elsewhere in this file).
+ *
+ * Why we don't call sub_ghz_set_opmode() here: that function unconditionally
+ * reloads the full SI4463 config from SPI on every invocation, and when the
+ * target frequency falls in the 915 MHz band it forces a swap to the FSK
+ * radio config.  Doing that on a 200 ms hopper tick churns hundreds of SPI
+ * writes per second, repeatedly mode-swaps the modem from OOK→FSK→OOK as
+ * the hopper crosses the 850 MHz boundary, and could lock up the device
+ * (the hopper would visibly hang on 915 MHz and the watchdog would then
+ * hard-reboot the unit). */
 void subghz_retune_freq_hz_ext(uint32_t freq_hz)
 {
+	S_M1_SubGHz_Band fe_band;
+
 	sub_ghz_rx_pause();
 
 	subghz_custom_freq_hz = freq_hz;
 	subghz_scan_config.band = subghz_freq_hz_to_band(freq_hz);
 
-	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
-	SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+	/* Frontend antenna mux: pick the matching frontend for the new RF band.
+	 * The radio modem config (OOK direct-mode) loaded at scene_on_enter is
+	 * preserved — only synthesizer frequency + frontend change. */
+	if (freq_hz >= 850000000UL)
+		fe_band = SUB_GHZ_BAND_915;
+	else if (freq_hz >= 390000000UL)
+		fe_band = SUB_GHZ_BAND_433_92;
+	else
+		fe_band = SUB_GHZ_BAND_315;
+	SI446x_Select_Frontend(fe_band);
+
+	/* VCO must be off (READY state) before changing FREQ_CONTROL.
+	 * Calibration happens automatically on the READY→RX transition. */
+	SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_READY);
+	SI446x_Set_Frequency(freq_hz);
+	SI446x_Start_Rx(0);
 
 	sub_ghz_rx_start();
 }
