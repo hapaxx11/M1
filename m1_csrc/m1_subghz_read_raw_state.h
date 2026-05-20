@@ -16,6 +16,7 @@
 #define M1_SUBGHZ_READ_RAW_STATE_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum {
     SubGhzReadRawStateStart = 0,   /**< Fresh entry — no capture exists */
@@ -88,6 +89,33 @@ static inline SubGhzReadRawState subghz_read_raw_state_to_repeat(SubGhzReadRawSt
         default:
             return s;
     }
+}
+
+/**
+ * @brief  Pure-logic: gate the displayed "N spl." counter by signal-present.
+ *
+ * The waveform cursor in the Read Raw scene only advances when RSSI is above
+ * the user-configured threshold (signal_present == true).  When no signal is
+ * detected, the cursor freezes.  The displayed SPL counter must follow the
+ * same gating — otherwise it ticks up from ambient RF noise that passes the
+ * 80 µs noise filter in the TIM1 input-capture ISR, giving the false
+ * impression that a capture is filling up.  See issue
+ * "Read Raw is counting SPL when none are being collected".
+ *
+ * @param  current_displayed     Value currently shown in the status bar.
+ * @param  new_total             Total samples written to SD since recording started
+ *                               (from sub_ghz_raw_recording_get_total_samples_ext()).
+ * @param  signal_seen_in_chunk  true if signal_present was observed at least once
+ *                               since the previous Q_EVENT_SUBGHZ_RX flush.
+ * @retval  new_total            when signal_seen_in_chunk is true (cursor advanced)
+ * @retval  current_displayed    when signal_seen_in_chunk is false (cursor frozen)
+ */
+static inline uint32_t subghz_read_raw_display_count_update(
+    uint32_t current_displayed,
+    uint32_t new_total,
+    bool     signal_seen_in_chunk)
+{
+    return signal_seen_in_chunk ? new_total : current_displayed;
 }
 
 #endif /* M1_SUBGHZ_READ_RAW_STATE_H_ */
