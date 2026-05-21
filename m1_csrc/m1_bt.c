@@ -611,13 +611,19 @@ static void ble_gatt_export(const ble_dev_t *dev)
             "%s,%s,%s,%04X,%04X,%02X,%s,%s\r\n",
             dev->addr_str, name, type, e->handle1, e->handle2,
             e->props, uuid_hex, value_hex);
-        if (len > 0)
+        if (len > 0 && len < (int)sizeof(line))
         {
             f_write(&fil, line, len, &bw);
         }
     }
 
     f_close(&fil);
+}
+
+static void ble_gatt_disconnect(void)
+{
+    m1_resp_t resp;
+    m1_esp32_simple_cmd(CMD_BLE_GATT_STOP, &resp, BLE_CMD_TIMEOUT_MS);
 }
 
 static uint16_t ble_gatt_fetch(const ble_dev_t *dev)
@@ -689,13 +695,11 @@ static uint16_t ble_gatt_fetch(const ble_dev_t *dev)
     }
 
     ble_gatt_export(dev);
+    if (ble_gatt_count == 0)
+    {
+        ble_gatt_disconnect();
+    }
     return ble_gatt_count;
-}
-
-static void ble_gatt_disconnect(void)
-{
-    m1_resp_t resp;
-    m1_esp32_simple_cmd(CMD_BLE_GATT_STOP, &resp, BLE_CMD_TIMEOUT_MS);
 }
 
 static bool ble_gatt_write_value(uint16_t handle, uint8_t flags,
@@ -786,7 +790,7 @@ static void ble_gatt_log_notify(const ble_dev_t *dev, const ble_gatt_notify_t *n
     int len = snprintf(line, sizeof(line), "%s,%s,%04X,%s,%s\r\n",
         dev->addr_str, name, notif->handle,
         notif->indication ? "indicate" : "notify", hex);
-    if (len > 0)
+    if (len > 0 && len < (int)sizeof(line))
     {
         f_write(&fil, line, len, &bw);
     }
