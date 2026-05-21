@@ -126,7 +126,12 @@
 /** IEEE 802.15.4 / Zigbee / Thread */
 #define M1_ESP32_CAP_802154         (UINT64_C(1) << 16)
 
-/* Bits 17-63 reserved for future use */
+/** BLE GATT client (connect to peer, enumerate services/characteristics,
+ *  read/write/subscribe).  Exposed by SiN360 firmware via
+ *  CMD_BLE_GATT_START/NEXT/STOP/WRITE/SUB/NOTIF (opcodes 0x28..0x2D). */
+#define M1_ESP32_CAP_BLE_GATT       (UINT64_C(1) << 17)
+
+/* Bits 18-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
@@ -139,7 +144,9 @@
 
 /** SiN360 firmware profile (sincere360/M1_SiN360_ESP32) — reference only.
  *  Updated to include M1_ESP32_CAP_BLE_HID: SiN360 v0.9.1.0 added
- *  CMD_BLE_HID_START/STOP/STATUS/REPORT for binary-SPI BLE keyboard injection. */
+ *  CMD_BLE_HID_START/STOP/STATUS/REPORT for binary-SPI BLE keyboard injection.
+ *  Updated to include M1_ESP32_CAP_BLE_GATT: SiN360 exposes a NimBLE GATT
+ *  client via CMD_BLE_GATT_START/NEXT/STOP/WRITE/SUB/NOTIF. */
 #define M1_ESP32_CAP_PROFILE_SIN360 \
     (M1_ESP32_CAP_WIFI_SCAN    | \
      M1_ESP32_CAP_STA_SCAN     | \
@@ -152,7 +159,8 @@
      M1_ESP32_CAP_PKTMON       | \
      M1_ESP32_CAP_PORTAL       | \
      M1_ESP32_CAP_NETSCAN      | \
-     M1_ESP32_CAP_BLE_HID)
+     M1_ESP32_CAP_BLE_HID      | \
+     M1_ESP32_CAP_BLE_GATT)
 
 /* AT firmware is detected at runtime via the stock `AT+CMD?` probe — no
  * curated AT fallback profile macros are defined here.  Adding a new AT

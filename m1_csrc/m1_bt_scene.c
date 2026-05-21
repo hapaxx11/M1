@@ -65,6 +65,9 @@ enum {
     BtSceneBadBt,
     BtSceneBtName,
 
+    /* GATT */
+    BtSceneGattDiscovery,
+
     /* Saved / Info stubs */
     BtSceneSaved,
     BtSceneInfo,
@@ -118,6 +121,8 @@ DELEGATE(detect_meta,     ble_detect_meta)
 DELEGATE_CAPPED(badbt,  badbt_run,                M1_ESP32_CAP_BLE_HID,   "Bad-BT")
 DELEGATE_CAPPED(btname, bluetooth_set_badbt_name, M1_ESP32_CAP_BLE_HID,   "BT Name")
 
+DELEGATE_CAPPED(gatt_discovery, ble_gatt_discovery, M1_ESP32_CAP_BLE_GATT, "GATT Discover")
+
 DELEGATE_CAPPED(saved, bluetooth_saved_devices, M1_ESP32_CAP_BT_MANAGE, "Saved Devices")
 DELEGATE_CAPPED(info,  bluetooth_info,          M1_ESP32_CAP_BT_MANAGE, "BT Info")
 
@@ -148,6 +153,7 @@ HANDLERS(detect_flock);
 HANDLERS(detect_meta);
 HANDLERS(badbt);
 HANDLERS(btname);
+HANDLERS(gatt_discovery);
 HANDLERS(saved);
 HANDLERS(info);
 
@@ -228,7 +234,7 @@ static const M1SceneHandlers detect_menu_handlers = {
 };
 
 /* ---- Top-level menu ----------------------------------------------------- */
-#define MENU_ITEM_COUNT  13
+#define MENU_ITEM_COUNT  14
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "BLE Scan",
@@ -240,6 +246,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Wardrive Cont.",
     "Wardrive Flock",
     "Detectors",
+    "GATT Discover",
     "Bad-BT",
     "BT Name",
     "Saved Devices",
@@ -256,6 +263,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     BtSceneWardriveContinu,
     BtSceneWardriveFlock,
     BtSceneDetectMenu,
+    BtSceneGattDiscovery,
     BtSceneBadBt,
     BtSceneBtName,
     BtSceneSaved,
@@ -324,6 +332,7 @@ static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
 
     [BtSceneBadBt]          = &badbt_handlers,
     [BtSceneBtName]         = &btname_handlers,
+    [BtSceneGattDiscovery]  = &gatt_discovery_handlers,
     [BtSceneSaved]          = &saved_handlers,
     [BtSceneInfo]           = &info_handlers,
 };
