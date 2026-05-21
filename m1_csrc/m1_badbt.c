@@ -1076,9 +1076,12 @@ void badbt_run(void)
     if (s_use_spi_hid)
     {
         /* SiN360 binary-SPI path: CMD_BLE_HID_START */
-        if (badbt_spi_hid_init(m1_badbt_name) != 0)
+        int init_ret = badbt_spi_hid_init(m1_badbt_name);
+        if (init_ret != 0)
         {
-            m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", "failed", " OK ");
+            char step_msg[16];
+            snprintf(step_msg, sizeof(step_msg), "fail rc %d", init_ret);
+            m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", step_msg, " OK ");
             m1_esp32_deinit();
             return;
         }
