@@ -132,16 +132,18 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 /* Menu drawing helper                                                        */
 /*============================================================================*/
 
-/** Menu layout constants — highlight starts at x=1 with 1px inset from the
- *  left edge and a gap before the scrollbar on the right. */
-#define M1_MENU_AREA_TOP     12   /**< Y below title + separator line       */
-#define M1_MENU_AREA_H       52   /**< Available height for menu items (64-12) */
-#define M1_MENU_ITEM_H_SMALL  8   /**< Pixel height per row — Small mode    */
+/** Menu layout constants — highlight starts at M1_MENU_HIGHLIGHT_X (1px
+ *  left inset) and leaves a 1px gap before the scrollbar on the right. */
+#define M1_MENU_AREA_TOP      12  /**< Y below title + separator line       */
+#define M1_MENU_AREA_H        52  /**< Available height for menu items (64-12) */
+#define M1_MENU_ITEM_H_SMALL   8  /**< Pixel height per row — Small mode    */
 #define M1_MENU_ITEM_H_MEDIUM 10  /**< Pixel height per row — Medium mode   */
-#define M1_MENU_ITEM_H_LARGE 13   /**< Pixel height per row — Large mode    */
+#define M1_MENU_ITEM_H_LARGE  13  /**< Pixel height per row — Large mode    */
+#define M1_MENU_HIGHLIGHT_X    1  /**< Highlight left x-inset (1px from edge) */
 #define M1_MENU_SCROLLBAR_X  124  /**< Scrollbar left edge (3px wide)       */
 #define M1_MENU_SCROLLBAR_W    3  /**< Scrollbar track width                */
-#define M1_MENU_TEXT_W       122  /**< Highlight / text area width           */
+/** Highlight/text area width: from M1_MENU_HIGHLIGHT_X to 1px before scrollbar */
+#define M1_MENU_TEXT_W  (M1_MENU_SCROLLBAR_X - M1_MENU_HIGHLIGHT_X - 1)
 
 /**
  * @brief  Get current menu item height based on m1_menu_style setting.

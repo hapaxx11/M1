@@ -921,7 +921,7 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 			/* Selection highlight — filled rounded box + inverted colours */
 			if (is_selected)
 			{
-				uint8_t sel_w = gui_width - 1 - (scroll_ok ? M1_MENU_SCROLLBAR_W + 1 : 0);
+				uint8_t sel_w = gui_width - 1 - (scroll_ok ? M1_MENU_SCROLLBAR_W + 2 : 0);
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
 				u8g2_DrawRBox(plcd_hdl, pfb_hdl->x + 1, row_top, sel_w, row_h, 2);
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_BG);
