@@ -1,1 +1,0 @@
-**Bluetooth GATT:** Fixed buffer-overread in CSV logging — `f_write` byte count now clamped to actual buffer size when `snprintf` would truncate a long notification or discovery row. Fixed stale GATT connection on ESP32 when `CMD_BLE_GATT_START` succeeds but zero entries are returned — `CMD_BLE_GATT_STOP` is now sent before returning an empty count.
