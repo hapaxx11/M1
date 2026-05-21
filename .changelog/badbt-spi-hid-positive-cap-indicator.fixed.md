@@ -1,0 +1,1 @@
+**Bad-BT: robust SPI vs AT HID transport selection** — `s_use_spi_hid` now requires `M1_ESP32_CAP_BLE_HID` to be explicitly set (positive indicator) in addition to `WIFI_JOIN` being absent, so a transient ESP32 capability-probe failure (bitmap=0) safely falls back to the AT `ble_hid_init()` path instead of incorrectly routing AT firmware into the binary-SPI HID path.

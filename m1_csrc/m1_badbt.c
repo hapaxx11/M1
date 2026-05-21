@@ -1070,8 +1070,13 @@ void badbt_run(void)
         return;
     }
 
-    /* Detect firmware type: WIFI_JOIN absent → SiN360 binary-SPI path */
-    s_use_spi_hid = !m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+    /* Detect firmware type: BLE_HID present AND WIFI_JOIN absent → SiN360
+     * binary-SPI path.  Using a positive indicator (BLE_HID explicitly set)
+     * guards against a transient caps-probe failure (bitmap=0) silently routing
+     * AT firmware into the SPI HID path.  When bitmap=0, BLE_HID is absent and
+     * the code safely falls back to the AT ble_hid_init() path. */
+    s_use_spi_hid = m1_esp32_has_cap(M1_ESP32_CAP_BLE_HID) &&
+                    !m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
     if (s_use_spi_hid)
     {
