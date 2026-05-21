@@ -7,7 +7,7 @@
  *         unit tests can exercise the dispatch logic without pulling in the
  *         full scene context (SubGhzApp, decenc state, etc.).
  *
- *  Convention: this header has no dependencies beyond <stdbool.h> so it can
+ *  Convention: this header has no dependencies beyond <stdbool.h>/<stdint.h> so it can
  *  be included in both firmware and tests.  Do NOT add anything here that
  *  references hardware, FreeRTOS, or the scene framework.
  */
