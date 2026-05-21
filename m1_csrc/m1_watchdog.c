@@ -17,7 +17,9 @@
 #include <stdbool.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
+#include "m1_fw_update_bl.h"
 #include "m1_watchdog.h"
+#include "m1_watchdog_boot_loop.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -39,6 +41,7 @@
  * at DR1).  The counter survives chip reset (backup domain) but is
  * cleared by a full power-off. */
 #define M1_WDT_BKP_LOOP_CTR_REG	RTC_BKP_DR2
+#define M1_WDT_BKP_LOOP_SIG_REG	RTC_BKP_DR3
 #define M1_WDT_BOOT_LOOP_MAX		3U   /* suppress IWDG after this many consecutive WDT resets */
 
 //************************** C O N S T A N T **********************************/
@@ -83,7 +86,10 @@ void m1_wdt_init(void)
 	BaseType_t ret;
 	size_t free_heap;
 	uint32_t loop_ctr;
+	uint32_t loop_sig;
+	uint32_t expected_sig;
 	bool was_wdt_reset;
+	m1_wdt_boot_loop_eval_t loop_eval;
 
 	/*
 	 * Freeze the IWDG counter when the CPU is halted by the debugger.
@@ -134,29 +140,29 @@ void m1_wdt_init(void)
 	 */
 	HAL_PWR_EnableBkUpAccess(); /* safe to call again; no-op if already enabled */
 	loop_ctr = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_CTR_REG);
-	/* Clamp: backup register DR2 can hold stale or garbage data if the
-	 * backup domain was retained while VBAT was present (e.g. across a
-	 * firmware flash without a full power-off).  Any value above the
-	 * maximum threshold is treated as 0 so a single subsequent IWDG
-	 * reset cannot instantly trip the boot-loop suppressor. */
-	if (loop_ctr > M1_WDT_BOOT_LOOP_MAX)
-	{
-		loop_ctr = 0;
-	}
-	if (was_wdt_reset)
-	{
-		loop_ctr++;
-	}
-	else
-	{
-		loop_ctr = 0;
-	}
-	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, loop_ctr);
+	loop_sig = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_SIG_REG);
+	expected_sig = m1_wdt_boot_loop_build_sig_components(
+		FW_VERSION_MAJOR,
+		FW_VERSION_MINOR,
+		FW_VERSION_BUILD,
+		FW_VERSION_RC,
+		M1_HAPAX_REVISION);
+	/* DR3 stores a firmware-version signature for DR2 validity.
+	 * Any signature mismatch (e.g. flashed new firmware while VBAT
+	 * retained) invalidates DR2 so stale in-range counters cannot
+	 * trigger a false boot-loop suppressor hit. */
+	loop_eval = m1_wdt_boot_loop_evaluate(
+		loop_ctr,
+		loop_sig,
+		was_wdt_reset,
+		expected_sig,
+		M1_WDT_BOOT_LOOP_MAX);
+	loop_ctr = loop_eval.runtime_ctr;
+	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_SIG_REG, expected_sig);
+	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, loop_eval.stored_ctr);
 
-	if (loop_ctr >= M1_WDT_BOOT_LOOP_MAX)
+	if (loop_eval.disable_iwdg)
 	{
-		/* Clear the counter so the *next* boot starts fresh. */
-		HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, 0);
 		M1_LOG_W(M1_LOGDB_TAG,
 		         "Boot loop detected (%lu consecutive WDT resets). "
 		         "IWDG disabled for this boot.\r\n",
