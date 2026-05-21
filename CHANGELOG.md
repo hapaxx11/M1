@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.17] - 2026-05-21
+
+### Fixed
+
+- **Watchdog:** Added a firmware-version signature guard for the backup-domain boot-loop counter so stale retained RTC data from a reflashed firmware no longer triggers false boot-loop suppression.
+- **Watchdog boot-loop counter hardening**: Boot-loop counter (RTC backup DR2)
+  is now clamped to `[0, M1_WDT_BOOT_LOOP_MAX]` before incrementing, preventing
+  stale or garbage data retained while VBAT is present (e.g., across a firmware
+  flash) from tripping the 3-reset threshold on a single subsequent IWDG reset.
+  IWDG reload ticks (`IWDG_RELOAD`) are now cleanly separated from the FreeRTOS
+  WDT task period by introducing `M1_WDT_TASK_PERIOD_MS` (2000 ms), eliminating
+  the unit confusion between hardware counter values and milliseconds.
+  CubeMX regeneration warning strengthened in `MX_IWDG_Init()` to explicitly
+  document that the deferred `HAL_IWDG_Init()` call must be manually removed
+  from any freshly regenerated `main.c`.
 ## [0.9.1.16] - 2026-05-18
 
 ### Changed
