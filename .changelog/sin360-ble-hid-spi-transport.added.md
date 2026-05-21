@@ -1,1 +1,0 @@
-**Bad-BT: SiN360 binary-SPI transport** — `badbt_run()` now auto-detects SiN360 firmware (WIFI_JOIN cap absent) and uses `CMD_BLE_HID_START/STOP/STATUS/REPORT` (opcodes 0x2E/0x2F/0x61/0x60) instead of AT `ble_hid_*` functions. Mouse and media DuckyScript commands are gracefully skipped on the SPI path. AT firmware users are unaffected.
