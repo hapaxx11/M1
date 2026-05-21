@@ -572,6 +572,10 @@ bool bl_verify_bank_crc(uint32_t bank_base)
 
     for (uint32_t i = 0; i < num_words; i++)
     {
+        /* Kick IWDG every 64KB to prevent timeout on large images */
+        if ((i & 0x3FFFU) == 0)
+            m1_wdt_reset();
+
         uint32_t word;
         __ASM volatile (
             "ldr.w %0, [%1]"
