@@ -139,6 +139,7 @@ HANDLERS(wardrive_flock);
 HANDLERS(spam_sour_apple);
 HANDLERS(spam_swiftpair);
 HANDLERS(spam_samsung);
+HANDLERS(spam_google_fp);
 HANDLERS(spam_flipper);
 HANDLERS(spam_all);
 HANDLERS(spoof_airtag);
