@@ -50,6 +50,7 @@ enum {
     BtSceneSpamSourApple,
     BtSceneSpamSwiftpair,
     BtSceneSpamSamsung,
+    BtSceneSpamGoogleFP,
     BtSceneSpamFlipper,
     BtSceneSpamAll,
     BtSceneSpoofAirtag,
@@ -105,6 +106,7 @@ DELEGATE(wardrive_flock,  ble_wardrive_flock)
 DELEGATE(spam_sour_apple, ble_spam_sour_apple)
 DELEGATE(spam_swiftpair,  ble_spam_swiftpair)
 DELEGATE(spam_samsung,    ble_spam_samsung)
+DELEGATE(spam_google_fp,  ble_spam_google_fastpair)
 DELEGATE(spam_flipper,    ble_spam_flipper)
 DELEGATE(spam_all,        ble_spam_all)
 DELEGATE(spoof_airtag,    ble_spoof_airtag)
@@ -175,14 +177,14 @@ static const M1SceneHandlers sniffer_menu_handlers = {
 };
 
 /* ---- BLE Spam submenu --------------------------------------------------- */
-#define SPAM_ITEM_COUNT  6
+#define SPAM_ITEM_COUNT  7
 static const char *const spam_labels[SPAM_ITEM_COUNT] = {
     "Sour Apple", "SwiftPair", "Samsung",
-    "Flipper", "All", "AirTag Spoof",
+    "Google FP", "Flipper", "All", "AirTag Spoof",
 };
 static const uint8_t spam_targets[SPAM_ITEM_COUNT] = {
     BtSceneSpamSourApple, BtSceneSpamSwiftpair, BtSceneSpamSamsung,
-    BtSceneSpamFlipper, BtSceneSpamAll, BtSceneSpoofAirtag,
+    BtSceneSpamGoogleFP, BtSceneSpamFlipper, BtSceneSpamAll, BtSceneSpoofAirtag,
 };
 static uint8_t spam_sel = 0, spam_scroll = 0;
 static void spam_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
@@ -309,6 +311,7 @@ static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
     [BtSceneSpamSourApple]  = &spam_sour_apple_handlers,
     [BtSceneSpamSwiftpair]  = &spam_swiftpair_handlers,
     [BtSceneSpamSamsung]    = &spam_samsung_handlers,
+    [BtSceneSpamGoogleFP]   = &spam_google_fp_handlers,
     [BtSceneSpamFlipper]    = &spam_flipper_handlers,
     [BtSceneSpamAll]        = &spam_all_handlers,
     [BtSceneSpoofAirtag]    = &spoof_airtag_handlers,

@@ -1,0 +1,1 @@
+**Bluetooth: Google Fast Pair BLE spam** — Added Google Fast Pair proximity advertisement spam (Android device pairing notifications) to the BLE Spam submenu, alongside Sour Apple, SwiftPair, Samsung, and Flipper. Also cycles through Google FP payloads in "All" spam mode.

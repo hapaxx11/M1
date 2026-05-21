@@ -34,6 +34,7 @@ void ble_detect_meta(void);
 void ble_spam_sour_apple(void);
 void ble_spam_swiftpair(void);
 void ble_spam_samsung(void);
+void ble_spam_google_fastpair(void);
 void ble_spam_flipper(void);
 void ble_spam_all(void);
 void ble_spoof_airtag(void);
