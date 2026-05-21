@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.18] - 2026-05-21
+
+### Fixed
+
+- **Sub-GHz Read Raw: MoreRAW submenu styling** — fixed the Decode/Rename/Delete action
+  menu to match the visual standards used by other Sub-GHz overlays: larger title font
+  (`M1_DISP_FUNC_MENU_FONT_N`), highlight width narrowed to 123 px (leaving right-edge margin),
+  and item text x-offset aligned with the Saved scene action menu (x=4).
 ## [0.9.1.17] - 2026-05-21
 
 ### Fixed
