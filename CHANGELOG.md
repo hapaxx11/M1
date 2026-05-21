@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.22] - 2026-05-21
+
+### Added
+
+- **Bluetooth: Google Fast Pair BLE spam** — Added Google Fast Pair proximity advertisement spam (Android device pairing notifications) to the BLE Spam submenu, alongside Sour Apple, SwiftPair, Samsung, and Flipper. Also cycles through Google FP payloads in "All" spam mode.
 ## [0.9.1.21] - 2026-05-21
 
 ### Added
