@@ -160,6 +160,68 @@ void test_to_repeat_result_is_always_a_tx_state_when_input_is(void)
     }
 }
 
+/*============================================================================*/
+/* subghz_read_raw_display_count_update                                       */
+/*                                                                            */
+/* Regression coverage for the issue "Read Raw is counting SPL when none are  */
+/* being collected".  The displayed counter must follow the same gating rule  */
+/* as the waveform cursor: only advance while signal_present is true.         */
+/*============================================================================*/
+
+void test_display_count_advances_when_signal_seen(void)
+{
+    /* Recording with signal present in the last draw tick — the displayed
+     * counter must catch up to the file's total. */
+    TEST_ASSERT_EQUAL_UINT32(
+        512u,
+        subghz_read_raw_display_count_update(0u, 512u, true));
+    TEST_ASSERT_EQUAL_UINT32(
+        2048u,
+        subghz_read_raw_display_count_update(1536u, 2048u, true));
+}
+
+void test_display_count_freezes_when_no_signal_seen(void)
+{
+    /* Recording without any signal_present sample since the last flush — the
+     * displayed counter must stay where it was, even though the file on SD
+     * has grown by another 512-sample chunk from ambient noise that passed
+     * the 80 µs ISR filter.  This is the regression guard for the issue. */
+    TEST_ASSERT_EQUAL_UINT32(
+        0u,
+        subghz_read_raw_display_count_update(0u, 512u, false));
+    TEST_ASSERT_EQUAL_UINT32(
+        1536u,
+        subghz_read_raw_display_count_update(1536u, 2048u, false));
+}
+
+void test_display_count_freezes_across_many_noise_chunks(void)
+{
+    /* Simulate a long silent recording: total_samples climbs in 512-sample
+     * steps from noise, but signal_seen_in_chunk stays false the entire
+     * time.  The displayed counter must remain at zero throughout. */
+    uint32_t displayed = 0u;
+    for (uint32_t total = 512u; total <= 10u * 512u; total += 512u)
+        displayed = subghz_read_raw_display_count_update(displayed, total, false);
+    TEST_ASSERT_EQUAL_UINT32(0u, displayed);
+}
+
+void test_display_count_catches_up_when_signal_returns(void)
+{
+    /* Realistic mix: silent → noisy chunks (frozen) → signal arrives in a
+     * later chunk (counter jumps to the current file total, not a stale
+     * subtotal).  This is the behaviour the user expects after pressing OK
+     * to start recording and then a real burst arriving a few seconds in. */
+    uint32_t displayed = 0u;
+    displayed = subghz_read_raw_display_count_update(displayed, 512u, false);
+    displayed = subghz_read_raw_display_count_update(displayed, 1024u, false);
+    displayed = subghz_read_raw_display_count_update(displayed, 1536u, false);
+    TEST_ASSERT_EQUAL_UINT32(0u, displayed);
+    /* Signal finally seen in this chunk — counter catches up to the full
+     * current total, not just 512. */
+    displayed = subghz_read_raw_display_count_update(displayed, 2048u, true);
+    TEST_ASSERT_EQUAL_UINT32(2048u, displayed);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -174,5 +236,9 @@ int main(void)
     RUN_TEST(test_to_repeat_is_idempotent_in_repeat_states);
     RUN_TEST(test_to_repeat_leaves_non_tx_states_unchanged);
     RUN_TEST(test_to_repeat_result_is_always_a_tx_state_when_input_is);
+    RUN_TEST(test_display_count_advances_when_signal_seen);
+    RUN_TEST(test_display_count_freezes_when_no_signal_seen);
+    RUN_TEST(test_display_count_freezes_across_many_noise_chunks);
+    RUN_TEST(test_display_count_catches_up_when_signal_returns);
     return UNITY_END();
 }
