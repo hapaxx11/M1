@@ -19,7 +19,8 @@
 
 /*************************** D E F I N E S ************************************/
 
-#define SPI_TIMEOUT_MS  100
+#define SPI_TIMEOUT_MS       100
+#define SPI_BUSY_RETRY_MS    150  /* Max retry window for HAL_BUSY (back-to-back cmds) */
 
 /*************************** V A R I A B L E S ********************************/
 
@@ -63,6 +64,27 @@ static HAL_StatusTypeDef spi_tx_64(const uint8_t *data)
 
 /******************************************************************************/
 /**
+  * @brief  Send 64 bytes with retry on HAL_BUSY (e.g. rapid back-to-back cmds)
+  */
+/******************************************************************************/
+static HAL_StatusTypeDef spi_tx_retry_64(const uint8_t *data)
+{
+	HAL_StatusTypeDef ret;
+	uint32_t start = HAL_GetTick();
+
+	do {
+		ret = spi_tx_64(data);
+		if (ret != HAL_BUSY)
+			return ret;
+		HAL_Delay(1);
+	} while ((HAL_GetTick() - start) < SPI_BUSY_RETRY_MS);
+
+	return ret;
+}
+
+
+/******************************************************************************/
+/**
   * @brief  Receive 64 bytes from ESP32 over SPI3 (master RX)
   * @param  data  Pointer to 64-byte receive buffer
   * @return HAL status
@@ -83,6 +105,27 @@ static HAL_StatusTypeDef spi_rx_64(uint8_t *data)
 	cs_delay();
 	/* Deassert CS */
 	HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin, GPIO_PIN_SET);
+
+	return ret;
+}
+
+
+/******************************************************************************/
+/**
+  * @brief  Receive 64 bytes with retry on HAL_BUSY
+  */
+/******************************************************************************/
+static HAL_StatusTypeDef spi_rx_retry_64(uint8_t *data)
+{
+	HAL_StatusTypeDef ret;
+	uint32_t start = HAL_GetTick();
+
+	do {
+		ret = spi_rx_64(data);
+		if (ret != HAL_BUSY)
+			return ret;
+		HAL_Delay(1);
+	} while ((HAL_GetTick() - start) < SPI_BUSY_RETRY_MS);
 
 	return ret;
 }
@@ -128,7 +171,7 @@ int m1_esp32_send_cmd(const m1_cmd_t *cmd, m1_resp_t *resp, uint32_t timeout_ms)
 	HAL_Delay(2);
 
 	/* Send the command */
-	hal_ret = spi_tx_64((const uint8_t *)cmd);
+	hal_ret = spi_tx_retry_64((const uint8_t *)cmd);
 	if (hal_ret != HAL_OK)
 		return -10 - (int)hal_ret;  /* -11=ERROR, -12=BUSY, -13=TIMEOUT */
 
@@ -137,7 +180,7 @@ int m1_esp32_send_cmd(const m1_cmd_t *cmd, m1_resp_t *resp, uint32_t timeout_ms)
 		return -2;
 
 	/* Read the response */
-	hal_ret = spi_rx_64((uint8_t *)resp);
+	hal_ret = spi_rx_retry_64((uint8_t *)resp);
 	if (hal_ret != HAL_OK)
 		return -20 - (int)hal_ret;  /* -21=ERROR, -22=BUSY, -23=TIMEOUT */
 

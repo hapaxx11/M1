@@ -50,6 +50,15 @@
 #define CMD_BLE_ADV_STOP      0x24
 #define CMD_BLE_ADV_RAW       0x25
 #define CMD_BLE_SCAN_NEXT_RAW 0x26
+#define CMD_BLE_ADV_RAW_EX    0x27   /* Extended raw advertisement */
+#define CMD_BLE_GATT_START    0x28   /* Start GATT client connection */
+#define CMD_BLE_GATT_NEXT     0x29   /* Fetch next GATT characteristic */
+#define CMD_BLE_GATT_STOP     0x2A   /* Disconnect GATT */
+#define CMD_BLE_GATT_WRITE    0x2B   /* Write GATT characteristic */
+#define CMD_BLE_GATT_SUB      0x2C   /* Subscribe to GATT notification */
+#define CMD_BLE_GATT_NOTIF    0x2D   /* Poll GATT notification */
+#define CMD_BLE_HID_START     0x2E   /* Start BLE HID (BadBLE) — payload: device name */
+#define CMD_BLE_HID_STOP      0x2F   /* Stop BLE HID and disconnect */
 
 /* WiFi attacks */
 #define CMD_DEAUTH_START      0x30
@@ -64,12 +73,15 @@
 #define CMD_DEAUTH_MULTI      0x39
 #define CMD_KARMA_STATUS      0x3A
 #define CMD_KARMA_PORTAL_START 0x3B
+#define CMD_WIFI_RAW_ATTACK_START 0x3C  /* Raw 802.11 frame injection start */
+#define CMD_WIFI_RAW_ATTACK_STOP  0x3D  /* Raw 802.11 frame injection stop */
 
 /* Packet monitor / sniffer */
 #define CMD_PKTMON_START      0x40
 #define CMD_PKTMON_NEXT       0x41
 #define CMD_PKTMON_STOP       0x42
 #define CMD_PKTMON_SET_CHAN   0x43
+#define CMD_PKTMON_RAW_NEXT   0x44   /* Fetch raw captured frame */
 
 /* Sniffer type constants (pktmon_start payload[0]) */
 #define SNIFF_ALL             0x00
@@ -101,6 +113,8 @@
 #define CMD_NETSCAN_START     0x5C
 #define CMD_NETSCAN_NEXT      0x5D
 #define CMD_NETSCAN_STOP      0x5E
+#define CMD_BLE_HID_REPORT    0x60   /* Send 8-byte HID keyboard boot report */
+#define CMD_BLE_HID_STATUS    0x61   /* Query HID state: bit0=active,bit1=connected */
 
 /* ---- Response status ---- */
 #define RESP_OK    0x00

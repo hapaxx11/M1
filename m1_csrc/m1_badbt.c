@@ -22,6 +22,8 @@
 #include "m1_compile_cfg.h"
 #include "m1_badbt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_cmd.h"
+#include "m1_esp32_caps.h"
 #include "esp_app_main.h"
 #include "ctrl_api.h"
 #include "m1_log_debug.h"
@@ -145,6 +147,10 @@ typedef struct
 static badbt_state_t badbt_state;
 static ctrl_cmd_t badbt_req;  /* initialized via CTRL_CMD_DEFAULT_REQ() before use */
 
+/* Set to true when running on SiN360 binary-SPI firmware.
+ * AT path (ble_hid_*) is used when false; binary CMD_BLE_HID_* when true. */
+static bool s_use_spi_hid = false;
+
 /* ASCII to HID scancode table (US keyboard layout, indices 0x20-0x7E) */
 static const ascii_hid_map_t ascii_to_hid[] =
 {
@@ -221,6 +227,96 @@ static uint16_t badbt_count_lines(const char *buf, uint32_t len);
 static void badbt_show_progress(const char *filename);
 static bool badbt_check_abort(void);
 
+/*************** B I N A R Y   S P I   H I D   H E L P E R S *****************/
+
+/* HID boot keyboard report: [modifier, reserved, key1..key6] — 8 bytes */
+#define BADBT_SPI_REPORT_LEN  8u
+
+/*============================================================================*/
+/**
+  * @brief  Start BLE HID advertising via binary SPI (SiN360 path)
+  * @param  name  Device name string to advertise (null-terminated)
+  * @retval 0 on success, non-zero on error
+  */
+/*============================================================================*/
+static int badbt_spi_hid_init(const char *name)
+{
+    m1_cmd_t  cmd;
+    m1_resp_t resp;
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic       = M1_CMD_MAGIC;
+    cmd.cmd_id      = CMD_BLE_HID_START;
+    if (name && name[0])
+    {
+        size_t nlen = strlen(name);
+        if (nlen >= M1_MAX_CMD_PAYLOAD)
+            nlen = M1_MAX_CMD_PAYLOAD - 1u;
+        memcpy(cmd.payload, name, nlen);
+        cmd.payload[nlen] = '\0';
+        cmd.payload_len   = (uint8_t)(nlen + 1u);
+    }
+
+    int rc = m1_esp32_send_cmd(&cmd, &resp, 3000);
+    if (rc != 0 || resp.status != RESP_OK)
+        return -1;
+    return 0;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Stop BLE HID via binary SPI (SiN360 path)
+  */
+/*============================================================================*/
+static void badbt_spi_hid_stop(void)
+{
+    m1_resp_t resp;
+    (void)m1_esp32_simple_cmd(CMD_BLE_HID_STOP, &resp, 2000);
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Query BLE HID connection status via binary SPI (SiN360 path)
+  * @retval true if a host device is connected
+  */
+/*============================================================================*/
+static bool badbt_spi_hid_is_connected(void)
+{
+    m1_resp_t resp;
+    int rc = m1_esp32_simple_cmd(CMD_BLE_HID_STATUS, &resp, 1000);
+    if (rc != 0 || resp.status != RESP_OK || resp.payload_len < 1u)
+        return false;
+    /* payload[0] bit flags: bit0=active, bit1=connected, bit2=notify_en, bit3=advertising */
+    return (resp.payload[0] & 0x02u) != 0u;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Send a standard 8-byte HID keyboard boot report via binary SPI
+  * @param  modifier  HID modifier byte (Ctrl/Shift/Alt/GUI)
+  * @param  keycode   HID key scancode (0x00 = no key / release)
+  */
+/*============================================================================*/
+static void badbt_spi_hid_send_kb(uint8_t modifier, uint8_t keycode)
+{
+    m1_cmd_t  cmd;
+    m1_resp_t resp;
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic          = M1_CMD_MAGIC;
+    cmd.cmd_id         = CMD_BLE_HID_REPORT;
+    cmd.payload_len    = BADBT_SPI_REPORT_LEN;
+    cmd.payload[0]     = modifier;
+    cmd.payload[1]     = 0x00;  /* reserved */
+    cmd.payload[2]     = keycode;
+    /* payload[3..7] remain 0 (no additional keys in the 6-key rollover slots) */
+
+    (void)m1_esp32_send_cmd(&cmd, &resp, 500);
+}
+
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
 /*============================================================================*/
@@ -230,7 +326,10 @@ static bool badbt_check_abort(void);
 /*============================================================================*/
 static void badbt_send_key(uint8_t modifier, uint8_t keycode)
 {
-    ble_hid_send_kb(&badbt_req, modifier, keycode);
+    if (s_use_spi_hid)
+        badbt_spi_hid_send_kb(modifier, keycode);
+    else
+        ble_hid_send_kb(&badbt_req, modifier, keycode);
     osDelay(BADBT_KEY_PRESS_MS);
 
     badbt_release_all();
@@ -245,7 +344,10 @@ static void badbt_send_key(uint8_t modifier, uint8_t keycode)
 /*============================================================================*/
 static void badbt_release_all(void)
 {
-    ble_hid_send_kb(&badbt_req, 0, 0);
+    if (s_use_spi_hid)
+        badbt_spi_hid_send_kb(0, 0);
+    else
+        ble_hid_send_kb(&badbt_req, 0, 0);
 }
 
 
@@ -454,66 +556,78 @@ static bool badbt_parse_line(const char *line)
     /* MOUSE_MOVE <dx> <dy>  — relative pointer movement (dx dy as integers) */
     if (strncmp(line, "MOUSE_MOVE ", 11) == 0)
     {
-        int dx = 0, dy = 0;
-        sscanf(line + 11, "%d %d", &dx, &dy);
-        if (dx < -127) dx = -127;
-        if (dx >  127) dx =  127;
-        if (dy < -127) dy = -127;
-        if (dy >  127) dy =  127;
-        ble_hid_send_mouse(&badbt_req, 0, (int8_t)dx, (int8_t)dy, 0);
-        osDelay(BADBT_KEY_RELEASE_MS);
+        if (!s_use_spi_hid)
+        {
+            int dx = 0, dy = 0;
+            sscanf(line + 11, "%d %d", &dx, &dy);
+            if (dx < -127) dx = -127;
+            if (dx >  127) dx =  127;
+            if (dy < -127) dy = -127;
+            if (dy >  127) dy =  127;
+            ble_hid_send_mouse(&badbt_req, 0, (int8_t)dx, (int8_t)dy, 0);
+            osDelay(BADBT_KEY_RELEASE_MS);
+        }
         return true;
     }
 
     /* MOUSE_CLICK [LEFT|RIGHT|MIDDLE]  — click a mouse button */
     if (strncmp(line, "MOUSE_CLICK", 11) == 0)
     {
-        uint8_t btn = 0x01; /* default: left */
-        const char *arg = line + 11;
-        while (*arg == ' ') arg++;
-        if (strncmp(arg, "RIGHT",  5) == 0) btn = 0x02;
-        else if (strncmp(arg, "MIDDLE", 6) == 0) btn = 0x04;
-        ble_hid_send_mouse(&badbt_req, btn, 0, 0, 0);
-        osDelay(BADBT_KEY_PRESS_MS);
-        ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
-        osDelay(BADBT_KEY_RELEASE_MS);
+        if (!s_use_spi_hid)
+        {
+            uint8_t btn = 0x01; /* default: left */
+            const char *arg = line + 11;
+            while (*arg == ' ') arg++;
+            if (strncmp(arg, "RIGHT",  5) == 0) btn = 0x02;
+            else if (strncmp(arg, "MIDDLE", 6) == 0) btn = 0x04;
+            ble_hid_send_mouse(&badbt_req, btn, 0, 0, 0);
+            osDelay(BADBT_KEY_PRESS_MS);
+            ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
+            osDelay(BADBT_KEY_RELEASE_MS);
+        }
         return true;
     }
 
     /* MOUSE_SCROLL <amount>  — scroll wheel (+up, -down) */
     if (strncmp(line, "MOUSE_SCROLL ", 13) == 0)
     {
-        int wheel = atoi(line + 13);
-        if (wheel < -127) wheel = -127;
-        if (wheel >  127) wheel =  127;
-        ble_hid_send_mouse(&badbt_req, 0, 0, 0, (int8_t)wheel);
-        osDelay(BADBT_KEY_RELEASE_MS);
-        /* Release */
-        ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
+        if (!s_use_spi_hid)
+        {
+            int wheel = atoi(line + 13);
+            if (wheel < -127) wheel = -127;
+            if (wheel >  127) wheel =  127;
+            ble_hid_send_mouse(&badbt_req, 0, 0, 0, (int8_t)wheel);
+            osDelay(BADBT_KEY_RELEASE_MS);
+            /* Release */
+            ble_hid_send_mouse(&badbt_req, 0, 0, 0, 0);
+        }
         return true;
     }
 
     /* MEDIA <action>  — Consumer Control HID usage */
     if (strncmp(line, "MEDIA ", 6) == 0)
     {
-        const char *action = line + 6;
-        uint16_t usage = 0;
-        if      (strncmp(action, "PLAY_PAUSE",  10) == 0) usage = 0x00CD;
-        else if (strncmp(action, "NEXT",         4) == 0) usage = 0x00B5;
-        else if (strncmp(action, "PREVIOUS",     8) == 0) usage = 0x00B6;
-        else if (strncmp(action, "PREV",         4) == 0) usage = 0x00B6;
-        else if (strncmp(action, "STOP",         4) == 0) usage = 0x00B7;
-        else if (strncmp(action, "MUTE",         4) == 0) usage = 0x00E2;
-        else if (strncmp(action, "VOLUME_UP",    9) == 0) usage = 0x00E9;
-        else if (strncmp(action, "VOLUME_DOWN", 11) == 0) usage = 0x00EA;
-        else if (strncmp(action, "VOL_UP",       6) == 0) usage = 0x00E9;
-        else if (strncmp(action, "VOL_DOWN",     8) == 0) usage = 0x00EA;
-        if (usage != 0)
+        if (!s_use_spi_hid)
         {
-            ble_hid_send_media(&badbt_req, usage);
-            osDelay(BADBT_KEY_PRESS_MS);
-            ble_hid_send_media(&badbt_req, 0); /* release */
-            osDelay(BADBT_KEY_RELEASE_MS);
+            const char *action = line + 6;
+            uint16_t usage = 0;
+            if      (strncmp(action, "PLAY_PAUSE",  10) == 0) usage = 0x00CD;
+            else if (strncmp(action, "NEXT",         4) == 0) usage = 0x00B5;
+            else if (strncmp(action, "PREVIOUS",     8) == 0) usage = 0x00B6;
+            else if (strncmp(action, "PREV",         4) == 0) usage = 0x00B6;
+            else if (strncmp(action, "STOP",         4) == 0) usage = 0x00B7;
+            else if (strncmp(action, "MUTE",         4) == 0) usage = 0x00E2;
+            else if (strncmp(action, "VOLUME_UP",    9) == 0) usage = 0x00E9;
+            else if (strncmp(action, "VOLUME_DOWN", 11) == 0) usage = 0x00EA;
+            else if (strncmp(action, "VOL_UP",       6) == 0) usage = 0x00E9;
+            else if (strncmp(action, "VOL_DOWN",     8) == 0) usage = 0x00EA;
+            if (usage != 0)
+            {
+                ble_hid_send_media(&badbt_req, usage);
+                osDelay(BADBT_KEY_PRESS_MS);
+                ble_hid_send_media(&badbt_req, 0); /* release */
+                osDelay(BADBT_KEY_RELEASE_MS);
+            }
         }
         return true;
     }
@@ -718,9 +832,20 @@ static bool badbt_wait_for_connection(void)
 
     while ((osKernelGetTickCount() - t0) < (BADBT_CONNECT_TIMEOUT * 1000))
     {
-        /* Check for connection via ESP32 (1-second polls) */
-        uint8_t ret = ble_hid_wait_connect(&badbt_req, 1);
-        if (ret == SUCCESS)
+        /* Check for connection (1-second polls) */
+        bool connected_now;
+        if (s_use_spi_hid)
+        {
+            osDelay(1000);
+            connected_now = badbt_spi_hid_is_connected();
+        }
+        else
+        {
+            uint8_t ret = ble_hid_wait_connect(&badbt_req, 1);
+            connected_now = (ret == SUCCESS);
+        }
+
+        if (connected_now)
         {
             badbt_state.connected = 1;
             return true;
@@ -945,14 +1070,39 @@ void badbt_run(void)
         return;
     }
 
-    uint8_t init_ret = ble_hid_init(&badbt_req, m1_badbt_name);
-    if (init_ret != SUCCESS)
+    /* Detect firmware type: BLE_HID present AND WIFI_JOIN absent → SiN360
+     * binary-SPI path.  Using a positive indicator (BLE_HID explicitly set)
+     * guards against a transient caps-probe failure (bitmap=0) silently routing
+     * AT firmware into the SPI HID path.  When bitmap=0, BLE_HID is absent and
+     * the code safely falls back to the AT ble_hid_init() path. */
+    s_use_spi_hid = m1_esp32_has_cap(M1_ESP32_CAP_BLE_HID) &&
+                    !m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+
+    if (s_use_spi_hid)
     {
-        char step_msg[16];
-        snprintf(step_msg, sizeof(step_msg), "fail step %d", init_ret);
-        m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", step_msg, " OK ");
-        m1_esp32_deinit();
-        return;
+        /* SiN360 binary-SPI path: CMD_BLE_HID_START */
+        int init_ret = badbt_spi_hid_init(m1_badbt_name);
+        if (init_ret != 0)
+        {
+            char step_msg[16];
+            snprintf(step_msg, sizeof(step_msg), "fail rc %d", init_ret);
+            m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", step_msg, " OK ");
+            m1_esp32_deinit();
+            return;
+        }
+    }
+    else
+    {
+        /* AT firmware path: ble_hid_init() */
+        uint8_t init_ret = ble_hid_init(&badbt_req, m1_badbt_name);
+        if (init_ret != SUCCESS)
+        {
+            char step_msg[16];
+            snprintf(step_msg, sizeof(step_msg), "fail step %d", init_ret);
+            m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", step_msg, " OK ");
+            m1_esp32_deinit();
+            return;
+        }
     }
 
     /* ---- Phase 2: Wait for target device to pair ---- */
@@ -961,7 +1111,10 @@ void badbt_run(void)
 
     if (!badbt_wait_for_connection())
     {
-        ble_hid_deinit(&badbt_req);
+        if (s_use_spi_hid)
+            badbt_spi_hid_stop();
+        else
+            ble_hid_deinit(&badbt_req);
         if (!badbt_state.connected)
             m1_message_box(&m1_u8g2, "Bad-BT", "Connection", "timeout", " OK ");
         m1_esp32_deinit();
@@ -976,7 +1129,10 @@ void badbt_run(void)
     /* Check SD card */
     if (m1_sdcard_get_status() != SD_access_OK)
     {
-        ble_hid_deinit(&badbt_req);
+        if (s_use_spi_hid)
+            badbt_spi_hid_stop();
+        else
+            ble_hid_deinit(&badbt_req);
         m1_message_box(&m1_u8g2, "Bad-BT", "SD card not", "available", " OK ");
         m1_esp32_deinit();
         return;
@@ -1072,7 +1228,10 @@ void badbt_run(void)
     }
 
     /* ---- Phase 4: Disconnect & cleanup ---- */
-    ble_hid_deinit(&badbt_req);
+    if (s_use_spi_hid)
+        badbt_spi_hid_stop();
+    else
+        ble_hid_deinit(&badbt_req);
     m1_esp32_deinit();
 }
 

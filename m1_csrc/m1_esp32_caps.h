@@ -137,7 +137,9 @@
  * detection always takes the firmware-reported path.
  * =========================================================================*/
 
-/** SiN360 firmware profile (sincere360/M1_SiN360_ESP32) — reference only. */
+/** SiN360 firmware profile (sincere360/M1_SiN360_ESP32) — reference only.
+ *  Updated to include M1_ESP32_CAP_BLE_HID: SiN360 v0.9.1.0 added
+ *  CMD_BLE_HID_START/STOP/STATUS/REPORT for binary-SPI BLE keyboard injection. */
 #define M1_ESP32_CAP_PROFILE_SIN360 \
     (M1_ESP32_CAP_WIFI_SCAN    | \
      M1_ESP32_CAP_STA_SCAN     | \
@@ -149,7 +151,8 @@
      M1_ESP32_CAP_KARMA        | \
      M1_ESP32_CAP_PKTMON       | \
      M1_ESP32_CAP_PORTAL       | \
-     M1_ESP32_CAP_NETSCAN)
+     M1_ESP32_CAP_NETSCAN      | \
+     M1_ESP32_CAP_BLE_HID)
 
 /* AT firmware is detected at runtime via the stock `AT+CMD?` probe — no
  * curated AT fallback profile macros are defined here.  Adding a new AT
