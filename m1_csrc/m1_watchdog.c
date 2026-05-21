@@ -17,14 +17,23 @@
 #include <stdbool.h>
 #include "stm32h5xx_hal.h"
 #include "main.h"
+#include "m1_fw_update_bl.h"
 #include "m1_watchdog.h"
+#include "m1_watchdog_boot_loop.h"
 
 /*************************** D E F I N E S ************************************/
 
 #define M1_LOGDB_TAG	"Watchdog"
 
-#define M1_WDT_TIMEOUT					IWDG_RELOAD
-#define M1_WDT_SYSTEM_CHECK_TIMEOUT		(2*M1_WDT_TIMEOUT)
+/* M1_WDT_TASK_PERIOD_MS is the FreeRTOS IWDG handler task period in
+ * milliseconds, defined separately from IWDG_RELOAD to avoid a unit
+ * confusion: IWDG_RELOAD is a hardware counter value (ticks, not ms).
+ * With prescaler 128 and LSI ~32 kHz, 1 IWDG tick ≈ 4 ms, so the full
+ * IWDG timeout is IWDG_RELOAD (4000) × 4 ms = 16,000 ms (16 s).
+ * The WDT task fires every 2,000 ms — 1/8 of the IWDG timeout —
+ * giving 8× steady-state margin. */
+#define M1_WDT_TASK_PERIOD_MS			2000U  /* WDT handler task reload period (ms) */
+#define M1_WDT_SYSTEM_CHECK_TIMEOUT		(4U * M1_WDT_TASK_PERIOD_MS) /* 8 s system-check interval */
 
 /* Boot-loop escape hatch — RTC backup register used to count consecutive
  * IWDG resets.  DR2 is the first slot after S_M1_BK_REGS_t (which uses
@@ -32,6 +41,7 @@
  * at DR1).  The counter survives chip reset (backup domain) but is
  * cleared by a full power-off. */
 #define M1_WDT_BKP_LOOP_CTR_REG	RTC_BKP_DR2
+#define M1_WDT_BKP_LOOP_SIG_REG	RTC_BKP_DR3
 #define M1_WDT_BOOT_LOOP_MAX		3U   /* suppress IWDG after this many consecutive WDT resets */
 
 //************************** C O N S T A N T **********************************/
@@ -76,7 +86,10 @@ void m1_wdt_init(void)
 	BaseType_t ret;
 	size_t free_heap;
 	uint32_t loop_ctr;
+	uint32_t loop_sig;
+	uint32_t expected_sig;
 	bool was_wdt_reset;
+	m1_wdt_boot_loop_eval_t loop_eval;
 
 	/*
 	 * Freeze the IWDG counter when the CPU is halted by the debugger.
@@ -127,20 +140,29 @@ void m1_wdt_init(void)
 	 */
 	HAL_PWR_EnableBkUpAccess(); /* safe to call again; no-op if already enabled */
 	loop_ctr = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_CTR_REG);
-	if (was_wdt_reset)
-	{
-		loop_ctr++;
-	}
-	else
-	{
-		loop_ctr = 0;
-	}
-	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, loop_ctr);
+	loop_sig = HAL_RTCEx_BKUPRead(&hrtc, M1_WDT_BKP_LOOP_SIG_REG);
+	expected_sig = m1_wdt_boot_loop_build_sig_components(
+		FW_VERSION_MAJOR,
+		FW_VERSION_MINOR,
+		FW_VERSION_BUILD,
+		FW_VERSION_RC,
+		M1_HAPAX_REVISION);
+	/* DR3 stores a firmware-version signature for DR2 validity.
+	 * Any signature mismatch (e.g. flashed new firmware while VBAT
+	 * retained) invalidates DR2 so stale in-range counters cannot
+	 * trigger a false boot-loop suppressor hit. */
+	loop_eval = m1_wdt_boot_loop_evaluate(
+		loop_ctr,
+		loop_sig,
+		was_wdt_reset,
+		expected_sig,
+		M1_WDT_BOOT_LOOP_MAX);
+	loop_ctr = loop_eval.runtime_ctr;
+	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_SIG_REG, expected_sig);
+	HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, loop_eval.stored_ctr);
 
-	if (loop_ctr >= M1_WDT_BOOT_LOOP_MAX)
+	if (loop_eval.disable_iwdg)
 	{
-		/* Clear the counter so the *next* boot starts fresh. */
-		HAL_RTCEx_BKUPWrite(&hrtc, M1_WDT_BKP_LOOP_CTR_REG, 0);
 		M1_LOG_W(M1_LOGDB_TAG,
 		         "Boot loop detected (%lu consecutive WDT resets). "
 		         "IWDG disabled for this boot.\r\n",
@@ -164,7 +186,7 @@ void m1_wdt_init(void)
 	 *
 	 * With IWDG_PRESCALER_128 and IWDG_RELOAD=4000 (LSI ~32 kHz):
 	 *   timeout = 128 / 32000 * 4000 = 16 s.
-	 * The WDT handler task reloads every M1_WDT_TIMEOUT/2 = 2000 ms,
+	 * The WDT handler task reloads every M1_WDT_TASK_PERIOD_MS = 2000 ms,
 	 * giving 8x steady-state margin inside the 16 s window.
 	 */
 	if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
@@ -209,8 +231,8 @@ static void m1_wdt_handler_task(void *param)
 	while (1)
 	{
 		m1_wdt_checkin();
-		vTaskDelay(pdMS_TO_TICKS(M1_WDT_TIMEOUT/2));
-		run_time += M1_WDT_TIMEOUT/2;
+		vTaskDelay(pdMS_TO_TICKS(M1_WDT_TASK_PERIOD_MS));
+		run_time += M1_WDT_TASK_PERIOD_MS;
 		m1_wdt_checkout();
 		if ( run_time >= M1_WDT_SYSTEM_CHECK_TIMEOUT )
 		{
