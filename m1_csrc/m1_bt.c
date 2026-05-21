@@ -37,10 +37,25 @@
 #define BLE_SCAN_TIMEOUT_MS     8000
 #define BLE_CMD_TIMEOUT_MS      2000
 #define BLE_NEXT_TIMEOUT_MS     1000
+#define BLE_GATT_TIMEOUT_MS     22000
 
 #define BLE_DEV_MAX             32
+#define BLE_GATT_MAX            64
 #define BLE_ADV_NAME_MAX        29
 #define BLE_CFG_FILE            "bt.cfg"
+#define BLE_LOG_DIR             "bt"
+#define BLE_GATT_FILE           "bt/gatt.csv"
+#define BLE_GATT_NOTIFY_FILE    "bt/gatt_notify.csv"
+
+/* NimBLE GATT characteristic property bits (see SiN360 firmware). */
+#define BLE_GATT_CHR_F_READ     0x02
+#define BLE_GATT_CHR_F_WRITE_NR 0x04
+#define BLE_GATT_CHR_F_WRITE    0x08
+#define BLE_GATT_CHR_F_NOTIFY   0x10
+#define BLE_GATT_CHR_F_INDICATE 0x20
+
+/* Flags byte for CMD_BLE_GATT_WRITE: bit 0 = write-without-response. */
+#define BLE_GATT_WRITE_NO_RSP   0x01
 
 //************************** S T R U C T U R E S *******************************
 
@@ -52,6 +67,36 @@ typedef struct {
     char     addr_str[18]; /* "XX:XX:XX:XX:XX:XX" */
 } ble_dev_t;
 
+/* One row of the GATT discovery result table.
+ *  type      1 = service, 2 = characteristic, 3 = descriptor.
+ *  handle1   service start handle (svc) / characteristic def handle (chr) /
+ *            descriptor handle (dsc).
+ *  handle2   service end handle (svc) / characteristic value handle (chr) /
+ *            owning characteristic value handle (dsc).
+ *  props     characteristic property bits (BLE_GATT_CHR_F_*); valid only when
+ *            type == 2.
+ *  uuid      raw UUID bytes (LE) — 2, 4, or 16 bytes.
+ *  value     short read-cache of the characteristic / descriptor value (up to
+ *            16 bytes) when the peer responded to a read during discovery. */
+typedef struct {
+    uint8_t  type;
+    uint16_t handle1;
+    uint16_t handle2;
+    uint8_t  props;
+    uint8_t  uuid_len;
+    uint8_t  uuid[16];
+    uint8_t  value_len;
+    uint8_t  value[16];
+} ble_gatt_entry_t;
+
+/* One notification / indication delivered by CMD_BLE_GATT_NOTIF. */
+typedef struct {
+    uint16_t handle;
+    uint8_t  indication; /* 0 = notify, 1 = indicate */
+    uint8_t  value_len;
+    uint8_t  value[55];
+} ble_gatt_notify_t;
+
 /***************************** V A R I A B L E S ******************************/
 
 static ble_dev_t *ble_list = NULL;
@@ -59,6 +104,9 @@ static uint16_t ble_count = 0;
 static uint16_t ble_view_idx = 0;
 static char ble_adv_name[BLE_ADV_NAME_MAX + 1] = "SiN360-M1";
 static bool ble_adv_name_loaded = false;
+static ble_gatt_entry_t ble_gatt_list[BLE_GATT_MAX];
+static uint16_t ble_gatt_count = 0;
+static uint16_t ble_gatt_view_idx = 0;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -66,6 +114,7 @@ void menu_bluetooth_init(void);
 void bluetooth_config(void);
 void bluetooth_scan(void);
 void bluetooth_advertise(void);
+void ble_gatt_discovery(void);
 
 static void ble_list_free(void);
 static uint16_t ble_list_print(bool up_dir);
@@ -347,6 +396,803 @@ static uint16_t ble_list_print(bool up_dir)
 
     return ble_count;
 }
+
+
+/*============================================================================*/
+/*  GATT Discovery (NimBLE binary SPI client)                                 */
+/*                                                                            */
+/*  Imported from sincere360/M1_SiN360_ESP32 reference firmware.              */
+/*  Uses CMD_BLE_GATT_START/NEXT/STOP/WRITE/SUB/NOTIF opcodes.  Runs as a     */
+/*  blocking delegate behind the BtSceneGattDiscovery scene wrapper, which    */
+/*  also handles ESP32 init/deinit and M1_ESP32_CAP_BLE_GATT gating.          */
+/*============================================================================*/
+
+/* -------- Hex / CSV helpers -------- */
+
+static void ble_hex_encode(char *out, size_t out_len, const uint8_t *data, uint8_t data_len)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    size_t pos = 0;
+
+    if (!out || out_len == 0) return;
+
+    for (uint8_t i = 0; i < data_len && pos + 2 < out_len; i++)
+    {
+        out[pos++] = hex[(data[i] >> 4) & 0x0F];
+        out[pos++] = hex[data[i] & 0x0F];
+    }
+    out[pos] = '\0';
+}
+
+static int ble_hex_value(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+}
+
+static uint8_t ble_hex_parse(const char *in, uint8_t *out, uint8_t out_len)
+{
+    int high = -1;
+    uint8_t count = 0;
+
+    if (!in || !out || out_len == 0) return 0;
+
+    for (size_t i = 0; in[i] && count < out_len; i++)
+    {
+        int v = ble_hex_value(in[i]);
+        if (v < 0) continue;
+
+        if (high < 0)
+        {
+            high = v;
+        }
+        else
+        {
+            out[count++] = (uint8_t)((high << 4) | v);
+            high = -1;
+        }
+    }
+
+    return count;
+}
+
+static void ble_csv_quote_field(char *dst, const char *src, size_t dst_len)
+{
+    size_t pos = 0;
+
+    if (!dst || dst_len == 0) return;
+    if (dst_len < 3)
+    {
+        dst[0] = '\0';
+        return;
+    }
+
+    dst[pos++] = '"';
+
+    if (src)
+    {
+        for (size_t i = 0; src[i] && pos + 2 < dst_len; i++)
+        {
+            if (src[i] == '"')
+            {
+                dst[pos++] = '"';
+                if (pos + 1 >= dst_len) break;
+            }
+            dst[pos++] = src[i];
+        }
+    }
+
+    if (pos + 1 < dst_len)
+    {
+        dst[pos++] = '"';
+    }
+    else
+    {
+        pos = dst_len - 2;
+        dst[pos++] = '"';
+    }
+    dst[pos] = '\0';
+}
+
+static bool ble_append_header_if_new(FIL *fil, const char *path, const char *header)
+{
+    FILINFO info;
+    UINT bw;
+    bool new_file = (f_stat(path, &info) != FR_OK || info.fsize == 0);
+
+    if (f_open(fil, path, FA_WRITE | FA_OPEN_APPEND) != FR_OK)
+    {
+        return false;
+    }
+
+    if (new_file && header)
+    {
+        f_write(fil, header, strlen(header), &bw);
+    }
+
+    return true;
+}
+
+/* -------- Wait-for-BACK helper (used by detail / pending screens) -------- */
+
+static void ble_gatt_wait_back(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+}
+
+/* -------- GATT helpers -------- */
+
+static void ble_uuid_to_text(const ble_gatt_entry_t *e, char *out, size_t out_len)
+{
+    if (!out || out_len == 0) return;
+
+    if (e->uuid_len == 2)
+    {
+        uint16_t v = e->uuid[0] | ((uint16_t)e->uuid[1] << 8);
+        snprintf(out, out_len, "UUID:%04X", v);
+    }
+    else if (e->uuid_len == 4)
+    {
+        uint32_t v = e->uuid[0] | ((uint32_t)e->uuid[1] << 8) |
+            ((uint32_t)e->uuid[2] << 16) | ((uint32_t)e->uuid[3] << 24);
+        snprintf(out, out_len, "UUID:%08lX", (unsigned long)v);
+    }
+    else if (e->uuid_len == 16)
+    {
+        snprintf(out, out_len, "UUID:%02X%02X%02X%02X...",
+            e->uuid[15], e->uuid[14], e->uuid[13], e->uuid[12]);
+    }
+    else
+    {
+        snprintf(out, out_len, "UUID:unknown");
+    }
+}
+
+static void ble_gatt_props_text(uint8_t props, char *out, size_t out_len)
+{
+    if (!out || out_len == 0) return;
+    out[0] = '\0';
+    if ((props & BLE_GATT_CHR_F_READ) && strlen(out) + 1 < out_len) strcat(out, "R");
+    if ((props & BLE_GATT_CHR_F_WRITE) && strlen(out) + 1 < out_len) strcat(out, "W");
+    if ((props & BLE_GATT_CHR_F_WRITE_NR) && strlen(out) + 1 < out_len) strcat(out, "w");
+    if ((props & BLE_GATT_CHR_F_NOTIFY) && strlen(out) + 1 < out_len) strcat(out, "N");
+    if ((props & BLE_GATT_CHR_F_INDICATE) && strlen(out) + 1 < out_len) strcat(out, "I");
+    if (out[0] == '\0')
+    {
+        strncpy(out, "-", out_len - 1);
+        out[out_len - 1] = '\0';
+    }
+}
+
+static void ble_gatt_export(const ble_dev_t *dev)
+{
+    FIL fil;
+    UINT bw;
+    char line[210];
+    char name[70];
+    char uuid_hex[33];
+    char value_hex[33];
+
+    if (!dev || ble_gatt_count == 0) return;
+
+    f_mkdir(BLE_LOG_DIR);
+    if (!ble_append_header_if_new(&fil, BLE_GATT_FILE,
+        "target_addr,target_name,type,handle1,handle2,props,uuid_hex,value_hex\r\n"))
+    {
+        return;
+    }
+
+    ble_csv_quote_field(name, dev->name[0] ? dev->name : "*no name*", sizeof(name));
+    for (uint16_t i = 0; i < ble_gatt_count; i++)
+    {
+        const ble_gatt_entry_t *e = &ble_gatt_list[i];
+        const char *type = (e->type == 1) ? "svc" : (e->type == 2) ? "chr" : "dsc";
+        ble_hex_encode(uuid_hex, sizeof(uuid_hex), e->uuid, e->uuid_len);
+        ble_hex_encode(value_hex, sizeof(value_hex), e->value, e->value_len);
+        int len = snprintf(line, sizeof(line),
+            "%s,%s,%s,%04X,%04X,%02X,%s,%s\r\n",
+            dev->addr_str, name, type, e->handle1, e->handle2,
+            e->props, uuid_hex, value_hex);
+        if (len > 0)
+        {
+            f_write(&fil, line, len, &bw);
+        }
+    }
+
+    f_close(&fil);
+}
+
+static uint16_t ble_gatt_fetch(const ble_dev_t *dev)
+{
+    m1_cmd_t cmd;
+    m1_resp_t resp;
+    int ret;
+    uint16_t expected;
+
+    ble_gatt_count = 0;
+    ble_gatt_view_idx = 0;
+
+    if (!dev) return 0;
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 6, 15, "GATT Discovery");
+    u8g2_DrawStr(&m1_u8g2, 6, 30, "Connecting...");
+    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
+        M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
+    m1_u8g2_nextpage();
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic = M1_CMD_MAGIC;
+    cmd.cmd_id = CMD_BLE_GATT_START;
+    cmd.payload[0] = dev->addr_type;
+    memcpy(&cmd.payload[1], dev->addr, 6);
+    cmd.payload_len = 7;
+
+    ret = m1_esp32_send_cmd(&cmd, &resp, BLE_GATT_TIMEOUT_MS);
+    if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2)
+    {
+        ble_show_pending("GATT Discovery", "Connect/disc failed", "Try another device");
+        return 0;
+    }
+
+    expected = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
+    if (expected > BLE_GATT_MAX) expected = BLE_GATT_MAX;
+
+    for (uint16_t i = 0; i < expected; i++)
+    {
+        ret = m1_esp32_simple_cmd(CMD_BLE_GATT_NEXT, &resp, BLE_NEXT_TIMEOUT_MS);
+        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 7) break;
+        if (resp.payload[0] == 0) break;
+
+        ble_gatt_entry_t *e = &ble_gatt_list[ble_gatt_count];
+        memset(e, 0, sizeof(*e));
+        e->type = resp.payload[0];
+        e->handle1 = resp.payload[1] | ((uint16_t)resp.payload[2] << 8);
+        e->handle2 = resp.payload[3] | ((uint16_t)resp.payload[4] << 8);
+        e->props = resp.payload[5];
+        e->uuid_len = resp.payload[6];
+        if (e->uuid_len > 16) e->uuid_len = 16;
+        if (resp.payload_len >= 7 + e->uuid_len)
+        {
+            memcpy(e->uuid, &resp.payload[7], e->uuid_len);
+        }
+        uint8_t pos = 7 + e->uuid_len;
+        if (resp.payload_len > pos)
+        {
+            e->value_len = resp.payload[pos++];
+            if (e->value_len > sizeof(e->value)) e->value_len = sizeof(e->value);
+            if (resp.payload_len >= pos + e->value_len)
+            {
+                memcpy(e->value, &resp.payload[pos], e->value_len);
+            }
+        }
+        ble_gatt_count++;
+    }
+
+    ble_gatt_export(dev);
+    return ble_gatt_count;
+}
+
+static void ble_gatt_disconnect(void)
+{
+    m1_resp_t resp;
+    m1_esp32_simple_cmd(CMD_BLE_GATT_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+}
+
+static bool ble_gatt_write_value(uint16_t handle, uint8_t flags,
+    const uint8_t *value, uint8_t value_len)
+{
+    m1_cmd_t cmd;
+    m1_resp_t resp;
+
+    if (handle == 0 || !value || value_len == 0 || value_len > 56) return false;
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic = M1_CMD_MAGIC;
+    cmd.cmd_id = CMD_BLE_GATT_WRITE;
+    cmd.payload[0] = handle & 0xFF;
+    cmd.payload[1] = (handle >> 8) & 0xFF;
+    cmd.payload[2] = flags;
+    cmd.payload[3] = value_len;
+    memcpy(&cmd.payload[4], value, value_len);
+    cmd.payload_len = 4 + value_len;
+
+    return m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS + 3000) == 0 &&
+        resp.status == RESP_OK;
+}
+
+static bool ble_gatt_subscribe_handle(uint16_t handle, bool enable, uint8_t mode)
+{
+    m1_cmd_t cmd;
+    m1_resp_t resp;
+
+    if (handle == 0) return false;
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.magic = M1_CMD_MAGIC;
+    cmd.cmd_id = CMD_BLE_GATT_SUB;
+    cmd.payload[0] = handle & 0xFF;
+    cmd.payload[1] = (handle >> 8) & 0xFF;
+    cmd.payload[2] = enable ? 1 : 0;
+    cmd.payload[3] = mode;
+    cmd.payload_len = 4;
+
+    return m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS + 2000) == 0 &&
+        resp.status == RESP_OK;
+}
+
+static bool ble_gatt_notify_next(ble_gatt_notify_t *notif)
+{
+    m1_resp_t resp;
+
+    if (!notif) return false;
+    memset(notif, 0, sizeof(*notif));
+
+    if (m1_esp32_simple_cmd(CMD_BLE_GATT_NOTIF, &resp, BLE_NEXT_TIMEOUT_MS) != 0 ||
+        resp.status != RESP_OK || resp.payload_len < 1 || resp.payload[0] == 0)
+    {
+        return false;
+    }
+
+    if (resp.payload_len < 5) return false;
+
+    notif->handle = resp.payload[1] | ((uint16_t)resp.payload[2] << 8);
+    notif->indication = resp.payload[3];
+    notif->value_len = resp.payload[4];
+    if (notif->value_len > resp.payload_len - 5) notif->value_len = resp.payload_len - 5;
+    if (notif->value_len > sizeof(notif->value)) notif->value_len = sizeof(notif->value);
+    memcpy(notif->value, &resp.payload[5], notif->value_len);
+    return true;
+}
+
+static void ble_gatt_log_notify(const ble_dev_t *dev, const ble_gatt_notify_t *notif)
+{
+    FIL fil;
+    UINT bw;
+    char line[170];
+    char name[70];
+    char hex[111];
+
+    if (!dev || !notif) return;
+
+    f_mkdir(BLE_LOG_DIR);
+    if (!ble_append_header_if_new(&fil, BLE_GATT_NOTIFY_FILE,
+        "target_addr,target_name,handle,type,value_hex\r\n"))
+    {
+        return;
+    }
+
+    ble_csv_quote_field(name, dev->name[0] ? dev->name : "*no name*", sizeof(name));
+    ble_hex_encode(hex, sizeof(hex), notif->value, notif->value_len);
+    int len = snprintf(line, sizeof(line), "%s,%s,%04X,%s,%s\r\n",
+        dev->addr_str, name, notif->handle,
+        notif->indication ? "indicate" : "notify", hex);
+    if (len > 0)
+    {
+        f_write(&fil, line, len, &bw);
+    }
+    f_close(&fil);
+}
+
+static void ble_gatt_show_detail(const ble_gatt_entry_t *e)
+{
+    char uuid[24];
+    char props[12];
+    char ln[26];
+    char value_hex[25];
+
+    if (!e) return;
+    ble_uuid_to_text(e, uuid, sizeof(uuid));
+    ble_gatt_props_text(e->props, props, sizeof(props));
+    ble_hex_encode(value_hex, sizeof(value_hex), e->value, e->value_len);
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "GATT Detail");
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    snprintf(ln, sizeof(ln), "H:%04X V:%04X", e->handle1, e->handle2);
+    u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
+    snprintf(ln, sizeof(ln), "Props:%s Raw:%02X", props, e->props);
+    u8g2_DrawStr(&m1_u8g2, 2, 34, ln);
+    u8g2_DrawStr(&m1_u8g2, 2, 44, uuid);
+    if (e->value_len > 0) u8g2_DrawStr(&m1_u8g2, 2, 54, value_hex);
+    u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Exit");
+    m1_u8g2_nextpage();
+
+    ble_gatt_wait_back();
+}
+
+static uint8_t ble_gatt_write_flags(const ble_gatt_entry_t *e)
+{
+    if (!e) return 0;
+    if ((e->props & BLE_GATT_CHR_F_WRITE) == 0 &&
+        (e->props & BLE_GATT_CHR_F_WRITE_NR) != 0)
+    {
+        return BLE_GATT_WRITE_NO_RSP;
+    }
+    return 0;
+}
+
+static void ble_gatt_write_text_tool(const ble_gatt_entry_t *e)
+{
+    char text[41] = {0};
+    char ln[26];
+    bool ok;
+
+    if (!e || m1_vkb_get_text("GATT text:", "", text, sizeof(text) - 1) == 0)
+    {
+        return;
+    }
+
+    ok = ble_gatt_write_value(e->handle2, ble_gatt_write_flags(e),
+        (const uint8_t *)text, (uint8_t)strlen(text));
+    if (ok) snprintf(ln, sizeof(ln), "Wrote %u bytes", (unsigned)strlen(text));
+    else snprintf(ln, sizeof(ln), "Write failed");
+    ble_show_pending("GATT Write", ln, NULL);
+}
+
+static void ble_gatt_write_hex_tool(const ble_gatt_entry_t *e)
+{
+    char hex[57] = {0};
+    uint8_t data[28];
+    uint8_t len;
+    char ln[26];
+    bool ok;
+
+    if (!e || m1_vkb_get_text("GATT hex:", "", hex, sizeof(hex) - 1) == 0)
+    {
+        return;
+    }
+
+    len = ble_hex_parse(hex, data, sizeof(data));
+    if (len == 0)
+    {
+        ble_show_pending("GATT Write", "No hex bytes", NULL);
+        return;
+    }
+
+    ok = ble_gatt_write_value(e->handle2, ble_gatt_write_flags(e), data, len);
+    if (ok) snprintf(ln, sizeof(ln), "Wrote %u bytes", len);
+    else snprintf(ln, sizeof(ln), "Write failed");
+    ble_show_pending("GATT Write", ln, NULL);
+}
+
+static void ble_gatt_notify_view(const ble_dev_t *dev, const ble_gatt_entry_t *e)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    ble_gatt_notify_t notif;
+    uint32_t count = 0;
+    char ln[26];
+    char hex[25] = "";
+    uint16_t last_handle = e ? e->handle2 : 0;
+    uint8_t last_len = 0;
+    uint8_t mode = (e && (e->props & BLE_GATT_CHR_F_INDICATE)) ? 2 : 1;
+
+    if (!e || !ble_gatt_subscribe_handle(e->handle2, true, mode))
+    {
+        ble_show_pending("GATT Notify", "Subscribe failed", NULL);
+        return;
+    }
+
+    while (1)
+    {
+        while (ble_gatt_notify_next(&notif))
+        {
+            count++;
+            last_handle = notif.handle;
+            last_len = notif.value_len;
+            ble_hex_encode(hex, sizeof(hex), notif.value,
+                notif.value_len > 12 ? 12 : notif.value_len);
+            ble_gatt_log_notify(dev, &notif);
+        }
+
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+            mode == 2 ? "GATT Indicate" : "GATT Notify");
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        snprintf(ln, sizeof(ln), "Count:%lu Len:%u", (unsigned long)count, last_len);
+        u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
+        snprintf(ln, sizeof(ln), "Handle:%04X", last_handle);
+        u8g2_DrawStr(&m1_u8g2, 2, 34, ln);
+        if (hex[0]) u8g2_DrawStr(&m1_u8g2, 2, 46, hex);
+        else u8g2_DrawStr(&m1_u8g2, 2, 46, "Waiting...");
+        u8g2_DrawStr(&m1_u8g2, 2, 63, "[BACK] Stop");
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+
+    ble_gatt_subscribe_handle(e->handle2, false, mode);
+}
+
+static bool ble_gatt_entry_has_tools(const ble_gatt_entry_t *e)
+{
+    if (!e || e->type != 2) return false;
+    return (e->props & (BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NR |
+        BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_INDICATE)) != 0;
+}
+
+static void ble_gatt_tools(const ble_dev_t *dev, const ble_gatt_entry_t *e)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    const char *labels[5];
+    uint8_t actions[5];
+    uint8_t count = 0;
+    uint8_t sel = 0;
+    char ln[26];
+
+    if (!e || e->type != 2)
+    {
+        ble_gatt_show_detail(e);
+        return;
+    }
+
+    labels[count] = "Detail"; actions[count++] = 0;
+    if (e->props & (BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NR))
+    {
+        labels[count] = "Write Text"; actions[count++] = 1;
+        labels[count] = "Write Hex"; actions[count++] = 2;
+    }
+    if (e->props & (BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_INDICATE))
+    {
+        labels[count] = "Notify View"; actions[count++] = 3;
+        labels[count] = "Notify Off"; actions[count++] = 4;
+    }
+
+    while (1)
+    {
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "GATT Tools");
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        snprintf(ln, sizeof(ln), "Value:%04X", e->handle2);
+        u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
+        for (uint8_t i = 0; i < count && i < 3; i++)
+        {
+            uint8_t idx = (sel + i) % count;
+            snprintf(ln, sizeof(ln), "%c%s", i == 0 ? '>' : ' ', labels[idx]);
+            u8g2_DrawStr(&m1_u8g2, 2, 36 + i * 9, ln);
+        }
+        u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Run [BACK]");
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+        xQueueReceive(button_events_q_hdl, &btn, 0);
+
+        if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            xQueueReset(main_q_hdl);
+            break;
+        }
+        else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (sel == 0) sel = count - 1;
+            else sel--;
+        }
+        else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            sel++;
+            if (sel >= count) sel = 0;
+        }
+        else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            switch (actions[sel])
+            {
+            case 0:
+                ble_gatt_show_detail(e);
+                break;
+            case 1:
+                ble_gatt_write_text_tool(e);
+                break;
+            case 2:
+                ble_gatt_write_hex_tool(e);
+                break;
+            case 3:
+                ble_gatt_notify_view(dev, e);
+                break;
+            case 4:
+                ble_show_pending("GATT Notify",
+                    ble_gatt_subscribe_handle(e->handle2, false,
+                        (e->props & BLE_GATT_CHR_F_INDICATE) ? 2 : 1) ?
+                        "Notify disabled" : "Disable failed",
+                    NULL);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+}
+
+static uint16_t ble_gatt_print(bool up_dir)
+{
+    char ln[26];
+    char uuid[24];
+    char props[12];
+
+    if (ble_gatt_count == 0) return 0;
+
+    if (up_dir)
+    {
+        if (ble_gatt_view_idx == 0) ble_gatt_view_idx = ble_gatt_count - 1;
+        else ble_gatt_view_idx--;
+    }
+    else
+    {
+        ble_gatt_view_idx++;
+        if (ble_gatt_view_idx >= ble_gatt_count) ble_gatt_view_idx = 0;
+    }
+
+    ble_gatt_entry_t *e = &ble_gatt_list[ble_gatt_view_idx];
+    ble_uuid_to_text(e, uuid, sizeof(uuid));
+    ble_gatt_props_text(e->props, props, sizeof(props));
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "GATT Discovery");
+    snprintf(ln, sizeof(ln), "%d/%d", ble_gatt_view_idx + 1, ble_gatt_count);
+    u8g2_DrawStr(&m1_u8g2, 98, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    if (e->type == 1)
+    {
+        snprintf(ln, sizeof(ln), "SVC %04X-%04X", e->handle1, e->handle2);
+        u8g2_DrawStr(&m1_u8g2, 2, 26, ln);
+    }
+    else if (e->type == 2)
+    {
+        snprintf(ln, sizeof(ln), "CHR %04X Val:%04X", e->handle1, e->handle2);
+        u8g2_DrawStr(&m1_u8g2, 2, 26, ln);
+        snprintf(ln, sizeof(ln), "Props:%s %02X", props, e->props);
+        u8g2_DrawStr(&m1_u8g2, 2, 36, ln);
+    }
+    else
+    {
+        snprintf(ln, sizeof(ln), "DSC %04X Chr:%04X", e->handle1, e->handle2);
+        u8g2_DrawStr(&m1_u8g2, 2, 26, ln);
+    }
+
+    if (e->value_len > 0)
+    {
+        char value_hex[25];
+        ble_hex_encode(value_hex, sizeof(value_hex), e->value, e->value_len);
+        u8g2_DrawStr(&m1_u8g2, 2, 46, value_hex);
+    }
+    else
+    {
+        u8g2_DrawStr(&m1_u8g2, 2, 48, uuid);
+    }
+    if (ble_gatt_entry_has_tools(e)) u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Tools [BACK]");
+    else u8g2_DrawStr(&m1_u8g2, 2, 63, "[OK]Detail [BACK]");
+    m1_u8g2_nextpage();
+
+    return ble_gatt_count;
+}
+
+/*============================================================================*/
+/**
+  * @brief BLE GATT Discovery: scan, pick a device, enumerate services /
+  *        characteristics / descriptors, write or subscribe to notifications.
+  *
+  * Blocking delegate — runs its own button event loop until BACK pops back.
+  * The scene wrapper (BtSceneGattDiscovery) handles ESP32 init/deinit and the
+  * M1_ESP32_CAP_BLE_GATT capability gate.
+  */
+/*============================================================================*/
+void ble_gatt_discovery(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    bool showing_gatt = false;
+    uint16_t list_count;
+
+    ble_ensure_esp32_ready();
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    m1_u8g2_firstpage();
+    u8g2_DrawStr(&m1_u8g2, 6, 15, "GATT Discovery");
+    u8g2_DrawStr(&m1_u8g2, 6, 30, "Scanning BLE...");
+    u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
+        M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
+    m1_u8g2_nextpage();
+
+    list_count = ble_do_scan();
+    if (list_count == 0)
+    {
+        ble_show_pending("GATT Discovery", "No devices found", NULL);
+        return;
+    }
+
+    ble_view_idx = 1;
+    ble_list_print(true);
+
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+
+        xQueueReceive(button_events_q_hdl, &btn, 0);
+        if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (showing_gatt)
+            {
+                ble_gatt_disconnect();
+            }
+            ble_list_free();
+            xQueueReset(main_q_hdl);
+            break;
+        }
+        else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (showing_gatt) ble_gatt_print(true);
+            else ble_list_print(true);
+        }
+        else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (showing_gatt) ble_gatt_print(false);
+            else ble_list_print(false);
+        }
+        else if (!showing_gatt && btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (ble_gatt_fetch(&ble_list[ble_view_idx]) > 0)
+            {
+                showing_gatt = true;
+                ble_gatt_view_idx = 1;
+                ble_gatt_print(true);
+            }
+        }
+        else if (showing_gatt && btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            ble_gatt_tools(&ble_list[ble_view_idx], &ble_gatt_list[ble_gatt_view_idx]);
+            if (ble_gatt_count > 0)
+            {
+                ble_gatt_view_idx++;
+                if (ble_gatt_view_idx >= ble_gatt_count) ble_gatt_view_idx = 0;
+            }
+            ble_gatt_print(true);
+        }
+    }
+}
+
 
 typedef enum {
     BLE_RAW_ANALYZER = 0,
