@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.21] - 2026-05-21
+
+### Added
+
+- **Bad-BT: SiN360 binary-SPI transport** — `badbt_run()` now auto-detects SiN360 firmware (WIFI_JOIN cap absent) and uses `CMD_BLE_HID_START/STOP/STATUS/REPORT` (opcodes 0x2E/0x2F/0x61/0x60) instead of AT `ble_hid_*` functions. Mouse and media DuckyScript commands are gracefully skipped on the SPI path. AT firmware users are unaffected.
+
+### Changed
+
+- **ESP32 caps: SiN360 profile now includes `BLE_HID`** — `M1_ESP32_CAP_PROFILE_SIN360` updated to reflect SiN360 v0.9.1.0 BLE HID support. New CMD opcodes added to `m1_esp32_cmd.h`: BLE GATT (0x28–0x2D), `CMD_BLE_HID_START/STOP` (0x2E/0x2F), `CMD_BLE_HID_REPORT/STATUS` (0x60/0x61), `CMD_WIFI_RAW_ATTACK_START/STOP` (0x3C/0x3D), `CMD_BLE_ADV_RAW_EX` (0x27), `CMD_PKTMON_RAW_NEXT` (0x44).
+- **ESP32 SPI: BUSY retry** — `m1_esp32_cmd.c` wraps `spi_tx_64()` and `spi_rx_64()` with 150 ms retry loops to recover from `HAL_BUSY` errors on rapid back-to-back commands.
+
+### Fixed
+
+- **Bad-BT: robust SPI vs AT HID transport selection** — `s_use_spi_hid` now requires `M1_ESP32_CAP_BLE_HID` to be explicitly set (positive indicator) in addition to `WIFI_JOIN` being absent, so a transient ESP32 capability-probe failure (bitmap=0) safely falls back to the AT `ble_hid_init()` path instead of incorrectly routing AT firmware into the binary-SPI HID path.
 ## [0.9.1.20] - 2026-05-21
 
 ### Changed
