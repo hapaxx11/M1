@@ -1,1 +1,0 @@
-**Sub-GHz Read: Config moved to LEFT button** — Matches the Read Raw scene's UX standard.  The Config screen now opens with the LEFT button (and shows a left-arrow icon in the bottom bar) instead of DOWN.  The previously undocumented frequency-preset cycling on LEFT/RIGHT has been removed — frequency selection is via the Config screen, consistent with every other Sub-GHz scene.

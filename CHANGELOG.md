@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.20] - 2026-05-21
+
+### Changed
+
+- **Sub-GHz Read: Config moved to LEFT button** — Matches the Read Raw scene's UX standard.  The Config screen now opens with the LEFT button (and shows a left-arrow icon in the bottom bar) instead of DOWN.  The previously undocumented frequency-preset cycling on LEFT/RIGHT has been removed — frequency selection is via the Config screen, consistent with every other Sub-GHz scene.
+
+### Fixed
+
+- **Sub-GHz Read: hopper crash at 915 MHz** — The frequency hopper in the Read scene previously called the heavyweight `sub_ghz_set_opmode()` path on every 200 ms hop tick, which reloads the full SI4463 config from SPI and forces an OOK→FSK modem swap when the hopper crosses into the 915 MHz band.  This churned hundreds of SPI writes per second, repeatedly mode-swapped the modem as the hopper cycled, and could lock the unit up and trigger a hard reboot — most visibly when the NA hopper reached 915 MHz.  `subghz_retune_freq_hz_ext()` now uses a lightweight `SI446x_Set_Frequency()` retune (same approach as the Frequency Analyzer / Spectrum Analyzer fast-sweep paths): the modem config loaded at scene entry is preserved across all hops, and only the synthesizer frequency and frontend antenna mux change.
 ## [0.9.1.19] - 2026-05-21
 
 ### Fixed
