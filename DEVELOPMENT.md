@@ -147,7 +147,7 @@ When a scene presents a list of selectable items (main menus, action menus,
 option lists), pressing OK to select is self-evident.  **Do not** draw a
 bottom bar with an "OK" label — it wastes 12px of vertical space.  Instead,
 use that space for additional list items and draw a **scrollbar** on the
-right edge as a position indicator (3px-wide track at x = 125).
+right edge as a position indicator (3px-wide track at x = 124).
 
 **Button bars are appropriate only** when they convey non-obvious functionality
 — e.g. "OK:Download" (tells user OK starts a download), "Send", "Save",
@@ -155,10 +155,10 @@ right edge as a position indicator (3px-wide track at x = 125).
 
 ### Scrollbar pattern for selection lists
 
-Draw a 3px-wide track frame at `M1_MENU_SCROLLBAR_X` (125) spanning the
+Draw a 3px-wide track frame at `M1_MENU_SCROLLBAR_X` (124) spanning the
 menu area, with a filled handle whose Y position is proportional to the
 selected item index.  Limit the highlight-box width to `M1_MENU_TEXT_W`
-(124px) so it does not overlap the scrollbar.
+(122px) so it does not overlap the scrollbar.
 
 ## Font-Aware Menu Implementation
 
@@ -187,8 +187,8 @@ Text Size**.  The setting is stored as `m1_menu_style` (declared in
 |----------|-------|---------|
 | `M1_MENU_AREA_TOP` | 12 | Y below title + separator |
 | `M1_MENU_AREA_H` | 52 | Available vertical space (64 − 12) |
-| `M1_MENU_TEXT_W` | 124 | Highlight/text width (leaves 4px for scrollbar) |
-| `M1_MENU_SCROLLBAR_X` | 125 | Scrollbar left edge |
+| `M1_MENU_TEXT_W` | 122 | Highlight/text width (leaves room for scrollbar) |
+| `M1_MENU_SCROLLBAR_X` | 124 | Scrollbar left edge |
 | `M1_MENU_SCROLLBAR_W` | 3 | Scrollbar track width |
 
 ### Rules for all scrollable lists
@@ -200,7 +200,7 @@ Text Size**.  The setting is stored as `m1_menu_style` (declared in
 3. **Use `M1_MENU_VIS(count)`** when computing the visible slice of a list.
 4. **Text baseline offset is `m1_menu_item_h() − 1`** — places text 1px above
    the bottom of its row.
-5. **Highlight box width must be `M1_MENU_TEXT_W` (124px)**, not 128px.
+5. **Highlight box width must be `M1_MENU_TEXT_W` (122px)**, not 128px.
 6. **Include `m1_scene.h`** in any `.c` file that draws a scrollable list.
 
 ### Justified exceptions

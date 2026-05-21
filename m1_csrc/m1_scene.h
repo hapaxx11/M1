@@ -132,9 +132,8 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 /* Menu drawing helper                                                        */
 /*============================================================================*/
 
-/** Menu layout constants — full-left highlight with 1px gap before scrollbar.
- *  Note: Sub-GHz and config-style menus use their own local constants (SCROLLBAR_X=125,
- *  TEXT_W=124) and intentionally differ from these shared scene values. */
+/** Menu layout constants — highlight starts at x=1 with 1px inset from the
+ *  left edge and a gap before the scrollbar on the right. */
 #define M1_MENU_AREA_TOP     12   /**< Y below title + separator line       */
 #define M1_MENU_AREA_H       52   /**< Available height for menu items (64-12) */
 #define M1_MENU_ITEM_H_SMALL  8   /**< Pixel height per row — Small mode    */
@@ -142,7 +141,7 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 #define M1_MENU_ITEM_H_LARGE 13   /**< Pixel height per row — Large mode    */
 #define M1_MENU_SCROLLBAR_X  124  /**< Scrollbar left edge (3px wide)       */
 #define M1_MENU_SCROLLBAR_W    3  /**< Scrollbar track width                */
-#define M1_MENU_TEXT_W       123  /**< Highlight / text area width           */
+#define M1_MENU_TEXT_W       122  /**< Highlight / text area width           */
 
 /**
  * @brief  Get current menu item height based on m1_menu_style setting.

@@ -407,7 +407,7 @@ static void draw_dashboard(uint8_t selection)
 		{
 			/* Draw selection highlight — rounded corners */
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h, 2);
+			u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, row_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawStr(&m1_u8g2, 4, y + row_h - 1, s_dashboard_items[item_idx]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -603,7 +603,7 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 		if (idx == selection)
 		{
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+			u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_browse_names[idx]);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -2326,7 +2326,7 @@ static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
 		if (idx == sel)
 		{
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+			u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
 
@@ -2385,7 +2385,7 @@ static void builder_draw_template_screen(uint8_t sel)
 		uint8_t y = LIST_START_Y + (i * item_h);
 		if (i == sel)
 		{
-			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+			u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
 		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_tmpl_names[i]);
@@ -2478,7 +2478,7 @@ static bool builder_slot_action(ir_builder_slot_t *slot)
 	for (uint8_t _i = 0; _i < SLOT_ACTION_COUNT; _i++) { \
 	uint8_t _y = LIST_START_Y + (_i * item_h); \
 	if (_i == asel) { \
-	u8g2_DrawRBox(&m1_u8g2, 0, _y, M1_MENU_TEXT_W, item_h, 2); \
+	u8g2_DrawRBox(&m1_u8g2, 1, _y, M1_MENU_TEXT_W, item_h, 2); \
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG); \
 	} \
 	u8g2_DrawStr(&m1_u8g2, 4, _y + text_ofs, s_slot_action_labels[_i]); \

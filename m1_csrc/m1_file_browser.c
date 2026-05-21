@@ -921,15 +921,15 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 			/* Selection highlight — filled rounded box + inverted colours */
 			if (is_selected)
 			{
-				uint8_t sel_w = gui_width - (scroll_ok ? M1_MENU_SCROLLBAR_W + 1 : 0);
+				uint8_t sel_w = gui_width - 1 - (scroll_ok ? M1_MENU_SCROLLBAR_W + 1 : 0);
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
-				u8g2_DrawRBox(plcd_hdl, pfb_hdl->x, row_top, sel_w, row_h, 2);
+				u8g2_DrawRBox(plcd_hdl, pfb_hdl->x + 1, row_top, sel_w, row_h, 2);
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_BG);
 			}
 
 			/* Icon and text */
-			u8g2_DrawXBMP(plcd_hdl, pfb_hdl->x, icon_y, fb_icon->icon_w, fb_icon->icon_h, fb_icon->pdata);
-			u8g2_DrawStr(plcd_hdl, pfb_hdl->x + fb_icon->icon_w + 2, text_y, name);
+			u8g2_DrawXBMP(plcd_hdl, pfb_hdl->x + 1, icon_y, fb_icon->icon_w, fb_icon->icon_h, fb_icon->pdata);
+			u8g2_DrawStr(plcd_hdl, pfb_hdl->x + 1 + fb_icon->icon_w + 2, text_y, name);
 
 			if (is_selected)
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
@@ -948,7 +948,7 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		uint16_t sb_pos    = pfb_hdl->listing_index - pfb_hdl->row_index;
 		uint16_t sb_max    = (num_of_files > gui_max_row) ? (num_of_files - gui_max_row) : 1;
 		uint8_t  sb_y      = pfb_hdl->y + (uint8_t)((uint16_t)sb_pos * (sb_area_h - sb_h) / sb_max);
-		uint8_t  sb_x      = pfb_hdl->x + M1_LCD_DISPLAY_WIDTH - M1_MENU_SCROLLBAR_W;
+		uint8_t  sb_x      = pfb_hdl->x + M1_LCD_DISPLAY_WIDTH - M1_MENU_SCROLLBAR_W - 1;
 		u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
 		/* Track */
 		u8g2_DrawVLine(plcd_hdl, sb_x + M1_MENU_SCROLLBAR_W / 2, pfb_hdl->y, sb_area_h);
