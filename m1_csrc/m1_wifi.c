@@ -2504,7 +2504,7 @@ static bool beacon_select_mode(beacon_list_mode_t *mode)
 			uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 			if (i == selected)
 			{
-				u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+				u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 				u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 			}
 			u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);
@@ -3325,7 +3325,7 @@ static bool wifi_join_choose_password(char *password, size_t password_len)
 					uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 					if (i == (uint8_t)sel)
 					{
-						u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+						u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 					}
 					u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, pw_items[i]);
@@ -3596,7 +3596,7 @@ void wifi_general_set_macs(void)
 					uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 					if (i == sel)
 					{
-						u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+						u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 						u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 					}
 					u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);
@@ -4627,7 +4627,7 @@ void wifi_saved_networks(void)
 				uint8_t y = (uint8_t)(M1_MENU_AREA_TOP + i * item_h);
 				if (idx == sel)
 				{
-					u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+					u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 				}
 				u8g2_DrawStr(&m1_u8g2, 4, (uint8_t)(y + text_ofs), creds[idx].ssid);

@@ -391,7 +391,7 @@ static void apps_draw_list(const char *title, uint16_t count, uint16_t selection
 
         if (idx == selection)
         {
-            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+            u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, s_app_list[idx].display_name);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
