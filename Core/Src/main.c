@@ -377,7 +377,18 @@ static void MX_IWDG_Init(void)
    * resulting in an infinite boot loop (issue #478).
    * The IWDG is armed later in m1_wdt_init() from m1_system_init_task(),
    * after the early init block but before startup_config_handler().
-   * The hiwdg struct configured above is used by that deferred call. */
+   * The hiwdg struct configured above is used by that deferred call.
+   *
+   * *** CubeMX REGENERATION WARNING ***
+   * This file was modified outside USER CODE blocks to remove the
+   * HAL_IWDG_Init() call that CubeMX places here by default.  If you
+   * regenerate main.c from the .ioc, CubeMX will re-add that call between
+   * the struct initialisation above and this USER CODE block, re-arming
+   * the IWDG before RTOS startup and recreating the boot-loop condition.
+   * After any CubeMX regeneration you MUST manually delete the generated
+   * HAL_IWDG_Init() call so that deferred arming in m1_wdt_init() is
+   * preserved.  Search for "HAL_IWDG_Init" in main.c and remove the call
+   * that appears inside MX_IWDG_Init() but OUTSIDE a USER CODE block. */
   /* USER CODE END IWDG_Init 2 */
 
 }

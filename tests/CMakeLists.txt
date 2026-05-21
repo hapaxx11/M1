@@ -154,6 +154,23 @@ endif()
 add_test(NAME bq27421_init COMMAND test_bq27421_init)
 
 # ------------------------------------------------------------------
+# Module under test: watchdog boot-loop backup-domain guard
+# Pure helper logic in m1_watchdog_boot_loop.h; verifies stale-signature
+# invalidation of DR2 counter and threshold behavior.
+# ------------------------------------------------------------------
+add_executable(test_watchdog_boot_loop
+    test_watchdog_boot_loop.c
+)
+target_include_directories(test_watchdog_boot_loop PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_watchdog_boot_loop PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_watchdog_boot_loop PRIVATE sanitizers)
+endif()
+add_test(NAME watchdog_boot_loop COMMAND test_watchdog_boot_loop)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"
