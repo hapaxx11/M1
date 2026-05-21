@@ -90,6 +90,7 @@
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
 #include "m1_virtual_kb.h"
+#include "m1_scene.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "m1_esp32_hal.h"
@@ -436,7 +437,7 @@ static void draw_rr_more_menu(void)
     static const char * const items[] = { "Decode", "Rename", "Delete" };
 
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 
     /* Title: truncated filename */
     char title[22];
@@ -456,10 +457,10 @@ static void draw_rr_more_menu(void)
         uint8_t y = 14 + i * row_h;
         if (i == rr_more_sel)
         {
-            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, row_h, 2);
+            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
-        u8g2_DrawStr(&m1_u8g2, 8, y + text_ofs, items[i]);
+        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 }
