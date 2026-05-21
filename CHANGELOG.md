@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.23] - 2026-05-21
+
+### Added
+
+- **Bluetooth: GATT Discovery** — Imported the SiN360 NimBLE GATT client as a
+  new Bluetooth scene (`BtSceneGattDiscovery`).  Scans for nearby BLE peers,
+  connects to a chosen device, enumerates services / characteristics /
+  descriptors, and exposes per-characteristic tools: read details, write text
+  or hex values (with response or without), and subscribe to notifications or
+  indications.  Discovery results are exported to `0:/bt/gatt.csv` and
+  notification streams to `0:/bt/gatt_notify.csv`.  Runtime-gated by the new
+  `M1_ESP32_CAP_BLE_GATT` capability bit, which is reported by SiN360 firmware
+  via `CMD_GET_STATUS`; on AT/legacy ESP32 firmware the menu item shows the
+  standard "not supported" screen and pops immediately.
+
+### Fixed
+
+- **Bluetooth GATT:** Fixed buffer-overread in CSV logging — `f_write` byte count now clamped to actual buffer size when `snprintf` would truncate a long notification or discovery row. Fixed stale GATT connection on ESP32 when `CMD_BLE_GATT_START` succeeds but zero entries are returned — `CMD_BLE_GATT_STOP` is now sent before returning an empty count.
 ## [0.9.1.22] - 2026-05-21
 
 ### Added
