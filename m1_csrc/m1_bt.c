@@ -965,32 +965,33 @@ void ble_spam_all(void)
     while (1)
     {
         uint8_t sent_type = type_idx;
+        uint8_t sent = ble_spam_payload_count(sent_type);
 
         switch (type_idx)
         {
         case 0:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(sour_apple_payloads[i], sour_apple_lens[i]);
             break;
         case 1:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(swiftpair_payloads[i], swiftpair_lens[i]);
             break;
         case 2:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(samsung_payloads[i], samsung_lens[i]);
             break;
         case 3:
-            for (uint8_t i = 0; i < 4; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(flipper_payloads[i], flipper_lens[i]);
             break;
         case 4:
-            for (uint8_t i = 0; i < 6; i++)
+            for (uint8_t i = 0; i < sent; i++)
                 ble_raw_adv_send(google_fastpair_payloads[i], google_fastpair_lens[i]);
             break;
         }
         type_idx = (type_idx + 1) % 5;
-        pkt_count += 4;
+        pkt_count += sent;
 
         uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
 

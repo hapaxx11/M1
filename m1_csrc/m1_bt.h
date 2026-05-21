@@ -13,6 +13,8 @@
 #ifndef M1_BT_H_
 #define M1_BT_H_
 
+#include <stdbool.h>
+#include <stdint.h>
 #include "m1_compile_cfg.h"
 
 void menu_bluetooth_init(void);
@@ -38,6 +40,11 @@ void ble_spam_google_fastpair(void);
 void ble_spam_flipper(void);
 void ble_spam_all(void);
 void ble_spoof_airtag(void);
+
+static inline uint8_t ble_spam_payload_count(uint8_t type_idx)
+{
+    return (type_idx == 4U) ? 6U : 4U;
+}
 
 /* Legacy AT-layer stubs — runtime-gated via M1_ESP32_CAP_* capability bits */
 typedef struct {

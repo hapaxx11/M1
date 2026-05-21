@@ -128,6 +128,24 @@ add_test(NAME battery_soc COMMAND test_battery_soc)
 set(STUBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 
 # ------------------------------------------------------------------
+# Module under test: BLE spam packet-count helper
+# Pure helper verifies the Google Fast Pair "All" cycle advert count
+# stays aligned with the UI packet counter.
+# ------------------------------------------------------------------
+add_executable(test_bt_spam_counts
+    test_bt_spam_counts.c
+)
+target_include_directories(test_bt_spam_counts PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_bt_spam_counts PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_bt_spam_counts PRIVATE sanitizers)
+endif()
+add_test(NAME bt_spam_counts COMMAND test_bt_spam_counts)
+
+# ------------------------------------------------------------------
 # Module under test: bq27421_init pure-logic helpers
 #
 # Regression for v0.9.0.166 crash: bq27421_init() entered the full
