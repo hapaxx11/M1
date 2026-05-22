@@ -1,1 +1,0 @@
-Sub-GHz: corrected the TE fallback comment in `subghz_decenc_read()` to reference the current replay fallback path, and strengthened the Princeton fast-TE regression test to assert decoded key and bit length in addition to TE.
