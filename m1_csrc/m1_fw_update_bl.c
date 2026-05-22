@@ -832,7 +832,7 @@ uint8_t bl_flash_app(FIL *hfile)
     M1_LOG_I(M1_LOGDB_TAG, "Erasing flash...\r\n");
 
 	/* Reset progress bar stale state from any prior failed attempt */
-	fw_gui_progress_update(0);
+	fw_gui_progress_update(SIZE_MAX);
 
 	/* Show "Erasing flash..." on the display so the user knows work is in
 	 * progress.  The erase phase can take several seconds. */
@@ -907,11 +907,12 @@ void fw_gui_progress_update(size_t remainder)
 	static uint8_t progress_percent_count = 0;
 	static uint8_t progress_slider_x_post;
 
-	/* remainder == 0 is a reset sentinel — clear stale state so the next
+	/* SIZE_MAX is the reset sentinel — clear stale state so the next
 	 * call with the new file size properly initialises the progress bar.
 	 * This prevents a silent skip when retrying after a failed update with
-	 * the same (or smaller) image file. */
-	if ( remainder == 0 )
+	 * the same (or smaller) image file.  We use SIZE_MAX rather than 0
+	 * because callers legitimately pass remainder == 0 at completion. */
+	if ( remainder == SIZE_MAX )
 	{
 		image_size = 0;
 		progress_percent_count = 0;

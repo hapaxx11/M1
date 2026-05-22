@@ -481,7 +481,7 @@ static esp_loader_error_t m1_fw_app(FIL *hfile)
 static esp_loader_error_t m1_fw_flash_binary(uint8_t *payload, size_t size)
 {
     esp_loader_error_t err;
-    size_t written;
+    static size_t written = 0;
     static bool init_done = false;
 
     if ( !init_done )
