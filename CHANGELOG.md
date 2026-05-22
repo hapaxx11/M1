@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.24] - 2026-05-21
+
+### Fixed
+
+- **UI: menu highlight and scrollbar alignment** — Fixed 1px alignment
+  issues across main menu, sub-menus, file browser, and config screens.
+  Main menu scrollbar and highlight right edge moved 1px right; sub-menu
+  and config scrollbars aligned to x=124; all scene menu highlights now
+  start at x=1 with consistent 122px width; file browser scrollbar,
+  highlight, and content shifted 1px inward.
 ## [0.9.1.23] - 2026-05-21
 
 ### Added
