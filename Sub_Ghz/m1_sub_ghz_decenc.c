@@ -374,10 +374,11 @@ bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw)
              * the fixed registry te_short), populate it from the protocol
              * registry so the Read/Info display, saved-file `TE:` field, and
              * Flipper-compatible export all show a non-zero, meaningful value.
-             * Replay already falls back to the same registry value when te=0
-             * (see sub_ghz_replay_from_decoded_entry), so this change does not
-             * alter TX timing — it only fixes display/save parity with Flipper
-             * for protocols whose decoders never populated TE. */
+             * Replay of decoded static entries uses the same fallback in
+             * subghz_transmit_static_signal() when resolving te_short for TX,
+             * so this change does not alter TX timing — it only fixes
+             * display/save parity with Flipper for protocols whose decoders
+             * never populated TE. */
             if (received->te == 0 && received->protocol < LEGACY_PROTOCOL_MAX)
             {
                 received->te = subghz_protocols_list[received->protocol].te_short;

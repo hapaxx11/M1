@@ -523,6 +523,8 @@ void test_princeton_reports_detected_te_fast_variant(void)
     uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
     uint8_t ret = subghz_decode_princeton(0, pc);
     TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_UINT16(BITS, subghz_decenc_ctl.ndecodedbitlength);
     TEST_ASSERT_EQUAL_UINT16(TE_S, (uint16_t)subghz_decenc_ctl.ndecodeddelay);
 }
 
