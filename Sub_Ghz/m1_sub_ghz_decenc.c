@@ -369,6 +369,19 @@ bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw)
             received->rssi = subghz_decenc_ctl.subghz_get_decoded_rssi();
             received->te = subghz_decenc_ctl.subghz_get_decoded_delay();
             received->bit_len = subghz_decenc_ctl.subghz_get_decoded_bitlength();
+            /* Fallback: if the protocol decoder did not record a per-capture TE
+             * (most non-Princeton decoders leave ndecodeddelay = 0 and rely on
+             * the fixed registry te_short), populate it from the protocol
+             * registry so the Read/Info display, saved-file `TE:` field, and
+             * Flipper-compatible export all show a non-zero, meaningful value.
+             * Replay already falls back to the same registry value when te=0
+             * (see sub_ghz_replay_from_decoded_entry), so this change does not
+             * alter TX timing — it only fixes display/save parity with Flipper
+             * for protocols whose decoders never populated TE. */
+            if (received->te == 0 && received->protocol < LEGACY_PROTOCOL_MAX)
+            {
+                received->te = subghz_protocols_list[received->protocol].te_short;
+            }
             /* Copy extended fields set by protocol-specific decoders */
             received->serial_number = subghz_decenc_ctl.n32_serialnumber;
             received->rolling_code  = subghz_decenc_ctl.n32_rollingcode;
