@@ -132,7 +132,11 @@ uint8_t subghz_decode_princeton(uint16_t p, uint16_t pulsecount)
     {
         subghz_decenc_ctl.n64_decodedvalue = code;
         subghz_decenc_ctl.ndecodedbitlength = bits_count;
-        subghz_decenc_ctl.ndecodeddelay = 0; //delay;
+        /* Store the detected te_short (in µs) as the signal TE.  Princeton
+         * remotes vary widely in TE (≈100–500 µs depending on the Rt resistor
+         * on the PT2262/SC5262 encoder), so the actually-observed timing is
+         * required for accurate replay and for display parity with Flipper. */
+        subghz_decenc_ctl.ndecodeddelay = te_short;
         subghz_decenc_ctl.ndecodedprotocol = p;
         return 0;
     }

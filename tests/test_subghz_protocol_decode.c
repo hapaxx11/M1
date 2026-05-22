@@ -484,6 +484,51 @@ void test_princeton_roundtrip_alternating(void)
 }
 
 /*
+ * Princeton decoder must populate ndecodeddelay with the detected te_short
+ * (in µs) so callers (Read display, replay, save-to-file) have access to the
+ * actual signal timing.  Without this, TE is reported as 0 and the replay
+ * path falls back to the protocol-table default — which mismatches remotes
+ * whose TE differs from the registry's 370 µs.  See issue: "SubGhz
+ * inconsistency" — Hapax-replayed signal did not trigger receiver while
+ * Momentum's did, because Momentum carried the true TE through to TX.
+ */
+void test_princeton_reports_detected_te(void)
+{
+    const uint32_t KEY  = 0x0704D0u;
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 450, TE_L = 1350; /* 1:3 ratio, TE≠registry default */
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    /* The detected te_short comes from pulse_times[2]/[3] of the test frame,
+     * which equal te_short/te_long after the decoder's swap.  Must equal TE_S. */
+    TEST_ASSERT_EQUAL_UINT16(TE_S, (uint16_t)subghz_decenc_ctl.ndecodeddelay);
+}
+
+void test_princeton_reports_detected_te_fast_variant(void)
+{
+    /* Fast PT2262 variant (small Rt) — te=125 µs. */
+    const uint32_t KEY  = 0x123456u;
+    const uint8_t  BITS = 24;
+    const uint16_t TE_S = 125, TE_L = 375;
+
+    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].data_bits    = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    uint8_t ret = subghz_decode_princeton(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_UINT16(BITS, subghz_decenc_ctl.ndecodedbitlength);
+    TEST_ASSERT_EQUAL_UINT16(TE_S, (uint16_t)subghz_decenc_ctl.ndecodeddelay);
+}
+
+/*
  * Verify the 1:3 ratio check rejects invalid timing.
  * Using te_short=500 and te_long=600 (ratio < 1:2) should cause
  * the decoder to return 1 (failure) before processing any bits.
@@ -809,6 +854,8 @@ int main(void)
     RUN_TEST(test_princeton_roundtrip_all_ones);
     RUN_TEST(test_princeton_roundtrip_all_zeros);
     RUN_TEST(test_princeton_roundtrip_alternating);
+    RUN_TEST(test_princeton_reports_detected_te);
+    RUN_TEST(test_princeton_reports_detected_te_fast_variant);
     RUN_TEST(test_princeton_rejects_non_1_3_ratio);
     /* Princeton Flipper jitter regression — fast te≈125µs variant */
     RUN_TEST(test_princeton_flipper_jitter_rejects_at_20pct);
