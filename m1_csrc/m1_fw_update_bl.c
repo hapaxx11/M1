@@ -572,6 +572,10 @@ bool bl_verify_bank_crc(uint32_t bank_base)
 
     for (uint32_t i = 0; i < num_words; i++)
     {
+        /* Kick IWDG every 64KB to prevent timeout on large images */
+        if ((i & 0x3FFFU) == 0)
+            m1_wdt_reset();
+
         uint32_t word;
         __ASM volatile (
             "ldr.w %0, [%1]"
@@ -826,11 +830,23 @@ uint8_t bl_flash_app(FIL *hfile)
 	f_lseek(hfile, 0); // Move file pointer to the beginning of the file
 	write_size = f_size(hfile); // Get image size
     M1_LOG_I(M1_LOGDB_TAG, "Erasing flash...\r\n");
-	// Display glass hour here
 
+	/* Reset progress bar stale state from any prior failed attempt */
+	fw_gui_progress_update(SIZE_MAX);
+
+	/* Show "Erasing flash..." on the display so the user knows work is in
+	 * progress.  The erase phase can take several seconds. */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, INFO_BOX_Y_POS_ROW_1 - M1_SUB_MENU_FONT_HEIGHT, 128, 28);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_DrawStr(&m1_u8g2, 4, INFO_BOX_Y_POS_ROW_1, "Erasing flash...");
+	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 24, 16, 18, 32, hourglass_18x32);
+	m1_u8g2_nextpage();
+
+    m1_wdt_reset();
     bl_flash_if_init();
     flash_err = bl_flash_start(write_size);
-    // Clear glass hour
     if ( flash_err != BL_CODE_OK )
     {
     	M1_LOG_I(M1_LOGDB_TAG, "Failed\r\n");
@@ -890,6 +906,18 @@ void fw_gui_progress_update(size_t remainder)
 	static uint32_t image_size = 0;
 	static uint8_t progress_percent_count = 0;
 	static uint8_t progress_slider_x_post;
+
+	/* SIZE_MAX is the reset sentinel — clear stale state so the next
+	 * call with the new file size properly initialises the progress bar.
+	 * This prevents a silent skip when retrying after a failed update with
+	 * the same (or smaller) image file.  We use SIZE_MAX rather than 0
+	 * because callers legitimately pass remainder == 0 at completion. */
+	if ( remainder == SIZE_MAX )
+	{
+		image_size = 0;
+		progress_percent_count = 0;
+		return;
+	}
 
 	if ( image_size < remainder )
 	{

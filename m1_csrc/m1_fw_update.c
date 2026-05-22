@@ -119,6 +119,7 @@ void firmware_update_start(void)
         m1_led_fw_update_on(NULL); // Turn on
     	startup_config_write(BK_REGS_SELECT_DEV_OP_STAT, DEV_OP_STATUS_FW_UPDATE_ACTIVE);
 
+    	m1_wdt_reset();
     	uret = bl_flash_app(&hfile_fw);
 
     	m1_led_fw_update_off(); // Turn off
@@ -141,9 +142,25 @@ void firmware_update_start(void)
     fw_update_status = uret; // Update new status
 	if ( fw_update_status==M1_FW_UPDATE_SUCCESS )
 	{
-		// Display warning message: device will reboot in n seconds...
+		/* Show success message before the bank swap reboot */
+		m1_message_box(&m1_u8g2, "Update complete!",
+		               "Device will reboot",
+		               "to apply firmware.", " OK ");
+		m1_wdt_reset();
 		bl_swap_banks();
 	} // if ( fw_update_status==M1_FW_UPDATE_SUCCESS )
+	else if ( fw_update_status==M1_FW_UPDATE_FAILED )
+	{
+		m1_message_box(&m1_u8g2, "Update failed!",
+		               "Flash or verify error.",
+		               "Please retry.", " OK ");
+	}
+	else if ( fw_update_status==M1_FW_UPDATE_LOW_BATTERY )
+	{
+		m1_message_box(&m1_u8g2, "Low battery!",
+		               "Charge device before",
+		               "updating firmware.", " OK ");
+	}
 
 	m1_device_stat.op_mode = old_op_mode;
 
@@ -305,6 +322,31 @@ void firmware_update_get_image_file(void)
     	{
     		m1_fb_close_file(&hfile_fw);
     		fw_update_status = uret;
+
+    		/* Show the user what went wrong instead of silently returning */
+    		switch (uret)
+    		{
+    		case M1_FW_CRC_CHECKSUM_UNMATCHED:
+    			m1_message_box(&m1_u8g2, "CRC mismatch!",
+    			               "File may be corrupt.",
+    			               "Re-download image.", " OK ");
+    			break;
+    		case M1_FW_IMAGE_SIZE_INVALID:
+    			m1_message_box(&m1_u8g2, "Invalid image!",
+    			               "File size is invalid",
+    			               "or not aligned.", " OK ");
+    			break;
+    		case M1_FW_IMAGE_FILE_ACCESS_ERROR:
+    			m1_message_box(&m1_u8g2, "File error!",
+    			               "Cannot read image",
+    			               "from SD card.", " OK ");
+    			break;
+    		default:
+    			m1_message_box(&m1_u8g2, "Image error!",
+    			               "Validation failed.",
+    			               " ", " OK ");
+    			break;
+    		}
     	} // if ( uret )
     } // if ( fw_update_status==M1_FW_UPDATE_READY )
 

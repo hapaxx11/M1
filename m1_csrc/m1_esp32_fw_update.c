@@ -27,6 +27,7 @@
 #include "m1_fw_update_bl.h"
 #include "m1_power_ctl.h"
 #include "m1_display.h"
+#include "m1_wdt_hw.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -250,6 +251,7 @@ void setting_esp32_image_file(void)
 			sum = image_size;
 			while ( sum )
 			{
+				m1_wdt_reset(); /* Kick IWDG each chunk — this loop can run for seconds on large images */
 				count = m1_fb_read_from_file(&hfile_fw, payload, ESP32_IMAGE_CHUNK_SIZE);
 				if ( !count ) // Read failed?
 				{
@@ -352,6 +354,7 @@ void setting_esp32_firmware_update(void)
         m1_device_stat.op_mode = M1_OPERATION_MODE_FIRMWARE_UPDATE;
 
         m1_led_fw_update_on(NULL); // Turn on
+        m1_wdt_reset(); /* Kick IWDG before entering the flash operation */
 		esp32_UART_deinit(); // Disable the ESP32 module first
     	uret = m1_fw_app(&hfile_fw);
 		if ( uret != ESP_LOADER_SUCCESS )
@@ -435,6 +438,7 @@ static esp_loader_error_t m1_fw_app(FIL *hfile)
 		progress_percent_count = 0;
 		while ( write_size )
 		{
+			m1_wdt_reset(); /* Kick IWDG each chunk — flash write + UART can stall */
 			flash_err = ESP_LOADER_ERROR_FAIL;
 			count = m1_fb_read_from_file(hfile, buffer, ESP32_IMAGE_CHUNK_SIZE);
 			if ( !count ) // Read failed?
@@ -477,12 +481,13 @@ static esp_loader_error_t m1_fw_app(FIL *hfile)
 static esp_loader_error_t m1_fw_flash_binary(uint8_t *payload, size_t size)
 {
     esp_loader_error_t err;
-    size_t written;
+    static size_t written = 0;
     static bool init_done = false;
 
     if ( !init_done )
     {
         printf("Erasing flash (this may take a while)...\r\n");
+        m1_wdt_reset(); /* Kick IWDG before erase — can take 5-20+ seconds */
         err = esp_loader_flash_start(start_address, image_size, ESP32_IMAGE_CHUNK_SIZE);
         if (err != ESP_LOADER_SUCCESS)
         {
@@ -665,6 +670,7 @@ void setting_esp32_backup_flash(void)
 	m1_u8g2_nextpage();
 	HAL_Delay(1000);
 
+	m1_wdt_reset(); /* Kick IWDG before connect — sync can take several seconds */
 	err = connect_to_target_with_stub(ESP32_UART_BAUDRATE, ESP32_UART_BAUDRATE);
 	if (err != ESP_LOADER_SUCCESS)
 	{
@@ -727,6 +733,7 @@ void setting_esp32_backup_flash(void)
 
 	while (offset < flash_size)
 	{
+		m1_wdt_reset(); /* Kick IWDG each chunk — 4MB backup takes minutes */
 		uint32_t chunk = ESP32_IMAGE_CHUNK_SIZE;
 		if (offset + chunk > flash_size)
 			chunk = flash_size - offset;
