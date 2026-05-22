@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.25] - 2026-05-22
+
+### Fixed
+
+- **Firmware update watchdog timeout** — added missing `m1_wdt_reset()` calls
+  to the ESP32 firmware update path (image file MD5 validation, flash erase/write
+  loop, and backup read loop) and to the STM32 bank CRC verification loop,
+  preventing IWDG-triggered reboots and freezes during firmware operations.
+- **STM32 firmware update UX** — added "Erasing flash..." display during the
+  multi-second erase phase, success/reboot confirmation dialog before bank swap,
+  error dialogs for CRC mismatch / invalid image / file access failures, and
+  fixed stale progress bar state that caused a missing progress display on retry
+  after a failed update.
 ## [0.9.1.24] - 2026-05-21
 
 ### Fixed
