@@ -465,7 +465,7 @@ static void draw_rr_more_menu(void)
         uint8_t y = 14 + i * row_h;
         if (i == rr_more_sel)
         {
-            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, row_h, 2);
+            u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, row_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
         u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);

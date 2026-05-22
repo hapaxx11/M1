@@ -40,6 +40,7 @@ void ble_spam_google_fastpair(void);
 void ble_spam_flipper(void);
 void ble_spam_all(void);
 void ble_spoof_airtag(void);
+void ble_gatt_discovery(void);
 
 static inline uint8_t ble_spam_payload_count(uint8_t type_idx)
 {

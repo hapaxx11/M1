@@ -750,7 +750,7 @@ static void browse_gui_update(uint8_t sel_item, char *file_name)
 		uint8_t y = M1_MENU_AREA_TOP + i * item_h;
 		if (i == sel_item)
 		{
-			u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, item_h, 2);
+			u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 		}
 		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, sdcard_explore_options[i]);

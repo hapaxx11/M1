@@ -102,8 +102,8 @@ static uint8_t cfg_real(uint8_t display_idx)
 
 /* Layout constants — aligned with menu scene (no button bar) */
 #define CFG_AREA_TOP     12   /* Y below title + separator line      */
-#define CFG_TEXT_W      124   /* Highlight / text area width           */
-#define CFG_SCROLLBAR_X 125   /* Scrollbar left edge (3px wide)       */
+#define CFG_TEXT_W      122   /* Highlight / text area width           */
+#define CFG_SCROLLBAR_X 124   /* Scrollbar left edge (3px wide)       */
 #define CFG_SCROLLBAR_W   3   /* Scrollbar track width                */
 
 static const char *cfg_item_labels[CFG_ITEMS] = {
@@ -388,7 +388,7 @@ static void draw(SubGhzApp *app)
         if (i == cfg_sel)
         {
             /* Highlight selected row — rounded corners, leave room for scrollbar */
-            u8g2_DrawRBox(&m1_u8g2, 0, y, CFG_TEXT_W, item_h, 2);
+            u8g2_DrawRBox(&m1_u8g2, 1, y, CFG_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 

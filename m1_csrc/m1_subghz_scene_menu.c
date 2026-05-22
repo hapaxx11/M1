@@ -40,9 +40,9 @@
 
 /* Layout constants */
 #define MENU_AREA_TOP     12   /* Y below title + separator line      */
-#define SCROLLBAR_X      125   /* Scrollbar left edge (3px wide)      */
+#define SCROLLBAR_X      124   /* Scrollbar left edge (3px wide)      */
 #define SCROLLBAR_W        3   /* Scrollbar track width               */
-#define MENU_TEXT_W      124   /* Highlight / text area width          */
+#define MENU_TEXT_W      122   /* Highlight / text area width          */
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -169,7 +169,7 @@ static void draw(SubGhzApp *app)
         if (idx == menu_sel)
         {
             /* Highlight selected item — rounded corners, leave room for scrollbar */
-            u8g2_DrawRBox(&m1_u8g2, 0, y, MENU_TEXT_W, item_h, 2);
+            u8g2_DrawRBox(&m1_u8g2, 1, y, MENU_TEXT_W, item_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
 
