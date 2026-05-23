@@ -184,6 +184,15 @@ void firmware_update_get_image_file(void)
     uint32_t crc32ret, image_size, fwver_old;
     S_M1_FW_CONFIG_t fwconfig;
 
+    /* Scene push calls on_exit which frees pfullpath — re-allocate if needed */
+    if ( !pfullpath )
+        pfullpath = malloc(FW_FILE_PATH_LEN_MAX + FW_FILE_NAME_LEN_MAX);
+    if ( !pfullpath )
+    {
+        fw_update_status = M1_FW_UPDATE_NOT_READY;
+        return;
+    }
+
 	f_info = storage_browse(NULL);
 
 	fw_update_status = M1_FW_IMAGE_FILE_TYPE_ERROR; // reset
