@@ -1206,3 +1206,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_badusb_parser PRIVATE sanitizers)
 endif()
 add_test(NAME badusb_parser COMMAND test_badusb_parser)
+
+# ── Sub-GHz autosave logic ──
+add_executable(test_subghz_autosave
+    test_subghz_autosave.c
+    ${M1_ROOT}/m1_csrc/subghz_autosave.c
+)
+target_include_directories(test_subghz_autosave PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_autosave PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_autosave PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_autosave COMMAND test_subghz_autosave)

@@ -44,6 +44,7 @@
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "flipper_subghz.h"
+#include "subghz_autosave.h"
 
 /*============================================================================*/
 /* Extern references to shared radio state (defined in m1_sub_ghz.c)          */
@@ -102,33 +103,37 @@ extern uint8_t subghz_get_save_fmt_ext(void);
 /* Autosave — save decoded signals to SD automatically                        */
 /*============================================================================*/
 
-#define SUBGHZ_AUTOSAVE_DIR  "/SUBGHZ/autosave"
-
 /**
  * @brief  Auto-save a decoded signal to the autosave directory.
  *
- * Generates a unique filename from protocol name + key + tick count.
- * Skips save if the key is zero or the directory cannot be created.
+ * Uses subghz_autosave.h for filename generation and duplicate detection.
+ * Skips save if the key is zero, the signal is a duplicate, or the
+ * directory cannot be created.
  */
 static void autosave_signal(const SubGHz_History_Entry_t *entry)
 {
     if (entry == NULL || entry->info.key == 0)
         return;
 
+    /* Duplicate detection: skip if same protocol+key already saved */
+    if (subghz_autosave_is_duplicate(
+            protocol_text[entry->info.protocol], entry->info.key))
+        return;
+
     /* Ensure autosave directory exists */
-    FRESULT res = f_mkdir(SUBGHZ_AUTOSAVE_DIR);
+    FRESULT res = f_mkdir(SUBGHZ_AUTOSAVE_DIR_PATH);
     if (res != FR_OK && res != FR_EXIST)
         return;
 
-    /* Build filename: <protocol>_<key_hex>_<tick>.sub or .sgh */
+    /* Build filename */
     uint8_t fmt = subghz_get_save_fmt_ext();
-    const char *ext = (fmt == 1) ? ".sgh" : ".sub";
     char path[80];
-    snprintf(path, sizeof(path), SUBGHZ_AUTOSAVE_DIR "/%s_%lX_%lu%s",
-             protocol_text[entry->info.protocol],
-             (unsigned long)(uint32_t)entry->info.key,
-             (unsigned long)HAL_GetTick(),
-             ext);
+    if (subghz_autosave_make_path(path, sizeof(path),
+            protocol_text[entry->info.protocol],
+            entry->info.key,
+            HAL_GetTick(),
+            fmt == 1) == 0)
+        return;
 
     if (fmt == 1)
         flipper_subghz_save_m1native_key(path,
@@ -197,6 +202,7 @@ static void scene_on_enter(SubGhzApp *app)
     {
         app->has_decoded = false;
         memset(&app->last_decoded, 0, sizeof(app->last_decoded));
+        subghz_autosave_dup_reset();
     }
 
     /* Auto-start RX (Flipper-consistent: entering Read immediately starts
