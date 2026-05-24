@@ -46,8 +46,27 @@
   `sub_ghz_replay_start_async`).  Migrates Saved/Playlist/Remote/BindWizard
   off the blocking wrappers.  Highest UX win — hold-OK continuous TX with
   live sine-wave + burst counter on display.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+
+  Split into sub-phases:
+
+  - **Phase 3b-1 — Transmitter controller (pure logic).**  ✅ Complete.
+    `Sub_Ghz/subghz_transmitter_ctl.c/h` sits one layer above the
+    `subghz_endless_tx` engine and one layer below the future scene.
+    Owns the READY / TX / EXITING phase, translates scene events
+    (OK_PRESS / OK_RELEASE / TX_BURST_COMPLETE / BACK / TEARDOWN_DONE /
+    LEFT / RIGHT) into scene actions (TX_START / TX_NEXT_BURST /
+    TX_TEARDOWN / EXIT_SCENE / CYCLE_BUTTON_*).  Hardware-independent;
+    21 host tests under ASan+UBSan cover init, all phase transitions,
+    SINGLE/ENDLESS bursts, abort, second-run reuse, button cycling
+    (Phase 4 hook), and the two state-invariants.
+
+  - **Phase 3b-2 — Transmitter scene + scene-manager API wire-up +
+    caller migration.**  🔲 Not started.  Adds `SubGhzSceneTransmitter`
+    consuming the controller; wires `search_and_pop_to` /
+    `subghz_scene_tick_due` / custom-event payload routing into the
+    main scene loop; migrates Saved/Playlist/Remote/BindWizard.
+- **Status**: 🔄 In progress (3b-1 ✅; 3b-2 pending)
+- **Commit**: `Phase 3b-1: add subghz_transmitter_ctl pure-logic scene controller`
 
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for

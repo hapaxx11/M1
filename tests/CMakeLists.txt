@@ -1360,3 +1360,17 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_scene_polish PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_scene_polish COMMAND test_subghz_scene_polish)
+
+add_executable(test_subghz_transmitter_ctl
+    test_subghz_transmitter_ctl.c
+    ${M1_ROOT}/Sub_Ghz/subghz_transmitter_ctl.c
+    ${M1_ROOT}/Sub_Ghz/subghz_endless_tx.c
+)
+target_include_directories(test_subghz_transmitter_ctl PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_transmitter_ctl PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_transmitter_ctl PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_transmitter_ctl COMMAND test_subghz_transmitter_ctl)
