@@ -58,6 +58,7 @@ typedef enum {
     SubGhzSceneAddManually,    /**< Manual signal entry and TX */
     SubGhzSceneRemote,         /**< Multi-button RF remote control */
     SubGhzSceneBindWizard,     /**< Bind New Remote step-by-step wizard */
+    SubGhzSceneTransmitter,    /**< Generic key-file Transmitter (Phase 3b-2b) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -223,6 +224,21 @@ typedef struct {
      *  by subghz_scene_send_custom_event(); read by scenes via
      *  subghz_scene_custom_payload(). */
     subghz_scene_custom_payload_t custom_event_payload;
+
+    /* --- Phase 3b-2b — Transmitter scene input parameters --- */
+    /** Path of the key/packet/Flipper file to transmit.  Set by the
+     *  caller before pushing SubGhzSceneTransmitter; remains valid for
+     *  the lifetime of that scene.  Empty string = no file (the scene
+     *  shows a "Load a file" error and BACK exits). */
+    char     tx_path[72];
+    /** Engine repeat count (tail bursts) — typical: 1 for static OOK,
+     *  3 for rolling codes.  Clamped to >= 1 by the controller. */
+    uint16_t tx_repeat_count;
+    /** TX mode for the Transmitter scene.  Stored as uint8_t (avoids
+     *  pulling subghz_endless_tx.h into the public scene header):
+     *  0 = SUBGHZ_TX_MODE_SINGLE, 1 = SUBGHZ_TX_MODE_ENDLESS.  The
+     *  scene casts to subghz_endless_tx_mode_t at init time. */
+    uint8_t  tx_mode;
 } SubGhzApp;
 
 /*============================================================================*/
@@ -419,5 +435,6 @@ extern const SubGhzSceneHandlers subghz_scene_brute_force_handlers;
 extern const SubGhzSceneHandlers subghz_scene_add_manually_handlers;
 extern const SubGhzSceneHandlers subghz_scene_remote_handlers;
 extern const SubGhzSceneHandlers subghz_scene_bind_wizard_handlers;
+extern const SubGhzSceneHandlers subghz_scene_transmitter_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

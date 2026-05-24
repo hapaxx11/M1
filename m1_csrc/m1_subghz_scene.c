@@ -68,6 +68,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneAddManually]      = &subghz_scene_add_manually_handlers,
     [SubGhzSceneRemote]           = &subghz_scene_remote_handlers,
     [SubGhzSceneBindWizard]       = &subghz_scene_bind_wizard_handlers,
+    [SubGhzSceneTransmitter]      = &subghz_scene_transmitter_handlers,
 };
 
 /*============================================================================*/

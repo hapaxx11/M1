@@ -78,12 +78,27 @@
       All transitions (push / pop / replace / search_and_pop_to) reset
       `tick_period_ms = 0` so a child cannot inherit a parent's cadence.
 
-    - **Phase 3b-2b — Transmitter scene + caller migration.**  🔲 Not
-      started.  Adds `SubGhzSceneTransmitter` consuming the 3b-1 controller
-      via the 3b-2a API; migrates Saved/Playlist/Remote/BindWizard off the
-      blocking replay wrappers.
-- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b pending)
-- **Commit**: `Phase 3b-2a: wire scene-manager polish primitives into SubGhz scene API`
+    - **Phase 3b-2b — Transmitter scene + caller migration.**  🔄 In
+      progress.  Split into 3b-2b-i (scaffold) and 3b-2b-ii…v (per-caller
+      migration).
+
+      - **Phase 3b-2b-i — Transmitter scene scaffold.**  ✅ Complete.
+        Adds `SubGhzSceneTransmitter` with full async-TX integration:
+        controller-driven READY/TX/EXITING state machine, prepare_flipper +
+        start_async on OK_PRESS, continue_async on TX completion, abort +
+        temp-file unlink on TX_TEARDOWN and scene_on_exit, animated dots
+        + burst counter while TX is in flight, error display + recovery
+        for prepare/start failures.  Inputs: `app->tx_path`,
+        `tx_repeat_count`, `tx_mode`.  Registered in the scene registry
+        and wired into the firmware CMake build.  No callers migrated
+        yet — that lands in 3b-2b-ii…v.
+
+      - **Phase 3b-2b-ii — Saved (PACKET path) migration.**  🔲 Not started.
+      - **Phase 3b-2b-iii — Playlist migration.**  🔲 Not started.
+      - **Phase 3b-2b-iv — Remote migration.**  🔲 Not started.
+      - **Phase 3b-2b-v — Bind Wizard migration.**  🔲 Not started.
+- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b-i ✅; 3b-2b-ii…v pending)
+- **Commit**: `Phase 3b-2b-i: add SubGhzSceneTransmitter scaffold`
 
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for
