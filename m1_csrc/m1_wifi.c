@@ -2724,7 +2724,8 @@ static bool wifi_append_header_if_new(FIL *fil, const char *path, const char *he
 
 	if (new_file && header)
 	{
-		if (f_write(fil, header, strlen(header), &bw) != FR_OK)
+		size_t hlen = strlen(header);
+		if (f_write(fil, header, hlen, &bw) != FR_OK || bw != hlen)
 		{
 			f_close(fil);
 			return false;
