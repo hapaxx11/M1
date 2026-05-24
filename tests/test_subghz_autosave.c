@@ -151,6 +151,19 @@ void test_dup_check_without_record_not_duplicate(void)
     TEST_ASSERT_TRUE(subghz_autosave_is_duplicate("Princeton", 0xABC));
 }
 
+void test_dup_hash_collision_not_false_positive(void)
+{
+    /* Even if two protocol names happened to produce the same djb2 hash,
+     * the secondary strcmp should prevent a false positive.  We can't
+     * trivially forge a djb2 collision, but we verify that different
+     * protocol names with the same key are NOT treated as duplicates
+     * (the strcmp guard is the only thing that distinguishes them when
+     * the hash alone would not). */
+    subghz_autosave_record("CAME", 0x1234);
+    TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Nice", 0x1234));
+    TEST_ASSERT_TRUE(subghz_autosave_is_duplicate("CAME", 0x1234));
+}
+
 /*═══════════════ Main ═══════════════*/
 
 int main(void)
@@ -176,6 +189,7 @@ int main(void)
     RUN_TEST(test_dup_ring_wraps);
     RUN_TEST(test_dup_null_protocol_returns_true);
     RUN_TEST(test_dup_check_without_record_not_duplicate);
+    RUN_TEST(test_dup_hash_collision_not_false_positive);
 
     return UNITY_END();
 }

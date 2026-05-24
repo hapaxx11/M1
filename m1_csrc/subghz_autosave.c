@@ -40,10 +40,12 @@ int subghz_autosave_make_path(char *out, size_t out_size,
 /*──────────── Duplicate detection ────────────*/
 
 #define AUTOSAVE_DUP_RING_SIZE  32
+#define AUTOSAVE_DUP_PROTO_LEN  24   /* stored protocol name for collision guard */
 
 typedef struct {
     uint32_t protocol_hash;
     uint64_t key;
+    char     protocol_name[AUTOSAVE_DUP_PROTO_LEN];
 } autosave_dup_entry_t;
 
 static autosave_dup_entry_t s_dup_ring[AUTOSAVE_DUP_RING_SIZE];
@@ -66,10 +68,11 @@ bool subghz_autosave_is_duplicate(const char *protocol, uint64_t key)
 
     uint32_t ph = hash_str(protocol);
 
-    /* Check existing entries */
+    /* Check existing entries — secondary strcmp guards against hash collisions */
     for (uint8_t i = 0; i < s_dup_count; i++)
     {
-        if (s_dup_ring[i].protocol_hash == ph && s_dup_ring[i].key == key)
+        if (s_dup_ring[i].protocol_hash == ph && s_dup_ring[i].key == key
+            && strncmp(s_dup_ring[i].protocol_name, protocol, AUTOSAVE_DUP_PROTO_LEN - 1) == 0)
             return true;
     }
 
@@ -85,6 +88,8 @@ void subghz_autosave_record(const char *protocol, uint64_t key)
 
     s_dup_ring[s_dup_head].protocol_hash = ph;
     s_dup_ring[s_dup_head].key = key;
+    strncpy(s_dup_ring[s_dup_head].protocol_name, protocol, AUTOSAVE_DUP_PROTO_LEN - 1);
+    s_dup_ring[s_dup_head].protocol_name[AUTOSAVE_DUP_PROTO_LEN - 1] = '\0';
     s_dup_head = (s_dup_head + 1) % AUTOSAVE_DUP_RING_SIZE;
     if (s_dup_count < AUTOSAVE_DUP_RING_SIZE)
         s_dup_count++;
