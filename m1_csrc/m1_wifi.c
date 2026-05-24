@@ -31,6 +31,7 @@
 #include "m1_lcd.h"
 #include "m1_compile_cfg.h"
 #include "m1_scene.h"
+#include "m1_subghz_button_bar.h"
 #include "m1_wifi_cred.h"
 
 /*************************** D E F I N E S ************************************/
@@ -194,7 +195,6 @@ static uint16_t wifi_do_scan(void)
 static uint16_t wifi_ap_list_print(bool up_dir)
 {
 	char prn_msg[25];
-	uint8_t y_offset;
 
 	if (!ap_list || !ap_count)
 	{
@@ -217,18 +217,18 @@ static uint16_t wifi_ap_list_print(bool up_dir)
 	}
 
 	m1_u8g2_firstpage();
-	u8g2_DrawStr(&m1_u8g2, 2, 10, "Total AP:");
 
-	sprintf(prn_msg, "%d", ap_count);
-	u8g2_DrawStr(&m1_u8g2, 2 + strlen("Total AP: ") * M1_GUI_FONT_WIDTH + 2,
-		10, prn_msg);
-
+	/* Title bar — standard non-inverted header */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 9, "WiFi Networks");
 	sprintf(prn_msg, "%d/%d", ap_view_idx + 1, ap_count);
-	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH,
-		10, prn_msg);
-	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH, 9, prn_msg);
+	u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
-	y_offset = 14 + M1_GUI_FONT_HEIGHT - 1;
+	/* Content — use compact font so all 5 rows fit above the button bar (y<52) */
+#define AP_ROW_Y_START  (M1_MENU_AREA_TOP + 7)  /* 12 + 7 = 19 (first baseline) */
+#define AP_ROW_STEP     8                        /* 7px ascent + 1px gap        */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
 	/* SSID */
 	if (ap_list[ap_view_idx].ssid[0] == 0x00)
@@ -236,25 +236,27 @@ static uint16_t wifi_ap_list_print(bool up_dir)
 	else
 		strncpy(prn_msg, ap_list[ap_view_idx].ssid, M1_LCD_DISPLAY_WIDTH / M1_GUI_FONT_WIDTH);
 	prn_msg[M1_LCD_DISPLAY_WIDTH / M1_GUI_FONT_WIDTH] = '\0';
-	u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
+	u8g2_DrawStr(&m1_u8g2, 2, AP_ROW_Y_START,                 prn_msg);
 
-	y_offset += M1_GUI_FONT_HEIGHT;
-	u8g2_DrawStr(&m1_u8g2, 2, y_offset, ap_list[ap_view_idx].bssid_str);
+	/* BSSID */
+	u8g2_DrawStr(&m1_u8g2, 2, AP_ROW_Y_START + AP_ROW_STEP,   ap_list[ap_view_idx].bssid_str);
 
-	y_offset += M1_GUI_FONT_HEIGHT + M1_GUI_ROW_SPACING;
+	/* RSSI */
 	sprintf(prn_msg, "RSSI: %ddBm", ap_list[ap_view_idx].rssi);
-	u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
+	u8g2_DrawStr(&m1_u8g2, 2, AP_ROW_Y_START + 2 * AP_ROW_STEP, prn_msg);
 
-	y_offset += M1_GUI_FONT_HEIGHT;
+	/* Channel */
 	sprintf(prn_msg, "Channel: %d", ap_list[ap_view_idx].channel);
-	u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
+	u8g2_DrawStr(&m1_u8g2, 2, AP_ROW_Y_START + 3 * AP_ROW_STEP, prn_msg);
 
-	y_offset += M1_GUI_FONT_HEIGHT;
+	/* Auth mode */
 	sprintf(prn_msg, "Auth mode: %d", ap_list[ap_view_idx].auth_mode);
-	u8g2_DrawStr(&m1_u8g2, 2, y_offset, prn_msg);
+	u8g2_DrawStr(&m1_u8g2, 2, AP_ROW_Y_START + 4 * AP_ROW_STEP, prn_msg);
+#undef AP_ROW_Y_START
+#undef AP_ROW_STEP
 
-	/* Bottom hint: OK to connect */
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "Connect", NULL, NULL);
+	/* Bottom bar: OK/center column with circle icon */
+	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Connect", NULL, NULL);
 
 	m1_u8g2_nextpage();
 
@@ -1357,7 +1359,7 @@ static uint16_t sta_list_print(bool up_dir)
 		sta_list_data[sta_view_idx].channel);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
+	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 	return sta_total;
 }
@@ -2878,7 +2880,7 @@ static void wifi_draw_ap_select(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count());
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
+	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -2913,7 +2915,7 @@ static void wifi_draw_sta_select(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count());
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
+	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -3665,7 +3667,7 @@ void wifi_general_set_channel(void)
 			snprintf(line, sizeof(line), "Channel: %d", channel);
 			u8g2_DrawStr(&m1_u8g2, 2, 28, line);
 			u8g2_DrawStr(&m1_u8g2, 2, 42, "UP/DOWN change");
-			m1_draw_bottom_bar(&m1_u8g2, NULL, "Set", NULL, NULL);
+			subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Set", NULL, NULL);
 			m1_u8g2_nextpage();
 		}
 

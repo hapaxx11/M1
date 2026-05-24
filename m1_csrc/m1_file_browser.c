@@ -156,8 +156,8 @@ S_M1_file_browser_hdl *m1_fb_init(u8g2_t *lcd_hdl)
 	strcpy(pfb_hdl->info.dir_name, SDCARD_DEFAULT_DRIVE_PATH);
 	pfb_hdl->info.file_name = NULL;
 	pfb_hdl->font_w = M1_GUI_FONT_WIDTH;
-	pfb_hdl->font_h = M1_GUI_FONT_HEIGHT;
-	pfb_hdl->font_h_spacing = M1_GUI_FONT_HEIGHT_SPACING;
+	pfb_hdl->font_h = m1_menu_item_h();   /* respects user text-size setting */
+	pfb_hdl->font_h_spacing = 0;          /* m1_menu_item_h() includes spacing */
 	pfb_hdl->info.file_is_selected = FALSE;
 
 	assert(lcd_hdl!=NULL);
@@ -583,7 +583,6 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	uint16_t count, len;
 	uint16_t l, k;
 	uint8_t disp_max_column, ext_len;
-	static uint8_t spacing;
 	static bool scroll_ok;
 	bool flag;
 
@@ -591,7 +590,6 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	{
 		gui_max_column = pfb_hdl->gui_width / pfb_hdl->font_w;
 		gui_max_row = pfb_hdl->gui_height / pfb_hdl->font_h;
-		spacing = pfb_hdl->font_h_spacing;
 
 		if (pfb_hdl->x < 0 || pfb_hdl->y < 0 ||
 			pfb_hdl->x + pfb_hdl->gui_width > M1_LCD_DISPLAY_WIDTH ||
@@ -604,7 +602,7 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		}
 
 		gui_width = gui_max_column*pfb_hdl->font_w;
-		gui_max_row -= 1; // Need room for row spacing
+		/* font_h_spacing is 0 (m1_menu_item_h already includes spacing) */
 		fb_gui_check = TRUE;
 	} // if (!fb_gui_check)
 
@@ -811,8 +809,8 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 		u8g2_DrawHLine(plcd_hdl, 0, 10, M1_LCD_DISPLAY_WIDTH);
 	}
 
-	/* Item list */
-	u8g2_SetFont(plcd_hdl, M1_DISP_SUB_MENU_FONT_N);
+	/* Item list — use user-configured font for consistent styling */
+	u8g2_SetFont(plcd_hdl, m1_menu_font());
 	count = 0;
 	uint8_t vis_row_idx = 0;
 	while (count < num_of_files)
@@ -911,19 +909,21 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 				}
 			} // else (!count)
 
-			/* Compute layout for this visible row */
-			uint8_t row_top  = pfb_hdl->y + (uint8_t)(vis_row_idx * (pfb_hdl->font_h + spacing) + spacing / 2);
-			uint8_t row_h    = pfb_hdl->font_h + spacing + 2;
-			uint8_t icon_y   = pfb_hdl->y + (uint8_t)(vis_row_idx * (pfb_hdl->font_h + spacing) + spacing + (pfb_hdl->font_h - fb_icon->icon_h));
-			uint8_t text_y   = pfb_hdl->y + (uint8_t)(vis_row_idx * (pfb_hdl->font_h + spacing) + spacing + pfb_hdl->font_h);
+			/* Compute layout for this visible row.
+			 * font_h_spacing is 0, so stride == font_h == m1_menu_item_h().
+			 * Matches m1_scene_draw_menu: row_top = y + i*item_h,
+			 * text baseline = row_top + item_h - 1. */
+			uint8_t row_top  = pfb_hdl->y + (uint8_t)(vis_row_idx * pfb_hdl->font_h);
+			uint8_t row_h    = pfb_hdl->font_h;
+			uint8_t icon_y   = row_top + (pfb_hdl->font_h > fb_icon->icon_h
+			                              ? pfb_hdl->font_h - fb_icon->icon_h : 0);
+			uint8_t text_y   = row_top + pfb_hdl->font_h - 1;
 			bool is_selected = (count == pfb_hdl->listing_index);
 
-			/* Selection highlight — filled rounded box + inverted colours */
 			if (is_selected)
 			{
-				uint8_t sel_w = gui_width - 1 - (scroll_ok ? M1_MENU_SCROLLBAR_W + 2 : 0);
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_TXT);
-				u8g2_DrawRBox(plcd_hdl, pfb_hdl->x + 1, row_top, sel_w, row_h, 2);
+				u8g2_DrawRBox(plcd_hdl, pfb_hdl->x + 1, row_top, M1_MENU_TEXT_W, row_h, 2);
 				u8g2_SetDrawColor(plcd_hdl, M1_DISP_DRAW_COLOR_BG);
 			}
 
@@ -942,7 +942,7 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	/* Modern scrollbar — VLine track + RBox handle */
 	if (scroll_ok)
 	{
-		uint8_t  sb_area_h = (uint8_t)((uint16_t)gui_max_row * (pfb_hdl->font_h + spacing));
+		uint8_t  sb_area_h = (uint8_t)((uint16_t)gui_max_row * pfb_hdl->font_h);
 		uint8_t  sb_h      = (num_of_files > 0) ? (sb_area_h / num_of_files) : sb_area_h;
 		if (sb_h < 6) sb_h = 6;
 		uint16_t sb_pos    = pfb_hdl->listing_index - pfb_hdl->row_index;

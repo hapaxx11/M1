@@ -1593,6 +1593,18 @@ All M1 scene UI must follow the **Momentum / Flipper-inspired visual standard**:
   Layout: `[42 px][1 px gap][42 px][1 px gap][42 px]` = 128 px.
 - **2-column bar** (`m1_draw_bottom_bar`): each button is 63 px wide.
   Layout: `[63 px][2 px gap][63 px]` = 128 px.
+  **`m1_draw_bottom_bar` has no OK/center column.** Its left slot maps to the
+  LEFT button; its right slot maps to the RIGHT button.  If the primary action
+  on a screen is triggered by pressing OK (e.g. "Select", "Set", "Confirm",
+  "Connect"), do **NOT** use `m1_draw_bottom_bar()` — use `subghz_button_bar_draw()`
+  with the center slot and the `ok_circle_8x8` icon instead:
+  ```c
+  /* Correct — OK action goes in the center slot */
+  subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
+
+  /* Wrong — left slot is the LEFT button, not OK */
+  m1_draw_bottom_bar(&m1_u8g2, NULL, "Select", NULL, NULL);
+  ```
 - Draw a button only for **populated slots** — if both icon and text are NULL for a
   slot, leave that column empty (no empty box).
 
