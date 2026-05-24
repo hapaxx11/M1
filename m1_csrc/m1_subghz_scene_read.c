@@ -41,6 +41,7 @@
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
+#include "m1_file_util.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "flipper_subghz.h"
@@ -121,11 +122,11 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
         return;
 
     /* Ensure parent and autosave directories exist */
-    FRESULT res = f_mkdir("/SUBGHZ");
-    if (res != FR_OK && res != FR_EXIST)
+    FRESULT res = fs_directory_ensure("/SUBGHZ");
+    if (res != FR_OK)
         return;
-    res = f_mkdir(SUBGHZ_AUTOSAVE_DIR_PATH);
-    if (res != FR_OK && res != FR_EXIST)
+    res = fs_directory_ensure(SUBGHZ_AUTOSAVE_DIR_PATH);
+    if (res != FR_OK)
         return;
 
     /* Build filename */
