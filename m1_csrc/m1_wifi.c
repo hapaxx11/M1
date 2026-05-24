@@ -2766,7 +2766,7 @@ void wifi_wardrive(void)
 			ap_list[i].rssi, ap_list[i].auth_mode);
 		if (len > 0)
 		{
-			if (f_write(&fil, line, len, &bw) != FR_OK)
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
 				break;
 		}
 	}
@@ -2810,7 +2810,7 @@ void wifi_station_wardrive(void)
 			sta_list_data[i].channel, sta_list_data[i].rssi, ssid);
 		if (len > 0)
 		{
-			if (f_write(&fil, line, len, &bw) != FR_OK)
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
 				break;
 		}
 	}
@@ -3138,7 +3138,7 @@ void wifi_general_save_aps(void)
 			ap_list[i].rssi, ap_list[i].auth_mode);
 		if (len > 0)
 		{
-			if (f_write(&fil, line, len, &bw) != FR_OK)
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
 				break;
 		}
 	}
