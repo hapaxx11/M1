@@ -274,44 +274,29 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
                 return true;
             }
 
-            /* Parsed (static-key) files: inline blocking replay in this scene.
-             * NOISE (RAW) files always take the if (is_raw_file) branch above
-             * and open the Read Raw scene — they never reach this path.
-             * Here we only handle PACKET/key files which need the key encoder
-             * to reconstruct the OOK waveform from protocol + key fields. */
-            {
-                uint8_t ret;
-
-                ret = sub_ghz_replay_flipper_file(saved_filepath);
-
-                if (ret == 0)
-                {
-                    /* Restore radio to known state after replay (the replay
-                     * function calls menu_sub_ghz_exit which powers off the
-                     * SI4463 on success). */
-                    menu_sub_ghz_init();
-                }
-                else
-                {
-                    char err_buf[32];
-                    const char *err = err_buf;
-                    snprintf(err_buf, sizeof(err_buf), "Error code: %u", (unsigned)ret);
-                    switch (ret)
-                    {
-                        case 1: err = "File/IO error";              break;
-                        case 2: err = "Missing data/frequency";     break;
-                        case 3: err = "Unsupported freq";           break;
-                        case 4: /* fall through */
-                        case 5: err = "Memory error";               break;
-                        case 6: err = "Cannot replay: dynamic key";   break;
-                        case 7: err = "Unsupported protocol";       break;
-                    }
-                    m1_message_box(&m1_u8g2, "Emulate failed", err, "",
-                                   "BACK to return");
-                }
-                app->need_redraw = true;
-                return true;
-            }
+            /* Parsed (static-key) files: push the Transmitter scene
+             * which drives the async-TX state machine (prepare_flipper
+             * + start_async + continue_async + abort) on top of our
+             * scene.  NOISE (RAW) files always take the if (is_raw_file)
+             * branch above and open the Read Raw scene — they never
+             * reach this path.  Here we only handle PACKET/key files
+             * which need the key encoder to reconstruct the OOK waveform
+             * from protocol + key fields.
+             *
+             * Transmitter scene UX:
+             *   - READY: shows filename + "Press OK to send"
+             *   - TX:    animated dots + burst counter
+             *   - On completion (1 burst tail) or BACK, pops back here.
+             *
+             * When the Transmitter scene pops, our scene_on_enter()
+             * re-runs and re-opens the file browser — that is the
+             * Momentum / Flipper UX for "return to list after sending". */
+            strncpy(app->tx_path, saved_filepath, sizeof(app->tx_path) - 1);
+            app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+            app->tx_repeat_count = 1U;             /* static keys: 1 burst */
+            app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
+            subghz_scene_push(app, SubGhzSceneTransmitter);
+            return true;
         }
         case SAVED_ACTION_INFO:
         {
