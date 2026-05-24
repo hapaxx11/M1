@@ -159,8 +159,26 @@
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for
   KeeLoq / FloR-S / CAME Atomo / FAAC rolling-code remotes.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: 🔄 In progress (4a ✅; 4b, 4c pending)
+- **Commit**: `Phase 4a: add subghz_button_caps pure-logic helper + host tests`
+
+  - **Phase 4a** ✅ — pure-logic `subghz_button_caps` module
+    (`Sub_Ghz/subghz_button_caps.{c,h}`) maps a protocol name to
+    `(supports_cycling, button_count)`.  Covers KeeLoq family, Nice
+    FloR-S (16 codes), CAME Atomo/TWEE, Alutech AT-4N, KingGates
+    Stylo4k, DITEC_GOL4, Scher-Khan, Toyota.  16 host tests
+    (`tests/test_subghz_button_caps.c`) pin protocol coverage,
+    case-insensitive matching, whitespace trimming, and the
+    "supports_cycling ⇒ button_count ≥ 2" invariant.  All 66 host
+    tests pass.
+  - **Phase 4b** 🔲 — plumb `tx_protocol_name` through `SubGhzApp`;
+    Transmitter `scene_on_enter` queries the helper and initialises
+    `allow_button_cycle` / `button_count`; READY/TX screens display
+    the current button index.  No key re-encoding yet.
+  - **Phase 4c** 🔲 — add a button-override prepare entry point in
+    `m1_sub_ghz.{c,h}` so cycling actually mutates the transmitted
+    key.  Wire CYCLE_BUTTON_PREV/NEXT to reload-with-override.
+    Add file-load tests for KeeLoq + Nice FloR-S overrides.
 
 ### Phase 5 — Split Saved into Saved + SavedMenu + Delete
 - **Description**: Extract action menu and delete confirmation from

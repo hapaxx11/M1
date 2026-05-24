@@ -1374,3 +1374,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_transmitter_ctl PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_transmitter_ctl COMMAND test_subghz_transmitter_ctl)
+
+# ------------------------------------------------------------------
+# Sub-GHz button-cycling capability lookup (Phase 4a)
+# ------------------------------------------------------------------
+add_executable(test_subghz_button_caps
+    test_subghz_button_caps.c
+    ${M1_ROOT}/Sub_Ghz/subghz_button_caps.c
+)
+target_include_directories(test_subghz_button_caps PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_button_caps PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_button_caps PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_button_caps COMMAND test_subghz_button_caps)
