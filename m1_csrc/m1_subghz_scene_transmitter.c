@@ -55,6 +55,7 @@
 #include "subghz_transmitter_ctl.h"
 #include "subghz_endless_tx.h"
 #include "subghz_button_caps.h"
+#include "subghz_button_override.h"
 #include "uiView.h"
 
 /*============================================================================*/
@@ -152,7 +153,19 @@ static bool perform_action(SubGhzApp *app, subghz_transmitter_action_t action)
             /* Prepare the temp file from the source key/PACKET/Flipper file.
              * Note: the Transmitter scene is the canonical entry point for
              * non-RAW files; RAW files go through the Read Raw scene's
-             * LoadKeyTX state instead. */
+             * LoadKeyTX state instead.
+             *
+             * Phase 4c: when the protocol supports button override, set
+             * the per-prepare slot before invoking the converter.  The
+             * converter latches and clears the slot internally, so the
+             * call is self-contained — no need to clear afterwards.
+             * For protocols without override support, the controller
+             * keeps button_index at 0 and the override is a no-op. */
+            if (s_ctl.allow_button_cycle)
+            {
+                sub_ghz_replay_set_button_override(
+                    (int8_t)s_ctl.button_index);
+            }
             const char *tmp = NULL;
             uint8_t prep_ret = sub_ghz_replay_prepare_flipper(
                 app->tx_path, &tmp);
@@ -227,11 +240,15 @@ static bool perform_action(SubGhzApp *app, subghz_transmitter_action_t action)
 
         case SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_PREV:
         case SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_NEXT:
-            /* Phase 4b — button index has already been mutated inside
-             * the controller; just request a redraw so the "Btn X/Y"
-             * indicator reflects the new value.  Phase 4c will wire
-             * this branch to a button-override prepare entry point so
-             * the transmitted key is re-encoded for the new button. */
+            /* Phase 4c — the controller has already mutated
+             * `s_ctl.button_index` to the new value.  The TX_START
+             * branch above will pass it to
+             * sub_ghz_replay_set_button_override() on the next OK
+             * press, and the converter will mutate the parsed
+             * key_value to encode the requested button before
+             * encoding the OOK PWM waveform.  Nothing to do here
+             * except request a redraw so the "Btn X/Y" indicator
+             * reflects the new value. */
             return true;
 
         case SUBGHZ_TXCTL_ACT_NONE:
@@ -261,22 +278,29 @@ static void scene_on_enter(SubGhzApp *app)
                               : SUBGHZ_TX_MODE_SINGLE;
 
     /* Init controller.  Phase 4b: query the button-cycling capability
-     * helper from the protocol name supplied by the caller.  When
-     * tx_protocol_name is empty or unknown, the helper returns
+     * helper from the protocol name supplied by the caller.  Phase 4c:
+     * AND-gate the cycling enable against subghz_button_override_supports()
+     * so the UI only offers cycling for protocols where pressing
+     * LEFT/RIGHT actually mutates the transmitted key.  Protocols whose
+     * button field is encoded via opaque manufacturer lookup tables
+     * (Nice FloR-S, FAAC SLH) or embedded inside the encrypted rolling
+     * payload (CAME Atomo, Alutech AT-4N, KingGates Stylo4k, DITEC GOL4,
+     * Toyota, Scher-Khan) are listed in `subghz_button_caps` for future
+     * use but do NOT yet have a working per-button re-encoder — those
+     * fall back to a single-button non-cycling display here.
+     *
+     * When tx_protocol_name is empty or unknown the helper returns
      * {false, 0} which leaves LEFT/RIGHT inert — matching the legacy
      * single-button behaviour for static OOK files and for callers
-     * (Playlist / Remote) where cycling is not part of the UX.
-     *
-     * No key re-encoding yet — Phase 4c wires CYCLE_BUTTON_PREV/NEXT
-     * actions to a button-override prepare entry point.  Until then
-     * the controller updates button_index in response to LEFT/RIGHT
-     * and the scene shows the new index, but the transmitted key
-     * remains the original captured value. */
+     * (Playlist / Remote) where cycling is not part of the UX. */
     subghz_button_caps_t caps =
         subghz_button_caps_for_protocol(app->tx_protocol_name);
+    bool override_ok =
+        subghz_button_override_supports(app->tx_protocol_name);
+    bool cycling_enabled = caps.supports_cycling && override_ok;
     subghz_transmitter_ctl_init(&s_ctl, mode, repeat,
-                                caps.supports_cycling,
-                                caps.button_count);
+                                cycling_enabled,
+                                cycling_enabled ? caps.button_count : 1U);
 
     /* Cadence for animation + auto-dismiss after error. */
     subghz_scene_set_tick_period(app, TX_ANIM_TICK_MS);
@@ -421,6 +445,11 @@ static void scene_on_exit(SubGhzApp *app)
         sub_ghz_replay_abort();
     }
     unlink_temp_if_any();
+    /* Phase 4c: clear any pending button-override slot.  The converter
+     * also resets on entry, but clearing here prevents a stale set
+     * (e.g. user pressed RIGHT then BACK without OK) from leaking
+     * into an unrelated subsequent prepare from any other caller. */
+    sub_ghz_replay_set_button_override(-1);
     /* Controller / tick cadence are reset automatically by the scene
      * manager on pop (Phase 3b-2a invariant). */
 }

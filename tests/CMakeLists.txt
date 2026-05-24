@@ -1390,3 +1390,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_button_caps PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_button_caps COMMAND test_subghz_button_caps)
+
+# ------------------------------------------------------------------
+# Sub-GHz button-override key mutation (Phase 4c)
+# ------------------------------------------------------------------
+add_executable(test_subghz_button_override
+    test_subghz_button_override.c
+    ${M1_ROOT}/Sub_Ghz/subghz_button_override.c
+)
+target_include_directories(test_subghz_button_override PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_button_override PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_button_override PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_button_override COMMAND test_subghz_button_override)

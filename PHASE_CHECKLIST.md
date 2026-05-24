@@ -159,8 +159,8 @@
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for
   KeeLoq / FloR-S / CAME Atomo / FAAC rolling-code remotes.
-- **Status**: 🔄 In progress (4a ✅; 4b ✅; 4c pending)
-- **Commit**: `Phase 4b: plumb tx_protocol_name + button-cycle indicator into Transmitter scene`
+- **Status**: ✅ Complete (4a ✅; 4b ✅; 4c ✅)
+- **Commit**: `Phase 4c: button-override key mutation (KeeLoq family) + AND-gate cycling`
 
   - **Phase 4a** ✅ — pure-logic `subghz_button_caps` module
     (`Sub_Ghz/subghz_button_caps.{c,h}`) maps a protocol name to
@@ -186,10 +186,32 @@
     lands in 4c.  All 66 host tests still pass; no new tests needed
     (controller cycling is already covered by the Phase 3b-1 21-test
     suite, and protocol→caps lookup is covered by the 16 Phase 4a tests).
-  - **Phase 4c** 🔲 — add a button-override prepare entry point in
-    `m1_sub_ghz.{c,h}` so cycling actually mutates the transmitted
-    key.  Wire CYCLE_BUTTON_PREV/NEXT to reload-with-override.
-    Add file-load tests for KeeLoq + Nice FloR-S overrides.
+  - **Phase 4c** ✅ — pure-logic `subghz_button_override` module
+    (`Sub_Ghz/subghz_button_override.{c,h}`) mutates the protocol's
+    button-field bits inside a 64-bit Flipper SubGhz Key value.
+    Supports KeeLoq family (KeeLoq, Jarolift — button at [63:60];
+    Star Line — button at [3:0]) where the button is a plain-bit
+    field that downstream encoders honour.  Protocols whose button
+    is encoded via opaque manufacturer lookup tables (Nice FloR-S)
+    or inside an encrypted rolling payload (CAME Atomo, Alutech
+    AT-4N, KingGates Stylo4k, DITEC GOL4, Toyota, Scher-Khan)
+    return `false` from `subghz_button_override_apply()` —
+    documented for future per-protocol encoders.  Wiring:
+    `sub_ghz_replay_set_button_override(button)` populates a
+    per-prepare slot; the Flipper-format converter
+    (`subghz_replay_flipper_to_tmp`) latches and clears the slot
+    at entry and applies it to the parsed `key_value` before the
+    OOK PWM / KeeLoq counter-mode encoder runs.  Transmitter scene
+    AND-gates cycling enable against
+    `subghz_button_override_supports()` so the UI only offers
+    cycling when LEFT/RIGHT will actually mutate the transmitted
+    key, and calls `sub_ghz_replay_set_button_override()` before
+    each TX_START.  16-test host suite
+    (`tests/test_subghz_button_override.c`) covers all 16 button
+    indices, serial+hop preservation, round-trip restoration,
+    pairwise-distinct keys for 4-button cycles, unsupported
+    protocols, NULL safety, case/whitespace tolerance, and
+    `_supports()`/`_apply()` agreement.  All 67 host tests pass.
 
 ### Phase 5 — Split Saved into Saved + SavedMenu + Delete
 - **Description**: Extract action menu and delete confirmation from

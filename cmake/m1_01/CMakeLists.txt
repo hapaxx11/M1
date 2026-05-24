@@ -339,6 +339,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_scene_polish.c
     ../../Sub_Ghz/subghz_transmitter_ctl.c
     ../../Sub_Ghz/subghz_button_caps.c
+    ../../Sub_Ghz/subghz_button_override.c
     ../../Sub_Ghz/subghz_new_remote_gen.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c

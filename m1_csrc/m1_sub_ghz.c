@@ -31,6 +31,7 @@
 #include "subghz_secplus_v1_encoder.h"
 #include "subghz_keeloq_encoder.h"
 #include "subghz_keeloq_mfkeys.h"
+#include "subghz_button_override.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
 #include "m1_storage.h"
@@ -1539,6 +1540,25 @@ static const char *stristr(const char *haystack, const char *needle)
 #define FLIPPER_SUB_TMP_SGH   "/SUBGHZ/_flipper_tmp.sgh"
 
 /*
+ * Per-prepare button-override slot consumed by the Flipper-format converter
+ * to implement Transmitter-scene LEFT/RIGHT button cycling for rolling-code
+ * remotes.  -1 = no override (use the parsed file value).  0..15 = override
+ * the protocol's button-field bits inside the parsed key_value, if and only
+ * if the protocol is supported by subghz_button_override.  The converter
+ * resets this slot to -1 at the end of every conversion, so each
+ * set + prepare cycle is self-contained.
+ */
+static int8_t s_button_override = -1;
+
+void sub_ghz_replay_set_button_override(int8_t button_index)
+{
+	if (button_index < 0 || button_index > 15)
+		s_button_override = -1;
+	else
+		s_button_override = button_index;
+}
+
+/*
  * Tracks whether sub_ghz_replay_start_async() has armed TX and whether
  * a Q_EVENT_SUBGHZ_TX completion is still pending.  Set true on a
  * successful start, cleared on every teardown path (natural completion,
@@ -1988,6 +2008,12 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
 
+	/* Latch the button-override slot at entry and clear the static slot
+	 * immediately so every return path leaves it disabled (set + prepare
+	 * cycles are self-contained).  Negative = no override active. */
+	const int8_t button_override = s_button_override;
+	s_button_override = -1;
+
 	line_buf = malloc(FLIPPER_SUB_LINE_MAX);
 	if (!line_buf) return 1;
 	out_buf = malloc(FLIPPER_SUB_OUT_MAX);
@@ -2221,6 +2247,21 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	/* ── 3b. KEY file: encode protocol → raw timing ── */
 	if (is_key && key_protocol[0] != '\0' && key_bit_count > 0)
 	{
+		/* Apply the per-prepare button override (Phase 4c).  For
+		 * supported protocols (KeeLoq family) this mutates the parsed
+		 * key_value to encode the requested button; for unsupported
+		 * protocols it is a no-op.  The KeeLoq counter-mode encoder
+		 * picks up the new button via its own extract_fields(); the
+		 * generic OOK PWM encoder transmits the mutated value verbatim. */
+		if (button_override >= 0)
+		{
+			uint64_t mutated = key_value;
+			(void)subghz_button_override_apply(key_protocol, key_value,
+			                                   (uint8_t)button_override,
+			                                   &mutated);
+			key_value = mutated;
+		}
+
 		/* Use the extracted key encoder for timing resolution + encoding */
 		SubGhzKeyParams key_params;
 		memset(&key_params, 0, sizeof(key_params));
