@@ -533,6 +533,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_menu.c
     ../../m1_csrc/m1_nfc.c
     ../../m1_csrc/m1_nfc_scene.c
+    ../../m1_csrc/nfc_ndef_encode.c
     ../../m1_csrc/m1_power_ctl.c
     ../../m1_csrc/m1_rf_spi.c
     ../../m1_csrc/m1_rfid.c

@@ -1221,3 +1221,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_autosave PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_autosave COMMAND test_subghz_autosave)
+
+# ── NFC NDEF encoder ──
+add_executable(test_nfc_ndef_encode
+    test_nfc_ndef_encode.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_encode.c
+)
+target_include_directories(test_nfc_ndef_encode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ndef_encode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ndef_encode PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
