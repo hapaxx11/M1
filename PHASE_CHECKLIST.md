@@ -11,8 +11,8 @@
   lifecycle states (Idle / Rx / Tx-blocking / Tx-async) and the legal transitions
   between them.  Host-tested.  This is the foundation for centralising radio
   lifecycle in subsequent phases — firmware scenes will be migrated incrementally.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete (state machine + tests landed; scene migration in later phases)
+- **Commit**: `Phase 1: add subghz_txrx_state pure-logic state machine + 24 host tests`
 
 ### Phase 2 — Per-scene state persistence
 - **Description**: Add `subghz_scene_set_state(app, sceneId, value)` and getter so

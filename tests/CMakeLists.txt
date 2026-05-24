@@ -1302,3 +1302,17 @@ if(TARGET sanitizers)
     target_link_libraries(test_music_parser PRIVATE sanitizers)
 endif()
 add_test(NAME music_parser COMMAND test_music_parser)
+
+# ── Sub-GHz TX/RX lifecycle state machine (Phase 1 of Momentum parity work) ──
+add_executable(test_subghz_txrx_state
+    test_subghz_txrx_state.c
+    ${M1_ROOT}/Sub_Ghz/subghz_txrx_state.c
+)
+target_include_directories(test_subghz_txrx_state PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_txrx_state PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_txrx_state PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_txrx_state COMMAND test_subghz_txrx_state)
