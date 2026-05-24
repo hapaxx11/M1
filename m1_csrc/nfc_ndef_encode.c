@@ -211,10 +211,16 @@ size_t ndef_encode_text(uint8_t *out, size_t out_size,
  *     0x1028 (MAC Address) = FF:FF:FF:FF:FF:FF (broadcast)
  */
 
-/* Write a WiFi attribute TLV into buf at pos, return new pos */
-static size_t wifi_attr(uint8_t *buf, size_t pos, uint16_t attr_id,
+/* Write a WiFi attribute TLV into buf at pos, return new pos.
+ * Returns 0 if the write would exceed buf_size. */
+static size_t wifi_attr(uint8_t *buf, size_t buf_size, size_t pos,
+                        uint16_t attr_id,
                         const uint8_t *data, uint16_t data_len)
 {
+    size_t need = 4 + (size_t)data_len;   /* 2 id + 2 len + payload */
+    if (pos + need > buf_size)
+        return 0;
+
     buf[pos++] = (uint8_t)(attr_id >> 8);
     buf[pos++] = (uint8_t)(attr_id & 0xFF);
     buf[pos++] = (uint8_t)(data_len >> 8);
@@ -248,33 +254,40 @@ size_t ndef_encode_wifi(uint8_t *out, size_t out_size,
 
     /* Network Index = 0x01 */
     uint8_t net_idx = 0x01;
-    cpos = wifi_attr(cred, cpos, 0x1026, &net_idx, 1);
+    cpos = wifi_attr(cred, sizeof(cred), cpos, 0x1026, &net_idx, 1);
+    if (cpos == 0) return 0;
 
     /* SSID */
-    cpos = wifi_attr(cred, cpos, 0x1045, (const uint8_t *)ssid, (uint16_t)ssid_len);
+    cpos = wifi_attr(cred, sizeof(cred), cpos, 0x1045, (const uint8_t *)ssid, (uint16_t)ssid_len);
+    if (cpos == 0) return 0;
 
     /* Auth Type */
     uint8_t auth[2] = { 0x00, auth_wpa2 ? 0x20 : 0x01 };
-    cpos = wifi_attr(cred, cpos, 0x1003, auth, 2);
+    cpos = wifi_attr(cred, sizeof(cred), cpos, 0x1003, auth, 2);
+    if (cpos == 0) return 0;
 
     /* Encryption Type */
     uint8_t enc[2] = { 0x00, auth_wpa2 ? 0x08 : 0x01 };
-    cpos = wifi_attr(cred, cpos, 0x100F, enc, 2);
+    cpos = wifi_attr(cred, sizeof(cred), cpos, 0x100F, enc, 2);
+    if (cpos == 0) return 0;
 
     /* Network Key */
     if (pass_len > 0)
-        cpos = wifi_attr(cred, cpos, 0x1027, (const uint8_t *)password, (uint16_t)pass_len);
+        cpos = wifi_attr(cred, sizeof(cred), cpos, 0x1027, (const uint8_t *)password, (uint16_t)pass_len);
     else
-        cpos = wifi_attr(cred, cpos, 0x1027, NULL, 0);
+        cpos = wifi_attr(cred, sizeof(cred), cpos, 0x1027, NULL, 0);
+    if (cpos == 0) return 0;
 
     /* MAC Address = FF:FF:FF:FF:FF:FF */
     uint8_t mac[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-    cpos = wifi_attr(cred, cpos, 0x1028, mac, 6);
+    cpos = wifi_attr(cred, sizeof(cred), cpos, 0x1028, mac, 6);
+    if (cpos == 0) return 0;
 
     /* Wrap in Credential attribute */
     uint8_t payload[300];
     size_t ppos = 0;
-    ppos = wifi_attr(payload, ppos, 0x100E, cred, (uint16_t)cpos);
+    ppos = wifi_attr(payload, sizeof(payload), ppos, 0x100E, cred, (uint16_t)cpos);
+    if (ppos == 0) return 0;
 
     /* TNF=0x02 (Media type), Type="application/vnd.wfa.wsc" */
     const uint8_t type[] = "application/vnd.wfa.wsc";

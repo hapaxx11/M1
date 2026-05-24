@@ -283,6 +283,14 @@ void test_wifi_password_too_long(void)
         "MySSID", long_pass, true));
 }
 
+void test_wifi_output_too_small(void)
+{
+    /* Output buffer too small for the final TLV — must return 0 */
+    uint8_t buf[4];
+    TEST_ASSERT_EQUAL(0, ndef_encode_wifi(buf, sizeof(buf),
+        "MyNet", "pass", true));
+}
+
 /*═══════════════ Phone Record ═══════════════*/
 
 void test_phone_basic(void)
@@ -381,6 +389,7 @@ int main(void)
     RUN_TEST(test_wifi_null_ssid);
     RUN_TEST(test_wifi_ssid_too_long);
     RUN_TEST(test_wifi_password_too_long);
+    RUN_TEST(test_wifi_output_too_small);
 
     /* Phone */
     RUN_TEST(test_phone_basic);
