@@ -6,7 +6,10 @@
  *
  * Reads a plain-text playlist (.txt) from /SUBGHZ/playlist/ containing
  * one "sub: <path>" entry per line, then transmits each referenced .sub
- * file in order using sub_ghz_replay_flipper_file().
+ * file in order via the async-driven SubGhzSceneTransmitter (one push
+ * per file).  When the Transmitter pops back to us, scene_on_enter
+ * detects the resume and advances to the next file or finalises the
+ * pass — no synchronous TX loop, no main-task blocking.
  *
  * Playlist format (one entry per line):
  *   sub: /SUBGHZ/Tesla_charge_AM270.sub
@@ -17,10 +20,12 @@
  * /SUBGHZ/... for compatibility with UberGuidoZ playlist collections.
  *
  * Controls:
- *   OK    = start / pause playback
- *   L/R   = adjust repeat count (1–9, then ∞)
- *   BACK  = stop playback & return to menu
- *   U/D   = scroll file list (when idle)
+ *   OK    = start playback (pushes Transmitter scene per file)
+ *   L/R   = adjust repeat count (1–9, then ∞) (idle only)
+ *   BACK  = re-open file browser (idle only — during playback BACK is
+ *           handled by the child Transmitter scene which aborts the
+ *           current file and triggers playlist stop on resume)
+ *   U/D   = scroll file list (idle only)
  */
 
 #include <stdint.h>
@@ -35,11 +40,7 @@
 #include "m1_scene.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
-#include "m1_sub_ghz.h"
 #include "subghz_playlist_parser.h"
-#include "flipper_subghz.h"
-
-/* sub_ghz_replay_flipper_file() and sub_ghz_replay_datafile() are declared in m1_sub_ghz.h */
 
 /*============================================================================*/
 /* Constants                                                                  */
@@ -154,78 +155,38 @@ static bool playlist_parse(SubGhzApp *app, const char *path)
 /*============================================================================*/
 
 /**
- * @brief  Transmit the next file in the playlist.
+ * @brief  Set up tx_* fields and push the Transmitter scene to send the
+ *         file at app->playlist_files[app->playlist_current].
  *
- * For M1 native NOISE .sgh files (produced by C3.12, SiN360, or Hapax),
- * uses sub_ghz_replay_datafile() to stream the original file directly —
- * no temp-file conversion needed.  For all other files (Flipper .sub RAW,
- * any PACKET/key file), falls back to sub_ghz_replay_flipper_file() which
- * handles the conversion transparently.
+ * The Transmitter scene drives the async TX state machine
+ * (prepare_flipper + start_async + continue_async + abort) on top of
+ * our scene.  When TX completes (or the user aborts via BACK), the
+ * Transmitter pops back to us and our scene_on_enter detects the
+ * pop-back via app->resume_from_child and decides whether to advance
+ * to the next file (natural completion) or stop (user abort).
  *
- * Returns false when the playlist pass is finished.
+ * Note: this uses the CONVERT path uniformly for all file types
+ * (Flipper RAW, M1 native NOISE, Flipper Key, M1 native PACKET).  The
+ * Transmitter scene's prepare_flipper handles all four — at the small
+ * cost of a temp-file conversion per NOISE file.  This is acceptable
+ * for playlist's serial playback.
  */
-static bool playlist_transmit_next(SubGhzApp *app)
+static void playlist_push_transmitter(SubGhzApp *app)
 {
     if (app->playlist_current >= app->playlist_count)
-        return false;
+        return;
 
     const char *path = app->playlist_files[app->playlist_current];
+    strncpy(app->tx_path, path, sizeof(app->tx_path) - 1);
+    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    app->tx_repeat_count = 1U;            /* one burst per playlist item */
+    app->tx_mode         = 0U;            /* SUBGHZ_TX_MODE_SINGLE */
 
-    /* Probe file header to choose the most efficient replay path.
-     * flipper_subghz_emulate_path() encodes the same decision used by the
-     * saved scene's handle_action() so both callers always agree. */
-    flipper_subghz_probe_t probe = {0};
-    if (flipper_subghz_probe(path, &probe) &&
-        flipper_subghz_emulate_path(probe.is_noise, probe.is_m1_native)
-            == FLIPPER_SUBGHZ_EMULATE_DIRECT)
-    {
-        /* M1 native NOISE file — direct replay, no conversion */
-        sub_ghz_replay_datafile(path, probe.frequency, probe.modulation);
-    }
-    else
-    {
-        /* Flipper .sub or PACKET/key file — convert via temp file */
-        sub_ghz_replay_flipper_file(path);
-    }
+    /* Flag so the Transmitter pop returns to our scene_on_enter and we
+     * recognise it as a resume rather than a fresh entry. */
+    app->resume_from_child = true;
 
-    /* sub_ghz_replay_*() calls menu_sub_ghz_exit() on return, which powers
-     * off the SI4463 by deasserting ENA.  Restore the radio before the next
-     * file transmits — otherwise recovery adds ~100ms latency per item. */
-    menu_sub_ghz_init();
-
-    /* Apply inter-signal delay (from "# delay: <ms>" playlist directive).
-     * Delays are recorded on the next playlist entry during parsing, so
-     * after transmitting the current signal we must consume the next
-     * entry's delay, if there is a next entry.  This also guarantees
-     * there is no delay after the final signal. */
-    uint8_t next_index = app->playlist_current + 1;
-    if (next_index < app->playlist_count)
-    {
-        uint16_t delay_ms = app->playlist_delays[next_index];
-        if (delay_ms > 0)
-            vTaskDelay(pdMS_TO_TICKS(delay_ms));
-    }
-
-    app->playlist_current++;
-    return true;
-}
-
-/**
- * @brief  Run one complete pass of the playlist.
- *
- * Returns false if playback was stopped (app->playlist_running cleared).
- */
-static bool playlist_run_pass(SubGhzApp *app)
-{
-    app->playlist_current = 0;
-
-    while (app->playlist_running && app->playlist_current < app->playlist_count)
-    {
-        app->need_redraw = true;
-        playlist_transmit_next(app);
-    }
-
-    return app->playlist_running;
+    subghz_scene_push(app, SubGhzSceneTransmitter);
 }
 
 /*============================================================================*/
@@ -276,6 +237,57 @@ static bool open_playlist_browser(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Detect resume-from-child: set by us before pushing the Transmitter
+     * scene.  When the Transmitter pops back, scene_on_enter is invoked
+     * by the scene manager and this branch advances the playlist instead
+     * of resetting state and re-opening the file browser.
+     *
+     * tx_completed_naturally is set by the Transmitter scene:
+     *   true  → TX ran to completion: advance to next file / next pass.
+     *   false → user aborted via BACK or dismissed an error: stop. */
+    if (app->resume_from_child)
+    {
+        app->resume_from_child = false;
+
+        if (!app->tx_completed_naturally)
+        {
+            /* User abort — stop playback and remain in READY state. */
+            app->playlist_running = false;
+            app->playlist_current = 0;
+            app->need_redraw = true;
+            return;
+        }
+
+        /* Natural completion of the just-played file.  Advance the
+         * playlist cursor and decide what to do next. */
+        app->playlist_current++;
+
+        if (app->playlist_current < app->playlist_count)
+        {
+            /* More files in this pass — push next Transmitter. */
+            playlist_push_transmitter(app);
+            return;
+        }
+
+        /* End of pass — bump repeat counter and decide. */
+        app->playlist_repeat_done++;
+        if (app->playlist_repeat_total > 0 &&
+            app->playlist_repeat_done >= app->playlist_repeat_total)
+        {
+            /* All requested passes completed — stop. */
+            app->playlist_running = false;
+            app->playlist_current = 0;
+            app->need_redraw = true;
+            return;
+        }
+
+        /* Start another pass from the top. */
+        app->playlist_current = 0;
+        playlist_push_transmitter(app);
+        return;
+    }
+
+    /* Fresh entry — reset state and open the file browser. */
     browse_done = false;
     list_scroll = 0;
     app->playlist_count = 0;
@@ -318,40 +330,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         {
             if (!app->playlist_running)
             {
-                /* Start playback */
-                app->playlist_running = true;
+                /* Start playback — initialise counters and push the
+                 * Transmitter scene for the first file.  Subsequent
+                 * files are pushed from scene_on_enter on pop-back. */
+                if (app->playlist_count == 0)
+                    return true;
+
+                app->playlist_running     = true;
                 app->playlist_repeat_done = 0;
-                app->need_redraw = true;
-
-                /* Run playlist passes */
-                bool keep_going = true;
-                while (keep_going && app->playlist_running)
-                {
-                    keep_going = playlist_run_pass(app);
-                    if (!app->playlist_running)
-                        break;
-
-                    app->playlist_repeat_done++;
-                    app->need_redraw = true;
-
-                    /* Check repeat limit */
-                    if (app->playlist_repeat_total > 0 &&
-                        app->playlist_repeat_done >= app->playlist_repeat_total)
-                    {
-                        break;
-                    }
-                }
-
-                app->playlist_running = false;
-                app->playlist_current = 0;
-                app->need_redraw = true;
+                app->playlist_current     = 0;
+                app->need_redraw          = true;
+                playlist_push_transmitter(app);
             }
-            else
-            {
-                /* Stop playback */
-                app->playlist_running = false;
-                app->need_redraw = true;
-            }
+            /* If already running, OK is ignored — playback control during
+             * TX is handled by the Transmitter scene's BACK button. */
             return true;
         }
 

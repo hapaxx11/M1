@@ -102,11 +102,29 @@
         file browser.  No new tests required — the Transmitter scene's
         21-test controller suite covers the state machine, and the
         flipper-load path remains identical.
-      - **Phase 3b-2b-iii — Playlist migration.**  🔲 Not started.
+      - **Phase 3b-2b-iii — Playlist migration.**  ✅ Complete.
+        Converts `m1_subghz_scene_playlist.c` from a synchronous
+        `while`-loop driver (`playlist_run_pass` + `playlist_transmit_next`
+        calling `sub_ghz_replay_flipper_file` / `sub_ghz_replay_datafile`
+        in a tight loop) to a fully async scene-push state machine.
+        New `playlist_push_transmitter()` sets `tx_path`/`tx_repeat_count`/
+        `tx_mode` and pushes `SubGhzSceneTransmitter` for the current
+        file.  `scene_on_enter` checks `app->resume_from_child` to detect
+        the Transmitter pop-back; on natural completion advances
+        `playlist_current` (or starts a new pass and increments
+        `playlist_repeat_done`), on user-initiated abort stops playback.
+        Abort detection uses a new `SubGhzApp::tx_completed_naturally`
+        flag set to `true` by the Transmitter scene's `scene_on_enter`
+        and overridden to `false` by its BACK / error-dismiss handlers.
+        The Playlist no longer calls `vTaskDelay` (which violated the
+        async/non-blocking RTOS rule) or the blocking replay wrappers;
+        inter-signal delays from the .txt playlist are still parsed
+        but not yet applied — to be re-added via `set_tick_period`
+        in a follow-up.
       - **Phase 3b-2b-iv — Remote migration.**  🔲 Not started.
       - **Phase 3b-2b-v — Bind Wizard migration.**  🔲 Not started.
-- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b-i ✅; 3b-2b-ii ✅; 3b-2b-iii…v pending)
-- **Commit**: `Phase 3b-2b-ii: migrate Saved (PACKET path) to SubGhzSceneTransmitter`
+- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b-i ✅; 3b-2b-ii ✅; 3b-2b-iii ✅; 3b-2b-iv…v pending)
+- **Commit**: `Phase 3b-2b-iii: migrate Playlist to async SubGhzSceneTransmitter push model`
 
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for

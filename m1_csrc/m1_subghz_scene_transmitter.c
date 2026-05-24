@@ -267,6 +267,11 @@ static void scene_on_enter(SubGhzApp *app)
     /* Cadence for animation + auto-dismiss after error. */
     subghz_scene_set_tick_period(app, TX_ANIM_TICK_MS);
 
+    /* Default to "natural completion".  The BACK event handler overrides
+     * this to false before initiating teardown so parents can detect
+     * user-initiated aborts on pop-back. */
+    app->tx_completed_naturally = true;
+
     app->need_redraw = true;
 }
 
@@ -284,6 +289,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         if (event == SubGhzEventBack || event == SubGhzEventOk)
         {
             s_last_error = NULL;
+            /* Treat dismissing an error screen as a user-initiated exit
+             * so a parent (e.g. Playlist) sees this as an abort and
+             * stops the sequence rather than advancing. */
+            app->tx_completed_naturally = false;
             subghz_transmitter_action_t a =
                 subghz_transmitter_ctl_event(&s_ctl,
                                               SUBGHZ_TXCTL_EVT_BACK);
@@ -323,6 +332,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventBack:
         {
+            /* User-initiated exit (either abort during TX or back from
+             * READY).  Signal "not natural" so parent scenes know to
+             * stop a sequence rather than advance to next item. */
+            app->tx_completed_naturally = false;
             subghz_transmitter_action_t a =
                 subghz_transmitter_ctl_event(&s_ctl,
                                               SUBGHZ_TXCTL_EVT_BACK);

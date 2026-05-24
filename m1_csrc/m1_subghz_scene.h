@@ -239,6 +239,13 @@ typedef struct {
      *  0 = SUBGHZ_TX_MODE_SINGLE, 1 = SUBGHZ_TX_MODE_ENDLESS.  The
      *  scene casts to subghz_endless_tx_mode_t at init time. */
     uint8_t  tx_mode;
+    /** Set by the Transmitter scene before popping so the parent scene
+     *  can distinguish a natural TX-complete pop from a user-initiated
+     *  BACK abort.  Initialised to true at Transmitter scene_on_enter
+     *  and overridden to false in the BACK event handler.  Read by
+     *  parent scenes (e.g. Playlist) in their scene_on_enter after
+     *  pop-back to decide whether to advance or stop a sequence. */
+    bool     tx_completed_naturally;
 } SubGhzApp;
 
 /*============================================================================*/
