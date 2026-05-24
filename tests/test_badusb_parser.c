@@ -5,7 +5,9 @@
  *
  * Host-side unit tests for the DuckyScript parser (badusb_parser.c/h).
  * Tests key-name lookup, modifier parsing, ASCII-to-HID mapping,
- * line classification, and line counting — all pure logic.
+ * line classification, and line counting for core DuckyScript commands.
+ * Advanced commands (ALTCHAR, HOLD/RELEASE, MOUSE, MEDIA,
+ * WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet implemented.
  */
 
 #include "unity.h"
