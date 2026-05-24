@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.27] - 2026-05-24
+
+### Fixed
+
+- **Firmware Update: fix crash when flashing STM32 firmware from SD card** —
+  Scene lifecycle freed the file path buffer before use, causing a HardFault
+  and watchdog reboot ~16 seconds after selecting the .bin file.
 ## [0.9.1.26] - 2026-05-22
 
 ### Fixed
