@@ -60,7 +60,14 @@ void firmware_swap_banks(void);
 void firmware_update_init(void)
 {
 	if ( !pfullpath )
+	{
 		pfullpath = malloc(FW_FILE_PATH_LEN_MAX + FW_FILE_NAME_LEN_MAX);
+		if (!pfullpath)
+		{
+			fw_update_status = M1_FW_UPDATE_NOT_READY;
+			return;
+		}
+	}
 	fw_update_status = M1_FW_UPDATE_NOT_READY;
 } // void firmware_update_init(void)
 

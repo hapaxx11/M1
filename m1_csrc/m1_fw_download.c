@@ -410,6 +410,7 @@ static void dl_show_result(http_status_t status, const fw_release_t *release)
 			default:                       err_msg = "Download failed"; break;
 		}
 		dl_show_message("Error:", err_msg);
+		m1_wdt_reset();
 		vTaskDelay(pdMS_TO_TICKS(3000));
 	}
 }
@@ -448,6 +449,7 @@ void fw_download_start(void)
 	if (!http_is_ready())
 	{
 		dl_show_message("WiFi not connected", "Connect first");
+		m1_wdt_reset();
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
 		m1_esp32_deinit();
@@ -470,6 +472,7 @@ void fw_download_start(void)
 	if (source_count == 0)
 	{
 		dl_show_message("No sources found", "Check fw_sources.txt");
+		m1_wdt_reset();
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
 		m1_esp32_deinit();

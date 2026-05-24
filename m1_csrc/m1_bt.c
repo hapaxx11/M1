@@ -202,7 +202,9 @@ static void ble_adv_name_save(void)
     }
 
     snprintf(line, sizeof(line), "adv_name=%s\n", ble_adv_name);
-    f_write(&fil, line, strlen(line), &bw);
+    FRESULT wr = f_write(&fil, line, strlen(line), &bw);
+    if (wr != FR_OK || bw != strlen(line))
+        M1_LOG_W("BT", "BLE config write failed (err=%d)\r\n", wr);
     f_close(&fil);
 }
 
@@ -509,7 +511,12 @@ static bool ble_append_header_if_new(FIL *fil, const char *path, const char *hea
 
     if (new_file && header)
     {
-        f_write(fil, header, strlen(header), &bw);
+        size_t hlen = strlen(header);
+        if (f_write(fil, header, hlen, &bw) != FR_OK || bw != hlen)
+        {
+            f_close(fil);
+            return false;
+        }
     }
 
     return true;
@@ -613,7 +620,8 @@ static void ble_gatt_export(const ble_dev_t *dev)
             e->props, uuid_hex, value_hex);
         if (len > 0 && len < (int)sizeof(line))
         {
-            f_write(&fil, line, len, &bw);
+            if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
+                break;
         }
     }
 
@@ -792,7 +800,9 @@ static void ble_gatt_log_notify(const ble_dev_t *dev, const ble_gatt_notify_t *n
         notif->indication ? "indicate" : "notify", hex);
     if (len > 0 && len < (int)sizeof(line))
     {
-        f_write(&fil, line, len, &bw);
+        FRESULT wr = f_write(&fil, line, len, &bw);
+        if (wr != FR_OK || bw != (UINT)len)
+            M1_LOG_W("BT", "GATT notify log write failed (err=%d)\r\n", wr);
     }
     f_close(&fil);
 }

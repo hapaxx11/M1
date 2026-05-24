@@ -792,6 +792,26 @@ endif()
 add_test(NAME rpc_crc16 COMMAND test_rpc_crc16)
 
 # ------------------------------------------------------------------
+# Module under test: RPC frame parser state machine
+# Tests byte-at-a-time frame parsing, CRC validation, length checks,
+# garbage rejection, and recovery after bad frames.
+# Uses standalone copies of the CRC and parser state machine.
+# ------------------------------------------------------------------
+add_executable(test_rpc_parse
+    test_rpc_parse.c
+    ${STUBS_DIR}/rpc_parse_impl.c
+    ${STUBS_DIR}/rpc_crc16_impl.c
+)
+target_include_directories(test_rpc_parse PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_rpc_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rpc_parse PRIVATE sanitizers)
+endif()
+add_test(NAME rpc_parse COMMAND test_rpc_parse)
+
+# ------------------------------------------------------------------
 # Module under test: file browser utilities (sorting, extension, path)
 # Tests pure-logic functions from m1_file_browser.c: case conversion,
 # directory-first qsort comparator, extension matching, file type
@@ -1191,3 +1211,94 @@ if(TARGET sanitizers)
     target_link_libraries(test_keeloq_mfkeys_builtin PRIVATE sanitizers)
 endif()
 add_test(NAME keeloq_mfkeys_builtin COMMAND test_keeloq_mfkeys_builtin)
+
+# ── BadUSB DuckyScript parser ──
+add_executable(test_badusb_parser
+    test_badusb_parser.c
+    ${M1_ROOT}/m1_csrc/badusb_parser.c
+)
+target_include_directories(test_badusb_parser PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_badusb_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_badusb_parser PRIVATE sanitizers)
+endif()
+add_test(NAME badusb_parser COMMAND test_badusb_parser)
+
+# ── Sub-GHz autosave logic ──
+add_executable(test_subghz_autosave
+    test_subghz_autosave.c
+    ${M1_ROOT}/m1_csrc/subghz_autosave.c
+)
+target_include_directories(test_subghz_autosave PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_autosave PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_autosave PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_autosave COMMAND test_subghz_autosave)
+
+# ── NFC NDEF encoder ──
+add_executable(test_nfc_ndef_encode
+    test_nfc_ndef_encode.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_encode.c
+)
+target_include_directories(test_nfc_ndef_encode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ndef_encode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ndef_encode PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
+
+# ── File utility path operations ──
+add_executable(test_file_util
+    test_file_util.c
+    ${M1_ROOT}/m1_csrc/m1_file_util.c
+)
+target_include_directories(test_file_util PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_file_util PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_file_util PRIVATE sanitizers)
+endif()
+add_test(NAME file_util COMMAND test_file_util)
+
+# ── Crypto AES-256-CBC round-trip ──
+add_executable(test_crypto
+    test_crypto.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+)
+target_compile_definitions(test_crypto PRIVATE M1_CRYPTO_SKIP_UID_FUNCTIONS)
+target_include_directories(test_crypto PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_crypto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_crypto PRIVATE sanitizers)
+endif()
+add_test(NAME crypto COMMAND test_crypto)
+
+# ── Music parser (FMF note parsing) ──
+add_executable(test_music_parser
+    test_music_parser.c
+    ${M1_ROOT}/m1_csrc/music_parser.c
+)
+target_include_directories(test_music_parser PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_music_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_music_parser PRIVATE sanitizers)
+endif()
+add_test(NAME music_parser COMMAND test_music_parser)

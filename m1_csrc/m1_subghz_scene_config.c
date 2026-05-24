@@ -59,6 +59,7 @@ extern void subghz_set_freq_idx_ext(uint8_t idx);
 extern void subghz_set_mod_idx_ext(uint8_t idx);
 extern void subghz_set_hopping_ext(bool v);
 extern void subghz_set_sound_ext(bool v);
+extern void subghz_set_autosave_ext(bool v);
 extern int8_t subghz_get_rssi_threshold_ext(void);
 extern void   subghz_set_rssi_threshold_ext(int8_t v);
 extern uint32_t subghz_get_user_custom_freq_ext(void);
@@ -71,15 +72,16 @@ extern const char *subghz_ism_regions_text[];
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS       8
+#define CFG_ITEMS       9
 #define CFG_FREQUENCY   0
 #define CFG_HOPPING     1
 #define CFG_MODULATION  2
 #define CFG_SOUND       3
-#define CFG_TX_POWER    4
-#define CFG_ISM_REGION  5
-#define CFG_SAVE_FMT    6
-#define CFG_RSSI_THRESH 7
+#define CFG_AUTOSAVE    4
+#define CFG_TX_POWER    5
+#define CFG_ISM_REGION  6
+#define CFG_SAVE_FMT    7
+#define CFG_RSSI_THRESH 8
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
@@ -111,6 +113,7 @@ static const char *cfg_item_labels[CFG_ITEMS] = {
     "Hopping:",
     "Modulation:",
     "Sound:",
+    "Autosave:",
     "TX Power:",
     "ISM Region:",
     "Save Format:",
@@ -147,6 +150,8 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             return "?";
         case CFG_SOUND:
             return app->sound ? "ON" : "OFF";
+        case CFG_AUTOSAVE:
+            return app->autosave ? "ON" : "OFF";
         case CFG_TX_POWER:
             return subghz_get_tx_power_label_ext(subghz_get_tx_power_idx_ext());
         case CFG_ISM_REGION:
@@ -187,6 +192,9 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
             break;
         case CFG_SOUND:
             app->sound = !app->sound;
+            break;
+        case CFG_AUTOSAVE:
+            app->autosave = !app->autosave;
             break;
         case CFG_TX_POWER:
         {
@@ -256,6 +264,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             subghz_set_mod_idx_ext(app->mod_idx);
             subghz_set_hopping_ext(app->hopping);
             subghz_set_sound_ext(app->sound);
+            subghz_set_autosave_ext(app->autosave);
             /* TX power is already updated via its accessor when changed. */
             /* Persist all settings to SD */
             settings_save_to_sd();

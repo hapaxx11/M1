@@ -99,6 +99,8 @@ extern bool    subghz_get_hopping_ext(void);
 extern void    subghz_set_hopping_ext(bool v);
 extern bool    subghz_get_sound_ext(void);
 extern void    subghz_set_sound_ext(bool v);
+extern bool    subghz_get_autosave_ext(void);
+extern void    subghz_set_autosave_ext(bool v);
 extern uint8_t subghz_get_tx_power_idx_ext(void);
 extern void    subghz_set_tx_power_idx_ext(uint8_t idx);
 extern int8_t  subghz_get_rssi_threshold_ext(void);
@@ -661,92 +663,87 @@ void settings_save_to_sd(void)
         return;
     }
 
-    snprintf(buf, sizeof(buf), "brightness=%d\n", m1_brightness_level);
-    f_write(&fp, buf, strlen(buf), &bw);
+    bool write_ok = true;
 
-    snprintf(buf, sizeof(buf), "buzzer=%d\n", m1_buzzer_on);
-    f_write(&fp, buf, strlen(buf), &bw);
+#define SETTINGS_WRITE(fmt, ...) \
+    do { \
+        if (write_ok) { \
+            snprintf(buf, sizeof(buf), fmt, __VA_ARGS__); \
+            size_t _sw_len = strlen(buf); \
+            if (f_write(&fp, buf, _sw_len, &bw) != FR_OK || bw != _sw_len) \
+                write_ok = false; \
+        } \
+    } while (0)
 
-    snprintf(buf, sizeof(buf), "led_notify=%d\n", m1_led_notify_on);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("brightness=%d\n", m1_brightness_level);
 
-    snprintf(buf, sizeof(buf), "led_color=%02X%02X%02X\n",
+    SETTINGS_WRITE("buzzer=%d\n", m1_buzzer_on);
+
+    SETTINGS_WRITE("led_notify=%d\n", m1_led_notify_on);
+
+    SETTINGS_WRITE("led_color=%02X%02X%02X\n",
              m1_led_color_r, m1_led_color_g, m1_led_color_b);
-    f_write(&fp, buf, strlen(buf), &bw);
 
-    snprintf(buf, sizeof(buf), "led_lowbatt=%02X%02X%02X\n",
+    SETTINGS_WRITE("led_lowbatt=%02X%02X%02X\n",
              m1_led_lowbatt_r, m1_led_lowbatt_g, m1_led_lowbatt_b);
-    f_write(&fp, buf, strlen(buf), &bw);
 
-    snprintf(buf, sizeof(buf), "orientation=%d\n", m1_screen_orientation);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("orientation=%d\n", m1_screen_orientation);
 
-    snprintf(buf, sizeof(buf), "sleep_timeout=%d\n", m1_sleep_timeout_idx);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("sleep_timeout=%d\n", m1_sleep_timeout_idx);
 
-    snprintf(buf, sizeof(buf), "menu_style=%d\n", m1_menu_style);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("menu_style=%d\n", m1_menu_style);
 
-    snprintf(buf, sizeof(buf), "dark_mode=%d\n", m1_dark_mode);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("dark_mode=%d\n", m1_dark_mode);
 
-    snprintf(buf, sizeof(buf), "ism_region=%d\n", m1_device_stat.config.ism_band_region);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("ism_region=%d\n", m1_device_stat.config.ism_band_region);
 
-    snprintf(buf, sizeof(buf), "subghz_save_fmt=%d\n", subghz_get_save_fmt_ext());
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_save_fmt=%d\n", subghz_get_save_fmt_ext());
 
-    snprintf(buf, sizeof(buf), "subghz_freq_idx=%d\n", subghz_get_freq_idx_ext());
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_freq_idx=%d\n", subghz_get_freq_idx_ext());
 
-    snprintf(buf, sizeof(buf), "subghz_mod_idx=%d\n", subghz_get_mod_idx_ext());
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_mod_idx=%d\n", subghz_get_mod_idx_ext());
 
-    snprintf(buf, sizeof(buf), "subghz_hopping=%d\n", subghz_get_hopping_ext() ? 1 : 0);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_hopping=%d\n", subghz_get_hopping_ext() ? 1 : 0);
 
-    snprintf(buf, sizeof(buf), "subghz_sound=%d\n", subghz_get_sound_ext() ? 1 : 0);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_sound=%d\n", subghz_get_sound_ext() ? 1 : 0);
 
-    snprintf(buf, sizeof(buf), "subghz_tx_power=%d\n", subghz_get_tx_power_idx_ext());
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_autosave=%d\n", subghz_get_autosave_ext() ? 1 : 0);
 
-    snprintf(buf, sizeof(buf), "subghz_rssi_threshold=%d\n", (int)subghz_get_rssi_threshold_ext());
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_tx_power=%d\n", subghz_get_tx_power_idx_ext());
 
-    snprintf(buf, sizeof(buf), "subghz_custom_freq=%lu\n", (unsigned long)subghz_get_user_custom_freq_ext());
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_rssi_threshold=%d\n", (int)subghz_get_rssi_threshold_ext());
 
-    snprintf(buf, sizeof(buf), "clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("subghz_custom_freq=%lu\n", (unsigned long)subghz_get_user_custom_freq_ext());
+
+    SETTINGS_WRITE("clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
 
 #if M1_HAS_RGB_BACKLIGHT
     {
         rgb_backlight_color_t c = rgb_backlight_get_color();
         rgb_backlight_hw_config_t cfg = rgb_backlight_get_config();
-        snprintf(buf, sizeof(buf), "rgb_backlight_installed=%d\n",
+        SETTINGS_WRITE("rgb_backlight_installed=%d\n",
                  rgb_backlight_is_installed() ? 1 : 0);
-        f_write(&fp, buf, strlen(buf), &bw);
-        snprintf(buf, sizeof(buf), "rgb_backlight_mode=%d\n",
+        SETTINGS_WRITE("rgb_backlight_mode=%d\n",
                  (int)rgb_backlight_get_mode());
-        f_write(&fp, buf, strlen(buf), &bw);
-        snprintf(buf, sizeof(buf), "rgb_backlight_brightness=%u\n",
+        SETTINGS_WRITE("rgb_backlight_brightness=%u\n",
                  (unsigned)rgb_backlight_get_brightness());
-        f_write(&fp, buf, strlen(buf), &bw);
-        snprintf(buf, sizeof(buf), "rgb_backlight_color=%02X%02X%02X\n",
+        SETTINGS_WRITE("rgb_backlight_color=%02X%02X%02X\n",
                  c.r, c.g, c.b);
-        f_write(&fp, buf, strlen(buf), &bw);
-        snprintf(buf, sizeof(buf), "rgb_backlight_leds=%u\n", (unsigned)cfg.led_count);
-        f_write(&fp, buf, strlen(buf), &bw);
-        snprintf(buf, sizeof(buf), "rgb_backlight_order=%d\n", (int)cfg.color_order);
-        f_write(&fp, buf, strlen(buf), &bw);
+        SETTINGS_WRITE("rgb_backlight_leds=%u\n", (unsigned)cfg.led_count);
+        SETTINGS_WRITE("rgb_backlight_order=%d\n", (int)cfg.color_order);
     }
 #endif
 
 #ifdef M1_APP_BADBT_ENABLE
-    snprintf(buf, sizeof(buf), "badbt_name=%s\n", m1_badbt_name);
-    f_write(&fp, buf, strlen(buf), &bw);
+    SETTINGS_WRITE("badbt_name=%s\n", m1_badbt_name);
 #endif
+
+#undef SETTINGS_WRITE
+
+    if (!write_ok)
+    {
+        M1_LOG_W(SETTINGS_TAG, "Write error during save\r\n");
+    }
 
     f_close(&fp);
 }
@@ -921,6 +918,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 13) - '0');
         if (val == 0 || val == 1)
             subghz_set_sound_ext(val == 1);
+    }
+
+    /* Parse "subghz_autosave=X" (0 or 1) */
+    p = strstr(buf, "subghz_autosave=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 16) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_autosave_ext(val == 1);
     }
 
     /* Parse "subghz_tx_power=X" (0–3) */

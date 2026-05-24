@@ -41,8 +41,11 @@
 #include "m1_ring_buffer.h"
 #include "m1_storage.h"
 #include "m1_sdcard_man.h"
+#include "m1_file_util.h"
 #include "m1_subghz_scene.h"
 #include "m1_subghz_button_bar.h"
+#include "flipper_subghz.h"
+#include "subghz_autosave.h"
 
 /*============================================================================*/
 /* Extern references to shared radio state (defined in m1_sub_ghz.c)          */
@@ -93,6 +96,66 @@ extern void subghz_pulse_handler_reset(void);
 
 /* SI446x control */
 extern void SI446x_Change_Modem_OOK_PDTC(uint8_t value);
+
+/* Save format accessor */
+extern uint8_t subghz_get_save_fmt_ext(void);
+
+/*============================================================================*/
+/* Autosave — save decoded signals to SD automatically                        */
+/*============================================================================*/
+
+/**
+ * @brief  Auto-save a decoded signal to the autosave directory.
+ *
+ * Uses subghz_autosave.h for filename generation and duplicate detection.
+ * Skips save if the key is zero, the signal is a duplicate, or the
+ * directory cannot be created.
+ */
+static void autosave_signal(const SubGHz_History_Entry_t *entry)
+{
+    if (entry == NULL || entry->info.key == 0)
+        return;
+
+    /* Duplicate detection: skip if same protocol+key already saved */
+    if (subghz_autosave_is_duplicate(
+            protocol_text[entry->info.protocol], entry->info.key))
+        return;
+
+    /* Ensure parent and autosave directories exist */
+    FRESULT res = fs_directory_ensure("/SUBGHZ");
+    if (res != FR_OK)
+        return;
+    res = fs_directory_ensure(SUBGHZ_AUTOSAVE_DIR_PATH);
+    if (res != FR_OK)
+        return;
+
+    /* Build filename */
+    uint8_t fmt = subghz_get_save_fmt_ext();
+    char path[80];
+    if (subghz_autosave_make_path(path, sizeof(path),
+            protocol_text[entry->info.protocol],
+            entry->info.key,
+            HAL_GetTick(),
+            fmt == 1) == 0)
+        return;
+
+    bool saved;
+    if (fmt == 1)
+        saved = flipper_subghz_save_m1native_key(path,
+            entry->frequency, "FuriHalSubGhzPresetOok650Async",
+            protocol_text[entry->info.protocol],
+            entry->info.bit_len, entry->info.key, entry->info.te);
+    else
+        saved = flipper_subghz_save_key(path,
+            entry->frequency, "FuriHalSubGhzPresetOok650Async",
+            protocol_text[entry->info.protocol],
+            entry->info.bit_len, entry->info.key, entry->info.te);
+
+    /* Only record as "seen" after a successful save */
+    if (saved)
+        subghz_autosave_record(
+            protocol_text[entry->info.protocol], entry->info.key);
+}
 
 /*============================================================================*/
 /* Display constants                                                          */
@@ -149,6 +212,7 @@ static void scene_on_enter(SubGhzApp *app)
     {
         app->has_decoded = false;
         memset(&app->last_decoded, 0, sizeof(app->last_decoded));
+        subghz_autosave_dup_reset();
     }
 
     /* Auto-start RX (Flipper-consistent: entering Read immediately starts
@@ -418,6 +482,14 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
                     if (app->sound)
                         m1_buzzer_notification();
+
+                    /* Autosave: write decoded signal to SD if enabled */
+                    if (app->autosave)
+                    {
+                        const SubGHz_History_Entry_t *newest =
+                            subghz_history_get(&app->history, 0);
+                        autosave_signal(newest);
+                    }
 
                     /* LED will auto-restore to RX color on next redraw cycle
                      * (fast blink timer handles the flash duration) */

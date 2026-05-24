@@ -40,6 +40,7 @@ extern uint8_t subghz_get_freq_idx_ext(void);
 extern uint8_t subghz_get_mod_idx_ext(void);
 extern bool    subghz_get_hopping_ext(void);
 extern bool    subghz_get_sound_ext(void);
+extern bool    subghz_get_autosave_ext(void);
 extern uint8_t subghz_get_tx_power_idx_ext(void);
 
 /*============================================================================*/
@@ -82,6 +83,7 @@ void subghz_scene_init(SubGhzApp *app)
     app->mod_idx      = subghz_get_mod_idx_ext();
     app->hopping      = subghz_get_hopping_ext();
     app->sound        = subghz_get_sound_ext();
+    app->autosave     = subghz_get_autosave_ext();
     app->tx_power_idx = subghz_get_tx_power_idx_ext();
 
     app->running      = true;

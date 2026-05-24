@@ -138,6 +138,7 @@ typedef struct {
     uint8_t  mod_idx;                 /**< Index into modulation presets */
     bool     hopping;                 /**< Frequency hopping enabled */
     bool     sound;                   /**< Beep on decode */
+    bool     autosave;                /**< Auto-save decoded signals to SD */
     bool     bin_raw;                 /**< BIN_RAW decoder enabled */
     uint8_t  tx_power_idx;            /**< TX power level index */
 

@@ -1663,7 +1663,9 @@ static void pmkid_save_to_sd(const uint8_t *src, const uint8_t *bssid,
 	if (f_open(&fil, "pmkid/captures.22000", FA_WRITE | FA_OPEN_APPEND) == FR_OK)
 	{
 		UINT bw;
-		f_write(&fil, line, strlen(line), &bw);
+		FRESULT wr = f_write(&fil, line, strlen(line), &bw);
+		if (wr != FR_OK || bw != strlen(line))
+			M1_LOG_W("WIFI", "PMKID write failed (err=%d)\r\n", wr);
 		f_close(&fil);
 	}
 }
@@ -2722,7 +2724,12 @@ static bool wifi_append_header_if_new(FIL *fil, const char *path, const char *he
 
 	if (new_file && header)
 	{
-		f_write(fil, header, strlen(header), &bw);
+		size_t hlen = strlen(header);
+		if (f_write(fil, header, hlen, &bw) != FR_OK || bw != hlen)
+		{
+			f_close(fil);
+			return false;
+		}
 	}
 
 	return true;
@@ -2759,7 +2766,8 @@ void wifi_wardrive(void)
 			ap_list[i].rssi, ap_list[i].auth_mode);
 		if (len > 0)
 		{
-			f_write(&fil, line, len, &bw);
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
+				break;
 		}
 	}
 	f_close(&fil);
@@ -2802,7 +2810,8 @@ void wifi_station_wardrive(void)
 			sta_list_data[i].channel, sta_list_data[i].rssi, ssid);
 		if (len > 0)
 		{
-			f_write(&fil, line, len, &bw);
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
+				break;
 		}
 	}
 	f_close(&fil);
@@ -3113,7 +3122,13 @@ void wifi_general_save_aps(void)
 	}
 
 	const char *hdr = "# ssid\tbssid\tchannel\trssi\tauth\r\n";
-	f_write(&fil, hdr, strlen(hdr), &bw);
+	FRESULT wr = f_write(&fil, hdr, strlen(hdr), &bw);
+	if (wr != FR_OK || bw != strlen(hdr))
+	{
+		f_close(&fil);
+		wifi_show_message("Save APs", "Header write failed", NULL);
+		return;
+	}
 	for (uint16_t i = 0; i < ap_count; i++)
 	{
 		char ssid[33];
@@ -3123,7 +3138,8 @@ void wifi_general_save_aps(void)
 			ap_list[i].rssi, ap_list[i].auth_mode);
 		if (len > 0)
 		{
-			f_write(&fil, line, len, &bw);
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
+				break;
 		}
 	}
 	f_close(&fil);
@@ -3914,7 +3930,8 @@ static void ep_save_creds_to_sd(void)
 			char line[80];
 			int len = snprintf(line, sizeof(line), "%s : %s\n",
 				ep_creds[i].username, ep_creds[i].password);
-			f_write(&fil, line, len, &bw);
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
+				break;
 		}
 		f_close(&fil);
 	}
