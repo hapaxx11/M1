@@ -76,8 +76,35 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneBindWizard,
 };
 
-static uint8_t menu_sel = 0;
-static uint8_t menu_scroll = 0;
+/*============================================================================*/
+/* Cursor state — packed into the per-scene 32-bit slot                       */
+/* (Phase 2 of the Momentum-parity migration: file-scope statics replaced     */
+/* with subghz_scene_get_state/set_state so the cursor survives child-scene   */
+/* pushes/pops without smelly globals.)                                       */
+/*============================================================================*/
+
+/* Layout in the slot:  [bits 0..7 = sel] [bits 8..15 = scroll] */
+#define MENU_STATE_PACK(sel, scroll) \
+    (((uint32_t)((scroll) & 0xFFu) << 8) | (uint32_t)((sel) & 0xFFu))
+#define MENU_STATE_SEL(s)     ((uint8_t)((s) & 0xFFu))
+#define MENU_STATE_SCROLL(s)  ((uint8_t)(((s) >> 8) & 0xFFu))
+
+static inline uint8_t menu_get_sel(const SubGhzApp *app)
+{
+    uint8_t s = MENU_STATE_SEL(subghz_scene_get_state(app, SubGhzSceneMenu));
+    return (s < MENU_ITEM_COUNT) ? s : 0;
+}
+
+static inline uint8_t menu_get_scroll(const SubGhzApp *app)
+{
+    uint8_t s = MENU_STATE_SCROLL(subghz_scene_get_state(app, SubGhzSceneMenu));
+    return (s < MENU_ITEM_COUNT) ? s : 0;
+}
+
+static inline void menu_store(SubGhzApp *app, uint8_t sel, uint8_t scroll)
+{
+    subghz_scene_set_state(app, SubGhzSceneMenu, MENU_STATE_PACK(sel, scroll));
+}
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -92,6 +119,8 @@ static void scene_on_enter(SubGhzApp *app)
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     const uint8_t vis = M1_MENU_VIS(MENU_ITEM_COUNT);
+    uint8_t sel    = menu_get_sel(app);
+    uint8_t scroll = menu_get_scroll(app);
 
     switch (event)
     {
@@ -100,29 +129,31 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventUp:
-            menu_sel = (menu_sel > 0) ? menu_sel - 1 : MENU_ITEM_COUNT - 1;
+            sel = (sel > 0) ? sel - 1 : MENU_ITEM_COUNT - 1;
             /* Adjust scroll window */
-            if (menu_sel < menu_scroll)
-                menu_scroll = menu_sel;
-            else if (menu_sel >= menu_scroll + vis)
-                menu_scroll = menu_sel - vis + 1;
+            if (sel < scroll)
+                scroll = sel;
+            else if (sel >= scroll + vis)
+                scroll = sel - vis + 1;
+            menu_store(app, sel, scroll);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
-            menu_sel = (menu_sel + 1) % MENU_ITEM_COUNT;
+            sel = (sel + 1) % MENU_ITEM_COUNT;
             /* Adjust scroll window */
-            if (menu_sel >= menu_scroll + vis)
-                menu_scroll = menu_sel - vis + 1;
+            if (sel >= scroll + vis)
+                scroll = sel - vis + 1;
             /* Handle wrap-around */
-            if (menu_sel == 0)
-                menu_scroll = 0;
+            if (sel == 0)
+                scroll = 0;
+            menu_store(app, sel, scroll);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventOk:
         {
-            SubGhzSceneId target = menu_targets[menu_sel];
+            SubGhzSceneId target = menu_targets[sel];
             if (target < SubGhzSceneCount)
             {
                 subghz_scene_push(app, target);
@@ -143,11 +174,11 @@ static void scene_on_exit(SubGhzApp *app)
 
 static void draw(SubGhzApp *app)
 {
-    (void)app;
-
     const uint8_t item_h   = m1_menu_item_h();
     const uint8_t text_ofs = item_h - 1;
     const uint8_t vis      = M1_MENU_VIS(MENU_ITEM_COUNT);
+    const uint8_t sel      = menu_get_sel(app);
+    const uint8_t scroll   = menu_get_scroll(app);
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -161,12 +192,12 @@ static void draw(SubGhzApp *app)
 
     /* Menu items */
     u8g2_SetFont(&m1_u8g2, m1_menu_font());
-    for (uint8_t i = 0; i < vis && (menu_scroll + i) < MENU_ITEM_COUNT; i++)
+    for (uint8_t i = 0; i < vis && (scroll + i) < MENU_ITEM_COUNT; i++)
     {
-        uint8_t idx = menu_scroll + i;
+        uint8_t idx = scroll + i;
         uint8_t y = MENU_AREA_TOP + i * item_h;
 
-        if (idx == menu_sel)
+        if (idx == sel)
         {
             /* Highlight selected item — rounded corners, leave room for scrollbar */
             u8g2_DrawRBox(&m1_u8g2, 1, y, MENU_TEXT_W, item_h, 2);
@@ -188,7 +219,7 @@ static void draw(SubGhzApp *app)
         if (MENU_ITEM_COUNT > 1)
         {
             sb_handle_y +=
-                (uint8_t)((uint16_t)sb_travel_h * menu_sel / (MENU_ITEM_COUNT - 1));
+                (uint8_t)((uint16_t)sb_travel_h * sel / (MENU_ITEM_COUNT - 1));
         }
 
         /* Track — single centerline pixel */

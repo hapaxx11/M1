@@ -31,6 +31,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "m1_sub_ghz_decenc.h"
+#include "subghz_scene_state.h"
 
 /*============================================================================*/
 /* Scene identifiers                                                          */
@@ -132,6 +133,12 @@ typedef struct {
     /* --- Scene manager state --- */
     SubGhzSceneId scene_stack[SUBGHZ_SCENE_STACK_MAX];
     uint8_t       scene_depth;        /**< Current stack depth (0 = empty) */
+
+    /** Per-scene 32-bit state slots, keyed by SubGhzSceneId.  Persisted
+     *  across push/pop so scenes can stash UI state (cursor position,
+     *  sub-mode, last-target) without resorting to file-scope statics.
+     *  See Phase 2 of the Momentum-parity migration plan. */
+    subghz_scene_state_array_t scene_state;
 
     /* --- Radio config --- */
     uint8_t  freq_idx;                /**< Index into frequency presets */
@@ -278,6 +285,28 @@ void subghz_scene_draw(SubGhzApp *app);
  * @brief  Get the currently active scene ID.
  */
 SubGhzSceneId subghz_scene_current(const SubGhzApp *app);
+
+/*============================================================================*/
+/* Per-scene state accessors (Phase 2 — Momentum parity)                      */
+/*============================================================================*/
+
+/**
+ * @brief  Store a 32-bit value in the slot for @p scene.
+ *
+ * Use to stash UI state (cursor index, sub-mode, last-selected target)
+ * that must persist across child-scene pushes and pops.  Slots are
+ * zero-initialised by `subghz_scene_init()`.
+ *
+ * Out-of-range @p scene is a silent no-op (matches Flipper semantics).
+ */
+void subghz_scene_set_state(SubGhzApp *app, SubGhzSceneId scene, uint32_t value);
+
+/**
+ * @brief  Read the 32-bit state slot for @p scene.
+ * @return The stored value, or 0 if no value has been stored yet (or @p scene
+ *         is out of range).
+ */
+uint32_t subghz_scene_get_state(const SubGhzApp *app, SubGhzSceneId scene);
 
 /**
  * @brief  Main entry point — runs the scene manager loop.

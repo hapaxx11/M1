@@ -1316,3 +1316,17 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_txrx_state PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_txrx_state COMMAND test_subghz_txrx_state)
+
+# ── Per-scene state slots (Phase 2 of Momentum parity work) ──
+add_executable(test_subghz_scene_state
+    test_subghz_scene_state.c
+    ${M1_ROOT}/Sub_Ghz/subghz_scene_state.c
+)
+target_include_directories(test_subghz_scene_state PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_scene_state PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_scene_state PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_scene_state COMMAND test_subghz_scene_state)

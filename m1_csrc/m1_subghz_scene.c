@@ -77,6 +77,10 @@ void subghz_scene_init(SubGhzApp *app)
 {
     memset(app, 0, sizeof(*app));
 
+    /* Per-scene state slots — explicit init for clarity (memset above
+     * already zeroes them, but the contract is documented as init()). */
+    subghz_scene_state_init(&app->scene_state);
+
     /* Load persisted radio config (set at boot from settings.cfg,
      * defaults to compile-time values if settings file is absent) */
     app->freq_idx     = subghz_get_freq_idx_ext();
@@ -102,6 +106,18 @@ SubGhzSceneId subghz_scene_current(const SubGhzApp *app)
     if (app->scene_depth == 0)
         return SubGhzSceneMenu;  /* fallback */
     return app->scene_stack[app->scene_depth - 1];
+}
+
+void subghz_scene_set_state(SubGhzApp *app, SubGhzSceneId scene, uint32_t value)
+{
+    if (app == NULL) return;
+    (void)subghz_scene_state_set(&app->scene_state, (uint8_t)scene, value);
+}
+
+uint32_t subghz_scene_get_state(const SubGhzApp *app, SubGhzSceneId scene)
+{
+    if (app == NULL) return 0;
+    return subghz_scene_state_get(&app->scene_state, (uint8_t)scene);
 }
 
 void subghz_scene_push(SubGhzApp *app, SubGhzSceneId scene)

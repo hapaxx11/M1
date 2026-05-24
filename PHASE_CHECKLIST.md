@@ -18,8 +18,8 @@
 - **Description**: Add `subghz_scene_set_state(app, sceneId, value)` and getter so
   scenes can persist UI state (selected submenu index, sub-mode) across pushes/pops
   without static file-scope globals.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete (pure module + 12 host tests; menu scene migrated as first user)
+- **Commit**: `Phase 2: add per-scene 32-bit state slots + migrate menu scene`
 
 ### Phase 3 — Dedicated Transmitter scene + `endless_tx`
 - **Description**: New `SubGhzSceneTransmitter` with hold-OK continuous TX,
