@@ -720,9 +720,14 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       					if (tmp_r) pfb_hdl->row_index_buffer = tmp_r;
 	       					if (!tmp_d || !tmp_l || !tmp_r)
 	       					{
+	       						/* Shrink-realloc failed — old pointers are still
+	       						 * valid (just slightly oversized).  Decrement
+	       						 * dir_level, close the handle, and re-list the
+	       						 * parent directory instead of exiting the browser. */
 	       						pfb_hdl->dir_level--;
 	       						f_closedir(&directory);
-	       						break; /* OOM — keep original pointers, exit browse */
+	       						button_status = NULL;
+	       						continue; /* re-list parent dir */
 	       					}
 	       				}
 	       				pfb_hdl->dir_level--;
