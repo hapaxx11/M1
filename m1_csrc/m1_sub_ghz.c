@@ -255,6 +255,7 @@ typedef struct {
 	bool    hopping;
 	bool    bin_raw;
 	bool    sound;
+	bool    autosave;       /* Auto-save decoded signals to SD */
 	uint8_t save_fmt;       /* 0 = Flipper .sub, 1 = M1 native .sgh */
 	int8_t  rssi_threshold; /* Hopper RSSI threshold (dBm, -50 to -100) */
 } SubGHz_Config_t;
@@ -265,6 +266,7 @@ static SubGHz_Config_t subghz_cfg = {
 	.hopping        = false,
 	.bin_raw        = false,
 	.sound          = true,
+	.autosave       = false,
 	.save_fmt       = 0,    /* Default: Flipper .sub for Flipper compatibility */
 	.rssi_threshold = -70   /* dBm: stay on freq if RSSI >= this (Flipper default) */
 };
@@ -5580,6 +5582,8 @@ bool    subghz_get_hopping_ext(void)         { return subghz_cfg.hopping; }
 void    subghz_set_hopping_ext(bool v)       { subghz_cfg.hopping = v; }
 bool    subghz_get_sound_ext(void)           { return subghz_cfg.sound; }
 void    subghz_set_sound_ext(bool v)         { subghz_cfg.sound = v; }
+bool    subghz_get_autosave_ext(void)        { return subghz_cfg.autosave; }
+void    subghz_set_autosave_ext(bool v)      { subghz_cfg.autosave = v; }
 
 /* ── Raw recording file management (used by Read Raw scene) ─────────────── */
 

@@ -99,6 +99,8 @@ extern bool    subghz_get_hopping_ext(void);
 extern void    subghz_set_hopping_ext(bool v);
 extern bool    subghz_get_sound_ext(void);
 extern void    subghz_set_sound_ext(bool v);
+extern bool    subghz_get_autosave_ext(void);
+extern void    subghz_set_autosave_ext(bool v);
 extern uint8_t subghz_get_tx_power_idx_ext(void);
 extern void    subghz_set_tx_power_idx_ext(uint8_t idx);
 extern int8_t  subghz_get_rssi_threshold_ext(void);
@@ -708,6 +710,9 @@ void settings_save_to_sd(void)
     snprintf(buf, sizeof(buf), "subghz_sound=%d\n", subghz_get_sound_ext() ? 1 : 0);
     f_write(&fp, buf, strlen(buf), &bw);
 
+    snprintf(buf, sizeof(buf), "subghz_autosave=%d\n", subghz_get_autosave_ext() ? 1 : 0);
+    f_write(&fp, buf, strlen(buf), &bw);
+
     snprintf(buf, sizeof(buf), "subghz_tx_power=%d\n", subghz_get_tx_power_idx_ext());
     f_write(&fp, buf, strlen(buf), &bw);
 
@@ -921,6 +926,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 13) - '0');
         if (val == 0 || val == 1)
             subghz_set_sound_ext(val == 1);
+    }
+
+    /* Parse "subghz_autosave=X" (0 or 1) */
+    p = strstr(buf, "subghz_autosave=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 16) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_autosave_ext(val == 1);
     }
 
     /* Parse "subghz_tx_power=X" (0–3) */
