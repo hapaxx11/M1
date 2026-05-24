@@ -120,8 +120,11 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
             protocol_text[entry->info.protocol], entry->info.key))
         return;
 
-    /* Ensure autosave directory exists */
-    FRESULT res = f_mkdir(SUBGHZ_AUTOSAVE_DIR_PATH);
+    /* Ensure parent and autosave directories exist */
+    FRESULT res = f_mkdir("/SUBGHZ");
+    if (res != FR_OK && res != FR_EXIST)
+        return;
+    res = f_mkdir(SUBGHZ_AUTOSAVE_DIR_PATH);
     if (res != FR_OK && res != FR_EXIST)
         return;
 
@@ -135,16 +138,22 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
             fmt == 1) == 0)
         return;
 
+    bool saved;
     if (fmt == 1)
-        flipper_subghz_save_m1native_key(path,
+        saved = flipper_subghz_save_m1native_key(path,
             entry->frequency, "FuriHalSubGhzPresetOok650Async",
             protocol_text[entry->info.protocol],
             entry->info.bit_len, entry->info.key, entry->info.te);
     else
-        flipper_subghz_save_key(path,
+        saved = flipper_subghz_save_key(path,
             entry->frequency, "FuriHalSubGhzPresetOok650Async",
             protocol_text[entry->info.protocol],
             entry->info.bit_len, entry->info.key, entry->info.te);
+
+    /* Only record as "seen" after a successful save */
+    if (saved)
+        subghz_autosave_record(
+            protocol_text[entry->info.protocol], entry->info.key);
 }
 
 /*============================================================================*/

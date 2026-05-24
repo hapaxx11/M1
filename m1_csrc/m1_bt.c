@@ -203,7 +203,8 @@ static void ble_adv_name_save(void)
 
     snprintf(line, sizeof(line), "adv_name=%s\n", ble_adv_name);
     FRESULT wr = f_write(&fil, line, strlen(line), &bw);
-    (void)wr;
+    if (wr != FR_OK || bw != strlen(line))
+        M1_LOG_W("BT", "BLE config write failed (err=%d)\r\n", wr);
     f_close(&fil);
 }
 
@@ -799,7 +800,8 @@ static void ble_gatt_log_notify(const ble_dev_t *dev, const ble_gatt_notify_t *n
     if (len > 0 && len < (int)sizeof(line))
     {
         FRESULT wr = f_write(&fil, line, len, &bw);
-        (void)wr;
+        if (wr != FR_OK || bw != (UINT)len)
+            M1_LOG_W("BT", "GATT notify log write failed (err=%d)\r\n", wr);
     }
     f_close(&fil);
 }

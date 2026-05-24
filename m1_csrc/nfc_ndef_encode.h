@@ -14,7 +14,6 @@
  *  - Text records (UTF-8, with language code)
  *  - WiFi Simple Config records (SSID + password)
  *  - Phone number records (tel: URI)
- *  - vCard (basic: name + phone)
  *
  * M1 Project
  */
@@ -58,8 +57,8 @@ typedef enum {
  * Output format (short record, single message):
  *   [0x03][Len][0xD1][0x01][PL_len]['U'][uri_code][uri_data...][0xFE]
  *
- * @param out       Output buffer (must be at least NDEF_MAX_MESSAGE_SIZE)
- * @param out_size  Size of output buffer
+ * @param out       Output buffer
+ * @param out_size  Size of output buffer (must be >= computed TLV size)
  * @param uri_code  URI prefix code (see ndef_uri_code_t)
  * @param uri       URI string WITHOUT the prefix (e.g. "example.com")
  * @return          Total bytes written (including TLV + terminator), or 0 on error
@@ -90,7 +89,7 @@ size_t ndef_encode_uri_auto(uint8_t *out, size_t out_size, const char *full_uri)
  *
  * @param out       Output buffer
  * @param out_size  Size of output buffer
- * @param lang      Language code (e.g. "en", "fr").  Max 6 chars.
+ * @param lang      Language code (e.g. "en", "fr").  Max 63 chars (6-bit length field).
  * @param text      Text content (UTF-8)
  * @return          Total bytes written, or 0 on error
  */

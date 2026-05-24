@@ -264,6 +264,25 @@ void test_wifi_null_ssid(void)
     TEST_ASSERT_EQUAL(0, ndef_encode_wifi(buf, sizeof(buf), NULL, "pass", true));
 }
 
+void test_wifi_ssid_too_long(void)
+{
+    uint8_t buf[512];
+    /* 33 chars exceeds WiFi 32-byte SSID max */
+    TEST_ASSERT_EQUAL(0, ndef_encode_wifi(buf, sizeof(buf),
+        "123456789012345678901234567890123", "pass", true));
+}
+
+void test_wifi_password_too_long(void)
+{
+    uint8_t buf[512];
+    /* 64 chars exceeds WPA2 63-byte password max */
+    char long_pass[65];
+    memset(long_pass, 'A', 64);
+    long_pass[64] = '\0';
+    TEST_ASSERT_EQUAL(0, ndef_encode_wifi(buf, sizeof(buf),
+        "MySSID", long_pass, true));
+}
+
 /*═══════════════ Phone Record ═══════════════*/
 
 void test_phone_basic(void)
@@ -360,6 +379,8 @@ int main(void)
     RUN_TEST(test_wifi_wpa2);
     RUN_TEST(test_wifi_open);
     RUN_TEST(test_wifi_null_ssid);
+    RUN_TEST(test_wifi_ssid_too_long);
+    RUN_TEST(test_wifi_password_too_long);
 
     /* Phone */
     RUN_TEST(test_phone_basic);

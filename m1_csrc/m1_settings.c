@@ -669,7 +669,8 @@ void settings_save_to_sd(void)
     do { \
         if (write_ok) { \
             snprintf(buf, sizeof(buf), fmt, __VA_ARGS__); \
-            if (f_write(&fp, buf, strlen(buf), &bw) != FR_OK) \
+            size_t _sw_len = strlen(buf); \
+            if (f_write(&fp, buf, _sw_len, &bw) != FR_OK || bw != _sw_len) \
                 write_ok = false; \
         } \
     } while (0)

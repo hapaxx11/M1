@@ -1664,7 +1664,8 @@ static void pmkid_save_to_sd(const uint8_t *src, const uint8_t *bssid,
 	{
 		UINT bw;
 		FRESULT wr = f_write(&fil, line, strlen(line), &bw);
-		(void)wr;
+		if (wr != FR_OK || bw != strlen(line))
+			M1_LOG_W("WIFI", "PMKID write failed (err=%d)\r\n", wr);
 		f_close(&fil);
 	}
 }
@@ -3121,7 +3122,12 @@ void wifi_general_save_aps(void)
 
 	const char *hdr = "# ssid\tbssid\tchannel\trssi\tauth\r\n";
 	FRESULT wr = f_write(&fil, hdr, strlen(hdr), &bw);
-	(void)wr;
+	if (wr != FR_OK || bw != strlen(hdr))
+	{
+		f_close(&fil);
+		wifi_show_message("Save APs", "Header write failed", NULL);
+		return;
+	}
 	for (uint16_t i = 0; i < ap_count; i++)
 	{
 		char ssid[33];

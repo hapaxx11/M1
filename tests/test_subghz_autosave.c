@@ -91,24 +91,25 @@ void test_dup_first_is_not_duplicate(void)
 void test_dup_same_is_duplicate(void)
 {
     TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
+    subghz_autosave_record("Princeton", 0xABC);
     TEST_ASSERT_TRUE(subghz_autosave_is_duplicate("Princeton", 0xABC));
 }
 
 void test_dup_different_key_is_not_duplicate(void)
 {
-    TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
+    subghz_autosave_record("Princeton", 0xABC);
     TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xDEF));
 }
 
 void test_dup_different_protocol_is_not_duplicate(void)
 {
-    TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
+    subghz_autosave_record("Princeton", 0xABC);
     TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("CAME", 0xABC));
 }
 
 void test_dup_reset_clears(void)
 {
-    TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
+    subghz_autosave_record("Princeton", 0xABC);
     subghz_autosave_dup_reset();
     TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
 }
@@ -117,7 +118,10 @@ void test_dup_ring_wraps(void)
 {
     /* Fill the ring with 32 unique entries */
     for (uint64_t i = 0; i < 32; i++)
+    {
         TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Proto", i));
+        subghz_autosave_record("Proto", i);
+    }
 
     /* All 32 should be detected as duplicates */
     for (uint64_t i = 0; i < 32; i++)
@@ -125,9 +129,26 @@ void test_dup_ring_wraps(void)
 
     /* Adding a 33rd entry evicts the oldest (key=0) */
     TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Proto", 99));
+    subghz_autosave_record("Proto", 99);
 
     /* key=0 was evicted, so it's no longer a duplicate */
     TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Proto", 0));
+}
+
+void test_dup_null_protocol_returns_true(void)
+{
+    /* NULL protocol should be treated as duplicate (prevent save) */
+    TEST_ASSERT_TRUE(subghz_autosave_is_duplicate(NULL, 0xABC));
+}
+
+void test_dup_check_without_record_not_duplicate(void)
+{
+    /* Check without recording — second check should still say "not duplicate" */
+    TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
+    TEST_ASSERT_FALSE(subghz_autosave_is_duplicate("Princeton", 0xABC));
+    /* Only after recording should it become duplicate */
+    subghz_autosave_record("Princeton", 0xABC);
+    TEST_ASSERT_TRUE(subghz_autosave_is_duplicate("Princeton", 0xABC));
 }
 
 /*═══════════════ Main ═══════════════*/
@@ -153,6 +174,8 @@ int main(void)
     RUN_TEST(test_dup_different_protocol_is_not_duplicate);
     RUN_TEST(test_dup_reset_clears);
     RUN_TEST(test_dup_ring_wraps);
+    RUN_TEST(test_dup_null_protocol_returns_true);
+    RUN_TEST(test_dup_check_without_record_not_duplicate);
 
     return UNITY_END();
 }

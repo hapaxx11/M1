@@ -44,13 +44,25 @@ int subghz_autosave_make_path(char *out, size_t out_size,
  *
  * Uses a small ring of recently saved {protocol_hash, key} pairs.
  * Returns true if the signal is a duplicate of one already saved.
- * If not a duplicate, records it in the ring for future checks.
+ * Does NOT record the entry — call subghz_autosave_record() after a
+ * successful save to register it.
  *
- * @param protocol  protocol name string
+ * @param protocol  protocol name string (NULL returns true)
  * @param key       decoded key value
  * @return          true if duplicate (already saved), false if new
  */
 bool subghz_autosave_is_duplicate(const char *protocol, uint64_t key);
+
+/**
+ * @brief  Record a protocol+key pair as "saved" for duplicate detection.
+ *
+ * Call this AFTER a successful save so that future calls to
+ * subghz_autosave_is_duplicate() with the same pair return true.
+ *
+ * @param protocol  protocol name string (NULL is a no-op)
+ * @param key       decoded key value
+ */
+void subghz_autosave_record(const char *protocol, uint64_t key);
 
 /**
  * @brief  Reset the duplicate detection state (e.g. on scene entry).

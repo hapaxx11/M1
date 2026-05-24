@@ -237,6 +237,11 @@ size_t ndef_encode_wifi(uint8_t *out, size_t out_size,
     size_t ssid_len = strlen(ssid);
     size_t pass_len = (password != NULL) ? strlen(password) : 0;
 
+    /* WiFi SSID max = 32 bytes; WPA2 password max = 63 bytes.
+     * Also guard against overflowing the local stack buffers. */
+    if (ssid_len > 32 || pass_len > 63)
+        return 0;
+
     /* Build inner credential attributes */
     uint8_t cred[256];
     size_t cpos = 0;

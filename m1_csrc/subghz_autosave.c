@@ -61,6 +61,9 @@ static uint32_t hash_str(const char *s)
 
 bool subghz_autosave_is_duplicate(const char *protocol, uint64_t key)
 {
+    if (protocol == NULL)
+        return true;  /* invalid — treat as duplicate to prevent save */
+
     uint32_t ph = hash_str(protocol);
 
     /* Check existing entries */
@@ -70,14 +73,21 @@ bool subghz_autosave_is_duplicate(const char *protocol, uint64_t key)
             return true;
     }
 
-    /* Not a duplicate — record it */
+    return false;
+}
+
+void subghz_autosave_record(const char *protocol, uint64_t key)
+{
+    if (protocol == NULL)
+        return;
+
+    uint32_t ph = hash_str(protocol);
+
     s_dup_ring[s_dup_head].protocol_hash = ph;
     s_dup_ring[s_dup_head].key = key;
     s_dup_head = (s_dup_head + 1) % AUTOSAVE_DUP_RING_SIZE;
     if (s_dup_count < AUTOSAVE_DUP_RING_SIZE)
         s_dup_count++;
-
-    return false;
 }
 
 void subghz_autosave_dup_reset(void)

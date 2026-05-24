@@ -719,7 +719,11 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       					if (tmp_l) pfb_hdl->listing_index_buffer = tmp_l;
 	       					if (tmp_r) pfb_hdl->row_index_buffer = tmp_r;
 	       					if (!tmp_d || !tmp_l || !tmp_r)
+	       					{
+	       						pfb_hdl->dir_level--;
+	       						f_closedir(&directory);
 	       						break; /* OOM — keep original pointers, exit browse */
+	       					}
 	       				}
 	       				pfb_hdl->dir_level--;
 	       			}
@@ -742,7 +746,11 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       				break; // Do nothing if it goes too deep
 	       			{
 	       				char *tmp_d = (TCHAR *)realloc(pfb_hdl->info.dir_name, strlen(pfb_hdl->info.dir_name) + 1 + 1 + strlen(this_file.fname));
-	       				if (!tmp_d) break; /* OOM */
+	       				if (!tmp_d)
+	       				{
+	       					f_closedir(&directory);
+	       					break; /* OOM */
+	       				}
 	       				pfb_hdl->info.dir_name = tmp_d;
 	       			}
 	       			strcat(pfb_hdl->info.dir_name, "/");
@@ -758,6 +766,12 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       					if (tmp_l) pfb_hdl->listing_index_buffer = tmp_l;
 	       					if (tmp_r) pfb_hdl->row_index_buffer = tmp_r;
 	       					pfb_hdl->dir_level--;
+	       					/* Revert dir_name: strip the appended "/subdir" */
+	       					{
+	       						char *slash = strrchr(pfb_hdl->info.dir_name, '/');
+	       						if (slash) *slash = '\0';
+	       					}
+	       					f_closedir(&directory);
 	       					break; /* OOM */
 	       				}
 	       				pfb_hdl->listing_index_buffer = tmp_l;
