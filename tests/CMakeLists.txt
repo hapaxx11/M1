@@ -1344,3 +1344,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_endless_tx PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_endless_tx COMMAND test_subghz_endless_tx)
+
+# ----------------------------------------------------------------------------
+# Sub-GHz scene manager polish primitives (Phase 10 — Momentum parity)
+# ----------------------------------------------------------------------------
+add_executable(test_subghz_scene_polish
+    test_subghz_scene_polish.c
+    ${M1_ROOT}/Sub_Ghz/subghz_scene_polish.c
+)
+target_include_directories(test_subghz_scene_polish PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_scene_polish PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_scene_polish PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_scene_polish COMMAND test_subghz_scene_polish)

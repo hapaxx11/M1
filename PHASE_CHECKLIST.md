@@ -28,6 +28,18 @@
 - **Status**: ✅ Complete (pure module + 19 host tests under ASan+UBSan)
 - **Commit**: `Phase 3a: add subghz_endless_tx repeat/hold policy state machine`
 
+### Phase 10 — Scene manager polish (pure logic)
+- **Description**: Pure-logic primitives `subghz_scene_stack_find` /
+  `subghz_scene_stack_pop_to_depth` (back `search_and_pop_to`),
+  `subghz_scene_tick_due` (wrap-safe periodic-tick scheduler), and the
+  `subghz_scene_custom_payload_t` typedef for custom events with a 32-bit
+  payload.  Pulled forward from its original position because the
+  Transmitter scene (Phase 3b) needs ticks (burst-counter animation) and
+  custom-event payloads (routing `Q_EVENT_SUBGHZ_TX` → endless-TX engine).
+- **Status**: ✅ Complete (pure module + 19 host tests under ASan+UBSan;
+  scene-manager wire-up to follow in Phase 3b)
+- **Commit**: `Phase 10: add subghz_scene_polish primitives (stack search + tick scheduler)`
+
 ### Phase 3b — Transmitter scene + migrate blocking-wrapper callers
 - **Description**: New `SubGhzSceneTransmitter` consumes `subghz_endless_tx`
   and the existing async TX primitives (`sub_ghz_replay_prepare_*` /
@@ -78,8 +90,8 @@
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with
   16-bit payload.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete (see entry above — promoted to land before Phase 3b)
+- **Commit**: `Phase 10: add subghz_scene_polish primitives (stack search + tick scheduler)`
 
 ### Phase 11 — Polymorphic decoder `get_string()` vtable
 - **Description**: Add `get_string(decoder, FILE*)` to the protocol registry
