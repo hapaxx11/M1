@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 3b-2b (async Transmitter scene; Saved/Playlist/Remote/Bind Wizard migration)
-- **PR Description**: Begins the multi-phase effort to close the remaining Sub-GHz architecture and feature gaps between M1 and Momentum.  This PR ships the phase plan and lands Phase 1 (TxRx state-machine foundation with host-side tests).  Subsequent phases are tracked here and will land in follow-up commits on the same branch.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 5 (split Saved into Saved + SavedMenu + Delete)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. This phase splits the monolithic Saved scene into three focused scenes: a pure file-browser `Saved`, an action-menu `SavedMenu` (which owns Decode / Emulate / Info / Rename and routes Delete to the dedicated scene), and a confirmation `Delete` scene. Shared file-selection state moves from file-scope statics into `SubGhzApp`, paving the way for further per-action scene extraction in Phases 8–9.
 
 ## Phases
 
@@ -216,9 +216,14 @@
 ### Phase 5 — Split Saved into Saved + SavedMenu + Delete
 - **Description**: Extract action menu and delete confirmation from
   `m1_subghz_scene_saved.c` into dedicated scenes; Saved becomes a pure file
-  browser.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+  browser.  Adds `SubGhzSceneSavedMenu` (action menu + info + decode screens)
+  and `SubGhzSceneDelete` (LEFT/RIGHT confirmation dialog, Cancel-default).
+  File-selection state moves from file-scope statics to shared `SubGhzApp`
+  fields (`saved_filepath`, `saved_filename`).  Delete confirm pops back
+  through SavedMenu to Saved via `subghz_scene_search_and_pop_to`.
+  All 67 host tests pass.
+- **Status**: ✅ Complete
+- **Commit**: `Phase 5: split Saved into Saved + SavedMenu + Delete scenes`
 
 ### Phase 6 — MoreRAW + DecodeRAW scenes
 - **Description**: Extract Read-Raw "More" submenu and offline decode results

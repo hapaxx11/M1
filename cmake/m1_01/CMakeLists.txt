@@ -583,6 +583,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_remote.c
     ../../m1_csrc/m1_subghz_scene_bind_wizard.c
     ../../m1_csrc/m1_subghz_scene_transmitter.c
+    ../../m1_csrc/m1_subghz_scene_saved_menu.c
+    ../../m1_csrc/m1_subghz_scene_delete.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

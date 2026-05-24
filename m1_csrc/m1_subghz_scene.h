@@ -59,6 +59,8 @@ typedef enum {
     SubGhzSceneRemote,         /**< Multi-button RF remote control */
     SubGhzSceneBindWizard,     /**< Bind New Remote step-by-step wizard */
     SubGhzSceneTransmitter,    /**< Generic key-file Transmitter (Phase 3b-2b) */
+    SubGhzSceneSavedMenu,      /**< Action menu (Decode/Emulate/Info/Rename/Delete) for a selected Saved file */
+    SubGhzSceneDelete,         /**< Delete-file confirmation dialog */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -263,6 +265,17 @@ typedef struct {
      *  (used by Playlist / Remote where button cycling is not part of
      *  the UX).  Sized to match @ref FLIPPER_SUBGHZ_PROTO_MAX_LEN. */
     char     tx_protocol_name[32];
+
+    /* --- Phase 5 — shared file-selection state for Saved/SavedMenu/Delete --- */
+    /** Path of the currently-selected saved file, in storage form
+     *  ("/SUBGHZ/<name>" — without the "0:" volume prefix).  Set by the
+     *  Saved file-browser scene when a file is chosen, consumed by the
+     *  SavedMenu scene (for action handling) and the Delete scene (for
+     *  the unlink target).  Empty string when no file is selected. */
+    char     saved_filepath[64];
+    /** Bare filename (basename only, no directory) of the currently-
+     *  selected saved file.  Set together with `saved_filepath`. */
+    char     saved_filename[32];
 } SubGhzApp;
 
 /*============================================================================*/
@@ -460,5 +473,7 @@ extern const SubGhzSceneHandlers subghz_scene_add_manually_handlers;
 extern const SubGhzSceneHandlers subghz_scene_remote_handlers;
 extern const SubGhzSceneHandlers subghz_scene_bind_wizard_handlers;
 extern const SubGhzSceneHandlers subghz_scene_transmitter_handlers;
+extern const SubGhzSceneHandlers subghz_scene_saved_menu_handlers;
+extern const SubGhzSceneHandlers subghz_scene_delete_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */
