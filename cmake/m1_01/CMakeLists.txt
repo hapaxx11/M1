@@ -335,6 +335,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_keeloq_encoder.c
     ../../Sub_Ghz/subghz_txrx_state.c
     ../../Sub_Ghz/subghz_scene_state.c
+    ../../Sub_Ghz/subghz_endless_tx.c
     ../../Sub_Ghz/subghz_new_remote_gen.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c

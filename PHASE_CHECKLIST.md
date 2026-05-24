@@ -21,10 +21,19 @@
 - **Status**: ✅ Complete (pure module + 12 host tests; menu scene migrated as first user)
 - **Commit**: `Phase 2: add per-scene 32-bit state slots + migrate menu scene`
 
-### Phase 3 — Dedicated Transmitter scene + `endless_tx`
-- **Description**: New `SubGhzSceneTransmitter` with hold-OK continuous TX,
-  graceful N-repeat finalisation on release.  Migrates Saved/Playlist/Remote/
-  BindWizard off blocking wrappers.  Highest UX win.
+### Phase 3a — `subghz_endless_tx` repeat / endless-hold policy (pure logic)
+- **Description**: Pure-logic state machine modelling SINGLE-mode N-burst TX
+  and ENDLESS-mode hold-OK continuous TX with graceful N-repeat finalisation
+  on release.  Foundation for the Transmitter scene (Phase 3b).
+- **Status**: ✅ Complete (pure module + 19 host tests under ASan+UBSan)
+- **Commit**: `Phase 3a: add subghz_endless_tx repeat/hold policy state machine`
+
+### Phase 3b — Transmitter scene + migrate blocking-wrapper callers
+- **Description**: New `SubGhzSceneTransmitter` consumes `subghz_endless_tx`
+  and the existing async TX primitives (`sub_ghz_replay_prepare_*` /
+  `sub_ghz_replay_start_async`).  Migrates Saved/Playlist/Remote/BindWizard
+  off the blocking wrappers.  Highest UX win — hold-OK continuous TX with
+  live sine-wave + burst counter on display.
 - **Status**: 🔲 Not started
 - **Commit**: _(pending)_
 

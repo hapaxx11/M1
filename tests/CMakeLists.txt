@@ -1330,3 +1330,17 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_scene_state PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_scene_state COMMAND test_subghz_scene_state)
+
+# ── TX repeat / endless-hold policy (Phase 3a of Momentum parity work) ──
+add_executable(test_subghz_endless_tx
+    test_subghz_endless_tx.c
+    ${M1_ROOT}/Sub_Ghz/subghz_endless_tx.c
+)
+target_include_directories(test_subghz_endless_tx PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_endless_tx PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_endless_tx PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_endless_tx COMMAND test_subghz_endless_tx)
