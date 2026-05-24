@@ -9,6 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.30] - 2026-05-24
+
+### Added
+
+- **DuckyScript parser: extract pure-logic module with 42 unit tests** —
+  Extracted key-name lookup, modifier parsing, ASCII-to-HID mapping,
+  and line-type classification from `m1_badusb.c` into a standalone
+  `badusb_parser.c/h` module. Added host-side test suite
+  (`test_badusb_parser.c`) covering named keys, modifier aliases,
+  separator styles, ASCII mapping, and core DuckyScript line types
+  (REM, DELAY, DEFAULT_DELAY, STRING, REPEAT, modifier+key combos,
+  standalone keys). Advanced commands (ALTCHAR, HOLD/RELEASE, MOUSE,
+  MEDIA, WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet implemented.
+- **Crypto AES-256-CBC tests** — 20 unit tests for `m1_crypto_encrypt_with_key` / `m1_crypto_decrypt_with_key` covering round-trip (1-byte to multi-block), PKCS7 padding validation, determinism with fixed IV, key independence, wrong-key rejection, and NULL/edge-case guards.
+- **File utility path tests** — 44 unit tests for `fu_get_file_extension`, `fu_get_filename`, `fu_get_filename_without_ext`, `fu_get_directory_path`, and `fu_path_combine` covering normal paths, edge cases (NULL, empty, dotfiles, mixed separators, buffer overflow), and SD card path patterns.
+- **Music parser module extraction** — Extracted `music_semitone_to_freq()`, `music_note_duration_ms()`, and `music_parse_note_token()` from `music_player.c` into a standalone `music_parser.c/h` module with 37 unit tests covering frequency conversion, BPM timing, and FMF note token parsing.
+- **NFC: NDEF encoder module** — New pure-logic `nfc_ndef_encode.c/h`
+  supporting URI (with auto-prefix detection), Text, WiFi Simple
+  Config (WPA2/Open), and Phone number NDEF record types. Produces
+  TLV-formatted payloads ready for writing to NTAG213/215/216 Type 2
+  Tags. 29 unit tests covering all record types, edge cases, and
+  cross-format consistency.
+- **RPC protocol: frame parser unit tests** — 17 tests covering state machine
+  byte-at-a-time parsing, CRC validation, length bounds, garbage rejection,
+  recovery after bad frames, and frame builder round-trip verification.
+- **Sub-GHz: Autosave decoded signals** — New "Autosave" toggle in the
+  Sub-GHz Config screen. When enabled, every decoded signal in the Read
+  scene is automatically saved to `0:/SUBGHZ/autosave/` with a filename
+  containing the protocol name, key, and timestamp. Respects the user's
+  save format preference (Flipper .sub or M1 native .sgh). Setting is
+  persisted to `settings.cfg`.
+
+### Fixed
+
+- **f_write return value checks** — added FRESULT checks to all unchecked
+  `f_write()` calls in WiFi (7 sites), Bluetooth (4 sites), Settings (25 sites
+  via SETTINGS_WRITE macro), IR Universal Remote (4 sites), and IR Quick Remote
+  (2 sites). Loop writes now break on failure; header writes return false;
+  settings save tracks write errors with a flag and logs on failure.
+- **Memory safety: NULL-check all malloc/calloc/realloc calls** — Audited every
+  heap allocation in `m1_csrc/`. Added NULL checks and safe-realloc patterns
+  (temp-pointer + fallback) to 10 previously unchecked call sites across
+  `m1_file_browser.c`, `m1_badbt.c`, `music_player.c`, and `m1_fw_update.c`.
+  Prevents HardFault on out-of-memory conditions.
+- **Watchdog: feed IWDG before long blocking delays** — Added `m1_wdt_reset()`
+  calls before every `vTaskDelay(≥2500 ms)` in error-message display paths
+  across `m1_http_client.c`, `m1_esp32_fw_download.c`, and `m1_fw_download.c`.
+  Prevents potential IWDG-triggered reboots when error screens are shown
+  during firmware download or SNTP sync operations.
 ## [0.9.1.29] - 2026-05-24
 
 ### Fixed
