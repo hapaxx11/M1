@@ -58,7 +58,7 @@ typedef enum {
  *   [0x03][Len][0xD1][0x01][PL_len]['U'][uri_code][uri_data...][0xFE]
  *
  * @param out       Output buffer
- * @param out_size  Size of output buffer (must be >= computed TLV size)
+ * @param out_size  Size of output buffer; returns 0 if too small
  * @param uri_code  URI prefix code (see ndef_uri_code_t)
  * @param uri       URI string WITHOUT the prefix (e.g. "example.com")
  * @return          Total bytes written (including TLV + terminator), or 0 on error
