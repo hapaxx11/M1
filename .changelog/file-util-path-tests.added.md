@@ -1,0 +1,1 @@
+**File utility path tests** — 44 unit tests for `fu_get_file_extension`, `fu_get_filename`, `fu_get_filename_without_ext`, `fu_get_directory_path`, and `fu_path_combine` covering normal paths, edge cases (NULL, empty, dotfiles, mixed separators, buffer overflow), and SD card path patterns.

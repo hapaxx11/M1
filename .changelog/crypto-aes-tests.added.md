@@ -1,0 +1,1 @@
+**Crypto AES-256-CBC tests** — 20 unit tests for `m1_crypto_encrypt_with_key` / `m1_crypto_decrypt_with_key` covering round-trip (1-byte to multi-block), PKCS7 padding validation, determinism with fixed IV, key independence, wrong-key rejection, and NULL/edge-case guards.

@@ -25,7 +25,10 @@ typedef DWORD           FSIZE_t;
 /* Minimal FRESULT */
 typedef enum {
 	FR_OK = 0,
-	FR_DISK_ERR = 1
+	FR_DISK_ERR = 1,
+	FR_NO_FILE = 4,
+	FR_NO_PATH = 5,
+	FR_EXIST = 8
 } FRESULT;
 
 /* ff.h config constant needed by ff_gen_drv.h */
@@ -34,17 +37,34 @@ typedef enum {
 #endif
 
 /* Minimal FATFS filesystem object (opaque for tests) */
-typedef struct { int dummy; } FATFS;
+typedef struct {
+	int dummy;
+	DWORD csize;  /* cluster size in sectors */
+#if !defined(FF_MAX_SS) || (FF_MAX_SS != FF_MIN_SS)
+	UINT ssize;   /* sector size */
+#endif
+} FATFS;
 
 /* FIL: wraps a stdio FILE* for host-side test I/O */
 typedef struct {
 	FILE *f;
 } FIL;
 
-/* FILINFO for directory listing (opaque for tests) */
+/* FILINFO for directory listing */
 typedef struct {
-	int dummy;
+	BYTE fattrib;
 } FILINFO;
+
+/* File attribute flags */
+#define AM_DIR   0x10
+
+/* Sector size constants used by m1_file_util.c */
+#ifndef FF_MAX_SS
+#define FF_MAX_SS  512
+#endif
+#ifndef FF_MIN_SS
+#define FF_MIN_SS  512
+#endif
 
 /* Mode flags referenced in flipper_file.c */
 #define FA_READ          0x01
@@ -109,6 +129,30 @@ static inline int f_printf(FIL *fp, const char *fmt, ...)
 	int r = vfprintf(fp->f, fmt, ap);
 	va_end(ap);
 	return r;
+}
+
+static inline FRESULT f_stat(const char *path, FILINFO *fno)
+{
+	(void)path; (void)fno;
+	return FR_NO_FILE;  /* default: file not found */
+}
+
+static inline FRESULT f_mkdir(const char *path)
+{
+	(void)path;
+	return FR_OK;
+}
+
+static inline FRESULT f_getfree(const char *path, DWORD *nclust, FATFS **fatfs)
+{
+	(void)path; (void)nclust; (void)fatfs;
+	return FR_DISK_ERR;  /* no filesystem in test mode */
+}
+
+static inline FRESULT f_rename(const char *old_name, const char *new_name)
+{
+	(void)old_name; (void)new_name;
+	return FR_OK;
 }
 
 #endif /* FF_H_STUB */

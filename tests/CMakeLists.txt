@@ -1256,3 +1256,34 @@ if(TARGET sanitizers)
     target_link_libraries(test_nfc_ndef_encode PRIVATE sanitizers)
 endif()
 add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
+
+# ── File utility path operations ──
+add_executable(test_file_util
+    test_file_util.c
+    ${M1_ROOT}/m1_csrc/m1_file_util.c
+)
+target_include_directories(test_file_util PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_file_util PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_file_util PRIVATE sanitizers)
+endif()
+add_test(NAME file_util COMMAND test_file_util)
+
+# ── Crypto AES-256-CBC round-trip ──
+add_executable(test_crypto
+    test_crypto.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+)
+target_compile_definitions(test_crypto PRIVATE M1_CRYPTO_SKIP_UID_FUNCTIONS)
+target_include_directories(test_crypto PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_crypto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_crypto PRIVATE sanitizers)
+endif()
+add_test(NAME crypto COMMAND test_crypto)
