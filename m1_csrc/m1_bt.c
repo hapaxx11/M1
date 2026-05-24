@@ -202,7 +202,8 @@ static void ble_adv_name_save(void)
     }
 
     snprintf(line, sizeof(line), "adv_name=%s\n", ble_adv_name);
-    f_write(&fil, line, strlen(line), &bw);
+    FRESULT wr = f_write(&fil, line, strlen(line), &bw);
+    (void)wr;
     f_close(&fil);
 }
 
@@ -509,7 +510,11 @@ static bool ble_append_header_if_new(FIL *fil, const char *path, const char *hea
 
     if (new_file && header)
     {
-        f_write(fil, header, strlen(header), &bw);
+        if (f_write(fil, header, strlen(header), &bw) != FR_OK)
+        {
+            f_close(fil);
+            return false;
+        }
     }
 
     return true;
@@ -613,7 +618,8 @@ static void ble_gatt_export(const ble_dev_t *dev)
             e->props, uuid_hex, value_hex);
         if (len > 0 && len < (int)sizeof(line))
         {
-            f_write(&fil, line, len, &bw);
+            if (f_write(&fil, line, len, &bw) != FR_OK)
+                break;
         }
     }
 
@@ -792,7 +798,8 @@ static void ble_gatt_log_notify(const ble_dev_t *dev, const ble_gatt_notify_t *n
         notif->indication ? "indicate" : "notify", hex);
     if (len > 0 && len < (int)sizeof(line))
     {
-        f_write(&fil, line, len, &bw);
+        FRESULT wr = f_write(&fil, line, len, &bw);
+        (void)wr;
     }
     f_close(&fil);
 }

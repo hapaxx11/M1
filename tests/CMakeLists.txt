@@ -792,6 +792,26 @@ endif()
 add_test(NAME rpc_crc16 COMMAND test_rpc_crc16)
 
 # ------------------------------------------------------------------
+# Module under test: RPC frame parser state machine
+# Tests byte-at-a-time frame parsing, CRC validation, length checks,
+# garbage rejection, and recovery after bad frames.
+# Uses standalone copies of the CRC and parser state machine.
+# ------------------------------------------------------------------
+add_executable(test_rpc_parse
+    test_rpc_parse.c
+    ${STUBS_DIR}/rpc_parse_impl.c
+    ${STUBS_DIR}/rpc_crc16_impl.c
+)
+target_include_directories(test_rpc_parse PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_rpc_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rpc_parse PRIVATE sanitizers)
+endif()
+add_test(NAME rpc_parse COMMAND test_rpc_parse)
+
+# ------------------------------------------------------------------
 # Module under test: file browser utilities (sorting, extension, path)
 # Tests pure-logic functions from m1_file_browser.c: case conversion,
 # directory-first qsort comparator, extension matching, file type
