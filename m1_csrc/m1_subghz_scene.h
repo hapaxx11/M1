@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_scene_state.h"
+#include "subghz_scene_polish.h"
 
 /*============================================================================*/
 /* Scene identifiers                                                          */
@@ -93,6 +94,12 @@ typedef enum {
 
     /* Timeout */
     SubGhzEventTimeout,        /**< Screen timeout / auto-dismiss */
+
+    /* Phase 3b-2a — scene-manager polish */
+    SubGhzEventTick,           /**< Periodic tick (cadence set per-scene via
+                                    subghz_scene_set_tick_period) */
+    SubGhzEventCustom,         /**< Scene-specific custom event; payload
+                                    accessible via subghz_scene_custom_payload() */
 } SubGhzEvent;
 
 /*============================================================================*/
@@ -201,6 +208,21 @@ typedef struct {
     bool     running;                 /**< false = exit scene manager loop */
     bool     resume_from_child;       /**< Set when Read pushes a child scene;
                                            cleared after resume_rx() uses it */
+
+    /* --- Phase 3b-2a — scene-manager polish state --- */
+    /** Wall-clock cadence (ms) for SubGhzEventTick.  Set via
+     *  subghz_scene_set_tick_period(); 0 disables ticks.  Reset to 0
+     *  automatically on every scene push/pop/replace so a scene that
+     *  forgot to enable ticks does not inherit a parent's cadence. */
+    uint32_t tick_period_ms;
+    /** HAL_GetTick() value at the most recent SubGhzEventTick dispatch.
+     *  Reset to current time on scene push/pop/replace so the first tick
+     *  after a scene transition fires a full `tick_period_ms` later. */
+    uint32_t last_tick_ms;
+    /** Payload carried with the next SubGhzEventCustom dispatch.  Written
+     *  by subghz_scene_send_custom_event(); read by scenes via
+     *  subghz_scene_custom_payload(). */
+    subghz_scene_custom_payload_t custom_event_payload;
 } SubGhzApp;
 
 /*============================================================================*/
@@ -307,6 +329,65 @@ void subghz_scene_set_state(SubGhzApp *app, SubGhzSceneId scene, uint32_t value)
  *         is out of range).
  */
 uint32_t subghz_scene_get_state(const SubGhzApp *app, SubGhzSceneId scene);
+
+/*============================================================================*/
+/* Polish API (Phase 3b-2a — Momentum parity)                                 */
+/*============================================================================*/
+
+/**
+ * @brief  Pop scenes one at a time until @p target is on top of the stack.
+ *
+ * Calls `on_exit` on every scene popped (excluding @p target) and `on_enter`
+ * on @p target.  If @p target is not currently on the stack the call is a
+ * no-op and the stack is unchanged.
+ *
+ * Backed by the pure-logic helper `subghz_scene_stack_pop_to_depth` so the
+ * search semantics (topmost match wins) are unit-tested independently of
+ * any hardware.
+ *
+ * @return  true if @p target was found and the stack was popped to it;
+ *          false if @p target was not on the stack.
+ */
+bool subghz_scene_search_and_pop_to(SubGhzApp *app, SubGhzSceneId target);
+
+/**
+ * @brief  Send a custom event to the current scene with a 32-bit payload.
+ *
+ * Stores @p payload in `app->custom_event_payload`, then dispatches a
+ * `SubGhzEventCustom` event to the current scene's `on_event` handler.
+ * The receiving scene reads the payload via `subghz_scene_custom_payload()`.
+ *
+ * @return  Whatever the scene's `on_event` returned (true = consumed).
+ */
+bool subghz_scene_send_custom_event(SubGhzApp *app,
+                                     subghz_scene_custom_payload_t payload);
+
+/**
+ * @brief  Read the payload of the currently-dispatching custom event.
+ *
+ * Only meaningful from inside an `on_event` handler that received
+ * `SubGhzEventCustom`.  Outside that context the value is whatever was
+ * last passed to `subghz_scene_send_custom_event()`.
+ */
+subghz_scene_custom_payload_t subghz_scene_custom_payload(const SubGhzApp *app);
+
+/**
+ * @brief  Configure the per-scene tick cadence.
+ *
+ * When @p period_ms > 0, the scene-manager loop dispatches
+ * `SubGhzEventTick` to the current scene every @p period_ms milliseconds
+ * of wall-clock time.  Use for animation (sine-wave preview, burst-count
+ * blink) or timed auto-dismiss.  Setting @p period_ms = 0 disables ticks.
+ *
+ * The cadence is reset to 0 automatically on every scene push/pop/replace
+ * so a child scene cannot accidentally inherit its parent's tick rate.
+ * Scenes that want ticks must call this from their `on_enter` handler.
+ *
+ * The first tick after this call fires @p period_ms after `HAL_GetTick()`
+ * at the moment of the call, not immediately, so callers do not have to
+ * suppress a spurious first tick.
+ */
+void subghz_scene_set_tick_period(SubGhzApp *app, uint32_t period_ms);
 
 /**
  * @brief  Main entry point — runs the scene manager loop.

@@ -61,12 +61,29 @@
     (Phase 4 hook), and the two state-invariants.
 
   - **Phase 3b-2 — Transmitter scene + scene-manager API wire-up +
-    caller migration.**  🔲 Not started.  Adds `SubGhzSceneTransmitter`
-    consuming the controller; wires `search_and_pop_to` /
-    `subghz_scene_tick_due` / custom-event payload routing into the
-    main scene loop; migrates Saved/Playlist/Remote/BindWizard.
-- **Status**: 🔄 In progress (3b-1 ✅; 3b-2 pending)
-- **Commit**: `Phase 3b-1: add subghz_transmitter_ctl pure-logic scene controller`
+    caller migration.**  🔄 In progress.  Split into 3b-2a (API wire-up,
+    ✅) and 3b-2b (scene + caller migration, 🔲).
+
+    - **Phase 3b-2a — Scene-manager API wire-up.**  ✅ Complete.
+      Exposes the Phase 10 polish primitives to scene code by wiring
+      `subghz_scene_search_and_pop_to(app, target)` (backed by
+      `subghz_scene_stack_pop_to_depth`), `subghz_scene_send_custom_event` /
+      `subghz_scene_custom_payload` (backed by `subghz_scene_custom_payload_t`),
+      and `subghz_scene_set_tick_period` (backed by `subghz_scene_tick_due`)
+      into `m1_subghz_scene.h/c`.  Adds two new event ids — `SubGhzEventTick`
+      and `SubGhzEventCustom` — and three new `SubGhzApp` fields
+      (`tick_period_ms`, `last_tick_ms`, `custom_event_payload`).  The main
+      loop polls at `min(rx_active?200ms : ∞, tick_period_ms)` and dispatches
+      `SubGhzEventTick` on cadence using the wrap-safe pure-logic helper.
+      All transitions (push / pop / replace / search_and_pop_to) reset
+      `tick_period_ms = 0` so a child cannot inherit a parent's cadence.
+
+    - **Phase 3b-2b — Transmitter scene + caller migration.**  🔲 Not
+      started.  Adds `SubGhzSceneTransmitter` consuming the 3b-1 controller
+      via the 3b-2a API; migrates Saved/Playlist/Remote/BindWizard off the
+      blocking replay wrappers.
+- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b pending)
+- **Commit**: `Phase 3b-2a: wire scene-manager polish primitives into SubGhz scene API`
 
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for

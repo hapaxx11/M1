@@ -22,6 +22,7 @@
 #include "m1_sub_ghz_api.h"
 #include "m1_sub_ghz_decenc.h"
 #include "m1_subghz_scene.h"
+#include "subghz_scene_polish.h"
 #include "m1_esp32_hal.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -120,6 +121,75 @@ uint32_t subghz_scene_get_state(const SubGhzApp *app, SubGhzSceneId scene)
     return subghz_scene_state_get(&app->scene_state, (uint8_t)scene);
 }
 
+/*============================================================================*/
+/* Polish API (Phase 3b-2a — Momentum parity)                                 */
+/*============================================================================*/
+
+/**
+ * @brief  Reset per-scene tick state.  Called from every transition helper
+ *         (push / pop / replace / search_and_pop_to) so a freshly-active
+ *         scene starts with ticks disabled and its first tick will fire a
+ *         full `tick_period_ms` after it opts in via `set_tick_period`.
+ */
+static void reset_tick_state(SubGhzApp *app)
+{
+    app->tick_period_ms = 0;
+    app->last_tick_ms   = HAL_GetTick();
+}
+
+bool subghz_scene_search_and_pop_to(SubGhzApp *app, SubGhzSceneId target)
+{
+    if (app == NULL || app->scene_depth == 0) return false;
+
+    uint8_t new_depth = subghz_scene_stack_pop_to_depth(
+        (const uint8_t *)app->scene_stack,
+        app->scene_depth,
+        (uint8_t)target);
+
+    if (new_depth == app->scene_depth) return false;  /* not found */
+
+    /* Pop scenes one at a time, calling on_exit for each, until target on top.
+     * We do NOT call on_enter on intermediate parents — they are skipped over,
+     * not re-entered.  The final on_enter on `target` reactivates the scene. */
+    while (app->scene_depth > new_depth)
+    {
+        const SubGhzSceneHandlers *cur = get_handlers(subghz_scene_current(app));
+        if (cur && cur->on_exit)
+            cur->on_exit(app);
+        app->scene_depth--;
+    }
+
+    reset_tick_state(app);
+
+    const SubGhzSceneHandlers *next = get_handlers(target);
+    if (next && next->on_enter)
+        next->on_enter(app);
+
+    app->need_redraw = true;
+    return true;
+}
+
+bool subghz_scene_send_custom_event(SubGhzApp *app,
+                                     subghz_scene_custom_payload_t payload)
+{
+    if (app == NULL) return false;
+    app->custom_event_payload = payload;
+    return subghz_scene_send_event(app, SubGhzEventCustom);
+}
+
+subghz_scene_custom_payload_t subghz_scene_custom_payload(const SubGhzApp *app)
+{
+    if (app == NULL) return 0;
+    return app->custom_event_payload;
+}
+
+void subghz_scene_set_tick_period(SubGhzApp *app, uint32_t period_ms)
+{
+    if (app == NULL) return;
+    app->tick_period_ms = period_ms;
+    app->last_tick_ms   = HAL_GetTick();
+}
+
 void subghz_scene_push(SubGhzApp *app, SubGhzSceneId scene)
 {
     /* Exit current scene if any */
@@ -140,6 +210,10 @@ void subghz_scene_push(SubGhzApp *app, SubGhzSceneId scene)
     const SubGhzSceneHandlers *next = get_handlers(scene);
     if (next && next->on_enter)
         next->on_enter(app);
+
+    /* Reset tick cadence so the child does not inherit the parent's rate */
+    app->tick_period_ms = 0;
+    app->last_tick_ms   = HAL_GetTick();
 
     app->need_redraw = true;
 }
@@ -170,6 +244,10 @@ void subghz_scene_pop(SubGhzApp *app)
     if (prev && prev->on_enter)
         prev->on_enter(app);
 
+    /* Reset tick cadence so the resumed parent must opt back in to ticks */
+    app->tick_period_ms = 0;
+    app->last_tick_ms   = HAL_GetTick();
+
     app->need_redraw = true;
 }
 
@@ -192,6 +270,10 @@ void subghz_scene_replace(SubGhzApp *app, SubGhzSceneId scene)
     const SubGhzSceneHandlers *next = get_handlers(scene);
     if (next && next->on_enter)
         next->on_enter(app);
+
+    /* Reset tick cadence — replacement is a fresh scene */
+    app->tick_period_ms = 0;
+    app->last_tick_ms   = HAL_GetTick();
 
     app->need_redraw = true;
 }
@@ -293,9 +375,18 @@ void subghz_scene_app_run(void)
                   subghz_read_raw_state_is_tx(app.raw_state)))
             rx_active = true;  /* periodic refresh: RSSI bar in Recording; signal-detection poll in Start; sine-wave animation in TX states */
 
-        /* Wait for event: use 200ms poll during active RX for RSSI refresh */
-        TickType_t wait = (app.hopper_active || rx_active) ?
-            pdMS_TO_TICKS(200) : portMAX_DELAY;
+        /* Wait for event: use 200ms poll during active RX for RSSI refresh.
+         * If a scene has opted into periodic ticks via set_tick_period(),
+         * cap the wait so we can dispatch SubGhzEventTick on cadence. */
+        uint32_t wait_ms = 0;  /* 0 = portMAX_DELAY (no upper bound) */
+        if (app.hopper_active || rx_active)
+            wait_ms = 200U;
+        if (app.tick_period_ms > 0U &&
+            (wait_ms == 0U || app.tick_period_ms < wait_ms))
+            wait_ms = app.tick_period_ms;
+
+        TickType_t wait = (wait_ms == 0U) ?
+            portMAX_DELAY : pdMS_TO_TICKS(wait_ms);
 
         ret = xQueueReceive(main_q_hdl, &q_item, wait);
 
@@ -399,6 +490,18 @@ void subghz_scene_app_run(void)
             }
         }
         prev_hopper_active = app.hopper_active;
+
+        /* Dispatch SubGhzEventTick on cadence.  Pure-logic helper handles
+         * uint32_t wraparound at the 49.7-day HAL_GetTick rollover. */
+        if (app.tick_period_ms > 0U)
+        {
+            uint32_t now = HAL_GetTick();
+            if (subghz_scene_tick_due(now, app.last_tick_ms, app.tick_period_ms))
+            {
+                app.last_tick_ms = now;
+                subghz_scene_send_event(&app, SubGhzEventTick);
+            }
+        }
 
         /* Redraw if needed */
         if (app.need_redraw)
