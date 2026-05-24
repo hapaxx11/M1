@@ -1191,3 +1191,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_keeloq_mfkeys_builtin PRIVATE sanitizers)
 endif()
 add_test(NAME keeloq_mfkeys_builtin COMMAND test_keeloq_mfkeys_builtin)
+
+# ── BadUSB DuckyScript parser ──
+add_executable(test_badusb_parser
+    test_badusb_parser.c
+    ${M1_ROOT}/m1_csrc/badusb_parser.c
+)
+target_include_directories(test_badusb_parser PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_badusb_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_badusb_parser PRIVATE sanitizers)
+endif()
+add_test(NAME badusb_parser COMMAND test_badusb_parser)
