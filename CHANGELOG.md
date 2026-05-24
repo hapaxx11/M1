@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.29] - 2026-05-24
+
+### Fixed
+
+- **WiFi AP detail screen**: moved "Connect" action to center (OK) column with circle icon; fixed content/button-bar overlap by using compact font and consistent 8px row spacing.
+  **File browser**: rows now use `m1_menu_item_h()` / `m1_menu_font()` / `M1_MENU_TEXT_W` — consistent with standard scene menus and responsive to user text-size setting.
+- **WiFi scenes**: station scan, AP/STA target-select, and Set Channel screens now use the center OK column with circle icon for their primary action ("Select" / "Set") instead of the left column.
 ## [0.9.1.28] - 2026-05-24
 
 ### Fixed
