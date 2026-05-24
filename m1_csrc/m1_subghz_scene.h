@@ -61,6 +61,8 @@ typedef enum {
     SubGhzSceneTransmitter,    /**< Generic key-file Transmitter (Phase 3b-2b) */
     SubGhzSceneSavedMenu,      /**< Action menu (Decode/Emulate/Info/Rename/Delete) for a selected Saved file */
     SubGhzSceneDelete,         /**< Delete-file confirmation dialog */
+    SubGhzSceneMoreRaw,        /**< Read-Raw Loaded "More" submenu (Decode/Rename/Delete) */
+    SubGhzSceneDecodeRaw,      /**< Offline decode-results view for a loaded RAW file */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -182,6 +184,14 @@ typedef struct {
     bool     raw_load_is_native;      /**< true = .sgh (use sub_ghz_replay_datafile) */
     uint32_t raw_load_freq_hz;        /**< Frequency for native replay */
     uint8_t  raw_load_mod;            /**< Modulation for native replay */
+    /** Phase 6 — currently-active Read-Raw file path (storage form, no "0:"
+     *  prefix).  Owned by the Read Raw scene but shared with its child
+     *  scenes (@ref SubGhzSceneMoreRaw, @ref SubGhzSceneDecodeRaw) so the
+     *  MoreRAW submenu can rename / delete / decode the same file the parent
+     *  scene is showing.  Empty string when no capture is loaded.  Cleared
+     *  by MoreRAW on delete so the Read Raw resume-from-child path detects
+     *  the deletion and resets to Start state. */
+    char     raw_filepath[72];
 
     /* --- Save flow --- */
     char     file_path[64];           /**< Current file path for save */
@@ -475,5 +485,7 @@ extern const SubGhzSceneHandlers subghz_scene_bind_wizard_handlers;
 extern const SubGhzSceneHandlers subghz_scene_transmitter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_saved_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_delete_handlers;
+extern const SubGhzSceneHandlers subghz_scene_more_raw_handlers;
+extern const SubGhzSceneHandlers subghz_scene_decode_raw_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

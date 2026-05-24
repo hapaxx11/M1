@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 5 (split Saved into Saved + SavedMenu + Delete)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. This phase splits the monolithic Saved scene into three focused scenes: a pure file-browser `Saved`, an action-menu `SavedMenu` (which owns Decode / Emulate / Info / Rename and routes Delete to the dedicated scene), and a confirmation `Delete` scene. Shared file-selection state moves from file-scope statics into `SubGhzApp`, paving the way for further per-action scene extraction in Phases 8–9.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 6 (extract MoreRAW + DecodeRAW into scenes)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. This phase extracts the Read-Raw Loaded-state "More" submenu (Decode / Rename / Delete) and the offline decode-results overlay out of `m1_subghz_scene_read_raw.c` and into two dedicated scenes: `SubGhzSceneMoreRaw` and `SubGhzSceneDecodeRaw`. The active file path is shared via the new `SubGhzApp::raw_filepath` field; the Read Raw resume-from-child path detects a child-side delete and resets to the Start state. Removes ~340 lines of overlay state from Read Raw and aligns the architecture with Momentum's scene-per-screen model.
 
 ## Phases
 
@@ -227,9 +227,13 @@
 
 ### Phase 6 — MoreRAW + DecodeRAW scenes
 - **Description**: Extract Read-Raw "More" submenu and offline decode results
-  screen into dedicated scenes.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+  screen into dedicated scenes.  Adds `SubGhzApp::raw_filepath` shared field,
+  `SubGhzSceneMoreRaw` (Decode/Rename/Delete), and `SubGhzSceneDecodeRaw`
+  (list + detail view).  Read Raw resume-from-child detects child-side delete
+  (raw_filepath cleared) and resets to Start state.  Removes ~340 lines of
+  overlay state from `m1_subghz_scene_read_raw.c`.
+- **Status**: ✅ Complete (host tests: 67/67 passing)
+- **Commit**: `Phase 6: extract Read-Raw MoreRAW + DecodeRAW into dedicated scenes`
 
 ### Phase 7 — Reusable `m1_submenu` widget
 - **Description**: Generic font-aware scrollable list widget; migrate every

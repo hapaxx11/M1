@@ -71,6 +71,8 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneTransmitter]      = &subghz_scene_transmitter_handlers,
     [SubGhzSceneSavedMenu]        = &subghz_scene_saved_menu_handlers,
     [SubGhzSceneDelete]           = &subghz_scene_delete_handlers,
+    [SubGhzSceneMoreRaw]          = &subghz_scene_more_raw_handlers,
+    [SubGhzSceneDecodeRaw]        = &subghz_scene_decode_raw_handlers,
 };
 
 /*============================================================================*/
