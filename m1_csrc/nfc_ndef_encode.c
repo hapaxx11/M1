@@ -47,6 +47,8 @@ static size_t build_tlv(uint8_t *out, size_t out_size,
 
     if (out == NULL || out_size < total || type == NULL)
         return 0;
+    if (payload_len > 0 && payload == NULL)
+        return 0;
 
     size_t pos = 0;
 
