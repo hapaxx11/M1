@@ -3930,7 +3930,7 @@ static void ep_save_creds_to_sd(void)
 			char line[80];
 			int len = snprintf(line, sizeof(line), "%s : %s\n",
 				ep_creds[i].username, ep_creds[i].password);
-			if (f_write(&fil, line, len, &bw) != FR_OK)
+			if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
 				break;
 		}
 		f_close(&fil);

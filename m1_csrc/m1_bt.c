@@ -620,7 +620,7 @@ static void ble_gatt_export(const ble_dev_t *dev)
             e->props, uuid_hex, value_hex);
         if (len > 0 && len < (int)sizeof(line))
         {
-            if (f_write(&fil, line, len, &bw) != FR_OK)
+            if (f_write(&fil, line, len, &bw) != FR_OK || bw != (UINT)len)
                 break;
         }
     }
