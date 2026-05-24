@@ -184,6 +184,19 @@ void firmware_update_get_image_file(void)
     uint32_t crc32ret, image_size, fwver_old;
     S_M1_FW_CONFIG_t fwconfig;
 
+	/* Scene push calls on_exit which frees pfullpath — re-allocate if needed */
+	if ( !pfullpath )
+	{
+		/* storage_browse() uses ESP_* max sizes for dir_name/file_name */
+		pfullpath = malloc(ESP_FILE_PATH_LEN_MAX + ESP_FILE_NAME_LEN_MAX + 2);
+	}
+	if ( !pfullpath )
+	{
+		fw_update_status = M1_FW_UPDATE_NOT_READY;
+		xQueueReset(main_q_hdl); // Reset main q before return
+		return;
+	}
+
 	f_info = storage_browse(NULL);
 
 	fw_update_status = M1_FW_IMAGE_FILE_TYPE_ERROR; // reset
