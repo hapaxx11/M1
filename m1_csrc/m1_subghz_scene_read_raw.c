@@ -379,7 +379,11 @@ static void stop_raw_rx(SubGhzApp *app)
     /* Free ring buffers — reclaim ~128 KB of RAM */
     sub_ghz_ring_buffers_deinit_ext();
 
-    app->raw_sample_count = sub_ghz_raw_recording_get_total_samples_ext();
+    /* Keep the signal-gated display count from recording — do NOT replace it
+     * with the full file total here.  The file on SD still contains every
+     * captured pulse (including noise that passed the ISR filter), but the
+     * displayed "N spl." should only reflect chunks where signal was above
+     * the RSSI threshold, matching Momentum behaviour (PR #487). */
 
     /* Remember the auto-generated filepath for Send / Save / Erase */
     const char *fname = sub_ghz_raw_recording_get_filename_ext();

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.28] - 2026-05-24
+
+### Fixed
+
+- **Sub-GHz Read Raw: SPL counter no longer jumps on stop** — the displayed
+  sample count now stays at its signal-gated value when recording stops,
+  instead of snapping to the full (ungated) file total.
 ## [0.9.1.27] - 2026-05-24
 
 ### Fixed
