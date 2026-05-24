@@ -810,9 +810,10 @@ static void ble_gatt_show_detail(const ble_gatt_entry_t *e)
     ble_hex_encode(value_hex, sizeof(value_hex), e->value, e->value_len);
 
     m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "GATT Detail");
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 2, 9, "GATT Detail");
-    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
     snprintf(ln, sizeof(ln), "H:%04X V:%04X", e->handle1, e->handle2);
     u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
     snprintf(ln, sizeof(ln), "Props:%s Raw:%02X", props, e->props);
@@ -912,10 +913,11 @@ static void ble_gatt_notify_view(const ble_dev_t *dev, const ble_gatt_entry_t *e
         }
 
         m1_u8g2_firstpage();
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 2, 9,
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
             mode == 2 ? "GATT Indicate" : "GATT Notify");
-        u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         snprintf(ln, sizeof(ln), "Count:%lu Len:%u", (unsigned long)count, last_len);
         u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
         snprintf(ln, sizeof(ln), "Handle:%04X", last_handle);
@@ -979,9 +981,10 @@ static void ble_gatt_tools(const ble_dev_t *dev, const ble_gatt_entry_t *e)
     while (1)
     {
         m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+        u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "GATT Tools");
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 2, 9, "GATT Tools");
-        u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
         snprintf(ln, sizeof(ln), "Value:%04X", e->handle2);
         u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
         for (uint8_t i = 0; i < count && i < 3; i++)
@@ -1066,11 +1069,13 @@ static uint16_t ble_gatt_print(bool up_dir)
     ble_gatt_props_text(e->props, props, sizeof(props));
 
     m1_u8g2_firstpage();
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 2, 9, "GATT Discovery");
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+    u8g2_DrawStr(&m1_u8g2, 2, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, "GATT Discovery");
     snprintf(ln, sizeof(ln), "%d/%d", ble_gatt_view_idx + 1, ble_gatt_count);
-    u8g2_DrawStr(&m1_u8g2, 98, 9, ln);
-    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+    u8g2_DrawStr(&m1_u8g2, 98, M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT, ln);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     if (e->type == 1)
     {
         snprintf(ln, sizeof(ln), "SVC %04X-%04X", e->handle1, e->handle2);

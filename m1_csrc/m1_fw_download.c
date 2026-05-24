@@ -38,7 +38,7 @@
 #define FW_DOWNLOAD_DIR     "0:/Firmware"
 
 /* Display layout constants */
-#define DL_CONFIRM_TITLE_Y    9  /* Text baseline for the header title */
+#define DL_CONFIRM_TITLE_Y   10  /* Text baseline within the 14px inverted title bar */
 #define DL_PROGRESS_BAR_X    4
 #define DL_PROGRESS_BAR_Y   30
 #define DL_PROGRESS_BAR_W  120
@@ -231,15 +231,14 @@ static bool dl_confirm_download(const fw_release_t *release)
 
 	m1_u8g2_firstpage();
 	do {
-		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-		/* Title — black text on white, separator line */
-		u8g2_DrawStr(&m1_u8g2, 2, 9, "Confirm Download");
-		u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+		/* Title */
+		u8g2_DrawXBMP(&m1_u8g2, 0, 0, 128, 14, m1_frame_128_14);
+		u8g2_DrawStr(&m1_u8g2, 2, DL_CONFIRM_TITLE_Y, "Confirm Download");
 
 		/* File info */
-		u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 4, 24, name_str);
 		u8g2_DrawStr(&m1_u8g2, 4, 34, size_str);
 		u8g2_DrawStr(&m1_u8g2, 4, 44, release->tag);
