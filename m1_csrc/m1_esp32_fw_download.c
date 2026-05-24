@@ -314,6 +314,7 @@ void esp32_fw_download_start(void)
 	if (!http_is_ready())
 	{
 		edl_show_message("WiFi not connected", "Connect first");
+		m1_wdt_reset();
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
 		m1_esp32_deinit();
@@ -336,6 +337,7 @@ void esp32_fw_download_start(void)
 	if (source_count == 0)
 	{
 		edl_show_message("No ESP32 sources", "Check fw_sources.txt");
+		m1_wdt_reset();
 		vTaskDelay(pdMS_TO_TICKS(2500));
 		xQueueReset(main_q_hdl);
 		m1_esp32_deinit();
@@ -457,6 +459,7 @@ source_selection:
 				default:                       err_msg = "Download failed"; break;
 			}
 			edl_show_message("Error:", err_msg);
+			m1_wdt_reset();
 			vTaskDelay(pdMS_TO_TICKS(3000));
 			xQueueReset(main_q_hdl);
 			m1_esp32_deinit();
@@ -468,6 +471,7 @@ source_selection:
 		    !build_md5_filename(rel->asset_name, md5_name, FW_RELEASE_ASSET_LEN))
 		{
 			edl_show_message("BIN downloaded", "MD5 name error");
+			m1_wdt_reset();
 			vTaskDelay(pdMS_TO_TICKS(3000));
 			xQueueReset(main_q_hdl);
 			m1_esp32_deinit();
@@ -485,6 +489,7 @@ source_selection:
 		if (dl_status != HTTP_OK)
 		{
 			edl_show_message("BIN OK, MD5 failed", "Flash manually");
+			m1_wdt_reset();
 			vTaskDelay(pdMS_TO_TICKS(3000));
 			xQueueReset(main_q_hdl);
 			m1_esp32_deinit();

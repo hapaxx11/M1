@@ -552,6 +552,7 @@ static void ssl_ensure_configured(void)
 		if (!first_poll)
 			vTaskDelay(pdMS_TO_TICKS(500));
 		first_poll = false;
+		m1_wdt_reset();
 		spi_AT_send_recv(
 			ESP32C6_AT_REQ_CIPSNTPTIME ESP32C6_AT_REQ_CRLF,
 			s_at_buf, sizeof(s_at_buf), 2);

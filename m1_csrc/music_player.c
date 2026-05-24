@@ -488,10 +488,22 @@ void music_player_run(void)
 
     free(fb->info.dir_name);
     fb->info.dir_name = malloc(strlen(MUSIC_PLAYER_DIR) + 1);
+    if (!fb->info.dir_name) { m1_fb_deinit(); return; }
     strcpy(fb->info.dir_name, MUSIC_PLAYER_DIR);
     fb->dir_level = 1;
-    fb->listing_index_buffer = realloc(fb->listing_index_buffer, 2 * sizeof(uint16_t));
-    fb->row_index_buffer     = realloc(fb->row_index_buffer,     2 * sizeof(uint16_t));
+    {
+        uint16_t *tmp_l = realloc(fb->listing_index_buffer, 2 * sizeof(uint16_t));
+        uint16_t *tmp_r = realloc(fb->row_index_buffer, 2 * sizeof(uint16_t));
+        if (!tmp_l || !tmp_r)
+        {
+            if (tmp_l) fb->listing_index_buffer = tmp_l;
+            if (tmp_r) fb->row_index_buffer = tmp_r;
+            m1_fb_deinit();
+            return;
+        }
+        fb->listing_index_buffer = tmp_l;
+        fb->row_index_buffer = tmp_r;
+    }
     fb->listing_index_buffer[0] = 0;
     fb->row_index_buffer[0]     = 0;
     fb->listing_index_buffer[1] = 0;

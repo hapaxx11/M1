@@ -146,9 +146,19 @@ S_M1_file_browser_hdl *m1_fb_init(u8g2_t *lcd_hdl)
 	m1_fb_deinit();
 
 	pfb_hdl = (S_M1_file_browser_hdl*)calloc(1, sizeof(S_M1_file_browser_hdl));
+	if (!pfb_hdl)
+		return NULL;
 
 	pfb_hdl->listing_index_buffer = (uint16_t *)calloc(1, sizeof(uint16_t));
 	pfb_hdl->row_index_buffer = (uint16_t *)calloc(1, sizeof(uint16_t));
+	if (!pfb_hdl->listing_index_buffer || !pfb_hdl->row_index_buffer)
+	{
+		free(pfb_hdl->listing_index_buffer);
+		free(pfb_hdl->row_index_buffer);
+		free(pfb_hdl);
+		pfb_hdl = NULL;
+		return NULL;
+	}
 	*pfb_hdl->listing_index_buffer = 0;
 	*pfb_hdl->row_index_buffer = 0;
 	pfb_hdl->info.dir_name = malloc(strlen(SDCARD_DEFAULT_DRIVE_PATH) + 1);
@@ -701,9 +711,16 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       					pfb_hdl->info.dir_name[l] = 0;
 	       					l--;
 	       				} // while (l >= 0 && !k)
-	       				pfb_hdl->info.dir_name = (char *)realloc(pfb_hdl->info.dir_name, l + 2);
-	       				pfb_hdl->listing_index_buffer = (uint16_t *)realloc(pfb_hdl->listing_index_buffer, pfb_hdl->dir_level * sizeof(uint16_t));
-	       				pfb_hdl->row_index_buffer = (uint16_t *)realloc(pfb_hdl->row_index_buffer, pfb_hdl->dir_level * sizeof(uint16_t));
+	       				{
+	       					char *tmp_d = (char *)realloc(pfb_hdl->info.dir_name, l + 2);
+	       					uint16_t *tmp_l = (uint16_t *)realloc(pfb_hdl->listing_index_buffer, pfb_hdl->dir_level * sizeof(uint16_t));
+	       					uint16_t *tmp_r = (uint16_t *)realloc(pfb_hdl->row_index_buffer, pfb_hdl->dir_level * sizeof(uint16_t));
+	       					if (tmp_d) pfb_hdl->info.dir_name = tmp_d;
+	       					if (tmp_l) pfb_hdl->listing_index_buffer = tmp_l;
+	       					if (tmp_r) pfb_hdl->row_index_buffer = tmp_r;
+	       					if (!tmp_d || !tmp_l || !tmp_r)
+	       						break; /* OOM — keep original pointers, exit browse */
+	       				}
 	       				pfb_hdl->dir_level--;
 	       			}
 	       			else // Being at root directory
@@ -723,14 +740,29 @@ S_M1_file_info *m1_fb_display(S_M1_Buttons_Status *button_status)
 	       		{
 	       			if ( pfb_hdl->dir_level >= DIRECTORY_MAX_DEPTH_LEVEL )
 	       				break; // Do nothing if it goes too deep
-	       			pfb_hdl->info.dir_name = (TCHAR *)realloc(pfb_hdl->info.dir_name, strlen(pfb_hdl->info.dir_name) + 1 + 1 + strlen(this_file.fname));
+	       			{
+	       				char *tmp_d = (TCHAR *)realloc(pfb_hdl->info.dir_name, strlen(pfb_hdl->info.dir_name) + 1 + 1 + strlen(this_file.fname));
+	       				if (!tmp_d) break; /* OOM */
+	       				pfb_hdl->info.dir_name = tmp_d;
+	       			}
 	       			strcat(pfb_hdl->info.dir_name, "/");
 	       			strcat(pfb_hdl->info.dir_name, this_file.fname);
 	       			pfb_hdl->listing_index_buffer[pfb_hdl->dir_level] = pfb_hdl->listing_index;
 	       			pfb_hdl->row_index_buffer[pfb_hdl->dir_level] = pfb_hdl->row_index;
 	       			pfb_hdl->dir_level++;
-	       			pfb_hdl->listing_index_buffer = (uint16_t *)realloc(pfb_hdl->listing_index_buffer, (pfb_hdl->dir_level + 1) * sizeof(uint16_t));
-	       			pfb_hdl->row_index_buffer = (uint16_t *)realloc(pfb_hdl->row_index_buffer, (pfb_hdl->dir_level + 1) * sizeof(uint16_t));
+	       			{
+	       				uint16_t *tmp_l = (uint16_t *)realloc(pfb_hdl->listing_index_buffer, (pfb_hdl->dir_level + 1) * sizeof(uint16_t));
+	       				uint16_t *tmp_r = (uint16_t *)realloc(pfb_hdl->row_index_buffer, (pfb_hdl->dir_level + 1) * sizeof(uint16_t));
+	       				if (!tmp_l || !tmp_r)
+	       				{
+	       					if (tmp_l) pfb_hdl->listing_index_buffer = tmp_l;
+	       					if (tmp_r) pfb_hdl->row_index_buffer = tmp_r;
+	       					pfb_hdl->dir_level--;
+	       					break; /* OOM */
+	       				}
+	       				pfb_hdl->listing_index_buffer = tmp_l;
+	       				pfb_hdl->row_index_buffer = tmp_r;
+	       			}
 	       			pfb_hdl->listing_index_buffer[pfb_hdl->dir_level] = 0;
 	       			pfb_hdl->row_index_buffer[pfb_hdl->dir_level] = 0;
 	       			pfb_hdl->info.file_is_selected = FALSE;
