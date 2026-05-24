@@ -52,9 +52,8 @@
 /* External linkage                                                           */
 /*============================================================================*/
 
-extern void    menu_sub_ghz_init(void);
-extern void    menu_sub_ghz_exit(void);
-extern uint8_t sub_ghz_replay_flipper_file(const char *path);
+/* (Radio lifecycle is now owned by SubGhzSceneTransmitter — no direct
+ *  menu_sub_ghz_* calls needed in this scene.) */
 extern uint32_t HAL_GetTick(void);
 
 /*============================================================================*/
@@ -329,12 +328,21 @@ static bool bw_generate_and_save(void)
                bw_params.bit_count, bw_params.key, (uint32_t)bw_params.te);
 }
 
-/** Fire TX of the generated file.  Returns true on success. */
-static bool bw_transmit(void)
+/** Push the async Transmitter scene to fire a TX step.  Replaces the legacy
+ *  blocking sub_ghz_replay_flipper_file() call; the Transmitter scene owns
+ *  the radio lifecycle (init/exit + tx_completed_naturally flag) and pops
+ *  back here on completion or BACK abort. */
+static void bw_push_tx(SubGhzApp *app)
 {
-    uint8_t rc = sub_ghz_replay_flipper_file(bw_filepath);
-    menu_sub_ghz_init(); /* Restore radio (architecture rule) */
-    return (rc == 0);
+    /* tx_path is 72 bytes; bw_filepath is "0:/SUBGHZ/" + up to 39 chars
+     * of file_base + ".sub" = at most 53 chars, safely within bounds. */
+    strncpy(app->tx_path, bw_filepath, sizeof(app->tx_path) - 1);
+    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    app->tx_repeat_count = 1U;                   /* static keys: 1 burst */
+    app->tx_mode         = 0U;                   /* SUBGHZ_TX_MODE_SINGLE */
+    app->tx_autostart    = true;                 /* 1-press fire UX */
+    app->resume_from_child = true;
+    subghz_scene_push(app, SubGhzSceneTransmitter);
 }
 
 /*============================================================================*/
@@ -516,6 +524,48 @@ static void draw_done(void)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Detect resume-from-child: we just popped back from the Transmitter
+     * scene after a TX step.  Inspect tx_completed_naturally to decide
+     * whether to advance to the next step or stay on the current step
+     * (so the user can retry on a failure / abort). */
+    if (app->resume_from_child)
+    {
+        app->resume_from_child = false;
+
+        if (bw_state == BW_STATE_STEP)
+        {
+            if (app->tx_completed_naturally)
+            {
+                /* TX ran to completion — advance to next step or done. */
+                const BindProtoDef *pd = current_proto();
+                bw_tx_failed = false;
+                app->hopper_active = false;
+
+                if (bw_step + 1 < pd->step_count)
+                {
+                    bw_step++;
+                    bw_countdown_start = HAL_GetTick();
+                    if (current_step()->countdown_sec > 0)
+                        app->hopper_active = true;
+                }
+                else
+                {
+                    bw_state = BW_STATE_DONE;
+                }
+            }
+            else
+            {
+                /* User aborted via BACK in the Transmitter scene — stay on
+                 * this TX step so they can press OK again to retry. */
+                bw_tx_failed = false;
+            }
+            app->need_redraw = true;
+            return;
+        }
+        /* Fall through to full reset if resume happened in an unexpected
+         * state (defensive — should not occur in practice). */
+    }
+
     bw_state        = BW_STATE_PROTO_SEL;
     bw_proto_sel    = 0;
     bw_proto_scroll = 0;
@@ -654,21 +704,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
             if (event == SubGhzEventOk)
             {
-                /* Fire TX if this is a TX step */
+                /* Fire TX if this is a TX step — push the async Transmitter
+                 * scene.  Advancement to the next step happens in
+                 * scene_on_enter after pop-back (see resume_from_child path). */
                 if (st->tx_step)
                 {
-                    if (!bw_transmit())
-                    {
-                        /* TX failed — stay on this step; show error hint */
-                        bw_tx_failed     = true;
-                        app->need_redraw = true;
-                        return true;
-                    }
+                    bw_tx_failed = false;
+                    app->hopper_active = false;
+                    bw_push_tx(app);
+                    return true;
                 }
 
                 bw_tx_failed = false;
 
-                /* Advance to next step or done screen */
+                /* Non-TX step: advance to next step or done screen */
                 app->hopper_active = false;
 
                 if (bw_step + 1 < pd->step_count)

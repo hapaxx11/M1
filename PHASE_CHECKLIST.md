@@ -1,7 +1,7 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 3b-2b-iv (Remote migration to async Transmitter)
+- **PR Title**: Sub-GHz: Momentum parity — Phase 3b-2b (async Transmitter scene; Saved/Playlist/Remote/Bind Wizard migration)
 - **PR Description**: Begins the multi-phase effort to close the remaining Sub-GHz architecture and feature gaps between M1 and Momentum.  This PR ships the phase plan and lands Phase 1 (TxRx state-machine foundation with host-side tests).  Subsequent phases are tracked here and will land in follow-up commits on the same branch.
 
 ## Phases
@@ -140,9 +140,21 @@
         the Transmitter controller's 21-test suite already covers
         the OK_PRESS path, and the new field is exercised by the
         existing READY→TX transition coverage.
-      - **Phase 3b-2b-v — Bind Wizard migration.**  🔲 Not started.
-- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b-i ✅; 3b-2b-ii ✅; 3b-2b-iii ✅; 3b-2b-iv ✅; 3b-2b-v pending)
-- **Commit**: `Phase 3b-2b-iv: migrate Remote scene to async SubGhzSceneTransmitter (tx_autostart)`
+      - **Phase 3b-2b-v — Bind Wizard migration.**  ✅ Complete.
+        Replaced the wizard's blocking `sub_ghz_replay_flipper_file()`
+        call in `bw_transmit()` with `bw_push_tx()`, which sets
+        `tx_path` / `tx_repeat_count=1` / `tx_mode=SINGLE` /
+        `tx_autostart=true` / `resume_from_child=true` and pushes
+        `SubGhzSceneTransmitter`.  Step advancement now happens in
+        `scene_on_enter`'s resume-from-child branch: on
+        `tx_completed_naturally==true` the wizard advances to the next
+        step (or to DONE if last step); on a user BACK abort, the
+        wizard stays on the current TX step so the user can retry.
+        Radio lifecycle is now fully owned by the Transmitter scene —
+        the wizard no longer needs to call `menu_sub_ghz_init/exit`.
+        All 65 host tests pass.
+- **Status**: ✅ Complete (3b-1 ✅; 3b-2a ✅; 3b-2b-i..v ✅)
+- **Commit**: `Phase 3b-2b-v: migrate Bind Wizard to async SubGhzSceneTransmitter`
 
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for
