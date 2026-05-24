@@ -255,6 +255,14 @@ typedef struct {
      *  clears this back to false after consuming it so a later pop-back
      *  won't auto-restart. */
     bool     tx_autostart;
+    /** Phase 4b — protocol name of the file pointed to by `tx_path`,
+     *  used by the Transmitter scene to query
+     *  @ref subghz_button_caps_for_protocol() and decide whether to
+     *  enable LEFT/RIGHT button cycling.  Set by the caller before
+     *  pushing the Transmitter scene; empty string disables cycling
+     *  (used by Playlist / Remote where button cycling is not part of
+     *  the UX).  Sized to match @ref FLIPPER_SUBGHZ_PROTO_MAX_LEN. */
+    char     tx_protocol_name[32];
 } SubGhzApp;
 
 /*============================================================================*/

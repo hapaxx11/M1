@@ -181,6 +181,10 @@ static void playlist_push_transmitter(SubGhzApp *app)
     app->tx_path[sizeof(app->tx_path) - 1] = '\0';
     app->tx_repeat_count = 1U;            /* one burst per playlist item */
     app->tx_mode         = 0U;            /* SUBGHZ_TX_MODE_SINGLE */
+    /* Phase 4b — Playlist runs items back-to-back automatically; button
+     * cycling is not part of the workflow.  Clear tx_protocol_name so
+     * the Transmitter scene treats every item as a single-button TX. */
+    app->tx_protocol_name[0] = '\0';
 
     /* Flag so the Transmitter pop returns to our scene_on_enter and we
      * recognise it as a resume rather than a fresh entry. */

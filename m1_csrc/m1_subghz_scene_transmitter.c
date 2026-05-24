@@ -54,6 +54,7 @@
 #include "m1_subghz_button_bar.h"
 #include "subghz_transmitter_ctl.h"
 #include "subghz_endless_tx.h"
+#include "subghz_button_caps.h"
 #include "uiView.h"
 
 /*============================================================================*/
@@ -226,9 +227,11 @@ static bool perform_action(SubGhzApp *app, subghz_transmitter_action_t action)
 
         case SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_PREV:
         case SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_NEXT:
-            /* Phase 4 — rolling-code button cycling.  Not wired yet
-             * (controller's allow_button_cycle = false), so this
-             * branch is unreachable from this scaffold. */
+            /* Phase 4b — button index has already been mutated inside
+             * the controller; just request a redraw so the "Btn X/Y"
+             * indicator reflects the new value.  Phase 4c will wire
+             * this branch to a button-override prepare entry point so
+             * the transmitted key is re-encoded for the new button. */
             return true;
 
         case SUBGHZ_TXCTL_ACT_NONE:
@@ -257,12 +260,23 @@ static void scene_on_enter(SubGhzApp *app)
         (app->tx_mode == 1U) ? SUBGHZ_TX_MODE_ENDLESS
                               : SUBGHZ_TX_MODE_SINGLE;
 
-    /* Init controller.  Phase 4 will set allow_button_cycle/button_count
-     * from the loaded protocol's flags; for now the controller will
-     * ignore LEFT/RIGHT. */
+    /* Init controller.  Phase 4b: query the button-cycling capability
+     * helper from the protocol name supplied by the caller.  When
+     * tx_protocol_name is empty or unknown, the helper returns
+     * {false, 0} which leaves LEFT/RIGHT inert — matching the legacy
+     * single-button behaviour for static OOK files and for callers
+     * (Playlist / Remote) where cycling is not part of the UX.
+     *
+     * No key re-encoding yet — Phase 4c wires CYCLE_BUTTON_PREV/NEXT
+     * actions to a button-override prepare entry point.  Until then
+     * the controller updates button_index in response to LEFT/RIGHT
+     * and the scene shows the new index, but the transmitted key
+     * remains the original captured value. */
+    subghz_button_caps_t caps =
+        subghz_button_caps_for_protocol(app->tx_protocol_name);
     subghz_transmitter_ctl_init(&s_ctl, mode, repeat,
-                                /*allow_button_cycle=*/false,
-                                /*button_count=*/0U);
+                                caps.supports_cycling,
+                                caps.button_count);
 
     /* Cadence for animation + auto-dismiss after error. */
     subghz_scene_set_tick_period(app, TX_ANIM_TICK_MS);
@@ -463,9 +477,19 @@ static void draw(SubGhzApp *app)
 
         draw_dots(s_anim_phase);
 
-        char counter[20];
+        char counter[24];
         uint16_t emitted = subghz_transmitter_ctl_bursts_emitted(&s_ctl);
-        snprintf(counter, sizeof(counter), "Burst %u", (unsigned)emitted);
+        if (s_ctl.allow_button_cycle && s_ctl.button_count > 1U)
+        {
+            snprintf(counter, sizeof(counter), "Burst %u  Btn %u/%u",
+                     (unsigned)emitted,
+                     (unsigned)(s_ctl.button_index + 1U),
+                     (unsigned)s_ctl.button_count);
+        }
+        else
+        {
+            snprintf(counter, sizeof(counter), "Burst %u", (unsigned)emitted);
+        }
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         m1_draw_text(&m1_u8g2, 2, 51, 124, counter, TEXT_ALIGN_CENTER);
 
@@ -475,18 +499,40 @@ static void draw(SubGhzApp *app)
     }
     else
     {
-        /* READY: filename + Send / Back hint. */
+        /* READY: filename + Send / Back hint.  When the loaded protocol
+         * supports button cycling (Phase 4b), render the current
+         * "Btn X/Y" indicator on the body line and surface LEFT/RIGHT
+         * as button-cycle hints; otherwise show the static
+         * "Press OK to send" copy. */
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         m1_draw_text(&m1_u8g2, 2, 30, 124, s_display_name,
                      TEXT_ALIGN_CENTER);
 
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        m1_draw_text(&m1_u8g2, 2, 44, 124, "Press OK to send",
-                     TEXT_ALIGN_CENTER);
+        if (s_ctl.allow_button_cycle && s_ctl.button_count > 1U)
+        {
+            char btn_line[16];
+            snprintf(btn_line, sizeof(btn_line), "Btn %u/%u",
+                     (unsigned)(s_ctl.button_index + 1U),
+                     (unsigned)s_ctl.button_count);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 2, 44, 124, btn_line,
+                         TEXT_ALIGN_CENTER);
 
-        subghz_button_bar_draw(arrowleft_8x8, "Back",
-                               ok_circle_8x8, "Send",
-                               NULL, NULL);
+            /* LEFT/RIGHT cycle the button index; OK sends. */
+            subghz_button_bar_draw(arrowleft_8x8, NULL,
+                                   ok_circle_8x8, "Send",
+                                   NULL, arrowright_8x8);
+        }
+        else
+        {
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 2, 44, 124, "Press OK to send",
+                         TEXT_ALIGN_CENTER);
+
+            subghz_button_bar_draw(arrowleft_8x8, "Back",
+                                   ok_circle_8x8, "Send",
+                                   NULL, NULL);
+        }
     }
 
     m1_u8g2_nextpage();

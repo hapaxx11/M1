@@ -159,8 +159,8 @@
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for
   KeeLoq / FloR-S / CAME Atomo / FAAC rolling-code remotes.
-- **Status**: 🔄 In progress (4a ✅; 4b, 4c pending)
-- **Commit**: `Phase 4a: add subghz_button_caps pure-logic helper + host tests`
+- **Status**: 🔄 In progress (4a ✅; 4b ✅; 4c pending)
+- **Commit**: `Phase 4b: plumb tx_protocol_name + button-cycle indicator into Transmitter scene`
 
   - **Phase 4a** ✅ — pure-logic `subghz_button_caps` module
     (`Sub_Ghz/subghz_button_caps.{c,h}`) maps a protocol name to
@@ -171,10 +171,21 @@
     case-insensitive matching, whitespace trimming, and the
     "supports_cycling ⇒ button_count ≥ 2" invariant.  All 66 host
     tests pass.
-  - **Phase 4b** 🔲 — plumb `tx_protocol_name` through `SubGhzApp`;
-    Transmitter `scene_on_enter` queries the helper and initialises
-    `allow_button_cycle` / `button_count`; READY/TX screens display
-    the current button index.  No key re-encoding yet.
+  - **Phase 4b** ✅ — `tx_protocol_name[32]` field added to
+    `SubGhzApp`; Transmitter `scene_on_enter` queries
+    `subghz_button_caps_for_protocol()` and passes
+    `(supports_cycling, button_count)` into
+    `subghz_transmitter_ctl_init()`.  The READY screen renders a
+    "Btn X/Y" indicator and LEFT/RIGHT arrow hints when cycling is
+    enabled; TX screen appends "Btn X/Y" to the burst counter.  The
+    `SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_*` branches in `perform_action()`
+    now redraw on each LEFT/RIGHT press.  Callers updated:
+    Saved populates from `saved_signal.protocol`, Bind Wizard from
+    `bw_params.proto_name`; Playlist and Remote clear the field
+    (cycling not part of their UX).  No key re-encoding yet — that
+    lands in 4c.  All 66 host tests still pass; no new tests needed
+    (controller cycling is already covered by the Phase 3b-1 21-test
+    suite, and protocol→caps lookup is covered by the 16 Phase 4a tests).
   - **Phase 4c** 🔲 — add a button-override prepare entry point in
     `m1_sub_ghz.{c,h}` so cycling actually mutates the transmitted
     key.  Wire CYCLE_BUTTON_PREV/NEXT to reload-with-override.

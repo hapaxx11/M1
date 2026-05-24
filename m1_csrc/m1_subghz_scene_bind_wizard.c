@@ -341,6 +341,15 @@ static void bw_push_tx(SubGhzApp *app)
     app->tx_repeat_count = 1U;                   /* static keys: 1 burst */
     app->tx_mode         = 0U;                   /* SUBGHZ_TX_MODE_SINGLE */
     app->tx_autostart    = true;                 /* 1-press fire UX */
+    /* Phase 4b — pass the binding protocol name to the Transmitter
+     * scene.  All five wizard protocols (CAME Atomo, Nice FloR-S,
+     * Alutech AT-4N, DITEC GOL4, KingGates Stylo4k) support button
+     * cycling, so the Transmitter will enable LEFT/RIGHT during the
+     * step.  Until Phase 4c lands the key-override path, cycling
+     * only updates the visible "Btn X/Y" indicator. */
+    strncpy(app->tx_protocol_name, bw_params.proto_name,
+            sizeof(app->tx_protocol_name) - 1);
+    app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
     app->resume_from_child = true;
     subghz_scene_push(app, SubGhzSceneTransmitter);
 }

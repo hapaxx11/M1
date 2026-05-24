@@ -295,6 +295,14 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             app->tx_path[sizeof(app->tx_path) - 1] = '\0';
             app->tx_repeat_count = 1U;             /* static keys: 1 burst */
             app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
+            /* Phase 4b — propagate the parsed protocol name so the
+             * Transmitter scene can query button-cycling capability.
+             * For PACKET/key files this is set by flipper_subghz_load;
+             * for RAW files we never reach here (RAW takes the Read Raw
+             * branch above), but a defensive copy is still safe. */
+            strncpy(app->tx_protocol_name, saved_signal.protocol,
+                    sizeof(app->tx_protocol_name) - 1);
+            app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
             subghz_scene_push(app, SubGhzSceneTransmitter);
             return true;
         }

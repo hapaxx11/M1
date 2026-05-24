@@ -186,6 +186,12 @@ static void remote_fire(SubGhzApp *app, uint8_t btn_idx)
     app->tx_repeat_count = 1U;             /* static keys: 1 burst */
     app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
     app->tx_autostart    = true;           /* one-press fire UX */
+    /* Phase 4b — Remote is a one-shot fire UX (the button on the M1
+     * remote view maps to a saved .sub file, and pressing it should
+     * send the captured key as-is).  Button cycling is not part of
+     * the Remote workflow, so clear tx_protocol_name and let the
+     * Transmitter scene render the legacy single-button view. */
+    app->tx_protocol_name[0] = '\0';
 
     subghz_scene_push(app, SubGhzSceneTransmitter);
 }
