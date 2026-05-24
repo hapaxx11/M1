@@ -1878,8 +1878,10 @@ static void save_favorites(void)
 
 	for (i = 0; i < s_favorite_count; i++)
 	{
-		f_write(&file, s_favorites[i], strlen(s_favorites[i]), &bw);
-		f_write(&file, "\n", 1, &bw);
+		if (f_write(&file, s_favorites[i], strlen(s_favorites[i]), &bw) != FR_OK)
+			break;
+		if (f_write(&file, "\n", 1, &bw) != FR_OK)
+			break;
 	}
 
 	f_close(&file);
@@ -2020,8 +2022,10 @@ static void save_recent(void)
 
 	for (i = 0; i < s_recent_count; i++)
 	{
-		f_write(&file, s_recent[i], strlen(s_recent[i]), &bw);
-		f_write(&file, "\n", 1, &bw);
+		if (f_write(&file, s_recent[i], strlen(s_recent[i]), &bw) != FR_OK)
+			break;
+		if (f_write(&file, "\n", 1, &bw) != FR_OK)
+			break;
 	}
 
 	f_close(&file);

@@ -349,8 +349,10 @@ static void save_last_used(ir_category_t cat, const char *path)
         {
             for (i = 0; i < IR_CAT_COUNT; i++)
             {
-                f_write(&file, lines[i], strlen(lines[i]), &bw);
-                f_write(&file, "\n", 1, &bw);
+                if (f_write(&file, lines[i], strlen(lines[i]), &bw) != FR_OK)
+                    break;
+                if (f_write(&file, "\n", 1, &bw) != FR_OK)
+                    break;
             }
             f_close(&file);
         }
