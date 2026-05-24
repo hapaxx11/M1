@@ -1,0 +1,1 @@
+**Music parser module extraction** — Extracted `music_semitone_to_freq()`, `music_note_duration_ms()`, and `music_parse_note_token()` from `music_player.c` into a standalone `music_parser.c/h` module with 37 unit tests covering frequency conversion, BPM timing, and FMF note token parsing.

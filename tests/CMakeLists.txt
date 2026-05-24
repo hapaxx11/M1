@@ -1287,3 +1287,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_crypto PRIVATE sanitizers)
 endif()
 add_test(NAME crypto COMMAND test_crypto)
+
+# ── Music parser (FMF note parsing) ──
+add_executable(test_music_parser
+    test_music_parser.c
+    ${M1_ROOT}/m1_csrc/music_parser.c
+)
+target_include_directories(test_music_parser PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_music_parser PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_music_parser PRIVATE sanitizers)
+endif()
+add_test(NAME music_parser COMMAND test_music_parser)
