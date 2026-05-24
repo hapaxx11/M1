@@ -246,6 +246,15 @@ typedef struct {
      *  parent scenes (e.g. Playlist) in their scene_on_enter after
      *  pop-back to decide whether to advance or stop a sequence. */
     bool     tx_completed_naturally;
+    /** Auto-start hint for the Transmitter scene.  When true, the scene
+     *  synthesizes an OK_PRESS during scene_on_enter so TX starts
+     *  immediately without requiring the user to confirm on the READY
+     *  screen.  Used by the Remote scene (Phase 3b-2b-iv) so that
+     *  pressing a mapped button fires the signal in one press, matching
+     *  the legacy blocking-wrapper behaviour.  The Transmitter scene
+     *  clears this back to false after consuming it so a later pop-back
+     *  won't auto-restart. */
+    bool     tx_autostart;
 } SubGhzApp;
 
 /*============================================================================*/

@@ -273,6 +273,26 @@ static void scene_on_enter(SubGhzApp *app)
     app->tx_completed_naturally = true;
 
     app->need_redraw = true;
+
+    /* Auto-start hint (Phase 3b-2b-iv) — synthesize an OK_PRESS so TX
+     * begins immediately without the READY → press-OK confirmation
+     * step.  Used by the Remote scene where pressing a mapped button
+     * must fire its signal in one press.  Cleared after consumption
+     * so any later pop-back into a new push has to opt in again. */
+    if (app->tx_autostart && app->tx_path[0] != '\0')
+    {
+        app->tx_autostart = false;
+        subghz_transmitter_action_t a =
+            subghz_transmitter_ctl_event(&s_ctl,
+                                          SUBGHZ_TXCTL_EVT_OK_PRESS);
+        (void)perform_action(app, a);
+    }
+    else
+    {
+        /* Defensive: ensure the flag is clear even on non-autostart
+         * pushes so a stale "true" from an earlier caller can't leak. */
+        app->tx_autostart = false;
+    }
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)

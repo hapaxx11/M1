@@ -1,7 +1,7 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — phased migration (Phase 1 — TxRx state machine)
+- **PR Title**: Sub-GHz: Momentum parity — Phase 3b-2b-iv (Remote migration to async Transmitter)
 - **PR Description**: Begins the multi-phase effort to close the remaining Sub-GHz architecture and feature gaps between M1 and Momentum.  This PR ships the phase plan and lands Phase 1 (TxRx state-machine foundation with host-side tests).  Subsequent phases are tracked here and will land in follow-up commits on the same branch.
 
 ## Phases
@@ -121,10 +121,28 @@
         inter-signal delays from the .txt playlist are still parsed
         but not yet applied — to be re-added via `set_tick_period`
         in a follow-up.
-      - **Phase 3b-2b-iv — Remote migration.**  🔲 Not started.
+      - **Phase 3b-2b-iv — Remote migration.**  ✅ Complete.
+        Replaces the `sub_ghz_replay_flipper_file()` + `menu_sub_ghz_init()`
+        blocking call in `m1_subghz_scene_remote.c::remote_fire()` with
+        a `subghz_scene_push(app, SubGhzSceneTransmitter)` handoff.  To
+        preserve the legacy "one press = fire" UX (the user must not
+        see a READY/Press-OK confirmation between pressing a remote
+        button and the signal going out), a new `SubGhzApp::tx_autostart`
+        boolean is consumed by the Transmitter scene's `scene_on_enter`,
+        which synthesizes an `OK_PRESS` controller event to start TX
+        immediately and then clears the flag.  Remote sets it to `true`
+        on every `remote_fire()`; defensively clears it in its own
+        `scene_on_enter` to keep stale values from leaking across
+        sibling Transmitter pushes.  The Remote scene's own "Sent!"
+        flash overlay and the corresponding `rem_tx_flash` /
+        `rem_tx_last` static state were dropped — the Transmitter
+        scene's TX overlay supersedes them.  No new tests required —
+        the Transmitter controller's 21-test suite already covers
+        the OK_PRESS path, and the new field is exercised by the
+        existing READY→TX transition coverage.
       - **Phase 3b-2b-v — Bind Wizard migration.**  🔲 Not started.
-- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b-i ✅; 3b-2b-ii ✅; 3b-2b-iii ✅; 3b-2b-iv…v pending)
-- **Commit**: `Phase 3b-2b-iii: migrate Playlist to async SubGhzSceneTransmitter push model`
+- **Status**: 🔄 In progress (3b-1 ✅; 3b-2a ✅; 3b-2b-i ✅; 3b-2b-ii ✅; 3b-2b-iii ✅; 3b-2b-iv ✅; 3b-2b-v pending)
+- **Commit**: `Phase 3b-2b-iv: migrate Remote scene to async SubGhzSceneTransmitter (tx_autostart)`
 
 ### Phase 4 — Custom button cycling for rolling-code TX
 - **Description**: UP/DOWN during Transmitter cycles button code 0..3 for
