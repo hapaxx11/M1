@@ -83,6 +83,22 @@ bool flipper_subghz_save_key(const char *path, uint32_t frequency,
                               const char *preset, const char *protocol,
                               uint32_t bit_count, uint64_t key, uint32_t te);
 
+/*
+ * Variant of flipper_subghz_save_key() that also writes a `Manufacture:`
+ * field — required for KeeLoq-family Create-from-scratch keys so the
+ * replay path can look up the manufacturer master key.  Pass a NULL or
+ * empty @p manufacture and the function falls back to the plain
+ * save_key() behaviour (no Manufacture: line written).
+ */
+bool flipper_subghz_save_key_with_manufacture(const char *path,
+                                               uint32_t    frequency,
+                                               const char *preset,
+                                               const char *protocol,
+                                               uint32_t    bit_count,
+                                               uint64_t    key,
+                                               uint32_t    te,
+                                               const char *manufacture);
+
 bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
                                        const char *preset, const char *protocol,
                                        uint32_t bit_count, uint64_t key, uint32_t te);

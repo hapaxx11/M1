@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8c-2 (SetSerial/SetButton/SetCounter/SetMfKey editor scenes)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor.  Phase 8c-2 adds the four KeeLoq-family editor scenes the Phase 8c-3 wiring step will chain together.  `SubGhzSceneSetSerial`, `SubGhzSceneSetButton`, and `SubGhzSceneSetCounter` each reuse the host-tested `subghz_hex_editor` module, sized via the picked protocol's `serial_bits` / `button_bits` / `counter_bits` from the Phase 8c-1 catalog, and round-trip their values through new `SubGhzApp` fields (`create_serial` u32, `create_button` u8, `create_counter` u32).  `SubGhzSceneSetMfKey` is a submenu-list picker over the currently-loaded KeeLoq manufacturer-key table; the picked name is stored in a new `create_mfkey_name[48]` app field for Phase 8c-3's assembler.  A new `keeloq_mfkeys_get_at(index, &out)` accessor on the existing `subghz_keeloq_mfkeys` module lets the picker iterate the table in load order, with four new host tests covering ordered iteration, out-of-range, NULL-entry, and empty-table behaviour.  Total host tests: 74 (was 70), all pass under ASan+UBSan.  No firmware behaviour changes yet — the four scenes are registered in the scene registry but nothing pushes them; Phase 8c-3 will wire SetType to push the first KeeLoq editor and the final editor to assemble the 64-bit key and push Transmitter.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8c-3 (wire KeeLoq Create-from-scratch flow)
+- **PR Description**: Completes the multi-phase Sub-GHz Create-from-scratch refactor.  Phase 8c-3 wires together the four KeeLoq-family editor scenes Phase 8c-2 added.  `SubGhzSceneSetType` now dispatches on the new `SUBGHZ_CREATE_FIELD_SERIAL` field-flag: legacy static-OOK protocols continue to push `SubGhzSceneSetKey` (single opaque hex-key editor); KeeLoq / Star Line / Jarolift push `SubGhzSceneSetSerial`, whose OK pushes `SubGhzSceneSetButton`, whose OK pushes `SubGhzSceneSetCounter`, whose OK pushes `SubGhzSceneSetMfKey`.  The final picker's OK assembles a 64-bit Flipper-format key, writes a temp `.sub` with the `Manufacture:` field set, and pushes the Transmitter scene with `tx_autostart=true` so the signal fires immediately.  Key assembly lives in the new pure-logic `Sub_Ghz/subghz_keeloq_create.c/h` module — Normal/Simple learning derivation + 528-round NLFSR plaintext HOP encryption + protocol-specific 64-bit reassembly, all host-testable.  A new `flipper_subghz_save_key_with_manufacture()` save helper extends `flipper_subghz.c` without breaking the ABI of the existing `flipper_subghz_save_key()` callers.  Replay routes through the existing KeeLoq counter-mode encoder in `sub_ghz_replay_flipper_file()` (which already understands `Manufacture:` and rolling-counter increments).  10 new host tests cover plaintext HOP layout + masking, bad-argument paths (NULL params, NULL out, unknown protocol, Secure learning), Normal and Simple learning end-to-end key assembly, KeeLoq vs Star Line bit layouts, and the counter-changes-hop invariant.  Total host tests: 84 (was 71), all pass under ASan+UBSan.
 
 ## Phases
 
@@ -537,13 +537,22 @@
       per the existing rule that scene rendering is not host-tested.
 
     - **Phase 8c-3 — Wire KeeLoq family through SetType → editors →
-      Transmitter.**  🔲 Not started.  SetType picker pushes the
-      first editor; final editor's OK assembles the 64-bit key and
-      pushes Transmitter.
+      Transmitter.**  ✅ Complete.  SetType picker dispatches via
+      `SUBGHZ_CREATE_FIELD_SERIAL` field-flag; KeeLoq family pushes
+      SetSerial → SetButton → SetCounter → SetMfKey, each editor's OK
+      pushes the next.  SetMfKey's OK assembles the 64-bit Flipper-
+      format key via the new pure-logic `subghz_keeloq_create.c/h`
+      module (Normal/Simple learning derivation + KeeLoq cipher hop
+      encrypt), writes a temp `.sub` with the `Manufacture:` field set
+      via new `flipper_subghz_save_key_with_manufacture()`, and pushes
+      Transmitter with `tx_autostart=true`.  10 new host tests cover
+      plaintext HOP layout, field masking, bad-argument paths, Normal
+      vs Simple learning, KeeLoq vs Star Line bit layouts, and
+      counter-changes-hop invariant.  Total host tests: 84.
 
-- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 ✅;
-  8c-1 ✅; 8c-2 ✅; 8c-3 pending)
-- **Commit**: `Phase 8c-2: add SetSerial/SetButton/SetCounter/SetMfKey editor scenes`
+- **Status**: ✅ Complete (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 ✅;
+  8c-1 ✅; 8c-2 ✅; 8c-3 ✅)
+- **Commit**: `Phase 8c-3: wire KeeLoq Create-from-scratch flow + key assembler`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on

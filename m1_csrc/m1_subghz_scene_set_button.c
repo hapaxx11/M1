@@ -100,7 +100,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             uint8_t  bits   = s_editor.bit_count;
             uint64_t masked = subghz_hex_editor_value(&s_editor) & button_mask_for(bits);
             app->create_button = (uint8_t)masked;
-            subghz_scene_pop(app);
+            /* Phase 8c-3 — chain forward to the Counter editor. */
+            subghz_scene_push(app, SubGhzSceneSetCounter);
             return true;
         }
 

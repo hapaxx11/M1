@@ -108,12 +108,29 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->create_proto_id = s_model.selected;
                 subghz_scene_set_state(app, SubGhzSceneSetType,
                                        s_model.selected);
-                /* Phase 8b-3 — hand off to the hex-key editor scene.
-                 * SetKey reads `create_proto_id` to look up the
-                 * protocol's bit width and frequency, lets the user
-                 * build a key, writes a temp .sub, and pushes the
-                 * Transmitter scene to fire it. */
-                subghz_scene_push(app, SubGhzSceneSetKey);
+                /* Phase 8c-3 — KeeLoq-family protocols use the
+                 * Serial / Button / Counter / MfKey editor chain
+                 * instead of the single opaque hex key editor.  The
+                 * selection is made via the field_flags bitmask so the
+                 * dispatch follows the catalog rather than hard-coded
+                 * protocol IDs.  Pure SetKey is still used for the
+                 * static-OOK families and the Phase 8a rolling-code
+                 * remotes that expose a single opaque hex key. */
+                if (subghz_create_proto_has_field(
+                        (SubGhzCreateProtoId)s_model.selected,
+                        SUBGHZ_CREATE_FIELD_SERIAL))
+                {
+                    subghz_scene_push(app, SubGhzSceneSetSerial);
+                }
+                else
+                {
+                    /* Phase 8b-3 — hand off to the hex-key editor scene.
+                     * SetKey reads `create_proto_id` to look up the
+                     * protocol's bit width and frequency, lets the user
+                     * build a key, writes a temp .sub, and pushes the
+                     * Transmitter scene to fire it. */
+                    subghz_scene_push(app, SubGhzSceneSetKey);
+                }
             }
             return true;
 

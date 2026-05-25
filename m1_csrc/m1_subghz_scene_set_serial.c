@@ -107,7 +107,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             uint8_t  bits   = s_editor.bit_count;
             uint64_t masked = subghz_hex_editor_value(&s_editor) & serial_mask_for(bits);
             app->create_serial = (uint32_t)masked;
-            subghz_scene_pop(app);
+            /* Phase 8c-3 — chain forward through the KeeLoq editor flow:
+             * Serial → Button → Counter → MfKey → Transmitter.  BACK at
+             * any stage pops back one step so the user can revise the
+             * previous field; the Phase 2 scene stack handles that
+             * automatically. */
+            subghz_scene_push(app, SubGhzSceneSetButton);
             return true;
         }
 

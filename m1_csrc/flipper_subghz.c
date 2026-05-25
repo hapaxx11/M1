@@ -746,6 +746,77 @@ bool flipper_subghz_save_key(const char *path, uint32_t frequency,
 
 /*============================================================================*/
 /**
+ * @brief  Variant of flipper_subghz_save_key() that also writes the
+ *         `Manufacture:` field so the saved key can be replayed via the
+ *         KeeLoq counter-mode encoder.
+ *
+ * Used by the Phase 8c-3 Create-from-scratch KeeLoq-family flow.  When
+ * @p manufacture is NULL or empty the function behaves identically to
+ * flipper_subghz_save_key() (no Manufacture line written).
+ */
+bool flipper_subghz_save_key_with_manufacture(const char *path,
+                                               uint32_t    frequency,
+                                               const char *preset,
+                                               const char *protocol,
+                                               uint32_t    bit_count,
+                                               uint64_t    key,
+                                               uint32_t    te,
+                                               const char *manufacture)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != '\0')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result && protocol && protocol[0] != '\0')
+		result = ff_write_kv_str(&ff, "Protocol", protocol);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	if (result && manufacture && manufacture[0] != '\0')
+		result = ff_write_kv_str(&ff, "Manufacture", manufacture);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
  * @brief  Lightweight M1 native .sgh PACKET save — writes from individual fields.
  *
  * Equivalent to flipper_subghz_save_m1native() but avoids the need for a

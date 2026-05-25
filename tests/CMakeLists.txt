@@ -1178,6 +1178,29 @@ endif()
 add_test(NAME subghz_hex_editor COMMAND test_subghz_hex_editor)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_keeloq_create (Phase 8c-3 — KeeLoq
+# Create-from-scratch key assembler).  Pure-logic module that builds
+# the 64-bit Flipper-format key from user-entered serial / button /
+# counter and a picked manufacturer master key.  Depends on the
+# subghz_keeloq cipher + learning primitives.  Zero hardware
+# dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_keeloq_create
+    test_subghz_keeloq_create.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_create.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+)
+target_include_directories(test_subghz_keeloq_create PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_keeloq_create PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_keeloq_create PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_keeloq_create COMMAND test_subghz_keeloq_create)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_read_raw_state (Read Raw async TX helpers)
 # Verifies the pure-logic dispatch helpers used by the Read Raw scene
 # to handle Q_EVENT_SUBGHZ_TX completion events and BACK during TX:
