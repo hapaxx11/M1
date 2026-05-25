@@ -189,6 +189,20 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 			        FLIPPER_SUBGHZ_MANUF_MAX_LEN - 1);
 			out->manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN - 1] = '\0';
 		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "CounterMode") == 0)
+		{
+			/* Phase 9d-2: optional KeeLoq-family replay policy override.
+			 * "Static" → STATIC replay (re-emit captured hop verbatim).
+			 * Anything else (including missing field, empty string, or
+			 * an unknown value such as "Bogus") falls through to the
+			 * INCREMENT default that was already set by memset() at the
+			 * caller — matching the historical behaviour for every
+			 * existing .sub file. */
+			if (subghz_strcasecmp(ff_get_value(ctx), "Static") == 0)
+				out->counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_STATIC;
+			else
+				out->counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
+		}
 	}
 
 	return (out->frequency > 0 && out->protocol[0] != '\0');
@@ -773,6 +787,34 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
                                                uint32_t    te,
                                                const char *manufacture)
 {
+	/* Thin wrapper kept for backwards-compatibility with Phase 9b/9c
+	 * callers — defaults CounterMode to INCREMENT so no new line is
+	 * written to existing files unless they go through the Phase 9d-3
+	 * SignalSettings save path. */
+	return flipper_subghz_save_key_full(path, frequency, preset, protocol,
+	                                    bit_count, key, te, manufacture,
+	                                    FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT);
+}
+
+/*============================================================================*/
+/**
+ * @brief  Phase 9d-2 — write a Flipper Key file with both optional
+ *         `Manufacture:` and `CounterMode:` fields.
+ *
+ * The `CounterMode:` line is only emitted when @p counter_mode is non-default
+ * (i.e. STATIC).  This keeps existing Phase 9b/9c saved files byte-identical
+ * across re-saves that did not touch the counter-mode toggle.
+ */
+bool flipper_subghz_save_key_full(const char *path,
+                                   uint32_t    frequency,
+                                   const char *preset,
+                                   const char *protocol,
+                                   uint32_t    bit_count,
+                                   uint64_t    key,
+                                   uint32_t    te,
+                                   const char *manufacture,
+                                   flipper_subghz_counter_mode_t counter_mode)
+{
 	flipper_file_t ff;
 	bool result = true;
 	char key_str[32];
@@ -820,6 +862,9 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
 
 	if (result && manufacture && manufacture[0] != '\0')
 		result = ff_write_kv_str(&ff, "Manufacture", manufacture);
+
+	if (result && counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+		result = ff_write_kv_str(&ff, "CounterMode", "Static");
 
 	ff_close(&ff);
 	return result;

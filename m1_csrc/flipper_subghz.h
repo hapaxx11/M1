@@ -34,6 +34,26 @@ typedef enum {
 	FLIPPER_SUBGHZ_TYPE_PARSED
 } flipper_subghz_type_t;
 
+/*
+ * Optional `CounterMode:` field carried by KeeLoq-family Flipper Key files
+ * (Phase 9d-2).  Selects the replay policy used by the KeeLoq encoder:
+ *
+ *   INCREMENT (default) — decrypt the captured hop word with the resolved
+ *                          manufacturer key, increment the 16-bit rolling
+ *                          counter, re-encrypt, and transmit.  Matches the
+ *                          historical behaviour for every existing .sub file.
+ *   STATIC              — re-emit the captured encrypted hop word verbatim
+ *                          (no counter increment).  Useful for receivers
+ *                          stuck on a known counter value.
+ *
+ * Files that omit the field, files that carry an unknown value, and all
+ * non-KeeLoq protocols load as INCREMENT.
+ */
+typedef enum {
+	FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT = 0,
+	FLIPPER_SUBGHZ_COUNTER_MODE_STATIC    = 1,
+} flipper_subghz_counter_mode_t;
+
 typedef struct {
 	flipper_subghz_type_t type;
 	uint32_t frequency;                 /* Hz, e.g. 433920000 */
@@ -50,6 +70,9 @@ typedef struct {
 	 * files — empty string when not present.  Populated by the Key parser
 	 * only; left as "" for RAW / M1-native files. */
 	char     manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN];
+	/* Optional `CounterMode:` field — Phase 9d-2.  Defaults to INCREMENT
+	 * for files that omit the field or carry an unrecognised value. */
+	flipper_subghz_counter_mode_t counter_mode;
 	/* Set to true when the file was loaded from an M1 native .sgh format
 	 * (not a Flipper .sub file).  Used to select the direct replay path
 	 * which feeds the original file into the streaming engine without any
@@ -108,6 +131,23 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
                                                uint64_t    key,
                                                uint32_t    te,
                                                const char *manufacture);
+
+/*
+ * Phase 9d-2 save variant that additionally writes the optional
+ * `CounterMode:` field.  The field is only emitted when @p counter_mode
+ * differs from the default (Increment), so files round-tripped from
+ * Phase 9b/9c continue to look identical on disk.  @p manufacture is
+ * handled exactly as in flipper_subghz_save_key_with_manufacture().
+ */
+bool flipper_subghz_save_key_full(const char *path,
+                                   uint32_t    frequency,
+                                   const char *preset,
+                                   const char *protocol,
+                                   uint32_t    bit_count,
+                                   uint64_t    key,
+                                   uint32_t    te,
+                                   const char *manufacture,
+                                   flipper_subghz_counter_mode_t counter_mode);
 
 bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
                                        const char *preset, const char *protocol,

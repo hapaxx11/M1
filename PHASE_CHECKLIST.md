@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9d-1 (Static counter mode in `keeloq_encode_replay()`)
-- **PR Description**: Begins Phase 9d (CounterMode toggle).  Adds a new `bool static_counter` field to `KeeLoqEncParams`; when `true`, `keeloq_encode_replay()` re-emits the captured encrypted hop word verbatim instead of running `keeloq_increment_hop()`.  The manufacturer-key derivation and field-extraction path still runs in both modes, so the encoded waveform layout is identical.  The existing replay caller in `m1_csrc/m1_sub_ghz.c` explicitly sets `static_counter = false`, preserving the current Increment-mode behaviour until Phase 9d-3 wires the toggle from the parsed `.sub` file.  Two new host tests cover (a) static-vs-increment producing different encoded pairs (the 16-bit counter differs by +1 in the HOP word) and (b) static-mode being deterministic across calls (no counter mutation between invocations).  All 74 host tests pass under ASan+UBSan.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9d-2 (`CounterMode:` `.sub` field parser + writer)
+- **PR Description**: Continues Phase 9d.  Adds parse + save support for the optional `CounterMode:` field on KeeLoq-family Flipper Key `.sub` files via a new `flipper_subghz_counter_mode_t` enum and `flipper_subghz_signal_t::counter_mode` member.  The parser recognises `CounterMode: Static` (→ STATIC) and defaults every other case — missing line, `Increment`, empty value, unknown value — to INCREMENT, so every existing `.sub` file replays unchanged.  A new `flipper_subghz_save_key_full()` helper writes both `Manufacture:` and `CounterMode:` and elides the `CounterMode:` line when the value is the default Increment, keeping Phase 9b/9c saved files byte-identical on re-save.  The Phase 9b `flipper_subghz_save_key_with_manufacture()` API is preserved and now delegates to the new helper (always Increment).  7 new host tests cover (a) missing field → Increment with a poisoned-struct regression guard, (b) `Static`, (c) explicit `Increment`, (d) unknown value `Bogus` → Increment, (e) full STATIC round-trip via save_key_full, (f) save_key_full(INCREMENT) emits no `CounterMode:` line, (g) save_key_with_manufacture never emits the line.  All 72 host tests pass under ASan+UBSan.
 
 ## Phases
 
@@ -686,11 +686,24 @@
       vs increment producing different encoded pairs (HOP counter
       differs by +1) and (b) static-mode being deterministic across
       repeated calls.  74 host tests passing under ASan+UBSan.
-    - **9d-2**: Parse / save `CounterMode:` custom field in the `.sub`
-      file via `flipper_subghz_signal_t::counter_mode`, with round-trip
-      tests for files that include the field, files that omit it
-      (default = Increment), and files with invalid values (treated
-      as Increment).
+    - **9d-2**: ✅ Complete.  Parse + save the optional `CounterMode:` field
+      on KeeLoq-family Flipper Key `.sub` files.  New
+      `flipper_subghz_counter_mode_t` enum (Increment = 0, Static = 1) and
+      `flipper_subghz_signal_t::counter_mode` member.  The parser recognises
+      `CounterMode: Static` (→ STATIC); missing line, `Increment`, empty
+      value, and unknown values all yield INCREMENT, so every existing `.sub`
+      file replays unchanged.  A new `flipper_subghz_save_key_full()` helper
+      writes both `Manufacture:` and `CounterMode:` and elides the
+      `CounterMode:` line when the value is the default Increment, keeping
+      Phase 9b/9c saved files byte-identical.  The Phase 9b
+      `flipper_subghz_save_key_with_manufacture()` API is preserved and now
+      delegates to the new helper (always Increment).  7 new host tests
+      cover (a) missing-field → Increment with a poisoned-struct regression
+      guard, (b) `Static`, (c) explicit `Increment`, (d) unknown value
+      `Bogus` → Increment, (e) STATIC full round-trip via save_key_full,
+      (f) save_key_full(INCREMENT) emits no `CounterMode:` line, (g)
+      save_key_with_manufacture never emits the line.  All 72 host tests
+      pass under ASan+UBSan.
     - **9d-3**: SignalSettings UI — third selectable row toggles
       CounterMode (Increment / Static) and persists via the
       Manufacture-preserving save helper.  Wire the toggle to the
@@ -700,8 +713,8 @@
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅)
-- **Commit**: `Phase 9d-1: add static_counter field to KeeLoqEncParams + 2 host tests`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅)
+- **Commit**: `Phase 9d-2: parse + save CounterMode: .sub field + 7 host tests`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with
