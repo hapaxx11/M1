@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9e-1 (counter-edit capability probe + documented 9e-2..5 deferrals)
-- **PR Description**: Lands the tractable foundation of Phase 9e (extend per-file Counter editing beyond the KeeLoq family) and documents the remaining four protocols as discrete sub-phases with concrete blockers.  New pure-logic accessor `subghz_signal_fields_counter_edit_status(protocol, *out_reason)` classifies a protocol as SUPPORTED (KeeLoq / Star Line / Jarolift — full 9b/9c/9d-3 editing), DEFERRED (Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 — each with a static blocker string explaining the specific obstacle), or UNSUPPORTED (everything else).  The SavedMenu Settings-entry gate is widened from `is_keeloq_family()` to "SUPPORTED || DEFERRED" so users on a 9e-roadmap protocol can enter the Settings scene and see the deferred reason verbatim (e.g. "Nice FloR-S: HCS perm. table req.").  Phase 9e-2..5 are split into discrete sub-phases in the checklist, each with a documented blocker, scope estimate, and licensing note.  7 new host tests cover all three return classes, case-insensitive match, NUL/space-terminated prefix match, NULL safety, and the empty-reason guarantee.  72 host tests passing under ASan+UBSan; no firmware functional changes for the KeeLoq family.
+- **PR Title**: Sub-GHz: Momentum parity — revise 9e-2..5 deferral rationale + Phase 11-1 polymorphic `get_string()` vtable foundation
+- **PR Description**: Two threads land together. (1) Revises the Phase 9e-2..5 deferral rationale in `PHASE_CHECKLIST.md`: the earlier "GPL-3.0 licensing implication" against porting Flipper/Unleashed reference code was incorrect — M1 itself is GPL-3.0 (see `LICENSE` / `COPYING.txt`), so importing Flipper reference code is fully licence-compatible.  The 9e-2..5 entries are re-cast in terms of the real engineering blockers (missing decoder field decomposition, missing cipher implementations, key-recovery complexity, undocumented checksum) and a licensing-note paragraph documents the correction. (2) Lands the Phase 11-1 foundation — adds a polymorphic `SubGhzGetStringFn get_string` function-pointer to `SubGhzProtocolDef` (default NULL via designated initialisers, so no other registry entries need touching), implements `subghz_signal_format_keeloq_info()` for the KeeLoq family using the already-extracted Phase 9a-1 / 9c-1 fields (Serial / Button / Counter), wires it onto the KeeLoq / Star Line / Jarolift entries, and teaches the Saved "Signal Info" screen to consult `proto->get_string` when present (falling back to the existing generic layout otherwise).  No functional change for any non-KeeLoq-family file.  New host suite `test_subghz_signal_format` covers the formatter's output shape, prefix-terminated protocol match, NULL safety, and the empty-buffer regression guard.  All host tests pass under ASan+UBSan.
 
 ## Phases
 
@@ -754,7 +754,21 @@
       72 host tests passing.  No firmware functional changes for
       KeeLoq family — that path is unchanged.
 
-    - **Phase 9e-2 — Nice FloR-S counter editing.**  🔲 Deferred.
+    > **Licensing note (revised 2026-05-25).**  Earlier drafts of
+    > Phases 9e-2..5 cited a "GPL-3.0 licensing implication" against
+    > porting Flipper/Unleashed reference code into M1.  This
+    > rationale is **incorrect and has been removed**: the M1 firmware
+    > is itself distributed under GPL-3.0 (see `LICENSE` /
+    > `COPYING.txt`), so importing GPL-3.0 reference code from
+    > Flipper Zero / Unleashed / Momentum is fully licence-compatible.
+    > The Phase 9e-2..5 deferrals below are therefore re-cast in terms
+    > of the underlying **engineering** blockers — research effort,
+    > missing decoder field decomposition, missing cipher
+    > implementations, and key-recovery complexity — none of which is
+    > related to licensing.
+
+    - **Phase 9e-2 — Nice FloR-S counter editing.**  🔲 Deferred —
+      engineering scope.
       Blocker: Nice FloR-S encodes the rolling counter through a
       1080-byte Microchip-HCS-style permutation lookup table.  To
       substitute the counter we need (a) the forward permutation
@@ -764,26 +778,33 @@
       codebase today — `Sub_Ghz/protocols/m1_nice_flor_s_decode.c`
       defers entirely to the generic PWM decoder, storing the 52-bit
       code as an opaque blob with no field decomposition.  The
-      permutation table is public (sigidwiki, Flipper Unleashed
-      sources) but copying it from Flipper carries a GPL-3.0
-      licensing implication for the M1 fork — a clean-room
-      implementation derived from sigidwiki documentation is
-      preferred.  Estimated scope: ~1080 bytes of table data + ~60
-      lines of pure-logic perm/inverse-perm + 12-test host suite.
+      permutation table is public on sigidwiki and in the Flipper
+      Unleashed sources (GPL-3.0, licence-compatible with M1's
+      GPL-3.0 — see the licensing note above), but the work of
+      wiring it through M1's decoder + field extractor + counter
+      encoder pipeline is still substantial and has not been
+      scheduled.  Estimated scope: ~1080 bytes of table data + ~60
+      lines of pure-logic perm/inverse-perm + 12-test host suite +
+      decoder-side field decomposition (currently absent).
 
-    - **Phase 9e-3 — CAME Atomo counter editing.**  🔲 Deferred.
+    - **Phase 9e-3 — CAME Atomo counter editing.**  🔲 Deferred —
+      engineering scope.
       Blocker: CAME Atomo wraps its 16-bit rolling counter inside an
       XTEA-family cipher with a public fixed key.  Counter
       substitution needs the full decode chain (cipher-decrypt →
       substitute → cipher-encrypt) which is ~80 lines including the
       fixed-key constants.  The cipher is documented in Flipper
-      Unleashed but copying carries the same GPL-3.0 concern as
-      Phase 9e-2.  The M1 decoder (`m1_came_atomo_decode.c`) stores
-      the 62-bit code as an opaque blob — no field-level
-      decomposition.  Estimated scope: ~80 lines pure-logic + 10
-      host tests + clean-room cipher reference.
+      Unleashed (GPL-3.0; licence-compatible — see note above) and
+      can be imported directly, but the M1 decoder
+      (`m1_came_atomo_decode.c`) stores the 62-bit code as an opaque
+      blob with no field-level decomposition, so the work also
+      requires extending the decoder to surface the encrypted
+      payload + counter offset before the cipher pipeline can be
+      hooked up.  Estimated scope: ~80 lines pure-logic cipher +
+      decoder field decomposition + 10 host tests.
 
-    - **Phase 9e-4 — Alutech AT-4N counter editing.**  🔲 Deferred.
+    - **Phase 9e-4 — Alutech AT-4N counter editing.**  🔲 Deferred —
+      research-blocked.
       Blocker: Alutech AT-4N uses a per-device AES-128-like cipher
       where the key is itself encrypted inside the captured payload
       (key-wrapping).  Substituting the counter requires (a)
@@ -795,21 +816,31 @@
       `min_count_bit` — see `subghz_new_remote_gen.c`) may not even
       carry enough bits to recover the key without the original
       capture's `RAW_Data` line, which Flipper Key files do not
-      preserve.  Estimated scope: research-blocked — needs a
-      reference implementation review before sizing.
+      preserve.  Reference implementations exist in Flipper
+      Unleashed (GPL-3.0, licence-compatible — see note above), but
+      they too operate on the original raw capture, not on the
+      reduced 64-bit Flipper Key form M1 saves.  Estimated scope:
+      research-blocked — needs a reference-implementation review to
+      confirm whether the saved 64-bit form retains enough entropy
+      to support counter substitution at all, before any code can
+      be sized.
 
-    - **Phase 9e-5 — Phoenix V2 counter editing.**  🔲 Deferred.
+    - **Phase 9e-5 — Phoenix V2 counter editing.**  🔲 Deferred —
+      research scope.
       Blocker: The 52-bit Phoenix V2 code has the counter at a known
       bit offset (the decoder in `m1_phoenix_v2_decode.c` shows the
       Manchester-style (LOW,HIGH)-pair layout) but a discriminant /
       checksum trails the counter and must be recomputed after
       substitution.  The checksum algorithm is not currently
       documented in the M1 codebase nor cited in the M1
-      protocol-registry entry (registry.c:821).  Estimated scope:
-      research to confirm the checksum polynomial + ~40 lines
-      pure-logic + 8 host tests.  Lower-priority than 9e-2/9e-3
-      because Phoenix V2 captures are rarer in real-world use.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅; 9d-3 ✅; 9e-1 ✅; 9e-2..5 🔲 deferred — documented)
+      protocol-registry entry (registry.c:821), and the Flipper
+      Unleashed source (GPL-3.0, licence-compatible — see note
+      above) treats the field similarly opaquely.  Estimated scope:
+      research to confirm the checksum polynomial against captured
+      remote samples + ~40 lines pure-logic + 8 host tests.
+      Lower-priority than 9e-2/9e-3 because Phoenix V2 captures are
+      rarer in real-world use.
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅; 9d-3 ✅; 9e-1 ✅; 9e-2..5 🔲 deferred — engineering scope / research-blocked, licensing rationale revised 2026-05-25)
 - **Commit**: `Phase 9e-1: counter-edit capability probe + deferred reasons for 9e-2..5`
 
 ### Phase 10 — Scene manager polish
@@ -819,11 +850,41 @@
 - **Commit**: `Phase 10: add subghz_scene_polish primitives (stack search + tick scheduler)`
 
 ### Phase 11 — Polymorphic decoder `get_string()` vtable
-- **Description**: Add `get_string(decoder, FILE*)` to the protocol registry
-  entry struct.  Removes the last `strcasecmp(proto->name, …)` branches in scene
-  code.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Description**: Add a polymorphic `get_string` function-pointer field to
+  the `SubGhzProtocolDef` registry entry struct so each protocol can render
+  its own human-readable Info-screen text from the loaded
+  `flipper_subghz_signal_t` fields, instead of every consumer hard-coding a
+  generic "Proto: … / Key: 0x… / Bits: …" layout.  Removes the last
+  `strcasecmp(proto->name, …)` name-dispatch branches in scene code.
+
+  Sub-phase plan:
+
+  - **Phase 11-1 — Vtable slot + KeeLoq-family renderer (foundation).**
+    🔄 In progress.  Adds `SubGhzGetStringFn get_string` to
+    `SubGhzProtocolDef` (default NULL via designated initialisers, so no
+    other registry entries need touching), with the function signature
+    chosen to be registry-friendly (no dependency on `flipper_subghz.h`):
+    `void (*)(const SubGhzSignalView *view, char *buf, size_t buflen)`.
+    `SubGhzSignalView` is a tiny opaque-by-value struct (protocol name,
+    64-bit key, bit count, TE) populated by the caller from the
+    already-loaded signal.  Implements
+    `subghz_signal_format_keeloq_info()` as the KeeLoq-family renderer
+    (Serial / Button / Counter — fields already extracted by the
+    Phase 9a-1 / 9c-1 helpers) and wires it onto the KeeLoq, Star Line,
+    and Jarolift registry entries.  Updates the Saved Info screen to
+    consult `proto->get_string` when present, falling back to the
+    existing generic layout when it is NULL.  Host tests cover the
+    formatter's output shape (line breaks, prefix-terminated protocol
+    match, NULL-safety) and a regression guard that non-KeeLoq protocol
+    rendering is unchanged.  No firmware-functional behaviour change
+    for any non-KeeLoq-family file.
+
+  - **Phase 11-2+** — incremental migration of additional protocols
+    (Nice FloR-S serial/button display, CAME Atomo / Came / Holtek
+    field decomposition) — deferred until decoder field decomposition
+    lands per the 9e-2..5 sub-phases.
+- **Status**: 🔄 In progress (11-1 foundation landing in this PR; 11-2+ deferred until decoders surface their fields)
+- **Commit**: `Phase 11-1: add polymorphic SubGhzGetStringFn vtable + KeeLoq-family Info renderer`
 
 ### Phase 12 — Receiver history quality-of-life
 - **Description**: `delete_old_signals` and `remove_duplicates` toggles, exposed
