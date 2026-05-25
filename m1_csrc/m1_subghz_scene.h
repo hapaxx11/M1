@@ -64,6 +64,10 @@ typedef enum {
     SubGhzSceneDecodeRaw,      /**< Offline decode-results view for a loaded RAW file */
     SubGhzSceneSetType,        /**< Create-from-scratch protocol picker (Phase 8b-2) */
     SubGhzSceneSetKey,         /**< Create-from-scratch hex-key editor (Phase 8b-3) */
+    SubGhzSceneSetSerial,      /**< Create-from-scratch KeeLoq serial editor (Phase 8c-2) */
+    SubGhzSceneSetButton,      /**< Create-from-scratch KeeLoq button editor (Phase 8c-2) */
+    SubGhzSceneSetCounter,     /**< Create-from-scratch KeeLoq counter editor (Phase 8c-2) */
+    SubGhzSceneSetMfKey,       /**< Create-from-scratch KeeLoq mfkey picker (Phase 8c-2) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -296,6 +300,27 @@ typedef struct {
      *  `[0, SUBGHZ_CREATE_PROTO_COUNT)`.  Initialised to 0 by
      *  `subghz_scene_init()` (memset). */
     uint8_t  create_proto_id;
+
+    /* --- Phase 8c-2 — Create-from-scratch KeeLoq field state --- */
+    /** User-entered KeeLoq serial.  Width depends on the picked protocol
+     *  spec (`serial_bits`, typically 28).  Stored as 32-bit; SetSerial
+     *  masks to the protocol's serial_bits on OK. */
+    uint32_t create_serial;
+    /** User-entered KeeLoq button code.  Width depends on the picked
+     *  protocol spec (`button_bits`, typically 4).  Stored as 8-bit;
+     *  SetButton masks to the protocol's button_bits on OK. */
+    uint8_t  create_button;
+    /** User-entered KeeLoq rolling counter.  Width depends on the picked
+     *  protocol spec (`counter_bits`, typically 16).  Stored as 32-bit;
+     *  SetCounter masks to the protocol's counter_bits on OK. */
+    uint32_t create_counter;
+    /** User-picked manufacturer-key name from the SetMfKey scene.  The
+     *  Phase 8c-3 assembler will look this up via @ref keeloq_mfkeys_find
+     *  to obtain the 64-bit master key and learn type before composing
+     *  the final 64-bit Flipper hop word.  Sized to match
+     *  @ref KeeLoqMfrEntry::name.  Empty string when no mfkey has been
+     *  picked yet. */
+    char     create_mfkey_name[48];
 } SubGhzApp;
 
 /*============================================================================*/
@@ -498,5 +523,9 @@ extern const SubGhzSceneHandlers subghz_scene_more_raw_handlers;
 extern const SubGhzSceneHandlers subghz_scene_decode_raw_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_type_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_key_handlers;
+extern const SubGhzSceneHandlers subghz_scene_set_serial_handlers;
+extern const SubGhzSceneHandlers subghz_scene_set_button_handlers;
+extern const SubGhzSceneHandlers subghz_scene_set_counter_handlers;
+extern const SubGhzSceneHandlers subghz_scene_set_mfkey_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

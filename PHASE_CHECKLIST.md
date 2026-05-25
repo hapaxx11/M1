@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8c-1 (extend create-proto catalog with KeeLoq family)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8c-1 extends the pure-logic protocol catalog in `Sub_Ghz/subghz_create_proto.c/h` from 17 to 20 entries by adding the three KeeLoq-cipher counter-mode protocols already supported by the existing `subghz_keeloq_encoder.c`: KeeLoq 433, Star Line 433, and Jarolift 433.  Unlike the Phase 8a/8b-1 entries which expose a single opaque hex `FIELD_KEY`, KeeLoq family entries advertise `FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY` to reflect the four-field editing UX that Phase 8c-2/3 will surface.  Three new `SubGhzCreateProtoSpec` bit-width fields (`serial_bits` 28, `button_bits` 4, `counter_bits` 16) describe how the editor scenes should size their cursors and how the assembler should mask user-entered values before composing the 64-bit Flipper-format key.  Five new host tests under ASan+UBSan cover the new entries, two new structural invariants (KeeLoq field widths fit a 64-bit key; non-KeeLoq entries have zero field widths), and the field-flag query tests are rewritten so the two flag groups are checked as disjoint.  All 70 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8c-2 (SetSerial/SetButton/SetCounter/SetMfKey editor scenes)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor.  Phase 8c-2 adds the four KeeLoq-family editor scenes the Phase 8c-3 wiring step will chain together.  `SubGhzSceneSetSerial`, `SubGhzSceneSetButton`, and `SubGhzSceneSetCounter` each reuse the host-tested `subghz_hex_editor` module, sized via the picked protocol's `serial_bits` / `button_bits` / `counter_bits` from the Phase 8c-1 catalog, and round-trip their values through new `SubGhzApp` fields (`create_serial` u32, `create_button` u8, `create_counter` u32).  `SubGhzSceneSetMfKey` is a submenu-list picker over the currently-loaded KeeLoq manufacturer-key table; the picked name is stored in a new `create_mfkey_name[48]` app field for Phase 8c-3's assembler.  A new `keeloq_mfkeys_get_at(index, &out)` accessor on the existing `subghz_keeloq_mfkeys` module lets the picker iterate the table in load order, with four new host tests covering ordered iteration, out-of-range, NULL-entry, and empty-table behaviour.  Total host tests: 74 (was 70), all pass under ASan+UBSan.  No firmware behaviour changes yet — the four scenes are registered in the scene registry but nothing pushes them; Phase 8c-3 will wire SetType to push the first KeeLoq editor and the final editor to assemble the 64-bit key and push Transmitter.
 
 ## Phases
 
@@ -513,8 +513,28 @@
       any scene.  All 70 host tests pass.
 
     - **Phase 8c-2 — SetSerial / SetButton / SetCounter / SetMfKey
-      editor scenes.**  🔲 Not started.  Per-field hex/decimal editor
-      scenes that compose into the Phase 8c-3 wiring.
+      editor scenes.**  ✅ Complete.  Four new scenes:
+      `SubGhzSceneSetSerial` / `SubGhzSceneSetButton` /
+      `SubGhzSceneSetCounter` reuse the host-tested
+      `subghz_hex_editor` module sized via the catalog's
+      `serial_bits` / `button_bits` / `counter_bits` and round-trip
+      their values through new `SubGhzApp::create_serial` (u32),
+      `create_button` (u8), `create_counter` (u32) fields.
+      `SubGhzSceneSetMfKey` is a submenu-list picker over the
+      currently-loaded KeeLoq manufacturer-key table; selection is
+      stored in a new `create_mfkey_name[48]` app field and the
+      cursor position persists across re-entries via the per-scene
+      state slot.  A new `keeloq_mfkeys_get_at(index, &out)`
+      accessor was added to the existing `subghz_keeloq_mfkeys`
+      module so the picker can iterate the table in load order;
+      four new host tests cover iteration, out-of-range, NULL-entry,
+      and empty-table behaviour (74 host tests pass).  All four
+      scenes pop on OK without pushing anything else — Phase 8c-3
+      will replace those pops with the chain push to compose the
+      full SetType → SetSerial → SetButton → SetCounter →
+      SetMfKey → Transmitter flow.  Scene files are firmware-only
+      (u8g2 / m1_display / m1_lcd dependencies) and host-untested
+      per the existing rule that scene rendering is not host-tested.
 
     - **Phase 8c-3 — Wire KeeLoq family through SetType → editors →
       Transmitter.**  🔲 Not started.  SetType picker pushes the
@@ -522,8 +542,8 @@
       pushes Transmitter.
 
 - **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 ✅;
-  8c-1 ✅; 8c-2/3 pending)
-- **Commit**: `Phase 8c-1: extend create-proto catalog with KeeLoq family`
+  8c-1 ✅; 8c-2 ✅; 8c-3 pending)
+- **Commit**: `Phase 8c-2: add SetSerial/SetButton/SetCounter/SetMfKey editor scenes`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on

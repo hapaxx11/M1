@@ -191,3 +191,18 @@ bool keeloq_mfkeys_find(const char *name, KeeLoqMfrEntry *entry);
  * @brief  Return the number of entries currently loaded.
  */
 uint32_t keeloq_mfkeys_count(void);
+
+/**
+ * @brief  Retrieve the entry at @p index from the loaded table.
+ *
+ * Provides ordered iteration over the in-memory table so UI code can
+ * present manufacturer names in a list (e.g. the SetMfKey picker scene).
+ * The order matches the load order from the keystore source — no
+ * sorting is performed.
+ *
+ * @param[in]  index  Zero-based index, must be < @ref keeloq_mfkeys_count().
+ * @param[out] entry  On success, filled with a copy of the entry.
+ * @return true if @p index is in range and @p entry is non-NULL,
+ *         false otherwise.
+ */
+bool keeloq_mfkeys_get_at(uint32_t index, KeeLoqMfrEntry *entry);

@@ -74,6 +74,10 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneDecodeRaw]        = &subghz_scene_decode_raw_handlers,
     [SubGhzSceneSetType]          = &subghz_scene_set_type_handlers,
     [SubGhzSceneSetKey]           = &subghz_scene_set_key_handlers,
+    [SubGhzSceneSetSerial]        = &subghz_scene_set_serial_handlers,
+    [SubGhzSceneSetButton]        = &subghz_scene_set_button_handlers,
+    [SubGhzSceneSetCounter]       = &subghz_scene_set_counter_handlers,
+    [SubGhzSceneSetMfKey]         = &subghz_scene_set_mfkey_handlers,
 };
 
 /*============================================================================*/
