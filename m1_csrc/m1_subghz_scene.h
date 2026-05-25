@@ -322,6 +322,21 @@ typedef struct {
      *  @ref KeeLoqMfrEntry::name.  Empty string when no mfkey has been
      *  picked yet. */
     char     create_mfkey_name[48];
+
+    /* --- Phase 9b — SignalSettings edit-in-place context flag --- */
+    /** Set to true by the SignalSettings scene immediately before pushing
+     *  one of the field-editor scenes (SetButton in 9b; SetCounter in 9c)
+     *  to repurpose those Create-from-scratch editors for editing a
+     *  loaded .sub file.  Consumed by the editor's on_enter (to seed the
+     *  initial value from the loaded signal instead of `create_*`) and
+     *  by on_event/OK (to dispatch the save-back path + pop instead of
+     *  chaining forward to the next Create-from-scratch step).
+     *
+     *  Cleared by the SignalSettings scene_on_enter when control returns
+     *  to it after the editor pops, so the next OK starts from a clean
+     *  state.  Cleared on app init via `subghz_scene_init()` memset.
+     */
+    bool     signal_edit_active;
 } SubGhzApp;
 
 /*============================================================================*/
@@ -529,5 +544,37 @@ extern const SubGhzSceneHandlers subghz_scene_set_button_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_counter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_mfkey_handlers;
 extern const SubGhzSceneHandlers subghz_scene_signal_settings_handlers;
+
+/*============================================================================*/
+/* SignalSettings (Phase 9b) cross-scene API                                  */
+/*============================================================================*/
+
+/**
+ * @brief  Return the cached KeeLoq button value (0..0x0F) extracted from
+ *         the currently-loaded SignalSettings file, or 0 when no file is
+ *         loaded or the protocol is not a supported KeeLoq family member.
+ *
+ * Used by @ref SubGhzSceneSetButton to seed its hex editor with the
+ * current file's button value when @ref SubGhzApp::signal_edit_active is
+ * set.
+ */
+uint8_t subghz_signal_settings_get_button(void);
+
+/**
+ * @brief  Reassemble the loaded SignalSettings file's 64-bit Flipper key
+ *         with @p new_button substituted in the button field, then save
+ *         the file back via @ref flipper_subghz_save_key_with_manufacture,
+ *         preserving the original Manufacture: line.
+ *
+ * Used by @ref SubGhzSceneSetButton on OK when @ref
+ * SubGhzApp::signal_edit_active is set.  No-op (returns false) when no
+ * supported file is currently loaded.
+ *
+ * @param[in] new_button  New button value; masked to 4 bits internally.
+ * @retval true   File was saved successfully and the in-memory cache
+ *                was refreshed to reflect the new value.
+ * @retval false  No supported file loaded, assemble failed, or save failed.
+ */
+bool subghz_signal_settings_apply_button(uint8_t new_button);
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

@@ -179,6 +179,16 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 		{
 			out->te = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
 		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Manufacture") == 0)
+		{
+			/* KeeLoq-family manufacturer-key name — Phase 9b carries it
+			 * through load → SignalSettings → save_key_with_manufacture
+			 * so the saved file's Manufacture line is preserved across
+			 * round-trip edits. */
+			strncpy(out->manufacture, ff_get_value(ctx),
+			        FLIPPER_SUBGHZ_MANUF_MAX_LEN - 1);
+			out->manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN - 1] = '\0';
+		}
 	}
 
 	return (out->frequency > 0 && out->protocol[0] != '\0');

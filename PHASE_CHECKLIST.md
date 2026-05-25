@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9a-2 (SignalSettings scene scaffold + Saved-menu gating)
-- **PR Description**: Adds the read-only `SubGhzSceneSignalSettings` scaffold and wires a gated "Settings" entry into the SavedMenu action menu.  Pushed by SavedMenu when the parsed file's protocol is a KeeLoq family member (KeeLoq / Star Line / Jarolift — gating expands to Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 in Phase 9e).  The scene reloads the `.sub` file on entry, dissects the 64-bit Flipper key via the Phase 9a-1 `subghz_signal_fields_keeloq_extract()` pure-logic helper, and renders Serial / Button / EncHop with a clear placeholder for the (Phase 9c) decrypted counter.  BACK pops back to the SavedMenu; OK is a no-op in this scaffold and is reserved for Phase 9b (push SetButton) and 9c (push SetCounter).  Unsupported parsed protocols and RAW files display an explicit placeholder so accidental scene entry is never silent.  No new host tests — 9a-2 is firmware-only scene rendering, covered by the existing 9a-1 extractor suite (84 host tests).  All 72 host CTest targets pass under ASan+UBSan.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9b (editable Button in SignalSettings + Manufacture round-trip)
+- **PR Description**: Makes the `SubGhzSceneSignalSettings` button field editable.  Pressing OK on a KeeLoq-family file (KeeLoq / Star Line / Jarolift) pushes `SubGhzSceneSetButton` in edit-signal mode, repurposing the existing 4-bit hex editor.  On OK the new `subghz_signal_settings_apply_button()` save helper reassembles the 64-bit key via the Phase 9a-1 `subghz_signal_fields_keeloq_assemble()` and writes the file back via `flipper_subghz_save_key_with_manufacture()`, preserving the original `Manufacture:` line.  Manufacture round-tripping is enabled by a new `manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN]` field on `flipper_subghz_signal_t` populated by the `subghz_parse_key()` parser; files without a `Manufacture:` line yield an empty string (regression-guarded).  A new `SubGhzApp::signal_edit_active` flag gates SetButton's source/dispatch so the Create-from-scratch flow is unchanged.  4 new host tests cover the Manufacture load/save round-trip (76/76 host tests passing under ASan+UBSan).
 
 ## Phases
 
@@ -579,9 +579,26 @@
     a clear placeholder so accidental entry is not silent.  No new
     host tests — 9a-2 is firmware-only scene rendering, covered by
     the existing 9a-1 extractor suite.
-  - **9b**: Editable Button — reuse `SubGhzSceneSetButton`, save back via
-    `flipper_subghz_save_key_with_manufacture()` preserving the existing
-    Manufacture: field.
+  - **9b**: ✅ Complete.  `SubGhzSceneSignalSettings` OK now pushes
+    `SubGhzSceneSetButton` in edit-signal mode for KeeLoq-family files,
+    repurposing the existing 4-bit hex editor.  A new `SubGhzApp::
+    signal_edit_active` flag (cleared in `SignalSettings::scene_on_enter`
+    and on app init) gates SetButton's source/dispatch: source becomes
+    `subghz_signal_settings_get_button()` (the cached extracted button)
+    instead of `app->create_button`, and on OK the new
+    `subghz_signal_settings_apply_button()` save helper re-assembles the
+    64-bit key via the Phase 9a-1 `subghz_signal_fields_keeloq_assemble()`
+    pure-logic helper and writes the file back via
+    `flipper_subghz_save_key_with_manufacture()`, preserving the original
+    `Manufacture:` line.  To enable Manufacture round-tripping, a new
+    `char manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN]` field was added to
+    `flipper_subghz_signal_t` and the `subghz_parse_key()` parser was
+    extended to populate it; files without a `Manufacture:` line yield
+    an empty string (regression-guarded).  After OK, SetButton pops back
+    to SignalSettings whose `scene_on_enter` reloads from disk and
+    reflects the new value.  4 new host tests cover the Manufacture
+    load/save round-trip (76 host tests total, all passing under
+    ASan+UBSan).
   - **9c**: Editable Counter for KeeLoq family — decrypt the encrypted
     hop with the resolved manufacturer key, replace the 16-bit counter,
     re-encrypt, reassemble the 64-bit key, save back.
@@ -591,8 +608,8 @@
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅)
-- **Commit**: `Phase 9a-2: add SubGhzSceneSignalSettings scaffold + Saved-menu gating`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅)
+- **Commit**: `Phase 9b: editable Button in SignalSettings + Manufacture round-trip`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

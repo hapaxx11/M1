@@ -47,6 +47,11 @@ static subghz_keeloq_fields_t  s_fields;
 static bool                    s_supported;
 /** True when the file load itself succeeded — drives the error placeholder. */
 static bool                    s_loaded;
+/** Cached absolute load path ("0:/SUBGHZ/<name>") used by the Phase 9b
+ *  save-back helper (`subghz_signal_settings_apply_button`).  Populated
+ *  by scene_on_enter from `app->saved_filepath`; cleared on exit so a
+ *  stale path can never be written to. */
+static char                    s_saved_full_path[80];
 
 /*============================================================================*/
 /* Scene callbacks                                                             */
@@ -54,10 +59,16 @@ static bool                    s_loaded;
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Returning from a pushed editor (SetButton, etc.) — clear the
+     * cross-scene edit context flag so a subsequent fresh entry from the
+     * Saved menu starts with a clean state. */
+    app->signal_edit_active = false;
+
     s_loaded    = false;
     s_supported = false;
     memset(&s_signal, 0, sizeof(s_signal));
     memset(&s_fields, 0, sizeof(s_fields));
+    s_saved_full_path[0] = '\0';
 
     if (app->saved_filepath[0] == '\0')
     {
@@ -74,6 +85,10 @@ static void scene_on_enter(SubGhzApp *app)
         return;
     }
     s_loaded = true;
+    /* Stash the absolute path so the Phase 9b save-back path can rewrite
+     * the exact file we loaded from without re-deriving from app state. */
+    strncpy(s_saved_full_path, full_path, sizeof(s_saved_full_path) - 1);
+    s_saved_full_path[sizeof(s_saved_full_path) - 1] = '\0';
 
     /* Only parsed (PACKET / Key) files have a 64-bit `key` to dissect.
      * RAW captures do not — the SavedMenu must already be gating this
@@ -103,9 +118,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventOk:
-            /* No-op in the 9a-2 scaffold.  Phase 9b will push SetButton;
-             * Phase 9c will push SetCounter.  Consume the event so the
-             * scene-manager doesn't fall through to a parent handler. */
+            /* Phase 9b — push SetButton in edit-signal mode for KeeLoq
+             * family files.  Unsupported protocols, RAW files, and load
+             * failures swallow the OK so the scene stays put.  Phase 9c
+             * will extend this to chain a SetCounter editor as well. */
+            if (s_loaded && s_supported)
+            {
+                app->signal_edit_active = true;
+                subghz_scene_push(app, SubGhzSceneSetButton);
+            }
             return true;
 
         default:
@@ -117,6 +138,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 static void scene_on_exit(SubGhzApp *app)
 {
     (void)app;
+    /* Defensive: never leave a stale absolute path resident in BSS where
+     * a later mis-routed save could overwrite the wrong file. */
+    s_saved_full_path[0] = '\0';
 }
 
 /*============================================================================*/
@@ -204,3 +228,57 @@ const SubGhzSceneHandlers subghz_scene_signal_settings_handlers = {
     .on_exit  = scene_on_exit,
     .draw     = draw,
 };
+
+/*============================================================================*/
+/* Phase 9b — Cross-scene API (consumed by SubGhzSceneSetButton)              */
+/*============================================================================*/
+
+uint8_t subghz_signal_settings_get_button(void)
+{
+    if (!s_loaded || !s_supported)
+        return 0U;
+    return (uint8_t)(s_fields.button & 0x0FU);
+}
+
+bool subghz_signal_settings_apply_button(uint8_t new_button)
+{
+    if (!s_loaded || !s_supported)
+        return false;
+    if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
+        return false;
+
+    /* Substitute the button field and re-assemble the 64-bit Flipper key
+     * using the host-tested pure-logic assembler (Phase 9a-1). */
+    subghz_keeloq_fields_t updated = s_fields;
+    updated.button = (uint8_t)(new_button & 0x0FU);
+
+    uint64_t new_key = 0;
+    if (!subghz_signal_fields_keeloq_assemble(s_signal.protocol,
+                                              &updated, &new_key))
+        return false;
+
+    /* The cached absolute load path is populated by scene_on_enter; if
+     * empty (no file loaded) the save is rejected.  The Manufacture line
+     * is propagated verbatim — if the source file had none, the field is
+     * "" and the save helper falls back to plain key-save behaviour. */
+    if (s_saved_full_path[0] == '\0')
+        return false;
+
+    bool ok = flipper_subghz_save_key_with_manufacture(s_saved_full_path,
+                                                       s_signal.frequency,
+                                                       s_signal.preset,
+                                                       s_signal.protocol,
+                                                       s_signal.bit_count,
+                                                       new_key,
+                                                       s_signal.te,
+                                                       s_signal.manufacture);
+    if (!ok)
+        return false;
+
+    /* Update the cache so a redraw without re-entering the scene shows
+     * the new value immediately.  The scene's on_enter will overwrite
+     * this anyway when control returns. */
+    s_fields    = updated;
+    s_signal.key = new_key;
+    return true;
+}

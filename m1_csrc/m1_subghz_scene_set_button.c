@@ -43,6 +43,16 @@ static const SubGhzCreateProtoSpec *s_spec;
 
 static uint8_t button_bits_for(SubGhzApp *app)
 {
+    /* Phase 9b — edit-signal mode reuses this scene for the KeeLoq family
+     * (KeeLoq / Star Line / Jarolift), all of which use a 4-bit button.
+     * The cached signal-fields module lives in
+     * `m1_subghz_scene_signal_settings.c`; the spec table is only
+     * relevant in Create-from-scratch mode. */
+    if (app->signal_edit_active)
+    {
+        s_spec = NULL;
+        return 4U;
+    }
     s_spec = subghz_create_proto_spec((SubGhzCreateProtoId)app->create_proto_id);
     if (s_spec && s_spec->button_bits > 0U)
         return s_spec->button_bits;
@@ -62,8 +72,12 @@ static void scene_on_enter(SubGhzApp *app)
 {
     uint8_t bits = button_bits_for(app);
     subghz_hex_editor_init(&s_editor, bits);
-    subghz_hex_editor_set_value(&s_editor,
-                                (uint64_t)app->create_button & button_mask_for(bits));
+    /* Phase 9b — seed from the loaded signal's button when editing a
+     * .sub file; otherwise from `create_button` (Create-from-scratch). */
+    uint64_t initial = app->signal_edit_active
+                       ? (uint64_t)subghz_signal_settings_get_button()
+                       : (uint64_t)app->create_button;
+    subghz_hex_editor_set_value(&s_editor, initial & button_mask_for(bits));
     app->need_redraw = true;
 }
 
@@ -99,8 +113,24 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         {
             uint8_t  bits   = s_editor.bit_count;
             uint64_t masked = subghz_hex_editor_value(&s_editor) & button_mask_for(bits);
+
+            if (app->signal_edit_active)
+            {
+                /* Phase 9b — save back to the loaded .sub file via the
+                 * SignalSettings cross-scene API.  Whether the save
+                 * succeeds or fails we pop back to SignalSettings so
+                 * the user is never trapped here; the on_enter there
+                 * will reload from disk and reflect reality (and clear
+                 * the edit-active flag).  Future polish (9c+) can add
+                 * an error confirm dialog on save failure. */
+                (void)subghz_signal_settings_apply_button((uint8_t)masked);
+                subghz_scene_pop(app);
+                return true;
+            }
+
             app->create_button = (uint8_t)masked;
-            /* Phase 8c-3 — chain forward to the Counter editor. */
+            /* Create-from-scratch flow (Phase 8c-3) — chain forward to
+             * the Counter editor. */
             subghz_scene_push(app, SubGhzSceneSetCounter);
             return true;
         }

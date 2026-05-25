@@ -16,6 +16,12 @@
 #define FLIPPER_SUBGHZ_RAW_MAX_SAMPLES   8192
 #define FLIPPER_SUBGHZ_PROTO_MAX_LEN     32
 #define FLIPPER_SUBGHZ_PRESET_MAX_LEN    48
+/* Width of the optional `Manufacture:` field in KeeLoq-family .sub files
+ * — sized to match the longest entry in the built-in keeloq mfkeys table
+ * (matches `KeeLoqMfrEntry::name`).  Kept on the parsed signal so the
+ * SignalSettings save-back path (Phase 9b) can round-trip Manufacture
+ * without re-opening the source file. */
+#define FLIPPER_SUBGHZ_MANUF_MAX_LEN     48
 
 /* Canonical Filetype: header string for Flipper-compatible RAW recordings
  * (.sub files with Protocol: RAW).  Used when writing files and kept here so
@@ -40,6 +46,10 @@ typedef struct {
 	/* For raw data */
 	int16_t  raw_data[FLIPPER_SUBGHZ_RAW_MAX_SAMPLES];
 	uint16_t raw_count;
+	/* Optional `Manufacture:` field carried by KeeLoq-family Flipper Key
+	 * files — empty string when not present.  Populated by the Key parser
+	 * only; left as "" for RAW / M1-native files. */
+	char     manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN];
 	/* Set to true when the file was loaded from an M1 native .sgh format
 	 * (not a Flipper .sub file).  Used to select the direct replay path
 	 * which feeds the original file into the streaming engine without any

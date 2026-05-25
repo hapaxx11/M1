@@ -844,6 +844,111 @@ void test_emulate_path_convert_when_not_raw_not_native(void)
 }
 
 /* ===================================================================
+ * Phase 9b — Manufacture: field load / save round-trip
+ *
+ * The SignalSettings save-back path (`subghz_signal_settings_apply_button`)
+ * requires that:
+ *   1. `flipper_subghz_load` parses the optional `Manufacture:` line into
+ *      `signal.manufacture` (empty when not present).
+ *   2. `flipper_subghz_save_key_with_manufacture` round-trips the field
+ *      verbatim — re-loading the saved file yields the same Manufacture
+ *      string.
+ *   3. Loading a file with no Manufacture line yields an empty string
+ *      (regression guard against accidental write of "(none)" or stale
+ *      stack data).
+ * =================================================================== */
+
+void test_load_flipper_key_manufacture_field(void)
+{
+	const char *path = "/tmp/test_flipper_key_mfg.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: KeeLoq\r\n"
+	    "Bit: 64\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "TE: 400\r\n"
+	    "Manufacture: AN-Motors\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_PARSED, sig.type);
+	TEST_ASSERT_EQUAL_STRING("KeeLoq", sig.protocol);
+	TEST_ASSERT_EQUAL_STRING("AN-Motors", sig.manufacture);
+
+	remove(path);
+}
+
+void test_load_flipper_key_no_manufacture_empty(void)
+{
+	const char *path = "/tmp/test_flipper_key_no_mfg.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bit: 24\r\n"
+	    "Key: 00 00 00 00 00 52 A1 2E\r\n"
+	    "TE: 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL_STRING("", sig.manufacture);
+
+	remove(path);
+}
+
+void test_save_key_with_manufacture_roundtrip(void)
+{
+	const char *path = "/tmp/test_save_key_mfg.sub";
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0x1122334455667788ULL, 400,
+	    "Came_Space");
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_PARSED, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_STRING("KeeLoq", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT32(64, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT64(0x1122334455667788ULL, sig.key);
+	TEST_ASSERT_EQUAL_UINT32(400, sig.te);
+	TEST_ASSERT_EQUAL_STRING("Came_Space", sig.manufacture);
+
+	remove(path);
+}
+
+void test_save_key_with_manufacture_null_writes_no_line(void)
+{
+	const char *path = "/tmp/test_save_key_null_mfg.sub";
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "Princeton", 24, 0x52A12EULL, 400,
+	    NULL);
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	/* No Manufacture: line in the file → field stays empty. */
+	TEST_ASSERT_EQUAL_STRING("", sig.manufacture);
+
+	remove(path);
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -924,6 +1029,12 @@ int main(void)
 	RUN_TEST(test_emulate_path_convert_when_raw_not_native);
 	RUN_TEST(test_emulate_path_convert_when_not_raw_native);
 	RUN_TEST(test_emulate_path_convert_when_not_raw_not_native);
+
+	/* Phase 9b — Manufacture: field load / save round-trip */
+	RUN_TEST(test_load_flipper_key_manufacture_field);
+	RUN_TEST(test_load_flipper_key_no_manufacture_empty);
+	RUN_TEST(test_save_key_with_manufacture_roundtrip);
+	RUN_TEST(test_save_key_with_manufacture_null_writes_no_line);
 
 	return UNITY_END();
 }
