@@ -458,6 +458,128 @@ static void test_counter_encode_masks_to_16_bits(void)
 }
 
 /*============================================================================*/
+/* Phase 9e-1 — counter-edit capability probe                                  */
+/*============================================================================*/
+
+static void test_counter_edit_status_keeloq_family_supported(void)
+{
+    const char *reason = (const char *)0xDEADBEEFULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("KeeLoq", &reason));
+    TEST_ASSERT_NOT_NULL(reason);
+    TEST_ASSERT_EQUAL_STRING("", reason);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("Star Line", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("Jarolift", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+}
+
+static void test_counter_edit_status_deferred_protocols(void)
+{
+    const char *reason = NULL;
+
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("Nice FloR-S", &reason));
+    TEST_ASSERT_NOT_NULL(reason);
+    TEST_ASSERT_TRUE(strstr(reason, "Nice FloR-S") != NULL);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("CAME Atomo", &reason));
+    TEST_ASSERT_NOT_NULL(reason);
+    TEST_ASSERT_TRUE(strstr(reason, "CAME Atomo") != NULL);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("Alutech AT-4N", &reason));
+    TEST_ASSERT_NOT_NULL(reason);
+    TEST_ASSERT_TRUE(strstr(reason, "Alutech") != NULL);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("Phoenix_V2", &reason));
+    TEST_ASSERT_NOT_NULL(reason);
+    TEST_ASSERT_TRUE(strstr(reason, "Phoenix V2") != NULL);
+}
+
+static void test_counter_edit_status_unsupported_protocols(void)
+{
+    const char *reason = NULL;
+
+    /* Static-OOK families — not in scope for counter editing. */
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+        subghz_signal_fields_counter_edit_status("Princeton", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+        subghz_signal_fields_counter_edit_status("Nice FLO 12b", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+
+    /* Unknown gibberish. */
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+        subghz_signal_fields_counter_edit_status("NotARealProtocol", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+}
+
+static void test_counter_edit_status_null_protocol(void)
+{
+    const char *reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+        subghz_signal_fields_counter_edit_status(NULL, &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+}
+
+static void test_counter_edit_status_null_out_reason_ok(void)
+{
+    /* The out_reason pointer is optional — passing NULL must not crash
+     * and must still return the correct status. */
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("KeeLoq", NULL));
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("Nice FloR-S", NULL));
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+        subghz_signal_fields_counter_edit_status("Princeton", NULL));
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+        subghz_signal_fields_counter_edit_status(NULL, NULL));
+}
+
+static void test_counter_edit_status_case_insensitive(void)
+{
+    const char *reason = NULL;
+
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("keeloq", &reason));
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("nice flor-s", &reason));
+    TEST_ASSERT_TRUE(strstr(reason, "Nice FloR-S") != NULL);
+
+    reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("CAME ATOMO", &reason));
+}
+
+static void test_counter_edit_status_trailing_space_match(void)
+{
+    /* The name-matching convention is NUL-or-space terminated, mirroring
+     * is_keeloq_family().  A registry name like "Nice FloR-S " (trailing
+     * space) must still classify correctly. */
+    const char *reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+        subghz_signal_fields_counter_edit_status("Nice FloR-S 433", &reason));
+    TEST_ASSERT_TRUE(strstr(reason, "Nice FloR-S") != NULL);
+}
+
+/*============================================================================*/
 /* Test runner                                                                 */
 /*============================================================================*/
 
@@ -498,5 +620,14 @@ int main(void)
     RUN_TEST(test_counter_encode_matches_increment_hop);
     RUN_TEST(test_counter_distinct_inputs_yield_distinct_ciphertext);
     RUN_TEST(test_counter_encode_masks_to_16_bits);
+
+    /* Phase 9e-1 — counter-edit capability probe */
+    RUN_TEST(test_counter_edit_status_keeloq_family_supported);
+    RUN_TEST(test_counter_edit_status_deferred_protocols);
+    RUN_TEST(test_counter_edit_status_unsupported_protocols);
+    RUN_TEST(test_counter_edit_status_null_protocol);
+    RUN_TEST(test_counter_edit_status_null_out_reason_ok);
+    RUN_TEST(test_counter_edit_status_case_insensitive);
+    RUN_TEST(test_counter_edit_status_trailing_space_match);
     return UNITY_END();
 }

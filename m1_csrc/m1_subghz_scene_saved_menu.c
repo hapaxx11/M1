@@ -213,12 +213,21 @@ static bool load_signal(const SubGhzApp *app)
     is_raw_file = (saved_signal.type == FLIPPER_SUBGHZ_TYPE_RAW
                    && saved_signal.raw_count > 0);
 
-    /* Phase 9a-2: gate the Settings entry on parsed files whose protocol
-     * has a host-tested field extractor.  KeeLoq family only for now;
-     * Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 follow in 9e. */
-    has_settings_entry = (!is_raw_file)
-                       && (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
-                       && subghz_signal_fields_is_keeloq_family(saved_signal.protocol);
+    /* Phase 9a-2/9e-1: gate the Settings entry on parsed files whose
+     * protocol either has a host-tested field extractor (KeeLoq family —
+     * full read-only display + Button/Counter/CounterMode editing) or
+     * has a documented deferred-implementation status (Nice FloR-S /
+     * CAME Atomo / Alutech AT-4N / Phoenix V2 — the scene shows a
+     * clear "edit not yet supported" placeholder with the specific
+     * blocker for that protocol).  All other protocols hide the entry. */
+    {
+        const subghz_counter_edit_status_t edit_status =
+            subghz_signal_fields_counter_edit_status(saved_signal.protocol, NULL);
+        has_settings_entry = (!is_raw_file)
+                           && (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
+                           && (edit_status == SUBGHZ_COUNTER_EDIT_SUPPORTED
+                               || edit_status == SUBGHZ_COUNTER_EDIT_DEFERRED);
+    }
 
     if (is_raw_file)
     {

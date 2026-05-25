@@ -392,7 +392,42 @@ static void draw(SubGhzApp *app)
         snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 22, line);
-        draw_placeholder("Field display not", "supported (9e)");
+
+        /* Phase 9e-1: show the documented deferred-implementation reason
+         * for Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 so
+         * the user can distinguish a deferred protocol from a wholly
+         * unsupported one.  The reason string is owned by
+         * subghz_signal_fields.c (static literal). */
+        const char *reason = NULL;
+        const subghz_counter_edit_status_t st =
+            subghz_signal_fields_counter_edit_status(s_signal.protocol, &reason);
+        if (st == SUBGHZ_COUNTER_EDIT_DEFERRED && reason && reason[0] != '\0')
+        {
+            /* Split the reason string at the first ':' so the two
+             * placeholder rows display the protocol tag on one line
+             * and the blocker on the next, keeping each within the
+             * 128-px display width. */
+            const char *colon = strchr(reason, ':');
+            if (colon)
+            {
+                char head[24];
+                size_t hl = (size_t)(colon - reason);
+                if (hl >= sizeof(head)) hl = sizeof(head) - 1U;
+                memcpy(head, reason, hl);
+                head[hl] = '\0';
+                const char *tail = colon + 1;
+                while (*tail == ' ') ++tail;
+                draw_placeholder(head, tail);
+            }
+            else
+            {
+                draw_placeholder(reason, "edit deferred (9e)");
+            }
+        }
+        else
+        {
+            draw_placeholder("Field display not", "supported");
+        }
     }
     else
     {

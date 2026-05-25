@@ -153,3 +153,70 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
                                (plain & 0x0000FFFFU);
     return keeloq_encrypt(new_plain, device_key);
 }
+
+/*============================================================================*/
+/* Counter-edit capability probe (Phase 9e-1)                                  */
+/*============================================================================*/
+
+/* Static deferred-reason strings — pointed to by callers; never freed. */
+static const char SF_REASON_EMPTY[]      = "";
+static const char SF_REASON_FLOR_S[]     = "Nice FloR-S: HCS perm. table req.";
+static const char SF_REASON_ATOMO[]      = "CAME Atomo: cipher decode req.";
+static const char SF_REASON_ALUTECH[]    = "Alutech: AES key recovery req.";
+static const char SF_REASON_PHOENIX_V2[] = "Phoenix V2: checksum recompute req.";
+
+/* Phase 9e-2..5 protocols — counter editing is on the roadmap but the
+ * required decode/encode path is not yet implemented.  Each entry cites
+ * the specific blocker documented in the Phase 9e checklist:
+ *
+ *   - Nice FloR-S    : 1080-byte Microchip-HCS-style permutation lookup
+ *                      table + inverse perm to substitute the counter.
+ *   - CAME Atomo     : XTEA-family fixed-key cipher decode chain to
+ *                      expose the counter bits inside the 62-bit code.
+ *   - Alutech AT-4N  : Per-device AES-128-like cipher key extracted
+ *                      from the encrypted payload before counter
+ *                      substitution.
+ *   - Phoenix V2     : Counter bit-field is at a known offset in the
+ *                      52-bit code but the trailing discriminant /
+ *                      checksum must be recomputed after editing.
+ */
+typedef struct {
+    const char *name;
+    const char *reason;
+} sf_deferred_entry_t;
+
+static const sf_deferred_entry_t SF_DEFERRED[] = {
+    { "Nice FloR-S",   SF_REASON_FLOR_S    },
+    { "CAME Atomo",    SF_REASON_ATOMO     },
+    { "Alutech AT-4N", SF_REASON_ALUTECH   },
+    { "Phoenix_V2",    SF_REASON_PHOENIX_V2 },
+};
+
+subghz_counter_edit_status_t
+subghz_signal_fields_counter_edit_status(const char  *protocol,
+                                         const char **out_reason)
+{
+    if (subghz_signal_fields_is_keeloq_family(protocol))
+    {
+        if (out_reason)
+            *out_reason = SF_REASON_EMPTY;
+        return SUBGHZ_COUNTER_EDIT_SUPPORTED;
+    }
+
+    if (protocol)
+    {
+        for (size_t i = 0; i < sizeof(SF_DEFERRED) / sizeof(SF_DEFERRED[0]); ++i)
+        {
+            if (name_matches(protocol, SF_DEFERRED[i].name))
+            {
+                if (out_reason)
+                    *out_reason = SF_DEFERRED[i].reason;
+                return SUBGHZ_COUNTER_EDIT_DEFERRED;
+            }
+        }
+    }
+
+    if (out_reason)
+        *out_reason = SF_REASON_EMPTY;
+    return SUBGHZ_COUNTER_EDIT_UNSUPPORTED;
+}

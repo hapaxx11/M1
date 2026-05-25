@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9d-3 (`CounterMode` toggle in SignalSettings + replay-path wiring)
-- **PR Description**: Continues Phase 9d.  Wires the `CounterMode:` `.sub` field that landed in Phase 9d-2 (parser + writer) into the UI and the replay engine.  The SignalSettings scene gains a third selectable row, `CntMode: Increment / Static`, which is reachable on every supported KeeLoq-family file (the toggle does not need the manufacturer key resolved, unlike the Counter editor).  OK flips the value in place and persists via `flipper_subghz_save_key_full()`, preserving `Manufacture:` and all other metadata.  The Phase 9b Button writer and Phase 9c-3 Counter writer were switched to the same helper so editing Button or Counter on a Static file no longer silently reverts the mode to Increment.  The KeeLoq replay path in `m1_sub_ghz.c` now parses `CounterMode:` directly from the `.sub` stream and forwards it to `KeeLoqEncParams::static_counter`, so Static-mode `.sub` files re-emit the captured encrypted hop word verbatim instead of running the decrypt → counter+1 → re-encrypt path.  2 new host tests cover the load → save round-trip preservation for both modes; 74 host tests pass under ASan+UBSan.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9e-1 (counter-edit capability probe + documented 9e-2..5 deferrals)
+- **PR Description**: Lands the tractable foundation of Phase 9e (extend per-file Counter editing beyond the KeeLoq family) and documents the remaining four protocols as discrete sub-phases with concrete blockers.  New pure-logic accessor `subghz_signal_fields_counter_edit_status(protocol, *out_reason)` classifies a protocol as SUPPORTED (KeeLoq / Star Line / Jarolift — full 9b/9c/9d-3 editing), DEFERRED (Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 — each with a static blocker string explaining the specific obstacle), or UNSUPPORTED (everything else).  The SavedMenu Settings-entry gate is widened from `is_keeloq_family()` to "SUPPORTED || DEFERRED" so users on a 9e-roadmap protocol can enter the Settings scene and see the deferred reason verbatim (e.g. "Nice FloR-S: HCS perm. table req.").  Phase 9e-2..5 are split into discrete sub-phases in the checklist, each with a documented blocker, scope estimate, and licensing note.  7 new host tests cover all three return classes, case-insensitive match, NUL/space-terminated prefix match, NULL safety, and the empty-reason guarantee.  72 host tests passing under ASan+UBSan; no firmware functional changes for the KeeLoq family.
 
 ## Phases
 
@@ -723,11 +723,94 @@
       `test_resave_increment_via_save_key_full_omits_field`).  All 74
       host tests pass under ASan+UBSan.
   - **9e**: Extend Counter editing to Nice FloR-S, CAME Atomo,
-    Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
-    don't require mfkey decryption, so editing the counter byte(s) is a
-    direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅; 9d-3 ✅)
-- **Commit**: `Phase 9d-3: CounterMode toggle in SignalSettings + replay-path wiring`
+    Alutech AT-4N, Phoenix V2.
+
+    Sub-phase plan:
+
+    - **Phase 9e-1 — Counter-edit capability probe (pure logic).**  ✅ Complete.
+      Adds `subghz_counter_edit_status_t` enum + new pure-logic accessor
+      `subghz_signal_fields_counter_edit_status(protocol, *out_reason)` in
+      `Sub_Ghz/subghz_signal_fields.{c,h}`.  Returns SUPPORTED for the
+      KeeLoq family (already wired in 9b/9c/9d-3), DEFERRED with a
+      documented blocker string for Nice FloR-S / CAME Atomo /
+      Alutech AT-4N / Phoenix V2, and UNSUPPORTED for everything else
+      (static-OOK families, raw recordings, unknown protocols, NULL).
+      The reason strings — "Nice FloR-S: HCS perm. table req.",
+      "CAME Atomo: cipher decode req.", "Alutech: AES key recovery
+      req.", "Phoenix V2: checksum recompute req." — are static
+      read-only literals owned by the module so callers never need to
+      manage their lifetime.  The SavedMenu Settings-entry gate is
+      widened from `is_keeloq_family()` to "SUPPORTED || DEFERRED" so
+      users on a 9e-roadmap protocol can enter the scene and see the
+      specific blocker.  `m1_subghz_scene_signal_settings.c` was taught
+      to render the deferred reason on the unsupported-protocol path —
+      the protocol tag (before the `:`) on the first placeholder row
+      and the blocker (after the `:`) on the second.  7 new host tests
+      under ASan+UBSan cover all three return classes, case-insensitive
+      match (mirroring `is_keeloq_family`), NUL-or-space terminated
+      prefix match (so "Nice FloR-S 433" classifies as Nice FloR-S),
+      NULL-protocol safety, optional `out_reason` (NULL is allowed),
+      and the empty-reason guarantee for SUPPORTED / UNSUPPORTED.
+      72 host tests passing.  No firmware functional changes for
+      KeeLoq family — that path is unchanged.
+
+    - **Phase 9e-2 — Nice FloR-S counter editing.**  🔲 Deferred.
+      Blocker: Nice FloR-S encodes the rolling counter through a
+      1080-byte Microchip-HCS-style permutation lookup table.  To
+      substitute the counter we need (a) the forward permutation
+      table, (b) an inverse permutation to recover the plaintext
+      counter from the captured 52-bit code, and (c) a re-permutation
+      after counter substitution.  None of these exist in the M1
+      codebase today — `Sub_Ghz/protocols/m1_nice_flor_s_decode.c`
+      defers entirely to the generic PWM decoder, storing the 52-bit
+      code as an opaque blob with no field decomposition.  The
+      permutation table is public (sigidwiki, Flipper Unleashed
+      sources) but copying it from Flipper carries a GPL-3.0
+      licensing implication for the M1 fork — a clean-room
+      implementation derived from sigidwiki documentation is
+      preferred.  Estimated scope: ~1080 bytes of table data + ~60
+      lines of pure-logic perm/inverse-perm + 12-test host suite.
+
+    - **Phase 9e-3 — CAME Atomo counter editing.**  🔲 Deferred.
+      Blocker: CAME Atomo wraps its 16-bit rolling counter inside an
+      XTEA-family cipher with a public fixed key.  Counter
+      substitution needs the full decode chain (cipher-decrypt →
+      substitute → cipher-encrypt) which is ~80 lines including the
+      fixed-key constants.  The cipher is documented in Flipper
+      Unleashed but copying carries the same GPL-3.0 concern as
+      Phase 9e-2.  The M1 decoder (`m1_came_atomo_decode.c`) stores
+      the 62-bit code as an opaque blob — no field-level
+      decomposition.  Estimated scope: ~80 lines pure-logic + 10
+      host tests + clean-room cipher reference.
+
+    - **Phase 9e-4 — Alutech AT-4N counter editing.**  🔲 Deferred.
+      Blocker: Alutech AT-4N uses a per-device AES-128-like cipher
+      where the key is itself encrypted inside the captured payload
+      (key-wrapping).  Substituting the counter requires (a)
+      recovering the per-device key from the captured payload, (b)
+      decrypting the counter bits, (c) re-encrypting, and (d)
+      re-wrapping.  Strictly harder than 9e-2 and 9e-3 because the
+      per-device key recovery is itself nontrivial.  The 64-bit
+      Flipper key M1 stores (capped from the registry's 72-bit
+      `min_count_bit` — see `subghz_new_remote_gen.c`) may not even
+      carry enough bits to recover the key without the original
+      capture's `RAW_Data` line, which Flipper Key files do not
+      preserve.  Estimated scope: research-blocked — needs a
+      reference implementation review before sizing.
+
+    - **Phase 9e-5 — Phoenix V2 counter editing.**  🔲 Deferred.
+      Blocker: The 52-bit Phoenix V2 code has the counter at a known
+      bit offset (the decoder in `m1_phoenix_v2_decode.c` shows the
+      Manchester-style (LOW,HIGH)-pair layout) but a discriminant /
+      checksum trails the counter and must be recomputed after
+      substitution.  The checksum algorithm is not currently
+      documented in the M1 codebase nor cited in the M1
+      protocol-registry entry (registry.c:821).  Estimated scope:
+      research to confirm the checksum polynomial + ~40 lines
+      pure-logic + 8 host tests.  Lower-priority than 9e-2/9e-3
+      because Phoenix V2 captures are rarer in real-world use.
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅; 9d-3 ✅; 9e-1 ✅; 9e-2..5 🔲 deferred — documented)
+- **Commit**: `Phase 9e-1: counter-edit capability probe + deferred reasons for 9e-2..5`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

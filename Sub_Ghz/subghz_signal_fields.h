@@ -178,6 +178,77 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
                                                     uint16_t new_counter,
                                                     uint64_t device_key);
 
+/*============================================================================*/
+/* Counter-edit capability probe (Phase 9e-1)                                  */
+/*============================================================================*/
+
+/**
+ * Classification returned by @ref subghz_signal_fields_counter_edit_status.
+ *
+ * Used by the SignalSettings scene (and SavedMenu gating) to decide whether
+ * to expose a Counter editor row for the currently-loaded `.sub` file and,
+ * when not yet supported, to display a clear deferred-implementation
+ * placeholder rather than a misleading "Protocol not supported" message.
+ */
+typedef enum {
+    /**
+     * The protocol has a fully-implemented counter decode/encode path
+     * (currently: KeeLoq, Star Line, Jarolift — see Phase 9c-1).
+     */
+    SUBGHZ_COUNTER_EDIT_SUPPORTED = 0,
+
+    /**
+     * The protocol is on the Phase 9e roadmap but the counter
+     * extract/substitute path is not yet implemented.  The accompanying
+     * reason string returned via the @c out_reason out-parameter explains
+     * the specific obstacle (cipher dependency, lookup table, checksum
+     * recompute, etc.).  The SignalSettings scene should show this string
+     * verbatim so the user can distinguish a deferred protocol from a
+     * fully-unsupported one.
+     */
+    SUBGHZ_COUNTER_EDIT_DEFERRED,
+
+    /**
+     * The protocol's counter (if any) is not in scope for editing —
+     * static-OOK families, raw recordings, or unknown protocols.
+     */
+    SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
+} subghz_counter_edit_status_t;
+
+/**
+ * Classify the counter-editing status of @p protocol.
+ *
+ * The function performs no I/O and no cipher work — it is a pure
+ * name-based lookup over a small static table.  The reason string,
+ * when written, points to a static read-only literal owned by this
+ * module; callers must not free it.
+ *
+ * Supported protocols (DEFERRED reason strings cite the specific blocker
+ * documented in the Phase 9e checklist entry):
+ *
+ *   - "KeeLoq", "Star Line", "Jarolift"           → SUPPORTED
+ *   - "Nice FloR-S"                               → DEFERRED ("Nice FloR-S: HCS perm. table req.")
+ *   - "CAME Atomo"                                → DEFERRED ("CAME Atomo: cipher decode req.")
+ *   - "Alutech AT-4N"                             → DEFERRED ("Alutech: AES key recovery req.")
+ *   - "Phoenix_V2"                                → DEFERRED ("Phoenix V2: checksum recompute req.")
+ *   - everything else (incl. NULL)                → UNSUPPORTED ("" — empty string)
+ *
+ * Protocol-name matching follows the same case-insensitive
+ * NUL-or-space-terminated prefix convention as
+ * @ref subghz_signal_fields_is_keeloq_family.
+ *
+ * @param[in]  protocol    Protocol name string; may be NULL.
+ * @param[out] out_reason  Optional.  When non-NULL, on return *out_reason
+ *                         points to a static string describing the status
+ *                         (deferred reason for DEFERRED; empty "" for
+ *                         SUPPORTED and UNSUPPORTED).  Never NULL on
+ *                         return when @p out_reason is non-NULL.
+ * @return  Counter-edit status classification.
+ */
+subghz_counter_edit_status_t
+subghz_signal_fields_counter_edit_status(const char  *protocol,
+                                         const char **out_reason);
+
 #ifdef __cplusplus
 }
 #endif
