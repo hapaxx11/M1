@@ -1201,6 +1201,29 @@ endif()
 add_test(NAME subghz_keeloq_create COMMAND test_subghz_keeloq_create)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_signal_fields (Phase 9a-1 — KeeLoq-family
+# {serial, button, encrypted-hop} extract / assemble for the
+# SignalSettings scene).  Pure-logic module; depends on
+# subghz_keeloq_create (and through it subghz_keeloq) only for the
+# cross-check tests.  Zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_signal_fields
+    test_subghz_signal_fields.c
+    ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_create.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+)
+target_include_directories(test_subghz_signal_fields PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_signal_fields PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_signal_fields PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_signal_fields COMMAND test_subghz_signal_fields)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_read_raw_state (Read Raw async TX helpers)
 # Verifies the pure-logic dispatch helpers used by the Read Raw scene
 # to handle Q_EVENT_SUBGHZ_TX completion events and BACK during TX:

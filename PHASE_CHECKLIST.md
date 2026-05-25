@@ -1,7 +1,7 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8c-3 (wire KeeLoq Create-from-scratch flow)
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9a-1 (KeeLoq field extractor pure-logic module)
 - **PR Description**: Completes the multi-phase Sub-GHz Create-from-scratch refactor.  Phase 8c-3 wires together the four KeeLoq-family editor scenes Phase 8c-2 added.  `SubGhzSceneSetType` now dispatches on the new `SUBGHZ_CREATE_FIELD_SERIAL` field-flag: legacy static-OOK protocols continue to push `SubGhzSceneSetKey` (single opaque hex-key editor); KeeLoq / Star Line / Jarolift push `SubGhzSceneSetSerial`, whose OK pushes `SubGhzSceneSetButton`, whose OK pushes `SubGhzSceneSetCounter`, whose OK pushes `SubGhzSceneSetMfKey`.  The final picker's OK assembles a 64-bit Flipper-format key, writes a temp `.sub` with the `Manufacture:` field set, and pushes the Transmitter scene with `tx_autostart=true` so the signal fires immediately.  Key assembly lives in the new pure-logic `Sub_Ghz/subghz_keeloq_create.c/h` module — Normal/Simple learning derivation + 528-round NLFSR plaintext HOP encryption + protocol-specific 64-bit reassembly, all host-testable.  A new `flipper_subghz_save_key_with_manufacture()` save helper extends `flipper_subghz.c` without breaking the ABI of the existing `flipper_subghz_save_key()` callers.  Replay routes through the existing KeeLoq counter-mode encoder in `sub_ghz_replay_flipper_file()` (which already understands `Manufacture:` and rolling-counter increments).  10 new host tests cover plaintext HOP layout + masking, bad-argument paths (NULL params, NULL out, unknown protocol, Secure learning), Normal and Simple learning end-to-end key assembly, KeeLoq vs Star Line bit layouts, and the counter-changes-hop invariant.  Total host tests: 84 (was 71), all pass under ASan+UBSan.
 
 ## Phases
@@ -557,8 +557,33 @@
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on
   KeeLoq, Nice FloR-S, CAME Atomo, Alutech AT-4N, Phoenix V2.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+
+  Sub-phase plan:
+
+  - **9a-1**: Pure-logic `subghz_signal_fields` module — extract/assemble
+    {serial, button, encrypted-hop} from the 64-bit KeeLoq-family Flipper
+    key (KeeLoq / Star Line / Jarolift), with full round-trip host tests.
+    No scene code yet — just the foundation for SignalSettings display
+    and the Phase 9c counter re-encrypt path.
+  - **9a-2**: Add `SubGhzSceneSignalSettings` scene scaffold — read-only
+    display showing Serial, Button (and, where decoded, Counter) for the
+    currently-loaded `.sub` file.  Wire a new "Settings" entry into the
+    Saved action menu, gated on protocol (KeeLoq / Star Line / Jarolift /
+    Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2).
+  - **9b**: Editable Button — reuse `SubGhzSceneSetButton`, save back via
+    `flipper_subghz_save_key_with_manufacture()` preserving the existing
+    Manufacture: field.
+  - **9c**: Editable Counter for KeeLoq family — decrypt the encrypted
+    hop with the resolved manufacturer key, replace the 16-bit counter,
+    re-encrypt, reassemble the 64-bit key, save back.
+  - **9d**: CounterMode toggle (Increment / Static) persisted as a custom
+    field in the `.sub` file and honoured by the replay path.
+  - **9e**: Extend Counter editing to Nice FloR-S, CAME Atomo,
+    Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
+    don't require mfkey decryption, so editing the counter byte(s) is a
+    direct bit-field substitution.
+- **Status**: 🔄 In progress (9a-1 ✅)
+- **Commit**: `Phase 9a-1: add subghz_signal_fields KeeLoq extractor + tests`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with
