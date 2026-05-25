@@ -469,26 +469,28 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     /* Use the actual active frequency (preset or hopper) */
                     uint32_t freq = app->current_freq_hz;
 
-                    /* Snapshot ring state so we can detect when add_ex() drops
-                     * the new decode (delete_old_signals=false + ring full).
-                     * A drop leaves both head and count unchanged AND no
-                     * merge occurred — distinguishing it from a duplicate
-                     * merge (count unchanged but the top entry is updated
-                     * with the just-decoded protocol/key). */
+                    /* Snapshot ring state and settings so we can detect when
+                     * add_ex() drops the new decode (delete_old_signals=false
+                     * + ring full).  Read settings once to avoid TOCTOU if
+                     * another task changes them between the two checks. */
                     uint8_t head_before  = app->history.head;
                     uint8_t count_before = app->history.count;
+                    bool remove_dupes    = subghz_get_remove_duplicates_ext();
+                    bool delete_old      = subghz_get_delete_old_signals_ext();
 
                     subghz_history_add_ex(&app->history, &decoded, freq,
-                                          subghz_get_remove_duplicates_ext(),
-                                          subghz_get_delete_old_signals_ext());
+                                          remove_dupes, delete_old);
 
                     bool inserted = (app->history.head  != head_before) ||
                                     (app->history.count != count_before);
+                    /* A merge can only happen when remove_duplicates=true;
+                     * gate the field comparison on that flag so a drop that
+                     * leaves the top entry matching the new decode
+                     * (remove_duplicates=false + ring full + delete_old=false)
+                     * is never misidentified as a merge. */
                     bool merged = false;
-                    if (!inserted && count_before > 0)
+                    if (!inserted && remove_dupes && count_before > 0)
                     {
-                        /* If the top entry now matches the just-decoded
-                         * (protocol, key, bit_len), the add was a merge. */
                         const SubGHz_History_Entry_t *top =
                             subghz_history_get(&app->history, 0);
                         if (top &&
