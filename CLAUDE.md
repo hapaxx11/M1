@@ -2003,6 +2003,63 @@ the scene manager without rewriting each tool.
 
 ---
 
+## Deferred Sub-GHz Momentum-Parity Work
+
+> The Momentum-parity phased programme (Phases 1–12) is otherwise complete.  The items
+> below were intentionally deferred and **MUST NOT** be re-opened without first
+> re-reading the phase rationale in this section.  When working on a related area,
+> check whether any blocker has been lifted and update this table accordingly.
+
+### Phase 7c — non-scene-native list candidates (N/A, not deferrable)
+
+The generic `subghz_submenu_model` + `m1_submenu_draw` widget migration is functionally
+complete.  The three remaining "list-shaped" UIs are intentionally **not** migrated
+because they do not fit the simple-label-list shape the widget targets:
+
+| Site | Reason it is not a widget candidate |
+|------|-------------------------------------|
+| `SubGhzSceneConfig` | LEFT/RIGHT value columns with `<` `>` arrows — not a label list |
+| Saved file browser | Delegates to the generic `storage_browse()` helper — not a scene-native list |
+| Add Manually picker | Was the legacy blocking delegate; **already retired** in Phase 8b-4 (now `SubGhzSceneSetType`, which already uses the widget) |
+
+These entries are **not** open work — do not reopen them.
+
+### Phase 9e-2..5 — counter editing for non-KeeLoq rolling-code protocols
+
+The Phase 9e-1 capability probe (`subghz_signal_fields_counter_edit_status`) already
+classifies these four protocols as `DEFERRED` with a documented blocker string visible
+in the SignalSettings scene.  Each sub-phase is blocked on **engineering scope or
+research**, **not licensing** — the licensing rationale in the original checklist was
+incorrect (both M1 and Flipper/Unleashed are GPL-3.0; importing reference code is
+licence-compatible).
+
+| Sub-phase | Protocol | Blocker | Estimated scope |
+|-----------|----------|---------|-----------------|
+| 9e-2 | Nice FloR-S | 1080-byte HCS-style permutation table + inverse permutation + decoder field decomposition (`m1_nice_flor_s_decode.c` stores the 52-bit code as an opaque blob) | ~1080 B table + ~60 LoC perm/inverse + 12-test host suite + decoder extension |
+| 9e-3 | CAME Atomo | XTEA-family cipher with public fixed key + decoder field decomposition (`m1_came_atomo_decode.c` stores the 62-bit code as an opaque blob) | ~80 LoC cipher + decoder extension + 10 host tests |
+| 9e-4 | Alutech AT-4N | Per-device AES-128-like cipher with key-wrapping; the 64-bit Flipper Key form M1 saves may not retain enough entropy for key recovery without the original `RAW_Data` line | **Research-blocked** — needs reference-implementation review before sizing |
+| 9e-5 | Phoenix V2 | Discriminant/checksum trailing the counter; algorithm is not documented in the M1 codebase nor cited in the registry entry | Research + ~40 LoC pure logic + 8 host tests |
+
+**Before unblocking 9e-2 or 9e-3**, add decoder-side field decomposition first (surface
+serial / button / counter / encrypted-payload fields from the protocol-specific
+decoder) — without it, the cipher work has nothing to operate on.
+
+### Phase 11-2+ — additional Info-screen `get_string()` renderers
+
+The polymorphic `SubGhzGetStringFn` vtable on `SubGhzProtocolDef` is live (Phase 11-1)
+and the KeeLoq-family renderer ships in this PR.  Adding renderers for Nice FloR-S,
+CAME Atomo, Came, Holtek, etc. is **deferred until decoder field decomposition lands
+per the 9e-2..5 sub-phases** — without decomposed fields, those renderers can only
+re-print what the existing fallback already shows.
+
+When a 9e sub-phase lands, add the corresponding `subghz_signal_format_<proto>_info()`
+renderer in `Sub_Ghz/subghz_signal_format.c` and wire it onto the registry entries
+that share the same field decomposition.  Cover with a `test_subghz_signal_format`
+sub-suite mirroring the KeeLoq test pattern (output shape, prefix-terminated match,
+NULL safety, truncation safety).
+
+---
+
 ## Remote Configuration
 
 - `origin` = hapaxx11/M1 (this fork — push here when explicitly told)
