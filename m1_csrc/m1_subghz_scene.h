@@ -68,6 +68,7 @@ typedef enum {
     SubGhzSceneSetButton,      /**< Create-from-scratch KeeLoq button editor (Phase 8c-2) */
     SubGhzSceneSetCounter,     /**< Create-from-scratch KeeLoq counter editor (Phase 8c-2) */
     SubGhzSceneSetMfKey,       /**< Create-from-scratch KeeLoq mfkey picker (Phase 8c-2) */
+    SubGhzSceneSignalSettings, /**< Read-only per-file field display (Phase 9a-2) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -527,5 +528,6 @@ extern const SubGhzSceneHandlers subghz_scene_set_serial_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_button_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_counter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_mfkey_handlers;
+extern const SubGhzSceneHandlers subghz_scene_signal_settings_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

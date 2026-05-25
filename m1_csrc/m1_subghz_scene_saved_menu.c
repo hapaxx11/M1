@@ -45,6 +45,7 @@
 #include "subghz_raw_decoder.h"
 #include "m1_virtual_kb.h"
 #include "subghz_submenu_model.h"
+#include "subghz_signal_fields.h"
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
@@ -59,13 +60,18 @@ enum {
     SAVED_ACTION_INFO,
     SAVED_ACTION_RENAME,
     SAVED_ACTION_DELETE,
+    SAVED_ACTION_SETTINGS,        /**< Phase 9a-2 — per-file SignalSettings */
 };
 
 static const char *const raw_action_labels[]    = { "Decode", "Emulate", "Info", "Rename", "Delete" };
 static const char *const parsed_action_labels[] = { "Emulate", "Info", "Rename", "Delete" };
+/* Parsed-file label set when the protocol supports the SignalSettings
+ * scene (Phase 9a-2: KeeLoq family only; broader gating in Phase 9e). */
+static const char *const parsed_settings_labels[] = { "Emulate", "Info", "Settings", "Rename", "Delete" };
 
-#define RAW_ACTION_COUNT    5
-#define PARSED_ACTION_COUNT 4
+#define RAW_ACTION_COUNT             5
+#define PARSED_ACTION_COUNT          4
+#define PARSED_SETTINGS_ACTION_COUNT 5
 
 /* Phase 7c-3: action menu uses the reusable pure-logic submenu model.
  * Selection is reset on every scene_on_enter to match prior behaviour. */
@@ -75,6 +81,9 @@ static const char *const *active_labels;
 
 static bool in_info_screen;
 static bool is_raw_file;
+/* Phase 9a-2 — true when the loaded parsed file's protocol is supported
+ * by the SignalSettings scene; gates the "Settings" entry in the menu. */
+static bool has_settings_entry;
 
 /* Cached .sub file metadata (loaded eagerly on scene entry) */
 static flipper_subghz_signal_t saved_signal;
@@ -101,11 +110,21 @@ static bool     decode_detail_view;
 /**
  * @brief  Map selected action index to unified action ID.
  *         RAW files have Decode at index 0; parsed files skip it.
+ *         When the SignalSettings entry is present (Phase 9a-2), it
+ *         occupies index 2 between Info and Rename.
  */
 static uint8_t map_action(uint8_t sel)
 {
     if (is_raw_file)
         return sel;                /* Direct mapping: 0=Decode,1=Emulate,… */
+    if (has_settings_entry)
+    {
+        /* Parsed-with-Settings layout: 0→Emulate, 1→Info, 2→Settings,
+         * 3→Rename, 4→Delete. */
+        if (sel == 2) return SAVED_ACTION_SETTINGS;
+        if (sel <= 1) return sel + 1;   /* 0→Emulate(1), 1→Info(2) */
+        return sel;                     /* 3→Rename(3), 4→Delete(4) */
+    }
     return sel + 1;                /* Skip Decode: 0→Emulate(1), 1→Info(2),… */
 }
 
@@ -194,10 +213,22 @@ static bool load_signal(const SubGhzApp *app)
     is_raw_file = (saved_signal.type == FLIPPER_SUBGHZ_TYPE_RAW
                    && saved_signal.raw_count > 0);
 
+    /* Phase 9a-2: gate the Settings entry on parsed files whose protocol
+     * has a host-tested field extractor.  KeeLoq family only for now;
+     * Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 follow in 9e. */
+    has_settings_entry = (!is_raw_file)
+                       && (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
+                       && subghz_signal_fields_is_keeloq_family(saved_signal.protocol);
+
     if (is_raw_file)
     {
         action_count  = RAW_ACTION_COUNT;
         active_labels = raw_action_labels;
+    }
+    else if (has_settings_entry)
+    {
+        action_count  = PARSED_SETTINGS_ACTION_COUNT;
+        active_labels = parsed_settings_labels;
     }
     else
     {
@@ -316,6 +347,14 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
              * the Delete scene unlinks the file and pops back through us
              * to the Saved file browser; on cancel, it pops back to us. */
             subghz_scene_push(app, SubGhzSceneDelete);
+            return true;
+        }
+        case SAVED_ACTION_SETTINGS:
+        {
+            /* Phase 9a-2 — push the read-only SignalSettings scene.  The
+             * scene reloads from app->saved_filepath and dissects the
+             * 64-bit key into protocol-specific fields. */
+            subghz_scene_push(app, SubGhzSceneSignalSettings);
             return true;
         }
     }
