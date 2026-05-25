@@ -121,6 +121,63 @@ bool subghz_signal_fields_keeloq_assemble(const char                   *protocol
                                            const subghz_keeloq_fields_t *fields,
                                            uint64_t                     *key_out);
 
+/*============================================================================*/
+/* KeeLoq-family rolling counter — decode / encode (Phase 9c-1)                */
+/*============================================================================*/
+
+/**
+ * Decrypt the 32-bit encrypted HOP word @p enc_hop with @p device_key and
+ * return its 16-bit rolling counter field (plaintext bits [31:16]).
+ *
+ * The KeeLoq plaintext HOP-word layout (Microchip HCS301, 32-bit):
+ *   [31:16] 16-bit rolling counter
+ *   [15:12]  4-bit button code (discriminant)
+ *   [11:10]  2-bit VLOW / battery flag
+ *   [ 9: 4]  6-bit discriminant (low 6 bits of serial)
+ *   [ 3: 0]  4-bit overflow / function counter
+ *
+ * The lower 16 plaintext bits are not returned by this function — they
+ * are recovered for re-encryption by
+ * @ref subghz_signal_fields_keeloq_counter_encode, which decrypts
+ * internally to preserve them.
+ *
+ * The caller is responsible for resolving @p device_key from the captured
+ * file's `Manufacture:` line via the manufacturer-key store
+ * (@ref keeloq_mfkeys_find) and the appropriate learning mode
+ * (Simple / Normal / Secure — see @ref subghz_keeloq.h).
+ *
+ * @param  enc_hop     32-bit encrypted HOP word from the Flipper key.
+ * @param  device_key  64-bit derived device key (output of
+ *                     @ref keeloq_learn_normal / _simple / _secure).
+ * @return  16-bit rolling counter.
+ */
+uint16_t subghz_signal_fields_keeloq_counter_decode(uint32_t enc_hop,
+                                                    uint64_t device_key);
+
+/**
+ * Substitute @p new_counter into the 16-bit counter field of the
+ * plaintext hop word obtained by decrypting @p enc_hop with
+ * @p device_key, preserving the lower 16 plaintext bits (button,
+ * VLOW, discriminant, overflow counter), and return the re-encrypted
+ * 32-bit hop word.
+ *
+ * Mathematical relation to @ref keeloq_increment_hop:
+ *   subghz_signal_fields_keeloq_counter_encode(
+ *       h,
+ *       subghz_signal_fields_keeloq_counter_decode(h, k) + 1,
+ *       k)
+ * is equivalent to keeloq_increment_hop(h, k) for any (h, k).
+ *
+ * @param  enc_hop      Current 32-bit encrypted HOP word (its low 16
+ *                      plaintext bits are preserved verbatim).
+ * @param  new_counter  Replacement 16-bit counter value.
+ * @param  device_key   64-bit derived device key.
+ * @return  New 32-bit encrypted HOP word with the substituted counter.
+ */
+uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
+                                                    uint16_t new_counter,
+                                                    uint64_t device_key);
+
 #ifdef __cplusplus
 }
 #endif

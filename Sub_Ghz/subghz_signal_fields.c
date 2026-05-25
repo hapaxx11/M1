@@ -10,6 +10,7 @@
  */
 
 #include "subghz_signal_fields.h"
+#include "subghz_keeloq.h"
 
 #include <ctype.h>
 #include <stddef.h>
@@ -126,4 +127,29 @@ bool subghz_signal_fields_keeloq_assemble(const char                   *protocol
                    (uint64_t)h;
     }
     return true;
+}
+
+/*============================================================================*/
+/* Counter decode / encode (Phase 9c-1)                                        */
+/*============================================================================*/
+
+uint16_t subghz_signal_fields_keeloq_counter_decode(uint32_t enc_hop,
+                                                    uint64_t device_key)
+{
+    const uint32_t plain = keeloq_decrypt(enc_hop, device_key);
+    return (uint16_t)(plain >> 16);
+}
+
+uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
+                                                    uint16_t new_counter,
+                                                    uint64_t device_key)
+{
+    /* Decrypt to recover the lower 16 plaintext bits
+     * (button / VLOW / discriminant / overflow counter), substitute the
+     * 16-bit rolling counter, and re-encrypt with the same device key.
+     * This mirrors keeloq_increment_hop()'s structure exactly. */
+    const uint32_t plain     = keeloq_decrypt(enc_hop, device_key);
+    const uint32_t new_plain = ((uint32_t)new_counter << 16) |
+                               (plain & 0x0000FFFFU);
+    return keeloq_encrypt(new_plain, device_key);
 }

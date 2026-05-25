@@ -602,14 +602,45 @@
   - **9c**: Editable Counter for KeeLoq family — decrypt the encrypted
     hop with the resolved manufacturer key, replace the 16-bit counter,
     re-encrypt, reassemble the 64-bit key, save back.
+
+    Sub-phase plan:
+
+    - **9c-1**: ✅ Complete.  Pure-logic counter decode / encode helpers
+      added to `Sub_Ghz/subghz_signal_fields.{c,h}` —
+      `subghz_signal_fields_keeloq_counter_decode(enc_hop, device_key)`
+      returns the 16-bit rolling counter (plaintext bits [31:16]) and
+      `subghz_signal_fields_keeloq_counter_encode(enc_hop, new_counter,
+      device_key)` substitutes a new counter while preserving the lower
+      16 plaintext bits (button / VLOW / discriminant / overflow).
+      Both functions are thin, named wrappers over the existing
+      `keeloq_decrypt` / `keeloq_encrypt` primitives so the upcoming
+      9c-2 scene code never hard-codes cipher details.  6 new host
+      tests (82 total) cover: known-counter decode, round-trip across
+      varied counter values, low-16-bit preservation under counter
+      substitution, equivalence with `keeloq_increment_hop` for the
+      `counter + 1` case, distinct-counter ciphertext disjointness, and
+      the 0xFFFF boundary.  All tests pass under ASan+UBSan.
+    - **9c-2**: SignalSettings counter display — resolve the manufacturer
+      key for the loaded `.sub` file via `keeloq_mfkeys_find()` + the
+      appropriate learning mode, decrypt via the 9c-1 helper, and
+      replace the "Counter: (9c)" placeholder with the live value.
+      Add `subghz_signal_settings_get_counter()` /
+      `subghz_signal_settings_has_counter()` cross-scene accessors.
+    - **9c-3**: Selection cursor in SignalSettings + repurpose
+      `SubGhzSceneSetCounter` for edit-signal mode (16-bit width when
+      `signal_edit_active`), seeded from
+      `subghz_signal_settings_get_counter()` and saved via a new
+      `subghz_signal_settings_apply_counter()` that uses the 9c-1
+      `_counter_encode()` helper + the 9a-1 assembler + the existing
+      Manufacture-preserving file save path.
   - **9d**: CounterMode toggle (Increment / Static) persisted as a custom
     field in the `.sub` file and honoured by the replay path.
   - **9e**: Extend Counter editing to Nice FloR-S, CAME Atomo,
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅)
-- **Commit**: `Phase 9b: editable Button in SignalSettings + Manufacture round-trip`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅)
+- **Commit**: `Phase 9c-1: KeeLoq counter decode/encode pure-logic helpers + 6 tests`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

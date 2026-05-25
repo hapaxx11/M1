@@ -11,6 +11,12 @@
  *   - Cross-protocol consistency with subghz_keeloq_create_key()
  *   - Bad-argument paths (NULL protocol / fields / out, unknown protocol)
  *   - Field masking (over-range serial / button)
+ *
+ * Phase 9c-1 additions:
+ *   - KeeLoq 16-bit counter decode / encode round-trip
+ *   - Counter substitution preserves the lower 16 plaintext bits
+ *   - Cross-check against keeloq_increment_hop() (counter+1 equivalence)
+ *   - Distinct counters yield distinct ciphertext
  */
 
 #include "unity.h"
@@ -332,6 +338,126 @@ static void test_assemble_masks_overrange_button(void)
 }
 
 /*============================================================================*/
+/* Counter decode / encode (Phase 9c-1)                                        */
+/*============================================================================*/
+
+/* A representative device key — value is arbitrary but fixed so the
+ * tests are deterministic.  Mirrors the style of the other KeeLoq
+ * cipher test vectors elsewhere in the suite. */
+#define TEST_DEVICE_KEY  0xA1B2C3D4E5F60718ULL
+
+/* Build a plaintext hop word from its component fields, then encrypt
+ * it to obtain a captured-style encrypted hop. */
+static uint32_t make_enc_hop(uint16_t counter,
+                             uint8_t  button,
+                             uint8_t  vlow,
+                             uint8_t  discriminant,
+                             uint8_t  overflow,
+                             uint64_t device_key)
+{
+    const uint32_t plain = ((uint32_t)counter       << 16) |
+                           ((uint32_t)(button & 0xF) << 12) |
+                           ((uint32_t)(vlow   & 0x3) << 10) |
+                           ((uint32_t)(discriminant & 0x3F) << 4) |
+                           (uint32_t)(overflow & 0xF);
+    return keeloq_encrypt(plain, device_key);
+}
+
+static void test_counter_decode_recovers_known_counter(void)
+{
+    const uint16_t counter = 0x1234;
+    uint32_t enc = make_enc_hop(counter, 0x5, 0x1, 0x2A, 0x0, TEST_DEVICE_KEY);
+
+    uint16_t decoded =
+        subghz_signal_fields_keeloq_counter_decode(enc, TEST_DEVICE_KEY);
+    TEST_ASSERT_EQUAL_HEX16(counter, decoded);
+}
+
+static void test_counter_encode_round_trip(void)
+{
+    const uint16_t counters[] = {
+        0x0000, 0x0001, 0x00FF, 0x1234, 0x8000, 0xABCD, 0xFFFF
+    };
+    /* A fixed captured-style encrypted hop word so we exercise the full
+     * decrypt-substitute-encrypt path. */
+    uint32_t enc = make_enc_hop(0xDEAD, 0x7, 0x0, 0x15, 0x3, TEST_DEVICE_KEY);
+
+    for (size_t i = 0; i < sizeof(counters)/sizeof(counters[0]); ++i)
+    {
+        uint32_t new_enc =
+            subghz_signal_fields_keeloq_counter_encode(enc, counters[i],
+                                                       TEST_DEVICE_KEY);
+        uint16_t back =
+            subghz_signal_fields_keeloq_counter_decode(new_enc,
+                                                       TEST_DEVICE_KEY);
+        TEST_ASSERT_EQUAL_HEX16(counters[i], back);
+    }
+}
+
+static void test_counter_encode_preserves_low_16_plain_bits(void)
+{
+    /* Distinct sentinel for each of the 16 plaintext bits below counter. */
+    uint32_t enc = make_enc_hop(0xC0DE, 0xB, 0x2, 0x29, 0x7, TEST_DEVICE_KEY);
+
+    /* Substituting a different counter must not perturb the lower 16
+     * plaintext bits (button / VLOW / discriminant / overflow). */
+    uint32_t new_enc =
+        subghz_signal_fields_keeloq_counter_encode(enc, 0x1111,
+                                                   TEST_DEVICE_KEY);
+
+    uint32_t old_plain = keeloq_decrypt(enc,     TEST_DEVICE_KEY);
+    uint32_t new_plain = keeloq_decrypt(new_enc, TEST_DEVICE_KEY);
+
+    TEST_ASSERT_EQUAL_HEX32((uint32_t)0x1111U << 16, new_plain & 0xFFFF0000U);
+    TEST_ASSERT_EQUAL_HEX32(old_plain & 0x0000FFFFU,
+                            new_plain & 0x0000FFFFU);
+}
+
+static void test_counter_encode_matches_increment_hop(void)
+{
+    /* keeloq_increment_hop(h, k) must equal encode(h, decode(h, k)+1, k)
+     * for any (h, k) — the two operations share a single source of truth. */
+    const uint32_t hops[] = {
+        0x00000000U, 0xDEADBEEFU, 0x12345678U, 0xFFFFFFFFU, 0xA5A5A5A5U
+    };
+    for (size_t i = 0; i < sizeof(hops)/sizeof(hops[0]); ++i)
+    {
+        uint32_t inc_ref = keeloq_increment_hop(hops[i], TEST_DEVICE_KEY);
+        uint16_t cur =
+            subghz_signal_fields_keeloq_counter_decode(hops[i], TEST_DEVICE_KEY);
+        uint32_t inc_via_encode =
+            subghz_signal_fields_keeloq_counter_encode(hops[i],
+                                                       (uint16_t)(cur + 1U),
+                                                       TEST_DEVICE_KEY);
+        TEST_ASSERT_EQUAL_HEX32(inc_ref, inc_via_encode);
+    }
+}
+
+static void test_counter_distinct_inputs_yield_distinct_ciphertext(void)
+{
+    uint32_t enc = make_enc_hop(0x0000, 0x1, 0x0, 0x00, 0x0, TEST_DEVICE_KEY);
+    uint32_t a = subghz_signal_fields_keeloq_counter_encode(enc, 0x0001U,
+                                                            TEST_DEVICE_KEY);
+    uint32_t b = subghz_signal_fields_keeloq_counter_encode(enc, 0x0002U,
+                                                            TEST_DEVICE_KEY);
+    TEST_ASSERT_NOT_EQUAL(a, b);
+}
+
+static void test_counter_encode_masks_to_16_bits(void)
+{
+    /* The function takes a uint16_t, so any wider value the caller
+     * passes is already masked by the C type system.  This test
+     * documents that boundary explicitly: passing (uint16_t)0xFFFF
+     * is accepted and round-trips correctly. */
+    uint32_t enc = make_enc_hop(0x4242, 0xC, 0x1, 0x0A, 0x5, TEST_DEVICE_KEY);
+    uint32_t new_enc =
+        subghz_signal_fields_keeloq_counter_encode(enc, (uint16_t)0xFFFFU,
+                                                   TEST_DEVICE_KEY);
+    TEST_ASSERT_EQUAL_HEX16((uint16_t)0xFFFFU,
+        subghz_signal_fields_keeloq_counter_decode(new_enc, TEST_DEVICE_KEY));
+}
+
+/*============================================================================*/
 /* Test runner                                                                 */
 /*============================================================================*/
 
@@ -364,5 +490,13 @@ int main(void)
 
     RUN_TEST(test_assemble_masks_overrange_serial);
     RUN_TEST(test_assemble_masks_overrange_button);
+
+    /* Phase 9c-1 — counter decode / encode pure logic */
+    RUN_TEST(test_counter_decode_recovers_known_counter);
+    RUN_TEST(test_counter_encode_round_trip);
+    RUN_TEST(test_counter_encode_preserves_low_16_plain_bits);
+    RUN_TEST(test_counter_encode_matches_increment_hop);
+    RUN_TEST(test_counter_distinct_inputs_yield_distinct_ciphertext);
+    RUN_TEST(test_counter_encode_masks_to_16_bits);
     return UNITY_END();
 }
