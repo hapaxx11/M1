@@ -2310,6 +2310,10 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 					kl_params.key_value   = key_value;
 					kl_params.bit_count   = key_bit_count;
 					kl_params.te          = key_te;
+					/* Phase 9d: replay path defaults to Increment mode.
+					 * Phase 9d-3 will wire this from the parsed
+					 * `CounterMode:` field of the .sub file. */
+					kl_params.static_counter = false;
 
 					SubGhzRawPair *kl_pairs  = NULL;
 					uint32_t       kl_npairs = 0;

@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9c-3 (SetCounter edit-signal repurpose + selection cursor in SignalSettings)
-- **PR Description**: Completes Phase 9c by making the rolling counter editable.  `SubGhzSceneSignalSettings` now sports a UP/DOWN selection cursor on the editable rows (Button, and Counter when the manufacturer key resolved); a `>` marker identifies the selected row.  OK dispatches to `SubGhzSceneSetButton` or `SubGhzSceneSetCounter` based on the cursor.  `SubGhzSceneSetCounter` was repurposed for edit-signal mode: when `app->signal_edit_active` is set, the hex editor opens in 16-bit width, seeds from `subghz_signal_settings_get_counter()`, and on OK calls the new `subghz_signal_settings_apply_counter()` cross-scene helper instead of pushing `SetMfKey`.  The save path re-encrypts the HOP word via the Phase 9c-1 `_counter_encode()` (which preserves the lower 16 plaintext bits), reassembles the 64-bit Flipper key via the Phase 9a-1 `_keeloq_assemble()`, and writes through the Manufacture-preserving save helper.  The device key resolved on `scene_on_enter` is cached so save does not re-derive from the mfkey table.  All 72 host tests pass under ASan+UBSan — all component pieces are already covered by `test_subghz_signal_fields` and `test_subghz_keeloq`.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9d-1 (Static counter mode in `keeloq_encode_replay()`)
+- **PR Description**: Begins Phase 9d (CounterMode toggle).  Adds a new `bool static_counter` field to `KeeLoqEncParams`; when `true`, `keeloq_encode_replay()` re-emits the captured encrypted hop word verbatim instead of running `keeloq_increment_hop()`.  The manufacturer-key derivation and field-extraction path still runs in both modes, so the encoded waveform layout is identical.  The existing replay caller in `m1_csrc/m1_sub_ghz.c` explicitly sets `static_counter = false`, preserving the current Increment-mode behaviour until Phase 9d-3 wires the toggle from the parsed `.sub` file.  Two new host tests cover (a) static-vs-increment producing different encoded pairs (the 16-bit counter differs by +1 in the HOP word) and (b) static-mode being deterministic across calls (no counter mutation between invocations).  All 74 host tests pass under ASan+UBSan.
 
 ## Phases
 
@@ -668,12 +668,40 @@
       covered by `test_subghz_signal_fields` and `test_subghz_keeloq`.
   - **9d**: CounterMode toggle (Increment / Static) persisted as a custom
     field in the `.sub` file and honoured by the replay path.
+
+    Sub-phase plan:
+
+    - **9d-1**: ✅ Complete.  Pure-logic foundation in the KeeLoq encoder.
+      Adds a new `bool static_counter` field to `KeeLoqEncParams`; when
+      set, `keeloq_encode_replay()` skips the `keeloq_increment_hop()`
+      call and re-emits the captured encrypted hop word verbatim
+      instead of running the decrypt → counter+1 → re-encrypt path.
+      The manufacturer-key derivation and field-extraction logic still
+      run in both modes so the encoded waveform layout is identical;
+      only `keeloq_increment_hop()` is bypassed.  The existing replay
+      caller in `m1_csrc/m1_sub_ghz.c` explicitly sets
+      `static_counter = false`, preserving current Increment-mode
+      behaviour for every existing `.sub` file until 9d-3 wires the
+      toggle from the parsed file.  2 new host tests cover (a) static
+      vs increment producing different encoded pairs (HOP counter
+      differs by +1) and (b) static-mode being deterministic across
+      repeated calls.  74 host tests passing under ASan+UBSan.
+    - **9d-2**: Parse / save `CounterMode:` custom field in the `.sub`
+      file via `flipper_subghz_signal_t::counter_mode`, with round-trip
+      tests for files that include the field, files that omit it
+      (default = Increment), and files with invalid values (treated
+      as Increment).
+    - **9d-3**: SignalSettings UI — third selectable row toggles
+      CounterMode (Increment / Static) and persists via the
+      Manufacture-preserving save helper.  Wire the toggle to the
+      replay path in `m1_sub_ghz.c` so `kl_params.static_counter`
+      reflects the parsed field.
   - **9e**: Extend Counter editing to Nice FloR-S, CAME Atomo,
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅)
-- **Commit**: `Phase 9c-3: SetCounter edit-signal repurpose + selection cursor in SignalSettings`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅)
+- **Commit**: `Phase 9d-1: add static_counter field to KeeLoqEncParams + 2 host tests`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

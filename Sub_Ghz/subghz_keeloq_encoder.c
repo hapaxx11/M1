@@ -236,8 +236,18 @@ KeeLoqEncResult keeloq_encode_replay(
         return KEELOQ_ENC_BAD_PROTOCOL;
     }
 
-    /* Counter-mode: decrypt → increment → re-encrypt */
-    uint32_t new_hop = keeloq_increment_hop(hop, device_key);
+    /* Counter-mode policy (Phase 9d):
+     *   Increment mode (default): decrypt → +1 → re-encrypt
+     *   Static    mode          : re-emit captured hop verbatim
+     * The manufacturer-key derivation path always runs so that field
+     * extraction and key reassembly use the same logic in both modes.
+     */
+    uint32_t new_hop;
+    if (params->static_counter) {
+        new_hop = hop;
+    } else {
+        new_hop = keeloq_increment_hop(hop, device_key);
+    }
 
     /* Reconstruct the 64-bit key with the new hop word */
     uint64_t new_key = reconstruct_key(params->protocol, new_hop, serial, button);
