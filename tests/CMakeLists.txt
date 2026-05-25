@@ -1140,6 +1140,25 @@ endif()
 add_test(NAME subghz_new_remote_gen COMMAND test_subghz_new_remote_gen)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_create_proto (Phase 8a — create-from-
+# scratch protocol catalog & field-schema descriptor).
+# Pure-logic protocol catalog + editable-field bitmask + key-range
+# masking helper.  Zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_create_proto
+    test_subghz_create_proto.c
+    ${M1_ROOT}/Sub_Ghz/subghz_create_proto.c
+)
+target_include_directories(test_subghz_create_proto PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_create_proto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_create_proto PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_create_proto COMMAND test_subghz_create_proto)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_read_raw_state (Read Raw async TX helpers)
 # Verifies the pure-logic dispatch helpers used by the Read Raw scene
 # to handle Q_EVENT_SUBGHZ_TX completion events and BACK during TX:

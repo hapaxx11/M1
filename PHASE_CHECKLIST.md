@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-4 (migrate Bind Wizard protocol picker to m1_submenu widget)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-4 migrates the Bind New Remote wizard's protocol-picker list (CAME Atomo / Nice FloR-S / Alutech AT-4N / DITEC GOL4 / KingGates Stylo4k) onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The hand-rolled `bw_proto_sel` / `bw_proto_scroll` math and ~55-line `draw_proto_sel()` are replaced with calls to the standard font-aware list widget, so the picker now honours **Settings → LCD & Notifications → Text Size** consistently with every other scene menu. `set_visible_count(M1_MENU_VIS(5))` is called on every PROTO_SEL `scene_on_event` and `draw` so a text-size change picked up while a child scene (Transmitter, etc.) was on top resyncs correctly. No behavioural change to the wizard steps or binding flow. All 68 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8a (create-from-scratch protocol catalog & field-schema descriptor)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8 (Create from scratch — SetType / SetKey / SetSerial / SetButton / SetCounter) is split into sub-phases mirroring Phase 7c.  Phase 8a lands the pure-logic foundation: a new `Sub_Ghz/subghz_create_proto.c/h` module that exposes the protocol catalog (proto name, freq, bit count, te, file prefix) and a per-protocol `SubGhzCreateFieldFlags` bitmask (FIELD_KEY / FIELD_SERIAL / FIELD_BUTTON / FIELD_COUNTER / FIELD_MFKEY) that Phase 8b's Type Picker scene and Phase 8c's per-field editor scenes will consume.  The Phase 8a catalog ships with the five PwmKeyReplay rolling-code remotes already exercised by the Bind New Remote wizard; each advertises `FIELD_KEY` only.  18 host tests under ASan+UBSan cover catalog shape, per-protocol metadata regression, field-flag query (both supported and unsupported), and the key-range masking helper.  Zero hardware dependencies.  No firmware behavioural change — the module compiles into the firmware build but is not yet wired into any scene.  All 69 host tests pass.
 
 ## Phases
 
@@ -366,8 +366,44 @@
 - **Description**: Create-from-scratch flow gated by
   `SubGhzProtocolFlag_PwmKeyReplay`.  Covers ~25 protocols (the ones M1 can
   actually replay).
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+
+  Split into sub-phases, mirroring how Phase 7c was structured:
+
+  - **Phase 8a — Protocol catalog & field-schema descriptor (pure logic).**
+    ✅ Complete.  New module `Sub_Ghz/subghz_create_proto.c/h` provides the
+    `SubGhzCreateProtoId` enum, the `SubGhzCreateFieldFlags` editable-field
+    bitmask (FIELD_KEY / FIELD_SERIAL / FIELD_BUTTON / FIELD_COUNTER /
+    FIELD_MFKEY), the per-protocol `SubGhzCreateProtoSpec` table, and the
+    public accessors `subghz_create_proto_count()`,
+    `subghz_create_proto_spec(id)`, `subghz_create_proto_has_field(id, f)`,
+    and `subghz_create_proto_key_in_range(id, key, *out)`.  Ships with the
+    five PwmKeyReplay rolling-code remotes already exercised by the Bind
+    New Remote wizard (CAME Atomo / Nice FloR-S / Alutech AT-4N / DITEC
+    GOL4 / KingGates Stylo4k); each advertises `FIELD_KEY` only.
+    Hardware-independent — no SI4463, no HAL, no FreeRTOS, no FAT FS.  18
+    host tests under ASan+UBSan cover catalog shape, per-protocol metadata
+    regression, field-flag query (both supported and unsupported), and the
+    key-range masking helper (including the Alutech 64-bit full-range case
+    and the NULL-out-pointer safety case).  Phase 8b will reuse the
+    accessors from the Type Picker scene; Phase 8c will extend the catalog
+    with the KeeLoq family (Serial + Button + Counter + MfKey).
+
+  - **Phase 8b — SetType scene + Add Manually retirement.**  🔲 Not started.
+    Replace the blocking `sub_ghz_add_manually()` delegate with a
+    scene-native Type Picker that drives the Phase 8a catalog through the
+    standard `subghz_submenu_model` + `m1_submenu_draw` widget.  Extend the
+    catalog with the static-OOK families currently in Add Manually
+    (Princeton, Nice FLO 12/24-bit, CAME 12/24-bit, Linear, GateTX,
+    DoorHan, Holtek HT12X).
+
+  - **Phase 8c — SetKey / SetSerial / SetButton / SetCounter editor scenes.**
+    🔲 Not started.  Per-field hex/decimal editor scenes routed off the
+    Phase 8a `field_flags` bitmask.  Adds the KeeLoq family
+    (FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY) on top of
+    the existing counter-mode encoder in `Sub_Ghz/subghz_keeloq.c`.
+
+- **Status**: 🔄 In progress (8a ✅; 8b/8c pending)
+- **Commit**: `Phase 8a: add subghz_create_proto pure-logic catalog + 18 host tests`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on
