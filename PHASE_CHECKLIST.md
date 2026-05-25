@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-1 (extend create-from-scratch catalog with static-OOK families)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-1 extends the Phase 8a `Sub_Ghz/subghz_create_proto.c/h` pure-logic catalog from 5 rolling-code entries to 17 by adding the 12 static-OOK families currently served by the blocking `sub_ghz_add_manually()` delegate: Princeton 433/315, Nice FLO 12/24-bit, CAME 12/24-bit + CAME 868, Linear 300, GateTX 433, DoorHan 315/433, and Holtek HT12X. Each new entry advertises `SUBGHZ_CREATE_FIELD_KEY` only and carries the canonical registry `proto_name` so the .sub Protocol: field will match the receiver decoder exactly when Phase 8b-2 wires the catalog into the SetType scene. 35 host tests under ASan+UBSan (up from 18) cover the extended catalog shape, per-protocol metadata regression for all 12 new entries, key-range truncation at the 10-bit Linear boundary, label uniqueness, and a "freq sits in a supported ISM band" invariant. Host-only — zero firmware behavioural change. All 69 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-2 (SetType picker scene scaffold)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-2 scaffolds a new `SubGhzSceneSetType` picker that consumes the Phase 8a/8b-1 `subghz_create_proto_*` catalog (17 entries: 5 rolling-code remotes + 12 static-OOK families) via the standard `subghz_submenu_model` + `m1_submenu_draw` widget.  Adds a new `SubGhzApp::create_proto_id` field that the OK handler populates from the model's selected index; selection persists across pushes/pops via the Phase 2 per-scene state slot.  Today the OK handler pops back to the parent — Phase 8b-3 will swap the pop for a push of the SetKey hex-entry scene, and Phase 8b-4 will retire the legacy `sub_ghz_add_manually()` blocking delegate by replacing the Sub-GHz menu's "Add Manually" entry with `subghz_scene_push(SubGhzSceneSetType)`.  No callers yet push the scene, so this change is firmware behaviourally inert; the 69 host tests continue to pass.
 
 ## Phases
 
@@ -410,12 +410,15 @@
       Host-only — the module is already in the firmware build (from
       Phase 8a) but not yet wired into any scene.  All 69 host tests pass.
 
-    - **Phase 8b-2 — SetType scene scaffold + scene-manager wiring.**  🔲
-      Not started.  New `SubGhzSceneSetType` consumes
+    - **Phase 8b-2 — SetType scene scaffold + scene-manager wiring.**  ✅
+      Complete.  New `SubGhzSceneSetType` consumes
       `subghz_create_proto_*` via the standard `subghz_submenu_model` +
       `m1_submenu_draw` widget.  Stores the picked `SubGhzCreateProtoId`
-      in a new `SubGhzApp::create_proto_id` field and pushes the SetKey
-      scene (Phase 8b-3).
+      in a new `SubGhzApp::create_proto_id` field; selection persists
+      across pushes/pops via the Phase 2 per-scene state slot.  Today
+      the OK handler pops back to the parent — Phase 8b-3 will swap
+      the pop for a push of the SetKey hex-entry scene.  No callers
+      yet push the scene; that lands in Phase 8b-4.
 
     - **Phase 8b-3 — SetKey hex-entry scene (reusable for Phase 8c).**
       🔲 Not started.  Hex-digit editor scene that builds a 64-bit key
@@ -436,8 +439,8 @@
     (FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY) on top of
     the existing counter-mode encoder in `Sub_Ghz/subghz_keeloq.c`.
 
-- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2/8b-3/8b-4 pending; 8c pending)
-- **Commit**: `Phase 8b-1: extend subghz_create_proto catalog with 12 static-OOK families`
+- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3/8b-4 pending; 8c pending)
+- **Commit**: `Phase 8b-2: scaffold SubGhzSceneSetType picker over create_proto catalog`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on

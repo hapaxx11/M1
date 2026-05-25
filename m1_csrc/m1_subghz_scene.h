@@ -63,6 +63,7 @@ typedef enum {
     SubGhzSceneDelete,         /**< Delete-file confirmation dialog */
     SubGhzSceneMoreRaw,        /**< Read-Raw Loaded "More" submenu (Decode/Rename/Delete) */
     SubGhzSceneDecodeRaw,      /**< Offline decode-results view for a loaded RAW file */
+    SubGhzSceneSetType,        /**< Create-from-scratch protocol picker (Phase 8b-2) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -286,6 +287,15 @@ typedef struct {
     /** Bare filename (basename only, no directory) of the currently-
      *  selected saved file.  Set together with `saved_filepath`. */
     char     saved_filename[32];
+
+    /* --- Phase 8b-2 — Create-from-scratch picker state --- */
+    /** Picked protocol id from the SetType scene.  Stored as `uint8_t`
+     *  so the public header does not need to pull in
+     *  `subghz_create_proto.h`; the consuming scene casts back to
+     *  @ref SubGhzCreateProtoId at use time.  Valid range is
+     *  `[0, SUBGHZ_CREATE_PROTO_COUNT)`.  Initialised to 0 by
+     *  `subghz_scene_init()` (memset). */
+    uint8_t  create_proto_id;
 } SubGhzApp;
 
 /*============================================================================*/
@@ -487,5 +497,6 @@ extern const SubGhzSceneHandlers subghz_scene_saved_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_delete_handlers;
 extern const SubGhzSceneHandlers subghz_scene_more_raw_handlers;
 extern const SubGhzSceneHandlers subghz_scene_decode_raw_handlers;
+extern const SubGhzSceneHandlers subghz_scene_set_type_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */
