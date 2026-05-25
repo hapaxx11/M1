@@ -1,0 +1,1 @@
+- **Sub-GHz Read Raw**: Fixed firmware build failure caused by `app->raw_filepath` appearing inside a function that defines `raw_filepath` as a `(app->raw_filepath)` macro alias.  The bare struct-member access was expanded by the preprocessor into `app->(app->raw_filepath)`, breaking compilation.  Switched the offending reference to the macro alias to match the surrounding code.

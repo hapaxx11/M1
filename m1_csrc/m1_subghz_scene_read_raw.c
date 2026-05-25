@@ -241,9 +241,11 @@ static void scene_on_enter(SubGhzApp *app)
 
         /* Phase 6 — if the MoreRaw child scene deleted the loaded file, it
          * cleared app->raw_filepath.  Drop back to the Start state instead
-         * of presenting a Loaded view that points at a non-existent file. */
+         * of presenting a Loaded view that points at a non-existent file.
+         * Use the raw_filepath macro alias to avoid token-paste expansion
+         * of the bare `raw_filepath` identifier inside `app->raw_filepath`. */
         if (app->raw_state == SubGhzReadRawStateLoaded &&
-            app->raw_filepath[0] == '\0')
+            raw_filepath[0] == '\0')
         {
             app->raw_state        = SubGhzReadRawStateStart;
             app->raw_sample_count = 0;
