@@ -38,11 +38,31 @@
 /*============================================================================*/
 
 typedef enum {
+    /* Rolling-code remotes (Phase 8a) — also covered by the Bind New Remote
+     * wizard, which generates a random key.  In the Create-from-scratch flow
+     * the user enters the hex key directly. */
     SUBGHZ_CREATE_PROTO_CAME_ATOMO = 0,        /**< CAME Atomo 433 — 62 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_NICE_FLOR_S,           /**< Nice FloR-S 433 — 52 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_ALUTECH_AT4N,          /**< Alutech AT-4N 433 — 64 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_DITEC_GOL4,            /**< DITEC GOL4 433 — 54 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_KINGGATES_STYLO4K,     /**< KingGates Stylo4k 433 — 60 bit OOK PWM */
+
+    /* Static-OOK families (Phase 8b-1) — currently served by the legacy
+     * `sub_ghz_add_manually()` blocking delegate.  Phase 8b-2/8b-4 will move
+     * the picker UI into a scene and retire that delegate. */
+    SUBGHZ_CREATE_PROTO_PRINCETON_433,         /**< Princeton 433 — 24 bit OOK PWM 1:3 */
+    SUBGHZ_CREATE_PROTO_PRINCETON_315,         /**< Princeton 315 — 24 bit OOK PWM 1:3 */
+    SUBGHZ_CREATE_PROTO_NICE_FLO_12_433,       /**< Nice FLO 433 — 12 bit OOK PWM 1:2 */
+    SUBGHZ_CREATE_PROTO_NICE_FLO_24_433,       /**< Nice FLO 433 — 24 bit OOK PWM 1:2 */
+    SUBGHZ_CREATE_PROTO_CAME_12_433,           /**< CAME 433 — 12 bit OOK PWM 1:2 */
+    SUBGHZ_CREATE_PROTO_CAME_24_433,           /**< CAME 433 — 24 bit OOK PWM 1:2 */
+    SUBGHZ_CREATE_PROTO_CAME_12_868,           /**< CAME 868 — 12 bit OOK PWM 1:2 */
+    SUBGHZ_CREATE_PROTO_LINEAR_300,            /**< Linear 300 — 10 bit OOK PWM 1:3 */
+    SUBGHZ_CREATE_PROTO_GATETX_433,            /**< GateTX 433 — 24 bit OOK PWM 1:3 */
+    SUBGHZ_CREATE_PROTO_DOORHAN_315,           /**< DoorHan 315 — 24 bit OOK PWM 1:3 */
+    SUBGHZ_CREATE_PROTO_DOORHAN_433,           /**< DoorHan 433 — 24 bit OOK PWM 1:3 */
+    SUBGHZ_CREATE_PROTO_HOLTEK_HT12X_433,      /**< Holtek HT12X 433 — 12 bit OOK PWM 1:3 */
+
     SUBGHZ_CREATE_PROTO_COUNT
 } SubGhzCreateProtoId;
 

@@ -76,6 +76,138 @@ static const SubGhzCreateProtoSpec s_proto_catalog[SUBGHZ_CREATE_PROTO_COUNT] = 
         .field_flags = SUBGHZ_CREATE_FIELD_KEY,
         .file_prefix = "KingGates",
     },
+
+    /*----------------------------------------------------------------------*
+     * Phase 8b-1 — Static-OOK families
+     *
+     * Metadata mirrors the legacy `subghz_add_manually_list[]` in
+     * m1_csrc/m1_sub_ghz.c plus Holtek HT12X (which the registry already
+     * supports but Add Manually does not yet expose).  The proto_name is
+     * the canonical name from Sub_Ghz/subghz_protocol_registry.c so the
+     * .sub Protocol: field that the upcoming Phase 8b-4 writer emits will
+     * match the receiver decoder exactly — fixing two long-standing bugs
+     * in the legacy code path (`Nice FLO 12b` → "Nice" and `Gate TX 433`
+     * → "Gate"; both gated only through the strstr() fallback today).
+     *
+     * The legacy table also stored a `ratio` field (1:2 vs 1:3 OOK PWM)
+     * used to derive te_long.  That ratio is **not** carried in this
+     * catalog — `subghz_key_encoder.c` derives te_long from the registry
+     * `te_long / te_short` ratio when reg_idx is known, so the catalog
+     * only needs to carry te_short.  The strstr() fallback in the
+     * encoder applies only when the protocol is not in the registry,
+     * which is not the case for any entry in this catalog.
+     *
+     * `Linear 300` is the only entry below 315 MHz; the others span
+     * 315 / 433 / 868 bands.
+     *----------------------------------------------------------------------*/
+    [SUBGHZ_CREATE_PROTO_PRINCETON_433] = {
+        .label       = "Princeton 433",
+        .proto_name  = "Princeton",
+        .freq_hz     = 433920000U,
+        .bit_count   = 24U,
+        .te          = 350U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "Princeton",
+    },
+    [SUBGHZ_CREATE_PROTO_PRINCETON_315] = {
+        .label       = "Princeton 315",
+        .proto_name  = "Princeton",
+        .freq_hz     = 315000000U,
+        .bit_count   = 24U,
+        .te          = 350U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "Princeton",
+    },
+    [SUBGHZ_CREATE_PROTO_NICE_FLO_12_433] = {
+        .label       = "Nice FLO 12b",
+        .proto_name  = "Nice FLO",
+        .freq_hz     = 433920000U,
+        .bit_count   = 12U,
+        .te          = 700U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "NiceFLO",
+    },
+    [SUBGHZ_CREATE_PROTO_NICE_FLO_24_433] = {
+        .label       = "Nice FLO 24b",
+        .proto_name  = "Nice FLO",
+        .freq_hz     = 433920000U,
+        .bit_count   = 24U,
+        .te          = 700U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "NiceFLO",
+    },
+    [SUBGHZ_CREATE_PROTO_CAME_12_433] = {
+        .label       = "CAME 12bit",
+        .proto_name  = "CAME",
+        .freq_hz     = 433920000U,
+        .bit_count   = 12U,
+        .te          = 320U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "CAME",
+    },
+    [SUBGHZ_CREATE_PROTO_CAME_24_433] = {
+        .label       = "CAME 24bit",
+        .proto_name  = "CAME",
+        .freq_hz     = 433920000U,
+        .bit_count   = 24U,
+        .te          = 320U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "CAME",
+    },
+    [SUBGHZ_CREATE_PROTO_CAME_12_868] = {
+        .label       = "CAME 12b 868",
+        .proto_name  = "CAME",
+        .freq_hz     = 868350000U,
+        .bit_count   = 12U,
+        .te          = 320U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "CAME",
+    },
+    [SUBGHZ_CREATE_PROTO_LINEAR_300] = {
+        .label       = "Linear 300",
+        .proto_name  = "Linear",
+        .freq_hz     = 300000000U,
+        .bit_count   = 10U,
+        .te          = 500U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "Linear",
+    },
+    [SUBGHZ_CREATE_PROTO_GATETX_433] = {
+        .label       = "Gate TX 433",
+        .proto_name  = "GateTX",
+        .freq_hz     = 433920000U,
+        .bit_count   = 24U,
+        .te          = 350U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "GateTX",
+    },
+    [SUBGHZ_CREATE_PROTO_DOORHAN_315] = {
+        .label       = "DoorHan 315",
+        .proto_name  = "DoorHan",
+        .freq_hz     = 315000000U,
+        .bit_count   = 24U,
+        .te          = 350U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "DoorHan",
+    },
+    [SUBGHZ_CREATE_PROTO_DOORHAN_433] = {
+        .label       = "DoorHan 433",
+        .proto_name  = "DoorHan",
+        .freq_hz     = 433920000U,
+        .bit_count   = 24U,
+        .te          = 350U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "DoorHan",
+    },
+    [SUBGHZ_CREATE_PROTO_HOLTEK_HT12X_433] = {
+        .label       = "Holtek HT12X 433",
+        .proto_name  = "Holtek_HT12X",
+        .freq_hz     = 433920000U,
+        .bit_count   = 12U,
+        .te          = 340U,
+        .field_flags = SUBGHZ_CREATE_FIELD_KEY,
+        .file_prefix = "Holtek",
+    },
 };
 
 /*============================================================================*/

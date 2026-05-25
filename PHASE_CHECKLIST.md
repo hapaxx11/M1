@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8a (create-from-scratch protocol catalog & field-schema descriptor)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8 (Create from scratch — SetType / SetKey / SetSerial / SetButton / SetCounter) is split into sub-phases mirroring Phase 7c.  Phase 8a lands the pure-logic foundation: a new `Sub_Ghz/subghz_create_proto.c/h` module that exposes the protocol catalog (proto name, freq, bit count, te, file prefix) and a per-protocol `SubGhzCreateFieldFlags` bitmask (FIELD_KEY / FIELD_SERIAL / FIELD_BUTTON / FIELD_COUNTER / FIELD_MFKEY) that Phase 8b's Type Picker scene and Phase 8c's per-field editor scenes will consume.  The Phase 8a catalog ships with the five PwmKeyReplay rolling-code remotes already exercised by the Bind New Remote wizard; each advertises `FIELD_KEY` only.  18 host tests under ASan+UBSan cover catalog shape, per-protocol metadata regression, field-flag query (both supported and unsupported), and the key-range masking helper.  Zero hardware dependencies.  No firmware behavioural change — the module compiles into the firmware build but is not yet wired into any scene.  All 69 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-1 (extend create-from-scratch catalog with static-OOK families)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-1 extends the Phase 8a `Sub_Ghz/subghz_create_proto.c/h` pure-logic catalog from 5 rolling-code entries to 17 by adding the 12 static-OOK families currently served by the blocking `sub_ghz_add_manually()` delegate: Princeton 433/315, Nice FLO 12/24-bit, CAME 12/24-bit + CAME 868, Linear 300, GateTX 433, DoorHan 315/433, and Holtek HT12X. Each new entry advertises `SUBGHZ_CREATE_FIELD_KEY` only and carries the canonical registry `proto_name` so the .sub Protocol: field will match the receiver decoder exactly when Phase 8b-2 wires the catalog into the SetType scene. 35 host tests under ASan+UBSan (up from 18) cover the extended catalog shape, per-protocol metadata regression for all 12 new entries, key-range truncation at the 10-bit Linear boundary, label uniqueness, and a "freq sits in a supported ISM band" invariant. Host-only — zero firmware behavioural change. All 69 host tests pass.
 
 ## Phases
 
@@ -388,13 +388,47 @@
     accessors from the Type Picker scene; Phase 8c will extend the catalog
     with the KeeLoq family (Serial + Button + Counter + MfKey).
 
-  - **Phase 8b — SetType scene + Add Manually retirement.**  🔲 Not started.
-    Replace the blocking `sub_ghz_add_manually()` delegate with a
-    scene-native Type Picker that drives the Phase 8a catalog through the
-    standard `subghz_submenu_model` + `m1_submenu_draw` widget.  Extend the
-    catalog with the static-OOK families currently in Add Manually
-    (Princeton, Nice FLO 12/24-bit, CAME 12/24-bit, Linear, GateTX,
-    DoorHan, Holtek HT12X).
+  - **Phase 8b — SetType scene + Add Manually retirement.**  🔄 In progress.
+    Split into sub-phases:
+
+    - **Phase 8b-1 — Extend catalog with static-OOK families (pure logic).**
+      ✅ Complete.  Extended `Sub_Ghz/subghz_create_proto.c/h` from 5 to 17
+      entries by adding the 12 static-OOK families currently served by the
+      blocking `sub_ghz_add_manually()` delegate: Princeton 433/315, Nice
+      FLO 12/24-bit, CAME 12/24-bit + CAME 868, Linear 300, GateTX 433,
+      DoorHan 315/433, and Holtek HT12X.  Each new entry advertises
+      `SUBGHZ_CREATE_FIELD_KEY` only (matches the Add Manually UX of
+      pick-protocol-then-enter-hex-key) and carries the canonical registry
+      `proto_name` so the .sub Protocol: field will match the receiver
+      decoder exactly — fixing two latent bugs in the legacy strchr-based
+      name stripping (`Nice FLO 12b` → "Nice" and `Gate TX 433` → "Gate")
+      that today rely only on `subghz_key_encoder.c`'s strstr() fallback.
+      35 host tests under ASan+UBSan (up from 18) cover the extended
+      catalog shape, per-protocol metadata regression for all 12 new
+      entries, key-range truncation at the 10-bit Linear boundary, label
+      uniqueness, and a "freq sits in a supported ISM band" invariant.
+      Host-only — the module is already in the firmware build (from
+      Phase 8a) but not yet wired into any scene.  All 69 host tests pass.
+
+    - **Phase 8b-2 — SetType scene scaffold + scene-manager wiring.**  🔲
+      Not started.  New `SubGhzSceneSetType` consumes
+      `subghz_create_proto_*` via the standard `subghz_submenu_model` +
+      `m1_submenu_draw` widget.  Stores the picked `SubGhzCreateProtoId`
+      in a new `SubGhzApp::create_proto_id` field and pushes the SetKey
+      scene (Phase 8b-3).
+
+    - **Phase 8b-3 — SetKey hex-entry scene (reusable for Phase 8c).**
+      🔲 Not started.  Hex-digit editor scene that builds a 64-bit key
+      with cursor + Hex/L/R/OK semantics.  Uses
+      `subghz_create_proto_key_in_range()` for masking + overflow
+      reporting.  Designed to be reused by Phase 8c's SetSerial /
+      SetButton / SetCounter editor scenes.
+
+    - **Phase 8b-4 — Retire `sub_ghz_add_manually()` blocking delegate.**
+      🔲 Not started.  Replace the Sub-GHz menu's "Add Manually" entry
+      with `subghz_scene_push(app, SubGhzSceneSetType)`; delete the
+      blocking event-loop function and the `subghz_add_manually_list[]`
+      table from `m1_csrc/m1_sub_ghz.c`.
 
   - **Phase 8c — SetKey / SetSerial / SetButton / SetCounter editor scenes.**
     🔲 Not started.  Per-field hex/decimal editor scenes routed off the
@@ -402,8 +436,8 @@
     (FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY) on top of
     the existing counter-mode encoder in `Sub_Ghz/subghz_keeloq.c`.
 
-- **Status**: 🔄 In progress (8a ✅; 8b/8c pending)
-- **Commit**: `Phase 8a: add subghz_create_proto pure-logic catalog + 18 host tests`
+- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2/8b-3/8b-4 pending; 8c pending)
+- **Commit**: `Phase 8b-1: extend subghz_create_proto catalog with 12 static-OOK families`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on
