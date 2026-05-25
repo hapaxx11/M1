@@ -346,6 +346,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_hex_editor.c
     ../../Sub_Ghz/subghz_keeloq_create.c
     ../../Sub_Ghz/subghz_signal_fields.c
+    ../../Sub_Ghz/subghz_signal_format.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c

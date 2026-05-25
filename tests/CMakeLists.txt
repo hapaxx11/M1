@@ -1224,6 +1224,28 @@ endif()
 add_test(NAME subghz_signal_fields COMMAND test_subghz_signal_fields)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_signal_format (Phase 11-1)
+# Polymorphic Info-screen renderers driven by the protocol registry's
+# .get_string vtable slot.  Pure-logic; zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_signal_format
+    test_subghz_signal_format.c
+    ${M1_ROOT}/Sub_Ghz/subghz_signal_format.c
+    ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+)
+target_include_directories(test_subghz_signal_format PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_signal_format PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_signal_format PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_signal_format COMMAND test_subghz_signal_format)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_read_raw_state (Read Raw async TX helpers)
 # Verifies the pure-logic dispatch helpers used by the Read Raw scene
 # to handle Q_EVENT_SUBGHZ_TX completion events and BACK during TX:

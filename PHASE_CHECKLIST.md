@@ -860,7 +860,7 @@
   Sub-phase plan:
 
   - **Phase 11-1 — Vtable slot + KeeLoq-family renderer (foundation).**
-    🔄 In progress.  Adds `SubGhzGetStringFn get_string` to
+    ✅ Complete.  Adds `SubGhzGetStringFn get_string` to
     `SubGhzProtocolDef` (default NULL via designated initialisers, so no
     other registry entries need touching), with the function signature
     chosen to be registry-friendly (no dependency on `flipper_subghz.h`):
@@ -869,21 +869,22 @@
     64-bit key, bit count, TE) populated by the caller from the
     already-loaded signal.  Implements
     `subghz_signal_format_keeloq_info()` as the KeeLoq-family renderer
-    (Serial / Button / Counter — fields already extracted by the
+    (Serial / Button / EncHop — fields already extracted by the
     Phase 9a-1 / 9c-1 helpers) and wires it onto the KeeLoq, Star Line,
-    and Jarolift registry entries.  Updates the Saved Info screen to
-    consult `proto->get_string` when present, falling back to the
-    existing generic layout when it is NULL.  Host tests cover the
-    formatter's output shape (line breaks, prefix-terminated protocol
-    match, NULL-safety) and a regression guard that non-KeeLoq protocol
-    rendering is unchanged.  No firmware-functional behaviour change
-    for any non-KeeLoq-family file.
+    and Jarolift registry entries.  The Saved Info screen consults
+    `proto->get_string` when present, falling back to the existing
+    generic layout when it is NULL.  Host suite `test_subghz_signal_format`
+    (13 tests) covers the formatter's output shape, prefix-terminated
+    case-insensitive protocol match, NULL safety, truncation safety,
+    and the vtable-signature smoke test.  All 73 host tests pass under
+    ASan+UBSan.  No firmware-functional behaviour change for any
+    non-KeeLoq-family file.
 
   - **Phase 11-2+** — incremental migration of additional protocols
     (Nice FloR-S serial/button display, CAME Atomo / Came / Holtek
     field decomposition) — deferred until decoder field decomposition
     lands per the 9e-2..5 sub-phases.
-- **Status**: 🔄 In progress (11-1 foundation landing in this PR; 11-2+ deferred until decoders surface their fields)
+- **Status**: 🔄 In progress (11-1 ✅; 11-2+ deferred until decoders surface their fields)
 - **Commit**: `Phase 11-1: add polymorphic SubGhzGetStringFn vtable + KeeLoq-family Info renderer`
 
 ### Phase 12 — Receiver history quality-of-life

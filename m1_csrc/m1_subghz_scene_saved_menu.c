@@ -46,6 +46,7 @@
 #include "m1_virtual_kb.h"
 #include "subghz_submenu_model.h"
 #include "subghz_signal_fields.h"
+#include "subghz_signal_format.h"
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
@@ -492,16 +493,58 @@ static void draw_info_screen(void)
 
     if (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
     {
-        snprintf(line, sizeof(line), "Proto: %s", saved_signal.protocol);
-        u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+        /* Phase 11-1: consult the protocol's polymorphic get_string vtable
+         * slot when present.  Currently installed only on the KeeLoq family
+         * (KeeLoq / Star Line / Jarolift); all other parsed protocols fall
+         * through to the generic Proto / Key / Bits / TE layout below. */
+        int16_t proto_idx = subghz_protocol_find_by_name(saved_signal.protocol);
+        const SubGhzProtocolDef *proto =
+            (proto_idx >= 0) ? subghz_protocol_get((uint16_t)proto_idx) : NULL;
 
-        snprintf(line, sizeof(line), "Key: 0x%lX", (uint32_t)saved_signal.key);
-        u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+        if (proto && proto->get_string)
+        {
+            char info[96];
+            SubGhzSignalView view = {
+                .protocol  = saved_signal.protocol,
+                .key       = saved_signal.key,
+                .bit_count = saved_signal.bit_count,
+                .te        = saved_signal.te,
+            };
+            proto->get_string(&view, info, sizeof(info));
 
-        snprintf(line, sizeof(line), "Bits: %lu  TE: %lu us",
-                 (unsigned long)saved_signal.bit_count,
-                 (unsigned long)saved_signal.te);
-        u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+            /* Render up to 3 newline-separated rows from the formatter
+             * output at y=22/30/38, leaving y=46 for Freq and y=54 for Mod. */
+            int y = 22;
+            const char *p = info;
+            for (int row = 0; row < 3 && *p; row++)
+            {
+                size_t n = 0;
+                while (p[n] && p[n] != '\n' && n < sizeof(line) - 1)
+                {
+                    line[n] = p[n];
+                    n++;
+                }
+                line[n] = '\0';
+                if (n > 0)
+                    u8g2_DrawStr(&m1_u8g2, 2, y, line);
+                y += 8;
+                if (p[n] == '\n') p += n + 1;
+                else              p += n;
+            }
+        }
+        else
+        {
+            snprintf(line, sizeof(line), "Proto: %s", saved_signal.protocol);
+            u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+            snprintf(line, sizeof(line), "Key: 0x%lX", (uint32_t)saved_signal.key);
+            u8g2_DrawStr(&m1_u8g2, 2, 30, line);
+
+            snprintf(line, sizeof(line), "Bits: %lu  TE: %lu us",
+                     (unsigned long)saved_signal.bit_count,
+                     (unsigned long)saved_signal.te);
+            u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+        }
     }
     else
     {
