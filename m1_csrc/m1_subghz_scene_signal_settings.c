@@ -103,6 +103,12 @@ static bool resolve_device_key(const flipper_subghz_signal_t *signal,
     if (signal->manufacture[0] == '\0')
         return false;
 
+    /* Lazy-load the manufacturer-key store so build-time embedded keys
+     * (subghz_keeloq_mfkeys_builtin.c) are available even when this scene
+     * is the first KeeLoq consumer this boot.  Mirrors m1_sub_ghz.c lazy-load. */
+    if (keeloq_mfkeys_count() == 0)
+        keeloq_mfkeys_load();
+
     KeeLoqMfrEntry mfr;
     if (!keeloq_mfkeys_find(signal->manufacture, &mfr))
         return false;

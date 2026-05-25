@@ -80,6 +80,15 @@ static bool        s_error_flash;
 
 static void load_entries(void)
 {
+    /* Lazy-load the manufacturer-key store on first entry.  This ensures
+     * build-time embedded keys (from subghz_keeloq_mfkeys_builtin.c, generated
+     * by scripts/gen_keeloq_mfkeys_builtin.py when the KEELOQ_KEY_VAULT secret
+     * is set) are visible in the picker even when the user has never opened
+     * a saved KeeLoq file yet.  Mirrors the lazy-load guard in
+     * m1_sub_ghz.c::sub_ghz_replay_flipper_file(). */
+    if (keeloq_mfkeys_count() == 0)
+        keeloq_mfkeys_load();
+
     uint32_t total = keeloq_mfkeys_count();
     if (total > SETMFKEY_MAX_ENTRIES)
         total = SETMFKEY_MAX_ENTRIES;
