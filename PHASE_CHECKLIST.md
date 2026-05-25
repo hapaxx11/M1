@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9c-2 (SignalSettings live counter display + cross-scene accessors)
-- **PR Description**: Replaces the read-only `Counter: (9c)` placeholder in `SubGhzSceneSignalSettings` with the live, decrypted 16-bit rolling counter for KeeLoq-family `.sub` files.  On `scene_on_enter`, a new `resolve_counter()` glue resolves the file's manufacturer entry via `keeloq_mfkeys_find()`, derives the device key with `keeloq_learn_normal/_simple()` per the recorded learning mode (Secure refused — no seed available), and decrypts the counter using the Phase 9c-1 `subghz_signal_fields_keeloq_counter_decode()` host-tested helper.  When resolution fails (missing `Manufacture:` line, manufacturer absent from the keystore, or Secure learning) the scene draws `Counter: key?` so the user can distinguish a gated counter from a broken file.  Two new cross-scene accessors — `subghz_signal_settings_has_counter()` and `subghz_signal_settings_get_counter()` — are declared in `m1_subghz_scene.h` for the upcoming Phase 9c-3 SetCounter edit-signal repurposing; the cached counter is cleared on `scene_on_exit` so a later caller cannot read a stale value.  All 72 host tests pass under ASan+UBSan — all component pieces are already covered by `test_subghz_keeloq` and `test_subghz_signal_fields`.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9c-3 (SetCounter edit-signal repurpose + selection cursor in SignalSettings)
+- **PR Description**: Completes Phase 9c by making the rolling counter editable.  `SubGhzSceneSignalSettings` now sports a UP/DOWN selection cursor on the editable rows (Button, and Counter when the manufacturer key resolved); a `>` marker identifies the selected row.  OK dispatches to `SubGhzSceneSetButton` or `SubGhzSceneSetCounter` based on the cursor.  `SubGhzSceneSetCounter` was repurposed for edit-signal mode: when `app->signal_edit_active` is set, the hex editor opens in 16-bit width, seeds from `subghz_signal_settings_get_counter()`, and on OK calls the new `subghz_signal_settings_apply_counter()` cross-scene helper instead of pushing `SetMfKey`.  The save path re-encrypts the HOP word via the Phase 9c-1 `_counter_encode()` (which preserves the lower 16 plaintext bits), reassembles the 64-bit Flipper key via the Phase 9a-1 `_keeloq_assemble()`, and writes through the Manufacture-preserving save helper.  The device key resolved on `scene_on_enter` is cached so save does not re-derive from the mfkey table.  All 72 host tests pass under ASan+UBSan — all component pieces are already covered by `test_subghz_signal_fields` and `test_subghz_keeloq`.
 
 ## Phases
 
@@ -643,21 +643,37 @@
       decode) are already covered by the existing
       `test_subghz_keeloq` and `test_subghz_signal_fields` suites
       (72/72 host tests passing under ASan+UBSan).
-    - **9c-3**: Selection cursor in SignalSettings + repurpose
-      `SubGhzSceneSetCounter` for edit-signal mode (16-bit width when
-      `signal_edit_active`), seeded from
-      `subghz_signal_settings_get_counter()` and saved via a new
-      `subghz_signal_settings_apply_counter()` that uses the 9c-1
-      `_counter_encode()` helper + the 9a-1 assembler + the existing
-      Manufacture-preserving file save path.
+    - **9c-3**: ✅ Complete.  `SubGhzSceneSignalSettings` now sports a
+      selection cursor (UP/DOWN) on the editable rows — Button and
+      (when resolvable) Counter — with a `>` marker on the selected
+      row.  OK dispatches to `SubGhzSceneSetButton` (cursor at Button)
+      or `SubGhzSceneSetCounter` (cursor at Counter); the Counter row
+      is only reachable when the manufacturer key resolved, otherwise
+      it stays gated behind the existing "key?" placeholder.
+      `SubGhzSceneSetCounter` was repurposed for edit-signal mode:
+      when `app->signal_edit_active` is set, the hex editor opens in
+      16-bit width, seeds from the new `subghz_signal_settings_get_counter()`
+      accessor, and on OK saves via the new
+      `subghz_signal_settings_apply_counter()` cross-scene helper
+      instead of pushing `SetMfKey`.  The save helper re-encrypts the
+      HOP word via the Phase 9c-1 `_counter_encode()` (which preserves
+      the lower 16 plaintext bits — button, VLOW, discriminant, overflow
+      counter), reassembles the 64-bit Flipper key via the Phase 9a-1
+      `_keeloq_assemble()`, and writes the file through the
+      Manufacture-preserving save path used by the 9b button writer.
+      The device key resolved on `scene_on_enter` is cached to avoid
+      re-deriving from the mfkey table on save.  All 72 host tests
+      pass under ASan+UBSan — every component (counter encode/decode,
+      key assemble, mfkey lookup, learning derivation) is already
+      covered by `test_subghz_signal_fields` and `test_subghz_keeloq`.
   - **9d**: CounterMode toggle (Increment / Static) persisted as a custom
     field in the `.sub` file and honoured by the replay path.
   - **9e**: Extend Counter editing to Nice FloR-S, CAME Atomo,
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅)
-- **Commit**: `Phase 9c-2: SignalSettings live counter display + cross-scene accessors`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅)
+- **Commit**: `Phase 9c-3: SetCounter edit-signal repurpose + selection cursor in SignalSettings`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

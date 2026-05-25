@@ -43,6 +43,15 @@ static const SubGhzCreateProtoSpec *s_spec;
 
 static uint8_t counter_bits_for(SubGhzApp *app)
 {
+    /* Phase 9c-3 — edit-signal mode reuses this scene for the KeeLoq
+     * family (KeeLoq / Star Line / Jarolift), all of which use a 16-bit
+     * rolling counter.  The Create-from-scratch spec table is only
+     * relevant when not in edit-signal mode. */
+    if (app->signal_edit_active)
+    {
+        s_spec = NULL;
+        return 16U;
+    }
     s_spec = subghz_create_proto_spec((SubGhzCreateProtoId)app->create_proto_id);
     if (s_spec && s_spec->counter_bits > 0U)
         return s_spec->counter_bits;
@@ -62,8 +71,13 @@ static void scene_on_enter(SubGhzApp *app)
 {
     uint8_t bits = counter_bits_for(app);
     subghz_hex_editor_init(&s_editor, bits);
-    subghz_hex_editor_set_value(&s_editor,
-                                (uint64_t)app->create_counter & counter_mask_for(bits));
+    /* Phase 9c-3 — seed from the loaded signal's decoded rolling counter
+     * when editing a .sub file; otherwise from `create_counter`
+     * (Create-from-scratch). */
+    uint64_t initial = app->signal_edit_active
+                       ? (uint64_t)subghz_signal_settings_get_counter()
+                       : (uint64_t)app->create_counter;
+    subghz_hex_editor_set_value(&s_editor, initial & counter_mask_for(bits));
     app->need_redraw = true;
 }
 
@@ -99,6 +113,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         {
             uint8_t  bits   = s_editor.bit_count;
             uint64_t masked = subghz_hex_editor_value(&s_editor) & counter_mask_for(bits);
+
+            if (app->signal_edit_active)
+            {
+                /* Phase 9c-3 — save back to the loaded .sub file via the
+                 * SignalSettings cross-scene API.  Whether the save
+                 * succeeds or fails we pop back to SignalSettings so
+                 * the user is never trapped here; the on_enter there
+                 * will reload from disk and reflect reality (and clear
+                 * the edit-active flag). */
+                (void)subghz_signal_settings_apply_counter((uint16_t)masked);
+                subghz_scene_pop(app);
+                return true;
+            }
+
             app->create_counter = (uint32_t)masked;
             /* Phase 8c-3 — chain forward to the manufacturer-key picker. */
             subghz_scene_push(app, SubGhzSceneSetMfKey);

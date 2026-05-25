@@ -604,4 +604,26 @@ bool subghz_signal_settings_has_counter(void);
  */
 uint16_t subghz_signal_settings_get_counter(void);
 
+/**
+ * @brief  Substitute @p new_counter into the loaded SignalSettings
+ *         file's encrypted HOP word (preserving the lower 16 plaintext
+ *         bits), reassemble the 64-bit Flipper key, and save the file
+ *         back via @ref flipper_subghz_save_key_with_manufacture
+ *         (Phase 9c-3).
+ *
+ * Used by @ref SubGhzSceneSetCounter on OK when @ref
+ * SubGhzApp::signal_edit_active is set.  Returns false when no counter
+ * was previously resolvable (@ref subghz_signal_settings_has_counter
+ * was false on entry) — without a resolvable device key the counter
+ * cannot be re-encrypted, so editing is refused rather than silently
+ * corrupting the file.
+ *
+ * @param[in] new_counter  New 16-bit rolling counter value.
+ * @retval true   File was saved successfully and the in-memory caches
+ *                (`enc_hop`, `key`, decoded counter) were refreshed.
+ * @retval false  No supported file loaded, no resolvable manufacturer
+ *                key, assemble failed, or save failed.
+ */
+bool subghz_signal_settings_apply_counter(uint16_t new_counter);
+
 #endif /* M1_SUBGHZ_SCENE_H_ */

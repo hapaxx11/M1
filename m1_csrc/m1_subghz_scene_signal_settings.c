@@ -55,35 +55,45 @@ static bool                    s_loaded;
 static bool                    s_has_counter;
 /** Decoded 16-bit rolling counter (valid iff s_has_counter == true). */
 static uint16_t                s_counter;
+/** Cached 64-bit derived device key — populated alongside s_counter by
+ *  resolve_counter() and reused by apply_counter() to re-encrypt the
+ *  updated HOP word without re-deriving from the mfkey table. */
+static uint64_t                s_device_key;
 /** Cached absolute load path ("0:/SUBGHZ/<name>") used by the Phase 9b
  *  save-back helper (`subghz_signal_settings_apply_button`).  Populated
  *  by scene_on_enter from `app->saved_filepath`; cleared on exit so a
  *  stale path can never be written to. */
 static char                    s_saved_full_path[80];
 
+/** UI selection cursor (Phase 9c-3) — selects which field is edited
+ *  when the user presses OK.  Values match the row order below. */
+enum {
+    SIG_CURSOR_BUTTON  = 0,
+    SIG_CURSOR_COUNTER = 1,
+    SIG_CURSOR_COUNT
+};
+static uint8_t                 s_cursor;
+
 /*============================================================================*/
 /* Counter resolution (Phase 9c-2)                                             */
 /*============================================================================*/
 
-/* Resolve the rolling counter for the currently-extracted KeeLoq-family
- * fields by looking up the manufacturer key in the loaded mfkeys table,
- * deriving the device key via the recorded learning mode, and decrypting
- * the encrypted hop word with the host-tested pure-logic helper.
+/* Resolve the device key for the currently-extracted KeeLoq-family
+ * fields by looking up the manufacturer entry in the loaded mfkeys table
+ * and deriving the device key via the recorded learning mode (Normal or
+ * Simple — Secure is rejected without a seed).
  *
- * Returns true and writes the 16-bit counter to *counter_out iff:
+ * Returns true and writes the device key to *device_key_out iff:
  *   - signal.manufacture is non-empty,
  *   - the manufacturer entry exists in the mfkeys table,
- *   - the learning mode is Normal or Simple (Secure cannot be resolved
- *     without a seed — matches subghz_keeloq_encoder.c behaviour).
+ *   - the learning mode is Normal or Simple.
  *
- * Pure-logic glue — depends only on already-tested modules.  All hardware
- * coupling (FatFS keystore I/O) is encapsulated by keeloq_mfkeys_load(),
- * which is expected to have run at boot. */
-static bool resolve_counter(const flipper_subghz_signal_t *signal,
-                            const subghz_keeloq_fields_t  *fields,
-                            uint16_t                       *counter_out)
+ * Pure-logic glue — depends only on already-tested modules. */
+static bool resolve_device_key(const flipper_subghz_signal_t *signal,
+                               const subghz_keeloq_fields_t  *fields,
+                               uint64_t                       *device_key_out)
 {
-    if (!signal || !fields || !counter_out)
+    if (!signal || !fields || !device_key_out)
         return false;
     if (signal->manufacture[0] == '\0')
         return false;
@@ -92,15 +102,14 @@ static bool resolve_counter(const flipper_subghz_signal_t *signal,
     if (!keeloq_mfkeys_find(signal->manufacture, &mfr))
         return false;
 
-    uint64_t device_key;
     switch (mfr.learn_type)
     {
         case KEELOQ_LEARN_NORMAL:
-            device_key = keeloq_learn_normal(fields->serial, mfr.key);
-            break;
+            *device_key_out = keeloq_learn_normal(fields->serial, mfr.key);
+            return true;
         case KEELOQ_LEARN_SIMPLE:
-            device_key = keeloq_learn_simple(fields->serial, mfr.key);
-            break;
+            *device_key_out = keeloq_learn_simple(fields->serial, mfr.key);
+            return true;
         case KEELOQ_LEARN_SECURE:
             /* Seed not recoverable from the .sub file — refuse rather than
              * silently fall back to Normal and produce a garbage counter. */
@@ -108,9 +117,25 @@ static bool resolve_counter(const flipper_subghz_signal_t *signal,
         default:
             return false;
     }
+}
+
+/* Resolve the rolling counter for the currently-extracted KeeLoq-family
+ * fields.  See @ref resolve_device_key for the resolution preconditions.
+ * On success the caller can reuse @p device_key_out to re-encrypt an
+ * updated counter without re-deriving from the mfkey table. */
+static bool resolve_counter(const flipper_subghz_signal_t *signal,
+                            const subghz_keeloq_fields_t  *fields,
+                            uint16_t                       *counter_out,
+                            uint64_t                       *device_key_out)
+{
+    if (!counter_out || !device_key_out)
+        return false;
+
+    if (!resolve_device_key(signal, fields, device_key_out))
+        return false;
 
     *counter_out = subghz_signal_fields_keeloq_counter_decode(fields->enc_hop,
-                                                              device_key);
+                                                              *device_key_out);
     return true;
 }
 
@@ -129,6 +154,8 @@ static void scene_on_enter(SubGhzApp *app)
     s_supported   = false;
     s_has_counter = false;
     s_counter     = 0U;
+    s_device_key  = 0U;
+    s_cursor      = SIG_CURSOR_BUTTON;
     memset(&s_signal, 0, sizeof(s_signal));
     memset(&s_fields, 0, sizeof(s_fields));
     s_saved_full_path[0] = '\0';
@@ -174,7 +201,8 @@ static void scene_on_enter(SubGhzApp *app)
              * learning) leaves s_has_counter == false and the scene draws
              * a "key?" placeholder; the rest of the fields still display
              * normally so the user knows the file loaded successfully. */
-            s_has_counter = resolve_counter(&s_signal, &s_fields, &s_counter);
+            s_has_counter = resolve_counter(&s_signal, &s_fields,
+                                            &s_counter, &s_device_key);
         }
     }
 
@@ -189,15 +217,32 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             subghz_scene_pop(app);
             return true;
 
+        case SubGhzEventUp:
+        case SubGhzEventDown:
+            /* Phase 9c-3 — cycle the selection cursor between the editable
+             * rows.  Counter row is only reachable when the manufacturer
+             * key resolved (otherwise editing has no meaning and the row
+             * shows "key?"). */
+            if (s_loaded && s_supported && s_has_counter)
+            {
+                s_cursor = (event == SubGhzEventUp)
+                           ? (uint8_t)((s_cursor + SIG_CURSOR_COUNT - 1U) % SIG_CURSOR_COUNT)
+                           : (uint8_t)((s_cursor + 1U) % SIG_CURSOR_COUNT);
+                app->need_redraw = true;
+            }
+            return true;
+
         case SubGhzEventOk:
-            /* Phase 9b — push SetButton in edit-signal mode for KeeLoq
-             * family files.  Unsupported protocols, RAW files, and load
-             * failures swallow the OK so the scene stays put.  Phase 9c
-             * will extend this to chain a SetCounter editor as well. */
+            /* Phase 9c-3 — dispatch to the editor for the selected row.
+             * Unsupported protocols, RAW files, and load failures swallow
+             * the OK so the scene stays put. */
             if (s_loaded && s_supported)
             {
                 app->signal_edit_active = true;
-                subghz_scene_push(app, SubGhzSceneSetButton);
+                if (s_cursor == SIG_CURSOR_COUNTER && s_has_counter)
+                    subghz_scene_push(app, SubGhzSceneSetCounter);
+                else
+                    subghz_scene_push(app, SubGhzSceneSetButton);
             }
             return true;
 
@@ -217,6 +262,7 @@ static void scene_on_exit(SubGhzApp *app)
      * never read a stale value from a previous file. */
     s_has_counter = false;
     s_counter     = 0U;
+    s_device_key  = 0U;
 }
 
 /*============================================================================*/
@@ -251,11 +297,20 @@ static void draw_keeloq_fields(void)
              (unsigned long)s_fields.serial);
     u8g2_DrawStr(&m1_u8g2, 2, 32, line);
 
-    snprintf(line, sizeof(line), "Button : 0x%X",
+    /* Phase 9c-3 — selection cursor on the editable rows.  The Button row
+     * is always editable; Counter is only reachable when the manufacturer
+     * key resolved (otherwise we draw "key?" and the cursor cannot move
+     * to it). */
+    const bool counter_selectable = s_has_counter;
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char counter_marker = (counter_selectable && s_cursor == SIG_CURSOR_COUNTER)
+                                ? '>' : ' ';
+
+    snprintf(line, sizeof(line), "%c Button : 0x%X", button_marker,
              (unsigned)(s_fields.button & 0x0F));
     u8g2_DrawStr(&m1_u8g2, 2, 42, line);
 
-    snprintf(line, sizeof(line), "EncHop : 0x%08lX",
+    snprintf(line, sizeof(line), "  EncHop : 0x%08lX",
              (unsigned long)s_fields.enc_hop);
     u8g2_DrawStr(&m1_u8g2, 2, 52, line);
 
@@ -266,9 +321,10 @@ static void draw_keeloq_fields(void)
      * show a short "key?" hint so the user can tell the field is gated
      * on mfkey availability rather than the file being broken. */
     if (s_has_counter)
-        snprintf(line, sizeof(line), "Counter: %u", (unsigned)s_counter);
+        snprintf(line, sizeof(line), "%c Counter: %u", counter_marker,
+                 (unsigned)s_counter);
     else
-        snprintf(line, sizeof(line), "Counter: key?");
+        snprintf(line, sizeof(line), "  Counter: key?");
     u8g2_DrawStr(&m1_u8g2, 2, 62, line);
 }
 
@@ -381,4 +437,58 @@ uint16_t subghz_signal_settings_get_counter(void)
     if (!s_loaded || !s_supported || !s_has_counter)
         return 0U;
     return s_counter;
+}
+
+/*============================================================================*/
+/* Phase 9c-3 — Cross-scene API (counter writer for SubGhzSceneSetCounter)     */
+/*============================================================================*/
+
+bool subghz_signal_settings_apply_counter(uint16_t new_counter)
+{
+    if (!s_loaded || !s_supported)
+        return false;
+    if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
+        return false;
+    /* Without a resolvable manufacturer key the encrypted hop word cannot
+     * be re-encrypted — refuse the edit rather than overwriting the file
+     * with corrupt cipher text. */
+    if (!s_has_counter)
+        return false;
+    if (s_saved_full_path[0] == '\0')
+        return false;
+
+    /* Re-encrypt the counter via the host-tested pure-logic helper
+     * (Phase 9c-1) — preserves the lower 16 plaintext bits (button,
+     * VLOW, discriminant, overflow counter). */
+    uint32_t new_enc_hop =
+        subghz_signal_fields_keeloq_counter_encode(s_fields.enc_hop,
+                                                   new_counter,
+                                                   s_device_key);
+
+    subghz_keeloq_fields_t updated = s_fields;
+    updated.enc_hop = new_enc_hop;
+
+    uint64_t new_key = 0;
+    if (!subghz_signal_fields_keeloq_assemble(s_signal.protocol,
+                                              &updated, &new_key))
+        return false;
+
+    bool ok = flipper_subghz_save_key_with_manufacture(s_saved_full_path,
+                                                       s_signal.frequency,
+                                                       s_signal.preset,
+                                                       s_signal.protocol,
+                                                       s_signal.bit_count,
+                                                       new_key,
+                                                       s_signal.te,
+                                                       s_signal.manufacture);
+    if (!ok)
+        return false;
+
+    /* Refresh the in-memory caches so a redraw without re-entering the
+     * scene reflects the new value immediately.  Re-entry's on_enter will
+     * overwrite this from disk anyway. */
+    s_fields      = updated;
+    s_signal.key  = new_key;
+    s_counter     = new_counter;
+    return true;
 }
