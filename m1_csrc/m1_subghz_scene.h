@@ -626,4 +626,25 @@ uint16_t subghz_signal_settings_get_counter(void);
  */
 bool subghz_signal_settings_apply_counter(uint16_t new_counter);
 
+/**
+ * @brief  Flip the loaded SignalSettings file's CounterMode field
+ *         between Increment and Static and persist via
+ *         @ref flipper_subghz_save_key_full (Phase 9d-3).
+ *
+ * Used by the SignalSettings scene when OK is pressed on the
+ * CounterMode row.  Unlike the Button/Counter editors this is a binary
+ * toggle so it is handled in place without pushing a dedicated editor
+ * scene.  Other fields (Manufacture, Button, Counter, frequency, preset,
+ * protocol, bit_count, key, te) are preserved verbatim.  CounterMode
+ * does not depend on the manufacturer key being resolvable, so the
+ * toggle works on every supported KeeLoq-family file — including the
+ * ones where @ref subghz_signal_settings_has_counter returns false.
+ *
+ * @retval true   File was saved successfully and the cached mode was
+ *                refreshed.
+ * @retval false  No supported file loaded, the scene was not entered
+ *                for a parsed file, or the save helper failed.
+ */
+bool subghz_signal_settings_toggle_counter_mode(void);
+
 #endif /* M1_SUBGHZ_SCENE_H_ */

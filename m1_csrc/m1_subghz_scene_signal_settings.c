@@ -65,11 +65,16 @@ static uint64_t                s_device_key;
  *  stale path can never be written to. */
 static char                    s_saved_full_path[80];
 
-/** UI selection cursor (Phase 9c-3) — selects which field is edited
- *  when the user presses OK.  Values match the row order below. */
+/** UI selection cursor — selects which field is acted upon when the user
+ *  presses OK.  Phase 9c-3 added Button + Counter; Phase 9d-3 inserts the
+ *  CounterMode toggle between them so it is always reachable even when
+ *  the manufacturer key did not resolve (Counter row is gated on
+ *  s_has_counter; CounterMode is not, since it does not require cipher
+ *  state to flip).  Values match the row order in draw_keeloq_fields(). */
 enum {
-    SIG_CURSOR_BUTTON  = 0,
-    SIG_CURSOR_COUNTER = 1,
+    SIG_CURSOR_BUTTON       = 0,
+    SIG_CURSOR_COUNTER_MODE = 1,
+    SIG_CURSOR_COUNTER      = 2,
     SIG_CURSOR_COUNT
 };
 static uint8_t                 s_cursor;
@@ -219,30 +224,61 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventUp:
         case SubGhzEventDown:
-            /* Phase 9c-3 — cycle the selection cursor between the editable
-             * rows.  Counter row is only reachable when the manufacturer
-             * key resolved (otherwise editing has no meaning and the row
+            /* Phase 9c-3 / 9d-3 — cycle the selection cursor between the
+             * editable rows.  Button is always selectable; CounterMode is
+             * always selectable once the file loaded and the protocol is
+             * supported (toggling does not require the manufacturer key);
+             * Counter is only reachable when the manufacturer key
+             * resolved (otherwise editing has no meaning and the row
              * shows "key?"). */
-            if (s_loaded && s_supported && s_has_counter)
+            if (s_loaded && s_supported)
             {
-                s_cursor = (event == SubGhzEventUp)
-                           ? (uint8_t)((s_cursor + SIG_CURSOR_COUNT - 1U) % SIG_CURSOR_COUNT)
-                           : (uint8_t)((s_cursor + 1U) % SIG_CURSOR_COUNT);
-                app->need_redraw = true;
+                /* Step direction with wrap; skip the COUNTER row when
+                 * the counter is unresolvable so it is never highlighted. */
+                int8_t step = (event == SubGhzEventUp) ? -1 : +1;
+                uint8_t next = s_cursor;
+                for (uint8_t guard = 0; guard < SIG_CURSOR_COUNT; ++guard)
+                {
+                    next = (uint8_t)((next + (uint8_t)SIG_CURSOR_COUNT + step)
+                                     % (uint8_t)SIG_CURSOR_COUNT);
+                    if (next == SIG_CURSOR_COUNTER && !s_has_counter)
+                        continue;
+                    break;
+                }
+                if (next != s_cursor)
+                {
+                    s_cursor = next;
+                    app->need_redraw = true;
+                }
             }
             return true;
 
         case SubGhzEventOk:
-            /* Phase 9c-3 — dispatch to the editor for the selected row.
-             * Unsupported protocols, RAW files, and load failures swallow
-             * the OK so the scene stays put. */
+            /* Phase 9c-3 / 9d-3 — dispatch to the editor for the
+             * selected row.  Unsupported protocols, RAW files, and load
+             * failures swallow the OK so the scene stays put. */
             if (s_loaded && s_supported)
             {
-                app->signal_edit_active = true;
-                if (s_cursor == SIG_CURSOR_COUNTER && s_has_counter)
-                    subghz_scene_push(app, SubGhzSceneSetCounter);
+                if (s_cursor == SIG_CURSOR_COUNTER_MODE)
+                {
+                    /* CounterMode is a binary toggle — no sub-scene
+                     * needed.  Flip in place, persist via the
+                     * save_key_full helper (preserves Manufacture: and
+                     * elides the field when Increment), and redraw.
+                     * Do NOT set signal_edit_active — that flag is used
+                     * by SetButton/SetCounter to know they were pushed
+                     * for an edit; no scene is pushed here. */
+                    (void)subghz_signal_settings_toggle_counter_mode();
+                    app->need_redraw = true;
+                }
                 else
-                    subghz_scene_push(app, SubGhzSceneSetButton);
+                {
+                    app->signal_edit_active = true;
+                    if (s_cursor == SIG_CURSOR_COUNTER && s_has_counter)
+                        subghz_scene_push(app, SubGhzSceneSetCounter);
+                    else
+                        subghz_scene_push(app, SubGhzSceneSetButton);
+                }
             }
             return true;
 
@@ -297,12 +333,14 @@ static void draw_keeloq_fields(void)
              (unsigned long)s_fields.serial);
     u8g2_DrawStr(&m1_u8g2, 2, 32, line);
 
-    /* Phase 9c-3 — selection cursor on the editable rows.  The Button row
-     * is always editable; Counter is only reachable when the manufacturer
-     * key resolved (otherwise we draw "key?" and the cursor cannot move
-     * to it). */
-    const bool counter_selectable = s_has_counter;
+    /* Phase 9c-3 / 9d-3 — selection cursor on the editable rows.  The
+     * Button row is always editable; the CounterMode toggle is always
+     * editable (cipher state not required to flip it); the Counter row
+     * is only reachable when the manufacturer key resolved (otherwise
+     * we draw "key?" and the cursor cannot move to it). */
     const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+    const bool counter_selectable = s_has_counter;
     const char counter_marker = (counter_selectable && s_cursor == SIG_CURSOR_COUNTER)
                                 ? '>' : ' ';
 
@@ -310,8 +348,13 @@ static void draw_keeloq_fields(void)
              (unsigned)(s_fields.button & 0x0F));
     u8g2_DrawStr(&m1_u8g2, 2, 42, line);
 
-    snprintf(line, sizeof(line), "  EncHop : 0x%08lX",
-             (unsigned long)s_fields.enc_hop);
+    /* CounterMode — Phase 9d-3.  Binary toggle persisted as the
+     * optional `CounterMode:` field of the .sub file.  Increment is the
+     * Flipper-compatible default and gets elided on save; Static causes
+     * the replay path to skip the counter+1 step. */
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
     u8g2_DrawStr(&m1_u8g2, 2, 52, line);
 
     /* Counter — Phase 9c-2.  Resolved on scene_on_enter via the
@@ -404,14 +447,15 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
     if (s_saved_full_path[0] == '\0')
         return false;
 
-    bool ok = flipper_subghz_save_key_with_manufacture(s_saved_full_path,
-                                                       s_signal.frequency,
-                                                       s_signal.preset,
-                                                       s_signal.protocol,
-                                                       s_signal.bit_count,
-                                                       new_key,
-                                                       s_signal.te,
-                                                       s_signal.manufacture);
+    bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                            s_signal.frequency,
+                                            s_signal.preset,
+                                            s_signal.protocol,
+                                            s_signal.bit_count,
+                                            new_key,
+                                            s_signal.te,
+                                            s_signal.manufacture,
+                                            s_signal.counter_mode);
     if (!ok)
         return false;
 
@@ -473,14 +517,15 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
                                               &updated, &new_key))
         return false;
 
-    bool ok = flipper_subghz_save_key_with_manufacture(s_saved_full_path,
-                                                       s_signal.frequency,
-                                                       s_signal.preset,
-                                                       s_signal.protocol,
-                                                       s_signal.bit_count,
-                                                       new_key,
-                                                       s_signal.te,
-                                                       s_signal.manufacture);
+    bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                            s_signal.frequency,
+                                            s_signal.preset,
+                                            s_signal.protocol,
+                                            s_signal.bit_count,
+                                            new_key,
+                                            s_signal.te,
+                                            s_signal.manufacture,
+                                            s_signal.counter_mode);
     if (!ok)
         return false;
 
@@ -490,5 +535,41 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
     s_fields      = updated;
     s_signal.key  = new_key;
     s_counter     = new_counter;
+    return true;
+}
+
+/*============================================================================*/
+/* Phase 9d-3 — CounterMode toggle + save                                      */
+/*============================================================================*/
+
+bool subghz_signal_settings_toggle_counter_mode(void)
+{
+    if (!s_loaded || !s_supported)
+        return false;
+    if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
+        return false;
+    if (s_saved_full_path[0] == '\0')
+        return false;
+
+    flipper_subghz_counter_mode_t new_mode =
+        (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+        ? FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT
+        : FLIPPER_SUBGHZ_COUNTER_MODE_STATIC;
+
+    bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                            s_signal.frequency,
+                                            s_signal.preset,
+                                            s_signal.protocol,
+                                            s_signal.bit_count,
+                                            s_signal.key,
+                                            s_signal.te,
+                                            s_signal.manufacture,
+                                            new_mode);
+    if (!ok)
+        return false;
+
+    /* Refresh the in-memory cache so an immediate redraw shows the new
+     * mode.  The scene's on_enter will reload from disk on re-entry. */
+    s_signal.counter_mode = new_mode;
     return true;
 }

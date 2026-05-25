@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9d-2 (`CounterMode:` `.sub` field parser + writer)
-- **PR Description**: Continues Phase 9d.  Adds parse + save support for the optional `CounterMode:` field on KeeLoq-family Flipper Key `.sub` files via a new `flipper_subghz_counter_mode_t` enum and `flipper_subghz_signal_t::counter_mode` member.  The parser recognises `CounterMode: Static` (→ STATIC) and defaults every other case — missing line, `Increment`, empty value, unknown value — to INCREMENT, so every existing `.sub` file replays unchanged.  A new `flipper_subghz_save_key_full()` helper writes both `Manufacture:` and `CounterMode:` and elides the `CounterMode:` line when the value is the default Increment, keeping Phase 9b/9c saved files byte-identical on re-save.  The Phase 9b `flipper_subghz_save_key_with_manufacture()` API is preserved and now delegates to the new helper (always Increment).  7 new host tests cover (a) missing field → Increment with a poisoned-struct regression guard, (b) `Static`, (c) explicit `Increment`, (d) unknown value `Bogus` → Increment, (e) full STATIC round-trip via save_key_full, (f) save_key_full(INCREMENT) emits no `CounterMode:` line, (g) save_key_with_manufacture never emits the line.  All 72 host tests pass under ASan+UBSan.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9d-3 (`CounterMode` toggle in SignalSettings + replay-path wiring)
+- **PR Description**: Continues Phase 9d.  Wires the `CounterMode:` `.sub` field that landed in Phase 9d-2 (parser + writer) into the UI and the replay engine.  The SignalSettings scene gains a third selectable row, `CntMode: Increment / Static`, which is reachable on every supported KeeLoq-family file (the toggle does not need the manufacturer key resolved, unlike the Counter editor).  OK flips the value in place and persists via `flipper_subghz_save_key_full()`, preserving `Manufacture:` and all other metadata.  The Phase 9b Button writer and Phase 9c-3 Counter writer were switched to the same helper so editing Button or Counter on a Static file no longer silently reverts the mode to Increment.  The KeeLoq replay path in `m1_sub_ghz.c` now parses `CounterMode:` directly from the `.sub` stream and forwards it to `KeeLoqEncParams::static_counter`, so Static-mode `.sub` files re-emit the captured encrypted hop word verbatim instead of running the decrypt → counter+1 → re-encrypt path.  2 new host tests cover the load → save round-trip preservation for both modes; 74 host tests pass under ASan+UBSan.
 
 ## Phases
 
@@ -704,17 +704,30 @@
       (f) save_key_full(INCREMENT) emits no `CounterMode:` line, (g)
       save_key_with_manufacture never emits the line.  All 72 host tests
       pass under ASan+UBSan.
-    - **9d-3**: SignalSettings UI — third selectable row toggles
-      CounterMode (Increment / Static) and persists via the
-      Manufacture-preserving save helper.  Wire the toggle to the
-      replay path in `m1_sub_ghz.c` so `kl_params.static_counter`
-      reflects the parsed field.
+    - **9d-3**: ✅ Complete.  SignalSettings UI — third selectable row
+      (`CntMode: Increment / Static`) toggles the CounterMode field in
+      place and persists via `flipper_subghz_save_key_full()`.  The row
+      is always reachable on supported KeeLoq-family files (unlike the
+      Counter row, the toggle does not require the manufacturer key to
+      be resolvable).  apply_button (Phase 9b) and apply_counter
+      (Phase 9c-3) were switched from the legacy
+      `save_key_with_manufacture` helper to `save_key_full`, passing
+      `s_signal.counter_mode`, so editing Button or Counter on a Static
+      file no longer silently resets the mode to Increment.  The
+      KeeLoq replay path in `m1_sub_ghz.c` now parses `CounterMode:`
+      directly from the `.sub` stream and forwards it to
+      `KeeLoqEncParams::static_counter`, so STATIC-mode files re-emit
+      the captured encrypted hop word verbatim.  2 new host tests
+      cover the load → save round-trip preservation for both modes
+      (`test_resave_static_via_save_key_full_preserves_mode`,
+      `test_resave_increment_via_save_key_full_omits_field`).  All 74
+      host tests pass under ASan+UBSan.
   - **9e**: Extend Counter editing to Nice FloR-S, CAME Atomo,
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅)
-- **Commit**: `Phase 9d-2: parse + save CounterMode: .sub field + 7 host tests`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅; 9c-3 ✅; 9d-1 ✅; 9d-2 ✅; 9d-3 ✅)
+- **Commit**: `Phase 9d-3: CounterMode toggle in SignalSettings + replay-path wiring`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

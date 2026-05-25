@@ -1988,6 +1988,11 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint64_t key_value = 0;
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
+	/* Phase 9d-3 — optional `CounterMode:` field on KeeLoq-family
+	 * .sub files.  Defaults to INCREMENT for files that omit the
+	 * field (matches the parse behaviour in flipper_subghz_load). */
+	flipper_subghz_counter_mode_t key_counter_mode =
+	    FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
 
 	/* Latch the button-override slot at entry and clear the static slot
 	 * immediately so every return path leaves it disabled (set + prepare
@@ -2174,6 +2179,37 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				}
 			}
 		}
+		else if (strncmp(line_buf, "CounterMode:", 12) == 0)
+		{
+			/* Phase 9d-3 — optional KeeLoq-family CounterMode field.
+			 * Recognises "Static" exactly (case-sensitive, matching the
+			 * Flipper file format).  Missing line, empty value, "Increment",
+			 * and any unknown value all yield INCREMENT, so every existing
+			 * .sub file replays unchanged.  Mirrors the parse rules in
+			 * flipper_subghz_load() for cross-tool consistency. */
+			const char *p = line_buf + 12;
+			while (*p == ' ' || *p == '\t') p++;
+			/* Strip trailing whitespace before comparison. */
+			char tmp[16] = {0};
+			size_t i = 0;
+			while (*p != '\0' && *p != '\r' && *p != '\n' && i < sizeof(tmp) - 1)
+			{
+				tmp[i++] = *p++;
+			}
+			tmp[i] = '\0';
+			while (i > 0 && isspace((unsigned char)tmp[i - 1]))
+			{
+				tmp[--i] = '\0';
+			}
+			if (strcmp(tmp, "Static") == 0)
+			{
+				key_counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_STATIC;
+			}
+			else
+			{
+				key_counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
+			}
+		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
 			/* Parse signed values, write absolute values as Data: lines.
@@ -2310,10 +2346,14 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 					kl_params.key_value   = key_value;
 					kl_params.bit_count   = key_bit_count;
 					kl_params.te          = key_te;
-					/* Phase 9d: replay path defaults to Increment mode.
-					 * Phase 9d-3 will wire this from the parsed
-					 * `CounterMode:` field of the .sub file. */
-					kl_params.static_counter = false;
+					/* Phase 9d-3 — wire the parsed CounterMode field from
+					 * the .sub file.  STATIC bypasses the counter-increment
+					 * step in the KeeLoq encoder so the captured hop word
+					 * replays verbatim; INCREMENT (the default for files
+					 * that omit the field) preserves the historical
+					 * decrypt → counter+1 → re-encrypt behaviour. */
+					kl_params.static_counter =
+					    (key_counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC);
 
 					SubGhzRawPair *kl_pairs  = NULL;
 					uint32_t       kl_npairs = 0;

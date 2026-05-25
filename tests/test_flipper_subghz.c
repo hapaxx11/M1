@@ -1140,6 +1140,97 @@ void test_save_key_with_manufacture_never_writes_counter_mode(void)
 	remove(path);
 }
 
+/*
+ * Phase 9d-3 — CounterMode preservation when re-saving from a loaded
+ * signal struct (mimics what the SignalSettings scene's apply_button /
+ * apply_counter helpers now do: read s_signal.counter_mode after
+ * flipper_subghz_load() and feed it back to flipper_subghz_save_key_full()).
+ *
+ * Cases:
+ *   1. STATIC file → load → resave with s_signal.counter_mode → still STATIC.
+ *   2. INCREMENT file (no field) → load → resave with s_signal.counter_mode
+ *      → still INCREMENT, file contains no CounterMode: line.
+ *
+ * Guards against a regression where the scene wrappers reverted to the
+ * legacy save_key_with_manufacture() helper and silently reset a Static
+ * file to Increment on any Button/Counter edit.
+ */
+
+void test_resave_static_via_save_key_full_preserves_mode(void)
+{
+	const char *path = "/tmp/test_resave_static_preserve.sub";
+
+	/* Write a STATIC file. */
+	bool ok = flipper_subghz_save_key_full(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0xDEADBEEFCAFEBABEULL, 400,
+	    "Came_Space",
+	    FLIPPER_SUBGHZ_COUNTER_MODE_STATIC);
+	TEST_ASSERT_TRUE(ok);
+
+	/* Load it, then re-save using the loaded struct's counter_mode —
+	 * exactly what the SignalSettings scene's apply_button now does. */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_STATIC, sig.counter_mode);
+
+	/* Simulate an edit that mutates the key but preserves all other
+	 * metadata (the scene's Button-substitute → reassemble path). */
+	ok = flipper_subghz_save_key_full(
+	    path, sig.frequency, sig.preset, sig.protocol,
+	    sig.bit_count, 0x1111222233334444ULL, sig.te,
+	    sig.manufacture, sig.counter_mode);
+	TEST_ASSERT_TRUE(ok);
+
+	/* Verify CounterMode survived the resave. */
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_STATIC, sig.counter_mode);
+	TEST_ASSERT_EQUAL_UINT64(0x1111222233334444ULL, sig.key);
+	TEST_ASSERT_EQUAL_STRING("Came_Space", sig.manufacture);
+
+	remove(path);
+}
+
+void test_resave_increment_via_save_key_full_omits_field(void)
+{
+	const char *path = "/tmp/test_resave_increment_preserve.sub";
+
+	/* Write a default-INCREMENT file via the legacy helper (the most
+	 * common pre-9d state on disk: no CounterMode: line). */
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0xDEADBEEFCAFEBABEULL, 400,
+	    "Came_Space");
+	TEST_ASSERT_TRUE(ok);
+
+	/* Load and round-trip via save_key_full with the loaded mode. */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT, sig.counter_mode);
+
+	ok = flipper_subghz_save_key_full(
+	    path, sig.frequency, sig.preset, sig.protocol,
+	    sig.bit_count, 0x1111222233334444ULL, sig.te,
+	    sig.manufacture, sig.counter_mode);
+	TEST_ASSERT_TRUE(ok);
+
+	/* Saved file must still omit the CounterMode line (Increment is
+	 * elided as the default) — keeps Phase 9b/9c saved files
+	 * byte-identical to legacy. */
+	FILE *f = fopen(path, "rb");
+	TEST_ASSERT_NOT_NULL(f);
+	char buf[1024];
+	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+	buf[n] = '\0';
+	fclose(f);
+	TEST_ASSERT_NULL(strstr(buf, "CounterMode"));
+
+	remove(path);
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -1236,6 +1327,11 @@ int main(void)
 	RUN_TEST(test_save_key_full_static_roundtrip);
 	RUN_TEST(test_save_key_full_increment_writes_no_line);
 	RUN_TEST(test_save_key_with_manufacture_never_writes_counter_mode);
+
+	/* Phase 9d-3 — CounterMode preservation when SignalSettings scene
+	 * re-saves a loaded file via save_key_full (apply_button / apply_counter). */
+	RUN_TEST(test_resave_static_via_save_key_full_preserves_mode);
+	RUN_TEST(test_resave_increment_via_save_key_full_omits_field);
 
 	return UNITY_END();
 }
