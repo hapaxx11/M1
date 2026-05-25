@@ -1331,6 +1331,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_scene_state COMMAND test_subghz_scene_state)
 
+# ── Submenu model (Phase 7a of Momentum parity work) ──
+add_executable(test_subghz_submenu_model
+    test_subghz_submenu_model.c
+    ${M1_ROOT}/Sub_Ghz/subghz_submenu_model.c
+)
+target_include_directories(test_subghz_submenu_model PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_submenu_model PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_submenu_model PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_submenu_model COMMAND test_subghz_submenu_model)
+
 # ── TX repeat / endless-hold policy (Phase 3a of Momentum parity work) ──
 add_executable(test_subghz_endless_tx
     test_subghz_endless_tx.c

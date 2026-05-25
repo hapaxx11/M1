@@ -238,8 +238,32 @@
 ### Phase 7 — Reusable `m1_submenu` widget
 - **Description**: Generic font-aware scrollable list widget; migrate every
   hand-rendered list scene onto it.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+
+  Split into sub-phases:
+
+  - **Phase 7a — Pure-logic `subghz_submenu_model` (scroll/selection math).**
+    ✅ Complete.  `Sub_Ghz/subghz_submenu_model.c/h` provides a 4-byte
+    model `{item_count, selected, scroll_offset, visible_count}` with
+    `init`, `set_item_count`, `set_visible_count`, `set_selected`, `up`,
+    `down`, `is_visible`, and `visible_row`.  Wrap-around (top↔bottom),
+    scroll-window anchoring (snap to selection in both directions),
+    empty-list and zero-visible safety are all enforced.  Hardware-
+    independent — no u8g2 / RTOS / SubGhzApp / HAL coupling.  25 host
+    tests under ASan+UBSan pin every invariant including a random-walk
+    fuzz pass.  Registered in `cmake/m1_01/CMakeLists.txt` so the
+    firmware links it in for Phase 7b.  No scenes migrated yet — that
+    starts in Phase 7c.
+  - **Phase 7b — Firmware rendering shim.**  🔲 Not started.  Builds
+    on the Phase 7a model and the existing font-aware helpers
+    (`m1_menu_item_h`, `m1_menu_max_visible`, `m1_menu_font`,
+    `M1_MENU_TEXT_W`, `M1_MENU_SCROLLBAR_X`).  Will provide a single
+    `m1_submenu_draw(model, title, labels[])` entry point that scenes
+    call from their `draw` callback.
+  - **Phase 7c+ — Migrate scenes.**  🔲 Not started.  Candidate scenes:
+    Menu, SavedMenu, MoreRAW, Config (Sub-GHz config), Saved file
+    browser, Add Manually picker, Bind Wizard protocol picker.
+- **Status**: 🔄 In progress (7a ✅; 7b/7c+ pending)
+- **Commit**: `Phase 7a: add subghz_submenu_model pure-logic widget + 25 host tests`
 
 ### Phase 8 — SetType / SetKey / SetSerial / SetButton / SetCounter
 - **Description**: Create-from-scratch flow gated by
