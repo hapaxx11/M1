@@ -577,4 +577,31 @@ uint8_t subghz_signal_settings_get_button(void);
  */
 bool subghz_signal_settings_apply_button(uint8_t new_button);
 
+/**
+ * @brief  Return true when the currently-loaded SignalSettings file's
+ *         rolling counter could be resolved (Phase 9c-2).
+ *
+ * Resolution requires a non-empty Manufacture: line, a matching entry in
+ * the loaded mfkeys table, and a learning mode that does not require an
+ * unrecoverable seed (Normal or Simple — Secure is rejected, matching
+ * @ref subghz_keeloq_encoder behaviour).
+ *
+ * @retval true   A counter is cached and @ref subghz_signal_settings_get_counter
+ *                returns a meaningful value.
+ * @retval false  No file is loaded, the protocol is unsupported, the
+ *                Manufacture line is empty, the mfkey lookup failed, or
+ *                the file uses Secure learning.
+ */
+bool subghz_signal_settings_has_counter(void);
+
+/**
+ * @brief  Return the cached 16-bit rolling counter for the currently-
+ *         loaded SignalSettings file (Phase 9c-2), or 0 when no counter
+ *         has been resolved.
+ *
+ * Callers must gate access on @ref subghz_signal_settings_has_counter to
+ * distinguish "counter == 0" from "no counter available".
+ */
+uint16_t subghz_signal_settings_get_counter(void);
+
 #endif /* M1_SUBGHZ_SCENE_H_ */

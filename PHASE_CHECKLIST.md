@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 9b (editable Button in SignalSettings + Manufacture round-trip)
-- **PR Description**: Makes the `SubGhzSceneSignalSettings` button field editable.  Pressing OK on a KeeLoq-family file (KeeLoq / Star Line / Jarolift) pushes `SubGhzSceneSetButton` in edit-signal mode, repurposing the existing 4-bit hex editor.  On OK the new `subghz_signal_settings_apply_button()` save helper reassembles the 64-bit key via the Phase 9a-1 `subghz_signal_fields_keeloq_assemble()` and writes the file back via `flipper_subghz_save_key_with_manufacture()`, preserving the original `Manufacture:` line.  Manufacture round-tripping is enabled by a new `manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN]` field on `flipper_subghz_signal_t` populated by the `subghz_parse_key()` parser; files without a `Manufacture:` line yield an empty string (regression-guarded).  A new `SubGhzApp::signal_edit_active` flag gates SetButton's source/dispatch so the Create-from-scratch flow is unchanged.  4 new host tests cover the Manufacture load/save round-trip (76/76 host tests passing under ASan+UBSan).
+- **PR Title**: Sub-GHz: Momentum parity — Phase 9c-2 (SignalSettings live counter display + cross-scene accessors)
+- **PR Description**: Replaces the read-only `Counter: (9c)` placeholder in `SubGhzSceneSignalSettings` with the live, decrypted 16-bit rolling counter for KeeLoq-family `.sub` files.  On `scene_on_enter`, a new `resolve_counter()` glue resolves the file's manufacturer entry via `keeloq_mfkeys_find()`, derives the device key with `keeloq_learn_normal/_simple()` per the recorded learning mode (Secure refused — no seed available), and decrypts the counter using the Phase 9c-1 `subghz_signal_fields_keeloq_counter_decode()` host-tested helper.  When resolution fails (missing `Manufacture:` line, manufacturer absent from the keystore, or Secure learning) the scene draws `Counter: key?` so the user can distinguish a gated counter from a broken file.  Two new cross-scene accessors — `subghz_signal_settings_has_counter()` and `subghz_signal_settings_get_counter()` — are declared in `m1_subghz_scene.h` for the upcoming Phase 9c-3 SetCounter edit-signal repurposing; the cached counter is cleared on `scene_on_exit` so a later caller cannot read a stale value.  All 72 host tests pass under ASan+UBSan — all component pieces are already covered by `test_subghz_keeloq` and `test_subghz_signal_fields`.
 
 ## Phases
 
@@ -620,12 +620,29 @@
       substitution, equivalence with `keeloq_increment_hop` for the
       `counter + 1` case, distinct-counter ciphertext disjointness, and
       the 0xFFFF boundary.  All tests pass under ASan+UBSan.
-    - **9c-2**: SignalSettings counter display — resolve the manufacturer
-      key for the loaded `.sub` file via `keeloq_mfkeys_find()` + the
-      appropriate learning mode, decrypt via the 9c-1 helper, and
-      replace the "Counter: (9c)" placeholder with the live value.
-      Add `subghz_signal_settings_get_counter()` /
-      `subghz_signal_settings_has_counter()` cross-scene accessors.
+    - **9c-2**: ✅ Complete.  SignalSettings counter display — on
+      `scene_on_enter`, the new `resolve_counter()` glue looks up the
+      file's manufacturer entry in the loaded mfkeys table via
+      `keeloq_mfkeys_find()`, derives the device key via
+      `keeloq_learn_normal/_simple()` per the recorded learning mode
+      (Secure is refused — no seed available in a `.sub` file), and
+      decrypts the rolling counter via the Phase 9c-1
+      `subghz_signal_fields_keeloq_counter_decode()` helper.  The
+      "Counter: (9c)" placeholder is replaced with the live decimal
+      value, or with "Counter: key?" when resolution fails (no
+      Manufacture line, manufacturer absent from the keystore, or
+      Secure learning) so the user can distinguish a gated counter
+      from a broken file.  Two new cross-scene accessors —
+      `subghz_signal_settings_has_counter()` and
+      `subghz_signal_settings_get_counter()` — are declared in
+      `m1_subghz_scene.h` and consumed by the upcoming Phase 9c-3
+      SetCounter edit-signal repurposing.  The accessors clear the
+      cached counter on `scene_on_exit` so a later caller cannot read
+      a stale value from a previously-loaded file.  No new host tests
+      required — all component pieces (mfkey lookup, learning, counter
+      decode) are already covered by the existing
+      `test_subghz_keeloq` and `test_subghz_signal_fields` suites
+      (72/72 host tests passing under ASan+UBSan).
     - **9c-3**: Selection cursor in SignalSettings + repurpose
       `SubGhzSceneSetCounter` for edit-signal mode (16-bit width when
       `signal_edit_active`), seeded from
@@ -639,8 +656,8 @@
     Alutech AT-4N, Phoenix V2.  These protocols have public layouts that
     don't require mfkey decryption, so editing the counter byte(s) is a
     direct bit-field substitution.
-- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅)
-- **Commit**: `Phase 9c-1: KeeLoq counter decode/encode pure-logic helpers + 6 tests`
+- **Status**: 🔄 In progress (9a-1 ✅; 9a-2 ✅; 9b ✅; 9c-1 ✅; 9c-2 ✅)
+- **Commit**: `Phase 9c-2: SignalSettings live counter display + cross-scene accessors`
 
 ### Phase 10 — Scene manager polish
 - **Description**: `search_and_pop_to`, periodic tick events, custom events with

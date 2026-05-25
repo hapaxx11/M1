@@ -34,6 +34,8 @@
 #include "m1_subghz_scene.h"
 #include "flipper_subghz.h"
 #include "subghz_signal_fields.h"
+#include "subghz_keeloq.h"
+#include "subghz_keeloq_mfkeys.h"
 
 /*============================================================================*/
 /* Local state                                                                 */
@@ -47,11 +49,70 @@ static subghz_keeloq_fields_t  s_fields;
 static bool                    s_supported;
 /** True when the file load itself succeeded — drives the error placeholder. */
 static bool                    s_loaded;
+/** True when the loaded file's manufacturer key was resolved and the
+ *  16-bit rolling counter was decoded successfully.  When false the scene
+ *  shows a "key?" placeholder instead of a numeric counter. */
+static bool                    s_has_counter;
+/** Decoded 16-bit rolling counter (valid iff s_has_counter == true). */
+static uint16_t                s_counter;
 /** Cached absolute load path ("0:/SUBGHZ/<name>") used by the Phase 9b
  *  save-back helper (`subghz_signal_settings_apply_button`).  Populated
  *  by scene_on_enter from `app->saved_filepath`; cleared on exit so a
  *  stale path can never be written to. */
 static char                    s_saved_full_path[80];
+
+/*============================================================================*/
+/* Counter resolution (Phase 9c-2)                                             */
+/*============================================================================*/
+
+/* Resolve the rolling counter for the currently-extracted KeeLoq-family
+ * fields by looking up the manufacturer key in the loaded mfkeys table,
+ * deriving the device key via the recorded learning mode, and decrypting
+ * the encrypted hop word with the host-tested pure-logic helper.
+ *
+ * Returns true and writes the 16-bit counter to *counter_out iff:
+ *   - signal.manufacture is non-empty,
+ *   - the manufacturer entry exists in the mfkeys table,
+ *   - the learning mode is Normal or Simple (Secure cannot be resolved
+ *     without a seed — matches subghz_keeloq_encoder.c behaviour).
+ *
+ * Pure-logic glue — depends only on already-tested modules.  All hardware
+ * coupling (FatFS keystore I/O) is encapsulated by keeloq_mfkeys_load(),
+ * which is expected to have run at boot. */
+static bool resolve_counter(const flipper_subghz_signal_t *signal,
+                            const subghz_keeloq_fields_t  *fields,
+                            uint16_t                       *counter_out)
+{
+    if (!signal || !fields || !counter_out)
+        return false;
+    if (signal->manufacture[0] == '\0')
+        return false;
+
+    KeeLoqMfrEntry mfr;
+    if (!keeloq_mfkeys_find(signal->manufacture, &mfr))
+        return false;
+
+    uint64_t device_key;
+    switch (mfr.learn_type)
+    {
+        case KEELOQ_LEARN_NORMAL:
+            device_key = keeloq_learn_normal(fields->serial, mfr.key);
+            break;
+        case KEELOQ_LEARN_SIMPLE:
+            device_key = keeloq_learn_simple(fields->serial, mfr.key);
+            break;
+        case KEELOQ_LEARN_SECURE:
+            /* Seed not recoverable from the .sub file — refuse rather than
+             * silently fall back to Normal and produce a garbage counter. */
+            return false;
+        default:
+            return false;
+    }
+
+    *counter_out = subghz_signal_fields_keeloq_counter_decode(fields->enc_hop,
+                                                              device_key);
+    return true;
+}
 
 /*============================================================================*/
 /* Scene callbacks                                                             */
@@ -64,8 +125,10 @@ static void scene_on_enter(SubGhzApp *app)
      * Saved menu starts with a clean state. */
     app->signal_edit_active = false;
 
-    s_loaded    = false;
-    s_supported = false;
+    s_loaded      = false;
+    s_supported   = false;
+    s_has_counter = false;
+    s_counter     = 0U;
     memset(&s_signal, 0, sizeof(s_signal));
     memset(&s_fields, 0, sizeof(s_fields));
     s_saved_full_path[0] = '\0';
@@ -104,6 +167,15 @@ static void scene_on_enter(SubGhzApp *app)
         s_supported = subghz_signal_fields_keeloq_extract(s_signal.protocol,
                                                           s_signal.key,
                                                           &s_fields);
+        if (s_supported)
+        {
+            /* Phase 9c-2 — best-effort counter resolution.  Failure
+             * (missing Manufacture line, unknown manufacturer, or Secure
+             * learning) leaves s_has_counter == false and the scene draws
+             * a "key?" placeholder; the rest of the fields still display
+             * normally so the user knows the file loaded successfully. */
+            s_has_counter = resolve_counter(&s_signal, &s_fields, &s_counter);
+        }
     }
 
     app->need_redraw = true;
@@ -141,6 +213,10 @@ static void scene_on_exit(SubGhzApp *app)
     /* Defensive: never leave a stale absolute path resident in BSS where
      * a later mis-routed save could overwrite the wrong file. */
     s_saved_full_path[0] = '\0';
+    /* Clear the counter cache so a later cross-scene accessor caller can
+     * never read a stale value from a previous file. */
+    s_has_counter = false;
+    s_counter     = 0U;
 }
 
 /*============================================================================*/
@@ -183,9 +259,17 @@ static void draw_keeloq_fields(void)
              (unsigned long)s_fields.enc_hop);
     u8g2_DrawStr(&m1_u8g2, 2, 52, line);
 
-    /* Counter requires manufacturer-key decryption (Phase 9c).  Placeholder
-     * text keeps the layout consistent so the 9c diff is minimal. */
-    u8g2_DrawStr(&m1_u8g2, 2, 62, "Counter: (9c)");
+    /* Counter — Phase 9c-2.  Resolved on scene_on_enter via the
+     * manufacturer-key store + the learning mode recorded in the keystore
+     * entry.  When resolution fails (no Manufacture line, manufacturer
+     * absent from the keystore, or Secure learning without a seed) we
+     * show a short "key?" hint so the user can tell the field is gated
+     * on mfkey availability rather than the file being broken. */
+    if (s_has_counter)
+        snprintf(line, sizeof(line), "Counter: %u", (unsigned)s_counter);
+    else
+        snprintf(line, sizeof(line), "Counter: key?");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
 }
 
 static void draw(SubGhzApp *app)
@@ -281,4 +365,20 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
     s_fields    = updated;
     s_signal.key = new_key;
     return true;
+}
+
+/*============================================================================*/
+/* Phase 9c-2 — Cross-scene API (counter accessors for SubGhzSceneSetCounter)  */
+/*============================================================================*/
+
+bool subghz_signal_settings_has_counter(void)
+{
+    return s_loaded && s_supported && s_has_counter;
+}
+
+uint16_t subghz_signal_settings_get_counter(void)
+{
+    if (!s_loaded || !s_supported || !s_has_counter)
+        return 0U;
+    return s_counter;
 }
