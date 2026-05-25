@@ -110,7 +110,35 @@ typedef struct {
 } SubGHz_History_t;
 
 void subghz_history_reset(SubGHz_History_t *hist);
+
+/**
+ * Default-behaviour insertion: equivalent to subghz_history_add_ex() with
+ * remove_duplicates=true and delete_old_signals=true.  Kept as the legacy
+ * 3-arg API so existing callers (and host unit tests covering the default
+ * semantics) do not need to change.
+ */
 uint8_t subghz_history_add(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *info, uint32_t freq_hz);
+
+/**
+ * Phase 12 — toggle-aware insertion used by the Read scene.
+ *
+ * @param remove_duplicates  When true, a reception that matches the most
+ *                           recent entry on (protocol, key, bit_len) is
+ *                           merged into that entry (count++ / refresh RSSI)
+ *                           instead of producing a new row.  When false,
+ *                           every reception adds a new row.
+ * @param delete_old_signals When true, a new entry inserted into a full ring
+ *                           evicts the oldest entry (the existing wrap
+ *                           behaviour).  When false, a full ring drops the
+ *                           new entry instead, preserving the oldest
+ *                           captures.
+ *
+ * Returns the post-insert entry count.
+ */
+uint8_t subghz_history_add_ex(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *info,
+                              uint32_t freq_hz,
+                              bool remove_duplicates, bool delete_old_signals);
+
 const SubGHz_History_Entry_t *subghz_history_get(const SubGHz_History_t *hist, uint8_t idx);
 
 enum {

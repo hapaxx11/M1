@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — revise 9e-2..5 deferral rationale + Phase 11-1 polymorphic `get_string()` vtable foundation
-- **PR Description**: Two threads land together. (1) Revises the Phase 9e-2..5 deferral rationale in `PHASE_CHECKLIST.md`: the earlier "GPL-3.0 licensing implication" against porting Flipper/Unleashed reference code was incorrect — M1 itself is GPL-3.0 (see `LICENSE` / `COPYING.txt`), so importing Flipper reference code is fully licence-compatible.  The 9e-2..5 entries are re-cast in terms of the real engineering blockers (missing decoder field decomposition, missing cipher implementations, key-recovery complexity, undocumented checksum) and a licensing-note paragraph documents the correction. (2) Lands the Phase 11-1 foundation — adds a polymorphic `SubGhzGetStringFn get_string` function-pointer to `SubGhzProtocolDef` (default NULL via designated initialisers, so no other registry entries need touching), implements `subghz_signal_format_keeloq_info()` for the KeeLoq family using the already-extracted Phase 9a-1 / 9c-1 fields (Serial / Button / Counter), wires it onto the KeeLoq / Star Line / Jarolift entries, and teaches the Saved "Signal Info" screen to consult `proto->get_string` when present (falling back to the existing generic layout otherwise).  No functional change for any non-KeeLoq-family file.  New host suite `test_subghz_signal_format` covers the formatter's output shape, prefix-terminated protocol match, NULL safety, and the empty-buffer regression guard.  All host tests pass under ASan+UBSan.
+- **PR Title**: Sub-GHz: Momentum parity — revise 9e-2..5 deferral rationale, Phase 11-1 polymorphic `get_string()` vtable foundation, Phase 12 receiver history QoL toggles
+- **PR Description**: Three threads land together. (1) Revises the Phase 9e-2..5 deferral rationale in `PHASE_CHECKLIST.md`: the earlier "GPL-3.0 licensing implication" against porting Flipper/Unleashed reference code was incorrect — M1 itself is GPL-3.0 (see `LICENSE` / `COPYING.txt`), so importing Flipper reference code is fully licence-compatible.  The 9e-2..5 entries are re-cast in terms of the real engineering blockers (missing decoder field decomposition, missing cipher implementations, key-recovery complexity, undocumented checksum) and a licensing-note paragraph documents the correction. (2) Lands the Phase 11-1 foundation — adds a polymorphic `SubGhzGetStringFn get_string` function-pointer to `SubGhzProtocolDef` (default NULL via designated initialisers, so no other registry entries need touching), implements `subghz_signal_format_keeloq_info()` for the KeeLoq family using the already-extracted Phase 9a-1 / 9c-1 fields (Serial / Button / Counter), wires it onto the KeeLoq / Star Line / Jarolift entries, and teaches the Saved "Signal Info" screen to consult `proto->get_string` when present (falling back to the existing generic layout otherwise).  No functional change for any non-KeeLoq-family file.  New host suite `test_subghz_signal_format` covers the formatter's output shape, prefix-terminated protocol match, NULL safety, and the empty-buffer regression guard.  (3) Lands Phase 12 — Receiver history quality-of-life toggles.  Adds a new toggle-aware insertion API `subghz_history_add_ex(hist, info, freq, remove_duplicates, delete_old_signals)` and re-implements the legacy 3-arg `subghz_history_add()` as `_ex(..., true, true)` so existing callers and the 18 default-semantics regression tests keep working unchanged.  Two new boolean fields land in `SubGHz_Config_t` (`remove_duplicates`, `delete_old_signals`, both defaulting to true) with `subghz_get/set_*_ext()` accessors.  The Read scene calls `subghz_history_add_ex()` with the live toggle states.  Two new rows ("Remove Dups:" and "Delete Old:") appear at the bottom of `SubGhzSceneConfig`, and both settings persist via new `subghz_remove_duplicates=` / `subghz_delete_old_signals=` keys in `settings.cfg`.  Six new host tests cover the four toggle combinations (dedup ON/OFF × evict ON/OFF), the duplicate-merge-when-full invariant, and a wrapper-equivalence smoke test.  All 73 host tests pass under ASan+UBSan.
 
 ## Phases
 
@@ -890,5 +890,23 @@
 ### Phase 12 — Receiver history quality-of-life
 - **Description**: `delete_old_signals` and `remove_duplicates` toggles, exposed
   via `SubGhzSceneConfig`.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Implementation**: Adds `subghz_history_add_ex(hist, info, freq,
+  remove_duplicates, delete_old_signals)` and re-implements the legacy 3-arg
+  `subghz_history_add()` as a default-behaviour wrapper (`_ex(..., true,
+  true)`) so the existing 18 default-semantics tests and all non-Read-scene
+  callers keep working unchanged.  Two new bool fields land in
+  `SubGHz_Config_t` (`remove_duplicates`, `delete_old_signals`, both
+  defaulting to `true`) with `subghz_get/set_remove_duplicates_ext()` and
+  `subghz_get/set_delete_old_signals_ext()` accessors.  `m1_subghz_scene_read.c`
+  calls `subghz_history_add_ex()` with the live toggle states.
+  `m1_subghz_scene_config.c` grows two new ON/OFF rows at the bottom
+  ("Remove Dups:", "Delete Old:") — the existing scrolling math handles the
+  expanded 11-item list automatically.  `m1_settings.c` persists both
+  toggles via new `subghz_remove_duplicates=` and `subghz_delete_old_signals=`
+  keys.  Six new host tests in `test_subghz_history.c` cover the four
+  toggle combinations (dedup ON/OFF × evict ON/OFF), the
+  duplicate-merge-when-full invariant (dedup is independent of eviction
+  policy), and a `subghz_history_add()` == `_ex(..., true, true)`
+  wrapper-equivalence smoke test.  All 73 host tests pass under ASan+UBSan.
+- **Status**: ✅ Complete
+- **Commit**: `Phase 12: add Remove Dups / Delete Old receiver history toggles + Config rows + settings persistence`

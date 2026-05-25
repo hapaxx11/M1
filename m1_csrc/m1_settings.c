@@ -108,6 +108,12 @@ extern void    subghz_set_rssi_threshold_ext(int8_t v);
 extern uint32_t subghz_get_user_custom_freq_ext(void);
 extern void     subghz_set_user_custom_freq_ext(uint32_t hz);
 
+/* Phase 12 — receiver history quality-of-life toggles */
+extern bool    subghz_get_remove_duplicates_ext(void);
+extern void    subghz_set_remove_duplicates_ext(bool v);
+extern bool    subghz_get_delete_old_signals_ext(void);
+extern void    subghz_set_delete_old_signals_ext(bool v);
+
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
 
@@ -715,6 +721,10 @@ void settings_save_to_sd(void)
 
     SETTINGS_WRITE("subghz_custom_freq=%lu\n", (unsigned long)subghz_get_user_custom_freq_ext());
 
+    /* Phase 12 — receiver history quality-of-life toggles */
+    SETTINGS_WRITE("subghz_remove_duplicates=%d\n", subghz_get_remove_duplicates_ext() ? 1 : 0);
+    SETTINGS_WRITE("subghz_delete_old_signals=%d\n", subghz_get_delete_old_signals_ext() ? 1 : 0);
+
     SETTINGS_WRITE("clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
 
 #if M1_HAS_RGB_BACKLIGHT
@@ -950,6 +960,24 @@ void settings_load_from_sd(void)
         {
             subghz_set_rssi_threshold_ext((int8_t)lval);
         }
+    }
+
+    /* Phase 12: Parse "subghz_remove_duplicates=X" (0 or 1) */
+    p = strstr(buf, "subghz_remove_duplicates=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 25) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_remove_duplicates_ext(val == 1);
+    }
+
+    /* Phase 12: Parse "subghz_delete_old_signals=X" (0 or 1) */
+    p = strstr(buf, "subghz_delete_old_signals=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 26) - '0');
+        if (val == 0 || val == 1)
+            subghz_set_delete_old_signals_ext(val == 1);
     }
 
     /* Parse "subghz_custom_freq=N" (Hz, 300000000–930000000) */

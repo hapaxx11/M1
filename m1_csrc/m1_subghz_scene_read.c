@@ -91,6 +91,10 @@ extern uint8_t subghz_record_mode_flag;
 /* Decoder polling */
 extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
 
+/* Phase 12 — receiver history quality-of-life toggles (m1_sub_ghz.c) */
+extern bool subghz_get_remove_duplicates_ext(void);
+extern bool subghz_get_delete_old_signals_ext(void);
+
 /* Decoder state reset */
 extern void subghz_pulse_handler_reset(void);
 
@@ -464,7 +468,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 {
                     /* Use the actual active frequency (preset or hopper) */
                     uint32_t freq = app->current_freq_hz;
-                    subghz_history_add(&app->history, &decoded, freq);
+                    subghz_history_add_ex(&app->history, &decoded, freq,
+                                          subghz_get_remove_duplicates_ext(),
+                                          subghz_get_delete_old_signals_ext());
                     app->last_decoded = decoded;
                     app->has_decoded = true;
 

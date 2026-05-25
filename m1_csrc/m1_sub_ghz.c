@@ -259,6 +259,8 @@ typedef struct {
 	bool    autosave;       /* Auto-save decoded signals to SD */
 	uint8_t save_fmt;       /* 0 = Flipper .sub, 1 = M1 native .sgh */
 	int8_t  rssi_threshold; /* Hopper RSSI threshold (dBm, -50 to -100) */
+	bool    remove_duplicates;  /* Phase 12: receiver history — dedupe consecutive identical decodes */
+	bool    delete_old_signals; /* Phase 12: receiver history — evict oldest when ring is full */
 } SubGHz_Config_t;
 
 static SubGHz_Config_t subghz_cfg = {
@@ -269,7 +271,9 @@ static SubGHz_Config_t subghz_cfg = {
 	.sound          = true,
 	.autosave       = false,
 	.save_fmt       = 0,    /* Default: Flipper .sub for Flipper compatibility */
-	.rssi_threshold = -70   /* dBm: stay on freq if RSSI >= this (Flipper default) */
+	.rssi_threshold = -70,  /* dBm: stay on freq if RSSI >= this (Flipper default) */
+	.remove_duplicates  = true,  /* Default ON — Flipper-parity behaviour */
+	.delete_old_signals = true   /* Default ON — Flipper-parity behaviour */
 };
 
 /* Add Manually retired in Phase 8b-4 — see m1_subghz_scene_set_type.c /
@@ -5438,6 +5442,12 @@ bool    subghz_get_sound_ext(void)           { return subghz_cfg.sound; }
 void    subghz_set_sound_ext(bool v)         { subghz_cfg.sound = v; }
 bool    subghz_get_autosave_ext(void)        { return subghz_cfg.autosave; }
 void    subghz_set_autosave_ext(bool v)      { subghz_cfg.autosave = v; }
+
+/* Phase 12 — receiver history quality-of-life toggles */
+bool    subghz_get_remove_duplicates_ext(void)     { return subghz_cfg.remove_duplicates; }
+void    subghz_set_remove_duplicates_ext(bool v)   { subghz_cfg.remove_duplicates = v; }
+bool    subghz_get_delete_old_signals_ext(void)    { return subghz_cfg.delete_old_signals; }
+void    subghz_set_delete_old_signals_ext(bool v)  { subghz_cfg.delete_old_signals = v; }
 
 /* ── Raw recording file management (used by Read Raw scene) ─────────────── */
 

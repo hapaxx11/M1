@@ -348,6 +348,188 @@ void test_dup_only_checks_last_entry(void)
 }
 
 /* ===================================================================
+ * Phase 12 — subghz_history_add_ex toggle semantics
+ * =================================================================== */
+
+/* remove_duplicates=true matches the default subghz_history_add() behaviour:
+ * a duplicate (same proto/key/bit_len as the most recent entry) merges. */
+void test_ex_remove_dups_on_matches_default(void)
+{
+    SubGHz_History_t hist;
+    subghz_history_reset(&hist);
+
+    SubGHz_Dec_Info_t info = make_info(0x123, PRINCETON, 24);
+    subghz_history_add_ex(&hist, &info, 433920000, true, true);
+    uint8_t cnt = subghz_history_add_ex(&hist, &info, 433920000, true, true);
+
+    TEST_ASSERT_EQUAL_UINT8(1, cnt);
+    TEST_ASSERT_EQUAL_UINT8(1, hist.count);
+    const SubGHz_History_Entry_t *e = subghz_history_get(&hist, 0);
+    TEST_ASSERT_NOT_NULL(e);
+    TEST_ASSERT_EQUAL_UINT8(2, e->count);   /* merged duplicate */
+}
+
+/* remove_duplicates=false: every reception adds a new entry, even when
+ * the most recent matches on (protocol, key, bit_len). */
+void test_ex_remove_dups_off_adds_new_entry(void)
+{
+    SubGHz_History_t hist;
+    subghz_history_reset(&hist);
+
+    SubGHz_Dec_Info_t info = make_info(0x123, PRINCETON, 24);
+    subghz_history_add_ex(&hist, &info, 433920000, false, true);
+    uint8_t cnt = subghz_history_add_ex(&hist, &info, 433920000, false, true);
+
+    TEST_ASSERT_EQUAL_UINT8(2, cnt);
+    TEST_ASSERT_EQUAL_UINT8(2, hist.count);
+    /* Each entry should have count=1 because dedup was disabled. */
+    const SubGHz_History_Entry_t *e0 = subghz_history_get(&hist, 0);
+    const SubGHz_History_Entry_t *e1 = subghz_history_get(&hist, 1);
+    TEST_ASSERT_NOT_NULL(e0);
+    TEST_ASSERT_NOT_NULL(e1);
+    TEST_ASSERT_EQUAL_UINT8(1, e0->count);
+    TEST_ASSERT_EQUAL_UINT8(1, e1->count);
+}
+
+/* delete_old_signals=true: full ring evicts the oldest entry on the next
+ * insert (the default subghz_history_add() behaviour). */
+void test_ex_delete_old_on_evicts_oldest(void)
+{
+    SubGHz_History_t hist;
+    subghz_history_reset(&hist);
+
+    /* Fill ring with SUBGHZ_HISTORY_MAX distinct entries. */
+    for (uint16_t i = 0; i < SUBGHZ_HISTORY_MAX; i++)
+    {
+        SubGHz_Dec_Info_t info = make_info((uint64_t)(0x1000 + i), PRINCETON, 24);
+        subghz_history_add_ex(&hist, &info, 433920000, true, true);
+    }
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_HISTORY_MAX, hist.count);
+
+    /* Insert one more; with delete_old_signals=true the count saturates
+     * at SUBGHZ_HISTORY_MAX but the newest entry replaces the oldest. */
+    SubGHz_Dec_Info_t newest = make_info(0xDEADBEEF, PRINCETON, 24);
+    uint8_t cnt = subghz_history_add_ex(&hist, &newest, 433920000, true, true);
+
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_HISTORY_MAX, cnt);
+    const SubGHz_History_Entry_t *e0 = subghz_history_get(&hist, 0);
+    TEST_ASSERT_NOT_NULL(e0);
+    TEST_ASSERT_EQUAL_UINT64((uint64_t)0xDEADBEEF, e0->info.key);  /* newest is index 0 */
+    /* Oldest must have shifted off — the key 0x1000 must no longer appear. */
+    bool oldest_found = false;
+    for (uint8_t i = 0; i < hist.count; i++)
+    {
+        const SubGHz_History_Entry_t *e = subghz_history_get(&hist, i);
+        if (e && e->info.key == (uint64_t)0x1000)
+        {
+            oldest_found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(oldest_found);
+}
+
+/* delete_old_signals=false: full ring drops the new entry instead of
+ * evicting the oldest.  The original oldest must be preserved. */
+void test_ex_delete_old_off_drops_new_when_full(void)
+{
+    SubGHz_History_t hist;
+    subghz_history_reset(&hist);
+
+    /* Fill ring with SUBGHZ_HISTORY_MAX distinct entries. */
+    for (uint16_t i = 0; i < SUBGHZ_HISTORY_MAX; i++)
+    {
+        SubGHz_Dec_Info_t info = make_info((uint64_t)(0x1000 + i), PRINCETON, 24);
+        subghz_history_add_ex(&hist, &info, 433920000, true, false);
+    }
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_HISTORY_MAX, hist.count);
+
+    /* Snapshot the current oldest key so we can verify it survives. */
+    const SubGHz_History_Entry_t *oldest_before =
+        subghz_history_get(&hist, SUBGHZ_HISTORY_MAX - 1);
+    TEST_ASSERT_NOT_NULL(oldest_before);
+    uint64_t oldest_key = oldest_before->info.key;
+
+    /* Insert one more with delete_old=false — must be a no-op. */
+    SubGHz_Dec_Info_t rejected = make_info(0xDEADBEEF, PRINCETON, 24);
+    uint8_t cnt = subghz_history_add_ex(&hist, &rejected, 433920000, true, false);
+
+    TEST_ASSERT_EQUAL_UINT8(SUBGHZ_HISTORY_MAX, cnt);
+
+    /* Newest (idx 0) is still the last successful insert, not 0xDEADBEEF. */
+    const SubGHz_History_Entry_t *e0 = subghz_history_get(&hist, 0);
+    TEST_ASSERT_NOT_NULL(e0);
+    TEST_ASSERT_NOT_EQUAL((uint64_t)0xDEADBEEF, e0->info.key);
+
+    /* The oldest entry must still be present. */
+    const SubGHz_History_Entry_t *oldest_after =
+        subghz_history_get(&hist, SUBGHZ_HISTORY_MAX - 1);
+    TEST_ASSERT_NOT_NULL(oldest_after);
+    TEST_ASSERT_EQUAL_UINT64(oldest_key, oldest_after->info.key);
+}
+
+/* delete_old=false still allows duplicate-merge to fire when the ring is
+ * full — the merge path returns before the overflow check, so an incoming
+ * duplicate of the most recent entry still increments its count.  This is
+ * a deliberate property: dedup is independent of the eviction policy. */
+void test_ex_delete_old_off_allows_dup_merge_when_full(void)
+{
+    SubGHz_History_t hist;
+    subghz_history_reset(&hist);
+
+    /* Fill with distinct entries. */
+    for (uint16_t i = 0; i < SUBGHZ_HISTORY_MAX; i++)
+    {
+        SubGHz_Dec_Info_t info = make_info((uint64_t)(0x1000 + i), PRINCETON, 24);
+        subghz_history_add_ex(&hist, &info, 433920000, true, false);
+    }
+    /* Most recent entry has key = 0x1000 + SUBGHZ_HISTORY_MAX - 1. */
+    uint64_t newest_key = (uint64_t)(0x1000 + SUBGHZ_HISTORY_MAX - 1);
+
+    /* Sending the same key again must merge (count++) even though the ring
+     * is full and delete_old=false. */
+    SubGHz_Dec_Info_t dup = make_info(newest_key, PRINCETON, 24);
+    subghz_history_add_ex(&hist, &dup, 433920000, true, false);
+
+    const SubGHz_History_Entry_t *e0 = subghz_history_get(&hist, 0);
+    TEST_ASSERT_NOT_NULL(e0);
+    TEST_ASSERT_EQUAL_UINT64(newest_key, e0->info.key);
+    TEST_ASSERT_EQUAL_UINT8(2, e0->count);  /* merged */
+}
+
+/* subghz_history_add() (the 3-arg wrapper) must be equivalent to
+ * subghz_history_add_ex(..., true, true) — guard against drift. */
+void test_default_wrapper_matches_ex_true_true(void)
+{
+    SubGHz_History_t a, b;
+    subghz_history_reset(&a);
+    subghz_history_reset(&b);
+
+    for (uint16_t i = 0; i < 5; i++)
+    {
+        SubGHz_Dec_Info_t info = make_info((uint64_t)(0x100 + i), PRINCETON, 24);
+        subghz_history_add(&a, &info, 433920000);
+        subghz_history_add_ex(&b, &info, 433920000, true, true);
+    }
+    /* Add a duplicate of the most recent to exercise dedup. */
+    SubGHz_Dec_Info_t dup = make_info((uint64_t)(0x100 + 4), PRINCETON, 24);
+    subghz_history_add(&a, &dup, 433920000);
+    subghz_history_add_ex(&b, &dup, 433920000, true, true);
+
+    TEST_ASSERT_EQUAL_UINT8(a.count, b.count);
+    TEST_ASSERT_EQUAL_UINT8(a.head,  b.head);
+    for (uint8_t i = 0; i < a.count; i++)
+    {
+        const SubGHz_History_Entry_t *ea = subghz_history_get(&a, i);
+        const SubGHz_History_Entry_t *eb = subghz_history_get(&b, i);
+        TEST_ASSERT_NOT_NULL(ea);
+        TEST_ASSERT_NOT_NULL(eb);
+        TEST_ASSERT_EQUAL_UINT64(ea->info.key, eb->info.key);
+        TEST_ASSERT_EQUAL_UINT8(ea->count, eb->count);
+    }
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -386,6 +568,14 @@ int main(void)
 
     /* Dup edge case */
     RUN_TEST(test_dup_only_checks_last_entry);
+
+    /* Phase 12 — _ex toggle semantics */
+    RUN_TEST(test_ex_remove_dups_on_matches_default);
+    RUN_TEST(test_ex_remove_dups_off_adds_new_entry);
+    RUN_TEST(test_ex_delete_old_on_evicts_oldest);
+    RUN_TEST(test_ex_delete_old_off_drops_new_when_full);
+    RUN_TEST(test_ex_delete_old_off_allows_dup_merge_when_full);
+    RUN_TEST(test_default_wrapper_matches_ex_true_true);
 
     return UNITY_END();
 }
