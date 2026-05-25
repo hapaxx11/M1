@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-2 (SetType picker scene scaffold)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-2 scaffolds a new `SubGhzSceneSetType` picker that consumes the Phase 8a/8b-1 `subghz_create_proto_*` catalog (17 entries: 5 rolling-code remotes + 12 static-OOK families) via the standard `subghz_submenu_model` + `m1_submenu_draw` widget.  Adds a new `SubGhzApp::create_proto_id` field that the OK handler populates from the model's selected index; selection persists across pushes/pops via the Phase 2 per-scene state slot.  Today the OK handler pops back to the parent — Phase 8b-3 will swap the pop for a push of the SetKey hex-entry scene, and Phase 8b-4 will retire the legacy `sub_ghz_add_manually()` blocking delegate by replacing the Sub-GHz menu's "Add Manually" entry with `subghz_scene_push(SubGhzSceneSetType)`.  No callers yet push the scene, so this change is firmware behaviourally inert; the 69 host tests continue to pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-3 (SetKey hex-entry scene + subghz_hex_editor module)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-3 adds a new `SubGhzSceneSetKey` hex-digit editor scene pushed by the Phase 8b-2 SetType picker on OK. Renders a hex-digit editor sized to the picked protocol's `bit_count` and matches the legacy `sub_ghz_add_manually()` UX exactly (UP/DOWN cycle current digit, LEFT/RIGHT move cursor, OK fires). On OK the assembled value is masked via `subghz_create_proto_key_in_range()`, written to `0:/SUBGHZ/_setkey_tmp.sub` via `flipper_subghz_save_key()`, and `SubGhzSceneTransmitter` is pushed with `tx_autostart=true` for one-press fire UX. The hex-digit editing logic itself lives in a new host-tested pure-logic module `Sub_Ghz/subghz_hex_editor.c/h` (17 host tests under ASan+UBSan) so the same backing model can drive the upcoming Phase 8c SetSerial / SetButton / SetCounter editor scenes without duplicating cursor/digit code. SetType's OK handler now pushes SetKey instead of popping, so the full SetType→SetKey→Transmitter flow is live behind whichever caller invokes SetType; Phase 8b-4 will wire it into the Sub-GHz menu by replacing the blocking `sub_ghz_add_manually()` delegate. All 70 host tests pass.
 
 ## Phases
 
@@ -421,11 +421,42 @@
       yet push the scene; that lands in Phase 8b-4.
 
     - **Phase 8b-3 — SetKey hex-entry scene (reusable for Phase 8c).**
-      🔲 Not started.  Hex-digit editor scene that builds a 64-bit key
-      with cursor + Hex/L/R/OK semantics.  Uses
-      `subghz_create_proto_key_in_range()` for masking + overflow
-      reporting.  Designed to be reused by Phase 8c's SetSerial /
-      SetButton / SetCounter editor scenes.
+      ✅ Complete.  New `SubGhzSceneSetKey` is pushed by the Phase
+      8b-2 SetType picker on OK.  Renders a hex-digit editor sized to
+      the picked protocol's `bit_count` (via the catalog
+      `SubGhzCreateProtoSpec`).  UX matches the legacy
+      `sub_ghz_add_manually()` exactly — UP/DOWN cycles the digit
+      under the cursor (wrap F↔0), LEFT/RIGHT moves the cursor
+      (saturate, no wrap), OK assembles the value and fires.  On OK
+      the value is masked via
+      `subghz_create_proto_key_in_range()` (defensive overflow
+      reporting that surfaces a "Save failed" overlay if a future
+      catalog edit ever introduces a bit_count/digit_count mismatch),
+      a temp `.sub` file is written via `flipper_subghz_save_key()`
+      at `0:/SUBGHZ/_setkey_tmp.sub`, and
+      `SubGhzSceneTransmitter` is pushed with `tx_autostart=true`
+      for one-press fire UX matching Add Manually's blocking
+      behaviour.  On Transmitter pop-back the editor state is
+      preserved (digits + cursor stay where the user left them) so
+      the user can tweak a single digit and fire again without
+      re-entering the whole key — Add Manually parity plus.  Temp
+      file is unlinked on resume-from-child, on BACK, and on
+      `scene_on_exit` so no stale `.sub` lingers on the SD card.
+      The hex-digit editing logic itself lives in a new
+      host-tested pure-logic module
+      `Sub_Ghz/subghz_hex_editor.c/h` (17 host tests under
+      ASan+UBSan covering init bit-width rounding, value
+      round-trip, overflow masking, cursor saturation, UP/DOWN
+      wrap, end-to-end "type 0xAB12" UX, and full 64-bit Alutech
+      coverage) so the same backing model can drive the upcoming
+      Phase 8c SetSerial / SetButton / SetCounter editor scenes
+      without duplicating cursor/digit code.  SetType's OK handler
+      now pushes SetKey instead of popping (the Phase 8b-2 scaffold
+      comment is replaced by a working push), so the full
+      SetType→SetKey→Transmitter flow is live behind whichever
+      caller invokes SetType — Phase 8b-4 will wire it into the
+      Sub-GHz menu by replacing the blocking
+      `sub_ghz_add_manually()` delegate.  All 70 host tests pass.
 
     - **Phase 8b-4 — Retire `sub_ghz_add_manually()` blocking delegate.**
       🔲 Not started.  Replace the Sub-GHz menu's "Add Manually" entry
@@ -439,8 +470,8 @@
     (FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY) on top of
     the existing counter-mode encoder in `Sub_Ghz/subghz_keeloq.c`.
 
-- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3/8b-4 pending; 8c pending)
-- **Commit**: `Phase 8b-2: scaffold SubGhzSceneSetType picker over create_proto catalog`
+- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 pending; 8c pending)
+- **Commit**: `Phase 8b-3: add SetKey hex-entry scene + subghz_hex_editor module`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on

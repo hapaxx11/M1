@@ -64,6 +64,7 @@ typedef enum {
     SubGhzSceneMoreRaw,        /**< Read-Raw Loaded "More" submenu (Decode/Rename/Delete) */
     SubGhzSceneDecodeRaw,      /**< Offline decode-results view for a loaded RAW file */
     SubGhzSceneSetType,        /**< Create-from-scratch protocol picker (Phase 8b-2) */
+    SubGhzSceneSetKey,         /**< Create-from-scratch hex-key editor (Phase 8b-3) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -498,5 +499,6 @@ extern const SubGhzSceneHandlers subghz_scene_delete_handlers;
 extern const SubGhzSceneHandlers subghz_scene_more_raw_handlers;
 extern const SubGhzSceneHandlers subghz_scene_decode_raw_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_type_handlers;
+extern const SubGhzSceneHandlers subghz_scene_set_key_handlers;
 
 #endif /* M1_SUBGHZ_SCENE_H_ */

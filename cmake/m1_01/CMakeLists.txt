@@ -343,6 +343,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_submenu_model.c
     ../../Sub_Ghz/subghz_new_remote_gen.c
     ../../Sub_Ghz/subghz_create_proto.c
+    ../../Sub_Ghz/subghz_hex_editor.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
@@ -591,6 +592,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_more_raw.c
     ../../m1_csrc/m1_subghz_scene_decode_raw.c
     ../../m1_csrc/m1_subghz_scene_set_type.c
+    ../../m1_csrc/m1_subghz_scene_set_key.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

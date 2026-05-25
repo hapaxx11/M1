@@ -1159,6 +1159,25 @@ endif()
 add_test(NAME subghz_create_proto COMMAND test_subghz_create_proto)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_hex_editor (Phase 8b-3 — SetKey scene
+# backing model).  Pure-logic hex-digit editor with cursor + UP/DOWN
+# cycling; reused by Phase 8c SetSerial / SetButton / SetCounter
+# editor scenes.  Zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_hex_editor
+    test_subghz_hex_editor.c
+    ${M1_ROOT}/Sub_Ghz/subghz_hex_editor.c
+)
+target_include_directories(test_subghz_hex_editor PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_hex_editor PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_hex_editor PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_hex_editor COMMAND test_subghz_hex_editor)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_read_raw_state (Read Raw async TX helpers)
 # Verifies the pure-logic dispatch helpers used by the Read Raw scene
 # to handle Q_EVENT_SUBGHZ_TX completion events and BACK during TX:

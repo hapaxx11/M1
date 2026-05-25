@@ -9,15 +9,12 @@
  * scratch" protocols (5 rolling-code remotes + 12 static-OOK families).
  *
  * On OK the picked @ref SubGhzCreateProtoId is stored in
- * @ref SubGhzApp::create_proto_id and the scene pops back to its
- * parent.  The Phase 8b-3 SetKey hex-entry scene will be pushed here
- * instead of popping once it lands; until then this scene is a
- * scaffold that other scenes can drive without committing to an
- * end-to-end flow.
- *
- * Selection persists across pushes/pops via the Phase 2 per-scene
- * 32-bit state slot keyed by @ref SubGhzSceneSetType so the user is
- * returned to the same protocol if they re-enter the picker.
+ * @ref SubGhzApp::create_proto_id and the @ref SubGhzSceneSetKey
+ * hex-entry scene is pushed (Phase 8b-3) to let the user build the
+ * key.  Selection persists across pushes/pops via the Phase 2
+ * per-scene 32-bit state slot keyed by @ref SubGhzSceneSetType so
+ * the user is returned to the same protocol if they re-enter the
+ * picker.
  *
  * Hardware-independent picker logic — the only firmware-side dependency
  * is the `m1_submenu_draw` widget for rendering.
@@ -111,12 +108,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->create_proto_id = s_model.selected;
                 subghz_scene_set_state(app, SubGhzSceneSetType,
                                        s_model.selected);
+                /* Phase 8b-3 — hand off to the hex-key editor scene.
+                 * SetKey reads `create_proto_id` to look up the
+                 * protocol's bit width and frequency, lets the user
+                 * build a key, writes a temp .sub, and pushes the
+                 * Transmitter scene to fire it. */
+                subghz_scene_push(app, SubGhzSceneSetKey);
             }
-            /* Phase 8b-3 will replace this pop with a push of the
-             * SetKey scene once that scene lands.  Today we pop so
-             * any caller that wants to test the picker round-trip can
-             * read `app->create_proto_id` after the pop-back. */
-            subghz_scene_pop(app);
             return true;
 
         default:
