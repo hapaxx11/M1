@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-4 (retire `sub_ghz_add_manually()` blocking delegate)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-4 wires the Sub-GHz menu's "Add Manually" entry directly to the scene-native `SubGhzSceneSetType` picker (Phase 8b-2) → `SubGhzSceneSetKey` hex editor (Phase 8b-3) → `SubGhzSceneTransmitter` (Phase 3b) flow that was built in the previous sub-phases.  The legacy blocking event-loop `sub_ghz_add_manually()` and its supporting helpers (`_transmit`, `_draw_list`, `_draw_key_entry`) plus the hard-coded `subghz_add_manually_list[11]` table are deleted from `m1_csrc/m1_sub_ghz.c`; the thin scene wrapper `m1_csrc/m1_subghz_scene_add_manually.c` and the `SubGhzSceneAddManually` enum value are also removed.  The protocol catalog now lives entirely in `Sub_Ghz/subghz_create_proto.c` (host-tested) and is the single source of truth for "create from scratch" protocols going forward.  All 70 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8c-1 (extend create-proto catalog with KeeLoq family)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8c-1 extends the pure-logic protocol catalog in `Sub_Ghz/subghz_create_proto.c/h` from 17 to 20 entries by adding the three KeeLoq-cipher counter-mode protocols already supported by the existing `subghz_keeloq_encoder.c`: KeeLoq 433, Star Line 433, and Jarolift 433.  Unlike the Phase 8a/8b-1 entries which expose a single opaque hex `FIELD_KEY`, KeeLoq family entries advertise `FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY` to reflect the four-field editing UX that Phase 8c-2/3 will surface.  Three new `SubGhzCreateProtoSpec` bit-width fields (`serial_bits` 28, `button_bits` 4, `counter_bits` 16) describe how the editor scenes should size their cursors and how the assembler should mask user-entered values before composing the 64-bit Flipper-format key.  Five new host tests under ASan+UBSan cover the new entries, two new structural invariants (KeeLoq field widths fit a 64-bit key; non-KeeLoq entries have zero field widths), and the field-flag query tests are rewritten so the two flag groups are checked as disjoint.  All 70 host tests pass.
 
 ## Phases
 
@@ -478,13 +478,52 @@
       tests pass.
 
   - **Phase 8c — SetKey / SetSerial / SetButton / SetCounter editor scenes.**
-    🔲 Not started.  Per-field hex/decimal editor scenes routed off the
+    🔄 In progress.  Per-field hex/decimal editor scenes routed off the
     Phase 8a `field_flags` bitmask.  Adds the KeeLoq family
     (FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY) on top of
     the existing counter-mode encoder in `Sub_Ghz/subghz_keeloq.c`.
 
-- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 ✅; 8c pending)
-- **Commit**: `Phase 8b-4: retire sub_ghz_add_manually() blocking delegate`
+    - **Phase 8c-1 — Extend catalog with KeeLoq family (pure logic).**
+      ✅ Complete.  Extended `Sub_Ghz/subghz_create_proto.c/h` from 17
+      to 20 entries by adding the three KeeLoq-cipher counter-mode
+      protocols already supported by the existing
+      `Sub_Ghz/subghz_keeloq_encoder.c::keeloq_encode_replay()`: KeeLoq
+      433, Star Line 433, and Jarolift 433.  Each new entry advertises
+      `SUBGHZ_CREATE_FIELD_SERIAL | _BUTTON | _COUNTER | _MFKEY` (not
+      `_KEY`) to reflect the four-field editing UX that Phase 8c-2/3
+      will surface — unlike Phase 8a's opaque-hex-key rolling-code
+      remotes, the user provides discrete Serial / Button / Counter
+      values plus a manufacturer-key name, and the encoder assembles
+      the 64-bit Flipper-format key from those fields.  Added three
+      new `SubGhzCreateProtoSpec` fields — `serial_bits` (28),
+      `button_bits` (4), `counter_bits` (16) — sized for the KeeLoq
+      family's standard field widths so the Phase 8c-2/3 editor
+      scenes can size their cursors and the assembler can mask
+      user-entered values before composing the final hop word.
+      Non-KeeLoq entries leave these widths at zero (a new
+      invariant test pins this regression-free).  Five new tests
+      under ASan+UBSan (catalog count bump to 20, per-protocol
+      metadata regression for KeeLoq / Star Line / Jarolift, the
+      "field widths fit 64-bit key" invariant, the "non-KeeLoq
+      entries have zero field widths" invariant); the field-flag
+      query tests are rewritten to dispatch on whether an entry
+      advertises FIELD_SERIAL, since FIELD_KEY and the KeeLoq
+      family are now disjoint.  Host-only — the module is already
+      in the firmware build (from Phase 8a) but not yet wired into
+      any scene.  All 70 host tests pass.
+
+    - **Phase 8c-2 — SetSerial / SetButton / SetCounter / SetMfKey
+      editor scenes.**  🔲 Not started.  Per-field hex/decimal editor
+      scenes that compose into the Phase 8c-3 wiring.
+
+    - **Phase 8c-3 — Wire KeeLoq family through SetType → editors →
+      Transmitter.**  🔲 Not started.  SetType picker pushes the
+      first editor; final editor's OK assembles the 64-bit key and
+      pushes Transmitter.
+
+- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 ✅;
+  8c-1 ✅; 8c-2/3 pending)
+- **Commit**: `Phase 8c-1: extend create-proto catalog with KeeLoq family`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on

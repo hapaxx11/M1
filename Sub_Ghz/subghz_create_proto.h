@@ -63,6 +63,17 @@ typedef enum {
     SUBGHZ_CREATE_PROTO_DOORHAN_433,           /**< DoorHan 433 — 24 bit OOK PWM 1:3 */
     SUBGHZ_CREATE_PROTO_HOLTEK_HT12X_433,      /**< Holtek HT12X 433 — 12 bit OOK PWM 1:3 */
 
+    /* KeeLoq family (Phase 8c-1) — counter-mode rolling-code remotes that
+     * the existing `Sub_Ghz/subghz_keeloq_encoder.c` already supports for
+     * replay.  Unlike the Phase 8a rolling-code remotes (which expose a
+     * single opaque hex key), these protocols are edited as discrete
+     * Serial / Button / Counter / Manufacturer-key fields and assembled
+     * into the final 64-bit key by the upcoming Phase 8c-2/3 editor
+     * scenes. */
+    SUBGHZ_CREATE_PROTO_KEELOQ,                /**< KeeLoq 433 — 64 bit OOK PWM (Flipper Bit:64) */
+    SUBGHZ_CREATE_PROTO_STAR_LINE,             /**< Star Line 433 — 64 bit OOK PWM */
+    SUBGHZ_CREATE_PROTO_JAROLIFT,              /**< Jarolift 433 — 64 bit OOK PWM (Flipper Bit:64) */
+
     SUBGHZ_CREATE_PROTO_COUNT
 } SubGhzCreateProtoId;
 
@@ -75,8 +86,10 @@ typedef enum {
  *
  * @c SUBGHZ_CREATE_FIELD_KEY is the catch-all "the whole hop word is one
  * opaque hex value"; the five rolling-code protocols in the initial Phase 8a
- * catalog all use this representation.  The remaining flags are reserved
- * for Phase 8c, which will introduce the KeeLoq counter-mode workflow.
+ * catalog all use this representation.  The remaining flags drive the
+ * Phase 8c KeeLoq counter-mode workflow, where the device is described as
+ * separate Serial / Button / Counter / Manufacturer-key components and the
+ * 64-bit key is assembled by the encoder.
  */
 typedef enum {
     SUBGHZ_CREATE_FIELD_KEY     = 1U << 0,     /**< Single opaque hex key */
@@ -98,6 +111,14 @@ typedef struct {
     uint16_t    te;           /**< te_short override in µs (0 = registry default) */
     uint16_t    field_flags;  /**< OR of @ref SubGhzCreateFieldFlags */
     const char *file_prefix;  /**< Suggested filename prefix, no spaces */
+    /* KeeLoq-family field widths (Phase 8c-1).  Non-zero only when the
+     * matching FIELD_SERIAL / FIELD_BUTTON / FIELD_COUNTER flag is set.
+     * The editor scenes use these to size their per-field hex/decimal
+     * cursors; the encoder uses them to mask the user-entered values
+     * before assembling the 64-bit key. */
+    uint8_t     serial_bits;  /**< Serial bit width (e.g. 28 for KeeLoq) */
+    uint8_t     button_bits;  /**< Button bit width (e.g. 4 for KeeLoq) */
+    uint8_t     counter_bits; /**< Counter bit width (e.g. 16 for KeeLoq) */
 } SubGhzCreateProtoSpec;
 
 /*============================================================================*/

@@ -208,6 +208,77 @@ static const SubGhzCreateProtoSpec s_proto_catalog[SUBGHZ_CREATE_PROTO_COUNT] = 
         .field_flags = SUBGHZ_CREATE_FIELD_KEY,
         .file_prefix = "Holtek",
     },
+
+    /*----------------------------------------------------------------------*
+     * Phase 8c-1 — KeeLoq family (counter-mode rolling-code)
+     *
+     * The three protocols below are the KeeLoq-cipher based remotes that
+     * `Sub_Ghz/subghz_keeloq_encoder.c::keeloq_encode_replay()` already
+     * supports for counter-mode replay when a manufacturer key is loaded.
+     *
+     * Unlike Phase 8a's rolling-code remotes (CAME Atomo / Nice FloR-S /
+     * etc.) which expose a single opaque hex key, KeeLoq-family devices
+     * are described as four discrete fields:
+     *   - Serial (28 bits) — device-specific identifier
+     *   - Button (4 bits) — pressed-button code
+     *   - Counter (16 bits) — rolling counter (post-decrypt)
+     *   - Manufacture (name) — selects the manufacturer key for encryption
+     *
+     * The Phase 8c-2/3 editor scenes will collect these four values,
+     * assemble the 64-bit Flipper-format key (KeeLoq/Jarolift:
+     * (button<<60)|(serial<<32)|HOP; Star Line: HOP<<32|(serial<<4)|button),
+     * write a `.sub` file with the `Manufacture:` field set, and replay
+     * via the existing counter-mode encoder.
+     *
+     * Bit widths are constant across the family.  bit_count is 64 — the
+     * size of the assembled Flipper Bit:64 key value, matching the format
+     * the encoder consumes.
+     *----------------------------------------------------------------------*/
+    [SUBGHZ_CREATE_PROTO_KEELOQ] = {
+        .label        = "KeeLoq 433",
+        .proto_name   = "KeeLoq",
+        .freq_hz      = 433920000U,
+        .bit_count    = 64U,
+        .te           = 400U,
+        .field_flags  = (uint16_t)(SUBGHZ_CREATE_FIELD_SERIAL  |
+                                   SUBGHZ_CREATE_FIELD_BUTTON  |
+                                   SUBGHZ_CREATE_FIELD_COUNTER |
+                                   SUBGHZ_CREATE_FIELD_MFKEY),
+        .file_prefix  = "KeeLoq",
+        .serial_bits  = 28U,
+        .button_bits  = 4U,
+        .counter_bits = 16U,
+    },
+    [SUBGHZ_CREATE_PROTO_STAR_LINE] = {
+        .label        = "Star Line 433",
+        .proto_name   = "Star Line",
+        .freq_hz      = 433920000U,
+        .bit_count    = 64U,
+        .te           = 400U,
+        .field_flags  = (uint16_t)(SUBGHZ_CREATE_FIELD_SERIAL  |
+                                   SUBGHZ_CREATE_FIELD_BUTTON  |
+                                   SUBGHZ_CREATE_FIELD_COUNTER |
+                                   SUBGHZ_CREATE_FIELD_MFKEY),
+        .file_prefix  = "StarLine",
+        .serial_bits  = 28U,
+        .button_bits  = 4U,
+        .counter_bits = 16U,
+    },
+    [SUBGHZ_CREATE_PROTO_JAROLIFT] = {
+        .label        = "Jarolift 433",
+        .proto_name   = "Jarolift",
+        .freq_hz      = 433920000U,
+        .bit_count    = 64U,
+        .te           = 400U,
+        .field_flags  = (uint16_t)(SUBGHZ_CREATE_FIELD_SERIAL  |
+                                   SUBGHZ_CREATE_FIELD_BUTTON  |
+                                   SUBGHZ_CREATE_FIELD_COUNTER |
+                                   SUBGHZ_CREATE_FIELD_MFKEY),
+        .file_prefix  = "Jarolift",
+        .serial_bits  = 28U,
+        .button_bits  = 4U,
+        .counter_bits = 16U,
+    },
 };
 
 /*============================================================================*/

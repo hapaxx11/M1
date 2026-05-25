@@ -27,8 +27,9 @@ static void test_count_matches_enum(void)
 {
     TEST_ASSERT_EQUAL_UINT32((uint32_t)SUBGHZ_CREATE_PROTO_COUNT,
                              subghz_create_proto_count());
-    /* Phase 8a: 5 rolling-code remotes + Phase 8b-1: 12 static-OOK families. */
-    TEST_ASSERT_EQUAL_UINT32(17U, subghz_create_proto_count());
+    /* Phase 8a: 5 rolling-code remotes + Phase 8b-1: 12 static-OOK families +
+     * Phase 8c-1: 3 KeeLoq-family entries. */
+    TEST_ASSERT_EQUAL_UINT32(20U, subghz_create_proto_count());
 }
 
 static void test_spec_non_null_for_every_valid_id(void)
@@ -128,8 +129,32 @@ static void check_proto(SubGhzCreateProtoId id, const char *proto_name,
     TEST_ASSERT_EQUAL_UINT32(bits, s->bit_count);
     TEST_ASSERT_EQUAL_UINT16(te, s->te);
     TEST_ASSERT_EQUAL_STRING(prefix, s->file_prefix);
-    /* Every Phase 8a protocol exposes the opaque-key field. */
+    /* Every Phase 8a/8b-1 protocol exposes the opaque-key field. */
     TEST_ASSERT_TRUE(subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_KEY));
+}
+
+/* Phase 8c-1 — KeeLoq family entries do NOT advertise FIELD_KEY; they
+ * advertise the four discrete-field flags instead.  All three family members
+ * share identical bit-width metadata. */
+static void check_keeloq_proto(SubGhzCreateProtoId id, const char *proto_name,
+                               uint32_t freq_hz, const char *prefix)
+{
+    const SubGhzCreateProtoSpec *s = subghz_create_proto_spec(id);
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL_STRING(proto_name, s->proto_name);
+    TEST_ASSERT_EQUAL_UINT32(freq_hz, s->freq_hz);
+    TEST_ASSERT_EQUAL_UINT32(64U, s->bit_count);
+    TEST_ASSERT_EQUAL_UINT16(400U, s->te);
+    TEST_ASSERT_EQUAL_STRING(prefix, s->file_prefix);
+    TEST_ASSERT_EQUAL_UINT8(28U, s->serial_bits);
+    TEST_ASSERT_EQUAL_UINT8(4U,  s->button_bits);
+    TEST_ASSERT_EQUAL_UINT8(16U, s->counter_bits);
+    /* All four KeeLoq-family flags advertised; FIELD_KEY is NOT. */
+    TEST_ASSERT_FALSE(subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_KEY));
+    TEST_ASSERT_TRUE(subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_SERIAL));
+    TEST_ASSERT_TRUE(subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_BUTTON));
+    TEST_ASSERT_TRUE(subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_COUNTER));
+    TEST_ASSERT_TRUE(subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_MFKEY));
 }
 
 static void test_came_atomo_metadata(void)
@@ -238,6 +263,70 @@ static void test_holtek_ht12x_433_metadata(void)
                 "Holtek_HT12X", 433920000U, 12U, 340U, "Holtek");
 }
 
+/*----------------------------------------------------------------------------*
+ * Phase 8c-1 — KeeLoq family                                                 *
+ *----------------------------------------------------------------------------*/
+
+static void test_keeloq_metadata(void)
+{
+    check_keeloq_proto(SUBGHZ_CREATE_PROTO_KEELOQ,
+                       "KeeLoq", 433920000U, "KeeLoq");
+}
+
+static void test_star_line_metadata(void)
+{
+    check_keeloq_proto(SUBGHZ_CREATE_PROTO_STAR_LINE,
+                       "Star Line", 433920000U, "StarLine");
+}
+
+static void test_jarolift_metadata(void)
+{
+    check_keeloq_proto(SUBGHZ_CREATE_PROTO_JAROLIFT,
+                       "Jarolift", 433920000U, "Jarolift");
+}
+
+/* The KeeLoq family share the encoder in Sub_Ghz/subghz_keeloq_encoder.c —
+ * verify the discrete-field widths sum to fit within the assembled 64-bit
+ * key (serial 28 + button 4 + counter 16 = 48 ≤ 64, leaving 16 bits for the
+ * remainder of the encrypted hop word). */
+static void test_keeloq_family_field_widths_fit_64_bit(void)
+{
+    static const SubGhzCreateProtoId family[] = {
+        SUBGHZ_CREATE_PROTO_KEELOQ,
+        SUBGHZ_CREATE_PROTO_STAR_LINE,
+        SUBGHZ_CREATE_PROTO_JAROLIFT,
+    };
+    for (size_t i = 0; i < sizeof(family) / sizeof(family[0]); i++) {
+        const SubGhzCreateProtoSpec *s = subghz_create_proto_spec(family[i]);
+        TEST_ASSERT_NOT_NULL(s);
+        const uint32_t total = (uint32_t)s->serial_bits +
+                               (uint32_t)s->button_bits +
+                               (uint32_t)s->counter_bits;
+        TEST_ASSERT_TRUE_MESSAGE(total <= 64U,
+            "KeeLoq family field widths overflow 64-bit key");
+        TEST_ASSERT_TRUE_MESSAGE(s->bit_count == 64U,
+            "KeeLoq family entries must report bit_count == 64");
+    }
+}
+
+/* Phase 8b-1/8c-1 invariant: non-KeeLoq entries must have zero KeeLoq
+ * field widths.  Prevents accidental data carry-over when adding new
+ * entries in future phases. */
+static void test_non_keeloq_field_widths_zero(void)
+{
+    for (uint32_t i = 0; i < subghz_create_proto_count(); i++) {
+        const SubGhzCreateProtoSpec *s =
+            subghz_create_proto_spec((SubGhzCreateProtoId)i);
+        if (subghz_create_proto_has_field((SubGhzCreateProtoId)i,
+                                           SUBGHZ_CREATE_FIELD_SERIAL)) {
+            continue; /* Skip KeeLoq family entries. */
+        }
+        TEST_ASSERT_EQUAL_UINT8(0U, s->serial_bits);
+        TEST_ASSERT_EQUAL_UINT8(0U, s->button_bits);
+        TEST_ASSERT_EQUAL_UINT8(0U, s->counter_bits);
+    }
+}
+
 /* Regression: Add Manually's strchr-based name stripping silently maps
  * "Nice FLO 12b" → "Nice" and "Gate TX 433" → "Gate".  The catalog must
  * carry the actual registry names so the .sub Protocol: field matches
@@ -255,6 +344,13 @@ static void test_proto_names_match_registry(void)
     /* Holtek registry name is "Holtek_HT12X". */
     TEST_ASSERT_EQUAL_STRING("Holtek_HT12X",
         subghz_create_proto_spec(SUBGHZ_CREATE_PROTO_HOLTEK_HT12X_433)->proto_name);
+    /* Phase 8c-1: KeeLoq family registry names. */
+    TEST_ASSERT_EQUAL_STRING("KeeLoq",
+        subghz_create_proto_spec(SUBGHZ_CREATE_PROTO_KEELOQ)->proto_name);
+    TEST_ASSERT_EQUAL_STRING("Star Line",
+        subghz_create_proto_spec(SUBGHZ_CREATE_PROTO_STAR_LINE)->proto_name);
+    TEST_ASSERT_EQUAL_STRING("Jarolift",
+        subghz_create_proto_spec(SUBGHZ_CREATE_PROTO_JAROLIFT)->proto_name);
 }
 
 /*============================================================================*/
@@ -263,25 +359,50 @@ static void test_proto_names_match_registry(void)
 
 static void test_has_field_true_for_advertised_field(void)
 {
-    /* Sanity: every catalog entry advertises FIELD_KEY. */
+    /* Every Phase 8a/8b-1 catalog entry advertises FIELD_KEY; the KeeLoq
+     * family (Phase 8c-1) advertises the four discrete-field flags
+     * instead. */
     for (uint32_t i = 0; i < subghz_create_proto_count(); i++) {
-        TEST_ASSERT_TRUE(subghz_create_proto_has_field(
-            (SubGhzCreateProtoId)i, SUBGHZ_CREATE_FIELD_KEY));
+        const SubGhzCreateProtoId id = (SubGhzCreateProtoId)i;
+        const bool is_keeloq =
+            subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_SERIAL);
+        if (is_keeloq) {
+            TEST_ASSERT_TRUE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_SERIAL));
+            TEST_ASSERT_TRUE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_BUTTON));
+            TEST_ASSERT_TRUE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_COUNTER));
+            TEST_ASSERT_TRUE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_MFKEY));
+        } else {
+            TEST_ASSERT_TRUE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_KEY));
+        }
     }
 }
 
 static void test_has_field_false_for_unsupported_fields(void)
 {
-    /* None of the Phase 8a entries support the KeeLoq-family fields yet. */
+    /* FIELD_KEY entries do NOT advertise the KeeLoq fields; KeeLoq entries
+     * do NOT advertise FIELD_KEY.  The two groups are disjoint. */
     for (uint32_t i = 0; i < subghz_create_proto_count(); i++) {
-        TEST_ASSERT_FALSE(subghz_create_proto_has_field(
-            (SubGhzCreateProtoId)i, SUBGHZ_CREATE_FIELD_SERIAL));
-        TEST_ASSERT_FALSE(subghz_create_proto_has_field(
-            (SubGhzCreateProtoId)i, SUBGHZ_CREATE_FIELD_BUTTON));
-        TEST_ASSERT_FALSE(subghz_create_proto_has_field(
-            (SubGhzCreateProtoId)i, SUBGHZ_CREATE_FIELD_COUNTER));
-        TEST_ASSERT_FALSE(subghz_create_proto_has_field(
-            (SubGhzCreateProtoId)i, SUBGHZ_CREATE_FIELD_MFKEY));
+        const SubGhzCreateProtoId id = (SubGhzCreateProtoId)i;
+        const bool is_keeloq =
+            subghz_create_proto_has_field(id, SUBGHZ_CREATE_FIELD_SERIAL);
+        if (is_keeloq) {
+            TEST_ASSERT_FALSE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_KEY));
+        } else {
+            TEST_ASSERT_FALSE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_SERIAL));
+            TEST_ASSERT_FALSE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_BUTTON));
+            TEST_ASSERT_FALSE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_COUNTER));
+            TEST_ASSERT_FALSE(subghz_create_proto_has_field(
+                id, SUBGHZ_CREATE_FIELD_MFKEY));
+        }
     }
 }
 
@@ -408,6 +529,13 @@ int main(void)
     RUN_TEST(test_doorhan_433_metadata);
     RUN_TEST(test_holtek_ht12x_433_metadata);
     RUN_TEST(test_proto_names_match_registry);
+
+    /* Per-protocol metadata — KeeLoq family (Phase 8c-1) */
+    RUN_TEST(test_keeloq_metadata);
+    RUN_TEST(test_star_line_metadata);
+    RUN_TEST(test_jarolift_metadata);
+    RUN_TEST(test_keeloq_family_field_widths_fit_64_bit);
+    RUN_TEST(test_non_keeloq_field_widths_zero);
 
     /* Field-flag query */
     RUN_TEST(test_has_field_true_for_advertised_field);
