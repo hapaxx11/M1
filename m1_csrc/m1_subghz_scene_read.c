@@ -468,37 +468,74 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 {
                     /* Use the actual active frequency (preset or hopper) */
                     uint32_t freq = app->current_freq_hz;
+
+                    /* Snapshot ring state so we can detect when add_ex() drops
+                     * the new decode (delete_old_signals=false + ring full).
+                     * A drop leaves both head and count unchanged AND no
+                     * merge occurred — distinguishing it from a duplicate
+                     * merge (count unchanged but the top entry is updated
+                     * with the just-decoded protocol/key). */
+                    uint8_t head_before  = app->history.head;
+                    uint8_t count_before = app->history.count;
+
                     subghz_history_add_ex(&app->history, &decoded, freq,
                                           subghz_get_remove_duplicates_ext(),
                                           subghz_get_delete_old_signals_ext());
-                    app->last_decoded = decoded;
-                    app->has_decoded = true;
 
-                    /* Auto-switch to history view once we have signals
-                     * (Flipper-consistent: receiver always shows the list) */
-                    if (app->history.count > 0 && !app->detail_view)
+                    bool inserted = (app->history.head  != head_before) ||
+                                    (app->history.count != count_before);
+                    bool merged = false;
+                    if (!inserted && count_before > 0)
                     {
-                        app->history_view = true;
-                        /* Auto-select newest signal (index 0 = most recent) */
-                        app->history_sel = 0;
-                        app->history_scroll = 0;
-                    }
-
-                    /* Decode feedback: green LED flash + sound */
-                    m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
-                    if (app->sound)
-                        m1_buzzer_notification();
-
-                    /* Autosave: write decoded signal to SD if enabled */
-                    if (app->autosave)
-                    {
-                        const SubGHz_History_Entry_t *newest =
+                        /* If the top entry now matches the just-decoded
+                         * (protocol, key, bit_len), the add was a merge. */
+                        const SubGHz_History_Entry_t *top =
                             subghz_history_get(&app->history, 0);
-                        autosave_signal(newest);
+                        if (top &&
+                            top->info.protocol == decoded.protocol &&
+                            top->info.key      == decoded.key &&
+                            top->info.bit_len  == decoded.bit_len)
+                        {
+                            merged = true;
+                        }
                     }
 
-                    /* LED will auto-restore to RX color on next redraw cycle
-                     * (fast blink timer handles the flash duration) */
+                    /* Only treat as a real decode if inserted or merged.
+                     * A dropped decode must not update selection or autosave,
+                     * which would otherwise re-save an unrelated old entry. */
+                    if (inserted || merged)
+                    {
+                        app->last_decoded = decoded;
+                        app->has_decoded = true;
+
+                        /* Auto-switch to history view once we have signals
+                         * (Flipper-consistent: receiver always shows the list) */
+                        if (app->history.count > 0 && !app->detail_view)
+                        {
+                            app->history_view = true;
+                            /* Auto-select newest signal (index 0 = most recent) */
+                            app->history_sel = 0;
+                            app->history_scroll = 0;
+                        }
+
+                        /* Decode feedback: green LED flash + sound */
+                        m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
+                        if (app->sound)
+                            m1_buzzer_notification();
+
+                        /* Autosave: write decoded signal to SD if enabled.
+                         * Only on a real new insertion — merges already
+                         * re-saved the same key earlier. */
+                        if (app->autosave && inserted)
+                        {
+                            const SubGHz_History_Entry_t *newest =
+                                subghz_history_get(&app->history, 0);
+                            autosave_signal(newest);
+                        }
+
+                        /* LED will auto-restore to RX color on next redraw cycle
+                         * (fast blink timer handles the flash duration) */
+                    }
                 }
 
                 app->need_redraw = true;

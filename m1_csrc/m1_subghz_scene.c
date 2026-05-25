@@ -152,12 +152,24 @@ bool subghz_scene_search_and_pop_to(SubGhzApp *app, SubGhzSceneId target)
 {
     if (app == NULL || app->scene_depth == 0) return false;
 
-    uint8_t new_depth = subghz_scene_stack_pop_to_depth(
-        (const uint8_t *)app->scene_stack,
-        app->scene_depth,
-        (uint8_t)target);
+    /* SubGhzSceneId is an enum (compiler-chosen storage, typically int), so
+     * the scene stack cannot be aliased as `uint8_t *` — that would scan the
+     * raw bytes of the first few enum entries instead of one slot per entry.
+     * Copy the slots into a byte buffer for the pure-logic helper, which
+     * operates on uint8_t arrays. */
+    uint8_t bytes[SUBGHZ_SCENE_STACK_MAX];
+    for (uint8_t i = 0; i < app->scene_depth; ++i)
+        bytes[i] = (uint8_t)app->scene_stack[i];
 
-    if (new_depth == app->scene_depth) return false;  /* not found */
+    int idx = subghz_scene_stack_find(bytes, app->scene_depth, (uint8_t)target);
+    if (idx < 0) return false;  /* not found */
+
+    uint8_t new_depth = (uint8_t)(idx + 1);
+
+    /* Target already on top — nothing to pop or re-enter.  Reported as
+     * success so callers do not fall back to subghz_scene_pop() and
+     * accidentally pop the target itself. */
+    if (new_depth == app->scene_depth) return true;
 
     /* Pop scenes one at a time, calling on_exit for each, until target on top.
      * We do NOT call on_enter on intermediate parents — they are skipped over,
@@ -170,6 +182,8 @@ bool subghz_scene_search_and_pop_to(SubGhzApp *app, SubGhzSceneId target)
         app->scene_depth--;
     }
 
+    /* Reset tick cadence BEFORE on_enter so target scenes that opt into
+     * ticks during entry (via subghz_scene_set_tick_period) keep their rate. */
     reset_tick_state(app);
 
     const SubGhzSceneHandlers *next = get_handlers(target);
@@ -217,14 +231,14 @@ void subghz_scene_push(SubGhzApp *app, SubGhzSceneId scene)
         app->scene_stack[app->scene_depth++] = scene;
     }
 
+    /* Reset tick cadence BEFORE on_enter so the child can opt back in via
+     * subghz_scene_set_tick_period() during its own entry handler. */
+    reset_tick_state(app);
+
     /* Enter new scene */
     const SubGhzSceneHandlers *next = get_handlers(scene);
     if (next && next->on_enter)
         next->on_enter(app);
-
-    /* Reset tick cadence so the child does not inherit the parent's rate */
-    app->tick_period_ms = 0;
-    app->last_tick_ms   = HAL_GetTick();
 
     app->need_redraw = true;
 }
@@ -250,14 +264,14 @@ void subghz_scene_pop(SubGhzApp *app)
         return;
     }
 
+    /* Reset tick cadence BEFORE on_enter so the resumed parent can opt back
+     * in via subghz_scene_set_tick_period() during its own entry handler. */
+    reset_tick_state(app);
+
     /* Re-enter the scene that's now on top */
     const SubGhzSceneHandlers *prev = get_handlers(subghz_scene_current(app));
     if (prev && prev->on_enter)
         prev->on_enter(app);
-
-    /* Reset tick cadence so the resumed parent must opt back in to ticks */
-    app->tick_period_ms = 0;
-    app->last_tick_ms   = HAL_GetTick();
 
     app->need_redraw = true;
 }
@@ -277,14 +291,14 @@ void subghz_scene_replace(SubGhzApp *app, SubGhzSceneId scene)
         app->scene_stack[app->scene_depth++] = scene;
     }
 
+    /* Reset tick cadence BEFORE on_enter — replacement is a fresh scene
+     * and must be able to opt into ticks during its entry handler. */
+    reset_tick_state(app);
+
     /* Enter replacement scene */
     const SubGhzSceneHandlers *next = get_handlers(scene);
     if (next && next->on_enter)
         next->on_enter(app);
-
-    /* Reset tick cadence — replacement is a fresh scene */
-    app->tick_period_ms = 0;
-    app->last_tick_ms   = HAL_GetTick();
 
     app->need_redraw = true;
 }
