@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 6 (extract MoreRAW + DecodeRAW into scenes)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. This phase extracts the Read-Raw Loaded-state "More" submenu (Decode / Rename / Delete) and the offline decode-results overlay out of `m1_subghz_scene_read_raw.c` and into two dedicated scenes: `SubGhzSceneMoreRaw` and `SubGhzSceneDecodeRaw`. The active file path is shared via the new `SubGhzApp::raw_filepath` field; the Read Raw resume-from-child path detects a child-side delete and resets to the Start state. Removes ~340 lines of overlay state from Read Raw and aligns the architecture with Momentum's scene-per-screen model.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 7b (firmware submenu rendering shim)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7b adds `m1_submenu_draw(model, title, labels)` — the firmware-side rendering shim that pairs the Phase 7a `subghz_submenu_model` pure-logic widget with the existing Hapax font-aware menu renderer (`m1_scene_draw_menu`). The shim is a thin null-guarded adapter; all u8g2 drawing already lives in `m1_scene.c`. No scenes are migrated yet — that begins in Phase 7c. All 68 host tests pass.
 
 ## Phases
 
@@ -253,17 +253,25 @@
     fuzz pass.  Registered in `cmake/m1_01/CMakeLists.txt` so the
     firmware links it in for Phase 7b.  No scenes migrated yet — that
     starts in Phase 7c.
-  - **Phase 7b — Firmware rendering shim.**  🔲 Not started.  Builds
-    on the Phase 7a model and the existing font-aware helpers
-    (`m1_menu_item_h`, `m1_menu_max_visible`, `m1_menu_font`,
-    `M1_MENU_TEXT_W`, `M1_MENU_SCROLLBAR_X`).  Will provide a single
-    `m1_submenu_draw(model, title, labels[])` entry point that scenes
-    call from their `draw` callback.
+  - **Phase 7b — Firmware rendering shim.**  ✅ Complete.  Adds
+    `m1_csrc/m1_submenu.{h,c}` providing
+    `m1_submenu_draw(model, title, labels)`, a thin null-guarded
+    adapter that translates the Phase 7a model's
+    `item_count`/`selected`/`scroll_offset`/`visible_count` fields into
+    the existing `m1_scene_draw_menu()` renderer.  All u8g2 drawing,
+    geometry constants, and font-aware row sizing already live in
+    `m1_scene.c`, so the shim is intentionally minimal — callers manage
+    the model in `on_enter`/`on_event` and emit one
+    `m1_submenu_draw()` call from `draw`.  Registered in
+    `cmake/m1_01/CMakeLists.txt`.  No host tests required (rendering
+    is hardware-coupled per the CLAUDE.md "What NOT to unit test"
+    list); the model itself is covered by the Phase 7a 25-test suite.
+    All 68 host tests pass.
   - **Phase 7c+ — Migrate scenes.**  🔲 Not started.  Candidate scenes:
     Menu, SavedMenu, MoreRAW, Config (Sub-GHz config), Saved file
     browser, Add Manually picker, Bind Wizard protocol picker.
-- **Status**: 🔄 In progress (7a ✅; 7b/7c+ pending)
-- **Commit**: `Phase 7a: add subghz_submenu_model pure-logic widget + 25 host tests`
+- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c+ pending)
+- **Commit**: `Phase 7b: add m1_submenu_draw firmware rendering shim`
 
 ### Phase 8 — SetType / SetKey / SetSerial / SetButton / SetCounter
 - **Description**: Create-from-scratch flow gated by

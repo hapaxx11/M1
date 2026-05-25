@@ -560,6 +560,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_sub_ghz.c
     # === Generic Scene Framework ===
     ../../m1_csrc/m1_scene.c
+    ../../m1_csrc/m1_submenu.c
     # === Sub-GHz Scene UI (Flipper-inspired scene architecture) ===
     ../../m1_csrc/m1_subghz_scene.c
     ../../m1_csrc/m1_subghz_button_bar.c
