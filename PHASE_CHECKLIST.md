@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 7b (firmware submenu rendering shim)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7b adds `m1_submenu_draw(model, title, labels)` — the firmware-side rendering shim that pairs the Phase 7a `subghz_submenu_model` pure-logic widget with the existing Hapax font-aware menu renderer (`m1_scene_draw_menu`). The shim is a thin null-guarded adapter; all u8g2 drawing already lives in `m1_scene.c`. No scenes are migrated yet — that begins in Phase 7c. All 68 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-1 (migrate Menu scene to m1_submenu widget)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-1 is the first scene migration onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The Sub-GHz top-level Menu scene now delegates all scroll/selection math to the pure-logic model and all rendering to the shim, deleting ~85 lines of custom pack/unpack/up-down/wrap math and custom u8g2 draw. The persisted state slot is simplified from a 16-bit (sel | scroll<<8) pack to a single byte (sel only) since the model rederives scroll_offset from selected + visible_count on entry. No visual change — `m1_submenu_draw` calls the same `m1_scene_draw_menu()` renderer the scene previously inlined. All 68 host tests pass.
 
 ## Phases
 
@@ -267,11 +267,25 @@
     is hardware-coupled per the CLAUDE.md "What NOT to unit test"
     list); the model itself is covered by the Phase 7a 25-test suite.
     All 68 host tests pass.
-  - **Phase 7c+ — Migrate scenes.**  🔲 Not started.  Candidate scenes:
-    Menu, SavedMenu, MoreRAW, Config (Sub-GHz config), Saved file
-    browser, Add Manually picker, Bind Wizard protocol picker.
-- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c+ pending)
-- **Commit**: `Phase 7b: add m1_submenu_draw firmware rendering shim`
+  - **Phase 7c+ — Migrate scenes.**  🔄 In progress.
+
+    - **Phase 7c-1 — Sub-GHz Menu scene.**  ✅ Complete.
+      Replaces the scene's hand-rolled scroll/selection math and custom
+      u8g2 draw with `subghz_submenu_model_*` + `m1_submenu_draw()`.
+      Persisted state slot shrinks from a 16-bit (sel | scroll<<8) pack
+      to a single byte (selection only) — the model rederives
+      `scroll_offset` from `selected + visible_count` on every
+      `scene_on_enter`, and `set_visible_count` is called on every
+      `scene_on_event` / `draw` so a user text-size change picked up
+      while a child scene was on top resyncs correctly.  No visual
+      change — `m1_submenu_draw` calls the same `m1_scene_draw_menu()`
+      renderer the scene previously inlined.  All 68 host tests pass.
+
+    Candidate scenes still to migrate: SavedMenu, MoreRAW, Config
+    (Sub-GHz config), Saved file browser, Add Manually picker, Bind
+    Wizard protocol picker.
+- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2+ pending)
+- **Commit**: `Phase 7c-1: migrate Sub-GHz Menu scene to m1_submenu widget`
 
 ### Phase 8 — SetType / SetKey / SetSerial / SetButton / SetCounter
 - **Description**: Create-from-scratch flow gated by
