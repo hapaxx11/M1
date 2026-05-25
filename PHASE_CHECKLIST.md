@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-3 (SetKey hex-entry scene + subghz_hex_editor module)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-3 adds a new `SubGhzSceneSetKey` hex-digit editor scene pushed by the Phase 8b-2 SetType picker on OK. Renders a hex-digit editor sized to the picked protocol's `bit_count` and matches the legacy `sub_ghz_add_manually()` UX exactly (UP/DOWN cycle current digit, LEFT/RIGHT move cursor, OK fires). On OK the assembled value is masked via `subghz_create_proto_key_in_range()`, written to `0:/SUBGHZ/_setkey_tmp.sub` via `flipper_subghz_save_key()`, and `SubGhzSceneTransmitter` is pushed with `tx_autostart=true` for one-press fire UX. The hex-digit editing logic itself lives in a new host-tested pure-logic module `Sub_Ghz/subghz_hex_editor.c/h` (17 host tests under ASan+UBSan) so the same backing model can drive the upcoming Phase 8c SetSerial / SetButton / SetCounter editor scenes without duplicating cursor/digit code. SetType's OK handler now pushes SetKey instead of popping, so the full SetType→SetKey→Transmitter flow is live behind whichever caller invokes SetType; Phase 8b-4 will wire it into the Sub-GHz menu by replacing the blocking `sub_ghz_add_manually()` delegate. All 70 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 8b-4 (retire `sub_ghz_add_manually()` blocking delegate)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 8b-4 wires the Sub-GHz menu's "Add Manually" entry directly to the scene-native `SubGhzSceneSetType` picker (Phase 8b-2) → `SubGhzSceneSetKey` hex editor (Phase 8b-3) → `SubGhzSceneTransmitter` (Phase 3b) flow that was built in the previous sub-phases.  The legacy blocking event-loop `sub_ghz_add_manually()` and its supporting helpers (`_transmit`, `_draw_list`, `_draw_key_entry`) plus the hard-coded `subghz_add_manually_list[11]` table are deleted from `m1_csrc/m1_sub_ghz.c`; the thin scene wrapper `m1_csrc/m1_subghz_scene_add_manually.c` and the `SubGhzSceneAddManually` enum value are also removed.  The protocol catalog now lives entirely in `Sub_Ghz/subghz_create_proto.c` (host-tested) and is the single source of truth for "create from scratch" protocols going forward.  All 70 host tests pass.
 
 ## Phases
 
@@ -459,10 +459,23 @@
       `sub_ghz_add_manually()` delegate.  All 70 host tests pass.
 
     - **Phase 8b-4 — Retire `sub_ghz_add_manually()` blocking delegate.**
-      🔲 Not started.  Replace the Sub-GHz menu's "Add Manually" entry
-      with `subghz_scene_push(app, SubGhzSceneSetType)`; delete the
-      blocking event-loop function and the `subghz_add_manually_list[]`
-      table from `m1_csrc/m1_sub_ghz.c`.
+      ✅ Complete.  The Sub-GHz menu's "Add Manually" entry (item 11) now
+      targets `SubGhzSceneSetType` directly — the user lands on the
+      Phase 8b-2 protocol picker, presses OK to push the Phase 8b-3
+      hex-key editor, and presses OK again to push the Phase 3b
+      Transmitter scene with `tx_autostart=true`.  The legacy
+      event-loop `sub_ghz_add_manually()` and its three drawing/transmit
+      helpers, plus the hard-coded `subghz_add_manually_list[11]` table,
+      are deleted from `m1_csrc/m1_sub_ghz.c`.  The thin scene wrapper
+      `m1_csrc/m1_subghz_scene_add_manually.c`, the
+      `SubGhzSceneAddManually` enum value, the registry entry, and the
+      handler `extern` are also removed.  `m1_subghz_scene_add_manually.c`
+      is dropped from `cmake/m1_01/CMakeLists.txt` and
+      `sub_ghz_add_manually()` is removed from `m1_csrc/m1_sub_ghz.h`.
+      The protocol catalog now lives entirely in
+      `Sub_Ghz/subghz_create_proto.c` (host-tested) and is the single
+      source of truth for "create from scratch" protocols.  All 70 host
+      tests pass.
 
   - **Phase 8c — SetKey / SetSerial / SetButton / SetCounter editor scenes.**
     🔲 Not started.  Per-field hex/decimal editor scenes routed off the
@@ -470,8 +483,8 @@
     (FIELD_SERIAL | FIELD_BUTTON | FIELD_COUNTER | FIELD_MFKEY) on top of
     the existing counter-mode encoder in `Sub_Ghz/subghz_keeloq.c`.
 
-- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 pending; 8c pending)
-- **Commit**: `Phase 8b-3: add SetKey hex-entry scene + subghz_hex_editor module`
+- **Status**: 🔄 In progress (8a ✅; 8b-1 ✅; 8b-2 ✅; 8b-3 ✅; 8b-4 ✅; 8c pending)
+- **Commit**: `Phase 8b-4: retire sub_ghz_add_manually() blocking delegate`
 
 ### Phase 9 — SignalSettings scene
 - **Description**: Per-file CounterMode and counter/button byte editing on

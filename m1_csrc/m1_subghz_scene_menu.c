@@ -69,7 +69,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneFreqScanner,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
-    SubGhzSceneAddManually,
+    SubGhzSceneSetType,   /* "Add Manually" — Phase 8b-4 retired the blocking delegate */
     SubGhzSceneRemote,
     SubGhzSceneBindWizard,
 };

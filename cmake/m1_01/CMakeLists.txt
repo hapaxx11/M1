@@ -583,7 +583,6 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_freq_scanner.c
     ../../m1_csrc/m1_subghz_scene_weather_station.c
     ../../m1_csrc/m1_subghz_scene_brute_force.c
-    ../../m1_csrc/m1_subghz_scene_add_manually.c
     ../../m1_csrc/m1_subghz_scene_remote.c
     ../../m1_csrc/m1_subghz_scene_bind_wizard.c
     ../../m1_csrc/m1_subghz_scene_transmitter.c

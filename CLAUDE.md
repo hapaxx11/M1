@@ -1745,7 +1745,6 @@ are **actively called** as blocking delegates from their scene wrappers:
 | `sub_ghz_freq_scanner()` | `m1_subghz_scene_freq_scanner.c` | Blocking delegate |
 | `sub_ghz_weather_station()` | `m1_subghz_scene_weather_station.c` | Blocking delegate |
 | `sub_ghz_brute_force()` | `m1_subghz_scene_brute_force.c` | Blocking delegate |
-| `sub_ghz_add_manually()` | `m1_subghz_scene_add_manually.c` | Blocking delegate |
 | `sub_ghz_replay_flipper_file()` | `m1_subghz_scene_saved.c` (PACKET/key emulate path) and `m1_subghz_scene_playlist.c` | Direct call for TX; RAW files go through Read Raw scene instead |
 
 These are **not dead code** — they are the implementation behind scene wrappers.
@@ -1993,7 +1992,7 @@ order.  Do not remove items, reorder, or add "Back" entries.
 | 8 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
 | 9 | Weather Station | SubGhzSceneWeatherStation | Blocking delegate → `sub_ghz_weather_station()` |
 | 10 | Brute Force | SubGhzSceneBruteForce | Blocking delegate → `sub_ghz_brute_force()` |
-| 11 | Add Manually | SubGhzSceneAddManually | Blocking delegate → `sub_ghz_add_manually()` |
+| 11 | Add Manually | SubGhzSceneSetType | Scene-native (Phase 8b — protocol picker → SetKey hex editor → Transmitter) |
 | 12 | Remote | SubGhzSceneRemote | Scene-native (multi-button .rem remote control) |
 | 13 | Bind Remote | SubGhzSceneBindWizard | Scene-native (guided rolling-code binding wizard) |
 
