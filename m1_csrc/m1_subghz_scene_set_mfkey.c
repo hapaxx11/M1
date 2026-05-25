@@ -300,9 +300,15 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    (void)app;
-    /* Defensive cleanup — also covers the case where the Transmitter
-     * scene pops beyond SetMfKey without a prior resume. */
+    /* When pushing the Transmitter scene, subghz_scene_push() calls our
+     * on_exit BEFORE the Transmitter's on_enter consumes the temp .sub
+     * file.  push_transmitter_with_assembled_key() sets
+     * app->resume_from_child=true immediately before the push, so we
+     * use that flag as the "we're handing off, do not unlink" gate.
+     * On a real exit (BACK / search_and_pop) the flag is false and the
+     * defensive unlink runs as before. */
+    if (app && app->resume_from_child)
+        return;
     unlink_tmp();
 }
 

@@ -101,10 +101,18 @@ static uint64_t assemble_flipper_key(const char *protocol, uint32_t hop_enc,
 KeeLoqCreateResult subghz_keeloq_create_key(const KeeLoqCreateParams *params,
                                              uint64_t                 *key_out)
 {
-    if (!params || !key_out)
+    /* Honour the documented contract: on every failure path that has a
+     * usable out pointer, @p *key_out is set to 0.  Initialise BEFORE
+     * the @p params NULL-check so the only remaining failure mode that
+     * cannot zero @p *key_out is the one where @p key_out itself is
+     * NULL (i.e. the caller has nothing to receive the value). */
+    if (!key_out)
         return KEELOQ_CREATE_BAD_ARG;
 
     *key_out = 0ULL;
+
+    if (!params)
+        return KEELOQ_CREATE_BAD_ARG;
 
     if (!is_supported_keeloq(params->protocol))
         return KEELOQ_CREATE_BAD_PROTOCOL;
