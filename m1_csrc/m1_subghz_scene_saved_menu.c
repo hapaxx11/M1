@@ -20,6 +20,11 @@
  *
  * Phase 5 split: action menu / info / decode previously lived inside
  * `m1_subghz_scene_saved.c`; that scene is now a pure file browser.
+ *
+ * Phase 7c-3: action-menu rendering and scroll/selection math come from
+ * the reusable `subghz_submenu_model` + `m1_submenu_draw` widget so the
+ * menu honours `Settings → LCD & Notifications → Text Size` consistently
+ * with the Sub-GHz top-level Menu and the Read-Raw MoreRAW menu.
  */
 
 #include <stdint.h>
@@ -31,6 +36,7 @@
 #include "m1_lcd.h"
 #include "m1_storage.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_subghz_scene.h"
 #include "flipper_subghz.h"
 #include "m1_sub_ghz.h"
@@ -38,6 +44,7 @@
 #include "subghz_protocol_registry.h"
 #include "subghz_raw_decoder.h"
 #include "m1_virtual_kb.h"
+#include "subghz_submenu_model.h"
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
@@ -54,15 +61,17 @@ enum {
     SAVED_ACTION_DELETE,
 };
 
-static const char *raw_action_labels[]    = { "Decode", "Emulate", "Info", "Rename", "Delete" };
-static const char *parsed_action_labels[] = { "Emulate", "Info", "Rename", "Delete" };
+static const char *const raw_action_labels[]    = { "Decode", "Emulate", "Info", "Rename", "Delete" };
+static const char *const parsed_action_labels[] = { "Emulate", "Info", "Rename", "Delete" };
 
 #define RAW_ACTION_COUNT    5
 #define PARSED_ACTION_COUNT 4
 
-static uint8_t action_sel;
+/* Phase 7c-3: action menu uses the reusable pure-logic submenu model.
+ * Selection is reset on every scene_on_enter to match prior behaviour. */
+static subghz_submenu_model_t s_action_model;
 static uint8_t action_count;
-static const char **active_labels;
+static const char *const *active_labels;
 
 static bool in_info_screen;
 static bool is_raw_file;
@@ -195,6 +204,9 @@ static bool load_signal(const SubGhzApp *app)
         action_count  = PARSED_ACTION_COUNT;
         active_labels = parsed_action_labels;
     }
+    subghz_submenu_model_init(&s_action_model,
+                              action_count,
+                              M1_MENU_VIS(action_count));
     return true;
 }
 
@@ -205,7 +217,6 @@ static void scene_on_enter(SubGhzApp *app)
     decode_detail_view = false;
     decode_sel    = 0;
     decode_scroll = 0;
-    action_sel    = 0;
 
     if (!load_signal(app))
     {
@@ -380,6 +391,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     }
 
     /* --- Action menu --- */
+
+    /* Re-sync visible_count in case the user changed the text-size
+     * preference while a child scene was on top. */
+    subghz_submenu_model_set_visible_count(&s_action_model,
+                                           M1_MENU_VIS(action_count));
+
     switch (event)
     {
         case SubGhzEventBack:
@@ -387,17 +404,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventUp:
-            action_sel = (action_sel > 0) ? action_sel - 1 : action_count - 1;
+            subghz_submenu_model_up(&s_action_model);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
-            action_sel = (action_sel + 1) % action_count;
+            subghz_submenu_model_down(&s_action_model);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventOk:
-            handle_action(app, map_action(action_sel));
+            handle_action(app, map_action(s_action_model.selected));
             return true;
 
         default:
@@ -541,45 +558,42 @@ static void draw_decode_screen(void)
 
 static void draw_action_menu(const SubGhzApp *app)
 {
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    char dname[22];
-    strncpy(dname, app->saved_filename, 21);
-    dname[21] = '\0';
-    u8g2_DrawStr(&m1_u8g2, 2, 10, dname);
+    /* Phase 7c-3: render via the reusable submenu widget.  The filename
+     * (truncated to a manageable length) is used as the title; the model
+     * derives row height, scroll math, and scrollbar geometry from the
+     * user's text-size preference. */
+    char title[22];
+    strncpy(title, app->saved_filename, sizeof(title) - 1);
+    title[sizeof(title) - 1] = '\0';
 
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
-    /* Compute row height: 50px available (y=14..63) */
-    uint8_t row_h = 50 / action_count;          /* 12 for 4, 10 for 5 */
-    uint8_t text_ofs = (row_h >= 12) ? 9 : 8;   /* text baseline offset */
-
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    for (uint8_t i = 0; i < action_count; i++)
-    {
-        uint8_t y = 14 + i * row_h;
-        if (i == action_sel)
-        {
-            u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, row_h, 2);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-        }
-        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, active_labels[i]);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
+    /* Re-sync visible_count for the current text-size setting before
+     * drawing — matches the Phase 7c-1 / 7c-2 pattern. */
+    subghz_submenu_model_set_visible_count(&s_action_model,
+                                           M1_MENU_VIS(action_count));
+    m1_submenu_draw(&s_action_model, title, active_labels);
 }
 
 static void draw(SubGhzApp *app)
 {
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
     if (in_decode_screen)
+    {
+        m1_u8g2_firstpage();
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         draw_decode_screen();
+        m1_u8g2_nextpage();
+    }
     else if (in_info_screen)
+    {
+        m1_u8g2_firstpage();
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         draw_info_screen();
+        m1_u8g2_nextpage();
+    }
     else
+    {
+        /* m1_submenu_draw owns its own firstpage/nextpage. */
         draw_action_menu(app);
-
-    m1_u8g2_nextpage();
+    }
 }
 
 /*============================================================================*/

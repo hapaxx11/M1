@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-2 (migrate MoreRAW scene to m1_submenu widget)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-2 migrates the Read-Raw "More" submenu (Decode / Rename / Delete) onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The scene's ad-hoc `50 / N` row-height divider is replaced with the standard font-aware list renderer, so the menu now honours **Settings → LCD & Notifications → Text Size** consistently with every other scene menu. No behavioural change to the actions themselves. All 68 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-3 (migrate SavedMenu action menu to m1_submenu widget)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-3 migrates the Saved-file action menu (Decode / Emulate / Info / Rename / Delete) onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The scene's ad-hoc `50 / N` row-height divider is replaced with the standard font-aware list renderer, so the menu now honours **Settings → LCD & Notifications → Text Size** consistently with the Sub-GHz top-level Menu and the Read-Raw MoreRAW menu. The Info and offline Decode overlay screens are unchanged. No behavioural change to the actions themselves. All 68 host tests pass.
 
 ## Phases
 
@@ -300,11 +300,33 @@
       behavioural change to the Decode / Rename / Delete actions
       themselves.  All 68 host tests pass.
 
-    Candidate scenes still to migrate: SavedMenu, Config
-    (Sub-GHz config), Saved file browser, Add Manually picker, Bind
-    Wizard protocol picker.
-- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2 ✅; 7c-3+ pending)
-- **Commit**: `Phase 7c-2: migrate Read-Raw MoreRAW scene to m1_submenu widget`
+    - **Phase 7c-3 — SavedMenu action menu.**  ✅ Complete.
+      Migrates the Saved-file action menu (RAW: Decode / Emulate /
+      Info / Rename / Delete; parsed: Emulate / Info / Rename /
+      Delete) from its hand-rolled `50 / N` row-height divider onto
+      the reusable `subghz_submenu_model` + `m1_submenu_draw`
+      widget.  The model is re-initialised in `load_signal()` after
+      `action_count` / `active_labels` are picked for the current
+      file's type, so RAW and parsed files both get the correct
+      item count and labels.  Selection logic moves from
+      `action_sel` arithmetic to `subghz_submenu_model_up/down`;
+      `set_visible_count(M1_MENU_VIS(action_count))` is called on
+      every action-menu `scene_on_event` and on every action-menu
+      `draw` so a text-size change picked up while a child scene
+      (Read Raw, Transmitter, Delete, etc.) was on top resyncs
+      correctly when control returns.  The Info screen and the
+      offline Decode results screen are unchanged — they remain
+      overlay views with their own bespoke layouts, drawn inside
+      explicit `m1_u8g2_firstpage` / `nextpage` blocks; only the
+      action-menu branch defers page-flow ownership to
+      `m1_submenu_draw`.  No behavioural change to any underlying
+      action.  All 68 host tests pass.
+
+    Candidate scenes still to migrate: Config (Sub-GHz config),
+    Saved file browser, Add Manually picker, Bind Wizard protocol
+    picker.
+- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2 ✅; 7c-3 ✅; 7c-4+ pending)
+- **Commit**: `Phase 7c-3: migrate SavedMenu action menu to m1_submenu widget`
 
 ### Phase 8 — SetType / SetKey / SetSerial / SetButton / SetCounter
 - **Description**: Create-from-scratch flow gated by
