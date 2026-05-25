@@ -37,8 +37,10 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_subghz_scene.h"
 #include "m1_virtual_kb.h"
+#include "subghz_submenu_model.h"
 
 /*============================================================================*/
 /* Scene state                                                                */
@@ -56,7 +58,12 @@ static const char *const more_raw_labels[MORE_RAW_ITEM_COUNT] = {
     "Decode", "Rename", "Delete",
 };
 
-static uint8_t more_raw_sel;
+/* Phase 7c-2: migrated to the reusable submenu model.  The scene only
+ * owns the model itself — scroll/selection math comes from the pure-logic
+ * widget and rendering from `m1_submenu_draw`.  Selection is reset each
+ * time the scene is entered (matches the prior behaviour where
+ * `more_raw_sel = 0` was set unconditionally in `scene_on_enter`). */
+static subghz_submenu_model_t s_model;
 
 /*============================================================================*/
 /* Helpers                                                                    */
@@ -160,12 +167,19 @@ static void scene_on_enter(SubGhzApp *app)
         subghz_scene_pop(app);
         return;
     }
-    more_raw_sel = 0;
+    subghz_submenu_model_init(&s_model,
+                              MORE_RAW_ITEM_COUNT,
+                              M1_MENU_VIS(MORE_RAW_ITEM_COUNT));
     app->need_redraw = true;
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
+    /* Re-sync visible_count in case the user changed the text-size
+     * preference while a child scene was on top. */
+    subghz_submenu_model_set_visible_count(&s_model,
+                                           M1_MENU_VIS(MORE_RAW_ITEM_COUNT));
+
     switch (event)
     {
         case SubGhzEventBack:
@@ -173,19 +187,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventUp:
-            more_raw_sel = (more_raw_sel > 0)
-                           ? (uint8_t)(more_raw_sel - 1)
-                           : (uint8_t)(MORE_RAW_ITEM_COUNT - 1);
+            subghz_submenu_model_up(&s_model);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
-            more_raw_sel = (uint8_t)((more_raw_sel + 1) % MORE_RAW_ITEM_COUNT);
+            subghz_submenu_model_down(&s_model);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventOk:
-            switch (more_raw_sel)
+            switch (s_model.selected)
             {
                 case MORE_RAW_DECODE:
                     /* Decode pushes the DecodeRaw scene which loads the file
@@ -224,9 +236,6 @@ static void scene_on_exit(SubGhzApp *app)
 
 static void draw(SubGhzApp *app)
 {
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
     /* Title: truncated filename (or "RAW" fallback) */
     char title[22];
     const char *fname = (app->raw_filepath[0] != '\0')
@@ -234,28 +243,11 @@ static void draw(SubGhzApp *app)
     strncpy(title, fname, sizeof(title) - 1);
     title[sizeof(title) - 1] = '\0';
 
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
-    /* Items: same row-height computation pattern used by the SavedMenu scene. */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    const uint8_t row_h    = 50 / MORE_RAW_ITEM_COUNT;
-    const uint8_t text_ofs = (row_h >= 12) ? 9 : 8;
-
-    for (uint8_t i = 0; i < MORE_RAW_ITEM_COUNT; i++)
-    {
-        uint8_t y = 14 + i * row_h;
-        if (i == more_raw_sel)
-        {
-            u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, row_h, 2);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-        }
-        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, more_raw_labels[i]);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
-
-    m1_u8g2_nextpage();
+    /* Re-sync visible_count for the current text-size setting before
+     * drawing — matches the Phase 7c-1 Menu scene pattern. */
+    subghz_submenu_model_set_visible_count(&s_model,
+                                           M1_MENU_VIS(MORE_RAW_ITEM_COUNT));
+    m1_submenu_draw(&s_model, title, more_raw_labels);
 }
 
 /*============================================================================*/

@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-1 (migrate Menu scene to m1_submenu widget)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-1 is the first scene migration onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The Sub-GHz top-level Menu scene now delegates all scroll/selection math to the pure-logic model and all rendering to the shim, deleting ~85 lines of custom pack/unpack/up-down/wrap math and custom u8g2 draw. The persisted state slot is simplified from a 16-bit (sel | scroll<<8) pack to a single byte (sel only) since the model rederives scroll_offset from selected + visible_count on entry. No visual change — `m1_submenu_draw` calls the same `m1_scene_draw_menu()` renderer the scene previously inlined. All 68 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-2 (migrate MoreRAW scene to m1_submenu widget)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-2 migrates the Read-Raw "More" submenu (Decode / Rename / Delete) onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The scene's ad-hoc `50 / N` row-height divider is replaced with the standard font-aware list renderer, so the menu now honours **Settings → LCD & Notifications → Text Size** consistently with every other scene menu. No behavioural change to the actions themselves. All 68 host tests pass.
 
 ## Phases
 
@@ -281,11 +281,30 @@
       change — `m1_submenu_draw` calls the same `m1_scene_draw_menu()`
       renderer the scene previously inlined.  All 68 host tests pass.
 
-    Candidate scenes still to migrate: SavedMenu, MoreRAW, Config
+    - **Phase 7c-2 — Read-Raw MoreRAW scene.**  ✅ Complete.
+      Migrates the Read-Raw "More" submenu (Decode / Rename / Delete)
+      from its ad-hoc `50 / N` row-height divider onto the reusable
+      `subghz_submenu_model` + `m1_submenu_draw` widget.  The scene
+      now uses the standard font-aware list renderer so the menu
+      honours **Settings → LCD & Notifications → Text Size**
+      consistently with every other scene menu — at Large text size
+      the three items render at the same 13 px row height as the
+      Sub-GHz top-level Menu.  The scene does not persist its
+      selection (it resets to 0 on every entry, matching prior
+      behaviour), so no per-scene state slot is needed.  Selection
+      logic moves from local `more_raw_sel` arithmetic to
+      `subghz_submenu_model_up/down` (already covered by the Phase
+      7a 25-test suite); `set_visible_count` is called on every
+      `scene_on_event` / `draw` so a user text-size change picked
+      up while a child scene was on top resyncs correctly.  No
+      behavioural change to the Decode / Rename / Delete actions
+      themselves.  All 68 host tests pass.
+
+    Candidate scenes still to migrate: SavedMenu, Config
     (Sub-GHz config), Saved file browser, Add Manually picker, Bind
     Wizard protocol picker.
-- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2+ pending)
-- **Commit**: `Phase 7c-1: migrate Sub-GHz Menu scene to m1_submenu widget`
+- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2 ✅; 7c-3+ pending)
+- **Commit**: `Phase 7c-2: migrate Read-Raw MoreRAW scene to m1_submenu widget`
 
 ### Phase 8 — SetType / SetKey / SetSerial / SetButton / SetCounter
 - **Description**: Create-from-scratch flow gated by
