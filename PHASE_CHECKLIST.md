@@ -1,8 +1,8 @@
 # Phase Checklist — Sub-GHz Momentum Parity
 
 ## PR Metadata
-- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-3 (migrate SavedMenu action menu to m1_submenu widget)
-- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-3 migrates the Saved-file action menu (Decode / Emulate / Info / Rename / Delete) onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The scene's ad-hoc `50 / N` row-height divider is replaced with the standard font-aware list renderer, so the menu now honours **Settings → LCD & Notifications → Text Size** consistently with the Sub-GHz top-level Menu and the Read-Raw MoreRAW menu. The Info and offline Decode overlay screens are unchanged. No behavioural change to the actions themselves. All 68 host tests pass.
+- **PR Title**: Sub-GHz: Momentum parity — Phase 7c-4 (migrate Bind Wizard protocol picker to m1_submenu widget)
+- **PR Description**: Continues the multi-phase Sub-GHz Momentum-parity refactor. Phase 7c-4 migrates the Bind New Remote wizard's protocol-picker list (CAME Atomo / Nice FloR-S / Alutech AT-4N / DITEC GOL4 / KingGates Stylo4k) onto the Phase 7a/7b reusable `subghz_submenu_model` + `m1_submenu_draw` widget. The hand-rolled `bw_proto_sel` / `bw_proto_scroll` math and ~55-line `draw_proto_sel()` are replaced with calls to the standard font-aware list widget, so the picker now honours **Settings → LCD & Notifications → Text Size** consistently with every other scene menu. `set_visible_count(M1_MENU_VIS(5))` is called on every PROTO_SEL `scene_on_event` and `draw` so a text-size change picked up while a child scene (Transmitter, etc.) was on top resyncs correctly. No behavioural change to the wizard steps or binding flow. All 68 host tests pass.
 
 ## Phases
 
@@ -322,11 +322,45 @@
       `m1_submenu_draw`.  No behavioural change to any underlying
       action.  All 68 host tests pass.
 
-    Candidate scenes still to migrate: Config (Sub-GHz config),
-    Saved file browser, Add Manually picker, Bind Wizard protocol
-    picker.
-- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2 ✅; 7c-3 ✅; 7c-4+ pending)
-- **Commit**: `Phase 7c-3: migrate SavedMenu action menu to m1_submenu widget`
+    - **Phase 7c-4 — Bind Wizard protocol picker.**  ✅ Complete.
+      Migrates the Bind New Remote wizard's protocol-picker list
+      (CAME Atomo / Nice FloR-S / Alutech AT-4N / DITEC GOL4 /
+      KingGates Stylo4k) from its hand-rolled `bw_proto_sel` /
+      `bw_proto_scroll` math + ~55-line custom `draw_proto_sel()`
+      onto the reusable `subghz_submenu_model` + `m1_submenu_draw`
+      widget.  A new `proto_picker_init()` helper populates a
+      `s_proto_labels[]` array from `subghz_new_remote_proto_label()`
+      (stable static strings owned by `subghz_new_remote_gen.c`) and
+      initialises `s_proto_model` to `BIND_PROTO_COUNT` items.  The
+      picker now uses the standard font-aware list renderer so it
+      honours **Settings → LCD & Notifications → Text Size**
+      consistently with the Sub-GHz top-level Menu, the Read-Raw
+      MoreRAW menu, and the SavedMenu action menu — at Large text
+      size the five protocols render at 13 px row height.  Selection
+      logic moves from local arithmetic to
+      `subghz_submenu_model_up/down`;
+      `set_visible_count(M1_MENU_VIS(BIND_PROTO_COUNT))` is called on
+      every PROTO_SEL `scene_on_event` and on every PROTO_SEL `draw`
+      so a text-size change picked up while a child scene
+      (Transmitter, etc.) was on top resyncs correctly when control
+      returns.  Wizard step screens, generating screen, done screen,
+      and save-error screen are unchanged — only the protocol-picker
+      branch defers page-flow ownership to `m1_submenu_draw`.  The
+      resume-from-child path leaves the model untouched so the
+      previously-selected protocol stays selected on pop-back, which
+      matches the prior behaviour of untouched `bw_proto_sel`.  No
+      behavioural change to the wizard steps or binding flow.  All
+      68 host tests pass.
+
+    Candidate scenes still to migrate: Config (Sub-GHz config — does
+    not fit the simple-label-list shape because of LEFT/RIGHT value
+    columns with `<` `>` arrows), Saved file browser (delegates to
+    the generic `storage_browse()` — not a scene-native list), Add
+    Manually picker (blocking delegate inside `sub_ghz_add_manually()`
+    — not a scene-native list).  Phase 7c is functionally complete
+    for all scene-native list candidates.
+- **Status**: 🔄 In progress (7a ✅; 7b ✅; 7c-1 ✅; 7c-2 ✅; 7c-3 ✅; 7c-4 ✅; remaining candidates are not scene-native lists)
+- **Commit**: `Phase 7c-4: migrate Bind Wizard protocol picker to m1_submenu widget`
 
 ### Phase 8 — SetType / SetKey / SetSerial / SetButton / SetCounter
 - **Description**: Create-from-scratch flow gated by
