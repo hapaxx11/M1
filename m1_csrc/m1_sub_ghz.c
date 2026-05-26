@@ -3425,7 +3425,12 @@ static uint8_t sub_ghz_raw_samples_init(void)
 		error = m1_sdm_get_logging_error();
 		if ( error )
 			break;
-		sdcard_dat_buffer_base = malloc(M1_SDM_MIN_BUFFER_SIZE);
+		/* Allocate from the FreeRTOS heap (pvPortMalloc / vPortFree).
+		 * The newlib heap (_sbrk-backed) was shrunk significantly by the
+		 * SiN360 binary-SPI BSS expansion and can no longer reliably hold
+		 * these buffers, even on a fresh boot.  Mirrors the v0.9.1.14 fix
+		 * applied to sub_ghz_ring_buffers_init() for Read Raw / Record. */
+		sdcard_dat_buffer_base = pvPortMalloc(M1_SDM_MIN_BUFFER_SIZE);
 		if (sdcard_dat_buffer_base==NULL)
 		{
 			error = 1;
@@ -3436,7 +3441,10 @@ static uint8_t sub_ghz_raw_samples_init(void)
 		subghz_back_buffer_size = SUBGHZ_RAW_DATA_SAMPLES_MAX;
 		while ( true )
 		{
-			subghz_back_buffer_base = malloc(subghz_back_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
+			/* NOTE: the base pointer is over-allocated by SUBGHZ_DMA_ALIGN-1 so
+			 * the aligned subghz_back_buffer pointer stays within the allocation;
+			 * always free subghz_back_buffer_base, never the aligned pointer. */
+			subghz_back_buffer_base = pvPortMalloc(subghz_back_buffer_size*sizeof(uint16_t) + SUBGHZ_DMA_ALIGN - 1);
 			if ( subghz_back_buffer_base )
 			{
 				subghz_back_buffer = (uint16_t *)(((uintptr_t)subghz_back_buffer_base + SUBGHZ_DMA_ALIGN - 1) & ~(uintptr_t)(SUBGHZ_DMA_ALIGN - 1));
@@ -3472,7 +3480,7 @@ static uint8_t sub_ghz_raw_samples_init(void)
 		sdcard_dat_buffer[sdcard_dat_read_size] = '\0'; // Add end of string to the buffer
 		sdcard_buffer_run_ptr = sdcard_dat_buffer;
 
-		psdcard_dat_buffer = malloc(sdcard_dat_read_size + 1);
+		psdcard_dat_buffer = pvPortMalloc(sdcard_dat_read_size + 1);
 		if ( psdcard_dat_buffer==NULL )
 		{
 			error = 1;
@@ -3524,7 +3532,7 @@ static uint8_t sub_ghz_raw_samples_init(void)
 	} while(0); // while (0)
 
 	if ( psdcard_dat_buffer!=NULL )
-		free(psdcard_dat_buffer);
+		vPortFree(psdcard_dat_buffer);
 
 	return error;
 
@@ -3542,13 +3550,14 @@ static void sub_ghz_raw_samples_deinit(bool discard_samples)
 {
 	if ( subghz_back_buffer )
 	{
-		free(subghz_back_buffer_base);
+		/* Must use vPortFree — allocated with pvPortMalloc in raw_samples_init */
+		vPortFree(subghz_back_buffer_base);
 		subghz_back_buffer = NULL;
 		subghz_back_buffer_base = NULL;
 	}
 	if ( sdcard_dat_buffer_base )
 	{
-		free(sdcard_dat_buffer_base);
+		vPortFree(sdcard_dat_buffer_base);
 		sdcard_dat_buffer_base = NULL;
 		sdcard_dat_buffer = NULL;
 	}
