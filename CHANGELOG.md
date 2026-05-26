@@ -9,6 +9,457 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.31] - 2026-05-26
+
+### Added
+
+- **Sub-GHz: button-cycling capability lookup** — new pure-logic
+  `subghz_button_caps` module maps a protocol name to its
+  `(supports_cycling, button_count)` tuple. Covers KeeLoq (incl.
+  Jarolift and Star Line), Nice FloR-S (16 codes), CAME Atomo/TWEE,
+  Alutech AT-4N, KingGates Stylo4k, DITEC_GOL4, Scher-Khan, and Toyota.
+  Phase 4a scaffold — wired into the firmware build but not yet
+  consumed by the Transmitter scene.
+- **Sub-GHz: Transmitter button cycling actually mutates the transmitted
+  key (Phase 4c)** — pressing LEFT/RIGHT on the Transmitter scene's
+  READY screen for a rolling-code remote now re-encodes the OOK PWM
+  waveform with the selected button index, instead of only updating
+  the on-screen "Btn X/Y" indicator.  Supported on KeeLoq, Jarolift,
+  and Star Line (the protocols whose button is a plain-bit field that
+  the M1 encoder path honours).  For other protocols listed in the
+  button-cycling capability table (Nice FloR-S, CAME Atomo/TWEE,
+  Alutech AT-4N, KingGates Stylo4k, DITEC GOL4, Scher-Khan, Toyota)
+  the cycling UI is suppressed at scene entry until per-protocol
+  re-encoders land in a follow-up phase — preventing a misleading
+  indicator that has no effect on the transmitted signal.  New
+  pure-logic `subghz_button_override` module + 16-test host suite
+  under ASan+UBSan; wiring is gated by a per-prepare override slot
+  that the Flipper-format converter latches and clears for each
+  TX_START.
+- **Sub-GHz Create-from-scratch — static-OOK catalog (Phase 8b-1, pure logic)** —
+  extended `Sub_Ghz/subghz_create_proto.c/h` with the 12 static-OOK families
+  served today by the legacy "Add Manually" delegate: Princeton 433/315, Nice
+  FLO 12/24-bit, CAME 12/24-bit + CAME 868, Linear 300, GateTX 433, DoorHan
+  315/433, and Holtek HT12X.  Catalog count grew from 5 to 17 entries.  Each
+  new entry advertises `SUBGHZ_CREATE_FIELD_KEY` only (matching the Add
+  Manually UX of "pick a protocol, enter a hex key").  The `proto_name`
+  field carries the canonical registry name — fixing two latent bugs in the
+  legacy strchr-based name stripping (`Nice FLO 12b` → "Nice" and
+  `Gate TX 433` → "Gate") that today rely on the encoder's strstr() fallback.
+  Phase 8b-2 will scaffold the SetType scene that consumes this catalog;
+  Phase 8b-4 will retire the blocking `sub_ghz_add_manually()` delegate.
+- Host-only change — no firmware behavioural change yet.  35 host tests under
+  ASan+UBSan (up from 18) cover the extended catalog shape, per-protocol
+  metadata regression for all 12 new entries, key-range truncation for the
+  narrowest catalog entry (Linear 10-bit), unique-label invariant, and the
+  "freq sits in a supported ISM band" invariant.  All 69 host tests pass.
+- **Sub-GHz Create-from-scratch — SetType picker scene (Phase 8b-2)** —
+  New `SubGhzSceneSetType` scaffolds the Momentum-style protocol picker for
+  the "Create from scratch" flow.  Backed by the Phase 8a/8b-1
+  `subghz_create_proto_*` catalog (17 entries: 5 rolling-code remotes + 12
+  static-OOK families), it uses the standard `subghz_submenu_model` +
+  `m1_submenu_draw` widget so the list automatically follows the user's
+  Text-Size preference and shows the scrollbar pattern.  Selection persists
+  across pushes/pops via the Phase 2 per-scene state slot.  On OK the
+  picked id is stored in a new `SubGhzApp::create_proto_id` field and the
+  scene pops back to its parent; Phase 8b-3 will swap the pop for a push
+  of the SetKey hex-entry scene, and Phase 8b-4 will retire the legacy
+  `sub_ghz_add_manually()` blocking delegate.  Host-only — no callers yet
+  push the scene, so this is firmware behaviourally inert until Phase 8b-4.
+- **Sub-GHz: Create-from-scratch KeeLoq field editors** — Adds four new
+  scenes (`SubGhzSceneSetSerial` / `SubGhzSceneSetButton` /
+  `SubGhzSceneSetCounter` / `SubGhzSceneSetMfKey`) backing the upcoming
+  KeeLoq-family entry flow.  The three numeric editors reuse the
+  host-tested hex-digit editor and are sized via the Phase 8c-1 catalog's
+  `serial_bits` / `button_bits` / `counter_bits`.  The manufacturer picker
+  lists every entry in the currently-loaded `keeloq_mfcodes` table (or
+  the built-in flash vault) so users can select the master key whose
+  cipher will be used to encrypt the assembled hop word.  A new
+  `keeloq_mfkeys_get_at()` accessor allows ordered iteration of the
+  in-memory table.  No user-visible behaviour change yet — the scenes
+  are registered but not yet linked into a flow; the next phase will
+  chain SetType → SetSerial → SetButton → SetCounter → SetMfKey →
+  Transmitter for the three KeeLoq-family protocols.
+- **Sub-GHz Phase 9e-1 — Counter-edit capability probe** — new pure-logic
+  accessor `subghz_signal_fields_counter_edit_status(protocol, *out_reason)`
+  classifies a protocol's counter-edit support as SUPPORTED (KeeLoq family),
+  DEFERRED with a documented blocker (Nice FloR-S, CAME Atomo, Alutech AT-4N,
+  Phoenix V2), or UNSUPPORTED.  The Saved → Signal Settings entry is now
+  offered for the four deferred protocols and displays the specific blocker
+  (e.g. "Nice FloR-S: HCS perm. table req.") so users can distinguish a
+  roadmap protocol from a wholly unsupported one.  KeeLoq-family editing
+  (Button / Counter / CounterMode) is unchanged.  7 new host tests; 72 host
+  tests passing under ASan+UBSan.
+- **Sub-GHz: KeeLoq family in the Create-from-scratch catalog (Phase 8c-1)** —
+  Extended the pure-logic protocol catalog in `Sub_Ghz/subghz_create_proto.c/h`
+  from 17 to 20 entries by adding KeeLoq 433, Star Line 433, and Jarolift 433.
+  Unlike the existing entries which expose a single opaque hex key, these
+  KeeLoq-cipher counter-mode protocols advertise discrete `FIELD_SERIAL`,
+  `FIELD_BUTTON`, `FIELD_COUNTER`, and `FIELD_MFKEY` flags — the foundation
+  for the per-field editor scenes coming in Phase 8c-2/3.  Adds new
+  `serial_bits` / `button_bits` / `counter_bits` metadata so the upcoming
+  editor cursors and the encoder assembler can size and mask user-entered
+  values correctly.  Host-tested only — no firmware behavioural change yet.
+- **Sub-GHz: create-from-scratch protocol catalog (Phase 8a)** — new
+  `Sub_Ghz/subghz_create_proto.c/h` pure-logic module exposes the protocol
+  catalog and per-protocol editable-field bitmask (FIELD_KEY / FIELD_SERIAL /
+  FIELD_BUTTON / FIELD_COUNTER / FIELD_MFKEY) that the upcoming Type Picker
+  and per-field editor scenes will consume.  No user-visible change yet.
+- Sub-GHz: `subghz_endless_tx` TX repeat / endless-hold policy state machine —
+  models SINGLE-mode N-burst transmissions and ENDLESS-mode hold-OK
+  continuous TX with graceful N-repeat finalisation on release.  Pure-logic
+  foundation for the upcoming Transmitter scene (Phase 3b).  Phase 3a of the
+  Momentum parity migration; 19 host tests under ASan+UBSan covering every
+  legal transition, abort paths, debounce edge cases, and realistic
+  KeeLoq / remote burst sequences.
+- **Sub-GHz: Receiver history Remove Duplicates / Delete Old Signals toggles** —
+  two new rows in Sub-GHz → Config control how the receiver's signal history
+  ring behaves.  `Remove Dups` (default ON) keeps the existing Flipper-parity
+  merge-on-duplicate behaviour; turning it OFF makes every decode produce a
+  new history row.  `Delete Old` (default ON) keeps the existing
+  oldest-eviction policy when the 50-entry ring fills up; turning it OFF
+  preserves the oldest captures and drops new arrivals instead.  Both
+  settings persist across reboot via `settings.cfg`
+  (`subghz_remove_duplicates`, `subghz_delete_old_signals`).
+- **Sub-GHz: KeeLoq counter decode / encode pure-logic helpers** — new
+  `subghz_signal_fields_keeloq_counter_decode()` /
+  `subghz_signal_fields_keeloq_counter_encode()` in
+  `Sub_Ghz/subghz_signal_fields.{c,h}` provide a named, host-testable API
+  for reading and substituting the 16-bit rolling counter inside a KeeLoq
+  encrypted HOP word.  Foundation for the upcoming SignalSettings
+  per-file counter editor (Phase 9c-2 / 9c-3).  6 new host tests cover
+  round-trip, low-16-plaintext-bit preservation under substitution, and
+  equivalence with `keeloq_increment_hop()` for the counter+1 case
+  (82 host tests total, all passing under ASan+UBSan).
+- **Sub-GHz: `CounterMode:` `.sub` field parser + writer (Phase 9d-2)** — Flipper
+  Key files may now carry an optional `CounterMode:` line (`Increment` or
+  `Static`) that selects the KeeLoq-family replay policy.  Files that omit the
+  field, carry `Increment`, or carry an unknown value all load as INCREMENT, so
+  every existing `.sub` file replays unchanged.  A new
+  `flipper_subghz_save_key_full()` helper writes both `Manufacture:` and
+  `CounterMode:` and elides the line when the value is the default Increment to
+  keep Phase 9b/9c saved files byte-identical.  The Phase 9b
+  `flipper_subghz_save_key_with_manufacture()` API is preserved and now
+  delegates to the new helper.  Wiring the toggle to the SignalSettings UI and
+  the replay path lands in Phase 9d-3.
+- **Sub-GHz: KeeLoq CounterMode toggle in SignalSettings + replay-path wiring (Phase 9d-3)** —
+  The `CounterMode:` field added in Phase 9d-2 is now editable and honoured at
+  transmit time.  The SignalSettings scene gains a third selectable row,
+  `CntMode: Increment / Static`, which is always reachable on supported
+  KeeLoq-family files (toggling does not require the manufacturer key to be
+  resolvable, unlike the Counter editor).  OK on this row flips the value in
+  place and persists the change via `flipper_subghz_save_key_full()`,
+  preserving `Manufacture:` and the other fields.  The Phase 9b Button writer
+  and Phase 9c-3 Counter writer were switched to the same `save_key_full()`
+  helper so that editing Button or Counter on a Static file no longer silently
+  resets the mode back to Increment.  The KeeLoq replay path in `m1_sub_ghz.c`
+  now parses the `CounterMode:` field directly from the `.sub` stream and
+  forwards it to `KeeLoqEncParams::static_counter`, so Static-mode `.sub`
+  files re-emit the captured encrypted hop word verbatim instead of running
+  the decrypt → counter+1 → re-encrypt path.  Two new host tests cover the
+  load → save round-trip preservation for both modes (69 total in
+  `test_flipper_subghz`).
+- **Sub-GHz: KeeLoq Create-from-scratch from Add Manually** — Picking KeeLoq, Star Line, or Jarolift in Sub-GHz → Add Manually now opens the Serial → Button → Counter → Manufacturer editor flow.  The final picker assembles a 64-bit Flipper-format key (Normal/Simple learning derivation + KeeLoq cipher hop encrypt), writes a temp `.sub` with the `Manufacture:` field set, and pushes the Transmitter scene with auto-start so the signal fires immediately.  Subsequent presses route through the existing KeeLoq counter-mode replay path so each transmission carries an incremented rolling counter.
+- **Sub-GHz: KeeLoq Static counter mode (Phase 9d-1)** — `keeloq_encode_replay()`
+  now accepts a `static_counter` parameter that, when set, re-emits the captured
+  encrypted hop word verbatim instead of incrementing the 16-bit rolling counter.
+  Pure-logic foundation only; the existing replay path continues to default to
+  Increment mode.  A user-facing toggle to select Increment vs Static per `.sub`
+  file lands in Phase 9d-3.
+- Sub-GHz: per-scene 32-bit state slots — scenes can now stash UI state
+  (cursor index, sub-mode, last-selected target) in a typed per-scene slot
+  via `subghz_scene_set_state()` / `subghz_scene_get_state()` instead of
+  file-scope statics.  Phase 2 of the Momentum parity migration; the menu
+  scene is migrated as the first user.  Pure-logic module with 12 host
+  tests under ASan+UBSan.
+- **Sub-GHz: polymorphic Info-screen renderer (Phase 11-1 foundation)** —
+  added a `SubGhzGetStringFn get_string` function-pointer slot to
+  `SubGhzProtocolDef`, allowing each protocol to render its own
+  human-readable "Signal Info" text instead of every consumer
+  hard-coding a generic "Proto / Key / Bits / TE" layout.  Installed
+  the first concrete renderer (`subghz_signal_format_keeloq_info`) on
+  the KeeLoq, Star Line, and Jarolift entries — these files now show
+  decomposed Serial / Button / EncHop fields on the Saved Info screen.
+  All other parsed protocols fall through to the existing generic
+  layout unchanged.  No firmware-functional behaviour change for any
+  non-KeeLoq-family file.
+- **Sub-GHz: Scene-manager API wire-up (Phase 3b-2a)** — exposes the Phase 10
+  polish primitives to scene code.  Adds `subghz_scene_search_and_pop_to`
+  (deep navigation back to a known parent), `subghz_scene_send_custom_event` /
+  `subghz_scene_custom_payload` (32-bit payload routing), and
+  `subghz_scene_set_tick_period` (per-scene wall-clock tick cadence) to the
+  `m1_subghz_scene.h/c` API.  Two new event ids — `SubGhzEventTick` and
+  `SubGhzEventCustom` — let scenes drive animation and route typed inter-scene
+  messages.  The scene-manager main loop now polls at the minimum of the
+  active RX/hopper cadence and the current scene's tick period, dispatching
+  `SubGhzEventTick` on schedule using the wrap-safe pure-logic helper.  All
+  scene transitions reset the tick cadence so a child scene cannot inherit
+  its parent's rate.  Foundation for the upcoming Transmitter scene
+  (Phase 3b-2b) — no behaviour change for existing scenes.
+- **Sub-GHz: scene-manager polish primitives (Phase 10)** — host-testable
+  pure-logic foundation for the upcoming Transmitter scene.  Adds
+  `subghz_scene_stack_find()` and `subghz_scene_stack_pop_to_depth()`
+  (the search-and-pop-to primitive), `subghz_scene_tick_due()` (wrap-safe
+  periodic-tick scheduler for animation cadence), and the
+  `subghz_scene_custom_payload_t` typedef that will back custom events
+  carrying a 32-bit payload word.  19 new unit tests under ASan + UBSan.
+- **Sub-GHz: SetKey hex-entry scene (Phase 8b-3)** — adds the
+  `SubGhzSceneSetKey` hex-digit editor scene pushed by the SetType
+  picker after the user picks a protocol. Renders a hex-digit editor
+  sized to the picked protocol's bit width, lets the user build a
+  64-bit key with UP/DOWN cycling a single digit and LEFT/RIGHT moving
+  the cursor, then writes a temp `.sub` and pushes the Transmitter
+  scene to fire the signal. Hex-digit editing logic extracted into a
+  new host-tested pure-logic module `Sub_Ghz/subghz_hex_editor.c/h`
+  (17 host tests under ASan+UBSan) so the same backing model can drive
+  the upcoming KeeLoq SetSerial / SetButton / SetCounter editor scenes.
+- Sub-GHz: pure-logic `subghz_signal_fields` module that extracts and
+  reassembles {serial, button, encrypted-hop} fields from the 64-bit
+  Flipper SubGhz Key File representation for KeeLoq, Star Line, and
+  Jarolift remotes.  Foundation for the upcoming SignalSettings scene
+  (per-file counter / button editing).  20 new host tests cover known
+  layouts for both KeeLoq/Jarolift and Star Line, round-trip
+  invariants, a cross-check against the Phase 8c-3
+  `subghz_keeloq_create_key()` flow, bad-argument paths, and
+  over-range field masking; all pass under ASan+UBSan.
+- **Sub-GHz: SignalSettings live counter display** — The Saved → Settings
+  scene now decrypts and displays the live 16-bit rolling counter for
+  KeeLoq-family `.sub` files (KeeLoq / Star Line / Jarolift), replacing
+  the prior `(9c)` placeholder.  Counter resolution uses the file's
+  `Manufacture:` line + the loaded manufacturer-key table; files using
+  Secure learning, missing a `Manufacture:` line, or whose manufacturer
+  is absent from the keystore display `Counter: key?` so the gating
+  cause is visible at a glance.  Cross-scene accessors
+  `subghz_signal_settings_has_counter()` / `_get_counter()` are exposed
+  for the upcoming editable-counter editor.
+- **Sub-GHz: editable rolling counter for KeeLoq-family `.sub` files** —
+  the per-file Signal Settings scene now sports a UP/DOWN selection
+  cursor; OK on the Counter row opens a 16-bit hex editor seeded with the
+  decoded counter and, on save, re-encrypts the HOP word with the
+  resolved manufacturer key (preserving the lower 16 plaintext bits) and
+  writes the file back with its `Manufacture:` line intact.  The Counter
+  row is only reachable when the manufacturer key is present in the
+  keystore and the learning mode is Normal or Simple; otherwise the
+  existing `key?` placeholder is shown and the cursor cannot move to it.
+- **Sub-GHz: Signal Settings scene (read-only scaffold)** — Saved → Settings
+  now opens a read-only per-file display showing the Serial, Button, and
+  encrypted HOP word for KeeLoq / Star Line / Jarolift `.sub` files.
+  Foundation for upcoming per-file button and counter editing.
+- **Sub-GHz: pure-logic `subghz_submenu_model` widget foundation** —
+  Adds a 4-byte hardware-independent model for scrollable list scenes
+  (item_count / selected / scroll_offset / visible_count) with wrap-around
+  navigation, scroll-window anchoring, and empty/zero-visible safety.
+  First step toward consolidating the hand-rolled list code in every
+  Sub-GHz menu scene onto a shared widget.  25 host tests under ASan+UBSan
+  pin every invariant.
+- **Sub-GHz: Phase 7b firmware submenu rendering shim** — `m1_submenu_draw(model, title, labels)` adapts the Phase 7a `subghz_submenu_model` pure-logic widget onto the existing Hapax font-aware menu renderer. Thin wrapper around `m1_scene_draw_menu()` with null-pointer guards; lays the groundwork for Phase 7c+ scene migrations (Menu, SavedMenu, MoreRAW, Config, Saved file browser, Add Manually picker, Bind Wizard protocol picker).
+- **Sub-GHz Transmitter scene: button-cycling capability plumbing (Phase 4b)** —
+  the Transmitter scene now queries `subghz_button_caps_for_protocol()` on entry
+  using the protocol name supplied by the caller (`SubGhzApp::tx_protocol_name`)
+  and surfaces an on-screen "Btn X/Y" indicator with LEFT/RIGHT cycle hints for
+  rolling-code protocols that M1 can re-encode (KeeLoq family, Nice FloR-S, CAME
+  Atomo/TWEE, Alutech AT-4N, KingGates Stylo4k, DITEC GOL4, Scher-Khan, Toyota).
+  The Saved scene and Bind Wizard populate the protocol name from the loaded
+  signal so cycling is enabled there; Playlist and Remote leave it empty since
+  their UX is automated playback / one-shot fire.  Key re-encoding for the
+  selected button still lands in Phase 4c — for now LEFT/RIGHT only updates the
+  visible button index.
+- **Sub-GHz: Transmitter scene controller (Phase 3b-1)** — pure-logic state
+  machine that drives the upcoming Transmitter scene.  Sits one layer above
+  the Phase 3a `subghz_endless_tx` engine; owns the READY / TX / EXITING
+  phase and translates scene events (OK press/release, TX burst complete,
+  BACK, teardown-done, LEFT/RIGHT) into scene actions (TX start, next burst,
+  teardown, exit, button cycle).  Hardware-independent; 21 host tests under
+  ASan+UBSan.  Foundation for migrating Saved/Playlist/Remote/BindWizard off
+  blocking replay wrappers in Phase 3b-2.
+- **Sub-GHz: Transmitter scene scaffold** — new `SubGhzSceneTransmitter`
+  implements controller-driven async-TX state machine for key/PACKET/Flipper
+  files, with animated dots, burst counter, and clean prepare/start error
+  recovery.  Phase 3b-2b-i — no callers migrated yet; Saved/Playlist/Remote/
+  BindWizard continue to use the legacy blocking replay wrappers.
+- **Sub-GHz: TX/RX lifecycle state machine (Phase 1 of Momentum parity work)** —
+  introduce `subghz_txrx_state` as a pure-logic, host-tested state machine that
+  models the SI4463 radio lifecycle (OFF / IDLE / RX_PASSIVE / RX_ACTIVE /
+  TX_BLOCK / TX_ASYNC) and enforces legal transitions.  Foundation for
+  subsequent phases that migrate scenes onto a centralised radio wrapper.
+
+### Changed
+
+- **Sub-GHz: retire legacy `sub_ghz_add_manually()` blocking delegate (Phase 8b-4)** —
+  The "Add Manually" entry in the Sub-GHz menu now routes directly to the
+  scene-native `SubGhzSceneSetType` protocol picker (Phase 8b-2), which pushes
+  `SubGhzSceneSetKey` (Phase 8b-3) for hex-key entry and `SubGhzSceneTransmitter`
+  (Phase 3b) for one-press fire.  The legacy event-loop function
+  `sub_ghz_add_manually()` and its supporting helpers
+  (`sub_ghz_add_manually_transmit`, `sub_ghz_add_manually_draw_list`,
+  `sub_ghz_add_manually_draw_key_entry`) plus the hard-coded
+  `subghz_add_manually_list[11]` table are removed from `m1_csrc/m1_sub_ghz.c`.
+  The thin scene wrapper `m1_csrc/m1_subghz_scene_add_manually.c` and the
+  `SubGhzSceneAddManually` enum value are also removed.  The protocol catalog
+  now lives in `Sub_Ghz/subghz_create_proto.c` (host-tested) and is the single
+  source of truth for "create from scratch" protocols going forward.  No
+  user-visible behaviour change beyond the new picker UX; all 70 host tests
+  still pass.
+- **Sub-GHz Playlist: async transmitter scene push** — Playlist playback no
+  longer runs a synchronous TX loop on the main task.  Each file in the
+  playlist now pushes the async-driven `SubGhzSceneTransmitter`; pop-back
+  is detected via `resume_from_child` to advance to the next file (on
+  natural TX completion) or stop (on user abort).  Removes the
+  `vTaskDelay`-based inter-signal pacing that violated the
+  async/non-blocking RTOS rule; per-entry delays from the .txt playlist
+  remain parsed but are no longer applied — re-adding them via the scene
+  tick scheduler is a follow-up.
+- **Sub-GHz Bind New Remote: async TX via Transmitter scene** — The wizard's
+  TX steps now push `SubGhzSceneTransmitter` instead of calling the blocking
+  `sub_ghz_replay_flipper_file()` wrapper directly.  This unifies radio
+  lifecycle ownership with the Saved (PACKET), Playlist, and Remote scenes:
+  the Transmitter owns init/exit and reports completion via
+  `tx_completed_naturally`, so the wizard's `scene_on_enter` resume-from-child
+  path advances to the next step on success or stays on the current TX step
+  (allowing retry) on a user abort.  No behavioural change for users — same
+  1-press fire UX via `tx_autostart`.
+- **Sub-GHz: Bind New Remote protocol picker migrated to reusable submenu widget** —
+  the wizard's protocol-picker list (CAME Atomo / Nice FloR-S / Alutech AT-4N /
+  DITEC GOL4 / KingGates Stylo4k) now renders via the Phase 7a/7b
+  `subghz_submenu_model` + `m1_submenu_draw` widget instead of its hand-rolled
+  scroll/selection math.  The picker is now consistent with the Sub-GHz top-level
+  Menu, Read-Raw MoreRAW, and Saved-file action menus, and honours
+  **Settings → LCD & Notifications → Text Size** identically — at Large text size
+  the five protocols render at the same 13 px row height as every other scene
+  menu.  Local `bw_proto_sel` / `bw_proto_scroll` are replaced by
+  `s_proto_model.selected` / `scroll_offset`; `set_visible_count(M1_MENU_VIS(5))`
+  is called on every `scene_on_event` and `draw` so a text-size change picked up
+  while a child scene (Transmitter, etc.) was on top resyncs correctly when
+  control returns to the picker.  No behavioural change to the wizard steps or
+  binding flow.  All 68 host tests pass.
+- **Sub-GHz: Menu scene migrated to reusable submenu widget** — The top-level
+  Sub-GHz menu now delegates scroll/selection math to the pure-logic
+  `subghz_submenu_model` and rendering to the `m1_submenu_draw` shim,
+  replacing ~85 lines of hand-rolled wrap-around math and custom u8g2 draw.
+  No visual change.  First scene migration in the Phase 7c rollout.
+- **Sub-GHz: MoreRAW scene migrated to the `m1_submenu` widget** —
+  Phase 7c-2 of the Momentum-parity refactor.  The Read-Raw "More"
+  submenu (Decode / Rename / Delete) now uses the reusable
+  `subghz_submenu_model` + `m1_submenu_draw` widget for scroll /
+  selection math and rendering.  The scene's ad-hoc `50 / N` row-height
+  divider is replaced with the standard font-aware list renderer, so
+  the menu now honours **Settings → LCD & Notifications → Text Size**
+  consistently with every other scene menu.  No behavioural change
+  to the actions themselves.
+- **Sub-GHz: Phase 9e-2..5 deferral rationale corrected** — the
+  `PHASE_CHECKLIST.md` entries for Nice FloR-S, CAME Atomo, Alutech
+  AT-4N, and Phoenix V2 counter editing previously cited a
+  "GPL-3.0 licensing implication" against porting Flipper/Unleashed
+  reference code into M1.  This was incorrect: the M1 firmware is
+  itself distributed under GPL-3.0 (see `LICENSE` / `COPYING.txt`),
+  so importing GPL-3.0 reference code from Flipper Zero / Unleashed /
+  Momentum is fully licence-compatible.  Each deferred sub-phase has
+  been re-cast in terms of its real engineering blocker — missing
+  decoder field decomposition, missing cipher implementation,
+  key-recovery complexity, or undocumented checksum — with a
+  consolidated licensing note documenting the correction.
+- Documentation: documented deferred Sub-GHz Momentum-parity phases (7c non-list
+  candidates, 9e-2..5 counter-edit blockers, 11-2+ Info-screen renderers) in
+  `CLAUDE.md` so future agents do not re-open intentionally deferred work without
+  first checking the engineering/research blocker for each sub-phase.
+- **Sub-GHz: extracted Read Raw MoreRAW + DecodeRaw into dedicated scenes** —
+  the Loaded-state "More" submenu (Decode / Rename / Delete) and the offline
+  decode-results overlay are now separate scenes (`SubGhzSceneMoreRaw`,
+  `SubGhzSceneDecodeRaw`) pushed on top of Read Raw instead of inline overlays.
+  The active file path is shared via the new `SubGhzApp::raw_filepath` field.
+  This removes ~340 lines of overlay state from `m1_subghz_scene_read_raw.c`
+  and aligns the architecture with Momentum's scene-per-screen model.
+- **Sub-GHz Remote: migrate to async Transmitter scene** — pressing a mapped
+  button on a `.rem` remote now hands off to the canonical async
+  `SubGhzSceneTransmitter` state machine via a new `tx_autostart` hint
+  (one-press fire UX preserved), removing the last per-button call to the
+  blocking `sub_ghz_replay_flipper_file()` wrapper from the Remote scene.
+  The TX progress and final state are shown by the Transmitter scene's
+  animated overlay; the Remote scene's own "Sent!" flash has been removed.
+- **Sub-GHz: Saved emulate path migrated to async TX** — the Saved scene's
+  PACKET/key Emulate action now pushes `SubGhzSceneTransmitter` instead of
+  inline-calling the legacy `sub_ghz_replay_flipper_file()` blocking wrapper.
+  Users get the same visual feedback as Read Raw TX: live "Press OK to send"
+  prompt, animated dots, burst counter, and clean BACK-to-abort.
+  Phase 3b-2b-ii — Playlist/Remote/Bind Wizard migrations still pending.
+- **Sub-GHz: SavedMenu action menu migrated to reusable submenu widget** —
+  the Saved-file action menu (Decode / Emulate / Info / Rename / Delete) now
+  uses the Phase 7a/7b `subghz_submenu_model` + `m1_submenu_draw` widget
+  instead of its hand-rolled `50 / N` row-height divider.  The menu now
+  honours **Settings → LCD & Notifications → Text Size** consistently with
+  the Sub-GHz top-level Menu and the Read-Raw MoreRAW menu — at Large text
+  size rows render at 13 px and scroll if not all items fit.  No behavioural
+  change to the underlying actions.
+- **Sub-GHz: Saved scene split into Saved + SavedMenu + Delete (Momentum-parity refactor)** —
+  the Saved file-browser scene is now responsible solely for selecting a file from
+  `0:/SUBGHZ/`. The action menu (Decode / Emulate / Info / Rename / Delete), the
+  "Signal Info" screen, and the offline decode-results screen moved into the new
+  `SubGhzSceneSavedMenu`, and the delete-confirmation dialog is now its own
+  `SubGhzSceneDelete` scene. The new dialog uses LEFT/RIGHT to focus
+  Cancel/Delete buttons and defaults to Cancel for safety; on confirm it pops
+  back through SavedMenu to the file browser via `subghz_scene_search_and_pop_to`.
+  `SubGhzApp` gains shared `saved_filepath` / `saved_filename` fields so the
+  three scenes can hand off the current selection without file-scope globals.
+- **Sub-GHz: editable button code in Signal Settings (KeeLoq family)** —
+  Pressing OK on a KeeLoq / Star Line / Jarolift `.sub` file in Saved →
+  Settings now opens the 4-bit Button editor.  On save, the file's 64-bit
+  Flipper key is reassembled with the new button value and rewritten,
+  preserving the original `Manufacture:` line so the replay path still
+  resolves the correct manufacturer master key.  Files without a
+  `Manufacture:` line round-trip unchanged.
+
+### Fixed
+
+- **Sub-GHz: KeeLoq-family button override now produces internally-consistent
+  packets** — `keeloq_encode_replay()` now synchronises the HOP plaintext button
+  bits (`[15:12]`) with the FIX-portion button nibble before re-encrypting, so a
+  key whose FIX button was mutated by `subghz_button_override_apply()` no longer
+  transmits a mismatched HOP-button. Real KeeLoq receivers reject packets with
+  inconsistent FIX vs HOP button bits, so before this fix, cycling buttons via
+  the Transmitter UI could produce a packet the receiver silently ignored. The
+  update is a no-op for untouched captures because FIX-button == HOP-button by
+  construction on a real remote.
+- **Sub-GHz `subghz_keeloq_create_key()`: honour `*key_out = 0` contract on
+  `BAD_ARG`** — the header documents "on failure `*key_out` is set to 0", but the
+  NULL-`params` path was returning `KEELOQ_CREATE_BAD_ARG` without zeroing the
+  caller's output. The zero-out now happens immediately after the `key_out`
+  NULL-check, so every failure path that has a usable out pointer leaves it at
+  `0ULL` as documented.
+- **Sub-GHz KeeLoq: ensure build-time embedded manufacturer keys are visible
+  to the new scene architecture** — the Set Manufacturer Key scene
+  (Add Manually → KeeLoq family) and the Signal Settings counter-edit path
+  now lazy-load the manufacturer-key store on first access, mirroring the
+  guard in the legacy replay path. Without this, a cold-boot user opening
+  these scenes before any saved KeeLoq file was loaded would see an empty
+  manufacturer-key picker / "device key not resolvable" even when the
+  firmware was built with a `KEELOQ_KEY_VAULT` (build-time embedded keys
+  via `scripts/gen_keeloq_mfkeys_builtin.py`).
+- **Sub-GHz Read Raw**: Fixed firmware build failure caused by `app->raw_filepath` appearing inside a function that defines `raw_filepath` as a `(app->raw_filepath)` macro alias.  The bare struct-member access was expanded by the preprocessor into `app->(app->raw_filepath)`, breaking compilation.  Switched the offending reference to the macro alias to match the surrounding code.
+- **Sub-GHz Create-from-scratch: temp `.sub` no longer deleted on scene push** —
+  `SubGhzSceneSetKey` and `SubGhzSceneSetMfKey`'s `scene_on_exit()` handlers now
+  skip the defensive `unlink_tmp()` when `app->resume_from_child` is true. Without
+  this, pushing the Transmitter scene (which triggers our `on_exit` via
+  `subghz_scene_push()`) was deleting the temp `.sub` file before the Transmitter
+  could open it, so the very first one-press fire after entering the scene would
+  fail silently. The defensive unlink still runs on real exits (BACK,
+  `search_and_pop`).
+- Sub-GHz Read scene: fix false-positive "merged" detection for dropped decodes — when `Remove Duplicates` is off, a full ring drop that matches the top entry no longer incorrectly triggers LED feedback, buzzer, or selection reset.
+- **Sub-GHz scene manager:** `subghz_scene_search_and_pop_to()` now copies the scene
+  stack into a byte buffer before passing it to the pure-logic helper — the previous
+  `(uint8_t *)app->scene_stack` cast scanned raw enum bytes and made stack searches
+  beyond the first entry fail, which broke Saved → Delete returning to the file list.
+  A target that is already on top of the stack is now reported as success instead of
+  "not found", so callers that fall back to `subghz_scene_pop()` no longer pop the
+  target itself.
+- **Sub-GHz scene manager:** `subghz_scene_push()`, `_pop()`, and `_replace()` now
+  reset the tick cadence BEFORE invoking the new scene's `on_enter()` handler.  The
+  previous order cleared the tick period immediately after the scene opted in via
+  `subghz_scene_set_tick_period()`, disabling animation and periodic tick handling
+  on the Transmitter and other scenes that schedule ticks during entry.
+- **Sub-GHz Read scene:** When the receiver history ring is full and "Delete Old
+  Signals" is disabled, dropped decodes no longer re-save an unrelated old entry.
+  The Read scene now detects whether `subghz_history_add_ex()` actually inserted
+  or merged the new decode and skips selection, autosave, and feedback otherwise.
 ## [0.9.1.30] - 2026-05-24
 
 ### Added
