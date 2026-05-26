@@ -23,7 +23,7 @@
 static void buf_append(char *buf, size_t buflen, size_t *used,
                        const char *src)
 {
-    if (!buf || buflen == 0 || !src) return;
+    if (!buf || buflen == 0 || !src || !used) return;
     if (*used >= buflen - 1) return;   /* buffer already full (NUL slot reserved) */
 
     size_t avail = buflen - 1 - *used;
