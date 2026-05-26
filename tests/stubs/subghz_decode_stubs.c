@@ -123,3 +123,18 @@ uint8_t subghz_decode_x10(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; 
 SubGHz_DecEnc_t subghz_decenc_ctl;
 
 bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw) { (void)out; (void)raw; return false; }
+
+/* Phase 11-1: subghz_protocol_registry.c references the polymorphic
+ * Info renderer via .get_string slots on the KeeLoq family entries.
+ * Registry-only tests don't exercise the rendering path; provide a
+ * no-op stub so they don't have to pull in subghz_signal_format.c +
+ * subghz_signal_fields.c + subghz_keeloq.c just to link the registry. */
+#include <stddef.h>
+#include "subghz_protocol_registry.h"
+void subghz_signal_format_keeloq_info(const SubGhzSignalView *view,
+                                       char                   *buf,
+                                       size_t                  buflen)
+{
+    (void)view;
+    if (buf && buflen > 0) buf[0] = '\0';
+}

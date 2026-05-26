@@ -1140,6 +1140,112 @@ endif()
 add_test(NAME subghz_new_remote_gen COMMAND test_subghz_new_remote_gen)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_create_proto (Phase 8a — create-from-
+# scratch protocol catalog & field-schema descriptor).
+# Pure-logic protocol catalog + editable-field bitmask + key-range
+# masking helper.  Zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_create_proto
+    test_subghz_create_proto.c
+    ${M1_ROOT}/Sub_Ghz/subghz_create_proto.c
+)
+target_include_directories(test_subghz_create_proto PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_create_proto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_create_proto PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_create_proto COMMAND test_subghz_create_proto)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_hex_editor (Phase 8b-3 — SetKey scene
+# backing model).  Pure-logic hex-digit editor with cursor + UP/DOWN
+# cycling; reused by Phase 8c SetSerial / SetButton / SetCounter
+# editor scenes.  Zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_hex_editor
+    test_subghz_hex_editor.c
+    ${M1_ROOT}/Sub_Ghz/subghz_hex_editor.c
+)
+target_include_directories(test_subghz_hex_editor PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_hex_editor PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_hex_editor PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_hex_editor COMMAND test_subghz_hex_editor)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_keeloq_create (Phase 8c-3 — KeeLoq
+# Create-from-scratch key assembler).  Pure-logic module that builds
+# the 64-bit Flipper-format key from user-entered serial / button /
+# counter and a picked manufacturer master key.  Depends on the
+# subghz_keeloq cipher + learning primitives.  Zero hardware
+# dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_keeloq_create
+    test_subghz_keeloq_create.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_create.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+)
+target_include_directories(test_subghz_keeloq_create PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_keeloq_create PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_keeloq_create PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_keeloq_create COMMAND test_subghz_keeloq_create)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_signal_fields (Phase 9a-1 — KeeLoq-family
+# {serial, button, encrypted-hop} extract / assemble for the
+# SignalSettings scene).  Pure-logic module; depends on
+# subghz_keeloq_create (and through it subghz_keeloq) only for the
+# cross-check tests.  Zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_signal_fields
+    test_subghz_signal_fields.c
+    ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq_create.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+)
+target_include_directories(test_subghz_signal_fields PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_signal_fields PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_signal_fields PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_signal_fields COMMAND test_subghz_signal_fields)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_signal_format (Phase 11-1)
+# Polymorphic Info-screen renderers driven by the protocol registry's
+# .get_string vtable slot.  Pure-logic; zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_signal_format
+    test_subghz_signal_format.c
+    ${M1_ROOT}/Sub_Ghz/subghz_signal_format.c
+    ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+)
+target_include_directories(test_subghz_signal_format PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_signal_format PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_signal_format PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_signal_format COMMAND test_subghz_signal_format)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_read_raw_state (Read Raw async TX helpers)
 # Verifies the pure-logic dispatch helpers used by the Read Raw scene
 # to handle Q_EVENT_SUBGHZ_TX completion events and BACK during TX:
@@ -1302,3 +1408,121 @@ if(TARGET sanitizers)
     target_link_libraries(test_music_parser PRIVATE sanitizers)
 endif()
 add_test(NAME music_parser COMMAND test_music_parser)
+
+# ── Sub-GHz TX/RX lifecycle state machine (Phase 1 of Momentum parity work) ──
+add_executable(test_subghz_txrx_state
+    test_subghz_txrx_state.c
+    ${M1_ROOT}/Sub_Ghz/subghz_txrx_state.c
+)
+target_include_directories(test_subghz_txrx_state PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_txrx_state PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_txrx_state PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_txrx_state COMMAND test_subghz_txrx_state)
+
+# ── Per-scene state slots (Phase 2 of Momentum parity work) ──
+add_executable(test_subghz_scene_state
+    test_subghz_scene_state.c
+    ${M1_ROOT}/Sub_Ghz/subghz_scene_state.c
+)
+target_include_directories(test_subghz_scene_state PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_scene_state PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_scene_state PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_scene_state COMMAND test_subghz_scene_state)
+
+# ── Submenu model (Phase 7a of Momentum parity work) ──
+add_executable(test_subghz_submenu_model
+    test_subghz_submenu_model.c
+    ${M1_ROOT}/Sub_Ghz/subghz_submenu_model.c
+)
+target_include_directories(test_subghz_submenu_model PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_submenu_model PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_submenu_model PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_submenu_model COMMAND test_subghz_submenu_model)
+
+# ── TX repeat / endless-hold policy (Phase 3a of Momentum parity work) ──
+add_executable(test_subghz_endless_tx
+    test_subghz_endless_tx.c
+    ${M1_ROOT}/Sub_Ghz/subghz_endless_tx.c
+)
+target_include_directories(test_subghz_endless_tx PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_endless_tx PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_endless_tx PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_endless_tx COMMAND test_subghz_endless_tx)
+
+# ----------------------------------------------------------------------------
+# Sub-GHz scene manager polish primitives (Phase 10 — Momentum parity)
+# ----------------------------------------------------------------------------
+add_executable(test_subghz_scene_polish
+    test_subghz_scene_polish.c
+    ${M1_ROOT}/Sub_Ghz/subghz_scene_polish.c
+)
+target_include_directories(test_subghz_scene_polish PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_scene_polish PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_scene_polish PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_scene_polish COMMAND test_subghz_scene_polish)
+
+add_executable(test_subghz_transmitter_ctl
+    test_subghz_transmitter_ctl.c
+    ${M1_ROOT}/Sub_Ghz/subghz_transmitter_ctl.c
+    ${M1_ROOT}/Sub_Ghz/subghz_endless_tx.c
+)
+target_include_directories(test_subghz_transmitter_ctl PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_transmitter_ctl PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_transmitter_ctl PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_transmitter_ctl COMMAND test_subghz_transmitter_ctl)
+
+# ------------------------------------------------------------------
+# Sub-GHz button-cycling capability lookup (Phase 4a)
+# ------------------------------------------------------------------
+add_executable(test_subghz_button_caps
+    test_subghz_button_caps.c
+    ${M1_ROOT}/Sub_Ghz/subghz_button_caps.c
+)
+target_include_directories(test_subghz_button_caps PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_button_caps PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_button_caps PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_button_caps COMMAND test_subghz_button_caps)
+
+# ------------------------------------------------------------------
+# Sub-GHz button-override key mutation (Phase 4c)
+# ------------------------------------------------------------------
+add_executable(test_subghz_button_override
+    test_subghz_button_override.c
+    ${M1_ROOT}/Sub_Ghz/subghz_button_override.c
+)
+target_include_directories(test_subghz_button_override PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_button_override PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_button_override PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_button_override COMMAND test_subghz_button_override)

@@ -622,3 +622,11 @@ uint32_t keeloq_mfkeys_count(void)
 {
     return s_count;
 }
+
+bool keeloq_mfkeys_get_at(uint32_t index, KeeLoqMfrEntry *entry)
+{
+    if (!s_table || !entry) return false;
+    if (index >= s_count)   return false;
+    *entry = s_table[index];
+    return true;
+}

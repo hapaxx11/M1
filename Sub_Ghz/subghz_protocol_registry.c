@@ -26,6 +26,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "subghz_protocol_registry.h"
+#include "subghz_signal_format.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_raw_decoder.h"
 
@@ -314,6 +315,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_tolerance_pct=20, .min_count_bit_for_found=66 },
         .decode = subghz_decode_keeloq,
+        .get_string = subghz_signal_format_keeloq_info,
     },
     [OREGON_V2] = {
         .name   = "Oregon v2",
@@ -378,6 +380,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=400, .te_long=800, .te_tolerance_pct=20, .min_count_bit_for_found=64 },
         .decode = subghz_decode_starline,
+        .get_string = subghz_signal_format_keeloq_info,
     },
     [GATE_TX] = {
         .name   = "GateTX",
@@ -1091,6 +1094,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .timing = { .te_short=400, .te_long=800, .te_delta=167,
                     .preamble_bits=12, .min_count_bit_for_found=72 },
         .decode = subghz_decode_jarolift,
+        .get_string = subghz_signal_format_keeloq_info,
     },
     [BENINCA_ARC] = {
         .name   = "Beninca ARC",

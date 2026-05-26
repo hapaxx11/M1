@@ -716,6 +716,89 @@ void test_encode_replay_empty_manufacture(void)
 }
 
 /*============================================================================*/
+/* Phase 9d-1 — static_counter mode                                            */
+/*============================================================================*/
+
+void test_encode_replay_static_counter_differs_from_increment(void)
+{
+    /* Static and Increment mode must produce different encoded pairs
+     * because the 16-bit counter inside the HOP word differs by +1 between
+     * the two modes (Increment runs keeloq_increment_hop, Static does not). */
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text("0123456789ABCDEF:1:BFT\n"));
+
+    KeeLoqEncParams p_static;
+    memset(&p_static, 0, sizeof(p_static));
+    p_static.protocol       = "KeeLoq";
+    p_static.manufacture    = "BFT";
+    p_static.key_value      = 0xA1B2C3D4E5F60718ULL;
+    p_static.bit_count      = 64;
+    p_static.te             = 0;
+    p_static.static_counter = true;
+
+    KeeLoqEncParams p_inc = p_static;
+    p_inc.static_counter = false;
+
+    SubGhzRawPair *pairs_a = NULL;
+    SubGhzRawPair *pairs_b = NULL;
+    uint32_t na = 0, nb = 0;
+
+    TEST_ASSERT_EQUAL_INT(KEELOQ_ENC_OK,
+        keeloq_encode_replay(&p_static, &pairs_a, &na, 1));
+    TEST_ASSERT_EQUAL_INT(KEELOQ_ENC_OK,
+        keeloq_encode_replay(&p_inc, &pairs_b, &nb, 1));
+
+    /* Same waveform length — only the data pairs encoding the HOP bits
+     * are expected to differ. */
+    TEST_ASSERT_EQUAL_UINT32(na, nb);
+    TEST_ASSERT_TRUE(na > 0);
+
+    bool found_diff = false;
+    for (uint32_t i = 0; i < na; i++) {
+        if (pairs_a[i].high_us != pairs_b[i].high_us ||
+            pairs_a[i].low_us  != pairs_b[i].low_us) {
+            found_diff = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(found_diff,
+        "Static and Increment modes produced identical pairs");
+
+    free(pairs_a);
+    free(pairs_b);
+}
+
+void test_encode_replay_static_counter_deterministic(void)
+{
+    /* In Static mode, repeated calls with identical inputs must produce
+     * byte-identical pair arrays (no counter mutation between calls). */
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text("0123456789ABCDEF:1:BFT\n"));
+
+    KeeLoqEncParams p;
+    memset(&p, 0, sizeof(p));
+    p.protocol       = "KeeLoq";
+    p.manufacture    = "BFT";
+    p.key_value      = 0xA1B2C3D4E5F60718ULL;
+    p.bit_count      = 64;
+    p.static_counter = true;
+
+    SubGhzRawPair *pairs_a = NULL;
+    SubGhzRawPair *pairs_b = NULL;
+    uint32_t na = 0, nb = 0;
+
+    TEST_ASSERT_EQUAL_INT(KEELOQ_ENC_OK,
+        keeloq_encode_replay(&p, &pairs_a, &na, 2));
+    TEST_ASSERT_EQUAL_INT(KEELOQ_ENC_OK,
+        keeloq_encode_replay(&p, &pairs_b, &nb, 2));
+
+    TEST_ASSERT_EQUAL_UINT32(na, nb);
+    TEST_ASSERT_TRUE(na > 0);
+    TEST_ASSERT_EQUAL_MEMORY(pairs_a, pairs_b, na * sizeof(SubGhzRawPair));
+
+    free(pairs_a);
+    free(pairs_b);
+}
+
+/*============================================================================*/
 /* Main                                                                        */
 /*============================================================================*/
 
@@ -785,6 +868,10 @@ int main(void)
     RUN_TEST(test_encode_replay_bad_bits);
     RUN_TEST(test_encode_replay_bad_protocol);
     RUN_TEST(test_encode_replay_empty_manufacture);
+
+    /* Phase 9d-1 — Static counter mode */
+    RUN_TEST(test_encode_replay_static_counter_differs_from_increment);
+    RUN_TEST(test_encode_replay_static_counter_deterministic);
 
     return UNITY_END();
 }

@@ -33,10 +33,9 @@
  *   BACK = exit Remote (returns to Sub-GHz menu)
  *   UP/DOWN/LEFT/RIGHT/OK = transmit corresponding signal
  *
- * The scene pushes itself from the Sub-GHz menu and is a standard scene
- * (blocking delegates handle the TX via sub_ghz_replay_flipper_file +
- * menu_sub_ghz_init/exit pattern).
- */
+ * The scene pushes itself from the Sub-GHz menu and is a standard scene.
+ * TX is handed off to the async SubGhzSceneTransmitter (Phase 3b-2b-iv);
+ * the radio is no longer driven from this scene's event handler. */
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -64,20 +63,19 @@
 #define REM_BTN_RIGHT  3
 #define REM_BTN_OK     4
 
-/* TX status: flash "Sent!" briefly after a button is pressed */
-#define REM_TX_FLASH_TICKS  2  /* Main-loop ticks to show "Sent!" overlay */
-
-static uint8_t  rem_tx_flash = 0;     /* Countdown for "Sent!" overlay */
-static uint8_t  rem_tx_last  = 0xFF;  /* Which button was last pressed */
+/* TX status indication is now handled entirely by the Transmitter scene
+ * (Phase 3b-2b-iv migration); this scene no longer maintains its own
+ * "Sent!" overlay state. */
 
 
 /*============================================================================*/
 /* Helpers — extern declarations                                              */
 /*============================================================================*/
 
-extern void menu_sub_ghz_init(void);
-extern void menu_sub_ghz_exit(void);
-extern uint8_t sub_ghz_replay_flipper_file(const char *path);
+/* Note (Phase 3b-2b-iv): TX is no longer performed by the blocking
+ * `sub_ghz_replay_flipper_file()` wrapper from this scene.  remote_fire()
+ * now pushes SubGhzSceneTransmitter with tx_autostart=true so each
+ * button press hands off to the async Transmitter state machine. */
 
 /*============================================================================*/
 /* Manifest parser                                                            */
@@ -174,15 +172,28 @@ static void remote_fire(SubGhzApp *app, uint8_t btn_idx)
     if (btn_idx >= SUBGHZ_REMOTE_BUTTON_COUNT || app->remote_files[btn_idx][0] == '\0')
         return;
 
+    /* Build absolute (FatFS) path of the mapped .sub file. */
     char fat_path[72];
     snprintf(fat_path, sizeof(fat_path), "0:%s", app->remote_files[btn_idx]);
 
-    sub_ghz_replay_flipper_file(fat_path);
-    menu_sub_ghz_init();  /* Restore radio after replay (see architecture rules) */
+    /* Hand off to the async Transmitter scene with autostart so the
+     * signal fires in a single button press (the user does not see a
+     * READY/Press-OK confirmation screen).  On TX completion or BACK,
+     * Transmitter pops and our scene_on_enter() runs again — the
+     * Remote screen is redrawn and ready for the next press. */
+    strncpy(app->tx_path, fat_path, sizeof(app->tx_path) - 1);
+    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    app->tx_repeat_count = 1U;             /* static keys: 1 burst */
+    app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
+    app->tx_autostart    = true;           /* one-press fire UX */
+    /* Phase 4b — Remote is a one-shot fire UX (the button on the M1
+     * remote view maps to a saved .sub file, and pressing it should
+     * send the captured key as-is).  Button cycling is not part of
+     * the Remote workflow, so clear tx_protocol_name and let the
+     * Transmitter scene render the legacy single-button view. */
+    app->tx_protocol_name[0] = '\0';
 
-    rem_tx_last  = btn_idx;
-    rem_tx_flash = REM_TX_FLASH_TICKS;
-    app->need_redraw = true;
+    subghz_scene_push(app, SubGhzSceneTransmitter);
 }
 
 static bool remote_load_manifest(SubGhzApp *app)
@@ -252,24 +263,10 @@ static void scene_draw(SubGhzApp *app)
     u8g2_DrawStr(&m1_u8g2, 32, 47, "\x19");  /* ↓ glyph */
     u8g2_DrawStr(&m1_u8g2, 42, 47, BTN_NAME(app, REM_BTN_DOWN));
 
-    /* "Sent!" flash overlay */
-    if (rem_tx_flash > 0)
-    {
-        static const char *btn_names[] = { "UP", "DOWN", "LEFT", "RIGHT", "OK" };
-        char sent_buf[24];
-        snprintf(sent_buf, sizeof(sent_buf), "Sent: %s",
-                 (rem_tx_last < SUBGHZ_REMOTE_BUTTON_COUNT) ?
-                     btn_names[rem_tx_last] : "?");
-        u8g2_DrawFrame(&m1_u8g2, 20, 54, 88, 10);
-        u8g2_SetDrawColor(&m1_u8g2, 1);
-        u8g2_DrawStr(&m1_u8g2, 22, 62, sent_buf);
-        rem_tx_flash--;
-    }
-    else
-    {
-        /* Hint */
-        u8g2_DrawStr(&m1_u8g2, 4, 62, "Press to send  OK:Load");
-    }
+    /* Hint — TX status itself is shown by the Transmitter scene when
+     * a button is pressed (Phase 3b-2b-iv migration), so this scene
+     * just shows what to do. */
+    u8g2_DrawStr(&m1_u8g2, 4, 62, "Press to send");
 
     u8g2_SendBuffer(&m1_u8g2);
 }
@@ -280,8 +277,11 @@ static void scene_draw(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    rem_tx_flash = 0;
-    rem_tx_last  = 0xFF;
+    /* Clear the autostart hint defensively — a sibling caller (e.g.
+     * a previous Saved push) may have set it, and we don't want it
+     * to leak into the Transmitter push that follows our remote_fire().
+     * remote_fire() sets it explicitly each time. */
+    app->tx_autostart = false;
 
     /* If no manifest loaded yet, auto-launch file browser */
     if (!app->remote_loaded)

@@ -179,6 +179,30 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 		{
 			out->te = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
 		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Manufacture") == 0)
+		{
+			/* KeeLoq-family manufacturer-key name — Phase 9b carries it
+			 * through load → SignalSettings → save_key_with_manufacture
+			 * so the saved file's Manufacture line is preserved across
+			 * round-trip edits. */
+			strncpy(out->manufacture, ff_get_value(ctx),
+			        FLIPPER_SUBGHZ_MANUF_MAX_LEN - 1);
+			out->manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN - 1] = '\0';
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "CounterMode") == 0)
+		{
+			/* Phase 9d-2: optional KeeLoq-family replay policy override.
+			 * "Static" → STATIC replay (re-emit captured hop verbatim).
+			 * Anything else (including missing field, empty string, or
+			 * an unknown value such as "Bogus") falls through to the
+			 * INCREMENT default that was already set by memset() at the
+			 * caller — matching the historical behaviour for every
+			 * existing .sub file. */
+			if (subghz_strcasecmp(ff_get_value(ctx), "Static") == 0)
+				out->counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_STATIC;
+			else
+				out->counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
+		}
 	}
 
 	return (out->frequency > 0 && out->protocol[0] != '\0');
@@ -739,6 +763,108 @@ bool flipper_subghz_save_key(const char *path, uint32_t frequency,
 
 	if (result && te > 0)
 		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Variant of flipper_subghz_save_key() that also writes the
+ *         `Manufacture:` field so the saved key can be replayed via the
+ *         KeeLoq counter-mode encoder.
+ *
+ * Used by the Phase 8c-3 Create-from-scratch KeeLoq-family flow.  When
+ * @p manufacture is NULL or empty the function behaves identically to
+ * flipper_subghz_save_key() (no Manufacture line written).
+ */
+bool flipper_subghz_save_key_with_manufacture(const char *path,
+                                               uint32_t    frequency,
+                                               const char *preset,
+                                               const char *protocol,
+                                               uint32_t    bit_count,
+                                               uint64_t    key,
+                                               uint32_t    te,
+                                               const char *manufacture)
+{
+	/* Thin wrapper kept for backwards-compatibility with Phase 9b/9c
+	 * callers — defaults CounterMode to INCREMENT so no new line is
+	 * written to existing files unless they go through the Phase 9d-3
+	 * SignalSettings save path. */
+	return flipper_subghz_save_key_full(path, frequency, preset, protocol,
+	                                    bit_count, key, te, manufacture,
+	                                    FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT);
+}
+
+/*============================================================================*/
+/**
+ * @brief  Phase 9d-2 — write a Flipper Key file with both optional
+ *         `Manufacture:` and `CounterMode:` fields.
+ *
+ * The `CounterMode:` line is only emitted when @p counter_mode is non-default
+ * (i.e. STATIC).  This keeps existing Phase 9b/9c saved files byte-identical
+ * across re-saves that did not touch the counter-mode toggle.
+ */
+bool flipper_subghz_save_key_full(const char *path,
+                                   uint32_t    frequency,
+                                   const char *preset,
+                                   const char *protocol,
+                                   uint32_t    bit_count,
+                                   uint64_t    key,
+                                   uint32_t    te,
+                                   const char *manufacture,
+                                   flipper_subghz_counter_mode_t counter_mode)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != '\0')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result && protocol && protocol[0] != '\0')
+		result = ff_write_kv_str(&ff, "Protocol", protocol);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	if (result && manufacture && manufacture[0] != '\0')
+		result = ff_write_kv_str(&ff, "Manufacture", manufacture);
+
+	if (result && counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+		result = ff_write_kv_str(&ff, "CounterMode", "Static");
 
 	ff_close(&ff);
 	return result;

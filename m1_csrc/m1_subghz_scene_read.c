@@ -91,6 +91,10 @@ extern uint8_t subghz_record_mode_flag;
 /* Decoder polling */
 extern bool subghz_decenc_read(SubGHz_Dec_Info_t *out, bool raw_mode);
 
+/* Phase 12 — receiver history quality-of-life toggles (m1_sub_ghz.c) */
+extern bool subghz_get_remove_duplicates_ext(void);
+extern bool subghz_get_delete_old_signals_ext(void);
+
 /* Decoder state reset */
 extern void subghz_pulse_handler_reset(void);
 
@@ -464,35 +468,76 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 {
                     /* Use the actual active frequency (preset or hopper) */
                     uint32_t freq = app->current_freq_hz;
-                    subghz_history_add(&app->history, &decoded, freq);
-                    app->last_decoded = decoded;
-                    app->has_decoded = true;
 
-                    /* Auto-switch to history view once we have signals
-                     * (Flipper-consistent: receiver always shows the list) */
-                    if (app->history.count > 0 && !app->detail_view)
+                    /* Snapshot ring state and settings so we can detect when
+                     * add_ex() drops the new decode (delete_old_signals=false
+                     * + ring full).  Read settings once to avoid TOCTOU if
+                     * another task changes them between the two checks. */
+                    uint8_t head_before  = app->history.head;
+                    uint8_t count_before = app->history.count;
+                    bool remove_dupes    = subghz_get_remove_duplicates_ext();
+                    bool delete_old      = subghz_get_delete_old_signals_ext();
+
+                    subghz_history_add_ex(&app->history, &decoded, freq,
+                                          remove_dupes, delete_old);
+
+                    bool inserted = (app->history.head  != head_before) ||
+                                    (app->history.count != count_before);
+                    /* A merge can only happen when remove_duplicates=true;
+                     * gate the field comparison on that flag so a drop that
+                     * leaves the top entry matching the new decode
+                     * (remove_duplicates=false + ring full + delete_old=false)
+                     * is never misidentified as a merge. */
+                    bool merged = false;
+                    if (!inserted && remove_dupes && count_before > 0)
                     {
-                        app->history_view = true;
-                        /* Auto-select newest signal (index 0 = most recent) */
-                        app->history_sel = 0;
-                        app->history_scroll = 0;
-                    }
-
-                    /* Decode feedback: green LED flash + sound */
-                    m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
-                    if (app->sound)
-                        m1_buzzer_notification();
-
-                    /* Autosave: write decoded signal to SD if enabled */
-                    if (app->autosave)
-                    {
-                        const SubGHz_History_Entry_t *newest =
+                        const SubGHz_History_Entry_t *top =
                             subghz_history_get(&app->history, 0);
-                        autosave_signal(newest);
+                        if (top &&
+                            top->info.protocol == decoded.protocol &&
+                            top->info.key      == decoded.key &&
+                            top->info.bit_len  == decoded.bit_len)
+                        {
+                            merged = true;
+                        }
                     }
 
-                    /* LED will auto-restore to RX color on next redraw cycle
-                     * (fast blink timer handles the flash duration) */
+                    /* Only treat as a real decode if inserted or merged.
+                     * A dropped decode must not update selection or autosave,
+                     * which would otherwise re-save an unrelated old entry. */
+                    if (inserted || merged)
+                    {
+                        app->last_decoded = decoded;
+                        app->has_decoded = true;
+
+                        /* Auto-switch to history view once we have signals
+                         * (Flipper-consistent: receiver always shows the list) */
+                        if (app->history.count > 0 && !app->detail_view)
+                        {
+                            app->history_view = true;
+                            /* Auto-select newest signal (index 0 = most recent) */
+                            app->history_sel = 0;
+                            app->history_scroll = 0;
+                        }
+
+                        /* Decode feedback: green LED flash + sound */
+                        m1_led_fast_blink(LED_BLINK_ON_GREEN, LED_FASTBLINK_PWM_H, LED_FASTBLINK_ONTIME_H);
+                        if (app->sound)
+                            m1_buzzer_notification();
+
+                        /* Autosave: write decoded signal to SD if enabled.
+                         * Only on a real new insertion — merges already
+                         * re-saved the same key earlier. */
+                        if (app->autosave && inserted)
+                        {
+                            const SubGHz_History_Entry_t *newest =
+                                subghz_history_get(&app->history, 0);
+                            autosave_signal(newest);
+                        }
+
+                        /* LED will auto-restore to RX color on next redraw cycle
+                         * (fast blink timer handles the flash duration) */
+                    }
                 }
 
                 app->need_redraw = true;

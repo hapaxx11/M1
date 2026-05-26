@@ -31,6 +31,7 @@
 #include "subghz_secplus_v1_encoder.h"
 #include "subghz_keeloq_encoder.h"
 #include "subghz_keeloq_mfkeys.h"
+#include "subghz_button_override.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
 #include "m1_storage.h"
@@ -258,6 +259,8 @@ typedef struct {
 	bool    autosave;       /* Auto-save decoded signals to SD */
 	uint8_t save_fmt;       /* 0 = Flipper .sub, 1 = M1 native .sgh */
 	int8_t  rssi_threshold; /* Hopper RSSI threshold (dBm, -50 to -100) */
+	bool    remove_duplicates;  /* Phase 12: receiver history — dedupe consecutive identical decodes */
+	bool    delete_old_signals; /* Phase 12: receiver history — evict oldest when ring is full */
 } SubGHz_Config_t;
 
 static SubGHz_Config_t subghz_cfg = {
@@ -268,30 +271,14 @@ static SubGHz_Config_t subghz_cfg = {
 	.sound          = true,
 	.autosave       = false,
 	.save_fmt       = 0,    /* Default: Flipper .sub for Flipper compatibility */
-	.rssi_threshold = -70   /* dBm: stay on freq if RSSI >= this (Flipper default) */
+	.rssi_threshold = -70,  /* dBm: stay on freq if RSSI >= this (Flipper default) */
+	.remove_duplicates  = true,  /* Default ON — Flipper-parity behaviour */
+	.delete_old_signals = true   /* Default ON — Flipper-parity behaviour */
 };
 
-/* Add Manually protocol entries */
-#define SUBGHZ_ADD_MANUALLY_COUNT   11
-static const struct {
-	const char *label;
-	uint32_t freq_hz;
-	uint8_t  bits;
-	uint16_t te;
-	uint8_t  ratio;  /* 3 = 1:3 (Princeton), 2 = 1:2 (CAME/Nice) */
-} subghz_add_manually_list[SUBGHZ_ADD_MANUALLY_COUNT] = {
-	{ "Princeton 433",   433920000,  24, 350, 3 },
-	{ "Princeton 315",   315000000,  24, 350, 3 },
-	{ "Nice FLO 12b",    433920000,  12, 700, 2 },
-	{ "Nice FLO 24b",    433920000,  24, 700, 2 },
-	{ "CAME 12bit",      433920000,  12, 320, 2 },
-	{ "CAME 24bit",      433920000,  24, 320, 2 },
-	{ "CAME 12b 868",    868350000,  12, 320, 2 },
-	{ "Linear 300",      300000000,  10, 500, 3 },
-	{ "Gate TX 433",     433920000,  24, 350, 3 },
-	{ "DoorHan 315",     315000000,  24, 350, 3 },
-	{ "DoorHan 433",     433920000,  24, 350, 3 }
-};
+/* Add Manually retired in Phase 8b-4 — see m1_subghz_scene_set_type.c /
+ * m1_subghz_scene_set_key.c and Sub_Ghz/subghz_create_proto.c for the
+ * scene-native protocol picker + hex-editor flow that replaced it. */
 
 static uint8_t subghz_band_order_find(S_M1_SubGHz_Band band)
 {
@@ -507,8 +494,7 @@ static void subghz_raw_draw_sin(void);
 static bool subghz_protocol_is_static(uint16_t protocol);
 
 /* Flipper-matching feature functions */
-void sub_ghz_add_manually(void);
-static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val);
+/* (sub_ghz_add_manually retired in Phase 8b-4 — see SubGhzSceneSetType) */
 
 /* Frequency hopping helpers (defined after forward declarations) */
 static uint32_t subghz_hopper_retune_next(void);
@@ -1539,6 +1525,25 @@ static const char *stristr(const char *haystack, const char *needle)
 #define FLIPPER_SUB_TMP_SGH   "/SUBGHZ/_flipper_tmp.sgh"
 
 /*
+ * Per-prepare button-override slot consumed by the Flipper-format converter
+ * to implement Transmitter-scene LEFT/RIGHT button cycling for rolling-code
+ * remotes.  -1 = no override (use the parsed file value).  0..15 = override
+ * the protocol's button-field bits inside the parsed key_value, if and only
+ * if the protocol is supported by subghz_button_override.  The converter
+ * resets this slot to -1 at the end of every conversion, so each
+ * set + prepare cycle is self-contained.
+ */
+static int8_t s_button_override = -1;
+
+void sub_ghz_replay_set_button_override(int8_t button_index)
+{
+	if (button_index < 0 || button_index > 15)
+		s_button_override = -1;
+	else
+		s_button_override = button_index;
+}
+
+/*
  * Tracks whether sub_ghz_replay_start_async() has armed TX and whether
  * a Q_EVENT_SUBGHZ_TX completion is still pending.  Set true on a
  * successful start, cleared on every teardown path (natural completion,
@@ -1987,6 +1992,17 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint64_t key_value = 0;
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
+	/* Phase 9d-3 — optional `CounterMode:` field on KeeLoq-family
+	 * .sub files.  Defaults to INCREMENT for files that omit the
+	 * field (matches the parse behaviour in flipper_subghz_load). */
+	flipper_subghz_counter_mode_t key_counter_mode =
+	    FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
+
+	/* Latch the button-override slot at entry and clear the static slot
+	 * immediately so every return path leaves it disabled (set + prepare
+	 * cycles are self-contained).  Negative = no override active. */
+	const int8_t button_override = s_button_override;
+	s_button_override = -1;
 
 	line_buf = malloc(FLIPPER_SUB_LINE_MAX);
 	if (!line_buf) return 1;
@@ -2167,6 +2183,37 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				}
 			}
 		}
+		else if (strncmp(line_buf, "CounterMode:", 12) == 0)
+		{
+			/* Phase 9d-3 — optional KeeLoq-family CounterMode field.
+			 * Recognises "Static" exactly (case-sensitive, matching the
+			 * Flipper file format).  Missing line, empty value, "Increment",
+			 * and any unknown value all yield INCREMENT, so every existing
+			 * .sub file replays unchanged.  Mirrors the parse rules in
+			 * flipper_subghz_load() for cross-tool consistency. */
+			const char *p = line_buf + 12;
+			while (*p == ' ' || *p == '\t') p++;
+			/* Strip trailing whitespace before comparison. */
+			char tmp[16] = {0};
+			size_t i = 0;
+			while (*p != '\0' && *p != '\r' && *p != '\n' && i < sizeof(tmp) - 1)
+			{
+				tmp[i++] = *p++;
+			}
+			tmp[i] = '\0';
+			while (i > 0 && isspace((unsigned char)tmp[i - 1]))
+			{
+				tmp[--i] = '\0';
+			}
+			if (strcmp(tmp, "Static") == 0)
+			{
+				key_counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_STATIC;
+			}
+			else
+			{
+				key_counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
+			}
+		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
 			/* Parse signed values, write absolute values as Data: lines.
@@ -2221,6 +2268,21 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	/* ── 3b. KEY file: encode protocol → raw timing ── */
 	if (is_key && key_protocol[0] != '\0' && key_bit_count > 0)
 	{
+		/* Apply the per-prepare button override (Phase 4c).  For
+		 * supported protocols (KeeLoq family) this mutates the parsed
+		 * key_value to encode the requested button; for unsupported
+		 * protocols it is a no-op.  The KeeLoq counter-mode encoder
+		 * picks up the new button via its own extract_fields(); the
+		 * generic OOK PWM encoder transmits the mutated value verbatim. */
+		if (button_override >= 0)
+		{
+			uint64_t mutated = key_value;
+			(void)subghz_button_override_apply(key_protocol, key_value,
+			                                   (uint8_t)button_override,
+			                                   &mutated);
+			key_value = mutated;
+		}
+
 		/* Use the extracted key encoder for timing resolution + encoding */
 		SubGhzKeyParams key_params;
 		memset(&key_params, 0, sizeof(key_params));
@@ -2288,6 +2350,14 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 					kl_params.key_value   = key_value;
 					kl_params.bit_count   = key_bit_count;
 					kl_params.te          = key_te;
+					/* Phase 9d-3 — wire the parsed CounterMode field from
+					 * the .sub file.  STATIC bypasses the counter-increment
+					 * step in the KeeLoq encoder so the captured hop word
+					 * replays verbatim; INCREMENT (the default for files
+					 * that omit the field) preserves the historical
+					 * decrypt → counter+1 → re-encrypt behaviour. */
+					kl_params.static_counter =
+					    (key_counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC);
 
 					SubGhzRawPair *kl_pairs  = NULL;
 					uint32_t       kl_npairs = 0;
@@ -2519,218 +2589,6 @@ uint8_t sub_ghz_replay_flipper_file(const char *sub_path)
 	return ret;
 }
 
-
-/*============================================================================*/
-/*============================================================================*/
-/**
-  * @brief  Add Manually — generate and transmit a protocol signal.
-  *         Matches Flipper Zero "Add Manually" menu.
-  *         User selects protocol, enters hex key value, transmits.
-  */
-/*============================================================================*/
-static void sub_ghz_add_manually_transmit(uint8_t proto_idx, uint64_t key_val)
-{
-	const uint32_t freq_hz = subghz_add_manually_list[proto_idx].freq_hz;
-	const uint8_t bits = subghz_add_manually_list[proto_idx].bits;
-	const uint16_t te = subghz_add_manually_list[proto_idx].te;
-	const uint8_t ratio = subghz_add_manually_list[proto_idx].ratio;
-
-	/* Build protocol name: strip suffix after first space (e.g. "Princeton 24" → "Princeton") */
-	char proto_name[FLIPPER_SUBGHZ_PROTO_MAX_LEN];
-	strncpy(proto_name, subghz_add_manually_list[proto_idx].label, sizeof(proto_name) - 1);
-	proto_name[sizeof(proto_name) - 1] = '\0';
-	char *sp = strchr(proto_name, ' ');
-	if (sp) *sp = '\0';
-
-	char tmp_path[48] = "/SUBGHZ/_addman_tmp.sub";
-	flipper_subghz_save_key(tmp_path, freq_hz,
-	    "FuriHalSubGhzPresetOok650Async", proto_name, bits, key_val, te);
-	sub_ghz_replay_flipper_file(tmp_path);
-	f_unlink(tmp_path);
-}
-
-static void sub_ghz_add_manually_draw_list(uint8_t sel, uint8_t scroll_top)
-{
-	const uint8_t item_h   = m1_menu_item_h();
-	const uint8_t text_ofs = item_h - 1;
-	const uint8_t max_vis  = m1_menu_max_visible();
-
-	m1_u8g2_firstpage();
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_text(&m1_u8g2, 2, 9, 120, "Add Manually", TEXT_ALIGN_CENTER);
-
-	u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
-
-	u8g2_SetFont(&m1_u8g2, m1_menu_font());
-	for (uint8_t i = 0; i < max_vis && (scroll_top + i) < SUBGHZ_ADD_MANUALLY_COUNT; i++)
-	{
-		uint8_t idx = scroll_top + i;
-		uint8_t y = M1_MENU_AREA_TOP + i * item_h;
-		if (idx == sel)
-		{
-			u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, item_h, 2);
-			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-		}
-		u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, subghz_add_manually_list[idx].label);
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	}
-
-	/* Scrollbar */
-	if (SUBGHZ_ADD_MANUALLY_COUNT > max_vis)
-	{
-		uint8_t sb_area_h   = max_vis * item_h;
-		uint8_t sb_handle_h = sb_area_h / SUBGHZ_ADD_MANUALLY_COUNT;
-		if (sb_handle_h < 6)
-			sb_handle_h = 6;
-		uint8_t sb_handle_ofs_max = (sb_area_h > sb_handle_h) ? (sb_area_h - sb_handle_h) : 0;
-		uint8_t sb_handle_y = M1_MENU_AREA_TOP;
-		if (SUBGHZ_ADD_MANUALLY_COUNT > 1)
-			sb_handle_y += (uint8_t)((uint16_t)sb_handle_ofs_max * sel / (SUBGHZ_ADD_MANUALLY_COUNT - 1));
-
-		u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
-		               M1_MENU_AREA_TOP, sb_area_h);
-		u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, sb_handle_y,
-		             M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
-	}
-
-	m1_u8g2_nextpage();
-}
-
-static void sub_ghz_add_manually_draw_key_entry(uint8_t proto_idx, const uint8_t *digits,
-                                                 uint8_t hex_digits, uint8_t cursor)
-{
-	char hex_str[20];
-	m1_u8g2_firstpage();
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-	u8g2_DrawStr(&m1_u8g2, 2, 10, subghz_add_manually_list[proto_idx].label);
-
-	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	char freq_str[16];
-	snprintf(freq_str, sizeof(freq_str), "%lu.%02lu MHz",
-	         subghz_add_manually_list[proto_idx].freq_hz / 1000000UL,
-	         (subghz_add_manually_list[proto_idx].freq_hz % 1000000UL) / 10000UL);
-	u8g2_DrawStr(&m1_u8g2, 2, 20, freq_str);
-
-	/* Draw hex key in large font */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	int p = 0;
-	hex_str[p++] = '0';
-	hex_str[p++] = 'x';
-	for (uint8_t d = 0; d < hex_digits; d++)
-		hex_str[p++] = "0123456789ABCDEF"[digits[d]];
-	hex_str[p] = '\0';
-	u8g2_DrawStr(&m1_u8g2, 4, 38, hex_str);
-
-	/* Cursor underline */
-	uint8_t cx = 4 + (cursor + 2) * 8; /* +2 for "0x" prefix */
-	u8g2_DrawHLine(&m1_u8g2, cx, 40, 7);
-
-	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, 0, 56, "\x18\x19:Hex L/R:Move OK:Send");
-	m1_u8g2_nextpage();
-}
-
-void sub_ghz_add_manually(void)
-{
-	S_M1_Buttons_Status btn;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	uint8_t sel = 0;
-	uint8_t scroll_top = 0;
-
-	menu_sub_ghz_init();
-	xQueueReset(main_q_hdl);
-
-	sub_ghz_add_manually_draw_list(sel, scroll_top);
-
-	while (1)
-	{
-		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-		if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
-		ret = xQueueReceive(button_events_q_hdl, &btn, 0);
-		if (ret != pdTRUE) continue;
-
-		if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-		{
-			menu_sub_ghz_exit();
-			xQueueReset(main_q_hdl);
-			return;
-		}
-		else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-		{
-			uint8_t max_vis = m1_menu_max_visible();
-			if (sel > 0) sel--;
-			else sel = SUBGHZ_ADD_MANUALLY_COUNT - 1;
-			if (sel < scroll_top) scroll_top = sel;
-			if (sel >= scroll_top + max_vis) scroll_top = sel - max_vis + 1;
-		}
-		else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-		{
-			uint8_t max_vis = m1_menu_max_visible();
-			sel++;
-			if (sel >= SUBGHZ_ADD_MANUALLY_COUNT) sel = 0;
-			if (sel < scroll_top) scroll_top = sel;
-			if (sel >= scroll_top + max_vis) scroll_top = sel - max_vis + 1;
-		}
-		else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-		{
-			/* Key entry screen */
-			uint8_t bits = subghz_add_manually_list[sel].bits;
-			uint8_t hex_digits = (bits + 3) / 4; /* Round up to hex digits */
-			uint8_t digits[16] = {0};
-			uint8_t cursor = 0;
-			bool entry_done = false;
-
-			sub_ghz_add_manually_draw_key_entry(sel, digits, hex_digits, cursor);
-
-			while (!entry_done)
-			{
-				ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-				if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
-				ret = xQueueReceive(button_events_q_hdl, &btn, 0);
-				if (ret != pdTRUE) continue;
-
-				if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					entry_done = true;
-				}
-				else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					digits[cursor] = (digits[cursor] + 1) & 0x0F;
-					sub_ghz_add_manually_draw_key_entry(sel, digits, hex_digits, cursor);
-				}
-				else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					digits[cursor] = (digits[cursor] - 1) & 0x0F;
-					sub_ghz_add_manually_draw_key_entry(sel, digits, hex_digits, cursor);
-				}
-				else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					if (cursor < hex_digits - 1) cursor++;
-					sub_ghz_add_manually_draw_key_entry(sel, digits, hex_digits, cursor);
-				}
-				else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					if (cursor > 0) cursor--;
-					sub_ghz_add_manually_draw_key_entry(sel, digits, hex_digits, cursor);
-				}
-				else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-				{
-					/* Build key value and transmit */
-					uint64_t key_val = 0;
-					for (uint8_t d = 0; d < hex_digits; d++)
-						key_val = (key_val << 4) | digits[d];
-
-					sub_ghz_add_manually_transmit(sel, key_val);
-					sub_ghz_add_manually_draw_key_entry(sel, digits, hex_digits, cursor);
-				}
-			}
-		}
-		sub_ghz_add_manually_draw_list(sel, scroll_top);
-	}
-}
 
 
 /*============================================================================*/
@@ -5584,6 +5442,12 @@ bool    subghz_get_sound_ext(void)           { return subghz_cfg.sound; }
 void    subghz_set_sound_ext(bool v)         { subghz_cfg.sound = v; }
 bool    subghz_get_autosave_ext(void)        { return subghz_cfg.autosave; }
 void    subghz_set_autosave_ext(bool v)      { subghz_cfg.autosave = v; }
+
+/* Phase 12 — receiver history quality-of-life toggles */
+bool    subghz_get_remove_duplicates_ext(void)     { return subghz_cfg.remove_duplicates; }
+void    subghz_set_remove_duplicates_ext(bool v)   { subghz_cfg.remove_duplicates = v; }
+bool    subghz_get_delete_old_signals_ext(void)    { return subghz_cfg.delete_old_signals; }
+void    subghz_set_delete_old_signals_ext(bool v)  { subghz_cfg.delete_old_signals = v; }
 
 /* ── Raw recording file management (used by Read Raw scene) ─────────────── */
 

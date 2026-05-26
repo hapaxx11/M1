@@ -4,8 +4,10 @@
  * @file   m1_subghz_scene_menu.c
  * @brief  Sub-GHz Menu Scene — entry point with Flipper-style item list.
  *
- * Displays a focused selection list with a scrollbar position indicator
- * on the right side.  No bottom button bar — OK is implied by the list.
+ * Phase 7c-1 migration: rendering and scroll/selection math come from the
+ * reusable `subghz_submenu_model` + `m1_submenu_draw` widget.  This scene
+ * only owns the labels, the OK-dispatch target table, and a single
+ * persisted byte (the selection index) in the per-scene state slot.
  *
  *   1. Read (protocol decode) — most common, at top
  *   2. Read Raw (raw capture)
@@ -29,20 +31,16 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_system.h"
 #include "m1_subghz_scene.h"
+#include "subghz_submenu_model.h"
 
 /*============================================================================*/
 /* Menu items                                                                 */
 /*============================================================================*/
 
 #define MENU_ITEM_COUNT   13
-
-/* Layout constants */
-#define MENU_AREA_TOP     12   /* Y below title + separator line      */
-#define SCROLLBAR_X      124   /* Scrollbar left edge (3px wide)      */
-#define SCROLLBAR_W        3   /* Scrollbar track width               */
-#define MENU_TEXT_W      122   /* Highlight / text area width          */
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -71,13 +69,31 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneFreqScanner,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
-    SubGhzSceneAddManually,
+    SubGhzSceneSetType,   /* "Add Manually" — Phase 8b-4 retired the blocking delegate */
     SubGhzSceneRemote,
     SubGhzSceneBindWizard,
 };
 
-static uint8_t menu_sel = 0;
-static uint8_t menu_scroll = 0;
+/*============================================================================*/
+/* Selection state — persisted across child-scene pushes via Phase 2          */
+/* per-scene state slot.  Only `selected` needs to persist; the scroll        */
+/* window is rederived by the model from the current selection + visible     */
+/* count on every entry.                                                      */
+/*============================================================================*/
+
+static subghz_submenu_model_t s_model;
+
+static inline uint8_t menu_get_saved_sel(const SubGhzApp *app)
+{
+    uint32_t s = subghz_scene_get_state(app, SubGhzSceneMenu);
+    uint8_t sel = (uint8_t)(s & 0xFFu);
+    return (sel < MENU_ITEM_COUNT) ? sel : 0;
+}
+
+static inline void menu_save_sel(SubGhzApp *app, uint8_t sel)
+{
+    subghz_scene_set_state(app, SubGhzSceneMenu, (uint32_t)sel);
+}
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -85,13 +101,19 @@ static uint8_t menu_scroll = 0;
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    (void)app;
+    subghz_submenu_model_init(&s_model,
+                              MENU_ITEM_COUNT,
+                              M1_MENU_VIS(MENU_ITEM_COUNT));
+    subghz_submenu_model_set_selected(&s_model, menu_get_saved_sel(app));
     app->need_redraw = true;
 }
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
-    const uint8_t vis = M1_MENU_VIS(MENU_ITEM_COUNT);
+    /* Re-sync visible_count in case the user changed the text-size
+     * preference while a child scene was on top. */
+    subghz_submenu_model_set_visible_count(&s_model,
+                                           M1_MENU_VIS(MENU_ITEM_COUNT));
 
     switch (event)
     {
@@ -100,29 +122,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventUp:
-            menu_sel = (menu_sel > 0) ? menu_sel - 1 : MENU_ITEM_COUNT - 1;
-            /* Adjust scroll window */
-            if (menu_sel < menu_scroll)
-                menu_scroll = menu_sel;
-            else if (menu_sel >= menu_scroll + vis)
-                menu_scroll = menu_sel - vis + 1;
+            subghz_submenu_model_up(&s_model);
+            menu_save_sel(app, s_model.selected);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventDown:
-            menu_sel = (menu_sel + 1) % MENU_ITEM_COUNT;
-            /* Adjust scroll window */
-            if (menu_sel >= menu_scroll + vis)
-                menu_scroll = menu_sel - vis + 1;
-            /* Handle wrap-around */
-            if (menu_sel == 0)
-                menu_scroll = 0;
+            subghz_submenu_model_down(&s_model);
+            menu_save_sel(app, s_model.selected);
             app->need_redraw = true;
             return true;
 
         case SubGhzEventOk:
         {
-            SubGhzSceneId target = menu_targets[menu_sel];
+            SubGhzSceneId target = menu_targets[s_model.selected];
             if (target < SubGhzSceneCount)
             {
                 subghz_scene_push(app, target);
@@ -144,62 +157,9 @@ static void scene_on_exit(SubGhzApp *app)
 static void draw(SubGhzApp *app)
 {
     (void)app;
-
-    const uint8_t item_h   = m1_menu_item_h();
-    const uint8_t text_ofs = item_h - 1;
-    const uint8_t vis      = M1_MENU_VIS(MENU_ITEM_COUNT);
-
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
-    /* Title */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 9, 120, "Sub-GHz", TEXT_ALIGN_CENTER);
-
-    /* Draw separator line */
-    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
-
-    /* Menu items */
-    u8g2_SetFont(&m1_u8g2, m1_menu_font());
-    for (uint8_t i = 0; i < vis && (menu_scroll + i) < MENU_ITEM_COUNT; i++)
-    {
-        uint8_t idx = menu_scroll + i;
-        uint8_t y = MENU_AREA_TOP + i * item_h;
-
-        if (idx == menu_sel)
-        {
-            /* Highlight selected item — rounded corners, leave room for scrollbar */
-            u8g2_DrawRBox(&m1_u8g2, 1, y, MENU_TEXT_W, item_h, 2);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-        }
-
-        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, menu_labels[idx]);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
-
-    /* Scrollbar — position indicator on the right edge */
-    {
-        uint8_t sb_area_h   = vis * item_h;
-        uint8_t sb_handle_h = sb_area_h / MENU_ITEM_COUNT;
-        if (sb_handle_h < 6) sb_handle_h = 6;
-
-        uint8_t sb_travel_h = (sb_handle_h < sb_area_h) ? (sb_area_h - sb_handle_h) : 0;
-        uint8_t sb_handle_y = MENU_AREA_TOP;
-        if (MENU_ITEM_COUNT > 1)
-        {
-            sb_handle_y +=
-                (uint8_t)((uint16_t)sb_travel_h * menu_sel / (MENU_ITEM_COUNT - 1));
-        }
-
-        /* Track — single centerline pixel */
-        u8g2_DrawVLine(&m1_u8g2, SCROLLBAR_X + SCROLLBAR_W / 2,
-                       MENU_AREA_TOP, sb_area_h);
-        /* Handle — filled rounded rectangle */
-        u8g2_DrawRBox(&m1_u8g2, SCROLLBAR_X, sb_handle_y,
-                      SCROLLBAR_W, sb_handle_h, 1);
-    }
-
-    m1_u8g2_nextpage();
+    subghz_submenu_model_set_visible_count(&s_model,
+                                           M1_MENU_VIS(MENU_ITEM_COUNT));
+    m1_submenu_draw(&s_model, "Sub-GHz", menu_labels);
 }
 
 /*============================================================================*/

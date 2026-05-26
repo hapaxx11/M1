@@ -152,7 +152,6 @@ void sub_ghz_weather_station(void);
 void sub_ghz_brute_force(void);
 void sub_ghz_rssi_meter(void);
 void sub_ghz_freq_scanner(void);
-void sub_ghz_add_manually(void);
 uint8_t sub_ghz_replay_flipper_file(const char *sub_path);
 
 /**
@@ -293,6 +292,29 @@ void sub_ghz_replay_abort(void);
  * may race the abort.
  */
 bool sub_ghz_replay_async_is_active(void);
+
+/**
+ * @brief  Set the button-override slot consumed by the next
+ *         sub_ghz_replay_prepare_flipper() / sub_ghz_replay_flipper_file()
+ *         call.
+ *
+ * Used by the Transmitter scene to implement LEFT/RIGHT button cycling
+ * for rolling-code remotes.  When @p button_index is in 0..15 and the
+ * loaded Flipper SubGhz Key File's protocol is in the supported set
+ * (see subghz_button_override.h — currently KeeLoq / Jarolift /
+ * Star Line), the converter mutates the parsed `key_value` to encode
+ * the requested button before invoking the OOK PWM encoder.  For all
+ * other protocols, the override is silently ignored.
+ *
+ * The slot is automatically cleared by the converter at the end of
+ * the conversion (whether successful or not), so each set + prepare
+ * cycle is self-contained.  Calling this with @p button_index < 0
+ * also clears the slot.
+ *
+ * @param  button_index  0..15 = override active for the next prepare;
+ *                       <0    = no override (use the file's value).
+ */
+void sub_ghz_replay_set_button_override(int8_t button_index);
 
 /* Scene-based UI entry point (new Flipper-inspired architecture) */
 void sub_ghz_scene_entry(void);

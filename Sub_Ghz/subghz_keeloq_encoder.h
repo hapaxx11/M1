@@ -79,6 +79,23 @@ typedef struct {
     uint64_t    key_value;   /**< Raw 64-bit key from .sub file */
     uint32_t    bit_count;   /**< Bit count from .sub file "Bit:" */
     uint32_t    te;          /**< TE from .sub file (0 = use default 400 µs) */
+    /**
+     * @brief CounterMode policy (Phase 9d).
+     *
+     * When @c false (default — Increment mode), the encoder runs the standard
+     * counter-mode rolling-code path: decrypt → increment 16-bit counter →
+     * re-encrypt → transmit.  This is the original behaviour and is required
+     * for binding a new remote whose receiver expects every TX to carry a
+     * fresh counter.
+     *
+     * When @c true (Static mode), the encoder skips the counter increment and
+     * re-emits the original encrypted hop word verbatim.  Useful for some
+     * receivers / debugging scenarios where the user wants to replay the
+     * exact captured packet repeatedly.  The captured hop is still subject
+     * to the manufacturer-key derivation path so the field layout is
+     * preserved; only `keeloq_increment_hop()` is bypassed.
+     */
+    bool        static_counter;
 } KeeLoqEncParams;
 
 /*============================================================================*/

@@ -844,6 +844,394 @@ void test_emulate_path_convert_when_not_raw_not_native(void)
 }
 
 /* ===================================================================
+ * Phase 9b — Manufacture: field load / save round-trip
+ *
+ * The SignalSettings save-back path (`subghz_signal_settings_apply_button`)
+ * requires that:
+ *   1. `flipper_subghz_load` parses the optional `Manufacture:` line into
+ *      `signal.manufacture` (empty when not present).
+ *   2. `flipper_subghz_save_key_with_manufacture` round-trips the field
+ *      verbatim — re-loading the saved file yields the same Manufacture
+ *      string.
+ *   3. Loading a file with no Manufacture line yields an empty string
+ *      (regression guard against accidental write of "(none)" or stale
+ *      stack data).
+ * =================================================================== */
+
+void test_load_flipper_key_manufacture_field(void)
+{
+	const char *path = "/tmp/test_flipper_key_mfg.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: KeeLoq\r\n"
+	    "Bit: 64\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "TE: 400\r\n"
+	    "Manufacture: AN-Motors\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_PARSED, sig.type);
+	TEST_ASSERT_EQUAL_STRING("KeeLoq", sig.protocol);
+	TEST_ASSERT_EQUAL_STRING("AN-Motors", sig.manufacture);
+
+	remove(path);
+}
+
+void test_load_flipper_key_no_manufacture_empty(void)
+{
+	const char *path = "/tmp/test_flipper_key_no_mfg.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bit: 24\r\n"
+	    "Key: 00 00 00 00 00 52 A1 2E\r\n"
+	    "TE: 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL_STRING("", sig.manufacture);
+
+	remove(path);
+}
+
+void test_save_key_with_manufacture_roundtrip(void)
+{
+	const char *path = "/tmp/test_save_key_mfg.sub";
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0x1122334455667788ULL, 400,
+	    "Came_Space");
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_TYPE_PARSED, sig.type);
+	TEST_ASSERT_EQUAL_UINT32(433920000UL, sig.frequency);
+	TEST_ASSERT_EQUAL_STRING("KeeLoq", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT32(64, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT64(0x1122334455667788ULL, sig.key);
+	TEST_ASSERT_EQUAL_UINT32(400, sig.te);
+	TEST_ASSERT_EQUAL_STRING("Came_Space", sig.manufacture);
+
+	remove(path);
+}
+
+void test_save_key_with_manufacture_null_writes_no_line(void)
+{
+	const char *path = "/tmp/test_save_key_null_mfg.sub";
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "Princeton", 24, 0x52A12EULL, 400,
+	    NULL);
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	/* No Manufacture: line in the file → field stays empty. */
+	TEST_ASSERT_EQUAL_STRING("", sig.manufacture);
+
+	remove(path);
+}
+
+/* ===================================================================
+ * Phase 9d-2 — CounterMode: field load / save round-trip
+ *
+ * Replay-policy override carried by KeeLoq-family .sub files:
+ *   1. Missing `CounterMode:` line  → INCREMENT (default).
+ *   2. `CounterMode: Static`        → STATIC.
+ *   3. `CounterMode: Increment`     → INCREMENT (explicit).
+ *   4. `CounterMode: Bogus`         → INCREMENT (defensive: unknown
+ *                                     values must not silently flip the
+ *                                     replay policy).
+ *   5. flipper_subghz_save_key_full() with STATIC → file contains the
+ *      line, round-trips back to STATIC on load.
+ *   6. flipper_subghz_save_key_full() with INCREMENT → no `CounterMode:`
+ *      line is written (default kept off-disk for forward compat).
+ *   7. flipper_subghz_save_key_with_manufacture() never writes the line.
+ * =================================================================== */
+
+void test_load_flipper_key_counter_mode_missing_is_increment(void)
+{
+	const char *path = "/tmp/test_flipper_key_cm_missing.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: KeeLoq\r\n"
+	    "Bit: 64\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "TE: 400\r\n"
+	    "Manufacture: AN-Motors\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0xAA, sizeof(sig));  /* poison: prove load resets the field */
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT, sig.counter_mode);
+
+	remove(path);
+}
+
+void test_load_flipper_key_counter_mode_static(void)
+{
+	const char *path = "/tmp/test_flipper_key_cm_static.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: KeeLoq\r\n"
+	    "Bit: 64\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "TE: 400\r\n"
+	    "Manufacture: AN-Motors\r\n"
+	    "CounterMode: Static\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_STATIC, sig.counter_mode);
+	/* Sanity: other fields still parsed correctly alongside CounterMode. */
+	TEST_ASSERT_EQUAL_STRING("AN-Motors", sig.manufacture);
+	TEST_ASSERT_EQUAL_UINT32(64, sig.bit_count);
+
+	remove(path);
+}
+
+void test_load_flipper_key_counter_mode_increment_explicit(void)
+{
+	const char *path = "/tmp/test_flipper_key_cm_inc.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: KeeLoq\r\n"
+	    "Bit: 64\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "TE: 400\r\n"
+	    "Manufacture: AN-Motors\r\n"
+	    "CounterMode: Increment\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT, sig.counter_mode);
+
+	remove(path);
+}
+
+void test_load_flipper_key_counter_mode_invalid_is_increment(void)
+{
+	const char *path = "/tmp/test_flipper_key_cm_bogus.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: KeeLoq\r\n"
+	    "Bit: 64\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "TE: 400\r\n"
+	    "Manufacture: AN-Motors\r\n"
+	    "CounterMode: Bogus\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT, sig.counter_mode);
+
+	remove(path);
+}
+
+void test_save_key_full_static_roundtrip(void)
+{
+	const char *path = "/tmp/test_save_key_cm_static.sub";
+	bool ok = flipper_subghz_save_key_full(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0x1122334455667788ULL, 400,
+	    "Came_Space",
+	    FLIPPER_SUBGHZ_COUNTER_MODE_STATIC);
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL_STRING("KeeLoq", sig.protocol);
+	TEST_ASSERT_EQUAL_STRING("Came_Space", sig.manufacture);
+	TEST_ASSERT_EQUAL_UINT64(0x1122334455667788ULL, sig.key);
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_STATIC, sig.counter_mode);
+
+	remove(path);
+}
+
+void test_save_key_full_increment_writes_no_line(void)
+{
+	const char *path = "/tmp/test_save_key_cm_inc.sub";
+	bool ok = flipper_subghz_save_key_full(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0x1122334455667788ULL, 400,
+	    "Came_Space",
+	    FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT);
+	TEST_ASSERT_TRUE(ok);
+
+	/* File should NOT contain a CounterMode: line — Increment is the
+	 * implicit default and gets elided to keep existing Phase 9b/9c
+	 * saved files byte-identical. */
+	FILE *f = fopen(path, "rb");
+	TEST_ASSERT_NOT_NULL(f);
+	char buf[1024];
+	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+	buf[n] = '\0';
+	fclose(f);
+	TEST_ASSERT_NULL(strstr(buf, "CounterMode"));
+
+	/* And of course load yields INCREMENT (the parser default). */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT, sig.counter_mode);
+
+	remove(path);
+}
+
+void test_save_key_with_manufacture_never_writes_counter_mode(void)
+{
+	/* Phase 9d-2 contract: the Phase 9b/9c API stays byte-stable —
+	 * `save_key_with_manufacture` must never emit a CounterMode line. */
+	const char *path = "/tmp/test_save_key_legacy_no_cm.sub";
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0x1122334455667788ULL, 400,
+	    "Came_Space");
+	TEST_ASSERT_TRUE(ok);
+
+	FILE *f = fopen(path, "rb");
+	TEST_ASSERT_NOT_NULL(f);
+	char buf[1024];
+	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+	buf[n] = '\0';
+	fclose(f);
+	TEST_ASSERT_NULL(strstr(buf, "CounterMode"));
+
+	remove(path);
+}
+
+/*
+ * Phase 9d-3 — CounterMode preservation when re-saving from a loaded
+ * signal struct (mimics what the SignalSettings scene's apply_button /
+ * apply_counter helpers now do: read s_signal.counter_mode after
+ * flipper_subghz_load() and feed it back to flipper_subghz_save_key_full()).
+ *
+ * Cases:
+ *   1. STATIC file → load → resave with s_signal.counter_mode → still STATIC.
+ *   2. INCREMENT file (no field) → load → resave with s_signal.counter_mode
+ *      → still INCREMENT, file contains no CounterMode: line.
+ *
+ * Guards against a regression where the scene wrappers reverted to the
+ * legacy save_key_with_manufacture() helper and silently reset a Static
+ * file to Increment on any Button/Counter edit.
+ */
+
+void test_resave_static_via_save_key_full_preserves_mode(void)
+{
+	const char *path = "/tmp/test_resave_static_preserve.sub";
+
+	/* Write a STATIC file. */
+	bool ok = flipper_subghz_save_key_full(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0xDEADBEEFCAFEBABEULL, 400,
+	    "Came_Space",
+	    FLIPPER_SUBGHZ_COUNTER_MODE_STATIC);
+	TEST_ASSERT_TRUE(ok);
+
+	/* Load it, then re-save using the loaded struct's counter_mode —
+	 * exactly what the SignalSettings scene's apply_button now does. */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_STATIC, sig.counter_mode);
+
+	/* Simulate an edit that mutates the key but preserves all other
+	 * metadata (the scene's Button-substitute → reassemble path). */
+	ok = flipper_subghz_save_key_full(
+	    path, sig.frequency, sig.preset, sig.protocol,
+	    sig.bit_count, 0x1111222233334444ULL, sig.te,
+	    sig.manufacture, sig.counter_mode);
+	TEST_ASSERT_TRUE(ok);
+
+	/* Verify CounterMode survived the resave. */
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_STATIC, sig.counter_mode);
+	TEST_ASSERT_EQUAL_UINT64(0x1111222233334444ULL, sig.key);
+	TEST_ASSERT_EQUAL_STRING("Came_Space", sig.manufacture);
+
+	remove(path);
+}
+
+void test_resave_increment_via_save_key_full_omits_field(void)
+{
+	const char *path = "/tmp/test_resave_increment_preserve.sub";
+
+	/* Write a default-INCREMENT file via the legacy helper (the most
+	 * common pre-9d state on disk: no CounterMode: line). */
+	bool ok = flipper_subghz_save_key_with_manufacture(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "KeeLoq", 64, 0xDEADBEEFCAFEBABEULL, 400,
+	    "Came_Space");
+	TEST_ASSERT_TRUE(ok);
+
+	/* Load and round-trip via save_key_full with the loaded mode. */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL(FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT, sig.counter_mode);
+
+	ok = flipper_subghz_save_key_full(
+	    path, sig.frequency, sig.preset, sig.protocol,
+	    sig.bit_count, 0x1111222233334444ULL, sig.te,
+	    sig.manufacture, sig.counter_mode);
+	TEST_ASSERT_TRUE(ok);
+
+	/* Saved file must still omit the CounterMode line (Increment is
+	 * elided as the default) — keeps Phase 9b/9c saved files
+	 * byte-identical to legacy. */
+	FILE *f = fopen(path, "rb");
+	TEST_ASSERT_NOT_NULL(f);
+	char buf[1024];
+	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+	buf[n] = '\0';
+	fclose(f);
+	TEST_ASSERT_NULL(strstr(buf, "CounterMode"));
+
+	remove(path);
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -924,6 +1312,26 @@ int main(void)
 	RUN_TEST(test_emulate_path_convert_when_raw_not_native);
 	RUN_TEST(test_emulate_path_convert_when_not_raw_native);
 	RUN_TEST(test_emulate_path_convert_when_not_raw_not_native);
+
+	/* Phase 9b — Manufacture: field load / save round-trip */
+	RUN_TEST(test_load_flipper_key_manufacture_field);
+	RUN_TEST(test_load_flipper_key_no_manufacture_empty);
+	RUN_TEST(test_save_key_with_manufacture_roundtrip);
+	RUN_TEST(test_save_key_with_manufacture_null_writes_no_line);
+
+	/* Phase 9d-2 — CounterMode: field load / save round-trip */
+	RUN_TEST(test_load_flipper_key_counter_mode_missing_is_increment);
+	RUN_TEST(test_load_flipper_key_counter_mode_static);
+	RUN_TEST(test_load_flipper_key_counter_mode_increment_explicit);
+	RUN_TEST(test_load_flipper_key_counter_mode_invalid_is_increment);
+	RUN_TEST(test_save_key_full_static_roundtrip);
+	RUN_TEST(test_save_key_full_increment_writes_no_line);
+	RUN_TEST(test_save_key_with_manufacture_never_writes_counter_mode);
+
+	/* Phase 9d-3 — CounterMode preservation when SignalSettings scene
+	 * re-saves a loaded file via save_key_full (apply_button / apply_counter). */
+	RUN_TEST(test_resave_static_via_save_key_full_preserves_mode);
+	RUN_TEST(test_resave_increment_via_save_key_full_omits_field);
 
 	return UNITY_END();
 }

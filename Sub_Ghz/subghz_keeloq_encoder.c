@@ -236,8 +236,33 @@ KeeLoqEncResult keeloq_encode_replay(
         return KEELOQ_ENC_BAD_PROTOCOL;
     }
 
-    /* Counter-mode: decrypt → increment → re-encrypt */
-    uint32_t new_hop = keeloq_increment_hop(hop, device_key);
+    /* Counter-mode policy (Phase 9d):
+     *   Increment mode (default): decrypt → +1 → re-encrypt
+     *   Static    mode          : re-emit captured hop verbatim
+     * The manufacturer-key derivation path always runs so that field
+     * extraction and key reassembly use the same logic in both modes.
+     */
+    uint32_t new_hop;
+    if (params->static_counter) {
+        new_hop = hop;
+    } else {
+        new_hop = keeloq_increment_hop(hop, device_key);
+    }
+
+    /* Sync HOP-plaintext button bits [15:12] with the FIX-portion button
+     * nibble before re-encrypting.  Without this, a packet whose FIX
+     * button was mutated by subghz_button_override_apply() would
+     * transmit FIX-button=new but HOP-plaintext-button=captured, which
+     * a real receiver will reject (the redundant button transmission is
+     * how KeeLoq-family receivers detect tampering).  For an untouched
+     * capture this is a no-op because FIX-button == HOP-button by
+     * construction on a real remote. */
+    {
+        uint32_t plain = keeloq_decrypt(new_hop, device_key);
+        plain = (plain & 0xFFFF0FFFU) |
+                ((uint32_t)(button & 0x0FU) << 12);
+        new_hop = keeloq_encrypt(plain, device_key);
+    }
 
     /* Reconstruct the 64-bit key with the new hop word */
     uint64_t new_key = reconstruct_key(params->protocol, new_hop, serial, button);

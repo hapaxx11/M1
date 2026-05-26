@@ -65,6 +65,12 @@ extern void   subghz_set_rssi_threshold_ext(int8_t v);
 extern uint32_t subghz_get_user_custom_freq_ext(void);
 extern void     subghz_set_user_custom_freq_ext(uint32_t hz);
 
+/* Phase 12 — receiver history quality-of-life toggles */
+extern bool subghz_get_remove_duplicates_ext(void);
+extern void subghz_set_remove_duplicates_ext(bool v);
+extern bool subghz_get_delete_old_signals_ext(void);
+extern void subghz_set_delete_old_signals_ext(bool v);
+
 /* ISM region data (non-static globals in m1_sub_ghz.c / m1_sub_ghz.h) */
 extern const char *subghz_ism_regions_text[];
 
@@ -72,7 +78,7 @@ extern const char *subghz_ism_regions_text[];
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS       9
+#define CFG_ITEMS       11
 #define CFG_FREQUENCY   0
 #define CFG_HOPPING     1
 #define CFG_MODULATION  2
@@ -82,6 +88,8 @@ extern const char *subghz_ism_regions_text[];
 #define CFG_ISM_REGION  6
 #define CFG_SAVE_FMT    7
 #define CFG_RSSI_THRESH 8
+#define CFG_REMOVE_DUPS 9   /* Phase 12 */
+#define CFG_DELETE_OLD  10  /* Phase 12 */
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
@@ -118,6 +126,8 @@ static const char *cfg_item_labels[CFG_ITEMS] = {
     "ISM Region:",
     "Save Format:",
     "RSSI Thresh:",
+    "Remove Dups:",   /* Phase 12 */
+    "Delete Old:",    /* Phase 12 */
 };
 
 /*============================================================================*/
@@ -164,6 +174,10 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             snprintf(rssi_buf, sizeof(rssi_buf), "%d dBm", (int)subghz_get_rssi_threshold_ext());
             return rssi_buf;
         }
+        case CFG_REMOVE_DUPS:
+            return subghz_get_remove_duplicates_ext() ? "ON" : "OFF";
+        case CFG_DELETE_OLD:
+            return subghz_get_delete_old_signals_ext() ? "ON" : "OFF";
         default:
             return "";
     }
@@ -233,6 +247,14 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
             subghz_set_rssi_threshold_ext(t);
             break;
         }
+        case CFG_REMOVE_DUPS:
+            (void)dir;
+            subghz_set_remove_duplicates_ext(!subghz_get_remove_duplicates_ext());
+            break;
+        case CFG_DELETE_OLD:
+            (void)dir;
+            subghz_set_delete_old_signals_ext(!subghz_get_delete_old_signals_ext());
+            break;
     }
 }
 

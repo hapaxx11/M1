@@ -333,7 +333,20 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_keeloq_mfkeys.c
     ../../Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
     ../../Sub_Ghz/subghz_keeloq_encoder.c
+    ../../Sub_Ghz/subghz_txrx_state.c
+    ../../Sub_Ghz/subghz_scene_state.c
+    ../../Sub_Ghz/subghz_endless_tx.c
+    ../../Sub_Ghz/subghz_scene_polish.c
+    ../../Sub_Ghz/subghz_transmitter_ctl.c
+    ../../Sub_Ghz/subghz_button_caps.c
+    ../../Sub_Ghz/subghz_button_override.c
+    ../../Sub_Ghz/subghz_submenu_model.c
     ../../Sub_Ghz/subghz_new_remote_gen.c
+    ../../Sub_Ghz/subghz_create_proto.c
+    ../../Sub_Ghz/subghz_hex_editor.c
+    ../../Sub_Ghz/subghz_keeloq_create.c
+    ../../Sub_Ghz/subghz_signal_fields.c
+    ../../Sub_Ghz/subghz_signal_format.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
@@ -552,6 +565,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_sub_ghz.c
     # === Generic Scene Framework ===
     ../../m1_csrc/m1_scene.c
+    ../../m1_csrc/m1_submenu.c
     # === Sub-GHz Scene UI (Flipper-inspired scene architecture) ===
     ../../m1_csrc/m1_subghz_scene.c
     ../../m1_csrc/m1_subghz_button_bar.c
@@ -572,9 +586,20 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_freq_scanner.c
     ../../m1_csrc/m1_subghz_scene_weather_station.c
     ../../m1_csrc/m1_subghz_scene_brute_force.c
-    ../../m1_csrc/m1_subghz_scene_add_manually.c
     ../../m1_csrc/m1_subghz_scene_remote.c
     ../../m1_csrc/m1_subghz_scene_bind_wizard.c
+    ../../m1_csrc/m1_subghz_scene_transmitter.c
+    ../../m1_csrc/m1_subghz_scene_saved_menu.c
+    ../../m1_csrc/m1_subghz_scene_delete.c
+    ../../m1_csrc/m1_subghz_scene_more_raw.c
+    ../../m1_csrc/m1_subghz_scene_decode_raw.c
+    ../../m1_csrc/m1_subghz_scene_set_type.c
+    ../../m1_csrc/m1_subghz_scene_set_key.c
+    ../../m1_csrc/m1_subghz_scene_set_serial.c
+    ../../m1_csrc/m1_subghz_scene_set_button.c
+    ../../m1_csrc/m1_subghz_scene_set_counter.c
+    ../../m1_csrc/m1_subghz_scene_set_mfkey.c
+    ../../m1_csrc/m1_subghz_scene_signal_settings.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c

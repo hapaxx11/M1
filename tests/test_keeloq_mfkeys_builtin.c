@@ -146,6 +146,81 @@ void test_builtin_sd_files_not_created(void)
     TEST_ASSERT_FALSE(sd_file_exists(KEELOQ_MFKEYS_PATH));
 }
 
+/* test_get_at_iterates_table
+ * keeloq_mfkeys_get_at(i) returns every entry in the loaded table in
+ * order, matching what keeloq_mfkeys_find() returns for the same names.
+ * Needed by the Phase 8c-2 SetMfKey picker scene.
+ */
+void test_get_at_iterates_table(void)
+{
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load());
+    uint32_t n = keeloq_mfkeys_count();
+    TEST_ASSERT_EQUAL_UINT32(2, n);
+
+    /* Iterate and verify each entry round-trips through find(). */
+    bool seen_test_vault = false;
+    bool seen_another    = false;
+    for (uint32_t i = 0; i < n; ++i) {
+        KeeLoqMfrEntry e;
+        TEST_ASSERT_TRUE(keeloq_mfkeys_get_at(i, &e));
+        TEST_ASSERT_NOT_NULL(e.name);
+        TEST_ASSERT_GREATER_THAN(0u, strlen(e.name));
+
+        KeeLoqMfrEntry e_find;
+        TEST_ASSERT_TRUE(keeloq_mfkeys_find(e.name, &e_find));
+        TEST_ASSERT_EQUAL_UINT64(e.key, e_find.key);
+        TEST_ASSERT_EQUAL_INT(e.learn_type, e_find.learn_type);
+
+        if (strcmp(e.name, "TestVaultMfr") == 0) seen_test_vault = true;
+        if (strcmp(e.name, "AnotherMfr")   == 0) seen_another    = true;
+    }
+    TEST_ASSERT_TRUE(seen_test_vault);
+    TEST_ASSERT_TRUE(seen_another);
+}
+
+/* test_get_at_out_of_range
+ * keeloq_mfkeys_get_at(i) with i >= count must return false and not
+ * touch the output buffer.
+ */
+void test_get_at_out_of_range(void)
+{
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load());
+    uint32_t n = keeloq_mfkeys_count();
+
+    KeeLoqMfrEntry e;
+    memset(&e, 0xA5, sizeof(e));
+    TEST_ASSERT_FALSE(keeloq_mfkeys_get_at(n, &e));
+    TEST_ASSERT_FALSE(keeloq_mfkeys_get_at(n + 100, &e));
+
+    /* Output buffer untouched. */
+    TEST_ASSERT_EQUAL_UINT8(0xA5, ((unsigned char *)&e)[0]);
+}
+
+/* test_get_at_null_entry
+ * keeloq_mfkeys_get_at() must reject a NULL output pointer without
+ * crashing.
+ */
+void test_get_at_null_entry(void)
+{
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load());
+    TEST_ASSERT_FALSE(keeloq_mfkeys_get_at(0, NULL));
+}
+
+/* test_get_at_empty_table
+ * With no table loaded, keeloq_mfkeys_get_at() must return false for
+ * any index — including 0 — and not touch the output buffer.
+ */
+void test_get_at_empty_table(void)
+{
+    keeloq_mfkeys_free();
+    TEST_ASSERT_EQUAL_UINT32(0, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    memset(&e, 0x5A, sizeof(e));
+    TEST_ASSERT_FALSE(keeloq_mfkeys_get_at(0, &e));
+    TEST_ASSERT_EQUAL_UINT8(0x5A, ((unsigned char *)&e)[0]);
+}
+
 /* ------------------------------------------------------------------ */
 
 int main(void)
@@ -156,5 +231,9 @@ int main(void)
     RUN_TEST(test_builtin_find_entry);
     RUN_TEST(test_builtin_find_case_insensitive);
     RUN_TEST(test_builtin_sd_files_not_created);
+    RUN_TEST(test_get_at_iterates_table);
+    RUN_TEST(test_get_at_out_of_range);
+    RUN_TEST(test_get_at_null_entry);
+    RUN_TEST(test_get_at_empty_table);
     return UNITY_END();
 }

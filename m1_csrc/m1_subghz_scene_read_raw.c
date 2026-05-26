@@ -95,9 +95,6 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_esp32_hal.h"
 #include "ff.h"
-#include "flipper_subghz.h"
-#include "subghz_protocol_registry.h"
-#include "subghz_raw_decoder.h"
 
 extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
@@ -135,11 +132,17 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
 
 /* Path to last recorded file — kept for Send/Save/Erase after recording.
  * Filesystem operations prepend "0:" to build FatFS paths, so keep
- * raw_filepath short enough that "0:" + path fits in the derived buffers. */
+ * raw_filepath short enough that "0:" + path fits in the derived buffers.
+ *
+ * Phase 6: the buffer itself now lives in SubGhzApp (`app->raw_filepath`)
+ * so the MoreRaw and DecodeRaw child scenes can share it.  The macro below
+ * is a compatibility alias so the existing call sites in this scene keep
+ * referencing `raw_filepath` — every reference is inside a function with
+ * `app` in lexical scope.  RAW_FILEPATH_MAX must remain in sync with the
+ * size of `SubGhzApp::raw_filepath` (sized to 72 bytes = 71-char path + NUL). */
 #define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
+#define raw_filepath      (app->raw_filepath)
 
-
-static char raw_filepath[RAW_FILEPATH_MAX + 1];
 
 /* ============================================================================
  * Async TX scene-local state.
@@ -155,26 +158,6 @@ static char raw_filepath[RAW_FILEPATH_MAX + 1];
  * subghz_read_raw_state_after_tx() so TX always returns to Idle
  * (freshly-recorded) or Loaded (pre-existing file). */
 static char tx_unlink_path[RAW_FILEPATH_MAX + 4]; /* "0:" + path + NUL */
-
-/* ============================================================================
- * MoreRAW state — Momentum-aligned submenu for the Loaded state.
- * Right button opens a 3-item menu: Decode / Rename / Delete.
- * ============================================================================ */
-static bool    rr_in_more_menu = false;
-static uint8_t rr_more_sel     = 0;
-
-/* Offline decode results — populated by do_rr_decode(), displayed while
- * rr_in_decode is true.  Stored as file-scope statics (not stack) because
- * flipper_subghz_signal_t contains an 8192-element int16_t array (16 KB). */
-#define RR_DECODE_MAX   16   /* max distinct protocols shown */
-#define RR_DECODE_VIS    3   /* list rows visible at once */
-#define RR_DECODE_ROW_H  8   /* px per list row */
-static SubGhzRawDecodeResult rr_decode_results[RR_DECODE_MAX];
-static uint8_t  rr_decode_count  = 0;
-static uint8_t  rr_decode_sel    = 0;
-static uint8_t  rr_decode_scroll = 0;
-static bool     rr_in_decode     = false;
-static bool     rr_decode_detail = false;
 
 /* Tracks whether signal_present (rssi > rssi_threshold) has been observed at
  * least once since the previous Q_EVENT_SUBGHZ_RX flush.  Used to gate the
@@ -195,9 +178,6 @@ typedef enum {
  * declarations that conflict with the actual static definitions. */
 static void draw(SubGhzApp *app);
 static raw_start_err_t start_raw_rx(SubGhzApp *app, size_t *heap_at_fail);
-static void draw_rr_more_menu(void);
-static void draw_rr_decode(void);
-static void do_rr_decode(void);
 
 /*============================================================================*/
 /* Helpers                                                                    */
@@ -259,6 +239,19 @@ static void scene_on_enter(SubGhzApp *app)
     {
         app->rssi            = -120;
 
+        /* Phase 6 — if the MoreRaw child scene deleted the loaded file, it
+         * cleared app->raw_filepath.  Drop back to the Start state instead
+         * of presenting a Loaded view that points at a non-existent file.
+         * Use the raw_filepath macro alias to avoid token-paste expansion
+         * of the bare `raw_filepath` identifier inside `app->raw_filepath`. */
+        if (app->raw_state == SubGhzReadRawStateLoaded &&
+            raw_filepath[0] == '\0')
+        {
+            app->raw_state        = SubGhzReadRawStateStart;
+            app->raw_sample_count = 0;
+            subghz_raw_rssi_reset_ext();
+        }
+
         /* Restart passive RX (radio was torn down by scene_on_exit when the
          * child scene was pushed).  State and filepath are preserved.
          * Stay in whatever state we left — the user presses OK to start
@@ -276,12 +269,6 @@ static void scene_on_enter(SubGhzApp *app)
     app->raw_sample_count = 0;
     app->rssi = -120;
     subghz_raw_rssi_reset_ext();
-
-    /* Reset MoreRAW and decode state on every fresh entry */
-    rr_in_more_menu = false;
-    rr_more_sel     = 0;
-    rr_in_decode    = false;
-    rr_decode_count = 0;
 
     /* If the Saved scene pre-loaded a file path, enter in Loaded state.
      * This is Momentum's LoadKeyIDLE path — the user opened a pre-recorded
@@ -396,324 +383,9 @@ static void stop_raw_rx(SubGhzApp *app)
      * is not flooded by noise edges while in the Idle state. */
 }
 
-/*============================================================================*/
-/* MoreRAW — Decode / Rename / Delete                                         */
-/*============================================================================*/
-
-/**
- * @brief  Load raw_filepath and run offline protocol decode.
- *
- * Sets rr_in_decode = true so draw() shows the results overlay.
- * Uses a static signal buffer to avoid a 16 KB stack allocation.
- */
-static void do_rr_decode(void)
-{
-    rr_decode_count  = 0;
-    rr_decode_sel    = 0;
-    rr_decode_scroll = 0;
-    rr_decode_detail = false;
-    rr_in_decode     = true;          /* enable overlay — even on failure shows "No protocols" */
-
-    if (raw_filepath[0] == '\0')
-        return;
-
-    char full_path[RAW_FILEPATH_MAX + 3];
-    snprintf(full_path, sizeof(full_path), "0:%s", raw_filepath);
-
-    /* Static to avoid a 16 KB stack allocation (raw_data[8192] lives inside
-     * the struct).  This function is only ever called from the main RTOS task
-     * while the scene is active; the blocking VKB / message-box calls above
-     * prevent any re-entry, so the non-reentrancy of a static local is safe. */
-    static flipper_subghz_signal_t sig;
-    memset(&sig, 0, sizeof(sig));
-    if (!flipper_subghz_load(full_path, &sig))
-        return;
-
-    if (sig.type != FLIPPER_SUBGHZ_TYPE_RAW || sig.raw_count == 0)
-        return;
-
-    subghz_pulse_handler_reset();
-    subghz_decenc_ctl.ndecodedrssi = 0;
-
-    rr_decode_count = subghz_decode_raw_offline(
-        sig.raw_data, sig.raw_count, sig.frequency,
-        rr_decode_results, RR_DECODE_MAX,
-        subghz_registry_decode_try_fn, NULL);
-}
-
-/**
- * @brief  Render the MoreRAW submenu overlay (Decode / Rename / Delete).
- */
-static void draw_rr_more_menu(void)
-{
-    static const char * const items[] = { "Decode", "Rename", "Delete" };
-
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-
-    /* Title: truncated filename */
-    char title[22];
-    const char *fname = (raw_filepath[0] != '\0')
-                        ? extract_filename(raw_filepath) : "RAW";
-    strncpy(title, fname, 21);
-    title[21] = '\0';
-    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    const uint8_t row_h    = 50 / 3;        /* ~16 px each */
-    const uint8_t text_ofs = (row_h >= 12) ? 9 : 8;
-
-    for (uint8_t i = 0; i < 3; i++)
-    {
-        uint8_t y = 14 + i * row_h;
-        if (i == rr_more_sel)
-        {
-            u8g2_DrawRBox(&m1_u8g2, 1, y, M1_MENU_TEXT_W, row_h, 2);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-        }
-        u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, items[i]);
-        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
-}
-
-/**
- * @brief  Render the decode results overlay.
- *
- * List view: scrollable list of matched protocols with key values.
- * Detail view (OK): full info for the selected entry.
- * Both match the layout used by the Saved scene's decode screen.
- */
-static void draw_rr_decode(void)
-{
-    char line[48];
-
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 2, 10, "Decode Results");
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
-    if (rr_decode_count == 0)
-    {
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 10, 32, "No protocols");
-        u8g2_DrawStr(&m1_u8g2, 10, 44, "decoded");
-        return;
-    }
-
-    if (rr_decode_detail)
-    {
-        /* Detail view — full info for the selected result */
-        const SubGhzRawDecodeResult *d = &rr_decode_results[rr_decode_sel];
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 2, 24, protocol_text[d->protocol]);
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-
-        snprintf(line, sizeof(line), "Key: 0x%lX  %dbit",
-                 (uint32_t)d->key, d->bit_len);
-        u8g2_DrawStr(&m1_u8g2, 2, 34, line);
-
-        snprintf(line, sizeof(line), "TE: %d us", d->te);
-        u8g2_DrawStr(&m1_u8g2, 2, 43, line);
-
-        /* Integer arithmetic — embedded nano.specs has no %f */
-        snprintf(line, sizeof(line), "Freq: %lu.%02lu MHz",
-                 (unsigned long)(d->frequency / 1000000UL),
-                 (unsigned long)((d->frequency % 1000000UL) / 10000UL));
-        u8g2_DrawStr(&m1_u8g2, 2, 52, line);
-
-        if (d->serial_number != 0 || d->rolling_code != 0)
-        {
-            snprintf(line, sizeof(line), "SN: %lX RC: %lX",
-                     (unsigned long)d->serial_number,
-                     (unsigned long)d->rolling_code);
-            u8g2_DrawStr(&m1_u8g2, 2, 61, line);
-        }
-    }
-    else
-    {
-        /* List view */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-
-        snprintf(line, sizeof(line), "Decoded: %d", rr_decode_count);
-        u8g2_DrawStr(&m1_u8g2, 2, 22, line);
-
-        uint8_t vis = (rr_decode_count < RR_DECODE_VIS)
-                      ? rr_decode_count : RR_DECODE_VIS;
-        for (uint8_t i = 0; i < vis; i++)
-        {
-            uint8_t idx = rr_decode_scroll + i;
-            if (idx >= rr_decode_count) break;
-
-            const SubGhzRawDecodeResult *d = &rr_decode_results[idx];
-            uint8_t y = 24 + i * RR_DECODE_ROW_H;
-
-            if (idx == rr_decode_sel)
-            {
-                u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, RR_DECODE_ROW_H, 2);
-                u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-            }
-
-            snprintf(line, sizeof(line), "%s 0x%lX",
-                     protocol_text[d->protocol], (uint32_t)d->key);
-            u8g2_DrawStr(&m1_u8g2, 2, y + 6, line);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-        }
-    }
-}
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
-    /* ---- Decode results overlay ----------------------------------------- */
-    if (rr_in_decode)
-    {
-        switch (event)
-        {
-            case SubGhzEventBack:
-                if (rr_decode_detail)
-                    rr_decode_detail = false;
-                else
-                    rr_in_decode = false;
-                app->need_redraw = true;
-                return true;
-
-            case SubGhzEventOk:
-                if (!rr_decode_detail && rr_decode_count > 0)
-                {
-                    rr_decode_detail = true;
-                    app->need_redraw = true;
-                }
-                return true;
-
-            case SubGhzEventUp:
-                if (!rr_decode_detail && rr_decode_count > 0)
-                {
-                    if (rr_decode_sel > 0) rr_decode_sel--;
-                    if (rr_decode_sel < rr_decode_scroll)
-                        rr_decode_scroll = rr_decode_sel;
-                    app->need_redraw = true;
-                }
-                return true;
-
-            case SubGhzEventDown:
-                if (!rr_decode_detail && rr_decode_count > 0)
-                {
-                    if (rr_decode_sel + 1 < rr_decode_count) rr_decode_sel++;
-                    if (rr_decode_sel >= rr_decode_scroll + RR_DECODE_VIS)
-                        rr_decode_scroll = rr_decode_sel - RR_DECODE_VIS + 1;
-                    app->need_redraw = true;
-                }
-                return true;
-
-            default:
-                break;
-        }
-        return false;
-    }
-
-    /* ---- MoreRAW submenu ------------------------------------------------- */
-    if (rr_in_more_menu)
-    {
-        switch (event)
-        {
-            case SubGhzEventBack:
-                rr_in_more_menu  = false;
-                app->need_redraw = true;
-                return true;
-
-            case SubGhzEventUp:
-                if (rr_more_sel > 0) rr_more_sel--;
-                app->need_redraw = true;
-                return true;
-
-            case SubGhzEventDown:
-                if (rr_more_sel < 2) rr_more_sel++;
-                app->need_redraw = true;
-                return true;
-
-            case SubGhzEventOk:
-            {
-                const uint8_t sel = rr_more_sel;
-                rr_in_more_menu = false;
-
-                if (sel == 0)  /* Decode */
-                {
-                    do_rr_decode();
-                    app->need_redraw = true;
-                }
-                else if (sel == 1)  /* Rename */
-                {
-                    const char *fname = extract_filename(raw_filepath);
-                    char base[32];
-                    strncpy(base, fname, sizeof(base) - 1);
-                    base[sizeof(base) - 1] = '\0';
-                    char *dot = strrchr(base, '.');
-                    if (dot) *dot = '\0';
-
-                    char new_name[32];
-                    if (m1_vkb_get_filename("Rename to:", base, new_name))
-                    {
-                        const char *ext = strrchr(fname, '.');
-                        if (!ext) ext = ".sub";
-                        char old_path[RAW_FILEPATH_MAX + 3];
-                        char new_path[RAW_FILEPATH_MAX + 3];
-                        snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
-                        snprintf(new_path, sizeof(new_path),
-                                 "0:/SUBGHZ/%s%s", new_name, ext);
-                        FRESULT res = f_rename(old_path, new_path);
-                        if (res == FR_OK)
-                        {
-                            snprintf(raw_filepath, sizeof(raw_filepath),
-                                     "/SUBGHZ/%s%s", new_name, ext);
-                        }
-                        else
-                        {
-                            m1_message_box(&m1_u8g2, "Rename failed",
-                                           "Could not rename file", "", "BACK");
-                        }
-                    }
-                    app->need_redraw = true;
-                }
-                else  /* Delete */
-                {
-                    char short_name[32];
-                    strncpy(short_name, extract_filename(raw_filepath),
-                            sizeof(short_name) - 1);
-                    short_name[sizeof(short_name) - 1] = '\0';
-
-                    uint8_t confirm = m1_message_box_choice(
-                        &m1_u8g2, "Delete file?", short_name, "", "OK  /  Cancel");
-                    if (confirm == 1)
-                    {
-                        char del_path[RAW_FILEPATH_MAX + 3];
-                        snprintf(del_path, sizeof(del_path), "0:%s", raw_filepath);
-                        FRESULT res = f_unlink(del_path);
-                        if ((res == FR_OK) || (res == FR_NO_FILE))
-                        {
-                            raw_filepath[0]       = '\0';
-                            subghz_raw_rssi_reset_ext();
-                            app->raw_state        = SubGhzReadRawStateStart;
-                            app->raw_sample_count = 0;
-                        }
-                        else
-                        {
-                            m1_message_box(&m1_u8g2, "Delete failed",
-                                           "Could not delete file", "", "BACK");
-                        }
-                    }
-                    app->need_redraw = true;
-                }
-                return true;
-            }
-
-            default:
-                break;
-        }
-        return false;
-    }
-
     /* ---- Normal ReadRaw event handling ----------------------------------- */
     switch (event)
     {
@@ -1003,9 +675,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                         app->raw_load_is_native = false;
                         app->raw_load_freq_hz   = 0;
                         app->raw_load_mod       = 0;
-                        rr_in_more_menu         = false;
-                        rr_in_decode            = false;
-                        rr_decode_count         = 0;
                     }
                     else
                     {
@@ -1018,12 +687,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else if (app->raw_state == SubGhzReadRawStateLoaded && raw_filepath[0] != '\0')
             {
-                /* More — open the MoreRAW submenu (Decode / Rename / Delete).
-                 * Momentum's LoadKeyIDLE → MoreRAW scene, adapted for M1's
-                 * blocking architecture as an inline overlay. */
-                rr_more_sel      = 0;
-                rr_in_more_menu  = true;
-                app->need_redraw = true;
+                /* Phase 6 — open the MoreRAW submenu as its own scene
+                 * (Decode / Rename / Delete).  app->raw_filepath is the
+                 * shared file pointer the child scene will read / mutate;
+                 * on Delete the child clears it and our resume-from-child
+                 * path drops us back to Start. */
+                app->resume_from_child = true;
+                subghz_scene_push(app, SubGhzSceneMoreRaw);
             }
             return true;
 
@@ -1121,9 +791,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    rr_in_more_menu = false;
-    rr_in_decode    = false;
-
     if (app->raw_state == SubGhzReadRawStateRecording)
     {
         /* Recording was in progress — use the normal stop path so all
@@ -1159,19 +826,10 @@ static void draw(SubGhzApp *app)
 {
     m1_u8g2_firstpage();
 
-    /* MoreRAW overlays — render and return immediately when active */
-    if (rr_in_decode)
-    {
-        draw_rr_decode();
-        m1_u8g2_nextpage();
-        return;
-    }
-    if (rr_in_more_menu)
-    {
-        draw_rr_more_menu();
-        m1_u8g2_nextpage();
-        return;
-    }
+    /* Phase 6 — MoreRAW and DecodeRaw are now sibling child scenes that
+     * own their own draw lifetime; nothing to overlay here.  When pushed,
+     * scene_on_exit tears down the radio and start_passive_rx is restored
+     * on resume. */
 
     /* Status bar: freq (left), mod (center), state+samples (right) */
     const char *freq = subghz_freq_labels ? subghz_freq_labels[app->freq_idx] : "???";

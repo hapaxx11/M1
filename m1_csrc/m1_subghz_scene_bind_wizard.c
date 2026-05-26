@@ -42,19 +42,20 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "m1_subghz_scene.h"
 #include "subghz_new_remote_gen.h"
+#include "subghz_submenu_model.h"
 #include "flipper_subghz.h"
 
 /*============================================================================*/
 /* External linkage                                                           */
 /*============================================================================*/
 
-extern void    menu_sub_ghz_init(void);
-extern void    menu_sub_ghz_exit(void);
-extern uint8_t sub_ghz_replay_flipper_file(const char *path);
+/* (Radio lifecycle is now owned by SubGhzSceneTransmitter — no direct
+ *  menu_sub_ghz_* calls needed in this scene.) */
 extern uint32_t HAL_GetTick(void);
 
 /*============================================================================*/
@@ -257,8 +258,10 @@ typedef enum {
 } BwState;
 
 static BwState   bw_state;
-static uint8_t   bw_proto_sel;   /* selected index in BIND_PROTO_COUNT */
-static uint8_t   bw_proto_scroll;
+/* Phase 7c-4: scroll/selection math for the protocol picker comes from the
+ * reusable pure-logic widget; selected index lives in s_proto_model.selected. */
+static subghz_submenu_model_t s_proto_model;
+static const char *s_proto_labels[BIND_PROTO_COUNT];
 static uint8_t   bw_step;       /* current step index (0-based) */
 static uint32_t  bw_countdown_start; /* HAL_GetTick() when countdown began */
 static bool      bw_tx_failed;  /* true if last TX step failed */
@@ -280,13 +283,23 @@ static char      bw_filepath[72]; /* "0:/SUBGHZ/<file_base>.sub" */
 /* Line height in pixels for instruction text (NokiaSmallPlain ascent=7) */
 #define STEP_TEXT_LINE_H    9
 
-/* Return visible items using the font-aware helper. */
-#define BW_PROTO_VIS   M1_MENU_VIS(BIND_PROTO_COUNT)
+/* Populate the protocol-label pointer table and (re)initialise the picker
+ * model.  Called from scene_on_enter (and from any future place that resets
+ * the picker).  Labels are static strings owned by subghz_new_remote_gen.c,
+ * so pointer lifetime is the firmware's. */
+static void proto_picker_init(void)
+{
+    for (uint8_t i = 0; i < BIND_PROTO_COUNT; i++)
+        s_proto_labels[i] = subghz_new_remote_proto_label(bind_protos[i].proto_id);
+    subghz_submenu_model_init(&s_proto_model,
+                              BIND_PROTO_COUNT,
+                              M1_MENU_VIS(BIND_PROTO_COUNT));
+}
 
 /* Return the currently-selected protocol entry. */
 static const BindProtoDef *current_proto(void)
 {
-    return &bind_protos[bw_proto_sel];
+    return &bind_protos[s_proto_model.selected];
 }
 
 static const BindStep *current_step(void)
@@ -329,12 +342,30 @@ static bool bw_generate_and_save(void)
                bw_params.bit_count, bw_params.key, (uint32_t)bw_params.te);
 }
 
-/** Fire TX of the generated file.  Returns true on success. */
-static bool bw_transmit(void)
+/** Push the async Transmitter scene to fire a TX step.  Replaces the legacy
+ *  blocking sub_ghz_replay_flipper_file() call; the Transmitter scene owns
+ *  the radio lifecycle (init/exit + tx_completed_naturally flag) and pops
+ *  back here on completion or BACK abort. */
+static void bw_push_tx(SubGhzApp *app)
 {
-    uint8_t rc = sub_ghz_replay_flipper_file(bw_filepath);
-    menu_sub_ghz_init(); /* Restore radio (architecture rule) */
-    return (rc == 0);
+    /* tx_path is 72 bytes; bw_filepath is "0:/SUBGHZ/" + up to 39 chars
+     * of file_base + ".sub" = at most 53 chars, safely within bounds. */
+    strncpy(app->tx_path, bw_filepath, sizeof(app->tx_path) - 1);
+    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    app->tx_repeat_count = 1U;                   /* static keys: 1 burst */
+    app->tx_mode         = 0U;                   /* SUBGHZ_TX_MODE_SINGLE */
+    app->tx_autostart    = true;                 /* 1-press fire UX */
+    /* Phase 4b — pass the binding protocol name to the Transmitter
+     * scene.  All five wizard protocols (CAME Atomo, Nice FloR-S,
+     * Alutech AT-4N, DITEC GOL4, KingGates Stylo4k) support button
+     * cycling, so the Transmitter will enable LEFT/RIGHT during the
+     * step.  Until Phase 4c lands the key-override path, cycling
+     * only updates the visible "Btn X/Y" indicator. */
+    strncpy(app->tx_protocol_name, bw_params.proto_name,
+            sizeof(app->tx_protocol_name) - 1);
+    app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
+    app->resume_from_child = true;
+    subghz_scene_push(app, SubGhzSceneTransmitter);
 }
 
 /*============================================================================*/
@@ -343,58 +374,12 @@ static bool bw_transmit(void)
 
 static void draw_proto_sel(void)
 {
-    const uint8_t vis    = BW_PROTO_VIS;
-    const uint8_t item_h = m1_menu_item_h();
-
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
-    /* Title — centered, non-bold, matching other Sub-GHz scene menus */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 9, 120, "Bind New Remote", TEXT_ALIGN_CENTER);
-    u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
-
-    /* Protocol list */
-    u8g2_SetFont(&m1_u8g2, m1_menu_font());
-
-    for (uint8_t i = 0; i < vis && (bw_proto_scroll + i) < BIND_PROTO_COUNT; i++)
-    {
-        uint8_t idx = bw_proto_scroll + i;
-        uint8_t y   = M1_MENU_AREA_TOP + (uint8_t)(i * item_h) + item_h - 1;
-
-        if (idx == bw_proto_sel)
-        {
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-            u8g2_DrawRBox(&m1_u8g2, 1, M1_MENU_AREA_TOP + (uint8_t)(i * item_h),
-                         M1_MENU_TEXT_W, item_h, 2);
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-            u8g2_SetFont(&m1_u8g2, m1_menu_font());
-        }
-
-        u8g2_DrawStr(&m1_u8g2, 4, y,
-                     subghz_new_remote_proto_label(bind_protos[idx].proto_id));
-
-        if (idx == bw_proto_sel)
-            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    }
-
-    /* Scrollbar — always drawn, handle position follows selected item */
-    {
-        uint8_t track_h  = (uint8_t)(vis * item_h);
-        uint8_t handle_h = track_h / BIND_PROTO_COUNT;
-        if (handle_h < 6) handle_h = 6;
-        uint8_t sb_travel = (handle_h < track_h) ? (track_h - handle_h) : 0u;
-        uint8_t handle_y  = M1_MENU_AREA_TOP;
-        if (BIND_PROTO_COUNT > 1)
-            handle_y += (uint8_t)((uint16_t)sb_travel * bw_proto_sel
-                                  / (BIND_PROTO_COUNT - 1));
-        u8g2_DrawVLine(&m1_u8g2, M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
-                       M1_MENU_AREA_TOP, track_h);
-        u8g2_DrawRBox(&m1_u8g2, M1_MENU_SCROLLBAR_X, handle_y,
-                      M1_MENU_SCROLLBAR_W, handle_h, 1);
-    }
-
-    m1_u8g2_nextpage();
+    /* Re-sync visible_count in case the user changed the text-size setting
+     * while a child scene (Transmitter, etc.) was on top — matches the
+     * SavedMenu / MoreRAW pattern. */
+    subghz_submenu_model_set_visible_count(&s_proto_model,
+                                           M1_MENU_VIS(BIND_PROTO_COUNT));
+    m1_submenu_draw(&s_proto_model, "Bind New Remote", s_proto_labels);
 }
 
 static void draw_generating(void)
@@ -516,9 +501,50 @@ static void draw_done(void)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Detect resume-from-child: we just popped back from the Transmitter
+     * scene after a TX step.  Inspect tx_completed_naturally to decide
+     * whether to advance to the next step or stay on the current step
+     * (so the user can retry on a failure / abort). */
+    if (app->resume_from_child)
+    {
+        app->resume_from_child = false;
+
+        if (bw_state == BW_STATE_STEP)
+        {
+            if (app->tx_completed_naturally)
+            {
+                /* TX ran to completion — advance to next step or done. */
+                const BindProtoDef *pd = current_proto();
+                bw_tx_failed = false;
+                app->hopper_active = false;
+
+                if (bw_step + 1 < pd->step_count)
+                {
+                    bw_step++;
+                    bw_countdown_start = HAL_GetTick();
+                    if (current_step()->countdown_sec > 0)
+                        app->hopper_active = true;
+                }
+                else
+                {
+                    bw_state = BW_STATE_DONE;
+                }
+            }
+            else
+            {
+                /* User aborted via BACK in the Transmitter scene — stay on
+                 * this TX step so they can press OK again to retry. */
+                bw_tx_failed = false;
+            }
+            app->need_redraw = true;
+            return;
+        }
+        /* Fall through to full reset if resume happened in an unexpected
+         * state (defensive — should not occur in practice). */
+    }
+
     bw_state        = BW_STATE_PROTO_SEL;
-    bw_proto_sel    = 0;
-    bw_proto_scroll = 0;
+    proto_picker_init();
     bw_step         = 0;
     bw_tx_failed    = false;
     memset(&bw_params, 0, sizeof(bw_params));
@@ -528,12 +554,14 @@ static void scene_on_enter(SubGhzApp *app)
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
-    const uint8_t vis = BW_PROTO_VIS;
-
     switch (bw_state)
     {
         /* ── Protocol selection list ─────────────────────────────────────── */
         case BW_STATE_PROTO_SEL:
+            /* Re-sync visible_count so a text-size change picked up while a
+             * child scene was on top is honoured by the model's scroll math. */
+            subghz_submenu_model_set_visible_count(&s_proto_model,
+                                                   M1_MENU_VIS(BIND_PROTO_COUNT));
             switch (event)
             {
                 case SubGhzEventBack:
@@ -541,33 +569,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     return true;
 
                 case SubGhzEventUp:
-                    if (bw_proto_sel > 0)
-                    {
-                        bw_proto_sel--;
-                        if (bw_proto_sel < bw_proto_scroll)
-                            bw_proto_scroll = bw_proto_sel;
-                    }
-                    else
-                    {
-                        bw_proto_sel    = BIND_PROTO_COUNT - 1;
-                        bw_proto_scroll = (bw_proto_sel >= vis)
-                                        ? (bw_proto_sel - vis + 1) : 0;
-                    }
+                    subghz_submenu_model_up(&s_proto_model);
                     app->need_redraw = true;
                     return true;
 
                 case SubGhzEventDown:
-                    if (bw_proto_sel < BIND_PROTO_COUNT - 1)
-                    {
-                        bw_proto_sel++;
-                        if (bw_proto_sel >= bw_proto_scroll + vis)
-                            bw_proto_scroll = bw_proto_sel - vis + 1;
-                    }
-                    else
-                    {
-                        bw_proto_sel    = 0;
-                        bw_proto_scroll = 0;
-                    }
+                    subghz_submenu_model_down(&s_proto_model);
                     app->need_redraw = true;
                     return true;
 
@@ -654,21 +661,20 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
             if (event == SubGhzEventOk)
             {
-                /* Fire TX if this is a TX step */
+                /* Fire TX if this is a TX step — push the async Transmitter
+                 * scene.  Advancement to the next step happens in
+                 * scene_on_enter after pop-back (see resume_from_child path). */
                 if (st->tx_step)
                 {
-                    if (!bw_transmit())
-                    {
-                        /* TX failed — stay on this step; show error hint */
-                        bw_tx_failed     = true;
-                        app->need_redraw = true;
-                        return true;
-                    }
+                    bw_tx_failed = false;
+                    app->hopper_active = false;
+                    bw_push_tx(app);
+                    return true;
                 }
 
                 bw_tx_failed = false;
 
-                /* Advance to next step or done screen */
+                /* Non-TX step: advance to next step or done screen */
                 app->hopper_active = false;
 
                 if (bw_step + 1 < pd->step_count)

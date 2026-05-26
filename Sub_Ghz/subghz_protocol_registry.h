@@ -114,6 +114,51 @@ typedef struct {
 typedef uint8_t (*SubGhzDecodeFn)(uint16_t protocol_index, uint16_t pulse_count);
 
 /*============================================================================*/
+/* Polymorphic Info-screen renderer (Phase 11-1)                              */
+/*============================================================================*/
+
+/**
+ * Lightweight, registry-friendly view of a loaded `.sub` signal.
+ *
+ * Populated by the caller from a `flipper_subghz_signal_t` (in the firmware
+ * Saved scene) or from explicit values (in host tests).  The view contains
+ * only primitive types so the registry header does not need to know about
+ * `flipper_subghz.h` — `Sub_Ghz/` stays independent of `m1_csrc/`.
+ *
+ * @field protocol   Protocol name string (may be NULL / empty for RAW).
+ * @field key        64-bit Flipper key as carried in the `.sub` file.
+ * @field bit_count  Bit width of the key (parsed from `Bit:` line).
+ * @field te         Symbol time in microseconds (parsed from `TE:` line).
+ */
+typedef struct {
+    const char *protocol;
+    uint64_t    key;
+    uint32_t    bit_count;
+    uint32_t    te;
+} SubGhzSignalView;
+
+/**
+ * Polymorphic per-protocol Info-screen renderer.
+ *
+ * Each protocol may install a renderer that formats the loaded signal as
+ * a multi-line human-readable string (rows separated by `\n`).  The caller
+ * pre-allocates @p buf of size @p buflen; the renderer must always write a
+ * NUL-terminated string (even on truncation), and must never write past
+ * @p buflen.
+ *
+ * Default behaviour (renderer is NULL): the Info screen falls back to the
+ * existing generic layout — "Proto: …\nKey: 0x…\nBits: …  TE: …".
+ *
+ * @param[in]  view   Loaded-signal view (never NULL when invoked by the
+ *                    Saved scene; tests may pass NULL — see contract).
+ * @param[out] buf    Caller-owned output buffer.
+ * @param[in]  buflen Size of @p buf in bytes (including NUL terminator).
+ */
+typedef void (*SubGhzGetStringFn)(const SubGhzSignalView *view,
+                                  char                   *buf,
+                                  size_t                  buflen);
+
+/*============================================================================*/
 /* Protocol Descriptor — one per protocol                                     */
 /*============================================================================*/
 
@@ -136,6 +181,9 @@ typedef struct {
 
     /* --- Decode (M1 convention) --- */
     SubGhzDecodeFn       decode;    /**< Decoder function (NULL = not implemented) */
+
+    /* --- Info rendering (Phase 11-1) --- */
+    SubGhzGetStringFn    get_string; /**< Polymorphic Info renderer (NULL = generic) */
 } SubGhzProtocolDef;
 
 /*============================================================================*/
