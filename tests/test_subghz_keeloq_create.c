@@ -72,6 +72,7 @@ static void test_create_rejects_null_params(void)
     uint64_t key = 0xAAAAAAAAAAAAAAAAULL;
     TEST_ASSERT_EQUAL_INT(KEELOQ_CREATE_BAD_ARG,
                           subghz_keeloq_create_key(NULL, &key));
+    TEST_ASSERT_EQUAL_UINT64(0ULL, key);   /* key_out zeroed on failure */
 }
 
 static void test_create_rejects_null_out(void)
