@@ -1526,3 +1526,23 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_button_override PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_button_override COMMAND test_subghz_button_override)
+
+# ------------------------------------------------------------------
+# Module under test: memmgr (Momentum-style heap redirect shim)
+#
+# On the host the pvPort* macros map to libc, so the test exercises
+# the __wrap_ delegation path (malloc/free/calloc/realloc + _r variants).
+# ------------------------------------------------------------------
+add_executable(test_memmgr
+    test_memmgr.c
+    ${M1_ROOT}/Core/Src/memmgr.c
+)
+target_include_directories(test_memmgr PRIVATE
+    ${M1_ROOT}/Core/Inc
+    stubs
+)
+target_link_libraries(test_memmgr PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_memmgr PRIVATE sanitizers)
+endif()
+add_test(NAME memmgr COMMAND test_memmgr)

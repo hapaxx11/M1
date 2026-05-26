@@ -80,7 +80,7 @@ target_sources(m1_01 INTERFACE
     ../../Core/Src/stm32h5xx_hal_timebase_tim.c
     ../../Core/Src/stm32h5xx_it.c
     ../../Core/Src/syscalls.c
-    ../../Core/Src/sysmem.c
+    ../../Core/Src/memmgr.c
     ../../Core/Src/system_stm32h5xx.c
     ../../Core/Startup/startup_stm32h573vitx.s
     #../../Core/ThreadSafe/newlib_lock_glue.c

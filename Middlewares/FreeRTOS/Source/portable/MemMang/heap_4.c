@@ -376,6 +376,49 @@ void * pvPortCalloc( size_t xNum,
 }
 /*-----------------------------------------------------------*/
 
+void * pvPortRealloc( void * pv,
+                      size_t xWantedSize )
+{
+    void * pvReturn = NULL;
+    uint8_t * puc;
+    BlockLink_t * pxLink;
+    size_t xOriginalSize = 0;
+
+    if( xWantedSize == 0 )
+    {
+        vPortFree( pv );
+        return NULL;
+    }
+
+    if( pv == NULL )
+    {
+        return pvPortMalloc( xWantedSize );
+    }
+
+    /* Retrieve the original usable block size from the heap_4 header. */
+    puc = ( uint8_t * ) pv;
+    puc -= xHeapStructSize;
+    pxLink = ( void * ) puc;
+
+    configASSERT( heapBLOCK_IS_ALLOCATED( pxLink ) != 0 );
+
+    if( heapBLOCK_IS_ALLOCATED( pxLink ) != 0 )
+    {
+        xOriginalSize = ( pxLink->xBlockSize & ~heapBLOCK_ALLOCATED_BITMASK ) - xHeapStructSize;
+    }
+
+    pvReturn = pvPortMalloc( xWantedSize );
+
+    if( pvReturn != NULL )
+    {
+        ( void ) memcpy( pvReturn, pv, ( xOriginalSize < xWantedSize ) ? xOriginalSize : xWantedSize );
+        vPortFree( pv );
+    }
+
+    return pvReturn;
+}
+/*-----------------------------------------------------------*/
+
 static void prvHeapInit( void ) /* PRIVILEGED_FUNCTION */
 {
     BlockLink_t * pxFirstFreeBlock;
