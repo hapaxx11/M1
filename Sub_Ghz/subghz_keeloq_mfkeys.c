@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include "FreeRTOS.h"
 #include "ff.h"
 #include "m1_crypto.h"
 
@@ -305,7 +306,7 @@ static void parse_mfkeys_line(char *line, RGState *rg)
 static bool prepare_table(void)
 {
     keeloq_mfkeys_free();
-    s_table = (KeeLoqMfrEntry *)malloc(KEELOQ_MFKEYS_MAX * sizeof(KeeLoqMfrEntry));
+    s_table = (KeeLoqMfrEntry *)pvPortMalloc(KEELOQ_MFKEYS_MAX * sizeof(KeeLoqMfrEntry));
     if (!s_table) return false;
     s_count = 0;
     return true;
@@ -392,7 +393,7 @@ bool keeloq_mfkeys_save_encrypted(void)
                          ((plain_max / M1_CRYPTO_AES_BLOCK_SIZE) + 1)
                          * M1_CRYPTO_AES_BLOCK_SIZE;
 
-    uint8_t *buf = (uint8_t *)malloc(enc_max);
+    uint8_t *buf = (uint8_t *)pvPortMalloc(enc_max);
     if (!buf)
         return false;
 
@@ -446,7 +447,7 @@ cleanup:
     /* Always wipe the heap buffer — it may contain plaintext or encrypted
      * key material regardless of which path we took. */
     memset(buf, 0, enc_max);
-    free(buf);
+    vPortFree(buf);
     return ok;
 }
 
@@ -503,7 +504,7 @@ bool keeloq_mfkeys_load_encrypted(void)
     }
 
     /* Allocate buffer: payload + 1 byte for null terminator after decryption */
-    uint8_t *buf = (uint8_t *)malloc(payload_len + 1);
+    uint8_t *buf = (uint8_t *)pvPortMalloc(payload_len + 1);
     if (!buf) {
         f_close(&f);
         return false;
@@ -513,7 +514,7 @@ bool keeloq_mfkeys_load_encrypted(void)
     fr = f_read(&f, buf, payload_len, &br);
     f_close(&f);
     if (fr != FR_OK || br != payload_len) {
-        free(buf);
+        vPortFree(buf);
         return false;
     }
 
@@ -522,7 +523,7 @@ bool keeloq_mfkeys_load_encrypted(void)
                                                      s_keeloq_product_key);
     if (plain_len == 0) {
         memset(buf, 0, payload_len + 1);
-        free(buf);
+        vPortFree(buf);
         return false;
     }
 
@@ -534,7 +535,7 @@ bool keeloq_mfkeys_load_encrypted(void)
 
     /* Clear sensitive data before freeing */
     memset(buf, 0, payload_len + 1);
-    free(buf);
+    vPortFree(buf);
 
     return ok;
 }
@@ -599,7 +600,7 @@ bool keeloq_mfkeys_load(void)
 void keeloq_mfkeys_free(void)
 {
     if (s_table) {
-        free(s_table);
+        vPortFree(s_table);
         s_table = NULL;
     }
     s_count = 0;

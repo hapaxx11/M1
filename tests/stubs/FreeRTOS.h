@@ -16,4 +16,14 @@ typedef void *   TaskHandle_t;
 #define pdMS_TO_TICKS(x) (x)
 #endif
 
+/* Map FreeRTOS heap API to libc so host-side tests compile and run
+ * against firmware source that uses pvPortMalloc / vPortFree. */
+#include <stdlib.h>
+#ifndef pvPortMalloc
+#define pvPortMalloc(sz) malloc(sz)
+#endif
+#ifndef vPortFree
+#define vPortFree(p)     free(p)
+#endif
+
 #endif /* FREERTOS_H_STUB */

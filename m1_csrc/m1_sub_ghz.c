@@ -1252,7 +1252,7 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	/* Allocate TX buffer if not already */
 	if (subghz_tx_encode_buf == NULL)
 	{
-		subghz_tx_encode_buf = malloc(SUBGHZ_TX_ENCODE_BUF_MAX * sizeof(uint16_t));
+		subghz_tx_encode_buf = pvPortMalloc(SUBGHZ_TX_ENCODE_BUF_MAX * sizeof(uint16_t));
 		if (subghz_tx_encode_buf == NULL)
 			return false;
 	}
@@ -1265,7 +1265,7 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 
 	if (subghz_tx_encode_len == 0)
 	{
-		free(subghz_tx_encode_buf);
+		vPortFree(subghz_tx_encode_buf);
 		subghz_tx_encode_buf = NULL;
 		return false;
 	}
@@ -1278,7 +1278,7 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	{
 		m1_buzzer_notification();
 		m1_message_box(&m1_u8g2, "TX Blocked:", "Region restricts", "this frequency.", "Set Region to Off");
-		free(subghz_tx_encode_buf);
+		vPortFree(subghz_tx_encode_buf);
 		subghz_tx_encode_buf = NULL;
 		return false;
 	}
@@ -1319,7 +1319,7 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, tx_band, 0, 0);
 
 	/* Free encode buffer */
-	free(subghz_tx_encode_buf);
+	vPortFree(subghz_tx_encode_buf);
 	subghz_tx_encode_buf = NULL;
 
 	/* Restore RX on the original recording frequency */
@@ -2004,16 +2004,16 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	const int8_t button_override = s_button_override;
 	s_button_override = -1;
 
-	line_buf = malloc(FLIPPER_SUB_LINE_MAX);
+	line_buf = pvPortMalloc(FLIPPER_SUB_LINE_MAX);
 	if (!line_buf) return 1;
-	out_buf = malloc(FLIPPER_SUB_OUT_MAX);
-	if (!out_buf) { free(line_buf); return 1; }
+	out_buf = pvPortMalloc(FLIPPER_SUB_OUT_MAX);
+	if (!out_buf) { vPortFree(line_buf); return 1; }
 
 	/* ── 1. Open .sub source ── */
 	fr = f_open(&f_sub, sub_path, FA_READ);
 	if (fr != FR_OK)
 	{
-		free(line_buf); free(out_buf);
+		vPortFree(line_buf); vPortFree(out_buf);
 		return 1;
 	}
 
@@ -2023,7 +2023,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	if (fr != FR_OK)
 	{
 		f_close(&f_sub);
-		free(line_buf); free(out_buf);
+		vPortFree(line_buf); vPortFree(out_buf);
 		return 1;
 	}
 
@@ -2303,16 +2303,16 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			{
 				f_close(&f_sgh);
 				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
+				vPortFree(line_buf); vPortFree(out_buf);
 				return SUBGHZ_KEY_ERR_UNSUPPORTED;
 			}
 			pairs_per_rep = max_pairs / 3;
-			pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+			pairs = (SubGhzRawPair *)pvPortMalloc(max_pairs * sizeof(SubGhzRawPair));
 			if (!pairs)
 			{
 				f_close(&f_sgh);
 				f_unlink(FLIPPER_SUB_TMP_SGH);
-				free(line_buf); free(out_buf);
+				vPortFree(line_buf); vPortFree(out_buf);
 				return 1;
 			}
 			npairs = subghz_key_encode_custom(&key_params, pairs, max_pairs, 3);
@@ -2387,7 +2387,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 
 						f_close(&f_sgh);
 						f_unlink(FLIPPER_SUB_TMP_SGH);
-						free(line_buf); free(out_buf);
+						vPortFree(line_buf); vPortFree(out_buf);
 						return ret_code;
 					}
 				}
@@ -2395,7 +2395,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				{
 					f_close(&f_sgh);
 					f_unlink(FLIPPER_SUB_TMP_SGH);
-					free(line_buf); free(out_buf);
+					vPortFree(line_buf); vPortFree(out_buf);
 					return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
 				}
 			}
@@ -2405,12 +2405,12 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
 				pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
 				uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
-				pairs = (SubGhzRawPair *)malloc(max_pairs * sizeof(SubGhzRawPair));
+				pairs = (SubGhzRawPair *)pvPortMalloc(max_pairs * sizeof(SubGhzRawPair));
 				if (!pairs)
 				{
 					f_close(&f_sgh);
 					f_unlink(FLIPPER_SUB_TMP_SGH);
-					free(line_buf); free(out_buf);
+					vPortFree(line_buf); vPortFree(out_buf);
 					return 1;
 				}
 
@@ -2492,13 +2492,13 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			}
 			has_data = true;
 		}
-		free(pairs);
+		vPortFree(pairs);
 	}
 
 	f_close(&f_sgh);
 
-	free(line_buf);
-	free(out_buf);
+	vPortFree(line_buf);
+	vPortFree(out_buf);
 
 	if (!has_data || frequency == 0)
 	{
@@ -3814,7 +3814,7 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	uint8_t *pfillbuffer;
 	uint8_t sign;
 
-	prn_buffer = malloc(64);
+	prn_buffer = pvPortMalloc(64);
 	if (prn_buffer == NULL)
 		return 1;
 	pfillbuffer = subghz_sdcard_write_buffer;
@@ -3846,7 +3846,7 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 		strcat((char *)pfillbuffer, prn_buffer);
 		strcat((char *)pfillbuffer, "Protocol: RAW\r\n");
 		m1_sdm_fill_buffer(pfillbuffer, strlen((char *)pfillbuffer));
-		free(prn_buffer);
+		vPortFree(prn_buffer);
 		return 0;
 	} // if ( header_init )
 
@@ -3881,7 +3881,7 @@ static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 	m1_sdm_fill_buffer(pfillbuffer, strlen((char *)pfillbuffer));
 
 	if ( prn_buffer!=NULL )
-		free(prn_buffer);
+		vPortFree(prn_buffer);
 	return 0;
 } // static uint8_t sub_ghz_rx_raw_save(bool header_init, bool last_data)
 

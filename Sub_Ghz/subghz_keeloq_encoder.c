@@ -23,6 +23,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "FreeRTOS.h"
 
 /*============================================================================*/
 /* Protocol detection                                                          */
@@ -274,7 +275,7 @@ KeeLoqEncResult keeloq_encode_replay(
     /* Allocate output buffer */
     uint32_t per_rep  = keeloq_pairs_per_rep(KEELOQ_PREAMBLE_PULSES, 64U);
     uint32_t total    = per_rep * (uint32_t)reps;
-    SubGhzRawPair *buf = (SubGhzRawPair *)malloc(total * sizeof(SubGhzRawPair));
+    SubGhzRawPair *buf = (SubGhzRawPair *)pvPortMalloc(total * sizeof(SubGhzRawPair));
     if (!buf) return KEELOQ_ENC_NOMEM;
 
     /* Encode @p reps repetitions */
