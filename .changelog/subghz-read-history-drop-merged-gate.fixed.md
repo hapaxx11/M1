@@ -1,1 +1,0 @@
-Sub-GHz Read scene: fix false-positive "merged" detection for dropped decodes — when `Remove Duplicates` is off, a full ring drop that matches the top entry no longer incorrectly triggers LED feedback, buzzer, or selection reset.
