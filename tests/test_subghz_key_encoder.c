@@ -322,6 +322,34 @@ void test_encode_3_repetitions(void)
     }
 }
 
+void test_encode_9_repetitions_low_te(void)
+{
+    /* TE=128: low-TE Princeton needs 9 reps per DMA burst for reliable TX.
+     * Verify the encoder correctly produces 9 identical repetitions. */
+    SubGhzKeyParams params = make_params("Princeton", 0x5, 4, 0);
+    SubGhzKeyTiming timing = { .te_short = 128, .te_long = 394, .gap_low = 3840 };
+
+    SubGhzRawPair out[50];
+    uint32_t count = subghz_key_encode(&params, &timing, out, 50, 9);
+
+    /* 9 reps × (4 data + 1 sync) = 45 */
+    TEST_ASSERT_EQUAL_UINT32(45, count);
+
+    /* Verify each repetition is structurally correct */
+    for (int rep = 0; rep < 9; rep++)
+    {
+        int base = rep * 5;
+        /* 0x5 = 0101: bit0=HIGH short, bit1=HIGH long */
+        TEST_ASSERT_EQUAL_UINT32(128, out[base + 0].high_us);
+        TEST_ASSERT_EQUAL_UINT32(394, out[base + 1].high_us);
+        TEST_ASSERT_EQUAL_UINT32(128, out[base + 2].high_us);
+        TEST_ASSERT_EQUAL_UINT32(394, out[base + 3].high_us);
+        /* Sync gap */
+        TEST_ASSERT_EQUAL_UINT32(128,  out[base + 4].high_us);
+        TEST_ASSERT_EQUAL_UINT32(3840, out[base + 4].low_us);
+    }
+}
+
 /* ===================================================================
  * Edge cases
  * =================================================================== */
@@ -836,6 +864,7 @@ int main(void)
 
     /* Encoding — repetitions */
     RUN_TEST(test_encode_3_repetitions);
+    RUN_TEST(test_encode_9_repetitions_low_te);
 
     /* Edge cases */
     RUN_TEST(test_encode_zero_bits_returns_zero);
