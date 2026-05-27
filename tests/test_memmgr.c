@@ -81,8 +81,11 @@ void test_wrap_realloc_zero_acts_as_free(void)
     void *p = __wrap_malloc(32);
     TEST_ASSERT_NOT_NULL(p);
     void *q = __wrap_realloc(p, 0);
-    /* Standard says returning NULL on size==0 is valid */
-    (void)q;
+    /* Standard allows either NULL or a freeable non-NULL pointer */
+    if (q != NULL)
+    {
+        __wrap_free(q);
+    }
 }
 
 void test_wrap_realloc_preserves_content(void)
