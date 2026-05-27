@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.34] - 2026-05-27
+
+### Added
+
+- ELF loader now enforces a 96 KB cumulative allocation budget per app load,
+  preventing oversized or malformed `.m1app` files from exhausting the shared
+  FreeRTOS heap. The budget leaves sufficient headroom for ESP32/STM32 firmware
+  flashing and other system operations. Loads that exceed the budget return
+  `ELF_ERR_BUDGET` and display "App too large" to the user.
+
+### Changed
+
+- **Heap: Momentum-style global malloc→FreeRTOS redirect** — All libc heap
+  calls (`malloc`/`free`/`calloc`/`realloc` and newlib reentrant `_r` variants)
+  are now transparently routed to the FreeRTOS heap-4 allocator via linker
+  `--wrap` flags (`Core/Src/memmgr.c`). Added `pvPortRealloc` to heap_4.
+  The newlib `_sbrk` heap (`Core/Src/sysmem.c`) is removed from the build.
+  Explicit `pvPortMalloc`/`vPortFree` call-site conversions are no longer
+  required — plain `malloc()`/`free()` now uses the FreeRTOS heap everywhere.
 ## [0.9.1.33] - 2026-05-26
 
 ### Changed
