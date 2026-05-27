@@ -15,7 +15,7 @@
  *   - GateTX       (24-bit, standard 1:2 OOK PWM)
  *   - Nice FLO     (12-bit, standard 1:2 OOK PWM)
  *   - Princeton    (24-bit, 1:3 OOK PWM, auto te-detect from first 8 pulses)
- *   - Holtek_HT12X (12-bit, 1:3 OOK PWM, reads timing from protocol list)
+ *   - Holtek_HT12X (12-bit, 1:3 OOK PWM, 25% tolerance, reads from registry)
  *   - Ansonic      (12-bit, 1:2 OOK PWM, reads timing from protocol list)
  *
  * The Magellan tests specifically cover the bug fixed in this PR:
@@ -735,7 +735,7 @@ void test_holtek_roundtrip_typical_key(void)
 
     subghz_protocols_list_ptr[0].te_short    = TE_S;
     subghz_protocols_list_ptr[0].te_long     = TE_L;
-    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].te_tolerance = 25;
     subghz_protocols_list_ptr[0].data_bits   = BITS;
 
     uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
@@ -753,7 +753,7 @@ void test_holtek_roundtrip_all_ones(void)
 
     subghz_protocols_list_ptr[0].te_short    = TE_S;
     subghz_protocols_list_ptr[0].te_long     = TE_L;
-    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].te_tolerance = 25;
     subghz_protocols_list_ptr[0].data_bits   = BITS;
 
     uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
@@ -770,7 +770,7 @@ void test_holtek_roundtrip_all_zeros(void)
 
     subghz_protocols_list_ptr[0].te_short    = TE_S;
     subghz_protocols_list_ptr[0].te_long     = TE_L;
-    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].te_tolerance = 25;
     subghz_protocols_list_ptr[0].data_bits   = BITS;
 
     uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
@@ -788,7 +788,7 @@ void test_holtek_roundtrip_real_remote(void)
 
     subghz_protocols_list_ptr[0].te_short    = TE_S;
     subghz_protocols_list_ptr[0].te_long     = TE_L;
-    subghz_protocols_list_ptr[0].te_tolerance = 20;
+    subghz_protocols_list_ptr[0].te_tolerance = 25;
     subghz_protocols_list_ptr[0].data_bits   = BITS;
 
     uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
@@ -805,6 +805,37 @@ void test_holtek_roundtrip_real_remote(void)
 /*   bit 1 = LONG  HIGH + SHORT LOW                                          */
 /* Timing is read from subghz_protocols_list[p].                            */
 /* ======================================================================= */
+
+/* ======================================================================= */
+/* Holtek HT12X jitter test                                                 */
+/*                                                                           */
+/* Verifies that at 25% tolerance (registry default after this PR, raised   */
+/* from 20% for consistency with other 1:3-ratio protocols), the decoder    */
+/* still decodes a key where each pulse is shortened by ~20µs (~6% of TE). */
+/* ======================================================================= */
+
+void test_holtek_jitter_25pct_roundtrip(void)
+{
+    /* Holtek HT12E — key 0xA5C, 12 bits, TE=340µs; each pulse 20µs short */
+    const uint32_t KEY  = 0xA5Cu;
+    const uint8_t  BITS = 12;
+    const uint16_t TE_S = 340, TE_L = 1020;
+    const uint16_t JITTER = 20; /* µs, applied to every pulse */
+
+    subghz_protocols_list_ptr[0].te_short    = TE_S;
+    subghz_protocols_list_ptr[0].te_long     = TE_L;
+    subghz_protocols_list_ptr[0].te_tolerance = 25;
+    subghz_protocols_list_ptr[0].data_bits   = BITS;
+
+    uint16_t pc = build_ook_pwm_pulses(KEY, BITS, TE_S, TE_L);
+    /* Shorten every pulse uniformly — simulates a slightly off-spec remote */
+    for (uint16_t i = 0; i < pc; i++)
+        subghz_decenc_ctl.pulse_times[i] -= JITTER;
+
+    uint8_t ret = subghz_decode_holtek(0, pc);
+    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+}
 
 void test_ansonic_roundtrip_typical_key(void)
 {
@@ -928,6 +959,7 @@ int main(void)
     RUN_TEST(test_holtek_roundtrip_all_ones);
     RUN_TEST(test_holtek_roundtrip_all_zeros);
     RUN_TEST(test_holtek_roundtrip_real_remote);
+    RUN_TEST(test_holtek_jitter_25pct_roundtrip);
 
     /* Ansonic 12-bit — 1:2 ratio, reads timing from protocol list */
     RUN_TEST(test_ansonic_roundtrip_typical_key);

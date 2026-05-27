@@ -305,7 +305,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_433,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=340, .te_long=1020, .te_tolerance_pct=20, .min_count_bit_for_found=12 },
+        .timing = { .te_short=340, .te_long=1020, .te_tolerance_pct=25, .min_count_bit_for_found=12 },
         .decode = subghz_decode_holtek,
     },
     [KEELOQ] = {
@@ -411,7 +411,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_433,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=450, .te_long=1350, .te_tolerance_pct=20, .min_count_bit_for_found=48 },
+        .timing = { .te_short=450, .te_long=1350, .te_tolerance_pct=25, .min_count_bit_for_found=48 },
         .decode = subghz_decode_ido,
     },
     [ANSONIC] = {
@@ -454,7 +454,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_433,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=385, .te_long=1155, .te_tolerance_pct=20, .min_count_bit_for_found=18 },
+        .timing = { .te_short=385, .te_long=1155, .te_tolerance_pct=25, .min_count_bit_for_found=18 },
         .decode = subghz_decode_clemsa,
     },
     [DOITRAND] = {
@@ -478,7 +478,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_433,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=330, .te_long=990, .te_tolerance_pct=20, .min_count_bit_for_found=36 },
+        .timing = { .te_short=330, .te_long=990, .te_tolerance_pct=25, .min_count_bit_for_found=36 },
         .decode = subghz_decode_nero,
     },
     [FIREFLY] = {
@@ -486,7 +486,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_MULTI,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=300, .te_long=900, .te_tolerance_pct=20, .min_count_bit_for_found=10 },
+        .timing = { .te_short=300, .te_long=900, .te_tolerance_pct=25, .min_count_bit_for_found=10 },
         .decode = subghz_decode_firefly,
     },
     [CAME_TWEE] = {
@@ -785,7 +785,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeStatic,
         .flags  = F_STATIC_433,
         .filter = SubGhzProtocolFilter_Auto,
-        .timing = { .te_short=375, .te_long=1125, .te_tolerance_pct=20, .min_count_bit_for_found=18 },
+        .timing = { .te_short=375, .te_long=1125, .te_tolerance_pct=25, .min_count_bit_for_found=18 },
         .decode = subghz_decode_legrand,
     },
     [LINEAR_DELTA3] = {
