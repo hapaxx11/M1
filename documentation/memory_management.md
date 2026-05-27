@@ -124,6 +124,94 @@ All allocations now share `configTOTAL_HEAP_SIZE` (defined in
 module with large buffers — increase this constant.  Monitor free heap at
 runtime with `xPortGetFreeHeapSize()` and `xPortGetMinimumEverFreeHeapSize()`.
 
+## Anti-patterns
+
+These are the failure modes introduced by the single-heap redirect.  They must
+be checked when implementing any new feature.
+
+### AP-1 · ISR-context allocation (hangs / asserts)
+
+**The problem:** `pvPortMalloc` calls `vTaskSuspendAll()`.  Any `malloc` call
+(or any libc call that allocates internally, such as `printf` with certain
+format strings) from inside an ISR, DMA callback, or timer callback will hang
+or trigger `configASSERT`.
+
+**How to check:** Grep new interrupt handlers (`*_IRQHandler`, HAL callbacks,
+timer callbacks, DMA callbacks) for `malloc`, `free`, `printf`, `sprintf`,
+`sscanf`, `strtod`, `strtol`.  If any of them — or any function they call — can
+reach an allocating function, that is a defect.
+
+**The fix:** Pre-allocate outside the ISR.  Pass data into/out of the ISR via
+queues or pre-allocated shared buffers.
+
+**Test coverage:** This pattern cannot be caught by host-side unit tests because
+the host does not run real ISR context or `vTaskSuspendAll`.  Audit is the only
+reliable guard.
+
+---
+
+### AP-2 · Ignoring NULL return from `malloc` (heap overflow)
+
+**The problem:** The FreeRTOS pool is fixed.  When it is exhausted, `pvPortMalloc`
+returns NULL.  Code that dereferences a NULL pointer without checking will hard-fault.
+
+**How to check:** Every `malloc()` / `pvPortMalloc()` call in new code must be
+followed immediately by a NULL check.  Either return an error code to the caller
+or call `configASSERT(0)` if the allocation is truly required.
+
+**The fix:**
+```c
+uint8_t *buf = malloc(len);
+if (buf == NULL) { return ERROR_OOM; }
+```
+
+**Test coverage:** `tests/test_memmgr.c` includes `test_wrap_malloc_oom_returns_null`
+which verifies that an oversized allocation returns NULL rather than crashing.
+The host sanitizer build (`ENABLE_SANITIZERS=ON`) will catch NULL-dereferences in
+any test that exercises an OOM path.
+
+---
+
+### AP-3 · Unbounded allocation growth (pool exhaustion)
+
+**The problem:** Before the heap redirect, large allocations from newlib's `_sbrk`
+heap would silently compete with stack.  Now they reduce the FreeRTOS pool, which
+affects all tasks, including critical ones.
+
+**How to check:** When adding a new feature that allocates large or persistent
+buffers:
+1. Estimate the maximum allocation size and add a comment near the call site.
+2. Confirm the remaining free heap (`xPortGetMinimumEverFreeHeapSize()`) after
+   startup is at least ~8 KB in a debug build.
+3. If pool headroom is insufficient, increase `configTOTAL_HEAP_SIZE` in
+   `Core/Inc/FreeRTOSConfig.h`.
+
+**Test coverage:** Host-side tests cannot simulate FreeRTOS pool exhaustion
+because the host stub maps `pvPortMalloc` to the system `malloc`.  Firmware
+integration testing is required.
+
+---
+
+### AP-4 · `pvPortRealloc` coupling to `heap_4` internals
+
+**The problem:** `pvPortRealloc` reads `BlockLink_t` header bytes directly to
+recover the original allocation size.  If the FreeRTOS heap implementation
+changes (version upgrade, or switch from `heap_4` to `heap_5` for non-contiguous
+regions), the header layout may change silently, causing `pvPortRealloc` to
+compute the wrong size or pass an invalid pointer to `configASSERT`.
+
+**How to check:** Whenever `Middlewares/FreeRTOS/Source/portable/MemMang/heap_4.c`
+is upgraded or replaced, review `pvPortRealloc` immediately afterwards:
+- Confirm `xHeapStructSize` calculation still matches.
+- Confirm `heapBLOCK_ALLOCATED_BITMASK` and `heapBLOCK_IS_ALLOCATED` macros
+  are unchanged.
+- Run `tests/test_memmgr.c` to verify the shim still builds and delegates.
+
+**Test coverage:** The host-side tests (`test_wrap_realloc_*`) verify that
+`__wrap_realloc` delegates correctly via the stub, but they do not exercise the
+real `BlockLink_t` header walking.  Manual review on every FreeRTOS upgrade is
+required.
+
 ## Testing
 
 Host-side unit tests for the redirect shim are in `tests/test_memmgr.c`.  They

@@ -1546,3 +1546,9 @@ if(TARGET sanitizers)
     target_link_libraries(test_memmgr PRIVATE sanitizers)
 endif()
 add_test(NAME memmgr COMMAND test_memmgr)
+# Allow ASan to return NULL for oversized allocations rather than aborting —
+# this lets test_wrap_malloc_oom_returns_null verify the NULL-propagation path
+# (AP-2 anti-pattern check) without triggering an allocator abort.
+set_tests_properties(memmgr PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=allocator_may_return_null=1"
+)
