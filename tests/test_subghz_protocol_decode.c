@@ -14,7 +14,7 @@
  *   - CAME         (12-bit, standard 1:2 OOK PWM)
  *   - GateTX       (24-bit, standard 1:2 OOK PWM)
  *   - Nice FLO     (12-bit, standard 1:2 OOK PWM)
- *   - Princeton    (24-bit, 1:3 OOK PWM, auto te-detect from pulse[2]/[3])
+ *   - Princeton    (24-bit, 1:3 OOK PWM, auto te-detect from first 8 pulses)
  *   - Holtek_HT12X (12-bit, 1:3 OOK PWM, reads timing from protocol list)
  *   - Ansonic      (12-bit, 1:2 OOK PWM, reads timing from protocol list)
  *
@@ -554,15 +554,15 @@ void test_princeton_rejects_non_1_3_ratio(void)
  *
  * The Flipper's CC1101 records with timing jitter: the "1"-bit SHORT LOW
  * gaps (nominally ~125µs) are measured as 104µs at two points and 106µs at
- * one point.  The te reference detected at pulse_times[2]/[3] is clean
- * (355H / 138L → te_short=138, te_long=355 after swap).
+ * one point.  With multi-pulse averaging of the first 8 pulses, the decoder
+ * estimates te_short≈136, te_long≈359.
  *
- * With te_tolerance=20 %: (138 * 20) / 100 truncates to 27, and the strict
- * comparison logic yields an effective accepted te_short range of 112–164µs.
+ * With te_tolerance=20 %: (136 * 20) / 100 truncates to 27, and the strict
+ * comparison logic yields an effective accepted te_short range of 110–162µs.
  * The 104µs gaps are below the lower bound → decoder breaks at bit 6 → FAIL.
  *
- * With te_tolerance=30 %: (138 * 30) / 100 truncates to 41, yielding an
- * effective accepted range of 98–178µs. All jittered gaps pass → full
+ * With te_tolerance=30 %: (136 * 30) / 100 truncates to 40, yielding an
+ * effective accepted range of 97–175µs. All jittered gaps pass → full
  * 24 bits decoded → SUCCESS, code=0x555503.
  *
  * Returns the number of pulse entries written (48 = 24 bit-pairs).
@@ -604,8 +604,8 @@ static uint16_t build_flipper_princeton_frame(void)
 /*
  * Regression anchor: with the original 20% tolerance the jittered Princeton
  * frame CANNOT be decoded.  The decoder breaks at bit 6 (pulse_times[11]=104
- * is below the te_short lower bound of 112µs — (138*20)/100 truncates to 27,
- * so accepted range is 112–164µs) and returns failure.
+ * is below the te_short lower bound of 110µs — (136*20)/100 truncates to 27,
+ * so accepted range is 110–162µs) and returns failure.
  *
  * This test must PASS both before and after the fix — it confirms that 20%
  * tolerance is genuinely too tight for Flipper-replayed Princeton signals.
@@ -621,8 +621,8 @@ void test_princeton_flipper_jitter_rejects_at_20pct(void)
 
 /*
  * Fix verification: with 30% tolerance the same jittered frame decodes
- * successfully.  (138 * 30) / 100 truncates to 41, yielding an effective
- * accepted te_short range of 98–178µs — covers the 104µs and 106µs jittered
+ * successfully.  (136 * 30) / 100 truncates to 40, yielding an effective
+ * accepted te_short range of 97–175µs — covers the 104µs and 106µs jittered
  * gaps.  The decoded key must equal 0x555503.
  */
 void test_princeton_flipper_jitter_decodes_at_30pct(void)
@@ -657,6 +657,64 @@ void test_princeton_fast_variant_te_125us(void)
     TEST_ASSERT_EQUAL_UINT8(0, ret);
     TEST_ASSERT_EQUAL_UINT32(KEY, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
     TEST_ASSERT_EQUAL_UINT16(BITS, subghz_decenc_ctl.ndecodedbitlength);
+}
+
+/*
+ * RAW decode worst-case: pulse_times[2] and [3] sit at opposite jitter
+ * extremes (400µs and 88µs for a TE≈128µs signal).  Under the old code that
+ * used only [2]/[3] for te estimation, this fails the 1:3 ratio check even
+ * at 30% tolerance (te_short=88, 88*3=264, |400-264|=136, 264*30/100=79,
+ * 136>79 → REJECT).
+ *
+ * The multi-pulse averaging fix scans the first 8 pulses, sorts them, and
+ * averages the halves, yielding te_short≈114, te_long≈380 — comfortably
+ * within the 1:3 ratio band.  With 30% tolerance the frame decodes
+ * successfully as key=0x555503.
+ */
+void test_princeton_raw_extreme_jitter_initial_pulses(void)
+{
+    /* Simulate a RAW-decoded Princeton frame where the first 4 bit-pairs
+     * have extreme jitter, as observed in the issue's RAW capture.
+     * Key = 0x555503 (binary: 0101 0101 0101 0101 0000 0011). */
+    static const uint16_t pulses[48] = {
+        /* H    L    — decoded bit  (key 0x555503 MSB first) */
+        136, 360,   /* bit  1 = 0 */
+        400,  88,   /* bit  2 = 1   ← worst-case [2]=400, [3]=88 */
+        144, 352,   /* bit  3 = 0 */
+        408,  88,   /* bit  4 = 1 */
+        136, 352,   /* bit  5 = 0 */
+        376, 120,   /* bit  6 = 1 */
+        144, 352,   /* bit  7 = 0 */
+        368, 128,   /* bit  8 = 1 */
+        136, 360,   /* bit  9 = 0 */
+        368, 128,   /* bit 10 = 1 */
+        144, 352,   /* bit 11 = 0 */
+        376, 120,   /* bit 12 = 1 */
+        136, 360,   /* bit 13 = 0 */
+        368, 128,   /* bit 14 = 1 */
+        144, 352,   /* bit 15 = 0 */
+        376, 120,   /* bit 16 = 1 */
+        104, 392,   /* bit 17 = 0 */
+        104, 384,   /* bit 18 = 0 */
+        104, 392,   /* bit 19 = 0 */
+        104, 384,   /* bit 20 = 0 */
+        112, 384,   /* bit 21 = 0 */
+        112, 384,   /* bit 22 = 0 */
+        368, 128,   /* bit 23 = 1 */
+        368, 128,   /* bit 24 = 1 */
+    };
+
+    for (uint16_t i = 0; i < 48; i++)
+        subghz_decenc_ctl.pulse_times[i] = pulses[i];
+
+    subghz_protocols_list_ptr[0].te_tolerance = 30;
+    subghz_protocols_list_ptr[0].data_bits    = 24;
+
+    uint8_t ret = subghz_decode_princeton(0, 48);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, ret,
+        "RAW jitter: multi-pulse te estimation must decode TE≈128 Princeton");
+    TEST_ASSERT_EQUAL_UINT32(0x555503u, (uint32_t)subghz_decenc_ctl.n64_decodedvalue);
+    TEST_ASSERT_EQUAL_UINT16(24, subghz_decenc_ctl.ndecodedbitlength);
 }
 
 /* ======================================================================= */
@@ -849,7 +907,7 @@ int main(void)
     RUN_TEST(test_nice_flo_roundtrip_typical_key);
     RUN_TEST(test_nice_flo_roundtrip_all_ones);
 
-    /* Princeton 24-bit — 1:3 ratio, auto te-detect from pulse[2]/[3] */
+    /* Princeton 24-bit — 1:3 ratio, auto te-detect from first 8 pulses */
     RUN_TEST(test_princeton_roundtrip_typical_key);
     RUN_TEST(test_princeton_roundtrip_all_ones);
     RUN_TEST(test_princeton_roundtrip_all_zeros);
@@ -861,6 +919,9 @@ int main(void)
     RUN_TEST(test_princeton_flipper_jitter_rejects_at_20pct);
     RUN_TEST(test_princeton_flipper_jitter_decodes_at_30pct);
     RUN_TEST(test_princeton_fast_variant_te_125us);
+
+    /* Princeton RAW decode — worst-case jitter in initial pulses */
+    RUN_TEST(test_princeton_raw_extreme_jitter_initial_pulses);
 
     /* Holtek_HT12X 12-bit — 1:3 ratio, reads timing from protocol list */
     RUN_TEST(test_holtek_roundtrip_typical_key);
