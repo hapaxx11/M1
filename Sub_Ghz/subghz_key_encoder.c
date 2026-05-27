@@ -180,6 +180,23 @@ uint32_t subghz_key_encode(const SubGhzKeyParams *params,
 }
 
 /*============================================================================*/
+/* subghz_low_te_calc_reps                                                     */
+/*============================================================================*/
+
+uint8_t subghz_low_te_calc_reps(uint32_t key_te)
+{
+    if (key_te == 0 || key_te >= 250)
+        return 3;
+
+    /* Scale so each burst ≈ 140ms (TE=370, 3 reps baseline).
+     * Use ceiling division: ceil(3 * 370 / key_te). */
+    uint8_t reps = (uint8_t)((3U * 370U + key_te - 1U) / key_te);
+    if (reps > 12) reps = 12;
+    if (reps < 3)  reps = 3;
+    return reps;
+}
+
+/*============================================================================*/
 /* Protocol-specific encoders                                                  */
 /*============================================================================*/
 

@@ -310,7 +310,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
              * drives the async-TX state machine on top of our scene. */
             strncpy(app->tx_path, app->saved_filepath, sizeof(app->tx_path) - 1);
             app->tx_path[sizeof(app->tx_path) - 1] = '\0';
-            app->tx_repeat_count = 1U;             /* static keys: 1 burst */
+            app->tx_repeat_count = 5U;             /* static keys: 5 bursts for reliable TX */
             app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
             /* Phase 4b — propagate the parsed protocol name so the
              * Transmitter scene can query button-cycling capability. */

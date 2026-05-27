@@ -2401,10 +2401,15 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			}
 			else
 			{
-				/* Encode 3 repetitions of the signal into raw timing pairs */
+				/* Encode repetitions of the signal into raw timing pairs.
+				 * For low-TE signals (TE < 250µs), scale up repetitions so
+				 * that each DMA burst carries enough signal duration for
+				 * reliable receiver detection.  Target: each burst ≈ 140ms
+				 * (matches default TE=370 with 3 reps). */
+				uint8_t reps = subghz_low_te_calc_reps(key_te);
 				uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
 				pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
-				uint32_t max_pairs = pairs_per_rep * 3; /* 3 repetitions */
+				uint32_t max_pairs = pairs_per_rep * reps;
 				pairs = (SubGhzRawPair *)pvPortMalloc(max_pairs * sizeof(SubGhzRawPair));
 				if (!pairs)
 				{
@@ -2414,13 +2419,14 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 					return 1;
 				}
 
-				npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, 3);
+				npairs = subghz_key_encode(&key_params, &key_timing, pairs, max_pairs, reps);
 			}
 		}
 
 		/* Write encoded pairs as Data: lines to the temp .sgh file.
-		 * The replay engine adds 4 more replays (SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT),
-		 * so total TX = 3 × 5 = 15 transmissions — matches a real remote button press. */
+		 * The caller controls how many times the file is replayed per TX session;
+		 * combined with the scaled in-file reps, total TX duration scales with
+		 * the caller's repeat count and the TE value. */
 		if (npairs > 0)
 		{
 			const size_t out_buf_cap = FLIPPER_SUB_OUT_MAX;

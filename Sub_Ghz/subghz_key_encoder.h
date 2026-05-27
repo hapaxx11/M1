@@ -131,6 +131,22 @@ uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
                                    uint8_t repetitions);
 
 /**
+ * Calculate the number of in-file repetitions needed for a low-TE signal.
+ *
+ * For signals with TE < 250µs, a single repetition is too short for reliable
+ * receiver detection.  This helper scales the repetition count so that each
+ * DMA burst carries approximately the same total duration as a TE=370 signal
+ * with 3 repetitions (~140ms).
+ *
+ * Formula: ceil(3 * 370 / key_te), clamped to [3, 12].
+ * For key_te >= 250 (or key_te == 0), returns 3 (the default).
+ *
+ * @param key_te  Short pulse duration in µs (from the .sub KEY file)
+ * @return        Number of repetitions to embed in the encoded raw file
+ */
+uint8_t subghz_low_te_calc_reps(uint32_t key_te);
+
+/**
  * Return the number of raw pairs needed by the custom encoder for @p params
  * and @p repetitions, without writing any data.
  *
