@@ -105,6 +105,15 @@ typedef struct __attribute__((packed)) {
     char     name[32];
 } m1_app_manifest_t;
 
+/* Cumulative allocation budget for a single ELF load (bytes).
+ * Limits total pvPortMalloc usage across all sections (code, data, BSS,
+ * symtab, strtab) so that a malformed or oversized .m1app cannot exhaust
+ * the shared FreeRTOS heap.  The remaining heap must stay available for
+ * ESP32/STM32 firmware flashing, Sub-GHz buffers, and other system tasks.
+ * 96 KB is generous for Cortex-M apps while leaving ~160 KB free in the
+ * 256 KB configTOTAL_HEAP_SIZE pool. */
+#define ELF_ALLOC_BUDGET  (96U * 1024U)  /* 96 KB */
+
 /* Loaded section info */
 #define ELF_MAX_SECTIONS  16
 
@@ -154,7 +163,8 @@ typedef enum {
     ELF_ERR_RELOCATE,
     ELF_ERR_SYMBOL,
     ELF_ERR_MANIFEST,
-    ELF_ERR_API_VERSION
+    ELF_ERR_API_VERSION,
+    ELF_ERR_BUDGET         /* cumulative allocation exceeded ELF_ALLOC_BUDGET */
 } elf_load_status_t;
 
 /* Public API */

@@ -1552,3 +1552,19 @@ add_test(NAME memmgr COMMAND test_memmgr)
 set_tests_properties(memmgr PROPERTIES
     ENVIRONMENT "ASAN_OPTIONS=allocator_may_return_null=1"
 )
+
+# ------------------------------------------------------------------
+# ELF loader allocation budget (compile-time checks on budget constant)
+# ------------------------------------------------------------------
+add_executable(test_elf_alloc_budget
+    test_elf_alloc_budget.c
+)
+target_include_directories(test_elf_alloc_budget PRIVATE
+    ${M1_ROOT}/m1_csrc
+    stubs
+)
+target_link_libraries(test_elf_alloc_budget PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_elf_alloc_budget PRIVATE sanitizers)
+endif()
+add_test(NAME elf_alloc_budget COMMAND test_elf_alloc_budget)
