@@ -281,6 +281,39 @@ The M1 communicates with the ESP32-C6 via **SPI AT commands** (not UART). Key po
 - Module config: `ESP32C6-SPI` (not `ESP32C6-4MB` which is UART)
 - UART is only used for firmware flashing (ROM bootloader), not runtime communication
 
+## Memory Management — Global Heap Redirect
+
+All libc heap calls (`malloc`, `free`, `calloc`, `realloc` and their newlib-nano
+reentrant `_r` variants) are **globally redirected** to the FreeRTOS heap-4
+allocator.  This is achieved via linker `--wrap` flags
+(`cmake/gcc-arm-none-eabi.cmake`) and a thin shim (`Core/Src/memmgr.c`).
+
+**What this means in practice:**
+
+- Plain `malloc()` / `free()` anywhere in the firmware hits `pvPortMalloc()` /
+  `vPortFree()`.  There is **no separate newlib `_sbrk` heap** — `sysmem.c` is
+  not in the build.
+- You may use either `malloc()` or `pvPortMalloc()` interchangeably.  New code
+  should prefer plain `malloc()` / `free()` for readability; existing
+  `pvPortMalloc` / `vPortFree` call sites do not need conversion.
+- `realloc()` is supported via `pvPortRealloc()` (added to `heap_4.c`).
+- `calloc()` delegates to `pvPortCalloc()`.
+
+**Caveats:**
+
+- All allocations share a single fixed `configTOTAL_HEAP_SIZE` pool.  If heap
+  usage grows, increase that constant in `FreeRTOSConfig.h`.
+- **Never call `malloc` / `free` from ISR context.**  `pvPortMalloc` calls
+  `vTaskSuspendAll()`, so allocating from an interrupt handler will assert or
+  hang.  This includes any libc function that allocates internally (e.g.
+  `printf` with large format strings).
+- `pvPortRealloc` reads the `BlockLink_t` header from `heap_4.c`.  If the
+  FreeRTOS heap implementation is changed (e.g. to heap_5), `pvPortRealloc`
+  must be updated to match.
+
+See [`documentation/memory_management.md`](documentation/memory_management.md)
+for the full design rationale and architecture details.
+
 ## Changelog
 
 Every meaningful change **must** include a changelog entry.  To avoid merge

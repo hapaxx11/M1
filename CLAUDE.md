@@ -717,9 +717,29 @@ to build.**
 
 - **S_M1_FW_CONFIG_t** struct is EXACTLY 20 bytes — NEVER modify it
 - CRC extension data lives at fixed offsets AFTER the struct (offset 20+)
-- All Flipper file parsers use stack allocation (no heap/malloc)
+- All Flipper file parsers use stack allocation (avoid heap where possible)
 - FreeRTOS headers must be included before stream_buffer.h / queue.h
 - Flipper parser API: functions are named `flipper_*_load()` / `flipper_*_save()`, return `bool`
+
+### Heap Redirect — `malloc()` ≡ `pvPortMalloc()`
+
+All libc heap calls are **globally redirected** to the FreeRTOS heap-4 allocator
+via linker `--wrap` flags (see `cmake/gcc-arm-none-eabi.cmake` and
+`Core/Src/memmgr.c`).  There is **no separate newlib `_sbrk` heap**.
+
+**Rules for agents:**
+
+1. **Plain `malloc()` / `free()` is fine** — it transparently hits FreeRTOS heap-4.
+   New code should prefer `malloc()` / `free()` for readability.
+2. **Existing `pvPortMalloc` / `vPortFree` call sites do not need conversion.**
+   Both spellings go to the same allocator.
+3. **Never allocate from ISR context** — `pvPortMalloc` calls `vTaskSuspendAll()`.
+   Any `malloc` (or libc function that allocates internally) called from an
+   interrupt handler will assert or hang.
+4. `realloc()` is supported (via `pvPortRealloc` in `heap_4.c`).
+5. All allocations share a single `configTOTAL_HEAP_SIZE` pool.
+6. The old guidance "must use `pvPortMalloc`/`vPortFree` instead of
+   `malloc`/`free`" is **obsolete** — they are now equivalent.
 
 ### Heap-Allocation Init Functions — Idempotency Rule
 
