@@ -717,9 +717,69 @@ to build.**
 
 - **S_M1_FW_CONFIG_t** struct is EXACTLY 20 bytes — NEVER modify it
 - CRC extension data lives at fixed offsets AFTER the struct (offset 20+)
-- All Flipper file parsers use stack allocation (no heap/malloc)
+- All Flipper file parsers use stack allocation (avoid heap where possible)
 - FreeRTOS headers must be included before stream_buffer.h / queue.h
 - Flipper parser API: functions are named `flipper_*_load()` / `flipper_*_save()`, return `bool`
+
+### Heap Redirect — `malloc()` ≡ `pvPortMalloc()`
+
+All libc heap calls are **globally redirected** to the FreeRTOS heap-4 allocator
+via linker `--wrap` flags (see `cmake/gcc-arm-none-eabi.cmake` and
+`Core/Src/memmgr.c`).  There is **no separate newlib `_sbrk` heap**.
+
+**Rules for agents:**
+
+1. **Plain `malloc()` / `free()` is fine** — it transparently hits FreeRTOS heap-4.
+   New code should prefer `malloc()` / `free()` for readability.
+2. **Existing `pvPortMalloc` / `vPortFree` call sites do not need conversion.**
+   Both spellings go to the same allocator.
+3. **Never allocate from ISR context** — `pvPortMalloc` calls `vTaskSuspendAll()`.
+   Any `malloc` (or libc function that allocates internally) called from an
+   interrupt handler will assert or hang.
+4. `realloc()` is supported (via `pvPortRealloc` in `heap_4.c`).
+5. All allocations share a single `configTOTAL_HEAP_SIZE` pool.
+6. The old guidance "must use `pvPortMalloc`/`vPortFree` instead of
+   `malloc`/`free`" is **obsolete** — they are now equivalent.
+
+#### ⚠ Heap anti-patterns — check for EVERY new feature
+
+Whenever you add or modify a feature, verify all four of the following.  These
+are real failure modes introduced by the single-heap architecture.
+
+**AP-1 · ISR-context allocation (hangs / asserts)**
+
+> Scan every new or modified interrupt handler (`*_IRQHandler`, callbacks
+> registered with `HAL_*_RegisterCallback`, timer callbacks, DMA callbacks).
+> If any of them — directly or via a called function — can reach `malloc`,
+> `free`, `printf`, `sprintf`, or any other libc function that may allocate
+> internally, flag it as a defect.  The fix is to pre-allocate before entering
+> the ISR and pass data via a queue or shared pointer.
+
+**AP-2 · Ignoring NULL return from `malloc` / `pvPortMalloc` (heap overflow)**
+
+> All allocations from a fixed `configTOTAL_HEAP_SIZE` pool can fail.  Every
+> call to `malloc()` / `pvPortMalloc()` in new code must guard the return value.
+> Never dereference the pointer without a NULL check.  On NULL, either return an
+> error code to the caller or call `configASSERT(0)` if the allocation is truly
+> required for the system to continue.
+
+**AP-3 · Unbounded allocation growth (pool exhaustion)**
+
+> When a new feature adds heap allocation — especially large or persistent
+> buffers — account for the bytes in `configTOTAL_HEAP_SIZE`
+> (`Core/Inc/FreeRTOSConfig.h`).  Add a comment near the allocation with the
+> expected size so reviewers can reason about the budget.  Call
+> `xPortGetFreeHeapSize()` or `xPortGetMinimumEverFreeHeapSize()` in a debug
+> build to confirm free headroom remains above ~8 KB after startup.
+
+**AP-4 · `pvPortRealloc` / heap_4 coupling (silent breakage on upgrade)**
+
+> `pvPortRealloc` (in `Middlewares/FreeRTOS/Source/portable/MemMang/heap_4.c`)
+> reads the `BlockLink_t` header directly.  If you upgrade FreeRTOS, switch
+> from heap_4 to heap_5, or otherwise change the heap layout, `pvPortRealloc`
+> **must be reviewed and updated** before merging.  The `configASSERT` on
+> `heapBLOCK_IS_ALLOCATED` will fire at runtime if the struct layout has
+> changed, but only on a code path that calls `realloc` — not during startup.
 
 ### Heap-Allocation Init Functions — Idempotency Rule
 

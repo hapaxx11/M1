@@ -1526,3 +1526,45 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_button_override PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_button_override COMMAND test_subghz_button_override)
+
+# ------------------------------------------------------------------
+# Module under test: memmgr (Momentum-style heap redirect shim)
+#
+# On the host the pvPort* macros map to libc, so the test exercises
+# the __wrap_ delegation path (malloc/free/calloc/realloc + _r variants).
+# ------------------------------------------------------------------
+add_executable(test_memmgr
+    test_memmgr.c
+    ${M1_ROOT}/Core/Src/memmgr.c
+)
+target_include_directories(test_memmgr PRIVATE
+    ${M1_ROOT}/Core/Inc
+    stubs
+)
+target_link_libraries(test_memmgr PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_memmgr PRIVATE sanitizers)
+endif()
+add_test(NAME memmgr COMMAND test_memmgr)
+# Allow ASan to return NULL for oversized allocations rather than aborting —
+# this lets test_wrap_malloc_oom_returns_null verify the NULL-propagation path
+# (AP-2 anti-pattern check) without triggering an allocator abort.
+set_tests_properties(memmgr PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=allocator_may_return_null=1"
+)
+
+# ------------------------------------------------------------------
+# ELF loader allocation budget (compile-time checks on budget constant)
+# ------------------------------------------------------------------
+add_executable(test_elf_alloc_budget
+    test_elf_alloc_budget.c
+)
+target_include_directories(test_elf_alloc_budget PRIVATE
+    ${M1_ROOT}/m1_csrc
+    stubs
+)
+target_link_libraries(test_elf_alloc_budget PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_elf_alloc_budget PRIVATE sanitizers)
+endif()
+add_test(NAME elf_alloc_budget COMMAND test_elf_alloc_budget)

@@ -276,6 +276,7 @@ static elf_load_status_t elf_load_section_data(FIL *fp, elf_app_t *app)
     uint16_t i;
     UINT br;
     FRESULT res;
+    uint32_t alloc_total = 0;  /* cumulative bytes allocated */
 
     for (i = 0; i < app->num_sections; i++)
     {
@@ -288,6 +289,17 @@ static elf_load_status_t elf_load_section_data(FIL *fp, elf_app_t *app)
         if (sec->size == 0)
             continue;
 
+        /* Budget check before allocating */
+        if (alloc_total + sec->size > ELF_ALLOC_BUDGET)
+        {
+            M1_LOG_E(TAG, "Alloc budget exceeded: section %u needs %lu bytes "
+                     "(used=%lu, budget=%lu)",
+                     i, (unsigned long)sec->size,
+                     (unsigned long)alloc_total,
+                     (unsigned long)ELF_ALLOC_BUDGET);
+            return ELF_ERR_BUDGET;
+        }
+
         /* Allocate RAM for this section */
         sec->data = (uint8_t *)pvPortMalloc(sec->size);
         if (sec->data == NULL)
@@ -297,6 +309,7 @@ static elf_load_status_t elf_load_section_data(FIL *fp, elf_app_t *app)
                      (unsigned long)xPortGetFreeHeapSize());
             return ELF_ERR_NO_MEMORY;
         }
+        alloc_total += sec->size;
 
         if (sec->type == SHT_NOBITS)
         {
@@ -340,9 +353,19 @@ static elf_load_status_t elf_load_section_data(FIL *fp, elf_app_t *app)
         elf_section_t *sym_sec = &app->sections[app->symtab_idx];
         if (sym_sec->data == NULL && sym_sec->size > 0)
         {
+            if (alloc_total + sym_sec->size > ELF_ALLOC_BUDGET)
+            {
+                M1_LOG_E(TAG, "Alloc budget exceeded on symtab (%lu+%lu > %lu)",
+                         (unsigned long)alloc_total,
+                         (unsigned long)sym_sec->size,
+                         (unsigned long)ELF_ALLOC_BUDGET);
+                return ELF_ERR_BUDGET;
+            }
+
             sym_sec->data = (uint8_t *)pvPortMalloc(sym_sec->size);
             if (sym_sec->data == NULL)
                 return ELF_ERR_NO_MEMORY;
+            alloc_total += sym_sec->size;
 
             res = f_lseek(fp, sym_sec->file_offset);
             if (res != FR_OK)
@@ -359,9 +382,19 @@ static elf_load_status_t elf_load_section_data(FIL *fp, elf_app_t *app)
         elf_section_t *str_sec = &app->sections[app->strtab_idx];
         if (str_sec->data == NULL && str_sec->size > 0)
         {
+            if (alloc_total + str_sec->size > ELF_ALLOC_BUDGET)
+            {
+                M1_LOG_E(TAG, "Alloc budget exceeded on strtab (%lu+%lu > %lu)",
+                         (unsigned long)alloc_total,
+                         (unsigned long)str_sec->size,
+                         (unsigned long)ELF_ALLOC_BUDGET);
+                return ELF_ERR_BUDGET;
+            }
+
             str_sec->data = (uint8_t *)pvPortMalloc(str_sec->size);
             if (str_sec->data == NULL)
                 return ELF_ERR_NO_MEMORY;
+            alloc_total += str_sec->size;
 
             res = f_lseek(fp, str_sec->file_offset);
             if (res != FR_OK)
@@ -372,6 +405,9 @@ static elf_load_status_t elf_load_section_data(FIL *fp, elf_app_t *app)
                 return ELF_ERR_FILE;
         }
     }
+
+    M1_LOG_D(TAG, "Alloc total: %lu / %lu bytes",
+             (unsigned long)alloc_total, (unsigned long)ELF_ALLOC_BUDGET);
 
     return ELF_OK;
 }

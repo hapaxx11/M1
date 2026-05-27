@@ -682,6 +682,7 @@ void game_apps_browser_run(void)
                     case ELF_ERR_SYMBOL:     err_msg = "Missing symbol";   break;
                     case ELF_ERR_MANIFEST:   err_msg = "Bad manifest";     break;
                     case ELF_ERR_API_VERSION: err_msg = "API too new";     break;
+                    case ELF_ERR_BUDGET:     err_msg = "App too large";    break;
                     default:                 err_msg = "Unknown error";     break;
                 }
 
