@@ -16,8 +16,6 @@
 
 #include "memmgr.h"
 
-#include <string.h>          /* memcpy, memset */
-
 #include "FreeRTOS.h"
 #include "portable.h"
 
