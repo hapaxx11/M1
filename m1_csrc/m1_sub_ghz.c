@@ -2406,13 +2406,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				 * that each DMA burst carries enough signal duration for
 				 * reliable receiver detection.  Target: each burst ≈ 140ms
 				 * (matches default TE=370 with 3 reps). */
-				uint8_t reps = 3;
-				if (key_te > 0 && key_te < 250)
-				{
-					reps = (uint8_t)((3U * 370U + key_te - 1U) / key_te);
-					if (reps > 12) reps = 12;
-					if (reps < 3)  reps = 3;
-				}
+				uint8_t reps = subghz_low_te_calc_reps(key_te);
 				uint32_t clamped_bits = (key_bit_count > 64) ? 64 : key_bit_count;
 				pairs_per_rep = clamped_bits + 1; /* data bits + sync gap */
 				uint32_t max_pairs = pairs_per_rep * reps;
@@ -2430,9 +2424,9 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		}
 
 		/* Write encoded pairs as Data: lines to the temp .sgh file.
-		 * The Transmitter scene drives 5 bursts (tx_repeat_count=5), each
-		 * replaying the file once.  Combined with the scaled in-file reps,
-		 * total TX duration targets ~700ms for any TE value. */
+		 * The caller controls how many times the file is replayed per TX session;
+		 * combined with the scaled in-file reps, total TX duration scales with
+		 * the caller's repeat count and the TE value. */
 		if (npairs > 0)
 		{
 			const size_t out_buf_cap = FLIPPER_SUB_OUT_MAX;

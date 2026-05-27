@@ -289,6 +289,44 @@ void test_encode_came_12bit(void)
 }
 
 /* ===================================================================
+ * Adaptive low-TE repetition calculation
+ * =================================================================== */
+
+void test_low_te_calc_reps_te128(void)
+{
+    /* TE=128 is the canonical low-TE Princeton case.
+     * Formula: ceil(3 * 370 / 128) = ceil(1110 / 128) = ceil(8.67) = 9 */
+    TEST_ASSERT_EQUAL_UINT8(9, subghz_low_te_calc_reps(128));
+}
+
+void test_low_te_calc_reps_te370_returns_default(void)
+{
+    /* TE=370 is the normal Princeton default: formula gives ceil(3*370/370)=3 */
+    TEST_ASSERT_EQUAL_UINT8(3, subghz_low_te_calc_reps(370));
+}
+
+void test_low_te_calc_reps_te250_boundary(void)
+{
+    /* TE=250 is at the boundary — still below the 250 threshold so formula applies.
+     * ceil(3 * 370 / 250) = ceil(1110 / 250) = ceil(4.44) = 5 */
+    TEST_ASSERT_EQUAL_UINT8(5, subghz_low_te_calc_reps(249));
+    /* TE=250 itself is at the cutoff — returns default 3 */
+    TEST_ASSERT_EQUAL_UINT8(3, subghz_low_te_calc_reps(250));
+}
+
+void test_low_te_calc_reps_very_small_te_clamped(void)
+{
+    /* Very small TE (e.g. TE=50) would give ceil(3*370/50)=23, clamped to 12 */
+    TEST_ASSERT_EQUAL_UINT8(12, subghz_low_te_calc_reps(50));
+}
+
+void test_low_te_calc_reps_zero_returns_default(void)
+{
+    /* TE=0 is invalid — returns default 3 */
+    TEST_ASSERT_EQUAL_UINT8(3, subghz_low_te_calc_reps(0));
+}
+
+/* ===================================================================
  * Encoding — multiple repetitions
  * =================================================================== */
 
@@ -861,6 +899,13 @@ int main(void)
 
     /* Encoding — CAME */
     RUN_TEST(test_encode_came_12bit);
+
+    /* Adaptive low-TE repetition calculation */
+    RUN_TEST(test_low_te_calc_reps_te128);
+    RUN_TEST(test_low_te_calc_reps_te370_returns_default);
+    RUN_TEST(test_low_te_calc_reps_te250_boundary);
+    RUN_TEST(test_low_te_calc_reps_very_small_te_clamped);
+    RUN_TEST(test_low_te_calc_reps_zero_returns_default);
 
     /* Encoding — repetitions */
     RUN_TEST(test_encode_3_repetitions);
