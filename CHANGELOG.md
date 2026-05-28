@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.37] - 2026-05-28
+
+### Fixed
+
+- Fix "No protocols decoded" regression when decoding a RAW file from the waveform viewer (More → Decode). The `resume_from_child` flag set by ReadRaw leaked through MoreRAW into DecodeRaw, causing the decode engine to be skipped on first entry.
 ## [0.9.1.36] - 2026-05-28
 
 ### Changed
