@@ -146,6 +146,7 @@ static void do_delete(SubGhzApp *app)
         /* Clear the active filepath so the Read Raw scene's
          * resume-from-child path resets to the Start state. */
         app->raw_filepath[0] = '\0';
+        app->resume_from_child = true;
         subghz_scene_pop(app);
     }
     else
@@ -161,6 +162,12 @@ static void do_delete(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Consume the resume_from_child flag that our parent (ReadRaw) set
+     * before pushing us.  Without this, the flag leaks into our own
+     * child scenes — notably DecodeRaw, which would skip load_and_decode()
+     * on first entry, producing a "No protocols decoded" false negative. */
+    app->resume_from_child = false;
+
     /* If there is no file to act on, immediately pop back. */
     if (app->raw_filepath[0] == '\0')
     {
@@ -183,6 +190,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     switch (event)
     {
         case SubGhzEventBack:
+            app->resume_from_child = true;
             subghz_scene_pop(app);
             return true;
 
@@ -227,6 +235,16 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
+    /* Do not modify resume_from_child here.
+     *
+     * subghz_scene_push() calls the current scene's on_exit() before
+     * entering the pushed scene, so setting resume_from_child here would
+     * leak into child scenes such as DecodeRaw and make them think they
+     * are being resumed from a child return.
+     *
+     * Any resume_from_child handoff needed for actual pops back to
+     * ReadRaw must be set explicitly by those pop/delete paths, not
+     * unconditionally on every exit from this scene. */
     (void)app;
 }
 

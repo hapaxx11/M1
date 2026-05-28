@@ -1,0 +1,1 @@
+- Fix "No protocols decoded" regression when decoding a RAW file from the waveform viewer (More → Decode). The `resume_from_child` flag set by ReadRaw leaked through MoreRAW into DecodeRaw, causing the decode engine to be skipped on first entry.
