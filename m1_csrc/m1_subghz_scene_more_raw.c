@@ -233,10 +233,17 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    /* Restore resume_from_child so our parent scene (ReadRaw) recognises
-     * this pop as a child-scene return rather than a fresh entry. */
-    if (app)
-        app->resume_from_child = true;
+    /* Do not modify resume_from_child here.
+     *
+     * subghz_scene_push() calls the current scene's on_exit() before
+     * entering the pushed scene, so setting resume_from_child here would
+     * leak into child scenes such as DecodeRaw and make them think they
+     * are being resumed from a child return.
+     *
+     * Any resume_from_child handoff needed for actual pops back to
+     * ReadRaw must be set explicitly by those pop/delete paths, not
+     * unconditionally on every exit from this scene. */
+    (void)app;
 }
 
 /*============================================================================*/
