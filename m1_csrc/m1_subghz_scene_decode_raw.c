@@ -12,13 +12,15 @@
  *
  *   List view (default):
  *     - Header: "Decode Results"
- *     - Body: "Decoded: N" followed by up to 3 visible rows showing
+ *     - Body: "Decoded: N" followed by scrollable rows showing
  *             "<protocol> 0x<key>" with selection highlight.
  *     - UP / DOWN scroll, OK opens the detail view for the selection.
  *     - "No protocols decoded" message when the engine returned 0 matches.
  *
  *   Detail view (OK from list):
  *     - Protocol name, Key + bit length, TE, Frequency, optional SN/RC.
+ *     - OK = Send (write temp .sub key file → push Transmitter scene).
+ *     - DOWN = Save (prompt filename → write persistent .sub key file).
  *     - BACK returns to the list view; second BACK pops the scene.
  *
  * The scene loads the file eagerly on entry into a file-scope
@@ -37,10 +39,13 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include "ff.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_scene.h"
+#include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
+#include "m1_subghz_button_bar.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_decenc.h"
 #include "flipper_subghz.h"
@@ -49,14 +54,14 @@
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
+extern uint8_t subghz_get_save_fmt_ext(void);
+extern bool subghz_protocol_is_static_ext(uint16_t protocol);
 
 /*============================================================================*/
 /* Scene state                                                                */
 /*============================================================================*/
 
 #define DECODE_RAW_MAX     16   /**< max distinct protocols shown */
-#define DECODE_RAW_VISIBLE  3   /**< list rows visible at once */
-#define DECODE_RAW_ROW_H    8   /**< px per list row */
 
 static SubGhzRawDecodeResult decode_results[DECODE_RAW_MAX];
 static uint8_t  decode_count;
@@ -133,9 +138,89 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventOk:
-            if (!decode_detail && decode_count > 0)
+            if (decode_detail && decode_count > 0)
+            {
+                /* Send: write a temp .sub key file and push Transmitter */
+                const SubGhzRawDecodeResult *d = &decode_results[decode_sel];
+                if (!subghz_protocol_is_static_ext(d->protocol))
+                    return true;
+
+                /* Use protocol-specified TE for the saved file when the
+                 * decoder stored the observed average. */
+                uint16_t te = d->te;
+                if (te == 0 && d->protocol < subghz_protocol_registry_count)
+                    te = subghz_protocols_list[d->protocol].te_short;
+
+                const char *tmp_path = "/SUBGHZ/_decode_tmp.sub";
+                if (!flipper_subghz_save_key(tmp_path,
+                        d->frequency, "FuriHalSubGhzPresetOok650Async",
+                        protocol_text[d->protocol],
+                        d->bit_len, d->key, te))
+                    return true;
+
+                strncpy(app->tx_path, tmp_path, sizeof(app->tx_path) - 1);
+                app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+                app->tx_repeat_count = 5U;
+                app->tx_mode         = 0U;
+                strncpy(app->tx_protocol_name, protocol_text[d->protocol],
+                        sizeof(app->tx_protocol_name) - 1);
+                app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
+                subghz_scene_push(app, SubGhzSceneTransmitter);
+            }
+            else if (!decode_detail && decode_count > 0)
             {
                 decode_detail = true;
+                app->need_redraw = true;
+            }
+            return true;
+
+        case SubGhzEventDown:
+            if (decode_detail && decode_count > 0)
+            {
+                /* Save decoded signal */
+                const SubGhzRawDecodeResult *d = &decode_results[decode_sel];
+                char default_name[32];
+                snprintf(default_name, sizeof(default_name), "%.12s_%lX",
+                         protocol_text[d->protocol],
+                         (unsigned long)(uint32_t)d->key);
+
+                char new_name[32];
+                if (!m1_vkb_get_filename("Save signal as:", default_name, new_name))
+                {
+                    app->need_redraw = true;
+                    return true;
+                }
+
+                uint16_t te = d->te;
+                if (te == 0 && d->protocol < subghz_protocol_registry_count)
+                    te = subghz_protocols_list[d->protocol].te_short;
+
+                uint8_t fmt = subghz_get_save_fmt_ext();
+                const char *ext = (fmt == 1) ? ".sgh" : ".sub";
+                char save_path[80];
+                snprintf(save_path, sizeof(save_path), "/SUBGHZ/%s%s", new_name, ext);
+
+                f_mkdir("/SUBGHZ");
+                if (fmt == 1)
+                    flipper_subghz_save_m1native_key(save_path,
+                        d->frequency, "FuriHalSubGhzPresetOok650Async",
+                        protocol_text[d->protocol],
+                        d->bit_len, d->key, te);
+                else
+                    flipper_subghz_save_key(save_path,
+                        d->frequency, "FuriHalSubGhzPresetOok650Async",
+                        protocol_text[d->protocol],
+                        d->bit_len, d->key, te);
+
+                app->need_redraw = true;
+            }
+            else if (!decode_detail && decode_count > 0)
+            {
+                if (decode_sel + 1 < decode_count)
+                    decode_sel++;
+                uint8_t vis = M1_MENU_VIS(decode_count);
+                if (decode_sel >= decode_scroll + vis)
+                    decode_scroll = (uint8_t)(decode_sel - vis + 1);
                 app->need_redraw = true;
             }
             return true;
@@ -147,17 +232,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     decode_sel--;
                 if (decode_sel < decode_scroll)
                     decode_scroll = decode_sel;
-                app->need_redraw = true;
-            }
-            return true;
-
-        case SubGhzEventDown:
-            if (!decode_detail && decode_count > 0)
-            {
-                if (decode_sel + 1 < decode_count)
-                    decode_sel++;
-                if (decode_sel >= decode_scroll + DECODE_RAW_VISIBLE)
-                    decode_scroll = (uint8_t)(decode_sel - DECODE_RAW_VISIBLE + 1);
                 app->need_redraw = true;
             }
             return true;
@@ -181,13 +255,16 @@ static void draw(SubGhzApp *app)
 {
     (void)app;
     char line[48];
+    const uint8_t item_h   = m1_menu_item_h();
+    const uint8_t text_ofs = item_h - 1;
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-    u8g2_DrawStr(&m1_u8g2, 2, 10, "Decode Results");
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    /* Title */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 9, 120, "Decode Results", TEXT_ALIGN_CENTER);
+    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     if (decode_count == 0)
     {
@@ -204,60 +281,81 @@ static void draw(SubGhzApp *app)
         const SubGhzRawDecodeResult *d = &decode_results[decode_sel];
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 2, 24, protocol_text[d->protocol]);
+        u8g2_DrawStr(&m1_u8g2, 2, 22, protocol_text[d->protocol]);
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
         snprintf(line, sizeof(line), "Key: 0x%lX  %dbit",
                  (uint32_t)d->key, d->bit_len);
-        u8g2_DrawStr(&m1_u8g2, 2, 34, line);
+        u8g2_DrawStr(&m1_u8g2, 2, 30, line);
 
-        snprintf(line, sizeof(line), "TE: %d us", d->te);
-        u8g2_DrawStr(&m1_u8g2, 2, 43, line);
+        /* Display TE — use protocol-specified value when available */
+        {
+            uint16_t te_display = d->te;
+            if (te_display == 0 && d->protocol < subghz_protocol_registry_count)
+                te_display = subghz_protocols_list[d->protocol].te_short;
+            snprintf(line, sizeof(line), "TE: %d us", te_display);
+            u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+        }
 
         /* Integer arithmetic — embedded nano.specs has no %f support */
         snprintf(line, sizeof(line), "Freq: %lu.%02lu MHz",
                  (unsigned long)(d->frequency / 1000000UL),
                  (unsigned long)((d->frequency % 1000000UL) / 10000UL));
-        u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+        u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 
-        if (d->serial_number != 0 || d->rolling_code != 0)
-        {
-            snprintf(line, sizeof(line), "SN: %lX RC: %lX",
-                     (unsigned long)d->serial_number,
-                     (unsigned long)d->rolling_code);
-            u8g2_DrawStr(&m1_u8g2, 2, 61, line);
-        }
+        /* Bottom bar — Send (OK) / Save (DOWN) */
+        bool can_send = subghz_protocol_is_static_ext(d->protocol);
+        subghz_button_bar_draw(
+            arrowdown_8x8, "Save",
+            NULL, can_send ? "Send" : NULL,
+            NULL, NULL);
     }
     else
     {
         /* List view */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_SetFont(&m1_u8g2, m1_menu_font());
+        uint8_t vis = M1_MENU_VIS(decode_count);
 
-        snprintf(line, sizeof(line), "Decoded: %d", decode_count);
-        u8g2_DrawStr(&m1_u8g2, 2, 22, line);
-
-        uint8_t vis = (decode_count < DECODE_RAW_VISIBLE)
-                      ? decode_count : DECODE_RAW_VISIBLE;
-        for (uint8_t i = 0; i < vis; i++)
+        for (uint8_t i = 0; i < vis && (decode_scroll + i) < decode_count; i++)
         {
             uint8_t idx = (uint8_t)(decode_scroll + i);
-            if (idx >= decode_count) break;
-
             const SubGhzRawDecodeResult *d = &decode_results[idx];
-            uint8_t y = (uint8_t)(24 + i * DECODE_RAW_ROW_H);
+            uint8_t y = (uint8_t)(M1_MENU_AREA_TOP + i * item_h);
 
             if (idx == decode_sel)
             {
-                u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH,
-                              DECODE_RAW_ROW_H, 2);
+                u8g2_DrawRBox(&m1_u8g2, M1_MENU_HIGHLIGHT_X, y,
+                              M1_MENU_TEXT_W, item_h, 2);
                 u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
             }
 
             snprintf(line, sizeof(line), "%s 0x%lX",
                      protocol_text[d->protocol], (uint32_t)d->key);
-            u8g2_DrawStr(&m1_u8g2, 2, y + 6, line);
+            u8g2_DrawStr(&m1_u8g2, 4, y + text_ofs, line);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        }
+
+        /* Scrollbar */
+        if (decode_count > 0)
+        {
+            uint8_t sb_area_h   = vis * item_h;
+            uint8_t sb_handle_h = sb_area_h / decode_count;
+            if (sb_handle_h < 6)
+                sb_handle_h = 6;
+            uint8_t sb_travel_h = (sb_area_h > sb_handle_h)
+                                  ? (sb_area_h - sb_handle_h) : 0;
+            uint8_t sb_handle_y = M1_MENU_AREA_TOP;
+            if (decode_count > 1)
+                sb_handle_y += (uint8_t)((uint16_t)sb_travel_h * decode_sel
+                               / (decode_count - 1));
+
+            u8g2_DrawVLine(&m1_u8g2,
+                           M1_MENU_SCROLLBAR_X + M1_MENU_SCROLLBAR_W / 2,
+                           M1_MENU_AREA_TOP, sb_area_h);
+            u8g2_DrawRBox(&m1_u8g2,
+                          M1_MENU_SCROLLBAR_X, sb_handle_y,
+                          M1_MENU_SCROLLBAR_W, sb_handle_h, 1);
         }
     }
 
