@@ -161,6 +161,12 @@ static void do_delete(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Consume the resume_from_child flag that our parent (ReadRaw) set
+     * before pushing us.  Without this, the flag leaks into our own
+     * child scenes — notably DecodeRaw, which would skip load_and_decode()
+     * on first entry, producing a "No protocols decoded" false negative. */
+    app->resume_from_child = false;
+
     /* If there is no file to act on, immediately pop back. */
     if (app->raw_filepath[0] == '\0')
     {
@@ -227,7 +233,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    (void)app;
+    /* Restore resume_from_child so our parent scene (ReadRaw) recognises
+     * this pop as a child-scene return rather than a fresh entry. */
+    if (app)
+        app->resume_from_child = true;
 }
 
 /*============================================================================*/
