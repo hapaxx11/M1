@@ -4,17 +4,19 @@
  * @file   m1_subghz_scene_saved_menu.c
  * @brief  Sub-GHz Saved-file action menu scene (Phase 5).
  *
- * Pushed by the Saved file-browser scene once a file is selected.  Owns
- * the action menu (Decode / Emulate / Info / Rename / Delete), the
- * informational "Signal Info" screen, and the offline decode-results
- * screen.
+ * Pushed by the Saved file-browser scene once a file is selected.
  *
- *   RAW files:    Decode, Emulate, Info, Rename, Delete
+ * RAW files are transparently redirected to the Read Raw scene in Loaded
+ * state (Momentum parity): the user sees the graphical waveform viewer
+ * with Send / New / More buttons instead of a text action menu.  This
+ * scene replaces itself in the scene stack with SubGhzSceneReadRaw via
+ * subghz_scene_replace(), so Back in Read Raw returns to the file browser.
+ *
+ * Parsed files show the action menu (Emulate / Info / Rename / Delete).
  *   Parsed files: Emulate, Info, Rename, Delete
  *
- * "Emulate" for RAW files pushes into the Read Raw scene in Loaded state
- * (Momentum's LoadKeyIDLE).  "Emulate" for parsed files pushes the
- * Transmitter scene which drives the async-TX state machine.
+ * "Emulate" for parsed files pushes the Transmitter scene which drives
+ * the async-TX state machine.
  *
  * "Delete" pushes the dedicated Delete confirmation scene.
  *
@@ -287,6 +289,26 @@ static void scene_on_enter(SubGhzApp *app)
         subghz_scene_pop(app);
         return;
     }
+
+    /* Momentum parity: RAW files open directly in the Read Raw waveform
+     * viewer (Loaded state) rather than a text action menu.  Replace
+     * ourselves in the scene stack with ReadRaw so Back returns to the
+     * file browser.  Decode / Rename / Delete remain accessible via the
+     * More button inside Read Raw. */
+    if (is_raw_file)
+    {
+        strncpy(app->raw_load_path, app->saved_filepath, sizeof(app->raw_load_path) - 1);
+        app->raw_load_path[sizeof(app->raw_load_path) - 1] = '\0';
+        app->raw_load_is_native = saved_signal.is_m1_native;
+        app->raw_load_freq_hz   = saved_signal.frequency;
+        {
+            uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
+            app->raw_load_mod = (mod == MODULATION_UNKNOWN) ? MODULATION_OOK : mod;
+        }
+        subghz_scene_replace(app, SubGhzSceneReadRaw);
+        return;
+    }
+
     app->need_redraw = true;
 }
 
@@ -308,29 +330,10 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_EMULATE:
         {
-            if (is_raw_file)
-            {
-                /* RAW files: open in the Read Raw scene in Loaded state.
-                 * This is Momentum's LoadKeyIDLE path — the user gets a proper
-                 * waveform viewer with Send / New buttons rather than a blind
-                 * one-shot replay that returns immediately.
-                 *
-                 * Pass replay metadata via app context so Read Raw knows which
-                 * replay function to use (direct for .sgh, flipper for .sub). */
-                strncpy(app->raw_load_path, app->saved_filepath, sizeof(app->raw_load_path) - 1);
-                app->raw_load_path[sizeof(app->raw_load_path) - 1] = '\0';
-                app->raw_load_is_native = saved_signal.is_m1_native;
-                app->raw_load_freq_hz   = saved_signal.frequency;
-                {
-                    uint8_t mod = flipper_subghz_preset_to_modulation(saved_signal.preset);
-                    app->raw_load_mod = (mod == MODULATION_UNKNOWN) ? MODULATION_OOK : mod;
-                }
-                subghz_scene_push(app, SubGhzSceneReadRaw);
-                return true;
-            }
-
             /* Parsed (static-key) files: push the Transmitter scene which
-             * drives the async-TX state machine on top of our scene. */
+             * drives the async-TX state machine on top of our scene.
+             * RAW files never reach here — they are redirected to
+             * SubGhzSceneReadRaw from scene_on_enter. */
             strncpy(app->tx_path, app->saved_filepath, sizeof(app->tx_path) - 1);
             app->tx_path[sizeof(app->tx_path) - 1] = '\0';
             app->tx_repeat_count = 5U;             /* static keys: 5 bursts for reliable TX */
