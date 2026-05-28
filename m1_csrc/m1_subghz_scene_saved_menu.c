@@ -97,6 +97,10 @@ static flipper_subghz_signal_t saved_signal;
 /*============================================================================*/
 
 #define DECODE_MAX_RESULTS   16
+/** Temp .sub file written for Transmitter from the decode-results screen.
+ *  Unlinked on return from Transmitter (resume_from_child path) and on
+ *  real scene exit. */
+#define SAVED_DECODE_TMP_PATH  "/SUBGHZ/_decode_tmp.sub"
 
 static SubGHz_Dec_Info_t decode_results[DECODE_MAX_RESULTS];
 static uint8_t  decode_count;
@@ -104,6 +108,12 @@ static uint8_t  decode_sel;
 static uint8_t  decode_scroll;
 static bool     in_decode_screen;
 static bool     decode_detail_view;
+static bool     s_decode_save_failed;  /**< Brief "Save failed" overlay flag */
+
+static void unlink_decode_tmp(void)
+{
+    f_unlink(SAVED_DECODE_TMP_PATH);
+}
 
 /*============================================================================*/
 /* Helpers                                                                    */
@@ -254,6 +264,17 @@ static bool load_signal(const SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
+    /* Returning from a child scene pushed by the decode-results screen
+     * (Transmitter or SaveSuccess): unlink the temp .sub if it was written
+     * for Transmitter, restore the decode view, and skip the full reload. */
+    if (app->resume_from_child)
+    {
+        app->resume_from_child = false;
+        unlink_decode_tmp();
+        app->need_redraw = true;
+        return;
+    }
+
     in_info_screen     = false;
     in_decode_screen   = false;
     decode_detail_view = false;
@@ -280,6 +301,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             decode_sel = 0;
             decode_scroll = 0;
             decode_detail_view = false;
+            s_decode_save_failed = false;
             in_decode_screen = true;
             app->need_redraw = true;
             return true;
@@ -377,6 +399,14 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     /* --- Decode results screen --- */
     if (in_decode_screen)
     {
+        /* Any keypress dismisses the "Save failed" overlay. */
+        if (s_decode_save_failed)
+        {
+            s_decode_save_failed = false;
+            app->need_redraw = true;
+            return true;
+        }
+
         switch (event)
         {
             case SubGhzEventBack:
@@ -404,20 +434,26 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     if (te == 0 && d->protocol < subghz_protocol_registry_count)
                         te = subghz_protocols_list[d->protocol].te_short;
 
-                    const char *tmp_path = "/SUBGHZ/_decode_tmp.sub";
-                    if (!flipper_subghz_save_key(tmp_path,
-                            d->frequency, "FuriHalSubGhzPresetOok650Async",
+                    /* Use the preset from the loaded file; fall back to OOK
+                     * when the file omitted the field. */
+                    const char *preset = (saved_signal.preset[0] != '\0')
+                                        ? saved_signal.preset
+                                        : "FuriHalSubGhzPresetOok650Async";
+
+                    if (!flipper_subghz_save_key(SAVED_DECODE_TMP_PATH,
+                            d->frequency, preset,
                             protocol_text[d->protocol],
                             d->bit_len, d->key, te))
                         return true;
 
-                    strncpy(app->tx_path, tmp_path, sizeof(app->tx_path) - 1);
+                    strncpy(app->tx_path, SAVED_DECODE_TMP_PATH, sizeof(app->tx_path) - 1);
                     app->tx_path[sizeof(app->tx_path) - 1] = '\0';
                     app->tx_repeat_count = 5U;
                     app->tx_mode         = 0U;
                     strncpy(app->tx_protocol_name, protocol_text[d->protocol],
                             sizeof(app->tx_protocol_name) - 1);
                     app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
+                    app->resume_from_child = true;
                     subghz_scene_push(app, SubGhzSceneTransmitter);
                 }
                 else if (!decode_detail_view && decode_count > 0)
@@ -455,9 +491,23 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                         return true;
                     }
 
+                    /* Reject empty names — an empty path segment causes
+                     * f_open to fail silently. */
+                    if (new_name[0] == '\0')
+                    {
+                        app->need_redraw = true;
+                        return true;
+                    }
+
                     uint16_t te = d->te;
                     if (te == 0 && d->protocol < subghz_protocol_registry_count)
                         te = subghz_protocols_list[d->protocol].te_short;
+
+                    /* Use the preset from the loaded file; fall back to OOK
+                     * when the file omitted the field. */
+                    const char *preset = (saved_signal.preset[0] != '\0')
+                                        ? saved_signal.preset
+                                        : "FuriHalSubGhzPresetOok650Async";
 
                     uint8_t fmt = subghz_get_save_fmt_ext();
                     const char *ext = (fmt == 1) ? ".sgh" : ".sub";
@@ -465,18 +515,30 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     snprintf(save_path, sizeof(save_path), "/SUBGHZ/%s%s", new_name, ext);
 
                     f_mkdir("/SUBGHZ");
+                    bool saved;
                     if (fmt == 1)
-                        flipper_subghz_save_m1native_key(save_path,
-                            d->frequency, "FuriHalSubGhzPresetOok650Async",
-                            protocol_text[d->protocol],
-                            d->bit_len, d->key, te);
+                        saved = flipper_subghz_save_m1native_key(save_path,
+                                    d->frequency, preset,
+                                    protocol_text[d->protocol],
+                                    d->bit_len, d->key, te);
                     else
-                        flipper_subghz_save_key(save_path,
-                            d->frequency, "FuriHalSubGhzPresetOok650Async",
-                            protocol_text[d->protocol],
-                            d->bit_len, d->key, te);
+                        saved = flipper_subghz_save_key(save_path,
+                                    d->frequency, preset,
+                                    protocol_text[d->protocol],
+                                    d->bit_len, d->key, te);
 
-                    app->need_redraw = true;
+                    if (saved)
+                    {
+                        strncpy(app->file_path, save_path, sizeof(app->file_path) - 1);
+                        app->file_path[sizeof(app->file_path) - 1] = '\0';
+                        app->resume_from_child = true;
+                        subghz_scene_push(app, SubGhzSceneSaveSuccess);
+                    }
+                    else
+                    {
+                        s_decode_save_failed = true;
+                        app->need_redraw = true;
+                    }
                 }
                 else if (!decode_detail_view && decode_count > 0)
                 {
@@ -542,7 +604,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    (void)app;
+    /* When handing off to a child scene from the decode-results screen,
+     * the temp .sub must survive until scene_on_enter reclaims it on
+     * return.  resume_from_child is set immediately before the push so it
+     * acts as the "do not unlink" gate here, matching the SetKey pattern. */
+    if (app && app->resume_from_child)
+        return;
+    unlink_decode_tmp();
 }
 
 /*============================================================================*/
@@ -658,6 +726,18 @@ static void draw_decode_screen(void)
     {
         /* Detail view of selected decoded signal */
         const SubGHz_Dec_Info_t *d = &decode_results[decode_sel];
+
+        if (s_decode_save_failed)
+        {
+            /* Brief "Save failed" overlay — any key will dismiss it */
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
+            m1_draw_text(&m1_u8g2, 0, 30, M1_LCD_DISPLAY_WIDTH,
+                         "Save failed", TEXT_ALIGN_CENTER);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 0, 42, M1_LCD_DISPLAY_WIDTH,
+                         "Press any key", TEXT_ALIGN_CENTER);
+            return;
+        }
 
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 22, protocol_text[d->protocol]);
