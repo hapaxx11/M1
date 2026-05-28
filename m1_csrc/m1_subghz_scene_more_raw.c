@@ -146,6 +146,7 @@ static void do_delete(SubGhzApp *app)
         /* Clear the active filepath so the Read Raw scene's
          * resume-from-child path resets to the Start state. */
         app->raw_filepath[0] = '\0';
+        app->resume_from_child = true;
         subghz_scene_pop(app);
     }
     else
@@ -189,6 +190,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     switch (event)
     {
         case SubGhzEventBack:
+            app->resume_from_child = true;
             subghz_scene_pop(app);
             return true;
 
