@@ -68,7 +68,12 @@ void firmware_update_init(void)
 			return;
 		}
 	}
-	fw_update_status = M1_FW_UPDATE_NOT_READY;
+	/* Preserve M1_FW_UPDATE_READY so a validated image file survives the
+	 * scene re-entry that happens when fw_image_on_enter() pops back to
+	 * the firmware menu.  Without this guard the status was always reset
+	 * and "Firmware update" would silently do nothing. */
+	if ( fw_update_status != M1_FW_UPDATE_READY )
+		fw_update_status = M1_FW_UPDATE_NOT_READY;
 } // void firmware_update_init(void)
 
 
@@ -167,6 +172,12 @@ void firmware_update_start(void)
 		m1_message_box(&m1_u8g2, "Low battery!",
 		               "Charge device before",
 		               "updating firmware.", " OK ");
+	}
+	else if ( fw_update_status==M1_FW_UPDATE_NOT_READY )
+	{
+		m1_message_box(&m1_u8g2, "No firmware loaded!",
+		               "Select Image File",
+		               "first.", " OK ");
 	}
 
 	m1_device_stat.op_mode = old_op_mode;
@@ -368,6 +379,14 @@ void firmware_update_get_image_file(void)
     			break;
     		}
     	} // if ( uret )
+    	else
+    	{
+    		/* File validated — show confirmation so the user knows the
+    		 * image is ready (mirrors SiN's confirmation screen). */
+    		m1_message_box(&m1_u8g2, "Image loaded!",
+    		               "Select Firmware update",
+    		               "to begin flashing.", " OK ");
+    	}
     } // if ( fw_update_status==M1_FW_UPDATE_READY )
 
 	xQueueReset(main_q_hdl); // Reset main q before return
