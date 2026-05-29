@@ -104,7 +104,12 @@ void setting_esp32_init(void)
 	assert(pfilename_md5!=NULL);
 
 	start_address = ESP32_START_ADDRESS_MIN;
-	esp32_update_status = M1_FW_UPDATE_NOT_READY; // Reset
+	/* Preserve M1_FW_UPDATE_READY so a validated image file survives the
+	 * scene re-entry that happens when esp32_image_on_enter() pops back to
+	 * the ESP32 menu.  Without this guard the status was always reset
+	 * and "Firmware update" would silently do nothing. */
+	if ( esp32_update_status != M1_FW_UPDATE_READY )
+		esp32_update_status = M1_FW_UPDATE_NOT_READY;
 } // void setting_esp32_init(void)
 
 
@@ -294,10 +299,48 @@ void setting_esp32_image_file(void)
     {
     	if ( uret ) // error?
     	{
-    		//m1_fb_close_file(&hfile_fw);
     		esp32_update_status = uret;
+
+    		/* Show the user what went wrong instead of silently returning */
+    		switch (uret)
+    		{
+    		case M1_FW_CRC_CHECKSUM_UNMATCHED:
+    			m1_message_box(&m1_u8g2, "MD5 mismatch!",
+    			               "File may be corrupt.",
+    			               "Re-download image.", " OK ");
+    			break;
+    		case M1_FW_CRC_FILE_INVALID:
+    		case M1_FW_CRC_FILE_ACCESS_ERROR:
+    			m1_message_box(&m1_u8g2, "MD5 file error!",
+    			               "Cannot read .md5",
+    			               "file from SD card.", " OK ");
+    			break;
+    		case M1_FW_IMAGE_SIZE_INVALID:
+    			m1_message_box(&m1_u8g2, "Invalid image!",
+    			               "File size is invalid",
+    			               "or not aligned.", " OK ");
+    			break;
+    		case M1_FW_IMAGE_FILE_ACCESS_ERROR:
+    			m1_message_box(&m1_u8g2, "File error!",
+    			               "Cannot read image",
+    			               "from SD card.", " OK ");
+    			break;
+    		default:
+    			m1_message_box(&m1_u8g2, "Image error!",
+    			               "Validation failed.",
+    			               " ", " OK ");
+    			break;
+    		}
     	} // if ( uret )
-    } // if ( fw_update_status==M1_FW_UPDATE_READY )
+    	else
+    	{
+    		/* File validated — show confirmation so the user knows the
+    		 * image is ready before selecting "Firmware update". */
+    		m1_message_box(&m1_u8g2, "Image loaded!",
+    		               "Select Firmware update",
+    		               "to begin flashing.", " OK ");
+    	}
+    } // if ( esp32_update_status==M1_FW_UPDATE_READY )
 
 	xQueueReset(main_q_hdl); // Reset main q before return
 
@@ -381,6 +424,31 @@ void setting_esp32_firmware_update(void)
 		HAL_Delay(100);
 		esp32_UART_deinit(); // Disable UART GPIO after update process is done
 	} // if ( (uret==M1_FW_UPDATE_FAILED) || (uret==M1_FW_UPDATE_SUCCESS) )
+
+	if ( esp32_update_status==M1_FW_UPDATE_SUCCESS )
+	{
+		m1_message_box(&m1_u8g2, "Update complete!",
+		               "ESP32 firmware has",
+		               "been flashed.", " OK ");
+	}
+	else if ( esp32_update_status==M1_FW_UPDATE_FAILED )
+	{
+		m1_message_box(&m1_u8g2, "Update failed!",
+		               "Flash or verify error.",
+		               "Please retry.", " OK ");
+	}
+	else if ( esp32_update_status==M1_FW_UPDATE_LOW_BATTERY )
+	{
+		m1_message_box(&m1_u8g2, "Low battery!",
+		               "Charge device before",
+		               "updating firmware.", " OK ");
+	}
+	else if ( esp32_update_status==M1_FW_UPDATE_NOT_READY )
+	{
+		m1_message_box(&m1_u8g2, "No firmware loaded!",
+		               "Select Image File",
+		               "first.", " OK ");
+	}
 
 	m1_device_stat.op_mode = old_op_mode;
 
