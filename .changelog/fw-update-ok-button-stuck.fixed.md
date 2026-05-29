@@ -1,0 +1,1 @@
+Fixed firmware/ESP32 update completion screen being unresponsive: the OK button had no effect because `op_mode` was still `FIRMWARE_UPDATE` when `m1_message_box` was called, causing the button task to suppress all queue events. `op_mode` is now restored and the queue flushed before showing the result message box.

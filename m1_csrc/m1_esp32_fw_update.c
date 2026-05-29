@@ -425,6 +425,13 @@ void setting_esp32_firmware_update(void)
 		esp32_UART_deinit(); // Disable UART GPIO after update process is done
 	} // if ( (uret==M1_FW_UPDATE_FAILED) || (uret==M1_FW_UPDATE_SUCCESS) )
 
+	/* Restore op_mode and flush any stale queue entries before showing the
+	 * message box.  While op_mode == M1_OPERATION_MODE_FIRMWARE_UPDATE the
+	 * button task skips posting to button_events_q_hdl / main_q_hdl, so
+	 * m1_message_box would block forever on xQueueReceive(main_q_hdl). */
+	m1_device_stat.op_mode = old_op_mode;
+	xQueueReset(main_q_hdl);
+
 	if ( esp32_update_status==M1_FW_UPDATE_SUCCESS )
 	{
 		m1_message_box(&m1_u8g2, "Update complete!",
@@ -449,10 +456,6 @@ void setting_esp32_firmware_update(void)
 		               "Select Image File",
 		               "first.", " OK ");
 	}
-
-	m1_device_stat.op_mode = old_op_mode;
-
-    xQueueReset(main_q_hdl); // Reset main q before return
 } // void setting_esp32_firmware_update(void)
 
 

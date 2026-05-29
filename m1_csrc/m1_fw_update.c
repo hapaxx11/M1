@@ -152,6 +152,14 @@ void firmware_update_start(void)
     	m1_fb_close_file(&hfile_fw);
 
     fw_update_status = uret; // Update new status
+
+	/* Restore op_mode and flush any stale queue entries before showing the
+	 * message box.  While op_mode == M1_OPERATION_MODE_FIRMWARE_UPDATE the
+	 * button task skips posting to button_events_q_hdl / main_q_hdl, so
+	 * m1_message_box would block forever on xQueueReceive(main_q_hdl). */
+	m1_device_stat.op_mode = old_op_mode;
+	xQueueReset(main_q_hdl);
+
 	if ( fw_update_status==M1_FW_UPDATE_SUCCESS )
 	{
 		/* Show success message before the bank swap reboot */
@@ -179,10 +187,6 @@ void firmware_update_start(void)
 		               "Select Image File",
 		               "first.", " OK ");
 	}
-
-	m1_device_stat.op_mode = old_op_mode;
-
-    xQueueReset(main_q_hdl); // Reset main q before return
 } // void firmware_update_start(void)
 
 
