@@ -1363,7 +1363,29 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
 
-# ── File utility path operations ──
+# ------------------------------------------------------------------
+# Module under test: nfc_card_info (manufacturer lookup, SAK classifier, UID helpers)
+#
+# Pure-logic functions extracted from m1_nfc.c with zero HAL/RTOS/display deps:
+#   nfc_manufacturer_name()  — UID byte 0 → ISO/IEC 7816-6 manufacturer string
+#   nfc_sak_type_str()       — SAK + ATQA → NFC-A card-type string
+#   nfc_uid_fmt()            — raw UID bytes → "AA BB …" hex string
+#   nfc_uid_step()           — UID big-endian increment / decrement (fuzzer helper)
+# ------------------------------------------------------------------
+add_executable(test_nfc_card_info
+    test_nfc_card_info.c
+    ${M1_ROOT}/m1_csrc/nfc_card_info.c
+)
+target_include_directories(test_nfc_card_info PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_card_info PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_card_info PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_card_info COMMAND test_nfc_card_info)
+
+
 add_executable(test_file_util
     test_file_util.c
     ${M1_ROOT}/m1_csrc/m1_file_util.c

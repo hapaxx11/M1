@@ -118,6 +118,10 @@ compilation units** with clean interfaces.
   field sanitize, CSV quote; extracted from `m1_wifi.c` (Phase A, firmware-wide
   Momentum-parity programme).  Zero HAL/RTOS/FatFS deps; 36 host tests in
   `tests/test_wifi_ap_record.c`.
+- `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup, NFC-A SAK/ATQA
+  type classifier, UID hex formatter, UID arithmetic step; extracted from `m1_nfc.c`
+  (Phase B, firmware-wide Momentum-parity programme).  Zero HAL/RTOS/display deps;
+  45 host tests in `tests/test_nfc_card_info.c`.
 
 **Decoupling technique:** When extracted logic needs hardware-side operations,
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller

@@ -2159,16 +2159,28 @@ UI/input/battery/LED refresh.  This violates the documented
 
 ### Phase B — NFC pure-logic extraction
 
-**Status: Not started**
+**Status: In progress** (initial extraction landed; deeper parser extraction pending)
 
-NFC (`m1_nfc.c`, 4,893 LoC) has partial pure-logic units in `NFC/` and `flipper_nfc/`
-but the bulk of card-data field decomposition, parsers, and conversion logic remains
-inline.  Apply the same extraction pattern as Phase A:
+**Completed:**
+- `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup (`nfc_manufacturer_name`),
+  NFC-A SAK/ATQA type classifier (`nfc_sak_type_str`), UID hex formatter (`nfc_uid_fmt`),
+  UID arithmetic step (`nfc_uid_step`); zero HAL/RTOS deps; 45 host tests (ASan + UBSan clean).
+- `m1_nfc.c` updated to call extracted helpers; static inline duplicates removed.
 
-- Identify HAL/RTOS-free logic in `m1_nfc.c` (field decomposition, parsers, conversion).
-- Extract into standalone units with zero HAL deps.
-- Cover each unit with host tests following the Sub_Ghz test pattern.
-- Leave `vTaskDelay`/`while` hardware flows in `m1_nfc.c` for later async work.
+**Remaining (deeper extraction — HAL/RTOS entangled):**
+
+NFC (`m1_nfc.c`, ~4,890 LoC) still has inline parsers tightly coupled to the RFAL hardware stack
+(`nfc_ctx`, `rfalNfcDevice`, `FillNfcContextFromDevice`).  These require the RFAL type definitions
+to compile and cannot be cleanly extracted until the RFAL dependency is abstracted.
+
+| Work item | Blocker |
+|-----------|---------|
+| Extract NFC file-format line parsers from `nfc_file.c` / `nfc_storage.c` | `nfc_fileio.h` / FatFS coupling |
+| Extract `FillNfcContextFromDevice` classification logic | `rfalNfcDevice` struct dependency |
+| Extract Mifare Classic sector/block logic | `mfc_crypto1` + hardware coupling |
+| Convert 25 `vTaskDelay` / 40 `while` hardware loops to async event flows | State-machine redesign needed |
+
+**Do not add new inline card-classification logic to `m1_nfc.c`; use `nfc_card_info.h` instead.**
 
 ### Phase C — Unified capability-probe module for WiFi / BT / NFC
 

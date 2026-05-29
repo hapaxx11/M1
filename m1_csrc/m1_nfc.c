@@ -28,6 +28,7 @@
 #include "rfal_nfcv.h"
 #include "rfal_rf.h"
 #include "legacy/mfc_crypto1.h"
+#include "nfc_card_info.h"
 
 /*************************** D E F I N E S ************************************/
 #define M1_LOGDB_TAG					"NFC"
@@ -179,8 +180,6 @@ static int  nfc_utils_gui_message(void);
 static int nfc_utils_kp_handler(void);
 
 /* Forward declarations for NFC tools (used by nfc_utils view and Extra Actions) */
-static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte);
-static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2]);
 static void nfc_tool_fuzzer(void);
 static void nfc_tool_cyborg_detector(void);
 static void nfc_tool_read_ndef(void);
@@ -1365,7 +1364,7 @@ static int nfc_utils_kp_handler(void)
 									u8g2_DrawStr(&m1_u8g2, 2, 10, c->ui.title_text);
 									u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 									snprintf(line, sizeof(line), "Mfr: %s (0x%02X)",
-									         nfc_tool_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
+									         nfc_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
 									u8g2_DrawStr(&m1_u8g2, 2, 20, line);
 									snprintf(line, sizeof(line), "UID: %s",
 									         hex2Str(c->head.uid, c->head.uid_len));
@@ -1376,7 +1375,7 @@ static int nfc_utils_kp_handler(void)
 										         c->head.a.atqa[0], c->head.a.atqa[1], c->head.a.sak);
 										u8g2_DrawStr(&m1_u8g2, 2, 40, line);
 										snprintf(line, sizeof(line), "Type: %s",
-										         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
+										         nfc_sak_type_str(c->head.a.sak, c->head.a.atqa));
 										u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 									}
 									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -2017,47 +2016,6 @@ void m1_nfc_info_more_draw(void)
 /*                   NFC TOOLS — Helpers                                      */
 /*============================================================================*/
 
-/* NFC-A manufacturer lookup (ISO/IEC 7816-6 / JIS X 6319-4, byte 0 of UID) */
-static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte)
-{
-	switch (mfr_byte) {
-		case 0x01: return "Motorola";
-		case 0x02: return "STMicro";
-		case 0x03: return "Hitachi";
-		case 0x04: return "NXP";
-		case 0x05: return "Infineon";
-		case 0x06: return "Cylink";
-		case 0x07: return "TI";
-		case 0x08: return "Fujitsu";
-		case 0x09: return "Matsushita";
-		case 0x0A: return "NEC";
-		case 0x0B: return "Oki";
-		case 0x0C: return "Toshiba";
-		case 0x0D: return "Mitsubishi";
-		case 0x0E: return "Samsung";
-		case 0x0F: return "Hyundai";
-		case 0x10: return "LG";
-		case 0x16: return "EM Micro";
-		case 0x28: return "SiliconCraft";
-		default:   return "Unknown";
-	}
-}
-
-/* SAK meaning for NFC-A */
-static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2])
-{
-	if (sak == 0x08) return "Classic 1K";
-	if (sak == 0x18) return "Classic 4K";
-	if (sak == 0x09) return "Classic Mini";
-	if (sak == 0x10) return "Classic 2K";
-	if (sak == 0x11) return "Classic 4K (Plus)";
-	if (sak == 0x00 && atqa[0] == 0x44) return "Ultralight/NTAG";
-	if (sak == 0x20) return "DESFire/ISO-DEP";
-	if (sak == 0x28) return "Classic+ISO-DEP";
-	if (sak == 0x60) return "Classic+DESFire";
-	return "Other";
-}
-
 /* Fuzzer card profiles for NFC-A emulation */
 #define NFC_FUZZ_PROFILE_COUNT  4
 static const char *nfc_fuzz_profile_names[] = {
@@ -2072,21 +2030,6 @@ static const uint8_t nfc_fuzz_profile_sak[] = {
 static const uint8_t nfc_fuzz_profile_uid_len[] = {
 	4, 4, 7, 7
 };
-
-static void nfc_fuzz_uid_step(uint8_t *uid, uint8_t uid_len, int8_t dir)
-{
-	if (dir > 0) {
-		for (int i = uid_len - 1; i >= 0; i--) {
-			uid[i]++;
-			if (uid[i] != 0) break;
-		}
-	} else {
-		for (int i = uid_len - 1; i >= 0; i--) {
-			uid[i]--;
-			if (uid[i] != 0xFF) break;
-		}
-	}
-}
 
 static void nfc_fuzz_draw_setup(uint8_t prof_sel, const uint8_t *uid, uint8_t uid_len,
                                 int8_t dir, uint16_t delay_ms)
@@ -2225,7 +2168,7 @@ static void nfc_tool_tag_info(void)
 
 				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 				snprintf(line, sizeof(line), "Mfr: %s (0x%02X)",
-				         nfc_tool_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
+				         nfc_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
 				u8g2_DrawStr(&m1_u8g2, 2, 20, line);
 
 				snprintf(line, sizeof(line), "UID: %s",
@@ -2239,7 +2182,7 @@ static void nfc_tool_tag_info(void)
 					u8g2_DrawStr(&m1_u8g2, 2, 40, line);
 
 					snprintf(line, sizeof(line), "Type: %s",
-					         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
+					         nfc_sak_type_str(c->head.a.sak, c->head.a.atqa));
 					u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 				}
 
@@ -2590,7 +2533,7 @@ static void nfc_tool_fuzzer(void)
 		}
 
 		/* Timeout = step to next UID */
-		nfc_fuzz_uid_step(uid, uid_len, dir);
+		nfc_uid_step(uid, uid_len, dir);
 		count++;
 
 		/* Update emulator with new UID (live update, no stop/start needed) */
