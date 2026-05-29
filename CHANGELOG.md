@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.40] - 2026-05-29
+
+### Fixed
+
+- Fixed firmware/ESP32 update completion screen being unresponsive: the OK button had no effect because `op_mode` was still `FIRMWARE_UPDATE` when `m1_message_box` was called, causing the button task to suppress all queue events. `op_mode` is now restored and the queue flushed before showing the result message box.
 ## [0.9.1.39] - 2026-05-29
 
 ### Fixed
