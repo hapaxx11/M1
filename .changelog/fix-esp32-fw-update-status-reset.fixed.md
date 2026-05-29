@@ -1,1 +1,0 @@
-ESP32 firmware flashing: guard status reset in `setting_esp32_init()` so a validated image survives scene re-entry; add "Image loaded!" confirmation and per-error messages in `setting_esp32_image_file()`; show success/failure/low-battery/not-ready message boxes in `setting_esp32_firmware_update()` instead of silently returning.

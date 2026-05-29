@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.39] - 2026-05-29
+
+### Fixed
+
+- ESP32 firmware flashing: guard status reset in `setting_esp32_init()` so a validated image survives scene re-entry; add "Image loaded!" confirmation and per-error messages in `setting_esp32_image_file()`; show success/failure/low-battery/not-ready message boxes in `setting_esp32_firmware_update()` instead of silently returning.
+- **Firmware Update: fix flashing from SD card** — `firmware_update_init()` no
+  longer resets `fw_update_status` when a validated image is already loaded,
+  so "Firmware update" now proceeds with the selected file instead of silently
+  doing nothing. Added confirmation message after successful image validation
+  and "No firmware loaded" feedback when starting without a file.
 ## [0.9.1.38] - 2026-05-29
 
 ### Fixed
