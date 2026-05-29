@@ -687,11 +687,6 @@ function init() {
 
     // Flash option checkboxes
     elements['chk-install-firmware'].addEventListener('change', updateFlashButton);
-    elements['chk-install-sd'].addEventListener('change', () => {
-        // Show/hide the overwrite sub-option based on whether SD install is enabled
-        elements['sd-overwrite-option'].classList.toggle('hidden', !elements['chk-install-sd'].checked);
-        updateFlashButton();
-    });
 
     // Android: show troubleshooting tips and USB permission button
     if (isAndroid) {
