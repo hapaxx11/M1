@@ -198,6 +198,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 strncpy(app->tx_protocol_name, protocol_text[d->protocol],
                         sizeof(app->tx_protocol_name) - 1);
                 app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
+                app->tx_autostart      = true;
                 app->resume_from_child = true;
                 subghz_scene_push(app, SubGhzSceneTransmitter);
             }
@@ -386,7 +387,7 @@ static void draw(SubGhzApp *app)
         bool can_send = subghz_protocol_is_static_ext(d->protocol);
         subghz_button_bar_draw(
             arrowdown_8x8, "Save",
-            NULL, can_send ? "Send" : NULL,
+            can_send ? ok_circle_8x8 : NULL, can_send ? "Send" : NULL,
             NULL, NULL);
     }
     else
