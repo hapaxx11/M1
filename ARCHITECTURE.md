@@ -114,6 +114,10 @@ compilation units** with clean interfaces.
 - `Sub_Ghz/subghz_raw_line_parser.c/h` — RAW_Data parsing from `m1_sub_ghz.c`
 - `Sub_Ghz/subghz_raw_decoder.c/h` — offline decode from `m1_subghz_scene_saved.c`
 - `Sub_Ghz/subghz_playlist_parser.c/h` — path remapping from `m1_subghz_scene_playlist.c`
+- `m1_csrc/wifi_ap_record.c/h` — AP record binary parser, BSSID fmt/parse, MAC check,
+  field sanitize, CSV quote; extracted from `m1_wifi.c` (Phase A, firmware-wide
+  Momentum-parity programme).  Zero HAL/RTOS/FatFS deps; 36 host tests in
+  `tests/test_wifi_ap_record.c`.
 
 **Decoupling technique:** When extracted logic needs hardware-side operations,
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller

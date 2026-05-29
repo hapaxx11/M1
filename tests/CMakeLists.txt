@@ -1568,3 +1568,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_elf_alloc_budget PRIVATE sanitizers)
 endif()
 add_test(NAME elf_alloc_budget COMMAND test_elf_alloc_budget)
+
+# ── WiFi AP record pure-logic extraction (Phase A — Firmware-wide Momentum parity) ──
+add_executable(test_wifi_ap_record
+    test_wifi_ap_record.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_ap_record PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_ap_record PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_ap_record PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_ap_record COMMAND test_wifi_ap_record)
+

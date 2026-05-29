@@ -1748,25 +1748,27 @@ navigation) keeps state management clean, testable, and consistent across the de
 
 ### Migration status
 
-**Migration is complete.**  All modules with submenus now use the scene-based
-architecture.  Sub-GHz has its own dedicated scene manager (`m1_subghz_scene.h/c`,
-17 scenes) with radio-specific event handling.  All other modules use the shared
-generic scene framework (`m1_scene.h/c`) with blocking delegates wrapping legacy
-functions.  BadUSB and Apps are single-function modules (no submenus) and do not
-need scene managers.
+Scene managers are present in **all** application modules with submenus.  However
+"scene-wrapped" (blocking delegate) and "scene-native/async" are meaningfully
+different quality levels.  Sub-GHz reached *scene-native/async* as part of the
+#519 Momentum-parity programme; the remaining modules are *scene-wrapped* — their
+scene shells call legacy blocking functions that freeze the UI for up to 2 seconds
+while waiting on hardware.  The firmware-wide momentum-parity programme (Phases A–F,
+tracked in the **Deferred Firmware-Wide Momentum-Parity Work** section below) will
+migrate the worst offenders to scene-native/async.
 
-| Module | Current | Target | Entry point |
-|--------|---------|--------|-------------|
-| **Sub-GHz** | ✅ Scene manager | Done | `sub_ghz_scene_entry()` → `m1_subghz_scene.c` |
-| **125KHz RFID** | ✅ Scene manager | Done | `rfid_scene_entry()` → `m1_rfid_scene.c` |
-| **NFC** | ✅ Scene manager | Done | `nfc_scene_entry()` → `m1_nfc_scene.c` |
-| **Infrared** | ✅ Scene manager | Done | `infrared_scene_entry()` → `m1_infrared_scene.c` |
-| **GPIO** | ✅ Scene manager | Done | `gpio_scene_entry()` → `m1_gpio_scene.c` |
-| **WiFi** | ✅ Scene manager | Done | `wifi_scene_entry()` → `m1_wifi_scene.c` |
-| **Bluetooth** | ✅ Scene manager | Done | `bt_scene_entry()` → `m1_bt_scene.c` |
-| **BadUSB** | — Single function | N/A | `badusb_run()` direct call (no submenus) |
-| **Games** | ✅ Scene manager | Done | `games_scene_entry()` → `m1_games_scene.c` |
-| **Settings** | ✅ Scene manager | Done | `settings_scene_entry()` → `m1_settings_scene.c` |
+| Module | Scene quality | Notes |
+|--------|--------------|-------|
+| **Sub-GHz** | ✅ Scene-native/async | 30 per-screen files; pure-logic units in `Sub_Ghz/`; async TX/RX flows; extensive host tests |
+| **125KHz RFID** | 🔶 Scene-wrapped | Good `lfrfid/` pure-logic separation + tests; 7 blocking `osDelay`/`vTaskDelay` calls; low priority (already well-structured) |
+| **NFC** | 🔶 Scene-wrapped | 8 scene IDs in 1 file; 25 `vTaskDelay`, 40 `while` loops; partial pure-logic units in `NFC/`; Phase B target |
+| **Infrared** | 🔶 Scene-wrapped | 6 scene IDs in 1 file; 12 `vTaskDelay`, 54 `while`; partial `Infrared/` vendored; Phase F target |
+| **GPIO** | 🔶 Scene-wrapped | 6–9 scene IDs; minimal blocking; acceptable as-is |
+| **WiFi** | ⚠️ Scene-wrapped (blocking) | 51 scene IDs in 1 file; **23 `HAL_Delay` calls up to 2000 ms** on main task; no pure-logic units (extraction in progress — see Phase A); highest priority |
+| **Bluetooth** | 🔶 Scene-wrapped | 32 scene IDs in 1 file; no hardware blocking; Phase D split target |
+| **BadUSB/BadBT** | — Single function | Intentionally no submenus; `osDelay` calls are legitimate script-pacing delays |
+| **Games** | 🔶 Scene-wrapped | Acceptable as-is |
+| **Settings** | 🔶 Scene-wrapped | 21 scene IDs in 1 file; Phase D split target |
 
 ### Agent instructions for scene migration
 
@@ -2117,6 +2119,100 @@ renderer in `Sub_Ghz/subghz_signal_format.c` and wire it onto the registry entri
 that share the same field decomposition.  Cover with a `test_subghz_signal_format`
 sub-suite mirroring the KeeLoq test pattern (output shape, prefix-terminated match,
 NULL safety, truncation safety).
+
+---
+
+## Deferred Firmware-Wide Momentum-Parity Work
+
+> This programme applies the #519 Sub-GHz architectural patterns (async flows, pure-logic
+> extraction, capability probes, per-screen scene files, shared widgets) across the rest
+> of the firmware.  Phases are independently mergeable and behaviour-preserving.
+> Each phase: extract → host-test → migrate callers → update docs → `.changelog` fragment.
+>
+> **Do not re-open deferred Sub-GHz items** (Phase 7c, 9e-2..5, 11-2+) as part of this
+> programme — they have separate trackers above.
+
+### Phase A — WiFi async conversion + pure-logic extraction
+
+**Status: In progress** (AP record extraction landed; async conversion pending)
+
+**Completed:**
+- `m1_csrc/wifi_ap_record.c/h` — binary ESP32 payload parser (`wifi_ap_record_parse_one`),
+  BSSID fmt/parse, MAC check, field sanitize, CSV quote; zero HAL/RTOS deps; 36 host tests.
+- `m1_wifi.c` updated to call extracted helpers; `wifi_ap_t` typedef moved to header.
+
+**Remaining (blocked on scope — async conversion is a major state-machine rewrite):**
+
+WiFi has **23 `HAL_Delay` calls** (200–2000 ms) on the main RTOS task, freezing
+UI/input/battery/LED refresh.  This violates the documented
+[Async / Non-Blocking RTOS Best Practices](#async--non-blocking-rtos-best-practices).
+
+| Work item | Blocker |
+|-----------|---------|
+| Replace blocking "show message + `HAL_Delay(1800)`" status screens with scene-state + `draw()` ticks | State-machine redesign needed |
+| Convert ESP32 reset/boot waits (`HAL_Delay(2000)`) into event-driven flows posting to `main_q_hdl` | Mirrors `SubGhzSceneTransmitter` pattern |
+| Convert `CMD_WIFI_JOIN` round-trips into async event flows | Requires SiN360 ESP32 firmware handshake protocol review |
+| Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | Should follow async conversion so each split file is already clean |
+| Extract AP-list parsing/sorting, scan-result formatting, credential/state modelling → `wifi/` unit | Prerequisite: define callback interfaces to decouple from SPI-AT |
+
+**Do not add new `HAL_Delay` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**
+
+### Phase B — NFC pure-logic extraction
+
+**Status: Not started**
+
+NFC (`m1_nfc.c`, 4,893 LoC) has partial pure-logic units in `NFC/` and `flipper_nfc/`
+but the bulk of card-data field decomposition, parsers, and conversion logic remains
+inline.  Apply the same extraction pattern as Phase A:
+
+- Identify HAL/RTOS-free logic in `m1_nfc.c` (field decomposition, parsers, conversion).
+- Extract into standalone units with zero HAL deps.
+- Cover each unit with host tests following the Sub_Ghz test pattern.
+- Leave `vTaskDelay`/`while` hardware flows in `m1_nfc.c` for later async work.
+
+### Phase C — Unified capability-probe module for WiFi / BT / NFC
+
+**Status: Not started**
+
+The `m1_esp32_caps` bitmap (`m1_esp32_caps.h/c`) is the authoritative source of
+ESP32 feature availability.  Currently, WiFi/BT/BadBT scenes gate features with
+ad-hoc inline firmware-name string checks instead of querying the bitmap.
+
+- Audit all inline firmware-name/version checks in `m1_wifi_scene.c`, `m1_bt_scene.c`,
+  and `m1_badbt.c`.
+- Map each check to the appropriate `M1_ESP32_CAP_*` bit (add new bits as needed).
+- Replace inline checks with a pure-logic classifier module (host-testable, no HAL deps),
+  mirroring `subghz_button_caps.c`.
+- Surface "unsupported/deferred" states in-UI through the classifier result, not
+  raw firmware names.
+- Cover with host tests for all capability classification paths.
+
+### Phase D — Scene-file granularity for WiFi (51), BT (32), Settings (21)
+
+**Status: Not started — depends on Phase A (WiFi) and Phase C (BT/Settings)**
+
+Split the large single-file scene managers into per-screen files following the
+`m1_subghz_scene_*.c` convention.  Do this *after* the async/extraction work for
+each module so each split file is already clean.  NFC (8), RFID (7), IR (6), GPIO
+(6–9) are acceptable as-is and are **not** worth splitting.
+
+### Phase E — Shared submenu-widget rollout
+
+**Status: Not started — depends on Phase D**
+
+`subghz_submenu_model` + `m1_submenu_draw` is currently Sub-GHz-local.  Promote the
+simple-label-list cases in WiFi/BT/NFC/IR onto the shared widget for consistent
+appearance and font-aware layout.  Skip value-column UIs (`<` `>` config-style
+screens) — consistent with the Phase 7c non-candidacy decision.
+
+### Phase F — IR universal pure-logic extraction
+
+**Status: Not started — lowest urgency**
+
+IR universal (`m1_ir_universal.c`, 3,373 LoC) has partial `Infrared/` vendored units
+but protocol/field handling is embedded in the monolith.  Apply Phase A/B extraction
+pattern.  The 12 `vTaskDelay` / 54 `while` calls are lower priority than WiFi's
+`HAL_Delay` violations because IR hardware operations are inherently timing-sensitive.
 
 ---
 

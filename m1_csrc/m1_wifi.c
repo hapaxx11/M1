@@ -33,6 +33,7 @@
 #include "m1_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "m1_wifi_cred.h"
+#include "wifi_ap_record.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -50,16 +51,7 @@
 
 //************************** S T R U C T U R E S *******************************
 
-/* Local AP record parsed from ESP32 binary response */
-typedef struct {
-	int8_t   rssi;
-	uint8_t  channel;
-	uint8_t  auth_mode;
-	uint8_t  bssid[6];
-	bool     selected;
-	char     ssid[33];
-	char     bssid_str[18]; /* "XX:XX:XX:XX:XX:XX" */
-} wifi_ap_t;
+/* wifi_ap_t is defined in wifi_ap_record.h (extracted pure-logic module) */
 
 /***************************** V A R I A B L E S ******************************/
 
@@ -159,28 +151,12 @@ static uint16_t wifi_do_scan(void)
 			break;
 		}
 
-		/* Unpack payload:
-		 * [0]     RSSI (int8_t)
-		 * [1]     channel
-		 * [2]     auth mode
-		 * [3..8]  BSSID (6 bytes)
-		 * [9]     SSID length
-		 * [10..]  SSID (up to 32 bytes)
-		 */
-		ap_list[i].rssi = (int8_t)resp.payload[0];
-		ap_list[i].channel = resp.payload[1];
-		ap_list[i].auth_mode = resp.payload[2];
-		memcpy(ap_list[i].bssid, &resp.payload[3], 6);
-
-		uint8_t ssid_len = resp.payload[9];
-		if (ssid_len > 32) ssid_len = 32;
-		memcpy(ap_list[i].ssid, &resp.payload[10], ssid_len);
-		ap_list[i].ssid[ssid_len] = '\0';
-
-		/* Format BSSID string */
-		sprintf(ap_list[i].bssid_str, "%02X:%02X:%02X:%02X:%02X:%02X",
-			ap_list[i].bssid[0], ap_list[i].bssid[1], ap_list[i].bssid[2],
-			ap_list[i].bssid[3], ap_list[i].bssid[4], ap_list[i].bssid[5]);
+		if (!wifi_ap_record_parse_one(resp.payload, resp.payload_len,
+		                              &ap_list[i]))
+		{
+			ap_count = i;
+			break;
+		}
 	}
 
 	return ap_count;
@@ -1887,10 +1863,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 	}
 }
 
-static bool wifi_mac_is_nonzero(const uint8_t mac[6])
-{
-	return mac[0] || mac[1] || mac[2] || mac[3] || mac[4] || mac[5];
-}
+/* wifi_mac_is_nonzero() is provided by wifi_ap_record.h */
 
 static uint8_t wifi_deauth_add_target(m1_cmd_t *cmd, uint8_t count, uint8_t mode,
 	uint8_t channel, const uint8_t bssid[6], const uint8_t sta[6])
@@ -2660,53 +2633,8 @@ static bool wifi_ext_is_html(const char *name)
 	return (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0);
 }
 
-static void wifi_sanitize_field(char *dst, const char *src, size_t dst_len)
-{
-	size_t i;
-
-	if (!dst || dst_len == 0)
-	{
-		return;
-	}
-
-	for (i = 0; i + 1 < dst_len && src && src[i]; i++)
-	{
-		char c = src[i];
-		dst[i] = (c == '\t' || c == '\r' || c == '\n') ? ' ' : c;
-	}
-	dst[i] = '\0';
-}
-
-static void wifi_csv_quote_field(char *dst, const char *src, size_t dst_len)
-{
-	size_t di = 0;
-	if (!dst || dst_len == 0)
-	{
-		return;
-	}
-
-	dst[di++] = '"';
-	for (size_t si = 0; src && src[si] && di + 2 < dst_len; si++)
-	{
-		char c = src[si];
-		if (c == '\r' || c == '\n')
-		{
-			c = ' ';
-		}
-		if (c == '"')
-		{
-			if (di + 3 >= dst_len) break;
-			dst[di++] = '"';
-			dst[di++] = '"';
-		}
-		else
-		{
-			dst[di++] = c;
-		}
-	}
-	dst[di++] = '"';
-	dst[di] = '\0';
-}
+/* wifi_sanitize_field() and wifi_csv_quote_field() are provided by
+ * wifi_ap_record.h (extracted pure-logic module). */
 
 #define WIFI_WARDRIVE_AP_FILE      "wifi/wardrive_aps.csv"
 #define WIFI_WARDRIVE_STA_FILE     "wifi/wardrive_stations.csv"
@@ -2820,23 +2748,8 @@ void wifi_station_wardrive(void)
 	wifi_show_message("Station Wardrive", line, WIFI_WARDRIVE_STA_FILE);
 }
 
-static bool wifi_parse_bssid(const char *s, uint8_t bssid[6])
-{
-	unsigned int b[6];
-
-	if (sscanf(s, "%02x:%02x:%02x:%02x:%02x:%02x",
-		&b[0], &b[1], &b[2], &b[3], &b[4], &b[5]) != 6)
-	{
-		return false;
-	}
-
-	for (uint8_t i = 0; i < 6; i++)
-	{
-		if (b[i] > 0xFF) return false;
-		bssid[i] = (uint8_t)b[i];
-	}
-	return true;
-}
+/* wifi_bssid_parse() is provided by wifi_ap_record.h (extracted pure-logic
+ * module); formerly this was the local static wifi_bssid_parse(). */
 
 static uint16_t wifi_selected_ap_count(void)
 {
@@ -3221,7 +3134,7 @@ void wifi_general_load_aps(void)
 		ap = &new_list[new_count];
 		strncpy(ap->ssid, ssid, 32);
 		ap->ssid[32] = '\0';
-		if (!wifi_parse_bssid(bssid_s, ap->bssid))
+		if (!wifi_bssid_parse(bssid_s, ap->bssid))
 		{
 			continue;
 		}
