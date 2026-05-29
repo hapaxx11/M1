@@ -243,25 +243,7 @@ Imported from [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) (GPLv3
 
 ### Getting the databases onto your SD card
 
-Every [GitHub Release](https://github.com/hapaxx11/M1/releases/latest) includes `SD_Assets.zip` — a ready-to-use archive that contains all three databases pre-arranged in the correct SD card directory structure.
-
-**Easiest: use the Web Updater (Hapax original feature):**
-1. Open the [Web Updater](https://hapaxx11.github.io/M1/), connect your M1, and select a release.
-2. Make sure **"Install SD card assets"** is checked (it is by default).
-3. Click **Install** — the updater downloads the ZIP, decompresses it in the browser,
-   and writes all files to your SD card over USB.  Existing files are skipped by default
-   so your customisations are preserved.  Tick **"Overwrite existing files"** to force a
-   full refresh.
-
-**Manual setup:**
-1. Download `SD_Assets.zip` from the latest release.
-2. Extract it to the **root** of your M1's SD card.
-3. This creates `IR/` and `SubGHz/` with all bundled files in the right places.
-
-The IR database powers **Infrared → Universal Remote** and **Infrared → Saved**.
-The Sub-GHz database powers **Sub-GHz → Saved** and **Sub-GHz → Playlist**.
-
-Advanced users can also copy the directories manually: `ir_database/` contents → `IR/`, `subghz_database/` contents → `SubGHz/`, `subghz_playlist/` contents → `SubGHz/playlist/`.
+Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_database/` contents → `SubGHz/`, `subghz_playlist/` contents → `SubGHz/playlist/`.
 
 ## Hardware
 

@@ -97,8 +97,6 @@ export async function fetchReleases(owner, repo, options = {}) {
             const rawAsset = r.assets.find(a =>
                 a.name.endsWith('.bin') && !a.name.endsWith('_wCRC.bin')
             );
-            // Find SD card assets archive
-            const sdAsset = r.assets.find(a => a.name === 'SD_Assets.zip');
 
             // Use the GitHub API asset endpoint for downloads.
             // downloadFirmware() will try direct first and fall back to a
@@ -122,11 +120,6 @@ export async function fetchReleases(owner, repo, options = {}) {
                     name: rawAsset.name,
                     size: rawAsset.size,
                     downloadUrl: apiAssetUrl(rawAsset.id),
-                } : null,
-                sdAsset: sdAsset ? {
-                    name: sdAsset.name,
-                    size: sdAsset.size,
-                    downloadUrl: apiAssetUrl(sdAsset.id),
                 } : null,
             };
         })
@@ -262,15 +255,4 @@ export async function downloadFirmware(url, onProgress = null) {
     }
 
     return result;
-}
-
-/**
- * Download the SD card assets archive (SD_Assets.zip) from a release asset URL.
- *
- * @param {string}   url          - Direct download URL
- * @param {function} [onProgress] - Callback(loaded, total) for progress
- * @returns {Promise<Uint8Array>} ZIP archive data
- */
-export async function downloadSdAssets(url, onProgress = null) {
-    return downloadFirmware(url, onProgress);
 }
