@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.38] - 2026-05-29
+
+### Fixed
+
+- Sub-GHz Decode Results: pressing Send now transmits immediately without an intermediate Transmit confirmation screen; the Send button now shows the OK icon.
 ## [0.9.1.37] - 2026-05-28
 
 ### Fixed
