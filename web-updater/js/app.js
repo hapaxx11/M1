@@ -441,8 +441,9 @@ async function handleFlash() {
     const installFw = elements['chk-install-firmware'].checked;
 
     if (!installFw) {
-        log('Select at least one option: Install firmware', 'warn');
+        log('Enable "Install firmware" to continue', 'warn');
         return;
+    }
     }
 
     // Determine source: local .bin file vs GitHub release
