@@ -1455,6 +1455,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_migration COMMAND test_badusb_migration)
 
+# ── Phase A-6: WiFi HAL_Delay elimination ──
+add_executable(test_wifi_haldelay_free
+    test_wifi_haldelay_free.c
+)
+target_compile_definitions(test_wifi_haldelay_free PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_wifi_haldelay_free PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_haldelay_free PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_haldelay_free COMMAND test_wifi_haldelay_free)
+
 # ── Sub-GHz autosave logic ──
 add_executable(test_subghz_autosave
     test_subghz_autosave.c

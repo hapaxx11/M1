@@ -1764,7 +1764,7 @@ migrate the worst offenders to scene-native/async.
 | **NFC** | 🔶 Scene-wrapped | 8 scene IDs in 1 file; 25 `vTaskDelay`, 40 `while` loops; partial pure-logic units in `NFC/`; Phase B target |
 | **Infrared** | 🔶 Scene-wrapped | 6 scene IDs in 1 file; 12 `vTaskDelay`, 54 `while`; partial `Infrared/` vendored; Phase F target |
 | **GPIO** | 🔶 Scene-wrapped | 6–9 scene IDs; minimal blocking; acceptable as-is |
-| **WiFi** | ⚠️ Scene-wrapped (blocking) | 51 scene IDs in 1 file; **23 `HAL_Delay` calls up to 2000 ms** on main task; no pure-logic units (extraction in progress — see Phase A); highest priority |
+| **WiFi** | ⚠️ Scene-wrapped (blocking) | 51 scene IDs in 1 file; ~~23 `HAL_Delay` calls~~ eliminated (A-6 ✅); pure-logic extraction in progress — see Phase A; CMD_WIFI_JOIN async conversion pending |
 | **Bluetooth** | 🔶 Scene-wrapped | 32 scene IDs in 1 file; no hardware blocking; Phase D split target |
 | **BadUSB/BadBT** | — Single function | Intentionally no submenus; `osDelay` calls are legitimate script-pacing delays |
 | **Games** | 🔶 Scene-wrapped | Acceptable as-is |
@@ -2134,7 +2134,7 @@ NULL safety, truncation safety).
 
 ### Phase A — WiFi async conversion + pure-logic extraction
 
-**Status: In progress** (AP record + MAC utils + file utils + status msg model + STA record + selection counters + deauth cmd builder extracted; async conversion pending)
+**Status: In progress** (AP record + MAC utils + file utils + status msg model + STA record + selection counters + deauth cmd builder extracted; HAL_Delay elimination complete ✅; CMD_WIFI_JOIN async conversion pending)
 
 **Completed:**
 - `m1_csrc/wifi_ap_record.c/h` — binary ESP32 payload parser (`wifi_ap_record_parse_one`),
@@ -2159,20 +2159,26 @@ NULL safety, truncation safety).
   (`wifi_deauth_add_target`, `wifi_build_selected_deauth_cmd`); `DEAUTH_MULTI_MAX_TARGETS`
   and `DEAUTH_MULTI_TARGET_BYTES` moved here from `m1_wifi.c`; 2 static functions removed;
   1 call site updated to pass arrays; zero HAL/RTOS deps; 19 host tests.
+- **A-6: HAL_Delay elimination** — all 23 `HAL_Delay` calls removed from `m1_wifi.c`:
+  - 18× status-screen `HAL_Delay(1800/2000)` replaced with `wifi_wait_dismiss()`, a static
+    helper that blocks in `xQueueReceive(portMAX_DELAY)` until Back or OK is pressed;
+    buttons are fully responsive during the wait, and other RTOS tasks (WDT, battery, LED)
+    continue to run.
+  - 4× ESP32 reset/boot waits (`HAL_Delay(200/2000)`) replaced with
+    `vTaskDelay(pdMS_TO_TICKS(N))` to preserve hardware timing while yielding to the RTOS.
+  - 1× station-scan countdown `HAL_Delay(1000)` converted to
+    `xQueueReceive(..., pdMS_TO_TICKS(1000))` with Back-press abort that sends
+    `CMD_STA_SCAN_STOP` and returns early.
+  - Source-level regression test added: `tests/test_wifi_haldelay_free.c` (9 tests);
+    confirms zero `HAL_Delay(` calls in `m1_wifi.c` and verifies all three replacement
+    patterns are present. **89/89 host tests pass.**
 
-**Remaining (blocked on scope — async conversion is a major state-machine rewrite):**
-
-WiFi has **23 `HAL_Delay` calls** (200–2000 ms) on the main RTOS task, freezing
-UI/input/battery/LED refresh.  This violates the documented
-[Async / Non-Blocking RTOS Best Practices](#async--non-blocking-rtos-best-practices).
+**Remaining:**
 
 | Work item | Blocker |
 |-----------|---------|
-| Replace 18× blocking "show message + `HAL_Delay`" status screens with `wifi_status_msg_t` + scene-tick polling | State-machine redesign + on-device UI testing |
-| Convert 4× ESP32 reset/boot waits (`HAL_Delay(200/2000)`) into event-driven flows posting to `main_q_hdl` | Mirrors `SubGhzSceneTransmitter` pattern; needs ESP32 boot-complete signal |
 | Convert `CMD_WIFI_JOIN` round-trips into async event flows | Requires SiN360 ESP32 firmware handshake protocol review |
-| Convert 1× scan countdown loop (`HAL_Delay(1000)`) into tick-based progress | Needs scan-progress event from ESP32 |
-| Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | Should follow async conversion so each split file is already clean |
+| Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | Should follow CMD_WIFI_JOIN async conversion |
 
 **Do not add new `HAL_Delay` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**
 

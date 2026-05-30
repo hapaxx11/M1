@@ -254,6 +254,32 @@ static void wifi_ap_list_free(void)
 	ap_count = 0;
 }
 
+/**
+ * @brief  Wait for the user to press Back or OK before returning.
+ *
+ * Replaces blocking HAL_Delay status screens: the message stays visible until
+ * the user explicitly dismisses it, so buttons are responsive and other RTOS
+ * tasks (battery, LED) keep running during the wait.
+ *
+ * Must be called from a blocking delegate context (not from on_event).
+ */
+static void wifi_wait_dismiss(void)
+{
+	S_M1_Main_Q_t q_item;
+	S_M1_Buttons_Status btn;
+	while (1)
+	{
+		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE &&
+		    q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK ||
+			    btn.event[BUTTON_OK_KP_ID]   == BUTTON_EVENT_CLICK)
+				break;
+		}
+	}
+}
+
 static void wifi_show_message(const char *title, const char *line1, const char *line2)
 {
 	m1_u8g2_firstpage();
@@ -263,7 +289,7 @@ static void wifi_show_message(const char *title, const char *line1, const char *
 	if (line1) u8g2_DrawStr(&m1_u8g2, 6, 30, line1);
 	if (line2) u8g2_DrawStr(&m1_u8g2, 6, 42, line2);
 	m1_u8g2_nextpage();
-	HAL_Delay(1800);
+	wifi_wait_dismiss();
 }
 
 
@@ -393,9 +419,9 @@ void wifi_scan_ap(void)
 		m1_u8g2_nextpage();
 
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
-		HAL_Delay(200);
+		vTaskDelay(pdMS_TO_TICKS(200));
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
-		HAL_Delay(2000);
+		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
 
 	/* Show scanning status */
@@ -490,9 +516,9 @@ static void ensure_esp32_ready(void)
 		m1_u8g2_nextpage();
 
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
-		HAL_Delay(200);
+		vTaskDelay(pdMS_TO_TICKS(200));
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
-		HAL_Delay(2000);
+		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
 }
 
@@ -706,7 +732,7 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 		u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
 			"Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -787,7 +813,7 @@ void wifi_signal_monitor(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Signal Monitor");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -1184,11 +1210,14 @@ static uint16_t sta_do_scan(void)
 	if (ret != 0 || resp.status != RESP_OK)
 		return 0;
 
-	/* Show scanning screen with countdown */
+	/* Show scanning screen with countdown — Back-press aborts early */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	for (int sec = STA_SCAN_DURATION / 1000; sec > 0; sec--)
 	{
 		char msg[25];
+		S_M1_Main_Q_t q_evt;
+		S_M1_Buttons_Status btn_s;
+
 		m1_u8g2_firstpage();
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning Stations...");
 		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
@@ -1196,7 +1225,17 @@ static uint16_t sta_do_scan(void)
 		sprintf(msg, "%ds remaining", sec);
 		u8g2_DrawStr(&m1_u8g2, 6, 60, msg);
 		m1_u8g2_nextpage();
-		HAL_Delay(1000);
+
+		if (xQueueReceive(main_q_hdl, &q_evt, pdMS_TO_TICKS(1000)) == pdTRUE &&
+		    q_evt.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn_s, 0);
+			if (btn_s.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_simple_cmd(CMD_STA_SCAN_STOP, &resp, SNIFF_CMD_TIMEOUT);
+				return 0;
+			}
+		}
 	}
 
 	/* Stop scan — returns count and resets index */
@@ -1665,7 +1704,7 @@ void wifi_sniff_eapol(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "EAPOL");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -1785,7 +1824,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -1961,7 +2000,7 @@ void wifi_attack_deauth(void)
 			M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "No targets found");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -2224,7 +2263,7 @@ static void beacon_message(const char *title, const char *line1, const char *lin
 	if (line1) u8g2_DrawStr(&m1_u8g2, 6, 30, line1);
 	if (line2) u8g2_DrawStr(&m1_u8g2, 6, 42, line2);
 	m1_u8g2_nextpage();
-	HAL_Delay(2000);
+	wifi_wait_dismiss();
 }
 
 static char *beacon_trim_line(char *line)
@@ -2472,7 +2511,7 @@ void wifi_attack_beacon(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("Beacon Spam", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -3058,7 +3097,7 @@ void wifi_general_load_ssids(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("Load SSIDs", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -3743,7 +3782,7 @@ void wifi_evil_portal(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Evil Portal");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -3847,7 +3886,7 @@ void wifi_probe_flood(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4137,7 +4176,7 @@ void wifi_attack_ap_clone(void)
 			u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
 			u8g2_DrawStr(&m1_u8g2, 6, 30, "No APs found!");
 			m1_u8g2_nextpage();
-			HAL_Delay(2000);
+			wifi_wait_dismiss();
 			return;
 		}
 	}
@@ -4158,7 +4197,7 @@ void wifi_attack_ap_clone(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, selected_only ? "No named selected APs" : "No named APs!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4166,7 +4205,7 @@ void wifi_attack_ap_clone(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("AP Clone", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4184,7 +4223,7 @@ void wifi_attack_ap_clone(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4236,7 +4275,7 @@ void wifi_attack_rickroll(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("Rickroll", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4254,7 +4293,7 @@ void wifi_attack_rickroll(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Rickroll");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4510,7 +4549,7 @@ void wifi_show_status(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Scan & Connect");
 	}
 	m1_u8g2_nextpage();
-	HAL_Delay(2000);
+	wifi_wait_dismiss();
 }
 
 void wifi_disconnect(void)
