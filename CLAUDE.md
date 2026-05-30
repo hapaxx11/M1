@@ -1764,7 +1764,7 @@ migrate the worst offenders to scene-native/async.
 | **NFC** | 🔶 Scene-wrapped | 8 scene IDs in 1 file; 25 `vTaskDelay`, 40 `while` loops; partial pure-logic units in `NFC/`; Phase B target |
 | **Infrared** | 🔶 Scene-wrapped | 6 scene IDs in 1 file; 12 `vTaskDelay`, 54 `while`; partial `Infrared/` vendored; Phase F target |
 | **GPIO** | 🔶 Scene-wrapped | 6–9 scene IDs; minimal blocking; acceptable as-is |
-| **WiFi** | ⚠️ Scene-wrapped (blocking) | 51 scene IDs in 1 file; ~~23 `HAL_Delay` calls~~ eliminated (A-6 ✅); pure-logic extraction in progress — see Phase A; CMD_WIFI_JOIN async conversion pending |
+| **WiFi** | ⚠️ Scene-wrapped (blocking) | 51 scene IDs split across 7 files (Phase D ✅); ~~23 `HAL_Delay` calls~~ eliminated (A-6 ✅); CMD_WIFI_JOIN async conversion N/A (SiN360 has no async push) |
 | **Bluetooth** | 🔶 Scene-wrapped | 32 scene IDs in 1 file; no hardware blocking; Phase D split target |
 | **BadUSB/BadBT** | — Single function | Intentionally no submenus; `osDelay` calls are legitimate script-pacing delays |
 | **Games** | 🔶 Scene-wrapped | Acceptable as-is |
@@ -2177,8 +2177,8 @@ NULL safety, truncation safety).
 
 | Work item | Blocker |
 |-----------|---------|
-| Convert `CMD_WIFI_JOIN` round-trips into async event flows | Requires SiN360 ESP32 firmware handshake protocol review |
-| Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | Should follow CMD_WIFI_JOIN async conversion |
+| Convert `CMD_WIFI_JOIN` round-trips into async event flows | ~~Requires SiN360 ESP32 firmware handshake protocol review~~ **N/A** — SiN360 ESP32 has no async push mechanism; SPI is strictly master-initiated; `CMD_WIFI_JOIN` blocks in ESP32 for up to 8 s then returns `RESP_BUSY`. STM32 side already cooperates via RTOS task + 10 s timeout. No further change needed. |
+| Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | ~~Should follow CMD_WIFI_JOIN async conversion~~ **Complete ✅** — see Phase D |
 
 **Do not add new `HAL_Delay` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**
 
@@ -2235,7 +2235,7 @@ ESP32 capability dependencies.
 
 ### Phase D — Scene-file granularity for WiFi (51), BT (32), Settings (21)
 
-**Status: In progress** — BT + Settings splits complete; WiFi split blocked by Phase A async conversion
+**Status: In progress** — BT + Settings + WiFi splits complete ✅
 
 Split the large single-file scene managers into per-screen files following the
 `m1_subghz_scene_*.c` convention.  Do this *after* the async/extraction work for
@@ -2258,8 +2258,18 @@ each module so each split file is already clean.  NFC (8), RFID (7), IR (6), GPI
 - `m1_settings_scene.c` stripped to registry table + `settings_scene_entry()` only
 - All new files added to `cmake/m1_01/CMakeLists.txt`
 
+- `m1_wifi_scene.h` — `WifiSceneId` typedef enum (48/51 values, ifdef-gated for connect features) + extern handler declarations
+- `m1_wifi_scene_menu.c` — top-level 12/15-item menu + 8 direct tool delegates + DELEGATE macro definition
+- `m1_wifi_scene_sniff.c` — Sniffers sub-menu + 7 sniffer delegates
+- `m1_wifi_scene_attack.c` — Attacks sub-menu + 8 attack delegates
+- `m1_wifi_scene_net.c` — Net Scan sub-menu + 5 net delegates
+- `m1_wifi_scene_general.c` — General sub-menu + 14 general delegates
+- `m1_wifi_scene_connect.c` — `#ifdef M1_APP_WIFI_CONNECT_ENABLE`-gated: Saved/Status/Disconnect using `DELEGATE_FEATURE` with `ESP32_FEATURE_WIFI_JOIN`
+- `m1_wifi_scene.c` stripped to registry table + `wifi_scene_entry()` only
+- All new files added to `cmake/m1_01/CMakeLists.txt`
+
 **Remaining:**
-- WiFi scene split (51 scenes) — blocked by Phase A async conversion (23 `HAL_Delay` calls must become async before splitting is worthwhile)
+- (none — all three modules split)
 
 ### Phase E — Shared submenu-widget rollout
 
@@ -2282,7 +2292,11 @@ Migrated files (raw `sel`/`scroll` byte pairs → `subghz_submenu_model_t` + wid
 | `m1_csrc/m1_settings_scene_fw.c` | Firmware Update sub-menu |
 | `m1_csrc/m1_settings_scene_esp32.c` | ESP32 Update sub-menu |
 | `m1_csrc/m1_nfc_scene.c` | NFC top-level menu |
-| `m1_csrc/m1_wifi_scene.c` | WiFi top-level menu + Sniffers + Attacks + Net Scan + General sub-menus (5 menus) |
+| `m1_csrc/m1_wifi_scene_menu.c` | WiFi top-level menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_sniff.c` | WiFi Sniffers sub-menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_attack.c` | WiFi Attacks sub-menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_net.c` | WiFi Net Scan sub-menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_general.c` | WiFi General sub-menu (Phase D split) |
 
 13 source-level regression test cases in `tests/test_submenu_widget_rollout.c`. 79/79 host tests pass, ASan + UBSan clean.
 

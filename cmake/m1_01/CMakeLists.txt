@@ -618,6 +618,12 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_watchdog.c
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
+    ../../m1_csrc/m1_wifi_scene_menu.c
+    ../../m1_csrc/m1_wifi_scene_sniff.c
+    ../../m1_csrc/m1_wifi_scene_attack.c
+    ../../m1_csrc/m1_wifi_scene_net.c
+    ../../m1_csrc/m1_wifi_scene_general.c
+    ../../m1_csrc/m1_wifi_scene_connect.c
     ../../m1_csrc/wifi_ap_record.c
     ../../m1_csrc/wifi_status_msg.c
     ../../m1_csrc/wifi_mac_utils.c
