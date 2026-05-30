@@ -2242,12 +2242,30 @@ each module so each split file is already clean.  NFC (8), RFID (7), IR (6), GPI
 
 ### Phase E — Shared submenu-widget rollout
 
-**Status: Not started — depends on Phase D**
+**Status: Complete**
 
-`subghz_submenu_model` + `m1_submenu_draw` is currently Sub-GHz-local.  Promote the
-simple-label-list cases in WiFi/BT/NFC/IR onto the shared widget for consistent
-appearance and font-aware layout.  Skip value-column UIs (`<` `>` config-style
-screens) — consistent with the Phase 7c non-candidacy decision.
+`m1_submenu_event()` added to `m1_submenu.c/h` alongside the existing `m1_submenu_draw()`.
+Both functions auto-sync `visible_count = M1_MENU_VIS(item_count)` internally, so callers
+no longer call `subghz_submenu_model_set_visible_count()` explicitly.
+
+Migrated files (raw `sel`/`scroll` byte pairs → `subghz_submenu_model_t` + widget API):
+
+| File | Menus migrated |
+|---|---|
+| `m1_csrc/m1_bt_scene_menu.c` | Top-level BT menu (14 items) |
+| `m1_csrc/m1_bt_scene_sniff.c` | Sniffers sub-menu (6 items) |
+| `m1_csrc/m1_bt_scene_spam.c` | Spam sub-menu (7 items) + Detectors sub-menu (3 items) |
+| `m1_csrc/m1_settings_scene_menu.c` | Top-level Settings menu (7 items) |
+| `m1_csrc/m1_settings_scene_storage.c` | Storage sub-menu |
+| `m1_csrc/m1_settings_scene_power.c` | Power sub-menu |
+| `m1_csrc/m1_settings_scene_fw.c` | Firmware Update sub-menu |
+| `m1_csrc/m1_settings_scene_esp32.c` | ESP32 Update sub-menu |
+| `m1_csrc/m1_nfc_scene.c` | NFC top-level menu |
+| `m1_csrc/m1_wifi_scene.c` | WiFi top-level menu + Sniffers + Attacks + Net Scan + General sub-menus (5 menus) |
+
+13 source-level regression test cases in `tests/test_submenu_widget_rollout.c`. 79/79 host tests pass, ASan + UBSan clean.
+
+IR menus excluded: `m1_ir_quick_remote.c` has a dynamic menu (variable count/labels); `m1_ir_universal.c` has no `m1_scene_menu_event` calls. Both are non-trivial and outside the "simple label list" scope.
 
 ### Phase F — IR universal pure-logic extraction
 

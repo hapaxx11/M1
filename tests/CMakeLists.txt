@@ -313,6 +313,24 @@ endif()
 add_test(NAME esp32_subghz_lifecycle COMMAND test_esp32_subghz_lifecycle)
 
 # ------------------------------------------------------------------
+# Source invariant: Phase E submenu-widget rollout.
+# All BT, Settings, NFC, and WiFi scene menus must use m1_submenu_event
+# + m1_submenu_draw (shared widget) and must NOT call m1_scene_menu_event
+# (raw sel/scroll pair API).
+# ------------------------------------------------------------------
+add_executable(test_submenu_widget_rollout
+    test_submenu_widget_rollout.c
+)
+target_compile_definitions(test_submenu_widget_rollout PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_submenu_widget_rollout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_submenu_widget_rollout PRIVATE sanitizers)
+endif()
+add_test(NAME submenu_widget_rollout COMMAND test_submenu_widget_rollout)
+
+# ------------------------------------------------------------------
 # Source invariant: esp32_main_deinit() releases all heap held by the
 # legacy AT-over-SPI plumbing (task stack, trans_data, stream buffer,
 # semaphores, device handle).

@@ -15,6 +15,9 @@
  *   BtSceneWardrive       — Wardrive delegate
  *   BtSceneWardriveContinu— Wardrive continuous delegate
  *   BtSceneWardriveFlock  — Wardrive Flock delegate
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -23,6 +26,7 @@
 #include "main.h"
 #include "m1_bt_scene.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
 #include "m1_lib.h"
@@ -82,22 +86,25 @@ static const uint8_t sniffer_targets[SNIFFER_ITEM_COUNT] = {
     BtSceneSniffAirtag, BtSceneMonitorAirtag, BtSceneSniffFlock,
 };
 
-static uint8_t sniffer_sel = 0, sniffer_scroll = 0;
+static subghz_submenu_model_t s_sniffer_model;
 
-static void sniffer_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static void sniffer_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_sniffer_model, SNIFFER_ITEM_COUNT,
+                              M1_MENU_VIS(SNIFFER_ITEM_COUNT));
+    app->need_redraw = true;
+}
 
 static bool sniffer_menu_event(M1SceneApp *app, M1SceneEvent ev)
 {
-    return m1_scene_menu_event(app, ev, &sniffer_sel, &sniffer_scroll,
-                               SNIFFER_ITEM_COUNT, M1_MENU_VIS(SNIFFER_ITEM_COUNT),
-                               sniffer_targets);
+    return m1_submenu_event(app, ev, &s_sniffer_model, sniffer_targets);
 }
 
 static void sniffer_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("BLE Sniffers", sniffer_labels, SNIFFER_ITEM_COUNT,
-                       sniffer_sel, sniffer_scroll, M1_MENU_VIS(SNIFFER_ITEM_COUNT));
+    m1_submenu_draw(&s_sniffer_model, "BLE Sniffers", sniffer_labels);
 }
 
 const M1SceneHandlers bt_scene_sniffer_menu_handlers = {

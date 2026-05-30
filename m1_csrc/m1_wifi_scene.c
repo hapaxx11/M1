@@ -6,6 +6,9 @@
  *
  * Top-level menu leads to five submenus plus direct functions:
  *   Scan / Sniffers / Attacks / Network Scan / General / (saved/status/disconnect)
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -13,6 +16,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_802154.h"
 #include "m1_esp32_hal.h"
@@ -229,16 +233,20 @@ static const uint8_t sniffer_targets[SNIFFER_ITEM_COUNT] = {
     WifiSceneSniffDeauth, WifiSceneSniffEapol, WifiSceneSniffPwnagotchi,
     WifiSceneSniffSae,
 };
-static uint8_t sniffer_sel = 0, sniffer_scroll = 0;
-static void sniffer_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static subghz_submenu_model_t s_sniffer_model;
+static void sniffer_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_sniffer_model, SNIFFER_ITEM_COUNT,
+                              M1_MENU_VIS(SNIFFER_ITEM_COUNT));
+    app->need_redraw = true;
+}
 static bool sniffer_menu_event(M1SceneApp *app, M1SceneEvent ev) {
-    return m1_scene_menu_event(app, ev, &sniffer_sel, &sniffer_scroll,
-                               SNIFFER_ITEM_COUNT, M1_MENU_VIS(SNIFFER_ITEM_COUNT), sniffer_targets);
+    return m1_submenu_event(app, ev, &s_sniffer_model, sniffer_targets);
 }
 static void sniffer_menu_draw(M1SceneApp *app) {
     (void)app;
-    m1_scene_draw_menu("Sniffers", sniffer_labels, SNIFFER_ITEM_COUNT,
-                       sniffer_sel, sniffer_scroll, M1_MENU_VIS(SNIFFER_ITEM_COUNT));
+    m1_submenu_draw(&s_sniffer_model, "Sniffers", sniffer_labels);
 }
 static const M1SceneHandlers sniffer_menu_handlers = {
     .on_enter = sniffer_menu_enter, .on_event = sniffer_menu_event,
@@ -257,16 +265,20 @@ static const uint8_t attack_targets[ATTACK_ITEM_COUNT] = {
     WifiSceneAttackRickroll, WifiSceneAttackEvilPortal, WifiSceneAttackProbeFlood,
     WifiSceneAttackKarma, WifiSceneAttackKarmaPortal,
 };
-static uint8_t attack_sel = 0, attack_scroll = 0;
-static void attack_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static subghz_submenu_model_t s_attack_model;
+static void attack_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_attack_model, ATTACK_ITEM_COUNT,
+                              M1_MENU_VIS(ATTACK_ITEM_COUNT));
+    app->need_redraw = true;
+}
 static bool attack_menu_event(M1SceneApp *app, M1SceneEvent ev) {
-    return m1_scene_menu_event(app, ev, &attack_sel, &attack_scroll,
-                               ATTACK_ITEM_COUNT, M1_MENU_VIS(ATTACK_ITEM_COUNT), attack_targets);
+    return m1_submenu_event(app, ev, &s_attack_model, attack_targets);
 }
 static void attack_menu_draw(M1SceneApp *app) {
     (void)app;
-    m1_scene_draw_menu("Attacks", attack_labels, ATTACK_ITEM_COUNT,
-                       attack_sel, attack_scroll, M1_MENU_VIS(ATTACK_ITEM_COUNT));
+    m1_submenu_draw(&s_attack_model, "Attacks", attack_labels);
 }
 static const M1SceneHandlers attack_menu_handlers = {
     .on_enter = attack_menu_enter, .on_event = attack_menu_event,
@@ -282,16 +294,20 @@ static const uint8_t net_targets[NET_ITEM_COUNT] = {
     WifiSceneNetPing, WifiSceneNetArp, WifiSceneNetSsh,
     WifiSceneNetTelnet, WifiSceneNetPorts,
 };
-static uint8_t net_sel = 0, net_scroll = 0;
-static void net_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static subghz_submenu_model_t s_net_model;
+static void net_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_net_model, NET_ITEM_COUNT,
+                              M1_MENU_VIS(NET_ITEM_COUNT));
+    app->need_redraw = true;
+}
 static bool net_menu_event(M1SceneApp *app, M1SceneEvent ev) {
-    return m1_scene_menu_event(app, ev, &net_sel, &net_scroll,
-                               NET_ITEM_COUNT, M1_MENU_VIS(NET_ITEM_COUNT), net_targets);
+    return m1_submenu_event(app, ev, &s_net_model, net_targets);
 }
 static void net_menu_draw(M1SceneApp *app) {
     (void)app;
-    m1_scene_draw_menu("Net Scan", net_labels, NET_ITEM_COUNT,
-                       net_sel, net_scroll, M1_MENU_VIS(NET_ITEM_COUNT));
+    m1_submenu_draw(&s_net_model, "Net Scan", net_labels);
 }
 static const M1SceneHandlers net_menu_handlers = {
     .on_enter = net_menu_enter, .on_event = net_menu_event,
@@ -314,16 +330,20 @@ static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
 };
-static uint8_t general_sel = 0, general_scroll = 0;
-static void general_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static subghz_submenu_model_t s_general_model;
+static void general_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_general_model, GENERAL_ITEM_COUNT,
+                              M1_MENU_VIS(GENERAL_ITEM_COUNT));
+    app->need_redraw = true;
+}
 static bool general_menu_event(M1SceneApp *app, M1SceneEvent ev) {
-    return m1_scene_menu_event(app, ev, &general_sel, &general_scroll,
-                               GENERAL_ITEM_COUNT, M1_MENU_VIS(GENERAL_ITEM_COUNT), general_targets);
+    return m1_submenu_event(app, ev, &s_general_model, general_targets);
 }
 static void general_menu_draw(M1SceneApp *app) {
     (void)app;
-    m1_scene_draw_menu("General", general_labels, GENERAL_ITEM_COUNT,
-                       general_sel, general_scroll, M1_MENU_VIS(GENERAL_ITEM_COUNT));
+    m1_submenu_draw(&s_general_model, "General", general_labels);
 }
 static const M1SceneHandlers general_menu_handlers = {
     .on_enter = general_menu_enter, .on_event = general_menu_event,
@@ -377,15 +397,19 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
 #endif
 };
 
-static uint8_t menu_sel    = 0;
-static uint8_t menu_scroll = 0;
+static subghz_submenu_model_t s_wifi_menu_model;
 
-static void menu_on_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static void menu_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_wifi_menu_model, MENU_ITEM_COUNT,
+                              M1_MENU_VIS(MENU_ITEM_COUNT));
+    app->need_redraw = true;
+}
 
 static bool menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
-    return m1_scene_menu_event(app, event, &menu_sel, &menu_scroll,
-                               MENU_ITEM_COUNT, M1_MENU_VIS(MENU_ITEM_COUNT), menu_targets);
+    return m1_submenu_event(app, event, &s_wifi_menu_model, menu_targets);
 }
 
 static void menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -393,8 +417,7 @@ static void menu_on_exit(M1SceneApp *app) { (void)app; }
 static void menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("WiFi", menu_labels, MENU_ITEM_COUNT,
-                       menu_sel, menu_scroll, M1_MENU_VIS(MENU_ITEM_COUNT));
+    m1_submenu_draw(&s_wifi_menu_model, "WiFi", menu_labels);
 }
 
 static const M1SceneHandlers menu_handlers = {

@@ -4,6 +4,9 @@
  * @file   m1_bt_scene_menu.c
  * @brief  Bluetooth top-level menu scene + core delegates
  *         (Scan, Advertise, Config).
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -12,6 +15,7 @@
 #include "main.h"
 #include "m1_bt_scene.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
 #include "m1_lib.h"
@@ -78,16 +82,19 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     BtSceneInfo,
 };
 
-static uint8_t menu_sel    = 0;
-static uint8_t menu_scroll = 0;
+static subghz_submenu_model_t s_menu_model;
 
-static void menu_on_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static void menu_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_menu_model, MENU_ITEM_COUNT,
+                              M1_MENU_VIS(MENU_ITEM_COUNT));
+    app->need_redraw = true;
+}
 
 static bool menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
-    return m1_scene_menu_event(app, event, &menu_sel, &menu_scroll,
-                               MENU_ITEM_COUNT, M1_MENU_VIS(MENU_ITEM_COUNT),
-                               menu_targets);
+    return m1_submenu_event(app, event, &s_menu_model, menu_targets);
 }
 
 static void menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -95,8 +102,7 @@ static void menu_on_exit(M1SceneApp *app) { (void)app; }
 static void menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("Bluetooth", menu_labels, MENU_ITEM_COUNT,
-                       menu_sel, menu_scroll, M1_MENU_VIS(MENU_ITEM_COUNT));
+    m1_submenu_draw(&s_menu_model, "Bluetooth", menu_labels);
 }
 
 const M1SceneHandlers bt_scene_menu_handlers = {

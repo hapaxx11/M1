@@ -137,6 +137,24 @@ compilation units** with clean interfaces.
   `SettingsSceneId` enum and all 26 handler symbols; `m1_settings_scene.c` reduced
   to scene registry table + `settings_scene_entry()`.
 
+**Phase E — Shared submenu-widget rollout:**
+
+`m1_submenu_event()` added to `m1_csrc/m1_submenu.c/h` alongside `m1_submenu_draw()`.
+Both functions auto-sync `visible_count` internally.  All simple-label-list menus in BT,
+Settings, NFC, and WiFi scene files migrated off raw `sel`/`scroll` byte pairs onto
+`subghz_submenu_model_t` + `m1_submenu_event` + `m1_submenu_draw`:
+
+| File | Menus migrated |
+|---|---|
+| `m1_bt_scene_menu.c` | Top-level BT menu |
+| `m1_bt_scene_sniff.c` | Sniffers sub-menu |
+| `m1_bt_scene_spam.c` | Spam sub-menu + Detectors sub-menu |
+| `m1_settings_scene_{menu,storage,power,fw,esp32}.c` | All 5 Settings menus |
+| `m1_nfc_scene.c` | NFC top-level menu |
+| `m1_wifi_scene.c` | WiFi top-level menu + 4 sub-menus |
+
+13 source-level regression tests in `tests/test_submenu_widget_rollout.c`.
+
 **Decoupling technique:** When extracted logic needs hardware-side operations,
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller
 provides a thin adapter; the module never touches hardware directly.

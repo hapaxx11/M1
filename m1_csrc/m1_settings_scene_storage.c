@@ -11,6 +11,9 @@
  *   SettingsSceneStorageMount   — Mount SD Card delegate
  *   SettingsSceneStorageUnmount — Unmount SD Card delegate
  *   SettingsSceneStorageFormat  — Format SD Card delegate
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -19,6 +22,7 @@
 #include "main.h"
 #include "m1_settings_scene.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_storage.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
@@ -95,20 +99,20 @@ static const uint8_t storage_targets[STORAGE_ITEM_COUNT] = {
     SettingsSceneStorageFormat,
 };
 
-static uint8_t storage_sel = 0, storage_scroll = 0;
+static subghz_submenu_model_t s_storage_model;
 
 static void storage_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
     menu_setting_storage_init();
+    subghz_submenu_model_init(&s_storage_model, STORAGE_ITEM_COUNT,
+                              M1_MENU_VIS(STORAGE_ITEM_COUNT));
     app->need_redraw = true;
 }
 
 static bool storage_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
-    return m1_scene_menu_event(app, event, &storage_sel, &storage_scroll,
-                               STORAGE_ITEM_COUNT, M1_MENU_VIS(STORAGE_ITEM_COUNT),
-                               storage_targets);
+    return m1_submenu_event(app, event, &s_storage_model, storage_targets);
 }
 
 static void storage_menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -116,8 +120,7 @@ static void storage_menu_on_exit(M1SceneApp *app) { (void)app; }
 static void storage_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("Storage", storage_labels, STORAGE_ITEM_COUNT,
-                       storage_sel, storage_scroll, M1_MENU_VIS(STORAGE_ITEM_COUNT));
+    m1_submenu_draw(&s_storage_model, "Storage", storage_labels);
 }
 
 const M1SceneHandlers settings_scene_storage_menu_handlers = {

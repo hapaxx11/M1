@@ -9,6 +9,9 @@
  *   SettingsScenePowerInfo   — Battery Info delegate
  *   SettingsScenePowerReboot — Reboot delegate
  *   SettingsScenePowerOff    — Power Off delegate
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -17,6 +20,7 @@
 #include "main.h"
 #include "m1_settings_scene.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_power_ctl.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
@@ -71,20 +75,20 @@ static const uint8_t power_targets[POWER_ITEM_COUNT] = {
     SettingsScenePowerOff,
 };
 
-static uint8_t power_sel = 0, power_scroll = 0;
+static subghz_submenu_model_t s_power_model;
 
 static void power_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
     menu_setting_power_init();
+    subghz_submenu_model_init(&s_power_model, POWER_ITEM_COUNT,
+                              M1_MENU_VIS(POWER_ITEM_COUNT));
     app->need_redraw = true;
 }
 
 static bool power_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
-    return m1_scene_menu_event(app, event, &power_sel, &power_scroll,
-                               POWER_ITEM_COUNT, M1_MENU_VIS(POWER_ITEM_COUNT),
-                               power_targets);
+    return m1_submenu_event(app, event, &s_power_model, power_targets);
 }
 
 static void power_menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -92,8 +96,7 @@ static void power_menu_on_exit(M1SceneApp *app) { (void)app; }
 static void power_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("Power", power_labels, POWER_ITEM_COUNT,
-                       power_sel, power_scroll, M1_MENU_VIS(POWER_ITEM_COUNT));
+    m1_submenu_draw(&s_power_model, "Power", power_labels);
 }
 
 const M1SceneHandlers settings_scene_power_menu_handlers = {

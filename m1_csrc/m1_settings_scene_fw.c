@@ -10,6 +10,9 @@
  *   SettingsSceneFwUpdateStart    — Firmware Update Start delegate
  *   SettingsSceneFwUpdateSwap     — Swap Banks delegate
  *   SettingsSceneFwUpdateDownload — Download delegate
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -18,6 +21,7 @@
 #include "main.h"
 #include "m1_settings_scene.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_fw_update.h"
 #include "m1_fw_download.h"
 #include "m1_lib.h"
@@ -84,20 +88,20 @@ static const uint8_t fw_targets[FW_ITEM_COUNT] = {
     SettingsSceneFwUpdateDownload,
 };
 
-static uint8_t fw_sel = 0, fw_scroll = 0;
+static subghz_submenu_model_t s_fw_model;
 
 static void fw_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
     firmware_update_init();
+    subghz_submenu_model_init(&s_fw_model, FW_ITEM_COUNT,
+                              M1_MENU_VIS(FW_ITEM_COUNT));
     app->need_redraw = true;
 }
 
 static bool fw_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
-    return m1_scene_menu_event(app, event, &fw_sel, &fw_scroll,
-                               FW_ITEM_COUNT, M1_MENU_VIS(FW_ITEM_COUNT),
-                               fw_targets);
+    return m1_submenu_event(app, event, &s_fw_model, fw_targets);
 }
 
 static void fw_menu_on_exit(M1SceneApp *app)
@@ -109,8 +113,7 @@ static void fw_menu_on_exit(M1SceneApp *app)
 static void fw_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("Firmware Update", fw_labels, FW_ITEM_COUNT,
-                       fw_sel, fw_scroll, M1_MENU_VIS(FW_ITEM_COUNT));
+    m1_submenu_draw(&s_fw_model, "Firmware Update", fw_labels);
 }
 
 const M1SceneHandlers settings_scene_fw_menu_handlers = {

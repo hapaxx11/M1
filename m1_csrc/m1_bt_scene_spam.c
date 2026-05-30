@@ -18,6 +18,9 @@
  *   BtSceneDetectSkimmers — Skimmers detect delegate
  *   BtSceneDetectFlock    — Flock detect delegate
  *   BtSceneDetectMeta     — Meta Devices detect delegate
+ *
+ * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
  */
 
 #include <stdint.h>
@@ -26,6 +29,7 @@
 #include "main.h"
 #include "m1_bt_scene.h"
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
 #include "m1_lib.h"
@@ -87,22 +91,25 @@ static const uint8_t spam_targets[SPAM_ITEM_COUNT] = {
     BtSceneSpamGoogleFP, BtSceneSpamFlipper, BtSceneSpamAll, BtSceneSpoofAirtag,
 };
 
-static uint8_t spam_sel = 0, spam_scroll = 0;
+static subghz_submenu_model_t s_spam_model;
 
-static void spam_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static void spam_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_spam_model, SPAM_ITEM_COUNT,
+                              M1_MENU_VIS(SPAM_ITEM_COUNT));
+    app->need_redraw = true;
+}
 
 static bool spam_menu_event(M1SceneApp *app, M1SceneEvent ev)
 {
-    return m1_scene_menu_event(app, ev, &spam_sel, &spam_scroll,
-                               SPAM_ITEM_COUNT, M1_MENU_VIS(SPAM_ITEM_COUNT),
-                               spam_targets);
+    return m1_submenu_event(app, ev, &s_spam_model, spam_targets);
 }
 
 static void spam_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("BLE Spam", spam_labels, SPAM_ITEM_COUNT,
-                       spam_sel, spam_scroll, M1_MENU_VIS(SPAM_ITEM_COUNT));
+    m1_submenu_draw(&s_spam_model, "BLE Spam", spam_labels);
 }
 
 const M1SceneHandlers bt_scene_spam_menu_handlers = {
@@ -126,22 +133,25 @@ static const uint8_t detect_targets[DETECT_ITEM_COUNT] = {
     BtSceneDetectSkimmers, BtSceneDetectFlock, BtSceneDetectMeta,
 };
 
-static uint8_t detect_sel = 0, detect_scroll = 0;
+static subghz_submenu_model_t s_detect_model;
 
-static void detect_menu_enter(M1SceneApp *app) { (void)app; app->need_redraw = true; }
+static void detect_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    subghz_submenu_model_init(&s_detect_model, DETECT_ITEM_COUNT,
+                              M1_MENU_VIS(DETECT_ITEM_COUNT));
+    app->need_redraw = true;
+}
 
 static bool detect_menu_event(M1SceneApp *app, M1SceneEvent ev)
 {
-    return m1_scene_menu_event(app, ev, &detect_sel, &detect_scroll,
-                               DETECT_ITEM_COUNT, M1_MENU_VIS(DETECT_ITEM_COUNT),
-                               detect_targets);
+    return m1_submenu_event(app, ev, &s_detect_model, detect_targets);
 }
 
 static void detect_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("BLE Detect", detect_labels, DETECT_ITEM_COUNT,
-                       detect_sel, detect_scroll, M1_MENU_VIS(DETECT_ITEM_COUNT));
+    m1_submenu_draw(&s_detect_model, "BLE Detect", detect_labels);
 }
 
 const M1SceneHandlers bt_scene_detect_menu_handlers = {
