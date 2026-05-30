@@ -38,6 +38,8 @@
 #include "irsnd.h"
 #include "ff.h"
 #include "m1_settings.h"
+#include "ir_signal_record.h"   /* ir_str_contains_icase(), ir_cmd_parse() (Phase H) */
+#include "ir_button_map.h"      /* ir_map_buttons() (Phase H) */
 
 /*************************** D E F I N E S ************************************/
 
@@ -224,7 +226,6 @@ static flipper_ir_signal_t s_qr_raw_sig;
 static bool load_last_used(ir_category_t cat, char *path, uint16_t path_len);
 static void save_last_used(ir_category_t cat, const char *path);
 static bool load_device(const char *filepath);
-static void map_buttons_to_commands(const ir_category_layout_t *layout);
 static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
                       const char *device_name, bool transmitting);
 static void qr_transmit(uint8_t btn_idx);
@@ -360,9 +361,30 @@ static void save_last_used(ir_category_t cat, const char *path)
     }
 }
 
+/*
+ * FatFS vtable adapter for ir_cmd_parse() — Phase H.
+ * Mirrors the adapter in m1_ir_universal.c (Phase G).
+ */
+static bool ff_next_wrap(void *ctx)           { return ff_read_line((flipper_file_t *)ctx);    }
+static bool ff_is_sep_wrap(void *ctx)         { return ff_is_separator((flipper_file_t *)ctx); }
+static bool ff_parse_kv_wrap(void *ctx)       { return ff_parse_kv((flipper_file_t *)ctx);     }
+static const char *ff_get_key_wrap(void *ctx) { return ff_get_key((flipper_file_t *)ctx);      }
+static const char *ff_get_val_wrap(void *ctx) { return ff_get_value((flipper_file_t *)ctx);    }
+
+static const ir_block_reader_t s_ff_reader = {
+    .next      = ff_next_wrap,
+    .is_sep    = ff_is_sep_wrap,
+    .parse_kv  = ff_parse_kv_wrap,
+    .get_key   = ff_get_key_wrap,
+    .get_value = ff_get_val_wrap,
+};
+
 /*============================================================================*/
 /*
- * Load a .ir file into s_qr_commands[].
+ * Load a .ir file into s_qr_commands[] via the ir_cmd_parse() vtable.
+ * Accepts both "IR signals file" and "IR library file" Flipper formats.
+ * Phase H: replaces the 90-line manual block-parsing loop with a single
+ * ir_cmd_parse() call per block, consistent with m1_ir_universal.c.
  */
 /*============================================================================*/
 static bool load_device(const char *filepath)
@@ -389,95 +411,15 @@ static bool load_device(const char *filepath)
         }
     }
 
-    /* Parse signal blocks */
     while (count < IR_UNIVERSAL_MAX_CMDS)
     {
-        ir_universal_cmd_t *cmd = &s_qr_commands[count];
-        bool got_name = false;
-        bool got_type = false;
-        bool is_parsed = false;
-        bool is_raw = false;
-
-        memset(cmd, 0, sizeof(*cmd));
-
-        while (ff_read_line(&ff))
+        if (!ir_cmd_parse(&s_ff_reader, &ff, &s_qr_commands[count]))
         {
-            if (ff_is_separator(&ff))
+            if (ff.eof)
                 break;
-            if (!ff_parse_kv(&ff))
-                continue;
-
-            const char *key = ff_get_key(&ff);
-            const char *val = ff_get_value(&ff);
-
-            if (strcmp(key, "name") == 0)
-            {
-                strncpy(cmd->name, val, IR_UNIVERSAL_NAME_MAX_LEN - 1);
-                cmd->name[IR_UNIVERSAL_NAME_MAX_LEN - 1] = '\0';
-                got_name = true;
-            }
-            else if (strcmp(key, "type") == 0)
-            {
-                got_type = true;
-                is_parsed = (strcmp(val, "parsed") == 0);
-                is_raw    = (strcmp(val, "raw") == 0);
-            }
-            else if (strcmp(key, "protocol") == 0 && is_parsed)
-            {
-                cmd->protocol = flipper_ir_proto_to_irmp(val);
-            }
-            else if (strcmp(key, "address") == 0 && is_parsed)
-            {
-                uint8_t hex[4];
-                uint8_t n = ff_parse_hex_bytes(val, hex, 4);
-                cmd->address = (n >= 2) ? (uint16_t)(hex[0] | ((uint16_t)hex[1] << 8))
-                                        : (uint16_t)hex[0];
-            }
-            else if (strcmp(key, "command") == 0 && is_parsed)
-            {
-                uint8_t hex[4];
-                uint8_t n = ff_parse_hex_bytes(val, hex, 4);
-                cmd->command = (n >= 2) ? (uint16_t)(hex[0] | ((uint16_t)hex[1] << 8))
-                                        : (uint16_t)hex[0];
-            }
-            else if (strcmp(key, "frequency") == 0 && is_raw)
-            {
-                cmd->raw_freq = (uint32_t)strtoul(val, NULL, 10);
-            }
-            else if (strcmp(key, "data") == 0 && is_raw)
-            {
-                const char *p = val;
-                uint16_t cnt = 0;
-                while (*p)
-                {
-                    while (*p == ' ') p++;
-                    if (*p == '\0') break;
-                    cnt++;
-                    while (*p && *p != ' ') p++;
-                }
-                cmd->raw_count = cnt;
-            }
+            continue; /* skip invalid blocks */
         }
-
-        if (got_name && got_type)
-        {
-            if (is_parsed && cmd->protocol != 0)
-            {
-                cmd->is_raw = false;
-                cmd->flags = 0;
-                cmd->valid = true;
-                count++;
-            }
-            else if (is_raw && cmd->raw_freq > 0)
-            {
-                cmd->is_raw = true;
-                cmd->valid = true;
-                count++;
-            }
-        }
-
-        if (ff.eof)
-            break;
+        count++;
     }
 
     ff_close(&ff);
@@ -485,114 +427,31 @@ static bool load_device(const char *filepath)
     return count > 0;
 }
 
-/*
- * Case-insensitive substring match helper.
- * Returns true if `needle` appears anywhere within `haystack`.
- */
-static bool ci_substr(const char *haystack, const char *needle)
-{
-    size_t hlen = strlen(haystack);
-    size_t nlen = strlen(needle);
-    size_t k;
-    size_t j;
-
-    if (nlen == 0)
-        return true;
-    if (nlen > hlen)
-        return false;
-
-    for (k = 0; k <= hlen - nlen; k++)
-    {
-        bool match = true;
-        for (j = 0; j < nlen; j++)
-        {
-            char ch = haystack[k + j];
-            char cn = needle[j];
-            if (ch >= 'A' && ch <= 'Z') ch += ('a' - 'A');
-            if (cn >= 'A' && cn <= 'Z') cn += ('a' - 'A');
-            if (ch != cn) { match = false; break; }
-        }
-        if (match)
-            return true;
-    }
-    return false;
-}
-
 /*============================================================================*/
 /*
- * Try to map one button slot to a command index using exact then
- * case-insensitive substring match.  Returns true if matched.
- */
-/*============================================================================*/
-static bool try_map_name(uint8_t btn_idx, const char *target)
-{
-    uint16_t c;
-
-    if (target == NULL)
-        return false;
-
-    /* Exact match */
-    for (c = 0; c < s_qr_cmd_count; c++)
-    {
-        if (strcmp(s_qr_commands[c].name, target) == 0)
-        {
-            s_btn_to_cmd[btn_idx] = (int8_t)c;
-            return true;
-        }
-    }
-
-    /* Case-insensitive substring match — bidirectional so that e.g.
-     * target="Vol_up" matches command="TV_Vol_up" (target in name), and
-     * target="Power" matches command="Power_on" (name in target prefix sense
-     * handled by the reverse direction).  Both are desirable for AC/audio
-     * remotes where command names vary across brands. */
-    for (c = 0; c < s_qr_cmd_count; c++)
-    {
-        if (ci_substr(s_qr_commands[c].name, target) ||
-            ci_substr(target, s_qr_commands[c].name))
-        {
-            s_btn_to_cmd[btn_idx] = (int8_t)c;
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/*============================================================================*/
-/*
- * Map grid button slots to loaded commands by matching command names.
- * Uses case-insensitive substring matching for flexibility.
- * If the primary cmd_name fails, tries each entry in cmd_alts in order.
+ * Map grid button slots to loaded commands.
+ * Phase H: thin wrapper around ir_map_buttons() from ir_button_map.c.
+ * Replaces the former try_map_name() + ci_substr() inline logic.
  */
 /*============================================================================*/
 static void map_buttons_to_commands(const ir_category_layout_t *layout)
 {
-    uint8_t b;
+    ir_button_spec_t   specs[IR_GRID_MAX_BUTTONS];
+    const char        *cmd_names[IR_UNIVERSAL_MAX_CMDS];
+    uint8_t  b;
+    uint16_t i;
 
-    for (b = 0; b < IR_GRID_MAX_BUTTONS; b++)
-        s_btn_to_cmd[b] = -1;
-
-    for (b = 0; b < layout->btn_count; b++)
+    for (b = 0; b < layout->btn_count && b < IR_GRID_MAX_BUTTONS; b++)
     {
-        const ir_grid_button_t *btn = &layout->buttons[b];
-
-        /* Try primary name */
-        if (try_map_name(b, btn->cmd_name))
-            continue;
-
-        /* Try fallback alternatives if provided */
-        if (btn->cmd_alts != NULL)
-        {
-            const char * const *alt = btn->cmd_alts;
-            while (*alt != NULL)
-            {
-                if (try_map_name(b, *alt))
-                    break;
-                alt++;
-            }
-        }
+        specs[b].cmd_name = layout->buttons[b].cmd_name;
+        specs[b].cmd_alts = layout->buttons[b].cmd_alts;
     }
+    for (i = 0; i < s_qr_cmd_count; i++)
+        cmd_names[i] = s_qr_commands[i].name;
+
+    ir_map_buttons(specs, layout->btn_count,
+                   cmd_names, s_qr_cmd_count,
+                   s_btn_to_cmd, IR_GRID_MAX_BUTTONS);
 }
 
 /*============================================================================*/

@@ -41,6 +41,8 @@ uint8_t ir_map_flipper_protocol(const char *name)
 		return IRMP_KASEIKYO_PROTOCOL;
 	if (strcmp(name, "NEC42") == 0 || strcmp(name, "NEC42ext") == 0)
 		return IRMP_NEC42_PROTOCOL;
+	if (strcmp(name, "NEC16") == 0)
+		return IRMP_NEC16_PROTOCOL;
 	if (strcmp(name, "Denon") == 0 || strcmp(name, "Sharp") == 0)
 		return IRMP_DENON_PROTOCOL;
 	if (strcmp(name, "JVC") == 0)

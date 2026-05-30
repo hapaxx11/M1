@@ -82,6 +82,12 @@ void test_protocol_nec42(void)
 	TEST_ASSERT_EQUAL_UINT8(IRMP_NEC42_PROTOCOL, ir_map_flipper_protocol("NEC42ext"));
 }
 
+void test_protocol_nec16(void)
+{
+	/* Phase H: NEC16 (IRMP protocol 27) was missing from the table. */
+	TEST_ASSERT_EQUAL_UINT8(IRMP_NEC16_PROTOCOL, ir_map_flipper_protocol("NEC16"));
+}
+
 void test_protocol_denon(void)
 {
 	TEST_ASSERT_EQUAL_UINT8(IRMP_DENON_PROTOCOL, ir_map_flipper_protocol("Denon"));
@@ -346,6 +352,7 @@ int main(void)
 	RUN_TEST(test_protocol_sony_variants);
 	RUN_TEST(test_protocol_kaseikyo);
 	RUN_TEST(test_protocol_nec42);
+	RUN_TEST(test_protocol_nec16);
 	RUN_TEST(test_protocol_denon);
 	RUN_TEST(test_protocol_jvc);
 	RUN_TEST(test_protocol_lg);

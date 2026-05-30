@@ -2351,6 +2351,46 @@ conversion planned.
 
 ---
 
+### Phase H — `ir_button_map` extraction + `load_device` vtable migration
+
+**`m1_csrc/ir_button_map.c/h`** — pure-logic button-to-command mapping extracted from
+`m1_ir_quick_remote.c`, zero HAL/RTOS/FatFS/display dependencies:
+
+| Symbol | What it does |
+|---|---|
+| `ir_button_spec_t` | Struct: `cmd_name` (primary) + `cmd_alts` (NULL-terminated fallback list) |
+| `ir_map_buttons(specs, btn_count, cmd_names, cmd_count, out_map, max_btns)` | Map button specs to command indices via bidirectional case-insensitive substring match; fills all slots to -1 first; exact match is preferred over substring match |
+
+**Protocol gap fix:** `ir_map_flipper_protocol()` was missing `NEC16 → IRMP_NEC16_PROTOCOL`
+(protocol ID 27), present in `flipper_ir.c`'s table but absent from `ir_signal_record.c`.
+Added after the NEC42/NEC42ext entry.
+
+**`load_device()` migration in `m1_ir_quick_remote.c`:**
+- Added 5 thin static `ff_*_wrap()` adapter functions + `static const ir_block_reader_t s_ff_reader`
+  (mirrors the Phase G adapter in `m1_ir_universal.c`)
+- The 90-line manual KV-parsing loop replaced with a `while`/`ir_cmd_parse()` loop per block
+- Uses `ir_map_flipper_protocol()` (consistent with `ir_cmd_parse`) instead of
+  `flipper_ir_proto_to_irmp()` (the former `load_device` path)
+
+**`m1_ir_quick_remote.c` duplicates removed:**
+- `ci_substr()` — removed; `ir_str_contains_icase()` from `ir_signal_record.h` used instead
+- `try_map_name()` — removed; logic moved into `try_match_name()` in `ir_button_map.c`
+- `map_buttons_to_commands()` body — replaced with thin wrapper calling `ir_map_buttons()`
+
+**Test count:** 1 (NEC16) new test case added to `test_ir_signal_record.c` + 22 Unity test
+cases in `tests/test_ir_button_map.c` covering: null/empty guards, exact match (single,
+first-entry, multi-button), bidirectional case-insensitive substring match, alt fallback
+(primary fails, first-matching alt wins, NULL/empty list), `max_btns` boundary, exact
+preferred over substring, realistic TV remote mapping, NULL primary name.
+
+ASan + UBSan clean.  **82/82 host tests pass.**
+
+**Remaining work:** None.  `m1_ir_quick_remote.c` still contains HAL-dependent
+`qr_transmit_raw()` (uses `flipper_ir_read_signal`, IRMP raw samples) and the
+visual grid rendering — these are scene-integrated and not extractable.
+
+---
+
 ## Remote Configuration
 
 - `origin` = hapaxx11/M1 (this fork — push here when explicitly told)

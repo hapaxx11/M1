@@ -1019,6 +1019,26 @@ endif()
 add_test(NAME ir_cmd_parse COMMAND test_ir_cmd_parse)
 
 # ------------------------------------------------------------------
+# Module under test: ir_button_map
+# Pure-logic button-to-command mapping — no HAL, RTOS, FatFS, or display deps.
+# Phase H extraction from m1_ir_quick_remote.c.
+# ------------------------------------------------------------------
+add_executable(test_ir_button_map
+    test_ir_button_map.c
+    ${M1_ROOT}/m1_csrc/ir_button_map.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_ir_button_map PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_ir_button_map PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_button_map PRIVATE sanitizers)
+endif()
+add_test(NAME ir_button_map COMMAND test_ir_button_map)
+
+# ------------------------------------------------------------------
 # Module under test: system_dashboard
 # Pure-logic helpers — uptime formatting, SD status text.
 # Compiles m1_system_dashboard_helpers.c directly (no HAL dependencies).
