@@ -23,6 +23,7 @@
 #include "m1_badusb.h"
 #include "usbd_hid.h"
 #include "m1_log_debug.h"
+#include "badusb_parser.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -42,97 +43,7 @@
 #define BADUSB_TX_WAIT_MS         20    /* Max wait for HID TX complete */
 #define BADUSB_HID_SETTLE_MS      3000  /* Extra delay for OS to load HID drivers */
 
-/* HID Keyboard scancodes */
-#define KEY_NONE                  0x00
-#define KEY_A                     0x04
-#define KEY_B                     0x05
-#define KEY_C                     0x06
-#define KEY_D                     0x07
-#define KEY_E                     0x08
-#define KEY_F                     0x09
-#define KEY_G                     0x0A
-#define KEY_H                     0x0B
-#define KEY_I                     0x0C
-#define KEY_J                     0x0D
-#define KEY_K                     0x0E
-#define KEY_L                     0x0F
-#define KEY_M                     0x10
-#define KEY_N                     0x11
-#define KEY_O                     0x12
-#define KEY_P                     0x13
-#define KEY_Q                     0x14
-#define KEY_R                     0x15
-#define KEY_S                     0x16
-#define KEY_T                     0x17
-#define KEY_U                     0x18
-#define KEY_V                     0x19
-#define KEY_W                     0x1A
-#define KEY_X                     0x1B
-#define KEY_Y                     0x1C
-#define KEY_Z                     0x1D
-#define KEY_1                     0x1E
-#define KEY_2                     0x1F
-#define KEY_3                     0x20
-#define KEY_4                     0x21
-#define KEY_5                     0x22
-#define KEY_6                     0x23
-#define KEY_7                     0x24
-#define KEY_8                     0x25
-#define KEY_9                     0x26
-#define KEY_0                     0x27
-#define KEY_ENTER                 0x28
-#define KEY_ESCAPE                0x29
-#define KEY_BACKSPACE             0x2A
-#define KEY_TAB                   0x2B
-#define KEY_SPACE                 0x2C
-#define KEY_MINUS                 0x2D
-#define KEY_EQUAL                 0x2E
-#define KEY_LEFTBRACE             0x2F
-#define KEY_RIGHTBRACE            0x30
-#define KEY_BACKSLASH             0x31
-#define KEY_SEMICOLON             0x33
-#define KEY_APOSTROPHE            0x34
-#define KEY_GRAVE                 0x35
-#define KEY_COMMA                 0x36
-#define KEY_DOT                   0x37
-#define KEY_SLASH                 0x38
-#define KEY_CAPSLOCK              0x39
-#define KEY_F1                    0x3A
-#define KEY_F2                    0x3B
-#define KEY_F3                    0x3C
-#define KEY_F4                    0x3D
-#define KEY_F5                    0x3E
-#define KEY_F6                    0x3F
-#define KEY_F7                    0x40
-#define KEY_F8                    0x41
-#define KEY_F9                    0x42
-#define KEY_F10                   0x43
-#define KEY_F11                   0x44
-#define KEY_F12                   0x45
-#define KEY_PRINTSCREEN           0x46
-#define KEY_SCROLLLOCK            0x47
-#define KEY_PAUSE                 0x48
-#define KEY_INSERT                0x49
-#define KEY_HOME                  0x4A
-#define KEY_PAGEUP                0x4B
-#define KEY_DELETE                0x4C
-#define KEY_END                   0x4D
-#define KEY_PAGEDOWN              0x4E
-#define KEY_RIGHT                 0x4F
-#define KEY_LEFT                  0x50
-#define KEY_DOWN                  0x51
-#define KEY_UP                    0x52
-#define KEY_NUMLOCK               0x53
-#define KEY_MENU                  0x65
-
 /************************** S T R U C T U R E S *******************************/
-
-/* ASCII to HID scancode + shift modifier mapping */
-typedef struct
-{
-    uint8_t keycode;
-    uint8_t shift;    /* 1 = shift required */
-} ascii_hid_map_t;
 
 /***************************** V A R I A B L E S ******************************/
 
@@ -141,67 +52,7 @@ static badusb_state_t badusb_state;
 /* USB HID report buffer: [modifier, reserved, key1..key6] */
 static uint8_t hid_report[8];
 
-/* ASCII to HID scancode table (US keyboard layout, indices 0x20-0x7E) */
-static const ascii_hid_map_t ascii_to_hid[] =
-{
-    /* 0x20 ' '  */ {KEY_SPACE,      0},
-    /* 0x21 '!'  */ {KEY_1,          1},
-    /* 0x22 '"'  */ {KEY_APOSTROPHE, 1},
-    /* 0x23 '#'  */ {KEY_3,          1},
-    /* 0x24 '$'  */ {KEY_4,          1},
-    /* 0x25 '%'  */ {KEY_5,          1},
-    /* 0x26 '&'  */ {KEY_7,          1},
-    /* 0x27 '\'' */ {KEY_APOSTROPHE, 0},
-    /* 0x28 '('  */ {KEY_9,          1},
-    /* 0x29 ')'  */ {KEY_0,          1},
-    /* 0x2A '*'  */ {KEY_8,          1},
-    /* 0x2B '+'  */ {KEY_EQUAL,      1},
-    /* 0x2C ','  */ {KEY_COMMA,      0},
-    /* 0x2D '-'  */ {KEY_MINUS,      0},
-    /* 0x2E '.'  */ {KEY_DOT,        0},
-    /* 0x2F '/'  */ {KEY_SLASH,      0},
-    /* 0x30 '0'  */ {KEY_0,          0},
-    /* 0x31 '1'  */ {KEY_1,          0},
-    /* 0x32 '2'  */ {KEY_2,          0},
-    /* 0x33 '3'  */ {KEY_3,          0},
-    /* 0x34 '4'  */ {KEY_4,          0},
-    /* 0x35 '5'  */ {KEY_5,          0},
-    /* 0x36 '6'  */ {KEY_6,          0},
-    /* 0x37 '7'  */ {KEY_7,          0},
-    /* 0x38 '8'  */ {KEY_8,          0},
-    /* 0x39 '9'  */ {KEY_9,          0},
-    /* 0x3A ':'  */ {KEY_SEMICOLON,  1},
-    /* 0x3B ';'  */ {KEY_SEMICOLON,  0},
-    /* 0x3C '<'  */ {KEY_COMMA,      1},
-    /* 0x3D '='  */ {KEY_EQUAL,      0},
-    /* 0x3E '>'  */ {KEY_DOT,        1},
-    /* 0x3F '?'  */ {KEY_SLASH,      1},
-    /* 0x40 '@'  */ {KEY_2,          1},
-    /* 0x41-0x5A: A-Z */
-    {KEY_A, 1}, {KEY_B, 1}, {KEY_C, 1}, {KEY_D, 1}, {KEY_E, 1},
-    {KEY_F, 1}, {KEY_G, 1}, {KEY_H, 1}, {KEY_I, 1}, {KEY_J, 1},
-    {KEY_K, 1}, {KEY_L, 1}, {KEY_M, 1}, {KEY_N, 1}, {KEY_O, 1},
-    {KEY_P, 1}, {KEY_Q, 1}, {KEY_R, 1}, {KEY_S, 1}, {KEY_T, 1},
-    {KEY_U, 1}, {KEY_V, 1}, {KEY_W, 1}, {KEY_X, 1}, {KEY_Y, 1},
-    {KEY_Z, 1},
-    /* 0x5B '['  */ {KEY_LEFTBRACE,  0},
-    /* 0x5C '\\' */ {KEY_BACKSLASH,  0},
-    /* 0x5D ']'  */ {KEY_RIGHTBRACE, 0},
-    /* 0x5E '^'  */ {KEY_6,          1},
-    /* 0x5F '_'  */ {KEY_MINUS,      1},
-    /* 0x60 '`'  */ {KEY_GRAVE,      0},
-    /* 0x61-0x7A: a-z */
-    {KEY_A, 0}, {KEY_B, 0}, {KEY_C, 0}, {KEY_D, 0}, {KEY_E, 0},
-    {KEY_F, 0}, {KEY_G, 0}, {KEY_H, 0}, {KEY_I, 0}, {KEY_J, 0},
-    {KEY_K, 0}, {KEY_L, 0}, {KEY_M, 0}, {KEY_N, 0}, {KEY_O, 0},
-    {KEY_P, 0}, {KEY_Q, 0}, {KEY_R, 0}, {KEY_S, 0}, {KEY_T, 0},
-    {KEY_U, 0}, {KEY_V, 0}, {KEY_W, 0}, {KEY_X, 0}, {KEY_Y, 0},
-    {KEY_Z, 0},
-    /* 0x7B '{'  */ {KEY_LEFTBRACE,  1},
-    /* 0x7C '|'  */ {KEY_BACKSLASH,  1},
-    /* 0x7D '}'  */ {KEY_RIGHTBRACE, 1},
-    /* 0x7E '~'  */ {KEY_GRAVE,      1},
-};
+/* ASCII to HID scancode table is provided by badusb_parser (busb_ascii_to_hid()) */
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -211,9 +62,6 @@ static void badusb_release_all(void);
 void badusb_type_char(char c);
 void badusb_type_string(const char *str);
 static bool badusb_parse_line(const char *line);
-static uint8_t badusb_parse_key_name(const char *name);
-static uint8_t badusb_parse_modifier(const char *name, const char **remainder);
-static uint16_t badusb_count_lines(const char *buf, uint32_t len);
 static void badusb_show_progress(const char *filename);
 static bool badusb_check_abort(void);
 
@@ -297,17 +145,18 @@ void badusb_type_char(char c)
     {
         if (c == '\n' || c == '\r')
         {
-            badusb_send_key(0, KEY_ENTER);
+            badusb_send_key(0, BUSB_KEY_ENTER);
         }
         else if (c == '\t')
         {
-            badusb_send_key(0, KEY_TAB);
+            badusb_send_key(0, BUSB_KEY_TAB);
         }
         return;
     }
 
-    const ascii_hid_map_t *entry = &ascii_to_hid[c - 0x20];
-    uint8_t mod = entry->shift ? HID_MOD_LSHIFT : 0;
+    const busb_ascii_hid_map_t *entry = busb_ascii_to_hid((unsigned char)c);
+    if (!entry) return;
+    uint8_t mod = entry->shift ? BUSB_MOD_LSHIFT : 0;
     badusb_send_key(mod, entry->keycode);
 }
 
@@ -363,155 +212,38 @@ void badusb_type_string_forced(const char *str)
 
 /*============================================================================*/
 /**
-  * @brief  Parse a named key to HID scancode
-  * @retval HID keycode or KEY_NONE if not recognized
-  */
-/*============================================================================*/
-static uint8_t badusb_parse_key_name(const char *name)
-{
-    if (strcmp(name, "ENTER") == 0 || strcmp(name, "RETURN") == 0)  return KEY_ENTER;
-    if (strcmp(name, "TAB") == 0)           return KEY_TAB;
-    if (strcmp(name, "ESCAPE") == 0 || strcmp(name, "ESC") == 0)    return KEY_ESCAPE;
-    if (strcmp(name, "SPACE") == 0)         return KEY_SPACE;
-    if (strcmp(name, "BACKSPACE") == 0)     return KEY_BACKSPACE;
-    if (strcmp(name, "DELETE") == 0 || strcmp(name, "DEL") == 0)    return KEY_DELETE;
-    if (strcmp(name, "INSERT") == 0)        return KEY_INSERT;
-    if (strcmp(name, "HOME") == 0)          return KEY_HOME;
-    if (strcmp(name, "END") == 0)           return KEY_END;
-    if (strcmp(name, "PAGEUP") == 0)        return KEY_PAGEUP;
-    if (strcmp(name, "PAGEDOWN") == 0)      return KEY_PAGEDOWN;
-    if (strcmp(name, "UP") == 0 || strcmp(name, "UPARROW") == 0)    return KEY_UP;
-    if (strcmp(name, "DOWN") == 0 || strcmp(name, "DOWNARROW") == 0) return KEY_DOWN;
-    if (strcmp(name, "LEFT") == 0 || strcmp(name, "LEFTARROW") == 0) return KEY_LEFT;
-    if (strcmp(name, "RIGHT") == 0 || strcmp(name, "RIGHTARROW") == 0) return KEY_RIGHT;
-    if (strcmp(name, "CAPSLOCK") == 0)      return KEY_CAPSLOCK;
-    if (strcmp(name, "NUMLOCK") == 0)       return KEY_NUMLOCK;
-    if (strcmp(name, "SCROLLLOCK") == 0)    return KEY_SCROLLLOCK;
-    if (strcmp(name, "PRINTSCREEN") == 0)   return KEY_PRINTSCREEN;
-    if (strcmp(name, "PAUSE") == 0 || strcmp(name, "BREAK") == 0)   return KEY_PAUSE;
-    if (strcmp(name, "MENU") == 0 || strcmp(name, "APP") == 0)      return KEY_MENU;
-    if (strcmp(name, "F1") == 0)            return KEY_F1;
-    if (strcmp(name, "F2") == 0)            return KEY_F2;
-    if (strcmp(name, "F3") == 0)            return KEY_F3;
-    if (strcmp(name, "F4") == 0)            return KEY_F4;
-    if (strcmp(name, "F5") == 0)            return KEY_F5;
-    if (strcmp(name, "F6") == 0)            return KEY_F6;
-    if (strcmp(name, "F7") == 0)            return KEY_F7;
-    if (strcmp(name, "F8") == 0)            return KEY_F8;
-    if (strcmp(name, "F9") == 0)            return KEY_F9;
-    if (strcmp(name, "F10") == 0)           return KEY_F10;
-    if (strcmp(name, "F11") == 0)           return KEY_F11;
-    if (strcmp(name, "F12") == 0)           return KEY_F12;
-
-    /* Single printable character */
-    if (strlen(name) == 1 && name[0] >= 0x20 && name[0] <= 0x7E)
-    {
-        return ascii_to_hid[name[0] - 0x20].keycode;
-    }
-
-    return KEY_NONE;
-}
-
-
-/*============================================================================*/
-/**
-  * @brief  Parse a modifier keyword and return its HID modifier bit
-  * @param  name: input string (may contain "CTRL", "ALT", "SHIFT", "GUI", etc.)
-  * @param  remainder: output pointer to the rest of the string after the modifier
-  * @retval modifier bitmask or 0 if not a modifier
-  */
-/*============================================================================*/
-static uint8_t badusb_parse_modifier(const char *name, const char **remainder)
-{
-    *remainder = NULL;
-
-    /* Check for modifier with space or dash separator */
-    struct {
-        const char *keyword;
-        uint8_t     mod;
-    } modifiers[] = {
-        {"CTRL",    HID_MOD_LCTRL},
-        {"CONTROL", HID_MOD_LCTRL},
-        {"ALT",     HID_MOD_LALT},
-        {"SHIFT",   HID_MOD_LSHIFT},
-        {"GUI",     HID_MOD_LGUI},
-        {"WINDOWS", HID_MOD_LGUI},
-        {"COMMAND", HID_MOD_LGUI},
-    };
-
-    for (int i = 0; i < (int)(sizeof(modifiers) / sizeof(modifiers[0])); i++)
-    {
-        size_t klen = strlen(modifiers[i].keyword);
-        if (strncmp(name, modifiers[i].keyword, klen) == 0)
-        {
-            char sep = name[klen];
-            if (sep == ' ' || sep == '-' || sep == '+' || sep == '\0')
-            {
-                if (sep != '\0')
-                    *remainder = name + klen + 1;
-                else
-                    *remainder = NULL;
-                return modifiers[i].mod;
-            }
-        }
-    }
-
-    return 0;
-}
-
-
-/*============================================================================*/
-/**
   * @brief  Parse and execute a single DuckyScript line
   * @retval true if line was valid, false on error
   */
 /*============================================================================*/
 static bool badusb_parse_line(const char *line)
 {
-    /* Skip leading whitespace */
-    while (*line == ' ' || *line == '\t') line++;
+    busb_parsed_line_t parsed;
+    busb_classify_line(line, &parsed);
 
-    /* Skip empty lines */
-    if (*line == '\0' || *line == '\n' || *line == '\r')
-        return true;
-
-    /* REM — comment */
-    if (strncmp(line, "REM ", 4) == 0 || strncmp(line, "REM\r", 4) == 0 ||
-        strncmp(line, "REM\n", 4) == 0 || strcmp(line, "REM") == 0)
-        return true;
-
-    /* DELAY <ms> */
-    if (strncmp(line, "DELAY ", 6) == 0)
+    switch (parsed.type)
     {
-        uint32_t ms = (uint32_t)atoi(line + 6);
-        if (ms > 0)
-            osDelay(ms);
+    case BUSB_LINE_EMPTY:
+    case BUSB_LINE_COMMENT:
         return true;
-    }
 
-    /* DEFAULT_DELAY <ms> */
-    if (strncmp(line, "DEFAULT_DELAY ", 14) == 0 ||
-        strncmp(line, "DEFAULTDELAY ", 13) == 0)
-    {
-        const char *p = line + (line[7] == '_' ? 14 : 13);
-        badusb_state.default_delay_ms = (uint16_t)atoi(p);
+    case BUSB_LINE_DELAY:
+        if (parsed.u.delay_ms > 0)
+            osDelay(parsed.u.delay_ms);
         return true;
-    }
 
-    /* STRING <text> */
-    if (strncmp(line, "STRING ", 7) == 0)
-    {
-        badusb_type_string(line + 7);
+    case BUSB_LINE_DEFAULT_DELAY:
+        badusb_state.default_delay_ms = (uint16_t)parsed.u.delay_ms;
         return true;
-    }
 
-    /* REPEAT <n> */
-    if (strncmp(line, "REPEAT ", 7) == 0)
-    {
-        int count = atoi(line + 7);
-        if (count > 0 && badusb_state.last_line[0] != '\0')
+    case BUSB_LINE_STRING:
+        badusb_type_string(parsed.u.string_text);
+        return true;
+
+    case BUSB_LINE_REPEAT:
+        if (parsed.u.repeat_count > 0 && badusb_state.last_line[0] != '\0')
         {
-            for (int i = 0; i < count && badusb_state.running; i++)
+            for (int i = 0; i < parsed.u.repeat_count && badusb_state.running; i++)
             {
                 badusb_parse_line(badusb_state.last_line);
                 if (badusb_state.default_delay_ms > 0)
@@ -519,107 +251,16 @@ static bool badusb_parse_line(const char *line)
             }
         }
         return true;  /* Don't update last_line for REPEAT */
+
+    case BUSB_LINE_MODIFIER_KEY:
+    case BUSB_LINE_STANDALONE_KEY:
+        badusb_send_key(parsed.u.key.modifiers, parsed.u.key.keycode);
+        return true;
+
+    default:
+        M1_LOG_W(M1_LOGDB_TAG, "Unknown cmd: %s\r\n", line);
+        return true;  /* Skip unrecognized lines rather than aborting */
     }
-
-    /* Try as modifier combo: CTRL x, GUI r, ALT F4, SHIFT INSERT, etc. */
-    {
-        uint8_t mod_accum = 0;
-        const char *cur = line;
-        const char *rest = NULL;
-
-        /* Accumulate all modifiers (supports CTRL-ALT x, CTRL SHIFT ESC, etc.) */
-        while (cur && *cur)
-        {
-            uint8_t m = badusb_parse_modifier(cur, &rest);
-            if (m == 0)
-                break;
-            mod_accum |= m;
-            cur = rest;
-        }
-
-        if (mod_accum != 0)
-        {
-            if (cur != NULL && *cur != '\0')
-            {
-                /* There's a key after the modifier(s) */
-                /* Remove trailing whitespace/newline */
-                char keybuf[32];
-                strncpy(keybuf, cur, sizeof(keybuf) - 1);
-                keybuf[sizeof(keybuf) - 1] = '\0';
-                /* Trim trailing whitespace */
-                int kl = (int)strlen(keybuf);
-                while (kl > 0 && (keybuf[kl-1] == '\r' || keybuf[kl-1] == '\n' ||
-                       keybuf[kl-1] == ' '))
-                    keybuf[--kl] = '\0';
-
-                uint8_t keycode = badusb_parse_key_name(keybuf);
-                if (keycode != KEY_NONE)
-                {
-                    /* Check if the key itself needs shift (e.g., for uppercase) */
-                    if (strlen(keybuf) == 1 && keybuf[0] >= 0x20 && keybuf[0] <= 0x7E)
-                    {
-                        uint8_t char_mod = ascii_to_hid[keybuf[0] - 0x20].shift ?
-                                           HID_MOD_LSHIFT : 0;
-                        mod_accum |= char_mod;
-                    }
-                    badusb_send_key(mod_accum, keycode);
-                }
-                else
-                {
-                    /* Modifier only, no recognized key */
-                    badusb_send_key(mod_accum, KEY_NONE);
-                }
-            }
-            else
-            {
-                /* Modifier alone (e.g., just "GUI") */
-                badusb_send_key(mod_accum, KEY_NONE);
-            }
-            return true;
-        }
-    }
-
-    /* Try as standalone key name */
-    {
-        /* Trim trailing CR/LF */
-        char keybuf[32];
-        strncpy(keybuf, line, sizeof(keybuf) - 1);
-        keybuf[sizeof(keybuf) - 1] = '\0';
-        int kl = (int)strlen(keybuf);
-        while (kl > 0 && (keybuf[kl-1] == '\r' || keybuf[kl-1] == '\n' ||
-               keybuf[kl-1] == ' '))
-            keybuf[--kl] = '\0';
-
-        uint8_t keycode = badusb_parse_key_name(keybuf);
-        if (keycode != KEY_NONE)
-        {
-            badusb_send_key(0, keycode);
-            return true;
-        }
-    }
-
-    M1_LOG_W(M1_LOGDB_TAG, "Unknown cmd: %s\r\n", line);
-    return true;  /* Skip unrecognized lines rather than aborting */
-}
-
-
-/*============================================================================*/
-/**
-  * @brief  Count lines in a text buffer
-  */
-/*============================================================================*/
-static uint16_t badusb_count_lines(const char *buf, uint32_t len)
-{
-    uint16_t count = 0;
-    for (uint32_t i = 0; i < len; i++)
-    {
-        if (buf[i] == '\n')
-            count++;
-    }
-    /* Count last line if no trailing newline */
-    if (len > 0 && buf[len - 1] != '\n')
-        count++;
-    return count;
 }
 
 
@@ -730,7 +371,7 @@ bool badusb_execute_file(const char *filepath)
     /* Init state */
     memset(&badusb_state, 0, sizeof(badusb_state));
     badusb_state.running = 1;
-    badusb_state.total_lines = badusb_count_lines(script_buf, bytes_read);
+    badusb_state.total_lines = busb_count_lines(script_buf, bytes_read);
 
     /* Extract just the filename for display */
     const char *fname = strrchr(filepath, '/');

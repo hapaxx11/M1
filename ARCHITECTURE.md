@@ -148,6 +148,13 @@ compilation units** with clean interfaces.
   `ir_parse_hex_bytes()` and `ir_parse_int32_array()` from `ir_signal_record.h`; zero
   FatFS dependency.  `flipper_ir_read_signal()` reduced to a 5-wrapper FatFS adapter.
   22 `flipper_ir_parse_block` test cases added to `tests/test_flipper_ir.c`.
+- **Phase J — `m1_badusb.c` migration to `badusb_parser.h`:** 46 `KEY_*` defines,
+  `ascii_hid_map_t` typedef, 95-entry `ascii_to_hid[]` table, and 3 static helpers
+  (`badusb_parse_key_name`, `badusb_parse_modifier`, `badusb_count_lines`) removed from
+  `m1_badusb.c`.  `badusb_parse_line()` refactored to a `busb_classify_line()` +
+  `switch` dispatch.  `badusb_type_char()` updated to `busb_ascii_to_hid()` +
+  `BUSB_KEY_*`/`BUSB_MOD_*`.  22 source-level regression cases in
+  `tests/test_badusb_migration.c`.
 - `m1_csrc/m1_bt_scene_{menu,sniff,spam,badbt}.c` — BT scene manager split into
   per-group files following the `m1_subghz_scene_*.c` convention (Phase D).
   `m1_bt_scene.h` exports the `BtSceneId` enum and all 29 handler symbols;

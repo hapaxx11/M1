@@ -1442,6 +1442,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_parser COMMAND test_badusb_parser)
 
+# ── Phase J: m1_badusb.c migration to badusb_parser.h ──
+add_executable(test_badusb_migration
+    test_badusb_migration.c
+)
+target_compile_definitions(test_badusb_migration PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_badusb_migration PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_badusb_migration PRIVATE sanitizers)
+endif()
+add_test(NAME badusb_migration COMMAND test_badusb_migration)
+
 # ── Sub-GHz autosave logic ──
 add_executable(test_subghz_autosave
     test_subghz_autosave.c

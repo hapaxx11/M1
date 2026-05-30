@@ -2436,6 +2436,48 @@ is vtable-abstracted and host-testable.
 
 ---
 
+### Phase J — `m1_badusb.c` migration to `badusb_parser.h`
+
+Migrates `m1_badusb.c` (the DuckyScript executor) off its own duplicate static helpers and HID
+constant tables onto the pure-logic `badusb_parser.h` module (extracted previously), following the
+same pattern as Phase H (`m1_ir_quick_remote.c` → `ir_button_map.h` / `ir_signal_record.h`).
+
+**Removed from `m1_badusb.c`:**
+
+| Removed | Replaced by |
+|---|---|
+| `/* HID Keyboard scancodes */` block — 46 `KEY_*` defines | `BUSB_KEY_*` from `badusb_parser.h` |
+| `typedef struct { keycode; shift; } ascii_hid_map_t;` | `busb_ascii_hid_map_t` from `badusb_parser.h` |
+| `static const ascii_hid_map_t ascii_to_hid[]` — 95-entry table | `busb_ascii_to_hid(c)` API call |
+| `static uint8_t badusb_parse_key_name(name)` | `busb_parse_key_name()` (in `busb_classify_line`) |
+| `static uint8_t badusb_parse_modifier(name, remainder)` | `busb_parse_modifier()` (in `busb_classify_line`) |
+| `static uint16_t badusb_count_lines(buf, len)` | `busb_count_lines(buf, len)` |
+
+**`badusb_parse_line()` refactored** — 130-line manual keyword-dispatch loop replaced with:
+```c
+busb_parsed_line_t parsed;
+busb_classify_line(line, &parsed);
+switch (parsed.type) { … }
+```
+Each case dispatches to the hardware action (osDelay, badusb_type_string, badusb_send_key, …) using
+the pre-parsed data from `parsed.u.*`. REPEAT handling unchanged (recursive call on `badusb_state.last_line`).
+
+**`badusb_type_char()` updated** — `KEY_ENTER` → `BUSB_KEY_ENTER`, `KEY_TAB` → `BUSB_KEY_TAB`,
+`&ascii_to_hid[c - 0x20]` → `busb_ascii_to_hid((unsigned char)c)`,
+`HID_MOD_LSHIFT` → `BUSB_MOD_LSHIFT`.
+
+**`#include "badusb_parser.h"` added** to `m1_badusb.c`.
+
+**22 source-level regression test cases** in `tests/test_badusb_migration.c` — verifies includes,
+absence of old defines/typedef/table/static helpers, presence of new API calls (`busb_classify_line`,
+`busb_count_lines`, `busb_ascii_to_hid`, `BUSB_KEY_*`, `BUSB_MOD_*`) and `badusb_parser.h`/`.c`
+API surface. ASan + UBSan clean. **83/83 host tests pass.**
+
+**Remaining work:** None.  All duplicate static helpers and HID constant tables removed from
+`m1_badusb.c`; pure-logic classification lives entirely in `badusb_parser.c`.
+
+---
+
 ## Remote Configuration
 
 - `origin` = hapaxx11/M1 (this fork — push here when explicitly told)
