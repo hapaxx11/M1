@@ -619,6 +619,9 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
     ../../m1_csrc/wifi_ap_record.c
+    ../../m1_csrc/wifi_status_msg.c
+    ../../m1_csrc/wifi_mac_utils.c
+    ../../m1_csrc/wifi_file_utils.c
     ../../m1_csrc/esp32_feature_map.c
 
     ../../m1_csrc/privateprofilestring.c

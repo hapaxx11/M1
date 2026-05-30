@@ -118,6 +118,16 @@ compilation units** with clean interfaces.
   field sanitize, CSV quote; extracted from `m1_wifi.c` (Phase A, firmware-wide
   Momentum-parity programme).  Zero HAL/RTOS/FatFS deps; 36 host tests in
   `tests/test_wifi_ap_record.c`.
+- `m1_csrc/wifi_mac_utils.c/h` — MAC address zero-check, format, match; extracted
+  from `m1_wifi.c` (Phase A).  Zero HAL/RTOS deps; 16 host tests in
+  `tests/test_wifi_mac_utils.c`.
+- `m1_csrc/wifi_file_utils.c/h` — WiFi file extension validators (AP cache, HTML,
+  SSID list); extracted from `m1_wifi.c` (Phase A).  Zero HAL/RTOS/FatFS deps;
+  21 host tests in `tests/test_wifi_file_utils.c`.
+- `m1_csrc/wifi_status_msg.c/h` — timed status message model for async scene
+  conversion; provides pollable expiry check replacing blocking HAL_Delay pattern
+  (Phase A).  Zero HAL/RTOS/display deps; 17 host tests in
+  `tests/test_wifi_status_msg.c`.
 - `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup, NFC-A SAK/ATQA
   type classifier, UID hex formatter, UID arithmetic step; extracted from `m1_nfc.c`
   (Phase B, firmware-wide Momentum-parity programme).  Zero HAL/RTOS/display deps;

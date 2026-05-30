@@ -2134,12 +2134,22 @@ NULL safety, truncation safety).
 
 ### Phase A — WiFi async conversion + pure-logic extraction
 
-**Status: In progress** (AP record extraction landed; async conversion pending)
+**Status: In progress** (AP record + MAC utils + file utils + status msg model extracted; async conversion pending)
 
 **Completed:**
 - `m1_csrc/wifi_ap_record.c/h` — binary ESP32 payload parser (`wifi_ap_record_parse_one`),
   BSSID fmt/parse, MAC check, field sanitize, CSV quote; zero HAL/RTOS deps; 36 host tests.
-- `m1_wifi.c` updated to call extracted helpers; `wifi_ap_t` typedef moved to header.
+- `m1_csrc/wifi_mac_utils.c/h` — MAC address utilities (`wifi_mac_is_zero`, `wifi_mac_format`,
+  `wifi_mac_match`); zero HAL/RTOS deps; 16 host tests.
+- `m1_csrc/wifi_file_utils.c/h` — file extension validators (`wifi_ascii_lower`,
+  `wifi_ext_is_ap_cache`, `wifi_ext_is_html`, `wifi_ext_is_ssid_list`); zero HAL/RTOS deps;
+  21 host tests.
+- `m1_csrc/wifi_status_msg.c/h` — pure-logic timed status message model
+  (`wifi_status_msg_set/clear/active/expired`); models the blocking
+  "show message + HAL_Delay(N)" pattern as pollable data for async scene ticks;
+  zero HAL/RTOS deps; 17 host tests.
+- `m1_wifi.c` updated: 3 static functions removed (MAC utils), 3 static functions
+  removed (file extension checkers), call sites updated to use extracted modules.
 
 **Remaining (blocked on scope — async conversion is a major state-machine rewrite):**
 
@@ -2149,11 +2159,12 @@ UI/input/battery/LED refresh.  This violates the documented
 
 | Work item | Blocker |
 |-----------|---------|
-| Replace blocking "show message + `HAL_Delay(1800)`" status screens with scene-state + `draw()` ticks | State-machine redesign needed |
-| Convert ESP32 reset/boot waits (`HAL_Delay(2000)`) into event-driven flows posting to `main_q_hdl` | Mirrors `SubGhzSceneTransmitter` pattern |
+| Replace 18× blocking "show message + `HAL_Delay`" status screens with `wifi_status_msg_t` + scene-tick polling | State-machine redesign + on-device UI testing |
+| Convert 4× ESP32 reset/boot waits (`HAL_Delay(200/2000)`) into event-driven flows posting to `main_q_hdl` | Mirrors `SubGhzSceneTransmitter` pattern; needs ESP32 boot-complete signal |
 | Convert `CMD_WIFI_JOIN` round-trips into async event flows | Requires SiN360 ESP32 firmware handshake protocol review |
+| Convert 1× scan countdown loop (`HAL_Delay(1000)`) into tick-based progress | Needs scan-progress event from ESP32 |
 | Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | Should follow async conversion so each split file is already clean |
-| Extract AP-list parsing/sorting, scan-result formatting, credential/state modelling → `wifi/` unit | Prerequisite: define callback interfaces to decouple from SPI-AT |
+| Extract AP-list selection counting, deauth cmd builder → parameterised pure-logic units | Depends on `wifi_sta_t` typedef promotion to header |
 
 **Do not add new `HAL_Delay` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**
 

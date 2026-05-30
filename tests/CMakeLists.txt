@@ -1727,3 +1727,45 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_ap_record COMMAND test_wifi_ap_record)
 
+# ---------- wifi_status_msg (Phase A) ----------
+add_executable(test_wifi_status_msg
+    test_wifi_status_msg.c
+    ${M1_ROOT}/m1_csrc/wifi_status_msg.c
+)
+target_include_directories(test_wifi_status_msg PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_status_msg PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_status_msg PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_status_msg COMMAND test_wifi_status_msg)
+
+# ---------- wifi_mac_utils (Phase A) ----------
+add_executable(test_wifi_mac_utils
+    test_wifi_mac_utils.c
+    ${M1_ROOT}/m1_csrc/wifi_mac_utils.c
+)
+target_include_directories(test_wifi_mac_utils PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_mac_utils PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_mac_utils PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_mac_utils COMMAND test_wifi_mac_utils)
+
+# ---------- wifi_file_utils (Phase A) ----------
+add_executable(test_wifi_file_utils
+    test_wifi_file_utils.c
+    ${M1_ROOT}/m1_csrc/wifi_file_utils.c
+)
+target_include_directories(test_wifi_file_utils PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_file_utils PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_file_utils PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_file_utils COMMAND test_wifi_file_utils)
+

@@ -1,0 +1,1 @@
+- WiFi Phase A: extract `wifi_mac_utils.c/h` (MAC address helpers), `wifi_file_utils.c/h` (file extension validators), and `wifi_status_msg.c/h` (async-ready timed status message model) from `m1_wifi.c`; 54 new host tests (86 total); 6 static functions removed from monolith.

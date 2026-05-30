@@ -34,6 +34,9 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_wifi_cred.h"
 #include "wifi_ap_record.h"
+#include "wifi_mac_utils.h"
+#include "wifi_file_utils.h"
+#include "wifi_status_msg.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -887,25 +890,8 @@ static wifi_sta_t *sta_list_data = NULL;
 static uint16_t sta_total = 0;
 static uint16_t sta_view_idx = 0;
 
-static bool wifi_mac_is_zero(const uint8_t mac[6])
-{
-	for (uint8_t i = 0; i < 6; i++)
-	{
-		if (mac[i]) return false;
-	}
-	return true;
-}
-
-static void wifi_format_mac(const uint8_t mac[6], char *out, size_t out_len)
-{
-	snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
-		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-}
-
-static bool wifi_mac_match(const uint8_t *a, const uint8_t *b)
-{
-	return memcmp(a, b, 6) == 0;
-}
+/* wifi_mac_is_zero(), wifi_mac_format(), wifi_mac_match() are provided by
+ * wifi_mac_utils.h (extracted pure-logic module). */
 
 static bool wifi_mac_track_pick_selected(uint8_t target[6], char *label, size_t label_len)
 {
@@ -1106,7 +1092,7 @@ void wifi_mac_track(void)
 			return;
 		}
 	}
-	wifi_format_mac(target, target_str, sizeof(target_str));
+	wifi_mac_format(target, target_str, sizeof(target_str));
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
@@ -2296,25 +2282,8 @@ typedef enum {
 static char beacon_file_ssids[BEACON_LIST_MAX_SSIDS][33];
 static const char *beacon_file_ptrs[BEACON_LIST_MAX_SSIDS];
 
-static uint8_t beacon_ascii_lower(uint8_t c)
-{
-	if (c >= 'A' && c <= 'Z') return c + ('a' - 'A');
-	return c;
-}
-
-static bool beacon_ext_is_list(const char *name)
-{
-	const char *dot = strrchr(name, '.');
-	if (!dot) return false;
-
-	char ext[5] = {0};
-	for (uint8_t i = 0; i < 4 && dot[i]; i++)
-	{
-		ext[i] = (char)beacon_ascii_lower((uint8_t)dot[i]);
-	}
-
-	return (strcmp(ext, ".txt") == 0 || strcmp(ext, ".lst") == 0);
-}
+/* wifi_ascii_lower() → wifi_ascii_lower() in wifi_file_utils.h
+ * wifi_ext_is_ssid_list() → wifi_ext_is_ssid_list() in wifi_file_utils.h */
 
 static void beacon_message(const char *title, const char *line1, const char *line2)
 {
@@ -2542,7 +2511,7 @@ void wifi_attack_beacon(void)
 		return;
 	}
 
-	if (!beacon_ext_is_list(f_info->file_name))
+	if (!wifi_ext_is_ssid_list(f_info->file_name))
 	{
 		beacon_message("Beacon Spam", "Use .txt/.lst", "1 SSID per line");
 		return;
@@ -2605,33 +2574,8 @@ void wifi_attack_beacon(void)
 
 static char wifi_portal_ssid[33] = "Free WiFi";
 
-static bool wifi_ext_is_ap_cache(const char *name)
-{
-	const char *dot = strrchr(name, '.');
-	if (!dot) return false;
-
-	char ext[5] = {0};
-	for (uint8_t i = 0; i < 4 && dot[i]; i++)
-	{
-		ext[i] = (char)beacon_ascii_lower((uint8_t)dot[i]);
-	}
-
-	return (strcmp(ext, ".tsv") == 0 || strcmp(ext, ".txt") == 0);
-}
-
-static bool wifi_ext_is_html(const char *name)
-{
-	const char *dot = strrchr(name, '.');
-	if (!dot) return false;
-
-	char ext[6] = {0};
-	for (uint8_t i = 0; i < 5 && dot[i]; i++)
-	{
-		ext[i] = (char)beacon_ascii_lower((uint8_t)dot[i]);
-	}
-
-	return (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0);
-}
+/* wifi_ext_is_ap_cache() and wifi_ext_is_html() are provided by
+ * wifi_file_utils.h (extracted pure-logic module). */
 
 /* wifi_sanitize_field() and wifi_csv_quote_field() are provided by
  * wifi_ap_record.h (extracted pure-logic module). */
@@ -3185,7 +3129,7 @@ void wifi_general_load_ssids(void)
 		return;
 	}
 
-	if (!beacon_ext_is_list(f_info->file_name))
+	if (!wifi_ext_is_ssid_list(f_info->file_name))
 	{
 		wifi_show_message("Load SSIDs", "Use .txt/.lst", "1 SSID per line");
 		return;
