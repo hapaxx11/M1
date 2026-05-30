@@ -37,6 +37,7 @@
 #include "m1_scene.h"
 #include "m1_ir_quick_remote.h"
 #include "m1_settings.h"
+#include "ir_signal_record.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -158,12 +159,8 @@ static void draw_dashboard(uint8_t selection);
 static void show_favorites_screen(void);
 static void show_recent_screen(void);
 static void show_search_screen(void);
-static bool is_ir_file(const char *fname);
-static void path_append(char *base, const char *item);
-static void path_go_up(char *path);
 static uint16_t parse_ir_file(const char *filepath);
 static bool parse_ir_signal_block(flipper_file_t *ff, ir_universal_cmd_t *cmd);
-static uint8_t map_flipper_protocol(const char *name);
 static void ir_custom_builder_run(void);
 static bool builder_browse_irdb_pick(ir_builder_slot_t *slot);
 static bool builder_pick_signal_from_file(const char *filepath, ir_builder_slot_t *slot);
@@ -340,7 +337,7 @@ static void ir_browse_with_fb(const char *start_dir, uint8_t start_level)
 
 		if (f_info->status == FB_OK && f_info->file_is_selected)
 		{
-			if (is_ir_file(f_info->file_name))
+			if (ir_is_ir_file(f_info->file_name))
 			{
 				/* Build full path and open command viewer */
 				snprintf(filepath, sizeof(filepath), "%s/%s",
@@ -714,83 +711,6 @@ static uint16_t scan_directory_page(const char *path, uint16_t page, uint16_t pa
  * Check if a filename has the .ir extension
  */
 /*============================================================================*/
-static bool is_ir_file(const char *fname)
-{
-	size_t len;
-
-	if (fname == NULL)
-		return false;
-
-	len = strlen(fname);
-	if (len < 4)
-		return false;
-
-	return (strcmp(&fname[len - 3], IR_FILE_EXTENSION) == 0);
-} // static bool is_ir_file(...)
-
-
-
-/*============================================================================*/
-/*
- * Append a path component to a base path
- */
-/*============================================================================*/
-static void path_append(char *base, const char *item)
-{
-	size_t len = strlen(base);
-
-	if (len > 0 && base[len - 1] != '/')
-	{
-		if (len + 1 < IR_UNIVERSAL_PATH_MAX_LEN)
-		{
-			base[len] = '/';
-			base[len + 1] = '\0';
-			len++;
-		}
-	}
-
-	strncat(base, item, IR_UNIVERSAL_PATH_MAX_LEN - len - 1);
-	base[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-} // static void path_append(...)
-
-
-
-/*============================================================================*/
-/*
- * Navigate one level up in the path
- */
-/*============================================================================*/
-static void path_go_up(char *path)
-{
-	size_t len = strlen(path);
-	int i;
-
-	if (len == 0)
-		return;
-
-	/* Remove trailing slash */
-	if (path[len - 1] == '/')
-	{
-		path[len - 1] = '\0';
-		len--;
-	}
-
-	/* Find the last slash and truncate */
-	for (i = (int)len - 1; i >= 0; i--)
-	{
-		if (path[i] == '/')
-		{
-			path[i] = '\0';
-			return;
-		}
-	}
-
-	/* No slash found - clear the path */
-	path[0] = '\0';
-} // static void path_go_up(...)
-
-
-
 /*============================================================================*/
 /*
  * Browse a directory in the IRDB hierarchy.
@@ -931,7 +851,7 @@ static void browse_directory(const char *path)
 						/* Build child path */
 						strncpy(child_path, s_current_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 						child_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-						path_append(child_path, s_browse_names[s_browse_selection]);
+						ir_path_append(child_path, s_browse_names[s_browse_selection], IR_UNIVERSAL_PATH_MAX_LEN);
 
 						/* Check if it's a directory or file */
 						if (f_stat(child_path, &fno) == FR_OK)
@@ -958,7 +878,7 @@ static void browse_directory(const char *path)
 							if (s_browse_selection >= s_browse_count && s_browse_count > 0)
 								s_browse_selection = s_browse_count - 1;
 						}
-						else if (is_ir_file(s_browse_names[s_browse_selection]))
+						else if (ir_is_ir_file(s_browse_names[s_browse_selection]))
 						{
 							/* Open .ir file and show commands */
 							add_to_recent(child_path);
@@ -990,57 +910,6 @@ static void browse_directory(const char *path)
 		} /* if (ret == pdTRUE) */
 	} /* while (1) */
 } // static void browse_directory(...)
-
-
-
-/*============================================================================*/
-/*
- * Map a Flipper-format protocol name to an IRMP protocol ID.
- * Returns 0 if not found.
- */
-/*============================================================================*/
-static uint8_t map_flipper_protocol(const char *name)
-{
-	/* Common Flipper protocol names mapped to IRMP IDs.
-	 * Must stay in sync with flipper_ir.c ir_proto_table[]. */
-	if (strcmp(name, "NEC") == 0 || strcmp(name, "NECext") == 0)
-		return IRMP_NEC_PROTOCOL;
-	if (strcmp(name, "Samsung48") == 0)
-		return IRMP_SAMSUNG48_PROTOCOL;
-	if (strcmp(name, "Samsung32") == 0 || strcmp(name, "Samsung") == 0)
-		return IRMP_SAMSUNG32_PROTOCOL;
-	if (strcmp(name, "RC5") == 0 || strcmp(name, "RC5X") == 0)
-		return IRMP_RC5_PROTOCOL;
-	if (strcmp(name, "RC6") == 0)
-		return IRMP_RC6_PROTOCOL;
-	if (strcmp(name, "Sony12") == 0 || strcmp(name, "Sony15") == 0 || strcmp(name, "Sony20") == 0 ||
-	    strcmp(name, "SIRC") == 0 || strcmp(name, "SIRC15") == 0 || strcmp(name, "SIRC20") == 0)
-		return IRMP_SIRCS_PROTOCOL;
-	if (strcmp(name, "Kaseikyo") == 0 || strcmp(name, "Panasonic") == 0)
-		return IRMP_KASEIKYO_PROTOCOL;
-	if (strcmp(name, "NEC42") == 0 || strcmp(name, "NEC42ext") == 0)
-		return IRMP_NEC42_PROTOCOL;
-	if (strcmp(name, "Denon") == 0 || strcmp(name, "Sharp") == 0)
-		return IRMP_DENON_PROTOCOL;
-	if (strcmp(name, "JVC") == 0)
-		return IRMP_JVC_PROTOCOL;
-	if (strcmp(name, "LG") == 0)
-		return IRMP_LGAIR_PROTOCOL;
-	if (strcmp(name, "Pioneer") == 0)
-		return IRMP_NEC_PROTOCOL;
-	if (strcmp(name, "Apple") == 0)
-		return IRMP_APPLE_PROTOCOL;
-	if (strcmp(name, "Bose") == 0)
-		return IRMP_BOSE_PROTOCOL;
-	if (strcmp(name, "Nokia") == 0)
-		return IRMP_NOKIA_PROTOCOL;
-	if (strcmp(name, "RCA") == 0)
-		return IRMP_RCCAR_PROTOCOL;
-	if (strcmp(name, "RCMM") == 0)
-		return IRMP_RCMM32_PROTOCOL;
-
-	return 0; /* Unknown protocol */
-} // static uint8_t map_flipper_protocol(...)
 
 
 
@@ -1091,7 +960,7 @@ static bool parse_ir_signal_block(flipper_file_t *ff, ir_universal_cmd_t *cmd)
 		}
 		else if (strcmp(ff_get_key(ff), "protocol") == 0 && is_parsed)
 		{
-			cmd->protocol = map_flipper_protocol(ff_get_value(ff));
+			cmd->protocol = ir_map_flipper_protocol(ff_get_value(ff));
 		}
 		else if (strcmp(ff_get_key(ff), "address") == 0 && is_parsed)
 		{
@@ -2707,7 +2576,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 					xQueueReset(main_q_hdl);
 					return false;
 				}
-				path_go_up(browse_path);
+				ir_path_go_up(browse_path);
 				exit_dir = true; /* Re-scan parent */
 			}
 			else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
@@ -2747,7 +2616,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 			{
 				/* Build child path */
 				snprintf(child_path, IR_UNIVERSAL_PATH_MAX_LEN, "%s", browse_path);
-				path_append(child_path, s_browse_names[s_browse_selection]);
+				ir_path_append(child_path, s_browse_names[s_browse_selection], IR_UNIVERSAL_PATH_MAX_LEN);
 
 				if (f_stat(child_path, &fno) == FR_OK &&
 					(fno.fattrib & AM_DIR))
@@ -2757,7 +2626,7 @@ static bool builder_browse_irdb_pick(ir_builder_slot_t *slot)
 					s_browse_page = 0;
 					exit_dir = true;
 				}
-				else if (is_ir_file(s_browse_names[s_browse_selection]))
+				else if (ir_is_ir_file(s_browse_names[s_browse_selection]))
 				{
 					/* Let user pick a signal from this file */
 					bool picked = builder_pick_signal_from_file(child_path,
@@ -3008,53 +2877,6 @@ static bool builder_save_remote(ir_builder_slot_t *slots, uint8_t n_slots)
 
 /*============================================================================*/
 /*
-* Case-insensitive substring search.
-* Returns true if needle is found anywhere within haystack (ASCII only).
-* An empty needle always matches.
-*/
-/*============================================================================*/
-static bool str_contains_icase(const char *haystack, const char *needle)
-{
-	size_t hl, nl, i, j;
-	char h, n;
-
-	if (needle == NULL || needle[0] == '\0')
-		return true;
-	if (haystack == NULL)
-		return false;
-
-	hl = strlen(haystack);
-	nl = strlen(needle);
-	if (nl > hl)
-		return false;
-
-	for (i = 0; i <= hl - nl; i++)
-	{
-		bool match = true;
-		for (j = 0; j < nl; j++)
-		{
-			h = haystack[i + j];
-			n = needle[j];
-			if (h >= 'A' && h <= 'Z')
-				h = (char)(h + 32);
-			if (n >= 'A' && n <= 'Z')
-				n = (char)(n + 32);
-			if (h != n)
-			{
-				match = false;
-				break;
-			}
-		}
-		if (match)
-			return true;
-	}
-	return false;
-} // static bool str_contains_icase(...)
-
-
-
-/*============================================================================*/
-/*
 * Walk the IRDB directory tree (3 levels: category / brand / device) and
 * collect up to IR_SEARCH_RESULTS_MAX .ir file paths whose filenames contain
 * the given query string (case-insensitive).  Uses three nested DIR objects
@@ -3088,12 +2910,12 @@ static void search_ir_files(const char *root, const char *query)
 
 		strncpy(cat_path, root, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 		cat_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-		path_append(cat_path, cat_fno.fname);
+		ir_path_append(cat_path, cat_fno.fname, IR_UNIVERSAL_PATH_MAX_LEN);
 
 		if (!(cat_fno.fattrib & AM_DIR))
 		{
 			/* .ir file directly in root */
-			if (is_ir_file(cat_fno.fname) && str_contains_icase(cat_fno.fname, query))
+			if (ir_is_ir_file(cat_fno.fname) && ir_str_contains_icase(cat_fno.fname, query))
 			{
 				strncpy(s_search_results[s_search_count], cat_path,
 					IR_UNIVERSAL_PATH_MAX_LEN - 1);
@@ -3118,12 +2940,12 @@ static void search_ir_files(const char *root, const char *query)
 
 			strncpy(brand_path, cat_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 			brand_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-			path_append(brand_path, brand_fno.fname);
+			ir_path_append(brand_path, brand_fno.fname, IR_UNIVERSAL_PATH_MAX_LEN);
 
 			if (!(brand_fno.fattrib & AM_DIR))
 			{
 				/* .ir file directly in category dir */
-				if (is_ir_file(brand_fno.fname) && str_contains_icase(brand_fno.fname, query))
+				if (ir_is_ir_file(brand_fno.fname) && ir_str_contains_icase(brand_fno.fname, query))
 				{
 					strncpy(s_search_results[s_search_count], brand_path,
 						IR_UNIVERSAL_PATH_MAX_LEN - 1);
@@ -3146,11 +2968,11 @@ static void search_ir_files(const char *root, const char *query)
 				if (dev_fno.fname[0] == '.')
 					continue;
 
-				if (is_ir_file(dev_fno.fname) && str_contains_icase(dev_fno.fname, query))
+				if (ir_is_ir_file(dev_fno.fname) && ir_str_contains_icase(dev_fno.fname, query))
 				{
 					strncpy(file_path, brand_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 					file_path[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
-					path_append(file_path, dev_fno.fname);
+					ir_path_append(file_path, dev_fno.fname, IR_UNIVERSAL_PATH_MAX_LEN);
 					strncpy(s_search_results[s_search_count], file_path,
 						IR_UNIVERSAL_PATH_MAX_LEN - 1);
 					s_search_results[s_search_count][IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';

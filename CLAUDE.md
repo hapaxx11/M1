@@ -2269,12 +2269,42 @@ IR menus excluded: `m1_ir_quick_remote.c` has a dynamic menu (variable count/lab
 
 ### Phase F — IR universal pure-logic extraction
 
-**Status: Not started — lowest urgency**
+**Status: Complete ✅ (pure-logic layer done; deeper extraction blocked by HAL/RTOS deps)**
 
-IR universal (`m1_ir_universal.c`, 3,373 LoC) has partial `Infrared/` vendored units
-but protocol/field handling is embedded in the monolith.  Apply Phase A/B extraction
-pattern.  The 12 `vTaskDelay` / 54 `while` calls are lower priority than WiFi's
-`HAL_Delay` violations because IR hardware operations are inherently timing-sensitive.
+`m1_csrc/ir_signal_record.c/h` extracted from `m1_ir_universal.c` with zero
+HAL, RTOS, FatFS, or display dependencies:
+
+| Function | Formerly | What it does |
+|---|---|---|
+| `ir_map_flipper_protocol(name)` | `static map_flipper_protocol` | Flipper protocol name → IRMP protocol ID |
+| `ir_is_ir_file(fname)` | `static is_ir_file` | Check `.ir` extension (case-sensitive) |
+| `ir_path_append(base, item, size)` | `static path_append` | Append path component with buffer-size guard |
+| `ir_path_go_up(path)` | `static path_go_up` | Navigate one level up in a path string |
+| `ir_str_contains_icase(h, n)` | `static str_contains_icase` | Case-insensitive substring search |
+
+5 static bodies removed from `m1_ir_universal.c`; 13 call sites updated to the
+new public names.  `ir_path_append` signature generalised: callers pass `base_size`
+instead of relying on the private `IR_UNIVERSAL_PATH_MAX_LEN` constant.
+
+`tests/stubs/ir_search_impl.c` (dead copy of `str_contains_icase`) deleted;
+`test_ir_search.c` updated to include `ir_signal_record.h` and call
+`ir_str_contains_icase` from the real module.
+
+47 Unity test cases:
+- `tests/test_ir_signal_record.c` — 41 cases covering all 5 functions: all 18
+  protocol mappings, null/unknown guards, case-sensitivity check, extension
+  edge cases, path boundary/overflow guard, null-safe calls
+- `tests/test_ir_search.c` — 19 existing cases now backed by the real module
+  (stub removed)
+
+ASan + UBSan clean.  80/80 host tests pass.
+
+**Remaining work (blocked):**
+- `parse_ir_signal_block()` couples `ir_universal_cmd_t` parsing to
+  `flipper_file_t` (FatFS); extraction requires decoupling the KV-reader from
+  the FatFS struct — deferred.
+- 12 `vTaskDelay` / 54 `while` calls in the monolith body — timing-sensitive
+  IR hardware ops; no async conversion planned.
 
 ---
 

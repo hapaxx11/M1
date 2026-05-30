@@ -957,16 +957,41 @@ endif()
 add_test(NAME rgb_backlight COMMAND test_rgb_backlight)
 
 # ------------------------------------------------------------------
-# Module under test: str_contains_icase (IR Universal Remote search helper)
-# Pure function — case-insensitive substring search used by IRDB search.
-# Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.
+# Module under test: ir_signal_record (IR Universal Remote pure-logic helpers)
+# Extracted from m1_ir_universal.c (Phase F) — zero HAL/RTOS/FatFS deps.
+# Covers:
+#   ir_map_flipper_protocol()  — Flipper protocol name → IRMP protocol ID
+#   ir_is_ir_file()            — ".ir" extension check
+#   ir_path_append()           — path component append with buffer-size guard
+#   ir_path_go_up()            — navigate one level up in a path
+#   ir_str_contains_icase()    — case-insensitive substring search
+# Stubs: irmp.h (protocol constants only)
+# ------------------------------------------------------------------
+add_executable(test_ir_signal_record
+    test_ir_signal_record.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_ir_signal_record PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_ir_signal_record PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_signal_record PRIVATE sanitizers)
+endif()
+add_test(NAME ir_signal_record COMMAND test_ir_signal_record)
+
+# ------------------------------------------------------------------
+# Module under test: ir_str_contains_icase (IR Universal Remote search helper)
+# Now backed by the extracted ir_signal_record module (Phase F).
 # ------------------------------------------------------------------
 add_executable(test_ir_search
     test_ir_search.c
-    ${STUBS_DIR}/ir_search_impl.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
 )
 target_include_directories(test_ir_search PRIVATE
     ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
 )
 target_link_libraries(test_ir_search PRIVATE unity)
 if(TARGET sanitizers)
