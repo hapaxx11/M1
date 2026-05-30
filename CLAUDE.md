@@ -2214,12 +2214,31 @@ to compile and cannot be cleanly extracted until the RFAL dependency is abstract
 
 ### Phase D — Scene-file granularity for WiFi (51), BT (32), Settings (21)
 
-**Status: Not started — depends on Phase A (WiFi) and Phase C (BT/Settings)**
+**Status: In progress**
 
 Split the large single-file scene managers into per-screen files following the
 `m1_subghz_scene_*.c` convention.  Do this *after* the async/extraction work for
 each module so each split file is already clean.  NFC (8), RFID (7), IR (6), GPIO
 (6–9) are acceptable as-is and are **not** worth splitting.
+
+**Completed:**
+- `m1_bt_scene.h` — `BtSceneId` typedef enum (33 values) + extern handler declarations
+- `m1_bt_scene_menu.c` — top-level 14-item menu + Scan/Advertise/Config delegates
+- `m1_bt_scene_sniff.c` — BLE Sniffers sub-menu + 6 sniffer + 3 wardrive delegates
+- `m1_bt_scene_spam.c` — BLE Spam sub-menu + 7 spam/spoof + Detectors sub-menu + 3 detect delegates
+- `m1_bt_scene_badbt.c` — Bad-BT/BT Name (BLE_HID), GATT (BLE_GATT), Saved/Info (BT_MANAGE) delegates
+- `m1_bt_scene.c` stripped to registry table + `bt_scene_entry()` only
+- `m1_settings_scene.h` — `SettingsSceneId` typedef enum (26 values) + extern handler declarations
+- `m1_settings_scene_menu.c` — top-level 7-item menu + LCD/About/Dashboard delegates
+- `m1_settings_scene_storage.c` — Storage sub-menu + 5 storage delegates
+- `m1_settings_scene_power.c` — Power sub-menu + 3 power delegates
+- `m1_settings_scene_fw.c` — Firmware Update sub-menu + 4 fw delegates
+- `m1_settings_scene_esp32.c` — ESP32 Update sub-menu + 6 ESP32 delegates
+- `m1_settings_scene.c` stripped to registry table + `settings_scene_entry()` only
+- All new files added to `cmake/m1_01/CMakeLists.txt`
+
+**Remaining:**
+- WiFi scene split (51 scenes) — blocked by Phase A async conversion (23 `HAL_Delay` calls must become async before splitting is worthwhile)
 
 ### Phase E — Shared submenu-widget rollout
 

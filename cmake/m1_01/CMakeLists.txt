@@ -554,10 +554,19 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_rfid_scene.c
     ../../m1_csrc/m1_ring_buffer.c
     ../../m1_csrc/m1_bt_scene.c
+    ../../m1_csrc/m1_bt_scene_menu.c
+    ../../m1_csrc/m1_bt_scene_sniff.c
+    ../../m1_csrc/m1_bt_scene_spam.c
+    ../../m1_csrc/m1_bt_scene_badbt.c
     ../../m1_csrc/m1_sdcard.c
     ../../m1_csrc/m1_sdcard_man.c
     ../../m1_csrc/m1_settings.c
     ../../m1_csrc/m1_settings_scene.c
+    ../../m1_csrc/m1_settings_scene_menu.c
+    ../../m1_csrc/m1_settings_scene_storage.c
+    ../../m1_csrc/m1_settings_scene_power.c
+    ../../m1_csrc/m1_settings_scene_fw.c
+    ../../m1_csrc/m1_settings_scene_esp32.c
     ../../m1_csrc/m1_system_dashboard.c
     ../../m1_csrc/m1_system_dashboard_helpers.c
     ../../m1_csrc/m1_storage.c

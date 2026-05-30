@@ -85,9 +85,9 @@ All modules with submenus use a stack-based scene manager:
 | Infrared | `m1_infrared_scene.c` | 3 items |
 | GPIO | `m1_gpio_scene.c` | 5–6 items |
 | WiFi | `m1_wifi_scene.c` | 4–6 items |
-| Bluetooth | `m1_bt_scene.c` | 3–7 items |
+| Bluetooth | `m1_bt_scene.c` (registry) + `m1_bt_scene_menu/sniff/spam/badbt.c` | 3–7 items |
 | Games | `m1_games_scene.c` | 6 items |
-| Settings | `m1_settings_scene.c` | 7 items + nested sub-menus |
+| Settings | `m1_settings_scene.c` (registry) + `m1_settings_scene_menu/storage/power/fw/esp32.c` | 7 items + nested sub-menus |
 
 ## Saved Item Actions
 
@@ -128,6 +128,14 @@ compilation units** with clean interfaces.
   class classifier `esp32_firmware_is_sin360()` (Phase C, firmware-wide
   Momentum-parity programme).  Zero HAL/RTOS deps; 36 host tests in
   `tests/test_esp32_feature_map.c`.
+- `m1_csrc/m1_bt_scene_{menu,sniff,spam,badbt}.c` — BT scene manager split into
+  per-group files following the `m1_subghz_scene_*.c` convention (Phase D).
+  `m1_bt_scene.h` exports the `BtSceneId` enum and all 29 handler symbols;
+  `m1_bt_scene.c` reduced to scene registry table + `bt_scene_entry()`.
+- `m1_csrc/m1_settings_scene_{menu,storage,power,fw,esp32}.c` — Settings scene manager
+  split into per-group files (Phase D).  `m1_settings_scene.h` exports the
+  `SettingsSceneId` enum and all 26 handler symbols; `m1_settings_scene.c` reduced
+  to scene registry table + `settings_scene_entry()`.
 
 **Decoupling technique:** When extracted logic needs hardware-side operations,
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller
