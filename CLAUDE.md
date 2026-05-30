@@ -1753,7 +1753,7 @@ Scene managers are present in **all** application modules with submenus.  Howeve
 different quality levels.  Sub-GHz reached *scene-native/async* as part of the
 #519 Momentum-parity programme; the remaining modules are *scene-wrapped* — their
 scene shells call legacy blocking functions that freeze the UI for up to 2 seconds
-while waiting on hardware.  The firmware-wide momentum-parity programme (Phases A–F,
+while waiting on hardware.  the firmware-wide momentum-parity programme (Phases A–J,
 tracked in the **Deferred Firmware-Wide Momentum-Parity Work** section below) will
 migrate the worst offenders to scene-native/async.
 
@@ -2184,9 +2184,8 @@ to compile and cannot be cleanly extracted until the RFAL dependency is abstract
 
 ### Phase C — Unified capability-probe module for WiFi / BT / NFC
 
-**Status: In progress** (classifier module landed; NFC cap gating pending)
+**Status: Complete ✅**
 
-**Completed:**
 - `m1_csrc/esp32_feature_map.c/h` — pure-logic ESP32 feature-to-capability classifier
   (`esp32_feature_supported`, `esp32_feature_required_caps`, `esp32_feature_label`,
   `esp32_firmware_is_sin360`); zero HAL/RTOS deps; 36 host tests (ASan + UBSan clean).
@@ -2199,22 +2198,19 @@ to compile and cannot be cleanly extracted until the RFAL dependency is abstract
   binary detection replaced by `esp32_firmware_is_sin360(m1_esp32_caps_get_bitmap())`.
 - `cmake/m1_01/CMakeLists.txt` — `esp32_feature_map.c` and `nfc_card_info.c` added
   (the latter was missing from the firmware build since Phase B).
-- `ARCHITECTURE.md` extractions list updated (see below).
+- `ARCHITECTURE.md` extractions list updated.
 
-**Remaining:**
-- NFC (`m1_nfc.c`, `m1_nfc_scene.c`) has no inline firmware-name string checks; no
-  capability gating is needed at this time — NFC tools are RFAL-hardware-dependent and
-  always use the on-board NFC controller, not the ESP32 coprocessor.
-- Settings (`m1_settings.c`) similarly has no ESP32 capability dependencies.
-- Phase D (scene-file granularity) is independently mergeable once Phase A WiFi async
-  conversion and Phase C are fully settled.
+NFC (`m1_nfc.c`, `m1_nfc_scene.c`) has no inline firmware-name string checks; no
+capability gating is needed — NFC tools are RFAL-hardware-dependent and always use
+the on-board NFC controller, not the ESP32 coprocessor.  Settings similarly has no
+ESP32 capability dependencies.
 
 **Do not add new `DELEGATE_CAPPED(… M1_ESP32_CAP_*, "label")` sites; use
 `DELEGATE_FEATURE(… ESP32_FEATURE_*)` and add one row to `esp32_feature_map.c` instead.**
 
 ### Phase D — Scene-file granularity for WiFi (51), BT (32), Settings (21)
 
-**Status: In progress**
+**Status: In progress** — BT + Settings splits complete; WiFi split blocked by Phase A async conversion
 
 Split the large single-file scene managers into per-screen files following the
 `m1_subghz_scene_*.c` convention.  Do this *after* the async/extraction work for
@@ -2242,7 +2238,7 @@ each module so each split file is already clean.  NFC (8), RFID (7), IR (6), GPI
 
 ### Phase E — Shared submenu-widget rollout
 
-**Status: Complete**
+**Status: Complete ✅**
 
 `m1_submenu_event()` added to `m1_submenu.c/h` alongside the existing `m1_submenu_draw()`.
 Both functions auto-sync `visible_count = M1_MENU_VIS(item_count)` internally, so callers
@@ -2353,6 +2349,8 @@ conversion planned.
 
 ### Phase H — `ir_button_map` extraction + `load_device` vtable migration
 
+**Status: Complete ✅**
+
 **`m1_csrc/ir_button_map.c/h`** — pure-logic button-to-command mapping extracted from
 `m1_ir_quick_remote.c`, zero HAL/RTOS/FatFS/display dependencies:
 
@@ -2392,6 +2390,8 @@ visual grid rendering — these are scene-integrated and not extractable.
 ---
 
 ### Phase I — `flipper_ir_parse_block()` vtable extraction + `ir_parse_int32_array`
+
+**Status: Complete ✅**
 
 Applies the `ir_block_reader_t` vtable pattern introduced in Phase G to
 `flipper_ir_read_signal()` in `flipper_ir.c`, decoupling the Flipper `.ir` file
@@ -2437,6 +2437,8 @@ is vtable-abstracted and host-testable.
 ---
 
 ### Phase J — `m1_badusb.c` migration to `badusb_parser.h`
+
+**Status: Complete ✅**
 
 Migrates `m1_badusb.c` (the DuckyScript executor) off its own duplicate static helpers and HID
 constant tables onto the pure-logic `badusb_parser.h` module (extracted previously), following the

@@ -1,0 +1,1 @@
+BT and Settings scene-file granularity split: `m1_bt_scene.c` (349-line monolith) split into `m1_bt_scene_{menu,sniff,spam,badbt}.c` + registry-only `.c`; `m1_settings_scene.c` (606-line monolith) split into `m1_settings_scene_{menu,storage,power,fw,esp32}.c` + registry-only `.c`; all 9 new files added to firmware CMakeLists; lifecycle test updated for new file layout
