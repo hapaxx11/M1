@@ -2299,12 +2299,55 @@ instead of relying on the private `IR_UNIVERSAL_PATH_MAX_LEN` constant.
 
 ASan + UBSan clean.  80/80 host tests pass.
 
-**Remaining work (blocked):**
-- `parse_ir_signal_block()` couples `ir_universal_cmd_t` parsing to
-  `flipper_file_t` (FatFS); extraction requires decoupling the KV-reader from
-  the FatFS struct — deferred.
+**Remaining work:**
+- `parse_ir_signal_block()` FatFS coupling — **resolved by Phase G** (`ir_cmd_parse` +
+  `ir_block_reader_t` vtable; thin FatFS adapter left in `m1_ir_universal.c`).
 - 12 `vTaskDelay` / 54 `while` calls in the monolith body — timing-sensitive
   IR hardware ops; no async conversion planned.
+
+---
+
+### Phase G — `ir_cmd_parse` extraction (KV-reader vtable abstraction)
+
+**Status: Complete ✅**
+
+Decouples `parse_ir_signal_block()` from FatFS by introducing an
+`ir_block_reader_t` vtable in `ir_signal_record.h`.  The parser logic (`ir_cmd_parse`)
+lives in `ir_signal_record.c` with zero FatFS deps; `m1_ir_universal.c` contains only
+a thin 8-line FatFS adapter.
+
+Added to `m1_csrc/ir_signal_record.c/h`:
+
+| Symbol | What it does |
+|---|---|
+| `IR_CMD_NAME_MAX_LEN` | `32` — max IR signal name length including NUL |
+| `ir_universal_cmd_t` | Parsed IR command record (moved from `m1_ir_universal.h`) |
+| `ir_parse_hex_bytes(str, out, max_len)` | Space-separated hex string → byte array (clone of `ff_parse_hex_bytes`, pure logic) |
+| `ir_block_reader_t` | Vtable: `next`, `is_sep`, `parse_kv`, `get_key`, `get_value` function pointers |
+| `ir_cmd_parse(ops, ctx, cmd)` | Parse one IR signal block via any `ir_block_reader_t`; replaces inline body of `parse_ir_signal_block` |
+
+`m1_ir_universal.h` updated: `ir_universal_cmd_t` removed (now in `ir_signal_record.h`);
+`#include "ir_signal_record.h"` added; `#define IR_UNIVERSAL_NAME_MAX_LEN IR_CMD_NAME_MAX_LEN`
+kept for backward compat.
+
+`parse_ir_signal_block()` in `m1_ir_universal.c` replaced with five thin static
+adapter wrappers (`ff_next_wrap`, `ff_is_sep_wrap`, `ff_parse_kv_wrap`,
+`ff_get_key_wrap`, `ff_get_val_wrap`) + a static `const ir_block_reader_t s_ff_reader`
+table + a one-line body that calls `ir_cmd_parse(&s_ff_reader, ff, cmd)`.
+
+32 Unity test cases in `tests/test_ir_cmd_parse.c` covering:
+- `ir_parse_hex_bytes`: null/empty/single/multi-byte, overflow clamp, case, leading whitespace
+- `ir_cmd_parse`: null guards, empty stream, valid NEC/RC5/Samsung32 parsed signals,
+  address/command little-endian encoding, raw signal (frequency + count), separator
+  termination, two-block sequential parsing, unknown protocol → false, missing
+  type/name → false, raw freq=0 → false, cmd zeroed on entry, protocol spot-checks
+  (Samsung48, RC6, Denon)
+
+ASan + UBSan clean.  **81/81 host tests pass.**
+
+**Remaining work:** None for this extraction.  12 `vTaskDelay` / 54 `while` calls in
+the wider `m1_ir_universal.c` body — timing-sensitive IR hardware ops; no async
+conversion planned.
 
 ---
 

@@ -1000,6 +1000,25 @@ endif()
 add_test(NAME ir_search COMMAND test_ir_search)
 
 # ------------------------------------------------------------------
+# Module under test: ir_cmd_parse (Phase G — KV-reader vtable abstraction)
+# Decouples parse_ir_signal_block() from FatFS via ir_block_reader_t.
+# No FatFS or HAL stubs needed — tests use a string-backed reader.
+# ------------------------------------------------------------------
+add_executable(test_ir_cmd_parse
+    test_ir_cmd_parse.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_ir_cmd_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_ir_cmd_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_cmd_parse PRIVATE sanitizers)
+endif()
+add_test(NAME ir_cmd_parse COMMAND test_ir_cmd_parse)
+
+# ------------------------------------------------------------------
 # Module under test: system_dashboard
 # Pure-logic helpers — uptime formatting, SD status text.
 # Compiles m1_system_dashboard_helpers.c directly (no HAL dependencies).

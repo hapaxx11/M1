@@ -182,3 +182,150 @@ bool ir_str_contains_icase(const char *haystack, const char *needle)
 	}
 	return false;
 }
+
+/* =========================================================================
+ * Hex byte parser
+ * =========================================================================*/
+
+#include <ctype.h>
+#include <stdlib.h>
+
+uint8_t ir_parse_hex_bytes(const char *str, uint8_t *out, uint8_t max_len)
+{
+	uint8_t count = 0;
+	const char *p = str;
+
+	if (str == NULL || out == NULL || max_len == 0)
+		return 0;
+
+	while (*p != '\0' && count < max_len)
+	{
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		if (*p == '\0')
+			break;
+
+		if (isxdigit((unsigned char)p[0]) && isxdigit((unsigned char)p[1]))
+		{
+			unsigned int val = 0;
+			char hex[3] = { p[0], p[1], '\0' };
+			val = (unsigned int)strtoul(hex, NULL, 16);
+			out[count++] = (uint8_t)val;
+			p += 2;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return count;
+}
+
+/* =========================================================================
+ * KV-reader block parser
+ * =========================================================================*/
+
+bool ir_cmd_parse(const ir_block_reader_t *ops, void *ctx, ir_universal_cmd_t *cmd)
+{
+	bool got_name    = false;
+	bool got_type    = false;
+	bool is_parsed   = false;
+	bool is_raw_type = false;
+
+	if (ops == NULL || ctx == NULL || cmd == NULL)
+		return false;
+
+	memset(cmd, 0, sizeof(ir_universal_cmd_t));
+
+	while (ops->next(ctx))
+	{
+		if (ops->is_sep(ctx))
+			break; /* end of this signal block */
+
+		if (!ops->parse_kv(ctx))
+			continue;
+
+		const char *k = ops->get_key(ctx);
+		const char *v = ops->get_value(ctx);
+
+		if (strcmp(k, "name") == 0)
+		{
+			strncpy(cmd->name, v, IR_CMD_NAME_MAX_LEN - 1);
+			cmd->name[IR_CMD_NAME_MAX_LEN - 1] = '\0';
+			got_name = true;
+		}
+		else if (strcmp(k, "type") == 0)
+		{
+			got_type = true;
+			if (strcmp(v, "parsed") == 0)
+			{
+				is_parsed   = true;
+				is_raw_type = false;
+			}
+			else if (strcmp(v, "raw") == 0)
+			{
+				is_parsed   = false;
+				is_raw_type = true;
+			}
+		}
+		else if (strcmp(k, "protocol") == 0 && is_parsed)
+		{
+			cmd->protocol = ir_map_flipper_protocol(v);
+		}
+		else if (strcmp(k, "address") == 0 && is_parsed)
+		{
+			uint8_t hex_buf[4];
+			uint8_t n = ir_parse_hex_bytes(v, hex_buf, 4);
+			cmd->address = (n >= 2) ? (uint16_t)(hex_buf[0] | ((uint16_t)hex_buf[1] << 8))
+			                        : (uint16_t)hex_buf[0];
+		}
+		else if (strcmp(k, "command") == 0 && is_parsed)
+		{
+			uint8_t hex_buf[4];
+			uint8_t n = ir_parse_hex_bytes(v, hex_buf, 4);
+			cmd->command = (n >= 2) ? (uint16_t)(hex_buf[0] | ((uint16_t)hex_buf[1] << 8))
+			                        : (uint16_t)hex_buf[0];
+		}
+		else if (strcmp(k, "frequency") == 0 && is_raw_type)
+		{
+			cmd->raw_freq = (uint32_t)strtoul(v, NULL, 10);
+		}
+		else if (strcmp(k, "data") == 0 && is_raw_type)
+		{
+			const char *p = v;
+			uint16_t count = 0;
+			while (*p)
+			{
+				while (*p == ' ')
+					p++;
+				if (*p == '\0')
+					break;
+				count++;
+				while (*p && *p != ' ')
+					p++;
+			}
+			cmd->raw_count = count;
+		}
+	}
+
+	if (got_name && got_type)
+	{
+		if (is_parsed && cmd->protocol != 0)
+		{
+			cmd->is_raw = false;
+			cmd->flags  = 0;
+			cmd->valid  = true;
+			return true;
+		}
+		if (is_raw_type && cmd->raw_freq > 0)
+		{
+			cmd->is_raw = true;
+			cmd->valid  = true;
+			return true;
+		}
+	}
+
+	return false;
+}

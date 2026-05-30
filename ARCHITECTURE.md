@@ -130,11 +130,13 @@ compilation units** with clean interfaces.
   `tests/test_esp32_feature_map.c`.
 - `m1_csrc/ir_signal_record.c/h` — IR Universal Remote pure-logic helpers; protocol
   name → IRMP ID mapping, `.ir` extension check, path component append/go-up with
-  buffer-size guard, case-insensitive substring search; extracted from
-  `m1_ir_universal.c` (Phase F, firmware-wide Momentum-parity programme).  Zero
-  HAL/RTOS/FatFS deps; `tests/stubs/ir_search_impl.c` dead stub removed; 41 host
-  tests in `tests/test_ir_signal_record.c` + 19 in `tests/test_ir_search.c`
-  (now backed by the real module).
+  buffer-size guard, case-insensitive substring search, hex-byte parser
+  (`ir_parse_hex_bytes`), `ir_block_reader_t` KV-reader vtable, `ir_cmd_parse()`
+  block parser; extracted from `m1_ir_universal.c` (Phases F + G, firmware-wide
+  Momentum-parity programme).  Zero HAL/RTOS/FatFS deps; `tests/stubs/ir_search_impl.c`
+  dead stub removed; 41 host tests in `tests/test_ir_signal_record.c` + 19 in
+  `tests/test_ir_search.c` (now backed by the real module) + 32 in
+  `tests/test_ir_cmd_parse.c` (vtable + block parser).
 - `m1_csrc/m1_bt_scene_{menu,sniff,spam,badbt}.c` — BT scene manager split into
   per-group files following the `m1_subghz_scene_*.c` convention (Phase D).
   `m1_bt_scene.h` exports the `BtSceneId` enum and all 29 handler symbols;

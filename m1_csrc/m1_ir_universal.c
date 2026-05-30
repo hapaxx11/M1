@@ -918,109 +918,30 @@ static void browse_directory(const char *path)
  * Parse a single IR signal block from a Flipper .ir file.
  * The flipper_file cursor should be positioned at the start of a signal block.
  * Returns true if a valid signal was parsed.
+ *
+ * Phase G: thin FatFS adapter — actual parsing delegated to ir_cmd_parse()
+ * in ir_signal_record.c via the ir_block_reader_t vtable.
  */
 /*============================================================================*/
+
+static bool ff_next_wrap(void *ctx)     { return ff_read_line((flipper_file_t *)ctx);    }
+static bool ff_is_sep_wrap(void *ctx)   { return ff_is_separator((flipper_file_t *)ctx); }
+static bool ff_parse_kv_wrap(void *ctx) { return ff_parse_kv((flipper_file_t *)ctx);     }
+static const char *ff_get_key_wrap(void *ctx) { return ff_get_key((flipper_file_t *)ctx);   }
+static const char *ff_get_val_wrap(void *ctx) { return ff_get_value((flipper_file_t *)ctx); }
+
+static const ir_block_reader_t s_ff_reader = {
+	.next      = ff_next_wrap,
+	.is_sep    = ff_is_sep_wrap,
+	.parse_kv  = ff_parse_kv_wrap,
+	.get_key   = ff_get_key_wrap,
+	.get_value = ff_get_val_wrap,
+};
+
 static bool parse_ir_signal_block(flipper_file_t *ff, ir_universal_cmd_t *cmd)
 {
-	bool got_name = false;
-	bool got_type = false;
-	bool is_parsed = false;
-	bool is_raw_type = false;
-
-	memset(cmd, 0, sizeof(ir_universal_cmd_t));
-
-	/* Read key-value pairs until we hit a separator or EOF */
-	while (ff_read_line(ff))
-	{
-		if (ff_is_separator(ff))
-			break; /* End of this signal block */
-
-		if (!ff_parse_kv(ff))
-			continue;
-
-		if (strcmp(ff_get_key(ff), "name") == 0)
-		{
-			strncpy(cmd->name, ff_get_value(ff), IR_UNIVERSAL_NAME_MAX_LEN - 1);
-			cmd->name[IR_UNIVERSAL_NAME_MAX_LEN - 1] = '\0';
-			got_name = true;
-		}
-		else if (strcmp(ff_get_key(ff), "type") == 0)
-		{
-			got_type = true;
-			if (strcmp(ff_get_value(ff), "parsed") == 0)
-			{
-				is_parsed = true;
-				is_raw_type = false;
-			}
-			else if (strcmp(ff_get_value(ff), "raw") == 0)
-			{
-				is_parsed = false;
-				is_raw_type = true;
-			}
-		}
-		else if (strcmp(ff_get_key(ff), "protocol") == 0 && is_parsed)
-		{
-			cmd->protocol = ir_map_flipper_protocol(ff_get_value(ff));
-		}
-		else if (strcmp(ff_get_key(ff), "address") == 0 && is_parsed)
-		{
-			uint8_t hex_buf[4];
-			uint8_t n = ff_parse_hex_bytes(ff_get_value(ff), hex_buf, 4);
-			cmd->address = (n >= 2) ? (uint16_t)(hex_buf[0] | ((uint16_t)hex_buf[1] << 8))
-			                        : (uint16_t)hex_buf[0];
-		}
-		else if (strcmp(ff_get_key(ff), "command") == 0 && is_parsed)
-		{
-			uint8_t hex_buf[4];
-			uint8_t n = ff_parse_hex_bytes(ff_get_value(ff), hex_buf, 4);
-			cmd->command = (n >= 2) ? (uint16_t)(hex_buf[0] | ((uint16_t)hex_buf[1] << 8))
-			                        : (uint16_t)hex_buf[0];
-		}
-		else if (strcmp(ff_get_key(ff), "frequency") == 0 && is_raw_type)
-		{
-			cmd->raw_freq = (uint32_t)strtoul(ff_get_value(ff), NULL, 10);
-		}
-		else if (strcmp(ff_get_key(ff), "data") == 0 && is_raw_type)
-		{
-			/* Count the raw timing values (space-separated integers) */
-			const char *p = ff_get_value(ff);
-			uint16_t count = 0;
-			while (*p)
-			{
-				/* Skip whitespace */
-				while (*p == ' ')
-					p++;
-				if (*p == '\0')
-					break;
-				count++;
-				/* Skip non-whitespace */
-				while (*p && *p != ' ')
-					p++;
-			}
-			cmd->raw_count = count;
-		}
-	}
-
-	if (got_name && got_type)
-	{
-		if (is_parsed && cmd->protocol != 0)
-		{
-			cmd->is_raw = false;
-			cmd->flags = 0; /* Full frame (not repeat) */
-			cmd->valid = true;
-			return true;
-		}
-		else if (is_raw_type && cmd->raw_freq > 0)
-		{
-			cmd->is_raw = true;
-			cmd->valid = true;
-			return true;
-		}
-	}
-
-	return false;
-} // static bool parse_ir_signal_block(...)
-
+	return ir_cmd_parse(&s_ff_reader, ff, cmd);
+}
 
 
 /*============================================================================*/
