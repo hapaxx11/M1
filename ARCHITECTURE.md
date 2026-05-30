@@ -131,10 +131,11 @@ compilation units** with clean interfaces.
 - `m1_csrc/ir_signal_record.c/h` — IR Universal Remote pure-logic helpers; protocol
   name → IRMP ID mapping (19 protocols incl. NEC16 added in Phase H), `.ir` extension
   check, path component append/go-up with buffer-size guard, case-insensitive substring
-  search, hex-byte parser (`ir_parse_hex_bytes`), `ir_block_reader_t` KV-reader vtable,
+  search, hex-byte parser (`ir_parse_hex_bytes`), signed int32-array parser
+  (`ir_parse_int32_array`, added Phase I), `ir_block_reader_t` KV-reader vtable,
   `ir_cmd_parse()` block parser; extracted from `m1_ir_universal.c` (Phases F + G,
   firmware-wide Momentum-parity programme).  Zero HAL/RTOS/FatFS deps;
-  `tests/stubs/ir_search_impl.c` dead stub removed; 42 host tests in
+  `tests/stubs/ir_search_impl.c` dead stub removed; 50 host tests in
   `tests/test_ir_signal_record.c` + 19 in `tests/test_ir_search.c` (now backed by the
   real module) + 32 in `tests/test_ir_cmd_parse.c` (vtable + block parser).
 - `m1_csrc/ir_button_map.c/h` — Pure-logic IR button-to-command mapping; `ir_button_spec_t`
@@ -142,6 +143,11 @@ compilation units** with clean interfaces.
   match priority and NULL-terminated fallback alt lists; extracted from
   `m1_ir_quick_remote.c` (Phase H).  Zero HAL/RTOS/FatFS deps; 22 host tests in
   `tests/test_ir_button_map.c`.
+- `flipper_ir_parse_block()` added to `m1_csrc/flipper_ir.c/h` (Phase I) — pure-logic
+  Flipper `.ir` signal block parser via `ir_block_reader_t` vtable; uses
+  `ir_parse_hex_bytes()` and `ir_parse_int32_array()` from `ir_signal_record.h`; zero
+  FatFS dependency.  `flipper_ir_read_signal()` reduced to a 5-wrapper FatFS adapter.
+  22 `flipper_ir_parse_block` test cases added to `tests/test_flipper_ir.c`.
 - `m1_csrc/m1_bt_scene_{menu,sniff,spam,badbt}.c` — BT scene manager split into
   per-group files following the `m1_subghz_scene_*.c` convention (Phase D).
   `m1_bt_scene.h` exports the `BtSceneId` enum and all 29 handler symbols;

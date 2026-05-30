@@ -225,6 +225,38 @@ uint8_t ir_parse_hex_bytes(const char *str, uint8_t *out, uint8_t max_len)
 	return count;
 }
 
+uint16_t ir_parse_int32_array(const char *str, int32_t *out, uint16_t max_count)
+{
+	uint16_t count = 0;
+	const char *p = str;
+	char *end;
+
+	if (str == NULL || out == NULL || max_count == 0)
+		return 0;
+
+	while (*p != '\0' && count < max_count)
+	{
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		if (*p == '\0')
+			break;
+
+		out[count] = (int32_t)strtol(p, &end, 10);
+
+		if (end == p)
+		{
+			p++;
+			continue;
+		}
+
+		count++;
+		p = end;
+	}
+
+	return count;
+}
+
 /* =========================================================================
  * KV-reader block parser
  * =========================================================================*/

@@ -9,6 +9,7 @@
  *   ir_path_append()           — path component append with buffer-size guard
  *   ir_path_go_up()            — navigate one level up in a path
  *   ir_str_contains_icase()    — case-insensitive substring search
+ *   ir_parse_int32_array()     — space-separated signed int32 string → array
  *
  * Build:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -335,6 +336,73 @@ void test_str_icase_both_null(void)
 }
 
 /* =========================================================================
+ * ir_parse_int32_array()
+ * =========================================================================*/
+
+void test_int32_array_null_str(void)
+{
+	int32_t out[4];
+	TEST_ASSERT_EQUAL_UINT16(0, ir_parse_int32_array(NULL, out, 4));
+}
+
+void test_int32_array_null_out(void)
+{
+	TEST_ASSERT_EQUAL_UINT16(0, ir_parse_int32_array("1 2 3", NULL, 4));
+}
+
+void test_int32_array_zero_max(void)
+{
+	int32_t out[4];
+	TEST_ASSERT_EQUAL_UINT16(0, ir_parse_int32_array("1 2 3", out, 0));
+}
+
+void test_int32_array_empty_str(void)
+{
+	int32_t out[4] = { 0 };
+	TEST_ASSERT_EQUAL_UINT16(0, ir_parse_int32_array("", out, 4));
+}
+
+void test_int32_array_single_value(void)
+{
+	int32_t out[4] = { 0 };
+	uint16_t n = ir_parse_int32_array("42", out, 4);
+	TEST_ASSERT_EQUAL_UINT16(1, n);
+	TEST_ASSERT_EQUAL_INT32(42, out[0]);
+}
+
+void test_int32_array_multi_value(void)
+{
+	int32_t out[6] = { 0 };
+	uint16_t n = ir_parse_int32_array("9024 4512 579 552 579 552", out, 6);
+	TEST_ASSERT_EQUAL_UINT16(6, n);
+	TEST_ASSERT_EQUAL_INT32(9024, out[0]);
+	TEST_ASSERT_EQUAL_INT32(4512, out[1]);
+	TEST_ASSERT_EQUAL_INT32(579,  out[2]);
+	TEST_ASSERT_EQUAL_INT32(552,  out[3]);
+}
+
+void test_int32_array_negative_values(void)
+{
+	int32_t out[4] = { 0 };
+	uint16_t n = ir_parse_int32_array("500 -300 400 -200", out, 4);
+	TEST_ASSERT_EQUAL_UINT16(4, n);
+	TEST_ASSERT_EQUAL_INT32(500,  out[0]);
+	TEST_ASSERT_EQUAL_INT32(-300, out[1]);
+	TEST_ASSERT_EQUAL_INT32(400,  out[2]);
+	TEST_ASSERT_EQUAL_INT32(-200, out[3]);
+}
+
+void test_int32_array_max_count_clamped(void)
+{
+	int32_t out[3] = { 0 };
+	uint16_t n = ir_parse_int32_array("1 2 3 4 5", out, 3);
+	TEST_ASSERT_EQUAL_UINT16(3, n);
+	TEST_ASSERT_EQUAL_INT32(1, out[0]);
+	TEST_ASSERT_EQUAL_INT32(2, out[1]);
+	TEST_ASSERT_EQUAL_INT32(3, out[2]);
+}
+
+/* =========================================================================
  * Runner
  * =========================================================================*/
 
@@ -396,6 +464,16 @@ int main(void)
 	RUN_TEST(test_str_icase_null_needle);
 	RUN_TEST(test_str_icase_null_haystack);
 	RUN_TEST(test_str_icase_both_null);
+
+	/* ir_parse_int32_array */
+	RUN_TEST(test_int32_array_null_str);
+	RUN_TEST(test_int32_array_null_out);
+	RUN_TEST(test_int32_array_zero_max);
+	RUN_TEST(test_int32_array_empty_str);
+	RUN_TEST(test_int32_array_single_value);
+	RUN_TEST(test_int32_array_multi_value);
+	RUN_TEST(test_int32_array_negative_values);
+	RUN_TEST(test_int32_array_max_count_clamped);
 
 	return UNITY_END();
 }

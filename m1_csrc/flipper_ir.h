@@ -13,6 +13,7 @@
 
 #include "flipper_file.h"
 #include "irmp.h"
+#include "ir_signal_record.h"
 
 #define FLIPPER_IR_RAW_MAX_SAMPLES  512
 #define FLIPPER_IR_NAME_MAX_LEN     32
@@ -47,6 +48,20 @@ bool flipper_ir_open(flipper_file_t *ctx, const char *path);
 
 /* Read next signal from an open .ir file. Returns false at EOF */
 bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out);
+
+/**
+ * Parse one IR signal block using an ir_block_reader_t vtable.
+ *
+ * This is the FatFS-free extraction of the flipper_ir_read_signal() body.
+ * Any source (FatFS file, in-memory string, …) can supply the key-value
+ * pairs by providing an ir_block_reader_t adapter.
+ *
+ * @param ops  Non-NULL reader vtable.
+ * @param ctx  Opaque context pointer forwarded to every vtable call.
+ * @param out  Output signal structure; zeroed on entry.
+ * @return true if a valid signal was parsed, false at EOF or error.
+ */
+bool flipper_ir_parse_block(const ir_block_reader_t *ops, void *ctx, flipper_ir_signal_t *out);
 
 /* Write a .ir file header */
 bool flipper_ir_write_header(flipper_file_t *ctx);

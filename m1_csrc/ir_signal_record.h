@@ -141,6 +141,20 @@ bool ir_str_contains_icase(const char *haystack, const char *needle);
  */
 uint8_t ir_parse_hex_bytes(const char *str, uint8_t *out, uint8_t max_len);
 
+/**
+ * Parse a space-separated signed integer string into an int32_t array.
+ *
+ * Input format: "9024 4512 -579 552" (integers separated by whitespace).
+ * Used for raw IR signal "data:" fields in Flipper .ir files.
+ * Parsing stops when out is full or the string is exhausted.
+ *
+ * @param str        Input integer string (may be NULL — returns 0).
+ * @param out        Output int32 buffer.
+ * @param max_count  Maximum number of values to write into out.
+ * @return Number of values written.
+ */
+uint16_t ir_parse_int32_array(const char *str, int32_t *out, uint16_t max_count);
+
 /* =========================================================================
  * KV-reader vtable + block parser
  * =========================================================================*/

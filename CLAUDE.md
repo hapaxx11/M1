@@ -2391,6 +2391,51 @@ visual grid rendering — these are scene-integrated and not extractable.
 
 ---
 
+### Phase I — `flipper_ir_parse_block()` vtable extraction + `ir_parse_int32_array`
+
+Applies the `ir_block_reader_t` vtable pattern introduced in Phase G to
+`flipper_ir_read_signal()` in `flipper_ir.c`, decoupling the Flipper `.ir` file
+block parser from FatFS.
+
+**`ir_parse_int32_array()` added to `m1_csrc/ir_signal_record.c/h`:**
+
+| Symbol | What it does |
+|---|---|
+| `ir_parse_int32_array(str, out, max_count)` | Space-separated signed integer string → `int32_t` array; pure-logic clone of `ff_parse_int32_array()` from `flipper_file.c`; no FatFS dependency |
+
+**`flipper_ir_parse_block()` added to `m1_csrc/flipper_ir.c/h`:**
+
+| Symbol | What it does |
+|---|---|
+| `flipper_ir_parse_block(ops, ctx, out)` | Parse one Flipper `.ir` signal block via any `ir_block_reader_t`; contains the full parsing logic (name/type/protocol/address/command/frequency/duty_cycle/data); uses `ir_parse_hex_bytes()` and `ir_parse_int32_array()` from `ir_signal_record.h`; zero FatFS dependency |
+
+**`flipper_ir_read_signal()` reduced to thin FatFS adapter:**
+- 5 static `ff_*_wrap()` adapter functions + `static const ir_block_reader_t s_ff_reader` added
+  (same pattern as Phase G adapter in `m1_ir_universal.c` and Phase H adapter in `m1_ir_quick_remote.c`)
+- `flipper_ir_read_signal()` body: null guard + `return flipper_ir_parse_block(&s_ff_reader, ctx, out)`
+- FatFS dependency stays entirely in `flipper_ir.c`; parser logic is now fully testable on the host
+
+**`#include "ir_signal_record.h"` added to `flipper_ir.h`** — for `ir_block_reader_t` type;
+one-way dependency, no circular include.
+
+**`tests/CMakeLists.txt`:** `ir_signal_record.c` added to the `test_flipper_ir` target
+(previously the target had no `ir_signal_record.c` and the new vtable functions would be undefined).
+
+**Test count:** 8 `ir_parse_int32_array` test cases added to `test_ir_signal_record.c` (null guards,
+empty, single/multi value, negatives, `max_count` clamp) + 22 `flipper_ir_parse_block` Unity test
+cases in `test_flipper_ir.c` using a string-backed `ir_block_reader_t` adapter (null ops/ctx/out
+guards, empty stream, NEC/RC5/Samsung32 parsed signals, address encoding, unknown protocol → protocol
+ID 0, unknown type → false, missing command → false, separator skipped (not terminator), raw basic,
+raw negatives, raw empty data → invalid, duty_cycle integer parse, two sequential signals, name
+truncation at `FLIPPER_IR_NAME_MAX_LEN`).
+
+ASan + UBSan clean.  **82/82 host tests pass.**
+
+**Remaining work:** None.  FatFS dependency is fully isolated to `flipper_ir.c`; the parser logic
+is vtable-abstracted and host-testable.
+
+---
+
 ## Remote Configuration
 
 - `origin` = hapaxx11/M1 (this fork — push here when explicitly told)

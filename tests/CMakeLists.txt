@@ -735,6 +735,7 @@ add_executable(test_flipper_ir
     test_flipper_ir.c
     ${M1_ROOT}/m1_csrc/flipper_ir.c
     ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
 )
 target_include_directories(test_flipper_ir PRIVATE
     ${STUBS_DIR}
