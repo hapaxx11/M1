@@ -17,6 +17,7 @@
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
 #include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -83,12 +84,15 @@ enum {
 /* Capability-gated delegate: shows "not supported" screen and pops immediately
  * when the required ESP32 capability is absent.
  * m1_esp32_ensure_init() is called first so CMD_GET_STATUS can be queried even
- * when the transport was deinitialized by the previous delegate. */
-#define DELEGATE_CAPPED(name, fn, cap, label) \
+ * when the transport was deinitialized by the previous delegate.
+ * Uses the esp32_feature_map table (Phase C) so cap bits and UI labels are
+ * maintained in one place rather than inline at each call site. */
+#define DELEGATE_FEATURE(name, fn, fid) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
         m1_esp32_ensure_init(); \
-        if (m1_esp32_require_cap((cap), (label))) { fn(); } \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
         m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 DELEGATE(scan,            bluetooth_scan)
@@ -118,13 +122,13 @@ DELEGATE(detect_skimmers, ble_detect_skimmers)
 DELEGATE(detect_flock,    ble_detect_flock)
 DELEGATE(detect_meta,     ble_detect_meta)
 
-DELEGATE_CAPPED(badbt,  badbt_run,                M1_ESP32_CAP_BLE_HID,   "Bad-BT")
-DELEGATE_CAPPED(btname, bluetooth_set_badbt_name, M1_ESP32_CAP_BLE_HID,   "BT Name")
+DELEGATE_FEATURE(badbt,  badbt_run,                ESP32_FEATURE_BLE_HID)
+DELEGATE_FEATURE(btname, bluetooth_set_badbt_name, ESP32_FEATURE_BLE_HID)
 
-DELEGATE_CAPPED(gatt_discovery, ble_gatt_discovery, M1_ESP32_CAP_BLE_GATT, "GATT Discover")
+DELEGATE_FEATURE(gatt_discovery, ble_gatt_discovery, ESP32_FEATURE_BLE_GATT)
 
-DELEGATE_CAPPED(saved, bluetooth_saved_devices, M1_ESP32_CAP_BT_MANAGE, "Saved Devices")
-DELEGATE_CAPPED(info,  bluetooth_info,          M1_ESP32_CAP_BT_MANAGE, "BT Info")
+DELEGATE_FEATURE(saved, bluetooth_saved_devices, ESP32_FEATURE_BT_MANAGE)
+DELEGATE_FEATURE(info,  bluetooth_info,          ESP32_FEATURE_BT_MANAGE)
 
 /* ---- Handler tables ----------------------------------------------------- */
 #define HANDLERS(name) static const M1SceneHandlers name##_handlers = { .on_enter = name##_on_enter }

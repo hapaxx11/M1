@@ -122,6 +122,12 @@ compilation units** with clean interfaces.
   type classifier, UID hex formatter, UID arithmetic step; extracted from `m1_nfc.c`
   (Phase B, firmware-wide Momentum-parity programme).  Zero HAL/RTOS/display deps;
   45 host tests in `tests/test_nfc_card_info.c`.
+- `m1_csrc/esp32_feature_map.c/h` — ESP32-gated feature-to-capability-bit classifier;
+  maps `esp32_feature_id_t` enum values (WiFi scan/attacks, BLE HID/GATT, BT manage,
+  802.15.4, etc.) to required `M1_ESP32_CAP_*` bits and UI labels; includes firmware
+  class classifier `esp32_firmware_is_sin360()` (Phase C, firmware-wide
+  Momentum-parity programme).  Zero HAL/RTOS deps; 36 host tests in
+  `tests/test_esp32_feature_map.c`.
 
 **Decoupling technique:** When extracted logic needs hardware-side operations,
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller

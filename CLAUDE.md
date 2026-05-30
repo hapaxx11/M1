@@ -2184,20 +2184,33 @@ to compile and cannot be cleanly extracted until the RFAL dependency is abstract
 
 ### Phase C — Unified capability-probe module for WiFi / BT / NFC
 
-**Status: Not started**
+**Status: In progress** (classifier module landed; NFC cap gating pending)
 
-The `m1_esp32_caps` bitmap (`m1_esp32_caps.h/c`) is the authoritative source of
-ESP32 feature availability.  Currently, WiFi/BT/BadBT scenes gate features with
-ad-hoc inline firmware-name string checks instead of querying the bitmap.
+**Completed:**
+- `m1_csrc/esp32_feature_map.c/h` — pure-logic ESP32 feature-to-capability classifier
+  (`esp32_feature_supported`, `esp32_feature_required_caps`, `esp32_feature_label`,
+  `esp32_firmware_is_sin360`); zero HAL/RTOS deps; 36 host tests (ASan + UBSan clean).
+- `m1_esp32_caps_get_bitmap()` added to `m1_esp32_caps.h/c` for full-bitmap access.
+- `m1_wifi_scene.c` — `DELEGATE_CAPPED(…, cap, label)` replaced by
+  `DELEGATE_FEATURE(…, ESP32_FEATURE_WIFI_JOIN)` using the centralised table.
+- `m1_bt_scene.c` — 5 `DELEGATE_CAPPED` call sites replaced by `DELEGATE_FEATURE`
+  (BLE_HID×2, BLE_GATT×1, BT_MANAGE×2).
+- `m1_badbt.c` — inline `m1_esp32_has_cap(BLE_HID) && !m1_esp32_has_cap(WIFI_JOIN)`
+  binary detection replaced by `esp32_firmware_is_sin360(m1_esp32_caps_get_bitmap())`.
+- `cmake/m1_01/CMakeLists.txt` — `esp32_feature_map.c` and `nfc_card_info.c` added
+  (the latter was missing from the firmware build since Phase B).
+- `ARCHITECTURE.md` extractions list updated (see below).
 
-- Audit all inline firmware-name/version checks in `m1_wifi_scene.c`, `m1_bt_scene.c`,
-  and `m1_badbt.c`.
-- Map each check to the appropriate `M1_ESP32_CAP_*` bit (add new bits as needed).
-- Replace inline checks with a pure-logic classifier module (host-testable, no HAL deps),
-  mirroring `subghz_button_caps.c`.
-- Surface "unsupported/deferred" states in-UI through the classifier result, not
-  raw firmware names.
-- Cover with host tests for all capability classification paths.
+**Remaining:**
+- NFC (`m1_nfc.c`, `m1_nfc_scene.c`) has no inline firmware-name string checks; no
+  capability gating is needed at this time — NFC tools are RFAL-hardware-dependent and
+  always use the on-board NFC controller, not the ESP32 coprocessor.
+- Settings (`m1_settings.c`) similarly has no ESP32 capability dependencies.
+- Phase D (scene-file granularity) is independently mergeable once Phase A WiFi async
+  conversion and Phase C are fully settled.
+
+**Do not add new `DELEGATE_CAPPED(… M1_ESP32_CAP_*, "label")` sites; use
+`DELEGATE_FEATURE(… ESP32_FEATURE_*)` and add one row to `esp32_feature_map.c` instead.**
 
 ### Phase D — Scene-file granularity for WiFi (51), BT (32), Settings (21)
 

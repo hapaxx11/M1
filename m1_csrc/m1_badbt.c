@@ -24,6 +24,7 @@
 #include "m1_esp32_hal.h"
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "esp_app_main.h"
 #include "ctrl_api.h"
 #include "m1_log_debug.h"
@@ -1082,13 +1083,11 @@ void badbt_run(void)
         return;
     }
 
-    /* Detect firmware type: BLE_HID present AND WIFI_JOIN absent → SiN360
-     * binary-SPI path.  Using a positive indicator (BLE_HID explicitly set)
-     * guards against a transient caps-probe failure (bitmap=0) silently routing
-     * AT firmware into the SPI HID path.  When bitmap=0, BLE_HID is absent and
-     * the code safely falls back to the AT ble_hid_init() path. */
-    s_use_spi_hid = m1_esp32_has_cap(M1_ESP32_CAP_BLE_HID) &&
-                    !m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+    /* Detect firmware type using the esp32_feature_map classifier (Phase C).
+     * esp32_firmware_is_sin360() encodes: BLE_HID present AND WIFI_JOIN absent
+     * — a positive indicator that guards against a transient caps-probe failure
+     * (bitmap=0) silently routing AT firmware into the SPI HID path. */
+    s_use_spi_hid = esp32_firmware_is_sin360(m1_esp32_caps_get_bitmap());
 
     if (s_use_spi_hid)
     {

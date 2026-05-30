@@ -425,5 +425,18 @@ uint32_t m1_esp32_caps_bss_bytes(void);
  */
 uint32_t m1_esp32_caps_free_heap(void);
 
+/**
+ * Return the full cached capability bitmap.
+ *
+ * Returns 0 when the cache has not yet been populated (i.e. before
+ * m1_esp32_caps_init() completes successfully) so callers who need all
+ * bits in one shot can pass it to esp32_feature_map helpers without
+ * issuing multiple m1_esp32_has_cap() calls.
+ *
+ * The return value is the same bitmap that m1_esp32_has_cap() queries
+ * internally; reading it does not re-probe the firmware.
+ */
+uint64_t m1_esp32_caps_get_bitmap(void);
+
 
 #endif /* M1_ESP32_CAPS_H_ */

@@ -103,6 +103,32 @@ endif()
 add_test(NAME esp32_caps COMMAND test_esp32_caps)
 
 # ------------------------------------------------------------------
+# Module under test: esp32_feature_map (Phase C — feature classifier)
+#
+# Pure-logic module: given a capability bitmap (uint64_t), classifies
+# which firmware features are available and identifies the firmware class
+# (SiN360 vs. AT).  Zero HAL / RTOS / display dependencies.
+# Verifies:
+#   - esp32_feature_required_caps(): each feature ID maps to correct M1_ESP32_CAP_* bit
+#   - esp32_feature_label(): non-empty labels for all valid feature IDs
+#   - esp32_feature_supported(): zero bitmap, all-ones, exact-required, missing-bit
+#   - esp32_firmware_is_sin360(): SiN360 profile, AT profile, edge bitmaps
+#   - ESP32_FEATURE_COUNT equals the current table size (regression guard)
+# ------------------------------------------------------------------
+add_executable(test_esp32_feature_map
+    test_esp32_feature_map.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_esp32_feature_map PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_feature_map PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_feature_map PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_feature_map COMMAND test_esp32_feature_map)
+
+# ------------------------------------------------------------------
 # Module under test: battery_soc_estimate
 # Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
 # Bug context: "Asian M1" fuel gauge reports 0% SoC while device is

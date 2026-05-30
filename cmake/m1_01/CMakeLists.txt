@@ -546,6 +546,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_menu.c
     ../../m1_csrc/m1_nfc.c
     ../../m1_csrc/m1_nfc_scene.c
+    ../../m1_csrc/nfc_card_info.c
     ../../m1_csrc/nfc_ndef_encode.c
     ../../m1_csrc/m1_power_ctl.c
     ../../m1_csrc/m1_rf_spi.c
@@ -609,6 +610,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
     ../../m1_csrc/wifi_ap_record.c
+    ../../m1_csrc/esp32_feature_map.c
 
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
