@@ -1769,3 +1769,34 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_file_utils COMMAND test_wifi_file_utils)
 
+# ---------- wifi_selection (Phase A) ----------
+add_executable(test_wifi_selection
+    test_wifi_selection.c
+    ${M1_ROOT}/m1_csrc/wifi_selection.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_selection PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_selection PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_selection PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_selection COMMAND test_wifi_selection)
+
+# ---------- wifi_deauth_cmd (Phase A) ----------
+add_executable(test_wifi_deauth_cmd
+    test_wifi_deauth_cmd.c
+    ${M1_ROOT}/m1_csrc/wifi_deauth_cmd.c
+    ${M1_ROOT}/m1_csrc/wifi_selection.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_deauth_cmd PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_deauth_cmd PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_deauth_cmd PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
+

@@ -37,6 +37,9 @@
 #include "wifi_mac_utils.h"
 #include "wifi_file_utils.h"
 #include "wifi_status_msg.h"
+#include "wifi_sta_record.h"
+#include "wifi_selection.h"
+#include "wifi_deauth_cmd.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -48,8 +51,7 @@
 #define M1_GUI_ROW_SPACING	1
 
 #define WIFI_AP_MAX	64
-#define DEAUTH_MULTI_MAX_TARGETS 4
-#define DEAUTH_MULTI_TARGET_BYTES 14
+/* DEAUTH_MULTI_MAX_TARGETS and DEAUTH_MULTI_TARGET_BYTES are defined in wifi_deauth_cmd.h */
 #define WIFI_JOIN_PASS_MAX 63
 
 //************************** S T R U C T U R E S *******************************
@@ -86,8 +88,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid);
 static uint16_t wifi_ap_list_print(bool up_dir);
 static void wifi_ap_list_free(void);
 static void wifi_draw_ap_info(void);
-static uint16_t wifi_selected_ap_count(void);
-static uint16_t wifi_selected_sta_count(void);
+/* wifi_selected_ap_count() and wifi_selected_sta_count() provided by wifi_selection.h */
 static bool wifi_join_choose_password(char *password, size_t password_len);
 static void wifi_connect_selected_ap(void);
 static void ensure_esp32_ready(void);
@@ -874,17 +875,9 @@ void wifi_signal_monitor(void)
 	}
 }
 
-typedef struct {
-	uint8_t  mac[6];
-	int8_t   rssi;
-	uint8_t  channel;
-	uint8_t  bssid[6];
-	bool     selected;
-	char     ssid[33];
-	char     mac_str[18];
-} wifi_sta_t;
+/* wifi_sta_t is defined in wifi_sta_record.h (extracted pure-logic module). */
 
-#define STA_MAX 64
+/* WIFI_STA_MAX is defined in wifi_sta_record.h */
 
 static wifi_sta_t *sta_list_data = NULL;
 static uint16_t sta_total = 0;
@@ -1214,8 +1207,8 @@ static uint16_t sta_do_scan(void)
 	sta_total = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
 	if (sta_total == 0)
 		return 0;
-	if (sta_total > STA_MAX)
-		sta_total = STA_MAX;
+	if (sta_total > WIFI_STA_MAX)
+		sta_total = WIFI_STA_MAX;
 
 	sta_list_data = (wifi_sta_t *)malloc(sta_total * sizeof(wifi_sta_t));
 	if (!sta_list_data) { sta_total = 0; return 0; }
@@ -1851,72 +1844,8 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 
 /* wifi_mac_is_nonzero() is provided by wifi_ap_record.h */
 
-static uint8_t wifi_deauth_add_target(m1_cmd_t *cmd, uint8_t count, uint8_t mode,
-	uint8_t channel, const uint8_t bssid[6], const uint8_t sta[6])
-{
-	uint8_t off;
-
-	if (count >= DEAUTH_MULTI_MAX_TARGETS || !bssid || !wifi_mac_is_nonzero(bssid) || channel == 0)
-	{
-		return count;
-	}
-
-	off = 1 + count * DEAUTH_MULTI_TARGET_BYTES;
-	cmd->payload[off] = mode;
-	cmd->payload[off + 1] = channel;
-	memcpy(&cmd->payload[off + 2], bssid, 6);
-	if (sta)
-	{
-		memcpy(&cmd->payload[off + 8], sta, 6);
-	}
-
-	count++;
-	cmd->payload[0] = count;
-	cmd->payload_len = 1 + count * DEAUTH_MULTI_TARGET_BYTES;
-	return count;
-}
-
-static uint8_t wifi_build_selected_deauth_cmd(m1_cmd_t *cmd, uint8_t *ap_targets,
-	uint8_t *sta_targets, uint16_t *selected_total)
-{
-	uint8_t count = 0;
-	uint8_t ap_count_used = 0;
-	uint8_t sta_count_used = 0;
-
-	memset(cmd, 0, sizeof(*cmd));
-	cmd->magic = M1_CMD_MAGIC;
-	cmd->cmd_id = CMD_DEAUTH_MULTI;
-	cmd->payload_len = 1;
-
-	if (ap_list)
-	{
-		for (uint16_t i = 0; i < ap_count && count < DEAUTH_MULTI_MAX_TARGETS; i++)
-		{
-			if (!ap_list[i].selected) continue;
-			uint8_t before = count;
-			count = wifi_deauth_add_target(cmd, count, 0, ap_list[i].channel,
-				ap_list[i].bssid, NULL);
-			if (count != before) ap_count_used++;
-		}
-	}
-
-	if (sta_list_data)
-	{
-		for (uint16_t i = 0; i < sta_total && count < DEAUTH_MULTI_MAX_TARGETS; i++)
-		{
-			if (!sta_list_data[i].selected) continue;
-			uint8_t before = count;
-			count = wifi_deauth_add_target(cmd, count, 1, sta_list_data[i].channel,
-				sta_list_data[i].bssid, sta_list_data[i].mac);
-			if (count != before) sta_count_used++;
-		}
-	}
-
-	if (ap_targets) *ap_targets = ap_count_used;
-	if (sta_targets) *sta_targets = sta_count_used;
-	if (selected_total) *selected_total = wifi_selected_ap_count() + wifi_selected_sta_count();
-	return count;
-}
+/* wifi_deauth_add_target() and wifi_build_selected_deauth_cmd() are provided
+ * by wifi_deauth_cmd.h (extracted pure-logic module). */
 
 static void wifi_deauth_selected_run(void)
 {
@@ -1933,7 +1862,8 @@ static void wifi_deauth_selected_run(void)
 	char ln[26];
 	uint32_t start_tick;
 
-	target_count = wifi_build_selected_deauth_cmd(&cmd, &ap_targets, &sta_targets, &selected_total);
+	target_count = wifi_build_selected_deauth_cmd(&cmd, ap_list, ap_count,
+		sta_list_data, sta_total, &ap_targets, &sta_targets, &selected_total);
 	if (target_count == 0)
 	{
 		wifi_show_message("Deauth", "No usable targets", "Need BSSID/channel");
@@ -2000,7 +1930,7 @@ void wifi_attack_deauth(void)
 
 	ensure_esp32_ready();
 
-	if (wifi_selected_ap_count() > 0 || wifi_selected_sta_count() > 0)
+	if (wifi_selected_ap_count(ap_list, ap_count) > 0 || wifi_selected_sta_count(sta_list_data, sta_total) > 0)
 	{
 		wifi_deauth_selected_run();
 		return;
@@ -2695,26 +2625,8 @@ void wifi_station_wardrive(void)
 /* wifi_bssid_parse() is provided by wifi_ap_record.h (extracted pure-logic
  * module); formerly this was the local static wifi_bssid_parse(). */
 
-static uint16_t wifi_selected_ap_count(void)
-{
-	uint16_t count = 0;
-	for (uint16_t i = 0; i < ap_count; i++)
-	{
-		if (ap_list[i].selected) count++;
-	}
-	return count;
-}
-
-static uint16_t wifi_selected_sta_count(void)
-{
-	uint16_t count = 0;
-	if (!sta_list_data) return 0;
-	for (uint16_t i = 0; i < sta_total; i++)
-	{
-		if (sta_list_data[i].selected) count++;
-	}
-	return count;
-}
+/* wifi_selected_ap_count() and wifi_selected_sta_count() are provided by
+ * wifi_selection.h (extracted pure-logic module). */
 
 static void wifi_draw_ap_select(void)
 {
@@ -2744,7 +2656,7 @@ static void wifi_draw_ap_select(void)
 	snprintf(ln, sizeof(ln), "CH:%d RSSI:%ddBm",
 		ap_list[ap_view_idx].channel, ap_list[ap_view_idx].rssi);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count());
+	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count(ap_list, ap_count));
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
@@ -2779,7 +2691,7 @@ static void wifi_draw_sta_select(void)
 	snprintf(ln, sizeof(ln), "AP:%02X:%02X:%02X:%02X:%02X:%02X",
 		b[0], b[1], b[2], b[3], b[4], b[5]);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count());
+	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count(sta_list_data, sta_total));
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
@@ -4230,7 +4142,7 @@ void wifi_attack_ap_clone(void)
 		}
 	}
 
-	selected_only = (wifi_selected_ap_count() > 0);
+	selected_only = (wifi_selected_ap_count(ap_list, ap_count) > 0);
 	for (uint16_t i = 0; i < ap_count && cloned < 32; i++)
 	{
 		if (selected_only && !ap_list[i].selected) continue;

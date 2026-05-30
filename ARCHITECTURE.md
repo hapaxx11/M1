@@ -128,6 +128,16 @@ compilation units** with clean interfaces.
   conversion; provides pollable expiry check replacing blocking HAL_Delay pattern
   (Phase A).  Zero HAL/RTOS/display deps; 17 host tests in
   `tests/test_wifi_status_msg.c`.
+- `m1_csrc/wifi_sta_record.h` — `wifi_sta_t` struct typedef (station/client entry
+  from promiscuous STA scan) promoted from file-local in `m1_wifi.c` to shared header
+  (Phase A).  Header-only; no HAL/RTOS deps.
+- `m1_csrc/wifi_selection.c/h` — parameterized AP/STA selection counters
+  (`wifi_selected_ap_count`, `wifi_selected_sta_count`); extracted from `m1_wifi.c`
+  (Phase A).  Zero HAL/RTOS deps; 18 host tests in `tests/test_wifi_selection.c`.
+- `m1_csrc/wifi_deauth_cmd.c/h` — deauth multi-target command builder
+  (`wifi_deauth_add_target`, `wifi_build_selected_deauth_cmd`); extracted from
+  `m1_wifi.c` (Phase A).  Zero HAL/RTOS deps; 19 host tests in
+  `tests/test_wifi_deauth_cmd.c`.
 - `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup, NFC-A SAK/ATQA
   type classifier, UID hex formatter, UID arithmetic step; extracted from `m1_nfc.c`
   (Phase B, firmware-wide Momentum-parity programme).  Zero HAL/RTOS/display deps;

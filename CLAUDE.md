@@ -2134,7 +2134,7 @@ NULL safety, truncation safety).
 
 ### Phase A — WiFi async conversion + pure-logic extraction
 
-**Status: In progress** (AP record + MAC utils + file utils + status msg model extracted; async conversion pending)
+**Status: In progress** (AP record + MAC utils + file utils + status msg model + STA record + selection counters + deauth cmd builder extracted; async conversion pending)
 
 **Completed:**
 - `m1_csrc/wifi_ap_record.c/h` — binary ESP32 payload parser (`wifi_ap_record_parse_one`),
@@ -2148,8 +2148,17 @@ NULL safety, truncation safety).
   (`wifi_status_msg_set/clear/active/expired`); models the blocking
   "show message + HAL_Delay(N)" pattern as pollable data for async scene ticks;
   zero HAL/RTOS deps; 17 host tests.
-- `m1_wifi.c` updated: 3 static functions removed (MAC utils), 3 static functions
-  removed (file extension checkers), call sites updated to use extracted modules.
+- `m1_csrc/wifi_sta_record.h` — `wifi_sta_t` typedef promoted from file-local in
+  `m1_wifi.c` to shared header; enables cross-module use of the STA struct without
+  HAL/RTOS dependencies.  Also exports `WIFI_STA_MAX`.
+- `m1_csrc/wifi_selection.c/h` — parameterized AP/STA selection counters
+  (`wifi_selected_ap_count(list, count)`, `wifi_selected_sta_count(list, count)`);
+  2 static functions removed from `m1_wifi.c`; 5 call sites updated; zero HAL/RTOS deps;
+  18 host tests.
+- `m1_csrc/wifi_deauth_cmd.c/h` — pure-logic deauth multi-target command builder
+  (`wifi_deauth_add_target`, `wifi_build_selected_deauth_cmd`); `DEAUTH_MULTI_MAX_TARGETS`
+  and `DEAUTH_MULTI_TARGET_BYTES` moved here from `m1_wifi.c`; 2 static functions removed;
+  1 call site updated to pass arrays; zero HAL/RTOS deps; 19 host tests.
 
 **Remaining (blocked on scope — async conversion is a major state-machine rewrite):**
 
@@ -2164,7 +2173,6 @@ UI/input/battery/LED refresh.  This violates the documented
 | Convert `CMD_WIFI_JOIN` round-trips into async event flows | Requires SiN360 ESP32 firmware handshake protocol review |
 | Convert 1× scan countdown loop (`HAL_Delay(1000)`) into tick-based progress | Needs scan-progress event from ESP32 |
 | Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | Should follow async conversion so each split file is already clean |
-| Extract AP-list selection counting, deauth cmd builder → parameterised pure-logic units | Depends on `wifi_sta_t` typedef promotion to header |
 
 **Do not add new `HAL_Delay` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**
 
