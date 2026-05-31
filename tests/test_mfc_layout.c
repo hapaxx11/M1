@@ -216,6 +216,113 @@ void test_uid4_null_input(void)
 }
 
 /* =========================================================================
+ * mfc_parse_key_line
+ * =========================================================================*/
+
+void test_key_line_all_ff(void)
+{
+    uint8_t key[MFC_KEY_BYTES] = {0};
+    TEST_ASSERT_TRUE(mfc_parse_key_line("FFFFFFFFFFFF", key));
+    for (int i = 0; i < MFC_KEY_BYTES; i++)
+        TEST_ASSERT_EQUAL_HEX8(0xFF, key[i]);
+}
+
+void test_key_line_all_00(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xFF, sizeof(key));
+    TEST_ASSERT_TRUE(mfc_parse_key_line("000000000000", key));
+    for (int i = 0; i < MFC_KEY_BYTES; i++)
+        TEST_ASSERT_EQUAL_HEX8(0x00, key[i]);
+}
+
+void test_key_line_mixed_case(void)
+{
+    uint8_t key[MFC_KEY_BYTES] = {0};
+    TEST_ASSERT_TRUE(mfc_parse_key_line("a1B2c3D4e5F6", key));
+    TEST_ASSERT_EQUAL_HEX8(0xA1, key[0]);
+    TEST_ASSERT_EQUAL_HEX8(0xB2, key[1]);
+    TEST_ASSERT_EQUAL_HEX8(0xC3, key[2]);
+    TEST_ASSERT_EQUAL_HEX8(0xD4, key[3]);
+    TEST_ASSERT_EQUAL_HEX8(0xE5, key[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xF6, key[5]);
+}
+
+void test_key_line_leading_whitespace(void)
+{
+    uint8_t key[MFC_KEY_BYTES] = {0};
+    TEST_ASSERT_TRUE(mfc_parse_key_line("  A0B1C2D3E4F5", key));
+    TEST_ASSERT_EQUAL_HEX8(0xA0, key[0]);
+    TEST_ASSERT_EQUAL_HEX8(0xF5, key[5]);
+}
+
+void test_key_line_tab_whitespace(void)
+{
+    uint8_t key[MFC_KEY_BYTES] = {0};
+    TEST_ASSERT_TRUE(mfc_parse_key_line("\t112233445566", key));
+    TEST_ASSERT_EQUAL_HEX8(0x11, key[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x66, key[5]);
+}
+
+void test_key_line_comment_rejected(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xAA, sizeof(key));
+    TEST_ASSERT_FALSE(mfc_parse_key_line("# FFFFFFFFFFFF", key));
+    /* key_out must be unchanged on failure */
+    TEST_ASSERT_EQUAL_HEX8(0xAA, key[0]);
+}
+
+void test_key_line_empty_rejected(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xBB, sizeof(key));
+    TEST_ASSERT_FALSE(mfc_parse_key_line("", key));
+}
+
+void test_key_line_whitespace_only_rejected(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xCC, sizeof(key));
+    TEST_ASSERT_FALSE(mfc_parse_key_line("   \t  ", key));
+}
+
+void test_key_line_invalid_char_rejected(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xDD, sizeof(key));
+    TEST_ASSERT_FALSE(mfc_parse_key_line("GFFFFFFFFFFF", key));
+}
+
+void test_key_line_too_short_rejected(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xEE, sizeof(key));
+    TEST_ASSERT_FALSE(mfc_parse_key_line("FFFFFFFFFF", key)); /* 10 chars, need 12 */
+}
+
+void test_key_line_null_line_rejected(void)
+{
+    uint8_t key[MFC_KEY_BYTES];
+    memset(key, 0xFF, sizeof(key));
+    TEST_ASSERT_FALSE(mfc_parse_key_line(NULL, key));
+}
+
+void test_key_line_null_out_rejected(void)
+{
+    TEST_ASSERT_FALSE(mfc_parse_key_line("FFFFFFFFFFFF", NULL));
+}
+
+void test_key_line_with_crlf(void)
+{
+    uint8_t key[MFC_KEY_BYTES] = {0};
+    /* Key followed by CR+LF (as in a Windows-style dict file) */
+    TEST_ASSERT_TRUE(mfc_parse_key_line("A0A1A2A3A4A5\r\n", key));
+    TEST_ASSERT_EQUAL_HEX8(0xA0, key[0]);
+    TEST_ASSERT_EQUAL_HEX8(0xA5, key[5]);
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 
@@ -257,6 +364,21 @@ int main(void)
     RUN_TEST(test_uid4_from_10byte);
     RUN_TEST(test_uid4_short_nfcid);
     RUN_TEST(test_uid4_null_input);
+
+    /* mfc_parse_key_line */
+    RUN_TEST(test_key_line_all_ff);
+    RUN_TEST(test_key_line_all_00);
+    RUN_TEST(test_key_line_mixed_case);
+    RUN_TEST(test_key_line_leading_whitespace);
+    RUN_TEST(test_key_line_tab_whitespace);
+    RUN_TEST(test_key_line_comment_rejected);
+    RUN_TEST(test_key_line_empty_rejected);
+    RUN_TEST(test_key_line_whitespace_only_rejected);
+    RUN_TEST(test_key_line_invalid_char_rejected);
+    RUN_TEST(test_key_line_too_short_rejected);
+    RUN_TEST(test_key_line_null_line_rejected);
+    RUN_TEST(test_key_line_null_out_rejected);
+    RUN_TEST(test_key_line_with_crlf);
 
     return UNITY_END();
 }

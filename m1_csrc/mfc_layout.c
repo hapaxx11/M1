@@ -97,3 +97,41 @@ void mfc_uid4_from_nfcid(const uint8_t *nfcid, uint8_t nfcid_len,
         if (nfcid_len > 0) memcpy(uid4_out, nfcid, nfcid_len);
     }
 }
+
+/* =========================================================================
+ * mfc_parse_key_line  (extracted from mfc_key_iter_next in nfc_poller.c)
+ * =========================================================================*/
+
+static int s_hex_nibble(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    return -1;
+}
+
+bool mfc_parse_key_line(const char *line, uint8_t key_out[MFC_KEY_BYTES])
+{
+    if (!line || !key_out) return false;
+
+    const char *p = line;
+
+    /* Skip leading whitespace */
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+
+    /* Empty line or comment */
+    if (*p == '\0' || *p == '#') return false;
+
+    /* Parse exactly MFC_KEY_BYTES * 2 = 12 hex digits */
+    uint8_t key[MFC_KEY_BYTES];
+    for (int i = 0; i < MFC_KEY_BYTES; i++) {
+        int hi = s_hex_nibble(*p++);
+        if (hi < 0) return false;
+        int lo = s_hex_nibble(*p++);
+        if (lo < 0) return false;
+        key[i] = (uint8_t)((hi << 4) | lo);
+    }
+
+    memcpy(key_out, key, MFC_KEY_BYTES);
+    return true;
+}

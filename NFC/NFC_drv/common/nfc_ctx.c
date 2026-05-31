@@ -10,6 +10,7 @@
 #include <stdio.h>  
 #include "nfc_ctx.h"
 #include "nfc_classify.h"
+#include "nfc_card_info.h"
 #include "rfal_nfc.h"
 #include "legacy/nfc_driver.h"   // Use Emu_SetNfcA, Emu_Clear
 
@@ -75,32 +76,6 @@ static const char* family_to_title(uint8_t family)
     if (family == M1NFC_FAM_ICLASS)     return "PicoPass";
 #endif
     return "NFC";
-}
-
-/*============================================================================*/
-/**
- * @brief make_uid_text - Convert UID bytes to hex text string
- * 
- * Converts UID byte array to space-separated hex string (e.g., "AA BB CC DD").
- * 
- * @param[out] out Output buffer for hex string
- * @param[in] outsz Size of output buffer
- * @param[in] uid UID byte array
- * @param[in] uid_len UID length in bytes
- * @retval None
- */
-/*============================================================================*/
-static void make_uid_text(char* out, size_t outsz, const uint8_t* uid, uint8_t uid_len)
-{
-    static const char H[] = "0123456789ABCDEF";
-    size_t p = 0;
-    for (uint8_t i = 0; i < uid_len && (p + 3) <= outsz; i++) {
-        uint8_t b = uid[i];
-        out[p++] = H[(b >> 4) & 0xF];
-        out[p++] = H[b & 0xF];
-        out[p++] = (i + 1 < uid_len) ? ' ' : '\0';
-    }
-    if (p < outsz) out[p] = '\0';
 }
 
 /* --------- API functions --------- */
@@ -258,8 +233,8 @@ void nfc_ctx_refresh_ui(void)
     strncpy(g_nfc_ctx.ui.title_text, t, sizeof(g_nfc_ctx.ui.title_text)-1);
     g_nfc_ctx.ui.title_text[sizeof(g_nfc_ctx.ui.title_text)-1] = '\0';
 
-    make_uid_text(g_nfc_ctx.ui.uid_text, sizeof(g_nfc_ctx.ui.uid_text),
-                  g_nfc_ctx.head.uid, g_nfc_ctx.head.uid_len);
+    nfc_uid_fmt(g_nfc_ctx.head.uid, g_nfc_ctx.head.uid_len,
+                g_nfc_ctx.ui.uid_text, sizeof(g_nfc_ctx.ui.uid_text));
     nfc_ctx_unlock();
 }
 

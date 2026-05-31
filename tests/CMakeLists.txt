@@ -1605,6 +1605,26 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME nfc_classify COMMAND test_nfc_classify)
 
+# ------------------------------------------------------------------
+# Module under test: nfc_ntag (NTAG / Ultralight pure-logic helpers)
+#
+# Pure-logic extraction from nfc_poller.c with zero HAL/RTOS/FatFS deps:
+#   ntag_page_count_from_size()   — GET_VERSION size byte → page count
+#   ntag_generate_amiibo_pwd()    — Amiibo XOR-derived PWD + PACK
+# ------------------------------------------------------------------
+add_executable(test_nfc_ntag
+    test_nfc_ntag.c
+    ${M1_ROOT}/m1_csrc/nfc_ntag.c
+)
+target_include_directories(test_nfc_ntag PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ntag PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ntag PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ntag COMMAND test_nfc_ntag)
+
 
 add_executable(test_file_util
     test_file_util.c

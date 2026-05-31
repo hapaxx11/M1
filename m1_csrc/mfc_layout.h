@@ -13,6 +13,7 @@
  *   - mfc_sector_first_block()    — sector index → first block number
  *   - mfc_sector_block_count()    — sector index → blocks-in-sector
  *   - mfc_uid4_from_nfcid()       — extract 4-byte UID for Crypto-1 auth
+ *   - mfc_parse_key_line()        — parse one key-dictionary hex line → 6 bytes
  *
  * M1 Project
  */
@@ -22,6 +23,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,6 +88,28 @@ uint16_t mfc_sector_block_count(uint16_t sector, uint16_t total_sectors);
  */
 void mfc_uid4_from_nfcid(const uint8_t *nfcid, uint8_t nfcid_len,
                           uint8_t uid4_out[4]);
+
+/* =========================================================================
+ * Key dictionary
+ * =========================================================================*/
+
+/** Length of a Mifare Classic key in bytes. */
+#define MFC_KEY_BYTES  6
+
+/**
+ * Parse one line from a Mifare Classic key dictionary file.
+ *
+ * Accepts lines in the format "FFFFFFFFFFFFFF" (12 uppercase or lowercase
+ * hex digits representing 6 bytes).  Leading ASCII whitespace is skipped.
+ * Lines that are empty or begin with '#' are silently rejected (return false)
+ * to allow the caller to skip them and read the next line.
+ *
+ * @param line     NUL-terminated line string (may have trailing CR/LF).
+ * @param key_out  Output buffer — receives exactly MFC_KEY_BYTES (6) bytes
+ *                 on success; unchanged on failure.
+ * @return         true if a valid 6-byte key was parsed, false otherwise.
+ */
+bool mfc_parse_key_line(const char *line, uint8_t key_out[MFC_KEY_BYTES]);
 
 #ifdef __cplusplus
 }
