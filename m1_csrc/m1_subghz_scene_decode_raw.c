@@ -80,7 +80,6 @@ static bool     s_save_failed;  /**< Brief "Save failed" overlay flag */
  * directly from the decode detail view without an extra screen. */
 static bool     s_tx_active;    /**< True while async TX is in flight */
 static uint8_t  s_tx_anim;     /**< Animation phase counter (0-3) */
-static uint8_t  s_tx_bursts;   /**< Burst counter */
 static char     s_tx_tmp[80];  /**< Temp .sgh path to unlink after TX */
 
 /* Static to avoid a 16 KB stack allocation (raw_data[8192] lives inside the
@@ -208,7 +207,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         {
             case SubGhzEventTxComplete:
             {
-                s_tx_bursts++;
                 sub_ghz_replay_async_status_t st =
                     sub_ghz_replay_continue_async(false);
                 if (st == SUBGHZ_REPLAY_ASYNC_DONE ||
@@ -298,7 +296,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
                 s_tx_active = true;
                 s_tx_anim   = 0;
-                s_tx_bursts = 0;
                 subghz_scene_set_tick_period(app, 150U);
                 app->need_redraw = true;
             }
@@ -406,6 +403,7 @@ static void scene_on_exit(SubGhzApp *app)
     (void)app;
     inline_tx_teardown();
     unlink_tmp();
+    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
 }
 
 /*============================================================================*/
