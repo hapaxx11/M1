@@ -319,7 +319,7 @@ void test_two_different_packets_decode(void)
 
 void test_duplicate_protocol_key_deduplicated(void)
 {
-    /* Two identical packets — should only get one result */
+    /* Two identical packets — should only get one result, with repeat_count=2 */
     int16_t raw[200];
     uint16_t len = build_raw_data(raw, 200, 2, 48, 300, 2000);
 
@@ -332,6 +332,8 @@ void test_duplicate_protocol_key_deduplicated(void)
     TEST_ASSERT_EQUAL_UINT16(3, results[0].protocol);
     /* Callback was invoked twice (once per packet) */
     TEST_ASSERT_EQUAL_UINT8(2, ctx.call_count);
+    /* repeat_count tracks the number of times this protocol+key was seen */
+    TEST_ASSERT_EQUAL_UINT8(2, results[0].repeat_count);
 }
 
 /*============================================================================*/
@@ -590,6 +592,69 @@ void test_zero_max_results(void)
 }
 
 /*============================================================================*/
+/* Tests: repeat_count tracking                                               */
+/*============================================================================*/
+
+void test_single_packet_repeat_count_is_one(void)
+{
+    /* A single packet should have repeat_count == 1 */
+    int16_t raw[100];
+    uint16_t len = build_raw_data(raw, 100, 1, 48, 300, 2000);
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 5, 0xABCD, 40);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, len, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT8(1, results[0].repeat_count);
+}
+
+void test_three_identical_packets_repeat_count_is_three(void)
+{
+    /* Three identical packets → repeat_count == 3 */
+    int16_t raw[400];
+    uint16_t len = build_raw_data(raw, 400, 3, 48, 300, 2000);
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 3, 0xDEAD, 40);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, len, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_UINT8(3, results[0].repeat_count);
+    /* Callback invoked three times (once per packet) */
+    TEST_ASSERT_EQUAL_UINT8(3, ctx.call_count);
+}
+
+void test_two_different_protocols_each_get_repeat_count_one(void)
+{
+    /* Two different protocols each seen once → both have repeat_count == 1 */
+    int16_t raw[200];
+    uint16_t idx = 0;
+    for (int i = 0; i < 48; i++)
+        raw[idx++] = (int16_t)((i % 2 == 0) ? 300 : -300);
+    raw[idx++] = 2000;
+    for (int i = 0; i < 48; i++)
+        raw[idx++] = (int16_t)((i % 2 == 0) ? 400 : -400);
+    raw[idx++] = 3000;
+
+    SubGhzRawDecodeResult results[4];
+    MultiMockCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.entries[0] = (MockProtoEntry){.protocol = 1, .key = 0x111, .min_pulses = 40};
+    ctx.entries[1] = (MockProtoEntry){.protocol = 2, .key = 0x222, .min_pulses = 40};
+    ctx.entry_count = 2;
+
+    uint8_t count = subghz_decode_raw_offline(
+        raw, idx, 433920000, results, 4, multi_mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT8(1, results[0].repeat_count);
+    TEST_ASSERT_EQUAL_UINT8(1, results[1].repeat_count);
+}
+
+/*============================================================================*/
 /* Main                                                                       */
 /*============================================================================*/
 
@@ -644,6 +709,11 @@ int main(void)
 
     /* Gap inclusion */
     RUN_TEST(test_gap_pulse_included_in_count);
+
+    /* repeat_count tracking */
+    RUN_TEST(test_single_packet_repeat_count_is_one);
+    RUN_TEST(test_three_identical_packets_repeat_count_is_three);
+    RUN_TEST(test_two_different_protocols_each_get_repeat_count_one);
 
     return UNITY_END();
 }

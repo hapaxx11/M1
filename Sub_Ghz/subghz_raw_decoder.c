@@ -23,18 +23,19 @@
 /**
  * Check if a result is a duplicate of an already-recorded result.
  * Deduplication key: protocol index + key value.
+ * Returns the index of the duplicate, or -1 if not found.
  */
-static bool is_duplicate(const SubGhzRawDecodeResult *results,
-                          uint8_t count,
-                          const SubGhzRawDecodeResult *candidate)
+static int find_duplicate(const SubGhzRawDecodeResult *results,
+                           uint8_t count,
+                           const SubGhzRawDecodeResult *candidate)
 {
     for (uint8_t i = 0; i < count; i++)
     {
         if (results[i].protocol == candidate->protocol &&
             results[i].key == candidate->key)
-            return true;
+            return (int)i;
     }
-    return false;
+    return -1;
 }
 
 /**
@@ -67,9 +68,19 @@ static bool try_packet(const uint16_t *pulse_buf,
     result.frequency = frequency;
     result.rssi = 0;   /* RSSI is meaningless for offline decode */
 
-    if (is_duplicate(results, *decode_count, &result))
+    int dup_idx = find_duplicate(results, *decode_count, &result);
+    if (dup_idx >= 0)
+    {
+        /* Same protocol+key seen again — bump confidence counter.
+         * Real remotes repeat their transmission several times, so a
+         * high repeat_count distinguishes genuine matches from timing
+         * coincidences that only fire once. */
+        if (results[dup_idx].repeat_count < 255)
+            results[dup_idx].repeat_count++;
         return false;
+    }
 
+    result.repeat_count = 1;
     results[(*decode_count)++] = result;
     return true;
 }
