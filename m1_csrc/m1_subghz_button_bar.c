@@ -116,7 +116,7 @@ void subghz_status_bar_draw(
 {
     /* Black text on white background — matches Momentum/Flipper header style */
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 
     /* Left side: frequency or "Hopping" */
     if (hopping)

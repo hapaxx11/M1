@@ -18,9 +18,11 @@
  *     - "No protocols decoded" message when the engine returned 0 matches.
  *
  *   Detail view (OK from list):
- *     - Protocol name, Key + bit length, TE, Frequency, optional SN/RC.
- *     - OK = Send (write temp .sub key file → push Transmitter scene).
- *     - DOWN = Save (prompt filename → write persistent .sub key file).
+ *     - Protocol name, Key + bit length, SN/Btn (when available),
+ *       TE, Frequency.
+ *     - OK = Send (inline async TX — no Transmitter scene push).
+ *     - DOWN = Save (prompt filename → write persistent .sub key file,
+ *                     then push to Saved file browser).
  *     - BACK returns to the list view; second BACK pops the scene.
  *
  * The scene loads the file eagerly on entry into a file-scope
@@ -42,6 +44,7 @@
 #include "ff.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_lp5814.h"
 #include "m1_scene.h"
 #include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
@@ -73,6 +76,12 @@ static uint8_t  decode_scroll;
 static bool     decode_detail;
 static bool     s_save_failed;  /**< Brief "Save failed" overlay flag */
 
+/* Inline TX state — replaces the Transmitter scene push so Send happens
+ * directly from the decode detail view without an extra screen. */
+static bool     s_tx_active;    /**< True while async TX is in flight */
+static uint8_t  s_tx_anim;     /**< Animation phase counter (0-3) */
+static char     s_tx_tmp[80];  /**< Temp .sgh path to unlink after TX */
+
 /* Static to avoid a 16 KB stack allocation (raw_data[8192] lives inside the
  * struct).  This scene only runs from the main RTOS task while the scene is
  * active; non-reentrancy of a file-scope static is safe. */
@@ -87,6 +96,21 @@ static void unlink_tmp(void)
     f_unlink(DECODE_TMP_PATH);
 }
 
+/** Tear down any in-flight inline TX and return to the decode detail view. */
+static void inline_tx_teardown(void)
+{
+    if (!s_tx_active)
+        return;
+    if (sub_ghz_replay_async_is_active())
+        sub_ghz_replay_abort();
+    if (s_tx_tmp[0] != '\0')
+    {
+        (void)f_unlink(s_tx_tmp);
+        s_tx_tmp[0] = '\0';
+    }
+    s_tx_active = false;
+}
+
 /** Load the file referenced by @p app->raw_filepath and run offline decode.
  *  Results are stored in @ref decode_results / @ref decode_count.  Failures
  *  leave @ref decode_count == 0 — the draw path will render the "No
@@ -98,6 +122,8 @@ static void load_and_decode(const SubGhzApp *app)
     decode_scroll = 0;
     decode_detail = false;
     s_save_failed = false;
+    s_tx_active   = false;
+    s_tx_tmp[0]   = '\0';
 
     if (app->raw_filepath[0] == '\0')
         return;
@@ -119,6 +145,38 @@ static void load_and_decode(const SubGhzApp *app)
         s_sig.raw_data, s_sig.raw_count, s_sig.frequency,
         decode_results, DECODE_RAW_MAX,
         subghz_registry_decode_try_fn, NULL);
+
+    /* Filter out low-confidence results — momentum parity.
+     * Real remote transmissions repeat the same packet multiple times,
+     * so a genuine protocol match will have repeat_count >= 2.  When
+     * we have confirmed results (repeat_count >= 2), discard any
+     * single-hit results which are likely false positives from timing
+     * coincidences across similar OOK protocol families. */
+    {
+        bool has_confirmed = false;
+        for (uint8_t i = 0; i < decode_count; i++)
+        {
+            if (decode_results[i].repeat_count >= 2)
+            {
+                has_confirmed = true;
+                break;
+            }
+        }
+        if (has_confirmed)
+        {
+            uint8_t dst = 0;
+            for (uint8_t src = 0; src < decode_count; src++)
+            {
+                if (decode_results[src].repeat_count >= 2)
+                {
+                    if (dst != src)
+                        decode_results[dst] = decode_results[src];
+                    dst++;
+                }
+            }
+            decode_count = dst;
+        }
+    }
 }
 
 /*============================================================================*/
@@ -127,16 +185,6 @@ static void load_and_decode(const SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    /* Returning from a child scene (Transmitter or SaveSuccess):
-     * unlink the temp .sub written for Transmitter (no-op if Save was used),
-     * then restore the decode view without re-running the decoder. */
-    if (app->resume_from_child)
-    {
-        app->resume_from_child = false;
-        unlink_tmp();
-        app->need_redraw = true;
-        return;
-    }
     load_and_decode(app);
     app->need_redraw = true;
 }
@@ -144,12 +192,44 @@ static void scene_on_enter(SubGhzApp *app)
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
     /* Any keypress dismisses the "Save failed" overlay.  The flag is only
-     * set while in the detail view, so clearing it is always safe here. */
+     * set while in the detail view, so clearing is safe. */
     if (s_save_failed)
     {
         s_save_failed = false;
         app->need_redraw = true;
         return true;
+    }
+
+    /* ---- Inline TX event handling ---- */
+    if (s_tx_active)
+    {
+        switch (event)
+        {
+            case SubGhzEventTxComplete:
+            {
+                sub_ghz_replay_async_status_t st =
+                    sub_ghz_replay_continue_async(false);
+                if (st == SUBGHZ_REPLAY_ASYNC_DONE ||
+                    st == SUBGHZ_REPLAY_ASYNC_ERROR)
+                {
+                    inline_tx_teardown();
+                    subghz_scene_set_tick_period(app, 0);
+                }
+                app->need_redraw = true;
+                return true;
+            }
+            case SubGhzEventBack:
+                inline_tx_teardown();
+                subghz_scene_set_tick_period(app, 0);
+                app->need_redraw = true;
+                return true;
+            case SubGhzEventTick:
+                s_tx_anim = (uint8_t)((s_tx_anim + 1U) & 0x03U);
+                app->need_redraw = true;
+                return true;
+            default:
+                return true;  /* swallow all other events during TX */
+        }
     }
 
     switch (event)
@@ -169,19 +249,16 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         case SubGhzEventOk:
             if (decode_detail && decode_count > 0)
             {
-                /* Send: write a temp .sub key file and push Transmitter */
+                /* Send inline: prepare + start async TX directly from
+                 * this scene — no Transmitter scene push. */
                 const SubGhzRawDecodeResult *d = &decode_results[decode_sel];
                 if (!subghz_protocol_is_static_ext(d->protocol))
                     return true;
 
-                /* Use protocol-specified TE for the saved file when the
-                 * decoder stored the observed average. */
                 uint16_t te = d->te;
                 if (te == 0 && d->protocol < subghz_protocol_registry_count)
                     te = subghz_protocols_list[d->protocol].te_short;
 
-                /* Use the preset from the source RAW file; fall back to the
-                 * most-common OOK preset when the file omitted the field. */
                 const char *preset = (s_sig.preset[0] != '\0')
                                      ? s_sig.preset : "FuriHalSubGhzPresetOok650Async";
 
@@ -191,16 +268,36 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                         d->bit_len, d->key, te))
                     return true;
 
-                strncpy(app->tx_path, DECODE_TMP_PATH, sizeof(app->tx_path) - 1);
-                app->tx_path[sizeof(app->tx_path) - 1] = '\0';
-                app->tx_repeat_count = 5U;
-                app->tx_mode         = 0U;
-                strncpy(app->tx_protocol_name, protocol_text[d->protocol],
-                        sizeof(app->tx_protocol_name) - 1);
-                app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
-                app->tx_autostart      = true;
-                app->resume_from_child = true;
-                subghz_scene_push(app, SubGhzSceneTransmitter);
+                const char *tmp = NULL;
+                uint8_t prep = sub_ghz_replay_prepare_flipper(
+                    DECODE_TMP_PATH, &tmp);
+                if (prep != 0)
+                {
+                    unlink_tmp();
+                    return true;
+                }
+                if (tmp != NULL)
+                {
+                    strncpy(s_tx_tmp, tmp, sizeof(s_tx_tmp) - 1);
+                    s_tx_tmp[sizeof(s_tx_tmp) - 1] = '\0';
+                }
+
+                uint8_t start_ret = sub_ghz_replay_start_async();
+                if (start_ret != 0)
+                {
+                    if (s_tx_tmp[0] != '\0')
+                    {
+                        (void)f_unlink(s_tx_tmp);
+                        s_tx_tmp[0] = '\0';
+                    }
+                    unlink_tmp();
+                    return true;
+                }
+
+                s_tx_active = true;
+                s_tx_anim   = 0;
+                subghz_scene_set_tick_period(app, 150U);
+                app->need_redraw = true;
             }
             else if (!decode_detail && decode_count > 0)
             {
@@ -226,8 +323,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     return true;
                 }
 
-                /* Reject empty names — an empty path segment would cause
-                 * f_open to fail silently and leave the user with no feedback. */
                 if (new_name[0] == '\0')
                 {
                     app->need_redraw = true;
@@ -238,8 +333,6 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 if (te == 0 && d->protocol < subghz_protocol_registry_count)
                     te = subghz_protocols_list[d->protocol].te_short;
 
-                /* Use the preset from the source RAW file; fall back to the
-                 * most-common OOK preset when the file omitted the field. */
                 const char *preset = (s_sig.preset[0] != '\0')
                                      ? s_sig.preset : "FuriHalSubGhzPresetOok650Async";
 
@@ -263,10 +356,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
                 if (saved)
                 {
-                    strncpy(app->file_path, save_path, sizeof(app->file_path) - 1);
-                    app->file_path[sizeof(app->file_path) - 1] = '\0';
-                    app->resume_from_child = true;
-                    subghz_scene_push(app, SubGhzSceneSaveSuccess);
+                    /* Navigate to the Saved file browser so the user
+                     * lands with the newly saved file visible —
+                     * matching Momentum workflow. */
+                    m1_led_fast_blink(LED_BLINK_ON_GREEN,
+                                     LED_FASTBLINK_PWM_H,
+                                     LED_FASTBLINK_ONTIME_H);
+                    subghz_scene_push(app, SubGhzSceneSaved);
                 }
                 else
                 {
@@ -304,13 +400,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
 static void scene_on_exit(SubGhzApp *app)
 {
-    /* When handing off to a child scene (Transmitter / SaveSuccess), the
-     * temp .sub must survive until scene_on_enter reclaims it on return.
-     * resume_from_child is set immediately before the push so it acts as
-     * the "do not unlink" gate here, matching the SetKey pattern. */
-    if (app && app->resume_from_child)
-        return;
+    (void)app;
+    inline_tx_teardown();
     unlink_tmp();
+    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
 }
 
 /*============================================================================*/
@@ -346,6 +439,24 @@ static void draw(SubGhzApp *app)
         /* Detail view — full info for the selected result */
         const SubGhzRawDecodeResult *d = &decode_results[decode_sel];
 
+        if (s_tx_active)
+        {
+            /* Inline TX overlay — "Sending..." with animation dots */
+            static const char *frames[4] = {".  ", ".. ", "...", " .."};
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+            u8g2_DrawStr(&m1_u8g2, 2, 22, protocol_text[d->protocol]);
+            m1_draw_text(&m1_u8g2, 2, 36, 124, "Sending",
+                         TEXT_ALIGN_CENTER);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 2, 46, 124, frames[s_tx_anim & 0x03U],
+                         TEXT_ALIGN_CENTER);
+            subghz_button_bar_draw(arrowleft_8x8, "Stop",
+                                   NULL, NULL,
+                                   NULL, NULL);
+            m1_u8g2_nextpage();
+            return;
+        }
+
         if (s_save_failed)
         {
             /* Brief "Save failed" overlay — any key will dismiss it */
@@ -368,20 +479,42 @@ static void draw(SubGhzApp *app)
                  (uint32_t)d->key, d->bit_len);
         u8g2_DrawStr(&m1_u8g2, 2, 30, line);
 
+        /* Show SN and Btn when available — matching Momentum's richer
+         * decode detail that exposes these fields for protocols that
+         * populate them. */
+        uint8_t info_y = 38;
+        if (d->serial_number != 0 || d->button_id != 0)
+        {
+            if (d->serial_number != 0 && d->button_id != 0)
+                snprintf(line, sizeof(line), "SN: 0x%lX  Btn: %u",
+                         (unsigned long)d->serial_number,
+                         (unsigned)d->button_id);
+            else if (d->serial_number != 0)
+                snprintf(line, sizeof(line), "SN: 0x%lX",
+                         (unsigned long)d->serial_number);
+            else
+                snprintf(line, sizeof(line), "Btn: %u",
+                         (unsigned)d->button_id);
+            u8g2_DrawStr(&m1_u8g2, 2, info_y, line);
+            info_y += 8;
+        }
+
         /* Display TE — use protocol-specified value when available */
+        if (info_y <= 38)
         {
             uint16_t te_display = d->te;
             if (te_display == 0 && d->protocol < subghz_protocol_registry_count)
                 te_display = subghz_protocols_list[d->protocol].te_short;
             snprintf(line, sizeof(line), "TE: %d us", te_display);
-            u8g2_DrawStr(&m1_u8g2, 2, 38, line);
+            u8g2_DrawStr(&m1_u8g2, 2, info_y, line);
+            info_y += 8;
         }
 
         /* Integer arithmetic — embedded nano.specs has no %f support */
         snprintf(line, sizeof(line), "Freq: %lu.%02lu MHz",
                  (unsigned long)(d->frequency / 1000000UL),
                  (unsigned long)((d->frequency % 1000000UL) / 10000UL));
-        u8g2_DrawStr(&m1_u8g2, 2, 46, line);
+        u8g2_DrawStr(&m1_u8g2, 2, info_y, line);
 
         /* Bottom bar — Send (OK) / Save (DOWN) */
         bool can_send = subghz_protocol_is_static_ext(d->protocol);

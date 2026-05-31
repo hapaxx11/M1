@@ -328,7 +328,7 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 #define SUBGHZ_RAW_BOTTOM_Y           48  /* Y of bottom border */
 #define SUBGHZ_RAW_END_SCALE         115  /* X of right border */
 #define SUBGHZ_RAW_THRESHOLD_MIN   (-90.0f) /* Minimum RSSI for display mapping */
-#define SUBGHZ_RAW_RSSI_DIVIDER      2.7f /* Scale factor: dBm → pixels */
+#define SUBGHZ_RAW_RSSI_DIVIDER      1.8f /* Scale factor: dBm → pixels (lower = denser fill) */
 #define SUBGHZ_RAW_SIN_AMPLITUDE      11  /* Amplitude for idle sine animation */
 #define SUBGHZ_RAW_CURSOR_SEG_W        2  /* Dashed cursor segment width (px) */
 #define SUBGHZ_RAW_RSSI_LABEL_Y       40  /* Y for vertical "RSSI" label */
@@ -1009,10 +1009,11 @@ static void subghz_raw_draw_frame(void)
 	u8g2_DrawVLine(&m1_u8g2, SUBGHZ_RAW_END_SCALE, SUBGHZ_RAW_TOP_SCALE,
 	               SUBGHZ_RAW_BOTTOM_Y - SUBGHZ_RAW_TOP_SCALE + 1);
 
-	/* "RSSI" label drawn vertically on right side */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	/* "RSSI" label drawn vertically on right side — small font to match
+	 * Momentum style and avoid overlap during recording. */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	u8g2_SetFontDirection(&m1_u8g2, 3); /* bottom-to-top */
-	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH, SUBGHZ_RAW_RSSI_LABEL_Y, "RSSI");
+	u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 1, SUBGHZ_RAW_RSSI_LABEL_Y, "RSSI");
 	u8g2_SetFontDirection(&m1_u8g2, 0); /* restore left-to-right */
 }
 
