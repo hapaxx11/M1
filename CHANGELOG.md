@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.42] - 2026-05-31
+
+### Changed
+
+- Sub-GHz Read Raw scenes now use the smaller NokiaSmallPlain font for the status bar and RSSI label, matching Momentum style and eliminating text overlap during recording. Waveform graph fills more densely. Decode results filter out single-hit false-positive protocols, keeping only confirmed (repeated) matches. Send from decode detail now transmits inline without pushing a separate Transmitter scene. Save from decode navigates directly to the file browser. Decode detail view shows serial number and button ID when available.
 ## [0.9.1.41] - 2026-05-29
 
 ## [0.9.1.40] - 2026-05-29
