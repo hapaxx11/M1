@@ -142,6 +142,11 @@ compilation units** with clean interfaces.
   type classifier, UID hex formatter, UID arithmetic step; extracted from `m1_nfc.c`
   (Phase B, firmware-wide Momentum-parity programme).  Zero HAL/RTOS/display deps;
   45 host tests in `tests/test_nfc_card_info.c`.
+- `m1_csrc/nfc_ndef_parse.c/h` — NDEF TLV record parser (`ndef_parse_records`); decodes
+  URI records (36 NFC Forum URI RTD prefix codes) and Text records from raw NDEF bytes
+  into human-readable text; extracted from `nfc_tool_parse_ndef_text()` in `m1_nfc.c`
+  (Phase B).  Complement to `nfc_ndef_encode.c/h`.  Zero HAL/RTOS/FatFS deps;
+  22 host tests in `tests/test_nfc_ndef_parse.c`.
 - `m1_csrc/esp32_feature_map.c/h` — ESP32-gated feature-to-capability-bit classifier;
   maps `esp32_feature_id_t` enum values (WiFi scan/attacks, BLE HID/GATT, BT manage,
   802.15.4, etc.) to required `M1_ESP32_CAP_*` bits and UI labels; includes firmware

@@ -2184,12 +2184,20 @@ NULL safety, truncation safety).
 
 ### Phase B — NFC pure-logic extraction
 
-**Status: In progress** (initial extraction landed; deeper parser extraction pending)
+**Status: In progress** (NDEF parse + card info extraction complete; deeper parser extraction blocked by HAL/RTOS)
 
 **Completed:**
 - `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup (`nfc_manufacturer_name`),
   NFC-A SAK/ATQA type classifier (`nfc_sak_type_str`), UID hex formatter (`nfc_uid_fmt`),
   UID arithmetic step (`nfc_uid_step`); zero HAL/RTOS deps; 45 host tests (ASan + UBSan clean).
+- `m1_csrc/nfc_ndef_parse.c/h` — NDEF TLV record parser (`ndef_parse_records`) decoding
+  URI records (36 NFC Forum URI RTD prefix codes) and Text records (UTF-8 with language code
+  skip) from raw NDEF message bytes into newline-separated human-readable text;
+  zero HAL/RTOS/FatFS deps; 22 host tests (ASan + UBSan clean).
+  Complement to `nfc_ndef_encode.c/h` (encode ↔ parse roundtrip tested).
+- `m1_nfc.c` — `nfc_tool_parse_ndef_text()` replaced with 3-line delegate to
+  `ndef_parse_records()`; `nfc_tool_write_url()` inline NDEF TLV building replaced
+  with `ndef_encode_uri()` call (dedup).
 - `m1_nfc.c` updated to call extracted helpers; static inline duplicates removed.
 
 **Remaining (deeper extraction — HAL/RTOS entangled):**
@@ -2206,6 +2214,7 @@ to compile and cannot be cleanly extracted until the RFAL dependency is abstract
 | Convert 25 `vTaskDelay` / 40 `while` hardware loops to async event flows | State-machine redesign needed |
 
 **Do not add new inline card-classification logic to `m1_nfc.c`; use `nfc_card_info.h` instead.**
+**Do not add new inline NDEF parsing or encoding to `m1_nfc.c`; use `nfc_ndef_parse.h` / `nfc_ndef_encode.h` instead.**
 
 ### Phase C — Unified capability-probe module for WiFi / BT / NFC
 

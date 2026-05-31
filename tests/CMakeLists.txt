@@ -1499,6 +1499,28 @@ endif()
 add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
 
 # ------------------------------------------------------------------
+# Module under test: nfc_ndef_parse (NDEF TLV record parser — URI + Text)
+#
+# Pure-logic NDEF message parser extracted from m1_nfc.c with zero
+# HAL/RTOS/FatFS/display deps:
+#   ndef_parse_records()  — raw NDEF bytes → newline-separated text
+# ------------------------------------------------------------------
+add_executable(test_nfc_ndef_parse
+    test_nfc_ndef_parse.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_parse.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_encode.c
+)
+target_include_directories(test_nfc_ndef_parse PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ndef_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ndef_parse PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ndef_parse COMMAND test_nfc_ndef_parse)
+
+# ------------------------------------------------------------------
 # Module under test: nfc_card_info (manufacturer lookup, SAK classifier, UID helpers)
 #
 # Pure-logic functions extracted from m1_nfc.c with zero HAL/RTOS/display deps:

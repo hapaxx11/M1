@@ -1,0 +1,1 @@
+NFC NDEF parser extracted into `nfc_ndef_parse.c/h` — pure-logic NDEF TLV record parser (URI + Text) with zero HAL/RTOS/FatFS dependencies; `nfc_tool_write_url()` deduped to use `ndef_encode_uri()`; 22 host tests.
