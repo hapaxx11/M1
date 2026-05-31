@@ -202,6 +202,34 @@ void test_hex_leading_whitespace(void)
 	TEST_ASSERT_EQUAL_UINT8(0xFF, out[0]);
 }
 
+void test_hex_single_digit(void)
+{
+	/* A lone hex digit parses as a single byte (value of the nibble). */
+	uint8_t out[4] = {0};
+	TEST_ASSERT_EQUAL_UINT8(1, ir_parse_hex_bytes("A", out, 4));
+	TEST_ASSERT_EQUAL_UINT8(0x0A, out[0]);
+}
+
+void test_hex_skips_invalid_chars(void)
+{
+	/* Invalid characters are skipped, not treated as terminators. */
+	uint8_t out[4] = {0};
+	TEST_ASSERT_EQUAL_UINT8(3, ir_parse_hex_bytes("07,00;00", out, 4));
+	TEST_ASSERT_EQUAL_UINT8(0x07, out[0]);
+	TEST_ASSERT_EQUAL_UINT8(0x00, out[1]);
+	TEST_ASSERT_EQUAL_UINT8(0x00, out[2]);
+}
+
+void test_hex_single_digit_then_valid_pair(void)
+{
+	/* Mixed single-digit + invalid char + valid pair, matching the
+	 * forgiving behaviour of the original ff_parse_hex_bytes(). */
+	uint8_t out[4] = {0};
+	TEST_ASSERT_EQUAL_UINT8(2, ir_parse_hex_bytes("0x07", out, 4));
+	TEST_ASSERT_EQUAL_UINT8(0x00, out[0]);
+	TEST_ASSERT_EQUAL_UINT8(0x07, out[1]);
+}
+
 /* ===================================================================
  * ir_cmd_parse() — null / invalid input guards
  * =================================================================== */
@@ -579,6 +607,9 @@ int main(void)
 	RUN_TEST(test_hex_overflow_clamps_to_max_len);
 	RUN_TEST(test_hex_upper_and_lower_case);
 	RUN_TEST(test_hex_leading_whitespace);
+	RUN_TEST(test_hex_single_digit);
+	RUN_TEST(test_hex_skips_invalid_chars);
+	RUN_TEST(test_hex_single_digit_then_valid_pair);
 
 	/* ir_cmd_parse() — null/invalid guards */
 	RUN_TEST(test_parse_null_ops);

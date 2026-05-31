@@ -216,9 +216,19 @@ uint8_t ir_parse_hex_bytes(const char *str, uint8_t *out, uint8_t max_len)
 			out[count++] = (uint8_t)val;
 			p += 2;
 		}
+		else if (isxdigit((unsigned char)p[0]))
+		{
+			/* Single hex digit */
+			unsigned int val = 0;
+			char hex[2] = { p[0], '\0' };
+			val = (unsigned int)strtoul(hex, NULL, 16);
+			out[count++] = (uint8_t)val;
+			p += 1;
+		}
 		else
 		{
-			break;
+			/* Skip invalid character */
+			p++;
 		}
 	}
 
