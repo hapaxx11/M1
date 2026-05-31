@@ -147,6 +147,20 @@ compilation units** with clean interfaces.
   into human-readable text; extracted from `nfc_tool_parse_ndef_text()` in `m1_nfc.c`
   (Phase B).  Complement to `nfc_ndef_encode.c/h`.  Zero HAL/RTOS/FatFS deps;
   22 host tests in `tests/test_nfc_ndef_parse.c`.
+- `m1_csrc/nfc_file_parse.c/h` — Pure-logic NFC file body parser with vtable-based
+  line reader (`nfc_line_reader_t`); provides `nfc_parse_body()` for "Page N:" /
+  "Block N:" dump lines, `nfc_parse_device_type()` for device-type string
+  classification, `nfc_parse_hex_bytes()` for hex byte parsing; extracted from
+  `nfc_storage.c` (Phase B).  Zero HAL/RTOS/FatFS deps; 26 host tests in
+  `tests/test_nfc_file_parse.c`.
+- `m1_csrc/mfc_layout.c/h` — Pure-logic Mifare Classic sector/block layout helpers:
+  `mfc_layout_from_sak()`, `mfc_sector_first_block()`, `mfc_sector_block_count()`,
+  `mfc_uid4_from_nfcid()`; extracted from `nfc_poller.c` (Phase B).
+  Zero HAL/RTOS/crypto deps; 27 host tests in `tests/test_mfc_layout.c`.
+- `m1_csrc/nfc_classify.c/h` — Pure-logic NFC-A device family classifier:
+  `nfc_classify_family()`, `nfc_classify_nfca()`; extracted from `nfc_ctx.c`
+  (Phase B).  Zero HAL/RTOS/display deps; 15 host tests in
+  `tests/test_nfc_classify.c`.
 - `m1_csrc/esp32_feature_map.c/h` — ESP32-gated feature-to-capability-bit classifier;
   maps `esp32_feature_id_t` enum values (WiFi scan/attacks, BLE HID/GATT, BT manage,
   802.15.4, etc.) to required `M1_ESP32_CAP_*` bits and UI labels; includes firmware

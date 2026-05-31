@@ -2184,7 +2184,7 @@ NULL safety, truncation safety).
 
 ### Phase B — NFC pure-logic extraction
 
-**Status: In progress** (NDEF parse + card info extraction complete; deeper parser extraction blocked by HAL/RTOS)
+**Status: In progress** (NDEF parse + card info + file parser + MFC layout + classifier extraction complete; deeper hardware-coupled extraction unblocked)
 
 **Completed:**
 - `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup (`nfc_manufacturer_name`),
@@ -2199,22 +2199,41 @@ NULL safety, truncation safety).
   `ndef_parse_records()`; `nfc_tool_write_url()` inline NDEF TLV building replaced
   with `ndef_encode_uri()` call (dedup).
 - `m1_nfc.c` updated to call extracted helpers; static inline duplicates removed.
+- `m1_csrc/nfc_file_parse.c/h` — Pure-logic NFC file body parser with vtable-based
+  line reader (`nfc_line_reader_t`, same pattern as `ir_block_reader_t`).
+  Provides `nfc_parse_body()` for "Page N:" / "Block N:" dump lines,
+  `nfc_parse_device_type()` for device-type string classification, and
+  `nfc_parse_hex_bytes()` for hex byte parsing.
+  Zero HAL/RTOS/FatFS deps; 26 host tests (ASan + UBSan clean).
+  `nfc_storage.c` body parser replaced with nfcfio→vtable adapter delegate.
+- `m1_csrc/mfc_layout.c/h` — Pure-logic Mifare Classic sector/block layout helpers:
+  `mfc_layout_from_sak()` (SAK→sectors+blocks), `mfc_sector_first_block()`,
+  `mfc_sector_block_count()`, `mfc_uid4_from_nfcid()` (NFCID→4-byte Crypto-1 UID).
+  Zero HAL/RTOS/crypto deps; 27 host tests (ASan + UBSan clean).
+  `nfc_poller.c` layout/UID statics replaced with delegates to mfc_layout.c.
+- `m1_csrc/nfc_classify.c/h` — Pure-logic NFC-A device family classifier:
+  `nfc_classify_family()` (SAK+ATQA→family), `nfc_classify_nfca()` (full
+  classification from primitives into `nfc_classify_result_t`).
+  Zero HAL/RTOS/display deps; 15 host tests (ASan + UBSan clean).
+  `nfc_ctx.c` classifier and `FillNfcContextFromDevice` now delegate to nfc_classify.c.
 
-**Remaining (deeper extraction — HAL/RTOS entangled):**
+**Remaining (deeper extraction — now unblocked):**
 
-NFC (`m1_nfc.c`, ~4,890 LoC) still has inline parsers tightly coupled to the RFAL hardware stack
-(`nfc_ctx`, `rfalNfcDevice`, `FillNfcContextFromDevice`).  These require the RFAL type definitions
-to compile and cannot be cleanly extracted until the RFAL dependency is abstracted.
+The vtable and pure-logic abstraction layers created above remove the previous blockers.
+Future extraction work can proceed using these foundations:
 
-| Work item | Blocker |
-|-----------|---------|
-| Extract NFC file-format line parsers from `nfc_file.c` / `nfc_storage.c` | `nfc_fileio.h` / FatFS coupling |
-| Extract `FillNfcContextFromDevice` classification logic | `rfalNfcDevice` struct dependency |
-| Extract Mifare Classic sector/block logic | `mfc_crypto1` + hardware coupling |
-| Convert 25 `vTaskDelay` / 40 `while` hardware loops to async event flows | State-machine redesign needed |
+| Work item | Status | Foundation |
+|-----------|--------|------------|
+| Extract NFC file-format line parsers from `nfc_storage.c` | **Unblocked** | `nfc_file_parse.h` vtable reader; body parser already extracted |
+| Extract `FillNfcContextFromDevice` classification logic | **Unblocked** | `nfc_classify.h`; pure classification extracted; RFAL adapter in place |
+| Extract Mifare Classic sector/block logic | **Unblocked** | `mfc_layout.h`; layout + UID helpers extracted; auth/read still hardware-coupled |
+| Convert 25 `vTaskDelay` / 40 `while` hardware loops to async event flows | Blocked | State-machine redesign needed (all loops use FreeRTOS queue receives) |
 
 **Do not add new inline card-classification logic to `m1_nfc.c`; use `nfc_card_info.h` instead.**
 **Do not add new inline NDEF parsing or encoding to `m1_nfc.c`; use `nfc_ndef_parse.h` / `nfc_ndef_encode.h` instead.**
+**Do not add new inline device-type parsing; use `nfc_file_parse.h` (`nfc_parse_device_type`) instead.**
+**Do not add new inline MFC layout/sector logic; use `mfc_layout.h` instead.**
+**Do not add new inline NFC-A family classification; use `nfc_classify.h` instead.**
 
 ### Phase C — Unified capability-probe module for WiFi / BT / NFC
 

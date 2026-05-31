@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdio.h>  
 #include "nfc_ctx.h"
+#include "nfc_classify.h"
 #include "rfal_nfc.h"
 #include "legacy/nfc_driver.h"   // Use Emu_SetNfcA, Emu_Clear
 
@@ -330,26 +331,25 @@ void nfc_ctx_set_dump(uint16_t unit_size, uint32_t unit_count, uint32_t origin,
 /*============================================================================*/
 uint8_t nfc_classify_family_from_nfca(uint8_t sak, const uint8_t atqa[2])
 {
-    if (sak == 0x08) { /* 1K */
-            platformLog("MIFARE CLASSIC 1K\r\n");
-        return M1NFC_FAM_CLASSIC;
-    } else if (sak == 0x18) { /* 4K */
-            platformLog("MIFARE Classic 4K\r\n");
-        return M1NFC_FAM_CLASSIC;
-    } else if (sak == 0x09) { /* Mini */
-            platformLog("MIFARE Classic 0.3K\r\n");
-        return M1NFC_FAM_CLASSIC;
-    }
-    if (sak == 0x00 && atqa[0] == 0x44) {
+    /* Delegate to the extracted pure-logic classifier (nfc_classify.c).
+     * platformLog calls preserved here for firmware diagnostics. */
+    uint8_t fam = nfc_classify_family(sak, atqa);
+    switch (fam) {
+        case NFC_CLASSIFY_FAM_CLASSIC:
+            if (sak == 0x08)      platformLog("MIFARE CLASSIC 1K\r\n");
+            else if (sak == 0x18) platformLog("MIFARE Classic 4K\r\n");
+            else if (sak == 0x09) platformLog("MIFARE Classic 0.3K\r\n");
+            break;
+        case NFC_CLASSIFY_FAM_ULTRALIGHT:
             platformLog("Ultralight/NTAG\r\n");
-        return M1NFC_FAM_ULTRALIGHT;
-    }
-    if (sak == 0x20) {
+            break;
+        case NFC_CLASSIFY_FAM_DESFIRE:
             platformLog("MIFARE DESFire\r\n");
-        return M1NFC_FAM_DESFIRE;
+            break;
+        default:
+            break;
     }
-
-    return 0; /* Classic */
+    return fam;
 }
 
 
@@ -378,19 +378,23 @@ uint8_t FillNfcContextFromDevice(const rfalNfcDevice* dev)
     {
         case RFAL_NFC_LISTEN_TYPE_NFCA:
         {
-            c->head.tech = M1NFC_TECH_A; // NFC_TX_A; // Note: M1NFC_TECH_* recommended for tech
-            uint8_t len = (uint8_t)dev->nfcidLen;
-            if (len > sizeof(c->head.uid)) len = sizeof(c->head.uid);
-            c->head.uid_len = len;
-            memcpy(c->head.uid, dev->nfcid, len);
+            /* Delegate to pure-logic classifier (nfc_classify.c) */
+            nfc_classify_result_t cr;
+            nfc_classify_nfca(dev->nfcid, (uint8_t)dev->nfcidLen,
+                              dev->dev.nfca.sensRes.anticollisionInfo,
+                              dev->dev.nfca.sensRes.platformInfo,
+                              dev->dev.nfca.selRes.sak,
+                              &cr);
 
-            c->head.a.has_atqa = true;
-            c->head.a.atqa[0]  = dev->dev.nfca.sensRes.anticollisionInfo;
-            c->head.a.atqa[1]  = dev->dev.nfca.sensRes.platformInfo;
-            c->head.a.has_sak  = true;
-            c->head.a.sak      = dev->dev.nfca.selRes.sak;
-
-            c->head.a.ats_len  = 0; // ISO-DEP(ATS) can be reflected later from proto.isoDep if needed
+            c->head.tech       = cr.tech;
+            c->head.uid_len    = cr.uid_len;
+            memcpy(c->head.uid, cr.uid, cr.uid_len);
+            c->head.a.has_atqa = cr.has_atqa;
+            c->head.a.atqa[0]  = cr.atqa[0];
+            c->head.a.atqa[1]  = cr.atqa[1];
+            c->head.a.has_sak  = cr.has_sak;
+            c->head.a.sak      = cr.sak;
+            c->head.a.ats_len  = 0;
             c->head.family     = nfc_classify_family_from_nfca(c->head.a.sak, c->head.a.atqa);
             break;
         }

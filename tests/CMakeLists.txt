@@ -1542,6 +1542,69 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME nfc_card_info COMMAND test_nfc_card_info)
 
+# ------------------------------------------------------------------
+# Module under test: nfc_file_parse (NFC file body parser — vtable-based line reader)
+#
+# Pure-logic extraction from nfc_storage.c with zero HAL/RTOS/FatFS deps:
+#   nfc_parse_hex_bytes()    — hex string → byte array
+#   nfc_parse_device_type()  — device-type string → tech/family/unit_size
+#   nfc_parse_body()         — "Page N:" / "Block N:" lines → dump buffer
+# ------------------------------------------------------------------
+add_executable(test_nfc_file_parse
+    test_nfc_file_parse.c
+    ${M1_ROOT}/m1_csrc/nfc_file_parse.c
+)
+target_include_directories(test_nfc_file_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_file_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_file_parse PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_file_parse COMMAND test_nfc_file_parse)
+
+# ------------------------------------------------------------------
+# Module under test: mfc_layout (Mifare Classic sector/block layout helpers)
+#
+# Pure-logic extraction from nfc_poller.c with zero HAL/RTOS/crypto deps:
+#   mfc_layout_from_sak()     — SAK → sectors + blocks
+#   mfc_sector_first_block()  — sector → first block number
+#   mfc_sector_block_count()  — sector → blocks-in-sector
+#   mfc_uid4_from_nfcid()     — NFCID → 4-byte Crypto-1 UID
+# ------------------------------------------------------------------
+add_executable(test_mfc_layout
+    test_mfc_layout.c
+    ${M1_ROOT}/m1_csrc/mfc_layout.c
+)
+target_include_directories(test_mfc_layout PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_mfc_layout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mfc_layout PRIVATE sanitizers)
+endif()
+add_test(NAME mfc_layout COMMAND test_mfc_layout)
+
+# ------------------------------------------------------------------
+# Module under test: nfc_classify (NFC-A device family classifier)
+#
+# Pure-logic extraction from nfc_ctx.c with zero HAL/RTOS/display deps:
+#   nfc_classify_family()  — SAK + ATQA → family code
+#   nfc_classify_nfca()    — full NFC-A classification from primitives
+# ------------------------------------------------------------------
+add_executable(test_nfc_classify
+    test_nfc_classify.c
+    ${M1_ROOT}/m1_csrc/nfc_classify.c
+)
+target_include_directories(test_nfc_classify PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_classify PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_classify PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_classify COMMAND test_nfc_classify)
+
 
 add_executable(test_file_util
     test_file_util.c

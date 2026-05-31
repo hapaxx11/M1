@@ -67,6 +67,7 @@
 #include "common/nfc_fileio.h"
 #include "logger.h"
 #include "mfc_crypto1.h"
+#include "mfc_layout.h"
 #include "picopass/picopass_poller.h"
 #include <stdio.h>
 
@@ -1271,42 +1272,19 @@ static void mfc_key_iter_close(mfc_key_iter_t *it)
 
 static void mfc_get_layout_from_sak(uint8_t sak, uint16_t *outSectors, uint16_t *outBlocks)
 {
-    switch (sak) {
-    case 0x09: /* Mini */
-        *outSectors = 5;
-        *outBlocks  = 20;
-        break;
-    case 0x01: /* Classic 1K TNP3xxx */
-    case 0x08: /* Classic 1K */
-    case 0x28: /* Classic EV1 1K */
-        *outSectors = 16;
-        *outBlocks  = 64;
-        break;
-    case 0x10: /* Plus 2K SL2 */
-    case 0x19: /* Classic 2K */
-        *outSectors = 32;
-        *outBlocks  = 128;
-        break;
-    case 0x11: /* Plus 4K SL2 */
-    case 0x18: /* Classic 4K */
-    case 0x38: /* Classic EV1 4K */
-        *outSectors = 40;
-        *outBlocks  = 256;
-        break;
-    default:
+    /* Delegate to extracted pure-logic module (mfc_layout.c) */
+    mfc_layout_t lay = mfc_layout_from_sak(sak);
+    *outSectors = lay.total_sectors;
+    *outBlocks  = lay.total_blocks;
+    if (sak != 0x09 && sak != 0x01 && sak != 0x08 && sak != 0x28 &&
+        sak != 0x10 && sak != 0x19 && sak != 0x11 && sak != 0x18 && sak != 0x38) {
         platformLog("[MFC] unknown SAK 0x%02X, fallback to 1K layout\r\n", sak);
-        *outSectors = 16;
-        *outBlocks  = 64;
-        break;
     }
 }
 
 static uint16_t mfc_sector_to_first_block(uint16_t sector)
 {
-    if (sector < 32)
-        return (uint16_t)(sector * 4);
-    else
-        return (uint16_t)(128 + (sector - 32) * 16);
+    return mfc_sector_first_block(sector);  /* Delegate to mfc_layout.c */
 }
 
 static void m1_read_mifareclassic(const rfalNfcDevice *dev)
@@ -1321,12 +1299,7 @@ static void m1_read_mifareclassic(const rfalNfcDevice *dev)
 
     /* UID: first 4 bytes for Crypto-1 (even for 7-byte UID cards) */
     uint8_t uid4[4];
-    if (dev->nfcidLen >= 7) {
-        /* For 7-byte UID: use bytes 3..6 (the second cascade level) */
-        memcpy(uid4, &dev->nfcid[3], 4);
-    } else {
-        memcpy(uid4, dev->nfcid, 4);
-    }
+    mfc_uid4_from_nfcid(dev->nfcid, (uint8_t)dev->nfcidLen, uid4);
 
     memset(g_nfc_dump_buf, 0x00, NFC_DUMP_BUF_SIZE);
     memset(g_nfc_valid_bits, 0x00, NFC_VALID_BITS_SIZE);
