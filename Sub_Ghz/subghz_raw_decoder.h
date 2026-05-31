@@ -58,6 +58,12 @@ typedef struct {
     uint32_t serial_number;
     uint32_t rolling_code;
     uint8_t  button_id;
+    uint8_t  repeat_count;  /**< Number of times this protocol+key was decoded
+                                 from distinct packet segments.  A genuine
+                                 remote transmission repeats several times, so
+                                 repeat_count >= 2 is a strong confidence
+                                 indicator.  False-positive matches from timing
+                                 coincidences typically appear only once. */
 } SubGhzRawDecodeResult;
 
 /*============================================================================*/

@@ -42,6 +42,7 @@
 #include "ff.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_lp5814.h"
 #include "m1_scene.h"
 #include "m1_virtual_kb.h"
 #include "m1_subghz_scene.h"
@@ -72,6 +73,7 @@ static uint8_t  decode_sel;
 static uint8_t  decode_scroll;
 static bool     decode_detail;
 static bool     s_save_failed;  /**< Brief "Save failed" overlay flag */
+static bool     s_save_ok;      /**< Brief "Saved" overlay flag */
 
 /* Static to avoid a 16 KB stack allocation (raw_data[8192] lives inside the
  * struct).  This scene only runs from the main RTOS task while the scene is
@@ -98,6 +100,7 @@ static void load_and_decode(const SubGhzApp *app)
     decode_scroll = 0;
     decode_detail = false;
     s_save_failed = false;
+    s_save_ok     = false;
 
     if (app->raw_filepath[0] == '\0')
         return;
@@ -119,6 +122,38 @@ static void load_and_decode(const SubGhzApp *app)
         s_sig.raw_data, s_sig.raw_count, s_sig.frequency,
         decode_results, DECODE_RAW_MAX,
         subghz_registry_decode_try_fn, NULL);
+
+    /* Filter out low-confidence results — momentum parity.
+     * Real remote transmissions repeat the same packet multiple times,
+     * so a genuine protocol match will have repeat_count >= 2.  When
+     * we have confirmed results (repeat_count >= 2), discard any
+     * single-hit results which are likely false positives from timing
+     * coincidences across similar OOK protocol families. */
+    {
+        bool has_confirmed = false;
+        for (uint8_t i = 0; i < decode_count; i++)
+        {
+            if (decode_results[i].repeat_count >= 2)
+            {
+                has_confirmed = true;
+                break;
+            }
+        }
+        if (has_confirmed)
+        {
+            uint8_t dst = 0;
+            for (uint8_t src = 0; src < decode_count; src++)
+            {
+                if (decode_results[src].repeat_count >= 2)
+                {
+                    if (dst != src)
+                        decode_results[dst] = decode_results[src];
+                    dst++;
+                }
+            }
+            decode_count = dst;
+        }
+    }
 }
 
 /*============================================================================*/
@@ -143,11 +178,12 @@ static void scene_on_enter(SubGhzApp *app)
 
 static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 {
-    /* Any keypress dismisses the "Save failed" overlay.  The flag is only
-     * set while in the detail view, so clearing it is always safe here. */
-    if (s_save_failed)
+    /* Any keypress dismisses the "Save failed" or "Saved" overlay.  The
+     * flag is only set while in the detail view, so clearing is safe. */
+    if (s_save_failed || s_save_ok)
     {
         s_save_failed = false;
+        s_save_ok     = false;
         app->need_redraw = true;
         return true;
     }
@@ -263,10 +299,14 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
                 if (saved)
                 {
-                    strncpy(app->file_path, save_path, sizeof(app->file_path) - 1);
-                    app->file_path[sizeof(app->file_path) - 1] = '\0';
-                    app->resume_from_child = true;
-                    subghz_scene_push(app, SubGhzSceneSaveSuccess);
+                    /* Inline success feedback — skip the separate
+                     * SaveSuccess scene for a streamlined workflow
+                     * matching Momentum. */
+                    m1_led_fast_blink(LED_BLINK_ON_GREEN,
+                                     LED_FASTBLINK_PWM_H,
+                                     LED_FASTBLINK_ONTIME_H);
+                    s_save_ok = true;
+                    app->need_redraw = true;
                 }
                 else
                 {
@@ -352,6 +392,19 @@ static void draw(SubGhzApp *app)
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
             m1_draw_text(&m1_u8g2, 0, 30, M1_LCD_DISPLAY_WIDTH,
                          "Save failed", TEXT_ALIGN_CENTER);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 0, 42, M1_LCD_DISPLAY_WIDTH,
+                         "Press any key", TEXT_ALIGN_CENTER);
+            m1_u8g2_nextpage();
+            return;
+        }
+
+        if (s_save_ok)
+        {
+            /* Brief "Saved!" overlay — any key will dismiss it */
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+            m1_draw_text(&m1_u8g2, 0, 30, M1_LCD_DISPLAY_WIDTH,
+                         "Saved!", TEXT_ALIGN_CENTER);
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
             m1_draw_text(&m1_u8g2, 0, 42, M1_LCD_DISPLAY_WIDTH,
                          "Press any key", TEXT_ALIGN_CENTER);
