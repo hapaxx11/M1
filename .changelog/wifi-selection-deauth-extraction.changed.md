@@ -1,0 +1,1 @@
+Extract `wifi_sta_record.h`, `wifi_selection.c/h`, and `wifi_deauth_cmd.c/h` from `m1_wifi.c` (Phase A A4/A5): `wifi_sta_t` promoted to shared header; AP/STA selection counters and deauth multi-target command builder are now pure-logic modules with zero HAL/RTOS deps; 37 new host tests (88/88 pass).

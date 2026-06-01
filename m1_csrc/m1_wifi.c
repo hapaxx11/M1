@@ -33,6 +33,13 @@
 #include "m1_scene.h"
 #include "m1_subghz_button_bar.h"
 #include "m1_wifi_cred.h"
+#include "wifi_ap_record.h"
+#include "wifi_mac_utils.h"
+#include "wifi_file_utils.h"
+#include "wifi_status_msg.h"
+#include "wifi_sta_record.h"
+#include "wifi_selection.h"
+#include "wifi_deauth_cmd.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -44,22 +51,12 @@
 #define M1_GUI_ROW_SPACING	1
 
 #define WIFI_AP_MAX	64
-#define DEAUTH_MULTI_MAX_TARGETS 4
-#define DEAUTH_MULTI_TARGET_BYTES 14
+/* DEAUTH_MULTI_MAX_TARGETS and DEAUTH_MULTI_TARGET_BYTES are defined in wifi_deauth_cmd.h */
 #define WIFI_JOIN_PASS_MAX 63
 
 //************************** S T R U C T U R E S *******************************
 
-/* Local AP record parsed from ESP32 binary response */
-typedef struct {
-	int8_t   rssi;
-	uint8_t  channel;
-	uint8_t  auth_mode;
-	uint8_t  bssid[6];
-	bool     selected;
-	char     ssid[33];
-	char     bssid_str[18]; /* "XX:XX:XX:XX:XX:XX" */
-} wifi_ap_t;
+/* wifi_ap_t is defined in wifi_ap_record.h (extracted pure-logic module) */
 
 /***************************** V A R I A B L E S ******************************/
 
@@ -91,8 +88,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid);
 static uint16_t wifi_ap_list_print(bool up_dir);
 static void wifi_ap_list_free(void);
 static void wifi_draw_ap_info(void);
-static uint16_t wifi_selected_ap_count(void);
-static uint16_t wifi_selected_sta_count(void);
+/* wifi_selected_ap_count() and wifi_selected_sta_count() provided by wifi_selection.h */
 static bool wifi_join_choose_password(char *password, size_t password_len);
 static void wifi_connect_selected_ap(void);
 static void ensure_esp32_ready(void);
@@ -159,28 +155,12 @@ static uint16_t wifi_do_scan(void)
 			break;
 		}
 
-		/* Unpack payload:
-		 * [0]     RSSI (int8_t)
-		 * [1]     channel
-		 * [2]     auth mode
-		 * [3..8]  BSSID (6 bytes)
-		 * [9]     SSID length
-		 * [10..]  SSID (up to 32 bytes)
-		 */
-		ap_list[i].rssi = (int8_t)resp.payload[0];
-		ap_list[i].channel = resp.payload[1];
-		ap_list[i].auth_mode = resp.payload[2];
-		memcpy(ap_list[i].bssid, &resp.payload[3], 6);
-
-		uint8_t ssid_len = resp.payload[9];
-		if (ssid_len > 32) ssid_len = 32;
-		memcpy(ap_list[i].ssid, &resp.payload[10], ssid_len);
-		ap_list[i].ssid[ssid_len] = '\0';
-
-		/* Format BSSID string */
-		sprintf(ap_list[i].bssid_str, "%02X:%02X:%02X:%02X:%02X:%02X",
-			ap_list[i].bssid[0], ap_list[i].bssid[1], ap_list[i].bssid[2],
-			ap_list[i].bssid[3], ap_list[i].bssid[4], ap_list[i].bssid[5]);
+		if (!wifi_ap_record_parse_one(resp.payload, resp.payload_len,
+		                              &ap_list[i]))
+		{
+			ap_count = i;
+			break;
+		}
 	}
 
 	return ap_count;
@@ -274,6 +254,32 @@ static void wifi_ap_list_free(void)
 	ap_count = 0;
 }
 
+/**
+ * @brief  Wait for the user to press Back or OK before returning.
+ *
+ * Replaces blocking HAL_Delay status screens: the message stays visible until
+ * the user explicitly dismisses it, so buttons are responsive and other RTOS
+ * tasks (battery, LED) keep running during the wait.
+ *
+ * Must be called from a blocking delegate context (not from on_event).
+ */
+static void wifi_wait_dismiss(void)
+{
+	S_M1_Main_Q_t q_item;
+	S_M1_Buttons_Status btn;
+	while (1)
+	{
+		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE &&
+		    q_item.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK ||
+			    btn.event[BUTTON_OK_KP_ID]   == BUTTON_EVENT_CLICK)
+				break;
+		}
+	}
+}
+
 static void wifi_show_message(const char *title, const char *line1, const char *line2)
 {
 	m1_u8g2_firstpage();
@@ -283,7 +289,7 @@ static void wifi_show_message(const char *title, const char *line1, const char *
 	if (line1) u8g2_DrawStr(&m1_u8g2, 6, 30, line1);
 	if (line2) u8g2_DrawStr(&m1_u8g2, 6, 42, line2);
 	m1_u8g2_nextpage();
-	HAL_Delay(1800);
+	wifi_wait_dismiss();
 }
 
 
@@ -413,9 +419,9 @@ void wifi_scan_ap(void)
 		m1_u8g2_nextpage();
 
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
-		HAL_Delay(200);
+		vTaskDelay(pdMS_TO_TICKS(200));
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
-		HAL_Delay(2000);
+		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
 
 	/* Show scanning status */
@@ -510,9 +516,9 @@ static void ensure_esp32_ready(void)
 		m1_u8g2_nextpage();
 
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_RESET);
-		HAL_Delay(200);
+		vTaskDelay(pdMS_TO_TICKS(200));
 		HAL_GPIO_WritePin(ESP32_EN_GPIO_Port, ESP32_EN_Pin, GPIO_PIN_SET);
-		HAL_Delay(2000);
+		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
 }
 
@@ -726,7 +732,7 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 		u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
 			"Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -807,7 +813,7 @@ void wifi_signal_monitor(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Signal Monitor");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -895,41 +901,16 @@ void wifi_signal_monitor(void)
 	}
 }
 
-typedef struct {
-	uint8_t  mac[6];
-	int8_t   rssi;
-	uint8_t  channel;
-	uint8_t  bssid[6];
-	bool     selected;
-	char     ssid[33];
-	char     mac_str[18];
-} wifi_sta_t;
+/* wifi_sta_t is defined in wifi_sta_record.h (extracted pure-logic module). */
 
-#define STA_MAX 64
+/* WIFI_STA_MAX is defined in wifi_sta_record.h */
 
 static wifi_sta_t *sta_list_data = NULL;
 static uint16_t sta_total = 0;
 static uint16_t sta_view_idx = 0;
 
-static bool wifi_mac_is_zero(const uint8_t mac[6])
-{
-	for (uint8_t i = 0; i < 6; i++)
-	{
-		if (mac[i]) return false;
-	}
-	return true;
-}
-
-static void wifi_format_mac(const uint8_t mac[6], char *out, size_t out_len)
-{
-	snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
-		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-}
-
-static bool wifi_mac_match(const uint8_t *a, const uint8_t *b)
-{
-	return memcmp(a, b, 6) == 0;
-}
+/* wifi_mac_is_zero(), wifi_mac_format(), wifi_mac_match() are provided by
+ * wifi_mac_utils.h (extracted pure-logic module). */
 
 static bool wifi_mac_track_pick_selected(uint8_t target[6], char *label, size_t label_len)
 {
@@ -1130,7 +1111,7 @@ void wifi_mac_track(void)
 			return;
 		}
 	}
-	wifi_format_mac(target, target_str, sizeof(target_str));
+	wifi_mac_format(target, target_str, sizeof(target_str));
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
@@ -1229,11 +1210,14 @@ static uint16_t sta_do_scan(void)
 	if (ret != 0 || resp.status != RESP_OK)
 		return 0;
 
-	/* Show scanning screen with countdown */
+	/* Show scanning screen with countdown — Back-press aborts early */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	for (int sec = STA_SCAN_DURATION / 1000; sec > 0; sec--)
 	{
 		char msg[25];
+		S_M1_Main_Q_t q_evt;
+		S_M1_Buttons_Status btn_s;
+
 		m1_u8g2_firstpage();
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning Stations...");
 		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
@@ -1241,7 +1225,17 @@ static uint16_t sta_do_scan(void)
 		sprintf(msg, "%ds remaining", sec);
 		u8g2_DrawStr(&m1_u8g2, 6, 60, msg);
 		m1_u8g2_nextpage();
-		HAL_Delay(1000);
+
+		if (xQueueReceive(main_q_hdl, &q_evt, pdMS_TO_TICKS(1000)) == pdTRUE &&
+		    q_evt.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			xQueueReceive(button_events_q_hdl, &btn_s, 0);
+			if (btn_s.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				m1_esp32_simple_cmd(CMD_STA_SCAN_STOP, &resp, SNIFF_CMD_TIMEOUT);
+				return 0;
+			}
+		}
 	}
 
 	/* Stop scan — returns count and resets index */
@@ -1252,8 +1246,8 @@ static uint16_t sta_do_scan(void)
 	sta_total = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
 	if (sta_total == 0)
 		return 0;
-	if (sta_total > STA_MAX)
-		sta_total = STA_MAX;
+	if (sta_total > WIFI_STA_MAX)
+		sta_total = WIFI_STA_MAX;
 
 	sta_list_data = (wifi_sta_t *)malloc(sta_total * sizeof(wifi_sta_t));
 	if (!sta_list_data) { sta_total = 0; return 0; }
@@ -1710,7 +1704,7 @@ void wifi_sniff_eapol(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "EAPOL");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -1830,7 +1824,7 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -1887,77 +1881,10 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 	}
 }
 
-static bool wifi_mac_is_nonzero(const uint8_t mac[6])
-{
-	return mac[0] || mac[1] || mac[2] || mac[3] || mac[4] || mac[5];
-}
+/* wifi_mac_is_nonzero() is provided by wifi_ap_record.h */
 
-static uint8_t wifi_deauth_add_target(m1_cmd_t *cmd, uint8_t count, uint8_t mode,
-	uint8_t channel, const uint8_t bssid[6], const uint8_t sta[6])
-{
-	uint8_t off;
-
-	if (count >= DEAUTH_MULTI_MAX_TARGETS || !bssid || !wifi_mac_is_nonzero(bssid) || channel == 0)
-	{
-		return count;
-	}
-
-	off = 1 + count * DEAUTH_MULTI_TARGET_BYTES;
-	cmd->payload[off] = mode;
-	cmd->payload[off + 1] = channel;
-	memcpy(&cmd->payload[off + 2], bssid, 6);
-	if (sta)
-	{
-		memcpy(&cmd->payload[off + 8], sta, 6);
-	}
-
-	count++;
-	cmd->payload[0] = count;
-	cmd->payload_len = 1 + count * DEAUTH_MULTI_TARGET_BYTES;
-	return count;
-}
-
-static uint8_t wifi_build_selected_deauth_cmd(m1_cmd_t *cmd, uint8_t *ap_targets,
-	uint8_t *sta_targets, uint16_t *selected_total)
-{
-	uint8_t count = 0;
-	uint8_t ap_count_used = 0;
-	uint8_t sta_count_used = 0;
-
-	memset(cmd, 0, sizeof(*cmd));
-	cmd->magic = M1_CMD_MAGIC;
-	cmd->cmd_id = CMD_DEAUTH_MULTI;
-	cmd->payload_len = 1;
-
-	if (ap_list)
-	{
-		for (uint16_t i = 0; i < ap_count && count < DEAUTH_MULTI_MAX_TARGETS; i++)
-		{
-			if (!ap_list[i].selected) continue;
-			uint8_t before = count;
-			count = wifi_deauth_add_target(cmd, count, 0, ap_list[i].channel,
-				ap_list[i].bssid, NULL);
-			if (count != before) ap_count_used++;
-		}
-	}
-
-	if (sta_list_data)
-	{
-		for (uint16_t i = 0; i < sta_total && count < DEAUTH_MULTI_MAX_TARGETS; i++)
-		{
-			if (!sta_list_data[i].selected) continue;
-			uint8_t before = count;
-			count = wifi_deauth_add_target(cmd, count, 1, sta_list_data[i].channel,
-				sta_list_data[i].bssid, sta_list_data[i].mac);
-			if (count != before) sta_count_used++;
-		}
-	}
-
-	if (ap_targets) *ap_targets = ap_count_used;
-	if (sta_targets) *sta_targets = sta_count_used;
-	if (selected_total) *selected_total = wifi_selected_ap_count() + wifi_selected_sta_count();
-	return count;
-}
+/* wifi_deauth_add_target() and wifi_build_selected_deauth_cmd() are provided
+ * by wifi_deauth_cmd.h (extracted pure-logic module). */
 
 static void wifi_deauth_selected_run(void)
 {
@@ -1974,7 +1901,8 @@ static void wifi_deauth_selected_run(void)
 	char ln[26];
 	uint32_t start_tick;
 
-	target_count = wifi_build_selected_deauth_cmd(&cmd, &ap_targets, &sta_targets, &selected_total);
+	target_count = wifi_build_selected_deauth_cmd(&cmd, ap_list, ap_count,
+		sta_list_data, sta_total, &ap_targets, &sta_targets, &selected_total);
 	if (target_count == 0)
 	{
 		wifi_show_message("Deauth", "No usable targets", "Need BSSID/channel");
@@ -2041,7 +1969,7 @@ void wifi_attack_deauth(void)
 
 	ensure_esp32_ready();
 
-	if (wifi_selected_ap_count() > 0 || wifi_selected_sta_count() > 0)
+	if (wifi_selected_ap_count(ap_list, ap_count) > 0 || wifi_selected_sta_count(sta_list_data, sta_total) > 0)
 	{
 		wifi_deauth_selected_run();
 		return;
@@ -2072,7 +2000,7 @@ void wifi_attack_deauth(void)
 			M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "No targets found");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -2323,25 +2251,8 @@ typedef enum {
 static char beacon_file_ssids[BEACON_LIST_MAX_SSIDS][33];
 static const char *beacon_file_ptrs[BEACON_LIST_MAX_SSIDS];
 
-static uint8_t beacon_ascii_lower(uint8_t c)
-{
-	if (c >= 'A' && c <= 'Z') return c + ('a' - 'A');
-	return c;
-}
-
-static bool beacon_ext_is_list(const char *name)
-{
-	const char *dot = strrchr(name, '.');
-	if (!dot) return false;
-
-	char ext[5] = {0};
-	for (uint8_t i = 0; i < 4 && dot[i]; i++)
-	{
-		ext[i] = (char)beacon_ascii_lower((uint8_t)dot[i]);
-	}
-
-	return (strcmp(ext, ".txt") == 0 || strcmp(ext, ".lst") == 0);
-}
+/* wifi_ascii_lower() → wifi_ascii_lower() in wifi_file_utils.h
+ * wifi_ext_is_ssid_list() → wifi_ext_is_ssid_list() in wifi_file_utils.h */
 
 static void beacon_message(const char *title, const char *line1, const char *line2)
 {
@@ -2352,7 +2263,7 @@ static void beacon_message(const char *title, const char *line1, const char *lin
 	if (line1) u8g2_DrawStr(&m1_u8g2, 6, 30, line1);
 	if (line2) u8g2_DrawStr(&m1_u8g2, 6, 42, line2);
 	m1_u8g2_nextpage();
-	HAL_Delay(2000);
+	wifi_wait_dismiss();
 }
 
 static char *beacon_trim_line(char *line)
@@ -2569,7 +2480,7 @@ void wifi_attack_beacon(void)
 		return;
 	}
 
-	if (!beacon_ext_is_list(f_info->file_name))
+	if (!wifi_ext_is_ssid_list(f_info->file_name))
 	{
 		beacon_message("Beacon Spam", "Use .txt/.lst", "1 SSID per line");
 		return;
@@ -2600,7 +2511,7 @@ void wifi_attack_beacon(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("Beacon Spam", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -2632,81 +2543,11 @@ void wifi_attack_beacon(void)
 
 static char wifi_portal_ssid[33] = "Free WiFi";
 
-static bool wifi_ext_is_ap_cache(const char *name)
-{
-	const char *dot = strrchr(name, '.');
-	if (!dot) return false;
+/* wifi_ext_is_ap_cache() and wifi_ext_is_html() are provided by
+ * wifi_file_utils.h (extracted pure-logic module). */
 
-	char ext[5] = {0};
-	for (uint8_t i = 0; i < 4 && dot[i]; i++)
-	{
-		ext[i] = (char)beacon_ascii_lower((uint8_t)dot[i]);
-	}
-
-	return (strcmp(ext, ".tsv") == 0 || strcmp(ext, ".txt") == 0);
-}
-
-static bool wifi_ext_is_html(const char *name)
-{
-	const char *dot = strrchr(name, '.');
-	if (!dot) return false;
-
-	char ext[6] = {0};
-	for (uint8_t i = 0; i < 5 && dot[i]; i++)
-	{
-		ext[i] = (char)beacon_ascii_lower((uint8_t)dot[i]);
-	}
-
-	return (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0);
-}
-
-static void wifi_sanitize_field(char *dst, const char *src, size_t dst_len)
-{
-	size_t i;
-
-	if (!dst || dst_len == 0)
-	{
-		return;
-	}
-
-	for (i = 0; i + 1 < dst_len && src && src[i]; i++)
-	{
-		char c = src[i];
-		dst[i] = (c == '\t' || c == '\r' || c == '\n') ? ' ' : c;
-	}
-	dst[i] = '\0';
-}
-
-static void wifi_csv_quote_field(char *dst, const char *src, size_t dst_len)
-{
-	size_t di = 0;
-	if (!dst || dst_len == 0)
-	{
-		return;
-	}
-
-	dst[di++] = '"';
-	for (size_t si = 0; src && src[si] && di + 2 < dst_len; si++)
-	{
-		char c = src[si];
-		if (c == '\r' || c == '\n')
-		{
-			c = ' ';
-		}
-		if (c == '"')
-		{
-			if (di + 3 >= dst_len) break;
-			dst[di++] = '"';
-			dst[di++] = '"';
-		}
-		else
-		{
-			dst[di++] = c;
-		}
-	}
-	dst[di++] = '"';
-	dst[di] = '\0';
-}
+/* wifi_sanitize_field() and wifi_csv_quote_field() are provided by
+ * wifi_ap_record.h (extracted pure-logic module). */
 
 #define WIFI_WARDRIVE_AP_FILE      "wifi/wardrive_aps.csv"
 #define WIFI_WARDRIVE_STA_FILE     "wifi/wardrive_stations.csv"
@@ -2820,44 +2661,11 @@ void wifi_station_wardrive(void)
 	wifi_show_message("Station Wardrive", line, WIFI_WARDRIVE_STA_FILE);
 }
 
-static bool wifi_parse_bssid(const char *s, uint8_t bssid[6])
-{
-	unsigned int b[6];
+/* wifi_bssid_parse() is provided by wifi_ap_record.h (extracted pure-logic
+ * module); formerly this was the local static wifi_bssid_parse(). */
 
-	if (sscanf(s, "%02x:%02x:%02x:%02x:%02x:%02x",
-		&b[0], &b[1], &b[2], &b[3], &b[4], &b[5]) != 6)
-	{
-		return false;
-	}
-
-	for (uint8_t i = 0; i < 6; i++)
-	{
-		if (b[i] > 0xFF) return false;
-		bssid[i] = (uint8_t)b[i];
-	}
-	return true;
-}
-
-static uint16_t wifi_selected_ap_count(void)
-{
-	uint16_t count = 0;
-	for (uint16_t i = 0; i < ap_count; i++)
-	{
-		if (ap_list[i].selected) count++;
-	}
-	return count;
-}
-
-static uint16_t wifi_selected_sta_count(void)
-{
-	uint16_t count = 0;
-	if (!sta_list_data) return 0;
-	for (uint16_t i = 0; i < sta_total; i++)
-	{
-		if (sta_list_data[i].selected) count++;
-	}
-	return count;
-}
+/* wifi_selected_ap_count() and wifi_selected_sta_count() are provided by
+ * wifi_selection.h (extracted pure-logic module). */
 
 static void wifi_draw_ap_select(void)
 {
@@ -2887,7 +2695,7 @@ static void wifi_draw_ap_select(void)
 	snprintf(ln, sizeof(ln), "CH:%d RSSI:%ddBm",
 		ap_list[ap_view_idx].channel, ap_list[ap_view_idx].rssi);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count());
+	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count(ap_list, ap_count));
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
@@ -2922,7 +2730,7 @@ static void wifi_draw_sta_select(void)
 	snprintf(ln, sizeof(ln), "AP:%02X:%02X:%02X:%02X:%02X:%02X",
 		b[0], b[1], b[2], b[3], b[4], b[5]);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count());
+	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count(sta_list_data, sta_total));
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
@@ -3221,7 +3029,7 @@ void wifi_general_load_aps(void)
 		ap = &new_list[new_count];
 		strncpy(ap->ssid, ssid, 32);
 		ap->ssid[32] = '\0';
-		if (!wifi_parse_bssid(bssid_s, ap->bssid))
+		if (!wifi_bssid_parse(bssid_s, ap->bssid))
 		{
 			continue;
 		}
@@ -3272,7 +3080,7 @@ void wifi_general_load_ssids(void)
 		return;
 	}
 
-	if (!beacon_ext_is_list(f_info->file_name))
+	if (!wifi_ext_is_ssid_list(f_info->file_name))
 	{
 		wifi_show_message("Load SSIDs", "Use .txt/.lst", "1 SSID per line");
 		return;
@@ -3289,7 +3097,7 @@ void wifi_general_load_ssids(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("Load SSIDs", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -3974,7 +3782,7 @@ void wifi_evil_portal(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Evil Portal");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4078,7 +3886,7 @@ void wifi_probe_flood(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4368,12 +4176,12 @@ void wifi_attack_ap_clone(void)
 			u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
 			u8g2_DrawStr(&m1_u8g2, 6, 30, "No APs found!");
 			m1_u8g2_nextpage();
-			HAL_Delay(2000);
+			wifi_wait_dismiss();
 			return;
 		}
 	}
 
-	selected_only = (wifi_selected_ap_count() > 0);
+	selected_only = (wifi_selected_ap_count(ap_list, ap_count) > 0);
 	for (uint16_t i = 0; i < ap_count && cloned < 32; i++)
 	{
 		if (selected_only && !ap_list[i].selected) continue;
@@ -4389,7 +4197,7 @@ void wifi_attack_ap_clone(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, selected_only ? "No named selected APs" : "No named APs!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4397,7 +4205,7 @@ void wifi_attack_ap_clone(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("AP Clone", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4415,7 +4223,7 @@ void wifi_attack_ap_clone(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4467,7 +4275,7 @@ void wifi_attack_rickroll(void)
 	if (total == 0)
 	{
 		beacon_load_failed_screen("Rickroll", &load_diag);
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4485,7 +4293,7 @@ void wifi_attack_rickroll(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 15, "Rickroll");
 		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
 		m1_u8g2_nextpage();
-		HAL_Delay(2000);
+		wifi_wait_dismiss();
 		return;
 	}
 
@@ -4741,7 +4549,7 @@ void wifi_show_status(void)
 		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Scan & Connect");
 	}
 	m1_u8g2_nextpage();
-	HAL_Delay(2000);
+	wifi_wait_dismiss();
 }
 
 void wifi_disconnect(void)

@@ -67,6 +67,8 @@
 #include "common/nfc_fileio.h"
 #include "logger.h"
 #include "mfc_crypto1.h"
+#include "mfc_layout.h"
+#include "nfc_ntag.h"
 #include "picopass/picopass_poller.h"
 #include <stdio.h>
 
@@ -96,16 +98,6 @@ static bool mfc_key_iter_next(mfc_key_iter_t *it, uint8_t key_out[MFC_KEY_LEN]);
 static void mfc_key_iter_rewind(mfc_key_iter_t *it);
 static void mfc_key_iter_close(mfc_key_iter_t *it);
 
-static void mfc_get_layout_from_sak(uint8_t sak, uint16_t *outSectors, uint16_t *outBlocks);
-static uint16_t mfc_sector_to_first_block(uint16_t sector);
-
-/* mfc_is_classic_sak() is provided by nfc_poller_helpers.c */
-
-/* Forward declarations for NFC-V / ST25TB reading */
-static void m1_nfcv_read(const rfalNfcDevice *dev);
-static void m1_st25tb_read(const rfalNfcDevice *dev);
-static void m1_read_mifareclassic(const rfalNfcDevice *dev);
-
 extern uint8_t g_nfc_dump_buf[NFC_DUMP_BUF_SIZE];
 extern uint8_t g_nfc_valid_bits[NFC_VALID_BITS_SIZE];
 
@@ -132,7 +124,11 @@ static void m1_t2t_read_ntag(const rfalNfcDevice *dev);
 static ReturnCode GetVersion_Ntag(uint8_t *rxBuf, uint16_t rxBufLen, uint16_t *rcvLen);
 static uint16_t LogParsedNtagVersion(const uint8_t *version, uint16_t len);
 static ReturnCode PwdAuth_Ntag(const uint8_t pwd[4], uint8_t pack[2]);
-static bool ntag_generate_amiibo_pwd(const uint8_t *uid, uint8_t uid_len, uint8_t pwd_out[4], uint8_t pack_out[2]);
+static void m1_nfcv_read(const rfalNfcDevice *dev);
+static void m1_st25tb_read(const rfalNfcDevice *dev);
+static void m1_read_mifareclassic(const rfalNfcDevice *dev);
+static void mfc_get_layout_from_sak(uint8_t sak, uint16_t *outSectors, uint16_t *outBlocks);
+static uint16_t mfc_sector_to_first_block(uint16_t sector);
 
 /*------------------------------------------------------------------------------------------*/
 #define SET_FAMILY(fmt, ...)  do { snprintf(NFC_Family, sizeof(NFC_Family), fmt, ##__VA_ARGS__); } while(0)
@@ -806,46 +802,6 @@ static ReturnCode PwdAuth_Ntag(const uint8_t pwd[4], uint8_t pack[2])
 
 /*============================================================================*/
 /**
- * @brief ntag_generate_amiibo_pwd - Generate Amiibo PWD_AUTH password from UID
- *
- * Derives the 4-byte password and 2-byte PACK for Amiibo (NTAG215) tags
- * using the well-known XOR algorithm. Requires a 7-byte UID.
- *
- * Algorithm:
- *   PWD[0] = 0xAA ^ UID[1] ^ UID[3]
- *   PWD[1] = 0x55 ^ UID[2] ^ UID[4]
- *   PWD[2] = 0xAA ^ UID[3] ^ UID[5]
- *   PWD[3] = 0x55 ^ UID[4] ^ UID[6]
- *   PACK   = 0x80, 0x80
- *
- * @param[in]  uid       7-byte UID from NTAG215
- * @param[in]  uid_len   UID length (must be 7)
- * @param[out] pwd_out   4-byte generated password
- * @param[out] pack_out  2-byte expected PACK
- * @retval true   Success
- * @retval false  Invalid UID length
- */
-/*============================================================================*/
-static bool ntag_generate_amiibo_pwd(const uint8_t *uid, uint8_t uid_len,
-                                     uint8_t pwd_out[4], uint8_t pack_out[2])
-{
-    if (!uid || uid_len != 7 || !pwd_out || !pack_out)
-        return false;
-
-    pwd_out[0] = 0xAA ^ uid[1] ^ uid[3];
-    pwd_out[1] = 0x55 ^ uid[2] ^ uid[4];
-    pwd_out[2] = 0xAA ^ uid[3] ^ uid[5];
-    pwd_out[3] = 0x55 ^ uid[4] ^ uid[6];
-
-    pack_out[0] = 0x80;
-    pack_out[1] = 0x80;
-
-    return true;
-}
-
-
-/*============================================================================*/
-/**
  * @brief LogParsedNtagVersion - Parse and log NTAG version information
  * 
  * Parses NTAG GET_VERSION response (8 bytes) and logs detailed version information
@@ -863,11 +819,9 @@ static bool ntag_generate_amiibo_pwd(const uint8_t *uid, uint8_t uid_len,
 static uint16_t LogParsedNtagVersion(const uint8_t *version, uint16_t len)
 {
 	//Use attributes for the compressor warning issue
-    uint16_t totalPages = 0;
-
     if ((version == NULL) || (len < 8U)) {
         platformLog("NTAG GET_VERSION parse skipped (len=%u)\r\n", len);
-        return totalPages;
+        return 0;
     }
 
     const uint8_t header  __attribute__((unused)) = version[0];
@@ -883,19 +837,13 @@ static uint16_t LogParsedNtagVersion(const uint8_t *version, uint16_t len)
     const char *prodStr   __attribute__((unused)) = (prod == 0x04) ? "NTAG" : "Unknown";
     const char *subStr    __attribute__((unused)) = (sub == 0x02) ? "Standard" : "Unknown";
 
-    const char *sizeStr __attribute__((unused)) = "Unknown";
-    if (size == 0x0F) {
-        sizeStr    = "NTAG213 [144B user]";
-        totalPages = 45U;
-    }
-    else if (size == 0x11) {
-        sizeStr    = "NTAG215 [504B user]";
-        totalPages = 135U;
-    }
-    else if (size == 0x13) {
-        sizeStr    = "NTAG216 [888B user]";
-        totalPages = 231U;
-    }
+    /* Delegate page count lookup to pure-logic module (nfc_ntag.c) */
+    uint16_t totalPages = ntag_page_count_from_size(size);
+
+    const char *sizeStr __attribute__((unused)) =
+        (size == 0x0F) ? "NTAG213 [144B user]" :
+        (size == 0x11) ? "NTAG215 [504B user]" :
+        (size == 0x13) ? "NTAG216 [888B user]" : "Unknown";
 
     const char *protoStr __attribute__((unused)) = (proto == 0x03) ? "ISO14443-3" : "Unknown";
 
@@ -1190,14 +1138,6 @@ static void m1_t2t_read_ntag(const rfalNfcDevice *dev)
 /* Streaming key dictionary iterator — reads one key at a time from SD card   */
 /*============================================================================*/
 
-static int mfc_hex_nibble(char c)
-{
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-    return -1;
-}
-
 static bool mfc_key_iter_open(mfc_key_iter_t *it)
 {
     if (!it) return false;
@@ -1218,27 +1158,10 @@ static bool mfc_key_iter_next(mfc_key_iter_t *it, uint8_t key_out[MFC_KEY_LEN])
 
     int n;
     while ((n = nfcfio_getline(&it->io, it->line, sizeof(it->line))) >= 0) {
-        char *p = it->line;
-
-        /* Skip whitespace */
-        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
-        if (*p == '\0') continue;
-        if (*p == '#')  continue;
-
-        /* Parse 12 hex chars → 6 bytes */
-        uint8_t key[MFC_KEY_LEN];
-        bool ok = true;
-        for (int i = 0; i < MFC_KEY_LEN && ok; i++) {
-            int hi = mfc_hex_nibble(*p++);
-            int lo = mfc_hex_nibble(*p++);
-            if (hi < 0 || lo < 0) { ok = false; break; }
-            key[i] = (uint8_t)((hi << 4) | lo);
+        if (mfc_parse_key_line(it->line, key_out)) {
+            it->count++;
+            return true;
         }
-        if (!ok) continue;
-
-        memcpy(key_out, key, MFC_KEY_LEN);
-        it->count++;
-        return true;
     }
     return false;
 }
@@ -1271,42 +1194,19 @@ static void mfc_key_iter_close(mfc_key_iter_t *it)
 
 static void mfc_get_layout_from_sak(uint8_t sak, uint16_t *outSectors, uint16_t *outBlocks)
 {
-    switch (sak) {
-    case 0x09: /* Mini */
-        *outSectors = 5;
-        *outBlocks  = 20;
-        break;
-    case 0x01: /* Classic 1K TNP3xxx */
-    case 0x08: /* Classic 1K */
-    case 0x28: /* Classic EV1 1K */
-        *outSectors = 16;
-        *outBlocks  = 64;
-        break;
-    case 0x10: /* Plus 2K SL2 */
-    case 0x19: /* Classic 2K */
-        *outSectors = 32;
-        *outBlocks  = 128;
-        break;
-    case 0x11: /* Plus 4K SL2 */
-    case 0x18: /* Classic 4K */
-    case 0x38: /* Classic EV1 4K */
-        *outSectors = 40;
-        *outBlocks  = 256;
-        break;
-    default:
+    /* Delegate to extracted pure-logic module (mfc_layout.c) */
+    mfc_layout_t lay = mfc_layout_from_sak(sak);
+    *outSectors = lay.total_sectors;
+    *outBlocks  = lay.total_blocks;
+    if (sak != 0x09 && sak != 0x01 && sak != 0x08 && sak != 0x28 &&
+        sak != 0x10 && sak != 0x19 && sak != 0x11 && sak != 0x18 && sak != 0x38) {
         platformLog("[MFC] unknown SAK 0x%02X, fallback to 1K layout\r\n", sak);
-        *outSectors = 16;
-        *outBlocks  = 64;
-        break;
     }
 }
 
 static uint16_t mfc_sector_to_first_block(uint16_t sector)
 {
-    if (sector < 32)
-        return (uint16_t)(sector * 4);
-    else
-        return (uint16_t)(128 + (sector - 32) * 16);
+    return mfc_sector_first_block(sector);  /* Delegate to mfc_layout.c */
 }
 
 static void m1_read_mifareclassic(const rfalNfcDevice *dev)
@@ -1321,12 +1221,7 @@ static void m1_read_mifareclassic(const rfalNfcDevice *dev)
 
     /* UID: first 4 bytes for Crypto-1 (even for 7-byte UID cards) */
     uint8_t uid4[4];
-    if (dev->nfcidLen >= 7) {
-        /* For 7-byte UID: use bytes 3..6 (the second cascade level) */
-        memcpy(uid4, &dev->nfcid[3], 4);
-    } else {
-        memcpy(uid4, dev->nfcid, 4);
-    }
+    mfc_uid4_from_nfcid(dev->nfcid, (uint8_t)dev->nfcidLen, uid4);
 
     memset(g_nfc_dump_buf, 0x00, NFC_DUMP_BUF_SIZE);
     memset(g_nfc_valid_bits, 0x00, NFC_VALID_BITS_SIZE);

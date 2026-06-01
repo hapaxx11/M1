@@ -1,0 +1,1 @@
+Phase I: Extract `flipper_ir_parse_block` from `flipper_ir_read_signal` into a pure-logic vtable-based parser using `ir_block_reader_t`; add `ir_parse_int32_array` to `ir_signal_record.c/h`; reduce `flipper_ir_read_signal` to a thin 5-wrapper FatFS adapter. 30 new host tests (22 `flipper_ir_parse_block` + 8 `ir_parse_int32_array`); 82/82 pass.

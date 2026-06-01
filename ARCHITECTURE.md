@@ -85,9 +85,9 @@ All modules with submenus use a stack-based scene manager:
 | Infrared | `m1_infrared_scene.c` | 3 items |
 | GPIO | `m1_gpio_scene.c` | 5–6 items |
 | WiFi | `m1_wifi_scene.c` | 4–6 items |
-| Bluetooth | `m1_bt_scene.c` | 3–7 items |
+| Bluetooth | `m1_bt_scene.c` (registry) + `m1_bt_scene_menu/sniff/spam/badbt.c` | 3–7 items |
 | Games | `m1_games_scene.c` | 6 items |
-| Settings | `m1_settings_scene.c` | 7 items + nested sub-menus |
+| Settings | `m1_settings_scene.c` (registry) + `m1_settings_scene_menu/storage/power/fw/esp32.c` | 7 items + nested sub-menus |
 
 ## Saved Item Actions
 
@@ -114,6 +114,112 @@ compilation units** with clean interfaces.
 - `Sub_Ghz/subghz_raw_line_parser.c/h` — RAW_Data parsing from `m1_sub_ghz.c`
 - `Sub_Ghz/subghz_raw_decoder.c/h` — offline decode from `m1_subghz_scene_saved.c`
 - `Sub_Ghz/subghz_playlist_parser.c/h` — path remapping from `m1_subghz_scene_playlist.c`
+- `m1_csrc/wifi_ap_record.c/h` — AP record binary parser, BSSID fmt/parse, MAC check,
+  field sanitize, CSV quote; extracted from `m1_wifi.c` (Phase A, firmware-wide
+  Momentum-parity programme).  Zero HAL/RTOS/FatFS deps; 36 host tests in
+  `tests/test_wifi_ap_record.c`.
+- `m1_csrc/wifi_mac_utils.c/h` — MAC address zero-check, format, match; extracted
+  from `m1_wifi.c` (Phase A).  Zero HAL/RTOS deps; 16 host tests in
+  `tests/test_wifi_mac_utils.c`.
+- `m1_csrc/wifi_file_utils.c/h` — WiFi file extension validators (AP cache, HTML,
+  SSID list); extracted from `m1_wifi.c` (Phase A).  Zero HAL/RTOS/FatFS deps;
+  21 host tests in `tests/test_wifi_file_utils.c`.
+- `m1_csrc/wifi_status_msg.c/h` — timed status message model for async scene
+  conversion; provides pollable expiry check replacing blocking HAL_Delay pattern
+  (Phase A).  Zero HAL/RTOS/display deps; 17 host tests in
+  `tests/test_wifi_status_msg.c`.
+- `m1_csrc/wifi_sta_record.h` — `wifi_sta_t` struct typedef (station/client entry
+  from promiscuous STA scan) promoted from file-local in `m1_wifi.c` to shared header
+  (Phase A).  Header-only; no HAL/RTOS deps.
+- `m1_csrc/wifi_selection.c/h` — parameterized AP/STA selection counters
+  (`wifi_selected_ap_count`, `wifi_selected_sta_count`); extracted from `m1_wifi.c`
+  (Phase A).  Zero HAL/RTOS deps; 18 host tests in `tests/test_wifi_selection.c`.
+- `m1_csrc/wifi_deauth_cmd.c/h` — deauth multi-target command builder
+  (`wifi_deauth_add_target`, `wifi_build_selected_deauth_cmd`); extracted from
+  `m1_wifi.c` (Phase A).  Zero HAL/RTOS deps; 19 host tests in
+  `tests/test_wifi_deauth_cmd.c`.
+- `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup, NFC-A SAK/ATQA
+  type classifier, UID hex formatter, UID arithmetic step; extracted from `m1_nfc.c`
+  (Phase B, firmware-wide Momentum-parity programme).  Zero HAL/RTOS/display deps;
+  45 host tests in `tests/test_nfc_card_info.c`.
+- `m1_csrc/nfc_ndef_parse.c/h` — NDEF TLV record parser (`ndef_parse_records`); decodes
+  URI records (36 NFC Forum URI RTD prefix codes) and Text records from raw NDEF bytes
+  into human-readable text; extracted from `nfc_tool_parse_ndef_text()` in `m1_nfc.c`
+  (Phase B).  Complement to `nfc_ndef_encode.c/h`.  Zero HAL/RTOS/FatFS deps;
+  22 host tests in `tests/test_nfc_ndef_parse.c`.
+- `m1_csrc/nfc_file_parse.c/h` — Pure-logic NFC file body parser with vtable-based
+  line reader (`nfc_line_reader_t`); provides `nfc_parse_body()` for "Page N:" /
+  "Block N:" dump lines, `nfc_parse_device_type()` for device-type string
+  classification, `nfc_parse_hex_bytes()` for hex byte parsing; extracted from
+  `nfc_storage.c` (Phase B).  Zero HAL/RTOS/FatFS deps; 26 host tests in
+  `tests/test_nfc_file_parse.c`.
+- `m1_csrc/mfc_layout.c/h` — Pure-logic Mifare Classic sector/block layout helpers:
+  `mfc_layout_from_sak()`, `mfc_sector_first_block()`, `mfc_sector_block_count()`,
+  `mfc_uid4_from_nfcid()`; extracted from `nfc_poller.c` (Phase B).
+  Zero HAL/RTOS/crypto deps; 27 host tests in `tests/test_mfc_layout.c`.
+- `m1_csrc/nfc_classify.c/h` — Pure-logic NFC-A device family classifier:
+  `nfc_classify_family()`, `nfc_classify_nfca()`; extracted from `nfc_ctx.c`
+  (Phase B).  Zero HAL/RTOS/display deps; 15 host tests in
+  `tests/test_nfc_classify.c`.
+- `m1_csrc/esp32_feature_map.c/h` — ESP32-gated feature-to-capability-bit classifier;
+  maps `esp32_feature_id_t` enum values (WiFi scan/attacks, BLE HID/GATT, BT manage,
+  802.15.4, etc.) to required `M1_ESP32_CAP_*` bits and UI labels; includes firmware
+  class classifier `esp32_firmware_is_sin360()` (Phase C, firmware-wide
+  Momentum-parity programme).  Zero HAL/RTOS deps; 36 host tests in
+  `tests/test_esp32_feature_map.c`.
+- `m1_csrc/ir_signal_record.c/h` — IR Universal Remote pure-logic helpers; protocol
+  name → IRMP ID mapping (19 protocols incl. NEC16 added in Phase H), `.ir` extension
+  check, path component append/go-up with buffer-size guard, case-insensitive substring
+  search, hex-byte parser (`ir_parse_hex_bytes`), signed int32-array parser
+  (`ir_parse_int32_array`, added Phase I), `ir_block_reader_t` KV-reader vtable,
+  `ir_cmd_parse()` block parser; extracted from `m1_ir_universal.c` (Phases F + G,
+  firmware-wide Momentum-parity programme).  Zero HAL/RTOS/FatFS deps;
+  `tests/stubs/ir_search_impl.c` dead stub removed; 50 host tests in
+  `tests/test_ir_signal_record.c` + 19 in `tests/test_ir_search.c` (now backed by the
+  real module) + 32 in `tests/test_ir_cmd_parse.c` (vtable + block parser).
+- `m1_csrc/ir_button_map.c/h` — Pure-logic IR button-to-command mapping; `ir_button_spec_t`
+  struct + `ir_map_buttons()` bidirectional case-insensitive substring matcher with exact
+  match priority and NULL-terminated fallback alt lists; extracted from
+  `m1_ir_quick_remote.c` (Phase H).  Zero HAL/RTOS/FatFS deps; 22 host tests in
+  `tests/test_ir_button_map.c`.
+- `flipper_ir_parse_block()` added to `m1_csrc/flipper_ir.c/h` (Phase I) — pure-logic
+  Flipper `.ir` signal block parser via `ir_block_reader_t` vtable; uses
+  `ir_parse_hex_bytes()` and `ir_parse_int32_array()` from `ir_signal_record.h`; zero
+  FatFS dependency.  `flipper_ir_read_signal()` reduced to a 5-wrapper FatFS adapter.
+  22 `flipper_ir_parse_block` test cases added to `tests/test_flipper_ir.c`.
+- **Phase J — `m1_badusb.c` migration to `badusb_parser.h`:** 46 `KEY_*` defines,
+  `ascii_hid_map_t` typedef, 95-entry `ascii_to_hid[]` table, and 3 static helpers
+  (`badusb_parse_key_name`, `badusb_parse_modifier`, `badusb_count_lines`) removed from
+  `m1_badusb.c`.  `badusb_parse_line()` refactored to a `busb_classify_line()` +
+  `switch` dispatch.  `badusb_type_char()` updated to `busb_ascii_to_hid()` +
+  `BUSB_KEY_*`/`BUSB_MOD_*`.  22 source-level regression cases in
+  `tests/test_badusb_migration.c`.
+- `m1_csrc/m1_bt_scene_{menu,sniff,spam,badbt}.c` — BT scene manager split into
+  per-group files following the `m1_subghz_scene_*.c` convention (Phase D).
+  `m1_bt_scene.h` exports the `BtSceneId` enum and all 29 handler symbols;
+  `m1_bt_scene.c` reduced to scene registry table + `bt_scene_entry()`.
+- `m1_csrc/m1_settings_scene_{menu,storage,power,fw,esp32}.c` — Settings scene manager
+  split into per-group files (Phase D).  `m1_settings_scene.h` exports the
+  `SettingsSceneId` enum and all 26 handler symbols; `m1_settings_scene.c` reduced
+  to scene registry table + `settings_scene_entry()`.
+
+**Phase E — Shared submenu-widget rollout:**
+
+`m1_submenu_event()` added to `m1_csrc/m1_submenu.c/h` alongside `m1_submenu_draw()`.
+Both functions auto-sync `visible_count` internally.  All simple-label-list menus in BT,
+Settings, NFC, and WiFi scene files migrated off raw `sel`/`scroll` byte pairs onto
+`subghz_submenu_model_t` + `m1_submenu_event` + `m1_submenu_draw`:
+
+| File | Menus migrated |
+|---|---|
+| `m1_bt_scene_menu.c` | Top-level BT menu |
+| `m1_bt_scene_sniff.c` | Sniffers sub-menu |
+| `m1_bt_scene_spam.c` | Spam sub-menu + Detectors sub-menu |
+| `m1_settings_scene_{menu,storage,power,fw,esp32}.c` | All 5 Settings menus |
+| `m1_nfc_scene.c` | NFC top-level menu |
+| `m1_wifi_scene.c` | WiFi top-level menu + 4 sub-menus |
+
+13 source-level regression tests in `tests/test_submenu_widget_rollout.c`.
 
 **Decoupling technique:** When extracted logic needs hardware-side operations,
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller

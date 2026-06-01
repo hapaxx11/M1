@@ -103,6 +103,32 @@ endif()
 add_test(NAME esp32_caps COMMAND test_esp32_caps)
 
 # ------------------------------------------------------------------
+# Module under test: esp32_feature_map (Phase C — feature classifier)
+#
+# Pure-logic module: given a capability bitmap (uint64_t), classifies
+# which firmware features are available and identifies the firmware class
+# (SiN360 vs. AT).  Zero HAL / RTOS / display dependencies.
+# Verifies:
+#   - esp32_feature_required_caps(): each feature ID maps to correct M1_ESP32_CAP_* bit
+#   - esp32_feature_label(): non-empty labels for all valid feature IDs
+#   - esp32_feature_supported(): zero bitmap, all-ones, exact-required, missing-bit
+#   - esp32_firmware_is_sin360(): SiN360 profile, AT profile, edge bitmaps
+#   - ESP32_FEATURE_COUNT equals the current table size (regression guard)
+# ------------------------------------------------------------------
+add_executable(test_esp32_feature_map
+    test_esp32_feature_map.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_esp32_feature_map PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_feature_map PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_feature_map PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_feature_map COMMAND test_esp32_feature_map)
+
+# ------------------------------------------------------------------
 # Module under test: battery_soc_estimate
 # Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
 # Bug context: "Asian M1" fuel gauge reports 0% SoC while device is
@@ -285,6 +311,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_subghz_lifecycle PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_subghz_lifecycle COMMAND test_esp32_subghz_lifecycle)
+
+# ------------------------------------------------------------------
+# Source invariant: Phase E submenu-widget rollout.
+# All BT, Settings, NFC, and WiFi scene menus must use m1_submenu_event
+# + m1_submenu_draw (shared widget) and must NOT call m1_scene_menu_event
+# (raw sel/scroll pair API).
+# ------------------------------------------------------------------
+add_executable(test_submenu_widget_rollout
+    test_submenu_widget_rollout.c
+)
+target_compile_definitions(test_submenu_widget_rollout PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_submenu_widget_rollout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_submenu_widget_rollout PRIVATE sanitizers)
+endif()
+add_test(NAME submenu_widget_rollout COMMAND test_submenu_widget_rollout)
 
 # ------------------------------------------------------------------
 # Source invariant: esp32_main_deinit() releases all heap held by the
@@ -691,6 +735,7 @@ add_executable(test_flipper_ir
     test_flipper_ir.c
     ${M1_ROOT}/m1_csrc/flipper_ir.c
     ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
 )
 target_include_directories(test_flipper_ir PRIVATE
     ${STUBS_DIR}
@@ -913,22 +958,86 @@ endif()
 add_test(NAME rgb_backlight COMMAND test_rgb_backlight)
 
 # ------------------------------------------------------------------
-# Module under test: str_contains_icase (IR Universal Remote search helper)
-# Pure function — case-insensitive substring search used by IRDB search.
-# Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.
+# Module under test: ir_signal_record (IR Universal Remote pure-logic helpers)
+# Extracted from m1_ir_universal.c (Phase F) — zero HAL/RTOS/FatFS deps.
+# Covers:
+#   ir_map_flipper_protocol()  — Flipper protocol name → IRMP protocol ID
+#   ir_is_ir_file()            — ".ir" extension check
+#   ir_path_append()           — path component append with buffer-size guard
+#   ir_path_go_up()            — navigate one level up in a path
+#   ir_str_contains_icase()    — case-insensitive substring search
+# Stubs: irmp.h (protocol constants only)
+# ------------------------------------------------------------------
+add_executable(test_ir_signal_record
+    test_ir_signal_record.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_ir_signal_record PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_ir_signal_record PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_signal_record PRIVATE sanitizers)
+endif()
+add_test(NAME ir_signal_record COMMAND test_ir_signal_record)
+
+# ------------------------------------------------------------------
+# Module under test: ir_str_contains_icase (IR Universal Remote search helper)
+# Now backed by the extracted ir_signal_record module (Phase F).
 # ------------------------------------------------------------------
 add_executable(test_ir_search
     test_ir_search.c
-    ${STUBS_DIR}/ir_search_impl.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
 )
 target_include_directories(test_ir_search PRIVATE
     ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
 )
 target_link_libraries(test_ir_search PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_ir_search PRIVATE sanitizers)
 endif()
 add_test(NAME ir_search COMMAND test_ir_search)
+
+# ------------------------------------------------------------------
+# Module under test: ir_cmd_parse (Phase G — KV-reader vtable abstraction)
+# Decouples parse_ir_signal_block() from FatFS via ir_block_reader_t.
+# No FatFS or HAL stubs needed — tests use a string-backed reader.
+# ------------------------------------------------------------------
+add_executable(test_ir_cmd_parse
+    test_ir_cmd_parse.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_ir_cmd_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_ir_cmd_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_cmd_parse PRIVATE sanitizers)
+endif()
+add_test(NAME ir_cmd_parse COMMAND test_ir_cmd_parse)
+
+# ------------------------------------------------------------------
+# Module under test: ir_button_map
+# Pure-logic button-to-command mapping — no HAL, RTOS, FatFS, or display deps.
+# Phase H extraction from m1_ir_quick_remote.c.
+# ------------------------------------------------------------------
+add_executable(test_ir_button_map
+    test_ir_button_map.c
+    ${M1_ROOT}/m1_csrc/ir_button_map.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_ir_button_map PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${STUBS_DIR}
+)
+target_link_libraries(test_ir_button_map PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_button_map PRIVATE sanitizers)
+endif()
+add_test(NAME ir_button_map COMMAND test_ir_button_map)
 
 # ------------------------------------------------------------------
 # Module under test: system_dashboard
@@ -1333,6 +1442,32 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_parser COMMAND test_badusb_parser)
 
+# ── Phase J: m1_badusb.c migration to badusb_parser.h ──
+add_executable(test_badusb_migration
+    test_badusb_migration.c
+)
+target_compile_definitions(test_badusb_migration PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_badusb_migration PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_badusb_migration PRIVATE sanitizers)
+endif()
+add_test(NAME badusb_migration COMMAND test_badusb_migration)
+
+# ── Phase A-6: WiFi HAL_Delay elimination ──
+add_executable(test_wifi_haldelay_free
+    test_wifi_haldelay_free.c
+)
+target_compile_definitions(test_wifi_haldelay_free PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_wifi_haldelay_free PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_haldelay_free PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_haldelay_free COMMAND test_wifi_haldelay_free)
+
 # ── Sub-GHz autosave logic ──
 add_executable(test_subghz_autosave
     test_subghz_autosave.c
@@ -1363,7 +1498,134 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
 
-# ── File utility path operations ──
+# ------------------------------------------------------------------
+# Module under test: nfc_ndef_parse (NDEF TLV record parser — URI + Text)
+#
+# Pure-logic NDEF message parser extracted from m1_nfc.c with zero
+# HAL/RTOS/FatFS/display deps:
+#   ndef_parse_records()  — raw NDEF bytes → newline-separated text
+# ------------------------------------------------------------------
+add_executable(test_nfc_ndef_parse
+    test_nfc_ndef_parse.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_parse.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_encode.c
+)
+target_include_directories(test_nfc_ndef_parse PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ndef_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ndef_parse PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ndef_parse COMMAND test_nfc_ndef_parse)
+
+# ------------------------------------------------------------------
+# Module under test: nfc_card_info (manufacturer lookup, SAK classifier, UID helpers)
+#
+# Pure-logic functions extracted from m1_nfc.c with zero HAL/RTOS/display deps:
+#   nfc_manufacturer_name()  — UID byte 0 → ISO/IEC 7816-6 manufacturer string
+#   nfc_sak_type_str()       — SAK + ATQA → NFC-A card-type string
+#   nfc_uid_fmt()            — raw UID bytes → "AA BB …" hex string
+#   nfc_uid_step()           — UID big-endian increment / decrement (fuzzer helper)
+# ------------------------------------------------------------------
+add_executable(test_nfc_card_info
+    test_nfc_card_info.c
+    ${M1_ROOT}/m1_csrc/nfc_card_info.c
+)
+target_include_directories(test_nfc_card_info PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_card_info PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_card_info PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_card_info COMMAND test_nfc_card_info)
+
+# ------------------------------------------------------------------
+# Module under test: nfc_file_parse (NFC file body parser — vtable-based line reader)
+#
+# Pure-logic extraction from nfc_storage.c with zero HAL/RTOS/FatFS deps:
+#   nfc_parse_hex_bytes()    — hex string → byte array
+#   nfc_parse_device_type()  — device-type string → tech/family/unit_size
+#   nfc_parse_body()         — "Page N:" / "Block N:" lines → dump buffer
+# ------------------------------------------------------------------
+add_executable(test_nfc_file_parse
+    test_nfc_file_parse.c
+    ${M1_ROOT}/m1_csrc/nfc_file_parse.c
+)
+target_include_directories(test_nfc_file_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_file_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_file_parse PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_file_parse COMMAND test_nfc_file_parse)
+
+# ------------------------------------------------------------------
+# Module under test: mfc_layout (Mifare Classic sector/block layout helpers)
+#
+# Pure-logic extraction from nfc_poller.c with zero HAL/RTOS/crypto deps:
+#   mfc_layout_from_sak()     — SAK → sectors + blocks
+#   mfc_sector_first_block()  — sector → first block number
+#   mfc_sector_block_count()  — sector → blocks-in-sector
+#   mfc_uid4_from_nfcid()     — NFCID → 4-byte Crypto-1 UID
+# ------------------------------------------------------------------
+add_executable(test_mfc_layout
+    test_mfc_layout.c
+    ${M1_ROOT}/m1_csrc/mfc_layout.c
+)
+target_include_directories(test_mfc_layout PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_mfc_layout PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mfc_layout PRIVATE sanitizers)
+endif()
+add_test(NAME mfc_layout COMMAND test_mfc_layout)
+
+# ------------------------------------------------------------------
+# Module under test: nfc_classify (NFC-A device family classifier)
+#
+# Pure-logic extraction from nfc_ctx.c with zero HAL/RTOS/display deps:
+#   nfc_classify_family()  — SAK + ATQA → family code
+#   nfc_classify_nfca()    — full NFC-A classification from primitives
+# ------------------------------------------------------------------
+add_executable(test_nfc_classify
+    test_nfc_classify.c
+    ${M1_ROOT}/m1_csrc/nfc_classify.c
+)
+target_include_directories(test_nfc_classify PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_classify PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_classify PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_classify COMMAND test_nfc_classify)
+
+# ------------------------------------------------------------------
+# Module under test: nfc_ntag (NTAG / Ultralight pure-logic helpers)
+#
+# Pure-logic extraction from nfc_poller.c with zero HAL/RTOS/FatFS deps:
+#   ntag_page_count_from_size()   — GET_VERSION size byte → page count
+#   ntag_generate_amiibo_pwd()    — Amiibo XOR-derived PWD + PACK
+# ------------------------------------------------------------------
+add_executable(test_nfc_ntag
+    test_nfc_ntag.c
+    ${M1_ROOT}/m1_csrc/nfc_ntag.c
+)
+target_include_directories(test_nfc_ntag PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ntag PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ntag PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ntag COMMAND test_nfc_ntag)
+
+
 add_executable(test_file_util
     test_file_util.c
     ${M1_ROOT}/m1_csrc/m1_file_util.c
@@ -1568,3 +1830,91 @@ if(TARGET sanitizers)
     target_link_libraries(test_elf_alloc_budget PRIVATE sanitizers)
 endif()
 add_test(NAME elf_alloc_budget COMMAND test_elf_alloc_budget)
+
+# ── WiFi AP record pure-logic extraction (Phase A — Firmware-wide Momentum parity) ──
+add_executable(test_wifi_ap_record
+    test_wifi_ap_record.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_ap_record PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_ap_record PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_ap_record PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_ap_record COMMAND test_wifi_ap_record)
+
+# ---------- wifi_status_msg (Phase A) ----------
+add_executable(test_wifi_status_msg
+    test_wifi_status_msg.c
+    ${M1_ROOT}/m1_csrc/wifi_status_msg.c
+)
+target_include_directories(test_wifi_status_msg PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_status_msg PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_status_msg PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_status_msg COMMAND test_wifi_status_msg)
+
+# ---------- wifi_mac_utils (Phase A) ----------
+add_executable(test_wifi_mac_utils
+    test_wifi_mac_utils.c
+    ${M1_ROOT}/m1_csrc/wifi_mac_utils.c
+)
+target_include_directories(test_wifi_mac_utils PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_mac_utils PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_mac_utils PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_mac_utils COMMAND test_wifi_mac_utils)
+
+# ---------- wifi_file_utils (Phase A) ----------
+add_executable(test_wifi_file_utils
+    test_wifi_file_utils.c
+    ${M1_ROOT}/m1_csrc/wifi_file_utils.c
+)
+target_include_directories(test_wifi_file_utils PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_file_utils PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_file_utils PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_file_utils COMMAND test_wifi_file_utils)
+
+# ---------- wifi_selection (Phase A) ----------
+add_executable(test_wifi_selection
+    test_wifi_selection.c
+    ${M1_ROOT}/m1_csrc/wifi_selection.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_selection PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_selection PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_selection PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_selection COMMAND test_wifi_selection)
+
+# ---------- wifi_deauth_cmd (Phase A) ----------
+add_executable(test_wifi_deauth_cmd
+    test_wifi_deauth_cmd.c
+    ${M1_ROOT}/m1_csrc/wifi_deauth_cmd.c
+    ${M1_ROOT}/m1_csrc/wifi_selection.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_deauth_cmd PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_deauth_cmd PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_deauth_cmd PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
+

@@ -1748,25 +1748,27 @@ navigation) keeps state management clean, testable, and consistent across the de
 
 ### Migration status
 
-**Migration is complete.**  All modules with submenus now use the scene-based
-architecture.  Sub-GHz has its own dedicated scene manager (`m1_subghz_scene.h/c`,
-17 scenes) with radio-specific event handling.  All other modules use the shared
-generic scene framework (`m1_scene.h/c`) with blocking delegates wrapping legacy
-functions.  BadUSB and Apps are single-function modules (no submenus) and do not
-need scene managers.
+Scene managers are present in **all** application modules with submenus.  However
+"scene-wrapped" (blocking delegate) and "scene-native/async" are meaningfully
+different quality levels.  Sub-GHz reached *scene-native/async* as part of the
+#519 Momentum-parity programme; the remaining modules are *scene-wrapped* — their
+scene shells call legacy blocking functions that freeze the UI for up to 2 seconds
+while waiting on hardware.  the firmware-wide momentum-parity programme (Phases A–J,
+tracked in the **Deferred Firmware-Wide Momentum-Parity Work** section below) will
+migrate the worst offenders to scene-native/async.
 
-| Module | Current | Target | Entry point |
-|--------|---------|--------|-------------|
-| **Sub-GHz** | ✅ Scene manager | Done | `sub_ghz_scene_entry()` → `m1_subghz_scene.c` |
-| **125KHz RFID** | ✅ Scene manager | Done | `rfid_scene_entry()` → `m1_rfid_scene.c` |
-| **NFC** | ✅ Scene manager | Done | `nfc_scene_entry()` → `m1_nfc_scene.c` |
-| **Infrared** | ✅ Scene manager | Done | `infrared_scene_entry()` → `m1_infrared_scene.c` |
-| **GPIO** | ✅ Scene manager | Done | `gpio_scene_entry()` → `m1_gpio_scene.c` |
-| **WiFi** | ✅ Scene manager | Done | `wifi_scene_entry()` → `m1_wifi_scene.c` |
-| **Bluetooth** | ✅ Scene manager | Done | `bt_scene_entry()` → `m1_bt_scene.c` |
-| **BadUSB** | — Single function | N/A | `badusb_run()` direct call (no submenus) |
-| **Games** | ✅ Scene manager | Done | `games_scene_entry()` → `m1_games_scene.c` |
-| **Settings** | ✅ Scene manager | Done | `settings_scene_entry()` → `m1_settings_scene.c` |
+| Module | Scene quality | Notes |
+|--------|--------------|-------|
+| **Sub-GHz** | ✅ Scene-native/async | 30 per-screen files; pure-logic units in `Sub_Ghz/`; async TX/RX flows; extensive host tests |
+| **125KHz RFID** | 🔶 Scene-wrapped | Good `lfrfid/` pure-logic separation + tests; 7 blocking `osDelay`/`vTaskDelay` calls; low priority (already well-structured) |
+| **NFC** | 🔶 Scene-wrapped | 8 scene IDs in 1 file; 25 `vTaskDelay`, 40 `while` loops; partial pure-logic units in `NFC/`; Phase B target |
+| **Infrared** | 🔶 Scene-wrapped | 6 scene IDs in 1 file; 12 `vTaskDelay`, 54 `while`; partial `Infrared/` vendored; Phase F target |
+| **GPIO** | 🔶 Scene-wrapped | 6–9 scene IDs; minimal blocking; acceptable as-is |
+| **WiFi** | ⚠️ Scene-wrapped (blocking) | 51 scene IDs split across 7 files (Phase D ✅); ~~23 `HAL_Delay` calls~~ eliminated (A-6 ✅); CMD_WIFI_JOIN async conversion N/A (SiN360 has no async push) |
+| **Bluetooth** | 🔶 Scene-wrapped | 32 scene IDs in 1 file; no hardware blocking; Phase D split target |
+| **BadUSB/BadBT** | — Single function | Intentionally no submenus; `osDelay` calls are legitimate script-pacing delays |
+| **Games** | 🔶 Scene-wrapped | Acceptable as-is |
+| **Settings** | 🔶 Scene-wrapped | 21 scene IDs in 1 file; Phase D split target |
 
 ### Agent instructions for scene migration
 
@@ -2117,6 +2119,428 @@ renderer in `Sub_Ghz/subghz_signal_format.c` and wire it onto the registry entri
 that share the same field decomposition.  Cover with a `test_subghz_signal_format`
 sub-suite mirroring the KeeLoq test pattern (output shape, prefix-terminated match,
 NULL safety, truncation safety).
+
+---
+
+## Deferred Firmware-Wide Momentum-Parity Work
+
+> This programme applies the #519 Sub-GHz architectural patterns (async flows, pure-logic
+> extraction, capability probes, per-screen scene files, shared widgets) across the rest
+> of the firmware.  Phases are independently mergeable and behaviour-preserving.
+> Each phase: extract → host-test → migrate callers → update docs → `.changelog` fragment.
+>
+> **Do not re-open deferred Sub-GHz items** (Phase 7c, 9e-2..5, 11-2+) as part of this
+> programme — they have separate trackers above.
+
+### Phase A — WiFi async conversion + pure-logic extraction
+
+**Status: In progress** (AP record + MAC utils + file utils + status msg model + STA record + selection counters + deauth cmd builder extracted; HAL_Delay elimination complete ✅; CMD_WIFI_JOIN async conversion pending)
+
+**Completed:**
+- `m1_csrc/wifi_ap_record.c/h` — binary ESP32 payload parser (`wifi_ap_record_parse_one`),
+  BSSID fmt/parse, MAC check, field sanitize, CSV quote; zero HAL/RTOS deps; 36 host tests.
+- `m1_csrc/wifi_mac_utils.c/h` — MAC address utilities (`wifi_mac_is_zero`, `wifi_mac_format`,
+  `wifi_mac_match`); zero HAL/RTOS deps; 16 host tests.
+- `m1_csrc/wifi_file_utils.c/h` — file extension validators (`wifi_ascii_lower`,
+  `wifi_ext_is_ap_cache`, `wifi_ext_is_html`, `wifi_ext_is_ssid_list`); zero HAL/RTOS deps;
+  21 host tests.
+- `m1_csrc/wifi_status_msg.c/h` — pure-logic timed status message model
+  (`wifi_status_msg_set/clear/active/expired`); models the blocking
+  "show message + HAL_Delay(N)" pattern as pollable data for async scene ticks;
+  zero HAL/RTOS deps; 17 host tests.
+- `m1_csrc/wifi_sta_record.h` — `wifi_sta_t` typedef promoted from file-local in
+  `m1_wifi.c` to shared header; enables cross-module use of the STA struct without
+  HAL/RTOS dependencies.  Also exports `WIFI_STA_MAX`.
+- `m1_csrc/wifi_selection.c/h` — parameterized AP/STA selection counters
+  (`wifi_selected_ap_count(list, count)`, `wifi_selected_sta_count(list, count)`);
+  2 static functions removed from `m1_wifi.c`; 5 call sites updated; zero HAL/RTOS deps;
+  18 host tests.
+- `m1_csrc/wifi_deauth_cmd.c/h` — pure-logic deauth multi-target command builder
+  (`wifi_deauth_add_target`, `wifi_build_selected_deauth_cmd`); `DEAUTH_MULTI_MAX_TARGETS`
+  and `DEAUTH_MULTI_TARGET_BYTES` moved here from `m1_wifi.c`; 2 static functions removed;
+  1 call site updated to pass arrays; zero HAL/RTOS deps; 19 host tests.
+- **A-6: HAL_Delay elimination** — all 23 `HAL_Delay` calls removed from `m1_wifi.c`:
+  - 18× status-screen `HAL_Delay(1800/2000)` replaced with `wifi_wait_dismiss()`, a static
+    helper that blocks in `xQueueReceive(portMAX_DELAY)` until Back or OK is pressed;
+    buttons are fully responsive during the wait, and other RTOS tasks (WDT, battery, LED)
+    continue to run.
+  - 4× ESP32 reset/boot waits (`HAL_Delay(200/2000)`) replaced with
+    `vTaskDelay(pdMS_TO_TICKS(N))` to preserve hardware timing while yielding to the RTOS.
+  - 1× station-scan countdown `HAL_Delay(1000)` converted to
+    `xQueueReceive(..., pdMS_TO_TICKS(1000))` with Back-press abort that sends
+    `CMD_STA_SCAN_STOP` and returns early.
+  - Source-level regression test added: `tests/test_wifi_haldelay_free.c` (9 tests);
+    confirms zero `HAL_Delay(` calls in `m1_wifi.c` and verifies all three replacement
+    patterns are present. **89/89 host tests pass.**
+
+**Remaining:**
+
+| Work item | Blocker |
+|-----------|---------|
+| Convert `CMD_WIFI_JOIN` round-trips into async event flows | ~~Requires SiN360 ESP32 firmware handshake protocol review~~ **N/A** — SiN360 ESP32 has no async push mechanism; SPI is strictly master-initiated; `CMD_WIFI_JOIN` blocks in ESP32 for up to 8 s then returns `RESP_BUSY`. STM32 side already cooperates via RTOS task + 10 s timeout. No further change needed. |
+| Split `m1_wifi_scene.c` (51 scene IDs, 1 file) into per-screen `m1_wifi_scene_*.c` files | ~~Should follow CMD_WIFI_JOIN async conversion~~ **Complete ✅** — see Phase D |
+
+**Do not add new `HAL_Delay` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**
+
+### Phase B — NFC pure-logic extraction
+
+**Status: Complete ✅**
+
+**Completed:**
+- `m1_csrc/nfc_card_info.c/h` — ISO/IEC 7816-6 manufacturer lookup (`nfc_manufacturer_name`),
+  NFC-A SAK/ATQA type classifier (`nfc_sak_type_str`), UID hex formatter (`nfc_uid_fmt`),
+  UID arithmetic step (`nfc_uid_step`); zero HAL/RTOS deps; 45 host tests (ASan + UBSan clean).
+- `m1_csrc/nfc_ndef_parse.c/h` — NDEF TLV record parser (`ndef_parse_records`) decoding
+  URI records (36 NFC Forum URI RTD prefix codes) and Text records (UTF-8 with language code
+  skip) from raw NDEF message bytes into newline-separated human-readable text;
+  zero HAL/RTOS/FatFS deps; 22 host tests (ASan + UBSan clean).
+  Complement to `nfc_ndef_encode.c/h` (encode ↔ parse roundtrip tested).
+- `m1_nfc.c` — `nfc_tool_parse_ndef_text()` replaced with 3-line delegate to
+  `ndef_parse_records()`; `nfc_tool_write_url()` inline NDEF TLV building replaced
+  with `ndef_encode_uri()` call (dedup).
+- `m1_nfc.c` updated to call extracted helpers; static inline duplicates removed.
+- `m1_csrc/nfc_file_parse.c/h` — Pure-logic NFC file body parser with vtable-based
+  line reader (`nfc_line_reader_t`, same pattern as `ir_block_reader_t`).
+  Provides `nfc_parse_body()` for "Page N:" / "Block N:" dump lines,
+  `nfc_parse_device_type()` for device-type string classification, and
+  `nfc_parse_hex_bytes()` for hex byte parsing.
+  Zero HAL/RTOS/FatFS deps; 26 host tests (ASan + UBSan clean).
+  `nfc_storage.c` body parser replaced with nfcfio→vtable adapter delegate.
+- `m1_csrc/mfc_layout.c/h` — Pure-logic Mifare Classic sector/block layout helpers:
+  `mfc_layout_from_sak()` (SAK→sectors+blocks), `mfc_sector_first_block()`,
+  `mfc_sector_block_count()`, `mfc_uid4_from_nfcid()` (NFCID→4-byte Crypto-1 UID),
+  `mfc_parse_key_line()` (hex key-dict line → 6-byte key, whitespace/comment tolerant).
+  Zero HAL/RTOS/crypto deps; 40 host tests (ASan + UBSan clean).
+  `nfc_poller.c` layout/UID/key-parse statics replaced with delegates to mfc_layout.c.
+- `m1_csrc/nfc_classify.c/h` — Pure-logic NFC-A device family classifier:
+  `nfc_classify_family()` (SAK+ATQA→family), `nfc_classify_nfca()` (full
+  classification from primitives into `nfc_classify_result_t`).
+  Zero HAL/RTOS/display deps; 15 host tests (ASan + UBSan clean).
+  `nfc_ctx.c` classifier and `FillNfcContextFromDevice` now delegate to nfc_classify.c.
+- `m1_csrc/nfc_ntag.c/h` — Pure-logic NTAG/Ultralight helpers:
+  `ntag_page_count_from_size()` (GET_VERSION size byte → page count for NTAG213/215/216),
+  `ntag_generate_amiibo_pwd()` (deterministic XOR-derived PWD+PACK from 7-byte UID).
+  Zero HAL/RTOS/FatFS deps; 14 host tests (ASan + UBSan clean).
+  `nfc_poller.c` `LogParsedNtagVersion()` and `ntag_generate_amiibo_pwd()` delegate
+  to nfc_ntag.c; `nfc_ctx.c` `make_uid_text()` static deduped to `nfc_uid_fmt()`.
+
+**Do not add new inline card-classification logic to `m1_nfc.c`; use `nfc_card_info.h` instead.**
+**Do not add new inline NDEF parsing or encoding to `m1_nfc.c`; use `nfc_ndef_parse.h` / `nfc_ndef_encode.h` instead.**
+**Do not add new inline device-type parsing; use `nfc_file_parse.h` (`nfc_parse_device_type`) instead.**
+**Do not add new inline MFC layout/sector/key-parse logic; use `mfc_layout.h` instead.**
+**Do not add new inline NFC-A family classification; use `nfc_classify.h` instead.**
+**Do not add new inline NTAG page-count or Amiibo pwd derivation; use `nfc_ntag.h` instead.**
+**Do not add new inline UID formatting to `nfc_ctx.c`; use `nfc_uid_fmt()` from `nfc_card_info.h` instead.**
+
+### Phase C — Unified capability-probe module for WiFi / BT / NFC
+
+**Status: Complete ✅**
+
+- `m1_csrc/esp32_feature_map.c/h` — pure-logic ESP32 feature-to-capability classifier
+  (`esp32_feature_supported`, `esp32_feature_required_caps`, `esp32_feature_label`,
+  `esp32_firmware_is_sin360`); zero HAL/RTOS deps; 36 host tests (ASan + UBSan clean).
+- `m1_esp32_caps_get_bitmap()` added to `m1_esp32_caps.h/c` for full-bitmap access.
+- `m1_wifi_scene.c` — `DELEGATE_CAPPED(…, cap, label)` replaced by
+  `DELEGATE_FEATURE(…, ESP32_FEATURE_WIFI_JOIN)` using the centralised table.
+- `m1_bt_scene.c` — 5 `DELEGATE_CAPPED` call sites replaced by `DELEGATE_FEATURE`
+  (BLE_HID×2, BLE_GATT×1, BT_MANAGE×2).
+- `m1_badbt.c` — inline `m1_esp32_has_cap(BLE_HID) && !m1_esp32_has_cap(WIFI_JOIN)`
+  binary detection replaced by `esp32_firmware_is_sin360(m1_esp32_caps_get_bitmap())`.
+- `cmake/m1_01/CMakeLists.txt` — `esp32_feature_map.c` and `nfc_card_info.c` added
+  (the latter was missing from the firmware build since Phase B).
+- `ARCHITECTURE.md` extractions list updated.
+
+NFC (`m1_nfc.c`, `m1_nfc_scene.c`) has no inline firmware-name string checks; no
+capability gating is needed — NFC tools are RFAL-hardware-dependent and always use
+the on-board NFC controller, not the ESP32 coprocessor.  Settings similarly has no
+ESP32 capability dependencies.
+
+**Do not add new `DELEGATE_CAPPED(… M1_ESP32_CAP_*, "label")` sites; use
+`DELEGATE_FEATURE(… ESP32_FEATURE_*)` and add one row to `esp32_feature_map.c` instead.**
+
+### Phase D — Scene-file granularity for WiFi (51), BT (32), Settings (21)
+
+**Status: In progress** — BT + Settings + WiFi splits complete ✅
+
+Split the large single-file scene managers into per-screen files following the
+`m1_subghz_scene_*.c` convention.  Do this *after* the async/extraction work for
+each module so each split file is already clean.  NFC (8), RFID (7), IR (6), GPIO
+(6–9) are acceptable as-is and are **not** worth splitting.
+
+**Completed:**
+- `m1_bt_scene.h` — `BtSceneId` typedef enum (33 values) + extern handler declarations
+- `m1_bt_scene_menu.c` — top-level 14-item menu + Scan/Advertise/Config delegates
+- `m1_bt_scene_sniff.c` — BLE Sniffers sub-menu + 6 sniffer + 3 wardrive delegates
+- `m1_bt_scene_spam.c` — BLE Spam sub-menu + 7 spam/spoof + Detectors sub-menu + 3 detect delegates
+- `m1_bt_scene_badbt.c` — Bad-BT/BT Name (BLE_HID), GATT (BLE_GATT), Saved/Info (BT_MANAGE) delegates
+- `m1_bt_scene.c` stripped to registry table + `bt_scene_entry()` only
+- `m1_settings_scene.h` — `SettingsSceneId` typedef enum (26 values) + extern handler declarations
+- `m1_settings_scene_menu.c` — top-level 7-item menu + LCD/About/Dashboard delegates
+- `m1_settings_scene_storage.c` — Storage sub-menu + 5 storage delegates
+- `m1_settings_scene_power.c` — Power sub-menu + 3 power delegates
+- `m1_settings_scene_fw.c` — Firmware Update sub-menu + 4 fw delegates
+- `m1_settings_scene_esp32.c` — ESP32 Update sub-menu + 6 ESP32 delegates
+- `m1_settings_scene.c` stripped to registry table + `settings_scene_entry()` only
+- All new files added to `cmake/m1_01/CMakeLists.txt`
+
+- `m1_wifi_scene.h` — `WifiSceneId` typedef enum (48/51 values, ifdef-gated for connect features) + extern handler declarations
+- `m1_wifi_scene_menu.c` — top-level 12/15-item menu + 8 direct tool delegates + DELEGATE macro definition
+- `m1_wifi_scene_sniff.c` — Sniffers sub-menu + 7 sniffer delegates
+- `m1_wifi_scene_attack.c` — Attacks sub-menu + 8 attack delegates
+- `m1_wifi_scene_net.c` — Net Scan sub-menu + 5 net delegates
+- `m1_wifi_scene_general.c` — General sub-menu + 14 general delegates
+- `m1_wifi_scene_connect.c` — `#ifdef M1_APP_WIFI_CONNECT_ENABLE`-gated: Saved/Status/Disconnect using `DELEGATE_FEATURE` with `ESP32_FEATURE_WIFI_JOIN`
+- `m1_wifi_scene.c` stripped to registry table + `wifi_scene_entry()` only
+- All new files added to `cmake/m1_01/CMakeLists.txt`
+
+**Remaining:**
+- (none — all three modules split)
+
+### Phase E — Shared submenu-widget rollout
+
+**Status: Complete ✅**
+
+`m1_submenu_event()` added to `m1_submenu.c/h` alongside the existing `m1_submenu_draw()`.
+Both functions auto-sync `visible_count = M1_MENU_VIS(item_count)` internally, so callers
+no longer call `subghz_submenu_model_set_visible_count()` explicitly.
+
+Migrated files (raw `sel`/`scroll` byte pairs → `subghz_submenu_model_t` + widget API):
+
+| File | Menus migrated |
+|---|---|
+| `m1_csrc/m1_bt_scene_menu.c` | Top-level BT menu (14 items) |
+| `m1_csrc/m1_bt_scene_sniff.c` | Sniffers sub-menu (6 items) |
+| `m1_csrc/m1_bt_scene_spam.c` | Spam sub-menu (7 items) + Detectors sub-menu (3 items) |
+| `m1_csrc/m1_settings_scene_menu.c` | Top-level Settings menu (7 items) |
+| `m1_csrc/m1_settings_scene_storage.c` | Storage sub-menu |
+| `m1_csrc/m1_settings_scene_power.c` | Power sub-menu |
+| `m1_csrc/m1_settings_scene_fw.c` | Firmware Update sub-menu |
+| `m1_csrc/m1_settings_scene_esp32.c` | ESP32 Update sub-menu |
+| `m1_csrc/m1_nfc_scene.c` | NFC top-level menu |
+| `m1_csrc/m1_wifi_scene_menu.c` | WiFi top-level menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_sniff.c` | WiFi Sniffers sub-menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_attack.c` | WiFi Attacks sub-menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_net.c` | WiFi Net Scan sub-menu (Phase D split) |
+| `m1_csrc/m1_wifi_scene_general.c` | WiFi General sub-menu (Phase D split) |
+
+13 source-level regression test cases in `tests/test_submenu_widget_rollout.c`. 79/79 host tests pass, ASan + UBSan clean.
+
+IR menus excluded: `m1_ir_quick_remote.c` has a dynamic menu (variable count/labels); `m1_ir_universal.c` has no `m1_scene_menu_event` calls. Both are non-trivial and outside the "simple label list" scope.
+
+### Phase F — IR universal pure-logic extraction
+
+**Status: Complete ✅ (pure-logic layer done; deeper extraction blocked by HAL/RTOS deps)**
+
+`m1_csrc/ir_signal_record.c/h` extracted from `m1_ir_universal.c` with zero
+HAL, RTOS, FatFS, or display dependencies:
+
+| Function | Formerly | What it does |
+|---|---|---|
+| `ir_map_flipper_protocol(name)` | `static map_flipper_protocol` | Flipper protocol name → IRMP protocol ID |
+| `ir_is_ir_file(fname)` | `static is_ir_file` | Check `.ir` extension (case-sensitive) |
+| `ir_path_append(base, item, size)` | `static path_append` | Append path component with buffer-size guard |
+| `ir_path_go_up(path)` | `static path_go_up` | Navigate one level up in a path string |
+| `ir_str_contains_icase(h, n)` | `static str_contains_icase` | Case-insensitive substring search |
+
+5 static bodies removed from `m1_ir_universal.c`; 13 call sites updated to the
+new public names.  `ir_path_append` signature generalised: callers pass `base_size`
+instead of relying on the private `IR_UNIVERSAL_PATH_MAX_LEN` constant.
+
+`tests/stubs/ir_search_impl.c` (dead copy of `str_contains_icase`) deleted;
+`test_ir_search.c` updated to include `ir_signal_record.h` and call
+`ir_str_contains_icase` from the real module.
+
+47 Unity test cases:
+- `tests/test_ir_signal_record.c` — 41 cases covering all 5 functions: all 18
+  protocol mappings, null/unknown guards, case-sensitivity check, extension
+  edge cases, path boundary/overflow guard, null-safe calls
+- `tests/test_ir_search.c` — 19 existing cases now backed by the real module
+  (stub removed)
+
+ASan + UBSan clean.  80/80 host tests pass.
+
+**Remaining work:**
+- `parse_ir_signal_block()` FatFS coupling — **resolved by Phase G** (`ir_cmd_parse` +
+  `ir_block_reader_t` vtable; thin FatFS adapter left in `m1_ir_universal.c`).
+- 12 `vTaskDelay` / 54 `while` calls in the monolith body — timing-sensitive
+  IR hardware ops; no async conversion planned.
+
+---
+
+### Phase G — `ir_cmd_parse` extraction (KV-reader vtable abstraction)
+
+**Status: Complete ✅**
+
+Decouples `parse_ir_signal_block()` from FatFS by introducing an
+`ir_block_reader_t` vtable in `ir_signal_record.h`.  The parser logic (`ir_cmd_parse`)
+lives in `ir_signal_record.c` with zero FatFS deps; `m1_ir_universal.c` contains only
+a thin 8-line FatFS adapter.
+
+Added to `m1_csrc/ir_signal_record.c/h`:
+
+| Symbol | What it does |
+|---|---|
+| `IR_CMD_NAME_MAX_LEN` | `32` — max IR signal name length including NUL |
+| `ir_universal_cmd_t` | Parsed IR command record (moved from `m1_ir_universal.h`) |
+| `ir_parse_hex_bytes(str, out, max_len)` | Space-separated hex string → byte array (clone of `ff_parse_hex_bytes`, pure logic) |
+| `ir_block_reader_t` | Vtable: `next`, `is_sep`, `parse_kv`, `get_key`, `get_value` function pointers |
+| `ir_cmd_parse(ops, ctx, cmd)` | Parse one IR signal block via any `ir_block_reader_t`; replaces inline body of `parse_ir_signal_block` |
+
+`m1_ir_universal.h` updated: `ir_universal_cmd_t` removed (now in `ir_signal_record.h`);
+`#include "ir_signal_record.h"` added; `#define IR_UNIVERSAL_NAME_MAX_LEN IR_CMD_NAME_MAX_LEN`
+kept for backward compat.
+
+`parse_ir_signal_block()` in `m1_ir_universal.c` replaced with five thin static
+adapter wrappers (`ff_next_wrap`, `ff_is_sep_wrap`, `ff_parse_kv_wrap`,
+`ff_get_key_wrap`, `ff_get_val_wrap`) + a static `const ir_block_reader_t s_ff_reader`
+table + a one-line body that calls `ir_cmd_parse(&s_ff_reader, ff, cmd)`.
+
+32 Unity test cases in `tests/test_ir_cmd_parse.c` covering:
+- `ir_parse_hex_bytes`: null/empty/single/multi-byte, overflow clamp, case, leading whitespace
+- `ir_cmd_parse`: null guards, empty stream, valid NEC/RC5/Samsung32 parsed signals,
+  address/command little-endian encoding, raw signal (frequency + count), separator
+  termination, two-block sequential parsing, unknown protocol → false, missing
+  type/name → false, raw freq=0 → false, cmd zeroed on entry, protocol spot-checks
+  (Samsung48, RC6, Denon)
+
+ASan + UBSan clean.  **81/81 host tests pass.**
+
+**Remaining work:** None for this extraction.  12 `vTaskDelay` / 54 `while` calls in
+the wider `m1_ir_universal.c` body — timing-sensitive IR hardware ops; no async
+conversion planned.
+
+---
+
+### Phase H — `ir_button_map` extraction + `load_device` vtable migration
+
+**Status: Complete ✅**
+
+**`m1_csrc/ir_button_map.c/h`** — pure-logic button-to-command mapping extracted from
+`m1_ir_quick_remote.c`, zero HAL/RTOS/FatFS/display dependencies:
+
+| Symbol | What it does |
+|---|---|
+| `ir_button_spec_t` | Struct: `cmd_name` (primary) + `cmd_alts` (NULL-terminated fallback list) |
+| `ir_map_buttons(specs, btn_count, cmd_names, cmd_count, out_map, max_btns)` | Map button specs to command indices via bidirectional case-insensitive substring match; fills all slots to -1 first; exact match is preferred over substring match |
+
+**Protocol gap fix:** `ir_map_flipper_protocol()` was missing `NEC16 → IRMP_NEC16_PROTOCOL`
+(protocol ID 27), present in `flipper_ir.c`'s table but absent from `ir_signal_record.c`.
+Added after the NEC42/NEC42ext entry.
+
+**`load_device()` migration in `m1_ir_quick_remote.c`:**
+- Added 5 thin static `ff_*_wrap()` adapter functions + `static const ir_block_reader_t s_ff_reader`
+  (mirrors the Phase G adapter in `m1_ir_universal.c`)
+- The 90-line manual KV-parsing loop replaced with a `while`/`ir_cmd_parse()` loop per block
+- Uses `ir_map_flipper_protocol()` (consistent with `ir_cmd_parse`) instead of
+  `flipper_ir_proto_to_irmp()` (the former `load_device` path)
+
+**`m1_ir_quick_remote.c` duplicates removed:**
+- `ci_substr()` — removed; `ir_str_contains_icase()` from `ir_signal_record.h` used instead
+- `try_map_name()` — removed; logic moved into `try_match_name()` in `ir_button_map.c`
+- `map_buttons_to_commands()` body — replaced with thin wrapper calling `ir_map_buttons()`
+
+**Test count:** 1 (NEC16) new test case added to `test_ir_signal_record.c` + 22 Unity test
+cases in `tests/test_ir_button_map.c` covering: null/empty guards, exact match (single,
+first-entry, multi-button), bidirectional case-insensitive substring match, alt fallback
+(primary fails, first-matching alt wins, NULL/empty list), `max_btns` boundary, exact
+preferred over substring, realistic TV remote mapping, NULL primary name.
+
+ASan + UBSan clean.  **82/82 host tests pass.**
+
+**Remaining work:** None.  `m1_ir_quick_remote.c` still contains HAL-dependent
+`qr_transmit_raw()` (uses `flipper_ir_read_signal`, IRMP raw samples) and the
+visual grid rendering — these are scene-integrated and not extractable.
+
+---
+
+### Phase I — `flipper_ir_parse_block()` vtable extraction + `ir_parse_int32_array`
+
+**Status: Complete ✅**
+
+Applies the `ir_block_reader_t` vtable pattern introduced in Phase G to
+`flipper_ir_read_signal()` in `flipper_ir.c`, decoupling the Flipper `.ir` file
+block parser from FatFS.
+
+**`ir_parse_int32_array()` added to `m1_csrc/ir_signal_record.c/h`:**
+
+| Symbol | What it does |
+|---|---|
+| `ir_parse_int32_array(str, out, max_count)` | Space-separated signed integer string → `int32_t` array; pure-logic clone of `ff_parse_int32_array()` from `flipper_file.c`; no FatFS dependency |
+
+**`flipper_ir_parse_block()` added to `m1_csrc/flipper_ir.c/h`:**
+
+| Symbol | What it does |
+|---|---|
+| `flipper_ir_parse_block(ops, ctx, out)` | Parse one Flipper `.ir` signal block via any `ir_block_reader_t`; contains the full parsing logic (name/type/protocol/address/command/frequency/duty_cycle/data); uses `ir_parse_hex_bytes()` and `ir_parse_int32_array()` from `ir_signal_record.h`; zero FatFS dependency |
+
+**`flipper_ir_read_signal()` reduced to thin FatFS adapter:**
+- 5 static `ff_*_wrap()` adapter functions + `static const ir_block_reader_t s_ff_reader` added
+  (same pattern as Phase G adapter in `m1_ir_universal.c` and Phase H adapter in `m1_ir_quick_remote.c`)
+- `flipper_ir_read_signal()` body: null guard + `return flipper_ir_parse_block(&s_ff_reader, ctx, out)`
+- FatFS dependency stays entirely in `flipper_ir.c`; parser logic is now fully testable on the host
+
+**`#include "ir_signal_record.h"` added to `flipper_ir.h`** — for `ir_block_reader_t` type;
+one-way dependency, no circular include.
+
+**`tests/CMakeLists.txt`:** `ir_signal_record.c` added to the `test_flipper_ir` target
+(previously the target had no `ir_signal_record.c` and the new vtable functions would be undefined).
+
+**Test count:** 8 `ir_parse_int32_array` test cases added to `test_ir_signal_record.c` (null guards,
+empty, single/multi value, negatives, `max_count` clamp) + 22 `flipper_ir_parse_block` Unity test
+cases in `test_flipper_ir.c` using a string-backed `ir_block_reader_t` adapter (null ops/ctx/out
+guards, empty stream, NEC/RC5/Samsung32 parsed signals, address encoding, unknown protocol → protocol
+ID 0, unknown type → false, missing command → false, separator skipped (not terminator), raw basic,
+raw negatives, raw empty data → invalid, duty_cycle integer parse, two sequential signals, name
+truncation at `FLIPPER_IR_NAME_MAX_LEN`).
+
+ASan + UBSan clean.  **82/82 host tests pass.**
+
+**Remaining work:** None.  FatFS dependency is fully isolated to `flipper_ir.c`; the parser logic
+is vtable-abstracted and host-testable.
+
+---
+
+### Phase J — `m1_badusb.c` migration to `badusb_parser.h`
+
+**Status: Complete ✅**
+
+Migrates `m1_badusb.c` (the DuckyScript executor) off its own duplicate static helpers and HID
+constant tables onto the pure-logic `badusb_parser.h` module (extracted previously), following the
+same pattern as Phase H (`m1_ir_quick_remote.c` → `ir_button_map.h` / `ir_signal_record.h`).
+
+**Removed from `m1_badusb.c`:**
+
+| Removed | Replaced by |
+|---|---|
+| `/* HID Keyboard scancodes */` block — 46 `KEY_*` defines | `BUSB_KEY_*` from `badusb_parser.h` |
+| `typedef struct { keycode; shift; } ascii_hid_map_t;` | `busb_ascii_hid_map_t` from `badusb_parser.h` |
+| `static const ascii_hid_map_t ascii_to_hid[]` — 95-entry table | `busb_ascii_to_hid(c)` API call |
+| `static uint8_t badusb_parse_key_name(name)` | `busb_parse_key_name()` (in `busb_classify_line`) |
+| `static uint8_t badusb_parse_modifier(name, remainder)` | `busb_parse_modifier()` (in `busb_classify_line`) |
+| `static uint16_t badusb_count_lines(buf, len)` | `busb_count_lines(buf, len)` |
+
+**`badusb_parse_line()` refactored** — 130-line manual keyword-dispatch loop replaced with:
+```c
+busb_parsed_line_t parsed;
+busb_classify_line(line, &parsed);
+switch (parsed.type) { … }
+```
+Each case dispatches to the hardware action (osDelay, badusb_type_string, badusb_send_key, …) using
+the pre-parsed data from `parsed.u.*`. REPEAT handling unchanged (recursive call on `badusb_state.last_line`).
+
+**`badusb_type_char()` updated** — `KEY_ENTER` → `BUSB_KEY_ENTER`, `KEY_TAB` → `BUSB_KEY_TAB`,
+`&ascii_to_hid[c - 0x20]` → `busb_ascii_to_hid((unsigned char)c)`,
+`HID_MOD_LSHIFT` → `BUSB_MOD_LSHIFT`.
+
+**`#include "badusb_parser.h"` added** to `m1_badusb.c`.
+
+**22 source-level regression test cases** in `tests/test_badusb_migration.c` — verifies includes,
+absence of old defines/typedef/table/static helpers, presence of new API calls (`busb_classify_line`,
+`busb_count_lines`, `busb_ascii_to_hid`, `BUSB_KEY_*`, `BUSB_MOD_*`) and `badusb_parser.h`/`.c`
+API surface. ASan + UBSan clean. **83/83 host tests pass.**
+
+**Remaining work:** None.  All duplicate static helpers and HID constant tables removed from
+`m1_badusb.c`; pure-logic classification lives entirely in `badusb_parser.c`.
 
 ---
 

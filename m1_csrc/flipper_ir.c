@@ -73,6 +73,11 @@ static const ir_proto_map_t ir_proto_table[] = {
 
 static int ff_strcasecmp(const char *a, const char *b);
 static uint16_t ff_hex_bytes_to_uint16_le(const uint8_t *bytes, uint8_t count);
+static bool ff_next_wrap(void *ctx);
+static bool ff_is_sep_wrap(void *ctx);
+static bool ff_parse_kv_wrap(void *ctx);
+static const char *ff_get_key_wrap(void *ctx);
+static const char *ff_get_val_wrap(void *ctx);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -178,7 +183,7 @@ bool flipper_ir_open(flipper_file_t *ctx, const char *path)
 
 /*============================================================================*/
 /**
- * @brief  Read the next IR signal from an open .ir file.
+ * @brief  Parse one IR signal block using an ir_block_reader_t vtable.
  *
  *         Parsed signal format:
  *           name: Power
@@ -194,39 +199,40 @@ bool flipper_ir_open(flipper_file_t *ctx, const char *path)
  *           duty_cycle: 0.330000
  *           data: 9024 4512 579 552 ...
  *
- * @param  ctx  flipper file context (must be open)
- * @param  out  output signal structure
- * @return true if a signal was read, false at EOF or error
+ * @param  ops  Non-NULL reader vtable.
+ * @param  ctx  Opaque context pointer forwarded to every vtable call.
+ * @param  out  Output signal structure; zeroed on entry.
+ * @return true if a valid signal was parsed, false at EOF or error.
  */
-bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
+bool flipper_ir_parse_block(const ir_block_reader_t *ops, void *ctx, flipper_ir_signal_t *out)
 {
 	bool got_name = false;
 	bool got_type = false;
 	uint8_t hex_buf[4];
 	uint8_t hex_count;
 
-	if (ctx == NULL || out == NULL)
+	if (ops == NULL || ctx == NULL || out == NULL)
 		return false;
 
 	memset(out, 0, sizeof(flipper_ir_signal_t));
 	out->valid = false;
 
 	/* Scan for the start of a signal block */
-	while (ff_read_line(ctx))
+	while (ops->next(ctx))
 	{
 		/* Skip separator lines */
-		if (ff_is_separator(ctx))
+		if (ops->is_sep(ctx))
 			continue;
 
-		if (!ff_parse_kv(ctx))
+		if (!ops->parse_kv(ctx))
 			continue;
 
 		/* Look for "name:" to start a signal block */
 		if (!got_name)
 		{
-			if (ff_strcasecmp(ff_get_key(ctx), "name") == 0)
+			if (ff_strcasecmp(ops->get_key(ctx), "name") == 0)
 			{
-				strncpy(out->name, ff_get_value(ctx), FLIPPER_IR_NAME_MAX_LEN - 1);
+				strncpy(out->name, ops->get_value(ctx), FLIPPER_IR_NAME_MAX_LEN - 1);
 				out->name[FLIPPER_IR_NAME_MAX_LEN - 1] = '\0';
 				got_name = true;
 			}
@@ -236,11 +242,11 @@ bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
 		/* After name, expect type */
 		if (!got_type)
 		{
-			if (ff_strcasecmp(ff_get_key(ctx), "type") == 0)
+			if (ff_strcasecmp(ops->get_key(ctx), "type") == 0)
 			{
-				if (ff_strcasecmp(ff_get_value(ctx), "parsed") == 0)
+				if (ff_strcasecmp(ops->get_value(ctx), "parsed") == 0)
 					out->type = FLIPPER_IR_SIGNAL_PARSED;
-				else if (ff_strcasecmp(ff_get_value(ctx), "raw") == 0)
+				else if (ff_strcasecmp(ops->get_value(ctx), "raw") == 0)
 					out->type = FLIPPER_IR_SIGNAL_RAW;
 				else
 					return false;  /* Unknown type */
@@ -253,18 +259,18 @@ bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
 		/* Parse type-specific fields */
 		if (out->type == FLIPPER_IR_SIGNAL_PARSED)
 		{
-			if (ff_strcasecmp(ff_get_key(ctx), "protocol") == 0)
+			if (ff_strcasecmp(ops->get_key(ctx), "protocol") == 0)
 			{
-				out->parsed.protocol = flipper_ir_proto_to_irmp(ff_get_value(ctx));
+				out->parsed.protocol = flipper_ir_proto_to_irmp(ops->get_value(ctx));
 			}
-			else if (ff_strcasecmp(ff_get_key(ctx), "address") == 0)
+			else if (ff_strcasecmp(ops->get_key(ctx), "address") == 0)
 			{
-				hex_count = ff_parse_hex_bytes(ff_get_value(ctx), hex_buf, 4);
+				hex_count = ir_parse_hex_bytes(ops->get_value(ctx), hex_buf, 4);
 				out->parsed.address = ff_hex_bytes_to_uint16_le(hex_buf, hex_count);
 			}
-			else if (ff_strcasecmp(ff_get_key(ctx), "command") == 0)
+			else if (ff_strcasecmp(ops->get_key(ctx), "command") == 0)
 			{
-				hex_count = ff_parse_hex_bytes(ff_get_value(ctx), hex_buf, 4);
+				hex_count = ir_parse_hex_bytes(ops->get_value(ctx), hex_buf, 4);
 				out->parsed.command = ff_hex_bytes_to_uint16_le(hex_buf, hex_count);
 				out->parsed.flags = 0;
 				out->valid = true;
@@ -273,14 +279,14 @@ bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
 		}
 		else /* FLIPPER_IR_SIGNAL_RAW */
 		{
-			if (ff_strcasecmp(ff_get_key(ctx), "frequency") == 0)
+			if (ff_strcasecmp(ops->get_key(ctx), "frequency") == 0)
 			{
-				out->raw.frequency = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
+				out->raw.frequency = (uint32_t)strtoul(ops->get_value(ctx), NULL, 10);
 			}
-			else if (ff_strcasecmp(ff_get_key(ctx), "duty_cycle") == 0)
+			else if (ff_strcasecmp(ops->get_key(ctx), "duty_cycle") == 0)
 			{
 				/* Parse float manually for embedded compatibility */
-				const char *p = ff_get_value(ctx);
+				const char *p = ops->get_value(ctx);
 				int whole = 0;
 				int frac = 0;
 				int frac_div = 1;
@@ -300,10 +306,10 @@ bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
 				}
 				out->raw.duty_cycle = (float)whole + (float)frac / (float)frac_div;
 			}
-			else if (ff_strcasecmp(ff_get_key(ctx), "data") == 0)
+			else if (ff_strcasecmp(ops->get_key(ctx), "data") == 0)
 			{
-				out->raw.sample_count = ff_parse_int32_array(
-					ff_get_value(ctx),
+				out->raw.sample_count = ir_parse_int32_array(
+					ops->get_value(ctx),
 					out->raw.samples,
 					FLIPPER_IR_RAW_MAX_SAMPLES
 				);
@@ -319,6 +325,28 @@ bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
 
 	return false;
 }
+
+/*============================================================================*/
+/* FatFS adapter — thin wrappers so flipper_ir_read_signal() can delegate to  */
+/* flipper_ir_parse_block() without exposing FatFS details to the pure parser. */
+/*============================================================================*/
+static bool ff_next_wrap(void *ctx)     { return ff_read_line((flipper_file_t *)ctx); }
+static bool ff_is_sep_wrap(void *ctx)   { return ff_is_separator((flipper_file_t *)ctx); }
+static bool ff_parse_kv_wrap(void *ctx) { return ff_parse_kv((flipper_file_t *)ctx); }
+static const char *ff_get_key_wrap(void *ctx)   { return ff_get_key((flipper_file_t *)ctx); }
+static const char *ff_get_val_wrap(void *ctx)   { return ff_get_value((flipper_file_t *)ctx); }
+
+static const ir_block_reader_t s_ff_reader = {
+	ff_next_wrap, ff_is_sep_wrap, ff_parse_kv_wrap, ff_get_key_wrap, ff_get_val_wrap
+};
+
+bool flipper_ir_read_signal(flipper_file_t *ctx, flipper_ir_signal_t *out)
+{
+	if (ctx == NULL)
+		return false;
+	return flipper_ir_parse_block(&s_ff_reader, ctx, out);
+}
+
 
 /*============================================================================*/
 /**
