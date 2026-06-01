@@ -58,9 +58,9 @@ void wifi_bssid_fmt(const uint8_t bssid[6], char out[18])
     if (!bssid || !out)
         return;
 
-    sprintf(out, "%02X:%02X:%02X:%02X:%02X:%02X",
-            bssid[0], bssid[1], bssid[2],
-            bssid[3], bssid[4], bssid[5]);
+    snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+             bssid[0], bssid[1], bssid[2],
+             bssid[3], bssid[4], bssid[5]);
 }
 
 bool wifi_bssid_parse(const char *s, uint8_t bssid[6])
@@ -72,6 +72,9 @@ bool wifi_bssid_parse(const char *s, uint8_t bssid[6])
 
     if (sscanf(s, "%02x:%02x:%02x:%02x:%02x:%02x",   /* NOLINT */
                &b[0], &b[1], &b[2], &b[3], &b[4], &b[5]) != 6)
+        return false;
+
+    if (strlen(s) != 17u)
         return false;
 
     for (uint8_t i = 0u; i < 6u; i++)
@@ -113,7 +116,7 @@ void wifi_csv_quote_field(char *dst, const char *src, size_t dst_len)
 {
     size_t di = 0u;
 
-    if (!dst || dst_len == 0u)
+    if (!dst || dst_len < 3u)
         return;
 
     dst[di++] = '"';

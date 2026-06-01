@@ -77,14 +77,10 @@ void nfc_uid_fmt(const uint8_t *uid, uint8_t uid_len,
 
     size_t pos = 0;
     for (uint8_t i = 0; i < uid_len; i++) {
-        /* Each byte needs 3 chars ("XX ") except the last needs 2 ("XX\0") */
-        size_t needed = (i + 1u < uid_len) ? 3u : 3u; /* always 3: "XX " + NUL guard */
-        if (pos + needed > out_size)
-            break;
         int written = snprintf(out + pos, out_size - pos,
                                (i + 1u < uid_len) ? "%02X " : "%02X",
                                uid[i]);
-        if (written <= 0)
+        if (written <= 0 || (size_t)written >= out_size - pos)
             break;
         pos += (size_t)written;
     }

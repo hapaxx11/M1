@@ -20,7 +20,7 @@ uint8_t wifi_deauth_add_target(m1_cmd_t *cmd, uint8_t count, uint8_t mode,
 {
 	uint8_t off;
 
-	if (count >= DEAUTH_MULTI_MAX_TARGETS || !bssid || !wifi_mac_is_nonzero(bssid) || channel == 0)
+	if (count >= DEAUTH_MULTI_MAX_TARGETS || !cmd || !bssid || !wifi_mac_is_nonzero(bssid) || channel == 0)
 	{
 		return count;
 	}
@@ -52,6 +52,9 @@ uint8_t wifi_build_selected_deauth_cmd(m1_cmd_t *cmd,
 	uint8_t count = 0;
 	uint8_t ap_count_used = 0;
 	uint8_t sta_count_used = 0;
+
+	if (!cmd)
+		return 0;
 
 	memset(cmd, 0, sizeof(*cmd));
 	cmd->magic = M1_CMD_MAGIC;

@@ -132,7 +132,8 @@ bool ir_str_contains_icase(const char *haystack, const char *needle);
  * Parse a space-separated hexadecimal byte string into a byte array.
  *
  * Input format: "07 00 00 00" or "AB CD EF" (pairs of hex digits, space-separated).
- * Parsing stops at the first malformed byte pair or when out is full.
+ * Invalid characters are skipped. A lone hex digit is accepted as one byte.
+ * Parsing stops when out is full or the string is exhausted.
  *
  * @param str      Input hex string (may be NULL — returns 0).
  * @param out      Output byte buffer.
