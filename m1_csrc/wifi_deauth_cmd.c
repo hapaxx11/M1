@@ -33,6 +33,10 @@ uint8_t wifi_deauth_add_target(m1_cmd_t *cmd, uint8_t count, uint8_t mode,
 	{
 		memcpy(&cmd->payload[off + 8], sta, 6);
 	}
+	else
+	{
+		memset(&cmd->payload[off + 8], 0, 6);
+	}
 
 	count++;
 	cmd->payload[0] = count;

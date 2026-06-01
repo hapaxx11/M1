@@ -16,19 +16,26 @@ uint8_t wifi_ascii_lower(uint8_t c)
     return c;
 }
 
+/* Case-insensitive exact comparison of the full file extension (including the
+ * leading '.') against a lowercase candidate.  Requires the whole extension to
+ * match so suffixes like ".tsvx" or ".html5" are rejected. */
+static bool wifi_ext_equals_icase(const char *ext, const char *want)
+{
+    uint8_t i = 0;
+    for (; ext[i] && want[i]; i++)
+    {
+        if (wifi_ascii_lower((uint8_t)ext[i]) != (uint8_t)want[i]) return false;
+    }
+    return ext[i] == '\0' && want[i] == '\0';
+}
+
 bool wifi_ext_is_ap_cache(const char *name)
 {
     if (!name) return false;
     const char *dot = strrchr(name, '.');
     if (!dot) return false;
 
-    char ext[5] = {0};
-    for (uint8_t i = 0; i < 4 && dot[i]; i++)
-    {
-        ext[i] = (char)wifi_ascii_lower((uint8_t)dot[i]);
-    }
-
-    return (strcmp(ext, ".tsv") == 0 || strcmp(ext, ".txt") == 0);
+    return (wifi_ext_equals_icase(dot, ".tsv") || wifi_ext_equals_icase(dot, ".txt"));
 }
 
 bool wifi_ext_is_html(const char *name)
@@ -37,13 +44,7 @@ bool wifi_ext_is_html(const char *name)
     const char *dot = strrchr(name, '.');
     if (!dot) return false;
 
-    char ext[6] = {0};
-    for (uint8_t i = 0; i < 5 && dot[i]; i++)
-    {
-        ext[i] = (char)wifi_ascii_lower((uint8_t)dot[i]);
-    }
-
-    return (strcmp(ext, ".html") == 0 || strcmp(ext, ".htm") == 0);
+    return (wifi_ext_equals_icase(dot, ".html") || wifi_ext_equals_icase(dot, ".htm"));
 }
 
 bool wifi_ext_is_ssid_list(const char *name)
@@ -52,11 +53,5 @@ bool wifi_ext_is_ssid_list(const char *name)
     const char *dot = strrchr(name, '.');
     if (!dot) return false;
 
-    char ext[5] = {0};
-    for (uint8_t i = 0; i < 4 && dot[i]; i++)
-    {
-        ext[i] = (char)wifi_ascii_lower((uint8_t)dot[i]);
-    }
-
-    return (strcmp(ext, ".txt") == 0 || strcmp(ext, ".lst") == 0);
+    return (wifi_ext_equals_icase(dot, ".txt") || wifi_ext_equals_icase(dot, ".lst"));
 }

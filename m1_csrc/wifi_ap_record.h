@@ -66,8 +66,8 @@ typedef struct {
  * @param payload_len Number of valid bytes in payload[].
  * @param out         Destination record; fully zeroed on entry by caller or
  *                    by this function — output is always consistent.
- * @return true on success, false if payload is too short or SSID length
- *         field overflows.
+ * @return true on success, false if payload is too short. An SSID length
+ *         field greater than 32 is clamped to 32 rather than rejected.
  */
 bool wifi_ap_record_parse_one(const uint8_t *payload,
                                uint8_t        payload_len,

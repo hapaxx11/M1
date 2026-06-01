@@ -14,6 +14,7 @@
 #include "ir_signal_record.h"  /* ir_str_contains_icase() */
 
 #include <stddef.h>
+#include <string.h>           /* strcmp() */
 
 /* =========================================================================
  * Internal helpers
