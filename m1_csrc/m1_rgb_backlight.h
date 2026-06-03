@@ -52,8 +52,8 @@ void rgb_backlight_update(void);
  *
  * RGB_BACKLIGHT_ACTION_SKIP is the regression guard for the boot-hang fix:
  * on a board with no SK6805 backlight, rgb_backlight_update() must do nothing
- * at all - it must never enter the SK6805 bit-bang path, which busy-waits on
- * DWT->CYCCNT and hangs on devices running without a debugger attached.
+ * at all - it must never enter the SK6805 bit-bang path, which relies on
+ * DWT->CYCCNT timing and previously could hang devices without a debugger.
  */
 typedef enum {
     RGB_BACKLIGHT_ACTION_SKIP = 0,   /* not installed: do nothing */
