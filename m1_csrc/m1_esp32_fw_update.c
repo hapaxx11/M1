@@ -385,7 +385,6 @@ void setting_esp32_start_address(void)
   * @retval None
   */
 /******************************************************************************/
-/******************************************************************************/
 /**
   * @brief  Draw a dedicated full-screen progress view for the ESP32 update.
   *         Clears the screen (so the bar/percent no longer overlay the menu)
