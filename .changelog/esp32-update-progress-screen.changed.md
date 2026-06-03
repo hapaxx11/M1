@@ -1,1 +1,0 @@
-**ESP32 update: progress now shown on a dedicated screen** — the flash progress bar and percentage previously drew on top of the ESP32-update menu, overlaying it. They now render on a cleared, dedicated screen with a title and a "do not power off" hint. The completion dialog (OK to return to the menu) is unchanged.
