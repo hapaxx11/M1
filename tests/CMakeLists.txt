@@ -957,8 +957,6 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rgb_backlight COMMAND test_rgb_backlight)
 
-# ------------------------------------------------------------------
-<<<<<<< HEAD
 # Module under test: ir_signal_record (IR Universal Remote pure-logic helpers)
 # Extracted from m1_ir_universal.c (Phase F) — zero HAL/RTOS/FatFS deps.
 # Covers:
@@ -984,9 +982,6 @@ endif()
 add_test(NAME ir_signal_record COMMAND test_ir_signal_record)
 
 # ------------------------------------------------------------------
-# Module under test: ir_str_contains_icase (IR Universal Remote search helper)
-# Now backed by the extracted ir_signal_record module (Phase F).
-=======
 # Module under test: esp32 update progress percentage
 # Pure math for the firmware-update progress bar.
 # ------------------------------------------------------------------
@@ -1022,7 +1017,6 @@ add_test(NAME esp32_fw_update COMMAND test_esp32_fw_update)
 # Module under test: str_contains_icase (IR Universal Remote search helper)
 # Pure function — case-insensitive substring search used by IRDB search.
 # Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.
->>>>>>> origin/main
 # ------------------------------------------------------------------
 add_executable(test_ir_search
     test_ir_search.c
