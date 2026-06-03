@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.43] - 2026-06-03
+
+### Fixed
+
+- **RGB backlight: fix boot hang / watchdog reboot loop on devices without a debugger attached** — `rgb_bl_send_reset()` produced the SK6805 reset pulse by busy-waiting on the DWT cycle counter (`DWT->CYCCNT`), which only advances while a debug probe is connected. On a standalone device `CYCCNT` stays frozen at 0, so the wait never terminated, hanging the button task on its first iteration. That starved every lower-priority task (UI, logger, and the IWDG-feeder), freezing the display, killing button input, and producing a ~20 s watchdog reboot loop. The reset wait is now bounded with a guard so it always terminates, and `rgb_backlight_update()` returns immediately when no SK6805 backlight is detected so boards without the RGB mod never enter the bit-bang path.
 ## [0.9.1.42] - 2026-05-31
 
 ### Changed
