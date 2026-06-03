@@ -24,6 +24,7 @@
 #include "app_common.h"
 #include "m1_storage.h"
 #include "m1_md5_hash.h"
+#include "m1_esp32_scratch.h"
 #include "m1_fw_update_bl.h"
 #include "m1_power_ctl.h"
 #include "m1_display.h"
@@ -156,6 +157,16 @@ void setting_esp32_image_file(void)
     size_t count, sum;
 
 	f_info = storage_browse(NULL);
+
+	/* storage_browse() runs the file-browser scene, which pops the ESP32
+	 * update scene and runs setting_esp32_exit() -> that frees pfullpath and
+	 * pfilename_md5.  Re-ensure they are allocated before use; otherwise the
+	 * strcpy(pfilename_md5, ...) below writes to NULL and HardFaults.  Bail
+	 * out gracefully (instead of crashing) if the heap is exhausted. */
+	if ( !esp32_fw_ensure_scratch(&pfullpath, &pfilename_md5,
+	                              ESP_FILE_PATH_LEN_MAX + ESP_FILE_NAME_LEN_MAX,
+	                              ESP_FILE_NAME_LEN_MAX, malloc) )
+		return;
 
 	esp32_update_status = M1_FW_IMAGE_FILE_TYPE_ERROR; // reset
 	if ( f_info->file_is_selected )
