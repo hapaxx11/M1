@@ -24,6 +24,8 @@
 #include "app_common.h"
 #include "m1_storage.h"
 #include "m1_md5_hash.h"
+#include "m1_esp32_progress.h"
+#include "m1_esp32_scratch.h"
 #include "m1_fw_update_bl.h"
 #include "m1_power_ctl.h"
 #include "m1_display.h"
@@ -156,6 +158,20 @@ void setting_esp32_image_file(void)
     size_t count, sum;
 
 	f_info = storage_browse(NULL);
+
+	/* storage_browse() runs the file-browser scene, which pops the ESP32
+	 * update scene and runs setting_esp32_exit() -> that frees pfullpath and
+	 * pfilename_md5.  Re-ensure they are allocated before use; otherwise the
+	 * strcpy(pfilename_md5, ...) below writes to NULL and HardFaults.  Bail
+	 * out gracefully (instead of crashing) if the heap is exhausted. */
+	if ( !esp32_fw_ensure_scratch(&pfullpath, &pfilename_md5,
+	                              ESP_FILE_PATH_LEN_MAX + ESP_FILE_NAME_LEN_MAX,
+	                              ESP_FILE_NAME_LEN_MAX, malloc) )
+	{
+		esp32_update_status = M1_FW_UPDATE_NOT_READY;
+		xQueueReset(main_q_hdl);
+		return;
+	}
 
 	esp32_update_status = M1_FW_IMAGE_FILE_TYPE_ERROR; // reset
 	if ( f_info->file_is_selected )
@@ -364,11 +380,60 @@ void setting_esp32_start_address(void)
 
 /******************************************************************************/
 /**
-  * @brief
-  * @param None
-  * @retval None
+  * @brief  Draw the ESP32 update progress percentage and bar below the header.
+  *         Called after esp32_update_draw_progress_header(), this updates only
+  *         the lower content area while preserving the existing header text.
   */
 /******************************************************************************/
+static void esp32_update_draw_progress_bar(size_t remainder)
+{
+	static size_t total = 0;
+	static int last_percent = -1;
+	uint8_t percent;
+	char txt[16];
+	const int bx = 8, by = 48, bw = 112, bh = 12; /* progress bar geometry */
+
+	if (remainder == SIZE_MAX) { total = 0; last_percent = -1; return; } /* reset */
+	if (total < remainder) { total = remainder; last_percent = -1; }      /* init */
+	if (total == 0) return;
+
+	percent = esp32_update_progress_percent(total, remainder);
+	if ((int)percent == last_percent) return; /* redraw only when the %% changes */
+	last_percent = (int)percent;
+
+	/* clear the area below the header */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, 34, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT - 34);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	/* percentage centered above the bar */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	sprintf(txt, "%u%%", (unsigned)percent);
+	m1_draw_text(&m1_u8g2, 0, 42, M1_LCD_DISPLAY_WIDTH, txt, TEXT_ALIGN_CENTER);
+
+	/* bar frame + fill */
+	u8g2_DrawFrame(&m1_u8g2, bx, by, bw, bh);
+	{
+		int fillw = ((bw - 2) * (int)percent) / 100;
+		if (fillw > 0)
+			u8g2_DrawBox(&m1_u8g2, bx + 1, by + 1, fillw, bh - 2);
+	}
+	m1_u8g2_nextpage();
+}
+
+static void esp32_update_draw_progress_header(void)
+{
+	/* Clear the whole screen so nothing from the menu shows through. */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, 0, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	m1_draw_text(&m1_u8g2, 2, 9, 124, "ESP32 Update", TEXT_ALIGN_CENTER);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+	m1_draw_text(&m1_u8g2, 2, 28, 124, "Do not power off", TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+}
+
 void setting_esp32_firmware_update(void)
 {
 	uint8_t uret, old_op_mode;
@@ -397,6 +462,11 @@ void setting_esp32_firmware_update(void)
         m1_device_stat.op_mode = M1_OPERATION_MODE_FIRMWARE_UPDATE;
 
         m1_led_fw_update_on(NULL); // Turn on
+
+        /* Dedicated full-screen progress view (no more menu overlay). */
+        esp32_update_draw_progress_header();
+        esp32_update_draw_progress_bar(SIZE_MAX); /* reset progress state for a clean redraw */
+
         m1_wdt_reset(); /* Kick IWDG before entering the flash operation */
 		esp32_UART_deinit(); // Disable the ESP32 module first
     	uret = m1_fw_app(&hfile_fw);
@@ -483,7 +553,7 @@ static esp_loader_error_t m1_fw_app(FIL *hfile)
 	};
 
 	write_size = image_size;
-	fw_gui_progress_update(write_size);
+	esp32_update_draw_progress_bar(write_size);
 
 	loader_port_stm32_init(&config);
 	esp32_UART_init();
@@ -518,7 +588,7 @@ static esp_loader_error_t m1_fw_app(FIL *hfile)
 			if ( flash_err != ESP_LOADER_SUCCESS )
 				break;
 			write_size -= count;
-			fw_gui_progress_update(write_size);
+			esp32_update_draw_progress_bar(write_size);
 		} // while ( write_size )
 
 		if ( write_size || (flash_err != ESP_LOADER_SUCCESS) )

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.46] - 2026-06-03
+
+### Changed
+
+- **ESP32 update: progress now shown on a dedicated screen** — the flash progress bar and percentage previously drew on top of the ESP32-update menu, overlaying it. They now render on a cleared, dedicated screen with a title and a "do not power off" hint. The completion dialog (OK to return to the menu) is unchanged.
+## [0.9.1.45] - 2026-06-03
+
+## [0.9.1.44] - 2026-06-03
+
+### Fixed
+
+- **ESP32 update: fix HardFault when selecting the firmware image from the SD card** — `setting_esp32_image_file()` used the `pfullpath` / `pfilename_md5` scratch buffers after `storage_browse()` had already entered the file-browser scene, which pops the ESP32-update scene and runs `setting_esp32_exit()` — freeing those buffers. The subsequent `strcpy(pfilename_md5, ...)` then wrote to a NULL pointer and hard-faulted, freezing the device for a few seconds before a watchdog reboot. The buffers are now re-allocated (and validated) after the file browser returns, so the SD-card ESP32 update path no longer crashes.
 ## [0.9.1.43] - 2026-06-03
 
 ### Fixed
