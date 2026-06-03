@@ -74,6 +74,34 @@ void test_rainbow_color_hits_known_hues(void)
     TEST_ASSERT_EQUAL_UINT8(255, b);
 }
 
+void test_decide_action_not_installed_skips(void)
+{
+    /* REGRESSION (boot-hang fix): when no SK6805 is installed, the action must
+     * be SKIP for every mode/brightness - update() must never drive the bus. */
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_SKIP,
+        rgb_backlight_decide_action(false, RGB_BACKLIGHT_MODE_STATIC, 128));
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_SKIP,
+        rgb_backlight_decide_action(false, RGB_BACKLIGHT_MODE_OFF, 0));
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_SKIP,
+        rgb_backlight_decide_action(false, RGB_BACKLIGHT_MODE_RAINBOW, 255));
+}
+
+void test_decide_action_installed_off(void)
+{
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_OFF,
+        rgb_backlight_decide_action(true, RGB_BACKLIGHT_MODE_OFF, 128));
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_OFF,
+        rgb_backlight_decide_action(true, RGB_BACKLIGHT_MODE_STATIC, 0));
+}
+
+void test_decide_action_installed_render(void)
+{
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_RENDER,
+        rgb_backlight_decide_action(true, RGB_BACKLIGHT_MODE_STATIC, 128));
+    TEST_ASSERT_EQUAL_INT(RGB_BACKLIGHT_ACTION_RENDER,
+        rgb_backlight_decide_action(true, RGB_BACKLIGHT_MODE_RAINBOW, 255));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -82,5 +110,8 @@ int main(void)
     RUN_TEST(test_breathing_profile_endpoints);
     RUN_TEST(test_rainbow_color_advances_with_phase);
     RUN_TEST(test_rainbow_color_hits_known_hues);
+    RUN_TEST(test_decide_action_not_installed_skips);
+    RUN_TEST(test_decide_action_installed_off);
+    RUN_TEST(test_decide_action_installed_render);
     return UNITY_END();
 }

@@ -87,7 +87,15 @@ static void rgb_bl_send_reset(void)
     HAL_GPIO_WritePin(SK6805_PORT, SK6805_PIN, GPIO_PIN_RESET);
     /* DWT busy-wait: 250 cycles/µs × reset duration */
     uint32_t start = DWT->CYCCNT;
-    while ((DWT->CYCCNT - start) < (250U * SK6805_RESET_US)) {}
+    /* Bounded wait: on boards with no debugger attached the DWT cycle
+     * counter may never advance.  An unbounded busy-wait there would spin
+     * forever with the SK6805 line low, hanging the caller (button task)
+     * and triggering an IWDG reset.  The guard guarantees termination. */
+    uint32_t guard = 0U;
+    while ((DWT->CYCCNT - start) < (250U * SK6805_RESET_US))
+    {
+        if (++guard > (250U * SK6805_RESET_US + 1000U)) break;
+    }
 }
 
 #endif /* STM32H573xx */
@@ -409,11 +417,18 @@ void rgb_backlight_update(void)
         led_count = RGB_BACKLIGHT_MAX_LEDS;
     }
 
-    if (!installed || mode == RGB_BACKLIGHT_MODE_OFF || brightness == 0U)
+    switch (rgb_backlight_decide_action(installed, mode, brightness))
     {
+    case RGB_BACKLIGHT_ACTION_SKIP:
+        /* No SK6805 backlight present: never touch the bit-bang path. */
+        return;
+    case RGB_BACKLIGHT_ACTION_OFF:
         memset(local_frame, 0, led_count * 3U);
         rgb_backlight_hw_write(local_frame, (uint16_t)(led_count * 3U));
         return;
+    case RGB_BACKLIGHT_ACTION_RENDER:
+    default:
+        break;
     }
 
     if (mode == RGB_BACKLIGHT_MODE_BREATHING)
