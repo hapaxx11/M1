@@ -45,6 +45,36 @@ void rgb_backlight_set_color(uint8_t r, uint8_t g, uint8_t b);
 void rgb_backlight_set_brightness(uint8_t brightness);
 void rgb_backlight_update(void);
 
+/*
+ * rgb_backlight_decide_action() - pure, host-testable gating decision for
+ * rgb_backlight_update().  Single source of truth so the install-gating
+ * cannot silently regress.
+ *
+ * RGB_BACKLIGHT_ACTION_SKIP is the regression guard for the boot-hang fix:
+ * on a board with no SK6805 backlight, rgb_backlight_update() must do nothing
+ * at all - it must never enter the SK6805 bit-bang path, which relies on
+ * DWT->CYCCNT timing and previously could hang devices without a debugger.
+ */
+typedef enum {
+    RGB_BACKLIGHT_ACTION_SKIP = 0,   /* not installed: do nothing */
+    RGB_BACKLIGHT_ACTION_OFF,        /* installed, off/zero brightness: blank LEDs */
+    RGB_BACKLIGHT_ACTION_RENDER,     /* installed and lit: render a frame */
+} rgb_backlight_action_t;
+
+static inline rgb_backlight_action_t
+rgb_backlight_decide_action(bool installed, rgb_backlight_mode_t mode, uint8_t brightness)
+{
+    if (!installed)
+    {
+        return RGB_BACKLIGHT_ACTION_SKIP;
+    }
+    if (mode == RGB_BACKLIGHT_MODE_OFF || brightness == 0U)
+    {
+        return RGB_BACKLIGHT_ACTION_OFF;
+    }
+    return RGB_BACKLIGHT_ACTION_RENDER;
+}
+
 /**
  * Probe for a connected SK6805 chain by temporarily driving PD3 low through
  * a pull-down and reading the line level.  Returns true if a chain is detected.
