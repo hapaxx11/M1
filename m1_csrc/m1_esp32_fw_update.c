@@ -166,7 +166,11 @@ void setting_esp32_image_file(void)
 	if ( !esp32_fw_ensure_scratch(&pfullpath, &pfilename_md5,
 	                              ESP_FILE_PATH_LEN_MAX + ESP_FILE_NAME_LEN_MAX,
 	                              ESP_FILE_NAME_LEN_MAX, malloc) )
+	{
+		esp32_update_status = M1_FW_UPDATE_NOT_READY;
+		xQueueReset(main_q_hdl);
 		return;
+	}
 
 	esp32_update_status = M1_FW_IMAGE_FILE_TYPE_ERROR; // reset
 	if ( f_info->file_is_selected )
