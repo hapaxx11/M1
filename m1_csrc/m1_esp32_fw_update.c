@@ -380,16 +380,9 @@ void setting_esp32_start_address(void)
 
 /******************************************************************************/
 /**
-  * @brief
-  * @param None
-  * @retval None
-  */
-/******************************************************************************/
-/**
-  * @brief  Draw a dedicated full-screen progress view for the ESP32 update.
-  *         Clears the screen (so the bar/percent no longer overlay the menu)
-  *         and draws a title + a "do not power off" hint.  fw_gui_progress_update()
-  *         then renders the bar/percent in the lower area on this clean screen.
+  * @brief  Draw the ESP32 update progress percentage and bar below the header.
+  *         Called after esp32_update_draw_progress_header(), this updates only
+  *         the lower content area while preserving the existing header text.
   */
 /******************************************************************************/
 static void esp32_update_draw_progress_bar(size_t remainder)

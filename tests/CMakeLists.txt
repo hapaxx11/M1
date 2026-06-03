@@ -927,6 +927,8 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_progress PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_progress COMMAND test_esp32_progress)
+
+# ------------------------------------------------------------------
 # Module under test: esp32 fw-update scratch-buffer guard
 # Pure logic (allocator injected) — regression for the SD image-select crash.
 # ------------------------------------------------------------------
