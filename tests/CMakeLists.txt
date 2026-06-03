@@ -913,6 +913,22 @@ endif()
 add_test(NAME rgb_backlight COMMAND test_rgb_backlight)
 
 # ------------------------------------------------------------------
+# Module under test: esp32 update progress percentage
+# Pure math for the firmware-update progress bar.
+# ------------------------------------------------------------------
+add_executable(test_esp32_progress
+    test_esp32_progress.c
+)
+target_include_directories(test_esp32_progress PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_progress PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_progress PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_progress COMMAND test_esp32_progress)
+
+# ------------------------------------------------------------------
 # Module under test: str_contains_icase (IR Universal Remote search helper)
 # Pure function — case-insensitive substring search used by IRDB search.
 # Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.
