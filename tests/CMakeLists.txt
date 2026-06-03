@@ -927,6 +927,20 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_progress PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_progress COMMAND test_esp32_progress)
+# Module under test: esp32 fw-update scratch-buffer guard
+# Pure logic (allocator injected) — regression for the SD image-select crash.
+# ------------------------------------------------------------------
+add_executable(test_esp32_fw_update
+    test_esp32_fw_update.c
+)
+target_include_directories(test_esp32_fw_update PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_fw_update PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_fw_update PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_fw_update COMMAND test_esp32_fw_update)
 
 # ------------------------------------------------------------------
 # Module under test: str_contains_icase (IR Universal Remote search helper)
