@@ -219,10 +219,22 @@ void test_subghz_scene_menu_uses_widget(void)
 static void assert_guarded_init(const char *relpath)
 {
     char *c = read_file(relpath);
-    /* The init call must still be present */
-    assert_contains(c, "subghz_submenu_model_init");
-    /* It must be guarded by item_count == 0 */
-    assert_contains(c, ".item_count == 0)");
+
+    const char *init = strstr(c, "subghz_submenu_model_init");
+    TEST_ASSERT_NOT_NULL_MESSAGE(init, relpath);
+
+    /* Look for the guard within a small window before the init call to avoid false positives. */
+    const char *win_start = (init - c > 200) ? (init - 200) : c;
+    const char *guard = strstr(win_start, "item_count");
+    TEST_ASSERT_NOT_NULL_MESSAGE(guard, relpath);
+    TEST_ASSERT_TRUE(guard < init);
+
+    const char *eq = strstr(win_start, "== 0");
+    if (!eq) eq = strstr(win_start, "==0");
+    TEST_ASSERT_NOT_NULL_MESSAGE(eq, relpath);
+    TEST_ASSERT_TRUE(guard < eq);
+    TEST_ASSERT_TRUE(eq < init);
+
     free(c);
 }
 
