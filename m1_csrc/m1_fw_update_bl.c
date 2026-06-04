@@ -21,6 +21,8 @@
 #include "m1_fw_update.h"
 #include "m1_fw_update_bl.h"
 #include "m1_sub_ghz.h"
+#include "m1_display.h"      /* m1_draw_text, TEXT_ALIGN_CENTER, M1_LCD_DISPLAY_HEIGHT */
+#include "m1_fw_progress.h"  /* fw_update_progress_percent() pure logic */
 
 /*************************** D E F I N E S ************************************/
 
@@ -812,6 +814,91 @@ static uint8_t bl_flash_binary(uint8_t *payload, size_t size)
 
 
 
+/******************************************************************************/
+/**
+  * @brief  Draw the dedicated STM32 firmware-update header (title + warning).
+  *         Mirrors the ESP32 update screen so the self-update no longer draws
+  *         its progress over the menu.  Clears the whole screen first.
+  */
+/******************************************************************************/
+static void fw_update_draw_progress_header(void)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, 0, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	m1_draw_text(&m1_u8g2, 2, 9, 124, "Firmware Update", TEXT_ALIGN_CENTER);
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+	m1_draw_text(&m1_u8g2, 2, 28, 124, "Do not power off", TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+} // static void fw_update_draw_progress_header(void)
+
+
+
+/******************************************************************************/
+/**
+  * @brief  Draw a centered status line in the content area below the header
+  *         (used for the multi-second "Erasing flash..." phase).
+  */
+/******************************************************************************/
+static void fw_update_draw_status(const char *msg)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, 34, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT - 34);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	m1_draw_text(&m1_u8g2, 0, 50, M1_LCD_DISPLAY_WIDTH, msg, TEXT_ALIGN_CENTER);
+	m1_u8g2_nextpage();
+} // static void fw_update_draw_status(const char *msg)
+
+
+
+/******************************************************************************/
+/**
+  * @brief  Draw the firmware-update progress percentage and bar below the
+  *         header.  Pass SIZE_MAX once to reset stale state for a clean redraw;
+  *         then pass the bytes still to flash on each chunk.  Redraws only when
+  *         the integer percentage changes.
+  */
+/******************************************************************************/
+static void fw_update_draw_progress_bar(size_t remainder)
+{
+	static size_t total = 0;
+	static int last_percent = -1;
+	uint8_t percent;
+	char txt[16];
+	const int bx = 8, by = 48, bw = 112, bh = 12; /* progress bar geometry */
+
+	if (remainder == SIZE_MAX) { total = 0; last_percent = -1; return; } /* reset */
+	if (total < remainder) { total = remainder; last_percent = -1; }      /* init */
+	if (total == 0) return;
+
+	percent = fw_update_progress_percent(total, remainder);
+	if ((int)percent == last_percent) return; /* redraw only when the %% changes */
+	last_percent = (int)percent;
+
+	/* clear the area below the header */
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+	u8g2_DrawBox(&m1_u8g2, 0, 34, M1_LCD_DISPLAY_WIDTH, M1_LCD_DISPLAY_HEIGHT - 34);
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+	/* percentage centered above the bar */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	sprintf(txt, "%u%%", (unsigned)percent);
+	m1_draw_text(&m1_u8g2, 0, 42, M1_LCD_DISPLAY_WIDTH, txt, TEXT_ALIGN_CENTER);
+
+	/* bar frame + fill */
+	u8g2_DrawFrame(&m1_u8g2, bx, by, bw, bh);
+	{
+		int fillw = ((bw - 2) * (int)percent) / 100;
+		if (fillw > 0)
+			u8g2_DrawBox(&m1_u8g2, bx + 1, by + 1, fillw, bh - 2);
+	}
+	m1_u8g2_nextpage();
+} // static void fw_update_draw_progress_bar(size_t remainder)
+
+
+
 
 /******************************************************************************/
 /**
@@ -831,18 +918,12 @@ uint8_t bl_flash_app(FIL *hfile)
 	write_size = f_size(hfile); // Get image size
     M1_LOG_I(M1_LOGDB_TAG, "Erasing flash...\r\n");
 
-	/* Reset progress bar stale state from any prior failed attempt */
-	fw_gui_progress_update(SIZE_MAX);
-
-	/* Show "Erasing flash..." on the display so the user knows work is in
-	 * progress.  The erase phase can take several seconds. */
-	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
-	u8g2_DrawBox(&m1_u8g2, 0, INFO_BOX_Y_POS_ROW_1 - M1_SUB_MENU_FONT_HEIGHT, 128, 28);
-	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	u8g2_DrawStr(&m1_u8g2, 4, INFO_BOX_Y_POS_ROW_1, "Erasing flash...");
-	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 24, 16, 18, 32, hourglass_18x32);
-	m1_u8g2_nextpage();
+	/* Dedicated full-screen progress view (mirrors the ESP32 update screen;
+	 * no more drawing over the menu).  Reset stale progress state, draw the
+	 * header, then show "Erasing flash..." while the multi-second erase runs. */
+	fw_update_draw_progress_bar(SIZE_MAX);
+	fw_update_draw_progress_header();
+	fw_update_draw_status("Erasing flash...");
 
     m1_wdt_reset();
     bl_flash_if_init();
@@ -862,7 +943,7 @@ uint8_t bl_flash_app(FIL *hfile)
 		if ( !count || (count % 4 != 0) ) // Read failed?
 			break;
 
-		fw_gui_progress_update(write_size);
+		fw_update_draw_progress_bar(write_size);
 
 		write_size -= count;
 		if ( count )
