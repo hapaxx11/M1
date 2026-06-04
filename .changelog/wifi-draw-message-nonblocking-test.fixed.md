@@ -1,1 +1,0 @@
-**Tests: WiFi draw-message nonblocking check** — Use brace-depth matching to locate the end of `wifi_draw_message()` in the source-level regression test, preventing false passes when the function later contains nested blocks or `#if` sections with a closing brace at column 0.
