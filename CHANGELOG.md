@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.50] - 2026-06-04
+
+### Fixed
+
+- WiFi → General → Join WiFi no longer hangs forever on "Scanning APs..." The transient "Scanning APs..." / "Connecting..." status screens were drawn with the blocking `wifi_show_message()` (which waits for an OK/Back key press) right before the scan/connect ran, so the device sat on the status screen waiting for a key the user did not know to give and the scan never started. These pre-action statuses now use a non-blocking `wifi_draw_message()` so the action runs immediately; the same misuse is fixed in Wardrive, Save APs, Scan & Connect, saved-network connect, and Evil-Portal HTML upload. Terminal/result screens ("No APs found", "Connected", errors) still wait for acknowledgement. Source-level regression tests added in `test_wifi_scan_status_nonblocking.c`.
 ## [0.9.1.49] - 2026-06-04
 
 ### Fixed
