@@ -1997,4 +1997,3 @@ if(TARGET sanitizers)
     target_link_libraries(test_wifi_deauth_cmd PRIVATE sanitizers)
 endif()
 add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
-
