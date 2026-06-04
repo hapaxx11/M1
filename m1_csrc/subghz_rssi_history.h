@@ -30,8 +30,9 @@
 /** Number of RSSI history entries (= waveform pixel columns). */
 #define SUBGHZ_RSSI_HISTORY_SIZE   100
 
-/** Minimum RSSI for display mapping.  Values below this yield a bar height of
- *  zero and must NOT be written to the history (see push bug-fix comment). */
+/** Minimum RSSI for display mapping. Values below this yield a bar height of
+ *  zero; when trace=false, u==0 must NOT overwrite the last committed slot
+ *  (otherwise previously committed bars would be erased). */
 #define SUBGHZ_RSSI_THRESHOLD_MIN  (-90.0f)
 
 /** Scale factor: dBm above THRESHOLD_MIN → pixel height.
