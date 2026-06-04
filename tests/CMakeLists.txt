@@ -1519,6 +1519,21 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_haldelay_free COMMAND test_wifi_haldelay_free)
 
+# Source-level guard: transient scan/connect status screens must be non-blocking
+# (regression for "Join WiFi hangs on endless AP search").
+# ------------------------------------------------------------------
+add_executable(test_wifi_scan_status_nonblocking
+    test_wifi_scan_status_nonblocking.c
+)
+target_compile_definitions(test_wifi_scan_status_nonblocking PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_wifi_scan_status_nonblocking PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_scan_status_nonblocking PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_scan_status_nonblocking COMMAND test_wifi_scan_status_nonblocking)
+
 # ── Sub-GHz autosave logic ──
 add_executable(test_subghz_autosave
     test_subghz_autosave.c
