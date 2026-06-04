@@ -1408,6 +1408,25 @@ endif()
 add_test(NAME subghz_read_raw_state COMMAND test_subghz_read_raw_state)
 
 # ------------------------------------------------------------------
+# Read Raw RSSI spectrogram logic — pure-math module extracted from
+# m1_sub_ghz.c so the push/reset helpers can be exercised without
+# pulling in hardware headers.
+# Regression: trace=false with rssi < THRESHOLD_MIN must NOT erase
+# committed bars (bug: empty waveform despite active recording).
+# ------------------------------------------------------------------
+add_executable(test_subghz_rssi_history
+    test_subghz_rssi_history.c
+)
+target_include_directories(test_subghz_rssi_history PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_rssi_history PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_rssi_history PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_rssi_history COMMAND test_subghz_rssi_history)
+
+# ------------------------------------------------------------------
 # Source invariant: async replay abort must preserve the shared main
 # queue, while the private blocking replay wrapper must still flush it
 # before returning to Saved / Playlist / Remote / Bind Wizard callers.
