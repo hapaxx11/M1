@@ -117,8 +117,9 @@ static subghz_submenu_model_t s_nfc_menu_model;
 static void menu_on_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_nfc_menu_model, MENU_ITEM_COUNT,
-                              M1_MENU_VIS(MENU_ITEM_COUNT));
+    if (s_nfc_menu_model.item_count == 0)
+        subghz_submenu_model_init(&s_nfc_menu_model, MENU_ITEM_COUNT,
+                                  M1_MENU_VIS(MENU_ITEM_COUNT));
     app->need_redraw = true;
 }
 

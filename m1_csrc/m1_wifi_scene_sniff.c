@@ -80,8 +80,9 @@ static subghz_submenu_model_t s_sniffer_model;
 static void sniffer_menu_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_sniffer_model, SNIFFER_ITEM_COUNT,
-                              M1_MENU_VIS(SNIFFER_ITEM_COUNT));
+    if (s_sniffer_model.item_count == 0)
+        subghz_submenu_model_init(&s_sniffer_model, SNIFFER_ITEM_COUNT,
+                                  M1_MENU_VIS(SNIFFER_ITEM_COUNT));
     app->need_redraw = true;
 }
 

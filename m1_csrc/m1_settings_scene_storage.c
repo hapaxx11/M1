@@ -105,8 +105,9 @@ static void storage_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
     menu_setting_storage_init();
-    subghz_submenu_model_init(&s_storage_model, STORAGE_ITEM_COUNT,
-                              M1_MENU_VIS(STORAGE_ITEM_COUNT));
+    if (s_storage_model.item_count == 0)
+        subghz_submenu_model_init(&s_storage_model, STORAGE_ITEM_COUNT,
+                                  M1_MENU_VIS(STORAGE_ITEM_COUNT));
     app->need_redraw = true;
 }
 

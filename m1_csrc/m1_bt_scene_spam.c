@@ -96,8 +96,9 @@ static subghz_submenu_model_t s_spam_model;
 static void spam_menu_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_spam_model, SPAM_ITEM_COUNT,
-                              M1_MENU_VIS(SPAM_ITEM_COUNT));
+    if (s_spam_model.item_count == 0)
+        subghz_submenu_model_init(&s_spam_model, SPAM_ITEM_COUNT,
+                                  M1_MENU_VIS(SPAM_ITEM_COUNT));
     app->need_redraw = true;
 }
 
@@ -138,8 +139,9 @@ static subghz_submenu_model_t s_detect_model;
 static void detect_menu_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_detect_model, DETECT_ITEM_COUNT,
-                              M1_MENU_VIS(DETECT_ITEM_COUNT));
+    if (s_detect_model.item_count == 0)
+        subghz_submenu_model_init(&s_detect_model, DETECT_ITEM_COUNT,
+                                  M1_MENU_VIS(DETECT_ITEM_COUNT));
     app->need_redraw = true;
 }
 

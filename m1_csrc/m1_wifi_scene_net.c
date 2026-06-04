@@ -72,8 +72,9 @@ static subghz_submenu_model_t s_net_model;
 static void net_menu_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_net_model, NET_ITEM_COUNT,
-                              M1_MENU_VIS(NET_ITEM_COUNT));
+    if (s_net_model.item_count == 0)
+        subghz_submenu_model_init(&s_net_model, NET_ITEM_COUNT,
+                                  M1_MENU_VIS(NET_ITEM_COUNT));
     app->need_redraw = true;
 }
 

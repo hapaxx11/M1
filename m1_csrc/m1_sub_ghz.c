@@ -32,6 +32,7 @@
 #include "subghz_keeloq_encoder.h"
 #include "subghz_keeloq_mfkeys.h"
 #include "subghz_button_override.h"
+#include "subghz_rssi_history.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
 #include "m1_storage.h"
@@ -322,20 +323,25 @@ static bool     subghz_hopper_active = false; /* true while hopping during ACTIV
 #define SUBGHZ_HOPPER_DWELL_MS       150  /* ms to dwell per frequency before hopping */
 #define SUBGHZ_HOPPER_RSSI_THRESHOLD -70  /* dBm: stay on freq if RSSI >= this */
 
-/* RAW RSSI history visualization (Flipper-style spectrogram) */
-#define SUBGHZ_RAW_RSSI_HISTORY_SIZE 100  /* Number of RSSI history entries */
+/* RAW RSSI history visualization (Flipper-style spectrogram).
+ * The constants and push/reset logic live in subghz_rssi_history.h so they
+ * can be exercised in host unit tests without pulling in hardware headers.
+ * SUBGHZ_RAW_* aliases keep the rest of this file unchanged. */
+#define SUBGHZ_RAW_RSSI_HISTORY_SIZE SUBGHZ_RSSI_HISTORY_SIZE
 #define SUBGHZ_RAW_TOP_SCALE          14  /* Y of top border / scale ticks */
 #define SUBGHZ_RAW_BOTTOM_Y           48  /* Y of bottom border */
 #define SUBGHZ_RAW_END_SCALE         115  /* X of right border */
-#define SUBGHZ_RAW_THRESHOLD_MIN   (-90.0f) /* Minimum RSSI for display mapping */
-#define SUBGHZ_RAW_RSSI_DIVIDER      1.8f /* Scale factor: dBm → pixels (lower = denser fill) */
+#define SUBGHZ_RAW_THRESHOLD_MIN   SUBGHZ_RSSI_THRESHOLD_MIN
+#define SUBGHZ_RAW_RSSI_DIVIDER    SUBGHZ_RSSI_DIVIDER
 #define SUBGHZ_RAW_SIN_AMPLITUDE      11  /* Amplitude for idle sine animation */
 #define SUBGHZ_RAW_CURSOR_SEG_W        2  /* Dashed cursor segment width (px) */
 #define SUBGHZ_RAW_RSSI_LABEL_Y       40  /* Y for vertical "RSSI" label */
-static uint8_t  subghz_raw_rssi_history[SUBGHZ_RAW_RSSI_HISTORY_SIZE + 2];
-static uint8_t  subghz_raw_rssi_current = 0; /* Current RSSI (for cursor display) */
-static uint8_t  subghz_raw_rssi_head = 0;    /* Write position in history */
-static bool     subghz_raw_rssi_history_end = false; /* Buffer has wrapped */
+static SubghzRssiHistory s_rssi_history;
+/* Convenience aliases so the rest of this file compiles without renaming. */
+#define subghz_raw_rssi_history      s_rssi_history.buf
+#define subghz_raw_rssi_current      s_rssi_history.current
+#define subghz_raw_rssi_head         s_rssi_history.head
+#define subghz_raw_rssi_history_end  s_rssi_history.end
 static uint8_t  subghz_raw_sin_idx = 0;      /* Sine animation index (idle state) */
 
 //************************** S T R U C T U R E S *******************************
@@ -905,7 +911,8 @@ static void subghz_raw_draw_sin(void)
 /*============================================================================*/
 /**
   * @brief  Push an RSSI reading into the history buffer.
-  *         Flipper-style: converts dBm to display pixels and stores.
+  *         Delegates to subghz_rssi_history_push() (subghz_rssi_history.h) which
+  *         contains the bug-fixed logic and can be exercised by host unit tests.
   * @param  rssi_dbm  RSSI in dBm (e.g. -80.0)
   * @param  trace     true = advance write position (new data point);
   *                   false = update current position only (display refresh)
@@ -913,31 +920,7 @@ static void subghz_raw_draw_sin(void)
 /*============================================================================*/
 static void subghz_raw_rssi_push(float rssi_dbm, bool trace)
 {
-	uint8_t u_rssi = 0;
-
-	if (rssi_dbm >= SUBGHZ_RAW_THRESHOLD_MIN)
-		u_rssi = (uint8_t)((rssi_dbm - SUBGHZ_RAW_THRESHOLD_MIN) / SUBGHZ_RAW_RSSI_DIVIDER);
-
-	subghz_raw_rssi_current = u_rssi;
-
-	if (trace)
-	{
-		subghz_raw_rssi_history[subghz_raw_rssi_head] = u_rssi;
-		subghz_raw_rssi_head++;
-		if (subghz_raw_rssi_head >= SUBGHZ_RAW_RSSI_HISTORY_SIZE)
-		{
-			subghz_raw_rssi_history_end = true;
-			subghz_raw_rssi_head = 0;
-		}
-	}
-	else
-	{
-		/* Update the last committed slot without advancing */
-		uint8_t slot = (subghz_raw_rssi_head > 0)
-		             ? (subghz_raw_rssi_head - 1)
-		             : (subghz_raw_rssi_history_end ? (SUBGHZ_RAW_RSSI_HISTORY_SIZE - 1) : 0);
-		subghz_raw_rssi_history[slot] = u_rssi;
-	}
+	subghz_rssi_history_push(&s_rssi_history, rssi_dbm, trace);
 }
 
 /*============================================================================*/
@@ -947,10 +930,7 @@ static void subghz_raw_rssi_push(float rssi_dbm, bool trace)
 /*============================================================================*/
 static void subghz_raw_rssi_reset(void)
 {
-	memset(subghz_raw_rssi_history, 0, sizeof(subghz_raw_rssi_history));
-	subghz_raw_rssi_head = 0;
-	subghz_raw_rssi_current = 0;
-	subghz_raw_rssi_history_end = false;
+	subghz_rssi_history_reset(&s_rssi_history);
 	subghz_raw_sin_idx = 0;
 }
 
@@ -5337,10 +5317,7 @@ void subghz_raw_rssi_set_current_ext(float rssi_dbm)
 	/* Update the live RSSI cursor indicator without mutating the history
 	 * buffer.  Used in Start state during silence so captured burst bars
 	 * are not erased when RSSI drops back below threshold. */
-	uint8_t u_rssi = 0;
-	if (rssi_dbm >= SUBGHZ_RAW_THRESHOLD_MIN)
-		u_rssi = (uint8_t)((rssi_dbm - SUBGHZ_RAW_THRESHOLD_MIN) / SUBGHZ_RAW_RSSI_DIVIDER);
-	subghz_raw_rssi_current = u_rssi;
+	subghz_raw_rssi_current = subghz_rssi_to_u8(rssi_dbm);
 }
 
 void subghz_raw_draw_sin_ext(void)
