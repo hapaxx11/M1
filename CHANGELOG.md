@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.48] - 2026-06-04
+
+### Changed
+
+- BadUSB DuckyScript executor migrated to `badusb_parser.h`: 46 `KEY_*` defines, `ascii_hid_map_t` typedef, 95-entry `ascii_to_hid[]` table, and 3 static helpers removed from `m1_badusb.c`; `badusb_parse_line()` refactored to `busb_classify_line()` + switch dispatch; `badusb_type_char()` updated to `busb_ascii_to_hid()` + `BUSB_KEY_*`/`BUSB_MOD_*`; 22 source-level regression tests in `test_badusb_migration.c`
+- BT and Settings scene-file granularity split: `m1_bt_scene.c` (349-line monolith) split into `m1_bt_scene_{menu,sniff,spam,badbt}.c` + registry-only `.c`; `m1_settings_scene.c` (606-line monolith) split into `m1_settings_scene_{menu,storage,power,fw,esp32}.c` + registry-only `.c`; all 9 new files added to firmware CMakeLists; lifecycle test updated for new file layout
+- ESP32 unified capability-probe module: new `esp32_feature_map.c/h` (18-feature enum → required `M1_ESP32_CAP_*` bits + UI label + `esp32_firmware_is_sin360()` classifier); `DELEGATE_CAPPED` replaced by `DELEGATE_FEATURE` in `m1_wifi_scene.c` (3 sites), `m1_bt_scene.c` (5 sites), and `m1_badbt.c`; `m1_esp32_caps_get_bitmap()` added; `nfc_card_info.c` added to firmware CMakeLists (missing since Phase B); 36 host tests
+- Phase H: Extract `ir_button_map.c/h` from `m1_ir_quick_remote.c` — pure-logic `ir_map_buttons()` with bidirectional case-insensitive substring matching and NULL-terminated alt fallback lists. Migrate `load_device()` to `ir_cmd_parse()` vtable (mirrors Phase G). Remove `ci_substr`, `try_map_name` duplicates. Fix NEC16 protocol gap in `ir_map_flipper_protocol()`. 23 new host tests; 82/82 pass.
+- Phase G: Extract `ir_cmd_parse` + `ir_block_reader_t` vtable from `m1_ir_universal.c` into `ir_signal_record.c/h`, decoupling `parse_ir_signal_block` from FatFS. Add `ir_parse_hex_bytes` and move `ir_universal_cmd_t` to the pure-logic header. 32 new host tests; 81/81 pass.
+- Phase I: Extract `flipper_ir_parse_block` from `flipper_ir_read_signal` into a pure-logic vtable-based parser using `ir_block_reader_t`; add `ir_parse_int32_array` to `ir_signal_record.c/h`; reduce `flipper_ir_read_signal` to a thin 5-wrapper FatFS adapter. 30 new host tests (22 `flipper_ir_parse_block` + 8 `ir_parse_int32_array`); 82/82 pass.
+- IR signal-record pure-logic extraction: new `ir_signal_record.c/h` module (`ir_map_flipper_protocol`, `ir_is_ir_file`, `ir_path_append`, `ir_path_go_up`, `ir_str_contains_icase`); 5 statics + 13 call sites migrated from `m1_ir_universal.c`; dead `ir_search_impl.c` stub deleted; `test_ir_search.c` migrated to real module; 41 host tests in `test_ir_signal_record.c`
+- Phase B: extracted `nfc_card_info.c/h` from `m1_nfc.c` — manufacturer lookup, SAK/ATQA type classifier, UID formatter, UID step; 45 host tests, zero HAL/RTOS deps.
+- NFC NDEF parser extracted into `nfc_ndef_parse.c/h` — pure-logic NDEF TLV record parser (URI + Text) with zero HAL/RTOS/FatFS dependencies; `nfc_tool_write_url()` deduped to use `ndef_encode_uri()`; 22 host tests.
+- nfc_ntag.c/h extracted (ntag_page_count_from_size, ntag_generate_amiibo_pwd); mfc_parse_key_line added to mfc_layout.c/h; make_uid_text deduped to nfc_uid_fmt in nfc_ctx.c; 21 new tests; 94/94 host tests pass
+- NFC Phase B blocker removal: extracted `nfc_file_parse.c/h` (vtable-based body parser), `mfc_layout.c/h` (MFC sector/block layout), `nfc_classify.c/h` (NFC-A family classifier) as pure-logic modules with 68 host tests; unblocked deeper NFC extraction from `nfc_storage.c`, `nfc_poller.c`, and `nfc_ctx.c`.
+- Shared submenu-widget rollout: `m1_submenu_event()` added to `m1_submenu.c/h` (auto-syncs `visible_count` internally); all simple-label-list menus in BT, Settings, NFC, and WiFi scene files migrated from raw `sel`/`scroll` byte pairs to `subghz_submenu_model_t` + widget API (10 files, 14 menus); 13 source-level regression tests in `test_submenu_widget_rollout.c`
+- WiFi AP record pure-logic extraction: new `wifi_ap_record.c/h` module (binary payload parser, BSSID fmt/parse, MAC check, field sanitize, CSV quote) with 36 host tests; `CLAUDE.md` migration table updated to distinguish scene-wrapped from scene-native/async; firmware-wide Momentum-parity deferred-work section (Phases A–F) added to `CLAUDE.md`; `ARCHITECTURE.md` modularization list updated
+- WiFi HAL_Delay elimination (Phase A-6): replaced all 23 `HAL_Delay` calls in
+  `m1_wifi.c` with button-responsive alternatives — status screens now use
+  `wifi_wait_dismiss()` (Back/OK dismissible), ESP32 reset waits use
+  `vTaskDelay(pdMS_TO_TICKS(N))`, and the station-scan countdown is abortable with
+  Back. Other RTOS tasks (WDT, battery, LED) are no longer frozen during WiFi
+  status displays.
+- WiFi Phase A: extract `wifi_mac_utils.c/h` (MAC address helpers), `wifi_file_utils.c/h` (file extension validators), and `wifi_status_msg.c/h` (async-ready timed status message model) from `m1_wifi.c`; 54 new host tests (86 total); 6 static functions removed from monolith.
+- Split `m1_wifi_scene.c` (51 scene IDs) into per-group files following the BT/Settings scene split pattern: `m1_wifi_scene_menu.c`, `m1_wifi_scene_sniff.c`, `m1_wifi_scene_attack.c`, `m1_wifi_scene_net.c`, `m1_wifi_scene_general.c`, `m1_wifi_scene_connect.c`; `m1_wifi_scene.c` reduced to registry table + entry point only. Phase D complete ✅.
+- Extract `wifi_sta_record.h`, `wifi_selection.c/h`, and `wifi_deauth_cmd.c/h` from `m1_wifi.c` (Phase A A4/A5): `wifi_sta_t` promoted to shared header; AP/STA selection counters and deauth multi-target command builder are now pure-logic modules with zero HAL/RTOS deps; 37 new host tests (88/88 pass).
 ## [0.9.1.47] - 2026-06-03
 
 ## [0.9.1.46] - 2026-06-03
