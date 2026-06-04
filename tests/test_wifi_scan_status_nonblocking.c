@@ -60,9 +60,27 @@ void test_wifi_draw_message_is_nonblocking(void)
     const char *fn = strstr(src, "static void wifi_draw_message(");
     TEST_ASSERT_NOT_NULL_MESSAGE(fn, "wifi_draw_message not defined");
 
-    const char *body_end = strstr(fn, "\n}");
+    const char *body_start = strchr(fn, '{');
+    TEST_ASSERT_NOT_NULL(body_start);
+
+    const char *body_end = NULL;
+    int depth = 0;
+    for (const char *p = body_start; *p != '\0'; ++p)
+    {
+        if (*p == '{')
+            ++depth;
+        else if (*p == '}')
+        {
+            --depth;
+            if (depth == 0)
+            {
+                body_end = p;
+                break;
+            }
+        }
+    }
     TEST_ASSERT_NOT_NULL(body_end);
-    size_t len = (size_t)((body_end + 2) - fn);
+    size_t len = (size_t)((body_end + 1) - fn);
     char *body = (char *)malloc(len + 1U);
     TEST_ASSERT_NOT_NULL(body);
     memcpy(body, fn, len);
