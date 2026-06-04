@@ -64,8 +64,8 @@ typedef struct {
  * @brief  Convert an RSSI dBm value to a pixel bar height.
  *
  * @param  rssi_dbm  RSSI in dBm (typically −120 … 0).
- * @retval  Pixel height in range [0, ~27].  Zero when rssi_dbm is below
- *          SUBGHZ_RSSI_THRESHOLD_MIN (−90 dBm).
+ * @retval  Pixel height (not clamped). Returns 0 when rssi_dbm is below
+ *          SUBGHZ_RSSI_THRESHOLD_MIN (−90 dBm); at 0 dBm this yields ~50.
  */
 static inline uint8_t subghz_rssi_to_u8(float rssi_dbm)
 {
