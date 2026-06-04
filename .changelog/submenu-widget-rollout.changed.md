@@ -1,0 +1,1 @@
+Shared submenu-widget rollout: `m1_submenu_event()` added to `m1_submenu.c/h` (auto-syncs `visible_count` internally); all simple-label-list menus in BT, Settings, NFC, and WiFi scene files migrated from raw `sel`/`scroll` byte pairs to `subghz_submenu_model_t` + widget API (10 files, 14 menus); 13 source-level regression tests in `test_submenu_widget_rollout.c`

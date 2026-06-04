@@ -12,9 +12,16 @@
  *
  * Usage from a scene's `draw` callback:
  *
- *     subghz_submenu_model_t *m = ...;          // owned by the scene
- *     subghz_submenu_model_set_visible_count(m, M1_MENU_VIS(m->item_count));
  *     m1_submenu_draw(m, "My Title", labels);
+ *
+ * Usage from a scene's `on_event` callback:
+ *
+ *     return m1_submenu_event(app, event, m, targets);
+ *
+ * `m1_submenu_event` and `m1_submenu_draw` both automatically re-sync
+ * `model->visible_count` via `M1_MENU_VIS()` so the widget adapts when the
+ * user changes the text-size preference without needing explicit calls to
+ * `subghz_submenu_model_set_visible_count()` in the scene.
  *
  * The shim is intentionally a thin wrapper around `m1_scene_draw_menu()` —
  * all geometry constants and the highlight/scrollbar drawing live in one
@@ -23,14 +30,17 @@
  *
  * Phase 7c+ migrates individual scenes (Menu, SavedMenu, MoreRAW, Config,
  * Saved file browser, Add Manually picker, Bind Wizard protocol picker)
- * onto this widget; existing hand-rendered lists continue to work
- * unchanged until then.
+ * onto this widget; Phase E extends this to WiFi/BT/NFC/Settings menus.
+ * Existing hand-rendered lists continue to work unchanged until migrated.
  */
 
 #ifndef M1_SUBMENU_H_
 #define M1_SUBMENU_H_
 
+#include <stdbool.h>
+#include <stdint.h>
 #include "subghz_submenu_model.h"
+#include "m1_scene.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,10 +55,9 @@ extern "C" {
  * (`m1_menu_font()`), so the rendering automatically follows
  * `Settings → LCD & Notifications → Text Size`.
  *
- * The caller is responsible for keeping `model->visible_count` in sync
- * with `M1_MENU_VIS(item_count)` whenever the user changes the text size
- * (typically by calling `subghz_submenu_model_set_visible_count()` in
- * the scene's `on_enter` and on a `SubGhzEventCustom` text-size change).
+ * Automatically re-syncs `model->visible_count` via `M1_MENU_VIS()` before
+ * drawing, so the scrollbar remains correct after a text-size preference
+ * change.
  *
  * Safe to call with NULL @p model, @p title, or @p labels — the call
  * becomes a no-op in those cases.  When `model->item_count == 0`, the
@@ -59,9 +68,39 @@ extern "C" {
  * @param labels  Array of `model->item_count` label strings.  May be NULL
  *                when `model->item_count == 0`.
  */
-void m1_submenu_draw(const subghz_submenu_model_t *model,
+void m1_submenu_draw(subghz_submenu_model_t *model,
                      const char *title,
                      const char *const *labels);
+
+/**
+ * @brief  Handle a scene event for a model-backed scrollable submenu.
+ *
+ * Phase E convenience wrapper.  Replaces the legacy `m1_scene_menu_event()`
+ * call for scenes that own a `subghz_submenu_model_t` instead of a raw
+ * `(sel, scroll)` pair.
+ *
+ * Automatically re-syncs `model->visible_count` via `M1_MENU_VIS()` before
+ * processing navigation so that wrap-around math stays correct when the
+ * user changes the text-size preference between events.
+ *
+ * Handled events:
+ *   - `M1SceneEventBack`  → `m1_scene_pop(app)`
+ *   - `M1SceneEventUp`    → `subghz_submenu_model_up(model)` + redraw
+ *   - `M1SceneEventDown`  → `subghz_submenu_model_down(model)` + redraw
+ *   - `M1SceneEventOk`    → `m1_scene_push(app, targets[model->selected])`
+ *   - all others          → returns `false`
+ *
+ * @param app      Scene application context.  Must not be NULL.
+ * @param event    Incoming scene event.
+ * @param model    Submenu model.  If NULL the call returns false.
+ * @param targets  Array of scene IDs, one per item.  If NULL the OK
+ *                 event is silently consumed without pushing a scene.
+ * @return `true` when the event was consumed, `false` otherwise.
+ */
+bool m1_submenu_event(M1SceneApp *app,
+                      M1SceneEvent event,
+                      subghz_submenu_model_t *model,
+                      const uint8_t *targets);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,1 @@
+nfc_ntag.c/h extracted (ntag_page_count_from_size, ntag_generate_amiibo_pwd); mfc_parse_key_line added to mfc_layout.c/h; make_uid_text deduped to nfc_uid_fmt in nfc_ctx.c; 21 new tests; 94/94 host tests pass

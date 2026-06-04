@@ -1,0 +1,1 @@
+Split `m1_wifi_scene.c` (51 scene IDs) into per-group files following the BT/Settings scene split pattern: `m1_wifi_scene_menu.c`, `m1_wifi_scene_sniff.c`, `m1_wifi_scene_attack.c`, `m1_wifi_scene_net.c`, `m1_wifi_scene_general.c`, `m1_wifi_scene_connect.c`; `m1_wifi_scene.c` reduced to registry table + entry point only. Phase D complete ✅.

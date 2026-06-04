@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "nfc_storage.h"
+#include "nfc_file_parse.h"
 #include "m1_sdcard.h"
 #include "nfc_fileio.h"
 #include "nfc_ctx.h"
@@ -14,132 +15,7 @@
 
 #define NFC_STORAGE_MIN_DUMP_UNITS  1
 
-typedef struct {
-    uint8_t  tech;      /* M1NFC_TECH_* */
-    uint8_t  family;    /* M1NFC_FAM_*  */
-    uint16_t unit_size; /* Page/block size */
-} nfc_family_info_t;
-
-
-/*============================================================================*/
-/**
- * @brief Remove leading whitespace from string
- * @param s String to trim (modified in place)
- * @return Pointer to trimmed string
- */
-/*============================================================================*/
-static char* str_ltrim(char* s)
-{
-    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
-    return s;
-}
-
-/*============================================================================*/
-/**
- * @brief Remove trailing whitespace from string
- * @param s String to trim (modified in place)
- * @return Pointer to trimmed string
- */
-/*============================================================================*/
-static char* str_rtrim(char* s)
-{
-    size_t len = strlen(s);
-    while (len > 0 &&
-           (s[len-1] == ' ' || s[len-1] == '\t' ||
-            s[len-1] == '\r' || s[len-1] == '\n')) {
-        s[--len] = '\0';
-    }
-    return s;
-}
-
-/*============================================================================*/
-/**
- * @brief Remove leading and trailing whitespace from string
- * @param s String to trim (modified in place)
- * @return Pointer to trimmed string
- */
-/*============================================================================*/
-static char* str_trim(char* s)
-{
-    return str_ltrim(str_rtrim(s));
-}
-
-/*============================================================================*/
-/**
- * @brief Convert a single character to 0~15 hex value
- * @param c Character to convert
- * @return Hex value (0-15) on success, -1 on failure
- */
-/*============================================================================*/
-static int hex_nibble(char c)
-{
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-    return -1;
-}
-
-/*============================================================================*/
-/**
- * @brief Parse HEX byte sequence from string (supports "AA BB CC" or "AABBCC" format)
- * @param s Input string containing hex bytes
- * @param out Output buffer for parsed bytes
- * @param max Maximum number of bytes to parse
- * @param out_len Pointer to store actual parsed length
- * @return 0 on success, 1 if second digit missing, 2 if invalid char/hex, 3 if buffer full
- */
-/*============================================================================*/
-static int parse_hex_bytes(char *s, uint8_t *out, size_t max, size_t *out_len)
-{
-    size_t      n        = 0;
-    int         have_hi  = 0;
-    uint8_t     hi_nib   = 0;
-    unsigned char *p     = (unsigned char *)str_trim(s);
-
-    while (*p)
-    {
-        /* Skip all whitespace */
-        if (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
-            p++;
-            continue;
-        }
-
-        /* Non-hex character is treated as error */
-        if (!isxdigit(*p)) {
-            return 2;   // invalid char
-        }
-
-        int v = hex_nibble(*p);
-        if (v < 0) {
-            return 2;   // invalid hex
-        }
-
-        if (!have_hi) {
-            /* Store upper nibble */
-            hi_nib  = (uint8_t)v;
-            have_hi = 1;
-        } else {
-            /* Combine with lower nibble to complete 1 byte */
-            if (n >= max) {
-                return 3;   // out buffer full
-            }
-            out[n++] = (uint8_t)((hi_nib << 4) | (uint8_t)v);
-            have_hi  = 0;
-        }
-
-        p++;
-    }
-
-    /* Error if hex string has odd number of characters */
-    if (have_hi) {
-        return 1;   // second digit missing
-    }
-
-    if (out_len) {
-        *out_len = n;
-    }
-    return 0;
-}
+/* nfc_family_info_t is now defined in nfc_file_parse.h */
 
 
 /*============================================================================*/
@@ -170,100 +46,28 @@ static void mark_unit_valid(uint8_t* valid_bits, uint32_t valid_bytes, uint32_t 
 /*============================================================================*/
 static int parse_device_type(const char* s, nfc_family_info_t* out)
 {
-    if (!s || !out) return -1;
-
-    if (strncmp(s, "Classic", 7) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_CLASSIC;
-        out->unit_size = 16;
-        return 0;
-    }
-
-    /* Flipper format: "Mifare Classic 1K", "Mifare Classic 4K" */
-    if (strncmp(s, "Mifare Classic", 14) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_CLASSIC;
-        out->unit_size = 16;
-        return 0;
-    }
-
-    if (strncmp(s, "Ultralight/NTAG", 15) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_ULTRALIGHT;
-        out->unit_size = 4;   /* Type2 page */
-        return 0;
-    }
-
-    /* Flipper format: "NTAG215", "NTAG213", "NTAG216", "NTAG203" */
-    if (strncmp(s, "NTAG", 4) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_ULTRALIGHT;
-        out->unit_size = 4;
-        return 0;
-    }
-
-    /* Flipper format: "Mifare Ultralight", "Mifare Ultralight EV1 ..." */
-    if (strncmp(s, "Mifare Ultralight", 17) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_ULTRALIGHT;
-        out->unit_size = 4;
-        return 0;
-    }
-
-    /* Flipper format: "ISO14443-3A" — generic NFC-A, default to Ultralight */
-    if (strncmp(s, "ISO14443-3A", 11) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_ULTRALIGHT;
-        out->unit_size = 4;
-        return 0;
-    }
-
-#ifdef M1NFC_FAM_DESFIRE
-    if (strncmp(s, "DESFire", 7) == 0) {
-        out->tech      = M1NFC_TECH_A;
-        out->family    = M1NFC_FAM_DESFIRE;
-        out->unit_size = 16;  /* Arbitrary, adjust as needed */
-        return 0;
-    }
-#endif
+    /* Delegate to extracted pure-logic parser (nfc_file_parse.c).
+     * Platform-specific #ifdef gating for T4T/Felica/15693/iClass is preserved
+     * here as overrides when those families are defined. */
+    int rc = nfc_parse_device_type(s, out);
 
 #ifdef M1NFC_FAM_T4T
-    if (strncmp(s, "ISO14443-4A", 11) == 0) {
+    if (rc != 0 && s && strncmp(s, "ISO14443-4A", 11) == 0) {
         out->tech      = M1NFC_TECH_A;
         out->family    = M1NFC_FAM_T4T;
-        out->unit_size = 4;   /* Logical block unit (arbitrary) */
+        out->unit_size = 4;
         return 0;
     }
 #endif
 
 #ifdef M1NFC_FAM_FELICA
-    if (strncmp(s, "Felica", 6) == 0) {
-        out->tech      = M1NFC_TECH_F;
-        out->family    = M1NFC_FAM_FELICA;
-        out->unit_size = 16;  /* Service block size (arbitrary) */
-        return 0;
+    if (rc == 0 && s && strncmp(s, "Felica", 6) == 0) {
+        /* Override family to M1NFC_FAM_FELICA if defined */
+        out->family = M1NFC_FAM_FELICA;
     }
 #endif
 
-#ifdef M1NFC_FAM_15693
-    if (strncmp(s, "ISO15693", 8) == 0) {
-        out->tech      = M1NFC_TECH_V;
-        out->family    = M1NFC_FAM_15693;
-        out->unit_size = 4;   /* block_size: can be adjusted per project */
-        return 0;
-    }
-#endif
-
-#ifdef M1NFC_FAM_ICLASS
-    if (strncmp(s, "PicoPass", 8) == 0) {
-        out->tech      = M1NFC_TECH_V;
-        out->family    = M1NFC_FAM_ICLASS;
-        out->unit_size = 8;   /* PicoPass block = 8 bytes */
-        return 0;
-    }
-#endif
-
-    return -1;
+    return rc;
 }
 
 /*============================================================================*/
@@ -412,53 +216,19 @@ static nfc_storage_result_t nfc_storage_parse_header_ini(
 }
 
 /*============================================================================*/
-/**
- * @brief Store unit data from "Page N:" / "Block N:" line into dump buffer
- * @param dump_buf Dump buffer to store data
- * @param unit_size Size of each unit (page/block)
- * @param unit_count Total number of units
- * @param valid_bits Valid bits bitmap (optional)
- * @param valid_bits_bytes Size of valid_bits buffer
- * @param max_seen_unit Pointer to update maximum seen unit index
- * @param idx Unit index to store
- * @param src_bytes Source data bytes
- * @param src_len Length of source data
- */
+/* nfcfio → nfc_line_reader_t adapter for nfc_parse_body()                    */
 /*============================================================================*/
-static void nfc_storage_store_unit(
-        uint8_t*    dump_buf,
-        uint16_t    unit_size,
-        uint32_t    unit_count,
-        uint8_t*    valid_bits,
-        uint32_t    valid_bits_bytes,
-        uint32_t*   max_seen_unit,
-        uint32_t    idx,
-        const uint8_t* src_bytes,
-        size_t      src_len)
+typedef struct {
+    nfc_parser_t *ps;
+} nfcfio_reader_ctx_t;
+
+static int nfcfio_reader_getline(void *ctx, char *buf, size_t bufsz)
 {
-    if (!dump_buf || unit_size == 0 || unit_count == 0) return;
-
-    if (src_len < unit_size) {
-        /* Pad remaining part with 0 if insufficient */
-        uint8_t tmp[32] = {0};
-        size_t copy = src_len;
-        if (copy > sizeof(tmp)) copy = sizeof(tmp);
-        memcpy(tmp, src_bytes, copy);
-
-        if (idx < unit_count) {
-            memcpy(dump_buf + idx * unit_size, tmp, unit_size);
-            mark_unit_valid(valid_bits, valid_bits_bytes, idx);
-            if (max_seen_unit && idx > *max_seen_unit) *max_seen_unit = idx;
-        }
-        return;
-    }
-
-    if (idx >= unit_count) return; /* Buffer overflow → clip */
-
-    memcpy(dump_buf + idx * unit_size, src_bytes, unit_size);
-    mark_unit_valid(valid_bits, valid_bits_bytes, idx);
-    if (max_seen_unit && idx > *max_seen_unit) *max_seen_unit = idx;
+    nfcfio_reader_ctx_t *rc = (nfcfio_reader_ctx_t *)ctx;
+    return nfcfio_getline(&rc->ps->io, buf, bufsz);
 }
+
+static const nfc_line_reader_t s_nfcfio_reader = { .getline = nfcfio_reader_getline };
 
 /*============================================================================*/
 /**
@@ -470,7 +240,7 @@ static void nfc_storage_store_unit(
  * @param valid_bits Valid bits bitmap (optional)
  * @param valid_bits_bytes Size of valid_bits buffer
  * @return NFC_STORAGE_OK on success, error code on failure
- * @note Felica, 15693, etc. can parse header only for now
+ * @note Delegates to nfc_parse_body() from nfc_file_parse.c via nfcfio adapter
  */
 /*============================================================================*/
 static nfc_storage_result_t nfc_storage_parse_body(
@@ -484,88 +254,38 @@ static nfc_storage_result_t nfc_storage_parse_body(
     if (!dump_buf || dump_buf_bytes == 0)
         return NFC_STORAGE_ERR_NO_BUFFER;
 
-    nfc_parser_t* ps = &c->parser;
-
-    uint16_t unit_size  = faminfo->unit_size;
+    uint16_t unit_size = faminfo->unit_size;
     if (unit_size == 0) unit_size = 4;
     uint32_t unit_count = dump_buf_bytes / unit_size;
     if (unit_count < NFC_STORAGE_MIN_DUMP_UNITS)
         return NFC_STORAGE_ERR_NO_BUFFER;
 
-    memset(dump_buf, 0, dump_buf_bytes);
-    if (valid_bits && valid_bits_bytes > 0)
-        memset(valid_bits, 0, valid_bits_bytes);
+    nfcfio_reader_ctx_t rctx = { .ps = &c->parser };
+    nfc_parse_body_meta_t meta;
 
-    uint32_t max_seen = 0;
-
-    while (1) {
-        int n = nfcfio_getline(&ps->io, ps->line, sizeof(ps->line));
-        if (n == -1) break;          /* EOF */
-        if (n < 0)  return NFC_STORAGE_ERR_IO;
-
-        char* line = str_trim(ps->line);
-        if (line[0] == '\0') continue;
-        if (line[0] == '#')  continue;
-
-        /* Classic: "Block N:" */
-        if (strncmp(line, "Block ", 6) == 0) {
-            unsigned long idx = 0;
-            char* colon = strchr(line, ':');
-            if (!colon) continue;
-            *colon = '\0';
-            if (sscanf(line, "Block %lu", &idx) != 1) continue;
-
-            char* data_str = str_trim(colon + 1);
-            uint8_t bytes[32];
-            size_t  len = 0;
-            uint8_t b = parse_hex_bytes(data_str, bytes, sizeof(bytes), &len);
-            if (b != 0)
-            {
-                platformLog("Block Parsing Fail [%d]\r\n",b);
-                return NFC_STORAGE_ERR_FORMAT;
-            }
-            nfc_storage_store_unit(dump_buf, unit_size, unit_count,
-                                   valid_bits, valid_bits_bytes,
-                                   &max_seen, (uint32_t)idx,
-                                   bytes, len);
-            continue;
+    nfc_parse_result_t rc = nfc_parse_body(&s_nfcfio_reader, &rctx,
+                                            unit_size,
+                                            dump_buf, dump_buf_bytes,
+                                            valid_bits, valid_bits_bytes,
+                                            &meta);
+    if (rc != NFC_PARSE_OK) {
+        if (rc == NFC_PARSE_ERR_FORMAT) {
+            platformLog("Body Parsing Fail\r\n");
+            return NFC_STORAGE_ERR_FORMAT;
         }
-
-        /* Type2: "Page N:" */
-        if (strncmp(line, "Page ", 5) == 0) {
-            unsigned long idx = 0;
-            char* colon = strchr(line, ':');
-            if (!colon) continue;
-            *colon = '\0';
-            if (sscanf(line, "Page %lu", &idx) != 1) continue;
-
-            char* data_str = str_trim(colon + 1);
-            uint8_t bytes[32];
-            size_t  len = 0;
-            uint8_t b = parse_hex_bytes(data_str, bytes, sizeof(bytes), &len);
-            if (b != 0)
-            {
-                platformLog("Page Parsing Fail [%d]\r\n",b);
-                return NFC_STORAGE_ERR_FORMAT;
-            }
-            nfc_storage_store_unit(dump_buf, unit_size, unit_count,
-                                   valid_bits, valid_bits_bytes,
-                                   &max_seen, (uint32_t)idx,
-                                   bytes, len);
-            continue;
-        }
-
-        /* Felica/ISO15693, etc. can add separate processing here */
+        if (rc == NFC_PARSE_ERR_IO)
+            return NFC_STORAGE_ERR_IO;
+        return NFC_STORAGE_ERR_NO_BUFFER;
     }
 
     /* Parsing complete → set nfc_ctx.dump metadata */
-    nfc_ctx_set_dump(unit_size,
-                     unit_count,
+    nfc_ctx_set_dump(meta.unit_size,
+                     meta.unit_count,
                      0,             /* origin */
                      dump_buf,
                      valid_bits,
-                     max_seen,
-                     true); //dump set
+                     meta.max_seen_unit,
+                     true);
 
     return NFC_STORAGE_OK;
 }

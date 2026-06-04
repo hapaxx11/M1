@@ -15,9 +15,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "irmp.h"
+#include "ir_signal_record.h"   /* ir_universal_cmd_t (Phase G) */
 
-#define IR_UNIVERSAL_NAME_MAX_LEN    32
+/* IR_UNIVERSAL_NAME_MAX_LEN kept for backward compatibility; see IR_CMD_NAME_MAX_LEN */
+#define IR_UNIVERSAL_NAME_MAX_LEN    IR_CMD_NAME_MAX_LEN
 #define IR_UNIVERSAL_MAX_CMDS        64
 #define IR_UNIVERSAL_BROWSE_PAGE_SIZE 6
 #define IR_UNIVERSAL_MAX_FAVORITES   10
@@ -35,18 +36,6 @@ typedef enum {
 	IR_UNIVERSAL_MODE_FAVORITES,
 	IR_UNIVERSAL_MODE_RECENT
 } ir_universal_mode_t;
-
-typedef struct {
-	char name[IR_UNIVERSAL_NAME_MAX_LEN];
-	uint8_t  protocol;     /* IRMP protocol ID */
-	uint16_t address;
-	uint16_t command;
-	uint8_t  flags;
-	bool     is_raw;
-	uint32_t raw_freq;     /* For raw signals */
-	uint16_t raw_count;
-	bool     valid;
-} ir_universal_cmd_t;
 
 /* Main entry point - called from m1_infrared.c */
 void ir_universal_run(void);

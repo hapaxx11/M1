@@ -1,0 +1,1 @@
+- NFC Phase B blocker removal: extracted `nfc_file_parse.c/h` (vtable-based body parser), `mfc_layout.c/h` (MFC sector/block layout), `nfc_classify.c/h` (NFC-A family classifier) as pure-logic modules with 68 host tests; unblocked deeper NFC extraction from `nfc_storage.c`, `nfc_poller.c`, and `nfc_ctx.c`.

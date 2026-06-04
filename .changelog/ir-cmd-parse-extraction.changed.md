@@ -1,0 +1,1 @@
+Phase G: Extract `ir_cmd_parse` + `ir_block_reader_t` vtable from `m1_ir_universal.c` into `ir_signal_record.c/h`, decoupling `parse_ir_signal_block` from FatFS. Add `ir_parse_hex_bytes` and move `ir_universal_cmd_t` to the pure-logic header. 32 new host tests; 81/81 pass.

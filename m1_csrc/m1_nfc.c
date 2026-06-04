@@ -28,6 +28,9 @@
 #include "rfal_nfcv.h"
 #include "rfal_rf.h"
 #include "legacy/mfc_crypto1.h"
+#include "nfc_card_info.h"
+#include "nfc_ndef_parse.h"
+#include "nfc_ndef_encode.h"
 
 /*************************** D E F I N E S ************************************/
 #define M1_LOGDB_TAG					"NFC"
@@ -179,8 +182,6 @@ static int  nfc_utils_gui_message(void);
 static int nfc_utils_kp_handler(void);
 
 /* Forward declarations for NFC tools (used by nfc_utils view and Extra Actions) */
-static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte);
-static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2]);
 static void nfc_tool_fuzzer(void);
 static void nfc_tool_cyborg_detector(void);
 static void nfc_tool_read_ndef(void);
@@ -1365,7 +1366,7 @@ static int nfc_utils_kp_handler(void)
 									u8g2_DrawStr(&m1_u8g2, 2, 10, c->ui.title_text);
 									u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 									snprintf(line, sizeof(line), "Mfr: %s (0x%02X)",
-									         nfc_tool_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
+									         nfc_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
 									u8g2_DrawStr(&m1_u8g2, 2, 20, line);
 									snprintf(line, sizeof(line), "UID: %s",
 									         hex2Str(c->head.uid, c->head.uid_len));
@@ -1376,7 +1377,7 @@ static int nfc_utils_kp_handler(void)
 										         c->head.a.atqa[0], c->head.a.atqa[1], c->head.a.sak);
 										u8g2_DrawStr(&m1_u8g2, 2, 40, line);
 										snprintf(line, sizeof(line), "Type: %s",
-										         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
+										         nfc_sak_type_str(c->head.a.sak, c->head.a.atqa));
 										u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 									}
 									u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -2017,47 +2018,6 @@ void m1_nfc_info_more_draw(void)
 /*                   NFC TOOLS — Helpers                                      */
 /*============================================================================*/
 
-/* NFC-A manufacturer lookup (ISO/IEC 7816-6 / JIS X 6319-4, byte 0 of UID) */
-static const char* nfc_tool_manufacturer_name(uint8_t mfr_byte)
-{
-	switch (mfr_byte) {
-		case 0x01: return "Motorola";
-		case 0x02: return "STMicro";
-		case 0x03: return "Hitachi";
-		case 0x04: return "NXP";
-		case 0x05: return "Infineon";
-		case 0x06: return "Cylink";
-		case 0x07: return "TI";
-		case 0x08: return "Fujitsu";
-		case 0x09: return "Matsushita";
-		case 0x0A: return "NEC";
-		case 0x0B: return "Oki";
-		case 0x0C: return "Toshiba";
-		case 0x0D: return "Mitsubishi";
-		case 0x0E: return "Samsung";
-		case 0x0F: return "Hyundai";
-		case 0x10: return "LG";
-		case 0x16: return "EM Micro";
-		case 0x28: return "SiliconCraft";
-		default:   return "Unknown";
-	}
-}
-
-/* SAK meaning for NFC-A */
-static const char* nfc_tool_sak_meaning(uint8_t sak, const uint8_t atqa[2])
-{
-	if (sak == 0x08) return "Classic 1K";
-	if (sak == 0x18) return "Classic 4K";
-	if (sak == 0x09) return "Classic Mini";
-	if (sak == 0x10) return "Classic 2K";
-	if (sak == 0x11) return "Classic 4K (Plus)";
-	if (sak == 0x00 && atqa[0] == 0x44) return "Ultralight/NTAG";
-	if (sak == 0x20) return "DESFire/ISO-DEP";
-	if (sak == 0x28) return "Classic+ISO-DEP";
-	if (sak == 0x60) return "Classic+DESFire";
-	return "Other";
-}
-
 /* Fuzzer card profiles for NFC-A emulation */
 #define NFC_FUZZ_PROFILE_COUNT  4
 static const char *nfc_fuzz_profile_names[] = {
@@ -2072,21 +2032,6 @@ static const uint8_t nfc_fuzz_profile_sak[] = {
 static const uint8_t nfc_fuzz_profile_uid_len[] = {
 	4, 4, 7, 7
 };
-
-static void nfc_fuzz_uid_step(uint8_t *uid, uint8_t uid_len, int8_t dir)
-{
-	if (dir > 0) {
-		for (int i = uid_len - 1; i >= 0; i--) {
-			uid[i]++;
-			if (uid[i] != 0) break;
-		}
-	} else {
-		for (int i = uid_len - 1; i >= 0; i--) {
-			uid[i]--;
-			if (uid[i] != 0xFF) break;
-		}
-	}
-}
 
 static void nfc_fuzz_draw_setup(uint8_t prof_sel, const uint8_t *uid, uint8_t uid_len,
                                 int8_t dir, uint16_t delay_ms)
@@ -2225,7 +2170,7 @@ static void nfc_tool_tag_info(void)
 
 				u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 				snprintf(line, sizeof(line), "Mfr: %s (0x%02X)",
-				         nfc_tool_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
+				         nfc_manufacturer_name(c->head.uid[0]), c->head.uid[0]);
 				u8g2_DrawStr(&m1_u8g2, 2, 20, line);
 
 				snprintf(line, sizeof(line), "UID: %s",
@@ -2239,7 +2184,7 @@ static void nfc_tool_tag_info(void)
 					u8g2_DrawStr(&m1_u8g2, 2, 40, line);
 
 					snprintf(line, sizeof(line), "Type: %s",
-					         nfc_tool_sak_meaning(c->head.a.sak, c->head.a.atqa));
+					         nfc_sak_type_str(c->head.a.sak, c->head.a.atqa));
 					u8g2_DrawStr(&m1_u8g2, 2, 46, line);
 				}
 
@@ -2590,7 +2535,7 @@ static void nfc_tool_fuzzer(void)
 		}
 
 		/* Timeout = step to next UID */
-		nfc_fuzz_uid_step(uid, uid_len, dir);
+		nfc_uid_step(uid, uid_len, dir);
 		count++;
 
 		/* Update emulator with new UID (live update, no stop/start needed) */
@@ -2977,90 +2922,7 @@ static uint16_t nfc_tool_parse_ndef_text(char *out, uint16_t out_size)
 	if (!c || !c->t2t.valid || c->t2t.ndef_len == 0)
 		return 0;
 
-	const uint8_t *ndef = c->t2t.ndef;
-	uint16_t len = c->t2t.ndef_len;
-	uint16_t pos = 0;
-	uint16_t written = 0;
-
-	while (pos < len && written < out_size - 1)
-	{
-		if (pos + 3 > len) break;
-
-		uint8_t header = ndef[pos++];
-		uint8_t tnf = header & 0x07;
-		uint8_t type_len = ndef[pos++];
-		uint32_t payload_len;
-
-		if (header & 0x10) { /* SR flag */
-			payload_len = ndef[pos++];
-		} else {
-			if (pos + 4 > len) break;
-			payload_len = ((uint32_t)ndef[pos] << 24) | ((uint32_t)ndef[pos+1] << 16) |
-			              ((uint32_t)ndef[pos+2] << 8) | ndef[pos+3];
-			pos += 4;
-		}
-
-		uint8_t id_len = 0;
-		if (header & 0x08) {
-			if (pos >= len) break;
-			id_len = ndef[pos++];
-		}
-
-		if (pos + type_len > len) break;
-		uint8_t type_byte = (type_len > 0) ? ndef[pos] : 0;
-		pos += type_len;
-		pos += id_len;
-
-		if (pos + payload_len > len) break;
-
-		if (tnf == 0x01 && type_byte == 'U' && payload_len > 0)
-		{
-			static const char *uri_prefixes[] = {
-				"", "http://www.", "https://www.", "http://", "https://",
-				"tel:", "mailto:", "ftp://anonymous:anonymous@", "ftp://ftp.",
-				"ftps://", "sftp://", "smb://", "nfs://", "ftp://", "dav://",
-				"news:", "telnet://", "imap:", "rtsp://", "urn:", "pop:",
-				"sip:", "sips:", "tftp:", "btspp://", "btl2cap://",
-				"btgoep://", "tcpobex://", "irdaobex://", "file://",
-				"urn:epc:id:", "urn:epc:tag:", "urn:epc:pat:", "urn:epc:raw:",
-				"urn:epc:", "urn:nfc:"
-			};
-			uint8_t prefix_code = ndef[pos];
-			const char *prefix = (prefix_code < 36) ? uri_prefixes[prefix_code] : "";
-			uint16_t plen = strlen(prefix);
-			if (written + plen < out_size - 1) {
-				strcpy(&out[written], prefix);
-				written += plen;
-			}
-			uint32_t copy_len = payload_len - 1;
-			if (written + copy_len >= out_size - 1)
-				copy_len = out_size - 1 - written;
-			memcpy(&out[written], &ndef[pos + 1], copy_len);
-			written += copy_len;
-			out[written++] = '\n';
-		}
-		else if (tnf == 0x01 && type_byte == 'T' && payload_len > 1)
-		{
-			uint8_t status = ndef[pos];
-			uint8_t lang_len = status & 0x3F;
-			uint32_t text_start = 1 + lang_len;
-			if (text_start < payload_len) {
-				uint32_t text_len = payload_len - text_start;
-				if (written + text_len >= out_size - 1)
-					text_len = out_size - 1 - written;
-				memcpy(&out[written], &ndef[pos + text_start], text_len);
-				written += text_len;
-				out[written++] = '\n';
-			}
-		}
-
-		pos += payload_len;
-		if (header & 0x40) break; /* ME flag — last record */
-	}
-
-	if (written > 0 && out[written - 1] == '\n') written--;
-	out[written] = '\0';
-	return written;
+	return ndef_parse_records(c->t2t.ndef, c->t2t.ndef_len, out, out_size);
 }
 
 
@@ -3183,24 +3045,12 @@ static void nfc_tool_write_url(void)
 	uint8_t vkb_ret = m1_vkb_get_filename("Enter URL (no https://):", default_url, url_text);
 	if (!vkb_ret) return;
 
-	uint8_t url_len = strlen(url_text);
-	if (url_len == 0) return;
+	if (url_text[0] == '\0') return;
 
-	uint8_t ndef_payload_len = 1 + url_len; /* prefix byte + url */
 	uint8_t ndef_record[128];
-	uint8_t ndef_total = 0;
-
-	/* Build NDEF TLV + record */
-	ndef_record[ndef_total++] = 0x03;                    /* NDEF TLV tag */
-	ndef_record[ndef_total++] = 3 + ndef_payload_len;    /* TLV length = header(3) + payload */
-	ndef_record[ndef_total++] = 0xD1;                    /* MB|ME|SR|TNF=WKT */
-	ndef_record[ndef_total++] = 0x01;                    /* Type length = 1 */
-	ndef_record[ndef_total++] = ndef_payload_len;         /* Payload length */
-	ndef_record[ndef_total++] = 'U';                     /* Type = URI */
-	ndef_record[ndef_total++] = 0x04;                    /* URI prefix: https:// */
-	memcpy(&ndef_record[ndef_total], url_text, url_len);
-	ndef_total += url_len;
-	ndef_record[ndef_total++] = 0xFE;                    /* Terminator TLV */
+	size_t ndef_total = ndef_encode_uri(ndef_record, sizeof(ndef_record),
+	                                    NDEF_URI_HTTPS, url_text);
+	if (ndef_total == 0) return;
 
 	/* Pad to 4-byte alignment for T2T pages */
 	while (ndef_total % 4 != 0)

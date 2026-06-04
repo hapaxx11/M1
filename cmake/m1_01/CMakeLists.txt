@@ -546,17 +546,32 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_menu.c
     ../../m1_csrc/m1_nfc.c
     ../../m1_csrc/m1_nfc_scene.c
+    ../../m1_csrc/nfc_card_info.c
+    ../../m1_csrc/nfc_classify.c
+    ../../m1_csrc/nfc_file_parse.c
     ../../m1_csrc/nfc_ndef_encode.c
+    ../../m1_csrc/nfc_ndef_parse.c
+    ../../m1_csrc/nfc_ntag.c
+    ../../m1_csrc/mfc_layout.c
     ../../m1_csrc/m1_power_ctl.c
     ../../m1_csrc/m1_rf_spi.c
     ../../m1_csrc/m1_rfid.c
     ../../m1_csrc/m1_rfid_scene.c
     ../../m1_csrc/m1_ring_buffer.c
     ../../m1_csrc/m1_bt_scene.c
+    ../../m1_csrc/m1_bt_scene_menu.c
+    ../../m1_csrc/m1_bt_scene_sniff.c
+    ../../m1_csrc/m1_bt_scene_spam.c
+    ../../m1_csrc/m1_bt_scene_badbt.c
     ../../m1_csrc/m1_sdcard.c
     ../../m1_csrc/m1_sdcard_man.c
     ../../m1_csrc/m1_settings.c
     ../../m1_csrc/m1_settings_scene.c
+    ../../m1_csrc/m1_settings_scene_menu.c
+    ../../m1_csrc/m1_settings_scene_storage.c
+    ../../m1_csrc/m1_settings_scene_power.c
+    ../../m1_csrc/m1_settings_scene_fw.c
+    ../../m1_csrc/m1_settings_scene_esp32.c
     ../../m1_csrc/m1_system_dashboard.c
     ../../m1_csrc/m1_system_dashboard_helpers.c
     ../../m1_csrc/m1_storage.c
@@ -608,6 +623,19 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_watchdog.c
     ../../m1_csrc/m1_wifi.c
     ../../m1_csrc/m1_wifi_scene.c
+    ../../m1_csrc/m1_wifi_scene_menu.c
+    ../../m1_csrc/m1_wifi_scene_sniff.c
+    ../../m1_csrc/m1_wifi_scene_attack.c
+    ../../m1_csrc/m1_wifi_scene_net.c
+    ../../m1_csrc/m1_wifi_scene_general.c
+    ../../m1_csrc/m1_wifi_scene_connect.c
+    ../../m1_csrc/wifi_ap_record.c
+    ../../m1_csrc/wifi_status_msg.c
+    ../../m1_csrc/wifi_mac_utils.c
+    ../../m1_csrc/wifi_file_utils.c
+    ../../m1_csrc/wifi_selection.c
+    ../../m1_csrc/wifi_deauth_cmd.c
+    ../../m1_csrc/esp32_feature_map.c
 
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
@@ -618,6 +646,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/flipper_nfc.c
     ../../m1_csrc/flipper_rfid.c
     # === Enhanced firmware: Universal Remote + Crypto (Phase 3+5) ===
+    ../../m1_csrc/ir_signal_record.c
+    ../../m1_csrc/ir_button_map.c
     ../../m1_csrc/m1_ir_universal.c
     ../../m1_csrc/m1_ir_quick_remote.c
     ../../m1_csrc/m1_crypto.c

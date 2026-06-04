@@ -1,0 +1,1 @@
+IR signal-record pure-logic extraction: new `ir_signal_record.c/h` module (`ir_map_flipper_protocol`, `ir_is_ir_file`, `ir_path_append`, `ir_path_go_up`, `ir_str_contains_icase`); 5 statics + 13 call sites migrated from `m1_ir_universal.c`; dead `ir_search_impl.c` stub deleted; `test_ir_search.c` migrated to real module; 41 host tests in `test_ir_signal_record.c`

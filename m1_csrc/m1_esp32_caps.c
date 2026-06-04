@@ -288,3 +288,11 @@ uint32_t m1_esp32_caps_free_heap(void)
         m1_esp32_caps_init();
     return s_free_heap_bytes;
 }
+
+uint64_t m1_esp32_caps_get_bitmap(void)
+{
+    /* Return the cached bitmap without re-probing.  Callers that need the
+     * bitmap for esp32_feature_map queries should ensure m1_esp32_caps_init()
+     * has already run (e.g. via m1_esp32_ensure_init()). */
+    return s_bitmap;
+}
