@@ -280,7 +280,18 @@ static void wifi_wait_dismiss(void)
 	}
 }
 
-static void wifi_show_message(const char *title, const char *line1, const char *line2)
+/**
+ * @brief  Draw a status screen and return immediately (no key wait).
+ *
+ * Use this for a transient "in progress" status shown right before a blocking
+ * action — e.g. "Scanning APs..." before wifi_do_scan(), or "Connecting..."
+ * before CMD_WIFI_JOIN.  The action then runs and the result is shown.
+ *
+ * Do NOT use the blocking variant (which waits for a key) for these: it leaves
+ * the device sitting on e.g. "Scanning APs..." forever, waiting for a key press
+ * the user does not know to give, so the scan/connect never starts.
+ */
+static void wifi_draw_message(const char *title, const char *line1, const char *line2)
 {
 	m1_u8g2_firstpage();
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
@@ -289,6 +300,17 @@ static void wifi_show_message(const char *title, const char *line1, const char *
 	if (line1) u8g2_DrawStr(&m1_u8g2, 6, 30, line1);
 	if (line2) u8g2_DrawStr(&m1_u8g2, 6, 42, line2);
 	m1_u8g2_nextpage();
+}
+
+/**
+ * @brief  Draw a status screen and wait until the user presses OK/Back.
+ *
+ * For terminal messages the user should acknowledge ("No APs found",
+ * "Connected", errors) — never for an in-progress status before an action.
+ */
+static void wifi_show_message(const char *title, const char *line1, const char *line2)
+{
+	wifi_draw_message(title, line1, line2);
 	wifi_wait_dismiss();
 }
 
@@ -344,7 +366,7 @@ static void wifi_connect_selected_ap(void)
 	memcpy(&cmd.payload[2 + ssid_len], password, pass_len);
 	cmd.payload_len = 2 + ssid_len + pass_len;
 
-	wifi_show_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
+	wifi_draw_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0)
 	{
@@ -2584,7 +2606,7 @@ void wifi_wardrive(void)
 	char ssid[70];
 
 	ensure_esp32_ready();
-	wifi_show_message("Wardrive", "Scanning APs...", NULL);
+	wifi_draw_message("Wardrive", "Scanning APs...", NULL);
 	if (wifi_do_scan() == 0)
 	{
 		wifi_show_message("Wardrive", "No APs found", NULL);
@@ -2914,7 +2936,7 @@ void wifi_general_save_aps(void)
 	if (!ap_list || ap_count == 0)
 	{
 		ensure_esp32_ready();
-		wifi_show_message("Save APs", "Scanning APs...", NULL);
+		wifi_draw_message("Save APs", "Scanning APs...", NULL);
 		if (wifi_do_scan() == 0)
 		{
 			wifi_show_message("Save APs", "No APs found", NULL);
@@ -3207,7 +3229,7 @@ static bool wifi_join_select_ap(void)
 	if (!ap_list || ap_count == 0)
 	{
 		ensure_esp32_ready();
-		wifi_show_message("Join WiFi", "Scanning APs...", NULL);
+		wifi_draw_message("Join WiFi", "Scanning APs...", NULL);
 		if (wifi_do_scan() == 0)
 		{
 			wifi_show_message("Join WiFi", "No APs found", NULL);
@@ -3286,7 +3308,7 @@ void wifi_general_join_wifi(void)
 	memcpy(&cmd.payload[2 + ssid_len], password, pass_len);
 	cmd.payload_len = 2 + ssid_len + pass_len;
 
-	wifi_show_message("Join WiFi", "Connecting...", ap_list[ap_view_idx].ssid);
+	wifi_draw_message("Join WiFi", "Connecting...", ap_list[ap_view_idx].ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
@@ -3631,7 +3653,7 @@ void wifi_general_select_ep_html(void)
 	}
 
 	snprintf(file_line, sizeof(file_line), "%.24s", f_info->file_name);
-	wifi_show_message("EP HTML", "Uploading...", file_line);
+	wifi_draw_message("EP HTML", "Uploading...", file_line);
 
 	while (1)
 	{
@@ -4366,7 +4388,7 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	memcpy(&cmd.payload[2 + ssid_len], cred->password, pass_len);
 	cmd.payload_len = 2 + ssid_len + pass_len;
 
-	wifi_show_message("Connect", "Connecting...", cred->ssid);
+	wifi_draw_message("Connect", "Connecting...", cred->ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
