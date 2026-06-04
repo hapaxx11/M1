@@ -42,8 +42,8 @@
 /**
  * @brief  RSSI spectrogram history state.
  *
- *  All fields are accessed only through the inline helpers below.  Firmware
- *  keeps one static instance; test code allocates one on the stack.
+ *  Mutation should go through the inline helpers below. Firmware may read buf/head/end
+ *  directly when rendering; test code allocates one instance on the stack.
  */
 typedef struct {
     /** Circular history buffer (+2 guard bytes). */
