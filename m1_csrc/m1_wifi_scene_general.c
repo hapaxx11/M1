@@ -106,8 +106,9 @@ static subghz_submenu_model_t s_general_model;
 static void general_menu_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_general_model, GENERAL_ITEM_COUNT,
-                              M1_MENU_VIS(GENERAL_ITEM_COUNT));
+    if (s_general_model.item_count == 0)
+        subghz_submenu_model_init(&s_general_model, GENERAL_ITEM_COUNT,
+                                  M1_MENU_VIS(GENERAL_ITEM_COUNT));
     app->need_redraw = true;
 }
 

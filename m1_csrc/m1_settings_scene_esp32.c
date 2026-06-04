@@ -118,8 +118,9 @@ static void esp32_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
     setting_esp32_init();
-    subghz_submenu_model_init(&s_esp32_model, ESP32_ITEM_COUNT,
-                              M1_MENU_VIS(ESP32_ITEM_COUNT));
+    if (s_esp32_model.item_count == 0)
+        subghz_submenu_model_init(&s_esp32_model, ESP32_ITEM_COUNT,
+                                  M1_MENU_VIS(ESP32_ITEM_COUNT));
     app->need_redraw = true;
 }
 

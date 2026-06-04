@@ -206,6 +206,96 @@ void test_subghz_scene_menu_uses_widget(void)
     free(c);
 }
 
+/* ------------------------------------------------------------------ */
+/* Regression: on_enter must NOT unconditionally reset model           */
+/*                                                                     */
+/* PR #547 introduced a bug where every on_enter called                */
+/* subghz_submenu_model_init() unconditionally, resetting the user's   */
+/* menu selection when returning from a child scene via scene_pop().   */
+/* The fix guards the init with `if (model.item_count == 0)` so that   */
+/* the model is only initialised on first entry.                       */
+/* ------------------------------------------------------------------ */
+
+static void assert_guarded_init(const char *relpath)
+{
+    char *c = read_file(relpath);
+    /* The init call must still be present */
+    assert_contains(c, "subghz_submenu_model_init");
+    /* It must be guarded by item_count == 0 */
+    assert_contains(c, ".item_count == 0)");
+    free(c);
+}
+
+void test_bt_menu_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_bt_scene_menu.c");
+}
+
+void test_bt_sniff_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_bt_scene_sniff.c");
+}
+
+void test_bt_spam_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_bt_scene_spam.c");
+}
+
+void test_settings_menu_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_settings_scene_menu.c");
+}
+
+void test_settings_storage_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_settings_scene_storage.c");
+}
+
+void test_settings_power_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_settings_scene_power.c");
+}
+
+void test_settings_fw_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_settings_scene_fw.c");
+}
+
+void test_settings_esp32_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_settings_scene_esp32.c");
+}
+
+void test_nfc_menu_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_nfc_scene.c");
+}
+
+void test_wifi_menu_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_wifi_scene_menu.c");
+}
+
+void test_wifi_sniff_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_wifi_scene_sniff.c");
+}
+
+void test_wifi_attack_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_wifi_scene_attack.c");
+}
+
+void test_wifi_general_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_wifi_scene_general.c");
+}
+
+void test_wifi_net_init_guarded(void)
+{
+    assert_guarded_init("m1_csrc/m1_wifi_scene_net.c");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -222,5 +312,19 @@ int main(void)
     RUN_TEST(test_nfc_scene_uses_widget);
     RUN_TEST(test_wifi_scene_uses_widget);
     RUN_TEST(test_subghz_scene_menu_uses_widget);
+    RUN_TEST(test_bt_menu_init_guarded);
+    RUN_TEST(test_bt_sniff_init_guarded);
+    RUN_TEST(test_bt_spam_init_guarded);
+    RUN_TEST(test_settings_menu_init_guarded);
+    RUN_TEST(test_settings_storage_init_guarded);
+    RUN_TEST(test_settings_power_init_guarded);
+    RUN_TEST(test_settings_fw_init_guarded);
+    RUN_TEST(test_settings_esp32_init_guarded);
+    RUN_TEST(test_nfc_menu_init_guarded);
+    RUN_TEST(test_wifi_menu_init_guarded);
+    RUN_TEST(test_wifi_sniff_init_guarded);
+    RUN_TEST(test_wifi_attack_init_guarded);
+    RUN_TEST(test_wifi_general_init_guarded);
+    RUN_TEST(test_wifi_net_init_guarded);
     return UNITY_END();
 }

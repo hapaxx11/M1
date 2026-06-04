@@ -84,8 +84,9 @@ static subghz_submenu_model_t s_attack_model;
 static void attack_menu_enter(M1SceneApp *app)
 {
     (void)app;
-    subghz_submenu_model_init(&s_attack_model, ATTACK_ITEM_COUNT,
-                              M1_MENU_VIS(ATTACK_ITEM_COUNT));
+    if (s_attack_model.item_count == 0)
+        subghz_submenu_model_init(&s_attack_model, ATTACK_ITEM_COUNT,
+                                  M1_MENU_VIS(ATTACK_ITEM_COUNT));
     app->need_redraw = true;
 }
 

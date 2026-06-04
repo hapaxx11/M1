@@ -94,8 +94,9 @@ static void fw_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
     firmware_update_init();
-    subghz_submenu_model_init(&s_fw_model, FW_ITEM_COUNT,
-                              M1_MENU_VIS(FW_ITEM_COUNT));
+    if (s_fw_model.item_count == 0)
+        subghz_submenu_model_init(&s_fw_model, FW_ITEM_COUNT,
+                                  M1_MENU_VIS(FW_ITEM_COUNT));
     app->need_redraw = true;
 }
 
