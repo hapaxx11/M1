@@ -1,1 +1,0 @@
-Sub-GHz Read Raw waveform no longer shows a blank spectrogram when signal bursts are followed by a noise-floor drop (RSSI < −90 dBm): the RSSI push logic no longer erases committed bars on below-minimum readings (`trace=false`, `u_rssi=0` is now a no-op on the history buffer). Regression tests added in `test_subghz_rssi_history.c`.

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.49] - 2026-06-04
+
+### Fixed
+
+- Sub-GHz Read Raw waveform no longer shows a blank spectrogram when signal bursts are followed by a noise-floor drop (RSSI < −90 dBm): the RSSI push logic no longer erases committed bars on below-minimum readings (`trace=false`, `u_rssi=0` is now a no-op on the history buffer). Regression tests added in `test_subghz_rssi_history.c`.
+- Menu selection position reset to top when returning from a child scene (e.g. pressing Back after entering a BT/WiFi/NFC/Settings sub-item). The submenu widget rollout (PR #547) unconditionally called `subghz_submenu_model_init()` on every scene re-entry, erasing the user's scroll offset and selected index. The init is now guarded so the model is only initialised on first entry.
 ## [0.9.1.48] - 2026-06-04
 
 ### Changed

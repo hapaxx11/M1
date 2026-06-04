@@ -1,1 +1,0 @@
-Menu selection position reset to top when returning from a child scene (e.g. pressing Back after entering a BT/WiFi/NFC/Settings sub-item). The submenu widget rollout (PR #547) unconditionally called `subghz_submenu_model_init()` on every scene re-entry, erasing the user's scroll offset and selected index. The init is now guarded so the model is only initialised on first entry.
