@@ -60,9 +60,27 @@ void test_wifi_draw_message_is_nonblocking(void)
     const char *fn = strstr(src, "static void wifi_draw_message(");
     TEST_ASSERT_NOT_NULL_MESSAGE(fn, "wifi_draw_message not defined");
 
-    const char *body_end = strstr(fn + 1, "\nstatic ");
+    const char *body_start = strchr(fn, '{');
+    TEST_ASSERT_NOT_NULL(body_start);
+
+    const char *body_end = NULL;
+    int depth = 0;
+    for (const char *p = body_start; *p != '\0'; ++p)
+    {
+        if (*p == '{')
+            ++depth;
+        else if (*p == '}')
+        {
+            --depth;
+            if (depth == 0)
+            {
+                body_end = p;
+                break;
+            }
+        }
+    }
     TEST_ASSERT_NOT_NULL(body_end);
-    size_t len = (size_t)(body_end - fn);
+    size_t len = (size_t)((body_end + 1) - fn);
     char *body = (char *)malloc(len + 1U);
     TEST_ASSERT_NOT_NULL(body);
     memcpy(body, fn, len);
@@ -81,10 +99,12 @@ void test_scanning_status_uses_nonblocking_draw(void)
     int blocking = (strstr(src, "wifi_show_message(\"Join WiFi\", \"Scanning APs...\"") != NULL) ||
                    (strstr(src, "wifi_show_message(\"Wardrive\", \"Scanning APs...\"") != NULL) ||
                    (strstr(src, "wifi_show_message(\"Save APs\", \"Scanning APs...\"") != NULL);
-    int nonblocking = (strstr(src, "wifi_draw_message(\"Join WiFi\", \"Scanning APs...\"") != NULL);
+    int nonblocking = (strstr(src, "wifi_draw_message(\"Join WiFi\", \"Scanning APs...\"") != NULL) &&
+                      (strstr(src, "wifi_draw_message(\"Wardrive\", \"Scanning APs...\"") != NULL) &&
+                      (strstr(src, "wifi_draw_message(\"Save APs\", \"Scanning APs...\"") != NULL);
     free(src);
     TEST_ASSERT_FALSE_MESSAGE(blocking, "Scanning status must not use blocking wifi_show_message");
-    TEST_ASSERT_TRUE_MESSAGE(nonblocking, "Join WiFi scan status should use wifi_draw_message");
+    TEST_ASSERT_TRUE_MESSAGE(nonblocking, "Pre-scan statuses should use wifi_draw_message");
 }
 
 /* The pre-connect "Connecting..." statuses must use the non-blocking draw. */
