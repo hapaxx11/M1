@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.51] - 2026-06-04
+
+### Fixed
+
+- **Tests: WiFi draw-message nonblocking check** — Use brace-depth matching to locate the end of `wifi_draw_message()` in the source-level regression test, preventing false passes when the function later contains nested blocks or `#if` sections with a closing brace at column 0.
 ## [0.9.1.50] - 2026-06-04
 
 ### Fixed
