@@ -997,6 +997,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME esp32_progress COMMAND test_esp32_progress)
 
+# Pure math for the STM32 (Hapax) self firmware-update progress bar.
+# ------------------------------------------------------------------
+add_executable(test_fw_progress
+    test_fw_progress.c
+)
+target_include_directories(test_fw_progress PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_fw_progress PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fw_progress PRIVATE sanitizers)
+endif()
+add_test(NAME fw_progress COMMAND test_fw_progress)
+
 # ------------------------------------------------------------------
 # Module under test: esp32 fw-update scratch-buffer guard
 # Pure logic (allocator injected) — regression for the SD image-select crash.
