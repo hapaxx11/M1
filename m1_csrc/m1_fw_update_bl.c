@@ -862,9 +862,8 @@ uint8_t bl_flash_app(FIL *hfile)
 		if ( !count || (count % 4 != 0) ) // Read failed?
 			break;
 
-		fw_gui_progress_update(write_size);
-
 		write_size -= count;
+		fw_gui_progress_update(write_size);
 		if ( count )
 		{
 			flash_err = bl_flash_binary(fw_payload, count);
