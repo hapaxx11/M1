@@ -92,10 +92,11 @@ void test_connecting_status_uses_nonblocking_draw(void)
 {
     char *src = read_file("m1_csrc/m1_wifi.c");
     int blocking = (strstr(src, "wifi_show_message(\"Join WiFi\", \"Connecting...\"") != NULL);
-    int nonblocking = (strstr(src, "wifi_draw_message(\"Join WiFi\", \"Connecting...\"") != NULL);
+    int nonblocking = (strstr(src, "wifi_draw_message(\"Join WiFi\", \"Connecting...\"") != NULL) &&
+                      (strstr(src, "wifi_draw_message(\"Connect\", \"Connecting...\"") != NULL);
     free(src);
     TEST_ASSERT_FALSE_MESSAGE(blocking, "Connecting status must not use blocking wifi_show_message");
-    TEST_ASSERT_TRUE_MESSAGE(nonblocking, "Join WiFi connect status should use wifi_draw_message");
+    TEST_ASSERT_TRUE_MESSAGE(nonblocking, "Pre-connect statuses should use wifi_draw_message");
 }
 
 int main(void)
