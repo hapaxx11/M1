@@ -7,7 +7,7 @@ M1 firmware, recording its current emulation capability, the technical reason fo
 any limitation, and where to look for new information that might unlock emulation
 in the future.
 
-**Last reviewed:** 2026-04-20
+**Last reviewed:** 2026-06-05
 
 ---
 
@@ -277,3 +277,75 @@ when a new Flipper/Momentum firmware release is published):
    manufacturer entries added by the community, then trigger a release build.
 4. **Update the "Last reviewed" date** at the top of this file.
 5. **Move any newly-emulatable protocol** from ❌ to the appropriate ✅ or 🔑 section.
+
+---
+
+## Appendix A — Investigation of issue #551 attachments
+
+Issue [#551](https://github.com/hapaxx11/M1/issues/551) ("subgghzkee") asks whether
+five files extracted from a Flipper Zero can expand the M1's Sub-GHz manufacturer-code
+(MC) reach, building on PRs #281, #29, #233 and #267.  Each file was fetched and mapped
+against the existing M1 infrastructure.  Findings and a prioritised plan follow.
+
+### A.1 File-by-file findings
+
+| File | Format | What it contains | Usable today? |
+|------|--------|------------------|---------------|
+| `keeloq_keys.txt` | RocketGod SubGHz Toolkit text export | 65 KeeLoq manufacturer master keys (name, hex, dec, learning type) | **Yes — partially.** The exact format is already parsed by `subghz_keeloq_mfkeys_load_text()`. See the Type 4/5 caveat in A.2. |
+| `came_atomo.txt` | `Filetype: Flipper SubGhz Keystore RAW File`, `Encryption: 1` | AES-encrypted blob of CAME Atomo cipher key material (IV in header, ciphertext in `Encrypt_data: RAW`) | **No.** Encrypted with Flipper's firmware keystore key, which is not included in the file. |
+| `nice_flor_s.txt` | Flipper Keystore RAW, `Encryption: 1` | AES-encrypted Nice FloR-S secret (the HCS permutation/seed material) | **No.** Same encrypted-asset barrier as above. |
+| `alutech_at_4n.txt` | Flipper Keystore RAW, `Encryption: 1` | AES-encrypted Alutech AT-4N key material | **No.** Same encrypted-asset barrier as above. |
+| `advanced_analysis.txt` | RocketGod SubGHz Toolkit memory dump | Live registry/decoder/encoder pointer dump from `mntm-012` (Momentum) firmware: 56 protocols, flag/type bytes, function-pointer addresses | **Reference only.** No key material; confirms the upstream protocol set and per-protocol capability flags. |
+
+### A.2 What is already covered
+
+* **KeeLoq manufacturer keys are already a solved delivery problem.** The
+  `keeloq_keys.txt` RocketGod format is parsed verbatim by
+  `Sub_Ghz/subghz_keeloq_mfkeys.c`; keys are embedded at build time via
+  `scripts/gen_keeloq_mfkeys_builtin.py` + the `KEELOQ_KEY_VAULT` CI secret, with an
+  SD-card fallback (`0:/SUBGHZ/keeloq_mfcodes[.enc]`).  No code change is needed to
+  *load* these keys — the owner pastes the file into `KEELOQ_KEY_VAULT`.  Per the
+  repository's ABSOLUTE RULES the public tree must keep
+  `subghz_keeloq_mfkeys_builtin.c` as the NULL stub, so the keys themselves are **not**
+  committed here.
+
+* **CAME Atomo / Nice FloR-S / Alutech AT-4N already decode and replay.** All three are
+  listed in the "✅ Replayable — Plain OOK PWM" table above and are captured via
+  `subghz_decode_generic_pwm()`.  Capture-and-replay works without the keystore files.
+
+### A.3 Gaps the files reveal (concrete, actionable)
+
+1. **KeeLoq learning types 4 and 5 are silently dropped.**
+   `keeloq_keys.txt` contains entries with `Type: 4` (Beninca) and `Type: 5` (FAAC SLH).
+   `subghz_keeloq_mfkeys.c` only accepts learning types 1–3
+   (`KEELOQ_LEARN_SIMPLE..SECURE`; see the validation at `subghz_keeloq_mfkeys.c`
+   `rg_finalize_entry()` and `parse_compact_line()`), so those rows are discarded on
+   load.  The underlying decryptor (`Sub_Ghz/subghz_keeloq.c`) likewise implements only
+   normal/simple/secure derivation — it has no "magic XOR" / "magic serial" learning
+   modes.  This is the single clearest reach-limiting gap in the attachments.
+
+2. **The three Keystore RAW files cannot be ingested as-is.** They are encrypted with
+   Flipper's firmware-internal keystore key.  Decrypting them requires that key, which is
+   not in the files.  The *plaintext* equivalents (CAME Atomo secret, the Nice FloR-S
+   permutation table, the Alutech AES key) are, however, already published in
+   Flipper/Momentum firmware source and could be ported directly — the encrypted blobs
+   are not the route in.
+
+### A.4 Prioritised implementation plan
+
+| Priority | Work item | Effort | Notes / blockers |
+|----------|-----------|--------|------------------|
+| **P1** | Refresh `KEELOQ_KEY_VAULT` from `keeloq_keys.txt` (owner action, no code) | Trivial | Picks up the type 1–3 keys immediately; ship in next release build. |
+| **P2** | Extend the mfkeys parser + decryptor to accept KeeLoq learning types 4 (magic-XOR) and 5 (magic-serial) instead of dropping them | Medium | Port `keeloq_learning_*` variants from Momentum `lib/subghz/protocols/keeloq.c`; add the two derivation functions to `subghz_keeloq.c` and widen the type validation in `subghz_keeloq_mfkeys.c`; cover with host tests in `tests/`. Unblocks Beninca / FAAC-RC families. |
+| **P3** | Port the Nice FloR-S permutation table from Flipper source to upgrade Nice FloR-S from raw replay to full counter-edit (currently `SUBGHZ_COUNTER_EDIT_DEFERRED`, "HCS perm. table req.") | Medium | Plaintext table is public; no key recovery needed.  Resolves the deferral noted in `subghz_signal_fields.h`. |
+| **P4** | Port the CAME Atomo cipher decode and Alutech AT-4N AES path from Flipper source to enable full decode/counter-edit (both currently `DEFERRED`) | High | Plaintext keys/algorithm are in upstream firmware; the encrypted attachment blobs are *not* required. |
+| **N/A** | Decrypt the three Keystore RAW attachments directly | — | Not pursued: requires Flipper's secret keystore key; the plaintext upstream source is the supported route instead. |
+
+### A.5 Recommendation
+
+The attachments do **not** unlock anything that requires the encrypted blobs.  The only
+attachment with immediate value is `keeloq_keys.txt`, and only for its type 1–3 entries
+(P1).  Genuine reach expansion (P2–P4) comes from porting the already-public plaintext
+algorithms/tables from Flipper/Momentum source — tracked above — not from the encrypted
+Keystore RAW files.  `advanced_analysis.txt` is retained as a cross-check of the upstream
+56-protocol registry when prioritising future ports.
