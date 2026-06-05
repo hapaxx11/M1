@@ -934,6 +934,8 @@ uint8_t bl_flash_app(FIL *hfile)
     	write_size = 0; // Set end condition
     }
 
+	fw_update_draw_progress_bar(write_size); // init total with full image size
+
     while ( write_size )
 	{
         m1_wdt_reset();
@@ -943,14 +945,12 @@ uint8_t bl_flash_app(FIL *hfile)
 		if ( !count || (count % 4 != 0) ) // Read failed?
 			break;
 
+		flash_err = bl_flash_binary(fw_payload, count);
+		if ( flash_err != BL_CODE_OK )
+			break;
+
 		write_size -= count;
 		fw_update_draw_progress_bar(write_size);
-		if ( count )
-		{
-			flash_err = bl_flash_binary(fw_payload, count);
-			if ( flash_err != BL_CODE_OK )
-				break;
-		} // if ( count )
 
 		if (!write_size)
 		{
