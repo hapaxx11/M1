@@ -36,6 +36,7 @@
 #include "subghz_signal_fields.h"
 #include "subghz_keeloq.h"
 #include "subghz_keeloq_mfkeys.h"
+#include "subghz_nice_flor_s.h"
 
 /*============================================================================*/
 /* Local state                                                                 */
@@ -43,10 +44,17 @@
 
 /** Cached .sub metadata loaded on scene_on_enter from app->saved_filepath. */
 static flipper_subghz_signal_t s_signal;
-/** Extracted plaintext fields (valid only when s_supported == true). */
+/** Extracted plaintext fields (valid only when s_supported == true and
+ *  s_is_nice_flor_s == false). */
 static subghz_keeloq_fields_t  s_fields;
-/** True when the loaded protocol is a recognised KeeLoq family member. */
+/** True when the loaded protocol is a recognised KeeLoq family member
+ *  or Nice FloR-S. */
 static bool                    s_supported;
+/** True when the loaded file's protocol is Nice FloR-S.  When false and
+ *  s_supported is true, the protocol is a KeeLoq-family member. */
+static bool                    s_is_nice_flor_s;
+/** Extracted Nice FloR-S fields (valid only when s_is_nice_flor_s). */
+static subghz_nice_flor_s_fields_t s_nfs_fields;
 /** True when the file load itself succeeded — drives the error placeholder. */
 static bool                    s_loaded;
 /** True when the loaded file's manufacturer key was resolved and the
@@ -167,14 +175,16 @@ static void scene_on_enter(SubGhzApp *app)
      * Saved menu starts with a clean state. */
     app->signal_edit_active = false;
 
-    s_loaded      = false;
-    s_supported   = false;
-    s_has_counter = false;
-    s_counter     = 0U;
-    s_device_key  = 0U;
-    s_cursor      = SIG_CURSOR_BUTTON;
+    s_loaded        = false;
+    s_supported     = false;
+    s_is_nice_flor_s = false;
+    s_has_counter   = false;
+    s_counter       = 0U;
+    s_device_key    = 0U;
+    s_cursor        = SIG_CURSOR_BUTTON;
     memset(&s_signal, 0, sizeof(s_signal));
     memset(&s_fields, 0, sizeof(s_fields));
+    memset(&s_nfs_fields, 0, sizeof(s_nfs_fields));
     s_saved_full_path[0] = '\0';
 
     if (app->saved_filepath[0] == '\0')
@@ -221,6 +231,19 @@ static void scene_on_enter(SubGhzApp *app)
             s_has_counter = resolve_counter(&s_signal, &s_fields,
                                             &s_counter, &s_device_key);
         }
+    }
+    else if (subghz_signal_fields_is_nice_flor_s(s_signal.protocol))
+    {
+        /* P3 — Nice FloR-S cipher support.  Button and repeat are
+         * plaintext in the 52-bit key.  Serial and counter require the
+         * 32-byte rainbow table (loaded from SD card at runtime, like
+         * the KeeLoq mfkey vault).  Without the table, the scene shows
+         * "table?" for the counter field and a placeholder serial. */
+        s_supported = subghz_signal_fields_nice_flor_s_extract(
+                          s_signal.key, &s_nfs_fields);
+        s_is_nice_flor_s = s_supported;
+        /* Rainbow table loading is a follow-up step — for now, the
+         * counter and serial are gated behind s_has_counter == false. */
     }
 
     app->need_redraw = true;
@@ -383,6 +406,41 @@ static void draw_keeloq_fields(void)
     u8g2_DrawStr(&m1_u8g2, 2, 62, line);
 }
 
+static void draw_nice_flor_s_fields(void)
+{
+    char line[40];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    /* Serial is inside the encrypted payload — requires the rainbow
+     * table to decrypt.  Show "table?" until table loading lands. */
+    snprintf(line, sizeof(line), "Serial : table?");
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+
+    snprintf(line, sizeof(line), "%c Button : 0x%X", button_marker,
+             (unsigned)(s_nfs_fields.button & 0x0F));
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
+    u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+    /* Counter requires the rainbow table to decrypt. */
+    if (s_has_counter)
+        snprintf(line, sizeof(line), "  Counter: %u",
+                 (unsigned)s_counter);
+    else
+        snprintf(line, sizeof(line), "  Counter: table?");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
+}
+
 static void draw(SubGhzApp *app)
 {
     (void)app;
@@ -406,10 +464,9 @@ static void draw(SubGhzApp *app)
         u8g2_DrawStr(&m1_u8g2, 2, 22, line);
 
         /* Phase 9e-1: show the documented deferred-implementation reason
-         * for Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 so
-         * the user can distinguish a deferred protocol from a wholly
-         * unsupported one.  The reason string is owned by
-         * subghz_signal_fields.c (static literal). */
+         * for CAME Atomo / Alutech AT-4N / Phoenix V2 so the user can
+         * distinguish a deferred protocol from a wholly unsupported one.
+         * Nice FloR-S has been promoted to SUPPORTED (P3). */
         const char *reason = NULL;
         const subghz_counter_edit_status_t st =
             subghz_signal_fields_counter_edit_status(s_signal.protocol, &reason);
@@ -443,7 +500,10 @@ static void draw(SubGhzApp *app)
     }
     else
     {
-        draw_keeloq_fields();
+        if (s_is_nice_flor_s)
+            draw_nice_flor_s_fields();
+        else
+            draw_keeloq_fields();
     }
     m1_u8g2_nextpage();
 }

@@ -179,6 +179,98 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
                                                     uint64_t device_key);
 
 /*============================================================================*/
+/* Nice FloR-S field extraction / assembly (P3 — Phase 9e-2)                   */
+/*============================================================================*/
+
+/**
+ * Return true iff @p protocol is the Nice FloR-S protocol.
+ *
+ * Recognised (case-insensitive, prefix-terminated by NUL or space):
+ *   - "Nice FloR-S"
+ *
+ * @param[in] protocol  Protocol name string, may be NULL.
+ * @return  true if the protocol is Nice FloR-S.
+ */
+bool subghz_signal_fields_is_nice_flor_s(const char *protocol);
+
+/**
+ * Extracted fields from a 52-bit Nice FloR-S Flipper-format key.
+ *
+ * The 52-bit over-the-air layout:
+ *   [51:48] button   — 4-bit positional button code (plaintext)
+ *   [47:44] repeat   — 4-bit repetition counter     (plaintext)
+ *   [43: 0] enc_part — 44-bit encrypted payload
+ *
+ * After decryption of enc_part:
+ *   [43:16] 28-bit serial number
+ *   [15: 0] 16-bit rolling counter
+ */
+typedef struct {
+    uint8_t  button;      /**< 4-bit button positional code (plaintext) */
+    uint8_t  repeat;      /**< 4-bit repetition counter     (plaintext) */
+    uint64_t enc_payload; /**< 44-bit encrypted payload     (bits 43:0) */
+} subghz_nice_flor_s_fields_t;
+
+/**
+ * Extract the {button, repeat, encrypted-payload} triplet from a 52-bit
+ * Nice FloR-S key.  No rainbow table is needed — button and repeat are
+ * plaintext, and the encrypted payload is returned as-is.
+ *
+ * @param[in]  key  52-bit Flipper key as carried by
+ *                  `flipper_subghz_signal_t::key`.
+ * @param[out] out  Receives the extracted fields.  Must be non-NULL.
+ * @retval true   Always succeeds when @p out is non-NULL.
+ * @retval false  @p out is NULL.
+ */
+bool subghz_signal_fields_nice_flor_s_extract(uint64_t                     key,
+                                               subghz_nice_flor_s_fields_t *out);
+
+/**
+ * Inverse of @ref subghz_signal_fields_nice_flor_s_extract — assemble
+ * a 52-bit Flipper-format Nice FloR-S key from {button, repeat,
+ * encrypted-payload}.
+ *
+ * @param[in]  fields   Fields to encode.  Must be non-NULL.
+ * @param[out] key_out  Receives the assembled 52-bit key.  Must be non-NULL.
+ * @retval true   Assembly succeeded.
+ * @retval false  @p fields or @p key_out is NULL.  On failure *key_out is 0.
+ */
+bool subghz_signal_fields_nice_flor_s_assemble(
+    const subghz_nice_flor_s_fields_t *fields,
+    uint64_t                          *key_out);
+
+/*============================================================================*/
+/* Nice FloR-S rolling counter — decode / encode (P3)                          */
+/*============================================================================*/
+
+/**
+ * Decrypt the 44-bit encrypted payload with the 32-byte rainbow table
+ * and return the 16-bit rolling counter.
+ *
+ * @param  enc_payload  44-bit encrypted payload (bits [43:0] of the key).
+ * @param  table        32-byte rainbow table.  Must not be NULL.
+ * @return 16-bit rolling counter.
+ */
+uint16_t subghz_signal_fields_nice_flor_s_counter_decode(
+    uint64_t       enc_payload,
+    const uint8_t  table[32]);
+
+/**
+ * Substitute @p new_counter into the plaintext obtained by decrypting
+ * @p enc_payload with @p table, preserving the 28-bit serial, and
+ * return the re-encrypted 44-bit payload.
+ *
+ * @param  enc_payload   Current 44-bit encrypted payload.
+ * @param  new_counter   Replacement 16-bit counter value.
+ * @param  table         32-byte rainbow table.
+ * @return New 44-bit encrypted payload with the substituted counter.
+ */
+uint64_t subghz_signal_fields_nice_flor_s_counter_encode(
+    uint64_t       enc_payload,
+    uint16_t       new_counter,
+    const uint8_t  table[32]);
+
+/*============================================================================*/
 /* Counter-edit capability probe (Phase 9e-1)                                  */
 /*============================================================================*/
 

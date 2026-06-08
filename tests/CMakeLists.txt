@@ -1367,6 +1367,7 @@ add_executable(test_subghz_signal_fields
     ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_create.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/Sub_Ghz/subghz_nice_flor_s.c
 )
 target_include_directories(test_subghz_signal_fields PRIVATE
     ${M1_ROOT}/Sub_Ghz
@@ -1379,6 +1380,24 @@ endif()
 add_test(NAME subghz_signal_fields COMMAND test_subghz_signal_fields)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_nice_flor_s (P3 — Nice FloR-S cipher).
+# Pure-logic cipher; zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_nice_flor_s
+    test_subghz_nice_flor_s.c
+    ${M1_ROOT}/Sub_Ghz/subghz_nice_flor_s.c
+)
+target_include_directories(test_subghz_nice_flor_s PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_nice_flor_s PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_nice_flor_s PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_nice_flor_s COMMAND test_subghz_nice_flor_s)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_signal_format (Phase 11-1)
 # Polymorphic Info-screen renderers driven by the protocol registry's
 # .get_string vtable slot.  Pure-logic; zero hardware dependencies.
@@ -1388,6 +1407,7 @@ add_executable(test_subghz_signal_format
     ${M1_ROOT}/Sub_Ghz/subghz_signal_format.c
     ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/Sub_Ghz/subghz_nice_flor_s.c
 )
 target_include_directories(test_subghz_signal_format PRIVATE
     ${M1_ROOT}/Sub_Ghz

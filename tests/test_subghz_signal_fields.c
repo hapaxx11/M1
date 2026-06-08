@@ -23,6 +23,7 @@
 #include "subghz_signal_fields.h"
 #include "subghz_keeloq_create.h"
 #include "subghz_keeloq.h"
+#include "subghz_nice_flor_s.h"
 
 #include <string.h>
 
@@ -484,10 +485,7 @@ static void test_counter_edit_status_deferred_protocols(void)
 {
     const char *reason = NULL;
 
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
-        subghz_signal_fields_counter_edit_status("Nice FloR-S", &reason));
-    TEST_ASSERT_NOT_NULL(reason);
-    TEST_ASSERT_TRUE(strstr(reason, "Nice FloR-S") != NULL);
+    /* Nice FloR-S is now SUPPORTED (P3 — cipher implemented). */
 
     reason = NULL;
     TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
@@ -543,7 +541,7 @@ static void test_counter_edit_status_null_out_reason_ok(void)
      * and must still return the correct status. */
     TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
         subghz_signal_fields_counter_edit_status("KeeLoq", NULL));
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
         subghz_signal_fields_counter_edit_status("Nice FloR-S", NULL));
     TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_UNSUPPORTED,
         subghz_signal_fields_counter_edit_status("Princeton", NULL));
@@ -559,9 +557,9 @@ static void test_counter_edit_status_case_insensitive(void)
         subghz_signal_fields_counter_edit_status("keeloq", &reason));
 
     reason = NULL;
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
         subghz_signal_fields_counter_edit_status("nice flor-s", &reason));
-    TEST_ASSERT_TRUE(strstr(reason, "Nice FloR-S") != NULL);
+    TEST_ASSERT_EQUAL_STRING("", reason);
 
     reason = NULL;
     TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
@@ -574,9 +572,151 @@ static void test_counter_edit_status_trailing_space_match(void)
      * is_keeloq_family().  A registry name like "Nice FloR-S " (trailing
      * space) must still classify correctly. */
     const char *reason = NULL;
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
         subghz_signal_fields_counter_edit_status("Nice FloR-S 433", &reason));
-    TEST_ASSERT_TRUE(strstr(reason, "Nice FloR-S") != NULL);
+    TEST_ASSERT_EQUAL_STRING("", reason);
+}
+
+/*============================================================================*/
+/* Nice FloR-S — family detection                                              */
+/*============================================================================*/
+
+static void test_is_nice_flor_s_recognises_protocol(void)
+{
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_nice_flor_s("Nice FloR-S"));
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_nice_flor_s("nice flor-s"));
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_nice_flor_s("Nice FloR-S 433"));
+}
+
+static void test_is_nice_flor_s_rejects_others(void)
+{
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_nice_flor_s("KeeLoq"));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_nice_flor_s("Nice FLO 12b"));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_nice_flor_s(NULL));
+}
+
+/*============================================================================*/
+/* Nice FloR-S — field extract / assemble                                      */
+/*============================================================================*/
+
+static void test_nice_flor_s_extract_known_layout(void)
+{
+    /* 52-bit key: btn=0x1, repeat=0xE, enc_payload=44-bit value */
+    const uint64_t key = 0x1E0436C6820444ULL & 0x000FFFFFFFFFFFFFULL;
+    /* Actually construct: btn=1 at bits 51:48, repeat=0xE at bits 47:44 */
+    const uint64_t test_key = ((uint64_t)0x1 << 48) |
+                               ((uint64_t)0xE << 44) |
+                               0x0436C6820444ULL;
+
+    subghz_nice_flor_s_fields_t f;
+    TEST_ASSERT_TRUE(subghz_signal_fields_nice_flor_s_extract(test_key, &f));
+    TEST_ASSERT_EQUAL_HEX8(0x1, f.button);
+    TEST_ASSERT_EQUAL_HEX8(0xE, f.repeat);
+    TEST_ASSERT_EQUAL_HEX64(0x0436C6820444ULL, f.enc_payload);
+}
+
+static void test_nice_flor_s_extract_rejects_null(void)
+{
+    TEST_ASSERT_FALSE(subghz_signal_fields_nice_flor_s_extract(0, NULL));
+}
+
+static void test_nice_flor_s_assemble_round_trip(void)
+{
+    const uint64_t original = ((uint64_t)0x4 << 48) |
+                               ((uint64_t)0xA << 44) |
+                               0x0ABCDEF01234ULL;
+
+    subghz_nice_flor_s_fields_t f;
+    TEST_ASSERT_TRUE(subghz_signal_fields_nice_flor_s_extract(original, &f));
+
+    uint64_t reassembled;
+    TEST_ASSERT_TRUE(subghz_signal_fields_nice_flor_s_assemble(&f, &reassembled));
+    TEST_ASSERT_EQUAL_HEX64(original, reassembled);
+}
+
+static void test_nice_flor_s_assemble_masks_fields(void)
+{
+    subghz_nice_flor_s_fields_t f = {
+        .button      = 0xFF,   /* should mask to 4 bits → 0xF */
+        .repeat      = 0xFF,   /* should mask to 4 bits → 0xF */
+        .enc_payload = 0xFFFFFFFFFFFFULL, /* should mask to 44 bits */
+    };
+    uint64_t key;
+    TEST_ASSERT_TRUE(subghz_signal_fields_nice_flor_s_assemble(&f, &key));
+
+    subghz_nice_flor_s_fields_t f2;
+    TEST_ASSERT_TRUE(subghz_signal_fields_nice_flor_s_extract(key, &f2));
+    TEST_ASSERT_EQUAL_HEX8(0x0F, f2.button);
+    TEST_ASSERT_EQUAL_HEX8(0x0F, f2.repeat);
+    TEST_ASSERT_EQUAL_HEX64(0x0FFFFFFFFFFFULL, f2.enc_payload);
+}
+
+static void test_nice_flor_s_assemble_rejects_null(void)
+{
+    uint64_t key;
+    TEST_ASSERT_FALSE(subghz_signal_fields_nice_flor_s_assemble(NULL, &key));
+    TEST_ASSERT_EQUAL_HEX64(0, key);
+
+    subghz_nice_flor_s_fields_t f = { .button = 1, .repeat = 0, .enc_payload = 0 };
+    TEST_ASSERT_FALSE(subghz_signal_fields_nice_flor_s_assemble(&f, NULL));
+}
+
+/*============================================================================*/
+/* Nice FloR-S — counter decode / encode                                       */
+/*============================================================================*/
+
+/* Synthetic test table (same as in test_subghz_nice_flor_s.c). */
+static const uint8_t NFS_TEST_TABLE[NICE_FLOR_S_TABLE_SIZE] = {
+    0xE2, 0x4B, 0x75, 0x3A, 0x96, 0xD1, 0x0F, 0x58,
+    0xC7, 0x6D, 0xA3, 0x1E, 0x84, 0xF0, 0x2C, 0x69,
+    0xB5, 0x47, 0xDE, 0x03, 0x91, 0x5C, 0xFA, 0x28,
+    0x7B, 0x34, 0xE6, 0x0A, 0xCD, 0x62, 0x8F, 0x11,
+};
+
+static void test_nice_flor_s_counter_decode_encode_roundtrip(void)
+{
+    const uint32_t serial  = 0x0436C682U;
+    const uint16_t counter = 0x0444U;
+    const uint64_t plain   = ((uint64_t)serial << 16) | counter;
+    const uint64_t enc     = nice_flor_s_encrypt(plain, NFS_TEST_TABLE);
+
+    /* Decode must recover the counter. */
+    const uint16_t decoded = subghz_signal_fields_nice_flor_s_counter_decode(
+        enc, NFS_TEST_TABLE);
+    TEST_ASSERT_EQUAL_HEX16(counter, decoded);
+
+    /* Encode with a new counter must decrypt to that counter. */
+    const uint16_t new_cnt = 0x0445U;
+    const uint64_t new_enc = subghz_signal_fields_nice_flor_s_counter_encode(
+        enc, new_cnt, NFS_TEST_TABLE);
+    const uint16_t check = subghz_signal_fields_nice_flor_s_counter_decode(
+        new_enc, NFS_TEST_TABLE);
+    TEST_ASSERT_EQUAL_HEX16(new_cnt, check);
+}
+
+static void test_nice_flor_s_counter_encode_preserves_serial(void)
+{
+    const uint32_t serial  = 0x0ABCDEFU;
+    const uint16_t counter = 0x1234U;
+    const uint64_t plain   = ((uint64_t)serial << 16) | counter;
+    const uint64_t enc     = nice_flor_s_encrypt(plain, NFS_TEST_TABLE);
+
+    /* Substitute counter but serial must be preserved. */
+    const uint16_t new_cnt = 0xAAAAU;
+    const uint64_t new_enc = subghz_signal_fields_nice_flor_s_counter_encode(
+        enc, new_cnt, NFS_TEST_TABLE);
+    const uint64_t new_plain = nice_flor_s_decrypt(new_enc, NFS_TEST_TABLE);
+
+    TEST_ASSERT_EQUAL_HEX32(serial,  (uint32_t)((new_plain >> 16) & 0x0FFFFFFFU));
+    TEST_ASSERT_EQUAL_HEX16(new_cnt, (uint16_t)(new_plain & 0xFFFFU));
+}
+
+static void test_nice_flor_s_counter_edit_status_supported(void)
+{
+    const char *reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("Nice FloR-S", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
 }
 
 /*============================================================================*/
@@ -629,5 +769,17 @@ int main(void)
     RUN_TEST(test_counter_edit_status_null_out_reason_ok);
     RUN_TEST(test_counter_edit_status_case_insensitive);
     RUN_TEST(test_counter_edit_status_trailing_space_match);
+
+    /* P3 — Nice FloR-S field extraction / counter edit */
+    RUN_TEST(test_is_nice_flor_s_recognises_protocol);
+    RUN_TEST(test_is_nice_flor_s_rejects_others);
+    RUN_TEST(test_nice_flor_s_extract_known_layout);
+    RUN_TEST(test_nice_flor_s_extract_rejects_null);
+    RUN_TEST(test_nice_flor_s_assemble_round_trip);
+    RUN_TEST(test_nice_flor_s_assemble_masks_fields);
+    RUN_TEST(test_nice_flor_s_assemble_rejects_null);
+    RUN_TEST(test_nice_flor_s_counter_decode_encode_roundtrip);
+    RUN_TEST(test_nice_flor_s_counter_encode_preserves_serial);
+    RUN_TEST(test_nice_flor_s_counter_edit_status_supported);
     return UNITY_END();
 }

@@ -11,6 +11,7 @@
 
 #include "subghz_signal_fields.h"
 #include "subghz_keeloq.h"
+#include "subghz_nice_flor_s.h"
 
 #include <ctype.h>
 #include <stddef.h>
@@ -155,22 +156,81 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
 }
 
 /*============================================================================*/
+/* Nice FloR-S field extraction / assembly (P3 — Phase 9e-2)                   */
+/*============================================================================*/
+
+bool subghz_signal_fields_is_nice_flor_s(const char *protocol)
+{
+    return name_matches(protocol, "Nice FloR-S");
+}
+
+bool subghz_signal_fields_nice_flor_s_extract(uint64_t                     key,
+                                               subghz_nice_flor_s_fields_t *out)
+{
+    if (!out)
+        return false;
+
+    out->button      = (uint8_t)((key >> 48) & 0x0FU);
+    out->repeat      = (uint8_t)((key >> 44) & 0x0FU);
+    out->enc_payload = key & 0x0FFFFFFFFFFFULL;   /* 44-bit mask */
+    return true;
+}
+
+bool subghz_signal_fields_nice_flor_s_assemble(
+    const subghz_nice_flor_s_fields_t *fields,
+    uint64_t                          *key_out)
+{
+    if (!key_out)
+        return false;
+    *key_out = 0ULL;
+
+    if (!fields)
+        return false;
+
+    *key_out = ((uint64_t)(fields->button & 0x0FU) << 48) |
+               ((uint64_t)(fields->repeat & 0x0FU) << 44) |
+               (fields->enc_payload & 0x0FFFFFFFFFFFULL);
+    return true;
+}
+
+/*============================================================================*/
+/* Nice FloR-S rolling counter — decode / encode (P3)                          */
+/*============================================================================*/
+
+uint16_t subghz_signal_fields_nice_flor_s_counter_decode(
+    uint64_t       enc_payload,
+    const uint8_t  table[32])
+{
+    const uint64_t plain = nice_flor_s_decrypt(enc_payload, table);
+    return (uint16_t)(plain & 0xFFFFU);
+}
+
+uint64_t subghz_signal_fields_nice_flor_s_counter_encode(
+    uint64_t       enc_payload,
+    uint16_t       new_counter,
+    const uint8_t  table[32])
+{
+    /* Decrypt → substitute counter → re-encrypt.
+     * The 28-bit serial (bits [43:16]) is preserved verbatim. */
+    const uint64_t plain     = nice_flor_s_decrypt(enc_payload, table);
+    const uint64_t new_plain = (plain & ~0xFFFFULL) | (uint64_t)new_counter;
+    return nice_flor_s_encrypt(new_plain, table);
+}
+
+/*============================================================================*/
 /* Counter-edit capability probe (Phase 9e-1)                                  */
 /*============================================================================*/
 
 /* Static deferred-reason strings — pointed to by callers; never freed. */
 static const char SF_REASON_EMPTY[]      = "";
-static const char SF_REASON_FLOR_S[]     = "Nice FloR-S: HCS perm. table req.";
 static const char SF_REASON_ATOMO[]      = "CAME Atomo: cipher decode req.";
 static const char SF_REASON_ALUTECH[]    = "Alutech: AES key recovery req.";
 static const char SF_REASON_PHOENIX_V2[] = "Phoenix V2: checksum recompute req.";
 
-/* Phase 9e-2..5 protocols — counter editing is on the roadmap but the
+/* Phase 9e protocols — counter editing is on the roadmap but the
  * required decode/encode path is not yet implemented.  Each entry cites
  * the specific blocker documented in the Phase 9e checklist:
  *
- *   - Nice FloR-S    : 1080-byte Microchip-HCS-style permutation lookup
- *                      table + inverse perm to substitute the counter.
  *   - CAME Atomo     : XTEA-family fixed-key cipher decode chain to
  *                      expose the counter bits inside the 62-bit code.
  *   - Alutech AT-4N  : Per-device AES-128-like cipher key extracted
@@ -179,6 +239,10 @@ static const char SF_REASON_PHOENIX_V2[] = "Phoenix V2: checksum recompute req."
  *   - Phoenix V2     : Counter bit-field is at a known offset in the
  *                      52-bit code but the trailing discriminant /
  *                      checksum must be recomputed after editing.
+ *
+ * Nice FloR-S has been promoted to SUPPORTED (P3) — its cipher is now
+ * implemented in subghz_nice_flor_s.c with a loadable 32-byte rainbow
+ * table, mirroring the KeeLoq key-vault pattern.
  */
 typedef struct {
     const char *name;
@@ -186,7 +250,6 @@ typedef struct {
 } sf_deferred_entry_t;
 
 static const sf_deferred_entry_t SF_DEFERRED[] = {
-    { "Nice FloR-S",   SF_REASON_FLOR_S    },
     { "CAME Atomo",    SF_REASON_ATOMO     },
     { "Alutech AT-4N", SF_REASON_ALUTECH   },
     { "Phoenix_V2",    SF_REASON_PHOENIX_V2 },
@@ -196,7 +259,8 @@ subghz_counter_edit_status_t
 subghz_signal_fields_counter_edit_status(const char  *protocol,
                                          const char **out_reason)
 {
-    if (subghz_signal_fields_is_keeloq_family(protocol))
+    if (subghz_signal_fields_is_keeloq_family(protocol) ||
+        subghz_signal_fields_is_nice_flor_s(protocol))
     {
         if (out_reason)
             *out_reason = SF_REASON_EMPTY;

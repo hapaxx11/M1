@@ -33,7 +33,7 @@ All carry `SubGhzProtocolFlag_PwmKeyReplay` in the registry.
 |----------|------|------|-------|
 | **CAME TWEE** | 54 | 433 MHz | Counter in upper byte; no crypto |
 | **CAME Atomo** | 62 | 433 MHz | Counter in upper bits; no crypto |
-| **Nice FloR-S** | 52 | 433 MHz | Simple pseudo-random sequence; publicly documented |
+| **Nice FloR-S** | 52 | 433 MHz | Counter-edit supported (P3); requires 32-byte rainbow table at runtime |
 | **Alutech AT-4N** | 72 | 433 MHz | Counter-based; no crypto |
 | **KingGates Stylo4k** | 60 | 433 MHz | Counter-based OOK PWM; no crypto |
 | **Scher-Khan Magicar** | 64 | 433 MHz | OOK PWM counter; no crypto |
@@ -345,7 +345,7 @@ against the existing M1 infrastructure.  Findings and a prioritised plan follow.
 |----------|-----------|--------|------------------|
 | **P1** | Refresh `KEELOQ_KEY_VAULT` from `keeloq_keys.txt` (owner action, no code) | Trivial | Picks up the type 1–3 keys immediately; ship in next release build. |
 | **P2** | ~~Extend the mfkeys parser + decryptor to accept KeeLoq learning types 4 (magic-XOR) and 5 (magic-serial) instead of dropping them~~ | ~~Medium~~ | **Done.** `KEELOQ_LEARN_MAGIC_XOR_TYPE1` and `KEELOQ_LEARN_FAAC_SLH` added to enum; `keeloq_learn_magic_xor_type1()` and `keeloq_learn_faac_slh()` derivation functions added; parser widened to accept types 1–5; encoder/create/signal-settings switch statements updated.  Type 4 is fully replay-capable; type 5 is parsed but the encoder refuses (seed not available from .sub file). |
-| **P3** | Port the Nice FloR-S permutation table from Flipper source to upgrade Nice FloR-S from raw replay to full counter-edit (currently `SUBGHZ_COUNTER_EDIT_DEFERRED`, "HCS perm. table req.") | Medium | Plaintext table is public; no key recovery needed.  Resolves the deferral noted in `subghz_signal_fields.h`. |
+| **P3** | ~~Port the Nice FloR-S permutation table from Flipper source to upgrade Nice FloR-S from raw replay to full counter-edit (currently `SUBGHZ_COUNTER_EDIT_DEFERRED`, "HCS perm. table req.")~~ | ~~Medium~~ | **Done.** Nice FloR-S cipher ported to `subghz_nice_flor_s.c/h` (encrypt/decrypt with a 32-byte rainbow table parameter).  Field extraction (`subghz_signal_fields_nice_flor_s_extract/assemble`) and counter decode/encode (`subghz_signal_fields_nice_flor_s_counter_decode/encode`) added to `subghz_signal_fields.c/h`.  Nice FloR-S promoted from `DEFERRED` to `SUPPORTED`; signal-settings scene updated.  The 32-byte rainbow table is loaded at runtime (like the KeeLoq key vault); actual table values are not committed per upstream convention. |
 | **P4** | Port the CAME Atomo cipher decode and Alutech AT-4N AES path from Flipper source to enable full decode/counter-edit (both currently `DEFERRED`) | High | Plaintext keys/algorithm are in upstream firmware; the encrypted attachment blobs are *not* required. |
 | **N/A** | Decrypt the three Keystore RAW attachments directly | — | Not pursued: requires Flipper's secret keystore key; the plaintext upstream source is the supported route instead. |
 
