@@ -182,6 +182,65 @@ static void test_different_plaintexts_different_ciphertexts(void)
 }
 
 /*============================================================================*/
+/* Known-answer test against rtl_433 reference vector                          */
+/*============================================================================*/
+
+/**
+ * The production 32-byte rainbow table, derived from the rtl_433
+ * precomputed decode/ki tables (merbanan/rtl_433 PR #2238).
+ */
+static const uint8_t PRODUCTION_TABLE[NICE_FLOR_S_TABLE_SIZE] = {
+    0x19, 0x05, 0x3F, 0x61, 0xCB, 0x6D, 0x45, 0x0A,
+    0x03, 0x07, 0x40, 0x05, 0x47, 0x86, 0xB4, 0x4A,
+    0x29, 0x9E, 0x66, 0xC7, 0x5D, 0x76, 0xAF, 0x65,
+    0x3C, 0x4D, 0x8F, 0xAE, 0x67, 0x94, 0x1D, 0x55,
+};
+
+/**
+ * Validate the production table against the rtl_433 PR #2238 example.
+ *
+ * OTA (inverted): {52} 0xd6f703d160ad9
+ * Expected:       button=2, serial=0x3AAB665, counter=2813, repeat=4
+ *
+ * The 44-bit encrypted payload (after button/repeat extraction and
+ * bit inversion) maps to enc_payload = 0x08FC2E9F526.  Decrypting
+ * with the production table must yield counter=2813, serial=0x3AAB665.
+ */
+static void test_production_table_rtl433_vector(void)
+{
+    /* Build encrypted payload from inverted OTA bytes.
+     * Raw OTA 52-bit value: 0xd6f703d160ad9
+     * After bit inversion:  b = {0x29, 0x08, 0xFC, 0x2E, 0x9F, 0x52, 0x6F}
+     */
+    const uint8_t b[7] = {0x29, 0x08, 0xFC, 0x2E, 0x9F, 0x52, 0x6F};
+
+    /* Rebuild encbuff (rtl_433 nibble re-alignment). */
+    uint8_t encbuff[7];
+    encbuff[0] = (b[0] >> 4) & 0x0FU;
+    for (int i = 0; i < 6; ++i)
+        encbuff[i + 1] = ((b[i] << 4) & 0xF0U) | ((b[i + 1] >> 4) & 0x0FU);
+
+    TEST_ASSERT_EQUAL_UINT8(2, encbuff[0] & 0x0FU);  /* button = 2 */
+
+    /* 44-bit encrypted payload as uint64_t (LE). */
+    uint64_t enc_payload = 0;
+    enc_payload |= (uint64_t)encbuff[6];
+    enc_payload |= (uint64_t)encbuff[5] << 8;
+    enc_payload |= (uint64_t)encbuff[4] << 16;
+    enc_payload |= (uint64_t)encbuff[3] << 24;
+    enc_payload |= (uint64_t)encbuff[2] << 32;
+    enc_payload |= (uint64_t)(encbuff[1] & 0x0FU) << 40;
+
+    const uint64_t plain = nice_flor_s_decrypt(enc_payload, PRODUCTION_TABLE);
+
+    const uint16_t counter = (uint16_t)(plain & 0xFFFFU);
+    const uint32_t serial  = (uint32_t)((plain >> 16) & 0x0FFFFFFFU);
+
+    TEST_ASSERT_EQUAL_UINT16(2813, counter);
+    TEST_ASSERT_EQUAL_HEX32(0x3AAB665, serial);
+}
+
+/*============================================================================*/
 /* Main runner                                                                 */
 /*============================================================================*/
 
@@ -199,6 +258,7 @@ int main(void)
     RUN_TEST(test_encrypt_output_upper_bits_zero);
     RUN_TEST(test_decrypt_wrong_table);
     RUN_TEST(test_different_plaintexts_different_ciphertexts);
+    RUN_TEST(test_production_table_rtl433_vector);
 
     return UNITY_END();
 }
