@@ -37,6 +37,7 @@
 #include "subghz_keeloq.h"
 #include "subghz_keeloq_mfkeys.h"
 #include "subghz_nice_flor_s.h"
+#include "subghz_nice_flor_s_table_builtin.h"
 
 /*============================================================================*/
 /* Local state                                                                 */
@@ -236,14 +237,21 @@ static void scene_on_enter(SubGhzApp *app)
     {
         /* P3 — Nice FloR-S cipher support.  Button and repeat are
          * plaintext in the 52-bit key.  Serial and counter require the
-         * 32-byte rainbow table (loaded from SD card at runtime, like
-         * the KeeLoq mfkey vault).  Without the table, the scene shows
-         * "table?" for the counter field and a placeholder serial. */
+         * 32-byte rainbow table to decrypt.  When the builtin table is
+         * available (baked in at build time via the
+         * NICE_FLOR_S_RAINBOW_TABLE secret), decode immediately;
+         * otherwise show "table?" placeholders. */
         s_supported = subghz_signal_fields_nice_flor_s_extract(
                           s_signal.key, &s_nfs_fields);
         s_is_nice_flor_s = s_supported;
-        /* Rainbow table loading is a follow-up step — for now, the
-         * counter and serial are gated behind s_has_counter == false. */
+
+        if (s_supported && nice_flor_s_table_builtin_available())
+        {
+            s_counter     = subghz_signal_fields_nice_flor_s_counter_decode(
+                                s_nfs_fields.enc_payload,
+                                nice_flor_s_table_builtin);
+            s_has_counter = true;
+        }
     }
 
     app->need_redraw = true;
@@ -416,8 +424,20 @@ static void draw_nice_flor_s_fields(void)
     u8g2_DrawStr(&m1_u8g2, 2, 22, line);
 
     /* Serial is inside the encrypted payload — requires the rainbow
-     * table to decrypt.  Show "table?" until table loading lands. */
-    snprintf(line, sizeof(line), "Serial : table?");
+     * table to decrypt.  When the builtin table is available, decrypt
+     * and display the 28-bit serial; otherwise show "table?". */
+    if (s_has_counter && nice_flor_s_table_builtin_available())
+    {
+        const uint64_t plain = nice_flor_s_decrypt(
+            s_nfs_fields.enc_payload, nice_flor_s_table_builtin);
+        const uint32_t serial = (uint32_t)((plain >> 16) & 0x0FFFFFFFUL);
+        snprintf(line, sizeof(line), "Serial : %07lX",
+                 (unsigned long)serial);
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "Serial : table?");
+    }
     u8g2_DrawStr(&m1_u8g2, 2, 32, line);
 
     const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';

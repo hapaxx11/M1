@@ -1,1 +1,1 @@
-Port the Nice FloR-S cipher from Flipper source and promote Nice FloR-S from DEFERRED to SUPPORTED for counter editing; the 32-byte rainbow table is loaded at runtime like the KeeLoq key vault.
+Port the Nice FloR-S cipher from Flipper source and promote Nice FloR-S from DEFERRED to SUPPORTED for counter editing; the 32-byte rainbow table is injected at build time via the NICE_FLOR_S_RAINBOW_TABLE secret (same pattern as KeeLoq key vault), with a NULL stub for public builds.
