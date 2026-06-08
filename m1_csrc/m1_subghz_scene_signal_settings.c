@@ -125,6 +125,12 @@ static bool resolve_device_key(const flipper_subghz_signal_t *signal,
             /* Seed not recoverable from the .sub file — refuse rather than
              * silently fall back to Normal and produce a garbage counter. */
             return false;
+        case KEELOQ_LEARN_MAGIC_XOR_TYPE1:
+            *device_key_out = keeloq_learn_magic_xor_type1(fields->serial, mfr.key);
+            return true;
+        case KEELOQ_LEARN_FAAC_SLH:
+            /* FAAC SLH requires a seed not recoverable from the .sub file. */
+            return false;
         default:
             return false;
     }

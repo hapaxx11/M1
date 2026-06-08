@@ -179,6 +179,83 @@ void test_simple_vs_normal_learning_differ(void)
     TEST_ASSERT_NOT_EQUAL_UINT64(dk_simple, dk_normal);
 }
 
+void test_magic_xor_type1_deterministic(void)
+{
+    uint32_t serial  = 0x0ABCDEFUL;
+    uint64_t mfr_key = 0xCEB6AE48B5C63ED2ULL;
+
+    uint64_t dk1 = keeloq_learn_magic_xor_type1(serial, mfr_key);
+    uint64_t dk2 = keeloq_learn_magic_xor_type1(serial, mfr_key);
+
+    TEST_ASSERT_EQUAL_UINT64(dk1, dk2);
+}
+
+void test_magic_xor_type1_expected_value(void)
+{
+    /* magic_xor_type1: device_key = ((serial << 32) | serial) ^ mfr_key
+     * serial = 0x0ABCDEF (28-bit mask applied)
+     * mfr_key = 0x0123456789ABCDEFULL
+     * expected = (0x0ABCDEF0ABCDEF) ^ 0x0123456789ABCDEF
+     *          = 0x0ABCDEF0ABCDEF ^ 0x0123456789ABCDEF */
+    uint32_t serial  = 0x0ABCDEFUL;
+    uint64_t mfr_key = 0x0123456789ABCDEFULL;
+
+    uint64_t expected = ((uint64_t)0x0ABCDEF << 32 | 0x0ABCDEF) ^ mfr_key;
+    uint64_t dk = keeloq_learn_magic_xor_type1(serial, mfr_key);
+
+    TEST_ASSERT_EQUAL_UINT64(expected, dk);
+}
+
+void test_magic_xor_type1_differs_from_normal(void)
+{
+    uint32_t serial  = 0x00123456UL;
+    uint64_t mfr_key = 0xAABBCCDDEEFF0011ULL;
+
+    uint64_t dk_magic  = keeloq_learn_magic_xor_type1(serial, mfr_key);
+    uint64_t dk_normal = keeloq_learn_normal(serial, mfr_key);
+
+    TEST_ASSERT_NOT_EQUAL_UINT64(dk_magic, dk_normal);
+}
+
+void test_faac_slh_deterministic(void)
+{
+    uint32_t seed    = 0x12345678UL;
+    uint64_t mfr_key = 0x53696C7669618C14ULL;  /* FAAC_SLH key from mfcodes */
+
+    uint64_t dk1 = keeloq_learn_faac_slh(seed, mfr_key);
+    uint64_t dk2 = keeloq_learn_faac_slh(seed, mfr_key);
+
+    TEST_ASSERT_EQUAL_UINT64(dk1, dk2);
+}
+
+void test_faac_slh_expected_value(void)
+{
+    /* faac_slh: hs = seed >> 16, lsb = (hs << 16) | 0x544D
+     * device_key = (encrypt(seed, key) << 32) | encrypt(lsb, key)
+     * Verify the construction matches independent component calculations. */
+    uint32_t seed    = 0xAABB1234UL;
+    uint64_t mfr_key = 0x53696C7669618C14ULL;
+
+    uint16_t hs  = (uint16_t)(seed >> 16);
+    uint32_t lsb = ((uint32_t)hs << 16) | 0x544DU;
+    uint64_t expected = ((uint64_t)keeloq_encrypt(seed, mfr_key) << 32) |
+                         (uint64_t)keeloq_encrypt(lsb, mfr_key);
+
+    uint64_t dk = keeloq_learn_faac_slh(seed, mfr_key);
+
+    TEST_ASSERT_EQUAL_UINT64(expected, dk);
+}
+
+void test_faac_slh_different_seeds(void)
+{
+    uint64_t mfr_key = 0x53696C7669618C14ULL;
+
+    uint64_t dk1 = keeloq_learn_faac_slh(0x00001111UL, mfr_key);
+    uint64_t dk2 = keeloq_learn_faac_slh(0x00002222UL, mfr_key);
+
+    TEST_ASSERT_NOT_EQUAL_UINT64(dk1, dk2);
+}
+
 /*============================================================================*/
 /* Counter-mode increment tests                                                */
 /*============================================================================*/
@@ -388,7 +465,7 @@ void test_load_text_compact_invalid_type_skipped(void)
 {
     const char *text =
         "0123456789ABCDEF:0:BadType0\n"
-        "0123456789ABCDEF:4:BadType4\n"
+        "0123456789ABCDEF:6:BadType6\n"
         "FEDCBA9876543210:2:CAME\n";
 
     TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
@@ -396,8 +473,70 @@ void test_load_text_compact_invalid_type_skipped(void)
 
     KeeLoqMfrEntry e;
     TEST_ASSERT_FALSE(keeloq_mfkeys_find("BadType0", &e));
-    TEST_ASSERT_FALSE(keeloq_mfkeys_find("BadType4", &e));
+    TEST_ASSERT_FALSE(keeloq_mfkeys_find("BadType6", &e));
     TEST_ASSERT_TRUE(keeloq_mfkeys_find("CAME",      &e));
+}
+
+void test_load_text_compact_type4_accepted(void)
+{
+    const char *text =
+        "CEB6AE48B5C63ED2:4:Beninca\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Beninca", &e));
+    TEST_ASSERT_EQUAL_UINT64(0xCEB6AE48B5C63ED2ULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_MAGIC_XOR_TYPE1, e.learn_type);
+}
+
+void test_load_text_compact_type5_accepted(void)
+{
+    const char *text =
+        "53696C7669618C14:5:FAAC_SLH\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("FAAC_SLH", &e));
+    TEST_ASSERT_EQUAL_UINT64(0x53696C7669618C14ULL, e.key);
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_FAAC_SLH, e.learn_type);
+}
+
+void test_load_text_rg_type4_accepted(void)
+{
+    const char *text =
+        "Manufacturer: Beninca\n"
+        "Key (Hex):    CEB6AE48B5C63ED2\n"
+        "Key (Dec):    0\n"
+        "Type:         4\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("Beninca", &e));
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_MAGIC_XOR_TYPE1, e.learn_type);
+}
+
+void test_load_text_rg_type5_accepted(void)
+{
+    const char *text =
+        "Manufacturer: FAAC_SLH\n"
+        "Key (Hex):    53696C7669618C14\n"
+        "Key (Dec):    0\n"
+        "Type:         5\n"
+        "------------------------------------\n";
+
+    TEST_ASSERT_TRUE(keeloq_mfkeys_load_text(text));
+    TEST_ASSERT_EQUAL_UINT32(1, keeloq_mfkeys_count());
+
+    KeeLoqMfrEntry e;
+    TEST_ASSERT_TRUE(keeloq_mfkeys_find("FAAC_SLH", &e));
+    TEST_ASSERT_EQUAL_INT(KEELOQ_LEARN_FAAC_SLH, e.learn_type);
 }
 
 void test_load_text_compact_malformed_hex_skipped(void)
@@ -820,6 +959,12 @@ int main(void)
     RUN_TEST(test_normal_learning_different_mfr_keys);
     RUN_TEST(test_simple_learning_deterministic);
     RUN_TEST(test_simple_vs_normal_learning_differ);
+    RUN_TEST(test_magic_xor_type1_deterministic);
+    RUN_TEST(test_magic_xor_type1_expected_value);
+    RUN_TEST(test_magic_xor_type1_differs_from_normal);
+    RUN_TEST(test_faac_slh_deterministic);
+    RUN_TEST(test_faac_slh_expected_value);
+    RUN_TEST(test_faac_slh_different_seeds);
 
     /* Counter-mode increment */
     RUN_TEST(test_increment_hop_counter_field);
@@ -843,6 +988,8 @@ int main(void)
     RUN_TEST(test_load_text_compact_comment_lines_skipped);
     RUN_TEST(test_load_text_compact_flipper_header_skipped);
     RUN_TEST(test_load_text_compact_invalid_type_skipped);
+    RUN_TEST(test_load_text_compact_type4_accepted);
+    RUN_TEST(test_load_text_compact_type5_accepted);
     RUN_TEST(test_load_text_compact_malformed_hex_skipped);
 
     /* load_text() — RocketGod format */
@@ -852,6 +999,8 @@ int main(void)
     RUN_TEST(test_load_text_rg_no_trailing_separator);
     RUN_TEST(test_load_text_rg_missing_key_skipped);
     RUN_TEST(test_load_text_rg_name_with_spaces);
+    RUN_TEST(test_load_text_rg_type4_accepted);
+    RUN_TEST(test_load_text_rg_type5_accepted);
 
     /* load_text() — mixed formats */
     RUN_TEST(test_load_text_mixed_formats);

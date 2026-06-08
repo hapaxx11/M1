@@ -181,7 +181,7 @@ static void rg_try_emit(RGState *rg)
     if (!rg->rg_has_name || !rg->rg_has_hex || !rg->rg_has_type) return;
     if (s_count >= KEELOQ_MFKEYS_MAX) return;
     if (rg->rg_type_val < KEELOQ_LEARN_SIMPLE ||
-        rg->rg_type_val > KEELOQ_LEARN_SECURE) return;
+        rg->rg_type_val > KEELOQ_LEARN_FAAC_SLH) return;
 
     uint64_t mfr_key = 0;
     if (!parse_hex64_standalone(rg->rg_hex, &mfr_key)) return;
@@ -248,7 +248,7 @@ static void parse_mfkeys_line(char *line, RGState *rg)
         long parsed = strtol(v, &endptr, 10);
         /* Accept only a pure integer field (no trailing garbage) */
         if (endptr != v && (*endptr == '\0' || *endptr == ' ') &&
-            parsed >= KEELOQ_LEARN_SIMPLE && parsed <= KEELOQ_LEARN_SECURE) {
+            parsed >= KEELOQ_LEARN_SIMPLE && parsed <= KEELOQ_LEARN_FAAC_SLH) {
             rg->rg_type_val = (int)parsed;
             rg->rg_has_type = true;
         }
@@ -284,7 +284,7 @@ static void parse_mfkeys_line(char *line, RGState *rg)
     char *endptr;
     long learn_type = strtol(p, &endptr, 10);
     if (endptr == p || *endptr != ':') return;
-    if (learn_type < KEELOQ_LEARN_SIMPLE || learn_type > KEELOQ_LEARN_SECURE) return;
+    if (learn_type < KEELOQ_LEARN_SIMPLE || learn_type > KEELOQ_LEARN_FAAC_SLH) return;
     p = endptr + 1;  /* skip ':' */
 
     /* Skip leading whitespace before name */

@@ -45,11 +45,17 @@ All carry `SubGhzProtocolFlag_PwmKeyReplay` in the registry.
 
 ## 🔑 Replayable with Manufacturer Key (KeeLoq cipher family)
 
-These three protocols all use the **KeeLoq NLFSR block cipher** for hop-word
+These protocols use the **KeeLoq NLFSR block cipher** for hop-word
 encryption.  The device key is derived from the serial number plus the
 manufacturer's 64-bit master key.  M1 implements full counter-mode replay:
 decrypt the captured hop word → increment the 16-bit rolling counter →
 re-encrypt → transmit as OOK PWM.
+
+**Supported learning types:** Simple (1), Normal (2), Secure (3),
+Magic XOR Type 1 (4), and FAAC SLH (5).  Types 4 and 5 are parsed from key
+files; type 4 (Beninca and similar) is fully replay-capable; type 5 (FAAC SLH)
+is stored but the encoder refuses to replay because the seed required for
+device-key derivation is not available from the `.sub` file.
 
 **Key delivery:** Manufacturer keys are embedded directly into the firmware at build time
 via `scripts/gen_keeloq_mfkeys_builtin.py` and the `KEELOQ_KEY_VAULT` GitHub Actions
@@ -64,6 +70,8 @@ are present (public/CI builds without the vault), the firmware falls back to the
 # Compact format (one entry per line)
 AABBCCDDEEFFAABB:2:ManufacturerName    # type 2 = Normal Learning
 AABBCCDDEEFFAABB:1:ManufacturerName    # type 1 = Simple Learning
+AABBCCDDEEFFAABB:4:ManufacturerName    # type 4 = Magic XOR Type 1
+AABBCCDDEEFFAABB:5:ManufacturerName    # type 5 = FAAC SLH
 
 # RocketGod multi-line format (as exported by the SubGHz Toolkit for Flipper Zero)
 Manufacturer: ManufacturerName
@@ -336,7 +344,7 @@ against the existing M1 infrastructure.  Findings and a prioritised plan follow.
 | Priority | Work item | Effort | Notes / blockers |
 |----------|-----------|--------|------------------|
 | **P1** | Refresh `KEELOQ_KEY_VAULT` from `keeloq_keys.txt` (owner action, no code) | Trivial | Picks up the type 1–3 keys immediately; ship in next release build. |
-| **P2** | Extend the mfkeys parser + decryptor to accept KeeLoq learning types 4 (magic-XOR) and 5 (magic-serial) instead of dropping them | Medium | Port `keeloq_learning_*` variants from Momentum `lib/subghz/protocols/keeloq.c`; add the two derivation functions to `subghz_keeloq.c` and widen the type validation in `subghz_keeloq_mfkeys.c`; cover with host tests in `tests/`. Unblocks Beninca / FAAC-RC families. |
+| **P2** | ~~Extend the mfkeys parser + decryptor to accept KeeLoq learning types 4 (magic-XOR) and 5 (magic-serial) instead of dropping them~~ | ~~Medium~~ | **Done.** `KEELOQ_LEARN_MAGIC_XOR_TYPE1` and `KEELOQ_LEARN_FAAC_SLH` added to enum; `keeloq_learn_magic_xor_type1()` and `keeloq_learn_faac_slh()` derivation functions added; parser widened to accept types 1–5; encoder/create/signal-settings switch statements updated.  Type 4 is fully replay-capable; type 5 is parsed but the encoder refuses (seed not available from .sub file). |
 | **P3** | Port the Nice FloR-S permutation table from Flipper source to upgrade Nice FloR-S from raw replay to full counter-edit (currently `SUBGHZ_COUNTER_EDIT_DEFERRED`, "HCS perm. table req.") | Medium | Plaintext table is public; no key recovery needed.  Resolves the deferral noted in `subghz_signal_fields.h`. |
 | **P4** | Port the CAME Atomo cipher decode and Alutech AT-4N AES path from Flipper source to enable full decode/counter-edit (both currently `DEFERRED`) | High | Plaintext keys/algorithm are in upstream firmware; the encrypted attachment blobs are *not* required. |
 | **N/A** | Decrypt the three Keystore RAW attachments directly | — | Not pursued: requires Flipper's secret keystore key; the plaintext upstream source is the supported route instead. |

@@ -133,8 +133,14 @@ KeeLoqCreateResult subghz_keeloq_create_key(const KeeLoqCreateParams *params,
         default:
             /* Secure Learning needs a seed (which is not available in a
              * Create-from-scratch flow).  Refuse rather than silently
-             * fall back to a different learn mode. */
+             * fall back to a different learn mode.
+             * FAAC SLH (type 5) also requires a seed. */
             return KEELOQ_CREATE_BAD_LEARN;
+        case KEELOQ_LEARN_MAGIC_XOR_TYPE1:
+            device_key = keeloq_learn_magic_xor_type1(
+                             params->serial & KEELOQ_SERIAL_MASK_28,
+                             params->mfr_key);
+            break;
     }
 
     /* Build the plaintext HOP word and encrypt it with the device key. */

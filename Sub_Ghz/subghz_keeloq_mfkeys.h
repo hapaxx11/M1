@@ -26,6 +26,8 @@
  *   AABBCCDDEEFFAABB:1:ManufacturerName   (Simple Learning)
  *   AABBCCDDEEFFAABB:2:ManufacturerName   (Normal Learning)
  *   AABBCCDDEEFFAABB:3:ManufacturerName   (Secure Learning)
+ *   AABBCCDDEEFFAABB:4:ManufacturerName   (Magic XOR Type 1)
+ *   AABBCCDDEEFFAABB:5:ManufacturerName   (FAAC SLH)
  *
  * **RocketGod format** (multi-line, as exported by
  *   RocketGod's SubGHz Toolkit for Flipper Zero):
@@ -54,9 +56,11 @@
 
 /** KeeLoq device-key derivation mode. */
 typedef enum {
-    KEELOQ_LEARN_SIMPLE  = 1,   /**< Simple XOR learning */
-    KEELOQ_LEARN_NORMAL  = 2,   /**< Normal learning (most common) */
-    KEELOQ_LEARN_SECURE  = 3,   /**< Secure learning (seed-based) */
+    KEELOQ_LEARN_SIMPLE          = 1,   /**< Simple XOR learning */
+    KEELOQ_LEARN_NORMAL          = 2,   /**< Normal learning (most common) */
+    KEELOQ_LEARN_SECURE          = 3,   /**< Secure learning (seed-based) */
+    KEELOQ_LEARN_MAGIC_XOR_TYPE1 = 4,   /**< Magic XOR type 1 (Beninca) */
+    KEELOQ_LEARN_FAAC_SLH        = 5,   /**< FAAC SLH seed-based learning */
 } KeeLoqLearnType;
 
 /** One manufacturer key table entry. */
