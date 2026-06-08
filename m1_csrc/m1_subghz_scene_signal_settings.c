@@ -38,6 +38,9 @@
 #include "subghz_keeloq_mfkeys.h"
 #include "subghz_nice_flor_s.h"
 #include "subghz_nice_flor_s_table_builtin.h"
+#include "subghz_came_atomo.h"
+#include "subghz_alutech_at_4n.h"
+#include "subghz_alutech_at_4n_table_builtin.h"
 
 /*============================================================================*/
 /* Local state                                                                 */
@@ -46,16 +49,23 @@
 /** Cached .sub metadata loaded on scene_on_enter from app->saved_filepath. */
 static flipper_subghz_signal_t s_signal;
 /** Extracted plaintext fields (valid only when s_supported == true and
- *  s_is_nice_flor_s == false). */
+ *  s_is_nice_flor_s == false and s_is_came_atomo == false and
+ *  s_is_alutech_at_4n == false). */
 static subghz_keeloq_fields_t  s_fields;
-/** True when the loaded protocol is a recognised KeeLoq family member
- *  or Nice FloR-S. */
+/** True when the loaded protocol is a recognised supported member. */
 static bool                    s_supported;
-/** True when the loaded file's protocol is Nice FloR-S.  When false and
- *  s_supported is true, the protocol is a KeeLoq-family member. */
+/** True when the loaded file's protocol is Nice FloR-S. */
 static bool                    s_is_nice_flor_s;
 /** Extracted Nice FloR-S fields (valid only when s_is_nice_flor_s). */
 static subghz_nice_flor_s_fields_t s_nfs_fields;
+/** True when the loaded file's protocol is CAME Atomo. */
+static bool                    s_is_came_atomo;
+/** Extracted CAME Atomo fields (valid only when s_is_came_atomo). */
+static subghz_came_atomo_fields_t s_atomo_fields;
+/** True when the loaded file's protocol is Alutech AT-4N. */
+static bool                    s_is_alutech_at_4n;
+/** Extracted Alutech AT-4N fields (valid only when s_is_alutech_at_4n). */
+static subghz_alutech_at_4n_fields_t s_alutech_fields;
 /** True when the file load itself succeeded — drives the error placeholder. */
 static bool                    s_loaded;
 /** True when the loaded file's manufacturer key was resolved and the
@@ -176,16 +186,20 @@ static void scene_on_enter(SubGhzApp *app)
      * Saved menu starts with a clean state. */
     app->signal_edit_active = false;
 
-    s_loaded        = false;
-    s_supported     = false;
-    s_is_nice_flor_s = false;
-    s_has_counter   = false;
-    s_counter       = 0U;
-    s_device_key    = 0U;
-    s_cursor        = SIG_CURSOR_BUTTON;
+    s_loaded          = false;
+    s_supported       = false;
+    s_is_nice_flor_s  = false;
+    s_is_came_atomo   = false;
+    s_is_alutech_at_4n = false;
+    s_has_counter     = false;
+    s_counter         = 0U;
+    s_device_key      = 0U;
+    s_cursor          = SIG_CURSOR_BUTTON;
     memset(&s_signal, 0, sizeof(s_signal));
     memset(&s_fields, 0, sizeof(s_fields));
     memset(&s_nfs_fields, 0, sizeof(s_nfs_fields));
+    memset(&s_atomo_fields, 0, sizeof(s_atomo_fields));
+    memset(&s_alutech_fields, 0, sizeof(s_alutech_fields));
     s_saved_full_path[0] = '\0';
 
     if (app->saved_filepath[0] == '\0')
@@ -251,6 +265,48 @@ static void scene_on_enter(SubGhzApp *app)
                                 s_nfs_fields.enc_payload,
                                 nice_flor_s_table_builtin);
             s_has_counter = true;
+        }
+    }
+    else if (subghz_signal_fields_is_came_atomo(s_signal.protocol))
+    {
+        /* P4 — CAME Atomo LFSR cipher support.  No external key material
+         * needed — the cipher is self-contained.  All fields (serial,
+         * counter, button) are decoded immediately. */
+        s_supported = subghz_signal_fields_came_atomo_extract(
+                          s_signal.key, &s_atomo_fields);
+        s_is_came_atomo = s_supported;
+
+        if (s_supported)
+        {
+            s_counter     = s_atomo_fields.counter;
+            s_has_counter = true;
+        }
+    }
+    else if (subghz_signal_fields_is_alutech_at_4n(s_signal.protocol))
+    {
+        /* P4 — Alutech AT-4N TEA-variant cipher support.  Requires the
+         * 32-byte rainbow table (injected at build time via the
+         * ALUTECH_AT_4N_RAINBOW_TABLE secret).  When the table is
+         * available, decode serial/counter immediately; otherwise show
+         * "table?" placeholders. */
+        s_is_alutech_at_4n = true;
+        if (alutech_at_4n_table_builtin_available())
+        {
+            s_supported = subghz_signal_fields_alutech_at_4n_extract(
+                              s_signal.key,
+                              alutech_at_4n_table_builtin,
+                              &s_alutech_fields);
+            if (s_supported)
+            {
+                s_counter     = s_alutech_fields.counter;
+                s_has_counter = true;
+            }
+        }
+        else
+        {
+            /* Table not available — mark as supported for UI display
+             * but counter/serial will show "table?" placeholders. */
+            s_supported = true;
         }
     }
 
@@ -461,6 +517,89 @@ static void draw_nice_flor_s_fields(void)
     u8g2_DrawStr(&m1_u8g2, 2, 62, line);
 }
 
+static void draw_came_atomo_fields(void)
+{
+    char line[40];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    /* CAME Atomo serial and counter are always available — the LFSR
+     * cipher requires no external key material. */
+    snprintf(line, sizeof(line), "Serial : %08lX",
+             (unsigned long)s_atomo_fields.serial);
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+    const bool counter_selectable = s_has_counter;
+    const char counter_marker = (counter_selectable && s_cursor == SIG_CURSOR_COUNTER)
+                                ? '>' : ' ';
+
+    snprintf(line, sizeof(line), "%c Button : 0x%X", button_marker,
+             (unsigned)(s_atomo_fields.button & 0x0F));
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
+    u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+    snprintf(line, sizeof(line), "%c Counter: %u", counter_marker,
+             (unsigned)s_counter);
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
+}
+
+static void draw_alutech_at_4n_fields(void)
+{
+    char line[40];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    /* Serial and counter require the rainbow table to decrypt. */
+    if (s_has_counter && alutech_at_4n_table_builtin_available())
+    {
+        snprintf(line, sizeof(line), "Serial : %08lX",
+                 (unsigned long)s_alutech_fields.serial);
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "Serial : table?");
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+
+    if (s_has_counter)
+    {
+        snprintf(line, sizeof(line), "%c Button : 0x%02X", button_marker,
+                 (unsigned)s_alutech_fields.button);
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "%c Button : table?", button_marker);
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
+    u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+    if (s_has_counter)
+        snprintf(line, sizeof(line), "  Counter: %u",
+                 (unsigned)s_counter);
+    else
+        snprintf(line, sizeof(line), "  Counter: table?");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
+}
+
 static void draw(SubGhzApp *app)
 {
     (void)app;
@@ -522,6 +661,10 @@ static void draw(SubGhzApp *app)
     {
         if (s_is_nice_flor_s)
             draw_nice_flor_s_fields();
+        else if (s_is_came_atomo)
+            draw_came_atomo_fields();
+        else if (s_is_alutech_at_4n)
+            draw_alutech_at_4n_fields();
         else
             draw_keeloq_fields();
     }

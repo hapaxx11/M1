@@ -1368,6 +1368,8 @@ add_executable(test_subghz_signal_fields
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq_create.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_nice_flor_s.c
+    ${M1_ROOT}/Sub_Ghz/subghz_came_atomo.c
+    ${M1_ROOT}/Sub_Ghz/subghz_alutech_at_4n.c
 )
 target_include_directories(test_subghz_signal_fields PRIVATE
     ${M1_ROOT}/Sub_Ghz
@@ -1398,6 +1400,42 @@ endif()
 add_test(NAME subghz_nice_flor_s COMMAND test_subghz_nice_flor_s)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_came_atomo (P4 — CAME Atomo LFSR cipher).
+# Pure-logic cipher; zero hardware dependencies; no external table.
+# ------------------------------------------------------------------
+add_executable(test_subghz_came_atomo
+    test_subghz_came_atomo.c
+    ${M1_ROOT}/Sub_Ghz/subghz_came_atomo.c
+)
+target_include_directories(test_subghz_came_atomo PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_came_atomo PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_came_atomo PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_came_atomo COMMAND test_subghz_came_atomo)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_alutech_at_4n (P4 — Alutech AT-4N TEA
+# cipher).  Pure-logic cipher; zero hardware dependencies.
+# ------------------------------------------------------------------
+add_executable(test_subghz_alutech_at_4n
+    test_subghz_alutech_at_4n.c
+    ${M1_ROOT}/Sub_Ghz/subghz_alutech_at_4n.c
+)
+target_include_directories(test_subghz_alutech_at_4n PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+    ${STUBS_DIR}
+)
+target_link_libraries(test_subghz_alutech_at_4n PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_alutech_at_4n PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_alutech_at_4n COMMAND test_subghz_alutech_at_4n)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_signal_format (Phase 11-1)
 # Polymorphic Info-screen renderers driven by the protocol registry's
 # .get_string vtable slot.  Pure-logic; zero hardware dependencies.
@@ -1408,6 +1446,8 @@ add_executable(test_subghz_signal_format
     ${M1_ROOT}/Sub_Ghz/subghz_signal_fields.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_nice_flor_s.c
+    ${M1_ROOT}/Sub_Ghz/subghz_came_atomo.c
+    ${M1_ROOT}/Sub_Ghz/subghz_alutech_at_4n.c
 )
 target_include_directories(test_subghz_signal_format PRIVATE
     ${M1_ROOT}/Sub_Ghz

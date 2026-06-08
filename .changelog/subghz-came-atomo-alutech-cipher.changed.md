@@ -1,0 +1,1 @@
+Sub-GHz: ported CAME Atomo LFSR cipher and Alutech AT-4N TEA cipher from upstream Flipper source; both protocols promoted from DEFERRED to SUPPORTED for counter editing; Alutech rainbow table injected at build time via ALUTECH_AT_4N_RAINBOW_TABLE secret

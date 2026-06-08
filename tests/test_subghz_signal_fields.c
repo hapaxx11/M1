@@ -24,6 +24,8 @@
 #include "subghz_keeloq_create.h"
 #include "subghz_keeloq.h"
 #include "subghz_nice_flor_s.h"
+#include "subghz_came_atomo.h"
+#include "subghz_alutech_at_4n.h"
 
 #include <string.h>
 
@@ -486,18 +488,8 @@ static void test_counter_edit_status_deferred_protocols(void)
     const char *reason = NULL;
 
     /* Nice FloR-S is now SUPPORTED (P3 — cipher implemented). */
-
-    reason = NULL;
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
-        subghz_signal_fields_counter_edit_status("CAME Atomo", &reason));
-    TEST_ASSERT_NOT_NULL(reason);
-    TEST_ASSERT_TRUE(strstr(reason, "CAME Atomo") != NULL);
-
-    reason = NULL;
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
-        subghz_signal_fields_counter_edit_status("Alutech AT-4N", &reason));
-    TEST_ASSERT_NOT_NULL(reason);
-    TEST_ASSERT_TRUE(strstr(reason, "Alutech") != NULL);
+    /* CAME Atomo is now SUPPORTED (P4 — LFSR cipher implemented). */
+    /* Alutech AT-4N is now SUPPORTED (P4 — TEA cipher implemented). */
 
     reason = NULL;
     TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
@@ -562,8 +554,9 @@ static void test_counter_edit_status_case_insensitive(void)
     TEST_ASSERT_EQUAL_STRING("", reason);
 
     reason = NULL;
-    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
         subghz_signal_fields_counter_edit_status("CAME ATOMO", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
 }
 
 static void test_counter_edit_status_trailing_space_match(void)
@@ -720,6 +713,235 @@ static void test_nice_flor_s_counter_edit_status_supported(void)
 }
 
 /*============================================================================*/
+/* P4 — CAME Atomo field extraction / counter edit                             */
+/*============================================================================*/
+
+static void test_is_came_atomo_recognises_protocol(void)
+{
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_came_atomo("CAME Atomo"));
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_came_atomo("came atomo"));
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_came_atomo("CAME Atomo 433"));
+}
+
+static void test_is_came_atomo_rejects_others(void)
+{
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_came_atomo("KeeLoq"));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_came_atomo("Nice FloR-S"));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_came_atomo(NULL));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_came_atomo("CAME TWEE"));
+}
+
+static void test_came_atomo_extract_roundtrip(void)
+{
+    /* Construct a known key via assemble, then extract and verify. */
+    subghz_came_atomo_fields_t f_in = {
+        .serial  = 0x12345678U,
+        .counter = 0x0042U,
+        .button  = 0x02U,
+        .cnt_2   = 0x10U,
+    };
+    uint64_t key = 0;
+    TEST_ASSERT_TRUE(subghz_signal_fields_came_atomo_assemble(&f_in, &key));
+
+    subghz_came_atomo_fields_t f_out = { 0 };
+    TEST_ASSERT_TRUE(subghz_signal_fields_came_atomo_extract(key, &f_out));
+
+    TEST_ASSERT_EQUAL_HEX32(f_in.serial,  f_out.serial);
+    TEST_ASSERT_EQUAL_HEX16(f_in.counter, f_out.counter);
+    TEST_ASSERT_EQUAL_HEX8(f_in.button,   f_out.button);
+    TEST_ASSERT_EQUAL_HEX8(f_in.cnt_2,    f_out.cnt_2);
+}
+
+static void test_came_atomo_extract_rejects_null(void)
+{
+    TEST_ASSERT_FALSE(subghz_signal_fields_came_atomo_extract(0x1234ULL, NULL));
+}
+
+static void test_came_atomo_assemble_rejects_null(void)
+{
+    uint64_t key = 0;
+    TEST_ASSERT_FALSE(subghz_signal_fields_came_atomo_assemble(NULL, &key));
+    TEST_ASSERT_FALSE(subghz_signal_fields_came_atomo_assemble(
+        &(subghz_came_atomo_fields_t){0}, NULL));
+}
+
+static void test_came_atomo_counter_decode_encode_roundtrip(void)
+{
+    subghz_came_atomo_fields_t f_in = {
+        .serial  = 0xDEADBEEFU,
+        .counter = 0x1234U,
+        .button  = 0x0AU,
+        .cnt_2   = 0x30U,
+    };
+    uint64_t key = 0;
+    TEST_ASSERT_TRUE(subghz_signal_fields_came_atomo_assemble(&f_in, &key));
+
+    /* Decode the counter. */
+    uint16_t cnt = subghz_signal_fields_came_atomo_counter_decode(key);
+    TEST_ASSERT_EQUAL_HEX16(0x1234U, cnt);
+
+    /* Substitute a new counter. */
+    uint64_t new_key = subghz_signal_fields_came_atomo_counter_encode(key, 0x5678U);
+
+    /* Verify the new counter. */
+    uint16_t new_cnt = subghz_signal_fields_came_atomo_counter_decode(new_key);
+    TEST_ASSERT_EQUAL_HEX16(0x5678U, new_cnt);
+
+    /* Verify serial is preserved. */
+    subghz_came_atomo_fields_t f_out = { 0 };
+    TEST_ASSERT_TRUE(subghz_signal_fields_came_atomo_extract(new_key, &f_out));
+    TEST_ASSERT_EQUAL_HEX32(0xDEADBEEFU, f_out.serial);
+    TEST_ASSERT_EQUAL_HEX8(0x0AU, f_out.button);
+}
+
+static void test_came_atomo_counter_edit_status_supported(void)
+{
+    const char *reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("CAME Atomo", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+}
+
+static void test_came_atomo_varied_roundtrip(void)
+{
+    /* Several different field combinations to catch edge cases. */
+    const struct {
+        uint32_t serial; uint16_t counter; uint8_t button; uint8_t cnt_2;
+    } cases[] = {
+        { 0x00000000U, 0x0000U, 0x0U, 0x00U },
+        { 0xFFFFFFFFU, 0xFFFFU, 0xFU, 0x7FU },
+        { 0xABCD1234U, 0x8765U, 0x6U, 0x55U },
+    };
+
+    for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
+    {
+        subghz_came_atomo_fields_t f_in = {
+            .serial  = cases[i].serial,
+            .counter = cases[i].counter,
+            .button  = cases[i].button,
+            .cnt_2   = cases[i].cnt_2,
+        };
+        uint64_t key = 0;
+        TEST_ASSERT_TRUE(subghz_signal_fields_came_atomo_assemble(&f_in, &key));
+
+        subghz_came_atomo_fields_t f_out = { 0 };
+        TEST_ASSERT_TRUE(subghz_signal_fields_came_atomo_extract(key, &f_out));
+
+        TEST_ASSERT_EQUAL_HEX32(f_in.serial,  f_out.serial);
+        TEST_ASSERT_EQUAL_HEX16(f_in.counter, f_out.counter);
+        TEST_ASSERT_EQUAL_HEX8(f_in.button & 0x0F, f_out.button);
+        TEST_ASSERT_EQUAL_HEX8(f_in.cnt_2 & 0x7F,  f_out.cnt_2);
+    }
+}
+
+/*============================================================================*/
+/* P4 — Alutech AT-4N field extraction / counter edit                          */
+/*============================================================================*/
+
+/* Re-use the same synthetic test table from test_subghz_alutech_at_4n.c */
+static const uint8_t ALU_TEST_TABLE[ALUTECH_AT_4N_TABLE_SIZE] = {
+    0xC6, 0xEF, 0x37, 0x20,
+    0x01, 0x23, 0x45, 0x67,
+    0x89, 0xAB, 0xCD, 0xEF,
+    0x61, 0xC8, 0x86, 0x47,
+    0xFE, 0xDC, 0xBA, 0x98,
+    0x76, 0x54, 0x32, 0x10,
+    0x9E, 0x37, 0x79, 0xB9,
+    0xC6, 0xEF, 0x37, 0x20,
+};
+
+static void test_is_alutech_at_4n_recognises_protocol(void)
+{
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_alutech_at_4n("Alutech AT-4N"));
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_alutech_at_4n("alutech at-4n"));
+    TEST_ASSERT_TRUE(subghz_signal_fields_is_alutech_at_4n("Alutech AT-4N 433"));
+}
+
+static void test_is_alutech_at_4n_rejects_others(void)
+{
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_alutech_at_4n("KeeLoq"));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_alutech_at_4n("CAME Atomo"));
+    TEST_ASSERT_FALSE(subghz_signal_fields_is_alutech_at_4n(NULL));
+}
+
+static void test_alutech_at_4n_extract_roundtrip(void)
+{
+    /* Build a known plaintext, assemble to key, then extract and verify. */
+    subghz_alutech_at_4n_fields_t f_in = {
+        .serial  = 0xDEADBEEFU,
+        .counter = 0x1234U,
+        .button  = 0xFFU,
+    };
+    uint64_t key = 0;
+    TEST_ASSERT_TRUE(subghz_signal_fields_alutech_at_4n_assemble(
+        &f_in, ALU_TEST_TABLE, &key));
+
+    subghz_alutech_at_4n_fields_t f_out = { 0 };
+    TEST_ASSERT_TRUE(subghz_signal_fields_alutech_at_4n_extract(
+        key, ALU_TEST_TABLE, &f_out));
+
+    TEST_ASSERT_EQUAL_HEX32(f_in.serial,  f_out.serial);
+    TEST_ASSERT_EQUAL_HEX16(f_in.counter, f_out.counter);
+    TEST_ASSERT_EQUAL_HEX8(f_in.button,   f_out.button);
+}
+
+static void test_alutech_at_4n_extract_rejects_null(void)
+{
+    TEST_ASSERT_FALSE(subghz_signal_fields_alutech_at_4n_extract(
+        0x1234ULL, ALU_TEST_TABLE, NULL));
+    TEST_ASSERT_FALSE(subghz_signal_fields_alutech_at_4n_extract(
+        0x1234ULL, NULL, &(subghz_alutech_at_4n_fields_t){0}));
+}
+
+static void test_alutech_at_4n_assemble_rejects_null(void)
+{
+    uint64_t key = 0;
+    TEST_ASSERT_FALSE(subghz_signal_fields_alutech_at_4n_assemble(
+        NULL, ALU_TEST_TABLE, &key));
+    TEST_ASSERT_FALSE(subghz_signal_fields_alutech_at_4n_assemble(
+        &(subghz_alutech_at_4n_fields_t){0}, NULL, &key));
+    TEST_ASSERT_FALSE(subghz_signal_fields_alutech_at_4n_assemble(
+        &(subghz_alutech_at_4n_fields_t){0}, ALU_TEST_TABLE, NULL));
+}
+
+static void test_alutech_at_4n_counter_decode_encode_roundtrip(void)
+{
+    subghz_alutech_at_4n_fields_t f_in = {
+        .serial  = 0x12345678U,
+        .counter = 0xABCDU,
+        .button  = 0x11U,
+    };
+    uint64_t key = 0;
+    TEST_ASSERT_TRUE(subghz_signal_fields_alutech_at_4n_assemble(
+        &f_in, ALU_TEST_TABLE, &key));
+
+    /* The key IS the enc_data (64-bit encrypted block). */
+    uint64_t enc_data = key;
+
+    /* Decode counter. */
+    uint16_t cnt = subghz_signal_fields_alutech_at_4n_counter_decode(
+        enc_data, ALU_TEST_TABLE);
+    TEST_ASSERT_EQUAL_HEX16(0xABCDU, cnt);
+
+    /* Substitute a new counter. */
+    uint64_t new_enc = subghz_signal_fields_alutech_at_4n_counter_encode(
+        enc_data, 0x5678U, ALU_TEST_TABLE);
+
+    /* Verify the new counter. */
+    uint16_t new_cnt = subghz_signal_fields_alutech_at_4n_counter_decode(
+        new_enc, ALU_TEST_TABLE);
+    TEST_ASSERT_EQUAL_HEX16(0x5678U, new_cnt);
+}
+
+static void test_alutech_at_4n_counter_edit_status_supported(void)
+{
+    const char *reason = NULL;
+    TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_SUPPORTED,
+        subghz_signal_fields_counter_edit_status("Alutech AT-4N", &reason));
+    TEST_ASSERT_EQUAL_STRING("", reason);
+}
+
+/*============================================================================*/
 /* Test runner                                                                 */
 /*============================================================================*/
 
@@ -781,5 +1003,24 @@ int main(void)
     RUN_TEST(test_nice_flor_s_counter_decode_encode_roundtrip);
     RUN_TEST(test_nice_flor_s_counter_encode_preserves_serial);
     RUN_TEST(test_nice_flor_s_counter_edit_status_supported);
+
+    /* P4 — CAME Atomo field extraction / counter edit */
+    RUN_TEST(test_is_came_atomo_recognises_protocol);
+    RUN_TEST(test_is_came_atomo_rejects_others);
+    RUN_TEST(test_came_atomo_extract_roundtrip);
+    RUN_TEST(test_came_atomo_extract_rejects_null);
+    RUN_TEST(test_came_atomo_assemble_rejects_null);
+    RUN_TEST(test_came_atomo_counter_decode_encode_roundtrip);
+    RUN_TEST(test_came_atomo_counter_edit_status_supported);
+    RUN_TEST(test_came_atomo_varied_roundtrip);
+
+    /* P4 — Alutech AT-4N field extraction / counter edit */
+    RUN_TEST(test_is_alutech_at_4n_recognises_protocol);
+    RUN_TEST(test_is_alutech_at_4n_rejects_others);
+    RUN_TEST(test_alutech_at_4n_extract_roundtrip);
+    RUN_TEST(test_alutech_at_4n_extract_rejects_null);
+    RUN_TEST(test_alutech_at_4n_assemble_rejects_null);
+    RUN_TEST(test_alutech_at_4n_counter_decode_encode_roundtrip);
+    RUN_TEST(test_alutech_at_4n_counter_edit_status_supported);
     return UNITY_END();
 }
