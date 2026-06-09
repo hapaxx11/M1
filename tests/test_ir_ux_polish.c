@@ -61,13 +61,14 @@ static void assert_absent(const char *content, const char *needle)
 /* Quick-remote: portrait orientation forced (IR must face forward)    */
 /* ------------------------------------------------------------------ */
 
-void test_quick_remote_no_forced_orientation(void)
+void test_quick_remote_forced_orientation_and_restore(void)
 {
     char *c = read_file("m1_csrc/m1_ir_quick_remote.c");
     /* Must force portrait orientation on entry */
     assert_contains(c, "settings_apply_orientation(M1_ORIENT_REMOTE)");
     /* Must save and restore the caller's orientation */
     assert_contains(c, "saved_orient");
+    assert_contains(c, "settings_apply_orientation(saved_orient)");
     /* Must include m1_settings.h for settings_apply_orientation() */
     assert_contains(c, "m1_settings.h");
     free(c);
@@ -182,7 +183,7 @@ void test_quick_remote_sidebar_layout(void)
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_quick_remote_no_forced_orientation);
+    RUN_TEST(test_quick_remote_forced_orientation_and_restore);
     RUN_TEST(test_quick_remote_no_long_press_left_right);
     RUN_TEST(test_quick_remote_has_ok_long_press_menu);
     RUN_TEST(test_dashboard_no_remote_mode_toggle);
