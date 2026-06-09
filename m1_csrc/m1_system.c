@@ -120,6 +120,17 @@ void system_periodic_task(void *param)
     button_events_q_hdl = xQueueCreate(1, sizeof(S_M1_Buttons_Status));
     assert(button_events_q_hdl!=NULL);
 
+	// After power on, wait here until the user releases the OK button.
+	// This prevents the button-press that powered the device from
+	// immediately triggering an action in the main menu.
+	while ( true )
+	{
+		if ( HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port, BUTTON_OK_Pin)==GPIO_PIN_SET ) // Button released?
+			break;
+		vTaskDelay(pdMS_TO_TICKS(100)); // Yield time to the system
+		m1_wdt_send_report(M1_REPORT_ID_BUTTONS_HANDLER_TASK, 100);
+	} // while ( true )
+
     while (TRUE)
     {
         event_change = 0x00;

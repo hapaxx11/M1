@@ -734,6 +734,13 @@ static const char proto_rf_gen24[]      = "RF_GEN24";
 static const char proto_rf_x10[]        = "RF_X10";
 static const char proto_rf_medion[]     = "RF_MEDION";
 static const char proto_melinera[]      = "MELINERA";
+static const char proto_nec8[]          = "NEC8";
+static const char proto_rca[]           = "RCA";
+static const char proto_pioneer[]       = "PIONEER";
+static const char proto_sircs15[]       = "SIRCS15";
+static const char proto_sircs20[]       = "SIRCS20";
+static const char proto_rc5x[]          = "RC5X";
+static const char proto_raw[]           = "RAW";
 
 const char * const
 irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
@@ -799,7 +806,14 @@ irmp_protocol_names[IRMP_N_PROTOCOLS + 1] =
     proto_rf_gen24,
     proto_rf_x10,
     proto_rf_medion,
-    proto_melinera
+    proto_melinera,
+    proto_nec8,
+    proto_rca,
+    proto_pioneer,
+    proto_sircs15,
+    proto_sircs20,
+    proto_rc5x,
+    proto_raw
 };
 
 #endif // #if defined(UNIX_OR_WINDOWS) || IRMP_PROTOCOL_NAMES==1

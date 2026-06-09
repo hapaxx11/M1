@@ -89,7 +89,16 @@
 
 #define IRMP_MELINERA_PROTOCOL                  60
 
-#define IRMP_N_PROTOCOLS                        60              // number of supported protocols
+// Additional protocols
+#define IRMP_NEC8_PROTOCOL                      61              // NEC with 8-bit command
+#define IRMP_RCA_PROTOCOL                       62              // RCA
+#define IRMP_PIONEER_PROTOCOL                   63              // Pioneer
+#define IRMP_SIRCS15_PROTOCOL                   64              // Sony SIRCS 15-bit
+#define IRMP_SIRCS20_PROTOCOL                   65              // Sony SIRCS 20-bit
+#define IRMP_RC5X_PROTOCOL                      66              // RC5 Extended
+#define IRMP_RAW_PROTOCOL                       67              // Raw data (must be last)
+
+#define IRMP_N_PROTOCOLS                        67              // number of supported protocols
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------
  * timing constants:
