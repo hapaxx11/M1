@@ -11,10 +11,16 @@ set(CMAKE_CXX_COMPILER_ID GNU)
 # Some default GCC settings
 # arm-none-eabi- must be part of path environment
 
-# On macOS, auto-detect the ARM toolchain if TOOLCHAIN_PATH is not set
-if(APPLE AND NOT DEFINED TOOLCHAIN_PATH)
+# Honor explicit TOOLCHAIN_PREFIX / TOOLCHAIN_PATH overrides
+if(DEFINED TOOLCHAIN_PATH AND NOT DEFINED TOOLCHAIN_PREFIX)
+    set(TOOLCHAIN_PREFIX "${TOOLCHAIN_PATH}/bin/arm-none-eabi-")
+endif()
+
+# On macOS, auto-detect the ARM toolchain if no override was provided
+if(APPLE AND NOT DEFINED TOOLCHAIN_PREFIX)
     file(GLOB ARM_TOOLCHAIN_VERSIONS "/Applications/ArmGNUToolchain/*/arm-none-eabi")
     if(ARM_TOOLCHAIN_VERSIONS)
+        list(SORT ARM_TOOLCHAIN_VERSIONS ORDER DESCENDING)
         list(GET ARM_TOOLCHAIN_VERSIONS 0 FIRST_ARM_TOOLCHAIN)
         set(TOOLCHAIN_PREFIX "${FIRST_ARM_TOOLCHAIN}/bin/arm-none-eabi-")
     endif()
