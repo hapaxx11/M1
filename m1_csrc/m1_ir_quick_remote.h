@@ -97,7 +97,7 @@ typedef enum {
  * Projector Remote button slots — portrait 2-column layout:
  *   col 0   col 1
  *   Power   Mute     (row 0)
- *   Source  Vol+     (row 1)  ← + row
+ *   Src     Vol+     (row 1)  ← + row
  *   OK      Vol-     (row 2)  ← - row directly below
  */
 #define IR_PRJ_POWER     0
