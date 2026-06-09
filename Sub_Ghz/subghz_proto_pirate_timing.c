@@ -14,7 +14,6 @@
 
 #include "subghz_proto_pirate_timing.h"
 #include <string.h>
-#include <stdlib.h>  /* abs() */
 
 /*============================================================================*/
 /* Automotive protocol reference table                                        */
@@ -23,9 +22,9 @@
 /*   - ProtoPirate protocol definitions (te_short / te_long / te_delta)       */
 /*   - M1 subghz_protocol_registry.c for cross-validation                    */
 /*                                                                            */
-/* Only OOK/AM protocols with clear short+long timing are listed; Manchester  */
-/* FM protocols are excluded because their NRZ encoding makes short/long      */
-/* classification ambiguous without a clock-recovery stage.                   */
+/* Only OOK/AM protocols with clear short+long timing are listed; some entries
+ * use Manchester/biphase AM encoding (Honda V1, Kia V1, PSA AM) but still
+ * have distinct short+long pulse widths that the tuner can measure.         */
 /*============================================================================*/
 
 const pptime_proto_ref_t pptime_proto_table[] = {
@@ -48,7 +47,6 @@ const pptime_proto_ref_t pptime_proto_table[] = {
     { "Alutech AT-4N",         400,     800,     100  },
     { "Nice FloR-S",           500,    1000,     120  },
     { "Ansonic",               555,    1110,     130  },
-    { "SMC5326",               300,     900,     100  },
     { "iDo 117",               450,    1350,     130  },
     { "BETT",                  340,     680,      80  },
     { "Nero Radio",            330,     990,     100  },
@@ -114,8 +112,6 @@ void pptime_analyze(const uint16_t *durations, size_t count,
     for (size_t i = 0; i < count; i++)
     {
         int32_t dur = (int32_t)durations[i];
-        /* Pulse durations are stored as unsigned magnitude in M1's buffer */
-        if (dur < 0) dur = -dur;
 
         if (dur < min_valid || dur > max_valid)
             continue;

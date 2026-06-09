@@ -83,7 +83,7 @@ typedef enum {
  * Values outside [min_valid, max_valid] (derived from 2×te_delta) are ignored
  * as noise.  The stats struct is zeroed before writing.
  *
- * @param durations  Array of absolute pulse durations in µs (sign is ignored).
+ * @param durations  Array of unsigned pulse durations in µs (from M1's pulse_times[] buffer).
  * @param count      Number of elements in durations[].
  * @param ref        Protocol reference used to set threshold and valid range.
  *                   May be NULL; in that case reasonable defaults are used.

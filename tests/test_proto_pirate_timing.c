@@ -52,7 +52,7 @@ void test_analyze_null_out_no_crash(void)
 void test_analyze_no_ref_uses_defaults(void)
 {
     /* 6 short pulses at 400 µs, 6 long pulses at 800 µs — fall within default
-     * valid range (50–1250 µs) and threshold (≈600 µs) */
+     * valid range (100–1100 µs) and threshold (≈600 µs) */
     uint16_t buf[12];
     make_pulses(buf, 6, 400, 6, 800);
 

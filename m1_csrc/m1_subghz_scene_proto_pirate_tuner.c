@@ -48,6 +48,7 @@ extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 
 /* Radio control helpers (defined in m1_sub_ghz.c) */
+extern void menu_sub_ghz_init(void);
 extern void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band,
                                    uint8_t channel, uint8_t tx_power);
 extern void sub_ghz_rx_init_ext(void);
@@ -132,6 +133,7 @@ static void run_analysis(void)
 /** Start RX with current app config (freq/mod).  Returns true on success. */
 static bool start_rx(SubGhzApp *app)
 {
+    menu_sub_ghz_init();
     subghz_pulse_handler_reset();
     subghz_apply_config_ext(app->freq_idx, app->mod_idx);
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
@@ -152,6 +154,7 @@ static void stop_rx(void)
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
     sub_ghz_rx_pause_ext();
     sub_ghz_rx_deinit_ext();
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
     s_rx_active = false;
 }
