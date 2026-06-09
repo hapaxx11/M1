@@ -144,10 +144,10 @@ void storage_about(void)
 		u8g2_DrawStr(&m1_u8g2, 2, 20, "Type: ");
 		u8g2_DrawStr(&m1_u8g2, 32, 20, sdcard_fat_sys_defs[info->fs_type]);
 		u8g2_DrawStr(&m1_u8g2, 2, 30, "Total: ");
-		sprintf(info_str, "%uGB", info->total_cap_kb/1024);
+		sprintf(info_str, "%uGB", info->total_cap_kb/(1024*1024));
 		u8g2_DrawStr(&m1_u8g2, 37, 30, info_str);
 		u8g2_DrawStr(&m1_u8g2, 2, 40, "Free: ");
-		sprintf(info_str, "%uGB", info->free_cap_kb/1024);
+		sprintf(info_str, "%uGB", info->free_cap_kb/(1024*1024));
 		u8g2_DrawStr(&m1_u8g2, 32, 40, info_str);
     } // if ( about_ok )
     else
