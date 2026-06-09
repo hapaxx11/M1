@@ -235,6 +235,45 @@ jobs:
           fi
 
       # ------------------------------------------------------------------ #
+      # 4b. Embed Nice FloR-S rainbow table (optional — same pattern as
+      #     KeeLoq).  The NICE_FLOR_S_RAINBOW_TABLE secret holds 64 hex
+      #     chars (32 bytes).  When absent, the NULL stub is used and
+      #     counter/serial fields show "table?" placeholders.
+      # ------------------------------------------------------------------ #
+      - name: Embed Nice FloR-S rainbow table
+        env:
+          NICE_FLOR_S_RAINBOW_TABLE: ${{ secrets.NICE_FLOR_S_RAINBOW_TABLE }}
+        run: |
+          if [ -n "${NICE_FLOR_S_RAINBOW_TABLE}" ]; then
+            python3 scripts/gen_nice_flor_s_table_builtin.py \
+              --hex "${NICE_FLOR_S_RAINBOW_TABLE}" \
+              Sub_Ghz/subghz_nice_flor_s_table_builtin.c
+            echo "Nice FloR-S rainbow table embedded from secret."
+          else
+            echo "NICE_FLOR_S_RAINBOW_TABLE secret not set — using NULL stub."
+          fi
+
+      # ------------------------------------------------------------------ #
+      # 4c. Embed Alutech AT-4N rainbow table (optional — same pattern as
+      #     Nice FloR-S).  The ALUTECH_AT_4N_RAINBOW_TABLE secret holds
+      #     64 hex chars (32 bytes = 8 × uint32_t TEA round constants).
+      #     When absent, the NULL stub is used and counter/serial fields
+      #     show "table?" placeholders.
+      # ------------------------------------------------------------------ #
+      - name: Embed Alutech AT-4N rainbow table
+        env:
+          ALUTECH_AT_4N_RAINBOW_TABLE: ${{ secrets.ALUTECH_AT_4N_RAINBOW_TABLE }}
+        run: |
+          if [ -n "${ALUTECH_AT_4N_RAINBOW_TABLE}" ]; then
+            python3 scripts/gen_alutech_at_4n_table_builtin.py \
+              --hex "${ALUTECH_AT_4N_RAINBOW_TABLE}" \
+              Sub_Ghz/subghz_alutech_at_4n_table_builtin.c
+            echo "Alutech AT-4N rainbow table embedded from secret."
+          else
+            echo "ALUTECH_AT_4N_RAINBOW_TABLE secret not set — using NULL stub."
+          fi
+
+      # ------------------------------------------------------------------ #
       # 5. Configure CMake
       # ------------------------------------------------------------------ #
       - name: Configure CMake

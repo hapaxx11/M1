@@ -101,6 +101,21 @@ uint64_t keeloq_learn_secure(uint32_t serial, uint32_t seed, uint64_t mfr_key)
     return ((uint64_t)k1 << 32) | k2;
 }
 
+uint64_t keeloq_learn_magic_xor_type1(uint32_t serial, uint64_t mfr_key)
+{
+    uint64_t s = (uint64_t)(serial & 0x0FFFFFFFU);
+    return ((s << 32) | s) ^ mfr_key;
+}
+
+uint64_t keeloq_learn_faac_slh(uint32_t seed, uint64_t mfr_key)
+{
+    uint16_t hs = (uint16_t)(seed >> 16);
+    uint32_t lsb = ((uint32_t)hs << 16) | 0x544DU;
+    uint64_t hi = (uint64_t)keeloq_encrypt(seed, mfr_key);
+    uint64_t lo = (uint64_t)keeloq_encrypt(lsb, mfr_key);
+    return (hi << 32) | lo;
+}
+
 /*============================================================================*/
 /* Counter-mode increment                                                     */
 /*============================================================================*/

@@ -96,6 +96,39 @@ uint64_t keeloq_learn_simple(uint32_t serial, uint64_t mfr_key);
  */
 uint64_t keeloq_learn_secure(uint32_t serial, uint32_t seed, uint64_t mfr_key);
 
+/**
+ * @brief  Magic XOR Type 1 Learning — derive a 64-bit device key by XOR of
+ *         the replicated serial and the manufacturer key.
+ *
+ * Used by Beninca and some other manufacturers.
+ *
+ * Algorithm (Flipper-compatible):
+ *   device_key = ((serial << 32) | serial) ^ mfr_key
+ *
+ * @param  serial   28-bit remote serial number (bits 27:0 used)
+ * @param  mfr_key  64-bit manufacturer master key
+ * @return 64-bit device key
+ */
+uint64_t keeloq_learn_magic_xor_type1(uint32_t serial, uint64_t mfr_key);
+
+/**
+ * @brief  FAAC SLH Learning — derive a 64-bit device key from a seed and the
+ *         manufacturer key using KeeLoq encryption.
+ *
+ * Used by FAAC SLH (Self-Learning Hopping) remotes.
+ *
+ * Algorithm (Flipper-compatible):
+ *   hs  = seed >> 16
+ *   lsb = (hs << 16) | 0x544D
+ *   device_key = (keeloq_encrypt(seed, mfr_key) << 32) |
+ *                 keeloq_encrypt(lsb, mfr_key)
+ *
+ * @param  seed     32-bit seed value (from captured data)
+ * @param  mfr_key  64-bit manufacturer master key
+ * @return 64-bit device key
+ */
+uint64_t keeloq_learn_faac_slh(uint32_t seed, uint64_t mfr_key);
+
 /*============================================================================*/
 /* Counter-mode rolling code increment                                        */
 /*============================================================================*/

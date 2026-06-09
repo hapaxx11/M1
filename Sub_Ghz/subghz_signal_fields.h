@@ -179,6 +179,276 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
                                                     uint64_t device_key);
 
 /*============================================================================*/
+/* Nice FloR-S field extraction / assembly (P3 — Phase 9e-2)                   */
+/*============================================================================*/
+
+/**
+ * Return true iff @p protocol is the Nice FloR-S protocol.
+ *
+ * Recognised (case-insensitive, prefix-terminated by NUL or space):
+ *   - "Nice FloR-S"
+ *
+ * @param[in] protocol  Protocol name string, may be NULL.
+ * @return  true if the protocol is Nice FloR-S.
+ */
+bool subghz_signal_fields_is_nice_flor_s(const char *protocol);
+
+/**
+ * Extracted fields from a 52-bit Nice FloR-S Flipper-format key.
+ *
+ * The 52-bit over-the-air layout:
+ *   [51:48] button   — 4-bit positional button code (plaintext)
+ *   [47:44] repeat   — 4-bit repetition counter     (plaintext)
+ *   [43: 0] enc_part — 44-bit encrypted payload
+ *
+ * After decryption of enc_part:
+ *   [43:16] 28-bit serial number
+ *   [15: 0] 16-bit rolling counter
+ */
+typedef struct {
+    uint8_t  button;      /**< 4-bit button positional code (plaintext) */
+    uint8_t  repeat;      /**< 4-bit repetition counter     (plaintext) */
+    uint64_t enc_payload; /**< 44-bit encrypted payload     (bits 43:0) */
+} subghz_nice_flor_s_fields_t;
+
+/**
+ * Extract the {button, repeat, encrypted-payload} triplet from a 52-bit
+ * Nice FloR-S key.  No rainbow table is needed — button and repeat are
+ * plaintext, and the encrypted payload is returned as-is.
+ *
+ * @param[in]  key  52-bit Flipper key as carried by
+ *                  `flipper_subghz_signal_t::key`.
+ * @param[out] out  Receives the extracted fields.  Must be non-NULL.
+ * @retval true   Always succeeds when @p out is non-NULL.
+ * @retval false  @p out is NULL.
+ */
+bool subghz_signal_fields_nice_flor_s_extract(uint64_t                     key,
+                                               subghz_nice_flor_s_fields_t *out);
+
+/**
+ * Inverse of @ref subghz_signal_fields_nice_flor_s_extract — assemble
+ * a 52-bit Flipper-format Nice FloR-S key from {button, repeat,
+ * encrypted-payload}.
+ *
+ * @param[in]  fields   Fields to encode.  Must be non-NULL.
+ * @param[out] key_out  Receives the assembled 52-bit key.  Must be non-NULL.
+ * @retval true   Assembly succeeded.
+ * @retval false  @p fields or @p key_out is NULL.  On failure *key_out is 0.
+ */
+bool subghz_signal_fields_nice_flor_s_assemble(
+    const subghz_nice_flor_s_fields_t *fields,
+    uint64_t                          *key_out);
+
+/*============================================================================*/
+/* Nice FloR-S rolling counter — decode / encode (P3)                          */
+/*============================================================================*/
+
+/**
+ * Decrypt the 44-bit encrypted payload with the 32-byte rainbow table
+ * and return the 16-bit rolling counter.
+ *
+ * @param  enc_payload  44-bit encrypted payload (bits [43:0] of the key).
+ * @param  table        32-byte rainbow table.  Must not be NULL.
+ * @return 16-bit rolling counter.
+ */
+uint16_t subghz_signal_fields_nice_flor_s_counter_decode(
+    uint64_t       enc_payload,
+    const uint8_t  table[32]);
+
+/**
+ * Substitute @p new_counter into the plaintext obtained by decrypting
+ * @p enc_payload with @p table, preserving the 28-bit serial, and
+ * return the re-encrypted 44-bit payload.
+ *
+ * @param  enc_payload   Current 44-bit encrypted payload.
+ * @param  new_counter   Replacement 16-bit counter value.
+ * @param  table         32-byte rainbow table.
+ * @return New 44-bit encrypted payload with the substituted counter.
+ */
+uint64_t subghz_signal_fields_nice_flor_s_counter_encode(
+    uint64_t       enc_payload,
+    uint16_t       new_counter,
+    const uint8_t  table[32]);
+
+/*============================================================================*/
+/* CAME Atomo field extraction / assembly (P4)                                 */
+/*============================================================================*/
+
+/**
+ * Return true iff @p protocol is the CAME Atomo protocol.
+ *
+ * @param[in] protocol  Protocol name string, may be NULL.
+ * @return  true if the protocol is CAME Atomo.
+ */
+bool subghz_signal_fields_is_came_atomo(const char *protocol);
+
+/**
+ * Extracted fields from a 62-bit CAME Atomo Flipper-format key.
+ *
+ * The over-the-air data is transmitted as (~plaintext64 >> 4), yielding
+ * 60 significant bits Manchester-encoded as 62 bits.  The Flipper key
+ * stores the 62-bit received value; to recover the plaintext 64-bit
+ * block we reverse: plaintext64 = ~(key << 4).
+ *
+ * Plaintext 64-bit block layout:
+ *   [63:57] cnt_2   — 7-bit hold-cycle counter
+ *   [56]    always 0
+ *   [55:40] cnt     — 16-bit rolling counter
+ *   [39: 8] serial  — 32-bit device serial
+ *   [ 7: 4] btn     — 4-bit button code
+ *   [ 3: 0] always 0
+ */
+typedef struct {
+    uint32_t serial;    /**< 32-bit device serial */
+    uint16_t counter;   /**< 16-bit rolling counter */
+    uint8_t  button;    /**<  4-bit button code */
+    uint8_t  cnt_2;     /**<  7-bit hold-cycle counter */
+} subghz_came_atomo_fields_t;
+
+/**
+ * Extract the {serial, counter, button, cnt_2} tuple from a CAME Atomo
+ * Flipper key by decrypting the LFSR cipher.  No external table is
+ * needed — the cipher is self-contained.
+ *
+ * @param[in]  key  62-bit Flipper key.
+ * @param[out] out  Receives the extracted fields.  Must be non-NULL.
+ * @retval true   Extraction succeeded.
+ * @retval false  @p out is NULL.
+ */
+bool subghz_signal_fields_came_atomo_extract(uint64_t                      key,
+                                             subghz_came_atomo_fields_t   *out);
+
+/**
+ * Inverse of @ref subghz_signal_fields_came_atomo_extract — assemble a
+ * 62-bit Flipper-format CAME Atomo key from plaintext fields by
+ * encrypting and applying the over-the-air transformation.
+ *
+ * @param[in]  fields   Fields to encode.  Must be non-NULL.
+ * @param[out] key_out  Receives the assembled 62-bit key.  Must be non-NULL.
+ * @retval true   Assembly succeeded.
+ * @retval false  @p fields or @p key_out is NULL.
+ */
+bool subghz_signal_fields_came_atomo_assemble(
+    const subghz_came_atomo_fields_t *fields,
+    uint64_t                         *key_out);
+
+/*============================================================================*/
+/* CAME Atomo rolling counter — decode / encode (P4)                           */
+/*============================================================================*/
+
+/**
+ * Decode the 16-bit rolling counter from a CAME Atomo Flipper key.
+ * Convenience wrapper — extracts and decrypts in one call.
+ *
+ * @param  key  62-bit Flipper key.
+ * @return 16-bit rolling counter.
+ */
+uint16_t subghz_signal_fields_came_atomo_counter_decode(uint64_t key);
+
+/**
+ * Substitute @p new_counter into the CAME Atomo plaintext, preserving
+ * serial, button, and cnt_2, then re-encrypt and return the 62-bit key.
+ *
+ * @param  key          Current 62-bit Flipper key.
+ * @param  new_counter  Replacement 16-bit counter value.
+ * @return New 62-bit Flipper key with the substituted counter.
+ */
+uint64_t subghz_signal_fields_came_atomo_counter_encode(uint64_t key,
+                                                        uint16_t new_counter);
+
+/*============================================================================*/
+/* Alutech AT-4N field extraction / assembly (P4)                              */
+/*============================================================================*/
+
+/**
+ * Return true iff @p protocol is the Alutech AT-4N protocol.
+ *
+ * @param[in] protocol  Protocol name string, may be NULL.
+ * @return  true if the protocol is Alutech AT-4N.
+ */
+bool subghz_signal_fields_is_alutech_at_4n(const char *protocol);
+
+/**
+ * Extracted fields from a 72-bit Alutech AT-4N Flipper-format key.
+ *
+ * The 72-bit key consists of 64 encrypted data bits + 8 CRC bits.
+ * After decryption the plaintext layout is:
+ *   Byte[0]     CRC check byte
+ *   Byte[1:4]   32-bit serial (big-endian)
+ *   Byte[5:6]   16-bit counter (big-endian)
+ *   Byte[7]     button code
+ */
+typedef struct {
+    uint32_t serial;    /**< 32-bit device serial */
+    uint16_t counter;   /**< 16-bit rolling counter */
+    uint8_t  button;    /**< button code */
+    uint8_t  frame_crc; /**< 8-bit frame CRC (not stored in key; zero) */
+    uint64_t enc_data;  /**< 64-bit encrypted data block (= key value) */
+} subghz_alutech_at_4n_fields_t;
+
+/**
+ * Extract the {serial, counter, button} tuple from an Alutech AT-4N
+ * Flipper key by decrypting with the provided rainbow table.
+ *
+ * @param[in]  key    64-bit Flipper key (encrypted data block).
+ * @param[in]  table  32-byte rainbow table.  Must not be NULL.
+ * @param[out] out    Receives the extracted fields.  Must be non-NULL.
+ * @retval true   Extraction succeeded.
+ * @retval false  @p table or @p out is NULL.
+ */
+bool subghz_signal_fields_alutech_at_4n_extract(
+    uint64_t                        key,
+    const uint8_t                   table[32],
+    subghz_alutech_at_4n_fields_t  *out);
+
+/**
+ * Inverse of @ref subghz_signal_fields_alutech_at_4n_extract — assemble
+ * a 64-bit Flipper-format Alutech AT-4N key from plaintext fields by
+ * computing the CRC check byte and encrypting.
+ *
+ * @param[in]  fields   Fields to encode.  Must be non-NULL.
+ * @param[in]  table    32-byte rainbow table.  Must not be NULL.
+ * @param[out] key_out  Receives the assembled 64-bit key.  Must be non-NULL.
+ * @retval true   Assembly succeeded.
+ * @retval false  @p fields, @p table, or @p key_out is NULL.
+ */
+bool subghz_signal_fields_alutech_at_4n_assemble(
+    const subghz_alutech_at_4n_fields_t *fields,
+    const uint8_t                        table[32],
+    uint64_t                            *key_out);
+
+/*============================================================================*/
+/* Alutech AT-4N rolling counter — decode / encode (P4)                        */
+/*============================================================================*/
+
+/**
+ * Decrypt the 64-bit encrypted data with the rainbow table and return
+ * the 16-bit rolling counter.
+ *
+ * @param  enc_data  64-bit encrypted data block.
+ * @param  table     32-byte rainbow table.  Must not be NULL.
+ * @return 16-bit rolling counter.
+ */
+uint16_t subghz_signal_fields_alutech_at_4n_counter_decode(
+    uint64_t       enc_data,
+    const uint8_t  table[32]);
+
+/**
+ * Substitute @p new_counter into the plaintext obtained by decrypting
+ * @p enc_data, recompute the CRC check byte, and return the re-encrypted
+ * 64-bit data block.
+ *
+ * @param  enc_data      Current 64-bit encrypted data block.
+ * @param  new_counter   Replacement 16-bit counter value.
+ * @param  table         32-byte rainbow table.
+ * @return New 64-bit encrypted data block with the substituted counter.
+ */
+uint64_t subghz_signal_fields_alutech_at_4n_counter_encode(
+    uint64_t       enc_data,
+    uint16_t       new_counter,
+    const uint8_t  table[32]);
+
+/*============================================================================*/
 /* Counter-edit capability probe (Phase 9e-1)                                  */
 /*============================================================================*/
 
@@ -227,9 +497,9 @@ typedef enum {
  * documented in the Phase 9e checklist entry):
  *
  *   - "KeeLoq", "Star Line", "Jarolift"           → SUPPORTED
- *   - "Nice FloR-S"                               → DEFERRED ("Nice FloR-S: HCS perm. table req.")
- *   - "CAME Atomo"                                → DEFERRED ("CAME Atomo: cipher decode req.")
- *   - "Alutech AT-4N"                             → DEFERRED ("Alutech: AES key recovery req.")
+ *   - "Nice FloR-S"                               → SUPPORTED
+ *   - "CAME Atomo"                                → SUPPORTED
+ *   - "Alutech AT-4N"                             → SUPPORTED (with rainbow table)
  *   - "Phoenix_V2"                                → DEFERRED ("Phoenix V2: checksum recompute req.")
  *   - everything else (incl. NULL)                → UNSUPPORTED ("" — empty string)
  *

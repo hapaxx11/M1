@@ -36,6 +36,11 @@
 #include "subghz_signal_fields.h"
 #include "subghz_keeloq.h"
 #include "subghz_keeloq_mfkeys.h"
+#include "subghz_nice_flor_s.h"
+#include "subghz_nice_flor_s_table_builtin.h"
+#include "subghz_came_atomo.h"
+#include "subghz_alutech_at_4n.h"
+#include "subghz_alutech_at_4n_table_builtin.h"
 
 /*============================================================================*/
 /* Local state                                                                 */
@@ -43,10 +48,24 @@
 
 /** Cached .sub metadata loaded on scene_on_enter from app->saved_filepath. */
 static flipper_subghz_signal_t s_signal;
-/** Extracted plaintext fields (valid only when s_supported == true). */
+/** Extracted plaintext fields (valid only when s_supported == true and
+ *  s_is_nice_flor_s == false and s_is_came_atomo == false and
+ *  s_is_alutech_at_4n == false). */
 static subghz_keeloq_fields_t  s_fields;
-/** True when the loaded protocol is a recognised KeeLoq family member. */
+/** True when the loaded protocol is a recognised supported member. */
 static bool                    s_supported;
+/** True when the loaded file's protocol is Nice FloR-S. */
+static bool                    s_is_nice_flor_s;
+/** Extracted Nice FloR-S fields (valid only when s_is_nice_flor_s). */
+static subghz_nice_flor_s_fields_t s_nfs_fields;
+/** True when the loaded file's protocol is CAME Atomo. */
+static bool                    s_is_came_atomo;
+/** Extracted CAME Atomo fields (valid only when s_is_came_atomo). */
+static subghz_came_atomo_fields_t s_atomo_fields;
+/** True when the loaded file's protocol is Alutech AT-4N. */
+static bool                    s_is_alutech_at_4n;
+/** Extracted Alutech AT-4N fields (valid only when s_is_alutech_at_4n). */
+static subghz_alutech_at_4n_fields_t s_alutech_fields;
 /** True when the file load itself succeeded — drives the error placeholder. */
 static bool                    s_loaded;
 /** True when the loaded file's manufacturer key was resolved and the
@@ -125,6 +144,12 @@ static bool resolve_device_key(const flipper_subghz_signal_t *signal,
             /* Seed not recoverable from the .sub file — refuse rather than
              * silently fall back to Normal and produce a garbage counter. */
             return false;
+        case KEELOQ_LEARN_MAGIC_XOR_TYPE1:
+            *device_key_out = keeloq_learn_magic_xor_type1(fields->serial, mfr.key);
+            return true;
+        case KEELOQ_LEARN_FAAC_SLH:
+            /* FAAC SLH requires a seed not recoverable from the .sub file. */
+            return false;
         default:
             return false;
     }
@@ -161,14 +186,20 @@ static void scene_on_enter(SubGhzApp *app)
      * Saved menu starts with a clean state. */
     app->signal_edit_active = false;
 
-    s_loaded      = false;
-    s_supported   = false;
-    s_has_counter = false;
-    s_counter     = 0U;
-    s_device_key  = 0U;
-    s_cursor      = SIG_CURSOR_BUTTON;
+    s_loaded          = false;
+    s_supported       = false;
+    s_is_nice_flor_s  = false;
+    s_is_came_atomo   = false;
+    s_is_alutech_at_4n = false;
+    s_has_counter     = false;
+    s_counter         = 0U;
+    s_device_key      = 0U;
+    s_cursor          = SIG_CURSOR_BUTTON;
     memset(&s_signal, 0, sizeof(s_signal));
     memset(&s_fields, 0, sizeof(s_fields));
+    memset(&s_nfs_fields, 0, sizeof(s_nfs_fields));
+    memset(&s_atomo_fields, 0, sizeof(s_atomo_fields));
+    memset(&s_alutech_fields, 0, sizeof(s_alutech_fields));
     s_saved_full_path[0] = '\0';
 
     if (app->saved_filepath[0] == '\0')
@@ -214,6 +245,68 @@ static void scene_on_enter(SubGhzApp *app)
              * normally so the user knows the file loaded successfully. */
             s_has_counter = resolve_counter(&s_signal, &s_fields,
                                             &s_counter, &s_device_key);
+        }
+    }
+    else if (subghz_signal_fields_is_nice_flor_s(s_signal.protocol))
+    {
+        /* P3 — Nice FloR-S cipher support.  Button and repeat are
+         * plaintext in the 52-bit key.  Serial and counter require the
+         * 32-byte rainbow table to decrypt.  When the builtin table is
+         * available (baked in at build time via the
+         * NICE_FLOR_S_RAINBOW_TABLE secret), decode immediately;
+         * otherwise show "table?" placeholders. */
+        s_supported = subghz_signal_fields_nice_flor_s_extract(
+                          s_signal.key, &s_nfs_fields);
+        s_is_nice_flor_s = s_supported;
+
+        if (s_supported && nice_flor_s_table_builtin_available())
+        {
+            s_counter     = subghz_signal_fields_nice_flor_s_counter_decode(
+                                s_nfs_fields.enc_payload,
+                                nice_flor_s_table_builtin);
+            s_has_counter = true;
+        }
+    }
+    else if (subghz_signal_fields_is_came_atomo(s_signal.protocol))
+    {
+        /* P4 — CAME Atomo LFSR cipher support.  No external key material
+         * needed — the cipher is self-contained.  All fields (serial,
+         * counter, button) are decoded immediately. */
+        s_supported = subghz_signal_fields_came_atomo_extract(
+                          s_signal.key, &s_atomo_fields);
+        s_is_came_atomo = s_supported;
+
+        if (s_supported)
+        {
+            s_counter     = s_atomo_fields.counter;
+            s_has_counter = true;
+        }
+    }
+    else if (subghz_signal_fields_is_alutech_at_4n(s_signal.protocol))
+    {
+        /* P4 — Alutech AT-4N TEA-variant cipher support.  Requires the
+         * 32-byte rainbow table (injected at build time via the
+         * ALUTECH_AT_4N_RAINBOW_TABLE secret).  When the table is
+         * available, decode serial/counter immediately; otherwise show
+         * "table?" placeholders. */
+        s_is_alutech_at_4n = true;
+        if (alutech_at_4n_table_builtin_available())
+        {
+            s_supported = subghz_signal_fields_alutech_at_4n_extract(
+                              s_signal.key,
+                              alutech_at_4n_table_builtin,
+                              &s_alutech_fields);
+            if (s_supported)
+            {
+                s_counter     = s_alutech_fields.counter;
+                s_has_counter = true;
+            }
+        }
+        else
+        {
+            /* Table not available — mark as supported for UI display
+             * but counter/serial will show "table?" placeholders. */
+            s_supported = true;
         }
     }
 
@@ -377,6 +470,136 @@ static void draw_keeloq_fields(void)
     u8g2_DrawStr(&m1_u8g2, 2, 62, line);
 }
 
+static void draw_nice_flor_s_fields(void)
+{
+    char line[40];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    /* Serial is inside the encrypted payload — requires the rainbow
+     * table to decrypt.  When the builtin table is available, decrypt
+     * and display the 28-bit serial; otherwise show "table?". */
+    if (s_has_counter && nice_flor_s_table_builtin_available())
+    {
+        const uint64_t plain = nice_flor_s_decrypt(
+            s_nfs_fields.enc_payload, nice_flor_s_table_builtin);
+        const uint32_t serial = (uint32_t)((plain >> 16) & 0x0FFFFFFFUL);
+        snprintf(line, sizeof(line), "Serial : %07lX",
+                 (unsigned long)serial);
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "Serial : table?");
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+
+    snprintf(line, sizeof(line), "%c Button : 0x%X", button_marker,
+             (unsigned)(s_nfs_fields.button & 0x0F));
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
+    u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+    /* Counter requires the rainbow table to decrypt. */
+    if (s_has_counter)
+        snprintf(line, sizeof(line), "  Counter: %u",
+                 (unsigned)s_counter);
+    else
+        snprintf(line, sizeof(line), "  Counter: table?");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
+}
+
+static void draw_came_atomo_fields(void)
+{
+    char line[40];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    /* CAME Atomo serial and counter are always available — the LFSR
+     * cipher requires no external key material. */
+    snprintf(line, sizeof(line), "Serial : %08lX",
+             (unsigned long)s_atomo_fields.serial);
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+    const bool counter_selectable = s_has_counter;
+    const char counter_marker = (counter_selectable && s_cursor == SIG_CURSOR_COUNTER)
+                                ? '>' : ' ';
+
+    snprintf(line, sizeof(line), "%c Button : 0x%X", button_marker,
+             (unsigned)(s_atomo_fields.button & 0x0F));
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
+    u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+    snprintf(line, sizeof(line), "%c Counter: %u", counter_marker,
+             (unsigned)s_counter);
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
+}
+
+static void draw_alutech_at_4n_fields(void)
+{
+    char line[40];
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+    snprintf(line, sizeof(line), "Proto: %s", s_signal.protocol);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+
+    /* Serial and counter require the rainbow table to decrypt. */
+    if (s_has_counter && alutech_at_4n_table_builtin_available())
+    {
+        snprintf(line, sizeof(line), "Serial : %08lX",
+                 (unsigned long)s_alutech_fields.serial);
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "Serial : table?");
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 32, line);
+
+    const char button_marker  = (s_cursor == SIG_CURSOR_BUTTON) ? '>' : ' ';
+    const char cmode_marker   = (s_cursor == SIG_CURSOR_COUNTER_MODE) ? '>' : ' ';
+
+    if (s_has_counter)
+    {
+        snprintf(line, sizeof(line), "%c Button : 0x%02X", button_marker,
+                 (unsigned)s_alutech_fields.button);
+    }
+    else
+    {
+        snprintf(line, sizeof(line), "%c Button : table?", button_marker);
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 42, line);
+
+    snprintf(line, sizeof(line), "%c CntMode: %s", cmode_marker,
+             (s_signal.counter_mode == FLIPPER_SUBGHZ_COUNTER_MODE_STATIC)
+             ? "Static" : "Increment");
+    u8g2_DrawStr(&m1_u8g2, 2, 52, line);
+
+    if (s_has_counter)
+        snprintf(line, sizeof(line), "  Counter: %u",
+                 (unsigned)s_counter);
+    else
+        snprintf(line, sizeof(line), "  Counter: table?");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, line);
+}
+
 static void draw(SubGhzApp *app)
 {
     (void)app;
@@ -400,10 +623,9 @@ static void draw(SubGhzApp *app)
         u8g2_DrawStr(&m1_u8g2, 2, 22, line);
 
         /* Phase 9e-1: show the documented deferred-implementation reason
-         * for Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 so
-         * the user can distinguish a deferred protocol from a wholly
-         * unsupported one.  The reason string is owned by
-         * subghz_signal_fields.c (static literal). */
+         * for CAME Atomo / Alutech AT-4N / Phoenix V2 so the user can
+         * distinguish a deferred protocol from a wholly unsupported one.
+         * Nice FloR-S has been promoted to SUPPORTED (P3). */
         const char *reason = NULL;
         const subghz_counter_edit_status_t st =
             subghz_signal_fields_counter_edit_status(s_signal.protocol, &reason);
@@ -437,7 +659,14 @@ static void draw(SubGhzApp *app)
     }
     else
     {
-        draw_keeloq_fields();
+        if (s_is_nice_flor_s)
+            draw_nice_flor_s_fields();
+        else if (s_is_came_atomo)
+            draw_came_atomo_fields();
+        else if (s_is_alutech_at_4n)
+            draw_alutech_at_4n_fields();
+        else
+            draw_keeloq_fields();
     }
     m1_u8g2_nextpage();
 }
@@ -461,6 +690,12 @@ uint8_t subghz_signal_settings_get_button(void)
 {
     if (!s_loaded || !s_supported)
         return 0U;
+    if (s_is_nice_flor_s)
+        return (uint8_t)(s_nfs_fields.button & 0x0FU);
+    if (s_is_came_atomo)
+        return (uint8_t)(s_atomo_fields.button & 0x0FU);
+    if (s_is_alutech_at_4n)
+        return s_alutech_fields.button;
     return (uint8_t)(s_fields.button & 0x0FU);
 }
 
@@ -470,13 +705,83 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
         return false;
     if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
         return false;
+    if (s_saved_full_path[0] == '\0')
+        return false;
 
-    /* Substitute the button field and re-assemble the 64-bit Flipper key
-     * using the host-tested pure-logic assembler (Phase 9a-1). */
+    uint64_t new_key = 0;
+
+    if (s_is_nice_flor_s)
+    {
+        subghz_nice_flor_s_fields_t updated = s_nfs_fields;
+        updated.button = (uint8_t)(new_button & 0x0FU);
+        if (!subghz_signal_fields_nice_flor_s_assemble(&updated, &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_nfs_fields = updated;
+        s_signal.key = new_key;
+        return true;
+    }
+    else if (s_is_came_atomo)
+    {
+        subghz_came_atomo_fields_t updated = s_atomo_fields;
+        updated.button = (uint8_t)(new_button & 0x0FU);
+        if (!subghz_signal_fields_came_atomo_assemble(&updated, &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_atomo_fields = updated;
+        s_signal.key = new_key;
+        return true;
+    }
+    else if (s_is_alutech_at_4n)
+    {
+        if (!alutech_at_4n_table_builtin_available())
+            return false;
+        subghz_alutech_at_4n_fields_t updated = s_alutech_fields;
+        updated.button = new_button;
+        if (!subghz_signal_fields_alutech_at_4n_assemble(&updated,
+                                                          alutech_at_4n_table_builtin,
+                                                          &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_alutech_fields = updated;
+        s_signal.key = new_key;
+        return true;
+    }
+
+    /* KeeLoq family — substitute the button field and re-assemble. */
     subghz_keeloq_fields_t updated = s_fields;
     updated.button = (uint8_t)(new_button & 0x0FU);
 
-    uint64_t new_key = 0;
     if (!subghz_signal_fields_keeloq_assemble(s_signal.protocol,
                                               &updated, &new_key))
         return false;
@@ -485,9 +790,6 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
      * empty (no file loaded) the save is rejected.  The Manufacture line
      * is propagated verbatim — if the source file had none, the field is
      * "" and the save helper falls back to plain key-save behaviour. */
-    if (s_saved_full_path[0] == '\0')
-        return false;
-
     bool ok = flipper_subghz_save_key_full(s_saved_full_path,
                                             s_signal.frequency,
                                             s_signal.preset,
@@ -534,14 +836,90 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
         return false;
     if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
         return false;
-    /* Without a resolvable manufacturer key the encrypted hop word cannot
-     * be re-encrypted — refuse the edit rather than overwriting the file
-     * with corrupt cipher text. */
     if (!s_has_counter)
         return false;
     if (s_saved_full_path[0] == '\0')
         return false;
 
+    uint64_t new_key = 0;
+
+    if (s_is_nice_flor_s)
+    {
+        if (!nice_flor_s_table_builtin_available())
+            return false;
+        uint64_t new_enc_payload = subghz_signal_fields_nice_flor_s_counter_encode(
+            s_nfs_fields.enc_payload, new_counter, nice_flor_s_table_builtin);
+        subghz_nice_flor_s_fields_t updated = s_nfs_fields;
+        updated.enc_payload = new_enc_payload;
+        if (!subghz_signal_fields_nice_flor_s_assemble(&updated, &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_nfs_fields  = updated;
+        s_signal.key  = new_key;
+        s_counter     = new_counter;
+        return true;
+    }
+    else if (s_is_came_atomo)
+    {
+        new_key = subghz_signal_fields_came_atomo_counter_encode(s_signal.key,
+                                                                  new_counter);
+        subghz_came_atomo_fields_t updated;
+        (void)subghz_signal_fields_came_atomo_extract(new_key, &updated);
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_atomo_fields = updated;
+        s_signal.key   = new_key;
+        s_counter      = new_counter;
+        return true;
+    }
+    else if (s_is_alutech_at_4n)
+    {
+        if (!alutech_at_4n_table_builtin_available())
+            return false;
+        new_key = subghz_signal_fields_alutech_at_4n_counter_encode(
+            s_signal.key, new_counter, alutech_at_4n_table_builtin);
+        subghz_alutech_at_4n_fields_t updated;
+        (void)subghz_signal_fields_alutech_at_4n_extract(
+            new_key, alutech_at_4n_table_builtin, &updated);
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_alutech_fields = updated;
+        s_signal.key     = new_key;
+        s_counter        = new_counter;
+        return true;
+    }
+
+    /* KeeLoq family — without a resolvable manufacturer key the encrypted
+     * hop word cannot be re-encrypted; refuse the edit rather than
+     * overwriting the file with corrupt cipher text. */
     /* Re-encrypt the counter via the host-tested pure-logic helper
      * (Phase 9c-1) — preserves the lower 16 plaintext bits (button,
      * VLOW, discriminant, overflow counter). */
@@ -553,7 +931,6 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
     subghz_keeloq_fields_t updated = s_fields;
     updated.enc_hop = new_enc_hop;
 
-    uint64_t new_key = 0;
     if (!subghz_signal_fields_keeloq_assemble(s_signal.protocol,
                                               &updated, &new_key))
         return false;

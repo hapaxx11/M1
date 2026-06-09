@@ -80,7 +80,7 @@ def _parse_compact_line(line):
         t = int(type_str)
     except ValueError:
         return None
-    if not (1 <= t <= 3 and 0 <= k <= 0xFFFF_FFFF_FFFF_FFFF):
+    if not (1 <= t <= 5 and 0 <= k <= 0xFFFF_FFFF_FFFF_FFFF):
         return None
     return k, t, name
 
@@ -104,7 +104,7 @@ def parse_keystore_lines(lines):
             t = int(key_type)
         except ValueError:
             return
-        if 1 <= t <= 3 and 0 <= k <= 0xFFFF_FFFF_FFFF_FFFF:
+        if 1 <= t <= 5 and 0 <= k <= 0xFFFF_FFFF_FFFF_FFFF:
             entries.append((k, t, manufacturer))
 
     for raw in lines:

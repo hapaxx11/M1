@@ -233,6 +233,13 @@ KeeLoqEncResult keeloq_encode_replay(
          * encoded file data handled here. Refuse to generate an invalid hop
          * word instead of silently falling back to normal learning. */
         return KEELOQ_ENC_BAD_PROTOCOL;
+    case KEELOQ_LEARN_MAGIC_XOR_TYPE1:
+        device_key = keeloq_learn_magic_xor_type1(serial, mfr.key);
+        break;
+    case KEELOQ_LEARN_FAAC_SLH:
+        /* FAAC SLH requires a seed from the captured data that is not
+         * available in this encoder path. */
+        return KEELOQ_ENC_BAD_PROTOCOL;
     default:
         return KEELOQ_ENC_BAD_PROTOCOL;
     }
