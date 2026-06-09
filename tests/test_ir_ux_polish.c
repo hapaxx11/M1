@@ -177,6 +177,22 @@ void test_quick_remote_sidebar_layout(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Grid: unsigned-wrap centering guard present                         */
+/* ------------------------------------------------------------------ */
+
+void test_grid_label_no_unsigned_wrap_centering(void)
+{
+    char *c = read_file("m1_csrc/m1_ir_quick_remote.c");
+    /* The tw >= cell_w guard must be present so centering never wraps */
+    assert_contains(c, "tw >= (u8g2_uint_t)cell_w");
+    /* Left-align branch must assign x + 1u (not centred) */
+    assert_contains(c, "x + 1u");
+    /* Centering formula must only run when tw < cell_w */
+    assert_contains(c, "(cell_w - tw) / 2u");
+    free(c);
+}
+
+/* ------------------------------------------------------------------ */
 /* Unity entry point                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -190,5 +206,6 @@ int main(void)
     RUN_TEST(test_dashboard_no_orientation_save_restore);
     RUN_TEST(test_brute_force_no_vtaskdelay_error);
     RUN_TEST(test_quick_remote_sidebar_layout);
+    RUN_TEST(test_grid_label_no_unsigned_wrap_centering);
     return UNITY_END();
 }

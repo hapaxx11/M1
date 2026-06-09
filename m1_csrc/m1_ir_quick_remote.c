@@ -83,53 +83,53 @@ typedef struct {
 
 /*************************** L A Y O U T S ***********************************/
 
-/* --- TV 3×3 Grid --- */
+/* --- TV 3×3 Grid — portrait 2-col order: Power/Mute, OK/Src, Vol+/Ch+, Vol-/Ch-, Menu --- */
 static const ir_grid_button_t s_tv_buttons[IR_TV_BTN_COUNT] = {
     [IR_TV_POWER]  = { "Power",  "Power"    },
-    [IR_TV_SOURCE] = { "Source", "Source"   },
     [IR_TV_MUTE]   = { "Mute",   "Mute"     },
-    [IR_TV_VOL_UP] = { "Vol+",   "Vol_up"   },
     [IR_TV_OK]     = { "OK",     "OK"       },
+    [IR_TV_SOURCE] = { "Src",    "Source"   },
+    [IR_TV_VOL_UP] = { "Vol+",   "Vol_up"   },
     [IR_TV_CH_UP]  = { "Ch+",    "Ch_next"  },
     [IR_TV_VOL_DN] = { "Vol-",   "Vol_dn"   },
-    [IR_TV_MENU]   = { "Menu",   "Menu"     },
     [IR_TV_CH_DN]  = { "Ch-",    "Ch_prev"  },
+    [IR_TV_MENU]   = { "Menu",   "Menu"     },
 };
 
 /* Fallback candidate names for AC Power (many remotes use "Power" instead of "Off") */
 static const char * const s_ac_power_alts[] = { "Power", "Power_on", "On", NULL };
 
-/* --- AC 3×3 Grid --- */
+/* --- AC 3×3 Grid — portrait 2-col order: Power/Mode, Swing/Fan, Temp+/Timer, Temp-/Turbo, Sleep --- */
 static const ir_grid_button_t s_ac_buttons[IR_AC_BTN_COUNT] = {
     [IR_AC_POWER]   = { "Power",  "Off",       s_ac_power_alts },
     [IR_AC_MODE]    = { "Mode",   "Mode"     },
     [IR_AC_SWING]   = { "Swing",  "Swing"    },
-    [IR_AC_TEMP_UP] = { "Temp+",  "Temp_up"  },
     [IR_AC_FAN]     = { "Fan",    "Fan"      },
+    [IR_AC_TEMP_UP] = { "Temp+",  "Temp_up"  },
     [IR_AC_TIMER]   = { "Timer",  "Timer"    },
     [IR_AC_TEMP_DN] = { "Temp-",  "Temp_dn"  },
     [IR_AC_TURBO]   = { "Turbo",  "Turbo"    },
     [IR_AC_SLEEP]   = { "Sleep",  "Sleep"    },
 };
 
-/* --- Audio 3×3 Grid --- */
+/* --- Audio 3×3 Grid — portrait 2-col order: Power/Mute, Src/Play, Vol+/Next, Vol-/Prev, Stop --- */
 static const ir_grid_button_t s_aud_buttons[IR_AUD_BTN_COUNT] = {
     [IR_AUD_POWER]  = { "Power",  "Power"    },
-    [IR_AUD_SOURCE] = { "Source", "Source"   },
     [IR_AUD_MUTE]   = { "Mute",   "Mute"     },
-    [IR_AUD_VOL_UP] = { "Vol+",   "Vol_up"   },
+    [IR_AUD_SOURCE] = { "Src",    "Source"   },
     [IR_AUD_PLAY]   = { "Play",   "Play"     },
+    [IR_AUD_VOL_UP] = { "Vol+",   "Vol_up"   },
     [IR_AUD_NEXT]   = { "Next",   "Next"     },
     [IR_AUD_VOL_DN] = { "Vol-",   "Vol_dn"   },
-    [IR_AUD_STOP]   = { "Stop",   "Stop"     },
     [IR_AUD_PREV]   = { "Prev",   "Prev"     },
+    [IR_AUD_STOP]   = { "Stop",   "Stop"     },
 };
 
-/* --- Projector 3×2 Grid --- */
+/* --- Projector 3×2 Grid — portrait 2-col order: Power/Mute, Src/Vol+, OK/Vol- --- */
 static const ir_grid_button_t s_prj_buttons[IR_PRJ_BTN_COUNT] = {
     [IR_PRJ_POWER]  = { "Power",  "Power"    },
-    [IR_PRJ_SOURCE] = { "Source", "Source"   },
     [IR_PRJ_MUTE]   = { "Mute",   "Mute"     },
+    [IR_PRJ_SOURCE] = { "Src",    "Source"   },
     [IR_PRJ_VOL_UP] = { "Vol+",   "Vol_up"   },
     [IR_PRJ_OK]     = { "OK",     "OK"       },
     [IR_PRJ_VOL_DN] = { "Vol-",   "Vol_dn"   },
@@ -570,12 +570,17 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
         }
 
         /* Label — horizontally and vertically centred in the cell.
-         * NokiaSmallPlain ascent ≈ 7 px; formula: baseline = y + cell_h/2 + 3 */
+         * NokiaSmallPlain ascent ≈ 7 px; formula: baseline = y + cell_h/2 + 3.
+         * If tw >= cell_w, left-align to avoid unsigned-wrap in centering math. */
         const char *label = layout->buttons[b].label;
         if (is_transmitting)
             label = ">>>";
         u8g2_uint_t tw = u8g2_GetStrWidth(&m1_u8g2, label);
-        u8g2_uint_t tx = (u8g2_uint_t)(x + (cell_w - tw) / 2u);
+        u8g2_uint_t tx;
+        if (tw >= (u8g2_uint_t)cell_w)
+            tx = (u8g2_uint_t)(x + 1u);  /* left-align when label fills the cell */
+        else
+            tx = (u8g2_uint_t)(x + (cell_w - tw) / 2u);
         u8g2_uint_t ty = (u8g2_uint_t)(y + cell_h / 2u + 3u);
         u8g2_DrawStr(&m1_u8g2, tx, ty, label);
 

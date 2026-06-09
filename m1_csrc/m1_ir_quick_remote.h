@@ -37,46 +37,72 @@ typedef enum {
 /** Maximum buttons in a quick-remote grid layout */
 #define IR_GRID_MAX_BUTTONS   12
 
-/** TV Remote button slots */
+/**
+ * TV Remote button slots — portrait 2-column layout:
+ *   col 0   col 1
+ *   Power   Mute     (row 0)
+ *   OK      Src      (row 1)
+ *   Vol+    Ch+      (row 2)  ← + row
+ *   Vol-    Ch-      (row 3)  ← - row directly below
+ *   Menu             (row 4)
+ */
 #define IR_TV_POWER      0
-#define IR_TV_SOURCE     1
-#define IR_TV_MUTE       2
-#define IR_TV_VOL_UP     3
-#define IR_TV_OK         4
+#define IR_TV_MUTE       1
+#define IR_TV_OK         2
+#define IR_TV_SOURCE     3
+#define IR_TV_VOL_UP     4
 #define IR_TV_CH_UP      5
 #define IR_TV_VOL_DN     6
-#define IR_TV_MENU       7
-#define IR_TV_CH_DN      8
+#define IR_TV_CH_DN      7
+#define IR_TV_MENU       8
 #define IR_TV_BTN_COUNT  9
 
-/** AC Remote button slots */
+/**
+ * AC Remote button slots — portrait 2-column layout:
+ *   col 0   col 1
+ *   Power   Mode     (row 0)
+ *   Swing   Fan      (row 1)
+ *   Temp+   Timer    (row 2)  ← + row
+ *   Temp-   Turbo    (row 3)  ← - row directly below
+ *   Sleep            (row 4)
+ */
 #define IR_AC_POWER      0
 #define IR_AC_MODE       1
 #define IR_AC_SWING      2
-#define IR_AC_TEMP_UP    3
-#define IR_AC_FAN        4
+#define IR_AC_FAN        3
+#define IR_AC_TEMP_UP    4
 #define IR_AC_TIMER      5
 #define IR_AC_TEMP_DN    6
 #define IR_AC_TURBO      7
 #define IR_AC_SLEEP      8
 #define IR_AC_BTN_COUNT  9
 
-/** Audio Remote button slots */
+/**
+ * Audio Remote button slots — portrait 2-column layout:
+ *   col 0   col 1
+ *   Src     Play     (row 1)
+ */
 #define IR_AUD_POWER     0
-#define IR_AUD_SOURCE    1
-#define IR_AUD_MUTE      2
-#define IR_AUD_VOL_UP    3
-#define IR_AUD_PLAY      4
+#define IR_AUD_MUTE      1
+#define IR_AUD_SOURCE    2
+#define IR_AUD_PLAY      3
+#define IR_AUD_VOL_UP    4
 #define IR_AUD_NEXT      5
 #define IR_AUD_VOL_DN    6
-#define IR_AUD_STOP      7
-#define IR_AUD_PREV      8
+#define IR_AUD_PREV      7
+#define IR_AUD_STOP      8
 #define IR_AUD_BTN_COUNT 9
 
-/** Projector Remote button slots */
+/**
+ * Projector Remote button slots — portrait 2-column layout:
+ *   col 0   col 1
+ *   Power   Mute     (row 0)
+ *   Src     Vol+     (row 1)  ← + row
+ *   OK      Vol-     (row 2)  ← - row directly below
+ */
 #define IR_PRJ_POWER     0
-#define IR_PRJ_SOURCE    1
-#define IR_PRJ_MUTE      2
+#define IR_PRJ_MUTE      1
+#define IR_PRJ_SOURCE    2
 #define IR_PRJ_VOL_UP    3
 #define IR_PRJ_OK        4
 #define IR_PRJ_VOL_DN    5
