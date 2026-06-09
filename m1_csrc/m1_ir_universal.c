@@ -44,7 +44,7 @@
 #define BROWSE_NAMES_MAX     16
 #define BROWSE_NAME_MAX_LEN  64
 
-#define DASHBOARD_ITEM_COUNT  13
+#define DASHBOARD_ITEM_COUNT  12
 
 #define IR_SEARCH_RESULTS_MAX BROWSE_NAMES_MAX
 
@@ -117,7 +117,7 @@ static char s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN];
 static uint16_t s_raw_ota_buffer[IR_RAW_OTA_BUFFER_MAX];
 static flipper_ir_signal_t s_raw_tx_signal;
 
-/* Dashboard menu text (item 12 is dynamic: Remote/Normal Mode) */
+/* Dashboard menu text */
 static const char *s_dashboard_items[DASHBOARD_ITEM_COUNT] = {
 	"TV Remote",
 	"AC Remote",
@@ -130,8 +130,7 @@ static const char *s_dashboard_items[DASHBOARD_ITEM_COUNT] = {
 	"Learned",
 	"Create Remote",
 	"Favorites",
-	"Recent",
-	"Remote Mode"
+	"Recent"
 };
 
 /* Custom remote builder state */
@@ -381,9 +380,6 @@ static void draw_dashboard(uint8_t selection)
 		}
 	}
 
-	/* Update Remote Mode label to reflect current state */
-	s_dashboard_items[12] = (m1_screen_orientation == M1_ORIENT_REMOTE) ? "Normal Mode" : "Remote Mode";
-
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
@@ -444,12 +440,6 @@ static void dashboard_screen(void)
 	BaseType_t ret;
 	uint8_t selection = 0;
 
-	/* Remember the caller's orientation so we can restore it on exit.
-	 * The "Toggle Remote Mode" item changes m1_screen_orientation to
-	 * M1_ORIENT_REMOTE while inside the IR dashboard; leaving without
-	 * restoring would leave the entire device in portrait mode. */
-	const uint8_t saved_orient = m1_screen_orientation;
-
 	draw_dashboard(selection);
 
 	while (1)
@@ -463,10 +453,6 @@ static void dashboard_screen(void)
 
 				if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
-					/* Restore the orientation the caller had when
-					 * entering the IR dashboard. */
-					if (m1_screen_orientation != saved_orient)
-						settings_apply_orientation(saved_orient);
 					xQueueReset(main_q_hdl);
 					break; /* Exit to caller */
 				}
@@ -503,46 +489,23 @@ static void dashboard_screen(void)
 						case 6: /* Browse IRDB */
 						case 8: /* Learned — browse user-saved remotes */
 						{
-							/* Use m1_file_browser (stock Monstatek pattern) so the user
-							 * can always navigate up via ".." even when the target folder
-							 * is empty.  start_level encodes how many levels deep the
-							 * starting directory sits relative to the SD drive root. */
-							uint8_t browse_saved_orient = m1_screen_orientation;
-							if (browse_saved_orient != M1_ORIENT_NORMAL)
-								settings_apply_orientation(M1_ORIENT_NORMAL);
 							if (selection == 6)
 								ir_browse_with_fb(IR_UNIVERSAL_IRDB_ROOT, 1);
 							else
 								ir_browse_with_fb(IR_LEARNED_DIR, 2);
-							/* Restore orientation */
-							if (browse_saved_orient != M1_ORIENT_NORMAL)
-								settings_apply_orientation(browse_saved_orient);
 							break;
 						}
 						case 7: /* Search IRDB */
 							show_search_screen();
 							break;
 						case 9: /* Create Remote — custom remote builder */
-						{
-							uint8_t build_saved_orient = m1_screen_orientation;
-							if (build_saved_orient != M1_ORIENT_NORMAL)
-								settings_apply_orientation(M1_ORIENT_NORMAL);
 							ir_custom_builder_run();
-							if (build_saved_orient != M1_ORIENT_NORMAL)
-								settings_apply_orientation(build_saved_orient);
 							break;
-						}
 						case 10: /* Favorites */
 							show_favorites_screen();
 							break;
 						case 11: /* Recent */
 							show_recent_screen();
-							break;
-						case 12: /* Toggle Remote Mode */
-							if (m1_screen_orientation == M1_ORIENT_REMOTE)
-								settings_apply_orientation(M1_ORIENT_NORMAL);
-							else
-								settings_apply_orientation(M1_ORIENT_REMOTE);
 							break;
 						default:
 							break;

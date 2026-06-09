@@ -37,7 +37,6 @@
 #include "flipper_ir.h"
 #include "irsnd.h"
 #include "ff.h"
-#include "m1_settings.h"
 #include "ir_signal_record.h"   /* ir_str_contains_icase(), ir_cmd_parse() (Phase H) */
 #include "ir_button_map.h"      /* ir_map_buttons() (Phase H) */
 
@@ -559,8 +558,8 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
     u8g2_DrawHLine(&m1_u8g2, 0, (u8g2_uint_t)(disp_h - GRID_BOTTOM_BAR_H), disp_w);
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
     {
-        const char *left_hint  = layout->universal_file ? "H<:Scan" : "";
-        const char *right_hint = "H>:File";
+        const char *left_hint  = "OK:Send";
+        const char *right_hint = "Hold:Menu";
         u8g2_DrawStr(&m1_u8g2, 1, (u8g2_uint_t)(disp_h - 1), left_hint);
         u8g2_uint_t rw = u8g2_GetStrWidth(&m1_u8g2, right_hint);
         u8g2_DrawStr(&m1_u8g2, disp_w - rw - 1, (u8g2_uint_t)(disp_h - 1), right_hint);
@@ -960,6 +959,101 @@ static void extract_device_name(const char *path, char *name, uint16_t name_len)
 }
 
 /*============================================================================*/
+/* Long-press OK popup menu for quick-remote secondary actions.               */
+/* Returns IR_GRID_ACT_NONE, IR_GRID_ACT_SCAN, or IR_GRID_ACT_CHANGE.        */
+/*============================================================================*/
+#define IR_GRID_ACT_NONE   0
+#define IR_GRID_ACT_SCAN   1
+#define IR_GRID_ACT_CHANGE 2
+
+static void draw_grid_action_menu(uint8_t item_count, const char *const *labels,
+                                  uint8_t sel)
+{
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+    /* Title */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Remote Options");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+    /* Items — 13 px each starting at y=13 */
+    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+    for (uint8_t i = 0; i < item_count; i++)
+    {
+        uint8_t y = 13 + i * 13;
+        if (i == sel)
+        {
+            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13, 2);
+            u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
+        }
+        u8g2_DrawStr(&m1_u8g2, 8, y + 10, labels[i]);
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    }
+
+    m1_u8g2_nextpage();
+}
+
+static uint8_t ir_grid_action_menu(const ir_category_layout_t *layout,
+                                   ir_category_t category)
+{
+    S_M1_Buttons_Status ab;
+    S_M1_Main_Q_t aq;
+    BaseType_t aret;
+
+    /* Build dynamic menu: "Power Scan" only if universal file exists */
+    const char *menu_items[3];
+    uint8_t     menu_actions[3];
+    uint8_t     n = 0;
+
+    if (layout->universal_file != NULL)
+    {
+        menu_items[n]   = "Power Scan";
+        menu_actions[n] = IR_GRID_ACT_SCAN;
+        n++;
+    }
+    menu_items[n]   = "Change Device";
+    menu_actions[n] = IR_GRID_ACT_CHANGE;
+    n++;
+
+    if (n == 0)
+        return IR_GRID_ACT_NONE;
+
+    uint8_t asel = 0;
+    draw_grid_action_menu(n, menu_items, asel);
+
+    while (1)
+    {
+        aret = xQueueReceive(main_q_hdl, &aq, portMAX_DELAY);
+        if (aret != pdTRUE)
+            continue;
+        if (aq.q_evt_type != Q_EVENT_KEYPAD)
+            continue;
+
+        xQueueReceive(button_events_q_hdl, &ab, 0);
+
+        if (ab.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            return IR_GRID_ACT_NONE;
+        }
+        else if (ab.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            asel = (asel > 0) ? (asel - 1) : (n - 1);
+            draw_grid_action_menu(n, menu_items, asel);
+        }
+        else if (ab.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            asel = (asel < n - 1) ? (asel + 1) : 0;
+            draw_grid_action_menu(n, menu_items, asel);
+        }
+        else if (ab.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            return menu_actions[asel];
+        }
+    }
+}
+
+/*============================================================================*/
 /*
  * Main quick-remote entry point.
  * Blocking function — returns when user presses BACK.
@@ -975,7 +1069,6 @@ void ir_quick_remote(ir_category_t category)
     char device_name[32];
     bool transmitting = false;
     const ir_category_layout_t *layout;
-    const uint8_t saved_orient = m1_screen_orientation;
 
     if ((uint8_t)category >= IR_CAT_COUNT)
         return;
@@ -1020,11 +1113,10 @@ void ir_quick_remote(ir_category_t category)
     if (!device_loaded)
         return;  /* User cancelled browse */
 
-    /* Switch to portrait (remote-control) orientation for the button grid.
-     * The caller's orientation is saved in saved_orient and restored on exit. */
-    settings_apply_orientation(M1_ORIENT_REMOTE);
+    /* Stay in the caller's orientation (landscape) — no forced rotation.
+     * The grid renderer adapts dynamically to whatever orientation is active. */
 
-    /* Effective column count and row count for portrait navigation */
+    /* Effective column count and row count for current orientation */
     uint8_t eff_cols = effective_cols(layout);
     uint8_t eff_rows = (layout->btn_count + eff_cols - 1) / eff_cols;
 
@@ -1045,7 +1137,6 @@ void ir_quick_remote(ir_category_t category)
             if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 xQueueReset(main_q_hdl);
-                settings_apply_orientation(saved_orient);
                 return;
             }
             else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
@@ -1083,14 +1174,6 @@ void ir_quick_remote(ir_category_t category)
                 if (sel >= layout->btn_count)
                     sel = layout->btn_count - 1;
             }
-            else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_LCLICK)
-            {
-                if (layout->universal_file)
-                {
-                    /* Launch brute-force scan (stays in portrait) */
-                    ir_brute_force_scan(category);
-                }
-            }
             else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 /* Navigate to next column within the current row */
@@ -1101,34 +1184,6 @@ void ir_quick_remote(ir_category_t category)
                 else
                     sel -= cur_col;  /* wrap to first column, same row */
             }
-            else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_LCLICK)
-            {
-                /* Browse for a different device file.
-                 * The file-browser list uses landscape-sized constants (124 px
-                 * highlight width, 125 px scrollbar), so we need a landscape
-                 * orientation during the browse.  Use the caller's orientation
-                 * if it is already landscape; fall back to NORMAL otherwise. */
-                uint8_t browse_orient = (saved_orient != M1_ORIENT_REMOTE)
-                                        ? saved_orient
-                                        : M1_ORIENT_NORMAL;
-                settings_apply_orientation(browse_orient);
-                char selected_path[QR_PATH_MAX];
-                if (browse_for_device(category, selected_path, QR_PATH_MAX))
-                {
-                    strncpy(s_qr_device_path, selected_path, QR_PATH_MAX - 1);
-                    s_qr_device_path[QR_PATH_MAX - 1] = '\0';
-                    if (load_device(s_qr_device_path))
-                    {
-                        map_buttons_to_commands(layout);
-                        extract_device_name(s_qr_device_path, device_name, sizeof(device_name));
-                        save_last_used(category, s_qr_device_path);
-                        device_loaded = true;
-                    }
-                }
-                settings_apply_orientation(M1_ORIENT_REMOTE);
-                eff_cols = effective_cols(layout);
-                eff_rows = (layout->btn_count + eff_cols - 1) / eff_cols;
-            }
             else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 if (s_btn_to_cmd[sel] >= 0)
@@ -1137,6 +1192,35 @@ void ir_quick_remote(ir_category_t category)
                     draw_grid(layout, sel, device_name, true);
                     qr_transmit(sel);
                     transmitting = false;
+                }
+            }
+            else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_LCLICK)
+            {
+                /* Long-press OK → popup menu for secondary actions.
+                 * Replaces the old long-press LEFT/RIGHT handlers that
+                 * required awkward orientation switches. */
+                uint8_t action = ir_grid_action_menu(layout, category);
+                if (action == IR_GRID_ACT_SCAN)
+                {
+                    ir_brute_force_scan(category);
+                }
+                else if (action == IR_GRID_ACT_CHANGE)
+                {
+                    char selected_path[QR_PATH_MAX];
+                    if (browse_for_device(category, selected_path, QR_PATH_MAX))
+                    {
+                        strncpy(s_qr_device_path, selected_path, QR_PATH_MAX - 1);
+                        s_qr_device_path[QR_PATH_MAX - 1] = '\0';
+                        if (load_device(s_qr_device_path))
+                        {
+                            map_buttons_to_commands(layout);
+                            extract_device_name(s_qr_device_path, device_name, sizeof(device_name));
+                            save_last_used(category, s_qr_device_path);
+                            device_loaded = true;
+                        }
+                    }
+                    eff_cols = effective_cols(layout);
+                    eff_rows = (layout->btn_count + eff_cols - 1) / eff_cols;
                 }
             }
 
@@ -1183,8 +1267,19 @@ void ir_brute_force_scan(ir_category_t category)
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 10, 30, "No universal file");
+        u8g2_DrawStr(&m1_u8g2, 10, 45, "Press any key");
         m1_u8g2_nextpage();
-        vTaskDelay(pdMS_TO_TICKS(1500));
+
+        /* Wait for any key press (async dismiss) */
+        while (1)
+        {
+            ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+            if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+            {
+                xQueueReceive(button_events_q_hdl, &btn, 0);
+                break;
+            }
+        }
         return;
     }
 
@@ -1225,18 +1320,7 @@ void ir_brute_force_scan(ir_category_t category)
             }
 
             u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-            if (u8g2_GetDisplayWidth(&m1_u8g2) >= u8g2_GetDisplayHeight(&m1_u8g2))
-            {
-                /* Landscape: one line fits */
-                u8g2_DrawStr(&m1_u8g2, 4, 58, "OK:Found  Back:Cancel");
-            }
-            else
-            {
-                /* Portrait (64 px wide): two lines within the 128 px height.
-                 * Second line is 10 px below the first (NokiaSmall line height). */
-                u8g2_DrawStr(&m1_u8g2, 4, 58, "OK: Found");
-                u8g2_DrawStr(&m1_u8g2, 4, 58 + 10, "Back: Stop");
-            }
+            u8g2_DrawStr(&m1_u8g2, 4, 58, "OK:Found  Back:Cancel");
         }
 
         m1_u8g2_nextpage();
