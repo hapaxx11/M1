@@ -1,1 +1,0 @@
-Restored the wait-for-OK-release loop at the start of `system_periodic_task`. After power-on, the task now waits for the OK button to be released before entering the main button-scan loop, preventing the power-on press from triggering a spurious menu action.

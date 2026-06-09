@@ -1,1 +1,0 @@
-macOS build support: `cmake/gcc-arm-none-eabi.cmake` now auto-detects the ARM toolchain from `/Applications/ArmGNUToolchain/` when `TOOLCHAIN_PATH` is not set. Added `setup_macos.sh` helper to install dependencies via Homebrew.

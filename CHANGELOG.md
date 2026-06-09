@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.58] - 2026-06-09
+
+### Added
+
+- Added 7 new IR protocol constants from Monstatek v0.8.0.2: `IRMP_NEC8_PROTOCOL` (61), `IRMP_RCA_PROTOCOL` (62), `IRMP_PIONEER_PROTOCOL` (63), `IRMP_SIRCS15_PROTOCOL` (64), `IRMP_SIRCS20_PROTOCOL` (65), `IRMP_RC5X_PROTOCOL` (66), `IRMP_RAW_PROTOCOL` (67). `IRMP_N_PROTOCOLS` updated to 67.
+- `irsnd_toggle(uint8_t pulse_toggle)` added to `Infrared/irsnd.c/h`. Toggles the complementary PWM output (CCxNE bit in TIMx_CCER) directly instead of calling HAL start/stop, reducing ISR overhead on each mark/space transition.
+- macOS build support: `cmake/gcc-arm-none-eabi.cmake` now auto-detects the ARM toolchain from `/Applications/ArmGNUToolchain/` when `TOOLCHAIN_PATH` is not set. Added `setup_macos.sh` helper to install dependencies via Homebrew.
+
+### Fixed
+
+- SD card "About" screen now displays correct capacity in GB (was dividing KB by 1024 instead of 1024×1024, causing a 32 GB card to display as ~33554432 GB).
+- Restored the wait-for-OK-release loop at the start of `system_periodic_task`. After power-on, the task now waits for the OK button to be released before entering the main button-scan loop, preventing the power-on press from triggering a spurious menu action.
 ## [0.9.1.57] - 2026-06-09
 
 ## [0.9.1.56] - 2026-06-09
