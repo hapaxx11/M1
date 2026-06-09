@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.54] - 2026-06-09
+
+### Changed
+
+- Sub-GHz: ported CAME Atomo LFSR cipher and Alutech AT-4N TEA cipher from upstream Flipper source; both protocols promoted from DEFERRED to SUPPORTED for counter editing; Alutech rainbow table injected at build time via ALUTECH_AT_4N_RAINBOW_TABLE secret
+- **Sub-GHz: KeeLoq learning types 4/5 (#551)** — added Magic XOR Type 1
+  (Beninca, type 4) and FAAC SLH (type 5) device-key derivation to the KeeLoq
+  cipher engine; widened the manufacturer-key parser to accept types 1–5 in
+  both compact and RocketGod formats; type 4 is fully replay-capable, type 5
+  is parsed but encoder-deferred (seed dependency).  Documented the
+  Flipper-extracted file investigation and MC-expansion plan.
+- Port the Nice FloR-S cipher from Flipper source and promote Nice FloR-S from DEFERRED to SUPPORTED for counter editing; the 32-byte rainbow table is injected at build time via the NICE_FLOR_S_RAINBOW_TABLE secret (same pattern as KeeLoq key vault), with a NULL stub for public builds.
 ## [0.9.1.53] - 2026-06-05
 
 ### Fixed
