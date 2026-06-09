@@ -2058,6 +2058,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
 
+# ---------- proto_pirate_timing (Proto Pirate — Phase B) ----------
+add_executable(test_proto_pirate_timing
+    test_proto_pirate_timing.c
+    ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate_timing.c
+)
+target_include_directories(test_proto_pirate_timing PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_proto_pirate_timing PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_proto_pirate_timing PRIVATE sanitizers)
+endif()
+add_test(NAME proto_pirate_timing COMMAND test_proto_pirate_timing)
+
 # IR UX Polish — source-level regression checks
 add_executable(test_ir_ux_polish
     test_ir_ux_polish.c

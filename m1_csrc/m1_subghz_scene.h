@@ -69,6 +69,8 @@ typedef enum {
     SubGhzSceneSetCounter,     /**< Create-from-scratch KeeLoq counter editor (Phase 8c-2) */
     SubGhzSceneSetMfKey,       /**< Create-from-scratch KeeLoq mfkey picker (Phase 8c-2) */
     SubGhzSceneSignalSettings, /**< Read-only per-file field display (Phase 9a-2) */
+    SubGhzSceneProtoPirateMenu,  /**< Proto Pirate sub-menu (Receiver/SubDecode/Timing Tuner) */
+    SubGhzSceneProtoPirateTuner, /**< Proto Pirate async Timing Tuner */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -544,6 +546,8 @@ extern const SubGhzSceneHandlers subghz_scene_set_button_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_counter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_set_mfkey_handlers;
 extern const SubGhzSceneHandlers subghz_scene_signal_settings_handlers;
+extern const SubGhzSceneHandlers subghz_scene_proto_pirate_menu_handlers;
+extern const SubGhzSceneHandlers subghz_scene_proto_pirate_tuner_handlers;
 
 /*============================================================================*/
 /* SignalSettings (Phase 9b) cross-scene API                                  */
