@@ -466,6 +466,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_jarolift_decode.c
     ../../Sub_Ghz/protocols/m1_beninca_arc_decode.c
     ../../Sub_Ghz/protocols/m1_hormann_bisecur_decode.c
+    ../../Sub_Ghz/protocols/m1_nord_ice_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c

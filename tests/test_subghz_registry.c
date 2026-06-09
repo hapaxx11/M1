@@ -668,6 +668,8 @@ static const ProtoFreqEntry known_proto_freqs[] = {
 	{ "Somfy Telis",     433420000UL, "Somfy EU roller shutters" },
 	/* 300-band */
 	{ "Linear",          300000000UL, "Linear 300 MHz" },
+	/* Nord ICE EU gate/garage */
+	{ "Nord ICE",        433920000UL, "EU gate/garage remote" },
 };
 
 void test_known_protocol_freqs_have_presets(void)

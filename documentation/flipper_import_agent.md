@@ -350,10 +350,10 @@ M1-specific wrappers/adapters derived from the Flipper HAL contract.
 
 Source: `lib/subghz/protocols/` in `flipperzero-firmware` (GPLv3)
 
-The 96 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
+The 97 decoder files in `Sub_Ghz/protocols/` were **independently re-implemented** based on
 the same RF timing specifications as Flipper (so `.sub` files remain compatible), but the M1
-code is not a copy of Flipper source.  The sole exception is noted below.  The total of 96
-comprises 95 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
+code is not a copy of Flipper source.  The sole exception is noted below.  The total of 97
+comprises 96 named protocol decoders plus one utility file (`m1_bin_raw_decode.c`).
 
 | M1 file | Flipper origin | Notes |
 |---------|---------------|-------|
@@ -364,8 +364,9 @@ comprises 95 named protocol decoders plus one utility file (`m1_bin_raw_decode.c
 | `Sub_Ghz/protocols/m1_tx_8300_decode.c` | `lib/subghz/protocols/tx_8300.c` | **Independent port** — 72-bit OOK, Fletcher-8 checksum, 128-bit decoder |
 | `Sub_Ghz/protocols/m1_oregon_v1_decode.c` | `lib/subghz/protocols/oregon_v1.c` | **Independent port** — Manchester, 32-bit, byte-sum checksum |
 | `Sub_Ghz/protocols/m1_oregon3_decode.c` | `lib/subghz/protocols/oregon3.c` | **Independent port** — Manchester inverted, 32-bit, nibble checksum |
+| `Sub_Ghz/protocols/m1_nord_ice_decode.c` | `lib/subghz/protocols/nord_ice.c` (Momentum) | **Independent port** — 33-bit PWM, 433 MHz gate/garage remote |
 
-**Subtotal:** 1 directly-copied file; 94 independent ports (+ 1 bin_raw utility file)
+**Subtotal:** 1 directly-copied file; 95 independent ports (+ 1 bin_raw utility file)
 
 ---
 
@@ -405,10 +406,10 @@ documentation and `.sub`/`.rfid`/`.nfc`/`.ir` file samples.
 | Category | Files | Directly copied | Independent ports/writes |
 |----------|-------|-----------------|--------------------------|
 | LF-RFID protocols | 57 | 57 | 0 |
-| Sub-GHz decoders | 96 | 1 | 94 (+ 1 bin_raw) |
+| Sub-GHz decoders | 97 | 1 | 95 (+ 1 bin_raw) |
 | Furi HAL reference (docs) | 45 | 45 | — |
 | Flipper file parsers | 10 | 0 | 10 |
-| **Total** | **208** | **58 compiled + 45 docs** | **104** |
+| **Total** | **209** | **58 compiled + 45 docs** | **105** |
 
 The **directly-copied compiled files** total ~58, comfortably below the 80-file submodule
 threshold.  Continue monitoring this count as new LF-RFID protocols are ported.

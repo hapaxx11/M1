@@ -82,6 +82,7 @@ uint8_t subghz_decode_nero_sketch(uint16_t a, uint16_t b) { (void)a; (void)b; re
 uint8_t subghz_decode_nexus_th(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_nice_flo(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_nice_flor_s(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_nord_ice(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_oregon3(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_oregon_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_oregon_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
