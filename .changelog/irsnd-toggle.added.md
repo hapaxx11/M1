@@ -1,0 +1,1 @@
+`irsnd_toggle(uint8_t pulse_toggle)` added to `Infrared/irsnd.c/h`. Toggles the complementary PWM output (CCxNE bit in TIMx_CCER) directly instead of calling HAL start/stop, reducing ISR overhead on each mark/space transition.

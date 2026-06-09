@@ -489,6 +489,30 @@ void irsnd_off(void)
 } // static void irsnd_off (void)
 
 
+/*============================================================================*/
+/*
+ * Toggle the complementary PWM output for the IR carrier.
+ * @param pulse_toggle  1 = enable (mark), 0 = disable (space)
+ *
+ * Directly manipulates the CCxNE bit in TIMx_CCER instead of calling
+ * the HAL start/stop wrappers, reducing ISR overhead on each mark/space
+ * transition.
+ */
+/*============================================================================*/
+void irsnd_toggle(uint8_t pulse_toggle)
+{
+	uint32_t tmp;
+
+	pulse_toggle <<= 2; // bit position: 00000x00 (TIM_CCxN_ENABLE = 0x04)
+	pulse_toggle &= TIM_CCxN_ENABLE;
+
+	/* Clear the CCxNE bit for this channel */
+	tmp = TIM_CCER_CC1NE << (ir_carrier_pwm_channel & 0xFU);
+	pir_timhdl_carrier->Instance->CCER &= ~tmp;
+	/* Set or clear the CCxNE bit based on pulse_toggle */
+	pir_timhdl_carrier->Instance->CCER |= (uint32_t)(pulse_toggle << (ir_carrier_pwm_channel & 0xFU));
+} // void irsnd_toggle(uint8_t pulse_toggle)
+
 
 /*============================================================================*/
 /*
