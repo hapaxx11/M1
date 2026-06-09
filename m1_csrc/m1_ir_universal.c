@@ -489,18 +489,26 @@ static void dashboard_screen(void)
 						case 6: /* Browse IRDB */
 						case 8: /* Learned — browse user-saved remotes */
 						{
+							uint8_t prev_orient = m1_screen_orientation;
+							settings_apply_orientation(M1_ORIENT_NORMAL);
 							if (selection == 6)
 								ir_browse_with_fb(IR_UNIVERSAL_IRDB_ROOT, 1);
 							else
 								ir_browse_with_fb(IR_LEARNED_DIR, 2);
+							settings_apply_orientation(prev_orient);
 							break;
 						}
 						case 7: /* Search IRDB */
 							show_search_screen();
 							break;
 						case 9: /* Create Remote — custom remote builder */
+						{
+							uint8_t prev_orient = m1_screen_orientation;
+							settings_apply_orientation(M1_ORIENT_NORMAL);
 							ir_custom_builder_run();
+							settings_apply_orientation(prev_orient);
 							break;
+						}
 						case 10: /* Favorites */
 							show_favorites_screen();
 							break;

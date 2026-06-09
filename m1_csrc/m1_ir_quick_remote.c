@@ -1002,7 +1002,7 @@ static void draw_grid_action_menu(uint8_t item_count, const char *const *labels,
     /* Title */
     u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
     u8g2_DrawStr(&m1_u8g2, 2, 10, "Remote Options");
-    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, u8g2_GetDisplayWidth(&m1_u8g2));
 
     /* Items — 13 px each starting at y=13 */
     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
@@ -1011,7 +1011,7 @@ static void draw_grid_action_menu(uint8_t item_count, const char *const *labels,
         uint8_t y = 13 + i * 13;
         if (i == sel)
         {
-            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13, 2);
+            u8g2_DrawRBox(&m1_u8g2, 0, y, u8g2_GetDisplayWidth(&m1_u8g2), 13, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
         u8g2_DrawStr(&m1_u8g2, 8, y + 10, labels[i]);
@@ -1021,8 +1021,7 @@ static void draw_grid_action_menu(uint8_t item_count, const char *const *labels,
     m1_u8g2_nextpage();
 }
 
-static uint8_t ir_grid_action_menu(const ir_category_layout_t *layout,
-                                   ir_category_t category)
+static uint8_t ir_grid_action_menu(const ir_category_layout_t *layout)
 {
     S_M1_Buttons_Status ab;
     S_M1_Main_Q_t aq;
@@ -1226,7 +1225,7 @@ void ir_quick_remote(ir_category_t category)
                 /* Long-press OK → popup menu for secondary actions.
                  * Replaces the old long-press LEFT/RIGHT handlers that
                  * required awkward orientation switches. */
-                uint8_t action = ir_grid_action_menu(layout, category);
+                uint8_t action = ir_grid_action_menu(layout);
                 if (action == IR_GRID_ACT_SCAN)
                 {
                     ir_brute_force_scan(category);
