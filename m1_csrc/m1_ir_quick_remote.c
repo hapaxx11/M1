@@ -125,7 +125,7 @@ static const ir_grid_button_t s_aud_buttons[IR_AUD_BTN_COUNT] = {
     [IR_AUD_STOP]   = { "Stop",   "Stop"     },
 };
 
-/* --- Projector 3×2 Grid — portrait 2-col order: Power/Mute, Source/Vol+, OK/Vol- --- */
+/* --- Projector 3×2 Grid — portrait 2-col order: Power/Mute, Src/Vol+, OK/Vol- --- */
 static const ir_grid_button_t s_prj_buttons[IR_PRJ_BTN_COUNT] = {
     [IR_PRJ_POWER]  = { "Power",  "Power"    },
     [IR_PRJ_MUTE]   = { "Mute",   "Mute"     },
