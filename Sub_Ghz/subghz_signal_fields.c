@@ -336,9 +336,6 @@ bool subghz_signal_fields_came_atomo_assemble(
 uint16_t subghz_signal_fields_came_atomo_counter_decode(uint64_t key)
 {
     subghz_came_atomo_fields_t f;
-    came_atomo_key_to_plain(key, (uint8_t *)&f);  /* temp reuse; see below */
-
-    /* Re-extract properly. */
     (void)subghz_signal_fields_came_atomo_extract(key, &f);
     return f.counter;
 }

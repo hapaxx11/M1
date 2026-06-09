@@ -6,8 +6,8 @@
  *
  * Implements the Alutech AT-4N TEA-variant block cipher used by Alutech
  * garage-door and gate remotes.  The cipher operates on a 64-bit data
- * block and requires six 32-bit round constants from a "rainbow table"
- * (24 bytes for decrypt, 28 bytes / 7 uint32 for encrypt).
+ * block and requires eight 32-bit values from a "rainbow table"
+ * (32 bytes total; decrypt uses entries [0..5], encrypt uses [0..2, 4..7]).
  *
  * The algorithm is ported from the Flipper Zero firmware
  * (lib/subghz/protocols/alutech_at_4n.c — public source).

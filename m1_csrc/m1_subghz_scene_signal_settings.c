@@ -699,6 +699,10 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
         return false;
     if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
         return false;
+    /* Non-KeeLoq protocols use different encoders — refuse the edit to
+     * avoid corrupting the .sub file with KeeLoq reassembly. */
+    if (s_is_nice_flor_s || s_is_came_atomo || s_is_alutech_at_4n)
+        return false;
 
     /* Substitute the button field and re-assemble the 64-bit Flipper key
      * using the host-tested pure-logic assembler (Phase 9a-1). */
@@ -762,6 +766,10 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
     if (!s_loaded || !s_supported)
         return false;
     if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
+        return false;
+    /* Non-KeeLoq protocols use different encoders — refuse the edit to
+     * avoid corrupting the .sub file with KeeLoq reassembly. */
+    if (s_is_nice_flor_s || s_is_came_atomo || s_is_alutech_at_4n)
         return false;
     /* Without a resolvable manufacturer key the encrypted hop word cannot
      * be re-encrypted — refuse the edit rather than overwriting the file
