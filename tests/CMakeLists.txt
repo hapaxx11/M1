@@ -2057,3 +2057,16 @@ if(TARGET sanitizers)
     target_link_libraries(test_wifi_deauth_cmd PRIVATE sanitizers)
 endif()
 add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
+
+# IR UX Polish — source-level regression checks
+add_executable(test_ir_ux_polish
+    test_ir_ux_polish.c
+)
+target_compile_definitions(test_ir_ux_polish PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_ir_ux_polish PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_ux_polish PRIVATE sanitizers)
+endif()
+add_test(NAME ir_ux_polish COMMAND test_ir_ux_polish)

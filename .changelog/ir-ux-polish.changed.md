@@ -1,0 +1,1 @@
+IR quick-remote no longer forces portrait (Remote Mode) orientation; long-press OK popup menu replaces broken long-press LEFT/RIGHT for Power Scan and Change Device; dashboard "Remote Mode" toggle removed; brute-force error screen uses async key dismiss
