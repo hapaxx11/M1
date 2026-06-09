@@ -571,7 +571,7 @@ static void draw_grid(const ir_category_layout_t *layout, uint8_t sel,
 
         /* Label — horizontally and vertically centred in the cell.
          * NokiaSmallPlain ascent ≈ 7 px; formula: baseline = y + cell_h/2 + 3.
-         * Clamp tx so text never overflows into an adjacent cell. */
+         * If tw >= cell_w, left-align to avoid unsigned-wrap in centering math. */
         const char *label = layout->buttons[b].label;
         if (is_transmitting)
             label = ">>>";
