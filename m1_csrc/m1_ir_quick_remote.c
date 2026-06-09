@@ -112,7 +112,7 @@ static const ir_grid_button_t s_ac_buttons[IR_AC_BTN_COUNT] = {
     [IR_AC_SLEEP]   = { "Sleep",  "Sleep"    },
 };
 
-/* --- Audio 3×3 Grid — portrait 2-col order: Power/Mute, Source/Play, Vol+/Next, Vol-/Prev, Stop --- */
+/* --- Audio 3×3 Grid — portrait 2-col order: Power/Mute, Src/Play, Vol+/Next, Vol-/Prev, Stop --- */
 static const ir_grid_button_t s_aud_buttons[IR_AUD_BTN_COUNT] = {
     [IR_AUD_POWER]  = { "Power",  "Power"    },
     [IR_AUD_MUTE]   = { "Mute",   "Mute"     },
