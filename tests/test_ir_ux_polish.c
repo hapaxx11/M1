@@ -142,6 +142,38 @@ void test_brute_force_no_vtaskdelay_error(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Grid: sidebar layout replaces off-screen title bar                  */
+/* ------------------------------------------------------------------ */
+
+void test_quick_remote_sidebar_layout(void)
+{
+    char *c = read_file("m1_csrc/m1_ir_quick_remote.c");
+
+    /* New sidebar constant must be defined */
+    assert_contains(c, "GRID_SIDEBAR_W");
+
+    /* Old top-title-bar constant must be gone */
+    assert_absent(c, "GRID_TOP_Y");
+
+    /* short_label field present in struct and layouts */
+    assert_contains(c, "short_label");
+
+    /* Category abbreviations for each layout entry */
+    assert_contains(c, "\"TV\"");
+    assert_contains(c, "\"AC\"");
+    assert_contains(c, "\"AUD\"");
+    assert_contains(c, "\"PRJ\"");
+    assert_contains(c, "\"FAN\"");
+    assert_contains(c, "\"LED\"");
+
+    /* Old truncated device-name title-bar rendering is gone */
+    assert_absent(c, "GRID_TOP_Y - 1");
+    assert_absent(c, "TEXT_ALIGN_CENTER");
+
+    free(c);
+}
+
+/* ------------------------------------------------------------------ */
 /* Unity entry point                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -154,5 +186,6 @@ int main(void)
     RUN_TEST(test_dashboard_no_remote_mode_toggle);
     RUN_TEST(test_dashboard_no_orientation_save_restore);
     RUN_TEST(test_brute_force_no_vtaskdelay_error);
+    RUN_TEST(test_quick_remote_sidebar_layout);
     return UNITY_END();
 }
