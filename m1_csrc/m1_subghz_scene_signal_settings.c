@@ -690,6 +690,12 @@ uint8_t subghz_signal_settings_get_button(void)
 {
     if (!s_loaded || !s_supported)
         return 0U;
+    if (s_is_nice_flor_s)
+        return (uint8_t)(s_nfs_fields.button & 0x0FU);
+    if (s_is_came_atomo)
+        return (uint8_t)(s_atomo_fields.button & 0x0FU);
+    if (s_is_alutech_at_4n)
+        return s_alutech_fields.button;
     return (uint8_t)(s_fields.button & 0x0FU);
 }
 
@@ -699,17 +705,83 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
         return false;
     if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
         return false;
-    /* Non-KeeLoq protocols use different encoders — refuse the edit to
-     * avoid corrupting the .sub file with KeeLoq reassembly. */
-    if (s_is_nice_flor_s || s_is_came_atomo || s_is_alutech_at_4n)
+    if (s_saved_full_path[0] == '\0')
         return false;
 
-    /* Substitute the button field and re-assemble the 64-bit Flipper key
-     * using the host-tested pure-logic assembler (Phase 9a-1). */
+    uint64_t new_key = 0;
+
+    if (s_is_nice_flor_s)
+    {
+        subghz_nice_flor_s_fields_t updated = s_nfs_fields;
+        updated.button = (uint8_t)(new_button & 0x0FU);
+        if (!subghz_signal_fields_nice_flor_s_assemble(&updated, &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_nfs_fields = updated;
+        s_signal.key = new_key;
+        return true;
+    }
+    else if (s_is_came_atomo)
+    {
+        subghz_came_atomo_fields_t updated = s_atomo_fields;
+        updated.button = (uint8_t)(new_button & 0x0FU);
+        if (!subghz_signal_fields_came_atomo_assemble(&updated, &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_atomo_fields = updated;
+        s_signal.key = new_key;
+        return true;
+    }
+    else if (s_is_alutech_at_4n)
+    {
+        if (!alutech_at_4n_table_builtin_available())
+            return false;
+        subghz_alutech_at_4n_fields_t updated = s_alutech_fields;
+        updated.button = new_button;
+        if (!subghz_signal_fields_alutech_at_4n_assemble(&updated,
+                                                          alutech_at_4n_table_builtin,
+                                                          &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_alutech_fields = updated;
+        s_signal.key = new_key;
+        return true;
+    }
+
+    /* KeeLoq family — substitute the button field and re-assemble. */
     subghz_keeloq_fields_t updated = s_fields;
     updated.button = (uint8_t)(new_button & 0x0FU);
 
-    uint64_t new_key = 0;
     if (!subghz_signal_fields_keeloq_assemble(s_signal.protocol,
                                               &updated, &new_key))
         return false;
@@ -718,9 +790,6 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
      * empty (no file loaded) the save is rejected.  The Manufacture line
      * is propagated verbatim — if the source file had none, the field is
      * "" and the save helper falls back to plain key-save behaviour. */
-    if (s_saved_full_path[0] == '\0')
-        return false;
-
     bool ok = flipper_subghz_save_key_full(s_saved_full_path,
                                             s_signal.frequency,
                                             s_signal.preset,
@@ -767,18 +836,90 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
         return false;
     if (s_signal.type != FLIPPER_SUBGHZ_TYPE_PARSED)
         return false;
-    /* Non-KeeLoq protocols use different encoders — refuse the edit to
-     * avoid corrupting the .sub file with KeeLoq reassembly. */
-    if (s_is_nice_flor_s || s_is_came_atomo || s_is_alutech_at_4n)
-        return false;
-    /* Without a resolvable manufacturer key the encrypted hop word cannot
-     * be re-encrypted — refuse the edit rather than overwriting the file
-     * with corrupt cipher text. */
     if (!s_has_counter)
         return false;
     if (s_saved_full_path[0] == '\0')
         return false;
 
+    uint64_t new_key = 0;
+
+    if (s_is_nice_flor_s)
+    {
+        if (!nice_flor_s_table_builtin_available())
+            return false;
+        uint64_t new_enc_payload = subghz_signal_fields_nice_flor_s_counter_encode(
+            s_nfs_fields.enc_payload, new_counter, nice_flor_s_table_builtin);
+        subghz_nice_flor_s_fields_t updated = s_nfs_fields;
+        updated.enc_payload = new_enc_payload;
+        if (!subghz_signal_fields_nice_flor_s_assemble(&updated, &new_key))
+            return false;
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_nfs_fields  = updated;
+        s_signal.key  = new_key;
+        s_counter     = new_counter;
+        return true;
+    }
+    else if (s_is_came_atomo)
+    {
+        new_key = subghz_signal_fields_came_atomo_counter_encode(s_signal.key,
+                                                                  new_counter);
+        subghz_came_atomo_fields_t updated;
+        (void)subghz_signal_fields_came_atomo_extract(new_key, &updated);
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_atomo_fields = updated;
+        s_signal.key   = new_key;
+        s_counter      = new_counter;
+        return true;
+    }
+    else if (s_is_alutech_at_4n)
+    {
+        if (!alutech_at_4n_table_builtin_available())
+            return false;
+        new_key = subghz_signal_fields_alutech_at_4n_counter_encode(
+            s_signal.key, new_counter, alutech_at_4n_table_builtin);
+        subghz_alutech_at_4n_fields_t updated;
+        (void)subghz_signal_fields_alutech_at_4n_extract(
+            new_key, alutech_at_4n_table_builtin, &updated);
+        bool ok = flipper_subghz_save_key_full(s_saved_full_path,
+                                               s_signal.frequency,
+                                               s_signal.preset,
+                                               s_signal.protocol,
+                                               s_signal.bit_count,
+                                               new_key,
+                                               s_signal.te,
+                                               s_signal.manufacture,
+                                               s_signal.counter_mode);
+        if (!ok)
+            return false;
+        s_alutech_fields = updated;
+        s_signal.key     = new_key;
+        s_counter        = new_counter;
+        return true;
+    }
+
+    /* KeeLoq family — without a resolvable manufacturer key the encrypted
+     * hop word cannot be re-encrypted; refuse the edit rather than
+     * overwriting the file with corrupt cipher text. */
     /* Re-encrypt the counter via the host-tested pure-logic helper
      * (Phase 9c-1) — preserves the lower 16 plaintext bits (button,
      * VLOW, discriminant, overflow counter). */
@@ -790,7 +931,6 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
     subghz_keeloq_fields_t updated = s_fields;
     updated.enc_hop = new_enc_hop;
 
-    uint64_t new_key = 0;
     if (!subghz_signal_fields_keeloq_assemble(s_signal.protocol,
                                               &updated, &new_key))
         return false;

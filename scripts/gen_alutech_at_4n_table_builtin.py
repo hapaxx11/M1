@@ -135,7 +135,7 @@ def parse_hex_table(hex_str):
     cleaned = hex_str.strip()
     cleaned = cleaned.replace(' ', '').replace(',', '').replace(':', '')
     cleaned = cleaned.replace('0x', '').replace('0X', '')
-    cleaned = cleaned.replace('\\n', '').replace('\\r', '')
+    cleaned = cleaned.replace('\n', '').replace('\r', '')
     try:
         raw = bytes.fromhex(cleaned)
     except ValueError:

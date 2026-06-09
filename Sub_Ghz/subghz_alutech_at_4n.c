@@ -64,14 +64,15 @@ uint64_t alutech_at_4n_decrypt(uint64_t data,
     const uint32_t m5 = table_u32(table, 5);
 
     uint32_t i = m0;
-    do {
+    for (unsigned rounds = 0U; rounds < 32U; ++rounds) {
         data2 = data2 - ((m1 + (data1 << 4)) ^
                          ((m2 + (data1 >> 5)) ^ (data1 + i)));
         const uint32_t data3 = data2 + i;
         i += m3;   /* subtract delta (m3 is negative delta) */
         data1 = data1 - ((m4 + (data2 << 4)) ^
                          ((m5 + (data2 >> 5)) ^ data3));
-    } while (i != 0);
+        if (i == 0U) break;
+    }
 
     /* Write back to the byte buffer. */
     p[0] = (uint8_t)(data1 >> 24);
@@ -115,13 +116,14 @@ uint64_t alutech_at_4n_encrypt(uint64_t data,
     const uint32_t terminal_sum  = table_u32(table, 0);
 
     uint32_t data1 = 0;
-    do {
+    for (unsigned rounds = 0U; rounds < 32U; ++rounds) {
         data1 = data1 + step_delta;
         data2 = data2 + ((k2 + (data3 << 4)) ^
                          ((k3 + (data3 >> 5)) ^ (data1 + data3)));
         data3 = data3 + ((k0 + (data2 << 4)) ^
                          ((k1 + (data2 >> 5)) ^ (data1 + data2)));
-    } while (data1 != terminal_sum);
+        if (data1 == terminal_sum) break;
+    }
 
     /* Write back in same byte order as decrypt. */
     p[0] = (uint8_t)(data2 >> 24);

@@ -15,10 +15,6 @@
  *               32-byte hex secret.
  *   validate  – given a 64-char hex table and a known OTA vector,
  *               decrypt and check the serial + counter match.
- *   bruteforce – given one or more plaintext/ciphertext pairs, search
- *               for table bytes that satisfy all constraints (Nice
- *               FloR-S only; the search space is 256^32 but the cipher
- *               structure limits the indices touched per pair).
  *
  * Build:
  *   cc -O2 -o rainbow_table_solver rainbow_table_solver.c \
@@ -229,8 +225,10 @@ static int cmd_validate(int argc, char **argv)
     else if (strcmp(cipher, "alutech_at_4n") == 0)
     {
         plain   = alutech_at_4n_decrypt(enc_payload, table);
-        counter = (uint16_t)(plain & 0xFFFFU);
-        serial  = (uint32_t)((plain >> 16) & 0xFFFFFFFFU);
+        uint8_t *pb = (uint8_t *)&plain;
+        counter = (uint16_t)(((uint16_t)pb[5] << 8) | pb[6]);
+        serial  = ((uint32_t)pb[1] << 24) | ((uint32_t)pb[2] << 16) |
+                  ((uint32_t)pb[3] <<  8) |  (uint32_t)pb[4];
     }
     else
     {
@@ -455,14 +453,17 @@ static int cmd_decrypt(int argc, char **argv)
     else if (strcmp(cipher, "alutech_at_4n") == 0)
     {
         plain = alutech_at_4n_decrypt(enc_payload, table);
+        uint8_t *pb = (uint8_t *)&plain;
+        uint32_t serial  = ((uint32_t)pb[1] << 24) | ((uint32_t)pb[2] << 16) |
+                           ((uint32_t)pb[3] <<  8) |  (uint32_t)pb[4];
+        uint16_t counter = (uint16_t)(((uint16_t)pb[5] << 8) | pb[6]);
+        uint8_t  button  = pb[7];
         printf("Cipher:    alutech_at_4n\n");
         printf("Encrypted: 0x%llX\n", (unsigned long long)enc_payload);
         printf("Decrypted: 0x%llX\n", (unsigned long long)plain);
-        printf("Bytes:     ");
-        uint8_t *p = (uint8_t *)&plain;
-        for (int i = 0; i < 8; ++i)
-            printf("%02X ", p[i]);
-        printf("\n");
+        printf("Serial:    0x%08X\n", serial);
+        printf("Counter:   %u (0x%04X)\n", counter, counter);
+        printf("Button:    0x%02X\n", button);
     }
     else
     {
