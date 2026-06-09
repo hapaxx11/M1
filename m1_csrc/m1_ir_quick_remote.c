@@ -27,6 +27,7 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_system.h"
+#include "m1_settings.h"
 #include "m1_tasks.h"
 #include "m1_watchdog.h"
 #include "m1_buzzer.h"
@@ -1099,6 +1100,10 @@ void ir_quick_remote(ir_category_t category)
     if ((uint8_t)category >= IR_CAT_COUNT)
         return;
 
+    /* Portrait orientation: IR blaster faces forward regardless of southpaw. */
+    uint8_t saved_orient = m1_screen_orientation;
+    settings_apply_orientation(M1_ORIENT_REMOTE);
+
     layout = &s_layouts[category];
     device_name[0] = '\0';
 
@@ -1137,10 +1142,12 @@ void ir_quick_remote(ir_category_t category)
     }
 
     if (!device_loaded)
+    {
+        settings_apply_orientation(saved_orient);
         return;  /* User cancelled browse */
+    }
 
-    /* Stay in the caller's orientation (landscape) — no forced rotation.
-     * The grid renderer adapts dynamically to whatever orientation is active. */
+    /* Portrait orientation active (M1_ORIENT_REMOTE) — grid uses 2 columns. */
 
     /* Effective column count and row count for current orientation */
     uint8_t eff_cols = effective_cols(layout);
@@ -1163,6 +1170,7 @@ void ir_quick_remote(ir_category_t category)
             if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
             {
                 xQueueReset(main_q_hdl);
+                settings_apply_orientation(saved_orient);
                 return;
             }
             else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
