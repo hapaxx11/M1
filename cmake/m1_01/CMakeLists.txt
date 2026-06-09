@@ -352,6 +352,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_came_atomo.c
     ../../Sub_Ghz/subghz_alutech_at_4n.c
     ../../Sub_Ghz/subghz_alutech_at_4n_table_builtin.c
+    ../../Sub_Ghz/subghz_proto_pirate_timing.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
@@ -620,6 +621,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_set_counter.c
     ../../m1_csrc/m1_subghz_scene_set_mfkey.c
     ../../m1_csrc/m1_subghz_scene_signal_settings.c
+    ../../m1_csrc/m1_subghz_scene_proto_pirate_menu.c
+    ../../m1_csrc/m1_subghz_scene_proto_pirate_tuner.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c
