@@ -127,7 +127,7 @@ void system_periodic_task(void *param)
 	{
 		if ( HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port, BUTTON_OK_Pin)==GPIO_PIN_SET ) // Button released?
 			break;
-		vTaskDelay(100); // Yield time to the system
+		vTaskDelay(pdMS_TO_TICKS(100)); // Yield time to the system
 		m1_wdt_send_report(M1_REPORT_ID_BUTTONS_HANDLER_TASK, 100);
 	} // while ( true )
 
