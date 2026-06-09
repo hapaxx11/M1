@@ -80,11 +80,7 @@ typedef enum {
 /**
  * Audio Remote button slots — portrait 2-column layout:
  *   col 0   col 1
- *   Power   Mute     (row 0)
- *   Source  Play     (row 1)
- *   Vol+    Next     (row 2)  ← + row
- *   Vol-    Prev     (row 3)  ← - row directly below
- *   Stop             (row 4)
+ *   Src     Play     (row 1)
  */
 #define IR_AUD_POWER     0
 #define IR_AUD_MUTE      1
