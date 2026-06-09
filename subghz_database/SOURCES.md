@@ -13,8 +13,8 @@ All `.sub` files in this directory were imported from the
 repository.
 
 - **Repository**: <https://github.com/UberGuidoZ/Flipper>
-- **Commit SHA**: `c074cebb2eba2d2f9ea278d5759552a7809c54b6`
-- **Import date**: 2026-04-04
+- **Commit SHA**: `29117c73ab6c3ac47eabf8f23e9dacc24f09012b`
+- **Import date**: 2026-06-09
 - **License**: **GNU General Public License v3.0** (see `LICENSE` in this
   directory)
 
