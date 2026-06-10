@@ -22,6 +22,7 @@
  *  11. Add Manually
  *  12. Remote
  *  13. Bind Remote
+ *  14. Proto Pirate (rolling-code analysis — PR #579)
  */
 
 #include <stdint.h>

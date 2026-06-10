@@ -2109,7 +2109,7 @@ Generated files are saved to `0:/SUBGHZ/NewRemote_<prefix>_<12-hex>.sub`.
 
 ## Sub-GHz Menu Structure
 
-The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 13 items** in this
+The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 14 items** in this
 order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
@@ -2127,6 +2127,7 @@ order.  Do not remove items, reorder, or add "Back" entries.
 | 11 | Add Manually | SubGhzSceneSetType | Scene-native (Phase 8b — protocol picker → SetKey hex editor → Transmitter) |
 | 12 | Remote | SubGhzSceneRemote | Scene-native (multi-button .rem remote control) |
 | 13 | Bind Remote | SubGhzSceneBindWizard | Scene-native (guided rolling-code binding wizard) |
+| 14 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and
 drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in
