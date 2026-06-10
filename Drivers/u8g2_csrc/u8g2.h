@@ -60,6 +60,13 @@
 
 #include "u8x8.h"
 
+/* M1 LOCAL MODIFICATION — do not remove during u8g2 upgrades.
+   Makes u8g2_UserInterfaceMessage/SelectionList/InputValue draw once and
+   return immediately so M1's FreeRTOS event loop handles button input
+   instead of u8g2's internal GPIO polling loop.  Without this define,
+   m1_message_box() in m1_display.c blocks forever.  */
+#define U8G2_REF_MAN_PIC
+
 /*
   The following macro enables 16 Bit mode. 
   Without defining this macro all calculations are done with 8 Bit (1 Byte) variables.
