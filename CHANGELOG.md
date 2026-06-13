@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1.60] - 2026-06-13
+
+### Added
+
+- **Sub-GHz: Nord ICE** — added decoder for Nord ICE 33-bit OOK PWM gate/garage remote
+  (433.92 MHz; serial + 6-bit button code; replay-capable). Ported from Momentum Firmware
+  (2026-03, @xMasterX). Flipper .sub files with `Protocol: Nord ICE` are now recognised.
+- Refreshed IR and Sub-GHz signal databases: 12 new IR remote files from Flipper-IRDB (d126fb1b) covering DuraBrand TV, Vizio VX32L, ContinentalEdison CELD55SQLDV24B6, Philips HTL2060, Ultimea Poseidon M20 soundbar, Klarstein Sommwerwind fan, Generic fans, NEC RU-M124 and Sony RM-PJ30 projectors, and BoomTone DJ LED par; Sub-GHz database pinned to UberGuidoZ commit 29117c73 (no new .sub files).
+
+### Changed
+
+- Updated FatFs filesystem library from R0.15 w/patch2 to R0.16, gaining exFAT directory-reading fixes and file-creation timestamp support (FF_FS_CRTIME); all M1-specific files (diskio.c, ffconf.h, ffsystem_baremetal.c) preserved unchanged.
+- Updated FreeRTOS kernel from V10.5.1 to V11.3.0; SMP and MPU remain disabled (configNUMBER_OF_CORES=1, configENABLE_MPU=0) so no API call sites are affected; ARM CM33-NTZ port, heap_4, and all headers refreshed; CMSIS_RTOS_V2 abstraction layer preserved unchanged. Requires hardware soak test before production release.
+- Updated u8g2 display library to v2.36.19, adding support for 5 new display controllers (SSD1315, SSD1362Z, ST7305, ST7586S-PE24064, UC1698); no API changes affect M1's ST7567 display.
+
+### Fixed
+
+- **u8g2: Restore `U8G2_REF_MAN_PIC` define** — lost during u8g2 v2.36.19 wholesale
+  file replacement. Without this M1-specific define, `m1_message_box()` (via
+  `u8g2_UserInterfaceMessage()`) enters u8g2's internal GPIO polling loop instead
+  of returning to M1's FreeRTOS event handler, causing message boxes to block.
+  Added vendored dependency update audit rules to CLAUDE.md to prevent recurrence.
 ## [0.9.1.59] - 2026-06-09
 
 ## [0.9.1.58] - 2026-06-09
