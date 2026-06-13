@@ -1,1 +1,0 @@
-Updated FatFs filesystem library from R0.15 w/patch2 to R0.16, gaining exFAT directory-reading fixes and file-creation timestamp support (FF_FS_CRTIME); all M1-specific files (diskio.c, ffconf.h, ffsystem_baremetal.c) preserved unchanged.

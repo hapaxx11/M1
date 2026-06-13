@@ -1,1 +1,0 @@
-Updated FreeRTOS kernel from V10.5.1 to V11.3.0; SMP and MPU remain disabled (configNUMBER_OF_CORES=1, configENABLE_MPU=0) so no API call sites are affected; ARM CM33-NTZ port, heap_4, and all headers refreshed; CMSIS_RTOS_V2 abstraction layer preserved unchanged. Requires hardware soak test before production release.
