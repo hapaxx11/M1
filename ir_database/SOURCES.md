@@ -31,22 +31,22 @@ database.  They live in **brand subdirectories** under each category
 (e.g. `TV/Samsung/Samsung_BN59-01358D.ir`).
 
 - **Repository**: <https://github.com/Lucaslhm/Flipper-IRDB>
-- **Commit SHA**: `ed18b8dc94b5fb286ef8513f7d688da981cbd83a`
-- **Import date**: 2026-04-04
+- **Commit SHA**: `d126fb1b6f1e114c52b4a8c19839ea65e3a9c24d`
+- **Import date**: 2026-06-09
 - **License**: **CC0 1.0 Universal** (public domain)
 
 | Category           | IRDB Source Directory          | Files |
 |--------------------|--------------------------------|------:|
-| TV/                | TVs/                           |   395 |
+| TV/                | TVs/                           |   398 |
 | AC/                | ACs/                           |   158 |
-| Audio/Receivers/   | Audio_and_Video_Receivers/     |   102 |
-| Audio/SoundBars/   | SoundBars/                     |   105 |
+| Audio/Receivers/   | Audio_and_Video_Receivers/     |   103 |
+| Audio/SoundBars/   | SoundBars/                     |   106 |
 | Audio/Speakers/    | Speakers/                      |    69 |
-| Fan/               | Fans/                          |   154 |
-| Projector/         | Projectors/                    |   125 |
-| LED/               | LED_Lighting/                  |   167 |
+| Fan/               | Fans/                          |   155 |
+| Projector/         | Projectors/                    |   126 |
+| LED/               | LED_Lighting/                  |   168 |
 | Streaming/         | Streaming_Devices/             |    25 |
-| **Total**          |                                | **1,296** |
+| **Total**          |                                | **1,308** |
 
 IRDB categories **not imported** (niche or low demand): Air_Purifiers,
 Bidet, Blu-Ray, Cable_Boxes, Cameras, Car_Multimedia, CCTV, CD_Players,

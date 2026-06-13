@@ -43,7 +43,6 @@
 
 */
 
-
 #include "u8x8.h"
 #include <string.h>
 
@@ -407,7 +406,7 @@ static const u8x8_display_info_t u8x8_st7302_122x250_display_info =
   /* write_pulse_width_ns = */ 70,	
   /* tile_width = */ 16,
   /* tile_height = */ 32,
-  /* default_x_offset = */ 0,
+  /* default_x_offset = */ 0,           /* not used: x offset is hard coded into cmd sequence */
   /* flipmode_x_offset = */ 0,
   /* pixel_width = */ 122,
   /* pixel_height = */ 250
@@ -415,7 +414,7 @@ static const u8x8_display_info_t u8x8_st7302_122x250_display_info =
 
 uint8_t u8x8_d_st7302_122x250(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
 {
-  uint16_t x;
+  // uint16_t x;
   uint8_t c, i, y;
   uint8_t *ptr;
   switch(msg)
@@ -455,9 +454,9 @@ uint8_t u8x8_d_st7302_122x250(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *
       break;
 #endif
     case U8X8_MSG_DISPLAY_DRAW_TILE:
-      x = ((u8x8_tile_t *)arg_ptr)->x_pos;    
-      x *= 8;
-      x += u8x8->x_offset;
+      // x = ((u8x8_tile_t *)arg_ptr)->x_pos;    
+      // x *= 8;
+      // x += u8x8->x_offset;
       y= (((u8x8_tile_t *)arg_ptr)->y_pos);
       y*=4;
     

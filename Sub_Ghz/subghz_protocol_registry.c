@@ -179,6 +179,7 @@ extern uint8_t subghz_decode_hormann_bisecur(uint16_t, uint16_t);
 
 /* FireCracker / CM17A home-automation RF */
 extern uint8_t subghz_decode_firecracker_cm17a(uint16_t, uint16_t);
+extern uint8_t subghz_decode_nord_ice(uint16_t, uint16_t);
 
 /* Generic decoders (used as delegates by simple protocols) */
 extern uint8_t subghz_decode_generic_pwm(uint16_t, uint16_t);
@@ -1146,6 +1147,29 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .timing = { .te_short=562, .te_long=1688, .te_delta=100,
                     .min_count_bit_for_found=40 },
         .decode = subghz_decode_firecracker_cm17a,
+    },
+
+    /* ── Nord ICE gate/garage remote (Momentum Firmware, 2026-03) ──────── */
+
+    [NORD_ICE] = {
+        /*
+         * Nord ICE 33-bit OOK PWM gate/garage remote.
+         * Frequency: 433.92 MHz
+         * Packet: 33 bits, no fixed preamble — GAP-triggered (7500 µs).
+         *   bits 32-15: 18-bit serial (upper)
+         *   bits 14- 9:  6-bit button code
+         *   bits  8- 0:  9-bit serial (lower)
+         * Reference: Momentum Firmware nord_ice.c, @xMasterX (MMX) 2026-03
+         */
+        .name   = "Nord ICE",
+        .type   = SubGhzProtocolTypeStatic,
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Load |
+                  SubGhzProtocolFlag_Save | SubGhzProtocolFlag_Send,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=300, .te_long=800, .te_delta=150,
+                    .min_count_bit_for_found=33 },
+        .decode = subghz_decode_nord_ice,
     },
 };
 

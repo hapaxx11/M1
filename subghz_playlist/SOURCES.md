@@ -4,7 +4,7 @@
 
 These playlist files are curated from the
 [UberGuidoZ/Flipper](https://github.com/UberGuidoZ/Flipper) repository
-(`subplaylist/` directory), commit `c074cebb`.
+(`subplaylist/` directory), commit `29117c73`.
 
 ## License
 

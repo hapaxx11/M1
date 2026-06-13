@@ -13,7 +13,7 @@
 #ifndef _IRMP_H_
 #define _IRMP_H_
 
-#ifndef IRMP_USE_AS_LIB
+#if !defined(IRMP_USE_AS_LIB)
 #  define IRMPCONFIG_STAGE1_H
 #  include "irmpconfig.h"
 #  undef IRMPCONFIG_STAGE1_H
@@ -21,7 +21,7 @@
 
 #include "irmpsystem.h"
 
-#ifndef IRMP_USE_AS_LIB
+#if !defined(IRMP_USE_AS_LIB)
 #  define IRMPCONFIG_STAGE2_H
 #  include "irmpconfig.h"
 #  undef IRMPCONFIG_STAGE2_H
@@ -39,9 +39,18 @@
 void irmp_idle(void);                   // the user has to provide an implementation of the irmp_idle() function and link it
 #endif
 
+#if IRMP_USE_COMPLETE_CALLBACK == 1
+void irmp_register_complete_callback_function(void (*aCompleteCallbackFunction)(void));
+#endif
+
 #if IRMP_SUPPORT_TECHNICS_PROTOCOL == 1
 #  undef IRMP_SUPPORT_MATSUSHITA_PROTOCOL
 #  define IRMP_SUPPORT_MATSUSHITA_PROTOCOL      1
+#endif
+
+#if IRMP_32_BIT == 0 && IRMP_SUPPORT_MERLIN_PROTOCOL == 1
+#  undef IRMP_SUPPORT_MERLIN_PROTOCOL
+#  warning MERLIN protocol disabled, IRMP_32_BIT=1 needed
 #endif
 
 #if IRMP_SUPPORT_DENON_PROTOCOL == 1 && IRMP_SUPPORT_RUWIDO_PROTOCOL == 1
@@ -74,6 +83,13 @@ void irmp_idle(void);                   // the user has to provide an implementa
 
 #if IRMP_SUPPORT_PANASONIC_PROTOCOL == 1 && IRMP_SUPPORT_MITSU_HEAVY_PROTOCOL == 1
 #  warning PANASONIC protocol conflicts wih MITSU_HEAVY, please enable only one of both protocols
+#  warning MITSU_HEAVY protocol disabled
+#  undef IRMP_SUPPORT_MITSU_HEAVY_PROTOCOL
+#  define IRMP_SUPPORT_MITSU_HEAVY_PROTOCOL      0
+#endif
+
+#if IRMP_SUPPORT_KASEIKYO_PROTOCOL == 1 && IRMP_SUPPORT_MITSU_HEAVY_PROTOCOL == 1
+#  warning KASEIKYO protocol conflicts wih MITSU_HEAVY, please enable only one of both protocols
 #  warning MITSU_HEAVY protocol disabled
 #  undef IRMP_SUPPORT_MITSU_HEAVY_PROTOCOL
 #  define IRMP_SUPPORT_MITSU_HEAVY_PROTOCOL      0
@@ -200,14 +216,14 @@ void irmp_idle(void);                   // the user has to provide an implementa
 #  define IRMP_SUPPORT_RCMM_PROTOCOL            0
 #endif
 
-#if IRMP_SUPPORT_PENTAX_PROTOCOL == 1 && F_INTERRUPTS > 16000
-#  warning F_INTERRUPTS too high, PENTAX protocol disabled (should be max 16000)
+#if IRMP_SUPPORT_PENTAX_PROTOCOL == 1 && F_INTERRUPTS > 17000 && __SIZEOF_INT__ < 4
+#  warning F_INTERRUPTS too high, PENTAX protocol disabled (should be max 17000)
 #  undef IRMP_SUPPORT_PENTAX_PROTOCOL
 #  define IRMP_SUPPORT_PENTAX_PROTOCOL          0
 #endif
 
-#if IRMP_SUPPORT_GREE_PROTOCOL == 1 && F_INTERRUPTS > 16000
-#  warning F_INTERRUPTS too high, GREE protocol disabled (should be max 16000)
+#if IRMP_SUPPORT_GREE_PROTOCOL == 1 && F_INTERRUPTS > 17000 && __SIZEOF_INT__ < 4
+#  warning F_INTERRUPTS too high, GREE protocol disabled (should be max 17000)
 #  undef IRMP_SUPPORT_GREE_PROTOCOL
 #  define IRMP_SUPPORT_GREE_PROTOCOL            0
 #endif

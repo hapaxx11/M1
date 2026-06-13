@@ -257,6 +257,9 @@ enum {
 
 	/* --- FireCracker / CM17A home-automation RF --- */
 	FIRECRACKER_CM17A,
+
+	/* --- Nord ICE gate/garage remote (Momentum, 2026) --- */
+	NORD_ICE,
 };
 
 /* Weather station decoded data */

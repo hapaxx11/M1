@@ -197,6 +197,7 @@ target_sources(m1_01 INTERFACE
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1306_96x40.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1309.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1312.c
+    ../../Drivers/u8g2_csrc/u8x8_d_ssd1315_128x64_noname.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1316.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1317.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1318.c
@@ -207,10 +208,12 @@ target_sources(m1_01 INTERFACE
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1327.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1329.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1362.c
+    ../../Drivers/u8g2_csrc/u8x8_d_ssd1362z.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1363.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1606_172x72.c
     ../../Drivers/u8g2_csrc/u8x8_d_ssd1607_200x200.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7302.c
+    ../../Drivers/u8g2_csrc/u8x8_d_st7305.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7511.c
     ../../Drivers/u8g2_csrc/u8x8_d_st75160.c
     ../../Drivers/u8g2_csrc/u8x8_d_st75161.c
@@ -226,6 +229,7 @@ target_sources(m1_01 INTERFACE
     ../../Drivers/u8g2_csrc/u8x8_d_st7586s_jlx384160.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7586s_md240128.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7586s_s028hn118a.c
+    ../../Drivers/u8g2_csrc/u8x8_d_st7586s_pe24064.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7586s_ymc240160.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7588.c
     ../../Drivers/u8g2_csrc/u8x8_d_st7920.c
@@ -240,6 +244,7 @@ target_sources(m1_01 INTERFACE
     ../../Drivers/u8g2_csrc/u8x8_d_uc1617.c
     ../../Drivers/u8g2_csrc/u8x8_d_uc1628.c
     ../../Drivers/u8g2_csrc/u8x8_d_uc1638.c
+    ../../Drivers/u8g2_csrc/u8x8_d_uc1698.c
     ../../Drivers/u8g2_csrc/u8x8_d_uc1701_dogs102.c
     ../../Drivers/u8g2_csrc/u8x8_d_uc1701_mini12864.c
     ../../Drivers/u8g2_csrc/u8x8_debounce.c
@@ -461,6 +466,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_jarolift_decode.c
     ../../Sub_Ghz/protocols/m1_beninca_arc_decode.c
     ../../Sub_Ghz/protocols/m1_hormann_bisecur_decode.c
+    ../../Sub_Ghz/protocols/m1_nord_ice_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c

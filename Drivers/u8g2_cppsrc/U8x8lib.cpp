@@ -143,8 +143,10 @@ extern "C" uint8_t u8x8_gpio_and_delay_arduino(u8x8_t *u8x8, uint8_t msg, uint8_
     case U8X8_MSG_GPIO_I2C_DATA:
       if ( arg_int == 0 )
       {
-	pinMode(u8x8_GetPinValue(u8x8, msg), OUTPUT);
+        // the next two lines are swapped https://github.com/olikraus/u8g2/issues/2744
+	// pinMode(u8x8_GetPinValue(u8x8, msg), OUTPUT);
 	digitalWrite(u8x8_GetPinValue(u8x8, msg), 0);
+        pinMode(u8x8_GetPinValue(u8x8, msg), OUTPUT);
       }
       else
       {

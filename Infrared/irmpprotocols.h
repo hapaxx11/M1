@@ -27,7 +27,7 @@
  */
 #define IRMP_UNKNOWN_PROTOCOL                    0              // unknown protocol
 #define IRMP_SIRCS_PROTOCOL                      1              // Sony
-#define IRMP_NEC_PROTOCOL                        2              // NEC, Pioneer, JVC, Toshiba, NoName etc.
+#define IRMP_NEC_PROTOCOL                        2              // NEC with 32 bits, 16 address + 8 + 8 command bits, Pioneer, JVC, Toshiba, NoName etc.
 #define IRMP_SAMSUNG_PROTOCOL                    3              // Samsung
 #define IRMP_MATSUSHITA_PROTOCOL                 4              // Matsushita
 #define IRMP_KASEIKYO_PROTOCOL                   5              // Kaseikyo (Panasonic etc)
@@ -81,7 +81,7 @@
 #define IRMP_GREE_PROTOCOL                      53              // Gree climate
 #define IRMP_RCII_PROTOCOL                      54              // RC II Infra Red Remote Control Protocol for FM8
 #define IRMP_METZ_PROTOCOL                      55              // METZ
-#define IRMP_ONKYO_PROTOCOL                     56
+#define IRMP_ONKYO_PROTOCOL                     56              // Like NEC but with 16 address + 16 command bits
 
 #define RF_GEN24_PROTOCOL                       57              // RF Generic, 24 Bits (Pollin 550666, EAN 4049702006022 and many other similar RF remote controls))
 #define RF_X10_PROTOCOL                         58              // RF PC X10 Remote Control (Medion, Pollin 721815)
@@ -104,7 +104,7 @@
  * timing constants:
  *---------------------------------------------------------------------------------------------------------------------------------------------------
  */
-// fm 229.2011: may not be more than 16000L, otherwise some JVC codes will not be accepted
+// fm 22.09.2011: may not be more than 16000L, otherwise some JVC codes will not be accepted
 #define IRMP_TIMEOUT_TIME                       15500                  // timeout after 15.5 ms darkness
 #define IRMP_TIMEOUT_TIME_MS                    15500L                      // timeout after 15.5 ms darkness
 
