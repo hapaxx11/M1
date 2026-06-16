@@ -2121,7 +2121,7 @@ order.  Do not remove items, reorder, or add "Back" entries.
 | 8 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
 | 9 | Weather Station | SubGhzSceneWeatherStation | Blocking delegate → `sub_ghz_weather_station()` |
 | 10 | Brute Force | SubGhzSceneBruteForce | Blocking delegate → `sub_ghz_brute_force()` |
-| 11 | Add Manually | SubGhzSceneSetType | Scene-native (Phase 8b — protocol picker → SetKey hex editor → Transmitter) |
+| 11 | Add Manually | SubGhzSceneSetType | Scene-native (protocol picker → SetKey hex editor → Transmitter) |
 | 12 | Remote | SubGhzSceneRemote | Scene-native (multi-button .rem remote control) |
 | 13 | Bind Remote | SubGhzSceneBindWizard | Scene-native (guided rolling-code binding wizard) |
 | 14 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
@@ -2140,7 +2140,7 @@ the scene manager without rewriting each tool.
 > re-reading the phase rationale in this section.  When working on a related area,
 > check whether any blocker has been lifted and update this table accordingly.
 
-### Phase 7c — non-scene-native list candidates (N/A, not deferrable)
+### Non-scene-native list candidates (excluded from widget migration)
 
 The generic `subghz_submenu_model` + `m1_submenu_draw` widget migration is functionally
 complete.  The three remaining "list-shaped" UIs are intentionally **not** migrated
@@ -2150,13 +2150,13 @@ because they do not fit the simple-label-list shape the widget targets:
 |------|-------------------------------------|
 | `SubGhzSceneConfig` | LEFT/RIGHT value columns with `<` `>` arrows — not a label list |
 | Saved file browser | Delegates to the generic `storage_browse()` helper — not a scene-native list |
-| Add Manually picker | Was the legacy blocking delegate; **already retired** in Phase 8b-4 (now `SubGhzSceneSetType`, which already uses the widget) |
+| Add Manually picker | Was the legacy blocking delegate; already retired (now `SubGhzSceneSetType`, which already uses the widget) |
 
 These entries are **not** open work — do not reopen them.
 
-### Phase 9e-2..5 — counter editing for non-KeeLoq rolling-code protocols
+### Counter editing for non-KeeLoq rolling-code protocols
 
-The Phase 9e-1 capability probe (`subghz_signal_fields_counter_edit_status`) classifies
+The capability probe (`subghz_signal_fields_counter_edit_status`) classifies
 protocols as `SUPPORTED`, `DEFERRED`, or `UNSUPPORTED`.
 
 **Promoted to SUPPORTED (no longer deferred):**
@@ -2170,13 +2170,13 @@ protocols as `SUPPORTED`, `DEFERRED`, or `UNSUPPORTED`.
 |----------|---------|
 | **Phoenix V2** | Discriminant/checksum trailing the counter must be recomputed after editing; algorithm not yet implemented. |
 
-### Phase 11-2+ — additional Info-screen `get_string()` renderers
+### Additional Info-screen `get_string()` renderers
 
 The polymorphic `SubGhzGetStringFn` vtable on `SubGhzProtocolDef` is live and the
 KeeLoq-family renderer ships in `Sub_Ghz/subghz_signal_format.c`.
 
 Nice FloR-S, CAME Atomo, and Alutech AT-4N now have decoder field decomposition
-(their cipher modules were completed per Phase 9e above) and can receive their own
+(their cipher modules are complete) and can receive their own
 `subghz_signal_format_<proto>_info()` renderers.  For each:
 1. Add `subghz_signal_format_<proto>_info()` in `Sub_Ghz/subghz_signal_format.c`.
 2. Wire it onto the matching registry entries.
@@ -2193,7 +2193,7 @@ Phoenix V2 renderer remains blocked until counter editing is implemented.
 > What follows are the actionable coding rules that resulted from the work.
 > Historical implementation logs are in git history.
 
-### Phase A — WiFi pure-logic extraction
+### WiFi pure-logic extraction
 
 **Do not add `HAL_Delay()` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**  Use
 `wifi_wait_dismiss()` for dismissible status screens and `vTaskDelay()` for hardware
@@ -2208,7 +2208,7 @@ Pure-logic WiFi helpers live in `wifi_ap_record.c/h`, `wifi_mac_utils.c/h`,
 `wifi_selection.c/h`, and `wifi_deauth_cmd.c/h` — all zero HAL/RTOS deps, all
 covered by host tests.
 
-### Phase B — NFC pure-logic extraction
+### NFC pure-logic extraction
 
 Pure-logic NFC helpers have been extracted and must be used for all new NFC code:
 
@@ -2221,18 +2221,18 @@ Pure-logic NFC helpers have been extracted and must be used for all new NFC code
 - **Do not** add inline UID formatting to `nfc_ctx.c` — use `nfc_uid_fmt()` from `nfc_card_info.h`.
 - NFC tools are RFAL-hardware-dependent; no ESP32 capability gating is needed in `m1_nfc.c` or `m1_nfc_scene.c`.
 
-### Phase C — Unified ESP32 capability-probe module
+### ESP32 capability-probe module
 
 **Do not** add new `DELEGATE_CAPPED(… M1_ESP32_CAP_*, "label")` sites — use
 `DELEGATE_FEATURE(… ESP32_FEATURE_*)` and add one row to `esp32_feature_map.c` instead.
 
-### Phase D — Scene-file granularity
+### Scene-file granularity
 
 BT, Settings, and WiFi scene managers have been split into per-group files following
 the `m1_subghz_scene_*.c` convention.  NFC (8), RFID (7), IR (6), and GPIO (6–9)
 are acceptable as single files — **do not split them**.
 
-### Phase E — Shared submenu-widget rollout
+### Shared submenu-widget rollout
 
 All simple-label-list menus use `subghz_submenu_model_t` + `m1_submenu_event()` +
 `m1_submenu_draw()`.  **Do not** use raw `sel`/`scroll` byte pairs for new menus.
@@ -2241,7 +2241,7 @@ IR menus are excluded: `m1_ir_quick_remote.c` has dynamic labels and
 `m1_ir_universal.c` has no `m1_scene_menu_event` calls — both are non-trivial
 widget candidates and remain as-is.
 
-### Phase F–I — IR pure-logic extraction
+### IR pure-logic extraction
 
 All pure-logic IR parsing lives in `ir_signal_record.c/h` (protocol name → IRMP ID,
 path helpers, `ir_block_reader_t` KV-reader vtable, `ir_cmd_parse()` block parser,
@@ -2254,7 +2254,7 @@ block parser; `flipper_ir_read_signal()` is a thin FatFS adapter wrapping it.
 scene-integrated code.  The 12 `vTaskDelay` / 54 `while` calls in `m1_ir_universal.c`
 are timing-sensitive IR hardware ops — **no async conversion planned**.
 
-### Phase J — BadUSB DuckyScript migration
+### BadUSB DuckyScript migration
 
 `m1_badusb.c` uses `badusb_parser.h` for all HID constant tables and classification.
 **Do not** re-add inline key/modifier define tables to `m1_badusb.c`.
@@ -2265,7 +2265,6 @@ are timing-sensitive IR hardware ops — **no async conversion planned**.
 - `bedge117` = bedge117/M1 (upstream C3 reference, DO NOT PUSH)
 - `sincere360` = sincere360/M1_SiN360 (upstream SiN360 reference, DO NOT PUSH)
 - `monstatek` = Monstatek/M1 (upstream reference, DO NOT PUSH)
-- Feature branch: `copilot/update-flipper-apps-and-references`
 
 ---
 
