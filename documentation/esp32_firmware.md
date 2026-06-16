@@ -90,6 +90,56 @@ Protocol classification: Zigbee (Z), Thread (T), Unknown (U).
 | `AT+STASCAN=0` | Stop station scan |
 | `AT+STASCAN?` | Query results → `+STASCAN:("<mac>")` per station |
 
+### dagnazty (dag) custom AT commands
+
+These commands are defined in [`dagnazty/esp32-at-monstatek-m1`](https://github.com/dagnazty/esp32-at-monstatek-m1)
+(`at_custom_wifi_cmd.c`, `at_custom_hid_cmd.c`, `at_custom_zigbee_cmd.c`).
+They are NOT available in bedge117, neddy299, or SiN360 firmware.
+The companion STM32 fork [`dagnazty/M1_T-1000`](https://github.com/dagnazty/M1_T-1000)
+uses these commands via UART+SPI AT text protocol.
+
+> **Hapax compatibility note:** Hapax uses SiN360 binary SPI (CMD_* opcodes), which is
+> incompatible with the dag AT text protocol.  The features listed below are NOT available
+> on a Hapax device running SiN360 firmware.  They are documented here for reference when
+> using or evaluating the dag AT ESP32 firmware variant.
+
+**WiFi attacks:**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+M1DEAUTH` | `="<bssid>",<ch>` | Deauth single AP — broadcast deauth frames on specified channel |
+| `AT+M1DEAUTHALL` | _(none)_ | Scan all visible APs and deauth all simultaneously (channel-hopping) |
+| `AT+M1DEAUTHSTOP` | _(none)_ | Stop ongoing deauth |
+| `AT+M1BEACON` | `=<start>,<ch>,"<ssid>","<bssid>"` | Beacon flood — broadcast fake AP beacon on specified channel |
+| `AT+M1KARMA` | `=<start>,"<ssid>"` | Karma attack — respond to probe requests with matching fake AP |
+| `AT+M1HSCAP` | `="<bssid>",<ch>,<timeout_s>` | PMKID / WPA handshake capture for specified AP |
+| `AT+M1EVILTWIN` | `=<start>,"<ssid>",<ch>` | Evil Twin rogue AP with captive portal on specified channel |
+| `AT+M1PROBE` | `=<start>,<ch>` | Probe flood — send probe requests on specified channel |
+| `AT+M1WIFISTATS` | _(none)_ | Query per-channel packet statistics from monitor mode |
+| `AT+M1PMKID` | `="<bssid>",<ch>` | Dedicated PMKID capture (EAPOL handshake, does not require client) |
+
+**WiFi monitoring:**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+M1MONITOR` | `=<start>,<ch>` | Enable/disable promiscuous monitor mode on specified channel |
+
+**BLE HID keyboard (replaces AT+BLEHIDINIT/AT+BLEHIDKB in dag firmware):**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+HIDKBINIT` | `=<enable>` | Initialise BLE HID keyboard service |
+| `AT+HIDKBSEND` | `=<modifier>,<k1>,<k2>,<k3>,<k4>,<k5>,<k6>` | Send HID keyboard report (7-byte USB HID format) |
+
+> **Note:** `AT+HIDKBINIT` / `AT+HIDKBSEND` replace the bedge117-style
+> `AT+BLEHIDINIT` / `AT+BLEHIDKB` naming in the dag firmware variant.
+
+**IEEE 802.15.4 / Zigbee (same semantics as bedge117/neddy299):**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+ZIGSNIFF` | `=<start>,<channel>` | Start/stop 802.15.4 promiscuous sniffing on specified channel |
+
 ## Key Customisations vs Stock esp-at
 
 1. **SPI pin mapping** for M1 hardware (stock defaults are wrong)

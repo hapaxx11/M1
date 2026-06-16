@@ -1104,15 +1104,120 @@ static bool wifi_mac_track_resp_match(const m1_resp_t *resp, const uint8_t targe
 	return false;
 }
 
+/*============================================================================*/
+/*  2.4 GHz Channel Survey (ported from dagnazty/M1_T-1000)                  */
+/*============================================================================*/
+/**
+  * @brief  Scan visible APs and display a 2.4 GHz channel environment summary.
+  *
+  * Shows a bar chart of APs per channel (1–13) plus key statistics: total AP
+  * count, busiest channel, best (least-congested) channel, and strongest RSSI.
+  * Uses the existing SiN360 binary SPI scan infrastructure (wifi_do_scan).
+  * Ported from dagnazty/M1_T-1000; adapted to Hapax scene architecture.
+  */
+void wifi_survey_24g(void)
+{
+	uint8_t  ch_count[14] = {0}; /* index 1-13 = 2.4 GHz channels */
+	int8_t   strongest_rssi = -128;
+	uint8_t  busiest_ch = 1, best_ch = 1;
+	uint8_t  max_count = 0, min_count = 255;
+	char     buf[32];
+	uint16_t count;
+
+	ensure_esp32_ready();
+
+	/* Show scanning status (non-blocking draw) */
+	wifi_draw_message("2.4G Survey", "Scanning APs...", "");
+
+	count = wifi_do_scan();
+
+	if (count == 0)
+	{
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		m1_u8g2_firstpage();
+		u8g2_DrawStr(&m1_u8g2, 2, 8, "2.4G Survey");
+		u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "No APs found");
+		m1_u8g2_nextpage();
+		wifi_wait_dismiss();
+		return;
+	}
+
+	/* Build per-channel counts; track strongest AP */
+	for (uint16_t i = 0; i < count; i++)
+	{
+		uint8_t ch = ap_list[i].channel;
+		if (ch >= 1 && ch <= 13)
+			ch_count[ch]++;
+		if (ap_list[i].rssi > strongest_rssi)
+			strongest_rssi = ap_list[i].rssi;
+	}
+
+	/* Find busiest and quietest channel */
+	for (uint8_t ch = 1; ch <= 13; ch++)
+	{
+		if (ch_count[ch] > max_count) { max_count = ch_count[ch]; busiest_ch = ch; }
+		if (ch_count[ch] < min_count) { min_count = ch_count[ch]; best_ch   = ch; }
+	}
+
+	/* ---- Draw results ---- */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	m1_u8g2_firstpage();
+
+	/* Title bar */
+	u8g2_DrawStr(&m1_u8g2, 2, 8, "2.4G Survey");
+	u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
+
+	/* Channel bar chart: channels 1-13, bar=8px wide, gap=1px, chart 28px tall
+	 * Region: x=1..117, chart top y=11, baseline y=39                          */
+	{
+		const uint8_t chart_top  = 11;
+		const uint8_t chart_h    = 28;
+		const uint8_t bar_w      =  8;
+		const uint8_t bar_step   =  9; /* bar_w + 1 px gap */
+		uint8_t bar_max = max_count ? max_count : 1;
+
+		for (uint8_t ch = 1; ch <= 13; ch++)
+		{
+			uint8_t bar_h = (uint8_t)(
+				(uint16_t)ch_count[ch] * chart_h / bar_max);
+			if (bar_h == 0 && ch_count[ch] > 0)
+				bar_h = 1; /* at least 1 px for non-zero counts */
+			uint8_t bx = 1 + (ch - 1) * bar_step;
+			if (bar_h > 0)
+				u8g2_DrawBox(&m1_u8g2, bx,
+				             chart_top + chart_h - bar_h,
+				             bar_w, bar_h);
+		}
+
+		/* Baseline */
+		u8g2_DrawHLine(&m1_u8g2, 1, chart_top + chart_h,
+		               13 * bar_step - 1);
+
+		/* Small downward arrow below the best (quietest) channel bar */
+		{
+			uint8_t ax = 1 + (best_ch - 1) * bar_step + bar_w / 2;
+			uint8_t ay = chart_top + chart_h + 1;
+			u8g2_DrawPixel(&m1_u8g2, ax,     ay);
+			u8g2_DrawPixel(&m1_u8g2, ax - 1, ay + 1);
+			u8g2_DrawPixel(&m1_u8g2, ax + 1, ay + 1);
+			u8g2_DrawPixel(&m1_u8g2, ax,     ay + 1);
+		}
+	}
+
+	/* Summary text — 2 lines below chart */
+	snprintf(buf, sizeof(buf), "%u APs   Best: ch %u", count, best_ch);
+	u8g2_DrawStr(&m1_u8g2, 0, 51, buf);
+	snprintf(buf, sizeof(buf), "Busy: ch %u (%u)   %d dBm",
+	         busiest_ch, max_count, (int)strongest_rssi);
+	u8g2_DrawStr(&m1_u8g2, 0, 62, buf);
+
+	m1_u8g2_nextpage();
+	wifi_wait_dismiss();
+}
+
 void wifi_mac_track(void)
 {
-	S_M1_Buttons_Status btn;
-	S_M1_Main_Q_t q_item;
-	BaseType_t ret;
-	m1_cmd_t cmd;
-	m1_resp_t resp;
-	uint8_t target[6] = {0};
-	char target_str[18];
 	char target_label[18];
 	char ln[26];
 	const char *last_type = "None";

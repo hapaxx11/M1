@@ -36,6 +36,7 @@ typedef enum {
     /* Direct tools */
     WifiSceneScanConnect,
     WifiSceneStationScan,
+    WifiSceneSurvey24g,
     WifiSceneMacTrack,
     WifiSceneWardrive,
     WifiSceneStationWardrive,
@@ -109,6 +110,7 @@ typedef enum {
 extern const M1SceneHandlers wifi_scene_menu_handlers;
 extern const M1SceneHandlers wifi_scene_scan_connect_handlers;
 extern const M1SceneHandlers wifi_scene_station_scan_handlers;
+extern const M1SceneHandlers wifi_scene_survey_24g_handlers;
 extern const M1SceneHandlers wifi_scene_mac_track_handlers;
 extern const M1SceneHandlers wifi_scene_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_station_wardrive_handlers;

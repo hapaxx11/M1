@@ -24,6 +24,7 @@ void wifi_scan_ap(void);
 
 /* Station scan (client discovery) */
 void wifi_station_scan(void);
+void wifi_survey_24g(void);
 
 /* Sniffer modes */
 void wifi_sniff_all(void);
