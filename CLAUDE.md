@@ -2196,7 +2196,7 @@ Phoenix V2 renderer remains blocked until counter editing is implemented.
 ### Phase A — WiFi pure-logic extraction
 
 **Do not add `HAL_Delay()` calls to `m1_wifi.c` or `m1_wifi_scene.c`.**  Use
-`wifi_wait_dismiss()` for dismissable status screens and `vTaskDelay()` for hardware
+`wifi_wait_dismiss()` for dismissible status screens and `vTaskDelay()` for hardware
 timing waits.
 
 `CMD_WIFI_JOIN` async conversion is **not achievable**: SiN360 ESP32 has no async
