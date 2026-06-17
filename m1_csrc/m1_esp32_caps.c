@@ -162,18 +162,55 @@ void m1_esp32_caps_init(void)
     if (s_queried)
         return;  /* Already cached from a previous call */
 
-    /* Require the SPI HAL transport to be active before sending CMD_GET_STATUS.
-     * If the ESP32 has not been initialised yet (or was deinitialized), return
-     * without caching so the next call retries once the transport is ready.
-     * Probing an uninitialised transport would time out and cache the
-     * fallback, potentially mis-attributing capabilities. */
+    /* Require the SPI HAL transport to be active before sending any binary
+     * commands.  If the ESP32 has not been initialised yet (or was
+     * deinitialized), return without caching so the next call retries once
+     * the transport is ready.  Probing an uninitialised transport would time
+     * out and cache the fallback, potentially mis-attributing capabilities. */
     if (!m1_esp32_get_init_status())
         return;
 
-    /* Probe 1: binary CMD_GET_STATUS (0x02).  SiN360 binary-SPI firmware
-     * always responds here.  AT firmware that implements the binary extension
-     * (e.g. hapaxx11/esp32-at-monstatek-m1) also responds here.  Unextended
-     * AT firmware (bedge117, dag) will return RESP_ERR or time out. */
+    /* Probe 0: binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
+     * CMD_GET_STATUS (0x02) was proposed as a capability-reporting command
+     * but never fully implemented in SiN360 firmware.  The actual SiN360
+     * cmd_get_status() implementation (sincere360/M1_SiN360_ESP32) returns
+     * only a 5-byte version payload, not the 41-byte capability report that
+     * m1_esp32_caps_parse_payload() expects.  Because SiN360 has no AT task,
+     * the AT+CMD? probe also fails, leaving SiN360 misdetected as "Unknown".
+     *
+     * CMD_PING is universally implemented by all binary-SPI firmware and
+     * returns a simple "PONG" (4 bytes) payload.  If CMD_PING succeeds, we
+     * know the ESP32 speaks the binary SPI protocol and can safely assume
+     * the SiN360 capability profile (since SiN360 is currently the only
+     * published binary-SPI firmware variant).
+     *
+     * This probe runs BEFORE CMD_GET_STATUS so that if a future firmware
+     * implements the full capability-reporting protocol, it will be detected
+     * via Probe 1 instead. */
+    ret = m1_esp32_simple_cmd(CMD_PING, &resp, CAPS_QUERY_TIMEOUT_MS);
+
+    if (ret == 0 && resp.status == RESP_OK && resp.payload_len == 4 &&
+        resp.payload[0] == 'P' && resp.payload[1] == 'O' &&
+        resp.payload[2] == 'N' && resp.payload[3] == 'G')
+    {
+        /* SiN360 binary-SPI firmware detected.  Use the full SiN360 profile.
+         * This is a fallback path because SiN360 does not implement the
+         * full CMD_GET_STATUS capability report. */
+        s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
+        strncpy(s_fw_name, "SiN360 (via PING)", sizeof(s_fw_name) - 1);
+        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+        caps_apply_footprint_estimates(s_bitmap);
+        s_queried = true;
+        return;
+    }
+
+    /* Probe 1: binary CMD_GET_STATUS (0x02).  AT firmware that implements
+     * the binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
+     * respond here with a full capability report.  Unextended AT firmware
+     * (bedge117, dag) will return RESP_ERR or time out.  Current SiN360
+     * firmware (v0.9.1.0) returns only a 5-byte version payload, which
+     * fails the parse check below, so this probe is skipped by the Probe 0
+     * PING detection above. */
     ret = m1_esp32_simple_cmd(CMD_GET_STATUS, &resp, CAPS_QUERY_TIMEOUT_MS);
 
     if (ret == 0 && resp.status == RESP_OK &&
@@ -201,7 +238,11 @@ void m1_esp32_caps_init(void)
      *
      * The response can be several KB, so the buffer is allocated from the
      * FreeRTOS heap rather than the caller's stack.  If the heap is
-     * exhausted, return without caching so the next call retries. */
+     * exhausted, return without caching so the next call retries.
+     *
+     * SiN360 binary-SPI firmware has no AT task, so this probe fails
+     * immediately, which is expected since Probe 0 already detected SiN360
+     * via CMD_PING. */
     if (!get_esp32_main_init_status())
         return;
 

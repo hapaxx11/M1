@@ -29,18 +29,25 @@
  * Never gate on a compile flag or firmware name string.
  *
  * Wire protocol note:
- *   Two probes are issued in sequence:
- *     1. Binary `CMD_GET_STATUS` (0x02) — SiN360 binary-SPI firmware (and any
- *        AT firmware that implements this extension) self-reports the full
- *        capability bitmap and firmware name.
- *     2. Stock AT `AT+CMD?` — when the binary probe fails, the AT task is
+ *   Three probes are issued in sequence:
+ *     0. Binary `CMD_PING` (0x01) — SiN360 binary-SPI firmware detection.
+ *        CMD_GET_STATUS was proposed as a capability-reporting command but
+ *        never fully implemented in SiN360 (it returns only a 5-byte version
+ *        payload, not the 41-byte capability report).  CMD_PING is universally
+ *        implemented and returns "PONG" (4 bytes).  If this probe succeeds,
+ *        we know we have SiN360 binary firmware and use M1_ESP32_CAP_PROFILE_SIN360.
+ *     1. Binary `CMD_GET_STATUS` (0x02) — AT firmware that implements the
+ *        full binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
+ *        self-report the full capability bitmap and firmware name here.
+ *        Current SiN360 is already detected via Probe 0, so this is skipped.
+ *     2. Stock AT `AT+CMD?` — when the binary probes fail, the AT task is
  *        queried for its supported-command list, and a small mapping table
  *        in `m1_esp32_caps.c` translates the presence of specific AT
  *        commands into M1_ESP32_CAP_* bits.  This probe works against any
  *        stock or custom ESP-AT firmware without requiring our own
  *        extensions.
- *   If both probes fail, the capability bitmap is left at zero and feature
- *   gates fail closed.
+ *   If all three probes fail, the capability bitmap is left at zero and
+ *   feature gates fail closed.
  *
  * M1 Project
  */
