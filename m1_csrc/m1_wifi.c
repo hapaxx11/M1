@@ -1213,6 +1213,13 @@ void wifi_survey_24g(void)
 
 void wifi_mac_track(void)
 {
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	uint8_t target[6] = {0};
+	char target_str[18];
 	char target_label[18];
 	char ln[26];
 	const char *last_type = "None";
