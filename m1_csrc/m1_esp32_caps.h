@@ -167,6 +167,24 @@
  * command to the runtime probe is a single-line edit to the
  * `s_at_cmd_cap_map[]` table in `m1_esp32_caps.c`. */
 
+/* dag T-800 profile: AT firmware (dagnazty/M1-T-800) with custom WiFi and
+ * HID AT commands.  Discriminated from stock bedge117/neddy299 AT by the
+ * presence of `M1_ESP32_CAP_BEACON` (AT+M1BEACON — only T-800 has it).
+ * Does NOT include 802.15.4 despite having AT+ZIGSNIFF in some builds
+ * because 802.15.4 is optional and may not be present in all T-800
+ * configurations; the probe detects it dynamically. */
+#define M1_ESP32_CAP_PROFILE_DAG_T800 \
+    (M1_ESP32_CAP_WIFI_JOIN    | \
+     M1_ESP32_CAP_WIFI_SCAN    | \
+     M1_ESP32_CAP_DEAUTH       | \
+     M1_ESP32_CAP_BEACON       | \
+     M1_ESP32_CAP_KARMA        | \
+     M1_ESP32_CAP_PORTAL       | \
+     M1_ESP32_CAP_BLE_ADV      | \
+     M1_ESP32_CAP_PKTMON       | \
+     M1_ESP32_CAP_PROBE_FLOOD  | \
+     M1_ESP32_CAP_BLE_HID)
+
 /* =========================================================================
  * Memory footprint estimates — for developer / diagnostic use only
  *
@@ -191,6 +209,15 @@
 #define M1_ESP32_FALLBACK_HEAP_SIN360  (160u * 1024u)  /**< ≈160 KB free heap */
 #define M1_ESP32_FALLBACK_BSS_AT       (284u * 1024u)  /**< ≈284 KB BSS */
 #define M1_ESP32_FALLBACK_HEAP_AT      (112u * 1024u)  /**< ≈112 KB free heap */
+
+/* dag T-800 AT firmware (dagnazty/M1-T-800): ESP-AT base + 14 custom AT
+ * commands.  Estimated from ESP-AT v4.0.0.0 base + dag custom modules
+ * (WiFi attacks, HID, Zigbee sniff).  BSS is comparable to stock AT;
+ * heap is slightly lower due to additional static buffers for deauth,
+ * beacon, and monitor functions.  To be refined once actual T-800
+ * firmware measurements are available (see CLAUDE.md update procedure). */
+#define M1_ESP32_FALLBACK_BSS_T800     (290u * 1024u)  /**< ≈290 KB BSS */
+#define M1_ESP32_FALLBACK_HEAP_T800    (105u * 1024u)  /**< ≈105 KB free heap */
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)

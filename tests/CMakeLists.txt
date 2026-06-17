@@ -1999,6 +1999,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_status_msg COMMAND test_wifi_status_msg)
 
+# ---------- wifi_ch_analysis (Phase 4 — dag integration) ----------
+add_executable(test_wifi_ch_analysis
+    test_wifi_ch_analysis.c
+    ${M1_ROOT}/m1_csrc/wifi_ch_analysis.c
+)
+target_include_directories(test_wifi_ch_analysis PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_ch_analysis PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_ch_analysis PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_ch_analysis COMMAND test_wifi_ch_analysis)
+
 # ---------- wifi_mac_utils (Phase A) ----------
 add_executable(test_wifi_mac_utils
     test_wifi_mac_utils.c

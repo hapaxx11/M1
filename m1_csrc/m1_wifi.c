@@ -35,6 +35,7 @@
 #include "m1_wifi_cred.h"
 #include "wifi_ap_record.h"
 #include "wifi_mac_utils.h"
+#include "wifi_ch_analysis.h"
 #include "wifi_file_utils.h"
 #include "wifi_status_msg.h"
 #include "wifi_sta_record.h"
@@ -1117,10 +1118,7 @@ static bool wifi_mac_track_resp_match(const m1_resp_t *resp, const uint8_t targe
   */
 void wifi_survey_24g(void)
 {
-	uint8_t  ch_count[14] = {0}; /* index 1-13 = 2.4 GHz channels */
-	int8_t   strongest_rssi = -128;
-	uint8_t  busiest_ch = 1, best_ch = 1;
-	uint8_t  max_count = 0, min_count = 255;
+	wifi_ch_analysis_t  ana;
 	char     buf[32];
 	uint16_t count;
 
@@ -1143,21 +1141,17 @@ void wifi_survey_24g(void)
 		return;
 	}
 
-	/* Build per-channel counts; track strongest AP */
-	for (uint16_t i = 0; i < count; i++)
+	/* Extract channel + RSSI arrays from ap_list for the pure-logic helper */
 	{
-		uint8_t ch = ap_list[i].channel;
-		if (ch >= 1 && ch <= 13)
-			ch_count[ch]++;
-		if (ap_list[i].rssi > strongest_rssi)
-			strongest_rssi = ap_list[i].rssi;
-	}
-
-	/* Find busiest and quietest channel */
-	for (uint8_t ch = 1; ch <= 13; ch++)
-	{
-		if (ch_count[ch] > max_count) { max_count = ch_count[ch]; busiest_ch = ch; }
-		if (ch_count[ch] < min_count) { min_count = ch_count[ch]; best_ch   = ch; }
+		uint8_t  ch_arr[256];
+		int8_t   rs_arr[256];
+		uint16_t n = (count > 256) ? 256 : count;
+		for (uint16_t i = 0; i < n; i++)
+		{
+			ch_arr[i] = ap_list[i].channel;
+			rs_arr[i] = ap_list[i].rssi;
+		}
+		wifi_ch_analysis_compute(ch_arr, rs_arr, n, &ana);
 	}
 
 	/* ---- Draw results ---- */
@@ -1175,14 +1169,11 @@ void wifi_survey_24g(void)
 		const uint8_t chart_h    = 28;
 		const uint8_t bar_w      =  8;
 		const uint8_t bar_step   =  9; /* bar_w + 1 px gap */
-		uint8_t bar_max = max_count ? max_count : 1;
 
 		for (uint8_t ch = 1; ch <= 13; ch++)
 		{
-			uint8_t bar_h = (uint8_t)(
-				(uint16_t)ch_count[ch] * chart_h / bar_max);
-			if (bar_h == 0 && ch_count[ch] > 0)
-				bar_h = 1; /* at least 1 px for non-zero counts */
+			uint8_t bar_h = wifi_ch_bar_height(
+				ana.ch_count[ch], ana.busiest_count, chart_h);
 			uint8_t bx = 1 + (ch - 1) * bar_step;
 			if (bar_h > 0)
 				u8g2_DrawBox(&m1_u8g2, bx,
@@ -1196,7 +1187,7 @@ void wifi_survey_24g(void)
 
 		/* Small downward arrow below the best (quietest) channel bar */
 		{
-			uint8_t ax = 1 + (best_ch - 1) * bar_step + bar_w / 2;
+			uint8_t ax = 1 + (ana.best_ch - 1) * bar_step + bar_w / 2;
 			uint8_t ay = chart_top + chart_h + 1;
 			u8g2_DrawPixel(&m1_u8g2, ax,     ay);
 			u8g2_DrawPixel(&m1_u8g2, ax - 1, ay + 1);
@@ -1206,10 +1197,10 @@ void wifi_survey_24g(void)
 	}
 
 	/* Summary text — 2 lines below chart */
-	snprintf(buf, sizeof(buf), "%u APs   Best: ch %u", count, best_ch);
+	snprintf(buf, sizeof(buf), "%u APs   Best: ch %u", count, ana.best_ch);
 	u8g2_DrawStr(&m1_u8g2, 0, 51, buf);
 	snprintf(buf, sizeof(buf), "Busy: ch %u (%u)   %d dBm",
-	         busiest_ch, max_count, (int)strongest_rssi);
+	         ana.busiest_ch, ana.busiest_count, (int)ana.strongest_rssi);
 	u8g2_DrawStr(&m1_u8g2, 0, 62, buf);
 
 	m1_u8g2_nextpage();

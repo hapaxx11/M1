@@ -23,8 +23,8 @@
   `AT+HIDKBINIT`/`AT+HIDKBSEND` → `CAP_BLE_HID`.
   Also update the parallel `k_test_at_cmd_map[]` in `tests/test_esp32_caps.c` and add
   a `test_at_cmd_parse_dag_t800_caps()` test case with a realistic T-800 AT+CMD? response.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `feat: add 14 dag T-800 AT commands to ESP32 cap mapping table`
 
 ### Phase 2 — T-800 Binary RPC / AT-Fallback Transport Investigation
 - **Description**: Determine whether the dag T-800 ESP32 firmware uses binary SPI framing
@@ -64,8 +64,8 @@
   `cmake/m1_01/CMakeLists.txt`. Write `tests/test_wifi_ch_analysis.c` with Unity tests
   covering: count accumulation, RSSI tracking, busiest/best edge cases (all-zero, tie,
   single-AP), and bar-height formula with clamp.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `refactor: extract wifi_ch_analysis.c/h from wifi_survey_24g + 14 Unity tests`
 
 ### Phase 5 — T-800 Firmware Discriminator Profile
 - **Description**: Add `M1_ESP32_CAP_PROFILE_DAG_T800` to `m1_csrc/m1_esp32_caps.h` as
@@ -77,8 +77,8 @@
   constant pair with estimated values (to be measured from the T-800 firmware; use T-800
   AT firmware defaults of ~280 KB BSS / ~120 KB heap as starting estimate). Add a test in
   `tests/test_esp32_caps.c` asserting the new profile constants and discriminator ordering.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `feat: add M1_ESP32_CAP_PROFILE_DAG_T800 + T-800 fallback constants + 3-way discriminator`
 
 ### Phase 6 — T-800 PMKID / HSCAP AT-Path Scene (if Phase 2B lands)
 - **Description**: If Phase 2 resolves as Phase 2B (AT text transport), add an AT-path
@@ -96,8 +96,8 @@
   `m1_csrc/` is already covered (it is). Run the quick audit script from CLAUDE.md to
   confirm no new top-level source directories are referenced by new test targets without a
   CI path filter entry.
-- **Status**: 🔲 Not started (blocked on Phases 2 and 4)
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete (`m1_csrc/**` already in `paths:` — no new directories needed)
+- **Commit**: _(no code change needed; verified during Phase 4)_
 
 ### Phase 8 — Documentation and Changelog
 - **Description**: Finalize documentation:

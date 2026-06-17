@@ -644,6 +644,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_wifi_scene_general.c
     ../../m1_csrc/m1_wifi_scene_connect.c
     ../../m1_csrc/wifi_ap_record.c
+    ../../m1_csrc/wifi_ch_analysis.c
     ../../m1_csrc/wifi_status_msg.c
     ../../m1_csrc/wifi_mac_utils.c
     ../../m1_csrc/wifi_file_utils.c

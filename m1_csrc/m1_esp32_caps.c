@@ -69,18 +69,50 @@ static uint32_t s_free_heap_bytes = 0u;
  * table — no curated fallback profile macros are required.
  *
  * Currently mapped commands:
- *   - "AT+CWJAP"      — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
- *   - "AT+BLEHIDINIT" — stock ESP-AT (BLE HID example) → CAP_BLE_HID
- *   - "AT+ZIGSNIFF"   — bedge117/dag/neddy299 custom    → CAP_802154
- *   - "AT+DEAUTH"     — dag/neddy299 at_custom_deauth   → CAP_DEAUTH
- *   - "AT+STASCAN"    — neddy299 at_custom_stascan      → CAP_STA_SCAN
+ *   - "AT+CWJAP"        — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
+ *   - "AT+BLEHIDINIT"   — stock ESP-AT (BLE HID example)  → CAP_BLE_HID
+ *   - "AT+ZIGSNIFF"     — bedge117/dag/neddy299 custom     → CAP_802154
+ *   - "AT+DEAUTH"       — dag/neddy299 at_custom_deauth    → CAP_DEAUTH
+ *   - "AT+STASCAN"      — neddy299 at_custom_stascan       → CAP_STA_SCAN
+ *   - "AT+M1DEAUTH"     — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
+ *   - "AT+M1DEAUTHALL"  — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
+ *   - "AT+M1DEAUTHSTOP" — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
+ *   - "AT+M1BEACON"     — dag T-800 at_custom_wifi_cmd     → CAP_BEACON
+ *   - "AT+M1KARMA"      — dag T-800 at_custom_wifi_cmd     → CAP_KARMA
+ *   - "AT+M1EVILTWIN"   — dag T-800 at_custom_wifi_cmd     → CAP_PORTAL
+ *   - "AT+M1BLESPAM"    — dag T-800 at_custom_wifi_cmd     → CAP_BLE_ADV
+ *   - "AT+M1MONITOR"    — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
+ *   - "AT+M1PROBE"      — dag T-800 at_custom_wifi_cmd     → CAP_PROBE_FLOOD
+ *   - "AT+M1PMKID"      — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
+ *   - "AT+M1HSCAP"      — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
+ *   - "AT+M1WIFISTATS"  — dag T-800 at_custom_wifi_cmd     → CAP_WIFI_SCAN
+ *   - "AT+HIDKBINIT"    — dag T-800 at_custom_hid_cmd      → CAP_BLE_HID
+ *   - "AT+HIDKBSEND"    — dag T-800 at_custom_hid_cmd      → CAP_BLE_HID
  * =========================================================================*/
 static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
-    { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
-    { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
-    { "AT+ZIGSNIFF",   M1_ESP32_CAP_802154    },
-    { "AT+DEAUTH",     M1_ESP32_CAP_DEAUTH    },
-    { "AT+STASCAN",    M1_ESP32_CAP_STA_SCAN  },
+    /* Stock ESP-AT */
+    { "AT+CWJAP",        M1_ESP32_CAP_WIFI_JOIN  },
+    { "AT+BLEHIDINIT",   M1_ESP32_CAP_BLE_HID    },
+    /* bedge117 / neddy299 custom commands */
+    { "AT+ZIGSNIFF",     M1_ESP32_CAP_802154     },
+    { "AT+DEAUTH",       M1_ESP32_CAP_DEAUTH     },
+    { "AT+STASCAN",      M1_ESP32_CAP_STA_SCAN   },
+    /* dag T-800 custom WiFi commands (at_custom_wifi_cmd.c) */
+    { "AT+M1DEAUTH",     M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1DEAUTHALL",  M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1DEAUTHSTOP", M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1BEACON",     M1_ESP32_CAP_BEACON     },
+    { "AT+M1KARMA",      M1_ESP32_CAP_KARMA      },
+    { "AT+M1EVILTWIN",   M1_ESP32_CAP_PORTAL     },
+    { "AT+M1BLESPAM",    M1_ESP32_CAP_BLE_ADV    },
+    { "AT+M1MONITOR",    M1_ESP32_CAP_PKTMON     },
+    { "AT+M1PROBE",      M1_ESP32_CAP_PROBE_FLOOD},
+    { "AT+M1PMKID",      M1_ESP32_CAP_PKTMON     },
+    { "AT+M1HSCAP",      M1_ESP32_CAP_PKTMON     },
+    { "AT+M1WIFISTATS",  M1_ESP32_CAP_WIFI_SCAN  },
+    /* dag T-800 custom HID commands (at_custom_hid_cmd.c) */
+    { "AT+HIDKBINIT",    M1_ESP32_CAP_BLE_HID    },
+    { "AT+HIDKBSEND",    M1_ESP32_CAP_BLE_HID    },
 };
 
 #define S_AT_CMD_CAP_MAP_N \
@@ -90,19 +122,29 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 
 /**
  * Set memory footprint estimates based on the resolved capability bitmap.
- * Uses M1_ESP32_CAP_WIFI_JOIN as the profile discriminator:
- *   present  → AT/C3 profile (bedge117/neddy299)
- *   absent   → SiN360 profile
+ * Three-way discriminator:
+ *   WIFI_JOIN + BEACON → dag T-800 profile (dagnazty/M1-T-800)
+ *   WIFI_JOIN alone    → stock AT/C3 profile (bedge117/neddy299)
+ *   neither            → SiN360 profile
  */
 static void caps_apply_footprint_estimates(uint64_t bitmap)
 {
-    if (bitmap & M1_ESP32_CAP_WIFI_JOIN)
+    if ((bitmap & M1_ESP32_CAP_WIFI_JOIN) &&
+        (bitmap & M1_ESP32_CAP_BEACON))
     {
+        /* dag T-800: AT firmware with custom WiFi/HID/Zigbee commands */
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_T800;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_T800;
+    }
+    else if (bitmap & M1_ESP32_CAP_WIFI_JOIN)
+    {
+        /* Stock AT / bedge117 / neddy299 */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
     }
     else
     {
+        /* SiN360 binary SPI firmware */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_SIN360;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_SIN360;
     }

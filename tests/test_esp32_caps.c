@@ -30,6 +30,8 @@ void test_fallback_constants_are_nonzero(void)
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_SIN360);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_AT);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_AT);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_T800);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_T800);
 }
 
 void test_fallback_at_bss_exceeds_sin360(void)
@@ -295,6 +297,41 @@ void test_sin360_profile_has_expected_caps(void)
     TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
 }
 
+void test_dag_t800_profile_has_expected_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_DAG_T800;
+    /* T-800 includes WiFi join (stock AT), all dag attack caps, and BLE HID */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BEACON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_KARMA);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PORTAL);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_ADV);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PKTMON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PROBE_FLOOD);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    /* T-800 does NOT include BLE scan, STA scan, NETSCAN, or BLE GATT
+     * (those are SiN360-specific binary SPI features) */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_NETSCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_GATT);
+}
+
+void test_fallback_t800_bss_exceeds_sin360(void)
+{
+    /* T-800 AT firmware has larger BSS than SiN360 due to AT infrastructure */
+    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_BSS_SIN360,
+                             M1_ESP32_FALLBACK_BSS_T800);
+}
+
+void test_fallback_t800_heap_less_than_sin360(void)
+{
+    /* T-800 has less free heap than SiN360 due to AT + custom modules */
+    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_HEAP_T800,
+                             M1_ESP32_FALLBACK_HEAP_SIN360);
+}
+
 /* =========================================================================
  * AT+CMD? response parser: m1_esp32_caps_parse_at_cmd_list()
  *
@@ -313,11 +350,29 @@ void test_sin360_profile_has_expected_caps(void)
  * test table must be updated in lockstep to keep the AT+CMD? parser
  * coverage in sync with the firmware behaviour. */
 static const m1_esp32_at_cmd_cap_entry_t k_test_at_cmd_map[] = {
-    { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
-    { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
-    { "AT+ZIGSNIFF",   M1_ESP32_CAP_802154    },
-    { "AT+DEAUTH",     M1_ESP32_CAP_DEAUTH    },
-    { "AT+STASCAN",    M1_ESP32_CAP_STA_SCAN  },
+    /* Stock ESP-AT */
+    { "AT+CWJAP",        M1_ESP32_CAP_WIFI_JOIN  },
+    { "AT+BLEHIDINIT",   M1_ESP32_CAP_BLE_HID    },
+    /* bedge117 / neddy299 custom commands */
+    { "AT+ZIGSNIFF",     M1_ESP32_CAP_802154     },
+    { "AT+DEAUTH",       M1_ESP32_CAP_DEAUTH     },
+    { "AT+STASCAN",      M1_ESP32_CAP_STA_SCAN   },
+    /* dag T-800 custom WiFi commands (at_custom_wifi_cmd.c) */
+    { "AT+M1DEAUTH",     M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1DEAUTHALL",  M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1DEAUTHSTOP", M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1BEACON",     M1_ESP32_CAP_BEACON     },
+    { "AT+M1KARMA",      M1_ESP32_CAP_KARMA      },
+    { "AT+M1EVILTWIN",   M1_ESP32_CAP_PORTAL     },
+    { "AT+M1BLESPAM",    M1_ESP32_CAP_BLE_ADV    },
+    { "AT+M1MONITOR",    M1_ESP32_CAP_PKTMON     },
+    { "AT+M1PROBE",      M1_ESP32_CAP_PROBE_FLOOD},
+    { "AT+M1PMKID",      M1_ESP32_CAP_PKTMON     },
+    { "AT+M1HSCAP",      M1_ESP32_CAP_PKTMON     },
+    { "AT+M1WIFISTATS",  M1_ESP32_CAP_WIFI_SCAN  },
+    /* dag T-800 custom HID commands (at_custom_hid_cmd.c) */
+    { "AT+HIDKBINIT",    M1_ESP32_CAP_BLE_HID    },
+    { "AT+HIDKBSEND",    M1_ESP32_CAP_BLE_HID    },
 };
 static const size_t k_test_at_cmd_map_n =
     sizeof(k_test_at_cmd_map) / sizeof(k_test_at_cmd_map[0]);
@@ -349,6 +404,29 @@ static const char *k_resp_neddy299 =
     "+CMD:5,\"AT+STASCAN\",1,1,1,0\r\n"
     "\r\nOK\r\n";
 
+/* dag T-800 (dagnazty/M1-T-800): all 14 custom AT commands.
+ * Note: AT+CWJAP is stock ESP-AT and IS present; AT+ZIGSNIFF is also
+ * present in the dag T-800 firmware. */
+static const char *k_resp_dag_t800 =
+    "+CMD:0,\"AT\",0,0,0,1\r\n"
+    "+CMD:1,\"AT+CWJAP\",1,1,1,1\r\n"
+    "+CMD:2,\"AT+ZIGSNIFF\",1,1,1,0\r\n"
+    "+CMD:3,\"AT+M1DEAUTH\",1,1,1,0\r\n"
+    "+CMD:4,\"AT+M1DEAUTHALL\",1,1,1,0\r\n"
+    "+CMD:5,\"AT+M1DEAUTHSTOP\",1,1,1,0\r\n"
+    "+CMD:6,\"AT+M1BEACON\",1,1,1,0\r\n"
+    "+CMD:7,\"AT+M1KARMA\",1,1,1,0\r\n"
+    "+CMD:8,\"AT+M1EVILTWIN\",1,1,1,0\r\n"
+    "+CMD:9,\"AT+M1BLESPAM\",1,1,1,0\r\n"
+    "+CMD:10,\"AT+M1MONITOR\",1,1,1,0\r\n"
+    "+CMD:11,\"AT+M1PROBE\",1,1,1,0\r\n"
+    "+CMD:12,\"AT+M1PMKID\",1,1,1,0\r\n"
+    "+CMD:13,\"AT+M1HSCAP\",1,1,1,0\r\n"
+    "+CMD:14,\"AT+M1WIFISTATS\",1,1,1,0\r\n"
+    "+CMD:15,\"AT+HIDKBINIT\",1,1,1,0\r\n"
+    "+CMD:16,\"AT+HIDKBSEND\",1,1,1,0\r\n"
+    "\r\nOK\r\n";
+
 void test_at_cmd_parse_stock_at_only_wifi_join(void)
 {
     uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
@@ -377,6 +455,25 @@ void test_at_cmd_parse_neddy299_caps(void)
                               M1_ESP32_CAP_STA_SCAN;
     uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
         k_resp_neddy299, k_test_at_cmd_map, k_test_at_cmd_map_n);
+
+    TEST_ASSERT_EQUAL_UINT64(expected, caps);
+}
+
+void test_at_cmd_parse_dag_t800_caps(void)
+{
+    const uint64_t expected = M1_ESP32_CAP_WIFI_JOIN   |
+                              M1_ESP32_CAP_802154      |
+                              M1_ESP32_CAP_DEAUTH      |
+                              M1_ESP32_CAP_BEACON      |
+                              M1_ESP32_CAP_KARMA       |
+                              M1_ESP32_CAP_PORTAL      |
+                              M1_ESP32_CAP_BLE_ADV     |
+                              M1_ESP32_CAP_PKTMON      |
+                              M1_ESP32_CAP_PROBE_FLOOD |
+                              M1_ESP32_CAP_WIFI_SCAN   |
+                              M1_ESP32_CAP_BLE_HID;
+    uint64_t caps = m1_esp32_caps_parse_at_cmd_list(
+        k_resp_dag_t800, k_test_at_cmd_map, k_test_at_cmd_map_n);
 
     TEST_ASSERT_EQUAL_UINT64(expected, caps);
 }
@@ -486,11 +583,13 @@ int main(void)
 
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);
+    RUN_TEST(test_dag_t800_profile_has_expected_caps);
 
     /* AT+CMD? response parser */
     RUN_TEST(test_at_cmd_parse_stock_at_only_wifi_join);
     RUN_TEST(test_at_cmd_parse_bedge_dag_caps);
     RUN_TEST(test_at_cmd_parse_neddy299_caps);
+    RUN_TEST(test_at_cmd_parse_dag_t800_caps);
     RUN_TEST(test_at_cmd_parse_empty_response_returns_zero);
     RUN_TEST(test_at_cmd_parse_null_inputs_return_zero);
     RUN_TEST(test_at_cmd_parse_requires_quoted_match);
@@ -502,6 +601,8 @@ int main(void)
     RUN_TEST(test_fallback_constants_are_nonzero);
     RUN_TEST(test_fallback_at_bss_exceeds_sin360);
     RUN_TEST(test_fallback_sin360_heap_exceeds_at);
+    RUN_TEST(test_fallback_t800_bss_exceeds_sin360);
+    RUN_TEST(test_fallback_t800_heap_less_than_sin360);
 
     return UNITY_END();
 }
