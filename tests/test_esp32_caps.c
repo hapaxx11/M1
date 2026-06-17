@@ -320,16 +320,18 @@ void test_dag_t800_profile_has_expected_caps(void)
 
 void test_fallback_t800_bss_exceeds_sin360(void)
 {
-    /* T-800 AT firmware has larger BSS than SiN360 due to AT infrastructure */
+    /* T-800 AT firmware has larger BSS than SiN360 due to AT infrastructure.
+     * Unity: TEST_ASSERT_GREATER_THAN(threshold, actual) passes when actual > threshold. */
     TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_BSS_SIN360,
                              M1_ESP32_FALLBACK_BSS_T800);
 }
 
 void test_fallback_t800_heap_less_than_sin360(void)
 {
-    /* T-800 has less free heap than SiN360 due to AT + custom modules */
-    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_HEAP_T800,
-                             M1_ESP32_FALLBACK_HEAP_SIN360);
+    /* T-800 has less free heap than SiN360 due to AT + custom modules.
+     * Use LESS_THAN so the assertion reads naturally: T800_HEAP < SIN360_HEAP. */
+    TEST_ASSERT_LESS_THAN(M1_ESP32_FALLBACK_HEAP_SIN360,
+                          M1_ESP32_FALLBACK_HEAP_T800);
 }
 
 /* =========================================================================

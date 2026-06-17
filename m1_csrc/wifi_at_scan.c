@@ -80,8 +80,10 @@ static bool cwlap_parse_one(const char *p, wifi_at_ap_t *out)
 
     out->rssi    = (int8_t)rssi;
     out->channel = (uint8_t)ch;
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < 6; i++) {
+        if (m[i] > 0xFFu) return false;
         out->bssid[i] = (uint8_t)m[i];
+    }
 
     return true;
 }
@@ -106,8 +108,9 @@ uint8_t wifi_at_cwlap_parse(const char *resp, wifi_at_ap_t *out, uint8_t max_out
         if (cwlap_parse_one(p, &out[count]))
             count++;
 
-        /* Advance past the closing ')' of this entry to avoid re-matching */
-        const char *end = strchr(p, ')');
+        /* Advance to the end of the current entry line; each +CWLAP entry is
+         * line-oriented, so this is safe even when the SSID contains ')'. */
+        const char *end = strchr(p, '\n');
         if (!end) break;
         p = end + 1;
     }
@@ -117,8 +120,8 @@ uint8_t wifi_at_cwlap_parse(const char *resp, wifi_at_ap_t *out, uint8_t max_out
 
 void wifi_at_format_bssid(const uint8_t bssid[6], char *dst)
 {
-    sprintf(dst, "%02x:%02x:%02x:%02x:%02x:%02x",
-            bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+    snprintf(dst, 18, "%02x:%02x:%02x:%02x:%02x:%02x",
+             bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
 }
 
 bool wifi_at_pmkid_parse(const char *resp,
@@ -155,9 +158,11 @@ bool wifi_at_pmkid_parse(const char *resp,
         if (!is_hex(hex32[i])) return false;
     }
 
-    /* Fill BSSID */
-    for (int i = 0; i < 6; i++)
+    /* Fill BSSID — validate each octet fits in uint8_t before truncating */
+    for (int i = 0; i < 6; i++) {
+        if (m[i] > 0xFFu) return false;
         bssid_out[i] = (uint8_t)m[i];
+    }
 
     /* Fill PMKID (16 bytes from 32 hex chars) */
     for (int i = 0; i < 16; i++)

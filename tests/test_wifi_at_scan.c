@@ -156,6 +156,41 @@ void test_cwlap_malformed_bssid_skipped(void)
     TEST_ASSERT_EQUAL_STRING("Good", out[0].ssid);
 }
 
+void test_cwlap_ssid_with_closing_paren(void)
+{
+    /* SSID containing ')' must not cause the entry-advance logic to cut
+     * the current entry short and skip the following entry. */
+    const char *resp =
+        "+CWLAP:(4,\"Net)work\",-55,\"aa:bb:cc:dd:ee:ff\",6)\r\n"
+        "+CWLAP:(3,\"Second\",-70,\"11:22:33:44:55:66\",11)\r\n"
+        "\r\nOK\r\n";
+    wifi_at_ap_t out[4];
+    memset(out, 0, sizeof(out));
+
+    uint8_t n = wifi_at_cwlap_parse(resp, out, 4);
+    TEST_ASSERT_EQUAL_UINT8(2, n);
+    TEST_ASSERT_EQUAL_STRING("Net)work", out[0].ssid);
+    TEST_ASSERT_EQUAL_UINT8(6, out[0].channel);
+    TEST_ASSERT_EQUAL_STRING("Second", out[1].ssid);
+    TEST_ASSERT_EQUAL_UINT8(11, out[1].channel);
+}
+
+void test_cwlap_oversized_mac_octet_skipped(void)
+{
+    /* A malformed response where a MAC octet value would overflow uint8_t
+     * (e.g. "1ff") must be rejected; the following valid entry is parsed. */
+    const char *resp =
+        "+CWLAP:(4,\"Bad\",-55,\"1ff:bb:cc:dd:ee:ff\",6)\r\n"
+        "+CWLAP:(4,\"Good\",-55,\"01:02:03:04:05:06\",11)\r\n"
+        "\r\nOK\r\n";
+    wifi_at_ap_t out[4];
+    memset(out, 0, sizeof(out));
+
+    uint8_t n = wifi_at_cwlap_parse(resp, out, 4);
+    TEST_ASSERT_EQUAL_UINT8(1, n);
+    TEST_ASSERT_EQUAL_STRING("Good", out[0].ssid);
+}
+
 /*===========================================================================*/
 /* wifi_at_format_bssid                                                      */
 /*===========================================================================*/
@@ -288,6 +323,15 @@ void test_pmkid_parse_uppercase_hex_accepted(void)
     TEST_ASSERT_EQUAL_HEX8(0xAA, pmkid[0]);
 }
 
+void test_pmkid_parse_oversized_mac_octet_returns_false(void)
+{
+    /* A MAC octet value that overflows uint8_t (e.g. "1ff") must be rejected */
+    const char *resp =
+        "+M1PMKID:1ff:bb:cc:dd:ee:ff,aabbccddeeff00112233445566778899\r\nOK\r\n";
+    uint8_t bssid[6] = {0}, pmkid[16] = {0};
+    TEST_ASSERT_FALSE(wifi_at_pmkid_parse(resp, bssid, pmkid));
+}
+
 /*===========================================================================*/
 /* main                                                                      */
 /*===========================================================================*/
@@ -308,6 +352,8 @@ int main(void)
     RUN_TEST(test_cwlap_extra_fields_ignored);
     RUN_TEST(test_cwlap_ssid_at_32_chars);
     RUN_TEST(test_cwlap_malformed_bssid_skipped);
+    RUN_TEST(test_cwlap_ssid_with_closing_paren);
+    RUN_TEST(test_cwlap_oversized_mac_octet_skipped);
 
     /* wifi_at_format_bssid */
     RUN_TEST(test_format_bssid_basic);
@@ -324,6 +370,7 @@ int main(void)
     RUN_TEST(test_pmkid_parse_no_prefix_returns_false);
     RUN_TEST(test_pmkid_parse_short_hex_returns_false);
     RUN_TEST(test_pmkid_parse_uppercase_hex_accepted);
+    RUN_TEST(test_pmkid_parse_oversized_mac_octet_returns_false);
 
     return UNITY_END();
 }

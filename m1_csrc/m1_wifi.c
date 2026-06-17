@@ -1147,9 +1147,9 @@ void wifi_survey_24g(void)
 
 	/* Extract channel + RSSI arrays from ap_list for the pure-logic helper */
 	{
-		uint8_t  ch_arr[256];
-		int8_t   rs_arr[256];
-		uint16_t n = (count > 256) ? 256 : count;
+		uint8_t  ch_arr[WIFI_AP_MAX];
+		int8_t   rs_arr[WIFI_AP_MAX];
+		uint16_t n = (count > WIFI_AP_MAX) ? WIFI_AP_MAX : count;
 		for (uint16_t i = 0; i < n; i++)
 		{
 			ch_arr[i] = ap_list[i].channel;
@@ -1201,7 +1201,7 @@ void wifi_survey_24g(void)
 	}
 
 	/* Summary text — 2 lines below chart */
-	snprintf(buf, sizeof(buf), "%u APs   Best: ch %u", count, ana.best_ch);
+	snprintf(buf, sizeof(buf), "%u APs   Best: ch %u", ana.total_aps, ana.best_ch);
 	u8g2_DrawStr(&m1_u8g2, 0, 51, buf);
 	snprintf(buf, sizeof(buf), "Busy: ch %u (%u)   %d dBm",
 	         ana.busiest_ch, ana.busiest_count, (int)ana.strongest_rssi);
@@ -1629,6 +1629,14 @@ void wifi_pmkid_at(void)
 	}
 
 	ensure_esp32_ready();
+
+	/* wifi_pmkid_at uses AT text commands; ensure the AT task is running. */
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+	if (!get_esp32_main_init_status()) {
+		wifi_show_message("PMKID Grab", "ESP32 not ready", NULL);
+		return;
+	}
 
 	/* Step 1: Scan APs via AT+CWLAP */
 	m1_u8g2_firstpage();

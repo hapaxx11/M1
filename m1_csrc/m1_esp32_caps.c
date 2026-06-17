@@ -180,37 +180,23 @@ void m1_esp32_caps_init(void)
      *
      * CMD_PING is universally implemented by all binary-SPI firmware and
      * returns a simple "PONG" (4 bytes) payload.  If CMD_PING succeeds, we
-     * know the ESP32 speaks the binary SPI protocol and can safely assume
-     * the SiN360 capability profile (since SiN360 is currently the only
-     * published binary-SPI firmware variant).
-     *
-     * This probe runs BEFORE CMD_GET_STATUS so that if a future firmware
-     * implements the full capability-reporting protocol, it will be detected
-     * via Probe 1 instead. */
+     * know the ESP32 speaks the binary SPI protocol.  We record that fact
+     * but do NOT return here — Probe 1 (CMD_GET_STATUS) still runs so that
+     * a future firmware implementing the full capability-reporting protocol
+     * is detected via Probe 1 rather than defaulting to the SiN360 profile. */
     ret = m1_esp32_simple_cmd(CMD_PING, &resp, CAPS_QUERY_TIMEOUT_MS);
 
-    if (ret == 0 && resp.status == RESP_OK && resp.payload_len == 4 &&
-        resp.payload[0] == 'P' && resp.payload[1] == 'O' &&
-        resp.payload[2] == 'N' && resp.payload[3] == 'G')
-    {
-        /* SiN360 binary-SPI firmware detected.  Use the full SiN360 profile.
-         * This is a fallback path because SiN360 does not implement the
-         * full CMD_GET_STATUS capability report. */
-        s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
-        strncpy(s_fw_name, "SiN360 (via PING)", sizeof(s_fw_name) - 1);
-        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
-        caps_apply_footprint_estimates(s_bitmap);
-        s_queried = true;
-        return;
-    }
+    bool is_binary_spi = (ret == 0 && resp.status == RESP_OK &&
+                          resp.payload_len == 4 &&
+                          resp.payload[0] == 'P' && resp.payload[1] == 'O' &&
+                          resp.payload[2] == 'N' && resp.payload[3] == 'G');
 
     /* Probe 1: binary CMD_GET_STATUS (0x02).  AT firmware that implements
      * the binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
      * respond here with a full capability report.  Unextended AT firmware
      * (bedge117, dag) will return RESP_ERR or time out.  Current SiN360
      * firmware (v0.9.1.0) returns only a 5-byte version payload, which
-     * fails the parse check below, so this probe is skipped by the Probe 0
-     * PING detection above. */
+     * fails the parse check below. */
     ret = m1_esp32_simple_cmd(CMD_GET_STATUS, &resp, CAPS_QUERY_TIMEOUT_MS);
 
     if (ret == 0 && resp.status == RESP_OK &&
@@ -219,6 +205,19 @@ void m1_esp32_caps_init(void)
     {
         s_bitmap = bitmap;
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+        caps_apply_footprint_estimates(s_bitmap);
+        s_queried = true;
+        return;
+    }
+
+    if (is_binary_spi)
+    {
+        /* PING succeeded (binary-SPI firmware confirmed) but CMD_GET_STATUS
+         * did not provide a full capability report.  This is the current
+         * SiN360 case — use the SiN360 fallback profile. */
+        s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
+        strncpy(s_fw_name, "SiN360 (via PING)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
         caps_apply_footprint_estimates(s_bitmap);
         s_queried = true;
@@ -240,9 +239,8 @@ void m1_esp32_caps_init(void)
      * FreeRTOS heap rather than the caller's stack.  If the heap is
      * exhausted, return without caching so the next call retries.
      *
-     * SiN360 binary-SPI firmware has no AT task, so this probe fails
-     * immediately, which is expected since Probe 0 already detected SiN360
-     * via CMD_PING. */
+     * SiN360 binary-SPI firmware has no AT task, so this probe is skipped
+     * by the early return in the is_binary_spi branch above. */
     if (!get_esp32_main_init_status())
         return;
 
