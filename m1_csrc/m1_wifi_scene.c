@@ -52,6 +52,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneAttackProbeFlood] = &wifi_scene_attack_probe_flood_handlers,
     [WifiSceneAttackKarma]      = &wifi_scene_attack_karma_handlers,
     [WifiSceneAttackKarmaPortal]= &wifi_scene_attack_karma_portal_handlers,
+    [WifiSceneAttackPmkidAt]    = &wifi_scene_attack_pmkid_at_handlers,
 
     [WifiSceneNetMenu]          = &wifi_scene_net_menu_handlers,
     [WifiSceneNetPing]          = &wifi_scene_net_ping_handlers,

@@ -96,12 +96,23 @@ These commands are defined in [`dagnazty/esp32-at-monstatek-m1`](https://github.
 (`at_custom_wifi_cmd.c`, `at_custom_hid_cmd.c`, `at_custom_zigbee_cmd.c`).
 They are NOT available in bedge117, neddy299, or SiN360 firmware.
 The companion STM32 fork [`dagnazty/M1_T-1000`](https://github.com/dagnazty/M1_T-1000)
-uses these commands via UART+SPI AT text protocol.
+uses these commands via SPI AT text protocol.
 
-> **Hapax compatibility note:** Hapax uses SiN360 binary SPI (CMD_* opcodes), which is
-> incompatible with the dag AT text protocol.  The features listed below are NOT available
-> on a Hapax device running SiN360 firmware.  They are documented here for reference when
-> using or evaluating the dag AT ESP32 firmware variant.
+> **Hapax T-800 transport note (Phase 2 resolved — 2026-06-17):** The dag T-800 ESP32
+> firmware (hapaxx11/M1-T-800, the Hapax-tracked fork) uses **SPI AT text** as its
+> primary transport, matching Hapax's `spi_AT_send_recv()` interface.  A binary RPC layer
+> exists in `main/rpc/` (magic `0x4D31`, i.e. "M1" LE) and is labeled "phase 1 dual-mode"
+> but is not yet the primary path.  The T-800 AT commands below are therefore callable
+> from Hapax firmware via `spi_AT_send_recv()` when the T-800 ESP32 is flashed.
+>
+> **Capability gating:** T-800 firmware is fingerprinted by the presence of both
+> `M1_ESP32_CAP_WIFI_JOIN` and `M1_ESP32_CAP_BEACON` bits (3-way discriminator in
+> `m1_esp32_caps.c`).  Use `m1_esp32_has_cap(M1_ESP32_CAP_BEACON)` to gate T-800-only
+> features.
+>
+> **Hapax integration status:** `AT+CWLAP` + `AT+M1PMKID` are integrated as the
+> "PMKID Grab" scene (`WifiSceneAttackPmkidAt`) in the WiFi Attacks menu.  All other
+> T-800 commands remain documented here for future integration.
 
 **WiFi attacks:**
 

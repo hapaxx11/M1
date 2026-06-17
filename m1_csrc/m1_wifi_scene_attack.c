@@ -5,7 +5,7 @@
  * @brief  WiFi Attacks sub-menu + attack delegates.
  *
  * Scenes covered:
- *   WifiSceneAttackMenu         — Attacks sub-menu (8 items)
+ *   WifiSceneAttackMenu         — Attacks sub-menu (9 items)
  *   WifiSceneAttackDeauth       — Deauth attack delegate
  *   WifiSceneAttackBeacon       — Beacon Spam delegate
  *   WifiSceneAttackClone        — AP Clone delegate
@@ -14,6 +14,7 @@
  *   WifiSceneAttackProbeFlood   — Probe Flood delegate
  *   WifiSceneAttackKarma        — Karma delegate
  *   WifiSceneAttackKarmaPortal  — Karma+Portal delegate
+ *   WifiSceneAttackPmkidAt      — PMKID Grab (dag T-800 AT path)
  *
  * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
@@ -51,6 +52,7 @@ DELEGATE(attack_evil_portal,  wifi_evil_portal)
 DELEGATE(attack_probe_flood,  wifi_probe_flood)
 DELEGATE(attack_karma,        wifi_attack_karma)
 DELEGATE(attack_karma_portal, wifi_attack_karma_portal)
+DELEGATE(attack_pmkid_at,     wifi_pmkid_at)
 
 const M1SceneHandlers wifi_scene_attack_deauth_handlers      = { .on_enter = attack_deauth_on_enter      };
 const M1SceneHandlers wifi_scene_attack_beacon_handlers      = { .on_enter = attack_beacon_on_enter      };
@@ -60,23 +62,24 @@ const M1SceneHandlers wifi_scene_attack_evil_portal_handlers = { .on_enter = att
 const M1SceneHandlers wifi_scene_attack_probe_flood_handlers = { .on_enter = attack_probe_flood_on_enter };
 const M1SceneHandlers wifi_scene_attack_karma_handlers       = { .on_enter = attack_karma_on_enter       };
 const M1SceneHandlers wifi_scene_attack_karma_portal_handlers= { .on_enter = attack_karma_portal_on_enter};
+const M1SceneHandlers wifi_scene_attack_pmkid_at_handlers    = { .on_enter = attack_pmkid_at_on_enter    };
 
 /*==========================================================================*/
 /* Attacks sub-menu                                                         */
 /*==========================================================================*/
 
-#define ATTACK_ITEM_COUNT  8
+#define ATTACK_ITEM_COUNT  9
 
 static const char *const attack_labels[ATTACK_ITEM_COUNT] = {
     "Deauth", "Beacon Spam", "AP Clone",
     "Rickroll", "Evil Portal", "Probe Flood",
-    "Karma", "Karma+Portal",
+    "Karma", "Karma+Portal", "PMKID Grab",
 };
 
 static const uint8_t attack_targets[ATTACK_ITEM_COUNT] = {
     WifiSceneAttackDeauth, WifiSceneAttackBeacon, WifiSceneAttackClone,
     WifiSceneAttackRickroll, WifiSceneAttackEvilPortal, WifiSceneAttackProbeFlood,
-    WifiSceneAttackKarma, WifiSceneAttackKarmaPortal,
+    WifiSceneAttackKarma, WifiSceneAttackKarmaPortal, WifiSceneAttackPmkidAt,
 };
 
 static subghz_submenu_model_t s_attack_model;

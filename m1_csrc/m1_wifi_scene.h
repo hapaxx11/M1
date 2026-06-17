@@ -62,6 +62,7 @@ typedef enum {
     WifiSceneAttackProbeFlood,
     WifiSceneAttackKarma,
     WifiSceneAttackKarmaPortal,
+    WifiSceneAttackPmkidAt,
 
     /* Network Scanners sub-menu */
     WifiSceneNetMenu,
@@ -138,6 +139,7 @@ extern const M1SceneHandlers wifi_scene_attack_evil_portal_handlers;
 extern const M1SceneHandlers wifi_scene_attack_probe_flood_handlers;
 extern const M1SceneHandlers wifi_scene_attack_karma_handlers;
 extern const M1SceneHandlers wifi_scene_attack_karma_portal_handlers;
+extern const M1SceneHandlers wifi_scene_attack_pmkid_at_handlers;
 
 /* m1_wifi_scene_net.c */
 extern const M1SceneHandlers wifi_scene_net_menu_handlers;

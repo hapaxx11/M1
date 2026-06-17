@@ -2013,6 +2013,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_ch_analysis COMMAND test_wifi_ch_analysis)
 
+# ---------- wifi_at_scan (Phase 6 — dag T-800 AT+CWLAP / AT+M1PMKID parsers) ----------
+add_executable(test_wifi_at_scan
+    test_wifi_at_scan.c
+    ${M1_ROOT}/m1_csrc/wifi_at_scan.c
+)
+target_include_directories(test_wifi_at_scan PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_at_scan PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_at_scan PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_at_scan COMMAND test_wifi_at_scan)
+
 # ---------- wifi_mac_utils (Phase A) ----------
 add_executable(test_wifi_mac_utils
     test_wifi_mac_utils.c
