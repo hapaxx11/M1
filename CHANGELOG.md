@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.0-alpha0] - 2026-06-19
+
+### Changed
+
+- **Documentation: Remove completed phase logs and stale backlog artifacts** — CLAUDE.md and ARCHITECTURE.md cleaned up: all completed Phases A–J implementation logs condensed to concise rule summaries; stale "In progress" labels corrected; Phase 9e-2/3/4 (Nice FloR-S, CAME Atomo, Alutech AT-4N counter-edit) updated from DEFERRED to SUPPORTED; Phase 11-2+ unblocked accordingly. ARCHITECTURE.md modularization table simplified.
 ## [0.9.1.60] - 2026-06-13
 
 ### Added
