@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.0] - 2026-06-21
+
+### Added
+
+- **WiFi: PMKID Grab via dag T-800 AT path** — new "PMKID Grab" entry in the WiFi Attacks menu
+  (WifiSceneAttackPmkidAt). Uses AT+CWLAP to scan visible APs, presents a scrollable one-at-a-time
+  selection list, then sends AT+M1PMKID to solicit the PMKID from the chosen AP (dag T-800 firmware
+  only). On success, saves to `pmkid/captures.22000` in Hashcat WPA*01 format via the existing
+  `pmkid_save_to_sd()` helper. Gated on M1_ESP32_CAP_BEACON (T-800 fingerprint bit).
+  Pure-logic AT parsing extracted into `wifi_at_scan.c/h` with 23 Unity tests.
+- **WiFi: 2.4G Channel Survey** — new tool in the WiFi top-level menu (between Station Scan and MAC Track). Scans visible APs and displays a per-channel bar chart (channels 1–13), total AP count, busiest channel, recommended (least-congested) channel, and strongest-signal RSSI. Ported from dagnazty/M1_T-1000 and adapted to Hapax's SiN360 binary SPI scan infrastructure.
+  **Documentation: dagnazty (dag) ESP32 AT firmware** — added full custom AT command table (AT+M1DEAUTH, AT+M1DEAUTHALL, AT+M1BEACON, AT+M1KARMA, AT+M1PMKID, AT+M1HSCAP, AT+M1EVILTWIN, AT+M1PROBE, AT+M1WIFISTATS, AT+M1MONITOR, AT+HIDKBINIT, AT+HIDKBSEND, AT+ZIGSNIFF) to documentation/esp32_firmware.md. Added dagnazty/M1_T-1000 (STM32 fork) to CLAUDE.md Public Forks Tracker.
+
+### Changed
+
+- **Documentation: Remove completed phase logs and stale backlog artifacts** — CLAUDE.md and ARCHITECTURE.md cleaned up: all completed Phases A–J implementation logs condensed to concise rule summaries; stale "In progress" labels corrected; Phase 9e-2/3/4 (Nice FloR-S, CAME Atomo, Alutech AT-4N counter-edit) updated from DEFERRED to SUPPORTED; Phase 11-2+ unblocked accordingly. ARCHITECTURE.md modularization table simplified.
+
+### Fixed
+
+- **ESP32 firmware detection: CMD_PING probe for SiN360** — Fixed a critical bug
+  where SiN360 binary-SPI firmware would be misdetected as "Unknown" firmware.
+  The original CMD_GET_STATUS probe expected a 41-byte capability report, but
+  the actual SiN360 implementation returns only 5 bytes.  Added Probe 0 that
+  tries CMD_PING first: if "PONG" is received, SiN360 is detected and the full
+  M1_ESP32_CAP_PROFILE_SIN360 capability profile is applied.  This ensures
+  correct identification without requiring changes to the SiN360 firmware itself.
 ## [0.9.1.60] - 2026-06-13
 
 ### Added
