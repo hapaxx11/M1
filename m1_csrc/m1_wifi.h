@@ -24,6 +24,7 @@ void wifi_scan_ap(void);
 
 /* Station scan (client discovery) */
 void wifi_station_scan(void);
+void wifi_survey_24g(void);
 
 /* Sniffer modes */
 void wifi_sniff_all(void);
@@ -54,6 +55,7 @@ void wifi_evil_portal(void);
 void wifi_probe_flood(void);
 void wifi_attack_karma(void);
 void wifi_attack_karma_portal(void);
+void wifi_pmkid_at(void);
 
 /* WiFi General / Config */
 void wifi_general_view_ap_info(void);

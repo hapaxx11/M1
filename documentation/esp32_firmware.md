@@ -90,6 +90,67 @@ Protocol classification: Zigbee (Z), Thread (T), Unknown (U).
 | `AT+STASCAN=0` | Stop station scan |
 | `AT+STASCAN?` | Query results → `+STASCAN:("<mac>")` per station |
 
+### dagnazty (dag) custom AT commands
+
+These commands are defined in [`dagnazty/esp32-at-monstatek-m1`](https://github.com/dagnazty/esp32-at-monstatek-m1)
+(`at_custom_wifi_cmd.c`, `at_custom_hid_cmd.c`, `at_custom_zigbee_cmd.c`).
+They are NOT available in bedge117, neddy299, or SiN360 firmware.
+The companion STM32 fork [`dagnazty/M1_T-1000`](https://github.com/dagnazty/M1_T-1000)
+uses these commands via SPI AT text protocol.
+
+> **Hapax T-800 transport note (Phase 2 resolved — 2026-06-17):** The dag T-800 ESP32
+> firmware (hapaxx11/M1-T-800, the Hapax-tracked fork) uses **SPI AT text** as its
+> primary transport, matching Hapax's `spi_AT_send_recv()` interface.  A binary RPC layer
+> exists in `main/rpc/` (magic `0x4D31`, i.e. "M1" LE) and is labeled "phase 1 dual-mode"
+> but is not yet the primary path.  The T-800 AT commands below are therefore callable
+> from Hapax firmware via `spi_AT_send_recv()` when the T-800 ESP32 is flashed.
+>
+> **Capability gating:** T-800 firmware is fingerprinted by the presence of both
+> `M1_ESP32_CAP_WIFI_JOIN` and `M1_ESP32_CAP_BEACON` bits (3-way discriminator in
+> `m1_esp32_caps.c`).  Use `m1_esp32_has_cap(M1_ESP32_CAP_BEACON)` to gate T-800-only
+> features.
+>
+> **Hapax integration status:** `AT+CWLAP` + `AT+M1PMKID` are integrated as the
+> "PMKID Grab" scene (`WifiSceneAttackPmkidAt`) in the WiFi Attacks menu.  All other
+> T-800 commands remain documented here for future integration.
+
+**WiFi attacks:**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+M1DEAUTH` | `="<bssid>",<ch>` | Deauth single AP — broadcast deauth frames on specified channel |
+| `AT+M1DEAUTHALL` | _(none)_ | Scan all visible APs and deauth all simultaneously (channel-hopping) |
+| `AT+M1DEAUTHSTOP` | _(none)_ | Stop ongoing deauth |
+| `AT+M1BEACON` | `=<start>,<ch>,"<ssid>","<bssid>"` | Beacon flood — broadcast fake AP beacon on specified channel |
+| `AT+M1KARMA` | `=<start>,"<ssid>"` | Karma attack — respond to probe requests with matching fake AP |
+| `AT+M1HSCAP` | `="<bssid>",<ch>,<timeout_s>` | PMKID / WPA handshake capture for specified AP |
+| `AT+M1EVILTWIN` | `=<start>,"<ssid>",<ch>` | Evil Twin rogue AP with captive portal on specified channel |
+| `AT+M1PROBE` | `=<start>,<ch>` | Probe flood — send probe requests on specified channel |
+| `AT+M1WIFISTATS` | _(none)_ | Query per-channel packet statistics from monitor mode |
+| `AT+M1PMKID` | `="<bssid>",<ch>` | Dedicated PMKID capture (EAPOL handshake, does not require client) |
+
+**WiFi monitoring:**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+M1MONITOR` | `=<start>,<ch>` | Enable/disable promiscuous monitor mode on specified channel |
+
+**BLE HID keyboard (replaces AT+BLEHIDINIT/AT+BLEHIDKB in dag firmware):**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+HIDKBINIT` | `=<enable>` | Initialise BLE HID keyboard service |
+| `AT+HIDKBSEND` | `=<modifier>,<k1>,<k2>,<k3>,<k4>,<k5>,<k6>` | Send HID keyboard report (7-byte USB HID format) |
+
+> **Note:** `AT+HIDKBINIT` / `AT+HIDKBSEND` replace the bedge117-style
+> `AT+BLEHIDINIT` / `AT+BLEHIDKB` naming in the dag firmware variant.
+
+**IEEE 802.15.4 / Zigbee (same semantics as bedge117/neddy299):**
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `AT+ZIGSNIFF` | `=<start>,<channel>` | Start/stop 802.15.4 promiscuous sniffing on specified channel |
+
 ## Key Customisations vs Stock esp-at
 
 1. **SPI pin mapping** for M1 hardware (stock defaults are wrong)

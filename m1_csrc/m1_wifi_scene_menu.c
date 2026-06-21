@@ -5,9 +5,10 @@
  * @brief  WiFi top-level menu scene + core/direct-tool delegates.
  *
  * Scenes covered:
- *   WifiSceneMenu           — top-level 12/15-item menu
+ *   WifiSceneMenu           — top-level 13/16-item menu
  *   WifiSceneScanConnect    — Scan & Connect delegate
  *   WifiSceneStationScan    — Station Scan delegate
+ *   WifiSceneSurvey24g      — 2.4G Channel Survey delegate
  *   WifiSceneMacTrack       — MAC Track delegate
  *   WifiSceneWardrive       — Wardrive delegate
  *   WifiSceneStationWardrive— Station Wardrive delegate
@@ -47,6 +48,7 @@
 
 DELEGATE(scan_connect,      wifi_scan_ap)
 DELEGATE(station_scan,      wifi_station_scan)
+DELEGATE(survey_24g,        wifi_survey_24g)
 DELEGATE(mac_track,         wifi_mac_track)
 DELEGATE(wardrive,          wifi_wardrive)
 DELEGATE(station_wardrive,  wifi_station_wardrive)
@@ -56,6 +58,7 @@ DELEGATE(thread,            thread_scan)
 
 const M1SceneHandlers wifi_scene_scan_connect_handlers     = { .on_enter = scan_connect_on_enter     };
 const M1SceneHandlers wifi_scene_station_scan_handlers     = { .on_enter = station_scan_on_enter     };
+const M1SceneHandlers wifi_scene_survey_24g_handlers       = { .on_enter = survey_24g_on_enter       };
 const M1SceneHandlers wifi_scene_mac_track_handlers        = { .on_enter = mac_track_on_enter        };
 const M1SceneHandlers wifi_scene_wardrive_handlers         = { .on_enter = wardrive_on_enter         };
 const M1SceneHandlers wifi_scene_station_wardrive_handlers = { .on_enter = station_wardrive_on_enter };
@@ -68,14 +71,15 @@ const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = threa
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define MENU_ITEM_COUNT  15
+#define MENU_ITEM_COUNT  16
 #else
-#define MENU_ITEM_COUNT  12
+#define MENU_ITEM_COUNT  13
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Scan & Connect",
     "Station Scan",
+    "2.4G Survey",
     "MAC Track",
     "Wardrive",
     "Station Wardrive",
@@ -96,6 +100,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneScanConnect,
     WifiSceneStationScan,
+    WifiSceneSurvey24g,
     WifiSceneMacTrack,
     WifiSceneWardrive,
     WifiSceneStationWardrive,

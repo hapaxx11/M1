@@ -69,18 +69,50 @@ static uint32_t s_free_heap_bytes = 0u;
  * table — no curated fallback profile macros are required.
  *
  * Currently mapped commands:
- *   - "AT+CWJAP"      — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
- *   - "AT+BLEHIDINIT" — stock ESP-AT (BLE HID example) → CAP_BLE_HID
- *   - "AT+ZIGSNIFF"   — bedge117/dag/neddy299 custom    → CAP_802154
- *   - "AT+DEAUTH"     — dag/neddy299 at_custom_deauth   → CAP_DEAUTH
- *   - "AT+STASCAN"    — neddy299 at_custom_stascan      → CAP_STA_SCAN
+ *   - "AT+CWJAP"        — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
+ *   - "AT+BLEHIDINIT"   — stock ESP-AT (BLE HID example)  → CAP_BLE_HID
+ *   - "AT+ZIGSNIFF"     — bedge117/dag/neddy299 custom     → CAP_802154
+ *   - "AT+DEAUTH"       — dag/neddy299 at_custom_deauth    → CAP_DEAUTH
+ *   - "AT+STASCAN"      — neddy299 at_custom_stascan       → CAP_STA_SCAN
+ *   - "AT+M1DEAUTH"     — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
+ *   - "AT+M1DEAUTHALL"  — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
+ *   - "AT+M1DEAUTHSTOP" — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
+ *   - "AT+M1BEACON"     — dag T-800 at_custom_wifi_cmd     → CAP_BEACON
+ *   - "AT+M1KARMA"      — dag T-800 at_custom_wifi_cmd     → CAP_KARMA
+ *   - "AT+M1EVILTWIN"   — dag T-800 at_custom_wifi_cmd     → CAP_PORTAL
+ *   - "AT+M1BLESPAM"    — dag T-800 at_custom_wifi_cmd     → CAP_BLE_ADV
+ *   - "AT+M1MONITOR"    — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
+ *   - "AT+M1PROBE"      — dag T-800 at_custom_wifi_cmd     → CAP_PROBE_FLOOD
+ *   - "AT+M1PMKID"      — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
+ *   - "AT+M1HSCAP"      — dag T-800 at_custom_wifi_cmd     → CAP_PKTMON
+ *   - "AT+M1WIFISTATS"  — dag T-800 at_custom_wifi_cmd     → CAP_WIFI_SCAN
+ *   - "AT+HIDKBINIT"    — dag T-800 at_custom_hid_cmd      → CAP_BLE_HID
+ *   - "AT+HIDKBSEND"    — dag T-800 at_custom_hid_cmd      → CAP_BLE_HID
  * =========================================================================*/
 static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
-    { "AT+CWJAP",      M1_ESP32_CAP_WIFI_JOIN },
-    { "AT+BLEHIDINIT", M1_ESP32_CAP_BLE_HID   },
-    { "AT+ZIGSNIFF",   M1_ESP32_CAP_802154    },
-    { "AT+DEAUTH",     M1_ESP32_CAP_DEAUTH    },
-    { "AT+STASCAN",    M1_ESP32_CAP_STA_SCAN  },
+    /* Stock ESP-AT */
+    { "AT+CWJAP",        M1_ESP32_CAP_WIFI_JOIN  },
+    { "AT+BLEHIDINIT",   M1_ESP32_CAP_BLE_HID    },
+    /* bedge117 / neddy299 custom commands */
+    { "AT+ZIGSNIFF",     M1_ESP32_CAP_802154     },
+    { "AT+DEAUTH",       M1_ESP32_CAP_DEAUTH     },
+    { "AT+STASCAN",      M1_ESP32_CAP_STA_SCAN   },
+    /* dag T-800 custom WiFi commands (at_custom_wifi_cmd.c) */
+    { "AT+M1DEAUTH",     M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1DEAUTHALL",  M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1DEAUTHSTOP", M1_ESP32_CAP_DEAUTH     },
+    { "AT+M1BEACON",     M1_ESP32_CAP_BEACON     },
+    { "AT+M1KARMA",      M1_ESP32_CAP_KARMA      },
+    { "AT+M1EVILTWIN",   M1_ESP32_CAP_PORTAL     },
+    { "AT+M1BLESPAM",    M1_ESP32_CAP_BLE_ADV    },
+    { "AT+M1MONITOR",    M1_ESP32_CAP_PKTMON     },
+    { "AT+M1PROBE",      M1_ESP32_CAP_PROBE_FLOOD},
+    { "AT+M1PMKID",      M1_ESP32_CAP_PKTMON     },
+    { "AT+M1HSCAP",      M1_ESP32_CAP_PKTMON     },
+    { "AT+M1WIFISTATS",  M1_ESP32_CAP_WIFI_SCAN  },
+    /* dag T-800 custom HID commands (at_custom_hid_cmd.c) */
+    { "AT+HIDKBINIT",    M1_ESP32_CAP_BLE_HID    },
+    { "AT+HIDKBSEND",    M1_ESP32_CAP_BLE_HID    },
 };
 
 #define S_AT_CMD_CAP_MAP_N \
@@ -90,19 +122,29 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 
 /**
  * Set memory footprint estimates based on the resolved capability bitmap.
- * Uses M1_ESP32_CAP_WIFI_JOIN as the profile discriminator:
- *   present  → AT/C3 profile (bedge117/neddy299)
- *   absent   → SiN360 profile
+ * Three-way discriminator:
+ *   WIFI_JOIN + BEACON → dag T-800 profile (dagnazty/M1-T-800)
+ *   WIFI_JOIN alone    → stock AT/C3 profile (bedge117/neddy299)
+ *   neither            → SiN360 profile
  */
 static void caps_apply_footprint_estimates(uint64_t bitmap)
 {
-    if (bitmap & M1_ESP32_CAP_WIFI_JOIN)
+    if ((bitmap & M1_ESP32_CAP_WIFI_JOIN) &&
+        (bitmap & M1_ESP32_CAP_BEACON))
     {
+        /* dag T-800: AT firmware with custom WiFi/HID/Zigbee commands */
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_T800;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_T800;
+    }
+    else if (bitmap & M1_ESP32_CAP_WIFI_JOIN)
+    {
+        /* Stock AT / bedge117 / neddy299 */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
     }
     else
     {
+        /* SiN360 binary SPI firmware */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_SIN360;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_SIN360;
     }
@@ -120,18 +162,41 @@ void m1_esp32_caps_init(void)
     if (s_queried)
         return;  /* Already cached from a previous call */
 
-    /* Require the SPI HAL transport to be active before sending CMD_GET_STATUS.
-     * If the ESP32 has not been initialised yet (or was deinitialized), return
-     * without caching so the next call retries once the transport is ready.
-     * Probing an uninitialised transport would time out and cache the
-     * fallback, potentially mis-attributing capabilities. */
+    /* Require the SPI HAL transport to be active before sending any binary
+     * commands.  If the ESP32 has not been initialised yet (or was
+     * deinitialized), return without caching so the next call retries once
+     * the transport is ready.  Probing an uninitialised transport would time
+     * out and cache the fallback, potentially mis-attributing capabilities. */
     if (!m1_esp32_get_init_status())
         return;
 
-    /* Probe 1: binary CMD_GET_STATUS (0x02).  SiN360 binary-SPI firmware
-     * always responds here.  AT firmware that implements the binary extension
-     * (e.g. hapaxx11/esp32-at-monstatek-m1) also responds here.  Unextended
-     * AT firmware (bedge117, dag) will return RESP_ERR or time out. */
+    /* Probe 0: binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
+     * CMD_GET_STATUS (0x02) was proposed as a capability-reporting command
+     * but never fully implemented in SiN360 firmware.  The actual SiN360
+     * cmd_get_status() implementation (sincere360/M1_SiN360_ESP32) returns
+     * only a 5-byte version payload, not the 41-byte capability report that
+     * m1_esp32_caps_parse_payload() expects.  Because SiN360 has no AT task,
+     * the AT+CMD? probe also fails, leaving SiN360 misdetected as "Unknown".
+     *
+     * CMD_PING is universally implemented by all binary-SPI firmware and
+     * returns a simple "PONG" (4 bytes) payload.  If CMD_PING succeeds, we
+     * know the ESP32 speaks the binary SPI protocol.  We record that fact
+     * but do NOT return here — Probe 1 (CMD_GET_STATUS) still runs so that
+     * a future firmware implementing the full capability-reporting protocol
+     * is detected via Probe 1 rather than defaulting to the SiN360 profile. */
+    ret = m1_esp32_simple_cmd(CMD_PING, &resp, CAPS_QUERY_TIMEOUT_MS);
+
+    bool is_binary_spi = (ret == 0 && resp.status == RESP_OK &&
+                          resp.payload_len == 4 &&
+                          resp.payload[0] == 'P' && resp.payload[1] == 'O' &&
+                          resp.payload[2] == 'N' && resp.payload[3] == 'G');
+
+    /* Probe 1: binary CMD_GET_STATUS (0x02).  AT firmware that implements
+     * the binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
+     * respond here with a full capability report.  Unextended AT firmware
+     * (bedge117, dag) will return RESP_ERR or time out.  Current SiN360
+     * firmware (v0.9.1.0) returns only a 5-byte version payload, which
+     * fails the parse check below. */
     ret = m1_esp32_simple_cmd(CMD_GET_STATUS, &resp, CAPS_QUERY_TIMEOUT_MS);
 
     if (ret == 0 && resp.status == RESP_OK &&
@@ -140,6 +205,19 @@ void m1_esp32_caps_init(void)
     {
         s_bitmap = bitmap;
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+        caps_apply_footprint_estimates(s_bitmap);
+        s_queried = true;
+        return;
+    }
+
+    if (is_binary_spi)
+    {
+        /* PING succeeded (binary-SPI firmware confirmed) but CMD_GET_STATUS
+         * did not provide a full capability report.  This is the current
+         * SiN360 case — use the SiN360 fallback profile. */
+        s_bitmap = M1_ESP32_CAP_PROFILE_SIN360;
+        strncpy(s_fw_name, "SiN360 (via PING)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
         caps_apply_footprint_estimates(s_bitmap);
         s_queried = true;
@@ -159,7 +237,10 @@ void m1_esp32_caps_init(void)
      *
      * The response can be several KB, so the buffer is allocated from the
      * FreeRTOS heap rather than the caller's stack.  If the heap is
-     * exhausted, return without caching so the next call retries. */
+     * exhausted, return without caching so the next call retries.
+     *
+     * SiN360 binary-SPI firmware has no AT task, so this probe is skipped
+     * by the early return in the is_binary_spi branch above. */
     if (!get_esp32_main_init_status())
         return;
 

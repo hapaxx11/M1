@@ -35,11 +35,15 @@
 #include "m1_wifi_cred.h"
 #include "wifi_ap_record.h"
 #include "wifi_mac_utils.h"
+#include "wifi_ch_analysis.h"
 #include "wifi_file_utils.h"
 #include "wifi_status_msg.h"
 #include "wifi_sta_record.h"
 #include "wifi_selection.h"
 #include "wifi_deauth_cmd.h"
+#include "wifi_at_scan.h"
+#include "m1_esp32_caps.h"
+#include "esp_app_main.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -92,6 +96,7 @@ static void wifi_draw_ap_info(void);
 static bool wifi_join_choose_password(char *password, size_t password_len);
 static void wifi_connect_selected_ap(void);
 static void ensure_esp32_ready(void);
+static void pmkid_save_to_sd(const uint8_t *src, const uint8_t *bssid, const uint8_t *pmkid_bytes);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -1104,6 +1109,108 @@ static bool wifi_mac_track_resp_match(const m1_resp_t *resp, const uint8_t targe
 	return false;
 }
 
+/*============================================================================*/
+/*  2.4 GHz Channel Survey (ported from dagnazty/M1_T-1000)                  */
+/*============================================================================*/
+/**
+  * @brief  Scan visible APs and display a 2.4 GHz channel environment summary.
+  *
+  * Shows a bar chart of APs per channel (1–13) plus key statistics: total AP
+  * count, busiest channel, best (least-congested) channel, and strongest RSSI.
+  * Uses the existing SiN360 binary SPI scan infrastructure (wifi_do_scan).
+  * Ported from dagnazty/M1_T-1000; adapted to Hapax scene architecture.
+  */
+void wifi_survey_24g(void)
+{
+	wifi_ch_analysis_t  ana;
+	char     buf[32];
+	uint16_t count;
+
+	ensure_esp32_ready();
+
+	/* Show scanning status (non-blocking draw) */
+	wifi_draw_message("2.4G Survey", "Scanning APs...", "");
+
+	count = wifi_do_scan();
+
+	if (count == 0)
+	{
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		m1_u8g2_firstpage();
+		u8g2_DrawStr(&m1_u8g2, 2, 8, "2.4G Survey");
+		u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "No APs found");
+		m1_u8g2_nextpage();
+		wifi_wait_dismiss();
+		return;
+	}
+
+	/* Extract channel + RSSI arrays from ap_list for the pure-logic helper */
+	{
+		uint8_t  ch_arr[WIFI_AP_MAX];
+		int8_t   rs_arr[WIFI_AP_MAX];
+		uint16_t n = (count > WIFI_AP_MAX) ? WIFI_AP_MAX : count;
+		for (uint16_t i = 0; i < n; i++)
+		{
+			ch_arr[i] = ap_list[i].channel;
+			rs_arr[i] = ap_list[i].rssi;
+		}
+		wifi_ch_analysis_compute(ch_arr, rs_arr, n, &ana);
+	}
+
+	/* ---- Draw results ---- */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	m1_u8g2_firstpage();
+
+	/* Title bar */
+	u8g2_DrawStr(&m1_u8g2, 2, 8, "2.4G Survey");
+	u8g2_DrawHLine(&m1_u8g2, 0, 10, 128);
+
+	/* Channel bar chart: channels 1-13, bar=8px wide, gap=1px, chart 28px tall
+	 * Region: x=1..117, chart top y=11, baseline y=39                          */
+	{
+		const uint8_t chart_top  = 11;
+		const uint8_t chart_h    = 28;
+		const uint8_t bar_w      =  8;
+		const uint8_t bar_step   =  9; /* bar_w + 1 px gap */
+
+		for (uint8_t ch = 1; ch <= 13; ch++)
+		{
+			uint8_t bar_h = wifi_ch_bar_height(
+				ana.ch_count[ch], ana.busiest_count, chart_h);
+			uint8_t bx = 1 + (ch - 1) * bar_step;
+			if (bar_h > 0)
+				u8g2_DrawBox(&m1_u8g2, bx,
+				             chart_top + chart_h - bar_h,
+				             bar_w, bar_h);
+		}
+
+		/* Baseline */
+		u8g2_DrawHLine(&m1_u8g2, 1, chart_top + chart_h,
+		               13 * bar_step - 1);
+
+		/* Small downward arrow below the best (quietest) channel bar */
+		{
+			uint8_t ax = 1 + (ana.best_ch - 1) * bar_step + bar_w / 2;
+			uint8_t ay = chart_top + chart_h + 1;
+			u8g2_DrawPixel(&m1_u8g2, ax,     ay);
+			u8g2_DrawPixel(&m1_u8g2, ax - 1, ay + 1);
+			u8g2_DrawPixel(&m1_u8g2, ax + 1, ay + 1);
+			u8g2_DrawPixel(&m1_u8g2, ax,     ay + 1);
+		}
+	}
+
+	/* Summary text — 2 lines below chart */
+	snprintf(buf, sizeof(buf), "%u APs   Best: ch %u", ana.total_aps, ana.best_ch);
+	u8g2_DrawStr(&m1_u8g2, 0, 51, buf);
+	snprintf(buf, sizeof(buf), "Busy: ch %u (%u)   %d dBm",
+	         ana.busiest_ch, ana.busiest_count, (int)ana.strongest_rssi);
+	u8g2_DrawStr(&m1_u8g2, 0, 62, buf);
+
+	m1_u8g2_nextpage();
+	wifi_wait_dismiss();
+}
+
 void wifi_mac_track(void)
 {
 	S_M1_Buttons_Status btn;
@@ -1453,8 +1560,187 @@ void wifi_sniff_sae(void)        { wifi_sniffer_run(SNIFF_SAE, "SAE/WPA3"); }
 
 
 /*============================================================================*/
-/*  Network Scanner UI                                                       */
+/*  PMKID Capture — dag T-800 AT path (AT+CWLAP + AT+M1PMKID)               */
 /*============================================================================*/
+
+/*
+ * wifi_pmkid_at() uses the dag T-800 AT firmware to actively solicit the
+ * PMKID from a chosen AP.  Transport: spi_AT_send_recv() with AT text
+ * commands — not the SiN360 binary protocol.  Gated on M1_ESP32_CAP_BEACON
+ * which is the T-800 fingerprint bit.
+ *
+ * Blocking: AT+CWLAP up to 12 s; AT+M1PMKID up to 18 s.  Both durations
+ * are bounded and short enough that no cancel mechanism is needed.
+ */
+
+/* Draw one AT-scan AP entry for the selection list (one at a time). */
+static void pmkid_at_draw_ap(const wifi_at_ap_t *aps, uint8_t idx, uint8_t total)
+{
+	char ln[26];
+
+	m1_u8g2_firstpage();
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	snprintf(ln, sizeof(ln), "PMKID - %d/%d", idx + 1, total);
+	u8g2_DrawStr(&m1_u8g2, 2, 9, ln);
+	u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
+
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+	/* SSID (truncated) */
+	char ssid_buf[21];
+	if (aps[idx].ssid[0] == '\0')
+		snprintf(ssid_buf, sizeof(ssid_buf), "*hidden*");
+	else {
+		strncpy(ssid_buf, aps[idx].ssid, 20);
+		ssid_buf[20] = '\0';
+	}
+	u8g2_DrawStr(&m1_u8g2, 2, 22, ssid_buf);
+
+	/* BSSID */
+	char bssid_str[18];
+	wifi_at_format_bssid(aps[idx].bssid, bssid_str);
+	u8g2_DrawStr(&m1_u8g2, 2, 30, bssid_str);
+
+	/* RSSI and channel */
+	snprintf(ln, sizeof(ln), "RSSI: %ddBm  Ch: %d",
+	         (int)aps[idx].rssi, (int)aps[idx].channel);
+	u8g2_DrawStr(&m1_u8g2, 2, 38, ln);
+
+	/* Bottom bar — OK = Grab, UP/DOWN to scroll */
+	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Grab", NULL, NULL);
+	m1_u8g2_nextpage();
+}
+
+void wifi_pmkid_at(void)
+{
+	S_M1_Buttons_Status btn;
+	S_M1_Main_Q_t q_item;
+	BaseType_t ret;
+	/* Keep resp_buf off the stack — 2 KB would consume the task's stack budget. */
+	static char resp_buf[2048];
+	wifi_at_ap_t *aps = NULL;
+	uint8_t ap_cnt = 0;
+	uint8_t sel_idx = 0;
+
+	/* T-800 capability gate */
+	if (!m1_esp32_has_cap(M1_ESP32_CAP_BEACON)) {
+		wifi_show_message("PMKID Grab", "Requires T-800", "Flash dag firmware");
+		return;
+	}
+
+	ensure_esp32_ready();
+
+	/* wifi_pmkid_at uses AT text commands; ensure the AT task is running. */
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+	if (!get_esp32_main_init_status()) {
+		wifi_show_message("PMKID Grab", "ESP32 not ready", NULL);
+		return;
+	}
+
+	/* Step 1: Scan APs via AT+CWLAP */
+	m1_u8g2_firstpage();
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "PMKID Grab");
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 6, 35, "Scanning WiFi...");
+	m1_u8g2_nextpage();
+
+	memset(resp_buf, 0, sizeof(resp_buf));
+	(void)spi_AT_send_recv("AT+CWLAP\r\n", resp_buf, sizeof(resp_buf), 12);
+
+	aps = (wifi_at_ap_t *)malloc(WIFI_AT_CWLAP_MAX_APS * sizeof(wifi_at_ap_t));
+	if (!aps) {
+		wifi_show_message("PMKID Grab", "Out of memory", NULL);
+		return;
+	}
+	memset(aps, 0, WIFI_AT_CWLAP_MAX_APS * sizeof(wifi_at_ap_t));
+
+	ap_cnt = wifi_at_cwlap_parse(resp_buf, aps, WIFI_AT_CWLAP_MAX_APS);
+	if (ap_cnt == 0) {
+		wifi_show_message("PMKID Grab", "No APs found", "Try again?");
+		free(aps);
+		return;
+	}
+
+	/* Step 2: AP selection loop */
+	pmkid_at_draw_ap(aps, sel_idx, ap_cnt);
+	while (1) {
+		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(200));
+		if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD) {
+			xQueueReceive(button_events_q_hdl, &btn, 0);
+			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				free(aps);
+				return;
+			}
+			else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				break;  /* AP selected */
+			}
+			else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				sel_idx = (sel_idx > 0) ? sel_idx - 1 : ap_cnt - 1;
+				pmkid_at_draw_ap(aps, sel_idx, ap_cnt);
+			}
+			else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				sel_idx = (sel_idx + 1 < ap_cnt) ? sel_idx + 1 : 0;
+				pmkid_at_draw_ap(aps, sel_idx, ap_cnt);
+			}
+		}
+	}
+
+	/* Step 3: Build and send AT+M1PMKID=<bssid>,<channel> */
+	char bssid_str[18];
+	wifi_at_format_bssid(aps[sel_idx].bssid, bssid_str);
+
+	char at_cmd[64];
+	snprintf(at_cmd, sizeof(at_cmd), "AT+M1PMKID=%s,%d\r\n",
+	         bssid_str, (int)aps[sel_idx].channel);
+
+	/* Show progress screen while probe runs (up to 15 s) */
+	m1_u8g2_firstpage();
+	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 10, "PMKID Grab");
+	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 6, 28, "Probing AP...");
+	u8g2_DrawStr(&m1_u8g2, 6, 38, "Up to 15s");
+	m1_u8g2_nextpage();
+
+	memset(resp_buf, 0, sizeof(resp_buf));
+	(void)spi_AT_send_recv(at_cmd, resp_buf, sizeof(resp_buf), 18);
+
+	/* Step 4: Parse AT+M1PMKID response */
+	uint8_t resp_bssid[6]  = {0};
+	uint8_t pmkid_bytes[16] = {0};
+	bool ok = wifi_at_pmkid_parse(resp_buf, resp_bssid, pmkid_bytes);
+
+	if (ok) {
+		/* STA MAC is not provided by AT+M1PMKID — use zeros.
+		 * Hashcat WPA*01 format only requires PMKID and AP MAC for cracking. */
+		static const uint8_t zero_mac[6] = {0};
+		pmkid_save_to_sd(zero_mac, resp_bssid, pmkid_bytes);
+		wifi_show_message("PMKID Grab", "PMKID saved!", "pmkid/captures.22000");
+	} else {
+		const char *err = strstr(resp_buf, "+M1PMKID:ERR:");
+		if (err) {
+			char errmsg[22];
+			strncpy(errmsg, err + 13, 21);
+			errmsg[21] = '\0';
+			char *nl = strchr(errmsg, '\r');
+			if (!nl) nl = strchr(errmsg, '\n');
+			if (nl) *nl = '\0';
+			wifi_show_message("PMKID Grab", "Failed:", errmsg);
+		} else {
+			wifi_show_message("PMKID Grab", "No PMKID received", "AP unsupported?");
+		}
+	}
+
+	free(aps);
+}
 
 #define NETSCAN_MODE_SSH    0
 #define NETSCAN_MODE_TELNET 1

@@ -29,18 +29,25 @@
  * Never gate on a compile flag or firmware name string.
  *
  * Wire protocol note:
- *   Two probes are issued in sequence:
- *     1. Binary `CMD_GET_STATUS` (0x02) — SiN360 binary-SPI firmware (and any
- *        AT firmware that implements this extension) self-reports the full
- *        capability bitmap and firmware name.
- *     2. Stock AT `AT+CMD?` — when the binary probe fails, the AT task is
+ *   Three probes are issued in sequence:
+ *     0. Binary `CMD_PING` (0x01) — SiN360 binary-SPI firmware detection.
+ *        CMD_GET_STATUS was proposed as a capability-reporting command but
+ *        never fully implemented in SiN360 (it returns only a 5-byte version
+ *        payload, not the 41-byte capability report).  CMD_PING is universally
+ *        implemented and returns "PONG" (4 bytes).  If this probe succeeds,
+ *        we know we have SiN360 binary firmware and use M1_ESP32_CAP_PROFILE_SIN360.
+ *     1. Binary `CMD_GET_STATUS` (0x02) — AT firmware that implements the
+ *        full binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
+ *        self-report the full capability bitmap and firmware name here.
+ *        Current SiN360 is already detected via Probe 0, so this is skipped.
+ *     2. Stock AT `AT+CMD?` — when the binary probes fail, the AT task is
  *        queried for its supported-command list, and a small mapping table
  *        in `m1_esp32_caps.c` translates the presence of specific AT
  *        commands into M1_ESP32_CAP_* bits.  This probe works against any
  *        stock or custom ESP-AT firmware without requiring our own
  *        extensions.
- *   If both probes fail, the capability bitmap is left at zero and feature
- *   gates fail closed.
+ *   If all three probes fail, the capability bitmap is left at zero and
+ *   feature gates fail closed.
  *
  * M1 Project
  */
@@ -167,6 +174,24 @@
  * command to the runtime probe is a single-line edit to the
  * `s_at_cmd_cap_map[]` table in `m1_esp32_caps.c`. */
 
+/* dag T-800 profile: AT firmware (dagnazty/M1-T-800) with custom WiFi and
+ * HID AT commands.  Discriminated from stock bedge117/neddy299 AT by the
+ * presence of `M1_ESP32_CAP_BEACON` (AT+M1BEACON — only T-800 has it).
+ * Does NOT include 802.15.4 despite having AT+ZIGSNIFF in some builds
+ * because 802.15.4 is optional and may not be present in all T-800
+ * configurations; the probe detects it dynamically. */
+#define M1_ESP32_CAP_PROFILE_DAG_T800 \
+    (M1_ESP32_CAP_WIFI_JOIN    | \
+     M1_ESP32_CAP_WIFI_SCAN    | \
+     M1_ESP32_CAP_DEAUTH       | \
+     M1_ESP32_CAP_BEACON       | \
+     M1_ESP32_CAP_KARMA        | \
+     M1_ESP32_CAP_PORTAL       | \
+     M1_ESP32_CAP_BLE_ADV      | \
+     M1_ESP32_CAP_PKTMON       | \
+     M1_ESP32_CAP_PROBE_FLOOD  | \
+     M1_ESP32_CAP_BLE_HID)
+
 /* =========================================================================
  * Memory footprint estimates — for developer / diagnostic use only
  *
@@ -191,6 +216,15 @@
 #define M1_ESP32_FALLBACK_HEAP_SIN360  (160u * 1024u)  /**< ≈160 KB free heap */
 #define M1_ESP32_FALLBACK_BSS_AT       (284u * 1024u)  /**< ≈284 KB BSS */
 #define M1_ESP32_FALLBACK_HEAP_AT      (112u * 1024u)  /**< ≈112 KB free heap */
+
+/* dag T-800 AT firmware (dagnazty/M1-T-800): ESP-AT base + 14 custom AT
+ * commands.  Estimated from ESP-AT v4.0.0.0 base + dag custom modules
+ * (WiFi attacks, HID, Zigbee sniff).  BSS is comparable to stock AT;
+ * heap is slightly lower due to additional static buffers for deauth,
+ * beacon, and monitor functions.  To be refined once actual T-800
+ * firmware measurements are available (see CLAUDE.md update procedure). */
+#define M1_ESP32_FALLBACK_BSS_T800     (290u * 1024u)  /**< ≈290 KB BSS */
+#define M1_ESP32_FALLBACK_HEAP_T800    (105u * 1024u)  /**< ≈105 KB free heap */
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)

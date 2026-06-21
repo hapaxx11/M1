@@ -28,6 +28,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneMenu]             = &wifi_scene_menu_handlers,
     [WifiSceneScanConnect]      = &wifi_scene_scan_connect_handlers,
     [WifiSceneStationScan]      = &wifi_scene_station_scan_handlers,
+    [WifiSceneSurvey24g]        = &wifi_scene_survey_24g_handlers,
     [WifiSceneMacTrack]         = &wifi_scene_mac_track_handlers,
     [WifiSceneWardrive]         = &wifi_scene_wardrive_handlers,
     [WifiSceneStationWardrive]  = &wifi_scene_station_wardrive_handlers,
@@ -51,6 +52,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneAttackProbeFlood] = &wifi_scene_attack_probe_flood_handlers,
     [WifiSceneAttackKarma]      = &wifi_scene_attack_karma_handlers,
     [WifiSceneAttackKarmaPortal]= &wifi_scene_attack_karma_portal_handlers,
+    [WifiSceneAttackPmkidAt]    = &wifi_scene_attack_pmkid_at_handlers,
 
     [WifiSceneNetMenu]          = &wifi_scene_net_menu_handlers,
     [WifiSceneNetPing]          = &wifi_scene_net_ping_handlers,
