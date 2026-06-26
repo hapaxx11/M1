@@ -111,7 +111,7 @@ void m1_diag_screen(void)
     snprintf(line_hfsr,  sizeof(line_hfsr),  "HFSR: %08lX", (unsigned long)hfsr);
 
     /* Drain any stale button events */
-    S_M1_Button_Status_t bs;
+    S_M1_Buttons_Status bs;
     while (xQueueReceive(button_events_q_hdl, &bs, 0) == pdTRUE) { }
 
     bool running = true;

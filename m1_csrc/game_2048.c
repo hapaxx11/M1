@@ -83,7 +83,7 @@ static void g2048_uint_to_str(uint32_t val, char *buf, uint8_t bufsize)
     if (val == 0)
     {
         buf[0] = '0';
-        buf[1] = '\0';
+        if (bufsize > 1) buf[1] = '\0';
         return;
     }
     char tmp[12];

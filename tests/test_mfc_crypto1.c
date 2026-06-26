@@ -14,28 +14,13 @@
 #include <stdint.h>
 #include <string.h>
 
-/* --- Stubs for hardware-dependent headers ---------------------------------- */
-/* rfal_rf.h stub */
-#ifndef RFAL_RF_H
-#define RFAL_RF_H
-typedef uint8_t ReturnCode;
-#define ERR_NONE 0
-#define ERR_TIMEOUT 1
-#endif
-
-/* rfal_nfc.h stub */
-#ifndef RFAL_NFC_H
-#define RFAL_NFC_H
-#endif
-
-/* logger.h stub */
-#ifndef LOGGER_H
-#define LOGGER_H
-#define NFC_LOG_T(...)  do {} while(0)
-#define NFC_LOG_D(...)  do {} while(0)
-#define NFC_LOG_W(...)  do {} while(0)
-#define NFC_LOG_E(...)  do {} while(0)
-#endif
+/* Hardware-dependent headers are stubbed by the dedicated headers in
+ * tests/stubs/ (added first on the include path by CMake via ${STUBS_DIR}).
+ * Do not redefine the include guards here — that would shadow the proper
+ * stubs which define RFAL_ERR_NONE / RFAL_ERR_TIMEOUT / etc. */
+#include "rfal_rf.h"
+#include "rfal_nfc.h"
+#include "logger.h"
 
 #include "mfc_crypto1.h"
 

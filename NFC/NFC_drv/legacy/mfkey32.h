@@ -3,8 +3,8 @@
  *
  * Recovers a sector key from two captured reader authentication attempts
  * (uid, nt, {nr}, {ar}). Self-contained canonical Crapto-1 implementation —
- * deliberately does NOT reuse mfc_crypto1.c, whose cipher is a non-standard
- * reimplementation.
+ * deliberately does NOT reuse mfc_crypto1.c to keep this module free of
+ * RFAL/HAL dependencies, making it independently host-buildable and testable.
  *
  * Crapto-1 recovery algorithm is GPL (bla, Karsten Nohl et al.); this file is
  * a memory-bounded port for the STM32H573. The M1 firmware is GPLv3 (COPYING.txt),

@@ -16,7 +16,7 @@
  * Usage:
  *   1. Call m1_diag_boot_report() early in startup (after logdb init).
  *   2. Call m1_diag_set_phase(M1_DIAG_PHASE_xxx) before each write step.
- *   3. Call m1_diag_set_phase(M1_DIAG_PHASE_NONE) when write completes cleanly.
+ *   3. Call m1_diag_set_phase(M1_DIAG_PHASE_DONE) when write completes cleanly.
  *   4. From RFID Utilities "RFID Diagnostics", call m1_diag_screen().
  */
 

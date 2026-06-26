@@ -9,9 +9,10 @@
  * lineage: bla / Karsten Nohl / Courtois et al. This project is GPLv3, so the
  * port is license-compatible. Attribution preserved.
  *
- * Deliberately does NOT use mfc_crypto1.c (a non-standard cipher reimpl). All
- * cipher/recovery math here is canonical and validated by mfkey32_selftest()
- * against a published known-answer vector.
+ * Deliberately does NOT use mfc_crypto1.c to keep this module free of RFAL/HAL
+ * dependencies, making it independently host-buildable and testable without any
+ * hardware stubs. All cipher/recovery math here is canonical and validated by
+ * mfkey32_selftest() against a published known-answer vector.
  *
  * Memory: runs out of a fixed file-scope arena (~110 KB .bss, no malloc, no
  * FreeRTOS heap use) so the footprint is deterministic and isolated.
@@ -408,7 +409,7 @@ static int calculate_msb_tables(
                 msb = states_buffer[i] >> 24;
                 if((msb >= msb_head) && (msb < msb_tail)) {
                     found = 0;
-                    for(j = 0; j < odd_msbs[msb - msb_head].tail - 1; j++) {
+                    for(j = 0; j < odd_msbs[msb - msb_head].tail; j++) {
                         if(odd_msbs[msb - msb_head].states[j] == states_buffer[i]) {
                             found = 1;
                             break;
