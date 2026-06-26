@@ -14,8 +14,8 @@
  * hardware stubs. All cipher/recovery math here is canonical and validated by
  * mfkey32_selftest() against a published known-answer vector.
  *
- * Memory: runs out of a fixed file-scope arena (~110 KB .bss, no malloc, no
- * FreeRTOS heap use) so the footprint is deterministic and isolated.
+ * Memory: working arena (~110 KB) is heap-allocated on entry to mfkey32v2_recover()
+ * and freed before it returns, so the footprint is only held while recovery runs.
  *
  * Build the host self-test on a PC with:
  *   cc -O2 -DMFKEY32_HOST_TEST mfkey32.c -o /tmp/mfkey32_test && /tmp/mfkey32_test
@@ -23,6 +23,7 @@
 
 #include "mfkey32.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* ----- canonical Crapto-1 primitives (from FlipperMfkey crypto1.h) ------- */
 
@@ -189,12 +190,7 @@ static void crypto1_get_lfsr(struct Crypto1State* state, uint64_t* lfsr) {
 
 /* ----- recovery (from FlipperMfkey mfkey.c, mfkey32 path only) ----------- */
 
-/* fixed working arena (~110 KB, .bss) - no malloc, deterministic footprint */
-static struct Msb   s_odd_msbs[MSB_LIMIT];
-static struct Msb   s_even_msbs[MSB_LIMIT];
-static unsigned int s_temp_states_odd[1280];
-static unsigned int s_temp_states_even[1280];
-static unsigned int s_states_buffer[1024];
+/* fixed working arena (~110 KB) – allocated on the heap per recovery call */
 
 /* tick hook, set per-recovery; lets the caller feed the watchdog / cancel */
 static mfkey32_tick_cb s_tick_cb = 0;
@@ -472,6 +468,20 @@ bool mfkey32v2_recover(uint32_t uid,
                        uint32_t nt1, uint32_t nr1, uint32_t ar1,
                        uint64_t *key_out,
                        mfkey32_tick_cb tick, void *tick_ctx) {
+    /* Allocate the ~110 KB working arena on the heap so it only occupies
+     * RAM while recovery is actually running (not permanently in .bss). */
+    struct Msb   *odd_msbs        = (struct Msb *)  malloc(MSB_LIMIT * sizeof(struct Msb));
+    struct Msb   *even_msbs       = (struct Msb *)  malloc(MSB_LIMIT * sizeof(struct Msb));
+    unsigned int *temp_states_odd = (unsigned int *)malloc(1280 * sizeof(unsigned int));
+    unsigned int *temp_states_even= (unsigned int *)malloc(1280 * sizeof(unsigned int));
+    unsigned int *states_buffer   = (unsigned int *)malloc(1024 * sizeof(unsigned int));
+
+    if(!odd_msbs || !even_msbs || !temp_states_odd || !temp_states_even || !states_buffer) {
+        free(odd_msbs); free(even_msbs);
+        free(temp_states_odd); free(temp_states_even); free(states_buffer);
+        return false;
+    }
+
     mfkey32_nonce_t n;
     s_tick_cb = tick;
     s_tick_ctx = tick_ctx;
@@ -495,18 +505,23 @@ bool mfkey32v2_recover(uint32_t uid,
     for(i = 31; i >= 0; i -= 2) oks = oks << 1 | BEBIT(ks2, i);
     for(i = 30; i >= 0; i -= 2) eks = eks << 1 | BEBIT(ks2, i);
 
+    bool result = false;
     for(msb = 0; msb <= ((256 / MSB_LIMIT) - 1); msb++) {
         if(calculate_msb_tables(
-               oks, eks, msb, &n, s_states_buffer, s_odd_msbs, s_even_msbs,
-               s_temp_states_odd, s_temp_states_even, in)) {
+               oks, eks, msb, &n, states_buffer, odd_msbs, even_msbs,
+               temp_states_odd, temp_states_even, in)) {
             if(key_out) *key_out = n.key;
-            return true;
+            result = true;
+            break;
         }
         if(s_abort) {
-            return false;
+            break;
         }
     }
-    return false;
+
+    free(odd_msbs); free(even_msbs);
+    free(temp_states_odd); free(temp_states_even); free(states_buffer);
+    return result;
 }
 
 bool mfkey32_selftest(void) {
@@ -530,10 +545,10 @@ int main(void) {
     printf("recover: ok=%d key=%012llx (expect a0a1a2a3a4a5)\n",
            ok, (unsigned long long)key);
     printf("selftest: %s\n", mfkey32_selftest() ? "PASS" : "FAIL");
-    size_t arena = sizeof(s_odd_msbs) + sizeof(s_even_msbs) +
-                   sizeof(s_temp_states_odd) + sizeof(s_temp_states_even) +
-                   sizeof(s_states_buffer);
-    printf("static arena: %zu bytes (%.1f KB)\n", arena, arena / 1024.0);
+    size_t arena = MSB_LIMIT * sizeof(struct Msb) * 2 +
+                   1280 * sizeof(unsigned int) * 2 +
+                   1024 * sizeof(unsigned int);
+    printf("heap arena: %zu bytes (%.1f KB)\n", arena, arena / 1024.0);
     return mfkey32_selftest() ? 0 : 1;
 }
 #endif
