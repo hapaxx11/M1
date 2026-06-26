@@ -27,6 +27,7 @@
 
 #include "lfrfid.h"
 #include "t5577_timing.h"    /* in-spec write-timing constants (da-pingwing fix) */
+#include "m1_diag.h"         /* write-phase breadcrumbs for reset diagnostics */
 
 /*************************** D E F I N E S ************************************/
 
@@ -273,8 +274,10 @@ static void t5577_write_block(uint8_t block, bool lock_bit, uint32_t data)
 /*============================================================================*/
 void t5577_execute_write(LFRFIDProgram* write, int block)
 {
+	m1_diag_set_phase(M1_DIAG_PHASE_START);
 	t5577_write_start();
     taskENTER_CRITICAL();
+    m1_diag_set_phase(M1_DIAG_PHASE_WRITE_BIT);
     for(size_t i = 0; i < write->t5577.max_blocks; i++) {
     	t5577_write_block(i, false, write->t5577.block_data[i]);
     }
@@ -285,5 +288,6 @@ void t5577_execute_write(LFRFIDProgram* write, int block)
 
     taskEXIT_CRITICAL();
     t5577_write_stop();
+    m1_diag_set_phase(M1_DIAG_PHASE_DONE);
 
 }

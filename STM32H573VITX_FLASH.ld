@@ -176,6 +176,17 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM
 
+  /* .noinit — survives soft/watchdog/brownout resets (never zeroed by startup).
+   * Used by m1_diag.c to persist reset-cause breadcrumbs and RFID write phase
+   * across resets without a debugger.  Magic value 0xD1A90C0E guards validity. */
+  .noinit (NOLOAD) :
+  {
+    . = ALIGN(4);
+    *(.noinit)
+    *(.noinit*)
+    . = ALIGN(4);
+  } >RAM
+
   /* User_heap_stack section, used to check that there is enough "RAM" Ram  type memory left */
   ._user_heap_stack :
   {

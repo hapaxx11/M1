@@ -30,8 +30,7 @@
 #include "lfrfid_file.h"
 #include "privateprofilestring.h"
 #include "m1_file_util.h"
-
-/*************************** D E F I N E S ************************************/
+#include "m1_diag.h"
 
 #define M1_LOGDB_TAG	"RFID"
 
@@ -2690,14 +2689,15 @@ void lfrfid_addm_save_init(void)
 /*============================================================================*/
 /* Utilities submenu options                                                  */
 /*============================================================================*/
-#define RFID_UTIL_OPTIONS_COUNT		5
+#define RFID_UTIL_OPTIONS_COUNT		6
 
 static const char *m1_rfid_util_options[] = {
 	"Clone Card",
 	"Erase Tag",
 	"T5577 Info",
 	"RFID Fuzzer",
-	"Brute Force FC"
+	"Brute Force FC",
+	"RFID Diagnostics"
 };
 
 /* Clone state machine */
@@ -3554,6 +3554,7 @@ void rfid_125khz_utilities(void)
 						case 2: lfrfid_util_t5577_info(); break;
 						case 3: lfrfid_util_fuzzer(); break;
 						case 4: lfrfid_util_brute_force_fc(); break;
+						case 5: m1_diag_screen(); break;
 					}
 					m1_gui_submenu_update(m1_rfid_util_options, RFID_UTIL_OPTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);
 				}
