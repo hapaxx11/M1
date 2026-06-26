@@ -1745,6 +1745,30 @@ endif()
 add_test(NAME mfc_layout COMMAND test_mfc_layout)
 
 # ------------------------------------------------------------------
+# Module under test: mfc_crypto1 (canonical Crypto-1 cipher core)
+#
+# Tests the canonical Crapto-1 filter/PRNG rewrite in mfc_crypto1.c:
+#   crypto1_init()          — 48-bit key → odd/even LFSR registers
+#   crypto1_word()          — 32-bit BEBIT-ordered keystream word
+#   crypto1_byte()          — 8-bit LSB-first keystream byte
+#   mfc_prng_successor()    — SWAPENDIAN LFSR step function
+# Stubs: rfal_rf.h, rfal_nfc.h, logger.h (inline in test file)
+# ------------------------------------------------------------------
+add_executable(test_mfc_crypto1
+    test_mfc_crypto1.c
+    ${M1_ROOT}/NFC/NFC_drv/legacy/mfc_crypto1.c
+)
+target_include_directories(test_mfc_crypto1 PRIVATE
+    ${STUBS_DIR}                        # rfal_rf.h, rfal_nfc.h, logger.h stubs
+    ${M1_ROOT}/NFC/NFC_drv/legacy
+)
+target_link_libraries(test_mfc_crypto1 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mfc_crypto1 PRIVATE sanitizers)
+endif()
+add_test(NAME mfc_crypto1 COMMAND test_mfc_crypto1)
+
+# ------------------------------------------------------------------
 # Module under test: nfc_classify (NFC-A device family classifier)
 #
 # Pure-logic extraction from nfc_ctx.c with zero HAL/RTOS/display deps:
