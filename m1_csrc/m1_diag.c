@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdbool.h>
 #include "m1_diag.h"
 #include "stm32h5xx_hal.h"
 #include "main.h"
