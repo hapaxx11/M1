@@ -1769,6 +1769,25 @@ endif()
 add_test(NAME mfc_crypto1 COMMAND test_mfc_crypto1)
 
 # ------------------------------------------------------------------
+# Module under test: mfkey32 (on-device MFKey32 Crypto-1 key recovery)
+#
+# Self-contained recovery engine — no HAL / RTOS / FreeRTOS dependencies.
+# Validated by the known-answer vector: uid 2a234f80 → key a0a1a2a3a4a5.
+# ------------------------------------------------------------------
+add_executable(test_mfkey32
+    test_mfkey32.c
+    ${M1_ROOT}/NFC/NFC_drv/legacy/mfkey32.c
+)
+target_include_directories(test_mfkey32 PRIVATE
+    ${M1_ROOT}/NFC/NFC_drv/legacy
+)
+target_link_libraries(test_mfkey32 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mfkey32 PRIVATE sanitizers)
+endif()
+add_test(NAME mfkey32 COMMAND test_mfkey32)
+
+# ------------------------------------------------------------------
 # Module under test: nfc_classify (NFC-A device family classifier)
 #
 # Pure-logic extraction from nfc_ctx.c with zero HAL/RTOS/display deps:
