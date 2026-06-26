@@ -10,8 +10,8 @@
  * a memory-bounded port for the STM32H573. The M1 firmware is GPLv3 (COPYING.txt),
  * so this is license-compatible.
  *
- * Memory: the recovery runs entirely out of a fixed static arena (no malloc,
- * no FreeRTOS heap use), so its footprint is deterministic and isolated.
+ * Memory: the recovery uses a transient heap-backed arena (~110 KB) allocated
+ * inside mfkey32v2_recover() and freed on return.
  */
 
 #ifndef MFKEY32_H_

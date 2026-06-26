@@ -13,6 +13,12 @@
 
 static inline void logUsartInit(void *husart) { (void)husart; }
 static inline int  logUsart(const char *fmt, ...) { (void)fmt; return 0; }
-static inline char *hex2Str(unsigned char *data, size_t len) { (void)data; (void)len; return ""; }
+static inline char *hex2Str(unsigned char *data, size_t len)
+{
+    static char hex_stub_buf[2] = {0};
+    (void)data;
+    (void)len;
+    return hex_stub_buf;
+}
 
 #endif /* LOGGER_H */
