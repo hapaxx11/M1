@@ -99,14 +99,14 @@ static inline void update_contribution(unsigned int data[], int item, int mask1,
     int p = data[item] >> 25;
     p = p << 1 | evenparity32(data[item] & mask1);
     p = p << 1 | evenparity32(data[item] & mask2);
-    data[item] = p << 24 | (data[item] & 0xffffff);
+    data[item] = ((uint32_t)p << 24) | (data[item] & 0xffffffu);
 }
 
 static inline uint32_t crypt_word(struct Crypto1State* s) {
     uint32_t res_ret = 0;
     uint32_t feedin, t;
     for(int i = 0; i <= 31; i++) {
-        res_ret |= (filter(s->odd) << (24 ^ i));
+        res_ret |= ((uint32_t)filter(s->odd) << (24 ^ i));
         feedin = LF_POLY_EVEN & s->even;
         feedin ^= LF_POLY_ODD & s->odd;
         s->even = s->even << 1 | (evenparity32(feedin));
@@ -168,7 +168,7 @@ static inline uint32_t napi_lfsr_rollback_word(struct Crypto1State* s, uint32_t 
     int i;
     uint32_t ret = 0;
     for(i = 31; i >= 0; --i)
-        ret |= napi_lfsr_rollback_bit(s, BEBIT(in, i), fb) << (i ^ 24);
+        ret |= ((uint32_t)napi_lfsr_rollback_bit(s, BEBIT(in, i), fb) << (i ^ 24));
     return ret;
 }
 
