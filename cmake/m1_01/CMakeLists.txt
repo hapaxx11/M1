@@ -689,6 +689,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/game_trex.c
     ../../m1_csrc/game_pong.c
     ../../m1_csrc/game_dice.c
+    ../../m1_csrc/game_2048.c
     ../../m1_csrc/music_player.c
     ../../m1_csrc/music_parser.c
     ../../m1_csrc/hex_viewer.c
