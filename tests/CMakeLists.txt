@@ -798,7 +798,26 @@ endif()
 add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
 
 # ------------------------------------------------------------------
-# Module under test: fw_source_asset_matches_filter (OTA filter logic)
+# Module under test: t5577_timing (T5577 write-timing constants)
+# Regression test for the da-pingwing timing bug fix: the previous
+# WRITE_GAP=18 + DATA_1=56 gave a "1" bit gap-to-gap of 74 Tc,
+# exceeding the T5577 datasheet max of 64 Tc. Fixed to 10+46=56 Tc.
+# The test includes only t5577_timing.h (pure defines, no HAL needed).
+# ------------------------------------------------------------------
+add_executable(test_t5577_timing
+    test_t5577_timing.c
+)
+target_include_directories(test_t5577_timing PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_t5577_timing PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_t5577_timing PRIVATE sanitizers)
+endif()
+add_test(NAME t5577_timing COMMAND test_t5577_timing)
+
+
 # Tests the asset name filtering function from m1_fw_source.c.
 # Pure string matching — include suffix + space-separated exclude suffixes.
 # Uses a standalone copy of the function to avoid HAL/HTTP/FatFS deps.

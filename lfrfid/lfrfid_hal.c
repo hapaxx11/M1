@@ -498,6 +498,15 @@ void lfrfid_read_hw_deinit(void)
 	if(rfid_rxtx_is_taking_this_irq == 0)
 		return;
 
+	/* Defense-in-depth (da-pingwing, M1_T-1000_RFID, GPL-3.0): ensure TIM3/TIM5
+	 * peripheral clocks are enabled before touching their registers. Accessing a
+	 * timer register while its RCC clock is gated raises a precise bus fault ->
+	 * HardFault (which the fault handler spins on, leaving RFID "stuck on Reading").
+	 * This previously crashed the first write when the worker forced
+	 * rfid_rxtx_is_taking_this_irq=1 and called this deinit with TIM5 clock off. */
+	__HAL_RCC_TIM3_CLK_ENABLE();
+	__HAL_RCC_TIM5_CLK_ENABLE();
+
 #if 1
 	GPIO_InitTypeDef gpio_init_struct = {0};
 
