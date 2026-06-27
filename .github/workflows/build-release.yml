@@ -4,7 +4,7 @@ name: Build and Release
 #   1. Every push (merge) to main → automatic release with auto-incremented version.
 #      Docs-only pushes (*.md, documentation/, LICENSE, IDE files) are skipped.
 #   2. Manual dispatch from the Actions tab → optional tag/name overrides.
-# Versions with MAJOR < 1 are automatically marked as pre-release.
+# Releases are NOT marked pre-release by default — use the 'prerelease' input to override.
 on:
   push:
     branches: [main]
@@ -37,7 +37,7 @@ on:
         required: false
         default: ''
       prerelease:
-        description: 'Force pre-release flag (versions < 1.0 are always pre-release)'
+        description: 'Mark this release as pre-release'
         required: false
         type: boolean
         default: false
@@ -179,12 +179,9 @@ jobs:
           echo "  Tag:          ${TAG}"
           echo "  Release file: ${RFILE}_wCRC.bin"
 
-          # Auto-detect pre-release: versions with MAJOR < 1 are always
-          # pre-release.  Manual dispatch can also force it via the input.
+          # Pre-release: only when explicitly requested via the manual dispatch input.
           MANUAL_PRERELEASE="${{ inputs.prerelease }}"
-          if [ "${MAJOR}" -lt 1 ]; then
-            IS_PRERELEASE=true
-          elif [ "${MANUAL_PRERELEASE}" = "true" ]; then
+          if [ "${MANUAL_PRERELEASE}" = "true" ]; then
             IS_PRERELEASE=true
           else
             IS_PRERELEASE=false
