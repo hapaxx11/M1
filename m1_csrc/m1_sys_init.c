@@ -29,6 +29,7 @@
 #include "battery.h"
 #include "m1_gpio.h"
 #include "m1_log_debug.h"
+#include "m1_diag.h"
 /*************************** D E F I N E S ************************************/
 
 #define M1_LOGDB_TAG	"Sys_Init"
@@ -187,6 +188,8 @@ void m1_system_init_task(void *param)
 			huart_logdb.Init.StopBits = UART_STOPBITS_1;
 			huart_logdb.Init.Parity = UART_PARITY_NONE;
 			m1_logdb_init();
+
+			m1_diag_boot_report(); /* snapshot reset cause before clearing RCC->RSR */
 
 			m1_wdt_init();
 			m1_tasks_init();

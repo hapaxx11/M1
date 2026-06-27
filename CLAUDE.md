@@ -932,6 +932,7 @@ binary when section garbage collection is enabled.
 | `u8g2_font_6x10_tr` | API only | BadUSB small readable | 7 | Yes |
 | `u8g2_font_10x20_mr` | API only | BadUSB large monospace | 14 | Yes |
 | `u8g2_font_finderskeepers_tf` | API only | BadUSB game-style | 7 | Yes |
+| `u8g2_font_u8glib_4_tf` | game_2048.c only | Tiny 4px font for 4+ digit tile values in 2048 | 4 | Yes |
 
 **Where the font is bound determines which code files must be updated when
 changing it:**

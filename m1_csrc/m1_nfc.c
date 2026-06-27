@@ -28,6 +28,7 @@
 #include "rfal_nfcv.h"
 #include "rfal_rf.h"
 #include "legacy/mfc_crypto1.h"
+#include "legacy/mfkey32.h"
 #include "nfc_card_info.h"
 #include "nfc_ndef_parse.h"
 #include "nfc_ndef_encode.h"
@@ -3919,6 +3920,41 @@ void nfc_saved_browse_gui_init(void)
  *         from a reader, enabling offline key recovery.
  */
 /*============================================================================*/
+/* Progress/cancel tick for the mfkey32v2 solver. Called ~every 32768 inner
+ * iterations. Yields so the watchdog task keeps feeding the IWDG and the rest
+ * of the system stays alive, redraws the progress screen when the MSB chunk
+ * advances, and returns false (abort) if BACK is pressed. */
+static uint8_t s_mfkey_last_round = 0xFF;
+
+static bool nfc_mfkey_progress_tick(int msb_round, void *ctx)
+{
+	(void)ctx;
+	vTaskDelay(1); /* let watchdog task + other tasks run during the long solve */
+	m1_wdt_reset(); /* feed IWDG directly in case WDT task hasn't run yet */
+
+	S_M1_Buttons_Status bs;
+	if (xQueueReceive(button_events_q_hdl, &bs, 0) == pdTRUE) {
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			return false;
+	}
+
+	if ((uint8_t)msb_round != s_mfkey_last_round) {
+		s_mfkey_last_round = (uint8_t)msb_round;
+		char line[24];
+		snprintf(line, sizeof(line), "Cracking %d/16", msb_round + 1);
+		m1_u8g2_firstpage();
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		u8g2_DrawStr(&m1_u8g2, 4, 14, "Detect Reader");
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		u8g2_DrawStr(&m1_u8g2, 4, 30, "Recovering key...");
+		u8g2_DrawStr(&m1_u8g2, 4, 42, line);
+		u8g2_DrawStr(&m1_u8g2, 4, 54, "BACK to cancel");
+		m1_u8g2_nextpage();
+	}
+	return true;
+}
+
 void nfc_detect_reader(void)
 {
 	S_M1_Buttons_Status bs;
@@ -4009,6 +4045,8 @@ void nfc_detect_reader(void)
 
 	/* Save nonces to SD card if any captured */
 	uint8_t captured = mfkey_sample_count;
+	char result_line[32];
+	snprintf(result_line, sizeof(result_line), "%u nonces saved", (unsigned)captured);
 	if (captured > 0)
 	{
 		FIL f;
@@ -4032,13 +4070,78 @@ void nfc_detect_reader(void)
 			}
 			m1_fb_close_file(&f);
 		}
+	}
 
-		/* Show result */
-		char result_line[32];
-		snprintf(result_line, sizeof(result_line), "%u nonces saved", (unsigned)captured);
+	/* On-device key recovery: needs two auth samples sharing (sector, keyType).
+	 * mfkey32v2 tolerates differing tag nonces. The recovered key is verified
+	 * against the second sample inside the solver, so a returned key is correct
+	 * by construction. Falls back to the saved nonce file on no pair / cancel. */
+	uint64_t rkey = 0;
+	bool rfound = false;
+	uint8_t rsec = 0, rkt = 0;
+	int a, b, i0 = -1, i1 = -1;
+	for (a = 0; a < (int)captured && i0 < 0; a++) {
+		for (b = a + 1; b < (int)captured; b++) {
+			if (mfkey_samples[a].sector == mfkey_samples[b].sector &&
+			    mfkey_samples[a].keyType == mfkey_samples[b].keyType) {
+				i0 = a; i1 = b;
+				rsec = mfkey_samples[a].sector;
+				rkt  = mfkey_samples[a].keyType;
+				break;
+			}
+		}
+	}
+
+	if (i0 >= 0) {
+		s_mfkey_last_round = 0xFF;
+		rfound = mfkey32v2_recover(
+			mfkey_samples[i0].uid,
+			mfkey_samples[i0].nt, mfkey_samples[i0].nr, mfkey_samples[i0].ar,
+			mfkey_samples[i1].nt, mfkey_samples[i1].nr, mfkey_samples[i1].ar,
+			&rkey, nfc_mfkey_progress_tick, NULL);
+	}
+
+	if (rfound) {
+		uint8_t kb[6];
+		for (int k = 0; k < 6; k++) kb[k] = (uint8_t)(rkey >> ((5 - k) * 8));
+		char keystr[16];
+		snprintf(keystr, sizeof(keystr), "%02X%02X%02X%02X%02X%02X",
+			kb[0], kb[1], kb[2], kb[3], kb[4], kb[5]);
+
+		/* Write keys_<UID>.txt (human-readable sector/key label) */
+		char path[40];
+		snprintf(path, sizeof(path), "0:/NFC/keys_%08lX.txt",
+			(unsigned long)mfkey_samples[i0].uid);
+		FIL kf;
+		if (m1_fb_open_new_file(&kf, path) == 0) {
+			char kline[64];
+			snprintf(kline, sizeof(kline), "Sector %u Key%c: %s\r\n",
+				(unsigned)rsec, (rkt == MFC_CMD_AUTH_A) ? 'A' : 'B', keystr);
+			m1_fb_write_to_file(&kf, kline, strlen(kline));
+			m1_fb_close_file(&kf);
+		}
+
+		/* Write keys_<UID>.dic (bare 12-hex key, one per line) for Proxmark/fchk */
+		char dicpath[40];
+		snprintf(dicpath, sizeof(dicpath), "0:/NFC/keys_%08lX.dic",
+			(unsigned long)mfkey_samples[i0].uid);
+		FIL df;
+		if (m1_fb_open_new_file(&df, dicpath) == 0) {
+			char dline[16];
+			snprintf(dline, sizeof(dline), "%s\n", keystr);
+			m1_fb_write_to_file(&df, dline, strlen(dline));
+			m1_fb_close_file(&df);
+		}
+
+		char l2[32];
+		snprintf(l2, sizeof(l2), "S%u %c %s", (unsigned)rsec,
+			(rkt == MFC_CMD_AUTH_A) ? 'A' : 'B', keystr);
+		m1_message_box(&m1_u8g2, "Key Recovered!", l2, "saved to SD", "BACK to return");
+	}
+	else if (captured > 0) {
 		m1_message_box(&m1_u8g2,
 			"Detect Reader",
-			result_line,
+			(i0 >= 0) ? "Recovery not completed" : result_line,
 			"/NFC/mfkey_nonces.txt",
 			"BACK to return");
 	}

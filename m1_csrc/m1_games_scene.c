@@ -30,6 +30,7 @@ enum {
     GamesSceneMusic,
     GamesSceneHexViewer,
     GamesSceneClock,
+    GamesScene2048,
     GamesSceneCount
 };
 
@@ -98,6 +99,14 @@ static void clock_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void game_2048_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    game_2048_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers snake_handlers      = { .on_enter = snake_on_enter      };
@@ -107,11 +116,12 @@ static const M1SceneHandlers pong_handlers       = { .on_enter = pong_on_enter  
 static const M1SceneHandlers dice_handlers       = { .on_enter = dice_on_enter       };
 static const M1SceneHandlers music_handlers      = { .on_enter = music_on_enter      };
 static const M1SceneHandlers hex_viewer_handlers = { .on_enter = hex_viewer_on_enter };
-static const M1SceneHandlers clock_handlers  = { .on_enter = clock_on_enter  };
+static const M1SceneHandlers clock_handlers      = { .on_enter = clock_on_enter      };
+static const M1SceneHandlers game_2048_handlers  = { .on_enter = game_2048_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  8
+#define MENU_ITEM_COUNT  9
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Snake",
@@ -122,6 +132,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Music Player",
     "Hex Viewer",
     "Clock",
+    "2048",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -133,6 +144,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     GamesSceneMusic,
     GamesSceneHexViewer,
     GamesSceneClock,
+    GamesScene2048,
 };
 
 static uint8_t menu_sel    = 0;
@@ -177,7 +189,8 @@ static const M1SceneHandlers *const scene_registry[GamesSceneCount] = {
     [GamesSceneDice]      = &dice_handlers,
     [GamesSceneMusic]     = &music_handlers,
     [GamesSceneHexViewer] = &hex_viewer_handlers,
-    [GamesSceneClock]  = &clock_handlers,
+    [GamesSceneClock]     = &clock_handlers,
+    [GamesScene2048]      = &game_2048_handlers,
 };
 
 /*--- Entry point ----------------------------------------------------------*/

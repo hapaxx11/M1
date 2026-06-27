@@ -26,15 +26,10 @@
 #include "main.h"
 
 #include "lfrfid.h"
+#include "t5577_timing.h"    /* in-spec write-timing constants (da-pingwing fix) */
+#include "m1_diag.h"         /* write-phase breadcrumbs for reset diagnostics */
 
 /*************************** D E F I N E S ************************************/
-
-#define T5577_TIMING_WAIT_TIME 400
-#define T5577_TIMING_START_GAP 30
-#define T5577_TIMING_WRITE_GAP 18
-#define T5577_TIMING_DATA_0    24
-#define T5577_TIMING_DATA_1    56
-#define T5577_TIMING_PROGRAM   700
 
 #define T5577_OPCODE_PAGE_0 0b10
 #define T5577_OPCODE_PAGE_1 0b11
@@ -67,17 +62,15 @@ static void t5577_delay_us(uint32_t us);
 //HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);   // OFF (CC3E clear)
 static void t5577_write_start(void)
 {
-
 	t5577_delay_init();
 
+	/* da-pingwing: keep the 5V boost ON and RFID_PULL (tank-damp FET) LOW so
+	 * the write field is at full strength from the first bit. */
+	HAL_GPIO_WritePin(EN_EXT_5V_GPIO_Port, EN_EXT_5V_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_RESET);
-	t5577_delay_us(28);
-	HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_SET);
 
-	lfrfid_RFIDOut_Init(125000);
-
-	HAL_TIM_PWM_Start(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);
-
+	lfrfid_RFIDOut_Init(125000);                           /* PB0 -> TIM3_CH3 PWM 125 kHz */
+	HAL_TIM_PWM_Start(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3); /* field ON */
 }
 
 
@@ -90,6 +83,10 @@ static void t5577_write_start(void)
 /*============================================================================*/
 static void t5577_write_stop(void)
 {
+	HAL_TIM_PWM_Stop(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);   /* carrier off */
+	/* da-pingwing: park PB0 LOW (coil FET off) + RFID_PULL LOW; the next
+	 * start call re-inits TIM3. Parking PB0 high would be a DC short. */
+	HAL_GPIO_WritePin(RFID_OUT_GPIO_Port, RFID_OUT_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(RFID_PULL_GPIO_Port, RFID_PULL_Pin, GPIO_PIN_RESET);
 }
 
@@ -143,9 +140,18 @@ static void t5577_delay_us(uint32_t us)
 /*============================================================================*/
 static void t5577_write_gap(uint32_t gap_time)
 {
-	  HAL_TIM_PWM_Stop(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);
+    /* da-pingwing: field OFF by switching PB0 to push-pull OUTPUT and driving
+     * it LOW — coil FET off, tank field collapses cleanly, no DC short or
+     * brownout. TIM3 keeps counting so reconnecting to AF resumes the carrier
+     * immediately (no timer restart needed). More robust than stop/start PWM. */
+    GPIO_InitTypeDef g = {0};
+    g.Pin = RFID_OUT_Pin; g.Pull = GPIO_NOPULL; g.Speed = GPIO_SPEED_FREQ_LOW;
+    g.Mode = GPIO_MODE_OUTPUT_PP;
+    HAL_GPIO_Init(RFID_OUT_GPIO_Port, &g);
+    HAL_GPIO_WritePin(RFID_OUT_GPIO_Port, RFID_OUT_Pin, GPIO_PIN_RESET); /* field OFF */
     t5577_delay_us(gap_time * 8);
-    HAL_TIM_PWM_Start(&Timerhdl_RfIdTIM3, TIM_CHANNEL_3);
+    g.Mode = GPIO_MODE_AF_PP; g.Alternate = GPIO_AF2_TIM3;
+    HAL_GPIO_Init(RFID_OUT_GPIO_Port, &g);                               /* field ON */
 }
 
 
@@ -268,8 +274,10 @@ static void t5577_write_block(uint8_t block, bool lock_bit, uint32_t data)
 /*============================================================================*/
 void t5577_execute_write(LFRFIDProgram* write, int block)
 {
+	m1_diag_set_phase(M1_DIAG_PHASE_START);
 	t5577_write_start();
     taskENTER_CRITICAL();
+    m1_diag_set_phase(M1_DIAG_PHASE_WRITE_BIT);
     for(size_t i = 0; i < write->t5577.max_blocks; i++) {
     	t5577_write_block(i, false, write->t5577.block_data[i]);
     }
@@ -280,5 +288,6 @@ void t5577_execute_write(LFRFIDProgram* write, int block)
 
     taskEXIT_CRITICAL();
     t5577_write_stop();
+    m1_diag_set_phase(M1_DIAG_PHASE_DONE);
 
 }

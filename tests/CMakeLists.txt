@@ -798,7 +798,26 @@ endif()
 add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
 
 # ------------------------------------------------------------------
-# Module under test: fw_source_asset_matches_filter (OTA filter logic)
+# Module under test: t5577_timing (T5577 write-timing constants)
+# Regression test for the da-pingwing timing bug fix: the previous
+# WRITE_GAP=18 + DATA_1=56 gave a "1" bit gap-to-gap of 74 Tc,
+# exceeding the T5577 datasheet max of 64 Tc. Fixed to 10+46=56 Tc.
+# The test includes only t5577_timing.h (pure defines, no HAL needed).
+# ------------------------------------------------------------------
+add_executable(test_t5577_timing
+    test_t5577_timing.c
+)
+target_include_directories(test_t5577_timing PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_t5577_timing PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_t5577_timing PRIVATE sanitizers)
+endif()
+add_test(NAME t5577_timing COMMAND test_t5577_timing)
+
+
 # Tests the asset name filtering function from m1_fw_source.c.
 # Pure string matching — include suffix + space-separated exclude suffixes.
 # Uses a standalone copy of the function to avoid HAL/HTTP/FatFS deps.
@@ -1724,6 +1743,49 @@ if(TARGET sanitizers)
     target_link_libraries(test_mfc_layout PRIVATE sanitizers)
 endif()
 add_test(NAME mfc_layout COMMAND test_mfc_layout)
+
+# ------------------------------------------------------------------
+# Module under test: mfc_crypto1 (canonical Crypto-1 cipher core)
+#
+# Tests the canonical Crapto-1 filter/PRNG rewrite in mfc_crypto1.c:
+#   crypto1_init()          — 48-bit key → odd/even LFSR registers
+#   crypto1_word()          — 32-bit BEBIT-ordered keystream word
+#   crypto1_byte()          — 8-bit LSB-first keystream byte
+#   mfc_prng_successor()    — SWAPENDIAN LFSR step function
+# Stubs: rfal_rf.h, rfal_nfc.h, logger.h (inline in test file)
+# ------------------------------------------------------------------
+add_executable(test_mfc_crypto1
+    test_mfc_crypto1.c
+    ${M1_ROOT}/NFC/NFC_drv/legacy/mfc_crypto1.c
+)
+target_include_directories(test_mfc_crypto1 PRIVATE
+    ${STUBS_DIR}                        # rfal_rf.h, rfal_nfc.h, logger.h stubs
+    ${M1_ROOT}/NFC/NFC_drv/legacy
+)
+target_link_libraries(test_mfc_crypto1 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mfc_crypto1 PRIVATE sanitizers)
+endif()
+add_test(NAME mfc_crypto1 COMMAND test_mfc_crypto1)
+
+# ------------------------------------------------------------------
+# Module under test: mfkey32 (on-device MFKey32 Crypto-1 key recovery)
+#
+# Self-contained recovery engine — no HAL / RTOS / FreeRTOS dependencies.
+# Validated by the known-answer vector: uid 2a234f80 → key a0a1a2a3a4a5.
+# ------------------------------------------------------------------
+add_executable(test_mfkey32
+    test_mfkey32.c
+    ${M1_ROOT}/NFC/NFC_drv/legacy/mfkey32.c
+)
+target_include_directories(test_mfkey32 PRIVATE
+    ${M1_ROOT}/NFC/NFC_drv/legacy
+)
+target_link_libraries(test_mfkey32 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_mfkey32 PRIVATE sanitizers)
+endif()
+add_test(NAME mfkey32 COMMAND test_mfkey32)
 
 # ------------------------------------------------------------------
 # Module under test: nfc_classify (NFC-A device family classifier)

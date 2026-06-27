@@ -318,6 +318,7 @@ target_sources(m1_01 INTERFACE
     ../../NFC/NFC_drv/legacy/nfc_poller.c
     ../../NFC/NFC_drv/legacy/nfc_poller_helpers.c
     ../../NFC/NFC_drv/legacy/mfc_crypto1.c
+    ../../NFC/NFC_drv/legacy/mfkey32.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_cipher.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_poller.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_listener.c
@@ -630,6 +631,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_proto_pirate_menu.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_tuner.c
     ../../m1_csrc/m1_sys_init.c
+    ../../m1_csrc/m1_diag.c
     ../../m1_csrc/m1_system.c
     ../../m1_csrc/m1_tasks.c
     ../../m1_csrc/m1_usb_cdc_msc.c
@@ -687,6 +689,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/game_trex.c
     ../../m1_csrc/game_pong.c
     ../../m1_csrc/game_dice.c
+    ../../m1_csrc/game_2048.c
     ../../m1_csrc/music_player.c
     ../../m1_csrc/music_parser.c
     ../../m1_csrc/hex_viewer.c
