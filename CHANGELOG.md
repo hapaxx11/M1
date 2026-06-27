@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.4] - 2026-06-27
+
+### Fixed
+
+- **CI: Hapax releases now visible in qMonstatek** — removed the automatic pre-release flag
+  for versions with MAJOR < 1. The GitHub `/releases/latest` API silently skips pre-releases,
+  which caused qMonstatek to show "No release candidates found" for `hapaxx11/M1`. Releases
+  are now published as full releases; the manual `prerelease` workflow input can still be used
+  to mark a release as pre-release when explicitly needed.
+- **WiFi: Saved Networks compatibility layer** — Saved Networks, Status, and
+  Disconnect now work on all ESP32 firmware variants (SiN360 binary SPI and
+  AT-based: dag T-800, bedge117).  Previously these screens were gated on
+  `ESP32_FEATURE_WIFI_JOIN` (AT-firmware only), so SiN360 users saw "Not
+  Supported" even though their credentials were already stored on the SD card.
+  `wifi_connect_from_saved()` now dispatches to `AT+CWJAP` on AT firmware and
+  `CMD_WIFI_JOIN` on SiN360, mirroring the Scan & Connect path.
+  `wifi_disconnect()` likewise dispatches to `AT+CWQAP` or `CMD_WIFI_DISCONNECT`.
+  Credentials remain stored in `0:/System/wifi_creds.bin` (AES-256-CBC
+  encrypted) and are portable across all firmware variants.
 ## [0.9.2.3] - 2026-06-27
 
 ### Fixed
