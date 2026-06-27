@@ -4805,6 +4805,14 @@ void wifi_ntp_background_sync(void)
 /*
  * Connect to a network using stored credentials (no password prompt).
  * Called from wifi_saved_networks() when user selects a saved entry.
+ *
+ * Dispatches to the correct transport based on the detected ESP32 firmware:
+ *   - AT firmware (dag/T-800, bedge117): uses AT+CWJAP text command via
+ *     spi_AT_send_recv(), mirroring the wifi_connect_selected_ap() AT path.
+ *   - Binary SPI firmware (SiN360): uses CMD_WIFI_JOIN binary command.
+ *
+ * Credentials are stored on the SD card and are therefore portable across
+ * all ESP32 firmware variants.
  */
 /*============================================================================*/
 static void wifi_connect_from_saved(const wifi_credential_t *cred)
@@ -4830,6 +4838,65 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 
 	ensure_esp32_ready();
 
+	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
+	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
+	{
+		m1_resp_t ping_resp;
+		const bool is_binary_spi =
+		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
+		     ping_resp.status == RESP_OK &&
+		     ping_resp.payload_len == 4 &&
+		     memcmp(ping_resp.payload, "PONG", 4) == 0);
+
+		if (!is_binary_spi && !get_esp32_main_init_status())
+			esp32_main_init();
+	}
+
+	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
+	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	{
+		static char at_resp[512];
+		char at_cmd[256];
+		char ssid_esc[65];
+		char pass_esc[127];
+		bool got_ip;
+
+		at_escape_str(cred->ssid, ssid_esc, sizeof(ssid_esc));
+		at_escape_str(cred->password, pass_esc, sizeof(pass_esc));
+
+		snprintf(at_cmd, sizeof(at_cmd),
+		         "AT+CWJAP=\"%s\",\"%s\"\r\n",
+		         ssid_esc, pass_esc);
+
+		wifi_draw_message("Connect", "Connecting...", cred->ssid);
+		memset(at_resp, 0, sizeof(at_resp));
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 20);
+
+		bool timeout_or_senderr = (strstr(at_resp, "TIMEOUT(") != NULL) ||
+		                         (strstr(at_resp, "SEND_ERR=") != NULL);
+		bool has_error = (strstr(at_resp, "ERROR") != NULL);
+		bool has_fail  = (strstr(at_resp, "FAIL") != NULL) || has_error || timeout_or_senderr;
+		const char *reason = "Check password";
+		if (timeout_or_senderr) reason = "ESP32 no response";
+		else if (has_error)    reason = "AT error";
+
+		got_ip = strstr(at_resp, "WIFI GOT IP") != NULL;
+		if (!got_ip || has_fail)
+		{
+			wifi_show_message("Connect", "Connect failed", reason);
+			return;
+		}
+
+		/* Success — update connected state */
+		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
+		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
+		s_wifi_stub_connected = true;
+		wifi_show_message("Connect", "Connected!", cred->ssid);
+		wifi_sync_rtc();
+		return;
+	}
+
+	/* ---- Binary SPI path (SiN360) ---- */
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
 	cmd.cmd_id = CMD_WIFI_JOIN;
@@ -5028,7 +5095,33 @@ void wifi_show_status(void)
 void wifi_disconnect(void)
 {
 	m1_resp_t resp;
-	m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
+
+	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
+	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
+	{
+		m1_resp_t ping_resp;
+		const bool is_binary_spi =
+		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
+		     ping_resp.status == RESP_OK &&
+		     ping_resp.payload_len == 4 &&
+		     memcmp(ping_resp.payload, "PONG", 4) == 0);
+
+		if (!is_binary_spi && !get_esp32_main_init_status())
+			esp32_main_init();
+	}
+
+	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	{
+		/* AT firmware (dag/T-800, bedge117) — send AT+CWQAP */
+		static char at_resp[64];
+		(void)spi_AT_send_recv("AT+CWQAP\r\n", at_resp, sizeof(at_resp), 3);
+	}
+	else
+	{
+		/* Binary SPI firmware (SiN360) */
+		m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
+	}
+
 	s_wifi_stub_connected = false;
 	memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
 }
