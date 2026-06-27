@@ -360,6 +360,28 @@ static void wifi_wait_dismiss(void)
 }
 
 /**
+ * @brief  Escape a string for use in an ESP-AT quoted parameter.
+ *
+ * ESP-AT treats '\', '"', and ',' as special within quoted strings.
+ * Each special character is prefixed with a backslash.
+ *
+ * @param src   Input string (null-terminated).
+ * @param dst   Output buffer (null-terminated result).
+ * @param dsize Output buffer capacity in bytes (including null terminator).
+ */
+static void at_escape_str(const char *src, char *dst, size_t dsize)
+{
+	size_t i = 0;
+	while (*src && i + 2 < dsize)
+	{
+		if (*src == '\\' || *src == '"' || *src == ',')
+			dst[i++] = '\\';
+		dst[i++] = *src++;
+	}
+	dst[i] = '\0';
+}
+
+/**
  * @brief  Draw a status screen and return immediately (no key wait).
  *
  * Use this for a transient "in progress" status shown right before a blocking
@@ -440,14 +462,22 @@ static void wifi_connect_selected_ap(void)
 	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
 	{
 		static char at_resp[512];
-		char at_cmd[128];
+		/* Buffer sized for worst-case fully-escaped SSID (32*2=64) +
+		 * password (63*2=126) + AT+CWJAP="",""\r\n (18) + NUL (1) = 209 */
+		char at_cmd[256];
+		/* Escaped SSID/password buffers: each char can expand to 2 chars */
+		char ssid_esc[65];
+		char pass_esc[127];
 		bool got_ip;
+
+		at_escape_str(ap_list[ap_view_idx].ssid, ssid_esc, sizeof(ssid_esc));
+		at_escape_str(password, pass_esc, sizeof(pass_esc));
 
 		/* AT+CWJAP="ssid","password" — ESP-AT standard command.
 		 * Timeout: 20 s (connection establishment can take up to ~15 s). */
 		snprintf(at_cmd, sizeof(at_cmd),
 		         "AT+CWJAP=\"%s\",\"%s\"\r\n",
-		         ap_list[ap_view_idx].ssid, password);
+		         ssid_esc, pass_esc);
 
 		wifi_draw_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
 		memset(at_resp, 0, sizeof(at_resp));
