@@ -1428,6 +1428,30 @@ void my_esp32_operation(void)
 - **Never leave the ESP32 SPI transport initialized after a blocking
   delegate returns** — the caller's scene does not know which ESP32 mode
   was active and cannot clean up for you.
+- **`m1_esp32_ensure_init()` is NOT sufficient for capability-dispatching
+  code.**  `m1_esp32_ensure_init()` calls only `m1_esp32_init()` (HAL-level
+  SPI hardware).  The capability probe (`AT+CMD?` and `CMD_GET_STATUS`) runs
+  inside the RTOS SPI-AT task, which is created by `esp32_main_init()`.
+  If `esp32_main_init()` has not been called, `m1_esp32_has_cap()` and the
+  entire capability bitmap return zero/false for every bit — including
+  `M1_ESP32_CAP_WIFI_JOIN`, `M1_ESP32_CAP_BLE_HID`, etc.  Any code that
+  dispatches on firmware type (AT vs SiN360 vs unknown future firmware) will
+  silently take the binary-SPI fallback path and fail.
+
+  **Rule:** Any function that reads capability bits — via `m1_esp32_has_cap()`,
+  `m1_esp32_require_cap()`, `esp32_firmware_is_sin360()`, or any check on the
+  cap bitmap — MUST call both init layers before the first capability read:
+  ```c
+  if (!m1_esp32_get_init_status())
+      m1_esp32_init();
+  if (!get_esp32_main_init_status())
+      esp32_main_init();
+  /* Now m1_esp32_has_cap() / m1_esp32_caps_probe() return correct values */
+  ```
+  This applies to ALL firmware variants — SiN360, dag T-800, stock AT, and any
+  firmware type introduced in the future.  The two-probe architecture
+  (CMD_GET_STATUS → AT+CMD? fallback) is designed to handle unknown firmware
+  gracefully, but it can only run when the RTOS task is alive.
 
 ### NFC Worker State Management — `Q_EVENT_NFC_*` Events
 
