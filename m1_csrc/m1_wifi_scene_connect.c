@@ -4,8 +4,16 @@
  * @file   m1_wifi_scene_connect.c
  * @brief  WiFi connect-feature delegates (Saved Networks, Status, Disconnect).
  *
- * Compile-gated by M1_APP_WIFI_CONNECT_ENABLE.  All three scenes use
- * DELEGATE_FEATURE to guard on ESP32_FEATURE_WIFI_JOIN (AT-firmware only).
+ * Compile-gated by M1_APP_WIFI_CONNECT_ENABLE.
+ *
+ * These three scenes are NOT gated on ESP32_FEATURE_WIFI_JOIN because:
+ *   - Credentials are stored on the SD card (0:/System/wifi_creds.bin) and
+ *     are completely independent of which ESP32 firmware is installed.
+ *   - wifi_connect_from_saved() dispatches to AT+CWJAP (AT firmware) or
+ *     CMD_WIFI_JOIN binary SPI (SiN360) based on the runtime capability bitmap.
+ *   - wifi_show_status() reads local state only — no ESP32 interaction.
+ *   - wifi_disconnect() dispatches to AT+CWQAP (AT firmware) or
+ *     CMD_WIFI_DISCONNECT binary SPI (SiN360).
  *
  * Scenes covered:
  *   WifiSceneSaved      — Saved Networks delegate
@@ -25,35 +33,46 @@
 #include "m1_scene.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
-#include "m1_esp32_caps.h"
-#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 
 /*==========================================================================*/
-/* Capability-gated delegate macro                                          */
+/* Connect-feature delegates (no capability gate)                           */
 /*==========================================================================*/
 
-/* Shows "not supported" screen when the required ESP32 capability is absent.
- * m1_esp32_ensure_init() is called first so CMD_GET_STATUS can be queried even
- * when the transport was deinitialized by the previous delegate.
- * Uses the esp32_feature_map table (Phase C) so cap bits and UI labels are
- * maintained in one place rather than inline at each call site. */
-#define DELEGATE_FEATURE(name, fn, fid) \
-    static void name##_on_enter(M1SceneApp *app) { \
-        (void)app; \
-        m1_esp32_ensure_init(); \
-        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
-                                  esp32_feature_label(fid))) { fn(); } \
-        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+/* Saved Networks: credentials are SD-based; wifi_connect_from_saved()
+ * handles both AT and binary SPI firmware automatically. */
+static void saved_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    m1_esp32_ensure_init();
+    wifi_saved_networks();
+    m1_esp32_deinit();
+    app->running = true;
+    m1_scene_pop(app);
+}
 
-/*==========================================================================*/
-/* Connect-feature delegates                                                */
-/*==========================================================================*/
+/* Status: shows local s_wifi_stub_connected / s_wifi_stub_ssid state only —
+ * no ESP32 interaction required. */
+static void status_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    wifi_show_status();
+    app->running = true;
+    m1_scene_pop(app);
+}
 
-DELEGATE_FEATURE(saved,      wifi_saved_networks, ESP32_FEATURE_WIFI_JOIN)
-DELEGATE_FEATURE(status,     wifi_show_status,    ESP32_FEATURE_WIFI_JOIN)
-DELEGATE_FEATURE(disconnect, wifi_disconnect,     ESP32_FEATURE_WIFI_JOIN)
+/* Disconnect: wifi_disconnect() dispatches to AT+CWQAP or CMD_WIFI_DISCONNECT
+ * based on the runtime capability bitmap. */
+static void disconnect_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    m1_esp32_ensure_init();
+    wifi_disconnect();
+    m1_esp32_deinit();
+    app->running = true;
+    m1_scene_pop(app);
+}
 
 const M1SceneHandlers wifi_scene_saved_handlers      = { .on_enter = saved_on_enter      };
 const M1SceneHandlers wifi_scene_status_handlers     = { .on_enter = status_on_enter     };
