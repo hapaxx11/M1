@@ -4141,7 +4141,7 @@ void nfc_detect_reader(void)
 	else if (captured > 0) {
 		m1_message_box(&m1_u8g2,
 			"Detect Reader",
-			(i0 >= 0) ? "Recovery incomplete" : result_line,
+			(i0 >= 0) ? "Recovery not completed" : result_line,
 			"/NFC/mfkey_nonces.txt",
 			"BACK to return");
 	}
