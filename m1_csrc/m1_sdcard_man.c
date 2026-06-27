@@ -306,7 +306,14 @@ static uint8_t m1_sdm_memory_init(void)
 	dev_sd_hdl.sdWriteBufferSize = M1_SDM_MIN_BUFFER_SIZE;
 
 	dev_sd_hdl.buff_info.sd_write_buffer_idx = 0;
-	dev_sd_hdl.buff_info.sd_write_buffer = m1_malloc(dev_sd_hdl.sdWriteBufferSize*M1_SDM_BUFFER_ARRAY_SIZE);
+	/* Allocate from the FreeRTOS heap directly (pvPortMalloc / vPortFree) rather
+	 * than via m1_malloc (malloc_critical).  This keeps the SD write buffer on the
+	 * unified FreeRTOS heap-4 pool established in #526 and avoids wrapping a
+	 * scheduler-suspending allocator inside taskENTER_CRITICAL — an anti-pattern
+	 * that the FreeRTOS V11 upgrade (#589) made riskier.  See issue #610 and the
+	 * "Heap Redirect" rules in CLAUDE.md — do NOT route this allocation back
+	 * through malloc_critical during future RTOS/library updates. */
+	dev_sd_hdl.buff_info.sd_write_buffer = pvPortMalloc(dev_sd_hdl.sdWriteBufferSize*M1_SDM_BUFFER_ARRAY_SIZE);
 
 	if (dev_sd_hdl.buff_info.sd_write_buffer==NULL)
 	{
@@ -336,7 +343,7 @@ static uint8_t m1_sdm_memory_deinit(void)
 {
     if (dev_sd_hdl.buff_info.sd_write_buffer != NULL)
     {
-    	m1_free(dev_sd_hdl.buff_info.sd_write_buffer);
+    	vPortFree(dev_sd_hdl.buff_info.sd_write_buffer);
     	dev_sd_hdl.buff_info.sd_write_buffer = NULL;
     }
 

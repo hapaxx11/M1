@@ -296,6 +296,27 @@ endif()
 add_test(NAME subghz_raw_capture_alloc COMMAND test_subghz_raw_capture_alloc)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_read_raw_status
+# Pure-logic mapping from a Read Raw start-error code to its on-screen
+# status line.  Bug context (#610): a heap shortage (SD write-buffer
+# alloc) and a genuine SD/FatFs fault both showed "SD card error",
+# making field reports ambiguous.  These tests pin three distinct
+# messages so the cause stays visible on-device.
+# ------------------------------------------------------------------
+add_executable(test_subghz_read_raw_status
+    test_subghz_read_raw_status.c
+    ${M1_ROOT}/Sub_Ghz/subghz_read_raw_status.c
+)
+target_include_directories(test_subghz_read_raw_status PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_read_raw_status PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_read_raw_status PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_read_raw_status COMMAND test_subghz_read_raw_status)
+
+# ------------------------------------------------------------------
 # Source invariant: ESP32 transport must be quiesced around Sub-GHz.
 # Bug context: SiN360 ESP32 tools can leave SPI3/EXTI active; Sub-GHz
 # Read/Read Raw depend on timing-sensitive SI4463/TIM1 capture.
