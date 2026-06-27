@@ -3108,8 +3108,10 @@ static uint8_t sub_ghz_ring_buffers_init(void)
 		/* The SD manager still needs heap for its write-buffer reserve after
 		 * these capture buffers are allocated. Probe that reserve now so Read
 		 * Raw does not accept a capture buffer size that makes SD startup fail
-		 * in m1_sdm_memory_init(). */
-		if ( !subghz_raw_capture_reserve_heap((size_t)M1_SDM_MIN_BUFFER_SIZE*M1_SDM_BUFFER_ARRAY_SIZE, m1_malloc, m1_free) )
+		 * in m1_sdm_memory_init().  Probe with pvPortMalloc/vPortFree so the
+		 * reserve exercises the *same* FreeRTOS heap-4 allocator the SD write
+		 * buffer now uses (see m1_sdm_memory_init, issue #610). */
+		if ( !subghz_raw_capture_reserve_heap((size_t)M1_SDM_MIN_BUFFER_SIZE*M1_SDM_BUFFER_ARRAY_SIZE, pvPortMalloc, vPortFree) )
 			goto retry_smaller_capture_buffer;
 		m1_ringbuffer_init(&subghz_rx_rawdata_rb, (uint8_t *)subghz_front_buffer, subghz_front_buffer_size, sizeof(uint16_t));
 

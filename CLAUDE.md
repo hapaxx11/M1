@@ -358,6 +358,14 @@ each modification is still present.  If a modification was lost, re-apply it.
 | `Middlewares/FreeRTOS/` | `portable/MemMang/heap_4.c` | `pvPortRealloc()` function | FreeRTOS upstream dropped `pvPortRealloc` in V11.  M1's `Core/Src/memmgr.c` wraps libc `realloc` through it via `--wrap`. Must be re-added after any FreeRTOS upgrade. | Hapax |
 | `Middlewares/FreeRTOS/` | `include/portable.h` | `void *pvPortRealloc(void *pv, size_t xWantedSize);` declaration | Companion declaration for the `pvPortRealloc` implementation in `heap_4.c`. | Hapax |
 
+> **FreeRTOS upgrades also endanger the rest of the #526 heap redirect, not just
+> `pvPortRealloc`.**  After any FreeRTOS / newlib / linker update, run the full
+> **Heap-Redirect Component Checklist** in the "Heap Redirect — `malloc()` ≡
+> `pvPortMalloc()`" section (Architecture Rules).  Verify all 8 components,
+> including the `--wrap` flags, the `memmgr.c` link, the `sysmem.c` exclusion, and
+> `configTOTAL_HEAP_SIZE`.  Breaking any one silently reverts to a broken or
+> split-heap state (the root-cause concern behind issue #610).
+
 ### Mandatory Audit Procedure
 
 When updating **any** vendored dependency (`Drivers/u8g2_csrc/`, `Drivers/u8g2_cppsrc/`,
@@ -810,6 +818,41 @@ via linker `--wrap` flags (see `cmake/gcc-arm-none-eabi.cmake` and
 5. All allocations share a single `configTOTAL_HEAP_SIZE` pool.
 6. The old guidance "must use `pvPortMalloc`/`vPortFree` instead of
    `malloc`/`free`" is **obsolete** — they are now equivalent.
+
+#### 🔒 Heap-Redirect Component Checklist — verify after EVERY RTOS / libc / linker update
+
+> **The heap redirect introduced in #526 is a multi-component system.  ALL of the
+> pieces below must coexist — removing or breaking any one silently reverts the
+> firmware to a broken or split-heap state.  This is not hypothetical: the
+> FreeRTOS V10.5.1 → V11.3.0 upgrade in #589 dropped `pvPortRealloc` and the
+> firmware failed to link until it was restored *within the same PR*.  Issue #610
+> ("SubGhz Read Raw Broken") was filed because the owner suspected #589 had
+> reverted the #526 heap behaviour.**
+>
+> **Whenever you upgrade FreeRTOS, newlib/picolibc, the linker, or touch
+> `cmake/gcc-arm-none-eabi.cmake` / `cmake/m1_01/CMakeLists.txt`, you MUST
+> re-verify every row of this table before considering the update complete.
+> Never "override" or remove any of these during a vendored RTOS/library update.**
+
+| # | Component | Location | How to verify |
+|---|-----------|----------|---------------|
+| 1 | `__wrap_*` shim (malloc/free/calloc/realloc + `_r` variants) | `Core/Src/memmgr.c`, `Core/Inc/memmgr.h` | File present and compiled |
+| 2 | Linker `--wrap` flags (all 8) | `cmake/gcc-arm-none-eabi.cmake` | `--wrap=malloc,free,calloc,realloc` **and** `--wrap=_malloc_r,_free_r,_calloc_r,_realloc_r` |
+| 3 | `memmgr.c` linked into firmware | `cmake/m1_01/CMakeLists.txt` | `../../Core/Src/memmgr.c` present in `target_sources` |
+| 4 | `sysmem.c` (newlib `_sbrk` heap) **excluded** | `cmake/m1_01/CMakeLists.txt` | `sysmem.c` is **NOT** referenced anywhere under `cmake/` |
+| 5 | `pvPortRealloc()` (M1 local mod) | `Middlewares/FreeRTOS/.../heap_4.c` + `include/portable.h` | Implementation + declaration both present (see Local Modification Registry) |
+| 6 | `pvPortCalloc()` | `Middlewares/FreeRTOS/.../heap_4.c` + `portable.h` | Present (native to FreeRTOS ≥ V11; restore if a future kernel drops it) |
+| 7 | `configTOTAL_HEAP_SIZE` unchanged | `Core/Inc/FreeRTOSConfig.h` | `262144` (256 KB) — do not shrink |
+| 8 | `test_memmgr` green | `tests/test_memmgr.c` | `ctest -R memmgr` passes |
+
+> **Do NOT route large or hot-path allocations through `malloc_critical` /
+> `m1_malloc`.**  Wrapping `pvPortMalloc`/`vPortFree` (which suspend the
+> scheduler) inside `taskENTER_CRITICAL()` is an anti-pattern (see AP-1) that the
+> FreeRTOS V11 upgrade made riskier.  The Read Raw record path allocates its SD
+> write buffer (`m1_sdm_memory_init`, `m1_csrc/m1_sdcard_man.c`) and capture ring
+> buffers (`sub_ghz_ring_buffers_init`, `m1_csrc/m1_sub_ghz.c`) **directly via
+> `pvPortMalloc`/`vPortFree`** for this reason.  Keep them on the direct FreeRTOS
+> heap-4 path; do not convert them back to `m1_malloc` during future updates.
 
 #### ⚠ Heap anti-patterns — check for EVERY new feature
 

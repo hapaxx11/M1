@@ -84,6 +84,7 @@
 #include "m1_lcd.h"
 #include "m1_lp5814.h"
 #include "m1_sub_ghz.h"
+#include "subghz_read_raw_status.h"
 #include "m1_sub_ghz_api.h"
 #include "m1_sub_ghz_decenc.h"
 #include "m1_ring_buffer.h"
@@ -166,12 +167,14 @@ static char tx_unlink_path[RAW_FILEPATH_MAX + 4]; /* "0:" + path + NUL */
  * from ticking up from ambient RF noise that survives the 80 µs ISR filter. */
 static bool s_signal_seen_in_chunk = false;
 
-/* Error codes returned by start_raw_rx() */
-typedef enum {
-    RAW_START_OK      = 0,
-    RAW_START_ERR_OOM = 1,  /* ring-buffer malloc failed          */
-    RAW_START_ERR_SD  = 2,  /* SD file or write-buffer init failed */
-} raw_start_err_t;
+/* Error codes returned by start_raw_rx().  Mirrors subghz_read_raw_start_err_t
+ * (Sub_Ghz/subghz_read_raw_status.h) so the failure cause — capture OOM, SD/file
+ * fault, or SD write-buffer alloc — is distinguishable on screen (issue #610). */
+typedef subghz_read_raw_start_err_t raw_start_err_t;
+#define RAW_START_OK      SUBGHZ_READ_RAW_START_OK
+#define RAW_START_ERR_OOM SUBGHZ_READ_RAW_START_ERR_OOM
+#define RAW_START_ERR_SD  SUBGHZ_READ_RAW_START_ERR_SD
+#define RAW_START_ERR_MEM SUBGHZ_READ_RAW_START_ERR_MEM
 
 /* Forward declarations — these functions are defined after scene_on_enter() but
  * called from it.  Without these, the compiler creates implicit non-static
@@ -325,13 +328,16 @@ static raw_start_err_t start_raw_rx(SubGhzApp *app, size_t *heap_at_fail)
     }
 
     /* Create the output .sub file and write the Flipper-compatible header */
-    if (sub_ghz_raw_recording_init_ext())
+    uint8_t rec_ret = sub_ghz_raw_recording_init_ext();
+    if (rec_ret)
     {
         /* Sample heap BEFORE freeing ring buffers so we reflect the memory
          * pressure that caused the SD init to fail, not the post-cleanup state. */
         if (heap_at_fail) *heap_at_fail = xPortGetFreeHeapSize();
         sub_ghz_ring_buffers_deinit_ext();
-        return RAW_START_ERR_SD;  /* SD error — stay in Start, radio keeps listening passively */
+        /* ret==2 → SD write-buffer alloc (heap) failed; ret==1 → SD/FatFs/file
+         * fault.  Keep them distinct so the screen disambiguates the cause. */
+        return (rec_ret == 2) ? RAW_START_ERR_MEM : RAW_START_ERR_SD;
     }
 
     /* Arm ISR: start TIM1 input-capture then flag ring-buffer writes */
@@ -430,11 +436,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 if (err != RAW_START_OK)
                 {
                     char detail[32];
-                    const char *line1;
-                    if (err == RAW_START_ERR_OOM)
-                        line1 = "Low memory";
-                    else
-                        line1 = "SD card error";
+                    const char *line1 = subghz_read_raw_start_err_line1(err);
                     /* heap_at_fail was captured inside start_raw_rx() at the
                      * exact moment of failure, before any cleanup freed buffers. */
                     snprintf(detail, sizeof(detail), "Heap free: %lu B",
