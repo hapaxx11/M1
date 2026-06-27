@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.2] - 2026-06-27
+
+### Added
+
+- **Games: 2048 puzzle game** — classic sliding-tile puzzle imported from dag firmware;
+  D-pad to slide tiles, OK to restart, BACK to exit; session best score tracked.
+- **NFC: on-device MFKey32 key recovery** — after capturing two reader authentication nonces via Detect Reader, the M1 now recovers the MIFARE Classic sector key entirely on-device using a memory-bounded Crapto-1 solver (~110 KB transient heap arena, freed after recovery). Shows a "Cracking N/16" progress screen with BACK to cancel. On success, saves the recovered key to `/NFC/keys_<UID>.txt` (labelled) and `/NFC/keys_<UID>.dic` (Proxmark-compatible dictionary). Ported from noproto/FlipperMfkey (GPLv3).
+- **RFID: reset-cause diagnostics with .noinit breadcrumbs** — `m1_diag.c/h` stores the T5577 write phase (START/WRITE_BIT/DONE) and MCU reset cause (BOR/IWDG/SFT/POR/PIN) in a `.noinit` RAM region that survives brownout/watchdog resets. A new "RFID Diagnostics" screen in RFID → Utilities shows the last reset cause and the write phase that was active when the reset occurred, enabling silent-reset debugging without a serial adapter. Ported from da-pingwing (GPLv3).
+
+### Changed
+
+- **Flash savings (~59 KB)** — switched the FatFs OEM code page from 932
+  (Japanese Shift-JIS) to 437 (US), dropping two large Unicode conversion
+  tables. ASCII/Latin long filenames are unaffected.
+
+### Fixed
+
+- **LF RFID → Read stuck on "Reading" / no detection** — `lfrfid_read_hw_deinit()`
+  could touch TIM3/TIM5 registers while their RCC clocks were gated, raising a
+  bus fault → HardFault (which the fault handler spins on, freezing the read
+  screen). Now enables those timer clocks defensively before access. Fix
+  courtesy of **da-pingwing** (github.com/da-pingwing/M1_T-1000_RFID, GPL-3.0).
+- **NFC MFKey32: move working arena from BSS to heap** — the ~110 KB static arrays used during
+  MIFARE Classic key recovery are now heap-allocated on entry to `mfkey32v2_recover()` and freed
+  on return, eliminating the permanent `.bss` footprint that overflowed the 640 KB RAM limit.
+- NFC: fix undefined signed left shifts in `mfkey32.c` by casting bit values to `uint32_t` before shifting, preventing UBSan runtime errors and the Host-side unit test timeout in CI.
+- **LF RFID → T5577 write produced a wrong (but valid) clone** — The T5577 bit
+  timing was out of spec: a "1" bit's gap-to-gap was 74 field clocks vs the
+  64 Tc datasheet maximum, so the chip latched it wrong and the cloned EM4100
+  read back as a consistent incorrect value. Retuned to in-spec timing
+  (DATA_0=14, DATA_1=46, WRITE_GAP=10 Tc → 24/56 Tc gap-to-gap). Also reworked
+  the field gap to actively drive the coil pin low (no DC short / brownout) and
+  the write stop to park PB0 LOW. Fix courtesy of **da-pingwing**
+  (github.com/da-pingwing/M1_T-1000_RFID, GPL-3.0).
 ## [0.9.2.1] - 2026-06-21
 
 ## [0.9.2.0] - 2026-06-21
