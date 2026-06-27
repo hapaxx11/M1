@@ -4838,6 +4838,20 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 
 	ensure_esp32_ready();
 
+	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
+	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
+	{
+		m1_resp_t ping_resp;
+		const bool is_binary_spi =
+		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
+		     ping_resp.status == RESP_OK &&
+		     ping_resp.payload_len == 4 &&
+		     memcmp(ping_resp.payload, "PONG", 4) == 0);
+
+		if (!is_binary_spi && !get_esp32_main_init_status())
+			esp32_main_init();
+	}
+
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
 	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
 	{
