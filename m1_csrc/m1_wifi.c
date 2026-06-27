@@ -5096,6 +5096,20 @@ void wifi_disconnect(void)
 {
 	m1_resp_t resp;
 
+	/* Ensure the SPI-AT RTOS task is running before capability probing on AT firmware.
+	 * SiN360 responds to CMD_PING; avoid starting the AT task in that case. */
+	{
+		m1_resp_t ping_resp;
+		const bool is_binary_spi =
+		    (m1_esp32_simple_cmd(CMD_PING, &ping_resp, 500) == 0 &&
+		     ping_resp.status == RESP_OK &&
+		     ping_resp.payload_len == 4 &&
+		     memcmp(ping_resp.payload, "PONG", 4) == 0);
+
+		if (!is_binary_spi && !get_esp32_main_init_status())
+			esp32_main_init();
+	}
+
 	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
 	{
 		/* AT firmware (dag/T-800, bedge117) — send AT+CWQAP */
