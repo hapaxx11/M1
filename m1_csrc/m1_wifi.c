@@ -186,6 +186,11 @@ static uint16_t wifi_do_scan(void)
 	m1_resp_t resp;
 	int ret;
 
+	/* Capability dispatch requires the SPI-AT RTOS task (esp32_main_init). */
+	m1_esp32_ensure_init();
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+
 	/* On AT firmware (dag/T-800, bedge117), use AT+CWLAP instead of binary
 	 * SPI scan commands which are SiN360-only.  M1_ESP32_CAP_WIFI_JOIN is
 	 * set by the AT+CMD? probe for any firmware that supports AT+CWJAP. */
@@ -448,11 +453,19 @@ static void wifi_connect_selected_ap(void)
 		memset(at_resp, 0, sizeof(at_resp));
 		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 20);
 
+		bool timeout_or_senderr = (strstr(at_resp, "TIMEOUT(") != NULL) ||
+		                         (strstr(at_resp, "SEND_ERR=") != NULL);
+		bool has_error = (strstr(at_resp, "ERROR") != NULL);
+		bool has_fail  = (strstr(at_resp, "FAIL") != NULL) || has_error || timeout_or_senderr;
+		const char *reason = "Check password";
+		if (timeout_or_senderr) reason = "ESP32 no response";
+		else if (has_error)    reason = "AT error";
+
 		got_ip = strstr(at_resp, "WIFI GOT IP") != NULL;
-		if (!got_ip || strstr(at_resp, "FAIL") != NULL)
+		if (!got_ip || has_fail)
 		{
 			memset(password, 0, sizeof(password));
-			wifi_show_message("Connect", "Connect failed", "Check password");
+			wifi_show_message("Connect", "Connect failed", reason);
 			return;
 		}
 
@@ -562,9 +575,9 @@ void wifi_scan_ap(void)
 		vTaskDelay(pdMS_TO_TICKS(2000));
 	}
 
-	/* For AT-firmware (dag/T-800): also start the SPI-AT RTOS task so that
-	 * the capability probe can run AT+CMD? to identify the firmware type.
-	 * No-op when the task is already running (SiN360 or repeated entry). */
+	/* For capability probing on AT-based firmware, ensure the SPI-AT RTOS task
+	 * is running so AT+CMD? can be issued. No-op only when the task is already
+	 * running (e.g. repeated entry). */
 	if (!get_esp32_main_init_status())
 		esp32_main_init();
 
