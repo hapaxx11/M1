@@ -138,6 +138,16 @@ static uint16_t wifi_do_scan_at(void)
 
 	wifi_ap_list_free();
 
+	/* Clear any stale responses queued from the capability-probe AT exchange. */
+	esp32_queue_reset();
+
+	/* Ensure Station mode before scanning.  dag/T-800 may boot with WiFi
+	 * disabled or in AP mode; AT+CWLAP returns ERROR unless the radio is in
+	 * STA mode (CWMODE=1).  Mirrors the sequence in wifi_ap_scan_list()
+	 * (esp_app_main.c).  Ignore the reply — the mode may already be correct. */
+	memset(resp_buf, 0, sizeof(resp_buf));
+	(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+
 	memset(resp_buf, 0, sizeof(resp_buf));
 	(void)spi_AT_send_recv("AT+CWLAP\r\n", resp_buf, sizeof(resp_buf),
 	                        (int)(WIFI_CMD_TIMEOUT_MS / 1000));
@@ -1811,6 +1821,11 @@ void wifi_pmkid_at(void)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 6, 35, "Scanning WiFi...");
 	m1_u8g2_nextpage();
+
+	/* Ensure Station mode before scanning — same rationale as wifi_do_scan_at(). */
+	esp32_queue_reset();
+	memset(resp_buf, 0, sizeof(resp_buf));
+	(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
 
 	memset(resp_buf, 0, sizeof(resp_buf));
 	(void)spi_AT_send_recv("AT+CWLAP\r\n", resp_buf, sizeof(resp_buf), 12);
