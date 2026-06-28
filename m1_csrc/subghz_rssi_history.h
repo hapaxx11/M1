@@ -107,6 +107,31 @@ static inline void subghz_rssi_history_reset(SubghzRssiHistory *h)
  *  captured bars when the signal briefly dropped to the noise floor, leaving
  *  an empty waveform despite an active recording (issue: "Read Raw graph").
  */
+/**
+ * @brief  Rate-limit guard for RSSI cursor advances.
+ *
+ *  Returns true when at least @p interval_ms milliseconds have elapsed since
+ *  @p last_ms.  All parameters are ms timestamps / intervals from
+ *  HAL_GetTick() or any monotonic uint32_t ms source.  The subtraction is
+ *  unsigned so 32-bit roll-over is handled correctly (correct as long as
+ *  interval_ms < 2^31 ms ≈ 24 days).
+ *
+ *  This is a pure function — no hardware dependencies — so it can be called
+ *  from draw() in the scene and exercised in host unit tests.
+ *
+ * @param  now_ms       Current timestamp in ms (from HAL_GetTick()).
+ * @param  last_ms      Timestamp of the most-recent allowed cursor advance.
+ * @param  interval_ms  Minimum inter-advance interval in ms (use 100U to match
+ *                      Momentum's 100 ms tick rate).
+ * @retval true   when (now_ms − last_ms) >= interval_ms.
+ * @retval false  otherwise (within the rate-limit window).
+ */
+static inline bool subghz_rssi_rate_allow(uint32_t now_ms, uint32_t last_ms,
+                                           uint32_t interval_ms)
+{
+    return (now_ms - last_ms) >= interval_ms;
+}
+
 static inline void subghz_rssi_history_push(SubghzRssiHistory *h,
                                              float rssi_dbm, bool trace)
 {

@@ -33,12 +33,13 @@
  *              user can judge signal strength before pressing OK to start recording.
  *              This makes the visual distinction unambiguous: a filling/scrolling
  *              waveform always means RECORDING is in progress (button = "Stop").
- *   RECORDING: Cursor advancement is driven entirely by the 200ms draw tick —
- *              NOT by SubGhzEventRxData.  On each tick, RSSI is sampled:
- *              above threshold → push_ext(rssi, true) advances the cursor;
- *              below threshold → push_ext(rssi, false) freezes the cursor
- *              immediately.  This is Momentum's tick-only pattern — cursor
- *              ownership belongs to the draw tick, not to incoming edge events.
+ *   RECORDING: Cursor advances at ~100 ms/step — matching Momentum's
+ *              view-dispatcher tick rate.  draw() is rate-limited by
+ *              s_rssi_draw_tick_ms so the waveform fills over ~10 s even
+ *              when Q_EVENT_SUBGHZ_RX events flood the main queue at
+ *              thousands/sec during active recording.  On each allowed tick,
+ *              RSSI is sampled: above threshold → push(trace=true) advances
+ *              the cursor; below threshold → push(trace=false) freezes it.
  *   IDLE:      Spectrogram frozen; "X spl." sample count, filename in waveform area.
  *              LEFT = Erase, ⊙ OK = Send (replay), RIGHT = Save (rename via VKB).
  *   LOADED:    Spectrogram reset (empty); "RAW" status, filename in waveform area.
@@ -96,6 +97,7 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_esp32_hal.h"
 #include "ff.h"
+#include "subghz_rssi_history.h"
 
 extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
@@ -166,6 +168,14 @@ static char tx_unlink_path[RAW_FILEPATH_MAX + 4]; /* "0:" + path + NUL */
  * is actually scrolling — matches Momentum's behaviour and stops the count
  * from ticking up from ambient RF noise that survives the 80 µs ISR filter. */
 static bool s_signal_seen_in_chunk = false;
+
+/* Timestamp (ms, HAL_GetTick()) of the last RSSI cursor advance.
+ * Rate-limits the spectrogram cursor to ~100 ms/step — the same rate
+ * as Momentum's 100 ms view-dispatcher tick.  Without this gate, the
+ * 100-slot history fills in milliseconds because draw() is invoked on
+ * every Q_EVENT_SUBGHZ_RX (= every captured edge, potentially thousands
+ * per second during active recording), making the waveform appear frozen. */
+static uint32_t s_rssi_draw_tick_ms = 0;
 
 /* Error codes returned by start_raw_rx().  Mirrors subghz_read_raw_start_err_t
  * (Sub_Ghz/subghz_read_raw_status.h) so the failure cause — capture OOM, SD/file
@@ -349,6 +359,8 @@ static raw_start_err_t start_raw_rx(SubGhzApp *app, size_t *heap_at_fail)
     app->raw_sample_count = 0;
     s_signal_seen_in_chunk = false;
     subghz_raw_rssi_reset_ext();
+    /* Prime the rate-limiter so the very first draw() fires immediately. */
+    s_rssi_draw_tick_ms = HAL_GetTick() - 100U;
 
     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
     return RAW_START_OK;
@@ -879,10 +891,9 @@ static void draw(SubGhzApp *app)
      *            cursor position is refreshed.  The graph does not scroll in this
      *            state so a filling waveform unambiguously signals that RECORDING
      *            is in progress (button = "Stop"), not passive listen (button = "REC").
-     * Recording: On every tick, sample RSSI and call push_ext with trace=true when
-     *            RSSI is above threshold (cursor advances) or trace=false when below
-     *            (cursor freezes in-place immediately).  Single decision point, no
-     *            trailing state, no auxiliary flags — identical to Momentum's pattern.
+     * Recording: Cursor advances at ~100 ms/step via s_rssi_draw_tick_ms rate-limiter
+     *            (matches Momentum's 100 ms view-dispatcher tick rate).
+     *            See the Recording branch below for details.
      */
     if (app->raw_state == SubGhzReadRawStateStart)
     {
@@ -902,9 +913,28 @@ static void draw(SubGhzApp *app)
     {
         app->rssi = subghz_read_rssi_ext();
         bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
-        /* Advance cursor when signal is above threshold; freeze immediately when not.
-         * trace=false updates the current column height without incrementing ind_write. */
-        subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
+
+        /* Rate-limit cursor advance to ~100 ms/step (Momentum tick rate).
+         *
+         * draw() is called on every SubGhzEventRxData which corresponds to
+         * every captured ISR edge — potentially thousands per second during
+         * active recording.  Without this gate the 100-slot history fills in
+         * milliseconds and the waveform appears frozen/not-progressing despite
+         * the SPL counter climbing.  At 100 ms/step the buffer fills in ~10 s,
+         * identical to Momentum. */
+        uint32_t now_ms = HAL_GetTick();
+        if (subghz_rssi_rate_allow(now_ms, s_rssi_draw_tick_ms, 100U))
+        {
+            /* Advance cursor when signal is above threshold;
+             * freeze immediately (update current column) when below. */
+            subghz_raw_rssi_push_ext((float)app->rssi, signal_present);
+            s_rssi_draw_tick_ms = now_ms;
+        }
+        else
+        {
+            /* Between ticks: update the live cursor indicator without advancing. */
+            subghz_raw_rssi_set_current_ext((float)app->rssi);
+        }
 
         /* Gate the displayed SPL counter by the same signal_present rule as the
          * cursor — see SubGhzEventRxData handler.  Latch the flag here on every
@@ -917,7 +947,7 @@ static void draw(SubGhzApp *app)
 
     /* Draw the RSSI spectrogram for non-TX states.
      * Start:     Live RSSI at frozen cursor (no scroll).
-     * Recording: Captured edges with cursor advancing on RxData.
+     * Recording: Spectrogram with cursor advancing at ~100 ms/step.
      * Idle:      Frozen spectrogram of the completed capture.
      *
      * TX / LoadKeyTX (and their Repeat variants): replace the spectrogram
