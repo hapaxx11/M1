@@ -1805,6 +1805,11 @@ target_include_directories(test_mfkey32 PRIVATE
 target_link_libraries(test_mfkey32 PRIVATE unity)
 if(TARGET sanitizers)
     target_link_libraries(test_mfkey32 PRIVATE sanitizers)
+    # The mfkey32 recovery search is prohibitively slow under Debug -O0 plus
+    # ASan/UBSan and can exceed the CI per-test timeout on shared runners.
+    # Keep sanitizer coverage, but optimize this target enough to stay within
+    # the existing 60 s workflow limit.
+    target_compile_options(test_mfkey32 PRIVATE -O2)
 endif()
 add_test(NAME mfkey32 COMMAND test_mfkey32)
 
