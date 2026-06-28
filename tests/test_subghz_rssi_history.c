@@ -283,6 +283,67 @@ void test_trace_false_after_wrap_noise_floor_does_not_erase(void)
 }
 
 /* =========================================================================
+ * subghz_rssi_rate_allow — waveform cursor rate-limiter
+ *
+ * Regression: before the 100 ms rate-limiter was introduced, draw() pushed a
+ * new RSSI sample on every SubGhzEventRxData (= every captured ISR edge,
+ * potentially thousands/sec).  This filled the 100-slot history buffer in
+ * milliseconds, causing the waveform to appear frozen despite samples being
+ * captured.  The fix adds subghz_rssi_rate_allow() to gate the push.
+ * ====================================================================== */
+
+void test_rate_allow_true_when_interval_elapsed(void)
+{
+    /* 100 ms elapsed since last push at t=0 → allowed */
+    TEST_ASSERT_TRUE(subghz_rssi_rate_allow(100U, 0U, 100U));
+}
+
+void test_rate_allow_true_when_more_than_interval_elapsed(void)
+{
+    /* 200 ms elapsed (well past the 100 ms interval) → allowed */
+    TEST_ASSERT_TRUE(subghz_rssi_rate_allow(200U, 0U, 100U));
+}
+
+void test_rate_allow_false_when_interval_not_elapsed(void)
+{
+    /* Only 50 ms elapsed → NOT allowed */
+    TEST_ASSERT_FALSE(subghz_rssi_rate_allow(50U, 0U, 100U));
+}
+
+void test_rate_allow_false_just_under_interval(void)
+{
+    /* 99 ms elapsed (1 ms short) → NOT allowed */
+    TEST_ASSERT_FALSE(subghz_rssi_rate_allow(99U, 0U, 100U));
+}
+
+void test_rate_allow_true_at_exact_boundary(void)
+{
+    /* Exactly 100 ms elapsed → allowed */
+    TEST_ASSERT_TRUE(subghz_rssi_rate_allow(500U, 400U, 100U));
+}
+
+void test_rate_allow_handles_uint32_overflow(void)
+{
+    /* now wraps around: now=5, last=0xFFFFFF00 (≈ 256 ms before wrap).
+     * Unsigned subtraction: 5 - 0xFFFFFF00 = 0x105 = 261 >= 100 → allowed. */
+    TEST_ASSERT_TRUE(subghz_rssi_rate_allow(5U, 0xFFFFFF00U, 100U));
+}
+
+void test_rate_allow_false_just_before_overflow(void)
+{
+    /* now=0xFFFFFF63 (= 0xFFFFFF00 + 99), just 99 ms after last → NOT allowed */
+    TEST_ASSERT_FALSE(subghz_rssi_rate_allow(0xFFFFFF63U, 0xFFFFFF00U, 100U));
+}
+
+void test_rate_allow_primed_state_fires_immediately(void)
+{
+    /* Simulate the primed state: last = now - 100 → exactly at boundary → allowed */
+    uint32_t now = 5000U;
+    uint32_t last = now - 100U;
+    TEST_ASSERT_TRUE(subghz_rssi_rate_allow(now, last, 100U));
+}
+
+/* =========================================================================
  * current field always reflects live RSSI
  * ====================================================================== */
 
@@ -353,6 +414,16 @@ int main(void)
     RUN_TEST(test_current_tracks_live_rssi_on_trace_true);
     RUN_TEST(test_current_tracks_live_rssi_on_trace_false);
     RUN_TEST(test_current_zero_when_rssi_below_min);
+
+    /* subghz_rssi_rate_allow — waveform rate-limiter */
+    RUN_TEST(test_rate_allow_true_when_interval_elapsed);
+    RUN_TEST(test_rate_allow_true_when_more_than_interval_elapsed);
+    RUN_TEST(test_rate_allow_false_when_interval_not_elapsed);
+    RUN_TEST(test_rate_allow_false_just_under_interval);
+    RUN_TEST(test_rate_allow_true_at_exact_boundary);
+    RUN_TEST(test_rate_allow_handles_uint32_overflow);
+    RUN_TEST(test_rate_allow_false_just_before_overflow);
+    RUN_TEST(test_rate_allow_primed_state_fires_immediately);
 
     return UNITY_END();
 }
