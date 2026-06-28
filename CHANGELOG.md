@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.7] - 2026-06-28
+
+### Fixed
+
+- Host tests: build `test_mfkey32` with optimization under ASan/UBSan so the
+  MFKey32 recovery test stays within the existing GitHub Actions timeout on
+  slower runners.
+- **Sub-GHz Read Raw: waveform now progresses at Momentum-equivalent rate** — The
+  RSSI spectrogram cursor was advancing on every ISR edge event (thousands/sec
+  during active recording), filling the 100-slot history buffer in milliseconds
+  and making the waveform appear frozen despite samples being captured. The cursor
+  now advances at ~100 ms/step matching Momentum's tick rate, so the waveform
+  fills over ~10 s exactly as on Flipper Zero.
 ## [0.9.2.6] - 2026-06-28
 
 ### Fixed
