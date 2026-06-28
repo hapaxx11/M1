@@ -131,7 +131,9 @@ static inline bool subghz_rssi_rate_allow(uint32_t now_ms, uint32_t last_ms,
 {
     return (now_ms - last_ms) >= interval_ms;
 }
-
+/**
+ * @brief  Push one RSSI sample into the history.
+ */
 static inline void subghz_rssi_history_push(SubghzRssiHistory *h,
                                              float rssi_dbm, bool trace)
 {
