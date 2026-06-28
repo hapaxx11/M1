@@ -542,6 +542,22 @@ void esp32_queue_reset(void)
 	}
 }
 
+bool esp32_queue_reset_locked(void)
+{
+	BaseType_t sem_taken;
+
+	if (!esp_ctrl_req_sem)
+		return false;
+
+	sem_taken = xSemaphoreTake(esp_ctrl_req_sem, SEC_TO_MILLISEC(WAIT_TIME_B2B_CTRL_REQ));
+	if (sem_taken != pdPASS)
+		return false;
+
+	esp32_queue_reset();
+	xSemaphoreGive(esp_ctrl_req_sem);
+	return true;
+}
+
 
 static void init_master_hd(spi_device_handle_t* spi)
 {

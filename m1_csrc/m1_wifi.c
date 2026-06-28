@@ -139,7 +139,7 @@ static uint16_t wifi_do_scan_at(void)
 	wifi_ap_list_free();
 
 	/* Clear any stale responses queued from the capability-probe AT exchange. */
-	esp32_queue_reset();
+	(void)esp32_queue_reset_locked();
 
 	/* Ensure Station mode before scanning.  dag/T-800 may boot with WiFi
 	 * disabled or in AP mode; AT+CWLAP returns ERROR unless the radio is in
@@ -1823,7 +1823,7 @@ void wifi_pmkid_at(void)
 	m1_u8g2_nextpage();
 
 	/* Ensure Station mode before scanning — same rationale as wifi_do_scan_at(). */
-	esp32_queue_reset();
+	(void)esp32_queue_reset_locked();
 	memset(resp_buf, 0, sizeof(resp_buf));
 	(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
 
