@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.9] - 2026-06-29
+
+### Changed
+
+- **WiFi: Navigate to Connected menu after successful connect** — When connecting
+  to a WiFi network (from Networks scan, Saved Networks, or General → Join WiFi),
+  the device now automatically navigates to the Connected menu (Status / Net Scan /
+  Disconnect) instead of showing a dismissible "Connected!" message and returning
+  to the previous screen.
+- **WiFi: Connection-dependent features moved to Connected menu** — Net Scan,
+  Status, and Disconnect are now grouped in a dedicated "Connected" sub-menu
+  (General → Connected) that requires an active WiFi connection to enter.
+  Net Scan removed from the top-level WiFi menu.
+- **WiFi: UX restructuring** — Renamed "Scan & Connect" to "Networks" for
+  clarity. Sniffers, Attacks, and Recon sub-menus now prompt to disconnect
+  if WiFi is connected (these features require monitor mode). Net Scan
+  sub-menu now requires an active WiFi connection before showing tools.
 ## [0.9.2.8] - 2026-06-29
 
 ### Changed
