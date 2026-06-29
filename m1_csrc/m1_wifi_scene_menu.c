@@ -8,7 +8,7 @@
  *   WifiSceneMenu           — top-level 6-item menu
  *   WifiSceneReconMenu      — Recon sub-menu (6 items)
  *   WifiScene802154Menu     — 802.15.4 sub-menu (2 items)
- *   WifiSceneScanConnect    — Scan & Connect delegate
+ *   WifiSceneScanConnect    — Networks scan/connect delegate
  *   WifiSceneStationScan    — Station Scan delegate
  *   WifiSceneSurvey24g      — 2.4G Channel Survey delegate
  *   WifiSceneMacTrack       — MAC Track delegate
