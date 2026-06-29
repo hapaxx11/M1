@@ -5281,10 +5281,10 @@ bool wifi_prompt_disconnect(void)
 
 bool wifi_require_connected(void)
 {
-	if (s_wifi_stub_connected)
+	if (wifi_is_connected())
 		return true;
 
-	wifi_show_message("Net Scan", "Connect via Networks", "first");
+	wifi_show_message("WiFi", "Connect via Networks first", NULL);
 	return false;
 }
 
