@@ -47,10 +47,15 @@
 static void saved_on_enter(M1SceneApp *app)
 {
     (void)app;
+    bool was_connected = wifi_is_connected();
     m1_esp32_ensure_init();
     wifi_saved_networks();
     m1_esp32_deinit();
     app->running = true;
+    if (!was_connected && wifi_is_connected()) {
+        m1_scene_replace(app, WifiSceneConnectedMenu);
+        return;
+    }
     m1_scene_pop(app);
 }
 

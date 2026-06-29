@@ -48,7 +48,22 @@
 /* Core / direct-tool delegates                                             */
 /*==========================================================================*/
 
-DELEGATE(scan_connect,      wifi_scan_ap)
+static void scan_connect_on_enter(M1SceneApp *app) {
+    (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    bool was_connected = wifi_is_connected();
+#endif
+    wifi_scan_ap();
+    m1_esp32_deinit();
+    app->running = true;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!was_connected && wifi_is_connected()) {
+        m1_scene_replace(app, WifiSceneConnectedMenu);
+        return;
+    }
+#endif
+    m1_scene_pop(app);
+}
 DELEGATE(station_scan,      wifi_station_scan)
 DELEGATE(survey_24g,        wifi_survey_24g)
 DELEGATE(mac_track,         wifi_mac_track)

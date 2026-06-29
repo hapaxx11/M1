@@ -61,7 +61,22 @@ DELEGATE(gen_load_aps,    wifi_general_load_aps)
 DELEGATE(gen_clear_aps,   wifi_general_clear_aps)
 DELEGATE(gen_load_ssids,  wifi_general_load_ssids)
 DELEGATE(gen_clear_ssids, wifi_general_clear_ssids)
-DELEGATE(gen_join,        wifi_general_join_wifi)
+static void gen_join_on_enter(M1SceneApp *app) {
+    (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    bool was_connected = wifi_is_connected();
+#endif
+    wifi_general_join_wifi();
+    m1_esp32_deinit();
+    app->running = true;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!was_connected && wifi_is_connected()) {
+        m1_scene_replace(app, WifiSceneConnectedMenu);
+        return;
+    }
+#endif
+    m1_scene_pop(app);
+}
 DELEGATE(gen_set_macs,    wifi_general_set_macs)
 DELEGATE(gen_set_chan,     wifi_general_set_channel)
 DELEGATE(gen_shutdown,    wifi_general_shutdown_wifi)
