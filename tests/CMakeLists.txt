@@ -2073,6 +2073,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_ap_record COMMAND test_wifi_ap_record)
 
+# ---------- wifi_ntp_parse ----------
+add_executable(test_wifi_ntp_parse
+    test_wifi_ntp_parse.c
+    ${M1_ROOT}/m1_csrc/wifi_ntp_parse.c
+)
+target_include_directories(test_wifi_ntp_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_ntp_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_ntp_parse PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_ntp_parse COMMAND test_wifi_ntp_parse)
+
 # ---------- wifi_status_msg (Phase A) ----------
 add_executable(test_wifi_status_msg
     test_wifi_status_msg.c
