@@ -160,6 +160,33 @@ void test_status_references_networks(void)
     free(c);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 8. Connect delegates navigate to Connected menu on success                */
+/*--------------------------------------------------------------------------*/
+
+void test_connect_delegates_navigate_to_connected_menu(void)
+{
+    char *c;
+
+    c = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_replace(app, WifiSceneConnectedMenu)"),
+        "Networks scan/connect delegate must replace with Connected menu on successful connect");
+    free(c);
+
+    c = read_file("m1_csrc/m1_wifi_scene_connect.c");
+    TEST_ASSERT_NOT_NULL(c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_replace(app, WifiSceneConnectedMenu)"),
+        "Saved Networks delegate must replace with Connected menu on successful connect");
+    free(c);
+
+    c = read_file("m1_csrc/m1_wifi_scene_general.c");
+    TEST_ASSERT_NOT_NULL(c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_replace(app, WifiSceneConnectedMenu)"),
+        "Join WiFi delegate must replace with Connected menu on successful connect");
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -170,5 +197,6 @@ int main(void)
     RUN_TEST(test_net_scan_requires_connected);
     RUN_TEST(test_helpers_declared_in_header);
     RUN_TEST(test_status_references_networks);
+    RUN_TEST(test_connect_delegates_navigate_to_connected_menu);
     return UNITY_END();
 }
