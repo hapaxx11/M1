@@ -58,9 +58,7 @@ bool wifi_ntp_parse_time(const char *response, clock_time_t *out)
     while (*p == ' ' || *p == '\t')
         p++;
 
-    /* Reject epoch / un-synced response ("Thu Jan  1 00:00:00 1970") */
-    if (strstr(p, "1970"))
-        return false;
+    /* Epoch/unsynced (year 1970) is rejected by the year range check below. */
 
     /* Parse asctime format: "Day Mon DD HH:MM:SS YYYY"
      * sscanf with %3s captures exactly 3 chars for day/month name. */
