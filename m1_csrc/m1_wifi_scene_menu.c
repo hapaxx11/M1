@@ -2,10 +2,12 @@
 
 /**
  * @file   m1_wifi_scene_menu.c
- * @brief  WiFi top-level menu scene + core/direct-tool delegates.
+ * @brief  WiFi top-level menu scene + Recon/802.15.4 sub-menus + core delegates.
  *
  * Scenes covered:
- *   WifiSceneMenu           — top-level 13/16-item menu
+ *   WifiSceneMenu           — top-level 7-item menu
+ *   WifiSceneReconMenu      — Recon sub-menu (6 items)
+ *   WifiScene802154Menu     — 802.15.4 sub-menu (2 items)
  *   WifiSceneScanConnect    — Scan & Connect delegate
  *   WifiSceneStationScan    — Station Scan delegate
  *   WifiSceneSurvey24g      — 2.4G Channel Survey delegate
@@ -67,55 +69,29 @@ const M1SceneHandlers wifi_scene_zigbee_handlers           = { .on_enter = zigbe
 const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = thread_on_enter           };
 
 /*==========================================================================*/
-/* Top-level menu                                                           */
+/* Top-level menu (7 items)                                                 */
 /*==========================================================================*/
 
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define MENU_ITEM_COUNT  16
-#else
-#define MENU_ITEM_COUNT  13
-#endif
+#define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Scan & Connect",
-    "Station Scan",
-    "2.4G Survey",
-    "MAC Track",
-    "Wardrive",
-    "Station Wardrive",
+    "Recon",
     "Sniffers",
     "Attacks",
     "Net Scan",
+    "802.15.4",
     "General",
-    "Zigbee Scan",
-    "Thread Scan",
-    "Signal Monitor",
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-    "Saved Networks",
-    "Status",
-    "Disconnect",
-#endif
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneScanConnect,
-    WifiSceneStationScan,
-    WifiSceneSurvey24g,
-    WifiSceneMacTrack,
-    WifiSceneWardrive,
-    WifiSceneStationWardrive,
+    WifiSceneReconMenu,
     WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
     WifiSceneNetMenu,
+    WifiScene802154Menu,
     WifiSceneGeneralMenu,
-    WifiSceneZigbee,
-    WifiSceneThread,
-    WifiSceneSignalMonitor,
-#ifdef M1_APP_WIFI_CONNECT_ENABLE
-    WifiSceneSaved,
-    WifiSceneStatus,
-    WifiSceneDisconnect,
-#endif
 };
 
 static subghz_submenu_model_t s_wifi_menu_model;
@@ -147,4 +123,102 @@ const M1SceneHandlers wifi_scene_menu_handlers = {
     .on_event = menu_on_event,
     .on_exit  = menu_on_exit,
     .draw     = menu_draw,
+};
+
+/*==========================================================================*/
+/* Recon sub-menu (6 items)                                                 */
+/*==========================================================================*/
+
+#define RECON_ITEM_COUNT  6
+
+static const char *const recon_labels[RECON_ITEM_COUNT] = {
+    "Station Scan",
+    "2.4G Survey",
+    "MAC Track",
+    "Wardrive",
+    "Station Wardrive",
+    "Signal Monitor",
+};
+
+static const uint8_t recon_targets[RECON_ITEM_COUNT] = {
+    WifiSceneStationScan,
+    WifiSceneSurvey24g,
+    WifiSceneMacTrack,
+    WifiSceneWardrive,
+    WifiSceneStationWardrive,
+    WifiSceneSignalMonitor,
+};
+
+static subghz_submenu_model_t s_recon_model;
+
+static void recon_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    if (s_recon_model.item_count == 0)
+        subghz_submenu_model_init(&s_recon_model, RECON_ITEM_COUNT,
+                                  M1_MENU_VIS(RECON_ITEM_COUNT));
+    app->need_redraw = true;
+}
+
+static bool recon_menu_event(M1SceneApp *app, M1SceneEvent ev)
+{
+    return m1_submenu_event(app, ev, &s_recon_model, recon_targets);
+}
+
+static void recon_menu_draw(M1SceneApp *app)
+{
+    (void)app;
+    m1_submenu_draw(&s_recon_model, "Recon", recon_labels);
+}
+
+const M1SceneHandlers wifi_scene_recon_menu_handlers = {
+    .on_enter = recon_menu_enter,
+    .on_event = recon_menu_event,
+    .on_exit  = NULL,
+    .draw     = recon_menu_draw,
+};
+
+/*==========================================================================*/
+/* 802.15.4 sub-menu (2 items)                                              */
+/*==========================================================================*/
+
+#define IEEE802154_ITEM_COUNT  2
+
+static const char *const ieee802154_labels[IEEE802154_ITEM_COUNT] = {
+    "Zigbee Scan",
+    "Thread Scan",
+};
+
+static const uint8_t ieee802154_targets[IEEE802154_ITEM_COUNT] = {
+    WifiSceneZigbee,
+    WifiSceneThread,
+};
+
+static subghz_submenu_model_t s_802154_model;
+
+static void ieee802154_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+    if (s_802154_model.item_count == 0)
+        subghz_submenu_model_init(&s_802154_model, IEEE802154_ITEM_COUNT,
+                                  M1_MENU_VIS(IEEE802154_ITEM_COUNT));
+    app->need_redraw = true;
+}
+
+static bool ieee802154_menu_event(M1SceneApp *app, M1SceneEvent ev)
+{
+    return m1_submenu_event(app, ev, &s_802154_model, ieee802154_targets);
+}
+
+static void ieee802154_menu_draw(M1SceneApp *app)
+{
+    (void)app;
+    m1_submenu_draw(&s_802154_model, "802.15.4", ieee802154_labels);
+}
+
+const M1SceneHandlers wifi_scene_802154_menu_handlers = {
+    .on_enter = ieee802154_menu_enter,
+    .on_event = ieee802154_menu_event,
+    .on_exit  = NULL,
+    .draw     = ieee802154_menu_draw,
 };
