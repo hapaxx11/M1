@@ -25,6 +25,8 @@
 #include "m1_buzzer.h"
 #include "irmp.h"
 #include "irsnd.h"
+#include "m1_system.h"
+#include "m1_gpio.h"
 #include "ff.h"
 
 #ifdef M1_APP_FILE_IMPORT_ENABLE
@@ -52,6 +54,9 @@ TIM_HandleTypeDef   Timerhdl_IrRx;
 IRMP_DATA 			irmp_data;
 
 volatile S_M1_IR_Det IrRx_Edge_Det; // Flag for first falling edge detected
+
+/* External-IR TX path latched at encode init from m1_ir_ext_on, used by deinit. */
+static uint8_t   s_ir_encode_ext = 0;
 
 volatile uint8_t ir_ota_data_tx_active;
 uint16_t ir_ota_data_tx_len;
@@ -864,15 +869,39 @@ void infrared_encode_sys_init(void)
 	Timerhdl_IrTx.Instance = IR_ENCODE_BASEBAND_TIMER;
 	Timerhdl_IrCarrier.Instance = IR_ENCODE_CARRIER_TIMER;
 
-	/*Configure GPIO pin */
-	gpio_init_struct.Pin = IR_TX_GPIO_PIN;
-	gpio_init_struct.Mode = GPIO_MODE_AF_PP;
-	gpio_init_struct.Pull = GPIO_NOPULL;
-	gpio_init_struct.Speed = GPIO_SPEED_FREQ_MEDIUM;
-	gpio_init_struct.Alternate = IR_GPIO_AF_TR;
-	HAL_GPIO_Init(IR_GPIO_PORT, &gpio_init_struct);
+	s_ir_encode_ext = (ir_active_path(m1_ir_ext_on) == IR_PATH_EXTERNAL) ? 1 : 0;
 
-	irsnd_init(&Timerhdl_IrCarrier, IR_ENCODE_TIMER_TX_CHANNEL);
+	if (s_ir_encode_ext)
+	{
+		/* External HX-53 transmitter: PA9 = TIM1_CH2 (regular channel), AF1.
+		   The HX-53 is a 5 V module — power VCC from the +5_EXT rail (J5/X8),
+		   NOT 3.3 V, or the emitter is too weak. PA9 still drives DAT at 3.3 V
+		   logic, which is fine (DAT is a logic input on the module). */
+		ext_power_5V_set(1);
+		__HAL_RCC_GPIOA_CLK_ENABLE();
+		gpio_init_struct.Pin = IR_EXT_TX_GPIO_PIN;
+		gpio_init_struct.Mode = GPIO_MODE_AF_PP;
+		gpio_init_struct.Pull = GPIO_NOPULL;
+		gpio_init_struct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+		gpio_init_struct.Alternate = IR_EXT_TX_GPIO_AF;
+		HAL_GPIO_Init(IR_EXT_TX_GPIO_PORT, &gpio_init_struct);
+
+		irsnd_init(&Timerhdl_IrCarrier, IR_EXT_TX_TIM_CHANNEL);
+		irsnd_set_output_mode(0); /* regular CCxE channel (PA9 has no free CHxN) */
+	}
+	else
+	{
+		/*Configure GPIO pin */
+		gpio_init_struct.Pin = IR_TX_GPIO_PIN;
+		gpio_init_struct.Mode = GPIO_MODE_AF_PP;
+		gpio_init_struct.Pull = GPIO_NOPULL;
+		gpio_init_struct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+		gpio_init_struct.Alternate = IR_GPIO_AF_TR;
+		HAL_GPIO_Init(IR_GPIO_PORT, &gpio_init_struct);
+
+		irsnd_init(&Timerhdl_IrCarrier, IR_ENCODE_TIMER_TX_CHANNEL);
+		irsnd_set_output_mode(1); /* onboard PC5 = TIM1_CH4N complementary (CCxNE) */
+	}
 /*
 	// HAL_TIM_PWM_DeInit(&Timerhdl_IrCarrier);
 
@@ -975,12 +1004,25 @@ void infrared_encode_sys_deinit(void)
 	BaseType_t ret;
 	GPIO_InitTypeDef gpio_init_struct;
 
-	gpio_init_struct.Pin = IR_DRV_Pin;
-	gpio_init_struct.Mode = GPIO_MODE_OUTPUT_PP;
-	gpio_init_struct.Pull = GPIO_NOPULL;
-	gpio_init_struct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(IR_GPIO_PORT, &gpio_init_struct);
-	HAL_GPIO_WritePin(IR_GPIO_PORT, IR_DRV_Pin, GPIO_PIN_RESET);
+	if (s_ir_encode_ext)
+	{
+		/* Park PA9 low so the external transmitter LED is off. */
+		gpio_init_struct.Pin = IR_EXT_TX_GPIO_PIN;
+		gpio_init_struct.Mode = GPIO_MODE_OUTPUT_PP;
+		gpio_init_struct.Pull = GPIO_NOPULL;
+		gpio_init_struct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(IR_EXT_TX_GPIO_PORT, &gpio_init_struct);
+		HAL_GPIO_WritePin(IR_EXT_TX_GPIO_PORT, IR_EXT_TX_GPIO_PIN, GPIO_PIN_RESET);
+	}
+	else
+	{
+		gpio_init_struct.Pin = IR_DRV_Pin;
+		gpio_init_struct.Mode = GPIO_MODE_OUTPUT_PP;
+		gpio_init_struct.Pull = GPIO_NOPULL;
+		gpio_init_struct.Speed = GPIO_SPEED_FREQ_LOW;
+		HAL_GPIO_Init(IR_GPIO_PORT, &gpio_init_struct);
+		HAL_GPIO_WritePin(IR_GPIO_PORT, IR_DRV_Pin, GPIO_PIN_RESET);
+	}
 
 	HAL_TIM_PWM_DeInit(&Timerhdl_IrCarrier);
 	HAL_TIM_Base_DeInit(&Timerhdl_IrTx);
@@ -1000,8 +1042,90 @@ void infrared_encode_sys_deinit(void)
 	if ( main_q_hdl != NULL)
 		xQueueReset(main_q_hdl);
 
+	if (s_ir_encode_ext && !m1_ir_ext_on)
+		ext_power_5V_set(0); /* keep +5_EXT on while External IR stays enabled */
+
 	//HAL_GPIO_DeInit(IR_GPIO_PORT, IR_TX_GPIO_PIN);
 } // void infrared_encode_sys_deinit(void)
+
+
+/*============================================================================*/
+/*
+ * Power the external IR transmitter rail (+5_EXT feeds the HX-53, a 5 V module).
+ * Called when the External IR setting is toggled and at settings load, so the
+ * HX-53 stays powered while the feature is enabled.
+ */
+/*============================================================================*/
+void infrared_ext_power(uint8_t on)
+{
+	ext_power_5V_set(on ? 1 : 0);   /* HX-53 transmitter (5 V) */
+} // void infrared_ext_power(uint8_t on)
+
+
+/*============================================================================*/
+/*
+ * External IR TX self-test. Forces the external carrier path and drives a SOLID
+ * 38 kHz carrier on PA9 (TIM1_CH2) for 4 s so the HX-53 emitter can be checked
+ * with a phone camera, while showing the real TIM1/GPIOA register state. If the
+ * registers read PA9 MODE=2 AF=1 / CC2E=1 MOE=1 CEN=1 and CNT spans 0..ARR but
+ * the camera shows nothing, the carrier IS being driven onto PA9 and the fault
+ * is physical (wiring/pin/module), not firmware.
+ */
+/*============================================================================*/
+void infrared_ext_tx_selftest(void)
+{
+	uint8_t saved = m1_ir_ext_on;
+	char l0[24], l1[24], l2[24];
+	uint32_t ccer, bdtr, cr1, afrh, moder, arr, c, t0;
+	uint32_t cnt_min = 0xFFFFFFFFu, cnt_max = 0u;
+
+	m1_ir_ext_on = 1;                                  /* force external path */
+	infrared_encode_sys_init();                        /* PA9 AF1/TIM1_CH2, +5V on */
+	irsnd_set_carrier_freq(IR_ENCODE_CARRIER_FREQ_38_KHZ);
+	irsnd_on();                                        /* continuous carrier */
+
+	cr1   = Timerhdl_IrCarrier.Instance->CR1;
+	ccer  = Timerhdl_IrCarrier.Instance->CCER;
+	bdtr  = Timerhdl_IrCarrier.Instance->BDTR;
+	arr   = Timerhdl_IrCarrier.Instance->ARR;
+	moder = GPIOA->MODER;
+	afrh  = GPIOA->AFR[1];                             /* AFRH: pins 8..15 */
+
+	/* Sample the counter for 5 ms: if it spans 0..ARR the timer is really
+	   oscillating (so PA9 carries a 38 kHz square wave, not a DC level). */
+	t0 = HAL_GetTick();
+	while ((HAL_GetTick() - t0) < 5u)
+	{
+		c = Timerhdl_IrCarrier.Instance->CNT;
+		if (c < cnt_min) cnt_min = c;
+		if (c > cnt_max) cnt_max = c;
+	}
+
+	snprintf(l0, sizeof(l0), "PA9 MODE=%lu AF=%lu",
+	         (unsigned long)((moder >> 18) & 0x3u), (unsigned long)((afrh >> 4) & 0xFu));
+	snprintf(l1, sizeof(l1), "CC2E=%lu MOE=%lu CEN=%lu",
+	         (unsigned long)((ccer >> 4) & 1u), (unsigned long)((bdtr >> 15) & 1u),
+	         (unsigned long)(cr1 & 1u));
+	snprintf(l2, sizeof(l2), "CNT %lu-%lu ARR=%lu",
+	         (unsigned long)cnt_min, (unsigned long)cnt_max, (unsigned long)arr);
+
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 2, 8,  "Ext TX self-test PA9");
+	u8g2_DrawStr(&m1_u8g2, 2, 20, l0);
+	u8g2_DrawStr(&m1_u8g2, 2, 31, l1);
+	u8g2_DrawStr(&m1_u8g2, 2, 42, l2);
+	u8g2_DrawStr(&m1_u8g2, 2, 56, "ON 4s: cam + meter PA9");
+	m1_u8g2_nextpage();
+
+	vTaskDelay(pdMS_TO_TICKS(4000));                   /* hold carrier for camera check */
+
+	irsnd_off();
+	infrared_encode_sys_deinit();      /* leaves rail on (m1_ir_ext_on still 1) */
+	m1_ir_ext_on = saved;
+	infrared_ext_power(saved);         /* restore rail to the real toggle state */
+} // void infrared_ext_tx_selftest(void)
 
 
 

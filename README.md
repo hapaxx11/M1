@@ -114,6 +114,7 @@ project discussion, and related project resources:
 - **Universal Remote Database** — pre-built remotes for Samsung, LG, Sony, Vizio, Bose, Denon, and more (see [`ir_database/`](ir_database/))
 - **Learn & Save** — record IR signals and save to SD card
 - **Import** Flipper Zero `.ir` files
+- **External transmitter (optional)** — drive an external HX-53 IR LED on the expansion header (PA9, 5 V) for higher output via **Settings → External IR**; receive/learn stays on the onboard sensor
 
 ### BadUSB
 - **DuckyScript interpreter** — run keystroke injection scripts from SD card

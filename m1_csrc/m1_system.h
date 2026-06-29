@@ -179,6 +179,7 @@ extern uint8_t              m1_sleep_timeout_idx;   /* 0=30s, 1=1m, 2=5m, 3=10m,
 extern uint8_t              m1_menu_style;          /* 0=Small (8px), 1=Medium (10px), 2=Large (13px) */
 extern uint8_t              m1_dark_mode;           /* 0=Off (normal), 1=On (inverted/dark display) */
 extern int8_t               m1_clock_tz_offset;     /* Local UTC offset in whole hours (-12..+14) */
+extern uint8_t              m1_ir_ext_on;           /* 0=onboard IR, 1=external IR modules (HX-53/HX-M121) */
 #ifdef M1_APP_BADBT_ENABLE
 #define BADBT_NAME_MAX_LEN 20
 extern char m1_badbt_name[BADBT_NAME_MAX_LEN + 1];

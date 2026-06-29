@@ -20,6 +20,7 @@
 #include <string.h>
 #include "stm32h5xx_hal.h"
 #include "m1_log_debug.h"
+#include "m1_compile_cfg.h"
 #include "main.h"
 #include "app_freertos.h"
 #include "semphr.h"
@@ -151,19 +152,34 @@ void m1_logdb_init(void)
 	PA10    ------> USART1_RX (alias UART_1_RX)
 	*/
 
+#ifndef M1_EXT_IR_FREE_UART1
+	/* Claim PA9/PA10 as USART1 TX/RX for the serial debug console. */
 	GPIO_InitStruct.Pin = UART_1_TX_Pin|UART_1_RX_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
 	HAL_GPIO_Init(UART_1_TX_GPIO_Port, &GPIO_InitStruct);
+#else
+	/* External IR owns PA9/PA10 — do NOT route them to USART1. The USART1
+	   peripheral still initialises (the log task runs harmlessly with no pins);
+	   the serial debug console is therefore inactive. */
+	(void)GPIO_InitStruct;
+#endif
 
 	huart_logdb.Instance = USART1;
 	//huart_logdb.Init.BaudRate = LOG_DEBUG_UART_BAUD;
 	//huart_logdb.Init.WordLength = UART_WORDLENGTH_8B;
 	//huart_logdb.Init.StopBits = UART_STOPBITS_1;
 	//huart_logdb.Init.Parity = UART_PARITY_NONE;
+#ifdef M1_EXT_IR_FREE_UART1
+	/* RX pin (PA10) is freed for external IR — run TX-only so the unconnected
+	   USART1 RX input can't generate a framing/noise interrupt storm that would
+	   starve the timing-critical IR decode. */
+	huart_logdb.Init.Mode = UART_MODE_TX;
+#else
 	huart_logdb.Init.Mode = UART_MODE_TX_RX;
+#endif
 	huart_logdb.Init.HwFlowCtl = UART_HWCONTROL_NONE;
 	huart_logdb.Init.OverSampling = UART_OVERSAMPLING_16;
 	huart_logdb.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
@@ -309,7 +325,7 @@ void m1_logdb_init(void)
     logdb_dma_tx_len = 0;
     plogdb_tx_rb = &logdb_tx_rb; // Use this pointer for macro to avoid compile error
 
-#ifdef M1_DEBUG_CLI_ENABLE
+#if defined(M1_DEBUG_CLI_ENABLE) && !defined(M1_EXT_IR_FREE_UART1)
 	/* Enable the UART global Interrupt */
 	HAL_NVIC_SetPriority(LOG_DEBUG_UART_IRQn, configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY, 0);
 	HAL_NVIC_EnableIRQ(LOG_DEBUG_UART_IRQn);
@@ -326,7 +342,10 @@ void m1_logdb_init(void)
 		// get USART ready to receive
 		HAL_UART_Receive_IT(&huart_logdb, logdb_rx_buffer, 1);
 	}
-#endif // #ifdef M1_DEBUG_CLI_ENABLE
+	/* M1_EXT_IR_FREE_UART1: RX is disabled (TX-only) and its pin is reused by
+	   external IR, so the RX IRQ/DMA are intentionally NOT armed here — this
+	   prevents a floating-RX interrupt storm from starving the IR decode. */
+#endif
 
 	mutex_log_write_trans = xSemaphoreCreateMutex();
 	assert(mutex_log_write_trans);
