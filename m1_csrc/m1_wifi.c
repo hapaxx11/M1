@@ -5262,13 +5262,14 @@ void wifi_disconnect(void)
 
 bool wifi_prompt_disconnect(void)
 {
-	if (!s_wifi_stub_connected)
+	if (!wifi_is_connected())
 		return true;
 
+	const char *ssid = wifi_get_connected_ssid();
 	uint8_t choice = m1_message_box_choice(&m1_u8g2,
 	                     "WiFi Connected",
 	                     "Disconnect to continue?",
-	                     s_wifi_stub_ssid,
+	                     (ssid && ssid[0] != '\0') ? ssid : NULL,
 	                     "Disconnect\nCancel");
 	if (choice != 1)
 		return false;
