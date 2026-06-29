@@ -29,6 +29,7 @@
 #include "m1_esp32_hal.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
+#include "m1_compile_cfg.h"
 
 /*==========================================================================*/
 /* Blocking delegate macro                                                  */
@@ -80,6 +81,12 @@ static subghz_submenu_model_t s_sniffer_model;
 static void sniffer_menu_enter(M1SceneApp *app)
 {
     (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!wifi_prompt_disconnect()) {
+        m1_scene_pop(app);
+        return;
+    }
+#endif
     if (s_sniffer_model.item_count == 0)
         subghz_submenu_model_init(&s_sniffer_model, SNIFFER_ITEM_COUNT,
                                   M1_MENU_VIS(SNIFFER_ITEM_COUNT));

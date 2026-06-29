@@ -75,7 +75,7 @@ const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = threa
 #define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
-    "Scan & Connect",
+    "Networks",
     "Recon",
     "Sniffers",
     "Attacks",
@@ -154,6 +154,12 @@ static subghz_submenu_model_t s_recon_model;
 static void recon_menu_enter(M1SceneApp *app)
 {
     (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!wifi_prompt_disconnect()) {
+        m1_scene_pop(app);
+        return;
+    }
+#endif
     if (s_recon_model.item_count == 0)
         subghz_submenu_model_init(&s_recon_model, RECON_ITEM_COUNT,
                                   M1_MENU_VIS(RECON_ITEM_COUNT));
