@@ -4918,10 +4918,21 @@ uint8_t wifi_sync_rtc(void)
 
 void wifi_ntp_background_sync(void)
 {
-	/* Attempt a single NTP sync if connected.
+	/* Attempt a single NTP sync if connected, throttled to once per 30 minutes.
 	 * Called from periodic tasks; result is ignored. */
-	if (s_wifi_stub_connected)
-		(void)wifi_sync_rtc();
+	static uint32_t s_last_ntp_tick = 0;
+	uint32_t now = HAL_GetTick();
+
+	if (!s_wifi_stub_connected)
+		return;
+
+	/* 30 min = 1 800 000 ms.  On the very first call s_last_ntp_tick == 0 so
+	 * the subtraction wraps correctly and the condition is always true. */
+	if ((now - s_last_ntp_tick) < 1800000UL)
+		return;
+
+	s_last_ntp_tick = now;
+	(void)wifi_sync_rtc();
 }
 
 /*============================================================================*/
