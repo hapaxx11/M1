@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.8] - 2026-06-29
+
+### Changed
+
+- **WiFi: menu reorganization** — root menu reduced from 16 to 7 items.
+  Recon tools (Station Scan, 2.4G Survey, MAC Track, Wardrive, Station
+  Wardrive, Signal Monitor) grouped under new "Recon" sub-menu; Zigbee/Thread
+  grouped under new "802.15.4" sub-menu; Saved Networks/Status/Disconnect
+  moved into General sub-menu.
+
+### Fixed
+
+- **Wi-Fi: ESP32 compatibility strengthening** — Fixed AP list always showing
+  last item instead of first after scan; AP list now sorted by signal strength
+  (RSSI descending); Connect button dynamically shows "Disconnect" when already
+  connected; saved Wi-Fi credentials auto-fill on reconnect; NTP time sync
+  implemented for AT-command ESP32 firmware (dag/bedge117).
+- Build: add `wifi_ntp_parse.c` to the firmware CMake target so WiFi NTP sync links successfully in CI and release builds.
 ## [0.9.2.7] - 2026-06-28
 
 ### Fixed
