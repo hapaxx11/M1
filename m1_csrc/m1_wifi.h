@@ -102,10 +102,9 @@ bool wifi_prompt_disconnect(void);
 /**
  * @brief  Check if WiFi is connected; show error if not.
  *
- * Shows a dismissible "Connect via Networks" message if WiFi is not
- * connected.  Intended for features that require an active connection
- * (e.g. Net Scan tools).
- *
+ * Shows a dismissible "Connect via Networks first" message if WiFi is not
+ * connected.  Intended for any feature/scene that requires an active connection
+ * (e.g. Connected menu, Net Scan tools).
  * @retval true   WiFi is connected — proceed.
  * @retval false  WiFi is not connected — caller should pop/abort.
  */
