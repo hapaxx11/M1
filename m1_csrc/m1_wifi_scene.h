@@ -16,7 +16,7 @@
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + 8 attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + 5 network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + 14 general/config delegates
- *                             + Saved Networks/Status/Disconnect targets
+ *                             + Net Scan target + Saved Networks/Status/Disconnect targets
  *   m1_wifi_scene_connect.c — Saved Networks, Status, Disconnect delegates
  *                             (compile-gated by M1_APP_WIFI_CONNECT_ENABLE)
  *

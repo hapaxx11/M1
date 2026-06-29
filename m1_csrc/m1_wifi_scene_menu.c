@@ -5,7 +5,7 @@
  * @brief  WiFi top-level menu scene + Recon/802.15.4 sub-menus + core delegates.
  *
  * Scenes covered:
- *   WifiSceneMenu           — top-level 7-item menu
+ *   WifiSceneMenu           — top-level 6-item menu
  *   WifiSceneReconMenu      — Recon sub-menu (6 items)
  *   WifiScene802154Menu     — 802.15.4 sub-menu (2 items)
  *   WifiSceneScanConnect    — Scan & Connect delegate
@@ -72,14 +72,13 @@ const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = threa
 /* Top-level menu (7 items)                                                 */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Networks",
     "Recon",
     "Sniffers",
     "Attacks",
-    "Net Scan",
     "802.15.4",
     "General",
 };
@@ -89,7 +88,6 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneReconMenu,
     WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
-    WifiSceneNetMenu,
     WifiScene802154Menu,
     WifiSceneGeneralMenu,
 };

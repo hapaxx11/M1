@@ -5,7 +5,7 @@
  * @brief  WiFi General/Config sub-menu + general delegates.
  *
  * Scenes covered:
- *   WifiSceneGeneralMenu            — General sub-menu (14+3 items)
+ *   WifiSceneGeneralMenu            — General sub-menu (15+3 items)
  *   WifiSceneGeneralViewInfo        — View AP Info delegate
  *   WifiSceneGeneralSelectAps       — Select APs delegate
  *   WifiSceneGeneralSelectStas      — Select STAs delegate
@@ -88,9 +88,9 @@ const M1SceneHandlers wifi_scene_gen_ep_html_handlers     = { .on_enter = gen_ep
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define GENERAL_ITEM_COUNT  17
+#define GENERAL_ITEM_COUNT  18
 #else
-#define GENERAL_ITEM_COUNT  14
+#define GENERAL_ITEM_COUNT  15
 #endif
 
 static const char *const general_labels[GENERAL_ITEM_COUNT] = {
@@ -99,6 +99,7 @@ static const char *const general_labels[GENERAL_ITEM_COUNT] = {
     "Load SSIDs", "Clear SSIDs",
     "Join WiFi", "Set MACs", "Set Channel",
     "Shutdown WiFi", "Set EP SSID", "Select EP HTML",
+    "Net Scan",
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     "Saved Networks", "Status", "Disconnect",
 #endif
@@ -110,6 +111,7 @@ static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralLoadSsids, WifiSceneGeneralClearSsids,
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
+    WifiSceneNetMenu,
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     WifiSceneSaved, WifiSceneStatus, WifiSceneDisconnect,
 #endif
