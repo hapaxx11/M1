@@ -16,8 +16,8 @@
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + 8 attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + 5 network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + 14 general/config delegates
- *                             + Saved Networks/Status/Disconnect targets
- *   m1_wifi_scene_connect.c — Saved Networks, Status, Disconnect delegates
+ *                             + Connected menu target (when connected)
+ *   m1_wifi_scene_connect.c — Connected menu + Saved Networks, Status, Disconnect delegates
  *                             (compile-gated by M1_APP_WIFI_CONNECT_ENABLE)
  *
  * m1_wifi_scene.c owns only the scene_registry[] table and wifi_scene_entry().
@@ -101,6 +101,7 @@ typedef enum {
 
     /* Connect features (compile-gated) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
+    WifiSceneConnectedMenu,
     WifiSceneSaved,
     WifiSceneStatus,
     WifiSceneDisconnect,
@@ -176,6 +177,7 @@ extern const M1SceneHandlers wifi_scene_gen_ep_html_handlers;
 
 /* m1_wifi_scene_connect.c (compile-gated by M1_APP_WIFI_CONNECT_ENABLE) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
+extern const M1SceneHandlers wifi_scene_connected_menu_handlers;
 extern const M1SceneHandlers wifi_scene_saved_handlers;
 extern const M1SceneHandlers wifi_scene_status_handlers;
 extern const M1SceneHandlers wifi_scene_disconnect_handlers;

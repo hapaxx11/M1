@@ -1761,6 +1761,106 @@ port alignment straightforward.
 
 ---
 
+## Post-Connection Navigation Pattern
+
+> **This is the default UX pattern for any action that establishes a connection to
+> a device, network, or peripheral.**  It applies to all WiFi and Bluetooth
+> connection flows, and serves as the fallback pattern for other protocols (NFC,
+> RFID, GPIO, etc.).  Individual protocols MAY override this pattern when a
+> more sensible flow exists for their specific hardware — for example, NFC tag
+> detection may jump directly to a tag-info screen instead of a generic
+> "connected" menu.
+
+### The pattern
+
+When a user action successfully establishes a new connection (WiFi join,
+Bluetooth pair, device handshake, etc.), the delegate scene **MUST** navigate
+to a **Connected Menu** scene instead of showing a dismissible message and
+returning to the previous screen.
+
+The Connected Menu scene:
+- **Title**: displays the connected device/network identifier (e.g. SSID,
+  device name, tag UID) — not a generic "Connected" label.
+- **Items**: lists only the actions available while connected (e.g. Status,
+  Net Scan, Disconnect for WiFi; Info, Services, Disconnect for Bluetooth).
+- **Guard**: checks that the connection is still active on entry
+  (`on_enter`).  If the connection has dropped, pops back immediately.
+- **BACK**: returns to the parent menu (the menu that led to the connection
+  action), NOT to the connection delegate itself.
+
+### Implementation — blocking delegate pattern
+
+For blocking delegates that call a connection function, use the
+`was_connected` / `m1_scene_replace` pattern:
+
+```c
+static void my_connect_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    bool was_connected = my_protocol_is_connected();
+
+    my_protocol_connect_delegate();   /* blocking — shows UI internally */
+
+    m1_esp32_deinit();   /* or protocol-specific teardown */
+    app->running = true;
+
+    if (!was_connected && my_protocol_is_connected()) {
+        m1_scene_replace(app, MyProtocolSceneConnectedMenu);
+        return;
+    }
+    m1_scene_pop(app);
+}
+```
+
+**Key details:**
+- Save `was_connected` **before** calling the delegate.
+- Check the connection state **after** the delegate returns.
+- Only navigate to the Connected Menu on a **false → true** transition.
+  If the user was already connected (and did not disconnect/reconnect),
+  pop normally — they were browsing, not connecting.
+- Use `m1_scene_replace()`, not `m1_scene_push()`, so BACK from the
+  Connected Menu returns to the parent menu rather than the (now stale)
+  delegate.
+
+### Current implementations
+
+| Module | Connect scenes | Connected Menu scene | Guard function |
+|--------|---------------|---------------------|----------------|
+| **WiFi** | `WifiSceneScanConnect`, `WifiSceneSaved`, `WifiSceneGeneralJoin` | `WifiSceneConnectedMenu` (Status, Net Scan, Disconnect) | `wifi_is_connected()` / `wifi_require_connected()` |
+| **Bluetooth** | _(not yet implemented)_ | _(planned)_ | _(planned)_ |
+
+### Rules for new connection flows
+
+1. **Every connection action must navigate to a Connected Menu on success.**
+   Do not show a "Connected!" message box and return to the previous screen.
+   The user expects to interact with the connected device immediately.
+
+2. **The Connected Menu must guard against stale connections.**  If the
+   connection drops between the delegate returning and the menu rendering
+   (race, timeout, user-initiated disconnect from the menu itself), the
+   menu's `on_enter` must detect this and pop back.
+
+3. **The Connected Menu title must identify the target.**  Use the SSID,
+   device name, MAC address, or other human-readable identifier — not a
+   generic "Connected" string.  Fall back to "Connected" only when no
+   identifier is available.
+
+4. **Disconnect must be a menu item in the Connected Menu**, not buried in
+   a sub-menu.  After disconnecting, the scene should pop back to the
+   parent menu.
+
+5. **Protocol-specific overrides are permitted.**  If a protocol's
+   connection leads to a single obvious action (e.g. NFC tag read
+   immediately shows tag info), the Connected Menu pattern may be skipped
+   in favour of navigating directly to that action's scene.  Document the
+   override reason in the scene file header.
+
+6. **Use `m1_scene_replace()` for the transition**, not `m1_scene_push()`.
+   The connection delegate is a transient action, not a persistent screen
+   — it should not remain on the scene stack.
+
+---
+
 ## UI / Button Bar Rules
 
 > **Note:** The [Saved Item Actions Pattern](#saved-item-actions-pattern) above is the

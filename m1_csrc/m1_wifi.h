@@ -82,6 +82,33 @@ void wifi_ntp_background_sync(void);
 void wifi_saved_networks(void);
 void wifi_show_status(void);
 void wifi_disconnect(void);
+
+/**
+ * @brief  Check if WiFi is connected and prompt user to disconnect.
+ *
+ * If WiFi is currently connected, shows a confirmation dialog asking the
+ * user whether to disconnect.  If the user confirms, performs the disconnect
+ * and returns true.  If the user declines, returns false (caller should
+ * abort the operation).  If WiFi is not connected, returns true immediately.
+ *
+ * Intended for use by Sniffer, Attack, and Recon sub-menu on_enter handlers
+ * that cannot operate while a WiFi connection is active.
+ *
+ * @retval true   WiFi is not connected (or was disconnected successfully).
+ * @retval false  User declined to disconnect — caller should pop/abort.
+ */
+bool wifi_prompt_disconnect(void);
+
+/**
+ * @brief  Check if WiFi is connected; show error if not.
+ *
+ * Shows a dismissible "Connect via Networks first" message if WiFi is not
+ * connected.  Intended for any feature/scene that requires an active connection
+ * (e.g. Connected menu, Net Scan tools).
+ * @retval true   WiFi is connected — proceed.
+ * @retval false  WiFi is not connected — caller should pop/abort.
+ */
+bool wifi_require_connected(void);
 #endif
 
 #endif /* M1_WIFI_H_ */

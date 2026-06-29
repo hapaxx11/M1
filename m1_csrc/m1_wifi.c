@@ -5093,7 +5093,7 @@ void wifi_saved_networks(void)
 
 	if (count == 0)
 	{
-		wifi_show_message("Saved Networks", "No saved networks", "Use Scan & Connect");
+		wifi_show_message("Saved Networks", "No saved networks", "Use Networks to add");
 		memset(creds, 0, sizeof(creds));
 		return;
 	}
@@ -5220,7 +5220,7 @@ void wifi_show_status(void)
 	else
 	{
 		u8g2_DrawStr(&m1_u8g2, 6, 28, "Disconnected");
-		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Scan & Connect");
+		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Networks to connect");
 	}
 	m1_u8g2_nextpage();
 	wifi_wait_dismiss();
@@ -5258,6 +5258,34 @@ void wifi_disconnect(void)
 
 	s_wifi_stub_connected = false;
 	memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
+}
+
+bool wifi_prompt_disconnect(void)
+{
+	if (!wifi_is_connected())
+		return true;
+
+	const char *ssid = wifi_get_connected_ssid();
+	uint8_t choice = m1_message_box_choice(&m1_u8g2,
+	                     "WiFi Connected",
+	                     "Disconnect to continue?",
+	                     (ssid && ssid[0] != '\0') ? ssid : NULL,
+	                     "Disconnect\nCancel");
+	if (choice != 1)
+		return false;
+
+	m1_esp32_ensure_init();
+	wifi_disconnect();
+	return true;
+}
+
+bool wifi_require_connected(void)
+{
+	if (wifi_is_connected())
+		return true;
+
+	wifi_show_message("WiFi", "Connect via Networks first", NULL);
+	return false;
 }
 
 #endif /* M1_APP_WIFI_CONNECT_ENABLE */

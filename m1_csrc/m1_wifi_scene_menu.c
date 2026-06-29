@@ -5,10 +5,10 @@
  * @brief  WiFi top-level menu scene + Recon/802.15.4 sub-menus + core delegates.
  *
  * Scenes covered:
- *   WifiSceneMenu           — top-level 7-item menu
+ *   WifiSceneMenu           — top-level 6-item menu
  *   WifiSceneReconMenu      — Recon sub-menu (6 items)
  *   WifiScene802154Menu     — 802.15.4 sub-menu (2 items)
- *   WifiSceneScanConnect    — Scan & Connect delegate
+ *   WifiSceneScanConnect    — Networks scan/connect delegate
  *   WifiSceneStationScan    — Station Scan delegate
  *   WifiSceneSurvey24g      — 2.4G Channel Survey delegate
  *   WifiSceneMacTrack       — MAC Track delegate
@@ -48,7 +48,22 @@
 /* Core / direct-tool delegates                                             */
 /*==========================================================================*/
 
-DELEGATE(scan_connect,      wifi_scan_ap)
+static void scan_connect_on_enter(M1SceneApp *app) {
+    (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    bool was_connected = wifi_is_connected();
+#endif
+    wifi_scan_ap();
+    m1_esp32_deinit();
+    app->running = true;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!was_connected && wifi_is_connected()) {
+        m1_scene_replace(app, WifiSceneConnectedMenu);
+        return;
+    }
+#endif
+    m1_scene_pop(app);
+}
 DELEGATE(station_scan,      wifi_station_scan)
 DELEGATE(survey_24g,        wifi_survey_24g)
 DELEGATE(mac_track,         wifi_mac_track)
@@ -69,17 +84,16 @@ const M1SceneHandlers wifi_scene_zigbee_handlers           = { .on_enter = zigbe
 const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = thread_on_enter           };
 
 /*==========================================================================*/
-/* Top-level menu (7 items)                                                 */
+/* Top-level menu (6 items)                                                 */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
-    "Scan & Connect",
+    "Networks",
     "Recon",
     "Sniffers",
     "Attacks",
-    "Net Scan",
     "802.15.4",
     "General",
 };
@@ -89,7 +103,6 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneReconMenu,
     WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
-    WifiSceneNetMenu,
     WifiScene802154Menu,
     WifiSceneGeneralMenu,
 };
@@ -154,6 +167,12 @@ static subghz_submenu_model_t s_recon_model;
 static void recon_menu_enter(M1SceneApp *app)
 {
     (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!wifi_prompt_disconnect()) {
+        m1_scene_pop(app);
+        return;
+    }
+#endif
     if (s_recon_model.item_count == 0)
         subghz_submenu_model_init(&s_recon_model, RECON_ITEM_COUNT,
                                   M1_MENU_VIS(RECON_ITEM_COUNT));

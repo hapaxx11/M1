@@ -5,7 +5,7 @@
  * @brief  WiFi General/Config sub-menu + general delegates.
  *
  * Scenes covered:
- *   WifiSceneGeneralMenu            — General sub-menu (14+3 items)
+ *   WifiSceneGeneralMenu            — General sub-menu (14+2 items)
  *   WifiSceneGeneralViewInfo        — View AP Info delegate
  *   WifiSceneGeneralSelectAps       — Select APs delegate
  *   WifiSceneGeneralSelectStas      — Select STAs delegate
@@ -21,7 +21,7 @@
  *   WifiSceneGeneralSetEpSsid       — Set EP SSID delegate
  *   WifiSceneGeneralSelectEpHtml    — Select EP HTML delegate
  *
- * Connect features (Saved Networks, Status, Disconnect) are also listed
+ * Connect features (Saved Networks, Connected menu) are also listed
  * here but their delegate implementations remain in m1_wifi_scene_connect.c.
  *
  * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
@@ -61,7 +61,22 @@ DELEGATE(gen_load_aps,    wifi_general_load_aps)
 DELEGATE(gen_clear_aps,   wifi_general_clear_aps)
 DELEGATE(gen_load_ssids,  wifi_general_load_ssids)
 DELEGATE(gen_clear_ssids, wifi_general_clear_ssids)
-DELEGATE(gen_join,        wifi_general_join_wifi)
+static void gen_join_on_enter(M1SceneApp *app) {
+    (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    bool was_connected = wifi_is_connected();
+#endif
+    wifi_general_join_wifi();
+    m1_esp32_deinit();
+    app->running = true;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!was_connected && wifi_is_connected()) {
+        m1_scene_replace(app, WifiSceneConnectedMenu);
+        return;
+    }
+#endif
+    m1_scene_pop(app);
+}
 DELEGATE(gen_set_macs,    wifi_general_set_macs)
 DELEGATE(gen_set_chan,     wifi_general_set_channel)
 DELEGATE(gen_shutdown,    wifi_general_shutdown_wifi)
@@ -88,7 +103,7 @@ const M1SceneHandlers wifi_scene_gen_ep_html_handlers     = { .on_enter = gen_ep
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define GENERAL_ITEM_COUNT  17
+#define GENERAL_ITEM_COUNT  16
 #else
 #define GENERAL_ITEM_COUNT  14
 #endif
@@ -100,7 +115,7 @@ static const char *const general_labels[GENERAL_ITEM_COUNT] = {
     "Join WiFi", "Set MACs", "Set Channel",
     "Shutdown WiFi", "Set EP SSID", "Select EP HTML",
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    "Saved Networks", "Status", "Disconnect",
+    "Saved Networks", "Connected",
 #endif
 };
 
@@ -111,7 +126,7 @@ static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    WifiSceneSaved, WifiSceneStatus, WifiSceneDisconnect,
+    WifiSceneSaved, WifiSceneConnectedMenu,
 #endif
 };
 
