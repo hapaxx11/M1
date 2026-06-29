@@ -32,13 +32,16 @@ static char *read_file(const char *relpath)
 
     snprintf(path, sizeof(path), "%s/%s", M1_ROOT, relpath);
     fp = fopen(path, "rb");
-    if (!fp) return NULL;
-    fseek(fp, 0, SEEK_END);
+    TEST_ASSERT_NOT_NULL_MESSAGE(fp, path);
+
+    TEST_ASSERT_EQUAL_INT(0, fseek(fp, 0, SEEK_END));
     size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    buf = malloc((size_t)size + 1);
-    if (!buf) { fclose(fp); return NULL; }
-    fread(buf, 1, (size_t)size, fp);
+    TEST_ASSERT_GREATER_THAN_INT(0, size);
+    TEST_ASSERT_EQUAL_INT(0, fseek(fp, 0, SEEK_SET));
+
+    buf = (char *)malloc((size_t)size + 1U);
+    TEST_ASSERT_NOT_NULL(buf);
+    TEST_ASSERT_EQUAL_size_t((size_t)size, fread(buf, 1U, (size_t)size, fp));
     buf[size] = '\0';
     fclose(fp);
     return buf;
