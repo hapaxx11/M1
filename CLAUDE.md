@@ -1775,7 +1775,7 @@ port alignment straightforward.
 
 When a user action successfully establishes a new connection (WiFi join,
 Bluetooth pair, device handshake, etc.), the delegate scene **MUST** navigate
-to a **Connected Menu** scene instead of showing a dismiss-able message and
+to a **Connected Menu** scene instead of showing a dismissible message and
 returning to the previous screen.
 
 The Connected Menu scene:
