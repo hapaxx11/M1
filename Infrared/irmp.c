@@ -4662,7 +4662,7 @@ void irmp_data_sampler(uint32_t pulse_len, uint8_t rx_logic_high)
 
             // If enough bits have been received, let check them here to complete
 
-            if (ir_rx_start_pulse_detected && ir_rx_bit_count==irmp_param.complete_len && irmp_param.stop_bit==0)    // enough bits received?
+            if (ir_rx_start_pulse_detected && ir_rx_bit_count==irmp_param.complete_len)    // enough bits received? (M1: stop_bit gate dropped - edge-based port never re-enters to clear it)
             {
                 if (irmp_last_command==irmp_tmp_command && key_repetition_len < AUTO_FRAME_REPETITION_LEN)
                 {
