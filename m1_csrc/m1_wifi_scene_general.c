@@ -5,7 +5,7 @@
  * @brief  WiFi General/Config sub-menu + general delegates.
  *
  * Scenes covered:
- *   WifiSceneGeneralMenu            — General sub-menu (15+3 items)
+ *   WifiSceneGeneralMenu            — General sub-menu (14+2 items)
  *   WifiSceneGeneralViewInfo        — View AP Info delegate
  *   WifiSceneGeneralSelectAps       — Select APs delegate
  *   WifiSceneGeneralSelectStas      — Select STAs delegate
@@ -21,7 +21,7 @@
  *   WifiSceneGeneralSetEpSsid       — Set EP SSID delegate
  *   WifiSceneGeneralSelectEpHtml    — Select EP HTML delegate
  *
- * Connect features (Saved Networks, Status, Disconnect) are also listed
+ * Connect features (Saved Networks, Connected menu) are also listed
  * here but their delegate implementations remain in m1_wifi_scene_connect.c.
  *
  * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
@@ -88,9 +88,9 @@ const M1SceneHandlers wifi_scene_gen_ep_html_handlers     = { .on_enter = gen_ep
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define GENERAL_ITEM_COUNT  18
+#define GENERAL_ITEM_COUNT  16
 #else
-#define GENERAL_ITEM_COUNT  15
+#define GENERAL_ITEM_COUNT  14
 #endif
 
 static const char *const general_labels[GENERAL_ITEM_COUNT] = {
@@ -99,9 +99,8 @@ static const char *const general_labels[GENERAL_ITEM_COUNT] = {
     "Load SSIDs", "Clear SSIDs",
     "Join WiFi", "Set MACs", "Set Channel",
     "Shutdown WiFi", "Set EP SSID", "Select EP HTML",
-    "Net Scan",
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    "Saved Networks", "Status", "Disconnect",
+    "Saved Networks", "Connected",
 #endif
 };
 
@@ -111,9 +110,8 @@ static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralLoadSsids, WifiSceneGeneralClearSsids,
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
-    WifiSceneNetMenu,
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    WifiSceneSaved, WifiSceneStatus, WifiSceneDisconnect,
+    WifiSceneSaved, WifiSceneConnectedMenu,
 #endif
 };
 

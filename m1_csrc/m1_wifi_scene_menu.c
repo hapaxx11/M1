@@ -69,7 +69,7 @@ const M1SceneHandlers wifi_scene_zigbee_handlers           = { .on_enter = zigbe
 const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = thread_on_enter           };
 
 /*==========================================================================*/
-/* Top-level menu (7 items)                                                 */
+/* Top-level menu (6 items)                                                 */
 /*==========================================================================*/
 
 #define MENU_ITEM_COUNT  6

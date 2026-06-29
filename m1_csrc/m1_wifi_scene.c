@@ -84,6 +84,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneThread]           = &wifi_scene_thread_handlers,
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
+    [WifiSceneConnectedMenu]    = &wifi_scene_connected_menu_handlers,
     [WifiSceneSaved]            = &wifi_scene_saved_handlers,
     [WifiSceneStatus]           = &wifi_scene_status_handlers,
     [WifiSceneDisconnect]       = &wifi_scene_disconnect_handlers,
