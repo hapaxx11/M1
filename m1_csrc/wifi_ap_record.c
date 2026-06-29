@@ -13,6 +13,7 @@
 
 #include <string.h>
 #include <stdio.h>   /* sprintf */
+#include <stdlib.h>  /* qsort */
 
 /* =========================================================================
  * Binary payload parsing
@@ -91,6 +92,24 @@ bool wifi_mac_is_nonzero(const uint8_t mac[6])
     if (!mac)
         return false;
     return mac[0] || mac[1] || mac[2] || mac[3] || mac[4] || mac[5];
+}
+
+/* =========================================================================
+ * Sorting
+ * =========================================================================*/
+
+static int wifi_ap_cmp_rssi_desc(const void *a, const void *b)
+{
+    const wifi_ap_t *ap_a = (const wifi_ap_t *)a;
+    const wifi_ap_t *ap_b = (const wifi_ap_t *)b;
+    return (int)ap_b->rssi - (int)ap_a->rssi;
+}
+
+void wifi_ap_list_sort_rssi(wifi_ap_t *list, uint16_t count)
+{
+    if (!list || count < 2u)
+        return;
+    qsort(list, count, sizeof(wifi_ap_t), wifi_ap_cmp_rssi_desc);
 }
 
 /* =========================================================================

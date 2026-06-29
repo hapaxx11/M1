@@ -7,14 +7,16 @@
  * Scene implementation is split across six files following the
  * m1_subghz_scene_*.c convention (Phase D):
  *
- *   m1_wifi_scene_menu.c    — top-level menu + core/direct-tool delegates
- *                             (Scan & Connect, Station Scan, MAC Track,
- *                              Wardrive, Station Wardrive, Signal Monitor,
- *                              Zigbee Scan, Thread Scan)
+ *   m1_wifi_scene_menu.c    — top-level menu + Recon/802.15.4 sub-menus
+ *                             + core/direct-tool delegates (Scan & Connect,
+ *                             Station Scan, 2.4G Survey, MAC Track,
+ *                             Wardrive, Station Wardrive, Signal Monitor,
+ *                             Zigbee Scan, Thread Scan)
  *   m1_wifi_scene_sniff.c   — Sniffers sub-menu + 7 sniffer delegates
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + 8 attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + 5 network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + 14 general/config delegates
+ *                             + Saved Networks/Status/Disconnect targets
  *   m1_wifi_scene_connect.c — Saved Networks, Status, Disconnect delegates
  *                             (compile-gated by M1_APP_WIFI_CONNECT_ENABLE)
  *
@@ -41,6 +43,9 @@ typedef enum {
     WifiSceneWardrive,
     WifiSceneStationWardrive,
     WifiSceneSignalMonitor,
+
+    /* Recon sub-menu */
+    WifiSceneReconMenu,
 
     /* Sniffers sub-menu */
     WifiSceneSnifferMenu,
@@ -89,11 +94,12 @@ typedef enum {
     WifiSceneGeneralSetEpSsid,
     WifiSceneGeneralSelectEpHtml,
 
-    /* 802.15.4 */
+    /* 802.15.4 sub-menu */
+    WifiScene802154Menu,
     WifiSceneZigbee,
     WifiSceneThread,
 
-    /* Connect features (AT-layer; compile-gated) */
+    /* Connect features (compile-gated) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     WifiSceneSaved,
     WifiSceneStatus,
@@ -116,6 +122,8 @@ extern const M1SceneHandlers wifi_scene_mac_track_handlers;
 extern const M1SceneHandlers wifi_scene_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_station_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_signal_monitor_handlers;
+extern const M1SceneHandlers wifi_scene_recon_menu_handlers;
+extern const M1SceneHandlers wifi_scene_802154_menu_handlers;
 extern const M1SceneHandlers wifi_scene_zigbee_handlers;
 extern const M1SceneHandlers wifi_scene_thread_handlers;
 

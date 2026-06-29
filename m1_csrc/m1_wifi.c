@@ -42,8 +42,11 @@
 #include "wifi_selection.h"
 #include "wifi_deauth_cmd.h"
 #include "wifi_at_scan.h"
+#include "wifi_ntp_parse.h"
 #include "m1_esp32_caps.h"
 #include "esp_app_main.h"
+#include "m1_system.h"
+#include "m1_wdt_hw.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -90,6 +93,7 @@ void wifi_scan_ap(void);
 static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid);
 
 static uint16_t wifi_ap_list_print(bool up_dir);
+static void wifi_ap_list_draw(void);
 static void wifi_ap_list_free(void);
 static void wifi_draw_ap_info(void);
 /* wifi_selected_ap_count() and wifi_selected_sta_count() provided by wifi_selection.h */
@@ -187,6 +191,7 @@ static uint16_t wifi_do_scan_at(void)
 	}
 
 	free(at_aps);
+	wifi_ap_list_sort_rssi(ap_list, ap_count);
 	return ap_count;
 }
 
@@ -252,6 +257,7 @@ static uint16_t wifi_do_scan(void)
 		}
 	}
 
+	wifi_ap_list_sort_rssi(ap_list, ap_count);
 	return ap_count;
 }
 
@@ -261,29 +267,20 @@ static uint16_t wifi_do_scan(void)
   * @brief Display AP info for current index
   */
 /*============================================================================*/
-static uint16_t wifi_ap_list_print(bool up_dir)
+/*============================================================================*/
+/**
+  * @brief Draw AP info for current ap_view_idx (no index change).
+  */
+/*============================================================================*/
+static void wifi_ap_list_draw(void)
 {
 	char prn_msg[25];
 
 	if (!ap_list || !ap_count)
-	{
-		ap_view_idx = 0;
-		return 0;
-	}
+		return;
 
-	if (up_dir)
-	{
-		if (ap_view_idx == 0)
-			ap_view_idx = ap_count - 1;
-		else
-			ap_view_idx--;
-	}
-	else
-	{
-		ap_view_idx++;
-		if (ap_view_idx >= ap_count)
-			ap_view_idx = 0;
-	}
+	if (ap_view_idx >= ap_count)
+		ap_view_idx = 0;
 
 	m1_u8g2_firstpage();
 
@@ -324,11 +321,42 @@ static uint16_t wifi_ap_list_print(bool up_dir)
 #undef AP_ROW_Y_START
 #undef AP_ROW_STEP
 
-	/* Bottom bar: OK/center column with circle icon */
-	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Connect", NULL, NULL);
+	/* Bottom bar: show Connect or Disconnect based on connection state */
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	if (s_wifi_stub_connected &&
+	    strncmp(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid)) == 0)
+		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Disconnect", NULL, NULL);
+	else
+#endif
+		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Connect", NULL, NULL);
 
 	m1_u8g2_nextpage();
+}
 
+
+static uint16_t wifi_ap_list_print(bool up_dir)
+{
+	if (!ap_list || !ap_count)
+	{
+		ap_view_idx = 0;
+		return 0;
+	}
+
+	if (up_dir)
+	{
+		if (ap_view_idx == 0)
+			ap_view_idx = ap_count - 1;
+		else
+			ap_view_idx--;
+	}
+	else
+	{
+		ap_view_idx++;
+		if (ap_view_idx >= ap_count)
+			ap_view_idx = 0;
+	}
+
+	wifi_ap_list_draw();
 	return ap_count;
 }
 
@@ -341,6 +369,7 @@ static void wifi_ap_list_free(void)
 		ap_list = NULL;
 	}
 	ap_count = 0;
+	ap_view_idx = 0;
 }
 
 /**
@@ -453,8 +482,21 @@ static void wifi_connect_selected_ap(void)
 		return;
 	}
 
-	if (!wifi_join_choose_password(password, sizeof(password)))
-		return;
+	/* Check for saved credentials before prompting for a password */
+	{
+		wifi_credential_t saved;
+		if (wifi_cred_find(ap_list[ap_view_idx].ssid, &saved))
+		{
+			strncpy(password, saved.password, WIFI_JOIN_PASS_MAX);
+			password[WIFI_JOIN_PASS_MAX] = '\0';
+			memset(&saved, 0, sizeof(saved));
+		}
+		else
+		{
+			if (!wifi_join_choose_password(password, sizeof(password)))
+				return;
+		}
+	}
 
 	ssid_len = (uint8_t)strnlen(ap_list[ap_view_idx].ssid, 32);
 	pass_len = (uint8_t)strnlen(password, WIFI_JOIN_PASS_MAX);
@@ -633,7 +675,8 @@ void wifi_scan_ap(void)
 
 	if (list_count)
 	{
-		wifi_ap_list_print(true);
+		ap_view_idx = 0;
+		wifi_ap_list_draw();
 	}
 	else
 	{
@@ -683,10 +726,20 @@ void wifi_scan_ap(void)
 				{
 					if (list_count && ap_list && ap_view_idx < ap_count)
 					{
-						wifi_connect_selected_ap();
-						/* Redraw AP list after returning from connect */
-						wifi_ap_list_print(true);
-						wifi_ap_list_print(false);
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+						if (s_wifi_stub_connected &&
+						    strncmp(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
+						            sizeof(s_wifi_stub_ssid)) == 0)
+						{
+							wifi_disconnect();
+						}
+						else
+#endif
+						{
+							wifi_connect_selected_ap();
+						}
+						/* Redraw AP list after returning from connect/disconnect */
+						wifi_ap_list_draw();
 					}
 				}
 			}
@@ -2493,7 +2546,8 @@ void wifi_attack_deauth(void)
 	}
 
 	/* Show AP list for target selection */
-	wifi_ap_list_print(true);
+	ap_view_idx = 0;
+	wifi_ap_list_draw();
 
 	while (1)
 	{
@@ -2517,8 +2571,7 @@ void wifi_attack_deauth(void)
 					wifi_deauth_run(ap_list[ap_view_idx].bssid,
 						ap_list[ap_view_idx].channel,
 						ap_list[ap_view_idx].ssid);
-					wifi_ap_list_print(true);
-					wifi_ap_list_print(false);
+					wifi_ap_list_draw();
 				}
 			}
 		}
@@ -4808,12 +4861,78 @@ return s_wifi_stub_ssid;
 
 uint8_t wifi_sync_rtc(void)
 {
-return 1; /* not connected — callers treat non-zero as "sync skipped" */
+	static char ntp_buf[256];
+	clock_time_t ct;
+	m1_time_t    mt;
+	uint32_t start_ms;
+	bool first_poll;
+
+	if (!s_wifi_stub_connected)
+		return 1;
+
+	/* AT firmware: send SNTP config, then poll for time.
+	 * Binary SPI (SiN360) does not yet support NTP — return silently. */
+	if (!m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+		return 1;
+
+	/* Configure SNTP — enable, UTC timezone, two NTP servers */
+	memset(ntp_buf, 0, sizeof(ntp_buf));
+	(void)spi_AT_send_recv(
+		"AT+CIPSNTPCFG=1,0,\"pool.ntp.org\",\"time.google.com\"\r\n",
+		ntp_buf, sizeof(ntp_buf), 3);
+	if (!strstr(ntp_buf, "OK"))
+		return 2;
+
+	/* Poll AT+CIPSNTPTIME? until a valid (non-1970) time is returned.
+	 * Mirrors the ssl_ensure_configured() pattern in m1_http_client.c. */
+	start_ms = HAL_GetTick();
+	first_poll = true;
+	while ((HAL_GetTick() - start_ms) < 5000u)
+	{
+		if (!first_poll)
+			vTaskDelay(pdMS_TO_TICKS(500));
+		first_poll = false;
+		m1_wdt_reset();
+
+		memset(ntp_buf, 0, sizeof(ntp_buf));
+		(void)spi_AT_send_recv("AT+CIPSNTPTIME?\r\n",
+		                        ntp_buf, sizeof(ntp_buf), 2);
+
+		if (wifi_ntp_parse_time(ntp_buf, &ct))
+		{
+			/* clock_time_t and m1_time_t have identical layout */
+			mt.year    = ct.year;
+			mt.month   = ct.month;
+			mt.day     = ct.day;
+			mt.hour    = ct.hour;
+			mt.minute  = ct.minute;
+			mt.second  = ct.second;
+			mt.weekday = ct.weekday;
+			m1_set_datetime(&mt);
+			return 0;
+		}
+	}
+
+	return 3;  /* Timeout waiting for SNTP sync */
 }
 
 void wifi_ntp_background_sync(void)
 {
-/* no-op: binary SPI firmware does not yet support NTP */
+	/* Attempt a single NTP sync if connected, throttled to once per 30 minutes.
+	 * Called from periodic tasks; result is ignored. */
+	static uint32_t s_last_ntp_tick = 0;
+	uint32_t now = HAL_GetTick();
+
+	if (!s_wifi_stub_connected)
+		return;
+
+	/* 30 min = 1 800 000 ms.  On the very first call s_last_ntp_tick == 0 so
+	 * the subtraction wraps correctly and the condition is always true. */
+	if ((now - s_last_ntp_tick) < 1800000UL)
+		return;
+
+	s_last_ntp_tick = now;
+	(void)wifi_sync_rtc();
 }
 
 /*============================================================================*/

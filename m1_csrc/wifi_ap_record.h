@@ -103,6 +103,19 @@ bool wifi_bssid_parse(const char *s, uint8_t bssid[6]);
 bool wifi_mac_is_nonzero(const uint8_t mac[6]);
 
 /* =========================================================================
+ * Sorting
+ * =========================================================================*/
+
+/**
+ * Sort an AP list in-place by RSSI descending (strongest signal first).
+ * Stable sort behavior is not guaranteed (uses qsort).
+ *
+ * @param list  Array of wifi_ap_t records.
+ * @param count Number of elements in the array.
+ */
+void wifi_ap_list_sort_rssi(wifi_ap_t *list, uint16_t count);
+
+/* =========================================================================
  * Field sanitization / CSV helpers
  * =========================================================================*/
 

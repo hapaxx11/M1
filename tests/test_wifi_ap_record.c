@@ -408,6 +408,92 @@ void test_parse_then_bssid_fmt_matches_expected(void)
 }
 
 /* =========================================================================
+ * wifi_ap_list_sort_rssi
+ * =========================================================================*/
+
+static wifi_ap_t make_ap(const char *ssid, int8_t rssi)
+{
+    wifi_ap_t ap;
+    memset(&ap, 0, sizeof(ap));
+    strncpy(ap.ssid, ssid, sizeof(ap.ssid) - 1);
+    ap.rssi = rssi;
+    return ap;
+}
+
+void test_sort_rssi_descending_order(void)
+{
+    wifi_ap_t list[4];
+    list[0] = make_ap("weak",   -80);
+    list[1] = make_ap("strong", -30);
+    list[2] = make_ap("mid",    -55);
+    list[3] = make_ap("close",  -20);
+
+    wifi_ap_list_sort_rssi(list, 4);
+
+    TEST_ASSERT_EQUAL_INT8(-20, list[0].rssi);
+    TEST_ASSERT_EQUAL_STRING("close", list[0].ssid);
+    TEST_ASSERT_EQUAL_INT8(-30, list[1].rssi);
+    TEST_ASSERT_EQUAL_INT8(-55, list[2].rssi);
+    TEST_ASSERT_EQUAL_INT8(-80, list[3].rssi);
+}
+
+void test_sort_rssi_already_sorted(void)
+{
+    wifi_ap_t list[3];
+    list[0] = make_ap("a", -10);
+    list[1] = make_ap("b", -50);
+    list[2] = make_ap("c", -90);
+
+    wifi_ap_list_sort_rssi(list, 3);
+
+    TEST_ASSERT_EQUAL_INT8(-10, list[0].rssi);
+    TEST_ASSERT_EQUAL_INT8(-50, list[1].rssi);
+    TEST_ASSERT_EQUAL_INT8(-90, list[2].rssi);
+}
+
+void test_sort_rssi_single_element(void)
+{
+    wifi_ap_t list[1];
+    list[0] = make_ap("only", -42);
+
+    wifi_ap_list_sort_rssi(list, 1);
+
+    TEST_ASSERT_EQUAL_INT8(-42, list[0].rssi);
+    TEST_ASSERT_EQUAL_STRING("only", list[0].ssid);
+}
+
+void test_sort_rssi_null_list(void)
+{
+    wifi_ap_list_sort_rssi(NULL, 5);
+    /* Should not crash */
+    TEST_PASS();
+}
+
+void test_sort_rssi_zero_count(void)
+{
+    wifi_ap_t list[1];
+    list[0] = make_ap("x", -50);
+
+    wifi_ap_list_sort_rssi(list, 0);
+
+    TEST_ASSERT_EQUAL_INT8(-50, list[0].rssi);
+}
+
+void test_sort_rssi_equal_values(void)
+{
+    wifi_ap_t list[3];
+    list[0] = make_ap("a", -50);
+    list[1] = make_ap("b", -50);
+    list[2] = make_ap("c", -50);
+
+    wifi_ap_list_sort_rssi(list, 3);
+
+    TEST_ASSERT_EQUAL_INT8(-50, list[0].rssi);
+    TEST_ASSERT_EQUAL_INT8(-50, list[1].rssi);
+    TEST_ASSERT_EQUAL_INT8(-50, list[2].rssi);
+}
+
+/* =========================================================================
  * Test runner
  * =========================================================================*/
 
@@ -463,6 +549,14 @@ int main(void)
 
     /* integration */
     RUN_TEST(test_parse_then_bssid_fmt_matches_expected);
+
+    /* wifi_ap_list_sort_rssi */
+    RUN_TEST(test_sort_rssi_descending_order);
+    RUN_TEST(test_sort_rssi_already_sorted);
+    RUN_TEST(test_sort_rssi_single_element);
+    RUN_TEST(test_sort_rssi_null_list);
+    RUN_TEST(test_sort_rssi_zero_count);
+    RUN_TEST(test_sort_rssi_equal_values);
 
     return UNITY_END();
 }

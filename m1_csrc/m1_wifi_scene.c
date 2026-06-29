@@ -34,6 +34,8 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneStationWardrive]  = &wifi_scene_station_wardrive_handlers,
     [WifiSceneSignalMonitor]    = &wifi_scene_signal_monitor_handlers,
 
+    [WifiSceneReconMenu]        = &wifi_scene_recon_menu_handlers,
+
     [WifiSceneSnifferMenu]      = &wifi_scene_sniffer_menu_handlers,
     [WifiSceneSniffAll]         = &wifi_scene_sniff_all_handlers,
     [WifiSceneSniffBeacon]      = &wifi_scene_sniff_beacon_handlers,
@@ -77,6 +79,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneGeneralSetEpSsid]     = &wifi_scene_gen_ep_ssid_handlers,
     [WifiSceneGeneralSelectEpHtml]  = &wifi_scene_gen_ep_html_handlers,
 
+    [WifiScene802154Menu]       = &wifi_scene_802154_menu_handlers,
     [WifiSceneZigbee]           = &wifi_scene_zigbee_handlers,
     [WifiSceneThread]           = &wifi_scene_thread_handlers,
 
