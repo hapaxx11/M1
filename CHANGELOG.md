@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.10] - 2026-07-01
+
+### Added
+
+- **Infrared: optional external IR transmitter (HX-53)** — a new
+  **Settings → LCD and Notifications → External IR** toggle routes IR transmit to
+  an external HX-53 module on the expansion header (DAT on PA9 = TIM1_CH2 38 kHz
+  carrier, VCC on the +5_EXT 5 V rail) instead of the onboard emitter. Receive and
+  Learn still use the onboard receiver. Off by default. Because PA9/PA10 are the
+  USART1 debug-console pins, the `M1_EXT_IR_FREE_UART1` build option frees PA9 for
+  IR (UART debug console disabled; USB-CDC/qMonstatek RPC unaffected). Pressing OK
+  on the toggle runs a TX self-test (solid carrier + TIM1 register readout).
+
+### Fixed
+
+- **Infrared: Learn New Remote now saves again** — fixed a decoder bug where
+  `irmp_get_data()` never reported a completed frame for stop-bit protocols
+  (NEC and most TV remotes), so "Learn New Remote" stayed on *Reading...* and
+  pressing OK exited without saving. The end-of-frame completion was gated on a
+  stop-bit flag that the edge-based sampler set but never cleared (the original
+  interrupt-driven IRMP re-entered to clear it; the M1 port does not). Captured
+  signals now decode and save.
 ## [0.9.2.9] - 2026-06-29
 
 ### Changed
