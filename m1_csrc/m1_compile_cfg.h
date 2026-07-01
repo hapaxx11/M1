@@ -81,6 +81,10 @@ extern void assert_failed();
 #define M1_APP_BLE_SPAM_ENABLE         /* Enable BLE Beacon Spam */
 #define M1_APP_BT_MANAGE_ENABLE        /* Enable BT device management & connect */
 #define M1_APP_RPC_ENABLE              /* Enable RPC protocol for qMonstatek desktop app */
+/* Optional: External IR uses PA9/PA10; define this to free them from USART1.
+ * Effect: disables the USART1 serial debug console (USB-CDC/RPC unaffected).
+ */
+/* #define M1_EXT_IR_FREE_UART1 */
 #define M1_APP_GAMES_ENABLE            /* Enable built-in Games menu */
 #define M1_APP_APPS_ENABLE             /* Enable Apps menu (ELF loader from SD card) */
 #define M1_APP_CAN_ENABLE              /* Enable CAN bus (FDCAN1) on J7 X10 connector */

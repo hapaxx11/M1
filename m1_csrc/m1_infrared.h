@@ -65,6 +65,24 @@
 #define IR_GPIO_AF_TR          	GPIO_AF1_TIM1
 #define IR_GPIO_AF_RX         	GPIO_AF1_TIM2
 
+/* ---- External IR transmitter on the expansion header (m1_ir_ext_on == 1) ----
+ * HX-53 transmitter DAT on PA9 = TIM1_CH2 (shares the onboard carrier timer TIM1,
+ * AF1). PA9/CH2 is a REGULAR (non-complementary) output, so irsnd drives CCxE
+ * here instead of the onboard CH4N's CCxNE (see irsnd_set_output_mode()). The
+ * HX-53 is a 5 V module, powered from the +5_EXT rail (ext_power_5V_set).
+ * Receive/learn always stays on the onboard receiver (PC4). */
+#define IR_EXT_TX_GPIO_PORT     GPIOA
+#define IR_EXT_TX_GPIO_PIN      GPIO_PIN_9
+#define IR_EXT_TX_GPIO_AF       GPIO_AF1_TIM1
+#define IR_EXT_TX_TIM_CHANNEL   TIM_CHANNEL_2
+
+/* IR transmit routing path (pure decision; testable on host). */
+typedef enum { IR_PATH_ONBOARD = 0, IR_PATH_EXTERNAL = 1 } S_M1_IR_Path;
+static inline S_M1_IR_Path ir_active_path(uint8_t ext_on)
+{
+	return ext_on ? IR_PATH_EXTERNAL : IR_PATH_ONBOARD;
+}
+
 #define TIM_FORCED_ACTIVE      ((uint16_t)0x0050)
 #define TIM_FORCED_INACTIVE    ((uint16_t)0x0040)
 
@@ -96,6 +114,12 @@ void infrared_saved_remotes(void);
 bool infrared_capture_one_signal(IRMP_DATA *out_data);
 void infrared_encode_sys_init(void);
 void infrared_encode_sys_deinit(void);
+/* Diagnostic: drive a solid 38 kHz carrier on the external TX pin (PA9) and show
+   the TIM1/GPIO register state. Triggered from Settings -> External IR (OK). */
+void infrared_ext_tx_selftest(void);
+/* Enable/disable the external IR transmitter rail (+5_EXT). Kept ON the whole
+   time External IR is enabled so the HX-53 stays powered (not just during a TX). */
+void infrared_ext_power(uint8_t on);
 S_M1_IR_Tx_States infrared_transmit(uint8_t init);
 
 extern uint32_t TIM_GetCounterCLKValue(uint16_t prescaler);

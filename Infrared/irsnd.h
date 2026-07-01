@@ -153,6 +153,9 @@ void irsnd_on(void);
 void irsnd_off(void);
 void irsnd_toggle(uint8_t pulse_toggle);
 void irsnd_set_carrier_freq(uint32_t freq);
+/* M1 LOCAL: select carrier output channel type. 1 = complementary (CCxN, onboard
+   TIM1_CH4N on PC5); 0 = regular (CCx, external TIM1_CH2 on PA9). Default 1. */
+void irsnd_set_output_mode(uint8_t use_complementary);
 
 #endif
 extern void                                     irsnd_stop (void);

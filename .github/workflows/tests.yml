@@ -13,6 +13,7 @@ on:
       - 'Esp_spi_at/**'
       - 'Battery/**'
       - 'tests/**'
+      - 'Infrared/**'
       - 'scripts/**'
       - '.github/workflows/tests.yml'
   push:
@@ -25,6 +26,7 @@ on:
       - 'Esp_spi_at/**'
       - 'Battery/**'
       - 'tests/**'
+      - 'Infrared/**'
       - 'scripts/**'
       - '.github/workflows/tests.yml'
 

@@ -2227,3 +2227,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_ir_ux_polish PRIVATE sanitizers)
 endif()
 add_test(NAME ir_ux_polish COMMAND test_ir_ux_polish)
+
+# IR learn decode — regression test for the NEC/stop-bit completion bug
+add_executable(test_irmp_decode
+    test_irmp_decode.c
+    ${M1_ROOT}/Infrared/irmp.c
+)
+target_include_directories(test_irmp_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Infrared
+)
+target_link_libraries(test_irmp_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_irmp_decode PRIVATE sanitizers)
+endif()
+add_test(NAME irmp_decode COMMAND test_irmp_decode)

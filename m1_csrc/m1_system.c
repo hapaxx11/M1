@@ -78,6 +78,7 @@ uint8_t                 m1_sleep_timeout_idx = 1;  /* 1 minute default */
 uint8_t                 m1_menu_style = 0;         /* 0=Small, 1=Medium, 2=Large */
 uint8_t                 m1_dark_mode = 0;          /* 0=Off (normal), 1=On (inverted display) */
 int8_t                  m1_clock_tz_offset = 0;    /* Local UTC offset in hours, -12..+14 */
+uint8_t                 m1_ir_ext_on = 0;          /* 0=onboard IR (default), 1=external IR modules */
 #ifdef M1_APP_BADBT_ENABLE
 char                    m1_badbt_name[BADBT_NAME_MAX_LEN + 1] = "M1-BadBT";
 #endif

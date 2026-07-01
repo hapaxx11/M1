@@ -23,6 +23,7 @@
 #include "m1_settings.h"
 #include "m1_buzzer.h"
 #include "m1_lcd.h"
+#include "m1_infrared.h"
 #include "m1_lp5814.h"
 #include "m1_display.h"
 #include "ff.h"
@@ -49,9 +50,9 @@
 
 /* LCD & Notifications menu items */
 #if M1_HAS_RGB_BACKLIGHT
-#define LCD_SETTINGS_ITEMS   11
+#define LCD_SETTINGS_ITEMS   12
 #else
-#define LCD_SETTINGS_ITEMS   10
+#define LCD_SETTINGS_ITEMS   11
 #endif
 #define LCD_SET_BRIGHTNESS   0
 #define LCD_SET_BUZZER       1
@@ -65,6 +66,9 @@
 #define LCD_SET_TZ_OFFSET    9
 #if M1_HAS_RGB_BACKLIGHT
 #define LCD_SET_RGB_BACKLIGHT 10
+#define LCD_SET_IR_EXT        11
+#else
+#define LCD_SET_IR_EXT        10
 #endif
 
 //************************** S T R U C T U R E S *******************************\n
@@ -189,6 +193,7 @@ static const char *const lcd_cfg_labels[LCD_SETTINGS_ITEMS] = {
 #if M1_HAS_RGB_BACKLIGHT
     "RGB Backlight:",
 #endif
+    "External IR:",
 };
 
 static char led_color_buf[8]; /* "#RRGGBB" + NUL */
@@ -228,6 +233,7 @@ static const char *lcd_cfg_get_value(uint8_t item)
     case LCD_SET_RGB_BACKLIGHT:
         return rgb_backlight_is_installed() ? "Configured" : "Not found";
 #endif
+    case LCD_SET_IR_EXT:     return m1_ir_ext_on ? "On" : "Off";
     default:                 return "";
     }
 }
@@ -424,6 +430,17 @@ void settings_lcd_and_notifications(void)
         }
 #endif
 
+        /* External IR: OK runs a TX self-test (solid 38 kHz carrier on PA9 +
+           register readout) to diagnose the external transmitter. */
+        if (sel == LCD_SET_IR_EXT &&
+            this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            infrared_ext_tx_selftest();
+            this_button_status.event[BUTTON_OK_KP_ID] = BUTTON_EVENT_IDLE;
+            needs_redraw = 1;
+            continue;
+        }
+
         /* Up/Down — navigate with scroll */
         if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
         {
@@ -480,6 +497,11 @@ void settings_lcd_and_notifications(void)
                 m1_lcd_set_dark_mode(!m1_dark_mode);
             else if (sel == LCD_SET_TZ_OFFSET)
                 m1_clock_tz_offset = (m1_clock_tz_offset <= -12) ? 14 : (int8_t)(m1_clock_tz_offset - 1);
+            else if (sel == LCD_SET_IR_EXT)
+            {
+                m1_ir_ext_on = !m1_ir_ext_on;
+                infrared_ext_power(m1_ir_ext_on); /* power the modules while enabled */
+            }
             needs_redraw = 1;
         }
 
@@ -515,6 +537,11 @@ void settings_lcd_and_notifications(void)
                 m1_lcd_set_dark_mode(!m1_dark_mode);
             else if (sel == LCD_SET_TZ_OFFSET)
                 m1_clock_tz_offset = (m1_clock_tz_offset >= 14) ? -12 : (int8_t)(m1_clock_tz_offset + 1);
+            else if (sel == LCD_SET_IR_EXT)
+            {
+                m1_ir_ext_on = !m1_ir_ext_on;
+                infrared_ext_power(m1_ir_ext_on); /* power the modules while enabled */
+            }
             needs_redraw = 1;
         }
     }
@@ -701,6 +728,8 @@ void settings_save_to_sd(void)
 
     SETTINGS_WRITE("dark_mode=%d\n", m1_dark_mode);
 
+    SETTINGS_WRITE("ir_external=%d\n", m1_ir_ext_on);
+
     SETTINGS_WRITE("ism_region=%d\n", m1_device_stat.config.ism_band_region);
 
     SETTINGS_WRITE("subghz_save_fmt=%d\n", subghz_get_save_fmt_ext());
@@ -873,6 +902,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 10) - '0');
         if (val == 0 || val == 1)
             m1_dark_mode = (uint8_t)val;
+    }
+
+    /* Parse "ir_external=X" */
+    p = strstr(buf, "ir_external=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 12) - '0');
+        if (val == 0 || val == 1)
+            m1_ir_ext_on = (uint8_t)val;
     }
 
     /* Parse "ism_region=X" */
@@ -1123,6 +1161,10 @@ apply:
 
     /* Apply orientation */
     settings_apply_orientation(m1_screen_orientation);
+
+    /* Power the external IR module rails if the feature is enabled, so the
+     * HX-53 (+5_EXT) and HX-M121 (EXT3V3) are live from boot. */
+    infrared_ext_power(m1_ir_ext_on);
 }
 
 

@@ -334,6 +334,9 @@ static uint8_t ir_ota_buffer_ok;
 static uint8_t ir_ota_frame_len;
 static uint16_t *ir_ota_pkt_buffer = NULL;
 static uint32_t ir_carrier_pwm_channel;
+/* M1 LOCAL: 1 = complementary output (CCxN, onboard PC5/TIM1_CH4N),
+   0 = regular output (CCx, external PA9/TIM1_CH2). Default complementary. */
+static uint8_t ir_carrier_use_compl = 1;
 
 static TIM_HandleTypeDef *pir_timhdl_carrier;
 
@@ -421,7 +424,12 @@ static void irsnd_set_freq(IRSND_FREQ_TYPE freq)
 
 	sConfigOC.OCMode = TIM_OCMODE_PWM1;
 	sConfigOC.Pulse = pir_timhdl_carrier->Init.Period/2; /* Duty cycle = 50% */
-	sConfigOC.OCNPolarity = TIM_OCPOLARITY_HIGH;
+	/* M1 LOCAL: OCPolarity/OCIdleState must be set for a REGULAR channel output
+	   (external IR PA9 = TIM1_CH2). The onboard complementary CH4N only needs the
+	   OCN* fields, so these were previously left uninitialised. */
+	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+	sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+	sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
 	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
 	sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
 	if (HAL_TIM_PWM_ConfigChannel(pir_timhdl_carrier, &sConfigOC, ir_carrier_pwm_channel) != HAL_OK)
@@ -469,10 +477,26 @@ void irsnd_set_carrier_freq(uint32_t freq)
  * Switch PWM on for Carrier
  */
 /*============================================================================*/
+/*============================================================================*/
+/*
+ * M1 LOCAL: select carrier output channel type (complementary vs regular).
+ * Onboard IR (PC5 = TIM1_CH4N) is complementary; the external transmitter
+ * (PA9 = TIM1_CH2) is a regular channel and has no free CHxN pin.
+ */
+/*============================================================================*/
+void irsnd_set_output_mode(uint8_t use_complementary)
+{
+	ir_carrier_use_compl = use_complementary ? 1 : 0;
+} // void irsnd_set_output_mode(uint8_t use_complementary)
+
+
+
 void irsnd_on(void)
 {
-	//HAL_TIM_PWM_Start(pir_timhdl_carrier, ir_carrier_pwm_channel);
-	HAL_TIMEx_PWMN_Start(pir_timhdl_carrier, ir_carrier_pwm_channel);
+	if (ir_carrier_use_compl)
+		HAL_TIMEx_PWMN_Start(pir_timhdl_carrier, ir_carrier_pwm_channel);
+	else
+		HAL_TIM_PWM_Start(pir_timhdl_carrier, ir_carrier_pwm_channel);
 } // static void irsnd_on (void)
 
 
@@ -484,8 +508,10 @@ void irsnd_on(void)
 /*============================================================================*/
 void irsnd_off(void)
 {
-	//HAL_TIM_PWM_Stop(pir_timhdl_carrier, ir_carrier_pwm_channel);
-	HAL_TIMEx_PWMN_Stop(pir_timhdl_carrier, ir_carrier_pwm_channel);
+	if (ir_carrier_use_compl)
+		HAL_TIMEx_PWMN_Stop(pir_timhdl_carrier, ir_carrier_pwm_channel);
+	else
+		HAL_TIM_PWM_Stop(pir_timhdl_carrier, ir_carrier_pwm_channel);
 } // static void irsnd_off (void)
 
 
@@ -502,15 +528,25 @@ void irsnd_off(void)
 void irsnd_toggle(uint8_t pulse_toggle)
 {
 	uint32_t tmp;
+	uint32_t bitval;
+	uint32_t sh = (ir_carrier_pwm_channel & 0xFU);
 
-	pulse_toggle <<= 2; // bit position: 00000x00 (TIM_CCxN_ENABLE = 0x04)
-	pulse_toggle &= TIM_CCxN_ENABLE;
+	if (ir_carrier_use_compl)
+	{
+		/* complementary output: CCxNE bit (offset 2 in the channel nibble, 0x04) */
+		tmp    = (uint32_t)TIM_CCER_CC1NE << sh;
+		bitval = pulse_toggle ? (uint32_t)TIM_CCxN_ENABLE : 0U;
+	}
+	else
+	{
+		/* regular output: CCxE bit (offset 0 in the channel nibble, 0x01) */
+		tmp    = (uint32_t)TIM_CCER_CC1E << sh;
+		bitval = pulse_toggle ? (uint32_t)TIM_CCx_ENABLE : 0U;
+	}
 
-	/* Clear the CCxNE bit for this channel */
-	tmp = TIM_CCER_CC1NE << (ir_carrier_pwm_channel & 0xFU);
+	/* Clear then set the enable bit for this channel. */
 	pir_timhdl_carrier->Instance->CCER &= ~tmp;
-	/* Set or clear the CCxNE bit based on pulse_toggle */
-	pir_timhdl_carrier->Instance->CCER |= (uint32_t)(pulse_toggle << (ir_carrier_pwm_channel & 0xFU));
+	pir_timhdl_carrier->Instance->CCER |= (bitval << sh);
 } // void irsnd_toggle(uint8_t pulse_toggle)
 
 
