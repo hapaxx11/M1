@@ -16,7 +16,7 @@
 
 #include "unity.h"
 #include "irmp.h"
-
+#include <string.h>
 void setUp(void) {}
 void tearDown(void) {}
 
