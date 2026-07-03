@@ -25,6 +25,8 @@
 #include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -37,15 +39,27 @@
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
+/* Capability-gated blocking delegate — see m1_wifi_scene_menu.c for the
+ * canonical documentation of this pattern.  Network scanners rely on the
+ * binary-SPI CMD_NETSCAN_START/NEXT command family (ESP32_FEATURE_NETSCAN),
+ * which dag T-800 AT firmware does not implement. */
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
 /*==========================================================================*/
 /* Network-scanner delegates                                                */
 /*==========================================================================*/
 
-DELEGATE(net_ping,   wifi_scan_ping)
-DELEGATE(net_arp,    wifi_scan_arp)
-DELEGATE(net_ssh,    wifi_scan_ssh)
-DELEGATE(net_telnet, wifi_scan_telnet)
-DELEGATE(net_ports,  wifi_scan_ports)
+DELEGATE_FEATURE(net_ping,   wifi_scan_ping,   ESP32_FEATURE_NETSCAN)
+DELEGATE_FEATURE(net_arp,    wifi_scan_arp,    ESP32_FEATURE_NETSCAN)
+DELEGATE_FEATURE(net_ssh,    wifi_scan_ssh,    ESP32_FEATURE_NETSCAN)
+DELEGATE_FEATURE(net_telnet, wifi_scan_telnet, ESP32_FEATURE_NETSCAN)
+DELEGATE_FEATURE(net_ports,  wifi_scan_ports,  ESP32_FEATURE_NETSCAN)
 
 const M1SceneHandlers wifi_scene_net_ping_handlers   = { .on_enter = net_ping_on_enter   };
 const M1SceneHandlers wifi_scene_net_arp_handlers    = { .on_enter = net_arp_on_enter    };

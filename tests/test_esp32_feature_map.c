@@ -253,6 +253,16 @@ void test_bt_manage_maps_to_cap_bt_manage(void)
         esp32_feature_required_caps(ESP32_FEATURE_BT_MANAGE));
 }
 
+void test_wifi_disconnect_maps_to_cap_wifi_set_chan(void)
+{
+    /* ESP32_FEATURE_WIFI_DISCONNECT reuses M1_ESP32_CAP_WIFI_SET_CHAN as its
+     * gate: neither dag T-800 nor SiN360 set this bit, so the "WiFi Disconnect"
+     * label is shown on both firmware types until a firmware that properly
+     * supports CMD_WIFI_DISCONNECT sets the bit. */
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_SET_CHAN,
+        esp32_feature_required_caps(ESP32_FEATURE_WIFI_DISCONNECT));
+}
+
 /* =========================================================================
  * Per-feature: supported() on SiN360 profile bitmap
  * =========================================================================*/
@@ -270,6 +280,9 @@ void test_sin360_profile_lacks_wifi_join(void)
     TEST_ASSERT_FALSE(
         esp32_feature_supported(M1_ESP32_CAP_PROFILE_SIN360,
                                 ESP32_FEATURE_WIFI_SET_CHAN));
+    TEST_ASSERT_FALSE(
+        esp32_feature_supported(M1_ESP32_CAP_PROFILE_SIN360,
+                                ESP32_FEATURE_WIFI_DISCONNECT));
 }
 
 /** SiN360 profile supports all listed attack + scan features. */
@@ -352,10 +365,10 @@ void test_is_sin360_bt_manage_only_returns_false(void)
  * Feature count sanity
  * =========================================================================*/
 
-void test_feature_count_equals_18(void)
+void test_feature_count_equals_19(void)
 {
     /* Update this test (and the feature table) whenever new IDs are added. */
-    TEST_ASSERT_EQUAL_INT(18, (int)ESP32_FEATURE_COUNT);
+    TEST_ASSERT_EQUAL_INT(19, (int)ESP32_FEATURE_COUNT);
 }
 
 /* =========================================================================
@@ -388,6 +401,7 @@ int main(void)
     RUN_TEST(test_wifi_join_maps_to_cap_wifi_join);
     RUN_TEST(test_wifi_set_mac_maps_to_cap_wifi_set_mac);
     RUN_TEST(test_wifi_set_chan_maps_to_cap_wifi_set_chan);
+    RUN_TEST(test_wifi_disconnect_maps_to_cap_wifi_set_chan);
     RUN_TEST(test_netscan_maps_to_cap_netscan);
     RUN_TEST(test_802154_maps_to_cap_802154);
     RUN_TEST(test_ble_scan_maps_to_cap_ble_scan);
@@ -407,7 +421,7 @@ int main(void)
     RUN_TEST(test_is_sin360_all_ones_returns_false);
     RUN_TEST(test_is_sin360_bt_manage_only_returns_false);
 
-    RUN_TEST(test_feature_count_equals_18);
+    RUN_TEST(test_feature_count_equals_19);
 
     return UNITY_END();
 }
