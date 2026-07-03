@@ -29,6 +29,8 @@
 #include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 
@@ -40,14 +42,27 @@
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
+/* Capability-gated blocking delegate — see m1_bt_scene_badbt.c for the
+ * canonical documentation of this pattern.  Only sniffers that actually
+ * touch the ESP32 (via CMD_BLE_SCAN_START/NEXT_RAW, ESP32_FEATURE_BLE_SCAN)
+ * are gated here — monitor_airtag / sniff_flock below are placeholder
+ * ("not yet implemented") stubs with no ESP32 dependency. */
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
 /*==========================================================================*/
 /* Sniffer delegates                                                        */
 /*==========================================================================*/
 
-DELEGATE(sniff_analyzer,  ble_sniff_analyzer)
-DELEGATE(sniff_generic,   ble_sniff_generic)
-DELEGATE(sniff_flipper,   ble_sniff_flipper)
-DELEGATE(sniff_airtag,    ble_sniff_airtag)
+DELEGATE_FEATURE(sniff_analyzer, ble_sniff_analyzer, ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(sniff_generic,  ble_sniff_generic,  ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(sniff_flipper,  ble_sniff_flipper,  ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(sniff_airtag,   ble_sniff_airtag,   ESP32_FEATURE_BLE_SCAN)
 DELEGATE(monitor_airtag,  ble_monitor_airtag)
 DELEGATE(sniff_flock,     ble_sniff_flock)
 

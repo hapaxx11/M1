@@ -18,6 +18,8 @@
 #include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -30,12 +32,22 @@
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
+/* Capability-gated blocking delegate — see m1_bt_scene_badbt.c for the
+ * canonical documentation of this pattern. */
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
 /*==========================================================================*/
 /* Core delegates                                                           */
 /*==========================================================================*/
 
-DELEGATE(scan,      bluetooth_scan)
-DELEGATE(advertise, bluetooth_advertise)
+DELEGATE_FEATURE(scan,      bluetooth_scan,      ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(advertise, bluetooth_advertise, ESP32_FEATURE_BLE_ADV)
 DELEGATE(config,    bluetooth_config)
 
 const M1SceneHandlers bt_scene_scan_handlers      = { .on_enter = scan_on_enter      };

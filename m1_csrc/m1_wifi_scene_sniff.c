@@ -27,6 +27,8 @@
 #include "m1_submenu.h"
 #include "m1_wifi.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -39,17 +41,28 @@
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
+/* Capability-gated blocking delegate — see m1_wifi_scene_menu.c for the
+ * canonical documentation of this pattern. All sniffers here rely on the
+ * binary-SPI CMD_PKTMON_START/NEXT/STOP command family (ESP32_FEATURE_PKTMON). */
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
 /*==========================================================================*/
 /* Sniffer delegates                                                        */
 /*==========================================================================*/
 
-DELEGATE(sniff_all,        wifi_sniff_all)
-DELEGATE(sniff_beacon,     wifi_sniff_beacon)
-DELEGATE(sniff_probe,      wifi_sniff_probe)
-DELEGATE(sniff_deauth,     wifi_sniff_deauth)
-DELEGATE(sniff_eapol,      wifi_sniff_eapol)
-DELEGATE(sniff_pwnagotchi, wifi_sniff_pwnagotchi)
-DELEGATE(sniff_sae,        wifi_sniff_sae)
+DELEGATE_FEATURE(sniff_all,        wifi_sniff_all,        ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(sniff_beacon,     wifi_sniff_beacon,     ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(sniff_probe,      wifi_sniff_probe,      ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(sniff_deauth,     wifi_sniff_deauth,     ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(sniff_eapol,      wifi_sniff_eapol,      ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(sniff_pwnagotchi, wifi_sniff_pwnagotchi, ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(sniff_sae,        wifi_sniff_sae,        ESP32_FEATURE_PKTMON)
 
 const M1SceneHandlers wifi_scene_sniff_all_handlers        = { .on_enter = sniff_all_on_enter        };
 const M1SceneHandlers wifi_scene_sniff_beacon_handlers     = { .on_enter = sniff_beacon_on_enter     };

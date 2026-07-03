@@ -81,12 +81,12 @@ static void scan_connect_on_enter(M1SceneApp *app) {
 }
 DELEGATE_FEATURE(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)
 DELEGATE(survey_24g,        wifi_survey_24g)
-DELEGATE(mac_track,         wifi_mac_track)
+DELEGATE_FEATURE(mac_track, wifi_mac_track, ESP32_FEATURE_PKTMON)
 DELEGATE(wardrive,          wifi_wardrive)
 DELEGATE_FEATURE(station_wardrive, wifi_station_wardrive, ESP32_FEATURE_STA_SCAN)
-DELEGATE(signal_monitor,    wifi_signal_monitor)
-DELEGATE(zigbee,            zigbee_scan)
-DELEGATE(thread,            thread_scan)
+DELEGATE_FEATURE(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)
+DELEGATE_FEATURE(zigbee, zigbee_scan, ESP32_FEATURE_802154)
+DELEGATE_FEATURE(thread, thread_scan, ESP32_FEATURE_802154)
 
 const M1SceneHandlers wifi_scene_scan_connect_handlers     = { .on_enter = scan_connect_on_enter     };
 const M1SceneHandlers wifi_scene_station_scan_handlers     = { .on_enter = station_scan_on_enter     };

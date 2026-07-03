@@ -1661,6 +1661,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_ux_restructure COMMAND test_wifi_ux_restructure)
 
+# ── ESP32 dag-firmware capability gating audit ──
+add_executable(test_esp32_dag_gating_audit
+    test_esp32_dag_gating_audit.c
+)
+target_compile_definitions(test_esp32_dag_gating_audit PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_esp32_dag_gating_audit PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_dag_gating_audit PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_dag_gating_audit COMMAND test_esp32_dag_gating_audit)
+
 # ── Sub-GHz autosave logic ──
 add_executable(test_subghz_autosave
     test_subghz_autosave.c
