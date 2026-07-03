@@ -3189,7 +3189,7 @@ void wifi_attack_beacon(void)
 			beacon_message("Beacon Spam", "Start failed!", NULL);
 			return;
 		}
-		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, tx_count, 1, false, true);
+		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, 1, 1, false, true);
 	}
 	else
 	{
