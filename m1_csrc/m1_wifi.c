@@ -5147,7 +5147,7 @@ void wifi_attack_rickroll(void)
 			wifi_wait_dismiss();
 			return;
 		}
-		beacon_run_loop("RICKROLL", rickroll_ssids, RICKROLL_SSID_COUNT, 1, true, true);
+		beacon_run_loop("RICKROLL", rickroll_ssids, 1, 1, true, true);
 	}
 	else
 	{
