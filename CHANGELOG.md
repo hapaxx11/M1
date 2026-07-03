@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.12] - 2026-07-03
+
+### Changed
+
+- **Bluetooth: BLE Spam AT command support** — BLE Spam now works with dag
+  T-800 ESP32 firmware via `AT+M1BLESPAM=<mode>` commands. Added unified
+  "BLE Spam" mode picker (All/Apple/Google/Microsoft) as the primary entry
+  in the BLE Spam menu. Individual spam types (Sour Apple, SwiftPair, etc.)
+  auto-detect AT vs binary SPI firmware and dispatch accordingly. SiN360
+  binary SPI compatibility fully retained.
 ## [0.9.2.11] - 2026-07-03
 
 ### Fixed
