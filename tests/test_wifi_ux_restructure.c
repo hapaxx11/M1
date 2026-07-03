@@ -274,6 +274,89 @@ void test_connected_ap_shows_scan_button(void)
     free(c);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 14. Beacon spam has AT+M1BEACON fallback (#626-7)                        */
+/*--------------------------------------------------------------------------*/
+
+void test_beacon_has_at_fallback(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1BEACON="),
+        "Beacon spam must have AT+M1BEACON command for dag firmware (#626-7)");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 15. Evil portal has AT+M1EVILTWIN fallback (#626-7)                      */
+/*--------------------------------------------------------------------------*/
+
+void test_evil_portal_has_at_fallback(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1EVILTWIN="),
+        "Evil portal must have AT+M1EVILTWIN command for dag firmware (#626-7)");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 16. Karma has AT+M1KARMA fallback (#626-7)                               */
+/*--------------------------------------------------------------------------*/
+
+void test_karma_has_at_fallback(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "AT+M1KARMA="),
+        "Karma attack must have AT+M1KARMA command for dag firmware (#626-7)");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 17. AP clone uses AT+M1BEACON for AT firmware (#626-7)                   */
+/*--------------------------------------------------------------------------*/
+
+void test_ap_clone_has_at_fallback(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    /* wifi_attack_ap_clone() must check m1_esp32_has_cap for AT path */
+    /* It uses AT+M1BEACON for single-SSID clone on AT firmware */
+    const char *fn_start = strstr(c, "wifi_attack_ap_clone(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start,
+        "wifi_attack_ap_clone() must exist (#626-7)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn_start, "AT+M1BEACON="),
+        "AP clone must use AT+M1BEACON for AT firmware (#626-7)");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 18. Rickroll uses AT+M1BEACON for AT firmware (#626-7)                   */
+/*--------------------------------------------------------------------------*/
+
+void test_rickroll_has_at_fallback(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    const char *fn_start = strstr(c, "wifi_attack_rickroll(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start,
+        "wifi_attack_rickroll() must exist (#626-7)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn_start, "AT+M1BEACON="),
+        "Rickroll must use AT+M1BEACON for AT firmware (#626-7)");
+
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -290,5 +373,10 @@ int main(void)
     RUN_TEST(test_message_box_choice_uses_rounded_corners);
     RUN_TEST(test_deauth_has_at_fallback);
     RUN_TEST(test_connected_ap_shows_scan_button);
+    RUN_TEST(test_beacon_has_at_fallback);
+    RUN_TEST(test_evil_portal_has_at_fallback);
+    RUN_TEST(test_karma_has_at_fallback);
+    RUN_TEST(test_ap_clone_has_at_fallback);
+    RUN_TEST(test_rickroll_has_at_fallback);
     return UNITY_END();
 }

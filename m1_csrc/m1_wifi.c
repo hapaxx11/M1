@@ -2821,7 +2821,7 @@ static void beacon_set_flags(uint8_t flags)
 }
 
 static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_count,
-	uint8_t total_loaded, bool auto_scroll)
+	uint8_t total_loaded, bool auto_scroll, bool use_at)
 {
 	S_M1_Buttons_Status btn;
 	S_M1_Main_Q_t q_item;
@@ -2873,7 +2873,14 @@ static void beacon_run_loop(const char *title, const char **ssids, uint8_t ssid_
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_BEACON_STOP, &resp, 1000);
+				if (use_at)
+				{
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1BEACON=0,0,\"\",\"\"\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+					m1_esp32_simple_cmd(CMD_BEACON_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -3125,6 +3132,7 @@ void wifi_attack_beacon(void)
 	uint8_t list_count;
 	uint8_t tx_count;
 	bool shuffle_beacons;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
 
@@ -3166,28 +3174,48 @@ void wifi_attack_beacon(void)
 		shuffle_beacons = true;
 	}
 
-	uint8_t total = beacon_batch_load(beacon_file_ptrs, tx_count, &load_diag);
-	if (total == 0)
+	if (use_at)
 	{
-		beacon_load_failed_screen("Beacon Spam", &load_diag);
-		wifi_wait_dismiss();
-		return;
+		/* AT path — dag T-800: AT+M1BEACON=1,<ch>,"<ssid>","<bssid>"
+		 * AT command supports only a single SSID; use the first from the list. */
+		char at_cmd[96];
+		char at_resp[64];
+		snprintf(at_cmd, sizeof(at_cmd),
+			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
+			beacon_file_ptrs[0]);
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			beacon_message("Beacon Spam", "Start failed!", NULL);
+			return;
+		}
+		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, tx_count, 1, false, true);
 	}
-
-	beacon_set_flags(shuffle_beacons ? 0x01 : 0x00);
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_BEACON_START;
-	cmd.payload_len = 0;
-	int spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	else
 	{
-		beacon_message("Beacon Spam", "Start failed!", NULL);
-		return;
-	}
+		uint8_t total = beacon_batch_load(beacon_file_ptrs, tx_count, &load_diag);
+		if (total == 0)
+		{
+			beacon_load_failed_screen("Beacon Spam", &load_diag);
+			wifi_wait_dismiss();
+			return;
+		}
 
-	beacon_run_loop("BEACON SPAM", beacon_file_ptrs, tx_count, total, false);
+		beacon_set_flags(shuffle_beacons ? 0x01 : 0x00);
+
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_BEACON_START;
+		cmd.payload_len = 0;
+		int spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			beacon_message("Beacon Spam", "Start failed!", NULL);
+			return;
+		}
+
+		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, tx_count, total, false, false);
+	}
 }
 
 /*============================================================================*/
@@ -4415,16 +4443,9 @@ void wifi_evil_portal(void)
 	char ln[26];
 	uint32_t start_tick, last_poll;
 	const char *portal_ssid = wifi_portal_ssid;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
-
-	/* Start portal */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_PORTAL_START;
-	uint8_t slen = (uint8_t)strlen(portal_ssid);
-	memcpy(cmd.payload, portal_ssid, slen);
-	cmd.payload_len = slen;
 
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	m1_u8g2_firstpage();
@@ -4434,15 +4455,44 @@ void wifi_evil_portal(void)
 		M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
 	m1_u8g2_nextpage();
 
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_at)
 	{
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Evil Portal");
-		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-		m1_u8g2_nextpage();
-		wifi_wait_dismiss();
-		return;
+		/* AT path — dag T-800: AT+M1EVILTWIN=1,"<ssid>",<ch> */
+		char at_cmd[64];
+		char at_resp[64];
+		snprintf(at_cmd, sizeof(at_cmd),
+			"AT+M1EVILTWIN=1,\"%.32s\",6\r\n", portal_ssid);
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Evil Portal");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+	}
+	else
+	{
+		/* Binary SPI path — SiN360 */
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_PORTAL_START;
+		uint8_t slen = (uint8_t)strlen(portal_ssid);
+		memcpy(cmd.payload, portal_ssid, slen);
+		cmd.payload_len = slen;
+
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Evil Portal");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
 	}
 
 	ep_cred_count = 0;
@@ -4455,7 +4505,7 @@ void wifi_evil_portal(void)
 		uint32_t now = HAL_GetTick();
 		uint32_t elapsed = (now - start_tick) / 1000;
 
-		if (now - last_poll >= EP_POLL_MS)
+		if (!use_at && now - last_poll >= EP_POLL_MS)
 		{
 			ep_poll_creds();
 			last_poll = now;
@@ -4473,21 +4523,30 @@ void wifi_evil_portal(void)
 		snprintf(ln, sizeof(ln), "SSID: %s", portal_ssid);
 		u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 
-		snprintf(ln, sizeof(ln), "Creds: %d  Time:%lus", ep_cred_count, elapsed);
-		u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-
-		if (ep_cred_count > 0)
+		if (use_at)
 		{
-			uint8_t vi = ep_view_idx;
-			if (vi >= ep_cred_count) vi = ep_cred_count - 1;
-			snprintf(ln, sizeof(ln), "U:%.20s", ep_creds[vi].username);
+			snprintf(ln, sizeof(ln), "Time:%lus (AT mode)", elapsed);
 			u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
-			snprintf(ln, sizeof(ln), "P:%.20s", ep_creds[vi].password);
-			u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+			u8g2_DrawStr(&m1_u8g2, 2, y, "No cred polling on AT");
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 2, y, "Waiting for clients...");
+			snprintf(ln, sizeof(ln), "Creds: %d  Time:%lus", ep_cred_count, elapsed);
+			u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
+
+			if (ep_cred_count > 0)
+			{
+				uint8_t vi = ep_view_idx;
+				if (vi >= ep_cred_count) vi = ep_cred_count - 1;
+				snprintf(ln, sizeof(ln), "U:%.20s", ep_creds[vi].username);
+				u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
+				snprintf(ln, sizeof(ln), "P:%.20s", ep_creds[vi].password);
+				u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, 2, y, "Waiting for clients...");
+			}
 		}
 
 		m1_u8g2_nextpage();
@@ -4498,17 +4557,26 @@ void wifi_evil_portal(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				ep_save_creds_to_sd();
-				m1_esp32_simple_cmd(CMD_PORTAL_STOP, &resp, 2000);
+				if (use_at)
+				{
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1EVILTWIN=0,\"\",0\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+				{
+					ep_save_creds_to_sd();
+					m1_esp32_simple_cmd(CMD_PORTAL_STOP, &resp, 2000);
+				}
 				xQueueReset(main_q_hdl);
 				break;
 			}
-			else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_at && btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_view_idx > 0) ep_view_idx--;
 				else if (ep_cred_count > 0) ep_view_idx = ep_cred_count - 1;
 			}
-			else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_at && btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_cred_count > 0)
 				{
@@ -4634,14 +4702,30 @@ void wifi_attack_karma(void)
 	uint32_t elapsed;
 	uint32_t probes = 0;
 	int spi_ret;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
 
-	spi_ret = m1_esp32_simple_cmd(CMD_KARMA_START, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_at)
 	{
-		wifi_show_message("Karma", "Start failed", "Flash ESP32 FW?");
-		return;
+		/* AT path — dag T-800: AT+M1KARMA=1,"" (empty SSID = respond to all probes) */
+		char at_resp[64];
+		(void)spi_AT_send_recv("AT+M1KARMA=1,\"\"\r\n",
+			at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			wifi_show_message("Karma", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else
+	{
+		spi_ret = m1_esp32_simple_cmd(CMD_KARMA_START, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message("Karma", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
 	}
 
 	start_tick = HAL_GetTick();
@@ -4653,7 +4737,7 @@ void wifi_attack_karma(void)
 		uint32_t now = HAL_GetTick();
 		elapsed = (now - start_tick) / 1000;
 
-		if (now - last_poll >= 1000)
+		if (!use_at && now - last_poll >= 1000)
 		{
 			spi_ret = m1_esp32_simple_cmd(CMD_KARMA_STATUS, &resp, 1000);
 			if (spi_ret == 0 && resp.status == RESP_OK && resp.payload_len >= 6)
@@ -4681,19 +4765,28 @@ void wifi_attack_karma(void)
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Probe-driven AP");
-		if (latest_ssid[0])
+		if (use_at)
 		{
-			snprintf(ln, sizeof(ln), "%.24s", latest_ssid);
+			snprintf(ln, sizeof(ln), "Time: %lus (AT)", elapsed);
 			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "Active");
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, "Waiting for probes...");
+			if (latest_ssid[0])
+			{
+				snprintf(ln, sizeof(ln), "%.24s", latest_ssid);
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, "Waiting for probes...");
+			}
+			snprintf(ln, sizeof(ln), "Probes:%lu", (unsigned long)probes);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+			snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
 		}
-		snprintf(ln, sizeof(ln), "Probes:%lu", (unsigned long)probes);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
-		snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 3 * SF_Y_STEP, ln);
 		m1_u8g2_nextpage();
 
 		ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(500));
@@ -4702,10 +4795,19 @@ void wifi_attack_karma(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_KARMA_STOP, &resp, 2000);
-				if (resp.status == RESP_OK && resp.payload_len >= 2)
+				if (use_at)
 				{
-					probes = resp.payload[0] | ((uint32_t)resp.payload[1] << 8);
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1KARMA=0,\"\"\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+				{
+					m1_esp32_simple_cmd(CMD_KARMA_STOP, &resp, 2000);
+					if (resp.status == RESP_OK && resp.payload_len >= 2)
+					{
+						probes = resp.payload[0] | ((uint32_t)resp.payload[1] << 8);
+					}
 				}
 				xQueueReset(main_q_hdl);
 				break;
@@ -4727,14 +4829,31 @@ void wifi_attack_karma_portal(void)
 	uint32_t elapsed;
 	uint32_t probes = 0;
 	int spi_ret;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
 
-	spi_ret = m1_esp32_simple_cmd(CMD_KARMA_PORTAL_START, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_at)
 	{
-		wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
-		return;
+		/* AT path — dag T-800: no combined karma+portal, degrade to basic karma.
+		 * AT+M1KARMA=1,"" starts karma; credential polling is unavailable. */
+		char at_resp[64];
+		(void)spi_AT_send_recv("AT+M1KARMA=1,\"\"\r\n",
+			at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else
+	{
+		spi_ret = m1_esp32_simple_cmd(CMD_KARMA_PORTAL_START, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
 	}
 
 	ep_cred_count = 0;
@@ -4748,7 +4867,7 @@ void wifi_attack_karma_portal(void)
 		uint32_t now = HAL_GetTick();
 		elapsed = (now - start_tick) / 1000;
 
-		if (now - last_poll >= 1000)
+		if (!use_at && now - last_poll >= 1000)
 		{
 			spi_ret = m1_esp32_simple_cmd(CMD_KARMA_STATUS, &resp, 1000);
 			if (spi_ret == 0 && resp.status == RESP_OK && resp.payload_len >= 6)
@@ -4772,33 +4891,44 @@ void wifi_attack_karma_portal(void)
 
 		m1_u8g2_firstpage();
 		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		u8g2_DrawStr(&m1_u8g2, 2, 10, "KARMA PORTAL");
+		u8g2_DrawStr(&m1_u8g2, 2, 10,
+			use_at ? "KARMA (degraded)" : "KARMA PORTAL");
 		u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		if (latest_ssid[0])
+		if (use_at)
 		{
-			snprintf(ln, sizeof(ln), "%.24s", latest_ssid);
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Probe-driven AP (AT)");
+			snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "No portal on AT FW");
 		}
 		else
 		{
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Waiting for probes...");
-		}
+			if (latest_ssid[0])
+			{
+				snprintf(ln, sizeof(ln), "%.24s", latest_ssid);
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, ln);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START, "Waiting for probes...");
+			}
 
-		snprintf(ln, sizeof(ln), "Probes:%lu Creds:%d", (unsigned long)probes, ep_cred_count);
-		u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
+			snprintf(ln, sizeof(ln), "Probes:%lu Creds:%d", (unsigned long)probes, ep_cred_count);
+			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + SF_Y_STEP, ln);
 
-		if (ep_cred_count > 0)
-		{
-			uint8_t vi = ep_view_idx;
-			if (vi >= ep_cred_count) vi = ep_cred_count - 1;
-			snprintf(ln, sizeof(ln), "U:%.20s", ep_creds[vi].username);
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
-		}
-		else
-		{
-			u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "Portal active");
+			if (ep_cred_count > 0)
+			{
+				uint8_t vi = ep_view_idx;
+				if (vi >= ep_cred_count) vi = ep_cred_count - 1;
+				snprintf(ln, sizeof(ln), "U:%.20s", ep_creds[vi].username);
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, ln);
+			}
+			else
+			{
+				u8g2_DrawStr(&m1_u8g2, 2, SF_Y_START + 2 * SF_Y_STEP, "Portal active");
+			}
 		}
 
 		snprintf(ln, sizeof(ln), "Time:%lus", elapsed);
@@ -4811,18 +4941,27 @@ void wifi_attack_karma_portal(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_KARMA_STOP, &resp, 2000);
-				ep_poll_creds();
-				ep_save_creds_to_sd();
+				if (use_at)
+				{
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1KARMA=0,\"\"\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+				{
+					m1_esp32_simple_cmd(CMD_KARMA_STOP, &resp, 2000);
+					ep_poll_creds();
+					ep_save_creds_to_sd();
+				}
 				xQueueReset(main_q_hdl);
 				break;
 			}
-			else if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_at && btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_view_idx > 0) ep_view_idx--;
 				else if (ep_cred_count > 0) ep_view_idx = ep_cred_count - 1;
 			}
-			else if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			else if (!use_at && btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
 			{
 				if (ep_cred_count > 0)
 				{
@@ -4848,6 +4987,7 @@ void wifi_attack_ap_clone(void)
 	const char *clone_ssids[32];
 	uint8_t cloned = 0;
 	bool selected_only = false;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
 
@@ -4893,33 +5033,57 @@ void wifi_attack_ap_clone(void)
 		return;
 	}
 
-	uint8_t total = beacon_batch_load(clone_ssids, cloned, &load_diag);
-	if (total == 0)
+	if (use_at)
 	{
-		beacon_load_failed_screen("AP Clone", &load_diag);
-		wifi_wait_dismiss();
-		return;
+		/* AT path — dag T-800: single SSID only via AT+M1BEACON */
+		char at_cmd[80];
+		char at_resp[64];
+		snprintf(at_cmd, sizeof(at_cmd),
+			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
+			clone_ssids[0]);
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+		beacon_run_loop("AP CLONE", clone_ssids, cloned, 1, false, true);
 	}
-
-	beacon_set_flags(0x00);
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_BEACON_START;
-	cmd.payload_len = 0;
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	else
 	{
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
-		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-		m1_u8g2_nextpage();
-		wifi_wait_dismiss();
-		return;
-	}
+		uint8_t total = beacon_batch_load(clone_ssids, cloned, &load_diag);
+		if (total == 0)
+		{
+			beacon_load_failed_screen("AP Clone", &load_diag);
+			wifi_wait_dismiss();
+			return;
+		}
 
-	beacon_run_loop("AP CLONE", clone_ssids, cloned, total, false);
+		beacon_set_flags(0x00);
+
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_BEACON_START;
+		cmd.payload_len = 0;
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "AP Clone");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+
+		beacon_run_loop("AP CLONE", clone_ssids, cloned, total, false, false);
+	}
 }
 
 
@@ -4960,36 +5124,61 @@ void wifi_attack_rickroll(void)
 	m1_resp_t resp;
 	m1_cmd_t cmd;
 	beacon_load_diag_t load_diag;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
 
-	uint8_t total = beacon_batch_load(rickroll_ssids, RICKROLL_SSID_COUNT, &load_diag);
-	if (total == 0)
+	if (use_at)
 	{
-		beacon_load_failed_screen("Rickroll", &load_diag);
-		wifi_wait_dismiss();
-		return;
+		/* AT path — dag T-800: single SSID only via AT+M1BEACON */
+		char at_cmd[80];
+		char at_resp[64];
+		snprintf(at_cmd, sizeof(at_cmd),
+			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
+			rickroll_ssids[0]);
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Rickroll");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+		beacon_run_loop("RICKROLL", rickroll_ssids, RICKROLL_SSID_COUNT, 1, true, true);
 	}
-
-	beacon_set_flags(0x00);
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_BEACON_START;
-	cmd.payload_len = 0;
-	int spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	else
 	{
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Rickroll");
-		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-		m1_u8g2_nextpage();
-		wifi_wait_dismiss();
-		return;
-	}
+		uint8_t total = beacon_batch_load(rickroll_ssids, RICKROLL_SSID_COUNT, &load_diag);
+		if (total == 0)
+		{
+			beacon_load_failed_screen("Rickroll", &load_diag);
+			wifi_wait_dismiss();
+			return;
+		}
 
-	beacon_run_loop("RICKROLL", rickroll_ssids, RICKROLL_SSID_COUNT, total, true);
+		beacon_set_flags(0x00);
+
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_BEACON_START;
+		cmd.payload_len = 0;
+		int spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Rickroll");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+
+		beacon_run_loop("RICKROLL", rickroll_ssids, RICKROLL_SSID_COUNT, total, true, false);
+	}
 }
 
 /*==========================================================================*/
