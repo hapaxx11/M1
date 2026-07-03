@@ -2520,6 +2520,16 @@ static void wifi_deauth_selected_run(void)
 
 	if (use_at)
 	{
+		/* AT path only supports deauthing a single AP BSSID.
+		 * If the user selected only STA targets (no AP targets), the AT
+		 * command cannot be used — show a clear error instead of failing
+		 * silently with a generic "Start failed" message. */
+		if (ap_targets == 0)
+		{
+			wifi_show_message("Deauth", "AT: select an AP", "STA-only not supported");
+			return;
+		}
+
 		/* AT path — send AT+M1DEAUTH for first selected AP target.
 		 * Multi-target rotation is not supported via AT; the command
 		 * deauths a single AP continuously until AT+M1DEAUTHSTOP. */
@@ -4530,9 +4540,12 @@ void wifi_probe_flood(void)
 
 	if (use_at)
 	{
-		/* AT path — dag T-800: AT+M1PROBE */
+		/* AT path — dag T-800: AT+M1PROBE=<start>,<ch>
+		 * Use channel 6 as the default 2.4 GHz channel for probe flooding. */
+		char at_cmd[24];
 		char at_resp[64];
-		(void)spi_AT_send_recv("AT+M1PROBE\r\n", at_resp, sizeof(at_resp), 5);
+		snprintf(at_cmd, sizeof(at_cmd), "AT+M1PROBE=1,6\r\n");
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
 		if (strstr(at_resp, "OK") == NULL)
 		{
 			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
@@ -4592,10 +4605,11 @@ void wifi_probe_flood(void)
 			{
 				if (use_at)
 				{
-					/* dag T-800 has no dedicated probe-flood-stop;
-					 * send AT+M1DEAUTHSTOP as a general monitor stop */
+					/* Stop probe flood: AT+M1PROBE=0,<ch> (matching start channel) */
+					char at_stop_cmd[24];
 					char at_stop_resp[32];
-					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
+					snprintf(at_stop_cmd, sizeof(at_stop_cmd), "AT+M1PROBE=0,6\r\n");
+					(void)spi_AT_send_recv(at_stop_cmd,
 						at_stop_resp, sizeof(at_stop_resp), 3);
 				}
 				else

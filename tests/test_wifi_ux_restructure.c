@@ -228,8 +228,8 @@ void test_message_box_choice_uses_rounded_corners(void)
     char *c = read_file("m1_csrc/m1_display.c");
     TEST_ASSERT_NOT_NULL(c);
 
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "u8g2_DrawRBox"),
-        "m1_message_box_choice must use DrawRBox for rounded corners (#626-5)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "u8g2_DrawRBox(&m1_u8g2, btn_x - 2"),
+        "m1_message_box_choice must use DrawRBox for button highlight (#626-5)");
 
     /* Must NOT use DrawBox for the button highlight */
     TEST_ASSERT_NULL_MESSAGE(strstr(c, "u8g2_DrawBox(&m1_u8g2, btn_x"),
@@ -266,10 +266,10 @@ void test_connected_ap_shows_scan_button(void)
     char *c = read_file("m1_csrc/m1_wifi.c");
     TEST_ASSERT_NOT_NULL(c);
 
-    /* The AP detail view must show a "Scan" label on the left button
-     * when viewing the connected AP. */
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Scan\""),
-        "Connected AP detail must show 'Scan' button (#626-1)");
+    /* The AP detail view shows "Scan" in the left slot of the 3-column
+     * button bar alongside ok_circle_8x8 — assert on the specific call. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Scan\", ok_circle_8x8"),
+        "Connected AP detail must show 'Scan' in left slot of button bar (#626-1)");
 
     free(c);
 }
