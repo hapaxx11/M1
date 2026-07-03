@@ -32,6 +32,8 @@
 #include "m1_wifi.h"
 #include "m1_802154.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -43,6 +45,19 @@
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
+/* Capability-gated blocking delegate — shows a "not supported" screen and
+ * pops immediately when the required ESP32 capability is absent, instead of
+ * calling into a binary-SPI-only command (e.g. CMD_STA_SCAN_START) on
+ * AT-firmware builds (dag T-800, stock AT) that don't implement it.  See
+ * esp32_feature_map.c for the required-capability table. */
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* Core / direct-tool delegates                                             */
@@ -64,11 +79,11 @@ static void scan_connect_on_enter(M1SceneApp *app) {
 #endif
     m1_scene_pop(app);
 }
-DELEGATE(station_scan,      wifi_station_scan)
+DELEGATE_FEATURE(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)
 DELEGATE(survey_24g,        wifi_survey_24g)
 DELEGATE(mac_track,         wifi_mac_track)
 DELEGATE(wardrive,          wifi_wardrive)
-DELEGATE(station_wardrive,  wifi_station_wardrive)
+DELEGATE_FEATURE(station_wardrive, wifi_station_wardrive, ESP32_FEATURE_STA_SCAN)
 DELEGATE(signal_monitor,    wifi_signal_monitor)
 DELEGATE(zigbee,            zigbee_scan)
 DELEGATE(thread,            thread_scan)

@@ -369,6 +369,46 @@ void test_rickroll_has_at_fallback(void)
     free(c);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 19. Station Scan / Station Wardrive are capability-gated                 */
+/*                                                                          */
+/* Regression test for: "wifi station scan results in start failed when    */
+/* running dag esp32".  Station Scan and Station Wardrive both rely on the */
+/* binary-SPI-only CMD_STA_SCAN_START command (SiN360 firmware, or         */
+/* neddy299's AT+STASCAN fork).  The dag T-800 AT firmware implements      */
+/* neither, so M1_ESP32_CAP_STA_SCAN is never set for it.  Before this fix */
+/* the scene delegates were plain DELEGATE() wrappers with no capability   */
+/* check, so on dag firmware the SPI command silently failed/timed out     */
+/* instead of showing the standard "not supported" screen.  They must use  */
+/* DELEGATE_FEATURE(..., ESP32_FEATURE_STA_SCAN) like the other            */
+/* capability-gated delegates (see m1_bt_scene_badbt.c).                   */
+/*--------------------------------------------------------------------------*/
+
+void test_station_scan_is_capability_gated(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "DELEGATE_FEATURE"),
+        "m1_wifi_scene_menu.c must define a capability-gated delegate macro");
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(c, "DELEGATE_FEATURE(station_scan, wifi_station_scan, ESP32_FEATURE_STA_SCAN)"),
+        "Station Scan delegate must be gated on ESP32_FEATURE_STA_SCAN");
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(c, "DELEGATE_FEATURE(station_wardrive, wifi_station_wardrive, ESP32_FEATURE_STA_SCAN)"),
+        "Station Wardrive delegate must be gated on ESP32_FEATURE_STA_SCAN");
+
+    /* Guard against reintroducing the ungated plain DELEGATE() wrapper. */
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "DELEGATE(station_scan,"),
+        "Station Scan must not use the ungated DELEGATE() macro");
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "DELEGATE(station_wardrive,"),
+        "Station Wardrive must not use the ungated DELEGATE() macro");
+
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -390,5 +430,6 @@ int main(void)
     RUN_TEST(test_karma_has_at_fallback);
     RUN_TEST(test_ap_clone_has_at_fallback);
     RUN_TEST(test_rickroll_has_at_fallback);
+    RUN_TEST(test_station_scan_is_capability_gated);
     return UNITY_END();
 }
