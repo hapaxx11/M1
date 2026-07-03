@@ -103,7 +103,7 @@ const M1SceneHandlers wifi_scene_gen_ep_html_handlers     = { .on_enter = gen_ep
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define GENERAL_ITEM_COUNT  16
+#define GENERAL_ITEM_COUNT  15
 #else
 #define GENERAL_ITEM_COUNT  14
 #endif
@@ -115,7 +115,7 @@ static const char *const general_labels[GENERAL_ITEM_COUNT] = {
     "Join WiFi", "Set MACs", "Set Channel",
     "Shutdown WiFi", "Set EP SSID", "Select EP HTML",
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    "Saved Networks", "Connected",
+    "Saved Networks",
 #endif
 };
 
@@ -126,7 +126,7 @@ static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    WifiSceneSaved, WifiSceneConnectedMenu,
+    WifiSceneSaved,
 #endif
 };
 

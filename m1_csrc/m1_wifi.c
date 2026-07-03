@@ -95,6 +95,12 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid);
 static uint16_t wifi_ap_list_print(bool up_dir);
 static void wifi_ap_list_draw(void);
 static void wifi_ap_list_free(void);
+
+/* Context label for the OK button in wifi_ap_list_draw().
+ * NULL → auto-select "Connect" / "Discon." based on connection state.
+ * Set to a non-NULL string (e.g. "Deauth") before calling draw for
+ * context-specific AP selection screens. */
+static const char *s_ap_ok_label = NULL;
 static void wifi_draw_ap_info(void);
 /* wifi_selected_ap_count() and wifi_selected_sta_count() provided by wifi_selection.h */
 static bool wifi_join_choose_password(char *password, size_t password_len);
@@ -321,14 +327,23 @@ static void wifi_ap_list_draw(void)
 #undef AP_ROW_Y_START
 #undef AP_ROW_STEP
 
-	/* Bottom bar: show Connect or Disconnect based on connection state */
+	/* Bottom bar: context-specific label for the OK button.
+	 * s_ap_ok_label overrides the default "Connect"/"Discon." choice. */
+	if (s_ap_ok_label)
+	{
+		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, s_ap_ok_label, NULL, NULL);
+	}
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-	if (s_wifi_stub_connected &&
-	    strncmp(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid)) == 0)
-		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Disconnect", NULL, NULL);
-	else
+	else if (s_wifi_stub_connected &&
+	         strncmp(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid)) == 0)
+	{
+		subghz_button_bar_draw(NULL, "Scan", ok_circle_8x8, "Discon.", NULL, NULL);
+	}
 #endif
+	else
+	{
 		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Connect", NULL, NULL);
+	}
 
 	m1_u8g2_nextpage();
 }
@@ -722,6 +737,26 @@ void wifi_scan_ap(void)
 					if (list_count)
 						wifi_ap_list_print(false);
 				}
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+				else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					/* "Scan" button — available only when viewing the connected AP */
+					if (list_count && ap_list && ap_view_idx < ap_count &&
+					    s_wifi_stub_connected &&
+					    strncmp(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
+					            sizeof(s_wifi_stub_ssid)) == 0)
+					{
+						uint8_t choice = m1_message_box_choice(
+							&m1_u8g2, "Net Scan", NULL, NULL,
+							"Ping\nARP\nSSH\nPorts");
+						if (choice == 1)      wifi_scan_ping();
+						else if (choice == 2) wifi_scan_arp();
+						else if (choice == 3) wifi_scan_ssh();
+						else if (choice == 4) wifi_scan_ports();
+						wifi_ap_list_draw();
+					}
+				}
+#endif
 				else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
 					if (list_count && ap_list && ap_view_idx < ap_count)
@@ -2018,7 +2053,7 @@ static void wifi_netscan_run(uint8_t mode, const char *title)
 	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
 	if (spi_ret != 0 || resp.status != RESP_OK)
 	{
-		wifi_show_message(title, "Join WiFi first", NULL);
+		wifi_show_message(title, "Start failed", "Join WiFi or update FW");
 		return;
 	}
 
@@ -2348,25 +2383,50 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
-	/* Build deauth command: bssid(6) + channel(1) */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_DEAUTH_START;
-	cmd.payload_len = 7;
-	memcpy(cmd.payload, bssid, 6);
-	cmd.payload[6] = channel;
-
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_at)
 	{
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
-		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-		m1_u8g2_nextpage();
-		wifi_wait_dismiss();
-		return;
+		/* AT path — dag T-800: AT+M1DEAUTH=<bssid>,<channel> */
+		char at_cmd[48];
+		char at_resp[64];
+		snprintf(at_cmd, sizeof(at_cmd),
+			"AT+M1DEAUTH=%02X:%02X:%02X:%02X:%02X:%02X,%d\r\n",
+			bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
+			channel);
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+	}
+	else
+	{
+		/* Binary SPI path — SiN360 */
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_DEAUTH_START;
+		cmd.payload_len = 7;
+		memcpy(cmd.payload, bssid, 6);
+		cmd.payload[6] = channel;
+
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
 	}
 
 	start_tick = HAL_GetTick();
@@ -2414,7 +2474,14 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
+				if (use_at)
+				{
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+					m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -2441,6 +2508,7 @@ static void wifi_deauth_selected_run(void)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	target_count = wifi_build_selected_deauth_cmd(&cmd, ap_list, ap_count,
 		sta_list_data, sta_total, &ap_targets, &sta_targets, &selected_total);
@@ -2450,11 +2518,42 @@ static void wifi_deauth_selected_run(void)
 		return;
 	}
 
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_at)
 	{
-		wifi_show_message("Deauth", "Start failed", "Flash ESP32 FW?");
-		return;
+		/* AT path — send AT+M1DEAUTH for first selected AP target.
+		 * Multi-target rotation is not supported via AT; the command
+		 * deauths a single AP continuously until AT+M1DEAUTHSTOP. */
+		char at_cmd[48];
+		char at_resp[64];
+		bool found = false;
+		for (uint16_t i = 0; i < ap_count && !found; i++)
+		{
+			if (ap_list[i].selected)
+			{
+				snprintf(at_cmd, sizeof(at_cmd),
+					"AT+M1DEAUTH=%02X:%02X:%02X:%02X:%02X:%02X,%d\r\n",
+					ap_list[i].bssid[0], ap_list[i].bssid[1],
+					ap_list[i].bssid[2], ap_list[i].bssid[3],
+					ap_list[i].bssid[4], ap_list[i].bssid[5],
+					ap_list[i].channel);
+				(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+				found = true;
+			}
+		}
+		if (!found || strstr(at_resp, "OK") == NULL)
+		{
+			wifi_show_message("Deauth", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else
+	{
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message("Deauth", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
 	}
 
 	start_tick = HAL_GetTick();
@@ -2492,7 +2591,14 @@ static void wifi_deauth_selected_run(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
+				if (use_at)
+				{
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+					m1_esp32_simple_cmd(CMD_DEAUTH_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -2545,7 +2651,8 @@ void wifi_attack_deauth(void)
 		return;
 	}
 
-	/* Show AP list for target selection */
+	/* Show AP list for target selection — label OK as "Deauth" */
+	s_ap_ok_label = "Deauth";
 	ap_view_idx = 0;
 	wifi_ap_list_draw();
 
@@ -2557,6 +2664,7 @@ void wifi_attack_deauth(void)
 			xQueueReceive(button_events_q_hdl, &this_button_status, 0);
 			if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
+				s_ap_ok_label = NULL;
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -4416,19 +4524,39 @@ void wifi_probe_flood(void)
 	int spi_ret;
 	char ln[26];
 	uint32_t start_tick;
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
 	ensure_esp32_ready();
 
-	spi_ret = m1_esp32_simple_cmd(CMD_PROBE_FLOOD_START, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_at)
 	{
-		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
-		u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
-		m1_u8g2_nextpage();
-		wifi_wait_dismiss();
-		return;
+		/* AT path — dag T-800: AT+M1PROBE */
+		char at_resp[64];
+		(void)spi_AT_send_recv("AT+M1PROBE\r\n", at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+	}
+	else
+	{
+		spi_ret = m1_esp32_simple_cmd(CMD_PROBE_FLOOD_START, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
 	}
 
 	start_tick = HAL_GetTick();
@@ -4462,7 +4590,16 @@ void wifi_probe_flood(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_PROBE_FLOOD_STOP, &resp, 1000);
+				if (use_at)
+				{
+					/* dag T-800 has no dedicated probe-flood-stop;
+					 * send AT+M1DEAUTHSTOP as a general monitor stop */
+					char at_stop_resp[32];
+					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
+						at_stop_resp, sizeof(at_stop_resp), 3);
+				}
+				else
+					m1_esp32_simple_cmd(CMD_PROBE_FLOOD_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -5268,9 +5405,9 @@ bool wifi_prompt_disconnect(void)
 	const char *ssid = wifi_get_connected_ssid();
 	uint8_t choice = m1_message_box_choice(&m1_u8g2,
 	                     "WiFi Connected",
-	                     "Disconnect to continue?",
+	                     "Disconnect to continue",
 	                     (ssid && ssid[0] != '\0') ? ssid : NULL,
-	                     "Disconnect\nCancel");
+	                     "Discon.\nCancel");
 	if (choice != 1)
 		return false;
 
@@ -5284,7 +5421,7 @@ bool wifi_require_connected(void)
 	if (wifi_is_connected())
 		return true;
 
-	wifi_show_message("WiFi", "Connect via Networks first", NULL);
+	wifi_show_message("WiFi", "Join WiFi first", NULL);
 	return false;
 }
 
