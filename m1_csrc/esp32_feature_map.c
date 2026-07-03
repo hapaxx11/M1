@@ -54,6 +54,8 @@ static const esp32_feature_entry_t s_feature_table[ESP32_FEATURE_COUNT] = {
     { M1_ESP32_CAP_WIFI_SET_MAC, "Set WiFi MAC"     },
     /* ESP32_FEATURE_WIFI_SET_CHAN */
     { M1_ESP32_CAP_WIFI_SET_CHAN,"Set WiFi Chan"    },
+    /* ESP32_FEATURE_WIFI_DISCONNECT */
+    { M1_ESP32_CAP_WIFI_SET_CHAN,"WiFi Disconnect"  },
     /* ESP32_FEATURE_NETSCAN */
     { M1_ESP32_CAP_NETSCAN,      "Net Scan"         },
     /* ESP32_FEATURE_802154 */

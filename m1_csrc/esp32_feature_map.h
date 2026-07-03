@@ -90,6 +90,9 @@ typedef enum {
     /** WiFi channel override */
     ESP32_FEATURE_WIFI_SET_CHAN,
 
+    /** WiFi disconnect / shutdown (binary-SPI CMD_WIFI_DISCONNECT) */
+    ESP32_FEATURE_WIFI_DISCONNECT,
+
     /* ----- Network scanning ----------------------------------------------- */
     /** Ping / ARP / SSH / Telnet / port scan */
     ESP32_FEATURE_NETSCAN,

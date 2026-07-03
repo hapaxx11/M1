@@ -183,6 +183,27 @@ void test_bt_sniffers_capability_gated(void)
     expect_gated(path, "DELEGATE(sniff_flock,     ble_sniff_flock)");
 }
 
+/*--------------------------------------------------------------------------*/
+/* WiFi General binary-SPI commands — CMD_WIFI_SET_MAC / CMD_WIFI_SET_CHANNEL
+ * / CMD_WIFI_DISCONNECT.  All three lack AT equivalents on dag T-800 and
+ * are also absent from the SiN360 capability profile, so they must be
+ * gated with DELEGATE_FEATURE rather than plain DELEGATE.                   */
+/*--------------------------------------------------------------------------*/
+
+void test_wifi_general_binary_commands_capability_gated(void)
+{
+    const char *path = "m1_csrc/m1_wifi_scene_general.c";
+
+    expect_gated(path, "DELEGATE_FEATURE(gen_set_macs,    wifi_general_set_macs,       ESP32_FEATURE_WIFI_SET_MAC)");
+    expect_gated(path, "DELEGATE_FEATURE(gen_set_chan,    wifi_general_set_channel,    ESP32_FEATURE_WIFI_SET_CHAN)");
+    expect_gated(path, "DELEGATE_FEATURE(gen_shutdown,   wifi_general_shutdown_wifi,  ESP32_FEATURE_WIFI_DISCONNECT)");
+
+    /* Ensure the ungated plain DELEGATE() variants are gone. */
+    expect_not_present(path, "DELEGATE(gen_set_macs,");
+    expect_not_present(path, "DELEGATE(gen_set_chan,");
+    expect_not_present(path, "DELEGATE(gen_shutdown,");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -192,5 +213,6 @@ int main(void)
     RUN_TEST(test_wifi_netscan_capability_gated);
     RUN_TEST(test_bt_scan_and_advertise_capability_gated);
     RUN_TEST(test_bt_sniffers_capability_gated);
+    RUN_TEST(test_wifi_general_binary_commands_capability_gated);
     return UNITY_END();
 }

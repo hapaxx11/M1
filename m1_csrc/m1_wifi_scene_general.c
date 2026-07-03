@@ -40,6 +40,7 @@
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
+#include "esp32_feature_map.h"
 
 /*==========================================================================*/
 /* Blocking delegate macro                                                  */
@@ -48,6 +49,17 @@
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
+/* Capability-gated blocking delegate — shows a "not supported" screen and
+ * pops immediately when the required ESP32 capability is absent.  See
+ * esp32_feature_map.c for the required-capability table. */
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* General delegates                                                        */
@@ -77,9 +89,9 @@ static void gen_join_on_enter(M1SceneApp *app) {
 #endif
     m1_scene_pop(app);
 }
-DELEGATE(gen_set_macs,    wifi_general_set_macs)
-DELEGATE(gen_set_chan,     wifi_general_set_channel)
-DELEGATE(gen_shutdown,    wifi_general_shutdown_wifi)
+DELEGATE_FEATURE(gen_set_macs,    wifi_general_set_macs,       ESP32_FEATURE_WIFI_SET_MAC)
+DELEGATE_FEATURE(gen_set_chan,    wifi_general_set_channel,    ESP32_FEATURE_WIFI_SET_CHAN)
+DELEGATE_FEATURE(gen_shutdown,   wifi_general_shutdown_wifi,  ESP32_FEATURE_WIFI_DISCONNECT)
 DELEGATE(gen_ep_ssid,     wifi_general_set_ep_ssid)
 DELEGATE(gen_ep_html,     wifi_general_select_ep_html)
 
