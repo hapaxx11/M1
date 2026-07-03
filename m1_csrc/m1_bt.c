@@ -157,7 +157,7 @@ static bool ble_spam_at_cmd(uint8_t mode)
     snprintf(at_cmd, sizeof(at_cmd), "AT+M1BLESPAM=%u\r\n", mode);
     (void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp),
                            BLE_SPAM_AT_TIMEOUT);
-    return (strstr(at_resp, "OK") != NULL);
+    return (strncmp(at_resp, "OK\r\n", 4) == 0 || strstr(at_resp, "\r\nOK\r\n") != NULL);
 }
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
@@ -2058,7 +2058,8 @@ static const uint8_t ble_spam_mode_at[BLE_SPAM_MODE_COUNT] = {
 
 /**
  * @brief  Binary SPI spam loop for a single mode category.
- *         Sends the matching payload set at ~100 ms intervals.
+ *         Waits ~100 ms per UI loop iteration; may send multiple packets per iteration
+ *         (e.g. "All" mode sends a whole payload set back-to-back).
  *         Returns when BACK is pressed.
  */
 static void ble_spam_spi_mode(uint8_t mode_idx)
