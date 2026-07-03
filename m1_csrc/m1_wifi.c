@@ -5052,7 +5052,7 @@ void wifi_attack_ap_clone(void)
 			wifi_wait_dismiss();
 			return;
 		}
-		beacon_run_loop("AP CLONE", clone_ssids, cloned, 1, false, true);
+		beacon_run_loop("AP CLONE", clone_ssids, 1, 1, false, true);
 	}
 	else
 	{
