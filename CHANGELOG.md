@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.13] - 2026-07-03
+
+### Fixed
+
+- **WiFi/Bluetooth: comprehensive ESP32 capability-gating audit for dag T-800 firmware** — Following
+  the Station Scan "start failed" fix, audited every remaining ESP32-dependent scene delegate for
+  proper capability gating. Added `DELEGATE_FEATURE` gating (matching the existing Bad-BT/BLE-HID
+  pattern) to: WiFi Sniffers (All/Beacon/Probe/Deauth/EAPOL/Pwnagotchi/SAE), MAC Track, Signal
+  Monitor (`ESP32_FEATURE_PKTMON`); 802.15.4 Zigbee/Thread scan (`ESP32_FEATURE_802154`); Net Scan
+  Ping/ARP/SSH/Telnet/Port (`ESP32_FEATURE_NETSCAN`); Bluetooth BLE Scan, BLE Advertise
+  (`ESP32_FEATURE_BLE_SCAN`/`ESP32_FEATURE_BLE_ADV`); and BLE Sniffers Analyzer/Generic/Flipper/
+  AirTag (`ESP32_FEATURE_BLE_SCAN`). Features that already implement a dual AT/binary-SPI dispatch
+  path (deauth, beacon, karma, evil portal, probe flood, AP clone, rickroll, PMKID grab, Networks/
+  Survey/Wardrive AP scan, all BLE Spam variants) and pure local placeholder stubs (AirTag Monitor,
+  BLE Wardrive, BLE Detectors, AirTag Spoof, BT Config) were confirmed correct and left unchanged.
+- **WiFi: Station Scan / Station Wardrive "Start failed" on dag T-800 firmware** — Station Scan
+  and Station Wardrive called the binary-SPI-only `CMD_STA_SCAN_START` command with no ESP32
+  capability check. dag T-800 AT firmware never sets `M1_ESP32_CAP_STA_SCAN` (it implements
+  neither the SiN360 binary command nor neddy299's `AT+STASCAN`), so the scan silently failed to
+  start. Both delegates now use the capability-gated `DELEGATE_FEATURE` wrapper and show the
+  standard "not supported" screen instead of failing silently.
 ## [0.9.2.12] - 2026-07-03
 
 ### Changed
