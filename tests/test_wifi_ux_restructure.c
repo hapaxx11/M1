@@ -328,14 +328,26 @@ void test_ap_clone_has_at_fallback(void)
     char *c = read_file("m1_csrc/m1_wifi.c");
     TEST_ASSERT_NOT_NULL(c);
 
-    /* wifi_attack_ap_clone() must check m1_esp32_has_cap for AT path */
-    /* It uses AT+M1BEACON for single-SSID clone on AT firmware */
-    const char *fn_start = strstr(c, "wifi_attack_ap_clone(");
+    /* Scope the search to wifi_attack_ap_clone() so later AT+M1BEACON uses
+     * (e.g. Rickroll) can't produce a false-positive. */
+    const char *fn_start = strstr(c, "void wifi_attack_ap_clone(");
     TEST_ASSERT_NOT_NULL_MESSAGE(fn_start,
         "wifi_attack_ap_clone() must exist (#626-7)");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn_start, "AT+M1BEACON="),
+
+    const char *fn_end = strstr(fn_start, "void wifi_attack_rickroll(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn_end,
+        "wifi_attack_ap_clone() end marker not found");
+
+    size_t slice_len = (size_t)(fn_end - fn_start);
+    char *slice = (char *)malloc(slice_len + 1);
+    TEST_ASSERT_NOT_NULL(slice);
+    memcpy(slice, fn_start, slice_len);
+    slice[slice_len] = '\0';
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(slice, "AT+M1BEACON="),
         "AP clone must use AT+M1BEACON for AT firmware (#626-7)");
 
+    free(slice);
     free(c);
 }
 
