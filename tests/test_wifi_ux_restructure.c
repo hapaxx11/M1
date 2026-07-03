@@ -228,7 +228,7 @@ void test_message_box_choice_uses_rounded_corners(void)
     char *c = read_file("m1_csrc/m1_display.c");
     TEST_ASSERT_NOT_NULL(c);
 
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "u8g2_DrawRBox(&m1_u8g2, btn_x - 2"),
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "u8g2_DrawRBox(&m1_u8g2, box_x"),
         "m1_message_box_choice must use DrawRBox for button highlight (#626-5)");
 
     /* Must NOT use DrawBox for the button highlight */
