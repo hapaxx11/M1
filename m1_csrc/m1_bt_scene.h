@@ -11,7 +11,7 @@
  *                           (Scan, Advertise, Config)
  *   m1_bt_scene_sniff.c   — BLE Sniffers sub-menu + 6 sniffer delegates
  *                           + 3 Wardrive delegates
- *   m1_bt_scene_spam.c    — BLE Spam sub-menu + 8 spam/spoof delegates
+ *   m1_bt_scene_spam.c    — BLE Spam sub-menu + 9 spam/spoof delegates
  *                           + Detectors sub-menu + 3 detect delegates
  *   m1_bt_scene_badbt.c   — Bad-BT (BLE HID), BT Name, GATT Discovery,
  *                           Saved Devices, BT Info delegates
@@ -52,6 +52,7 @@ typedef enum {
 
     /* Spam sub-menu */
     BtSceneSpamMenu,
+    BtSceneSpamUnified,
     BtSceneSpamSourApple,
     BtSceneSpamSwiftpair,
     BtSceneSpamSamsung,
@@ -104,6 +105,7 @@ extern const M1SceneHandlers bt_scene_wardrive_flock_handlers;
 
 /* m1_bt_scene_spam.c */
 extern const M1SceneHandlers bt_scene_spam_menu_handlers;
+extern const M1SceneHandlers bt_scene_spam_unified_handlers;
 extern const M1SceneHandlers bt_scene_spam_sour_apple_handlers;
 extern const M1SceneHandlers bt_scene_spam_swiftpair_handlers;
 extern const M1SceneHandlers bt_scene_spam_samsung_handlers;

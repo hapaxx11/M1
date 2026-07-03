@@ -41,6 +41,7 @@ static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
     [BtSceneWardriveFlock]  = &bt_scene_wardrive_flock_handlers,
 
     [BtSceneSpamMenu]       = &bt_scene_spam_menu_handlers,
+    [BtSceneSpamUnified]    = &bt_scene_spam_unified_handlers,
     [BtSceneSpamSourApple]  = &bt_scene_spam_sour_apple_handlers,
     [BtSceneSpamSwiftpair]  = &bt_scene_spam_swiftpair_handlers,
     [BtSceneSpamSamsung]    = &bt_scene_spam_samsung_handlers,
