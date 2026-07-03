@@ -7,6 +7,7 @@
  *
  * Scenes covered:
  *   BtSceneSpamMenu       — BLE Spam sub-menu (8 items)
+ *   BtSceneSpamUnified    — Unified BLE Spam (mode picker + AT/binary SPI)
  *   BtSceneSpamSourApple  — Sour Apple spam delegate
  *   BtSceneSpamSwiftpair  — SwiftPair spam delegate
  *   BtSceneSpamSamsung    — Samsung spam delegate
@@ -53,6 +54,7 @@ DELEGATE(spam_samsung,    ble_spam_samsung)
 DELEGATE(spam_google_fp,  ble_spam_google_fastpair)
 DELEGATE(spam_flipper,    ble_spam_flipper)
 DELEGATE(spam_all,        ble_spam_all)
+DELEGATE(spam_unified,    bluetooth_ble_spam)
 DELEGATE(spoof_airtag,    ble_spoof_airtag)
 
 const M1SceneHandlers bt_scene_spam_sour_apple_handlers = { .on_enter = spam_sour_apple_on_enter };
@@ -61,6 +63,7 @@ const M1SceneHandlers bt_scene_spam_samsung_handlers    = { .on_enter = spam_sam
 const M1SceneHandlers bt_scene_spam_google_fp_handlers  = { .on_enter = spam_google_fp_on_enter  };
 const M1SceneHandlers bt_scene_spam_flipper_handlers    = { .on_enter = spam_flipper_on_enter    };
 const M1SceneHandlers bt_scene_spam_all_handlers        = { .on_enter = spam_all_on_enter        };
+const M1SceneHandlers bt_scene_spam_unified_handlers    = { .on_enter = spam_unified_on_enter    };
 const M1SceneHandlers bt_scene_spoof_airtag_handlers    = { .on_enter = spoof_airtag_on_enter    };
 
 /*==========================================================================*/
@@ -79,14 +82,15 @@ const M1SceneHandlers bt_scene_detect_meta_handlers     = { .on_enter = detect_m
 /* BLE Spam sub-menu                                                        */
 /*==========================================================================*/
 
-#define SPAM_ITEM_COUNT  7
+#define SPAM_ITEM_COUNT  8
 
 static const char *const spam_labels[SPAM_ITEM_COUNT] = {
-    "Sour Apple", "SwiftPair", "Samsung",
+    "BLE Spam", "Sour Apple", "SwiftPair", "Samsung",
     "Google FP", "Flipper", "All", "AirTag Spoof",
 };
 
 static const uint8_t spam_targets[SPAM_ITEM_COUNT] = {
+    BtSceneSpamUnified,
     BtSceneSpamSourApple, BtSceneSpamSwiftpair, BtSceneSpamSamsung,
     BtSceneSpamGoogleFP, BtSceneSpamFlipper, BtSceneSpamAll, BtSceneSpoofAirtag,
 };

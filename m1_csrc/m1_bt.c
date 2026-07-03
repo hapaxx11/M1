@@ -36,6 +36,7 @@
 
 #define BLE_SCAN_TIMEOUT_MS     8000
 #define BLE_CMD_TIMEOUT_MS      2000
+#define BLE_SPAM_AT_TIMEOUT     5       /* seconds — AT+M1BLESPAM response */
 #define BLE_NEXT_TIMEOUT_MS     1000
 #define BLE_GATT_TIMEOUT_MS     22000
 
@@ -118,6 +119,46 @@ void ble_gatt_discovery(void);
 
 static void ble_list_free(void);
 static uint16_t ble_list_print(bool up_dir);
+
+/* AT command transport — provided by esp_app_main.c (RTOS SPI-AT task) */
+extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
+                                int out_buf_size, int timeout_sec);
+
+/*============================================================================*/
+/* AT+M1BLESPAM mode constants (dag T-800 ESP32 firmware)                    */
+/*                                                                           */
+/* mode bitmask:  1 = Apple, 2 = Google, 4 = Microsoft, 7 = All, 0 = Stop   */
+/*============================================================================*/
+#define BLE_SPAM_AT_APPLE       1U
+#define BLE_SPAM_AT_GOOGLE      2U
+#define BLE_SPAM_AT_MICROSOFT   4U
+#define BLE_SPAM_AT_ALL         7U
+#define BLE_SPAM_AT_STOP        0U
+
+/**
+ * @brief  True when the ESP32 speaks AT text commands (dag T-800 firmware).
+ *         When false, the binary SPI protocol (SiN360) is in use.
+ */
+static inline bool ble_use_at_path(void)
+{
+    return m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+}
+
+/**
+ * @brief  Send AT+M1BLESPAM=<mode> to start/stop autonomous BLE spam on
+ *         the ESP32.  The ESP32 runs the spam task internally — STM32 only
+ *         sends start and stop commands.
+ * @return true on success (response contains "OK"), false otherwise.
+ */
+static bool ble_spam_at_cmd(uint8_t mode)
+{
+    char at_cmd[32];
+    char at_resp[64];
+    snprintf(at_cmd, sizeof(at_cmd), "AT+M1BLESPAM=%u\r\n", mode);
+    (void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp),
+                           BLE_SPAM_AT_TIMEOUT);
+    return (strstr(at_resp, "OK") != NULL);
+}
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -1607,6 +1648,82 @@ void bluetooth_advertise(void)
 
 
 /*============================================================================*/
+/*  AT spam running loop — ESP32 runs autonomously, STM32 shows status       */
+/*============================================================================*/
+
+/**
+ * @brief  Show a running screen while the ESP32 runs BLE spam autonomously
+ *         via AT+M1BLESPAM.  BACK button sends AT+M1BLESPAM=0 to stop.
+ * @param  title  Screen title (e.g. "BLE SPAM" or "SOUR APPLE")
+ * @param  mode_name  Mode description (e.g. "All", "Apple", etc.)
+ */
+static void ble_spam_at_run(const char *title, const char *mode_name)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    char ln[26];
+    uint32_t start_tick = HAL_GetTick();
+
+    while (1)
+    {
+        uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
+
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        uint8_t y = 22;
+
+        u8g2_DrawStr(&m1_u8g2, 2, y, "Spam active (ESP32)"); y += 9;
+
+        snprintf(ln, sizeof(ln), "Mode: %s", mode_name);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(200));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                ble_spam_at_cmd(BLE_SPAM_AT_STOP);
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * @brief  Start AT-based spam with a given mode, show running screen,
+ *         and stop on BACK.
+ * @param  title       Screen title
+ * @param  mode_name   Human-readable mode name
+ * @param  at_mode     AT mode bitmask (1=Apple, 2=Google, 4=Microsoft, 7=All)
+ */
+static void ble_spam_at_delegate(const char *title, const char *mode_name,
+                                 uint8_t at_mode)
+{
+    ble_ensure_esp32_ready();
+
+    if (!ble_spam_at_cmd(at_mode))
+    {
+        ble_show_pending(title, "AT+M1BLESPAM failed", "Check ESP32 firmware");
+        return;
+    }
+
+    ble_spam_at_run(title, mode_name);
+}
+
+
+/*============================================================================*/
 /*  BLE raw adv helper — send raw bytes, show running screen, cycle payloads */
 /*============================================================================*/
 
@@ -1695,6 +1812,11 @@ static const uint8_t sour_apple_lens[] = { 20, 20, 20, 20 };
 
 void ble_spam_sour_apple(void)
 {
+    if (ble_use_at_path())
+    {
+        ble_spam_at_delegate("SOUR APPLE", "Apple", BLE_SPAM_AT_APPLE);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("SOUR APPLE",
         sour_apple_payloads, sour_apple_lens, 4);
@@ -1719,6 +1841,11 @@ static const uint8_t swiftpair_lens[] = { 14, 14, 14, 14 };
 
 void ble_spam_swiftpair(void)
 {
+    if (ble_use_at_path())
+    {
+        ble_spam_at_delegate("SWIFTPAIR", "Microsoft", BLE_SPAM_AT_MICROSOFT);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("SWIFTPAIR",
         swiftpair_payloads, swiftpair_lens, 4);
@@ -1747,6 +1874,13 @@ static const uint8_t samsung_lens[] = { 31, 31, 31, 31 };
 
 void ble_spam_samsung(void)
 {
+    if (ble_use_at_path())
+    {
+        /* dag T-800 AT spam does not have a Samsung-specific mode;
+         * fall through to binary SPI if SiN360, or use All for AT */
+        ble_spam_at_delegate("SAMSUNG BLE", "All", BLE_SPAM_AT_ALL);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("SAMSUNG BLE",
         samsung_payloads, samsung_lens, 4);
@@ -1775,6 +1909,11 @@ static const uint8_t google_fastpair_lens[] = { 14, 14, 14, 14, 14, 14 };
 
 void ble_spam_google_fastpair(void)
 {
+    if (ble_use_at_path())
+    {
+        ble_spam_at_delegate("GOOGLE FP", "Google", BLE_SPAM_AT_GOOGLE);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("GOOGLE FP",
         google_fastpair_payloads, google_fastpair_lens, 6);
@@ -1798,6 +1937,12 @@ static const uint8_t flipper_lens[] = { 17, 16, 16, 12 };
 
 void ble_spam_flipper(void)
 {
+    if (ble_use_at_path())
+    {
+        /* No Flipper-specific AT mode; fall back to All */
+        ble_spam_at_delegate("FLIPPER BLE", "All", BLE_SPAM_AT_ALL);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("FLIPPER BLE",
         flipper_payloads, flipper_lens, 4);
@@ -1810,6 +1955,12 @@ void ble_spam_flipper(void)
 
 void ble_spam_all(void)
 {
+    if (ble_use_at_path())
+    {
+        ble_spam_at_delegate("BLE SPAM ALL", "All", BLE_SPAM_AT_ALL);
+        return;
+    }
+
     S_M1_Buttons_Status btn;
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
@@ -1886,6 +2037,184 @@ void ble_spam_all(void)
                 xQueueReset(main_q_hdl);
                 break;
             }
+        }
+    }
+}
+
+
+/*============================================================================*/
+/*  Unified BLE Spam — dag-style mode picker with AT / binary SPI dispatch   */
+/*============================================================================*/
+
+/* Mode table: label, AT bitmask.
+ * For binary SPI, mode index maps to the same payload sets as ble_spam_all(). */
+#define BLE_SPAM_MODE_COUNT  4
+static const char *const ble_spam_mode_labels[BLE_SPAM_MODE_COUNT] = {
+    "All", "Apple", "Google", "Microsoft",
+};
+static const uint8_t ble_spam_mode_at[BLE_SPAM_MODE_COUNT] = {
+    BLE_SPAM_AT_ALL, BLE_SPAM_AT_APPLE, BLE_SPAM_AT_GOOGLE, BLE_SPAM_AT_MICROSOFT,
+};
+
+/**
+ * @brief  Binary SPI spam loop for a single mode category.
+ *         Sends the matching payload set at ~100 ms intervals.
+ *         Returns when BACK is pressed.
+ */
+static void ble_spam_spi_mode(uint8_t mode_idx)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    m1_resp_t resp;
+    char ln[26];
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t pkt_count = 0;
+    uint8_t type_idx = 0;
+    uint8_t idx = 0;
+
+    while (1)
+    {
+        /* Select payload set based on mode */
+        const uint8_t (*payloads)[31] = NULL;
+        const uint8_t *lengths = NULL;
+        uint8_t count = 0;
+
+        if (mode_idx == 0) /* All — cycle through types */
+        {
+            switch (type_idx)
+            {
+            case 0: payloads = sour_apple_payloads;     lengths = sour_apple_lens;     count = 4; break;
+            case 1: payloads = swiftpair_payloads;      lengths = swiftpair_lens;       count = 4; break;
+            case 2: payloads = samsung_payloads;         lengths = samsung_lens;         count = 4; break;
+            case 3: payloads = flipper_payloads;         lengths = flipper_lens;         count = 4; break;
+            case 4: payloads = google_fastpair_payloads; lengths = google_fastpair_lens; count = 6; break;
+            }
+            for (uint8_t i = 0; i < count; i++)
+                ble_raw_adv_send(payloads[i], lengths[i]);
+            pkt_count += count;
+            type_idx = (type_idx + 1) % 5;
+        }
+        else if (mode_idx == 1) /* Apple */
+        {
+            ble_raw_adv_send(sour_apple_payloads[idx % 4], sour_apple_lens[idx % 4]);
+            idx = (idx + 1) % 4;
+            pkt_count++;
+        }
+        else if (mode_idx == 2) /* Google */
+        {
+            ble_raw_adv_send(google_fastpair_payloads[idx % 6], google_fastpair_lens[idx % 6]);
+            idx = (idx + 1) % 6;
+            pkt_count++;
+        }
+        else /* Microsoft */
+        {
+            ble_raw_adv_send(swiftpair_payloads[idx % 4], swiftpair_lens[idx % 4]);
+            idx = (idx + 1) % 4;
+            pkt_count++;
+        }
+
+        uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000;
+
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, "BLE SPAM");
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+        uint8_t y = 22;
+
+        snprintf(ln, sizeof(ln), "Mode: %s", ble_spam_mode_labels[mode_idx]);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        snprintf(ln, sizeof(ln), "Packets: %lu", pkt_count);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
+
+        snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+        u8g2_DrawStr(&m1_u8g2, 2, y, ln);
+
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(100));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                m1_esp32_simple_cmd(CMD_BLE_ADV_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+}
+
+void bluetooth_ble_spam(void)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    uint8_t sel = 0;
+    bool use_at = ble_use_at_path();
+
+    ble_ensure_esp32_ready();
+
+    /* Mode picker — UP/DOWN to select, OK to start, BACK to exit */
+    while (1)
+    {
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, "BLE SPAM");
+        u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+
+        u8g2_SetFont(&m1_u8g2, m1_menu_font());
+        uint8_t rh = m1_menu_item_h();
+
+        for (uint8_t i = 0; i < BLE_SPAM_MODE_COUNT; i++)
+        {
+            uint8_t y = M1_MENU_AREA_TOP + i * rh;
+            if (i == sel)
+            {
+                u8g2_SetDrawColor(&m1_u8g2, 1);
+                u8g2_DrawRBox(&m1_u8g2, 0, y, M1_MENU_TEXT_W, rh, 2);
+                u8g2_SetDrawColor(&m1_u8g2, 0);
+            }
+            u8g2_DrawStr(&m1_u8g2, 4, y + rh - 1, ble_spam_mode_labels[i]);
+            u8g2_SetDrawColor(&m1_u8g2, 1);
+        }
+
+        m1_u8g2_nextpage();
+
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD)
+            continue;
+        xQueueReceive(button_events_q_hdl, &btn, 0);
+
+        if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            xQueueReset(main_q_hdl);
+            break;
+        }
+        if (btn.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK && sel > 0)
+            sel--;
+        if (btn.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK &&
+            sel < BLE_SPAM_MODE_COUNT - 1)
+            sel++;
+        if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            if (use_at)
+            {
+                if (ble_spam_at_cmd(ble_spam_mode_at[sel]))
+                    ble_spam_at_run("BLE SPAM", ble_spam_mode_labels[sel]);
+                else
+                    ble_show_pending("BLE SPAM", "AT+M1BLESPAM failed",
+                                     "Check ESP32 firmware");
+            }
+            else
+            {
+                ble_spam_spi_mode(sel);
+            }
+            /* After returning from spam, redraw the picker */
         }
     }
 }

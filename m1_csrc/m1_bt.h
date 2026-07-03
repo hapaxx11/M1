@@ -39,6 +39,7 @@ void ble_spam_samsung(void);
 void ble_spam_google_fastpair(void);
 void ble_spam_flipper(void);
 void ble_spam_all(void);
+void bluetooth_ble_spam(void);
 void ble_spoof_airtag(void);
 void ble_gatt_discovery(void);
 
