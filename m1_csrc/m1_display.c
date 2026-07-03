@@ -750,6 +750,19 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
     uint8_t button_cnt = u8x8_GetStringLineCnt(buttons);
     if (button_cnt == 0) return 0;
 
+    /* Pre-extract button labels into NUL-terminated copies so
+     * u8g2_GetStrWidth measures each label individually. */
+    char btn_labels[4][16];
+    if (button_cnt > 4) button_cnt = 4;
+    for (uint8_t i = 0; i < button_cnt; i++) {
+        const char *start = u8x8_GetStringLineStart(i, buttons);
+        uint8_t len = 0;
+        while (start[len] != '\0' && start[len] != '\n' && len < 15)
+            len++;
+        memcpy(btn_labels[i], start, len);
+        btn_labels[i][len] = '\0';
+    }
+
     for (;;) {
         m1_u8g2_firstpage();
         do {
@@ -757,21 +770,40 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
             uint8_t line_height = u8g2_GetAscent(&m1_u8g2) - u8g2_GetDescent(&m1_u8g2);
             uint8_t y = 15;
 
-            if (title1) { u8g2_DrawStr(&m1_u8g2, 2, y, title1); y += line_height; }
-            if (title2) { u8g2_DrawStr(&m1_u8g2, 2, y, title2); y += line_height; }
-            if (title3) { u8g2_DrawStr(&m1_u8g2, 2, y, title3); y += line_height; }
+            /* Truncate title lines to display width (21 chars at 6px) */
+            char trunc[22];
+            if (title1) {
+                strncpy(trunc, title1, 21); trunc[21] = '\0';
+                u8g2_DrawStr(&m1_u8g2, 2, y, trunc); y += line_height;
+            }
+            if (title2) {
+                strncpy(trunc, title2, 21); trunc[21] = '\0';
+                u8g2_DrawStr(&m1_u8g2, 2, y, trunc); y += line_height;
+            }
+            if (title3) {
+                strncpy(trunc, title3, 21); trunc[21] = '\0';
+                u8g2_DrawStr(&m1_u8g2, 2, y, trunc); y += line_height;
+            }
 
-            /* Draw buttons at the bottom */
+            /* Draw buttons at the bottom with rounded corners */
             for (uint8_t i = 0; i < button_cnt; i++) {
-                const char *btn_text = u8x8_GetStringLineStart(i, buttons);
-                uint8_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_text) + 4;
-                uint8_t btn_x = (128 / (button_cnt + 1)) * (i + 1) - (btn_w / 2);
+                u8g2_uint_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_labels[i]) + 6u;
+                int16_t btn_x_i = (int16_t)((128u / (button_cnt + 1u)) * (i + 1u)) - (int16_t)(btn_w / 2u);
+                int16_t max_x = (btn_w < 128u) ? (int16_t)(128u - btn_w) : 0;
+
+                if (btn_x_i < 0)
+                    btn_x_i = 0;
+                else if (btn_x_i > max_x)
+                    btn_x_i = max_x;
+
+                u8g2_uint_t btn_x = (u8g2_uint_t)btn_x_i;
+                u8g2_uint_t box_x = (btn_x >= 2u) ? (btn_x - 2u) : 0u;
 
                 if (i == cursor) {
-                    u8g2_DrawBox(&m1_u8g2, btn_x - 2, 50, btn_w, 12);
+                    u8g2_DrawRBox(&m1_u8g2, box_x, 50, btn_w, 12, 2);
                     u8g2_SetDrawColor(&m1_u8g2, 0);
                 }
-                u8g2_DrawStr(&m1_u8g2, btn_x, 60, btn_text);
+                u8g2_DrawStr(&m1_u8g2, btn_x, 60, btn_labels[i]);
                 u8g2_SetDrawColor(&m1_u8g2, 1);
             }
         } while (m1_u8g2_nextpage());

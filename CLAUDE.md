@@ -1906,6 +1906,22 @@ All M1 scene UI must follow the **Momentum / Flipper-inspired visual standard**:
 - Draw a button only for **populated slots** — if both icon and text are NULL for a
   slot, leave that column empty (no empty box).
 
+#### Dialog boxes (`m1_message_box_choice`)
+
+- **Always use `u8g2_DrawRBox` (rounded corners, r=2)** for dialog button
+  highlights.  Never use `u8g2_DrawBox` — square-corner buttons violate the
+  Hapax UI standard.
+- **Button label text must fit the allocated button width.**  Measure with
+  `u8g2_GetStrWidth` and truncate or abbreviate if necessary.  Common
+  abbreviations: "Disconnect" → "Discon.", "Configure" → "Config".
+- **Title lines must not exceed 21 characters** at `u8g2_font_6x10_tr`
+  (128px ÷ 6px/char ≈ 21).  Truncate or reword titles that would overflow
+  the display width.
+- **Each button label must be NUL-terminated individually** when measuring
+  width.  The `\n`-delimited `buttons` string must be split before calling
+  `u8g2_GetStrWidth` — passing the raw substring (which continues past `\n`
+  to the next label) measures the wrong width.
+
 #### Scene header / status bars
 
 - **Black text on white background** — scene title headers and status bars (including
