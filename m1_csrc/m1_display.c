@@ -787,11 +787,20 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
 
             /* Draw buttons at the bottom with rounded corners */
             for (uint8_t i = 0; i < button_cnt; i++) {
-                uint8_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_labels[i]) + 6;
-                uint8_t btn_x = (128 / (button_cnt + 1)) * (i + 1) - (btn_w / 2);
+                u8g2_uint_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_labels[i]) + 6u;
+                int16_t btn_x_i = (int16_t)((128u / (button_cnt + 1u)) * (i + 1u)) - (int16_t)(btn_w / 2u);
+                int16_t max_x = (btn_w < 128u) ? (int16_t)(128u - btn_w) : 0;
+
+                if (btn_x_i < 0)
+                    btn_x_i = 0;
+                else if (btn_x_i > max_x)
+                    btn_x_i = max_x;
+
+                u8g2_uint_t btn_x = (u8g2_uint_t)btn_x_i;
+                u8g2_uint_t box_x = (btn_x >= 2u) ? (btn_x - 2u) : 0u;
 
                 if (i == cursor) {
-                    u8g2_DrawRBox(&m1_u8g2, btn_x - 2, 50, btn_w, 12, 2);
+                    u8g2_DrawRBox(&m1_u8g2, box_x, 50, btn_w, 12, 2);
                     u8g2_SetDrawColor(&m1_u8g2, 0);
                 }
                 u8g2_DrawStr(&m1_u8g2, btn_x, 60, btn_labels[i]);
