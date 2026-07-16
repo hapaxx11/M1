@@ -48,8 +48,8 @@ than **1.0.0.0**.  Until that milestone is reached, the following weighting appl
 | HAL / driver patterns (SPI, UART, GPIO, power) | **Flipper / forks** (consult `documentation/furi_hal_reference/`) | The Furi HAL is a proven abstraction for the same peripherals M1 uses. |
 | Build system, CMake structure, FreeRTOS integration | **Monstatek/M1** | M1's build system is already established and functional. |
 | Flash layout, boot bank, CRC metadata | **Monstatek/M1** | Hardware-specific; Monstatek's implementation is validated on real M1 boards. |
-| UI framework, display rendering, keypad handling | **Monstatek/M1** (low-level) / **Flipper** (scene UX) | M1's UIView framework differs from Flipper's ViewPort model, so display rendering and keypad mapping remain Monstatek. However, **scene-level UX patterns** (saved-item action menus, verb sets, navigation flow) follow the Flipper `*_scene_saved_menu.c` pattern. See the `ui-scene-architecture` skill ("Saved Item Actions Pattern"). |
-| Scrollable list / menu text size | **Hapax** | Hapax has a user-configurable text size setting (`m1_menu_style`). All scrollable lists **must** use `m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, and `M1_MENU_VIS()` instead of hardcoding fonts, row heights, or visible item counts. Neither Flipper nor upstream Monstatek have this feature — imported code must be adapted. See the `ui-scene-architecture` skill ("User-Configurable Font Size"). |
+| UI framework, display rendering, keypad handling | **Monstatek/M1** (low-level) / **Flipper** (scene UX) | M1's UIView framework differs from Flipper's ViewPort model, so display rendering and keypad mapping remain Monstatek. However, **scene-level UX patterns** (saved-item action menus, verb sets, navigation flow) follow the Flipper `*_scene_saved_menu.c` pattern. See the [`ui-scene-architecture`](../.github/skills/ui-scene-architecture/SKILL.md#saved-item-actions-pattern) skill ("Saved Item Actions Pattern"). |
+| Scrollable list / menu text size | **Hapax** | Hapax has a user-configurable text size setting (`m1_menu_style`). All scrollable lists **must** use `m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, and `M1_MENU_VIS()` instead of hardcoding fonts, row heights, or visible item counts. Neither Flipper nor upstream Monstatek have this feature — imported code must be adapted. See the [`ui-scene-architecture`](../.github/skills/ui-scene-architecture/SKILL.md#user-configurable-font-size--m1_menu_style) skill ("User-Configurable Font Size"). |
 
 ### Menu architecture import gate (mandatory)
 
@@ -1107,7 +1107,7 @@ When adding a new deviation, copy this row:
 - [ ] GPLv3 attribution comment added (if porting Flipper code)
 - [ ] `README_License.md` updated (if porting Flipper code)
 - [ ] Firmware builds without errors
-- [ ] Any scrollable list / menu UI uses Hapax font-aware helpers (`m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`) — see the `ui-scene-architecture` skill ("User-Configurable Font Size")
+- [ ] Any scrollable list / menu UI uses Hapax font-aware helpers (`m1_menu_font()`, `m1_menu_item_h()`, `m1_menu_max_visible()`, `M1_MENU_VIS()`) — see the [`ui-scene-architecture`](../.github/skills/ui-scene-architecture/SKILL.md#user-configurable-font-size--m1_menu_style) skill ("User-Configurable Font Size")
 - [ ] `.sub` file round-trip tested on hardware or in simulation
 
 ---
