@@ -98,7 +98,7 @@ when they conflict.
 
 **Core verbs** (required): Emulate/Send, Info, Rename, Delete.
 
-See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
+See the [`ui-scene-architecture`](.github/skills/ui-scene-architecture/SKILL.md) skill ("Saved Item Actions Pattern") for the full
 specification, optional verbs, implementation patterns per module, and rules
 for new modules.
 
@@ -144,7 +144,7 @@ this widget.
 use a callback function pointer (`SubGhzRawDecodeTryFn`-style).  The caller
 provides a thin adapter; the module never touches hardware directly.
 
-See [`CLAUDE.md`](CLAUDE.md) § "Preferred Modularization Pattern" for the full
+See the [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill ("Preferred Modularization Pattern") for the full
 specification and rules.
 
 ## Test Architecture
@@ -165,5 +165,5 @@ This pattern covers file parsers (`flipper_rfid.c`, `flipper_ir.c`,
 `lfrfid_manchester.c`), data conversion (`datatypes_utils.c`), and utility
 logic (`m1_fw_source.c` asset filtering, `m1_json_mini.c`).
 
-See [`CLAUDE.md`](CLAUDE.md) § "Preferred Unit Testing Pattern" for the full
+See the [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill ("Preferred Unit Testing Pattern") for the full
 specification with code examples and rules.
