@@ -92,7 +92,7 @@ preferences when they conflict.
 
 Required core verbs: **Emulate/Send**, **Info**, **Rename**, **Delete**.
 
-See [`CLAUDE.md`](CLAUDE.md) § "Saved Item Actions Pattern" for the full
+See the [`ui-scene-architecture`](.github/skills/ui-scene-architecture/SKILL.md) skill ("Saved Item Actions Pattern") for the full
 specification, optional verbs per module, and implementation examples.
 
 ## Button Model
@@ -366,7 +366,7 @@ python scripts/assemble_changelog.py              # assemble and delete fragment
 ```
 
 See [`.changelog/README.md`](.changelog/README.md) for the full reference
-and [`CLAUDE.md`](CLAUDE.md) § "CHANGELOG.md" for additional rules enforced
+and the [`docs-changelog`](.github/skills/docs-changelog/SKILL.md) skill ("CHANGELOG.md") for additional rules enforced
 by AI agents.
 
 ## Branch Naming and Commit Messages
@@ -426,7 +426,7 @@ standalone `.c`/`.h` module**.  Use callback function pointers to decouple from
 hardware when the logic needs to invoke hardware-side operations.  This makes the
 logic independently testable and easier to maintain.
 
-See `CLAUDE.md` § "Preferred Modularization Pattern" for the full specification
+See the [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill ("Preferred Modularization Pattern") for the full specification
 with examples.
 
 ### Preferred Unit Testing Pattern
@@ -452,7 +452,7 @@ encode/decode, bit manipulation, string matching, filter logic.
 **What NOT to test on host:** AT command construction, GPIO manipulation, RTOS task
 orchestration, u8g2 rendering — these need hardware integration testing.
 
-See `CLAUDE.md` § "Preferred Unit Testing Pattern" for the full specification with
+See the [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill ("Preferred Unit Testing Pattern") for the full specification with
 code examples.
 
 ### CI Path Filter — Mandatory Rule

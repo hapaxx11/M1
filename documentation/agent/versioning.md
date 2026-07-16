@@ -16,11 +16,11 @@
 - **RPC protocol**: `hapax_revision` is sent as a separate byte in `S_RPC_DeviceInfo`. qMonstatek conditionally appends the `-Hapax.X` suffix only when `hapax_revision > 0`, so stock Monstatek firmware displays without it.
 
 For Flipper protocol import procedures (Sub-GHz, LF-RFID, NFC, IR), see
-[`documentation/flipper_import_agent.md`](documentation/flipper_import_agent.md).
+[`documentation/flipper_import_agent.md`](../flipper_import_agent.md).
 
 For hardware capability assessment (which silicon is present, which features official firmware
 does not expose), see
-[`documentation/hardware_schematics.md`](documentation/hardware_schematics.md).
+[`documentation/hardware_schematics.md`](../hardware_schematics.md).
 Consult this file *secondarily* — source code and build config are primary truth.
 
 ---

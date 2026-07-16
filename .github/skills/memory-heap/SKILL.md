@@ -48,7 +48,7 @@ via linker `--wrap` flags (see `cmake/gcc-arm-none-eabi.cmake` and
 | 2 | Linker `--wrap` flags (all 8) | `cmake/gcc-arm-none-eabi.cmake` | `--wrap=malloc,free,calloc,realloc` **and** `--wrap=_malloc_r,_free_r,_calloc_r,_realloc_r` |
 | 3 | `memmgr.c` linked into firmware | `cmake/m1_01/CMakeLists.txt` | `../../Core/Src/memmgr.c` present in `target_sources` |
 | 4 | `sysmem.c` (newlib `_sbrk` heap) **excluded** | `cmake/m1_01/CMakeLists.txt` | `sysmem.c` is **NOT** referenced anywhere under `cmake/` |
-| 5 | `pvPortRealloc()` (M1 local mod) | `Middlewares/FreeRTOS/.../heap_4.c` + `include/portable.h` | Implementation + declaration both present (see Local Modification Registry) |
+| 5 | `pvPortRealloc()` (M1 local mod) | `Middlewares/FreeRTOS/.../heap_4.c` + `include/portable.h` | Implementation + declaration both present (see Local Modification Registry in the `vendored-deps` skill) |
 | 6 | `pvPortCalloc()` | `Middlewares/FreeRTOS/.../heap_4.c` + `portable.h` | Present (native to FreeRTOS ≥ V11; restore if a future kernel drops it) |
 | 7 | `configTOTAL_HEAP_SIZE` unchanged | `Core/Inc/FreeRTOSConfig.h` | `262144` (256 KB) — do not shrink |
 | 8 | `test_memmgr` green | `tests/test_memmgr.c` | `ctest -R memmgr` passes |

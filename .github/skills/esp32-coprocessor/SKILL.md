@@ -22,7 +22,7 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - Pre-built binaries available on the GitHub Releases pages of each repo
 - Enables: Bad-BT / BLE HID, 802.15.4 (Zigbee/Thread)
 - Does NOT support (current firmware): WiFi sniffing, BLE wardrive, deauth attacks, evil portal, network scanners, WiFi connect/NTP sync (binary SPI; AT implementations pending), BT device management (binary SPI)
-- See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for the full reference
+- See [`documentation/esp32_firmware.md`](../../../documentation/esp32_firmware.md) for the full reference
 
 #### Binary SPI firmware (recommended — sincere360 / SiN360)
 - **Source repo**: [`sincere360/M1_SiN360_ESP32`](https://github.com/sincere360/M1_SiN360_ESP32) (NimBLE binary SPI slave)

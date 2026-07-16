@@ -246,7 +246,7 @@ with open('build/factory/factory_ESP32C6-SPI.md5', 'wb') as f:
     f.write(md5.encode('ascii'))
 ```
 
-See `CLAUDE.md` § "ESP32 Build — How to Build from Claude Code" for the
+See the [`esp32-coprocessor`](../.github/skills/esp32-coprocessor/SKILL.md) skill ("ESP32 Build — How to Build from Claude Code") for the
 Windows/PowerShell build procedure.
 
 ---
@@ -493,5 +493,5 @@ analysis of the known Hapax-fork ESP32 firmware releases.
 These values are accessible at runtime via `m1_esp32_caps_bss_bytes()` and
 `m1_esp32_caps_free_heap()` and are intended for developer diagnostics (OOM
 triage, buffer sizing decisions) — not user-visible display.  See
-`CLAUDE.md` § "Memory Footprint Estimates" for guidance on updating them
+the [`esp32-coprocessor`](../.github/skills/esp32-coprocessor/SKILL.md) skill ("Memory Footprint Estimates") for guidance on updating them
 when new firmware releases are analysed.

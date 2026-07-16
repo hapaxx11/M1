@@ -120,11 +120,11 @@ to build.**
 - Update build commands, environment requirements, or workflow rules if they change.
 - Keep this in sync with the canonical `CLAUDE.md` build instructions.
 
-### CLAUDE.md Font Inventory — update when fonts change
+### Font Inventory — update when fonts change
 
 - When adding, removing, or changing any font in `m1_display.h` macros or the
   `m1_app_api.c` font table, update the **Font Inventory** table in the
-  Architecture Rules section of this file.
-- See the **Font Maintenance Rules** subsection for the full checklist.
+  [`ui-scene-architecture`](../ui-scene-architecture/SKILL.md) skill.
+- See the **Font Maintenance Rules** subsection there for the full checklist.
 
 ---

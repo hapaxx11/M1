@@ -28,8 +28,8 @@ each modification is still present.  If a modification was lost, re-apply it.
 
 > **FreeRTOS upgrades also endanger the rest of the #526 heap redirect, not just
 > `pvPortRealloc`.**  After any FreeRTOS / newlib / linker update, run the full
-> **Heap-Redirect Component Checklist** in the "Heap Redirect — `malloc()` ≡
-> `pvPortMalloc()`" section (Architecture Rules).  Verify all 8 components,
+> **Heap-Redirect Component Checklist** in the [`memory-heap`](../memory-heap/SKILL.md)
+> skill ("Heap Redirect — `malloc()` ≡ `pvPortMalloc()`" section).  Verify all 8 components,
 > including the `--wrap` flags, the `memmgr.c` link, the `sysmem.c` exclusion, and
 > `configTOTAL_HEAP_SIZE`.  Breaking any one silently reverts to a broken or
 > split-heap state (the root-cause concern behind issue #610).

@@ -17,8 +17,9 @@ description: Async/non-blocking RTOS best practices and hardware state-managemen
 
 This is the canonical RTOS hygiene rule for the M1 codebase.  It is independent of —
 and takes precedence over — the "Blocking delegate" wrapper pattern documented in the
-[Scene-Based Application Architecture](#scene-based-application-architecture)
-section.  That section describes how *existing* legacy event-loops are integrated
+[Scene-Based Application Architecture](../ui-scene-architecture/SKILL.md#scene-based-application-architecture)
+section (in the `ui-scene-architecture` skill).  That section describes how *existing*
+legacy event-loops are integrated
 into scenes; **new code should not add new blocking delegates** without justification.
 
 #### Why async/non-blocking
