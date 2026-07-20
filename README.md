@@ -43,11 +43,11 @@ project discussion, and related project resources:
 [![Unit Tests](https://github.com/hapaxx11/M1/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/hapaxx11/M1/actions/workflows/tests.yml)
 [![Latest Release](https://img.shields.io/github/v/release/hapaxx11/M1?include_prereleases&label=latest)](https://github.com/hapaxx11/M1/releases/latest)
 
-> **🔧 [Flash your M1 right now — open the Web Updater](https://hapaxx11.github.io/M1/)**
+> **🔧 [Flash your M1 — open the Web Updater](https://hapaxx11.github.io/M1/)** *(work in progress)*
 >
-> No software to install for updates or reflashing if Hapax is already installed. Plug in
-> via USB-C, open Chrome/Edge, and flash the latest firmware in seconds. For a first
-> install from stock firmware, use the DFU/qMonstatek method below.
+> Browser-based flashing if Hapax is already installed. Plug in via USB-C, open
+> Chrome/Edge, pick a release, and flash. For a first install from stock firmware,
+> use the DFU/qMonstatek method below.
 
 ## Highlights vs Stock Firmware
 
@@ -267,10 +267,15 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **Storage:** microSD card
 - **Hardware revision:** 2.x
 
-> **ESP32 firmware required:** Hapax supports two ESP32-C6 coprocessor firmware variants:
+> **ESP32 firmware required:** Hapax supports multiple ESP32-C6 coprocessor firmware
+> variants.  The two recommended for end users are:
 >
 > - **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** (binary SPI) — full feature set including all sniffers, recon tools, station scan, and BLE features.
 > - **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** (AT commands over SPI) — supports WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, and network joining. Does not support packet-monitor sniffers, station scan, or advanced BLE features.
+>
+> Other variants exist (bedge117 base, neddy299 deauth, hapaxx11-caps) for
+> development and testing.  See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md)
+> for the full firmware comparison, AT command reference, and capability matrix.
 >
 > Flash via **Settings → ESP32 Update** (OTA over SPI) or via esptool — no hardware changes required. The stock Espressif UART-based AT firmware is **not** compatible.
 >
@@ -278,57 +283,27 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 
 ## Building
 
+> **Most users don't need to build firmware.** CI automatically builds and
+> publishes every merge to `main` as a GitHub Release. See [Flashing](#flashing)
+> below to install a release.
+
 ### Prerequisites
 
-- **ARM GCC 14.2+** with CMake and Ninja, or
-- **STM32CubeIDE 1.17+** (tested with 1.17.0 and 2.1.0)
+- **ARM GCC 14.2+** with CMake and Ninja
 - **Python 3** (for post-build CRC injection)
 
-### Build with CMake (recommended)
+### Build with CMake
 
 ```bash
-# Configure
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-# Build (post-build CRC injection runs automatically)
-cmake --build build
-```
-
-The CMake `POST_BUILD` step automatically runs `tools/append_crc32.py` to inject CRC
-and Hapax metadata into the binary.  For non-CMake builds (STM32CubeIDE), run manually:
-
-```bash
-python tools/append_crc32.py build/M1_Hapax_v<VERSION>.bin \
-    --output build/M1_Hapax_v<VERSION>_wCRC.bin \
-    --hapax-revision 1 --verbose
-```
-
-Replace `<VERSION>` with the version from `m1_fw_update_bl.h` (e.g. `0.9.0.1`).
-
-### Build with STM32CubeIDE
-
-Open the project directory in STM32CubeIDE and build.
-
-### Build with Make (Linux)
-
-```bash
-make
-```
-
-Output: `./artifacts/`
-
-### Build on macOS
-
-```bash
-# Install dependencies
-./setup_macos.sh
-
-# Build (toolchain auto-detected from /Applications/ArmGNUToolchain/)
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-See [`DEVELOPMENT.md`](DEVELOPMENT.md) for detailed build environment setup and
+The `POST_BUILD` step automatically runs `tools/append_crc32.py` to inject CRC and
+Hapax metadata into the binary.
+
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for detailed build environment setup,
+alternative build methods (STM32CubeIDE, Make, macOS), and
 [`documentation/mbt.md`](documentation/mbt.md) for SRecord/CRC tooling.
 
 ### Running Tests
@@ -361,10 +336,13 @@ You never need to compile firmware yourself — just pick a method below.
 
 ### Via Web Updater (recommended for updates)
 
-The fastest way to reflash — no software to install.  The Web Updater is hosted on
-GitHub Pages and fetches firmware directly from GitHub Releases.  Requires Hapax
-firmware already running on the M1 (the Web Updater connects over USB Serial, which
-needs the Hapax RPC interface).  For a first install from stock firmware, use
+> 🚧 **Work in progress** — the Web Updater is functional for basic flashing but
+> is still being refined.  SD card asset population and error recovery may not
+> work in all cases.
+
+The Web Updater is hosted on GitHub Pages and fetches firmware directly from GitHub
+Releases.  Requires Hapax firmware already running on the M1 (connects over USB
+Serial via the Hapax RPC interface).  For a first install from stock firmware, use
 **Via DFU Mode** below.
 
 1. Open the **[M1 Web Updater](https://hapaxx11.github.io/M1/)** in Chrome or Edge
@@ -378,8 +356,19 @@ mode and will usually not appear as a serial port; use the **Via DFU Mode (recov
 install)** section below instead.
 
 ### Via WiFi (OTA)
-Connect to WiFi, then go to **Settings → FW Update → Download** to browse and install
-firmware images from GitHub Releases directly to SD card.
+
+> 🚧 **Work in progress** — OTA download is functional but still being stabilised.
+> Requires an ESP32 firmware that supports WiFi joining (SiN360 or dag T-800).
+
+The M1 can download firmware updates over WiFi directly from GitHub Releases:
+
+1. Connect to WiFi (WiFi → Scan → join a network)
+2. Go to **Settings → FW Update → Download**
+3. Browse available releases and select one to download
+
+The firmware image is saved to the SD card (`Firmware/` directory).  After download,
+you flash it via **Settings → FW Update → Install from SD** as a separate step —
+the device does not reflash itself automatically.
 
 ### Via DFU Mode (recovery / first install)
 1. Power off the M1 (Settings → Power → Power Off → Right Button)
