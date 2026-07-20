@@ -54,6 +54,7 @@
 #include "flipper_subghz.h"
 #include "subghz_protocol_registry.h"
 #include "subghz_raw_decoder.h"
+#include "subghz_mod_suggest.h"
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
@@ -75,6 +76,11 @@ static uint8_t  decode_sel;
 static uint8_t  decode_scroll;
 static bool     decode_detail;
 static bool     s_save_failed;  /**< Brief "Save failed" overlay flag */
+
+/* Waveform → modulation suggestion (issue #616).  Computed from the loaded
+ * RAW samples; surfaced on the "No protocols decoded" screen so the operator
+ * gets a hint whether to retry the capture in OOK/AM or FSK/FM. */
+static SubGhzModSuggestResult s_mod_suggest;
 
 /* Inline TX state — replaces the Transmitter scene push so Send happens
  * directly from the decode detail view without an extra screen. */
@@ -124,6 +130,7 @@ static void load_and_decode(const SubGhzApp *app)
     s_save_failed = false;
     s_tx_active   = false;
     s_tx_tmp[0]   = '\0';
+    memset(&s_mod_suggest, 0, sizeof(s_mod_suggest));
 
     if (app->raw_filepath[0] == '\0')
         return;
@@ -137,6 +144,10 @@ static void load_and_decode(const SubGhzApp *app)
 
     if (s_sig.type != FLIPPER_SUBGHZ_TYPE_RAW || s_sig.raw_count == 0)
         return;
+
+    /* Waveform-based modulation hint — computed for every RAW capture so it
+     * is available if no protocol decodes. */
+    s_mod_suggest = subghz_mod_suggest(s_sig.raw_data, s_sig.raw_count);
 
     subghz_pulse_handler_reset();
     subghz_decenc_ctl.ndecodedrssi = 0;
@@ -428,8 +439,21 @@ static void draw(SubGhzApp *app)
     if (decode_count == 0)
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 10, 32, "No protocols");
-        u8g2_DrawStr(&m1_u8g2, 10, 44, "decoded");
+        u8g2_DrawStr(&m1_u8g2, 10, 26, "No protocols");
+        u8g2_DrawStr(&m1_u8g2, 10, 38, "decoded");
+
+        /* Waveform-based modulation hint (issue #616): when nothing decodes,
+         * suggest which modulation the captured waveform most resembles so the
+         * operator knows whether to retry the capture in OOK/AM or FSK/FM. */
+        if (s_mod_suggest.confidence != SUBGHZ_MOD_SUGGEST_CONF_NONE &&
+            s_mod_suggest.type != SUBGHZ_MOD_SUGGEST_UNKNOWN)
+        {
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            snprintf(line, sizeof(line), "Looks like %s (%s)",
+                     subghz_mod_suggest_type_str(s_mod_suggest.type),
+                     subghz_mod_suggest_confidence_str(s_mod_suggest.confidence));
+            u8g2_DrawStr(&m1_u8g2, 4, 54, line);
+        }
         m1_u8g2_nextpage();
         return;
     }

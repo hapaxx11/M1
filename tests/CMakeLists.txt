@@ -563,6 +563,24 @@ endif()
 add_test(NAME subghz_raw_decoder COMMAND test_subghz_raw_decoder)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_mod_suggest (waveform → modulation hint)
+# Pure timing heuristic (issue #616) that suggests OOK/AM vs FSK/FM
+# from a RAW capture's pulse-duration quantization.  Zero hardware deps.
+# ------------------------------------------------------------------
+add_executable(test_subghz_mod_suggest
+    test_subghz_mod_suggest.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+)
+target_include_directories(test_subghz_mod_suggest PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_mod_suggest PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_mod_suggest PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_mod_suggest COMMAND test_subghz_mod_suggest)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_registry_decode_try_fn
 # Canonical SubGhzRawDecodeTryFn bridge extracted from
 # subghz_decode_try_fn.c.  Tests cover:

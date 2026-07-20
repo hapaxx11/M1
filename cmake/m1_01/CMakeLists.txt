@@ -334,6 +334,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_read_raw_status.c
     ../../Sub_Ghz/subghz_raw_line_parser.c
     ../../Sub_Ghz/subghz_raw_decoder.c
+    ../../Sub_Ghz/subghz_mod_suggest.c
     ../../Sub_Ghz/subghz_playlist_parser.c
     ../../Sub_Ghz/subghz_secplus_v1_encoder.c
     ../../Sub_Ghz/subghz_keeloq.c
