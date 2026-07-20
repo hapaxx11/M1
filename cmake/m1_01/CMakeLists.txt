@@ -334,6 +334,15 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_read_raw_status.c
     ../../Sub_Ghz/subghz_raw_line_parser.c
     ../../Sub_Ghz/subghz_raw_decoder.c
+    ../../Sub_Ghz/subghz_mod_suggest.c
+    ../../Sub_Ghz/rf_repetition.c
+    ../../Sub_Ghz/rf_fingerprint.c
+    ../../Sub_Ghz/rf_protocol_db.c
+    ../../Sub_Ghz/rf_match.c
+    ../../Sub_Ghz/rf_fingerprint_24.c
+    ../../Sub_Ghz/rf_sweep.c
+    ../../Sub_Ghz/rf_scan_plan.c
+    ../../Sub_Ghz/rf_ook_fsk.c
     ../../Sub_Ghz/subghz_playlist_parser.c
     ../../Sub_Ghz/subghz_secplus_v1_encoder.c
     ../../Sub_Ghz/subghz_keeloq.c
@@ -529,6 +538,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_esp32_hal.c
     ../../m1_csrc/m1_esp32_cmd.c
     ../../m1_csrc/m1_esp32_caps.c
+    ../../m1_csrc/m1_rf_fingerprint_24.c
     ../../m1_csrc/m1_esp_hosted_dummy.c
     ../../m1_csrc/m1_file_browser.c
     ../../m1_csrc/m1_file_util.c
@@ -631,6 +641,8 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_signal_settings.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_menu.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_tuner.c
+    ../../m1_csrc/m1_subghz_scene_signal_identifier.c
+    ../../m1_csrc/m1_subghz_scene_analyzer_menu.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_diag.c
     ../../m1_csrc/m1_system.c

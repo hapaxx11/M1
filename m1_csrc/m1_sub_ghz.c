@@ -33,6 +33,11 @@
 #include "subghz_keeloq_mfkeys.h"
 #include "subghz_button_override.h"
 #include "subghz_rssi_history.h"
+#include "rf_fingerprint.h"
+#include "rf_match.h"
+#include "rf_sweep.h"
+#include "rf_scan_plan.h"
+#include "rf_ook_fsk.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
 #include "m1_storage.h"
@@ -5181,6 +5186,214 @@ void sub_ghz_freq_scanner(void)
     xQueueReset(main_q_hdl);
     m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
 } /* end sub_ghz_freq_scanner() */
+
+
+/*============================================================================*/
+/* Signal Identifier (RF Rosetta)                                             */
+/*                                                                            */
+/* Sweeps the curated ISM probe plan (rf_scan_plan), and whenever a frequency */
+/* shows activity above the RSSI threshold it samples a short RSSI burst,      */
+/* classifies OOK vs FSK (rf_ook_fsk), builds a sensor-agnostic fingerprint    */
+/* (rf_fingerprint), and — only when the fingerprint is discriminating enough  */
+/* to name a protocol — scores it against the database (rf_match_best).  The   */
+/* results are folded into a confidence-ranked live report (rf_sweep) that the */
+/* user reads.  All the decision logic lives in the pure, host-tested modules; */
+/* this delegate is a thin SI4463 wrapper reusing the freq_scanner RX path.    */
+/*============================================================================*/
+
+#define SIGID_BURST_SAMPLES   24U   /* RSSI samples taken per catch to classify */
+#define SIGID_THRESHOLD_DBM   (-80) /* default catch threshold (dBm) */
+#define SIGID_THRESHOLD_MIN   (-110)
+#define SIGID_THRESHOLD_MAX   (-40)
+#define SIGID_VISIBLE_ROWS    4U
+
+void sub_ghz_signal_identifier(void)
+{
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
+    char info_str[40];
+
+    rf_sweep_report_t report;
+    rf_scan_cursor_t  cursor;
+    int16_t  rssi_burst[SIGID_BURST_SAMPLES];
+    uint8_t  scroll_pos = 0;
+    bool     running = true;
+    int8_t   threshold = SIGID_THRESHOLD_DBM;
+    bool     cur_915 = false;
+
+    rf_sweep_report_reset(&report);
+    rf_scan_cursor_reset(&cursor);
+
+    menu_sub_ghz_init();
+
+    /* Initialise the radio for the first probe point's band. */
+    {
+        const rf_scan_point_t *p0 = rf_scan_cursor_point(&cursor);
+        cur_915 = (p0 != NULL) ? p0->use_915 : false;
+    }
+    radio_init_rx_tx(cur_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                     MODEM_MOD_TYPE_OOK, true);
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+
+    while (running)
+    {
+        /* ---- one full sweep pass over the probe plan ---- */
+        bool pass_done = false;
+        while (!pass_done)
+        {
+            const rf_scan_point_t *pt = rf_scan_cursor_point(&cursor);
+            if (pt == NULL) { pass_done = true; break; }
+
+            /* Re-init the front-end only when crossing the 850 MHz boundary. */
+            if (pt->use_915 != cur_915)
+            {
+                cur_915 = pt->use_915;
+                radio_init_rx_tx(cur_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                                 MODEM_MOD_TYPE_OOK, true);
+                radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+            }
+
+            SI446x_Set_Frequency(pt->freq_hz);
+            SI446x_Start_Rx(0);
+            HAL_Delay(2); /* Let AGC settle */
+
+            SI446x_Get_IntStatus(0, 0, 0);
+            pmodemstat = SI446x_Get_ModemStatus(0x00);
+            int16_t rssi = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+
+            if (rssi > threshold)
+            {
+                /* Caught activity: sample a short RSSI burst to classify the
+                 * modulation family without a full RAW timing capture. */
+                int16_t peak = rssi;
+                for (uint16_t s = 0; s < SIGID_BURST_SAMPLES; s++)
+                {
+                    SI446x_Get_IntStatus(0, 0, 0);
+                    pmodemstat = SI446x_Get_ModemStatus(0x00);
+                    int16_t r = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+                    rssi_burst[s] = r;
+                    if (r > peak) peak = r;
+                    HAL_Delay(1);
+                }
+
+                rf_ook_fsk_result_t mc =
+                    rf_ook_fsk_classify(rssi_burst, SIGID_BURST_SAMPLES);
+
+                rf_fingerprint_t fp;
+                memset(&fp, 0, sizeof(fp));
+                fp.sensor         = RF_SENSOR_SUBGHZ;
+                fp.freq_hz        = pt->freq_hz;
+                fp.band           = rf_band_from_freq(pt->freq_hz);
+                fp.mod            = mc.mod;
+                fp.mod_confidence = mc.confidence;
+                fp.repetition     = 1;
+                fp.rssi_dbm       = peak;
+
+                /* Only trust the scorer when the fingerprint carries more than
+                 * its band; otherwise the signal is merely "active". */
+                if (rf_fingerprint_is_discriminating(&fp))
+                {
+                    rf_match_result_t m = rf_match_best(&fp);
+                    rf_sweep_report_add(&report, &fp, &m);
+                }
+                else
+                {
+                    rf_sweep_report_add(&report, &fp, NULL);
+                }
+            }
+
+            /* Advancing returns true when a full pass just completed. */
+            if (rf_scan_cursor_advance(&cursor))
+                pass_done = true;
+        }
+
+        /* ---- draw the ranked report ---- */
+        m1_u8g2_firstpage();
+        do {
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+            snprintf(info_str, sizeof(info_str), "Signal ID  [%ddBm]", threshold);
+            u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
+
+            if (report.count == 0)
+            {
+                if (report.total_detections == 0)
+                    u8g2_DrawStr(&m1_u8g2, 10, 32, "Listening...");
+                else
+                    u8g2_DrawStr(&m1_u8g2, 6, 32, "Active, unidentified");
+            }
+            else
+            {
+                for (uint8_t row = 0; row < SIGID_VISIBLE_ROWS; row++)
+                {
+                    uint8_t idx = scroll_pos + row;
+                    if (idx >= report.count) break;
+
+                    const rf_sweep_hit_t *h = &report.hits[idx];
+                    uint8_t y = 20 + row * 11;
+
+                    /* Line 1: name + confidence. */
+                    snprintf(info_str, sizeof(info_str), "%s %u%%",
+                             (h->sig && h->sig->name) ? h->sig->name : "?",
+                             (unsigned)h->confidence);
+                    u8g2_DrawStr(&m1_u8g2, 2, y, info_str);
+                }
+
+                if (report.count > SIGID_VISIBLE_ROWS)
+                {
+                    snprintf(info_str, sizeof(info_str), "%d/%d",
+                             scroll_pos + 1, report.count);
+                    u8g2_DrawStr(&m1_u8g2, 104, 64, info_str);
+                }
+            }
+
+            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Thr OK:Clr \x18\x19");
+
+        } while (m1_u8g2_nextpage());
+
+        /* ---- handle input ---- */
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+
+            if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                running = false;
+            }
+            else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                rf_sweep_report_reset(&report);
+                rf_scan_cursor_reset(&cursor);
+                scroll_pos = 0;
+            }
+            else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (scroll_pos > 0) scroll_pos--;
+            }
+            else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (scroll_pos + SIGID_VISIBLE_ROWS < report.count) scroll_pos++;
+            }
+            else if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (threshold < SIGID_THRESHOLD_MAX) threshold += 5;
+            }
+            else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (threshold > SIGID_THRESHOLD_MIN) threshold -= 5;
+            }
+        }
+    }
+
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_ISOLATED);
+    SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
+    menu_sub_ghz_exit();
+    xQueueReset(main_q_hdl);
+    m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
+} /* end sub_ghz_signal_identifier() */
 
 
 /*============================================================================*/

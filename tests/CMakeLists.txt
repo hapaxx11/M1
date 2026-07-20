@@ -563,6 +563,137 @@ endif()
 add_test(NAME subghz_raw_decoder COMMAND test_subghz_raw_decoder)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_mod_suggest (waveform → modulation hint)
+# Pure timing heuristic (issue #616) that suggests OOK/AM vs FSK/FM
+# from a RAW capture's pulse-duration quantization.  Zero hardware deps.
+# ------------------------------------------------------------------
+add_executable(test_subghz_mod_suggest
+    test_subghz_mod_suggest.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+)
+target_include_directories(test_subghz_mod_suggest PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_mod_suggest PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_mod_suggest PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_mod_suggest COMMAND test_subghz_mod_suggest)
+
+# ------------------------------------------------------------------
+# RF Rosetta cross-sensor identification core (pure logic, no hardware).
+#   rf_repetition  — repeated-burst detection ("[x2]" badge)
+#   rf_fingerprint — sensor-agnostic fingerprint extractor (composes
+#                    subghz_mod_suggest + rf_repetition)
+#   rf_protocol_db — protocol signature + security-metadata table
+#   rf_match       — fingerprint x DB scoring engine -> identity + confidence
+# ------------------------------------------------------------------
+add_executable(test_rf_repetition
+    test_rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+)
+target_include_directories(test_rf_repetition PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_repetition PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_repetition PRIVATE sanitizers)
+endif()
+add_test(NAME rf_repetition COMMAND test_rf_repetition)
+
+add_executable(test_rf_fingerprint
+    test_rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+)
+target_include_directories(test_rf_fingerprint PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_fingerprint PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_fingerprint PRIVATE sanitizers)
+endif()
+add_test(NAME rf_fingerprint COMMAND test_rf_fingerprint)
+
+add_executable(test_rf_protocol_db
+    test_rf_protocol_db.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_protocol_db PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_protocol_db PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_protocol_db PRIVATE sanitizers)
+endif()
+add_test(NAME rf_protocol_db COMMAND test_rf_protocol_db)
+
+add_executable(test_rf_match
+    test_rf_match.c
+    ${M1_ROOT}/Sub_Ghz/rf_match.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_match PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_match PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_match PRIVATE sanitizers)
+endif()
+add_test(NAME rf_match COMMAND test_rf_match)
+
+# rf_fingerprint_24 — ESP32-C6 2.4 GHz fingerprint backend (BLE/WiFi/802.15.4
+# extraction + sensor-aware identification). Pure logic, no hardware.
+add_executable(test_rf_fingerprint_24
+    test_rf_fingerprint_24.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint_24.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+    ${M1_ROOT}/Sub_Ghz/rf_match.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_fingerprint_24 PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_fingerprint_24 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_fingerprint_24 PRIVATE sanitizers)
+endif()
+add_test(NAME rf_fingerprint_24 COMMAND test_rf_fingerprint_24)
+
+# rf_sweep — ranked sweep-report aggregator (Signal Identifier live report)
+add_executable(test_rf_sweep
+    test_rf_sweep.c
+    ${M1_ROOT}/Sub_Ghz/rf_sweep.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_sweep PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_sweep PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_sweep PRIVATE sanitizers)
+endif()
+add_test(NAME rf_sweep COMMAND test_rf_sweep)
+
+# rf_scan_plan — Signal Identifier ISM probe plan + cursor
+add_executable(test_rf_scan_plan
+    test_rf_scan_plan.c
+    ${M1_ROOT}/Sub_Ghz/rf_scan_plan.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+)
+target_include_directories(test_rf_scan_plan PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_scan_plan PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_scan_plan PRIVATE sanitizers)
+endif()
+add_test(NAME rf_scan_plan COMMAND test_rf_scan_plan)
+
+# rf_ook_fsk — OOK-vs-FSK classifier from an RSSI burst
+add_executable(test_rf_ook_fsk
+    test_rf_ook_fsk.c
+    ${M1_ROOT}/Sub_Ghz/rf_ook_fsk.c
+)
+target_include_directories(test_rf_ook_fsk PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_ook_fsk PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_ook_fsk PRIVATE sanitizers)
+endif()
+add_test(NAME rf_ook_fsk COMMAND test_rf_ook_fsk)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_registry_decode_try_fn
 # Canonical SubGhzRawDecodeTryFn bridge extracted from
 # subghz_decode_try_fn.c.  Tests cover:

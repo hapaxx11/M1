@@ -13,16 +13,13 @@
  *   2. Read Raw (raw capture)
  *   3. Saved (file browser)
  *   4. Playlist
- *   5. Frequency Analyzer
- *   6. Spectrum Analyzer
- *   7. RSSI Meter
- *   8. Freq Scanner
- *   9. Weather Station
- *  10. Brute Force
- *  11. Add Manually
- *  12. Remote
- *  13. Bind Remote
- *  14. Proto Pirate (rolling-code analysis — PR #579)
+ *   5. Analyzer (Freq/Spectrum Analyzer, RSSI Meter, Freq Scanner, Signal ID,
+ *      Proto Pirate)
+ *   6. Weather Station
+ *   7. Brute Force
+ *   8. Add Manually
+ *   9. Remote
+ *  10. Bind Remote
  */
 
 #include <stdint.h>
@@ -41,23 +38,19 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT   14
+#define MENU_ITEM_COUNT   10
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
     "Read Raw",
     "Saved",
     "Playlist",
-    "Frequency Analyzer",
-    "Spectrum Analyzer",
-    "RSSI Meter",
-    "Freq Scanner",
+    "Analyzer",
     "Weather Station",
     "Brute Force",
     "Add Manually",
     "Remote",
     "Bind Remote",
-    "Proto Pirate",
 };
 
 static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
@@ -65,16 +58,12 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneReadRaw,
     SubGhzSceneSaved,
     SubGhzScenePlaylist,
-    SubGhzSceneFreqAnalyzer,
-    SubGhzSceneSpectrumAnalyzer,
-    SubGhzSceneRssiMeter,
-    SubGhzSceneFreqScanner,
+    SubGhzSceneAnalyzerMenu,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
     SubGhzSceneSetType,   /* "Add Manually" — Phase 8b-4 retired the blocking delegate */
     SubGhzSceneRemote,
     SubGhzSceneBindWizard,
-    SubGhzSceneProtoPirateMenu,
 };
 
 /*============================================================================*/

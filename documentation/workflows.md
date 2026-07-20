@@ -19,7 +19,8 @@ identify it and eventually capture or replay it.
 ### Understanding the three scanning tools
 
 All three tools share the same four band presets and the same SI4463 radio
-hardware.  They answer different questions.
+hardware.  They answer different questions.  All three (plus RSSI Meter and
+Signal ID) live under **Sub-GHz → Analyzer**.
 
 #### Spectrum Analyzer — *"Where is RF energy right now?"*
 

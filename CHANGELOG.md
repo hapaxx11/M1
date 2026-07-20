@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — The five
+-  passive RF-analysis tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter,
+-  Freq Scanner, and Signal ID) are now grouped under a single **Analyzer** entry in
+-  the top-level Sub-GHz menu instead of occupying five separate top-level slots.
+-  This shortens the Sub-GHz menu from 15 to 11 items and groups the observe-only
++ **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — RF-analysis
++  tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter, Freq Scanner, and
++  Signal ID) are now grouped under a single **Analyzer** entry in the top-level
++  Sub-GHz menu.
++  This shortens the Sub-GHz menu from 14 to 10 items and groups the observe-only
+  (`m1_csrc/m1_subghz_scene_analyzer_menu.c`); the individual analyzer scenes are
+  unchanged and simply reachable one level deeper. The `subghz-protocols` skill
+  menu invariant was updated in the same change.
+
+### Added
+
+- **RF Rosetta: ESP32-C6 2.4 GHz fingerprint backend (CAPS-gated)** — Extended the
+  sensor-agnostic RF Rosetta identification pipeline (Signal ID) to the ESP32-C6
+  2.4 GHz domains. New pure-logic backend `Sub_Ghz/rf_fingerprint_24.c/h` turns a
+  coprocessor scan observation (radio channel + RSSI) into an `rf_fingerprint_t`
+  for BLE advertising, 2.4 GHz WiFi, and IEEE 802.15.4 (Zigbee/Thread), with
+  channel→frequency helpers for each. Because the three families share band and
+  modulation family, `rf_match_24()` names a detection deterministically from its
+  sensor domain (via the new `rf_protocol_db_find_2400()` resolver) instead of
+  relying on band+modulation scoring. The runtime CAPS gate lives in
+  `m1_csrc/m1_rf_fingerprint_24.c` (`m1_rf24_require_sensor()` /
+  `m1_rf24_sensor_available()`), mapping each sensor onto its
+  `M1_ESP32_CAP_BLE_SCAN` / `M1_ESP32_CAP_WIFI_SCAN` / `M1_ESP32_CAP_802154` bit so
+  the feature fails closed on firmware that lacks the capability. Covered by
+  `tests/test_rf_fingerprint_24.c` (13 host tests).
+
 ## [0.9.2.13] - 2026-07-03
 
 ### Fixed
