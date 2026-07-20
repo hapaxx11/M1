@@ -1,6 +1,6 @@
 ---
 name: subghz-protocols
-description: Sub-GHz protocol reference: the four file-format types and two replay paths (.sub/.sgh taxonomy), rolling-code replay philosophy and feasibility registry, the Bind New Remote wizard rules, the 11-item Sub-GHz menu structure (with the Analyzer sub-menu), and deferred Momentum-parity work. Load for any Sub-GHz protocol, replay, emulation, freq-preset, or bind-wizard work.
+description: Sub-GHz protocol reference: the four file-format types and two replay paths (.sub/.sgh taxonomy), rolling-code replay philosophy and feasibility registry, the Bind New Remote wizard rules, the 10-item Sub-GHz menu structure (with the Analyzer sub-menu), and deferred Momentum-parity work. Load for any Sub-GHz protocol, replay, emulation, freq-preset, or bind-wizard work.
 ---
 
 # Sub-GHz Protocols
@@ -339,7 +339,7 @@ Generated files are saved to `0:/SUBGHZ/NewRemote_<prefix>_<12-hex>.sub`.
 
 ## Sub-GHz Menu Structure
 
-The top-level Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 11 items**
+The top-level Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 10 items**
 in this order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
@@ -354,13 +354,13 @@ in this order.  Do not remove items, reorder, or add "Back" entries.
 | 8 | Add Manually | SubGhzSceneSetType | Scene-native (protocol picker → SetKey hex editor → Transmitter) |
 | 9 | Remote | SubGhzSceneRemote | Scene-native (multi-button .rem remote control) |
 | 10 | Bind Remote | SubGhzSceneBindWizard | Scene-native (guided rolling-code binding wizard) |
-| 11 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
 
 ### Analyzer sub-menu
 
 The **Analyzer** entry (`m1_subghz_scene_analyzer_menu.c`, `SubGhzSceneAnalyzerMenu`) groups the
-passive RF-analysis tools (observe / measure / identify only — no TX, no save).  It must contain
-**exactly 5 items** in this order.  Do not remove items, reorder, or add "Back" entries.
+RF-analysis tools.  Most are passive (observe / measure / identify only — no TX, no save); Proto
+Pirate additionally offers a protocol-aware receiver.  It must contain **exactly 6 items** in this
+order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
 |---|-------|----------|----------------|
@@ -369,6 +369,7 @@ passive RF-analysis tools (observe / measure / identify only — no TX, no save)
 | 3 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
 | 4 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
 | 5 | Signal ID | SubGhzSceneSignalIdentifier | Blocking delegate → `sub_ghz_signal_identifier()` (RF Rosetta sweep + fingerprint) |
+| 6 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and
 drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in

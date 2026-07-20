@@ -4,10 +4,11 @@
  * @file   m1_subghz_scene_analyzer_menu.c
  * @brief  Sub-GHz Analyzer sub-menu scene.
  *
- * Consolidates the passive RF-analysis tools that previously lived as
- * separate top-level Sub-GHz menu entries into a single "Analyzer" group.
- * None of these tools transmit or persist signals — they only observe /
- * measure / identify the RF environment.
+ * Consolidates the RF-analysis tools that previously lived as separate
+ * top-level Sub-GHz menu entries into a single "Analyzer" group.  Most of
+ * these tools are passive — they only observe / measure / identify the RF
+ * environment without transmitting.  Proto Pirate additionally offers a
+ * protocol-aware receiver for rolling-code capture.
  *
  * Menu items:
  *   1. Frequency Analyzer — pushes SubGhzSceneFreqAnalyzer
@@ -15,6 +16,7 @@
  *   3. RSSI Meter         — pushes SubGhzSceneRssiMeter
  *   4. Freq Scanner       — pushes SubGhzSceneFreqScanner
  *   5. Signal ID          — pushes SubGhzSceneSignalIdentifier (RF Rosetta)
+ *   6. Proto Pirate       — pushes SubGhzSceneProtoPirateMenu (rolling-code)
  *
  * All scene transitions are non-blocking; the scene itself only handles
  * navigation events (UP / DOWN / OK / BACK).
@@ -34,7 +36,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define AN_MENU_ITEM_COUNT  5
+#define AN_MENU_ITEM_COUNT  6
 
 static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
     "Frequency Analyzer",
@@ -42,6 +44,7 @@ static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
     "RSSI Meter",
     "Freq Scanner",
     "Signal ID",
+    "Proto Pirate",
 };
 
 static const SubGhzSceneId an_menu_targets[AN_MENU_ITEM_COUNT] = {
@@ -50,6 +53,7 @@ static const SubGhzSceneId an_menu_targets[AN_MENU_ITEM_COUNT] = {
     SubGhzSceneRssiMeter,
     SubGhzSceneFreqScanner,
     SubGhzSceneSignalIdentifier,
+    SubGhzSceneProtoPirateMenu,
 };
 
 /*============================================================================*/
