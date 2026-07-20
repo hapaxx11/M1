@@ -155,7 +155,7 @@ project discussion, and related project resources:
 - Deauth, Beacon Spam, AP Clone, Rickroll, Evil Portal, Probe Flood, Karma, Karma+Portal, PMKID Grab
 
 **Recon:**
-- Station Scan, 2.4G Channel Survey, MAC Track, Wardrive, Station Wardrive, Signal Monitor
+- Station Scan, 2.4G Survey, MAC Track, Wardrive, Station Wardrive, Signal Monitor
 
 **Network Scanners:**
 - Ping, ARP, SSH, Telnet, Port Scan
@@ -268,7 +268,7 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **Hardware revision:** 2.x
 
 > **ESP32 firmware required:** Hapax supports multiple ESP32-C6 coprocessor firmware
-> variants.  The two recommended for end users are:
+> variants. The two recommended for end users are:
 >
 > - **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** (binary SPI) — full feature set including all sniffers, recon tools, station scan, and BLE features.
 > - **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** (AT commands over SPI) — supports WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, and network joining. Does not support packet-monitor sniffers, station scan, or advanced BLE features.
@@ -284,7 +284,7 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 ## Building
 
 > **Most users don't need to build firmware.** CI automatically builds and
-> publishes every merge to `main` as a GitHub Release. See [Flashing](#flashing)
+> publishes every non-docs-only merge to `main` as a GitHub Release. See [Flashing](#flashing)
 > below to install a release.
 
 ### Prerequisites
@@ -362,7 +362,7 @@ install)** section below instead.
 
 The M1 can download firmware updates over WiFi directly from GitHub Releases:
 
-1. Connect to WiFi (WiFi → Scan → join a network)
+1. Connect to WiFi (WiFi → Networks → join a network)
 2. Go to **Settings → FW Update → Download**
 3. Browse available releases and select one to download
 
