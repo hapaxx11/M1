@@ -55,6 +55,8 @@
 #include "subghz_protocol_registry.h"
 #include "subghz_raw_decoder.h"
 #include "subghz_mod_suggest.h"
+#include "rf_fingerprint.h"
+#include "rf_match.h"
 
 extern SubGHz_DecEnc_t subghz_decenc_ctl;
 extern void subghz_pulse_handler_reset(void);
@@ -81,6 +83,13 @@ static bool     s_save_failed;  /**< Brief "Save failed" overlay flag */
  * RAW samples; surfaced on the "No protocols decoded" screen so the operator
  * gets a hint whether to retry the capture in OOK/AM or FSK/FM. */
 static SubGhzModSuggestResult s_mod_suggest;
+
+/* RF Rosetta identification (decode-miss value-add): when no decoder matches,
+ * the captured waveform is fingerprinted (frequency band + modulation + timing
+ * + repetition) and scored against the protocol-signature database so the
+ * operator gets a best-guess category + security posture instead of a bare
+ * "No protocols decoded". */
+static rf_match_result_t s_ident;
 
 /* Inline TX state — replaces the Transmitter scene push so Send happens
  * directly from the decode detail view without an extra screen. */
@@ -131,6 +140,8 @@ static void load_and_decode(const SubGhzApp *app)
     s_tx_active   = false;
     s_tx_tmp[0]   = '\0';
     memset(&s_mod_suggest, 0, sizeof(s_mod_suggest));
+    memset(&s_ident, 0, sizeof(s_ident));
+    s_ident.index = -1;
 
     if (app->raw_filepath[0] == '\0')
         return;
@@ -148,6 +159,15 @@ static void load_and_decode(const SubGhzApp *app)
     /* Waveform-based modulation hint — computed for every RAW capture so it
      * is available if no protocol decodes. */
     s_mod_suggest = subghz_mod_suggest(s_sig.raw_data, s_sig.raw_count);
+
+    /* RF Rosetta fingerprint + identification.  The loaded RAW file carries no
+     * modulation-preset index, so pass 0xFF (N/A) and let the modulation family
+     * come from the waveform heuristic; band + timing + repetition still drive
+     * a useful category match. */
+    rf_fingerprint_t fp;
+    rf_fingerprint_from_subghz_raw(s_sig.raw_data, s_sig.raw_count,
+                                   s_sig.frequency, 0xFF, 0, 0, &fp);
+    s_ident = rf_match_best(&fp);
 
     subghz_pulse_handler_reset();
     subghz_decenc_ctl.ndecodedrssi = 0;
@@ -439,20 +459,33 @@ static void draw(SubGhzApp *app)
     if (decode_count == 0)
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 10, 26, "No protocols");
-        u8g2_DrawStr(&m1_u8g2, 10, 38, "decoded");
+        u8g2_DrawStr(&m1_u8g2, 10, 22, "No protocols");
+        u8g2_DrawStr(&m1_u8g2, 10, 32, "decoded");
 
-        /* Waveform-based modulation hint (issue #616): when nothing decodes,
-         * suggest which modulation the captured waveform most resembles so the
-         * operator knows whether to retry the capture in OOK/AM or FSK/FM. */
-        if (s_mod_suggest.confidence != SUBGHZ_MOD_SUGGEST_CONF_NONE &&
-            s_mod_suggest.type != SUBGHZ_MOD_SUGGEST_UNKNOWN)
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+        /* RF Rosetta decode-miss identification: best-guess category +
+         * security posture from the waveform fingerprint. */
+        if (s_ident.sig != NULL)
         {
-            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+            snprintf(line, sizeof(line), "~%s %u%%",
+                     rf_category_str(s_ident.sig->category),
+                     (unsigned)s_ident.confidence);
+            u8g2_DrawStr(&m1_u8g2, 4, 44, line);
+            snprintf(line, sizeof(line), "%s / %s",
+                     s_ident.sig->name,
+                     rf_security_str(s_ident.sig->security));
+            u8g2_DrawStr(&m1_u8g2, 4, 54, line);
+        }
+        else if (s_mod_suggest.confidence != SUBGHZ_MOD_SUGGEST_CONF_NONE &&
+                 s_mod_suggest.type != SUBGHZ_MOD_SUGGEST_UNKNOWN)
+        {
+            /* No confident identity — fall back to the modulation hint (issue
+             * #616) so the operator knows whether to retry in OOK/AM or FSK/FM. */
             snprintf(line, sizeof(line), "Looks like %s (%s)",
                      subghz_mod_suggest_type_str(s_mod_suggest.type),
                      subghz_mod_suggest_confidence_str(s_mod_suggest.confidence));
-            u8g2_DrawStr(&m1_u8g2, 4, 54, line);
+            u8g2_DrawStr(&m1_u8g2, 4, 50, line);
         }
         m1_u8g2_nextpage();
         return;
