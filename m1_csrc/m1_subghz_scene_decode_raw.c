@@ -160,14 +160,11 @@ static void load_and_decode(const SubGhzApp *app)
      * is available if no protocol decodes. */
     s_mod_suggest = subghz_mod_suggest(s_sig.raw_data, s_sig.raw_count);
 
-    /* RF Rosetta fingerprint + identification.  The loaded RAW file carries no
-     * modulation-preset index, so pass 0xFF (N/A) and let the modulation family
-     * come from the waveform heuristic; band + timing + repetition still drive
-     * a useful category match. */
     rf_fingerprint_t fp;
     rf_fingerprint_from_subghz_raw(s_sig.raw_data, s_sig.raw_count,
                                    s_sig.frequency, 0xFF, 0, 0, &fp);
-    s_ident = rf_match_best(&fp);
+    if (rf_fingerprint_is_discriminating(&fp))
+        s_ident = rf_match_best(&fp);
 
     subghz_pulse_handler_reset();
     subghz_decenc_ctl.ndecodedrssi = 0;
