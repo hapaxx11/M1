@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — The five
+  passive RF-analysis tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter,
+  Freq Scanner, and Signal ID) are now grouped under a single **Analyzer** entry in
+  the top-level Sub-GHz menu instead of occupying five separate top-level slots.
+  This shortens the Sub-GHz menu from 15 to 11 items and groups the observe-only
+  tools (no TX, no save) together. New scene `SubGhzSceneAnalyzerMenu`
+  (`m1_csrc/m1_subghz_scene_analyzer_menu.c`); the individual analyzer scenes are
+  unchanged and simply reachable one level deeper. The `subghz-protocols` skill
+  menu invariant was updated in the same change.
+
 ### Added
 
 - **RF Rosetta: ESP32-C6 2.4 GHz fingerprint backend (CAPS-gated)** — Extended the

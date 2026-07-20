@@ -642,6 +642,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_proto_pirate_menu.c
     ../../m1_csrc/m1_subghz_scene_proto_pirate_tuner.c
     ../../m1_csrc/m1_subghz_scene_signal_identifier.c
+    ../../m1_csrc/m1_subghz_scene_analyzer_menu.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_diag.c
     ../../m1_csrc/m1_system.c
