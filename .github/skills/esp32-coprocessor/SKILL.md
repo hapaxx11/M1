@@ -20,8 +20,8 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - **dag fork**: [`dagnazty/esp32-at-monstatek-m1`](https://github.com/dagnazty/esp32-at-monstatek-m1) (additional AT command extensions)
 - All are forks of Espressif's official `esp-at`, customised for M1's SPI transport
 - Pre-built binaries available on the GitHub Releases pages of each repo
-- Enables: Bad-BT / BLE HID, 802.15.4 (Zigbee/Thread), and — on the neddy299 / dag forks — **WiFi attacks**: deauth (`AT+DEAUTH` on neddy299, `AT+M1DEAUTH` on dag) plus, on dag, beacon spam (`AT+M1BEACON`), karma (`AT+M1KARMA`), evil portal (`AT+M1EVILTWIN`), probe flood (`AT+M1PROBE`), and PMKID / handshake capture (`AT+M1PMKID` / `AT+M1HSCAP`)
-- Does NOT support (any AT fork — binary-SPI-only): WiFi packet sniffers / signal monitor, station scan, MAC tracker / wardrive, BLE wardrive / BLE sniffers, network scanners, WiFi connect / NTP sync, BT device management
+- Enables: Bad-BT / BLE HID, 802.15.4 (Zigbee/Thread), WiFi connect (`AT+CWJAP`) + NTP sync (`AT+CIPSNTPCFG` / `AT+CIPSNTPTIME?`), and — on the neddy299 / dag forks — **WiFi attacks**: deauth (`AT+DEAUTH` on neddy299, `AT+M1DEAUTH` on dag) plus, on dag, beacon spam (`AT+M1BEACON`), karma (`AT+M1KARMA`), evil portal (`AT+M1EVILTWIN`), probe flood (`AT+M1PROBE`), and PMKID / handshake capture (`AT+M1PMKID` / `AT+M1HSCAP`)
+- Does NOT support (AT firmware): WiFi packet sniffers / signal monitor, MAC tracker / wardrive, BLE wardrive / BLE sniffers, network scanners, station scan (currently binary-SPI-only in M1; no `AT+STASCAN` dispatch), BT device management
 - See [`documentation/esp32_firmware.md`](../../../documentation/esp32_firmware.md) for the full reference
 
 #### Binary SPI firmware (recommended — sincere360 / SiN360)
