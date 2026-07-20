@@ -581,6 +581,61 @@ endif()
 add_test(NAME subghz_mod_suggest COMMAND test_subghz_mod_suggest)
 
 # ------------------------------------------------------------------
+# RF Rosetta cross-sensor identification core (pure logic, no hardware).
+#   rf_repetition  — repeated-burst detection ("[x2]" badge)
+#   rf_fingerprint — sensor-agnostic fingerprint extractor (composes
+#                    subghz_mod_suggest + rf_repetition)
+#   rf_protocol_db — protocol signature + security-metadata table
+#   rf_match       — fingerprint x DB scoring engine -> identity + confidence
+# ------------------------------------------------------------------
+add_executable(test_rf_repetition
+    test_rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+)
+target_include_directories(test_rf_repetition PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_repetition PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_repetition PRIVATE sanitizers)
+endif()
+add_test(NAME rf_repetition COMMAND test_rf_repetition)
+
+add_executable(test_rf_fingerprint
+    test_rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+)
+target_include_directories(test_rf_fingerprint PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_fingerprint PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_fingerprint PRIVATE sanitizers)
+endif()
+add_test(NAME rf_fingerprint COMMAND test_rf_fingerprint)
+
+add_executable(test_rf_protocol_db
+    test_rf_protocol_db.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_protocol_db PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_protocol_db PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_protocol_db PRIVATE sanitizers)
+endif()
+add_test(NAME rf_protocol_db COMMAND test_rf_protocol_db)
+
+add_executable(test_rf_match
+    test_rf_match.c
+    ${M1_ROOT}/Sub_Ghz/rf_match.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_match PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_match PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_match PRIVATE sanitizers)
+endif()
+add_test(NAME rf_match COMMAND test_rf_match)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_registry_decode_try_fn
 # Canonical SubGhzRawDecodeTryFn bridge extracted from
 # subghz_decode_try_fn.c.  Tests cover:
