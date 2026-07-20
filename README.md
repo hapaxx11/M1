@@ -53,18 +53,19 @@ project discussion, and related project resources:
 
 | Feature | Monstatek Stock (v0.8.0.1) | Hapax |
 |---------|---------------------------|-------|
-| Sub-GHz protocols | ~20 | **100** |
+| Sub-GHz protocols | ~20 | **105** |
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
-| Sub-GHz tools (spectrum, RSSI, scanner, weather, brute force, playlist) | ✗ | ✓ |
+| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, weather, brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
 | OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
+| On-device MFKey32 MIFARE key recovery | ✗ | ✓ |
 | AES-256 encryption API | ✗ | ✓ |
 | Bad-BT (Bluetooth HID) | ✗ | ✓ |
-| WiFi packet sniffers & attacks (SiN360 ESP32 required) | ✗ | ✓ (17 tools) |
-| BLE sniffers, wardrive, spam & detectors (SiN360 ESP32 required) | ✗ | ✓ (16 tools) |
+| WiFi sniffers, attacks, recon & net scan (ESP32 required) | ✗ | ✓ (27 tools) |
+| BLE sniffers, wardrive, spam & detectors (ESP32 required) | ✗ | ✓ (20 tools) |
 | IR remote database | — | **1,412** files included |
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
@@ -84,14 +85,17 @@ project discussion, and related project resources:
 - Furi compatibility layer for near-direct protocol porting from Flipper/Momentum
 
 ### Sub-GHz Enhancements
-- **100 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
+- **105 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
 - **Frequency Scanner** — sweep and find active frequencies above threshold
+- **Signal Identifier (RF Rosetta)** — passive signal identification: fingerprints captured signals by physical characteristics (band, modulation, timing, repetition) and scores against a protocol database with security metadata; works on both sub-GHz and 2.4 GHz domains (BLE/WiFi/802.15.4 via ESP32-C6)
 - **Weather Station** — decode Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
 - **Brute Force** — brute-force RF code transmitter (Princeton, CAME, Nice FLO, Linear, Holtek)
 - **Playlist Player** — load `.txt` playlist files from `SubGHz/playlist/` and transmit each `.sub` file sequentially; supports repeat count, progress display, and Flipper path remapping
+- **Proto Pirate** — rolling-code analysis toolkit: live capture, offline `.sub` file decode, and timing tuner comparing captured pulse widths against 25 automotive/garage protocol definitions (KeeLoq, Star Line, CAME, Nice FLO, etc.)
 - **Add Manually** — select a protocol, enter a hex key, and transmit a single-burst RF signal
+- **Create from Scratch** — protocol picker with per-field editors for KeeLoq/Star Line/Jarolift (serial, button, counter, manufacturer key)
 - **Radio Settings** — adjustable TX power, custom frequency entry (300–928 MHz)
 
 ### NFC Enhancements
@@ -101,6 +105,7 @@ project discussion, and related project resources:
 - **PicoPass/iCLASS** — read, authenticate, and emulate HID iCLASS cards (DES key diversification)
 - **NFC Fuzzer** — protocol testing tool
 - **MIFARE Classic Crypto1** support
+- **On-device MFKey32 key recovery** — after capturing two reader authentication nonces via Detect Reader, recovers the MIFARE Classic sector key entirely on-device using a memory-bounded Crapto-1 solver; saves recovered keys in Proxmark-compatible dictionary format
 
 ### RFID Enhancements
 - **26 protocol decoders** — EM4100 (+ 32/16-bit variants), H10301, HID Generic, HID ExGeneric, Indala26, Indala224, AWID, Pyramid, Paradox, IOProx, FDX-A, FDX-B, Viking, Electra, Gallagher, Jablotron, PAC/Stanley, Securakey, GProx II, Noralsy, Idteck, Keri, Nexwatch, InstaFob
@@ -136,25 +141,27 @@ project discussion, and related project resources:
 - Download ready-to-use apps and the App SDK at **[m1-sdk](https://github.com/bedge117/m1-sdk)**
 
 ### Games & Entertainment
-- Snake, Tetris, T-Rex Runner, Pong, Dice — built-in games accessible from the menu
+- Snake, Tetris, T-Rex Runner, Pong, 2048, Dice — built-in games accessible from the menu
 - **Music Player** — plays Flipper Music Format (`.fmf`) files from `SD:/Music/`
 
 ### WiFi
 
-> **Requires [SiN360 ESP32 firmware](https://github.com/sincere360/M1_SiN360_ESP32/releases)** — see ESP32 note above.
+> **Requires compatible ESP32 firmware** — either [SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases) (binary SPI, full feature set) or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT commands, partial feature set). See ESP32 note below.
 
 **Sniffers:**
 - Packet sniffers: All, Beacon, Probe, Deauth, EAPOL, SAE/WPA3, Pwnagotchi
-- Signal Monitor, Station Scan, MAC Tracker, Wardrive, Station Wardrive
 
 **Attacks:**
-- Deauth, Beacon Spam, AP Clone, Rickroll, Evil Portal, Probe Flood, Karma, Karma+Portal
+- Deauth, Beacon Spam, AP Clone, Rickroll, Evil Portal, Probe Flood, Karma, Karma+Portal, PMKID Grab
+
+**Recon:**
+- Station Scan, 2.4G Channel Survey, MAC Track, Wardrive, Station Wardrive, Signal Monitor
 
 **Network Scanners:**
 - Ping, ARP, SSH, Telnet, Port Scan
 
 **General:**
-- Scan nearby access points, Status, Saved Networks (AES-256 encrypted on SD card)
+- Networks (scan & connect), Status, Saved Networks (AES-256 encrypted on SD card)
 - Firmware Download — browse and download Hapax releases directly to SD card
 - Set SSID/MAC/channel, Evil Portal HTML config, save/load/clear AP lists
 
@@ -170,13 +177,13 @@ project discussion, and related project resources:
 
 ### Bluetooth & BLE
 
-> **Requires [SiN360 ESP32 firmware](https://github.com/sincere360/M1_SiN360_ESP32/releases)** — see ESP32 note above.
+> **Requires compatible ESP32 firmware** — either [SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases) (binary SPI) or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT commands, BLE Spam only). See ESP32 note below.
 
 **BLE Sniffers:** Analyzer, Generic, Flipper, AirTag Sniff/Monitor, Flock
 
 **BLE Wardrive:** Regular, Continuous, Flock
 
-**BLE Spam:** Sour Apple, SwiftPair, Samsung, Flipper, All, AirTag Spoof
+**BLE Spam:** BLE Spam (unified All/Apple/Google/Microsoft), Sour Apple, SwiftPair, Samsung, Flipper, All, AirTag Spoof
 
 **BLE Detectors:** Skimmers, Flock, Meta
 
@@ -260,9 +267,14 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **Storage:** microSD card
 - **Hardware revision:** 2.x
 
-> **ESP32 firmware required:** As of v0.9.1, Hapax uses the **[sincere360/M1_SiN360_ESP32](https://github.com/sincere360/M1_SiN360_ESP32)** binary SPI firmware for the ESP32-C6 coprocessor. This firmware must be installed for WiFi, Bluetooth, and BLE features to work. Flash it via **Settings → ESP32 Update** (OTA over SPI) or via esptool — no hardware changes required. The stock Espressif AT firmware and older SPI-AT builds are **not** compatible with v0.9.1+.
+> **ESP32 firmware required:** Hapax supports two ESP32-C6 coprocessor firmware variants:
 >
-> Download the latest `factory_ESP32C6-SPI-XIAO.bin` from the [SiN360 ESP32 releases page](https://github.com/sincere360/M1_SiN360_ESP32/releases).
+> - **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** (binary SPI) — full feature set including all sniffers, recon tools, station scan, and BLE features.
+> - **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** (AT commands over SPI) — supports WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, and network joining. Does not support packet-monitor sniffers, station scan, or advanced BLE features.
+>
+> Flash via **Settings → ESP32 Update** (OTA over SPI) or via esptool — no hardware changes required. The stock Espressif UART-based AT firmware is **not** compatible.
+>
+> Download the latest SiN360 binary from the [SiN360 ESP32 releases page](https://github.com/sincere360/M1_SiN360_ESP32/releases).
 
 ## Building
 
@@ -305,6 +317,17 @@ make
 
 Output: `./artifacts/`
 
+### Build on macOS
+
+```bash
+# Install dependencies
+./setup_macos.sh
+
+# Build (toolchain auto-detected from /Applications/ArmGNUToolchain/)
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
 See [`DEVELOPMENT.md`](DEVELOPMENT.md) for detailed build environment setup and
 [`documentation/mbt.md`](documentation/mbt.md) for SRecord/CRC tooling.
 
@@ -327,7 +350,7 @@ as GitHub Actions workflows:
 |------|-------------|-------|------|
 | **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
 | **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | On-demand (`workflow_dispatch`) |
-| **Unity + ASan/UBSan** | `tests.yml` | `bit_util.c` (expandable) | Enforced (blocks PR) |
+| **Unity + ASan/UBSan** | `tests.yml` | 123 test files, 5,000+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
 | **Doxygen** | `docs.yml` | Application source | Auto-deploy to Pages |
 
 ## Flashing
