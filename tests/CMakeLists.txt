@@ -635,6 +635,24 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rf_match COMMAND test_rf_match)
 
+# rf_fingerprint_24 — ESP32-C6 2.4 GHz fingerprint backend (BLE/WiFi/802.15.4
+# extraction + sensor-aware identification). Pure logic, no hardware.
+add_executable(test_rf_fingerprint_24
+    test_rf_fingerprint_24.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint_24.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+    ${M1_ROOT}/Sub_Ghz/rf_match.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_fingerprint_24 PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_fingerprint_24 PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_fingerprint_24 PRIVATE sanitizers)
+endif()
+add_test(NAME rf_fingerprint_24 COMMAND test_rf_fingerprint_24)
+
 # rf_sweep — ranked sweep-report aggregator (Signal Identifier live report)
 add_executable(test_rf_sweep
     test_rf_sweep.c

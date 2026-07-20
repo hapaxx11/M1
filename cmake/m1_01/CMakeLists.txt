@@ -339,6 +339,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/rf_fingerprint.c
     ../../Sub_Ghz/rf_protocol_db.c
     ../../Sub_Ghz/rf_match.c
+    ../../Sub_Ghz/rf_fingerprint_24.c
     ../../Sub_Ghz/rf_sweep.c
     ../../Sub_Ghz/rf_scan_plan.c
     ../../Sub_Ghz/rf_ook_fsk.c
@@ -537,6 +538,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_esp32_hal.c
     ../../m1_csrc/m1_esp32_cmd.c
     ../../m1_csrc/m1_esp32_caps.c
+    ../../m1_csrc/m1_rf_fingerprint_24.c
     ../../m1_csrc/m1_esp_hosted_dummy.c
     ../../m1_csrc/m1_file_browser.c
     ../../m1_csrc/m1_file_util.c

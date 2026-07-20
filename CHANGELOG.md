@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **RF Rosetta: ESP32-C6 2.4 GHz fingerprint backend (CAPS-gated)** — Extended the
+  sensor-agnostic RF Rosetta identification pipeline (Signal ID) to the ESP32-C6
+  2.4 GHz domains. New pure-logic backend `Sub_Ghz/rf_fingerprint_24.c/h` turns a
+  coprocessor scan observation (radio channel + RSSI) into an `rf_fingerprint_t`
+  for BLE advertising, 2.4 GHz WiFi, and IEEE 802.15.4 (Zigbee/Thread), with
+  channel→frequency helpers for each. Because the three families share band and
+  modulation family, `rf_match_24()` names a detection deterministically from its
+  sensor domain (via the new `rf_protocol_db_find_2400()` resolver) instead of
+  relying on band+modulation scoring. The runtime CAPS gate lives in
+  `m1_csrc/m1_rf_fingerprint_24.c` (`m1_rf24_require_sensor()` /
+  `m1_rf24_sensor_available()`), mapping each sensor onto its
+  `M1_ESP32_CAP_BLE_SCAN` / `M1_ESP32_CAP_WIFI_SCAN` / `M1_ESP32_CAP_802154` bit so
+  the feature fails closed on firmware that lacks the capability. Covered by
+  `tests/test_rf_fingerprint_24.c` (13 host tests).
+
 ## [0.9.2.13] - 2026-07-03
 
 ### Fixed

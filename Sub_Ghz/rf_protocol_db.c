@@ -18,11 +18,19 @@
 #include "rf_protocol_db.h"
 
 #include <stddef.h>   /* NULL */
+#include <string.h>   /* strcmp */
 
 /* Convenience band groupings. */
 #define B_315_433   (RF_BAND_315 | RF_BAND_433)
 #define B_868_915   (RF_BAND_868 | RF_BAND_915)
 #define B_SUBGHZ    (RF_BAND_300 | RF_BAND_315 | RF_BAND_433 | RF_BAND_868 | RF_BAND_915)
+
+/* Canonical names for the three ESP32-C6 2.4 GHz domains.  Shared between the
+ * table below and rf_protocol_db_find_2400() so the sensor -> signature mapping
+ * stays correct even if the surrounding table is reordered. */
+#define RF_SIG_NAME_BLE     "BLE Advertising"
+#define RF_SIG_NAME_WIFI    "WiFi (2.4 GHz)"
+#define RF_SIG_NAME_ZIGBEE  "Zigbee/Thread (802.15.4)"
 
 static const rf_protocol_sig_t rf_db[] = {
     /* ---- Automotive --------------------------------------------------- */
@@ -169,7 +177,7 @@ static const rf_protocol_sig_t rf_db[] = {
 
     /* ---- 2.4 GHz (ESP32-C6 domains) ----------------------------------- */
     {
-        .name = "BLE Advertising", .category = RF_CAT_CONSUMER,
+        .name = RF_SIG_NAME_BLE, .category = RF_CAT_CONSUMER,
         .mod = RF_MOD_FSK, .bands = RF_BAND_2400,
         .te_min_us = 0, .te_max_us = 0, .bits_min = 0, .bits_max = 0,
         .security = RF_SEC_UNKNOWN, .known_vuln = false,
@@ -177,7 +185,7 @@ static const rf_protocol_sig_t rf_db[] = {
         .security_note = "MAC may rotate; static MAC = trackable",
     },
     {
-        .name = "WiFi (2.4 GHz)", .category = RF_CAT_CONSUMER,
+        .name = RF_SIG_NAME_WIFI, .category = RF_CAT_CONSUMER,
         .mod = RF_MOD_FSK, .bands = RF_BAND_2400,
         .te_min_us = 0, .te_max_us = 0, .bits_min = 0, .bits_max = 0,
         .security = RF_SEC_ENCRYPTED, .known_vuln = false,
@@ -185,7 +193,7 @@ static const rf_protocol_sig_t rf_db[] = {
         .security_note = "WPA2/3 encrypts payload; mgmt frames are clear",
     },
     {
-        .name = "Zigbee/Thread (802.15.4)", .category = RF_CAT_IOT,
+        .name = RF_SIG_NAME_ZIGBEE, .category = RF_CAT_IOT,
         .mod = RF_MOD_FSK, .bands = RF_BAND_2400,
         .te_min_us = 0, .te_max_us = 0, .bits_min = 0, .bits_max = 0,
         .security = RF_SEC_ENCRYPTED, .known_vuln = false,
@@ -206,6 +214,25 @@ const rf_protocol_sig_t *rf_protocol_db_get(uint16_t index)
     if (index >= RF_DB_COUNT)
         return NULL;
     return &rf_db[index];
+}
+
+int rf_protocol_db_find_2400(rf_sensor_t sensor)
+{
+    const char *want;
+    switch (sensor)
+    {
+        case RF_SENSOR_BLE:     want = RF_SIG_NAME_BLE;    break;
+        case RF_SENSOR_WIFI:    want = RF_SIG_NAME_WIFI;   break;
+        case RF_SENSOR_802154:  want = RF_SIG_NAME_ZIGBEE; break;
+        default:                return -1;   /* not a 2.4 GHz sensor */
+    }
+
+    for (uint16_t i = 0; i < RF_DB_COUNT; i++)
+    {
+        if (rf_db[i].name != NULL && strcmp(rf_db[i].name, want) == 0)
+            return (int)i;
+    }
+    return -1;
 }
 
 const char *rf_category_str(rf_category_t cat)
