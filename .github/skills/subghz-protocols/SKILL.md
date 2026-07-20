@@ -1,6 +1,6 @@
 ---
 name: subghz-protocols
-description: Sub-GHz protocol reference: the four file-format types and two replay paths (.sub/.sgh taxonomy), rolling-code replay philosophy and feasibility registry, the Bind New Remote wizard rules, the 10-item Sub-GHz menu structure (with the Analyzer sub-menu), and deferred Momentum-parity work. Load for any Sub-GHz protocol, replay, emulation, freq-preset, or bind-wizard work.
+description: Sub-GHz protocol reference: the four file-format types and two replay paths (.sub/.sgh taxonomy), rolling-code replay philosophy and feasibility registry, the Bind New Remote wizard rules, the 10-item Sub-GHz menu structure (with the Analyzer sub-menu), and the remaining Momentum-parity work. Load for any Sub-GHz protocol, replay, emulation, freq-preset, or bind-wizard work.
 ---
 
 # Sub-GHz Protocols
@@ -378,56 +378,26 @@ the scene manager without rewriting each tool.
 
 ---
 
-## Deferred Sub-GHz Momentum-Parity Work
+## Remaining Sub-GHz Momentum-Parity Work
 
-> The Momentum-parity phased programme (Phases 1–12) is otherwise complete.  The items
-> below were intentionally deferred and **MUST NOT** be re-opened without first
-> re-reading the phase rationale in this section.  When working on a related area,
-> check whether any blocker has been lifted and update this table accordingly.
+> The Momentum-parity phased programme (Phases 1–12) is **complete and shipped**.
+> Only the two items in the table below are genuinely still open.  Everything
+> else that used to live in this section has landed — counter editing for Nice
+> FloR-S, CAME Atomo and Alutech AT-4N is `SUPPORTED` (cipher modules complete),
+> and the widget migration is done.  Do **not** re-open anything that is *not*
+> listed here.
 
-### Non-scene-native list candidates (excluded from widget migration)
+| Remaining item | Blocker / how to finish it |
+|----------------|----------------------------|
+| **Phoenix V2 counter editing** | The discriminant/checksum trailing the counter must be recomputed after editing; the algorithm is not yet implemented.  Classified `DEFERRED` by `subghz_signal_fields_counter_edit_status` in `Sub_Ghz/subghz_signal_fields.c`. |
+| **Per-protocol Info-screen `get_string()` renderers** | The `SubGhzGetStringFn` vtable ships only the KeeLoq-family renderer (`Sub_Ghz/subghz_signal_format.c`).  Nice FloR-S, CAME Atomo and Alutech AT-4N already have decoder field decomposition and can each receive a `subghz_signal_format_<proto>_info()` renderer: (1) add the function in `subghz_signal_format.c`, (2) wire it onto the matching registry entries, (3) cover it with a `test_subghz_signal_format` sub-suite (output shape, prefix-terminated match, NULL safety, truncation safety) — mirror the KeeLoq test pattern.  The Phoenix V2 renderer stays blocked until its counter editing lands. |
 
-The generic `subghz_submenu_model` + `m1_submenu_draw` widget migration is functionally
-complete.  The three remaining "list-shaped" UIs are intentionally **not** migrated
+**Not open work — do not re-open:** three "list-shaped" UIs are intentionally
+excluded from the `subghz_submenu_model` + `m1_submenu_draw` widget migration
 because they do not fit the simple-label-list shape the widget targets:
-
-| Site | Reason it is not a widget candidate |
-|------|-------------------------------------|
-| `SubGhzSceneConfig` | LEFT/RIGHT value columns with `<` `>` arrows — not a label list |
-| Saved file browser | Delegates to the generic `storage_browse()` helper — not a scene-native list |
-| Add Manually picker | Was the legacy blocking delegate; already retired (now `SubGhzSceneSetType`, which already uses the widget) |
-
-These entries are **not** open work — do not reopen them.
-
-### Counter editing for non-KeeLoq rolling-code protocols
-
-The capability probe (`subghz_signal_fields_counter_edit_status`) classifies
-protocols as `SUPPORTED`, `DEFERRED`, or `UNSUPPORTED`.
-
-**Promoted to SUPPORTED (no longer deferred):**
-- **Nice FloR-S** — cipher implemented in `subghz_nice_flor_s.c/h` with a 32-byte rainbow table (build-time secret, mirrors KeeLoq key-vault pattern).
-- **CAME Atomo** — LFSR stream cipher self-contained in `subghz_came_atomo.c/h`; no external key material needed.
-- **Alutech AT-4N** — TEA-variant cipher in `subghz_alutech_at_4n.c/h` with a 32-byte build-time rainbow table.
-
-**Still DEFERRED:**
-
-| Protocol | Blocker |
-|----------|---------|
-| **Phoenix V2** | Discriminant/checksum trailing the counter must be recomputed after editing; algorithm not yet implemented. |
-
-### Additional Info-screen `get_string()` renderers
-
-The polymorphic `SubGhzGetStringFn` vtable on `SubGhzProtocolDef` is live and the
-KeeLoq-family renderer ships in `Sub_Ghz/subghz_signal_format.c`.
-
-Nice FloR-S, CAME Atomo, and Alutech AT-4N now have decoder field decomposition
-(their cipher modules are complete) and can receive their own
-`subghz_signal_format_<proto>_info()` renderers.  For each:
-1. Add `subghz_signal_format_<proto>_info()` in `Sub_Ghz/subghz_signal_format.c`.
-2. Wire it onto the matching registry entries.
-3. Cover with a `test_subghz_signal_format` sub-suite (output shape, prefix-terminated
-   match, NULL safety, truncation safety) — mirror the KeeLoq test pattern.
-
-Phoenix V2 renderer remains blocked until counter editing is implemented.
+`SubGhzSceneConfig` (LEFT/RIGHT value columns with `<` `>` arrows),
+the saved-file browser (delegates to the generic `storage_browse()` helper),
+and the former Add Manually picker (already retired — now `SubGhzSceneSetType`,
+which uses the widget).
 
 ---
