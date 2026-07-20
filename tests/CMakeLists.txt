@@ -635,6 +635,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rf_match COMMAND test_rf_match)
 
+# rf_sweep — ranked sweep-report aggregator (Signal Identifier live report)
+add_executable(test_rf_sweep
+    test_rf_sweep.c
+    ${M1_ROOT}/Sub_Ghz/rf_sweep.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_sweep PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_sweep PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_sweep PRIVATE sanitizers)
+endif()
+add_test(NAME rf_sweep COMMAND test_rf_sweep)
+
 # ------------------------------------------------------------------
 # Module under test: subghz_registry_decode_try_fn
 # Canonical SubGhzRawDecodeTryFn bridge extracted from

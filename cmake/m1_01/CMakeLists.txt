@@ -339,6 +339,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/rf_fingerprint.c
     ../../Sub_Ghz/rf_protocol_db.c
     ../../Sub_Ghz/rf_match.c
+    ../../Sub_Ghz/rf_sweep.c
     ../../Sub_Ghz/subghz_playlist_parser.c
     ../../Sub_Ghz/subghz_secplus_v1_encoder.c
     ../../Sub_Ghz/subghz_keeloq.c
