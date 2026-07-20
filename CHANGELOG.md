@@ -9,21 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — The five
--  passive RF-analysis tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter,
--  Freq Scanner, and Signal ID) are now grouped under a single **Analyzer** entry in
--  the top-level Sub-GHz menu instead of occupying five separate top-level slots.
--  This shortens the Sub-GHz menu from 15 to 11 items and groups the observe-only
-+ **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — RF-analysis
-+  tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter, Freq Scanner, and
-+  Signal ID) are now grouped under a single **Analyzer** entry in the top-level
-+  Sub-GHz menu.
-+  This shortens the Sub-GHz menu from 14 to 10 items and groups the observe-only
-  (`m1_csrc/m1_subghz_scene_analyzer_menu.c`); the individual analyzer scenes are
-  unchanged and simply reachable one level deeper. The `subghz-protocols` skill
-  menu invariant was updated in the same change.
+## [0.9.2.14] - 2026-07-20
 
 ### Added
 
@@ -41,7 +27,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `M1_ESP32_CAP_BLE_SCAN` / `M1_ESP32_CAP_WIFI_SCAN` / `M1_ESP32_CAP_802154` bit so
   the feature fails closed on firmware that lacks the capability. Covered by
   `tests/test_rf_fingerprint_24.c` (13 host tests).
+- **Sub-GHz: passive signal identification (RF Rosetta)** — A new sensor-agnostic
+  identification core fingerprints a captured signal by its physical
+  characteristics (frequency band, modulation family, timing element,
+  repetition count) and scores it against a protocol-signature database with
+  security metadata (fixed / rolling / encrypted + plain-English notes). When a
+  Read Raw capture matches no known protocol, the Decode Results screen now
+  shows a best-guess category, confidence, and security posture instead of a
+  bare "No protocols decoded", falling back to the modulation hint when no
+  identity is confident. The database also covers the 2.4 GHz domains
+  (BLE / WiFi / 802.15.4) for future cross-sensor use. Inspired by RF Rosetta.
+- **Sub-GHz: Signal Identifier scene (RF Rosetta)** — Added a new "Signal ID"
+  entry to the Sub-GHz menu that sweeps a curated list of common ISM
+  frequencies with the SI4463 radio and, whenever it catches activity above an
+  adjustable RSSI threshold, samples a short RSSI burst to classify the
+  modulation family (OOK vs FSK), builds a sensor-agnostic fingerprint, and —
+  only when that fingerprint is discriminating enough to name a protocol —
+  scores it against the protocol database. Matches accumulate into a live,
+  confidence-ranked report the user reads on-screen (name + confidence, with
+  scroll, clear, and threshold controls); frequencies with activity that
+  cannot be identified are still surfaced as "active, unidentified" rather than
+  a misleading guess. All decision logic lives in pure, host-tested modules
+  (`rf_scan_plan`, `rf_ook_fsk`, plus the existing fingerprint/match/sweep
+  core); the SI4463 delegate is a thin wrapper reusing the proven Freq Scanner
+  receive path, so the scoring engine and protocol database are untouched. The
+  OOK-vs-FSK-from-RSSI step is a heuristic and reports modest confidence.
+  Inspired by RF Rosetta.
+- **Sub-GHz: sweep-report aggregator for the Signal Identifier (RF Rosetta)** —
+  Added the pure-logic core that turns a stream of per-detection
+  identification results into a live, deduplicated, confidence-ranked report:
+  identical protocols seen on the same band merge (raising confidence, keeping
+  the strongest RSSI and its frequency), the list stays sorted best-first, and
+  a bounded set of slots evicts only the weakest entry when a more confident
+  signal arrives. This is the host-tested foundation the forthcoming Signal
+  Identifier sweep scene will feed and render; it plugs into the existing
+  fingerprint/match engine without touching the scoring or protocol database.
+  Inspired by RF Rosetta.
+- **Sub-GHz: modulation suggestion from waveform** — When a captured Read Raw
+  signal cannot be matched to a known protocol, the Decode Results screen now
+  hints whether the waveform looks like OOK/AM or FSK/FM (with a confidence
+  level) so you know which modulation to retry the capture with. Inspired by
+  RF Rosetta (#616).
 
+### Changed
+
+- **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — The five
+-  passive RF-analysis tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter,
+-  Freq Scanner, and Signal ID) are now grouped under a single **Analyzer** entry in
+-  the top-level Sub-GHz menu instead of occupying five separate top-level slots.
+-  This shortens the Sub-GHz menu from 15 to 11 items and groups the observe-only
++ **Sub-GHz: analyzer tools consolidated into an "Analyzer" sub-menu** — RF-analysis
++  tools (Frequency Analyzer, Spectrum Analyzer, RSSI Meter, Freq Scanner, and
++  Signal ID) are now grouped under a single **Analyzer** entry in the top-level
++  Sub-GHz menu.
++  This shortens the Sub-GHz menu from 14 to 10 items and groups the observe-only
+  (`m1_csrc/m1_subghz_scene_analyzer_menu.c`); the individual analyzer scenes are
+  unchanged and simply reachable one level deeper. The `subghz-protocols` skill
+  menu invariant was updated in the same change.
+- **Documentation: Agent instruction restructure** — split the monolithic
+  `CLAUDE.md` (~2,500 lines) into a slim always-loaded core plus modular,
+  on-demand skills under `.github/skills/` (subghz-protocols, flipper-import,
+  esp32-coprocessor, ui-scene-architecture, firmware-testing, hardware-state-mgmt,
+  memory-heap, vendored-deps, docs-changelog, forks-tracker). Added a Skill Index
+  routing table to `CLAUDE.md`, `AGENTS.md` and `.github/copilot-instructions.md`
+  entrypoints, and `documentation/agent/versioning.md`. No functional firmware change.
+- **Sub-GHz: Proto Pirate moved under Analyzer** — the Proto Pirate rolling-code
+  toolkit is now the 6th item of the **Analyzer** sub-menu instead of a
+  top-level entry, trimming the top-level Sub-GHz menu from 14 to 10 items.
 ## [0.9.2.13] - 2026-07-03
 
 ### Fixed
