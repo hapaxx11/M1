@@ -145,4 +145,18 @@ void rf_fingerprint_from_subghz_raw(const int16_t *raw_data,
 /** Human-readable modulation-family label ("OOK/AM", "FSK/FM", "?"). */
 const char *rf_mod_family_str(rf_mod_family_t mod);
 
+/**
+ * Does the fingerprint carry a discriminating feature beyond its band?
+ *
+ * Band alone cannot name a protocol — every device on 433 MHz shares that
+ * band — so a band-only fingerprint would match the first same-band signature
+ * at full confidence, which is misleading.  A consumer that builds coarse
+ * fingerprints (e.g. the live sweep) should only trust rf_match_best() when
+ * this returns true; otherwise the signal is merely "active, unidentified".
+ *
+ * @return true when modulation, timing element, or an estimated bit count is
+ *         known (any feature the scorer can weigh against more than band).
+ */
+bool rf_fingerprint_is_discriminating(const rf_fingerprint_t *fp);
+
 #endif /* RF_FINGERPRINT_H */

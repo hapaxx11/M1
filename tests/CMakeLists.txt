@@ -648,6 +648,33 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rf_sweep COMMAND test_rf_sweep)
 
+# rf_scan_plan — Signal Identifier ISM probe plan + cursor
+add_executable(test_rf_scan_plan
+    test_rf_scan_plan.c
+    ${M1_ROOT}/Sub_Ghz/rf_scan_plan.c
+    ${M1_ROOT}/Sub_Ghz/rf_fingerprint.c
+    ${M1_ROOT}/Sub_Ghz/rf_repetition.c
+    ${M1_ROOT}/Sub_Ghz/subghz_mod_suggest.c
+)
+target_include_directories(test_rf_scan_plan PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_scan_plan PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_scan_plan PRIVATE sanitizers)
+endif()
+add_test(NAME rf_scan_plan COMMAND test_rf_scan_plan)
+
+# rf_ook_fsk — OOK-vs-FSK classifier from an RSSI burst
+add_executable(test_rf_ook_fsk
+    test_rf_ook_fsk.c
+    ${M1_ROOT}/Sub_Ghz/rf_ook_fsk.c
+)
+target_include_directories(test_rf_ook_fsk PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_ook_fsk PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_ook_fsk PRIVATE sanitizers)
+endif()
+add_test(NAME rf_ook_fsk COMMAND test_rf_ook_fsk)
+
 # ------------------------------------------------------------------
 # Module under test: subghz_registry_decode_try_fn
 # Canonical SubGhzRawDecodeTryFn bridge extracted from

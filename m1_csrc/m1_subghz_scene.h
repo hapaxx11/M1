@@ -71,6 +71,7 @@ typedef enum {
     SubGhzSceneSignalSettings, /**< Read-only per-file field display (Phase 9a-2) */
     SubGhzSceneProtoPirateMenu,  /**< Proto Pirate sub-menu (Receiver/SubDecode/Timing Tuner) */
     SubGhzSceneProtoPirateTuner, /**< Proto Pirate async Timing Tuner */
+    SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -548,6 +549,7 @@ extern const SubGhzSceneHandlers subghz_scene_set_mfkey_handlers;
 extern const SubGhzSceneHandlers subghz_scene_signal_settings_handlers;
 extern const SubGhzSceneHandlers subghz_scene_proto_pirate_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_proto_pirate_tuner_handlers;
+extern const SubGhzSceneHandlers subghz_scene_signal_identifier_handlers;
 
 /*============================================================================*/
 /* SignalSettings (Phase 9b) cross-scene API                                  */

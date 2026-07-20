@@ -59,6 +59,15 @@ const char *rf_mod_family_str(rf_mod_family_t mod)
     }
 }
 
+bool rf_fingerprint_is_discriminating(const rf_fingerprint_t *fp)
+{
+    if (fp == NULL)
+        return false;
+    return (fp->mod != RF_MOD_UNKNOWN) ||
+           (fp->te_us != 0U) ||
+           (fp->est_bits != 0U);
+}
+
 /* Map the mod-suggest family enum onto the shared rf_mod_family_t. */
 static rf_mod_family_t map_mod(SubGhzModSuggestType t)
 {

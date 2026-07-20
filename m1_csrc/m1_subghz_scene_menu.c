@@ -23,6 +23,7 @@
  *  12. Remote
  *  13. Bind Remote
  *  14. Proto Pirate (rolling-code analysis — PR #579)
+ *  15. Signal ID (RF Rosetta sweep + fingerprint identifier)
  */
 
 #include <stdint.h>
@@ -41,7 +42,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT   14
+#define MENU_ITEM_COUNT   15
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -58,6 +59,7 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Remote",
     "Bind Remote",
     "Proto Pirate",
+    "Signal ID",
 };
 
 static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
@@ -75,6 +77,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneRemote,
     SubGhzSceneBindWizard,
     SubGhzSceneProtoPirateMenu,
+    SubGhzSceneSignalIdentifier,
 };
 
 /*============================================================================*/

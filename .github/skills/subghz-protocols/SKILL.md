@@ -1,6 +1,6 @@
 ---
 name: subghz-protocols
-description: Sub-GHz protocol reference: the four file-format types and two replay paths (.sub/.sgh taxonomy), rolling-code replay philosophy and feasibility registry, the Bind New Remote wizard rules, the 14-item Sub-GHz menu structure, and deferred Momentum-parity work. Load for any Sub-GHz protocol, replay, emulation, freq-preset, or bind-wizard work.
+description: Sub-GHz protocol reference: the four file-format types and two replay paths (.sub/.sgh taxonomy), rolling-code replay philosophy and feasibility registry, the Bind New Remote wizard rules, the 15-item Sub-GHz menu structure, and deferred Momentum-parity work. Load for any Sub-GHz protocol, replay, emulation, freq-preset, or bind-wizard work.
 ---
 
 # Sub-GHz Protocols
@@ -339,7 +339,7 @@ Generated files are saved to `0:/SUBGHZ/NewRemote_<prefix>_<12-hex>.sub`.
 
 ## Sub-GHz Menu Structure
 
-The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 14 items** in this
+The Sub-GHz scene menu (`m1_subghz_scene_menu.c`) must contain **exactly 15 items** in this
 order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
@@ -358,6 +358,7 @@ order.  Do not remove items, reorder, or add "Back" entries.
 | 12 | Remote | SubGhzSceneRemote | Scene-native (multi-button .rem remote control) |
 | 13 | Bind Remote | SubGhzSceneBindWizard | Scene-native (guided rolling-code binding wizard) |
 | 14 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
+| 15 | Signal ID | SubGhzSceneSignalIdentifier | Blocking delegate → `sub_ghz_signal_identifier()` (RF Rosetta sweep + fingerprint) |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and
 drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in

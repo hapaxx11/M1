@@ -123,6 +123,26 @@ void test_mod_family_strings(void)
     TEST_ASSERT_EQUAL_STRING("?",      rf_mod_family_str(RF_MOD_UNKNOWN));
 }
 
+void test_is_discriminating(void)
+{
+    rf_fingerprint_t fp;
+    memset(&fp, 0, sizeof(fp));
+
+    /* Band alone is NOT discriminating. */
+    fp.band = RF_BAND_433;
+    TEST_ASSERT_FALSE(rf_fingerprint_is_discriminating(&fp));
+
+    /* Any of mod / te / bits makes it discriminating. */
+    fp.mod = RF_MOD_OOK;
+    TEST_ASSERT_TRUE(rf_fingerprint_is_discriminating(&fp));
+    fp.mod = RF_MOD_UNKNOWN; fp.te_us = 300;
+    TEST_ASSERT_TRUE(rf_fingerprint_is_discriminating(&fp));
+    fp.te_us = 0; fp.est_bits = 24;
+    TEST_ASSERT_TRUE(rf_fingerprint_is_discriminating(&fp));
+
+    TEST_ASSERT_FALSE(rf_fingerprint_is_discriminating(NULL));
+}
+
 /*============================================================================*/
 /* Runner                                                                     */
 /*============================================================================*/
@@ -139,6 +159,7 @@ int main(void)
     RUN_TEST(test_preset_forces_modulation_family);
     RUN_TEST(test_repetition_populates_fingerprint);
     RUN_TEST(test_mod_family_strings);
+    RUN_TEST(test_is_discriminating);
 
     return UNITY_END();
 }
