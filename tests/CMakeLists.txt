@@ -2386,3 +2386,17 @@ if(TARGET sanitizers)
     target_link_libraries(test_irmp_decode PRIVATE sanitizers)
 endif()
 add_test(NAME irmp_decode COMMAND test_irmp_decode)
+
+# ESP32-C6 idle auto power-off — pure-logic state machine
+add_executable(test_esp32_idle
+    test_esp32_idle.c
+    ${M1_ROOT}/m1_csrc/esp32_idle.c
+)
+target_include_directories(test_esp32_idle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_idle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_idle PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_idle COMMAND test_esp32_idle)

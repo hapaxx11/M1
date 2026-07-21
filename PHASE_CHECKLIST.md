@@ -28,8 +28,8 @@
 ### Phase 1 — ESP32-C6 idle auto power-off (pure-logic core + host test)
 - **Description**: New `m1_csrc/esp32_idle.c/h` pure-logic idle-timeout state machine
   with `tests/test_esp32_idle.c` host coverage; registered in firmware + test CMake.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add ESP32-C6 idle power-off pure-logic core + host test`
 
 ### Phase 2 — Wire idle power-off into the ESP32 HAL + periodic task
 - **Description**: Add `m1_esp32_idle_poll()` in `m1_esp32_hal.c` (reads EN pin +

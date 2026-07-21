@@ -668,6 +668,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/wifi_selection.c
     ../../m1_csrc/wifi_deauth_cmd.c
     ../../m1_csrc/esp32_feature_map.c
+    ../../m1_csrc/esp32_idle.c
 
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
