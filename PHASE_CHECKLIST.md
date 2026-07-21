@@ -35,8 +35,8 @@
 - **Description**: Add `m1_esp32_idle_poll()` in `m1_esp32_hal.c` (reads EN pin +
   init state, calls `esp32_disable()` on timeout) and call it from
   `system_periodic_task()` inside the non-firmware-update guard.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Wire ESP32-C6 idle power-off into HAL and system periodic task`
 
 ### Phase 3 — Docs: record the July 2026 fork review
 - **Description**: Update `.github/skills/forks-tracker/SKILL.md` review dates/notes.

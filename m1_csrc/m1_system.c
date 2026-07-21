@@ -349,6 +349,7 @@ void system_periodic_task(void *param)
         	} // if ( event_change & BUTTON_EVENT_ACTIVE )
         	battery_indicator_update();
         	lcd_saver_update();
+        	m1_esp32_idle_poll();   /* auto power-off idle ESP32-C6 to save battery */
 #if M1_HAS_RGB_BACKLIGHT
             rgb_backlight_update();
 #endif
