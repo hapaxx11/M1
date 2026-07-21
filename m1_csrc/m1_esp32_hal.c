@@ -19,6 +19,7 @@
 #include "main.h"
 #include "m1_settings.h"
 #include "m1_esp32_hal.h"
+#include "esp32_idle.h"
 #include "m1_esp32_caps.h"
 #include "m1_http_client.h"
 //#include "spi_drv.h"
@@ -69,6 +70,16 @@ EXTI_HandleTypeDef esp32_exti_dataready;
 
 static uint8_t esp32_init_done = FALSE;
 static uint8_t esp32_uart_init_done = FALSE;
+
+/* Idle auto power-off: cut ESP32-C6 power after it has been powered but unused
+ * (transport not initialised) for ESP32_IDLE_POWER_OFF_MS.  m1_esp32_deinit()
+ * intentionally leaves the EN pin high, so without this the C6 would keep
+ * drawing current forever after the first WiFi/BT/802.15.4 feature is used. */
+static esp32_idle_ctx_t esp32_idle_ctx = {
+    .timeout_ms    = ESP32_IDLE_POWER_OFF_MS,
+    .idle_since_ms = 0u,
+    .idle_active   = false,
+};
 SemaphoreHandle_t sem_esp32_trans;
 
 S_M1_RingBuffer esp32_rb_hdl = {0};
@@ -516,6 +527,36 @@ uint8_t m1_esp32_get_init_status(void)
 {
 	return esp32_init_done;
 } // uint8_t m1_esp32_get_init_status(void)
+
+
+/******************************************************************************/
+/**
+* @brief Idle auto power-off tick for the ESP32-C6.
+*
+* Call periodically from a background task (e.g. system_periodic_task()) while
+* NOT in firmware-update mode.  When the coprocessor has been powered (EN pin
+* high) but its transport has been idle (deinitialised) for at least
+* ESP32_IDLE_POWER_OFF_MS, the enable line is dropped to save battery.  The next
+* WiFi/BT/802.15.4 feature re-enables and re-boots the C6 through the normal
+* m1_esp32_init() / esp32_main_init() path, so this is transparent to callers.
+*
+* @param  None
+* @retval None
+*/
+/******************************************************************************/
+void m1_esp32_idle_poll(void)
+{
+	/* "powered" is read directly from the EN output so the flag can never
+	 * drift out of sync with other writers of the pin (m1_bt.c, fw update). */
+	bool powered = (HAL_GPIO_ReadPin(ESP32_EN_GPIO_Port, ESP32_EN_Pin) == GPIO_PIN_SET);
+	bool busy    = (esp32_init_done == TRUE);
+
+	if (esp32_idle_poll(&esp32_idle_ctx, powered, busy, HAL_GetTick())
+	        == ESP32_IDLE_ACTION_POWER_OFF)
+	{
+		esp32_disable();
+	}
+} // void m1_esp32_idle_poll(void)
 
 
 

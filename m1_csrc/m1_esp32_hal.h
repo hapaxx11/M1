@@ -41,6 +41,7 @@ void esp32_disable(void);
 void m1_esp32_uart_tx(char *txdata);
 void esp32_uartrx_handler(uint8_t rx_byte);
 uint8_t m1_esp32_get_init_status(void);
+void m1_esp32_idle_poll(void);
 void esp32_UART_init(void);
 void esp32_UART_deinit(void);
 void esp32_UART_change_baudrate(uint32_t baudrate);

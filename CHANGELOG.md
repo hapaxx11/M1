@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ESP32-C6 idle auto power-off** — The ESP32-C6 coprocessor is now automatically
+  powered off after 60 s of inactivity to save battery. Previously the enable line
+  was left asserted after any WiFi/BT/802.15.4 feature exited (`m1_esp32_deinit()`
+  tears down the SPI transport but does not drop `ESP32_EN`), so the coprocessor
+  kept drawing current indefinitely. A new host-tested pure-logic idle-timeout
+  state machine (`m1_csrc/esp32_idle.c/h`) drives `m1_esp32_idle_poll()`, called
+  from `system_periodic_task()` (skipped during firmware update). Re-entry into any
+  ESP32 feature transparently re-enables and re-boots the C6 through the normal
+  init path. Ported from the idle-power-off behaviour in dagnazty/M1_T-1000 v0.1.5.
+
 ## [0.9.2.14] - 2026-07-20
 
 ### Added
