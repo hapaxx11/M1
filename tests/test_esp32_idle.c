@@ -100,10 +100,10 @@ void test_tick_wraparound_is_handled(void)
 {
     esp32_idle_ctx_t ctx;
     esp32_idle_ctx_init(&ctx, 1000u);
-    /* Open the window near the 32-bit tick max. */
-    uint32_t t0 = 0xFFFFFC00u;   /* ~1024 before wrap */
+    /* Open the window close enough to the 32-bit tick max to force wrap. */
+    uint32_t t0 = 0xFFFFFF00u;   /* 256 before wrap */
     TEST_ASSERT_EQUAL(ESP32_IDLE_ACTION_NONE, esp32_idle_poll(&ctx, true, false, t0));
-    /* now wraps past zero; elapsed = 1000 exactly -> power off. */
+    /* Wraps past zero; elapsed = 1000 exactly -> power off. */
     uint32_t t1 = (uint32_t)(t0 + 1000u);
     TEST_ASSERT_EQUAL(ESP32_IDLE_ACTION_POWER_OFF, esp32_idle_poll(&ctx, true, false, t1));
 }

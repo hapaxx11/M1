@@ -59,9 +59,9 @@ void esp32_idle_ctx_init(esp32_idle_ctx_t *ctx, uint32_t timeout_ms);
  *
  * Returns ESP32_IDLE_ACTION_POWER_OFF exactly once when the coprocessor has
  * been powered but idle for at least timeout_ms; otherwise ESP32_IDLE_ACTION_NONE.
- * After returning POWER_OFF the internal window is cleared, so the action will
- * not repeat until the C6 is powered and used again.  Tick wrap-around is
- * handled via unsigned subtraction.
+ * After returning POWER_OFF the current idle window is consumed; the action will
+ * not re-fire until another full idle window elapses (a new window opens on the
+ * next idle poll). Tick wrap-around is handled via unsigned subtraction.
  */
 esp32_idle_action_t esp32_idle_poll(esp32_idle_ctx_t *ctx,
                                     bool powered,
