@@ -213,6 +213,85 @@ void test_full_report_evicts_weakest_only_if_better(void)
 }
 
 /*============================================================================*/
+/* Decode-confirmed hits                                                      */
+/*============================================================================*/
+
+void test_decode_confirmed_added_at_100pct(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+
+    static const char name[] = "Princeton";
+    TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(&rep, 433920000UL,
+                                                 RF_BAND_433, -65, name));
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);
+    TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_NULL(rep.hits[0].sig);
+    TEST_ASSERT_EQUAL_UINT16(1, rep.hits[0].hits);
+    TEST_ASSERT_EQUAL_UINT32(1, rep.total_detections);
+    TEST_ASSERT_EQUAL_UINT32(1, rep.identified_detections);
+}
+
+void test_decode_confirmed_merges_on_same_name_and_band(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+
+    static const char name[] = "Princeton";
+    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -65, name);
+    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -60, name);
+
+    TEST_ASSERT_EQUAL_UINT8(1, rep.count);           /* merged, not two slots */
+    TEST_ASSERT_EQUAL_UINT16(2, rep.hits[0].hits);
+    TEST_ASSERT_EQUAL(100, rep.hits[0].confidence);  /* still 100 */
+    TEST_ASSERT_EQUAL_UINT32(2, rep.total_detections);
+}
+
+void test_decode_confirmed_ranks_above_fingerprint(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+
+    /* Add a fingerprint hit at 80% confidence first. */
+    rf_protocol_sig_t sig = make_sig("CarKeyFob", RF_CAT_AUTOMOTIVE, RF_SEC_ROLLING);
+    rf_fingerprint_t fp = make_fp(RF_BAND_433, 433920000UL, -70);
+    rf_sweep_report_add(&rep, &fp, &(rf_match_result_t){0, 80, &sig});
+
+    /* Now add a decode-confirmed hit at 100%. */
+    static const char name[] = "Princeton";
+    rf_sweep_report_add_decoded(&rep, 433920000UL, RF_BAND_433, -72, name);
+
+    /* Decode-confirmed hit must be rank 0. */
+    TEST_ASSERT_EQUAL_UINT8(2, rep.count);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
+}
+
+void test_decode_confirmed_evicts_weakest_when_full(void)
+{
+    rf_sweep_report_t rep;
+    rf_sweep_report_reset(&rep);
+
+    /* Fill the report with fingerprint hits (confidence 10..17). */
+    rf_protocol_sig_t sigs[RF_SWEEP_MAX_HITS];
+    for (uint8_t i = 0; i < RF_SWEEP_MAX_HITS; i++) {
+        sigs[i] = make_sig("fp", RF_CAT_MISC, RF_SEC_UNKNOWN);
+        rf_fingerprint_t fp = make_fp(RF_BAND_433, 433000000UL + i, 0);
+        rf_sweep_report_add(&rep, &fp, &(rf_match_result_t){0, (uint8_t)(10 + i), &sigs[i]});
+    }
+    TEST_ASSERT_EQUAL_UINT8(RF_SWEEP_MAX_HITS, rep.count);
+
+    /* A decode-confirmed hit (100%) must evict the weakest fingerprint slot. */
+    static const char name[] = "Princeton";
+    TEST_ASSERT_TRUE(rf_sweep_report_add_decoded(&rep, 433920000UL,
+                                                  RF_BAND_433, -55, name));
+    TEST_ASSERT_EQUAL_UINT8(RF_SWEEP_MAX_HITS, rep.count);
+    TEST_ASSERT_EQUAL_PTR(name, rep.hits[0].decode_name);
+    TEST_ASSERT_EQUAL_UINT8(100, rep.hits[0].confidence);
+}
+
+/*============================================================================*/
 /* Runner                                                                     */
 /*============================================================================*/
 
@@ -227,5 +306,9 @@ int main(void)
     RUN_TEST(test_same_sig_different_band_separate);
     RUN_TEST(test_ranked_by_confidence_then_rssi);
     RUN_TEST(test_full_report_evicts_weakest_only_if_better);
+    RUN_TEST(test_decode_confirmed_added_at_100pct);
+    RUN_TEST(test_decode_confirmed_merges_on_same_name_and_band);
+    RUN_TEST(test_decode_confirmed_ranks_above_fingerprint);
+    RUN_TEST(test_decode_confirmed_evicts_weakest_when_full);
     return UNITY_END();
 }

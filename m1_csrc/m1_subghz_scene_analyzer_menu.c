@@ -11,11 +11,11 @@
  * protocol-aware receiver for rolling-code capture.
  *
  * Menu items:
- *   1. Frequency Analyzer — pushes SubGhzSceneFreqAnalyzer
- *   2. Spectrum Analyzer  — pushes SubGhzSceneSpectrumAnalyzer
- *   3. RSSI Meter         — pushes SubGhzSceneRssiMeter
- *   4. Freq Scanner       — pushes SubGhzSceneFreqScanner
- *   5. Signal ID          — pushes SubGhzSceneSignalIdentifier (RF Rosetta)
+ *   1. Smart ID           — pushes SubGhzSceneSmartSignalId (pre-scan + RF Rosetta)
+ *   2. Frequency Analyzer — pushes SubGhzSceneFreqAnalyzer
+ *   3. Spectrum Analyzer  — pushes SubGhzSceneSpectrumAnalyzer
+ *   4. RSSI Meter         — pushes SubGhzSceneRssiMeter
+ *   5. Freq Scanner       — pushes SubGhzSceneFreqScanner
  *   6. Proto Pirate       — pushes SubGhzSceneProtoPirateMenu (rolling-code)
  *
  * All scene transitions are non-blocking; the scene itself only handles
@@ -39,20 +39,20 @@
 #define AN_MENU_ITEM_COUNT  6
 
 static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
+    "Smart ID",
     "Frequency Analyzer",
     "Spectrum Analyzer",
     "RSSI Meter",
     "Freq Scanner",
-    "Signal ID",
     "Proto Pirate",
 };
 
 static const SubGhzSceneId an_menu_targets[AN_MENU_ITEM_COUNT] = {
+    SubGhzSceneSmartSignalId,
     SubGhzSceneFreqAnalyzer,
     SubGhzSceneSpectrumAnalyzer,
     SubGhzSceneRssiMeter,
     SubGhzSceneFreqScanner,
-    SubGhzSceneSignalIdentifier,
     SubGhzSceneProtoPirateMenu,
 };
 

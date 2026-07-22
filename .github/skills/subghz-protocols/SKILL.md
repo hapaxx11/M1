@@ -364,11 +364,11 @@ order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
 |---|-------|----------|----------------|
-| 1 | Frequency Analyzer | SubGhzSceneFreqAnalyzer | Blocking delegate → `sub_ghz_frequency_reader()` |
-| 2 | Spectrum Analyzer | SubGhzSceneSpectrumAnalyzer | Blocking delegate → `sub_ghz_spectrum_analyzer()` |
-| 3 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
-| 4 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
-| 5 | Signal ID | SubGhzSceneSignalIdentifier | Blocking delegate → `sub_ghz_signal_identifier()` (RF Rosetta sweep + fingerprint) |
+| 1 | Smart ID | SubGhzSceneSmartSignalId | Blocking delegate → `sub_ghz_smart_signal_id()` (Hapax pre-scan + RF Rosetta identifier) |
+| 2 | Frequency Analyzer | SubGhzSceneFreqAnalyzer | Blocking delegate → `sub_ghz_frequency_reader()` |
+| 3 | Spectrum Analyzer | SubGhzSceneSpectrumAnalyzer | Blocking delegate → `sub_ghz_spectrum_analyzer()` |
+| 4 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
+| 5 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
 | 6 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and

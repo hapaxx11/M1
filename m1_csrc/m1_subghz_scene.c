@@ -82,6 +82,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneProtoPirateMenu]  = &subghz_scene_proto_pirate_menu_handlers,
     [SubGhzSceneProtoPirateTuner] = &subghz_scene_proto_pirate_tuner_handlers,
     [SubGhzSceneSignalIdentifier] = &subghz_scene_signal_identifier_handlers,
+    [SubGhzSceneSmartSignalId]    = &subghz_scene_smart_signal_id_handlers,
     [SubGhzSceneAnalyzerMenu]     = &subghz_scene_analyzer_menu_handlers,
 };
 

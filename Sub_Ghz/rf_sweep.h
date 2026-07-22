@@ -36,11 +36,14 @@
 
 /** One identified signal accumulated during a sweep. */
 typedef struct {
-    const rf_protocol_sig_t *sig;        /**< Matched signature (never NULL in a slot) */
+    const rf_protocol_sig_t *sig;        /**< Matched signature, or NULL for decode-confirmed hits */
+    const char              *decode_name; /**< Decoder protocol name (non-NULL when sig==NULL,
+                                              meaning the protocol decoder identified it directly
+                                              at 100% confidence; NULL for fingerprint-scored hits) */
     uint32_t                 freq_hz;    /**< Frequency of the strongest sample (Hz) */
     uint16_t                 band;       /**< rf_band_flag_t the signal was seen on */
-    rf_category_t            category;   /**< Device category (from sig) */
-    rf_security_t            security;   /**< Security posture (from sig) */
+    rf_category_t            category;   /**< Device category (from sig, or RF_CAT_UNKNOWN) */
+    rf_security_t            security;   /**< Security posture (from sig, or RF_SEC_UNKNOWN) */
     uint8_t                  confidence; /**< Best 0..100 confidence observed */
     int16_t                  rssi_dbm;   /**< Strongest RSSI observed (dBm); 0 unknown */
     uint16_t                 hits;       /**< Times this signal was seen */
@@ -85,5 +88,31 @@ bool rf_sweep_report_add(rf_sweep_report_t      *rep,
  * Best (rank-0) hit in the report, or NULL when nothing has been identified.
  */
 const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep);
+
+/**
+ * Fold a decode-confirmed hit into the report.
+ *
+ * Use this when the protocol decoder recognised the timing burst directly,
+ * yielding a definitive protocol name.  The hit is recorded at 100% confidence
+ * and deduplication is performed by (protocol_name pointer, band) identity.
+ *
+ * @param rep           Report to update (NULL is a no-op returning false).
+ * @param freq_hz       Centre frequency the signal was captured on (Hz).
+ * @param band          rf_band_flag_t bit for that frequency.
+ * @param rssi_dbm      RSSI of the strongest burst sample (dBm); 0 = unknown.
+ * @param protocol_name Protocol name string as returned by
+ *                      subghz_protocol_get_name() — must be a stable pointer
+ *                      (e.g. a string literal in the registry table) since the
+ *                      hit stores the pointer, not a copy.
+ *
+ * @return true when the hit was stored or merged; false when rep or
+ *         protocol_name is NULL, or when the report is full and the new
+ *         decode-confirmed hit does not outrank the weakest slot.
+ */
+bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
+                                 uint32_t           freq_hz,
+                                 uint16_t           band,
+                                 int16_t            rssi_dbm,
+                                 const char        *protocol_name);
 
 #endif /* RF_SWEEP_H */

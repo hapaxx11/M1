@@ -74,6 +74,7 @@ static void fill_slot(rf_sweep_hit_t *slot,
                       const rf_match_result_t *match)
 {
     slot->sig        = match->sig;
+    slot->decode_name = NULL;
     slot->freq_hz    = fp->freq_hz;
     slot->band       = fp->band;
     slot->category   = match->sig->category;
@@ -81,6 +82,24 @@ static void fill_slot(rf_sweep_hit_t *slot,
     slot->confidence = match->confidence;
     slot->rssi_dbm   = fp->rssi_dbm;
     slot->hits       = 1;
+}
+
+/* Fill a slot from a decode-confirmed detection. */
+static void fill_slot_decoded(rf_sweep_hit_t *slot,
+                              uint32_t        freq_hz,
+                              uint16_t        band,
+                              int16_t         rssi_dbm,
+                              const char     *protocol_name)
+{
+    slot->sig         = NULL;
+    slot->decode_name = protocol_name;
+    slot->freq_hz     = freq_hz;
+    slot->band        = band;
+    slot->category    = RF_CAT_UNKNOWN;
+    slot->security    = RF_SEC_UNKNOWN;
+    slot->confidence  = 100;
+    slot->rssi_dbm    = rssi_dbm;
+    slot->hits        = 1;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -147,4 +166,57 @@ const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep)
     if (rep == NULL || rep->count == 0)
         return NULL;
     return &rep->hits[0];
+}
+
+bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
+                                 uint32_t           freq_hz,
+                                 uint16_t           band,
+                                 int16_t            rssi_dbm,
+                                 const char        *protocol_name)
+{
+    if (rep == NULL || protocol_name == NULL)
+        return false;
+
+    rep->total_detections++;
+    rep->identified_detections++;
+
+    /* Same protocol on the same band → merge (bump hits, update strongest RSSI). */
+    for (uint8_t i = 0; i < rep->count; i++) {
+        if (rep->hits[i].decode_name == protocol_name &&
+            rep->hits[i].band == band) {
+            rf_sweep_hit_t *slot = &rep->hits[i];
+            if (slot->hits < UINT16_MAX)
+                slot->hits++;
+            if (rssi_stronger(rssi_dbm, slot->rssi_dbm)) {
+                slot->rssi_dbm = rssi_dbm;
+                slot->freq_hz  = freq_hz;
+            }
+            resort(rep); /* RSSI update may change ordering among 100%-confidence hits */
+            return true;
+        }
+    }
+
+    /* New decode-confirmed identity: take a free slot if available. */
+    if (rep->count < RF_SWEEP_MAX_HITS) {
+        fill_slot_decoded(&rep->hits[rep->count], freq_hz, band, rssi_dbm, protocol_name);
+        rep->count++;
+        resort(rep);
+        return true;
+    }
+
+    /* Full: evict the weakest slot only if the newcomer outranks it.
+     * A decode-confirmed hit has confidence 100, so it always outranks any
+     * fingerprint slot that scored below 100. */
+    {
+        rf_sweep_hit_t candidate;
+        fill_slot_decoded(&candidate, freq_hz, band, rssi_dbm, protocol_name);
+        rf_sweep_hit_t *weakest = &rep->hits[RF_SWEEP_MAX_HITS - 1];
+        if (hit_ranks_above(&candidate, weakest)) {
+            *weakest = candidate;
+            resort(rep);
+            return true;
+        }
+    }
+
+    return false;
 }
