@@ -92,7 +92,7 @@ const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep);
 /**
  * Fold a decode-confirmed hit into the report.
  *
- * Use this when the protocol decoder recognisied the timing burst directly,
+ * Use this when the protocol decoder recognised the timing burst directly,
  * yielding a definitive protocol name.  The hit is recorded at 100% confidence
  * and deduplication is performed by (protocol_name pointer, band) identity.
  *
