@@ -12,12 +12,11 @@
  *
  * Menu items:
  *   1. Smart ID           — pushes SubGhzSceneSmartSignalId (pre-scan + RF Rosetta)
- *   2. Signal ID          — pushes SubGhzSceneSignalIdentifier (RF Rosetta)
- *   3. Frequency Analyzer — pushes SubGhzSceneFreqAnalyzer
- *   4. Spectrum Analyzer  — pushes SubGhzSceneSpectrumAnalyzer
- *   5. RSSI Meter         — pushes SubGhzSceneRssiMeter
- *   6. Freq Scanner       — pushes SubGhzSceneFreqScanner
- *   7. Proto Pirate       — pushes SubGhzSceneProtoPirateMenu (rolling-code)
+ *   2. Frequency Analyzer — pushes SubGhzSceneFreqAnalyzer
+ *   3. Spectrum Analyzer  — pushes SubGhzSceneSpectrumAnalyzer
+ *   4. RSSI Meter         — pushes SubGhzSceneRssiMeter
+ *   5. Freq Scanner       — pushes SubGhzSceneFreqScanner
+ *   6. Proto Pirate       — pushes SubGhzSceneProtoPirateMenu (rolling-code)
  *
  * All scene transitions are non-blocking; the scene itself only handles
  * navigation events (UP / DOWN / OK / BACK).
@@ -37,11 +36,10 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define AN_MENU_ITEM_COUNT  7
+#define AN_MENU_ITEM_COUNT  6
 
 static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
     "Smart ID",
-    "Signal ID",
     "Frequency Analyzer",
     "Spectrum Analyzer",
     "RSSI Meter",
@@ -51,7 +49,6 @@ static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
 
 static const SubGhzSceneId an_menu_targets[AN_MENU_ITEM_COUNT] = {
     SubGhzSceneSmartSignalId,
-    SubGhzSceneSignalIdentifier,
     SubGhzSceneFreqAnalyzer,
     SubGhzSceneSpectrumAnalyzer,
     SubGhzSceneRssiMeter,
