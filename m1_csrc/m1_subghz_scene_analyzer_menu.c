@@ -16,7 +16,8 @@
  *   3. RSSI Meter         — pushes SubGhzSceneRssiMeter
  *   4. Freq Scanner       — pushes SubGhzSceneFreqScanner
  *   5. Signal ID          — pushes SubGhzSceneSignalIdentifier (RF Rosetta)
- *   6. Proto Pirate       — pushes SubGhzSceneProtoPirateMenu (rolling-code)
+ *   6. Smart ID           — pushes SubGhzSceneSmartSignalId (pre-scan + RF Rosetta)
+ *   7. Proto Pirate       — pushes SubGhzSceneProtoPirateMenu (rolling-code)
  *
  * All scene transitions are non-blocking; the scene itself only handles
  * navigation events (UP / DOWN / OK / BACK).
@@ -36,7 +37,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define AN_MENU_ITEM_COUNT  6
+#define AN_MENU_ITEM_COUNT  7
 
 static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
     "Frequency Analyzer",
@@ -44,6 +45,7 @@ static const char *an_menu_labels[AN_MENU_ITEM_COUNT] = {
     "RSSI Meter",
     "Freq Scanner",
     "Signal ID",
+    "Smart ID",
     "Proto Pirate",
 };
 
@@ -53,6 +55,7 @@ static const SubGhzSceneId an_menu_targets[AN_MENU_ITEM_COUNT] = {
     SubGhzSceneRssiMeter,
     SubGhzSceneFreqScanner,
     SubGhzSceneSignalIdentifier,
+    SubGhzSceneSmartSignalId,
     SubGhzSceneProtoPirateMenu,
 };
 

@@ -2413,3 +2413,18 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_idle PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_idle COMMAND test_esp32_idle)
+
+# rf_smart_scan — Smart ID pre-scan probe-plan builder
+add_executable(test_rf_smart_scan
+    test_rf_smart_scan.c
+    ${M1_ROOT}/Sub_Ghz/rf_smart_scan.c
+    ${M1_ROOT}/Sub_Ghz/rf_scan_plan.c
+)
+target_include_directories(test_rf_smart_scan PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_rf_smart_scan PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_smart_scan PRIVATE sanitizers)
+endif()
+add_test(NAME rf_smart_scan COMMAND test_rf_smart_scan)

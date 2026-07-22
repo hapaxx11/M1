@@ -38,6 +38,7 @@
 #include "rf_sweep.h"
 #include "rf_sweep_display.h"
 #include "rf_scan_plan.h"
+#include "rf_smart_scan.h"
 #include "rf_ook_fsk.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
@@ -5395,6 +5396,383 @@ void sub_ghz_signal_identifier(void)
     xQueueReset(main_q_hdl);
     m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
 } /* end sub_ghz_signal_identifier() */
+
+
+/*============================================================================*/
+/* Smart Signal Identifier (RF Rosetta + pre-scan)                           */
+/*                                                                            */
+/* Phase 2A: Freq Scanner feeds Signal ID.                                    */
+/*                                                                            */
+/* Before entering the normal Signal ID loop, performs a single quick pass   */
+/* over all four scan bands to discover active frequencies.  The discovered   */
+/* frequencies (up to RF_SMART_SCAN_MAX_FREQS) replace the fixed ISM probe    */
+/* plan, so identification dwells only on channels that actually carry signal.*/
+/* If no active frequencies are found during the pre-scan, the function       */
+/* transparently falls back to the standard fixed probe plan.                 */
+/*============================================================================*/
+
+void sub_ghz_smart_signal_id(void)
+{
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
+    char info_str[40];
+
+    /* ---- pre-scan state ---- */
+    uint32_t  detected_hz[RF_SMART_SCAN_MAX_FREQS];
+    uint8_t   detected_count = 0;
+
+    /* Dynamic probe plan built from the pre-scan hits */
+    rf_scan_point_t dyn_plan[RF_SMART_SCAN_MAX_FREQS];
+    uint8_t         dyn_count = 0;
+
+    /* Signal ID state */
+    rf_sweep_report_t report;
+    int16_t  rssi_burst[SIGID_BURST_SAMPLES];
+    uint8_t  scroll_pos = 0;
+    bool     running = true;
+    int8_t   threshold = SIGID_THRESHOLD_DBM;
+
+    rf_sweep_report_reset(&report);
+    menu_sub_ghz_init();
+
+    /* ---------------------------------------------------------------------- */
+    /* Pre-scan phase                                                          */
+    /* Same four bands as sub_ghz_freq_scanner(); one pass per band.          */
+    /* ---------------------------------------------------------------------- */
+
+    static const uint32_t prescan_centers[] = {
+        307000000UL,   /* 300–315 MHz */
+        370000000UL,   /* 345–395 MHz */
+        435000000UL,   /* 430–440 MHz */
+        915000000UL,   /* 910–920 MHz */
+    };
+    static const uint32_t prescan_spans[] = {
+        15000000UL,
+        50000000UL,
+        10000000UL,
+        10000000UL,
+    };
+    #define PRESCAN_NUM_RANGES  4
+
+    /* Show a brief "Scanning…" splash while the pre-scan runs. */
+    m1_u8g2_firstpage();
+    do {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 0, 9, "Smart ID");
+        u8g2_DrawStr(&m1_u8g2, 10, 32, "Scanning...");
+    } while (m1_u8g2_nextpage());
+
+    for (uint8_t r = 0; r < PRESCAN_NUM_RANGES && detected_count < RF_SMART_SCAN_MAX_FREQS; r++)
+    {
+        uint32_t center = prescan_centers[r];
+        uint32_t span   = prescan_spans[r];
+        uint32_t step   = span / 128;
+        if (step < 50000UL) step = 50000UL;
+
+        bool is_915 = (center >= RF_SCAN_915_BOUNDARY_HZ);
+        radio_init_rx_tx(is_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                         MODEM_MOD_TYPE_OOK, true);
+        radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+
+        uint32_t freq     = center - span / 2;
+        uint32_t freq_end = center + span / 2;
+
+        while (freq < freq_end && detected_count < RF_SMART_SCAN_MAX_FREQS)
+        {
+            SI446x_Set_Frequency(freq);
+            SI446x_Start_Rx(0);
+            HAL_Delay(2);
+
+            SI446x_Get_IntStatus(0, 0, 0);
+            pmodemstat = SI446x_Get_ModemStatus(0x00);
+            int16_t rssi = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+
+            if (rssi > threshold)
+            {
+                /* Dedup within FREQ_SCANNER_DEDUP_KHZ (50 kHz) */
+                bool dup = false;
+                for (uint8_t h = 0; h < detected_count; h++)
+                {
+                    int32_t diff = (int32_t)freq - (int32_t)detected_hz[h];
+                    if (diff < 0) diff = -diff;
+                    if (diff < (int32_t)(FREQ_SCANNER_DEDUP_KHZ * 1000))
+                    {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup)
+                    detected_hz[detected_count++] = freq;
+            }
+
+            freq += step;
+        }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Build the dynamic probe plan                                            */
+    /* ---------------------------------------------------------------------- */
+
+    if (detected_count > 0)
+    {
+        dyn_count = rf_smart_scan_build_plan(detected_hz, detected_count,
+                                             dyn_plan, RF_SMART_SCAN_MAX_FREQS);
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Signal ID loop — same body as sub_ghz_signal_identifier() but uses the */
+    /* dynamic plan (or falls back to rf_scan_plan when dyn_count == 0).      */
+    /* ---------------------------------------------------------------------- */
+
+    /* Index into dyn_plan (0-based, wraps at dyn_count) */
+    uint8_t  dyn_idx   = 0;
+    uint32_t pass_cnt  = 0;
+    bool     cur_915   = false;
+
+    if (dyn_count > 0)
+    {
+        /* Initialise radio for the first dynamic point's band */
+        cur_915 = dyn_plan[0].use_915;
+    }
+    else
+    {
+        /* Fall back: start from the first fixed probe point */
+        const rf_scan_point_t *p0 = rf_scan_plan_point(0);
+        cur_915 = (p0 != NULL) ? p0->use_915 : false;
+    }
+    radio_init_rx_tx(cur_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                     MODEM_MOD_TYPE_OOK, true);
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+
+    /* Static probe cursor for the fall-back path */
+    rf_scan_cursor_t cursor;
+    rf_scan_cursor_reset(&cursor);
+
+    while (running)
+    {
+        /* ---- one pass over whichever probe list is active ---- */
+        bool pass_done = false;
+
+        if (dyn_count > 0)
+        {
+            /* Dynamic plan: one full cycle through dyn_plan[] */
+            for (uint8_t i = 0; i < dyn_count; i++)
+            {
+                const rf_scan_point_t *pt = &dyn_plan[i];
+
+                if (pt->use_915 != cur_915)
+                {
+                    cur_915 = pt->use_915;
+                    radio_init_rx_tx(cur_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                                     MODEM_MOD_TYPE_OOK, true);
+                    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+                }
+
+                SI446x_Set_Frequency(pt->freq_hz);
+                SI446x_Start_Rx(0);
+                HAL_Delay(2);
+
+                SI446x_Get_IntStatus(0, 0, 0);
+                pmodemstat = SI446x_Get_ModemStatus(0x00);
+                int16_t rssi = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+
+                if (rssi > threshold)
+                {
+                    int16_t peak = rssi;
+                    for (uint16_t s = 0; s < SIGID_BURST_SAMPLES; s++)
+                    {
+                        SI446x_Get_IntStatus(0, 0, 0);
+                        pmodemstat = SI446x_Get_ModemStatus(0x00);
+                        int16_t r = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+                        rssi_burst[s] = r;
+                        if (r > peak) peak = r;
+                        HAL_Delay(1);
+                    }
+
+                    rf_ook_fsk_result_t mc =
+                        rf_ook_fsk_classify(rssi_burst, SIGID_BURST_SAMPLES);
+
+                    rf_fingerprint_t fp;
+                    memset(&fp, 0, sizeof(fp));
+                    fp.sensor         = RF_SENSOR_SUBGHZ;
+                    fp.freq_hz        = pt->freq_hz;
+                    fp.band           = rf_band_from_freq(pt->freq_hz);
+                    fp.mod            = mc.mod;
+                    fp.mod_confidence = mc.confidence;
+                    fp.repetition     = 1;
+                    fp.rssi_dbm       = peak;
+
+                    if (rf_fingerprint_is_discriminating(&fp))
+                    {
+                        rf_match_result_t m = rf_match_best(&fp);
+                        rf_sweep_report_add(&report, &fp, &m);
+                    }
+                    else
+                    {
+                        rf_sweep_report_add(&report, &fp, NULL);
+                    }
+                }
+            }
+            pass_cnt++;
+            pass_done = true;
+        }
+        else
+        {
+            /* Fall-back: fixed probe plan cursor (identical to sub_ghz_signal_identifier) */
+            while (!pass_done)
+            {
+                const rf_scan_point_t *pt = rf_scan_cursor_point(&cursor);
+                if (pt == NULL) { pass_done = true; break; }
+
+                if (pt->use_915 != cur_915)
+                {
+                    cur_915 = pt->use_915;
+                    radio_init_rx_tx(cur_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
+                                     MODEM_MOD_TYPE_OOK, true);
+                    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
+                }
+
+                SI446x_Set_Frequency(pt->freq_hz);
+                SI446x_Start_Rx(0);
+                HAL_Delay(2);
+
+                SI446x_Get_IntStatus(0, 0, 0);
+                pmodemstat = SI446x_Get_ModemStatus(0x00);
+                int16_t rssi = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+
+                if (rssi > threshold)
+                {
+                    int16_t peak = rssi;
+                    for (uint16_t s = 0; s < SIGID_BURST_SAMPLES; s++)
+                    {
+                        SI446x_Get_IntStatus(0, 0, 0);
+                        pmodemstat = SI446x_Get_ModemStatus(0x00);
+                        int16_t r = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
+                        rssi_burst[s] = r;
+                        if (r > peak) peak = r;
+                        HAL_Delay(1);
+                    }
+
+                    rf_ook_fsk_result_t mc =
+                        rf_ook_fsk_classify(rssi_burst, SIGID_BURST_SAMPLES);
+
+                    rf_fingerprint_t fp;
+                    memset(&fp, 0, sizeof(fp));
+                    fp.sensor         = RF_SENSOR_SUBGHZ;
+                    fp.freq_hz        = pt->freq_hz;
+                    fp.band           = rf_band_from_freq(pt->freq_hz);
+                    fp.mod            = mc.mod;
+                    fp.mod_confidence = mc.confidence;
+                    fp.repetition     = 1;
+                    fp.rssi_dbm       = peak;
+
+                    if (rf_fingerprint_is_discriminating(&fp))
+                    {
+                        rf_match_result_t m = rf_match_best(&fp);
+                        rf_sweep_report_add(&report, &fp, &m);
+                    }
+                    else
+                    {
+                        rf_sweep_report_add(&report, &fp, NULL);
+                    }
+                }
+
+                if (rf_scan_cursor_advance(&cursor))
+                    pass_done = true;
+            }
+        }
+
+        /* ---- draw the ranked report ---- */
+        m1_u8g2_firstpage();
+        do {
+            u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+
+            /* Title: "Smart ID [N] -80dBm" or "Smart ID [scan] -80dBm" */
+            if (dyn_count > 0)
+                snprintf(info_str, sizeof(info_str),
+                         "Smart ID [%u] %ddBm", dyn_count, threshold);
+            else
+                snprintf(info_str, sizeof(info_str),
+                         "Smart ID [scan] %ddBm", threshold);
+            u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
+
+            if (report.count == 0)
+            {
+                if (report.total_detections == 0)
+                    u8g2_DrawStr(&m1_u8g2, 10, 32, "Listening...");
+                else
+                    u8g2_DrawStr(&m1_u8g2, 6, 32, "Active, unidentified");
+            }
+            else
+            {
+                for (uint8_t row = 0; row < SIGID_VISIBLE_ROWS; row++)
+                {
+                    uint8_t idx = scroll_pos + row;
+                    if (idx >= report.count) break;
+
+                    const rf_sweep_hit_t *h = &report.hits[idx];
+                    uint8_t y = 20 + row * 11;
+
+                    rf_sweep_display_format_hit(info_str, sizeof(info_str),
+                                               h, SIGID_MIN_HITS);
+                    u8g2_DrawStr(&m1_u8g2, 2, y, info_str);
+                }
+
+                if (report.count > SIGID_VISIBLE_ROWS)
+                {
+                    snprintf(info_str, sizeof(info_str), "%d/%d",
+                             scroll_pos + 1, report.count);
+                    u8g2_DrawStr(&m1_u8g2, 104, 64, info_str);
+                }
+            }
+
+            u8g2_DrawStr(&m1_u8g2, 0, 64, "L/R:Thr OK:Clr \x18\x19");
+
+        } while (m1_u8g2_nextpage());
+
+        /* ---- handle input ---- */
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+
+            if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                running = false;
+            }
+            else if (this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                rf_sweep_report_reset(&report);
+                rf_scan_cursor_reset(&cursor);
+                scroll_pos = 0;
+            }
+            else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (scroll_pos > 0) scroll_pos--;
+            }
+            else if (this_button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (scroll_pos + SIGID_VISIBLE_ROWS < report.count) scroll_pos++;
+            }
+            else if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (threshold < SIGID_THRESHOLD_MAX) threshold += 5;
+            }
+            else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                if (threshold > SIGID_THRESHOLD_MIN) threshold -= 5;
+            }
+        }
+    }
+
+    radio_set_antenna_mode(RADIO_ANTENNA_MODE_ISOLATED);
+    SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
+    menu_sub_ghz_exit();
+    xQueueReset(main_q_hdl);
+    m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
+} /* end sub_ghz_smart_signal_id() */
 
 
 /*============================================================================*/
