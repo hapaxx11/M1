@@ -1,1 +1,0 @@
-**Sub-GHz Analyzer: Smart ID is now prioritized as the lead analyzer tool** — Reordered the Analyzer sub-menu so **Smart ID** (Hapax pre-scan + RF Rosetta flow) appears first, with **Signal ID removed** and raw analysis tools retained. This keeps Freq Scanner available for quick RF reconnaissance while clearly prioritizing Smart ID as the Hapax differentiator.
