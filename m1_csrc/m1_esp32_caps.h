@@ -637,12 +637,12 @@ m1_esp32_rpc_parse_resp(const uint8_t *buf, uint16_t buf_len,
  * Must be called after m1_esp32_init() + esp32_main_init().
  *
  * Four probes are attempted in order:
- *   0. Binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
- *   1. Binary CMD_GET_STATUS (0x02) — SiN360 / extension-aware firmware.
- *   2. M1_RPC PING (magic 0x4D31) — CD3 native binary RPC firmware
- *      (bedge117/m1-esp32-brain), followed by M1_RPC GET_STATUS.
- *   3. Stock AT command `AT+CMD?` — translated against the
- *      `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.
+ *   - Binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
+ *   - Binary CMD_GET_STATUS (0x02) — SiN360 / extension-aware firmware.
+ *   - M1_RPC PING (magic 0x4D31) — CD3 native binary RPC firmware
+ *     (bedge117/m1-esp32-brain), followed by M1_RPC GET_STATUS.
+ *   - Stock AT command `AT+CMD?` — translated against the
+ *     `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.
  *
  * If all probes fail, the capability bitmap is left at zero (feature
  * gates fail closed) and the firmware name is reported as
