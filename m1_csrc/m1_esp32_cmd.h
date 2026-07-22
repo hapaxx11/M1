@@ -164,4 +164,20 @@ int m1_esp32_send_cmd(const m1_cmd_t *cmd, m1_resp_t *resp, uint32_t timeout_ms)
  */
 int m1_esp32_simple_cmd(uint8_t cmd_id, m1_resp_t *resp, uint32_t timeout_ms);
 
+/**
+ * Unlike m1_esp32_send_cmd(), this function does NOT validate any magic bytes
+ * in the response — it returns the received frame exactly as received.  Used
+ * exclusively by the CD3 M1_RPC probe in m1_esp32_caps_init() which performs
+ * its own frame validation (magic 0x4D31, CRC16, msg_type).
+ *
+ * @param tx_64      64-byte transmit buffer
+ * @param rx_64      64-byte receive buffer
+ * @param timeout_ms Maximum time to wait for the HANDSHAKE signal (ms)
+ * @return 0 on success;
+ *         -2 on handshake timeout (no response ready signal);
+ *         -(10 + HAL_StatusTypeDef) on TX SPI error;
+ *         -(20 + HAL_StatusTypeDef) on RX SPI error
+ */
+int m1_esp32_send_cmd_raw(const uint8_t *tx_64, uint8_t *rx_64, uint32_t timeout_ms);
+
 #endif /* M1_ESP32_CMD_H_ */

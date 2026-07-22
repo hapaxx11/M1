@@ -212,3 +212,38 @@ int m1_esp32_simple_cmd(uint8_t cmd_id, m1_resp_t *resp, uint32_t timeout_ms)
 
 	return m1_esp32_send_cmd(&cmd, resp, timeout_ms);
 }
+
+
+/******************************************************************************/
+/**
+  * @brief  Send a raw 64-byte frame to the ESP32 and receive the raw response.
+  *
+  * Unlike m1_esp32_send_cmd() this function does NOT validate any magic byte
+  * in the response — the raw receive buffer is returned as-is.  Used by the
+  * CD3 M1_RPC probe which has its own frame validation (0x4D31 magic, CRC16).
+  *
+  * @param  tx_64      64-byte transmit buffer
+  * @param  rx_64      64-byte receive buffer
+  * @param  timeout_ms Maximum time to wait for HANDSHAKE signal (ms)
+  * @return 0 on success, -2 on timeout, -(10+HAL) on TX error, -(20+HAL) on RX
+  */
+/******************************************************************************/
+int m1_esp32_send_cmd_raw(const uint8_t *tx_64, uint8_t *rx_64, uint32_t timeout_ms)
+{
+	HAL_StatusTypeDef hal_ret;
+
+	HAL_Delay(2);
+
+	hal_ret = spi_tx_retry_64(tx_64);
+	if (hal_ret != HAL_OK)
+		return -10 - (int)hal_ret;
+
+	if (wait_handshake(timeout_ms) != 0)
+		return -2;
+
+	hal_ret = spi_rx_retry_64(rx_64);
+	if (hal_ret != HAL_OK)
+		return -20 - (int)hal_ret;
+
+	return 0;
+}

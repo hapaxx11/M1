@@ -70,6 +70,12 @@ static const esp32_feature_entry_t s_feature_table[ESP32_FEATURE_COUNT] = {
     { M1_ESP32_CAP_BLE_GATT,     "GATT Discover"    },
     /* ESP32_FEATURE_BT_MANAGE */
     { M1_ESP32_CAP_BT_MANAGE,    "BT Management"    },
+    /* ESP32_FEATURE_PMKID */
+    { M1_ESP32_CAP_PMKID,        "PMKID Capture"    },
+    /* ESP32_FEATURE_HANDSHAKE */
+    { M1_ESP32_CAP_HANDSHAKE,    "Handshake Capture"},
+    /* ESP32_FEATURE_OTA */
+    { M1_ESP32_CAP_OTA,          "ESP32 OTA Update" },
 };
 
 /* Compile-time assertion: table length matches enum count */
@@ -111,4 +117,14 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap)
      * firmware) correctly return false. */
     return (cap_bitmap & M1_ESP32_CAP_BLE_HID) != 0u &&
            (cap_bitmap & M1_ESP32_CAP_WIFI_JOIN) == 0u;
+}
+
+bool esp32_firmware_is_cd3(uint64_t cap_bitmap)
+{
+    /* CD3 native binary-RPC firmware (bedge117/m1-esp32-brain):
+     * HANDSHAKE and OTA are both unique to CD3 — neither SiN360 nor any
+     * AT variant sets them.  All-zero bitmaps (unknown / fallback) return
+     * false. */
+    return (cap_bitmap & M1_ESP32_CAP_HANDSHAKE) != 0u &&
+           (cap_bitmap & M1_ESP32_CAP_OTA) != 0u;
 }

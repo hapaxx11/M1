@@ -138,7 +138,28 @@
  *  CMD_BLE_GATT_START/NEXT/STOP/WRITE/SUB/NOTIF (opcodes 0x28..0x2D). */
 #define M1_ESP32_CAP_BLE_GATT       (UINT64_C(1) << 17)
 
-/* Bits 18-63 reserved for future use */
+/** Dedicated PMKID capture — send a targeted EAPOL-1 and capture the PMKID
+ *  without requiring a full four-way handshake.  Distinct from
+ *  M1_ESP32_CAP_PKTMON (passive packet monitor).
+ *  Exposed by CD3 (bedge117/m1-esp32-brain) via M1_RPC_OFF_PMKID_CAPTURE
+ *  and by dag T-800 AT firmware via AT+M1PMKID.  Note: the dag mapping sets
+ *  CAP_PKTMON for AT+M1PMKID (legacy overlap); new callers that specifically
+ *  need PMKID should gate on M1_ESP32_CAP_PMKID. */
+#define M1_ESP32_CAP_PMKID          (UINT64_C(1) << 18)
+
+/** WPA handshake / EAPOL capture — deauth a station and capture the
+ *  four-way EAPOL handshake for offline cracking.  Result exported as
+ *  .pcap.  Exposed by CD3 via M1_RPC_OFF_HS_START/STATUS/GET/STOP.
+ *  Not available in AT or SiN360 firmware. */
+#define M1_ESP32_CAP_HANDSHAKE      (UINT64_C(1) << 19)
+
+/** ESP32 firmware OTA self-update — M1 can push a new ESP32 binary to the
+ *  coprocessor over the SPI link without re-flashing via UART/SD card.
+ *  Exposed by CD3 via M1_RPC_SYS_OTA_BEGIN/DATA/END.
+ *  Not available in AT or SiN360 firmware. */
+#define M1_ESP32_CAP_OTA            (UINT64_C(1) << 20)
+
+/* Bits 21-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
@@ -192,6 +213,37 @@
      M1_ESP32_CAP_PROBE_FLOOD  | \
      M1_ESP32_CAP_BLE_HID)
 
+/** CD3 native binary RPC firmware profile (bedge117/m1-esp32-brain) —
+ *  reference only.  Represents the full feature set of the m1-native
+ *  firmware once all components are wired.  CD3 self-reports its actual
+ *  bitmap via M1_RPC_SYS_GET_STATUS; this macro is retained for unit
+ *  tests and as a fallback when the GET_STATUS probe succeeds but returns
+ *  an all-zero bitmap.
+ *
+ *  CD3 uses the M1_RPC binary SPI protocol (magic 0x4D31, "M1") and is
+ *  detected by the M1_RPC probe in m1_esp32_caps_init().  Key capabilities unique
+ *  to CD3 vs SiN360/AT: PMKID, HANDSHAKE, OTA (bits 18-20).
+ *  NETSCAN absent (no ping/ARP scanner component in v1.x).
+ *  BT_MANAGE absent (no Bluetooth Classic component). */
+#define M1_ESP32_CAP_PROFILE_CD3 \
+    (M1_ESP32_CAP_WIFI_SCAN    | \
+     M1_ESP32_CAP_WIFI_JOIN    | \
+     M1_ESP32_CAP_STA_SCAN     | \
+     M1_ESP32_CAP_DEAUTH       | \
+     M1_ESP32_CAP_BEACON       | \
+     M1_ESP32_CAP_PROBE_FLOOD  | \
+     M1_ESP32_CAP_KARMA        | \
+     M1_ESP32_CAP_PKTMON       | \
+     M1_ESP32_CAP_PORTAL       | \
+     M1_ESP32_CAP_PMKID        | \
+     M1_ESP32_CAP_HANDSHAKE    | \
+     M1_ESP32_CAP_BLE_SCAN     | \
+     M1_ESP32_CAP_BLE_ADV      | \
+     M1_ESP32_CAP_BLE_HID      | \
+     M1_ESP32_CAP_BLE_GATT     | \
+     M1_ESP32_CAP_802154       | \
+     M1_ESP32_CAP_OTA)
+
 /* =========================================================================
  * Memory footprint estimates — for developer / diagnostic use only
  *
@@ -201,8 +253,11 @@
  * releases.  m1_esp32_caps_bss_bytes() and m1_esp32_caps_free_heap() are
  * developer-diagnostic accessors — not user-visible.
  *
- * Profile discriminator: M1_ESP32_CAP_WIFI_JOIN present in bitmap →
- * AT/C3 profile (bedge117/neddy299); absent → SiN360 profile.
+ * Profile discriminator (four-way; evaluated in priority order):
+ *   HANDSHAKE + OTA present → CD3 native (bedge117/m1-esp32-brain)
+ *   WIFI_JOIN + BEACON      → dag T-800 (AT firmware with custom cmds)
+ *   WIFI_JOIN alone         → stock AT/C3 (bedge117/neddy299)
+ *   neither WIFI_JOIN       → SiN360 binary-SPI
  *
  * Sources (see documentation/esp32_firmware.md for derivation rationale):
  *   SiN360  BSS : sincere360/M1_SiN360_ESP32 v0.9.0.8, ESP-IDF 5.5.4
@@ -211,6 +266,8 @@
  *   AT/C3   BSS : bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0
  *   AT/C3   heap: Full AT infrastructure + SPI ring buffers + BLE HID +
  *                 802.15.4
+ *   CD3     BSS : bedge117/m1-esp32-brain v1.x (estimated; no map file yet)
+ *   CD3     heap: Native ESP-IDF WiFi/BLE/802.15.4 without AT overhead
  * =========================================================================*/
 #define M1_ESP32_FALLBACK_BSS_SIN360   (200u * 1024u)  /**< ≈200 KB BSS */
 #define M1_ESP32_FALLBACK_HEAP_SIN360  (160u * 1024u)  /**< ≈160 KB free heap */
@@ -225,6 +282,14 @@
  * firmware measurements are available (see CLAUDE.md update procedure). */
 #define M1_ESP32_FALLBACK_BSS_T800     (290u * 1024u)  /**< ≈290 KB BSS */
 #define M1_ESP32_FALLBACK_HEAP_T800    (105u * 1024u)  /**< ≈105 KB free heap */
+
+/* CD3 native binary RPC firmware (bedge117/m1-esp32-brain v1.x):
+ * Native ESP-IDF WiFi + NimBLE + 802.15.4, no AT overhead.
+ * Estimated conservatively; to be refined once actual hardware
+ * measurements are available (see documentation/esp32_firmware.md
+ * update procedure). */
+#define M1_ESP32_FALLBACK_BSS_CD3      (185u * 1024u)  /**< ≈185 KB BSS (estimated) */
+#define M1_ESP32_FALLBACK_HEAP_CD3     (175u * 1024u)  /**< ≈175 KB free heap (estimated) */
 
 /* =========================================================================
  * CMD_GET_STATUS payload structure (protocol version 1)
@@ -387,6 +452,183 @@ static inline bool m1_esp32_caps_at_cmd_response_valid(const char *resp_buf)
 }
 
 /* =========================================================================
+ * M1_RPC binary SPI protocol helpers (CD3 / bedge117/m1-esp32-brain)
+ *
+ * The CD3 firmware (bedge117/m1-esp32-brain) uses a structured binary RPC
+ * protocol over the same SPI-HD transport as the AT firmware, but with a
+ * distinct frame format:
+ *
+ *   [ magic:2 ][ version:1 ][ msg_type:1 ][ msg_id:2 LE ][ payload_len:2 LE ]
+ *   [ payload:0..N ][ CRC16:2 ]
+ *
+ * where magic = 0x4D31 ("M1" in little-endian — wire bytes [0x31, 0x4D])
+ * and CRC16 is CRC-16/CCITT (poly 0x1021, init 0xFFFF) over header+payload.
+ *
+ * These helpers are pure-logic (no HAL/RTOS deps) and are used both by the
+ * Probe 3 detection path in m1_esp32_caps_init() and by host-side unit tests.
+ * Defined as static inline to remain header-only.
+ *
+ * The GET_STATUS response payload (m1_esp32_rpc_devstatus_t) has the same
+ * 41-byte layout as m1_esp32_status_payload_t: proto_ver (1), cap_bitmap
+ * (8 bytes LE), fw_name (32 bytes).
+ * =========================================================================*/
+
+/* M1_RPC frame constants */
+#define M1_ESP32_RPC_MAGIC        UINT16_C(0x4D31)  /**< "M1" LE — wire: [0x31, 0x4D] */
+#define M1_ESP32_RPC_VERSION      UINT8_C(0x01)     /**< Protocol version */
+#define M1_ESP32_RPC_HDR_SIZE     8u                /**< Header size in bytes */
+#define M1_ESP32_RPC_CRC_SIZE     2u                /**< CRC16 trailer size in bytes */
+
+/* M1_RPC message type values */
+#define M1_ESP32_RPC_REQ          UINT8_C(0x01)  /**< Request (STM32 to ESP32) */
+#define M1_ESP32_RPC_RESP         UINT8_C(0x02)  /**< Successful response */
+#define M1_ESP32_RPC_NAK          UINT8_C(0x05)  /**< Error response */
+
+/* M1_RPC system command IDs */
+#define M1_ESP32_RPC_SYS_PING        UINT16_C(0x0001)  /**< PING: cookie echo */
+#define M1_ESP32_RPC_SYS_GET_STATUS  UINT16_C(0x0002)  /**< GET_STATUS: devstatus */
+
+/**
+ * CD3 M1_RPC GET_STATUS response payload.
+ *
+ * 41 bytes: proto_ver (1), cap_bitmap[8] (8 bytes LE uint64), fw_name[32].
+ * Wire-identical to m1_esp32_status_payload_t on LE targets.
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t  proto_ver;      /**< M1_ESP32_RPC_VERSION (1) */
+    uint8_t  cap_bitmap[8];  /**< M1_ESP32_CAP_* bits, LE uint64 as 8 bytes */
+    char     fw_name[32];    /**< Null-terminated ASCII firmware identifier */
+} m1_esp32_rpc_devstatus_t;
+
+/**
+ * Unpack the LE 8-byte cap_bitmap from an m1_esp32_rpc_devstatus_t into a
+ * uint64_t capability bitmap.
+ */
+static inline uint64_t m1_esp32_rpc_caps_get(const uint8_t bitmap[8])
+{
+    uint64_t cap = 0u;
+    for (unsigned i = 0u; i < 8u; i++)
+        cap |= ((uint64_t)bitmap[i]) << (i * 8u);
+    return cap;
+}
+
+/**
+ * CRC-16/CCITT (poly 0x1021, init 0xFFFF) over a byte buffer.
+ * Used to compute and verify M1_RPC frame CRCs.
+ */
+static inline uint16_t m1_esp32_rpc_crc16(const uint8_t *data, size_t len)
+{
+    uint16_t crc = 0xFFFFu;
+    for (size_t i = 0u; i < len; i++)
+    {
+        crc ^= ((uint16_t)data[i]) << 8u;
+        for (unsigned j = 0u; j < 8u; j++)
+            crc = (crc & 0x8000u) ? (uint16_t)((crc << 1u) ^ 0x1021u)
+                                  : (uint16_t)(crc << 1u);
+    }
+    return crc;
+}
+
+/**
+ * Build an M1_RPC request frame into @p buf.
+ *
+ * Writes the 8-byte header, copies @p payload_len bytes of @p payload, then
+ * appends the 2-byte CRC16.  The buffer is NOT zero-padded past the frame.
+ *
+ * @param buf          Output buffer (must be >= 8 + payload_len + 2 bytes)
+ * @param buf_size     Capacity of @p buf
+ * @param msg_id       M1_ESP32_RPC_SYS_* command ID (stored LE)
+ * @param payload      Payload bytes (may be NULL when payload_len == 0)
+ * @param payload_len  Number of payload bytes
+ * @return Total frame size (8 + payload_len + 2) on success; 0 if buf too small
+ */
+static inline uint16_t
+m1_esp32_rpc_build_req(uint8_t *buf, uint16_t buf_size,
+                        uint16_t msg_id,
+                        const uint8_t *payload, uint16_t payload_len)
+{
+    uint16_t frame_size = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + payload_len +
+                                     M1_ESP32_RPC_CRC_SIZE);
+    if (!buf || buf_size < frame_size || (payload_len > 0u && !payload))
+        return 0u;
+
+    buf[0] = (uint8_t)(M1_ESP32_RPC_MAGIC        & 0xFFu);
+    buf[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
+    buf[2] = M1_ESP32_RPC_VERSION;
+    buf[3] = M1_ESP32_RPC_REQ;
+    buf[4] = (uint8_t)(msg_id        & 0xFFu);
+    buf[5] = (uint8_t)((msg_id >> 8u) & 0xFFu);
+    buf[6] = (uint8_t)(payload_len        & 0xFFu);
+    buf[7] = (uint8_t)((payload_len >> 8u) & 0xFFu);
+
+    if (payload && payload_len > 0u)
+    {
+        for (uint16_t i = 0u; i < payload_len; i++)
+            buf[M1_ESP32_RPC_HDR_SIZE + i] = payload[i];
+    }
+
+    uint16_t crc = m1_esp32_rpc_crc16(buf, M1_ESP32_RPC_HDR_SIZE + payload_len);
+    buf[M1_ESP32_RPC_HDR_SIZE + payload_len]      = (uint8_t)(crc        & 0xFFu);
+    buf[M1_ESP32_RPC_HDR_SIZE + payload_len + 1u] = (uint8_t)((crc >> 8u) & 0xFFu);
+
+    return frame_size;
+}
+
+/**
+ * Parse an M1_RPC response frame received from CD3 firmware.
+ *
+ * Validates magic (0x4D31), version, CRC16, msg_type == RESP, and
+ * msg_id == @p expected_msg_id.  On success sets @p *payload_out and
+ * @p *payload_len_out.
+ *
+ * @param buf               Received buffer
+ * @param buf_len           Valid bytes in @p buf
+ * @param expected_msg_id   M1_ESP32_RPC_SYS_* ID we expect in the response
+ * @param payload_out       Points into @p buf at the payload start on success
+ * @param payload_len_out   Payload byte count on success
+ * @return true on a valid matching response; false otherwise
+ */
+static inline bool
+m1_esp32_rpc_parse_resp(const uint8_t *buf, uint16_t buf_len,
+                         uint16_t expected_msg_id,
+                         const uint8_t **payload_out,
+                         uint16_t *payload_len_out)
+{
+    if (payload_out)     *payload_out = NULL;
+    if (payload_len_out) *payload_len_out = 0u;
+    if (!buf || !payload_out || !payload_len_out ||
+        buf_len < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE))
+        return false;
+    uint16_t magic = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8u);
+    if (magic != M1_ESP32_RPC_MAGIC)
+        return false;
+    if (buf[2] != M1_ESP32_RPC_VERSION)
+        return false;
+    if (buf[3] != M1_ESP32_RPC_RESP)
+        return false;
+
+    uint16_t msg_id = (uint16_t)buf[4] | ((uint16_t)buf[5] << 8u);
+    if (msg_id != expected_msg_id)
+        return false;
+
+    uint16_t plen  = (uint16_t)buf[6] | ((uint16_t)buf[7] << 8u);
+    uint16_t total = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + plen + M1_ESP32_RPC_CRC_SIZE);
+    if (total > buf_len)
+        return false;
+
+    uint16_t expected_crc = m1_esp32_rpc_crc16(buf, M1_ESP32_RPC_HDR_SIZE + plen);
+    uint16_t wire_crc =
+        (uint16_t)buf[M1_ESP32_RPC_HDR_SIZE + plen] |
+        ((uint16_t)buf[M1_ESP32_RPC_HDR_SIZE + plen + 1u] << 8u);
+    if (wire_crc != expected_crc)
+        return false;
+
+    *payload_out     = buf + M1_ESP32_RPC_HDR_SIZE;
+    *payload_len_out = plen;
+    return true;
+}
+
+/* =========================================================================
  * Public API
  * =========================================================================*/
 
@@ -394,12 +636,15 @@ static inline bool m1_esp32_caps_at_cmd_response_valid(const char *resp_buf)
  * Probe the connected ESP32 firmware and cache its capability descriptor.
  * Must be called after m1_esp32_init() + esp32_main_init().
  *
- * Two probes are attempted in order:
- *   1. Binary CMD_GET_STATUS (0x02) — SiN360 / extension-aware firmware.
- *   2. Stock AT command `AT+CMD?` — translated against the
- *      `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.
+ * Four probes are attempted in order:
+ *   - Binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
+ *   - Binary CMD_GET_STATUS (0x02) — SiN360 / extension-aware firmware.
+ *   - M1_RPC PING (magic 0x4D31) — CD3 native binary RPC firmware
+ *     (bedge117/m1-esp32-brain), followed by M1_RPC GET_STATUS.
+ *   - Stock AT command `AT+CMD?` — translated against the
+ *     `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.
  *
- * If both probes fail, the capability bitmap is left at zero (feature
+ * If all probes fail, the capability bitmap is left at zero (feature
  * gates fail closed) and the firmware name is reported as
  * "Unknown (fallback)".  Safe to call multiple times — subsequent calls
  * are no-ops once a probe has succeeded.

@@ -33,6 +33,17 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - Handshake via HANDSHAKE pin (PD7) after each TX; CS on PB10 (ESP32_SPI3_NSS)
 - Same SPI3 Mode 1 hardware as AT firmware — no hardware changes required to switch between variants
 
+#### CD3 native binary RPC firmware (next-gen — bedge117/m1-esp32-brain)
+- **Source repo**: [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain) (native ESP-IDF, no AT stack)
+- Pre-built binaries on the Releases page
+- **Architecture**: SPI-slave HD mode, M1_RPC binary protocol (magic `0x4D31` "M1"), same GPIO/CS/HANDSHAKE pins as AT and SiN360 — no hardware changes required
+- **Enables**: Native ESP-IDF WiFi (scan, join, deauth, beacon, probe, karma, portal, pktmon, sta_scan), NimBLE (scan, adv, HID, GATT), 802.15.4, **PMKID capture** (`M1_ESP32_CAP_PMKID`), **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`), **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA`), M1-to-M1 peer link over ESP-NOW, GPIO API
+- **Does NOT include** (v1): NETSCAN (no ping/ARP scanner), BT Classic management
+- Detected by the M1 via **M1_RPC PING** in `m1_esp32_caps_init()`; capability bitmap reported via M1_RPC GET_STATUS
+- Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response
+- **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)
+- Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE && OTA` both set
+
 ### Communication
 - M1 ↔ ESP32-C6 uses **SPI** for AT commands (NOT UART)
 - SPI Mode 1 (CPOL=0, CPHA=1) — hardcoded in `m1_esp32_hal.c:529`
@@ -61,9 +72,12 @@ other memory-intensive features.
 #### How the estimate is selected
 
 After `m1_esp32_caps_init()` resolves the capability bitmap (either from a live
-`CMD_GET_STATUS` parse or the compile-flag fallback), it selects the profile:
-- **`M1_ESP32_CAP_WIFI_JOIN` present** → AT profile (bedge117/C3.12)
-- **`M1_ESP32_CAP_WIFI_JOIN` absent**  → SiN360 profile
+probe or the compile-flag fallback), it applies a four-way discriminator in
+priority order:
+- **`HANDSHAKE` and `OTA` both present** → CD3 profile
+- **`WIFI_JOIN` and `BEACON` both present** → dag T-800 profile
+- **`WIFI_JOIN` present, `BEACON` absent** → AT/C3 profile
+- **`WIFI_JOIN` absent** → SiN360 profile
 
 The selected constants are written to `s_bss_bytes` and `s_free_heap_bytes` and
 returned by `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`.
@@ -76,6 +90,10 @@ returned by `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`.
 | SiN360 | `M1_ESP32_FALLBACK_HEAP_SIN360` | 160 KB | NimBLE with `MSYS_BUF_FROM_HEAP=y`; 10×1600 B static WiFi RX; `ap_records[64]` ≈ 14 KB |
 | AT/C3 | `M1_ESP32_FALLBACK_BSS_AT` | 284 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
 | AT/C3 | `M1_ESP32_FALLBACK_HEAP_AT` | 112 KB | Full AT infrastructure + SPI ring buffers + BLE HID + 802.15.4 |
+| dag T-800 | `M1_ESP32_FALLBACK_BSS_T800` | 290 KB | Estimated from ESP-AT base + dag custom modules |
+| dag T-800 | `M1_ESP32_FALLBACK_HEAP_T800` | 105 KB | AT + deauth/beacon/monitor static buffers |
+| CD3 | `M1_ESP32_FALLBACK_BSS_CD3` | 185 KB (est.) | bedge117/m1-esp32-brain v1.x — native ESP-IDF, no AT overhead (estimate, to be refined) |
+| CD3 | `M1_ESP32_FALLBACK_HEAP_CD3` | 175 KB (est.) | Native WiFi/BLE/802.15.4 without AT ring buffers (estimate, to be refined) |
 
 #### How to update estimates when a new firmware release appears
 

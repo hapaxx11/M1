@@ -32,6 +32,8 @@ void test_fallback_constants_are_nonzero(void)
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_AT);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_T800);
     TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_T800);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_BSS_CD3);
+    TEST_ASSERT_GREATER_THAN(0u, M1_ESP32_FALLBACK_HEAP_CD3);
 }
 
 void test_fallback_at_bss_exceeds_sin360(void)
@@ -223,6 +225,9 @@ void test_cap_bits_are_unique(void)
         M1_ESP32_CAP_BLE_HID,
         M1_ESP32_CAP_BT_MANAGE,
         M1_ESP32_CAP_802154,
+        M1_ESP32_CAP_PMKID,
+        M1_ESP32_CAP_HANDSHAKE,
+        M1_ESP32_CAP_OTA,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -256,6 +261,9 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
         M1_ESP32_CAP_BLE_HID,
         M1_ESP32_CAP_BT_MANAGE,
         M1_ESP32_CAP_802154,
+        M1_ESP32_CAP_PMKID,
+        M1_ESP32_CAP_HANDSHAKE,
+        M1_ESP32_CAP_OTA,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -332,6 +340,279 @@ void test_fallback_t800_heap_less_than_sin360(void)
      * Use LESS_THAN so the assertion reads naturally: T800_HEAP < SIN360_HEAP. */
     TEST_ASSERT_LESS_THAN(M1_ESP32_FALLBACK_HEAP_SIN360,
                           M1_ESP32_FALLBACK_HEAP_T800);
+}
+
+/* =========================================================================
+ * CD3 profile macro sanity checks
+ * =========================================================================*/
+
+void test_cd3_profile_has_expected_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_CD3;
+    /* CD3 includes WiFi scan/join, attack features, BLE, 802.15.4 */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_STA_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BEACON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PROBE_FLOOD);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_KARMA);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PKTMON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PORTAL);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_ADV);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_GATT);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    /* CD3-specific caps */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PMKID);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_HANDSHAKE);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_OTA);
+    /* CD3 does NOT include NETSCAN (no ping/ARP scanner in v1) */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_NETSCAN);
+}
+
+void test_cd3_fallback_bss_less_than_at(void)
+{
+    /* CD3 native WiFi has less BSS than AT firmware (no AT ring buffers). */
+    TEST_ASSERT_LESS_THAN(M1_ESP32_FALLBACK_BSS_AT,
+                          M1_ESP32_FALLBACK_BSS_CD3);
+}
+
+void test_cd3_fallback_heap_exceeds_at(void)
+{
+    /* CD3 has more free heap than AT firmware (no AT infrastructure overhead). */
+    TEST_ASSERT_GREATER_THAN(M1_ESP32_FALLBACK_HEAP_AT,
+                             M1_ESP32_FALLBACK_HEAP_CD3);
+}
+
+/* =========================================================================
+ * M1_RPC protocol helper tests
+ * =========================================================================*/
+
+/* ---- CRC16 -------------------------------------------------------------- */
+
+void test_rpc_crc16_empty_returns_0xffff(void)
+{
+    /* CRC of zero bytes with init=0xFFFF is always 0xFFFF */
+    TEST_ASSERT_EQUAL_UINT16(0xFFFFu, m1_esp32_rpc_crc16(NULL, 0));
+}
+
+void test_rpc_crc16_single_zero_byte(void)
+{
+    /* CRC-16/CCITT of 0x00: init=0xFFFF XOR (0x00 << 8) = 0xFFFF,
+     * 8 shift iterations with bit 15 always set → result is well-known.
+     * Pre-computed: 0xE1F0 */
+    const uint8_t data[] = {0x00};
+    TEST_ASSERT_EQUAL_UINT16(0xE1F0u,
+                             m1_esp32_rpc_crc16(data, sizeof(data)));
+}
+
+void test_rpc_crc16_known_vector(void)
+{
+    /* CRC-16/CCITT of "123456789" (ASCII) = 0x29B1 — standard test vector. */
+    const uint8_t data[] = {'1','2','3','4','5','6','7','8','9'};
+    TEST_ASSERT_EQUAL_UINT16(0x29B1u,
+                             m1_esp32_rpc_crc16(data, sizeof(data)));
+}
+
+/* ---- m1_esp32_rpc_build_req --------------------------------------------- */
+
+void test_rpc_build_req_ping_frame_layout(void)
+{
+    uint8_t buf[64];
+    memset(buf, 0xCC, sizeof(buf));
+
+    const uint8_t cookie[4] = {0x4D, 0x31, 0x50, 0x49}; /* "M1PI" */
+    uint16_t frame_len = m1_esp32_rpc_build_req(buf, sizeof(buf),
+                                                 M1_ESP32_RPC_SYS_PING,
+                                                 cookie, 4u);
+
+    /* Frame size: 8 (header) + 4 (payload) + 2 (CRC) = 14 */
+    TEST_ASSERT_EQUAL_UINT16(14u, frame_len);
+
+    /* Magic bytes (LE 0x4D31 → [0x31, 0x4D]) */
+    TEST_ASSERT_EQUAL_UINT8(0x31u, buf[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x4Du, buf[1]);
+    /* Version */
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_VERSION, buf[2]);
+    /* msg_type = REQ */
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_REQ, buf[3]);
+    /* msg_id = PING (LE 0x0001 → [0x01, 0x00]) */
+    TEST_ASSERT_EQUAL_UINT8(0x01u, buf[4]);
+    TEST_ASSERT_EQUAL_UINT8(0x00u, buf[5]);
+    /* payload_len = 4 */
+    TEST_ASSERT_EQUAL_UINT8(0x04u, buf[6]);
+    TEST_ASSERT_EQUAL_UINT8(0x00u, buf[7]);
+    /* payload = cookie */
+    TEST_ASSERT_EQUAL_UINT8(0x4Du, buf[8]);
+    TEST_ASSERT_EQUAL_UINT8(0x31u, buf[9]);
+    TEST_ASSERT_EQUAL_UINT8(0x50u, buf[10]);
+    TEST_ASSERT_EQUAL_UINT8(0x49u, buf[11]);
+    /* CRC16 over bytes 0-11 should match inline computation */
+    uint16_t expected_crc = m1_esp32_rpc_crc16(buf, 12);
+    uint16_t wire_crc = (uint16_t)buf[12] | ((uint16_t)buf[13] << 8u);
+    TEST_ASSERT_EQUAL_UINT16(expected_crc, wire_crc);
+}
+
+void test_rpc_build_req_get_status_no_payload(void)
+{
+    uint8_t buf[64];
+    memset(buf, 0xCC, sizeof(buf));
+
+    uint16_t frame_len = m1_esp32_rpc_build_req(buf, sizeof(buf),
+                                                 M1_ESP32_RPC_SYS_GET_STATUS,
+                                                 NULL, 0u);
+
+    /* Frame size: 8 + 0 + 2 = 10 */
+    TEST_ASSERT_EQUAL_UINT16(10u, frame_len);
+    /* msg_id = GET_STATUS (LE 0x0002 → [0x02, 0x00]) */
+    TEST_ASSERT_EQUAL_UINT8(0x02u, buf[4]);
+    TEST_ASSERT_EQUAL_UINT8(0x00u, buf[5]);
+    /* payload_len = 0 */
+    TEST_ASSERT_EQUAL_UINT8(0x00u, buf[6]);
+    TEST_ASSERT_EQUAL_UINT8(0x00u, buf[7]);
+}
+
+void test_rpc_build_req_buf_too_small_returns_zero(void)
+{
+    uint8_t buf[9]; /* Enough for header but not header+CRC */
+    uint16_t frame_len = m1_esp32_rpc_build_req(buf, sizeof(buf),
+                                                 M1_ESP32_RPC_SYS_GET_STATUS,
+                                                 NULL, 0u);
+    TEST_ASSERT_EQUAL_UINT16(0u, frame_len);
+}
+
+void test_rpc_build_req_null_buf_returns_zero(void)
+{
+    uint16_t frame_len = m1_esp32_rpc_build_req(NULL, 64u,
+                                                 M1_ESP32_RPC_SYS_PING,
+                                                 NULL, 0u);
+    TEST_ASSERT_EQUAL_UINT16(0u, frame_len);
+}
+
+/* ---- m1_esp32_rpc_parse_resp -------------------------------------------- */
+
+/** Helper: build a synthetic M1_RPC response frame. */
+static void make_rpc_resp(uint8_t buf[64], uint16_t msg_id,
+                           const uint8_t *payload, uint16_t plen)
+{
+    memset(buf, 0, 64);
+    buf[0] = (uint8_t)(M1_ESP32_RPC_MAGIC        & 0xFFu);
+    buf[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
+    buf[2] = M1_ESP32_RPC_VERSION;
+    buf[3] = M1_ESP32_RPC_RESP;
+    buf[4] = (uint8_t)(msg_id        & 0xFFu);
+    buf[5] = (uint8_t)((msg_id >> 8u) & 0xFFu);
+    buf[6] = (uint8_t)(plen        & 0xFFu);
+    buf[7] = (uint8_t)((plen >> 8u) & 0xFFu);
+    for (uint16_t i = 0; i < plen; i++)
+        buf[8u + i] = payload ? payload[i] : 0u;
+    uint16_t crc = m1_esp32_rpc_crc16(buf, 8u + plen);
+    buf[8u + plen]      = (uint8_t)(crc        & 0xFFu);
+    buf[8u + plen + 1u] = (uint8_t)((crc >> 8u) & 0xFFu);
+}
+
+void test_rpc_parse_resp_valid_ping(void)
+{
+    uint8_t buf[64];
+    const uint8_t echo[4] = {0x4D, 0x31, 0x50, 0x49};
+    make_rpc_resp(buf, M1_ESP32_RPC_SYS_PING, echo, 4u);
+
+    const uint8_t *pl  = NULL;
+    uint16_t       plen = 0u;
+    bool ok = m1_esp32_rpc_parse_resp(buf, 64u,
+                                       M1_ESP32_RPC_SYS_PING,
+                                       &pl, &plen);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_UINT16(4u, plen);
+    TEST_ASSERT_EQUAL_UINT8(0x4Du, pl[0]);
+}
+
+void test_rpc_parse_resp_wrong_magic_returns_false(void)
+{
+    uint8_t buf[64];
+    make_rpc_resp(buf, M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    buf[0] = 0xAB;  /* Corrupt magic */
+
+    const uint8_t *pl  = NULL;
+    uint16_t       plen = 0u;
+    TEST_ASSERT_FALSE(m1_esp32_rpc_parse_resp(buf, 64u,
+                                               M1_ESP32_RPC_SYS_PING,
+                                               &pl, &plen));
+}
+
+void test_rpc_parse_resp_wrong_msg_id_returns_false(void)
+{
+    uint8_t buf[64];
+    make_rpc_resp(buf, M1_ESP32_RPC_SYS_GET_STATUS, NULL, 0u);
+
+    const uint8_t *pl  = NULL;
+    uint16_t       plen = 0u;
+    /* Parse as PING but frame is a GET_STATUS response */
+    TEST_ASSERT_FALSE(m1_esp32_rpc_parse_resp(buf, 64u,
+                                               M1_ESP32_RPC_SYS_PING,
+                                               &pl, &plen));
+}
+
+void test_rpc_parse_resp_bad_crc_returns_false(void)
+{
+    uint8_t buf[64];
+    make_rpc_resp(buf, M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    buf[8] ^= 0xFF;  /* Corrupt CRC low byte */
+
+    const uint8_t *pl  = NULL;
+    uint16_t       plen = 0u;
+    TEST_ASSERT_FALSE(m1_esp32_rpc_parse_resp(buf, 64u,
+                                               M1_ESP32_RPC_SYS_PING,
+                                               &pl, &plen));
+}
+
+void test_rpc_parse_resp_nak_returns_false(void)
+{
+    uint8_t buf[64];
+    make_rpc_resp(buf, M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    buf[3] = M1_ESP32_RPC_NAK;  /* Overwrite msg_type → recompute CRC */
+    uint16_t crc = m1_esp32_rpc_crc16(buf, 8u);
+    buf[8] = (uint8_t)(crc & 0xFFu);
+    buf[9] = (uint8_t)((crc >> 8u) & 0xFFu);
+
+    const uint8_t *pl  = NULL;
+    uint16_t       plen = 0u;
+    TEST_ASSERT_FALSE(m1_esp32_rpc_parse_resp(buf, 64u,
+                                               M1_ESP32_RPC_SYS_PING,
+                                               &pl, &plen));
+}
+
+void test_rpc_parse_resp_too_short_returns_false(void)
+{
+    uint8_t buf[64];
+    make_rpc_resp(buf, M1_ESP32_RPC_SYS_PING, NULL, 0u);
+
+    const uint8_t *pl  = NULL;
+    uint16_t       plen = 0u;
+    /* Pass only 9 bytes: header(8) + CRC_low(1), missing CRC_high */
+    TEST_ASSERT_FALSE(m1_esp32_rpc_parse_resp(buf, 9u,
+                                               M1_ESP32_RPC_SYS_PING,
+                                               &pl, &plen));
+}
+
+/* ---- m1_esp32_rpc_devstatus_t ------------------------------------------- */
+
+void test_rpc_devstatus_struct_size(void)
+{
+    /* 1 (proto_ver) + 8 (cap_bitmap[8]) + 32 (fw_name) = 41 */
+    TEST_ASSERT_EQUAL_UINT32(41u, (uint32_t)sizeof(m1_esp32_rpc_devstatus_t));
+}
+
+void test_rpc_caps_get_round_trip(void)
+{
+    /* Pack a known bitmap into a uint8_t[8] LE array, then unpack. */
+    const uint64_t expected = M1_ESP32_CAP_PROFILE_CD3;
+    uint8_t bitmap[8];
+    for (unsigned i = 0; i < 8u; i++)
+        bitmap[i] = (uint8_t)((expected >> (i * 8u)) & 0xFFu);
+    TEST_ASSERT_EQUAL_UINT64(expected, m1_esp32_rpc_caps_get(bitmap));
 }
 
 /* =========================================================================
@@ -605,6 +886,34 @@ int main(void)
     RUN_TEST(test_fallback_sin360_heap_exceeds_at);
     RUN_TEST(test_fallback_t800_bss_exceeds_sin360);
     RUN_TEST(test_fallback_t800_heap_less_than_sin360);
+
+    /* CD3 profile + fallback invariants */
+    RUN_TEST(test_cd3_profile_has_expected_caps);
+    RUN_TEST(test_cd3_fallback_bss_less_than_at);
+    RUN_TEST(test_cd3_fallback_heap_exceeds_at);
+
+    /* M1_RPC helpers: CRC16 */
+    RUN_TEST(test_rpc_crc16_empty_returns_0xffff);
+    RUN_TEST(test_rpc_crc16_single_zero_byte);
+    RUN_TEST(test_rpc_crc16_known_vector);
+
+    /* M1_RPC helpers: build_req */
+    RUN_TEST(test_rpc_build_req_ping_frame_layout);
+    RUN_TEST(test_rpc_build_req_get_status_no_payload);
+    RUN_TEST(test_rpc_build_req_buf_too_small_returns_zero);
+    RUN_TEST(test_rpc_build_req_null_buf_returns_zero);
+
+    /* M1_RPC helpers: parse_resp */
+    RUN_TEST(test_rpc_parse_resp_valid_ping);
+    RUN_TEST(test_rpc_parse_resp_wrong_magic_returns_false);
+    RUN_TEST(test_rpc_parse_resp_wrong_msg_id_returns_false);
+    RUN_TEST(test_rpc_parse_resp_bad_crc_returns_false);
+    RUN_TEST(test_rpc_parse_resp_nak_returns_false);
+    RUN_TEST(test_rpc_parse_resp_too_short_returns_false);
+
+    /* M1_RPC devstatus */
+    RUN_TEST(test_rpc_devstatus_struct_size);
+    RUN_TEST(test_rpc_caps_get_round_trip);
 
     return UNITY_END();
 }

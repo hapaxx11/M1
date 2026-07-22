@@ -16,10 +16,11 @@ with the M1.  A custom SPI-configured build is required.
 
 | Repository | Description |
 |-----------|-------------|
-| [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **Primary** — C3 custom ESP32-C6 SPI AT firmware for M1 |
+| [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **Primary AT** — C3 custom ESP32-C6 SPI AT firmware for M1 |
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | Fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
 | [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | Fork (dag) — additional AT command extensions |
 | [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | Fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
+| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC** — ESP-IDF native WiFi/BLE/802.15.4, no AT stack, M1_RPC protocol |
 
 All repos are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
@@ -51,6 +52,12 @@ SPI transport and pin mapping.
 | Version | Features |
 |---------|----------|
 | See [GitHub Releases](https://github.com/dagnazty/esp32-at-monstatek-m1/releases) | Additional AT command extensions on top of bedge117 base |
+
+### bedge117/m1-esp32-brain (CD3 native binary RPC) releases
+
+| Version | Notable changes |
+|---------|----------------|
+| See [GitHub Releases](https://github.com/bedge117/m1-esp32-brain/releases) | Native ESP-IDF WiFi/BLE/802.15.4; SPI-slave architecture; M1_RPC binary protocol; M1-to-M1 ESP-NOW peer link; GPIO API |
 
 ## Custom AT Commands
 
@@ -294,32 +301,38 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 | 14 | `M1_ESP32_CAP_BLE_HID` | AT BLE HID keyboard (Bad-BT) |
 | 15 | `M1_ESP32_CAP_BT_MANAGE` | AT BT device management |
 | 16 | `M1_ESP32_CAP_802154` | AT IEEE 802.15.4 / Zigbee / Thread |
-| 17-63 | — | Reserved for future use |
+| 17 | `M1_ESP32_CAP_BLE_GATT` | `CMD_BLE_GATT_*` client operations |
+| 18 | `M1_ESP32_CAP_PMKID` | Dedicated PMKID capture (CD3 native) |
+| 19 | `M1_ESP32_CAP_HANDSHAKE` | WPA handshake / EAPOL capture with pcap (CD3 native) |
+| 20 | `M1_ESP32_CAP_OTA` | ESP32 firmware OTA self-update (CD3 native) |
+| 21-63 | — | Reserved for future use |
 
 ### Capability matrix by firmware variant
 
 Both SiN360 (via `CMD_GET_STATUS`) and AT firmware (via the stock `AT+CMD?`
-listing) self-report their capabilities at runtime.  The table below shows the
-expected `cap_bitmap` for each tracked variant.  The hapaxx11 fork of neddy299
-implements `CMD_GET_STATUS` directly, so it self-reports via probe 1 and the
-`AT+CMD?` fallback (probe 2) is not needed for it.
+listing) self-report their capabilities at runtime.  CD3 firmware
+(`bedge117/m1-esp32-brain`) self-reports via the M1_RPC probe.  The table
+below shows the expected `cap_bitmap` for each tracked variant.
 
-| Command family | SiN360 | bedge117 / dag | neddy299 (hapaxx11 fork) |
-|----------------|:------:|:--------------:|:------------------------:|
-| WiFi AP scan | ✅ | — | — |
-| Station scan | ✅ | — | ✅ |
-| Packet monitor | ✅ | — | — |
-| Deauth | ✅ | — | ✅ |
-| Beacon spam | ✅ | — | — |
-| Probe flood | ✅ | — | — |
-| Karma | ✅ | — | — |
-| Portal | ✅ | — | — |
-| Network scanners | ✅ | — | — |
-| WiFi join/disconnect | — | ✅ | ✅ |
-| BLE scan / advertise | ✅ | — | — |
-| **BLE HID (Bad-BT)** | — | ✅ | ✅ |
-| **IEEE 802.15.4** | — | ✅ | ✅ |
-| Classic BT management | — | — | — |
+| Command family | SiN360 | bedge117 / dag (AT) | neddy299 (hapaxx11 fork) | CD3 (m1-esp32-brain) |
+|----------------|:------:|:-------------------:|:------------------------:|:--------------------:|
+| WiFi AP scan | ✅ | — | — | ✅ |
+| Station scan | ✅ | — | ✅ | ✅ |
+| Packet monitor | ✅ | — | — | ✅ |
+| Deauth | ✅ | — | ✅ | ✅ |
+| Beacon spam | ✅ | — | — | ✅ |
+| Probe flood | ✅ | — | — | ✅ |
+| Karma | ✅ | — | — | ✅ |
+| Portal | ✅ | — | — | ✅ |
+| Network scanners | ✅ | — | — | — |
+| WiFi join/disconnect | — | ✅ | ✅ | ✅ |
+| BLE scan / advertise | ✅ | — | — | ✅ |
+| **BLE HID (Bad-BT)** | — | ✅ | ✅ | ✅ |
+| **IEEE 802.15.4** | — | ✅ | ✅ | ✅ |
+| Classic BT management | — | — | — | — |
+| **PMKID capture** | — | — | — | ✅ |
+| **Handshake capture** | — | — | — | ✅ |
+| **OTA self-update** | — | — | — | ✅ |
 
 AT capability mapping audit (tracked firmware set): the AT commands currently
 mapped to capability bits by the runtime `AT+CMD?` probe are `AT+CWJAP`
@@ -330,19 +343,33 @@ mapping is a single-line edit to `s_at_cmd_cap_map[]` in
 
 ### Probe sequence
 
-When the M1 initialises the ESP32, it performs a two-step capability probe:
+When the M1 initialises the ESP32, it performs a multi-step capability probe:
 
-1. **Binary CMD_GET_STATUS** (opcode `0x02`): tried first.  SiN360 binary-SPI
-   firmware and AT-based firmware that implements the binary extension (e.g.
-   `hapaxx11/esp32-at-monstatek-m1`, a fork of neddy299) respond here with the
+1. **Binary CMD_PING** (opcode `0x01`): tried first.  Confirms that the
+   connected firmware speaks the SiN360/binary-SPI protocol (magic `0xAB`/`0xCD`).
+   CD3 firmware (magic `0x4D31`) does **not** respond to this ping; it is
+   correctly detected by probe 3 below.
+
+2. **Binary CMD_GET_STATUS** (opcode `0x02`): tried after CMD_PING.  SiN360
+   binary-SPI firmware and AT-based firmware that implements the binary
+   extension (e.g. `hapaxx11/esp32-at-monstatek-m1`) respond here with the
    41-byte capability payload.  Unextended AT firmware (bedge117, dag, stock
    neddy299) does not implement this opcode and will time out or return
-   `RESP_ERR`.
+   `RESP_ERR`.  If CMD_PING succeeded but CMD_GET_STATUS failed, the firmware
+   is classified as SiN360 and the SiN360 fallback profile is applied.
 
-2. **Stock `AT+CMD?`** (AT text command): tried only when step 1 fails — i.e.
-   for AT firmware that does not implement the binary extension (bedge117, dag)
-   and the AT task (`get_esp32_main_init_status()`) is active.  `AT+CMD?` is
-   part of the standard ESP-AT command set
+3. **M1_RPC PING** (magic `0x4D31` "M1"): tried only when neither CMD_PING nor
+   CMD_GET_STATUS succeeded (i.e. the firmware is not SiN360-style binary-SPI).
+   Detects CD3 firmware (`bedge117/m1-esp32-brain`), which uses the M1_RPC
+   binary protocol with a different frame format (see [M1_RPC Protocol](#m1_rpc-protocol)
+   below).  If PING succeeds, M1_RPC GET_STATUS is immediately issued to
+   retrieve the capability bitmap; if GET_STATUS fails, the CD3 conservative
+   profile macro (`M1_ESP32_CAP_PROFILE_CD3`) is applied.
+
+4. **Stock `AT+CMD?`** (AT text command): tried only when steps 1–3 all fail
+   — i.e. for AT firmware that does not implement the binary extension
+   (bedge117, dag) and the AT task (`get_esp32_main_init_status()`) is active.
+   `AT+CMD?` is part of the standard ESP-AT command set
    ([reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd))
    and is supported unchanged by every tracked AT firmware variant.
 
@@ -361,7 +388,7 @@ When the M1 initialises the ESP32, it performs a two-step capability probe:
    Adding support for a new AT-side feature is a single-line edit to this
    table — no curated fallback profile macros are required.
 
-3. **Fail-closed default**: applied when both steps 1 and 2 fail.  The
+5. **Fail-closed default**: applied when all steps 1–4 fail.  The
    capability bitmap is left at zero and the firmware name is reported as
    `"Unknown (fallback)"`.  Feature gates that check specific
    `M1_ESP32_CAP_*` bits will all return false and the "Feature not
@@ -404,6 +431,67 @@ same opcode check to their SPI receive loop.
 > `m1_esp32_has_cap` with one or more `M1_ESP32_CAP_*` bits OR'd together),
 > **not** on a compile flag or firmware name string.
 > See `m1_csrc/m1_esp32_caps.h` for the full API.
+
+### <a name="m1_rpc-protocol"></a>M1_RPC protocol — CD3 firmware (bedge117/m1-esp32-brain)
+
+CD3 firmware uses a structured binary RPC protocol over the **same SPI-HD
+transport** as the AT firmware (same GPIO pins, same status register layout,
+same CS/HANDSHAKE signalling), but with a different frame format.  There is no
+AT stack in CD3.
+
+**Frame format:**
+
+```
+[ magic:2 LE ][ version:1 ][ msg_type:1 ][ msg_id:2 LE ][ payload_len:2 LE ]
+[ payload:0..N bytes ]
+[ CRC16:2 LE ]
+```
+
+| Field | Size | Value |
+|-------|------|-------|
+| `magic` | 2 | `0x4D31` LE ("M1") — wire bytes `[0x31, 0x4D]` |
+| `version` | 1 | `0x01` |
+| `msg_type` | 1 | `0x01` = REQ, `0x02` = RESP, `0x05` = NAK |
+| `msg_id` | 2 LE | Command ID (see below) |
+| `payload_len` | 2 LE | Byte count of the following payload |
+| `payload` | 0..N | Command-specific payload |
+| `CRC16` | 2 LE | CRC-16/CCITT (poly `0x1021`, init `0xFFFF`) over header+payload |
+
+**System command IDs:**
+
+| `msg_id` | Name | Request payload | Response payload |
+|----------|------|-----------------|-----------------|
+| `0x0001` | PING | 4-byte cookie | Echo of cookie |
+| `0x0002` | GET_STATUS | none | `m1_esp32_rpc_devstatus_t` (41 bytes) |
+
+**GET_STATUS response payload (`m1_esp32_rpc_devstatus_t`, 41 bytes):**
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 1 | `proto_ver` | `0x01` |
+| 1 | 8 | `cap_bitmap[8]` | `M1_ESP32_CAP_*` bits as LE `uint64_t` packed into 8 bytes |
+| 9 | 32 | `fw_name` | Null-terminated ASCII firmware identifier (e.g. `"m1-native"`) |
+
+The GET_STATUS payload is wire-identical to `m1_esp32_status_payload_t` (used
+by the SiN360 CMD_GET_STATUS path) on LE targets, so the same
+`m1_esp32_caps_parse_payload()` helper decodes both.
+
+**SPI transport:** CD3 uses `spi_slave_hd` mode, identical GPIO pin assignment
+(`ESP32_SPI3_NSS_Pin` CS, `ESP32_HANDSHAKE_Pin` response-ready), same
+fixed 64-byte MTU per SPI transaction.  The host sends a request padded to 64
+bytes, waits for HANDSHAKE to go high, then reads a 64-byte response.
+
+**Pure-logic helpers** for building and validating M1_RPC frames are in
+`m1_csrc/m1_esp32_caps.h` (static inline, no HAL deps):
+- `m1_esp32_rpc_crc16()` — CRC-16/CCITT computation
+- `m1_esp32_rpc_build_req()` — assemble a request frame into a buffer
+- `m1_esp32_rpc_parse_resp()` — validate a response (magic, version, CRC, msg_id)
+- `m1_esp32_rpc_caps_get()` — unpack an 8-byte LE cap_bitmap array to `uint64_t`
+
+The SPI raw send/receive path used by the CD3 probe (`m1_esp32_send_cmd_raw()`
+in `m1_csrc/m1_esp32_cmd.c`) is identical to `m1_esp32_send_cmd()` but skips
+the `0xCD` magic validation, returning the raw 64-byte response for M1_RPC
+frame validation instead.
 
 ### `AT+CMD?` — runtime probe for AT firmware
 
@@ -485,10 +573,20 @@ protocol.  Instead, the M1 always derives them from compile-time constants
 (`M1_ESP32_FALLBACK_*` in `m1_csrc/m1_esp32_caps.h`) based on source-code
 analysis of the known Hapax-fork ESP32 firmware releases.
 
-| Profile | BSS estimate | Free heap estimate | Source |
-|---------|-------------|---------------------|--------|
-| **SiN360** (no `M1_ESP32_CAP_WIFI_JOIN` in bitmap) | ≈ 200 KB | ≈ 160 KB | sincere360/M1_SiN360_ESP32 v0.9.0.8 source + sdkconfig |
-| **AT/C3** (`M1_ESP32_CAP_WIFI_JOIN` present in bitmap) | ≈ 284 KB | ≈ 112 KB | bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0 |
+The discriminator is a four-way check applied in priority order:
+
+| Priority | Discriminator | Profile | BSS estimate | Free heap estimate |
+|----------|--------------|---------|-------------|---------------------|
+| 1 | `HANDSHAKE` **and** `OTA` both set | **CD3** native (bedge117/m1-esp32-brain) | ≈ 185 KB (est.) | ≈ 175 KB (est.) |
+| 2 | `WIFI_JOIN` **and** `BEACON` both set | **dag T-800** AT | ≈ 290 KB | ≈ 105 KB |
+| 3 | `WIFI_JOIN` set, `BEACON` absent | **AT/C3** (bedge117/neddy299) | ≈ 284 KB | ≈ 112 KB |
+| 4 | `WIFI_JOIN` absent | **SiN360** binary-SPI | ≈ 200 KB | ≈ 160 KB |
+
+CD3 figures are estimates pending actual hardware measurement (native ESP-IDF
+WiFi/BLE/802.15.4 without AT overhead has lower BSS and higher available heap
+than the AT firmware stack).  Update `M1_ESP32_FALLBACK_BSS_CD3` and
+`M1_ESP32_FALLBACK_HEAP_CD3` in `m1_csrc/m1_esp32_caps.h` once a memory map
+from a production CD3 build is available.
 
 These values are accessible at runtime via `m1_esp32_caps_bss_bytes()` and
 `m1_esp32_caps_free_heap()` and are intended for developer diagnostics (OOM

@@ -263,6 +263,24 @@ void test_wifi_disconnect_maps_to_cap_wifi_set_chan(void)
         esp32_feature_required_caps(ESP32_FEATURE_WIFI_DISCONNECT));
 }
 
+void test_pmkid_maps_to_cap_pmkid(void)
+{
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PMKID,
+        esp32_feature_required_caps(ESP32_FEATURE_PMKID));
+}
+
+void test_handshake_maps_to_cap_handshake(void)
+{
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_HANDSHAKE,
+        esp32_feature_required_caps(ESP32_FEATURE_HANDSHAKE));
+}
+
+void test_ota_maps_to_cap_ota(void)
+{
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_OTA,
+        esp32_feature_required_caps(ESP32_FEATURE_OTA));
+}
+
 /* =========================================================================
  * Per-feature: supported() on SiN360 profile bitmap
  * =========================================================================*/
@@ -310,6 +328,98 @@ void test_sin360_profile_supports_attack_features(void)
                                     sin360_features[i]),
             esp32_feature_label(sin360_features[i]));
     }
+}
+
+/* =========================================================================
+ * Per-feature: supported() on CD3 profile bitmap
+ * =========================================================================*/
+
+void test_cd3_profile_has_pmkid_handshake_ota(void)
+{
+    TEST_ASSERT_TRUE(
+        esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, ESP32_FEATURE_PMKID));
+    TEST_ASSERT_TRUE(
+        esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, ESP32_FEATURE_HANDSHAKE));
+    TEST_ASSERT_TRUE(
+        esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, ESP32_FEATURE_OTA));
+}
+
+void test_cd3_profile_lacks_netscan(void)
+{
+    /* CD3 v1 does not include a ping/ARP network scanner */
+    TEST_ASSERT_FALSE(
+        esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, ESP32_FEATURE_NETSCAN));
+}
+
+void test_cd3_profile_supports_wifi_and_ble(void)
+{
+    static const esp32_feature_id_t cd3_features[] = {
+        ESP32_FEATURE_WIFI_SCAN,
+        ESP32_FEATURE_WIFI_JOIN,
+        ESP32_FEATURE_STA_SCAN,
+        ESP32_FEATURE_DEAUTH,
+        ESP32_FEATURE_BEACON,
+        ESP32_FEATURE_PROBE_FLOOD,
+        ESP32_FEATURE_KARMA,
+        ESP32_FEATURE_PKTMON,
+        ESP32_FEATURE_PORTAL,
+        ESP32_FEATURE_BLE_SCAN,
+        ESP32_FEATURE_BLE_ADV,
+        ESP32_FEATURE_BLE_HID,
+        ESP32_FEATURE_BLE_GATT,
+        ESP32_FEATURE_802154,
+    };
+    for (size_t i = 0; i < sizeof(cd3_features)/sizeof(cd3_features[0]); i++)
+    {
+        TEST_ASSERT_TRUE_MESSAGE(
+            esp32_feature_supported(M1_ESP32_CAP_PROFILE_CD3, cd3_features[i]),
+            esp32_feature_label(cd3_features[i]));
+    }
+}
+
+/* =========================================================================
+ * esp32_firmware_is_cd3 — classifier
+ * =========================================================================*/
+
+void test_is_cd3_zero_bitmap_returns_false(void)
+{
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(0u));
+}
+
+void test_is_cd3_profile_cd3_returns_true(void)
+{
+    TEST_ASSERT_TRUE(esp32_firmware_is_cd3(M1_ESP32_CAP_PROFILE_CD3));
+}
+
+void test_is_cd3_handshake_and_ota_returns_true(void)
+{
+    /* Minimum CD3 discriminator: both HANDSHAKE and OTA must be set */
+    TEST_ASSERT_TRUE(
+        esp32_firmware_is_cd3(M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_OTA));
+}
+
+void test_is_cd3_handshake_only_returns_false(void)
+{
+    /* HANDSHAKE without OTA is not enough to identify CD3 */
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_HANDSHAKE));
+}
+
+void test_is_cd3_ota_only_returns_false(void)
+{
+    /* OTA without HANDSHAKE is not enough to identify CD3 */
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_OTA));
+}
+
+void test_is_cd3_sin360_profile_returns_false(void)
+{
+    /* SiN360 has neither HANDSHAKE nor OTA */
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_PROFILE_SIN360));
+}
+
+void test_is_cd3_all_ones_returns_true(void)
+{
+    /* All bits set includes both HANDSHAKE and OTA → CD3 */
+    TEST_ASSERT_TRUE(esp32_firmware_is_cd3(UINT64_MAX));
 }
 
 /* =========================================================================
@@ -365,10 +475,10 @@ void test_is_sin360_bt_manage_only_returns_false(void)
  * Feature count sanity
  * =========================================================================*/
 
-void test_feature_count_equals_19(void)
+void test_feature_count_equals_22(void)
 {
     /* Update this test (and the feature table) whenever new IDs are added. */
-    TEST_ASSERT_EQUAL_INT(19, (int)ESP32_FEATURE_COUNT);
+    TEST_ASSERT_EQUAL_INT(22, (int)ESP32_FEATURE_COUNT);
 }
 
 /* =========================================================================
@@ -409,9 +519,16 @@ int main(void)
     RUN_TEST(test_ble_hid_maps_to_cap_ble_hid);
     RUN_TEST(test_ble_gatt_maps_to_cap_ble_gatt);
     RUN_TEST(test_bt_manage_maps_to_cap_bt_manage);
+    RUN_TEST(test_pmkid_maps_to_cap_pmkid);
+    RUN_TEST(test_handshake_maps_to_cap_handshake);
+    RUN_TEST(test_ota_maps_to_cap_ota);
 
     RUN_TEST(test_sin360_profile_lacks_wifi_join);
     RUN_TEST(test_sin360_profile_supports_attack_features);
+
+    RUN_TEST(test_cd3_profile_has_pmkid_handshake_ota);
+    RUN_TEST(test_cd3_profile_lacks_netscan);
+    RUN_TEST(test_cd3_profile_supports_wifi_and_ble);
 
     RUN_TEST(test_is_sin360_zero_bitmap_returns_false);
     RUN_TEST(test_is_sin360_profile_sin360_returns_true);
@@ -421,7 +538,15 @@ int main(void)
     RUN_TEST(test_is_sin360_all_ones_returns_false);
     RUN_TEST(test_is_sin360_bt_manage_only_returns_false);
 
-    RUN_TEST(test_feature_count_equals_19);
+    RUN_TEST(test_is_cd3_zero_bitmap_returns_false);
+    RUN_TEST(test_is_cd3_profile_cd3_returns_true);
+    RUN_TEST(test_is_cd3_handshake_and_ota_returns_true);
+    RUN_TEST(test_is_cd3_handshake_only_returns_false);
+    RUN_TEST(test_is_cd3_ota_only_returns_false);
+    RUN_TEST(test_is_cd3_sin360_profile_returns_false);
+    RUN_TEST(test_is_cd3_all_ones_returns_true);
+
+    RUN_TEST(test_feature_count_equals_22);
 
     return UNITY_END();
 }
