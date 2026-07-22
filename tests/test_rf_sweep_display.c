@@ -261,6 +261,48 @@ void test_format_hit_min_hits_zero_always_shows_confidence(void)
     TEST_ASSERT_EQUAL_STRING("433.92 F:Car Key Fob 50%", buf);
 }
 
+void test_format_hit_decode_confirmed(void)
+{
+    char buf[RF_SWEEP_DISP_LINE_LEN];
+    /* decode-confirmed hit: sig==NULL, decode_name set, confidence=100 */
+    rf_sweep_hit_t hit = {
+        .sig         = NULL,
+        .decode_name = "Princeton",
+        .freq_hz     = 433920000UL,
+        .band        = RF_BAND_433,
+        .category    = RF_CAT_UNKNOWN,
+        .security    = RF_SEC_UNKNOWN,
+        .confidence  = 100,
+        .rssi_dbm    = -68,
+        .hits        = 3,
+    };
+
+    rf_sweep_display_format_hit(buf, sizeof(buf), &hit, 2);
+    /* Security prefix must be absent; confidence shown as "100%" */
+    TEST_ASSERT_EQUAL_STRING("433.92 Princeton 100%", buf);
+}
+
+void test_format_hit_decode_confirmed_skips_min_hits_guard(void)
+{
+    char buf[RF_SWEEP_DISP_LINE_LEN];
+    /* decode-confirmed hit with only 1 hit but min_hits=2 */
+    rf_sweep_hit_t hit = {
+        .sig         = NULL,
+        .decode_name = "NiceFlorS",
+        .freq_hz     = 433920000UL,
+        .band        = RF_BAND_433,
+        .category    = RF_CAT_UNKNOWN,
+        .security    = RF_SEC_UNKNOWN,
+        .confidence  = 100,
+        .rssi_dbm    = -72,
+        .hits        = 1,
+    };
+
+    rf_sweep_display_format_hit(buf, sizeof(buf), &hit, 2);
+    /* Must show "100%", not "?%" — a decode is definitive */
+    TEST_ASSERT_EQUAL_STRING("433.92 NiceFlorS 100%", buf);
+}
+
 /*============================================================================*/
 /* Main                                                                       */
 /*============================================================================*/
@@ -294,6 +336,8 @@ int main(void)
     RUN_TEST(test_format_hit_no_tag_in_name);
     RUN_TEST(test_format_hit_null_hit);
     RUN_TEST(test_format_hit_min_hits_zero_always_shows_confidence);
+    RUN_TEST(test_format_hit_decode_confirmed);
+    RUN_TEST(test_format_hit_decode_confirmed_skips_min_hits_guard);
 
     return UNITY_END();
 }

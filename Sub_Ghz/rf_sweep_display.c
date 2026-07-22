@@ -72,8 +72,19 @@ void rf_sweep_display_format_hit(char *buf, uint16_t buf_len,
         return;
     buf[0] = '\0';
 
-    if (hit == NULL || hit->sig == NULL)
+    if (hit == NULL)
         return;
+
+    /* Determine the name source: decode-confirmed hits use decode_name;
+     * fingerprint-scored hits use the database signature name. */
+    const char *name_src = NULL;
+    bool is_decoded = (hit->sig == NULL && hit->decode_name != NULL);
+    if (is_decoded)
+        name_src = hit->decode_name;
+    else if (hit->sig != NULL)
+        name_src = hit->sig->name;
+    else
+        return;  /* no name available */
 
     /* Format frequency as MHz (e.g. "433.92"). */
     uint32_t mhz_int = hit->freq_hz / 1000000UL;
@@ -82,16 +93,17 @@ void rf_sweep_display_format_hit(char *buf, uint16_t buf_len,
     snprintf(freq_str, sizeof(freq_str), "%lu.%02lu",
              (unsigned long)mhz_int, (unsigned long)mhz_frac);
 
-    /* Security prefix. */
-    const char *sec_pfx = rf_sweep_display_security_prefix(hit->security);
+    /* Security prefix — omitted for decode-confirmed hits (security unknown). */
+    const char *sec_pfx = is_decoded ? "" : rf_sweep_display_security_prefix(hit->security);
 
     /* Strip tags from the name. */
     char clean_name[24];
-    rf_sweep_display_strip_tags(clean_name, sizeof(clean_name), hit->sig->name);
+    rf_sweep_display_strip_tags(clean_name, sizeof(clean_name), name_src);
 
-    /* Confidence string. */
+    /* Confidence string.  Decode-confirmed hits always show their confidence
+     * (100%) regardless of hit count — a decode is definitive. */
     char conf_str[6];
-    if (hit->hits >= min_hits)
+    if (is_decoded || hit->hits >= min_hits)
         snprintf(conf_str, sizeof(conf_str), "%u%%", (unsigned)hit->confidence);
     else
         snprintf(conf_str, sizeof(conf_str), "?%%");
