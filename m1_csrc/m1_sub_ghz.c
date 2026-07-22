@@ -5525,9 +5525,16 @@ void sub_ghz_smart_signal_id(void)
         uint32_t step   = span / 128;
         if (step < 50000UL) step = 50000UL;
 
-        bool is_915 = (center >= RF_SCAN_915_BOUNDARY_HZ);
-        radio_init_rx_tx(is_915 ? SUB_GHZ_BAND_915 : SUB_GHZ_BAND_433,
-                         MODEM_MOD_TYPE_OOK, true);
+        S_M1_SubGHz_Band init_band;
+        if (center >= 850000000UL)
+            init_band = SUB_GHZ_BAND_915;
+        else if (center >= 390000000UL)
+            init_band = SUB_GHZ_BAND_433_92;
+        else
+            init_band = SUB_GHZ_BAND_315;
+
+        radio_init_rx_tx(init_band, MODEM_MOD_TYPE_OOK, true);
+        SI446x_Select_Frontend(init_band);
         radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
 
         uint32_t freq     = center - span / 2;
