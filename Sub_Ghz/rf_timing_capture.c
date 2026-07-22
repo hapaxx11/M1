@@ -25,10 +25,11 @@ uint16_t rf_timing_from_rssi_burst(
     if (rssi_dbm == NULL || n == 0 || out == NULL || out_max == 0)
         return 0;
 
-    /* Guard against degenerate period so we never multiply by 0. */
+    /* Guard against degenerate / huge period so we never multiply by 0 or overflow. */
     if (sample_period_us == 0)
         sample_period_us = 1;
-
+    if (sample_period_us > RF_TIMING_CAPTURE_MAX_US)
+        sample_period_us = RF_TIMING_CAPTURE_MAX_US;
     uint16_t out_count = 0;
 
     /* Current polarity: true = mark (above threshold). */
