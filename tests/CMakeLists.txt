@@ -706,6 +706,18 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rf_ook_fsk COMMAND test_rf_ook_fsk)
 
+# rf_timing_capture — Phase 4A RSSI-burst → mark/space timing converter
+add_executable(test_rf_timing_capture
+    test_rf_timing_capture.c
+    ${M1_ROOT}/Sub_Ghz/rf_timing_capture.c
+)
+target_include_directories(test_rf_timing_capture PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_timing_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_timing_capture PRIVATE sanitizers)
+endif()
+add_test(NAME rf_timing_capture COMMAND test_rf_timing_capture)
+
 # ------------------------------------------------------------------
 # Module under test: subghz_registry_decode_try_fn
 # Canonical SubGhzRawDecodeTryFn bridge extracted from

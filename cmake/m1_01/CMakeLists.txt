@@ -345,6 +345,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/rf_scan_plan.c
     ../../Sub_Ghz/rf_smart_scan.c
     ../../Sub_Ghz/rf_ook_fsk.c
+    ../../Sub_Ghz/rf_timing_capture.c
     ../../Sub_Ghz/subghz_playlist_parser.c
     ../../Sub_Ghz/subghz_secplus_v1_encoder.c
     ../../Sub_Ghz/subghz_keeloq.c

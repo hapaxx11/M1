@@ -40,6 +40,7 @@
 #include "rf_scan_plan.h"
 #include "rf_smart_scan.h"
 #include "rf_ook_fsk.h"
+#include "rf_timing_capture.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
 #include "m1_storage.h"
@@ -5203,7 +5204,8 @@ void sub_ghz_freq_scanner(void)
 /* this delegate is a thin SI4463 wrapper reusing the freq_scanner RX path.    */
 /*============================================================================*/
 
-#define SIGID_BURST_SAMPLES   24U   /* RSSI samples taken per catch to classify */
+#define SIGID_BURST_SAMPLES   64U   /* RSSI samples per catch (OOK/FSK + timing) */
+#define SIGID_SAMPLE_PERIOD_US  2000U /* ms HAL_Delay(2) → 2000 µs per sample    */
 #define SIGID_THRESHOLD_DBM   (-80) /* default catch threshold (dBm) */
 #define SIGID_THRESHOLD_MIN   (-110)
 #define SIGID_THRESHOLD_MAX   (-40)
@@ -5268,8 +5270,10 @@ void sub_ghz_signal_identifier(void)
 
             if (rssi > threshold)
             {
-                /* Caught activity: sample a short RSSI burst to classify the
-                 * modulation family without a full RAW timing capture. */
+                /* Phase 4A: Sample RSSI burst for both OOK/FSK classification
+                 * and timing-element extraction.  Each sample is 2 ms apart so
+                 * the 64-sample window covers ~128 ms — enough to catch several
+                 * repeats of a typical short-range remote at ≥1 kbps. */
                 int16_t peak = rssi;
                 for (uint16_t s = 0; s < SIGID_BURST_SAMPLES; s++)
                 {
@@ -5278,21 +5282,51 @@ void sub_ghz_signal_identifier(void)
                     int16_t r = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
                     rssi_burst[s] = r;
                     if (r > peak) peak = r;
-                    HAL_Delay(1);
+                    HAL_Delay(2);
                 }
 
+                /* OOK/FSK classification (coarse modulation family). */
                 rf_ook_fsk_result_t mc =
                     rf_ook_fsk_classify(rssi_burst, SIGID_BURST_SAMPLES);
 
+                /* Timing-element extraction: convert the RSSI burst into a
+                 * pseudo-timing array (mark/space durations in µs) and feed it
+                 * to rf_fingerprint_from_subghz_raw() to populate te_us,
+                 * pulse_count, est_bits, and repetition. */
+                int16_t timing_buf[SIGID_BURST_SAMPLES];
+                uint16_t timing_count = rf_timing_from_rssi_burst(
+                    rssi_burst, SIGID_BURST_SAMPLES,
+                    threshold, SIGID_SAMPLE_PERIOD_US,
+                    timing_buf, SIGID_BURST_SAMPLES);
+
                 rf_fingerprint_t fp;
-                memset(&fp, 0, sizeof(fp));
-                fp.sensor         = RF_SENSOR_SUBGHZ;
-                fp.freq_hz        = pt->freq_hz;
-                fp.band           = rf_band_from_freq(pt->freq_hz);
-                fp.mod            = mc.mod;
-                fp.mod_confidence = mc.confidence;
-                fp.repetition     = 1;
-                fp.rssi_dbm       = peak;
+                if (timing_count >= 4)
+                {
+                    /* Enough timing edges for the extractors to work with. */
+                    rf_fingerprint_from_subghz_raw(
+                        timing_buf, timing_count,
+                        pt->freq_hz, 0xFF, peak, 0, &fp);
+
+                    /* Prefer the burst-based modulation when the fingerprint
+                     * extractor returned UNKNOWN (not enough quantized pulses). */
+                    if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                    {
+                        fp.mod            = mc.mod;
+                        fp.mod_confidence = mc.confidence;
+                    }
+                }
+                else
+                {
+                    /* Fallback: build fingerprint from burst classifier only. */
+                    memset(&fp, 0, sizeof(fp));
+                    fp.sensor         = RF_SENSOR_SUBGHZ;
+                    fp.freq_hz        = pt->freq_hz;
+                    fp.band           = rf_band_from_freq(pt->freq_hz);
+                    fp.mod            = mc.mod;
+                    fp.mod_confidence = mc.confidence;
+                    fp.repetition     = 1;
+                    fp.rssi_dbm       = peak;
+                }
 
                 /* Only trust the scorer when the fingerprint carries more than
                  * its band; otherwise the signal is merely "active". */
@@ -5588,21 +5622,41 @@ void sub_ghz_smart_signal_id(void)
                         int16_t r = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
                         rssi_burst[s] = r;
                         if (r > peak) peak = r;
-                        HAL_Delay(1);
+                        HAL_Delay(2);
                     }
 
                     rf_ook_fsk_result_t mc =
                         rf_ook_fsk_classify(rssi_burst, SIGID_BURST_SAMPLES);
 
+                    int16_t timing_buf[SIGID_BURST_SAMPLES];
+                    uint16_t timing_count = rf_timing_from_rssi_burst(
+                        rssi_burst, SIGID_BURST_SAMPLES,
+                        threshold, SIGID_SAMPLE_PERIOD_US,
+                        timing_buf, SIGID_BURST_SAMPLES);
+
                     rf_fingerprint_t fp;
-                    memset(&fp, 0, sizeof(fp));
-                    fp.sensor         = RF_SENSOR_SUBGHZ;
-                    fp.freq_hz        = pt->freq_hz;
-                    fp.band           = rf_band_from_freq(pt->freq_hz);
-                    fp.mod            = mc.mod;
-                    fp.mod_confidence = mc.confidence;
-                    fp.repetition     = 1;
-                    fp.rssi_dbm       = peak;
+                    if (timing_count >= 4)
+                    {
+                        rf_fingerprint_from_subghz_raw(
+                            timing_buf, timing_count,
+                            pt->freq_hz, 0xFF, peak, 0, &fp);
+                        if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                        {
+                            fp.mod            = mc.mod;
+                            fp.mod_confidence = mc.confidence;
+                        }
+                    }
+                    else
+                    {
+                        memset(&fp, 0, sizeof(fp));
+                        fp.sensor         = RF_SENSOR_SUBGHZ;
+                        fp.freq_hz        = pt->freq_hz;
+                        fp.band           = rf_band_from_freq(pt->freq_hz);
+                        fp.mod            = mc.mod;
+                        fp.mod_confidence = mc.confidence;
+                        fp.repetition     = 1;
+                        fp.rssi_dbm       = peak;
+                    }
 
                     if (rf_fingerprint_is_discriminating(&fp))
                     {
@@ -5652,21 +5706,41 @@ void sub_ghz_smart_signal_id(void)
                         int16_t r = pmodemstat->CURR_RSSI / 2 - MODEM_RSSI_COMP - 70;
                         rssi_burst[s] = r;
                         if (r > peak) peak = r;
-                        HAL_Delay(1);
+                        HAL_Delay(2);
                     }
 
                     rf_ook_fsk_result_t mc =
                         rf_ook_fsk_classify(rssi_burst, SIGID_BURST_SAMPLES);
 
+                    int16_t timing_buf[SIGID_BURST_SAMPLES];
+                    uint16_t timing_count = rf_timing_from_rssi_burst(
+                        rssi_burst, SIGID_BURST_SAMPLES,
+                        threshold, SIGID_SAMPLE_PERIOD_US,
+                        timing_buf, SIGID_BURST_SAMPLES);
+
                     rf_fingerprint_t fp;
-                    memset(&fp, 0, sizeof(fp));
-                    fp.sensor         = RF_SENSOR_SUBGHZ;
-                    fp.freq_hz        = pt->freq_hz;
-                    fp.band           = rf_band_from_freq(pt->freq_hz);
-                    fp.mod            = mc.mod;
-                    fp.mod_confidence = mc.confidence;
-                    fp.repetition     = 1;
-                    fp.rssi_dbm       = peak;
+                    if (timing_count >= 4)
+                    {
+                        rf_fingerprint_from_subghz_raw(
+                            timing_buf, timing_count,
+                            pt->freq_hz, 0xFF, peak, 0, &fp);
+                        if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                        {
+                            fp.mod            = mc.mod;
+                            fp.mod_confidence = mc.confidence;
+                        }
+                    }
+                    else
+                    {
+                        memset(&fp, 0, sizeof(fp));
+                        fp.sensor         = RF_SENSOR_SUBGHZ;
+                        fp.freq_hz        = pt->freq_hz;
+                        fp.band           = rf_band_from_freq(pt->freq_hz);
+                        fp.mod            = mc.mod;
+                        fp.mod_confidence = mc.confidence;
+                        fp.repetition     = 1;
+                        fp.rssi_dbm       = peak;
+                    }
 
                     if (rf_fingerprint_is_discriminating(&fp))
                     {
