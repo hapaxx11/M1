@@ -191,7 +191,7 @@ bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
                 slot->rssi_dbm = rssi_dbm;
                 slot->freq_hz  = freq_hz;
             }
-            /* confidence stays 100 — no resort needed */
+            resort(rep); /* RSSI update may change ordering among 100%-confidence hits */
             return true;
         }
     }
