@@ -36,6 +36,7 @@
 #include "rf_fingerprint.h"
 #include "rf_match.h"
 #include "rf_sweep.h"
+#include "rf_sweep_display.h"
 #include "rf_scan_plan.h"
 #include "rf_ook_fsk.h"
 #include "m1_ring_buffer.h"
@@ -5206,6 +5207,7 @@ void sub_ghz_freq_scanner(void)
 #define SIGID_THRESHOLD_MIN   (-110)
 #define SIGID_THRESHOLD_MAX   (-40)
 #define SIGID_VISIBLE_ROWS    4U
+#define SIGID_MIN_HITS        2U    /* require N hits before showing confidence */
 
 void sub_ghz_signal_identifier(void)
 {
@@ -5334,10 +5336,9 @@ void sub_ghz_signal_identifier(void)
                     const rf_sweep_hit_t *h = &report.hits[idx];
                     uint8_t y = 20 + row * 11;
 
-                    /* Line 1: name + confidence. */
-                    snprintf(info_str, sizeof(info_str), "%s %u%%",
-                             (h->sig && h->sig->name) ? h->sig->name : "?",
-                             (unsigned)h->confidence);
+                    /* Formatted line: freq sec:name conf% */
+                    rf_sweep_display_format_hit(info_str, sizeof(info_str),
+                                               h, SIGID_MIN_HITS);
                     u8g2_DrawStr(&m1_u8g2, 2, y, info_str);
                 }
 

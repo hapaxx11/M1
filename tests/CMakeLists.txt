@@ -666,6 +666,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rf_sweep COMMAND test_rf_sweep)
 
+add_executable(test_rf_sweep_display
+    test_rf_sweep_display.c
+    ${M1_ROOT}/Sub_Ghz/rf_sweep_display.c
+    ${M1_ROOT}/Sub_Ghz/rf_sweep.c
+    ${M1_ROOT}/Sub_Ghz/rf_protocol_db.c
+)
+target_include_directories(test_rf_sweep_display PRIVATE ${M1_ROOT}/Sub_Ghz)
+target_link_libraries(test_rf_sweep_display PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rf_sweep_display PRIVATE sanitizers)
+endif()
+add_test(NAME rf_sweep_display COMMAND test_rf_sweep_display)
+
 # rf_scan_plan — Signal Identifier ISM probe plan + cursor
 add_executable(test_rf_scan_plan
     test_rf_scan_plan.c
