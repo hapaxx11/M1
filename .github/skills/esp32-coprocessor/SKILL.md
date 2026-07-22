@@ -39,7 +39,7 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - **Architecture**: SPI-slave HD mode, M1_RPC binary protocol (magic `0x4D31` "M1"), same GPIO/CS/HANDSHAKE pins as AT and SiN360 — no hardware changes required
 - **Enables**: Native ESP-IDF WiFi (scan, join, deauth, beacon, probe, karma, portal, pktmon, sta_scan), NimBLE (scan, adv, HID, GATT), 802.15.4, **PMKID capture** (`M1_ESP32_CAP_PMKID`), **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`), **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA`), M1-to-M1 peer link over ESP-NOW, GPIO API
 - **Does NOT include** (v1): NETSCAN (no ping/ARP scanner), BT Classic management
-- Detected by the M1 via **M1_RPC PING** (probe 3 in `m1_esp32_caps_init()`); capability bitmap reported via M1_RPC GET_STATUS
+- Detected by the M1 via **M1_RPC PING** in `m1_esp32_caps_init()`; capability bitmap reported via M1_RPC GET_STATUS
 - Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response
 - **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)
 - Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE && OTA` both set

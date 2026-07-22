@@ -221,9 +221,9 @@
  *  an all-zero bitmap.
  *
  *  CD3 uses the M1_RPC binary SPI protocol (magic 0x4D31, "M1") and is
- *  detected by Probe 3 in m1_esp32_caps_init().  Key capabilities unique
+ *  detected by the M1_RPC probe in m1_esp32_caps_init().  Key capabilities unique
  *  to CD3 vs SiN360/AT: PMKID, HANDSHAKE, OTA (bits 18-20).
- *  WiFi JOIN + NETSCAN absent (no ping/ARP scanner component in v1.x).
+ *  NETSCAN absent (no ping/ARP scanner component in v1.x).
  *  BT_MANAGE absent (no Bluetooth Classic component). */
 #define M1_ESP32_CAP_PROFILE_CD3 \
     (M1_ESP32_CAP_WIFI_SCAN    | \
@@ -549,7 +549,7 @@ m1_esp32_rpc_build_req(uint8_t *buf, uint16_t buf_size,
 {
     uint16_t frame_size = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + payload_len +
                                      M1_ESP32_RPC_CRC_SIZE);
-    if (!buf || buf_size < frame_size)
+    if (!buf || buf_size < frame_size || (payload_len > 0u && !payload))
         return 0u;
 
     buf[0] = (uint8_t)(M1_ESP32_RPC_MAGIC        & 0xFFu);
@@ -594,9 +594,11 @@ m1_esp32_rpc_parse_resp(const uint8_t *buf, uint16_t buf_len,
                          const uint8_t **payload_out,
                          uint16_t *payload_len_out)
 {
-    if (!buf || buf_len < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE))
+    if (payload_out)     *payload_out = NULL;
+    if (payload_len_out) *payload_len_out = 0u;
+    if (!buf || !payload_out || !payload_len_out ||
+        buf_len < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE))
         return false;
-
     uint16_t magic = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8u);
     if (magic != M1_ESP32_RPC_MAGIC)
         return false;

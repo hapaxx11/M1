@@ -232,7 +232,7 @@ void m1_esp32_caps_init(void)
         return;
     }
 
-    /* Probe 2: M1_RPC PING (magic 0x4D31) — CD3 native binary RPC firmware
+    /* M1_RPC probe: PING (magic 0x4D31) — CD3 native binary RPC firmware
      * (bedge117/m1-esp32-brain).
      *
      * CD3 uses a completely different frame format from the SiN360/CMD_PING
