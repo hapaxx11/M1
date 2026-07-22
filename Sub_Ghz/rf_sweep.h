@@ -105,7 +105,9 @@ const rf_sweep_hit_t *rf_sweep_report_top(const rf_sweep_report_t *rep);
  *                      (e.g. a string literal in the registry table) since the
  *                      hit stores the pointer, not a copy.
  *
- * @return true when the hit was stored (always, unless rep is NULL).
+ * @return true when the hit was stored or merged; false when rep or
+ *         protocol_name is NULL, or when the report is full and the new
+ *         decode-confirmed hit does not outrank the weakest slot.
  */
 bool rf_sweep_report_add_decoded(rf_sweep_report_t *rep,
                                  uint32_t           freq_hz,

@@ -33,7 +33,8 @@
  * Deduplication radius.
  *
  * Two entries are considered the same channel if they are within this many
- * Hz of each other.  Matches the 100 kHz step floor of the pre-scan.
+ * Hz of each other.  Chosen to be coarser than the pre-scan's 50 kHz step
+ * floor so that adjacent probe points collapse into a single detection.
  */
 #define RF_SMART_SCAN_DEDUP_HZ     100000UL
 

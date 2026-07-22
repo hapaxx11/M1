@@ -5587,9 +5587,6 @@ void sub_ghz_smart_signal_id(void)
     /* dynamic plan (or falls back to rf_scan_plan when dyn_count == 0).      */
     /* ---------------------------------------------------------------------- */
 
-    /* Index into dyn_plan (0-based, wraps at dyn_count) */
-    uint8_t  dyn_idx   = 0;
-    uint32_t pass_cnt  = 0;
     bool     cur_915   = false;
 
     if (dyn_count > 0)
@@ -5722,7 +5719,6 @@ void sub_ghz_smart_signal_id(void)
                     }
                 }
             }
-            pass_cnt++;
             pass_done = true;
         }
         else
