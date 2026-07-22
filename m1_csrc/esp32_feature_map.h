@@ -118,6 +118,16 @@ typedef enum {
     /** Saved BT devices list / BT info */
     ESP32_FEATURE_BT_MANAGE,
 
+    /* ----- CD3 / M1_RPC native features ----------------------------------- */
+    /** Dedicated PMKID capture (CD3: separate from generic PKTMON) */
+    ESP32_FEATURE_PMKID,
+
+    /** WPA handshake / EAPOL capture with pcap export */
+    ESP32_FEATURE_HANDSHAKE,
+
+    /** ESP32 firmware OTA self-update over WiFi */
+    ESP32_FEATURE_OTA,
+
     /* ----- Sentinel (must be last) ---------------------------------------- */
     ESP32_FEATURE_COUNT,
 } esp32_feature_id_t;
@@ -174,6 +184,18 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
  * to call before m1_esp32_caps_init() completes.
  */
 bool esp32_firmware_is_sin360(uint64_t cap_bitmap);
+
+/**
+ * @brief  Return true when the bitmap indicates a CD3 native binary-RPC
+ *         firmware (bedge117/m1-esp32-brain).
+ *
+ * Discriminator: HANDSHAKE present AND OTA present.  Both bits are unique to
+ * the CD3 firmware — neither SiN360 nor any AT variant sets them.
+ *
+ * Returns false for all-zero bitmaps (fallback / unknown firmware) — safe
+ * to call before m1_esp32_caps_init() completes.
+ */
+bool esp32_firmware_is_cd3(uint64_t cap_bitmap);
 
 #ifdef __cplusplus
 }

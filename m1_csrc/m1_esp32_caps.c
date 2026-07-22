@@ -122,15 +122,23 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 
 /**
  * Set memory footprint estimates based on the resolved capability bitmap.
- * Three-way discriminator:
- *   WIFI_JOIN + BEACON → dag T-800 profile (dagnazty/M1-T-800)
- *   WIFI_JOIN alone    → stock AT/C3 profile (bedge117/neddy299)
- *   neither            → SiN360 profile
+ * Four-way discriminator (evaluated in priority order):
+ *   HANDSHAKE + OTA present → CD3 native (bedge117/m1-esp32-brain)
+ *   WIFI_JOIN + BEACON      → dag T-800 (AT firmware with custom cmds)
+ *   WIFI_JOIN alone         → stock AT/C3 (bedge117/neddy299)
+ *   neither WIFI_JOIN       → SiN360 binary-SPI
  */
 static void caps_apply_footprint_estimates(uint64_t bitmap)
 {
-    if ((bitmap & M1_ESP32_CAP_WIFI_JOIN) &&
-        (bitmap & M1_ESP32_CAP_BEACON))
+    if ((bitmap & M1_ESP32_CAP_HANDSHAKE) &&
+        (bitmap & M1_ESP32_CAP_OTA))
+    {
+        /* CD3 native binary RPC firmware (bedge117/m1-esp32-brain) */
+        s_bss_bytes       = M1_ESP32_FALLBACK_BSS_CD3;
+        s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_CD3;
+    }
+    else if ((bitmap & M1_ESP32_CAP_WIFI_JOIN) &&
+             (bitmap & M1_ESP32_CAP_BEACON))
     {
         /* dag T-800: AT firmware with custom WiFi/HID/Zigbee commands */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_T800;
@@ -224,7 +232,83 @@ void m1_esp32_caps_init(void)
         return;
     }
 
-    /* Probe 2: stock ESP-AT `AT+CMD?`.  This command is part of the basic
+    /* Probe 2: M1_RPC PING (magic 0x4D31) — CD3 native binary RPC firmware
+     * (bedge117/m1-esp32-brain).
+     *
+     * CD3 uses a completely different frame format from the SiN360/CMD_PING
+     * protocol.  It ignores frames with 0xAB magic (so is_binary_spi is
+     * always false for CD3) but responds to M1_RPC PING (magic 0x4D31 "M1").
+     * We use m1_esp32_send_cmd_raw() here because the normal send path
+     * validates resp->magic == 0xCD, which CD3 never sends.
+     *
+     * On success we immediately follow up with M1_RPC GET_STATUS to retrieve
+     * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
+     * stage firmware not yet implementing GET_STATUS), we fall back to the
+     * CD3 conservative profile macro rather than the AT path. */
+    {
+        uint8_t  tx64[64];
+        uint8_t  rx64[64];
+        static const uint8_t cd3_cookie[4] = {0x4D, 0x31, 0x50, 0x49}; /* "M1PI" */
+        uint16_t req_len;
+        const uint8_t *rpc_pl  = NULL;
+        uint16_t       rpc_plen = 0u;
+
+        memset(tx64, 0, sizeof(tx64));
+        req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
+                                          M1_ESP32_RPC_SYS_PING,
+                                          cd3_cookie, 4u);
+        if (req_len > 0u)
+        {
+            memset(rx64, 0, sizeof(rx64));
+            ret = m1_esp32_send_cmd_raw(tx64, rx64, CAPS_QUERY_TIMEOUT_MS);
+
+            if (ret == 0 &&
+                m1_esp32_rpc_parse_resp(rx64, (uint16_t)sizeof(rx64),
+                                         M1_ESP32_RPC_SYS_PING,
+                                         &rpc_pl, &rpc_plen))
+            {
+                /* CD3 confirmed — issue GET_STATUS to retrieve capabilities */
+                memset(tx64, 0, sizeof(tx64));
+                req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
+                                                  M1_ESP32_RPC_SYS_GET_STATUS,
+                                                  NULL, 0u);
+                if (req_len > 0u)
+                {
+                    memset(rx64, 0, sizeof(rx64));
+                    rpc_pl   = NULL;
+                    rpc_plen = 0u;
+                    if (m1_esp32_send_cmd_raw(tx64, rx64,
+                                               CAPS_QUERY_TIMEOUT_MS) == 0 &&
+                        m1_esp32_rpc_parse_resp(rx64, (uint16_t)sizeof(rx64),
+                                                 M1_ESP32_RPC_SYS_GET_STATUS,
+                                                 &rpc_pl, &rpc_plen) &&
+                        rpc_plen >= (uint16_t)sizeof(m1_esp32_rpc_devstatus_t) &&
+                        m1_esp32_caps_parse_payload(rpc_pl,
+                                                     (uint8_t)rpc_plen,
+                                                     &bitmap, fw_name))
+                    {
+                        s_bitmap = bitmap;
+                        strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+                        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                        caps_apply_footprint_estimates(s_bitmap);
+                        s_queried = true;
+                        return;
+                    }
+                }
+
+                /* PING confirmed CD3 but GET_STATUS is not yet implemented —
+                 * use the conservative CD3 profile macro. */
+                s_bitmap = M1_ESP32_CAP_PROFILE_CD3;
+                strncpy(s_fw_name, "CD3 (via M1_RPC)", sizeof(s_fw_name) - 1);
+                s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                caps_apply_footprint_estimates(s_bitmap);
+                s_queried = true;
+                return;
+            }
+        }
+    }
+
+    /* Probe 3: stock ESP-AT `AT+CMD?`.  This command is part of the basic
      * ESP-AT command set and is supported by all tracked AT firmware
      * variants (bedge117, dag, neddy299) without requiring any custom
      * extension on the ESP32 side.  The response lists every AT command the
