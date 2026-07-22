@@ -4186,6 +4186,28 @@ void sub_ghz_display(SubGHz_Dec_Info_t decoded_data)
 #define SPECTRUM_MAX_SPAN   200000000UL /* 200 MHz maximum zoom */
 #define SPECTRUM_MIN_FREQ   SUBGHZ_MIN_FREQ_HZ /* Si4463 + frontend lower limit */
 #define SPECTRUM_MAX_FREQ   SUBGHZ_MAX_FREQ_HZ /* Si4463 upper limit */
+#define SUBGHZ_SWEEP_RANGE_COUNT 4U
+
+static const uint32_t subghz_sweep_centers[SUBGHZ_SWEEP_RANGE_COUNT] = {
+    307000000UL,  /* 300-315 MHz */
+    370000000UL,  /* 345-395 MHz */
+    435000000UL,  /* 430-440 MHz */
+    915000000UL,  /* 910-920 MHz */
+};
+
+static const uint32_t subghz_sweep_spans[SUBGHZ_SWEEP_RANGE_COUNT] = {
+    15000000UL,
+    50000000UL,
+    10000000UL,
+    10000000UL,
+};
+
+static const char *subghz_sweep_labels[SUBGHZ_SWEEP_RANGE_COUNT] = {
+    "300-315",
+    "345-395",
+    "430-440",
+    "910-920",
+};
 
 void sub_ghz_spectrum_analyzer(void)
 {
@@ -4212,24 +4234,9 @@ void sub_ghz_spectrum_analyzer(void)
     int8_t   peak_rssi = -127;
     uint8_t  peak_bar = 0;
 
-    /* Predefined sweep ranges */
-    static const uint32_t sweep_centers[] = {
-        307000000UL,  /* 300-315 MHz */
-        370000000UL,  /* 345-395 MHz */
-        435000000UL,  /* 430-440 MHz */
-        915000000UL,  /* 910-920 MHz */
-    };
-    static const uint32_t sweep_spans[] = {
-        15000000UL,
-        50000000UL,
-        10000000UL,
-        10000000UL,
-    };
-    #define NUM_SWEEP_RANGES  4
-
     /* Start with first preset */
-    center_freq = sweep_centers[band_idx];
-    span = sweep_spans[band_idx];
+    center_freq = subghz_sweep_centers[band_idx];
+    span = subghz_sweep_spans[band_idx];
 
     menu_sub_ghz_init();
 
@@ -4246,8 +4253,8 @@ void sub_ghz_spectrum_analyzer(void)
         /* Load preset unless user is in custom zoom/center */
         if (!custom_view)
         {
-            center_freq = sweep_centers[band_idx];
-            span = sweep_spans[band_idx];
+            center_freq = subghz_sweep_centers[band_idx];
+            span = subghz_sweep_spans[band_idx];
         }
 
         step = span / SPECTRUM_BAR_COUNT;
@@ -4362,7 +4369,7 @@ void sub_ghz_spectrum_analyzer(void)
                 }
                 else
                 {
-                    band_idx = (band_idx + 1) % NUM_SWEEP_RANGES;
+                    band_idx = (band_idx + 1) % SUBGHZ_SWEEP_RANGE_COUNT;
                 }
             }
             else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
@@ -4375,7 +4382,8 @@ void sub_ghz_spectrum_analyzer(void)
                 }
                 else
                 {
-                    band_idx = (band_idx + NUM_SWEEP_RANGES - 1) % NUM_SWEEP_RANGES;
+                    band_idx = (band_idx + SUBGHZ_SWEEP_RANGE_COUNT - 1) %
+                               SUBGHZ_SWEEP_RANGE_COUNT;
                 }
             }
             else if (this_button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
@@ -4396,7 +4404,7 @@ void sub_ghz_spectrum_analyzer(void)
                     span *= 2;
                     if (span > SPECTRUM_MAX_SPAN) span = SPECTRUM_MAX_SPAN;
                     /* If zoomed back out to or past the preset span, snap to preset */
-                    if (span >= sweep_spans[band_idx])
+                    if (span >= subghz_sweep_spans[band_idx])
                         custom_view = false;
                 }
             }
@@ -5003,32 +5011,13 @@ void sub_ghz_freq_scanner(void)
     uint8_t  range_idx = 0;
     int8_t   threshold = FREQ_SCANNER_THRESHOLD;
 
-    static const uint32_t scan_centers[] = {
-        307000000UL,
-        370000000UL,
-        435000000UL,
-        915000000UL,
-    };
-    static const uint32_t scan_spans[] = {
-        15000000UL,
-        50000000UL,
-        10000000UL,
-        10000000UL,
-    };
-    static const char *scan_labels[] = {
-        "300-315",
-        "345-395",
-        "430-440",
-        "910-920",
-    };
-    #define NUM_SCAN_RANGES 4
-
     memset(hits, 0, sizeof(hits));
 
     menu_sub_ghz_init();
 
     /* Initialize radio */
-    if (scan_centers[range_idx] < 525000000UL && scan_centers[range_idx] >= 284000000UL)
+    if (subghz_sweep_centers[range_idx] < 525000000UL &&
+        subghz_sweep_centers[range_idx] >= 284000000UL)
         radio_init_rx_tx(SUB_GHZ_BAND_433, MODEM_MOD_TYPE_OOK, true);
     else
         radio_init_rx_tx(SUB_GHZ_BAND_915, MODEM_MOD_TYPE_OOK, true);
@@ -5037,8 +5026,8 @@ void sub_ghz_freq_scanner(void)
     while (running)
     {
         /* Perform one sweep */
-        uint32_t center = scan_centers[range_idx];
-        uint32_t span = scan_spans[range_idx];
+        uint32_t center = subghz_sweep_centers[range_idx];
+        uint32_t span = subghz_sweep_spans[range_idx];
         uint32_t step = span / 128;
         if (step < 50000) step = 50000; /* Min 50 kHz steps */
         uint32_t freq = center - span / 2;
@@ -5094,7 +5083,7 @@ void sub_ghz_freq_scanner(void)
 
             /* Title */
             snprintf(info_str, sizeof(info_str), "Scan: %s MHz [%ddBm]",
-                     scan_labels[range_idx], threshold);
+                     subghz_sweep_labels[range_idx], threshold);
             u8g2_DrawStr(&m1_u8g2, 0, 9, info_str);
 
             if (hit_count == 0)
@@ -5144,11 +5133,11 @@ void sub_ghz_freq_scanner(void)
             }
             else if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                range_idx = (range_idx + 1) % NUM_SCAN_RANGES;
+                range_idx = (range_idx + 1) % SUBGHZ_SWEEP_RANGE_COUNT;
                 hit_count = 0;
                 scroll_pos = 0;
                 memset(hits, 0, sizeof(hits));
-                if (scan_centers[range_idx] >= 850000000UL)
+                if (subghz_sweep_centers[range_idx] >= 850000000UL)
                     radio_init_rx_tx(SUB_GHZ_BAND_915, MODEM_MOD_TYPE_OOK, true);
                 else
                     radio_init_rx_tx(SUB_GHZ_BAND_433, MODEM_MOD_TYPE_OOK, true);
@@ -5156,11 +5145,12 @@ void sub_ghz_freq_scanner(void)
             }
             else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
             {
-                range_idx = (range_idx + NUM_SCAN_RANGES - 1) % NUM_SCAN_RANGES;
+                range_idx = (range_idx + SUBGHZ_SWEEP_RANGE_COUNT - 1) %
+                            SUBGHZ_SWEEP_RANGE_COUNT;
                 hit_count = 0;
                 scroll_pos = 0;
                 memset(hits, 0, sizeof(hits));
-                if (scan_centers[range_idx] >= 850000000UL)
+                if (subghz_sweep_centers[range_idx] >= 850000000UL)
                     radio_init_rx_tx(SUB_GHZ_BAND_915, MODEM_MOD_TYPE_OOK, true);
                 else
                     radio_init_rx_tx(SUB_GHZ_BAND_433, MODEM_MOD_TYPE_OOK, true);
@@ -5213,6 +5203,19 @@ void sub_ghz_freq_scanner(void)
 #define SIGID_VISIBLE_ROWS    4U
 #define SIGID_MIN_HITS        2U    /* require N hits before showing confidence */
 
+static inline int8_t subghz_sigid_default_threshold(void)
+{
+    int8_t threshold = SIGID_THRESHOLD_DBM;
+    if (subghz_cfg.rssi_threshold >= SIGID_THRESHOLD_MIN &&
+        subghz_cfg.rssi_threshold <= SIGID_THRESHOLD_MAX)
+        threshold = subghz_cfg.rssi_threshold;
+    if (threshold < SIGID_THRESHOLD_MIN)
+        return SIGID_THRESHOLD_MIN;
+    if (threshold > SIGID_THRESHOLD_MAX)
+        return SIGID_THRESHOLD_MAX;
+    return threshold;
+}
+
 void sub_ghz_signal_identifier(void)
 {
     S_M1_Buttons_Status this_button_status;
@@ -5226,7 +5229,7 @@ void sub_ghz_signal_identifier(void)
     int16_t  rssi_burst[SIGID_BURST_SAMPLES];
     uint8_t  scroll_pos = 0;
     bool     running = true;
-    int8_t   threshold = SIGID_THRESHOLD_DBM;
+    int8_t   threshold = subghz_sigid_default_threshold();
     bool     cur_915 = false;
 
     rf_sweep_report_reset(&report);
@@ -5495,7 +5498,7 @@ void sub_ghz_smart_signal_id(void)
     int16_t  rssi_burst[SIGID_BURST_SAMPLES];
     uint8_t  scroll_pos = 0;
     bool     running = true;
-    int8_t   threshold = SIGID_THRESHOLD_DBM;
+    int8_t   threshold = subghz_sigid_default_threshold();
 
     rf_sweep_report_reset(&report);
     menu_sub_ghz_init();
@@ -5505,20 +5508,6 @@ void sub_ghz_smart_signal_id(void)
     /* Same four bands as sub_ghz_freq_scanner(); one pass per band.          */
     /* ---------------------------------------------------------------------- */
 
-    static const uint32_t prescan_centers[] = {
-        307000000UL,   /* 300–315 MHz */
-        370000000UL,   /* 345–395 MHz */
-        435000000UL,   /* 430–440 MHz */
-        915000000UL,   /* 910–920 MHz */
-    };
-    static const uint32_t prescan_spans[] = {
-        15000000UL,
-        50000000UL,
-        10000000UL,
-        10000000UL,
-    };
-    #define PRESCAN_NUM_RANGES  4
-
     /* Show a brief "Scanning…" splash while the pre-scan runs. */
     m1_u8g2_firstpage();
     do {
@@ -5527,10 +5516,12 @@ void sub_ghz_smart_signal_id(void)
         u8g2_DrawStr(&m1_u8g2, 10, 32, "Scanning...");
     } while (m1_u8g2_nextpage());
 
-    for (uint8_t r = 0; r < PRESCAN_NUM_RANGES && detected_count < RF_SMART_SCAN_MAX_FREQS; r++)
+    for (uint8_t r = 0;
+         r < SUBGHZ_SWEEP_RANGE_COUNT && detected_count < RF_SMART_SCAN_MAX_FREQS;
+         r++)
     {
-        uint32_t center = prescan_centers[r];
-        uint32_t span   = prescan_spans[r];
+        uint32_t center = subghz_sweep_centers[r];
+        uint32_t span   = subghz_sweep_spans[r];
         uint32_t step   = span / 128;
         if (step < 50000UL) step = 50000UL;
 

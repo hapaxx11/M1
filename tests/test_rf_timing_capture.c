@@ -232,9 +232,9 @@ void test_single_sample_period_at_max(void)
 void test_marks_and_spaces_above_noise_floor(void)
 {
     /*
-     * subghz_mod_suggest ignores samples < 40 µs (NOISE_FLOOR).
-     * With period = 100 µs we must produce elements >= 100 µs so they
-     * are seen as in-band pulses by mod_suggest.
+     * subghz_mod_suggest ignores samples < 40 µs (NOISE_FLOOR), so the
+     * compatibility contract is that each emitted timing magnitude is
+     * at least 40 µs and won't be discarded as noise.
      */
     int16_t rssi[] = { -70, -90, -70, -90 };
     int16_t out[8];
