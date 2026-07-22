@@ -1885,17 +1885,23 @@ void wifi_pmkid_at(void)
 	uint8_t ap_cnt = 0;
 	uint8_t sel_idx = 0;
 
+	/* Bring up the SPI transport and AT task *before* checking the T-800
+	 * capability gate below.  m1_esp32_has_cap() only probes when the SPI
+	 * transport is already initialised (m1_esp32_get_init_status()); if
+	 * this function is entered directly (e.g. fresh navigation into
+	 * Attacks -> PMKID Grab without a prior WiFi scan), the transport and
+	 * AT task would otherwise never have been started, causing the gate
+	 * to fail with "Requires T-800" even on genuine dag T-800 firmware. */
+	ensure_esp32_ready();
+	if (!get_esp32_main_init_status())
+		esp32_main_init();
+
 	/* T-800 capability gate */
 	if (!m1_esp32_has_cap(M1_ESP32_CAP_BEACON)) {
 		wifi_show_message("PMKID Grab", "Requires T-800", "Flash dag firmware");
 		return;
 	}
 
-	ensure_esp32_ready();
-
-	/* wifi_pmkid_at uses AT text commands; ensure the AT task is running. */
-	if (!get_esp32_main_init_status())
-		esp32_main_init();
 	if (!get_esp32_main_init_status()) {
 		wifi_show_message("PMKID Grab", "ESP32 not ready", NULL);
 		return;
