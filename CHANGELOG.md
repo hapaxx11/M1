@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.16] - 2026-07-22
+
+### Changed
+
+- **Sub-GHz Analyzer: Smart ID is now prioritized as the lead analyzer tool** — Reordered the Analyzer sub-menu so **Smart ID** (Hapax pre-scan + RF Rosetta flow) appears first, with **Signal ID removed** and raw analysis tools retained. This keeps Freq Scanner available for quick RF reconnaissance while clearly prioritizing Smart ID as the Hapax differentiator.
 ## [0.9.2.15] - 2026-07-21
 
 ### Added
