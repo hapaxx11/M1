@@ -73,7 +73,7 @@ typedef enum {
     SubGhzSceneProtoPirateTuner, /**< Proto Pirate async Timing Tuner */
     SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
     SubGhzSceneSmartSignalId,    /**< Smart ID: pre-scan then RF Rosetta identifier */
-    SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Freq/Spectrum/RSSI/Scanner/Signal ID) */
+    SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Smart ID/Signal ID + RF analysis tools) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 

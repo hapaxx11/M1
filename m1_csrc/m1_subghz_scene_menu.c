@@ -13,8 +13,8 @@
  *   2. Read Raw (raw capture)
  *   3. Saved (file browser)
  *   4. Playlist
- *   5. Analyzer (Freq/Spectrum Analyzer, RSSI Meter, Freq Scanner, Signal ID,
- *      Proto Pirate)
+ *   5. Analyzer (Smart ID, Signal ID, Freq/Spectrum Analyzer, RSSI Meter,
+ *      Freq Scanner, Proto Pirate)
  *   6. Weather Station
  *   7. Brute Force
  *   8. Add Manually

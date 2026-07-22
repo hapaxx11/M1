@@ -359,17 +359,18 @@ in this order.  Do not remove items, reorder, or add "Back" entries.
 
 The **Analyzer** entry (`m1_subghz_scene_analyzer_menu.c`, `SubGhzSceneAnalyzerMenu`) groups the
 RF-analysis tools.  Most are passive (observe / measure / identify only — no TX, no save); Proto
-Pirate additionally offers a protocol-aware receiver.  It must contain **exactly 6 items** in this
+Pirate additionally offers a protocol-aware receiver.  It must contain **exactly 7 items** in this
 order.  Do not remove items, reorder, or add "Back" entries.
 
 | # | Label | Scene ID | Implementation |
 |---|-------|----------|----------------|
-| 1 | Frequency Analyzer | SubGhzSceneFreqAnalyzer | Blocking delegate → `sub_ghz_frequency_reader()` |
-| 2 | Spectrum Analyzer | SubGhzSceneSpectrumAnalyzer | Blocking delegate → `sub_ghz_spectrum_analyzer()` |
-| 3 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
-| 4 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
-| 5 | Signal ID | SubGhzSceneSignalIdentifier | Blocking delegate → `sub_ghz_signal_identifier()` (RF Rosetta sweep + fingerprint) |
-| 6 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
+| 1 | Smart ID | SubGhzSceneSmartSignalId | Blocking delegate → `sub_ghz_smart_signal_id()` (Hapax pre-scan + RF Rosetta identifier) |
+| 2 | Signal ID | SubGhzSceneSignalIdentifier | Blocking delegate → `sub_ghz_signal_identifier()` (RF Rosetta sweep + fingerprint) |
+| 3 | Frequency Analyzer | SubGhzSceneFreqAnalyzer | Blocking delegate → `sub_ghz_frequency_reader()` |
+| 4 | Spectrum Analyzer | SubGhzSceneSpectrumAnalyzer | Blocking delegate → `sub_ghz_spectrum_analyzer()` |
+| 5 | RSSI Meter | SubGhzSceneRssiMeter | Blocking delegate → `sub_ghz_rssi_meter()` |
+| 6 | Freq Scanner | SubGhzSceneFreqScanner | Blocking delegate → `sub_ghz_freq_scanner()` |
+| 7 | Proto Pirate | SubGhzSceneProtoPirateMenu | Scene-native (rolling-code analysis toolkit — PR #579) |
 
 **"Blocking delegate"** scenes call a legacy function that runs its own event loop and
 drawing.  The thin scene wrapper (`m1_subghz_scene_<name>.c`) calls the function in
