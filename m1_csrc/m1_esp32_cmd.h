@@ -163,7 +163,8 @@ int m1_esp32_send_cmd(const m1_cmd_t *cmd, m1_resp_t *resp, uint32_t timeout_ms)
  * @return 0 on success, negative on error
  */
 int m1_esp32_simple_cmd(uint8_t cmd_id, m1_resp_t *resp, uint32_t timeout_ms);
- *
+
+/**
  * Unlike m1_esp32_send_cmd(), this function does NOT validate any magic bytes
  * in the response — it returns the received frame exactly as received.  Used
  * exclusively by the CD3 M1_RPC probe in m1_esp32_caps_init() which performs
