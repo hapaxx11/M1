@@ -820,6 +820,38 @@ void test_at_cmd_response_valid_detector(void)
     TEST_ASSERT_FALSE(m1_esp32_caps_at_cmd_response_valid(NULL));
 }
 
+/* =========================================================================
+ * m1_esp32_caps_should_run_at_probe() — AT-task-not-yet-running regression
+ *
+ * Bug: navigating directly to a capability-gated scene (e.g. WiFi ->
+ * 802.15.4 -> Zigbee Scan, or Attacks -> PMKID Grab) as the very first
+ * ESP32 interaction left the AT task not yet started.  m1_esp32_caps_init()
+ * used to bail out of Probe 3 unconditionally whenever the AT task was not
+ * already running, permanently failing capability detection for AT-only
+ * firmware (dag T-800) — firmware name stuck at "Unknown" and every
+ * capability bit (including M1_ESP32_CAP_BEACON, gating PMKID Grab) unset.
+ * =========================================================================*/
+
+void test_should_run_at_probe_already_running(void)
+{
+    /* AT task already running before any start attempt — always proceed. */
+    TEST_ASSERT_TRUE(m1_esp32_caps_should_run_at_probe(true, true));
+}
+
+void test_should_run_at_probe_started_successfully(void)
+{
+    /* AT task was not running, but the start attempt brought it up —
+     * this is the fix: proceed with the probe instead of bailing out. */
+    TEST_ASSERT_TRUE(m1_esp32_caps_should_run_at_probe(false, true));
+}
+
+void test_should_run_at_probe_still_not_running(void)
+{
+    /* AT task was not running and the start attempt did not bring it up
+     * (e.g. heap exhaustion) — retry on a later call instead of probing. */
+    TEST_ASSERT_FALSE(m1_esp32_caps_should_run_at_probe(false, false));
+}
+
 void test_at_cmd_parse_arbitrary_line_order(void)
 {
     /* The probe must work regardless of ordering in the response. */
@@ -879,6 +911,11 @@ int main(void)
     RUN_TEST(test_at_cmd_parse_substring_in_text_does_not_match);
     RUN_TEST(test_at_cmd_response_valid_detector);
     RUN_TEST(test_at_cmd_parse_arbitrary_line_order);
+
+    /* AT-task startup regression (Probe 3 skip bug) */
+    RUN_TEST(test_should_run_at_probe_already_running);
+    RUN_TEST(test_should_run_at_probe_started_successfully);
+    RUN_TEST(test_should_run_at_probe_still_not_running);
 
     /* M1_ESP32_FALLBACK_* constant invariants */
     RUN_TEST(test_fallback_constants_are_nonzero);

@@ -451,6 +451,39 @@ static inline bool m1_esp32_caps_at_cmd_response_valid(const char *resp_buf)
     return resp_buf && strstr(resp_buf, "+CMD:") != NULL;
 }
 
+/**
+ * Decide whether the Probe 3 (`AT+CMD?`) probe should proceed, given the AT
+ * task's readiness before and after an attempt to start it.
+ *
+ * Regression fixed by this predicate: `m1_esp32_caps_init()` used to
+ * unconditionally skip Probe 3 whenever the AT task was not already
+ * running, instead of starting it (the same pattern already used by
+ * `wifi_do_scan()` in m1_wifi.c).  Capability-gated scene delegates
+ * (`DELEGATE_FEATURE` in m1_wifi_scene_menu.c and friends) only guarantee
+ * the SPI transport is up via `m1_esp32_ensure_init()` before checking a
+ * capability — none of them start the AT task first, since that normally
+ * happens *inside* the feature function itself, after the gate has already
+ * been evaluated.  The result: on pure-AT firmware (dag T-800, bedge117)
+ * navigated to directly (e.g. WiFi -> 802.15.4 -> Zigbee Scan, or Attacks
+ * -> PMKID Grab, as the very first ESP32 interaction), capability
+ * detection would permanently fail — firmware name stuck at "Unknown" and
+ * every capability bit unset (e.g. "Requires T-800" shown even when T-800
+ * firmware is actually flashed) — because the probe was skipped forever.
+ *
+ * @param at_task_running_before             AT task status before any start
+ *                                            attempt (get_esp32_main_init_status()).
+ * @param at_task_running_after_start_attempt AT task status after calling
+ *                                            esp32_main_init() when it was
+ *                                            not already running.
+ * @return true if Probe 3 should run now.
+ */
+static inline bool
+m1_esp32_caps_should_run_at_probe(bool at_task_running_before,
+                                   bool at_task_running_after_start_attempt)
+{
+    return at_task_running_before || at_task_running_after_start_attempt;
+}
+
 /* =========================================================================
  * M1_RPC binary SPI protocol helpers (CD3 / bedge117/m1-esp32-brain)
  *

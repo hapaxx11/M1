@@ -29,6 +29,7 @@
 /* Forward declarations — implemented in m1_esp32_hal.c and esp_app_main.c */
 extern uint8_t m1_esp32_get_init_status(void);
 extern bool    get_esp32_main_init_status(void);
+extern void    esp32_main_init(void);
 extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
                                 int out_buf_size, int timeout_sec);
 
@@ -316,8 +317,19 @@ void m1_esp32_caps_init(void)
      * mapping table recognises.
      *
      * The AT task must be running before we can issue AT text commands.
-     * If it has not been started yet, return without caching so the next
-     * call retries once the task is ready.
+     * Callers (DELEGATE_FEATURE-style capability gates) only guarantee the
+     * SPI transport is up via m1_esp32_ensure_init() before checking a
+     * capability — they do not start the AT task themselves, since the AT
+     * task is only otherwise started deep inside each feature function
+     * *after* the capability gate has already been evaluated.  Left
+     * unaddressed, this means the AT+CMD? probe below is skipped on every
+     * such gate check for pure-AT firmware (dag T-800, bedge117, etc.),
+     * permanently failing capability detection ("Unknown" firmware, cap
+     * bits never set) even though the firmware is fully supported.  Start
+     * the AT task here, mirroring the pattern already used by
+     * wifi_do_scan() (m1_wifi.c), so the probe can always run once the SPI
+     * transport is ready.  If the task still is not up right after trying
+     * (e.g. heap pressure), return without caching so the next call retries.
      *
      * The response can be several KB, so the buffer is allocated from the
      * FreeRTOS heap rather than the caller's stack.  If the heap is
@@ -325,8 +337,19 @@ void m1_esp32_caps_init(void)
      *
      * SiN360 binary-SPI firmware has no AT task, so this probe is skipped
      * by the early return in the is_binary_spi branch above. */
-    if (!get_esp32_main_init_status())
-        return;
+    {
+        bool at_task_before = get_esp32_main_init_status();
+        bool at_task_after  = at_task_before;
+
+        if (!at_task_before)
+        {
+            esp32_main_init();
+            at_task_after = get_esp32_main_init_status();
+        }
+
+        if (!m1_esp32_caps_should_run_at_probe(at_task_before, at_task_after))
+            return;
+    }
 
     {
         char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
