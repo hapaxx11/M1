@@ -41,6 +41,7 @@
 #include "rf_smart_scan.h"
 #include "rf_ook_fsk.h"
 #include "rf_timing_capture.h"
+#include "subghz_raw_decoder.h"
 #include "m1_ring_buffer.h"
 #include "m1_core_config.h"
 #include "m1_storage.h"
@@ -5300,19 +5301,44 @@ void sub_ghz_signal_identifier(void)
                     timing_buf, SIGID_BURST_SAMPLES);
 
                 rf_fingerprint_t fp;
+                bool decoded = false;
                 if (timing_count >= 4)
                 {
-                    /* Enough timing edges for the extractors to work with. */
-                    rf_fingerprint_from_subghz_raw(
-                        timing_buf, timing_count,
-                        pt->freq_hz, 0xFF, peak, 0, &fp);
-
-                    /* Prefer the burst-based modulation when the fingerprint
-                     * extractor returned UNKNOWN (not enough quantized pulses). */
-                    if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                    /* Phase 4B: attempt protocol decode before falling back to
+                     * fingerprint scoring.  A successful decode yields 100%
+                     * confidence and skips the heuristic scoring path entirely. */
+                    SubGhzRawDecodeResult decode_res;
+                    if (subghz_decode_raw_offline(
+                            timing_buf, timing_count,
+                            pt->freq_hz, &decode_res, 1,
+                            subghz_registry_decode_try_fn, NULL) > 0)
                     {
-                        fp.mod            = mc.mod;
-                        fp.mod_confidence = mc.confidence;
+                        const char *proto_name =
+                            subghz_protocol_get_name(decode_res.protocol);
+                        if (proto_name != NULL)
+                        {
+                            rf_sweep_report_add_decoded(
+                                &report, pt->freq_hz,
+                                rf_band_from_freq(pt->freq_hz),
+                                peak, proto_name);
+                            decoded = true;
+                        }
+                    }
+
+                    if (!decoded)
+                    {
+                        /* Enough timing edges for the extractors to work with. */
+                        rf_fingerprint_from_subghz_raw(
+                            timing_buf, timing_count,
+                            pt->freq_hz, 0xFF, peak, 0, &fp);
+
+                        /* Prefer the burst-based modulation when the fingerprint
+                         * extractor returned UNKNOWN (not enough quantized pulses). */
+                        if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                        {
+                            fp.mod            = mc.mod;
+                            fp.mod_confidence = mc.confidence;
+                        }
                     }
                 }
                 else
@@ -5330,14 +5356,17 @@ void sub_ghz_signal_identifier(void)
 
                 /* Only trust the scorer when the fingerprint carries more than
                  * its band; otherwise the signal is merely "active". */
-                if (rf_fingerprint_is_discriminating(&fp))
+                if (!decoded)
                 {
-                    rf_match_result_t m = rf_match_best(&fp);
-                    rf_sweep_report_add(&report, &fp, &m);
-                }
-                else
-                {
-                    rf_sweep_report_add(&report, &fp, NULL);
+                    if (rf_fingerprint_is_discriminating(&fp))
+                    {
+                        rf_match_result_t m = rf_match_best(&fp);
+                        rf_sweep_report_add(&report, &fp, &m);
+                    }
+                    else
+                    {
+                        rf_sweep_report_add(&report, &fp, NULL);
+                    }
                 }
             }
 
@@ -5635,15 +5664,38 @@ void sub_ghz_smart_signal_id(void)
                         timing_buf, SIGID_BURST_SAMPLES);
 
                     rf_fingerprint_t fp;
+                    bool decoded = false;
                     if (timing_count >= 4)
                     {
-                        rf_fingerprint_from_subghz_raw(
-                            timing_buf, timing_count,
-                            pt->freq_hz, 0xFF, peak, 0, &fp);
-                        if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                        /* Phase 4B: attempt protocol decode before fingerprint scoring. */
+                        SubGhzRawDecodeResult decode_res;
+                        if (subghz_decode_raw_offline(
+                                timing_buf, timing_count,
+                                pt->freq_hz, &decode_res, 1,
+                                subghz_registry_decode_try_fn, NULL) > 0)
                         {
-                            fp.mod            = mc.mod;
-                            fp.mod_confidence = mc.confidence;
+                            const char *proto_name =
+                                subghz_protocol_get_name(decode_res.protocol);
+                            if (proto_name != NULL)
+                            {
+                                rf_sweep_report_add_decoded(
+                                    &report, pt->freq_hz,
+                                    rf_band_from_freq(pt->freq_hz),
+                                    peak, proto_name);
+                                decoded = true;
+                            }
+                        }
+
+                        if (!decoded)
+                        {
+                            rf_fingerprint_from_subghz_raw(
+                                timing_buf, timing_count,
+                                pt->freq_hz, 0xFF, peak, 0, &fp);
+                            if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                            {
+                                fp.mod            = mc.mod;
+                                fp.mod_confidence = mc.confidence;
+                            }
                         }
                     }
                     else
@@ -5658,14 +5710,17 @@ void sub_ghz_smart_signal_id(void)
                         fp.rssi_dbm       = peak;
                     }
 
-                    if (rf_fingerprint_is_discriminating(&fp))
+                    if (!decoded)
                     {
-                        rf_match_result_t m = rf_match_best(&fp);
-                        rf_sweep_report_add(&report, &fp, &m);
-                    }
-                    else
-                    {
-                        rf_sweep_report_add(&report, &fp, NULL);
+                        if (rf_fingerprint_is_discriminating(&fp))
+                        {
+                            rf_match_result_t m = rf_match_best(&fp);
+                            rf_sweep_report_add(&report, &fp, &m);
+                        }
+                        else
+                        {
+                            rf_sweep_report_add(&report, &fp, NULL);
+                        }
                     }
                 }
             }
@@ -5719,15 +5774,38 @@ void sub_ghz_smart_signal_id(void)
                         timing_buf, SIGID_BURST_SAMPLES);
 
                     rf_fingerprint_t fp;
+                    bool decoded = false;
                     if (timing_count >= 4)
                     {
-                        rf_fingerprint_from_subghz_raw(
-                            timing_buf, timing_count,
-                            pt->freq_hz, 0xFF, peak, 0, &fp);
-                        if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                        /* Phase 4B: attempt protocol decode before fingerprint scoring. */
+                        SubGhzRawDecodeResult decode_res;
+                        if (subghz_decode_raw_offline(
+                                timing_buf, timing_count,
+                                pt->freq_hz, &decode_res, 1,
+                                subghz_registry_decode_try_fn, NULL) > 0)
                         {
-                            fp.mod            = mc.mod;
-                            fp.mod_confidence = mc.confidence;
+                            const char *proto_name =
+                                subghz_protocol_get_name(decode_res.protocol);
+                            if (proto_name != NULL)
+                            {
+                                rf_sweep_report_add_decoded(
+                                    &report, pt->freq_hz,
+                                    rf_band_from_freq(pt->freq_hz),
+                                    peak, proto_name);
+                                decoded = true;
+                            }
+                        }
+
+                        if (!decoded)
+                        {
+                            rf_fingerprint_from_subghz_raw(
+                                timing_buf, timing_count,
+                                pt->freq_hz, 0xFF, peak, 0, &fp);
+                            if (fp.mod == RF_MOD_UNKNOWN && mc.mod != RF_MOD_UNKNOWN)
+                            {
+                                fp.mod            = mc.mod;
+                                fp.mod_confidence = mc.confidence;
+                            }
                         }
                     }
                     else
@@ -5742,14 +5820,17 @@ void sub_ghz_smart_signal_id(void)
                         fp.rssi_dbm       = peak;
                     }
 
-                    if (rf_fingerprint_is_discriminating(&fp))
+                    if (!decoded)
                     {
-                        rf_match_result_t m = rf_match_best(&fp);
-                        rf_sweep_report_add(&report, &fp, &m);
-                    }
-                    else
-                    {
-                        rf_sweep_report_add(&report, &fp, NULL);
+                        if (rf_fingerprint_is_discriminating(&fp))
+                        {
+                            rf_match_result_t m = rf_match_best(&fp);
+                            rf_sweep_report_add(&report, &fp, &m);
+                        }
+                        else
+                        {
+                            rf_sweep_report_add(&report, &fp, NULL);
+                        }
                     }
                 }
 
