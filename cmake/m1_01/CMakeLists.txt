@@ -356,6 +356,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_scene_state.c
     ../../Sub_Ghz/subghz_endless_tx.c
     ../../Sub_Ghz/subghz_static_tx.c
+    ../../Sub_Ghz/subghz_tx_wave_anim.c
     ../../Sub_Ghz/subghz_scene_polish.c
     ../../Sub_Ghz/subghz_transmitter_ctl.c
     ../../Sub_Ghz/subghz_button_caps.c
