@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.20] - 2026-07-23
+
+### Added
+
+- **Sub-GHz: scrolling "sending" wave animation on the Transmitter screen** — The
+  generic key-file Transmitter scene now shows a continuously scrolling
+  sine-wave animation while a signal is transmitting, replacing the static
+  "..." dot cycle. Ported from Momentum's Read RAW scrolling-sine idea
+  (`Sub_Ghz/subghz_tx_wave_anim.c`), driven off the existing display tick with
+  no extra thread or blocking loop.
 ## [0.9.2.19] - 2026-07-23
 
 ### Fixed
