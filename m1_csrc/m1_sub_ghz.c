@@ -1303,10 +1303,10 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	 * The previous implementation armed a single pass and then polled
 	 * subghz_decenc_ctl.ntx_raw_repeat — a counter only decremented by the
 	 * file-based replay engine (sub_ghz_replay_continue), never by this
-	 * direct-buffer path.  It therefore always ran its full 2-second safety
-	 * timeout (the UI "sat" on the Sending overlay) and only a single frame was
-	 * ever transmitted.  Drive the repeats explicitly and wait on the real
-	 * per-burst DMA completion instead. */
+	 * direct-buffer path.  It therefore ran the wait out to its safety timeout
+	 * with the UI frozen on the Sending overlay (~20 s observed in testing) and
+	 * only a single frame was ever transmitted.  Drive the repeats explicitly
+	 * and wait on the real per-burst DMA completion instead. */
 	const uint16_t total_bursts =
 	    subghz_static_tx_total_bursts(SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT);
 

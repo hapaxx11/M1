@@ -1,6 +1,6 @@
 - **Sub-GHz: static-code "Send" no longer hangs on the Sending overlay** — Sending
   a captured static-code signal (e.g. a Princeton remote) from the Receiver-Info
-  detail view sat on the "Sending…" screen for a fixed ~2 s and only ever emitted
+  detail view sat frozen on the "Sending…" screen for ~20 s and only ever emitted
   a single frame.  The completion wait polled `subghz_decenc_ctl.ntx_raw_repeat`,
   a counter that is only decremented by the file-based replay engine and never by
   this direct-buffer path, so it always ran its full safety timeout.  The send now
