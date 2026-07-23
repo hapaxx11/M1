@@ -45,7 +45,7 @@ typedef enum {
  * @brief  Total number of frames to transmit for a static-code send.
  *
  * @param  extra_repeats  Additional replays after the first transmit.
- * @retval 1 + extra_repeats, saturating at UINT16_MAX.
+ * @retval 1 + extra_repeats (for uint8_t input, max 256).
  */
 uint16_t subghz_static_tx_total_bursts(uint8_t extra_repeats);
 
