@@ -1310,6 +1310,7 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	const uint16_t total_bursts =
 	    subghz_static_tx_total_bursts(SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT);
 
+	bool timed_out = false;
 	for (uint16_t burst = 0; burst < total_bursts; burst++)
 	{
 		if (burst > 0)
@@ -1329,16 +1330,22 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 		/* Wait for this burst's DMA transfer-complete, bounded by a safety
 		 * cap so a wedged DMA can never hang the UI. */
 		uint32_t elapsed = 0;
+		subghz_static_tx_wait_t w = SUBGHZ_STATIC_TX_WAIT;
 		for (;;)
 		{
 			bool done =
 			    (uint16_t)(subghz_tx_tc_count - start_count) != 0U;
-			subghz_static_tx_wait_t w = subghz_static_tx_wait_step(
+			w = subghz_static_tx_wait_step(
 			    done, elapsed, SUBGHZ_STATIC_TX_BURST_TIMEOUT_MS);
 			if (w != SUBGHZ_STATIC_TX_WAIT)
 				break;
 			vTaskDelay(pdMS_TO_TICKS(SUBGHZ_STATIC_TX_POLL_MS));
 			elapsed += SUBGHZ_STATIC_TX_POLL_MS;
+		}
+		if (w == SUBGHZ_STATIC_TX_TIMEOUT)
+		{
+			timed_out = true;
+			break;
 		}
 	}
 
@@ -1355,6 +1362,9 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
 	sub_ghz_rx_init();
 	sub_ghz_rx_start();
+
+	if (timed_out)
+		return false;
 
 	/* Show success */
 	m1_message_box(&m1_u8g2, "Sent!",
