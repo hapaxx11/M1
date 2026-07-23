@@ -32,6 +32,7 @@
 #include "subghz_keeloq_encoder.h"
 #include "subghz_keeloq_mfkeys.h"
 #include "subghz_button_override.h"
+#include "subghz_static_tx.h"
 #include "subghz_rssi_history.h"
 #include "rf_fingerprint.h"
 #include "rf_match.h"
@@ -59,6 +60,12 @@
 #define SUBGHZ_RAW_DATA_SAMPLES_MAX			64000 // data type of sample: uint16_t
 
 #define SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT		4 // number of additional replays after the first transmit
+
+/* Static-code (direct-buffer) blocking send tuning.  A single OOK frame is a
+ * few tens of milliseconds; the safety cap only guards against a wedged DMA. */
+#define SUBGHZ_STATIC_TX_GAP_MS				8U   // inter-frame gap between repeats
+#define SUBGHZ_STATIC_TX_POLL_MS			2U   // per-burst completion poll cadence
+#define SUBGHZ_STATIC_TX_BURST_TIMEOUT_MS	400U // per-burst safety cap
 
 #define SI4463_nIRQ_EXTI_IRQn         	EXTI12_IRQn
 
@@ -414,6 +421,7 @@ static void     *subghz_back_buffer_base = NULL; // Original malloc pointer (bef
 static uint16_t *double_buffer_ptr[2];
 static uint32_t sdcard_dat_file_size, sdcard_dat_buffer_end_pos;
 uint8_t subghz_tx_tc_flag;
+volatile uint16_t subghz_tx_tc_count;
 static uint8_t subghz_tx_start_high = 1; // 1 = next buffer starts HIGH (mark), 0 = LOW (space)
 uint8_t subghz_record_mode_flag = 0;
 static uint32_t subghz_record_total_samples = 0;  /* Total samples saved to file during recording */
@@ -1288,19 +1296,50 @@ static bool subghz_transmit_static_signal(const SubGHz_History_Entry_t *entry)
 	m1_message_box(&m1_u8g2, "Sending...",
 	               protocol_text[proto_idx], "", "");
 
-	/* Transmit with repeats */
-	sub_ghz_transmit_raw(
-		(uint32_t)subghz_tx_encode_buf,
-		(uint32_t)&timerhdl_subghz_tx.Instance->ARR,
-		subghz_tx_encode_len,
-		SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT);
+	/* Transmit the encoded frame `total_bursts` times.  Each burst is one DMA
+	 * pass over the OOK PWM buffer; the TIM1 update ISR posts Q_EVENT_SUBGHZ_TX
+	 * and bumps subghz_tx_tc_count when the pass finishes.
+	 *
+	 * The previous implementation armed a single pass and then polled
+	 * subghz_decenc_ctl.ntx_raw_repeat — a counter only decremented by the
+	 * file-based replay engine (sub_ghz_replay_continue), never by this
+	 * direct-buffer path.  It therefore always ran its full 2-second safety
+	 * timeout (the UI "sat" on the Sending overlay) and only a single frame was
+	 * ever transmitted.  Drive the repeats explicitly and wait on the real
+	 * per-burst DMA completion instead. */
+	const uint16_t total_bursts =
+	    subghz_static_tx_total_bursts(SUBGHZ_TX_RAW_REPLAY_REPEAT_DEFAULT);
 
-	/* Wait for TX to complete (DMA transfer) */
-	uint32_t timeout = 2000; /* max 2 seconds */
-	while (subghz_decenc_ctl.ntx_raw_repeat > 0 && timeout > 0)
+	for (uint16_t burst = 0; burst < total_bursts; burst++)
 	{
-		vTaskDelay(pdMS_TO_TICKS(10));
-		timeout -= 10;
+		if (burst > 0)
+		{
+			/* Re-arm the next frame from the same buffer after a short gap. */
+			sub_ghz_raw_tx_stop();
+			vTaskDelay(pdMS_TO_TICKS(SUBGHZ_STATIC_TX_GAP_MS));
+		}
+
+		const uint16_t start_count = subghz_tx_tc_count;
+
+		sub_ghz_transmit_raw(
+		    (uint32_t)subghz_tx_encode_buf,
+		    (uint32_t)&timerhdl_subghz_tx.Instance->ARR,
+		    subghz_tx_encode_len, 0);
+
+		/* Wait for this burst's DMA transfer-complete, bounded by a safety
+		 * cap so a wedged DMA can never hang the UI. */
+		uint32_t elapsed = 0;
+		for (;;)
+		{
+			bool done =
+			    (uint16_t)(subghz_tx_tc_count - start_count) != 0U;
+			subghz_static_tx_wait_t w = subghz_static_tx_wait_step(
+			    done, elapsed, SUBGHZ_STATIC_TX_BURST_TIMEOUT_MS);
+			if (w != SUBGHZ_STATIC_TX_WAIT)
+				break;
+			vTaskDelay(pdMS_TO_TICKS(SUBGHZ_STATIC_TX_POLL_MS));
+			elapsed += SUBGHZ_STATIC_TX_POLL_MS;
+		}
 	}
 
 	/* Stop TX and clean up */

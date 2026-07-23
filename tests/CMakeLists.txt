@@ -2137,6 +2137,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_endless_tx COMMAND test_subghz_endless_tx)
 
+# ── Static-code (direct-buffer) blocking TX burst/wait policy (issue #650) ──
+add_executable(test_subghz_static_tx
+    test_subghz_static_tx.c
+    ${M1_ROOT}/Sub_Ghz/subghz_static_tx.c
+)
+target_include_directories(test_subghz_static_tx PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_static_tx PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_static_tx PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_static_tx COMMAND test_subghz_static_tx)
+
 # ----------------------------------------------------------------------------
 # Sub-GHz scene manager polish primitives (Phase 10 — Momentum parity)
 # ----------------------------------------------------------------------------
