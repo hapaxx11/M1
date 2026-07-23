@@ -45,6 +45,7 @@ void subghz_tx_wave_anim_step(uint8_t *phase)
 int8_t subghz_tx_wave_anim_sample(uint16_t column, uint8_t phase, uint8_t amplitude)
 {
     if (amplitude == 0U) return 0;
+    if (amplitude > 127U) amplitude = 127U;
 
     /* Scroll speed: one full sine period (256 index steps) completes every
      * SUBGHZ_TX_WAVE_ANIM_PHASE_PERIOD ticks, i.e. 4 index steps per tick

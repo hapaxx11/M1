@@ -49,9 +49,9 @@ void subghz_tx_wave_anim_step(uint8_t *phase);
  *
  * @param  column     0-based horizontal position within the plot area.
  * @param  phase      Current animation phase (see subghz_tx_wave_anim_step()).
- * @param  amplitude  Maximum |y| deviation returned (peak amplitude, must be
- *                     >= 1; values are proportionally scaled from the
- *                     internal +/-127 lookup table range).
+ * @param  amplitude  Maximum |y| deviation returned (peak amplitude, 0..127;
+ *                    values above 127 are clamped). Values are proportionally
+ *                    scaled from the internal +/-127 lookup table range.
  * @retval  Signed y-offset in the range [-amplitude, +amplitude].
  */
 int8_t subghz_tx_wave_anim_sample(uint16_t column, uint8_t phase, uint8_t amplitude);
