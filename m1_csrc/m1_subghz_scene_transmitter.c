@@ -56,6 +56,7 @@
 #include "subghz_endless_tx.h"
 #include "subghz_button_caps.h"
 #include "subghz_button_override.h"
+#include "subghz_tx_wave_anim.h"
 #include "uiView.h"
 
 /*============================================================================*/
@@ -88,7 +89,8 @@ static char s_display_name[32];
 static const char *s_last_error;
 static char        s_last_error_buf[32];
 
-/** Animation tick counter — drives the simple "sending" indicator. */
+/** Animation tick counter — drives the scrolling "sending" wave (see
+ *  @ref subghz_tx_wave_anim_step / draw_wave()). */
 static uint8_t s_anim_phase;
 
 /** Display tick cadence (ms) — see subghz_scene_set_tick_period(). */
@@ -420,11 +422,12 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         }
 
         case SubGhzEventTick:
-            /* Advance the simple "..." animation while TX is in flight.
-             * No redraw needed in READY — display is static there. */
+            /* Advance the scrolling "sending" wave animation while TX is
+             * in flight.  No redraw needed in READY — display is static
+             * there. */
             if (subghz_transmitter_ctl_is_tx(&s_ctl))
             {
-                s_anim_phase = (uint8_t)((s_anim_phase + 1U) & 0x03U);
+                subghz_tx_wave_anim_step(&s_anim_phase);
                 app->need_redraw = true;
             }
             return true;
@@ -458,13 +461,29 @@ static void scene_on_exit(SubGhzApp *app)
 /* Drawing                                                                    */
 /*============================================================================*/
 
-static void draw_dots(uint8_t phase)
+static void draw_wave(uint8_t phase)
 {
-    /* Three dots, one of which is bold per phase 0..3 (4-step cycle). */
-    static const char *frames[4] = {".  ", ".. ", "...", " ..", };
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 42, 124, frames[phase & 0x03U],
-                 TEXT_ALIGN_CENTER);
+    /* Scrolling sine-wave "sending" animation (ported from Momentum's
+     * Read RAW view; see Sub_Ghz/subghz_tx_wave_anim.h).  Drawn as a strip
+     * of connected line segments across the same plot-style area the dot
+     * indicator previously occupied, between the filename and burst
+     * counter lines. */
+    const uint8_t x0 = 2U;
+    const uint8_t x1 = 125U;
+    const uint8_t y_center = 34U;
+    const uint8_t amplitude = 6U;
+
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    int8_t prev_y = subghz_tx_wave_anim_sample(0U, phase, amplitude);
+    for (uint16_t x = (uint16_t)(x0 + 1U); x <= x1; x++)
+    {
+        int8_t y = subghz_tx_wave_anim_sample((uint16_t)(x - x0), phase,
+                                              amplitude);
+        u8g2_DrawLine(&m1_u8g2,
+                     (uint16_t)(x - 1U), (uint16_t)(y_center + prev_y),
+                     x,                  (uint16_t)(y_center + y));
+        prev_y = y;
+    }
 }
 
 static void draw(SubGhzApp *app)
@@ -499,12 +518,13 @@ static void draw(SubGhzApp *app)
 
     if (subghz_transmitter_ctl_is_tx(&s_ctl))
     {
-        /* TX in flight: filename + dots animation + burst counter. */
+        /* TX in flight: filename + scrolling wave animation + burst
+         * counter. */
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         m1_draw_text(&m1_u8g2, 2, 24, 124, s_display_name,
                      TEXT_ALIGN_CENTER);
 
-        draw_dots(s_anim_phase);
+        draw_wave(s_anim_phase);
 
         char counter[24];
         uint16_t emitted = subghz_transmitter_ctl_bursts_emitted(&s_ctl);

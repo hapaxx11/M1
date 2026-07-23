@@ -2151,6 +2151,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_static_tx COMMAND test_subghz_static_tx)
 
+# ── Scrolling "sending" wave animation for the Transmitter scene ──
+add_executable(test_subghz_tx_wave_anim
+    test_subghz_tx_wave_anim.c
+    ${M1_ROOT}/Sub_Ghz/subghz_tx_wave_anim.c
+)
+target_include_directories(test_subghz_tx_wave_anim PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_tx_wave_anim PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_tx_wave_anim PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_tx_wave_anim COMMAND test_subghz_tx_wave_anim)
+
 # ----------------------------------------------------------------------------
 # Sub-GHz scene manager polish primitives (Phase 10 — Momentum parity)
 # ----------------------------------------------------------------------------
