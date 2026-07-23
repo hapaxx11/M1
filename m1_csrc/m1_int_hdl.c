@@ -658,6 +658,7 @@ void TIM1_UP_IRQHandler(void)
 			xQueueSendFromISR(main_q_hdl, &q_item, &xHigherPriorityTaskWoken);
 			portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 			subghz_tx_tc_flag = 0;
+			subghz_tx_tc_count++; // Monotonic completion tick for blocking waiters
 		}
 		timerhdl_subghz_tx.Instance->CCR4 = 0;
 	} // else
