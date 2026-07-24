@@ -32,9 +32,70 @@ and supports both unicast (peer-addressed) and broadcast (all-listen) modes.
 
 ---
 
-## 2. Architecture Constraints
+## 2. CD3 Reference Implementation (bedge117/m1-esp32-brain)
 
-### 2.1 Firmware-Agnostic Capability Gate
+The CD3 firmware **already implements** ESP-NOW peer link in the
+`components/esp_now_link` component.  Our design defers to their implementation
+as the reference protocol since they were first.
+
+### 2.1 CD3 Wire Protocol (existing, we adopt this)
+
+Every ESP-NOW radio frame uses the wire format:
+
+```
+[ 'M' (0x4D) ][ '1' (0x31) ][ type:1 ][ payload:0..240 ]
+```
+
+| Type | Name | Payload |
+|------|------|---------|
+| `0x00` | `ANNOUNCE` | Device name string (up to 23 bytes) |
+| `0x01` | `DATA` | User message bytes (up to 240 bytes) |
+
+Constants: `ENL_NAME_MAX = 23`, `ENL_MSG_MAX = 240`, `ENL_MAX_PEERS = 16`.
+
+### 2.2 CD3 M1_RPC Commands (existing, range `0x0600..0x06FF`)
+
+| msg_id | Name | Direction | Payload |
+|--------|------|-----------|---------|
+| `0x0600` | `M1_RPC_NOW_START` | REQ→ESP | ch(1) + name string → RESP status(1) + mac(6) |
+| `0x0601` | `M1_RPC_NOW_STOP` | REQ→ESP | none → RESP status(1) |
+| `0x0602` | `M1_RPC_NOW_ANNOUNCE` | REQ→ESP | none → RESP status(1) |
+| `0x0603` | `M1_RPC_NOW_PEERS_GET` | REQ→ESP | none → RESP count(1) + [mac(6)+rssi(1)+namelen(1)+name]×N |
+| `0x0604` | `M1_RPC_NOW_SEND` | REQ→ESP | mac(6) + data → RESP status(1) |
+| `0x0605` | `M1_RPC_NOW_RECV_GET` | REQ→ESP | none → RESP count(1) + [mac(6)+len(2 LE)+data]×N |
+
+**Key CD3 design choices we inherit:**
+- **No encryption** — `encrypt = false` always.  ESP-NOW CCMP encryption is not
+  used.  This is acceptable for our use case (local device-to-device, visual
+  pairing confirmation provides MITM awareness).  If a future CD3 release adds
+  encryption we will support it, but we do not require it.
+- **Channel set on init** — the caller chooses the channel at `NOW_START` time.
+  There is no built-in channel negotiation in the ESP-NOW protocol itself.
+- **Broadcast for discovery** — presence is announced via broadcast (`FF:FF:FF:FF:FF:FF`).
+  Discovered peers are tracked in a 16-slot table (LRU eviction).
+- **Polling model** — the STM32 polls `NOW_RECV_GET` to drain received messages.
+  The ESP32 buffers up to 32 inbound messages in a ring buffer.
+
+### 2.3 Capability Bit (not yet self-reported by CD3)
+
+CD3 implements the `M1_RPC_NOW_*` handlers but does **not** yet set a
+capability bit in `M1_FW_CAPS`.  We will:
+
+1. Reserve `M1_ESP32_CAP_ESPNOW` (bit 21) on the STM32 side.
+2. Gate all peer-link scenes on `m1_esp32_require_cap(M1_ESP32_CAP_ESPNOW, ...)`.
+3. Propose that CD3 adds `M1_CAP_ESPNOW = (UINT64_C(1) << 21)` to its
+   `m1_rpc.h` and ORs it into `M1_FW_CAPS`.
+
+Until CD3 self-reports the bit, we can use a fallback probe: attempt
+`M1_RPC_NOW_START` + immediate `M1_RPC_NOW_STOP` — if both succeed, infer
+the capability is present and cache it (same pattern as the HANDSHAKE detection
+workaround documented in `m1_esp32_caps.h`).
+
+---
+
+## 3. Architecture Constraints
+
+### 3.1 Firmware-Agnostic Capability Gate
 
 The M1 supports multiple ESP32 firmware variants (SiN360, CD3-AT, CD3, dag
 T-800).  Every ESP32-dependent feature is gated at runtime by the
@@ -48,16 +109,16 @@ follow the same pattern:
 - A new `ESP32_FEATURE_ESPNOW` entry in `esp32_feature_map.h/.c` maps the
   feature to its required cap bit and UI label.
 
-### 2.2 Transport Independence
+### 3.2 Transport Independence
 
 The STM32 host must not care which protocol variant the ESP32 speaks.  The
 ESP-NOW commands MUST be deliverable over:
 
 | Firmware | Transport | Path |
 |----------|-----------|------|
-| CD3 (native RPC) | M1_RPC binary frames | New msg_id range `0x0060..0x006F` |
-| CD3-AT / dag T-800 | AT text commands | `AT+M1ESPNOW=...` custom command |
-| SiN360 | Binary SPI opcodes | New CMD_ESPNOW_* opcodes (if SiN360 adds support) |
+| CD3 (native RPC) | M1_RPC binary frames | `M1_RPC_NOW_*` range `0x0600..0x0605` (already implemented) |
+| CD3-AT / dag T-800 | AT text commands | `AT+M1ESPNOW=...` custom command (future) |
+| SiN360 | Binary SPI opcodes | Not supported (SiN360 won't set `M1_ESP32_CAP_ESPNOW`) |
 
 The STM32-side implementation uses a thin HAL-layer function
 (`m1_espnow_send_cmd()`) that internally dispatches to the correct transport
@@ -65,20 +126,22 @@ based on the detected firmware class, mirroring the pattern used by WiFi attack
 functions (`m1_wifi.c` checks `m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN)` and
 switches between AT and binary paths).
 
-### 2.3 64-Byte SPI MTU Constraint
+### 3.3 SPI MTU and Message Size
 
-The current SPI-HD transport uses a fixed 64-byte MTU per transaction.  An
-ESP-NOW data frame can carry up to 250 bytes.  For file transfer payloads
-exceeding 64 bytes, the design uses a chunked RPC pattern (similar to OTA):
+The CD3 M1_RPC transport uses a larger MTU than the 64-byte SPI-HD transaction
+size.  The `M1L_MTU` constant in the CD3 `m1_rpc.h` is **512 bytes**, and
+`M1_RPC_MAX_PAYLOAD` accommodates the full ESP-NOW message size (240 bytes +
+framing).  Therefore:
 
-- Host sends `ESPNOW_TX_DATA` with a chunk index + up to 48 bytes of payload
-  per SPI transaction (64 − 8-byte M1_RPC header − 2-byte CRC16 − 6 reserved).
-- ESP32 firmware buffers chunks and transmits the full ESP-NOW frame once all
-  chunks for a logical message arrive.
-- Received ESP-NOW frames are delivered to the STM32 via unsolicited
-  `ESPNOW_RX_DATA` responses (same chunking in reverse).
+- `M1_RPC_NOW_SEND` carries the full ESP-NOW payload (up to 240 data bytes +
+  6 MAC bytes) in a single RPC transaction — no chunking needed.
+- `M1_RPC_NOW_RECV_GET` returns multiple queued messages packed in one response.
 
-### 2.4 Idle Power-Off Interaction
+For file transfer (which sends application-layer chunks over ESP-NOW), the
+chunking happens at the application protocol level (see §6), not the SPI
+transport level.
+
+### 3.4 Idle Power-Off Interaction
 
 The ESP32 auto powers off after 60s idle (esp32_idle.c state machine).  While
 an ESP-NOW session is active, the idle timer must be suppressed.  The peer-link
@@ -87,69 +150,64 @@ powered during active peer sessions.
 
 ---
 
-## 3. New M1_RPC Message IDs (CD3 Path)
+## 4. Channel Coordination
 
-Reserved in the `0x0060..0x006F` range (peer-link namespace):
+ESP-NOW does **not** define a built-in channel negotiation mechanism.  All peers
+must be on the same WiFi channel to communicate.  The Espressif ESP-NOW
+specification leaves channel management entirely to the application layer.
 
-| msg_id | Name | Direction | Payload |
-|--------|------|-----------|---------|
-| `0x0060` | `ESPNOW_INIT` | REQ→ESP | channel (1B), encryption (1B), local_name[16] |
-| `0x0061` | `ESPNOW_DEINIT` | REQ→ESP | none |
-| `0x0062` | `ESPNOW_BROADCAST` | REQ→ESP | data[0..48] — peer discovery beacon |
-| `0x0063` | `ESPNOW_ADD_PEER` | REQ→ESP | mac[6], channel(1), encrypt(1) |
-| `0x0064` | `ESPNOW_DEL_PEER` | REQ→ESP | mac[6] |
-| `0x0065` | `ESPNOW_TX_DATA` | REQ→ESP | peer_mac[6], chunk_idx(1), chunk_total(1), data[0..48] |
-| `0x0066` | `ESPNOW_TX_STATUS` | RESP←ESP | peer_mac[6], status(1) — delivery ACK/NAK |
-| `0x0067` | `ESPNOW_RX_DATA` | UNSOL←ESP | src_mac[6], chunk_idx(1), chunk_total(1), data[0..48] |
-| `0x0068` | `ESPNOW_SCAN_START` | REQ→ESP | channel(1), duration_ms(2 LE) |
-| `0x0069` | `ESPNOW_SCAN_RESULT` | UNSOL←ESP | src_mac[6], rssi(1), name[16] |
-| `0x006A` | `ESPNOW_SCAN_STOP` | REQ→ESP | none |
+**Our standard (no public protocol-level standard exists):**
 
-### AT Fallback (CD3-AT / dag)
+The **acknowledging device** (responder) always hops to the initiator's channel.
+If the responder does not hop, the initiator treats it as a declined connection
+(equivalent to a pairing rejection).  Rationale:
 
-```
-AT+M1ESPNOW=INIT,<channel>,<encrypt>,<name>
-AT+M1ESPNOW=DEINIT
-AT+M1ESPNOW=BROADCAST,<hex_data>
-AT+M1ESPNOW=ADDPEER,<mac>,<channel>,<encrypt>
-AT+M1ESPNOW=DELPEER,<mac>
-AT+M1ESPNOW=TX,<mac>,<hex_data>
-AT+M1ESPNOW=SCAN,<channel>,<duration_ms>
-AT+M1ESPNOW=SCANSTOP
+- The initiator is already broadcasting on its channel — changing it would break
+  ongoing discovery for other devices listening on that channel.
+- The responder explicitly accepts the peer request, so hopping is a conscious
+  action tied to the user pressing "Accept" on the pairing screen.
+- This matches the CD3 `esp_now_link_start(channel, name)` API — the caller
+  sets the channel, so the STM32 host scene on the responder simply calls
+  `NOW_START` with the initiator's channel (included in the ANNOUNCE beacon).
 
-Unsolicited responses:
-+M1ESPNOW:RX,<src_mac>,<hex_data>
-+M1ESPNOW:TX_STATUS,<peer_mac>,<OK|FAIL>
-+M1ESPNOW:PEER,<src_mac>,<rssi>,<name>
-```
+**Concurrent WiFi implications:**
+
+When the acknowledging device hops to the initiator's channel, its WiFi STA
+connection (if active) is unaffected IF already on the same channel, or the
+STA will be forced to the new channel (ESP32-C6 single-radio limitation).  The
+STM32 host does NOT need to prompt for WiFi disconnection — the channel hop is
+handled transparently by the ESP32 when accepting the peer link.  If the
+responder's WiFi STA is on a different channel, the STA will temporarily lose
+connectivity for the duration of the ESP-NOW session (acceptable tradeoff,
+since the user explicitly accepted the peer link).
 
 ---
 
-## 4. Peer Discovery & Handshake Protocol
+## 5. Peer Discovery & Handshake Protocol
 
-### 4.1 Discovery Phase
+### 5.1 Discovery Phase
 
-1. Device A enters "Peer Link" scene → calls `ESPNOW_INIT` then
-   `ESPNOW_SCAN_START` → listens for broadcast beacons.
-2. Device A also sends periodic `ESPNOW_BROADCAST` beacons containing:
-   - Magic: `"M1PL"` (4 bytes)
-   - Protocol version: 1 (1 byte)
-   - Device name: user-configurable, up to 16 chars (16 bytes)
-   - Session nonce: random 4 bytes (replay protection)
-3. Both devices see each other's beacons via `ESPNOW_SCAN_RESULT`.
+1. Device A enters "Peer Link" scene → calls `M1_RPC_NOW_START(channel, name)`
+   to initialise ESP-NOW and begin broadcasting ANNOUNCE beacons.
+2. The CD3 firmware automatically broadcasts `['M','1', 0x00, name...]` on
+   start and can be triggered again with `M1_RPC_NOW_ANNOUNCE`.
+3. Device A periodically polls `M1_RPC_NOW_PEERS_GET` to retrieve the
+   discovered-peer table (MAC + RSSI + name for each peer in range).
 4. User selects a discovered peer from the list → initiates pairing.
 
-### 4.2 Pairing Confirmation
+### 5.2 Pairing Confirmation
 
-1. Device A sends a unicast `PAIR_REQUEST` (via `ESPNOW_TX_DATA`) to Device B.
+1. Device A sends a unicast `PAIR_REQUEST` (via `M1_RPC_NOW_SEND`) to Device B's MAC.
 2. Device B displays "Pair with <name>?" confirmation screen.
-3. Device B responds with `PAIR_ACCEPT` or `PAIR_REJECT`.
-4. On `PAIR_ACCEPT`, both devices call `ESPNOW_ADD_PEER` with the other's MAC.
-5. Both devices show a 4-digit visual confirmation code derived from
-   `SHA256(nonce_A || nonce_B || mac_A || mac_B)[0:2]` — user confirms they
-   match (MITM protection for encrypted sessions).
+3. Device B hops to Device A's channel (if different) by calling
+   `M1_RPC_NOW_START(initiator_channel, name)`.
+4. Device B responds with `PAIR_ACCEPT` or `PAIR_REJECT` via `M1_RPC_NOW_SEND`.
+5. On `PAIR_ACCEPT`, both devices are now communicating on the same channel.
+   A 4-digit visual confirmation code derived from
+   `CRC32(mac_A || mac_B)[0:2]` is shown — user confirms they match
+   (basic MITM awareness, no encryption required).
 
-### 4.3 Session State Machine (STM32 side, pure logic)
+### 5.3 Session State Machine (STM32 side, pure logic)
 
 ```
 IDLE → SCANNING → PEER_FOUND → PAIR_SENT → PAIRED → (FILE_TX | GAME | ...) → IDLE
@@ -162,11 +220,11 @@ This state machine will be implemented as a pure-logic module
 
 ---
 
-## 5. CRC32 File Transfer Protocol
+## 6. CRC32 File Transfer Protocol
 
-### 5.1 Transfer Framing
+### 6.1 Transfer Framing
 
-Built on top of the ESP-NOW peer link session (section 4):
+Built on top of the ESP-NOW peer link session (section 5):
 
 | Byte offset | Size | Field |
 |-------------|------|-------|
@@ -174,7 +232,7 @@ Built on top of the ESP-NOW peer link session (section 4):
 | 1 | 1 | Sequence number (wraps at 255) |
 | 2..N | varies | Type-specific payload |
 
-### 5.2 Transfer Flow
+### 6.2 Transfer Flow
 
 1. **Sender** sends `FILE_OFFER`: filename[32] + file_size(4 LE) + crc32(4 LE) + chunk_size(1).
 2. **Receiver** displays "Accept <filename> (<size> bytes)?" → responds `FILE_ACCEPT` or `FILE_REJECT`.
@@ -185,15 +243,17 @@ Built on top of the ESP-NOW peer link session (section 4):
    - Match → saves to SD card, shows success screen.
    - Mismatch → sends `FILE_ABORT` with error code, sender retries or aborts.
 
-### 5.3 Flow Control
+### 6.3 Flow Control
 
 - Window size = 1 (stop-and-wait ARQ) for simplicity in v1.
 - Timeout: 500 ms per chunk ACK; 3 retries before abort.
-- Maximum file size: 256 KB (limited by receiver RAM buffering strategy —
-  writes directly to SD card via FatFS in streaming mode for larger files,
-  no full-file RAM buffer needed).
+- **Streaming-to-SD** — the receiver writes chunks directly to SD card via
+  FatFS as they arrive (no full-file RAM buffer).  This is the obvious choice
+  given the unified FreeRTOS heap-4 architecture (#526) where RAM is a shared
+  resource with known constraints.  CRC32 is accumulated incrementally as each
+  chunk is written.  No practical file-size limit beyond SD card capacity.
 
-### 5.4 Pure-Logic Module
+### 6.4 Pure-Logic Module
 
 `espnow_file_transfer.c/h` — state machine + CRC32 accumulation + chunk
 reassembly.  Host-testable.  The HAL boundary is a small
@@ -204,9 +264,9 @@ reassembly.  Host-testable.  The HAL boundary is a small
 
 ---
 
-## 6. Peer Tic-Tac-Toe Protocol
+## 7. Peer Tic-Tac-Toe Protocol
 
-### 6.1 Game Messages (over ESP-NOW unicast)
+### 7.1 Game Messages (over ESP-NOW unicast)
 
 | Type | Value | Payload |
 |------|-------|---------|
@@ -218,7 +278,7 @@ reassembly.  Host-testable.  The HAL boundary is a small
 | `GAME_END` | `0x25` | game_id(1), result(1) [0=draw, 1=host_win, 2=peer_win] |
 | `GAME_QUIT` | `0x26` | game_id(1) |
 
-### 6.2 Pure-Logic Core
+### 7.2 Pure-Logic Core
 
 `espnow_tictactoe.c/h` — board validation, win detection, move application.
 No display/HAL deps.  The scene (`m1_espnow_scene_tictactoe.c`) handles draw +
@@ -226,7 +286,7 @@ input, calling into the pure-logic core for state transitions.
 
 ---
 
-## 7. STM32-Side Module Structure
+## 8. STM32-Side Module Structure
 
 ```
 m1_csrc/
@@ -248,9 +308,9 @@ tests/
 
 ---
 
-## 8. Capability Bit & Feature Map Changes
+## 9. Capability Bit & Feature Map Changes
 
-### 8.1 New Capability Bit
+### 9.1 New Capability Bit
 
 ```c
 /* m1_esp32_caps.h — bit 21 */
@@ -258,7 +318,7 @@ tests/
 #define M1_ESP32_CAP_ESPNOW         (UINT64_C(1) << 21)
 ```
 
-### 8.2 Feature Map Addition
+### 9.2 Feature Map Addition
 
 ```c
 /* esp32_feature_map.h */
@@ -269,53 +329,54 @@ ESP32_FEATURE_ESPNOW,
 { M1_ESP32_CAP_ESPNOW,  "ESP-NOW Peer Link" },
 ```
 
-### 8.3 Profile Updates
+### 9.3 Profile Updates
 
-- `M1_ESP32_CAP_PROFILE_CD3` will include `M1_ESP32_CAP_ESPNOW` once the CD3
-  firmware implements the `0x0060..0x006F` range.
+- `M1_ESP32_CAP_PROFILE_CD3` will include `M1_ESP32_CAP_ESPNOW` once CD3
+  adds the bit to its `M1_FW_CAPS` (the RPC handlers already exist).
 - AT firmware variants will gain the capability when they implement
   `AT+M1ESPNOW`.
 - SiN360 profile is unlikely to add this (no planned development).
 
 ---
 
-## 9. Multi-Firmware Support Summary
+## 10. Multi-Firmware Support Summary
 
 | Concern | Resolution |
 |---------|-----------|
-| How does the STM32 know if ESP-NOW is available? | `M1_ESP32_CAP_ESPNOW` bit in probed `cap_bitmap` |
-| How does the STM32 send ESP-NOW commands to CD3? | M1_RPC messages `0x0060..0x006F` |
-| How does the STM32 send ESP-NOW commands to AT FW? | `AT+M1ESPNOW=...` custom AT command |
-| How does the STM32 send ESP-NOW commands to SiN360? | Not supported initially; SiN360 won't set `M1_ESP32_CAP_ESPNOW` |
+| How does the STM32 know if ESP-NOW is available? | `M1_ESP32_CAP_ESPNOW` bit in probed `cap_bitmap` (or fallback probe via `NOW_START`/`NOW_STOP`) |
+| How does the STM32 send ESP-NOW commands to CD3? | `M1_RPC_NOW_*` messages `0x0600..0x0605` (already implemented in CD3) |
+| How does the STM32 send ESP-NOW commands to AT FW? | `AT+M1ESPNOW=...` custom AT command (future) |
+| How does the STM32 send ESP-NOW commands to SiN360? | Not supported; SiN360 won't set `M1_ESP32_CAP_ESPNOW` |
 | What if the user has a firmware without ESP-NOW? | `m1_esp32_require_cap()` shows "Feature not supported" screen |
-| Can we add ESP-NOW without touching the ESP32 FW? | No — ESP-NOW is an ESP32 radio feature, requires ESP32-side code |
+| Can we add ESP-NOW without touching the ESP32 FW? | CD3 already has it — STM32 side only needs the HAL glue |
 | Does this block other ESP32 features? | No — ESP-NOW coexists with WiFi STA/AP on ESP32-C6 |
-| Does this affect the SPI transport? | No — same 64-byte MTU, same SPI-HD mode, new msg_ids only |
+| Does this affect the SPI transport? | No — same transport, existing msg_ids |
 
 ---
 
-## 10. Implementation Phases
+## 11. Implementation Phases
 
 ### Phase 1: Capability Infrastructure (STM32 only)
 - Add `M1_ESP32_CAP_ESPNOW` bit (21) to `m1_esp32_caps.h`
 - Add `ESP32_FEATURE_ESPNOW` to `esp32_feature_map.h/.c`
 - Add host tests for the new feature map entry
+- Implement fallback capability probe (`NOW_START`/`NOW_STOP`) in
+  `m1_esp32_caps.c` for CD3 builds that don't yet self-report the bit
 - Stub `m1_espnow_hal.c/h` with `m1_esp32_require_cap()` gate
 
 ### Phase 2: Pure-Logic Protocol Modules (STM32, host-testable)
 - `espnow_peer_session.c/h` — state machine with full host test coverage
-- `espnow_file_transfer.c/h` — chunked transfer + CRC32 + ARQ
+- `espnow_file_transfer.c/h` — streaming-to-SD transfer + CRC32 + ARQ
 - `espnow_tictactoe.c/h` — game logic
 
 ### Phase 3: UI Scenes (STM32)
 - Main menu entry under a suitable top-level module (WiFi or new "Peer" category)
 - Scan/discovery, pairing, transfer progress, Tic-Tac-Toe scenes
 
-### Phase 4: ESP32 Firmware Implementation
-- CD3 (`bedge117/m1-esp32-brain`): implement `0x0060..0x006F` handlers using
-  `esp_now_*()` ESP-IDF API
+### Phase 4: ESP32 Firmware Coordination
+- CD3 (`bedge117/m1-esp32-brain`): already implements `M1_RPC_NOW_*` handlers —
+  only needs to add `M1_CAP_ESPNOW` to `M1_FW_CAPS` for self-reporting
 - CD3-AT: implement `AT+M1ESPNOW` command handler (optional, lower priority)
-- Self-report `M1_ESP32_CAP_ESPNOW` in `cap_bitmap` / `AT+CMD?` listing
 
 ### Phase 5: Integration & Testing
 - End-to-end testing with two M1 devices
@@ -324,32 +385,45 @@ ESP32_FEATURE_ESPNOW,
 
 ---
 
-## 11. Open Questions
+## 12. Design Decisions (resolved)
 
-1. **Encryption**: Should ESP-NOW encryption (CCMP) be mandatory for file
-   transfer, or optional?  ESP-NOW supports per-peer PMK; the pairing
-   handshake could exchange keys derived from the visual confirmation code.
-2. **Channel coordination**: ESP-NOW operates on a single WiFi channel.  If
-   both devices are on different channels at discovery time, one must hop.
-   The broadcast beacon should include the sender's current channel.
-3. **Concurrent WiFi**: ESP-NOW coexists with WiFi STA on ESP32-C6, but
-   channel is locked to the STA channel when connected.  Should we require
-   WiFi disconnection before peer link, or allow degraded same-channel-only
-   mode?
-4. **Maximum file size**: 256 KB RAM buffering vs. streaming-to-SD tradeoff.
-   SD streaming is preferred for generality but adds FatFS dependency to the
-   transfer state machine (resolved by the HAL ops abstraction).
+1. **Encryption**: No encryption.  Defer to the CD3 reference implementation
+   which uses `encrypt = false` for all ESP-NOW peers.  This is acceptable for
+   local device-to-device transfers; visual confirmation codes provide MITM
+   awareness.  If a future CD3 release enables CCMP encryption and the standard
+   is well-defined, we will support it — but we do not require it.
+
+2. **Channel coordination**: No public protocol-level standard exists for
+   ESP-NOW channel negotiation.  Our standard: the **acknowledging device
+   (responder) always hops** to the initiator's channel.  If the responder does
+   not hop, it is treated as a declined connection.
+
+3. **Concurrent WiFi**: Resolved by decision #2.  The responder hops
+   transparently when accepting the peer link — no user prompt for WiFi
+   disconnection is needed.  WiFi STA connectivity on the responder may
+   temporarily degrade if the new channel differs from the AP channel (single-
+   radio constraint), but this is acceptable since the user explicitly accepted.
+
+4. **File size / RAM buffering**: Streaming-to-SD is the only supported mode.
+   Given the unified FreeRTOS heap-4 architecture (#526), buffering entire files
+   in RAM is unacceptable.  CRC32 is accumulated incrementally as chunks arrive;
+   the HAL ops abstraction (`file_open`/`file_write`/`file_close`) keeps FatFS
+   out of the pure-logic module.  No practical file-size limit.
+
 5. **Game extensibility**: The `game_id` field allows future games beyond
-   Tic-Tac-Toe.  Should the protocol support arbitrary game messages, or keep
-   it simple with per-game message types?
+   Tic-Tac-Toe.  Keep it simple with per-game message types for now; the 1-byte
+   game_id prefix is sufficient routing for the foreseeable future.
 
 ---
 
-## 12. References
+## 13. References
 
 - ESP-IDF ESP-NOW API: https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/api-reference/network/esp_now.html
+- CD3 ESP-NOW component: https://github.com/bedge117/m1-esp32-brain/tree/main/components/esp_now_link
+- CD3 M1_RPC header: `components/m1_rpc/include/m1_rpc.h` (msg_ids `0x0600..0x0605`)
 - M1 ESP32 capability system: `m1_csrc/m1_esp32_caps.h`
 - M1_RPC protocol: `documentation/esp32_firmware.md` §M1_RPC
 - ESP32 feature map: `m1_csrc/esp32_feature_map.h/.c`
+- Heap memory strategy: hapaxx11/M1#526
 - Firmware testing skill: `.github/skills/firmware-testing/SKILL.md`
 - ESP32 coprocessor skill: `.github/skills/esp32-coprocessor/SKILL.md`
