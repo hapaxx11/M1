@@ -99,6 +99,9 @@ typedef enum {
     WifiSceneZigbee,
     WifiSceneThread,
 
+    /* ESP-NOW Peer Link (delegate into separate scene manager) */
+    WifiSceneEspnowPeer,
+
     /* Connect features (compile-gated) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     WifiSceneConnectedMenu,
@@ -127,6 +130,7 @@ extern const M1SceneHandlers wifi_scene_recon_menu_handlers;
 extern const M1SceneHandlers wifi_scene_802154_menu_handlers;
 extern const M1SceneHandlers wifi_scene_zigbee_handlers;
 extern const M1SceneHandlers wifi_scene_thread_handlers;
+extern const M1SceneHandlers wifi_scene_espnow_peer_handlers;
 
 /* m1_wifi_scene_sniff.c */
 extern const M1SceneHandlers wifi_scene_sniffer_menu_handlers;

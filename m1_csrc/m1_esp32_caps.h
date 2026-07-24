@@ -170,7 +170,14 @@
  *  or SiN360 firmware. */
 #define M1_ESP32_CAP_OTA            (UINT64_C(1) << 20)
 
-/* Bits 21-63 reserved for future use */
+/** ESP-NOW peer-to-peer communication (discovery, unicast, broadcast).
+ *  Supported by CD3 (bedge117/m1-esp32-brain) via M1_RPC_NOW_* handlers
+ *  (msg_ids 0x0600..0x0605) but not yet self-reported in M1_FW_CAPS.
+ *  Until CD3 sets this bit in M1_FW_CAPS, the feature gate will fail closed
+ *  on CD3 builds.  No fallback probe is implemented. */
+#define M1_ESP32_CAP_ESPNOW         (UINT64_C(1) << 21)
+
+/* Bits 22-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference

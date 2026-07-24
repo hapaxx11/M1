@@ -2481,3 +2481,60 @@ if(TARGET sanitizers)
     target_link_libraries(test_rf_smart_scan PRIVATE sanitizers)
 endif()
 add_test(NAME rf_smart_scan COMMAND test_rf_smart_scan)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_peer_session (ESP-NOW peer discovery & pairing)
+#
+# Pure-logic state machine for peer discovery, pairing, and session
+# management.  Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_peer_session
+    test_espnow_peer_session.c
+    ${M1_ROOT}/m1_csrc/espnow_peer_session.c
+)
+target_include_directories(test_espnow_peer_session PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_peer_session PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_peer_session PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_peer_session COMMAND test_espnow_peer_session)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_file_transfer (ESP-NOW file transfer protocol)
+#
+# Streaming-to-SD file transfer with stop-and-wait ARQ and CRC32
+# integrity.  Uses mock HAL ops for testing.
+# ------------------------------------------------------------------
+add_executable(test_espnow_file_transfer
+    test_espnow_file_transfer.c
+    ${M1_ROOT}/m1_csrc/espnow_file_transfer.c
+)
+target_include_directories(test_espnow_file_transfer PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_file_transfer PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_file_transfer PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_file_transfer COMMAND test_espnow_file_transfer)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
+#
+# Pure-logic board validation, win detection, and move application.
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_tictactoe
+    test_espnow_tictactoe.c
+    ${M1_ROOT}/m1_csrc/espnow_tictactoe.c
+)
+target_include_directories(test_espnow_tictactoe PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_tictactoe PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_tictactoe PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_tictactoe COMMAND test_espnow_tictactoe)

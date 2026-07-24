@@ -540,6 +540,60 @@ in `m1_csrc/m1_esp32_cmd.c`) is identical to `m1_esp32_send_cmd()` but skips
 the `0xCD` magic validation, returning the raw 64-byte response for M1_RPC
 frame validation instead.
 
+### ESP-NOW peer link — CD3 M1_RPC command range `0x0600..0x0605`
+
+CD3 implements M1-to-M1 ESP-NOW peer link in the `components/esp_now_link`
+component.  The STM32 controls it via six M1_RPC message IDs:
+
+| `msg_id` | Name | REQ payload | RESP payload |
+|----------|------|-------------|--------------|
+| `0x0600` | `M1_RPC_NOW_START` | ch(1) + name string | status(1) + mac(6) |
+| `0x0601` | `M1_RPC_NOW_STOP` | none | status(1) |
+| `0x0602` | `M1_RPC_NOW_ANNOUNCE` | none | status(1) |
+| `0x0603` | `M1_RPC_NOW_PEERS_GET` | none | count(1) + [mac(6)+rssi(1)+namelen(1)+name]×N |
+| `0x0604` | `M1_RPC_NOW_SEND` | mac(6) + data | status(1) |
+| `0x0605` | `M1_RPC_NOW_RECV_GET` | none | count(1) + [mac(6)+len(2 LE)+data]×N |
+
+**ESP-NOW radio frame format** (over the air, not the SPI frame):
+
+```
+[ 'M' (0x4D) ][ '1' (0x31) ][ type:1 ][ payload:0..240 ]
+```
+
+| Type | Name | Payload |
+|------|------|---------|
+| `0x00` | `ANNOUNCE` | Device name string (up to `ENL_NAME_MAX = 23` bytes) |
+| `0x01` | `DATA` | User message bytes (up to `ENL_MSG_MAX = 240` bytes) |
+
+Peer table: up to `ENL_MAX_PEERS = 16` entries (LRU eviction).  Discovery is
+broadcast (`FF:FF:FF:FF:FF:FF`); the ESP32 buffers up to 32 inbound messages.
+The STM32 polls `NOW_RECV_GET` to drain the ring buffer.
+
+**STM32-side SPI transport constraint:**  The fixed 64-byte SPI transaction
+leaves at most 48 bytes of usable RPC payload per call (after the 16-byte
+M1_RPC header+CRC overhead).  `NOW_SEND` prefixes a 6-byte MAC, so the
+maximum ESP-NOW application data per SPI call is **42 bytes** — not the
+240-byte ESP-NOW protocol limit.  Full-size payloads require multi-transaction
+RPC chunking (not yet implemented).
+
+**Capability bit:** `M1_ESP32_CAP_ESPNOW` (bit 21, `m1_csrc/m1_esp32_caps.h`).
+CD3 implements the handlers but does not yet self-report this bit in
+`M1_FW_CAPS`; the feature gate will fail closed until CD3 adds it.
+
+**Key design decisions:**
+- *No encryption* — `encrypt = false` always, matching CD3's `esp_now_link`.
+  Visual confirmation codes (4-digit `CRC32(mac_A‖mac_B) % 10000`) provide
+  MITM awareness.  CCMP support will be added if a future CD3 release
+  standardises it.
+- *Channel coordination* — The **acknowledging device (responder) always hops**
+  to the initiator's channel at `NOW_START` time.  If the responder does not
+  hop, the initiator treats it as a declined connection.  No public
+  protocol-level standard exists; this is our application-layer convention.
+- *File transfer* — Stop-and-wait ARQ over the peer link, implemented in
+  `m1_csrc/espnow_file_transfer.c/h` with streaming-to-SD (FatFS) and
+  incremental CRC32.  Chunk size must not exceed 42 bytes with the current
+  SPI transport.
+
 ### `AT+CMD?` — runtime probe for AT firmware
 
 AT-based firmware variants that do not implement the `CMD_GET_STATUS` binary

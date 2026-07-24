@@ -34,6 +34,7 @@
 #include "m1_esp32_hal.h"
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
+#include "m1_espnow_scene.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
@@ -98,11 +99,20 @@ const M1SceneHandlers wifi_scene_signal_monitor_handlers   = { .on_enter = signa
 const M1SceneHandlers wifi_scene_zigbee_handlers           = { .on_enter = zigbee_on_enter           };
 const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = thread_on_enter           };
 
+/* ESP-NOW Peer Link — runs its own scene manager internally */
+static void espnow_peer_on_enter(M1SceneApp *app) {
+    (void)app;
+    espnow_scene_entry();
+    app->running = true;
+    m1_scene_pop(app);
+}
+const M1SceneHandlers wifi_scene_espnow_peer_handlers = { .on_enter = espnow_peer_on_enter };
+
 /*==========================================================================*/
 /* Top-level menu (6 items)                                                 */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  6
+#define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Networks",
@@ -110,6 +120,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Sniffers",
     "Attacks",
     "802.15.4",
+    "Peer Link",
     "General",
 };
 
@@ -119,6 +130,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
     WifiScene802154Menu,
+    WifiSceneEspnowPeer,
     WifiSceneGeneralMenu,
 };
 
