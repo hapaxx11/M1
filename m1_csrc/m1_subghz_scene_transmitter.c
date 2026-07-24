@@ -509,7 +509,7 @@ static void draw(SubGhzApp *app)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         m1_draw_text(&m1_u8g2, 2, 50, 124, s_last_error,
                      TEXT_ALIGN_CENTER);
-        subghz_button_bar_draw(arrowleft_8x8, "Back",
+        subghz_button_bar_draw(NULL, NULL,
                                NULL, NULL,
                                NULL, NULL);
         m1_u8g2_nextpage();
@@ -578,7 +578,7 @@ static void draw(SubGhzApp *app)
             m1_draw_text(&m1_u8g2, 2, 44, 124, "Press OK to send",
                          TEXT_ALIGN_CENTER);
 
-            subghz_button_bar_draw(arrowleft_8x8, "Back",
+            subghz_button_bar_draw(NULL, NULL,
                                    ok_circle_8x8, "Send",
                                    NULL, NULL);
         }

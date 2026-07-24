@@ -10,19 +10,36 @@ Reference: [UI / Button Bar Rules](/.github/skills/ui-scene-architecture/SKILL.m
 
 Confirmed violations in scene-migrated Sub-GHz code:
 
-- [ ] **m1_subghz_scene_transmitter.c:512** — Remove "Back" label from LEFT slot
-  (error state: `arrowleft_8x8, "Back"` → `arrowleft_8x8, NULL` or remove entirely)
-- [ ] **m1_subghz_scene_transmitter.c:581** — Remove "Back" label from LEFT slot
-  (ready state with single button: same fix)
-- [ ] **m1_subghz_scene_need_saving.c:109** — "OK" placed in RIGHT column; move OK
-  action to CENTER. Also replace `u8g2_DrawBox` with `u8g2_DrawRBox` (r=2) for the
-  Save/Discard highlight buttons.
-- [ ] **m1_subghz_scene_playlist.c:500** — "OK:Play" in RIGHT column, "R-/R+" in
-  CENTER. Move "OK:Play" → CENTER with `ok_circle_8x8`, "R-/R+" as LEFT/RIGHT hints.
+- [x] **m1_subghz_scene_transmitter.c:512** — Removed "Back" label from LEFT slot
+  (error state: bar now empty — hardware BACK button already dismisses the error).
+- [x] **m1_subghz_scene_transmitter.c:581** — Removed "Back" label from LEFT slot
+  (ready state, single-button case); CENTER already correctly shows OK/"Send".
+- [x] **m1_subghz_scene_need_saving.c:109** — Moved "OK" from RIGHT to CENTER
+  column (`ok_circle_8x8, "OK"`); LEFT/RIGHT slots now show plain arrow icons
+  hinting the choice-cycle action (no "Cancel" label — hardware BACK already
+  handles that). Replaced both `u8g2_DrawBox` calls with `u8g2_DrawRBox(..., 2)`
+  for the Save/Discard choice highlights.
+- [x] **m1_subghz_scene_playlist.c:500** — Moved "Play" to CENTER column with
+  `ok_circle_8x8`; LEFT/RIGHT slots now show "R-"/"R+" (repeat count) matching
+  the actual LEFT/RIGHT button behavior.
 
-Build & test after each file change.
+Build & test after each file change — **verified**: `cmake --build build-tests`
+succeeds and `ctest --test-dir build-tests` passes all 129 tests (no regressions;
+these are UI-only drawing changes with no host-testable pure logic).
 
 ---
+
+### Discovered during Phase 1 (deferred, not yet fixed)
+
+- **`m1_subghz_scene_transmitter.c:545`** and **`m1_subghz_scene_playlist.c:494`**
+  both draw `arrowleft_8x8, "Stop"` in the LEFT slot, but the actual stop action
+  is wired to `SubGhzEventBack` (the hardware BACK button), not the LEFT button.
+  This is the same class of bug as the "Back" label violations (a button-bar hint
+  pointing at the wrong physical button) but wasn't caught by the original text
+  search since the label text is "Stop" rather than "Back". Needs its own pass:
+  either rewire LEFT to actually stop, or remove the LEFT-slot hint since BACK
+  already stops self-evidently.
+  - [ ] Audit and fix in a follow-up phase.
 
 ## Phase 2 — Fix Legacy Module Button Bar Violations
 

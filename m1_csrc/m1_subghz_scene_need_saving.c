@@ -90,7 +90,7 @@ static void draw(SubGhzApp *app)
     /* Save button */
     if (choice == 0)
     {
-        u8g2_DrawBox(&m1_u8g2, 10, 38, 40, 10);
+        u8g2_DrawRBox(&m1_u8g2, 10, 38, 40, 10, 2);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     }
     u8g2_DrawStr(&m1_u8g2, 18, 46, "Save");
@@ -99,17 +99,17 @@ static void draw(SubGhzApp *app)
     /* Discard button */
     if (choice == 1)
     {
-        u8g2_DrawBox(&m1_u8g2, 68, 38, 50, 10);
+        u8g2_DrawRBox(&m1_u8g2, 68, 38, 50, 10, 2);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
     }
     u8g2_DrawStr(&m1_u8g2, 72, 46, "Discard");
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 
-    /* Bottom bar */
+    /* Bottom bar — LEFT/RIGHT cycle the choice, OK (center column) confirms */
     subghz_button_bar_draw(
-        arrowleft_8x8, "Cancel",
-        NULL, "LR:Choose",
-        NULL, "OK");
+        arrowleft_8x8, NULL,
+        ok_circle_8x8, "OK",
+        arrowright_8x8, NULL);
 
     m1_u8g2_nextpage();
 }

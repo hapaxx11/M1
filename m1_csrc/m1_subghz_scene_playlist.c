@@ -498,9 +498,9 @@ static void draw(SubGhzApp *app)
         else
         {
             subghz_button_bar_draw(
-                NULL, NULL,
-                NULL, "R-/R+",
-                NULL, "OK:Play");
+                NULL, "R-",
+                ok_circle_8x8, "Play",
+                NULL, "R+");
         }
     }
 
