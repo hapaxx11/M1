@@ -179,7 +179,7 @@ void espnow_session_stop(espnow_session_t *s);
 /**
  * @brief  Compute the 4-digit visual confirmation code from two MACs.
  *
- * Code = CRC32(mac_a || mac_b) & 0xFFFF, formatted as 0000-9999.
+ * Code = CRC32(mac_a || mac_b) % 10000, formatted as 0000-9999.
  * Pure function — used internally and exposed for testing.
  */
 uint16_t espnow_compute_confirm_code(const uint8_t mac_a[ESPNOW_MAC_LEN],

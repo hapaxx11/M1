@@ -177,6 +177,10 @@ bool espnow_ft_send_chunk(espnow_ft_ctx_t *ctx, const uint8_t *chunk_data,
     msg[5] = (uint8_t)(offset >> 24);
     memcpy(&msg[6], chunk_data, chunk_len);
 
+    /* Record offset/length before advancing so timeout can retry exactly. */
+    ctx->last_chunk_offset = ctx->bytes_transferred;
+    ctx->last_chunk_len    = (uint32_t)chunk_len;
+
     bool ok = ctx->hal->send(ctx->peer_mac, msg, 6 + chunk_len, ctx->hal->ctx);
     if (ok) {
         ctx->bytes_transferred += (uint32_t)chunk_len;
@@ -204,12 +208,11 @@ bool espnow_ft_send_check_timeout(espnow_ft_ctx_t *ctx)
         return true;
     }
 
-    /* Retry: go back to SENDING so caller can resend the chunk.
-     * Roll back bytes_transferred and seq for the failed chunk. */
-    /* Note: we leave bytes_transferred as-is since the receiver will
-     * de-dup by offset.  The sender re-transmits from the same offset. */
+    /* Retry: go back to SENDING so caller can resend the same chunk.
+     * Roll back bytes_transferred and seq to exactly what they were before
+     * the failed chunk was sent (last_chunk_offset/len stored in send_chunk). */
     ctx->current_seq--;
-    ctx->bytes_transferred -= ctx->chunk_size; /* approximate rollback */
+    ctx->bytes_transferred = ctx->last_chunk_offset;
     ctx->state = ESPNOW_FT_STATE_SENDING;
     return true;
 }

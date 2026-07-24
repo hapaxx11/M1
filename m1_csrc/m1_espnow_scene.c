@@ -52,5 +52,7 @@ void espnow_scene_entry(void)
 {
     m1_scene_run(scene_registry, EspnowSceneCount,
                  espnow_hw_init, espnow_hw_deinit);
-    m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
+    /* Do NOT post Q_EVENT_MENU_EXIT here — this function is called as a
+     * nested blocking delegate from the WiFi scene, which handles the
+     * exit event when the WiFi module itself exits. */
 }

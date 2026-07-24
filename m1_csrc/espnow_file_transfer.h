@@ -134,6 +134,10 @@ typedef struct {
     /** Timestamp of last send (for timeout detection). */
     uint32_t last_send_ms;
 
+    /** Offset and length of the last chunk sent (for exact retry rollback). */
+    uint32_t last_chunk_offset;
+    uint32_t last_chunk_len;
+
     /** File handle (receiver side). */
     espnow_ft_file_t file_handle;
 

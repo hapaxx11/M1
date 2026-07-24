@@ -169,11 +169,16 @@ uint8_t m1_espnow_poll_peers(void *peers_out, uint8_t max_peers)
 
 bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
 {
-    if (len > 240) len = 240;  /* ENL_MSG_MAX */
-
-    /* Payload: mac(6) + data */
+    /* Payload buffer: SPI_BUF_SIZE - 16 bytes for RPC framing overhead.
+     * With 6 MAC prefix bytes, the maximum ESP-NOW data payload is
+     * sizeof(payload) - 6 bytes (limited by the 64-byte SPI transaction).
+     * ENL_MSG_MAX (240) is an ESP-NOW protocol limit but cannot be reached
+     * in a single SPI call without RPC multi-transaction chunking. */
     uint8_t payload[SPI_BUF_SIZE - 16];
-    if (6 + len > sizeof(payload)) return false;
+    const size_t max_data = sizeof(payload) - 6;
+    if (len > max_data) len = max_data;
+    if (len == 0) return false;
+
     memcpy(payload, mac, 6);
     memcpy(payload + 6, data, len);
 

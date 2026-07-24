@@ -2,7 +2,7 @@
 
 # ESP-NOW Peer Link — Design & Implementation Plan
 
-**Status:** Phase 4 complete — UI scenes, HAL integration, and menu wiring implemented. Phase 5 (end-to-end integration testing) requires two physical M1 devices.
+**Status:** Phases 1–4 complete and committed — capability infrastructure, pure-logic protocol modules, UI scenes, HAL integration, and menu wiring are all implemented. Phase 5 (end-to-end integration testing) requires two physical M1 devices.
 **Issue:** hapaxx11/M1#661 (closes hapaxx11/M1#661)
 **Related:** hapaxx11/M1#660 (deferred from SPI-slave brain architecture)
 
@@ -128,18 +128,24 @@ switches between AT and binary paths).
 
 ### 3.3 SPI MTU and Message Size
 
-The CD3 M1_RPC transport uses a larger MTU than the 64-byte SPI-HD transaction
-size.  The `M1L_MTU` constant in the CD3 `m1_rpc.h` is **512 bytes**, and
-`M1_RPC_MAX_PAYLOAD` accommodates the full ESP-NOW message size (240 bytes +
-framing).  Therefore:
+The STM32-side M1_RPC transport (`m1_esp32_send_cmd_raw`) uses a fixed **64-byte**
+SPI transaction.  After subtracting the M1_RPC header and CRC (16 bytes of
+framing overhead), the usable RPC payload is at most **48 bytes** per call.
+`M1_RPC_NOW_SEND` further prefixes the MAC address (6 bytes), leaving a maximum
+of **42 bytes** of ESP-NOW application data per SPI call.
 
-- `M1_RPC_NOW_SEND` carries the full ESP-NOW payload (up to 240 data bytes +
-  6 MAC bytes) in a single RPC transaction — no chunking needed.
-- `M1_RPC_NOW_RECV_GET` returns multiple queued messages packed in one response.
+This means:
+
+- `M1_RPC_NOW_SEND` is currently limited to 42 data bytes — not the ESP-NOW
+  protocol maximum of 240 bytes.  Full-size ESP-NOW payloads would require
+  multi-transaction RPC chunking (not yet implemented).
+- `M1_RPC_NOW_RECV_GET` similarly returns up to 48 bytes of RPC payload, so
+  large queued messages may be truncated.
 
 For file transfer (which sends application-layer chunks over ESP-NOW), the
-chunking happens at the application protocol level (see §6), not the SPI
-transport level.
+`ESPNOW_FT_CHUNK_MAX` constant must be set no larger than 42 bytes when using
+this SPI transport.  Larger chunks require RPC multi-transaction framing to be
+implemented first.
 
 ### 3.4 Idle Power-Off Interaction
 
