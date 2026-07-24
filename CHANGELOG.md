@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.23] - 2026-07-24
+
+### Changed
+
+- **Bad-USB: faster typing** — Removed redundant fixed per-key/per-character
+  delays in DuckyScript typing; timing is now gated solely by the existing
+  HID report poll-complete wait, delivering ~4x faster typing while still
+  guaranteeing every key-down/key-up edge is sent in order. Cherry-picked
+  from bedge117/M1 (C3).
 ## [0.9.2.22] - 2026-07-24
 
 ### Changed
