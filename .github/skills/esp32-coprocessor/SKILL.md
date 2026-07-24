@@ -130,6 +130,15 @@ returned by `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`.
 6. **Update this table** and the table in `documentation/esp32_firmware.md`
    with the new values and their source (firmware version + analysis method).
 
+7. **Update `README.md`**: whenever a `M1_ESP32_CAP_*` bit is added/removed, a
+   `M1_ESP32_CAP_PROFILE_*` macro's cap count changes, or a new firmware
+   variant/profile is introduced, update the ESP32 firmware comparison table
+   in the "Hardware" section of `README.md` (caps-supported counts, the
+   `X / N total caps` denominator, and the firmware list/links) so it stays
+   consistent with `m1_esp32_caps.h`, the capability matrix in
+   `documentation/esp32_firmware.md`, and this skill's tables. README updates
+   for CAPS changes do not require a firmware build (doc-only change).
+
 ### ESP32 Build — How to Build from Claude Code
 
 **CRITICAL: `cmd.exe /C` piped through Git Bash loses all output and fails silently with batch files.
