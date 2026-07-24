@@ -8,7 +8,7 @@
 #include "main.h"
 #include "m1_nfc.h"
 #include "m1_display.h"
-#include "m1_subghz_button_bar.h"
+#include "m1_button_bar.h"
 #include "m1_storage.h"
 #include "m1_sdcard.h"
 #include "m1_virtual_kb.h"
@@ -1241,7 +1241,7 @@ static void nfc_utils_wipe_tag_run(void)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 4, 26, "Zeros all user pages");
 	u8g2_DrawStr(&m1_u8g2, 4, 38, "Hold tag to back");
-	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Wipe", NULL, NULL);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Wipe", NULL, NULL);
 	m1_u8g2_nextpage();
 
 	while (1)
@@ -1269,7 +1269,7 @@ static void nfc_utils_wipe_tag_run(void)
 				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 				u8g2_DrawStr(&m1_u8g2, 4, 28, "This will erase all");
 				u8g2_DrawStr(&m1_u8g2, 4, 40, "user data on the tag");
-				subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Confirm", NULL, NULL);
+				m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Confirm", NULL, NULL);
 				m1_u8g2_nextpage();
 			}
 			else
@@ -2817,7 +2817,7 @@ static void nfc_unlock_with_reader(void)
 							 (unsigned)nfc_ctx_get_t2t_page_count());
 					u8g2_DrawStr(&m1_u8g2, 2, 44, pg_str);
 				}
-				subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Save", NULL, NULL);
+				m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Save", NULL, NULL);
 				m1_u8g2_nextpage();
 
 				while (1)

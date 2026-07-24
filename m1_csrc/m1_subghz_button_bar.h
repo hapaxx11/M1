@@ -2,10 +2,18 @@
 
 /**
  * @file   m1_subghz_button_bar.h
- * @brief  Standardized 3-column bottom bar renderer for Sub-GHz scenes.
+ * @brief  Sub-GHz-specific status/RSSI bars, plus a backward-compatible
+ *         wrapper for the shared bottom-bar renderer.
  *
- * Provides consistent button hint rendering across all Sub-GHz screens.
- * Fixed layout: left (x=2), center (x=48), right (x=96), y=53/61.
+ * `subghz_button_bar_draw()` forwards to the generic `m1_button_bar_draw()`
+ * (see m1_button_bar.h) which has no Sub-GHz-specific logic and is shared
+ * across all M1 modules. It is kept here (rather than requiring every
+ * Sub-GHz scene to switch to `m1_button_bar.h`) purely for backward
+ * compatibility with existing call sites.  New non-Sub-GHz code should
+ * `#include "m1_button_bar.h"` and call `m1_button_bar_draw()` directly.
+ *
+ * `subghz_status_bar_draw()` and `subghz_rssi_bar_draw()` remain genuinely
+ * Sub-GHz-specific (frequency/modulation/RSSI readouts) and stay here.
  */
 
 #ifndef M1_SUBGHZ_BUTTON_BAR_H_
@@ -18,6 +26,9 @@
  *
  * Each slot can have an icon (8x8 bitmap) and/or a text label.
  * Pass NULL for unused slots.
+ *
+ * Forwards to `m1_button_bar_draw()` (m1_button_bar.h) — kept for backward
+ * compatibility with existing Sub-GHz call sites.
  *
  * @param left_icon   Left slot icon (8x8 XBM), or NULL
  * @param left_text   Left slot label, or NULL

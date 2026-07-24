@@ -31,7 +31,7 @@
 #include "m1_lcd.h"
 #include "m1_compile_cfg.h"
 #include "m1_scene.h"
-#include "m1_subghz_button_bar.h"
+#include "m1_button_bar.h"
 #include "m1_wifi_cred.h"
 #include "wifi_ap_record.h"
 #include "wifi_mac_utils.h"
@@ -331,18 +331,18 @@ static void wifi_ap_list_draw(void)
 	 * s_ap_ok_label overrides the default "Connect"/"Discon." choice. */
 	if (s_ap_ok_label)
 	{
-		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, s_ap_ok_label, NULL, NULL);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, s_ap_ok_label, NULL, NULL);
 	}
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 	else if (s_wifi_stub_connected &&
 	         strncmp(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid)) == 0)
 	{
-		subghz_button_bar_draw(NULL, "Scan", ok_circle_8x8, "Discon.", NULL, NULL);
+		m1_button_bar_draw(NULL, "Scan", ok_circle_8x8, "Discon.", NULL, NULL);
 	}
 #endif
 	else
 	{
-		subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Connect", NULL, NULL);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Connect", NULL, NULL);
 	}
 
 	m1_u8g2_nextpage();
@@ -1745,7 +1745,7 @@ static uint16_t sta_list_print(bool up_dir)
 		sta_list_data[sta_view_idx].channel);
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
 
-	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 	return sta_total;
 }
@@ -1870,7 +1870,7 @@ static void pmkid_at_draw_ap(const wifi_at_ap_t *aps, uint8_t idx, uint8_t total
 	u8g2_DrawStr(&m1_u8g2, 2, 38, ln);
 
 	/* Bottom bar — OK = Grab, UP/DOWN to scroll */
-	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Grab", NULL, NULL);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Grab", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -3390,7 +3390,7 @@ static void wifi_draw_ap_select(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_ap_count(ap_list, ap_count));
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -3425,7 +3425,7 @@ static void wifi_draw_sta_select(void)
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += SF_Y_STEP;
 	snprintf(ln, sizeof(ln), "Selected:%d", wifi_selected_sta_count(sta_list_data, sta_total));
 	u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-	subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Select", NULL, NULL);
 	m1_u8g2_nextpage();
 }
 
@@ -4184,7 +4184,7 @@ void wifi_general_set_channel(void)
 			snprintf(line, sizeof(line), "Channel: %d", channel);
 			u8g2_DrawStr(&m1_u8g2, 2, 28, line);
 			u8g2_DrawStr(&m1_u8g2, 2, 42, "UP/DOWN change");
-			subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Set", NULL, NULL);
+			m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Set", NULL, NULL);
 			m1_u8g2_nextpage();
 		}
 

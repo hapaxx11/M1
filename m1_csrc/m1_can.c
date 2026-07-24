@@ -27,7 +27,7 @@
 
 #include "m1_display.h"
 #include "m1_lcd.h"
-#include "m1_subghz_button_bar.h"
+#include "m1_button_bar.h"
 #include "m1_tasks.h"
 #include "m1_system.h"
 #include "m1_buzzer.h"
@@ -291,7 +291,7 @@ static void can_draw_send_screen(uint32_t id, const uint8_t *data, uint8_t dlc,
         u8g2_DrawFrame(&m1_u8g2, 0, 35, 127, 11);
 
     /* Bottom bar — OK sends the frame (center column); LEFT/RIGHT move cursor */
-    subghz_button_bar_draw(arrowleft_8x8, NULL,
+    m1_button_bar_draw(arrowleft_8x8, NULL,
                            ok_circle_8x8, "Send",
                            arrowright_8x8, NULL);
 

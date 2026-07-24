@@ -87,18 +87,30 @@ function is generic — it draws rounded-corner buttons in a 3-column layout and
 no Sub-GHz–specific logic.
 
 Plan:
-- [ ] Create `m1_csrc/m1_button_bar.c` and `m1_csrc/m1_button_bar.h`
-  - Move `subghz_button_bar_draw()` implementation here
-  - Rename to `m1_button_bar_draw()` (keep a `static inline` forwarding macro
-    or `#define subghz_button_bar_draw m1_button_bar_draw` in the old header for
-    backward compat during transition)
-- [ ] Keep `m1_subghz_button_bar.h` as a thin wrapper that `#include`s
-  `m1_button_bar.h` + adds `subghz_status_bar_draw()` and `subghz_rssi_bar_draw()`
-  (these ARE Sub-GHz–specific)
-- [ ] Update `m1_wifi.c` to `#include "m1_button_bar.h"` directly
-- [ ] Update `cmake/m1_01/CMakeLists.txt` to add `m1_button_bar.c`
-- [ ] Grep for any other non-subghz users and update includes
-- [ ] Build + verify no regressions
+- [x] Create `m1_csrc/m1_button_bar.c` and `m1_csrc/m1_button_bar.h`
+  - Moved the generic 3-column renderer (`draw_btn()` helper +
+    `m1_button_bar_draw()`) here verbatim from `m1_subghz_button_bar.c`.
+- [x] `m1_subghz_button_bar.c` is now a thin wrapper: `subghz_button_bar_draw()`
+  forwards to `m1_button_bar_draw()` (kept as a real function, not a macro,
+  since it's never taken as a function pointer — preserves the ~20+ existing
+  Sub-GHz call sites with zero call-site churn). `subghz_status_bar_draw()`
+  and `subghz_rssi_bar_draw()` (genuinely Sub-GHz–specific) remain unchanged
+  in this file. Header doc-comment updated to describe the split.
+- [x] Updated `m1_wifi.c` and all Phase 2 legacy modules
+  (`m1_can.c`, `m1_infrared.c`, `m1_ir_universal.c`, `m1_nfc.c`) to
+  `#include "m1_button_bar.h"` directly and call `m1_button_bar_draw()` —
+  none of them use the Sub-GHz-specific status/RSSI bars, so there was no
+  reason for them to depend on `m1_subghz_button_bar.h` at all.
+- [x] Updated `cmake/m1_01/CMakeLists.txt` to add `m1_button_bar.c` (under the
+  "Generic Scene Framework" section, alongside `m1_scene.c`/`m1_submenu.c`).
+- [x] Grepped for any other non-Sub-GHz users of `subghz_button_bar_draw` —
+  none remained; all Sub-GHz scene files keep calling `subghz_button_bar_draw()`
+  unchanged (still valid via the forwarding wrapper).
+- [x] Build + verify no regressions:
+  - Full firmware build (arm-none-eabi-gcc + Ninja, Release):
+    RAM 653528B/640KB (99.72%), FLASH 1007896B/1023KB (96.21%) — identical
+    to the Phase 2 baseline, confirming the extraction is a pure refactor.
+  - Host tests: 129/129 passed (`ctest --test-dir build-tests`).
 
 ---
 

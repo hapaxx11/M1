@@ -23,7 +23,7 @@
 #include "m1_system.h"
 #include "m1_display.h"
 #include "m1_infrared.h"
-#include "m1_subghz_button_bar.h"
+#include "m1_button_bar.h"
 #include "m1_tasks.h"
 #include "m1_watchdog.h"
 #include "m1_buzzer.h"
@@ -2127,7 +2127,7 @@ static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
 
 	/* Bottom hint: OK = assign, RIGHT = save */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	subghz_button_bar_draw(NULL, NULL,
+	m1_button_bar_draw(NULL, NULL,
 	                       ok_circle_8x8, "Assign",
 	                       arrowright_8x8, "Save");
 
