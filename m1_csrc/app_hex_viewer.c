@@ -26,6 +26,7 @@
 #include "m1_storage.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_button_bar.h"
 #include "hex_viewer.h"
 
 /*************************** D E F I N E S ************************************/
@@ -209,8 +210,9 @@ static void hex_viewer_draw(hex_viewer_state_t *st)
     }
 
     u8g2_DrawStr(&m1_u8g2, 8, 50, ascii_buf);
-    m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, "Browse",
-                       arrowright_8x8);
+    m1_button_bar_draw(arrowleft_8x8, NULL,
+                       ok_circle_8x8, "Browse",
+                       arrowright_8x8, NULL);
     m1_u8g2_nextpage();
 }
 

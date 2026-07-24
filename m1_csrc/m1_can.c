@@ -27,6 +27,7 @@
 
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_button_bar.h"
 #include "m1_tasks.h"
 #include "m1_system.h"
 #include "m1_buzzer.h"
@@ -289,8 +290,10 @@ static void can_draw_send_screen(uint32_t id, const uint8_t *data, uint8_t dlc,
     if (cursor_pos == 2)
         u8g2_DrawFrame(&m1_u8g2, 0, 35, 127, 11);
 
-    /* Bottom bar */
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Send", arrowright_8x8);
+    /* Bottom bar — OK sends the frame (center column); LEFT/RIGHT move cursor */
+    m1_button_bar_draw(arrowleft_8x8, NULL,
+                           ok_circle_8x8, "Send",
+                           arrowright_8x8, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -334,7 +337,7 @@ void can_sniffer(void)
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 4, 35, "Check transceiver");
         u8g2_DrawStr(&m1_u8g2, 4, 45, "on J7 (X10).");
-        m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, NULL, NULL);
+        m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
         m1_u8g2_nextpage();
 
         /* Wait for BACK key, then exit */
@@ -456,7 +459,7 @@ void can_send(void)
             u8g2_DrawStr(&m1_u8g2, 4, 20, "CAN init failed!");
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 4, 35, "Check transceiver");
-            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, NULL, NULL);
+            m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
             m1_u8g2_nextpage();
 
             while (1)
@@ -547,7 +550,7 @@ void can_saved(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 4, 40, "Save/load CAN logs");
     u8g2_DrawStr(&m1_u8g2, 4, 50, "to SD card.");
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, NULL, NULL);
+    m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
     m1_u8g2_nextpage();
 
     while (1)

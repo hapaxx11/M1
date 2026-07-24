@@ -9,6 +9,9 @@
  *   - Broadcast debug      (trigger all tags' diagnostic screen)
  *   - Targeted ping        (wake a specific tag identified by its barcode)
  *
+ * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * consistent font-aware layout and automatic visible-count sync.
+ *
  * Entry point: esl_scene_entry()
  * Called from the Infrared scene menu.
  */
@@ -25,6 +28,7 @@
 #include "queue.h"
 
 #include "m1_scene.h"
+#include "m1_submenu.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_tasks.h"
@@ -361,22 +365,20 @@ static const uint8_t esl_menu_targets[ESL_MENU_ITEM_COUNT] = {
     EslSceneTarget,
 };
 
-static uint8_t esl_menu_sel    = 0U;
-static uint8_t esl_menu_scroll = 0U;
+static subghz_submenu_model_t s_esl_menu_model;
 
 static void esl_menu_on_enter(M1SceneApp *app)
 {
     (void)app;
+    if (s_esl_menu_model.item_count == 0)
+        subghz_submenu_model_init(&s_esl_menu_model, ESL_MENU_ITEM_COUNT,
+                                  M1_MENU_VIS(ESL_MENU_ITEM_COUNT));
     app->need_redraw = true;
 }
 
 static bool esl_menu_on_event(M1SceneApp *app, M1SceneEvent event)
 {
-    return m1_scene_menu_event(app, event,
-                               &esl_menu_sel, &esl_menu_scroll,
-                               ESL_MENU_ITEM_COUNT,
-                               M1_MENU_VIS(ESL_MENU_ITEM_COUNT),
-                               esl_menu_targets);
+    return m1_submenu_event(app, event, &s_esl_menu_model, esl_menu_targets);
 }
 
 static void esl_menu_on_exit(M1SceneApp *app) { (void)app; }
@@ -384,9 +386,7 @@ static void esl_menu_on_exit(M1SceneApp *app) { (void)app; }
 static void esl_menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_scene_draw_menu("ESL Tags", esl_menu_labels, ESL_MENU_ITEM_COUNT,
-                       esl_menu_sel, esl_menu_scroll,
-                       M1_MENU_VIS(ESL_MENU_ITEM_COUNT));
+    m1_submenu_draw(&s_esl_menu_model, "ESL Tags", esl_menu_labels);
 }
 
 static const M1SceneHandlers esl_menu_handlers = {

@@ -4,7 +4,7 @@
  * @file   m1_settings_scene_menu.c
  * @brief  Settings top-level menu scene + LCD, About, and Dashboard delegates.
  *
- * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
  */
 

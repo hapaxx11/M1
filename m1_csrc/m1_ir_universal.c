@@ -23,6 +23,7 @@
 #include "m1_system.h"
 #include "m1_display.h"
 #include "m1_infrared.h"
+#include "m1_button_bar.h"
 #include "m1_tasks.h"
 #include "m1_watchdog.h"
 #include "m1_buzzer.h"
@@ -613,7 +614,10 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 		}
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, left_label, right_label, arrowright_8x8);
+		m1_button_bar_draw(
+		    arrowleft_8x8, left_label,
+		    ok_circle_8x8, right_label,
+		    (ok_label && strcmp(ok_label, "Send") == 0) ? NULL : arrowright_8x8, NULL);
 	}
 
 	m1_u8g2_nextpage();
@@ -2126,7 +2130,9 @@ static void builder_draw_slots(const ir_builder_slot_t *slots, uint8_t n_slots,
 
 	/* Bottom hint: OK = assign, RIGHT = save */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_bottom_bar(&m1_u8g2, NULL, "Assign", "Save", NULL);
+	m1_button_bar_draw(NULL, NULL,
+	                       ok_circle_8x8, "Assign",
+	                       arrowright_8x8, "Save");
 
 	m1_u8g2_nextpage();
 }

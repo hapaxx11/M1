@@ -464,17 +464,23 @@ different quality levels.  Sub-GHz is *scene-native/async*; the remaining module
 are *scene-wrapped* — their scene shells call legacy blocking functions that may
 freeze the UI briefly while waiting on hardware.
 
+All scene-wrapped modules now use the **submenu model** pattern
+(`subghz_submenu_model_t` + `m1_submenu_draw()` + `m1_submenu_event()`).
+The legacy `m1_scene_menu_event()` helper has zero callers and is retained only
+for backward compatibility — **never use it in new code**.
+
 | Module | Scene quality | Notes |
 |--------|--------------|-------|
 | **Sub-GHz** | ✅ Scene-native/async | 30 per-screen files; pure-logic units in `Sub_Ghz/`; async TX/RX flows; extensive host tests |
-| **125KHz RFID** | 🔶 Scene-wrapped | Good `lfrfid/` pure-logic separation + tests; 7 blocking `osDelay`/`vTaskDelay` calls; low priority (already well-structured) |
-| **NFC** | 🔶 Scene-wrapped | 8 scene IDs in 1 file; 25 `vTaskDelay`, 40 `while` loops; pure-logic units in `NFC/` and `m1_csrc/nfc_*.c/h` |
-| **Infrared** | 🔶 Scene-wrapped | 6 scene IDs in 1 file; 12 `vTaskDelay`, 54 `while`; pure-logic units in `ir_signal_record.c/h`, `ir_button_map.c/h`, `flipper_ir.c/h` |
-| **GPIO** | 🔶 Scene-wrapped | 6–9 scene IDs; minimal blocking; acceptable as-is |
-| **WiFi** | 🔶 Scene-wrapped | 51 scene IDs split across 7 files; `HAL_Delay` eliminated; `CMD_WIFI_JOIN` async conversion N/A (SiN360 ESP32 has no async push) |
-| **Bluetooth** | 🔶 Scene-wrapped | 32 scene IDs split across 4 files; no hardware blocking |
+| **125KHz RFID** | ✅ Submenu model | Good `lfrfid/` pure-logic separation + tests; 7 blocking `osDelay`/`vTaskDelay` calls |
+| **NFC** | ✅ Submenu model | 8 scene IDs in 1 file; 25 `vTaskDelay`, 40 `while` loops; pure-logic units in `NFC/` and `m1_csrc/nfc_*.c/h` |
+| **Infrared** | ✅ Submenu model | 6 scene IDs in 1 file; 12 `vTaskDelay`, 54 `while`; pure-logic units in `ir_signal_record.c/h`, `ir_button_map.c/h`, `flipper_ir.c/h` |
+| **GPIO** | ✅ Submenu model | 6–9 scene IDs; main + CAN Bus sub-menu; minimal blocking |
+| **WiFi** | ✅ Submenu model | 51 scene IDs split across 7 files; `HAL_Delay` eliminated; `CMD_WIFI_JOIN` async conversion N/A (SiN360 ESP32 has no async push) |
+| **Bluetooth** | ✅ Submenu model | 32 scene IDs split across 4 files; no hardware blocking |
 | **BadUSB/BadBT** | — Single function | Intentionally no submenus; `osDelay` calls are legitimate script-pacing delays |
-| **Games** | 🔶 Scene-wrapped | Acceptable as-is |
+| **Games** | ✅ Submenu model | 8 game delegates from scene-based menu |
+| **ESL Tags** | ✅ Submenu model | 2-item menu; IR-based Pricer ESL tag interaction |
 | **Settings** | 🔶 Scene-wrapped | 21 scene IDs split across 5 files |
 
 ### Agent instructions for scene migration
@@ -482,6 +488,25 @@ freeze the UI briefly while waiting on hardware.
 Scene migration is complete for all modules.  There are no more legacy-menu
 modules to migrate.  When working on **any** module, all new screens and features
 **MUST** be implemented as scenes, not as standalone event-loop functions.
+
+#### Submenu model pattern (MANDATORY for all menus)
+
+Every scene that presents a scrollable selection list **MUST** use the submenu model
+pattern.  The legacy `m1_scene_menu_event()` / `m1_scene_draw_menu()` direct-call
+pattern is deprecated — no new code may use it.
+
+**Required pattern** (reference: `m1_subghz_scene_menu.c`, `m1_nfc_scene.c`):
+
+1. `#include "m1_submenu.h"` (pulls in `subghz_submenu_model.h` + `m1_scene.h`)
+2. Declare a file-static `subghz_submenu_model_t` model variable.
+3. In `on_enter`: call `subghz_submenu_model_init()` with `M1_MENU_VIS(count)`.
+4. In `on_event`: call `m1_submenu_event(app, event, &model, targets)`.
+5. In `draw`: call `m1_submenu_draw(&model, "Title", labels)`.
+
+Both `m1_submenu_event()` and `m1_submenu_draw()` auto-sync `visible_count` via
+`M1_MENU_VIS()`, so the menu automatically adapts when the user changes the
+text-size preference — no manual `subghz_submenu_model_set_visible_count()` call
+is needed in the scene itself.
 
 #### Mandatory import conversion plan (legacy menu code from other repos)
 
@@ -522,6 +547,9 @@ incrementally.  Do **not** delete them.
 
 ### Rules for all scene menus
 
+- **MUST use the submenu model** — `subghz_submenu_model_t` + `m1_submenu_draw()` +
+  `m1_submenu_event()`.  Never use the deprecated `m1_scene_menu_event()` or call
+  `m1_scene_draw_menu()` directly from a scene.
 - Scene menus use the scrollbar pattern (no "OK" button bar).
 - Never add "Back" as a menu item or button bar label.
 - When item count changes, verify `MENU_VISIBLE` and scrolling math.

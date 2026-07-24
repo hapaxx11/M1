@@ -14,7 +14,7 @@
  *   WifiSceneSniffPwnagotchi— Pwnagotchi sniffer delegate
  *   WifiSceneSniffSae       — SAE/WPA3 sniffer delegate
  *
- * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
  */
 

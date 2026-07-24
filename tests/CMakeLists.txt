@@ -334,7 +334,7 @@ endif()
 add_test(NAME esp32_subghz_lifecycle COMMAND test_esp32_subghz_lifecycle)
 
 # ------------------------------------------------------------------
-# Source invariant: Phase E submenu-widget rollout.
+# Source invariant: submenu model widget rollout.
 # All BT, Settings, NFC, and WiFi scene menus must use m1_submenu_event
 # + m1_submenu_draw (shared widget) and must NOT call m1_scene_menu_event
 # (raw sel/scroll pair API).

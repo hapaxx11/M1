@@ -490,17 +490,20 @@ static void draw(SubGhzApp *app)
         /* Bottom bar */
         if (app->playlist_running)
         {
+            /* LEFT is a no-op while running (see scene_on_event, LEFT
+             * case is guarded by !playlist_running) — only hardware
+             * BACK stops playback.  No button bar label needed. */
             subghz_button_bar_draw(
-                arrowleft_8x8, "Stop",
+                NULL, NULL,
                 NULL, NULL,
                 NULL, NULL);
         }
         else
         {
             subghz_button_bar_draw(
-                NULL, NULL,
-                NULL, "R-/R+",
-                NULL, "OK:Play");
+                NULL, "R-",
+                ok_circle_8x8, "Play",
+                NULL, "R+");
         }
     }
 

@@ -31,6 +31,7 @@
 #include "privateprofilestring.h"
 #include "m1_file_util.h"
 #include "m1_diag.h"
+#include "m1_button_bar.h"
 
 #define M1_LOGDB_TAG	"RFID"
 
@@ -2816,7 +2817,8 @@ static void lfrfid_util_clone(void)
 				if (hex) m1_draw_text(&m1_u8g2, 2, 22, 124, hex, TEXT_ALIGN_LEFT);
 				if (fc)  m1_draw_text(&m1_u8g2, 2, 32, 124, fc, TEXT_ALIGN_LEFT);
 				m1_draw_text_box(&m1_u8g2, 0, 42, 128, 10, "Place T5577, press OK", TEXT_ALIGN_CENTER);
-				m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, res_string(IDS_RETRY), "Clone", arrowright_8x8);
+				m1_button_bar_draw(arrowleft_8x8, res_string(IDS_RETRY),
+				                   ok_circle_8x8, "Clone", NULL, NULL);
 				m1_u8g2_nextpage();
 			}
 			else if (state == CLONE_ST_VERIFYING)
@@ -3633,5 +3635,4 @@ static void lfrfid_write_screen_draw(int param, char* filename)
     }
 
 } // static void rfid_read_more_options_write(void)
-
 

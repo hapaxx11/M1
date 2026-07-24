@@ -9,7 +9,7 @@
  * lives in `m1_scene.c`; this module only translates the model's fields
  * into the renderer's positional parameters and adds null-pointer guards.
  *
- * Phase E adds `m1_submenu_event()` — a drop-in replacement for the legacy
+ * Submenu model adds `m1_submenu_event()` — a drop-in replacement for the legacy
  * `m1_scene_menu_event()` helper that works with `subghz_submenu_model_t`
  * instead of a raw (sel, scroll) pair.  Both functions also auto-sync the
  * model's `visible_count` from `M1_MENU_VIS()` so callers never need to
