@@ -1776,6 +1776,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_migration COMMAND test_badusb_migration)
 
+# ── Bad-USB typing speed (poll-gated, no fixed per-key delays) ──
+add_executable(test_badusb_typing_speed
+    test_badusb_typing_speed.c
+)
+target_compile_definitions(test_badusb_typing_speed PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_badusb_typing_speed PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_badusb_typing_speed PRIVATE sanitizers)
+endif()
+add_test(NAME badusb_typing_speed COMMAND test_badusb_typing_speed)
+
 # ── Phase A-6: WiFi HAL_Delay elimination ──
 add_executable(test_wifi_haldelay_free
     test_wifi_haldelay_free.c

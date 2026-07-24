@@ -38,9 +38,15 @@
 /* Timing */
 #define BADUSB_ENUM_TIMEOUT_MS    5000  /* Max wait for host to enumerate HID */
 #define BADUSB_ENUM_POLL_MS       50    /* Poll interval for enumeration check */
-#define BADUSB_KEY_PRESS_MS       6     /* Hold key down (must exceed bInterval=2ms) */
-#define BADUSB_KEY_RELEASE_MS     6     /* Delay after release */
-#define BADUSB_INTER_CHAR_MS      2     /* Between characters in STRING */
+/* Typing speed: correctness is governed by badusb_wait_tx_idle(), which waits
+ * for the USB HID class to return to HID_IDLE (previous IN report completed),
+ * bounded by BADUSB_TX_WAIT_MS. With bInterval=2ms, this poll-gating is
+ * sufficient to keep press/release edges ordered; extra fixed per-key sleeps
+ * are optional padding for finicky hosts. Leaving these at 0 makes typing run
+ * at USB-poll speed (~250 chars/s, matching Flipper); raise only if needed. */
+#define BADUSB_KEY_PRESS_MS       0     /* extra hold after press (0 = poll-gated) */
+#define BADUSB_KEY_RELEASE_MS     0     /* extra pause after release               */
+#define BADUSB_INTER_CHAR_MS      0     /* extra pause between STRING chars         */
 #define BADUSB_TX_WAIT_MS         20    /* Max wait for HID TX complete */
 #define BADUSB_HID_SETTLE_MS      3000  /* Extra delay for OS to load HID drivers */
 
@@ -115,10 +121,14 @@ void badusb_send_key(uint8_t modifier, uint8_t keycode)
     hid_report[0] = modifier;
     hid_report[2] = keycode;
     USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+#if BADUSB_KEY_PRESS_MS > 0
     osDelay(BADUSB_KEY_PRESS_MS);
+#endif
 
     badusb_release_all();
+#if BADUSB_KEY_RELEASE_MS > 0
     osDelay(BADUSB_KEY_RELEASE_MS);
+#endif
 }
 
 
@@ -172,7 +182,9 @@ void badusb_type_string(const char *str)
     while (*str && badusb_state.running)
     {
         badusb_type_char(*str++);
+#if BADUSB_INTER_CHAR_MS > 0
         osDelay(BADUSB_INTER_CHAR_MS);
+#endif
     }
 }
 
@@ -204,7 +216,9 @@ void badusb_type_string_forced(const char *str)
     while (*str && badusb_state.running)
     {
         badusb_type_char(*str++);
+#if BADUSB_INTER_CHAR_MS > 0
         osDelay(BADUSB_INTER_CHAR_MS);
+#endif
     }
 
     badusb_state.running = 0;
