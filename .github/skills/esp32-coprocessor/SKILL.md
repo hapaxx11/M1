@@ -136,8 +136,8 @@ returned by `m1_esp32_caps_bss_bytes()` / `m1_esp32_caps_free_heap()`.
    in the "Hardware" section of `README.md` (caps-supported counts, the
    `X / N total caps` denominator, and the firmware list/links) so it stays
    consistent with `m1_esp32_caps.h`, the capability matrix in
-   `documentation/esp32_firmware.md`, and this skill's tables. README updates
-   for CAPS changes do not require a firmware build (doc-only change).
+   `documentation/esp32_firmware.md`, and this skill's tables. If you're only
+   syncing README (no firmware source changes), no firmware build is required.
 
 ### ESP32 Build — How to Build from Claude Code
 
