@@ -13,6 +13,7 @@
 #include "main.h"
 #include "m1_lcd.h"
 #include "m1_display.h"
+#include "m1_button_bar.h"
 #include "m1_file_browser.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_menu.h"
@@ -295,7 +296,9 @@ static void badusb_show_progress(const char *filename)
     else
         m1_draw_text(&m1_u8g2, 2, 52, 124, "Done", TEXT_ALIGN_CENTER);
 
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Stop", "OK", arrowright_8x8);
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8,
+                       badusb_state.running ? "Stop" : "OK",
+                       NULL, NULL);
 
     m1_u8g2_nextpage();
 }
@@ -578,7 +581,7 @@ void badusb_run(void)
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             m1_draw_text(&m1_u8g2, 2, 10, 124, "Run BadUSB?", TEXT_ALIGN_CENTER);
             m1_draw_text(&m1_u8g2, 2, 28, 124, msg_line, TEXT_ALIGN_CENTER);
-            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, "Run", arrowright_8x8);
+            m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Run", NULL, NULL);
             m1_u8g2_nextpage();
 
             /* Wait for OK or BACK */

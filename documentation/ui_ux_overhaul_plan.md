@@ -39,7 +39,18 @@ these are UI-only drawing changes with no host-testable pure logic).
   search since the label text is "Stop" rather than "Back". Needs its own pass:
   either rewire LEFT to actually stop, or remove the LEFT-slot hint since BACK
   already stops self-evidently.
-  - [ ] Audit and fix in a follow-up phase.
+  - [x] Audit and fix in a follow-up phase. Confirmed via
+    `subghz_transmitter_ctl_event()` (PHASE_TX default case: "OK_PRESS / LEFT /
+    RIGHT / TEARDOWN_DONE during TX are ignored") and
+    `m1_subghz_scene_playlist.c` `scene_on_event()` (the `SubGhzEventLeft` case
+    is guarded by `!app->playlist_running`) that LEFT is a genuine no-op while
+    "Stop" was shown. Removed the mislabeled LEFT-slot hint in both
+    `m1_subghz_scene_transmitter.c:545` and `m1_subghz_scene_playlist.c:494`
+    (now `subghz_button_bar_draw(NULL, NULL, NULL, NULL, NULL, NULL)`) —
+    hardware BACK already stops self-evidently, matching the resolution used
+    for the "Back" label violations above. Host tests (`ctest --test-dir
+    build-tests`) still 129/129 passing (UI-only drawing change, no
+    host-testable pure logic affected).
 
 ## Phase 2 — Fix Legacy Module Button Bar Violations
 
@@ -69,13 +80,63 @@ changes with no host-testable pure logic).
 
 ### Remaining `m1_draw_bottom_bar` sites not yet audited
 
-Not yet individually verified against their event handlers (deferred to a later
-pass): `m1_nfc.c:507` (Retry/More), `m1_nfc.c:1168` (Cancel/Write),
-`m1_nfc.c:2083` (Stop), and the ~45 other `m1_draw_bottom_bar` call sites across
-`m1_badbt.c`, `m1_badusb.c`, `m1_bt.c`, `m1_rfid.c`, `m1_storage.c`,
-`m1_gpio_uart.c`, `m1_power_ctl.c`, `app_hex_viewer.c`, `m1_802154.c`,
-`m1_esp32_fw_download.c`, `m1_fw_download.c`, `m1_clock.c`, `m1_app_api.c`.
-- [ ] Audit and fix in a follow-up phase.
+Phase 2 follow-up audit completed against each screen's button handler:
+
+- [x] **Converted / cleared mismatches**
+  - `app_hex_viewer.c:213` — moved `Browse` from the RIGHT slot to
+    CENTER=`ok_circle_8x8,"Browse"`; kept LEFT/RIGHT page-scroll arrows.
+  - `m1_802154.c:275` — detail dismiss screen now uses CENTER=`ok_circle_8x8,"OK"`
+    instead of a mislabeled RIGHT-slot `OK`.
+  - `m1_802154.c:483` — scan list now uses CENTER=`ok_circle_8x8,"Info"` with
+    LEFT informational page text, rather than showing OK-open on the RIGHT slot.
+  - `m1_badbt.c:777`, `m1_badusb.c:299` — progress/done screens now use the
+    CENTER slot (`"Stop"` while running, `"OK"` when done) instead of a
+    RIGHT-slot `OK`.
+  - `m1_badbt.c:830`, `m1_badbt.c:884` — wait-for-connection screens now use
+    CENTER=`ok_circle_8x8,"Stop"`; `m1_badbt.c:1072` init screen bar cleared
+    because no button action is wired during the transient init draw.
+  - `m1_badbt.c:1202`, `m1_badusb.c:584` — file-run confirms now use
+    CENTER=`ok_circle_8x8,"Run"`.
+  - `m1_bt.c:2318` — BT config screen moved `Edit` from the LEFT slot to
+    CENTER=`ok_circle_8x8,"Edit"` (OK is the real trigger).
+  - `m1_can.c:340`, `m1_can.c:462`, `m1_can.c:553` — cleared BACK-only
+    left-arrow hints on CAN error / placeholder screens.
+  - `m1_infrared.c:429` — cleared BACK-only `Cancel` hint on the IR learn screen.
+  - `m1_ir_universal.c:617` — `draw_list_screen()` now maps OK actions
+    (`Open` / `Pick` / `Send`) to the CENTER slot, keeps `More` on LEFT for the
+    command list, and only shows a RIGHT arrow when RIGHT genuinely pages.
+  - `m1_nfc.c:1170`, `m1_nfc.c:3074` — write-confirm screens now use
+    CENTER=`ok_circle_8x8,"Write"` instead of RIGHT-slot `Write`.
+  - `m1_nfc.c:2760` — captured-password follow-up screen now uses
+    CENTER=`ok_circle_8x8,"Read"`.
+  - `m1_nfc.c:2085`, `m1_nfc.c:2710`, `m1_nfc.c:2884`, `m1_nfc.c:3022` —
+    cleared BACK-only `Stop` / `Cancel` / `Exit` hints.
+  - `m1_rfid.c:2820` — clone workflow moved `Clone` from the RIGHT slot to
+    CENTER=`ok_circle_8x8,"Clone"` while preserving LEFT=`Retry`.
+- **Intentionally left unchanged after handler audit**
+  - `m1_badbt.c` / `m1_badusb.c` abort loops accept multiple buttons, but the
+    converted screens now hint the OK-centered primary action only; no further
+    scene restructuring was needed.
+  - `m1_can.c:255` — LEFT/RIGHT genuinely cycle baud rate; the message count is
+    informational text, not an OK-mapping violation.
+  - `m1_clock.c:149` — LEFT/RIGHT genuinely page zones; OK is only an extra
+    alias for `Next`, not the sole trigger.
+  - `m1_esp32_fw_download.c:422`, `m1_esp32_fw_download.c:513`,
+    `m1_fw_download.c:247`, `m1_fw_download.c:386` — explicit `OK:...` text is
+    self-documenting and acceptable.
+  - `m1_gpio_uart.c:245` — LEFT/RIGHT genuinely change baud, and `OK:Mode`
+    explicitly documents the OK action.
+  - `m1_nfc.c:509`, `m1_nfc.c:1387`, `m1_nfc.c:1916`, `m1_nfc.c:2060`,
+    `m1_nfc.c:2196`, `m1_nfc.c:3513` — `Retry`/`More`/`Delete` and
+    `OK:Start` already match their real bindings.
+  - `m1_power_ctl.c:484`, `m1_power_ctl.c:604`,
+    `m1_storage.c:531`, `m1_storage.c:649`, `m1_storage.c:859` — LEFT/RIGHT
+    cancel/confirm actions are genuinely wired to LEFT/RIGHT.
+  - `m1_rfid.c:485`, `m1_rfid.c:2086` — `Retry`/`More` and `Cancel`/`Delete`
+    already use real LEFT/RIGHT handlers.
+- [x] Audit and fix in a follow-up phase. Host tests
+  (`cmake --build build-tests -j4 && ctest --test-dir build-tests --output-on-failure`)
+  still pass 129/129 after the continued audit.
 
 ---
 

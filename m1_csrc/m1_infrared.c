@@ -426,7 +426,7 @@ bool infrared_capture_one_signal(IRMP_DATA *out_data)
 	u8g2_DrawStr(&m1_u8g2, 4, 28, "Point remote at M1");
 	u8g2_DrawStr(&m1_u8g2, 4, 39, "then press a button.");
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", NULL, NULL);
+	m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
 	m1_u8g2_nextpage();
 
 	while (1)

@@ -337,7 +337,7 @@ void can_sniffer(void)
         u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 4, 35, "Check transceiver");
         u8g2_DrawStr(&m1_u8g2, 4, 45, "on J7 (X10).");
-        m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, NULL, NULL);
+        m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
         m1_u8g2_nextpage();
 
         /* Wait for BACK key, then exit */
@@ -459,7 +459,7 @@ void can_send(void)
             u8g2_DrawStr(&m1_u8g2, 4, 20, "CAN init failed!");
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 4, 35, "Check transceiver");
-            m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, NULL, NULL);
+            m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
             m1_u8g2_nextpage();
 
             while (1)
@@ -550,7 +550,7 @@ void can_saved(void)
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 4, 40, "Save/load CAN logs");
     u8g2_DrawStr(&m1_u8g2, 4, 50, "to SD card.");
-    m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, NULL, NULL, NULL);
+    m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
     m1_u8g2_nextpage();
 
     while (1)

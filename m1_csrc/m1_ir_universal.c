@@ -614,7 +614,10 @@ static void draw_list_screen(const char *title, uint16_t count, uint16_t selecti
 		}
 
 		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, left_label, right_label, arrowright_8x8);
+		m1_button_bar_draw(
+		    arrowleft_8x8, left_label,
+		    ok_circle_8x8, right_label,
+		    (ok_label && strcmp(ok_label, "Send") == 0) ? NULL : arrowright_8x8, NULL);
 	}
 
 	m1_u8g2_nextpage();

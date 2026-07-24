@@ -1167,7 +1167,7 @@ static void nfc_utils_write_uid_run(void)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 4, 26, uid_str);
 	u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold target to back");
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", "Write", arrowright_8x8);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Write", NULL, NULL);
 	m1_u8g2_nextpage();
 
 	uint8_t confirmed = 0;
@@ -2082,7 +2082,7 @@ static void nfc_fuzz_draw_running(uint8_t prof_sel, const uint8_t *uid, uint8_t 
 	u8g2_DrawStr(&m1_u8g2, 2, 42, line);
 
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Stop", NULL, NULL);
+	m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
 
 	m1_u8g2_nextpage();
 }
@@ -2707,7 +2707,7 @@ static void nfc_unlock_with_reader(void)
 	u8g2_DrawStr(&m1_u8g2, 2, 26, "Emulating card UID...");
 	u8g2_DrawStr(&m1_u8g2, 2, 38, "Tap M1 on the reader");
 	u8g2_DrawStr(&m1_u8g2, 2, 50, "to capture password");
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", NULL, NULL);
+	m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
 	m1_u8g2_nextpage();
 
 	nfc_ctx_sync_emu();
@@ -2757,7 +2757,7 @@ static void nfc_unlock_with_reader(void)
 		u8g2_DrawStr(&m1_u8g2, 32, 26, pwd_str);
 		u8g2_DrawStr(&m1_u8g2, 2, 40, "Hold card on M1");
 		u8g2_DrawStr(&m1_u8g2, 2, 50, "to read all pages");
-		m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Exit", "Read", arrowright_8x8);
+		m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Read", NULL, NULL);
 		m1_u8g2_nextpage();
 	}
 
@@ -2881,7 +2881,7 @@ static void nfc_tool_cyborg_detector(void)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 4, 26, "NFC field is ON");
 	u8g2_DrawStr(&m1_u8g2, 4, 38, "Hold implant near back");
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Stop", NULL, NULL);
+	m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
 	m1_u8g2_nextpage();
 
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_L);
@@ -3019,7 +3019,7 @@ static void nfc_tool_read_ndef(void)
 				}
 			}
 
-			m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Exit", NULL, NULL);
+			m1_draw_bottom_bar(&m1_u8g2, NULL, NULL, NULL, NULL);
 			m1_u8g2_nextpage();
 		}
 	}
@@ -3071,7 +3071,7 @@ static void nfc_tool_write_url(void)
 	strncpy(disp_url, url_text, 21);
 	disp_url[21] = '\0';
 	u8g2_DrawStr(&m1_u8g2, 4, 36, disp_url);
-	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, "Cancel", "Write", arrowright_8x8);
+	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Write", NULL, NULL);
 	m1_u8g2_nextpage();
 
 	/* Wait for OK or BACK */
@@ -4845,4 +4845,3 @@ void nfc_add_manually(void)
 		m1_message_box(&m1_u8g2, "Add Manually", "SD card error", " ", "BACK to return");
 	}
 }
-

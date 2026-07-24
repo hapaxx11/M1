@@ -26,6 +26,7 @@
 #include "m1_esp32_caps.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
+#include "m1_button_bar.h"
 #include "m1_scene.h"
 
 /*************************** D E F I N E S ************************************/
@@ -2314,7 +2315,7 @@ void bluetooth_config(void)
             u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
             u8g2_DrawStr(&m1_u8g2, 2, 26, "Adv Name:");
             u8g2_DrawStr(&m1_u8g2, 2, 38, ble_adv_name);
-            m1_draw_bottom_bar(&m1_u8g2, NULL, "Edit", NULL, NULL);
+            m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Edit", NULL, NULL);
             m1_u8g2_nextpage();
         }
 
