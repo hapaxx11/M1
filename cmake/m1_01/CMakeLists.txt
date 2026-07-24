@@ -676,6 +676,9 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/wifi_deauth_cmd.c
     ../../m1_csrc/esp32_feature_map.c
     ../../m1_csrc/esp32_idle.c
+    ../../m1_csrc/espnow_peer_session.c
+    ../../m1_csrc/espnow_file_transfer.c
+    ../../m1_csrc/espnow_tictactoe.c
 
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c

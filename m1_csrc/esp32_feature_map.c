@@ -76,6 +76,8 @@ static const esp32_feature_entry_t s_feature_table[ESP32_FEATURE_COUNT] = {
     { M1_ESP32_CAP_HANDSHAKE,    "Handshake Capture"},
     /* ESP32_FEATURE_OTA */
     { M1_ESP32_CAP_OTA,          "ESP32 OTA Update" },
+    /* ESP32_FEATURE_ESPNOW */
+    { M1_ESP32_CAP_ESPNOW,       "ESP-NOW Peer Link"},
 };
 
 /* Compile-time assertion: table length matches enum count */

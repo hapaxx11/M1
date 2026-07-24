@@ -2,7 +2,7 @@
 
 # ESP-NOW Peer Link — Design & Implementation Plan
 
-**Status:** Draft — planning only, no implementation started.
+**Status:** Phase 2 complete — capability infrastructure and pure-logic protocol modules implemented with host tests.
 **Issue:** hapaxx11/M1#661 (closes hapaxx11/M1#661)
 **Related:** hapaxx11/M1#660 (deferred from SPI-slave brain architecture)
 

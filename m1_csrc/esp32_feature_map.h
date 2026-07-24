@@ -128,6 +128,10 @@ typedef enum {
     /** ESP32 firmware OTA self-update over WiFi */
     ESP32_FEATURE_OTA,
 
+    /* ----- ESP-NOW peer link ---------------------------------------------- */
+    /** ESP-NOW peer link (discovery + file transfer + games) */
+    ESP32_FEATURE_ESPNOW,
+
     /* ----- Sentinel (must be last) ---------------------------------------- */
     ESP32_FEATURE_COUNT,
 } esp32_feature_id_t;
