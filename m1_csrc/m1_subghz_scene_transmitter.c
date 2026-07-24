@@ -542,7 +542,10 @@ static void draw(SubGhzApp *app)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         m1_draw_text(&m1_u8g2, 2, 51, 124, counter, TEXT_ALIGN_CENTER);
 
-        subghz_button_bar_draw(arrowleft_8x8, "Stop",
+        /* LEFT is a no-op during TX (see subghz_transmitter_ctl_event,
+         * PHASE_TX default case) — only hardware BACK stops/aborts.
+         * No button bar label needed; BACK is self-evident. */
+        subghz_button_bar_draw(NULL, NULL,
                                NULL, NULL,
                                NULL, NULL);
     }
