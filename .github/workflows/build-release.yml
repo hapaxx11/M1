@@ -83,15 +83,12 @@ jobs:
       - name: Build "What's Changed" notes from changelog fragments
         id: changelog
         run: |
-          RAW="$(python3 scripts/assemble_changelog.py --preview 2>/dev/null | tail -n +3)"
-          if [ -z "$(echo "${RAW}" | tr -d '[:space:]')" ]; then
+          set -euo pipefail
+          RAW="$(python3 scripts/assemble_changelog.py --preview | tail -n +3)"
+          if [ -z "$(printf '%s' "${RAW}" | tr -d '[:space:]')" ]; then
             RAW="_No changelog fragments were recorded for this release._"
           fi
-          {
-            echo "notes<<CHANGELOG_NOTES_EOF"
-            echo "${RAW}"
-            echo "CHANGELOG_NOTES_EOF"
-          } >> "$GITHUB_OUTPUT"
+          printf 'notes<<CHANGELOG_NOTES_EOF\n%s\nCHANGELOG_NOTES_EOF\n' "${RAW}" >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------ #
       # 2. Auto-increment version — patch source files before building
@@ -148,6 +145,7 @@ jobs:
           # compare link in the release notes. Empty on the very first release.
           PREV_TAG=$(gh release list \
               --repo "$GITHUB_REPOSITORY" \
+              --exclude-drafts \
               --limit 1 \
               --json tagName \
               --jq '.[0].tagName // empty' 2>/dev/null || echo "")
