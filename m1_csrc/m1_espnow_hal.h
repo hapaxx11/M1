@@ -70,7 +70,11 @@ uint8_t m1_espnow_poll_peers(void *peers, uint8_t max_peers);
  *
  * @param  mac   Destination 6-byte MAC address.
  * @param  data  Payload bytes.
- * @param  len   Payload length (≤240 bytes).
+ * @param  len   Payload length.  Capped to 42 bytes per call by the 64-byte
+ *               SPI transaction limit (SPI_BUF_SIZE(64) - RPC_HDR(16) - MAC(6)).
+ *               ENL_MSG_MAX=240 is the ESP-NOW protocol limit but cannot be
+ *               reached in a single SPI call without RPC multi-transaction
+ *               chunking (not yet implemented).
  * @return true on success.
  */
 bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len);
