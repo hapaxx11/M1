@@ -124,16 +124,24 @@ Replacement: "Phase E submenu model" → "shared submenu model" (or just "submen
 model pattern").
 
 ### 4A — Skills docs (`.github/skills/ui-scene-architecture/SKILL.md`)
-- [ ] Replace all 12 occurrences of "Phase E" with plain descriptive text
-- [ ] Section heading "Phase E submenu model pattern" → "Submenu model pattern"
-- [ ] Table entries "✅ Phase E submenu model" → "✅ Submenu model"
+- [x] Replaced all occurrences of "Phase E" with plain descriptive text
+- [x] Section heading "Phase E submenu model pattern" → "Submenu model pattern"
+- [x] Table entries "✅ Phase E submenu model" → "✅ Submenu model"
 
-### 4B — Source code comments (24 occurrences across 22 files)
-- [ ] Global sed: "Phase E:" comment header → "Submenu model:" or remove
-- [ ] `m1_submenu.h` / `m1_submenu.c` — update prose references
-- [ ] `tests/CMakeLists.txt` / `tests/test_submenu_widget_rollout.c` — update
+### 4B — Source code comments (across 20 `m1_csrc/*.c/.h` files + 2 `tests/` files)
+- [x] "Phase E: uses ..." comment header → "Submenu model: uses ..." (18 scene files)
+- [x] `m1_submenu.h` / `m1_submenu.c` — updated prose references ("Phase E adds" →
+  "Submenu model adds", "Phase E extends" → "Submenu model extends", "Phase E
+  convenience wrapper" → "Submenu model convenience wrapper")
+- [x] `tests/CMakeLists.txt` / `tests/test_submenu_widget_rollout.c` — updated
+  ("Phase E submenu-widget rollout" → "submenu model widget rollout")
+- Note: `Drivers/CMSIS/Device/ST/STM32H5xx/Include/stm32h573xx.h` also matched
+  "Phase E" in a grep, but it's a false positive (vendor CMSIS header text
+  "...Arbitration **Phase E**nable..." — unrelated to the internal label) and
+  was left untouched.
 
-Build not required (comment-only + docs changes).
+Build not required (comment-only + docs changes), but verified anyway:
+host tests 129/129 passed after the comment changes (no regressions).
 
 ---
 

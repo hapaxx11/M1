@@ -24,7 +24,7 @@
  * Connect features (Saved Networks, Connected menu) are also listed
  * here but their delegate implementations remain in m1_wifi_scene_connect.c.
  *
- * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
  */
 

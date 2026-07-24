@@ -9,7 +9,7 @@
  *   - Broadcast debug      (trigger all tags' diagnostic screen)
  *   - Targeted ping        (wake a specific tag identified by its barcode)
  *
- * Phase E: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
+ * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
  *
  * Entry point: esl_scene_entry()

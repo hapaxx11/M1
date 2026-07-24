@@ -30,7 +30,7 @@
  *
  * Phase 7c+ migrates individual scenes (Menu, SavedMenu, MoreRAW, Config,
  * Saved file browser, Add Manually picker, Bind Wizard protocol picker)
- * onto this widget; Phase E extends this to WiFi/BT/NFC/Settings menus.
+ * onto this widget; Submenu model extends this to WiFi/BT/NFC/Settings menus.
  * Existing hand-rendered lists continue to work unchanged until migrated.
  */
 
@@ -75,7 +75,7 @@ void m1_submenu_draw(subghz_submenu_model_t *model,
 /**
  * @brief  Handle a scene event for a model-backed scrollable submenu.
  *
- * Phase E convenience wrapper.  Replaces the legacy `m1_scene_menu_event()`
+ * Submenu model convenience wrapper.  Replaces the legacy `m1_scene_menu_event()`
  * call for scenes that own a `subghz_submenu_model_t` instead of a raw
  * `(sel, scroll)` pair.
  *

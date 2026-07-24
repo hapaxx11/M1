@@ -3,7 +3,7 @@
 /*
  * test_submenu_widget_rollout.c
  *
- * Source-level regression checks for Phase E: shared submenu-widget rollout.
+ * Source-level regression checks for the submenu model: shared submenu-widget rollout.
  * Verifies that all BT, Settings, NFC, and WiFi scene files that were
  * migrated off raw sel/scroll byte pairs now use m1_submenu_event() +
  * m1_submenu_draw() and no longer call m1_scene_menu_event().
