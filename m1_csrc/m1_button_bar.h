@@ -25,7 +25,7 @@
  * @param left_text   Left slot label, or NULL
  * @param center_icon Center slot icon (8x8 XBM), or NULL
  * @param center_text Center slot label, or NULL
- * @param right_icon  Right slot icon (8x8/10x10 XBM), or NULL
+ * @param right_icon  Right slot icon (8x8 XBM), or NULL
  * @param right_text  Right slot label, or NULL
  */
 void m1_button_bar_draw(
