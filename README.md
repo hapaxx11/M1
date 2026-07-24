@@ -273,14 +273,26 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 >
 > | Firmware | Caps supported | Notes |
 > |----------|:---------------:|-------|
-> | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 | Native ESP-IDF, no AT stack; adds PMKID + WPA handshake capture and ESP32 OTA self-update; includes WiFi join + 802.15.4; currently no NETSCAN or BT management. |
+> | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 (profile macro; see caveat) | Native ESP-IDF, no AT stack; not a fork of the AT-based firmware below. Includes WiFi join + 802.15.4. PMKID capture and ESP32 OTA self-update are **reserved protocol message IDs that are not yet implemented** in shipped releases (see caveat); WPA handshake capture is implemented but not yet self-reported via the capability bitmap. |
 > | **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** | 13 / 21 | Binary SPI; full sniffer/recon/station-scan/BLE feature set; no PMKID/handshake capture or OTA. |
 > | **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** | 10 / 21 | AT commands over SPI; WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, network joining. No packet-monitor sniffers, station scan, or advanced BLE features. |
 >
+> **Caveat on CD3's "17/21":** that figure is the *reference/target* capability
+> profile macro (`M1_ESP32_CAP_PROFILE_CD3`), used only as a conservative
+> fallback when a CD3 device can't be live-probed. As of the 2026-07-21 review
+> of public CD3 source, no shipped release actually self-reports OTA or PMKID
+> support at runtime — see [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#wire-bits--cap_bitmap)
+> for the verified per-message-ID status. Do not rely on CD3 OTA or PMKID
+> until a release advertises those capability bits.
+>
 > See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#capability-matrix-by-firmware-variant)
 > for the full firmware comparison, AT command reference, and per-capability
-> matrix. Other variants exist (bedge117 base, neddy299 deauth, hapaxx11-caps)
-> for development and testing.
+> matrix. Other variants exist (**CD3-AT** base, neddy299 deauth, hapaxx11-caps)
+> for development and testing. **CD3-AT** (the AT-based `bedge117/esp32-at-monstatek-m1`
+> lineage) and **CD3** (the native `bedge117/m1-esp32-brain` binary-RPC firmware)
+> are two separate, non-interoperable codebases from the same author — see
+> [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#source-repository)
+> for the naming disambiguation.
 >
 > **Note:** the compile-time CAPS profile macros (`M1_ESP32_CAP_PROFILE_*`) are
 > only a conservative fallback used when a connected firmware can't be probed

@@ -6,7 +6,7 @@
  * Runtime capability descriptor for the ESP32-C6 coprocessor.
  *
  * Multiple ESP32 firmware variants are supported (SiN360 binary-SPI,
- * bedge117 AT, neddy299 AT-deauth, and future variants).  Each exposes
+ * CD3-AT (bedge117 base), neddy299 AT-deauth, and future variants).  Each exposes
  * a different set of features.  This module provides:
  *
  *   1. A capability bitmap queried at runtime via CMD_GET_STATUS.
@@ -141,22 +141,33 @@
 /** Dedicated PMKID capture — send a targeted EAPOL-1 and capture the PMKID
  *  without requiring a full four-way handshake.  Distinct from
  *  M1_ESP32_CAP_PKTMON (passive packet monitor).
- *  Exposed by CD3 (bedge117/m1-esp32-brain) via M1_RPC_OFF_PMKID_CAPTURE
- *  and by dag T-800 AT firmware via AT+M1PMKID.  Note: the dag mapping sets
- *  CAP_PKTMON for AT+M1PMKID (legacy overlap); new callers that specifically
- *  need PMKID should gate on M1_ESP32_CAP_PMKID. */
+ *  Reserved for CD3 (bedge117/m1-esp32-brain) via M1_RPC_OFF_PMKID_CAPTURE,
+ *  but as of the 2026-07-21 source review that message ID is NOT dispatched
+ *  in any shipped CD3 release (falls through to NAK ERR_UNSUPPORTED) — do
+ *  not assume CD3 devices support this without confirming their self-reported
+ *  cap_bitmap.  Also exposed by dag T-800 AT firmware via AT+M1PMKID (this
+ *  path IS functional).  Note: the dag mapping sets CAP_PKTMON for AT+M1PMKID
+ *  (legacy overlap); new callers that specifically need PMKID should gate on
+ *  M1_ESP32_CAP_PMKID. */
 #define M1_ESP32_CAP_PMKID          (UINT64_C(1) << 18)
 
 /** WPA handshake / EAPOL capture — deauth a station and capture the
  *  four-way EAPOL handshake for offline cracking.  Result exported as
- *  .pcap.  Exposed by CD3 via M1_RPC_OFF_HS_START/STATUS/GET/STOP.
- *  Not available in AT or SiN360 firmware. */
+ *  .pcap.  Dispatched by CD3 via M1_RPC_OFF_HS_START/STATUS/GET/STOP (this
+ *  RPC path IS functional as of the 2026-07-21 source review), but CD3 does
+ *  not yet set this bit in its self-reported cap_bitmap (M1_FW_CAPS in
+ *  main.c) — m1_esp32_has_cap() will return false against a real device
+ *  until a release starts advertising it.  Not available in AT or SiN360
+ *  firmware. */
 #define M1_ESP32_CAP_HANDSHAKE      (UINT64_C(1) << 19)
 
 /** ESP32 firmware OTA self-update — M1 can push a new ESP32 binary to the
  *  coprocessor over the SPI link without re-flashing via UART/SD card.
- *  Exposed by CD3 via M1_RPC_SYS_OTA_BEGIN/DATA/END.
- *  Not available in AT or SiN360 firmware. */
+ *  Reserved for CD3 via M1_RPC_SYS_OTA_BEGIN/DATA/END, but as of the
+ *  2026-07-21 source review these message IDs are NOT dispatched in any
+ *  shipped CD3 release (fall through to NAK ERR_UNSUPPORTED) — this is a
+ *  protocol placeholder only, not a working feature.  Not available in AT
+ *  or SiN360 firmware. */
 #define M1_ESP32_CAP_OTA            (UINT64_C(1) << 20)
 
 /* Bits 21-63 reserved for future use */
@@ -196,7 +207,7 @@
  * `s_at_cmd_cap_map[]` table in `m1_esp32_caps.c`. */
 
 /* dag T-800 profile: AT firmware (dagnazty/M1-T-800) with custom WiFi and
- * HID AT commands.  Discriminated from stock bedge117/neddy299 AT by the
+ * HID AT commands.  Discriminated from stock CD3-AT (bedge117/neddy299) by the
  * presence of `M1_ESP32_CAP_BEACON` (AT+M1BEACON — only T-800 has it).
  * Does NOT include 802.15.4 despite having AT+ZIGSNIFF in some builds
  * because 802.15.4 is optional and may not be present in all T-800
@@ -214,15 +225,20 @@
      M1_ESP32_CAP_BLE_HID)
 
 /** CD3 native binary RPC firmware profile (bedge117/m1-esp32-brain) —
- *  reference only.  Represents the full feature set of the m1-native
- *  firmware once all components are wired.  CD3 self-reports its actual
- *  bitmap via M1_RPC_SYS_GET_STATUS; this macro is retained for unit
- *  tests and as a fallback when the GET_STATUS probe succeeds but returns
- *  an all-zero bitmap.
+ *  reference/ASPIRATIONAL only, not what any shipped release currently
+ *  self-reports.  Represents the full feature set the m1-native firmware is
+ *  designed to eventually expose once all components are wired.  CD3
+ *  self-reports its actual bitmap via M1_RPC_SYS_GET_STATUS; this macro is
+ *  retained for unit tests and as a fallback when the GET_STATUS probe
+ *  succeeds but returns an all-zero bitmap.
  *
  *  CD3 uses the M1_RPC binary SPI protocol (magic 0x4D31, "M1") and is
- *  detected by the M1_RPC probe in m1_esp32_caps_init().  Key capabilities unique
- *  to CD3 vs SiN360/AT: PMKID, HANDSHAKE, OTA (bits 18-20).
+ *  detected by the M1_RPC probe in m1_esp32_caps_init().  Capabilities unique
+ *  to CD3 vs SiN360/AT: PMKID, HANDSHAKE, OTA (bits 18-20) — but as of the
+ *  2026-07-21 source review, PMKID and OTA are reserved message IDs with no
+ *  dispatch in main.c, and HANDSHAKE is dispatched but not yet included in
+ *  the firmware's self-reported M1_FW_CAPS.  See the CAP_PMKID/HANDSHAKE/OTA
+ *  comments above for details before relying on this macro's bits 18-20.
  *  NETSCAN absent (no ping/ARP scanner component in v1.x).
  *  BT_MANAGE absent (no Bluetooth Classic component). */
 #define M1_ESP32_CAP_PROFILE_CD3 \
@@ -254,17 +270,19 @@
  * developer-diagnostic accessors — not user-visible.
  *
  * Profile discriminator (four-way; evaluated in priority order):
- *   HANDSHAKE + OTA present → CD3 native (bedge117/m1-esp32-brain)
+ *   HANDSHAKE + OTA present → CD3 native (bedge117/m1-esp32-brain) — see
+ *                             caveat: no shipped release currently sets
+ *                             both bits (or either bit)
  *   WIFI_JOIN + BEACON      → dag T-800 (AT firmware with custom cmds)
- *   WIFI_JOIN alone         → stock AT/C3 (bedge117/neddy299)
+ *   WIFI_JOIN alone         → CD3-AT (bedge117/neddy299)
  *   neither WIFI_JOIN       → SiN360 binary-SPI
  *
  * Sources (see documentation/esp32_firmware.md for derivation rationale):
  *   SiN360  BSS : sincere360/M1_SiN360_ESP32 v0.9.0.8, ESP-IDF 5.5.4
  *   SiN360  heap: NimBLE with MSYS_BUF_FROM_HEAP=y; 10×1600 B static WiFi
  *                 RX; ap_records[64] ≈ 14 KB
- *   AT/C3   BSS : bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0
- *   AT/C3   heap: Full AT infrastructure + SPI ring buffers + BLE HID +
+ *   CD3-AT  BSS : bedge117/esp32-at-monstatek-m1 v2.0.2, ESP-AT v4.0.0.0
+ *   CD3-AT  heap: Full AT infrastructure + SPI ring buffers + BLE HID +
  *                 802.15.4
  *   CD3     BSS : bedge117/m1-esp32-brain v1.x (estimated; no map file yet)
  *   CD3     heap: Native ESP-IDF WiFi/BLE/802.15.4 without AT overhead
