@@ -58,6 +58,8 @@ jobs:
       project_name:     ${{ steps.meta.outputs.project_name }}
       release_file_base: ${{ steps.meta.outputs.release_file_base }}
       is_prerelease:    ${{ steps.meta.outputs.is_prerelease }}
+      compare_line:     ${{ steps.meta.outputs.compare_line }}
+      changelog_notes:  ${{ steps.changelog.outputs.notes }}
 
     steps:
       # ------------------------------------------------------------------ #
@@ -68,6 +70,28 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      # ------------------------------------------------------------------ #
+      # 1a. Assemble changelog fragments into "What's Changed" release notes
+      #
+      # Fragments in .changelog/*.md are the source of truth for this
+      # release's user-visible changes (see .changelog/README.md). Rendering
+      # them here — instead of relying on GitHub's PR-label-based auto-notes
+      # — avoids the release page collapsing everything into a single
+      # "Other Changes" bullet when PRs aren't labelled.
+      # ------------------------------------------------------------------ #
+      - name: Build "What's Changed" notes from changelog fragments
+        id: changelog
+        run: |
+          RAW="$(python3 scripts/assemble_changelog.py --preview 2>/dev/null | tail -n +3)"
+          if [ -z "$(echo "${RAW}" | tr -d '[:space:]')" ]; then
+            RAW="_No changelog fragments were recorded for this release._"
+          fi
+          {
+            echo "notes<<CHANGELOG_NOTES_EOF"
+            echo "${RAW}"
+            echo "CHANGELOG_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       # ------------------------------------------------------------------ #
       # 2. Auto-increment version — patch source files before building
@@ -120,6 +144,15 @@ jobs:
 
           echo "new_rc=${NEW_RC}" >> "$GITHUB_OUTPUT"
 
+          # Previous release tag (any version), used for the "Full Changelog"
+          # compare link in the release notes. Empty on the very first release.
+          PREV_TAG=$(gh release list \
+              --repo "$GITHUB_REPOSITORY" \
+              --limit 1 \
+              --json tagName \
+              --jq '.[0].tagName // empty' 2>/dev/null || echo "")
+          echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+
           # Patch FW_VERSION_RC in the header
           sed -i "s/^\(#define[[:space:]]FW_VERSION_RC[[:space:]]*\)[0-9]*/\1${NEW_RC}/" \
               m1_csrc/m1_fw_update_bl.h
@@ -171,6 +204,19 @@ jobs:
           # The wCRC image is ${PROJECT}_wCRC.bin, ELF/BIN/HEX are ${PROJECT}.{ext}.
           RFILE="${PROJECT}"
           echo "release_file_base=${RFILE}" >> "$GITHUB_OUTPUT"
+
+          # Full-changelog compare link (empty on the very first release).
+          PREV_TAG="${{ steps.patch.outputs.prev_tag }}"
+          if [ -n "${PREV_TAG}" ]; then
+            COMPARE_LINE="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+          else
+            COMPARE_LINE=""
+          fi
+          {
+            echo "compare_line<<COMPARE_LINE_EOF"
+            echo "${COMPARE_LINE}"
+            echo "COMPARE_LINE_EOF"
+          } >> "$GITHUB_OUTPUT"
 
           echo "--- Build metadata ---"
           echo "  Project:      ${PROJECT}"
@@ -358,7 +404,11 @@ jobs:
           tag_name:   ${{ needs.build.outputs.tag }}
           name:       ${{ needs.build.outputs.release_name }}
           prerelease: ${{ needs.build.outputs.is_prerelease }}
-          generate_release_notes: true
+          # Notes are built from the assembled changelog fragments below
+          # instead of GitHub's PR-label-based auto-generation, which
+          # otherwise collapses everything into a single "Other Changes"
+          # bullet when PRs aren't labelled.
+          generate_release_notes: false
           files: |
             artifacts/${{ needs.build.outputs.project_name }}.elf
             artifacts/${{ needs.build.outputs.project_name }}.hex
@@ -366,6 +416,10 @@ jobs:
             artifacts/${{ needs.build.outputs.release_file_base }}_wCRC.bin
           body: |
             ## M1 Hapax ${{ needs.build.outputs.tag }}
+
+            ## What's Changed
+
+            ${{ needs.build.outputs.changelog_notes }}
 
             | File | Description |
             |------|-------------|
@@ -375,6 +429,8 @@ jobs:
             | `${{ needs.build.outputs.project_name }}.elf`         | ELF with debug symbols |
 
             > **Flash via SD card:** copy `*_wCRC.bin` to the root of the SD card and use the M1 firmware update menu.
+
+            ${{ needs.build.outputs.compare_line }}
 
   # ====================================================================== #
   # Apply release retention policy
