@@ -157,8 +157,8 @@
  *  RPC path IS functional as of the 2026-07-21 source review), but CD3 does
  *  not yet set this bit in its self-reported cap_bitmap (M1_FW_CAPS in
  *  main.c) — m1_esp32_has_cap() will return false against a real device
- *  until a release starts advertising it.  Not available in AT or SiN360
- *  firmware. */
+ *  until a release starts advertising it.  Not self-reported by AT or SiN360
+ *  firmware variants; dag T-800 provides AT+M1HSCAP mapped to CAP_PKTMON (legacy overlap). */
 #define M1_ESP32_CAP_HANDSHAKE      (UINT64_C(1) << 19)
 
 /** ESP32 firmware OTA self-update — M1 can push a new ESP32 binary to the
