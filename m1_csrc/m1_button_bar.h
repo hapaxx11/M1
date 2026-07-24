@@ -6,7 +6,7 @@
  *         scenes and modules (Sub-GHz, WiFi, CAN, NFC, Infrared, etc.).
  *
  * Provides consistent Momentum-style button hint rendering.  Fixed layout:
- * left (x=0), center (x=43), right (x=86), y=52-64, 42px-wide buttons with
+ * left (x=0), center (x=43), right (x=86), y=52-63, 42px-wide buttons with
  * 1px gaps.
  */
 
