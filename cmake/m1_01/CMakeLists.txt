@@ -679,6 +679,12 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/espnow_peer_session.c
     ../../m1_csrc/espnow_file_transfer.c
     ../../m1_csrc/espnow_tictactoe.c
+    ../../m1_csrc/m1_espnow_hal.c
+    ../../m1_csrc/m1_espnow_scene.c
+    ../../m1_csrc/m1_espnow_scene_main.c
+    ../../m1_csrc/m1_espnow_scene_scan.c
+    ../../m1_csrc/m1_espnow_scene_transfer.c
+    ../../m1_csrc/m1_espnow_scene_tictactoe.c
 
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c

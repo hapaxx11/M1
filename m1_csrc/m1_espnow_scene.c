@@ -1,0 +1,56 @@
+/* See COPYING.txt for license details. */
+
+/**
+ * @file   m1_espnow_scene.c
+ * @brief  ESP-NOW Peer Link Scene Manager — registry and entry point.
+ *
+ * Scene implementations:
+ *   m1_espnow_scene_main.c     — top-level menu
+ *   m1_espnow_scene_scan.c     — scan list + pairing
+ *   m1_espnow_scene_transfer.c — file transfer progress
+ *   m1_espnow_scene_tictactoe.c — Tic-Tac-Toe game
+ */
+
+#include "stm32h5xx_hal.h"
+#include "main.h"
+#include "m1_espnow_scene.h"
+#include "m1_scene.h"
+#include "m1_esp32_hal.h"
+#include "m1_tasks.h"
+
+/*==========================================================================*/
+/* ESP32 init/deinit for ESP-NOW module                                     */
+/*==========================================================================*/
+
+static void espnow_hw_init(void)
+{
+    m1_esp32_ensure_init();
+}
+
+static void espnow_hw_deinit(void)
+{
+    m1_esp32_deinit();
+}
+
+/*==========================================================================*/
+/* Scene registry                                                           */
+/*==========================================================================*/
+
+static const M1SceneHandlers *const scene_registry[EspnowSceneCount] = {
+    [EspnowSceneMenu]       = &espnow_scene_menu_handlers,
+    [EspnowSceneScan]       = &espnow_scene_scan_handlers,
+    [EspnowScenePair]       = &espnow_scene_pair_handlers,
+    [EspnowSceneTransfer]   = &espnow_scene_transfer_handlers,
+    [EspnowSceneTicTacToe]  = &espnow_scene_tictactoe_handlers,
+};
+
+/*==========================================================================*/
+/* Entry point                                                              */
+/*==========================================================================*/
+
+void espnow_scene_entry(void)
+{
+    m1_scene_run(scene_registry, EspnowSceneCount,
+                 espnow_hw_init, espnow_hw_deinit);
+    m1_app_send_q_message(main_q_hdl, Q_EVENT_MENU_EXIT);
+}

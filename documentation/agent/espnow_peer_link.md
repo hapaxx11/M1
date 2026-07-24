@@ -2,7 +2,7 @@
 
 # ESP-NOW Peer Link — Design & Implementation Plan
 
-**Status:** Phase 2 complete — capability infrastructure and pure-logic protocol modules implemented with host tests.
+**Status:** Phase 4 complete — UI scenes, HAL integration, and menu wiring implemented. Phase 5 (end-to-end integration testing) requires two physical M1 devices.
 **Issue:** hapaxx11/M1#661 (closes hapaxx11/M1#661)
 **Related:** hapaxx11/M1#660 (deferred from SPI-slave brain architecture)
 
@@ -293,10 +293,10 @@ m1_csrc/
 ├── espnow_peer_session.c/h    # Discovery + pairing state machine (pure logic)
 ├── espnow_file_transfer.c/h   # File transfer protocol (pure logic)
 ├── espnow_tictactoe.c/h       # Tic-Tac-Toe game logic (pure logic)
-├── m1_espnow_hal.c/h          # HAL glue: transport dispatch (CD3 RPC / AT / SiN360)
-├── m1_espnow_scene_main.c     # Peer Link main menu scene
-├── m1_espnow_scene_scan.c     # Peer discovery / scan list scene
-├── m1_espnow_scene_pair.c     # Pairing confirmation scene
+├── m1_espnow_hal.c/h          # HAL glue: CD3 M1_RPC transport dispatch
+├── m1_espnow_scene.c/h        # Scene manager: registry + entry point
+├── m1_espnow_scene_main.c     # Peer Link top-level menu (cap-gated)
+├── m1_espnow_scene_scan.c     # Peer discovery + pairing scenes
 ├── m1_espnow_scene_transfer.c # File send/receive progress scene
 └── m1_espnow_scene_tictactoe.c # Tic-Tac-Toe game scene
 
@@ -305,6 +305,9 @@ tests/
 ├── test_espnow_file_transfer.c
 └── test_espnow_tictactoe.c
 ```
+
+**Menu integration:** WiFi top-level menu → "Peer Link" entry → delegates into
+`espnow_scene_entry()` which runs its own scene manager with ESP32 init/deinit.
 
 ---
 
