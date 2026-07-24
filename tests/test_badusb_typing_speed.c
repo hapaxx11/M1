@@ -55,6 +55,19 @@ static char *read_file(const char *relpath)
     TEST_ASSERT_NOT_NULL(buf);
     TEST_ASSERT_EQUAL_size_t((size_t)size, fread(buf, 1U, (size_t)size, fp));
     buf[size] = '\0';
+
+    /* Normalize CRLF->LF so substring checks are stable across checkouts */
+    {
+        char *src = buf;
+        char *dst = buf;
+        while (*src)
+        {
+            if (*src != '\r') *dst++ = *src;
+            src++;
+        }
+        *dst = '\0';
+    }
+
     fclose(fp);
     return buf;
 }
