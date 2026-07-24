@@ -64,6 +64,14 @@ Multiple entries can go in one file, separated by a blank line:
 3. When the PR merges and a release build runs, CI assembles all fragments
    into `CHANGELOG.md` and deletes the fragment files.
 
+## Release notes
+
+The same fragments are also rendered into the **"What's Changed"** section of
+the GitHub release body (`build-release.yml`), instead of relying on GitHub's
+PR-label-based auto-generated notes (which otherwise collapse everything into
+a single "Other Changes" bullet when PRs aren't labelled). If a release has no
+fragments, the release notes fall back to a placeholder message.
+
 ## Local preview
 
 To see what the assembled changelog would look like without modifying files:

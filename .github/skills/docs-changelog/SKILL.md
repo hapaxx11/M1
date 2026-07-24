@@ -48,6 +48,9 @@ to build.**
   at release time, which reads all fragment files, groups entries by category,
   merges them into the `[Unreleased]` section of `CHANGELOG.md`, deletes the
   fragment files, then stamps the version heading.
+- **Release notes**: the same fragments are rendered (via `--preview`) into
+  the "What's Changed" section of the GitHub release body, instead of
+  GitHub's PR-label-based auto-generated notes.
 - **Local preview**: `python scripts/assemble_changelog.py --preview` shows
   what the assembled output would look like without modifying any files.
 
