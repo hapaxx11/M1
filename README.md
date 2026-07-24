@@ -273,7 +273,7 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 >
 > | Firmware | Caps supported | Notes |
 > |----------|:---------------:|-------|
-> | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 | Native ESP-IDF, no AT stack; adds PMKID capture, WPA handshake capture, and ESP32 OTA self-update on top of a SiN360-equivalent WiFi/BLE feature set. |
+> | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 | Native ESP-IDF, no AT stack; adds PMKID + WPA handshake capture and ESP32 OTA self-update; includes WiFi join + 802.15.4; currently no NETSCAN or BT management. |
 > | **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** | 13 / 21 | Binary SPI; full sniffer/recon/station-scan/BLE feature set; no PMKID/handshake capture or OTA. |
 > | **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** | 10 / 21 | AT commands over SPI; WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, network joining. No packet-monitor sniffers, station scan, or advanced BLE features. |
 >
