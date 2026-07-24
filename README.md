@@ -268,14 +268,25 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **Hardware revision:** 2.x
 
 > **ESP32 firmware required:** Hapax supports multiple ESP32-C6 coprocessor firmware
-> variants. The two recommended for end users are:
+> variants. The most capable, ranked by number of capabilities (CAPS) supported
+> out of the 21 currently defined:
 >
-> - **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** (binary SPI) — full feature set including all sniffers, recon tools, station scan, and BLE features.
-> - **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** (AT commands over SPI) — supports WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, and network joining. Does not support packet-monitor sniffers, station scan, or advanced BLE features.
+> | Firmware | Caps supported | Notes |
+> |----------|:---------------:|-------|
+> | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 | Native ESP-IDF, no AT stack; adds PMKID + WPA handshake capture and ESP32 OTA self-update; includes WiFi join + 802.15.4; currently no NETSCAN or BT management. |
+> | **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** | 13 / 21 | Binary SPI; full sniffer/recon/station-scan/BLE feature set; no PMKID/handshake capture or OTA. |
+> | **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** | 10 / 21 | AT commands over SPI; WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, network joining. No packet-monitor sniffers, station scan, or advanced BLE features. |
 >
-> Other variants exist (bedge117 base, neddy299 deauth, hapaxx11-caps) for
-> development and testing.  See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md)
-> for the full firmware comparison, AT command reference, and capability matrix.
+> See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#capability-matrix-by-firmware-variant)
+> for the full firmware comparison, AT command reference, and per-capability
+> matrix. Other variants exist (bedge117 base, neddy299 deauth, hapaxx11-caps)
+> for development and testing.
+>
+> **Note:** the compile-time CAPS profile macros (`M1_ESP32_CAP_PROFILE_*`) are
+> only a conservative fallback used when a connected firmware can't be probed
+> dynamically (e.g. `CMD_GET_STATUS`/`M1_RPC GET_STATUS` is unavailable or
+> unimplemented). Whenever a firmware self-reports its capability bitmap at
+> runtime, that live bitmap is always used instead of the fallback profile.
 >
 > Flash via **Settings → ESP32 Update** (OTA over SPI) or via esptool — no hardware changes required. The stock Espressif UART-based AT firmware is **not** compatible.
 >
