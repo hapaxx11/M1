@@ -46,22 +46,36 @@ these are UI-only drawing changes with no host-testable pure logic).
 Legacy (pre-scene) modules using `m1_draw_bottom_bar()` where OK is the primary
 action (rule says use `subghz_button_bar_draw()` with center slot instead):
 
-- [ ] **m1_can.c:293** — CAN Send screen shows "Send" in RIGHT slot, but OK sends.
-  Replace `m1_draw_bottom_bar(…, "Send", arrowright_8x8)` with
-  `subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "Send", NULL, NULL)`.
-- [ ] **m1_infrared.c:320** — "Save"/"OK" in RIGHT slot for OK-triggered action.
-  Same conversion.
-- [ ] **m1_ir_universal.c:2129** — "Assign"/"Save" layout; verify which button
-  triggers and fix accordingly.
-- [ ] **m1_nfc.c:1270** — "Confirm" in RIGHT with `arrowright_8x8`; verify if OK
-  triggers.
-- [ ] **m1_nfc.c:2818** — "Save" in RIGHT; verify.
+- [x] **m1_can.c:293** — CAN Send screen shows "Send" in RIGHT slot, but OK sends.
+  Replaced `m1_draw_bottom_bar(…, "Send", arrowright_8x8)` with
+  `subghz_button_bar_draw(arrowleft_8x8, NULL, ok_circle_8x8, "Send", arrowright_8x8, NULL)`.
+- [x] **m1_infrared.c:320** (and 2 sibling call sites at ~287/376) — "Save"/"OK" in
+  RIGHT slot for OK-triggered action. Converted all 3 to
+  `subghz_button_bar_draw(NULL, NULL, ok_circle_8x8, "…", NULL, NULL)`.
+- [x] **m1_ir_universal.c:2129** — "Assign"/"Save"; OK triggers Assign, RIGHT
+  triggers Save. Converted to CENTER=`ok_circle_8x8,"Assign"`,
+  RIGHT=`arrowright_8x8,"Save"`.
+- [x] **m1_nfc.c:1270** (and sibling wipe-confirm bar + Card-Unlocked save bar at
+  ~2818) — "Confirm"/"Wipe"/"Save" in RIGHT slot while OK/RIGHT both trigger the
+  action and LEFT/Cancel had no real LEFT-button binding (only hardware BACK).
+  Converted all 3 to CENTER=`ok_circle_8x8, "<label>"` with empty LEFT/RIGHT.
 
-Additionally audit all 56 `m1_draw_bottom_bar` call sites for:
-- [ ] Any remaining "Back" labels
-- [ ] Any "Select"/"Set"/"Confirm" labels where OK is the actual trigger
+Build verified: full firmware build via
+`cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build`
+succeeds (gcc-arm-none-eabi 13.2, RAM 99.72%/FLASH 96.21% used, unchanged from
+baseline — no new warnings introduced by these edits). Host tests
+(`ctest --test-dir build-tests`) still 129/129 passing (these are UI-drawing-only
+changes with no host-testable pure logic).
 
-Build after all legacy fixes.
+### Remaining `m1_draw_bottom_bar` sites not yet audited
+
+Not yet individually verified against their event handlers (deferred to a later
+pass): `m1_nfc.c:507` (Retry/More), `m1_nfc.c:1168` (Cancel/Write),
+`m1_nfc.c:2083` (Stop), and the ~45 other `m1_draw_bottom_bar` call sites across
+`m1_badbt.c`, `m1_badusb.c`, `m1_bt.c`, `m1_rfid.c`, `m1_storage.c`,
+`m1_gpio_uart.c`, `m1_power_ctl.c`, `app_hex_viewer.c`, `m1_802154.c`,
+`m1_esp32_fw_download.c`, `m1_fw_download.c`, `m1_clock.c`, `m1_app_api.c`.
+- [ ] Audit and fix in a follow-up phase.
 
 ---
 
