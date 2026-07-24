@@ -9,7 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.2.25] - 2026-07-24
+## [0.9.2.24] - 2026-07-24
+
+### Added
+
+- **WiFi: ESP-NOW peer link** — New CD3-only (`M1_ESP32_CAP_ESPNOW`) peer-to-peer
+  link between two M1 devices over ESP-NOW, exposed as "Peer Link" in the WiFi
+  menu. Pure-logic protocol modules (host-tested, zero HAL deps):
+  `espnow_peer_session.c/h` (discovery & pairing state machine),
+  `espnow_file_transfer.c/h` (streaming-to-SD with stop-and-wait ARQ + CRC32),
+  and `espnow_tictactoe.c/h` (board validation, win detection, move
+  application). UI scenes cover peer scan/pairing, file-transfer progress, and
+  a full tic-tac-toe board. HAL integration (`m1_espnow_hal.c/h`) uses the CD3
+  `M1_RPC` transport (`NOW_START`/`STOP`/`ANNOUNCE`/`PEERS_GET`/`SEND`/
+  `RECV_GET`).
 
 ## [0.9.2.23] - 2026-07-24
 
