@@ -72,7 +72,7 @@ static uint32_t s_free_heap_bytes = 0u;
  * Currently mapped commands:
  *   - "AT+CWJAP"        — stock ESP-AT, WiFi station join → CAP_WIFI_JOIN
  *   - "AT+BLEHIDINIT"   — stock ESP-AT (BLE HID example)  → CAP_BLE_HID
- *   - "AT+ZIGSNIFF"     — bedge117/dag/neddy299 custom     → CAP_802154
+ *   - "AT+ZIGSNIFF"     — CD3-AT/dag/neddy299 custom      → CAP_802154
  *   - "AT+DEAUTH"       — dag/neddy299 at_custom_deauth    → CAP_DEAUTH
  *   - "AT+STASCAN"      — neddy299 at_custom_stascan       → CAP_STA_SCAN
  *   - "AT+M1DEAUTH"     — dag T-800 at_custom_wifi_cmd     → CAP_DEAUTH
@@ -94,7 +94,7 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
     /* Stock ESP-AT */
     { "AT+CWJAP",        M1_ESP32_CAP_WIFI_JOIN  },
     { "AT+BLEHIDINIT",   M1_ESP32_CAP_BLE_HID    },
-    /* bedge117 / neddy299 custom commands */
+    /* CD3-AT (bedge117) / neddy299 custom commands */
     { "AT+ZIGSNIFF",     M1_ESP32_CAP_802154     },
     { "AT+DEAUTH",       M1_ESP32_CAP_DEAUTH     },
     { "AT+STASCAN",      M1_ESP32_CAP_STA_SCAN   },
@@ -124,9 +124,12 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 /**
  * Set memory footprint estimates based on the resolved capability bitmap.
  * Four-way discriminator (evaluated in priority order):
- *   HANDSHAKE + OTA present → CD3 native (bedge117/m1-esp32-brain)
+ *   HANDSHAKE + OTA present → CD3 native (bedge117/m1-esp32-brain) — in
+ *                             practice no shipped release currently sets
+ *                             either bit; see m1_esp32_caps.h CAP_OTA/
+ *                             CAP_HANDSHAKE comments
  *   WIFI_JOIN + BEACON      → dag T-800 (AT firmware with custom cmds)
- *   WIFI_JOIN alone         → stock AT/C3 (bedge117/neddy299)
+ *   WIFI_JOIN alone         → CD3-AT (bedge117/neddy299)
  *   neither WIFI_JOIN       → SiN360 binary-SPI
  */
 static void caps_apply_footprint_estimates(uint64_t bitmap)
@@ -147,7 +150,7 @@ static void caps_apply_footprint_estimates(uint64_t bitmap)
     }
     else if (bitmap & M1_ESP32_CAP_WIFI_JOIN)
     {
-        /* Stock AT / bedge117 / neddy299 */
+        /* CD3-AT (bedge117 base) / neddy299 */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_AT;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_AT;
     }

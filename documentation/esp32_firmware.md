@@ -12,52 +12,74 @@ bootloader protocol) for firmware flashing.
 Espressif's stock AT firmware downloads are **UART-only** and will **NOT** work
 with the M1.  A custom SPI-configured build is required.
 
+> **Naming note — two unrelated bedge117 ESP32 firmwares:** bedge117 has
+> authored **two separate, non-interoperable** ESP32-C6 coprocessor firmwares
+> for the M1, and Hapax previously referred to both loosely as "C3"/"bedge117",
+> which conflated them. To disambiguate:
+> - **CD3-AT** — [`bedge117/esp32-at-monstatek-m1`](https://github.com/bedge117/esp32-at-monstatek-m1),
+>   the original ESP-AT-based firmware (SPI transport layered on Espressif's
+>   `esp-at` command stack). `neddy299`, `dagnazty`, and `hapaxx11`'s own
+>   `esp32-at-monstatek-m1` forks are all forks of this **CD3-AT lineage**.
+>   Detected at runtime via the generic `AT+CMD?` probe (see
+>   [AT+CMD? — runtime probe for AT firmware](#at-cmd----runtime-probe-for-at-firmware)).
+> - **CD3** — [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain),
+>   a different, newer codebase: native ESP-IDF (no AT stack at all), using the
+>   custom binary `M1_RPC` protocol. Detected via the `M1_RPC` PING/GET_STATUS
+>   probe. This is **not** a fork of CD3-AT and shares no source code with it —
+>   only the SPI-HD transport wiring and GPIO pin assignment are the same.
+>
+> Do not use "C3" or "bedge117" alone to mean either firmware — always say
+> **CD3-AT** (AT-based) or **CD3** (native binary RPC) so readers know which
+> codebase and protocol are being discussed.
+
 ## Source Repository
 
 | Repository | Description |
 |-----------|-------------|
-| [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **Primary AT** — C3 custom ESP32-C6 SPI AT firmware for M1 |
-| [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | Fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
-| [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | Fork (dag) — additional AT command extensions |
-| [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | Fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
-| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC** — ESP-IDF native WiFi/BLE/802.15.4, no AT stack, M1_RPC protocol |
+| [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **CD3-AT (primary)** — custom ESP32-C6 SPI AT firmware for M1 |
+| [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | CD3-AT fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
+| [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | CD3-AT fork (dag / T-800) — additional AT command extensions |
+| [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | CD3-AT fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
+| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC** — separate codebase, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
 
-All repos are forks of Espressif's official
+All AT-based repos above are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
-SPI transport and pin mapping.
+SPI transport and pin mapping. `bedge117/m1-esp32-brain` (CD3) is **not** an
+`esp-at` fork — it is a from-scratch native ESP-IDF application.
 
 ## Releases
 
-### bedge117 (C3) releases
+### bedge117 (CD3-AT) releases
 
 | Version | Features |
 |---------|----------|
 | **v1.0.0** | Base SPI AT firmware — correct SPI pin mapping, status register offset fix, USB Serial/JTAG disabled, SPI Mode 1 |
 | **v2.0.2** | + BLE HID keyboard (`AT+BLEHIDINIT` / `AT+BLEHIDKB`), + IEEE 802.15.4 sniffer (`AT+ZIGSNIFF`) with Thread frame version filter fix |
 
-### neddy299 (Deauth) releases
+### neddy299 (CD3-AT Deauth fork) releases
 
 | Version | Features |
 |---------|----------|
 | **v1.0.1** | WiFi deauthentication (`AT+DEAUTH`), station scanning (`AT+STASCAN`) |
 
-### hapaxx11 (neddy299 fork, CMD_GET_STATUS) releases
+### hapaxx11 (CD3-AT, neddy299 fork, CMD_GET_STATUS) releases
 
 | Version | Features |
 |---------|----------|
 | **v1.0.1-caps** | All neddy299 v1.0.1 features + `CMD_GET_STATUS` binary opcode (opcode `0x02`) — self-reports `cap_bitmap = 0x14412` (`STA_SCAN` \| `DEAUTH` \| `WIFI_JOIN` \| `BLE_HID` \| `802154`), `fw_name = "AT-neddy299-1.0.1"` |
 
-### dagnazty (dag) releases
+### dagnazty (CD3-AT, dag / T-800) releases
 
 | Version | Features |
 |---------|----------|
-| See [GitHub Releases](https://github.com/dagnazty/esp32-at-monstatek-m1/releases) | Additional AT command extensions on top of bedge117 base |
+| See [GitHub Releases](https://github.com/dagnazty/esp32-at-monstatek-m1/releases) | Additional AT command extensions on top of the CD3-AT (bedge117) base |
 
-### bedge117/m1-esp32-brain (CD3 native binary RPC) releases
+### bedge117/m1-esp32-brain (CD3 native binary RPC — separate codebase from CD3-AT) releases
 
 | Version | Notable changes |
 |---------|----------------|
 | See [GitHub Releases](https://github.com/bedge117/m1-esp32-brain/releases) | Native ESP-IDF WiFi/BLE/802.15.4; SPI-slave architecture; M1_RPC binary protocol; M1-to-M1 ESP-NOW peer link; GPIO API |
+
 
 ## Custom AT Commands
 
@@ -101,7 +123,7 @@ Protocol classification: Zigbee (Z), Thread (T), Unknown (U).
 
 These commands are defined in [`dagnazty/esp32-at-monstatek-m1`](https://github.com/dagnazty/esp32-at-monstatek-m1)
 (`at_custom_wifi_cmd.c`, `at_custom_hid_cmd.c`, `at_custom_zigbee_cmd.c`).
-They are NOT available in bedge117, neddy299, or SiN360 firmware.
+They are NOT available in CD3-AT (bedge117/neddy299), or SiN360 firmware.
 The companion STM32 fork [`dagnazty/M1_T-1000`](https://github.com/dagnazty/M1_T-1000)
 uses these commands via SPI AT text protocol.
 
@@ -210,7 +232,9 @@ library.
 
 1. Connect to WiFi via **WiFi → Scan + Connect**.
 2. Navigate to **Settings → ESP32 update → Download**.
-3. Select a firmware source (C3 ESP32 AT, Deauth ESP32 AT).
+3. Select a firmware source (`C3 ESP32 AT`, `Deauth ESP32 AT` — both are
+   **CD3-AT** AT-based firmware; there is currently no default download source
+   configured for the native **CD3** `m1-esp32-brain` firmware).
 4. Select a release version.
 5. The firmware `.bin` and `.md5` are downloaded to `0:/ESP32_FW/` on SD card.
 6. Return to **ESP32 update → Image File** to select and flash.
@@ -302,19 +326,41 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 | 15 | `M1_ESP32_CAP_BT_MANAGE` | AT BT device management |
 | 16 | `M1_ESP32_CAP_802154` | AT IEEE 802.15.4 / Zigbee / Thread |
 | 17 | `M1_ESP32_CAP_BLE_GATT` | `CMD_BLE_GATT_*` client operations |
-| 18 | `M1_ESP32_CAP_PMKID` | Dedicated PMKID capture (CD3 native) |
-| 19 | `M1_ESP32_CAP_HANDSHAKE` | WPA handshake / EAPOL capture with pcap (CD3 native) |
-| 20 | `M1_ESP32_CAP_OTA` | ESP32 firmware OTA self-update (CD3 native) |
+| 18 | `M1_ESP32_CAP_PMKID` | Dedicated PMKID capture — reserved `M1_RPC_OFF_PMKID_CAPTURE` msg ID; **not yet dispatched** in current CD3 (`bedge117/m1-esp32-brain`) releases as of the 2026-07 review — see note below |
+| 19 | `M1_ESP32_CAP_HANDSHAKE` | WPA handshake / EAPOL capture with pcap — `M1_RPC_OFF_HS_START/STATUS/GET/STOP` **are dispatched** in current CD3 releases, but the firmware does not yet set this bit in its self-reported `cap_bitmap` — see note below |
+| 20 | `M1_ESP32_CAP_OTA` | ESP32 firmware OTA self-update — reserved `M1_RPC_SYS_OTA_BEGIN/DATA/END` msg IDs; **not yet dispatched** in current CD3 releases — see note below |
 | 21-63 | — | Reserved for future use |
+
+> **CD3 (`bedge117/m1-esp32-brain`) capability status — reviewed 2026-07-21
+> against public source (commit `74ace433`):** the `M1_RPC` wire protocol
+> (`components/m1_rpc/include/m1_rpc.h`) *reserves* message IDs for PMKID
+> capture and OTA self-update, and `m1_csrc/m1_esp32_caps.h` defines
+> corresponding `M1_ESP32_CAP_PMKID`/`M1_ESP32_CAP_OTA` bits for when they
+> ship. As of that review, `main/main.c`'s `dispatch_request()` has **no
+> case** for `M1_RPC_OFF_PMKID_CAPTURE` or any `M1_RPC_SYS_OTA_*` message —
+> both fall through to the `default:` handler and are NAK'd with
+> `M1_RPC_ERR_UNSUPPORTED`. Handshake capture (`M1_RPC_OFF_HS_*`) **is**
+> dispatched and functional, but the firmware's advertised capability
+> bitmap (`M1_FW_CAPS` in `main.c`) is currently only
+> `WIFI_SCAN | WIFI_JOIN | DEAUTH | PKTMON` — it does not yet set
+> `M1_CAP_HANDSHAKE`, so `m1_esp32_has_cap(M1_ESP32_CAP_HANDSHAKE)` will
+> return false against a real device even though the underlying RPC calls
+> would succeed if issued directly. Do not build UI/menu entries that assume
+> PMKID or OTA are usable against CD3 today; re-verify against the firmware's
+> self-reported `cap_bitmap` (not this table) before relying on any of bits
+> 18-20.
 
 ### Capability matrix by firmware variant
 
 Both SiN360 (via `CMD_GET_STATUS`) and AT firmware (via the stock `AT+CMD?`
 listing) self-report their capabilities at runtime.  CD3 firmware
 (`bedge117/m1-esp32-brain`) self-reports via the M1_RPC probe.  The table
-below shows the expected `cap_bitmap` for each tracked variant.
+below shows the *reference/target* `cap_bitmap` for each tracked variant —
+i.e. the feature set the firmware family is designed to eventually expose,
+which for CD3 is **not** the same as what a given release currently
+self-reports (see the capability-status note above the wire-bits table).
 
-| Command family | SiN360 | bedge117 / dag (AT) | neddy299 (hapaxx11 fork) | CD3 (m1-esp32-brain) |
+| Command family | SiN360 | CD3-AT / dag T-800 | neddy299 (hapaxx11 fork) | CD3 (m1-esp32-brain) |
 |----------------|:------:|:-------------------:|:------------------------:|:--------------------:|
 | WiFi AP scan | ✅ | — | — | ✅ |
 | Station scan | ✅ | — | ✅ | ✅ |
@@ -330,9 +376,9 @@ below shows the expected `cap_bitmap` for each tracked variant.
 | **BLE HID (Bad-BT)** | — | ✅ | ✅ | ✅ |
 | **IEEE 802.15.4** | — | ✅ | ✅ | ✅ |
 | Classic BT management | — | — | — | — |
-| **PMKID capture** | — | — | — | ✅ |
-| **Handshake capture** | — | — | — | ✅ |
-| **OTA self-update** | — | — | — | ✅ |
+| **PMKID capture** | — | — | — | 🚧 reserved, not dispatched |
+| **Handshake capture** | — | — | — | ✅ (dispatched; cap bit not yet self-reported) |
+| **OTA self-update** | — | — | — | 🚧 reserved, not dispatched |
 
 AT capability mapping audit (tracked firmware set): the AT commands currently
 mapped to capability bits by the runtime `AT+CMD?` probe are `AT+CWJAP`
@@ -353,10 +399,11 @@ When the M1 initialises the ESP32, it performs a multi-step capability probe:
 2. **Binary CMD_GET_STATUS** (opcode `0x02`): tried after CMD_PING.  SiN360
    binary-SPI firmware and AT-based firmware that implements the binary
    extension (e.g. `hapaxx11/esp32-at-monstatek-m1`) respond here with the
-   41-byte capability payload.  Unextended AT firmware (bedge117, dag, stock
-   neddy299) does not implement this opcode and will time out or return
-   `RESP_ERR`.  If CMD_PING succeeded but CMD_GET_STATUS failed, the firmware
-   is classified as SiN360 and the SiN360 fallback profile is applied.
+   41-byte capability payload.  Unextended AT firmware (CD3-AT base, dag,
+   stock neddy299) does not implement this opcode and will time out or
+   return `RESP_ERR`.  If CMD_PING succeeded but CMD_GET_STATUS failed, the
+   firmware is classified as SiN360 and the SiN360 fallback profile is
+   applied.
 
 3. **M1_RPC PING** (magic `0x4D31` "M1"): tried only when neither CMD_PING nor
    CMD_GET_STATUS succeeded (i.e. the firmware is not SiN360-style binary-SPI).
@@ -368,7 +415,7 @@ When the M1 initialises the ESP32, it performs a multi-step capability probe:
 
 4. **Stock `AT+CMD?`** (AT text command): tried only when steps 1–3 all fail
    — i.e. for AT firmware that does not implement the binary extension
-   (bedge117, dag) and the AT task (`get_esp32_main_init_status()`) is active.
+   (CD3-AT base, dag) and the AT task (`get_esp32_main_init_status()`) is active.
    `AT+CMD?` is part of the standard ESP-AT command set
    ([reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd))
    and is supported unchanged by every tracked AT firmware variant.
@@ -579,8 +626,18 @@ The discriminator is a four-way check applied in priority order:
 |----------|--------------|---------|-------------|---------------------|
 | 1 | `HANDSHAKE` **and** `OTA` both set | **CD3** native (bedge117/m1-esp32-brain) | ≈ 185 KB (est.) | ≈ 175 KB (est.) |
 | 2 | `WIFI_JOIN` **and** `BEACON` both set | **dag T-800** AT | ≈ 290 KB | ≈ 105 KB |
-| 3 | `WIFI_JOIN` set, `BEACON` absent | **AT/C3** (bedge117/neddy299) | ≈ 284 KB | ≈ 112 KB |
+| 3 | `WIFI_JOIN` set, `BEACON` absent | **CD3-AT** (bedge117/neddy299) | ≈ 284 KB | ≈ 112 KB |
 | 4 | `WIFI_JOIN` absent | **SiN360** binary-SPI | ≈ 200 KB | ≈ 160 KB |
+
+> **Caveat:** priority 1 assumes a CD3 build that self-reports both
+> `HANDSHAKE` and `OTA`.  As of the 2026-07-21 source review, no published
+> CD3 release sets either bit (see the capability-status note in
+> [Runtime Capability Detection](#wire-bits--cap_bitmap) above), so in
+> practice CD3 devices detected via the M1_RPC probe currently fall back to
+> `M1_ESP32_CAP_PROFILE_CD3` (applied when M1_RPC PING succeeds but
+> GET_STATUS does not, or as a manual override) rather than matching this
+> discriminator row from a real `cap_bitmap`.  The row remains correct for
+> whenever a CD3 release starts self-reporting those bits.
 
 CD3 figures are estimates pending actual hardware measurement (native ESP-IDF
 WiFi/BLE/802.15.4 without AT overhead has lower BSS and higher available heap

@@ -38,6 +38,14 @@ a fresh analysis is warranted.  All timestamps are **UTC**.
 
 ### Known Forks
 
+> **Naming note:** "C3"/"C3.12" below refers exclusively to bedge117's **STM32
+> firmware** fork (`bedge117/M1`). It is unrelated to the ESP32-C6 coprocessor
+> firmwares also authored by bedge117 — those are tracked and named separately
+> as **CD3-AT** (`bedge117/esp32-at-monstatek-m1`, AT-command based) and **CD3**
+> (`bedge117/m1-esp32-brain`, native binary RPC); see
+> [`documentation/esp32_firmware.md`](../../../documentation/esp32_firmware.md#source-repository)
+> and the [`esp32-coprocessor`](../esp32-coprocessor/SKILL.md) skill.
+
 | Fork | Owner | Activity | Latest Commit (SHA) | Latest Commit Date (UTC) | Last Reviewed by Hapax | Notes |
 |------|-------|----------|---------------------|--------------------------|------------------------|-------|
 | [Monstatek/M1](https://github.com/Monstatek/M1) | Monstatek | **Active** (upstream) | `4c77bb86` | 2026-06-05 06:30 | 2026-07-21 00:30 | Original upstream. v0.8.0.2 (2026-05-08): added Universal Remote (inferior to Hapax's) and Flipper IR flat database (inferior to Hapax's ir_database). `battery_log.c` diagnostic CSV logger is worth cherry-picking. `bq27421_golden_image.h` constants are additive. irmp/irsnd updated but Hapax version appears newer. Cherry-pick `battery_log.c`. **2026-07-21 review**: only new commit since is PR #11 (`4c77bb86`, macOS build support — CMake toolchain tweaks + `setup_macos.sh`); low value for the Hapax Linux/Windows workflow, not imported. |
