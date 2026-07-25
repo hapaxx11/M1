@@ -870,6 +870,35 @@ void test_at_cmd_parse_arbitrary_line_order(void)
 }
 
 /* =========================================================================
+ * "Feature not supported" screen wording (m1_esp32_require_cap body lines)
+ *
+ * Regression coverage for issue #668 defect 2 — the screen previously read
+ * "Flash compatible / ESP32 firmware" (broken English).  The corrected
+ * wording reads "Flash a compatible / ESP32 firmware".
+ * =========================================================================*/
+
+void test_unsupported_screen_lines_are_grammatical(void)
+{
+    /* First line unchanged. */
+    TEST_ASSERT_EQUAL_STRING("Not supported by", M1_ESP32_UNSUPPORTED_LINE_1);
+
+    /* The instruction must include the article "a" so the two lines read
+     * "Flash a compatible ESP32 firmware" rather than the broken
+     * "Flash compatible ESP32 firmware". */
+    TEST_ASSERT_EQUAL_STRING("Flash a compatible", M1_ESP32_UNSUPPORTED_LINE_2);
+    TEST_ASSERT_EQUAL_STRING("ESP32 firmware", M1_ESP32_UNSUPPORTED_LINE_3);
+    TEST_ASSERT_NOT_NULL(strstr(M1_ESP32_UNSUPPORTED_LINE_2, " a "));
+}
+
+void test_unsupported_screen_lines_fit_display(void)
+{
+    /* Main-menu font renders ~21 chars on the 128px display. */
+    TEST_ASSERT_LESS_OR_EQUAL_UINT(21u, (unsigned)strlen(M1_ESP32_UNSUPPORTED_LINE_1));
+    TEST_ASSERT_LESS_OR_EQUAL_UINT(21u, (unsigned)strlen(M1_ESP32_UNSUPPORTED_LINE_2));
+    TEST_ASSERT_LESS_OR_EQUAL_UINT(21u, (unsigned)strlen(M1_ESP32_UNSUPPORTED_LINE_3));
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 
@@ -951,6 +980,10 @@ int main(void)
     /* M1_RPC devstatus */
     RUN_TEST(test_rpc_devstatus_struct_size);
     RUN_TEST(test_rpc_caps_get_round_trip);
+
+    /* "Feature not supported" screen wording (issue #668 defect 2) */
+    RUN_TEST(test_unsupported_screen_lines_are_grammatical);
+    RUN_TEST(test_unsupported_screen_lines_fit_display);
 
     return UNITY_END();
 }

@@ -454,10 +454,10 @@ bool m1_esp32_require_cap(uint64_t cap, const char *feature_name)
         u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
 
         /* Body */
-        u8g2_DrawStr(&m1_u8g2, 0, 25, "Not supported by");
+        u8g2_DrawStr(&m1_u8g2, 0, 25, M1_ESP32_UNSUPPORTED_LINE_1);
         u8g2_DrawStr(&m1_u8g2, 0, 37, fw_line);
-        u8g2_DrawStr(&m1_u8g2, 0, 52, "Flash compatible");
-        u8g2_DrawStr(&m1_u8g2, 0, 62, "ESP32 firmware");
+        u8g2_DrawStr(&m1_u8g2, 0, 52, M1_ESP32_UNSUPPORTED_LINE_2);
+        u8g2_DrawStr(&m1_u8g2, 0, 62, M1_ESP32_UNSUPPORTED_LINE_3);
     }
     while (u8g2_NextPage(&m1_u8g2));
 
