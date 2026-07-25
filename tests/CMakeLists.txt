@@ -2324,6 +2324,32 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_status_msg COMMAND test_wifi_status_msg)
 
+# ---------- wifi_scan_fail_msg (scan-failure screen wording) ----------
+add_executable(test_wifi_scan_fail_msg
+    test_wifi_scan_fail_msg.c
+)
+target_include_directories(test_wifi_scan_fail_msg PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_scan_fail_msg PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_scan_fail_msg PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_scan_fail_msg COMMAND test_wifi_scan_fail_msg)
+
+# ---------- esp32_spi_bin (binary-safe SPI-HD receive copy) ----------
+add_executable(test_esp32_spi_bin
+    test_esp32_spi_bin.c
+)
+target_include_directories(test_esp32_spi_bin PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_spi_bin PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_spi_bin PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_spi_bin COMMAND test_esp32_spi_bin)
+
 # ---------- wifi_ch_analysis (Phase 4 — dag integration) ----------
 add_executable(test_wifi_ch_analysis
     test_wifi_ch_analysis.c

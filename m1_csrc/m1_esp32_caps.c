@@ -32,6 +32,9 @@ extern bool    get_esp32_main_init_status(void);
 extern void    esp32_main_init(void);
 extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
                                 int out_buf_size, int timeout_sec);
+extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                    uint8_t *rx_buf, int rx_buf_size,
+                                    int *out_len, int timeout_sec);
 
 /*************************** D E F I N E S ************************************/
 
@@ -49,6 +52,17 @@ extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
  * full command list.  5 s is the standard "long" timeout used elsewhere in
  * the AT bridge (e.g. spi_AT_send_recv 5 s in m1_http_client / m1_802154). */
 #define AT_CMD_PROBE_TIMEOUT_S 5
+
+/* Quick AT presence probe timeout.  A bare "AT\r\n" is answered almost
+ * instantly by any AT firmware; 1 s is generous.  CD3 firmware (which speaks
+ * M1_RPC, not AT) will not answer, so this short timeout avoids paying the
+ * full AT_CMD_PROBE_TIMEOUT_S for CD3 detection. */
+#define AT_PRESENCE_TIMEOUT_S  1
+
+/* CD3 native M1_RPC probe (PING/GET_STATUS) timeout.  CD3 is already running
+ * and answers immediately over the SPI-HD transport, so a short timeout keeps
+ * detection snappy for non-CD3 firmware (which simply never answers). */
+#define CD3_RPC_PROBE_TIMEOUT_S 2
 
 /*************************** V A R I A B L E S ********************************/
 
@@ -236,110 +250,26 @@ void m1_esp32_caps_init(void)
         return;
     }
 
-    /* M1_RPC probe: PING (magic 0x4D31) — CD3 native binary RPC firmware
-     * (bedge117/m1-esp32-brain).
+    /* From here on the firmware is not SiN360 binary-SPI.  It is either an
+     * AT firmware (stock ESP-AT, bedge117/dag/neddy299 variants) or the CD3
+     * native binary-RPC firmware (bedge117/m1-esp32-brain).  BOTH speak over
+     * the same half-duplex SPI-HD transport (spi_slave_hd: command/address/
+     * dummy phases + WRBUF/RDDMA + HANDSHAKE) driven by the AT RTOS task, so
+     * the task must be running before either the AT+CMD? text probe or the
+     * M1_RPC binary probe below can exchange a frame.
      *
-     * CD3 uses a completely different frame format from the SiN360/CMD_PING
-     * protocol.  It ignores frames with 0xAB magic (so is_binary_spi is
-     * always false for CD3) but responds to M1_RPC PING (magic 0x4D31 "M1").
-     * We use m1_esp32_send_cmd_raw() here because the normal send path
-     * validates resp->magic == 0xCD, which CD3 never sends.
+     * The AT task is not started by the DELEGATE_FEATURE-style capability
+     * gates that call us (they only bring up the SPI HAL via
+     * m1_esp32_ensure_init()); the AT task is otherwise only started deep
+     * inside each feature function *after* the gate has been evaluated.  Left
+     * unaddressed, this permanently fails detection ("Unknown" firmware, cap
+     * bits never set) even for fully-supported firmware.  Start the AT task
+     * here, mirroring wifi_do_scan() (m1_wifi.c).  If the task still is not up
+     * right after trying (e.g. heap pressure), return without caching so the
+     * next call retries.
      *
-     * On success we immediately follow up with M1_RPC GET_STATUS to retrieve
-     * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
-     * stage firmware not yet implementing GET_STATUS), we fall back to the
-     * CD3 conservative profile macro rather than the AT path. */
-    {
-        uint8_t  tx64[64];
-        uint8_t  rx64[64];
-        static const uint8_t cd3_cookie[4] = {0x4D, 0x31, 0x50, 0x49}; /* "M1PI" */
-        uint16_t req_len;
-        const uint8_t *rpc_pl  = NULL;
-        uint16_t       rpc_plen = 0u;
-
-        memset(tx64, 0, sizeof(tx64));
-        req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
-                                          M1_ESP32_RPC_SYS_PING,
-                                          cd3_cookie, 4u);
-        if (req_len > 0u)
-        {
-            memset(rx64, 0, sizeof(rx64));
-            ret = m1_esp32_send_cmd_raw(tx64, rx64, CAPS_QUERY_TIMEOUT_MS);
-
-            if (ret == 0 &&
-                m1_esp32_rpc_parse_resp(rx64, (uint16_t)sizeof(rx64),
-                                         M1_ESP32_RPC_SYS_PING,
-                                         &rpc_pl, &rpc_plen))
-            {
-                /* CD3 confirmed — issue GET_STATUS to retrieve capabilities */
-                memset(tx64, 0, sizeof(tx64));
-                req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
-                                                  M1_ESP32_RPC_SYS_GET_STATUS,
-                                                  NULL, 0u);
-                if (req_len > 0u)
-                {
-                    memset(rx64, 0, sizeof(rx64));
-                    rpc_pl   = NULL;
-                    rpc_plen = 0u;
-                    if (m1_esp32_send_cmd_raw(tx64, rx64,
-                                               CAPS_QUERY_TIMEOUT_MS) == 0 &&
-                        m1_esp32_rpc_parse_resp(rx64, (uint16_t)sizeof(rx64),
-                                                 M1_ESP32_RPC_SYS_GET_STATUS,
-                                                 &rpc_pl, &rpc_plen) &&
-                        rpc_plen >= (uint16_t)sizeof(m1_esp32_rpc_devstatus_t) &&
-                        m1_esp32_caps_parse_payload(rpc_pl,
-                                                     (uint8_t)rpc_plen,
-                                                     &bitmap, fw_name))
-                    {
-                        s_bitmap = bitmap;
-                        strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
-                        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
-                        caps_apply_footprint_estimates(s_bitmap);
-                        s_queried = true;
-                        return;
-                    }
-                }
-
-                /* PING confirmed CD3 but GET_STATUS is not yet implemented —
-                 * use the conservative CD3 profile macro. */
-                s_bitmap = M1_ESP32_CAP_PROFILE_CD3;
-                strncpy(s_fw_name, "CD3 (via M1_RPC)", sizeof(s_fw_name) - 1);
-                s_fw_name[sizeof(s_fw_name) - 1] = '\0';
-                caps_apply_footprint_estimates(s_bitmap);
-                s_queried = true;
-                return;
-            }
-        }
-    }
-
-    /* Probe 3: stock ESP-AT `AT+CMD?`.  This command is part of the basic
-     * ESP-AT command set and is supported by all tracked AT firmware
-     * variants (bedge117, dag, neddy299) without requiring any custom
-     * extension on the ESP32 side.  The response lists every AT command the
-     * firmware understands; we OR in capability bits for each command our
-     * mapping table recognises.
-     *
-     * The AT task must be running before we can issue AT text commands.
-     * Callers (DELEGATE_FEATURE-style capability gates) only guarantee the
-     * SPI transport is up via m1_esp32_ensure_init() before checking a
-     * capability — they do not start the AT task themselves, since the AT
-     * task is only otherwise started deep inside each feature function
-     * *after* the capability gate has already been evaluated.  Left
-     * unaddressed, this means the AT+CMD? probe below is skipped on every
-     * such gate check for pure-AT firmware (dag T-800, bedge117, etc.),
-     * permanently failing capability detection ("Unknown" firmware, cap
-     * bits never set) even though the firmware is fully supported.  Start
-     * the AT task here, mirroring the pattern already used by
-     * wifi_do_scan() (m1_wifi.c), so the probe can always run once the SPI
-     * transport is ready.  If the task still is not up right after trying
-     * (e.g. heap pressure), return without caching so the next call retries.
-     *
-     * The response can be several KB, so the buffer is allocated from the
-     * FreeRTOS heap rather than the caller's stack.  If the heap is
-     * exhausted, return without caching so the next call retries.
-     *
-     * SiN360 binary-SPI firmware has no AT task, so this probe is skipped
-     * by the early return in the is_binary_spi branch above. */
+     * SiN360 binary-SPI firmware has no AT task and was already handled above
+     * via the is_binary_spi early return, so it never reaches this point. */
     {
         bool at_task_before = get_esp32_main_init_status();
         bool at_task_after  = at_task_before;
@@ -354,6 +284,38 @@ void m1_esp32_caps_init(void)
             return;
     }
 
+    /* Probe 2a: quick AT presence check.  Send a bare "AT\r\n" with a short
+     * timeout — any AT firmware answers "OK" almost immediately.  CD3 native
+     * firmware (which speaks M1_RPC, not AT) will not reply, so this times
+     * out in AT_PRESENCE_TIMEOUT_S (1 s) instead of paying the full
+     * AT_CMD_PROBE_TIMEOUT_S (5 s) for the heavyweight AT+CMD? probe.
+     *
+     * If the presence probe fails, skip directly to the CD3 binary probe
+     * (Probe 3) — there is no point waiting 5 s for AT+CMD? when the
+     * firmware does not even answer a bare AT. */
+    {
+        char at_presence[64];
+        at_presence[0] = '\0';
+        (void)spi_AT_send_recv("AT\r\n", at_presence,
+                               (int)sizeof(at_presence),
+                               AT_PRESENCE_TIMEOUT_S);
+
+        if (strstr(at_presence, "OK") == NULL)
+            goto probe_cd3;  /* Not AT firmware — skip to CD3 probe */
+    }
+
+    /* Probe 2b: stock ESP-AT `AT+CMD?`.  This command is part of the basic
+     * ESP-AT command set and is supported by all tracked AT firmware variants
+     * (bedge117, dag, neddy299) without requiring any custom extension.  The
+     * response lists every AT command the firmware understands; we OR in
+     * capability bits for each command our mapping table recognises.
+     *
+     * We only reach here if the quick AT presence probe above succeeded, so
+     * this is guaranteed to be an AT firmware and will respond promptly.
+     *
+     * The response can be several KB, so the buffer is allocated from the
+     * FreeRTOS heap rather than the caller's stack.  If the heap is
+     * exhausted, return without caching so the next call retries. */
     {
         char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
         if (!at_resp)
@@ -384,7 +346,97 @@ void m1_esp32_caps_init(void)
         vPortFree(at_resp);
     }
 
-    /* Both probes failed — fail closed.  Feature gates that check specific
+    /* Probe 3: CD3 native binary RPC firmware (bedge117/m1-esp32-brain) via
+     * M1_RPC PING (magic 0x4D31 "M1").
+     *
+     * CD3 speaks M1_RPC over the SAME half-duplex SPI-HD transport as the AT
+     * firmware — NOT the full-duplex 64-byte transfer used by the SiN360
+     * binary protocol.  A plain full-duplex HAL_SPI_TransmitReceive (as in
+     * m1_esp32_send_cmd_raw()) cannot be answered by a spi_slave_hd slave, so
+     * the request/response MUST go through spi_AT_send_recv_bin(), which is
+     * binary-safe (length-preserving on both send and receive — no NUL
+     * truncation of the M1_RPC header/CRC bytes).
+     *
+     * This probe runs only after the AT presence probe has failed (or AT+CMD?
+     * did not yield a valid response), so a working AT firmware (already
+     * detected above) is never sent a binary frame.
+     *
+     * On success we immediately follow up with M1_RPC GET_STATUS to retrieve
+     * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
+     * stage firmware not yet implementing GET_STATUS), we fall back to the
+     * CD3 conservative profile macro. */
+probe_cd3:
+    {
+        uint8_t  tx64[64];
+        uint8_t  rx64[64];
+        static const uint8_t cd3_cookie[4] = {0x4D, 0x31, 0x50, 0x49}; /* "M1PI" */
+        uint16_t req_len;
+        int      rx_len = 0;
+        const uint8_t *rpc_pl  = NULL;
+        uint16_t       rpc_plen = 0u;
+
+        memset(tx64, 0, sizeof(tx64));
+        req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
+                                          M1_ESP32_RPC_SYS_PING,
+                                          cd3_cookie, 4u);
+        if (req_len > 0u)
+        {
+            memset(rx64, 0, sizeof(rx64));
+            rx_len = 0;
+
+            if (spi_AT_send_recv_bin(tx64, (int)req_len,
+                                     rx64, (int)sizeof(rx64),
+                                     &rx_len, CD3_RPC_PROBE_TIMEOUT_S) == 0 &&
+                rx_len > 0 &&
+                m1_esp32_rpc_parse_resp(rx64, (uint16_t)rx_len,
+                                         M1_ESP32_RPC_SYS_PING,
+                                         &rpc_pl, &rpc_plen))
+            {
+                /* CD3 confirmed — issue GET_STATUS to retrieve capabilities */
+                memset(tx64, 0, sizeof(tx64));
+                req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
+                                                  M1_ESP32_RPC_SYS_GET_STATUS,
+                                                  NULL, 0u);
+                if (req_len > 0u)
+                {
+                    memset(rx64, 0, sizeof(rx64));
+                    rx_len   = 0;
+                    rpc_pl   = NULL;
+                    rpc_plen = 0u;
+                    if (spi_AT_send_recv_bin(tx64, (int)req_len,
+                                             rx64, (int)sizeof(rx64),
+                                             &rx_len, CD3_RPC_PROBE_TIMEOUT_S) == 0 &&
+                        rx_len > 0 &&
+                        m1_esp32_rpc_parse_resp(rx64, (uint16_t)rx_len,
+                                                 M1_ESP32_RPC_SYS_GET_STATUS,
+                                                 &rpc_pl, &rpc_plen) &&
+                        rpc_plen >= (uint16_t)sizeof(m1_esp32_rpc_devstatus_t) &&
+                        m1_esp32_caps_parse_payload(rpc_pl,
+                                                     (uint8_t)rpc_plen,
+                                                     &bitmap, fw_name))
+                    {
+                        s_bitmap = bitmap;
+                        strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+                        s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                        caps_apply_footprint_estimates(s_bitmap);
+                        s_queried = true;
+                        return;
+                    }
+                }
+
+                /* PING confirmed CD3 but GET_STATUS is not yet implemented —
+                 * use the conservative CD3 profile macro. */
+                s_bitmap = M1_ESP32_CAP_PROFILE_CD3;
+                strncpy(s_fw_name, "CD3 (via M1_RPC)", sizeof(s_fw_name) - 1);
+                s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                caps_apply_footprint_estimates(s_bitmap);
+                s_queried = true;
+                return;
+            }
+        }
+    }
+
+    /* All probes failed — fail closed.  Feature gates that check specific
      * M1_ESP32_CAP_* bits will all return false and the "Feature not
      * supported" UI will appear.  This is intentional: granting capabilities
      * we cannot verify risks crashing on firmware that does not implement
@@ -454,10 +506,10 @@ bool m1_esp32_require_cap(uint64_t cap, const char *feature_name)
         u8g2_DrawHLine(&m1_u8g2, 0, 11, 128);
 
         /* Body */
-        u8g2_DrawStr(&m1_u8g2, 0, 25, "Not supported by");
+        u8g2_DrawStr(&m1_u8g2, 0, 25, M1_ESP32_UNSUPPORTED_LINE_1);
         u8g2_DrawStr(&m1_u8g2, 0, 37, fw_line);
-        u8g2_DrawStr(&m1_u8g2, 0, 52, "Flash compatible");
-        u8g2_DrawStr(&m1_u8g2, 0, 62, "ESP32 firmware");
+        u8g2_DrawStr(&m1_u8g2, 0, 52, M1_ESP32_UNSUPPORTED_LINE_2);
+        u8g2_DrawStr(&m1_u8g2, 0, 62, M1_ESP32_UNSUPPORTED_LINE_3);
     }
     while (u8g2_NextPage(&m1_u8g2));
 

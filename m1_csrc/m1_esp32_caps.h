@@ -736,6 +736,20 @@ bool m1_esp32_has_cap(uint64_t cap);
  */
 const char *m1_esp32_caps_fw_name(void);
 
+/* -------------------------------------------------------------------------
+ * Body text drawn by the "feature not supported" screen (m1_esp32_require_cap).
+ *
+ * Exposed as macros so the exact wording is covered by host-side unit tests —
+ * the draw function itself is HAL-bound (u8g2 + HAL_Delay) and cannot run on
+ * the host.  These three macros define only the fixed lines; the firmware name
+ * is drawn from a separate runtime string (fw_line) between LINE_1 and LINE_2.
+ *
+ * Each line must fit a 128px display in the main-menu font (~21 chars).
+ * ------------------------------------------------------------------------- */
+#define M1_ESP32_UNSUPPORTED_LINE_1  "Not supported by"
+#define M1_ESP32_UNSUPPORTED_LINE_2  "Flash a compatible"
+#define M1_ESP32_UNSUPPORTED_LINE_3  "ESP32 firmware"
+
 /**
  * Check that all required capabilities are supported; if any are absent, draw a
  * standard "Feature not supported" screen (2 s) so the user knows why
