@@ -523,10 +523,26 @@ The GET_STATUS payload is wire-identical to `m1_esp32_status_payload_t` (used
 by the SiN360 CMD_GET_STATUS path) on LE targets, so the same
 `m1_esp32_caps_parse_payload()` helper decodes both.
 
-**SPI transport:** CD3 uses `spi_slave_hd` mode, identical GPIO pin assignment
-(`ESP32_SPI3_NSS_Pin` CS, `ESP32_HANDSHAKE_Pin` response-ready), same
-fixed 64-byte MTU per SPI transaction.  The host sends a request padded to 64
-bytes, waits for HANDSHAKE to go high, then reads a 64-byte response.
+**SPI transport:** CD3 uses `spi_slave_hd` (half-duplex) mode over the **same
+SPI-HD transport as the AT firmware** — identical GPIO pin assignment
+(`ESP32_SPI3_NSS_Pin` CS, `ESP32_HANDSHAKE_Pin` response-ready), command/
+address/dummy phases, status register, and `WRBUF`/`RDDMA` DMA windows, all
+driven by the AT RTOS task (`spi_trans_control_task` in `esp_app_main.c`).  A
+`spi_slave_hd` slave **cannot** answer a plain full-duplex `HAL_SPI_TransmitReceive`,
+so the M1_RPC PING/GET_STATUS probe is issued through
+`spi_AT_send_recv_bin()` (the binary-safe variant of `spi_AT_send_recv()`),
+**not** the full-duplex `m1_esp32_send_cmd_raw()` path.  The host writes the
+M1_RPC request frame (length-prefixed, not NUL-terminated), waits for
+HANDSHAKE, and reads the response frame with its true byte length preserved.
+
+> **Binary-safe receive (PR #669 deferred fix):** The legacy AT receive path
+> delivered every slave response as a NUL-terminated C string (`strcpy()`).
+> M1_RPC frames contain embedded `0x00` bytes in their header/CRC, so that
+> path truncated them and CD3 was misdetected as `Unknown (fallback)`.  The
+> receive copy now uses a length-based `esp32_spi_bin_copy()`
+> (`m1_csrc/esp32_spi_bin.h`, host-tested by `tests/test_esp32_spi_bin.c`), and
+> the CD3 probe runs **after** the `AT+CMD?` text probe so a working AT
+> firmware is never sent a binary frame.
 
 **Pure-logic helpers** for building and validating M1_RPC frames are in
 `m1_csrc/m1_esp32_caps.h` (static inline, no HAL deps):
@@ -535,10 +551,9 @@ bytes, waits for HANDSHAKE to go high, then reads a 64-byte response.
 - `m1_esp32_rpc_parse_resp()` — validate a response (magic, version, CRC, msg_id)
 - `m1_esp32_rpc_caps_get()` — unpack an 8-byte LE cap_bitmap array to `uint64_t`
 
-The SPI raw send/receive path used by the CD3 probe (`m1_esp32_send_cmd_raw()`
-in `m1_csrc/m1_esp32_cmd.c`) is identical to `m1_esp32_send_cmd()` but skips
-the `0xCD` magic validation, returning the raw 64-byte response for M1_RPC
-frame validation instead.
+`m1_esp32_send_cmd_raw()` (`m1_csrc/m1_esp32_cmd.c`) remains available as the
+full-duplex raw path used by the SiN360 binary protocol and ESP-NOW HAL, but
+is no longer used for the CD3 M1_RPC probe.
 
 ### ESP-NOW peer link — CD3 M1_RPC command range `0x0600..0x0605`
 

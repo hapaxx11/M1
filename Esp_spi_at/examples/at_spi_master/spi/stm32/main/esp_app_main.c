@@ -27,6 +27,7 @@
 #include "esp_at_list.h"
 #include "esp_queue.h"
 #include "m1_at_response_parser.h"
+#include "esp32_spi_bin.h"
 
 #define STREAM_BUFFER_SIZE    	SPI_TRANS_MAX_LEN
 
@@ -321,7 +322,15 @@ static void spi_trans_control_task(void* arg)
     			spi_mutex_unlock();
     			continue;
     		}
-    		strcpy(app_resp, trans_data);
+    		/* Copy the response payload verbatim.  A length-based copy (not
+    		 * strcpy) is required so binary M1_RPC frames — whose header/CRC
+    		 * bytes routinely contain 0x00 — are delivered intact rather than
+    		 * truncated at the first NUL.  buf_len below carries the true byte
+    		 * count for binary consumers; the trailing NUL keeps text (AT)
+    		 * consumers, which treat the buffer as a C string, working. */
+    		esp32_spi_bin_copy((uint8_t *)app_resp, recv_opt.transmit_len + 1,
+    		                   (const uint8_t *)trans_data, recv_opt.transmit_len);
+    		app_resp[recv_opt.transmit_len] = '\0';
 
     		xSemaphoreGive(esp_ctrl_req_sem);
 
@@ -508,6 +517,77 @@ uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf, int out_buf_size, in
 
 	return SUCCESS;
 } // uint8_t spi_AT_send_recv(...)
+
+
+/******************************************************************************/
+/**
+  * @brief  Binary-safe send/receive over the SPI-HD transport.
+  *
+  * Sends an arbitrary binary frame (no NUL-termination assumption) to the
+  * ESP32 and returns exactly one binary response frame.  Unlike
+  * spi_AT_send_recv() this does NOT scan the reply for a textual "OK"/"ERROR"
+  * terminator and does NOT copy via strcpy — it is used for the CD3 native
+  * M1_RPC protocol (magic 0x4D31), whose frames contain embedded 0x00 bytes.
+  *
+  * The send path is length-based (via ctrl_cmd_t.cmd_len), and the receive
+  * path copies exactly the number of bytes the slave reported, so binary
+  * payloads survive intact in both directions.
+  *
+  * @param  tx_buf      Binary request frame to send
+  * @param  tx_len      Length of @p tx_buf in bytes (> 0)
+  * @param  rx_buf      Caller buffer for the binary response
+  * @param  rx_buf_size Capacity of @p rx_buf in bytes (>= 1)
+  * @param  out_len     [out] bytes written to @p rx_buf (0 on error/timeout)
+  * @param  timeout_sec Response timeout in seconds (0 → DEFAULT_CTRL_RESP_TIMEOUT)
+  * @return SUCCESS on success, CTRL_ERR_* otherwise
+  */
+/******************************************************************************/
+uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                             uint8_t *rx_buf, int rx_buf_size,
+                             int *out_len, int timeout_sec)
+{
+	ctrl_cmd_t req = CTRL_CMD_DEFAULT_REQ();
+	uint8_t ret;
+	int rx_len = 0;
+	uint32_t rx_uid = 0;
+	uint8_t *resp = NULL;
+
+	if (out_len)
+		*out_len = 0;
+
+	if (!tx_buf || tx_len <= 0 || !rx_buf || rx_buf_size < 1)
+		return CTRL_ERR_INCORRECT_ARG;
+
+	req.at_cmd  = (char *)tx_buf;   /* send path is length-based (cmd_len) */
+	req.cmd_len = (uint16_t)tx_len;
+	if (!timeout_sec)
+		timeout_sec = DEFAULT_CTRL_RESP_TIMEOUT;
+	req.cmd_timeout_sec = timeout_sec;
+
+	ret = spi_AT_app_send_command(&req);
+	if (ret != SUCCESS)
+		return ret;
+
+	/* Binary frames carry no textual OK/ERROR terminator, so read exactly
+	 * one response element and copy it verbatim (embedded NULs and all). */
+	resp = spi_AT_app_get_response(&rx_len, &rx_uid, timeout_sec);
+	if (!resp || rx_len <= 0)
+	{
+		if (resp)
+			free(resp);
+		return CTRL_ERR_REQUEST_TIMEOUT;
+	}
+
+	{
+		size_t copied = esp32_spi_bin_copy(rx_buf, (size_t)rx_buf_size,
+		                                   resp, (size_t)rx_len);
+		if (out_len)
+			*out_len = (int)copied;
+	}
+	free(resp);
+
+	return SUCCESS;
+} // uint8_t spi_AT_send_recv_bin(...)
 
 
 void esp32_queue_reset(void)
