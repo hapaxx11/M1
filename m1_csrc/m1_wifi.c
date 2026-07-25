@@ -42,6 +42,7 @@
 #include "wifi_selection.h"
 #include "wifi_deauth_cmd.h"
 #include "wifi_at_scan.h"
+#include "wifi_scan_fail_msg.h"
 #include "wifi_ntp_parse.h"
 #include "m1_esp32_caps.h"
 #include "esp_app_main.h"
@@ -696,11 +697,11 @@ void wifi_scan_ap(void)
 	else
 	{
 		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, "Scan AP");
+		u8g2_DrawStr(&m1_u8g2, 6, 15, M1_WIFI_SCAN_FAIL_LINE_1);
 		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,
 			M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
 		u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
-			"Failed. Let retry!");
+			M1_WIFI_SCAN_FAIL_LINE_2);
 		m1_u8g2_nextpage();
 	}
 
