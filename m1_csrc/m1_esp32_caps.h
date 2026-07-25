@@ -741,7 +741,8 @@ const char *m1_esp32_caps_fw_name(void);
  *
  * Exposed as macros so the exact wording is covered by host-side unit tests —
  * the draw function itself is HAL-bound (u8g2 + HAL_Delay) and cannot run on
- * the host.  The middle line (the firmware name) is filled in at runtime.
+ * the host.  These three macros define only the fixed lines; the firmware name
+ * is drawn from a separate runtime string (fw_line) between LINE_1 and LINE_2.
  *
  * Each line must fit a 128px display in the main-menu font (~21 chars).
  * ------------------------------------------------------------------------- */

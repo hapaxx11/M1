@@ -53,6 +53,12 @@ extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * the AT bridge (e.g. spi_AT_send_recv 5 s in m1_http_client / m1_802154). */
 #define AT_CMD_PROBE_TIMEOUT_S 5
 
+/* Quick AT presence probe timeout.  A bare "AT\r\n" is answered almost
+ * instantly by any AT firmware; 1 s is generous.  CD3 firmware (which speaks
+ * M1_RPC, not AT) will not answer, so this short timeout avoids paying the
+ * full AT_CMD_PROBE_TIMEOUT_S for CD3 detection. */
+#define AT_PRESENCE_TIMEOUT_S  1
+
 /* CD3 native M1_RPC probe (PING/GET_STATUS) timeout.  CD3 is already running
  * and answers immediately over the SPI-HD transport, so a short timeout keeps
  * detection snappy for non-CD3 firmware (which simply never answers). */
@@ -278,17 +284,34 @@ void m1_esp32_caps_init(void)
             return;
     }
 
-    /* Probe 2: stock ESP-AT `AT+CMD?`.  This command is part of the basic
+    /* Probe 2a: quick AT presence check.  Send a bare "AT\r\n" with a short
+     * timeout — any AT firmware answers "OK" almost immediately.  CD3 native
+     * firmware (which speaks M1_RPC, not AT) will not reply, so this times
+     * out in AT_PRESENCE_TIMEOUT_S (1 s) instead of paying the full
+     * AT_CMD_PROBE_TIMEOUT_S (5 s) for the heavyweight AT+CMD? probe.
+     *
+     * If the presence probe fails, skip directly to the CD3 binary probe
+     * (Probe 3) — there is no point waiting 5 s for AT+CMD? when the
+     * firmware does not even answer a bare AT. */
+    {
+        char at_presence[64];
+        at_presence[0] = '\0';
+        (void)spi_AT_send_recv("AT\r\n", at_presence,
+                               (int)sizeof(at_presence),
+                               AT_PRESENCE_TIMEOUT_S);
+
+        if (strstr(at_presence, "OK") == NULL)
+            goto probe_cd3;  /* Not AT firmware — skip to CD3 probe */
+    }
+
+    /* Probe 2b: stock ESP-AT `AT+CMD?`.  This command is part of the basic
      * ESP-AT command set and is supported by all tracked AT firmware variants
      * (bedge117, dag, neddy299) without requiring any custom extension.  The
      * response lists every AT command the firmware understands; we OR in
      * capability bits for each command our mapping table recognises.
      *
-     * This text probe runs BEFORE the CD3 binary probe on purpose: an AT
-     * firmware answers here and returns immediately, so it is never sent a
-     * binary M1_RPC frame that could desync its line-based command parser.
-     * CD3 rejects "AT+CMD?" (bad M1_RPC magic → no reply), so this probe
-     * simply times out for CD3 and detection continues to the M1_RPC probe.
+     * We only reach here if the quick AT presence probe above succeeded, so
+     * this is guaranteed to be an AT firmware and will respond promptly.
      *
      * The response can be several KB, so the buffer is allocated from the
      * FreeRTOS heap rather than the caller's stack.  If the heap is
@@ -334,13 +357,15 @@ void m1_esp32_caps_init(void)
      * binary-safe (length-preserving on both send and receive — no NUL
      * truncation of the M1_RPC header/CRC bytes).
      *
-     * This probe runs only after the AT+CMD? probe has failed, so a working
-     * AT firmware (already detected above) is never sent a binary frame.
+     * This probe runs only after the AT presence probe has failed (or AT+CMD?
+     * did not yield a valid response), so a working AT firmware (already
+     * detected above) is never sent a binary frame.
      *
      * On success we immediately follow up with M1_RPC GET_STATUS to retrieve
      * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
      * stage firmware not yet implementing GET_STATUS), we fall back to the
      * CD3 conservative profile macro. */
+probe_cd3:
     {
         uint8_t  tx64[64];
         uint8_t  rx64[64];

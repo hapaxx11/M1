@@ -535,7 +535,7 @@ so the M1_RPC PING/GET_STATUS probe is issued through
 M1_RPC request frame (length-prefixed, not NUL-terminated), waits for
 HANDSHAKE, and reads the response frame with its true byte length preserved.
 
-> **Binary-safe receive (PR #669 deferred fix):** The legacy AT receive path
+> **Binary-safe receive (PR #669):** The legacy AT receive path
 > delivered every slave response as a NUL-terminated C string (`strcpy()`).
 > M1_RPC frames contain embedded `0x00` bytes in their header/CRC, so that
 > path truncated them and CD3 was misdetected as `Unknown (fallback)`.  The
