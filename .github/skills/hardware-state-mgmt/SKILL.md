@@ -126,7 +126,7 @@ the Read Raw scene consumes `Q_EVENT_SUBGHZ_TX` directly in its `on_event`
 handler (implemented in PR #470), enabling live sine-wave animation and
 hold-to-repeat TX.
 
-#### Async TX state machine (completed — PR #470)
+#### Async TX state machine
 
 The Read Raw scene uses a fully async, non-blocking TX architecture with four
 explicit Momentum-aligned states defined in `m1_subghz_read_raw_state.h`:

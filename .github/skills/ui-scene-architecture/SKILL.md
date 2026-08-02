@@ -458,16 +458,16 @@ navigation) keeps state management clean, testable, and consistent across the de
 
 ### Migration status
 
-Scene managers are present in **all** application modules with submenus.  However
-"scene-wrapped" (blocking delegate) and "scene-native/async" are meaningfully
-different quality levels.  Sub-GHz is *scene-native/async*; the remaining modules
-are *scene-wrapped* — their scene shells call legacy blocking functions that may
-freeze the UI briefly while waiting on hardware.
+Scene migration is **complete for all modules** — there are no legacy-menu modules
+left to migrate.  When working on **any** module, all new screens and features
+**MUST** be implemented as scenes, not standalone event-loop functions.
 
-All scene-wrapped modules now use the **submenu model** pattern
-(`subghz_submenu_model_t` + `m1_submenu_draw()` + `m1_submenu_event()`).
-The legacy `m1_scene_menu_event()` helper has zero callers and is retained only
-for backward compatibility — **never use it in new code**.
+Two quality levels remain: Sub-GHz is *scene-native/async*; the other modules are
+*scene-wrapped* — their scene shells call legacy blocking delegates that may briefly
+freeze the UI on hardware waits.  All scene-wrapped modules use the **submenu model**
+(`subghz_submenu_model_t` + `m1_submenu_draw()` + `m1_submenu_event()`); the legacy
+`m1_scene_menu_event()` helper has zero callers and is retained only for backward
+compatibility — **never use it in new code**.
 
 | Module | Scene quality | Notes |
 |--------|--------------|-------|
@@ -483,13 +483,7 @@ for backward compatibility — **never use it in new code**.
 | **ESL Tags** | ✅ Submenu model | 2-item menu; IR-based Pricer ESL tag interaction |
 | **Settings** | 🔶 Scene-wrapped | 21 scene IDs split across 5 files |
 
-### Agent instructions for scene migration
-
-Scene migration is complete for all modules.  There are no more legacy-menu
-modules to migrate.  When working on **any** module, all new screens and features
-**MUST** be implemented as scenes, not as standalone event-loop functions.
-
-#### Submenu model pattern (MANDATORY for all menus)
+### Submenu model pattern (MANDATORY for all menus)
 
 Every scene that presents a scrollable selection list **MUST** use the submenu model
 pattern.  The legacy `m1_scene_menu_event()` / `m1_scene_draw_menu()` direct-call
@@ -508,7 +502,7 @@ Both `m1_submenu_event()` and `m1_submenu_draw()` auto-sync `visible_count` via
 text-size preference — no manual `subghz_submenu_model_set_visible_count()` call
 is needed in the scene itself.
 
-#### Mandatory import conversion plan (legacy menu code from other repos)
+### Mandatory import conversion plan (legacy menu code from other repos)
 
 When importing UI code (Monstatek, Flipper, Momentum, SiN360, C3, or any fork),
 do **not** preserve legacy submenu loops.  Convert imported menu flows to scene
