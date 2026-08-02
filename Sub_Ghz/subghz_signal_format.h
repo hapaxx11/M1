@@ -3,7 +3,7 @@
 /*
  * subghz_signal_format.h
  *
- * Polymorphic Info-screen renderers (Phase 11-1).
+ * Polymorphic Info-screen renderers.
  *
  * Each function defined here matches the `SubGhzGetStringFn` signature
  * declared in `subghz_protocol_registry.h` and is installed onto a
@@ -42,8 +42,8 @@ extern "C" {
  *   Button: 0xX
  *   EncHop: 0xWWWWWWWW
  *
- * The Serial / Button / EncHop fields are extracted via the Phase 9a-1
- * `subghz_signal_fields_keeloq_extract()` helper, so the layout matches
+ * The Serial / Button / EncHop fields are extracted via
+ * `subghz_signal_fields_keeloq_extract()`, so the layout matches
  * the values shown in the SignalSettings scene exactly.
  *
  * Contract:

@@ -3,7 +3,7 @@
 /*
  * test_rf_timing_capture.c
  *
- * Unit tests for the Phase 4A RSSI-burst → timing-array converter
+ * Unit tests for the RSSI-burst → timing-array converter
  * (rf_timing_capture.c/h).
  *
  * Convention: positive timing values = mark (signal above threshold),

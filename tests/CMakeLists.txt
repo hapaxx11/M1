@@ -103,7 +103,7 @@ endif()
 add_test(NAME esp32_caps COMMAND test_esp32_caps)
 
 # ------------------------------------------------------------------
-# Module under test: esp32_feature_map (Phase C — feature classifier)
+# Module under test: esp32_feature_map (feature classifier)
 #
 # Pure-logic module: given a capability bitmap (uint64_t), classifies
 # which firmware features are available and identifies the firmware class
@@ -708,7 +708,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME rf_ook_fsk COMMAND test_rf_ook_fsk)
 
-# rf_timing_capture — Phase 4A RSSI-burst → mark/space timing converter
+# rf_timing_capture — RSSI-burst → mark/space timing converter
 add_executable(test_rf_timing_capture
     test_rf_timing_capture.c
     ${M1_ROOT}/Sub_Ghz/rf_timing_capture.c
@@ -1176,7 +1176,7 @@ endif()
 add_test(NAME rgb_backlight COMMAND test_rgb_backlight)
 
 # Module under test: ir_signal_record (IR Universal Remote pure-logic helpers)
-# Extracted from m1_ir_universal.c (Phase F) — zero HAL/RTOS/FatFS deps.
+# Extracted from m1_ir_universal.c — zero HAL/RTOS/FatFS deps.
 # Covers:
 #   ir_map_flipper_protocol()  — Flipper protocol name → IRMP protocol ID
 #   ir_is_ir_file()            — ".ir" extension check
@@ -1265,7 +1265,7 @@ endif()
 add_test(NAME ir_search COMMAND test_ir_search)
 
 # ------------------------------------------------------------------
-# Module under test: ir_cmd_parse (Phase G — KV-reader vtable abstraction)
+# Module under test: ir_cmd_parse (KV-reader vtable abstraction)
 # Decouples parse_ir_signal_block() from FatFS via ir_block_reader_t.
 # No FatFS or HAL stubs needed — tests use a string-backed reader.
 # ------------------------------------------------------------------
@@ -1286,7 +1286,7 @@ add_test(NAME ir_cmd_parse COMMAND test_ir_cmd_parse)
 # ------------------------------------------------------------------
 # Module under test: ir_button_map
 # Pure-logic button-to-command mapping — no HAL, RTOS, FatFS, or display deps.
-# Phase H extraction from m1_ir_quick_remote.c.
+# Extracted from m1_ir_quick_remote.c.
 # ------------------------------------------------------------------
 add_executable(test_ir_button_map
     test_ir_button_map.c
@@ -1513,7 +1513,7 @@ endif()
 add_test(NAME subghz_new_remote_gen COMMAND test_subghz_new_remote_gen)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_create_proto (Phase 8a — create-from-
+# Module under test: subghz_create_proto (create-from-
 # scratch protocol catalog & field-schema descriptor).
 # Pure-logic protocol catalog + editable-field bitmask + key-range
 # masking helper.  Zero hardware dependencies.
@@ -1532,10 +1532,10 @@ endif()
 add_test(NAME subghz_create_proto COMMAND test_subghz_create_proto)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_hex_editor (Phase 8b-3 — SetKey scene
-# backing model).  Pure-logic hex-digit editor with cursor + UP/DOWN
-# cycling; reused by Phase 8c SetSerial / SetButton / SetCounter
-# editor scenes.  Zero hardware dependencies.
+# Module under test: subghz_hex_editor (SetKey scene backing
+# model).  Pure-logic hex-digit editor with cursor + UP/DOWN cycling;
+# reused by the SetSerial / SetButton / SetCounter editor scenes.
+# Zero hardware dependencies.
 # ------------------------------------------------------------------
 add_executable(test_subghz_hex_editor
     test_subghz_hex_editor.c
@@ -1551,8 +1551,8 @@ endif()
 add_test(NAME subghz_hex_editor COMMAND test_subghz_hex_editor)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_keeloq_create (Phase 8c-3 — KeeLoq
-# Create-from-scratch key assembler).  Pure-logic module that builds
+# Module under test: subghz_keeloq_create (KeeLoq create-from-
+# scratch key assembler).  Pure-logic module that builds
 # the 64-bit Flipper-format key from user-entered serial / button /
 # counter and a picked manufacturer master key.  Depends on the
 # subghz_keeloq cipher + learning primitives.  Zero hardware
@@ -1574,7 +1574,7 @@ endif()
 add_test(NAME subghz_keeloq_create COMMAND test_subghz_keeloq_create)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_signal_fields (Phase 9a-1 — KeeLoq-family
+# Module under test: subghz_signal_fields (KeeLoq-family
 # {serial, button, encrypted-hop} extract / assemble for the
 # SignalSettings scene).  Pure-logic module; depends on
 # subghz_keeloq_create (and through it subghz_keeloq) only for the
@@ -1654,7 +1654,7 @@ endif()
 add_test(NAME subghz_alutech_at_4n COMMAND test_subghz_alutech_at_4n)
 
 # ------------------------------------------------------------------
-# Module under test: subghz_signal_format (Phase 11-1)
+# Module under test: subghz_signal_format
 # Polymorphic Info-screen renderers driven by the protocol registry's
 # .get_string vtable slot.  Pure-logic; zero hardware dependencies.
 # ------------------------------------------------------------------
@@ -1785,7 +1785,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_parser COMMAND test_badusb_parser)
 
-# ── Phase J: m1_badusb.c migration to badusb_parser.h ──
+# ── m1_badusb.c migration to badusb_parser.h ──
 add_executable(test_badusb_migration
     test_badusb_migration.c
 )
@@ -1811,7 +1811,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_typing_speed COMMAND test_badusb_typing_speed)
 
-# ── Phase A-6: WiFi HAL_Delay elimination ──
+# ── WiFi HAL_Delay elimination ──
 add_executable(test_wifi_haldelay_free
     test_wifi_haldelay_free.c
 )
@@ -2116,7 +2116,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME music_parser COMMAND test_music_parser)
 
-# ── Sub-GHz TX/RX lifecycle state machine (Phase 1 of Momentum parity work) ──
+# ── Sub-GHz TX/RX lifecycle state machine ──
 add_executable(test_subghz_txrx_state
     test_subghz_txrx_state.c
     ${M1_ROOT}/Sub_Ghz/subghz_txrx_state.c
@@ -2130,7 +2130,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_txrx_state COMMAND test_subghz_txrx_state)
 
-# ── Per-scene state slots (Phase 2 of Momentum parity work) ──
+# ── Per-scene state slots ──
 add_executable(test_subghz_scene_state
     test_subghz_scene_state.c
     ${M1_ROOT}/Sub_Ghz/subghz_scene_state.c
@@ -2144,7 +2144,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_scene_state COMMAND test_subghz_scene_state)
 
-# ── Submenu model (Phase 7a of Momentum parity work) ──
+# ── Submenu model ──
 add_executable(test_subghz_submenu_model
     test_subghz_submenu_model.c
     ${M1_ROOT}/Sub_Ghz/subghz_submenu_model.c
@@ -2158,7 +2158,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_submenu_model COMMAND test_subghz_submenu_model)
 
-# ── TX repeat / endless-hold policy (Phase 3a of Momentum parity work) ──
+# ── TX repeat / endless-hold policy ──
 add_executable(test_subghz_endless_tx
     test_subghz_endless_tx.c
     ${M1_ROOT}/Sub_Ghz/subghz_endless_tx.c
@@ -2201,7 +2201,7 @@ endif()
 add_test(NAME subghz_tx_wave_anim COMMAND test_subghz_tx_wave_anim)
 
 # ----------------------------------------------------------------------------
-# Sub-GHz scene manager polish primitives (Phase 10 — Momentum parity)
+# Sub-GHz scene manager polish primitives
 # ----------------------------------------------------------------------------
 add_executable(test_subghz_scene_polish
     test_subghz_scene_polish.c
@@ -2231,7 +2231,7 @@ endif()
 add_test(NAME subghz_transmitter_ctl COMMAND test_subghz_transmitter_ctl)
 
 # ------------------------------------------------------------------
-# Sub-GHz button-cycling capability lookup (Phase 4a)
+# Sub-GHz button-cycling capability lookup
 # ------------------------------------------------------------------
 add_executable(test_subghz_button_caps
     test_subghz_button_caps.c
@@ -2247,7 +2247,7 @@ endif()
 add_test(NAME subghz_button_caps COMMAND test_subghz_button_caps)
 
 # ------------------------------------------------------------------
-# Sub-GHz button-override key mutation (Phase 4c)
+# Sub-GHz button-override key mutation
 # ------------------------------------------------------------------
 add_executable(test_subghz_button_override
     test_subghz_button_override.c
@@ -2304,7 +2304,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME elf_alloc_budget COMMAND test_elf_alloc_budget)
 
-# ── WiFi AP record pure-logic extraction (Phase A — Firmware-wide Momentum parity) ──
+# ── WiFi AP record pure-logic extraction ──
 add_executable(test_wifi_ap_record
     test_wifi_ap_record.c
     ${M1_ROOT}/m1_csrc/wifi_ap_record.c
@@ -2332,7 +2332,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_ntp_parse COMMAND test_wifi_ntp_parse)
 
-# ---------- wifi_status_msg (Phase A) ----------
+# ---------- wifi_status_msg ----------
 add_executable(test_wifi_status_msg
     test_wifi_status_msg.c
     ${M1_ROOT}/m1_csrc/wifi_status_msg.c
@@ -2372,7 +2372,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME esp32_spi_bin COMMAND test_esp32_spi_bin)
 
-# ---------- wifi_ch_analysis (Phase 4 — dag integration) ----------
+# ---------- wifi_ch_analysis (dag integration) ----------
 add_executable(test_wifi_ch_analysis
     test_wifi_ch_analysis.c
     ${M1_ROOT}/m1_csrc/wifi_ch_analysis.c
@@ -2386,7 +2386,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_ch_analysis COMMAND test_wifi_ch_analysis)
 
-# ---------- wifi_at_scan (Phase 6 — dag T-800 AT+CWLAP / AT+M1PMKID parsers) ----------
+# ---------- wifi_at_scan (T-800 AT+CWLAP / AT+M1PMKID parsers) ----------
 add_executable(test_wifi_at_scan
     test_wifi_at_scan.c
     ${M1_ROOT}/m1_csrc/wifi_at_scan.c
@@ -2400,7 +2400,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_at_scan COMMAND test_wifi_at_scan)
 
-# ---------- wifi_mac_utils (Phase A) ----------
+# ---------- wifi_mac_utils ----------
 add_executable(test_wifi_mac_utils
     test_wifi_mac_utils.c
     ${M1_ROOT}/m1_csrc/wifi_mac_utils.c
@@ -2414,7 +2414,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_mac_utils COMMAND test_wifi_mac_utils)
 
-# ---------- wifi_file_utils (Phase A) ----------
+# ---------- wifi_file_utils ----------
 add_executable(test_wifi_file_utils
     test_wifi_file_utils.c
     ${M1_ROOT}/m1_csrc/wifi_file_utils.c
@@ -2428,7 +2428,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_file_utils COMMAND test_wifi_file_utils)
 
-# ---------- wifi_selection (Phase A) ----------
+# ---------- wifi_selection ----------
 add_executable(test_wifi_selection
     test_wifi_selection.c
     ${M1_ROOT}/m1_csrc/wifi_selection.c
@@ -2443,7 +2443,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_selection COMMAND test_wifi_selection)
 
-# ---------- wifi_deauth_cmd (Phase A) ----------
+# ---------- wifi_deauth_cmd ----------
 add_executable(test_wifi_deauth_cmd
     test_wifi_deauth_cmd.c
     ${M1_ROOT}/m1_csrc/wifi_deauth_cmd.c
@@ -2459,7 +2459,7 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_deauth_cmd COMMAND test_wifi_deauth_cmd)
 
-# ---------- proto_pirate_timing (Proto Pirate — Phase B) ----------
+# ---------- proto_pirate_timing (Proto Pirate timing helpers) ----------
 add_executable(test_proto_pirate_timing
     test_proto_pirate_timing.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate_timing.c

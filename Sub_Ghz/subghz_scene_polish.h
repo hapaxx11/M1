@@ -4,9 +4,8 @@
  * @file   subghz_scene_polish.h
  * @brief  Sub-GHz scene-manager polish primitives — pure logic, host-testable.
  *
- * Phase 10 of the Momentum parity migration.  Provides three small,
- * hardware-independent helpers that back the scene-manager API additions
- * required by the upcoming Transmitter scene (Phase 3b):
+ * Provides three small, hardware-independent helpers that back the
+ * scene-manager API additions used by the Transmitter scene:
  *
  *   1. `subghz_scene_stack_find()` — backs `search_and_pop_to(scene)`.
  *      Given the current scene-stack array, returns the depth at which

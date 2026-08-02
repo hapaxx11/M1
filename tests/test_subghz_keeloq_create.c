@@ -3,7 +3,7 @@
 /**
  * @file   test_subghz_keeloq_create.c
  * @brief  Host unit tests for the pure-logic KeeLoq Create-from-scratch
- *         key assembler (Phase 8c-3).
+ *         key assembler.
  *
  * Verifies the assembled 64-bit Flipper-format key by encrypting the
  * expected plaintext HOP word with the device key derived via the same

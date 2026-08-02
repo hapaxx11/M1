@@ -3,7 +3,7 @@
 /**
  * @file   subghz_keeloq_create.h
  * @brief  KeeLoq-family "create from scratch" 64-bit Flipper key assembler
- *         — pure logic, host-testable (Phase 8c-3).
+ *         — pure logic, host-testable.
  *
  * Given a user-entered serial, button, rolling counter, and a manufacturer
  * master key + learn type, this module builds the 64-bit Flipper SubGhz

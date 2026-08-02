@@ -3,8 +3,8 @@
 /**
  * @file   subghz_hex_editor.h
  * @brief  Pure-logic hex-digit editor — backing model for the Sub-GHz
- *         Create-from-scratch SetKey scene and the upcoming Phase 8c
- *         SetSerial / SetButton / SetCounter editor scenes.
+ *         Create-from-scratch SetKey, SetSerial, SetButton, and
+ *         SetCounter editor scenes.
  *
  * Models a fixed-width hex-digit string with a movable cursor.  Each
  * digit is stored as its own nibble (0..15) so UP/DOWN cycling on an

@@ -258,7 +258,7 @@ typedef enum {
 } BwState;
 
 static BwState   bw_state;
-/* Phase 7c-4: scroll/selection math for the protocol picker comes from the
+/* Scroll/selection math for the protocol picker comes from the
  * reusable pure-logic widget; selected index lives in s_proto_model.selected. */
 static subghz_submenu_model_t s_proto_model;
 static const char *s_proto_labels[BIND_PROTO_COUNT];
@@ -355,12 +355,9 @@ static void bw_push_tx(SubGhzApp *app)
     app->tx_repeat_count = 1U;                   /* static keys: 1 burst */
     app->tx_mode         = 0U;                   /* SUBGHZ_TX_MODE_SINGLE */
     app->tx_autostart    = true;                 /* 1-press fire UX */
-    /* Phase 4b — pass the binding protocol name to the Transmitter
-     * scene.  All five wizard protocols (CAME Atomo, Nice FloR-S,
-     * Alutech AT-4N, DITEC GOL4, KingGates Stylo4k) support button
-     * cycling, so the Transmitter will enable LEFT/RIGHT during the
-     * step.  Until Phase 4c lands the key-override path, cycling
-     * only updates the visible "Btn X/Y" indicator. */
+    /* Pass the binding protocol name to the Transmitter scene so it
+     * can decide whether to expose LEFT/RIGHT button cycling for the
+     * generated key. */
     strncpy(app->tx_protocol_name, bw_params.proto_name,
             sizeof(app->tx_protocol_name) - 1);
     app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';

@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_delete.c
- * @brief  Sub-GHz Saved-file delete confirmation scene (Phase 5).
+ * @brief  Sub-GHz Saved-file delete confirmation scene.
  *
  * Pushed by the SavedMenu scene when the user picks "Delete".  Reads
  * `app->saved_filepath` / `app->saved_filename` to know which file the

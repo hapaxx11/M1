@@ -114,7 +114,7 @@ typedef struct {
 typedef uint8_t (*SubGhzDecodeFn)(uint16_t protocol_index, uint16_t pulse_count);
 
 /*============================================================================*/
-/* Polymorphic Info-screen renderer (Phase 11-1)                              */
+/* Polymorphic Info-screen renderer                                            */
 /*============================================================================*/
 
 /**
@@ -182,7 +182,7 @@ typedef struct {
     /* --- Decode (M1 convention) --- */
     SubGhzDecodeFn       decode;    /**< Decoder function (NULL = not implemented) */
 
-    /* --- Info rendering (Phase 11-1) --- */
+    /* --- Info rendering --- */
     SubGhzGetStringFn    get_string; /**< Polymorphic Info renderer (NULL = generic) */
 } SubGhzProtocolDef;
 

@@ -88,7 +88,7 @@ void test_read_raw_recording_rechecks_esp32_quiesced_before_allocating_capture_b
 
 void test_wifi_and_bt_delegates_deinitialize_esp32_before_scene_pop(void)
 {
-    /* After Phase D the DELEGATE macro lives in the per-group split files;
+    /* After the split, the DELEGATE macro lives in the per-group files;
      * m1_wifi_scene_menu.c and m1_bt_scene_menu.c are the canonical files
      * that define it for WiFi and BT respectively. */
     char *wifi = read_file("m1_csrc/m1_wifi_scene_menu.c");

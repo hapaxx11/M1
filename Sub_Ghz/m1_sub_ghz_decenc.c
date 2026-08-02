@@ -481,7 +481,7 @@ uint8_t subghz_history_add_ex(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *i
                               uint32_t freq_hz,
                               bool remove_duplicates, bool delete_old_signals)
 {
-	/* Phase 12: when remove_duplicates is true, check against the most
+	/* When remove_duplicates is true, check against the most
 	 * recent entry on (protocol, key, bit_len) and merge instead of
 	 * creating a new row.  When false, every reception adds a new entry. */
 	if (remove_duplicates && hist->count > 0)
@@ -500,7 +500,7 @@ uint8_t subghz_history_add_ex(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *i
 		}
 	}
 
-	/* Phase 12: when delete_old_signals is false and the ring is full,
+	/* When delete_old_signals is false and the ring is full,
 	 * drop the new entry instead of evicting the oldest. */
 	if (!delete_old_signals && hist->count >= SUBGHZ_HISTORY_MAX)
 		return hist->count;

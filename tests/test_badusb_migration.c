@@ -3,7 +3,7 @@
 /*
  * test_badusb_migration.c
  *
- * Source-level regression checks for Phase J: m1_badusb.c migration to
+ * Source-level regression checks for m1_badusb.c migration to
  * badusb_parser.h. Verifies that:
  *
  *   - m1_badusb.c includes badusb_parser.h

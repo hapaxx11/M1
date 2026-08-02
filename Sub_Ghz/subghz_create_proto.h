@@ -5,21 +5,16 @@
  * @brief  Sub-GHz "Create from scratch" protocol catalog & field-schema
  *         descriptor — pure logic, host-testable.
  *
- * Phase 8a of the Momentum parity migration.  Provides the protocol
- * catalog and per-protocol editable-field bitmask that the upcoming
- * SetType (Phase 8b) and SetKey/SetSerial/SetButton/SetCounter
- * (Phase 8c) scenes will consume.
+ * Provides the protocol catalog and per-protocol editable-field bitmask
+ * consumed by the create-from-scratch scenes.
  *
- * The catalog covers the set of protocols for which the M1 can both
- * **build a key from user-entered fields** and **transmit it
- * indefinitely** via the standard OOK PWM key encoder
- * (`SubGhzProtocolFlag_PwmKeyReplay`).  Phase 8a ships with the five
- * rolling-code protocols already exercised by the Bind New Remote
- * wizard (CAME Atomo / Nice FloR-S / Alutech AT-4N / DITEC GOL4 /
- * KingGates Stylo4k); Phase 8b/8c will extend the catalog to cover
- * KeeLoq counter-mode (Serial+Button+Counter+MfKey) and the static
- * OOK families currently served by the "Add Manually" delegate
- * (Princeton, Nice FLO, CAME 12/24-bit, Linear, GateTX, DoorHan).
+ * The catalog covers protocols for which the M1 can both **build a key
+ * from user-entered fields** and **transmit it indefinitely** via the
+ * standard OOK PWM key encoder (`SubGhzProtocolFlag_PwmKeyReplay`).  It
+ * includes the opaque-key rolling-code remotes used by Bind New Remote,
+ * the static OOK families, and the KeeLoq-family counter-mode remotes
+ * that are edited as Serial / Button / Counter / Manufacturer-key
+ * components.
  *
  * The module has zero hardware dependencies — no SI4463, no HAL, no
  * FreeRTOS, no FAT FS — and is fully testable on the host.
@@ -38,18 +33,18 @@
 /*============================================================================*/
 
 typedef enum {
-    /* Rolling-code remotes (Phase 8a) — also covered by the Bind New Remote
-     * wizard, which generates a random key.  In the Create-from-scratch flow
-     * the user enters the hex key directly. */
+    /* Rolling-code remotes also covered by the Bind New Remote wizard,
+     * which generates a random key.  In the Create-from-scratch flow the
+     * user enters the hex key directly. */
     SUBGHZ_CREATE_PROTO_CAME_ATOMO = 0,        /**< CAME Atomo 433 — 62 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_NICE_FLOR_S,           /**< Nice FloR-S 433 — 52 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_ALUTECH_AT4N,          /**< Alutech AT-4N 433 — 64 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_DITEC_GOL4,            /**< DITEC GOL4 433 — 54 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_KINGGATES_STYLO4K,     /**< KingGates Stylo4k 433 — 60 bit OOK PWM */
 
-    /* Static-OOK families (Phase 8b-1) — currently served by the legacy
-     * `sub_ghz_add_manually()` blocking delegate.  Phase 8b-2/8b-4 will move
-     * the picker UI into a scene and retire that delegate. */
+    /* Static-OOK families.  These entries use the canonical registry names
+     * shared with the create-from-scratch flow that replaced the legacy
+     * `sub_ghz_add_manually()` delegate. */
     SUBGHZ_CREATE_PROTO_PRINCETON_433,         /**< Princeton 433 — 24 bit OOK PWM 1:3 */
     SUBGHZ_CREATE_PROTO_PRINCETON_315,         /**< Princeton 315 — 24 bit OOK PWM 1:3 */
     SUBGHZ_CREATE_PROTO_NICE_FLO_12_433,       /**< Nice FLO 433 — 12 bit OOK PWM 1:2 */
@@ -63,13 +58,12 @@ typedef enum {
     SUBGHZ_CREATE_PROTO_DOORHAN_433,           /**< DoorHan 433 — 24 bit OOK PWM 1:3 */
     SUBGHZ_CREATE_PROTO_HOLTEK_HT12X_433,      /**< Holtek HT12X 433 — 12 bit OOK PWM 1:3 */
 
-    /* KeeLoq family (Phase 8c-1) — counter-mode rolling-code remotes that
-     * the existing `Sub_Ghz/subghz_keeloq_encoder.c` already supports for
-     * replay.  Unlike the Phase 8a rolling-code remotes (which expose a
-     * single opaque hex key), these protocols are edited as discrete
-     * Serial / Button / Counter / Manufacturer-key fields and assembled
-     * into the final 64-bit key by the upcoming Phase 8c-2/3 editor
-     * scenes. */
+    /* KeeLoq family — counter-mode rolling-code remotes that
+     * `Sub_Ghz/subghz_keeloq_encoder.c` already supports for replay.
+     * Unlike the opaque-key rolling-code remotes above, these protocols
+     * are edited as discrete Serial / Button / Counter /
+     * Manufacturer-key fields and assembled into the final 64-bit key by
+     * the create-from-scratch editors. */
     SUBGHZ_CREATE_PROTO_KEELOQ,                /**< KeeLoq 433 — 64 bit OOK PWM (Flipper Bit:64) */
     SUBGHZ_CREATE_PROTO_STAR_LINE,             /**< Star Line 433 — 64 bit OOK PWM */
     SUBGHZ_CREATE_PROTO_JAROLIFT,              /**< Jarolift 433 — 64 bit OOK PWM (Flipper Bit:64) */
@@ -85,11 +79,11 @@ typedef enum {
  * Bitmask of user-editable fields on a protocol's create-from-scratch form.
  *
  * @c SUBGHZ_CREATE_FIELD_KEY is the catch-all "the whole hop word is one
- * opaque hex value"; the five rolling-code protocols in the initial Phase 8a
- * catalog all use this representation.  The remaining flags drive the
- * Phase 8c KeeLoq counter-mode workflow, where the device is described as
- * separate Serial / Button / Counter / Manufacturer-key components and the
- * 64-bit key is assembled by the encoder.
+ * opaque hex value" representation used by the rolling-code protocols
+ * whose editable state is stored as a single key word.  The remaining
+ * flags drive the KeeLoq-family workflow, where the device is described
+ * as separate Serial / Button / Counter / Manufacturer-key components
+ * and the 64-bit key is assembled by the encoder.
  */
 typedef enum {
     SUBGHZ_CREATE_FIELD_KEY     = 1U << 0,     /**< Single opaque hex key */
@@ -111,9 +105,9 @@ typedef struct {
     uint16_t    te;           /**< te_short override in µs (0 = registry default) */
     uint16_t    field_flags;  /**< OR of @ref SubGhzCreateFieldFlags */
     const char *file_prefix;  /**< Suggested filename prefix, no spaces */
-    /* KeeLoq-family field widths (Phase 8c-1).  Non-zero only when the
-     * matching FIELD_SERIAL / FIELD_BUTTON / FIELD_COUNTER flag is set.
-     * The editor scenes use these to size their per-field hex/decimal
+    /* KeeLoq-family field widths.  Non-zero only when the matching
+     * FIELD_SERIAL / FIELD_BUTTON / FIELD_COUNTER flag is set.  The
+     * editor scenes use these to size their per-field hex/decimal
      * cursors; the encoder uses them to mask the user-entered values
      * before assembling the 64-bit key. */
     uint8_t     serial_bits;  /**< Serial bit width (e.g. 28 for KeeLoq) */

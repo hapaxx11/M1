@@ -2,7 +2,7 @@
 
 /**
  * @file   subghz_keeloq_create.c
- * @brief  KeeLoq-family Create-from-scratch key assembler (Phase 8c-3).
+ * @brief  KeeLoq-family Create-from-scratch key assembler.
  *
  * Pure-logic implementation — no hardware, no FAT FS, no RTOS.
  */

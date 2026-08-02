@@ -844,7 +844,7 @@ void test_emulate_path_convert_when_not_raw_not_native(void)
 }
 
 /* ===================================================================
- * Phase 9b — Manufacture: field load / save round-trip
+ * Manufacture field load / save round-trip
  *
  * The SignalSettings save-back path (`subghz_signal_settings_apply_button`)
  * requires that:
@@ -949,7 +949,7 @@ void test_save_key_with_manufacture_null_writes_no_line(void)
 }
 
 /* ===================================================================
- * Phase 9d-2 — CounterMode: field load / save round-trip
+ * CounterMode field load / save round-trip
  *
  * Replay-policy override carried by KeeLoq-family .sub files:
  *   1. Missing `CounterMode:` line  → INCREMENT (default).
@@ -1099,8 +1099,8 @@ void test_save_key_full_increment_writes_no_line(void)
 	TEST_ASSERT_TRUE(ok);
 
 	/* File should NOT contain a CounterMode: line — Increment is the
-	 * implicit default and gets elided to keep existing Phase 9b/9c
-	 * saved files byte-identical. */
+	 * implicit default and gets elided to keep existing saved files
+	 * byte-identical. */
 	FILE *f = fopen(path, "rb");
 	TEST_ASSERT_NOT_NULL(f);
 	char buf[1024];
@@ -1120,8 +1120,8 @@ void test_save_key_full_increment_writes_no_line(void)
 
 void test_save_key_with_manufacture_never_writes_counter_mode(void)
 {
-	/* Phase 9d-2 contract: the Phase 9b/9c API stays byte-stable —
-	 * `save_key_with_manufacture` must never emit a CounterMode line. */
+	/* Contract: `save_key_with_manufacture` stays byte-stable and
+	 * must never emit a CounterMode line. */
 	const char *path = "/tmp/test_save_key_legacy_no_cm.sub";
 	bool ok = flipper_subghz_save_key_with_manufacture(
 	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
@@ -1141,7 +1141,7 @@ void test_save_key_with_manufacture_never_writes_counter_mode(void)
 }
 
 /*
- * Phase 9d-3 — CounterMode preservation when re-saving from a loaded
+ * CounterMode preservation when re-saving from a loaded
  * signal struct (mimics what the SignalSettings scene's apply_button /
  * apply_counter helpers now do: read s_signal.counter_mode after
  * flipper_subghz_load() and feed it back to flipper_subghz_save_key_full()).
@@ -1198,7 +1198,7 @@ void test_resave_increment_via_save_key_full_omits_field(void)
 	const char *path = "/tmp/test_resave_increment_preserve.sub";
 
 	/* Write a default-INCREMENT file via the legacy helper (the most
-	 * common pre-9d state on disk: no CounterMode: line). */
+	 * common legacy state on disk: no CounterMode: line). */
 	bool ok = flipper_subghz_save_key_with_manufacture(
 	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
 	    "KeeLoq", 64, 0xDEADBEEFCAFEBABEULL, 400,
@@ -1218,8 +1218,8 @@ void test_resave_increment_via_save_key_full_omits_field(void)
 	TEST_ASSERT_TRUE(ok);
 
 	/* Saved file must still omit the CounterMode line (Increment is
-	 * elided as the default) — keeps Phase 9b/9c saved files
-	 * byte-identical to legacy. */
+	 * elided as the default) — keeps saved files byte-identical to
+	 * legacy output. */
 	FILE *f = fopen(path, "rb");
 	TEST_ASSERT_NOT_NULL(f);
 	char buf[1024];
@@ -1313,13 +1313,13 @@ int main(void)
 	RUN_TEST(test_emulate_path_convert_when_not_raw_native);
 	RUN_TEST(test_emulate_path_convert_when_not_raw_not_native);
 
-	/* Phase 9b — Manufacture: field load / save round-trip */
+	/* Manufacture field load / save round-trip */
 	RUN_TEST(test_load_flipper_key_manufacture_field);
 	RUN_TEST(test_load_flipper_key_no_manufacture_empty);
 	RUN_TEST(test_save_key_with_manufacture_roundtrip);
 	RUN_TEST(test_save_key_with_manufacture_null_writes_no_line);
 
-	/* Phase 9d-2 — CounterMode: field load / save round-trip */
+	/* CounterMode field load / save round-trip */
 	RUN_TEST(test_load_flipper_key_counter_mode_missing_is_increment);
 	RUN_TEST(test_load_flipper_key_counter_mode_static);
 	RUN_TEST(test_load_flipper_key_counter_mode_increment_explicit);
@@ -1328,7 +1328,7 @@ int main(void)
 	RUN_TEST(test_save_key_full_increment_writes_no_line);
 	RUN_TEST(test_save_key_with_manufacture_never_writes_counter_mode);
 
-	/* Phase 9d-3 — CounterMode preservation when SignalSettings scene
+	/* CounterMode preservation when the SignalSettings scene
 	 * re-saves a loaded file via save_key_full (apply_button / apply_counter). */
 	RUN_TEST(test_resave_static_via_save_key_full_preserves_mode);
 	RUN_TEST(test_resave_increment_via_save_key_full_omits_field);

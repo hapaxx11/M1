@@ -137,7 +137,7 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * Filesystem operations prepend "0:" to build FatFS paths, so keep
  * raw_filepath short enough that "0:" + path fits in the derived buffers.
  *
- * Phase 6: the buffer itself now lives in SubGhzApp (`app->raw_filepath`)
+ * The buffer itself now lives in SubGhzApp (`app->raw_filepath`)
  * so the MoreRaw and DecodeRaw child scenes can share it.  The macro below
  * is a compatibility alias so the existing call sites in this scene keep
  * referencing `raw_filepath` — every reference is inside a function with
@@ -252,7 +252,7 @@ static void scene_on_enter(SubGhzApp *app)
     {
         app->rssi            = -120;
 
-        /* Phase 6 — if the MoreRaw child scene deleted the loaded file, it
+        /* If the MoreRaw child scene deleted the loaded file, it
          * cleared app->raw_filepath.  Drop back to the Start state instead
          * of presenting a Loaded view that points at a non-existent file.
          * Use the raw_filepath macro alias to avoid token-paste expansion
@@ -701,7 +701,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
             else if (app->raw_state == SubGhzReadRawStateLoaded && raw_filepath[0] != '\0')
             {
-                /* Phase 6 — open the MoreRAW submenu as its own scene
+                /* Open the MoreRAW submenu as its own scene
                  * (Decode / Rename / Delete).  app->raw_filepath is the
                  * shared file pointer the child scene will read / mutate;
                  * on Delete the child clears it and our resume-from-child
@@ -743,7 +743,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
              * continue_async() handles that case but we still don't want to
              * change scene state).
              *
-             * Phase 2 hold-to-repeat:  Peek the OK button GPIO directly —
+             * Hold-to-repeat: peek the OK button GPIO directly —
              * we MUST NOT consume keypad events from button_events_q_hdl
              * because the user might just be tapping OK and we still need
              * the next translate_button() to deliver SubGhzEventOk to other
@@ -840,7 +840,7 @@ static void draw(SubGhzApp *app)
 {
     m1_u8g2_firstpage();
 
-    /* Phase 6 — MoreRAW and DecodeRaw are now sibling child scenes that
+    /* MoreRAW and DecodeRaw are sibling child scenes that
      * own their own draw lifetime; nothing to overlay here.  When pushed,
      * scene_on_exit tears down the radio and start_passive_rx is restored
      * on resume. */

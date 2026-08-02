@@ -2,7 +2,7 @@
 
 /**
  * @file   test_subghz_button_override.c
- * @brief  Host tests for Sub-GHz button-override key mutation (Phase 4c).
+ * @brief  Host tests for Sub-GHz button-override key mutation.
  *
  * Pure-logic coverage of subghz_button_override_apply() / _supports():
  *
@@ -15,8 +15,8 @@
  *   4. Round-trip: applying button N then back to original button
  *      restores the original key.
  *   5. Cycle uniqueness: 4 distinct buttons → 4 distinct keys for
- *      KeeLoq and Star Line (the protocols actually exposed by
- *      Phase 4a's button_caps with button_count=4).
+ *      KeeLoq and Star Line (the protocols exposed by
+ *      button_caps with button_count=4).
  *   6. Unsupported protocols — verify FloR-S, CAME Atomo, Alutech
  *      AT-4N, KingGates Stylo4k, DITEC_GOL4, FAAC SLH, Toyota,
  *      Scher-Khan, an unknown protocol, and NULL return false.

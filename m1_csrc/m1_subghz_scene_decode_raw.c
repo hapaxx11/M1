@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_decode_raw.c
- * @brief  Sub-GHz Read-Raw offline decode-results scene (Phase 6).
+ * @brief  Sub-GHz Read-Raw offline decode-results scene.
  *
  * Pushed by the MoreRAW scene when the user selects "Decode" on a loaded
  * RAW file.  Loads @ref SubGhzApp.raw_filepath, runs the offline RAW
@@ -30,7 +30,7 @@
  * the RTOS task stack — matching the convention already used by Read Raw
  * and the SavedMenu decode path.
  *
- * Phase 6 split: this overlay was previously inlined inside
+ * This overlay was previously inlined inside
  * `m1_subghz_scene_read_raw.c` behind `rr_in_decode` / `rr_decode_*`
  * file-scope statics and a separate `do_rr_decode()` helper.  Extracting
  * it removes ~140 lines of overlay state from Read Raw and gives the

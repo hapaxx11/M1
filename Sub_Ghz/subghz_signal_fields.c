@@ -2,7 +2,7 @@
 
 /**
  * @file   subghz_signal_fields.c
- * @brief  KeeLoq-family field extract / assemble — Phase 9a-1.
+ * @brief  KeeLoq-family field extract / assemble.
  *
  * See subghz_signal_fields.h for the bit layouts and contract.
  *
@@ -134,7 +134,7 @@ bool subghz_signal_fields_keeloq_assemble(const char                   *protocol
 }
 
 /*============================================================================*/
-/* Counter decode / encode (Phase 9c-1)                                        */
+/* Counter decode / encode                                                     */
 /*============================================================================*/
 
 uint16_t subghz_signal_fields_keeloq_counter_decode(uint32_t enc_hop,
@@ -159,7 +159,7 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
 }
 
 /*============================================================================*/
-/* Nice FloR-S field extraction / assembly (P3 — Phase 9e-2)                   */
+/* Nice FloR-S field extraction / assembly                                     */
 /*============================================================================*/
 
 bool subghz_signal_fields_is_nice_flor_s(const char *protocol)
@@ -197,7 +197,7 @@ bool subghz_signal_fields_nice_flor_s_assemble(
 }
 
 /*============================================================================*/
-/* Nice FloR-S rolling counter — decode / encode (P3)                          */
+/* Nice FloR-S rolling counter — decode / encode                               */
 /*============================================================================*/
 
 uint16_t subghz_signal_fields_nice_flor_s_counter_decode(
@@ -221,7 +221,7 @@ uint64_t subghz_signal_fields_nice_flor_s_counter_encode(
 }
 
 /*============================================================================*/
-/* CAME Atomo field extraction / assembly (P4)                                 */
+/* CAME Atomo field extraction / assembly                                      */
 /*============================================================================*/
 
 bool subghz_signal_fields_is_came_atomo(const char *protocol)
@@ -330,7 +330,7 @@ bool subghz_signal_fields_came_atomo_assemble(
 }
 
 /*============================================================================*/
-/* CAME Atomo rolling counter — decode / encode (P4)                           */
+/* CAME Atomo rolling counter — decode / encode                                */
 /*============================================================================*/
 
 uint16_t subghz_signal_fields_came_atomo_counter_decode(uint64_t key)
@@ -353,7 +353,7 @@ uint64_t subghz_signal_fields_came_atomo_counter_encode(uint64_t key,
 }
 
 /*============================================================================*/
-/* Alutech AT-4N field extraction / assembly (P4)                              */
+/* Alutech AT-4N field extraction / assembly                                   */
 /*============================================================================*/
 
 bool subghz_signal_fields_is_alutech_at_4n(const char *protocol)
@@ -445,7 +445,7 @@ bool subghz_signal_fields_alutech_at_4n_assemble(
 }
 
 /*============================================================================*/
-/* Alutech AT-4N rolling counter — decode / encode (P4)                        */
+/* Alutech AT-4N rolling counter — decode / encode                             */
 /*============================================================================*/
 
 uint16_t subghz_signal_fields_alutech_at_4n_counter_decode(
@@ -477,31 +477,23 @@ uint64_t subghz_signal_fields_alutech_at_4n_counter_encode(
 }
 
 /*============================================================================*/
-/* Counter-edit capability probe (Phase 9e-1)                                  */
+/* Counter-edit capability probe                                               */
 /*============================================================================*/
 
 /* Static deferred-reason strings — pointed to by callers; never freed. */
 static const char SF_REASON_EMPTY[]      = "";
 static const char SF_REASON_PHOENIX_V2[] = "Phoenix V2: checksum recompute req.";
 
-/* Phase 9e protocols — counter editing is on the roadmap but the
- * required decode/encode path is not yet implemented.  Each entry cites
- * the specific blocker documented in the Phase 9e checklist:
+/* Protocols listed here have a known counter field but still lack the
+ * extract/substitute/re-encode path needed for editing.  Each entry cites
+ * the concrete blocker:
  *
  *   - Phoenix V2     : Counter bit-field is at a known offset in the
  *                      52-bit code but the trailing discriminant /
  *                      checksum must be recomputed after editing.
  *
- * Nice FloR-S has been promoted to SUPPORTED (P3) — its cipher is now
- * implemented in subghz_nice_flor_s.c with a loadable 32-byte rainbow
- * table, mirroring the KeeLoq key-vault pattern.
- *
- * CAME Atomo has been promoted to SUPPORTED (P4) — its LFSR stream
- * cipher is self-contained (no external key material).
- *
- * Alutech AT-4N has been promoted to SUPPORTED (P4) — its TEA-variant
- * cipher uses a 32-byte rainbow table injected at build time via the
- * ALUTECH_AT_4N_RAINBOW_TABLE secret.
+ * Nice FloR-S, CAME Atomo, and Alutech AT-4N are handled by the
+ * supported paths above.
  */
 typedef struct {
     const char *name;

@@ -4,10 +4,9 @@
  * @file   subghz_transmitter_ctl.h
  * @brief  Sub-GHz Transmitter scene controller — pure logic, host-testable.
  *
- * Phase 3b-1 of the Momentum parity migration.  Provides the high-level
- * state machine that the upcoming Transmitter scene (Phase 3b-2) will
- * drive from its `on_event` handler.  The controller sits one layer
- * **above** the @ref subghz_endless_tx engine (Phase 3a) and one layer
+ * Provides the high-level state machine that the Transmitter scene drives
+ * from its `on_event` handler.  The controller sits one layer
+ * **above** the @ref subghz_endless_tx engine and one layer
  * **below** the scene/RTOS code:
  *
  *     scene on_event  → subghz_transmitter_ctl_event()
@@ -48,7 +47,7 @@
  *                      is true, cycles button_index 0..button_count-1
  *                      and returns CYCLE_BUTTON_PREV/NEXT so the scene
  *                      can reload the key for the new button.  Otherwise
- *                      ignored.  (Phase 4 fully wires this up.)
+ *                      ignored.
  *
  * Design rationale: keeping this module pure (no globals, no HAL, no
  * radio code) means scene event routing is fully unit-testable on the
@@ -122,8 +121,8 @@ typedef struct {
 
     /** True when the loaded protocol supports M1-replayable rolling-code
      *  TX with multiple buttons (KeeLoq, Nice FloR-S, CAME Atomo, FAAC,
-     *  Alutech, etc.).  Phase 4 sets this from
-     *  `SubGhzProtocolFlag_PwmKeyReplay` on Dynamic protocols. */
+     *  Alutech, etc.).  The scene sets this from the protocol's
+     *  button-cycling capability. */
     bool    allow_button_cycle;
 
     /** Current button index in the cycle, 0..button_count-1.  Wraps. */

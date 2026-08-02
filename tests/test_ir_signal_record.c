@@ -85,7 +85,7 @@ void test_protocol_nec42(void)
 
 void test_protocol_nec16(void)
 {
-	/* Phase H: NEC16 (IRMP protocol 27) was missing from the table. */
+	/* NEC16 (IRMP protocol 27) was missing from the table. */
 	TEST_ASSERT_EQUAL_UINT8(IRMP_NEC16_PROTOCOL, ir_map_flipper_protocol("NEC16"));
 }
 

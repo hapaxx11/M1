@@ -5,8 +5,8 @@
  * test_subghz_protocol_ignore.c
  *
  * Unit tests for the Sub-GHz protocol ignore filter module
- * (Sub_Ghz/subghz_protocol_ignore.c) — the Momentum-style CATEGORY GROUP
- * model (Vehicles / Gates / Sensors / Pagers / Weather / TPMS).
+ * (Sub_Ghz/subghz_protocol_ignore.c) — the CATEGORY GROUP model
+ * (Vehicles / Gates / Sensors / Pagers / Weather / TPMS).
  *
  * Covers:
  *   - Default state (nothing ignored) and reset.
@@ -14,7 +14,7 @@
  *       * Weather / TPMS derived from the protocol `type`.
  *       * Vehicles / Gates / Sensors / Pagers from the name-keyed table.
  *   - group_set / group_get / group_toggle and is_ignored() gating.
- *   - Uncategorised protocols are never ignored (Momentum parity).
+ *   - Uncategorised protocols are never ignored.
  *   - Per-group protocol counts and ignored-group counts.
  *   - Hex serialize/deserialize round-trip of the ignored-group bitmask.
  *   - Name-based query via the registry.

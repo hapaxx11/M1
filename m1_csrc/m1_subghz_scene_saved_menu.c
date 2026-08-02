@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_saved_menu.c
- * @brief  Sub-GHz Saved-file action menu scene (Phase 5).
+ * @brief  Sub-GHz Saved-file action menu scene.
  *
  * Pushed by the Saved file-browser scene once a file is selected.
  *
@@ -20,10 +20,10 @@
  *
  * "Delete" pushes the dedicated Delete confirmation scene.
  *
- * Phase 5 split: action menu / info / decode previously lived inside
+ * Action menu / info / decode previously lived inside
  * `m1_subghz_scene_saved.c`; that scene is now a pure file browser.
  *
- * Phase 7c-3: action-menu rendering and scroll/selection math come from
+ * Action-menu rendering and scroll/selection math come from
  * the reusable `subghz_submenu_model` + `m1_submenu_draw` widget so the
  * menu honours `Settings → LCD & Notifications → Text Size` consistently
  * with the Sub-GHz top-level Menu and the Read-Raw MoreRAW menu.
@@ -57,18 +57,18 @@ enum {
     SAVED_ACTION_INFO,
     SAVED_ACTION_RENAME,
     SAVED_ACTION_DELETE,
-    SAVED_ACTION_SETTINGS,        /**< Phase 9a-2 — per-file SignalSettings */
+    SAVED_ACTION_SETTINGS,        /**< Per-file SignalSettings */
 };
 
 static const char *const parsed_action_labels[] = { "Emulate", "Info", "Rename", "Delete" };
 /* Parsed-file label set when the protocol supports the SignalSettings
- * scene (Phase 9a-2: KeeLoq family only; broader gating in Phase 9e). */
+ * scene when the loaded protocol supports it. */
 static const char *const parsed_settings_labels[] = { "Emulate", "Info", "Settings", "Rename", "Delete" };
 
 #define PARSED_ACTION_COUNT          4
 #define PARSED_SETTINGS_ACTION_COUNT 5
 
-/* Phase 7c-3: action menu uses the reusable pure-logic submenu model.
+/* Action menu uses the reusable pure-logic submenu model.
  * Selection is reset on every scene_on_enter to match prior behaviour. */
 static subghz_submenu_model_t s_action_model;
 static uint8_t action_count;
@@ -76,7 +76,7 @@ static const char *const *active_labels;
 
 static bool in_info_screen;
 static bool is_raw_file;
-/* Phase 9a-2 — true when the loaded parsed file's protocol is supported
+/* True when the loaded parsed file's protocol is supported
  * by the SignalSettings scene; gates the "Settings" entry in the menu. */
 static bool has_settings_entry;
 
@@ -89,7 +89,7 @@ static flipper_subghz_signal_t saved_signal;
 
 /**
  * @brief  Map selected action index to unified action ID.
- *         When the SignalSettings entry is present (Phase 9a-2), it
+ *         When the SignalSettings entry is present, it
  *         occupies index 2 between Info and Rename.
  */
 static uint8_t map_action(uint8_t sel)
@@ -134,7 +134,7 @@ static bool load_signal(const SubGhzApp *app)
     is_raw_file = (saved_signal.type == FLIPPER_SUBGHZ_TYPE_RAW
                    && saved_signal.raw_count > 0);
 
-    /* Phase 9a-2/9e-1: gate the Settings entry on parsed files whose
+    /* Gate the Settings entry on parsed files whose
      * protocol either has a host-tested field extractor (KeeLoq family —
      * full read-only display + Button/Counter/CounterMode editing) or
      * has a documented deferred-implementation status (Nice FloR-S /
@@ -211,8 +211,8 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
             app->tx_path[sizeof(app->tx_path) - 1] = '\0';
             app->tx_repeat_count = 5U;             /* static keys: 5 bursts for reliable TX */
             app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
-            /* Phase 4b — propagate the parsed protocol name so the
-             * Transmitter scene can query button-cycling capability. */
+            /* Propagate the parsed protocol name so the Transmitter
+             * scene can query button-cycling capability. */
             strncpy(app->tx_protocol_name, saved_signal.protocol,
                     sizeof(app->tx_protocol_name) - 1);
             app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';
@@ -260,7 +260,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_SETTINGS:
         {
-            /* Phase 9a-2 — push the read-only SignalSettings scene.  The
+            /* Push the read-only SignalSettings scene.  The
              * scene reloads from app->saved_filepath and dissects the
              * 64-bit key into protocol-specific fields. */
             subghz_scene_push(app, SubGhzSceneSignalSettings);
@@ -338,7 +338,7 @@ static void draw_info_screen(void)
 
     if (saved_signal.type == FLIPPER_SUBGHZ_TYPE_PARSED)
     {
-        /* Phase 11-1: consult the protocol's polymorphic get_string vtable
+        /* Consult the protocol's polymorphic get_string vtable
          * slot when present.  Currently installed only on the KeeLoq family
          * (KeeLoq / Star Line / Jarolift); all other parsed protocols fall
          * through to the generic Proto / Key / Bits / TE layout below. */
@@ -414,7 +414,7 @@ static void draw_info_screen(void)
 
 static void draw_action_menu(const SubGhzApp *app)
 {
-    /* Phase 7c-3: render via the reusable submenu widget.  The filename
+    /* Render via the reusable submenu widget.  The filename
      * (truncated to a manageable length) is used as the title; the model
      * derives row height, scroll math, and scrollbar geometry from the
      * user's text-size preference. */
@@ -423,7 +423,7 @@ static void draw_action_menu(const SubGhzApp *app)
     title[sizeof(title) - 1] = '\0';
 
     /* Re-sync visible_count for the current text-size setting before
-     * drawing — matches the Phase 7c-1 / 7c-2 pattern. */
+     * drawing — matches the shared submenu pattern. */
     subghz_submenu_model_set_visible_count(&s_action_model,
                                            M1_MENU_VIS(action_count));
     m1_submenu_draw(&s_action_model, title, active_labels);

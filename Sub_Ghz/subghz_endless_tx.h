@@ -4,8 +4,8 @@
  * @file   subghz_endless_tx.h
  * @brief  Sub-GHz TX repeat / endless-hold policy — pure logic, host-testable.
  *
- * Phase 3a of the Momentum parity migration.  Models the behaviour that the
- * upcoming Transmitter scene (Phase 3b) needs in order to support:
+ * Models the transmit-repeat behaviour that the Transmitter scene uses to
+ * support:
  *
  *   - **SINGLE** mode — transmit a key burst N times then stop.  N comes
  *     from the protocol's recommended repeat count (typical: 3 for rolling

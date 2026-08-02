@@ -911,7 +911,7 @@ the enum in `m1_sub_ghz_decenc.h`.
 | `roger.c` | `"Roger"` | `m1_roger_decode.c` | Generic PWM (500/1000, 28 bits) |
 | `somfy_keytis.c` | `"Somfy Keytis"` | `m1_somfy_keytis_decode.c` | Generic Manchester (640/1280, 80 bits); distinct from `"Somfy Telis"` |
 
-#### Sub-GHz Phase 3 — Weather/Sensor protocols (March 2026)
+#### Sub-GHz Weather/Sensor protocols (March 2026)
 
 The following 12 weather/sensor protocols were added. PPM-based decoders use the
 new `subghz_decode_generic_ppm()` generic decoder utility.
@@ -931,7 +931,7 @@ new `subghz_decode_generic_ppm()` generic decoder utility.
 | `lacrosse_tx141thbv2.c` | `"LaCrosse_TX141THBv2"` | `m1_lacrosse_tx141thbv2_decode.c` | Generic PWM (40 bits, weather sensor) |
 | `wendox_w6726.c` | `"Wendox_W6726"` | `m1_wendox_w6726_decode.c` | Generic PWM (29 bits, weather sensor) |
 
-#### Sub-GHz Phase 4 — Remote/Gate/Automation protocols (March 2026)
+#### Sub-GHz Remote/Gate/Automation protocols (March 2026)
 
 | Flipper source file | `SUBGHZ_PROTOCOL_*_NAME` | M1 decoder | Notes |
 |---------------------|--------------------------|------------|-------|
@@ -944,7 +944,7 @@ new `subghz_decode_generic_ppm()` generic decoder utility.
 #### Sub-GHz protocols gap (remaining — no unported protocols as of March 2026)
 
 All protocols identified in the March 2026 gap analysis have now been ported
-(17 Phase 2 + 12 Phase 3 weather + 5 Phase 4 remote/gate + 5 Phase 5 advanced weather = 39 new protocols total).
+(17 initial + 12 weather/sensor + 5 remote/gate + 5 advanced weather = 39 new protocols total).
 If new Flipper protocols appear in future `dev` branch updates, repeat the
 analysis by comparing Flipper's `lib/subghz/protocols/` against M1's
 `protocol_text[]` array.
@@ -977,7 +977,7 @@ protocol registry (`subghz_protocol_find_by_name()`) as the primary lookup:
 This fixed multiple interop issues:
 - **Cham_Code** — was previously unmatched (no strstr entry)
 - **Marantec24** — was incorrectly caught by `strstr("Marantec")` rolling-code check
-- **All Phase 2 static protocols** — Clemsa, BETT, MegaCode, Centurion, etc.
+- **All static protocols from the initial batch** — Clemsa, BETT, MegaCode, Centurion, etc.
   were missing from both strstr branches
 
 ### Dual `.sub` / `.sgh` File Format Support

@@ -2,15 +2,16 @@
 
 /**
  * @file   m1_subghz_scene_set_counter.c
- * @brief  Sub-GHz Create-from-scratch KeeLoq SetCounter editor scene (Phase 8c-2).
+ * @brief  Sub-GHz Create-from-scratch KeeLoq SetCounter editor scene.
  *
  * Hex-digit editor for the KeeLoq-family rolling counter.  The editor's
  * bit width is taken from the picked protocol's
  * @ref SubGhzCreateProtoSpec::counter_bits (16 bits for the KeeLoq /
- * Star Line / Jarolift entries shipped by Phase 8c-1).  On OK the
+ * Star Line / Jarolift entries in the built-in catalog).  On OK the
  * assembled value is masked to `counter_bits` and persisted into
  * @ref SubGhzApp::create_counter; the scene pops back to whichever
- * scene pushed it.  Phase 8c-3 will push @ref SubGhzSceneSetMfKey next.
+ * scene pushed it. In the create-from-scratch flow, OK advances to
+ * @ref SubGhzSceneSetMfKey next.
  *
  * Hardware-coupled UI rendering only — the underlying digit/cursor
  * state lives in the host-tested pure `subghz_hex_editor` module.
@@ -43,7 +44,7 @@ static const SubGhzCreateProtoSpec *s_spec;
 
 static uint8_t counter_bits_for(SubGhzApp *app)
 {
-    /* Phase 9c-3 — edit-signal mode reuses this scene for the KeeLoq
+    /* Edit-signal mode reuses this scene for the KeeLoq
      * family (KeeLoq / Star Line / Jarolift), all of which use a 16-bit
      * rolling counter.  The Create-from-scratch spec table is only
      * relevant when not in edit-signal mode. */
@@ -71,7 +72,7 @@ static void scene_on_enter(SubGhzApp *app)
 {
     uint8_t bits = counter_bits_for(app);
     subghz_hex_editor_init(&s_editor, bits);
-    /* Phase 9c-3 — seed from the loaded signal's decoded rolling counter
+    /* Seed from the loaded signal's decoded rolling counter
      * when editing a .sub file; otherwise from `create_counter`
      * (Create-from-scratch). */
     uint64_t initial = app->signal_edit_active
@@ -116,7 +117,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
             if (app->signal_edit_active)
             {
-                /* Phase 9c-3 — save back to the loaded .sub file via the
+                /* Save back to the loaded .sub file via the
                  * SignalSettings cross-scene API.  Whether the save
                  * succeeds or fails we pop back to SignalSettings so
                  * the user is never trapped here; the on_enter there
@@ -128,7 +129,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             }
 
             app->create_counter = (uint32_t)masked;
-            /* Phase 8c-3 — chain forward to the manufacturer-key picker. */
+            /* Create-from-scratch flow — chain forward to the manufacturer-key picker. */
             subghz_scene_push(app, SubGhzSceneSetMfKey);
             return true;
         }

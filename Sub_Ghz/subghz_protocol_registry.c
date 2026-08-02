@@ -143,7 +143,7 @@ extern uint8_t subghz_decode_pocsag(uint16_t, uint16_t);
 extern uint8_t subghz_decode_tpms_generic(uint16_t, uint16_t);
 extern uint8_t subghz_decode_pcsg_generic(uint16_t, uint16_t);
 
-/* Momentum Phase 3: Weather/Sensor protocols */
+/* Weather/Sensor protocols */
 extern uint8_t subghz_decode_auriol_ahfl(uint16_t, uint16_t);
 extern uint8_t subghz_decode_auriol_hg0601a(uint16_t, uint16_t);
 extern uint8_t subghz_decode_gt_wt02(uint16_t, uint16_t);
@@ -157,14 +157,14 @@ extern uint8_t subghz_decode_emos_e601x(uint16_t, uint16_t);
 extern uint8_t subghz_decode_lacrosse_tx141thbv2(uint16_t, uint16_t);
 extern uint8_t subghz_decode_wendox_w6726(uint16_t, uint16_t);
 
-/* Momentum Phase 4: Remote/Gate/Automation protocols */
+/* Remote/Gate/Automation protocols */
 extern uint8_t subghz_decode_ditec_gol4(uint16_t, uint16_t);
 extern uint8_t subghz_decode_elplast(uint16_t, uint16_t);
 extern uint8_t subghz_decode_honeywell_wdb(uint16_t, uint16_t);
 extern uint8_t subghz_decode_keyfinder(uint16_t, uint16_t);
 extern uint8_t subghz_decode_x10(uint16_t, uint16_t);
 
-/* Momentum Phase 5: Advanced weather protocols */
+/* Advanced weather protocols */
 extern uint8_t subghz_decode_acurite_592txr(uint16_t, uint16_t);
 extern uint8_t subghz_decode_acurite_986(uint16_t, uint16_t);
 extern uint8_t subghz_decode_acurite_5n1(uint16_t, uint16_t);
@@ -172,7 +172,7 @@ extern uint8_t subghz_decode_tx_8300(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon_v1(uint16_t, uint16_t);
 extern uint8_t subghz_decode_oregon3(uint16_t, uint16_t);
 
-/* Phase 6: Rolling code parity additions */
+/* Additional rolling-code protocols */
 extern uint8_t subghz_decode_jarolift(uint16_t, uint16_t);
 extern uint8_t subghz_decode_beninca_arc(uint16_t, uint16_t);
 extern uint8_t subghz_decode_hormann_bisecur(uint16_t, uint16_t);
@@ -854,7 +854,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_somfy_keytis,
     },
 
-    /* ── Momentum Phase 3: Weather/Sensor protocols ────────────────────── */
+    /* ── Weather/Sensor protocols ──────────────────────────────────────── */
 
     [AURIOL_AHFL] = {
         .name   = "Auriol_AHFL",
@@ -953,7 +953,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_wendox_w6726,
     },
 
-    /* ── Momentum Phase 4: Remote/Gate/Automation protocols ────────────── */
+    /* ── Remote/Gate/Automation protocols ──────────────────────────────── */
 
     [DITEC_GOL4] = {
         .name   = "DITEC_GOL4",
@@ -1034,7 +1034,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_pcsg_generic,
     },
 
-    /* --- Momentum Phase 5: Advanced weather protocols --- */
+    /* --- Advanced weather protocols --- */
     [ACURITE_592TXR] = {
         .name   = "Acurite_592TXR",
         .type   = SubGhzProtocolTypeWeather,
@@ -1084,7 +1084,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .decode = subghz_decode_oregon3,
     },
 
-    /* ── Phase 6: Rolling code parity additions ─────────────────────────── */
+    /* ── Additional rolling-code protocols ─────────────────────────────── */
 
     [JAROLIFT] = {
         .name   = "Jarolift",

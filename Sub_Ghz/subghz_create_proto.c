@@ -6,8 +6,6 @@
  * Pure-logic "Create from scratch" protocol catalog — see header for the
  * design rationale.  Zero hardware dependencies.
  *
- * Phase 8a of the Momentum parity migration.
- *
  * M1 Project — Hapax fork
  */
 
@@ -22,8 +20,7 @@
  * M1 can both build from a user-entered key and replay indefinitely via
  * the standard PWM key encoder.  Metadata mirrors the Bind New Remote
  * generator (see Sub_Ghz/subghz_new_remote_gen.c proto_specs[]) so the
- * two stay byte-for-byte consistent — Phase 8b will dedupe once the
- * SetType scene lands.
+ * two flows stay byte-for-byte consistent.
  *
  * Bit-count notes:
  *   - Alutech AT-4N: registry min_count_bit is 72, but the decoder also
@@ -78,16 +75,16 @@ static const SubGhzCreateProtoSpec s_proto_catalog[SUBGHZ_CREATE_PROTO_COUNT] = 
     },
 
     /*----------------------------------------------------------------------*
-     * Phase 8b-1 — Static-OOK families
+     * Static-OOK families
      *
      * Metadata mirrors the legacy `subghz_add_manually_list[]` in
-     * m1_csrc/m1_sub_ghz.c plus Holtek HT12X (which the registry already
-     * supports but Add Manually does not yet expose).  The proto_name is
+     * m1_csrc/m1_sub_ghz.c plus Holtek HT12X, which the registry supports
+     * and the current create-from-scratch flow exposes.  The proto_name is
      * the canonical name from Sub_Ghz/subghz_protocol_registry.c so the
-     * .sub Protocol: field that the upcoming Phase 8b-4 writer emits will
-     * match the receiver decoder exactly — fixing two long-standing bugs
-     * in the legacy code path (`Nice FLO 12b` → "Nice" and `Gate TX 433`
-     * → "Gate"; both gated only through the strstr() fallback today).
+     * written `.sub` `Protocol:` field matches the receiver decoder exactly,
+     * fixing two long-standing legacy mismatches (`Nice FLO 12b` → "Nice"
+     * and `Gate TX 433` → "Gate"; both gated only through the strstr()
+     * fallback today).
      *
      * The legacy table also stored a `ratio` field (1:2 vs 1:3 OOK PWM)
      * used to derive te_long.  That ratio is **not** carried in this
@@ -210,24 +207,24 @@ static const SubGhzCreateProtoSpec s_proto_catalog[SUBGHZ_CREATE_PROTO_COUNT] = 
     },
 
     /*----------------------------------------------------------------------*
-     * Phase 8c-1 — KeeLoq family (counter-mode rolling-code)
+     * KeeLoq family (counter-mode rolling-code)
      *
      * The three protocols below are the KeeLoq-cipher based remotes that
      * `Sub_Ghz/subghz_keeloq_encoder.c::keeloq_encode_replay()` already
      * supports for counter-mode replay when a manufacturer key is loaded.
      *
-     * Unlike Phase 8a's rolling-code remotes (CAME Atomo / Nice FloR-S /
-     * etc.) which expose a single opaque hex key, KeeLoq-family devices
+     * Unlike the opaque-key rolling-code remotes above (CAME Atomo /
+     * Nice FloR-S / etc.), KeeLoq-family devices
      * are described as four discrete fields:
      *   - Serial (28 bits) — device-specific identifier
      *   - Button (4 bits) — pressed-button code
      *   - Counter (16 bits) — rolling counter (post-decrypt)
      *   - Manufacture (name) — selects the manufacturer key for encryption
      *
-     * The Phase 8c-2/3 editor scenes will collect these four values,
-     * assemble the 64-bit Flipper-format key (KeeLoq/Jarolift:
+     * The create-from-scratch editors collect these four values, assemble
+     * the 64-bit Flipper-format key (KeeLoq/Jarolift:
      * (button<<60)|(serial<<32)|HOP; Star Line: HOP<<32|(serial<<4)|button),
-     * write a `.sub` file with the `Manufacture:` field set, and replay
+     * write a `.sub` file with the `Manufacture:` field set, and replay it
      * via the existing counter-mode encoder.
      *
      * Bit widths are constant across the family.  bit_count is 64 — the

@@ -4,8 +4,8 @@
  * @file   test_esp32_feature_map.c
  * @brief  Host-side unit tests for the ESP32 feature-to-capability classifier.
  *
- * Phase C of the firmware-wide momentum-parity migration.
  *
+
  * Covers:
  *   esp32_feature_supported()       — bitmap × feature → bool
  *   esp32_feature_required_caps()   — feature → required M1_ESP32_CAP_* bits

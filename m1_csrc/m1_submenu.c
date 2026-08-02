@@ -4,7 +4,7 @@
  * @file   m1_submenu.c
  * @brief  Firmware-side rendering shim for `subghz_submenu_model_t`.
  *
- * Phase 7b: thin adapter that bridges the Phase 7a pure-logic model to
+ * Thin adapter that bridges the pure-logic model to
  * the existing `m1_scene_draw_menu()` renderer.  All actual u8g2 drawing
  * lives in `m1_scene.c`; this module only translates the model's fields
  * into the renderer's positional parameters and adds null-pointer guards.

@@ -149,7 +149,7 @@ void test_builtin_sd_files_not_created(void)
 /* test_get_at_iterates_table
  * keeloq_mfkeys_get_at(i) returns every entry in the loaded table in
  * order, matching what keeloq_mfkeys_find() returns for the same names.
- * Needed by the Phase 8c-2 SetMfKey picker scene.
+ * Needed by the SetMfKey picker scene.
  */
 void test_get_at_iterates_table(void)
 {

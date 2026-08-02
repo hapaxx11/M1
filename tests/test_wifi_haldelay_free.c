@@ -3,7 +3,7 @@
 /*
  * test_wifi_haldelay_free.c
  *
- * Source-level regression checks for Phase A-6: HAL_Delay elimination from
+ * Source-level regression checks for HAL_Delay elimination from
  * m1_wifi.c. Verifies that:
  *
  *   - m1_wifi.c contains no HAL_Delay() calls (comments excluded)
