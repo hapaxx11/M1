@@ -181,16 +181,11 @@ OOK PWM key encoder can replay.  **Never gate on protocol name strings — use t
    no cipher (just a counter increment).  If it uses a known reversible cipher with a
    public or partially-published key, add it to the ⚠️ Possible list and open a task.
 
-2. **KeeLoq counter mode is implemented** (`Sub_Ghz/subghz_keeloq*.c/h`).  Manufacturer
-   keys are embedded at build time via `scripts/gen_keeloq_mfkeys_builtin.py` and the
-   `KEELOQ_KEY_VAULT` CI secret.  When no built-in keys are present, the firmware falls
-   back to the SD card: `0:/SUBGHZ/keeloq_mfcodes.enc` (AES-256-CBC encrypted) or the
-   legacy plaintext `0:/SUBGHZ/keeloq_mfcodes` (auto-migrated on first load).
-   The counter-mode encoder:
-   - Derives the device key via Normal or Simple Learning
-   - Decrypts the captured hop word using the full KeeLoq cipher
-   - Increments the 16-bit rolling counter
-   - Re-encrypts and transmits as OOK PWM
+2. **KeeLoq counter mode is implemented** (`Sub_Ghz/subghz_keeloq*.c/h`) — see the
+   KeeLoq note under the registry table above for the key-provisioning details.  The
+   counter-mode encoder derives the device key (Normal or Simple Learning), decrypts
+   the captured hop word using the full KeeLoq cipher, increments the 16-bit rolling
+   counter, and re-encrypts for OOK PWM transmission.
 
 3. **Security+ 1.0 brute-force counter mode** is already implemented in `m1_sub_ghz.c`.
    The dedicated ternary encoder lives in `Sub_Ghz/subghz_secplus_v1_encoder.c`.
