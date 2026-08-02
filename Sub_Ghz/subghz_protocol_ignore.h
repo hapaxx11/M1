@@ -102,6 +102,9 @@ typedef enum {
 /** Clear the ignore set (no group ignored — every protocol is decoded). */
 void subghz_ignore_reset(void);
 
+/** Build the protocol->group cache outside RX hot paths. */
+void subghz_ignore_cache_warmup(void);
+
 /**
  * Hot-path query: is the protocol at registry @p index currently ignored?
  *

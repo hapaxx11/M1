@@ -100,6 +100,16 @@ void test_reset_clears_all(void)
     TEST_ASSERT_EQUAL_UINT16(0, subghz_ignore_group_ignored_count());
 }
 
+void test_cache_warmup_keeps_group_resolution_correct(void)
+{
+    subghz_ignore_cache_warmup();
+
+    TEST_ASSERT_EQUAL_UINT32(SUBGHZ_IGNORE_GROUP_BIT(SubGhzIgnoreGroupGates),
+                             subghz_ignore_group_mask_of(P_PRINCETON));
+    TEST_ASSERT_EQUAL_UINT32(SUBGHZ_IGNORE_GROUP_BIT(SubGhzIgnoreGroupWeather),
+                             subghz_ignore_group_mask_of(P_OREGON));
+}
+
 /*============================================================================*/
 /* Group membership resolution                                                */
 /*============================================================================*/
@@ -316,6 +326,7 @@ int main(void)
 
     RUN_TEST(test_default_nothing_ignored);
     RUN_TEST(test_reset_clears_all);
+    RUN_TEST(test_cache_warmup_keeps_group_resolution_correct);
 
     RUN_TEST(test_group_mask_name_table);
     RUN_TEST(test_group_mask_type_derived);

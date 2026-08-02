@@ -1178,6 +1178,9 @@ void settings_load_from_sd(void)
 #endif
 
 apply:
+    /* Warm the ignore-group cache before any Sub-GHz RX decode path runs. */
+    subghz_ignore_cache_warmup();
+
     /* Apply brightness */
     lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
 

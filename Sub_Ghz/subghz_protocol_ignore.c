@@ -203,6 +203,11 @@ void subghz_ignore_reset(void)
     g_ignored_groups = 0;
 }
 
+void subghz_ignore_cache_warmup(void)
+{
+    ensure_cache();
+}
+
 uint32_t subghz_ignore_group_mask_of(uint16_t index)
 {
     if (index >= subghz_protocol_registry_count ||

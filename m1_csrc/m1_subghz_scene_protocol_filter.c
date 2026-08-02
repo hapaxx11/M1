@@ -13,7 +13,7 @@
  * Navigation:
  *   UP/DOWN         = select group
  *   OK / LEFT/RIGHT = toggle On ↔ Ignored for the selected group
- *   BACK            = persist the ignore set and return to Config
+ *   BACK            = save cursor row and return to Config
  *
  * The ignore set is held by the pure-logic subghz_protocol_ignore module;
  * this scene is only the UI.  Group membership is data-driven from the
@@ -29,7 +29,6 @@
 #include "m1_lcd.h"
 #include "m1_scene.h"
 #include "m1_subghz_scene.h"
-#include "m1_settings.h"
 #include "subghz_protocol_registry.h"
 #include "subghz_protocol_ignore.h"
 
@@ -86,9 +85,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
     switch (event)
     {
         case SubGhzEventBack:
-            /* Persist the ignore list before leaving. */
             subghz_scene_set_state(app, SubGhzSceneProtocolFilter, pf_sel);
-            settings_save_to_sd();
             subghz_scene_pop(app);
             return true;
 
