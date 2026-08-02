@@ -74,7 +74,7 @@ typedef enum {
     SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
     SubGhzSceneSmartSignalId,    /**< Smart ID: pre-scan then RF Rosetta identifier */
     SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Smart ID + RF analysis tools) */
-    SubGhzSceneProtocolFilter, /**< Per-protocol ignore/decode toggle list */
+    SubGhzSceneProtocolFilter, /**< Protocol-group ignore filter (Weather/TPMS/Vehicles/Gates/Sensors/Pagers) */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 

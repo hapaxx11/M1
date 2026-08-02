@@ -36,10 +36,10 @@ static uint32_t g_ignored_groups;
  */
 typedef struct {
     const char *name;
-    uint8_t     groups;   /* OR of SUBGHZ_IGNORE_GROUP_BIT(...) */
+    uint32_t    groups;   /* OR of SUBGHZ_IGNORE_GROUP_BIT(...) */
 } subghz_group_map_t;
 
-#define GB(g)   ((uint8_t)SUBGHZ_IGNORE_GROUP_BIT(g))
+#define GB(g)   (SUBGHZ_IGNORE_GROUP_BIT(g))
 
 static const subghz_group_map_t k_group_map[] = {
     /* ── Vehicles — car alarms / automotive keyfobs ─────────────────────── */
