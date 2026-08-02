@@ -120,7 +120,7 @@ static const char *const k_group_names[SubGhzIgnoreGroupCount] = {
 /* Group-mask cache — built once from the (const) registry.                   */
 /*----------------------------------------------------------------------------*/
 
-static uint8_t g_group_cache[SUBGHZ_IGNORE_MAX_PROTOCOLS];
+static uint32_t g_group_cache[SUBGHZ_IGNORE_MAX_PROTOCOLS];
 static bool    g_cache_built;
 
 static int ascii_lower(int c)
@@ -142,12 +142,12 @@ static bool name_equals_ci(const char *a, const char *b)
     return *a == *b;
 }
 
-static uint8_t compute_group_mask(uint16_t index)
+static uint32_t compute_group_mask(uint16_t index)
 {
     if (index >= subghz_protocol_registry_count)
         return 0;
 
-    uint8_t mask = 0;
+    uint32_t mask = 0;
 
     /* Weather / TPMS are derived directly from the protocol type. */
     switch (subghz_protocol_registry[index].type)
