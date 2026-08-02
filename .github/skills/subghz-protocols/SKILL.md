@@ -373,6 +373,44 @@ the scene manager without rewriting each tool.
 
 ---
 
+## Protocol Filter (ignore protocols on capture)
+
+Momentum/Unleashed parity: the user can mark individual protocols as **Ignored**
+so the receiver skips them during capture/decode.  The M1 implementation is a
+small, pure-logic ignore-list plus a UI scene.
+
+| File | Role |
+|------|------|
+| `Sub_Ghz/subghz_protocol_ignore.c/.h` | Pure ignore-set: 128-bit bitset indexed by registry index, hex serialize/deserialize for persistence, and registry-backed name helpers.  Zero hardware deps, host-tested. |
+| `m1_csrc/m1_subghz_scene_protocol_filter.c` | `SubGhzSceneProtocolFilter` — scrollable On/Ignored toggle list driven straight from the protocol registry.  Reached via the **Protocols** row in the Sub-GHz **Config** scene. |
+
+### The single gate — `subghz_ignore_is_ignored(index)`
+
+Every decode loop consults this one function before running a protocol's
+decoder, so the ignore list is honoured **everywhere protocols are decoded**:
+
+- **Live Read** — `subghz_pulse_handler()` in `Sub_Ghz/m1_sub_ghz_decenc.c`.
+- **Read Raw / Decode Raw / Playlist / RF Rosetta Signal ID + Smart ID** —
+  `subghz_registry_decode_try_fn()` in `Sub_Ghz/subghz_decode_try_fn.c`
+  (the shared `SubGhzRawDecodeTryFn` used by `subghz_decode_raw_offline()`).
+
+Because RF Rosetta's decode stage runs through `subghz_registry_decode_try_fn()`,
+ignored protocols never produce a "decoded" hit there either.
+
+### Rules for new reading/decoding code
+
+1. **Any new loop that iterates the registry to decode a capture MUST call
+   `subghz_ignore_is_ignored(index)` and `continue` when it returns true.**
+   Do not re-implement the skip inline with a different data source.
+2. **Persistence is index-based** (hex bitmask `subghz_ignore=` in the settings
+   file, written/parsed in `m1_settings.c`).  Like `freq_idx`/`mod_idx`, the mask
+   is tied to registry order — new protocols are appended to the end of the
+   registry so existing saved bits keep their meaning.
+3. **The Config scene shows the ignored count** ("All On" / "N off") and opens
+   the filter on OK/RIGHT; keep that entry when editing `m1_subghz_scene_config.c`.
+
+---
+
 ## Remaining Sub-GHz Momentum-Parity Work
 
 > The Momentum-parity phased programme (Phases 1–12) is **complete and shipped**.

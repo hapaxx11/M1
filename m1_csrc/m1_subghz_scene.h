@@ -74,6 +74,7 @@ typedef enum {
     SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
     SubGhzSceneSmartSignalId,    /**< Smart ID: pre-scan then RF Rosetta identifier */
     SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Smart ID + RF analysis tools) */
+    SubGhzSceneProtocolFilter, /**< Per-protocol ignore/decode toggle list */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -554,6 +555,7 @@ extern const SubGhzSceneHandlers subghz_scene_proto_pirate_tuner_handlers;
 extern const SubGhzSceneHandlers subghz_scene_signal_identifier_handlers;
 extern const SubGhzSceneHandlers subghz_scene_smart_signal_id_handlers;
 extern const SubGhzSceneHandlers subghz_scene_analyzer_menu_handlers;
+extern const SubGhzSceneHandlers subghz_scene_protocol_filter_handlers;
 
 /*============================================================================*/
 /* SignalSettings (Phase 9b) cross-scene API                                  */

@@ -23,6 +23,7 @@
 
 #include <string.h>
 #include "subghz_protocol_registry.h"
+#include "subghz_protocol_ignore.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_raw_decoder.h"
 
@@ -39,6 +40,12 @@ bool subghz_registry_decode_try_fn(const uint16_t *pulse_buf,
 
     for (uint16_t p = 0; p < subghz_protocol_registry_count; p++)
     {
+        /* Skip protocols the user has chosen to ignore (Protocol Filter).
+         * Applies to every offline/raw decode caller — Read Raw, Decode Raw,
+         * Playlist, and the RF Rosetta Signal ID / Smart ID decode stage. */
+        if (subghz_ignore_is_ignored(p))
+            continue;
+
         const SubGhzProtocolDef *proto = &subghz_protocol_registry[p];
         if (proto->decode && proto->decode(p, pulse_count) == 0)
         {

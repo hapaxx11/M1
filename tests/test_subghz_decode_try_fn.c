@@ -45,6 +45,7 @@
 #include <stdbool.h>
 #include "unity.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_protocol_ignore.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_raw_decoder.h"
 
@@ -69,6 +70,7 @@ static void reset_state(void)
     memset(&g_decenc_read_info, 0, sizeof(g_decenc_read_info));
     memset(g_decoder_call_count, 0, sizeof(g_decoder_call_count));
     memset(&subghz_decenc_ctl, 0, sizeof(subghz_decenc_ctl));
+    subghz_ignore_reset();   /* start every test with nothing ignored */
 }
 
 /*============================================================================*/
@@ -283,6 +285,72 @@ void test_single_pulse_copy(void)
     TEST_ASSERT_EQUAL_UINT16(999, subghz_decenc_ctl.pulse_times[0]);
 }
 
+/* 9. Ignore filter — an ignored protocol's decoder is never invoked even
+ *    though it would otherwise match, and the overall result is false when it
+ *    is the only matching protocol. */
+void test_ignored_protocol_decoder_skipped(void)
+{
+    g_decoder_result[1] = 0;      /* decoder[1] would match at pulse level */
+    g_decenc_read_result = true;  /* and decenc_read would succeed */
+    g_decenc_read_info.protocol = 1;
+    g_decenc_read_info.key      = 0xABCD;
+
+    subghz_ignore_set(1, true);   /* but the user ignores protocol 1 */
+
+    SubGhzRawDecodeResult result;
+    memset(&result, 0, sizeof(result));
+
+    bool ret = subghz_registry_decode_try_fn(TEST_PULSES, TEST_PULSE_COUNT, &result, NULL);
+
+    TEST_ASSERT_FALSE(ret);
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[1]);   /* skipped entirely */
+    /* The other decoders were still tried. */
+    TEST_ASSERT_EQUAL_INT(1, g_decoder_call_count[0]);
+    TEST_ASSERT_EQUAL_INT(1, g_decoder_call_count[2]);
+}
+
+/* 10. Ignore filter — ignoring one protocol still lets a different,
+ *     non-ignored protocol decode successfully. */
+void test_non_ignored_protocol_still_decodes(void)
+{
+    g_decoder_result[2] = 0;      /* decoder[2] matches */
+    g_decenc_read_result = true;
+    g_decenc_read_info.protocol = 2;
+    g_decenc_read_info.key      = 0x1234;
+
+    subghz_ignore_set(0, true);   /* ignore an unrelated protocol */
+
+    SubGhzRawDecodeResult result;
+    memset(&result, 0, sizeof(result));
+
+    bool ret = subghz_registry_decode_try_fn(TEST_PULSES, TEST_PULSE_COUNT, &result, NULL);
+
+    TEST_ASSERT_TRUE(ret);
+    TEST_ASSERT_EQUAL_UINT16(2, result.protocol);
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[0]);   /* ignored → skipped */
+}
+
+/* 11. Ignoring all protocols yields no decode. */
+void test_all_ignored_no_decode(void)
+{
+    for (int i = 0; i < 3; i++) g_decoder_result[i] = 0;  /* all would match */
+    g_decenc_read_result = true;
+
+    subghz_ignore_set(0, true);
+    subghz_ignore_set(1, true);
+    subghz_ignore_set(2, true);
+
+    SubGhzRawDecodeResult result;
+    memset(&result, 0, sizeof(result));
+
+    bool ret = subghz_registry_decode_try_fn(TEST_PULSES, TEST_PULSE_COUNT, &result, NULL);
+
+    TEST_ASSERT_FALSE(ret);
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[0]);
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[1]);
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[2]);
+}
+
 /*============================================================================*/
 /* main                                                                       */
 /*============================================================================*/
@@ -299,6 +367,9 @@ int main(void)
     RUN_TEST(test_first_decoder_match_no_further_scan);
     RUN_TEST(test_null_user_ctx_accepted);
     RUN_TEST(test_single_pulse_copy);
+    RUN_TEST(test_ignored_protocol_decoder_skipped);
+    RUN_TEST(test_non_ignored_protocol_still_decodes);
+    RUN_TEST(test_all_ignored_no_decode);
 
     return UNITY_END();
 }

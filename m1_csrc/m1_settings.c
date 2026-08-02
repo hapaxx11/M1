@@ -34,6 +34,7 @@
 #include "m1_scene.h"
 #include "m1_virtual_kb.h"
 #include "m1_clock_util.h"
+#include "subghz_protocol_ignore.h"
 #if M1_HAS_RGB_BACKLIGHT
 #include "m1_rgb_backlight.h"
 #endif
@@ -754,6 +755,14 @@ void settings_save_to_sd(void)
     SETTINGS_WRITE("subghz_remove_duplicates=%d\n", subghz_get_remove_duplicates_ext() ? 1 : 0);
     SETTINGS_WRITE("subghz_delete_old_signals=%d\n", subghz_get_delete_old_signals_ext() ? 1 : 0);
 
+    /* Protocol Filter — ignore list as a big-endian hex bitmask (index-based).
+     * 32 hex chars for 128 protocols; fits comfortably in the 64-byte line. */
+    {
+        char ign_hex[SUBGHZ_IGNORE_HEX_BUFSZ];
+        if (subghz_ignore_serialize_hex(ign_hex, sizeof(ign_hex)) > 0)
+            SETTINGS_WRITE("subghz_ignore=%s\n", ign_hex);
+    }
+
     SETTINGS_WRITE("clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
 
 #if M1_HAS_RGB_BACKLIGHT
@@ -1016,6 +1025,27 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 26) - '0');
         if (val == 0 || val == 1)
             subghz_set_delete_old_signals_ext(val == 1);
+    }
+
+    /* Parse "subghz_ignore=HHHH..." — Protocol Filter ignore-list bitmask.
+     * Copy the hex run into a local buffer (bounded) and hand it to the
+     * deserializer, which clears the set first and tolerates short strings. */
+    p = strstr(buf, "subghz_ignore=");
+    if (p != NULL)
+    {
+        p += 14;   /* skip "subghz_ignore=" */
+        char ign_hex[SUBGHZ_IGNORE_HEX_BUFSZ];
+        size_t k = 0;
+        while (k < sizeof(ign_hex) - 1 &&
+               ((p[k] >= '0' && p[k] <= '9') ||
+                (p[k] >= 'a' && p[k] <= 'f') ||
+                (p[k] >= 'A' && p[k] <= 'F')))
+        {
+            ign_hex[k] = p[k];
+            k++;
+        }
+        ign_hex[k] = '\0';
+        subghz_ignore_deserialize_hex(ign_hex);
     }
 
     /* Parse "subghz_custom_freq=N" (Hz, 300000000–930000000) */
