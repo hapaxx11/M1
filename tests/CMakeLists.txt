@@ -385,6 +385,7 @@ add_executable(test_subghz_registry
     test_subghz_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
@@ -453,6 +454,7 @@ add_executable(test_subghz_key_encoder
     ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_key_encoder PRIVATE
@@ -736,6 +738,7 @@ add_test(NAME rf_timing_capture COMMAND test_rf_timing_capture)
 add_executable(test_subghz_decode_try_fn
     test_subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
 )
 target_include_directories(test_subghz_decode_try_fn PRIVATE
     ${STUBS_DIR}            # stm32h5xx_hal.h, m1_io_defs.h
@@ -747,6 +750,25 @@ if(TARGET sanitizers)
     target_link_libraries(test_subghz_decode_try_fn PRIVATE sanitizers)
 endif()
 add_test(NAME subghz_decode_try_fn COMMAND test_subghz_decode_try_fn)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_protocol_ignore (Protocol Filter ignore-list)
+# Pure bitset + hex serialize + name helpers (registry-backed).
+# ------------------------------------------------------------------
+add_executable(test_subghz_protocol_ignore
+    test_subghz_protocol_ignore.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
+)
+target_include_directories(test_subghz_protocol_ignore PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_protocol_ignore PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_protocol_ignore PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_protocol_ignore COMMAND test_subghz_protocol_ignore)
 
 # ------------------------------------------------------------------
 # Module under test: subghz_playlist_parser (Flipper→M1 path remapping)

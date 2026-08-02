@@ -328,6 +328,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/m1_sub_ghz_decenc.c
     ../../Sub_Ghz/subghz_protocol_registry.c
     ../../Sub_Ghz/subghz_decode_try_fn.c
+    ../../Sub_Ghz/subghz_protocol_ignore.c
     ../../Sub_Ghz/subghz_block_generic.c
     ../../Sub_Ghz/subghz_key_encoder.c
     ../../Sub_Ghz/subghz_raw_capture_alloc.c
@@ -650,6 +651,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_signal_identifier.c
     ../../m1_csrc/m1_subghz_scene_smart_signal_id.c
     ../../m1_csrc/m1_subghz_scene_analyzer_menu.c
+    ../../m1_csrc/m1_subghz_scene_protocol_filter.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_diag.c
     ../../m1_csrc/m1_system.c

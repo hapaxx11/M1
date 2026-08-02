@@ -27,6 +27,7 @@
 #include "m1_system.h"
 #include "m1_virtual_kb.h"
 #include "subghz_freq_presets.h"
+#include "subghz_protocol_ignore.h"
 
 /*============================================================================*/
 /* Frequency & modulation preset tables (shared with m1_sub_ghz.c)            */
@@ -78,7 +79,7 @@ extern const char *subghz_ism_regions_text[];
 /* Config items                                                               */
 /*============================================================================*/
 
-#define CFG_ITEMS       11
+#define CFG_ITEMS       12
 #define CFG_FREQUENCY   0
 #define CFG_HOPPING     1
 #define CFG_MODULATION  2
@@ -90,6 +91,7 @@ extern const char *subghz_ism_regions_text[];
 #define CFG_RSSI_THRESH 8
 #define CFG_REMOVE_DUPS 9   /* Phase 12 */
 #define CFG_DELETE_OLD  10  /* Phase 12 */
+#define CFG_PROTOCOLS   11  /* Protocol Filter (ignore list) */
 
 static uint8_t cfg_sel = 0;
 static uint8_t cfg_scroll = 0;  /* First visible item (scrolling if items > visible) */
@@ -128,6 +130,7 @@ static const char *cfg_item_labels[CFG_ITEMS] = {
     "RSSI Thresh:",
     "Remove Dups:",   /* Phase 12 */
     "Delete Old:",    /* Phase 12 */
+    "Ignore:",        /* Protocol Filter (ignore groups) */
 };
 
 /*============================================================================*/
@@ -178,6 +181,15 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
             return subghz_get_remove_duplicates_ext() ? "ON" : "OFF";
         case CFG_DELETE_OLD:
             return subghz_get_delete_old_signals_ext() ? "ON" : "OFF";
+        case CFG_PROTOCOLS:
+        {
+            static char proto_buf[12];
+            uint16_t n = subghz_ignore_group_ignored_count();
+            if (n == 0)
+                return "All On";
+            snprintf(proto_buf, sizeof(proto_buf), "%u off", (unsigned)n);
+            return proto_buf;
+        }
         default:
             return "";
     }
@@ -321,6 +333,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventRight:
         case SubGhzEventOk:
+            /* Special case: OK/RIGHT on Protocols opens the Protocol Filter. */
+            if (cfg_real(cfg_sel) == CFG_PROTOCOLS)
+            {
+                subghz_scene_push(app, SubGhzSceneProtocolFilter);
+                app->need_redraw = true;
+                return true;
+            }
             /* Special case: OK on the Custom frequency entry opens VKB */
             if (cfg_real(cfg_sel) == CFG_FREQUENCY && app->freq_idx == CFG_FREQ_COUNT - 1)
             {

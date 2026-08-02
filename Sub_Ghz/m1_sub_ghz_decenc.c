@@ -17,6 +17,7 @@
 #include "stm32h5xx_hal.h"
 #include <m1_sub_ghz_decenc.h>
 #include "subghz_protocol_registry.h"
+#include "subghz_protocol_ignore.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "si446x_cmd.h"
@@ -296,6 +297,12 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 			  {
 				  for(i = 0; i < subghz_protocol_registry_count; i++)
 				  {
+					  /* Skip protocols the user has chosen to ignore
+					   * (Protocol Filter) during live Read capture. */
+					  if ( subghz_ignore_is_ignored(i) )
+					  {
+						  continue;
+					  }
 					  if ( !subghz_decode_protocol(i, subghz_decenc_ctl.npulsecount) )
 					  {
 						  // receive successfully for protocol i

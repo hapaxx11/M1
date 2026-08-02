@@ -373,6 +373,63 @@ the scene manager without rewriting each tool.
 
 ---
 
+## Protocol Filter (ignore protocol groups on capture)
+
+Momentum parity: the user ignores whole **categories** of signals (not
+individual protocols one-by-one) so the receiver skips them during
+capture/decode.  In Momentum each protocol carries a category tag
+(`SubGhzProtocol.filter`) and the receiver keeps an `ignore_filter` bitmask of
+ignored categories; a decode is accepted only when
+`(protocol->filter & ignore_filter) == 0`.  The M1 mirrors this with a small,
+pure-logic ignore module plus a UI scene.
+
+| File | Role |
+|------|------|
+| `Sub_Ghz/subghz_protocol_ignore.c/.h` | Category-group ignore filter: a bitmask of ignored **groups** (`SubGhzIgnoreGroup` — Weather, TPMS, Vehicles, Gates, Sensors, Pagers), group-membership resolution from the registry, hex serialize/deserialize for persistence, and the hot-path `subghz_ignore_is_ignored(index)` query.  Zero hardware deps, host-tested. |
+| `m1_csrc/m1_subghz_scene_protocol_filter.c` | `SubGhzSceneProtocolFilter` — short On/Ignored toggle list of the groups.  Reached via the **Ignore** row in the Sub-GHz **Config** scene. |
+
+### Group membership is data-driven
+
+`subghz_ignore_group_mask_of(index)` maps a registry index to its group bitmask:
+
+- **Weather** and **TPMS** are derived directly from the protocol `type`
+  (`SubGhzProtocolTypeWeather` / `SubGhzProtocolTypeTPMS`).
+- **Vehicles / Gates / Sensors / Pagers** come from a single name-keyed table
+  (`k_group_map[]`) in `subghz_protocol_ignore.c`.
+
+Add a protocol to a group by editing that one table (or, for weather/TPMS, by
+setting its registry `type`).  Protocols with no group are **never** ignorable
+— exactly like Momentum protocols whose `filter` is 0.
+
+### The single gate — `subghz_ignore_is_ignored(index)`
+
+Every decode loop consults this one function before running a protocol's
+decoder, so the ignore filter is honoured **everywhere protocols are decoded**:
+
+- **Live Read** — `subghz_pulse_handler()` in `Sub_Ghz/m1_sub_ghz_decenc.c`.
+- **Read Raw / Decode Raw / Playlist / RF Rosetta Signal ID + Smart ID** —
+  `subghz_registry_decode_try_fn()` in `Sub_Ghz/subghz_decode_try_fn.c`
+  (the shared `SubGhzRawDecodeTryFn` used by `subghz_decode_raw_offline()`).
+
+Because RF Rosetta's decode stage runs through `subghz_registry_decode_try_fn()`,
+protocols in an ignored group never produce a "decoded" hit there either.
+
+### Rules for new reading/decoding code
+
+1. **Any new loop that iterates the registry to decode a capture MUST call
+   `subghz_ignore_is_ignored(index)` and `continue` when it returns true.**
+   Do not re-implement the skip inline with a different data source.
+2. **Persistence is group-keyed** (hex bitmask `subghz_ignore=` in the settings
+   file, written/parsed in `m1_settings.c`).  The mask is keyed by
+   `SubGhzIgnoreGroup` id, so adding protocols to an existing group does **not**
+   invalidate a saved setting — keep the group enum order stable and append new
+   groups at the end.
+3. **The Config scene shows the ignored-group count** ("All On" / "N off") and
+   opens the filter on OK/RIGHT; keep that entry when editing
+   `m1_subghz_scene_config.c`.
+
+---
+
 ## Remaining Sub-GHz Momentum-Parity Work
 
 > The Momentum-parity phased programme (Phases 1–12) is **complete and shipped**.
