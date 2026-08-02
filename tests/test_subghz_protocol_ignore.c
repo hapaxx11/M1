@@ -23,8 +23,8 @@
  * provides a small stand-in registry with recognisable protocol names/types.
  *
  * Build:
- *   cmake -B tests/build-tests -S tests && cmake --build tests/build-tests
- *   ctest --test-dir tests/build-tests -R subghz_protocol_ignore --output-on-failure
+ *   cmake -B build-tests -S tests && cmake --build build-tests
+ *   ctest --test-dir build-tests -R subghz_protocol_ignore --output-on-failure
  */
 
 #include <string.h>

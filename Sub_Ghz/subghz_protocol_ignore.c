@@ -121,6 +121,7 @@ static const char *const k_group_names[SubGhzIgnoreGroupCount] = {
 /*----------------------------------------------------------------------------*/
 
 static uint32_t g_group_cache[SUBGHZ_IGNORE_MAX_PROTOCOLS];
+static uint16_t g_group_count_cache[SubGhzIgnoreGroupCount];
 static bool    g_cache_built;
 
 static int ascii_lower(int c)
@@ -188,8 +189,18 @@ static void ensure_cache(void)
     if (n > SUBGHZ_IGNORE_MAX_PROTOCOLS)
         n = SUBGHZ_IGNORE_MAX_PROTOCOLS;
 
+    for (uint16_t g = 0; g < SubGhzIgnoreGroupCount; g++)
+        g_group_count_cache[g] = 0;
+
     for (uint16_t i = 0; i < n; i++)
-        g_group_cache[i] = compute_group_mask(i);
+    {
+        uint32_t mask = compute_group_mask(i);
+        g_group_cache[i] = mask;
+
+        for (uint16_t g = 0; g < SubGhzIgnoreGroupCount; g++)
+            if (mask & SUBGHZ_IGNORE_GROUP_BIT(g))
+                g_group_count_cache[g]++;
+    }
 
     g_cache_built = true;
 }
@@ -274,16 +285,8 @@ uint16_t subghz_ignore_group_protocol_count(SubGhzIgnoreGroup g)
     if (g >= SubGhzIgnoreGroupCount)
         return 0;
 
-    uint32_t bit = SUBGHZ_IGNORE_GROUP_BIT(g);
-    uint16_t n   = subghz_protocol_registry_count;
-    if (n > SUBGHZ_IGNORE_MAX_PROTOCOLS)
-        n = SUBGHZ_IGNORE_MAX_PROTOCOLS;
-
-    uint16_t total = 0;
-    for (uint16_t i = 0; i < n; i++)
-        if (subghz_ignore_group_mask_of(i) & bit)
-            total++;
-    return total;
+    ensure_cache();
+    return g_group_count_cache[g];
 }
 
 /*============================================================================*/
@@ -322,7 +325,7 @@ void subghz_ignore_deserialize_hex(const char *hex)
     if (!hex)
         return;
 
-    while (*hex == ' ' || *hex == '\t')
+    while (*hex == ' ' || *hex == '\t' || *hex == '\r' || *hex == '\n')
         hex++;
 
     uint32_t v = 0;
