@@ -130,7 +130,7 @@ static const char *cfg_item_labels[CFG_ITEMS] = {
     "RSSI Thresh:",
     "Remove Dups:",   /* Phase 12 */
     "Delete Old:",    /* Phase 12 */
-    "Protocols:",     /* Protocol Filter */
+    "Ignore:",        /* Protocol Filter (ignore groups) */
 };
 
 /*============================================================================*/
@@ -184,7 +184,7 @@ static const char *get_value_text(SubGhzApp *app, uint8_t item)
         case CFG_PROTOCOLS:
         {
             static char proto_buf[12];
-            uint16_t n = subghz_ignore_count();
+            uint16_t n = subghz_ignore_group_ignored_count();
             if (n == 0)
                 return "All On";
             snprintf(proto_buf, sizeof(proto_buf), "%u off", (unsigned)n);

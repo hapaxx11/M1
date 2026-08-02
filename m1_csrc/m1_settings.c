@@ -755,8 +755,8 @@ void settings_save_to_sd(void)
     SETTINGS_WRITE("subghz_remove_duplicates=%d\n", subghz_get_remove_duplicates_ext() ? 1 : 0);
     SETTINGS_WRITE("subghz_delete_old_signals=%d\n", subghz_get_delete_old_signals_ext() ? 1 : 0);
 
-    /* Protocol Filter — ignore list as a big-endian hex bitmask (index-based).
-     * 32 hex chars for 128 protocols; fits comfortably in the 64-byte line. */
+    /* Protocol Filter — ignored groups as a big-endian hex bitmask.
+     * 8 hex chars for the 32-bit group mask; fits easily in the 64-byte line. */
     {
         char ign_hex[SUBGHZ_IGNORE_HEX_BUFSZ];
         if (subghz_ignore_serialize_hex(ign_hex, sizeof(ign_hex)) > 0)
@@ -1027,7 +1027,7 @@ void settings_load_from_sd(void)
             subghz_set_delete_old_signals_ext(val == 1);
     }
 
-    /* Parse "subghz_ignore=HHHH..." — Protocol Filter ignore-list bitmask.
+    /* Parse "subghz_ignore=HHHH..." — Protocol Filter ignored-group bitmask.
      * Copy the hex run into a local buffer (bounded) and hand it to the
      * deserializer, which clears the set first and tolerates short strings. */
     p = strstr(buf, "subghz_ignore=");

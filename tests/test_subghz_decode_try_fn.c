@@ -103,17 +103,20 @@ static uint8_t test_decode_1(uint16_t p, uint16_t n) { (void)p; (void)n; g_decod
 static uint8_t test_decode_2(uint16_t p, uint16_t n) { (void)p; (void)n; g_decoder_call_count[2]++; return (uint8_t)g_decoder_result[2]; }
 
 const SubGhzProtocolDef subghz_protocol_registry[] = {
-    [0] = { .name = "TestProto0", .type = SubGhzProtocolTypeStatic,
+    /* Names/types are chosen so each protocol lands in a distinct ignore
+     * group (Weather / TPMS derived from type, Vehicles from the name table)
+     * — this lets the ignore-filter tests below drive skipping by group. */
+    [0] = { .name = "Oregon v2", .type = SubGhzProtocolTypeWeather,
             .timing = { .te_short = 350, .te_long = 700, .te_delta = 100,
                         .min_count_bit_for_found = 24 },
             .decode = test_decode_0,
             .flags = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_Send },
-    [1] = { .name = "TestProto1", .type = SubGhzProtocolTypeStatic,
+    [1] = { .name = "Schrader TPMS", .type = SubGhzProtocolTypeTPMS,
             .timing = { .te_short = 500, .te_long = 1000, .te_delta = 100,
                         .min_count_bit_for_found = 24 },
             .decode = test_decode_1,
             .flags = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_Send },
-    [2] = { .name = "TestProto2", .type = SubGhzProtocolTypeStatic,
+    [2] = { .name = "Star Line", .type = SubGhzProtocolTypeDynamic,
             .timing = { .te_short = 600, .te_long = 1200, .te_delta = 100,
                         .min_count_bit_for_found = 24 },
             .decode = test_decode_2,
@@ -285,17 +288,18 @@ void test_single_pulse_copy(void)
     TEST_ASSERT_EQUAL_UINT16(999, subghz_decenc_ctl.pulse_times[0]);
 }
 
-/* 9. Ignore filter — an ignored protocol's decoder is never invoked even
- *    though it would otherwise match, and the overall result is false when it
- *    is the only matching protocol. */
+/* 9. Ignore filter — a protocol whose GROUP is ignored is never decoded even
+ *     though it would otherwise match, and the overall result is false when it
+ *     is the only matching protocol.  Protocol 0 ("Oregon v2") is in the
+ *     Weather group. */
 void test_ignored_protocol_decoder_skipped(void)
 {
-    g_decoder_result[1] = 0;      /* decoder[1] would match at pulse level */
+    g_decoder_result[0] = 0;      /* decoder[0] would match at pulse level */
     g_decenc_read_result = true;  /* and decenc_read would succeed */
-    g_decenc_read_info.protocol = 1;
+    g_decenc_read_info.protocol = 0;
     g_decenc_read_info.key      = 0xABCD;
 
-    subghz_ignore_set(1, true);   /* but the user ignores protocol 1 */
+    subghz_ignore_group_set(SubGhzIgnoreGroupWeather, true); /* ignore proto 0's group */
 
     SubGhzRawDecodeResult result;
     memset(&result, 0, sizeof(result));
@@ -303,22 +307,22 @@ void test_ignored_protocol_decoder_skipped(void)
     bool ret = subghz_registry_decode_try_fn(TEST_PULSES, TEST_PULSE_COUNT, &result, NULL);
 
     TEST_ASSERT_FALSE(ret);
-    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[1]);   /* skipped entirely */
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[0]);   /* skipped entirely */
     /* The other decoders were still tried. */
-    TEST_ASSERT_EQUAL_INT(1, g_decoder_call_count[0]);
+    TEST_ASSERT_EQUAL_INT(1, g_decoder_call_count[1]);
     TEST_ASSERT_EQUAL_INT(1, g_decoder_call_count[2]);
 }
 
-/* 10. Ignore filter — ignoring one protocol still lets a different,
+/* 10. Ignore filter — ignoring one group still lets a different,
  *     non-ignored protocol decode successfully. */
 void test_non_ignored_protocol_still_decodes(void)
 {
-    g_decoder_result[2] = 0;      /* decoder[2] matches */
+    g_decoder_result[2] = 0;      /* decoder[2] ("Star Line", Vehicles) matches */
     g_decenc_read_result = true;
     g_decenc_read_info.protocol = 2;
     g_decenc_read_info.key      = 0x1234;
 
-    subghz_ignore_set(0, true);   /* ignore an unrelated protocol */
+    subghz_ignore_group_set(SubGhzIgnoreGroupWeather, true); /* ignore an unrelated group */
 
     SubGhzRawDecodeResult result;
     memset(&result, 0, sizeof(result));
@@ -327,18 +331,18 @@ void test_non_ignored_protocol_still_decodes(void)
 
     TEST_ASSERT_TRUE(ret);
     TEST_ASSERT_EQUAL_UINT16(2, result.protocol);
-    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[0]);   /* ignored → skipped */
+    TEST_ASSERT_EQUAL_INT(0, g_decoder_call_count[0]);   /* Weather group → skipped */
 }
 
-/* 11. Ignoring all protocols yields no decode. */
+/* 11. Ignoring every relevant group yields no decode. */
 void test_all_ignored_no_decode(void)
 {
     for (int i = 0; i < 3; i++) g_decoder_result[i] = 0;  /* all would match */
     g_decenc_read_result = true;
 
-    subghz_ignore_set(0, true);
-    subghz_ignore_set(1, true);
-    subghz_ignore_set(2, true);
+    subghz_ignore_group_set(SubGhzIgnoreGroupWeather, true);   /* proto 0 */
+    subghz_ignore_group_set(SubGhzIgnoreGroupTPMS, true);      /* proto 1 */
+    subghz_ignore_group_set(SubGhzIgnoreGroupVehicles, true);  /* proto 2 */
 
     SubGhzRawDecodeResult result;
     memset(&result, 0, sizeof(result));
