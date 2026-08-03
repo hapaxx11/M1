@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.28] - 2026-08-03
+
+### Changed
+
+- **WiFi: menu cleanup Phase 1** — Renamed the top-level `Networks` item to
+  `Scan & Connect` (C3-style primary entry) and promoted **Wardrive** to its own
+  top-level WiFi sub-menu, relocating AP Wardrive / Station Wardrive out of
+  Recon. First phase of the WiFi UX restructuring plan
+  (`documentation/wifi_cleanup_plan.md`).
+- **WiFi: menu cleanup Phase 2** — Merged the `Sniffers` menu into **Recon**
+  (passive captures now sit alongside the other recon tools with C3-style
+  names), moved the AP/SSID list-management actions into the **Wardrive**
+  sub-menu, surfaced `Status`/`Disconnect` in a slimmed **General**, and added a
+  capability-gated **802.15.4 Flood** entry. Second phase of the WiFi UX
+  restructuring plan (`documentation/wifi_cleanup_plan.md`).
+- **WiFi: menu cleanup Phase 3** — Added the selected-network **Target** context:
+  pressing OK on a network in **Scan & Connect** now opens a per-network menu
+  that separates the **Connect** action (joins the network → Connected menu)
+  from the SSID-scoped **Target** actions (per-AP Deauth, Handshake/EAPOL
+  capture, Beacon clone, PMKID) plus **Cycle AP** to iterate the known BSSIDs of
+  a single SSID. The Target actions are only reachable once a network is
+  selected, so each action's precondition is satisfied by construction. Third
+  phase of the WiFi UX restructuring plan (`documentation/wifi_cleanup_plan.md`).
+- # WiFi cleanup — Phase 4: attack consolidation & multi-target flow
+- Collapsed Karma/Karma+Portal into a single **Karma** menu entry with an
+  inline "Serve portal? [Yes] [No]" prompt (`wifi_attack_karma_with_portal()`).
+  Attacks menu now has 8 items (was 9).
+  - Added pure-logic `wifi_multi_target_build()` helper to build a flat AP target
+  list from the selected entries of any `wifi_ap_t[]` array (no HAL/RTOS deps;
+  seeds from both live scan results and loaded saved lists).
+  - Added post-deauth chaining prompt to single-target deauth: after the attack
+  completes the user is offered `[Handshake] [Evil Portal] [Done]` to chain
+  immediately into EAPOL capture or Evil Portal (plan §3.8).
+  - Tests: `test_wifi_multi_target.c` (11 pure-logic cases) and
+  `test_wifi_ux_restructure.c` extended to 31 source assertions.
+- # WiFi cleanup — Phase 5: WiFi Hotspot (deferred / optional)
+- Added a capability-gated **WiFi Hotspot** entry to the **General** menu
+  (`WifiSceneGeneralHotspot`), backed by a new `M1_ESP32_CAP_WIFI_HOTSPOT` bit
+  and `ESP32_FEATURE_WIFI_HOTSPOT` classifier entry. No shipped AT, SiN360 or
+  CD3 firmware self-reports this capability yet, so the entry shows the
+  standard "Feature not supported" screen until a firmware advertises it
+  (plan §3.9).
+  - Implemented `wifi_general_hotspot()`: raw ESP-AT SoftAP path
+  (`AT+CWMODE=2` + `AT+CWSAP`) that prompts for SSID/password and offers a
+  Stop/Keep choice that restores STA mode (`AT+CWMODE=1`) on exit.
+  - Tests: `test_esp32_feature_map.c` extended with the new mapping (24
+  features) and `test_wifi_ux_restructure.c` extended with the General-menu
+  entry, capability-gate and declaration assertions (34 source assertions).
 ## [0.9.2.27] - 2026-08-03
 
 ### Fixed
