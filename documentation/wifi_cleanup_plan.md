@@ -345,9 +345,9 @@ phase that touches `.c/.h` sources.
 ## 7. Open questions for the owner
 
 1. Should **WiFi Hotspot** and **Peer Link** live under a future top‑level
-   **Tools** menu (as C3 does for Peer Link), or stay under WiFi as today?
+   **Tools** menu (as C3 does for Peer Link), or stay under WiFi as today? Hapax: do not add **Tools** menu, leave here for now
 2. For multi‑target attacks, is the selection set seeded from the persisted
-   "Select APs" list, from live scan results, or both?
+   "Select APs" list, from live scan results, or both? Hapax: both
 3. Preferred label casing/order for the final top menu (this plan proposes
    `Scan & Connect · Recon · Attacks · Wardrive · 802.15.4 · Peer Link ·
    General`).
