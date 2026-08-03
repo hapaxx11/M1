@@ -56,6 +56,7 @@ a fresh analysis is warranted.  All timestamps are **UTC**.
 | [rgomez31UAQ/Monstatek-M1_STM32H573VIT6_Firmware](https://github.com/rgomez31UAQ/Monstatek-M1_STM32H573VIT6_Firmware) | rgomez31UAQ | Inactive | `024b4c16` | 2026-02-27 19:25 | 2026-04-02 03:21 | Fork of stock + build doc PR. No custom firmware work. |
 | [steveAG/monstatek-m1](https://github.com/steveAG/monstatek-m1) | steveAG | Inactive | `2df97efc` | 2026-02-20 21:22 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
 | [fengjuan0/Monstatek-M1](https://github.com/fengjuan0/Monstatek-M1) | fengjuan0 | Inactive | `2df97efc` | 2026-02-24 03:45 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
+| [RogueMaster/M1](https://github.com/RogueMaster/M1) | RogueMaster | Inactive | `682e6a06` | 2026-06-15 22:09 | 2026-08-03 02:29 | Branding/promo fork (Discord/Patreon plugs, "RM WUZ HERE" README edits, `.github/FUNDING.yml`) layered on top of bedge117's C3.12 line (`81434fa8` = wholesale copy of bedge117 at C3.12, already fully reviewed under the bedge117 row). Also merged in Monstatek's PR #11 macOS build support (`4c77bb86`, already reviewed under the Monstatek row as low-value) and Monstatek v0.8.0.2 content (IR remote database, `battery_log.c`, `bq27421_golden_image.h` — already tracked as cherry-pick candidates in the Monstatek row). No original code contributions found; nothing new to cherry-pick. |
 
 ### How to Update This Table
 
