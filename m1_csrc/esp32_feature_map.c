@@ -78,6 +78,8 @@ static const esp32_feature_entry_t s_feature_table[ESP32_FEATURE_COUNT] = {
     { M1_ESP32_CAP_OTA,          "ESP32 OTA Update" },
     /* ESP32_FEATURE_ESPNOW */
     { M1_ESP32_CAP_ESPNOW,       "ESP-NOW Peer Link"},
+    /* ESP32_FEATURE_WIFI_HOTSPOT */
+    { M1_ESP32_CAP_WIFI_HOTSPOT, "WiFi Hotspot"     },
 };
 
 /* Compile-time assertion: table length matches enum count */

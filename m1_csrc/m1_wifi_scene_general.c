@@ -5,7 +5,7 @@
  * @brief  WiFi General/Config sub-menu + general delegates.
  *
  * Scenes covered:
- *   WifiSceneGeneralMenu            — General sub-menu (14+2 items)
+ *   WifiSceneGeneralMenu            — General sub-menu
  *   WifiSceneGeneralViewInfo        — View AP Info delegate
  *   WifiSceneGeneralSelectAps       — Select APs delegate
  *   WifiSceneGeneralSelectStas      — Select STAs delegate
@@ -20,9 +20,13 @@
  *   WifiSceneGeneralShutdown        — Shutdown WiFi delegate
  *   WifiSceneGeneralSetEpSsid       — Set EP SSID delegate
  *   WifiSceneGeneralSelectEpHtml    — Select EP HTML delegate
+ *   WifiSceneGeneralHotspot         — WiFi Hotspot delegate (Phase 5, §3.9)
  *
- * Connect features (Saved Networks, Connected menu) are also listed
- * here but their delegate implementations remain in m1_wifi_scene_connect.c.
+ * The AP/SSID list-management delegates (Save/Load/Clear APs, Load/Clear
+ * SSIDs) are still implemented here but are now reached from the Wardrive
+ * sub-menu's export flow (Phase 2 of the WiFi cleanup plan §3.5).  Saved
+ * Networks, Status and Disconnect (connect delegates in
+ * m1_wifi_scene_connect.c) are surfaced here when M1_APP_WIFI_CONNECT_ENABLE.
  *
  * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
@@ -94,6 +98,7 @@ DELEGATE_FEATURE(gen_set_chan,    wifi_general_set_channel,    ESP32_FEATURE_WIF
 DELEGATE_FEATURE(gen_shutdown,   wifi_general_shutdown_wifi,  ESP32_FEATURE_WIFI_DISCONNECT)
 DELEGATE(gen_ep_ssid,     wifi_general_set_ep_ssid)
 DELEGATE(gen_ep_html,     wifi_general_select_ep_html)
+DELEGATE_FEATURE(gen_hotspot,     wifi_general_hotspot,        ESP32_FEATURE_WIFI_HOTSPOT)
 
 const M1SceneHandlers wifi_scene_gen_view_info_handlers   = { .on_enter = gen_view_info_on_enter   };
 const M1SceneHandlers wifi_scene_gen_select_aps_handlers  = { .on_enter = gen_select_aps_on_enter  };
@@ -109,36 +114,34 @@ const M1SceneHandlers wifi_scene_gen_set_chan_handlers     = { .on_enter = gen_s
 const M1SceneHandlers wifi_scene_gen_shutdown_handlers    = { .on_enter = gen_shutdown_on_enter    };
 const M1SceneHandlers wifi_scene_gen_ep_ssid_handlers     = { .on_enter = gen_ep_ssid_on_enter     };
 const M1SceneHandlers wifi_scene_gen_ep_html_handlers     = { .on_enter = gen_ep_html_on_enter     };
+const M1SceneHandlers wifi_scene_gen_hotspot_handlers     = { .on_enter = gen_hotspot_on_enter     };
 
 /*==========================================================================*/
 /* General sub-menu                                                         */
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define GENERAL_ITEM_COUNT  15
+#define GENERAL_ITEM_COUNT  13
 #else
-#define GENERAL_ITEM_COUNT  14
+#define GENERAL_ITEM_COUNT  10
 #endif
 
 static const char *const general_labels[GENERAL_ITEM_COUNT] = {
     "View AP Info", "Select APs", "Select STAs",
-    "Save APs", "Load APs", "Clear APs",
-    "Load SSIDs", "Clear SSIDs",
     "Join WiFi", "Set MACs", "Set Channel",
-    "Shutdown WiFi", "Set EP SSID", "Select EP HTML",
+    "Shutdown WiFi", "Set EP SSID", "Select EP HTML", "WiFi Hotspot",
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    "Saved Networks",
+    "Saved Networks", "Status", "Disconnect",
 #endif
 };
 
 static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralViewInfo, WifiSceneGeneralSelectAps, WifiSceneGeneralSelectStas,
-    WifiSceneGeneralSaveAps, WifiSceneGeneralLoadAps, WifiSceneGeneralClearAps,
-    WifiSceneGeneralLoadSsids, WifiSceneGeneralClearSsids,
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
+    WifiSceneGeneralHotspot,
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    WifiSceneSaved,
+    WifiSceneSaved, WifiSceneStatus, WifiSceneDisconnect,
 #endif
 };
 

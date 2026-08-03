@@ -1842,6 +1842,10 @@ add_test(NAME wifi_scan_status_nonblocking COMMAND test_wifi_scan_status_nonbloc
 # ── WiFi UX restructure (#621) ──
 add_executable(test_wifi_ux_restructure
     test_wifi_ux_restructure.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_wifi_ux_restructure PRIVATE
+    ${M1_ROOT}/m1_csrc
 )
 target_compile_definitions(test_wifi_ux_restructure PRIVATE
     M1_ROOT="${M1_ROOT}"
@@ -2443,6 +2447,21 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_selection COMMAND test_wifi_selection)
 
+# ---------- wifi_ap_cycle ----------
+add_executable(test_wifi_ap_cycle
+    test_wifi_ap_cycle.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_cycle.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_ap_cycle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_ap_cycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_ap_cycle PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_ap_cycle COMMAND test_wifi_ap_cycle)
+
 # ---------- wifi_deauth_cmd ----------
 add_executable(test_wifi_deauth_cmd
     test_wifi_deauth_cmd.c
@@ -2586,3 +2605,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_espnow_tictactoe PRIVATE sanitizers)
 endif()
 add_test(NAME espnow_tictactoe COMMAND test_espnow_tictactoe)
+
+# ------------------------------------------------------------------
+# Module under test: wifi_multi_target (Phase 4 — multi-target AP builder)
+#
+# Pure-logic helper that builds a flat target list from the selected
+# entries of an AP list.  Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_wifi_multi_target
+    test_wifi_multi_target.c
+    ${M1_ROOT}/m1_csrc/wifi_multi_target.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_multi_target PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_multi_target PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_multi_target PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_multi_target COMMAND test_wifi_multi_target)
+

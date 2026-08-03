@@ -11,14 +11,16 @@
  *                             + core/direct-tool delegates (Scan & Connect,
  *                             Station Scan, 2.4G Survey, MAC Track,
  *                             Wardrive, Station Wardrive, Signal Monitor,
- *                             Zigbee Scan, Thread Scan)
- *   m1_wifi_scene_sniff.c   — Sniffers sub-menu + 7 sniffer delegates
+ *                             Zigbee Scan, Thread Scan, 802.15.4 Flood)
+ *   m1_wifi_scene_sniff.c   — 7 passive sniffer delegates (reached from Recon)
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + 8 attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + 5 network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + 14 general/config delegates
  *                             + Connected menu target (when connected)
  *   m1_wifi_scene_connect.c — Connected menu + Saved Networks, Status, Disconnect delegates
  *                             (compile-gated by M1_APP_WIFI_CONNECT_ENABLE)
+ *   m1_wifi_scene_target.c  — selected-network Target context (Target + Connect
+ *                             groups) reached from Scan & Connect (§3.2)
  *
  * m1_wifi_scene.c owns only the scene_registry[] table and wifi_scene_entry().
  */
@@ -47,8 +49,10 @@ typedef enum {
     /* Recon sub-menu */
     WifiSceneReconMenu,
 
-    /* Sniffers sub-menu */
-    WifiSceneSnifferMenu,
+    /* Wardrive sub-menu */
+    WifiSceneWardriveMenu,
+
+    /* Sniffer delegates (merged into the Recon sub-menu — no standalone menu) */
     WifiSceneSniffAll,
     WifiSceneSniffBeacon,
     WifiSceneSniffProbe,
@@ -93,14 +97,25 @@ typedef enum {
     WifiSceneGeneralShutdown,
     WifiSceneGeneralSetEpSsid,
     WifiSceneGeneralSelectEpHtml,
+    WifiSceneGeneralHotspot,
 
     /* 802.15.4 sub-menu */
     WifiScene802154Menu,
     WifiSceneZigbee,
     WifiSceneThread,
+    WifiScene802154Flood,
 
     /* ESP-NOW Peer Link (delegate into separate scene manager) */
     WifiSceneEspnowPeer,
+
+    /* Selected-network Target context (Target + Connect groups, §3.2) */
+    WifiSceneTargetMenu,
+    WifiSceneTargetConnect,
+    WifiSceneTargetDeauth,
+    WifiSceneTargetHandshake,
+    WifiSceneTargetBeacon,
+    WifiSceneTargetPmkid,
+    WifiSceneTargetCycle,
 
     /* Connect features (compile-gated) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
@@ -127,13 +142,23 @@ extern const M1SceneHandlers wifi_scene_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_station_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_signal_monitor_handlers;
 extern const M1SceneHandlers wifi_scene_recon_menu_handlers;
+extern const M1SceneHandlers wifi_scene_wardrive_menu_handlers;
 extern const M1SceneHandlers wifi_scene_802154_menu_handlers;
 extern const M1SceneHandlers wifi_scene_zigbee_handlers;
 extern const M1SceneHandlers wifi_scene_thread_handlers;
+extern const M1SceneHandlers wifi_scene_802154_flood_handlers;
 extern const M1SceneHandlers wifi_scene_espnow_peer_handlers;
 
+/* m1_wifi_scene_target.c — selected-network Target context */
+extern const M1SceneHandlers wifi_scene_target_menu_handlers;
+extern const M1SceneHandlers wifi_scene_target_connect_handlers;
+extern const M1SceneHandlers wifi_scene_target_deauth_handlers;
+extern const M1SceneHandlers wifi_scene_target_handshake_handlers;
+extern const M1SceneHandlers wifi_scene_target_beacon_handlers;
+extern const M1SceneHandlers wifi_scene_target_pmkid_handlers;
+extern const M1SceneHandlers wifi_scene_target_cycle_handlers;
+
 /* m1_wifi_scene_sniff.c */
-extern const M1SceneHandlers wifi_scene_sniffer_menu_handlers;
 extern const M1SceneHandlers wifi_scene_sniff_all_handlers;
 extern const M1SceneHandlers wifi_scene_sniff_beacon_handlers;
 extern const M1SceneHandlers wifi_scene_sniff_probe_handlers;
@@ -178,6 +203,7 @@ extern const M1SceneHandlers wifi_scene_gen_set_chan_handlers;
 extern const M1SceneHandlers wifi_scene_gen_shutdown_handlers;
 extern const M1SceneHandlers wifi_scene_gen_ep_ssid_handlers;
 extern const M1SceneHandlers wifi_scene_gen_ep_html_handlers;
+extern const M1SceneHandlers wifi_scene_gen_hotspot_handlers;
 
 /* m1_wifi_scene_connect.c (compile-gated by M1_APP_WIFI_CONNECT_ENABLE) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE

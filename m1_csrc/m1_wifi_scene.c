@@ -6,7 +6,7 @@
  *
  * Scene implementations live in per-group files (Phase D split):
  *   m1_wifi_scene_menu.c    — top menu + core/direct-tool delegates
- *   m1_wifi_scene_sniff.c   — Sniffers sub-menu + sniffer delegates
+ *   m1_wifi_scene_sniff.c   — passive sniffer delegates (reached from Recon)
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + general/config delegates
@@ -36,7 +36,8 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
 
     [WifiSceneReconMenu]        = &wifi_scene_recon_menu_handlers,
 
-    [WifiSceneSnifferMenu]      = &wifi_scene_sniffer_menu_handlers,
+    [WifiSceneWardriveMenu]     = &wifi_scene_wardrive_menu_handlers,
+
     [WifiSceneSniffAll]         = &wifi_scene_sniff_all_handlers,
     [WifiSceneSniffBeacon]      = &wifi_scene_sniff_beacon_handlers,
     [WifiSceneSniffProbe]       = &wifi_scene_sniff_probe_handlers,
@@ -78,12 +79,22 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneGeneralShutdown]      = &wifi_scene_gen_shutdown_handlers,
     [WifiSceneGeneralSetEpSsid]     = &wifi_scene_gen_ep_ssid_handlers,
     [WifiSceneGeneralSelectEpHtml]  = &wifi_scene_gen_ep_html_handlers,
+    [WifiSceneGeneralHotspot]       = &wifi_scene_gen_hotspot_handlers,
 
     [WifiScene802154Menu]       = &wifi_scene_802154_menu_handlers,
     [WifiSceneZigbee]           = &wifi_scene_zigbee_handlers,
     [WifiSceneThread]           = &wifi_scene_thread_handlers,
+    [WifiScene802154Flood]      = &wifi_scene_802154_flood_handlers,
 
     [WifiSceneEspnowPeer]       = &wifi_scene_espnow_peer_handlers,
+
+    [WifiSceneTargetMenu]       = &wifi_scene_target_menu_handlers,
+    [WifiSceneTargetConnect]    = &wifi_scene_target_connect_handlers,
+    [WifiSceneTargetDeauth]     = &wifi_scene_target_deauth_handlers,
+    [WifiSceneTargetHandshake]  = &wifi_scene_target_handshake_handlers,
+    [WifiSceneTargetBeacon]     = &wifi_scene_target_beacon_handlers,
+    [WifiSceneTargetPmkid]      = &wifi_scene_target_pmkid_handlers,
+    [WifiSceneTargetCycle]      = &wifi_scene_target_cycle_handlers,
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     [WifiSceneConnectedMenu]    = &wifi_scene_connected_menu_handlers,

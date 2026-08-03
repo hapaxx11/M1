@@ -22,6 +22,22 @@ void menu_wifi_exit(void);
 
 void wifi_scan_ap(void);
 
+/* Selected-network Target context (WiFi cleanup plan §3.2).
+ *
+ * wifi_scan_ap() flags a pending target when the user presses OK on a
+ * non-connected AP in the scan list; the Scan & Connect scene delegate then
+ * opens the Target menu.  The wifi_target_* actions operate on that
+ * highlighted AP and are only reachable once a network has been selected. */
+bool wifi_scan_ap_target_selected(void);
+bool wifi_target_valid(void);
+const char *wifi_target_ssid(void);
+void wifi_target_connect(void);
+void wifi_target_deauth(void);
+void wifi_target_handshake(void);
+void wifi_target_beacon(void);
+void wifi_target_pmkid(void);
+void wifi_target_cycle(void);
+
 /* Station scan (client discovery) */
 void wifi_station_scan(void);
 void wifi_survey_24g(void);
@@ -55,6 +71,7 @@ void wifi_evil_portal(void);
 void wifi_probe_flood(void);
 void wifi_attack_karma(void);
 void wifi_attack_karma_portal(void);
+void wifi_attack_karma_with_portal(void);
 void wifi_pmkid_at(void);
 
 /* WiFi General / Config */
@@ -72,6 +89,7 @@ void wifi_general_set_channel(void);
 void wifi_general_shutdown_wifi(void);
 void wifi_general_set_ep_ssid(void);
 void wifi_general_select_ep_html(void);
+void wifi_general_hotspot(void);
 
 /* Legacy AT-layer stubs — gated by compile flag */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
@@ -102,7 +120,7 @@ bool wifi_prompt_disconnect(void);
 /**
  * @brief  Check if WiFi is connected; show error if not.
  *
- * Shows a dismissible "Connect via Networks first" message if WiFi is not
+ * Shows a dismissible "Join WiFi first" message if WiFi is not
  * connected.  Intended for any feature/scene that requires an active connection
  * (e.g. Connected menu, Net Scan tools).
  * @retval true   WiFi is connected — proceed.

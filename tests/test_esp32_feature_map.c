@@ -287,6 +287,12 @@ void test_espnow_maps_to_cap_espnow(void)
         esp32_feature_required_caps(ESP32_FEATURE_ESPNOW));
 }
 
+void test_wifi_hotspot_maps_to_cap_wifi_hotspot(void)
+{
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_HOTSPOT,
+        esp32_feature_required_caps(ESP32_FEATURE_WIFI_HOTSPOT));
+}
+
 /* =========================================================================
  * Per-feature: supported() on SiN360 profile bitmap
  * =========================================================================*/
@@ -481,10 +487,10 @@ void test_is_sin360_bt_manage_only_returns_false(void)
  * Feature count sanity
  * =========================================================================*/
 
-void test_feature_count_equals_23(void)
+void test_feature_count_equals_24(void)
 {
     /* Update this test (and the feature table) whenever new IDs are added. */
-    TEST_ASSERT_EQUAL_INT(23, (int)ESP32_FEATURE_COUNT);
+    TEST_ASSERT_EQUAL_INT(24, (int)ESP32_FEATURE_COUNT);
 }
 
 /* =========================================================================
@@ -529,6 +535,7 @@ int main(void)
     RUN_TEST(test_handshake_maps_to_cap_handshake);
     RUN_TEST(test_ota_maps_to_cap_ota);
     RUN_TEST(test_espnow_maps_to_cap_espnow);
+    RUN_TEST(test_wifi_hotspot_maps_to_cap_wifi_hotspot);
 
     RUN_TEST(test_sin360_profile_lacks_wifi_join);
     RUN_TEST(test_sin360_profile_supports_attack_features);
@@ -553,7 +560,7 @@ int main(void)
     RUN_TEST(test_is_cd3_sin360_profile_returns_false);
     RUN_TEST(test_is_cd3_all_ones_returns_true);
 
-    RUN_TEST(test_feature_count_equals_23);
+    RUN_TEST(test_feature_count_equals_24);
 
     return UNITY_END();
 }
