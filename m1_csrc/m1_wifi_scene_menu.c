@@ -179,7 +179,7 @@ const M1SceneHandlers wifi_scene_menu_handlers = {
 };
 
 /*==========================================================================*/
-/* Recon sub-menu (11 items — passive discovery + merged sniffers §3.4)     */
+/* Recon sub-menu (11 items — passive discovery + merged sniffers)          */
 /*==========================================================================*/
 
 #define RECON_ITEM_COUNT  11
