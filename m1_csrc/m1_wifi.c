@@ -4421,6 +4421,26 @@ void wifi_general_hotspot(void)
 		return;
 	}
 
+	/* Reject characters that would break/inject into quoted ESP-AT parameters. */
+	for (size_t i = 0; ssid[i]; i++)
+	{
+		char ch = ssid[i];
+		if (ch == '"' || ch == '\\' || ch == ',' || ch == '\r' || ch == '\n')
+		{
+			wifi_show_message("WiFi Hotspot", "Invalid SSID", "No \\\\ \" , CR/LF");
+			return;
+		}
+	}
+	for (size_t i = 0; pwd[i]; i++)
+	{
+		char ch = pwd[i];
+		if (ch == '"' || ch == '\\' || ch == ',' || ch == '\r' || ch == '\n')
+		{
+			wifi_show_message("WiFi Hotspot", "Invalid password", "No \\\\ \" , CR/LF");
+			return;
+		}
+	}
+
 	ensure_esp32_ready();
 	memset(resp_buf, 0, sizeof(resp_buf));
 	(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
