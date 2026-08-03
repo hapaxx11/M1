@@ -583,8 +583,8 @@ void test_scan_connect_opens_target_menu(void)
 
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_scan_ap_target_selected()"),
         "Scan & Connect delegate must consult wifi_scan_ap_target_selected()");
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_push(app, WifiSceneTargetMenu)"),
-        "Scan & Connect delegate must push the Target menu on selection");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_replace(app, WifiSceneTargetMenu)"),
+        "Scan & Connect delegate must replace the current scene with the Target menu on selection");
 
     free(c);
 }
