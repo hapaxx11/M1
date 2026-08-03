@@ -43,8 +43,7 @@ static bool s_game_active;
 
 static void ttt_on_enter(M1SceneApp *app)
 {
-    /* Initiator plays X.  In Phase 5, role assignment comes from
-     * the peer session pairing order. */
+    /* Initiator plays X. */
     ttt_game_init(&s_game, TTT_ROLE_X);
     s_cursor = 4;  /* center */
     s_game_active = true;

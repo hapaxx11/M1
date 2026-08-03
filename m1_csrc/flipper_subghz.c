@@ -181,7 +181,7 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "Manufacture") == 0)
 		{
-			/* KeeLoq-family manufacturer-key name — Phase 9b carries it
+			/* KeeLoq-family manufacturer-key name — carried
 			 * through load → SignalSettings → save_key_with_manufacture
 			 * so the saved file's Manufacture line is preserved across
 			 * round-trip edits. */
@@ -191,7 +191,7 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "CounterMode") == 0)
 		{
-			/* Phase 9d-2: optional KeeLoq-family replay policy override.
+			/* Optional KeeLoq-family replay policy override.
 			 * "Static" → STATIC replay (re-emit captured hop verbatim).
 			 * Anything else (including missing field, empty string, or
 			 * an unknown value such as "Bogus") falls through to the
@@ -774,7 +774,7 @@ bool flipper_subghz_save_key(const char *path, uint32_t frequency,
  *         `Manufacture:` field so the saved key can be replayed via the
  *         KeeLoq counter-mode encoder.
  *
- * Used by the Phase 8c-3 Create-from-scratch KeeLoq-family flow.  When
+ * Used by the create-from-scratch KeeLoq-family flow.  When
  * @p manufacture is NULL or empty the function behaves identically to
  * flipper_subghz_save_key() (no Manufacture line written).
  */
@@ -787,9 +787,9 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
                                                uint32_t    te,
                                                const char *manufacture)
 {
-	/* Thin wrapper kept for backwards-compatibility with Phase 9b/9c
+	/* Thin wrapper kept for backwards-compatibility with earlier
 	 * callers — defaults CounterMode to INCREMENT so no new line is
-	 * written to existing files unless they go through the Phase 9d-3
+	 * written to existing files unless they go through the
 	 * SignalSettings save path. */
 	return flipper_subghz_save_key_full(path, frequency, preset, protocol,
 	                                    bit_count, key, te, manufacture,
@@ -798,11 +798,11 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
 
 /*============================================================================*/
 /**
- * @brief  Phase 9d-2 — write a Flipper Key file with both optional
+ * @brief  Write a Flipper Key file with both optional
  *         `Manufacture:` and `CounterMode:` fields.
  *
  * The `CounterMode:` line is only emitted when @p counter_mode is non-default
- * (i.e. STATIC).  This keeps existing Phase 9b/9c saved files byte-identical
+ * (i.e. STATIC).  This keeps existing saved files byte-identical
  * across re-saves that did not touch the counter-mode toggle.
  */
 bool flipper_subghz_save_key_full(const char *path,

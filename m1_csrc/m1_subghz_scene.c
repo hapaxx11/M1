@@ -139,7 +139,7 @@ uint32_t subghz_scene_get_state(const SubGhzApp *app, SubGhzSceneId scene)
 }
 
 /*============================================================================*/
-/* Polish API (Phase 3b-2a — Momentum parity)                                 */
+/* Polish API                                                                 */
 /*============================================================================*/
 
 /**

@@ -4,7 +4,7 @@
  * test_ir_cmd_parse.c
  *
  * Unit tests for ir_cmd_parse() and ir_parse_hex_bytes() in ir_signal_record.c
- * (Phase G extraction — decouples parse_ir_signal_block from FatFS).
+ * (KV-reader extraction — decouples parse_ir_signal_block from FatFS).
  *
  * A minimal string-backed ir_block_reader_t replaces flipper_file_t so the
  * parser logic can run on the host without any FatFS or HAL dependency.

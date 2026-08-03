@@ -855,7 +855,7 @@ void test_encode_replay_empty_manufacture(void)
 }
 
 /*============================================================================*/
-/* Phase 9d-1 — static_counter mode                                            */
+/* static_counter mode                                                         */
 /*============================================================================*/
 
 void test_encode_replay_static_counter_differs_from_increment(void)
@@ -1018,7 +1018,7 @@ int main(void)
     RUN_TEST(test_encode_replay_bad_protocol);
     RUN_TEST(test_encode_replay_empty_manufacture);
 
-    /* Phase 9d-1 — Static counter mode */
+    /* Static counter mode */
     RUN_TEST(test_encode_replay_static_counter_differs_from_increment);
     RUN_TEST(test_encode_replay_static_counter_deterministic);
 

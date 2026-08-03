@@ -127,7 +127,7 @@ They are NOT available in CD3-AT (bedge117/neddy299), or SiN360 firmware.
 The companion STM32 fork [`dagnazty/M1_T-1000`](https://github.com/dagnazty/M1_T-1000)
 uses these commands via SPI AT text protocol.
 
-> **Hapax T-800 transport note (Phase 2 resolved — 2026-06-17):** The dag T-800 ESP32
+> **Hapax T-800 transport note (resolved — 2026-06-17):** The dag T-800 ESP32
 > firmware (hapaxx11/M1-T-800, the Hapax-tracked fork) uses **SPI AT text** as its
 > primary transport, matching Hapax's `spi_AT_send_recv()` interface.  A binary RPC layer
 > exists in `main/rpc/` (magic `0x4D31`, i.e. "M1" LE) and is labeled "phase 1 dual-mode"

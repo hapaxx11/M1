@@ -34,7 +34,7 @@
  *   UP/DOWN/LEFT/RIGHT/OK = transmit corresponding signal
  *
  * The scene pushes itself from the Sub-GHz menu and is a standard scene.
- * TX is handed off to the async SubGhzSceneTransmitter (Phase 3b-2b-iv);
+ * TX is handed off to the async SubGhzSceneTransmitter;
  * the radio is no longer driven from this scene's event handler. */
 
 #include <stdint.h>
@@ -64,7 +64,7 @@
 #define REM_BTN_OK     4
 
 /* TX status indication is now handled entirely by the Transmitter scene
- * (Phase 3b-2b-iv migration); this scene no longer maintains its own
+ * this scene no longer maintains its own
  * "Sent!" overlay state. */
 
 
@@ -72,7 +72,7 @@
 /* Helpers — extern declarations                                              */
 /*============================================================================*/
 
-/* Note (Phase 3b-2b-iv): TX is no longer performed by the blocking
+/* TX is no longer performed by the blocking
  * `sub_ghz_replay_flipper_file()` wrapper from this scene.  remote_fire()
  * now pushes SubGhzSceneTransmitter with tx_autostart=true so each
  * button press hands off to the async Transmitter state machine. */
@@ -186,7 +186,7 @@ static void remote_fire(SubGhzApp *app, uint8_t btn_idx)
     app->tx_repeat_count = 1U;             /* static keys: 1 burst */
     app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
     app->tx_autostart    = true;           /* one-press fire UX */
-    /* Phase 4b — Remote is a one-shot fire UX (the button on the M1
+    /* Remote is a one-shot fire UX (the button on the M1
      * remote view maps to a saved .sub file, and pressing it should
      * send the captured key as-is).  Button cycling is not part of
      * the Remote workflow, so clear tx_protocol_name and let the
@@ -264,7 +264,7 @@ static void scene_draw(SubGhzApp *app)
     u8g2_DrawStr(&m1_u8g2, 42, 47, BTN_NAME(app, REM_BTN_DOWN));
 
     /* Hint — TX status itself is shown by the Transmitter scene when
-     * a button is pressed (Phase 3b-2b-iv migration), so this scene
+     * a button is pressed, so this scene
      * just shows what to do. */
     u8g2_DrawStr(&m1_u8g2, 4, 62, "Press to send");
 

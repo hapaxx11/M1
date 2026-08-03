@@ -2,16 +2,16 @@
 
 /**
  * @file   m1_subghz_scene_set_type.c
- * @brief  Sub-GHz Create-from-scratch SetType picker scene (Phase 8b-2).
+ * @brief  Sub-GHz Create-from-scratch SetType picker scene.
  *
- * Scrollable picker scene over the Phase 8a/8b-1 `subghz_create_proto_*`
+ * Scrollable picker scene over the `subghz_create_proto_*`
  * catalog.  Lets the user pick one of the 17 supported "create from
  * scratch" protocols (5 rolling-code remotes + 12 static-OOK families).
  *
  * On OK the picked @ref SubGhzCreateProtoId is stored in
  * @ref SubGhzApp::create_proto_id and the @ref SubGhzSceneSetKey
- * hex-entry scene is pushed (Phase 8b-3) to let the user build the
- * key.  Selection persists across pushes/pops via the Phase 2
+ * hex-entry scene is pushed to let the user build the
+ * key.  Selection persists across pushes/pops via the
  * per-scene 32-bit state slot keyed by @ref SubGhzSceneSetType so
  * the user is returned to the same protocol if they re-enter the
  * picker.
@@ -36,8 +36,7 @@
 /*============================================================================*/
 
 /* The labels array is rebuilt on every scene_on_enter from the catalog so
- * that any future change to the catalog (Phase 8c will add the KeeLoq
- * family) is picked up without touching this scene. */
+ * that any catalog change is picked up without touching this scene. */
 static subghz_submenu_model_t s_model;
 static const char *s_labels[SUBGHZ_CREATE_PROTO_COUNT];
 
@@ -108,13 +107,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 app->create_proto_id = s_model.selected;
                 subghz_scene_set_state(app, SubGhzSceneSetType,
                                        s_model.selected);
-                /* Phase 8c-3 — KeeLoq-family protocols use the
+                /* KeeLoq-family protocols use the
                  * Serial / Button / Counter / MfKey editor chain
                  * instead of the single opaque hex key editor.  The
                  * selection is made via the field_flags bitmask so the
                  * dispatch follows the catalog rather than hard-coded
                  * protocol IDs.  Pure SetKey is still used for the
-                 * static-OOK families and the Phase 8a rolling-code
+                 * static-OOK families and the rolling-code
                  * remotes that expose a single opaque hex key. */
                 if (subghz_create_proto_has_field(
                         (SubGhzCreateProtoId)s_model.selected,
@@ -124,7 +123,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 }
                 else
                 {
-                    /* Phase 8b-3 — hand off to the hex-key editor scene.
+                    /* Hand off to the hex-key editor scene.
                      * SetKey reads `create_proto_id` to look up the
                      * protocol's bit width and frequency, lets the user
                      * build a key, writes a temp .sub, and pushes the
@@ -153,7 +152,7 @@ static void draw(SubGhzApp *app)
 {
     (void)app;
     /* Re-sync visible_count for the current text-size setting before
-     * drawing — matches the Phase 7c-1 Menu scene pattern. */
+     * drawing — matches the menu scene pattern. */
     subghz_submenu_model_set_visible_count(&s_model,
                                            M1_MENU_VIS(s_model.item_count));
     m1_submenu_draw(&s_model, "Set Type", s_labels);

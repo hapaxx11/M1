@@ -479,7 +479,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_tx_8300_decode.c
     ../../Sub_Ghz/protocols/m1_oregon_v1_decode.c
     ../../Sub_Ghz/protocols/m1_oregon3_decode.c
-    # Phase 6: Rolling code parity additions
+    # Rolling code parity additions
     ../../Sub_Ghz/protocols/m1_jarolift_decode.c
     ../../Sub_Ghz/protocols/m1_beninca_arc_decode.c
     ../../Sub_Ghz/protocols/m1_hormann_bisecur_decode.c
@@ -690,29 +690,29 @@ target_sources(m1_01 INTERFACE
 
     ../../m1_csrc/privateprofilestring.c
     ../../m1_csrc/uiView.c
-    # === Enhanced firmware: Flipper file format parsers (Phase 2) ===
+    # === Enhanced firmware: Flipper file format parsers ===
     ../../m1_csrc/flipper_file.c
     ../../m1_csrc/flipper_ir.c
     ../../m1_csrc/flipper_subghz.c
     ../../m1_csrc/flipper_nfc.c
     ../../m1_csrc/flipper_rfid.c
-    # === Enhanced firmware: Universal Remote + Crypto (Phase 3+5) ===
+    # === Enhanced firmware: Universal Remote + Crypto ===
     ../../m1_csrc/ir_signal_record.c
     ../../m1_csrc/ir_button_map.c
     ../../m1_csrc/m1_ir_universal.c
     ../../m1_csrc/m1_ir_quick_remote.c
     ../../m1_csrc/m1_crypto.c
     ../../m1_csrc/m1_wifi_cred.c
-    # === Enhanced firmware: Flipper integration (Phase 6) ===
+    # === Enhanced firmware: Flipper integration ===
     ../../m1_csrc/m1_flipper_integration.c
-    # === Enhanced firmware: BadUSB (Phase 7) ===
+    # === Enhanced firmware: BadUSB ===
     ../../USB/Class/HID/Src/usbd_hid.c
     ../../m1_csrc/m1_badusb.c
     ../../m1_csrc/badusb_parser.c
-    # === Enhanced firmware: Bad-BT (Phase 8) ===
+    # === Enhanced firmware: Bad-BT ===
     ../../m1_csrc/m1_badbt.c
 
-    # === Enhanced firmware: Built-in Games (Phase 9) ===
+    # === Enhanced firmware: Built-in Games ===
     ../../m1_csrc/m1_games.c
     ../../m1_csrc/m1_games_scene.c
     ../../m1_csrc/m1_clock_util.c
@@ -728,7 +728,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/hex_viewer.c
     ../../m1_csrc/app_hex_viewer.c
     ../../m1_csrc/signal_gen.c
-    # === Enhanced firmware: ELF App Loader (Phase 10) ===
+    # === Enhanced firmware: ELF App Loader ===
     ../../m1_csrc/m1_elf_loader.c
     ../../m1_csrc/m1_app_api.c
     ../../m1_csrc/m1_app_manager.c

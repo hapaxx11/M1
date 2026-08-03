@@ -2,7 +2,7 @@
 
 /**
  * @file   test_subghz_signal_format.c
- * @brief  Unity tests for the Phase 11-1 polymorphic Info-screen renderer.
+ * @brief  Unity tests for the polymorphic Info-screen renderer.
  *
  * Covers `subghz_signal_format_keeloq_info()`:
  *   - Buffer always NUL-terminated (including on NULL/zero inputs).

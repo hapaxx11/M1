@@ -348,7 +348,7 @@ void test_dup_only_checks_last_entry(void)
 }
 
 /* ===================================================================
- * Phase 12 — subghz_history_add_ex toggle semantics
+ * subghz_history_add_ex toggle semantics
  * =================================================================== */
 
 /* remove_duplicates=true matches the default subghz_history_add() behaviour:
@@ -569,7 +569,7 @@ int main(void)
     /* Dup edge case */
     RUN_TEST(test_dup_only_checks_last_entry);
 
-    /* Phase 12 — _ex toggle semantics */
+    /* _ex toggle semantics */
     RUN_TEST(test_ex_remove_dups_on_matches_default);
     RUN_TEST(test_ex_remove_dups_off_adds_new_entry);
     RUN_TEST(test_ex_delete_old_on_evicts_oldest);

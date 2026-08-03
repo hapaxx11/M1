@@ -3,7 +3,7 @@
 /*
  * rf_timing_capture.h
  *
- * Phase 4A — Timing-element extraction for the RF Rosetta Signal Identifier.
+ * Timing-element extraction for the RF Rosetta Signal Identifier.
  *
  * The sweep loop collects a short burst of RSSI samples while dwelling on an
  * active frequency.  This module converts that burst into a pseudo-timing array

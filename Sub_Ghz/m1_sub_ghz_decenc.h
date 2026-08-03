@@ -120,7 +120,7 @@ void subghz_history_reset(SubGHz_History_t *hist);
 uint8_t subghz_history_add(SubGHz_History_t *hist, const SubGHz_Dec_Info_t *info, uint32_t freq_hz);
 
 /**
- * Phase 12 — toggle-aware insertion used by the Read scene.
+ * Toggle-aware insertion used by the Read scene.
  *
  * @param remove_duplicates  When true, a reception that matches the most
  *                           recent entry on (protocol, key, bit_len) is
@@ -217,7 +217,7 @@ enum {
 	REVERS_RB2,
 	ROGER,
 	SOMFY_KEYTIS,
-	/* --- Momentum Phase 3: Weather/Sensor protocols --- */
+	/* --- Weather/Sensor protocols --- */
 	AURIOL_AHFL,
 	AURIOL_HG0601A,
 	GT_WT02,
@@ -230,7 +230,7 @@ enum {
 	EMOS_E601X,
 	LACROSSE_TX141THBV2,
 	WENDOX_W6726,
-	/* --- Momentum Phase 4: Remote/Gate/Automation protocols --- */
+	/* --- Remote/Gate/Automation protocols --- */
 	DITEC_GOL4,
 	ELPLAST,
 	HONEYWELL_WDB,
@@ -242,7 +242,7 @@ enum {
 	TPMS_GENERIC,
 	PCSG_GENERIC,
 
-	/* --- Momentum Phase 5: Advanced weather protocols --- */
+	/* --- Advanced weather protocols --- */
 	ACURITE_592TXR,
 	ACURITE_986,
 	ACURITE_5N1,
@@ -250,7 +250,7 @@ enum {
 	OREGON_V1,
 	OREGON3,
 
-	/* --- Phase 6: Rolling code parity additions --- */
+	/* --- Additional rolling-code protocols --- */
 	JAROLIFT,          /* KeeLoq-based 72-bit rolling code (detect-only) */
 	BENINCA_ARC,       /* AES-128 encrypted 128-bit rolling code (detect-only) */
 	HORMANN_BISECUR,   /* Manchester 176-bit AES rolling code at 868 MHz (detect-only) */
@@ -329,7 +329,7 @@ uint8_t subghz_decode_generic_pwm(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_manchester(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_generic_ppm(uint16_t p, uint16_t pulsecount);
 
-/* Momentum Phase 5: Advanced weather protocols */
+/* Advanced weather protocols */
 uint8_t subghz_decode_acurite_592txr(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_acurite_986(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_tx_8300(uint16_t p, uint16_t pulsecount);
@@ -390,7 +390,7 @@ uint8_t subghz_decode_revers_rb2(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_roger(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_somfy_keytis(uint16_t p, uint16_t pulsecount);
 
-/* Phase 6: Rolling code parity additions */
+/* Additional rolling-code protocols */
 uint8_t subghz_decode_jarolift(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_beninca_arc(uint16_t p, uint16_t pulsecount);
 uint8_t subghz_decode_hormann_bisecur(uint16_t p, uint16_t pulsecount);

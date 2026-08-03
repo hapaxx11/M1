@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_transmitter.c
- * @brief  Sub-GHz Transmitter scene — generic key-file replay (Phase 3b-2b-i scaffold).
+ * @brief  Sub-GHz Transmitter scene — generic key-file replay.
  *
  * Pushes onto the scene stack from any caller that wants to TX a PACKET /
  * key / Flipper `.sub` file with the canonical async-TX state machine
@@ -25,7 +25,7 @@
  *            → BACK             → TX_TEARDOWN → unlink temp + abort + park
  *   EXITING  → (next event)     → EXIT_SCENE → subghz_scene_pop()
  *
- * Notes for callers migrating off the blocking wrappers (Phase 3b-2b-ii+):
+ * Notes for callers using the async Transmitter scene:
  *   - Saved (PACKET path):    set tx_path = saved file, mode=SINGLE,
  *                              repeat_count = file's repeat or 1.
  *   - Playlist:               loop over entries, push Transmitter per
@@ -34,9 +34,8 @@
  *   - Remote:                 push Transmitter on button press.
  *   - Bind Wizard:            push Transmitter for each step's TX.
  *
- * This file (Phase 3b-2b-i) only adds the scene scaffold; no callers are
- * migrated yet.  Compiles + registers + boots cleanly; the scene becomes
- * reachable in 3b-2b-ii.
+ * This scene is the shared async replay path used by Saved, Playlist,
+ * Remote, Bind Wizard, and create-from-scratch flows.
  */
 
 #include <stdint.h>
@@ -157,7 +156,7 @@ static bool perform_action(SubGhzApp *app, subghz_transmitter_action_t action)
              * non-RAW files; RAW files go through the Read Raw scene's
              * LoadKeyTX state instead.
              *
-             * Phase 4c: when the protocol supports button override, set
+             * When the protocol supports button override, set
              * the per-prepare slot before invoking the converter.  The
              * converter latches and clears the slot internally, so the
              * call is self-contained — no need to clear afterwards.
@@ -242,7 +241,7 @@ static bool perform_action(SubGhzApp *app, subghz_transmitter_action_t action)
 
         case SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_PREV:
         case SUBGHZ_TXCTL_ACT_CYCLE_BUTTON_NEXT:
-            /* Phase 4c — the controller has already mutated
+            /* The controller has already mutated
              * `s_ctl.button_index` to the new value.  The TX_START
              * branch above will pass it to
              * sub_ghz_replay_set_button_override() on the next OK
@@ -279,8 +278,8 @@ static void scene_on_enter(SubGhzApp *app)
         (app->tx_mode == 1U) ? SUBGHZ_TX_MODE_ENDLESS
                               : SUBGHZ_TX_MODE_SINGLE;
 
-    /* Init controller.  Phase 4b: query the button-cycling capability
-     * helper from the protocol name supplied by the caller.  Phase 4c:
+    /* Init controller. Query the button-cycling capability helper from
+     * the protocol name supplied by the caller, then
      * AND-gate the cycling enable against subghz_button_override_supports()
      * so the UI only offers cycling for protocols where pressing
      * LEFT/RIGHT actually mutates the transmitted key.  Protocols whose
@@ -314,7 +313,7 @@ static void scene_on_enter(SubGhzApp *app)
 
     app->need_redraw = true;
 
-    /* Auto-start hint (Phase 3b-2b-iv) — synthesize an OK_PRESS so TX
+    /* Auto-start hint — synthesize an OK_PRESS so TX
      * begins immediately without the READY → press-OK confirmation
      * step.  Used by the Remote scene where pressing a mapped button
      * must fire its signal in one press.  Cleared after consumption
@@ -448,13 +447,13 @@ static void scene_on_exit(SubGhzApp *app)
         sub_ghz_replay_abort();
     }
     unlink_temp_if_any();
-    /* Phase 4c: clear any pending button-override slot.  The converter
+    /* Clear any pending button-override slot.  The converter
      * also resets on entry, but clearing here prevents a stale set
      * (e.g. user pressed RIGHT then BACK without OK) from leaking
      * into an unrelated subsequent prepare from any other caller. */
     sub_ghz_replay_set_button_override(-1);
     /* Controller / tick cadence are reset automatically by the scene
-     * manager on pop (Phase 3b-2a invariant). */
+     * manager on pop. */
 }
 
 /*============================================================================*/
@@ -552,7 +551,7 @@ static void draw(SubGhzApp *app)
     else
     {
         /* READY: filename + Send / Back hint.  When the loaded protocol
-         * supports button cycling (Phase 4b), render the current
+         * supports button cycling, render the current
          * "Btn X/Y" indicator on the body line and surface LEFT/RIGHT
          * as button-cycle hints; otherwise show the static
          * "Press OK to send" copy. */

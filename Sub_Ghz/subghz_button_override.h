@@ -66,7 +66,7 @@ extern "C" {
  *
  * @note  A return of @c false is the canonical signal for the caller
  *        to skip key mutation and either transmit the original key
- *        (legacy Phase 4b behaviour) or display a "cycling disabled"
+ *        unchanged or display a "cycling disabled"
  *        indicator.  Returning @c false is NOT an error — it is the
  *        expected behaviour for protocols outside the supported set.
  */

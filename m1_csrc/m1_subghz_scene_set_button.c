@@ -2,15 +2,16 @@
 
 /**
  * @file   m1_subghz_scene_set_button.c
- * @brief  Sub-GHz Create-from-scratch KeeLoq SetButton editor scene (Phase 8c-2).
+ * @brief  Sub-GHz Create-from-scratch KeeLoq SetButton editor scene.
  *
  * Hex-digit editor for the KeeLoq-family button code.  The editor's bit
  * width is taken from the picked protocol's
  * @ref SubGhzCreateProtoSpec::button_bits (4 bits for the KeeLoq /
- * Star Line / Jarolift entries shipped by Phase 8c-1).  On OK the
+ * Star Line / Jarolift entries in the built-in catalog).  On OK the
  * assembled value is masked to `button_bits` and persisted into
  * @ref SubGhzApp::create_button; the scene pops back to whichever
- * scene pushed it.  Phase 8c-3 will push @ref SubGhzSceneSetCounter next.
+ * scene pushed it. In the create-from-scratch flow, OK advances to
+ * @ref SubGhzSceneSetCounter next.
  *
  * Hardware-coupled UI rendering only — the underlying digit/cursor
  * state lives in the host-tested pure `subghz_hex_editor` module.
@@ -43,7 +44,7 @@ static const SubGhzCreateProtoSpec *s_spec;
 
 static uint8_t button_bits_for(SubGhzApp *app)
 {
-    /* Phase 9b — edit-signal mode reuses this scene for the KeeLoq family
+    /* Edit-signal mode reuses this scene for the KeeLoq family
      * (KeeLoq / Star Line / Jarolift), all of which use a 4-bit button.
      * The cached signal-fields module lives in
      * `m1_subghz_scene_signal_settings.c`; the spec table is only
@@ -72,7 +73,7 @@ static void scene_on_enter(SubGhzApp *app)
 {
     uint8_t bits = button_bits_for(app);
     subghz_hex_editor_init(&s_editor, bits);
-    /* Phase 9b — seed from the loaded signal's button when editing a
+    /* Seed from the loaded signal's button when editing a
      * .sub file; otherwise from `create_button` (Create-from-scratch). */
     uint64_t initial = app->signal_edit_active
                        ? (uint64_t)subghz_signal_settings_get_button()
@@ -116,20 +117,19 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
             if (app->signal_edit_active)
             {
-                /* Phase 9b — save back to the loaded .sub file via the
+                /* Save back to the loaded .sub file via the
                  * SignalSettings cross-scene API.  Whether the save
                  * succeeds or fails we pop back to SignalSettings so
                  * the user is never trapped here; the on_enter there
                  * will reload from disk and reflect reality (and clear
-                 * the edit-active flag).  Future polish (9c+) can add
-                 * an error confirm dialog on save failure. */
+                 * the edit-active flag). */
                 (void)subghz_signal_settings_apply_button((uint8_t)masked);
                 subghz_scene_pop(app);
                 return true;
             }
 
             app->create_button = (uint8_t)masked;
-            /* Create-from-scratch flow (Phase 8c-3) — chain forward to
+            /* Create-from-scratch flow — chain forward to
              * the Counter editor. */
             subghz_scene_push(app, SubGhzSceneSetCounter);
             return true;

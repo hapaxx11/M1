@@ -184,7 +184,7 @@ void test_nfc_scene_uses_widget(void)
 
 void test_wifi_scene_uses_widget(void)
 {
-    /* After Phase D the menu + submenu widget live in the per-group split
+    /* After the split, the menu + submenu widget live in the per-group
      * file; m1_wifi_scene_menu.c is the canonical file for the top menu. */
     char *c = read_file("m1_csrc/m1_wifi_scene_menu.c");
     assert_contains(c, "m1_submenu.h");

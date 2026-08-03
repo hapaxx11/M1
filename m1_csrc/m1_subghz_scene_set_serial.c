@@ -2,15 +2,16 @@
 
 /**
  * @file   m1_subghz_scene_set_serial.c
- * @brief  Sub-GHz Create-from-scratch KeeLoq SetSerial editor scene (Phase 8c-2).
+ * @brief  Sub-GHz Create-from-scratch KeeLoq SetSerial editor scene.
  *
  * Hex-digit editor for the KeeLoq-family device serial.  The editor's
  * bit width is taken from the picked protocol's
  * @ref SubGhzCreateProtoSpec::serial_bits (28 bits for the KeeLoq /
- * Star Line / Jarolift entries shipped by Phase 8c-1).  On OK the
+ * Star Line / Jarolift entries in the built-in catalog).  On OK the
  * assembled value is masked to `serial_bits` and persisted into
  * @ref SubGhzApp::create_serial; the scene then pops back to whichever
- * scene pushed it.  Phase 8c-3 will push @ref SubGhzSceneSetButton next.
+ * scene pushed it. In the create-from-scratch flow, OK advances to
+ * @ref SubGhzSceneSetButton next.
  *
  * On scene_on_enter the editor is seeded from the current
  * `app->create_serial` value so a re-entry preserves what the user
@@ -107,10 +108,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             uint8_t  bits   = s_editor.bit_count;
             uint64_t masked = subghz_hex_editor_value(&s_editor) & serial_mask_for(bits);
             app->create_serial = (uint32_t)masked;
-            /* Phase 8c-3 — chain forward through the KeeLoq editor flow:
+            /* Create-from-scratch flow — chain forward through the KeeLoq editor flow:
              * Serial → Button → Counter → MfKey → Transmitter.  BACK at
              * any stage pops back one step so the user can revise the
-             * previous field; the Phase 2 scene stack handles that
+             * previous field; the scene stack handles that
              * automatically. */
             subghz_scene_push(app, SubGhzSceneSetButton);
             return true;

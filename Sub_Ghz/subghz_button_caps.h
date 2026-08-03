@@ -4,8 +4,8 @@
  * @file   subghz_button_caps.h
  * @brief  Sub-GHz protocol button-cycling capability lookup — pure logic.
  *
- * Phase 4a of the Momentum parity migration.  Given a protocol name
- * (the same string used in `subghz_protocol_registry.c::name`), returns
+ * Given a protocol name (the same string used in
+ * `subghz_protocol_registry.c::name`), returns
  * whether the protocol supports on-device button cycling and, if so,
  * how many distinct button codes it exposes.
  *
@@ -15,7 +15,7 @@
  *                        │                     each value of `btn` 0..N-1
  *                        └─ button_count     : N (1..16); 0 = unsupported
  *
- * The result is consumed by the Transmitter scene (Phase 4b) to populate
+ * The result is consumed by the Transmitter scene to populate
  * @ref subghz_transmitter_ctl_t.allow_button_cycle and `.button_count`.
  *
  * This module is hardware-independent: no SI4463, no DMA, no RTOS, no
@@ -37,7 +37,7 @@
  *    are intentionally excluded from cycling — a remote with multiple
  *    buttons is represented by multiple saved files, not by cycling.
  *
- * Coverage (rolling-code OOK PWM, Phase 4a):
+ * Coverage (rolling-code OOK PWM):
  *
  *   | Protocol            | Button count | Encoder family               |
  *   |---------------------|--------------|------------------------------|

@@ -276,8 +276,8 @@ typedef struct {
 	bool    autosave;       /* Auto-save decoded signals to SD */
 	uint8_t save_fmt;       /* 0 = Flipper .sub, 1 = M1 native .sgh */
 	int8_t  rssi_threshold; /* Hopper RSSI threshold (dBm, -50 to -100) */
-	bool    remove_duplicates;  /* Phase 12: receiver history — dedupe consecutive identical decodes */
-	bool    delete_old_signals; /* Phase 12: receiver history — evict oldest when ring is full */
+	bool    remove_duplicates;  /* Receiver history — dedupe consecutive identical decodes */
+	bool    delete_old_signals; /* Receiver history — evict oldest when ring is full */
 } SubGHz_Config_t;
 
 static SubGHz_Config_t subghz_cfg = {
@@ -293,7 +293,7 @@ static SubGHz_Config_t subghz_cfg = {
 	.delete_old_signals = true   /* Default ON — Flipper-parity behaviour */
 };
 
-/* Add Manually retired in Phase 8b-4 — see m1_subghz_scene_set_type.c /
+/* Add Manually retired — see m1_subghz_scene_set_type.c /
  * m1_subghz_scene_set_key.c and Sub_Ghz/subghz_create_proto.c for the
  * scene-native protocol picker + hex-editor flow that replaced it. */
 
@@ -517,7 +517,7 @@ static void subghz_raw_draw_sin(void);
 static bool subghz_protocol_is_static(uint16_t protocol);
 
 /* Flipper-matching feature functions */
-/* (sub_ghz_add_manually retired in Phase 8b-4 — see SubGhzSceneSetType) */
+/* (sub_ghz_add_manually retired — see SubGhzSceneSetType) */
 
 /* Frequency hopping helpers (defined after forward declarations) */
 static uint32_t subghz_hopper_retune_next(void);
@@ -1124,7 +1124,7 @@ static void subghz_raw_rssi_draw(void)
 
 
 /*============================================================================*/
-/* Phase 5 — Protocol-Specific Emulation (static-code TX)                     */
+/* Protocol-Specific Emulation (static-code TX)                               */
 /*============================================================================*/
 
 /* Maximum pulse pairs: data_bits * 2 (mark+space per bit) + 2 (sync pulse) + margin */
@@ -2031,7 +2031,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint64_t key_value = 0;
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
-	/* Phase 9d-3 — optional `CounterMode:` field on KeeLoq-family
+	/* Optional `CounterMode:` field on KeeLoq-family
 	 * .sub files.  Defaults to INCREMENT for files that omit the
 	 * field (matches the parse behaviour in flipper_subghz_load). */
 	flipper_subghz_counter_mode_t key_counter_mode =
@@ -2224,7 +2224,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		}
 		else if (strncmp(line_buf, "CounterMode:", 12) == 0)
 		{
-			/* Phase 9d-3 — optional KeeLoq-family CounterMode field.
+			/* Optional KeeLoq-family CounterMode field.
 			 * Recognises "Static" exactly (case-sensitive, matching the
 			 * Flipper file format).  Missing line, empty value, "Increment",
 			 * and any unknown value all yield INCREMENT, so every existing
@@ -2307,7 +2307,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	/* ── 3b. KEY file: encode protocol → raw timing ── */
 	if (is_key && key_protocol[0] != '\0' && key_bit_count > 0)
 	{
-		/* Apply the per-prepare button override (Phase 4c).  For
+		/* Apply the per-prepare button override.  For
 		 * supported protocols (KeeLoq family) this mutates the parsed
 		 * key_value to encode the requested button; for unsupported
 		 * protocols it is a no-op.  The KeeLoq counter-mode encoder
@@ -2389,7 +2389,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 					kl_params.key_value   = key_value;
 					kl_params.bit_count   = key_bit_count;
 					kl_params.te          = key_te;
-					/* Phase 9d-3 — wire the parsed CounterMode field from
+					/* Wire the parsed CounterMode field from
 					 * the .sub file.  STATIC bypasses the counter-increment
 					 * step in the KeeLoq encoder so the captured hop word
 					 * replays verbatim; INCREMENT (the default for files
@@ -5323,7 +5323,7 @@ void sub_ghz_signal_identifier(void)
 
             if (rssi > threshold)
             {
-                /* Phase 4A: Sample RSSI burst for both OOK/FSK classification
+                /* Sample RSSI burst for both OOK/FSK classification
                  * and timing-element extraction.  Each sample is 2 ms apart so
                  * the 64-sample window covers ~128 ms — enough to catch several
                  * repeats of a typical short-range remote at ≥1 kbps. */
@@ -5356,7 +5356,7 @@ void sub_ghz_signal_identifier(void)
                 bool decoded = false;
                 if (timing_count >= 4)
                 {
-                    /* Phase 4B: attempt protocol decode before falling back to
+                    /* Attempt protocol decode before falling back to
                      * fingerprint scoring.  A successful decode yields 100%
                      * confidence and skips the heuristic scoring path entirely. */
                     SubGhzRawDecodeResult decode_res;
@@ -5516,7 +5516,7 @@ void sub_ghz_signal_identifier(void)
 /*============================================================================*/
 /* Smart Signal Identifier (RF Rosetta + pre-scan)                           */
 /*                                                                            */
-/* Phase 2A: Freq Scanner feeds Signal ID.                                    */
+/* Pre-scan: Freq Scanner feeds Signal ID.                                     */
 /*                                                                            */
 /* Before entering the normal Signal ID loop, performs a single quick pass   */
 /* over all four scan bands to discover active frequencies.  The discovered   */
@@ -5711,7 +5711,7 @@ void sub_ghz_smart_signal_id(void)
                     bool decoded = false;
                     if (timing_count >= 4)
                     {
-                        /* Phase 4B: attempt protocol decode before fingerprint scoring. */
+                        /* Attempt protocol decode before fingerprint scoring. */
                         SubGhzRawDecodeResult decode_res;
                         if (subghz_decode_raw_offline(
                                 timing_buf, timing_count,
@@ -5820,7 +5820,7 @@ void sub_ghz_smart_signal_id(void)
                     bool decoded = false;
                     if (timing_count >= 4)
                     {
-                        /* Phase 4B: attempt protocol decode before fingerprint scoring. */
+                        /* Attempt protocol decode before fingerprint scoring. */
                         SubGhzRawDecodeResult decode_res;
                         if (subghz_decode_raw_offline(
                                 timing_buf, timing_count,
@@ -6228,7 +6228,7 @@ void    subghz_set_sound_ext(bool v)         { subghz_cfg.sound = v; }
 bool    subghz_get_autosave_ext(void)        { return subghz_cfg.autosave; }
 void    subghz_set_autosave_ext(bool v)      { subghz_cfg.autosave = v; }
 
-/* Phase 12 — receiver history quality-of-life toggles */
+/* Receiver history quality-of-life toggles */
 bool    subghz_get_remove_duplicates_ext(void)     { return subghz_cfg.remove_duplicates; }
 void    subghz_set_remove_duplicates_ext(bool v)   { subghz_cfg.remove_duplicates = v; }
 bool    subghz_get_delete_old_signals_ext(void)    { return subghz_cfg.delete_old_signals; }

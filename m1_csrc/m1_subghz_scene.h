@@ -57,18 +57,18 @@ typedef enum {
     SubGhzSceneBruteForce,     /**< Brute-force code transmitter */
     SubGhzSceneRemote,         /**< Multi-button RF remote control */
     SubGhzSceneBindWizard,     /**< Bind New Remote step-by-step wizard */
-    SubGhzSceneTransmitter,    /**< Generic key-file Transmitter (Phase 3b-2b) */
+    SubGhzSceneTransmitter,    /**< Generic key-file Transmitter */
     SubGhzSceneSavedMenu,      /**< Action menu (Decode/Emulate/Info/Rename/Delete) for a selected Saved file */
     SubGhzSceneDelete,         /**< Delete-file confirmation dialog */
     SubGhzSceneMoreRaw,        /**< Read-Raw Loaded "More" submenu (Decode/Rename/Delete) */
     SubGhzSceneDecodeRaw,      /**< Offline decode-results view for a loaded RAW file */
-    SubGhzSceneSetType,        /**< Create-from-scratch protocol picker (Phase 8b-2) */
-    SubGhzSceneSetKey,         /**< Create-from-scratch hex-key editor (Phase 8b-3) */
-    SubGhzSceneSetSerial,      /**< Create-from-scratch KeeLoq serial editor (Phase 8c-2) */
-    SubGhzSceneSetButton,      /**< Create-from-scratch KeeLoq button editor (Phase 8c-2) */
-    SubGhzSceneSetCounter,     /**< Create-from-scratch KeeLoq counter editor (Phase 8c-2) */
-    SubGhzSceneSetMfKey,       /**< Create-from-scratch KeeLoq mfkey picker (Phase 8c-2) */
-    SubGhzSceneSignalSettings, /**< Read-only per-file field display (Phase 9a-2) */
+    SubGhzSceneSetType,        /**< Create-from-scratch protocol picker */
+    SubGhzSceneSetKey,         /**< Create-from-scratch hex-key editor */
+    SubGhzSceneSetSerial,      /**< Create-from-scratch KeeLoq serial editor */
+    SubGhzSceneSetButton,      /**< Create-from-scratch KeeLoq button editor */
+    SubGhzSceneSetCounter,     /**< Create-from-scratch KeeLoq counter editor */
+    SubGhzSceneSetMfKey,       /**< Create-from-scratch KeeLoq mfkey picker */
+    SubGhzSceneSignalSettings, /**< Per-file signal field display */
     SubGhzSceneProtoPirateMenu,  /**< Proto Pirate sub-menu (Receiver/SubDecode/Timing Tuner) */
     SubGhzSceneProtoPirateTuner, /**< Proto Pirate async Timing Tuner */
     SubGhzSceneSignalIdentifier, /**< RF Rosetta sweep + fingerprint identifier */
@@ -112,7 +112,7 @@ typedef enum {
     /* Timeout */
     SubGhzEventTimeout,        /**< Screen timeout / auto-dismiss */
 
-    /* Phase 3b-2a — scene-manager polish */
+    /* Scene-manager polish */
     SubGhzEventTick,           /**< Periodic tick (cadence set per-scene via
                                     subghz_scene_set_tick_period) */
     SubGhzEventCustom,         /**< Scene-specific custom event; payload
@@ -161,7 +161,7 @@ typedef struct {
     /** Per-scene 32-bit state slots, keyed by SubGhzSceneId.  Persisted
      *  across push/pop so scenes can stash UI state (cursor position,
      *  sub-mode, last-target) without resorting to file-scope statics.
-     *  See Phase 2 of the Momentum-parity migration plan. */
+     *  Stored in the shared per-scene state array. */
     subghz_scene_state_array_t scene_state;
 
     /* --- Radio config --- */
@@ -196,7 +196,7 @@ typedef struct {
     bool     raw_load_is_native;      /**< true = .sgh (use sub_ghz_replay_datafile) */
     uint32_t raw_load_freq_hz;        /**< Frequency for native replay */
     uint8_t  raw_load_mod;            /**< Modulation for native replay */
-    /** Phase 6 — currently-active Read-Raw file path (storage form, no "0:"
+    /** Currently-active Read-Raw file path (storage form, no "0:"
      *  prefix).  Owned by the Read Raw scene but shared with its child
      *  scenes (@ref SubGhzSceneMoreRaw, @ref SubGhzSceneDecodeRaw) so the
      *  MoreRAW submenu can rename / delete / decode the same file the parent
@@ -234,7 +234,7 @@ typedef struct {
     bool     resume_from_child;       /**< Set when Read pushes a child scene;
                                            cleared after resume_rx() uses it */
 
-    /* --- Phase 3b-2a — scene-manager polish state --- */
+    /* --- Scene-manager polish state --- */
     /** Wall-clock cadence (ms) for SubGhzEventTick.  Set via
      *  subghz_scene_set_tick_period(); 0 disables ticks.  Reset to 0
      *  automatically on every scene push/pop/replace so a scene that
@@ -249,7 +249,7 @@ typedef struct {
      *  subghz_scene_custom_payload(). */
     subghz_scene_custom_payload_t custom_event_payload;
 
-    /* --- Phase 3b-2b — Transmitter scene input parameters --- */
+    /* --- Transmitter scene input parameters --- */
     /** Path of the key/packet/Flipper file to transmit.  Set by the
      *  caller before pushing SubGhzSceneTransmitter; remains valid for
      *  the lifetime of that scene.  Empty string = no file (the scene
@@ -273,13 +273,13 @@ typedef struct {
     /** Auto-start hint for the Transmitter scene.  When true, the scene
      *  synthesizes an OK_PRESS during scene_on_enter so TX starts
      *  immediately without requiring the user to confirm on the READY
-     *  screen.  Used by the Remote scene (Phase 3b-2b-iv) so that
+     *  screen.  Used by the Remote scene so that
      *  pressing a mapped button fires the signal in one press, matching
      *  the legacy blocking-wrapper behaviour.  The Transmitter scene
      *  clears this back to false after consuming it so a later pop-back
      *  won't auto-restart. */
     bool     tx_autostart;
-    /** Phase 4b — protocol name of the file pointed to by `tx_path`,
+    /** Protocol name of the file pointed to by `tx_path`,
      *  used by the Transmitter scene to query
      *  @ref subghz_button_caps_for_protocol() and decide whether to
      *  enable LEFT/RIGHT button cycling.  Set by the caller before
@@ -288,7 +288,7 @@ typedef struct {
      *  the UX).  Sized to match @ref FLIPPER_SUBGHZ_PROTO_MAX_LEN. */
     char     tx_protocol_name[32];
 
-    /* --- Phase 5 — shared file-selection state for Saved/SavedMenu/Delete --- */
+    /* --- Shared file-selection state for Saved/SavedMenu/Delete --- */
     /** Path of the currently-selected saved file, in storage form
      *  ("/SUBGHZ/<name>" — without the "0:" volume prefix).  Set by the
      *  Saved file-browser scene when a file is chosen, consumed by the
@@ -299,7 +299,7 @@ typedef struct {
      *  selected saved file.  Set together with `saved_filepath`. */
     char     saved_filename[32];
 
-    /* --- Phase 8b-2 — Create-from-scratch picker state --- */
+    /* --- Create-from-scratch picker state --- */
     /** Picked protocol id from the SetType scene.  Stored as `uint8_t`
      *  so the public header does not need to pull in
      *  `subghz_create_proto.h`; the consuming scene casts back to
@@ -308,7 +308,7 @@ typedef struct {
      *  `subghz_scene_init()` (memset). */
     uint8_t  create_proto_id;
 
-    /* --- Phase 8c-2 — Create-from-scratch KeeLoq field state --- */
+    /* --- Create-from-scratch KeeLoq field state --- */
     /** User-entered KeeLoq serial.  Width depends on the picked protocol
      *  spec (`serial_bits`, typically 28).  Stored as 32-bit; SetSerial
      *  masks to the protocol's serial_bits on OK. */
@@ -322,16 +322,16 @@ typedef struct {
      *  SetCounter masks to the protocol's counter_bits on OK. */
     uint32_t create_counter;
     /** User-picked manufacturer-key name from the SetMfKey scene.  The
-     *  Phase 8c-3 assembler will look this up via @ref keeloq_mfkeys_find
+     *  The create-from-scratch assembler will look this up via @ref keeloq_mfkeys_find
      *  to obtain the 64-bit master key and learn type before composing
      *  the final 64-bit Flipper hop word.  Sized to match
      *  @ref KeeLoqMfrEntry::name.  Empty string when no mfkey has been
      *  picked yet. */
     char     create_mfkey_name[48];
 
-    /* --- Phase 9b — SignalSettings edit-in-place context flag --- */
+    /* --- SignalSettings edit-in-place context flag --- */
     /** Set to true by the SignalSettings scene immediately before pushing
-     *  one of the field-editor scenes (SetButton in 9b; SetCounter in 9c)
+     *  one of the field-editor scenes (SetButton or SetCounter)
      *  to repurpose those Create-from-scratch editors for editing a
      *  loaded .sub file.  Consumed by the editor's on_enter (to seed the
      *  initial value from the loaded signal instead of `create_*`) and
@@ -429,7 +429,7 @@ void subghz_scene_draw(SubGhzApp *app);
 SubGhzSceneId subghz_scene_current(const SubGhzApp *app);
 
 /*============================================================================*/
-/* Per-scene state accessors (Phase 2 — Momentum parity)                      */
+/* Per-scene state accessors                                                   */
 /*============================================================================*/
 
 /**
@@ -451,7 +451,7 @@ void subghz_scene_set_state(SubGhzApp *app, SubGhzSceneId scene, uint32_t value)
 uint32_t subghz_scene_get_state(const SubGhzApp *app, SubGhzSceneId scene);
 
 /*============================================================================*/
-/* Polish API (Phase 3b-2a — Momentum parity)                                 */
+/* Polish API                                                                 */
 /*============================================================================*/
 
 /**
@@ -558,7 +558,7 @@ extern const SubGhzSceneHandlers subghz_scene_analyzer_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_protocol_filter_handlers;
 
 /*============================================================================*/
-/* SignalSettings (Phase 9b) cross-scene API                                  */
+/* SignalSettings cross-scene API                                              */
 /*============================================================================*/
 
 /**
@@ -591,7 +591,7 @@ bool subghz_signal_settings_apply_button(uint8_t new_button);
 
 /**
  * @brief  Return true when the currently-loaded SignalSettings file's
- *         rolling counter could be resolved (Phase 9c-2).
+ *         rolling counter could be resolved.
  *
  * Resolution requires a non-empty Manufacture: line, a matching entry in
  * the loaded mfkeys table, and a learning mode that does not require an
@@ -608,7 +608,7 @@ bool subghz_signal_settings_has_counter(void);
 
 /**
  * @brief  Return the cached 16-bit rolling counter for the currently-
- *         loaded SignalSettings file (Phase 9c-2), or 0 when no counter
+ *         loaded SignalSettings file, or 0 when no counter
  *         has been resolved.
  *
  * Callers must gate access on @ref subghz_signal_settings_has_counter to
@@ -621,7 +621,7 @@ uint16_t subghz_signal_settings_get_counter(void);
  *         file's encrypted HOP word (preserving the lower 16 plaintext
  *         bits), reassemble the 64-bit Flipper key, and save the file
  *         back via @ref flipper_subghz_save_key_with_manufacture
- *         (Phase 9c-3).
+ *         in place.
  *
  * Used by @ref SubGhzSceneSetCounter on OK when @ref
  * SubGhzApp::signal_edit_active is set.  Returns false when no counter
@@ -641,7 +641,7 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter);
 /**
  * @brief  Flip the loaded SignalSettings file's CounterMode field
  *         between Increment and Static and persist via
- *         @ref flipper_subghz_save_key_full (Phase 9d-3).
+ *         @ref flipper_subghz_save_key_full.
  *
  * Used by the SignalSettings scene when OK is pressed on the
  * CounterMode row.  Unlike the Button/Counter editors this is a binary

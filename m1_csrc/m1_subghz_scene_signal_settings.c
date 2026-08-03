@@ -2,26 +2,24 @@
 
 /**
  * @file   m1_subghz_scene_signal_settings.c
- * @brief  Sub-GHz per-file SignalSettings scene — Phase 9a-2 scaffold.
+ * @brief  Sub-GHz per-file SignalSettings scene.
  *
- * Read-only display of the protocol-specific signal fields (Serial,
- * Button, and the encrypted HOP word) extracted from the currently-
- * loaded .sub file pointed to by `app->saved_filepath`.  Pushed by the
- * Saved action menu when the user picks the new "Settings" entry.
+ * Displays protocol-specific signal fields extracted from the currently-
+ * loaded .sub file pointed to by `app->saved_filepath`. Pushed by the
+ * Saved action menu when the user picks "Settings".
  *
- * Phase 9a-2 scope (this file): read-only display for the KeeLoq family
- * (KeeLoq / Star Line / Jarolift), using the host-tested pure-logic
- * extractor in `Sub_Ghz/subghz_signal_fields.c` (Phase 9a-1).  Editing
- * lands in Phases 9b (button) and 9c (counter); extension to
- * Nice FloR-S / CAME Atomo / Alutech AT-4N / Phoenix V2 lands in 9e.
+ * Field extraction is handled by the host-tested pure `subghz_signal_fields`
+ * helpers. Supported protocols show editable Button / CounterMode / Counter
+ * rows as appropriate; deferred protocols show an explicit blocker so the user
+ * can tell why editing is unavailable.
  *
  * Navigation:
  *   - BACK pops back to the SavedMenu action menu.
- *   - OK is a no-op in this scaffold (will push SetButton in 9b).
+ *   - OK toggles CounterMode in place or opens the corresponding editor scene
+ *     for Button / Counter when that row is selected.
  *
- * Field extraction is fully reversible (see subghz_signal_fields.h);
- * the display is non-destructive — no file I/O happens beyond the
- * `flipper_subghz_load()` invocation on scene_on_enter.
+ * Field extraction is fully reversible (see subghz_signal_fields.h); the
+ * display is non-destructive apart from explicit edit actions.
  */
 
 #include <stdint.h>
@@ -78,15 +76,15 @@ static uint16_t                s_counter;
  *  resolve_counter() and reused by apply_counter() to re-encrypt the
  *  updated HOP word without re-deriving from the mfkey table. */
 static uint64_t                s_device_key;
-/** Cached absolute load path ("0:/SUBGHZ/<name>") used by the Phase 9b
+/** Cached absolute load path ("0:/SUBGHZ/<name>") used by the
  *  save-back helper (`subghz_signal_settings_apply_button`).  Populated
  *  by scene_on_enter from `app->saved_filepath`; cleared on exit so a
  *  stale path can never be written to. */
 static char                    s_saved_full_path[80];
 
 /** UI selection cursor — selects which field is acted upon when the user
- *  presses OK.  Phase 9c-3 added Button + Counter; Phase 9d-3 inserts the
- *  CounterMode toggle between them so it is always reachable even when
+ *  presses OK. CounterMode sits between Button and Counter so it remains
+ *  reachable even when
  *  the manufacturer key did not resolve (Counter row is gated on
  *  s_has_counter; CounterMode is not, since it does not require cipher
  *  state to flip).  Values match the row order in draw_keeloq_fields(). */
@@ -99,7 +97,7 @@ enum {
 static uint8_t                 s_cursor;
 
 /*============================================================================*/
-/* Counter resolution (Phase 9c-2)                                             */
+/* Counter resolution                                                           */
 /*============================================================================*/
 
 /* Resolve the device key for the currently-extracted KeeLoq-family
@@ -217,7 +215,7 @@ static void scene_on_enter(SubGhzApp *app)
         return;
     }
     s_loaded = true;
-    /* Stash the absolute path so the Phase 9b save-back path can rewrite
+    /* Stash the absolute path so the save-back path can rewrite
      * the exact file we loaded from without re-deriving from app state. */
     strncpy(s_saved_full_path, full_path, sizeof(s_saved_full_path) - 1);
     s_saved_full_path[sizeof(s_saved_full_path) - 1] = '\0';
@@ -238,7 +236,7 @@ static void scene_on_enter(SubGhzApp *app)
                                                           &s_fields);
         if (s_supported)
         {
-            /* Phase 9c-2 — best-effort counter resolution.  Failure
+            /* Best-effort counter resolution.  Failure
              * (missing Manufacture line, unknown manufacturer, or Secure
              * learning) leaves s_has_counter == false and the scene draws
              * a "key?" placeholder; the rest of the fields still display
@@ -249,7 +247,7 @@ static void scene_on_enter(SubGhzApp *app)
     }
     else if (subghz_signal_fields_is_nice_flor_s(s_signal.protocol))
     {
-        /* P3 — Nice FloR-S cipher support.  Button and repeat are
+        /* Nice FloR-S cipher support.  Button and repeat are
          * plaintext in the 52-bit key.  Serial and counter require the
          * 32-byte rainbow table to decrypt.  When the builtin table is
          * available (baked in at build time via the
@@ -269,7 +267,7 @@ static void scene_on_enter(SubGhzApp *app)
     }
     else if (subghz_signal_fields_is_came_atomo(s_signal.protocol))
     {
-        /* P4 — CAME Atomo LFSR cipher support.  No external key material
+        /* CAME Atomo LFSR cipher support.  No external key material
          * needed — the cipher is self-contained.  All fields (serial,
          * counter, button) are decoded immediately. */
         s_supported = subghz_signal_fields_came_atomo_extract(
@@ -284,7 +282,7 @@ static void scene_on_enter(SubGhzApp *app)
     }
     else if (subghz_signal_fields_is_alutech_at_4n(s_signal.protocol))
     {
-        /* P4 — Alutech AT-4N TEA-variant cipher support.  Requires the
+        /* Alutech AT-4N TEA-variant cipher support.  Requires the
          * 32-byte rainbow table (injected at build time via the
          * ALUTECH_AT_4N_RAINBOW_TABLE secret).  When the table is
          * available, decode serial/counter immediately; otherwise show
@@ -323,7 +321,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
 
         case SubGhzEventUp:
         case SubGhzEventDown:
-            /* Phase 9c-3 / 9d-3 — cycle the selection cursor between the
+            /* Cycle the selection cursor between the
              * editable rows.  Button is always selectable; CounterMode is
              * always selectable once the file loaded and the protocol is
              * supported (toggling does not require the manufacturer key);
@@ -353,7 +351,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventOk:
-            /* Phase 9c-3 / 9d-3 — dispatch to the editor for the
+            /* Dispatch to the editor for the
              * selected row.  Unsupported protocols, RAW files, and load
              * failures swallow the OK so the scene stays put. */
             if (s_loaded && s_supported)
@@ -432,7 +430,7 @@ static void draw_keeloq_fields(void)
              (unsigned long)s_fields.serial);
     u8g2_DrawStr(&m1_u8g2, 2, 32, line);
 
-    /* Phase 9c-3 / 9d-3 — selection cursor on the editable rows.  The
+    /* Selection cursor on the editable rows.  The
      * Button row is always editable; the CounterMode toggle is always
      * editable (cipher state not required to flip it); the Counter row
      * is only reachable when the manufacturer key resolved (otherwise
@@ -447,7 +445,7 @@ static void draw_keeloq_fields(void)
              (unsigned)(s_fields.button & 0x0F));
     u8g2_DrawStr(&m1_u8g2, 2, 42, line);
 
-    /* CounterMode — Phase 9d-3.  Binary toggle persisted as the
+    /* CounterMode — binary toggle persisted as the
      * optional `CounterMode:` field of the .sub file.  Increment is the
      * Flipper-compatible default and gets elided on save; Static causes
      * the replay path to skip the counter+1 step. */
@@ -456,7 +454,7 @@ static void draw_keeloq_fields(void)
              ? "Static" : "Increment");
     u8g2_DrawStr(&m1_u8g2, 2, 52, line);
 
-    /* Counter — Phase 9c-2.  Resolved on scene_on_enter via the
+    /* Counter — resolved on scene_on_enter via the
      * manufacturer-key store + the learning mode recorded in the keystore
      * entry.  When resolution fails (no Manufacture line, manufacturer
      * absent from the keystore, or Secure learning without a seed) we
@@ -622,7 +620,7 @@ static void draw(SubGhzApp *app)
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 22, line);
 
-        /* Phase 9e-1: show the documented deferred-implementation reason
+        /* Show the documented deferred-implementation reason
          * for CAME Atomo / Alutech AT-4N / Phoenix V2 so the user can
          * distinguish a deferred protocol from a wholly unsupported one.
          * Nice FloR-S has been promoted to SUPPORTED (P3). */
@@ -683,7 +681,7 @@ const SubGhzSceneHandlers subghz_scene_signal_settings_handlers = {
 };
 
 /*============================================================================*/
-/* Phase 9b — Cross-scene API (consumed by SubGhzSceneSetButton)              */
+/* Cross-scene API (consumed by SubGhzSceneSetButton)                          */
 /*============================================================================*/
 
 uint8_t subghz_signal_settings_get_button(void)
@@ -811,7 +809,7 @@ bool subghz_signal_settings_apply_button(uint8_t new_button)
 }
 
 /*============================================================================*/
-/* Phase 9c-2 — Cross-scene API (counter accessors for SubGhzSceneSetCounter)  */
+/* Cross-scene API (counter accessors for SubGhzSceneSetCounter)                */
 /*============================================================================*/
 
 bool subghz_signal_settings_has_counter(void)
@@ -827,7 +825,7 @@ uint16_t subghz_signal_settings_get_counter(void)
 }
 
 /*============================================================================*/
-/* Phase 9c-3 — Cross-scene API (counter writer for SubGhzSceneSetCounter)     */
+/* Cross-scene API (counter writer for SubGhzSceneSetCounter)                  */
 /*============================================================================*/
 
 bool subghz_signal_settings_apply_counter(uint16_t new_counter)
@@ -921,7 +919,7 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
      * hop word cannot be re-encrypted; refuse the edit rather than
      * overwriting the file with corrupt cipher text. */
     /* Re-encrypt the counter via the host-tested pure-logic helper
-     * (Phase 9c-1) — preserves the lower 16 plaintext bits (button,
+     * and preserves the lower 16 plaintext bits (button,
      * VLOW, discriminant, overflow counter). */
     uint32_t new_enc_hop =
         subghz_signal_fields_keeloq_counter_encode(s_fields.enc_hop,
@@ -957,7 +955,7 @@ bool subghz_signal_settings_apply_counter(uint16_t new_counter)
 }
 
 /*============================================================================*/
-/* Phase 9d-3 — CounterMode toggle + save                                      */
+/* CounterMode toggle + save                                                    */
 /*============================================================================*/
 
 bool subghz_signal_settings_toggle_counter_mode(void)

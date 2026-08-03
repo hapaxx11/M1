@@ -4,7 +4,7 @@
  * @file   test_subghz_button_caps.c
  * @brief  Host-side unit tests for the button-cycling capability lookup.
  *
- * Phase 4a — pins the protocol coverage list against accidental edits
+ * Pins the protocol coverage list against accidental edits
  * and exercises the name-canonicalization rules (case, whitespace).
  */
 

@@ -80,7 +80,7 @@ typedef struct {
     uint32_t    bit_count;   /**< Bit count from .sub file "Bit:" */
     uint32_t    te;          /**< TE from .sub file (0 = use default 400 µs) */
     /**
-     * @brief CounterMode policy (Phase 9d).
+     * @brief CounterMode policy.
      *
      * When @c false (default — Increment mode), the encoder runs the standard
      * counter-mode rolling-code path: decrypt → increment 16-bit counter →

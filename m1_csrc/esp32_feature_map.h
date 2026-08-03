@@ -4,8 +4,6 @@
  * @file   esp32_feature_map.h
  * @brief  ESP32-gated feature classifier — pure logic, no HAL/RTOS deps.
  *
- * Phase C of the firmware-wide momentum-parity migration.
- *
  * Centralises the mapping of every ESP32-dependent firmware feature to the
  * M1_ESP32_CAP_* capability bits it requires, together with the UI label
  * shown in the "Feature not supported" screen.
@@ -29,7 +27,7 @@
  *    row to the table in esp32_feature_map.c.  Do NOT add new
  *    DELEGATE_CAPPED(... M1_ESP32_CAP_xxx, "label") sites.
  *
- * Mirroring subghz_button_caps.c (Phase 4a) — same pattern, applied to the
+ * Mirroring subghz_button_caps.c — same pattern, applied to the
  * ESP32 capability landscape.
  *
  * M1 Project

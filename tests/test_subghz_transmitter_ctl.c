@@ -291,7 +291,7 @@ static void test_second_ok_press_after_completion_reinits_engine(void)
 }
 
 /*============================================================================*/
-/* Button cycle (Phase 4 hook)                                                */
+/* Button cycle                                                               */
 /*============================================================================*/
 
 static void test_button_cycle_disabled_when_flag_off(void)
@@ -363,8 +363,8 @@ static void test_button_cycle_left_retreats_and_wraps(void)
 static void test_button_cycle_ignored_during_tx(void)
 {
     /* LEFT/RIGHT during TX must not interfere — they're only meaningful
-     * in READY (before a key fires).  Phase 4 may revisit this but the
-     * current contract is "no cycle mid-burst". */
+     * in READY (before a key fires).  The current contract is
+     * "no cycle mid-burst". */
     subghz_transmitter_ctl_init(&c, SUBGHZ_TX_MODE_ENDLESS, 3, true, 4);
     subghz_transmitter_ctl_event(&c, SUBGHZ_TXCTL_EVT_OK_PRESS);
 

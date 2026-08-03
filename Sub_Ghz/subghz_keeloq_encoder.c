@@ -244,7 +244,7 @@ KeeLoqEncResult keeloq_encode_replay(
         return KEELOQ_ENC_BAD_PROTOCOL;
     }
 
-    /* Counter-mode policy (Phase 9d):
+    /* Counter-mode policy:
      *   Increment mode (default): decrypt → +1 → re-encrypt
      *   Static    mode          : re-emit captured hop verbatim
      * The manufacturer-key derivation path always runs so that field

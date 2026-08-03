@@ -1,6 +1,6 @@
 ---
 name: docs-changelog
-description: Documentation update rules: the mandatory changelog-fragment workflow (.changelog/*.md), and the doc-update matrix (README, ARCHITECTURE, DEVELOPMENT, flipper_import_agent, font inventory) that must be kept in sync with code changes. Load for any change that needs a changelog entry or documentation update.
+description: Documentation update rules: the mandatory changelog-fragment workflow (.changelog/*.md), and the doc-update matrix (README, ARCHITECTURE, DEVELOPMENT, flipper-import skill, font inventory) that must be kept in sync with code changes. Load for any change that needs a changelog entry or documentation update.
 ---
 
 # Documentation & Changelog Rules
@@ -104,7 +104,7 @@ to build.**
   prerequisites change.
 - Update the SD card layout section if new top-level folders are introduced.
 
-### documentation/flipper_import_agent.md — update when Flipper-derived files change
+### `.github/skills/flipper-import/SKILL.md` — update when Flipper-derived files change
 
 - When any file is added to `lfrfid/`, `Sub_Ghz/protocols/`, or `m1_csrc/flipper_*.c/h`:
   - Add it to the correct inventory table (Category 1 / 2 / 4).

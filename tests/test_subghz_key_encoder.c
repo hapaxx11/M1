@@ -639,7 +639,7 @@ void test_custom_required_pairs_unknown_protocol(void)
 }
 
 /* ===================================================================
- * Phase 2: Rolling code replay — per-protocol exclusion list
+ * Rolling-code replay — per-protocol exclusion list
  * OOK-PWM dynamic protocols should now resolve timing successfully.
  * Non-OOK-PWM and encrypted protocols remain rejected.
  * =================================================================== */
@@ -937,7 +937,7 @@ int main(void)
     RUN_TEST(test_custom_required_pairs_null_params);
     RUN_TEST(test_custom_required_pairs_unknown_protocol);
 
-    /* Phase 2: Rolling code replay — OOK-PWM-encodable rolling protocols allowed */
+    /* Rolling-code replay — OOK-PWM-encodable rolling protocols allowed */
     RUN_TEST(test_rolling_came_twee_allowed);
     RUN_TEST(test_rolling_nice_flor_s_allowed);
     RUN_TEST(test_rolling_alutech_allowed);
@@ -946,7 +946,7 @@ int main(void)
     RUN_TEST(test_rolling_toyota_allowed);
     RUN_TEST(test_rolling_ditec_gol4_allowed);
 
-    /* Phase 2: Non-OOK-PWM / encrypted rolling protocols remain rejected */
+    /* Rolling-code replay — non-OOK-PWM / encrypted protocols remain rejected */
     RUN_TEST(test_rolling_keeloq_still_rejected);
     RUN_TEST(test_rolling_secplus_v1_still_rejected);
     RUN_TEST(test_rolling_secplus_v2_still_rejected);
@@ -960,7 +960,7 @@ int main(void)
     RUN_TEST(test_rolling_revers_rb2_rejected);
     RUN_TEST(test_rolling_star_line_rejected);
 
-    /* Phase 2: Rolling code encode roundtrip */
+    /* Rolling-code encode roundtrip */
     RUN_TEST(test_rolling_came_twee_encode_roundtrip);
 
     return UNITY_END();

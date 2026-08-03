@@ -4,7 +4,7 @@
  * @file   m1_subghz_scene_menu.c
  * @brief  Sub-GHz Menu Scene — entry point with Flipper-style item list.
  *
- * Phase 7c-1 migration: rendering and scroll/selection math come from the
+ * Rendering and scroll/selection math come from the
  * reusable `subghz_submenu_model` + `m1_submenu_draw` widget.  This scene
  * only owns the labels, the OK-dispatch target table, and a single
  * persisted byte (the selection index) in the per-scene state slot.
@@ -61,13 +61,13 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneAnalyzerMenu,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
-    SubGhzSceneSetType,   /* "Add Manually" — Phase 8b-4 retired the blocking delegate */
+    SubGhzSceneSetType,   /* "Add Manually" now uses the scene-native create-from-scratch flow */
     SubGhzSceneRemote,
     SubGhzSceneBindWizard,
 };
 
 /*============================================================================*/
-/* Selection state — persisted across child-scene pushes via Phase 2          */
+/* Selection state — persisted across child-scene pushes via the              */
 /* per-scene state slot.  Only `selected` needs to persist; the scroll        */
 /* window is rederived by the model from the current selection + visible     */
 /* count on every entry.                                                      */

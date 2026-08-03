@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_more_raw.c
- * @brief  Sub-GHz Read-Raw "More" submenu scene (Phase 6).
+ * @brief  Sub-GHz Read-Raw "More" submenu scene.
  *
  * Pushed by the Read Raw scene from the RIGHT button while in the Loaded
  * state.  Provides the Momentum LoadKeyIDLE → MoreRAW submenu actions for
@@ -22,7 +22,7 @@
  * three actions are blocking (VKB / message-box / decode-load), so the
  * scene's event handler runs at most once per user interaction.
  *
- * Phase 6 split: this submenu was previously inlined inside
+ * This submenu was previously inlined inside
  * `m1_subghz_scene_read_raw.c` behind `rr_in_more_menu` / `rr_more_sel`
  * file-scope statics.  Extracting it removes ~120 lines of overlay state
  * from Read Raw and aligns the architecture with Momentum's dedicated
@@ -58,7 +58,7 @@ static const char *const more_raw_labels[MORE_RAW_ITEM_COUNT] = {
     "Decode", "Rename", "Delete",
 };
 
-/* Phase 7c-2: migrated to the reusable submenu model.  The scene only
+/* Migrated to the reusable submenu model.  The scene only
  * owns the model itself — scroll/selection math comes from the pure-logic
  * widget and rendering from `m1_submenu_draw`.  Selection is reset each
  * time the scene is entered (matches the prior behaviour where
@@ -262,7 +262,7 @@ static void draw(SubGhzApp *app)
     title[sizeof(title) - 1] = '\0';
 
     /* Re-sync visible_count for the current text-size setting before
-     * drawing — matches the Phase 7c-1 Menu scene pattern. */
+     * drawing — matches the menu scene pattern. */
     subghz_submenu_model_set_visible_count(&s_model,
                                            M1_MENU_VIS(MORE_RAW_ITEM_COUNT));
     m1_submenu_draw(&s_model, title, more_raw_labels);

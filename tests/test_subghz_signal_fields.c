@@ -2,7 +2,7 @@
 
 /**
  * @file   test_subghz_signal_fields.c
- * @brief  Unity tests for subghz_signal_fields — Phase 9a-1.
+ * @brief  Unity tests for subghz_signal_fields.
  *
  * Covers:
  *   - KeeLoq family detection (positive + negative cases)
@@ -12,7 +12,7 @@
  *   - Bad-argument paths (NULL protocol / fields / out, unknown protocol)
  *   - Field masking (over-range serial / button)
  *
- * Phase 9c-1 additions:
+ * Additional coverage:
  *   - KeeLoq 16-bit counter decode / encode round-trip
  *   - Counter substitution preserves the lower 16 plaintext bits
  *   - Cross-check against keeloq_increment_hop() (counter+1 equivalence)
@@ -196,7 +196,7 @@ static void test_round_trip_keeloq_varied(void)
 /* Cross-check against subghz_keeloq_create                                    */
 /*============================================================================*/
 
-/* The Phase 8c-3 create flow builds a 64-bit Flipper key from
+/* The create flow builds a 64-bit Flipper key from
  * {serial, button, counter, mfr_key, learn_type}.  Our extractor MUST be
  * able to reverse the {serial, button} half of that and re-assemble it
  * byte-for-byte. */
@@ -341,7 +341,7 @@ static void test_assemble_masks_overrange_button(void)
 }
 
 /*============================================================================*/
-/* Counter decode / encode (Phase 9c-1)                                        */
+/* Counter decode / encode                                                     */
 /*============================================================================*/
 
 /* A representative device key — value is arbitrary but fixed so the
@@ -461,7 +461,7 @@ static void test_counter_encode_masks_to_16_bits(void)
 }
 
 /*============================================================================*/
-/* Phase 9e-1 — counter-edit capability probe                                  */
+/* Counter-edit capability probe                                               */
 /*============================================================================*/
 
 static void test_counter_edit_status_keeloq_family_supported(void)
@@ -487,9 +487,9 @@ static void test_counter_edit_status_deferred_protocols(void)
 {
     const char *reason = NULL;
 
-    /* Nice FloR-S is now SUPPORTED (P3 — cipher implemented). */
-    /* CAME Atomo is now SUPPORTED (P4 — LFSR cipher implemented). */
-    /* Alutech AT-4N is now SUPPORTED (P4 — TEA cipher implemented). */
+    /* Nice FloR-S is now SUPPORTED because its cipher is implemented. */
+    /* CAME Atomo is now SUPPORTED because its LFSR cipher is implemented. */
+    /* Alutech AT-4N is now SUPPORTED because its TEA cipher is implemented. */
 
     reason = NULL;
     TEST_ASSERT_EQUAL(SUBGHZ_COUNTER_EDIT_DEFERRED,
@@ -975,7 +975,7 @@ int main(void)
     RUN_TEST(test_assemble_masks_overrange_serial);
     RUN_TEST(test_assemble_masks_overrange_button);
 
-    /* Phase 9c-1 — counter decode / encode pure logic */
+    /* Counter decode / encode pure logic */
     RUN_TEST(test_counter_decode_recovers_known_counter);
     RUN_TEST(test_counter_encode_round_trip);
     RUN_TEST(test_counter_encode_preserves_low_16_plain_bits);
@@ -983,7 +983,7 @@ int main(void)
     RUN_TEST(test_counter_distinct_inputs_yield_distinct_ciphertext);
     RUN_TEST(test_counter_encode_masks_to_16_bits);
 
-    /* Phase 9e-1 — counter-edit capability probe */
+    /* Counter-edit capability probe */
     RUN_TEST(test_counter_edit_status_keeloq_family_supported);
     RUN_TEST(test_counter_edit_status_deferred_protocols);
     RUN_TEST(test_counter_edit_status_unsupported_protocols);
@@ -992,7 +992,7 @@ int main(void)
     RUN_TEST(test_counter_edit_status_case_insensitive);
     RUN_TEST(test_counter_edit_status_trailing_space_match);
 
-    /* P3 — Nice FloR-S field extraction / counter edit */
+    /* Nice FloR-S field extraction / counter edit */
     RUN_TEST(test_is_nice_flor_s_recognises_protocol);
     RUN_TEST(test_is_nice_flor_s_rejects_others);
     RUN_TEST(test_nice_flor_s_extract_known_layout);
@@ -1004,7 +1004,7 @@ int main(void)
     RUN_TEST(test_nice_flor_s_counter_encode_preserves_serial);
     RUN_TEST(test_nice_flor_s_counter_edit_status_supported);
 
-    /* P4 — CAME Atomo field extraction / counter edit */
+    /* CAME Atomo field extraction / counter edit */
     RUN_TEST(test_is_came_atomo_recognises_protocol);
     RUN_TEST(test_is_came_atomo_rejects_others);
     RUN_TEST(test_came_atomo_extract_roundtrip);
@@ -1014,7 +1014,7 @@ int main(void)
     RUN_TEST(test_came_atomo_counter_edit_status_supported);
     RUN_TEST(test_came_atomo_varied_roundtrip);
 
-    /* P4 — Alutech AT-4N field extraction / counter edit */
+    /* Alutech AT-4N field extraction / counter edit */
     RUN_TEST(test_is_alutech_at_4n_recognises_protocol);
     RUN_TEST(test_is_alutech_at_4n_rejects_others);
     RUN_TEST(test_alutech_at_4n_extract_roundtrip);

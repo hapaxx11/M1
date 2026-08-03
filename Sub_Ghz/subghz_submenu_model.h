@@ -8,7 +8,7 @@
  * scrollable list scene in the Sub-GHz module (Menu, SavedMenu, MoreRAW,
  * Config, …).  Hardware-independent: no u8g2, no FreeRTOS, no SubGhzApp.
  *
- * The rendering layer is a thin firmware-side shim (Phase 7b) that reads
+ * The rendering layer is a thin firmware-side shim that reads
  * `selected` / `scroll_offset` / `visible_count` from this model and draws
  * the highlight box + scrollbar + item text using the Hapax font-aware
  * helpers.  The semantic contract intentionally mirrors Flipper / Momentum's

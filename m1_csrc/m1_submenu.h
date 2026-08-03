@@ -4,8 +4,8 @@
  * @file   m1_submenu.h
  * @brief  Firmware-side rendering shim for `subghz_submenu_model_t`.
  *
- * Phase 7b of the Sub-GHz Momentum-parity migration.  Pairs the pure-logic
- * scroll/selection model in `Sub_Ghz/subghz_submenu_model.{c,h}` (Phase 7a)
+ * Pairs the pure-logic
+ * scroll/selection model in `Sub_Ghz/subghz_submenu_model.{c,h}`
  * with the Hapax font-aware menu drawing helpers (`m1_menu_item_h`,
  * `m1_menu_font`, `M1_MENU_TEXT_W`, `M1_MENU_SCROLLBAR_X`) so any scene can
  * render a Flipper-style scrollable list with a single call.
@@ -28,7 +28,7 @@
  * place, and changing the user text size (`m1_menu_style`) is picked up
  * automatically via the font-aware helpers.
  *
- * Phase 7c+ migrates individual scenes (Menu, SavedMenu, MoreRAW, Config,
+ * Individual scenes (Menu, SavedMenu, MoreRAW, Config,
  * Saved file browser, Add Manually picker, Bind Wizard protocol picker)
  * onto this widget; Submenu model extends this to WiFi/BT/NFC/Settings menus.
  * Existing hand-rendered lists continue to work unchanged until migrated.
@@ -63,7 +63,7 @@ extern "C" {
  * becomes a no-op in those cases.  When `model->item_count == 0`, the
  * title and an empty list area are drawn (no items, no scrollbar).
  *
- * @param model   Pure-logic submenu model (Phase 7a).  May be NULL.
+ * @param model   Pure-logic submenu model.  May be NULL.
  * @param title   Title string drawn centred at top.  May be NULL.
  * @param labels  Array of `model->item_count` label strings.  May be NULL
  *                when `model->item_count == 0`.

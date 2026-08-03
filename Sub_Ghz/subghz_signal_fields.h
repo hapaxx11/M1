@@ -3,8 +3,8 @@
 /**
  * @file   subghz_signal_fields.h
  * @brief  Per-protocol field extraction / assembly for the 64-bit Flipper
- *         SubGhz Key File representation — pure logic, host-testable
- *         (Phase 9a-1, foundation for the SignalSettings scene).
+ *         SubGhz Key File representation — pure logic, host-testable,
+ *         and shared by the SignalSettings scene.
  *
  * The Saved → Settings flow needs to display and edit individual fields
  * (serial, button, counter) inside the opaque `uint64_t key` carried by
@@ -12,14 +12,14 @@
  * each supported protocol family and provides reversible extract /
  * assemble helpers so the scene code never hard-codes shift amounts.
  *
- * Initial scope (Phase 9a-1): **KeeLoq family only** — KeeLoq, Star Line,
- * Jarolift.  These all use a 64-bit Flipper key whose layout depends on
- * the protocol name (KeeLoq/Jarolift vs Star Line — see
+ * The KeeLoq-family helpers cover KeeLoq, Star Line, and Jarolift.
+ * These all use a 64-bit Flipper key whose layout depends on the
+ * protocol name (KeeLoq/Jarolift vs Star Line — see
  * `subghz_keeloq_create.h` for the exact bit layouts).  The encrypted
  * 32-bit HOP word carries the rolling counter; decrypting it to expose
- * the counter for editing is a *separate* concern handled by the existing
- * `subghz_keeloq.c::keeloq_decrypt()` + per-file manufacturer-key
- * resolution and is wired up in Phase 9c.
+ * the counter for editing is a separate concern handled by the existing
+ * `subghz_keeloq.c::keeloq_decrypt()` path plus per-file
+ * manufacturer-key resolution.
  *
  * The module has zero hardware dependencies — no SI4463, no HAL, no
  * FreeRTOS, no FAT FS — and is fully testable on the host.
@@ -49,7 +49,7 @@ extern "C" {
  * KeeLoq "discriminant" that gets baked into the plaintext HOP word).
  * `button` is the 4-bit button code.  `enc_hop` is the 32-bit encrypted
  * HOP word as it appears in the Flipper key — counter editing requires
- * decrypting it with the manufacturer key (Phase 9c).
+ * decrypting it with the manufacturer key.
  */
 typedef struct {
     uint32_t serial;    /**< 28-bit device serial                  */
@@ -122,7 +122,7 @@ bool subghz_signal_fields_keeloq_assemble(const char                   *protocol
                                            uint64_t                     *key_out);
 
 /*============================================================================*/
-/* KeeLoq-family rolling counter — decode / encode (Phase 9c-1)                */
+/* KeeLoq-family rolling counter — decode / encode                             */
 /*============================================================================*/
 
 /**
@@ -179,7 +179,7 @@ uint32_t subghz_signal_fields_keeloq_counter_encode(uint32_t enc_hop,
                                                     uint64_t device_key);
 
 /*============================================================================*/
-/* Nice FloR-S field extraction / assembly (P3 — Phase 9e-2)                   */
+/* Nice FloR-S field extraction / assembly                                     */
 /*============================================================================*/
 
 /**
@@ -240,7 +240,7 @@ bool subghz_signal_fields_nice_flor_s_assemble(
     uint64_t                          *key_out);
 
 /*============================================================================*/
-/* Nice FloR-S rolling counter — decode / encode (P3)                          */
+/* Nice FloR-S rolling counter — decode / encode                               */
 /*============================================================================*/
 
 /**
@@ -271,7 +271,7 @@ uint64_t subghz_signal_fields_nice_flor_s_counter_encode(
     const uint8_t  table[32]);
 
 /*============================================================================*/
-/* CAME Atomo field extraction / assembly (P4)                                 */
+/* CAME Atomo field extraction / assembly                                      */
 /*============================================================================*/
 
 /**
@@ -333,7 +333,7 @@ bool subghz_signal_fields_came_atomo_assemble(
     uint64_t                         *key_out);
 
 /*============================================================================*/
-/* CAME Atomo rolling counter — decode / encode (P4)                           */
+/* CAME Atomo rolling counter — decode / encode                                */
 /*============================================================================*/
 
 /**
@@ -357,7 +357,7 @@ uint64_t subghz_signal_fields_came_atomo_counter_encode(uint64_t key,
                                                         uint16_t new_counter);
 
 /*============================================================================*/
-/* Alutech AT-4N field extraction / assembly (P4)                              */
+/* Alutech AT-4N field extraction / assembly                                   */
 /*============================================================================*/
 
 /**
@@ -418,7 +418,7 @@ bool subghz_signal_fields_alutech_at_4n_assemble(
     uint64_t                            *key_out);
 
 /*============================================================================*/
-/* Alutech AT-4N rolling counter — decode / encode (P4)                        */
+/* Alutech AT-4N rolling counter — decode / encode                             */
 /*============================================================================*/
 
 /**
@@ -449,7 +449,7 @@ uint64_t subghz_signal_fields_alutech_at_4n_counter_encode(
     const uint8_t  table[32]);
 
 /*============================================================================*/
-/* Counter-edit capability probe (Phase 9e-1)                                  */
+/* Counter-edit capability probe                                               */
 /*============================================================================*/
 
 /**
@@ -463,12 +463,13 @@ uint64_t subghz_signal_fields_alutech_at_4n_counter_encode(
 typedef enum {
     /**
      * The protocol has a fully-implemented counter decode/encode path
-     * (currently: KeeLoq, Star Line, Jarolift — see Phase 9c-1).
+     * (currently: KeeLoq, Star Line, Jarolift, Nice FloR-S,
+     * CAME Atomo, and Alutech AT-4N).
      */
     SUBGHZ_COUNTER_EDIT_SUPPORTED = 0,
 
     /**
-     * The protocol is on the Phase 9e roadmap but the counter
+     * The protocol has a known counter field, but the counter
      * extract/substitute path is not yet implemented.  The accompanying
      * reason string returned via the @c out_reason out-parameter explains
      * the specific obstacle (cipher dependency, lookup table, checksum
@@ -494,7 +495,7 @@ typedef enum {
  * module; callers must not free it.
  *
  * Supported protocols (DEFERRED reason strings cite the specific blocker
- * documented in the Phase 9e checklist entry):
+ * that still prevents counter editing):
  *
  *   - "KeeLoq", "Star Line", "Jarolift"           → SUPPORTED
  *   - "Nice FloR-S"                               → SUPPORTED

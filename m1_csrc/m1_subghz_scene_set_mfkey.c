@@ -2,8 +2,7 @@
 
 /**
  * @file   m1_subghz_scene_set_mfkey.c
- * @brief  Sub-GHz Create-from-scratch KeeLoq SetMfKey picker scene
- *         (Phase 8c-2 picker + Phase 8c-3 final assembly).
+ * @brief  Sub-GHz Create-from-scratch KeeLoq SetMfKey picker and assembly scene.
  *
  * Scrollable list picker over the loaded KeeLoq manufacturer-key table
  * (built-in flash or SD-card fallback — see
@@ -11,7 +10,7 @@
  * manufacturer whose master key + learn type should be used to encrypt
  * the assembled hop word.
  *
- * On OK (Phase 8c-3): the picked manufacturer name is stored in
+ * On OK: the picked manufacturer name is stored in
  * @ref SubGhzApp::create_mfkey_name, the 64-bit Flipper-format key is
  * built via @ref subghz_keeloq_create_key, written to a temp `.sub`
  * file with the `Manufacture:` field set, and the Transmitter scene is
@@ -23,7 +22,7 @@
  * absent) the picker draws a short "No KeeLoq mfkeys loaded" placeholder
  * and BACK pops out without modifying the app state.
  *
- * Selection persists across pushes/pops via the Phase 2 per-scene state
+ * Selection persists across pushes/pops via the per-scene state
  * slot keyed by @ref SubGhzSceneSetMfKey so re-entering the picker
  * returns the user to the same row.
  */
@@ -280,7 +279,7 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 subghz_scene_set_state(app, SubGhzSceneSetMfKey,
                                        s_model.selected);
 
-                /* Phase 8c-3 — assemble the 64-bit key and push the
+                /* Assemble the 64-bit key and push the
                  * Transmitter.  On failure surface a brief error flash
                  * so the user sees that something went wrong instead of
                  * the picker silently doing nothing. */

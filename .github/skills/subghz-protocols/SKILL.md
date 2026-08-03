@@ -6,7 +6,7 @@ description: Sub-GHz protocol reference: the four file-format types and two repl
 # Sub-GHz Protocols
 
 > Extracted from CLAUDE.md. Load for any Sub-GHz protocol, replay, or bind work.
-> See also documentation/subghz_emulation_status.md and documentation/flipper_import_agent.md.
+> See also documentation/subghz_emulation_status.md and `.github/skills/flipper-import/SKILL.md`.
 
 ### Sub-GHz File Format Taxonomy and Replay Paths
 

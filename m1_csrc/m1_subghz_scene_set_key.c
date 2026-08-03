@@ -2,9 +2,9 @@
 
 /**
  * @file   m1_subghz_scene_set_key.c
- * @brief  Sub-GHz Create-from-scratch SetKey hex-entry scene (Phase 8b-3).
+ * @brief  Sub-GHz Create-from-scratch SetKey hex-entry scene.
  *
- * Pushed by the Phase 8b-2 SetType picker after the user picks a
+ * Pushed by the SetType picker after the user picks a
  * protocol.  Renders a hex-digit editor for the protocol's key bit
  * width (driven by the @ref SubGhzCreateProtoSpec catalog entry) and
  * lets the user build a 64-bit key with UP/DOWN cycling a single
@@ -16,7 +16,7 @@
  *
  * The hex-digit editing logic lives in the host-tested pure-logic
  * `subghz_hex_editor` module so the same state machine can drive the
- * upcoming Phase 8c SetSerial / SetButton / SetCounter editor scenes
+ * SetSerial / SetButton / SetCounter editor scenes
  * without duplicating cursor/digit-cycling code.
  *
  * Hardware-coupled UI rendering only — the underlying digit/cursor
@@ -123,7 +123,7 @@ static bool push_transmitter_with_key(SubGhzApp *app)
     /* Pass the protocol name so the Transmitter can decide whether to
      * enable button cycling.  Most Create-from-scratch protocols are
      * static OOK families and won't enable cycling, but rolling-code
-     * remotes (KeeLoq-family in Phase 8c) will. */
+     * remotes in the KeeLoq family will. */
     strncpy(app->tx_protocol_name, s_spec->proto_name,
             sizeof(app->tx_protocol_name) - 1);
     app->tx_protocol_name[sizeof(app->tx_protocol_name) - 1] = '\0';

@@ -19,7 +19,7 @@
 /* Width of the optional `Manufacture:` field in KeeLoq-family .sub files
  * — sized to match the longest entry in the built-in keeloq mfkeys table
  * (matches `KeeLoqMfrEntry::name`).  Kept on the parsed signal so the
- * SignalSettings save-back path (Phase 9b) can round-trip Manufacture
+ * SignalSettings save-back path can round-trip Manufacture
  * without re-opening the source file. */
 #define FLIPPER_SUBGHZ_MANUF_MAX_LEN     48
 
@@ -36,7 +36,7 @@ typedef enum {
 
 /*
  * Optional `CounterMode:` field carried by KeeLoq-family Flipper Key files
- * (Phase 9d-2).  Selects the replay policy used by the KeeLoq encoder:
+ * Selects the replay policy used by the KeeLoq encoder:
  *
  *   INCREMENT (default) — decrypt the captured hop word with the resolved
  *                          manufacturer key, increment the 16-bit rolling
@@ -70,7 +70,7 @@ typedef struct {
 	 * files — empty string when not present.  Populated by the Key parser
 	 * only; left as "" for RAW / M1-native files. */
 	char     manufacture[FLIPPER_SUBGHZ_MANUF_MAX_LEN];
-	/* Optional `CounterMode:` field — Phase 9d-2.  Defaults to INCREMENT
+	/* Optional `CounterMode:` field. Defaults to INCREMENT
 	 * for files that omit the field or carry an unrecognised value. */
 	flipper_subghz_counter_mode_t counter_mode;
 	/* Set to true when the file was loaded from an M1 native .sgh format
@@ -133,10 +133,10 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
                                                const char *manufacture);
 
 /*
- * Phase 9d-2 save variant that additionally writes the optional
+ * Save variant that additionally writes the optional
  * `CounterMode:` field.  The field is only emitted when @p counter_mode
  * differs from the default (Increment), so files round-tripped from
- * Phase 9b/9c continue to look identical on disk.  @p manufacture is
+ * existing files continue to look identical on disk.  @p manufacture is
  * handled exactly as in flipper_subghz_save_key_with_manufacture().
  */
 bool flipper_subghz_save_key_full(const char *path,

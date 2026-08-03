@@ -3,8 +3,8 @@
 /**
  * @file   test_subghz_hex_editor.c
  * @brief  Host unit tests for the pure-logic hex-digit editor module
- *         (Phase 8b-3 — SetKey scene backing model, reused by Phase 8c
- *         SetSerial / SetButton / SetCounter scenes).
+ *         (SetKey scene backing model, reused by the SetSerial /
+ *         SetButton / SetCounter scenes).
  */
 
 #include "unity.h"
