@@ -9,4 +9,4 @@
   block (`m1_csrc/m1_fw_source.c`) now point to `bedge117/m1-esp32-brain`'s
   `factory_m1-esp32-brain.bin` asset (matches the existing 0x0 factory-flash
   default), keeping Hapax devices aligned with bedge117's actively maintained
-  ESP32 co-processor firmware.
+  ESP32 coprocessor firmware.
