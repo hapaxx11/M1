@@ -42,6 +42,7 @@
 #include "wifi_selection.h"
 #include "wifi_ap_cycle.h"
 #include "wifi_deauth_cmd.h"
+#include "wifi_multi_target.h"
 #include "wifi_at_scan.h"
 #include "wifi_scan_fail_msg.h"
 #include "wifi_ntp_parse.h"
@@ -4999,6 +5000,30 @@ void wifi_attack_karma_portal(void)
 
 
 /*============================================================================*/
+/*  Karma with portal toggle (§3.7)                                          */
+/*============================================================================*/
+
+/* Prompts the user to optionally serve a captive portal during the Karma
+ * attack, then runs the appropriate variant.  Consolidates the former
+ * "Karma" and "Karma+Portal" menu entries into a single item with an
+ * inline yes/no toggle (plan §3.7).
+ *
+ * choice 1 = "Yes" → run with captive portal (wifi_attack_karma_portal)
+ * choice 2 = "No"  → run without portal       (wifi_attack_karma)
+ * Back/cancel       → do nothing
+ */
+void wifi_attack_karma_with_portal(void)
+{
+	uint8_t choice = m1_message_box_choice(&m1_u8g2,
+	                     "Karma", "Serve portal?", NULL,
+	                     "Yes\nNo");
+	if (choice == 1)
+		wifi_attack_karma_portal();
+	else if (choice == 2)
+		wifi_attack_karma();
+}
+
+/*============================================================================*/
 /*  AP Clone Spam UI                                                         */
 /*============================================================================*/
 
@@ -5162,6 +5187,14 @@ void wifi_target_deauth(void)
 	wifi_deauth_run(ap_list[ap_view_idx].bssid,
 		ap_list[ap_view_idx].channel,
 		ap_list[ap_view_idx].ssid);
+	/* Post-deauth chaining prompt (plan §3.8). */
+	uint8_t choice = m1_message_box_choice(&m1_u8g2,
+	                     "Deauth done", "Follow up?", NULL,
+	                     "Handshake\nEvil Portal\nDone");
+	if (choice == 1)
+		wifi_sniff_eapol();
+	else if (choice == 2)
+		wifi_evil_portal();
 }
 
 /* Target group: EAPOL/handshake capture (PMKID auto-saved when present). */

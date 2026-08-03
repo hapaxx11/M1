@@ -615,6 +615,117 @@ void test_target_actions_require_selected_network(void)
     free(m);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 27. Phase 4: Karma+Portal removed from attack menu; Karma uses toggle    */
+/*--------------------------------------------------------------------------*/
+
+void test_karma_portal_removed_from_menu(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_attack.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    /* "Karma+Portal" must no longer appear as a menu label. */
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "\"Karma+Portal\""),
+        "Attack menu must no longer list 'Karma+Portal' (Phase 4 §3.7)");
+
+    /* The menu still has "Karma" with the toggle function. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Karma\""),
+        "Attack menu must still list 'Karma'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_attack_karma_with_portal"),
+        "Karma delegate must call wifi_attack_karma_with_portal()");
+
+    /* Item count must be 8 after removing Karma+Portal. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "#define ATTACK_ITEM_COUNT  8"),
+        "Attack menu item count must be 8 (Phase 4)");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 28. Phase 4: wifi_attack_karma_with_portal() declared in m1_wifi.h       */
+/*--------------------------------------------------------------------------*/
+
+void test_karma_with_portal_declared(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.h");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_attack_karma_with_portal"),
+        "wifi_attack_karma_with_portal() must be declared in m1_wifi.h");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 29. Phase 4: wifi_attack_karma_with_portal() shows portal prompt          */
+/*--------------------------------------------------------------------------*/
+
+void test_karma_with_portal_prompts(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    const char *fn = strstr(c, "void wifi_attack_karma_with_portal(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn,
+        "wifi_attack_karma_with_portal() must be implemented in m1_wifi.c");
+
+    /* Prompts with "Serve portal?" and offers Yes/No choice. */
+    const char *prompt = strstr(fn, "Serve portal?");
+    TEST_ASSERT_NOT_NULL_MESSAGE(prompt,
+        "wifi_attack_karma_with_portal() must prompt 'Serve portal?'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "wifi_attack_karma_portal"),
+        "wifi_attack_karma_with_portal() must call wifi_attack_karma_portal() on Yes");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "wifi_attack_karma()"),
+        "wifi_attack_karma_with_portal() must call wifi_attack_karma() on No");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 30. Phase 4: post-deauth chaining prompt in wifi_target_deauth()          */
+/*--------------------------------------------------------------------------*/
+
+void test_target_deauth_has_chaining_prompt(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    const char *fn = strstr(c, "void wifi_target_deauth(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn,
+        "wifi_target_deauth() must be implemented in m1_wifi.c");
+
+    /* Chaining prompt appears after wifi_deauth_run() returns. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "Deauth done"),
+        "wifi_target_deauth() must show post-deauth 'Deauth done' prompt (§3.8)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "Handshake"),
+        "Post-deauth chaining prompt must offer 'Handshake' follow-up");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "Evil Portal"),
+        "Post-deauth chaining prompt must offer 'Evil Portal' follow-up");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "wifi_sniff_eapol"),
+        "Post-deauth chaining must call wifi_sniff_eapol() for Handshake");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(fn, "wifi_evil_portal"),
+        "Post-deauth chaining must call wifi_evil_portal() for Evil Portal");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 31. Phase 4: wifi_multi_target_build() declared in wifi_multi_target.h   */
+/*--------------------------------------------------------------------------*/
+
+void test_multi_target_build_declared(void)
+{
+    char *c = read_file("m1_csrc/wifi_multi_target.h");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_multi_target_build"),
+        "wifi_multi_target_build() must be declared in wifi_multi_target.h");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_ap_t"),
+        "wifi_multi_target_build() must operate on wifi_ap_t arrays");
+
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -644,5 +755,11 @@ int main(void)
     RUN_TEST(test_target_scene_has_target_and_connect_groups);
     RUN_TEST(test_scan_connect_opens_target_menu);
     RUN_TEST(test_target_actions_require_selected_network);
+    RUN_TEST(test_karma_portal_removed_from_menu);
+    RUN_TEST(test_karma_with_portal_declared);
+    RUN_TEST(test_karma_with_portal_prompts);
+    RUN_TEST(test_target_deauth_has_chaining_prompt);
+    RUN_TEST(test_multi_target_build_declared);
     return UNITY_END();
 }
+

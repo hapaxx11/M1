@@ -2601,3 +2601,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_espnow_tictactoe PRIVATE sanitizers)
 endif()
 add_test(NAME espnow_tictactoe COMMAND test_espnow_tictactoe)
+
+# ------------------------------------------------------------------
+# Module under test: wifi_multi_target (Phase 4 — multi-target AP builder)
+#
+# Pure-logic helper that builds a flat target list from the selected
+# entries of an AP list.  Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_wifi_multi_target
+    test_wifi_multi_target.c
+    ${M1_ROOT}/m1_csrc/wifi_multi_target.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_multi_target PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_multi_target PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_multi_target PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_multi_target COMMAND test_wifi_multi_target)
+

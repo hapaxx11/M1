@@ -341,12 +341,22 @@ phase that touches `.c/.h` sources.
 - The per‑AP Deauth also stays reachable from **Attacks → Deauth** for now (its
   multi‑target selection harness lands in Phase 4); nothing is stranded.
 
-### Phase 4 — Attack consolidation & multi‑target flow
-- Collapse Karma/Karma+Portal → Karma(+toggle); keep Evil Portal (§3.7).
-- Implement multi‑target attack harness seeded by `wifi_selected_ap_count()`
-  selections; route multi‑target Deauth/Beacon/Probe Flood through it.
-- Add post‑deauth chaining prompt (§3.8).
-- Tests: pure selection→target‑list builder; source assertions for menu shape.
+### Phase 4 — Attack consolidation & multi‑target flow — **DONE**
+- [x] Collapsed Karma/Karma+Portal → **Karma(+toggle)**: new
+      `wifi_attack_karma_with_portal()` prompts "Serve portal? [Yes] [No]" and
+      routes to `wifi_attack_karma_portal()` or `wifi_attack_karma()` accordingly.
+      "Karma+Portal" removed from the Attacks menu (8 items); the scene handler
+      is retained in the registry (append-only rule) but unreachable via the menu.
+- [x] Extracted pure-logic **`wifi_multi_target_build()`** (`wifi_multi_target.h/.c`):
+      builds a flat target list from the selected entries of an AP list, with no
+      HAL/RTOS deps. Seeds multi-target attack flows from the current `ap_list[]`
+      (populated from live scan or loaded saved list — "both" per §7 answer).
+- [x] Added **post-deauth chaining prompt** to `wifi_target_deauth()` (§3.8):
+      after the deauth loop completes the user is offered
+      `[Handshake] [Evil Portal] [Done]` to immediately chain into EAPOL capture
+      or Evil Portal without returning to the menu.
+- [x] Tests: `test_wifi_multi_target.c` (11/11, pure-logic) +
+      source assertions 27–31 in `test_wifi_ux_restructure.c` (31/31 pass).
 
 ### Phase 5 — WiFi Hotspot (deferred / optional)
 - Capability‑gated SoftAP hotspot entry (§3.9). Ships only if ESP32 firmware

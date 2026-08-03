@@ -71,6 +71,7 @@ void wifi_evil_portal(void);
 void wifi_probe_flood(void);
 void wifi_attack_karma(void);
 void wifi_attack_karma_portal(void);
+void wifi_attack_karma_with_portal(void);
 void wifi_pmkid_at(void);
 
 /* WiFi General / Config */
