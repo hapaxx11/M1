@@ -288,6 +288,35 @@ Starting from Hapax v0.9.0 (firmware build that includes `m1_esp32_caps.c`),
 the M1 queries the connected ESP32 firmware for its capability descriptor at
 first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
 
+### Host transport compatibility layer (`m1_esp32_rpc.c/.h`)
+
+Once the capability bitmap is known, the host classifies the firmware into one
+of three wire transports via `esp32_firmware_transport(cap_bitmap)`
+(`esp32_feature_map.c`), returning `esp32_transport_t`:
+
+| Firmware | Discriminator | Transport enum |
+|----------|---------------|----------------|
+| **CD3 native brain** (`m1-esp32-brain`) | `HANDSHAKE && OTA` | `ESP32_TRANSPORT_RPC` |
+| **SiN360** | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
+| **AT builds, incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
+| unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
+
+The native brain CD3 speaks the binary `M1_RPC` protocol, which the AT command
+set cannot express, so `m1_esp32_rpc.c/.h` provides a reusable host-side
+`M1_RPC` client: the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from
+the shared `bedge117/m1-esp32-brain` `m1_rpc.h`), the payload structs, and a
+NAK/status-aware `m1_esp32_rpc_call()` that frames a request, sends it over the
+half-duplex SPI-HD path (`spi_AT_send_recv_bin`), and decodes the reply. ESP-NOW
+(`m1_espnow_hal.c`) is the first consumer; other WiFi/BLE/802.15.4 features
+adopt it by branching on `m1_esp32_active_transport()`.
+
+> **The two CD3 firmwares take different transports and both stay supported.**
+> The legacy **CD3-AT** advertises `WIFI_JOIN` but never the brain-CD3
+> `HANDSHAKE+OTA` pair, so it resolves to `ESP32_TRANSPORT_AT` and continues to
+> be driven over AT text commands exactly as before — the M1_RPC layer never
+> re-routes it. Only the native **brain CD3** resolves to
+> `ESP32_TRANSPORT_RPC`.
+
 ### CMD_GET_STATUS payload format (protocol version 1)
 
 The 41-byte response payload returned by supporting ESP32 firmware:

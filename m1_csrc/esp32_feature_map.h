@@ -180,6 +180,49 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
  * =========================================================================*/
 
 /**
+ * @brief  Wire transport an ESP32 firmware variant speaks.
+ *
+ * The M1 supports three mutually-exclusive on-wire command protocols over the
+ * same SPI-HD hardware.  A feature module that wants to drive the ESP32 must
+ * pick the encoder matching the detected transport:
+ *   - AT text commands ("AT+...\r\n") for the bedge117 / neddy299 / dag builds
+ *     and the legacy CD3-AT firmware,
+ *   - the 64-byte binary CMD_* protocol for SiN360,
+ *   - the M1_RPC binary framing (magic 0x4D31) for the native "brain" CD3
+ *     (m1-esp32-brain).
+ *
+ * NOTE: there are two distinct CD3 firmwares.  The legacy **CD3-AT** speaks AT
+ * text commands and therefore classifies as ESP32_TRANSPORT_AT (it advertises
+ * WIFI_JOIN and never sets the HANDSHAKE+OTA pair).  Only the newer native
+ * **brain CD3** speaks M1_RPC and classifies as ESP32_TRANSPORT_RPC.  Both
+ * remain fully supported.
+ */
+typedef enum {
+    ESP32_TRANSPORT_NONE = 0,   /**< Unknown / not detected — fail closed */
+    ESP32_TRANSPORT_AT,         /**< AT text commands (bedge117 / neddy299 / dag / CD3-AT) */
+    ESP32_TRANSPORT_BINARY_SPI, /**< 64-byte binary CMD_* protocol (SiN360) */
+    ESP32_TRANSPORT_RPC,        /**< M1_RPC binary framing (native brain CD3) */
+} esp32_transport_t;
+
+/**
+ * @brief  Classify the wire transport implied by @p cap_bitmap.
+ *
+ * Resolution order (a firmware matches at most one):
+ *   1. brain CD3 (HANDSHAKE + OTA) -> ESP32_TRANSPORT_RPC
+ *   2. SiN360 (BLE_HID, no JOIN)   -> ESP32_TRANSPORT_BINARY_SPI
+ *   3. any other non-zero bitmap   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
+ *   4. all-zero bitmap             -> ESP32_TRANSPORT_NONE
+ *
+ * The legacy CD3-AT firmware advertises WIFI_JOIN without the brain CD3's
+ * HANDSHAKE+OTA pair, so it correctly resolves to ESP32_TRANSPORT_AT and keeps
+ * driving the ESP32 over AT commands exactly as before this layer existed.
+ *
+ * Pure logic — no HAL calls, no global state.  Safe to call before
+ * m1_esp32_caps_init() completes (an all-zero bitmap yields NONE).
+ */
+esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap);
+
+/**
  * @brief  Return true when the bitmap indicates a SiN360 binary-SPI firmware.
  *
  * Discriminator: BLE_HID present (SiN360-only bit) AND WIFI_JOIN absent
