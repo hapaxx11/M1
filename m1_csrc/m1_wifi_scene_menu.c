@@ -72,8 +72,17 @@ static void scan_connect_on_enter(M1SceneApp *app) {
     bool was_connected = wifi_is_connected();
 #endif
     wifi_scan_ap();
-    m1_esp32_deinit();
     app->running = true;
+
+    /* The user selected a network in the scan list → open the selected-network
+     * Target context (Target + Connect groups, plan §3.2).  Keep the ESP32
+     * initialised; the Target action delegates manage its lifecycle. */
+    if (wifi_scan_ap_target_selected() && wifi_target_valid()) {
+        m1_scene_push(app, WifiSceneTargetMenu);
+        return;
+    }
+
+    m1_esp32_deinit();
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     if (!was_connected && wifi_is_connected()) {
         m1_scene_replace(app, WifiSceneConnectedMenu);

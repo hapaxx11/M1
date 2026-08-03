@@ -667,7 +667,9 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_wifi_scene_net.c
     ../../m1_csrc/m1_wifi_scene_general.c
     ../../m1_csrc/m1_wifi_scene_connect.c
+    ../../m1_csrc/m1_wifi_scene_target.c
     ../../m1_csrc/wifi_ap_record.c
+    ../../m1_csrc/wifi_ap_cycle.c
     ../../m1_csrc/wifi_ch_analysis.c
     ../../m1_csrc/wifi_at_scan.c
     ../../m1_csrc/wifi_ntp_parse.c

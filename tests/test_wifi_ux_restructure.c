@@ -540,6 +540,81 @@ void test_802154_has_flood(void)
     free(impl);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 24. Phase 3: selected-network Target scene exists (Target + Connect)      */
+/*--------------------------------------------------------------------------*/
+
+void test_target_scene_has_target_and_connect_groups(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_target.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    /* Connect group (auth) routes to the existing Connected menu on success. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Connect\""),
+        "Target scene must offer a 'Connect' item (Connect group)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_replace(app, WifiSceneConnectedMenu)"),
+        "Target 'Connect' must replace into the Connected menu on success");
+
+    /* Target group (needs a specific AP) — per-AP verbs + Cycle AP. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Deauth\""),
+        "Target scene must offer per-AP 'Deauth'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Handshake\""),
+        "Target scene must offer 'Handshake'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Beacon\""),
+        "Target scene must offer 'Beacon'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"PMKID\""),
+        "Target scene must offer 'PMKID'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Cycle AP\""),
+        "Target scene must offer 'Cycle AP'");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 25. Phase 3: Scan & Connect opens the Target context on selection        */
+/*--------------------------------------------------------------------------*/
+
+void test_scan_connect_opens_target_menu(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_scan_ap_target_selected()"),
+        "Scan & Connect delegate must consult wifi_scan_ap_target_selected()");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "m1_scene_push(app, WifiSceneTargetMenu)"),
+        "Scan & Connect delegate must push the Target menu on selection");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 26. Phase 3: Target actions are only reachable via a selected network     */
+/*--------------------------------------------------------------------------*/
+
+void test_target_actions_require_selected_network(void)
+{
+    /* The pending-target flag is only set by the scan loop, so the Target
+     * context cannot be opened without first selecting a network. */
+    char *w = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(w);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(w, "s_wifi_target_selected = true;"),
+        "wifi_scan_ap() must flag a pending target on OK for a selected AP");
+    /* Every Target action guards on the highlighted AP. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(w, "bool wifi_target_valid(void)"),
+        "wifi.c must expose wifi_target_valid() to guard Target actions");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(w, "wifi_ap_cycle_next(ap_list, ap_count, ap_view_idx)"),
+        "Cycle AP must use the pure wifi_ap_cycle_next() helper");
+    free(w);
+
+    /* Top-level menu must NOT list the Target menu directly (unreachable
+     * except via a selected network). */
+    char *m = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(m);
+    TEST_ASSERT_NULL_MESSAGE(strstr(m, "WifiSceneTargetMenu,\n"),
+        "Top-level menu target table must not list the Target menu");
+    free(m);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -566,5 +641,8 @@ int main(void)
     RUN_TEST(test_wardrive_absorbs_list_mgmt);
     RUN_TEST(test_general_slimmed);
     RUN_TEST(test_802154_has_flood);
+    RUN_TEST(test_target_scene_has_target_and_connect_groups);
+    RUN_TEST(test_scan_connect_opens_target_menu);
+    RUN_TEST(test_target_actions_require_selected_network);
     return UNITY_END();
 }

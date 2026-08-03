@@ -40,6 +40,7 @@
 #include "wifi_status_msg.h"
 #include "wifi_sta_record.h"
 #include "wifi_selection.h"
+#include "wifi_ap_cycle.h"
 #include "wifi_deauth_cmd.h"
 #include "wifi_at_scan.h"
 #include "wifi_scan_fail_msg.h"
@@ -92,6 +93,12 @@ void menu_wifi_exit(void);
 void wifi_scan_ap(void);
 
 static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid);
+
+/* Set by wifi_scan_ap() when the user presses OK on a non-connected AP so
+ * the Scan & Connect scene delegate can open the selected-network Target
+ * context (WiFi cleanup plan §3.2).  Reset at the start of every scan and
+ * consumed (cleared) by wifi_scan_ap_target_selected(). */
+static bool s_wifi_target_selected = false;
 
 static uint16_t wifi_ap_list_print(bool up_dir);
 static void wifi_ap_list_draw(void);
@@ -658,6 +665,9 @@ void wifi_scan_ap(void)
 	BaseType_t ret;
 	uint16_t list_count;
 
+	/* Reset the pending-target flag for this scan session. */
+	s_wifi_target_selected = false;
+
 	/* Initialize ESP32 if needed */
 	u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
 	if (!m1_esp32_get_init_status())
@@ -768,14 +778,21 @@ void wifi_scan_ap(void)
 						            sizeof(s_wifi_stub_ssid)) == 0)
 						{
 							wifi_disconnect();
+							/* Redraw AP list after returning from disconnect */
+							wifi_ap_list_draw();
 						}
 						else
 #endif
 						{
-							wifi_connect_selected_ap();
+							/* Open the selected-network Target context
+							 * (Target + Connect groups, plan §3.2): flag the
+							 * selection and hand control back to the Scan &
+							 * Connect scene delegate, which pushes the Target
+							 * menu for ap_list[ap_view_idx]. */
+							s_wifi_target_selected = true;
+							xQueueReset(main_q_hdl);
+							break;
 						}
-						/* Redraw AP list after returning from connect/disconnect */
-						wifi_ap_list_draw();
 					}
 				}
 			}
@@ -5091,6 +5108,144 @@ void wifi_attack_ap_clone(void)
 
 		beacon_run_loop("AP CLONE", clone_ssids, cloned, total, false, false);
 	}
+}
+
+
+/*============================================================================*/
+/*  Selected-network Target context (WiFi cleanup plan §3.2)                  */
+/*                                                                            */
+/*  These wrappers act on the AP currently highlighted in the Scan & Connect  */
+/*  list (ap_list[ap_view_idx]).  They are the only reachable path to the     */
+/*  per-AP Target actions — the Target scene delegates call them after the    */
+/*  user selects a network, so every action's precondition (a specific SSID)  */
+/*  is satisfied by construction.                                             */
+/*============================================================================*/
+
+/* Consume the pending-target flag set by wifi_scan_ap(): returns true once
+ * (and clears it) when the user selected a network in the scan list. */
+bool wifi_scan_ap_target_selected(void)
+{
+	bool sel = s_wifi_target_selected;
+	s_wifi_target_selected = false;
+	return sel;
+}
+
+/* True when a valid AP is currently highlighted (guards the Target scene). */
+bool wifi_target_valid(void)
+{
+	return (ap_list != NULL && ap_count != 0 && ap_view_idx < ap_count);
+}
+
+/* SSID of the highlighted AP, or NULL for a hidden/invalid entry. */
+const char *wifi_target_ssid(void)
+{
+	if (!wifi_target_valid() || ap_list[ap_view_idx].ssid[0] == '\0')
+		return NULL;
+	return ap_list[ap_view_idx].ssid;
+}
+
+/* Connect group: join the highlighted network (reuses the standard flow so
+ * saved credentials / Connected-menu navigation are unchanged). */
+void wifi_target_connect(void)
+{
+	if (!wifi_target_valid())
+		return;
+	wifi_connect_selected_ap();
+}
+
+/* Target group: per-AP deauth against the highlighted BSSID. */
+void wifi_target_deauth(void)
+{
+	if (!wifi_target_valid())
+		return;
+	ensure_esp32_ready();
+	wifi_deauth_run(ap_list[ap_view_idx].bssid,
+		ap_list[ap_view_idx].channel,
+		ap_list[ap_view_idx].ssid);
+}
+
+/* Target group: EAPOL/handshake capture (PMKID auto-saved when present). */
+void wifi_target_handshake(void)
+{
+	wifi_sniff_eapol();
+}
+
+/* Target group: clone (beacon) the highlighted SSID. */
+void wifi_target_beacon(void)
+{
+	m1_cmd_t cmd;
+	m1_resp_t resp;
+	int spi_ret;
+	beacon_load_diag_t load_diag;
+	const char *clone_ssids[1];
+	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+
+	if (!wifi_target_valid() || ap_list[ap_view_idx].ssid[0] == '\0')
+	{
+		wifi_show_message("Beacon", "Hidden SSID", "not supported");
+		return;
+	}
+
+	ensure_esp32_ready();
+	clone_ssids[0] = ap_list[ap_view_idx].ssid;
+
+	if (use_at)
+	{
+		/* AT path — dag T-800: single SSID via AT+M1BEACON */
+		char at_cmd[80];
+		char at_resp[64];
+		snprintf(at_cmd, sizeof(at_cmd),
+			"AT+M1BEACON=1,6,\"%.32s\",\"FF:FF:FF:FF:FF:FF\"\r\n",
+			clone_ssids[0]);
+		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 5);
+		if (strstr(at_resp, "OK") == NULL)
+		{
+			wifi_show_message("Beacon", "Start failed!", NULL);
+			return;
+		}
+		beacon_run_loop("BEACON", clone_ssids, 1, 1, false, true);
+	}
+	else
+	{
+		uint8_t total = beacon_batch_load(clone_ssids, 1, &load_diag);
+		if (total == 0)
+		{
+			beacon_load_failed_screen("Beacon", &load_diag);
+			wifi_wait_dismiss();
+			return;
+		}
+
+		beacon_set_flags(0x00);
+
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_BEACON_START;
+		cmd.payload_len = 0;
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message("Beacon", "Start failed!", NULL);
+			return;
+		}
+
+		beacon_run_loop("BEACON", clone_ssids, 1, total, false, false);
+	}
+}
+
+/* Target group: PMKID capture. */
+void wifi_target_pmkid(void)
+{
+	wifi_pmkid_at();
+}
+
+/* Target group: advance the highlighted AP to the next BSSID of the same
+ * SSID (Cycle APs).  The Target scene redraws its title afterwards. */
+void wifi_target_cycle(void)
+{
+	if (!wifi_target_valid())
+		return;
+	ap_view_idx = wifi_ap_cycle_next(ap_list, ap_count, ap_view_idx);
+	wifi_ap_list_draw();
 }
 
 

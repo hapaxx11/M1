@@ -22,6 +22,22 @@ void menu_wifi_exit(void);
 
 void wifi_scan_ap(void);
 
+/* Selected-network Target context (WiFi cleanup plan §3.2).
+ *
+ * wifi_scan_ap() flags a pending target when the user presses OK on a
+ * non-connected AP in the scan list; the Scan & Connect scene delegate then
+ * opens the Target menu.  The wifi_target_* actions operate on that
+ * highlighted AP and are only reachable once a network has been selected. */
+bool wifi_scan_ap_target_selected(void);
+bool wifi_target_valid(void);
+const char *wifi_target_ssid(void);
+void wifi_target_connect(void);
+void wifi_target_deauth(void);
+void wifi_target_handshake(void);
+void wifi_target_beacon(void);
+void wifi_target_pmkid(void);
+void wifi_target_cycle(void);
+
 /* Station scan (client discovery) */
 void wifi_station_scan(void);
 void wifi_survey_24g(void);

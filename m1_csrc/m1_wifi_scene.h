@@ -19,6 +19,8 @@
  *                             + Connected menu target (when connected)
  *   m1_wifi_scene_connect.c — Connected menu + Saved Networks, Status, Disconnect delegates
  *                             (compile-gated by M1_APP_WIFI_CONNECT_ENABLE)
+ *   m1_wifi_scene_target.c  — selected-network Target context (Target + Connect
+ *                             groups) reached from Scan & Connect (§3.2)
  *
  * m1_wifi_scene.c owns only the scene_registry[] table and wifi_scene_entry().
  */
@@ -105,6 +107,15 @@ typedef enum {
     /* ESP-NOW Peer Link (delegate into separate scene manager) */
     WifiSceneEspnowPeer,
 
+    /* Selected-network Target context (Target + Connect groups, §3.2) */
+    WifiSceneTargetMenu,
+    WifiSceneTargetConnect,
+    WifiSceneTargetDeauth,
+    WifiSceneTargetHandshake,
+    WifiSceneTargetBeacon,
+    WifiSceneTargetPmkid,
+    WifiSceneTargetCycle,
+
     /* Connect features (compile-gated) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     WifiSceneConnectedMenu,
@@ -136,6 +147,15 @@ extern const M1SceneHandlers wifi_scene_zigbee_handlers;
 extern const M1SceneHandlers wifi_scene_thread_handlers;
 extern const M1SceneHandlers wifi_scene_802154_flood_handlers;
 extern const M1SceneHandlers wifi_scene_espnow_peer_handlers;
+
+/* m1_wifi_scene_target.c — selected-network Target context */
+extern const M1SceneHandlers wifi_scene_target_menu_handlers;
+extern const M1SceneHandlers wifi_scene_target_connect_handlers;
+extern const M1SceneHandlers wifi_scene_target_deauth_handlers;
+extern const M1SceneHandlers wifi_scene_target_handshake_handlers;
+extern const M1SceneHandlers wifi_scene_target_beacon_handlers;
+extern const M1SceneHandlers wifi_scene_target_pmkid_handlers;
+extern const M1SceneHandlers wifi_scene_target_cycle_handlers;
 
 /* m1_wifi_scene_sniff.c */
 extern const M1SceneHandlers wifi_scene_sniff_all_handlers;

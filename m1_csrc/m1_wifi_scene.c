@@ -87,6 +87,14 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
 
     [WifiSceneEspnowPeer]       = &wifi_scene_espnow_peer_handlers,
 
+    [WifiSceneTargetMenu]       = &wifi_scene_target_menu_handlers,
+    [WifiSceneTargetConnect]    = &wifi_scene_target_connect_handlers,
+    [WifiSceneTargetDeauth]     = &wifi_scene_target_deauth_handlers,
+    [WifiSceneTargetHandshake]  = &wifi_scene_target_handshake_handlers,
+    [WifiSceneTargetBeacon]     = &wifi_scene_target_beacon_handlers,
+    [WifiSceneTargetPmkid]      = &wifi_scene_target_pmkid_handlers,
+    [WifiSceneTargetCycle]      = &wifi_scene_target_cycle_handlers,
+
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
     [WifiSceneConnectedMenu]    = &wifi_scene_connected_menu_handlers,
     [WifiSceneSaved]            = &wifi_scene_saved_handlers,

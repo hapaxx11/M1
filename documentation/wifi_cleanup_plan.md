@@ -320,13 +320,26 @@ phase that touches `.c/.h` sources.
       for the Recon merge, Wardrive list-mgmt absorption, the slimmed General,
       and the 802.15.4 Flood entry (23/23 pass).
 
-### Phase 3 — Selected‑network context (Target + Connect groups)
-- New selected‑SSID scene with the two‑group button bar (§3.2); wire the
-  existing Connected menu as the Connect target.
-- Move Handshake/EAPOL‑capture, targeted Beacon, per‑AP Deauth, PMKID into the
-  Target group; implement "Cycle APs".
-- Tests: pure helper for AP‑cycling over `wifi_ap_t[]`; source assertions that
-  Target actions are unreachable except via a selected network.
+### Phase 3 — Selected‑network context (Target + Connect groups) — **DONE**
+- [x] New selected‑SSID scene (`m1_wifi_scene_target.c`, `WifiSceneTargetMenu`)
+      with the two precondition groups (§3.2): a **Connect** item (auth group)
+      and the SSID‑scoped **Target** actions. Pressing OK on a network in
+      **Scan & Connect** flags a pending target (`wifi_scan_ap_target_selected()`)
+      and the Scan & Connect delegate pushes the Target menu for the highlighted
+      AP; **Connect** `m1_scene_replace()`s into the existing Connected menu on
+      success, wiring it as the Connect target.
+- [x] Moved per‑AP **Deauth**, **Handshake/EAPOL** capture, targeted **Beacon**
+      (clone this SSID) and **PMKID** into the Target group as `wifi_target_*`
+      wrappers that act on the highlighted AP; implemented **Cycle AP** on top of
+      the new pure `wifi_ap_cycle_next()` helper so the Target actions iterate
+      the known BSSIDs of one SSID. The Target actions are unreachable except via
+      a selected network.
+- [x] Tests: pure‑logic `test_wifi_ap_cycle.c` (AP‑cycling over `wifi_ap_t[]`,
+      8/8) plus source assertions in `test_wifi_ux_restructure.c` that the Target
+      scene exposes both groups, that Scan & Connect opens it on selection, and
+      that the actions require a selected network (26/26).
+- The per‑AP Deauth also stays reachable from **Attacks → Deauth** for now (its
+  multi‑target selection harness lands in Phase 4); nothing is stranded.
 
 ### Phase 4 — Attack consolidation & multi‑target flow
 - Collapse Karma/Karma+Portal → Karma(+toggle); keep Evil Portal (§3.7).

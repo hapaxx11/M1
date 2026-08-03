@@ -2443,6 +2443,21 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_selection COMMAND test_wifi_selection)
 
+# ---------- wifi_ap_cycle ----------
+add_executable(test_wifi_ap_cycle
+    test_wifi_ap_cycle.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_cycle.c
+    ${M1_ROOT}/m1_csrc/wifi_ap_record.c
+)
+target_include_directories(test_wifi_ap_cycle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_ap_cycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_ap_cycle PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_ap_cycle COMMAND test_wifi_ap_cycle)
+
 # ---------- wifi_deauth_cmd ----------
 add_executable(test_wifi_deauth_cmd
     test_wifi_deauth_cmd.c
