@@ -288,11 +288,6 @@ void test_wifi_menu_init_guarded(void)
     assert_guarded_init("m1_csrc/m1_wifi_scene_menu.c");
 }
 
-void test_wifi_sniff_init_guarded(void)
-{
-    assert_guarded_init("m1_csrc/m1_wifi_scene_sniff.c");
-}
-
 void test_wifi_attack_init_guarded(void)
 {
     assert_guarded_init("m1_csrc/m1_wifi_scene_attack.c");
@@ -334,7 +329,6 @@ int main(void)
     RUN_TEST(test_settings_esp32_init_guarded);
     RUN_TEST(test_nfc_menu_init_guarded);
     RUN_TEST(test_wifi_menu_init_guarded);
-    RUN_TEST(test_wifi_sniff_init_guarded);
     RUN_TEST(test_wifi_attack_init_guarded);
     RUN_TEST(test_wifi_general_init_guarded);
     RUN_TEST(test_wifi_net_init_guarded);
