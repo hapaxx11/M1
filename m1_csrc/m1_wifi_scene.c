@@ -36,6 +36,8 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
 
     [WifiSceneReconMenu]        = &wifi_scene_recon_menu_handlers,
 
+    [WifiSceneWardriveMenu]     = &wifi_scene_wardrive_menu_handlers,
+
     [WifiSceneSnifferMenu]      = &wifi_scene_sniffer_menu_handlers,
     [WifiSceneSniffAll]         = &wifi_scene_sniff_all_handlers,
     [WifiSceneSniffBeacon]      = &wifi_scene_sniff_beacon_handlers,

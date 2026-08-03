@@ -47,6 +47,9 @@ typedef enum {
     /* Recon sub-menu */
     WifiSceneReconMenu,
 
+    /* Wardrive sub-menu */
+    WifiSceneWardriveMenu,
+
     /* Sniffers sub-menu */
     WifiSceneSnifferMenu,
     WifiSceneSniffAll,
@@ -127,6 +130,7 @@ extern const M1SceneHandlers wifi_scene_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_station_wardrive_handlers;
 extern const M1SceneHandlers wifi_scene_signal_monitor_handlers;
 extern const M1SceneHandlers wifi_scene_recon_menu_handlers;
+extern const M1SceneHandlers wifi_scene_wardrive_menu_handlers;
 extern const M1SceneHandlers wifi_scene_802154_menu_handlers;
 extern const M1SceneHandlers wifi_scene_zigbee_handlers;
 extern const M1SceneHandlers wifi_scene_thread_handlers;

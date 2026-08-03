@@ -276,20 +276,30 @@ targets, scene ordering, and gating declarations) plus pure‑logic unit tests f
 any new helper extracted along the way. A firmware build is required for every
 phase that touches `.c/.h` sources.
 
-### Phase 0 — Plan (this PR)
+### Phase 0 — Plan — **DONE**
 - [x] This document.
-- [ ] Changelog fragment noting the design doc.
+- [x] Changelog fragment noting the design doc.
 - No source changes, no build required (docs‑only).
 
-### Phase 1 — Rename + top‑menu reshape (low risk, no new features)
-- Rename top item `Networks` → `Scan & Connect`.
-- Reorder/rename top menu to the §3.1 shape; introduce empty **Wardrive** menu
-  and keep old submenus reachable so nothing regresses mid‑migration.
-- Tests: extend `test_wifi_ux_restructure.c` to assert new labels/targets.
+### Phase 1 — Rename + top‑menu reshape (low risk, no new features) — **DONE**
+- [x] Rename top item `Networks` → `Scan & Connect` (label + user‑facing hint
+      strings in `m1_wifi.c`).
+- [x] Introduce a top‑level **Wardrive** sub‑menu. Rather than shipping an empty
+      placeholder, the two existing wardrive tools (AP Wardrive / Station
+      Wardrive) were relocated out of Recon into it immediately — this pulls the
+      §3.5 relocation forward from Phase 2 and avoids a dead menu.
+- [x] **Sniffers is intentionally kept on the top menu for now** so its tools
+      stay reachable; it is removed only in Phase 2 when merged into Recon, per
+      the "keep old submenus reachable so nothing regresses mid‑migration" rule.
+      Phase 1 top menu: `Scan & Connect · Recon · Sniffers · Attacks · Wardrive ·
+      802.15.4 · Peer Link · General`.
+- [x] Tests: extended `test_wifi_ux_restructure.c` (new label assertion +
+      `test_wardrive_is_top_level_menu`); firmware build verified.
 
-### Phase 2 — Recon/Sniffers merge, Wardrive & General split, 802.15.4 Flood
+### Phase 2 — Recon/Sniffers merge, General split, 802.15.4 Flood
 - Merge Sniffers into Recon (§3.4); delete the Sniffers top item.
-- Move Wardrive/Station Wardrive + list‑management items into **Wardrive** (§3.5).
+- Move the list‑management items (Save/Load/Clear APs, Load/Clear SSIDs) into the
+  **Wardrive** export flow (§3.5).
 - Slim **General** to Saved/Status/Disconnect.
 - Add capability‑gated **802.15.4 Flood**.
 - Tests: menu‑content assertions for Recon, Wardrive, General, 802.15.4.

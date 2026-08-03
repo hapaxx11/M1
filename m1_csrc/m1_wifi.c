@@ -5440,7 +5440,7 @@ void wifi_saved_networks(void)
 
 	if (count == 0)
 	{
-		wifi_show_message("Saved Networks", "No saved networks", "Use Networks to add");
+		wifi_show_message("Saved Networks", "No saved networks", "Use Scan & Connect to add");
 		memset(creds, 0, sizeof(creds));
 		return;
 	}
@@ -5567,7 +5567,7 @@ void wifi_show_status(void)
 	else
 	{
 		u8g2_DrawStr(&m1_u8g2, 6, 28, "Disconnected");
-		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Networks to connect");
+		u8g2_DrawStr(&m1_u8g2, 6, 40, "Use Scan & Connect to join");
 	}
 	m1_u8g2_nextpage();
 	wifi_wait_dismiss();

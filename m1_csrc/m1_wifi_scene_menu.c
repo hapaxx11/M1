@@ -5,10 +5,11 @@
  * @brief  WiFi top-level menu scene + Recon/802.15.4 sub-menus + core delegates.
  *
  * Scenes covered:
- *   WifiSceneMenu           — top-level 6-item menu
- *   WifiSceneReconMenu      — Recon sub-menu (6 items)
+ *   WifiSceneMenu           — top-level menu
+ *   WifiSceneReconMenu      — Recon sub-menu
+ *   WifiSceneWardriveMenu   — Wardrive sub-menu (AP / Station Wardrive)
  *   WifiScene802154Menu     — 802.15.4 sub-menu (2 items)
- *   WifiSceneScanConnect    — Networks scan/connect delegate
+ *   WifiSceneScanConnect    — Scan & Connect scan/connect delegate
  *   WifiSceneStationScan    — Station Scan delegate
  *   WifiSceneSurvey24g      — 2.4G Channel Survey delegate
  *   WifiSceneMacTrack       — MAC Track delegate
@@ -112,13 +113,14 @@ const M1SceneHandlers wifi_scene_espnow_peer_handlers = { .on_enter = espnow_pee
 /* Top-level menu (6 items)                                                 */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  8
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
-    "Networks",
+    "Scan & Connect",
     "Recon",
     "Sniffers",
     "Attacks",
+    "Wardrive",
     "802.15.4",
     "Peer Link",
     "General",
@@ -129,6 +131,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneReconMenu,
     WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
+    WifiSceneWardriveMenu,
     WifiScene802154Menu,
     WifiSceneEspnowPeer,
     WifiSceneGeneralMenu,
@@ -169,14 +172,12 @@ const M1SceneHandlers wifi_scene_menu_handlers = {
 /* Recon sub-menu (6 items)                                                 */
 /*==========================================================================*/
 
-#define RECON_ITEM_COUNT  6
+#define RECON_ITEM_COUNT  4
 
 static const char *const recon_labels[RECON_ITEM_COUNT] = {
     "Station Scan",
     "2.4G Survey",
     "MAC Track",
-    "Wardrive",
-    "Station Wardrive",
     "Signal Monitor",
 };
 
@@ -184,8 +185,6 @@ static const uint8_t recon_targets[RECON_ITEM_COUNT] = {
     WifiSceneStationScan,
     WifiSceneSurvey24g,
     WifiSceneMacTrack,
-    WifiSceneWardrive,
-    WifiSceneStationWardrive,
     WifiSceneSignalMonitor,
 };
 
@@ -222,6 +221,57 @@ const M1SceneHandlers wifi_scene_recon_menu_handlers = {
     .on_event = recon_menu_event,
     .on_exit  = NULL,
     .draw     = recon_menu_draw,
+};
+
+/*==========================================================================*/
+/* Wardrive sub-menu (2 items)                                              */
+/*==========================================================================*/
+
+#define WARDRIVE_ITEM_COUNT  2
+
+static const char *const wardrive_labels[WARDRIVE_ITEM_COUNT] = {
+    "AP Wardrive",
+    "Station Wardrive",
+};
+
+static const uint8_t wardrive_targets[WARDRIVE_ITEM_COUNT] = {
+    WifiSceneWardrive,
+    WifiSceneStationWardrive,
+};
+
+static subghz_submenu_model_t s_wardrive_model;
+
+static void wardrive_menu_enter(M1SceneApp *app)
+{
+    (void)app;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    if (!wifi_prompt_disconnect()) {
+        m1_scene_pop(app);
+        return;
+    }
+#endif
+    if (s_wardrive_model.item_count == 0)
+        subghz_submenu_model_init(&s_wardrive_model, WARDRIVE_ITEM_COUNT,
+                                  M1_MENU_VIS(WARDRIVE_ITEM_COUNT));
+    app->need_redraw = true;
+}
+
+static bool wardrive_menu_event(M1SceneApp *app, M1SceneEvent ev)
+{
+    return m1_submenu_event(app, ev, &s_wardrive_model, wardrive_targets);
+}
+
+static void wardrive_menu_draw(M1SceneApp *app)
+{
+    (void)app;
+    m1_submenu_draw(&s_wardrive_model, "Wardrive", wardrive_labels);
+}
+
+const M1SceneHandlers wifi_scene_wardrive_menu_handlers = {
+    .on_enter = wardrive_menu_enter,
+    .on_event = wardrive_menu_event,
+    .on_exit  = NULL,
+    .draw     = wardrive_menu_draw,
 };
 
 /*==========================================================================*/

@@ -3,8 +3,9 @@
 /*
  * test_wifi_ux_restructure.c
  *
- * Source-level checks for the WiFi UX restructuring (issue #621):
- *   - Top-level menu renamed from "Scan & Connect" to "Networks"
+ * Source-level checks for the WiFi UX restructuring (issues #621, #680):
+ *   - Top-level menu item renamed from "Networks" to "Scan & Connect"
+ *   - Wardrive promoted to its own top-level sub-menu (Phase 1 of #680)
  *   - Sniffers/Attacks/Recon sub-menus prompt disconnect if WiFi is connected
  *   - Net Scan sub-menu requires WiFi connection before showing tools
  *   - wifi_prompt_disconnect() and wifi_require_connected() are declared
@@ -48,21 +49,21 @@ static char *read_file(const char *relpath)
 }
 
 /*--------------------------------------------------------------------------*/
-/* 1. Top-level menu label is "Networks", NOT "Scan & Connect"              */
+/* 1. Top-level menu label is "Scan & Connect", NOT "Networks"              */
 /*--------------------------------------------------------------------------*/
 
-void test_menu_label_is_networks(void)
+void test_menu_label_is_scan_connect(void)
 {
     char *c = read_file("m1_csrc/m1_wifi_scene_menu.c");
     TEST_ASSERT_NOT_NULL(c);
 
     /* Must contain the new label */
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Networks\""),
-        "Top-level WiFi menu must use 'Networks' label");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Scan & Connect\""),
+        "Top-level WiFi menu must use 'Scan & Connect' label");
 
-    /* Must NOT contain the old label */
-    TEST_ASSERT_NULL_MESSAGE(strstr(c, "\"Scan & Connect\""),
-        "Old 'Scan & Connect' label must be removed");
+    /* Must NOT contain the old top-level "Networks" label entry */
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "\n    \"Networks\","),
+        "Old top-level 'Networks' label must be removed");
 
     free(c);
 }
@@ -145,17 +146,17 @@ void test_helpers_declared_in_header(void)
 }
 
 /*--------------------------------------------------------------------------*/
-/* 7. Status screen references "Networks" not old name                       */
+/* 7. Status/hint screens reference "Scan & Connect" not old menu name       */
 /*--------------------------------------------------------------------------*/
 
-void test_status_references_networks(void)
+void test_status_references_scan_connect(void)
 {
     char *c = read_file("m1_csrc/m1_wifi.c");
     TEST_ASSERT_NOT_NULL(c);
 
-    /* Should not reference the old menu name in user-visible strings */
-    TEST_ASSERT_NULL_MESSAGE(strstr(c, "Use Scan & Connect"),
-        "Status screen must reference 'Networks' not old name");
+    /* Should not reference the old "Use Networks" wording in hint strings */
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "Use Networks"),
+        "Hint screens must reference 'Scan & Connect' not the old 'Networks' name");
 
     free(c);
 }
@@ -409,16 +410,43 @@ void test_station_scan_is_capability_gated(void)
     free(c);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 20. Wardrive is a top-level menu; wardrive tools moved out of Recon      */
+/*     (Phase 1 of the WiFi cleanup plan)                                   */
+/*--------------------------------------------------------------------------*/
+
+void test_wardrive_is_top_level_menu(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    /* Top-level menu offers a "Wardrive" item targeting its own sub-menu. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Wardrive\""),
+        "Top-level WiFi menu must offer a 'Wardrive' item");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "WifiSceneWardriveMenu"),
+        "Wardrive menu scene target must be wired");
+
+    /* Wardrive tools moved out of the Recon sub-menu into Wardrive. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wardrive_targets"),
+        "Wardrive sub-menu target table must exist");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"AP Wardrive\""),
+        "Wardrive sub-menu must list 'AP Wardrive'");
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "\"Station Wardrive\",\n    \"Signal Monitor\""),
+        "Recon sub-menu must no longer contain the wardrive items");
+
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_menu_label_is_networks);
+    RUN_TEST(test_menu_label_is_scan_connect);
     RUN_TEST(test_sniffer_menu_prompts_disconnect);
     RUN_TEST(test_attack_menu_prompts_disconnect);
     RUN_TEST(test_recon_menu_prompts_disconnect);
     RUN_TEST(test_net_scan_requires_connected);
     RUN_TEST(test_helpers_declared_in_header);
-    RUN_TEST(test_status_references_networks);
+    RUN_TEST(test_status_references_scan_connect);
     RUN_TEST(test_connect_delegates_navigate_to_connected_menu);
     RUN_TEST(test_general_menu_no_connected_item);
     RUN_TEST(test_deauth_uses_deauth_label);
@@ -431,5 +459,6 @@ int main(void)
     RUN_TEST(test_ap_clone_has_at_fallback);
     RUN_TEST(test_rickroll_has_at_fallback);
     RUN_TEST(test_station_scan_is_capability_gated);
+    RUN_TEST(test_wardrive_is_top_level_menu);
     return UNITY_END();
 }
