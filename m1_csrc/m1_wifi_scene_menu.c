@@ -78,7 +78,7 @@ static void scan_connect_on_enter(M1SceneApp *app) {
      * Target context (Target + Connect groups, plan §3.2).  Keep the ESP32
      * initialised; the Target action delegates manage its lifecycle. */
     if (wifi_scan_ap_target_selected() && wifi_target_valid()) {
-        m1_scene_replace(app, WifiSceneTargetMenu);
+        m1_scene_push(app, WifiSceneTargetMenu);
         return;
     }
 
