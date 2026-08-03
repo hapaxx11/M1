@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "esp32_feature_map.h"
+
 #ifndef M1_ROOT
 #error "M1_ROOT must be defined by CMake"
 #endif
@@ -726,6 +728,51 @@ void test_multi_target_build_declared(void)
     free(c);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 32. Phase 5: WiFi Hotspot capability-gated General menu entry            */
+/*--------------------------------------------------------------------------*/
+
+void test_general_menu_has_hotspot_entry(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_general.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"WiFi Hotspot\""),
+        "General menu must offer a 'WiFi Hotspot' entry (Phase 5, §3.9)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "WifiSceneGeneralHotspot"),
+        "General target table must route 'WiFi Hotspot' to WifiSceneGeneralHotspot");
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(c, "DELEGATE_FEATURE(gen_hotspot,     wifi_general_hotspot,        ESP32_FEATURE_WIFI_HOTSPOT)"),
+        "WiFi Hotspot delegate must be capability-gated on ESP32_FEATURE_WIFI_HOTSPOT");
+
+    free(c);
+}
+
+void test_hotspot_capability_hides_feature_when_absent(void)
+{
+    /* No shipped firmware self-reports M1_ESP32_CAP_WIFI_HOTSPOT yet, so the
+     * feature gate must fail closed (deferred / optional, plan §3.9). */
+    TEST_ASSERT_FALSE(esp32_feature_supported(0u, ESP32_FEATURE_WIFI_HOTSPOT));
+    TEST_ASSERT_TRUE(esp32_feature_supported(
+        esp32_feature_required_caps(ESP32_FEATURE_WIFI_HOTSPOT),
+        ESP32_FEATURE_WIFI_HOTSPOT));
+}
+
+void test_wifi_general_hotspot_declared(void)
+{
+    char *h = read_file("m1_csrc/m1_wifi.h");
+    TEST_ASSERT_NOT_NULL(h);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(h, "void wifi_general_hotspot(void);"),
+        "wifi_general_hotspot() must be declared in m1_wifi.h");
+    free(h);
+
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "void wifi_general_hotspot(void)"),
+        "wifi_general_hotspot() must be implemented in m1_wifi.c");
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -760,6 +807,9 @@ int main(void)
     RUN_TEST(test_karma_with_portal_prompts);
     RUN_TEST(test_target_deauth_has_chaining_prompt);
     RUN_TEST(test_multi_target_build_declared);
+    RUN_TEST(test_general_menu_has_hotspot_entry);
+    RUN_TEST(test_hotspot_capability_hides_feature_when_absent);
+    RUN_TEST(test_wifi_general_hotspot_declared);
     return UNITY_END();
 }
 

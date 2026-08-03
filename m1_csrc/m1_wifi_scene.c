@@ -79,6 +79,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiSceneGeneralShutdown]      = &wifi_scene_gen_shutdown_handlers,
     [WifiSceneGeneralSetEpSsid]     = &wifi_scene_gen_ep_ssid_handlers,
     [WifiSceneGeneralSelectEpHtml]  = &wifi_scene_gen_ep_html_handlers,
+    [WifiSceneGeneralHotspot]       = &wifi_scene_gen_hotspot_handlers,
 
     [WifiScene802154Menu]       = &wifi_scene_802154_menu_handlers,
     [WifiSceneZigbee]           = &wifi_scene_zigbee_handlers,

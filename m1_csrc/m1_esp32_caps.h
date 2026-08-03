@@ -177,7 +177,13 @@
  *  on CD3 builds.  No fallback probe is implemented. */
 #define M1_ESP32_CAP_ESPNOW         (UINT64_C(1) << 21)
 
-/* Bits 22-63 reserved for future use */
+/** WiFi SoftAP hotspot (raw ESP-AT AT+CWMODE=2 / AT+CWSAP path).  Not
+ *  self-reported by any shipped AT, SiN360 or CD3 firmware as of the
+ *  2026-08-03 source review — the feature gate fails closed until a
+ *  firmware starts advertising this bit (plan §3.9, Phase 5). */
+#define M1_ESP32_CAP_WIFI_HOTSPOT   (UINT64_C(1) << 22)
+
+/* Bits 23-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference

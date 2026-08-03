@@ -4392,6 +4392,59 @@ void wifi_general_select_ep_html(void)
 	wifi_show_message("EP HTML", line, "Ready for portal");
 }
 
+/* General: WiFi Hotspot (SoftAP) — Phase 5 of the WiFi cleanup plan (§3.9).
+ * Raw ESP-AT path: AT+CWMODE=2 switches the radio to SoftAP mode and
+ * AT+CWSAP configures the SSID/password/channel/security.  Gated behind
+ * M1_ESP32_CAP_WIFI_HOTSPOT (esp32_feature_map.h), which no shipped
+ * firmware self-reports yet — the DELEGATE_FEATURE wrapper in
+ * m1_wifi_scene_general.c shows "Feature not supported" until a firmware
+ * advertises the bit, so this body only runs once support is confirmed. */
+void wifi_general_hotspot(void)
+{
+	char ssid[33];
+	char pwd[65];
+	char cmd_buf[160];
+	char resp_buf[256];
+	uint8_t choice;
+
+	memset(ssid, 0, sizeof(ssid));
+	if (m1_vkb_get_text("Hotspot SSID:", "", ssid, 32) == 0 || ssid[0] == '\0')
+		return;
+
+	memset(pwd, 0, sizeof(pwd));
+	if (m1_vkb_get_text("Hotspot Password:", "", pwd, 64) == 0)
+		return;
+
+	if (pwd[0] != '\0' && strlen(pwd) < 8)
+	{
+		wifi_show_message("WiFi Hotspot", "Password too short", "Need 8+ chars");
+		return;
+	}
+
+	ensure_esp32_ready();
+	memset(resp_buf, 0, sizeof(resp_buf));
+	(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
+
+	snprintf(cmd_buf, sizeof(cmd_buf), "AT+CWSAP=\"%s\",\"%s\",6,%d\r\n",
+	         ssid, pwd, (pwd[0] != '\0') ? 3 : 0);
+	memset(resp_buf, 0, sizeof(resp_buf));
+	(void)spi_AT_send_recv(cmd_buf, resp_buf, sizeof(resp_buf), 3);
+	if (strstr(resp_buf, "OK") == NULL)
+	{
+		(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+		wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
+		return;
+	}
+
+	choice = m1_message_box_choice(&m1_u8g2, "WiFi Hotspot", "Broadcasting", ssid,
+	                                "Stop\nKeep");
+	if (choice == 1)
+	{
+		(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+		wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
+	}
+}
+
 
 /*============================================================================*/
 /*  Evil Portal UI                                                           */

@@ -358,10 +358,22 @@ phase that touches `.c/.h` sources.
 - [x] Tests: `test_wifi_multi_target.c` (11/11, pure-logic) +
       source assertions 27–31 in `test_wifi_ux_restructure.c` (31/31 pass).
 
-### Phase 5 — WiFi Hotspot (deferred / optional)
-- Capability‑gated SoftAP hotspot entry (§3.9). Ships only if ESP32 firmware
-  support is confirmed; otherwise remains hidden behind the capability gate.
-- Tests: capability‑gate assertion (feature hidden when cap absent).
+### Phase 5 — WiFi Hotspot (deferred / optional) — **DONE**
+- [x] Added **`M1_ESP32_CAP_WIFI_HOTSPOT`** (bit 22, `m1_esp32_caps.h`) and
+      **`ESP32_FEATURE_WIFI_HOTSPOT`** (`esp32_feature_map.h/.c`) — no shipped
+      AT, SiN360 or CD3 firmware self-reports this bit yet, so the gate fails
+      closed by default, matching the "ships only if confirmed" deferral.
+- [x] Added **WiFi Hotspot** entry to the **General** menu
+      (`WifiSceneGeneralHotspot`), wired through `DELEGATE_FEATURE(...,
+      ESP32_FEATURE_WIFI_HOTSPOT)` so it shows the standard "Feature not
+      supported" screen until a firmware advertises the capability.
+- [x] Implemented `wifi_general_hotspot()` (`m1_wifi.c`) — raw ESP-AT path
+      (`AT+CWMODE=2` + `AT+CWSAP`) prompting for SSID/password, with a
+      Stop/Keep prompt that restores STA mode (`AT+CWMODE=1`) on exit.
+- [x] Tests: `test_esp32_feature_map.c` extended (mapping + updated
+      `ESP32_FEATURE_COUNT` regression guard) and `test_wifi_ux_restructure.c`
+      extended with the General-menu entry, capability-gate (hidden when cap
+      absent, reachable when present) and declaration assertions (34/34 pass).
 
 ---
 

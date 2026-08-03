@@ -89,6 +89,7 @@ void wifi_general_set_channel(void);
 void wifi_general_shutdown_wifi(void);
 void wifi_general_set_ep_ssid(void);
 void wifi_general_select_ep_html(void);
+void wifi_general_hotspot(void);
 
 /* Legacy AT-layer stubs — gated by compile flag */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE

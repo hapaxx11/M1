@@ -1842,6 +1842,10 @@ add_test(NAME wifi_scan_status_nonblocking COMMAND test_wifi_scan_status_nonbloc
 # ── WiFi UX restructure (#621) ──
 add_executable(test_wifi_ux_restructure
     test_wifi_ux_restructure.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_wifi_ux_restructure PRIVATE
+    ${M1_ROOT}/m1_csrc
 )
 target_compile_definitions(test_wifi_ux_restructure PRIVATE
     M1_ROOT="${M1_ROOT}"

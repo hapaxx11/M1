@@ -97,6 +97,7 @@ typedef enum {
     WifiSceneGeneralShutdown,
     WifiSceneGeneralSetEpSsid,
     WifiSceneGeneralSelectEpHtml,
+    WifiSceneGeneralHotspot,
 
     /* 802.15.4 sub-menu */
     WifiScene802154Menu,
@@ -202,6 +203,7 @@ extern const M1SceneHandlers wifi_scene_gen_set_chan_handlers;
 extern const M1SceneHandlers wifi_scene_gen_shutdown_handlers;
 extern const M1SceneHandlers wifi_scene_gen_ep_ssid_handlers;
 extern const M1SceneHandlers wifi_scene_gen_ep_html_handlers;
+extern const M1SceneHandlers wifi_scene_gen_hotspot_handlers;
 
 /* m1_wifi_scene_connect.c (compile-gated by M1_APP_WIFI_CONNECT_ENABLE) */
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
