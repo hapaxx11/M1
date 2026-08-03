@@ -156,6 +156,33 @@ endif()
 add_test(NAME esp32_rpc COMMAND test_esp32_rpc)
 
 # ------------------------------------------------------------------
+# Module under test: m1_esp32_rpc_features (per-feature M1_RPC action layer)
+#
+# Builds on the m1_esp32_rpc client to provide one action wrapper per
+# WiFi / BLE / 802.15.4 feature plus the feature -> opcode map.  The SPI-HD
+# transport is stubbed with a fake that captures the outgoing REQ frame and
+# replays a canned RESP/NAK, so every wrapper runs on the host.  Verifies:
+#   - esp32_feature_rpc_opcode(): known mappings, unmapped features, out-of-range
+#   - trigger / scalar / struct payload encoders build the right opcode + bytes
+#   - wifi_scan / zb_sniff_get response decoders (count, cap-to-max, NAK)
+#   - argument validation + NAK / transport-failure propagation
+# ------------------------------------------------------------------
+add_executable(test_esp32_rpc_features
+    test_esp32_rpc_features.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_rpc_features.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_rpc.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_esp32_rpc_features PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_rpc_features PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_rpc_features PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_rpc_features COMMAND test_esp32_rpc_features)
+
+# ------------------------------------------------------------------
 # Module under test: battery_soc_estimate
 # Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
 # Bug context: "Asian M1" fuel gauge reports 0% SoC while device is

@@ -317,6 +317,49 @@ adopt it by branching on `m1_esp32_active_transport()`.
 > re-routes it. Only the native **brain CD3** resolves to
 > `ESP32_TRANSPORT_RPC`.
 
+#### Per-feature action layer (`m1_esp32_rpc_features.c/.h`)
+
+`m1_esp32_rpc.c` is the generic client; `m1_esp32_rpc_features.c/.h` is the
+feature layer built on top of it. It provides two things every WiFi / BLE /
+802.15.4 feature needs to drive the native brain CD3:
+
+- `esp32_feature_rpc_opcode(feature_id, &op)` — the authoritative
+  feature → `m1_esp32_rpc_id_t` map (e.g. `ESP32_FEATURE_WIFI_SCAN` →
+  `M1_ESP32_RPC_WIFI_SCAN`, `ESP32_FEATURE_DEAUTH` →
+  `M1_ESP32_RPC_OFF_DEAUTH_START`). Host-composed features with no single
+  native opcode (`NETSCAN`, `BLE_GATT`, `BT_MANAGE`) return `false`.
+- One small action wrapper per feature action that builds the canonical
+  little-endian payload, dispatches via `m1_esp32_rpc_call()`, and decodes the
+  reply into a neutral out-struct — e.g. `m1_esp32_rpc_wifi_scan()`,
+  `m1_esp32_rpc_deauth_start()`, `m1_esp32_rpc_ble_hid_key()`,
+  `m1_esp32_rpc_zb_sniff_get()`, plus the `*_start` / `*_stop` triggers.
+
+A feature wires it in by branching on the active transport:
+
+```c
+esp32_transport_t xport = m1_esp32_active_transport();
+if (xport == ESP32_TRANSPORT_RPC) {
+    m1_esp32_rpc_zb_sniff_start(ch);          /* brain CD3: binary M1_RPC */
+} else {
+    spi_AT_send_recv("AT+ZIGSNIFF=1,...\r\n", ...);  /* AT / CD3-AT path */
+}
+```
+
+The 802.15.4 sniffer / flood (`m1_802154.c`) uses exactly this pattern: on
+brain CD3 it drives `ZB_SNIFF_START` / `ZB_SNIFF_GET` / `ZB_SNIFF_STOP` (and
+`ZB_FLOOD_*`) and folds the binary `m1_esp32_rpc_zb_device_t` records into the
+same deduplicated display list the AT `+ZIGFRAME` parser feeds; every other
+build keeps the AT text path unchanged. The whole feature layer is transport-
+injectable, so it is exercised on the host in `tests/test_esp32_rpc_features.c`
+without an ESP32.
+
+> **Payloads whose brain-CD3 wire format is not yet settled** (WiFi connect
+> credentials, beacon/probe SSID lists, captive-portal config, BLE advertise
+> blobs) are reachable through `esp32_feature_rpc_opcode()` +
+> `m1_esp32_rpc_call()` directly, but do not yet have a typed wrapper here —
+> those are filled in as the corresponding brain-CD3 opcode payloads are
+> validated against hardware.
+
 ### CMD_GET_STATUS payload format (protocol version 1)
 
 The 41-byte response payload returned by supporting ESP32 firmware:
