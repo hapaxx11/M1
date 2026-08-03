@@ -25,6 +25,13 @@
 #include "espnow_peer_session.h"
 #include "ff.h"
 
+/* Forward declarations — implemented in m1_esp32_hal.c and esp_app_main.c.
+ * The CD3 M1_RPC transport rides the same half-duplex SPI-HD command protocol
+ * as the AT firmware, driven by the AT RTOS task, so that task must be running
+ * before any ESP-NOW frame can be exchanged. */
+extern bool    get_esp32_main_init_status(void);
+extern void    esp32_main_init(void);
+
 /*==========================================================================*/
 /* M1_RPC ESP-NOW message IDs (CD3 bedge117/m1-esp32-brain)                 */
 /*==========================================================================*/
@@ -43,6 +50,24 @@
 #define SPI_BUF_SIZE  64
 
 /*==========================================================================*/
+/* SPI transport timeout for CD3 M1_RPC ESP-NOW commands                     */
+/*==========================================================================*/
+
+/* Response timeout in SECONDS for spi_AT_send_recv_bin().  ESP-NOW operations
+ * (announce, peer list, send) complete promptly on the ESP32; 2 s is generous
+ * and matches the CD3 detection probe timeout in m1_esp32_caps.c. */
+#define ESPNOW_RPC_TIMEOUT_S  2
+
+/* Binary-safe half-duplex SPI-HD send/receive (Esp_spi_at master driver).
+ * CD3 (bedge117/m1-esp32-brain) is a spi_slave_hd slave, so its M1_RPC frames
+ * MUST travel over this half-duplex path — NOT the full-duplex 64-byte
+ * transfer used by the SiN360 binary protocol.  Declared extern here exactly
+ * as in m1_esp32_caps.c (the CD3 detection probe uses the same function). */
+extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                     uint8_t *rx_buf, int rx_buf_size,
+                                     int *out_len, int timeout_sec);
+
+/*==========================================================================*/
 /* Module state                                                             */
 /*==========================================================================*/
 
@@ -56,7 +81,13 @@ static bool    s_started;
 
 /**
  * Build and send a simple M1_RPC request, return true if response OK.
- * Uses the 64-byte SPI transaction buffer model.
+ *
+ * CD3 speaks M1_RPC over the half-duplex SPI-HD transport (spi_slave_hd +
+ * HANDSHAKE), the same transport used by the AT firmware and by the CD3
+ * detection probe in m1_esp32_caps.c.  A full-duplex HAL_SPI_TransmitReceive
+ * (m1_esp32_send_cmd_raw) cannot be answered by a spi_slave_hd slave, so the
+ * request/response is exchanged via spi_AT_send_recv_bin(), which is binary
+ * safe (length-preserving, no NUL truncation of the M1_RPC header/CRC bytes).
  */
 static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
                             uint8_t payload_len, uint8_t *resp_buf,
@@ -64,19 +95,23 @@ static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
 {
     uint8_t tx[SPI_BUF_SIZE];
     uint8_t rx[SPI_BUF_SIZE];
+    int     rx_len = 0;
 
     memset(tx, 0, sizeof(tx));
     uint16_t frame_sz = m1_esp32_rpc_build_req(tx, SPI_BUF_SIZE, msg_id,
                                                 payload, payload_len);
     if (frame_sz == 0) return false;
 
-    int rc = m1_esp32_send_cmd_raw(tx, rx, 200);
-    if (rc != 0) return false;
+    memset(rx, 0, sizeof(rx));
+    if (spi_AT_send_recv_bin(tx, (int)frame_sz, rx, (int)sizeof(rx),
+                             &rx_len, ESPNOW_RPC_TIMEOUT_S) != 0 ||
+        rx_len <= 0)
+        return false;
 
     /* Parse and validate response */
     const uint8_t *resp_payload = NULL;
     uint16_t resp_payload_len = 0;
-    if (!m1_esp32_rpc_parse_resp(rx, SPI_BUF_SIZE, msg_id,
+    if (!m1_esp32_rpc_parse_resp(rx, (uint16_t)rx_len, msg_id,
                                   &resp_payload, &resp_payload_len))
         return false;
 
@@ -96,6 +131,15 @@ static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
 
 bool m1_espnow_start(uint8_t channel)
 {
+    /* Bring up the SPI HAL and the AT/SPI-HD RTOS task that carries the CD3
+     * M1_RPC frames.  DELEGATE_FEATURE only guarantees the SPI HAL is up (via
+     * m1_esp32_ensure_init()); the transport task is otherwise started deep
+     * inside individual features, so start it here — mirroring the CD3
+     * detection probe in m1_esp32_caps_init(). */
+    m1_esp32_ensure_init();
+    if (!get_esp32_main_init_status())
+        esp32_main_init();
+
     s_channel = channel;
     uint8_t payload[24];  /* ch(1) + name string */
     payload[0] = channel;

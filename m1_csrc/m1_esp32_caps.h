@@ -153,12 +153,11 @@
 
 /** WPA handshake / EAPOL capture — deauth a station and capture the
  *  four-way EAPOL handshake for offline cracking.  Result exported as
- *  .pcap.  Dispatched by CD3 via M1_RPC_OFF_HS_START/STATUS/GET/STOP (this
- *  RPC path IS functional as of the 2026-07-21 source review), but CD3 does
- *  not yet set this bit in its self-reported cap_bitmap (M1_FW_CAPS in
- *  main.c) — m1_esp32_has_cap() will return false against a real device
- *  until a release starts advertising it.  Not self-reported by AT or SiN360
- *  firmware variants; dag T-800 provides AT+M1HSCAP mapped to CAP_PKTMON (legacy overlap). */
+ *  .pcap.  Dispatched by CD3 via M1_RPC_OFF_HS_START/STATUS/GET/STOP, and the
+ *  shipped m1-esp32-brain firmware now advertises this bit in its self-reported
+ *  cap_bitmap (M1_FW_CAPS in main.c), so m1_esp32_has_cap() returns true against
+ *  a real CD3 device.  Not self-reported by AT or SiN360 firmware variants; dag
+ *  T-800 provides AT+M1HSCAP mapped to CAP_PKTMON (legacy overlap). */
 #define M1_ESP32_CAP_HANDSHAKE      (UINT64_C(1) << 19)
 
 /** ESP32 firmware OTA self-update — M1 can push a new ESP32 binary to the
@@ -170,20 +169,54 @@
  *  or SiN360 firmware. */
 #define M1_ESP32_CAP_OTA            (UINT64_C(1) << 20)
 
+/* -------------------------------------------------------------------------
+ * Bits 21-23 are OWNED by the canonical CD3 wire protocol header
+ * (bedge117/m1-esp32-brain, components/m1_rpc/include/m1_rpc.h).  Their bit
+ * positions MUST match that header exactly, because the CD3 firmware serialises
+ * its M1_FW_CAPS bitmap using these positions in the M1_RPC_SYS_GET_STATUS
+ * response.  Diverging here silently mis-maps every CD3 capability from bit 21
+ * upward.  Do NOT reuse bits 21-23 for host-only capabilities.
+ * ------------------------------------------------------------------------- */
+
+/** BLE advertisement spam (SourApple / SwiftPair / Samsung / Flipper / …).
+ *  Canonical CD3 bit (M1_CAP_BLE_SPAM); dispatched by CD3 via
+ *  M1_RPC_BLE_SPAM_START/STOP and self-reported in M1_FW_CAPS. */
+#define M1_ESP32_CAP_BLE_SPAM       (UINT64_C(1) << 21)
+
+/** IEEE 802.15.4 raw frame transmit / injection / flood.  Canonical CD3 bit
+ *  (M1_CAP_802154_TX); dispatched via M1_RPC_ZB_FLOOD_START / M1_RPC_ZB_INJECT
+ *  and self-reported in M1_FW_CAPS.  Distinct from M1_ESP32_CAP_802154 (bit 16)
+ *  which covers scan/sniff. */
+#define M1_ESP32_CAP_802154_TX      (UINT64_C(1) << 22)
+
+/** WiFi SoftAP hotspot.  Canonical CD3 bit (M1_CAP_SOFTAP); dispatched via
+ *  M1_RPC_SOFTAP_START/STOP and self-reported in M1_FW_CAPS.  AT firmware may
+ *  offer an equivalent via the raw ESP-AT AT+CWMODE=2 / AT+CWSAP path. */
+#define M1_ESP32_CAP_SOFTAP         (UINT64_C(1) << 23)
+
+/* -------------------------------------------------------------------------
+ * Bits 24+ are host-only (hapaxx11) capabilities that have no assignment in
+ * the canonical CD3 wire header.  No shipped firmware self-reports them, so
+ * their feature gates fail closed until a firmware advertises the bit.  They
+ * live above bit 23 specifically so they can never collide with a canonical
+ * CD3 capability position.
+ * ------------------------------------------------------------------------- */
+
 /** ESP-NOW peer-to-peer communication (discovery, unicast, broadcast).
- *  Supported by CD3 (bedge117/m1-esp32-brain) via M1_RPC_NOW_* handlers
- *  (msg_ids 0x0600..0x0605) but not yet self-reported in M1_FW_CAPS.
- *  Until CD3 sets this bit in M1_FW_CAPS, the feature gate will fail closed
- *  on CD3 builds.  No fallback probe is implemented. */
-#define M1_ESP32_CAP_ESPNOW         (UINT64_C(1) << 21)
+ *  Handled by CD3 (bedge117/m1-esp32-brain) via M1_RPC_NOW_* handlers
+ *  (msg_ids 0x0600..0x0605) but not self-reported in M1_FW_CAPS.  Until CD3
+ *  sets this bit, the feature gate fails closed on CD3 builds.  No fallback
+ *  probe is implemented.  Host-only bit — not part of the canonical CD3
+ *  capability header. */
+#define M1_ESP32_CAP_ESPNOW         (UINT64_C(1) << 24)
 
-/** WiFi SoftAP hotspot (raw ESP-AT AT+CWMODE=2 / AT+CWSAP path).  Not
- *  self-reported by any shipped AT, SiN360 or CD3 firmware as of the
- *  2026-08-03 source review — the feature gate fails closed until a
- *  firmware starts advertising this bit (plan §3.9, Phase 5). */
-#define M1_ESP32_CAP_WIFI_HOTSPOT   (UINT64_C(1) << 22)
+/** WiFi SoftAP hotspot via the raw ESP-AT AT+CWMODE=2 / AT+CWSAP path.  Not
+ *  self-reported by any shipped AT, SiN360 or CD3 firmware — the feature gate
+ *  fails closed until a firmware advertises this bit.  Host-only bit; CD3's
+ *  native SoftAP is M1_ESP32_CAP_SOFTAP (bit 23). */
+#define M1_ESP32_CAP_WIFI_HOTSPOT   (UINT64_C(1) << 25)
 
-/* Bits 23-63 reserved for future use */
+/* Bits 26-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
@@ -270,7 +303,10 @@
      M1_ESP32_CAP_BLE_ADV      | \
      M1_ESP32_CAP_BLE_HID      | \
      M1_ESP32_CAP_BLE_GATT     | \
+     M1_ESP32_CAP_BLE_SPAM     | \
      M1_ESP32_CAP_802154       | \
+     M1_ESP32_CAP_802154_TX    | \
+     M1_ESP32_CAP_SOFTAP       | \
      M1_ESP32_CAP_OTA)
 
 /* =========================================================================
