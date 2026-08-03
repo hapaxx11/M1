@@ -6,7 +6,7 @@
  *
  * Scene implementations live in per-group files (Phase D split):
  *   m1_wifi_scene_menu.c    — top menu + core/direct-tool delegates
- *   m1_wifi_scene_sniff.c   — Sniffers sub-menu + sniffer delegates
+ *   m1_wifi_scene_sniff.c   — passive sniffer delegates (reached from Recon)
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + general/config delegates
@@ -38,7 +38,6 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
 
     [WifiSceneWardriveMenu]     = &wifi_scene_wardrive_menu_handlers,
 
-    [WifiSceneSnifferMenu]      = &wifi_scene_sniffer_menu_handlers,
     [WifiSceneSniffAll]         = &wifi_scene_sniff_all_handlers,
     [WifiSceneSniffBeacon]      = &wifi_scene_sniff_beacon_handlers,
     [WifiSceneSniffProbe]       = &wifi_scene_sniff_probe_handlers,
@@ -84,6 +83,7 @@ static const M1SceneHandlers *const scene_registry[WifiSceneCount] = {
     [WifiScene802154Menu]       = &wifi_scene_802154_menu_handlers,
     [WifiSceneZigbee]           = &wifi_scene_zigbee_handlers,
     [WifiSceneThread]           = &wifi_scene_thread_handlers,
+    [WifiScene802154Flood]      = &wifi_scene_802154_flood_handlers,
 
     [WifiSceneEspnowPeer]       = &wifi_scene_espnow_peer_handlers,
 

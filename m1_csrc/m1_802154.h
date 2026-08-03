@@ -37,5 +37,6 @@ typedef struct {
 /* Menu entry functions */
 void zigbee_scan(void);
 void thread_scan(void);
+void ieee802154_flood(void);
 
 #endif /* M1_802154_H_ */

@@ -6,7 +6,9 @@
  * Source-level checks for the WiFi UX restructuring (issues #621, #680):
  *   - Top-level menu item renamed from "Networks" to "Scan & Connect"
  *   - Wardrive promoted to its own top-level sub-menu (Phase 1 of #680)
- *   - Sniffers/Attacks/Recon sub-menus prompt disconnect if WiFi is connected
+ *   - Sniffers merged into Recon; Wardrive absorbs AP/SSID list management;
+ *     General slimmed; 802.15.4 gains a Flood entry (Phase 2 of #680)
+ *   - Attacks/Recon sub-menus prompt disconnect if WiFi is connected
  *   - Net Scan sub-menu requires WiFi connection before showing tools
  *   - wifi_prompt_disconnect() and wifi_require_connected() are declared
  */
@@ -69,18 +71,39 @@ void test_menu_label_is_scan_connect(void)
 }
 
 /*--------------------------------------------------------------------------*/
-/* 2. Sniffer sub-menu prompts disconnect                                   */
+/* 2. Sniffers merged into Recon (Phase 2); no standalone Sniffers menu      */
 /*--------------------------------------------------------------------------*/
 
-void test_sniffer_menu_prompts_disconnect(void)
+void test_sniffers_merged_into_recon(void)
 {
-    char *c = read_file("m1_csrc/m1_wifi_scene_sniff.c");
-    TEST_ASSERT_NOT_NULL(c);
+    char *menu = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(menu);
 
-    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "wifi_prompt_disconnect"),
-        "Sniffer sub-menu must call wifi_prompt_disconnect");
+    /* Top-level menu no longer offers a standalone "Sniffers" item. */
+    TEST_ASSERT_NULL_MESSAGE(strstr(menu, "\"Sniffers\""),
+        "Top-level WiFi menu must no longer have a 'Sniffers' item (Phase 2)");
+    TEST_ASSERT_NULL_MESSAGE(strstr(menu, "WifiSceneSnifferMenu"),
+        "Top-level WiFi menu must not target the removed Sniffers sub-menu");
 
-    free(c);
+    /* Recon now lists the merged passive captures with C3-style naming and
+     * routes them to the existing sniffer delegates. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "\"Packet Monitor\""),
+        "Recon must list 'Packet Monitor' (merged from Sniffers)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "\"SAE / WPA3\""),
+        "Recon must list 'SAE / WPA3' (merged from Sniffers)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "WifiSceneSniffAll"),
+        "Recon target table must route to the sniffer delegates");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "WifiSceneSniffSae"),
+        "Recon target table must route to the sniffer delegates");
+    free(menu);
+
+    /* The standalone Sniffers sub-menu scene is gone; sniff.c keeps only the
+     * delegates, which inherit Recon's disconnect prompt. */
+    char *sniff = read_file("m1_csrc/m1_wifi_scene_sniff.c");
+    TEST_ASSERT_NOT_NULL(sniff);
+    TEST_ASSERT_NULL_MESSAGE(strstr(sniff, "wifi_scene_sniffer_menu_handlers"),
+        "Standalone Sniffers sub-menu handlers must be removed (Phase 2)");
+    free(sniff);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -437,11 +460,91 @@ void test_wardrive_is_top_level_menu(void)
     free(c);
 }
 
+/*--------------------------------------------------------------------------*/
+/* 21. Wardrive absorbs AP/SSID list-management items (Phase 2 §3.5)         */
+/*--------------------------------------------------------------------------*/
+
+void test_wardrive_absorbs_list_mgmt(void)
+{
+    char *menu = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(menu);
+
+    /* Wardrive sub-menu now lists the list-management items and routes them
+     * to the existing General delegates. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "\"Save APs\""),
+        "Wardrive sub-menu must list 'Save APs' (moved from General)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "\"Clear SSIDs\""),
+        "Wardrive sub-menu must list 'Clear SSIDs' (moved from General)");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "WifiSceneGeneralSaveAps"),
+        "Wardrive target table must route 'Save APs' to its General delegate");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "WifiSceneGeneralClearSsids"),
+        "Wardrive target table must route 'Clear SSIDs' to its General delegate");
+    free(menu);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 22. General is slimmed: list mgmt removed, Status/Disconnect added        */
+/*--------------------------------------------------------------------------*/
+
+void test_general_slimmed(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi_scene_general.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    /* The list-management labels no longer appear as menu entries in General
+     * (they now live under Wardrive). */
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "\"Save APs\","),
+        "General menu must no longer list 'Save APs' (moved to Wardrive)");
+    TEST_ASSERT_NULL_MESSAGE(strstr(c, "\"Load SSIDs\","),
+        "General menu must no longer list 'Load SSIDs' (moved to Wardrive)");
+
+    /* Status and Disconnect are surfaced in General. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Status\""),
+        "General menu must offer 'Status'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "\"Disconnect\""),
+        "General menu must offer 'Disconnect'");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "WifiSceneStatus"),
+        "General target table must route 'Status' to WifiSceneStatus");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(c, "WifiSceneDisconnect"),
+        "General target table must route 'Disconnect' to WifiSceneDisconnect");
+
+    free(c);
+}
+
+/*--------------------------------------------------------------------------*/
+/* 23. 802.15.4 gains a capability-gated Flood entry (Phase 2 §3.6)          */
+/*--------------------------------------------------------------------------*/
+
+void test_802154_has_flood(void)
+{
+    char *menu = read_file("m1_csrc/m1_wifi_scene_menu.c");
+    TEST_ASSERT_NOT_NULL(menu);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "\"802.15.4 Flood\""),
+        "802.15.4 sub-menu must offer an '802.15.4 Flood' item");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(menu, "WifiScene802154Flood"),
+        "802.15.4 Flood scene target must be wired");
+    /* Flood is capability-gated like the Zigbee/Thread scans. */
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(menu, "DELEGATE_FEATURE(flood_802154, ieee802154_flood, ESP32_FEATURE_802154)"),
+        "802.15.4 Flood delegate must be gated on ESP32_FEATURE_802154");
+    free(menu);
+
+    /* The flood implementation exists and drives the ESP32 flood command. */
+    char *impl = read_file("m1_csrc/m1_802154.c");
+    TEST_ASSERT_NOT_NULL(impl);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(impl, "void ieee802154_flood("),
+        "ieee802154_flood() must be implemented");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(impl, "AT+ZIGFLOOD"),
+        "ieee802154_flood() must drive the AT+ZIGFLOOD command");
+    free(impl);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_menu_label_is_scan_connect);
-    RUN_TEST(test_sniffer_menu_prompts_disconnect);
+    RUN_TEST(test_sniffers_merged_into_recon);
     RUN_TEST(test_attack_menu_prompts_disconnect);
     RUN_TEST(test_recon_menu_prompts_disconnect);
     RUN_TEST(test_net_scan_requires_connected);
@@ -460,5 +563,8 @@ int main(void)
     RUN_TEST(test_rickroll_has_at_fallback);
     RUN_TEST(test_station_scan_is_capability_gated);
     RUN_TEST(test_wardrive_is_top_level_menu);
+    RUN_TEST(test_wardrive_absorbs_list_mgmt);
+    RUN_TEST(test_general_slimmed);
+    RUN_TEST(test_802154_has_flood);
     return UNITY_END();
 }

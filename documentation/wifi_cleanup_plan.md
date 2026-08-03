@@ -296,13 +296,29 @@ phase that touches `.c/.h` sources.
 - [x] Tests: extended `test_wifi_ux_restructure.c` (new label assertion +
       `test_wardrive_is_top_level_menu`); firmware build verified.
 
-### Phase 2 — Recon/Sniffers merge, General split, 802.15.4 Flood
-- Merge Sniffers into Recon (§3.4); delete the Sniffers top item.
-- Move the list‑management items (Save/Load/Clear APs, Load/Clear SSIDs) into the
-  **Wardrive** export flow (§3.5).
-- Slim **General** to Saved/Status/Disconnect.
-- Add capability‑gated **802.15.4 Flood**.
-- Tests: menu‑content assertions for Recon, Wardrive, General, 802.15.4.
+### Phase 2 — Recon/Sniffers merge, General split, 802.15.4 Flood — **DONE**
+- [x] Merge Sniffers into Recon (§3.4): deleted the standalone `Sniffers` top
+      item and its sub-menu scene; the seven passive captures now live in
+      **Recon** with C3-style naming (`Packet Monitor`, `Beacon Sniff`, …) and
+      inherit Recon's disconnect prompt. Top menu is now `Scan & Connect ·
+      Recon · Attacks · Wardrive · 802.15.4 · Peer Link · General`.
+- [x] Moved the list-management items (Save/Load/Clear APs, Load/Clear SSIDs)
+      into the **Wardrive** sub-menu (§3.5). The delegates still live in
+      `m1_wifi_scene_general.c`; only their menu placement moved.
+- [x] Slimmed **General**: list-management removed; **Status** and
+      **Disconnect** surfaced alongside Saved Networks. The remaining
+      config/selection items (View AP Info, Select APs/STAs, Join, Set
+      MACs/Channel, Shutdown, EP SSID/HTML) are **kept in General for now** so
+      nothing becomes unreachable — they relocate to the selected-network
+      **Target** group (P3) and the **Attacks**/Evil-Portal config (P4), per the
+      Phase 1 "keep old submenus reachable so nothing regresses mid-migration"
+      rule. General reaches its final Saved/Status/Disconnect shape once P3/P4
+      land.
+- [x] Added capability-gated **802.15.4 Flood** (`ieee802154_flood()`, gated on
+      `ESP32_FEATURE_802154`, driving `AT+ZIGFLOOD`).
+- [x] Tests: extended `test_wifi_ux_restructure.c` with menu-content assertions
+      for the Recon merge, Wardrive list-mgmt absorption, the slimmed General,
+      and the 802.15.4 Flood entry (23/23 pass).
 
 ### Phase 3 — Selected‑network context (Target + Connect groups)
 - New selected‑SSID scene with the two‑group button bar (§3.2); wire the

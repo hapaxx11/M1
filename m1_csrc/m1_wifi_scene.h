@@ -11,8 +11,8 @@
  *                             + core/direct-tool delegates (Scan & Connect,
  *                             Station Scan, 2.4G Survey, MAC Track,
  *                             Wardrive, Station Wardrive, Signal Monitor,
- *                             Zigbee Scan, Thread Scan)
- *   m1_wifi_scene_sniff.c   — Sniffers sub-menu + 7 sniffer delegates
+ *                             Zigbee Scan, Thread Scan, 802.15.4 Flood)
+ *   m1_wifi_scene_sniff.c   — 7 passive sniffer delegates (reached from Recon)
  *   m1_wifi_scene_attack.c  — Attacks sub-menu + 8 attack delegates
  *   m1_wifi_scene_net.c     — Net Scan sub-menu + 5 network-scanner delegates
  *   m1_wifi_scene_general.c — General sub-menu + 14 general/config delegates
@@ -50,8 +50,7 @@ typedef enum {
     /* Wardrive sub-menu */
     WifiSceneWardriveMenu,
 
-    /* Sniffers sub-menu */
-    WifiSceneSnifferMenu,
+    /* Sniffer delegates (merged into the Recon sub-menu — no standalone menu) */
     WifiSceneSniffAll,
     WifiSceneSniffBeacon,
     WifiSceneSniffProbe,
@@ -101,6 +100,7 @@ typedef enum {
     WifiScene802154Menu,
     WifiSceneZigbee,
     WifiSceneThread,
+    WifiScene802154Flood,
 
     /* ESP-NOW Peer Link (delegate into separate scene manager) */
     WifiSceneEspnowPeer,
@@ -134,10 +134,10 @@ extern const M1SceneHandlers wifi_scene_wardrive_menu_handlers;
 extern const M1SceneHandlers wifi_scene_802154_menu_handlers;
 extern const M1SceneHandlers wifi_scene_zigbee_handlers;
 extern const M1SceneHandlers wifi_scene_thread_handlers;
+extern const M1SceneHandlers wifi_scene_802154_flood_handlers;
 extern const M1SceneHandlers wifi_scene_espnow_peer_handlers;
 
 /* m1_wifi_scene_sniff.c */
-extern const M1SceneHandlers wifi_scene_sniffer_menu_handlers;
 extern const M1SceneHandlers wifi_scene_sniff_all_handlers;
 extern const M1SceneHandlers wifi_scene_sniff_beacon_handlers;
 extern const M1SceneHandlers wifi_scene_sniff_probe_handlers;

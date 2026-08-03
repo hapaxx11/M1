@@ -5,7 +5,7 @@
  * @brief  WiFi General/Config sub-menu + general delegates.
  *
  * Scenes covered:
- *   WifiSceneGeneralMenu            — General sub-menu (14+2 items)
+ *   WifiSceneGeneralMenu            — General sub-menu
  *   WifiSceneGeneralViewInfo        — View AP Info delegate
  *   WifiSceneGeneralSelectAps       — Select APs delegate
  *   WifiSceneGeneralSelectStas      — Select STAs delegate
@@ -21,8 +21,11 @@
  *   WifiSceneGeneralSetEpSsid       — Set EP SSID delegate
  *   WifiSceneGeneralSelectEpHtml    — Select EP HTML delegate
  *
- * Connect features (Saved Networks, Connected menu) are also listed
- * here but their delegate implementations remain in m1_wifi_scene_connect.c.
+ * The AP/SSID list-management delegates (Save/Load/Clear APs, Load/Clear
+ * SSIDs) are still implemented here but are now reached from the Wardrive
+ * sub-menu's export flow (Phase 2 of the WiFi cleanup plan §3.5).  Saved
+ * Networks, Status and Disconnect (connect delegates in
+ * m1_wifi_scene_connect.c) are surfaced here when M1_APP_WIFI_CONNECT_ENABLE.
  *
  * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
@@ -115,30 +118,26 @@ const M1SceneHandlers wifi_scene_gen_ep_html_handlers     = { .on_enter = gen_ep
 /*==========================================================================*/
 
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-#define GENERAL_ITEM_COUNT  15
+#define GENERAL_ITEM_COUNT  12
 #else
-#define GENERAL_ITEM_COUNT  14
+#define GENERAL_ITEM_COUNT  9
 #endif
 
 static const char *const general_labels[GENERAL_ITEM_COUNT] = {
     "View AP Info", "Select APs", "Select STAs",
-    "Save APs", "Load APs", "Clear APs",
-    "Load SSIDs", "Clear SSIDs",
     "Join WiFi", "Set MACs", "Set Channel",
     "Shutdown WiFi", "Set EP SSID", "Select EP HTML",
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    "Saved Networks",
+    "Saved Networks", "Status", "Disconnect",
 #endif
 };
 
 static const uint8_t general_targets[GENERAL_ITEM_COUNT] = {
     WifiSceneGeneralViewInfo, WifiSceneGeneralSelectAps, WifiSceneGeneralSelectStas,
-    WifiSceneGeneralSaveAps, WifiSceneGeneralLoadAps, WifiSceneGeneralClearAps,
-    WifiSceneGeneralLoadSsids, WifiSceneGeneralClearSsids,
     WifiSceneGeneralJoin, WifiSceneGeneralSetMacs, WifiSceneGeneralSetChan,
     WifiSceneGeneralShutdown, WifiSceneGeneralSetEpSsid, WifiSceneGeneralSelectEpHtml,
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
-    WifiSceneSaved,
+    WifiSceneSaved, WifiSceneStatus, WifiSceneDisconnect,
 #endif
 };
 

@@ -7,7 +7,7 @@
  * Scenes covered:
  *   WifiSceneMenu           — top-level menu
  *   WifiSceneReconMenu      — Recon sub-menu
- *   WifiSceneWardriveMenu   — Wardrive sub-menu (AP / Station Wardrive)
+ *   WifiSceneWardriveMenu   — Wardrive sub-menu (AP/Station Wardrive + list mgmt)
  *   WifiScene802154Menu     — 802.15.4 sub-menu (2 items)
  *   WifiSceneScanConnect    — Scan & Connect scan/connect delegate
  *   WifiSceneStationScan    — Station Scan delegate
@@ -18,6 +18,7 @@
  *   WifiSceneSignalMonitor  — Signal Monitor delegate
  *   WifiSceneZigbee         — Zigbee Scan delegate
  *   WifiSceneThread         — Thread Scan delegate
+ *   WifiScene802154Flood    — 802.15.4 Flood delegate (capability-gated)
  *
  * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
@@ -89,6 +90,7 @@ DELEGATE_FEATURE(station_wardrive, wifi_station_wardrive, ESP32_FEATURE_STA_SCAN
 DELEGATE_FEATURE(signal_monitor, wifi_signal_monitor, ESP32_FEATURE_PKTMON)
 DELEGATE_FEATURE(zigbee, zigbee_scan, ESP32_FEATURE_802154)
 DELEGATE_FEATURE(thread, thread_scan, ESP32_FEATURE_802154)
+DELEGATE_FEATURE(flood_802154, ieee802154_flood, ESP32_FEATURE_802154)
 
 const M1SceneHandlers wifi_scene_scan_connect_handlers     = { .on_enter = scan_connect_on_enter     };
 const M1SceneHandlers wifi_scene_station_scan_handlers     = { .on_enter = station_scan_on_enter     };
@@ -99,6 +101,7 @@ const M1SceneHandlers wifi_scene_station_wardrive_handlers = { .on_enter = stati
 const M1SceneHandlers wifi_scene_signal_monitor_handlers   = { .on_enter = signal_monitor_on_enter   };
 const M1SceneHandlers wifi_scene_zigbee_handlers           = { .on_enter = zigbee_on_enter           };
 const M1SceneHandlers wifi_scene_thread_handlers           = { .on_enter = thread_on_enter           };
+const M1SceneHandlers wifi_scene_802154_flood_handlers     = { .on_enter = flood_802154_on_enter      };
 
 /* ESP-NOW Peer Link — runs its own scene manager internally */
 static void espnow_peer_on_enter(M1SceneApp *app) {
@@ -110,15 +113,14 @@ static void espnow_peer_on_enter(M1SceneApp *app) {
 const M1SceneHandlers wifi_scene_espnow_peer_handlers = { .on_enter = espnow_peer_on_enter };
 
 /*==========================================================================*/
-/* Top-level menu (6 items)                                                 */
+/* Top-level menu (7 items)                                                 */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  8
+#define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Scan & Connect",
     "Recon",
-    "Sniffers",
     "Attacks",
     "Wardrive",
     "802.15.4",
@@ -129,7 +131,6 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     WifiSceneScanConnect,
     WifiSceneReconMenu,
-    WifiSceneSnifferMenu,
     WifiSceneAttackMenu,
     WifiSceneWardriveMenu,
     WifiScene802154Menu,
@@ -169,23 +170,37 @@ const M1SceneHandlers wifi_scene_menu_handlers = {
 };
 
 /*==========================================================================*/
-/* Recon sub-menu (6 items)                                                 */
+/* Recon sub-menu (11 items — passive discovery + merged sniffers §3.4)     */
 /*==========================================================================*/
 
-#define RECON_ITEM_COUNT  4
+#define RECON_ITEM_COUNT  11
 
 static const char *const recon_labels[RECON_ITEM_COUNT] = {
     "Station Scan",
     "2.4G Survey",
-    "MAC Track",
     "Signal Monitor",
+    "MAC Track",
+    "Packet Monitor",
+    "Beacon Sniff",
+    "Probe Sniff",
+    "EAPOL Sniff",
+    "Deauth Sniff",
+    "Pwnagotchi",
+    "SAE / WPA3",
 };
 
 static const uint8_t recon_targets[RECON_ITEM_COUNT] = {
     WifiSceneStationScan,
     WifiSceneSurvey24g,
-    WifiSceneMacTrack,
     WifiSceneSignalMonitor,
+    WifiSceneMacTrack,
+    WifiSceneSniffAll,
+    WifiSceneSniffBeacon,
+    WifiSceneSniffProbe,
+    WifiSceneSniffEapol,
+    WifiSceneSniffDeauth,
+    WifiSceneSniffPwnagotchi,
+    WifiSceneSniffSae,
 };
 
 static subghz_submenu_model_t s_recon_model;
@@ -224,19 +239,29 @@ const M1SceneHandlers wifi_scene_recon_menu_handlers = {
 };
 
 /*==========================================================================*/
-/* Wardrive sub-menu (2 items)                                              */
+/* Wardrive sub-menu (7 items — wardrive tools + AP/SSID list mgmt §3.5)    */
 /*==========================================================================*/
 
-#define WARDRIVE_ITEM_COUNT  2
+#define WARDRIVE_ITEM_COUNT  7
 
 static const char *const wardrive_labels[WARDRIVE_ITEM_COUNT] = {
     "AP Wardrive",
     "Station Wardrive",
+    "Save APs",
+    "Load APs",
+    "Clear APs",
+    "Load SSIDs",
+    "Clear SSIDs",
 };
 
 static const uint8_t wardrive_targets[WARDRIVE_ITEM_COUNT] = {
     WifiSceneWardrive,
     WifiSceneStationWardrive,
+    WifiSceneGeneralSaveAps,
+    WifiSceneGeneralLoadAps,
+    WifiSceneGeneralClearAps,
+    WifiSceneGeneralLoadSsids,
+    WifiSceneGeneralClearSsids,
 };
 
 static subghz_submenu_model_t s_wardrive_model;
@@ -275,19 +300,21 @@ const M1SceneHandlers wifi_scene_wardrive_menu_handlers = {
 };
 
 /*==========================================================================*/
-/* 802.15.4 sub-menu (2 items)                                              */
+/* 802.15.4 sub-menu (3 items)                                              */
 /*==========================================================================*/
 
-#define IEEE802154_ITEM_COUNT  2
+#define IEEE802154_ITEM_COUNT  3
 
 static const char *const ieee802154_labels[IEEE802154_ITEM_COUNT] = {
     "Zigbee Scan",
     "Thread Scan",
+    "802.15.4 Flood",
 };
 
 static const uint8_t ieee802154_targets[IEEE802154_ITEM_COUNT] = {
     WifiSceneZigbee,
     WifiSceneThread,
+    WifiScene802154Flood,
 };
 
 static subghz_submenu_model_t s_802154_model;

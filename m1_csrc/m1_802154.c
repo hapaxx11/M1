@@ -5,8 +5,9 @@
  *
  * Sends AT+ZIGSNIFF commands to ESP32-C6 and parses +ZIGFRAME responses.
  * Builds a deduplicated device list and displays it on the LCD.
- * Two entry points: zigbee_scan() and thread_scan() — same logic,
- * different protocol filter ('Z' vs 'T').
+ * Two scan entry points: zigbee_scan() and thread_scan() — same logic,
+ * different protocol filter ('Z' vs 'T').  ieee802154_flood() transmits
+ * 802.15.4 frames across channels 11-26 until BACK is pressed.
  */
 
 #include <stdint.h>
@@ -548,4 +549,136 @@ void zigbee_scan(void)
 void thread_scan(void)
 {
     ieee802154_scan(IEEE802154_PROTO_THREAD);
+}
+
+/*
+ * 802.15.4 Flood — continuously transmits 802.15.4 frames, cycling channels
+ * 11-26, until BACK is pressed.  Sends AT+ZIGFLOOD=1,<ch> to start on a
+ * channel and AT+ZIGFLOOD=0 to stop.  Capability-gated by the scene layer on
+ * ESP32_FEATURE_802154, so firmwares without 802.15.4 support show the
+ * standard "not supported" screen instead of reaching this function.
+ */
+void ieee802154_flood(void)
+{
+    S_M1_Buttons_Status this_button_status;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    char resp_buf[AT_RESP_BUF_SIZE];
+    const char *title = "802.15.4 Flood";
+    uint8_t ch = 11;
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    if (!m1_esp32_get_init_status())
+    {
+        m1_esp32_init();
+    }
+    if (!get_esp32_main_init_status())
+    {
+        show_message(title, "Initializing...", NULL, 0);
+        esp32_main_init();
+    }
+
+    /* Drain stale button events accumulated during ESP32 init.
+     * Check if BACK was pressed — if so, exit immediately. */
+    while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+    {
+        if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+            if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                m1_esp32_deinit();
+                return;
+            }
+        }
+    }
+
+    if (!get_esp32_main_init_status())
+    {
+        show_message(title, "ESP32 not ready!", "Press Back", 0);
+        goto wait_exit;
+    }
+
+    for (;;)
+    {
+        char cmd[24];
+        snprintf(cmd, sizeof(cmd), "AT+ZIGFLOOD=1,%u\r\n", ch);
+
+        /* Show flooding progress */
+        m1_u8g2_firstpage();
+        u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        draw_title_bar(title);
+        {
+            char info[24];
+            snprintf(info, sizeof(info), "Flooding ch %u", ch);
+            u8g2_DrawStr(&m1_u8g2, 2, 26, info);
+        }
+        u8g2_DrawStr(&m1_u8g2, 2, 38, "Back to stop");
+        m1_u8g2_nextpage();
+
+        /* Start/switch flood channel */
+        resp_buf[0] = '\0';
+        spi_AT_send_recv(cmd, resp_buf, sizeof(resp_buf), 5);
+
+        /* Check first channel response for errors */
+        if (ch == 11 && (strstr(resp_buf, "ERROR") || strstr(resp_buf, "TIMEOUT")
+                      || strstr(resp_buf, "SEND_ERR")))
+        {
+            char err_msg[44];
+            strncpy(err_msg, resp_buf, 40);
+            err_msg[40] = '\0';
+            for (int i = 0; err_msg[i]; i++)
+                if (err_msg[i] == '\r' || err_msg[i] == '\n') err_msg[i] = ' ';
+            show_message(title, "ZIGFLOOD error:", err_msg, 0);
+            goto wait_exit;
+        }
+
+        /* Transmit on this channel for the dwell window, checking for BACK. */
+        uint32_t dwell_start = HAL_GetTick();
+        while ((HAL_GetTick() - dwell_start) < SCAN_DWELL_TIME_MS)
+        {
+            vTaskDelay(pdMS_TO_TICKS(SCAN_POLL_INTERVAL_MS));
+
+            if (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+            {
+                if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+                {
+                    xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+                    if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
+                     || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK
+                     || this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+                     || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+                    {
+                        spi_AT_send_recv("AT+ZIGFLOOD=0\r\n", resp_buf, sizeof(resp_buf), 5);
+                        xQueueReset(main_q_hdl);
+                        m1_esp32_deinit();
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (++ch > 26) ch = 11;
+    }
+
+wait_exit:
+    while (1)
+    {
+        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &this_button_status, 0);
+            if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK
+             || this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK
+             || this_button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK
+             || this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+                break;
+        }
+    }
+    /* Stop flood just in case */
+    spi_AT_send_recv("AT+ZIGFLOOD=0\r\n", resp_buf, sizeof(resp_buf), 5);
+    xQueueReset(main_q_hdl);
+    m1_esp32_deinit();
 }
