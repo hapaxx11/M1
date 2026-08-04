@@ -226,15 +226,22 @@ static uint16_t wifi_do_scan(void)
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
 		wifi_ap_list_free();
 
-		static m1_esp32_rpc_scan_entry_t rpc_entries[WIFI_AP_MAX];
+		m1_esp32_rpc_scan_entry_t *rpc_entries =
+		    (m1_esp32_rpc_scan_entry_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_scan_entry_t));
+		if (!rpc_entries)
+			return 0u;
 		uint8_t rpc_count = 0u;
 		if (m1_esp32_rpc_wifi_scan(rpc_entries, WIFI_AP_MAX, &rpc_count) != M1_ESP32_RPC_OK
-		    || rpc_count == 0u)
+		    || rpc_count == 0u) {
+			free(rpc_entries);
 			return 0u;
+		}
 
 		ap_list = (wifi_ap_t *)malloc(rpc_count * sizeof(wifi_ap_t));
-		if (!ap_list)
+		if (!ap_list) {
+			free(rpc_entries);
 			return 0u;
+		}
 		memset(ap_list, 0, rpc_count * sizeof(wifi_ap_t));
 
 		for (uint8_t i = 0u; i < rpc_count; i++) {
@@ -249,6 +256,7 @@ static uint16_t wifi_do_scan(void)
 			memcpy(ap_list[i].ssid, (const uint8_t *)(e + 1), slen);
 			ap_list[i].ssid[slen] = '\0';
 		}
+		free(rpc_entries);
 		ap_count = rpc_count;
 		wifi_ap_list_sort_rssi(ap_list, ap_count);
 		return ap_count;
@@ -3281,19 +3289,11 @@ void wifi_attack_beacon(void)
 
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
-		/* brain CD3 M1_RPC path: build typed SSID array from the file pointers. */
-		static char rpc_beacon_ssids[BEACON_LIST_MAX_SSIDS][33];
+		/* brain CD3 M1_RPC path: beacon_file_ssids already holds the SSID data
+		 * that beacon_file_ptrs points into, so pass it directly. */
 		uint8_t rpc_count = list_count < BEACON_LIST_MAX_SSIDS
 		                    ? list_count : BEACON_LIST_MAX_SSIDS;
-		for (uint8_t i = 0u; i < rpc_count; i++) {
-			if (beacon_file_ptrs[i]) {
-				strncpy(rpc_beacon_ssids[i], beacon_file_ptrs[i], 32u);
-				rpc_beacon_ssids[i][32] = '\0';
-			} else {
-				rpc_beacon_ssids[i][0] = '\0';
-			}
-		}
-		if (m1_esp32_rpc_beacon_start((const char (*)[33])rpc_beacon_ssids,
+		if (m1_esp32_rpc_beacon_start((const char (*)[33])beacon_file_ssids,
 		                              rpc_count) != M1_ESP32_RPC_OK)
 		{
 			beacon_message("Beacon Spam", "Start failed!", NULL);
