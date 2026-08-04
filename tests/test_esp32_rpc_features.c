@@ -509,6 +509,22 @@ void test_zb_sniff_get_null_rejected(void)
     TEST_ASSERT_EQUAL_UINT8(0u, count);
 }
 
+void test_zb_sniff_get_zero_devices(void)
+{
+    const uint8_t body[] = { 0u };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_ZB_SNIFF_GET, body, sizeof(body));
+
+    m1_esp32_rpc_zb_device_t out[2];
+    memset(out, 0xA5, sizeof(out));
+    uint8_t count = 9u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_zb_sniff_get(out, 2, &count));
+    TEST_ASSERT_EQUAL_UINT8(0u, count);
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_ZB_SNIFF_GET, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
+}
+
 /* ================================================================== */
 /* Runner                                                             */
 /* ================================================================== */
@@ -551,6 +567,7 @@ int main(void)
     RUN_TEST(test_zb_sniff_get_decodes_devices);
     RUN_TEST(test_zb_sniff_get_caps_to_max);
     RUN_TEST(test_zb_sniff_get_null_rejected);
+    RUN_TEST(test_zb_sniff_get_zero_devices);
 
     return UNITY_END();
 }

@@ -469,7 +469,15 @@ static void ieee802154_scan(char filter_proto)
             /* Poll for discovered devices */
             if (xport == ESP32_TRANSPORT_RPC)
             {
+                m1_esp32_rpc_zb_device_t rpc_devices[8];
+                uint8_t rpc_n = 0u;
+                if (m1_esp32_rpc_zb_sniff_get(rpc_devices,
+                                              (uint8_t)(sizeof(rpc_devices) / sizeof(rpc_devices[0])),
+                                              &rpc_n) == M1_ESP32_RPC_OK && rpc_n > 0u)
+                {
                     total_poll_bytes += 1 + (int)rpc_n * (int)sizeof(m1_esp32_rpc_zb_device_t);
+                    for (uint8_t i = 0; i < rpc_n; i++)
+                        ieee802154_add_rpc_device(&rpc_devices[i], filter_proto);
                 }
             }
             else
