@@ -469,14 +469,7 @@ static void ieee802154_scan(char filter_proto)
             /* Poll for discovered devices */
             if (xport == ESP32_TRANSPORT_RPC)
             {
-                /* Brain CD3: pull binary device records via ZB_SNIFF_GET. */
-                m1_esp32_rpc_zb_device_t rpc_devs[8];
-                uint8_t rpc_n = 0;
-                if (m1_esp32_rpc_zb_sniff_get(rpc_devs, 8, &rpc_n) == M1_ESP32_RPC_OK)
-                {
-                    total_poll_bytes += rpc_n;
-                    for (uint8_t k = 0; k < rpc_n; k++)
-                        ieee802154_add_rpc_device(&rpc_devs[k], filter_proto);
+                    total_poll_bytes += 1 + (int)rpc_n * (int)sizeof(m1_esp32_rpc_zb_device_t);
                 }
             }
             else
