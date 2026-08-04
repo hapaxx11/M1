@@ -28,6 +28,9 @@
 #include "m1_lcd.h"
 #include "m1_button_bar.h"
 #include "m1_scene.h"
+#include "esp32_feature_map.h"
+#include "m1_esp32_rpc.h"
+#include "m1_esp32_rpc_features.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -330,6 +333,56 @@ static uint16_t ble_do_scan(void)
     int ret;
 
     ble_list_free();
+
+    /* brain CD3 M1_RPC path */
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        if (m1_esp32_rpc_ble_scan_start(5u) != M1_ESP32_RPC_OK)
+            return 0;
+
+        /* Call BLE_SCAN_RESULTS directly to parse variable-length name bytes. */
+        uint8_t raw[M1_ESP32_RPC_PAYLOAD_MAX]; uint16_t rlen;
+        if (m1_esp32_rpc_call(M1_ESP32_RPC_BLE_SCAN_RESULTS, NULL, 0u,
+                              raw, sizeof(raw), &rlen, 10u) != M1_ESP32_RPC_OK
+            || rlen < 2u)
+            return 0;
+
+        uint16_t total = (uint16_t)raw[0] | ((uint16_t)raw[1] << 8u);
+        if (total > BLE_DEV_MAX) total = BLE_DEV_MAX;
+        if (total == 0u) return 0;
+
+        ble_list = (ble_dev_t *)malloc(total * sizeof(ble_dev_t));
+        if (!ble_list)
+            return 0;
+        memset(ble_list, 0, total * sizeof(ble_dev_t));
+
+        uint16_t off = 2u;
+        const uint16_t PREFIX = 9u; /* addr[6] + type[1] + rssi[1] + name_len[1] */
+        for (uint16_t i = 0u; i < total; i++)
+        {
+            if ((uint16_t)(off + PREFIX) > rlen)
+                break;
+            memcpy(ble_list[i].addr, &raw[off], 6u);
+            ble_list[i].addr_type = raw[off + 6u];
+            ble_list[i].rssi      = (int8_t)raw[off + 7u];
+            uint8_t orig_nl = raw[off + 8u];
+            off = (uint16_t)(off + PREFIX);
+            uint8_t nl = orig_nl;
+            if (nl > 29u) nl = 29u;
+            if ((uint16_t)(off + orig_nl) > rlen)
+                nl = (uint8_t)(rlen > off ? rlen - off : 0u);
+            if (nl > 0u)
+                memcpy(ble_list[i].name, &raw[off], nl);
+            ble_list[i].name[nl] = '\0';
+            off = (uint16_t)(off + orig_nl);
+            snprintf(ble_list[i].addr_str, sizeof(ble_list[i].addr_str),
+                     "%02X:%02X:%02X:%02X:%02X:%02X",
+                     ble_list[i].addr[0], ble_list[i].addr[1], ble_list[i].addr[2],
+                     ble_list[i].addr[3], ble_list[i].addr[4], ble_list[i].addr[5]);
+            ble_count++;
+        }
+        return ble_count;
+    }
 
     /* BLE_SCAN_START blocks on ESP32 for ~5s (NimBLE scan duration) */
     ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
@@ -1741,6 +1794,60 @@ static void ble_raw_adv_send(const uint8_t *data, uint8_t len)
     m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS);
 }
 
+/*============================================================================*/
+/**
+  * @brief  Run an RPC BLE spam mode until user presses BACK.
+  * @param  title  Screen title string.
+  * @param  mode   BLE_SPAM_START mode byte (0x01=Apple 0x02=Samsung
+  *                0x03=Windows 0xFF=All).
+  */
+/*============================================================================*/
+static void ble_spam_rpc_run(const char *title, uint8_t mode)
+{
+    S_M1_Buttons_Status btn;
+    S_M1_Main_Q_t q_item;
+    BaseType_t ret;
+    char ln[26];
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t elapsed_prev = UINT32_MAX;
+
+    if (m1_esp32_rpc_ble_spam_start(mode) != M1_ESP32_RPC_OK)
+    {
+        m1_message_box(&m1_u8g2, title, "Start failed", NULL, " OK ");
+        return;
+    }
+
+    while (1)
+    {
+        uint32_t elapsed = (HAL_GetTick() - start_tick) / 1000u;
+        if (elapsed != elapsed_prev)
+        {
+            elapsed_prev = elapsed;
+            m1_u8g2_firstpage();
+            u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+            u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+            u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+            u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+            snprintf(ln, sizeof(ln), "Time: %lus", elapsed);
+            u8g2_DrawStr(&m1_u8g2, 2, 24, ln);
+            m1_button_bar_draw(NULL, NULL, NULL, "Stop", NULL, NULL);
+            m1_u8g2_nextpage();
+        }
+
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(200));
+        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &btn, 0);
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                xQueueReset(main_q_hdl);
+                break;
+            }
+        }
+    }
+    (void)m1_esp32_rpc_ble_spam_stop();
+}
+
 static void ble_spam_run_loop(const char *title,
     const uint8_t payloads[][31], const uint8_t *lengths, uint8_t count)
 {
@@ -1818,6 +1925,11 @@ void ble_spam_sour_apple(void)
         ble_spam_at_delegate("SOUR APPLE", "Apple", BLE_SPAM_AT_APPLE);
         return;
     }
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        ble_spam_rpc_run("SOUR APPLE", 0x01u);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("SOUR APPLE",
         sour_apple_payloads, sour_apple_lens, 4);
@@ -1845,6 +1957,11 @@ void ble_spam_swiftpair(void)
     if (ble_use_at_path())
     {
         ble_spam_at_delegate("SWIFTPAIR", "Microsoft", BLE_SPAM_AT_MICROSOFT);
+        return;
+    }
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        ble_spam_rpc_run("SWIFTPAIR", 0x03u);
         return;
     }
     ble_ensure_esp32_ready();
@@ -1882,6 +1999,11 @@ void ble_spam_samsung(void)
         ble_spam_at_delegate("SAMSUNG BLE", "All", BLE_SPAM_AT_ALL);
         return;
     }
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        ble_spam_rpc_run("SAMSUNG BLE", 0x02u);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("SAMSUNG BLE",
         samsung_payloads, samsung_lens, 4);
@@ -1915,6 +2037,12 @@ void ble_spam_google_fastpair(void)
         ble_spam_at_delegate("GOOGLE FP", "Google", BLE_SPAM_AT_GOOGLE);
         return;
     }
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        /* brain CD3 uses 0xFF=All; there is no Google-specific mode byte */
+        ble_spam_rpc_run("GOOGLE FP", 0xFFu);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("GOOGLE FP",
         google_fastpair_payloads, google_fastpair_lens, 6);
@@ -1944,6 +2072,11 @@ void ble_spam_flipper(void)
         ble_spam_at_delegate("FLIPPER BLE", "All", BLE_SPAM_AT_ALL);
         return;
     }
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        ble_spam_rpc_run("FLIPPER BLE", 0xFFu);
+        return;
+    }
     ble_ensure_esp32_ready();
     ble_spam_run_loop("FLIPPER BLE",
         flipper_payloads, flipper_lens, 4);
@@ -1959,6 +2092,12 @@ void ble_spam_all(void)
     if (ble_use_at_path())
     {
         ble_spam_at_delegate("BLE SPAM ALL", "All", BLE_SPAM_AT_ALL);
+        return;
+    }
+
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        ble_spam_rpc_run("BLE SPAM ALL", 0xFFu);
         return;
     }
 

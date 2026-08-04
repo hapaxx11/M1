@@ -192,7 +192,6 @@ void test_trigger_variants_route_expected_opcodes(void)
         { m1_esp32_rpc_captive_stop,    M1_ESP32_RPC_OFF_CAPTIVE_STOP},
         { m1_esp32_rpc_handshake_stop,  M1_ESP32_RPC_OFF_HS_STOP     },
         { m1_esp32_rpc_ble_init,        M1_ESP32_RPC_BLE_INIT        },
-        { m1_esp32_rpc_ble_scan_start,  M1_ESP32_RPC_BLE_SCAN_START  },
         { m1_esp32_rpc_ble_adv_stop,    M1_ESP32_RPC_BLE_ADV_STOP    },
         { m1_esp32_rpc_ble_spam_stop,   M1_ESP32_RPC_BLE_SPAM_STOP   },
         { m1_esp32_rpc_ble_hid_deinit,  M1_ESP32_RPC_BLE_HID_DEINIT  },
@@ -226,11 +225,21 @@ void test_trigger_transport_failure(void)
 /* Scalar-payload commands                                            */
 /* ================================================================== */
 
+void test_ble_scan_start_encodes_dur_s(void)
+{
+    /* Wire format: [dur_lo:1][dur_hi:1] u16 LE */
+    canned_ok(M1_ESP32_RPC_BLE_SCAN_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_scan_start(300u));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_BLE_SCAN_START, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(2u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(0x2Cu, tx_payload()[0]);   /* 300 = 0x012C lo */
+    TEST_ASSERT_EQUAL_UINT8(0x01u, tx_payload()[1]);   /* 300 = 0x012C hi */
+}
+
 void test_channel_commands_encode_single_byte(void)
 {
     struct { m1_esp32_rpc_status_t (*fn)(uint8_t); uint16_t op; } cases[] = {
         { m1_esp32_rpc_monitor_start,   M1_ESP32_RPC_OFF_MONITOR_START },
-        { m1_esp32_rpc_handshake_start, M1_ESP32_RPC_OFF_HS_START      },
         { m1_esp32_rpc_zb_sniff_start,  M1_ESP32_RPC_ZB_SNIFF_START    },
         { m1_esp32_rpc_zb_flood_start,  M1_ESP32_RPC_ZB_FLOOD_START    },
     };
@@ -286,8 +295,30 @@ void test_deauth_start_null_rejected(void)
 }
 
 /* ================================================================== */
-/* BLE HID                                                            */
+/* Handshake capture (hs_start)                                       */
 /* ================================================================== */
+
+void test_hs_start_encodes_9_byte_payload(void)
+{
+    /* Wire format: [bssid:6][channel:1][deauth_count:2 LE] */
+    static const uint8_t bssid[6] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF };
+    canned_ok(M1_ESP32_RPC_OFF_HS_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_hs_start(bssid, 6u, 5u));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_HS_START, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(9u, tx_plen());
+    TEST_ASSERT_EQUAL_MEMORY(bssid, tx_payload(), 6u);
+    TEST_ASSERT_EQUAL_UINT8(6u, tx_payload()[6]);           /* channel */
+    TEST_ASSERT_EQUAL_UINT8(5u, tx_payload()[7]);           /* deauth_count lo */
+    TEST_ASSERT_EQUAL_UINT8(0u, tx_payload()[8]);           /* deauth_count hi */
+}
+
+void test_hs_start_null_bssid_rejected(void)
+{
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID, m1_esp32_rpc_hs_start(NULL, 6u, 3u));
+}
+
+
 
 void test_ble_hid_key_encodes_modifier_and_keys(void)
 {
@@ -496,11 +527,15 @@ int main(void)
     RUN_TEST(test_trigger_transport_failure);
 
     RUN_TEST(test_channel_commands_encode_single_byte);
+    RUN_TEST(test_ble_scan_start_encodes_dur_s);
     RUN_TEST(test_set_mac_encodes_six_bytes);
     RUN_TEST(test_set_mac_null_rejected);
 
     RUN_TEST(test_deauth_start_serialises_struct);
     RUN_TEST(test_deauth_start_null_rejected);
+
+    RUN_TEST(test_hs_start_encodes_9_byte_payload);
+    RUN_TEST(test_hs_start_null_bssid_rejected);
 
     RUN_TEST(test_ble_hid_key_encodes_modifier_and_keys);
     RUN_TEST(test_ble_hid_key_no_keys_ok);

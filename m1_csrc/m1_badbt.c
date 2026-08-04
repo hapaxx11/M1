@@ -27,6 +27,7 @@
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
 #include "esp_app_main.h"
+#include "m1_esp32_rpc_features.h"
 #include "ctrl_api.h"
 #include "m1_log_debug.h"
 #include <string.h>
@@ -328,7 +329,10 @@ static void badbt_spi_hid_send_kb(uint8_t modifier, uint8_t keycode)
 /*============================================================================*/
 static void badbt_send_key(uint8_t modifier, uint8_t keycode)
 {
-    if (s_use_spi_hid)
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
+        uint8_t keys[1] = { keycode };
+        (void)m1_esp32_rpc_ble_hid_key(modifier, keys, keycode ? 1u : 0u);
+    } else if (s_use_spi_hid)
         badbt_spi_hid_send_kb(modifier, keycode);
     else
         ble_hid_send_kb(&badbt_req, modifier, keycode);
@@ -346,7 +350,9 @@ static void badbt_send_key(uint8_t modifier, uint8_t keycode)
 /*============================================================================*/
 static void badbt_release_all(void)
 {
-    if (s_use_spi_hid)
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+        (void)m1_esp32_rpc_ble_hid_key(0u, NULL, 0u);
+    else if (s_use_spi_hid)
         badbt_spi_hid_send_kb(0, 0);
     else
         ble_hid_send_kb(&badbt_req, 0, 0);
@@ -838,7 +844,12 @@ static bool badbt_wait_for_connection(void)
     {
         /* Check for connection (1-second polls) */
         bool connected_now;
-        if (s_use_spi_hid)
+        if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+        {
+            osDelay(1000);
+            connected_now = m1_esp32_rpc_ble_hid_is_connected();
+        }
+        else if (s_use_spi_hid)
         {
             osDelay(1000);
             connected_now = badbt_spi_hid_is_connected();
@@ -1092,7 +1103,17 @@ void badbt_run(void)
      * (bitmap=0) silently routing AT firmware into the SPI HID path. */
     s_use_spi_hid = esp32_firmware_is_sin360(m1_esp32_caps_get_bitmap());
 
-    if (s_use_spi_hid)
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+    {
+        /* brain CD3 M1_RPC path: BLE_HID_INIT then wait for advertising. */
+        if (m1_esp32_rpc_ble_hid_init(m1_badbt_name) != M1_ESP32_RPC_OK)
+        {
+            m1_message_box(&m1_u8g2, "Bad-BT", "BLE HID init", "RPC failed", " OK ");
+            m1_esp32_deinit();
+            return;
+        }
+    }
+    else if (s_use_spi_hid)
     {
         /* SiN360 binary-SPI path: CMD_BLE_HID_START */
         int init_ret = badbt_spi_hid_init(m1_badbt_name);
@@ -1125,7 +1146,9 @@ void badbt_run(void)
 
     if (!badbt_wait_for_connection())
     {
-        if (s_use_spi_hid)
+        if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+            (void)m1_esp32_rpc_ble_hid_deinit();
+        else if (s_use_spi_hid)
             badbt_spi_hid_stop();
         else
             ble_hid_deinit(&badbt_req);
@@ -1143,7 +1166,9 @@ void badbt_run(void)
     /* Check SD card */
     if (m1_sdcard_get_status() != SD_access_OK)
     {
-        if (s_use_spi_hid)
+        if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+            (void)m1_esp32_rpc_ble_hid_deinit();
+        else if (s_use_spi_hid)
             badbt_spi_hid_stop();
         else
             ble_hid_deinit(&badbt_req);
@@ -1242,7 +1267,9 @@ void badbt_run(void)
     }
 
     /* ---- Phase 4: Disconnect & cleanup ---- */
-    if (s_use_spi_hid)
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+        (void)m1_esp32_rpc_ble_hid_deinit();
+    else if (s_use_spi_hid)
         badbt_spi_hid_stop();
     else
         ble_hid_deinit(&badbt_req);

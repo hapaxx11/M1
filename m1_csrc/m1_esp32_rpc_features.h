@@ -84,11 +84,32 @@ bool esp32_feature_rpc_opcode(esp32_feature_id_t fid, m1_esp32_rpc_id_t *out_op)
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_scan_entry_t *out,
                                              uint8_t max, uint8_t *out_count);
 
+/**
+ * WIFI_CONNECT: join an AP with @p ssid and @p password.
+ *
+ * Wire format: [ssid_len:1][ssid][pwd_len:1][pwd].
+ * On success the RESP carries [status:1][ipv4:4 LE].
+ * @p out_ip (optional) receives the assigned IPv4 address in host byte order.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_wifi_connect(const char *ssid,
+                                                const char *password,
+                                                uint32_t *out_ip);
+
 /** WIFI_DISCONNECT: tear down the current station association. */
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_disconnect(void);
 
 /** WIFI_SET_MAC-equivalent: override the station MAC (6 bytes). */
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_set_mac(const uint8_t mac[6]);
+
+/**
+ * SOFTAP_START: bring up a WiFi hotspot on @p channel broadcasting @p ssid
+ * (protected by @p password, may be empty for open AP).
+ *
+ * Wire format: [channel:1][ssid\0][pass\0].
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_softap_start(const char *ssid,
+                                                const char *password,
+                                                uint8_t channel);
 
 /** SOFTAP_STOP: bring the SoftAP hotspot down. */
 m1_esp32_rpc_status_t m1_esp32_rpc_softap_stop(void);
@@ -97,7 +118,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_softap_stop(void);
  * Offensive WiFi
  * =========================================================================*/
 
-/** OFF_MONITOR_START on @p channel (1-14). */
+/** OFF_MONITOR_START on @p channel (1-14; 0 = channel-hop 1-13). */
 m1_esp32_rpc_status_t m1_esp32_rpc_monitor_start(uint8_t channel);
 /** OFF_MONITOR_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_monitor_stop(void);
@@ -107,17 +128,78 @@ m1_esp32_rpc_status_t m1_esp32_rpc_deauth_start(const m1_esp32_rpc_deauth_req_t 
 /** OFF_DEAUTH_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_deauth_stop(void);
 
+/**
+ * OFF_BEACON_START: broadcast beacon frames for each SSID in @p ssids.
+ *
+ * Wire format: [count:1] then per SSID [len:1][ssid].
+ * @p count must be 1..32; @p ssids must not be NULL.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_beacon_start(const char (*ssids)[33],
+                                                uint8_t count);
 /** OFF_BEACON_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_beacon_stop(void);
+
+/**
+ * OFF_PROBE_START: flood probe-request frames on @p channel.
+ *
+ * Wire format: [channel:1][count:1] then per SSID [len:1][ssid].
+ * @p count 0 = wildcard (no SSID list needed, @p ssids may be NULL).
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_probe_start(uint8_t channel,
+                                               const char (*ssids)[33],
+                                               uint8_t count);
 /** OFF_PROBE_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_probe_stop(void);
+
+/**
+ * OFF_KARMA_START: auto-respond to every probe request on @p channel.
+ *
+ * Wire format: [channel:1].
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_karma_start(uint8_t channel);
 /** OFF_KARMA_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_karma_stop(void);
+
+/**
+ * OFF_CAPTIVE_START: launch a rogue-AP captive portal on @p channel.
+ *
+ * Wire format: [channel:1][ssid_len:1][ssid][title...].
+ * @p title is optional; pass NULL or "" to use the firmware default.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_captive_start(uint8_t channel,
+                                                 const char *ssid,
+                                                 const char *title);
 /** OFF_CAPTIVE_STOP (evil portal). */
 m1_esp32_rpc_status_t m1_esp32_rpc_captive_stop(void);
 
-/** OFF_HS_START (handshake/PMKID capture) on @p channel. */
-m1_esp32_rpc_status_t m1_esp32_rpc_handshake_start(uint8_t channel);
+/**
+ * OFF_STA_SCAN_START: scan for associated stations on a target AP.
+ *
+ * Wire format: m1_esp32_rpc_sta_scan_req_t ([bssid:6][channel:1][dur_s:1]).
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_sta_scan_start(const uint8_t bssid[6],
+                                                  uint8_t channel,
+                                                  uint8_t dur_s);
+
+/**
+ * OFF_STA_SCAN_RESULTS: retrieve discovered station list.
+ *
+ * Fills up to @p max entries and sets @p *out_count.
+ * RESP wire format: [count:2 LE] then per sta [mac:6][rssi:i8].
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_sta_scan_results(m1_esp32_rpc_sta_entry_t *out,
+                                                    uint8_t max,
+                                                    uint8_t *out_count);
+
+/**
+ * OFF_HS_START: start EAPOL handshake capture on @p channel.
+ *
+ * Wire format: m1_esp32_rpc_hs_start_req_t ([bssid:6][channel:1][deauth_count:2 LE]).
+ * @p deauth_count injected deauth frames to force client reconnection (0 = passive).
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_hs_start(const uint8_t bssid[6],
+                                            uint8_t channel,
+                                            uint16_t deauth_count);
 /** OFF_HS_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_handshake_stop(void);
 
@@ -127,10 +209,40 @@ m1_esp32_rpc_status_t m1_esp32_rpc_handshake_stop(void);
 
 /** BLE_INIT: bring the controller up. */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_init(void);
-/** BLE_SCAN_START: begin passive scanning. */
-m1_esp32_rpc_status_t m1_esp32_rpc_ble_scan_start(void);
+
+/**
+ * BLE_SCAN_START: begin passive scanning for @p dur_s seconds.
+ *
+ * Wire format: [dur_lo:1][dur_hi:1] (u16 LE seconds; 0 = firmware default 3 s).
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_scan_start(uint16_t dur_s);
+
+/**
+ * BLE_SCAN_RESULTS: retrieve discovered BLE device list.
+ *
+ * Fills up to @p max entries and sets @p *out_count.
+ * RESP wire format: [count:2 LE] then per dev [addr:6][type:1][rssi:i8][name_len:1][name].
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_scan_results(m1_esp32_rpc_ble_dev_t *out,
+                                                    uint8_t max,
+                                                    uint8_t *out_count);
+
+/**
+ * BLE_ADV_START: start generic BLE advertising as @p name.
+ *
+ * Wire format: raw device name bytes (no length prefix).
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_adv_start(const char *name);
 /** BLE_ADV_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_adv_stop(void);
+
+/**
+ * BLE_SPAM_START: start proximity-pair popup ad-spam.
+ *
+ * Wire format: [mode:1].  Mode values (mirrors BLE_SPAM_MODE_* on firmware side):
+ *   0x01 = Apple  0x02 = Samsung  0x03 = Windows  0xFF = all (round-robin).
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_spam_start(uint8_t mode);
 /** BLE_SPAM_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_spam_stop(void);
 
@@ -142,6 +254,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_hid_key(uint8_t modifier,
                                                uint8_t key_count);
 /** BLE_HID_DEINIT. */
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_hid_deinit(void);
+/** BLE_HID_STATUS: returns true if a host is connected (bit1 of status byte). */
+bool m1_esp32_rpc_ble_hid_is_connected(void);
 
 /* =========================================================================
  * IEEE 802.15.4 (Zigbee / Thread)

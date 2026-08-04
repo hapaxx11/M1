@@ -26,12 +26,11 @@
 #include "espnow_peer_session.h"
 #include "ff.h"
 
-/* Forward declarations — implemented in m1_esp32_hal.c and esp_app_main.c.
+/* esp_app_main.h declares get_esp32_main_init_status() / esp32_main_init().
  * The CD3 M1_RPC transport rides the same half-duplex SPI-HD command protocol
  * as the AT firmware, driven by the AT RTOS task, so that task must be running
  * before any ESP-NOW frame can be exchanged. */
-extern bool    get_esp32_main_init_status(void);
-extern void    esp32_main_init(void);
+#include "esp_app_main.h"
 
 /*==========================================================================*/
 /* SPI transaction buffer size (64 bytes for SPI-HD half-duplex)             */

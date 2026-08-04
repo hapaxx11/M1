@@ -261,6 +261,34 @@ typedef struct __attribute__((packed)) {
     uint8_t  weekday; /* 0=Sun .. 6=Sat */
 } m1_esp32_rpc_time_t;
 
+/* OFF_HS_START request: start EAPOL/handshake capture + optional deauth burst. */
+typedef struct __attribute__((packed)) {
+    uint8_t  bssid[6];       /* target AP BSSID */
+    uint8_t  channel;        /* channel to listen on */
+    uint16_t deauth_count;   /* deauth frames to inject (0 = passive) */
+} m1_esp32_rpc_hs_start_req_t;
+
+/* OFF_STA_SCAN_START request: find associated stations on a target AP. */
+typedef struct __attribute__((packed)) {
+    uint8_t bssid[6];   /* target AP BSSID */
+    uint8_t channel;    /* channel the AP operates on */
+    uint8_t dur_s;      /* scan duration in seconds (0 = firmware default) */
+} m1_esp32_rpc_sta_scan_req_t;
+
+/* OFF_STA_SCAN_RESULTS response entry (per station). */
+typedef struct __attribute__((packed)) {
+    uint8_t mac[6];
+    int8_t  rssi;
+} m1_esp32_rpc_sta_entry_t;
+
+/* BLE_SCAN_RESULTS response entry (fixed prefix; name_len name bytes follow). */
+typedef struct __attribute__((packed)) {
+    uint8_t addr[6];
+    uint8_t addr_type;   /* 0=public 1=random */
+    int8_t  rssi;
+    uint8_t name_len;
+} m1_esp32_rpc_ble_dev_t;
+
 /* =========================================================================
  * Response decoder (pure logic — host-testable, no HAL / RTOS deps)
  * =========================================================================*/
