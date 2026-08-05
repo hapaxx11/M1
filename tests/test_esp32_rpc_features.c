@@ -399,7 +399,7 @@ void test_wifi_scan_decodes_entries(void)
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
                               M1_ESP32_RPC_WIFI_SCAN, body, blen);
 
-    m1_esp32_rpc_scan_entry_t out[8];
+    m1_esp32_rpc_wifi_scan_result_t out[8];
     uint8_t count = 0;
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_wifi_scan(out, 8, &count));
@@ -408,6 +408,8 @@ void test_wifi_scan_decodes_entries(void)
     TEST_ASSERT_EQUAL_INT8(-40, out[0].rssi);
     TEST_ASSERT_EQUAL_UINT8(0x12, out[2].bssid[0]);
     TEST_ASSERT_EQUAL_UINT8(3u, out[2].channel);
+    TEST_ASSERT_EQUAL_STRING("S0", out[0].ssid);
+    TEST_ASSERT_EQUAL_STRING("S2", out[2].ssid);
 }
 
 void test_wifi_scan_caps_to_max(void)
@@ -417,7 +419,7 @@ void test_wifi_scan_caps_to_max(void)
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
                               M1_ESP32_RPC_WIFI_SCAN, body, blen);
 
-    m1_esp32_rpc_scan_entry_t out[2];
+    m1_esp32_rpc_wifi_scan_result_t out[2];
     uint8_t count = 0;
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_wifi_scan(out, 2, &count));
@@ -437,10 +439,35 @@ void test_wifi_scan_propagates_nak(void)
     const uint8_t body[] = { M1_ESP32_RPC_ERR_NOT_INIT };
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_NAK,
                               M1_ESP32_RPC_WIFI_SCAN, body, sizeof(body));
-    m1_esp32_rpc_scan_entry_t out[4];
+    m1_esp32_rpc_wifi_scan_result_t out[4];
     uint8_t count = 5;
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_NOT_INIT,
                       m1_esp32_rpc_wifi_scan(out, 4, &count));
+    TEST_ASSERT_EQUAL_UINT8(0u, count);
+}
+
+void test_wifi_scan_truncated_ssid_entry_stops_before_oob(void)
+{
+    uint8_t body[32];
+    body[0] = 1u;
+    m1_esp32_rpc_scan_entry_t e = {
+        .bssid = { 1u, 2u, 3u, 4u, 5u, 6u },
+        .rssi = -55,
+        .channel = 6u,
+        .authmode = 3u,
+        .ssid_len = 5u,
+    };
+    memcpy(&body[1], &e, sizeof(e));
+    memcpy(&body[1 + sizeof(e)], "ABC", 3u);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body,
+                              (uint16_t)(1u + sizeof(e) + 3u));
+
+    m1_esp32_rpc_wifi_scan_result_t out[2];
+    memset(out, 0xA5, sizeof(out));
+    uint8_t count = 9u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_wifi_scan(out, 2, &count));
     TEST_ASSERT_EQUAL_UINT8(0u, count);
 }
 

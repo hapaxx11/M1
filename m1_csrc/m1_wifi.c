@@ -226,8 +226,8 @@ static uint16_t wifi_do_scan(void)
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
 		wifi_ap_list_free();
 
-		m1_esp32_rpc_scan_entry_t *rpc_entries =
-		    (m1_esp32_rpc_scan_entry_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_scan_entry_t));
+		m1_esp32_rpc_wifi_scan_result_t *rpc_entries =
+		    (m1_esp32_rpc_wifi_scan_result_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_wifi_scan_result_t));
 		if (!rpc_entries)
 			return 0u;
 		uint8_t rpc_count = 0u;
@@ -245,16 +245,13 @@ static uint16_t wifi_do_scan(void)
 		memset(ap_list, 0, rpc_count * sizeof(wifi_ap_t));
 
 		for (uint8_t i = 0u; i < rpc_count; i++) {
-			const m1_esp32_rpc_scan_entry_t *e = &rpc_entries[i];
+			const m1_esp32_rpc_wifi_scan_result_t *e = &rpc_entries[i];
 			ap_list[i].rssi      = e->rssi;
 			ap_list[i].channel   = e->channel;
 			ap_list[i].auth_mode = e->authmode;
 			memcpy(ap_list[i].bssid, e->bssid, 6u);
 			wifi_bssid_fmt(e->bssid, ap_list[i].bssid_str);
-			/* SSID text immediately follows the fixed prefix in the RPC entry. */
-			uint8_t slen = e->ssid_len < 32u ? e->ssid_len : 32u;
-			memcpy(ap_list[i].ssid, (const uint8_t *)(e + 1), slen);
-			ap_list[i].ssid[slen] = '\0';
+			memcpy(ap_list[i].ssid, e->ssid, sizeof(ap_list[i].ssid));
 		}
 		free(rpc_entries);
 		ap_count = rpc_count;

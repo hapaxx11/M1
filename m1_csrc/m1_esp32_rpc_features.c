@@ -93,7 +93,7 @@ static m1_esp32_rpc_status_t rpc_do_u8(uint16_t op, uint8_t v)
 /* WiFi station / AP                                                        */
 /*==========================================================================*/
 
-m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_scan_entry_t *out,
+m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *out,
                                              uint8_t max, uint8_t *out_count)
 {
     if (out_count) *out_count = 0u;
@@ -120,12 +120,19 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_scan_entry_t *out,
     while (got < want && got < max) {
         if ((uint16_t)(off + ENTRY) > rlen)
             break;  /* truncated frame — stop at last whole entry */
-        memcpy(&out[got], &resp[off], ENTRY);
-        off = (uint16_t)(off + ENTRY + out[got].ssid_len);
-        if (off > rlen) {         /* ssid text overran the frame */
-            got++;
+        const m1_esp32_rpc_scan_entry_t *in =
+            (const m1_esp32_rpc_scan_entry_t *)&resp[off];
+        uint16_t next = (uint16_t)(off + ENTRY + in->ssid_len);
+        if (next > rlen)
             break;
-        }
+        memcpy(out[got].bssid, in->bssid, sizeof(out[got].bssid));
+        out[got].rssi = in->rssi;
+        out[got].channel = in->channel;
+        out[got].authmode = in->authmode;
+        uint8_t slen = in->ssid_len < 32u ? in->ssid_len : 32u;
+        memcpy(out[got].ssid, &resp[off + ENTRY], slen);
+        out[got].ssid[slen] = '\0';
+        off = next;
         got++;
     }
 

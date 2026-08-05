@@ -80,8 +80,17 @@ bool esp32_feature_rpc_opcode(esp32_feature_id_t fid, m1_esp32_rpc_id_t *out_op)
  * WiFi station / AP
  * =========================================================================*/
 
-/** WIFI_SCAN: fill up to @p max scan entries; sets @p *out_count. */
-m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_scan_entry_t *out,
+/** One decoded WIFI_SCAN result entry returned to host callers. */
+typedef struct {
+    uint8_t bssid[6];
+    int8_t  rssi;
+    uint8_t channel;
+    uint8_t authmode;
+    char    ssid[33];
+} m1_esp32_rpc_wifi_scan_result_t;
+
+/** WIFI_SCAN: fill up to @p max decoded entries; sets @p *out_count. */
+m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *out,
                                              uint8_t max, uint8_t *out_count);
 
 /**
