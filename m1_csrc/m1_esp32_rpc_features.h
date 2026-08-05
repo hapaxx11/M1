@@ -152,7 +152,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_beacon_stop(void);
  * OFF_PROBE_START: flood probe-request frames on @p channel.
  *
  * Wire format: [channel:1][count:1] then per SSID [len:1][ssid].
- * @p count 0 = wildcard (no SSID list needed, @p ssids may be NULL).
+ * @p count must be 1..32; @p ssids must not be NULL.
  */
 m1_esp32_rpc_status_t m1_esp32_rpc_probe_start(uint8_t channel,
                                                const char (*ssids)[33],
