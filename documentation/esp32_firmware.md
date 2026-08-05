@@ -353,12 +353,13 @@ build keeps the AT text path unchanged. The whole feature layer is transport-
 injectable, so it is exercised on the host in `tests/test_esp32_rpc_features.c`
 without an ESP32.
 
-> **Payloads whose brain-CD3 wire format is not yet settled** (WiFi connect
-> credentials, beacon/probe SSID lists, captive-portal config, BLE advertise
-> blobs) are reachable through `esp32_feature_rpc_opcode()` +
-> `m1_esp32_rpc_call()` directly, but do not yet have a typed wrapper here —
-> those are filled in as the corresponding brain-CD3 opcode payloads are
-> validated against hardware.
+> All features have typed wrappers in `m1_esp32_rpc_features.c/.h`:
+> `m1_esp32_rpc_wifi_connect()`, `m1_esp32_rpc_beacon_start()`,
+> `m1_esp32_rpc_probe_start()`, `m1_esp32_rpc_captive_start()`, and
+> `m1_esp32_rpc_ble_adv_start()` are available and encode the confirmed
+> brain-CD3 wire format.  The raw `esp32_feature_rpc_opcode()` +
+> `m1_esp32_rpc_call()` path remains available for future opcodes not yet
+> covered by a wrapper.
 
 ### CMD_GET_STATUS payload format (protocol version 1)
 
