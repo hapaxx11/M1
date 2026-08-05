@@ -579,9 +579,9 @@ static void wifi_connect_selected_ap(void)
 		uint32_t assigned_ip = 0u;
 		m1_esp32_rpc_status_t st =
 		    m1_esp32_rpc_wifi_connect(ap_list[ap_view_idx].ssid, password, &assigned_ip);
-		memset(password, 0, sizeof(password));
 		if (st != M1_ESP32_RPC_OK)
 		{
+			memset(password, 0, sizeof(password));
 			wifi_show_message("Connect", "Connect failed", "Check password");
 			return;
 		}
@@ -593,6 +593,7 @@ static void wifi_connect_selected_ap(void)
 		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
 		s_wifi_stub_connected = true;
 #endif
+		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
 		return;
 	}
@@ -5045,9 +5046,14 @@ void wifi_attack_karma_portal(void)
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
 		/* brain CD3 M1_RPC path: Karma + captive portal on channel 0 (auto). */
-		if (m1_esp32_rpc_karma_start(0u) != M1_ESP32_RPC_OK ||
-		    m1_esp32_rpc_captive_start(0u, wifi_portal_ssid, "M1 Login") != M1_ESP32_RPC_OK)
+		if (m1_esp32_rpc_karma_start(0u) != M1_ESP32_RPC_OK)
 		{
+			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+		if (m1_esp32_rpc_captive_start(0u, wifi_portal_ssid, "M1 Login") != M1_ESP32_RPC_OK)
+		{
+			(void)m1_esp32_rpc_karma_stop();
 			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
 			return;
 		}

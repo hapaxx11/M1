@@ -267,6 +267,48 @@ void test_set_mac_null_rejected(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID, m1_esp32_rpc_wifi_set_mac(NULL));
 }
 
+void test_beacon_start_caps_payload_and_patches_count(void)
+{
+    char ssids[8][33];
+    for (uint8_t i = 0u; i < 8u; i++) {
+        memset(ssids[i], 'A' + (char)i, 32u);
+        ssids[i][32] = '\0';
+    }
+
+    canned_ok(M1_ESP32_RPC_OFF_BEACON_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_beacon_start((const char (*)[33])ssids, 8u));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_BEACON_START, tx_msg_id());
+    TEST_ASSERT_LESS_OR_EQUAL_UINT16(M1_ESP32_RPC_PAYLOAD_MAX, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(7u, tx_payload()[0]);
+}
+
+void test_probe_start_caps_payload_and_patches_count(void)
+{
+    char ssids[8][33];
+    for (uint8_t i = 0u; i < 8u; i++) {
+        memset(ssids[i], 'a' + (char)i, 32u);
+        ssids[i][32] = '\0';
+    }
+
+    canned_ok(M1_ESP32_RPC_OFF_PROBE_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_probe_start(6u, (const char (*)[33])ssids, 8u));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_PROBE_START, tx_msg_id());
+    TEST_ASSERT_LESS_OR_EQUAL_UINT16(M1_ESP32_RPC_PAYLOAD_MAX, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(6u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT8(7u, tx_payload()[1]);
+}
+
+void test_probe_start_rejects_missing_ssids_or_zero_count(void)
+{
+    char ssids[1][33] = {{0}};
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+                      m1_esp32_rpc_probe_start(1u, NULL, 1u));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+                      m1_esp32_rpc_probe_start(1u, (const char (*)[33])ssids, 0u));
+}
+
 /* ================================================================== */
 /* Deauth struct payload                                              */
 /* ================================================================== */

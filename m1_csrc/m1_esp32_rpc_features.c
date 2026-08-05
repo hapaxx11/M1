@@ -253,9 +253,10 @@ m1_esp32_rpc_status_t m1_esp32_rpc_beacon_start(const char (*ssids)[33],
         return M1_ESP32_RPC_ERR_INVALID;
 
     /* Wire: [count:1] then per SSID [len:1][ssid] */
-    uint8_t payload[1u + 32u * (1u + 32u)];
+    uint8_t payload[M1_ESP32_RPC_PAYLOAD_MAX];
     uint16_t off = 0u;
-    payload[off++] = count;
+    uint8_t encoded = 0u;
+    payload[off++] = 0u;
     for (uint8_t i = 0u; i < count; i++) {
         uint8_t l = (uint8_t)strnlen(ssids[i], 32u);
         if ((uint16_t)(off + 1u + l) > (uint16_t)sizeof(payload))
@@ -263,7 +264,11 @@ m1_esp32_rpc_status_t m1_esp32_rpc_beacon_start(const char (*ssids)[33],
         payload[off++] = l;
         memcpy(&payload[off], ssids[i], l);
         off = (uint16_t)(off + l);
+        encoded++;
     }
+    payload[0] = encoded;
+    if (encoded == 0u)
+        return M1_ESP32_RPC_ERR_INVALID;
     return rpc_do(M1_ESP32_RPC_OFF_BEACON_START, payload, off);
 }
 
@@ -276,19 +281,27 @@ m1_esp32_rpc_status_t m1_esp32_rpc_probe_start(uint8_t channel,
                                                const char (*ssids)[33],
                                                uint8_t count)
 {
+    if (!ssids || count == 0u)
+        return M1_ESP32_RPC_ERR_INVALID;
+
     /* Wire: [channel:1][count:1] then per SSID [len:1][ssid] */
-    uint8_t payload[2u + 16u * (1u + 32u)];
+    uint8_t payload[M1_ESP32_RPC_PAYLOAD_MAX];
     uint16_t off = 0u;
+    uint8_t encoded = 0u;
     payload[off++] = channel;
-    payload[off++] = count;
-    for (uint8_t i = 0u; i < count && ssids; i++) {
+    payload[off++] = 0u;
+    for (uint8_t i = 0u; i < count; i++) {
         uint8_t l = (uint8_t)strnlen(ssids[i], 32u);
         if ((uint16_t)(off + 1u + l) > (uint16_t)sizeof(payload))
             break;
         payload[off++] = l;
         memcpy(&payload[off], ssids[i], l);
         off = (uint16_t)(off + l);
+        encoded++;
     }
+    payload[1] = encoded;
+    if (encoded == 0u)
+        return M1_ESP32_RPC_ERR_INVALID;
     return rpc_do(M1_ESP32_RPC_OFF_PROBE_START, payload, off);
 }
 
