@@ -48,6 +48,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 # Core project settings
 project(${CMAKE_PROJECT_NAME})
 
+# Strip the local build directory path out of assert()/__FILE__ strings and
+# DWARF debug info, so shipped binaries don't leak the developer's absolute
+# build path.
+add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=")
+
 # Resolve toolchain utilities to full paths so post-build steps work
 # regardless of PATH at build time (bare names from toolchain file fail
 # inside nested cmd.exe / ninja subprocesses)

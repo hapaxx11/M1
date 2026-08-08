@@ -65,10 +65,26 @@ if(TARGET sanitizers)
 endif()
 
 # ------------------------------------------------------------------
+# Module under test: m1_logdb_growth (header-only pure-logic buffer-growth
+# decision extracted from m1_log_debug.c's m1_logdb_dyn_vsprintf())
+# ------------------------------------------------------------------
+add_executable(test_logdb_growth
+    test_logdb_growth.c
+)
+target_include_directories(test_logdb_growth PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_logdb_growth PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_logdb_growth PRIVATE sanitizers)
+endif()
+
+# ------------------------------------------------------------------
 # CTest registration
 # ------------------------------------------------------------------
 enable_testing()
 add_test(NAME bit_util COMMAND test_bit_util)
+add_test(NAME logdb_growth COMMAND test_logdb_growth)
 
 # ------------------------------------------------------------------
 # Module under test: m1_esp32_caps (parse payload + capability bits + AT+CMD? parser)
