@@ -44,7 +44,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 /* Fake transport: captures TX, replays a canned frame.               */
 /* ------------------------------------------------------------------ */
 
-static uint8_t g_canned[256];
+static uint8_t g_canned[2048];
 static int     g_canned_len;
 static uint8_t g_ret;
 static uint8_t g_last_tx[256];
@@ -526,6 +526,33 @@ void test_wifi_scan_truncated_ssid_entry_stops_before_oob(void)
     TEST_ASSERT_EQUAL_UINT8(0u, count);
 }
 
+/* Regression guard: the brain firmware (handle_wifi_scan() in
+ * bedge117/m1-esp32-brain main.c) returns the ENTIRE AP list as one logical
+ * RPC response (up to its own M1_SCAN_RESP_MAX == 1800 payload bytes), not
+ * chunked behind separate *_GET calls. The old M1_ESP32_RPC_PAYLOAD_MAX (246
+ * bytes) reception ceiling silently failed every scan whose encoded payload
+ * exceeded it -- roughly 20 APs at this test's fixed entry size, but far
+ * fewer with typical (longer) real-world SSIDs -- which is why "AP scan
+ * failed. Please try again." reproduced in every non-empty RF environment.
+ * 30 entries encode to 362 payload bytes, comfortably over the old 246-byte
+ * cap but well under M1_ESP32_RPC_RESP_PAYLOAD_MAX. */
+void test_wifi_scan_many_aps_exceeds_old_payload_cap(void)
+{
+    uint8_t body[512];
+    uint16_t blen = build_scan_resp(body, 30);
+    TEST_ASSERT_GREATER_THAN_UINT16(246u, blen);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body, blen);
+
+    m1_esp32_rpc_wifi_scan_result_t out[32];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_wifi_scan(out, 32, &count));
+    TEST_ASSERT_EQUAL_UINT8(30u, count);
+    TEST_ASSERT_EQUAL_UINT8(0x10, out[0].bssid[0]);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)(0x10 + 29), out[29].bssid[0]);
+}
+
 /* ================================================================== */
 /* Zigbee sniff response decode                                       */
 /* ================================================================== */
@@ -646,6 +673,7 @@ int main(void)
     RUN_TEST(test_wifi_scan_null_out_rejected);
     RUN_TEST(test_wifi_scan_propagates_nak);
     RUN_TEST(test_wifi_scan_truncated_ssid_entry_stops_before_oob);
+    RUN_TEST(test_wifi_scan_many_aps_exceeds_old_payload_cap);
 
     RUN_TEST(test_zb_sniff_get_decodes_devices);
     RUN_TEST(test_zb_sniff_get_caps_to_max);

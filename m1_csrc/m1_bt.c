@@ -340,20 +340,35 @@ static uint16_t ble_do_scan(void)
         if (m1_esp32_rpc_ble_scan_start(5u) != M1_ESP32_RPC_OK)
             return 0;
 
-        /* Call BLE_SCAN_RESULTS directly to parse variable-length name bytes. */
-        uint8_t raw[M1_ESP32_RPC_PAYLOAD_MAX]; uint16_t rlen;
-        if (m1_esp32_rpc_call(M1_ESP32_RPC_BLE_SCAN_RESULTS, NULL, 0u,
-                              raw, sizeof(raw), &rlen, 10u) != M1_ESP32_RPC_OK
-            || rlen < 2u)
+        /* Call BLE_SCAN_RESULTS directly to parse variable-length name bytes.
+         * Heap-allocated at M1_ESP32_RPC_RESP_PAYLOAD_MAX: the brain firmware
+         * returns the whole device list in one response (see
+         * m1_esp32_rpc_ble_scan_results() in m1_esp32_rpc_features.c), so the
+         * small control-command M1_ESP32_RPC_PAYLOAD_MAX silently truncated
+         * multi-device scans. */
+        uint8_t *raw = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
+        uint16_t rlen;
+        if (!raw)
             return 0;
+        if (m1_esp32_rpc_call(M1_ESP32_RPC_BLE_SCAN_RESULTS, NULL, 0u,
+                              raw, M1_ESP32_RPC_RESP_PAYLOAD_MAX, &rlen,
+                              10u) != M1_ESP32_RPC_OK
+            || rlen < 2u)
+        {
+            free(raw);
+            return 0;
+        }
 
         uint16_t total = (uint16_t)raw[0] | ((uint16_t)raw[1] << 8u);
         if (total > BLE_DEV_MAX) total = BLE_DEV_MAX;
-        if (total == 0u) return 0;
+        if (total == 0u) { free(raw); return 0; }
 
         ble_list = (ble_dev_t *)malloc(total * sizeof(ble_dev_t));
         if (!ble_list)
+        {
+            free(raw);
             return 0;
+        }
         memset(ble_list, 0, total * sizeof(ble_dev_t));
 
         uint16_t off = 2u;
@@ -381,6 +396,7 @@ static uint16_t ble_do_scan(void)
                      ble_list[i].addr[3], ble_list[i].addr[4], ble_list[i].addr[5]);
             ble_count++;
         }
+        free(raw);
         return ble_count;
     }
 
