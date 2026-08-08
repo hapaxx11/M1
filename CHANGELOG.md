@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.29] - 2026-08-08
+
+### Added
+
+- **ESP32 CD3 M1_RPC compatibility layer** — added a reusable host-side M1_RPC
+  client (`m1_esp32_rpc.c/.h`) so WiFi / BLE / 802.15.4 features can drive the
+  native "brain" CD3 firmware (bedge117/m1-esp32-brain), which speaks the
+  binary M1_RPC protocol instead of AT text commands. Provides the canonical
+  opcode map, payload structs, a NAK/status-aware `m1_esp32_rpc_call()`, and an
+  `esp32_firmware_transport()` selector that routes each detected firmware to
+  the right encoder. ESP-NOW is refactored onto the shared client as its first
+  consumer. The legacy CD3-AT firmware continues to use the AT path unchanged.
+- **ESP32 brain-CD3 per-feature M1_RPC layer** — WiFi / BLE / 802.15.4 features can
+  now drive the native "brain" CD3 firmware (bedge117/m1-esp32-brain), not just
+  ESP-NOW. Adds `m1_esp32_rpc_features.c/.h` on top of the M1_RPC client: the
+  authoritative feature → opcode map (`esp32_feature_rpc_opcode()`) plus a typed
+  action wrapper per feature action (`m1_esp32_rpc_wifi_scan()`,
+  `m1_esp32_rpc_deauth_start()`, `m1_esp32_rpc_ble_hid_key()`,
+  `m1_esp32_rpc_zb_sniff_get()`, and the `*_start` / `*_stop` triggers) that
+  builds the canonical payload, dispatches over SPI-HD, and decodes the reply.
+  The 802.15.4 Zigbee/Thread sniffer and flood (`m1_802154.c`) now branch on
+  `m1_esp32_active_transport()` and use these calls on brain CD3 while keeping
+  the AT `+ZIGSNIFF` / `+ZIGFLOOD` text path for every other build (incl. legacy
+  CD3-AT). The layer is transport-injectable and fully host-tested
+  (`tests/test_esp32_rpc_features.c`).
 ## [0.9.2.28] - 2026-08-03
 
 ### Changed
