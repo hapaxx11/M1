@@ -166,7 +166,9 @@
  *  2026-07-21 source review these message IDs are NOT dispatched in any
  *  shipped CD3 release (fall through to NAK ERR_UNSUPPORTED) — this is a
  *  protocol placeholder only, not a working feature.  Not available in AT
- *  or SiN360 firmware. */
+ *  or SiN360 firmware.  NOTE: the shipped brain firmware deliberately does
+ *  NOT advertise this bit, so it is NOT used to discriminate CD3 — see
+ *  esp32_firmware_is_cd3() (HANDSHAKE + 802154_TX/BLE_SPAM) instead. */
 #define M1_ESP32_CAP_OTA            (UINT64_C(1) << 20)
 
 /* -------------------------------------------------------------------------
@@ -279,12 +281,15 @@
  *  succeeds but returns an all-zero bitmap.
  *
  *  CD3 uses the M1_RPC binary SPI protocol (magic 0x4D31, "M1") and is
- *  detected by the M1_RPC probe in m1_esp32_caps_init().  Capabilities unique
- *  to CD3 vs SiN360/AT: PMKID, HANDSHAKE, OTA (bits 18-20) — but as of the
- *  2026-07-21 source review, PMKID and OTA are reserved message IDs with no
- *  dispatch in main.c, and HANDSHAKE is dispatched but not yet included in
- *  the firmware's self-reported M1_FW_CAPS.  See the CAP_PMKID/HANDSHAKE/OTA
- *  comments above for details before relying on this macro's bits 18-20.
+ *  detected by the M1_RPC probe in m1_esp32_caps_init().  It is discriminated
+ *  from SiN360/AT by esp32_firmware_is_cd3(): HANDSHAKE (bit 19) combined with
+ *  a canonical CD3-only bit (802154_TX bit 22 or BLE_SPAM bit 21).  NOTE the
+ *  shipped brain firmware does NOT advertise OTA (bit 20), so OTA is not part
+ *  of the discriminator even though this aspirational macro still lists it.
+ *  As of the 2026-07-21 source review, PMKID and OTA are reserved message IDs
+ *  with no dispatch in main.c, and HANDSHAKE is dispatched and now self-reported
+ *  in the firmware's M1_FW_CAPS.  See the CAP_PMKID/HANDSHAKE/OTA comments above
+ *  for details before relying on this macro's bits 18-20.
  *  NETSCAN absent (no ping/ARP scanner component in v1.x).
  *  BT_MANAGE absent (no Bluetooth Classic component). */
 #define M1_ESP32_CAP_PROFILE_CD3 \

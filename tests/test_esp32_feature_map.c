@@ -403,16 +403,43 @@ void test_is_cd3_profile_cd3_returns_true(void)
     TEST_ASSERT_TRUE(esp32_firmware_is_cd3(M1_ESP32_CAP_PROFILE_CD3));
 }
 
-void test_is_cd3_handshake_and_ota_returns_true(void)
+void test_is_cd3_handshake_and_rpc_bit_returns_true(void)
 {
-    /* Minimum CD3 discriminator: both HANDSHAKE and OTA must be set */
+    /* Minimum CD3 discriminator: HANDSHAKE plus a canonical CD3-only bit. */
     TEST_ASSERT_TRUE(
+        esp32_firmware_is_cd3(M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154_TX));
+    TEST_ASSERT_TRUE(
+        esp32_firmware_is_cd3(M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_BLE_SPAM));
+}
+
+void test_is_cd3_real_brain_caps_returns_true(void)
+{
+    /* Mirror the shipped hapaxx11/m1-esp32-brain M1_FW_CAPS: HANDSHAKE is set
+     * but OTA is deliberately omitted.  The old (HANDSHAKE+OTA) rule wrongly
+     * classified this as AT — the regression this fix addresses. */
+    const uint64_t brain =
+        M1_ESP32_CAP_WIFI_SCAN | M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_DEAUTH |
+        M1_ESP32_CAP_PKTMON    | M1_ESP32_CAP_STA_SCAN  | M1_ESP32_CAP_BEACON |
+        M1_ESP32_CAP_PORTAL    | M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154 |
+        M1_ESP32_CAP_BLE_SCAN  | M1_ESP32_CAP_BLE_ADV   | M1_ESP32_CAP_BLE_HID |
+        M1_ESP32_CAP_BLE_SPAM  | M1_ESP32_CAP_802154_TX | M1_ESP32_CAP_PROBE_FLOOD |
+        M1_ESP32_CAP_KARMA     | M1_ESP32_CAP_SOFTAP;
+    TEST_ASSERT_EQUAL_UINT64(0u, brain & M1_ESP32_CAP_OTA);  /* OTA NOT set */
+    TEST_ASSERT_TRUE(esp32_firmware_is_cd3(brain));
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC, esp32_firmware_transport(brain));
+}
+
+void test_is_cd3_handshake_and_ota_only_returns_false(void)
+{
+    /* HANDSHAKE + OTA but no canonical CD3-only bit (802154_TX/BLE_SPAM) is no
+     * longer sufficient — OTA is not part of the discriminator. */
+    TEST_ASSERT_FALSE(
         esp32_firmware_is_cd3(M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_OTA));
 }
 
 void test_is_cd3_handshake_only_returns_false(void)
 {
-    /* HANDSHAKE without OTA is not enough to identify CD3 */
+    /* HANDSHAKE without a CD3-only bit is not enough to identify CD3 */
     TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_HANDSHAKE));
 }
 
@@ -422,15 +449,23 @@ void test_is_cd3_ota_only_returns_false(void)
     TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_OTA));
 }
 
+void test_is_cd3_rpc_bit_only_returns_false(void)
+{
+    /* A canonical CD3-only bit without HANDSHAKE is not enough (SiN360 sets
+     * neither, but guard the rule regardless). */
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_802154_TX));
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_BLE_SPAM));
+}
+
 void test_is_cd3_sin360_profile_returns_false(void)
 {
-    /* SiN360 has neither HANDSHAKE nor OTA */
+    /* SiN360 has neither HANDSHAKE nor the 802154_TX/BLE_SPAM combination */
     TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_PROFILE_SIN360));
 }
 
 void test_is_cd3_all_ones_returns_true(void)
 {
-    /* All bits set includes both HANDSHAKE and OTA → CD3 */
+    /* All bits set includes HANDSHAKE + 802154_TX + BLE_SPAM → CD3 */
     TEST_ASSERT_TRUE(esp32_firmware_is_cd3(UINT64_MAX));
 }
 
@@ -554,9 +589,12 @@ int main(void)
 
     RUN_TEST(test_is_cd3_zero_bitmap_returns_false);
     RUN_TEST(test_is_cd3_profile_cd3_returns_true);
-    RUN_TEST(test_is_cd3_handshake_and_ota_returns_true);
+    RUN_TEST(test_is_cd3_handshake_and_rpc_bit_returns_true);
+    RUN_TEST(test_is_cd3_real_brain_caps_returns_true);
+    RUN_TEST(test_is_cd3_handshake_and_ota_only_returns_false);
     RUN_TEST(test_is_cd3_handshake_only_returns_false);
     RUN_TEST(test_is_cd3_ota_only_returns_false);
+    RUN_TEST(test_is_cd3_rpc_bit_only_returns_false);
     RUN_TEST(test_is_cd3_sin360_profile_returns_false);
     RUN_TEST(test_is_cd3_all_ones_returns_true);
 
