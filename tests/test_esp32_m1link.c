@@ -73,6 +73,7 @@ static void fake_reset(void)
 static void queue_frame(uint8_t msg_type, uint16_t msg_id,
                         const uint8_t *payload, uint16_t plen)
 {
+    TEST_ASSERT_LESS_THAN_INT(MAX_TXNS, g_slave_count);
     uint8_t *b = g_slave[g_slave_count];
     b[0] = (uint8_t)(M1_ESP32_RPC_MAGIC & 0xFFu);
     b[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
@@ -93,6 +94,7 @@ static void queue_frame(uint8_t msg_type, uint16_t msg_id,
 /* Queue an all-zero (invalid / pure padding) slave frame. */
 static void queue_blank(void)
 {
+    TEST_ASSERT_LESS_THAN_INT(MAX_TXNS, g_slave_count);
     memset(g_slave[g_slave_count], 0, MTU);
     g_slave_count++;
 }
@@ -339,6 +341,34 @@ void test_m1link_ignores_wrong_msg_id(void)
     TEST_ASSERT_EQUAL_MEMORY(body, pl, 2);
 }
 
+/* ---- Malformed oversized frame is rejected without OOB access ---------- */
+void test_m1link_rejects_oversized_declared_payload(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_SYS_PING, NULL, 0u);
+
+    queue_blank();
+    uint8_t *bad = g_slave[0];
+    bad[0] = (uint8_t)(M1_ESP32_RPC_MAGIC & 0xFFu);
+    bad[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
+    bad[2] = M1_ESP32_RPC_VERSION;
+    bad[3] = M1_ESP32_RPC_RESP;
+    bad[4] = (uint8_t)(M1_ESP32_RPC_SYS_PING & 0xFFu);
+    bad[5] = (uint8_t)((M1_ESP32_RPC_SYS_PING >> 8u) & 0xFFu);
+    bad[6] = 0xFFu;
+    bad[7] = 0xFFu; /* Declares a payload larger than this buffer. */
+
+    const uint8_t ok[1] = {0x42};
+    queue_frame(M1_ESP32_RPC_RESP, M1_ESP32_RPC_SYS_PING, ok, 1u);
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv(fake_xfer, NULL, s_tx, s_rx, MTU, 4,
+                                           s_req, req_len, s_out,
+                                           (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_EQUAL_UINT8(0u, rc);
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_HDR_SIZE + 1 + M1_ESP32_RPC_CRC_SIZE,
+                          out_len);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -351,5 +381,6 @@ int main(void)
     RUN_TEST(test_m1link_transport_error);
     RUN_TEST(test_m1link_invalid_args);
     RUN_TEST(test_m1link_ignores_wrong_msg_id);
+    RUN_TEST(test_m1link_rejects_oversized_declared_payload);
     return UNITY_END();
 }

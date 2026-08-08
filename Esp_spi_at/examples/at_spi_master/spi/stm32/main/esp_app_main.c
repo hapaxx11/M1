@@ -621,6 +621,7 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 /******************************************************************************/
 #define M1LINK_SPI_TIMEOUT_MS   100u
 #define M1LINK_HS_TIMEOUT_MS    50u
+#define M1LINK_BUSY_RETRY_MS    150u
 
 static void m1link_cs_delay(void)
 {
@@ -646,6 +647,7 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
                            void *ctx)
 {
 	HAL_StatusTypeDef ret;
+	uint32_t start;
 	(void)ctx;
 
 	/* Honour the brain's HANDSHAKE: wait until it signals it is armed before
@@ -654,16 +656,23 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 	 * low usually means the slave firmware is not running. */
 	(void)m1link_wait_handshake(M1LINK_HS_TIMEOUT_MS);
 
-	HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin,
-	                  GPIO_PIN_RESET);
-	m1link_cs_delay();
+	start = HAL_GetTick();
+	do {
+		HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin,
+		                  GPIO_PIN_RESET);
+		m1link_cs_delay();
 
-	ret = HAL_SPI_TransmitReceive(&hspi_esp, (uint8_t *)tx, rx, mtu,
-	                              M1LINK_SPI_TIMEOUT_MS);
+		ret = HAL_SPI_TransmitReceive(&hspi_esp, (uint8_t *)tx, rx, mtu,
+		                              M1LINK_SPI_TIMEOUT_MS);
 
-	m1link_cs_delay();
-	HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin,
-	                  GPIO_PIN_SET);
+		m1link_cs_delay();
+		HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin,
+		                  GPIO_PIN_SET);
+
+		if (ret != HAL_BUSY)
+			break;
+		HAL_Delay(1);
+	} while ((HAL_GetTick() - start) < M1LINK_BUSY_RETRY_MS);
 
 	return (ret == HAL_OK) ? 0 : -1;
 }

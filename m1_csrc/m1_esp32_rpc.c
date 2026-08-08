@@ -122,13 +122,14 @@ static int m1link_parse_frame(const uint8_t *buf, uint16_t buf_len,
     if (buf[2] != M1_ESP32_RPC_VERSION) return -1;
 
     uint16_t p = (uint16_t)buf[6] | ((uint16_t)buf[7] << 8u);
-    uint16_t total = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + p + M1_ESP32_RPC_CRC_SIZE);
-    if (total > buf_len) return -1;
+    size_t crc_off = (size_t)M1_ESP32_RPC_HDR_SIZE + (size_t)p;
+    size_t total = crc_off + (size_t)M1_ESP32_RPC_CRC_SIZE;
+    if (total > (size_t)buf_len) return -1;
 
-    uint16_t expected_crc = m1_esp32_rpc_crc16(buf, M1_ESP32_RPC_HDR_SIZE + p);
+    uint16_t expected_crc = m1_esp32_rpc_crc16(buf, (uint16_t)crc_off);
     uint16_t wire_crc =
-        (uint16_t)buf[M1_ESP32_RPC_HDR_SIZE + p] |
-        ((uint16_t)buf[M1_ESP32_RPC_HDR_SIZE + p + 1u] << 8u);
+        (uint16_t)buf[crc_off] |
+        ((uint16_t)buf[crc_off + 1u] << 8u);
     if (wire_crc != expected_crc) return -1;
 
     if (msg_type) *msg_type = buf[3];
