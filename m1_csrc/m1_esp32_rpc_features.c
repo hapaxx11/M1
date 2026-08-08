@@ -13,6 +13,7 @@
  * M1 Project
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "m1_esp32_rpc_features.h"
@@ -100,13 +101,25 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
     if (!out || max == 0u)
         return M1_ESP32_RPC_ERR_INVALID;
 
-    uint8_t  resp[M1_ESP32_RPC_PAYLOAD_MAX];
+    /* Heap-allocated at M1_ESP32_RPC_RESP_PAYLOAD_MAX: the brain firmware's
+     * handle_wifi_scan() returns the entire AP list as one logical response
+     * (up to its own M1_SCAN_RESP_MAX == 1800 payload bytes), not chunked
+     * behind separate *_GET calls, so the reception budget here must match
+     * that rather than the small control-command M1_ESP32_RPC_PAYLOAD_MAX
+     * (246 bytes), which silently failed every scan of more than ~6-8 APs. */
+    uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
+    if (!resp)
+        return M1_ESP32_RPC_ERR_NO_MEM;
+
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
-        m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u, resp, sizeof(resp),
+        m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u, resp,
+                          M1_ESP32_RPC_RESP_PAYLOAD_MAX,
                           &rlen, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
-    if (st != M1_ESP32_RPC_OK)
+    if (st != M1_ESP32_RPC_OK) {
+        free(resp);
         return st;
+    }
 
     /* RESP: [count:2 LE] then repeated (fixed entry + ssid_len ssid bytes).
      * The brain firmware (handle_wifi_scan() in main.c) writes the AP count
@@ -115,8 +128,10 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
      * parsing at offset 1 desyncs every entry by one byte, corrupting bssid/
      * rssi/channel/authmode/ssid_len for every AP and causing AP Scan / 2.4G
      * Survey to read garbage or fail outright. */
-    if (rlen < 2u)
+    if (rlen < 2u) {
+        free(resp);
         return M1_ESP32_RPC_ERR_BAD_FRAME;
+    }
 
     uint16_t want   = (uint16_t)resp[0] | ((uint16_t)resp[1] << 8u);
     uint16_t off    = 2u;
@@ -142,6 +157,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
         got++;
     }
 
+    free(resp);
     if (out_count) *out_count = got;
     return M1_ESP32_RPC_OK;
 }
@@ -382,17 +398,28 @@ m1_esp32_rpc_status_t m1_esp32_rpc_sta_scan_results(m1_esp32_rpc_sta_entry_t *ou
     if (!out || max == 0u)
         return M1_ESP32_RPC_ERR_INVALID;
 
-    uint8_t  resp[M1_ESP32_RPC_PAYLOAD_MAX];
+    /* See m1_esp32_rpc_wifi_scan(): handle_sta_scan_results() also returns
+     * its full list in one response, so this needs the bulk-list reception
+     * budget, not the small control-command M1_ESP32_RPC_PAYLOAD_MAX. */
+    uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
+    if (!resp)
+        return M1_ESP32_RPC_ERR_NO_MEM;
+
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_OFF_STA_SCAN_RESULTS, NULL, 0u, resp,
-                          sizeof(resp), &rlen, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
-    if (st != M1_ESP32_RPC_OK)
+                          M1_ESP32_RPC_RESP_PAYLOAD_MAX, &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st != M1_ESP32_RPC_OK) {
+        free(resp);
         return st;
+    }
 
     /* RESP: [count:2 LE] then per sta [mac:6][rssi:i8] */
-    if (rlen < 2u)
+    if (rlen < 2u) {
+        free(resp);
         return M1_ESP32_RPC_ERR_BAD_FRAME;
+    }
 
     uint16_t want = (uint16_t)resp[0] | ((uint16_t)resp[1] << 8u);
     uint16_t off  = 2u;
@@ -404,6 +431,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_sta_scan_results(m1_esp32_rpc_sta_entry_t *ou
         off = (uint16_t)(off + REC);
         got++;
     }
+    free(resp);
     if (out_count) *out_count = got;
     return M1_ESP32_RPC_OK;
 }
@@ -456,17 +484,28 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_scan_results(m1_esp32_rpc_ble_dev_t *out,
     if (!out || max == 0u)
         return M1_ESP32_RPC_ERR_INVALID;
 
-    uint8_t  resp[M1_ESP32_RPC_PAYLOAD_MAX];
+    /* See m1_esp32_rpc_wifi_scan(): BLE_SCAN_RESULTS also returns its full
+     * device list in one response, so this needs the bulk-list reception
+     * budget, not the small control-command M1_ESP32_RPC_PAYLOAD_MAX. */
+    uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
+    if (!resp)
+        return M1_ESP32_RPC_ERR_NO_MEM;
+
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_BLE_SCAN_RESULTS, NULL, 0u, resp,
-                          sizeof(resp), &rlen, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
-    if (st != M1_ESP32_RPC_OK)
+                          M1_ESP32_RPC_RESP_PAYLOAD_MAX, &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st != M1_ESP32_RPC_OK) {
+        free(resp);
         return st;
+    }
 
     /* RESP: [count:2 LE] then per dev [addr:6][type:1][rssi:i8][name_len:1][name] */
-    if (rlen < 2u)
+    if (rlen < 2u) {
+        free(resp);
         return M1_ESP32_RPC_ERR_BAD_FRAME;
+    }
 
     uint16_t want = (uint16_t)resp[0] | ((uint16_t)resp[1] << 8u);
     uint16_t off  = 2u;
@@ -484,6 +523,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_scan_results(m1_esp32_rpc_ble_dev_t *out,
         }
         got++;
     }
+    free(resp);
     if (out_count) *out_count = got;
     return M1_ESP32_RPC_OK;
 }
@@ -586,17 +626,29 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_sniff_get(m1_esp32_rpc_zb_device_t *out,
     if (!out || max == 0u)
         return M1_ESP32_RPC_ERR_INVALID;
 
-    uint8_t  resp[M1_ESP32_RPC_PAYLOAD_MAX];
+    /* See m1_esp32_rpc_wifi_scan(): handle_zb_sniff_get() returns up to 64
+     * fixed-size device records (1 + 64*17 = 1089 bytes) in one response, so
+     * this needs the bulk-list reception budget, not the small
+     * control-command M1_ESP32_RPC_PAYLOAD_MAX. */
+    uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
+    if (!resp)
+        return M1_ESP32_RPC_ERR_NO_MEM;
+
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_ZB_SNIFF_GET, NULL, 0u, resp,
-                          sizeof(resp), &rlen, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
-    if (st != M1_ESP32_RPC_OK)
+                          M1_ESP32_RPC_RESP_PAYLOAD_MAX, &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st != M1_ESP32_RPC_OK) {
+        free(resp);
         return st;
+    }
 
     /* RESP: [count:1][fixed-size device record × count]. */
-    if (rlen < 1u)
+    if (rlen < 1u) {
+        free(resp);
         return M1_ESP32_RPC_ERR_BAD_FRAME;
+    }
 
     uint8_t  want = resp[0];
     uint16_t off  = 1u;
@@ -609,6 +661,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_sniff_get(m1_esp32_rpc_zb_device_t *out,
         got++;
     }
 
+    free(resp);
     if (out_count) *out_count = got;
     return M1_ESP32_RPC_OK;
 }

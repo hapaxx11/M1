@@ -197,15 +197,38 @@ typedef enum {
 /* =========================================================================
  * Frame sizing
  *
- * Single-transaction control commands and their replies fit comfortably in
+ * Single-transaction control commands and their requests fit comfortably in
  * this budget (ESP-NOW frames are <= 64 bytes; deauth / connect / HID-string
- * requests are well under 246 payload bytes).  Bulk transfers (scan-result
- * lists, .pcap capture) are retrieved with chunked *_GET calls, so a modest
- * single-frame ceiling keeps the client's stack footprint small.
+ * requests are well under 246 payload bytes), so M1_ESP32_RPC_FRAME_MAX still
+ * bounds outbound REQ frames (built into the small stack buffer in
+ * m1_esp32_rpc_call()).
  * =========================================================================*/
 #define M1_ESP32_RPC_FRAME_MAX   256u
 #define M1_ESP32_RPC_PAYLOAD_MAX \
     (M1_ESP32_RPC_FRAME_MAX - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
+
+/* =========================================================================
+ * Response reception budget.
+ *
+ * The brain firmware (handle_wifi_scan() / handle_sta_scan_results() /
+ * handle_ble_scan_results() in bedge117/m1-esp32-brain main.c) does NOT
+ * chunk bulk-list responses behind separate *_GET calls -- it returns the
+ * whole list (up to M1_SCAN_RESP_MAX == 1800 payload bytes on the firmware
+ * side) as a single logical RPC response, relying on the M1 Link transport's
+ * own FRAG reassembly (m1_esp32_m1link_send_recv()) to deliver it in one
+ * piece. The old 256-byte single-frame ceiling (246 payload bytes) silently
+ * discarded that assumption: any WIFI_SCAN/STA_SCAN/BLE_SCAN_RESULTS reply
+ * larger than roughly 6-8 APs overflowed the M1 Link reassembly buffer,
+ * m1_esp32_m1link_send_recv() returned "reassembly overflow", and the whole
+ * RPC call failed with M1_ESP32_RPC_ERR_TRANSPORT -- which is why AP Scan /
+ * 2.4G Survey / Station Scan reliably failed with "AP scan failed. Please
+ * try again." in any real (non-empty) RF environment. Size the reception
+ * buffer to the firmware's actual maximum instead of an arbitrary control-
+ * command budget. This buffer is heap-allocated (see m1_esp32_rpc_call()),
+ * not stack, to avoid growing every RPC call's stack frame. */
+#define M1_ESP32_RPC_RESP_FRAME_MAX   2048u
+#define M1_ESP32_RPC_RESP_PAYLOAD_MAX \
+    (M1_ESP32_RPC_RESP_FRAME_MAX - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
 
 /* =========================================================================
  * Canonical payload structs (mirrored from bedge117/m1-esp32-brain m1_rpc.h).

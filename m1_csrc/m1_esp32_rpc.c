@@ -20,6 +20,7 @@
  * M1 Project
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "m1_esp32_rpc.h"
@@ -67,9 +68,9 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                         uint8_t *resp, uint16_t resp_cap,
                                         uint16_t *resp_len, int timeout_sec)
 {
-    uint8_t tx[M1_ESP32_RPC_FRAME_MAX];
-    uint8_t rx[M1_ESP32_RPC_FRAME_MAX];
-    int     rx_len = 0;
+    uint8_t  tx[M1_ESP32_RPC_FRAME_MAX];
+    uint8_t *rx;
+    int      rx_len = 0;
 
     if (resp_len) *resp_len = 0u;
 
@@ -81,24 +82,37 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     if (frame_sz == 0u)
         return M1_ESP32_RPC_ERR_INVALID;
 
-    memset(rx, 0, sizeof(rx));
-    if (s_transport(tx, (int)frame_sz, rx, (int)sizeof(rx),
-                    &rx_len, timeout_sec) != 0 || rx_len <= 0)
+    /* Heap-allocated: the reception budget (M1_ESP32_RPC_RESP_FRAME_MAX) must
+     * cover the firmware's largest bulk-list response (WIFI_SCAN/STA_SCAN/
+     * BLE_SCAN_RESULTS), which is far bigger than a stack-friendly control
+     * frame -- see the comment on M1_ESP32_RPC_RESP_FRAME_MAX. */
+    rx = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
+    if (!rx)
+        return M1_ESP32_RPC_ERR_NO_MEM;
+
+    memset(rx, 0, M1_ESP32_RPC_RESP_FRAME_MAX);
+    if (s_transport(tx, (int)frame_sz, rx, (int)M1_ESP32_RPC_RESP_FRAME_MAX,
+                    &rx_len, timeout_sec) != 0 || rx_len <= 0) {
+        free(rx);
         return M1_ESP32_RPC_ERR_TRANSPORT;
+    }
 
     const uint8_t *payload = NULL;
     uint16_t       payload_len = 0u;
     m1_esp32_rpc_status_t st = m1_esp32_rpc_decode_resp(rx, (uint16_t)rx_len,
                                                         msg_id, &payload,
                                                         &payload_len);
-    if (st != M1_ESP32_RPC_OK)
+    if (st != M1_ESP32_RPC_OK) {
+        free(rx);
         return st;
+    }
 
     if (resp && resp_cap > 0u && payload_len > 0u) {
         uint16_t copy_len = (payload_len < resp_cap) ? payload_len : resp_cap;
         memcpy(resp, payload, copy_len);
         if (resp_len) *resp_len = copy_len;
     }
+    free(rx);
     return M1_ESP32_RPC_OK;
 }
 

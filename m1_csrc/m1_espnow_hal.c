@@ -24,6 +24,7 @@
 #include "m1_esp32_cmd.h"
 #include "m1_esp32_rpc.h"
 #include "espnow_peer_session.h"
+#include "espnow_rpc_parse.h"
 #include "ff.h"
 
 /* esp_app_main.h declares get_esp32_main_init_status() / esp32_main_init().
@@ -37,6 +38,27 @@
 /*==========================================================================*/
 
 #define SPI_BUF_SIZE  64
+
+/*==========================================================================*/
+/* Bulk-response reception budgets                                           */
+/*==========================================================================*/
+
+/* PEERS_GET response: count(1) + up to ESPNOW_MAX_PEERS x
+ * [mac(6)+rssi(1)+namelen(1)+name(up to ESPNOW_NAME_MAX)]. The old
+ * SPI_BUF_SIZE (64-byte) reception ceiling silently truncated any peer list
+ * beyond ~2 peers, desyncing rssi/namelen/name parsing for the remainder --
+ * the same class of defect as the WiFi/BLE scan buffer overflow fixed for
+ * m1_esp32_rpc_features.c. Size the reception buffer to the protocol's
+ * documented worst case instead. */
+#define ESPNOW_PEERS_RESP_MAX \
+    (1u + (uint16_t)ESPNOW_MAX_PEERS * \
+     (ESPNOW_MAC_LEN + 1u + 1u + ESPNOW_NAME_MAX))
+
+/* RECV_GET response: count(1) + mac(6) + len(2) + data (up to ENL_MSG_MAX,
+ * documented as 240 bytes below).  249 bytes already exceeds the old
+ * 64-byte SPI_BUF_SIZE ceiling, so any message longer than ~55 bytes was
+ * silently truncated before parsing ever saw it. */
+#define ESPNOW_RECV_RESP_MAX  (1u + ESPNOW_MAC_LEN + 2u + 240u)
 
 /*==========================================================================*/
 /* SPI transport timeout for CD3 M1_RPC ESP-NOW commands                     */
@@ -66,17 +88,23 @@ static bool    s_started;
  * the shared m1_esp32_rpc_call() client (m1_esp32_rpc.c).  ESP-NOW is the first
  * consumer of that reusable layer; the M1_ESP32_RPC_NOW_* opcodes it uses are
  * defined once in m1_esp32_rpc.h.
+ *
+ * @param resp_cap  Capacity of resp_buf in bytes.  Must match the caller's
+ *                  actual buffer size -- previously this was hardcoded to
+ *                  SPI_BUF_SIZE (64) regardless of the buffer passed in,
+ *                  silently truncating any PEERS_GET/RECV_GET response
+ *                  larger than 64 bytes.
  */
 static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
                             uint8_t payload_len, uint8_t *resp_buf,
-                            uint8_t *resp_len)
+                            uint16_t resp_cap, uint16_t *resp_len)
 {
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(msg_id, payload, payload_len,
-                          resp_buf, SPI_BUF_SIZE, &rlen, ESPNOW_RPC_TIMEOUT_S);
+                          resp_buf, resp_cap, &rlen, ESPNOW_RPC_TIMEOUT_S);
     if (resp_len)
-        *resp_len = (uint8_t)rlen;
+        *resp_len = rlen;
     return st == M1_ESP32_RPC_OK;
 }
 
@@ -103,10 +131,10 @@ bool m1_espnow_start(uint8_t channel)
     if (nlen > ESPNOW_NAME_MAX) nlen = ESPNOW_NAME_MAX;
     memcpy(payload + 1, name, nlen);
 
-    uint8_t resp[SPI_BUF_SIZE];
-    uint8_t rlen = 0;
+    uint8_t  resp[SPI_BUF_SIZE];
+    uint16_t rlen = 0;
     if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_START, payload, (uint8_t)(1 + nlen),
-                        resp, &rlen)) {
+                        resp, sizeof(resp), &rlen)) {
         return false;
     }
 
@@ -122,48 +150,33 @@ bool m1_espnow_start(uint8_t channel)
 bool m1_espnow_stop(void)
 {
     if (!s_started) return true;
-    uint8_t resp[SPI_BUF_SIZE];
-    uint8_t rlen = 0;
-    bool ok = espnow_rpc_cmd(M1_ESP32_RPC_NOW_STOP, NULL, 0, resp, &rlen);
+    uint8_t  resp[SPI_BUF_SIZE];
+    uint16_t rlen = 0;
+    bool ok = espnow_rpc_cmd(M1_ESP32_RPC_NOW_STOP, NULL, 0, resp,
+                             sizeof(resp), &rlen);
     s_started = false;
     return ok;
 }
 
 bool m1_espnow_announce(void)
 {
-    uint8_t resp[SPI_BUF_SIZE];
-    uint8_t rlen = 0;
-    return espnow_rpc_cmd(M1_ESP32_RPC_NOW_ANNOUNCE, NULL, 0, resp, &rlen);
+    uint8_t  resp[SPI_BUF_SIZE];
+    uint16_t rlen = 0;
+    return espnow_rpc_cmd(M1_ESP32_RPC_NOW_ANNOUNCE, NULL, 0, resp,
+                          sizeof(resp), &rlen);
 }
 
 uint8_t m1_espnow_poll_peers(void *peers_out, uint8_t max_peers)
 {
-    uint8_t resp[SPI_BUF_SIZE];
-    uint8_t rlen = 0;
-    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_PEERS_GET, NULL, 0, resp, &rlen))
+    uint8_t  resp[ESPNOW_PEERS_RESP_MAX];
+    uint16_t rlen = 0;
+    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_PEERS_GET, NULL, 0, resp,
+                        sizeof(resp), &rlen))
         return 0;
 
-    /* Response: count(1) + [mac(6)+rssi(1)+namelen(1)+name]×N */
-    if (rlen < 1) return 0;
-    uint8_t count = resp[0];
-    if (count > max_peers) count = max_peers;
-
-    espnow_peer_info_t *peers = (espnow_peer_info_t *)peers_out;
-    uint8_t offset = 1;
-    for (uint8_t i = 0; i < count && offset < rlen; i++) {
-        if (offset + 8 > rlen) break;  /* mac(6) + rssi(1) + namelen(1) */
-        memcpy(peers[i].mac, resp + offset, ESPNOW_MAC_LEN);
-        offset += ESPNOW_MAC_LEN;
-        peers[i].rssi = (int8_t)resp[offset++];
-        uint8_t namelen = resp[offset++];
-        if (namelen > ESPNOW_NAME_MAX) namelen = ESPNOW_NAME_MAX;
-        if (offset + namelen > rlen) namelen = rlen - offset;
-        memcpy(peers[i].name, resp + offset, namelen);
-        peers[i].name[namelen] = '\0';
-        offset += namelen;
-        peers[i].channel = s_channel;
-    }
-    return count;
+    return espnow_rpc_parse_peers(resp, rlen,
+                                  (espnow_peer_info_t *)peers_out,
+                                  max_peers, s_channel);
 }
 
 bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
@@ -181,34 +194,23 @@ bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
     memcpy(payload, mac, 6);
     memcpy(payload + 6, data, len);
 
-    uint8_t resp[SPI_BUF_SIZE];
-    uint8_t rlen = 0;
+    uint8_t  resp[SPI_BUF_SIZE];
+    uint16_t rlen = 0;
     return espnow_rpc_cmd(M1_ESP32_RPC_NOW_SEND, payload, (uint8_t)(6 + len),
-                          resp, &rlen);
+                          resp, sizeof(resp), &rlen);
 }
 
 bool m1_espnow_recv_msg(uint8_t from_mac[6], uint8_t *buf,
                          size_t buf_size, uint8_t *out_len)
 {
-    uint8_t resp[SPI_BUF_SIZE];
-    uint8_t rlen = 0;
-    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_RECV_GET, NULL, 0, resp, &rlen))
+    uint8_t  resp[ESPNOW_RECV_RESP_MAX];
+    uint16_t rlen = 0;
+    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_RECV_GET, NULL, 0, resp,
+                        sizeof(resp), &rlen))
         return false;
 
-    /* Response: count(1) + [mac(6)+len(2 LE)+data]×N — we take first msg */
-    if (rlen < 1 || resp[0] == 0) return false;
-
-    uint8_t offset = 1;
-    if (offset + 8 > rlen) return false;  /* mac(6) + len(2) min */
-    memcpy(from_mac, resp + offset, 6);
-    offset += 6;
-    uint16_t msg_len = (uint16_t)(resp[offset] | (resp[offset + 1] << 8));
-    offset += 2;
-    if (msg_len > buf_size) msg_len = (uint16_t)buf_size;
-    if (offset + msg_len > rlen) msg_len = rlen - offset;
-    memcpy(buf, resp + offset, msg_len);
-    *out_len = (uint8_t)msg_len;
-    return true;
+    return espnow_rpc_parse_recv(resp, rlen, from_mac, buf, buf_size,
+                                 out_len);
 }
 
 void m1_espnow_get_mac(uint8_t mac[6])
