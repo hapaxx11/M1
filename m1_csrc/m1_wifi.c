@@ -48,6 +48,7 @@
 #include "wifi_ntp_parse.h"
 #include "m1_esp32_caps.h"
 #include "esp_app_main.h"
+#include "m1_esp32_rpc_features.h"
 #include "m1_system.h"
 #include "m1_wdt_hw.h"
 
@@ -220,6 +221,43 @@ static uint16_t wifi_do_scan(void)
 	m1_esp32_ensure_init();
 	if (!get_esp32_main_init_status())
 		esp32_main_init();
+
+	/* brain CD3 (binary M1_RPC): use WIFI_SCAN opcode. */
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
+		wifi_ap_list_free();
+
+		m1_esp32_rpc_wifi_scan_result_t *rpc_entries =
+		    (m1_esp32_rpc_wifi_scan_result_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_wifi_scan_result_t));
+		if (!rpc_entries)
+			return 0u;
+		uint8_t rpc_count = 0u;
+		if (m1_esp32_rpc_wifi_scan(rpc_entries, WIFI_AP_MAX, &rpc_count) != M1_ESP32_RPC_OK
+		    || rpc_count == 0u) {
+			free(rpc_entries);
+			return 0u;
+		}
+
+		ap_list = (wifi_ap_t *)malloc(rpc_count * sizeof(wifi_ap_t));
+		if (!ap_list) {
+			free(rpc_entries);
+			return 0u;
+		}
+		memset(ap_list, 0, rpc_count * sizeof(wifi_ap_t));
+
+		for (uint8_t i = 0u; i < rpc_count; i++) {
+			const m1_esp32_rpc_wifi_scan_result_t *e = &rpc_entries[i];
+			ap_list[i].rssi      = e->rssi;
+			ap_list[i].channel   = e->channel;
+			ap_list[i].auth_mode = e->authmode;
+			memcpy(ap_list[i].bssid, e->bssid, 6u);
+			wifi_bssid_fmt(e->bssid, ap_list[i].bssid_str);
+			memcpy(ap_list[i].ssid, e->ssid, sizeof(ap_list[i].ssid));
+		}
+		free(rpc_entries);
+		ap_count = rpc_count;
+		wifi_ap_list_sort_rssi(ap_list, ap_count);
+		return ap_count;
+	}
 
 	/* On AT firmware (dag/T-800, bedge117), use AT+CWLAP instead of binary
 	 * SPI scan commands which are SiN360-only.  M1_ESP32_CAP_WIFI_JOIN is
@@ -533,6 +571,32 @@ static void wifi_connect_selected_ap(void)
 	}
 
 	ensure_esp32_ready();
+
+	/* ---- brain CD3 M1_RPC path ---- */
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		wifi_draw_message("Connect", "Connecting...", ap_list[ap_view_idx].ssid);
+		uint32_t assigned_ip = 0u;
+		m1_esp32_rpc_status_t st =
+		    m1_esp32_rpc_wifi_connect(ap_list[ap_view_idx].ssid, password, &assigned_ip);
+		if (st != M1_ESP32_RPC_OK)
+		{
+			memset(password, 0, sizeof(password));
+			wifi_show_message("Connect", "Connect failed", "Check password");
+			return;
+		}
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+		if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
+			wifi_show_message("Connect", "Warning", "Credentials not saved");
+		strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
+		        sizeof(s_wifi_stub_ssid) - 1);
+		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
+		s_wifi_stub_connected = true;
+#endif
+		memset(password, 0, sizeof(password));
+		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
+		return;
+	}
 
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
 	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
@@ -2410,7 +2474,27 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 	uint32_t start_tick;
 	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
 
-	if (use_at)
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* brain CD3 M1_RPC path */
+		m1_esp32_rpc_deauth_req_t req;
+		memcpy(req.bssid, bssid, 6u);
+		req.channel     = channel;
+		memset(req.station, 0xFF, 6u);  /* broadcast */
+		req.count       = 0u;           /* continuous */
+		req.interval_ms = 0u;           /* fastest */
+		if (m1_esp32_rpc_deauth_start(&req) != M1_ESP32_RPC_OK)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Deauth");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+	}
+	else if (use_at)
 	{
 		/* AT path — dag T-800: AT+M1DEAUTH=<bssid>,<channel> */
 		char at_cmd[48];
@@ -2499,7 +2583,9 @@ static void wifi_deauth_run(uint8_t *bssid, uint8_t channel, const char *ssid)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
+				if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+					(void)m1_esp32_rpc_deauth_stop();
+				else if (use_at)
 				{
 					char at_stop_resp[32];
 					(void)spi_AT_send_recv("AT+M1DEAUTHSTOP\r\n",
@@ -3199,7 +3285,22 @@ void wifi_attack_beacon(void)
 		shuffle_beacons = true;
 	}
 
-	if (use_at)
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* brain CD3 M1_RPC path: beacon_file_ssids already holds the SSID data
+		 * that beacon_file_ptrs points into, so pass it directly. */
+		uint8_t rpc_count = list_count < BEACON_LIST_MAX_SSIDS
+		                    ? list_count : BEACON_LIST_MAX_SSIDS;
+		if (m1_esp32_rpc_beacon_start((const char (*)[33])beacon_file_ssids,
+		                              rpc_count) != M1_ESP32_RPC_OK)
+		{
+			beacon_message("Beacon Spam", "Start failed!", NULL);
+			return;
+		}
+		beacon_run_loop("BEACON SPAM", beacon_file_ptrs, rpc_count, rpc_count, false, true);
+		(void)m1_esp32_rpc_beacon_stop();
+	}
+	else if (use_at)
 	{
 		/* AT path — dag T-800: AT+M1BEACON=1,<ch>,"<ssid>","<bssid>"
 		 * AT command supports only a single SSID; use the first from the list. */
@@ -4804,7 +4905,16 @@ void wifi_attack_karma(void)
 
 	ensure_esp32_ready();
 
-	if (use_at)
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* brain CD3 M1_RPC path: channel 0 = auto-select */
+		if (m1_esp32_rpc_karma_start(0u) != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Karma", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else if (use_at)
 	{
 		/* AT path — dag T-800: AT+M1KARMA=1,"" (empty SSID = respond to all probes) */
 		char at_resp[64];
@@ -4893,7 +5003,9 @@ void wifi_attack_karma(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
+				if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+					(void)m1_esp32_rpc_karma_stop();
+				else if (use_at)
 				{
 					char at_stop_resp[32];
 					(void)spi_AT_send_recv("AT+M1KARMA=0,\"\"\r\n",
@@ -4931,7 +5043,22 @@ void wifi_attack_karma_portal(void)
 
 	ensure_esp32_ready();
 
-	if (use_at)
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* brain CD3 M1_RPC path: Karma + captive portal on channel 0 (auto). */
+		if (m1_esp32_rpc_karma_start(0u) != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+		if (m1_esp32_rpc_captive_start(0u, wifi_portal_ssid, "M1 Login") != M1_ESP32_RPC_OK)
+		{
+			(void)m1_esp32_rpc_karma_stop();
+			wifi_show_message("Karma Portal", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else if (use_at)
 	{
 		/* AT path — dag T-800: no combined karma+portal, degrade to basic karma.
 		 * AT+M1KARMA=1,"" starts karma; credential polling is unavailable. */
@@ -5039,7 +5166,12 @@ void wifi_attack_karma_portal(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
+				if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+				{
+					(void)m1_esp32_rpc_captive_stop();
+					(void)m1_esp32_rpc_karma_stop();
+				}
+				else if (use_at)
 				{
 					char at_stop_resp[32];
 					(void)spi_AT_send_recv("AT+M1KARMA=0,\"\"\r\n",
@@ -5273,6 +5405,23 @@ void wifi_target_deauth(void)
 /* Target group: EAPOL/handshake capture (PMKID auto-saved when present). */
 void wifi_target_handshake(void)
 {
+	if (!wifi_target_valid())
+		return;
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* brain CD3 path: send HS_START with the selected AP's BSSID + channel. */
+		m1_esp32_rpc_status_t st =
+		    m1_esp32_rpc_hs_start(ap_list[ap_view_idx].bssid,
+		                          ap_list[ap_view_idx].channel,
+		                          5 /* initial deauth frames */);
+		if (st != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Handshake", "Start failed", NULL);
+			return;
+		}
+		wifi_show_message("Handshake", "Capture started", "Use HS Status to check");
+		return;
+	}
 	wifi_sniff_eapol();
 }
 
@@ -5295,7 +5444,22 @@ void wifi_target_beacon(void)
 	ensure_esp32_ready();
 	clone_ssids[0] = ap_list[ap_view_idx].ssid;
 
-	if (use_at)
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* brain CD3 M1_RPC path. */
+		char rpc_ssid[1][33];
+		strncpy(rpc_ssid[0], clone_ssids[0], 32u);
+		rpc_ssid[0][32] = '\0';
+		if (m1_esp32_rpc_beacon_start((const char (*)[33])rpc_ssid, 1u)
+		    != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Beacon", "Start failed!", NULL);
+			return;
+		}
+		beacon_run_loop("BEACON", clone_ssids, 1, 1, false, true);
+		(void)m1_esp32_rpc_beacon_stop();
+	}
+	else if (use_at)
 	{
 		/* AT path — dag T-800: single SSID via AT+M1BEACON */
 		char at_cmd[80];
@@ -5592,6 +5756,26 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 
 		if (!is_binary_spi && !get_esp32_main_init_status())
 			esp32_main_init();
+	}
+
+	/* ---- brain CD3 M1_RPC path ---- */
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		wifi_draw_message("Connect", "Connecting...", cred->ssid);
+		uint32_t assigned_ip = 0u;
+		m1_esp32_rpc_status_t st =
+		    m1_esp32_rpc_wifi_connect(cred->ssid, cred->password, &assigned_ip);
+		if (st != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Connect", "Connect failed", "Check password");
+			return;
+		}
+		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
+		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
+		s_wifi_stub_connected = true;
+		wifi_show_message("Connect", "Connected!", cred->ssid);
+		wifi_sync_rtc();
+		return;
 	}
 
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */

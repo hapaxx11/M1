@@ -45,6 +45,47 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)
 - Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE && OTA` both set (caveat: no shipped CD3 release currently sets either bit — see the OTA/PMKID note above; this discriminator will match once a release self-reports them)
 
+### Transport compatibility layer (host side)
+
+> **Two CD3 firmwares exist — do not confuse them.** The legacy **CD3-AT** speaks
+> AT text commands; the native **brain CD3** (`m1-esp32-brain`) speaks binary
+> M1_RPC. Both are supported, on different transports.
+
+The M1 host classifies the attached firmware into one of three wire transports
+via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
+`esp32_transport_t`:
+
+| Firmware | Discriminator | Transport |
+|----------|---------------|-----------|
+| brain CD3 (`m1-esp32-brain`) | `HANDSHAKE && OTA` | `ESP32_TRANSPORT_RPC` |
+| SiN360 | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
+| AT builds **incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
+| unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
+
+- **`m1_esp32_rpc.c/.h`** is the reusable M1_RPC feature layer for brain CD3:
+  the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared
+  `bedge117/m1-esp32-brain` `m1_rpc.h`), payload structs, and a NAK/status-aware
+  `m1_esp32_rpc_call(msg_id, req, len, resp, cap, *rlen, timeout)` that frames,
+  sends over the half-duplex SPI-HD path (`spi_AT_send_recv_bin`), and decodes.
+- **ESP-NOW** (`m1_espnow_hal.c`) is the first consumer of this client. Other
+  WiFi/BLE/802.15.4 features adopt it via the per-feature layer below.
+- **`m1_esp32_rpc_features.c/.h`** is the per-feature layer on top of the client:
+  `esp32_feature_rpc_opcode(feature_id, &op)` maps each `esp32_feature_id_t` to
+  its native `M1_ESP32_RPC_*` opcode, and there is one small action wrapper per
+  feature action (`m1_esp32_rpc_wifi_scan()`, `m1_esp32_rpc_deauth_start()`,
+  `m1_esp32_rpc_ble_hid_key()`, `m1_esp32_rpc_zb_sniff_get()`, the `*_start` /
+  `*_stop` triggers, …) that builds the payload, calls `m1_esp32_rpc_call()`,
+  and decodes the reply. Wire a feature in by branching:
+  `if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) { m1_esp32_rpc_*(); }
+  else { /* existing AT / binary-SPI path */ }`. The 802.15.4 sniffer/flood
+  (`m1_802154.c`) is a worked example. The whole layer is transport-injectable
+  and host-tested in `tests/test_esp32_rpc_features.c`.
+- **CD3-AT is never re-routed to M1_RPC** — it advertises `WIFI_JOIN` without the
+  brain-CD3 `HANDSHAKE+OTA` pair, so it falls through to `ESP32_TRANSPORT_AT` and
+  keeps using the existing AT command paths unchanged.
+- Frame constants and the pure build/parse inline helpers live in
+  `m1_esp32_caps.h`; `m1_esp32_rpc.h` reuses them (no duplication).
+
 ### Communication
 - M1 ↔ ESP32-C6 uses **SPI** for AT commands (NOT UART)
 - SPI Mode 1 (CPOL=0, CPHA=1) — hardcoded in `m1_esp32_hal.c:529`

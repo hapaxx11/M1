@@ -132,3 +132,21 @@ bool esp32_firmware_is_cd3(uint64_t cap_bitmap)
     return (cap_bitmap & M1_ESP32_CAP_HANDSHAKE) != 0u &&
            (cap_bitmap & M1_ESP32_CAP_OTA) != 0u;
 }
+
+esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap)
+{
+    /* Order matters: the native brain CD3 is the most specific (HANDSHAKE +
+     * OTA) and must be tested before the SiN360 rule, then SiN360 before the
+     * generic AT fallback.  The legacy CD3-AT firmware sets WIFI_JOIN but NOT
+     * the HANDSHAKE+OTA pair, so it falls through to ESP32_TRANSPORT_AT and
+     * continues to be driven over AT text commands — this layer never
+     * re-routes it to M1_RPC.  An all-zero bitmap (unknown / not yet probed)
+     * yields NONE so transport-selecting callers fail closed. */
+    if (cap_bitmap == 0u)
+        return ESP32_TRANSPORT_NONE;
+    if (esp32_firmware_is_cd3(cap_bitmap))
+        return ESP32_TRANSPORT_RPC;
+    if (esp32_firmware_is_sin360(cap_bitmap))
+        return ESP32_TRANSPORT_BINARY_SPI;
+    return ESP32_TRANSPORT_AT;
+}

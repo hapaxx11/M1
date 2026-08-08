@@ -22,25 +22,30 @@
 #include "m1_esp32_hal.h"
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
+#include "m1_esp32_rpc.h"
 #include "espnow_peer_session.h"
 #include "ff.h"
 
-/*==========================================================================*/
-/* M1_RPC ESP-NOW message IDs (CD3 bedge117/m1-esp32-brain)                 */
-/*==========================================================================*/
-
-#define M1_RPC_NOW_START      UINT16_C(0x0600)
-#define M1_RPC_NOW_STOP       UINT16_C(0x0601)
-#define M1_RPC_NOW_ANNOUNCE   UINT16_C(0x0602)
-#define M1_RPC_NOW_PEERS_GET  UINT16_C(0x0603)
-#define M1_RPC_NOW_SEND       UINT16_C(0x0604)
-#define M1_RPC_NOW_RECV_GET   UINT16_C(0x0605)
+/* esp_app_main.h declares get_esp32_main_init_status() / esp32_main_init().
+ * The CD3 M1_RPC transport rides the same half-duplex SPI-HD command protocol
+ * as the AT firmware, driven by the AT RTOS task, so that task must be running
+ * before any ESP-NOW frame can be exchanged. */
+#include "esp_app_main.h"
 
 /*==========================================================================*/
 /* SPI transaction buffer size (64 bytes for SPI-HD half-duplex)             */
 /*==========================================================================*/
 
 #define SPI_BUF_SIZE  64
+
+/*==========================================================================*/
+/* SPI transport timeout for CD3 M1_RPC ESP-NOW commands                     */
+/*==========================================================================*/
+
+/* Response timeout in SECONDS for the shared M1_RPC client.  ESP-NOW
+ * operations (announce, peer list, send) complete promptly on the ESP32; 2 s
+ * is generous and matches the CD3 detection probe timeout in m1_esp32_caps.c. */
+#define ESPNOW_RPC_TIMEOUT_S  2
 
 /*==========================================================================*/
 /* Module state                                                             */
@@ -51,43 +56,28 @@ static uint8_t s_channel = 1;
 static bool    s_started;
 
 /*==========================================================================*/
-/* Internal helpers — M1_RPC frame build + send (reuse caps.h inline)        */
+/* Internal helper — thin wrapper over the shared M1_RPC client              */
 /*==========================================================================*/
 
 /**
- * Build and send a simple M1_RPC request, return true if response OK.
- * Uses the 64-byte SPI transaction buffer model.
+ * Send a simple M1_RPC request, return true if the ESP32 answered OK.
+ *
+ * Delegates framing, half-duplex SPI-HD transport and response/NAK decoding to
+ * the shared m1_esp32_rpc_call() client (m1_esp32_rpc.c).  ESP-NOW is the first
+ * consumer of that reusable layer; the M1_ESP32_RPC_NOW_* opcodes it uses are
+ * defined once in m1_esp32_rpc.h.
  */
 static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
                             uint8_t payload_len, uint8_t *resp_buf,
                             uint8_t *resp_len)
 {
-    uint8_t tx[SPI_BUF_SIZE];
-    uint8_t rx[SPI_BUF_SIZE];
-
-    memset(tx, 0, sizeof(tx));
-    uint16_t frame_sz = m1_esp32_rpc_build_req(tx, SPI_BUF_SIZE, msg_id,
-                                                payload, payload_len);
-    if (frame_sz == 0) return false;
-
-    int rc = m1_esp32_send_cmd_raw(tx, rx, 200);
-    if (rc != 0) return false;
-
-    /* Parse and validate response */
-    const uint8_t *resp_payload = NULL;
-    uint16_t resp_payload_len = 0;
-    if (!m1_esp32_rpc_parse_resp(rx, SPI_BUF_SIZE, msg_id,
-                                  &resp_payload, &resp_payload_len))
-        return false;
-
-    if (resp_buf && resp_len) {
-        uint8_t copy_len = (uint8_t)resp_payload_len;
-        if (copy_len > SPI_BUF_SIZE - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
-            copy_len = SPI_BUF_SIZE - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE;
-        memcpy(resp_buf, resp_payload, copy_len);
-        *resp_len = copy_len;
-    }
-    return true;
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(msg_id, payload, payload_len,
+                          resp_buf, SPI_BUF_SIZE, &rlen, ESPNOW_RPC_TIMEOUT_S);
+    if (resp_len)
+        *resp_len = (uint8_t)rlen;
+    return st == M1_ESP32_RPC_OK;
 }
 
 /*==========================================================================*/
@@ -96,6 +86,15 @@ static bool espnow_rpc_cmd(uint16_t msg_id, const uint8_t *payload,
 
 bool m1_espnow_start(uint8_t channel)
 {
+    /* Bring up the SPI HAL and the AT/SPI-HD RTOS task that carries the CD3
+     * M1_RPC frames.  DELEGATE_FEATURE only guarantees the SPI HAL is up (via
+     * m1_esp32_ensure_init()); the transport task is otherwise started deep
+     * inside individual features, so start it here — mirroring the CD3
+     * detection probe in m1_esp32_caps_init(). */
+    m1_esp32_ensure_init();
+    if (!get_esp32_main_init_status())
+        esp32_main_init();
+
     s_channel = channel;
     uint8_t payload[24];  /* ch(1) + name string */
     payload[0] = channel;
@@ -106,7 +105,7 @@ bool m1_espnow_start(uint8_t channel)
 
     uint8_t resp[SPI_BUF_SIZE];
     uint8_t rlen = 0;
-    if (!espnow_rpc_cmd(M1_RPC_NOW_START, payload, (uint8_t)(1 + nlen),
+    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_START, payload, (uint8_t)(1 + nlen),
                         resp, &rlen)) {
         return false;
     }
@@ -125,7 +124,7 @@ bool m1_espnow_stop(void)
     if (!s_started) return true;
     uint8_t resp[SPI_BUF_SIZE];
     uint8_t rlen = 0;
-    bool ok = espnow_rpc_cmd(M1_RPC_NOW_STOP, NULL, 0, resp, &rlen);
+    bool ok = espnow_rpc_cmd(M1_ESP32_RPC_NOW_STOP, NULL, 0, resp, &rlen);
     s_started = false;
     return ok;
 }
@@ -134,14 +133,14 @@ bool m1_espnow_announce(void)
 {
     uint8_t resp[SPI_BUF_SIZE];
     uint8_t rlen = 0;
-    return espnow_rpc_cmd(M1_RPC_NOW_ANNOUNCE, NULL, 0, resp, &rlen);
+    return espnow_rpc_cmd(M1_ESP32_RPC_NOW_ANNOUNCE, NULL, 0, resp, &rlen);
 }
 
 uint8_t m1_espnow_poll_peers(void *peers_out, uint8_t max_peers)
 {
     uint8_t resp[SPI_BUF_SIZE];
     uint8_t rlen = 0;
-    if (!espnow_rpc_cmd(M1_RPC_NOW_PEERS_GET, NULL, 0, resp, &rlen))
+    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_PEERS_GET, NULL, 0, resp, &rlen))
         return 0;
 
     /* Response: count(1) + [mac(6)+rssi(1)+namelen(1)+name]×N */
@@ -184,7 +183,7 @@ bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
 
     uint8_t resp[SPI_BUF_SIZE];
     uint8_t rlen = 0;
-    return espnow_rpc_cmd(M1_RPC_NOW_SEND, payload, (uint8_t)(6 + len),
+    return espnow_rpc_cmd(M1_ESP32_RPC_NOW_SEND, payload, (uint8_t)(6 + len),
                           resp, &rlen);
 }
 
@@ -193,7 +192,7 @@ bool m1_espnow_recv_msg(uint8_t from_mac[6], uint8_t *buf,
 {
     uint8_t resp[SPI_BUF_SIZE];
     uint8_t rlen = 0;
-    if (!espnow_rpc_cmd(M1_RPC_NOW_RECV_GET, NULL, 0, resp, &rlen))
+    if (!espnow_rpc_cmd(M1_ESP32_RPC_NOW_RECV_GET, NULL, 0, resp, &rlen))
         return false;
 
     /* Response: count(1) + [mac(6)+len(2 LE)+data]×N — we take first msg */

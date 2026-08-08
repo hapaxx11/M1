@@ -228,6 +228,11 @@ void test_cap_bits_are_unique(void)
         M1_ESP32_CAP_PMKID,
         M1_ESP32_CAP_HANDSHAKE,
         M1_ESP32_CAP_OTA,
+        M1_ESP32_CAP_BLE_SPAM,
+        M1_ESP32_CAP_802154_TX,
+        M1_ESP32_CAP_SOFTAP,
+        M1_ESP32_CAP_ESPNOW,
+        M1_ESP32_CAP_WIFI_HOTSPOT,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -264,6 +269,11 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
         M1_ESP32_CAP_PMKID,
         M1_ESP32_CAP_HANDSHAKE,
         M1_ESP32_CAP_OTA,
+        M1_ESP32_CAP_BLE_SPAM,
+        M1_ESP32_CAP_802154_TX,
+        M1_ESP32_CAP_SOFTAP,
+        M1_ESP32_CAP_ESPNOW,
+        M1_ESP32_CAP_WIFI_HOTSPOT,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -274,6 +284,92 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
         TEST_ASSERT_EQUAL_UINT64_MESSAGE(UINT64_C(0), c & (c - UINT64_C(1)),
             "M1_ESP32_CAP_* bit is not a power of two");
     }
+}
+
+/* =========================================================================
+ * Canonical CD3 wire-protocol bit alignment (regression)
+ *
+ * Bits 0-23 of M1_ESP32_CAP_* MUST match the canonical CD3 firmware header
+ * (bedge117/m1-esp32-brain, components/m1_rpc/include/m1_rpc.h — the M1_CAP_*
+ * definitions).  The CD3 firmware serialises its self-reported capability
+ * bitmap (M1_FW_CAPS) using those exact positions in the M1_RPC_SYS_GET_STATUS
+ * response, so any divergence silently mis-maps every CD3 capability from the
+ * first mismatched bit upward.  These literal values are copied from m1_rpc.h
+ * and must not be changed to "follow" the header — if the header ever moves a
+ * bit, the wire protocol has broken and BOTH must be corrected together.
+ * =========================================================================*/
+
+void test_caps_match_canonical_cd3_wire_bits(void)
+{
+    /* System / WiFi / BLE / 802.15.4 bits 0-20 (M1_CAP_* in m1_rpc.h). */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  0, M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  1, M1_ESP32_CAP_STA_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  2, M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  3, M1_ESP32_CAP_BLE_ADV);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  4, M1_ESP32_CAP_DEAUTH);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  5, M1_ESP32_CAP_BEACON);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  6, M1_ESP32_CAP_PROBE_FLOOD);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  7, M1_ESP32_CAP_KARMA);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  8, M1_ESP32_CAP_PKTMON);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) <<  9, M1_ESP32_CAP_PORTAL);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 10, M1_ESP32_CAP_WIFI_JOIN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 11, M1_ESP32_CAP_WIFI_SET_MAC);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 12, M1_ESP32_CAP_WIFI_SET_CHAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 13, M1_ESP32_CAP_NETSCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 14, M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 15, M1_ESP32_CAP_BT_MANAGE);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 16, M1_ESP32_CAP_802154);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 17, M1_ESP32_CAP_BLE_GATT);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 18, M1_ESP32_CAP_PMKID);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 19, M1_ESP32_CAP_HANDSHAKE);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 20, M1_ESP32_CAP_OTA);
+
+    /* Bits 21-23 — the ones that were previously mis-assigned on the M1. */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 21, M1_ESP32_CAP_BLE_SPAM);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 22, M1_ESP32_CAP_802154_TX);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(1) << 23, M1_ESP32_CAP_SOFTAP);
+
+    /* Host-only capabilities must NOT collide with any canonical CD3 bit
+     * (0-23); they live at bit 24+. */
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT64(UINT64_C(1) << 24, M1_ESP32_CAP_ESPNOW);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT64(UINT64_C(1) << 24, M1_ESP32_CAP_WIFI_HOTSPOT);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0),
+        (M1_ESP32_CAP_ESPNOW | M1_ESP32_CAP_WIFI_HOTSPOT) &
+        ((UINT64_C(1) << 24) - 1));
+}
+
+/* The exact capability bitmap the shipped CD3 firmware self-reports in its
+ * GET_STATUS response (M1_FW_CAPS in bedge117/m1-esp32-brain main/main.c). */
+#define CD3_M1_FW_CAPS_WIRE                                                    \
+    ((UINT64_C(1) <<  0) | (UINT64_C(1) << 10) | (UINT64_C(1) <<  4) |         \
+     (UINT64_C(1) <<  8) | (UINT64_C(1) <<  1) | (UINT64_C(1) <<  5) |         \
+     (UINT64_C(1) <<  9) | (UINT64_C(1) << 19) | (UINT64_C(1) << 16) |         \
+     (UINT64_C(1) <<  2) | (UINT64_C(1) <<  3) | (UINT64_C(1) << 14) |         \
+     (UINT64_C(1) << 21) | (UINT64_C(1) << 22) | (UINT64_C(1) <<  6) |         \
+     (UINT64_C(1) <<  7) | (UINT64_C(1) << 23))
+
+void test_cd3_reported_bitmap_maps_to_correct_caps(void)
+{
+    /* Serialise the CD3 bitmap the way the firmware does (LE uint8[8]) and
+     * unpack it via the shared helper — exactly what m1_esp32_caps_init()
+     * does with the GET_STATUS payload. */
+    uint8_t bitmap[8];
+    for (unsigned i = 0; i < 8u; i++)
+        bitmap[i] = (uint8_t)((CD3_M1_FW_CAPS_WIRE >> (i * 8u)) & 0xFFu);
+
+    const uint64_t caps = m1_esp32_rpc_caps_get(bitmap);
+
+    /* Bits 21-23 the firmware advertises resolve to the right capabilities. */
+    TEST_ASSERT_TRUE(caps & M1_ESP32_CAP_BLE_SPAM);   /* bit 21 */
+    TEST_ASSERT_TRUE(caps & M1_ESP32_CAP_802154_TX);  /* bit 22 */
+    TEST_ASSERT_TRUE(caps & M1_ESP32_CAP_SOFTAP);     /* bit 23 */
+    TEST_ASSERT_TRUE(caps & M1_ESP32_CAP_HANDSHAKE);  /* bit 19 */
+
+    /* Host-only bits are NOT advertised by CD3, so they must read as false —
+     * the pre-fix bug set ESPNOW (old bit 21) and WIFI_HOTSPOT (old bit 22)
+     * from the firmware's BLE_SPAM / 802154_TX advertisement. */
+    TEST_ASSERT_FALSE(caps & M1_ESP32_CAP_ESPNOW);
+    TEST_ASSERT_FALSE(caps & M1_ESP32_CAP_WIFI_HOTSPOT);
 }
 
 /* =========================================================================
@@ -924,6 +1020,8 @@ int main(void)
     /* Bit uniqueness */
     RUN_TEST(test_cap_bits_are_unique);
     RUN_TEST(test_cap_bits_are_single_bit_powers_of_two);
+    RUN_TEST(test_caps_match_canonical_cd3_wire_bits);
+    RUN_TEST(test_cd3_reported_bitmap_maps_to_correct_caps);
 
     /* Profile macros */
     RUN_TEST(test_sin360_profile_has_expected_caps);

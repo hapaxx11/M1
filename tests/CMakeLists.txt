@@ -129,6 +129,60 @@ endif()
 add_test(NAME esp32_feature_map COMMAND test_esp32_feature_map)
 
 # ------------------------------------------------------------------
+# Module under test: m1_esp32_rpc (CD3 M1_RPC compatibility layer)
+#
+# Reusable M1_RPC client + transport classifier.  The SPI-HD transport
+# (spi_AT_send_recv_bin) and capability cache (m1_esp32_caps_get_bitmap) are
+# stubbed in the test so the pure request/response + framing logic runs on the
+# host.  Verifies:
+#   - m1_esp32_rpc_call(): REQ build -> RESP/NAK decode, payload copy/truncation,
+#     transport failure, msg_id mismatch, oversize-request guard
+#   - m1_esp32_rpc_decode_resp(): bad magic/CRC/short-buffer, empty-NAK status
+#   - esp32_firmware_transport() / m1_esp32_active_transport(): NONE / RPC (brain
+#     CD3) / BINARY_SPI (SiN360) / AT (generic AT + legacy CD3-AT) classification
+# ------------------------------------------------------------------
+add_executable(test_esp32_rpc
+    test_esp32_rpc.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_rpc.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_esp32_rpc PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_rpc PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_rpc PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_rpc COMMAND test_esp32_rpc)
+
+# ------------------------------------------------------------------
+# Module under test: m1_esp32_rpc_features (per-feature M1_RPC action layer)
+#
+# Builds on the m1_esp32_rpc client to provide one action wrapper per
+# WiFi / BLE / 802.15.4 feature plus the feature -> opcode map.  The SPI-HD
+# transport is stubbed with a fake that captures the outgoing REQ frame and
+# replays a canned RESP/NAK, so every wrapper runs on the host.  Verifies:
+#   - esp32_feature_rpc_opcode(): known mappings, unmapped features, out-of-range
+#   - trigger / scalar / struct payload encoders build the right opcode + bytes
+#   - wifi_scan / zb_sniff_get response decoders (count, cap-to-max, NAK)
+#   - argument validation + NAK / transport-failure propagation
+# ------------------------------------------------------------------
+add_executable(test_esp32_rpc_features
+    test_esp32_rpc_features.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_rpc_features.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_rpc.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_esp32_rpc_features PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_rpc_features PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_rpc_features PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_rpc_features COMMAND test_esp32_rpc_features)
+
+# ------------------------------------------------------------------
 # Module under test: battery_soc_estimate
 # Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
 # Bug context: "Asian M1" fuel gauge reports 0% SoC while device is

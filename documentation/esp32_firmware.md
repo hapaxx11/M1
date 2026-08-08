@@ -288,6 +288,79 @@ Starting from Hapax v0.9.0 (firmware build that includes `m1_esp32_caps.c`),
 the M1 queries the connected ESP32 firmware for its capability descriptor at
 first use via the `CMD_GET_STATUS` (opcode `0x02`) SPI command.
 
+### Host transport compatibility layer (`m1_esp32_rpc.c/.h`)
+
+Once the capability bitmap is known, the host classifies the firmware into one
+of three wire transports via `esp32_firmware_transport(cap_bitmap)`
+(`esp32_feature_map.c`), returning `esp32_transport_t`:
+
+| Firmware | Discriminator | Transport enum |
+|----------|---------------|----------------|
+| **CD3 native brain** (`m1-esp32-brain`) | `HANDSHAKE && OTA` | `ESP32_TRANSPORT_RPC` |
+| **SiN360** | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
+| **AT builds, incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
+| unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
+
+The native brain CD3 speaks the binary `M1_RPC` protocol, which the AT command
+set cannot express, so `m1_esp32_rpc.c/.h` provides a reusable host-side
+`M1_RPC` client: the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from
+the shared `bedge117/m1-esp32-brain` `m1_rpc.h`), the payload structs, and a
+NAK/status-aware `m1_esp32_rpc_call()` that frames a request, sends it over the
+half-duplex SPI-HD path (`spi_AT_send_recv_bin`), and decodes the reply. ESP-NOW
+(`m1_espnow_hal.c`) is the first consumer; other WiFi/BLE/802.15.4 features
+adopt it by branching on `m1_esp32_active_transport()`.
+
+> **The two CD3 firmwares take different transports and both stay supported.**
+> The legacy **CD3-AT** advertises `WIFI_JOIN` but never the brain-CD3
+> `HANDSHAKE+OTA` pair, so it resolves to `ESP32_TRANSPORT_AT` and continues to
+> be driven over AT text commands exactly as before — the M1_RPC layer never
+> re-routes it. Only the native **brain CD3** resolves to
+> `ESP32_TRANSPORT_RPC`.
+
+#### Per-feature action layer (`m1_esp32_rpc_features.c/.h`)
+
+`m1_esp32_rpc.c` is the generic client; `m1_esp32_rpc_features.c/.h` is the
+feature layer built on top of it. It provides two things every WiFi / BLE /
+802.15.4 feature needs to drive the native brain CD3:
+
+- `esp32_feature_rpc_opcode(feature_id, &op)` — the authoritative
+  feature → `m1_esp32_rpc_id_t` map (e.g. `ESP32_FEATURE_WIFI_SCAN` →
+  `M1_ESP32_RPC_WIFI_SCAN`, `ESP32_FEATURE_DEAUTH` →
+  `M1_ESP32_RPC_OFF_DEAUTH_START`). Host-composed features with no single
+  native opcode (`NETSCAN`, `BLE_GATT`, `BT_MANAGE`) return `false`.
+- One small action wrapper per feature action that builds the canonical
+  little-endian payload, dispatches via `m1_esp32_rpc_call()`, and decodes the
+  reply into a neutral out-struct — e.g. `m1_esp32_rpc_wifi_scan()`,
+  `m1_esp32_rpc_deauth_start()`, `m1_esp32_rpc_ble_hid_key()`,
+  `m1_esp32_rpc_zb_sniff_get()`, plus the `*_start` / `*_stop` triggers.
+
+A feature wires it in by branching on the active transport:
+
+```c
+esp32_transport_t xport = m1_esp32_active_transport();
+if (xport == ESP32_TRANSPORT_RPC) {
+    m1_esp32_rpc_zb_sniff_start(ch);          /* brain CD3: binary M1_RPC */
+} else {
+    spi_AT_send_recv("AT+ZIGSNIFF=1,...\r\n", ...);  /* AT / CD3-AT path */
+}
+```
+
+The 802.15.4 sniffer / flood (`m1_802154.c`) uses exactly this pattern: on
+brain CD3 it drives `ZB_SNIFF_START` / `ZB_SNIFF_GET` / `ZB_SNIFF_STOP` (and
+`ZB_FLOOD_*`) and folds the binary `m1_esp32_rpc_zb_device_t` records into the
+same deduplicated display list the AT `+ZIGFRAME` parser feeds; every other
+build keeps the AT text path unchanged. The whole feature layer is transport-
+injectable, so it is exercised on the host in `tests/test_esp32_rpc_features.c`
+without an ESP32.
+
+> All features have typed wrappers in `m1_esp32_rpc_features.c/.h`:
+> `m1_esp32_rpc_wifi_connect()`, `m1_esp32_rpc_beacon_start()`,
+> `m1_esp32_rpc_probe_start()`, `m1_esp32_rpc_captive_start()`, and
+> `m1_esp32_rpc_ble_adv_start()` are available and encode the confirmed
+> brain-CD3 wire format.  The raw `esp32_feature_rpc_opcode()` +
+> `m1_esp32_rpc_call()` path remains available for future opcodes not yet
+> covered by a wrapper.
+
 ### CMD_GET_STATUS payload format (protocol version 1)
 
 The 41-byte response payload returned by supporting ESP32 firmware:
@@ -327,28 +400,37 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 | 16 | `M1_ESP32_CAP_802154` | AT IEEE 802.15.4 / Zigbee / Thread |
 | 17 | `M1_ESP32_CAP_BLE_GATT` | `CMD_BLE_GATT_*` client operations |
 | 18 | `M1_ESP32_CAP_PMKID` | Dedicated PMKID capture — reserved `M1_RPC_OFF_PMKID_CAPTURE` msg ID; **not yet dispatched** in current CD3 (`bedge117/m1-esp32-brain`) releases as of the 2026-07 review — see note below |
-| 19 | `M1_ESP32_CAP_HANDSHAKE` | WPA handshake / EAPOL capture with pcap — `M1_RPC_OFF_HS_START/STATUS/GET/STOP` **are dispatched** in current CD3 releases, but the firmware does not yet set this bit in its self-reported `cap_bitmap` — see note below |
+| 19 | `M1_ESP32_CAP_HANDSHAKE` | WPA handshake / EAPOL capture with pcap — `M1_RPC_OFF_HS_START/STATUS/GET/STOP`; **dispatched and advertised** in current CD3 releases (`M1_FW_CAPS` sets this bit) |
 | 20 | `M1_ESP32_CAP_OTA` | ESP32 firmware OTA self-update — reserved `M1_RPC_SYS_OTA_BEGIN/DATA/END` msg IDs; **not yet dispatched** in current CD3 releases — see note below |
-| 21-63 | — | Reserved for future use |
+| 21 | `M1_ESP32_CAP_BLE_SPAM` | BLE advertisement spam — `M1_RPC_BLE_SPAM_START/STOP`. **Canonical CD3 wire bit** (`M1_CAP_BLE_SPAM`) — must match `m1_rpc.h` |
+| 22 | `M1_ESP32_CAP_802154_TX` | IEEE 802.15.4 raw TX / flood / inject — `M1_RPC_ZB_FLOOD_START` / `M1_RPC_ZB_INJECT`. **Canonical CD3 wire bit** (`M1_CAP_802154_TX`) |
+| 23 | `M1_ESP32_CAP_SOFTAP` | WiFi SoftAP hotspot — `M1_RPC_SOFTAP_START/STOP`. **Canonical CD3 wire bit** (`M1_CAP_SOFTAP`) |
+| 24 | `M1_ESP32_CAP_ESPNOW` | ESP-NOW peer link — `M1_RPC_NOW_*` (host-only bit; **not** in the canonical CD3 header, not self-reported by any firmware) |
+| 25 | `M1_ESP32_CAP_WIFI_HOTSPOT` | AT `AT+CWMODE=2` SoftAP path (host-only bit; not self-reported by any firmware) |
+| 26-63 | — | Reserved for future use |
 
-> **CD3 (`bedge117/m1-esp32-brain`) capability status — reviewed 2026-07-21
-> against public source (commit `74ace433`):** the `M1_RPC` wire protocol
-> (`components/m1_rpc/include/m1_rpc.h`) *reserves* message IDs for PMKID
-> capture and OTA self-update, and `m1_csrc/m1_esp32_caps.h` defines
+> **Bits 21-23 are owned by the canonical CD3 wire header**
+> (`bedge117/m1-esp32-brain`, `components/m1_rpc/include/m1_rpc.h`:
+> `M1_CAP_BLE_SPAM` / `M1_CAP_802154_TX` / `M1_CAP_SOFTAP`).  `m1_esp32_caps.h`
+> must keep these bit positions identical, because CD3 serialises its
+> `M1_FW_CAPS` bitmap using them in the `GET_STATUS` response.  Host-only
+> capabilities (`ESPNOW`, `WIFI_HOTSPOT`) therefore start at bit 24 so they can
+> never collide with a CD3-reported capability.
+
+> **CD3 (`bedge117/m1-esp32-brain`) capability status:** the `M1_RPC` wire
+> protocol (`components/m1_rpc/include/m1_rpc.h`) *reserves* message IDs for
+> PMKID capture and OTA self-update, and `m1_csrc/m1_esp32_caps.h` defines
 > corresponding `M1_ESP32_CAP_PMKID`/`M1_ESP32_CAP_OTA` bits for when they
-> ship. As of that review, `main/main.c`'s `dispatch_request()` has **no
-> case** for `M1_RPC_OFF_PMKID_CAPTURE` or any `M1_RPC_SYS_OTA_*` message —
-> both fall through to the `default:` handler and are NAK'd with
-> `M1_RPC_ERR_UNSUPPORTED`. Handshake capture (`M1_RPC_OFF_HS_*`) **is**
-> dispatched and functional, but the firmware's advertised capability
-> bitmap (`M1_FW_CAPS` in `main.c`) is currently only
-> `WIFI_SCAN | WIFI_JOIN | DEAUTH | PKTMON` — it does not yet set
-> `M1_CAP_HANDSHAKE`, so `m1_esp32_has_cap(M1_ESP32_CAP_HANDSHAKE)` will
-> return false against a real device even though the underlying RPC calls
-> would succeed if issued directly. Do not build UI/menu entries that assume
-> PMKID or OTA are usable against CD3 today; re-verify against the firmware's
-> self-reported `cap_bitmap` (not this table) before relying on any of bits
-> 18-20.
+> ship. `main/main.c`'s `dispatch_request()` has **no case** for
+> `M1_RPC_OFF_PMKID_CAPTURE` or any `M1_RPC_SYS_OTA_*` message — both fall
+> through to the `default:` handler and are NAK'd with `M1_RPC_ERR_UNSUPPORTED`.
+> The firmware's advertised capability bitmap (`M1_FW_CAPS` in `main.c`) is
+> `WIFI_SCAN | WIFI_JOIN | DEAUTH | PKTMON | STA_SCAN | BEACON | PORTAL |
+> HANDSHAKE | 802154 | BLE_SCAN | BLE_ADV | BLE_HID | BLE_SPAM | 802154_TX |
+> PROBE_FLOOD | KARMA | SOFTAP` — it does **not** set `PMKID` or `OTA`. Do not
+> build UI/menu entries that assume PMKID or OTA are usable against CD3 today;
+> re-verify against the firmware's self-reported `cap_bitmap` (not this table)
+> before relying on bits 18 and 20.
 
 ### Capability matrix by firmware variant
 
@@ -584,16 +666,22 @@ Peer table: up to `ENL_MAX_PEERS = 16` entries (LRU eviction).  Discovery is
 broadcast (`FF:FF:FF:FF:FF:FF`); the ESP32 buffers up to 32 inbound messages.
 The STM32 polls `NOW_RECV_GET` to drain the ring buffer.
 
-**STM32-side SPI transport constraint:**  The fixed 64-byte SPI transaction
-leaves at most 48 bytes of usable RPC payload per call (after the 16-byte
-M1_RPC header+CRC overhead).  `NOW_SEND` prefixes a 6-byte MAC, so the
-maximum ESP-NOW application data per SPI call is **42 bytes** — not the
+**STM32-side SPI transport:**  ESP-NOW M1_RPC frames travel over the
+half-duplex SPI-HD command protocol (`spi_AT_send_recv_bin()`), the same
+transport used by the CD3 detection probe — **not** the full-duplex 64-byte
+transfer (`m1_esp32_send_cmd_raw()`) used by the SiN360 binary protocol.  A
+`spi_slave_hd` slave cannot answer a full-duplex `HAL_SPI_TransmitReceive`, so
+using the wrong path silently fails every ESP-NOW command.  The fixed 64-byte
+SPI transaction leaves at most 48 bytes of usable RPC payload per call (after
+the 16-byte M1_RPC header+CRC overhead).  `NOW_SEND` prefixes a 6-byte MAC, so
+the maximum ESP-NOW application data per SPI call is **42 bytes** — not the
 240-byte ESP-NOW protocol limit.  Full-size payloads require multi-transaction
 RPC chunking (not yet implemented).
 
-**Capability bit:** `M1_ESP32_CAP_ESPNOW` (bit 21, `m1_csrc/m1_esp32_caps.h`).
-CD3 implements the handlers but does not yet self-report this bit in
-`M1_FW_CAPS`; the feature gate will fail closed until CD3 adds it.
+**Capability bit:** `M1_ESP32_CAP_ESPNOW` (bit **24**, `m1_csrc/m1_esp32_caps.h`).
+This is a host-only bit above the canonical CD3 wire range (bits 0-23); CD3
+implements the handlers but does not self-report ESP-NOW in `M1_FW_CAPS`, so
+the feature gate fails closed until CD3 adds it.
 
 **Key design decisions:**
 - *No encryption* — `encrypt = false` always, matching CD3's `esp_now_link`.
