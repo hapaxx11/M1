@@ -6,13 +6,13 @@
  * Unit tests for the RPC CRC-16 implementation and frame format.
  * Tests the table-driven CRC used by the M1 RPC binary protocol.
  *
- * The M1 RPC CRC-16 uses a custom lookup table (poly=0x1021,
- * init=0xFFFF, no reflect, no final XOR).  The production table in
- * m1_csrc/m1_rpc.c differs from the canonical CRC-16/CCITT-FALSE table in
- * 46 entries, so the check value for "123456789" is 0xC9B1 — NOT
- * the standard CCITT-FALSE result of 0x29B1.  Both the table and
- * expected values here are copied verbatim from the production code;
- * do NOT "correct" them to match online CRC calculators.
+ * The M1 RPC CRC-16 uses the standard CRC-16/CCITT-FALSE lookup table
+ * (poly=0x1021, init=0xFFFF, no reflect, no final XOR), matching the
+ * table qMonstatek uses as its "Correct" CRC dialect. (An earlier
+ * production table had 46 wrong entries and produced 0xC9B1 for
+ * "123456789" instead of the standard 0x29B1 — that corrupted table
+ * caused qMonstatek to report "Legacy FW — Compatibility Mode" and has
+ * been fixed; see m1_csrc/m1_rpc.c.)
  *
  * Build with the host-side CMake:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -39,13 +39,10 @@ void tearDown(void) {}
 
 void test_crc16_known_vector_123456789(void)
 {
-    /* M1 RPC CRC-16 over "123456789" = 0xC9B1.
-     * The M1 lookup table differs from the canonical CRC-16/CCITT-FALSE
-     * table (which yields 0x29B1), so this value is intentionally
-     * different.  Verified against the production table in m1_csrc/m1_rpc.c. */
+    /* Standard CRC-16/CCITT-FALSE check value for "123456789" = 0x29B1. */
     uint8_t data[] = "123456789";
     uint16_t crc = rpc_crc16(data, 9);
-    TEST_ASSERT_EQUAL_HEX16(0xC9B1, crc);
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc);
 }
 
 void test_crc16_empty(void)
@@ -74,7 +71,7 @@ void test_crc16_two_bytes(void)
 {
     uint8_t data[] = {0xAA, 0x55};
     uint16_t crc = rpc_crc16(data, 2);
-    TEST_ASSERT_EQUAL_HEX16(0x05EA, crc);
+    TEST_ASSERT_EQUAL_HEX16(0xE5EA, crc);
 }
 
 /* ===================================================================
