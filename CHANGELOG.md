@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.33] - 2026-08-08
+
+### Fixed
+
+- **ESP32 brain: WiFi/BLE/STA scan and Zigbee sniff "AP scan failed" fixed** — the
+  M1_RPC response buffer was hardcoded to 256 bytes, but the brain firmware
+  returns bulk scan/sniff lists (up to ~1.8 KB) as a single response. Any real
+  scan with more than a handful of results overflowed the buffer and failed
+  with "AP scan failed. Please try again." Response buffers for
+  `m1_esp32_rpc_wifi_scan()`, `m1_esp32_rpc_sta_scan_results()`,
+  `m1_esp32_rpc_ble_scan_results()`, `m1_esp32_rpc_zb_sniff_get()`, and the
+  BLE scan path in `m1_bt.c` are now heap-allocated large enough to hold the
+  firmware's largest documented bulk response.
+- **ESP-NOW brain: peer list and message reception undersized response buffer fixed** —
+  auditing all other brain-based ESP32 RPC calls after the WiFi/BLE scan
+  buffer overflow fix turned up the same defect in the ESP-NOW HAL
+  (`m1_espnow_hal.c`): every `M1_RPC_NOW_*` call hardcoded the response
+  reception capacity to `SPI_BUF_SIZE` (64 bytes) inside `espnow_rpc_cmd()`,
+  ignoring the caller's actual buffer size, and truncated the returned
+  length to a `uint8_t`. `M1_RPC_NOW_PEERS_GET` can report up to 16 peers
+  (up to 497 bytes) and `M1_RPC_NOW_RECV_GET` up to a 240-byte message (249
+  bytes total) — both silently truncated well before parsing, dropping
+  peers from the discovery list and corrupting/losing received messages.
+  `espnow_rpc_cmd()` now takes an explicit response-capacity/length pair,
+  `m1_espnow_poll_peers()` / `m1_espnow_recv_msg()` size their buffers to
+  the protocol's documented worst case, and the peer/message decoders were
+  extracted into a pure, host-testable `espnow_rpc_parse.c` module.
 ## [0.9.2.32] - 2026-08-08
 
 ### Fixed
