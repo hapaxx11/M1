@@ -440,7 +440,14 @@ static void ieee802154_scan(char filter_proto)
         /* Start/switch channel */
         if (xport == ESP32_TRANSPORT_RPC)
         {
-            m1_esp32_rpc_zb_sniff_start(ch);
+            m1_esp32_rpc_status_t rpc_st = m1_esp32_rpc_zb_sniff_start(ch);
+            if (ch == 11 && rpc_st != M1_ESP32_RPC_OK)
+            {
+                char err_msg[32];
+                snprintf(err_msg, sizeof(err_msg), "RPC NAK %d", (int)rpc_st);
+                show_message(title, "ZIGSNIFF error:", err_msg, 0);
+                goto wait_exit;
+            }
         }
         else
         {
