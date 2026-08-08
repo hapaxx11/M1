@@ -681,10 +681,11 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                  uint8_t *rx_buf, int rx_buf_size,
                                  int *out_len, int timeout_sec)
 {
-	/* 512-byte working buffers.  Static (not on-stack) to keep this off the
-	 * caller's stack; the M1_RPC path is single-threaded like the SiN360 one. */
-	static uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
-	static uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
+	/* 512-byte working buffers for fixed-size M1 Link transactions.
+	 * Keep these on the caller stack so we don't permanently reserve
+	 * additional .bss in the firmware image. */
+	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
+	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
 	uint8_t rc;
 
 	(void)timeout_sec; /* the poll budget bounds the wait */
