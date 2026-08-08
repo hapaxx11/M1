@@ -26,7 +26,11 @@ with the M1.  A custom SPI-configured build is required.
 >   a different, newer codebase: native ESP-IDF (no AT stack at all), using the
 >   custom binary `M1_RPC` protocol. Detected via the `M1_RPC` PING/GET_STATUS
 >   probe. This is **not** a fork of CD3-AT and shares no source code with it —
->   only the SPI-HD transport wiring and GPIO pin assignment are the same.
+>   only the physical SPI3 wiring and GPIO pin assignment are the same. Note the
+>   **electrical protocol differs**: CD3-AT is an ESP-AT half-duplex
+>   `spi_slave_hd` command slave, whereas the brain CD3 is a **full-duplex
+>   `spi_slave`** clocking fixed 512-byte transactions (see the transport table
+>   below).
 >
 > Do not use "C3" or "bedge117" alone to mean either firmware — always say
 > **CD3-AT** (AT-based) or **CD3** (native binary RPC) so readers know which
@@ -296,26 +300,59 @@ of three wire transports via `esp32_firmware_transport(cap_bitmap)`
 
 | Firmware | Discriminator | Transport enum |
 |----------|---------------|----------------|
-| **CD3 native brain** (`m1-esp32-brain`) | `HANDSHAKE && OTA` | `ESP32_TRANSPORT_RPC` |
+| **CD3 native brain** (`m1-esp32-brain`) | `HANDSHAKE && (802154_TX \|\| BLE_SPAM)` | `ESP32_TRANSPORT_RPC` |
 | **SiN360** | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
 | **AT builds, incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
 | unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
 
-The native brain CD3 speaks the binary `M1_RPC` protocol, which the AT command
-set cannot express, so `m1_esp32_rpc.c/.h` provides a reusable host-side
-`M1_RPC` client: the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from
-the shared `bedge117/m1-esp32-brain` `m1_rpc.h`), the payload structs, and a
-NAK/status-aware `m1_esp32_rpc_call()` that frames a request, sends it over the
-half-duplex SPI-HD path (`spi_AT_send_recv_bin`), and decodes the reply. ESP-NOW
+> **Why not `OTA`?** Earlier revisions keyed CD3 detection off `HANDSHAKE && OTA`,
+> but the shipped brain firmware's `M1_FW_CAPS` advertises `HANDSHAKE` while
+> **deliberately omitting `OTA`** ("intentionally omitted until implemented"), so
+> the whole class of brain devices was misclassified as AT and every ESP32
+> feature failed (AP scan failed, 2.4G survey found nothing, Signal Monitor fell
+> back to "Unknown"). Detection now keys off `HANDSHAKE` combined with a
+> CD3-unique bit (`802154_TX` or `BLE_SPAM`) that the SiN360 and AT profiles
+> never advertise.
+
+The native brain CD3 is an ESP-IDF **full-duplex `spi_slave`** device — **not**
+the ESP-AT half-duplex `spi_slave_hd` command slave. Every SPI transaction
+clocks **exactly 512 bytes** (`M1_ESP32_M1LINK_MTU`) in both directions at once,
+with one `M1_RPC` frame at the head of the buffer and zero padding after it, and
+the slave **pipelines its reply onto a later transaction** (it prepares its TX
+buffer from the previous loop iteration). Sending AT-style `spi_slave_hd`
+command/address/dummy frames (via `spi_AT_send_recv_bin`) to this slave yields
+no reply at all — that transport mismatch is the second half of why brain
+features were broken.
+
+`m1_esp32_rpc.c/.h` provides a reusable host-side `M1_RPC` client: the canonical
+opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared `m1-esp32-brain`
+`m1_rpc.h`), the payload structs, a NAK/status-aware `m1_esp32_rpc_call()`, and
+the full-duplex framing/pipelining helper `m1_esp32_m1link_send_recv()`. The
+helper issues the request then follow-up **IDLE** filler transactions, scanning
+each received 512-byte frame for a `RESP`/`NAK` whose `msg_id` matches the
+request (skipping `IDLE`/`EVENT`/mismatched frames and reassembling `FRAG`
+chains), bounded by a poll budget. On-target, `spi_m1link_send_recv_bin()`
+(`esp_app_main.c`) supplies the single-transaction primitive using
+`HAL_SPI_TransmitReceive` on `hspi_esp` (SPI3) with manual CS (PB10) and
+HANDSHAKE (PD7) handling, mirroring the SiN360 direct-HAL pattern — it does
+**not** rely on the ESP-AT RTOS task, which the brain firmware does not run. The
+`M1_RPC` client defaults to this M1 Link transport, and the CD3 detection probe
+(Probe 3 in `m1_esp32_caps.c`) uses it for `SYS_PING` / `SYS_GET_STATUS`; the AT
+presence and `AT+CMD?` probes stay on `spi_AT_send_recv_bin`. ESP-NOW
 (`m1_espnow_hal.c`) is the first consumer; other WiFi/BLE/802.15.4 features
 adopt it by branching on `m1_esp32_active_transport()`.
 
+> **SPI clock note:** the brain reports ~4.7 MHz stable with a 10 MHz target, so
+> start the SPI3 prescaler conservative and only raise it after `SYS_PING` is
+> reliably stable.
+
 > **The two CD3 firmwares take different transports and both stay supported.**
 > The legacy **CD3-AT** advertises `WIFI_JOIN` but never the brain-CD3
-> `HANDSHAKE+OTA` pair, so it resolves to `ESP32_TRANSPORT_AT` and continues to
-> be driven over AT text commands exactly as before — the M1_RPC layer never
-> re-routes it. Only the native **brain CD3** resolves to
-> `ESP32_TRANSPORT_RPC`.
+> `HANDSHAKE + 802154_TX/BLE_SPAM` combination, so it resolves to
+> `ESP32_TRANSPORT_AT` and continues to be driven over AT text commands exactly
+> as before — the M1_RPC layer never re-routes it. Only the native **brain CD3**
+> resolves to `ESP32_TRANSPORT_RPC` and rides the 512-byte full-duplex
+> `spi_slave` transport.
 
 #### Per-feature action layer (`m1_esp32_rpc_features.c/.h`)
 

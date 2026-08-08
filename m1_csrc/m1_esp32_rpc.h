@@ -364,14 +364,15 @@ m1_esp32_rpc_decode_resp(const uint8_t *buf, uint16_t buf_len,
 /* =========================================================================
  * Transport injection (for host tests)
  *
- * On-target the client sends frames via spi_AT_send_recv_bin() (the binary-safe
- * half-duplex SPI-HD path shared with the AT firmware and the CD3 detection
- * probe).  Host tests install a fake transport to exercise the build / decode
- * path without hardware.
+ * On-target the client sends frames via spi_m1link_send_recv_bin() (the 512-byte
+ * full-duplex "M1 Link" path the native brain CD3 requires — see below).  Host
+ * tests install a fake transport to exercise the build / decode path without
+ * hardware.
  * =========================================================================*/
 
 /**
- * Transport function signature — matches spi_AT_send_recv_bin().
+ * Transport function signature — matches spi_m1link_send_recv_bin() /
+ * spi_AT_send_recv_bin().
  * @return 0 (SUCCESS) on success, non-zero on transport error.
  */
 typedef uint8_t (*m1_esp32_rpc_transport_fn)(const uint8_t *tx_buf, int tx_len,
@@ -380,7 +381,7 @@ typedef uint8_t (*m1_esp32_rpc_transport_fn)(const uint8_t *tx_buf, int tx_len,
 
 /**
  * Override the transport used by m1_esp32_rpc_call().  Pass NULL to restore the
- * default (spi_AT_send_recv_bin).  Intended for host tests only.
+ * default (spi_m1link_send_recv_bin).  Intended for host tests only.
  */
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
 

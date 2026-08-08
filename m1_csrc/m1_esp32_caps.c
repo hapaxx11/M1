@@ -152,9 +152,11 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 static void caps_apply_footprint_estimates(uint64_t bitmap)
 {
     if ((bitmap & M1_ESP32_CAP_HANDSHAKE) &&
-        (bitmap & M1_ESP32_CAP_OTA))
+        (bitmap & (M1_ESP32_CAP_802154_TX | M1_ESP32_CAP_BLE_SPAM)))
     {
-        /* CD3 native binary RPC firmware (bedge117/m1-esp32-brain) */
+        /* CD3 native binary RPC "brain" firmware (m1-esp32-brain).  Mirrors the
+         * esp32_firmware_is_cd3() discriminator (HANDSHAKE + a CD3-unique bit),
+         * NOT the old HANDSHAKE+OTA pair — the shipped brain omits OTA. */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_CD3;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_CD3;
     }
