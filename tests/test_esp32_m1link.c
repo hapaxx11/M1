@@ -73,7 +73,7 @@ static void fake_reset(void)
 static void queue_frame(uint8_t msg_type, uint16_t msg_id,
                         const uint8_t *payload, uint16_t plen)
 {
-    TEST_ASSERT_LESS_THAN_INT(MAX_TXNS, g_slave_count);
+    TEST_ASSERT_TRUE(g_slave_count < MAX_TXNS);
     uint8_t *b = g_slave[g_slave_count];
     b[0] = (uint8_t)(M1_ESP32_RPC_MAGIC & 0xFFu);
     b[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
@@ -94,7 +94,7 @@ static void queue_frame(uint8_t msg_type, uint16_t msg_id,
 /* Queue an all-zero (invalid / pure padding) slave frame. */
 static void queue_blank(void)
 {
-    TEST_ASSERT_LESS_THAN_INT(MAX_TXNS, g_slave_count);
+    TEST_ASSERT_TRUE(g_slave_count < MAX_TXNS);
     memset(g_slave[g_slave_count], 0, MTU);
     g_slave_count++;
 }
