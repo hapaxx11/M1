@@ -125,23 +125,33 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap)
 
 bool esp32_firmware_is_cd3(uint64_t cap_bitmap)
 {
-    /* CD3 native binary-RPC firmware (bedge117/m1-esp32-brain):
-     * HANDSHAKE and OTA are both unique to CD3 — neither SiN360 nor any
-     * AT variant sets them.  All-zero bitmaps (unknown / fallback) return
-     * false. */
+    /* CD3 native binary-RPC firmware (bedge117/m1-esp32-brain).
+     *
+     * The shipped brain firmware's self-reported M1_FW_CAPS (main.c) advertises
+     * HANDSHAKE but deliberately OMITS OTA ("intentionally omitted until
+     * implemented").  Keying detection on OTA therefore mis-classified a real
+     * brain device as ESP32_TRANSPORT_AT, routing every WiFi/BLE/802.15.4
+     * feature back down the AT path — which the brain does not implement — so
+     * nothing worked.  Detect instead on HANDSHAKE (an RPC-only capability
+     * dispatched via M1_RPC_OFF_HS_*) combined with a second canonical CD3-only
+     * bit (802.15.4 TX or BLE spam).  Requiring the second bit keeps the rule
+     * from colliding with any hypothetical AT firmware that maps a lone
+     * handshake command.  Neither SiN360 nor any AT variant sets this
+     * combination.  All-zero bitmaps (unknown / fallback) return false. */
     return (cap_bitmap & M1_ESP32_CAP_HANDSHAKE) != 0u &&
-           (cap_bitmap & M1_ESP32_CAP_OTA) != 0u;
+           (cap_bitmap & (M1_ESP32_CAP_802154_TX | M1_ESP32_CAP_BLE_SPAM)) != 0u;
 }
 
 esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap)
 {
     /* Order matters: the native brain CD3 is the most specific (HANDSHAKE +
-     * OTA) and must be tested before the SiN360 rule, then SiN360 before the
-     * generic AT fallback.  The legacy CD3-AT firmware sets WIFI_JOIN but NOT
-     * the HANDSHAKE+OTA pair, so it falls through to ESP32_TRANSPORT_AT and
-     * continues to be driven over AT text commands — this layer never
-     * re-routes it to M1_RPC.  An all-zero bitmap (unknown / not yet probed)
-     * yields NONE so transport-selecting callers fail closed. */
+     * an RPC-only bit) and must be tested before the SiN360 rule, then SiN360
+     * before the generic AT fallback.  The legacy CD3-AT firmware sets WIFI_JOIN
+     * but NOT the brain CD3's HANDSHAKE + 802154_TX/BLE_SPAM combination, so it
+     * falls through to ESP32_TRANSPORT_AT and continues to be driven over AT
+     * text commands — this layer never re-routes it to M1_RPC.  An all-zero
+     * bitmap (unknown / not yet probed) yields NONE so transport-selecting
+     * callers fail closed. */
     if (cap_bitmap == 0u)
         return ESP32_TRANSPORT_NONE;
     if (esp32_firmware_is_cd3(cap_bitmap))

@@ -364,14 +364,15 @@ m1_esp32_rpc_decode_resp(const uint8_t *buf, uint16_t buf_len,
 /* =========================================================================
  * Transport injection (for host tests)
  *
- * On-target the client sends frames via spi_AT_send_recv_bin() (the binary-safe
- * half-duplex SPI-HD path shared with the AT firmware and the CD3 detection
- * probe).  Host tests install a fake transport to exercise the build / decode
- * path without hardware.
+ * On-target the client sends frames via spi_m1link_send_recv_bin() (the 512-byte
+ * full-duplex "M1 Link" path the native brain CD3 requires — see below).  Host
+ * tests install a fake transport to exercise the build / decode path without
+ * hardware.
  * =========================================================================*/
 
 /**
- * Transport function signature — matches spi_AT_send_recv_bin().
+ * Transport function signature — matches spi_m1link_send_recv_bin() /
+ * spi_AT_send_recv_bin().
  * @return 0 (SUCCESS) on success, non-zero on transport error.
  */
 typedef uint8_t (*m1_esp32_rpc_transport_fn)(const uint8_t *tx_buf, int tx_len,
@@ -380,9 +381,82 @@ typedef uint8_t (*m1_esp32_rpc_transport_fn)(const uint8_t *tx_buf, int tx_len,
 
 /**
  * Override the transport used by m1_esp32_rpc_call().  Pass NULL to restore the
- * default (spi_AT_send_recv_bin).  Intended for host tests only.
+ * default (spi_m1link_send_recv_bin).  Intended for host tests only.
  */
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
+
+/* =========================================================================
+ * M1 Link full-duplex transport (native brain CD3)
+ *
+ * The native brain CD3 firmware (hapaxx11/m1-esp32-brain) is an ESP-IDF
+ * `spi_slave` (NOT `spi_slave_hd`) device: every SPI transaction clocks EXACTLY
+ * M1_ESP32_M1LINK_MTU bytes in BOTH directions at once (master frame on MOSI,
+ * slave frame on MISO), with one m1_rpc frame at the head of each fixed buffer
+ * and zero padding after it.  This is fundamentally different from the ESP-AT
+ * `spi_slave_hd` command/address/dummy protocol that spi_AT_send_recv_bin()
+ * drives — sending AT-style HD command frames to a full-duplex slave yields no
+ * reply, which is why every brain feature (and capability detection) failed.
+ *
+ * The slave pipelines its reply: it consumes the request on transaction N and
+ * presents the response on a LATER transaction (it prepares the outgoing buffer
+ * from the previous loop iteration).  The host must therefore issue follow-up
+ * transactions — sending IDLE filler frames — and scan each received frame for
+ * the matching response.
+ * =========================================================================*/
+
+/** M1 Link fixed transaction size in bytes (matches brain M1L_MTU). */
+#define M1_ESP32_M1LINK_MTU        512u
+
+/** Default number of follow-up (poll) transactions issued after the request
+ *  while waiting for the pipelined response before giving up. */
+#define M1_ESP32_M1LINK_MAX_POLLS  8
+
+/**
+ * Single fixed-size full-duplex exchange primitive.
+ *
+ * Clocks exactly @p mtu bytes out of @p tx and into @p rx in one SPI
+ * transaction (honouring CS + HANDSHAKE on-target).  @p ctx carries
+ * transport-specific state (on-target: unused; host tests: a fake frame queue).
+ *
+ * @return 0 on success, non-zero on transport error / timeout.
+ */
+typedef int (*m1_esp32_m1link_xfer_fn)(const uint8_t *tx, uint8_t *rx,
+                                       uint16_t mtu, void *ctx);
+
+/**
+ * Pure-logic M1 Link request/response over a caller-supplied exchange primitive.
+ *
+ * Sends the already-built request frame @p tx_buf (length @p tx_len, <= @p mtu)
+ * on the first exchange, then issues up to @p max_polls follow-up IDLE
+ * transactions, scanning every received frame for a RESP/NAK whose msg_id
+ * matches the request.  Frames that are IDLE, EVENT, or carry a different
+ * msg_id are skipped; FRAG frames sharing the request msg_id are reassembled.
+ *
+ * On success the complete response frame (header + payload + CRC) is written to
+ * @p rx_buf and @p *out_len is set to its length; the returned frame is
+ * suitable input for m1_esp32_rpc_decode_resp().
+ *
+ * This is host-testable: inject a fake @p xfer that returns canned slave frames.
+ *
+ * @param xfer         Single-transaction full-duplex exchange primitive
+ * @param ctx          Opaque context passed through to @p xfer
+ * @param scratch_tx   Caller-provided @p mtu-byte TX working buffer
+ * @param scratch_rx   Caller-provided @p mtu-byte RX working buffer
+ * @param mtu          Transaction size (M1_ESP32_M1LINK_MTU on-target)
+ * @param max_polls    Follow-up transactions to issue (>= 1; budgets the wait)
+ * @param tx_buf       Request frame bytes (built by m1_esp32_rpc_build_req)
+ * @param tx_len       Request frame length (> 0, <= @p mtu)
+ * @param rx_buf       Output buffer for the matched response frame
+ * @param rx_buf_size  Capacity of @p rx_buf
+ * @param out_len      [out] response frame bytes written (0 on failure)
+ * @return 0 on success; non-zero on invalid args, transport error, or no match
+ */
+uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
+                                  uint8_t *scratch_tx, uint8_t *scratch_rx,
+                                  uint16_t mtu, int max_polls,
+                                  const uint8_t *tx_buf, int tx_len,
+                                  uint8_t *rx_buf, int rx_buf_size,
+                                  int *out_len);
 
 /* =========================================================================
  * Public client API

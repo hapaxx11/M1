@@ -193,9 +193,9 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
  *
  * NOTE: there are two distinct CD3 firmwares.  The legacy **CD3-AT** speaks AT
  * text commands and therefore classifies as ESP32_TRANSPORT_AT (it advertises
- * WIFI_JOIN and never sets the HANDSHAKE+OTA pair).  Only the newer native
- * **brain CD3** speaks M1_RPC and classifies as ESP32_TRANSPORT_RPC.  Both
- * remain fully supported.
+ * WIFI_JOIN and never sets the HANDSHAKE + 802154_TX/BLE_SPAM combination).
+ * Only the newer native **brain CD3** speaks M1_RPC and classifies as
+ * ESP32_TRANSPORT_RPC.  Both remain fully supported.
  */
 typedef enum {
     ESP32_TRANSPORT_NONE = 0,   /**< Unknown / not detected — fail closed */
@@ -208,14 +208,15 @@ typedef enum {
  * @brief  Classify the wire transport implied by @p cap_bitmap.
  *
  * Resolution order (a firmware matches at most one):
- *   1. brain CD3 (HANDSHAKE + OTA) -> ESP32_TRANSPORT_RPC
- *   2. SiN360 (BLE_HID, no JOIN)   -> ESP32_TRANSPORT_BINARY_SPI
- *   3. any other non-zero bitmap   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
- *   4. all-zero bitmap             -> ESP32_TRANSPORT_NONE
+ *   1. brain CD3 (HANDSHAKE + 802154_TX/BLE_SPAM) -> ESP32_TRANSPORT_RPC
+ *   2. SiN360 (BLE_HID, no JOIN)                   -> ESP32_TRANSPORT_BINARY_SPI
+ *   3. any other non-zero bitmap                   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
+ *   4. all-zero bitmap                             -> ESP32_TRANSPORT_NONE
  *
  * The legacy CD3-AT firmware advertises WIFI_JOIN without the brain CD3's
- * HANDSHAKE+OTA pair, so it correctly resolves to ESP32_TRANSPORT_AT and keeps
- * driving the ESP32 over AT commands exactly as before this layer existed.
+ * HANDSHAKE + 802154_TX/BLE_SPAM combination, so it correctly resolves to
+ * ESP32_TRANSPORT_AT and keeps driving the ESP32 over AT commands exactly as
+ * before this layer existed.
  *
  * Pure logic — no HAL calls, no global state.  Safe to call before
  * m1_esp32_caps_init() completes (an all-zero bitmap yields NONE).
@@ -238,8 +239,12 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap);
  * @brief  Return true when the bitmap indicates a CD3 native binary-RPC
  *         firmware (bedge117/m1-esp32-brain).
  *
- * Discriminator: HANDSHAKE present AND OTA present.  Both bits are unique to
- * the CD3 firmware — neither SiN360 nor any AT variant sets them.
+ * Discriminator: HANDSHAKE present AND at least one of 802154_TX / BLE_SPAM.
+ * HANDSHAKE is an RPC-only capability (dispatched via M1_RPC_OFF_HS_*); the
+ * shipped brain firmware advertises it but deliberately omits OTA, so OTA can
+ * NOT be used as a discriminator.  Requiring a second canonical CD3-only bit
+ * (802.15.4 TX or BLE spam) keeps the rule from colliding with SiN360 or any
+ * AT variant, none of which set this combination.
  *
  * Returns false for all-zero bitmaps (fallback / unknown firmware) — safe
  * to call before m1_esp32_caps_init() completes.

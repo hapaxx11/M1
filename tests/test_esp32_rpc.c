@@ -39,6 +39,18 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     return 1; /* non-zero == transport error */
 }
 
+/* The default transport is now the full-duplex M1 Link path; stub it too so the
+ * module links.  Tests install a fake via m1_esp32_rpc_set_transport(). */
+uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                 uint8_t *rx_buf, int rx_buf_size,
+                                 int *out_len, int timeout_sec)
+{
+    (void)tx_buf; (void)tx_len; (void)rx_buf; (void)rx_buf_size;
+    (void)timeout_sec;
+    if (out_len) *out_len = 0;
+    return 1; /* non-zero == transport error */
+}
+
 /* ------------------------------------------------------------------ */
 /* Fake transport: replays a canned response frame.                   */
 /* ------------------------------------------------------------------ */
@@ -276,8 +288,8 @@ void test_transport_none_for_zero_bitmap(void)
 
 void test_transport_rpc_for_cd3(void)
 {
-    /* CD3 discriminator: HANDSHAKE + OTA both set. */
-    uint64_t cd3 = M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_OTA |
+    /* CD3 discriminator: HANDSHAKE + a canonical CD3-only bit (802154_TX). */
+    uint64_t cd3 = M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154_TX |
                    M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_BLE_HID;
     TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC, esp32_firmware_transport(cd3));
     g_bitmap = cd3;
@@ -294,7 +306,8 @@ void test_transport_binary_spi_for_sin360(void)
 
 void test_transport_at_for_generic_at_firmware(void)
 {
-    /* AT firmware: WIFI_JOIN set but not the CD3 HANDSHAKE+OTA pair. */
+    /* AT firmware: WIFI_JOIN set but not the CD3 HANDSHAKE + 802154_TX/BLE_SPAM
+     * combination. */
     uint64_t at = M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_DEAUTH |
                   M1_ESP32_CAP_802154;
     TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_AT, esp32_firmware_transport(at));
@@ -303,8 +316,8 @@ void test_transport_at_for_generic_at_firmware(void)
 void test_transport_at_for_legacy_cd3_at(void)
 {
     /* Legacy CD3-AT: advertises WIFI_JOIN (+ BLE_HID, 802154) but NOT the
-     * brain-CD3 HANDSHAKE+OTA pair, so it must stay on the AT path — the
-     * compatibility layer never re-routes CD3-AT to M1_RPC. */
+     * brain-CD3 HANDSHAKE + 802154_TX/BLE_SPAM combination, so it must stay on
+     * the AT path — the compatibility layer never re-routes CD3-AT to M1_RPC. */
     uint64_t cd3_at = M1_ESP32_CAP_WIFI_JOIN | M1_ESP32_CAP_BLE_HID |
                       M1_ESP32_CAP_802154 | M1_ESP32_CAP_DEAUTH;
     TEST_ASSERT_FALSE(esp32_firmware_is_cd3(cd3_at));

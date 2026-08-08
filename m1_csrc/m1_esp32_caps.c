@@ -35,6 +35,9 @@ extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
 extern uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                     uint8_t *rx_buf, int rx_buf_size,
                                     int *out_len, int timeout_sec);
+extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                        uint8_t *rx_buf, int rx_buf_size,
+                                        int *out_len, int timeout_sec);
 
 /*************************** D E F I N E S ************************************/
 
@@ -149,9 +152,11 @@ static const m1_esp32_at_cmd_cap_entry_t s_at_cmd_cap_map[] = {
 static void caps_apply_footprint_estimates(uint64_t bitmap)
 {
     if ((bitmap & M1_ESP32_CAP_HANDSHAKE) &&
-        (bitmap & M1_ESP32_CAP_OTA))
+        (bitmap & (M1_ESP32_CAP_802154_TX | M1_ESP32_CAP_BLE_SPAM)))
     {
-        /* CD3 native binary RPC firmware (bedge117/m1-esp32-brain) */
+        /* CD3 native binary RPC "brain" firmware (m1-esp32-brain).  Mirrors the
+         * esp32_firmware_is_cd3() discriminator (HANDSHAKE + a CD3-unique bit),
+         * NOT the old HANDSHAKE+OTA pair — the shipped brain omits OTA. */
         s_bss_bytes       = M1_ESP32_FALLBACK_BSS_CD3;
         s_free_heap_bytes = M1_ESP32_FALLBACK_HEAP_CD3;
     }
@@ -346,20 +351,23 @@ void m1_esp32_caps_init(void)
         vPortFree(at_resp);
     }
 
-    /* Probe 3: CD3 native binary RPC firmware (bedge117/m1-esp32-brain) via
-     * M1_RPC PING (magic 0x4D31 "M1").
+    /* Probe 3: CD3 native "brain" binary RPC firmware (hapaxx11/m1-esp32-brain)
+     * via M1_RPC PING (magic 0x4D31 "M1").
      *
-     * CD3 speaks M1_RPC over the SAME half-duplex SPI-HD transport as the AT
-     * firmware — NOT the full-duplex 64-byte transfer used by the SiN360
-     * binary protocol.  A plain full-duplex HAL_SPI_TransmitReceive (as in
-     * m1_esp32_send_cmd_raw()) cannot be answered by a spi_slave_hd slave, so
-     * the request/response MUST go through spi_AT_send_recv_bin(), which is
-     * binary-safe (length-preserving on both send and receive — no NUL
-     * truncation of the M1_RPC header/CRC bytes).
+     * The brain CD3 is an ESP-IDF full-duplex `spi_slave` device: every
+     * transaction clocks EXACTLY 512 bytes in both directions and the reply is
+     * pipelined onto a later transaction.  This is fundamentally different from
+     * the ESP-AT half-duplex `spi_slave_hd` command protocol — sending AT-style
+     * HD frames (spi_AT_send_recv_bin) to a full-duplex slave yields no answer,
+     * which is why CD3 detection and every brain feature failed.  The
+     * request/response MUST therefore go through spi_m1link_send_recv_bin(),
+     * the 512-byte full-duplex "M1 Link" transport (see esp_app_main.c), which
+     * builds the padded frame, honours the HANDSHAKE line, and reassembles the
+     * pipelined reply.
      *
      * This probe runs only after the AT presence probe has failed (or AT+CMD?
      * did not yield a valid response), so a working AT firmware (already
-     * detected above) is never sent a binary frame.
+     * detected above) is never driven with the full-duplex transport.
      *
      * On success we immediately follow up with M1_RPC GET_STATUS to retrieve
      * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
@@ -384,7 +392,7 @@ probe_cd3:
             memset(rx64, 0, sizeof(rx64));
             rx_len = 0;
 
-            if (spi_AT_send_recv_bin(tx64, (int)req_len,
+            if (spi_m1link_send_recv_bin(tx64, (int)req_len,
                                      rx64, (int)sizeof(rx64),
                                      &rx_len, CD3_RPC_PROBE_TIMEOUT_S) == 0 &&
                 rx_len > 0 &&
@@ -403,7 +411,7 @@ probe_cd3:
                     rx_len   = 0;
                     rpc_pl   = NULL;
                     rpc_plen = 0u;
-                    if (spi_AT_send_recv_bin(tx64, (int)req_len,
+                    if (spi_m1link_send_recv_bin(tx64, (int)req_len,
                                              rx64, (int)sizeof(rx64),
                                              &rx_len, CD3_RPC_PROBE_TIMEOUT_S) == 0 &&
                         rx_len > 0 &&

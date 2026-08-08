@@ -28,6 +28,7 @@
 #include "esp_queue.h"
 #include "m1_at_response_parser.h"
 #include "esp32_spi_bin.h"
+#include "m1_esp32_rpc.h"      /* M1 Link full-duplex framing helper + MTU */
 
 #define STREAM_BUFFER_SIZE    	SPI_TRANS_MAX_LEN
 
@@ -588,6 +589,127 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 
 	return SUCCESS;
 } // uint8_t spi_AT_send_recv_bin(...)
+
+
+/******************************************************************************/
+/**
+  * @brief  Full-duplex "M1 Link" master transport for the native brain CD3.
+  *
+  * The brain CD3 firmware (hapaxx11/m1-esp32-brain) is an ESP-IDF full-duplex
+  * `spi_slave` device — NOT the ESP-AT half-duplex `spi_slave_hd` slave that
+  * spi_AT_send_recv_bin() drives.  Every transaction clocks EXACTLY
+  * M1_ESP32_M1LINK_MTU (512) bytes in both directions at once, with one m1_rpc
+  * frame at the head of the buffer and zero padding after it.  The slave
+  * pipelines its reply onto a LATER transaction, so this transport issues the
+  * request then follow-up IDLE transactions, scanning for the matching reply
+  * (all handled by the pure helper m1_esp32_m1link_send_recv()).
+  *
+  * CS (PB10) and the HANDSHAKE line (PD7) are driven manually per transaction,
+  * mirroring the SiN360 direct-HAL pattern in m1_esp32_cmd.c.  This path does
+  * NOT rely on the ESP-AT RTOS task (spi_trans_control_task), which the brain
+  * firmware does not run.
+  *
+  * @param  tx_buf      Binary request frame to send (built by m1_esp32_rpc_*)
+  * @param  tx_len      Length of @p tx_buf in bytes (> 0, <= 512)
+  * @param  rx_buf      Caller buffer for the binary response frame
+  * @param  rx_buf_size Capacity of @p rx_buf in bytes (>= 1)
+  * @param  out_len     [out] bytes written to @p rx_buf (0 on error/timeout)
+  * @param  timeout_sec Unused (the poll budget bounds the wait); kept for
+  *                     signature compatibility with spi_AT_send_recv_bin()
+  * @return SUCCESS on success, CTRL_ERR_* otherwise
+  */
+/******************************************************************************/
+#define M1LINK_SPI_TIMEOUT_MS   100u
+#define M1LINK_HS_TIMEOUT_MS    50u
+#define M1LINK_BUSY_RETRY_MS    150u
+
+static void m1link_cs_delay(void)
+{
+	/* Short delay (~1us) for the ESP32 SPI slave to recognize the CS edge. */
+	for (volatile int i = 0; i < 50; i++) {}
+}
+
+/* Wait for the brain's HANDSHAKE line (PD7) to signal armed/ready, bounded by
+ * @p timeout_ms.  Returns true if it asserted within the window. */
+static bool m1link_wait_handshake(uint32_t timeout_ms)
+{
+	uint32_t start = HAL_GetTick();
+	while (HAL_GPIO_ReadPin(ESP32_HANDSHAKE_GPIO_Port, ESP32_HANDSHAKE_Pin)
+	       != GPIO_PIN_SET) {
+		if ((HAL_GetTick() - start) >= timeout_ms)
+			return false;
+	}
+	return true;
+}
+
+/* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn. */
+static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
+                           void *ctx)
+{
+	HAL_StatusTypeDef ret;
+	uint32_t start;
+	(void)ctx;
+
+	/* Honour the brain's HANDSHAKE: wait until it signals it is armed before
+	 * clocking (matches the brain's post_setup/post_trans semantics).  If it
+	 * never asserts we still attempt the clock (best effort), but a persistent
+	 * low usually means the slave firmware is not running. */
+	(void)m1link_wait_handshake(M1LINK_HS_TIMEOUT_MS);
+
+	start = HAL_GetTick();
+	do {
+		HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin,
+		                  GPIO_PIN_RESET);
+		m1link_cs_delay();
+
+		ret = HAL_SPI_TransmitReceive(&hspi_esp, (uint8_t *)tx, rx, mtu,
+		                              M1LINK_SPI_TIMEOUT_MS);
+
+		m1link_cs_delay();
+		HAL_GPIO_WritePin(ESP32_SPI3_NSS_GPIO_Port, ESP32_SPI3_NSS_Pin,
+		                  GPIO_PIN_SET);
+
+		if (ret != HAL_BUSY)
+			break;
+		HAL_Delay(1);
+	} while ((HAL_GetTick() - start) < M1LINK_BUSY_RETRY_MS);
+
+	return (ret == HAL_OK) ? 0 : -1;
+}
+
+uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                 uint8_t *rx_buf, int rx_buf_size,
+                                 int *out_len, int timeout_sec)
+{
+	/* 512-byte working buffers for fixed-size M1 Link transactions.
+	 * Keep these on the caller stack so we don't permanently reserve
+	 * additional .bss in the firmware image. */
+	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
+	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
+	uint8_t rc;
+
+	(void)timeout_sec; /* the poll budget bounds the wait */
+
+	if (out_len)
+		*out_len = 0;
+
+	if (!tx_buf || tx_len <= 0 || !rx_buf || rx_buf_size < 1)
+		return CTRL_ERR_INCORRECT_ARG;
+
+	rc = m1_esp32_m1link_send_recv(m1link_hal_xfer, NULL,
+	                               s_m1link_tx, s_m1link_rx,
+	                               M1_ESP32_M1LINK_MTU,
+	                               M1_ESP32_M1LINK_MAX_POLLS,
+	                               tx_buf, tx_len,
+	                               rx_buf, rx_buf_size, out_len);
+
+	switch (rc) {
+	case 0u:  return SUCCESS;
+	case 1u:  return CTRL_ERR_INCORRECT_ARG;
+	case 2u:  return CTRL_ERR_TRANSPORT_SEND;
+	default:  return CTRL_ERR_REQUEST_TIMEOUT; /* 3 overflow / 4 no-match */
+	}
+} // uint8_t spi_m1link_send_recv_bin(...)
 
 
 void esp32_queue_reset(void)

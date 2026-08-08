@@ -183,6 +183,33 @@ endif()
 add_test(NAME esp32_rpc_features COMMAND test_esp32_rpc_features)
 
 # ------------------------------------------------------------------
+# Module under test: m1_esp32_m1link (full-duplex "M1 Link" transport helper)
+#
+# The pure framing/pipelining logic of the 512-byte full-duplex spi_slave
+# transport used by the native brain CD3 firmware.  A fake single-transaction
+# exchange primitive replays a scripted queue of slave frames so the helper's
+# request/poll loop runs on the host.  Verifies:
+#   - reply pipelined onto a later transaction (poll loop + IDLE fillers)
+#   - IDLE / EVENT / wrong-msg_id frames are skipped
+#   - multi-FRAG responses are reassembled into a single decodable RESP
+#   - NAK frames are matched and surfaced via decode_resp
+#   - poll-budget timeout, transport-error propagation, argument validation
+# ------------------------------------------------------------------
+add_executable(test_esp32_m1link
+    test_esp32_m1link.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_rpc.c
+    ${M1_ROOT}/m1_csrc/esp32_feature_map.c
+)
+target_include_directories(test_esp32_m1link PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_m1link PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_m1link PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_m1link COMMAND test_esp32_m1link)
+
+# ------------------------------------------------------------------
 # Module under test: battery_soc_estimate
 # Pure piecewise-linear voltage → SoC mapping. Zero hardware deps.
 # Bug context: "Asian M1" fuel gauge reports 0% SoC while device is

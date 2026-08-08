@@ -36,14 +36,14 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 #### CD3 native binary RPC firmware (next-gen — bedge117/m1-esp32-brain)
 - **Source repo**: [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain) (native ESP-IDF, no AT stack)
 - Pre-built binaries on the Releases page
-- **Architecture**: SPI-slave HD mode, M1_RPC binary protocol (magic `0x4D31` "M1"), same GPIO/CS/HANDSHAKE pins as AT and SiN360 — no hardware changes required
+- **Architecture**: **full-duplex `spi_slave`** (NOT ESP-AT `spi_slave_hd`), M1_RPC binary protocol (magic `0x4D31` "M1"), fixed **512-byte** (`M1_ESP32_M1LINK_MTU`) transactions in both directions, same GPIO/CS/HANDSHAKE pins as AT and SiN360 — no hardware changes required. The slave pipelines its reply onto a **later** transaction, so the host must poll with IDLE filler frames.
 - **Enables**: Native ESP-IDF WiFi (scan, join, deauth, beacon, probe, karma, portal, pktmon, sta_scan), NimBLE (scan, adv, HID, GATT), 802.15.4, M1-to-M1 peer link over ESP-NOW, GPIO API
-- **Reserved, NOT yet implemented in shipped releases** (verified against public source, 2026-07-21): **PMKID capture** (`M1_ESP32_CAP_PMKID` / `M1_RPC_OFF_PMKID_CAPTURE`) and **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA` / `M1_RPC_SYS_OTA_BEGIN/DATA/END`) — message IDs exist in the shared `m1_rpc.h` but have no dispatch case in `main.c`, so they NAK with `ERR_UNSUPPORTED`. **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`) IS dispatched and functional, but the firmware does not yet include this bit in its self-reported capability bitmap.
+- **Reserved, NOT yet implemented in shipped releases** (verified against public source, 2026-07-21): **PMKID capture** (`M1_ESP32_CAP_PMKID` / `M1_RPC_OFF_PMKID_CAPTURE`) and **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA` / `M1_RPC_SYS_OTA_BEGIN/DATA/END`) — message IDs exist in the shared `m1_rpc.h` but have no dispatch case in `main.c`, so they NAK with `ERR_UNSUPPORTED`. **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`) is dispatched and functional and is advertised by current brain firmware capability bitmaps.
 - **Does NOT include** (v1): NETSCAN (no ping/ARP scanner), BT Classic management
 - Detected by the M1 via **M1_RPC PING** in `m1_esp32_caps_init()`; capability bitmap reported via M1_RPC GET_STATUS
 - Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response
 - **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)
-- Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE && OTA` both set (caveat: no shipped CD3 release currently sets either bit — see the OTA/PMKID note above; this discriminator will match once a release self-reports them)
+- Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE` set AND a CD3-unique bit (`802154_TX` or `BLE_SPAM`) set. **Do NOT key off `OTA`** — the shipped brain firmware advertises `HANDSHAKE` but intentionally omits `OTA` (see the OTA/PMKID note above), so an `OTA`-gated discriminator misclassified every brain device as AT and broke all ESP32 features. The real `M1_FW_CAPS` (HANDSHAKE set, OTA clear, 802154_TX/BLE_SPAM set) now resolves to `ESP32_TRANSPORT_RPC`.
 
 ### Transport compatibility layer (host side)
 
@@ -57,7 +57,7 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
 
 | Firmware | Discriminator | Transport |
 |----------|---------------|-----------|
-| brain CD3 (`m1-esp32-brain`) | `HANDSHAKE && OTA` | `ESP32_TRANSPORT_RPC` |
+| brain CD3 (`m1-esp32-brain`) | `HANDSHAKE && (802154_TX \|\| BLE_SPAM)` | `ESP32_TRANSPORT_RPC` |
 | SiN360 | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
 | AT builds **incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
 | unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
@@ -66,7 +66,15 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
   the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared
   `bedge117/m1-esp32-brain` `m1_rpc.h`), payload structs, and a NAK/status-aware
   `m1_esp32_rpc_call(msg_id, req, len, resp, cap, *rlen, timeout)` that frames,
-  sends over the half-duplex SPI-HD path (`spi_AT_send_recv_bin`), and decodes.
+  sends over the **512-byte full-duplex "M1 Link" transport**
+  (`spi_m1link_send_recv_bin`, the default), and decodes. The framing/pipelining
+  is a pure, host-tested helper — `m1_esp32_m1link_send_recv()` — that issues the
+  request then follow-up IDLE transactions, scanning each 512-byte frame for the
+  matching `RESP`/`NAK` (skipping IDLE/EVENT/mismatched frames, reassembling
+  FRAGs). On-target `spi_m1link_send_recv_bin()` (`esp_app_main.c`) supplies the
+  single-transaction primitive via `HAL_SPI_TransmitReceive` on `hspi_esp` (SPI3)
+  with manual CS (PB10) + HANDSHAKE (PD7), and does **not** need the ESP-AT RTOS
+  task. The AT presence / `AT+CMD?` probes stay on `spi_AT_send_recv_bin`.
 - **ESP-NOW** (`m1_espnow_hal.c`) is the first consumer of this client. Other
   WiFi/BLE/802.15.4 features adopt it via the per-feature layer below.
 - **`m1_esp32_rpc_features.c/.h`** is the per-feature layer on top of the client:
@@ -81,8 +89,8 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
   (`m1_802154.c`) is a worked example. The whole layer is transport-injectable
   and host-tested in `tests/test_esp32_rpc_features.c`.
 - **CD3-AT is never re-routed to M1_RPC** — it advertises `WIFI_JOIN` without the
-  brain-CD3 `HANDSHAKE+OTA` pair, so it falls through to `ESP32_TRANSPORT_AT` and
-  keeps using the existing AT command paths unchanged.
+  brain-CD3 `HANDSHAKE + 802154_TX/BLE_SPAM` combination, so it falls through to
+  `ESP32_TRANSPORT_AT` and keeps using the existing AT command paths unchanged.
 - Frame constants and the pure build/parse inline helpers live in
   `m1_esp32_caps.h`; `m1_esp32_rpc.h` reuses them (no duplication).
 
@@ -116,7 +124,7 @@ other memory-intensive features.
 After `m1_esp32_caps_init()` resolves the capability bitmap (either from a live
 probe or the compile-flag fallback), it applies a four-way discriminator in
 priority order:
-- **`HANDSHAKE` and `OTA` both present** → CD3 profile
+- **`HANDSHAKE` and (`802154_TX` or `BLE_SPAM`) present** → CD3 (brain) profile
 - **`WIFI_JOIN` and `BEACON` both present** → dag T-800 profile
 - **`WIFI_JOIN` present, `BEACON` absent** → CD3-AT profile
 - **`WIFI_JOIN` absent** → SiN360 profile
