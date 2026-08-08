@@ -39,6 +39,18 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     return 1; /* non-zero == transport error */
 }
 
+/* The default transport is now the full-duplex M1 Link path; stub it too so the
+ * module links.  Tests install a fake via m1_esp32_rpc_set_transport(). */
+uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
+                                 uint8_t *rx_buf, int rx_buf_size,
+                                 int *out_len, int timeout_sec)
+{
+    (void)tx_buf; (void)tx_len; (void)rx_buf; (void)rx_buf_size;
+    (void)timeout_sec;
+    if (out_len) *out_len = 0;
+    return 1; /* non-zero == transport error */
+}
+
 /* ------------------------------------------------------------------ */
 /* Fake transport: replays a canned response frame.                   */
 /* ------------------------------------------------------------------ */
