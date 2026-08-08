@@ -108,12 +108,18 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
     if (st != M1_ESP32_RPC_OK)
         return st;
 
-    /* RESP: [count:1] then repeated (fixed 10-byte entry + ssid_len ssid). */
-    if (rlen < 1u)
+    /* RESP: [count:2 LE] then repeated (fixed entry + ssid_len ssid bytes).
+     * The brain firmware (handle_wifi_scan() in main.c) writes the AP count
+     * as a 2-byte little-endian value, matching handle_sta_scan_results()'s
+     * count field. Reading only resp[0] as an 8-bit count and starting entry
+     * parsing at offset 1 desyncs every entry by one byte, corrupting bssid/
+     * rssi/channel/authmode/ssid_len for every AP and causing AP Scan / 2.4G
+     * Survey to read garbage or fail outright. */
+    if (rlen < 2u)
         return M1_ESP32_RPC_ERR_BAD_FRAME;
 
-    uint8_t  want   = resp[0];
-    uint16_t off    = 1u;
+    uint16_t want   = (uint16_t)resp[0] | ((uint16_t)resp[1] << 8u);
+    uint16_t off    = 2u;
     uint8_t  got    = 0u;
     const uint16_t ENTRY = (uint16_t)sizeof(m1_esp32_rpc_scan_entry_t);
 

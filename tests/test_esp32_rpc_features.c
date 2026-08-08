@@ -425,9 +425,11 @@ void test_ble_hid_init_null_name_empty_payload(void)
 
 static uint16_t build_scan_resp(uint8_t *body, uint8_t n_entries)
 {
-    /* [count:1] then n_entries × (10-byte fixed entry + ssid_len ssid bytes) */
+    /* [count:2 LE] then n_entries × (fixed entry + ssid_len ssid bytes) —
+     * matches the brain firmware's handle_wifi_scan() wire format. */
     uint16_t off = 0u;
     body[off++] = n_entries;
+    body[off++] = 0u;
     for (uint8_t i = 0; i < n_entries; i++) {
         m1_esp32_rpc_scan_entry_t e;
         memset(&e, 0, sizeof(e));
@@ -502,6 +504,7 @@ void test_wifi_scan_truncated_ssid_entry_stops_before_oob(void)
 {
     uint8_t body[32];
     body[0] = 1u;
+    body[1] = 0u;
     m1_esp32_rpc_scan_entry_t e = {
         .bssid = { 1u, 2u, 3u, 4u, 5u, 6u },
         .rssi = -55,
@@ -509,11 +512,11 @@ void test_wifi_scan_truncated_ssid_entry_stops_before_oob(void)
         .authmode = 3u,
         .ssid_len = 5u,
     };
-    memcpy(&body[1], &e, sizeof(e));
-    memcpy(&body[1 + sizeof(e)], "ABC", 3u);
+    memcpy(&body[2], &e, sizeof(e));
+    memcpy(&body[2 + sizeof(e)], "ABC", 3u);
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
                               M1_ESP32_RPC_WIFI_SCAN, body,
-                              (uint16_t)(1u + sizeof(e) + 3u));
+                              (uint16_t)(2u + sizeof(e) + 3u));
 
     m1_esp32_rpc_wifi_scan_result_t out[2];
     memset(out, 0xA5, sizeof(out));
@@ -642,6 +645,7 @@ int main(void)
     RUN_TEST(test_wifi_scan_caps_to_max);
     RUN_TEST(test_wifi_scan_null_out_rejected);
     RUN_TEST(test_wifi_scan_propagates_nak);
+    RUN_TEST(test_wifi_scan_truncated_ssid_entry_stops_before_oob);
 
     RUN_TEST(test_zb_sniff_get_decodes_devices);
     RUN_TEST(test_zb_sniff_get_caps_to_max);
