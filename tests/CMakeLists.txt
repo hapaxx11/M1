@@ -2650,6 +2650,28 @@ endif()
 add_test(NAME espnow_peer_session COMMAND test_espnow_peer_session)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_rpc_parse (M1_RPC_NOW_PEERS_GET / NOW_RECV_GET
+# response decoders, extracted from m1_espnow_hal.c)
+#
+# Regression guard for the undersized (64-byte) reception buffer that used
+# to cap every M1_RPC_NOW_* response in m1_espnow_hal.c regardless of the
+# caller's actual buffer size -- the same class of defect fixed for the
+# WiFi/BLE scan RPCs in m1_esp32_rpc_features.c. Pure logic, no HAL deps.
+# ------------------------------------------------------------------
+add_executable(test_espnow_rpc_parse
+    test_espnow_rpc_parse.c
+    ${M1_ROOT}/m1_csrc/espnow_rpc_parse.c
+)
+target_include_directories(test_espnow_rpc_parse PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_rpc_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_rpc_parse PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_rpc_parse COMMAND test_espnow_rpc_parse)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_file_transfer (ESP-NOW file transfer protocol)
 #
 # Streaming-to-SD file transfer with stop-and-wait ARQ and CRC32
