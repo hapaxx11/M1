@@ -443,7 +443,16 @@ void CDC_TxAbort(void)
  * a class that hasn't attached. */
 uint8_t CDC_Transmit_Busy(void)
 {
+#if M1_USB_MODE == M1_CFG_USB_CDC_MSC
+  /* On composite devices, pClassData tracks the *current* classId, so read the
+   * CDC instance's class-data explicitly. */
+  hUsbDeviceFS.classId = CDC_InstID;
+  USBD_CDC_HandleTypeDef *hcdc =
+      (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassDataCmsit[CDC_InstID];
+#else
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+#endif
+
   if (hcdc == NULL)
     return 0U;
   return (hcdc->TxState != 0U) ? 1U : 0U;
