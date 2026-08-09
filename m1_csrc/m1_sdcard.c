@@ -22,6 +22,7 @@
 #include "app_freertos.h"
 #include "cmsis_os.h"
 #include "m1_sdcard.h"
+#include "m1_sdcard_selfheal.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -1143,9 +1144,27 @@ void sdcard_detection_task(void *param)
 
 	while (1)
 	{
-		ret = xQueueReceive(sdcard_det_q_hdl, &q_item, portMAX_DELAY);
+		ret = xQueueReceive(sdcard_det_q_hdl, &q_item, pdMS_TO_TICKS(2000));
 		if ( ret != pdPASS )
-			continue;
+		{
+			/* SELF-HEAL (no event this cycle): a missed/bounced card-detect edge
+			 * can leave a physically-present card stuck at SD_access_NotReady
+			 * (unmounted, FatFs driver unlinked) with no further edge to ever
+			 * re-drive recovery, so the SD stays dead until reboot. If the card
+			 * is still physically present and stuck NotReady, and no event is
+			 * already queued, re-drive the normal detect/recovery path. A
+			 * genuine removal reads !m1_sd_detected() and is left alone; scoped
+			 * to NotReady only so it never disturbs the intentional UnMounted
+			 * USB-storage mode. */
+			if ( m1_sdcard_should_self_heal(m1_sd_detected() ? true : false,
+			                                m1_sdcard_get_status(),
+			                                (uint32_t)uxQueueMessagesWaiting(sdcard_det_q_hdl)) )
+			{
+				q_item.q_evt_type = Q_EVENT_SDCARD_CHANGE;
+				(void)xQueueSend(sdcard_det_q_hdl, &q_item, 0);
+				continue;
+			}
+		}
 
 		if (ret==pdPASS)
 		{

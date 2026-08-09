@@ -2432,8 +2432,22 @@ void m1_rpc_task(void *param)
 
     static uint8_t screen_seq = 0;
 
+    /* Watchdog supervision: activate now that the task is running
+     * (registered inactive at boot). The 100ms notify-wait means a
+     * healthy idle loop heartbeats ~10x/sec; the only thing that
+     * legitimately stops the loop is a deferred ESP32 flash op, which
+     * suspends this report around itself (see below). */
+    m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+    TickType_t rpc_wdt_last = xTaskGetTickCount();
+
     for (;;)
     {
+        /* Heartbeat: report the actual elapsed time of the previous
+         * iteration (before any long op below). A true hang stops the
+         * reports and lets the watchdog reset. */
+        m1_wdt_send_report_ex(M1_REPORT_ID_RPC_TASK, rpc_wdt_last);
+        rpc_wdt_last = xTaskGetTickCount();
+
         /* Wait for notification with timeout.
          * Notifications come from:
          *  - m1_rpc_notify_screen_update() for screen frame ready
@@ -2449,6 +2463,17 @@ void m1_rpc_task(void *param)
             memcpy(&frame, (const void *)&s_deferred_frame, sizeof(S_RPC_Frame));
             s_deferred_pending = false;
 
+            /* ESP32 flash start/finish legitimately block this task for many
+             * seconds (connect_to_target(), flash erase, verify). Suspend our
+             * watchdog report around them so a real flash is never misread as
+             * a hang and reset mid-flash (brick risk). Every other deferred
+             * op is bounded (<=5s SD software timeout), so it stays
+             * supervised. */
+            bool rpc_flash_op = (frame.cmd == RPC_CMD_ESP_UPDATE_START ||
+                                  frame.cmd == RPC_CMD_ESP_UPDATE_FINISH);
+            if (rpc_flash_op)
+                m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK);
+
             switch (frame.cmd)
             {
             case RPC_CMD_FILE_WRITE_START:  rpc_handle_file_write_start(&frame);  break;
@@ -2462,6 +2487,14 @@ void m1_rpc_task(void *param)
             case RPC_CMD_ESP_UPDATE_START:  rpc_handle_esp_update_start(&frame);  break;
             case RPC_CMD_ESP_UPDATE_FINISH: rpc_handle_esp_update_finish(&frame); break;
             default: break;
+            }
+
+            if (rpc_flash_op)
+            {
+                /* Resume + reset the heartbeat baseline so the just-elapsed
+                 * flash seconds aren't counted against the next window. */
+                m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+                rpc_wdt_last = xTaskGetTickCount();
             }
         }
 
