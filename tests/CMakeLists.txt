@@ -1343,6 +1343,24 @@ endif()
 add_test(NAME esp32_fw_update COMMAND test_esp32_fw_update)
 
 # ------------------------------------------------------------------
+# Module under test: M1 self-flash ESP32 IRQ mask session state machine
+# Pure logic — regression ported from bedge117/M1 C3.164 (self-flash
+# data-phase reset from unmasking ESP IRQs between erase and first chunk).
+# ------------------------------------------------------------------
+add_executable(test_fw_selfflash_mask
+    test_fw_selfflash_mask.c
+    ${M1_ROOT}/m1_csrc/m1_fw_selfflash_mask.c
+)
+target_include_directories(test_fw_selfflash_mask PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_fw_selfflash_mask PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fw_selfflash_mask PRIVATE sanitizers)
+endif()
+add_test(NAME fw_selfflash_mask COMMAND test_fw_selfflash_mask)
+
+# ------------------------------------------------------------------
 # Module under test: str_contains_icase (IR Universal Remote search helper)
 # Pure function — case-insensitive substring search used by IRDB search.
 # Uses a standalone copy because m1_ir_universal.c has HAL/RTOS dependencies.

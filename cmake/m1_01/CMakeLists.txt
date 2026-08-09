@@ -553,6 +553,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_fusb302.c
     ../../m1_csrc/m1_fw_update.c
     ../../m1_csrc/m1_fw_update_bl.c
+    ../../m1_csrc/m1_fw_selfflash_mask.c
     ../../m1_csrc/m1_rpc.c
     ../../m1_csrc/m1_rgb_backlight.c
     ../../m1_csrc/m1_gpio.c
