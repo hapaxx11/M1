@@ -2010,14 +2010,14 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
  * buffer so no timings are dropped mid-line. The previous fixed 64 silently
  * truncated every RAW_Data line to its first 64 samples — a 512-sample capture
  * transmitted only ~13% of its waveform, which is why replayed RAW signals often
- * did nothing. Static (not stack): 8KB is too large for this task's stack. */
+ * did nothing. Heap-allocated: 8KB is too large for this task's stack. */
 #define FLIPPER_SUB_MAX_SAMPLES  SUBGHZ_RAW_LINE_MAX_SAMPLES
-static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 
 	FIL f_sub, f_sgh;
 	FRESULT fr;
 	char *line_buf;
 	char *out_buf;
+	uint32_t *sample_buf;
 	uint32_t frequency = 0;
 	uint8_t modulation = MODULATION_OOK;
 	bool is_raw = false;
@@ -2055,12 +2055,14 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 	if (!line_buf) return 1;
 	out_buf = pvPortMalloc(FLIPPER_SUB_OUT_MAX);
 	if (!out_buf) { vPortFree(line_buf); return 1; }
+	sample_buf = pvPortMalloc(FLIPPER_SUB_MAX_SAMPLES * sizeof(uint32_t));
+	if (!sample_buf) { vPortFree(line_buf); vPortFree(out_buf); return 1; }
 
 	/* ── 1. Open .sub source ── */
 	fr = f_open(&f_sub, sub_path, FA_READ);
 	if (fr != FR_OK)
 	{
-		vPortFree(line_buf); vPortFree(out_buf);
+		vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 		return 1;
 	}
 
@@ -2070,7 +2072,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 	if (fr != FR_OK)
 	{
 		f_close(&f_sub);
-		vPortFree(line_buf); vPortFree(out_buf);
+		vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 		return 1;
 	}
 
@@ -2089,7 +2091,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 		/* Continuation of a long RAW_Data line that was split by f_gets */
 		if (in_raw_continuation)
 		{
-			uint32_t *samples = s_raw_sample_batch;
+			uint32_t *samples = sample_buf;
 			uint16_t nsamples = subghz_parse_raw_data_line(
 				line_buf, line_complete, &raw_line_state, samples, FLIPPER_SUB_MAX_SAMPLES);
 
@@ -2269,7 +2271,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 			 * Uses the extracted raw line parser for cross-buffer handling. */
 			subghz_raw_line_state_init(&raw_line_state);
 
-			uint32_t *samples = s_raw_sample_batch;
+			uint32_t *samples = sample_buf;
 			uint16_t nsamples = subghz_parse_raw_data_line(
 				line_buf + 9, line_complete, &raw_line_state, samples, FLIPPER_SUB_MAX_SAMPLES);
 
@@ -2350,7 +2352,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 			{
 				f_close(&f_sgh);
 				f_unlink(FLIPPER_SUB_TMP_SGH);
-				vPortFree(line_buf); vPortFree(out_buf);
+				vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 				return SUBGHZ_KEY_ERR_UNSUPPORTED;
 			}
 			pairs_per_rep = max_pairs / 3;
@@ -2359,7 +2361,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 			{
 				f_close(&f_sgh);
 				f_unlink(FLIPPER_SUB_TMP_SGH);
-				vPortFree(line_buf); vPortFree(out_buf);
+				vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 				return 1;
 			}
 			npairs = subghz_key_encode_custom(&key_params, pairs, max_pairs, 3);
@@ -2434,7 +2436,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 
 						f_close(&f_sgh);
 						f_unlink(FLIPPER_SUB_TMP_SGH);
-						vPortFree(line_buf); vPortFree(out_buf);
+						vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 						return ret_code;
 					}
 				}
@@ -2442,7 +2444,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 				{
 					f_close(&f_sgh);
 					f_unlink(FLIPPER_SUB_TMP_SGH);
-					vPortFree(line_buf); vPortFree(out_buf);
+					vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 					return resolve_ret; /* 6 = rolling/weather/TPMS, 7 = unsupported */
 				}
 			}
@@ -2462,7 +2464,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 				{
 					f_close(&f_sgh);
 					f_unlink(FLIPPER_SUB_TMP_SGH);
-					vPortFree(line_buf); vPortFree(out_buf);
+					vPortFree(sample_buf); vPortFree(line_buf); vPortFree(out_buf);
 					return 1;
 				}
 
@@ -2550,6 +2552,7 @@ static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 
 	f_close(&f_sgh);
 
+	vPortFree(sample_buf);
 	vPortFree(line_buf);
 	vPortFree(out_buf);
 
