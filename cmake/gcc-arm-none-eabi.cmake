@@ -54,6 +54,13 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 if(CMAKE_BUILD_TYPE MATCHES Release)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -g0")
+    # CMake's built-in Release defaults ("-O3 -DNDEBUG") are appended by
+    # project()/enable_language() after CMAKE_C_FLAGS above, and the later
+    # -O3 silently overrides our -Os (last -O flag wins in GCC), bloating
+    # the firmware image. Force NDEBUG without re-adding -O3 so -Os sticks.
+    set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
+    set(CMAKE_ASM_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
 endif()
 
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} -x assembler-with-cpp -MMD -MP")
