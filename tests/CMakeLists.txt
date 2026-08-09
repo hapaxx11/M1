@@ -330,6 +330,26 @@ endif()
 add_test(NAME watchdog_decision COMMAND test_watchdog_decision)
 
 # ------------------------------------------------------------------
+# Module under test: SD detection task self-heal decision
+# Pure helper logic in m1_sdcard_selfheal.h; verifies the bounded SD
+# detection task only re-drives recovery for a physically-present card
+# stuck at SD_access_NotReady with no event already queued, and never for
+# a removed card or the intentional SD_access_UnMounted USB-storage state.
+# ------------------------------------------------------------------
+add_executable(test_sdcard_selfheal
+    test_sdcard_selfheal.c
+)
+target_include_directories(test_sdcard_selfheal PRIVATE
+    ${STUBS_DIR}            # minimal m1_sdcard.h enum stub
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_sdcard_selfheal PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_sdcard_selfheal PRIVATE sanitizers)
+endif()
+add_test(NAME sdcard_selfheal COMMAND test_sdcard_selfheal)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"
