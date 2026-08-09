@@ -261,6 +261,7 @@ void m1_wdt_report_init(void)
 		wdt_report[i].run_time = 0;
 	}
 	m1_wdt_add_task_to_report(M1_REPORT_ID_BUTTONS_HANDLER_TASK, M1_WDT_SYSTEM_CHECK_TIMEOUT, 70, 120);
+#ifdef M1_APP_RPC_ENABLE
 	/* Background task: DELIBERATELY GENEROUS window (min 25%, max 250%). It
 	 * reports actual elapsed wall-time each loop, so a healthy task
 	 * accumulates ~100% of a period; only a task that has essentially
@@ -268,6 +269,7 @@ void m1_wdt_report_init(void)
 	 * inactive; the task activates itself when it starts looping. */
 	m1_wdt_add_task_to_report(M1_REPORT_ID_RPC_TASK, M1_WDT_SYSTEM_CHECK_TIMEOUT, 25, 250);
 	m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK);
+#endif
 	// Add other tasks here if needed
 } // void m1_wdt_report_init(void)
 
