@@ -20,6 +20,7 @@
 #include "m1_fw_update_bl.h"
 #include "m1_watchdog.h"
 #include "m1_watchdog_boot_loop.h"
+#include "m1_watchdog_decision.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -378,23 +379,37 @@ static void m1_wdt_system_check(void)
 	{
 		min = (wdt_report[i].report_period/100)*wdt_report[i].min_rpt_percent;
 		max = (wdt_report[i].report_period/100)*wdt_report[i].max_rpt_percent;
+		/* Decide the outcome under the critical section (atomic read-modify of the
+		 * report fields), but do the LOGGING and the failure handler AFTER exiting.
+		 * M1_LOG_* takes a mutex + queue, which is illegal from inside
+		 * taskENTER_CRITICAL(): under log contention it tries to block with the
+		 * scheduler suspended, which can hang/corrupt this very watchdog task —
+		 * which then stops feeding the IWDG and resets the device. */
+		m1_wdt_action_t wdt_action;
+		uint8_t  wdt_id = 0;
+		uint32_t wdt_rt = 0;
 		taskENTER_CRITICAL();
-		if ( (wdt_report[i].run_time >= min) && (wdt_report[i].run_time <= max) )
+		wdt_id = wdt_report[i].report_id;
+		wdt_action = m1_wdt_decide_action(wdt_report[i].run_time, min, max, wdt_report[i].inactive);
+		if (wdt_action == M1_WDT_ACTION_FAILURE)
 		{
-			//M1_LOG_I(M1_LOGDB_TAG, "SysOK\r\n");
-			wdt_report[i].run_time = 0;
-		}
-		else if (wdt_report[i].inactive)
-		{
-			M1_LOG_W(M1_LOGDB_TAG, "Task ID %d suspended\r\n", wdt_report[i].report_id);
-			wdt_report[i].run_time = 0;
+			wdt_rt = wdt_report[i].run_time;
 		}
 		else
 		{
-			M1_LOG_W(M1_LOGDB_TAG, "WDT failure. Task ID %d, run time: %ld\r\n", wdt_report[i].report_id, wdt_report[i].run_time);
-		    m1_wdt_failure_handler();
-		} // else
+			wdt_report[i].run_time = 0;
+		}
 		taskEXIT_CRITICAL();
+
+		if (wdt_action == M1_WDT_ACTION_SUSPENDED)
+		{
+			M1_LOG_W(M1_LOGDB_TAG, "Task ID %d suspended\r\n", wdt_id);
+		}
+		else if (wdt_action == M1_WDT_ACTION_FAILURE)
+		{
+			M1_LOG_W(M1_LOGDB_TAG, "WDT failure. Task ID %d, run time: %ld\r\n", wdt_id, wdt_rt);
+			m1_wdt_failure_handler();
+		}
 	} // for(i=0; i<M1_REPORT_ID_END_OF_LIST; i++)
 } // static void m1_wdt_system_check(void)
 

@@ -312,6 +312,24 @@ endif()
 add_test(NAME watchdog_boot_loop COMMAND test_watchdog_boot_loop)
 
 # ------------------------------------------------------------------
+# Module under test: watchdog per-task report decision
+# Pure helper logic in m1_watchdog_decision.h; verifies OK/suspended/failure
+# classification used by m1_wdt_system_check() (decision now made INSIDE the
+# critical section, with logging/failure-handler moved OUTSIDE it).
+# ------------------------------------------------------------------
+add_executable(test_watchdog_decision
+    test_watchdog_decision.c
+)
+target_include_directories(test_watchdog_decision PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_watchdog_decision PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_watchdog_decision PRIVATE sanitizers)
+endif()
+add_test(NAME watchdog_decision COMMAND test_watchdog_decision)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"
