@@ -350,6 +350,25 @@ endif()
 add_test(NAME sdcard_selfheal COMMAND test_sdcard_selfheal)
 
 # ------------------------------------------------------------------
+# Module under test: RPC USB session epoch decision (C3.154)
+# Pure helper logic in m1_rpc_usb_epoch.h; verifies that a host-side USB
+# bus reset/disconnect (re-enumeration without an MCU reboot) discards ONLY
+# stale old-session deferred-command / partial-file-write state, and never
+# a command that legitimately arrived in the new session.
+# ------------------------------------------------------------------
+add_executable(test_rpc_usb_epoch
+    test_rpc_usb_epoch.c
+)
+target_include_directories(test_rpc_usb_epoch PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_rpc_usb_epoch PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rpc_usb_epoch PRIVATE sanitizers)
+endif()
+add_test(NAME rpc_usb_epoch COMMAND test_rpc_usb_epoch)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"

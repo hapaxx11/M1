@@ -438,6 +438,28 @@ void CDC_TxAbort(void)
   hcdc->TxState = 0U;
 }
 
+/* True while the IN endpoint still owns a previous transfer. Not enumerated
+ * yet (pClassData == NULL) is reported as not-busy so callers don't wedge on
+ * a class that hasn't attached. */
+uint8_t CDC_Transmit_Busy(void)
+{
+  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+  if (hcdc == NULL)
+    return 0U;
+  return (hcdc->TxState != 0U) ? 1U : 0U;
+}
+
+/* Re-arm the CDC OUT (RX) endpoint, forcing the CDC instance on a composite
+ * device (see header comment). Returns USBD_OK only when the rearm was
+ * accepted. */
+uint8_t CDC_RearmRx(void)
+{
+#if M1_USB_MODE == M1_CFG_USB_CDC_MSC
+  hUsbDeviceFS.classId = CDC_InstID;
+#endif
+  return USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+}
+
 /**
   * @}
   */
