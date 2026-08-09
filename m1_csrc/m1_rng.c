@@ -11,6 +11,7 @@
  */
 #include "m1_rng.h"
 #include "stm32h5xx_hal.h"     /* CMSIS device (RNG/RCC) + HAL_GetTick */
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define RNG_SPIN_MAX   200000u
@@ -50,12 +51,15 @@ uint32_t m1_rng_get(void)
             if (sr & (RNG_SR_SEIS | RNG_SR_CEIS)) { s_state = 2; break; }
             if (sr & RNG_SR_DRDY) {
                 /* Atomically re-check DRDY and consume DR so a concurrent caller
-                 * can't leave us reading a stale/zero word. */
+                 * can't leave us reading a stale/zero word. Track whether the
+                 * read was actually consumed (drdy_seen), so a legitimate zero
+                 * is returned rather than treated as a lost race. */
                 uint32_t v = 0;
+                bool drdy_seen = false;
                 __disable_irq();
-                if (RNG->SR & RNG_SR_DRDY) v = RNG->DR;
+                if (RNG->SR & RNG_SR_DRDY) { v = RNG->DR; drdy_seen = true; }
                 __enable_irq();
-                if (v) return v;   /* lost the race -> DRDY cleared; try again */
+                if (drdy_seen) return v;  /* return even if v == 0 */
             }
         }
         s_state = 2;
