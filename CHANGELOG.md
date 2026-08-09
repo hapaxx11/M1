@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.35] - 2026-08-09
+
+### Added
+
+- **Games: Flappy Bird, Coin Flip, Rock Paper Scissors** — three new
+  built-in games added to the Games menu, ported from bedge117/M1 ("C3"):
+  Flappy Bird (OK/UP to flap, pipe collision + best-score tracking), Coin
+  Flip (animated spin with running heads/tails stats), Rock Paper Scissors
+  (LEFT/RIGHT to choose, OK to play against the CPU, score tracking).
+- **NFC: Amiibo master-key re-signing** — when loading a raw NTAG215 (.bin) amiibo
+  dump, if a user-supplied `key_retail.bin` is present on the SD card, the data
+  and tag HMACs are regenerated for the dump's own UID so it validates on a
+  real console even if the source dump's HMACs didn't match its UID. Falls
+  back to serving the dump as-is when no key file is found. Ported from
+  bedge117/M1 ("C3") after license/provenance review.
 ## [0.9.2.34] - 2026-08-09
 
 ## [0.9.2.33] - 2026-08-08
