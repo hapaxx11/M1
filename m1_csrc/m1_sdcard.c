@@ -1160,10 +1160,8 @@ void sdcard_detection_task(void *param)
 			                                m1_sdcard_get_status(),
 			                                (uint32_t)uxQueueMessagesWaiting(sdcard_det_q_hdl)) )
 			{
-				M1_LOG_W(M1_LOGDB_TAG, "SD self-heal: card present but NotReady, re-initializing\r\n");
 				q_item.q_evt_type = Q_EVENT_SDCARD_CHANGE;
-				xQueueSend(sdcard_det_q_hdl, &q_item, portMAX_DELAY);
-			}
+				(void)xQueueSend(sdcard_det_q_hdl, &q_item, 0);
 			continue;
 		}
 
