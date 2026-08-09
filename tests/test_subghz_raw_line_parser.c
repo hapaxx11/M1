@@ -303,6 +303,36 @@ void test_parse_large_values(void)
 }
 
 /* ===================================================================
+ * Full-buffer capacity (regression: replay used to truncate every
+ * RAW_Data line to a hardcoded 64-sample array, silently dropping the
+ * rest of the waveform for any longer capture)
+ * =================================================================== */
+
+void test_parse_full_line_not_truncated_at_64_samples(void)
+{
+    SubGhzRawLineState state;
+    subghz_raw_line_state_init(&state);
+
+    /* Build a line with 300 samples (> the old hardcoded 64-sample cap) */
+    char line[1600];
+    size_t pos = 0;
+    const int n_values = 300;
+    for (int i = 0; i < n_values; i++)
+    {
+        int written = snprintf(&line[pos], sizeof(line) - pos, " %d", (i % 500) + 1);
+        pos += (size_t)written;
+    }
+
+    static uint32_t out[SUBGHZ_RAW_LINE_MAX_SAMPLES];
+    uint16_t count = subghz_parse_raw_data_line(
+        line, true, &state, out, SUBGHZ_RAW_LINE_MAX_SAMPLES);
+
+    TEST_ASSERT_EQUAL_UINT16(n_values, count);
+    TEST_ASSERT_EQUAL_UINT32(1, out[0]);
+    TEST_ASSERT_EQUAL_UINT32((299 % 500) + 1, out[n_values - 1]);
+}
+
+/* ===================================================================
  * State init
  * =================================================================== */
 
@@ -352,6 +382,9 @@ int main(void)
 
     /* Large values */
     RUN_TEST(test_parse_large_values);
+
+    /* Full-buffer capacity (replay truncation regression) */
+    RUN_TEST(test_parse_full_line_not_truncated_at_64_samples);
 
     /* State init */
     RUN_TEST(test_state_init_clears_leftover);

@@ -2005,6 +2005,14 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 {
 #define FLIPPER_SUB_LINE_MAX  4096
 #define FLIPPER_SUB_OUT_MAX   256
+/* One f_gets buffer (FLIPPER_SUB_LINE_MAX chars) holds at most ~LINE_MAX/2
+ * space-separated samples ("1 " = 2 chars). Size the parse batch to cover a full
+ * buffer so no timings are dropped mid-line. The previous fixed 64 silently
+ * truncated every RAW_Data line to its first 64 samples — a 512-sample capture
+ * transmitted only ~13% of its waveform, which is why replayed RAW signals often
+ * did nothing. Static (not stack): 8KB is too large for this task's stack. */
+#define FLIPPER_SUB_MAX_SAMPLES  SUBGHZ_RAW_LINE_MAX_SAMPLES
+static uint32_t s_raw_sample_batch[FLIPPER_SUB_MAX_SAMPLES];
 
 	FIL f_sub, f_sgh;
 	FRESULT fr;
@@ -2081,9 +2089,9 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		/* Continuation of a long RAW_Data line that was split by f_gets */
 		if (in_raw_continuation)
 		{
-			uint32_t samples[64];
+			uint32_t *samples = s_raw_sample_batch;
 			uint16_t nsamples = subghz_parse_raw_data_line(
-				line_buf, line_complete, &raw_line_state, samples, 64);
+				line_buf, line_complete, &raw_line_state, samples, FLIPPER_SUB_MAX_SAMPLES);
 
 			if (nsamples > 0)
 			{
@@ -2261,9 +2269,9 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 			 * Uses the extracted raw line parser for cross-buffer handling. */
 			subghz_raw_line_state_init(&raw_line_state);
 
-			uint32_t samples[64];
+			uint32_t *samples = s_raw_sample_batch;
 			uint16_t nsamples = subghz_parse_raw_data_line(
-				line_buf + 9, line_complete, &raw_line_state, samples, 64);
+				line_buf + 9, line_complete, &raw_line_state, samples, FLIPPER_SUB_MAX_SAMPLES);
 
 			if (nsamples > 0)
 			{
@@ -2586,6 +2594,7 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 
 #undef FLIPPER_SUB_LINE_MAX
 #undef FLIPPER_SUB_OUT_MAX
+#undef FLIPPER_SUB_MAX_SAMPLES
 } // subghz_replay_flipper_to_tmp
 
 /*============================================================================*/
