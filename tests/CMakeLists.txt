@@ -2797,3 +2797,31 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_multi_target COMMAND test_wifi_multi_target)
 
+
+# ------------------------------------------------------------------
+# Module under test: m1_amiibo (Amiibo master-key re-signing, ported from
+# bedge117/M1 "C3" — NFC/amiibo/{nfc3d,mbedtls_shim,tiny_aes,sha256,m1_amiibo})
+#
+# Vendored crypto (MIT / public domain) + original glue code that re-signs a
+# 540-byte NTAG215 amiibo dump's HMACs for its own UID using a user-supplied
+# key_retail.bin. Uses the host FatFs stub (ff.h) for f_open/f_read.
+# ------------------------------------------------------------------
+add_executable(test_m1_amiibo
+    test_m1_amiibo.c
+    ${M1_ROOT}/NFC/amiibo/m1_amiibo.c
+    ${M1_ROOT}/NFC/amiibo/amiibo.c
+    ${M1_ROOT}/NFC/amiibo/keygen.c
+    ${M1_ROOT}/NFC/amiibo/drbg.c
+    ${M1_ROOT}/NFC/amiibo/mbedtls_shim.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+)
+target_include_directories(test_m1_amiibo PRIVATE
+    ${STUBS_DIR}            # ff.h stub
+    ${M1_ROOT}/NFC/amiibo
+)
+target_link_libraries(test_m1_amiibo PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_m1_amiibo PRIVATE sanitizers)
+endif()
+add_test(NAME m1_amiibo COMMAND test_m1_amiibo)

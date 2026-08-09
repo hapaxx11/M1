@@ -53,6 +53,7 @@ target_include_directories(m1_01 INTERFACE
     ../../NFC/NFC_drv/common
     ../../NFC/NFC_drv/legacy
     ../../NFC/NFC_drv/legacy/picopass
+    ../../NFC/amiibo
     ../../Battery
     ../../lfrfid
     ../../USB
@@ -324,6 +325,13 @@ target_sources(m1_01 INTERFACE
     ../../NFC/NFC_drv/legacy/picopass/picopass_cipher.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_poller.c
     ../../NFC/NFC_drv/legacy/picopass/picopass_listener.c
+    ../../NFC/amiibo/amiibo.c
+    ../../NFC/amiibo/keygen.c
+    ../../NFC/amiibo/drbg.c
+    ../../NFC/amiibo/mbedtls_shim.c
+    ../../NFC/amiibo/tiny_aes.c
+    ../../NFC/amiibo/sha256.c
+    ../../NFC/amiibo/m1_amiibo.c
     ../../NFC/app_x-cube-nfcx.c
     ../../Sub_Ghz/datatypes_utils.c
     ../../Sub_Ghz/m1_sub_ghz_api.c

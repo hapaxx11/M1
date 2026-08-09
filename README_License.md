@@ -155,6 +155,52 @@ The ST-provided library components remain under their original license terms.
 
 ---
 
+## 7. Amiibo Master-Key Re-Signing (MIT / Public Domain)
+
+This project includes third-party components used to re-sign NTAG215 Amiibo
+figure dumps against a user-supplied `key_retail.bin`, so dumps whose HMACs
+don't match their UID still validate on a real console.
+
+### Related Files
+
+- NFC/amiibo/nfc3d/amiibo.c, .h — Amiibo pack/unpack and key-derivation glue
+- NFC/amiibo/drbg.c, nfc3d/drbg.h — deterministic random bit generator
+- NFC/amiibo/keygen.c, nfc3d/keygen.h — derived-key generation
+- NFC/amiibo/util.h
+- NFC/amiibo/sha256.c / sha256.h
+- NFC/amiibo/tiny_aes.c / tiny_aes.h
+- NFC/amiibo/mbedtls_shim.c, mbedtls/aes.h, mbedtls/md.h — original glue
+  implementing the small mbedTLS-compatible subset used by the files above
+- NFC/amiibo/portable_endian.h — original glue
+- NFC/amiibo/m1_amiibo.c / m1_amiibo.h — original glue
+
+### Original Projects
+
+- https://github.com/socram8888/amiibo_dump (nfc3d amiibo/drbg/keygen, util.h) —
+  (c) 2015-2017 Marcos Del Sol Vives, (c) 2016 javiMaD
+- https://github.com/kokke/tiny-AES-c (tiny_aes.c / tiny_aes.h)
+- Brad Conte's public-domain SHA-256 implementation (sha256.c / sha256.h)
+
+### License
+
+- nfc3d/{amiibo,drbg,keygen}.c/h and util.h: MIT License
+- tiny_aes.c/h and sha256.c/h: Public Domain
+
+### Modifications
+
+`mbedtls_shim.c`, `mbedtls/aes.h`, `mbedtls/md.h`, `portable_endian.h` and
+`m1_amiibo.c/h` are original glue code written to bridge the vendored,
+byte-for-byte unmodified upstream sources above to the M1's FatFs storage and
+NTAG215 emulation path, without requiring a full mbedTLS dependency.
+
+### Notes
+
+Re-signing requires the user to place their own legally-obtained
+`key_retail.bin` on the SD card; no proprietary Nintendo key material is
+included in or distributed with this repository.
+
+---
+
 ## License Copies
 
 Copies of applicable open source licenses are provided in the `LICENSES/` directory:
@@ -175,6 +221,9 @@ driver implementations.
 
 The LP5814 driver is based in part on an MIT-licensed reference project and applies only to the
 LP5814 driver implementation.
+
+The Amiibo master-key re-signing feature includes MIT-licensed and public-domain third-party
+components and applies only to the files listed in that section.
 
 All other firmware components in this repository were independently developed by Monstatek and are
 not derived from GPL-licensed works.
