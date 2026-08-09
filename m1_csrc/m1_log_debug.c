@@ -29,6 +29,7 @@
 #include "m1_ring_buffer.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_compile_cfg.h"
+#include "m1_logdb_growth.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
 #endif
@@ -347,8 +348,16 @@ void m1_logdb_init(void)
 	   prevents a floating-RX interrupt storm from starving the IR decode. */
 #endif
 
-	mutex_log_write_trans = xSemaphoreCreateMutex();
-	assert(mutex_log_write_trans);
+	/* mutex_log_write_trans is created once and never deleted: m1_logdb_deinit()
+	   is called from m1_usb_cdc_comconfig(), which CDC_Control_FS() (USB
+	   SET_LINE_CODING) invokes from ISR context. vSemaphoreDelete() is not an
+	   ISR-safe FreeRTOS API, so deleting/recreating the mutex on every
+	   deinit/init cycle risked corrupting FreeRTOS state. */
+	if ( mutex_log_write_trans == NULL )
+	{
+		mutex_log_write_trans = xSemaphoreCreateMutex();
+		assert(mutex_log_write_trans);
+	}
 
 	log_q_hdl = xQueueCreate(1, 1);
 	assert(log_q_hdl!=NULL);
@@ -384,8 +393,10 @@ void m1_logdb_deinit(void)
     HAL_NVIC_DisableIRQ(GPDMA1_Channel2_IRQn);
     HAL_DMA_DeInit(&hdma_rxlogdb);
 
-    if ( mutex_log_write_trans != NULL )
-    	vSemaphoreDelete(mutex_log_write_trans);
+    /* mutex_log_write_trans is intentionally NOT deleted here — see the
+       create-once comment in m1_logdb_init(). This deinit path can run from
+       ISR context (CDC_Control_FS -> m1_usb_cdc_comconfig), where
+       vSemaphoreDelete() would be undefined behaviour. */
 } // static void m1_logdb_deinit(void)
 
 
@@ -708,28 +719,28 @@ void m1_logdb_printf(S_M1_LogDebugLevel_t level, const char* tag, const char* fo
 static void m1_logdb_dyn_vsprintf(const char *format, va_list pargs, char **pstring)
 {
 	int ret_n;
-	uint8_t mem_size;
+	int mem_size;
+	int new_size;
 	va_list pargsc;
 
 	mem_size = M1_LOGDB_MESSAGE_SIZE; // Set the default size first
 	while (1)
 	{
+		m1_logdb_grow_action_t action;
+
 		va_copy(pargsc, pargs); // Make a copy of the argument list
 		ret_n = vsnprintf(*pstring, mem_size, format, pargsc); // Try it
-		if ( ret_n > -1 ) // Good try?
-		{
-			if (ret_n < mem_size) // Good size?
-				break; // Exit loop and return
-			else
-				mem_size = ret_n + 20; // Adjust the allocated space
-		} // if ( ret_n > -1 )
-		else
-			mem_size = UCHAR_MAX; // Exit condition
+		va_end(pargsc);
+
+		action = m1_logdb_next_alloc_size(ret_n, mem_size, 2 * M1_LOGDB_MESSAGE_SIZE, &new_size);
+		if ( action == M1_LOGDB_GROW_DONE )
+			break; // Exit loop and return
 
 		free(*pstring); // Free allocated memory slot
 		*pstring = NULL; // Caller function may check NULL for error condition
-		if ( mem_size > 2*M1_LOGDB_MESSAGE_SIZE ) // Memory size exceeds the maximum allowed size?
+		if ( action == M1_LOGDB_GROW_GIVE_UP )
 			break; // Exit
+		mem_size = new_size;
 		*pstring = (char *)malloc(mem_size);
 	    if ( *pstring==NULL )
 	    {

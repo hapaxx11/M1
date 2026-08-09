@@ -162,6 +162,15 @@
 #if !defined  (LSE_STARTUP_TIMEOUT)
   #define LSE_STARTUP_TIMEOUT    5000UL     /*!< Time out for LSE start up, in ms */
 #endif /* LSE_STARTUP_TIMEOUT */
+
+#if !defined  (SDMMC_SWDATATIMEOUT)
+  /* Software (HAL_GetTick-based) SD data timeout, in ms. The ST default
+     aliases this to SDMMC_DATATIMEOUT (0xFFFFFFFF, ~49 days), so a wedged
+     SD card would spin every polled SD operation (init/abort/erase/status)
+     effectively forever. Bound it to a sane 5 s so wedged-card conditions
+     are detected and handled instead of hanging the caller. */
+  #define SDMMC_SWDATATIMEOUT    5000U
+#endif /* SDMMC_SWDATATIMEOUT */
 /**
   * @brief External clock source for SPI/SAI peripheral
   *        This value is used by the SPI/SAI HAL module to compute the SPI/SAI clock source

@@ -129,9 +129,11 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 			break;
 
 		case I2C_TRANS_WRITE_REGISTER:
-			taskENTER_CRITICAL();
+			/* Not wrapped in a critical section: HAL_I2C_Mem_Write() relies on
+			   HAL_GetTick() (SysTick) for its internal timeout, and freezing
+			   the tick here can turn a transient I2C stall into a watchdog
+			   reset instead of a bounded HAL timeout. */
 			stat = HAL_I2C_Mem_Write(pi2chdl, m1_i2c_addr[trans_inf->dev_id], trans_inf->reg_address, I2C_MEMADD_SIZE_8BIT, &trans_inf->reg_data, 1, trans_inf->timeout);
-			taskEXIT_CRITICAL();
 			break;
 
 		case I2C_TRANS_READ_DATA:
@@ -139,9 +141,7 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 			break;
 
 		case I2C_TRANS_WRITE_DATA:
-			taskENTER_CRITICAL();
 			stat = HAL_I2C_Master_Transmit(pi2chdl, m1_i2c_addr[trans_inf->dev_id], trans_inf->pdata, trans_inf->data_len, trans_inf->timeout);
-			taskEXIT_CRITICAL();
 			break;
 
 		case I2C_TRANS_READ_REGISTER_MULTIPLE:	// Added for STC3115 to read multiple registers, shb
@@ -149,9 +149,7 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 			break;
 
 		case I2C_TRANS_WRITE_REGISTER_MULTIPLE:	// Added for STC3115 to write multiple registers, shb
-			taskENTER_CRITICAL();
 			stat = HAL_I2C_Mem_Write(pi2chdl, m1_i2c_addr[trans_inf->dev_id], trans_inf->reg_address, I2C_MEMADD_SIZE_8BIT, trans_inf->pdata, trans_inf->data_len, trans_inf->timeout);
-			taskEXIT_CRITICAL();
 			break;
 
 		default:
