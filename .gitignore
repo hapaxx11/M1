@@ -68,6 +68,7 @@ appsplan.md
 # Host-side test build output
 build-tests/
 build_test/
+build_tests/
 
 # Doxygen generated documentation
 docs/html/
