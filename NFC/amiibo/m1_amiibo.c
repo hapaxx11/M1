@@ -43,6 +43,13 @@ bool m1_amiibo_load_keys(const char *path)
     if (s_keys.data.magicBytesSize > 16 || s_keys.tag.magicBytesSize > 16) {
         return false;
     }
+    /* Require a NUL terminator in both typeString fields so that
+     * nfc3d_keygen_prepare_seed()'s memccpy() cannot return NULL and
+     * cause a NULL-pointer write via the subsequent memcpy. */
+    if (memchr(s_keys.data.typeString, '\0', sizeof(s_keys.data.typeString)) == NULL ||
+        memchr(s_keys.tag.typeString,  '\0', sizeof(s_keys.tag.typeString))  == NULL) {
+        return false;
+    }
     s_loaded = true;
     return true;
 }

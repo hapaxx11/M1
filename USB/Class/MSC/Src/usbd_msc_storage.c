@@ -216,7 +216,6 @@ int8_t STORAGE_Read(uint8_t lun, uint8_t *buf,
           /* Completion never arrived — recover instead of hanging forever. Leave
            * event != CPLT so res stays -1 (USB reports an error and retries). */
           event = 0;
-          DBG_sd_rd_timeout_cnt++;
           break;
         }
         m1_wdt_reset();
@@ -285,7 +284,6 @@ int8_t STORAGE_Write(uint8_t lun, uint8_t *buf,
           /* Completion never arrived — recover instead of hanging forever. Leave
            * event != CPLT so res stays -1 (USB reports an error and retries). */
           event = 0;
-          DBG_sd_wr_timeout_cnt++;
           break;
         }
         m1_wdt_reset();
@@ -311,12 +309,10 @@ int8_t STORAGE_Write(uint8_t lun, uint8_t *buf,
       }
       else
       {
-        if (res !=0) DBG_sd_rd_timeout_cnt++;
+        if (res !=0) DBG_sd_wr_timeout_cnt++;
       }
     }
   }
-
-  if (res !=0) DBG_sd_wr_timeout_cnt++;
 
   return (res);
 }

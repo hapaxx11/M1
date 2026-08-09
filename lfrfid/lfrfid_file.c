@@ -114,6 +114,7 @@ bool lfrfid_profile_load(const S_M1_file_info *f, const char* ext)
 		 * otherwise smash protocol/bitrate/filename/filepath and adjacent .bss. */
 		{
 			size_t n = lfrfid_uid_copy_len(data.v.hex.out_len, sizeof(lfrfid_tag_info.uid));
+			memset(lfrfid_tag_info.uid, 0, sizeof(lfrfid_tag_info.uid));
 			memcpy(lfrfid_tag_info.uid, data.buf, n);
 		}
 

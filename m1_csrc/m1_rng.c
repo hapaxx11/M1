@@ -36,6 +36,13 @@ static void rng_hw_init(void)
 
 static uint32_t sw_rand(void)
 {
+    /* Seed once on first use so rand() doesn't produce a deterministic
+     * sequence across boots when the TRNG is unavailable. */
+    static bool seeded = false;
+    if (!seeded) {
+        srand((unsigned int)HAL_GetTick());
+        seeded = true;
+    }
     /* Mix two rand() draws with the tick — same non-crypto quality as before. */
     return ((uint32_t)rand() << 17) ^ ((uint32_t)rand() << 3) ^ (uint32_t)HAL_GetTick();
 }
