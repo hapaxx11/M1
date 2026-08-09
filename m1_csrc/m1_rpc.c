@@ -34,6 +34,7 @@
 #include "m1_sdcard.h"
 #include "m1_file_browser.h"
 #include "m1_fw_update_bl.h"
+#include "m1_fw_selfflash_mask.h"
 #include "m1_lcd.h"
 #include "m1_watchdog.h"
 #include "u8g2.h"
@@ -81,6 +82,7 @@ typedef struct {
     uint32_t expected_crc32;
     uint32_t bytes_written;
     uint8_t *flash_addr;         /* Next write address in inactive bank */
+    fw_selfflash_mask_state_t esp_irq_mask;  /* ESP IRQ mask session tracker */
 } S_RPC_FwUpdateState;
 
 /* ESP32 update state — direct flash via esp-serial-flasher */
@@ -1592,6 +1594,32 @@ static void rpc_handle_fw_info(const S_RPC_Frame *f)
 }
 
 
+/* Mask/unmask the ESP32 interrupt lines (DataReady / Handshake / UART RX)
+ * for the ENTIRE M1 self-flash session (erase through FINISH), not just
+ * around the erase. After ESP (WiFi/BLE/802.15.4) activity the ESP keeps
+ * asserting these lines and streaming over UART4; those high-priority ISRs
+ * preempt the flash worker and the (lowest-priority) IWDG feeder in every
+ * unmasked gap. Unmasking right after the erase — before the first DATA
+ * chunk arrives — lets a buffered ESP backlog starve the feeder/worker and
+ * the IWDG reset the device before a single byte is written (inactive bank
+ * erased, 0 bytes, device reports v0.0.0 after the reset). Keeping the lines
+ * masked for the whole session removes every gap; USB TX (the ACKs) is
+ * independent of these ESP lines, so ACKs are unaffected. See
+ * m1_fw_selfflash_mask.h for the pure session state machine driving when to
+ * (un)mask. Unmask on FINISH and every error/teardown exit. */
+static void fw_esp_irqs_mask(void)
+{
+    HAL_NVIC_DisableIRQ(EXTI1_IRQn);   /* ESP DataReady */
+    HAL_NVIC_DisableIRQ(EXTI7_IRQn);   /* ESP Handshake */
+    HAL_NVIC_DisableIRQ(UART4_IRQn);   /* ESP UART RX   */
+}
+static void fw_esp_irqs_unmask(void)
+{
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI7_IRQn);
+    HAL_NVIC_EnableIRQ(UART4_IRQn);
+}
+
 /**
  * @brief  Handle FW_UPDATE_START — prepare to receive firmware image.
  *
@@ -1643,6 +1671,13 @@ static void rpc_handle_fw_update_start(const S_RPC_Frame *f)
     /* Unlock flash */
     HAL_FLASH_Unlock();
 
+    /* Mask the ESP32 interrupt lines for the WHOLE self-flash session (erase
+     * through FINISH) — see fw_esp_irqs_mask() above for why unmasking in a
+     * gap between ops is what let the IWDG reset the device mid-flash. */
+    fw_selfflash_mask_init(&s_fw_update.esp_irq_mask);
+    fw_selfflash_mask_begin(&s_fw_update.esp_irq_mask);
+    fw_esp_irqs_mask();
+
     /* Erase required sectors in inactive bank */
     uint16_t n_sectors = (total_size + FLASH_SECTOR_SIZE - 1) / FLASH_SECTOR_SIZE;
     FLASH_EraseInitTypeDef erase_init;
@@ -1659,6 +1694,8 @@ static void rpc_handle_fw_update_start(const S_RPC_Frame *f)
         if (HAL_FLASHEx_Erase(&erase_init, &sector_error) != HAL_OK)
         {
             HAL_FLASH_Lock();
+            if (fw_selfflash_mask_end(&s_fw_update.esp_irq_mask))
+                fw_esp_irqs_unmask();
             m1_rpc_send_nack(f->seq, RPC_ERR_FLASH_ERROR);
             return;
         }
@@ -1670,6 +1707,11 @@ static void rpc_handle_fw_update_start(const S_RPC_Frame *f)
     s_fw_update.expected_crc32 = expected_crc;
     s_fw_update.bytes_written = 0;
     s_fw_update.flash_addr    = (uint8_t *)inactive_base;
+
+    /* Send the START ACK with the ESP IRQs STILL masked — and LEAVE them
+     * masked for the rest of the session (DATA chunks + FINISH unmask). USB
+     * TX is unaffected by the masked ESP lines, so the ACK delivers
+     * promptly regardless. */
 
     m1_rpc_send_ack(f->seq);
 }
@@ -1706,17 +1748,28 @@ static void rpc_handle_fw_update_data(const S_RPC_Frame *f)
 
     m1_wdt_reset();
 
-    /* Write using HAL — STM32H5 requires 16-byte aligned writes.
-     * bl_flash_if_write handles alignment internally. */
+    /* Write using HAL — STM32H5 requires 16-byte aligned writes; bl_flash_if_write
+     * handles alignment internally. The ESP IRQ lines are already masked for the
+     * whole session (see START), so the quad-word program can't be preempted by
+     * an EXTI1/EXTI7/UART4 ISR — on STM32H5 such a preemption stalls FLASH_BSY
+     * (RWW) and starves the lowest-priority IWDG feeder. No per-chunk
+     * mask/unmask: the between-chunk gaps were the exposure. */
     if (bl_flash_if_write((uint8_t *)&f->payload[4], write_addr, data_len) != BL_CODE_OK)
     {
         HAL_FLASH_Lock();
         s_fw_update.active = false;
+        if (fw_selfflash_mask_end(&s_fw_update.esp_irq_mask))
+            fw_esp_irqs_unmask();
         m1_rpc_send_nack(f->seq, RPC_ERR_FLASH_ERROR);
         return;
     }
 
     s_fw_update.bytes_written += data_len;
+
+    /* ACK this chunk with the ESP IRQs still masked (they stay masked for the
+     * whole session — FINISH unmasks). USB TX is independent of the ESP
+     * lines, so the ACK delivers promptly; keeping them masked means no
+     * between-chunk gap for an ESP flood to starve the worker/IWDG feeder. */
     m1_rpc_send_ack(f->seq);
 }
 
@@ -1752,6 +1805,8 @@ static void rpc_handle_fw_update_finish(const S_RPC_Frame *f)
         if (!bl_verify_bank_crc(inactive_base))
         {
             M1_LOG_E(M1_LOGDB_TAG, "FW update: post-write CRC verification FAILED\r\n");
+            if (fw_selfflash_mask_end(&s_fw_update.esp_irq_mask))
+                fw_esp_irqs_unmask();
             m1_rpc_send_nack(f->seq, RPC_ERR_CRC_MISMATCH);
             return;
         }
@@ -1762,6 +1817,10 @@ static void rpc_handle_fw_update_finish(const S_RPC_Frame *f)
         M1_LOG_I(M1_LOGDB_TAG, "FW update: no CRC extension, skipping verification\r\n");
     }
 
+    /* Session done — re-enable the ESP IRQ lines that were masked since
+     * START. */
+    if (fw_selfflash_mask_end(&s_fw_update.esp_irq_mask))
+        fw_esp_irqs_unmask();
     m1_rpc_send_ack(f->seq);
 }
 

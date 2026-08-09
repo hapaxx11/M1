@@ -312,6 +312,24 @@ endif()
 add_test(NAME watchdog_boot_loop COMMAND test_watchdog_boot_loop)
 
 # ------------------------------------------------------------------
+# Module under test: watchdog per-task report decision
+# Pure helper logic in m1_watchdog_decision.h; verifies OK/suspended/failure
+# classification used by m1_wdt_system_check() (decision now made INSIDE the
+# critical section, with logging/failure-handler moved OUTSIDE it).
+# ------------------------------------------------------------------
+add_executable(test_watchdog_decision
+    test_watchdog_decision.c
+)
+target_include_directories(test_watchdog_decision PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_watchdog_decision PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_watchdog_decision PRIVATE sanitizers)
+endif()
+add_test(NAME watchdog_decision COMMAND test_watchdog_decision)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"
@@ -1094,6 +1112,22 @@ endif()
 add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
 
 # ------------------------------------------------------------------
+# lfrfid_uid_copy: pure clamp helper, no HAL/RTOS/FatFs deps at all.
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_uid_copy
+    test_lfrfid_uid_copy.c
+    ${M1_ROOT}/lfrfid/lfrfid_uid_copy.c
+)
+target_include_directories(test_lfrfid_uid_copy PRIVATE
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_lfrfid_uid_copy PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_uid_copy PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_uid_copy COMMAND test_lfrfid_uid_copy)
+
+# ------------------------------------------------------------------
 # Module under test: t5577_timing (T5577 write-timing constants)
 # Regression test for the da-pingwing timing bug fix: the previous
 # WRITE_GAP=18 + DATA_1=56 gave a "1" bit gap-to-gap of 74 Tc,
@@ -1341,6 +1375,24 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp32_fw_update PRIVATE sanitizers)
 endif()
 add_test(NAME esp32_fw_update COMMAND test_esp32_fw_update)
+
+# ------------------------------------------------------------------
+# Module under test: M1 self-flash ESP32 IRQ mask session state machine
+# Pure logic — regression ported from bedge117/M1 C3.164 (self-flash
+# data-phase reset from unmasking ESP IRQs between erase and first chunk).
+# ------------------------------------------------------------------
+add_executable(test_fw_selfflash_mask
+    test_fw_selfflash_mask.c
+    ${M1_ROOT}/m1_csrc/m1_fw_selfflash_mask.c
+)
+target_include_directories(test_fw_selfflash_mask PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_fw_selfflash_mask PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fw_selfflash_mask PRIVATE sanitizers)
+endif()
+add_test(NAME fw_selfflash_mask COMMAND test_fw_selfflash_mask)
 
 # ------------------------------------------------------------------
 # Module under test: str_contains_icase (IR Universal Remote search helper)
@@ -2745,3 +2797,31 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_multi_target COMMAND test_wifi_multi_target)
 
+
+# ------------------------------------------------------------------
+# Module under test: m1_amiibo (Amiibo master-key re-signing, ported from
+# bedge117/M1 "C3" — NFC/amiibo/{nfc3d,mbedtls_shim,tiny_aes,sha256,m1_amiibo})
+#
+# Vendored crypto (MIT / public domain) + original glue code that re-signs a
+# 540-byte NTAG215 amiibo dump's HMACs for its own UID using a user-supplied
+# key_retail.bin. Uses the host FatFs stub (ff.h) for f_open/f_read.
+# ------------------------------------------------------------------
+add_executable(test_m1_amiibo
+    test_m1_amiibo.c
+    ${M1_ROOT}/NFC/amiibo/m1_amiibo.c
+    ${M1_ROOT}/NFC/amiibo/amiibo.c
+    ${M1_ROOT}/NFC/amiibo/keygen.c
+    ${M1_ROOT}/NFC/amiibo/drbg.c
+    ${M1_ROOT}/NFC/amiibo/mbedtls_shim.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+)
+target_include_directories(test_m1_amiibo PRIVATE
+    ${STUBS_DIR}            # ff.h stub
+    ${M1_ROOT}/NFC/amiibo
+)
+target_link_libraries(test_m1_amiibo PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_m1_amiibo PRIVATE sanitizers)
+endif()
+add_test(NAME m1_amiibo COMMAND test_m1_amiibo)

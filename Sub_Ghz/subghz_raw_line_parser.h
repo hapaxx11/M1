@@ -32,6 +32,19 @@ typedef struct {
     char leftover[16];     /**< Partial number from previous buffer boundary */
 } SubGhzRawLineState;
 
+/**
+ * Maximum number of samples a single RAW_Data f_gets buffer can hold.
+ *
+ * Callers read RAW_Data lines into a 4096-byte f_gets buffer. Each
+ * space-separated sample is at least 2 chars ("1 "), so a full buffer can
+ * contain up to 4096/2 = 2048 samples. Callers MUST size their samples_out
+ * array to at least this many entries — passing a smaller fixed-size array
+ * (e.g. 64) silently truncates every RAW_Data line to its first N samples,
+ * which for long captures means only a fraction of the waveform is ever
+ * transmitted on replay.
+ */
+#define SUBGHZ_RAW_LINE_MAX_SAMPLES  2048
+
 /*============================================================================*/
 /* Functions                                                                   */
 /*============================================================================*/

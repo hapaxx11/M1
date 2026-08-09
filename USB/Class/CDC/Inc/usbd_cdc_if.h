@@ -36,6 +36,10 @@ extern USBD_CDC_ItfTypeDef  USBD_CDC_Interface_fops;
 /* Exported functions ------------------------------------------------------- */
 uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
+/* Abort a stuck IN transfer (flush EP + clear TxState) so a shared TX buffer is
+ * safe to reuse after the host stops reading. Guards NULL pClassData. */
+void CDC_TxAbort(void);
+
 #ifdef __cplusplus
 }
 #endif
