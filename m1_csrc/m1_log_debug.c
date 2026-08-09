@@ -29,9 +29,9 @@
 #include "m1_ring_buffer.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_compile_cfg.h"
+#include "m1_logdb_growth.h"
 #ifdef M1_APP_RPC_ENABLE
 #include "m1_rpc.h"
-#include "m1_logdb_growth.h"
 #endif
 
 /*************************** D E F I N E S ************************************/
@@ -730,6 +730,7 @@ static void m1_logdb_dyn_vsprintf(const char *format, va_list pargs, char **pstr
 
 		va_copy(pargsc, pargs); // Make a copy of the argument list
 		ret_n = vsnprintf(*pstring, mem_size, format, pargsc); // Try it
+		va_end(pargsc);
 
 		action = m1_logdb_next_alloc_size(ret_n, mem_size, 2 * M1_LOGDB_MESSAGE_SIZE, &new_size);
 		if ( action == M1_LOGDB_GROW_DONE )

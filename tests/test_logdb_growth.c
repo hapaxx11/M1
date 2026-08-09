@@ -12,7 +12,7 @@
  * `ret_n + 20` exceeded 255 wrapped back into the valid range, so the
  * loop kept reallocating a too-small buffer forever instead of giving up
  * — an infinite spin / crash on any log line >= ~235 bytes. Fixed by
- * using a plain `int` for the size arithmetic. test_grow_wraps_with_narrow_type
+ * using a plain `int` for the size arithmetic. test_grow_large_message_gives_up_without_wrap
  * below reproduces the old bug using an explicit uint8_t cast to prove the
  * fixed (int-based) logic no longer wraps.
  *
