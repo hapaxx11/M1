@@ -1162,7 +1162,8 @@ void sdcard_detection_task(void *param)
 			{
 				q_item.q_evt_type = Q_EVENT_SDCARD_CHANGE;
 				(void)xQueueSend(sdcard_det_q_hdl, &q_item, 0);
-			continue;
+				continue;
+			}
 		}
 
 		if (ret==pdPASS)
