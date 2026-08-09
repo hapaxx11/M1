@@ -741,6 +741,10 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/game_pong.c
     ../../m1_csrc/game_dice.c
     ../../m1_csrc/game_2048.c
+    ../../m1_csrc/game_flappy.c
+    ../../m1_csrc/game_coin_flip.c
+    ../../m1_csrc/game_rps.c
+    ../../m1_csrc/game_tamagotchi.c
     ../../m1_csrc/music_player.c
     ../../m1_csrc/music_parser.c
     ../../m1_csrc/hex_viewer.c

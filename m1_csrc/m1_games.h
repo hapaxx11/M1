@@ -54,6 +54,10 @@ void game_trex_run(void);
 void game_pong_run(void);
 void game_dice_run(void);
 void game_2048_run(void);
+void game_flappy_run(void);
+void game_coin_flip_run(void);
+void game_rps_run(void);
+void game_tamagotchi_run(void);
 
 /* Utility apps */
 void app_hex_viewer_run(void);

@@ -35,6 +35,10 @@ enum {
     GamesSceneHexViewer,
     GamesSceneClock,
     GamesScene2048,
+    GamesSceneFlappy,
+    GamesSceneCoinFlip,
+    GamesSceneRPS,
+    GamesSceneTamagotchi,
     GamesSceneCount
 };
 
@@ -111,6 +115,38 @@ static void game_2048_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void flappy_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    game_flappy_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static void coin_flip_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    game_coin_flip_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static void rps_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    game_rps_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static void tamagotchi_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    game_tamagotchi_run();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers snake_handlers      = { .on_enter = snake_on_enter      };
@@ -122,10 +158,14 @@ static const M1SceneHandlers music_handlers      = { .on_enter = music_on_enter 
 static const M1SceneHandlers hex_viewer_handlers = { .on_enter = hex_viewer_on_enter };
 static const M1SceneHandlers clock_handlers      = { .on_enter = clock_on_enter      };
 static const M1SceneHandlers game_2048_handlers  = { .on_enter = game_2048_on_enter  };
+static const M1SceneHandlers flappy_handlers      = { .on_enter = flappy_on_enter      };
+static const M1SceneHandlers coin_flip_handlers   = { .on_enter = coin_flip_on_enter   };
+static const M1SceneHandlers rps_handlers         = { .on_enter = rps_on_enter         };
+static const M1SceneHandlers tamagotchi_handlers  = { .on_enter = tamagotchi_on_enter  };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  9
+#define MENU_ITEM_COUNT  13
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Snake",
@@ -137,6 +177,10 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Hex Viewer",
     "Clock",
     "2048",
+    "Flappy Bird",
+    "Coin Flip",
+    "Rock Paper Scissors",
+    "Tamagotchi",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -149,6 +193,10 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     GamesSceneHexViewer,
     GamesSceneClock,
     GamesScene2048,
+    GamesSceneFlappy,
+    GamesSceneCoinFlip,
+    GamesSceneRPS,
+    GamesSceneTamagotchi,
 };
 
 static subghz_submenu_model_t s_games_menu_model;
@@ -195,6 +243,10 @@ static const M1SceneHandlers *const scene_registry[GamesSceneCount] = {
     [GamesSceneHexViewer] = &hex_viewer_handlers,
     [GamesSceneClock]     = &clock_handlers,
     [GamesScene2048]      = &game_2048_handlers,
+    [GamesSceneFlappy]     = &flappy_handlers,
+    [GamesSceneCoinFlip]   = &coin_flip_handlers,
+    [GamesSceneRPS]        = &rps_handlers,
+    [GamesSceneTamagotchi] = &tamagotchi_handlers,
 };
 
 /*--- Entry point ----------------------------------------------------------*/
