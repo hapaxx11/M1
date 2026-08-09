@@ -1094,6 +1094,22 @@ endif()
 add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
 
 # ------------------------------------------------------------------
+# lfrfid_uid_copy: pure clamp helper, no HAL/RTOS/FatFs deps at all.
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_uid_copy
+    test_lfrfid_uid_copy.c
+    ${M1_ROOT}/lfrfid/lfrfid_uid_copy.c
+)
+target_include_directories(test_lfrfid_uid_copy PRIVATE
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_lfrfid_uid_copy PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_uid_copy PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_uid_copy COMMAND test_lfrfid_uid_copy)
+
+# ------------------------------------------------------------------
 # Module under test: t5577_timing (T5577 write-timing constants)
 # Regression test for the da-pingwing timing bug fix: the previous
 # WRITE_GAP=18 + DATA_1=56 gave a "1" bit gap-to-gap of 74 Tc,

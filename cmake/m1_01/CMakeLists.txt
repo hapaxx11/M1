@@ -274,8 +274,10 @@ target_sources(m1_01 INTERFACE
     ../../FatFs/diskio.c
     ../../FatFs/ff.c
     ../../FatFs/ff_gen_drv.c
-    ../../FatFs/ffsystem.c
-    ../../FatFs/ffsystem_baremetal.c
+    # FatFs sync provider: with FF_FS_REENTRANT=1 exactly ONE ffsystem*.c may
+    # define ff_mutex_*. ffsystem_cmsis_os.c provides the CMSIS-OS2 recursive
+    # mutex handlers; ffsystem.c would duplicate them and ffsystem_baremetal.c
+    # #errors when reentrancy is on. So only the CMSIS one is compiled.
     ../../FatFs/ffsystem_cmsis_os.c
     ../../FatFs/ffunicode.c
     ../../Infrared/irmp.c
@@ -499,6 +501,7 @@ target_sources(m1_01 INTERFACE
     ../../USB/Core/Src/usbd_ioreq.c
     ../../lfrfid/lfrfid.c
     ../../lfrfid/lfrfid_file.c
+    ../../lfrfid/lfrfid_uid_copy.c
     ../../lfrfid/lfrfid_hal.c
     ../../lfrfid/lfrfid_protocol.c
     ../../lfrfid/lfrfid_protocol_em4100.c
@@ -589,6 +592,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_power_ctl.c
     ../../m1_csrc/m1_rf_spi.c
     ../../m1_csrc/m1_rfid.c
+    ../../m1_csrc/m1_rng.c
     ../../m1_csrc/m1_rfid_scene.c
     ../../m1_csrc/m1_ring_buffer.c
     ../../m1_csrc/m1_bt_scene.c
