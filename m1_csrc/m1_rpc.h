@@ -210,6 +210,13 @@ void m1_rpc_init(void);
 void m1_rpc_feed(const uint8_t *data, uint16_t len);
 
 /**
+ * @brief  Record a USB transport reset (bus reset / disconnect) from the PCD
+ *         ISR. Bumps the RPC USB session epoch so the receive parser and
+ *         rpc_task drop stale state from the previous session. ISR-safe.
+ */
+void m1_rpc_usb_session_reset_from_isr(void);
+
+/**
  * @brief  Check if the given data starts with an RPC sync byte.
  * @param  data   Pointer to data buffer
  * @param  len    Buffer length
