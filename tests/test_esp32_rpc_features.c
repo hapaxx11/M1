@@ -277,6 +277,121 @@ void test_set_mac_null_rejected(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID, m1_esp32_rpc_wifi_set_mac(NULL));
 }
 
+void test_monitor_read_decodes_frame(void)
+{
+    /* Wire format: [ch:1][rssi:i8][len:2 LE][frame bytes] */
+    static const uint8_t frame[] = { 0x80, 0x00, 0x01, 0x02, 0x03, 0x04 };
+    uint8_t body[16];
+    body[0] = 6u;
+    body[1] = (uint8_t)(-55);
+    body[2] = (uint8_t)(sizeof(frame) & 0xFFu);
+    body[3] = (uint8_t)((sizeof(frame) >> 8u) & 0xFFu);
+    memcpy(&body[4], frame, sizeof(frame));
+
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_OFF_MONITOR_READ,
+                              body, (uint16_t)(4u + sizeof(frame)));
+
+    uint8_t out_frame[16];
+    uint16_t out_len = 0u;
+    uint8_t ch = 0u;
+    int8_t rssi = 0;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_monitor_read(out_frame, sizeof(out_frame),
+                                                &out_len, &ch, &rssi));
+    TEST_ASSERT_EQUAL_UINT16(sizeof(frame), out_len);
+    TEST_ASSERT_EQUAL_UINT8(6u, ch);
+    TEST_ASSERT_EQUAL_INT8(-55, rssi);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(frame, out_frame, sizeof(frame));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_MONITOR_READ, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
+}
+
+void test_monitor_read_empty_response_is_ok(void)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_OFF_MONITOR_READ, NULL, 0u);
+
+    uint16_t out_len = 0xABCDu;
+    uint8_t ch = 0xFFu;
+    int8_t rssi = 0x7F;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_monitor_read(NULL, 0u, &out_len, &ch, &rssi));
+    TEST_ASSERT_EQUAL_UINT16(0u, out_len);
+    TEST_ASSERT_EQUAL_UINT8(0u, ch);
+    TEST_ASSERT_EQUAL_INT8(0, rssi);
+}
+
+void test_monitor_read_truncated_header_rejects(void)
+{
+    const uint8_t body[] = { 6u, (uint8_t)(-55) }; /* missing len */
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_OFF_MONITOR_READ, body, sizeof(body));
+
+    uint8_t out_frame[8];
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BAD_FRAME,
+                      m1_esp32_rpc_monitor_read(out_frame, sizeof(out_frame),
+                                                NULL, NULL, NULL));
+}
+
+void test_monitor_read_oversized_len_rejects(void)
+{
+    /* frame_len claims 0x0100 bytes but the response only carries 4 payload
+     * bytes after the 4-byte header. */
+    uint8_t body[8] = { 6u, (uint8_t)(-55), 0x00, 0x01, 1, 2, 3, 4 };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_OFF_MONITOR_READ, body, sizeof(body));
+
+    uint8_t out_frame[8];
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BAD_FRAME,
+                      m1_esp32_rpc_monitor_read(out_frame, sizeof(out_frame),
+                                                NULL, NULL, NULL));
+}
+
+void test_monitor_read_truncates_to_frame_max_and_reports_copied_len(void)
+{
+    static const uint8_t frame[] = { 0x80, 0x00, 0x01, 0x02, 0x03, 0x04 };
+    uint8_t body[16];
+    body[0] = 11u;
+    body[1] = (uint8_t)(-42);
+    body[2] = (uint8_t)(sizeof(frame) & 0xFFu);
+    body[3] = (uint8_t)((sizeof(frame) >> 8u) & 0xFFu);
+    memcpy(&body[4], frame, sizeof(frame));
+
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_OFF_MONITOR_READ,
+                              body, (uint16_t)(4u + sizeof(frame)));
+
+    uint8_t out_frame[4] = { 0 };
+    uint16_t out_len = 0u;
+    uint8_t ch = 0u;
+    int8_t rssi = 0;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_monitor_read(out_frame, sizeof(out_frame),
+                                                &out_len, &ch, &rssi));
+    TEST_ASSERT_EQUAL_UINT16(sizeof(out_frame), out_len);
+    TEST_ASSERT_EQUAL_UINT8(11u, ch);
+    TEST_ASSERT_EQUAL_INT8(-42, rssi);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(frame, out_frame, sizeof(out_frame));
+}
+
+void test_ble_adv_start_encodes_name(void)
+{
+    const char name[] = "M1Adv";
+    canned_ok(M1_ESP32_RPC_BLE_ADV_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_adv_start(name));
+    TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_BLE_ADV_START, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(strlen(name), tx_plen());
+    TEST_ASSERT_EQUAL_UINT8_ARRAY((const uint8_t *)name, tx_payload(), strlen(name));
+}
+
+void test_ble_adv_start_null_name_empty_payload(void)
+{
+    canned_ok(M1_ESP32_RPC_BLE_ADV_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_adv_start(NULL));
+    TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
+}
+
 void test_beacon_start_caps_payload_and_patches_count(void)
 {
     char ssids[8][33];
@@ -655,6 +770,15 @@ int main(void)
     RUN_TEST(test_ble_scan_start_encodes_dur_s);
     RUN_TEST(test_set_mac_encodes_six_bytes);
     RUN_TEST(test_set_mac_null_rejected);
+
+    RUN_TEST(test_monitor_read_decodes_frame);
+    RUN_TEST(test_monitor_read_empty_response_is_ok);
+    RUN_TEST(test_monitor_read_truncated_header_rejects);
+    RUN_TEST(test_monitor_read_oversized_len_rejects);
+    RUN_TEST(test_monitor_read_truncates_to_frame_max_and_reports_copied_len);
+
+    RUN_TEST(test_ble_adv_start_encodes_name);
+    RUN_TEST(test_ble_adv_start_null_name_empty_payload);
 
     RUN_TEST(test_deauth_start_serialises_struct);
     RUN_TEST(test_deauth_start_null_rejected);

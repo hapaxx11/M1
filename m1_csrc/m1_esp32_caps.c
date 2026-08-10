@@ -291,7 +291,7 @@ void m1_esp32_caps_init(void)
         m1_esp32_caps_parse_payload(resp.payload, resp.payload_len,
                                     &bitmap, fw_name))
     {
-        s_bitmap = bitmap;
+        s_bitmap = m1_esp32_caps_with_cd3_host_bits(bitmap);
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
         caps_apply_footprint_estimates(s_bitmap);
@@ -480,7 +480,7 @@ probe_cd3:
                                                      (uint8_t)rpc_plen,
                                                      &bitmap, fw_name))
                     {
-                        s_bitmap = bitmap;
+                        s_bitmap = m1_esp32_caps_with_cd3_host_bits(bitmap);
                         /* fw_name is a bare identifier (e.g. "m1-native") with
                          * no dotted version.  Fold in the GET_FW_VERSION semver
                          * so qMonstatek's parseVerNums() recognises the brain

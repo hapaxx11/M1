@@ -211,6 +211,21 @@ void test_wifi_set_chan_maps_to_cap_wifi_set_chan(void)
         esp32_feature_required_caps(ESP32_FEATURE_WIFI_SET_CHAN));
 }
 
+void test_wifi_disconnect_maps_to_cap_wifi_disconnect(void)
+{
+    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_DISCONNECT,
+        esp32_feature_required_caps(ESP32_FEATURE_WIFI_DISCONNECT));
+}
+
+void test_wifi_disconnect_supported_with_only_disconnect_bit(void)
+{
+    uint64_t caps = M1_ESP32_CAP_WIFI_DISCONNECT;
+    TEST_ASSERT_TRUE(
+        esp32_feature_supported(caps, ESP32_FEATURE_WIFI_DISCONNECT));
+    TEST_ASSERT_FALSE(
+        esp32_feature_supported(caps, ESP32_FEATURE_WIFI_SET_CHAN));
+}
+
 void test_netscan_maps_to_cap_netscan(void)
 {
     TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_NETSCAN,
@@ -251,16 +266,6 @@ void test_bt_manage_maps_to_cap_bt_manage(void)
 {
     TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_BT_MANAGE,
         esp32_feature_required_caps(ESP32_FEATURE_BT_MANAGE));
-}
-
-void test_wifi_disconnect_maps_to_cap_wifi_set_chan(void)
-{
-    /* ESP32_FEATURE_WIFI_DISCONNECT reuses M1_ESP32_CAP_WIFI_SET_CHAN as its
-     * gate: neither dag T-800 nor SiN360 set this bit, so the "WiFi Disconnect"
-     * label is shown on both firmware types until a firmware that properly
-     * supports CMD_WIFI_DISCONNECT sets the bit. */
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_SET_CHAN,
-        esp32_feature_required_caps(ESP32_FEATURE_WIFI_DISCONNECT));
 }
 
 void test_pmkid_maps_to_cap_pmkid(void)
@@ -558,7 +563,8 @@ int main(void)
     RUN_TEST(test_wifi_join_maps_to_cap_wifi_join);
     RUN_TEST(test_wifi_set_mac_maps_to_cap_wifi_set_mac);
     RUN_TEST(test_wifi_set_chan_maps_to_cap_wifi_set_chan);
-    RUN_TEST(test_wifi_disconnect_maps_to_cap_wifi_set_chan);
+    RUN_TEST(test_wifi_disconnect_maps_to_cap_wifi_disconnect);
+    RUN_TEST(test_wifi_disconnect_supported_with_only_disconnect_bit);
     RUN_TEST(test_netscan_maps_to_cap_netscan);
     RUN_TEST(test_802154_maps_to_cap_802154);
     RUN_TEST(test_ble_scan_maps_to_cap_ble_scan);

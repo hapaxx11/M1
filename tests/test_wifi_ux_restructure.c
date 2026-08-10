@@ -773,6 +773,24 @@ void test_wifi_general_hotspot_declared(void)
     free(c);
 }
 
+void test_rpc_station_scan_uses_explicit_duration_and_no_restart_abort(void)
+{
+    char *c = read_file("m1_csrc/m1_wifi.c");
+    TEST_ASSERT_NOT_NULL(c);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(c, "const uint8_t dur_s = (uint8_t)(STA_SCAN_DURATION / 1000u);"),
+        "RPC station scan must request the same bounded duration as the countdown UI");
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        strstr(c, "m1_esp32_rpc_sta_scan_start(bssid, channel, dur_s)"),
+        "RPC station scan must use the explicit countdown duration");
+    TEST_ASSERT_NULL_MESSAGE(
+        strstr(c, "m1_esp32_rpc_sta_scan_start(bssid, channel, 0u)"),
+        "Back abort must not restart RPC station scan with the firmware-default duration");
+
+    free(c);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -810,6 +828,6 @@ int main(void)
     RUN_TEST(test_general_menu_has_hotspot_entry);
     RUN_TEST(test_hotspot_capability_hides_feature_when_absent);
     RUN_TEST(test_wifi_general_hotspot_declared);
+    RUN_TEST(test_rpc_station_scan_uses_explicit_duration_and_no_restart_abort);
     return UNITY_END();
 }
-

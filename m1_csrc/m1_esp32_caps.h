@@ -219,7 +219,20 @@
  *  native SoftAP is M1_ESP32_CAP_SOFTAP (bit 23). */
 #define M1_ESP32_CAP_WIFI_HOTSPOT   (UINT64_C(1) << 25)
 
-/* Bits 26-63 reserved for future use */
+/**
+ * WiFi station disconnect / shutdown.  Host-only bit.
+ *
+ * The "Shutdown WiFi" menu action only needs the ESP32 to tear down the
+ * current station association.  Previously it was gated on
+ * M1_ESP32_CAP_WIFI_SET_CHAN, which AT firmware with channel-override support
+ * advertises but the native brain-CD3 firmware does not.  Adding a dedicated
+ * host-only bit lets CD3 expose WiFi disconnect without pretending to support
+ * channel override.  Dispatched via M1_RPC_WIFI_DISCONNECT on CD3 and via
+ * AT+CWQAP or CMD_WIFI_DISCONNECT on the legacy transports.
+ */
+#define M1_ESP32_CAP_WIFI_DISCONNECT (UINT64_C(1) << 26)
+
+/* Bits 27-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
@@ -294,26 +307,36 @@
  *  NETSCAN absent (no ping/ARP scanner component in v1.x).
  *  BT_MANAGE absent (no Bluetooth Classic component). */
 #define M1_ESP32_CAP_PROFILE_CD3 \
-    (M1_ESP32_CAP_WIFI_SCAN    | \
-     M1_ESP32_CAP_WIFI_JOIN    | \
-     M1_ESP32_CAP_STA_SCAN     | \
-     M1_ESP32_CAP_DEAUTH       | \
-     M1_ESP32_CAP_BEACON       | \
-     M1_ESP32_CAP_PROBE_FLOOD  | \
-     M1_ESP32_CAP_KARMA        | \
-     M1_ESP32_CAP_PKTMON       | \
-     M1_ESP32_CAP_PORTAL       | \
-     M1_ESP32_CAP_PMKID        | \
-     M1_ESP32_CAP_HANDSHAKE    | \
-     M1_ESP32_CAP_BLE_SCAN     | \
-     M1_ESP32_CAP_BLE_ADV      | \
-     M1_ESP32_CAP_BLE_HID      | \
-     M1_ESP32_CAP_BLE_GATT     | \
-     M1_ESP32_CAP_BLE_SPAM     | \
-     M1_ESP32_CAP_802154       | \
-     M1_ESP32_CAP_802154_TX    | \
-     M1_ESP32_CAP_SOFTAP       | \
+    (M1_ESP32_CAP_WIFI_SCAN     | \
+     M1_ESP32_CAP_WIFI_JOIN     | \
+     M1_ESP32_CAP_WIFI_DISCONNECT | \
+     M1_ESP32_CAP_STA_SCAN      | \
+     M1_ESP32_CAP_DEAUTH        | \
+     M1_ESP32_CAP_BEACON        | \
+     M1_ESP32_CAP_PROBE_FLOOD   | \
+     M1_ESP32_CAP_KARMA         | \
+     M1_ESP32_CAP_PKTMON        | \
+     M1_ESP32_CAP_PORTAL        | \
+     M1_ESP32_CAP_PMKID         | \
+     M1_ESP32_CAP_HANDSHAKE     | \
+     M1_ESP32_CAP_BLE_SCAN      | \
+     M1_ESP32_CAP_BLE_ADV       | \
+     M1_ESP32_CAP_BLE_HID       | \
+     M1_ESP32_CAP_BLE_GATT      | \
+     M1_ESP32_CAP_BLE_SPAM      | \
+     M1_ESP32_CAP_802154        | \
+     M1_ESP32_CAP_802154_TX     | \
+     M1_ESP32_CAP_SOFTAP        | \
      M1_ESP32_CAP_OTA)
+
+/**
+ * Augment a confirmed native-CD3 capability bitmap with host-owned bits that
+ * the firmware does not self-report in SYS_GET_STATUS.
+ */
+static inline uint64_t m1_esp32_caps_with_cd3_host_bits(uint64_t bitmap)
+{
+    return bitmap | M1_ESP32_CAP_WIFI_DISCONNECT;
+}
 
 /* =========================================================================
  * Memory footprint estimates — for developer / diagnostic use only

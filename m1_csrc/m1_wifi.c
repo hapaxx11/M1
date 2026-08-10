@@ -1062,6 +1062,44 @@ static void sniffer_draw_packet(const m1_resp_t *resp, const char *title,
 
 
 /* ---- Generic sniffer runner ---- */
+/* Build a SiN360-style m1_resp_t from a CD3 monitor-read frame so the
+ * existing sniffer UI (sniffer_draw_packet / wifi_mac_track_resp_match)
+ * can render it without knowing the transport.  The binary-SPI format is:
+ *   resp.payload[0] = sniff_type
+ *   resp.payload[1] = rssi
+ *   resp.payload[2] = channel
+ *   resp.payload[3] = frame length
+ *   resp.payload[4..] = frame bytes
+ */
+static void wifi_sniffer_resp_from_monitor_frame(uint8_t sniff_type,
+                                                 const uint8_t *frame,
+                                                 uint16_t frame_len,
+                                                 int8_t rssi,
+                                                 uint8_t channel,
+                                                 m1_resp_t *out_resp)
+{
+	memset(out_resp, 0, sizeof(*out_resp));
+	out_resp->magic = M1_CMD_MAGIC;
+	out_resp->cmd_id = CMD_PKTMON_NEXT;
+	out_resp->status = RESP_OK;
+
+	uint16_t plen = (uint16_t)(1u + 1u + 1u + 1u + frame_len);
+	if (plen > M1_MAX_RESP_PAYLOAD)
+		plen = M1_MAX_RESP_PAYLOAD;
+	out_resp->payload_len = (uint8_t)plen;
+
+	out_resp->payload[0] = sniff_type;
+	out_resp->payload[1] = (uint8_t)rssi;
+	out_resp->payload[2] = channel;
+	out_resp->payload[3] = (uint8_t)(plen - 4u);
+	if (frame && frame_len > 0u) {
+		uint16_t copy = (uint16_t)(plen - 4u);
+		if (copy > frame_len)
+			copy = frame_len;
+		memcpy(&out_resp->payload[4], frame, copy);
+	}
+}
+
 static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 {
 	S_M1_Buttons_Status btn;
@@ -1074,6 +1112,7 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	uint16_t pkt_count = 0;
 	bool paused = false;
 	bool has_pkt = false;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 
 	ensure_esp32_ready();
 
@@ -1086,27 +1125,25 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 		M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
 	m1_u8g2_nextpage();
 
-	/* Build and send start command */
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_PKTMON_START;
-	cmd.payload_len = 3;
-	cmd.payload[0] = sniff_type;
-	cmd.payload[1] = 0; /* channel 0 = hop all */
-	cmd.payload[2] = 5; /* 500ms hop interval */
-
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_rpc)
 	{
-		m1_u8g2_firstpage();
-		u8g2_DrawStr(&m1_u8g2, 6, 15, title);
-		u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,
-			M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
-		u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
-			"Start failed!");
-		m1_u8g2_nextpage();
-		wifi_wait_dismiss();
-		return;
+		if (m1_esp32_rpc_monitor_start(0u) != M1_ESP32_RPC_OK)
+			goto start_fail;
+	}
+	else
+	{
+		/* Build and send start command */
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_PKTMON_START;
+		cmd.payload_len = 3;
+		cmd.payload[0] = sniff_type;
+		cmd.payload[1] = 0; /* channel 0 = hop all */
+		cmd.payload[2] = 5; /* 500ms hop interval */
+
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+			goto start_fail;
 	}
 
 	/* Show waiting for packets */
@@ -1126,7 +1163,10 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
+				if (use_rpc)
+					(void)m1_esp32_rpc_monitor_stop();
+				else
+					m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
 				break;
 			}
@@ -1140,16 +1180,43 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 		if (paused) continue;
 
-		/* Poll for next packet */
-		spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
-		if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
-			continue;
+		if (use_rpc)
+		{
+			uint8_t frame[M1_MAX_RESP_PAYLOAD];
+			uint16_t flen = 0u;
+			uint8_t ch = 0u;
+			int8_t rssi = 0;
+			m1_esp32_rpc_status_t rst = m1_esp32_rpc_monitor_read(
+			    frame, sizeof(frame), &flen, &ch, &rssi);
+			if (rst != M1_ESP32_RPC_OK || flen == 0u)
+				continue;
+			wifi_sniffer_resp_from_monitor_frame(sniff_type, frame, flen,
+			                                     rssi, ch, &resp);
+		}
+		else
+		{
+			/* Poll for next packet */
+			spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
+			if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
+				continue;
+		}
 
 		pkt_count++;
 		memcpy(&last_resp, &resp, sizeof(m1_resp_t));
 		has_pkt = true;
 		sniffer_draw_packet(&last_resp, title, pkt_count, false);
 	}
+	return;
+
+start_fail:
+	m1_u8g2_firstpage();
+	u8g2_DrawStr(&m1_u8g2, 6, 15, title);
+	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,
+		M1_LCD_DISPLAY_HEIGHT / 2 - 2, 32, 32, wifi_error_32x32);
+	u8g2_DrawStr(&m1_u8g2, 6, 15 + M1_GUI_ROW_SPACING + M1_GUI_FONT_HEIGHT,
+		"Start failed!");
+	m1_u8g2_nextpage();
+	wifi_wait_dismiss();
 }
 
 
@@ -1576,6 +1643,7 @@ void wifi_mac_track(void)
 	uint32_t packets = 0;
 	uint32_t hits = 0;
 	int spi_ret;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 
 	ensure_esp32_ready();
 
@@ -1588,19 +1656,30 @@ void wifi_mac_track(void)
 	}
 	wifi_mac_format(target, target_str, sizeof(target_str));
 
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.magic = M1_CMD_MAGIC;
-	cmd.cmd_id = CMD_PKTMON_START;
-	cmd.payload_len = 3;
-	cmd.payload[0] = SNIFF_ALL;
-	cmd.payload[1] = 0;
-	cmd.payload[2] = 3; /* faster hop for tracking */
-
-	spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
-	if (spi_ret != 0 || resp.status != RESP_OK)
+	if (use_rpc)
 	{
-		wifi_show_message("MAC Track", "Start failed", "Flash ESP32 FW?");
-		return;
+		if (m1_esp32_rpc_monitor_start(0u) != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("MAC Track", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else
+	{
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.magic = M1_CMD_MAGIC;
+		cmd.cmd_id = CMD_PKTMON_START;
+		cmd.payload_len = 3;
+		cmd.payload[0] = SNIFF_ALL;
+		cmd.payload[1] = 0;
+		cmd.payload[2] = 3; /* faster hop for tracking */
+
+		spi_ret = m1_esp32_send_cmd(&cmd, &resp, SNIFF_CMD_TIMEOUT);
+		if (spi_ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message("MAC Track", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
 	}
 
 	start_tick = HAL_GetTick();
@@ -1634,16 +1713,35 @@ void wifi_mac_track(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
+				if (use_rpc)
+					(void)m1_esp32_rpc_monitor_stop();
+				else
+					m1_esp32_simple_cmd(CMD_PKTMON_STOP, &resp, 1000);
 				xQueueReset(main_q_hdl);
 				break;
 			}
 		}
 
-		spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
-		if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
+		if (use_rpc)
 		{
-			continue;
+			uint8_t frame[M1_MAX_RESP_PAYLOAD];
+			uint16_t flen = 0u;
+			uint8_t ch = 0u;
+			int8_t rssi = 0;
+			m1_esp32_rpc_status_t rst = m1_esp32_rpc_monitor_read(
+			    frame, sizeof(frame), &flen, &ch, &rssi);
+			if (rst != M1_ESP32_RPC_OK || flen == 0u)
+				continue;
+			wifi_sniffer_resp_from_monitor_frame(SNIFF_ALL, frame, flen,
+			                                     rssi, ch, &resp);
+		}
+		else
+		{
+			spi_ret = m1_esp32_simple_cmd(CMD_PKTMON_NEXT, &resp, WIFI_NEXT_TIMEOUT_MS);
+			if (spi_ret != 0 || resp.status != RESP_OK || resp.payload_len == 0)
+			{
+				continue;
+			}
 		}
 
 		packets++;
@@ -1671,8 +1769,81 @@ static uint16_t sta_do_scan(void)
 	m1_cmd_t cmd;
 	m1_resp_t resp;
 	int ret;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 
 	sta_list_free();
+
+	if (use_rpc)
+	{
+		/* CD3 station scan: target is the currently selected AP.  The UI
+		 * expects results after a fixed countdown, so start the scan, wait,
+		 * then fetch results. */
+		wifi_ap_t *ap = (ap_list && ap_count && ap_view_idx < ap_count)
+		                ? &ap_list[ap_view_idx] : NULL;
+		uint8_t bssid[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+		uint8_t channel = 0u;
+		if (ap) {
+			memcpy(bssid, ap->bssid, 6u);
+			channel = ap->channel;
+		}
+		const uint8_t dur_s = (uint8_t)(STA_SCAN_DURATION / 1000u);
+		if (m1_esp32_rpc_sta_scan_start(bssid, channel, dur_s) != M1_ESP32_RPC_OK)
+			return 0u;
+
+		/* Show scanning screen with countdown — Back-press aborts early */
+		u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+		for (int sec = STA_SCAN_DURATION / 1000; sec > 0; sec--)
+		{
+			char msg[25];
+			S_M1_Main_Q_t q_evt;
+			S_M1_Buttons_Status btn_s;
+
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning Stations...");
+			u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 18 / 2,
+				M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
+			sprintf(msg, "%ds remaining", sec);
+			u8g2_DrawStr(&m1_u8g2, 6, 60, msg);
+			m1_u8g2_nextpage();
+
+			if (xQueueReceive(main_q_hdl, &q_evt, pdMS_TO_TICKS(1000)) == pdTRUE &&
+			    q_evt.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				xQueueReceive(button_events_q_hdl, &btn_s, 0);
+				if (btn_s.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+				{
+					return 0u;
+				}
+			}
+		}
+
+		m1_esp32_rpc_sta_entry_t entries[WIFI_STA_MAX];
+		uint8_t rpc_count = 0u;
+		if (m1_esp32_rpc_sta_scan_results(entries, WIFI_STA_MAX, &rpc_count) != M1_ESP32_RPC_OK
+		    || rpc_count == 0u)
+			return 0u;
+
+		sta_total = rpc_count;
+		sta_list_data = (wifi_sta_t *)malloc(sta_total * sizeof(wifi_sta_t));
+		if (!sta_list_data) { sta_total = 0; return 0; }
+		memset(sta_list_data, 0, sta_total * sizeof(wifi_sta_t));
+
+		for (uint8_t i = 0u; i < rpc_count; i++)
+		{
+			memcpy(sta_list_data[i].mac, entries[i].mac, 6u);
+			sta_list_data[i].rssi = entries[i].rssi;
+			sta_list_data[i].channel = channel ? channel : 1u;
+			if (ap)
+				memcpy(sta_list_data[i].bssid, ap->bssid, 6u);
+			sta_list_data[i].ssid[0] = '\0';
+
+			sprintf(sta_list_data[i].mac_str, "%02X:%02X:%02X:%02X:%02X:%02X",
+				sta_list_data[i].mac[0], sta_list_data[i].mac[1],
+				sta_list_data[i].mac[2], sta_list_data[i].mac[3],
+				sta_list_data[i].mac[4], sta_list_data[i].mac[5]);
+		}
+		return sta_total;
+	}
 
 	/* Start station scan with channel hopping */
 	memset(&cmd, 0, sizeof(cmd));
@@ -4158,8 +4329,30 @@ static bool wifi_send_set_mac(uint8_t iface, const uint8_t mac[6])
 	uint8_t out_mac[6];
 	char line[26];
 	int ret;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 
 	ensure_esp32_ready();
+
+	if (use_rpc)
+	{
+		/* CD3 only exposes a station MAC override via WIFI_SET_MAC; ignore
+		 * AP-MAC requests silently (the SoftAP path sets its own MAC). */
+		if (iface != 0u)
+		{
+			wifi_show_message("Set MACs", "AP MAC not supported", "On brain CD3");
+			return false;
+		}
+		if (m1_esp32_rpc_wifi_set_mac(mac) != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Set MACs", "Set failed", "Flash ESP32 FW?");
+			return false;
+		}
+		memcpy(out_mac, mac, 6u);
+		snprintf(line, sizeof(line), "%02X:%02X:%02X:%02X:%02X:%02X",
+			out_mac[0], out_mac[1], out_mac[2], out_mac[3], out_mac[4], out_mac[5]);
+		wifi_show_message("Set MACs", "STA MAC set", line);
+		return true;
+	}
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.magic = M1_CMD_MAGIC;
@@ -4287,6 +4480,7 @@ void wifi_general_set_channel(void)
 	BaseType_t ret;
 	uint8_t channel = 6;
 	bool redraw = true;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 
 	while (1)
 	{
@@ -4333,16 +4527,30 @@ void wifi_general_set_channel(void)
 			m1_resp_t resp;
 			int spi_ret;
 			char line[26];
+			bool ok = false;
 
 			ensure_esp32_ready();
-			memset(&cmd, 0, sizeof(cmd));
-			cmd.magic = M1_CMD_MAGIC;
-			cmd.cmd_id = CMD_WIFI_SET_CHANNEL;
-			cmd.payload_len = 1;
-			cmd.payload[0] = channel;
+			if (use_rpc)
+			{
+				/* CD3 channel override: use monitor mode on the selected
+				 * channel as the closest available primitive. */
+				ok = (m1_esp32_rpc_monitor_start(channel) == M1_ESP32_RPC_OK);
+				if (ok)
+					(void)m1_esp32_rpc_monitor_stop();
+			}
+			else
+			{
+				memset(&cmd, 0, sizeof(cmd));
+				cmd.magic = M1_CMD_MAGIC;
+				cmd.cmd_id = CMD_WIFI_SET_CHANNEL;
+				cmd.payload_len = 1;
+				cmd.payload[0] = channel;
 
-			spi_ret = m1_esp32_send_cmd(&cmd, &resp, 2000);
-			if (spi_ret != 0 || resp.status != RESP_OK)
+				spi_ret = m1_esp32_send_cmd(&cmd, &resp, 2000);
+				ok = (spi_ret == 0 && resp.status == RESP_OK);
+			}
+
+			if (!ok)
 			{
 				wifi_show_message("Set Channel", "Set failed", "Flash ESP32 FW?");
 			}
@@ -4360,13 +4568,25 @@ void wifi_general_shutdown_wifi(void)
 {
 	m1_resp_t resp;
 	int ret;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 
 	ensure_esp32_ready();
-	ret = m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 2000);
-	if (ret != 0 || resp.status != RESP_OK)
+	if (use_rpc)
 	{
-		wifi_show_message("Shutdown WiFi", "Command failed", "Flash ESP32 FW?");
-		return;
+		if (m1_esp32_rpc_wifi_disconnect() != M1_ESP32_RPC_OK)
+		{
+			wifi_show_message("Shutdown WiFi", "Command failed", "Flash ESP32 FW?");
+			return;
+		}
+	}
+	else
+	{
+		ret = m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 2000);
+		if (ret != 0 || resp.status != RESP_OK)
+		{
+			wifi_show_message("Shutdown WiFi", "Command failed", "Flash ESP32 FW?");
+			return;
+		}
 	}
 
 	wifi_show_message("Shutdown WiFi", "WiFi radio idle", "STA mode restored");
@@ -4802,10 +5022,29 @@ void wifi_probe_flood(void)
 	char ln[26];
 	uint32_t start_tick;
 	bool use_at = m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN);
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	const uint8_t flood_channel = 6u;
 
 	ensure_esp32_ready();
 
-	if (use_at)
+	if (use_rpc)
+	{
+		char ssids[1][33];
+		memset(ssids, 0, sizeof(ssids));
+		strncpy(ssids[0], "M1Probe", sizeof(ssids[0]) - 1u);
+		if (m1_esp32_rpc_probe_start(flood_channel, (const char (*)[33])ssids, 1u)
+		    != M1_ESP32_RPC_OK)
+		{
+			u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+			m1_u8g2_firstpage();
+			u8g2_DrawStr(&m1_u8g2, 6, 15, "Probe Flood");
+			u8g2_DrawStr(&m1_u8g2, 6, 30, "Start failed!");
+			m1_u8g2_nextpage();
+			wifi_wait_dismiss();
+			return;
+		}
+	}
+	else if (use_at)
 	{
 		/* AT path — dag T-800: AT+M1PROBE=<start>,<ch>
 		 * Use channel 6 as the default 2.4 GHz channel for probe flooding. */
@@ -4870,7 +5109,9 @@ void wifi_probe_flood(void)
 			xQueueReceive(button_events_q_hdl, &btn, 0);
 			if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 			{
-				if (use_at)
+				if (use_rpc)
+					(void)m1_esp32_rpc_probe_stop();
+				else if (use_at)
 				{
 					/* Stop probe flood: AT+M1PROBE=0,<ch> (matching start channel) */
 					char at_stop_cmd[24];
@@ -6036,7 +6277,12 @@ void wifi_disconnect(void)
 			esp32_main_init();
 	}
 
-	if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		/* Native brain CD3 firmware */
+		(void)m1_esp32_rpc_wifi_disconnect();
+	}
+	else if (m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))
 	{
 		/* AT firmware (dag/T-800, bedge117) — send AT+CWQAP */
 		static char at_resp[64];
