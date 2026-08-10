@@ -329,6 +329,15 @@
      M1_ESP32_CAP_SOFTAP        | \
      M1_ESP32_CAP_OTA)
 
+/**
+ * Augment a confirmed native-CD3 capability bitmap with host-owned bits that
+ * the firmware does not self-report in SYS_GET_STATUS.
+ */
+static inline uint64_t m1_esp32_caps_with_cd3_host_bits(uint64_t bitmap)
+{
+    return bitmap | M1_ESP32_CAP_WIFI_DISCONNECT;
+}
+
 /* =========================================================================
  * Memory footprint estimates — for developer / diagnostic use only
  *

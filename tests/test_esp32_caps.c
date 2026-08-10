@@ -482,6 +482,13 @@ void test_cd3_fallback_heap_exceeds_at(void)
                              M1_ESP32_FALLBACK_HEAP_CD3);
 }
 
+void test_cd3_host_bits_add_wifi_disconnect(void)
+{
+    const uint64_t reported = M1_ESP32_CAP_WIFI_SCAN | M1_ESP32_CAP_WIFI_JOIN;
+    TEST_ASSERT_EQUAL_UINT64(reported | M1_ESP32_CAP_WIFI_DISCONNECT,
+                             m1_esp32_caps_with_cd3_host_bits(reported));
+}
+
 /* =========================================================================
  * M1_RPC protocol helper tests
  * =========================================================================*/
@@ -1180,6 +1187,7 @@ int main(void)
     RUN_TEST(test_cd3_profile_has_expected_caps);
     RUN_TEST(test_cd3_fallback_bss_less_than_at);
     RUN_TEST(test_cd3_fallback_heap_exceeds_at);
+    RUN_TEST(test_cd3_host_bits_add_wifi_disconnect);
 
     /* M1_RPC helpers: CRC16 */
     RUN_TEST(test_rpc_crc16_empty_returns_0xffff);

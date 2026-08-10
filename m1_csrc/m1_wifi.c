@@ -1786,7 +1786,8 @@ static uint16_t sta_do_scan(void)
 			memcpy(bssid, ap->bssid, 6u);
 			channel = ap->channel;
 		}
-		if (m1_esp32_rpc_sta_scan_start(bssid, channel, 0u) != M1_ESP32_RPC_OK)
+		const uint8_t dur_s = (uint8_t)(STA_SCAN_DURATION / 1000u);
+		if (m1_esp32_rpc_sta_scan_start(bssid, channel, dur_s) != M1_ESP32_RPC_OK)
 			return 0u;
 
 		/* Show scanning screen with countdown — Back-press aborts early */
@@ -1811,7 +1812,6 @@ static uint16_t sta_do_scan(void)
 				xQueueReceive(button_events_q_hdl, &btn_s, 0);
 				if (btn_s.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
 				{
-					(void)m1_esp32_rpc_sta_scan_start(bssid, channel, 0u);
 					return 0u;
 				}
 			}

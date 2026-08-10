@@ -348,6 +348,33 @@ void test_monitor_read_oversized_len_rejects(void)
                                                 NULL, NULL, NULL));
 }
 
+void test_monitor_read_truncates_to_frame_max_and_reports_copied_len(void)
+{
+    static const uint8_t frame[] = { 0x80, 0x00, 0x01, 0x02, 0x03, 0x04 };
+    uint8_t body[16];
+    body[0] = 11u;
+    body[1] = (uint8_t)(-42);
+    body[2] = (uint8_t)(sizeof(frame) & 0xFFu);
+    body[3] = (uint8_t)((sizeof(frame) >> 8u) & 0xFFu);
+    memcpy(&body[4], frame, sizeof(frame));
+
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_OFF_MONITOR_READ,
+                              body, (uint16_t)(4u + sizeof(frame)));
+
+    uint8_t out_frame[4] = { 0 };
+    uint16_t out_len = 0u;
+    uint8_t ch = 0u;
+    int8_t rssi = 0;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_monitor_read(out_frame, sizeof(out_frame),
+                                                &out_len, &ch, &rssi));
+    TEST_ASSERT_EQUAL_UINT16(sizeof(out_frame), out_len);
+    TEST_ASSERT_EQUAL_UINT8(11u, ch);
+    TEST_ASSERT_EQUAL_INT8(-42, rssi);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(frame, out_frame, sizeof(out_frame));
+}
+
 void test_ble_adv_start_encodes_name(void)
 {
     const char name[] = "M1Adv";
@@ -748,6 +775,7 @@ int main(void)
     RUN_TEST(test_monitor_read_empty_response_is_ok);
     RUN_TEST(test_monitor_read_truncated_header_rejects);
     RUN_TEST(test_monitor_read_oversized_len_rejects);
+    RUN_TEST(test_monitor_read_truncates_to_frame_max_and_reports_copied_len);
 
     RUN_TEST(test_ble_adv_start_encodes_name);
     RUN_TEST(test_ble_adv_start_null_name_empty_payload);
