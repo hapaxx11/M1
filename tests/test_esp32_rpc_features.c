@@ -336,7 +336,9 @@ void test_monitor_read_truncated_header_rejects(void)
 
 void test_monitor_read_oversized_len_rejects(void)
 {
-    uint8_t body[8] = { 6u, (uint8_t)(-55), 0xFF, 0xFF, 1, 2, 3, 4 };
+    /* frame_len claims 0x0100 bytes but the response only carries 4 payload
+     * bytes after the 4-byte header. */
+    uint8_t body[8] = { 6u, (uint8_t)(-55), 0x00, 0x01, 1, 2, 3, 4 };
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
                               M1_ESP32_RPC_OFF_MONITOR_READ, body, sizeof(body));
 

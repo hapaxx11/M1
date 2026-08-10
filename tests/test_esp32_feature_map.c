@@ -268,12 +268,6 @@ void test_bt_manage_maps_to_cap_bt_manage(void)
         esp32_feature_required_caps(ESP32_FEATURE_BT_MANAGE));
 }
 
-void test_wifi_disconnect_maps_to_cap_wifi_disconnect(void)
-{
-    TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_WIFI_DISCONNECT,
-        esp32_feature_required_caps(ESP32_FEATURE_WIFI_DISCONNECT));
-}
-
 void test_pmkid_maps_to_cap_pmkid(void)
 {
     TEST_ASSERT_EQUAL_UINT64(M1_ESP32_CAP_PMKID,

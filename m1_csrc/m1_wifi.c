@@ -1084,8 +1084,8 @@ static void wifi_sniffer_resp_from_monitor_frame(uint8_t sniff_type,
 	out_resp->status = RESP_OK;
 
 	uint16_t plen = (uint16_t)(1u + 1u + 1u + 1u + frame_len);
-	if (plen > M1_CMD_PAYLOAD_SIZE)
-		plen = M1_CMD_PAYLOAD_SIZE;
+	if (plen > M1_MAX_RESP_PAYLOAD)
+		plen = M1_MAX_RESP_PAYLOAD;
 	out_resp->payload_len = (uint8_t)plen;
 
 	out_resp->payload[0] = sniff_type;
@@ -1182,7 +1182,7 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 		if (use_rpc)
 		{
-			uint8_t frame[M1_CMD_PAYLOAD_SIZE];
+			uint8_t frame[M1_MAX_RESP_PAYLOAD];
 			uint16_t flen = 0u;
 			uint8_t ch = 0u;
 			int8_t rssi = 0;
@@ -1724,7 +1724,7 @@ void wifi_mac_track(void)
 
 		if (use_rpc)
 		{
-			uint8_t frame[M1_CMD_PAYLOAD_SIZE];
+			uint8_t frame[M1_MAX_RESP_PAYLOAD];
 			uint16_t flen = 0u;
 			uint8_t ch = 0u;
 			int8_t rssi = 0;
