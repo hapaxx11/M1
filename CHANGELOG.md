@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **ESP32 brain-CD3 detected as "Unknown (fallback)" — SPI FIFO byte-shift** —
+  the full-duplex "M1 Link" probe that detects the native brain CD3
+  (`bedge117/m1-esp32-brain`) runs *after* the half-duplex AT / SiN360 probes.
+  A half-duplex transfer that timed out against a non-responding slave could
+  leave a byte of residue in SPI3's RX/TX FIFO, which byte-shifts every
+  subsequent full-duplex frame so the `M1_RPC` PING/GET_STATUS reply never
+  passes CRC — detection then falls through to `Unknown (fallback)` and every
+  ESP32 feature is gated off ("AP scan failed", "Not supported by Unknown
+  (fallback)", "No Targets found"). Two complementary fixes: (1) the on-target
+  transport (`spi_m1link_send_recv_bin`) now issues `HAL_SPI_Abort()` to flush
+  the FIFOs before the first M1 Link transaction so the request goes out
+  byte-aligned; (2) the pure framing helper (`m1link_parse_frame` in
+  `m1_esp32_rpc.c`) now scans for the RPC magic anywhere in the received buffer
+  (validating version/length/CRC at each candidate offset) and copies the
+  single-frame response from the located frame base, so a reply that is still
+  shifted a few bytes by residue is recovered instead of dropped. New
+  host-tested regressions (`tests/test_esp32_m1link.c`) cover shifted
+  single-frame responses, the shifted PING echo, shifted FRAG reassembly, and
+  a stray-magic-before-real-frame case.
+
 ## [0.9.2.40] - 2026-08-10
 
 ### Added
