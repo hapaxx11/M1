@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.40] - 2026-08-10
+
+### Added
+
+- **ESP32 caps: `m1_esp32_caps_is_queried()` predicate** — New probe-free
+  predicate that returns whether the capability cache has been populated from a
+  prior successful probe. Safe to call from any display-draw path.
+- **Settings Dashboard: ESP32 firmware identification** — The system page of the
+  Settings Dashboard now shows the detected ESP32 firmware name (e.g.
+  `ESP32 SiN360-0.9.6`) when capability data has been cached from prior ESP32
+  feature use. If no cached data exists, the line prompts the user to scan WiFi
+  to detect the firmware. The name is read from the caps cache without
+  triggering a probe, so the dashboard repaints instantly in all cases.
 ## [0.9.2.39] - 2026-08-10
 
 ### Fixed
