@@ -162,7 +162,7 @@ static int m1link_parse_frame_at(const uint8_t *f, size_t avail,
  * trusting offset 0.  On success returns 0 and sets the out params (payload
  * points at the located frame's payload); returns non-zero if no valid frame is
  * found.  Candidate offsets that fail version/length/CRC checks are skipped so a
- * stray 0x31 0x4D pair inside padding or a payload cannot cause a false match. */
+ * stray 0x4D 0x31 pair inside padding or a payload cannot cause a false match. */
 static int m1link_parse_frame(const uint8_t *buf, uint16_t buf_len,
                               uint8_t *msg_type, uint16_t *msg_id,
                               uint16_t *plen, const uint8_t **payload)
