@@ -633,3 +633,8 @@ uint64_t m1_esp32_caps_get_bitmap(void)
      * has already run (e.g. via m1_esp32_ensure_init()). */
     return s_bitmap;
 }
+
+bool m1_esp32_caps_is_queried(void)
+{
+    return s_queried;
+}

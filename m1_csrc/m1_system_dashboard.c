@@ -23,6 +23,7 @@
 #include "m1_sdcard.h"
 #include "m1_system_dashboard_helpers.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_fw_update_bl.h"
 #include "m1_system.h"
@@ -156,7 +157,15 @@ static void dashboard_draw_page(dashboard_page_t page)
         snprintf(line3, sizeof(line3), "Buzz %s  LED %s",
                  m1_buzzer_on ? "On" : "Off",
                  m1_led_notify_on ? "On" : "Off");
-        line4[0] = '\0'; /* no fourth line on system page */
+        if (m1_esp32_caps_is_queried())
+        {
+            snprintf(line4, sizeof(line4), "ESP32 %s",
+                     m1_esp32_caps_fw_name());
+        }
+        else
+        {
+            snprintf(line4, sizeof(line4), "Scan WiFi for ESP32 info");
+        }
     }
 
     /* --- Drawing --- */

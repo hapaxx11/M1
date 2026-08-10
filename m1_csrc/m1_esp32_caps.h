@@ -938,5 +938,15 @@ uint32_t m1_esp32_caps_free_heap(void);
  */
 uint64_t m1_esp32_caps_get_bitmap(void);
 
+/**
+ * Return true if the capability cache has already been populated from a
+ * prior successful probe, false if no probe has completed yet.
+ *
+ * This predicate never triggers a probe and is safe to call from any
+ * context including display-draw paths.  Use it to decide whether a
+ * cached firmware name is available before calling m1_esp32_caps_fw_name().
+ */
+bool m1_esp32_caps_is_queried(void);
+
 
 #endif /* M1_ESP32_CAPS_H_ */
