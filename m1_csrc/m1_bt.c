@@ -1657,6 +1657,8 @@ void bluetooth_advertise(void)
     m1_cmd_t cmd;
     m1_resp_t resp;
     int spi_ret;
+    bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+    bool started = false;
 
     ble_ensure_esp32_ready();
 
@@ -1667,22 +1669,33 @@ void bluetooth_advertise(void)
         M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
     m1_u8g2_nextpage();
 
-    /* Send BLE_ADV_START with the configured device name. */
-    memset(&cmd, 0, sizeof(cmd));
-    cmd.magic = M1_CMD_MAGIC;
-    cmd.cmd_id = CMD_BLE_ADV_START;
     const char *adv_name = ble_adv_name_get();
-    uint8_t name_len = (uint8_t)strlen(adv_name);
-    if (name_len > BLE_ADV_NAME_MAX) name_len = BLE_ADV_NAME_MAX;
-    memcpy(cmd.payload, adv_name, name_len);
-    cmd.payload_len = name_len;
 
-    spi_ret = m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS);
+    if (use_rpc)
+    {
+        if (m1_esp32_rpc_ble_adv_start(adv_name) == M1_ESP32_RPC_OK)
+            started = true;
+    }
+    else
+    {
+        /* Send BLE_ADV_START with the configured device name. */
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.magic = M1_CMD_MAGIC;
+        cmd.cmd_id = CMD_BLE_ADV_START;
+        uint8_t name_len = (uint8_t)strlen(adv_name);
+        if (name_len > BLE_ADV_NAME_MAX) name_len = BLE_ADV_NAME_MAX;
+        memcpy(cmd.payload, adv_name, name_len);
+        cmd.payload_len = name_len;
+
+        spi_ret = m1_esp32_send_cmd(&cmd, &resp, BLE_CMD_TIMEOUT_MS);
+        if (spi_ret == 0 && resp.status == RESP_OK)
+            started = true;
+    }
 
     m1_u8g2_firstpage();
     u8g2_DrawStr(&m1_u8g2, 6, 15, "BLE Advertise");
 
-    if (spi_ret == 0 && resp.status == RESP_OK)
+    if (started)
     {
         u8g2_DrawStr(&m1_u8g2, 6, 28, "Broadcasting as:");
         u8g2_DrawStr(&m1_u8g2, 6, 40, adv_name);
@@ -1696,6 +1709,9 @@ void bluetooth_advertise(void)
     }
     m1_u8g2_nextpage();
 
+    if (!started)
+        return;
+
     while (1)
     {
         ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
@@ -1707,7 +1723,10 @@ void bluetooth_advertise(void)
 
                 if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
                 {
-                    m1_esp32_simple_cmd(CMD_BLE_ADV_STOP, &resp, BLE_CMD_TIMEOUT_MS);
+                    if (use_rpc)
+                        (void)m1_esp32_rpc_ble_adv_stop();
+                    else
+                        m1_esp32_simple_cmd(CMD_BLE_ADV_STOP, &resp, BLE_CMD_TIMEOUT_MS);
                     xQueueReset(main_q_hdl);
                     break;
                 }
