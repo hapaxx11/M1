@@ -732,9 +732,9 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * timeout (seconds) so slow features get the window they need; floor it so
 	 * the default quick commands still complete promptly. */
 	/* Floor for a poll budget when the caller passes no timeout (seconds). */
-#define M1LINK_DEFAULT_TIMEOUT_S 2
+	const int m1link_default_timeout_s = 2;
 	if (timeout_sec <= 0)
-		timeout_sec = M1LINK_DEFAULT_TIMEOUT_S;
+		timeout_sec = m1link_default_timeout_s;
 	max_polls = timeout_sec * (1000 / (int)M1LINK_HS_TIMEOUT_MS) * 2;
 	if (max_polls < M1_ESP32_M1LINK_MAX_POLLS)
 		max_polls = M1_ESP32_M1LINK_MAX_POLLS;
