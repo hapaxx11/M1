@@ -629,13 +629,13 @@ static void m1link_cs_delay(void)
 	for (volatile int i = 0; i < 50; i++) {}
 }
 
-/* Yield for ~1 ms while waiting.  vTaskDelay is only valid once the scheduler
+/* Yield for ~1 ms while waiting. vTaskDelay is only valid once the scheduler
  * is running; before that (or if it is suspended) fall back to HAL_Delay so we
  * still pace the loop without an illegal RTOS call. */
 static void m1link_delay_1ms(void)
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
-		vTaskDelay(1);
+		vTaskDelay(pdMS_TO_TICKS(1));
 	else
 		HAL_Delay(1);
 }
