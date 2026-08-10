@@ -307,25 +307,26 @@
  *  NETSCAN absent (no ping/ARP scanner component in v1.x).
  *  BT_MANAGE absent (no Bluetooth Classic component). */
 #define M1_ESP32_CAP_PROFILE_CD3 \
-    (M1_ESP32_CAP_WIFI_SCAN    | \
-     M1_ESP32_CAP_WIFI_JOIN    | \
-     M1_ESP32_CAP_STA_SCAN     | \
-     M1_ESP32_CAP_DEAUTH       | \
-     M1_ESP32_CAP_BEACON       | \
-     M1_ESP32_CAP_PROBE_FLOOD  | \
-     M1_ESP32_CAP_KARMA        | \
-     M1_ESP32_CAP_PKTMON       | \
-     M1_ESP32_CAP_PORTAL       | \
-     M1_ESP32_CAP_PMKID        | \
-     M1_ESP32_CAP_HANDSHAKE    | \
-     M1_ESP32_CAP_BLE_SCAN     | \
-     M1_ESP32_CAP_BLE_ADV      | \
-     M1_ESP32_CAP_BLE_HID      | \
-     M1_ESP32_CAP_BLE_GATT     | \
-     M1_ESP32_CAP_BLE_SPAM     | \
-     M1_ESP32_CAP_802154       | \
-     M1_ESP32_CAP_802154_TX    | \
-     M1_ESP32_CAP_SOFTAP       | \
+    (M1_ESP32_CAP_WIFI_SCAN     | \
+     M1_ESP32_CAP_WIFI_JOIN     | \
+     M1_ESP32_CAP_WIFI_DISCONNECT | \
+     M1_ESP32_CAP_STA_SCAN      | \
+     M1_ESP32_CAP_DEAUTH        | \
+     M1_ESP32_CAP_BEACON        | \
+     M1_ESP32_CAP_PROBE_FLOOD   | \
+     M1_ESP32_CAP_KARMA         | \
+     M1_ESP32_CAP_PKTMON        | \
+     M1_ESP32_CAP_PORTAL        | \
+     M1_ESP32_CAP_PMKID         | \
+     M1_ESP32_CAP_HANDSHAKE     | \
+     M1_ESP32_CAP_BLE_SCAN      | \
+     M1_ESP32_CAP_BLE_ADV       | \
+     M1_ESP32_CAP_BLE_HID       | \
+     M1_ESP32_CAP_BLE_GATT      | \
+     M1_ESP32_CAP_BLE_SPAM      | \
+     M1_ESP32_CAP_802154        | \
+     M1_ESP32_CAP_802154_TX     | \
+     M1_ESP32_CAP_SOFTAP        | \
      M1_ESP32_CAP_OTA)
 
 /* =========================================================================
