@@ -120,9 +120,49 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
 /* M1 Link full-duplex framing/pipelining (pure logic, host-testable)       */
 /*==========================================================================*/
 
-/* Validate the frame at the head of @p buf.  On success returns 0 and fills the
- * out params; returns non-zero if the frame is malformed (bad magic/version,
- * length overruns @p buf_len, or CRC mismatch). */
+/* Validate a complete frame whose header starts at @p f, with @p avail bytes
+ * available from @p f to the end of the enclosing buffer.  On success returns 0
+ * and fills the out params; returns non-zero if the frame is malformed (bad
+ * magic/version, length overruns @p avail, or CRC mismatch). */
+static int m1link_parse_frame_at(const uint8_t *f, size_t avail,
+                                 uint8_t *msg_type, uint16_t *msg_id,
+                                 uint16_t *plen, const uint8_t **payload)
+{
+    if (avail < (size_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE))
+        return -1;
+
+    uint16_t magic = (uint16_t)f[0] | ((uint16_t)f[1] << 8u);
+    if (magic != M1_ESP32_RPC_MAGIC)  return -1;
+    if (f[2] != M1_ESP32_RPC_VERSION) return -1;
+
+    uint16_t p = (uint16_t)f[6] | ((uint16_t)f[7] << 8u);
+    size_t crc_off = (size_t)M1_ESP32_RPC_HDR_SIZE + (size_t)p;
+    size_t total = crc_off + (size_t)M1_ESP32_RPC_CRC_SIZE;
+    if (total > avail) return -1;
+
+    uint16_t expected_crc = m1_esp32_rpc_crc16(f, (uint16_t)crc_off);
+    uint16_t wire_crc =
+        (uint16_t)f[crc_off] |
+        ((uint16_t)f[crc_off + 1u] << 8u);
+    if (wire_crc != expected_crc) return -1;
+
+    if (msg_type) *msg_type = f[3];
+    if (msg_id)   *msg_id   = (uint16_t)f[4] | ((uint16_t)f[5] << 8u);
+    if (plen)     *plen     = p;
+    if (payload)  *payload  = f + M1_ESP32_RPC_HDR_SIZE;
+    return 0;
+}
+
+/* Locate and validate a frame anywhere within @p buf.  The full-duplex brain
+ * reply normally starts at offset 0, but a byte of residue left in the SPI FIFO
+ * by a prior half-duplex (AT / SiN360) transfer shifts the whole frame a few
+ * bytes into the received buffer.  Because every transaction over-clocks the
+ * MTU with zero padding, a shifted frame is still delivered intact — just at a
+ * non-zero offset — so we scan for the RPC magic across the buffer instead of
+ * trusting offset 0.  On success returns 0 and sets the out params (payload
+ * points at the located frame's payload); returns non-zero if no valid frame is
+ * found.  Candidate offsets that fail version/length/CRC checks are skipped so a
+ * stray 0x4D 0x31 pair inside padding or a payload cannot cause a false match. */
 static int m1link_parse_frame(const uint8_t *buf, uint16_t buf_len,
                               uint8_t *msg_type, uint16_t *msg_id,
                               uint16_t *plen, const uint8_t **payload)
@@ -131,26 +171,18 @@ static int m1link_parse_frame(const uint8_t *buf, uint16_t buf_len,
         buf_len < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE))
         return -1;
 
-    uint16_t magic = (uint16_t)buf[0] | ((uint16_t)buf[1] << 8u);
-    if (magic != M1_ESP32_RPC_MAGIC)    return -1;
-    if (buf[2] != M1_ESP32_RPC_VERSION) return -1;
-
-    uint16_t p = (uint16_t)buf[6] | ((uint16_t)buf[7] << 8u);
-    size_t crc_off = (size_t)M1_ESP32_RPC_HDR_SIZE + (size_t)p;
-    size_t total = crc_off + (size_t)M1_ESP32_RPC_CRC_SIZE;
-    if (total > (size_t)buf_len) return -1;
-
-    uint16_t expected_crc = m1_esp32_rpc_crc16(buf, (uint16_t)crc_off);
-    uint16_t wire_crc =
-        (uint16_t)buf[crc_off] |
-        ((uint16_t)buf[crc_off + 1u] << 8u);
-    if (wire_crc != expected_crc) return -1;
-
-    if (msg_type) *msg_type = buf[3];
-    if (msg_id)   *msg_id   = (uint16_t)buf[4] | ((uint16_t)buf[5] << 8u);
-    if (plen)     *plen     = p;
-    if (payload)  *payload  = buf + M1_ESP32_RPC_HDR_SIZE;
-    return 0;
+    size_t last = (size_t)buf_len -
+                  (size_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE);
+    for (size_t off = 0u; off <= last; off++) {
+        /* Cheap magic prefilter before the full validation. */
+        if (buf[off] != (uint8_t)(M1_ESP32_RPC_MAGIC & 0xFFu) ||
+            buf[off + 1u] != (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu))
+            continue;
+        if (m1link_parse_frame_at(buf + off, (size_t)buf_len - off,
+                                  msg_type, msg_id, plen, payload) == 0)
+            return 0;
+    }
+    return -1;
 }
 
 /* Write a bare header-only frame (no payload) of the given type/id into @p buf,
@@ -253,11 +285,14 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
                     *out_len = (int)(M1_ESP32_RPC_HDR_SIZE + total_plen +
                                      M1_ESP32_RPC_CRC_SIZE);
             } else {
-                /* Single-frame response: copy it out verbatim. */
+                /* Single-frame response: copy it out verbatim from the located
+                 * frame base (which may be a few bytes into scratch_rx when a
+                 * shifted frame was recovered), not the start of scratch_rx. */
+                const uint8_t *base = rpayload - M1_ESP32_RPC_HDR_SIZE;
                 int frame = (int)(M1_ESP32_RPC_HDR_SIZE + rplen +
                                   M1_ESP32_RPC_CRC_SIZE);
                 if (frame > rx_buf_size) return 3u;
-                memcpy(rx_buf, scratch_rx, (size_t)frame);
+                memcpy(rx_buf, base, (size_t)frame);
                 if (out_len) *out_len = frame;
             }
             return 0u; /* matched */

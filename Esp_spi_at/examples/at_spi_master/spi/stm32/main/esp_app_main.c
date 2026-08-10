@@ -739,6 +739,16 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	if (max_polls < M1_ESP32_M1LINK_MAX_POLLS)
 		max_polls = M1_ESP32_M1LINK_MAX_POLLS;
 
+	/* Flush any residual FIFO / packing state before full-duplex M1 Link
+	 * transactions.  The brain (CD3) detection probe runs AFTER the half-duplex
+	 * AT / SiN360 probes; a transfer that timed out against a non-responding
+	 * slave can leave bytes stranded in SPI3's RX/TX FIFO.  Left in place, that
+	 * residue byte-shifts every subsequent full-duplex frame so the reply never
+	 * validates and the brain is misdetected as "Unknown (fallback)".  Abort
+	 * resets the peripheral state machine and flushes the FIFOs so the next
+	 * M1 Link transaction starts byte-aligned (harmless when already idle). */
+	HAL_SPI_Abort(&hspi_esp);
+
 	rc = m1_esp32_m1link_send_recv(m1link_hal_xfer, NULL,
 	                               s_m1link_tx, s_m1link_rx,
 	                               M1_ESP32_M1LINK_MTU,
