@@ -542,7 +542,7 @@ void test_m1link_reassembles_shifted_fragments(void)
 
 /* ---- A stray magic pair before the real frame must not cause a mismatch --
  * The scan skips a candidate offset that fails version/CRC validation and
- * keeps looking, so a 0x31 0x4D pair sitting in the residue does not shadow
+ * keeps looking, so a 0x4D 0x31 pair sitting in the residue does not shadow
  * the genuine frame that follows it. */
 void test_m1link_ignores_stray_magic_before_real_frame(void)
 {
