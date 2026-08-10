@@ -157,7 +157,7 @@ static void dashboard_draw_page(dashboard_page_t page)
         snprintf(line3, sizeof(line3), "Buzz %s  LED %s",
                  m1_buzzer_on ? "On" : "Off",
                  m1_led_notify_on ? "On" : "Off");
-        if (m1_esp32_get_init_status())
+        if (m1_esp32_caps_is_queried())
         {
             snprintf(line4, sizeof(line4), "ESP32 %s",
                      m1_esp32_caps_fw_name());
