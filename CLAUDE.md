@@ -104,6 +104,16 @@ Terminology used when communicating with the agent about the M1 UI.
 > **More on testing, modularization, and the phase checklist:** read the
 > [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill.
 
+- **Changelog entries MUST use fragment files — NEVER edit `CHANGELOG.md` directly** —
+  create a `.changelog/<short-description>.<category>.md` file instead (see
+  [`.changelog/README.md`](.changelog/README.md)).  Editing `CHANGELOG.md` directly on
+  a feature branch is a workflow violation — it will cause merge conflicts and be
+  overwritten or duplicated by the CI assembler.  This is a hard rule with no exceptions
+  for agents or humans; the skill explains the full format.
+
+> **Full changelog fragment rules:** read the
+> [`docs-changelog`](.github/skills/docs-changelog/SKILL.md) skill.
+
 ---
 
 ## Deploy Locations
