@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2.39] - 2026-08-10
+
+### Fixed
+
+- **ESP32: native CD3 RPC dispatch fixes** — Brain CD3 firmware now routes WiFi
+  station scan, probe/monitor flows, set-MAC, disconnect/shutdown, and BLE
+  advertise through the M1_RPC wrappers, and exposes the host-side WiFi
+  disconnect capability so the related menu actions are available.
 ## [0.9.2.38] - 2026-08-10
 
 ### Fixed
