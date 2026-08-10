@@ -76,6 +76,63 @@ static uint32_t s_bss_bytes       = 0u;
 static uint32_t s_free_heap_bytes = 0u;
 
 /* =========================================================================
+ * Brain-CD3 firmware version probe
+ *
+ * The brain's GET_STATUS fw_name is a bare identifier (e.g. "m1-native") with
+ * NO dotted version, which qMonstatek's parseVerNums() cannot parse — so the
+ * desktop app reports "ESP32 detected — incompatible firmware" even though the
+ * link is fully functional.  The brain's actual semver is exposed via the
+ * separate M1_RPC SYS_GET_FW_VERSION (0x0003) opcode.  Query it here (once the
+ * device is known to be a brain) and fold it into the cached firmware-name
+ * string so both the on-device display and the qMonstatek device-info RPC
+ * report a parseable version, mirroring the C3 reference firmware's
+ * esp_fw_status_str() ("m1_link X.Y.Z <hash>").
+ * =========================================================================*/
+
+/**
+ * Issue M1_RPC SYS_GET_FW_VERSION to a confirmed brain CD3 device and format a
+ * versioned firmware-name string ("<fw_name> X.Y.Z[ <hash>]") into @p out.
+ * Returns true on success; false if the firmware does not answer or the reply
+ * is malformed (caller keeps the bare fw_name in that case). */
+static bool caps_cd3_fetch_fw_version(const char *fw_name,
+                                       char *out, size_t out_size)
+{
+    uint8_t  tx64[32];
+    uint8_t  rx64[64];
+    uint16_t req_len;
+    int      rx_len = 0;
+    const uint8_t *rpc_pl  = NULL;
+    uint16_t       rpc_plen = 0u;
+
+    if (!out || out_size == 0u)
+        return false;
+
+    memset(tx64, 0, sizeof(tx64));
+    req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
+                                      M1_ESP32_RPC_SYS_GET_FW_VERSION_CAPS,
+                                      NULL, 0u);
+    if (req_len == 0u)
+        return false;
+
+    memset(rx64, 0, sizeof(rx64));
+    if (spi_m1link_send_recv_bin(tx64, (int)req_len,
+                                 rx64, (int)sizeof(rx64),
+                                 &rx_len, CD3_RPC_PROBE_TIMEOUT_S) != 0 ||
+        rx_len <= 0 ||
+        !m1_esp32_rpc_parse_resp(rx64, (uint16_t)rx_len,
+                                  M1_ESP32_RPC_SYS_GET_FW_VERSION_CAPS,
+                                  &rpc_pl, &rpc_plen) ||
+        rpc_plen < (uint16_t)sizeof(m1_esp32_rpc_fw_version_t))
+        return false;
+
+    m1_esp32_rpc_fw_version_t ver;
+    memcpy(&ver, rpc_pl, sizeof(ver));
+    ver.git_hash[sizeof(ver.git_hash) - 1] = '\0';
+    m1_esp32_rpc_format_fw_version(out, out_size, fw_name, &ver);
+    return out[0] != '\0';
+}
+
+/* =========================================================================
  * AT command → capability bit mapping table
  *
  * Consulted by m1_esp32_caps_parse_at_cmd_list() against the response of a
@@ -424,7 +481,23 @@ probe_cd3:
                                                      &bitmap, fw_name))
                     {
                         s_bitmap = bitmap;
-                        strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
+                        /* fw_name is a bare identifier (e.g. "m1-native") with
+                         * no dotted version.  Fold in the GET_FW_VERSION semver
+                         * so qMonstatek's parseVerNums() recognises the brain
+                         * as compatible; fall back to the bare name when the
+                         * firmware does not answer the version query. */
+                        char versioned[32];
+                        if (caps_cd3_fetch_fw_version(fw_name, versioned,
+                                                      sizeof(versioned)))
+                        {
+                            strncpy(s_fw_name, versioned,
+                                    sizeof(s_fw_name) - 1);
+                        }
+                        else
+                        {
+                            strncpy(s_fw_name, fw_name,
+                                    sizeof(s_fw_name) - 1);
+                        }
                         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
                         caps_apply_footprint_estimates(s_bitmap);
                         s_queried = true;
@@ -433,10 +506,23 @@ probe_cd3:
                 }
 
                 /* PING confirmed CD3 but GET_STATUS is not yet implemented —
-                 * use the conservative CD3 profile macro. */
+                 * use the conservative CD3 profile macro.  Still try to attach
+                 * the real semver so the reported name is parseable. */
                 s_bitmap = M1_ESP32_CAP_PROFILE_CD3;
-                strncpy(s_fw_name, "CD3 (via M1_RPC)", sizeof(s_fw_name) - 1);
-                s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                {
+                    char versioned[32];
+                    if (caps_cd3_fetch_fw_version("CD3", versioned,
+                                                  sizeof(versioned)))
+                    {
+                        strncpy(s_fw_name, versioned, sizeof(s_fw_name) - 1);
+                    }
+                    else
+                    {
+                        strncpy(s_fw_name, "CD3 (via M1_RPC)",
+                                sizeof(s_fw_name) - 1);
+                    }
+                    s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+                }
                 caps_apply_footprint_estimates(s_bitmap);
                 s_queried = true;
                 return;

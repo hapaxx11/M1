@@ -430,8 +430,13 @@ void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
 /** M1 Link fixed transaction size in bytes (matches brain M1L_MTU). */
 #define M1_ESP32_M1LINK_MTU        512u
 
-/** Default number of follow-up (poll) transactions issued after the request
- *  while waiting for the pipelined response before giving up. */
+/** Default/minimum number of follow-up (poll) transactions issued after the
+ *  request while waiting for the pipelined response before giving up.
+ *
+ *  The pure helper uses this as a transaction count only (host tests inject an
+ *  instantaneous fake exchange). On-target timing is set by
+ *  spi_m1link_send_recv_bin(), which scales max_polls from timeout_sec and
+ *  applies this macro as a floor. */
 #define M1_ESP32_M1LINK_MAX_POLLS  8
 
 /**
