@@ -620,7 +620,7 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
   */
 /******************************************************************************/
 #define M1LINK_SPI_TIMEOUT_MS   100u
-#define M1LINK_HS_TIMEOUT_MS    50u
+#define M1LINK_HS_TIMEOUT_MS    100u
 #define M1LINK_BUSY_RETRY_MS    150u
 
 static void m1link_cs_delay(void)
@@ -629,8 +629,24 @@ static void m1link_cs_delay(void)
 	for (volatile int i = 0; i < 50; i++) {}
 }
 
+/* Yield for ~1 ms while waiting.  vTaskDelay is only valid once the scheduler
+ * is running; before that (or if it is suspended) fall back to HAL_Delay so we
+ * still pace the loop without an illegal RTOS call. */
+static void m1link_delay_1ms(void)
+{
+	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+		vTaskDelay(1);
+	else
+		HAL_Delay(1);
+}
+
 /* Wait for the brain's HANDSHAKE line (PD7) to signal armed/ready, bounded by
- * @p timeout_ms.  Returns true if it asserted within the window. */
+ * @p timeout_ms.  Returns true if it asserted within the window.
+ *
+ * Yields between polls instead of busy-spinning: a brain that is mid-scan holds
+ * the link for a second or more, and a tight spin here starves the FreeRTOS
+ * idle hook / watchdog feeder and can trigger an IWDG reset (this mirrors the
+ * proven C3 m1_link master, which yields for exactly this reason). */
 static bool m1link_wait_handshake(uint32_t timeout_ms)
 {
 	uint32_t start = HAL_GetTick();
@@ -638,6 +654,7 @@ static bool m1link_wait_handshake(uint32_t timeout_ms)
 	       != GPIO_PIN_SET) {
 		if ((HAL_GetTick() - start) >= timeout_ms)
 			return false;
+		m1link_delay_1ms();
 	}
 	return true;
 }
@@ -650,10 +667,10 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 	uint32_t start;
 	(void)ctx;
 
-	/* Honour the brain's HANDSHAKE: wait until it signals it is armed before
-	 * clocking (matches the brain's post_setup/post_trans semantics).  If it
-	 * never asserts we still attempt the clock (best effort), but a persistent
-	 * low usually means the slave firmware is not running. */
+	/* Honour the brain's HANDSHAKE: never clock while the slave is not armed.
+	 * If it never asserts within the window we still attempt the clock once
+	 * (best effort), but a persistent low usually means the slave firmware is
+	 * not running. */
 	(void)m1link_wait_handshake(M1LINK_HS_TIMEOUT_MS);
 
 	start = HAL_GetTick();
@@ -671,10 +688,21 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 
 		if (ret != HAL_BUSY)
 			break;
-		HAL_Delay(1);
+		m1link_delay_1ms();
 	} while ((HAL_GetTick() - start) < M1LINK_BUSY_RETRY_MS);
 
-	return (ret == HAL_OK) ? 0 : -1;
+	if (ret != HAL_OK)
+	{
+		/* SELF-HEAL: a transient SPI fault (OVR / mode fault / HAL timeout)
+		 * leaves SPI3's FIFO/packing byte-shifted, so every later fixed-size
+		 * exchange would fail CRC and the brain would read as permanently
+		 * unavailable until a full re-init.  Abort resets the peripheral state
+		 * machine and flushes the FIFOs so the NEXT transaction recovers on its
+		 * own (same recovery the C3 m1_link master relies on). */
+		HAL_SPI_Abort(&hspi_esp);
+		return -1;
+	}
+	return 0;
 }
 
 uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
@@ -687,8 +715,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
 	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
 	uint8_t rc;
-
-	(void)timeout_sec; /* the poll budget bounds the wait */
+	int     max_polls;
 
 	if (out_len)
 		*out_len = 0;
@@ -696,10 +723,26 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	if (!tx_buf || tx_len <= 0 || !rx_buf || rx_buf_size < 1)
 		return CTRL_ERR_INCORRECT_ARG;
 
+	/* The poll budget is the response wait.  Each poll waits for the slave's
+	 * HANDSHAKE (up to M1LINK_HS_TIMEOUT_MS) and yields, so the count maps to a
+	 * real time window.  Bulk-list operations (WiFi scan, station scan, BLE
+	 * scan) keep the brain busy for a second or more before it queues its
+	 * RESP, so an 8-poll (~sub-second) budget reliably timed out with "AP scan
+	 * failed" in any real RF environment.  Scale the budget from the caller's
+	 * timeout (seconds) so slow features get the window they need; floor it so
+	 * the default quick commands still complete promptly. */
+	/* Floor for a poll budget when the caller passes no timeout (seconds). */
+#define M1LINK_DEFAULT_TIMEOUT_S 2
+	if (timeout_sec <= 0)
+		timeout_sec = M1LINK_DEFAULT_TIMEOUT_S;
+	max_polls = timeout_sec * (1000 / (int)M1LINK_HS_TIMEOUT_MS) * 2;
+	if (max_polls < M1_ESP32_M1LINK_MAX_POLLS)
+		max_polls = M1_ESP32_M1LINK_MAX_POLLS;
+
 	rc = m1_esp32_m1link_send_recv(m1link_hal_xfer, NULL,
 	                               s_m1link_tx, s_m1link_rx,
 	                               M1_ESP32_M1LINK_MTU,
-	                               M1_ESP32_M1LINK_MAX_POLLS,
+	                               max_polls,
 	                               tx_buf, tx_len,
 	                               rx_buf, rx_buf_size, out_len);
 

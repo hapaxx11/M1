@@ -41,7 +41,7 @@ description: ESP32-C6 coprocessor reference: AT vs binary-SPI firmware variants,
 - **Reserved, NOT yet implemented in shipped releases** (verified against public source, 2026-07-21): **PMKID capture** (`M1_ESP32_CAP_PMKID` / `M1_RPC_OFF_PMKID_CAPTURE`) and **ESP32 OTA self-update** (`M1_ESP32_CAP_OTA` / `M1_RPC_SYS_OTA_BEGIN/DATA/END`) — message IDs exist in the shared `m1_rpc.h` but have no dispatch case in `main.c`, so they NAK with `ERR_UNSUPPORTED`. **WPA handshake/EAPOL capture** (`M1_ESP32_CAP_HANDSHAKE`) is dispatched and functional and is advertised by current brain firmware capability bitmaps.
 - **Does NOT include** (v1): NETSCAN (no ping/ARP scanner), BT Classic management
 - Detected by the M1 via **M1_RPC PING** in `m1_esp32_caps_init()`; capability bitmap reported via M1_RPC GET_STATUS
-- Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response
+- Firmware identifier: `fw_name = "m1-native"` in the GET_STATUS response — a **bare identifier with no dotted version**. The real semver is fetched via the separate `M1_RPC SYS_GET_FW_VERSION` (0x0003) opcode and folded into the cached name as `"m1-native X.Y.Z[ <hash>]"` (`caps_cd3_fetch_fw_version()` + the pure `m1_esp32_rpc_format_fw_version()` helper). **This versioned string is required for qMonstatek compatibility**: the desktop app keys "compatible" off a parseable `X.Y.Z` in the device-info `esp32_version` (its `parseVerNums()`), so the bare `"m1-native"` reported as "incompatible firmware". Mirrors the C3 reference's `esp_fw_status_str()` ("m1_link X.Y.Z <hash>").
 - **Conservative fallback profile**: `M1_ESP32_CAP_PROFILE_CD3` applied if GET_STATUS unavailable (early firmware)
 - Discriminator in `esp32_feature_map.c`: `esp32_firmware_is_cd3()` — `HANDSHAKE` set AND a CD3-unique bit (`802154_TX` or `BLE_SPAM`) set. **Do NOT key off `OTA`** — the shipped brain firmware advertises `HANDSHAKE` but intentionally omits `OTA` (see the OTA/PMKID note above), so an `OTA`-gated discriminator misclassified every brain device as AT and broke all ESP32 features. The real `M1_FW_CAPS` (HANDSHAKE set, OTA clear, 802154_TX/BLE_SPAM set) now resolves to `ESP32_TRANSPORT_RPC`.
 
@@ -75,6 +75,13 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
   single-transaction primitive via `HAL_SPI_TransmitReceive` on `hspi_esp` (SPI3)
   with manual CS (PB10) + HANDSHAKE (PD7), and does **not** need the ESP-AT RTOS
   task. The AT presence / `AT+CMD?` probes stay on `spi_AT_send_recv_bin`.
+  **Poll budget / pacing**: the on-target transport scales its follow-up poll
+  budget from the caller's timeout (seconds) and paces each poll on the slave's
+  HANDSHAKE with a scheduler yield (`vTaskDelay`), plus `HAL_SPI_Abort` self-heal
+  on a failed transaction. A slow bulk-list reply (WiFi/BLE scan takes the brain
+  ~1s+ before it queues its RESP) therefore gets a real multi-second window —
+  the old fixed 8-poll, busy-spin budget returned "AP scan failed" before the
+  brain finished scanning. Mirrors the proven C3 `m1_link` master.
 - **ESP-NOW** (`m1_espnow_hal.c`) is the first consumer of this client. Other
   WiFi/BLE/802.15.4 features adopt it via the per-feature layer below.
 - **`m1_esp32_rpc_features.c/.h`** is the per-feature layer on top of the client:

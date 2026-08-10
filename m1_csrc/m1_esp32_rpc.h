@@ -431,7 +431,14 @@ void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
 #define M1_ESP32_M1LINK_MTU        512u
 
 /** Default number of follow-up (poll) transactions issued after the request
- *  while waiting for the pipelined response before giving up. */
+ *  while waiting for the pipelined response before giving up.
+ *
+ *  On-target (spi_m1link_send_recv_bin) each poll also waits for the slave's
+ *  HANDSHAKE (up to ~100 ms) and paces itself with a scheduler yield, so this
+ *  count spans a real time window (~a second or more) — long enough for the
+ *  brain's multi-second WiFi/BLE scan responses to arrive.  The pure helper
+ *  itself stays a simple transaction counter (host tests inject an
+ *  instantaneous fake exchange); the timing lives in the on-target xfer. */
 #define M1_ESP32_M1LINK_MAX_POLLS  8
 
 /**

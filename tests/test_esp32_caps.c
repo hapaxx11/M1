@@ -995,6 +995,131 @@ void test_unsupported_screen_lines_fit_display(void)
 }
 
 /* =========================================================================
+ * Brain-CD3 GET_FW_VERSION formatting (qMonstatek compatibility regression)
+ *
+ * Regression coverage for the "ESP32 detected — incompatible firmware" issue:
+ * qMonstatek only treats the ESP as compatible when esp32_version contains a
+ * parseable dotted version (parseVerNums()).  The brain's GET_STATUS fw_name
+ * ("m1-native") carries no version, so the device-info string must fold in the
+ * GET_FW_VERSION semver.  m1_esp32_rpc_format_fw_version() builds that string.
+ * =========================================================================*/
+
+void test_rpc_fw_version_struct_size(void)
+{
+    /* 3 semver bytes + 16-byte git hash = 19 bytes on the wire. */
+    TEST_ASSERT_EQUAL_UINT(19u, (unsigned)sizeof(m1_esp32_rpc_fw_version_t));
+}
+
+void test_format_fw_version_basic_semver(void)
+{
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    v.major = 1u; v.minor = 5u; v.patch = 0u;
+
+    char out[32];
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), "m1-native", &v);
+
+    /* Must be exactly "<name> X.Y.Z" with no trailing hash when git_hash
+     * is empty. */
+    TEST_ASSERT_EQUAL_STRING("m1-native 1.5.0", out);
+}
+
+void test_format_fw_version_contains_parseable_dotted_version(void)
+{
+    /* The whole point: a client scanning for /(\d+)\.(\d+)\.(\d+)/ must find
+     * a match in the produced string.  Verify the "X.Y.Z" substring exists. */
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    v.major = 1u; v.minor = 2u; v.patch = 16u;
+
+    char out[32];
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), "m1-native", &v);
+
+    TEST_ASSERT_NOT_NULL(strstr(out, "1.2.16"));
+    /* Sanity: the bare fw_name alone would NOT have matched. */
+    TEST_ASSERT_NULL(strstr("m1-native", "1.2.16"));
+}
+
+void test_format_fw_version_appends_distinct_hash(void)
+{
+    /* The firmware leaves git_hash blank when it equals the semver; when it is
+     * a distinct build tag it is appended after the version. */
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    v.major = 1u; v.minor = 5u; v.patch = 0u;
+    strncpy(v.git_hash, "g-e515182", sizeof(v.git_hash) - 1);
+
+    char out[32];
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), "m1-native", &v);
+    TEST_ASSERT_EQUAL_STRING("m1-native 1.5.0 g-e515182", out);
+}
+
+void test_format_fw_version_omits_redundant_hash(void)
+{
+    /* When git_hash equals the semver string it must not be duplicated
+     * ("1.5.0 1.5.0"). */
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    v.major = 1u; v.minor = 5u; v.patch = 0u;
+    strncpy(v.git_hash, "1.5.0", sizeof(v.git_hash) - 1);
+
+    char out[32];
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), "m1-native", &v);
+    TEST_ASSERT_EQUAL_STRING("m1-native 1.5.0", out);
+}
+
+void test_format_fw_version_null_name_uses_default(void)
+{
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    v.major = 1u; v.minor = 0u; v.patch = 3u;
+
+    char out[32];
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), NULL, &v);
+    TEST_ASSERT_EQUAL_STRING("m1-native 1.0.3", out);
+}
+
+void test_format_fw_version_unterminated_hash_is_bounded(void)
+{
+    /* A malformed payload with no NUL in git_hash must not overrun the
+     * destination or read past the 16-byte field. */
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    v.major = 9u; v.minor = 9u; v.patch = 9u;
+    memset(v.git_hash, 'A', sizeof(v.git_hash)); /* no NUL terminator */
+
+    char out[32];
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), "m1-native", &v);
+
+    /* Output must be NUL-terminated within the buffer and contain the
+     * version. */
+    TEST_ASSERT_EQUAL_CHAR('\0', out[sizeof(out) - 1]);
+    TEST_ASSERT_NOT_NULL(strstr(out, "9.9.9"));
+    /* Bounded: total length must fit the 32-byte device-info field. */
+    TEST_ASSERT_LESS_THAN_UINT(32u, (unsigned)strlen(out));
+}
+
+void test_format_fw_version_null_ver_clears_output(void)
+{
+    char out[32];
+    memset(out, 'X', sizeof(out));
+    m1_esp32_rpc_format_fw_version(out, sizeof(out), "m1-native", NULL);
+    TEST_ASSERT_EQUAL_STRING("", out);
+}
+
+void test_format_fw_version_null_out_is_safe(void)
+{
+    m1_esp32_rpc_fw_version_t v;
+    memset(&v, 0, sizeof(v));
+    /* Must not crash on NULL output or zero size. */
+    m1_esp32_rpc_format_fw_version(NULL, 32u, "m1-native", &v);
+    char out[4];
+    memset(out, 'X', sizeof(out));
+    m1_esp32_rpc_format_fw_version(out, 0u, "m1-native", &v);
+    TEST_ASSERT_EQUAL_CHAR('X', out[0]); /* untouched when size==0 */
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 
@@ -1078,6 +1203,17 @@ int main(void)
     /* M1_RPC devstatus */
     RUN_TEST(test_rpc_devstatus_struct_size);
     RUN_TEST(test_rpc_caps_get_round_trip);
+
+    /* Brain-CD3 GET_FW_VERSION formatting (qMonstatek compat regression) */
+    RUN_TEST(test_rpc_fw_version_struct_size);
+    RUN_TEST(test_format_fw_version_basic_semver);
+    RUN_TEST(test_format_fw_version_contains_parseable_dotted_version);
+    RUN_TEST(test_format_fw_version_appends_distinct_hash);
+    RUN_TEST(test_format_fw_version_omits_redundant_hash);
+    RUN_TEST(test_format_fw_version_null_name_uses_default);
+    RUN_TEST(test_format_fw_version_unterminated_hash_is_bounded);
+    RUN_TEST(test_format_fw_version_null_ver_clears_output);
+    RUN_TEST(test_format_fw_version_null_out_is_safe);
 
     /* "Feature not supported" screen wording (issue #668 defect 2) */
     RUN_TEST(test_unsupported_screen_lines_are_grammatical);

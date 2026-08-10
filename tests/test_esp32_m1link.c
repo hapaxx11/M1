@@ -369,6 +369,67 @@ void test_m1link_rejects_oversized_declared_payload(void)
                           out_len);
 }
 
+/* ---- Delayed bulk response: reply arrives after MANY IDLE polls ---------
+ *
+ * Regression for the "every brain feature fails" root cause.  A WiFi/BLE scan
+ * keeps the brain busy for a second or more before it queues its RESP, so the
+ * host sees a long run of IDLE frames first.  The old fixed 8-poll budget
+ * (with no inter-poll pacing) gave up long before that reply arrived.  This
+ * proves the helper keeps polling through a long IDLE run and still matches a
+ * late RESP when given the larger, time-scaled budget the on-target transport
+ * now passes down. */
+void test_m1link_waits_through_many_idle_polls_for_scan_reply(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u);
+
+    /* 30 IDLE transactions model the ~1s+ the brain spends scanning before it
+     * queues its response (30 polls * ~50-100ms handshake-paced each). */
+    for (int i = 0; i < 30; i++)
+        queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+
+    /* The eventual WIFI_SCAN RESP: [count:2 LE] = 0 APs (empty environment). */
+    const uint8_t scan_resp[2] = {0x00, 0x00};
+    queue_frame(M1_ESP32_RPC_RESP, M1_ESP32_RPC_WIFI_SCAN, scan_resp, 2u);
+
+    int out_len = 0;
+    /* Budget comfortably larger than the old hard-coded 8. */
+    uint8_t rc = m1_esp32_m1link_send_recv(fake_xfer, NULL, s_tx, s_rx, MTU, 40,
+                                           s_req, req_len, s_out,
+                                           (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_EQUAL_UINT8(0u, rc);
+    const uint8_t *pl = NULL; uint16_t pl_len = 0u;
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_OK,
+        m1_esp32_rpc_decode_resp(s_out, (uint16_t)out_len,
+                                 M1_ESP32_RPC_WIFI_SCAN, &pl, &pl_len));
+    TEST_ASSERT_EQUAL_UINT16(2u, pl_len);
+    TEST_ASSERT_EQUAL_MEMORY(scan_resp, pl, 2);
+    /* All 30 IDLE polls plus the final RESP transaction were consumed. */
+    TEST_ASSERT_EQUAL_INT(31, g_tx_calls);
+}
+
+/* ---- The same delayed reply is LOST under the old 8-poll budget ----------
+ * Mirrors the pre-fix behaviour: with only 8 follow-up polls the host returns
+ * "no match" while the brain is still mid-scan, which is exactly the
+ * "AP scan failed, please try again" symptom reported against the brain. */
+void test_m1link_short_budget_drops_delayed_scan_reply(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u);
+
+    for (int i = 0; i < 12; i++)
+        queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+    const uint8_t scan_resp[2] = {0x00, 0x00};
+    queue_frame(M1_ESP32_RPC_RESP, M1_ESP32_RPC_WIFI_SCAN, scan_resp, 2u);
+
+    int out_len = 0;
+    /* Old fixed budget: request + 8 polls — the RESP (txn 12) never arrives. */
+    uint8_t rc = m1_esp32_m1link_send_recv(fake_xfer, NULL, s_tx, s_rx, MTU, 8,
+                                           s_req, req_len, s_out,
+                                           (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_NOT_EQUAL(0u, rc);
+    TEST_ASSERT_EQUAL_INT(0, out_len);
+    TEST_ASSERT_EQUAL_INT(9, g_tx_calls);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -382,5 +443,7 @@ int main(void)
     RUN_TEST(test_m1link_invalid_args);
     RUN_TEST(test_m1link_ignores_wrong_msg_id);
     RUN_TEST(test_m1link_rejects_oversized_declared_payload);
+    RUN_TEST(test_m1link_waits_through_many_idle_polls_for_scan_reply);
+    RUN_TEST(test_m1link_short_budget_drops_delayed_scan_reply);
     return UNITY_END();
 }

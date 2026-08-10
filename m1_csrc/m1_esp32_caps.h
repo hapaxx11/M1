@@ -58,6 +58,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>   /* size_t for parse helper */
+#include <stdio.h>    /* snprintf used by the fw-version format helper */
 #include <string.h>   /* strncpy/strstr/strlen used in inline parse helpers */
 
 /* =========================================================================
@@ -589,9 +590,14 @@ m1_esp32_caps_should_run_at_probe(bool at_task_running_before,
 #define M1_ESP32_RPC_RESP         UINT8_C(0x02)  /**< Successful response */
 #define M1_ESP32_RPC_NAK          UINT8_C(0x05)  /**< Error response */
 
-/* M1_RPC system command IDs */
-#define M1_ESP32_RPC_SYS_PING        UINT16_C(0x0001)  /**< PING: cookie echo */
-#define M1_ESP32_RPC_SYS_GET_STATUS  UINT16_C(0x0002)  /**< GET_STATUS: devstatus */
+/* M1_RPC system command IDs.  SYS_GET_FW_VERSION is named with a _CAPS_
+ * suffix here (unlike SYS_PING / SYS_GET_STATUS) because the canonical opcode
+ * enum in m1_esp32_rpc.h already declares M1_ESP32_RPC_SYS_GET_FW_VERSION as
+ * an enumerator (0x0003) — this macro is the same value for the caps probe,
+ * which cannot include m1_esp32_rpc.h (it would be a circular include). */
+#define M1_ESP32_RPC_SYS_PING                  UINT16_C(0x0001)  /**< PING: cookie echo */
+#define M1_ESP32_RPC_SYS_GET_STATUS            UINT16_C(0x0002)  /**< GET_STATUS: devstatus */
+#define M1_ESP32_RPC_SYS_GET_FW_VERSION_CAPS   UINT16_C(0x0003)  /**< GET_FW_VERSION: semver */
 
 /**
  * CD3 M1_RPC GET_STATUS response payload.
@@ -604,6 +610,18 @@ typedef struct __attribute__((packed)) {
     uint8_t  cap_bitmap[8];  /**< M1_ESP32_CAP_* bits, LE uint64 as 8 bytes */
     char     fw_name[32];    /**< Null-terminated ASCII firmware identifier */
 } m1_esp32_rpc_devstatus_t;
+
+/**
+ * CD3 M1_RPC GET_FW_VERSION response payload.
+ *
+ * Mirrors m1_rpc_fw_version_t in bedge117/m1-esp32-brain m1_rpc.h:
+ * 3 semantic-version bytes followed by a 16-byte build/git-hash tag (which the
+ * firmware leaves blank when it would just duplicate the semver string).
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t major, minor, patch;
+    char    git_hash[16];    /**< Null-terminated; may be empty */
+} m1_esp32_rpc_fw_version_t;
 
 /**
  * Unpack the LE 8-byte cap_bitmap from an m1_esp32_rpc_devstatus_t into a
@@ -731,6 +749,67 @@ m1_esp32_rpc_parse_resp(const uint8_t *buf, uint16_t buf_len,
     *payload_out     = buf + M1_ESP32_RPC_HDR_SIZE;
     *payload_len_out = plen;
     return true;
+}
+
+/**
+ * Format a brain-CD3 firmware identity string of the form
+ * "<fw_name> X.Y.Z" (optionally appending the build/git-hash tag when the
+ * firmware reports one that differs from the bare semver).
+ *
+ * The brain's GET_STATUS fw_name is a bare identifier (e.g. "m1-native") that
+ * carries NO dotted version.  qMonstatek (and any client that keys
+ * compatibility off a parseable X.Y.Z version — see its parseVerNums()) treats
+ * such a string as "incompatible firmware" even when the link is fully
+ * functional.  Appending the GET_FW_VERSION semver produces a string a client
+ * can parse (e.g. "m1-native 1.5.0"), which is exactly how the C3 reference
+ * firmware reports its ESP ("m1_link X.Y.Z <hash>").
+ *
+ * Pure logic — no HAL/RTOS deps.
+ *
+ * @param out      Destination buffer
+ * @param out_size Capacity of @p out in bytes
+ * @param fw_name  Bare firmware identifier from GET_STATUS (may be NULL/empty)
+ * @param ver      Decoded GET_FW_VERSION payload (must not be NULL)
+ */
+static inline void
+m1_esp32_rpc_format_fw_version(char *out, size_t out_size,
+                                const char *fw_name,
+                                const m1_esp32_rpc_fw_version_t *ver)
+{
+    if (!out || out_size == 0u)
+        return;
+    out[0] = '\0';
+    if (!ver)
+        return;
+
+    /* Bound every source so a malformed (unterminated) payload can never
+     * overrun the destination. */
+    char name[32];
+    if (fw_name && fw_name[0])
+    {
+        strncpy(name, fw_name, sizeof(name) - 1u);
+        name[sizeof(name) - 1u] = '\0';
+    }
+    else
+    {
+        strncpy(name, "m1-native", sizeof(name) - 1u);
+        name[sizeof(name) - 1u] = '\0';
+    }
+
+    char hash[17];
+    strncpy(hash, ver->git_hash, sizeof(hash) - 1u);
+    hash[sizeof(hash) - 1u] = '\0';
+
+    char sem[16];
+    snprintf(sem, sizeof(sem), "%u.%u.%u",
+             (unsigned)ver->major, (unsigned)ver->minor, (unsigned)ver->patch);
+
+    /* Compose "name X.Y.Z[ hash]".  Append the hash only when it adds
+     * information (i.e. differs from the bare semver). */
+    if (hash[0] && strcmp(hash, sem) != 0)
+        snprintf(out, out_size, "%s %s %s", name, sem, hash);
+    else
+        snprintf(out, out_size, "%s %s", name, sem);
 }
 
 /* =========================================================================

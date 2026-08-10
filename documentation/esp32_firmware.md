@@ -331,16 +331,21 @@ the full-duplex framing/pipelining helper `m1_esp32_m1link_send_recv()`. The
 helper issues the request then follow-up **IDLE** filler transactions, scanning
 each received 512-byte frame for a `RESP`/`NAK` whose `msg_id` matches the
 request (skipping `IDLE`/`EVENT`/mismatched frames and reassembling `FRAG`
-chains), bounded by a poll budget. On-target, `spi_m1link_send_recv_bin()`
-(`esp_app_main.c`) supplies the single-transaction primitive using
-`HAL_SPI_TransmitReceive` on `hspi_esp` (SPI3) with manual CS (PB10) and
-HANDSHAKE (PD7) handling, mirroring the SiN360 direct-HAL pattern — it does
-**not** rely on the ESP-AT RTOS task, which the brain firmware does not run. The
-`M1_RPC` client defaults to this M1 Link transport, and the CD3 detection probe
-(Probe 3 in `m1_esp32_caps.c`) uses it for `SYS_PING` / `SYS_GET_STATUS`; the AT
-presence and `AT+CMD?` probes stay on `spi_AT_send_recv_bin`. ESP-NOW
-(`m1_espnow_hal.c`) is the first consumer; other WiFi/BLE/802.15.4 features
-adopt it by branching on `m1_esp32_active_transport()`.
+chains). On-target, `spi_m1link_send_recv_bin()` (`esp_app_main.c`) supplies the
+single-transaction primitive using `HAL_SPI_TransmitReceive` on `hspi_esp`
+(SPI3) with manual CS (PB10) and HANDSHAKE (PD7) handling — it does **not**
+rely on the ESP-AT RTOS task, which the brain firmware does not run. The
+follow-up **poll budget is scaled from the caller's timeout (seconds)** and each
+poll is paced on the slave's HANDSHAKE with a scheduler yield (plus
+`HAL_SPI_Abort` self-heal after a failed transaction): a WiFi/BLE scan keeps the
+brain busy for ~1 s+ before it queues its RESP, so the old fixed 8-poll,
+busy-spin budget reliably timed out with "AP scan failed" before the reply
+arrived. The `M1_RPC` client defaults to this M1 Link transport, and the CD3
+detection probe (Probe 3 in `m1_esp32_caps.c`) uses it for `SYS_PING` /
+`SYS_GET_STATUS` / `SYS_GET_FW_VERSION`; the AT presence and `AT+CMD?` probes
+stay on `spi_AT_send_recv_bin`. ESP-NOW (`m1_espnow_hal.c`) is the first
+consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
+`m1_esp32_active_transport()`.
 
 > **SPI clock note:** the brain reports ~4.7 MHz stable with a 10 MHz target, so
 > start the SPI3 prescaler conservative and only raise it after `SYS_PING` is
@@ -629,6 +634,7 @@ AT stack in CD3.
 |----------|------|-----------------|-----------------|
 | `0x0001` | PING | 4-byte cookie | Echo of cookie |
 | `0x0002` | GET_STATUS | none | `m1_esp32_rpc_devstatus_t` (41 bytes) |
+| `0x0003` | GET_FW_VERSION | none | `m1_esp32_rpc_fw_version_t` (19 bytes) |
 
 **GET_STATUS response payload (`m1_esp32_rpc_devstatus_t`, 41 bytes):**
 
@@ -642,17 +648,33 @@ The GET_STATUS payload is wire-identical to `m1_esp32_status_payload_t` (used
 by the SiN360 CMD_GET_STATUS path) on LE targets, so the same
 `m1_esp32_caps_parse_payload()` helper decodes both.
 
-**SPI transport:** CD3 uses `spi_slave_hd` (half-duplex) mode over the **same
-SPI-HD transport as the AT firmware** — identical GPIO pin assignment
-(`ESP32_SPI3_NSS_Pin` CS, `ESP32_HANDSHAKE_Pin` response-ready), command/
-address/dummy phases, status register, and `WRBUF`/`RDDMA` DMA windows, all
-driven by the AT RTOS task (`spi_trans_control_task` in `esp_app_main.c`).  A
-`spi_slave_hd` slave **cannot** answer a plain full-duplex `HAL_SPI_TransmitReceive`,
-so the M1_RPC PING/GET_STATUS probe is issued through
-`spi_AT_send_recv_bin()` (the binary-safe variant of `spi_AT_send_recv()`),
-**not** the full-duplex `m1_esp32_send_cmd_raw()` path.  The host writes the
-M1_RPC request frame (length-prefixed, not NUL-terminated), waits for
-HANDSHAKE, and reads the response frame with its true byte length preserved.
+**GET_FW_VERSION response payload (`m1_esp32_rpc_fw_version_t`, 19 bytes):**
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 1 | `major` | Semantic-version major |
+| 1 | 1 | `minor` | Semantic-version minor |
+| 2 | 1 | `patch` | Semantic-version patch |
+| 3 | 16 | `git_hash` | Null-terminated build/git tag (blank when it equals the semver) |
+
+> **qMonstatek compatibility (the "incompatible firmware" hint):** the brain's
+> GET_STATUS `fw_name` is a bare identifier (`"m1-native"`) carrying **no dotted
+> version**. qMonstatek keys "ESP32 compatible" off a parseable `X.Y.Z` in the
+> device-info `esp32_version` string (its `parseVerNums()`), so reporting the
+> bare name made the desktop app declare the ESP "incompatible firmware" even
+> though the link worked. The CD3 probe therefore follows GET_STATUS with a
+> GET_FW_VERSION query and folds the semver into the reported name
+> (`"m1-native X.Y.Z[ <hash>]"`) via the pure `m1_esp32_rpc_format_fw_version()`
+> helper — the same approach as the C3 reference firmware's `esp_fw_status_str()`
+> ("m1_link X.Y.Z <hash>").
+
+**SPI transport:** the native brain CD3 is an ESP-IDF **full-duplex
+`spi_slave`** device. Every transaction clocks exactly 512 bytes in both
+directions and the slave pipelines its reply onto a later transaction, so the
+M1_RPC PING/GET_STATUS/GET_FW_VERSION probes are issued through the full-duplex
+M1 Link transport (`spi_m1link_send_recv_bin()`), **not** the AT half-duplex
+`spi_AT_send_recv_bin()` path. See the "native brain CD3 full-duplex transport"
+section above for the framing/pipelining details.
 
 > **Binary-safe receive (PR #669):** The legacy AT receive path
 > delivered every slave response as a NUL-terminated C string (`strcpy()`).
