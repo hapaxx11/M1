@@ -255,6 +255,51 @@ m1_esp32_rpc_status_t m1_esp32_rpc_monitor_stop(void)
     return rpc_trigger(M1_ESP32_RPC_OFF_MONITOR_STOP);
 }
 
+m1_esp32_rpc_status_t m1_esp32_rpc_monitor_read(uint8_t *out_frame,
+                                                uint16_t frame_max,
+                                                uint16_t *out_len,
+                                                uint8_t *out_channel,
+                                                int8_t  *out_rssi)
+{
+    if (out_len)     *out_len    = 0u;
+    if (out_channel) *out_channel = 0u;
+    if (out_rssi)    *out_rssi   = 0;
+    if (out_frame && frame_max)  memset(out_frame, 0, frame_max);
+
+    /* Empty REQ; RESP is either empty (no packet buffered) or one frame. */
+    uint8_t resp[M1_ESP32_RPC_RESP_FRAME_MAX];
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_OFF_MONITOR_READ, NULL, 0u,
+                          resp, sizeof(resp), &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st != M1_ESP32_RPC_OK)
+        return st;
+
+    /* Empty response simply means nothing buffered yet. */
+    if (rlen == 0u)
+        return M1_ESP32_RPC_OK;
+
+    /* Need at least the channel + rssi + len header. */
+    if (rlen < 4u)
+        return M1_ESP32_RPC_ERR_BAD_FRAME;
+
+    uint8_t  ch  = resp[0];
+    int8_t   rssi = (int8_t)resp[1];
+    uint16_t flen = (uint16_t)resp[2] | ((uint16_t)resp[3] << 8u);
+    if ((uint16_t)(4u + flen) > rlen)
+        return M1_ESP32_RPC_ERR_BAD_FRAME;
+
+    if (out_len)     *out_len    = flen;
+    if (out_channel) *out_channel = ch;
+    if (out_rssi)    *out_rssi   = rssi;
+    if (out_frame && frame_max && flen > 0u) {
+        uint16_t copy = (flen < frame_max) ? flen : frame_max;
+        memcpy(out_frame, &resp[4], copy);
+    }
+    return M1_ESP32_RPC_OK;
+}
+
 m1_esp32_rpc_status_t m1_esp32_rpc_deauth_start(const m1_esp32_rpc_deauth_req_t *req)
 {
     if (!req)

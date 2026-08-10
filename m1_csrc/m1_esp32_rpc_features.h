@@ -132,6 +132,27 @@ m1_esp32_rpc_status_t m1_esp32_rpc_monitor_start(uint8_t channel);
 /** OFF_MONITOR_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_monitor_stop(void);
 
+/**
+ * OFF_MONITOR_READ: poll one buffered monitor frame from the ESP32.
+ *
+ * Wire format (when a frame is available):
+ *   [channel:1][rssi:i8][frame_len:2 LE][frame bytes]
+ * If no frame is buffered the response has payload_len == 0.
+ *
+ * @param out_frame    [out] receives the raw 802.11 frame bytes (may be NULL).
+ * @param frame_max    Capacity of @p out_frame in bytes.
+ * @param out_len      [out] number of frame bytes copied (may be NULL).
+ * @param out_channel  [out] channel the frame was captured on (may be NULL).
+ * @param out_rssi     [out] RSSI in dBm (may be NULL).
+ * @return M1_ESP32_RPC_OK on success, including a zero-length response (no
+ *         packet buffered).  Other codes report transport / framing errors.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_monitor_read(uint8_t *out_frame,
+                                                uint16_t frame_max,
+                                                uint16_t *out_len,
+                                                uint8_t *out_channel,
+                                                int8_t  *out_rssi);
+
 /** OFF_DEAUTH_START from a fully-populated request struct. */
 m1_esp32_rpc_status_t m1_esp32_rpc_deauth_start(const m1_esp32_rpc_deauth_req_t *req);
 /** OFF_DEAUTH_STOP. */
