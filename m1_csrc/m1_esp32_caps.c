@@ -75,6 +75,13 @@ static char     s_fw_name[32]     = "Unknown";
 static uint32_t s_bss_bytes       = 0u;
 static uint32_t s_free_heap_bytes = 0u;
 
+/* Phase 0 (issue #719): read-only snapshot of the last probe sequence,
+ * surfaced on the Settings > Dashboard so the "Unknown (fallback)" failure is
+ * observable on-device without a debugger.  Populated by m1_esp32_caps_init(),
+ * copied out by m1_esp32_caps_get_diag().  Diagnostic only — no feature gate
+ * reads it. */
+static m1_esp32_caps_diag_t s_diag = { 0 };
+
 /* =========================================================================
  * Brain-CD3 firmware version probe
  *
@@ -250,13 +257,25 @@ void m1_esp32_caps_init(void)
     if (s_queried)
         return;  /* Already cached from a previous call */
 
+    /* Phase 0 diagnostics (issue #719): start a fresh snapshot of this probe
+     * sequence.  Fields are filled in as each probe runs and copied out by
+     * m1_esp32_caps_get_diag() for the on-device dashboard. */
+    memset(&s_diag, 0, sizeof(s_diag));
+    s_diag.outcome        = (uint8_t)M1_ESP32_PROBE_NONE;
+    s_diag.rpc_ping_rc    = 0;
+    s_diag.rpc_ping_rxlen = 0;
+
     /* Require the SPI HAL transport to be active before sending any binary
      * commands.  If the ESP32 has not been initialised yet (or was
      * deinitialized), return without caching so the next call retries once
      * the transport is ready.  Probing an uninitialised transport would time
      * out and cache the fallback, potentially mis-attributing capabilities. */
     if (!m1_esp32_get_init_status())
+    {
+        s_diag.outcome = (uint8_t)M1_ESP32_PROBE_HAL_OFF;
         return;
+    }
+    s_diag.hal_ready = 1u;
 
     /* Probe 0: binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
      * CMD_GET_STATUS (0x02) was proposed as a capability-reporting command
@@ -278,6 +297,7 @@ void m1_esp32_caps_init(void)
                           resp.payload_len == 4 &&
                           resp.payload[0] == 'P' && resp.payload[1] == 'O' &&
                           resp.payload[2] == 'N' && resp.payload[3] == 'G');
+    s_diag.bin_ping_ok = is_binary_spi ? 1u : 0u;
 
     /* Probe 1: binary CMD_GET_STATUS (0x02).  AT firmware that implements
      * the binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
@@ -295,6 +315,9 @@ void m1_esp32_caps_init(void)
         strncpy(s_fw_name, fw_name, sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
         caps_apply_footprint_estimates(s_bitmap);
+        s_diag.bin_status_ok = 1u;
+        s_diag.outcome       = (uint8_t)M1_ESP32_PROBE_BIN_STATUS;
+        s_diag.bitmap        = s_bitmap;
         s_queried = true;
         return;
     }
@@ -308,6 +331,8 @@ void m1_esp32_caps_init(void)
         strncpy(s_fw_name, "SiN360 (via PING)", sizeof(s_fw_name) - 1);
         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
         caps_apply_footprint_estimates(s_bitmap);
+        s_diag.outcome = (uint8_t)M1_ESP32_PROBE_BIN_PING;
+        s_diag.bitmap  = s_bitmap;
         s_queried = true;
         return;
     }
@@ -342,8 +367,14 @@ void m1_esp32_caps_init(void)
             at_task_after = get_esp32_main_init_status();
         }
 
+        s_diag.at_task_before = at_task_before ? 1u : 0u;
+        s_diag.at_task_after  = at_task_after  ? 1u : 0u;
+
         if (!m1_esp32_caps_should_run_at_probe(at_task_before, at_task_after))
+        {
+            s_diag.outcome = (uint8_t)M1_ESP32_PROBE_RETRY;
             return;
+        }
     }
 
     /* Probe 2a: quick AT presence check.  Send a bare "AT\r\n" with a short
@@ -364,6 +395,8 @@ void m1_esp32_caps_init(void)
 
         if (strstr(at_presence, "OK") == NULL)
             goto probe_cd3;  /* Not AT firmware — skip to CD3 probe */
+
+        s_diag.at_presence_ok = 1u;
     }
 
     /* Probe 2b: stock ESP-AT `AT+CMD?`.  This command is part of the basic
@@ -400,6 +433,9 @@ void m1_esp32_caps_init(void)
             strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
             s_fw_name[sizeof(s_fw_name) - 1] = '\0';
             caps_apply_footprint_estimates(s_bitmap);
+            s_diag.at_cmd_ok = 1u;
+            s_diag.outcome   = (uint8_t)M1_ESP32_PROBE_AT;
+            s_diag.bitmap    = s_bitmap;
             s_queried = true;
             vPortFree(at_resp);
             return;
@@ -446,17 +482,25 @@ probe_cd3:
                                           cd3_cookie, 4u);
         if (req_len > 0u)
         {
+            uint8_t ping_rc;
+
             memset(rx64, 0, sizeof(rx64));
             rx_len = 0;
 
-            if (spi_m1link_send_recv_bin(tx64, (int)req_len,
+            s_diag.rpc_attempted = 1u;
+            ping_rc = spi_m1link_send_recv_bin(tx64, (int)req_len,
                                      rx64, (int)sizeof(rx64),
-                                     &rx_len, CD3_RPC_PROBE_TIMEOUT_S) == 0 &&
+                                     &rx_len, CD3_RPC_PROBE_TIMEOUT_S);
+            s_diag.rpc_ping_rc    = (int16_t)ping_rc;
+            s_diag.rpc_ping_rxlen = (int16_t)rx_len;
+
+            if (ping_rc == 0 &&
                 rx_len > 0 &&
                 m1_esp32_rpc_parse_resp(rx64, (uint16_t)rx_len,
                                          M1_ESP32_RPC_SYS_PING,
                                          &rpc_pl, &rpc_plen))
             {
+                s_diag.rpc_ping_ok = 1u;
                 /* CD3 confirmed — issue GET_STATUS to retrieve capabilities */
                 memset(tx64, 0, sizeof(tx64));
                 req_len = m1_esp32_rpc_build_req(tx64, (uint16_t)sizeof(tx64),
@@ -500,6 +544,9 @@ probe_cd3:
                         }
                         s_fw_name[sizeof(s_fw_name) - 1] = '\0';
                         caps_apply_footprint_estimates(s_bitmap);
+                        s_diag.rpc_status_ok = 1u;
+                        s_diag.outcome = (uint8_t)M1_ESP32_PROBE_RPC_STATUS;
+                        s_diag.bitmap  = s_bitmap;
                         s_queried = true;
                         return;
                     }
@@ -524,6 +571,8 @@ probe_cd3:
                     s_fw_name[sizeof(s_fw_name) - 1] = '\0';
                 }
                 caps_apply_footprint_estimates(s_bitmap);
+                s_diag.outcome = (uint8_t)M1_ESP32_PROBE_RPC_PROFILE;
+                s_diag.bitmap  = s_bitmap;
                 s_queried = true;
                 return;
             }
@@ -539,6 +588,8 @@ probe_cd3:
     strncpy(s_fw_name, "Unknown (fallback)", sizeof(s_fw_name) - 1);
     s_fw_name[sizeof(s_fw_name) - 1] = '\0';
     caps_apply_footprint_estimates(0u);
+    s_diag.outcome = (uint8_t)M1_ESP32_PROBE_UNKNOWN;
+    s_diag.bitmap  = 0u;
     s_queried = true;
 }
 
@@ -549,6 +600,7 @@ void m1_esp32_caps_reset(void)
     s_free_heap_bytes = 0u;
     s_queried         = false;
     s_fw_name[0]      = '\0';
+    memset(&s_diag, 0, sizeof(s_diag));
 }
 
 bool m1_esp32_has_cap(uint64_t cap)
@@ -637,4 +689,11 @@ uint64_t m1_esp32_caps_get_bitmap(void)
 bool m1_esp32_caps_is_queried(void)
 {
     return s_queried;
+}
+
+void m1_esp32_caps_get_diag(m1_esp32_caps_diag_t *out)
+{
+    if (!out)
+        return;
+    *out = s_diag;
 }

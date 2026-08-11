@@ -238,6 +238,23 @@ The captured RX pattern discriminates the causes directly:
 | Intermittent success; fails only when AT task active | **C1 (contention)** |
 | `802154_TX`/`BLE_SPAM` absent once PING works | C6 (discriminator) |
 
+> **Phase 0 implementation status (delivered).** `m1_esp32_caps_init()` now
+> records a `m1_esp32_caps_diag_t` snapshot for every probe run (outcome stage,
+> `bin_ping`/`bin_status`/`at_presence`/`at_cmd` flags, `at_task_before/after`,
+> and the M1_RPC PING `rc`/`rxlen`/ok flags), exposed via
+> `m1_esp32_caps_get_diag()` and rendered by the pure, host-tested
+> `m1_esp32_caps_diag_format()`. A new **Dashboard page 4/4** (Settings >
+> Dashboard) shows the firmware name, the formatted probe result (e.g.
+> `FAIL rc-1 n0 at1`), the resolved `caps` bitmap, and the AT-task state —
+> directly reading out the **C1 contention** signal (`at1` = host AT task was up
+> at PING time) and the "no reply vs corrupted reply" distinction (`n0`).
+> **Known limitation:** capturing the *raw* PING RX bytes / magic offset / CRC
+> (needed to fully disambiguate C2 vs C4) requires a small transport hook in
+> `spi_m1link_send_recv_bin()` to surface the scratch buffer on failure; that is
+> deferred to Phase 1 so this diagnostic phase stays behaviour-neutral. The
+> `SYS_GET_FW_VERSION` capture (item 3) already exists from #705 and is shown as
+> part of the firmware name on the new page once a PING succeeds.
+
 ---
 
 ## 6. Proposed resolution phases (direct implementation from here)

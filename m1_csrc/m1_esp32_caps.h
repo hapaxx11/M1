@@ -836,6 +836,112 @@ m1_esp32_rpc_format_fw_version(char *out, size_t out_size,
 }
 
 /* =========================================================================
+ * Probe diagnostics (Phase 0, issue #719)
+ *
+ * A read-only snapshot of what happened the last time m1_esp32_caps_init()
+ * ran its probe sequence.  It exists purely to make the "Unknown (fallback)"
+ * failure observable on-device (Settings > Dashboard) without a debugger, so
+ * we can tell WHICH probe stage failed and how the brain-CD3 M1_RPC PING
+ * behaved (transport return code, bytes returned, whether the host AT task was
+ * running at probe time — the leading contention hypothesis).
+ *
+ * The struct and its formatter are pure logic (no HAL/RTOS deps) so they are
+ * covered by host-side unit tests.  m1_esp32_caps_init() fills the record;
+ * m1_esp32_caps_get_diag() copies it out without re-probing.
+ * ========================================================================= */
+
+/** Which resolution the last probe sequence reached. */
+typedef enum
+{
+    M1_ESP32_PROBE_NONE = 0,     /**< init has not completed a probe yet          */
+    M1_ESP32_PROBE_HAL_OFF,      /**< SPI HAL not up — early return, no cache     */
+    M1_ESP32_PROBE_RETRY,        /**< host AT task failed to start — early return */
+    M1_ESP32_PROBE_BIN_STATUS,   /**< binary CMD_GET_STATUS parsed a full report  */
+    M1_ESP32_PROBE_BIN_PING,     /**< SiN360 detected via CMD_PING "PONG"         */
+    M1_ESP32_PROBE_AT,           /**< AT firmware detected via AT+CMD?            */
+    M1_ESP32_PROBE_RPC_STATUS,   /**< brain CD3: PING + GET_STATUS both parsed    */
+    M1_ESP32_PROBE_RPC_PROFILE,  /**< brain CD3: PING ok, GET_STATUS fell back    */
+    M1_ESP32_PROBE_UNKNOWN       /**< every probe failed — bitmap left at zero    */
+} m1_esp32_probe_outcome_t;
+
+/** Snapshot of the last probe sequence. */
+typedef struct
+{
+    uint8_t  outcome;         /**< m1_esp32_probe_outcome_t                        */
+    uint8_t  hal_ready;       /**< m1_esp32_get_init_status() at entry             */
+    uint8_t  bin_ping_ok;     /**< CMD_PING returned "PONG"                        */
+    uint8_t  bin_status_ok;   /**< CMD_GET_STATUS parsed a full capability report  */
+    uint8_t  at_task_before;  /**< host AT task already running on entry           */
+    uint8_t  at_task_after;   /**< host AT task running after the start attempt    */
+    uint8_t  at_presence_ok;  /**< bare "AT\r\n" answered "OK"                     */
+    uint8_t  at_cmd_ok;       /**< "AT+CMD?" response validated                    */
+    uint8_t  rpc_attempted;   /**< M1_RPC PING transport call was issued           */
+    uint8_t  rpc_ping_ok;     /**< M1_RPC PING RESP validated                      */
+    uint8_t  rpc_status_ok;   /**< M1_RPC GET_STATUS RESP validated + parsed       */
+    int16_t  rpc_ping_rc;     /**< transport return code (0 == SUCCESS)            */
+    int16_t  rpc_ping_rxlen;  /**< bytes the transport returned for the PING       */
+    uint64_t bitmap;          /**< resulting cached capability bitmap (0 on fail)  */
+} m1_esp32_caps_diag_t;
+
+/**
+ * Render a compact, human-readable one-line summary of a probe snapshot,
+ * suitable for a 128px display line.  Pure logic — no HAL deps.
+ *
+ * Examples:
+ *   "no probe yet"                 (outcome NONE)
+ *   "HAL off"                      (transport not up)
+ *   "AT task down"                 (host AT task would not start)
+ *   "SiN360 PING"                  (binary-SPI firmware)
+ *   "AT probed"                    (AT firmware)
+ *   "RPC ok"                       (brain CD3 fully probed)
+ *   "RPC ping/no stat"             (brain CD3 PING ok, GET_STATUS failed)
+ *   "FAIL rc-1 n0 at1"             (all failed: PING rc=-1, 0 bytes, AT task up)
+ *
+ * The trailing "rc/n/at" detail is appended whenever the M1_RPC PING was
+ * attempted, so the reader can distinguish "no reply" (n0) from a corrupted
+ * reply and see whether the host AT task was contending for SPI3 (at1).
+ *
+ * @param d        Snapshot to render (may be NULL — yields "no probe yet")
+ * @param buf      Destination buffer
+ * @param buf_size Capacity of @p buf in bytes (>= 1)
+ */
+static inline void
+m1_esp32_caps_diag_format(const m1_esp32_caps_diag_t *d,
+                          char *buf, size_t buf_size)
+{
+    if (!buf || buf_size == 0u)
+        return;
+    buf[0] = '\0';
+    if (!d)
+    {
+        snprintf(buf, buf_size, "no probe yet");
+        return;
+    }
+
+    const char *tag;
+    switch ((m1_esp32_probe_outcome_t)d->outcome)
+    {
+        case M1_ESP32_PROBE_HAL_OFF:     tag = "HAL off";          break;
+        case M1_ESP32_PROBE_RETRY:       tag = "AT task down";     break;
+        case M1_ESP32_PROBE_BIN_STATUS:  tag = "bin GET_STATUS";   break;
+        case M1_ESP32_PROBE_BIN_PING:    tag = "SiN360 PING";      break;
+        case M1_ESP32_PROBE_AT:          tag = "AT probed";        break;
+        case M1_ESP32_PROBE_RPC_STATUS:  tag = "RPC ok";           break;
+        case M1_ESP32_PROBE_RPC_PROFILE: tag = "RPC ping/no stat"; break;
+        case M1_ESP32_PROBE_UNKNOWN:     tag = "FAIL";             break;
+        case M1_ESP32_PROBE_NONE:
+        default:                         tag = "no probe yet";     break;
+    }
+
+    if (d->rpc_attempted)
+        snprintf(buf, buf_size, "%s rc%d n%d at%d",
+                 tag, (int)d->rpc_ping_rc, (int)d->rpc_ping_rxlen,
+                 d->at_task_after ? 1 : 0);
+    else
+        snprintf(buf, buf_size, "%s", tag);
+}
+
+/* =========================================================================
  * Public API
  * =========================================================================*/
 
@@ -947,6 +1053,16 @@ uint64_t m1_esp32_caps_get_bitmap(void);
  * cached firmware name is available before calling m1_esp32_caps_fw_name().
  */
 bool m1_esp32_caps_is_queried(void);
+
+/**
+ * Copy out a read-only snapshot of the most recent probe sequence for
+ * diagnostics (issue #719 Phase 0).  Never triggers a probe, so it is safe
+ * to call from display-draw paths.  When no probe has run yet the snapshot's
+ * outcome is M1_ESP32_PROBE_NONE.
+ *
+ * @param out  Destination for the snapshot (ignored when NULL).
+ */
+void m1_esp32_caps_get_diag(m1_esp32_caps_diag_t *out);
 
 
 #endif /* M1_ESP32_CAPS_H_ */

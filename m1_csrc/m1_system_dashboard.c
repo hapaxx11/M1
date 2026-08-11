@@ -34,7 +34,7 @@
 
 /*************************** D E F I N E S ************************************/
 
-#define DASHBOARD_PAGE_COUNT   3U
+#define DASHBOARD_PAGE_COUNT   4U
 #define DASHBOARD_POLL_MS      200U
 
 /************************** S T R U C T U R E S *******************************/
@@ -43,7 +43,8 @@ typedef enum
 {
     DASHBOARD_PAGE_OVERVIEW = 0,
     DASHBOARD_PAGE_IO,
-    DASHBOARD_PAGE_SYSTEM
+    DASHBOARD_PAGE_SYSTEM,
+    DASHBOARD_PAGE_ESP32
 } dashboard_page_t;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -143,7 +144,7 @@ static void dashboard_draw_page(dashboard_page_t page)
         snprintf(line4, sizeof(line4), "ESP32 %s / Binary SPI",
                  m1_esp32_get_init_status() ? "HAL" : "Off");
     }
-    else /* DASHBOARD_PAGE_SYSTEM */
+    else if (page == DASHBOARD_PAGE_SYSTEM)
     {
         snprintf(line1, sizeof(line1), "Hapax %d.%d.%d.%d-H.%d",
                  m1_device_stat.config.fw_version_major,
@@ -166,6 +167,30 @@ static void dashboard_draw_page(dashboard_page_t page)
         {
             snprintf(line4, sizeof(line4), "Scan WiFi for ESP32 info");
         }
+    }
+    else /* DASHBOARD_PAGE_ESP32 — probe diagnostics (issue #719) */
+    {
+        m1_esp32_caps_diag_t diag;
+        char diag_line[40];
+
+        m1_esp32_caps_get_diag(&diag);
+        m1_esp32_caps_diag_format(&diag, diag_line, sizeof(diag_line));
+
+        if (m1_esp32_caps_is_queried())
+        {
+            snprintf(line1, sizeof(line1), "ESP32 %s",
+                     m1_esp32_caps_fw_name());
+        }
+        else
+        {
+            snprintf(line1, sizeof(line1), "ESP32 not probed");
+        }
+        snprintf(line2, sizeof(line2), "Probe %s", diag_line);
+        snprintf(line3, sizeof(line3), "caps %08lX",
+                 (unsigned long)(diag.bitmap & 0xFFFFFFFFUL));
+        snprintf(line4, sizeof(line4), "ATtask b%d a%d",
+                 diag.at_task_before ? 1 : 0,
+                 diag.at_task_after ? 1 : 0);
     }
 
     /* --- Drawing --- */
