@@ -209,7 +209,15 @@ static void dashboard_draw_page(dashboard_page_t page)
         m1_esp32_rpc_call_diag_format(&rpc_diag, rpc_line, sizeof(rpc_line));
 
         snprintf(line1, sizeof(line1), "Last feature RPC:");
-        snprintf(line2, sizeof(line2), "%s", rpc_line);
+
+        /* The "no-reply" line optionally carries a trailing " tNs" wall-clock
+         * suffix (issue #719 Phase 6) — at the dashboard's small font this
+         * detail can run past the right edge of the display and become
+         * unreadable. Split it onto its own line instead of letting it
+         * overflow. */
+        dashboard_split_rpc_wallclock_suffix(rpc_line,
+                                             line2, sizeof(line2),
+                                             line3, sizeof(line3));
     }
 
     /* --- Drawing --- */
