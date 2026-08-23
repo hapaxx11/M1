@@ -1193,11 +1193,11 @@ void test_diag_format_unknown_reports_rpc_detail_and_at_task(void)
     memset(&d, 0, sizeof(d));
     d.outcome        = (uint8_t)M1_ESP32_PROBE_UNKNOWN;
     d.rpc_attempted  = 1u;
-    d.rpc_ping_rc    = -1;
+    d.rpc_ping_rc    = 13; /* CTRL_ERR_REQUEST_TIMEOUT */
     d.rpc_ping_rxlen = 0;
     d.at_task_after  = 1u;
     m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("FAIL rc-1 n0 at1", buf);
+    TEST_ASSERT_EQUAL_STRING("FAIL rc13 n0 at1", buf);
 }
 
 void test_diag_format_null_buffer_is_safe(void)
