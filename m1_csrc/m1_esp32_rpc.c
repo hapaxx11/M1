@@ -40,6 +40,11 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                         uint8_t *rx_buf, int rx_buf_size,
                                         int *out_len, int timeout_sec);
 
+/* Declared extern exactly as in m1_esp32_caps.c, rather than pulling in all of
+ * m1_esp32_hal.h (FreeRTOS/SPI/UART handles) just for this one status check --
+ * see m1_esp32_active_transport() below. */
+extern uint8_t m1_esp32_get_init_status(void);
+
 /*==========================================================================*/
 /* Transport selection                                                      */
 /*==========================================================================*/
@@ -65,6 +70,18 @@ void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn)
 
 esp32_transport_t m1_esp32_active_transport(void)
 {
+    /* Self-prime exactly like m1_esp32_has_cap(): m1_esp32_caps_get_bitmap()
+     * only returns the cached bitmap and never re-probes, so before
+     * m1_esp32_caps_init() has ever run this used to read back an all-zero
+     * bitmap and misclassify a brain-CD3 device as ESP32_TRANSPORT_NONE.
+     * That silently routed the *first* ESP32 feature call down the wrong
+     * (legacy binary-SPI or AT) path on scene delegates that don't already
+     * force a probe first -- e.g. the un-gated WiFi Scan / "Scan & Connect"
+     * entry (m1_wifi_scene_menu.c) -- which never reaches m1_esp32_rpc_call()
+     * at all, so the Dashboard's "Last feature RPC:" line reads "no call
+     * yet" forever even after a scan was attempted. */
+    if (!m1_esp32_caps_is_queried() && m1_esp32_get_init_status())
+        m1_esp32_caps_init();
     return esp32_firmware_transport(m1_esp32_caps_get_bitmap());
 }
 

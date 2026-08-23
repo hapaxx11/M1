@@ -27,6 +27,24 @@
 static uint64_t g_bitmap;
 uint64_t m1_esp32_caps_get_bitmap(void) { return g_bitmap; }
 
+/* Controllable capability-probe state for the self-priming regression tests
+ * (m1_esp32_active_transport() below).  Existing tests set g_bitmap directly
+ * and expect no re-probe, so default g_queried true (bitmap already
+ * "current") and only flip it for the dedicated priming tests. */
+static bool     g_queried;
+static bool     g_hal_ready;
+static uint64_t g_caps_init_bitmap;
+static int      g_caps_init_calls;
+
+bool m1_esp32_caps_is_queried(void) { return g_queried; }
+uint8_t m1_esp32_get_init_status(void) { return g_hal_ready ? 1u : 0u; }
+void m1_esp32_caps_init(void)
+{
+    g_caps_init_calls++;
+    g_bitmap  = g_caps_init_bitmap;
+    g_queried = true;
+}
+
 /* The default transport pointer references this symbol; provide a stub so the
  * module links.  Tests install a fake via m1_esp32_rpc_set_transport(). */
 uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
@@ -103,6 +121,10 @@ static int make_frame(uint8_t *buf, uint8_t msg_type, uint16_t msg_id,
 void setUp(void)
 {
     g_bitmap = 0u;
+    g_queried = true;
+    g_hal_ready = true;
+    g_caps_init_bitmap = 0u;
+    g_caps_init_calls = 0;
     g_canned_len = 0;
     g_ret = 0;
     g_last_tx_len = 0;
@@ -449,6 +471,47 @@ void test_transport_at_for_legacy_cd3_at(void)
     TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_AT, m1_esp32_active_transport());
 }
 
+void test_transport_self_primes_when_not_yet_queried(void)
+{
+    /* Regression: before m1_esp32_caps_init() has ever run in a session (e.g.
+     * the very first ESP32 feature entered is WiFi Scan / "Scan & Connect",
+     * which is not capability-gated -- see scan_connect_on_enter() in
+     * m1_wifi_scene_menu.c), m1_esp32_active_transport() used to read back the
+     * still-zero cached bitmap and misclassify a brain-CD3 device as
+     * ESP32_TRANSPORT_NONE.  wifi_do_scan() then fell through to the legacy
+     * binary-SPI scan path instead of m1_esp32_rpc_wifi_scan(), so
+     * m1_esp32_rpc_call() was never invoked and the Dashboard's "Last feature
+     * RPC:" line read "no call yet" even after a scan was attempted. */
+    uint64_t cd3 = M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154_TX;
+    g_queried = false;
+    g_hal_ready = true;
+    g_caps_init_bitmap = cd3;
+    g_caps_init_calls = 0;
+
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC, m1_esp32_active_transport());
+    TEST_ASSERT_EQUAL_INT(1, g_caps_init_calls);
+    TEST_ASSERT_TRUE(g_queried);
+
+    /* A second call must not re-probe -- the bitmap is now cached. */
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC, m1_esp32_active_transport());
+    TEST_ASSERT_EQUAL_INT(1, g_caps_init_calls);
+}
+
+void test_transport_none_and_no_probe_when_hal_not_initialised(void)
+{
+    /* Priming must never run (and would time out) against a transport that
+     * isn't up yet -- mirrors m1_esp32_has_cap()'s own guard. */
+    g_queried = false;
+    g_hal_ready = false;
+    g_caps_init_bitmap = M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154_TX;
+    g_caps_init_calls = 0;
+    g_bitmap = 0u;
+
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_NONE, m1_esp32_active_transport());
+    TEST_ASSERT_EQUAL_INT(0, g_caps_init_calls);
+    TEST_ASSERT_FALSE(g_queried);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -476,5 +539,7 @@ int main(void)
     RUN_TEST(test_transport_binary_spi_for_sin360);
     RUN_TEST(test_transport_at_for_generic_at_firmware);
     RUN_TEST(test_transport_at_for_legacy_cd3_at);
+    RUN_TEST(test_transport_self_primes_when_not_yet_queried);
+    RUN_TEST(test_transport_none_and_no_probe_when_hal_not_initialised);
     return UNITY_END();
 }

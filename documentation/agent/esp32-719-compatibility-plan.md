@@ -383,10 +383,45 @@ observable on the dashboard exactly like the Phase 0 probe diagnostics.
   | `op0103 bad-frame st254 r<n> p0` | A frame came back but failed CRC/magic/msg_id validation — FIFO shift or corruption specific to a large multi-poll exchange |
   | `op0103 nak st<n> r<n> p0` | The brain explicitly rejected the request (e.g. `ERR_BUSY`/`ERR_HARDWARE`) — a firmware-side condition, not a host transport bug |
   | `op0103 ok st0 r<n> p<n>` with `p0` | The call succeeded but decoded zero AP entries — either a genuinely empty scan (no APs in range) or a `want` vs `got` mismatch inside `m1_esp32_rpc_wifi_scan()`'s entry-walk loop |
+  | `"no call yet"` | `m1_esp32_rpc_call()` was never invoked at all — see Phase 2″ below |
 
-- **Phase 5 (next) – Root-cause and fix the specific failure the Phase 2′
+- **Phase 2″ (this update) – Fix "no call yet" reproducing on the first WiFi
+  Scan of a session.** Field report: opening WiFi Scan as the very first ESP32
+  feature (before any other screen queried capabilities, e.g. Dashboard) left
+  Dashboard page 5/5 reading `"no call yet"` even after the scan was attempted
+  and failed. Root cause: `m1_esp32_active_transport()` only ever read the
+  *cached* capability bitmap (`m1_esp32_caps_get_bitmap()`, which never
+  re-probes) instead of self-priming like `m1_esp32_has_cap()` does. Before
+  `m1_esp32_caps_init()` had run once, the bitmap was still all-zero, so
+  `esp32_firmware_transport()` classified the brain as `ESP32_TRANSPORT_NONE`.
+  `wifi_do_scan()`'s `m1_esp32_active_transport() == ESP32_TRANSPORT_RPC`
+  branch was therefore skipped, and the scan fell through to the legacy
+  binary-SPI `CMD_WIFI_SCAN_START` path — which the brain does not implement
+  and, crucially, never calls `m1_esp32_rpc_call()` — instead of
+  `m1_esp32_rpc_wifi_scan()`. The WiFi Scan / "Scan & Connect" menu entry is
+  the one delegate that is not capability-gated (`DELEGATE`, not
+  `DELEGATE_FEATURE`, in `m1_wifi_scene_menu.c`), so it is typically the first
+  thing that runs and the first to hit this stale-bitmap window.
+
+  > **Phase 2″ implementation status (delivered).** `m1_esp32_active_transport()`
+  > (`m1_esp32_rpc.c`) now runs `m1_esp32_caps_init()` first — only when the
+  > ESP32 HAL transport is already up — whenever
+  > `m1_esp32_caps_is_queried()` is false, mirroring `m1_esp32_has_cap()`'s
+  > existing self-priming guard. This fixes every caller that checks
+  > `m1_esp32_active_transport()` without a preceding capability probe, not
+  > just WiFi Scan. Regression coverage:
+  > `tests/test_esp32_rpc.c::test_transport_self_primes_when_not_yet_queried`
+  > (fails before the fix, asserting the un-primed call still returned
+  > `ESP32_TRANSPORT_NONE`) and
+  > `test_transport_none_and_no_probe_when_hal_not_initialised` (priming must
+  > not run before the HAL transport is up). The next reproduction is a plain
+  > WiFi Scan from a cold boot; Dashboard page 5/5 should now show a real
+  > `op0103 …` line per the table above instead of `"no call yet"`, unblocking
+  > Phase 5's root-cause work on the line it actually reports.
+
+- **Phase 5 (next) – Root-cause and fix the specific failure the Phase 2′/2″
   read-back identifies**, following the same "diagnose before fixing blind"
-  discipline as Phases 0-2′: only implement the fix indicated by the actual
+  discipline as Phases 0-2″: only implement the fix indicated by the actual
   `op0103 …` line the owner reports, add a regression test reproducing that
   specific wire condition (e.g. a captured real oversized `WIFI_SCAN` reply,
   or a poll-budget-exhaustion case), and re-verify via the same dashboard page

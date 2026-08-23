@@ -25,6 +25,12 @@
 static uint64_t g_bitmap;
 uint64_t m1_esp32_caps_get_bitmap(void) { return g_bitmap; }
 
+/* This module never exercises m1_esp32_active_transport(), so pretend the
+ * bitmap is already queried -- it just needs to link. */
+bool m1_esp32_caps_is_queried(void) { return true; }
+void m1_esp32_caps_init(void) {}
+uint8_t m1_esp32_get_init_status(void) { return 1u; }
+
 uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                              uint8_t *rx_buf, int rx_buf_size,
                              int *out_len, int timeout_sec)

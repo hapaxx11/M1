@@ -585,8 +585,11 @@ void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out);
  * Return the wire transport the currently-detected ESP32 firmware speaks.
  *
  * Thin runtime wrapper over esp32_firmware_transport() applied to the cached
- * capability bitmap (m1_esp32_caps_get_bitmap()).  Returns ESP32_TRANSPORT_NONE
- * before m1_esp32_caps_init() has populated the bitmap.
+ * capability bitmap (m1_esp32_caps_get_bitmap()).  Self-primes exactly like
+ * m1_esp32_has_cap(): if m1_esp32_caps_init() has not yet populated the
+ * bitmap, it is run first (only when the ESP32 HAL transport is already up),
+ * so the very first feature call of a session classifies correctly instead
+ * of reading back a stale all-zero bitmap as ESP32_TRANSPORT_NONE.
  */
 esp32_transport_t m1_esp32_active_transport(void);
 
