@@ -334,14 +334,18 @@ request (skipping `IDLE`/`EVENT`/mismatched frames and reassembling `FRAG`
 chains). On-target, `spi_m1link_send_recv_bin()` (`esp_app_main.c`) supplies the
 single-transaction primitive using `HAL_SPI_TransmitReceive` on `hspi_esp`
 (SPI3) with manual CS (PB10) and HANDSHAKE (PD7) handling — it does **not**
-rely on the ESP-AT RTOS task, which the brain firmware does not run. The
+depend on the ESP-AT RTOS task being present (the brain firmware does not run
+it), but it **does** take the same shared SPI3 mutex that task uses whenever
+it has been created, so the two can never clock the bus at the same time
+(issue #719 Phase 1). The
 follow-up **poll budget is scaled from the caller's timeout (seconds)** and each
 poll is paced on the slave's HANDSHAKE with a scheduler yield (plus
 `HAL_SPI_Abort` self-heal after a failed transaction): a WiFi/BLE scan keeps the
 brain busy for ~1 s+ before it queues its RESP, so the old fixed 8-poll,
 busy-spin budget reliably timed out with "AP scan failed" before the reply
 arrived. The `M1_RPC` client defaults to this M1 Link transport, and the CD3
-detection probe (Probe 3 in `m1_esp32_caps.c`) uses it for `SYS_PING` /
+detection probe (Probe 2 in `m1_esp32_caps.c`, which runs before the host AT
+task is started) uses it for `SYS_PING` /
 `SYS_GET_STATUS` / `SYS_GET_FW_VERSION`; the AT presence and `AT+CMD?` probes
 stay on `spi_AT_send_recv_bin`. ESP-NOW (`m1_espnow_hal.c`) is the first
 consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
@@ -531,16 +535,20 @@ When the M1 initialises the ESP32, it performs a multi-step capability probe:
 
 3. **M1_RPC PING** (magic `0x4D31` "M1"): tried only when neither CMD_PING nor
    CMD_GET_STATUS succeeded (i.e. the firmware is not SiN360-style binary-SPI).
-   Detects CD3 firmware (`bedge117/m1-esp32-brain`), which uses the M1_RPC
-   binary protocol with a different frame format (see [M1_RPC Protocol](#m1_rpc-protocol)
-   below).  If PING succeeds, M1_RPC GET_STATUS is immediately issued to
-   retrieve the capability bitmap; if GET_STATUS fails, the CD3 conservative
-   profile macro (`M1_ESP32_CAP_PROFILE_CD3`) is applied.
+   Runs over the full-duplex M1 Link transport **before** the host AT task is
+   started (issue #719 Phase 1), so a brain that only speaks M1_RPC never
+   touches the AT task at all.  Detects CD3 firmware (`bedge117/m1-esp32-brain`),
+   which uses the M1_RPC binary protocol with a different frame format (see
+   [M1_RPC Protocol](#m1_rpc-protocol) below).  If PING succeeds, M1_RPC
+   GET_STATUS is immediately issued to retrieve the capability bitmap; if
+   GET_STATUS fails, the CD3 conservative profile macro
+   (`M1_ESP32_CAP_PROFILE_CD3`) is applied.
 
-4. **Stock `AT+CMD?`** (AT text command): tried only when steps 1–3 all fail
-   — i.e. for AT firmware that does not implement the binary extension
-   (CD3-AT base, dag) and the AT task (`get_esp32_main_init_status()`) is active.
-   `AT+CMD?` is part of the standard ESP-AT command set
+4. **Stock `AT+CMD?`** (AT text command): tried only when steps 1–3 all fail.
+   The host AT task is (re)started here if it is not already running
+   (`get_esp32_main_init_status()`), then a quick `AT\r\n` presence check
+   gates the heavier `AT+CMD?` probe.  `AT+CMD?` is part of the standard
+   ESP-AT command set
    ([reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd))
    and is supported unchanged by every tracked AT firmware variant.
 
@@ -681,9 +689,18 @@ section above for the framing/pipelining details.
 > M1_RPC frames contain embedded `0x00` bytes in their header/CRC, so that
 > path truncated them and CD3 was misdetected as `Unknown (fallback)`.  The
 > receive copy now uses a length-based `esp32_spi_bin_copy()`
-> (`m1_csrc/esp32_spi_bin.h`, host-tested by `tests/test_esp32_spi_bin.c`), and
-> the CD3 probe runs **after** the `AT+CMD?` text probe so a working AT
-> firmware is never sent a binary frame.
+> (`m1_csrc/esp32_spi_bin.h`, host-tested by `tests/test_esp32_spi_bin.c`).
+>
+> **Probe ordering (issue #719 Phase 1):** the CD3 probe now runs **before**
+> the host AT task is started and before the `AT+CMD?` text probe, not after
+> — a brain that only speaks M1_RPC never needs the AT task, and probing it
+> first avoids racing `spi_trans_control_task` for SPI3 (`m1link_hal_xfer()`
+> takes the same shared mutex the AT task uses whenever that task has been
+> created). Real AT firmware simply does not answer the M1_RPC PING (it
+> speaks a different framing over the half-duplex `spi_slave_hd` protocol),
+> so the probe times out and falls through to start the AT task and run the
+> AT probes below it, the same way Probes 0/1 already speculatively try the
+> binary-SPI protocol against firmware that may not implement it.
 
 **Pure-logic helpers** for building and validating M1_RPC frames are in
 `m1_csrc/m1_esp32_caps.h` (static inline, no HAL deps):

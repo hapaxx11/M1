@@ -528,6 +528,23 @@ add_test(NAME esp32_main_deinit_releases_legacy_task
     COMMAND test_esp32_main_deinit_releases_legacy_task)
 
 # ------------------------------------------------------------------
+# Source invariant: issue #719 Phase 1 — the brain-CD3 M1_RPC probe runs
+# before the host AT task is started, and m1link_hal_xfer() takes the shared
+# SPI3 mutex so it can never race spi_trans_control_task on SPI3.
+# ------------------------------------------------------------------
+add_executable(test_esp32_probe_ordering
+    test_esp32_probe_ordering.c
+)
+target_compile_definitions(test_esp32_probe_ordering PRIVATE
+    M1_ROOT="${M1_ROOT}"
+)
+target_link_libraries(test_esp32_probe_ordering PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_probe_ordering PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_probe_ordering COMMAND test_esp32_probe_ordering)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_protocol_registry (lookup functions)
 # Stubs needed: all decoder functions + HAL stubs
 # Bug context: .sub file replay used fragile strstr() chains —

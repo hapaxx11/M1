@@ -606,8 +606,12 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
   *
   * CS (PB10) and the HANDSHAKE line (PD7) are driven manually per transaction,
   * mirroring the SiN360 direct-HAL pattern in m1_esp32_cmd.c.  This path does
-  * NOT rely on the ESP-AT RTOS task (spi_trans_control_task), which the brain
-  * firmware does not run.
+  * NOT depend on the ESP-AT RTOS task (spi_trans_control_task) being present
+  * -- the brain firmware itself never runs it -- but DOES take the same
+  * shared `pxMutex` that task uses whenever it has been created, so the two
+  * can never clock SPI3 at the same time (issue #719 C1: SPI3 bus
+  * contention).  Safe to call before the AT task has ever been started
+  * (pxMutex is still NULL and no locking is attempted).
   *
   * @param  tx_buf      Binary request frame to send (built by m1_esp32_rpc_*)
   * @param  tx_len      Length of @p tx_buf in bytes (> 0, <= 512)
@@ -659,6 +663,26 @@ static bool m1link_wait_handshake(uint32_t timeout_ms)
 	return true;
 }
 
+/* Take the shared SPI3 mutex before a full-duplex M1 Link transfer, but only
+ * if the host AT task has actually been created (pxMutex is a file-scope
+ * static, zero-initialised to NULL until init_master_hd() creates it inside
+ * esp32_main_init()).  This lets the M1 Link probe run standalone — before
+ * the AT task has ever been started — while still serialising with
+ * spi_trans_control_task on SPI3 whenever that task exists, regardless of
+ * which caller started it (see issue #719 C1: SPI3 bus contention between
+ * the host AT task and the M1 Link probe). */
+static void m1link_lock_spi_if_at_task_present(void)
+{
+	if (pxMutex)
+		spi_mutex_lock();
+}
+
+static void m1link_unlock_spi_if_at_task_present(void)
+{
+	if (pxMutex)
+		spi_mutex_unlock();
+}
+
 /* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn. */
 static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
                            void *ctx)
@@ -666,6 +690,8 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 	HAL_StatusTypeDef ret;
 	uint32_t start;
 	(void)ctx;
+
+	m1link_lock_spi_if_at_task_present();
 
 	/* Honour the brain's HANDSHAKE: never clock while the slave is not armed.
 	 * If it never asserts within the window we still attempt the clock once
@@ -700,8 +726,10 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 		 * machine and flushes the FIFOs so the NEXT transaction recovers on its
 		 * own (same recovery the C3 m1_link master relies on). */
 		HAL_SPI_Abort(&hspi_esp);
+		m1link_unlock_spi_if_at_task_present();
 		return -1;
 	}
+	m1link_unlock_spi_if_at_task_present();
 	return 0;
 }
 

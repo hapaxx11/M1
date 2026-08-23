@@ -337,114 +337,7 @@ void m1_esp32_caps_init(void)
         return;
     }
 
-    /* From here on the firmware is not SiN360 binary-SPI.  It is either an
-     * AT firmware (stock ESP-AT, bedge117/dag/neddy299 variants) or the CD3
-     * native binary-RPC firmware (bedge117/m1-esp32-brain).  BOTH speak over
-     * the same half-duplex SPI-HD transport (spi_slave_hd: command/address/
-     * dummy phases + WRBUF/RDDMA + HANDSHAKE) driven by the AT RTOS task, so
-     * the task must be running before either the AT+CMD? text probe or the
-     * M1_RPC binary probe below can exchange a frame.
-     *
-     * The AT task is not started by the DELEGATE_FEATURE-style capability
-     * gates that call us (they only bring up the SPI HAL via
-     * m1_esp32_ensure_init()); the AT task is otherwise only started deep
-     * inside each feature function *after* the gate has been evaluated.  Left
-     * unaddressed, this permanently fails detection ("Unknown" firmware, cap
-     * bits never set) even for fully-supported firmware.  Start the AT task
-     * here, mirroring wifi_do_scan() (m1_wifi.c).  If the task still is not up
-     * right after trying (e.g. heap pressure), return without caching so the
-     * next call retries.
-     *
-     * SiN360 binary-SPI firmware has no AT task and was already handled above
-     * via the is_binary_spi early return, so it never reaches this point. */
-    {
-        bool at_task_before = get_esp32_main_init_status();
-        bool at_task_after  = at_task_before;
-
-        if (!at_task_before)
-        {
-            esp32_main_init();
-            at_task_after = get_esp32_main_init_status();
-        }
-
-        s_diag.at_task_before = at_task_before ? 1u : 0u;
-        s_diag.at_task_after  = at_task_after  ? 1u : 0u;
-
-        if (!m1_esp32_caps_should_run_at_probe(at_task_before, at_task_after))
-        {
-            s_diag.outcome = (uint8_t)M1_ESP32_PROBE_RETRY;
-            return;
-        }
-    }
-
-    /* Probe 2a: quick AT presence check.  Send a bare "AT\r\n" with a short
-     * timeout — any AT firmware answers "OK" almost immediately.  CD3 native
-     * firmware (which speaks M1_RPC, not AT) will not reply, so this times
-     * out in AT_PRESENCE_TIMEOUT_S (1 s) instead of paying the full
-     * AT_CMD_PROBE_TIMEOUT_S (5 s) for the heavyweight AT+CMD? probe.
-     *
-     * If the presence probe fails, skip directly to the CD3 binary probe
-     * (Probe 3) — there is no point waiting 5 s for AT+CMD? when the
-     * firmware does not even answer a bare AT. */
-    {
-        char at_presence[64];
-        at_presence[0] = '\0';
-        (void)spi_AT_send_recv("AT\r\n", at_presence,
-                               (int)sizeof(at_presence),
-                               AT_PRESENCE_TIMEOUT_S);
-
-        if (strstr(at_presence, "OK") == NULL)
-            goto probe_cd3;  /* Not AT firmware — skip to CD3 probe */
-
-        s_diag.at_presence_ok = 1u;
-    }
-
-    /* Probe 2b: stock ESP-AT `AT+CMD?`.  This command is part of the basic
-     * ESP-AT command set and is supported by all tracked AT firmware variants
-     * (bedge117, dag, neddy299) without requiring any custom extension.  The
-     * response lists every AT command the firmware understands; we OR in
-     * capability bits for each command our mapping table recognises.
-     *
-     * We only reach here if the quick AT presence probe above succeeded, so
-     * this is guaranteed to be an AT firmware and will respond promptly.
-     *
-     * The response can be several KB, so the buffer is allocated from the
-     * FreeRTOS heap rather than the caller's stack.  If the heap is
-     * exhausted, return without caching so the next call retries. */
-    {
-        char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
-        if (!at_resp)
-            return;  /* Heap exhausted — retry on next call */
-
-        at_resp[0] = '\0';
-        (void)spi_AT_send_recv("AT+CMD?\r\n", at_resp,
-                               (int)AT_CMD_RESP_BUF_SZ,
-                               AT_CMD_PROBE_TIMEOUT_S);
-
-        if (m1_esp32_caps_at_cmd_response_valid(at_resp))
-        {
-            /* Probe succeeded — OR in every tracked AT command the
-             * firmware advertised.  A response that contains "+CMD:"
-             * lines but none of our tracked names is still a successful
-             * probe; the bitmap simply reflects that the firmware has
-             * no features we currently recognise. */
-            s_bitmap = m1_esp32_caps_parse_at_cmd_list(
-                at_resp, s_at_cmd_cap_map, S_AT_CMD_CAP_MAP_N);
-            strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
-            s_fw_name[sizeof(s_fw_name) - 1] = '\0';
-            caps_apply_footprint_estimates(s_bitmap);
-            s_diag.at_cmd_ok = 1u;
-            s_diag.outcome   = (uint8_t)M1_ESP32_PROBE_AT;
-            s_diag.bitmap    = s_bitmap;
-            s_queried = true;
-            vPortFree(at_resp);
-            return;
-        }
-
-        vPortFree(at_resp);
-    }
-
-    /* Probe 3: CD3 native "brain" binary RPC firmware (hapaxx11/m1-esp32-brain)
+    /* Probe 2: CD3 native "brain" binary RPC firmware (hapaxx11/m1-esp32-brain)
      * via M1_RPC PING (magic 0x4D31 "M1").
      *
      * The brain CD3 is an ESP-IDF full-duplex `spi_slave` device: every
@@ -458,15 +351,21 @@ void m1_esp32_caps_init(void)
      * builds the padded frame, honours the HANDSHAKE line, and reassembles the
      * pipelined reply.
      *
-     * This probe runs only after the AT presence probe has failed (or AT+CMD?
-     * did not yield a valid response), so a working AT firmware (already
-     * detected above) is never driven with the full-duplex transport.
+     * This probe deliberately runs BEFORE the host AT task is started (issue
+     * #719 Phase 1): a brain that only speaks M1_RPC never touches the AT
+     * task at all, so trying it first avoids the SPI3 contention window that
+     * previously existed between `spi_trans_control_task` and the mutex-free
+     * full-duplex M1 Link transfer (m1link_hal_xfer() now also takes the
+     * shared SPI mutex whenever the AT task has been created, so even a
+     * PING issued after the AT task is already running — e.g. because some
+     * earlier feature started it — can no longer race a half-duplex AT
+     * transaction on the same peripheral).
      *
      * On success we immediately follow up with M1_RPC GET_STATUS to retrieve
      * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
      * stage firmware not yet implementing GET_STATUS), we fall back to the
-     * CD3 conservative profile macro. */
-probe_cd3:
+     * CD3 conservative profile macro.  If the PING itself fails, we fall
+     * through below to start the AT task and try the AT probes instead. */
     {
         uint8_t  tx64[64];
         uint8_t  rx64[64];
@@ -579,6 +478,110 @@ probe_cd3:
         }
     }
 
+    /* The M1_RPC PING did not validate — this is not a CD3 brain.  Fall back
+     * to the AT probes: it is either stock/custom ESP-AT firmware or nothing
+     * is connected at all.  BOTH the AT+CMD? text probe and the (now
+     * exhausted) M1_RPC probe speak over SPI3, but only the AT probes need
+     * the host AT task (spi_trans_control_task) — the RTOS task that
+     * exchanges half-duplex spi_slave_hd frames with the ESP32.
+     *
+     * The AT task is not started by the DELEGATE_FEATURE-style capability
+     * gates that call us (they only bring up the SPI HAL via
+     * m1_esp32_ensure_init()); the AT task is otherwise only started deep
+     * inside each feature function *after* the gate has been evaluated.  Left
+     * unaddressed, this permanently fails detection ("Unknown" firmware, cap
+     * bits never set) even for fully-supported firmware.  Start the AT task
+     * here, mirroring wifi_do_scan() (m1_wifi.c).  If the task still is not up
+     * right after trying (e.g. heap pressure), return without caching so the
+     * next call retries.
+     *
+     * SiN360 binary-SPI firmware has no AT task and was already handled above
+     * via the is_binary_spi early return, so it never reaches this point. */
+    {
+        bool at_task_before = get_esp32_main_init_status();
+        bool at_task_after  = at_task_before;
+
+        if (!at_task_before)
+        {
+            esp32_main_init();
+            at_task_after = get_esp32_main_init_status();
+        }
+
+        s_diag.at_task_before = at_task_before ? 1u : 0u;
+        s_diag.at_task_after  = at_task_after  ? 1u : 0u;
+
+        if (!m1_esp32_caps_should_run_at_probe(at_task_before, at_task_after))
+        {
+            s_diag.outcome = (uint8_t)M1_ESP32_PROBE_RETRY;
+            return;
+        }
+    }
+
+    /* Probe 3a: quick AT presence check.  Send a bare "AT\r\n" with a short
+     * timeout — any AT firmware answers "OK" almost immediately.
+     *
+     * If the presence probe fails, there is nothing left to try — skip
+     * directly to the fallback rather than paying the full 5 s AT+CMD?
+     * timeout for a firmware that does not even answer a bare AT. */
+    {
+        char at_presence[64];
+        at_presence[0] = '\0';
+        (void)spi_AT_send_recv("AT\r\n", at_presence,
+                               (int)sizeof(at_presence),
+                               AT_PRESENCE_TIMEOUT_S);
+
+        if (strstr(at_presence, "OK") == NULL)
+            goto caps_fallback;  /* Not AT firmware — nothing left to try */
+
+        s_diag.at_presence_ok = 1u;
+    }
+
+    /* Probe 3b: stock ESP-AT `AT+CMD?`.  This command is part of the basic
+     * ESP-AT command set and is supported by all tracked AT firmware variants
+     * (bedge117, dag, neddy299) without requiring any custom extension.  The
+     * response lists every AT command the firmware understands; we OR in
+     * capability bits for each command our mapping table recognises.
+     *
+     * We only reach here if the quick AT presence probe above succeeded, so
+     * this is guaranteed to be an AT firmware and will respond promptly.
+     *
+     * The response can be several KB, so the buffer is allocated from the
+     * FreeRTOS heap rather than the caller's stack.  If the heap is
+     * exhausted, return without caching so the next call retries. */
+    {
+        char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
+        if (!at_resp)
+            return;  /* Heap exhausted — retry on next call */
+
+        at_resp[0] = '\0';
+        (void)spi_AT_send_recv("AT+CMD?\r\n", at_resp,
+                               (int)AT_CMD_RESP_BUF_SZ,
+                               AT_CMD_PROBE_TIMEOUT_S);
+
+        if (m1_esp32_caps_at_cmd_response_valid(at_resp))
+        {
+            /* Probe succeeded — OR in every tracked AT command the
+             * firmware advertised.  A response that contains "+CMD:"
+             * lines but none of our tracked names is still a successful
+             * probe; the bitmap simply reflects that the firmware has
+             * no features we currently recognise. */
+            s_bitmap = m1_esp32_caps_parse_at_cmd_list(
+                at_resp, s_at_cmd_cap_map, S_AT_CMD_CAP_MAP_N);
+            strncpy(s_fw_name, "AT (probed)", sizeof(s_fw_name) - 1);
+            s_fw_name[sizeof(s_fw_name) - 1] = '\0';
+            caps_apply_footprint_estimates(s_bitmap);
+            s_diag.at_cmd_ok = 1u;
+            s_diag.outcome   = (uint8_t)M1_ESP32_PROBE_AT;
+            s_diag.bitmap    = s_bitmap;
+            s_queried = true;
+            vPortFree(at_resp);
+            return;
+        }
+
+        vPortFree(at_resp);
+    }
+
+caps_fallback:
     /* All probes failed — fail closed.  Feature gates that check specific
      * M1_ESP32_CAP_* bits will all return false and the "Feature not
      * supported" UI will appear.  This is intentional: granting capabilities

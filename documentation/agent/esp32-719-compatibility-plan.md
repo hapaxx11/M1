@@ -267,6 +267,22 @@ The captured RX pattern discriminates the causes directly:
   AT probes; only start the host AT task if the RPC probe fails. Make
   `m1link_hal_xfer()` hold `spi_mutex`. This removes both the contention and the
   HD→full-duplex FIFO-residue window in one structural change.
+
+  > **Phase 1 implementation status (delivered).** `m1_esp32_caps_init()` now
+  > issues the M1_RPC `SYS_PING`/`SYS_GET_STATUS` probe immediately after the
+  > SiN360 binary probes and *before* `esp32_main_init()` runs; the host AT
+  > task is only started (and the AT presence / `AT+CMD?` probes only run) if
+  > the RPC PING did not validate. `m1link_hal_xfer()` now takes the same
+  > shared `pxMutex` the AT task's `spi_trans_control_task` uses, guarded so
+  > it is a no-op before the AT task has ever been created (the mutex does
+  > not exist yet) — this also covers the field-observed case where the AT
+  > task was already running *before* `m1_esp32_caps_init()` ever ran (its own
+  > diagnostics reported `ATtask b1 a1`), which the re-ordering alone cannot
+  > prevent since caps init did not start that task. Regression coverage:
+  > `tests/test_esp32_probe_ordering.c` (source-invariant checks, following
+  > the same pattern as `test_esp32_main_deinit_releases_legacy_task.c`, since
+  > neither `m1_esp32_caps_init()` nor `m1link_hal_xfer()` have an injectable
+  > seam for host execution).
 - **Phase 2 – Harden the SPI reset & config (C2/C3).** If Phase 1 diagnostics
   still show shift/garbage, replace the lone `HAL_SPI_Abort` with a deterministic
   H5 disable/drain/re-init, and correct the `hspi_esp` fields (NSSP/threshold/

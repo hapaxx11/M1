@@ -29,7 +29,7 @@
  * Never gate on a compile flag or firmware name string.
  *
  * Wire protocol note:
- *   Three probes are issued in sequence:
+ *   Probes are issued in this order:
  *     0. Binary `CMD_PING` (0x01) — SiN360 binary-SPI firmware detection.
  *        CMD_GET_STATUS was proposed as a capability-reporting command but
  *        never fully implemented in SiN360 (it returns only a 5-byte version
@@ -40,13 +40,21 @@
  *        full binary extension (e.g. hapaxx11/esp32-at-monstatek-m1) would
  *        self-report the full capability bitmap and firmware name here.
  *        Current SiN360 is already detected via Probe 0, so this is skipped.
- *     2. Stock AT `AT+CMD?` — when the binary probes fail, the AT task is
- *        queried for its supported-command list, and a small mapping table
- *        in `m1_esp32_caps.c` translates the presence of specific AT
+ *     2. M1_RPC `SYS_PING` (magic 0x4D31) over the full-duplex "M1 Link"
+ *        transport — CD3 native binary-RPC firmware detection (issue #719).
+ *        This runs BEFORE the host AT task is started: a brain that only
+ *        speaks M1_RPC never needs the AT task, and probing it first avoids
+ *        SPI3 contention between `spi_trans_control_task` and the M1 Link
+ *        transfer.  On success, `SYS_GET_STATUS` follows to retrieve the
+ *        capability bitmap.
+ *     3. Stock AT `AT+CMD?` — reached only once the M1_RPC probe has failed.
+ *        The host AT task is started here (if not already running) and the
+ *        AT task is queried for its supported-command list; a small mapping
+ *        table in `m1_esp32_caps.c` translates the presence of specific AT
  *        commands into M1_ESP32_CAP_* bits.  This probe works against any
  *        stock or custom ESP-AT firmware without requiring our own
  *        extensions.
- *   If all three probes fail, the capability bitmap is left at zero and
+ *   If every probe fails, the capability bitmap is left at zero and
  *   feature gates fail closed.
  *
  * M1 Project
@@ -548,11 +556,11 @@ static inline bool m1_esp32_caps_at_cmd_response_valid(const char *resp_buf)
 }
 
 /**
- * Decide whether the Probe 3 (`AT+CMD?`) probe should proceed, given the AT
+ * Decide whether the Probe 3b (`AT+CMD?`) probe should proceed, given the AT
  * task's readiness before and after an attempt to start it.
  *
  * Regression fixed by this predicate: `m1_esp32_caps_init()` used to
- * unconditionally skip Probe 3 whenever the AT task was not already
+ * unconditionally skip Probe 3b whenever the AT task was not already
  * running, instead of starting it (the same pattern already used by
  * `wifi_do_scan()` in m1_wifi.c).  Capability-gated scene delegates
  * (`DELEGATE_FEATURE` in m1_wifi_scene_menu.c and friends) only guarantee
@@ -571,7 +579,7 @@ static inline bool m1_esp32_caps_at_cmd_response_valid(const char *resp_buf)
  * @param at_task_running_after_start_attempt AT task status after calling
  *                                            esp32_main_init() when it was
  *                                            not already running.
- * @return true if Probe 3 should run now.
+ * @return true if Probe 3b should run now.
  */
 static inline bool
 m1_esp32_caps_should_run_at_probe(bool at_task_running_before,
@@ -594,7 +602,8 @@ m1_esp32_caps_should_run_at_probe(bool at_task_running_before,
  * and CRC16 is CRC-16/CCITT (poly 0x1021, init 0xFFFF) over header+payload.
  *
  * These helpers are pure-logic (no HAL/RTOS deps) and are used both by the
- * Probe 3 detection path in m1_esp32_caps_init() and by host-side unit tests.
+ * Probe 2 (M1_RPC) detection path in m1_esp32_caps_init() and by host-side
+ * unit tests.
  * Defined as static inline to remain header-only.
  *
  * The GET_STATUS response payload (m1_esp32_rpc_devstatus_t) has the same
@@ -947,15 +956,20 @@ m1_esp32_caps_diag_format(const m1_esp32_caps_diag_t *d,
 
 /**
  * Probe the connected ESP32 firmware and cache its capability descriptor.
- * Must be called after m1_esp32_init() + esp32_main_init().
+ * Must be called after m1_esp32_init() brings up the SPI HAL transport.
+ * The host AT task (esp32_main_init()) is started internally, only if
+ * needed, after the M1_RPC probe fails — callers do not need to start it
+ * themselves.
  *
  * Four probes are attempted in order:
  *   - Binary CMD_PING (0x01) — SiN360 binary-SPI firmware detection.
  *   - Binary CMD_GET_STATUS (0x02) — SiN360 / extension-aware firmware.
  *   - M1_RPC PING (magic 0x4D31) — CD3 native binary RPC firmware
- *     (bedge117/m1-esp32-brain), followed by M1_RPC GET_STATUS.
+ *     (bedge117/m1-esp32-brain), followed by M1_RPC GET_STATUS.  Runs
+ *     before the host AT task is started (issue #719 Phase 1).
  *   - Stock AT command `AT+CMD?` — translated against the
- *     `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.
+ *     `s_at_cmd_cap_map[]` table in m1_esp32_caps.c.  Starts the host AT
+ *     task first if it is not already running.
  *
  * If all probes fail, the capability bitmap is left at zero (feature
  * gates fail closed) and the firmware name is reported as
