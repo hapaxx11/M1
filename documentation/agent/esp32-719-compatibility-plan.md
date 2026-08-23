@@ -125,7 +125,7 @@ Crucially, the intermediate outcomes cache **different** names/bitmaps:
 | **all probes fail** | **`"Unknown (fallback)"`** | **`0`** |
 
 Because the dashboard shows **`Unknown (fallback)`** and **not**
-`"Scan WiFi for ESP32 info"** (the un-probed state) nor `"CD3 (via M1_RPC)"`:
+**`Scan WiFi for ESP32 info`** (the un-probed state) nor **`CD3 (via M1_RPC)`**:
 
 - `m1_esp32_caps_init()` **ran to completion and cached** (so the SPI HAL was up
   and the early `return`s at the init-status gate and the `should_run_at_probe`
