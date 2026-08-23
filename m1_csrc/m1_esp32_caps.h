@@ -904,7 +904,7 @@ typedef struct
  *   "AT probed"                    (AT firmware)
  *   "RPC ok"                       (brain CD3 fully probed)
  *   "RPC ping/no stat"             (brain CD3 PING ok, GET_STATUS failed)
- *   "FAIL rc-1 n0 at1"             (all failed: PING rc=-1, 0 bytes, AT task up)
+ *   "FAIL rc13 n0 at1"             (all failed: PING rc=CTRL_ERR_REQUEST_TIMEOUT, 0 bytes, AT task up)
  *
  * The trailing "rc/n/at" detail is appended whenever the M1_RPC PING was
  * attempted, so the reader can distinguish "no reply" (n0) from a corrupted
