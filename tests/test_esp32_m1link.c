@@ -48,6 +48,11 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     return 1;
 }
 
+/* Not exercised by this module's framing/pipelining tests (see
+ * test_esp32_rpc.c for the Phase 6 "wall-clock diagnostic" coverage); stub so
+ * the module links. */
+uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return 0u; }
+
 /* ------------------------------------------------------------------ */
 /* Fake full-duplex exchange: replays a scripted queue of slave frames */
 /* ------------------------------------------------------------------ */

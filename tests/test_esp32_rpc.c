@@ -69,6 +69,12 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     return 1; /* non-zero == transport error */
 }
 
+/* Controllable elapsed-time stub for the Phase 6 "wall-clock diagnostic"
+ * tests (issue #719) -- on-target this is populated by
+ * spi_m1link_send_recv_bin() from HAL_GetTick(). */
+static uint32_t g_last_elapsed_ms;
+uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return g_last_elapsed_ms; }
+
 /* ------------------------------------------------------------------ */
 /* Fake transport: replays a canned response frame.                   */
 /* ------------------------------------------------------------------ */
@@ -128,6 +134,7 @@ void setUp(void)
     g_canned_len = 0;
     g_ret = 0;
     g_last_tx_len = 0;
+    g_last_elapsed_ms = 0u;
     memset(g_canned, 0, sizeof(g_canned));
     m1_esp32_rpc_set_transport(fake_transport);
 }
@@ -296,7 +303,8 @@ void test_diag_records_ok_call_with_payload_len(void)
 void test_diag_records_transport_failure_as_no_reply(void)
 {
     g_ret = 1; /* fake reports a transport error, 0 bytes returned */
-    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 1);
+    g_last_elapsed_ms = 10000u; /* transport genuinely waited the full ~10s */
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 10);
 
     m1_esp32_rpc_call_diag_t d;
     m1_esp32_rpc_get_call_diag(&d);
@@ -304,10 +312,31 @@ void test_diag_records_transport_failure_as_no_reply(void)
     TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_TRANSPORT, d.status);
     TEST_ASSERT_EQUAL_INT(0, d.rx_len);
     TEST_ASSERT_EQUAL_UINT16(0u, d.resp_len);
+    TEST_ASSERT_EQUAL_UINT16(10000u, d.elapsed_ms);
 
     char buf[40];
     m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0", buf);
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0 t10s", buf);
+}
+
+/* Regression guard (issue #719 Phase 6): a repeat "no-reply" field report
+ * after the Phase 5 timeout widening cannot by itself tell apart "the scan
+ * genuinely needs longer than the budget" from "something is giving up
+ * early" -- both used to render the exact same line. Confirm the elapsed
+ * suffix reflects a short wait distinctly from a full one. */
+void test_diag_no_reply_reports_short_elapsed_when_transport_gives_up_early(void)
+{
+    g_ret = 1;
+    g_last_elapsed_ms = 1000u; /* gave up after ~1s despite a 10s budget */
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 10);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT16(1000u, d.elapsed_ms);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0 t1s", buf);
 }
 
 void test_diag_records_msgid_mismatch_as_bad_frame(void)
@@ -525,6 +554,7 @@ int main(void)
     RUN_TEST(test_diag_no_call_yet_before_any_call);
     RUN_TEST(test_diag_records_ok_call_with_payload_len);
     RUN_TEST(test_diag_records_transport_failure_as_no_reply);
+    RUN_TEST(test_diag_no_reply_reports_short_elapsed_when_transport_gives_up_early);
     RUN_TEST(test_diag_records_msgid_mismatch_as_bad_frame);
     RUN_TEST(test_diag_records_nak_status_code);
     RUN_TEST(test_diag_set_transport_resets_snapshot);

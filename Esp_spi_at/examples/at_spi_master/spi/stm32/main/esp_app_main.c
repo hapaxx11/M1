@@ -618,9 +618,14 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
   * @param  rx_buf      Caller buffer for the binary response frame
   * @param  rx_buf_size Capacity of @p rx_buf in bytes (>= 1)
   * @param  out_len     [out] bytes written to @p rx_buf (0 on error/timeout)
-  * @param  timeout_sec Unused (the poll budget bounds the wait); kept for
-  *                     signature compatibility with spi_AT_send_recv_bin()
+  * @param  timeout_sec Scales the follow-up poll budget (see max_polls below);
+  *                     <= 0 falls back to a 2 s default.
   * @return SUCCESS on success, CTRL_ERR_* otherwise
+  *
+  * The wall-clock milliseconds actually spent in the poll loop (regardless of
+  * outcome) are recorded and readable via m1_esp32_m1link_last_elapsed_ms() --
+  * see the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
+  * (issue #719 Phase 6).
   */
 /******************************************************************************/
 #define M1LINK_SPI_TIMEOUT_MS   100u
@@ -733,6 +738,22 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 	return 0;
 }
 
+/* Wall-clock ms spent in the most recent spi_m1link_send_recv_bin() poll
+ * loop, regardless of outcome -- see m1_esp32_m1link_last_elapsed_ms() below
+ * and the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
+ * (issue #719 Phase 6). */
+static uint32_t s_m1link_last_elapsed_ms;
+
+/* Read back the elapsed time recorded by the last spi_m1link_send_recv_bin()
+ * call.  Consulted by m1_esp32_rpc_call() to annotate its "no-reply"
+ * diagnostic line with how long the transport actually waited, so a repeated
+ * "no-reply" report after a poll-budget fix can be told apart from a
+ * transport that is giving up early. */
+uint32_t m1_esp32_m1link_last_elapsed_ms(void)
+{
+	return s_m1link_last_elapsed_ms;
+}
+
 uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                  uint8_t *rx_buf, int rx_buf_size,
                                  int *out_len, int timeout_sec)
@@ -742,8 +763,9 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * additional .bss in the firmware image. */
 	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
 	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
-	uint8_t rc;
-	int     max_polls;
+	uint8_t  rc;
+	int      max_polls;
+	uint32_t t0 = HAL_GetTick();
 
 	if (out_len)
 		*out_len = 0;
@@ -783,6 +805,8 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	                               max_polls,
 	                               tx_buf, tx_len,
 	                               rx_buf, rx_buf_size, out_len);
+
+	s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
 
 	switch (rc) {
 	case 0u:  return SUCCESS;

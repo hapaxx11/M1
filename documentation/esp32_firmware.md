@@ -365,6 +365,16 @@ consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
 > Settings > Dashboard page 5/5, so a "feature X still fails" report can be
 > replaced with the specific failure mode (no reply / bad frame / an ESP32 NAK
 > / a genuinely empty result) without needing a debugger.
+>
+> **Wall-clock diagnostic (issue #719 Phase 6).** A "no-reply" line by itself
+> cannot tell apart a transport that genuinely exhausted its whole poll
+> budget from one that gave up early — both rendered identically, which was
+> ambiguous when a repeat field report showed the same "no-reply" line after
+> the Phase 5 WIFI_SCAN timeout widening. The `no-reply` line now appends how
+> long the transport actually waited, e.g. `"op0103 no-reply st253 r0 p0
+> t10s"` (waited the full ~10 s budget) vs `"...t1s"` (gave up early despite
+> a 10 s budget) — pinpointing whether the next fix should widen the timeout
+> further or repair the poll-budget plumbing itself.
 
 > **SPI clock note:** the brain reports ~4.7 MHz stable with a 10 MHz target, so
 > start the SPI3 prescaler conservative and only raise it after `SYS_PING` is

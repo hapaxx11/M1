@@ -515,28 +515,64 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
  * (already host-testable via the injectable transport) and the formatter is
  * a static inline so it is covered by host-side unit tests without linking
  * the .c file.
+ *
+ * --------------------------------------------------------------------------
+ * Poll-budget wall-clock diagnostic (issue #719 Phase 6)
+ *
+ * Phase 5 widened the M1 Link poll budget for WIFI_SCAN
+ * (M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S, 10 s) because the field read-back showed
+ * "op0103 no-reply st253 r0 p0" — poll-budget exhaustion. A repeat report
+ * after that fix landed showed the SAME line, which is ambiguous: it could
+ * mean the brain's real scan still takes longer than the new 10 s budget
+ * (needs a bigger number, or an async trigger/poll redesign), OR it could
+ * mean the transport gave up well before 10 s actually elapsed (a bug in the
+ * poll-budget/timeout plumbing itself, not a "too small" number). The old
+ * "no-reply" line cannot distinguish these — both render identically.
+ *
+ * m1_esp32_rpc_call() now records how many wall-clock milliseconds the
+ * transport call actually took (via m1_esp32_m1link_last_elapsed_ms(),
+ * populated by spi_m1link_send_recv_bin() from HAL_GetTick() either side of
+ * its poll loop) alongside the existing snapshot fields. The formatter
+ * appends this to the ERR_TRANSPORT ("no-reply") line only — e.g.
+ * "op0103 no-reply st253 r0 p0 t10s" means the transport genuinely spent the
+ * whole ~10 s budget waiting (points at the scan itself needing more time),
+ * while "op0103 no-reply st253 r0 p0 t1s" on a call issued with the 10 s
+ * WIFI_SCAN timeout means something gave up far earlier than it should have
+ * (a poll-budget/timeout bug, not a too-short number). Other outcomes (ok /
+ * bad-frame / nak) already imply a prompt reply, so their line is unchanged.
  * ========================================================================= */
 
 /** Snapshot of the last m1_esp32_rpc_call() invocation. */
 typedef struct
 {
-    uint16_t msg_id;    /**< M1_ESP32_RPC_* opcode of the last call             */
-    uint8_t  attempted; /**< a call has been made since boot                    */
-    uint8_t  status;    /**< m1_esp32_rpc_status_t result returned to the caller*/
-    int16_t  rx_len;    /**< raw transport frame bytes received (<=0 == none)   */
-    uint16_t resp_len;  /**< decoded response payload bytes copied to the caller*/
+    uint16_t msg_id;     /**< M1_ESP32_RPC_* opcode of the last call             */
+    uint8_t  attempted;  /**< a call has been made since boot                    */
+    uint8_t  status;     /**< m1_esp32_rpc_status_t result returned to the caller*/
+    int16_t  rx_len;     /**< raw transport frame bytes received (<=0 == none)   */
+    uint16_t resp_len;   /**< decoded response payload bytes copied to the caller*/
+    uint16_t elapsed_ms; /**< wall-clock ms spent in the transport call (capped  *
+                          *   at 65535); see "Poll-budget wall-clock diagnostic" *
+                          *   below (issue #719 Phase 6)                         */
 } m1_esp32_rpc_call_diag_t;
 
 /**
  * Render a compact, human-readable one-line summary of a call snapshot,
  * suitable for a 128px display line.  Pure logic — no HAL deps.
  *
+ * The ERR_TRANSPORT ("no-reply") case additionally appends the wall-clock
+ * time actually spent waiting (see "Poll-budget wall-clock diagnostic",
+ * issue #719 Phase 6): this tells the very next thing a "no-reply" read-back
+ * needs to answer — did the transport genuinely exhaust its whole poll
+ * budget (a real scan took longer than the configured timeout) or did it
+ * give up early (the timeout/poll-budget plumbing itself is broken)?  Other
+ * outcomes already imply a prompt reply, so their format is unchanged.
+ *
  * Examples:
- *   "no call yet"                    (no m1_esp32_rpc_call() issued yet)
- *   "op0103 ok st0 r512 p24"         (WIFI_SCAN succeeded, 24 payload bytes)
- *   "op0103 no-reply st253 r0 p0"    (transport never got a matching reply)
- *   "op0103 bad-frame st254 r18 p0"  (a reply arrived but failed to decode)
- *   "op0103 nak st10 r18 p0"         (ESP32 explicitly rejected, e.g. err 10)
+ *   "no call yet"                       (no m1_esp32_rpc_call() issued yet)
+ *   "op0103 ok st0 r512 p24"            (WIFI_SCAN succeeded, 24 payload bytes)
+ *   "op0103 no-reply st253 r0 p0 t10s"  (no reply after waiting ~10s)
+ *   "op0103 bad-frame st254 r18 p0"     (a reply arrived but failed to decode)
+ *   "op0103 nak st10 r18 p0"            (ESP32 explicitly rejected, e.g. err 10)
  *
  * @param d        Snapshot to render (may be NULL — yields "no call yet")
  * @param buf      Destination buffer
@@ -564,9 +600,16 @@ m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
         default:                         tag = "nak";       break;
     }
 
-    snprintf(buf, buf_size, "op%04X %s st%u r%d p%u",
-             (unsigned)d->msg_id, tag, (unsigned)d->status,
-             (int)d->rx_len, (unsigned)d->resp_len);
+    int n = snprintf(buf, buf_size, "op%04X %s st%u r%d p%u",
+                     (unsigned)d->msg_id, tag, (unsigned)d->status,
+                     (int)d->rx_len, (unsigned)d->resp_len);
+
+    if ((m1_esp32_rpc_status_t)d->status == M1_ESP32_RPC_ERR_TRANSPORT &&
+        n > 0 && (size_t)n < buf_size)
+    {
+        snprintf(buf + n, buf_size - (size_t)n, " t%us",
+                 (unsigned)(d->elapsed_ms / 1000u));
+    }
 }
 
 /**

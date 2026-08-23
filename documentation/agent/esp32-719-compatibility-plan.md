@@ -1,11 +1,12 @@
 # ESP32 CD3 Compatibility — Root-Cause Review & Resolution Plan (Issue #719)
 
 > **Status:** Phases 0-2″ implemented and field-confirmed (see §0); Phase 5
-> implemented (see §0b). This document originally captured a thorough review
-> of the 7 prior fix attempts, narrowed the current failure, enumerated the
-> remaining candidate root causes, and proposed a staged, testable resolution;
-> the phase call-outs below track what has since landed and what the
-> on-device dashboard reports.
+> implemented (see §0b); Phase 6 implemented (see §0c) after a repeat field
+> report showed the identical "no-reply" line after Phase 5. This document
+> originally captured a thorough review of the 7 prior fix attempts, narrowed
+> the current failure, enumerated the remaining candidate root causes, and
+> proposed a staged, testable resolution; the phase call-outs below track
+> what has since landed and what the on-device dashboard reports.
 
 ---
 
@@ -94,6 +95,49 @@ issue).
 > 10 s value). Next reproduction: retry WiFi Scan on the owner's hardware and
 > confirm Dashboard page 5/5 reads `op0103 ok st0 r<n> p<n>` (or a genuinely
 > empty `p0` if no APs are in range) instead of `no-reply`.
+
+---
+
+## 0c. Field update — repeat "no-reply" after Phase 5, Phase 6 implemented
+
+A subsequent report showed WiFi Scan still failing ("AP scan failed. Please
+try again.") with **the exact same** Dashboard page 5/5 line as before the
+Phase 5 fix:
+
+```
+Last feature RPC: op0103 no-reply st253 r0 p0
+```
+
+This is ambiguous by construction: `M1_ESP32_RPC_ERR_TRANSPORT` ("no-reply")
+renders identically whether the transport genuinely exhausted the whole
+10 s `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` budget (pointing at the brain's real
+scan needing *even more* time, or a redesign to an async trigger/poll
+pattern) or whether something gave up well before 10 s actually elapsed (a
+bug in the poll-budget/timeout plumbing itself — e.g. the widened timeout
+not actually reaching the transport, or the poll-count-to-wall-clock scaling
+in `spi_m1link_send_recv_bin()` not behaving as assumed on real hardware).
+Guessing a bigger number again without first telling these apart would repeat
+the exact anti-pattern this document exists to avoid.
+
+> **Phase 6 implementation status (delivered).** `m1_esp32_rpc_call()`'s
+> diagnostic snapshot (`m1_esp32_rpc_call_diag_t`) gained an `elapsed_ms`
+> field recording the wall-clock time the M1 Link transport actually spent
+> in its poll loop, populated by a new `m1_esp32_m1link_last_elapsed_ms()`
+> getter (backed by `HAL_GetTick()` either side of the poll loop in
+> `spi_m1link_send_recv_bin()`, `esp_app_main.c`). `m1_esp32_rpc_call_diag_format()`
+> now appends this to the `no-reply` line only (other outcomes already imply
+> a prompt reply, so their format is unchanged) — e.g.
+> `"op0103 no-reply st253 r0 p0 t10s"` (waited the full ~10 s budget: the
+> scan itself needs more time) vs `"op0103 no-reply st253 r0 p0 t1s"` (gave
+> up after ~1 s despite a 10 s budget: a poll-budget/timeout bug, not a
+> too-small number). Regression coverage: `tests/test_esp32_rpc.c` —
+> `test_diag_records_transport_failure_as_no_reply` (asserts the full-budget
+> case renders `t10s`) and
+> `test_diag_no_reply_reports_short_elapsed_when_transport_gives_up_early`
+> (asserts a short elapsed value renders `t1s` distinctly). **Next:**
+> reproduce the WiFi Scan failure again and report the new Dashboard page 5/5
+> line verbatim — the `t<N>s` suffix determines which of the two remaining
+> root causes (real scan duration vs. poll-budget bug) Phase 7 should target.
 
 ---
 
@@ -516,12 +560,20 @@ adds tests under `tests/`:
   passes `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (10 s) to the transport rather
   than the generic `M1_ESP32_RPC_FEATURE_TIMEOUT_S` (2 s); fails before the
   fix (observed 2 s), passes after (observed 10 s).
+- **Wall-clock diagnostic (Phase 6):** `tests/test_esp32_rpc.c::
+  test_diag_records_transport_failure_as_no_reply` and
+  `test_diag_no_reply_reports_short_elapsed_when_transport_gives_up_early`
+  assert the `no-reply` line's `t<N>s` suffix reflects a full ~10 s wait vs.
+  a short ~1 s wait distinctly, so the next field report can be read without
+  ambiguity.
 
 **Definition of done:** the dashboard reports a versioned brain name (e.g.
 `ESP32 m1-native X.Y.Z`) with a **non-zero** bitmap (**met**, see §0), and WiFi
 Scan, Beacon Sniff, and Deauth all function on the owner's hardware
-(**Phase 5 fix delivered for the `no-reply` cause, see §0b — pending owner
-re-verification that a real scan now completes**).
+(**Phase 5 fix delivered for the `no-reply` cause, see §0b; a repeat report
+after that fix showed the identical line, so Phase 6 (§0c) adds the elapsed
+wait time needed to tell apart "still too short" from "budget not actually
+honoured" — pending the owner's next read-back with the `t<N>s` suffix**).
 
 ---
 
@@ -533,10 +585,14 @@ re-verification that a real scan now completes**).
    p0"`). This single read-back discriminates the remaining WiFi-scan-specific
    candidates (see the table in §6) and drives Phase 5.
    **(Done, Phase 5)** — reported as `"op0103 no-reply st253 r0 p0"`; fixed
-   per §0b. **Next:** retry WiFi Scan on the owner's hardware and report the
-   new Dashboard page 5/5 line (expected `op0103 ok st0 r<n> p<n>`) to confirm
-   the poll-budget widening resolved it, or to identify a different remaining
-   candidate if it did not.
+   per §0b. **(Repeat report, Phase 6)** — the identical line recurred after
+   the Phase 5 fix; the line now carries a `t<N>s` elapsed-wait suffix (see
+   §0c). **Next:** retry WiFi Scan on the owner's hardware (with the Phase 6
+   build) and report the new Dashboard page 5/5 line verbatim, e.g.
+   `"op0103 no-reply st253 r0 p0 t10s"` vs `"...t1s"` vs a successful
+   `"op0103 ok st0 r<n> p<n>"` — the exact text (including the `t<N>s`
+   suffix, if present) determines whether Phase 7 targets a still-too-short
+   budget or a poll-budget/timeout plumbing bug.
 1. The **exact `m1-esp32-brain` release** flashed (tag + git hash, from the boot
    log or `SYS_GET_FW_VERSION`).
 2. Whether a **logic analyzer / scope** on CS(PB10)/SCLK/MISO/HANDSHAKE(PD7) is

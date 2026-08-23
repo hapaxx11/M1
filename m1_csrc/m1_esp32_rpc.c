@@ -45,6 +45,13 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * see m1_esp32_active_transport() below. */
 extern uint8_t m1_esp32_get_init_status(void);
 
+/* Wall-clock milliseconds spent in the most recent spi_m1link_send_recv_bin()
+ * poll loop (implemented in esp_app_main.c via HAL_GetTick()), regardless of
+ * whether it matched a reply. Used only for the "no-reply" diagnostic line --
+ * see the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
+ * (issue #719 Phase 6). */
+extern uint32_t m1_esp32_m1link_last_elapsed_ms(void);
+
 /*==========================================================================*/
 /* Transport selection                                                      */
 /*==========================================================================*/
@@ -91,13 +98,16 @@ void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out)
 }
 
 static void rpc_call_diag_record(uint16_t msg_id, m1_esp32_rpc_status_t status,
-                                 int rx_len, uint16_t resp_len)
+                                 int rx_len, uint16_t resp_len,
+                                 uint32_t elapsed_ms)
 {
-    s_call_diag.msg_id    = msg_id;
-    s_call_diag.attempted = 1u;
-    s_call_diag.status    = (uint8_t)status;
-    s_call_diag.rx_len    = (int16_t)rx_len;
-    s_call_diag.resp_len  = resp_len;
+    s_call_diag.msg_id     = msg_id;
+    s_call_diag.attempted  = 1u;
+    s_call_diag.status     = (uint8_t)status;
+    s_call_diag.rx_len     = (int16_t)rx_len;
+    s_call_diag.resp_len   = resp_len;
+    s_call_diag.elapsed_ms = (elapsed_ms > 0xFFFFu) ? 0xFFFFu
+                                                    : (uint16_t)elapsed_ms;
 }
 
 /*==========================================================================*/
@@ -116,14 +126,14 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     if (resp_len) *resp_len = 0u;
 
     if (req_len > M1_ESP32_RPC_PAYLOAD_MAX || (req_len > 0u && !req)) {
-        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u);
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u, 0u);
         return M1_ESP32_RPC_ERR_INVALID;
     }
 
     uint16_t frame_sz = m1_esp32_rpc_build_req(tx, (uint16_t)sizeof(tx),
                                                msg_id, req, req_len);
     if (frame_sz == 0u) {
-        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u);
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u, 0u);
         return M1_ESP32_RPC_ERR_INVALID;
     }
 
@@ -133,14 +143,18 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
      * frame -- see the comment on M1_ESP32_RPC_RESP_FRAME_MAX. */
     rx = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
     if (!rx) {
-        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u);
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
         return M1_ESP32_RPC_ERR_NO_MEM;
     }
 
     memset(rx, 0, M1_ESP32_RPC_RESP_FRAME_MAX);
-    if (s_transport(tx, (int)frame_sz, rx, (int)M1_ESP32_RPC_RESP_FRAME_MAX,
-                    &rx_len, timeout_sec) != 0 || rx_len <= 0) {
-        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, rx_len, 0u);
+    int transport_rc = s_transport(tx, (int)frame_sz, rx,
+                                   (int)M1_ESP32_RPC_RESP_FRAME_MAX,
+                                   &rx_len, timeout_sec);
+    uint32_t elapsed_ms = m1_esp32_m1link_last_elapsed_ms();
+    if (transport_rc != 0 || rx_len <= 0) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, rx_len, 0u,
+                             elapsed_ms);
         free(rx);
         return M1_ESP32_RPC_ERR_TRANSPORT;
     }
@@ -151,7 +165,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                                         msg_id, &payload,
                                                         &payload_len);
     if (st != M1_ESP32_RPC_OK) {
-        rpc_call_diag_record(msg_id, st, rx_len, 0u);
+        rpc_call_diag_record(msg_id, st, rx_len, 0u, elapsed_ms);
         free(rx);
         return st;
     }
@@ -162,7 +176,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
         memcpy(resp, payload, copy_len);
         if (resp_len) *resp_len = copy_len;
     }
-    rpc_call_diag_record(msg_id, M1_ESP32_RPC_OK, rx_len, copy_len);
+    rpc_call_diag_record(msg_id, M1_ESP32_RPC_OK, rx_len, copy_len, elapsed_ms);
     free(rx);
     return M1_ESP32_RPC_OK;
 }
