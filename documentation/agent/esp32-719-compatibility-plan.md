@@ -1,9 +1,53 @@
 # ESP32 CD3 Compatibility — Root-Cause Review & Resolution Plan (Issue #719)
 
-> **Status:** Planning only. This document does **not** change firmware behaviour.
-> It captures a thorough review of the 7 prior fix attempts, narrows the current
-> failure, enumerates the remaining candidate root causes, and proposes a
-> staged, testable resolution. Implementation will be directed from here.
+> **Status:** Phases 0-2 implemented and field-confirmed (see §0). This document
+> originally captured a thorough review of the 7 prior fix attempts, narrowed
+> the current failure, enumerated the remaining candidate root causes, and
+> proposed a staged, testable resolution; the phase call-outs below track what
+> has since landed and what the on-device dashboard reports.
+
+---
+
+## 0. Field update — Phase 1 confirmed, next symptom identified (Phase 2)
+
+A real dashboard read-back (Settings > Dashboard, ESP32 page) after the Phase 1
+fix landed reports:
+
+```
+ESP32 m1-native 1.5.0
+Probe RPC ok rc0 n14 at0
+caps 04E947FF
+ATtask b0 a0
+```
+
+This closes out §4 for the CD3 detection failure:
+
+- `RPC ok` == `M1_ESP32_PROBE_RPC_STATUS` — both `SYS_PING` and `SYS_GET_STATUS`
+  validated over the full-duplex M1 Link transport, and the firmware name
+  parsed from the real payload (not a fallback string).
+- `ATtask b0 a0` — the host AT task was never started, so there was no SPI3
+  contention (**C1** confirmed fixed).
+- `caps 04E947FF` decodes to a bitmap that includes `WIFI_SCAN` (bit 0),
+  `HANDSHAKE` (bit 19) and `802154_TX` (bit 22), so `esp32_firmware_is_cd3()`
+  correctly resolves this device to `ESP32_TRANSPORT_RPC` (**C6** is moot — the
+  discriminator bits are present) — the wire format, CRC, and HANDSHAKE timing
+  are self-evidently correct for this exchange (**C2/C3/C4/C5** are also moot
+  for this transaction).
+
+**However, WiFi Scan still fails** on the same hardware ("AP scan failed.
+Please try again."). This is a **different code path** than the one the
+dashboard just confirmed: `SYS_PING`/`SYS_GET_STATUS` are tiny single-frame
+control exchanges, while `WIFI_SCAN` is a bulk-list response that alone
+exercises the M1 Link **FRAG reassembly** loop in
+`m1_esp32_m1link_send_recv()` across multiple polled transactions. A clean
+PING says nothing about whether that separate path transports, reassembles,
+and decodes correctly in a real RF environment (real APs present, real SSID
+lengths, more than one poll transaction needed).
+
+Per the project's own history here (seven prior *code-only* fix attempts
+missed), we do not guess again — **Phase 2** (delivered, see §6) instruments
+the *feature*-call path the same way Phase 0 instrumented the probe path, so
+the next report can name the exact failure mode instead of "still fails".
 
 ---
 
@@ -283,17 +327,70 @@ The captured RX pattern discriminates the causes directly:
   > the same pattern as `test_esp32_main_deinit_releases_legacy_task.c`, since
   > neither `m1_esp32_caps_init()` nor `m1link_hal_xfer()` have an injectable
   > seam for host execution).
-- **Phase 2 – Harden the SPI reset & config (C2/C3).** If Phase 1 diagnostics
-  still show shift/garbage, replace the lone `HAL_SPI_Abort` with a deterministic
-  H5 disable/drain/re-init, and correct the `hspi_esp` fields (NSSP/threshold/
-  mode/clock) for the brain slave.
-- **Phase 3 – Re-sync the wire protocol (C4/C5).** Diff and align magic/version/
-  opcodes/CRC/MTU/HANDSHAKE against the exact flashed brain release; add host
-  tests over captured real frames.
-- **Phase 4 – Pre-empt post-PING classification (C6).** Verify the live
-  capability bitmap and, if required, broaden `esp32_firmware_is_cd3()` /
-  transport selection so a correctly-probed brain always resolves to
-  `ESP32_TRANSPORT_RPC`.
+- **Phase 2 (superseded by field evidence, §0) – Harden the SPI reset & config
+  (C2/C3).** Originally: if Phase 1 diagnostics still showed shift/garbage,
+  replace the lone `HAL_SPI_Abort` with a deterministic H5 disable/drain/
+  re-init, and correct the `hspi_esp` fields (NSSP/threshold/mode/clock) for
+  the brain slave. **Not needed:** the field dashboard read-back in §0 shows a
+  clean `SYS_PING`/`SYS_GET_STATUS` exchange (`RPC ok`), which is only possible
+  if the SPI config/clock/reset sequence is already correct for this
+  transaction — C2/C3 are ruled out for the control-frame path.
+- **Phase 3 (superseded by field evidence, §0) – Re-sync the wire protocol
+  (C4/C5).** Originally: diff and align magic/version/opcodes/CRC/MTU/
+  HANDSHAKE against the exact flashed brain release. **Not needed:** the same
+  clean PING/GET_STATUS exchange proves the magic/version/CRC/HANDSHAKE
+  contract used for that exchange already matches the flashed brain.
+- **Phase 4 (superseded by field evidence, §0) – Pre-empt post-PING
+  classification (C6).** Originally: verify the live capability bitmap
+  broadens `esp32_firmware_is_cd3()` if needed. **Not needed:** `caps
+  04E947FF` already includes `HANDSHAKE` + `802154_TX`, so the device already
+  resolves to `ESP32_TRANSPORT_RPC` without further changes.
+
+**Phase 2′ – WiFi scan feature-call diagnostics (this update, §0).** The
+control-frame path (PING/GET_STATUS) being clean does not confirm the
+separate bulk-list `WIFI_SCAN` path (FRAG reassembly across multiple polled
+transactions) — WiFi Scan is the first feature to actually exercise that path
+against real hardware, and it still fails. Rather than guess again, instrument
+the single client every feature call goes through
+(`m1_esp32_rpc_call()` in `m1_esp32_rpc.c`) so any feature's outcome is
+observable on the dashboard exactly like the Phase 0 probe diagnostics.
+
+  > **Phase 2′ implementation status (delivered).** `m1_esp32_rpc_call()` now
+  > records a `m1_esp32_rpc_call_diag_t` snapshot on every invocation
+  > (msg_id, whether the transport returned a matching frame at all, the raw
+  > frame byte count, the final status — OK / an ESP32 NAK code /
+  > `ERR_TRANSPORT` ("no reply") / `ERR_BAD_FRAME` ("bad frame", e.g. CRC or
+  > reassembly corruption) — and the decoded payload byte count), exposed via
+  > `m1_esp32_rpc_get_call_diag()` and rendered by the pure, host-tested
+  > `m1_esp32_rpc_call_diag_format()` (e.g. `"op0103 no-reply st253 r0 p0"` for
+  > a `WIFI_SCAN` (`0x0103`) call that never got a matching reply). A new
+  > **Dashboard page 5/5** (Settings > Dashboard) shows the last feature RPC
+  > call's formatted line. Because `m1_esp32_rpc_wifi_scan()` (and every other
+  > feature wrapper in `m1_esp32_rpc_features.c`) already funnels through
+  > `m1_esp32_rpc_call()`, no call site changes were needed to capture WiFi
+  > Scan's outcome — the next reproduction only needs to open the WiFi Scan
+  > screen, let it fail, then read Dashboard page 5/5. Regression coverage:
+  > `tests/test_esp32_rpc.c` (new `test_diag_*` cases covering the OK / NAK /
+  > `ERR_TRANSPORT` / `ERR_BAD_FRAME` / reset-on-`set_transport` outcomes and
+  > the exact rendered line for each).
+
+  The read-back directly discriminates the remaining candidates for the
+  WiFi-scan-specific failure:
+
+  | Dashboard page 5/5 reads | Points to |
+  |---|---|
+  | `op0103 no-reply st253 r0 p0` | Transport never got a matching reply within the poll budget — reassembly overflow (`M1_ESP32_RPC_RESP_FRAME_MAX` too small for the real AP count/SSID lengths) or the poll budget/timeout is too short for a real scan |
+  | `op0103 bad-frame st254 r<n> p0` | A frame came back but failed CRC/magic/msg_id validation — FIFO shift or corruption specific to a large multi-poll exchange |
+  | `op0103 nak st<n> r<n> p0` | The brain explicitly rejected the request (e.g. `ERR_BUSY`/`ERR_HARDWARE`) — a firmware-side condition, not a host transport bug |
+  | `op0103 ok st0 r<n> p<n>` with `p0` | The call succeeded but decoded zero AP entries — either a genuinely empty scan (no APs in range) or a `want` vs `got` mismatch inside `m1_esp32_rpc_wifi_scan()`'s entry-walk loop |
+
+- **Phase 5 (next) – Root-cause and fix the specific failure the Phase 2′
+  read-back identifies**, following the same "diagnose before fixing blind"
+  discipline as Phases 0-2′: only implement the fix indicated by the actual
+  `op0103 …` line the owner reports, add a regression test reproducing that
+  specific wire condition (e.g. a captured real oversized `WIFI_SCAN` reply,
+  or a poll-budget-exhaustion case), and re-verify via the same dashboard page
+  before considering WiFi Scan resolved.
 
 Each phase is independently shippable and gated behind a read-back on the
 dashboard so we confirm the bitmap becomes non-zero before moving on.
@@ -310,22 +407,36 @@ adds tests under `tests/`:
   fixture, and that a successful PING short-circuits the AT probes.
 - **Mutex/contention (Phase 1):** test (or documented on-target check) that the
   M1 Link xfer path acquires the SPI mutex.
-- **FIFO/reset (Phase 2):** extend `tests/test_esp32_m1link.c` with the observed
-  real shift/garbage pattern (from Phase 0 capture) and assert recovery.
-- **Wire format (Phase 3):** CRC/parse tests over a **captured real** brain
-  PING + GET_STATUS frame (not a synthetic one) in `tests/test_esp32_rpc.c` /
-  `tests/test_esp32_caps.c`.
-- **Classification (Phase 4):** `tests/test_esp32_feature_map.c` cases for the
-  flashed brain's actual bitmap → `ESP32_TRANSPORT_RPC`.
+- **FIFO/reset (Phase 2, superseded):** would have extended
+  `tests/test_esp32_m1link.c` with an observed shift/garbage pattern; not
+  needed per §0/§6 (Phase 2 superseded by field evidence).
+- **Wire format (Phase 3, superseded):** would have added CRC/parse tests over
+  a captured real brain frame; not needed per §0/§6 (Phase 3 superseded by
+  field evidence).
+- **Classification (Phase 4, superseded):** would have added
+  `tests/test_esp32_feature_map.c` cases; not needed per §0/§6 (the live
+  bitmap already classifies correctly).
+- **Feature-call diagnostics (Phase 2′):** `tests/test_esp32_rpc.c` covers
+  `m1_esp32_rpc_call_diag_format()` / `m1_esp32_rpc_get_call_diag()` for the OK,
+  NAK, `ERR_TRANSPORT`, and `ERR_BAD_FRAME` outcomes of `m1_esp32_rpc_call()`,
+  plus the snapshot reset on `m1_esp32_rpc_set_transport()` and the NULL-safe
+  formatter cases.
 
 **Definition of done:** the dashboard reports a versioned brain name (e.g.
-`ESP32 m1-native X.Y.Z`) with a **non-zero** bitmap, and WiFi Scan, Beacon
-Sniff, and Deauth all function on the owner's hardware.
+`ESP32 m1-native X.Y.Z`) with a **non-zero** bitmap (**met**, see §0), and WiFi
+Scan, Beacon Sniff, and Deauth all function on the owner's hardware
+(**outstanding** — WiFi Scan still fails; Phase 2′ delivers the read-back
+needed to root-cause it in Phase 5).
 
 ---
 
 ## 8. Information needed from the owner / hardware
 
+0. **(New, Phase 2′)** With the Phase 2′ diagnostics installed, reproduce a
+   WiFi Scan attempt until it fails, then open **Settings > Dashboard > page
+   5/5** and report the exact line shown (e.g. `"op0103 no-reply st253 r0
+   p0"`). This single read-back discriminates the remaining WiFi-scan-specific
+   candidates (see the table in §6) and drives Phase 5.
 1. The **exact `m1-esp32-brain` release** flashed (tag + git hash, from the boot
    log or `SYS_GET_FW_VERSION`).
 2. Whether a **logic analyzer / scope** on CS(PB10)/SCLK/MISO/HANDSHAKE(PD7) is
@@ -339,9 +450,22 @@ Sniff, and Deauth all function on the owner's hardware.
 
 ## 9. Open questions
 
-- Does `HAL_SPI_Abort` clear SPI3's RX FIFO on STM32H573 in practice, or is an
-  explicit disable/drain required? (Drives C2.)
-- Is the brain's `spi_slave` SPI mode identical to SiN360's, or does the brain
-  need a per-transport reconfigure? (Drives C3.)
-- Has the shipped brain protocol (`m1_rpc.h`) drifted from the constants mirrored
-  into `m1_esp32_caps.h`/`m1_esp32_rpc.h`? (Drives C4.)
+- ~~Does `HAL_SPI_Abort` clear SPI3's RX FIFO on STM32H573 in practice, or is
+  an explicit disable/drain required? (Drove C2.)~~ Moot per §0 — the clean
+  PING/GET_STATUS exchange shows the reset sequence is already adequate for
+  this transport.
+- ~~Is the brain's `spi_slave` SPI mode identical to SiN360's, or does the
+  brain need a per-transport reconfigure? (Drove C3.)~~ Moot per §0, same
+  reasoning.
+- ~~Has the shipped brain protocol (`m1_rpc.h`) drifted from the constants
+  mirrored into `m1_esp32_caps.h`/`m1_esp32_rpc.h`? (Drove C4.)~~ Moot per §0
+  for the control-frame path — but **re-open specifically for `WIFI_SCAN`**
+  if Phase 2′'s read-back shows `bad-frame`: the bulk-list entry layout
+  (`m1_esp32_rpc_scan_entry_t` + trailing SSID bytes) is a separate, more
+  complex wire contract than the tiny PING/GET_STATUS frames and has never
+  been confirmed against a real device.
+- **(New, Phase 2′)** Is `M1_ESP32_RPC_RESP_FRAME_MAX` (2048 bytes) large
+  enough for the owner's real RF environment, and is the M1 Link poll budget
+  (scaled from `M1_ESP32_RPC_FEATURE_TIMEOUT_S` = 2 s) long enough for the
+  brain to finish a real scan and queue its reply? Both are candidate causes
+  for a `no-reply` (`ERR_TRANSPORT`) read-back on `op0103`.

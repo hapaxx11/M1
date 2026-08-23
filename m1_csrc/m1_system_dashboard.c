@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_system_dashboard.c
- * @brief  3-page at-a-glance system status dashboard.
+ * @brief  Multi-page at-a-glance system status dashboard.
  *
  * Ported from dagnazty/M1_T-1000 (app_system_dashboard.c), adapted for
  * Hapax firmware:
@@ -24,6 +24,7 @@
 #include "m1_system_dashboard_helpers.h"
 #include "m1_esp32_hal.h"
 #include "m1_esp32_caps.h"
+#include "m1_esp32_rpc.h"
 #include "m1_usb_cdc_msc.h"
 #include "m1_fw_update_bl.h"
 #include "m1_system.h"
@@ -34,7 +35,7 @@
 
 /*************************** D E F I N E S ************************************/
 
-#define DASHBOARD_PAGE_COUNT   4U
+#define DASHBOARD_PAGE_COUNT   5U
 #define DASHBOARD_POLL_MS      200U
 
 /************************** S T R U C T U R E S *******************************/
@@ -44,7 +45,8 @@ typedef enum
     DASHBOARD_PAGE_OVERVIEW = 0,
     DASHBOARD_PAGE_IO,
     DASHBOARD_PAGE_SYSTEM,
-    DASHBOARD_PAGE_ESP32
+    DASHBOARD_PAGE_ESP32,
+    DASHBOARD_PAGE_ESP32_RPC
 } dashboard_page_t;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -168,7 +170,7 @@ static void dashboard_draw_page(dashboard_page_t page)
             snprintf(line4, sizeof(line4), "Scan WiFi for ESP32 info");
         }
     }
-    else /* DASHBOARD_PAGE_ESP32 — probe diagnostics (issue #719) */
+    else if (page == DASHBOARD_PAGE_ESP32) /* probe diagnostics (issue #719) */
     {
         m1_esp32_caps_diag_t diag;
         char diag_line[40];
@@ -191,6 +193,23 @@ static void dashboard_draw_page(dashboard_page_t page)
         snprintf(line4, sizeof(line4), "ATtask b%d a%d",
                  diag.at_task_before ? 1 : 0,
                  diag.at_task_after ? 1 : 0);
+    }
+    else /* DASHBOARD_PAGE_ESP32_RPC — last feature call diagnostics
+          * (issue #719 Phase 2): the probe (page 4/5) only exercises the tiny
+          * single-frame PING/GET_STATUS exchange, so a healthy probe result
+          * does not confirm a bulk-list feature call (WiFi Scan, Station
+          * Scan, BLE Scan...) transports/frames/decodes correctly. Reads out
+          * the last m1_esp32_rpc_call() outcome so a "still fails" report can
+          * be replaced with the specific opcode/status/byte counts. */
+    {
+        m1_esp32_rpc_call_diag_t rpc_diag;
+        char rpc_line[40];
+
+        m1_esp32_rpc_get_call_diag(&rpc_diag);
+        m1_esp32_rpc_call_diag_format(&rpc_diag, rpc_line, sizeof(rpc_line));
+
+        snprintf(line1, sizeof(line1), "Last feature RPC:");
+        snprintf(line2, sizeof(line2), "%s", rpc_line);
     }
 
     /* --- Drawing --- */

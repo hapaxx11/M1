@@ -351,6 +351,21 @@ stay on `spi_AT_send_recv_bin`. ESP-NOW (`m1_espnow_hal.c`) is the first
 consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
 `m1_esp32_active_transport()`.
 
+> **Feature-call diagnostics (issue #719 Phase 2).** A successful CD3 probe
+> only proves the tiny single-frame `SYS_PING`/`SYS_GET_STATUS` exchange
+> works — it does not prove a bulk-list feature call (`WIFI_SCAN`,
+> `OFF_STA_SCAN_RESULTS`, `BLE_SCAN_RESULTS`, ...) transports, reassembles
+> (`FRAG`), and decodes correctly, since those are the only calls that
+> exercise the M1 Link reassembly loop across multiple polled transactions
+> against real hardware. `m1_esp32_rpc_call()` — the single client every
+> feature dispatches through — records a snapshot of its last invocation
+> (opcode, raw frame byte count, final status, decoded payload byte count) via
+> `m1_esp32_rpc_get_call_diag()`; `m1_esp32_rpc_call_diag_format()` renders it
+> as a one-line summary (e.g. `"op0103 no-reply st253 r0 p0"`) shown on
+> Settings > Dashboard page 5/5, so a "feature X still fails" report can be
+> replaced with the specific failure mode (no reply / bad frame / an ESP32 NAK
+> / a genuinely empty result) without needing a debugger.
+
 > **SPI clock note:** the brain reports ~4.7 MHz stable with a 10 MHz target, so
 > start the SPI3 prescaler conservative and only raise it after `SYS_PING` is
 > reliably stable.

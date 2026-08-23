@@ -487,6 +487,97 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
                                   int *out_len);
 
 /* =========================================================================
+ * Feature-call diagnostics (Phase 2, issue #719)
+ *
+ * Phase 0/1 instrumented the CD3 detection probe (m1_esp32_caps.h's
+ * m1_esp32_caps_diag_t) and fixed the SPI3 contention that was zeroing the
+ * M1_RPC PING.  With that fixed, the dashboard now reports a real brain
+ * (e.g. "m1-native 1.5.0") with a non-zero, WIFI_SCAN-capable bitmap — yet
+ * WiFi Scan itself still fails with "AP scan failed. Please try again."
+ * That failure is downstream of a DIFFERENT call: every feature (WIFI_SCAN
+ * included) goes through m1_esp32_rpc_call(), not the tiny single-frame PING/
+ * GET_STATUS probe, so the probe succeeding tells us nothing about whether a
+ * bulk-list feature call (which alone exercises the M1 Link FRAG reassembly
+ * path in m1_esp32_m1link_send_recv()) is transporting, framing, and
+ * decoding correctly.
+ *
+ * This is the same "diagnose before fixing blind" approach as Phase 0: record
+ * a snapshot of the last m1_esp32_rpc_call() outcome (which opcode, whether
+ * the transport ever replied, how many raw frame bytes came back, the final
+ * status, and how many payload bytes were decoded) and surface it on the
+ * dashboard, so the next report can say e.g. "op0103 no-reply st253 r0 p0" or
+ * "op0103 ok st0 r512 p24" instead of just "still fails" — pinpointing
+ * whether the fault is transport (no reply / reassembly overflow), framing
+ * (bad CRC/msg_id), an explicit ESP32 NAK, or the firmware genuinely
+ * returning an empty list.
+ *
+ * Pure logic, no HAL deps: the struct is populated by m1_esp32_rpc_call()
+ * (already host-testable via the injectable transport) and the formatter is
+ * a static inline so it is covered by host-side unit tests without linking
+ * the .c file.
+ * ========================================================================= */
+
+/** Snapshot of the last m1_esp32_rpc_call() invocation. */
+typedef struct
+{
+    uint16_t msg_id;    /**< M1_ESP32_RPC_* opcode of the last call             */
+    uint8_t  attempted; /**< a call has been made since boot                    */
+    uint8_t  status;    /**< m1_esp32_rpc_status_t result returned to the caller*/
+    int16_t  rx_len;    /**< raw transport frame bytes received (<=0 == none)   */
+    uint16_t resp_len;  /**< decoded response payload bytes copied to the caller*/
+} m1_esp32_rpc_call_diag_t;
+
+/**
+ * Render a compact, human-readable one-line summary of a call snapshot,
+ * suitable for a 128px display line.  Pure logic — no HAL deps.
+ *
+ * Examples:
+ *   "no call yet"                    (no m1_esp32_rpc_call() issued yet)
+ *   "op0103 ok st0 r512 p24"         (WIFI_SCAN succeeded, 24 payload bytes)
+ *   "op0103 no-reply st253 r0 p0"    (transport never got a matching reply)
+ *   "op0103 bad-frame st254 r18 p0"  (a reply arrived but failed to decode)
+ *   "op0103 nak st10 r18 p0"         (ESP32 explicitly rejected, e.g. err 10)
+ *
+ * @param d        Snapshot to render (may be NULL — yields "no call yet")
+ * @param buf      Destination buffer
+ * @param buf_size Capacity of @p buf in bytes (>= 1)
+ */
+static inline void
+m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
+                              char *buf, size_t buf_size)
+{
+    if (!buf || buf_size == 0u)
+        return;
+    buf[0] = '\0';
+    if (!d || !d->attempted)
+    {
+        snprintf(buf, buf_size, "no call yet");
+        return;
+    }
+
+    const char *tag;
+    switch ((m1_esp32_rpc_status_t)d->status)
+    {
+        case M1_ESP32_RPC_OK:            tag = "ok";        break;
+        case M1_ESP32_RPC_ERR_TRANSPORT: tag = "no-reply";  break;
+        case M1_ESP32_RPC_ERR_BAD_FRAME: tag = "bad-frame"; break;
+        default:                         tag = "nak";       break;
+    }
+
+    snprintf(buf, buf_size, "op%04X %s st%u r%d p%u",
+             (unsigned)d->msg_id, tag, (unsigned)d->status,
+             (int)d->rx_len, (unsigned)d->resp_len);
+}
+
+/**
+ * Copy out a snapshot of the last m1_esp32_rpc_call() invocation without
+ * re-issuing any request.  @p out->attempted is 0 if no call has been made
+ * since boot (or since the last m1_esp32_rpc_set_transport(), which resets
+ * the snapshot along with the transport in host tests).
+ */
+void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out);
+
+/* =========================================================================
  * Public client API
  * =========================================================================*/
 

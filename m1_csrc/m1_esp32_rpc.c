@@ -49,14 +49,38 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * host tests swap in a fake via m1_esp32_rpc_set_transport(). */
 static m1_esp32_rpc_transport_fn s_transport = spi_m1link_send_recv_bin;
 
+/* Snapshot of the last m1_esp32_rpc_call() invocation — see the "Feature-call
+ * diagnostics (Phase 2, issue #719)" comment in m1_esp32_rpc.h.  Diagnostic
+ * only: never consulted by any feature gate or decode path. */
+static m1_esp32_rpc_call_diag_t s_call_diag = { 0 };
+
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn)
 {
     s_transport = fn ? fn : spi_m1link_send_recv_bin;
+    /* Host tests call this from setUp()/tearDown() between cases; reset the
+     * snapshot alongside the transport so stale diagnostics from a previous
+     * test/call never leak into the next one. */
+    memset(&s_call_diag, 0, sizeof(s_call_diag));
 }
 
 esp32_transport_t m1_esp32_active_transport(void)
 {
     return esp32_firmware_transport(m1_esp32_caps_get_bitmap());
+}
+
+void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out)
+{
+    if (out) *out = s_call_diag;
+}
+
+static void rpc_call_diag_record(uint16_t msg_id, m1_esp32_rpc_status_t status,
+                                 int rx_len, uint16_t resp_len)
+{
+    s_call_diag.msg_id    = msg_id;
+    s_call_diag.attempted = 1u;
+    s_call_diag.status    = (uint8_t)status;
+    s_call_diag.rx_len    = (int16_t)rx_len;
+    s_call_diag.resp_len  = resp_len;
 }
 
 /*==========================================================================*/
@@ -74,25 +98,32 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
 
     if (resp_len) *resp_len = 0u;
 
-    if (req_len > M1_ESP32_RPC_PAYLOAD_MAX || (req_len > 0u && !req))
+    if (req_len > M1_ESP32_RPC_PAYLOAD_MAX || (req_len > 0u && !req)) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u);
         return M1_ESP32_RPC_ERR_INVALID;
+    }
 
     uint16_t frame_sz = m1_esp32_rpc_build_req(tx, (uint16_t)sizeof(tx),
                                                msg_id, req, req_len);
-    if (frame_sz == 0u)
+    if (frame_sz == 0u) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u);
         return M1_ESP32_RPC_ERR_INVALID;
+    }
 
     /* Heap-allocated: the reception budget (M1_ESP32_RPC_RESP_FRAME_MAX) must
      * cover the firmware's largest bulk-list response (WIFI_SCAN/STA_SCAN/
      * BLE_SCAN_RESULTS), which is far bigger than a stack-friendly control
      * frame -- see the comment on M1_ESP32_RPC_RESP_FRAME_MAX. */
     rx = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
-    if (!rx)
+    if (!rx) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u);
         return M1_ESP32_RPC_ERR_NO_MEM;
+    }
 
     memset(rx, 0, M1_ESP32_RPC_RESP_FRAME_MAX);
     if (s_transport(tx, (int)frame_sz, rx, (int)M1_ESP32_RPC_RESP_FRAME_MAX,
                     &rx_len, timeout_sec) != 0 || rx_len <= 0) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, rx_len, 0u);
         free(rx);
         return M1_ESP32_RPC_ERR_TRANSPORT;
     }
@@ -103,15 +134,18 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                                         msg_id, &payload,
                                                         &payload_len);
     if (st != M1_ESP32_RPC_OK) {
+        rpc_call_diag_record(msg_id, st, rx_len, 0u);
         free(rx);
         return st;
     }
 
+    uint16_t copy_len = 0u;
     if (resp && resp_cap > 0u && payload_len > 0u) {
-        uint16_t copy_len = (payload_len < resp_cap) ? payload_len : resp_cap;
+        copy_len = (payload_len < resp_cap) ? payload_len : resp_cap;
         memcpy(resp, payload, copy_len);
         if (resp_len) *resp_len = copy_len;
     }
+    rpc_call_diag_record(msg_id, M1_ESP32_RPC_OK, rx_len, copy_len);
     free(rx);
     return M1_ESP32_RPC_OK;
 }

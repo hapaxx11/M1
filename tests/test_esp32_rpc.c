@@ -231,6 +231,128 @@ void test_call_truncates_payload_to_capacity(void)
 }
 
 /* ================================================================== */
+/* m1_esp32_rpc_call() call diagnostics (Phase 2, issue #719)         */
+/* ================================================================== */
+
+void test_diag_no_call_yet_before_any_call(void)
+{
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(0u, d.attempted);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("no call yet", buf);
+}
+
+void test_diag_records_ok_call_with_payload_len(void)
+{
+    const uint8_t body[] = {0x00, 0xAA, 0xBB, 0xCC};
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body, sizeof(body));
+
+    uint8_t  resp[16];
+    uint16_t rlen = 0;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0,
+                          resp, sizeof(resp), &rlen, 1);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, st);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(1u, d.attempted);
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_WIFI_SCAN, d.msg_id);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, d.status);
+    TEST_ASSERT_EQUAL_UINT16(sizeof(body), d.resp_len);
+    TEST_ASSERT_EQUAL_INT(g_canned_len, d.rx_len);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 ok st0 r14 p4", buf);
+}
+
+void test_diag_records_transport_failure_as_no_reply(void)
+{
+    g_ret = 1; /* fake reports a transport error, 0 bytes returned */
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(1u, d.attempted);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_TRANSPORT, d.status);
+    TEST_ASSERT_EQUAL_INT(0, d.rx_len);
+    TEST_ASSERT_EQUAL_UINT16(0u, d.resp_len);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0", buf);
+}
+
+void test_diag_records_msgid_mismatch_as_bad_frame(void)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_NOW_STOP, NULL, 0);
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_NOW_START, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_BAD_FRAME, d.status);
+    TEST_ASSERT_TRUE(d.rx_len > 0);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0600 bad-frame st254 r10 p0", buf);
+}
+
+void test_diag_records_nak_status_code(void)
+{
+    const uint8_t nak_body[] = { M1_ESP32_RPC_ERR_UNSUPPORTED };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_NAK,
+                              M1_ESP32_RPC_WIFI_SCAN, nak_body, sizeof(nak_body));
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_UNSUPPORTED, d.status);
+    TEST_ASSERT_EQUAL_UINT16(0u, d.resp_len);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 nak st10 r11 p0", buf);
+}
+
+void test_diag_set_transport_resets_snapshot(void)
+{
+    const uint8_t body[] = {0x00};
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body, sizeof(body));
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(1u, d.attempted);
+
+    m1_esp32_rpc_set_transport(fake_transport); /* re-install: resets snapshot */
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(0u, d.attempted);
+}
+
+void test_diag_format_null_snapshot_is_no_call(void)
+{
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(NULL, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("no call yet", buf);
+}
+
+void test_diag_format_null_buffer_is_safe(void)
+{
+    m1_esp32_rpc_call_diag_t d = { .attempted = 1u };
+    m1_esp32_rpc_call_diag_format(&d, NULL, 0u);
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, 0u);
+}
+
+/* ================================================================== */
 /* m1_esp32_rpc_decode_resp() framing errors                          */
 /* ================================================================== */
 
@@ -337,6 +459,14 @@ int main(void)
     RUN_TEST(test_call_msgid_mismatch_is_bad_frame);
     RUN_TEST(test_call_oversize_request_rejected);
     RUN_TEST(test_call_truncates_payload_to_capacity);
+    RUN_TEST(test_diag_no_call_yet_before_any_call);
+    RUN_TEST(test_diag_records_ok_call_with_payload_len);
+    RUN_TEST(test_diag_records_transport_failure_as_no_reply);
+    RUN_TEST(test_diag_records_msgid_mismatch_as_bad_frame);
+    RUN_TEST(test_diag_records_nak_status_code);
+    RUN_TEST(test_diag_set_transport_resets_snapshot);
+    RUN_TEST(test_diag_format_null_snapshot_is_no_call);
+    RUN_TEST(test_diag_format_null_buffer_is_safe);
     RUN_TEST(test_decode_bad_magic);
     RUN_TEST(test_decode_bad_crc);
     RUN_TEST(test_decode_short_buffer);
