@@ -1,10 +1,11 @@
 # ESP32 CD3 Compatibility — Root-Cause Review & Resolution Plan (Issue #719)
 
-> **Status:** Phases 0-2 implemented and field-confirmed (see §0). This document
-> originally captured a thorough review of the 7 prior fix attempts, narrowed
-> the current failure, enumerated the remaining candidate root causes, and
-> proposed a staged, testable resolution; the phase call-outs below track what
-> has since landed and what the on-device dashboard reports.
+> **Status:** Phases 0-2″ implemented and field-confirmed (see §0); Phase 5
+> implemented (see §0b). This document originally captured a thorough review
+> of the 7 prior fix attempts, narrowed the current failure, enumerated the
+> remaining candidate root causes, and proposed a staged, testable resolution;
+> the phase call-outs below track what has since landed and what the
+> on-device dashboard reports.
 
 ---
 
@@ -48,6 +49,51 @@ Per the project's own history here (seven prior *code-only* fix attempts
 missed), we do not guess again — **Phase 2** (delivered, see §6) instruments
 the *feature*-call path the same way Phase 0 instrumented the probe path, so
 the next report can name the exact failure mode instead of "still fails".
+
+---
+
+## 0b. Field update — Phase 2′/2″ read-back reproduced, Phase 5 implemented
+
+With the Phase 2′/2″ diagnostics in place, the owner reproduced a WiFi Scan
+failure and reported the Dashboard page 5/5 line verbatim:
+
+```
+Last feature RPC: op0103 no-reply st253 r0 p0
+```
+
+Per the discriminator table in §6, this is `M1_ESP32_RPC_ERR_TRANSPORT`
+("no-reply", status 253) with zero raw reply bytes (`r0`) and zero decoded
+payload bytes (`p0`) — the M1 Link transport never saw a matching reply frame
+for the `WIFI_SCAN` (`0x0103`) request within its poll budget.
+
+Root cause: unlike `STA_SCAN`/`BLE_SCAN` (a quick START trigger followed by a
+separate RESULTS poll of an already-buffered list), the brain's
+`handle_wifi_scan()` runs the entire channel sweep **synchronously inside the
+single WIFI_SCAN request/response transaction** and only replies once the scan
+completes — a real active scan across all 2.4 GHz channels can legitimately
+take several seconds. Every feature wrapper in `m1_esp32_rpc_features.c`,
+including `m1_esp32_rpc_wifi_scan()`, passed the shared
+`M1_ESP32_RPC_FEATURE_TIMEOUT_S` (2 s) — sized for prompt, single-transaction
+control commands, not a full synchronous scan. `spi_m1link_send_recv_bin()`
+scales its poll budget from that timeout, so the transport gave up and
+reported `ERR_TRANSPORT` before the brain could queue its reply — exactly
+`M1_ESP32_RPC_RESP_FRAME_MAX`/reassembly-overflow-free, matching the first row
+of the §6 table (poll-budget exhaustion, not a frame-size or corruption
+issue).
+
+> **Phase 5 implementation status (delivered).** Added a WIFI_SCAN-specific
+> `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (10 s) in `m1_esp32_rpc_features.h` and
+> switched `m1_esp32_rpc_wifi_scan()` to pass it instead of the generic
+> `M1_ESP32_RPC_FEATURE_TIMEOUT_S`, widening the M1 Link poll budget enough
+> for a real full-channel scan to finish before the transport gives up. Every
+> other feature wrapper (STA_SCAN, BLE_SCAN, deauth, beacon, etc.) keeps the
+> original 2 s budget since they remain prompt trigger/poll commands.
+> Regression coverage: `tests/test_esp32_rpc_features.c::
+> test_wifi_scan_uses_extended_timeout` (fails before the fix, asserting the
+> fake transport observed the old 2 s timeout; passes after, asserting the new
+> 10 s value). Next reproduction: retry WiFi Scan on the owner's hardware and
+> confirm Dashboard page 5/5 reads `op0103 ok st0 r<n> p<n>` (or a genuinely
+> empty `p0` if no APs are in range) instead of `no-reply`.
 
 ---
 
@@ -427,6 +473,15 @@ observable on the dashboard exactly like the Phase 0 probe diagnostics.
   or a poll-budget-exhaustion case), and re-verify via the same dashboard page
   before considering WiFi Scan resolved.
 
+  > **Phase 5 implementation status (delivered, see §0b).** The owner's
+  > read-back was `op0103 no-reply st253 r0 p0` — poll-budget exhaustion, not
+  > reassembly overflow or bad-frame corruption. Fix: a dedicated
+  > `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (10 s) for the `WIFI_SCAN` call only,
+  > replacing the shared 2 s `M1_ESP32_RPC_FEATURE_TIMEOUT_S` which was sized
+  > for prompt control commands and never accounted for WIFI_SCAN's uniquely
+  > synchronous full-channel-sweep reply. See §0b for full detail and test
+  > coverage.
+
 Each phase is independently shippable and gated behind a read-back on the
 dashboard so we confirm the bitmap becomes non-zero before moving on.
 
@@ -456,12 +511,17 @@ adds tests under `tests/`:
   NAK, `ERR_TRANSPORT`, and `ERR_BAD_FRAME` outcomes of `m1_esp32_rpc_call()`,
   plus the snapshot reset on `m1_esp32_rpc_set_transport()` and the NULL-safe
   formatter cases.
+- **WIFI_SCAN timeout (Phase 5):** `tests/test_esp32_rpc_features.c::
+  test_wifi_scan_uses_extended_timeout` asserts `m1_esp32_rpc_wifi_scan()`
+  passes `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (10 s) to the transport rather
+  than the generic `M1_ESP32_RPC_FEATURE_TIMEOUT_S` (2 s); fails before the
+  fix (observed 2 s), passes after (observed 10 s).
 
 **Definition of done:** the dashboard reports a versioned brain name (e.g.
 `ESP32 m1-native X.Y.Z`) with a **non-zero** bitmap (**met**, see §0), and WiFi
 Scan, Beacon Sniff, and Deauth all function on the owner's hardware
-(**outstanding** — WiFi Scan still fails; Phase 2′ delivers the read-back
-needed to root-cause it in Phase 5).
+(**Phase 5 fix delivered for the `no-reply` cause, see §0b — pending owner
+re-verification that a real scan now completes**).
 
 ---
 
@@ -472,6 +532,11 @@ needed to root-cause it in Phase 5).
    5/5** and report the exact line shown (e.g. `"op0103 no-reply st253 r0
    p0"`). This single read-back discriminates the remaining WiFi-scan-specific
    candidates (see the table in §6) and drives Phase 5.
+   **(Done, Phase 5)** — reported as `"op0103 no-reply st253 r0 p0"`; fixed
+   per §0b. **Next:** retry WiFi Scan on the owner's hardware and report the
+   new Dashboard page 5/5 line (expected `op0103 ok st0 r<n> p<n>`) to confirm
+   the poll-budget widening resolved it, or to identify a different remaining
+   candidate if it did not.
 1. The **exact `m1-esp32-brain` release** flashed (tag + git hash, from the boot
    log or `SYS_GET_FW_VERSION`).
 2. Whether a **logic analyzer / scope** on CS(PB10)/SCLK/MISO/HANDSHAKE(PD7) is
@@ -504,3 +569,7 @@ needed to root-cause it in Phase 5).
   (scaled from `M1_ESP32_RPC_FEATURE_TIMEOUT_S` = 2 s) long enough for the
   brain to finish a real scan and queue its reply? Both are candidate causes
   for a `no-reply` (`ERR_TRANSPORT`) read-back on `op0103`.
+  **(Resolved, Phase 5)** The owner's read-back (`op0103 no-reply st253 r0
+  p0`, `r0`/`p0`) confirmed the poll-budget theory, not a frame-size
+  overflow — no reply frame arrived at all, so `M1_ESP32_RPC_RESP_FRAME_MAX`
+  was never exercised. Fixed via `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (§0b).

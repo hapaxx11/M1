@@ -55,12 +55,13 @@ static int     g_canned_len;
 static uint8_t g_ret;
 static uint8_t g_last_tx[256];
 static int     g_last_tx_len;
+static int     g_last_timeout_sec;
 
 static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
                               uint8_t *rx_buf, int rx_buf_size,
                               int *out_len, int timeout_sec)
 {
-    (void)timeout_sec;
+    g_last_timeout_sec = timeout_sec;
     g_last_tx_len = (tx_len < (int)sizeof(g_last_tx)) ? tx_len
                                                       : (int)sizeof(g_last_tx);
     memcpy(g_last_tx, tx_buf, (size_t)g_last_tx_len);
@@ -609,6 +610,28 @@ void test_wifi_scan_null_out_rejected(void)
     TEST_ASSERT_EQUAL_UINT8(0u, count);
 }
 
+/* Regression guard (issue #719 Phase 5): field read-back showed WIFI_SCAN
+ * failing with "op0103 no-reply st253 r0 p0" — the transport's poll budget
+ * (scaled from the caller's timeout_sec) expired before the brain's
+ * synchronous full-channel scan replied. m1_esp32_rpc_wifi_scan() must pass
+ * the longer, WIFI_SCAN-specific timeout rather than the generic prompt-
+ * command M1_ESP32_RPC_FEATURE_TIMEOUT_S. */
+void test_wifi_scan_uses_extended_timeout(void)
+{
+    uint8_t body[128];
+    uint16_t blen = build_scan_resp(body, 1);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body, blen);
+
+    m1_esp32_rpc_wifi_scan_result_t out[4];
+    uint8_t count = 0;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_wifi_scan(out, 4, &count));
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S, g_last_timeout_sec);
+    TEST_ASSERT_GREATER_THAN_INT(M1_ESP32_RPC_FEATURE_TIMEOUT_S,
+                                 g_last_timeout_sec);
+}
+
 void test_wifi_scan_propagates_nak(void)
 {
     const uint8_t body[] = { M1_ESP32_RPC_ERR_NOT_INIT };
@@ -800,6 +823,7 @@ int main(void)
 
     RUN_TEST(test_wifi_scan_decodes_entries);
     RUN_TEST(test_wifi_scan_caps_to_max);
+    RUN_TEST(test_wifi_scan_uses_extended_timeout);
     RUN_TEST(test_wifi_scan_null_out_rejected);
     RUN_TEST(test_wifi_scan_propagates_nak);
     RUN_TEST(test_wifi_scan_truncated_ssid_entry_stops_before_oob);

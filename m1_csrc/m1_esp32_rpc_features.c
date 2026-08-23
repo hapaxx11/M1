@@ -115,7 +115,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u, resp,
                           M1_ESP32_RPC_RESP_PAYLOAD_MAX,
-                          &rlen, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+                          &rlen, M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S);
     if (st != M1_ESP32_RPC_OK) {
         free(resp);
         return st;

@@ -55,6 +55,27 @@ extern "C" {
  * single-transaction control commands these features issue. */
 #define M1_ESP32_RPC_FEATURE_TIMEOUT_S  2
 
+/* WIFI_SCAN-specific response timeout (seconds) — issue #719 Phase 5.
+ *
+ * Unlike every other scan-style feature (STA_SCAN, BLE_SCAN), which use a
+ * START trigger followed by a separate, quick RESULTS poll of an
+ * already-buffered list, the brain's handle_wifi_scan() runs the *entire*
+ * channel sweep synchronously inside the single WIFI_SCAN request/response
+ * transaction (see m1_esp32_rpc_wifi_scan()'s "one logical response" comment
+ * below) and only replies once the scan completes. A real active scan across
+ * all 2.4 GHz channels can legitimately take several seconds — far longer
+ * than M1_ESP32_RPC_FEATURE_TIMEOUT_S's 2 s budget for prompt commands.
+ *
+ * Field read-back on the Settings > Dashboard > page 5/5 "Last feature RPC"
+ * line confirmed the failure mode this predicted: "op0103 no-reply st253 r0
+ * p0" (M1_ESP32_RPC_ERR_TRANSPORT) — the M1 Link transport's poll budget,
+ * scaled from the caller's timeout_sec (see spi_m1link_send_recv_bin()),
+ * expired before the brain queued its reply. Widening the budget passed for
+ * this call (rather than the shared constant, which stays 2 s for every
+ * other prompt command) lets a real scan finish before the transport gives
+ * up. */
+#define M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S  10
+
 /* =========================================================================
  * Feature -> RPC opcode map
  * =========================================================================*/
