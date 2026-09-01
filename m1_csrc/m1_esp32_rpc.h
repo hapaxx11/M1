@@ -434,9 +434,11 @@ void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
  *  request while waiting for the pipelined response before giving up.
  *
  *  The pure helper uses this as a transaction count only (host tests inject an
- *  instantaneous fake exchange). On-target timing is set by
- *  spi_m1link_send_recv_bin(), which scales max_polls from timeout_sec and
- *  applies this macro as a floor. */
+ *  instantaneous fake exchange). On-target, spi_m1link_send_recv_bin() no
+ *  longer derives its poll budget from this macro (issue #719 Phase 7): it
+ *  now paces on real wall-clock time via m1_esp32_m1link_send_recv_timed()
+ *  instead, so this floor only bounds m1_esp32_m1link_send_recv()'s own
+ *  fixed-count callers (see "Poll-budget wall-clock FIX" below). */
 #define M1_ESP32_M1LINK_MAX_POLLS  8
 
 /**

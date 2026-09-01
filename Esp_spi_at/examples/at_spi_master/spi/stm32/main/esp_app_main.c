@@ -618,7 +618,8 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
   * @param  rx_buf      Caller buffer for the binary response frame
   * @param  rx_buf_size Capacity of @p rx_buf in bytes (>= 1)
   * @param  out_len     [out] bytes written to @p rx_buf (0 on error/timeout)
-  * @param  timeout_sec Scales the follow-up poll budget (see max_polls below);
+  * @param  timeout_sec Real wall-clock budget (seconds) the transport waits
+  *                     for a reply before giving up (issue #719 Phase 7);
   *                     <= 0 falls back to a 2 s default.
   * @return SUCCESS on success, CTRL_ERR_* otherwise
   *

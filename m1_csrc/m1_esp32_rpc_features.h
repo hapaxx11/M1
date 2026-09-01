@@ -73,7 +73,17 @@ extern "C" {
  * expired before the brain queued its reply. Widening the budget passed for
  * this call (rather than the shared constant, which stays 2 s for every
  * other prompt command) lets a real scan finish before the transport gives
- * up. */
+ * up.
+ *
+ * Update (issue #719 Phase 7): a later field read-back of the same line
+ * showed "op0103 no-reply st253 r0 p0 t0s" — the transport was giving up in
+ * well under a second despite this 10 s budget, because
+ * spi_m1link_send_recv_bin() converted timeout_sec into a fixed poll COUNT
+ * that assumed a fixed per-poll cost, not real elapsed time (see the
+ * "Poll-budget wall-clock FIX" comment in m1_esp32_rpc.h). With that
+ * transport bug fixed, this 10 s value now takes effect as originally
+ * intended; a further field read-back after the fix confirmed a real scan
+ * completing well within the budget: "op0103 ok st0 r456 p446". */
 #define M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S  10
 
 /* =========================================================================
