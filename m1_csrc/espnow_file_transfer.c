@@ -83,7 +83,7 @@ bool espnow_ft_send_offer(espnow_ft_ctx_t *ctx)
     if (!ctx || ctx->state != ESPNOW_FT_STATE_IDLE)
         return false;
 
-    /* Build OFFER: type(1) + seq(1) + filename(32) + size(4LE) + crc(4LE) + chunk_size(1) */
+    /* Build OFFER: type(1) + seq(1) + filename + size(4LE) + crc(4LE) + chunk_size(1) */
     uint8_t msg[2 + ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
     memset(msg, 0, sizeof(msg));
     msg[0] = ESPNOW_FT_MSG_OFFER;
@@ -242,7 +242,7 @@ bool espnow_ft_recv_on_msg(espnow_ft_ctx_t *ctx,
     case ESPNOW_FT_MSG_OFFER:
         if (ctx->state != ESPNOW_FT_STATE_IDLE)
             return false;
-        /* Parse offer: filename(32) + size(4LE) + crc(4LE) + chunk_size(1) */
+        /* Parse offer: filename + size(4LE) + crc(4LE) + chunk_size(1) */
         if (len < ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1)
             return false;
         memcpy(ctx->peer_mac, peer_mac, ESPNOW_FT_MAC_LEN);

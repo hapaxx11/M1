@@ -188,7 +188,10 @@ bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
      * in a single SPI call without RPC multi-transaction chunking. */
     uint8_t payload[SPI_BUF_SIZE - 16];
     const size_t max_data = sizeof(payload) - 6;
-    if (len > max_data) len = max_data;
+    if (max_data != M1_ESPNOW_SEND_PAYLOAD_MAX)
+        return false;
+    if (len > max_data)
+        return false;
     if (len == 0) return false;
 
     memcpy(payload, mac, 6);

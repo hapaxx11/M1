@@ -822,8 +822,9 @@ M1_RPC, keeping the Peer Link gate satisfied only for that probed firmware path.
   protocol-level standard exists; this is our application-layer convention.
 - *File transfer* — Stop-and-wait ARQ over the peer link, implemented in
   `m1_csrc/espnow_file_transfer.c/h` with streaming-to-SD (FatFS) and
-  incremental CRC32.  Chunk size must not exceed 42 bytes with the current
-  SPI transport.
+  incremental CRC32.  Direct sender frames must not exceed 42 bytes with the
+  current SPI transport; the sender UI uses 31-byte transfer filenames and
+  36-byte file chunks so OFFER/DATA frames fit without transport truncation.
 
 #### App-layer peer-link protocol (STM32-side, host-tested)
 
@@ -854,11 +855,14 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
 - *Capture sharing (`espnow_shareable`)* — Classifies which saved items
   (`.sub` / `.nfc` / `.rfid` / `.ir`) may be shared, extracts a safe basename,
   rejects path-traversal / unsafe names, and builds the `/ESPNOW/<name>` receive
-  path.  The sender browses saved items and "Send to peer"; the receiver stores
-  into `/ESPNOW/`.
+  path.  The Peer Link menu exposes Send Capture; the sender picks a saved-item
+  category, browses the SD card, and streams the file to the paired peer.  The
+  receiver stores into `/ESPNOW/`.
 - *Messaging (`espnow_message`)* — Builds/parses short text frames (type `0x20`,
   ≤ 120 chars) and maintains a bounded inbox ring (cap 8) with eviction and
-  duplicate suppression.
+  duplicate suppression.  The first Messages scene caps composed text to one
+  direct 42-byte send frame (40 text bytes plus the 2-byte message header) until
+  scene-level fragmentation is wired for longer chat messages.
 - *Remote trigger (`espnow_trigger`)* — A danger-gated request → consent →
   execute → result state machine (types `0x30..0x33`) that asks a paired peer to
   replay a **named** saved capture; it reuses `espnow_shareable` name-safety and

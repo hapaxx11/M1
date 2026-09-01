@@ -15,6 +15,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_espnow_scene.h"
+#include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
 #include "espnow_peer_session.h"
@@ -184,6 +185,11 @@ static bool pair_on_event(M1SceneApp *app, M1SceneEvent event)
     if (m1_espnow_recv_msg(from_mac, msg_buf, sizeof(msg_buf), &msg_len)) {
         if (msg_len >= 1 && msg_buf[0] == ESPNOW_MSG_PAIR_ACCEPT) {
             espnow_session_pair_accepted(&s_session);
+            if (s_session.selected_peer_idx < s_session.peer_count) {
+                m1_espnow_scene_ctx_set_peer(
+                    s_session.peers[s_session.selected_peer_idx].mac,
+                    s_session.peers[s_session.selected_peer_idx].name);
+            }
             app->need_redraw = true;
             /* Stay on pair screen showing confirm code briefly,
              * then pop back.  For now just pop. */

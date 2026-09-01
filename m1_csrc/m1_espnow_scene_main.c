@@ -4,7 +4,7 @@
  * @file   m1_espnow_scene_main.c
  * @brief  ESP-NOW Peer Link top-level menu scene.
  *
- * Provides the 3-item menu: Scan Peers, Send File, Tic-Tac-Toe.
+ * Provides the Peer Link top-level menu.
  * Gates entry on M1_ESP32_CAP_ESPNOW via DELEGATE_FEATURE pattern.
  */
 
@@ -24,16 +24,20 @@
 /* Top-level menu                                                           */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  3
+#define MENU_ITEM_COUNT  5
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Scan Peers",
-    "Send File",
+    "Messages",
+    "Send Capture",
+    "Receive File",
     "Tic-Tac-Toe",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     EspnowSceneScan,
+    EspnowSceneMessages,
+    EspnowSceneSendCapture,
     EspnowSceneTransfer,
     EspnowSceneTicTacToe,
 };

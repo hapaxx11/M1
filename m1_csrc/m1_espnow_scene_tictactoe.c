@@ -14,6 +14,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_espnow_scene.h"
+#include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
 #include "espnow_tictactoe.h"
@@ -48,7 +49,8 @@ static void ttt_on_enter(M1SceneApp *app)
     s_cursor = 4;  /* center */
     s_game_active = true;
     s_last_poll_tick = HAL_GetTick();
-    memset(s_peer_mac, 0xFF, ESPNOW_MAC_LEN);  /* broadcast for now */
+    if (!m1_espnow_scene_ctx_get_peer(s_peer_mac, NULL, 0))
+        memset(s_peer_mac, 0xFF, ESPNOW_MAC_LEN);
     app->need_redraw = true;
 }
 

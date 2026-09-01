@@ -4,7 +4,10 @@
   42-byte SPI ceiling, saved-capture sharing helpers (`espnow_shareable`), short
   peer text messaging (`espnow_message`), a danger-gated remote-trigger state
   machine (`espnow_trigger`), and an Encrypt-then-MAC authenticated-encryption
-  envelope (`espnow_crypto`, AES-256-CBC + HMAC-SHA256).  All modules are pure
-  logic with host unit tests; live use is gated behind `M1_ESP32_CAP_ESPNOW`,
-  which the STM32 now infers for confirmed native CD3 until brain firmware
-  self-reports bit 24 directly.
+  envelope (`espnow_crypto`, AES-256-CBC + HMAC-SHA256).  Peer Link also now
+  exposes Messages and Send Capture scenes: paired devices can compose short
+  direct-frame text messages and send saved Sub-GHz/NFC/RFID/IR captures through
+  the existing storage browser and CRC-checked transfer path.  The pure modules
+  have host unit tests; live use is gated behind `M1_ESP32_CAP_ESPNOW`, which the
+  STM32 now infers for confirmed native CD3 until brain firmware self-reports bit
+  24 directly.

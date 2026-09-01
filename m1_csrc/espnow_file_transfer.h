@@ -30,7 +30,7 @@ extern "C" {
  * =========================================================================*/
 
 /** Maximum filename length in FILE_OFFER. */
-#define ESPNOW_FT_FILENAME_MAX   32
+#define ESPNOW_FT_FILENAME_MAX   31
 
 /** Maximum data bytes per FILE_DATA chunk (ESP-NOW 250 - framing). */
 #define ESPNOW_FT_CHUNK_MAX      200

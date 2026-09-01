@@ -2,8 +2,9 @@
 
 > **Status:** This branch implements Phases 0–4 as pure-logic, host-tested STM32-side
 > modules (see `m1_csrc/espnow_{chunk,shareable,message,trigger,crypto}.c`
-> and their `tests/test_espnow_*` suites). Scene/UI wiring and live bench
-> validation remain, and depend on the coordinated `bedge117/m1-esp32-brain`
+> and their `tests/test_espnow_*` suites), plus Peer Link scene wiring for
+> Messages and Send Capture. Live two-device bench validation and remaining
+> trigger/encryption scene work depend on the coordinated `bedge117/m1-esp32-brain`
 > changes noted in §4. This document is retained for direction by @hapaxx11.
 >
 > **Origin:** The forks tracker lists **M1↔M1 peer link** (dag `M1_T-1000`
@@ -47,7 +48,7 @@ The ESP-NOW peer-link stack is **already partially shipped** and reachable from
 | Peer discovery + pairing FSM (pure) | `espnow_peer_session.c/.h` | IDLE→SCANNING→PEER_FOUND→PAIR_SENT→PAIRED, 4-digit confirm code + host test |
 | File transfer protocol (pure) | `espnow_file_transfer.c/.h` | Stop-and-wait ARQ, CRC32, streaming-to-SD + host test |
 | Tic-Tac-Toe demo app (pure) | `espnow_tictactoe.c/.h` | Playable over the link + host test |
-| Scenes | `m1_espnow_scene_main/scan/transfer/tictactoe.c` | Menu: **Scan Peers / Send File / Tic-Tac-Toe** |
+| Scenes | `m1_espnow_scene_main/scan/messages/send/transfer/tictactoe.c` | Menu: **Scan Peers / Messages / Send Capture / Receive File / Tic-Tac-Toe** |
 | Capability gate | `M1_ESP32_CAP_ESPNOW` bit 24 (`m1_esp32_caps.h:222`) | Host-only bit; **not self-reported** by any shipped firmware yet |
 | Host tests | `tests/test_espnow_{peer_session,file_transfer,rpc_parse,tictactoe}.c` | Passing |
 | Reference doc | `documentation/esp32_firmware.md:761-819` | Wire format, opcode table, design decisions |
@@ -67,8 +68,8 @@ discovery, capture sharing, remote trigger.**
 | dag pillar | Hapax today | Gap to close |
 |------------|-------------|--------------|
 | **Peer discovery** | ✅ `espnow_peer_session` + Scan scene + confirm code; `M1_ESP32_CAP_ESPNOW` is temporarily inferred for confirmed native CD3 via STM32 M1_RPC probe fallback | None (polish only; brain should eventually self-report bit 24) |
-| **Capture sharing** | ⚠️ File transfer exists but the transfer scene is **receiver-only**; sender path is stubbed (`m1_espnow_scene_transfer.c:85-86` "future Phase 5 integration") | Add a **sender-side file browser** and a "Send to peer" action from saved Sub-GHz / NFC / RFID / IR items |
-| **Peer messaging** | ❌ No text/chat app over the DATA channel | New short-message app + scene |
+| **Capture sharing** | ✅ Sender UI now offers a category picker for saved Sub-GHz / NFC / RFID / IR captures, opens the existing storage browser, and streams the selected file to the paired peer; receiver still stores into `/ESPNOW/` | Two-device bench validation and optional per-saved-item "Send to peer" shortcuts |
+| **Peer messaging** | ✅ Messages scene uses VKB compose plus the `espnow_message` inbox/framing module for paired-peer short text | Scene-level chunking for messages longer than one direct `NOW_SEND` call |
 | **AES-256 encryption** | ❌ `encrypt = false` always (`esp32_firmware.md:808`); only visual confirm codes | Application-layer authenticated encryption over the DATA channel (see §5, Phase 4) |
 | **Remote trigger** | ❌ None | New command app: ask a paired peer to replay/transmit a named saved capture (danger-gated) |
 
@@ -83,8 +84,9 @@ Two enablement blockers apply to **all** on-device use, regardless of pillar:
 2. **Payload size.** The fixed 64-byte SPI-HD transaction caps ESP-NOW app data
    at **42 bytes per `NOW_SEND` call** (`esp32_firmware.md:795-800`); this branch
    adds STM32-side app-layer chunking/reassembly for full 240-byte logical
-   messages.  Scene integration still needs to route large app payloads through
-   the chunk helper.
+   messages.  The first Messages UI intentionally caps composed text to one
+   direct frame; scene integration still needs to route larger app payloads
+   through the chunk helper.
 
 ---
 
@@ -130,6 +132,9 @@ so early phases unblock later ones.
   Sub-GHz (`.sub`), NFC (`.nfc`), RFID (`.rfid`), and IR (`.ir`) item menus.
 - Reuse `espnow_file_transfer.c` (already bidirectional at the protocol level) and
   the paired-peer MAC from `espnow_peer_session`.
+- **Status:** Sender UI is wired through Peer Link → Send Capture, with saved
+  category picker, storage browser, CRC preflight, 36-byte sender chunks and
+  progress card. Two-device bench validation remains.
 - **Deliverable:** end-to-end save→send→receive→save of a capture between two M1s.
 - **Host tests:** extend `test_espnow_file_transfer.c` for the sender FSM
   (offer/accept/data/ack/complete, retry, abort) if not already covered.
@@ -142,6 +147,10 @@ so early phases unblock later ones.
   (`espnow_file_transfer.h:51-59`).
 - New scene under the Peer Link menu ("Messages"), depends on Phase 0 chunking
   for messages longer than one SPI call.
+- **Status:** Messages UI is wired through Peer Link → Messages, with VKB
+  compose, paired-peer send, receive polling and an 8-entry inbox display. The
+  UI currently limits text to 40 bytes so frames fit the direct 42-byte
+  `NOW_SEND` budget until scene-level fragmentation is added.
 - **Deliverable:** two paired M1s exchange short text messages.
 - **Host tests:** `test_espnow_message.c` — framing, ordering, truncation,
   type-demux against pairing/FT/game types.

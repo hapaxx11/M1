@@ -7,6 +7,8 @@
  * Scene implementations:
  *   m1_espnow_scene_main.c     — top-level menu
  *   m1_espnow_scene_scan.c     — scan list + pairing
+ *   m1_espnow_scene_messages.c — short text messages
+ *   m1_espnow_scene_send.c     — capture sender picker/progress
  *   m1_espnow_scene_transfer.c — file transfer progress
  *   m1_espnow_scene_tictactoe.c — Tic-Tac-Toe game
  */
@@ -14,6 +16,7 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_espnow_scene.h"
+#include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_esp32_hal.h"
 #include "m1_tasks.h"
@@ -24,6 +27,7 @@
 
 static void espnow_hw_init(void)
 {
+    m1_espnow_scene_ctx_reset();
     m1_esp32_ensure_init();
 }
 
@@ -41,6 +45,9 @@ static const M1SceneHandlers *const scene_registry[EspnowSceneCount] = {
     [EspnowSceneScan]       = &espnow_scene_scan_handlers,
     [EspnowScenePair]       = &espnow_scene_pair_handlers,
     [EspnowSceneTransfer]   = &espnow_scene_transfer_handlers,
+    [EspnowSceneSendCapture]= &espnow_scene_send_capture_handlers,
+    [EspnowSceneSendProgress]= &espnow_scene_send_progress_handlers,
+    [EspnowSceneMessages]   = &espnow_scene_messages_handlers,
     [EspnowSceneTicTacToe]  = &espnow_scene_tictactoe_handlers,
 };
 

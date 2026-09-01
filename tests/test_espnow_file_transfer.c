@@ -10,6 +10,7 @@
 
 #include "unity.h"
 #include "espnow_file_transfer.h"
+#include "m1_espnow_hal.h"
 
 #include <string.h>
 
@@ -163,6 +164,24 @@ void test_send_offer_transitions_to_offer_sent(void)
     TEST_ASSERT_EQUAL_UINT8(ESPNOW_FT_MSG_OFFER, s_mock.sends[0][0]);
 }
 
+void test_sender_frames_fit_direct_transport_budget(void)
+{
+    reset_mock();
+    espnow_ft_ctx_t ctx;
+    espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "capture.sub",
+                         72, 0x12345678, 36);
+    TEST_ASSERT_TRUE(espnow_ft_send_offer(&ctx));
+    TEST_ASSERT_LESS_OR_EQUAL_UINT(M1_ESPNOW_SEND_PAYLOAD_MAX,
+                                   s_mock.send_lens[0]);
+
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0));
+    uint8_t data[36];
+    memset(data, 0xA5, sizeof(data));
+    TEST_ASSERT_TRUE(espnow_ft_send_chunk(&ctx, data, sizeof(data)));
+    TEST_ASSERT_LESS_OR_EQUAL_UINT(M1_ESPNOW_SEND_PAYLOAD_MAX,
+                                   s_mock.send_lens[1]);
+}
+
 void test_send_accept_transitions_to_sending(void)
 {
     reset_mock();
@@ -278,16 +297,21 @@ void test_recv_offer_parses_metadata(void)
     espnow_ft_ctx_t ctx;
     espnow_ft_recv_init(&ctx, &s_mock_hal);
 
-    /* Build offer payload: filename(32) + size(4) + crc(4) + chunk_size(1) */
+    /* Build offer payload: filename + size(4) + crc(4) + chunk_size(1) */
     uint8_t payload[ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
+    size_t off = ESPNOW_FT_FILENAME_MAX;
     memset(payload, 0, sizeof(payload));
     memcpy(payload, "hello.sub", 9);
     /* size = 256 (LE) */
-    payload[32] = 0x00; payload[33] = 0x01; payload[34] = 0x00; payload[35] = 0x00;
+    payload[off + 0] = 0x00; payload[off + 1] = 0x01;
+    payload[off + 2] = 0x00; payload[off + 3] = 0x00;
+    off += 4;
     /* crc = 0xAABBCCDD (LE) */
-    payload[36] = 0xDD; payload[37] = 0xCC; payload[38] = 0xBB; payload[39] = 0xAA;
+    payload[off + 0] = 0xDD; payload[off + 1] = 0xCC;
+    payload[off + 2] = 0xBB; payload[off + 3] = 0xAA;
+    off += 4;
     /* chunk_size = 100 */
-    payload[40] = 100;
+    payload[off] = 100;
 
     TEST_ASSERT_TRUE(espnow_ft_recv_on_msg(&ctx, PEER_MAC,
         ESPNOW_FT_MSG_OFFER, 0, payload, sizeof(payload)));
@@ -306,10 +330,11 @@ void test_recv_accept_opens_file_and_sends_accept(void)
 
     /* Simulate offer */
     uint8_t payload[ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
+    size_t off = ESPNOW_FT_FILENAME_MAX;
     memset(payload, 0, sizeof(payload));
     memcpy(payload, "test.sub", 8);
-    payload[32] = 10; /* size = 10 */
-    payload[40] = 10; /* chunk_size = 10 */
+    payload[off] = 10; /* size = 10 */
+    payload[off + 8] = 10; /* chunk_size = 10 */
     espnow_ft_recv_on_msg(&ctx, PEER_MAC, ESPNOW_FT_MSG_OFFER, 0,
                            payload, sizeof(payload));
 
@@ -329,7 +354,7 @@ void test_recv_reject_sends_reject_and_goes_idle(void)
 
     uint8_t payload[ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
     memset(payload, 0, sizeof(payload));
-    payload[40] = 100;
+    payload[ESPNOW_FT_FILENAME_MAX + 8] = 100;
     espnow_ft_recv_on_msg(&ctx, PEER_MAC, ESPNOW_FT_MSG_OFFER, 0,
                            payload, sizeof(payload));
 
@@ -346,9 +371,10 @@ void test_recv_data_writes_to_file_and_acks(void)
 
     /* Setup: offer → accept */
     uint8_t payload[ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
+    size_t off = ESPNOW_FT_FILENAME_MAX;
     memset(payload, 0, sizeof(payload));
-    payload[32] = 10; /* size = 10 */
-    payload[40] = 10; /* chunk_size = 10 */
+    payload[off] = 10; /* size = 10 */
+    payload[off + 8] = 10; /* chunk_size = 10 */
     espnow_ft_recv_on_msg(&ctx, PEER_MAC, ESPNOW_FT_MSG_OFFER, 0,
                            payload, sizeof(payload));
     espnow_ft_recv_accept(&ctx, "/sd/test.sub");
@@ -384,13 +410,16 @@ void test_recv_complete_success(void)
 
     /* Offer with matching size and CRC */
     uint8_t payload[ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
+    size_t off = ESPNOW_FT_FILENAME_MAX;
     memset(payload, 0, sizeof(payload));
-    payload[32] = 10; /* size = 10 (LE) */
-    payload[36] = (uint8_t)(expected_crc >>  0);
-    payload[37] = (uint8_t)(expected_crc >>  8);
-    payload[38] = (uint8_t)(expected_crc >> 16);
-    payload[39] = (uint8_t)(expected_crc >> 24);
-    payload[40] = 10;
+    payload[off] = 10; /* size = 10 (LE) */
+    off += 4;
+    payload[off + 0] = (uint8_t)(expected_crc >>  0);
+    payload[off + 1] = (uint8_t)(expected_crc >>  8);
+    payload[off + 2] = (uint8_t)(expected_crc >> 16);
+    payload[off + 3] = (uint8_t)(expected_crc >> 24);
+    off += 4;
+    payload[off] = 10;
     espnow_ft_recv_on_msg(&ctx, PEER_MAC, ESPNOW_FT_MSG_OFFER, 0,
                            payload, sizeof(payload));
     espnow_ft_recv_accept(&ctx, "/sd/out.bin");
@@ -417,10 +446,11 @@ void test_recv_complete_crc_mismatch_fails(void)
 
     /* Offer with wrong CRC */
     uint8_t payload[ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
+    size_t off = ESPNOW_FT_FILENAME_MAX;
     memset(payload, 0, sizeof(payload));
-    payload[32] = 10; /* size = 10 */
-    payload[36] = 0xFF; /* bogus CRC */
-    payload[40] = 10;
+    payload[off] = 10; /* size = 10 */
+    payload[off + 4] = 0xFF; /* bogus CRC */
+    payload[off + 8] = 10;
     espnow_ft_recv_on_msg(&ctx, PEER_MAC, ESPNOW_FT_MSG_OFFER, 0,
                            payload, sizeof(payload));
     espnow_ft_recv_accept(&ctx, "/sd/out.bin");
