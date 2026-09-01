@@ -605,7 +605,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventLeft:
-            if (app->raw_state == SubGhzReadRawStateStart)
+            if (subghz_read_raw_state_is_tx(app->raw_state))
+            {
+                /* Toggle repeat mode while transmitting */
+                app->raw_tx_repeat_mode = !app->raw_tx_repeat_mode;
+                app->need_redraw = true;
+            }
+            else if (app->raw_state == SubGhzReadRawStateStart)
             {
                 /* Config — scene_on_exit tears down RX; scene_on_enter re-inits
                  * on return via the resume path.  User presses OK to start
@@ -651,7 +657,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             return true;
 
         case SubGhzEventRight:
-            if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
+            if (subghz_read_raw_state_is_tx(app->raw_state))
+            {
+                /* Toggle repeat mode while transmitting (same as LEFT) */
+                app->raw_tx_repeat_mode = !app->raw_tx_repeat_mode;
+                app->need_redraw = true;
+            }
+            else if (app->raw_state == SubGhzReadRawStateIdle && raw_filepath[0] != '\0')
             {
                 /* Save — rename the auto-generated file via VKB */
                 const char *fname = extract_filename(raw_filepath);
@@ -750,7 +762,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
              * scene logic.  GPIO read is a true peek: no FreeRTOS state
              * mutation, no queue side effects.
              *
-             * If OK is still held at completion, transition to the matching
+             * Repeat decision: `subghz_raw_tx_should_repeat(toggle, ok_held)`
+             * — true when the persistent repeat toggle is active OR the OK
+             * GPIO is still held.  If repeating, transition to the matching
              * repeat state (TX → TXRepeat, LoadKeyTX → LoadKeyTXRepeat) and
              * call continue_async(true) so the async driver auto-restarts
              * the next burst.  Otherwise (one-shot end or repeat release)
@@ -760,11 +774,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                 bool ok_held = (HAL_GPIO_ReadPin(BUTTON_OK_GPIO_Port,
                                                  BUTTON_OK_Pin)
                                  == BUTTON_PRESS_STATE);
+                bool do_repeat = subghz_raw_tx_should_repeat(
+                                     app->raw_tx_repeat_mode, ok_held);
                 sub_ghz_replay_async_status_t st =
-                    sub_ghz_replay_continue_async(ok_held);
+                    sub_ghz_replay_continue_async(do_repeat);
                 if (st == SUBGHZ_REPLAY_ASYNC_RUNNING)
                 {
-                    if (ok_held)
+                    if (do_repeat)
                     {
                         /* Promote to the repeat state.  Idempotent when we
                          * are already in TXRepeat / LoadKeyTXRepeat. */
@@ -776,8 +792,8 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                             app->need_redraw = true;
                         }
                     }
-                    /* else: running but not held — driver is finishing the
-                     * already-armed burst; stay in current TX state until
+                    /* else: running but not held/toggled — driver is finishing
+                     * the already-armed burst; stay in current TX state until
                      * the next completion event arrives. */
                 }
                 else
@@ -1015,10 +1031,13 @@ static void draw(SubGhzApp *app)
         case SubGhzReadRawStateTXRepeat:
         case SubGhzReadRawStateLoadKeyTX:
         case SubGhzReadRawStateLoadKeyTXRepeat:
-            /* No button bar during async TX — matches Momentum's TX state which
-             * hides all action buttons.  The animated sine wave drawn in the
-             * waveform area indicates live transmission; releasing OK at the
-             * end of a burst returns to Idle/Loaded (holding OK re-arms). */
+            /* Show repeat-mode toggle during TX.  LEFT/RIGHT flip the toggle;
+             * the label reflects the current mode so the user can change it
+             * mid-burst without stopping transmission. */
+            subghz_button_bar_draw(
+                arrowleft_8x8, app->raw_tx_repeat_mode ? "Rpt" : "Once",
+                NULL, NULL,
+                arrowright_8x8, NULL);
             break;
     }
 

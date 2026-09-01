@@ -472,6 +472,24 @@ endif()
 add_test(NAME subghz_read_raw_status COMMAND test_subghz_read_raw_status)
 
 # ------------------------------------------------------------------
+# Module under test: m1_subghz_read_raw_state.h — TX repeat-mode helpers
+# Covers subghz_raw_tx_should_repeat(), subghz_read_raw_state_is_tx(),
+# subghz_read_raw_state_to_repeat(), and repeat-mode toggle logic.
+# Pure inline helpers; no firmware .c file needed.
+# ------------------------------------------------------------------
+add_executable(test_subghz_tx_repeat_mode
+    test_subghz_tx_repeat_mode.c
+)
+target_include_directories(test_subghz_tx_repeat_mode PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_tx_repeat_mode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_tx_repeat_mode PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_tx_repeat_mode COMMAND test_subghz_tx_repeat_mode)
+
+# ------------------------------------------------------------------
 # Source invariant: ESP32 transport must be quiesced around Sub-GHz.
 # Bug context: SiN360 ESP32 tools can leave SPI3/EXTI active; Sub-GHz
 # Read/Read Raw depend on timing-sensitive SI4463/TIM1 capture.
