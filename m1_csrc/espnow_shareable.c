@@ -76,6 +76,22 @@ bool espnow_share_is_shareable(const char *name)
     return espnow_share_classify(name) != ESPNOW_SHARE_KIND_UNKNOWN;
 }
 
+const char *espnow_share_kind_dir(espnow_share_kind_t kind)
+{
+    switch (kind) {
+    case ESPNOW_SHARE_KIND_SUBGHZ:
+        return "0:/SUBGHZ";
+    case ESPNOW_SHARE_KIND_NFC:
+        return "0:/NFC";
+    case ESPNOW_SHARE_KIND_RFID:
+        return "0:/RFID";
+    case ESPNOW_SHARE_KIND_IR:
+        return "0:/IR";
+    default:
+        return NULL;
+    }
+}
+
 bool espnow_share_basename(const char *path, char *out, size_t out_cap)
 {
     if (path == NULL || out == NULL || out_cap == 0u)

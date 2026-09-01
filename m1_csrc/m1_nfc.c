@@ -35,12 +35,13 @@
 #include "nfc_card_info.h"
 #include "nfc_ndef_parse.h"
 #include "nfc_ndef_encode.h"
+#include "m1_espnow_capture_share.h"
 
 /*************************** D E F I N E S ************************************/
 #define M1_LOGDB_TAG					"NFC"
 
 #define NFC_READ_MORE_OPTIONS			4
-#define NFC_READ_MORE_OPTIONS_FILE    	7 // Emulate, Unlock, Edit UID, Card Actions, Info, Rename, Delete
+#define NFC_READ_MORE_OPTIONS_FILE    	8 // Emulate, Send to Peer, Unlock, Edit UID, Card Actions, Info, Rename, Delete
 
 #define NFC_FILEPATH					"/NFC"
 #define NFC_FILE_EXTENSION				".nfc"
@@ -64,6 +65,7 @@ const char *m1_nfc_more_options[] = {
 /* Menu for LOAD_FILE (Excluding Save - does not require Save as it was retrieved from a file) */
 const char *m1_nfc_more_options_file[] = {
 		"Emulate UID",
+		"Send to Peer",
 		"Unlock",
 		"Edit UID",
 		"Card Actions",
@@ -624,7 +626,7 @@ static int nfc_read_more_kp_handler(void)
 			menu_index = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE); // Get current index
 			if (is_load_file)
 			{
-				/* LOAD_FILE: Emulate, Unlock, Edit UID, Card Actions, Info, Rename, Delete */
+				/* LOAD_FILE: Emulate, Send to Peer, Unlock, Edit UID, Card Actions, Info, Rename, Delete */
 				view_id = 0xFF;
 				switch ( menu_index )
 				{
@@ -632,28 +634,34 @@ static int nfc_read_more_kp_handler(void)
 						view_id = VIEW_MODE_NFC_EMULATE;
 						break;
 
-					case 1: /* Unlock — capture password from reader */
+					case 1:
+						if (c && c->file.path[0] != '\0')
+							m1_espnow_capture_share_send_path(c->file.path);
+						m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+						break;
+
+					case 2: /* Unlock — capture password from reader */
 						nfc_unlock_with_reader();
 						m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 						break;
 
-					case 2:
+					case 3:
 						view_id = VIEW_MODE_NFC_EDIT_UID;
 						break;
 
-					case 3:
+					case 4:
 						view_id = VIEW_MODE_NFC_UTILS;
 						break;
 
-					case 4:
+					case 5:
 						view_id = VIEW_MODE_NFC_INFO;
 						break;
 
-					case 5:
+					case 6:
 						view_id = VIEW_MODE_NFC_RENAME;
 						break;
 
-					case 6: // Delete
+					case 7: // Delete
 						if (nfc_read_more_options_delete()==0)
 						{
 							return 0; // exit

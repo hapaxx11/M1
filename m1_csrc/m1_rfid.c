@@ -32,6 +32,7 @@
 #include "m1_file_util.h"
 #include "m1_diag.h"
 #include "m1_button_bar.h"
+#include "m1_espnow_capture_share.h"
 
 #define M1_LOGDB_TAG	"RFID"
 
@@ -42,12 +43,13 @@
 //#define RFID_FILE_INFIX						"" // Not used
 
 #define RFID_READ_MORE_OPTIONS					3
-#define RFID_READ_SAVED_MORE_OPTIONS				6
+#define RFID_READ_SAVED_MORE_OPTIONS				7
 #define RFID_READ_ADD_MANUALLY_MORE_OPTIONS (LFRFIDProtocolMax)
 
 //************************** C O N S T A N T **********************************/
 const char *m1_rfid_save_mode_options[] = {
 	"Emulate",
+	"Send to Peer",
 	"Write",
 	"Edit",
 	"Rename",
@@ -1307,22 +1309,32 @@ static int lfrfid_saved_submenu_kp_handler(void)
 				break;
 
 			case 1:
+			{
+				char path[160];
+				fu_path_combine(path, sizeof(path),
+					lfrfid_tag_info.filepath, lfrfid_tag_info.filename);
+				m1_espnow_capture_share_send_path(path);
+				m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
+				break;
+			}
+
+			case 2:
 				view_id = VIEW_MODE_LFRFID_SAVED_WRITE;
 				break;
 
-			case 2:
+			case 3:
 				view_id = VIEW_MODE_LFRFID_SAVED_EDIT;
 				break;
 
-			case 3:
+			case 4:
 				view_id = VIEW_MODE_LFRFID_SAVED_RENAME;
 				break;
 
-			case 4:
+			case 5:
 				view_id = VIEW_MODE_LFRFID_SAVED_DELETE;
 				break;
 
-			case 5:
+			case 6:
 				view_id = VIEW_MODE_LFRFID_SAVED_INFO;
 				break;
 
@@ -3635,4 +3647,3 @@ static void lfrfid_write_screen_draw(int param, char* filename)
     }
 
 } // static void rfid_read_more_options_write(void)
-

@@ -39,6 +39,7 @@
 #include "m1_ir_quick_remote.h"
 #include "m1_settings.h"
 #include "ir_signal_record.h"
+#include "m1_espnow_capture_share.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -977,7 +978,7 @@ static uint16_t parse_ir_file(const char *filepath)
 /*
  * IR Saved File Action Menu — Flipper "saved_menu" pattern.
  *
- * Presents file-level actions (Send All, Info, Rename, Delete) after a
+ * Presents file-level actions (Send All, Send to Peer, Info, Rename, Delete) after a
  * .ir file has been loaded and its commands are in s_commands[].
  *
  * Returns:
@@ -986,21 +987,33 @@ static uint16_t parse_ir_file(const char *filepath)
  */
 /*============================================================================*/
 
-#define IR_ACTION_COUNT   4
-#define IR_ACTION_SEND_ALL 0
-#define IR_ACTION_INFO     1
-#define IR_ACTION_RENAME   2
-#define IR_ACTION_DELETE   3
+#define IR_ACTION_COUNT        5
+#define IR_ACTION_SEND_ALL     0
+#define IR_ACTION_SEND_TO_PEER 1
+#define IR_ACTION_INFO         2
+#define IR_ACTION_RENAME       3
+#define IR_ACTION_DELETE       4
 
 static const char *ir_action_labels[IR_ACTION_COUNT] = {
-    "Send All", "Info", "Rename", "Delete"
+    "Send All", "Send to Peer", "Info", "Rename", "Delete"
 };
 
 static void draw_ir_action_menu(const char *filename, uint8_t sel)
 {
     char dname[22];
+    uint8_t scroll = 0;
     strncpy(dname, filename, 21);
     dname[21] = '\0';
+
+    const uint8_t row_h = m1_menu_item_h();
+    const uint8_t max_vis = M1_MENU_VIS(IR_ACTION_COUNT);
+
+    if ((max_vis < IR_ACTION_COUNT) && (sel >= max_vis))
+    {
+        scroll = sel - max_vis + 1;
+        if (scroll > (IR_ACTION_COUNT - max_vis))
+            scroll = IR_ACTION_COUNT - max_vis;
+    }
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -1010,17 +1023,17 @@ static void draw_ir_action_menu(const char *filename, uint8_t sel)
     u8g2_DrawStr(&m1_u8g2, 2, 10, dname);
     u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
-    /* 4 items in 52px (y=13..64) → 13px per item */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    for (uint8_t i = 0; i < IR_ACTION_COUNT; i++)
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
+    for (uint8_t i = 0; i < max_vis; i++)
     {
-        uint8_t y = 13 + i * 13;
-        if (i == sel)
+        uint8_t idx = scroll + i;
+        uint8_t y = 13 + i * row_h;
+        if (idx == sel)
         {
-            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13, 2);
+            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, row_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
-        u8g2_DrawStr(&m1_u8g2, 8, y + 10, ir_action_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 8, y + row_h - 3u, ir_action_labels[idx]);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
@@ -1168,6 +1181,12 @@ static bool ir_file_action_menu(const char *ir_file_path)
                     }
                     m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
                     return true;  /* Done — stay in commands */
+                }
+
+                case IR_ACTION_SEND_TO_PEER:
+                {
+                    m1_espnow_capture_share_send_path(ir_file_path);
+                    break;  /* Redraw action menu */
                 }
 
                 case IR_ACTION_INFO:

@@ -3,7 +3,7 @@
 > **Status:** This branch implements Phases 0–4 as pure-logic, host-tested STM32-side
 > modules (see `m1_csrc/espnow_{chunk,shareable,message,trigger,crypto}.c`
 > and their `tests/test_espnow_*` suites), plus Peer Link scene wiring for
-> Messages and Send Capture. Live two-device bench validation and remaining
+> Messages, Send Capture, and saved-item Send to Peer shortcuts. Live two-device bench validation and remaining
 > trigger/encryption scene work depend on the coordinated `bedge117/m1-esp32-brain`
 > changes noted in §4. This document is retained for direction by @hapaxx11.
 >
@@ -68,7 +68,7 @@ discovery, capture sharing, remote trigger.**
 | dag pillar | Hapax today | Gap to close |
 |------------|-------------|--------------|
 | **Peer discovery** | ✅ `espnow_peer_session` + Scan scene + confirm code; `M1_ESP32_CAP_ESPNOW` is temporarily inferred for confirmed native CD3 via STM32 M1_RPC probe fallback | None (polish only; brain should eventually self-report bit 24) |
-| **Capture sharing** | ✅ Sender UI now offers a category picker for saved Sub-GHz / NFC / RFID / IR captures, opens the existing storage browser, and streams the selected file to the paired peer; receiver still stores into `/ESPNOW/` | Two-device bench validation and optional per-saved-item "Send to peer" shortcuts |
+| **Capture sharing** | ✅ Sender UI offers a Peer Link category picker and saved-item Send to Peer shortcuts for Sub-GHz / NFC / RFID / IR captures, then streams the selected file to the paired peer; receiver still stores into `/ESPNOW/` | Two-device bench validation |
 | **Peer messaging** | ✅ Messages scene uses VKB compose plus the `espnow_message` inbox/framing module for paired-peer short text | Scene-level chunking for messages longer than one direct `NOW_SEND` call |
 | **AES-256 encryption** | ❌ `encrypt = false` always (`esp32_firmware.md:808`); only visual confirm codes | Application-layer authenticated encryption over the DATA channel (see §5, Phase 4) |
 | **Remote trigger** | ❌ None | New command app: ask a paired peer to replay/transmit a named saved capture (danger-gated) |
@@ -132,9 +132,10 @@ so early phases unblock later ones.
   Sub-GHz (`.sub`), NFC (`.nfc`), RFID (`.rfid`), and IR (`.ir`) item menus.
 - Reuse `espnow_file_transfer.c` (already bidirectional at the protocol level) and
   the paired-peer MAC from `espnow_peer_session`.
-- **Status:** Sender UI is wired through Peer Link → Send Capture, with saved
-  category picker, storage browser, CRC preflight, 36-byte sender chunks and
-  progress card. Two-device bench validation remains.
+- **Status:** Sender UI is wired through Peer Link → Send Capture and saved-item
+  Send to Peer actions, with saved category picker, storage browser, CRC
+  preflight, 36-byte sender chunks and progress card. Two-device bench
+  validation remains.
 - **Deliverable:** end-to-end save→send→receive→save of a capture between two M1s.
 - **Host tests:** extend `test_espnow_file_transfer.c` for the sender FSM
   (offer/accept/data/ack/complete, retry, abort) if not already covered.

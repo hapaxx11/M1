@@ -856,8 +856,9 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
   (`.sub` / `.nfc` / `.rfid` / `.ir`) may be shared, extracts a safe basename,
   rejects path-traversal / unsafe names, and builds the `/ESPNOW/<name>` receive
   path.  The Peer Link menu exposes Send Capture; the sender picks a saved-item
-  category, browses the SD card, and streams the file to the paired peer.  The
-  receiver stores into `/ESPNOW/`.
+  category, browses the SD card, and streams the file to the paired peer.  Saved
+  capture action menus also expose Send to Peer shortcuts that reuse the same
+  paired-peer transfer flow.  The receiver stores into `/ESPNOW/`.
 - *Messaging (`espnow_message`)* — Builds/parses short text frames (type `0x20`,
   ≤ 120 chars) and maintains a bounded inbox ring (cap 8) with eviction and
   duplicate suppression.  The first Messages scene caps composed text to one

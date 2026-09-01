@@ -59,6 +59,14 @@ espnow_share_kind_t espnow_share_classify(const char *name);
 bool espnow_share_is_shareable(const char *name);
 
 /**
+ * @brief  Return the saved-capture browser root for a shareable kind.
+ *
+ * The returned strings use the existing storage browser volume prefix.
+ * Returns NULL for UNKNOWN.
+ */
+const char *espnow_share_kind_dir(espnow_share_kind_t kind);
+
+/**
  * @brief  Extract the basename (final path component) from a full path.
  *
  * "/SUBGHZ/x/foo.sub" → "foo.sub".  A path with no separator is copied as-is.

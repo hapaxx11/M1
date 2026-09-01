@@ -63,6 +63,19 @@ void test_is_shareable(void)
     TEST_ASSERT_FALSE(espnow_share_is_shareable("a.exe"));
 }
 
+void test_kind_dir_maps_saved_capture_roots(void)
+{
+    TEST_ASSERT_EQUAL_STRING("0:/SUBGHZ",
+        espnow_share_kind_dir(ESPNOW_SHARE_KIND_SUBGHZ));
+    TEST_ASSERT_EQUAL_STRING("0:/NFC",
+        espnow_share_kind_dir(ESPNOW_SHARE_KIND_NFC));
+    TEST_ASSERT_EQUAL_STRING("0:/RFID",
+        espnow_share_kind_dir(ESPNOW_SHARE_KIND_RFID));
+    TEST_ASSERT_EQUAL_STRING("0:/IR",
+        espnow_share_kind_dir(ESPNOW_SHARE_KIND_IR));
+    TEST_ASSERT_NULL(espnow_share_kind_dir(ESPNOW_SHARE_KIND_UNKNOWN));
+}
+
 /* =========================================================================
  * basename
  * =========================================================================*/
@@ -155,6 +168,7 @@ int main(void)
     RUN_TEST(test_classify_directory_dot_not_extension);
     RUN_TEST(test_classify_hidden_file_no_extension);
     RUN_TEST(test_is_shareable);
+    RUN_TEST(test_kind_dir_maps_saved_capture_roots);
     RUN_TEST(test_basename_strips_path);
     RUN_TEST(test_basename_no_separator);
     RUN_TEST(test_basename_truncates);
