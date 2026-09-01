@@ -50,7 +50,7 @@ static void push_rx(const uint8_t mac[ESPNOW_MAC_LEN],
 
 bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
 {
-    TEST_ASSERT_LESS_OR_EQUAL_size_t(ESPNOW_CHUNK_MSG_MAX, len);
+    TEST_ASSERT_LESS_OR_EQUAL_size_t(ESPNOW_CHUNK_FRAME_MAX, len);
     TEST_ASSERT_LESS_THAN_UINT8(MAX_QUEUE, s_tx_count);
     memcpy(s_tx[s_tx_count].mac, mac, ESPNOW_MAC_LEN);
     memcpy(s_tx[s_tx_count].data, data, len);
@@ -178,6 +178,61 @@ void test_plaintext_fallback_preserves_large_legacy_frame(void)
     TEST_ASSERT_TRUE(m1_espnow_secure_link_fallback());
 }
 
+void test_long_plaintext_send_is_fragmented_for_fallback(void)
+{
+    uint8_t payload[82];
+    espnow_chunk_reasm_t reasm;
+    espnow_chunk_status_t st = ESPNOW_CHUNK_IGNORED;
+
+    payload[0] = 0x20u;
+    payload[1] = 0x04u;
+    for (uint8_t i = 2u; i < sizeof(payload); ++i)
+        payload[i] = (uint8_t)('a' + (i % 26u));
+
+    configure_link();
+    TEST_ASSERT_TRUE(m1_espnow_secure_link_send(s_peer, payload,
+                                                sizeof(payload)));
+    TEST_ASSERT_GREATER_THAN_UINT8(2u, s_tx_count);
+    TEST_ASSERT_EQUAL_UINT8(ESPNOW_SECURE_CTRL_HELLO, s_tx[0].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(ESPNOW_APP_FRAG, s_tx[1].data[0]);
+
+    espnow_chunk_reasm_init(&reasm);
+    for (uint8_t i = 1u; i < s_tx_count; ++i)
+        st = espnow_chunk_reasm_feed(&reasm, s_tx[i].data, s_tx[i].len);
+
+    TEST_ASSERT_EQUAL(ESPNOW_CHUNK_COMPLETE, st);
+    TEST_ASSERT_EQUAL_UINT16(sizeof(payload), reasm.msg_len);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, reasm.msg, sizeof(payload));
+}
+
+void test_long_plaintext_fragments_reassemble_in_fallback(void)
+{
+    uint8_t payload[82];
+    espnow_chunk_splitter_t split;
+    uint8_t frame[ESPNOW_CHUNK_FRAME_MAX];
+    size_t frame_len = 0;
+    uint8_t from[ESPNOW_MAC_LEN];
+    uint8_t out[sizeof(payload)];
+    uint8_t out_len = 0;
+
+    payload[0] = 0x20u;
+    payload[1] = 0x05u;
+    for (uint8_t i = 2u; i < sizeof(payload); ++i)
+        payload[i] = (uint8_t)('A' + (i % 26u));
+
+    configure_link();
+    TEST_ASSERT_TRUE(espnow_chunk_split_init(&split, 0x51u, payload,
+                                            sizeof(payload)));
+    while (espnow_chunk_split_next(&split, frame, sizeof(frame), &frame_len))
+        push_rx(s_peer, frame, (uint8_t)frame_len);
+
+    TEST_ASSERT_TRUE(m1_espnow_secure_link_recv(from, out, sizeof(out),
+                                                &out_len));
+    TEST_ASSERT_EQUAL_UINT8(sizeof(payload), out_len);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, out, sizeof(payload));
+    TEST_ASSERT_TRUE(m1_espnow_secure_link_fallback());
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -185,5 +240,7 @@ int main(void)
     RUN_TEST(test_ack_enables_encrypted_fragment_send);
     RUN_TEST(test_plaintext_from_peer_is_rejected_after_encryption_enabled);
     RUN_TEST(test_plaintext_fallback_preserves_large_legacy_frame);
+    RUN_TEST(test_long_plaintext_send_is_fragmented_for_fallback);
+    RUN_TEST(test_long_plaintext_fragments_reassemble_in_fallback);
     return UNITY_END();
 }

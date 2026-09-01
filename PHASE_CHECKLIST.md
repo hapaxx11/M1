@@ -13,12 +13,12 @@
 
 ### Phase 2 — Chunked plaintext transport
 - **Description**: Teach the optional secure-link wrapper to fragment/reassemble plaintext app payloads when they exceed the direct 42-byte send budget, without requiring ESP32 firmware changes.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Support chunked ESP-NOW plaintext`
 
 ### Phase 3 — Messages UI polish
 - **Description**: Raise the Messages composer to the full protocol text length and add concise on-screen hint/status text for chunked Hapax messages versus short compatibility messages.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Docs, validation, cleanup

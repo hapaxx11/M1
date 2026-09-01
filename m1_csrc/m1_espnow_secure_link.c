@@ -91,6 +91,23 @@ static bool secure_send_encrypted(const uint8_t peer_mac[ESPNOW_MAC_LEN],
     return true;
 }
 
+static bool secure_send_chunked_plaintext(const uint8_t peer_mac[ESPNOW_MAC_LEN],
+                                          const uint8_t *payload, size_t len)
+{
+    espnow_chunk_splitter_t split;
+    uint8_t frame[ESPNOW_CHUNK_FRAME_MAX];
+    size_t frame_len = 0;
+
+    if (!espnow_chunk_split_init(&split, s_next_msg_id++, payload, len))
+        return false;
+
+    while (espnow_chunk_split_next(&split, frame, sizeof(frame), &frame_len)) {
+        if (!m1_espnow_send(peer_mac, frame, frame_len))
+            return false;
+    }
+    return true;
+}
+
 bool m1_espnow_secure_link_send(const uint8_t peer_mac[ESPNOW_MAC_LEN],
                                 const uint8_t *payload, size_t len)
 {
@@ -98,9 +115,7 @@ bool m1_espnow_secure_link_send(const uint8_t peer_mac[ESPNOW_MAC_LEN],
         return false;
 
     if (secure_peer_matches(peer_mac) && s_encrypted) {
-        if (secure_send_encrypted(peer_mac, payload, len))
-            return true;
-        s_fallback = true;
+        return secure_send_encrypted(peer_mac, payload, len);
     }
 
     if (secure_peer_matches(peer_mac) && !s_encrypted && !s_hello_sent) {
@@ -108,6 +123,9 @@ bool m1_espnow_secure_link_send(const uint8_t peer_mac[ESPNOW_MAC_LEN],
         s_hello_sent = true;
         s_fallback = true;
     }
+
+    if (len > M1_ESPNOW_SEND_PAYLOAD_MAX)
+        return secure_send_chunked_plaintext(peer_mac, payload, len);
 
     return m1_espnow_send(peer_mac, payload, len);
 }
@@ -128,6 +146,30 @@ static bool secure_open_reassembled(uint8_t *buf, size_t buf_size,
     *out_len = (uint8_t)plain_len;
     s_encrypted = true;
     s_fallback = false;
+    return true;
+}
+
+static bool secure_copy_reassembled_plaintext(uint8_t from_mac[ESPNOW_MAC_LEN],
+                                              const uint8_t raw_from[ESPNOW_MAC_LEN],
+                                              uint8_t *buf, size_t buf_size,
+                                              uint8_t *out_len)
+{
+    size_t copy_len;
+
+    if (s_reasm.msg_len == 0u)
+        return false;
+    if (secure_peer_matches(raw_from) &&
+        !espnow_secure_should_accept_plaintext(!s_encrypted, s_encrypted))
+        return false;
+
+    copy_len = s_reasm.msg_len;
+    if (copy_len > buf_size)
+        copy_len = buf_size;
+    memcpy(from_mac, raw_from, ESPNOW_MAC_LEN);
+    memcpy(buf, s_reasm.msg, copy_len);
+    *out_len = (uint8_t)copy_len;
+    if (s_configured && secure_peer_matches(raw_from) && !s_encrypted)
+        s_fallback = true;
     return true;
 }
 
@@ -165,11 +207,19 @@ bool m1_espnow_secure_link_recv(uint8_t from_mac[ESPNOW_MAC_LEN],
         }
 
         chunk_status = espnow_chunk_reasm_feed(&s_reasm, raw, raw_len);
-        if (chunk_status == ESPNOW_CHUNK_COMPLETE &&
-            secure_peer_matches(raw_from) &&
-            secure_open_reassembled(buf, buf_size, out_len)) {
-            memcpy(from_mac, raw_from, ESPNOW_MAC_LEN);
-            return true;
+        if (chunk_status == ESPNOW_CHUNK_COMPLETE) {
+            if (secure_peer_matches(raw_from) &&
+                s_reasm.msg[0] == ESPNOW_APP_CRYPTO_BASE) {
+                if (secure_open_reassembled(buf, buf_size, out_len)) {
+                    memcpy(from_mac, raw_from, ESPNOW_MAC_LEN);
+                    return true;
+                }
+                continue;
+            }
+            if (secure_copy_reassembled_plaintext(from_mac, raw_from, buf,
+                                                  buf_size, out_len)) {
+                return true;
+            }
         }
         if (chunk_status != ESPNOW_CHUNK_IGNORED)
             continue;
