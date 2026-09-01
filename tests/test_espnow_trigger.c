@@ -50,6 +50,23 @@ void test_request_parse_rejects_unsafe_name(void)
     TEST_ASSERT_FALSE(espnow_trig_parse_request(frame, 6, &kind, name, sizeof(name)));
 }
 
+void test_request_parse_rejects_out_of_range_kind(void)
+{
+    uint8_t frame[16] = { ESPNOW_TRIG_MSG_REQUEST, 0xFFu, 'x', '.', 's', 'u', 'b' };
+    espnow_share_kind_t kind = ESPNOW_SHARE_KIND_UNKNOWN;
+    char name[ESPNOW_TRIG_NAME_MAX + 1];
+    TEST_ASSERT_FALSE(espnow_trig_parse_request(frame, 7, &kind, name, sizeof(name)));
+}
+
+void test_request_parse_rejects_embedded_nul_name(void)
+{
+    uint8_t frame[16] = { ESPNOW_TRIG_MSG_REQUEST, ESPNOW_SHARE_KIND_SUBGHZ,
+                          'o', 'k', '\0', 'x' };
+    espnow_share_kind_t kind;
+    char name[ESPNOW_TRIG_NAME_MAX + 1];
+    TEST_ASSERT_FALSE(espnow_trig_parse_request(frame, 6, &kind, name, sizeof(name)));
+}
+
 void test_request_parse_rejects_wrong_type(void)
 {
     uint8_t frame[8] = { ESPNOW_TRIG_MSG_ACCEPT, 0, 'x' };
@@ -148,6 +165,15 @@ void test_responder_rejects_unknown_kind(void)
     TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_REJECT_BAD_NAME, resp.reject_reason);
 }
 
+void test_responder_rejects_out_of_range_kind(void)
+{
+    espnow_trigger_ctx_t resp;
+    espnow_trigger_init(&resp, ESPNOW_TRIG_ROLE_RESPONDER, true);
+    TEST_ASSERT_FALSE(espnow_trigger_on_request(&resp, (espnow_share_kind_t)0xFFu, "file.sub"));
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_STATE_REJECTED, resp.state);
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_REJECT_BAD_NAME, resp.reject_reason);
+}
+
 void test_responder_deny_path(void)
 {
     espnow_trigger_ctx_t resp;
@@ -219,6 +245,8 @@ int main(void)
     RUN_TEST(test_request_build_parse_roundtrip);
     RUN_TEST(test_request_build_rejects_unsafe_name);
     RUN_TEST(test_request_parse_rejects_unsafe_name);
+    RUN_TEST(test_request_parse_rejects_out_of_range_kind);
+    RUN_TEST(test_request_parse_rejects_embedded_nul_name);
     RUN_TEST(test_request_parse_rejects_wrong_type);
     RUN_TEST(test_status_build_parse);
     RUN_TEST(test_status_build_rejects_bad_type);
@@ -226,6 +254,7 @@ int main(void)
     RUN_TEST(test_responder_auto_rejects_when_disabled);
     RUN_TEST(test_responder_rejects_bad_name);
     RUN_TEST(test_responder_rejects_unknown_kind);
+    RUN_TEST(test_responder_rejects_out_of_range_kind);
     RUN_TEST(test_responder_deny_path);
     RUN_TEST(test_grant_requires_pending_request);
     RUN_TEST(test_execution_failure_marks_rejected);

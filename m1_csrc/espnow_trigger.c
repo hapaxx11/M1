@@ -17,6 +17,11 @@
  * Wire framing
  * =========================================================================*/
 
+static bool espnow_trig_kind_is_valid(espnow_share_kind_t kind)
+{
+    return kind >= ESPNOW_SHARE_KIND_SUBGHZ && kind <= ESPNOW_SHARE_KIND_IR;
+}
+
 bool espnow_trig_build_request(espnow_share_kind_t kind, const char *name,
                                uint8_t *out, size_t out_cap, size_t *out_len)
 {
@@ -48,6 +53,9 @@ bool espnow_trig_parse_request(const uint8_t *frame, size_t len,
         return false;
     if (frame[0] != (uint8_t)ESPNOW_TRIG_MSG_REQUEST)
         return false;
+    espnow_share_kind_t kind = (espnow_share_kind_t)frame[1];
+    if (!espnow_trig_kind_is_valid(kind))
+        return false;
 
     size_t nlen = len - 2u;
     if (nlen + 1u > name_cap)
@@ -55,6 +63,8 @@ bool espnow_trig_parse_request(const uint8_t *frame, size_t len,
 
     char tmp[ESPNOW_TRIG_NAME_MAX + 1];
     if (nlen > ESPNOW_TRIG_NAME_MAX)
+        return false;
+    if (memchr(&frame[2], '\0', nlen) != NULL)
         return false;
     memcpy(tmp, &frame[2], nlen);
     tmp[nlen] = '\0';
@@ -65,7 +75,7 @@ bool espnow_trig_parse_request(const uint8_t *frame, size_t len,
 
     memcpy(name_out, tmp, nlen + 1u);
     if (out_kind != NULL)
-        *out_kind = (espnow_share_kind_t)frame[1];
+        *out_kind = kind;
     return true;
 }
 
@@ -200,7 +210,7 @@ bool espnow_trigger_on_request(espnow_trigger_ctx_t *ctx,
 
     /* Safety gate 2 — the name must be valid and the kind shareable. */
     if (!espnow_share_name_is_safe(name, ESPNOW_TRIG_NAME_MAX) ||
-        kind == ESPNOW_SHARE_KIND_UNKNOWN) {
+        !espnow_trig_kind_is_valid(kind)) {
         ctx->reject_reason = ESPNOW_TRIG_REJECT_BAD_NAME;
         ctx->state = ESPNOW_TRIG_STATE_REJECTED;
         return false;
