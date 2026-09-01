@@ -461,6 +461,7 @@ void test_cd3_profile_has_expected_caps(void)
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_GATT);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_ESPNOW);
     /* CD3-specific caps */
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PMKID);
     TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_HANDSHAKE);
@@ -483,10 +484,12 @@ void test_cd3_fallback_heap_exceeds_at(void)
                              M1_ESP32_FALLBACK_HEAP_CD3);
 }
 
-void test_cd3_host_bits_add_wifi_disconnect(void)
+void test_cd3_host_bits_add_probe_fallback_caps(void)
 {
     const uint64_t reported = M1_ESP32_CAP_WIFI_SCAN | M1_ESP32_CAP_WIFI_JOIN;
-    TEST_ASSERT_EQUAL_UINT64(reported | M1_ESP32_CAP_WIFI_DISCONNECT,
+    TEST_ASSERT_EQUAL_UINT64(reported |
+                             M1_ESP32_CAP_WIFI_DISCONNECT |
+                             M1_ESP32_CAP_ESPNOW,
                              m1_esp32_caps_with_cd3_host_bits(reported));
 }
 
@@ -1318,7 +1321,7 @@ int main(void)
     RUN_TEST(test_cd3_profile_has_expected_caps);
     RUN_TEST(test_cd3_fallback_bss_less_than_at);
     RUN_TEST(test_cd3_fallback_heap_exceeds_at);
-    RUN_TEST(test_cd3_host_bits_add_wifi_disconnect);
+    RUN_TEST(test_cd3_host_bits_add_probe_fallback_caps);
 
     /* M1_RPC helpers: CRC16 */
     RUN_TEST(test_rpc_crc16_empty_returns_0xffff);

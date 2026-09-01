@@ -207,18 +207,19 @@
 
 /* -------------------------------------------------------------------------
  * Bits 24+ are host-only (hapaxx11) capabilities that have no assignment in
- * the canonical CD3 wire header.  No shipped firmware self-reports them, so
- * their feature gates fail closed until a firmware advertises the bit.  They
+ * the canonical CD3 wire header.  Current shipped firmware does not
+ * self-report them, so they either fail closed or are inferred only after a
+ * safer STM32-side runtime probe has confirmed the backing firmware.  They
  * live above bit 23 specifically so they can never collide with a canonical
  * CD3 capability position.
  * ------------------------------------------------------------------------- */
 
 /** ESP-NOW peer-to-peer communication (discovery, unicast, broadcast).
  *  Handled by CD3 (bedge117/m1-esp32-brain) via M1_RPC_NOW_* handlers
- *  (msg_ids 0x0600..0x0605) but not self-reported in M1_FW_CAPS.  Until CD3
- *  sets this bit, the feature gate fails closed on CD3 builds.  No fallback
- *  probe is implemented.  Host-only bit — not part of the canonical CD3
- *  capability header. */
+ *  (msg_ids 0x0600..0x0605) but not self-reported in M1_FW_CAPS by current
+ *  shipped builds.  Until CD3 sets this bit, the STM32 capability probe adds
+ *  it as a host-owned fallback after native CD3 has been confirmed via M1_RPC.
+ *  Host-only bit — not part of the canonical CD3 capability header. */
 #define M1_ESP32_CAP_ESPNOW         (UINT64_C(1) << 24)
 
 /** WiFi SoftAP hotspot via the raw ESP-AT AT+CWMODE=2 / AT+CWSAP path.  Not
@@ -300,7 +301,9 @@
  *  designed to eventually expose once all components are wired.  CD3
  *  self-reports its actual bitmap via M1_RPC_SYS_GET_STATUS; this macro is
  *  retained for unit tests and as a fallback when the GET_STATUS probe
- *  succeeds but returns an all-zero bitmap.
+ *  succeeds but returns an all-zero bitmap.  It includes host-owned fallback
+ *  bits that the STM32 may infer only after the native CD3 M1_RPC probe
+ *  succeeds.
  *
  *  CD3 uses the M1_RPC binary SPI protocol (magic 0x4D31, "M1") and is
  *  detected by the M1_RPC probe in m1_esp32_caps_init().  It is discriminated
@@ -335,15 +338,18 @@
      M1_ESP32_CAP_802154        | \
      M1_ESP32_CAP_802154_TX     | \
      M1_ESP32_CAP_SOFTAP        | \
+     M1_ESP32_CAP_ESPNOW        | \
      M1_ESP32_CAP_OTA)
 
 /**
  * Augment a confirmed native-CD3 capability bitmap with host-owned bits that
- * the firmware does not self-report in SYS_GET_STATUS.
+ * current shipped firmware does not self-report in SYS_GET_STATUS.  This is
+ * the STM32-side runtime-probe fallback: callers only use it after M1_RPC has
+ * positively identified the coprocessor as native CD3.
  */
 static inline uint64_t m1_esp32_caps_with_cd3_host_bits(uint64_t bitmap)
 {
-    return bitmap | M1_ESP32_CAP_WIFI_DISCONNECT;
+    return bitmap | M1_ESP32_CAP_WIFI_DISCONNECT | M1_ESP32_CAP_ESPNOW;
 }
 
 /* =========================================================================

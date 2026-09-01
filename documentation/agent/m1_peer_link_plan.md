@@ -66,7 +66,7 @@ discovery, capture sharing, remote trigger.**
 
 | dag pillar | Hapax today | Gap to close |
 |------------|-------------|--------------|
-| **Peer discovery** | ✅ `espnow_peer_session` + Scan scene + confirm code | None (polish only) |
+| **Peer discovery** | ✅ `espnow_peer_session` + Scan scene + confirm code; `M1_ESP32_CAP_ESPNOW` is temporarily inferred for confirmed native CD3 via STM32 M1_RPC probe fallback | None (polish only; brain should eventually self-report bit 24) |
 | **Capture sharing** | ⚠️ File transfer exists but the transfer scene is **receiver-only**; sender path is stubbed (`m1_espnow_scene_transfer.c:85-86` "future Phase 5 integration") | Add a **sender-side file browser** and a "Send to peer" action from saved Sub-GHz / NFC / RFID / IR items |
 | **Peer messaging** | ❌ No text/chat app over the DATA channel | New short-message app + scene |
 | **AES-256 encryption** | ❌ `encrypt = false` always (`esp32_firmware.md:808`); only visual confirm codes | Application-layer authenticated encryption over the DATA channel (see §5, Phase 4) |
@@ -75,14 +75,16 @@ discovery, capture sharing, remote trigger.**
 Two enablement blockers apply to **all** on-device use, regardless of pillar:
 
 1. **Capability self-report.** `M1_ESP32_CAP_ESPNOW` (bit 24) is host-only and no
-   shipped CD3 brain firmware sets it, so the feature gate *fails closed* on real
-   hardware today (`m1_esp32_caps.h:216-222`, `esp32_firmware.md:802-805`). The
-   brain firmware (`bedge117/m1-esp32-brain`, separate repo) must advertise the
-   bit — or Hapax must add a dedicated `NOW`-ping fallback probe.
+   shipped CD3 brain firmware sets it.  This branch now satisfies the gate via an
+   STM32-side M1_RPC probe fallback for confirmed native CD3
+   (`m1_esp32_caps.h:216-222`, `esp32_firmware.md:802-805`), but the brain
+   firmware (`bedge117/m1-esp32-brain`, separate repo) should eventually
+   advertise the bit directly.
 2. **Payload size.** The fixed 64-byte SPI-HD transaction caps ESP-NOW app data
-   at **42 bytes per `NOW_SEND` call** (`esp32_firmware.md:795-800`); full 240-byte
-   frames need multi-transaction RPC chunking that is **not yet implemented**.
-   Messaging and encryption headers make this limit bite sooner.
+   at **42 bytes per `NOW_SEND` call** (`esp32_firmware.md:795-800`); this branch
+   adds STM32-side app-layer chunking/reassembly for full 240-byte logical
+   messages.  Scene integration still needs to route large app payloads through
+   the chunk helper.
 
 ---
 
@@ -188,13 +190,13 @@ so early phases unblock later ones.
 1. **Confirm transport choice** — ESP-NOW (this plan) vs also wanting a 915 MHz
    FSK SI4463 path for parity with dag. Recommendation: ESP-NOW only.
 2. **Phase 0 first** — capability detection + chunking unblock everything else and
-   are the main firmware/hardware coordination items.
+   are now implemented as STM32-side foundations; brain firmware should still
+   self-report ESP-NOW long-term.
 3. **Then pick order** among Phases 1–4 by priority. Capture sharing (Phase 1)
    has the most existing code and the clearest payoff; encryption (Phase 4) is
    the biggest cross-repo dependency.
-4. **Brain firmware coordination** — flag which pieces (self-report bit, large-
-   frame `NOW_SEND`, any new opcode) need `bedge117/m1-esp32-brain` changes so
-   they can be scheduled there.
+4. **Brain firmware coordination** — flag which pieces (self-report bit, any new
+   opcode) need `bedge117/m1-esp32-brain` changes so they can be scheduled there.
 
 Direct which phase(s) to implement and I'll proceed with real code + host tests
 per the repo's build-and-test rules.

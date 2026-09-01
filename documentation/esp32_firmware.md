@@ -803,8 +803,10 @@ brain-firmware change.
 
 **Capability bit:** `M1_ESP32_CAP_ESPNOW` (bit **24**, `m1_csrc/m1_esp32_caps.h`).
 This is a host-only bit above the canonical CD3 wire range (bits 0-23); CD3
-implements the handlers but does not self-report ESP-NOW in `M1_FW_CAPS`, so
-the feature gate fails closed until CD3 adds it.
+implements the handlers but current shipped builds do not self-report ESP-NOW
+in `M1_FW_CAPS`.  Until the brain firmware reports bit 24 itself, the STM32
+capability probe sets the host-owned bit after native CD3 is confirmed via
+M1_RPC, keeping the Peer Link gate satisfied only for that probed firmware path.
 
 **Key design decisions:**
 - *Link-layer encryption off; authentication at the app layer* — the ESP-NOW
@@ -870,10 +872,10 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
   tampered or wrong-key frames are rejected up front.
 
 > **Gating:** all of the above is compiled unconditionally but only reachable
-> once the peer-link scene passes the `M1_ESP32_CAP_ESPNOW` gate.  Because
-> shipped CD3 firmware does not self-report bit 24, live use additionally
-> depends on a coordinated `bedge117/m1-esp32-brain` change to self-report that
-> bit, unless the STM32 side adds a runtime probe fallback.
+> once the peer-link scene passes the `M1_ESP32_CAP_ESPNOW` gate.  Current
+> shipped CD3 firmware does not self-report bit 24, so the STM32 side adds a
+> temporary runtime-probe fallback after native CD3 is confirmed; a future brain
+> firmware can replace this by self-reporting the bit directly.
 
 ### `AT+CMD?` — runtime probe for AT firmware
 
