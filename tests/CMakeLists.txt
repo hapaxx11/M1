@@ -2990,6 +2990,36 @@ endif()
 add_test(NAME espnow_crypto COMMAND test_espnow_crypto)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_secure (optional ESP-NOW encrypted session)
+#
+# Pure negotiation-frame helpers and stable pair-key derivation for optional
+# app-layer encryption.  Uses espnow_crypto + espnow_chunk in the test to prove
+# encrypted envelopes fit through app-layer fragmentation.
+# ------------------------------------------------------------------
+add_executable(test_espnow_secure
+    test_espnow_secure.c
+    ${M1_ROOT}/m1_csrc/espnow_secure.c
+    ${M1_ROOT}/m1_csrc/espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/espnow_chunk.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+)
+target_include_directories(test_espnow_secure PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/NFC/amiibo
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_espnow_secure PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+)
+target_link_libraries(test_espnow_secure PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_secure PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_secure COMMAND test_espnow_secure)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.

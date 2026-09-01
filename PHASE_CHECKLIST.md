@@ -13,12 +13,12 @@
 
 ### Phase 2 — Pure optional crypto session
 - **Description**: Add host-tested pure helpers for deriving a stable paired-session key, deciding when to encrypt, sealing outbound app payloads, and opening encrypted/plaintext inbound payloads with fallback.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add optional ESP-NOW secure session`
 
 ### Phase 3 — Firmware scene wiring
 - **Description**: Store session crypto state for the selected peer and route Messages and Remote Trigger payloads through the optional encrypted send/receive helpers.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Docs, validation, cleanup
