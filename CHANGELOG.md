@@ -11,6 +11,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.3.0] - 2026-09-01
 
+### Added
+
+- **ESP32: last feature RPC call diagnostics (issue #719 Phase 2)** — A field
+  read-back confirmed the brain-CD3 M1_RPC probe fix (Phase 1): the dashboard now
+  reports a real firmware name and a non-zero, WIFI_SCAN-capable capability
+  bitmap. WiFi Scan still fails, but the probe's tiny single-frame PING/
+  GET_STATUS exchange never exercised the separate bulk-list M1 Link FRAG
+  reassembly path that WIFI_SCAN (and Station Scan / BLE Scan) actually use.
+  `m1_esp32_rpc_call()` — the single client every ESP32 feature dispatches
+  through — now records a snapshot of its last invocation (opcode, whether the
+  transport returned a matching frame, raw frame byte count, final status, and
+  decoded payload byte count), readable via `m1_esp32_rpc_get_call_diag()` /
+  `m1_esp32_rpc_call_diag_format()` and shown on a new Settings > Dashboard page
+  5/5 (e.g. `"op0103 no-reply st253 r0 p0"`), so the next WiFi Scan failure
+  report can name the exact failure mode instead of "still fails".
+- **Settings Dashboard: ESP32 probe diagnostics** — A new Dashboard page (4/5)
+  shows the result of the last ESP32 firmware detection probe (which stage
+  resolved, the M1_RPC PING transport return code and byte count, the resolved
+  capability bitmap, and whether the host AT task was running at probe time). This
+  makes the "ESP32 Unknown (fallback)" failure (issue #719) observable on-device
+  without a debugger.
+- **ESP32: wall-clock timing on the "no-reply" feature RPC diagnostic (issue #719 Phase 6)** —
+  A repeat field report showed WiFi Scan still failing with the exact same
+  `Settings > Dashboard > page 5/5` line (`"op0103 no-reply st253 r0 p0"`) even
+  after the Phase 5 timeout widening, which is ambiguous: it cannot tell apart
+  "the scan genuinely needs longer than the 10 s budget" from "the transport
+  gave up early despite the fix." The `"no-reply"` line now appends how long
+  the M1 Link transport actually waited, e.g.
+  `"op0103 no-reply st253 r0 p0 t10s"` (waited the full budget — needs more
+  time) vs `"op0103 no-reply st253 r0 p0 t1s"` (gave up early — a poll-budget
+  bug, not a too-small number), pinpointing which root cause to chase next.
+- # Brain ESP32 NTP clock sync on WiFi connect
+- `wifi_sync_rtc()` now handles the brain CD3 (M1_RPC) transport path.
+  When connected via `ESP32_TRANSPORT_RPC`, it issues a `SYS_SNTP_SYNC` RPC call
+  to the brain firmware (which queries `pool.ntp.org` internally) and applies
+  the returned UTC time to the M1 RTC — matching the NTP sync that the AT
+  firmware path has always performed on connect.
+
+### Fixed
+
+- **Dashboard: RPC diagnostic wall-clock suffix no longer runs off-screen** — the
+  System Dashboard's ESP32 RPC diagnostics page (5/5) drew the last feature
+  call's trailing " tNs" wall-clock suffix (issue #719 Phase 6) in-line with
+  the rest of the diagnostic line, which overflowed the 128px display and
+  made it unreadable. The suffix is now split onto its own line.
+- **ESP32: brain-CD3 M1_RPC probe raced the host AT task on SPI3 (issue #719 Phase 1)** —
+  On-device diagnostics (added previously) showed the host AT task
+  (`spi_trans_control_task`) already running whenever the brain-CD3 M1_RPC PING
+  was attempted, and the full-duplex M1 Link transfer never took the shared
+  SPI3 mutex, so the two could corrupt each other's framing and the brain was
+  permanently misdetected as `ESP32 Unknown (fallback)` with an all-zero
+  capability bitmap. The M1_RPC brain probe now runs *before* the host AT task
+  is started, so a brain-only device is probed without ever touching the AT
+  task, and `m1link_hal_xfer()` now takes the same SPI3 mutex the AT task uses
+  whenever that task exists, so the two transports can no longer overlap even
+  if the AT task was already started by an earlier feature.
+- **ESP32: M1 Link poll budget now paced on real wall-clock time (issue #719
+  Phase 7)** — A field read-back showed `"op0103 no-reply st253 r0 p0 t0s"`: the
+  transport gave up in well under a second despite the 10 s WIFI_SCAN timeout.
+  `spi_m1link_send_recv_bin()` converted the caller's timeout into a fixed poll
+  COUNT assuming ~50 ms per poll, but a poll completes in well under a
+  millisecond whenever the brain's HANDSHAKE line is already asserted, so the
+  count-based budget could exhaust in a fraction of the intended window. The M1
+  Link transport now paces its poll loop on `HAL_GetTick()` directly via a new
+  `m1_esp32_m1link_send_recv_timed()` helper, so it always waits the caller's
+  full requested timeout regardless of how fast individual transactions
+  complete.
+- **ESP32: fix "Last feature RPC: no call yet" on the first WiFi Scan (issue #719)**
+  — `m1_esp32_active_transport()` only read the *cached* capability bitmap and
+  never re-probed, so before `m1_esp32_caps_init()` had run at least once in a
+  session it read back an all-zero bitmap and misclassified a brain-CD3 device
+  as `ESP32_TRANSPORT_NONE`. The un-gated WiFi Scan / "Scan & Connect" entry is
+  typically the very first ESP32 feature a user tries, so its scan silently
+  fell through to the legacy binary-SPI scan path instead of
+  `m1_esp32_rpc_wifi_scan()` — `m1_esp32_rpc_call()` was never invoked, and
+  Settings > Dashboard page 5/5 kept reading "Last feature RPC: no call yet"
+  even after a scan was attempted. `m1_esp32_active_transport()` now
+  self-primes exactly like `m1_esp32_has_cap()`: it runs `m1_esp32_caps_init()`
+  first (only once the ESP32 HAL transport is up) whenever the bitmap has not
+  yet been queried.
+- **ESP32: WiFi Scan RPC timeout too short for a real scan (issue #719 Phase 5)** —
+  Field read-back on Settings > Dashboard > page 5/5 confirmed WiFi Scan was
+  failing with `"op0103 no-reply st253 r0 p0"`: the brain's WIFI_SCAN
+  request/response replies only once the *entire* channel sweep completes
+  (unlike STA_SCAN/BLE_SCAN's quick start-then-poll pattern), so the shared
+  2 s timeout used for prompt control commands was too short and the M1 Link
+  transport gave up before a real scan finished. `m1_esp32_rpc_wifi_scan()`
+  now uses a dedicated, longer `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (10 s).
+## [0.9.3.0] - 2026-09-01
+
 ## [0.9.2.41] - 2026-08-10
 
 ### Fixed
