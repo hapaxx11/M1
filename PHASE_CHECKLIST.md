@@ -36,8 +36,8 @@
 - **Description**: `espnow_trigger.c/h` pure request/consent/execute/result FSM
   with capture-name validation and explicit consent gating (app type 0x30).
   Host tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `espnow: Phase 3 — danger-gated remote trigger FSM`
 
 ### Phase 4 — Authenticated encryption (app-layer AES)
 - **Description**: `espnow_crypto.c/h` pure AEAD wrapper over the existing

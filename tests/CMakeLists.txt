@@ -2939,6 +2939,27 @@ endif()
 add_test(NAME espnow_message COMMAND test_espnow_message)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_trigger (ESP-NOW danger-gated remote trigger)
+#
+# Pure request/consent/execute/result FSM + wire framing for asking a paired
+# peer to replay a named saved capture.  Reuses espnow_shareable for name
+# safety.  Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_trigger
+    test_espnow_trigger.c
+    ${M1_ROOT}/m1_csrc/espnow_trigger.c
+    ${M1_ROOT}/m1_csrc/espnow_shareable.c
+)
+target_include_directories(test_espnow_trigger PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_trigger PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_trigger PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_trigger COMMAND test_espnow_trigger)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.
