@@ -777,6 +777,97 @@ void test_wifi_scan_async_cleanup_is_safe_after_poll(void)
 }
 
 /* ================================================================== */
+/* SYS_SNTP_SYNC                                                      */
+/* ================================================================== */
+
+static uint16_t build_sntp_resp(uint8_t *body, uint16_t year, uint8_t mon,
+                                uint8_t day, uint8_t hr, uint8_t min,
+                                uint8_t sec, uint8_t wday)
+{
+    m1_esp32_rpc_time_t t;
+    t.year    = year;
+    t.month   = mon;
+    t.day     = day;
+    t.hour    = hr;
+    t.minute  = min;
+    t.second  = sec;
+    t.weekday = wday;
+    memcpy(body, &t, sizeof(t));
+    return (uint16_t)sizeof(t);
+}
+
+/* Happy path: valid RESP decodes into out struct correctly. */
+void test_sntp_sync_decodes_valid_time(void)
+{
+    uint8_t body[16];
+    uint16_t blen = build_sntp_resp(body, 2025, 6, 15, 13, 45, 30, 0);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_SYS_SNTP_SYNC, body, blen);
+
+    m1_esp32_rpc_utctime_t t;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_sntp_sync(&t));
+    TEST_ASSERT_EQUAL_UINT16(2025u, t.year);
+    TEST_ASSERT_EQUAL_UINT8(6u,  t.month);
+    TEST_ASSERT_EQUAL_UINT8(15u, t.day);
+    TEST_ASSERT_EQUAL_UINT8(13u, t.hour);
+    TEST_ASSERT_EQUAL_UINT8(45u, t.minute);
+    TEST_ASSERT_EQUAL_UINT8(30u, t.second);
+    TEST_ASSERT_EQUAL_UINT8(0u,  t.weekday);
+}
+
+/* NULL out pointer: call succeeds but does not write. */
+void test_sntp_sync_null_out_succeeds(void)
+{
+    uint8_t body[16];
+    uint16_t blen = build_sntp_resp(body, 2025, 1, 1, 0, 0, 0, 3);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_SYS_SNTP_SYNC, body, blen);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_sntp_sync(NULL));
+}
+
+/* year == 1970 must be rejected as epoch sentinel (NTP not converged). */
+void test_sntp_sync_rejects_epoch_year(void)
+{
+    uint8_t body[16];
+    uint16_t blen = build_sntp_resp(body, 1970, 1, 1, 0, 0, 0, 4);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_SYS_SNTP_SYNC, body, blen);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_TIMEOUT, m1_esp32_rpc_sntp_sync(NULL));
+}
+
+/* Truncated response must be rejected. */
+void test_sntp_sync_rejects_short_response(void)
+{
+    /* Only 3 bytes — shorter than sizeof(m1_esp32_rpc_time_t) == 8. */
+    const uint8_t body[] = { 0xE9, 0x07, 0x06 };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_SYS_SNTP_SYNC, body, sizeof(body));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BAD_FRAME, m1_esp32_rpc_sntp_sync(NULL));
+}
+
+/* NAK propagates the error code from the brain. */
+void test_sntp_sync_propagates_nak(void)
+{
+    const uint8_t body[] = { M1_ESP32_RPC_ERR_TIMEOUT };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_NAK,
+                              M1_ESP32_RPC_SYS_SNTP_SYNC, body, sizeof(body));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_TIMEOUT, m1_esp32_rpc_sntp_sync(NULL));
+}
+
+/* Uses the generic feature timeout (2 s), not the long WiFi-scan budget. */
+void test_sntp_sync_uses_feature_timeout(void)
+{
+    uint8_t body[16];
+    uint16_t blen = build_sntp_resp(body, 2024, 3, 20, 12, 0, 0, 3);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_SYS_SNTP_SYNC, body, blen);
+    m1_esp32_rpc_sntp_sync(NULL);
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_FEATURE_TIMEOUT_S, g_last_timeout_sec);
+    TEST_ASSERT_LESS_THAN_INT(M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S,
+                               g_last_timeout_sec);
+}
+
+/* ================================================================== */
 /* Zigbee sniff response decode                                       */
 /* ================================================================== */
 
@@ -916,6 +1007,13 @@ int main(void)
     RUN_TEST(test_zb_sniff_get_caps_to_max);
     RUN_TEST(test_zb_sniff_get_null_rejected);
     RUN_TEST(test_zb_sniff_get_zero_devices);
+
+    RUN_TEST(test_sntp_sync_decodes_valid_time);
+    RUN_TEST(test_sntp_sync_null_out_succeeds);
+    RUN_TEST(test_sntp_sync_rejects_epoch_year);
+    RUN_TEST(test_sntp_sync_rejects_short_response);
+    RUN_TEST(test_sntp_sync_propagates_nak);
+    RUN_TEST(test_sntp_sync_uses_feature_timeout);
 
     return UNITY_END();
 }

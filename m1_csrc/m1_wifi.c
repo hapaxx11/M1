@@ -5908,6 +5908,38 @@ uint8_t wifi_sync_rtc(void)
 	if (!s_wifi_stub_connected)
 		return 1;
 
+	/* brain CD3 (binary M1_RPC): use SYS_SNTP_SYNC opcode.
+	 * The brain firmware fetches the time from pool.ntp.org internally;
+	 * poll with 500 ms retries for up to 5 s to allow NTP convergence on
+	 * slow connections, matching the AT firmware poll budget below. */
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		start_ms  = HAL_GetTick();
+		first_poll = true;
+		while ((HAL_GetTick() - start_ms) < 5000u)
+		{
+			if (!first_poll)
+				vTaskDelay(pdMS_TO_TICKS(500));
+			first_poll = false;
+			m1_wdt_reset();
+
+			m1_esp32_rpc_utctime_t utc;
+			if (m1_esp32_rpc_sntp_sync(&utc) == M1_ESP32_RPC_OK)
+			{
+				mt.year    = utc.year;
+				mt.month   = utc.month;
+				mt.day     = utc.day;
+				mt.hour    = utc.hour;
+				mt.minute  = utc.minute;
+				mt.second  = utc.second;
+				mt.weekday = utc.weekday;
+				m1_set_datetime(&mt);
+				return 0;
+			}
+		}
+		return 3;  /* Timeout waiting for SNTP sync */
+	}
+
 	/* AT firmware: send SNTP config, then poll for time.
 	 * Binary SPI (SiN360) does not yet support NTP — return silently. */
 	if (!m1_esp32_has_cap(M1_ESP32_CAP_WIFI_JOIN))

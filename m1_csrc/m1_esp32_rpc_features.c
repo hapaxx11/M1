@@ -799,3 +799,40 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_stop(void)
 {
     return rpc_trigger(M1_ESP32_RPC_ZB_FLOOD_STOP);
 }
+
+/*==========================================================================*/
+/* System                                                                   */
+/*==========================================================================*/
+
+m1_esp32_rpc_status_t m1_esp32_rpc_sntp_sync(m1_esp32_rpc_utctime_t *out)
+{
+    m1_esp32_rpc_time_t wire;
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_SYS_SNTP_SYNC, NULL, 0u,
+                          (uint8_t *)&wire, sizeof(wire), &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st != M1_ESP32_RPC_OK)
+        return st;
+
+    if (rlen < sizeof(wire))
+        return M1_ESP32_RPC_ERR_BAD_FRAME;
+
+    /* Reject any response whose year field looks like the epoch (1970 or
+     * earlier) — the brain firmware may reply before NTP converges on slow
+     * connections.  Callers that need to retry should loop with a short delay
+     * (see wifi_sync_rtc()). */
+    if (wire.year <= 1970u)
+        return M1_ESP32_RPC_ERR_TIMEOUT;
+
+    if (out) {
+        out->year    = wire.year;
+        out->month   = wire.month;
+        out->day     = wire.day;
+        out->hour    = wire.hour;
+        out->minute  = wire.minute;
+        out->second  = wire.second;
+        out->weekday = wire.weekday;
+    }
+    return M1_ESP32_RPC_OK;
+}

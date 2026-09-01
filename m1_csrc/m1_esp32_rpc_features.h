@@ -411,6 +411,40 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_start(uint8_t channel);
 /** ZB_FLOOD_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_stop(void);
 
+/* =========================================================================
+ * System
+ * =========================================================================*/
+
+/**
+ * Decoded UTC time from a SYS_SNTP_SYNC response.
+ * Field layout mirrors m1_time_t and clock_time_t so the caller can copy
+ * directly to either without field-by-field assignment.
+ */
+typedef struct {
+    uint16_t year;
+    uint8_t  month;   /**< 1–12 */
+    uint8_t  day;     /**< 1–31 */
+    uint8_t  hour;    /**< 0–23 */
+    uint8_t  minute;  /**< 0–59 */
+    uint8_t  second;  /**< 0–59 */
+    uint8_t  weekday; /**< 0=Sun … 6=Sat */
+} m1_esp32_rpc_utctime_t;
+
+/**
+ * SYS_SNTP_SYNC: request the brain firmware to fetch the current time from
+ * the NTP pool and return it.
+ *
+ * The brain issues a pool.ntp.org query and replies with the UTC time once
+ * synchronized (or returns an error if no IP connectivity is available).
+ * The call uses M1_ESP32_RPC_FEATURE_TIMEOUT_S (2 s) because the firmware
+ * is already associated when this is called (after a successful WIFI_CONNECT).
+ *
+ * @param out  [out] receives the decoded UTC time on success; may be NULL to
+ *             merely trigger synchronization without reading back the time.
+ * @return M1_ESP32_RPC_OK on success, or an error code on failure.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_sntp_sync(m1_esp32_rpc_utctime_t *out);
+
 #ifdef __cplusplus
 }
 #endif
