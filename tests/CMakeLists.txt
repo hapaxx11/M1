@@ -472,6 +472,41 @@ endif()
 add_test(NAME subghz_read_raw_status COMMAND test_subghz_read_raw_status)
 
 # ------------------------------------------------------------------
+# Module under test: m1_subghz_read_raw_state.h — TX repeat-mode helpers
+# Covers subghz_raw_tx_should_repeat(), subghz_read_raw_state_is_tx(),
+# subghz_read_raw_state_to_repeat(), and repeat-mode toggle logic.
+# Pure inline helpers; no firmware .c file needed.
+# ------------------------------------------------------------------
+add_executable(test_subghz_tx_repeat_mode
+    test_subghz_tx_repeat_mode.c
+)
+target_include_directories(test_subghz_tx_repeat_mode PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_tx_repeat_mode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_tx_repeat_mode PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_tx_repeat_mode COMMAND test_subghz_tx_repeat_mode)
+
+# ------------------------------------------------------------------
+# Module under test: Sub_Ghz/subghz_rssi_bar.inc — RSSI geometry helper
+# Tests subghz_rssi_fill_w() boundary values, clamping, and linear
+# mapping.  Header-only; no firmware .c file needed.
+# ------------------------------------------------------------------
+add_executable(test_subghz_rssi
+    test_subghz_rssi.c
+)
+target_include_directories(test_subghz_rssi PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_rssi PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_rssi PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_rssi COMMAND test_subghz_rssi)
+
+# ------------------------------------------------------------------
 # Source invariant: ESP32 transport must be quiesced around Sub-GHz.
 # Bug context: SiN360 ESP32 tools can leave SPI3/EXTI active; Sub-GHz
 # Read/Read Raw depend on timing-sensitive SI4463/TIM1 capture.
@@ -1117,6 +1152,31 @@ if(TARGET sanitizers)
     target_link_libraries(test_flipper_ir PRIVATE sanitizers)
 endif()
 add_test(NAME flipper_ir COMMAND test_flipper_ir)
+
+# ------------------------------------------------------------------
+# Module under test: flipper_ir_custom extensions
+# Tests flipper_ir_rename_signal(), flipper_ir_delete_signal(),
+# flipper_ir_append_signal(), and flipper_ir_raw_feed_t.
+# Uses real temp files via the ff.h stdio stub so the full
+# streaming-rewrite path (read → temp → rename → replace) is
+# exercised end-to-end.
+# Stubs: ff.h, irmp.h (protocol constants only)
+# ------------------------------------------------------------------
+add_executable(test_flipper_ir_custom
+    test_flipper_ir_custom.c
+    ${M1_ROOT}/m1_csrc/flipper_ir.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_flipper_ir_custom PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_flipper_ir_custom PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flipper_ir_custom PRIVATE sanitizers)
+endif()
+add_test(NAME flipper_ir_custom COMMAND test_flipper_ir_custom)
 
 # ------------------------------------------------------------------
 # Module under test: flipper_nfc (NFC device type mapping)

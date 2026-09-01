@@ -196,6 +196,7 @@ typedef struct {
     bool     raw_load_is_native;      /**< true = .sgh (use sub_ghz_replay_datafile) */
     uint32_t raw_load_freq_hz;        /**< Frequency for native replay */
     uint8_t  raw_load_mod;            /**< Modulation for native replay */
+    bool     raw_tx_repeat_mode;      /**< true = loop TX after each burst (toggle via LEFT/RIGHT during TX); false = send once */
     /** Currently-active Read-Raw file path (storage form, no "0:"
      *  prefix).  Owned by the Read Raw scene but shared with its child
      *  scenes (@ref SubGhzSceneMoreRaw, @ref SubGhzSceneDecodeRaw) so the

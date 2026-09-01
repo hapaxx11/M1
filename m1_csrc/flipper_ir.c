@@ -474,3 +474,211 @@ uint16_t flipper_ir_count_signals(const char *path)
 	ff_close(&ff);
 	return count;
 }
+
+/*============================================================================*/
+/* Internal streaming-rewrite helper                                          */
+/*============================================================================*/
+
+/* Max FatFS path length handled by the rewrite helpers */
+#define FLIPPER_IR_PATH_MAX  120
+
+/**
+ * @brief  Streaming rewrite: copy all signals to a temp file, optionally
+ *         skipping or renaming one signal at @p target_idx.
+ *
+ * When @p skip is true, the signal at @p target_idx is omitted (delete).
+ * When @p skip is false and @p rename_to is non-NULL, the signal name is
+ * replaced with @p rename_to (rename).
+ * When @p append_sig is non-NULL, it is written after all existing signals.
+ *
+ * On success, the original file is replaced by the temp file.
+ * On failure, the temp file is deleted and the original is left untouched.
+ *
+ * @param path       FatFS path to the original .ir file.
+ * @param target_idx Signal index to skip/rename.  UINT16_MAX = "no target"
+ *                   (used for pure-append; skip and rename are ignored).
+ * @param skip       Omit the target signal when true.
+ * @param rename_to  New name for the target signal (NULL = keep name).
+ * @param append_sig Signal to append after all existing signals (NULL = none).
+ * @retval true   on success.
+ * @retval false  on I/O error or out-of-range index.
+ */
+static bool flipper_ir_stream_rewrite(const char *path,
+                                       uint16_t    target_idx,
+                                       bool        skip,
+                                       const char *rename_to,
+                                       const flipper_ir_signal_t *append_sig)
+{
+	char tmp[FLIPPER_IR_PATH_MAX + 2];
+	flipper_file_t src, dst;
+	flipper_ir_signal_t sig;
+	uint16_t n = 0;
+	bool target_seen = false;
+	bool ok = true;
+
+	if (snprintf(tmp, sizeof(tmp), "%s~", path) >= (int)(sizeof(tmp) - 1))
+		return false;
+
+	if (!flipper_ir_open(&src, path))
+		return false;
+
+	if (!ff_open_write(&dst, tmp))
+	{
+		ff_close(&src);
+		return false;
+	}
+
+	if (!flipper_ir_write_header(&dst))
+	{
+		ok = false;
+		goto done;
+	}
+
+	memset(&sig, 0, sizeof(sig));
+	while (flipper_ir_read_signal(&src, &sig))
+	{
+		if (n == target_idx)
+		{
+			target_seen = true;
+			if (!skip)
+			{
+				if (rename_to != NULL)
+					snprintf(sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", rename_to);
+				if (!flipper_ir_write_signal(&dst, &sig))
+					ok = false;
+			}
+		}
+		else
+		{
+			if (!flipper_ir_write_signal(&dst, &sig))
+				ok = false;
+		}
+		n++;
+		if (!ok)
+			break;
+		memset(&sig, 0, sizeof(sig));
+	}
+
+	/* target_idx == UINT16_MAX means "no target" (pure append) */
+	if (target_idx != UINT16_MAX && !target_seen)
+		ok = false;  /* idx was out of range */
+
+	/* Append extra signal if requested */
+	if (ok && append_sig != NULL)
+	{
+		if (!flipper_ir_write_signal(&dst, append_sig))
+			ok = false;
+	}
+
+done:
+	ff_close(&src);
+	ff_close(&dst);
+
+	if (ok)
+	{
+		char bak[FLIPPER_IR_PATH_MAX + 6];
+
+		/* Use a backup name so a failed rename can't lose the original file. */
+		if (snprintf(bak, sizeof(bak), "%s.bak", path) >= (int)(sizeof(bak) - 1))
+		{
+			ok = false;
+			(void)f_unlink(tmp);
+		}
+		else
+		{
+			(void)f_unlink(bak);
+			if (f_rename(path, bak) != FR_OK)
+			{
+				ok = false;
+				(void)f_unlink(tmp);
+			}
+			else if (f_rename(tmp, path) != FR_OK)
+			{
+				(void)f_rename(bak, path); /* best-effort rollback */
+				ok = false;
+				(void)f_unlink(tmp);
+			}
+
+			if (ok)
+				(void)f_unlink(bak);
+		}
+	}
+	else
+	{
+		f_unlink(tmp);
+	}
+	return ok;
+}
+
+/*============================================================================*/
+
+bool flipper_ir_rename_signal(const char *path, uint16_t idx, const char *new_name)
+{
+	if (path == NULL || new_name == NULL || new_name[0] == '\0')
+		return false;
+	return flipper_ir_stream_rewrite(path, idx, false, new_name, NULL);
+}
+
+bool flipper_ir_delete_signal(const char *path, uint16_t idx)
+{
+	if (path == NULL)
+		return false;
+	return flipper_ir_stream_rewrite(path, idx, true, NULL, NULL);
+}
+
+bool flipper_ir_append_signal(const char *path, const flipper_ir_signal_t *sig)
+{
+	if (path == NULL || sig == NULL || !sig->valid)
+		return false;
+	return flipper_ir_stream_rewrite(path, UINT16_MAX, false, NULL, sig);
+}
+
+/*============================================================================*/
+/* Raw-signal accumulator                                                     */
+/*============================================================================*/
+
+void flipper_ir_raw_feed_init(flipper_ir_raw_feed_t *f, const char *name,
+                               uint32_t freq_hz, float duty_cycle)
+{
+	if (f == NULL)
+		return;
+	memset(f, 0, sizeof(*f));
+	snprintf(f->sig.name, FLIPPER_IR_NAME_MAX_LEN, "%s", name ? name : "Signal");
+	f->sig.type           = FLIPPER_IR_SIGNAL_RAW;
+	f->sig.raw.frequency  = freq_hz;
+	f->sig.raw.duty_cycle = duty_cycle;
+}
+
+bool flipper_ir_raw_feed_push(flipper_ir_raw_feed_t *f, int32_t sample_us)
+{
+	if (f == NULL || f->overflow)
+		return false;
+	if (f->sig.raw.sample_count >= FLIPPER_IR_RAW_MAX_SAMPLES)
+	{
+		f->overflow = true;
+		return false;
+	}
+	f->sig.raw.samples[f->sig.raw.sample_count++] = sample_us;
+	return true;
+}
+
+bool flipper_ir_raw_feed_finish(flipper_ir_raw_feed_t *f)
+{
+	if (f == NULL || f->overflow || f->sig.raw.sample_count == 0)
+		return false;
+	/* Ensure the final sample is a space (negative) for proper demodulator
+	 * termination.  If the last pushed sample is a mark, append a trailing
+	 * silence that is long enough to end the frame. */
+	if (f->sig.raw.samples[f->sig.raw.sample_count - 1] > 0)
+	{
+		if (f->sig.raw.sample_count < FLIPPER_IR_RAW_MAX_SAMPLES)
+			f->sig.raw.samples[f->sig.raw.sample_count++] = -9000;
+		else
+		{
+			f->overflow = true;
+			return false;
+		}
+	}
+	f->sig.valid = true;
+	return true;
+}

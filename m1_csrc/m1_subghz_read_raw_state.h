@@ -92,6 +92,27 @@ static inline SubGhzReadRawState subghz_read_raw_state_to_repeat(SubGhzReadRawSt
 }
 
 /**
+ * @brief  Pure-logic: should the TX burst auto-restart after completion?
+ *
+ * Called from the Read Raw scene's SubGhzEventTxComplete handler.  Returns
+ * true when the burst should immediately restart — either because the user
+ * is physically holding the OK button, or because the persistent repeat-mode
+ * toggle is active.
+ *
+ * Extracted as a named function so host tests can verify all four
+ * (toggle, ok_held) combinations without touching hardware.
+ *
+ * @param  repeat_toggle  Value of `SubGhzApp::raw_tx_repeat_mode`.
+ * @param  ok_held        true when the OK GPIO reads pressed at burst end.
+ * @retval true  if the TX engine should loop.
+ * @retval false if one-shot: the TX engine should stop after this burst.
+ */
+static inline bool subghz_raw_tx_should_repeat(bool repeat_toggle, bool ok_held)
+{
+    return repeat_toggle || ok_held;
+}
+
+/**
  * @brief  Pure-logic: gate the displayed "N spl." counter by signal-present.
  *
  * The waveform cursor in the Read Raw scene only advances when RSSI is above

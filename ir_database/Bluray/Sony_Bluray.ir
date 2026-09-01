@@ -1,0 +1,128 @@
+Filetype: IR signals file
+Version: 1
+
+#
+name: Power
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 15 00 00 00
+
+#
+name: Play
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 32 00 00 00
+
+#
+name: Pause
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 19 00 00 00
+
+#
+name: Stop
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 38 00 00 00
+
+#
+name: Eject
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 00 00 00 00
+
+#
+name: Next
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 30 00 00 00
+
+#
+name: Previous
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 31 00 00 00
+
+#
+name: Fast_Fwd
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 28 00 00 00
+
+#
+name: Rewind
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 29 00 00 00
+
+#
+name: Top_Menu
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 07 00 00 00
+
+#
+name: Menu
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 03 00 00 00
+
+#
+name: Up
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 74 00 00 00
+
+#
+name: Down
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 75 00 00 00
+
+#
+name: Left
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 78 00 00 00
+
+#
+name: Right
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 79 00 00 00
+
+#
+name: Ok
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 0B 00 00 00
+
+#
+name: Return
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 0E 00 00 00
+
+#
+name: Options
+type: parsed
+protocol: SIRC
+address: 1A 00 00 00
+command: 41 00 00 00

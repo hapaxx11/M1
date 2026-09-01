@@ -151,8 +151,8 @@ static inline FRESULT f_getfree(const char *path, DWORD *nclust, FATFS **fatfs)
 
 static inline FRESULT f_rename(const char *old_name, const char *new_name)
 {
-	(void)old_name; (void)new_name;
-	return FR_OK;
+	if (!old_name || !new_name) return FR_DISK_ERR;
+	return (rename(old_name, new_name) == 0) ? FR_OK : FR_DISK_ERR;
 }
 
 #endif /* FF_H_STUB */

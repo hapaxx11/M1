@@ -1,0 +1,170 @@
+Filetype: IR signals file
+Version: 1
+
+#
+name: Bright_Up
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 5C 00 00 00
+
+#
+name: Bright_Down
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 5D 00 00 00
+
+#
+name: Off
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 5E 00 00 00
+
+#
+name: On
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 5F 00 00 00
+
+#
+name: Red
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 58 00 00 00
+
+#
+name: Green
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 59 00 00 00
+
+#
+name: Blue
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 45 00 00 00
+
+#
+name: White
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 44 00 00 00
+
+#
+name: Orange_Dk
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 54 00 00 00
+
+#
+name: Yellow_Dk
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 55 00 00 00
+
+#
+name: Cyan
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 49 00 00 00
+
+#
+name: Purple
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 48 00 00 00
+
+#
+name: Orange
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 50 00 00 00
+
+#
+name: Yellow
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 51 00 00 00
+
+#
+name: Teal
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4D 00 00 00
+
+#
+name: Pink
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4C 00 00 00
+
+#
+name: Amber
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 52 00 00 00
+
+#
+name: Lime
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 53 00 00 00
+
+#
+name: Sky_Blue
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4E 00 00 00
+
+#
+name: Lavender
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4F 00 00 00
+
+#
+name: Warm_White
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 56 00 00 00
+
+#
+name: Cool_White
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 57 00 00 00
+
+#
+name: Soft_Blue
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4B 00 00 00
+
+#
+name: Flash
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 40 00 00 00

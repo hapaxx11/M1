@@ -15,6 +15,7 @@
 #include "m1_scene.h"
 #include "m1_submenu.h"
 #include "m1_infrared.h"
+#include "m1_ir_custom.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 
@@ -25,6 +26,7 @@ enum {
     InfraredSceneLearn,
     InfraredSceneReplay,
     InfraredSceneEsl,
+    InfraredSceneCustom,
     InfraredSceneCount
 };
 
@@ -62,21 +64,31 @@ static void esl_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void custom_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    infrared_custom_remotes();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers universal_handlers = { .on_enter = universal_on_enter };
 static const M1SceneHandlers learn_handlers     = { .on_enter = learn_on_enter     };
 static const M1SceneHandlers replay_handlers    = { .on_enter = replay_on_enter    };
 static const M1SceneHandlers esl_handlers       = { .on_enter = esl_on_enter       };
+static const M1SceneHandlers custom_handlers    = { .on_enter = custom_on_enter    };
 
 /*--- Menu scene -----------------------------------------------------------*/
 
-#define MENU_ITEM_COUNT  4
+#define MENU_ITEM_COUNT  5
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Universal Remotes",
     "Learn",
     "Replay",
+    "Custom Remote",
     "ESL Tags",
 };
 
@@ -84,6 +96,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     InfraredSceneUniversal,
     InfraredSceneLearn,
     InfraredSceneReplay,
+    InfraredSceneCustom,
     InfraredSceneEsl,
 };
 
@@ -126,6 +139,7 @@ static const M1SceneHandlers *const scene_registry[InfraredSceneCount] = {
     [InfraredSceneLearn]     = &learn_handlers,
     [InfraredSceneReplay]    = &replay_handlers,
     [InfraredSceneEsl]       = &esl_handlers,
+    [InfraredSceneCustom]    = &custom_handlers,
 };
 
 /*--- Entry point ----------------------------------------------------------*/
