@@ -870,6 +870,7 @@ typedef enum
     M1_ESP32_PROBE_AT,           /**< AT firmware detected via AT+CMD?            */
     M1_ESP32_PROBE_RPC_STATUS,   /**< brain CD3: PING + GET_STATUS both parsed    */
     M1_ESP32_PROBE_RPC_PROFILE,  /**< brain CD3: PING ok, GET_STATUS fell back    */
+    M1_ESP32_PROBE_NO_MEM,       /**< AT+CMD? heap alloc failed — retry on next   */
     M1_ESP32_PROBE_UNKNOWN       /**< every probe failed — bitmap left at zero    */
 } m1_esp32_probe_outcome_t;
 
@@ -937,6 +938,7 @@ m1_esp32_caps_diag_format(const m1_esp32_caps_diag_t *d,
         case M1_ESP32_PROBE_AT:          tag = "AT probed";        break;
         case M1_ESP32_PROBE_RPC_STATUS:  tag = "RPC ok";           break;
         case M1_ESP32_PROBE_RPC_PROFILE: tag = "RPC ping/no stat"; break;
+        case M1_ESP32_PROBE_NO_MEM:      tag = "no-mem/retry";    break;
         case M1_ESP32_PROBE_UNKNOWN:     tag = "FAIL";             break;
         case M1_ESP32_PROBE_NONE:
         default:                         tag = "no probe yet";     break;

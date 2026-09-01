@@ -191,6 +191,7 @@ add_executable(test_esp32_rpc_features
 )
 target_include_directories(test_esp32_rpc_features PRIVATE
     ${M1_ROOT}/m1_csrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs
 )
 target_link_libraries(test_esp32_rpc_features PRIVATE unity)
 if(TARGET sanitizers)

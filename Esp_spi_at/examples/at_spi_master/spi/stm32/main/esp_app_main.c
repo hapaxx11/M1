@@ -689,15 +689,17 @@ static void m1link_unlock_spi_if_at_task_present(void)
 		spi_mutex_unlock();
 }
 
-/* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn. */
+/* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn.
+ * The caller (spi_m1link_send_recv_bin) holds the shared SPI3 mutex for the
+ * entire abort + timed-exchange sequence, so no per-transfer locking is needed
+ * here — doing it per-transfer would serialise individual transactions but still
+ * allow spi_trans_control_task to interpose between request and reply polls. */
 static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
                            void *ctx)
 {
 	HAL_StatusTypeDef ret;
 	uint32_t start;
 	(void)ctx;
-
-	m1link_lock_spi_if_at_task_present();
 
 	/* Honour the brain's HANDSHAKE: never clock while the slave is not armed.
 	 * If it never asserts within the window we still attempt the clock once
@@ -732,10 +734,8 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 		 * machine and flushes the FIFOs so the NEXT transaction recovers on its
 		 * own (same recovery the C3 m1_link master relies on). */
 		HAL_SPI_Abort(&hspi_esp);
-		m1link_unlock_spi_if_at_task_present();
 		return -1;
 	}
-	m1link_unlock_spi_if_at_task_present();
 	return 0;
 }
 
@@ -753,6 +753,15 @@ static uint32_t s_m1link_last_elapsed_ms;
 uint32_t m1_esp32_m1link_last_elapsed_ms(void)
 {
 	return s_m1link_last_elapsed_ms;
+}
+
+/* 1 ms inter-poll yield so the RTOS idle task / watchdog gets CPU time
+ * during the long brain CD3 scan timeout.  Injected as a pacing callback
+ * into m1_esp32_m1link_send_recv_timed() between each unmatched poll. */
+static void m1link_pace_1ms(void *ctx)
+{
+	(void)ctx;
+	vTaskDelay(pdMS_TO_TICKS(1));
 }
 
 uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
@@ -792,6 +801,14 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 		timeout_sec = m1link_default_timeout_s;
 	timeout_ms = (uint32_t)timeout_sec * 1000u;
 
+	/* Hold the mutex across the abort AND the full timed request/poll sequence.
+	 * Taking it per-transfer (inside m1link_hal_xfer) serialises individual
+	 * transactions but still allows spi_trans_control_task to acquire the mutex
+	 * and issue an incompatible half-duplex transaction between the request
+	 * unlock and the next IDLE poll.  Holding it here for the entire sequence
+	 * prevents that interleaving (issue #719 Phase 1 C1). */
+	m1link_lock_spi_if_at_task_present();
+
 	/* Flush any residual FIFO / packing state before full-duplex M1 Link
 	 * transactions.  The brain (CD3) detection probe runs AFTER the half-duplex
 	 * AT / SiN360 probes; a transfer that timed out against a non-responding
@@ -807,8 +824,11 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	                                     M1_ESP32_M1LINK_MTU,
 	                                     HAL_GetTick,
 	                                     timeout_ms, 20000,
+	                                     m1link_pace_1ms, NULL,
 	                                     tx_buf, tx_len,
 	                                     rx_buf, rx_buf_size, out_len);
+
+	m1link_unlock_spi_if_at_task_present();
 
 	s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
 

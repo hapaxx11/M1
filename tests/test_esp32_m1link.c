@@ -622,6 +622,7 @@ void test_m1link_timed_paces_on_wallclock_not_poll_count(void)
     int out_len = 0;
     uint8_t rc = m1_esp32_m1link_send_recv_timed(
         fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 10000u, 100,
+        NULL, NULL,
         s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
     TEST_ASSERT_EQUAL_UINT8(0u, rc);
     const uint8_t *pl = NULL; uint16_t pl_len = 0u;
@@ -650,6 +651,7 @@ void test_m1link_timed_gives_up_after_wallclock_timeout(void)
     int out_len = 0;
     uint8_t rc = m1_esp32_m1link_send_recv_timed(
         fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 2500u, 100,
+        NULL, NULL,
         s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
     TEST_ASSERT_NOT_EQUAL(0u, rc);
     TEST_ASSERT_EQUAL_INT(0, out_len);
@@ -672,6 +674,7 @@ void test_m1link_timed_max_iterations_safety_net(void)
     int out_len = 0;
     uint8_t rc = m1_esp32_m1link_send_recv_timed(
         fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000000u, 5,
+        NULL, NULL,
         s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
     TEST_ASSERT_NOT_EQUAL(0u, rc);
     TEST_ASSERT_EQUAL_INT(0, out_len);
@@ -689,6 +692,7 @@ void test_m1link_timed_transport_error(void)
     int out_len = 0;
     uint8_t rc = m1_esp32_m1link_send_recv_timed(
         fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000u, 10,
+        NULL, NULL,
         s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
     TEST_ASSERT_EQUAL_UINT8(2u, rc);
     TEST_ASSERT_EQUAL_INT(0, out_len);
@@ -712,6 +716,7 @@ void test_m1link_timed_reassembles_fragments(void)
     int out_len = 0;
     uint8_t rc = m1_esp32_m1link_send_recv_timed(
         fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000u, 10,
+        NULL, NULL,
         s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
     TEST_ASSERT_EQUAL_UINT8(0u, rc);
 
@@ -736,24 +741,28 @@ void test_m1link_timed_invalid_args(void)
     TEST_ASSERT_NOT_EQUAL(0u,
         m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
                                         NULL, 1000u, 10,
+                                        NULL, NULL,
                                         s_req, req_len, s_out,
                                         (int)sizeof(s_out), &out_len));
     /* max_iterations < 1 */
     TEST_ASSERT_NOT_EQUAL(0u,
         m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
                                         fake_now_ms, 1000u, 0,
+                                        NULL, NULL,
                                         s_req, req_len, s_out,
                                         (int)sizeof(s_out), &out_len));
     /* NULL xfer */
     TEST_ASSERT_NOT_EQUAL(0u,
         m1_esp32_m1link_send_recv_timed(NULL, NULL, s_tx, s_rx, MTU,
                                         fake_now_ms, 1000u, 10,
+                                        NULL, NULL,
                                         s_req, req_len, s_out,
                                         (int)sizeof(s_out), &out_len));
     /* tx_len > mtu */
     TEST_ASSERT_NOT_EQUAL(0u,
         m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
                                         fake_now_ms, 1000u, 10,
+                                        NULL, NULL,
                                         s_req, (int)MTU + 1, s_out,
                                         (int)sizeof(s_out), &out_len));
 }

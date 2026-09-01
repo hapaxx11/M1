@@ -365,7 +365,13 @@ void m1_esp32_caps_init(void)
      * the capability bitmap.  If GET_STATUS fails after PING succeeds (early-
      * stage firmware not yet implementing GET_STATUS), we fall back to the
      * CD3 conservative profile macro.  If the PING itself fails, we fall
-     * through below to start the AT task and try the AT probes instead. */
+     * through below to start the AT task and try the AT probes instead.
+     *
+     * Snapshot the AT task state NOW — before the PING — so the diagnostic
+     * records the real at_task_before value on ALL probe outcomes (not just
+     * the AT-fallback path that previously initialised these fields). */
+    s_diag.at_task_before = get_esp32_main_init_status() ? 1u : 0u;
+    s_diag.at_task_after  = s_diag.at_task_before;   /* default; AT fallback overwrites */
     {
         uint8_t  tx64[64];
         uint8_t  rx64[64];
@@ -498,7 +504,7 @@ void m1_esp32_caps_init(void)
      * SiN360 binary-SPI firmware has no AT task and was already handled above
      * via the is_binary_spi early return, so it never reaches this point. */
     {
-        bool at_task_before = get_esp32_main_init_status();
+        bool at_task_before = s_diag.at_task_before != 0u;
         bool at_task_after  = at_task_before;
 
         if (!at_task_before)
@@ -507,8 +513,7 @@ void m1_esp32_caps_init(void)
             at_task_after = get_esp32_main_init_status();
         }
 
-        s_diag.at_task_before = at_task_before ? 1u : 0u;
-        s_diag.at_task_after  = at_task_after  ? 1u : 0u;
+        s_diag.at_task_after = at_task_after ? 1u : 0u;
 
         if (!m1_esp32_caps_should_run_at_probe(at_task_before, at_task_after))
         {
@@ -551,7 +556,10 @@ void m1_esp32_caps_init(void)
     {
         char *at_resp = (char *)pvPortMalloc(AT_CMD_RESP_BUF_SZ);
         if (!at_resp)
+        {
+            s_diag.outcome = (uint8_t)M1_ESP32_PROBE_NO_MEM;
             return;  /* Heap exhausted — retry on next call */
+        }
 
         at_resp[0] = '\0';
         (void)spi_AT_send_recv("AT+CMD?\r\n", at_resp,

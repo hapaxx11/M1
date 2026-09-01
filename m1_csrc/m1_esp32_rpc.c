@@ -418,9 +418,10 @@ uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
                                         uint16_t mtu,
                                         m1_esp32_m1link_clock_fn now_ms,
                                         uint32_t timeout_ms, int max_iterations,
-                                        const uint8_t *tx_buf, int tx_len,
-                                        uint8_t *rx_buf, int rx_buf_size,
-                                        int *out_len)
+                                       m1_esp32_m1link_pace_fn pace_fn, void *pace_ctx,
+                                       const uint8_t *tx_buf, int tx_len,
+                                       uint8_t *rx_buf, int rx_buf_size,
+                                       int *out_len)
 {
     if (out_len) *out_len = 0;
 
@@ -443,11 +444,13 @@ uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
         if (rc == 2u) return 2u;
         if (rc == 3u) return 3u;
 
-        /* rc == 1u: no match yet. Keep polling only while wall-clock time
-         * remains -- see "Poll-budget wall-clock FIX" (issue #719 Phase 7).
-         * Paced on real elapsed time (unlike a fixed poll count) so it always
-         * waits the caller's full budget regardless of how fast any
-         * individual transaction happens to complete. */
+        /* rc == 1u: no match yet. Yield to the scheduler before the next
+         * poll so the idle task and watchdog are not starved during a long
+         * scan timeout — see m1link_wait_handshake() IWDG reset warning.
+         * Then check the wall-clock deadline (issue #719 Phase 7 "Poll-budget
+         * wall-clock FIX") so we always wait the caller's full budget. */
+        if (pace_fn)
+            pace_fn(pace_ctx);
         if ((uint32_t)(now_ms() - start) >= timeout_ms)
             return 4u;
     }

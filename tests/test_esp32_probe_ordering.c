@@ -121,30 +121,79 @@ void test_caps_init_still_falls_back_to_unknown(void)
     free(content);
 }
 
-/* ----- esp_app_main.c: m1link_hal_xfer() takes the shared SPI3 mutex ----- */
+/* ----- esp_app_main.c: mutex held for the full abort + exchange sequence ---- */
 
-void test_m1link_hal_xfer_locks_shared_spi_mutex(void)
+void test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence(void)
 {
     char *content = read_file(
         "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
 
-    assert_contains(content, "m1link_lock_spi_if_at_task_present");
-    assert_contains(content, "m1link_unlock_spi_if_at_task_present");
+    /* Anchor all checks to the body of spi_m1link_send_recv_bin so that
+     * the HAL_SPI_Abort call inside m1link_hal_xfer (earlier in the file)
+     * and any mention of m1_esp32_m1link_send_recv_timed in comments do not
+     * pollute the ordered checks.  Anchor to the C function definition (which
+     * has a return type) rather than the comment references to the name. */
+    const char *fn_start = strstr(content, "uint8_t spi_m1link_send_recv_bin(");
+    TEST_ASSERT_NOT_NULL_MESSAGE(fn_start, "spi_m1link_send_recv_bin definition not found");
 
-    /* Guarded so it is safe to call before the AT task (and its mutex) has
-     * ever been created. */
-    assert_contains(content,
-        "static void m1link_lock_spi_if_at_task_present(void)\n"
-        "{\n"
-        "\tif (pxMutex)\n"
-        "\t\tspi_mutex_lock();\n"
-        "}");
+    /* The full-sequence lock must wrap the abort AND the timed exchange, so
+     * spi_trans_control_task cannot interpose between request and reply polls. */
+    const char *lock_call  = strstr(fn_start, "m1link_lock_spi_if_at_task_present();");
+    const char *abort_call = strstr(fn_start, "HAL_SPI_Abort(&hspi_esp);");
+    const char *timed_call = strstr(fn_start, "m1_esp32_m1link_send_recv_timed(");
+    const char *unlock_call= strstr(fn_start, "m1link_unlock_spi_if_at_task_present();");
 
-    /* The lock must wrap the actual SPI transaction inside m1link_hal_xfer(). */
-    assert_ordered(content, "m1link_lock_spi_if_at_task_present();",
-                   "HAL_SPI_TransmitReceive(&hspi_esp,");
-    assert_ordered(content, "HAL_SPI_TransmitReceive(&hspi_esp,",
-                   "m1link_unlock_spi_if_at_task_present();");
+    TEST_ASSERT_NOT_NULL(lock_call);
+    TEST_ASSERT_NOT_NULL(abort_call);
+    TEST_ASSERT_NOT_NULL(timed_call);
+    TEST_ASSERT_NOT_NULL(unlock_call);
+
+    TEST_ASSERT_TRUE_MESSAGE(lock_call  < abort_call,  "lock must precede abort");
+    TEST_ASSERT_TRUE_MESSAGE(abort_call < timed_call,  "abort must precede timed exchange");
+    TEST_ASSERT_TRUE_MESSAGE(timed_call < unlock_call, "timed exchange must precede unlock");
+
+    /* m1link_hal_xfer must NOT take the per-transfer lock: doing so would
+     * serialise individual SPI transactions but still allow the AT task to
+     * interpose between the request unlock and the next IDLE poll.  Search
+     * only within m1link_hal_xfer's text range (between its definition and
+     * the start of spi_m1link_send_recv_bin) to avoid false positives. */
+    const char *xfer_fn = strstr(content, "static int m1link_hal_xfer(");
+    TEST_ASSERT_NOT_NULL(xfer_fn);
+    TEST_ASSERT_TRUE_MESSAGE(fn_start > xfer_fn,
+        "spi_m1link_send_recv_bin must come after m1link_hal_xfer");
+    const char *xfer_lock = strstr(xfer_fn, "m1link_lock_spi_if_at_task_present();");
+    /* If the call is found at all, it must be in spi_m1link_send_recv_bin
+     * (at or after fn_start), not inside m1link_hal_xfer (before fn_start). */
+    TEST_ASSERT_TRUE_MESSAGE(xfer_lock == NULL || xfer_lock >= fn_start,
+        "m1link_hal_xfer must not take per-transfer SPI mutex");
+
+    free(content);
+}
+
+/* ----- m1_wifi.c: firmware classification before AT task start ------------ */
+
+void test_wifi_do_scan_classifies_before_starting_at_task(void)
+{
+    char *content = read_file("m1_csrc/m1_wifi.c");
+
+    /* m1_esp32_caps_init() (classification) must run before esp32_main_init()
+     * (AT task start) inside wifi_do_scan(), so a brain-CD3 device is probed
+     * over M1_RPC without the AT task on SPI3. */
+    assert_ordered(content, "m1_esp32_caps_init();",
+                   "esp32_main_init();");
+
+    free(content);
+}
+
+void test_wifi_do_scan_skips_at_task_for_rpc_transport(void)
+{
+    char *content = read_file("m1_csrc/m1_wifi.c");
+
+    /* esp32_main_init() must be guarded by an ESP32_TRANSPORT_RPC check so
+     * that the AT task is not started for brain-CD3 firmware. */
+    assert_contains(content, "ESP32_TRANSPORT_RPC");
+    assert_ordered(content, "ESP32_TRANSPORT_RPC",
+                   "esp32_main_init();");
 
     free(content);
 }
@@ -155,6 +204,8 @@ int main(void)
     RUN_TEST(test_rpc_ping_issued_before_at_task_start);
     RUN_TEST(test_at_task_start_precedes_at_probes);
     RUN_TEST(test_caps_init_still_falls_back_to_unknown);
-    RUN_TEST(test_m1link_hal_xfer_locks_shared_spi_mutex);
+    RUN_TEST(test_spi_m1link_send_recv_bin_locks_spi_mutex_for_full_sequence);
+    RUN_TEST(test_wifi_do_scan_classifies_before_starting_at_task);
+    RUN_TEST(test_wifi_do_scan_skips_at_task_for_rpc_transport);
     return UNITY_END();
 }

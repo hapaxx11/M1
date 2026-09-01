@@ -403,6 +403,36 @@ void test_diag_format_null_buffer_is_safe(void)
     m1_esp32_rpc_call_diag_format(&d, buf, 0u);
 }
 
+/* Host-side local failures (invalid args, no-mem) are distinct from an ESP32
+ * NAK: m1_esp32_rpc_call() records them with rx_len==-1 before any transport
+ * call, so the dashboard correctly says "bad-arg"/"no-mem" rather than "nak"
+ * (which would imply the ESP32 explicitly rejected a request that was never
+ * sent). */
+void test_diag_format_invalid_args_shows_bad_arg(void)
+{
+    m1_esp32_rpc_call_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.attempted = 1u;
+    d.status    = (uint8_t)M1_ESP32_RPC_ERR_INVALID;
+    d.rx_len    = -1;
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0000 bad-arg st2 r-1 p0", buf);
+}
+
+void test_diag_format_no_mem_shows_no_mem(void)
+{
+    m1_esp32_rpc_call_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.attempted = 1u;
+    d.msg_id    = (uint16_t)M1_ESP32_RPC_WIFI_SCAN;
+    d.status    = (uint8_t)M1_ESP32_RPC_ERR_NO_MEM;
+    d.rx_len    = -1;
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-mem st5 r-1 p0", buf);
+}
+
 /* ================================================================== */
 /* m1_esp32_rpc_decode_resp() framing errors                          */
 /* ================================================================== */
@@ -560,6 +590,8 @@ int main(void)
     RUN_TEST(test_diag_set_transport_resets_snapshot);
     RUN_TEST(test_diag_format_null_snapshot_is_no_call);
     RUN_TEST(test_diag_format_null_buffer_is_safe);
+    RUN_TEST(test_diag_format_invalid_args_shows_bad_arg);
+    RUN_TEST(test_diag_format_no_mem_shows_no_mem);
     RUN_TEST(test_decode_bad_magic);
     RUN_TEST(test_decode_bad_crc);
     RUN_TEST(test_decode_short_buffer);

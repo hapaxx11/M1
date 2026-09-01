@@ -12,6 +12,7 @@
  */
 
 #include "unity.h"
+#include <string.h>
 #include "m1_esp32_caps.h"
 #include <string.h>
 #include <stdint.h>
@@ -1212,6 +1213,23 @@ void test_diag_format_null_buffer_is_safe(void)
     TEST_ASSERT_EQUAL_CHAR('x', buf[0]);  /* untouched */
 }
 
+/* M1_ESP32_PROBE_NO_MEM: AT presence probe succeeded but the AT+CMD? response
+ * buffer allocation failed.  The formatter must render "no-mem/retry" rather
+ * than "no probe yet" (PROBE_NONE), so the dashboard clearly reports a local
+ * heap failure and not a missing probe. */
+void test_diag_format_no_mem_outcome_is_distinct(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.outcome          = (uint8_t)M1_ESP32_PROBE_NO_MEM;
+    d.at_presence_ok   = 1u;  /* AT presence succeeded */
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    /* Must not render the PROBE_NONE string */
+    TEST_ASSERT_NOT_EQUAL(0, strcmp("no probe yet", buf));
+    TEST_ASSERT_EQUAL_STRING("no-mem/retry", buf);
+}
+
 /* Every distinct outcome renders a non-empty string that fits the 128px
  * dashboard line (buffer 40, main-menu font ~21 chars — but the diag line uses
  * the small dashboard font and m1_draw_text truncates, so we only assert the
@@ -1222,7 +1240,7 @@ void test_diag_format_all_outcomes_nonempty_and_bounded(void)
         M1_ESP32_PROBE_NONE, M1_ESP32_PROBE_HAL_OFF, M1_ESP32_PROBE_RETRY,
         M1_ESP32_PROBE_BIN_STATUS, M1_ESP32_PROBE_BIN_PING, M1_ESP32_PROBE_AT,
         M1_ESP32_PROBE_RPC_STATUS, M1_ESP32_PROBE_RPC_PROFILE,
-        M1_ESP32_PROBE_UNKNOWN
+        M1_ESP32_PROBE_NO_MEM, M1_ESP32_PROBE_UNKNOWN
     };
     for (size_t i = 0; i < sizeof(outcomes) / sizeof(outcomes[0]); i++)
     {
@@ -1348,6 +1366,7 @@ int main(void)
     RUN_TEST(test_diag_format_rpc_ok);
     RUN_TEST(test_diag_format_unknown_reports_rpc_detail_and_at_task);
     RUN_TEST(test_diag_format_null_buffer_is_safe);
+    RUN_TEST(test_diag_format_no_mem_outcome_is_distinct);
     RUN_TEST(test_diag_format_all_outcomes_nonempty_and_bounded);
 
     return UNITY_END();

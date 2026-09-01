@@ -583,6 +583,16 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
 typedef uint32_t (*m1_esp32_m1link_clock_fn)(void);
 
 /**
+ * Optional inter-poll scheduler yield injected into m1_esp32_m1link_send_recv_timed().
+ * Called once between each unmatched poll iteration so the RTOS scheduler can
+ * service the idle task and watchdog during long scans.  Pass NULL to skip
+ * (pure-logic host tests; the on-target adapter passes a vTaskDelay(1) wrapper).
+ *
+ * @param ctx  Opaque context forwarded from the pace_ctx argument.
+ */
+typedef void (*m1_esp32_m1link_pace_fn)(void *ctx);
+
+/**
  * Wall-clock-paced variant of m1_esp32_m1link_send_recv() (issue #719
  * Phase 7). Sends @p tx_buf on the first transaction, then follow-up IDLE
  * polls, exactly like m1_esp32_m1link_send_recv() — but keeps polling until
@@ -602,6 +612,12 @@ typedef uint32_t (*m1_esp32_m1link_clock_fn)(void);
  * @param max_iterations Hard cap on transactions issued (>= 1); a safety net
  *                       independent of @p now_ms in case the clock source
  *                       ever fails to advance
+ * @param pace_fn        Optional inter-poll pacing callback (may be NULL); called
+ *                       between each unmatched poll to yield to the RTOS scheduler
+ *                       and prevent starving the idle task or watchdog during long
+ *                       scans.  On-target: pass a vTaskDelay(1) wrapper.  Host
+ *                       pure-logic tests: pass NULL.
+ * @param pace_ctx       Opaque pointer forwarded to @p pace_fn (ignored if NULL)
  * @param tx_buf         Request frame bytes (built by m1_esp32_rpc_build_req)
  * @param tx_len         Request frame length (> 0, <= @p mtu)
  * @param rx_buf         Output buffer for the matched response frame
@@ -615,6 +631,7 @@ uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
                                         uint16_t mtu,
                                         m1_esp32_m1link_clock_fn now_ms,
                                         uint32_t timeout_ms, int max_iterations,
+                                        m1_esp32_m1link_pace_fn pace_fn, void *pace_ctx,
                                         const uint8_t *tx_buf, int tx_len,
                                         uint8_t *rx_buf, int rx_buf_size,
                                         int *out_len);
@@ -650,6 +667,8 @@ typedef struct
  *   "op0103 no-reply st253 r0 p0 t10s"  (no reply after waiting ~10s)
  *   "op0103 bad-frame st254 r18 p0"     (a reply arrived but failed to decode)
  *   "op0103 nak st10 r18 p0"            (ESP32 explicitly rejected, e.g. err 10)
+ *   "op0103 bad-arg st2 r-1 p0"         (invalid arguments — never sent)
+ *   "op0103 no-mem st5 r-1 p0"          (host alloc failure — never sent)
  *
  * @param d        Snapshot to render (may be NULL — yields "no call yet")
  * @param buf      Destination buffer
@@ -674,6 +693,8 @@ m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
         case M1_ESP32_RPC_OK:            tag = "ok";        break;
         case M1_ESP32_RPC_ERR_TRANSPORT: tag = "no-reply";  break;
         case M1_ESP32_RPC_ERR_BAD_FRAME: tag = "bad-frame"; break;
+        case M1_ESP32_RPC_ERR_INVALID:   tag = "bad-arg";   break;
+        case M1_ESP32_RPC_ERR_NO_MEM:    tag = "no-mem";    break;
         default:                         tag = "nak";       break;
     }
 

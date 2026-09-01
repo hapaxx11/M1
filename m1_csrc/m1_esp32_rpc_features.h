@@ -43,6 +43,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "FreeRTOS.h"           /* TickType_t, TaskHandle_t, SemaphoreHandle_t */
 #include "m1_esp32_rpc.h"       /* client + opcode enum + payload structs */
 #include "esp32_feature_map.h"  /* esp32_feature_id_t */
 
@@ -123,6 +124,80 @@ typedef struct {
 /** WIFI_SCAN: fill up to @p max decoded entries; sets @p *out_count. */
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *out,
                                              uint8_t max, uint8_t *out_count);
+
+/* -------------------------------------------------------------------------
+ * Async WIFI_SCAN: non-blocking variant for use on the FreeRTOS target.
+ *
+ * The synchronous m1_esp32_rpc_wifi_scan() blocks the caller for up to
+ * M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S (10 s) while the brain firmware sweeps
+ * all channels.  The async API offloads that work to a short-lived worker
+ * task so the calling task can remain responsive (check buttons, refresh the
+ * UI) while the scan is in flight.
+ *
+ * Usage:
+ *   m1_esp32_rpc_wifi_scan_async_t ctx;
+ *   m1_esp32_rpc_wifi_scan_async_start(&ctx, buf, max);
+ *   while (!m1_esp32_rpc_wifi_scan_async_poll(&ctx))
+ *       vTaskDelay(pdMS_TO_TICKS(50));          // yield; check buttons here
+ *   st = ctx.status; count = ctx.count;
+ *   m1_esp32_rpc_wifi_scan_async_cleanup(&ctx);
+ * -------------------------------------------------------------------------*/
+
+/** State block for an in-flight async WiFi scan.  Stack- or heap-allocate
+ *  one per scan call; do not share between tasks.  All fields are written by
+ *  the worker task and read by the caller after completion. */
+typedef struct {
+    m1_esp32_rpc_wifi_scan_result_t *out;    /**< Result buffer (caller-owned). */
+    uint8_t                          max;    /**< Buffer capacity in entries. */
+    uint8_t                          count;  /**< Entries written by worker. */
+    m1_esp32_rpc_status_t            status; /**< Worker exit status. */
+    volatile bool                    cancel; /**< Caller sets true to abort. */
+    SemaphoreHandle_t                done;   /**< Binary semaphore: given on exit. */
+    TaskHandle_t                     task;   /**< Worker handle (NULL after done). */
+} m1_esp32_rpc_wifi_scan_async_t;
+
+/**
+ * Start an async WiFi scan.
+ *
+ * Allocates a binary semaphore, spawns a worker task that calls
+ * m1_esp32_rpc_wifi_scan(), and returns immediately.  The caller must later
+ * call m1_esp32_rpc_wifi_scan_async_poll() to detect completion and
+ * m1_esp32_rpc_wifi_scan_async_cleanup() to release resources.
+ *
+ * @param ctx  Uninitialised state block; must remain valid until cleanup.
+ * @param out  Caller-allocated result buffer; must remain valid until cleanup.
+ * @param max  Capacity of @p out in entries.
+ * @return true on success (worker launched), false if semaphore or task
+ *         creation failed.
+ */
+bool m1_esp32_rpc_wifi_scan_async_start(m1_esp32_rpc_wifi_scan_async_t *ctx,
+                                        m1_esp32_rpc_wifi_scan_result_t *out,
+                                        uint8_t max);
+
+/**
+ * Non-blocking completion check.
+ *
+ * @return true when the worker has finished (or been cancelled) and results
+ *         are available in @p ctx->out / @p ctx->count / @p ctx->status.
+ *         false while the scan is still in flight.
+ */
+bool m1_esp32_rpc_wifi_scan_async_poll(m1_esp32_rpc_wifi_scan_async_t *ctx);
+
+/**
+ * Request cancellation of an in-flight scan.
+ *
+ * Sets a flag the worker task checks before issuing the RPC call.  Does not
+ * block; callers must still poll for completion and call cleanup.
+ */
+void m1_esp32_rpc_wifi_scan_async_cancel(m1_esp32_rpc_wifi_scan_async_t *ctx);
+
+/**
+ * Release resources allocated by m1_esp32_rpc_wifi_scan_async_start().
+ *
+ * Must be called exactly once after m1_esp32_rpc_wifi_scan_async_poll()
+ * returns true (or after cancellation + poll confirms completion).
+ */
+void m1_esp32_rpc_wifi_scan_async_cleanup(m1_esp32_rpc_wifi_scan_async_t *ctx);
 
 /**
  * WIFI_CONNECT: join an AP with @p ssid and @p password.
