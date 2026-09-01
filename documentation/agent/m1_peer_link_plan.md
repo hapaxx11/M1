@@ -71,7 +71,7 @@ discovery, capture sharing, remote trigger.**
 | **Peer discovery** | ✅ `espnow_peer_session` + Scan scene + confirm code; `M1_ESP32_CAP_ESPNOW` is temporarily inferred for confirmed native CD3 via STM32 M1_RPC probe fallback | None (polish only; brain should eventually self-report bit 24) |
 | **Capture sharing** | ✅ Sender UI offers a Peer Link category picker and saved-item Send to Peer shortcuts for Sub-GHz / NFC / RFID / IR captures, then streams the selected file to the paired peer; receiver still stores into `/ESPNOW/` | Two-device bench validation |
 | **Peer messaging** | ✅ Messages scene uses VKB compose plus the `espnow_message` inbox/framing module for paired-peer short text | Scene-level chunking for messages longer than one direct `NOW_SEND` call |
-| **AES-256 encryption** | ❌ `encrypt = false` always (`esp32_firmware.md:808`); only visual confirm codes | Application-layer authenticated encryption over the DATA channel (see §5, Phase 4) |
+| **AES-256 encryption** | ✅ Optional app-layer Encrypt-then-MAC is wired for paired app payloads. Peers opportunistically exchange plaintext crypto HELLO/ACK control frames; once acknowledged, payloads are AES-256-CBC + HMAC-SHA256 envelopes over the fragment helper. If negotiation does not complete, the UI keeps a plaintext fallback for compatibility. | Two-device bench validation and a future stronger key exchange before treating it as robust confidentiality |
 | **Remote trigger** | ✅ Peer Link → Remote Trigger lets a paired sender request Sub-GHz/IR replay by safe saved-capture name; the receiver must explicitly allow incoming triggers and confirm each request before bounded replay | Two-device bench validation and future expansion only if additional capture kinds get safe bounded execution paths |
 
 Two enablement blockers apply to **all** on-device use, regardless of pillar:
@@ -98,13 +98,14 @@ This feature cannot be fully validated in the firmware repo alone:
 - **Two physical M1 devices** (or one M1 + one XIAO/Pico ESP-NOW bench) are
   required to test discovery, pairing, transfer, messaging, and trigger.
 - **CD3 brain ESP32 firmware** (`bedge117/m1-esp32-brain`) owns the over-the-air
-  ESP-NOW behaviour and the `M1_ESP32_CAP_ESPNOW` self-report. Remote Trigger
-  rides the existing `NOW_SEND` / `NOW_RECV_GET` DATA channel, so it does not
-  require a new brain opcode; future self-report and encryption standardisation
-  still need coordinated changes there. Per repo policy that is a **separate
-  repository** and is out of scope for STM32-side commits — this plan assumes we
-  either (a) drive the brain team, or (b) keep every new capability behind the
-  closed feature gate until the brain supports it.
+  ESP-NOW behaviour and the `M1_ESP32_CAP_ESPNOW` self-report. Remote Trigger and
+  optional app-layer encryption ride the existing `NOW_SEND` / `NOW_RECV_GET`
+  DATA channel, so they do not require new brain opcodes; future self-report and
+  stronger encryption/key-exchange standardisation still need coordinated
+  changes there. Per repo policy that is a **separate repository** and is out of
+  scope for STM32-side commits — this plan assumes we either (a) drive the brain
+  team, or (b) keep every new capability behind the closed feature gate until the
+  brain supports it.
 - Per `CLAUDE.md`, **pure-logic layers are host-tested**; hardware-coupled scene
   behaviour is bench-gated. Each phase below lists its host tests explicitly.
 
@@ -180,18 +181,31 @@ so early phases unblock later ones.
   rejection when capability/consent absent, name validation.
 - **Hardware gate:** two-device remote replay, with the confirm gate exercised.
 
-### Phase 4 — Authenticated encryption (AES)
-- Add application-layer authenticated encryption over the DATA channel keyed off
-  the pairing exchange (the confirm code already proves a shared secret exists).
-  Evaluate: (a) app-layer AES-GCM/CCM in Hapax pure code, vs (b) ESP-NOW native
-  PMK/LMK CCMP once a CD3 release standardises it (`esp32_firmware.md:808-811`).
-- Prefer app-layer so it is testable on host and independent of brain firmware;
-  fold the AEAD header into the Phase 0 chunk format.
-- **Deliverable:** messaging + transfer + trigger payloads are confidential and
-  tamper-evident between paired peers.
-- **Host tests:** `test_espnow_crypto.c` — encrypt/decrypt round-trip, tamper
-  detection (auth-tag failure), replay/nonce handling, key-derivation vectors.
-- **Hardware gate:** two-device encrypted session interop.
+### Phase 4 — Optional authenticated encryption (AES)
+- Application-layer authenticated encryption rides the existing DATA channel:
+  pair setup derives stable key material from ordered peer MACs plus the visual
+  confirm code, then `espnow_secure` negotiates with tiny plaintext HELLO/ACK
+  control frames (`0xE1`/`0xE2`). Once ACK is observed, `m1_espnow_secure_link`
+  seals app payloads with `espnow_crypto` and sends the larger envelope through
+  `espnow_chunk`.
+- Fallback is intentionally enabled for now: if HELLO/ACK does not complete
+  because the peer is older or not in a polling peer-link scene, outbound payloads
+  continue over the plaintext path. After encryption is established, plaintext
+  frames from the configured peer are rejected to avoid silent downgrade.
+- The wired app payload paths are Messages, Send/Receive Capture file transfer,
+  Remote Trigger, and Tic-Tac-Toe. Pairing itself remains plaintext so it can
+  bootstrap the optional encrypted layer.
+- **Status:** Host-tested and scene-wired; not yet a strong secrecy guarantee
+  because key material is still derived from visible pairing transcript data.
+  A future cross-repo key exchange or ESP-NOW PMK/LMK standardisation should
+  replace that before relying on confidentiality against passive observers.
+- **Deliverable:** paired peers opportunistically encrypt app payloads while
+  preserving plaintext compatibility when negotiation fails.
+- **Host tests:** `test_espnow_crypto.c`, `test_espnow_secure.c`, and
+  `test_m1_espnow_secure_link.c` cover key derivation, HELLO/ACK framing,
+  encrypted chunking, tamper rejection, fallback, and downgrade rejection.
+- **Hardware gate:** two-device encrypted session interop plus fallback with an
+  older/plaintext peer.
 
 ### Phase 5 — Polish, docs, changelog
 - Menu/UX consolidation of the Peer Link submenu (Scan / Messages / Send Capture
@@ -211,11 +225,10 @@ so early phases unblock later ones.
 2. **Phase 0 first** — capability detection + chunking unblock everything else and
    are now implemented as STM32-side foundations; brain firmware should still
    self-report ESP-NOW long-term.
-3. **Then pick order** among Phases 1–4 by priority. Capture sharing (Phase 1)
-   has the most existing code and the clearest payoff; encryption (Phase 4) is
-   the biggest cross-repo dependency.
-4. **Brain firmware coordination** — flag which pieces (self-report bit, any new
-   opcode) need `bedge117/m1-esp32-brain` changes so they can be scheduled there.
+3. **Bench the wired pillars** — discovery, capture sharing, messaging, remote
+   trigger, and optional encryption now need two-device validation.
+4. **Brain firmware coordination** — the remaining long-term items are direct
+   ESP-NOW capability self-report and stronger encryption/key exchange.
 
 Direct which phase(s) to implement and I'll proceed with real code + host tests
 per the repo's build-and-test rules.

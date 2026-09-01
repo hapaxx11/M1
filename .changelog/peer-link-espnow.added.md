@@ -10,7 +10,8 @@
   captures through the existing storage browser, use Send to Peer shortcuts from
   saved capture action menus over the CRC-checked transfer path, and request a
   paired peer to replay a named Sub-GHz/IR capture only after explicit receiver
-  consent.  The pure modules
+  consent, and opportunistically encrypt paired app payloads with plaintext
+  fallback when the optional HELLO/ACK crypto negotiation is unavailable.  The pure modules
   have host unit tests; live use is gated behind `M1_ESP32_CAP_ESPNOW`, which the
   STM32 now infers for confirmed native CD3 until brain firmware self-reports bit
   24 directly.

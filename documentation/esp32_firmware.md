@@ -845,7 +845,9 @@ are registered centrally in `m1_csrc/espnow_appmsg.h` (`espnow_app_classify()`):
 Each module is **pure logic** (no HAL/RTOS/display), extracted so it can be
 exercised by host unit tests under `tests/` (`test_espnow_chunk`,
 `test_espnow_shareable`, `test_espnow_message`, `test_espnow_trigger`,
-`test_espnow_crypto`).
+`test_espnow_crypto`, `test_espnow_secure`).  The firmware-side optional
+encrypted transport wrapper is covered by `test_m1_espnow_secure_link` with
+stubbed ESP-NOW HAL calls.
 
 - *Fragmentation (`espnow_chunk`)* — Splits an app message up to 240 bytes into
   ≤ 42-byte OTA frames (4-byte header: type/msg_id/frag_idx/frag_cnt) and
@@ -873,11 +875,19 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
   NFC/RFID remote execution until those lifecycles have a safe bounded path.
 - *Authenticated encryption (`espnow_crypto`)* — An Encrypt-then-MAC envelope
   (type `0xE0`) wrapping the payload with AES-256-CBC (`m1_crypto`) and a
-  truncated HMAC-SHA256 tag (`NFC/amiibo/sha256.c`).  A single pairing shared
-  secret is expanded into independent encryption and MAC keys
-  (`enc = SHA256(secret‖0x01)`, `mac = SHA256(secret‖0x02)`); the tag covers the
-  type byte, IV and ciphertext and is verified **before** any decryption, so
-  tampered or wrong-key frames are rejected up front.
+  truncated HMAC-SHA256 tag (`NFC/amiibo/sha256.c`).  `espnow_secure` derives
+  stable pair key material from the ordered peer MAC addresses plus the visual
+  confirm code, then negotiates optional use with plaintext `0xE1` HELLO and
+  `0xE2` ACK control frames.  Once ACK is observed, `m1_espnow_secure_link`
+  fragments the larger encrypted envelope through `espnow_chunk` and sends it as
+  ordinary `NOW_SEND` frames.  If negotiation does not complete, app payloads
+  fall back to plaintext for compatibility; after encryption is established,
+  plaintext frames from the configured peer are rejected to avoid silent
+  downgrade.  The tag covers the type byte, IV and ciphertext and is verified
+  **before** any decryption, so tampered or wrong-key frames are rejected up
+  front.  The current key material is best-effort and should be replaced by a
+  stronger key exchange before treating the link as robust against passive
+  observers.
 
 > **Gating:** all of the above is compiled unconditionally but only reachable
 > once the peer-link scene passes the `M1_ESP32_CAP_ESPNOW` gate.  Current
