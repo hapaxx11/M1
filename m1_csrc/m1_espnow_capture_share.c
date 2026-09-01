@@ -16,6 +16,7 @@
 #include "main.h"
 #include "m1_espnow_scene_ctx.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_file_transfer.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -37,7 +38,7 @@ static bool send_hal_send(const uint8_t mac[ESPNOW_FT_MAC_LEN],
                           const uint8_t *data, size_t len, void *ctx)
 {
     (void)ctx;
-    return m1_espnow_send(mac, data, len);
+    return m1_espnow_secure_link_send(mac, data, len);
 }
 
 static uint32_t send_hal_millis(void *ctx)
@@ -157,12 +158,12 @@ static void send_run_transfer(const uint8_t peer_mac[ESPNOW_MAC_LEN])
 
         if (send_handle_button_cancel()) {
             uint8_t abort_msg[2] = { ESPNOW_FT_MSG_ABORT, s_send_ctx.current_seq };
-            m1_espnow_send(peer_mac, abort_msg, sizeof(abort_msg));
+            m1_espnow_secure_link_send(peer_mac, abort_msg, sizeof(abort_msg));
             snprintf(s_send_status, sizeof(s_send_status), "Cancelled");
             break;
         }
 
-        if (m1_espnow_recv_msg(from_mac, msg, sizeof(msg), &msg_len) &&
+        if (m1_espnow_secure_link_recv(from_mac, msg, sizeof(msg), &msg_len) &&
             memcmp(from_mac, peer_mac, ESPNOW_MAC_LEN) == 0 &&
             msg_len >= 2u) {
             espnow_ft_send_on_recv(&s_send_ctx, msg[0], msg + 2, msg_len - 2u);

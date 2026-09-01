@@ -17,6 +17,7 @@
 #include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_tictactoe.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -68,7 +69,8 @@ static bool ttt_on_event(M1SceneApp *app, M1SceneEvent event)
         uint8_t from_mac[ESPNOW_MAC_LEN];
         uint8_t msg_buf[8];
         uint8_t msg_len = 0;
-        if (m1_espnow_recv_msg(from_mac, msg_buf, sizeof(msg_buf), &msg_len)) {
+        if (m1_espnow_secure_link_recv(from_mac, msg_buf, sizeof(msg_buf),
+                                       &msg_len)) {
             if (msg_len >= 2 && msg_buf[0] == TTT_MSG_MOVE) {
                 uint8_t cell = msg_buf[1];
                 ttt_cell_t their = ttt_their_cell(&s_game);
@@ -114,7 +116,7 @@ static bool ttt_on_event(M1SceneApp *app, M1SceneEvent event)
 
             /* Send move to opponent */
             uint8_t move_msg[2] = { TTT_MSG_MOVE, s_cursor };
-            m1_espnow_send(s_peer_mac, move_msg, 2);
+            m1_espnow_secure_link_send(s_peer_mac, move_msg, 2);
             app->need_redraw = true;
         }
         return true;
@@ -123,7 +125,7 @@ static bool ttt_on_event(M1SceneApp *app, M1SceneEvent event)
         if (s_game_active && s_game.result == TTT_RESULT_NONE) {
             /* Resign */
             uint8_t resign_msg[1] = { TTT_MSG_RESIGN };
-            m1_espnow_send(s_peer_mac, resign_msg, 1);
+            m1_espnow_secure_link_send(s_peer_mac, resign_msg, 1);
         }
         m1_scene_pop(app);
         return true;

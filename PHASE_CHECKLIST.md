@@ -18,10 +18,10 @@
 
 ### Phase 3 — Firmware scene wiring
 - **Description**: Store session crypto state for the selected peer and route Messages and Remote Trigger payloads through the optional encrypted send/receive helpers.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Wire optional ESP-NOW encryption`
 
 ### Phase 4 — Docs, validation, cleanup
 - **Description**: Update docs/changelog, run targeted tests, attempt firmware build, remove this checklist, and reply to the PR comment.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

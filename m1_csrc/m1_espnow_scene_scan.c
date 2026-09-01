@@ -18,6 +18,7 @@
 #include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_peer_session.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -186,9 +187,14 @@ static bool pair_on_event(M1SceneApp *app, M1SceneEvent event)
         if (msg_len >= 1 && msg_buf[0] == ESPNOW_MSG_PAIR_ACCEPT) {
             espnow_session_pair_accepted(&s_session);
             if (s_session.selected_peer_idx < s_session.peer_count) {
+                uint8_t local_mac[ESPNOW_MAC_LEN];
+                const espnow_peer_info_t *peer =
+                    &s_session.peers[s_session.selected_peer_idx];
+                m1_espnow_get_mac(local_mac);
                 m1_espnow_scene_ctx_set_peer(
-                    s_session.peers[s_session.selected_peer_idx].mac,
-                    s_session.peers[s_session.selected_peer_idx].name);
+                    peer->mac, peer->name);
+                (void)m1_espnow_secure_link_configure(
+                    local_mac, peer->mac, s_session.confirm_code);
             }
             app->need_redraw = true;
             /* Stay on pair screen showing confirm code briefly,

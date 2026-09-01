@@ -17,6 +17,7 @@
 #include "m1_espnow_scene.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_file_transfer.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -39,7 +40,7 @@ static bool ft_hal_send(const uint8_t mac[ESPNOW_FT_MAC_LEN],
                         const uint8_t *data, size_t len, void *ctx)
 {
     (void)ctx;
-    return m1_espnow_send(mac, data, len);
+    return m1_espnow_secure_link_send(mac, data, len);
 }
 
 static espnow_ft_file_t ft_hal_file_open(const char *path, void *ctx)
@@ -105,7 +106,7 @@ static bool transfer_on_event(M1SceneApp *app, M1SceneEvent event)
         uint8_t from_mac[ESPNOW_FT_MAC_LEN];
         uint8_t msg_buf[ESPNOW_FT_CHUNK_MAX + 8];
         uint8_t msg_len = 0;
-        if (m1_espnow_recv_msg(from_mac, msg_buf, sizeof(msg_buf), &msg_len)) {
+        if (m1_espnow_secure_link_recv(from_mac, msg_buf, sizeof(msg_buf), &msg_len)) {
             if (msg_len >= 2) {
                 uint8_t type = msg_buf[0];
                 uint8_t seq  = msg_buf[1];

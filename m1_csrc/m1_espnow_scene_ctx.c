@@ -9,6 +9,8 @@
 
 #include <string.h>
 
+#include "m1_espnow_secure_link.h"
+
 static uint8_t s_peer_mac[ESPNOW_MAC_LEN];
 static char s_peer_name[M1_ESPNOW_PEER_NAME_MAX + 1u];
 static bool s_peer_valid;
@@ -20,6 +22,7 @@ void m1_espnow_scene_ctx_reset(void)
     s_peer_name[0] = '\0';
     s_peer_valid = false;
     s_share_kind = ESPNOW_SHARE_KIND_UNKNOWN;
+    m1_espnow_secure_link_reset();
 }
 
 void m1_espnow_scene_ctx_set_peer(const uint8_t mac[ESPNOW_MAC_LEN],

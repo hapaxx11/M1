@@ -16,6 +16,7 @@
 #include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_message.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -41,7 +42,7 @@ static void messages_poll(M1SceneApp *app)
     char text[ESPNOW_MSG_TEXT_MAX + 1u];
     uint8_t seq = 0;
 
-    if (!m1_espnow_recv_msg(from_mac, frame, sizeof(frame), &frame_len))
+    if (!m1_espnow_secure_link_recv(from_mac, frame, sizeof(frame), &frame_len))
         return;
     if (memcmp(from_mac, s_peer_mac, ESPNOW_MAC_LEN) != 0)
         return;
@@ -75,7 +76,7 @@ static void messages_compose(M1SceneApp *app)
         app->need_redraw = true;
         return;
     }
-    if (!m1_espnow_send(s_peer_mac, frame, frame_len)) {
+    if (!m1_espnow_secure_link_send(s_peer_mac, frame, frame_len)) {
         snprintf(s_status, sizeof(s_status), "Send failed");
         app->need_redraw = true;
         return;
@@ -83,7 +84,9 @@ static void messages_compose(M1SceneApp *app)
 
     espnow_inbox_push(&s_inbox, s_peer_mac, s_next_seq, true, text);
     s_next_seq++;
-    snprintf(s_status, sizeof(s_status), "Sent");
+    snprintf(s_status, sizeof(s_status),
+             m1_espnow_secure_link_encrypted() ? "Sent secure" :
+             (m1_espnow_secure_link_fallback() ? "Sent plain" : "Sent"));
     app->need_redraw = true;
 }
 

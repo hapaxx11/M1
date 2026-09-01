@@ -18,6 +18,7 @@
 #include "m1_scene.h"
 #include "m1_submenu.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_trigger.h"
 #include "espnow_shareable.h"
 #include "m1_display.h"
@@ -113,7 +114,7 @@ static bool trigger_send_status(espnow_trig_msg_t type, uint8_t code)
 
     if (!espnow_trig_build_status(type, code, frame, sizeof(frame), &frame_len))
         return false;
-    return m1_espnow_send(s_peer_mac, frame, frame_len);
+    return m1_espnow_secure_link_send(s_peer_mac, frame, frame_len);
 }
 
 static void trigger_reset_receiver(void)
@@ -241,7 +242,7 @@ static void trigger_status_on_enter(M1SceneApp *app)
         return;
     }
 
-    if (!m1_espnow_send(s_peer_mac, frame, frame_len) ||
+    if (!m1_espnow_secure_link_send(s_peer_mac, frame, frame_len) ||
         !espnow_trigger_request_sent(&s_init_ctx, kind, name)) {
         trigger_status_fail("Send failed");
         app->need_redraw = true;
@@ -276,7 +277,7 @@ static void trigger_status_poll(M1SceneApp *app)
         return;
     }
 
-    if (!m1_espnow_recv_msg(from_mac, frame, sizeof(frame), &frame_len))
+    if (!m1_espnow_secure_link_recv(from_mac, frame, sizeof(frame), &frame_len))
         return;
     if (memcmp(from_mac, s_peer_mac, ESPNOW_MAC_LEN) != 0)
         return;
@@ -366,7 +367,7 @@ static void trigger_listen_poll(M1SceneApp *app)
         return;
     s_last_poll_tick = now;
 
-    if (!m1_espnow_recv_msg(from_mac, frame, sizeof(frame), &frame_len))
+    if (!m1_espnow_secure_link_recv(from_mac, frame, sizeof(frame), &frame_len))
         return;
     if (memcmp(from_mac, s_peer_mac, ESPNOW_MAC_LEN) != 0)
         return;

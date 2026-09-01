@@ -716,6 +716,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_espnow_scene_send.c
     ../../m1_csrc/m1_espnow_scene_transfer.c
     ../../m1_csrc/m1_espnow_scene_trigger.c
+    ../../m1_csrc/m1_espnow_secure_link.c
     ../../m1_csrc/m1_espnow_scene_tictactoe.c
 
     ../../m1_csrc/privateprofilestring.c
