@@ -8,17 +8,17 @@
 
 ### Phase 1 — Discovery and plan
 - **Description**: Inspect the existing trigger FSM, Peer Link scene manager, saved-capture replay paths, and safety/UX constraints.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Constrain remote trigger routing`
 
 ### Phase 2 — Pure helper and tests
 - **Description**: Add host-tested pure routing helpers for trigger-kind replay decisions and action labeling/path handling.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Constrain remote trigger routing`
 
 ### Phase 3 — Sender/receiver scene wiring
 - **Description**: Add Peer Link Remote Trigger scenes for selecting a saved capture, sending a request to the paired peer, polling status/result frames, and consenting to inbound requests.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Replay execution adapters

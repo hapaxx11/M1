@@ -11,6 +11,7 @@
 
 #include "espnow_trigger.h"
 
+#include <stdio.h>
 #include <string.h>
 
 /* =========================================================================
@@ -22,12 +23,42 @@ static bool espnow_trig_kind_is_valid(espnow_share_kind_t kind)
     return kind >= ESPNOW_SHARE_KIND_SUBGHZ && kind <= ESPNOW_SHARE_KIND_IR;
 }
 
+bool espnow_trig_kind_can_execute(espnow_share_kind_t kind)
+{
+    return kind == ESPNOW_SHARE_KIND_SUBGHZ || kind == ESPNOW_SHARE_KIND_IR;
+}
+
+bool espnow_trig_build_replay_path(espnow_share_kind_t kind, const char *name,
+                                   char *out, size_t out_cap)
+{
+    const char *dir = espnow_share_kind_dir(kind);
+    int n;
+
+    if (name == NULL || out == NULL || out_cap == 0u)
+        return false;
+    if (!espnow_trig_kind_can_execute(kind))
+        return false;
+    if (!espnow_share_name_is_safe(name, ESPNOW_TRIG_NAME_MAX))
+        return false;
+    if (espnow_share_classify(name) != kind)
+        return false;
+    if (dir == NULL)
+        return false;
+
+    n = snprintf(out, out_cap, "%s/%s", dir, name);
+    return n > 0 && (size_t)n < out_cap;
+}
+
 bool espnow_trig_build_request(espnow_share_kind_t kind, const char *name,
                                uint8_t *out, size_t out_cap, size_t *out_len)
 {
     if (name == NULL || out == NULL || out_len == NULL)
         return false;
     if (!espnow_share_name_is_safe(name, ESPNOW_TRIG_NAME_MAX))
+        return false;
+    if (!espnow_trig_kind_can_execute(kind))
+        return false;
+    if (espnow_share_classify(name) != kind)
         return false;
 
     size_t nlen = strlen(name);
@@ -145,6 +176,10 @@ bool espnow_trigger_request_sent(espnow_trigger_ctx_t *ctx,
         return false;
     if (!espnow_share_name_is_safe(name, ESPNOW_TRIG_NAME_MAX))
         return false;
+    if (!espnow_trig_kind_can_execute(kind))
+        return false;
+    if (espnow_share_classify(name) != kind)
+        return false;
 
     ctx->kind = kind;
     strncpy(ctx->name, name, ESPNOW_TRIG_NAME_MAX);
@@ -208,9 +243,10 @@ bool espnow_trigger_on_request(espnow_trigger_ctx_t *ctx,
         return false;
     }
 
-    /* Safety gate 2 — the name must be valid and the kind shareable. */
+    /* Safety gate 2 — the name must be valid and the kind executable. */
     if (!espnow_share_name_is_safe(name, ESPNOW_TRIG_NAME_MAX) ||
-        !espnow_trig_kind_is_valid(kind)) {
+        !espnow_trig_kind_can_execute(kind) ||
+        espnow_share_classify(name) != kind) {
         ctx->reject_reason = ESPNOW_TRIG_REJECT_BAD_NAME;
         ctx->state = ESPNOW_TRIG_STATE_REJECTED;
         return false;

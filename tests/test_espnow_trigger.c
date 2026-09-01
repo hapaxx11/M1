@@ -99,6 +99,75 @@ void test_status_build_rejects_bad_type(void)
                                                frame, sizeof(frame), &flen));
 }
 
+void test_request_name_cap_fits_direct_send_budget(void)
+{
+    uint8_t frame[64];
+    size_t flen = 0;
+    char ok_name[ESPNOW_TRIG_NAME_MAX + 1];
+    char long_name[ESPNOW_TRIG_NAME_MAX + 2];
+
+    memset(ok_name, 'a', sizeof(ok_name));
+    ok_name[ESPNOW_TRIG_NAME_MAX - 3u] = '.';
+    ok_name[ESPNOW_TRIG_NAME_MAX - 2u] = 'i';
+    ok_name[ESPNOW_TRIG_NAME_MAX - 1u] = 'r';
+    ok_name[ESPNOW_TRIG_NAME_MAX] = '\0';
+
+    TEST_ASSERT_TRUE(espnow_trig_build_request(ESPNOW_SHARE_KIND_IR,
+                                               ok_name, frame, sizeof(frame),
+                                               &flen));
+    TEST_ASSERT_EQUAL_UINT(ESPNOW_TRIG_NAME_MAX + 2u, flen);
+
+    memset(long_name, 'b', sizeof(long_name));
+    long_name[ESPNOW_TRIG_NAME_MAX - 2u] = '.';
+    long_name[ESPNOW_TRIG_NAME_MAX - 1u] = 'i';
+    long_name[ESPNOW_TRIG_NAME_MAX] = 'r';
+    long_name[ESPNOW_TRIG_NAME_MAX + 1u] = '\0';
+    TEST_ASSERT_FALSE(espnow_trig_build_request(ESPNOW_SHARE_KIND_IR,
+                                                long_name, frame,
+                                                sizeof(frame), &flen));
+}
+
+/* =========================================================================
+ * Replay routing
+ * =========================================================================*/
+
+void test_executable_kinds_are_rf_replay_only(void)
+{
+    TEST_ASSERT_TRUE(espnow_trig_kind_can_execute(ESPNOW_SHARE_KIND_SUBGHZ));
+    TEST_ASSERT_TRUE(espnow_trig_kind_can_execute(ESPNOW_SHARE_KIND_IR));
+    TEST_ASSERT_FALSE(espnow_trig_kind_can_execute(ESPNOW_SHARE_KIND_NFC));
+    TEST_ASSERT_FALSE(espnow_trig_kind_can_execute(ESPNOW_SHARE_KIND_RFID));
+    TEST_ASSERT_FALSE(espnow_trig_kind_can_execute(ESPNOW_SHARE_KIND_UNKNOWN));
+}
+
+void test_replay_path_builds_for_executable_kind(void)
+{
+    char path[64];
+    TEST_ASSERT_TRUE(espnow_trig_build_replay_path(ESPNOW_SHARE_KIND_SUBGHZ,
+                                                   "garage.sub", path,
+                                                   sizeof(path)));
+    TEST_ASSERT_EQUAL_STRING("0:/SUBGHZ/garage.sub", path);
+
+    TEST_ASSERT_TRUE(espnow_trig_build_replay_path(ESPNOW_SHARE_KIND_IR,
+                                                   "tv.ir", path,
+                                                   sizeof(path)));
+    TEST_ASSERT_EQUAL_STRING("0:/IR/tv.ir", path);
+}
+
+void test_replay_path_rejects_mismatched_or_unsupported_kind(void)
+{
+    char path[64];
+    TEST_ASSERT_FALSE(espnow_trig_build_replay_path(ESPNOW_SHARE_KIND_SUBGHZ,
+                                                    "tv.ir", path,
+                                                    sizeof(path)));
+    TEST_ASSERT_FALSE(espnow_trig_build_replay_path(ESPNOW_SHARE_KIND_NFC,
+                                                    "card.nfc", path,
+                                                    sizeof(path)));
+    TEST_ASSERT_FALSE(espnow_trig_build_replay_path(ESPNOW_SHARE_KIND_IR,
+                                                    "../tv.ir", path,
+                                                    sizeof(path)));
+}
+
 /* =========================================================================
  * Happy path — full exchange
  * =========================================================================*/
@@ -161,6 +230,29 @@ void test_responder_rejects_unknown_kind(void)
     espnow_trigger_ctx_t resp;
     espnow_trigger_init(&resp, ESPNOW_TRIG_ROLE_RESPONDER, true);
     TEST_ASSERT_FALSE(espnow_trigger_on_request(&resp, ESPNOW_SHARE_KIND_UNKNOWN, "file.sub"));
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_STATE_REJECTED, resp.state);
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_REJECT_BAD_NAME, resp.reject_reason);
+}
+
+void test_responder_rejects_nfc_rfid_remote_emulation(void)
+{
+    espnow_trigger_ctx_t resp;
+    espnow_trigger_init(&resp, ESPNOW_TRIG_ROLE_RESPONDER, true);
+    TEST_ASSERT_FALSE(espnow_trigger_on_request(&resp, ESPNOW_SHARE_KIND_NFC, "card.nfc"));
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_STATE_REJECTED, resp.state);
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_REJECT_BAD_NAME, resp.reject_reason);
+
+    espnow_trigger_init(&resp, ESPNOW_TRIG_ROLE_RESPONDER, true);
+    TEST_ASSERT_FALSE(espnow_trigger_on_request(&resp, ESPNOW_SHARE_KIND_RFID, "tag.rfid"));
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_STATE_REJECTED, resp.state);
+    TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_REJECT_BAD_NAME, resp.reject_reason);
+}
+
+void test_responder_rejects_kind_extension_mismatch(void)
+{
+    espnow_trigger_ctx_t resp;
+    espnow_trigger_init(&resp, ESPNOW_TRIG_ROLE_RESPONDER, true);
+    TEST_ASSERT_FALSE(espnow_trigger_on_request(&resp, ESPNOW_SHARE_KIND_SUBGHZ, "tv.ir"));
     TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_STATE_REJECTED, resp.state);
     TEST_ASSERT_EQUAL_INT(ESPNOW_TRIG_REJECT_BAD_NAME, resp.reject_reason);
 }
@@ -250,10 +342,16 @@ int main(void)
     RUN_TEST(test_request_parse_rejects_wrong_type);
     RUN_TEST(test_status_build_parse);
     RUN_TEST(test_status_build_rejects_bad_type);
+    RUN_TEST(test_request_name_cap_fits_direct_send_budget);
+    RUN_TEST(test_executable_kinds_are_rf_replay_only);
+    RUN_TEST(test_replay_path_builds_for_executable_kind);
+    RUN_TEST(test_replay_path_rejects_mismatched_or_unsupported_kind);
     RUN_TEST(test_full_exchange_success);
     RUN_TEST(test_responder_auto_rejects_when_disabled);
     RUN_TEST(test_responder_rejects_bad_name);
     RUN_TEST(test_responder_rejects_unknown_kind);
+    RUN_TEST(test_responder_rejects_nfc_rfid_remote_emulation);
+    RUN_TEST(test_responder_rejects_kind_extension_mismatch);
     RUN_TEST(test_responder_rejects_out_of_range_kind);
     RUN_TEST(test_responder_deny_path);
     RUN_TEST(test_grant_requires_pending_request);

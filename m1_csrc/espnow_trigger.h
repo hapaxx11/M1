@@ -38,8 +38,8 @@
 extern "C" {
 #endif
 
-/** Maximum capture-name length carried in a request. */
-#define ESPNOW_TRIG_NAME_MAX     48u
+/** Maximum capture-name length carried in a direct REQUEST frame. */
+#define ESPNOW_TRIG_NAME_MAX     40u
 
 /** Wire message types (within the 0x30 app block). */
 typedef enum {
@@ -139,6 +139,24 @@ bool espnow_trig_build_status(espnow_trig_msg_t type, uint8_t code,
  */
 bool espnow_trig_parse_status(const uint8_t *frame, size_t len,
                               espnow_trig_msg_t *out_type, uint8_t *out_code);
+
+/**
+ * @brief  True when @p kind supports bounded remote replay/trigger execution.
+ *
+ * Capture sharing supports Sub-GHz/NFC/RFID/IR files, but remote trigger is
+ * intentionally limited to RF replay actions that can finish and return a
+ * RESULT frame: Sub-GHz `.sub` and Infrared `.ir`.
+ */
+bool espnow_trig_kind_can_execute(espnow_share_kind_t kind);
+
+/**
+ * @brief  Build the local saved-capture path for a trigger request.
+ *
+ * Validates that @p name is safe, that @p kind is executable, and that the
+ * filename extension matches @p kind before returning `0:/<module>/<name>`.
+ */
+bool espnow_trig_build_replay_path(espnow_share_kind_t kind, const char *name,
+                                  char *out, size_t out_cap);
 
 /* =========================================================================
  * FSM
