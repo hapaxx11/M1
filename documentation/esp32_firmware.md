@@ -845,10 +845,10 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
 `test_espnow_crypto`).
 
 - *Fragmentation (`espnow_chunk`)* — Splits an app message up to 240 bytes into
-  ≤ 42-byte OTA frames (type `0x50`, 4-byte header: id/seq/count/flags) and
+  ≤ 42-byte OTA frames (4-byte header: type/msg_id/frag_idx/frag_cnt) and
   reassembles them on the receiver with out-of-order, duplicate and error
-  handling.  This is what lets full-size payloads cross the 42-byte SPI ceiling
-  without any brain-firmware change.
+  handling.  The type byte is `0x50`; this is what lets full-size payloads cross
+  the 42-byte SPI ceiling without any brain-firmware change.
 - *Capture sharing (`espnow_shareable`)* — Classifies which saved items
   (`.sub` / `.nfc` / `.rfid` / `.ir`) may be shared, extracts a safe basename,
   rejects path-traversal / unsafe names, and builds the `/ESPNOW/<name>` receive
@@ -872,8 +872,8 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
 > **Gating:** all of the above is compiled unconditionally but only reachable
 > once the peer-link scene passes the `M1_ESP32_CAP_ESPNOW` gate.  Because
 > shipped CD3 firmware does not self-report bit 24, live use additionally
-> depends on a coordinated `bedge117/m1-esp32-brain` change (self-report bit +
-> large-frame send) tracked separately.
+> depends on a coordinated `bedge117/m1-esp32-brain` change to self-report that
+> bit, unless the STM32 side adds a runtime probe fallback.
 
 ### `AT+CMD?` — runtime probe for AT firmware
 
