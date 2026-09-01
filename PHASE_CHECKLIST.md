@@ -29,8 +29,8 @@
 ### Phase 2 — Peer messaging (short text)
 - **Description**: `espnow_message.c/h` pure compose/frame/parse + inbox ring
   buffer over the DATA channel (app type 0x20). Host tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `espnow: Phase 2 — short-text peer messaging + inbox ring`
 
 ### Phase 3 — Remote trigger (danger-gated)
 - **Description**: `espnow_trigger.c/h` pure request/consent/execute/result FSM

@@ -2919,6 +2919,26 @@ endif()
 add_test(NAME espnow_shareable COMMAND test_espnow_shareable)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_message (ESP-NOW short-text peer messaging)
+#
+# Pure framing (build/parse) for text messages over the DATA channel plus a
+# fixed-capacity inbox ring with eviction and duplicate detection.
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_message
+    test_espnow_message.c
+    ${M1_ROOT}/m1_csrc/espnow_message.c
+)
+target_include_directories(test_espnow_message PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_message PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_message PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_message COMMAND test_espnow_message)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.

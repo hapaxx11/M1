@@ -700,6 +700,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/espnow_tictactoe.c
     ../../m1_csrc/espnow_chunk.c
     ../../m1_csrc/espnow_shareable.c
+    ../../m1_csrc/espnow_message.c
     ../../m1_csrc/espnow_rpc_parse.c
     ../../m1_csrc/m1_espnow_hal.c
     ../../m1_csrc/m1_espnow_scene.c
