@@ -2876,6 +2876,28 @@ endif()
 add_test(NAME espnow_file_transfer COMMAND test_espnow_file_transfer)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_chunk (ESP-NOW payload fragmentation/reassembly)
+#
+# Pure app-layer fragmentation so logical messages larger than the 42-byte
+# per-NOW_SEND SPI budget ride multiple frames and reassemble on the receiver
+# without any brain-firmware change.  Also covers the espnow_appmsg type
+# registry and the espnow_caps_decide availability decision (header-only).
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_chunk
+    test_espnow_chunk.c
+    ${M1_ROOT}/m1_csrc/espnow_chunk.c
+)
+target_include_directories(test_espnow_chunk PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_chunk PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_chunk PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_chunk COMMAND test_espnow_chunk)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.
