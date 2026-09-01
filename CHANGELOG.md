@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.3.1] - 2026-09-01
 
+## [0.9.3.1] - 2026-09-01
+
 ### Added
 
 - **ESP32: last feature RPC call diagnostics (issue #719 Phase 2)** — A field
