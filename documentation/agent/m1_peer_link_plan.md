@@ -3,9 +3,10 @@
 > **Status:** This branch implements Phases 0–4 as pure-logic, host-tested STM32-side
 > modules (see `m1_csrc/espnow_{chunk,shareable,message,trigger,crypto}.c`
 > and their `tests/test_espnow_*` suites), plus Peer Link scene wiring for
-> Messages, Send Capture, and saved-item Send to Peer shortcuts. Live two-device bench validation and remaining
-> trigger/encryption scene work depend on the coordinated `bedge117/m1-esp32-brain`
-> changes noted in §4. This document is retained for direction by @hapaxx11.
+> Messages, Send Capture, saved-item Send to Peer shortcuts, and danger-gated
+> Remote Trigger. Live two-device bench validation and remaining encryption
+> scene work depend on the coordinated `bedge117/m1-esp32-brain` changes noted
+> in §4. This document is retained for direction by @hapaxx11.
 >
 > **Origin:** The forks tracker lists **M1↔M1 peer link** (dag `M1_T-1000`
 > v0.3.0, `m1_link.c/h` + `m1_link_app.c`, ~2600 lines) as *rejected/deferred*.
@@ -71,7 +72,7 @@ discovery, capture sharing, remote trigger.**
 | **Capture sharing** | ✅ Sender UI offers a Peer Link category picker and saved-item Send to Peer shortcuts for Sub-GHz / NFC / RFID / IR captures, then streams the selected file to the paired peer; receiver still stores into `/ESPNOW/` | Two-device bench validation |
 | **Peer messaging** | ✅ Messages scene uses VKB compose plus the `espnow_message` inbox/framing module for paired-peer short text | Scene-level chunking for messages longer than one direct `NOW_SEND` call |
 | **AES-256 encryption** | ❌ `encrypt = false` always (`esp32_firmware.md:808`); only visual confirm codes | Application-layer authenticated encryption over the DATA channel (see §5, Phase 4) |
-| **Remote trigger** | ❌ None | New command app: ask a paired peer to replay/transmit a named saved capture (danger-gated) |
+| **Remote trigger** | ✅ Peer Link → Remote Trigger lets a paired sender request Sub-GHz/IR replay by safe saved-capture name; the receiver must explicitly allow incoming triggers and confirm each request before bounded replay | Two-device bench validation and future expansion only if additional capture kinds get safe bounded execution paths |
 
 Two enablement blockers apply to **all** on-device use, regardless of pillar:
 
@@ -97,12 +98,13 @@ This feature cannot be fully validated in the firmware repo alone:
 - **Two physical M1 devices** (or one M1 + one XIAO/Pico ESP-NOW bench) are
   required to test discovery, pairing, transfer, messaging, and trigger.
 - **CD3 brain ESP32 firmware** (`bedge117/m1-esp32-brain`) owns the over-the-air
-  ESP-NOW behaviour and the `M1_ESP32_CAP_ESPNOW` self-report. Any new wire
-  behaviour (chunking, encryption negotiation, a `NOW_TRIGGER` opcode) needs a
-  coordinated change there. Per repo policy that is a **separate repository** and
-  is out of scope for STM32-side commits — this plan assumes we either (a) drive
-  the brain team, or (b) keep every new capability behind the closed feature gate
-  until the brain supports it.
+  ESP-NOW behaviour and the `M1_ESP32_CAP_ESPNOW` self-report. Remote Trigger
+  rides the existing `NOW_SEND` / `NOW_RECV_GET` DATA channel, so it does not
+  require a new brain opcode; future self-report and encryption standardisation
+  still need coordinated changes there. Per repo policy that is a **separate
+  repository** and is out of scope for STM32-side commits — this plan assumes we
+  either (a) drive the brain team, or (b) keep every new capability behind the
+  closed feature gate until the brain supports it.
 - Per `CLAUDE.md`, **pure-logic layers are host-tested**; hardware-coupled scene
   behaviour is bench-gated. Each phase below lists its host tests explicitly.
 
@@ -164,8 +166,15 @@ so early phases unblock later ones.
 - Strong UX guard rails: opt-in "allow remote trigger" per session, on-device
   confirmation on the executing side, and clear on-screen indication of remote-
   initiated TX (legal/safety).
-- May need a brain opcode (e.g. `NOW_*` app-type only — can ride the existing
-  DATA channel, so possibly **no new RPC opcode** required).
+- Uses the existing `NOW_SEND` / `NOW_RECV_GET` DATA channel; no new brain RPC
+  opcode is required.
+- **Status:** Remote Trigger is scene-wired under Peer Link. The requester
+  chooses Sub-GHz or Infrared, browses saved captures, sends a safe basename to
+  the paired peer, and waits for ACCEPT/REJECT/RESULT frames. The responder's
+  Allow Incoming scene polls the paired peer, checks the local file exists, shows
+  the request, requires OK consent, then executes bounded Sub-GHz `.sub` replay
+  or IR `.ir` Send All and returns a result. NFC/RFID remain share-only until
+  there is a safe bounded remote-emulation lifecycle.
 - **Deliverable:** M1-A causes M1-B to replay a chosen saved Sub-GHz/IR capture.
 - **Host tests:** `test_espnow_trigger.c` — request/confirm/deny/execute FSM,
   rejection when capability/consent absent, name validation.

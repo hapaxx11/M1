@@ -28,5 +28,5 @@
 
 ### Phase 5 — Docs, validation, cleanup
 - **Description**: Update directly related docs/changelog, run targeted tests, attempt firmware build, remove this checklist, and reply to the PR comment.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Document remote trigger wiring`

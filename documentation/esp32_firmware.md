@@ -867,7 +867,10 @@ exercised by host unit tests under `tests/` (`test_espnow_chunk`,
 - *Remote trigger (`espnow_trigger`)* — A danger-gated request → consent →
   execute → result state machine (types `0x30..0x33`) that asks a paired peer to
   replay a **named** saved capture; it reuses `espnow_shareable` name-safety and
-  requires explicit consent on the responder.
+  requires explicit consent on the responder.  The Peer Link Remote Trigger UI
+  sends only safe basenames over the existing DATA channel, limits executable
+  requests to bounded Sub-GHz `.sub` replay and IR `.ir` Send All, and rejects
+  NFC/RFID remote execution until those lifecycles have a safe bounded path.
 - *Authenticated encryption (`espnow_crypto`)* — An Encrypt-then-MAC envelope
   (type `0xE0`) wrapping the payload with AES-256-CBC (`m1_crypto`) and a
   truncated HMAC-SHA256 tag (`NFC/amiibo/sha256.c`).  A single pairing shared
