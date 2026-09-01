@@ -23,12 +23,16 @@
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_tasks.h"
+#include "m1_espnow_scene_scratch.h"
 
 /*==========================================================================*/
 /* Transfer scene state                                                     */
 /*==========================================================================*/
 
-static espnow_ft_ctx_t s_ft_ctx;
+/* Shared with m1_espnow_capture_share.c (send) — the send and receive
+ * scenes are alternate, mutually-exclusive Peer Link destinations; see
+ * m1_espnow_scene_scratch.h. */
+#define s_ft_ctx (g_m1_espnow_scene_scratch.file_transfer_ctx)
 static uint32_t s_last_tick;
 
 #define TRANSFER_POLL_INTERVAL_MS  50

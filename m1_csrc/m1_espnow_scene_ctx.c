@@ -67,6 +67,11 @@ const char *m1_espnow_scene_ctx_peer_name(void)
     return s_peer_valid ? s_peer_name : "";
 }
 
+const uint8_t *m1_espnow_scene_ctx_peer_mac(void)
+{
+    return s_peer_valid ? s_peer_mac : NULL;
+}
+
 void m1_espnow_scene_ctx_set_share_kind(espnow_share_kind_t kind)
 {
     s_share_kind = kind;

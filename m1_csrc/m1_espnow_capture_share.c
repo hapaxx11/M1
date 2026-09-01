@@ -18,6 +18,7 @@
 #include "m1_espnow_hal.h"
 #include "m1_espnow_secure_link.h"
 #include "espnow_file_transfer.h"
+#include "m1_espnow_scene_scratch.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_tasks.h"
@@ -29,12 +30,10 @@
     (M1_ESPNOW_SEND_PAYLOAD_MAX - 6u)  /* FILE_DATA type+seq+offset */
 #define SEND_OFFER_TIMEOUT_MS  10000u
 
-static espnow_ft_ctx_t s_send_ctx;
+/* Shared with the other Peer Link scenes; see m1_espnow_scene_scratch.h. */
+#define s_send_ctx (g_m1_espnow_scene_scratch.file_transfer_ctx)
 static char s_send_status[32];
-static char s_send_path[160];
-static char s_send_filename[ESPNOW_FT_FILENAME_MAX + 1u];
-static FIL s_send_file;
-static bool s_send_file_open;
+static void *s_send_file_handle;  /* shares the HAL's static FIL (m1_espnow_hal.c) */
 static bool s_send_active;
 
 static bool send_hal_send(const uint8_t mac[ESPNOW_FT_MAC_LEN],
@@ -97,7 +96,7 @@ static void send_progress_draw_card(void)
     u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
 
     u8g2_SetFont(&m1_u8g2, u8g2_font_NokiaSmallPlain_tf);
-    m1_draw_text(&m1_u8g2, 2, 24, 120, s_send_filename, TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 24, 120, s_send_ctx.filename, TEXT_ALIGN_CENTER);
     m1_draw_text(&m1_u8g2, 2, 38, 120, s_send_status, TEXT_ALIGN_CENTER);
 
     if (s_send_ctx.file_size > 0u &&
@@ -130,13 +129,14 @@ static bool send_handle_button_cancel(void)
     return buttons.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK;
 }
 
-static void send_run_transfer(const uint8_t peer_mac[ESPNOW_MAC_LEN])
+static void send_run_transfer(const uint8_t peer_mac[ESPNOW_MAC_LEN],
+                              const char *path)
 {
     FIL file;
     uint8_t buf[SEND_CHUNK_BYTES];
     uint32_t offer_start = HAL_GetTick();
 
-    if (f_open(&file, s_send_path, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+    if (f_open(&file, path, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
         snprintf(s_send_status, sizeof(s_send_status), "Open failed");
         send_progress_draw_card();
         HAL_Delay(1200);
@@ -225,10 +225,12 @@ bool m1_espnow_capture_share_send_path(const char *path)
     uint8_t peer_mac[ESPNOW_MAC_LEN];
     uint32_t file_size = 0;
     uint32_t crc = 0;
+    char local_path[160];
+    char filename[ESPNOW_FT_FILENAME_MAX + 1u];
 
     memset(&s_send_ctx, 0, sizeof(s_send_ctx));
-    s_send_filename[0] = '\0';
-    s_send_path[0] = '\0';
+    filename[0] = '\0';
+    local_path[0] = '\0';
 
     if (!m1_espnow_scene_ctx_get_peer(peer_mac, NULL, 0)) {
         snprintf(s_send_status, sizeof(s_send_status), "Scan Peers first");
@@ -244,11 +246,11 @@ bool m1_espnow_capture_share_send_path(const char *path)
         return false;
     }
 
-    snprintf(s_send_path, sizeof(s_send_path), "%s", path);
-    espnow_share_basename(s_send_path, s_send_filename, sizeof(s_send_filename));
-    if (!espnow_share_is_shareable(s_send_filename) ||
-        !espnow_share_name_is_safe(s_send_filename, ESPNOW_FT_FILENAME_MAX) ||
-        !send_compute_crc(s_send_path, &file_size, &crc)) {
+    snprintf(local_path, sizeof(local_path), "%s", path);
+    espnow_share_basename(local_path, filename, sizeof(filename));
+    if (!espnow_share_is_shareable(filename) ||
+        !espnow_share_name_is_safe(filename, ESPNOW_FT_FILENAME_MAX) ||
+        !send_compute_crc(local_path, &file_size, &crc)) {
         snprintf(s_send_status, sizeof(s_send_status), "Invalid file");
         send_progress_draw_card();
         HAL_Delay(1200);
@@ -262,11 +264,11 @@ bool m1_espnow_capture_share_send_path(const char *path)
         return false;
     }
 
-    espnow_ft_send_init(&s_send_ctx, &s_send_hal, peer_mac, s_send_filename,
+    espnow_ft_send_init(&s_send_ctx, &s_send_hal, peer_mac, filename,
                         file_size, crc, SEND_CHUNK_BYTES);
     snprintf(s_send_status, sizeof(s_send_status), "Preparing...");
     send_progress_draw_card();
-    send_run_transfer(peer_mac);
+    send_run_transfer(peer_mac, local_path);
     bool sent = s_send_ctx.state == ESPNOW_FT_STATE_DONE;
     m1_espnow_stop();
     return sent;
@@ -302,6 +304,7 @@ bool m1_espnow_capture_share_choose_and_begin(espnow_share_kind_t kind)
         const char *dir = espnow_share_kind_dir(kind);
         S_M1_file_info *fi;
         char path[160];
+        char filename[ESPNOW_FT_FILENAME_MAX + 1u];
         uint8_t peer_mac[ESPNOW_MAC_LEN];
         uint32_t file_size;
         uint32_t crc;
@@ -314,19 +317,19 @@ bool m1_espnow_capture_share_choose_and_begin(espnow_share_kind_t kind)
         snprintf(path, sizeof(path), "%s/%s", fi->dir_name, fi->file_name);
 
         if (!m1_espnow_scene_ctx_get_peer(peer_mac, NULL, 0) ||
-            !espnow_share_basename(path, s_send_filename, sizeof(s_send_filename)) ||
-            !espnow_share_is_shareable(s_send_filename) ||
-            !espnow_share_name_is_safe(s_send_filename, ESPNOW_FT_FILENAME_MAX) ||
+            !espnow_share_basename(path, filename, sizeof(filename)) ||
+            !espnow_share_is_shareable(filename) ||
+            !espnow_share_name_is_safe(filename, ESPNOW_FT_FILENAME_MAX) ||
             !send_compute_crc(path, &file_size, &crc) ||
             !m1_espnow_start(m1_espnow_get_channel()))
             return false;
-        if (f_open(&s_send_file, path, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+        s_send_file_handle = m1_espnow_file_open_read(path);
+        if (s_send_file_handle == NULL) {
             m1_espnow_stop();
             return false;
         }
 
-        s_send_file_open = true;
-        espnow_ft_send_init(&s_send_ctx, &s_send_hal, peer_mac, s_send_filename,
+        espnow_ft_send_init(&s_send_ctx, &s_send_hal, peer_mac, filename,
                             file_size, crc, SEND_CHUNK_BYTES);
         s_send_active = espnow_ft_send_offer(&s_send_ctx);
         if (!s_send_active)
@@ -348,10 +351,10 @@ bool m1_espnow_capture_share_step(void)
             espnow_ft_send_check_timeout(&s_send_ctx);
         if (s_send_ctx.state == ESPNOW_FT_STATE_SENDING) {
             uint8_t buf[SEND_CHUNK_BYTES];
-            UINT br = 0;
-            if (f_lseek(&s_send_file, s_send_ctx.bytes_transferred) != FR_OK ||
-                f_read(&s_send_file, buf, s_send_ctx.chunk_size, &br) != FR_OK ||
-                br == 0u || !espnow_ft_send_chunk(&s_send_ctx, buf, br))
+            size_t br = 0;
+            if (!m1_espnow_file_seek(s_send_file_handle, s_send_ctx.bytes_transferred) ||
+                !m1_espnow_file_read(s_send_file_handle, buf, s_send_ctx.chunk_size, &br) ||
+                br == 0u || !espnow_ft_send_chunk(&s_send_ctx, buf, (uint8_t)br))
                 s_send_ctx.state = ESPNOW_FT_STATE_FAILED;
         }
         if (s_send_ctx.state == ESPNOW_FT_STATE_DONE ||
@@ -362,9 +365,9 @@ bool m1_espnow_capture_share_step(void)
 
 void m1_espnow_capture_share_cancel(void)
     {
-        if (s_send_file_open) {
-            f_close(&s_send_file);
-            s_send_file_open = false;
+        if (s_send_file_handle != NULL) {
+            m1_espnow_file_close(s_send_file_handle);
+            s_send_file_handle = NULL;
         }
         if (s_send_active && s_send_ctx.state != ESPNOW_FT_STATE_DONE &&
             s_send_ctx.state != ESPNOW_FT_STATE_FAILED)

@@ -18,6 +18,7 @@
 #include "m1_espnow_hal.h"
 #include "m1_espnow_secure_link.h"
 #include "espnow_message.h"
+#include "m1_espnow_scene_scratch.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_tasks.h"
@@ -26,9 +27,8 @@
 #define MSG_POLL_INTERVAL_MS  100u
 #define MSG_TEXT_UI_MAX       ESPNOW_MSG_TEXT_MAX
 
-static espnow_inbox_t s_inbox;
-static uint8_t s_peer_mac[ESPNOW_MAC_LEN];
-static char s_peer_name[M1_ESPNOW_PEER_NAME_MAX + 1u];
+/* Shared with the other Peer Link scenes; see m1_espnow_scene_scratch.h. */
+#define s_inbox (g_m1_espnow_scene_scratch.messages_inbox)
 static uint8_t s_next_seq;
 static uint32_t s_last_poll_tick;
 static char s_status[32];
@@ -41,10 +41,11 @@ static void messages_poll(M1SceneApp *app)
     uint8_t frame_len = 0;
     char text[ESPNOW_MSG_TEXT_MAX + 1u];
     uint8_t seq = 0;
+    const uint8_t *peer_mac = m1_espnow_scene_ctx_peer_mac();
 
     if (!m1_espnow_secure_link_recv(from_mac, frame, sizeof(frame), &frame_len))
         return;
-    if (memcmp(from_mac, s_peer_mac, ESPNOW_MAC_LEN) != 0)
+    if (peer_mac == NULL || memcmp(from_mac, peer_mac, ESPNOW_MAC_LEN) != 0)
         return;
     if (!espnow_msg_parse(frame, frame_len, &seq, text, sizeof(text), NULL))
         return;
@@ -61,6 +62,10 @@ static void messages_compose(M1SceneApp *app)
     char text[MSG_TEXT_UI_MAX + 1u];
     uint8_t frame[ESPNOW_MSG_HDR_LEN + MSG_TEXT_UI_MAX];
     size_t frame_len = 0;
+    const uint8_t *peer_mac = m1_espnow_scene_ctx_peer_mac();
+
+    if (peer_mac == NULL)
+        return;
 
     text[0] = '\0';
     if (m1_vkb_get_text("Message:", "", text, sizeof(text)) == 0u)
@@ -76,13 +81,13 @@ static void messages_compose(M1SceneApp *app)
         app->need_redraw = true;
         return;
     }
-    if (!m1_espnow_secure_link_send(s_peer_mac, frame, frame_len)) {
+    if (!m1_espnow_secure_link_send(peer_mac, frame, frame_len)) {
         snprintf(s_status, sizeof(s_status), "Send failed");
         app->need_redraw = true;
         return;
     }
 
-    espnow_inbox_push(&s_inbox, s_peer_mac, s_next_seq, true, text);
+    espnow_inbox_push(&s_inbox, peer_mac, s_next_seq, true, text);
     s_next_seq++;
     snprintf(s_status, sizeof(s_status),
              m1_espnow_secure_link_encrypted() ? "Sent secure" :
@@ -93,8 +98,7 @@ static void messages_compose(M1SceneApp *app)
 
 static void messages_on_enter(M1SceneApp *app)
 {
-    s_have_peer = m1_espnow_scene_ctx_get_peer(
-        s_peer_mac, s_peer_name, sizeof(s_peer_name));
+    s_have_peer = m1_espnow_scene_ctx_peer_mac() != NULL;
     if (!s_have_peer)
         snprintf(s_status, sizeof(s_status), "Scan Peers first");
     else
@@ -143,10 +147,11 @@ static void messages_draw(M1SceneApp *app)
                      TEXT_ALIGN_CENTER);
     } else if (s_inbox.count == 0u) {
         char line[32];
-        snprintf(line, sizeof(line), "Peer: %s", s_peer_name);
+        snprintf(line, sizeof(line), "Peer: %s", m1_espnow_scene_ctx_peer_name());
         m1_draw_text(&m1_u8g2, 2, 26, 120, line, TEXT_ALIGN_CENTER);
-        m1_draw_text(&m1_u8g2, 2, 40, 120, "OK compose (120 max)",
-                     TEXT_ALIGN_CENTER);
+        snprintf(line, sizeof(line), "OK compose (%u max)",
+                (unsigned)ESPNOW_MSG_TEXT_MAX);
+        m1_draw_text(&m1_u8g2, 2, 40, 120, line, TEXT_ALIGN_CENTER);
     } else {
         uint8_t visible = M1_MENU_VIS(s_inbox.count);
         uint8_t first = (uint8_t)(s_inbox.count - visible);

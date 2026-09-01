@@ -713,6 +713,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_espnow_scene_main.c
     ../../m1_csrc/m1_espnow_scene_scan.c
     ../../m1_csrc/m1_espnow_scene_messages.c
+    ../../m1_csrc/m1_espnow_scene_scratch.c
     ../../m1_csrc/m1_espnow_scene_send.c
     ../../m1_csrc/m1_espnow_scene_transfer.c
     ../../m1_csrc/m1_espnow_scene_trigger.c

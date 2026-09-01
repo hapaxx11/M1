@@ -123,6 +123,29 @@ void *m1_espnow_file_open(const char *path);
 bool m1_espnow_file_write(void *handle, const uint8_t *data, size_t len);
 
 /**
+ * @brief  Open a file for reading on the SD card.
+ * @param  path  File path (e.g. "/ESPNOW/file.sub").
+ * @return Opaque file handle (NULL on failure).  Shares the same
+ *         underlying FatFS object as @ref m1_espnow_file_open — safe
+ *         because only one transfer (send or receive) is ever active.
+ */
+void *m1_espnow_file_open_read(const char *path);
+
+/**
+ * @brief  Read data from an open file.
+ * @param  out_len  Receives the number of bytes actually read (may be NULL).
+ * @return true on success (including a short/zero-byte read at EOF).
+ */
+bool m1_espnow_file_read(void *handle, uint8_t *data, size_t len,
+                         size_t *out_len);
+
+/**
+ * @brief  Seek an open file to an absolute byte offset.
+ * @return true on success.
+ */
+bool m1_espnow_file_seek(void *handle, uint32_t offset);
+
+/**
  * @brief  Close a file handle.
  */
 void m1_espnow_file_close(void *handle);

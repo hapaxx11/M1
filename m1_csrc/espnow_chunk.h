@@ -51,8 +51,12 @@ extern "C" {
 /** Usable fragment payload bytes per frame. */
 #define ESPNOW_CHUNK_DATA_MAX      (ESPNOW_CHUNK_FRAME_MAX - ESPNOW_CHUNK_HDR_LEN)
 
-/** Largest logical message that can be reassembled (ESP-NOW app limit). */
-#define ESPNOW_CHUNK_MSG_MAX       240u
+/** Largest logical message that can be reassembled (ESP-NOW app limit).
+ *  Sized to comfortably fit the largest sealed envelope the peer-link
+ *  protocols actually produce today (see ESPNOW_CRYPTO_PLAINTEXT_MAX) —
+ *  kept tight since this reassembly buffer is a permanently resident
+ *  (.bss) buffer on a tightly RAM-constrained target. */
+#define ESPNOW_CHUNK_MSG_MAX       104u
 
 /** Maximum fragments for the largest message. */
 #define ESPNOW_CHUNK_MAX_FRAGS \

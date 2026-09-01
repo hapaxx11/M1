@@ -42,14 +42,20 @@ extern "C" {
 /** Message frame header length (type + seq). */
 #define ESPNOW_MSG_HDR_LEN       2u
 
-/** Maximum text length (bytes) in a single message. */
-#define ESPNOW_MSG_TEXT_MAX      120u
+/** Maximum text length (bytes) in a single message.
+ *  Kept modest — the on-device inbox stores this many bytes per slot as a
+ *  permanently resident (.bss) buffer on a tightly RAM-constrained target,
+ *  and the small OLED screen only shows a few characters per line anyway. */
+#define ESPNOW_MSG_TEXT_MAX      30u
 
 /** MAC address length. */
 #define ESPNOW_MSG_MAC_LEN       6u
 
-/** Number of messages retained in the inbox ring. */
-#define ESPNOW_INBOX_CAP         8u
+/** Number of messages retained in the inbox ring.
+ *  Kept small — each slot holds a full text body, and this ring is a
+ *  permanently resident (.bss) buffer on a tightly RAM-constrained
+ *  target. */
+#define ESPNOW_INBOX_CAP         2u
 
 /* =========================================================================
  * Framing

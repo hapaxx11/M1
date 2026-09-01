@@ -22,6 +22,7 @@
 #include "m1_espnow_hal.h"
 #include "m1_espnow_secure_link.h"
 #include "espnow_trigger.h"
+#include "m1_espnow_scene_scratch.h"
 #include "espnow_shareable.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -57,12 +58,14 @@ static const espnow_share_kind_t s_trig_kinds[TRIG_KIND_COUNT] = {
 static subghz_submenu_model_t s_trig_menu_model;
 static subghz_submenu_model_t s_trig_kind_model;
 
-static espnow_trigger_ctx_t s_init_ctx;
-static espnow_trigger_ctx_t s_resp_ctx;
-static uint8_t s_peer_mac[ESPNOW_MAC_LEN];
-static char s_peer_name[M1_ESPNOW_PEER_NAME_MAX + 1u];
-static char s_status[32];
-static char s_detail[48];
+/* s_init_ctx (initiator/"Request Replay" flow) and s_resp_ctx (responder/
+ * "Allow Incoming" flow) are alternate scenes — never active at once — so
+ * they share one physical context, further shared with the sibling Peer
+ * Link scenes; see m1_espnow_scene_scratch.h. */
+#define s_init_ctx (g_m1_espnow_scene_scratch.trigger_ctx)
+#define s_resp_ctx (g_m1_espnow_scene_scratch.trigger_ctx)
+static char s_status[24];
+static char s_detail[32];
 static uint32_t s_last_poll_tick;
 static uint32_t s_request_start_tick;
 static bool s_have_peer;
@@ -119,7 +122,8 @@ static bool trigger_send_status(espnow_trig_msg_t type, uint8_t code)
 
     if (!espnow_trig_build_status(type, code, frame, sizeof(frame), &frame_len))
         return false;
-    return m1_espnow_secure_link_send(s_peer_mac, frame, frame_len);
+    return m1_espnow_secure_link_send(m1_espnow_scene_ctx_peer_mac(),
+                                      frame, frame_len);
 }
 
 static void trigger_reset_receiver(void)
@@ -248,8 +252,7 @@ static void trigger_status_on_enter(M1SceneApp *app)
     s_terminal = false;
     s_detail[0] = '\0';
     espnow_trigger_init(&s_init_ctx, ESPNOW_TRIG_ROLE_INITIATOR, false);
-    s_have_peer = m1_espnow_scene_ctx_get_peer(s_peer_mac, s_peer_name,
-                                               sizeof(s_peer_name));
+    s_have_peer = m1_espnow_scene_ctx_peer_mac() != NULL;
     if (!s_have_peer) {
         trigger_status_fail("Scan Peers first");
         app->need_redraw = true;
@@ -282,7 +285,8 @@ static void trigger_status_on_enter(M1SceneApp *app)
         return;
     }
 
-    if (!m1_espnow_secure_link_send(s_peer_mac, frame, frame_len) ||
+    if (!m1_espnow_secure_link_send(m1_espnow_scene_ctx_peer_mac(), frame,
+                                    frame_len) ||
         !espnow_trigger_request_sent(&s_init_ctx, kind, name)) {
         trigger_status_fail("Send failed");
         app->need_redraw = true;
@@ -319,7 +323,7 @@ static void trigger_status_poll(M1SceneApp *app)
 
     if (!m1_espnow_secure_link_recv(from_mac, frame, sizeof(frame), &frame_len))
         return;
-    if (memcmp(from_mac, s_peer_mac, ESPNOW_MAC_LEN) != 0)
+    if (memcmp(from_mac, m1_espnow_scene_ctx_peer_mac(), ESPNOW_MAC_LEN) != 0)
         return;
     if (!espnow_trig_parse_status(frame, frame_len, &type, &code))
         return;
@@ -363,7 +367,8 @@ static void trigger_status_draw(M1SceneApp *app)
 {
     (void)app;
     trigger_draw_card("Remote Trigger", s_detail,
-                      s_have_peer ? s_peer_name : "", s_status);
+                      s_have_peer ? m1_espnow_scene_ctx_peer_name() : "",
+                      s_status);
 }
 
 /*==========================================================================*/
@@ -372,8 +377,7 @@ static void trigger_status_draw(M1SceneApp *app)
 
 static void trigger_listen_on_enter(M1SceneApp *app)
 {
-    s_have_peer = m1_espnow_scene_ctx_get_peer(s_peer_mac, s_peer_name,
-                                               sizeof(s_peer_name));
+    s_have_peer = m1_espnow_scene_ctx_peer_mac() != NULL;
     s_terminal = false;
     s_detail[0] = '\0';
     trigger_reset_receiver();
@@ -409,7 +413,7 @@ static void trigger_listen_poll(M1SceneApp *app)
 
     if (!m1_espnow_secure_link_recv(from_mac, frame, sizeof(frame), &frame_len))
         return;
-    if (memcmp(from_mac, s_peer_mac, ESPNOW_MAC_LEN) != 0)
+    if (memcmp(from_mac, m1_espnow_scene_ctx_peer_mac(), ESPNOW_MAC_LEN) != 0)
         return;
     if (frame_len == 0u || frame[0] != (uint8_t)ESPNOW_TRIG_MSG_REQUEST)
         return;
@@ -522,9 +526,10 @@ static void trigger_listen_draw(M1SceneApp *app)
 {
     (void)app;
     if (s_pending_request) {
-        trigger_draw_card("Allow Trigger", s_detail, s_peer_name, s_status);
+        trigger_draw_card("Allow Trigger", s_detail,
+                          m1_espnow_scene_ctx_peer_name(), s_status);
     } else {
-        trigger_draw_card("Allow Trigger", s_peer_name,
+        trigger_draw_card("Allow Trigger", m1_espnow_scene_ctx_peer_name(),
                           "Remote replay is ON", s_status);
     }
 }

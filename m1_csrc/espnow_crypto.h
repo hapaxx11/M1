@@ -83,15 +83,18 @@ extern "C" {
 
 /**
  * Maximum plaintext length that always yields an envelope that fits inside a
- * single reassembled app message (ESPNOW_CHUNK_MSG_MAX == 240):
+ * single reassembled app message (ESPNOW_CHUNK_MSG_MAX == 104):
  *
  *   envelope = 1 + 16 + ciphertext + 16
  *   ciphertext = ((plaintext / 16) + 1) * 16   (PKCS7 always adds >= 1 byte)
  *
- * With plaintext = 176 the ciphertext is 192 (12 blocks) and the envelope is
- * 1 + 16 + 192 + 16 = 225 <= 240.  Using 176 keeps a comfortable margin.
+ * With plaintext = 48 the ciphertext is 64 (4 blocks) and the envelope is
+ * 1 + 16 + 64 + 16 = 97 <= 104.  Using 48 keeps a comfortable margin over
+ * the largest message any current peer-link protocol builds (short text up
+ * to ESPNOW_MSG_TEXT_MAX, trigger requests up to 2 + ESPNOW_TRIG_NAME_MAX,
+ * file-transfer control frames).
  */
-#define ESPNOW_CRYPTO_PLAINTEXT_MAX  176u
+#define ESPNOW_CRYPTO_PLAINTEXT_MAX  48u
 
 /** Largest possible sealed envelope, for buffer sizing by callers. */
 #define ESPNOW_CRYPTO_ENVELOPE_MAX \

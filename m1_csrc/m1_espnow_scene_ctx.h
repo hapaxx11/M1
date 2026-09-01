@@ -31,6 +31,10 @@ bool m1_espnow_scene_ctx_get_peer(uint8_t mac[ESPNOW_MAC_LEN],
 
 const char *m1_espnow_scene_ctx_peer_name(void);
 
+/** Pointer to the currently-paired peer MAC, or NULL if unpaired.
+ *  Valid only while paired; callers must not cache it across a re-pair. */
+const uint8_t *m1_espnow_scene_ctx_peer_mac(void);
+
 void m1_espnow_scene_ctx_set_share_kind(espnow_share_kind_t kind);
 espnow_share_kind_t m1_espnow_scene_ctx_share_kind(void);
 
