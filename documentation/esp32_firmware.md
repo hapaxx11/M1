@@ -338,7 +338,8 @@ depend on the ESP-AT RTOS task being present (the brain firmware does not run
 it), but it **does** take the same shared SPI3 mutex that task uses whenever
 it has been created, so the two can never clock the bus at the same time
 (issue #719 Phase 1). The
-follow-up **poll budget is scaled from the caller's timeout (seconds)** and each
+follow-up **poll budget is paced on real wall-clock time** (via
+`m1_esp32_m1link_send_recv_timed()`, issue #719 Phase 7) and each
 poll is paced on the slave's HANDSHAKE with a scheduler yield (plus
 `HAL_SPI_Abort` self-heal after a failed transaction): a WiFi/BLE scan keeps the
 brain busy for ~1 s+ before it queues its RESP, so the old fixed 8-poll,
@@ -375,6 +376,25 @@ consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
 > t10s"` (waited the full ~10 s budget) vs `"...t1s"` (gave up early despite
 > a 10 s budget) — pinpointing whether the next fix should widen the timeout
 > further or repair the poll-budget plumbing itself.
+>
+> **Poll-budget wall-clock fix (issue #719 Phase 7).** A field read-back
+> after the Phase 5 timeout widening showed `"op0103 no-reply st253 r0 p0
+> t0s"` — the transport gave up in well under a second despite the 10 s
+> WIFI_SCAN budget. Root cause: `spi_m1link_send_recv_bin()` converted the
+> caller's timeout into a fixed transaction **count**, assuming each poll
+> costs roughly `M1LINK_HS_TIMEOUT_MS` of wall-clock time; in practice a poll
+> completes in well under a millisecond whenever the brain's HANDSHAKE line
+> is already asserted, so that count-based budget could exhaust long before
+> the intended timeout elapsed, regardless of how it was scaled. The fix adds
+> `m1_esp32_m1link_send_recv_timed()`, which reuses the same framing/
+> reassembly logic (via a shared `m1link_step()` helper) but paces the poll
+> loop on an injected wall-clock function (`HAL_GetTick` on-target; a fake
+> counter in host tests) instead of a poll count, with a generous
+> `max_iterations` safety backstop. `spi_m1link_send_recv_bin()` now calls
+> this timed variant; the original poll-count-based
+> `m1_esp32_m1link_send_recv()` is unchanged for callers that want that
+> semantics. Field read-backs after the fix confirmed WiFi Scan completing
+> normally (`"op0103 ok st0 r456 p446"`).
 
 > **SPI clock note:** the brain reports ~4.7 MHz stable with a 10 MHz target, so
 > start the SPI3 prescaler conservative and only raise it after `SYS_PING` is
