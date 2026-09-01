@@ -78,7 +78,7 @@ typedef struct {
 
 #define FW_VERSION_MAJOR   			0
 #define FW_VERSION_MINOR   			9
-#define FW_VERSION_BUILD   			2
+#define FW_VERSION_BUILD   			3
 #define FW_VERSION_RC   			0
 
 #define M1_HAPAX_REVISION			0

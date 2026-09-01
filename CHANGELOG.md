@@ -9,9 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.2.42] - 2026-09-01
-
-## [0.9.3.0] - 2026-09-01
+## [0.9.3.1] - 2026-09-01
 
 ### Added
 
@@ -101,7 +99,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2 s timeout used for prompt control commands was too short and the M1 Link
   transport gave up before a real scan finished. `m1_esp32_rpc_wifi_scan()`
   now uses a dedicated, longer `M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S` (10 s).
-## [0.9.3.0] - 2026-09-01
 
 ## [0.9.2.41] - 2026-08-10
 
