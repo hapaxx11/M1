@@ -1,7 +1,10 @@
 # M1↔M1 Peer Link — Phased Implementation Plan (ESP-NOW compatibility layer)
 
-> **Status:** Planning draft for direction by @hapaxx11. No firmware behaviour
-> changes are included in this PR — this document only.
+> **Status:** Phases 0–4 implemented as pure-logic, host-tested STM32-side
+> modules (see `m1_csrc/espnow_{chunk,shareable,message,trigger,crypto}.c`
+> and their `tests/test_espnow_*` suites). Scene/UI wiring and live bench
+> validation remain, and depend on the coordinated `bedge117/m1-esp32-brain`
+> changes noted in §4. This document is retained for direction by @hapaxx11.
 >
 > **Origin:** The forks tracker lists **M1↔M1 peer link** (dag `M1_T-1000`
 > v0.3.0, `m1_link.c/h` + `m1_link_app.c`, ~2600 lines) as *rejected/deferred*.
