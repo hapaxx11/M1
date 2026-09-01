@@ -764,7 +764,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
 	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
 	uint8_t  rc;
-	int      max_polls;
+	uint32_t timeout_ms;
 	uint32_t t0 = HAL_GetTick();
 
 	if (out_len)
@@ -773,21 +773,23 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	if (!tx_buf || tx_len <= 0 || !rx_buf || rx_buf_size < 1)
 		return CTRL_ERR_INCORRECT_ARG;
 
-	/* The poll budget is the response wait.  Each poll waits for the slave's
-	 * HANDSHAKE (up to M1LINK_HS_TIMEOUT_MS) and yields, so the count maps to a
-	 * real time window.  Bulk-list operations (WiFi scan, station scan, BLE
-	 * scan) keep the brain busy for a second or more before it queues its
-	 * RESP, so an 8-poll (~sub-second) budget reliably timed out with "AP scan
-	 * failed" in any real RF environment.  Scale the budget from the caller's
-	 * timeout (seconds) so slow features get the window they need; floor it so
-	 * the default quick commands still complete promptly. */
+	/* The poll budget is the response wait, paced on real wall-clock time
+	 * (issue #719 Phase 7) rather than a poll count: earlier revisions
+	 * derived a fixed transaction COUNT from timeout_sec assuming each poll
+	 * costs ~M1LINK_HS_TIMEOUT_MS, but a poll (HANDSHAKE wait + one SPI
+	 * transfer) can complete in well under a millisecond whenever the
+	 * brain's HANDSHAKE line is already asserted, so that count-based budget
+	 * could exhaust in a fraction of a second regardless of timeout_sec --
+	 * see the "Poll-budget wall-clock FIX" comment in m1_esp32_rpc.h. Pacing
+	 * on HAL_GetTick() instead means we always wait the caller's requested
+	 * timeout_sec, however fast or slow individual transactions turn out to
+	 * be. max_iterations remains only as a generous safety backstop against
+	 * a runaway loop if the clock source itself ever misbehaves. */
 	/* Floor for a poll budget when the caller passes no timeout (seconds). */
 	const int m1link_default_timeout_s = 2;
 	if (timeout_sec <= 0)
 		timeout_sec = m1link_default_timeout_s;
-	max_polls = timeout_sec * (1000 / (int)M1LINK_HS_TIMEOUT_MS) * 2;
-	if (max_polls < M1_ESP32_M1LINK_MAX_POLLS)
-		max_polls = M1_ESP32_M1LINK_MAX_POLLS;
+	timeout_ms = (uint32_t)timeout_sec * 1000u;
 
 	/* Flush any residual FIFO / packing state before full-duplex M1 Link
 	 * transactions.  The brain (CD3) detection probe runs AFTER the half-duplex
@@ -799,12 +801,13 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * M1 Link transaction starts byte-aligned (harmless when already idle). */
 	HAL_SPI_Abort(&hspi_esp);
 
-	rc = m1_esp32_m1link_send_recv(m1link_hal_xfer, NULL,
-	                               s_m1link_tx, s_m1link_rx,
-	                               M1_ESP32_M1LINK_MTU,
-	                               max_polls,
-	                               tx_buf, tx_len,
-	                               rx_buf, rx_buf_size, out_len);
+	rc = m1_esp32_m1link_send_recv_timed(m1link_hal_xfer, NULL,
+	                                     s_m1link_tx, s_m1link_rx,
+	                                     M1_ESP32_M1LINK_MTU,
+	                                     HAL_GetTick,
+	                                     timeout_ms, 20000,
+	                                     tx_buf, tx_len,
+	                                     rx_buf, rx_buf_size, out_len);
 
 	s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
 
