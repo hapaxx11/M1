@@ -23,8 +23,8 @@
 - **Description**: `espnow_shareable.c/h` pure helper: which saved-item
   extensions are shareable, basename extraction, receive-path builder. Host
   tests. (File-browser scene wiring is bench-gated.)
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `espnow: Phase 1 — sender-side capture-sharing helper`
 
 ### Phase 2 — Peer messaging (short text)
 - **Description**: `espnow_message.c/h` pure compose/frame/parse + inbox ring

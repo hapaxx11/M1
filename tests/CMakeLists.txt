@@ -2898,6 +2898,27 @@ endif()
 add_test(NAME espnow_chunk COMMAND test_espnow_chunk)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_shareable (ESP-NOW capture-sharing helpers)
+#
+# Pure sender-side decisions for Phase 1 capture sharing: shareable-kind
+# classification by extension, basename extraction, received-filename safety
+# validation (path-traversal guard), and receive-path construction.
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_shareable
+    test_espnow_shareable.c
+    ${M1_ROOT}/m1_csrc/espnow_shareable.c
+)
+target_include_directories(test_espnow_shareable PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_shareable PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_shareable PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_shareable COMMAND test_espnow_shareable)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.
