@@ -121,7 +121,7 @@ bool espnow_trig_parse_request(const uint8_t *frame, size_t len,
                                char *name_out, size_t name_cap);
 
 /**
- * @brief  Build a single-byte status frame (ACCEPT/REJECT/RESULT).
+ * @brief  Build a two-byte status frame (type + code).
  *
  * ACCEPT carries a 0 code; REJECT carries an espnow_trig_reject_t; RESULT
  * carries an espnow_trig_result_t.
@@ -132,7 +132,7 @@ bool espnow_trig_build_status(espnow_trig_msg_t type, uint8_t code,
                               uint8_t *out, size_t out_cap, size_t *out_len);
 
 /**
- * @brief  Parse a single-byte status frame.
+ * @brief  Parse a two-byte status frame (type + code).
  * @param  out_type  Receives the message type (may be NULL).
  * @param  out_code  Receives the code byte (may be NULL).
  * @return true if the frame is a valid ACCEPT/REJECT/RESULT status frame.
