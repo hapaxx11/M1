@@ -148,6 +148,7 @@ static void show_commands(const char *ir_file_path);
 static bool ir_file_action_menu(const char *ir_file_path);
 static void transmit_command(const ir_universal_cmd_t *cmd);
 static void transmit_raw_command(const ir_universal_cmd_t *cmd);
+static bool wait_for_ir_tx_complete(bool *cancelled);
 static void load_favorites(void);
 static void save_favorites(void);
 static void add_to_recent(const char *path);
@@ -919,6 +920,35 @@ static bool parse_ir_signal_block(flipper_file_t *ff, ir_universal_cmd_t *cmd)
 	return ir_cmd_parse(&s_ff_reader, ff, cmd);
 }
 
+static bool wait_for_ir_tx_complete(bool *cancelled)
+{
+	S_M1_Main_Q_t tx_q;
+	uint32_t deadline = HAL_GetTick() + 3000;
+
+	while (1)
+	{
+		uint32_t now = HAL_GetTick();
+		uint32_t remaining = (now < deadline) ? (deadline - now) : 0;
+		if (remaining == 0)
+			return false;
+		if (xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(remaining)) != pdTRUE)
+			return false;
+		if (tx_q.q_evt_type == Q_EVENT_IRRED_TX)
+			return true;
+		if (tx_q.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			S_M1_Buttons_Status bs;
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (cancelled != NULL &&
+			    bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				*cancelled = true;
+				return false;
+			}
+		}
+	}
+}
+
 
 /*============================================================================*/
 /*
@@ -971,6 +1001,38 @@ static uint16_t parse_ir_file(const char *filepath)
 	ff_close(&ff);
 	return count;
 } // static uint16_t parse_ir_file(...)
+
+bool m1_ir_universal_send_file_all(const char *ir_file_path)
+{
+	bool sent_any = false;
+	bool cancelled = false;
+
+	if (ir_file_path == NULL || ir_file_path[0] == '\0')
+		return false;
+
+	strncpy(s_raw_tx_filepath, ir_file_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
+	s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+	s_cmd_count = parse_ir_file(ir_file_path);
+	if (s_cmd_count == 0)
+		return false;
+
+	for (uint16_t i = 0; i < s_cmd_count && !cancelled; i++)
+	{
+		if (!s_commands[i].valid)
+			continue;
+
+		transmit_command(&s_commands[i]);
+		sent_any = true;
+		(void)wait_for_ir_tx_complete(&cancelled);
+		infrared_encode_sys_deinit();
+		if (!cancelled)
+			vTaskDelay(pdMS_TO_TICKS(200));
+	}
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+	return sent_any && !cancelled;
+}
 
 
 
@@ -1130,56 +1192,7 @@ static bool ir_file_action_menu(const char *ir_file_path)
             {
                 case IR_ACTION_SEND_ALL:
                 {
-                    /* Transmit every command in the file sequentially.
-                     * Each transmit_command() calls infrared_encode_sys_init(),
-                     * so we must deinit after each TX — even on timeout —
-                     * before the next command can re-init the hardware. */
-                    bool cancelled = false;
-                    for (uint16_t i = 0; i < s_cmd_count && !cancelled; i++)
-                    {
-                        if (s_commands[i].valid)
-                        {
-                            transmit_command(&s_commands[i]);
-
-                            /* Wait specifically for Q_EVENT_IRRED_TX, ignoring
-                             * unrelated events.  BACK cancels the loop.
-                             * Drain button_events_q_hdl when keypad events
-                             * arrive to keep the two queues in sync. */
-                            S_M1_Main_Q_t tx_q;
-                            uint32_t deadline = HAL_GetTick() + 3000;
-                            bool tx_done = false;
-                            while (!tx_done && !cancelled)
-                            {
-                                uint32_t now = HAL_GetTick();
-                                uint32_t remaining = (now < deadline) ? (deadline - now) : 0;
-                                if (remaining == 0)
-                                    break; /* timeout */
-                                BaseType_t rx = xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(remaining));
-                                if (rx != pdTRUE)
-                                    break; /* timeout */
-                                if (tx_q.q_evt_type == Q_EVENT_IRRED_TX)
-                                {
-                                    tx_done = true;
-                                }
-                                else if (tx_q.q_evt_type == Q_EVENT_KEYPAD)
-                                {
-                                    S_M1_Buttons_Status bs;
-                                    xQueueReceive(button_events_q_hdl, &bs, 0);
-                                    if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-                                        cancelled = true;
-                                }
-                                /* else: ignore other event types, loop again */
-                            }
-
-                            /* Always deinit — transmit_command() called
-                             * infrared_encode_sys_init(), so we must tear down
-                             * regardless of whether TX complete arrived. */
-                            infrared_encode_sys_deinit();
-                            if (!cancelled)
-                                vTaskDelay(pdMS_TO_TICKS(200));
-                        }
-                    }
-                    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                    m1_ir_universal_send_file_all(ir_file_path);
                     return true;  /* Done — stay in commands */
                 }
 

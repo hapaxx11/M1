@@ -47,4 +47,7 @@ void ir_universal_run_learned(void);
 void ir_universal_init(void);
 void ir_universal_deinit(void);
 
+/* Bounded file-level transmit helper used by ESP-NOW remote trigger. */
+bool m1_ir_universal_send_file_all(const char *ir_file_path);
+
 #endif /* M1_IR_UNIVERSAL_H_ */

@@ -24,12 +24,13 @@
 /* Top-level menu                                                           */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  5
+#define MENU_ITEM_COUNT  6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Scan Peers",
     "Messages",
     "Send Capture",
+    "Remote Trigger",
     "Receive File",
     "Tic-Tac-Toe",
 };
@@ -38,6 +39,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     EspnowSceneScan,
     EspnowSceneMessages,
     EspnowSceneSendCapture,
+    EspnowSceneTriggerMenu,
     EspnowSceneTransfer,
     EspnowSceneTicTacToe,
 };

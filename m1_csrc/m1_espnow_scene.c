@@ -10,6 +10,7 @@
  *   m1_espnow_scene_messages.c — short text messages
  *   m1_espnow_scene_send.c     — capture sender picker/progress
  *   m1_espnow_scene_transfer.c — file transfer progress
+ *   m1_espnow_scene_trigger.c  — remote trigger request/consent
  *   m1_espnow_scene_tictactoe.c — Tic-Tac-Toe game
  */
 
@@ -48,6 +49,10 @@ static const M1SceneHandlers *const scene_registry[EspnowSceneCount] = {
     [EspnowSceneSendCapture]= &espnow_scene_send_capture_handlers,
     [EspnowSceneSendProgress]= &espnow_scene_send_progress_handlers,
     [EspnowSceneMessages]   = &espnow_scene_messages_handlers,
+    [EspnowSceneTriggerMenu]= &espnow_scene_trigger_menu_handlers,
+    [EspnowSceneTriggerRequest]= &espnow_scene_trigger_request_handlers,
+    [EspnowSceneTriggerStatus]= &espnow_scene_trigger_status_handlers,
+    [EspnowSceneTriggerListen]= &espnow_scene_trigger_listen_handlers,
     [EspnowSceneTicTacToe]  = &espnow_scene_tictactoe_handlers,
 };
 

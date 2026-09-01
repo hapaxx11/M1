@@ -18,15 +18,15 @@
 
 ### Phase 3 — Sender/receiver scene wiring
 - **Description**: Add Peer Link Remote Trigger scenes for selecting a saved capture, sending a request to the paired peer, polling status/result frames, and consenting to inbound requests.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Wire remote trigger scenes`
 
 ### Phase 4 — Replay execution adapters
 - **Description**: Execute accepted trigger requests through the existing module replay/emulate functions with danger gating and hardware cleanup.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Wire remote trigger scenes`
 
 ### Phase 5 — Docs, validation, cleanup
 - **Description**: Update directly related docs/changelog, run targeted tests, attempt firmware build, remove this checklist, and reply to the PR comment.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
