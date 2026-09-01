@@ -1,6 +1,6 @@
-# M1↔M1 Peer Link — Phased Implementation Plan (ESP-NOW compatibility layer)
+# M1↔M1 Peer Link — Implementation Status and Remaining Plan (ESP-NOW compatibility layer)
 
-> **Status:** Phases 0–4 implemented as pure-logic, host-tested STM32-side
+> **Status:** This branch implements Phases 0–4 as pure-logic, host-tested STM32-side
 > modules (see `m1_csrc/espnow_{chunk,shareable,message,trigger,crypto}.c`
 > and their `tests/test_espnow_*` suites). Scene/UI wiring and live bench
 > validation remain, and depend on the coordinated `bedge117/m1-esp32-brain`

@@ -8,6 +8,7 @@
 #include "unity.h"
 #include "espnow_message.h"
 
+#include <stdio.h>
 #include <string.h>
 
 void setUp(void)  {}
