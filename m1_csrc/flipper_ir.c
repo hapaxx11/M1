@@ -576,9 +576,32 @@ done:
 
 	if (ok)
 	{
-		f_unlink(path);
-		if (f_rename(tmp, path) != FR_OK)
+		char bak[FLIPPER_IR_PATH_MAX + 6];
+
+		/* Use a backup name so a failed rename can't lose the original file. */
+		if (snprintf(bak, sizeof(bak), "%s.bak", path) >= (int)(sizeof(bak) - 1))
+		{
 			ok = false;
+			(void)f_unlink(tmp);
+		}
+		else
+		{
+			(void)f_unlink(bak);
+			if (f_rename(path, bak) != FR_OK)
+			{
+				ok = false;
+				(void)f_unlink(tmp);
+			}
+			else if (f_rename(tmp, path) != FR_OK)
+			{
+				(void)f_rename(bak, path); /* best-effort rollback */
+				ok = false;
+				(void)f_unlink(tmp);
+			}
+
+			if (ok)
+				(void)f_unlink(bak);
+		}
 	}
 	else
 	{

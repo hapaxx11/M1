@@ -213,7 +213,8 @@ static uint16_t ir_cust_list_remotes(char names[IR_CUSTOM_MAX_REMOTES][IR_CUSTOM
         size_t flen = strlen(fno.fname);
         if (flen <= ext_len)
             continue;
-        if (strcasecmp(fno.fname + flen - ext_len, IR_CUSTOM_EXT) != 0)
+        const char *ext = fno.fname + flen - ext_len;
+        if (ext[0] != '.' || (ext[1] | 0x20) != 'i' || (ext[2] | 0x20) != 'r')
             continue;
 
         /* Strip the .ir extension for display */
@@ -257,13 +258,29 @@ static void ir_cust_send_signal(const flipper_ir_signal_t *sig)
     irsnd_generate_tx_data(irmp);
     infrared_transmit(1);
 
+    uint32_t deadline = HAL_GetTick() + 3000;
+
     while (!tx_done)
     {
         infrared_transmit(0);
+
+        /* Avoid a permanent wedge if the TX-complete event is never posted. */
+        if (HAL_GetTick() >= deadline)
+            break;
+
         if (xQueueReceive(main_q_hdl, &q, pdMS_TO_TICKS(50)) == pdTRUE)
         {
             if (q.q_evt_type == Q_EVENT_IRRED_TX)
+            {
                 tx_done = 1;
+            }
+            else if (q.q_evt_type == Q_EVENT_KEYPAD)
+            {
+                S_M1_Buttons_Status bs;
+                if (xQueueReceive(button_events_q_hdl, &bs, 0) == pdTRUE &&
+                    bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+                    break;
+            }
         }
     }
 
