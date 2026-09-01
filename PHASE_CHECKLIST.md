@@ -18,5 +18,5 @@
 
 ### Phase 3 — IR Custom Remotes + new ir_database files
 - **Description**: (a) Extend `flipper_ir.c/h` with `flipper_ir_rewrite()`, `flipper_ir_rename_signal()`, `flipper_ir_delete_signal()`, `flipper_ir_raw_feed()`. (b) Add host tests `tests/test_flipper_ir_custom.c`. (c) Create `m1_csrc/m1_ir_custom.c/h` — multi-button custom remote scene (learn, browse, rename, delete). (d) Wire "Custom Remotes" entry into `m1_infrared_scene.c`. (e) Add new ir_database files: `ir_database/Bluray/Samsung_Bluray.ir`, `ir_database/Bluray/Sony_Bluray.ir`, `ir_database/Monitor/Universal_Monitor.ir`, `ir_database/LED/RGB_24key.ir`.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Phase 3: IR Custom Remotes + new ir_database files (dag 08cd5560)`

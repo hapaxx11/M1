@@ -1,0 +1,135 @@
+Filetype: IR signals file
+Version: 1
+
+#
+name: Power
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 15 00 00 00
+
+#
+name: Play_Pause
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 2B 00 00 00
+
+#
+name: Stop
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 19 00 00 00
+
+#
+name: Eject
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 09 00 00 00
+
+#
+name: Next
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 12 00 00 00
+
+#
+name: Previous
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 10 00 00 00
+
+#
+name: Fast_Fwd
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 13 00 00 00
+
+#
+name: Rewind
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 11 00 00 00
+
+#
+name: Menu
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 1A 00 00 00
+
+#
+name: Home
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 79 00 00 00
+
+#
+name: Up
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 60 00 00 00
+
+#
+name: Down
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 61 00 00 00
+
+#
+name: Left
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 65 00 00 00
+
+#
+name: Right
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 62 00 00 00
+
+#
+name: Ok
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 68 00 00 00
+
+#
+name: Back
+type: parsed
+protocol: Samsung32
+address: A8 00 00 00
+command: 58 00 00 00
+
+#
+name: Vol_Up
+type: parsed
+protocol: Samsung32
+address: 07 00 00 00
+command: 07 00 00 00
+
+#
+name: Vol_Down
+type: parsed
+protocol: Samsung32
+address: 07 00 00 00
+command: 0B 00 00 00
+
+#
+name: Mute
+type: parsed
+protocol: Samsung32
+address: 07 00 00 00
+command: 0F 00 00 00

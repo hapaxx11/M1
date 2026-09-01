@@ -1,0 +1,114 @@
+Filetype: IR signals file
+Version: 1
+
+#
+name: Power
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 40 00 00 00
+
+#
+name: Brightness_Up
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 41 00 00 00
+
+#
+name: Brightness_Down
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 42 00 00 00
+
+#
+name: Input
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4A 00 00 00
+
+#
+name: Auto_Config
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 4B 00 00 00
+
+#
+name: HDMI_1
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 60 00 00 00
+
+#
+name: HDMI_2
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 61 00 00 00
+
+#
+name: VGA
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 62 00 00 00
+
+#
+name: DisplayPort
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 63 00 00 00
+
+#
+name: Menu
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 43 00 00 00
+
+#
+name: Up
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 44 00 00 00
+
+#
+name: Down
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 45 00 00 00
+
+#
+name: Left
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 46 00 00 00
+
+#
+name: Right
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 47 00 00 00
+
+#
+name: Ok
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 48 00 00 00
+
+#
+name: Exit
+type: parsed
+protocol: NEC
+address: 00 00 00 00
+command: 49 00 00 00

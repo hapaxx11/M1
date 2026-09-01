@@ -78,4 +78,82 @@ const char *flipper_ir_irmp_to_proto(uint8_t irmp_id);
 /* Count signals in a .ir file without loading them all */
 uint16_t flipper_ir_count_signals(const char *path);
 
+/**
+ * @brief  Rename one signal (by index) in-place.
+ *
+ * Streams the file through a temp copy, changing the name of the signal
+ * at @p idx.  The original file is replaced atomically.
+ *
+ * @param path      Full FatFS path to the .ir file (e.g. "0:/IR/Custom/tv.ir").
+ * @param idx       Zero-based index of the signal to rename.
+ * @param new_name  New name string; must be non-empty, ≤ FLIPPER_IR_NAME_MAX_LEN-1 chars.
+ * @retval true   on success.
+ * @retval false  if @p idx is out of range, or any I/O error occurs.
+ */
+bool flipper_ir_rename_signal(const char *path, uint16_t idx, const char *new_name);
+
+/**
+ * @brief  Delete one signal (by index) in-place.
+ *
+ * Streams the file through a temp copy, omitting the signal at @p idx.
+ * The original file is replaced atomically.
+ *
+ * @param path  Full FatFS path to the .ir file.
+ * @param idx   Zero-based index of the signal to delete.
+ * @retval true   on success.
+ * @retval false  if @p idx is out of range, or any I/O error occurs.
+ */
+bool flipper_ir_delete_signal(const char *path, uint16_t idx);
+
+/**
+ * @brief  Append one signal to a .ir file.
+ *
+ * Streams the existing content through a temp copy then appends @p sig.
+ * The original file is replaced atomically.  Works on empty files (header
+ * only) as well as files that already contain signals.
+ *
+ * @param path  Full FatFS path to the .ir file.
+ * @param sig   Signal to append; must be valid (sig->valid == true).
+ * @retval true   on success.
+ * @retval false  on any I/O error.
+ */
+bool flipper_ir_append_signal(const char *path, const flipper_ir_signal_t *sig);
+
+/* ---- Raw-signal accumulator -------------------------------------------- */
+
+/**
+ * @brief  Accumulator that builds a RAW-type flipper_ir_signal_t from
+ *         successive mark/space edge durations captured by the IR hardware.
+ *
+ * Usage:
+ *   flipper_ir_raw_feed_t f;
+ *   flipper_ir_raw_feed_init(&f, "Power", 38000, 0.33f);
+ *   while (edge_available())
+ *       flipper_ir_raw_feed_push(&f, next_edge_us());
+ *   if (flipper_ir_raw_feed_finish(&f))
+ *       flipper_ir_write_signal(&ff, &f.sig);
+ */
+typedef struct {
+    flipper_ir_signal_t sig;      /**< Output signal being assembled. */
+    bool                overflow; /**< Set when sample_count exceeded capacity. */
+} flipper_ir_raw_feed_t;
+
+/** Initialise the accumulator (must be called before push/finish). */
+void flipper_ir_raw_feed_init(flipper_ir_raw_feed_t *f, const char *name,
+                               uint32_t freq_hz, float duty_cycle);
+
+/**
+ * @brief  Push one mark/space sample (µs, positive = mark, negative = space).
+ * @retval true   sample accepted.
+ * @retval false  overflow — sample count exceeded FLIPPER_IR_RAW_MAX_SAMPLES.
+ */
+bool flipper_ir_raw_feed_push(flipper_ir_raw_feed_t *f, int32_t sample_us);
+
+/**
+ * @brief  Finalise the accumulator and mark the signal as valid.
+ * @retval true   signal is valid and ready to write.
+ * @retval false  accumulator is empty, overflowed, or invalid.
+ */
+bool flipper_ir_raw_feed_finish(flipper_ir_raw_feed_t *f);
+
 #endif /* FLIPPER_IR_H_ */

@@ -1154,6 +1154,31 @@ endif()
 add_test(NAME flipper_ir COMMAND test_flipper_ir)
 
 # ------------------------------------------------------------------
+# Module under test: flipper_ir_custom extensions
+# Tests flipper_ir_rename_signal(), flipper_ir_delete_signal(),
+# flipper_ir_append_signal(), and flipper_ir_raw_feed_t.
+# Uses real temp files via the ff.h stdio stub so the full
+# streaming-rewrite path (read → temp → rename → replace) is
+# exercised end-to-end.
+# Stubs: ff.h, irmp.h (protocol constants only)
+# ------------------------------------------------------------------
+add_executable(test_flipper_ir_custom
+    test_flipper_ir_custom.c
+    ${M1_ROOT}/m1_csrc/flipper_ir.c
+    ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/m1_csrc/ir_signal_record.c
+)
+target_include_directories(test_flipper_ir_custom PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_flipper_ir_custom PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_flipper_ir_custom PRIVATE sanitizers)
+endif()
+add_test(NAME flipper_ir_custom COMMAND test_flipper_ir_custom)
+
+# ------------------------------------------------------------------
 # Module under test: flipper_nfc (NFC device type mapping)
 # Tests flipper_nfc_parse_type() — maps ~60 Flipper NFC device type
 # strings (NTAG, Mifare Classic, DESFire, FeliCa, ISO15693, SLIX,
