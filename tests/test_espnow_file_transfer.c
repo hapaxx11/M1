@@ -174,7 +174,7 @@ void test_sender_frames_fit_direct_transport_budget(void)
     TEST_ASSERT_LESS_OR_EQUAL_UINT(M1_ESPNOW_SEND_PAYLOAD_MAX,
                                    s_mock.send_lens[0]);
 
-    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0));
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u, NULL, 0));
     uint8_t data[36];
     memset(data, 0xA5, sizeof(data));
     TEST_ASSERT_TRUE(espnow_ft_send_chunk(&ctx, data, sizeof(data)));
@@ -189,7 +189,7 @@ void test_send_accept_transitions_to_sending(void)
     espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
                          1024, 0xDEADBEEF, 100);
     espnow_ft_send_offer(&ctx);
-    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0));
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u, NULL, 0));
     TEST_ASSERT_EQUAL(ESPNOW_FT_STATE_SENDING, ctx.state);
 }
 
@@ -200,7 +200,7 @@ void test_send_reject_transitions_to_failed(void)
     espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
                          1024, 0xDEADBEEF, 100);
     espnow_ft_send_offer(&ctx);
-    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_REJECT, NULL, 0));
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_REJECT, 0u, NULL, 0));
     TEST_ASSERT_EQUAL(ESPNOW_FT_STATE_FAILED, ctx.state);
 }
 
@@ -211,7 +211,7 @@ void test_send_chunk_transitions_to_wait_ack(void)
     espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
                          200, 0x12345678, 100);
     espnow_ft_send_offer(&ctx);
-    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0);
+    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u, NULL, 0);
 
     uint8_t data[100];
     memset(data, 0xAA, sizeof(data));
@@ -226,15 +226,36 @@ void test_send_ack_after_all_data_sends_complete(void)
     espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
                          50, 0x12345678, 100);
     espnow_ft_send_offer(&ctx);
-    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0);
+    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u, NULL, 0);
 
     uint8_t data[50];
     memset(data, 0xBB, sizeof(data));
     espnow_ft_send_chunk(&ctx, data, 50);
 
     /* Receive ACK — should complete since all bytes are sent */
-    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACK, NULL, 0));
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACK, 0u, NULL, 0));
     TEST_ASSERT_EQUAL(ESPNOW_FT_STATE_DONE, ctx.state);
+}
+
+void test_send_ignores_ack_for_previous_chunk(void)
+{
+    uint8_t data[100];
+    espnow_ft_ctx_t ctx;
+
+    reset_mock();
+    memset(data, 0xBB, sizeof(data));
+    espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
+                        200, 0x12345678, 100);
+    TEST_ASSERT_TRUE(espnow_ft_send_offer(&ctx));
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u,
+                                            NULL, 0));
+    TEST_ASSERT_TRUE(espnow_ft_send_chunk(&ctx, data, sizeof(data)));
+    TEST_ASSERT_FALSE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACK, 1u,
+                                             NULL, 0));
+    TEST_ASSERT_EQUAL(ESPNOW_FT_STATE_WAIT_ACK, ctx.state);
+    TEST_ASSERT_TRUE(espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACK, 0u,
+                                            NULL, 0));
+    TEST_ASSERT_EQUAL(ESPNOW_FT_STATE_SENDING, ctx.state);
 }
 
 void test_send_timeout_retries(void)
@@ -244,7 +265,7 @@ void test_send_timeout_retries(void)
     espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
                          200, 0x12345678, 100);
     espnow_ft_send_offer(&ctx);
-    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0);
+    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u, NULL, 0);
 
     uint8_t data[100];
     memset(data, 0xCC, sizeof(data));
@@ -264,7 +285,7 @@ void test_send_timeout_max_retries_fails(void)
     espnow_ft_send_init(&ctx, &s_mock_hal, PEER_MAC, "test.sub",
                          200, 0x12345678, 100);
     espnow_ft_send_offer(&ctx);
-    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, NULL, 0);
+    espnow_ft_send_on_recv(&ctx, ESPNOW_FT_MSG_ACCEPT, 0u, NULL, 0);
 
     uint8_t data[100];
     memset(data, 0xDD, sizeof(data));
@@ -485,6 +506,7 @@ int main(void)
     RUN_TEST(test_send_reject_transitions_to_failed);
     RUN_TEST(test_send_chunk_transitions_to_wait_ack);
     RUN_TEST(test_send_ack_after_all_data_sends_complete);
+    RUN_TEST(test_send_ignores_ack_for_previous_chunk);
     RUN_TEST(test_send_timeout_retries);
     RUN_TEST(test_send_timeout_max_retries_fails);
 

@@ -18,6 +18,7 @@
 #include "main.h"
 #include "m1_espnow_scene.h"
 #include "m1_espnow_scene_ctx.h"
+#include "m1_espnow_hal.h"
 #include "m1_scene.h"
 #include "m1_esp32_hal.h"
 #include "m1_tasks.h"
@@ -34,6 +35,7 @@ static void espnow_hw_init(void)
 
 static void espnow_hw_deinit(void)
 {
+    m1_espnow_stop();
     m1_esp32_deinit();
 }
 

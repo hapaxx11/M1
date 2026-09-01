@@ -55,6 +55,10 @@ static void menu_on_enter(M1SceneApp *app)
         app->running = false;
         return;
     }
+    if (!m1_espnow_start(m1_espnow_get_channel())) {
+        app->running = false;
+        return;
+    }
     if (s_menu_model.item_count == 0)
         subghz_submenu_model_init(&s_menu_model, MENU_ITEM_COUNT,
                                   M1_MENU_VIS(MENU_ITEM_COUNT));

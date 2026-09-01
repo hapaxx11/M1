@@ -166,7 +166,8 @@ static void send_run_transfer(const uint8_t peer_mac[ESPNOW_MAC_LEN])
         if (m1_espnow_secure_link_recv(from_mac, msg, sizeof(msg), &msg_len) &&
             memcmp(from_mac, peer_mac, ESPNOW_MAC_LEN) == 0 &&
             msg_len >= 2u) {
-            espnow_ft_send_on_recv(&s_send_ctx, msg[0], msg + 2, msg_len - 2u);
+            espnow_ft_send_on_recv(&s_send_ctx, msg[0], msg[1],
+                                   msg + 2, msg_len - 2u);
         }
 
         if (s_send_ctx.state == ESPNOW_FT_STATE_OFFER_SENT &&
@@ -262,7 +263,9 @@ bool m1_espnow_capture_share_send_path(const char *path)
     snprintf(s_send_status, sizeof(s_send_status), "Preparing...");
     send_progress_draw_card();
     send_run_transfer(peer_mac);
-    return s_send_ctx.state == ESPNOW_FT_STATE_DONE;
+    bool sent = s_send_ctx.state == ESPNOW_FT_STATE_DONE;
+    m1_espnow_stop();
+    return sent;
 }
 
 bool m1_espnow_capture_share_choose_and_send(espnow_share_kind_t kind)

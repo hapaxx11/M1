@@ -19,6 +19,7 @@
 #include "m1_espnow_hal.h"
 #include "m1_espnow_secure_link.h"
 #include "espnow_file_transfer.h"
+#include "espnow_shareable.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_tasks.h"
@@ -119,9 +120,14 @@ static bool transfer_on_event(M1SceneApp *app, M1SceneEvent event)
         /* Handle offer acceptance (auto-accept for now) */
         if (s_ft_ctx.state == ESPNOW_FT_STATE_OFFER_RECEIVED) {
             char save_path[64];
-            snprintf(save_path, sizeof(save_path), "/ESPNOW/%s",
-                     s_ft_ctx.filename);
-            espnow_ft_recv_accept(&s_ft_ctx, save_path);
+            if (!espnow_share_name_is_safe(s_ft_ctx.filename,
+                                           ESPNOW_FT_FILENAME_MAX) ||
+                !espnow_share_recv_path(s_ft_ctx.filename, save_path,
+                                        sizeof(save_path))) {
+                espnow_ft_recv_reject(&s_ft_ctx);
+            } else {
+                espnow_ft_recv_accept(&s_ft_ctx, save_path);
+            }
             app->need_redraw = true;
         }
 

@@ -182,6 +182,26 @@ void test_reasm_duplicate_fragment_tolerated(void)
     TEST_ASSERT_EQUAL_MEMORY(src, r.msg, sizeof(src));
 }
 
+void test_reasm_rejects_conflicting_duplicate_fragment(void)
+{
+    uint8_t src[ESPNOW_CHUNK_DATA_MAX + 3];
+    uint8_t frame[ESPNOW_CHUNK_FRAME_MAX];
+    size_t frame_len;
+    espnow_chunk_splitter_t split;
+    espnow_chunk_reasm_t reasm;
+
+    fill_pattern(src, sizeof(src));
+    TEST_ASSERT_TRUE(espnow_chunk_split_init(&split, 0x55u, src, sizeof(src)));
+    TEST_ASSERT_TRUE(espnow_chunk_split_next(&split, frame, sizeof(frame),
+                                             &frame_len));
+    espnow_chunk_reasm_init(&reasm);
+    TEST_ASSERT_EQUAL_INT(ESPNOW_CHUNK_NEED_MORE,
+                          espnow_chunk_reasm_feed(&reasm, frame, frame_len));
+    frame[ESPNOW_CHUNK_HDR_LEN] ^= 0xFFu;
+    TEST_ASSERT_EQUAL_INT(ESPNOW_CHUNK_ERROR,
+                          espnow_chunk_reasm_feed(&reasm, frame, frame_len));
+}
+
 void test_reasm_rejects_bad_index(void)
 {
     espnow_chunk_reasm_t r;
@@ -241,7 +261,10 @@ void test_appmsg_classify_blocks(void)
     TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_FILE_TRANSFER, espnow_app_classify(0x16));
     TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_MESSAGE,       espnow_app_classify(0x20));
     TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_TRIGGER,       espnow_app_classify(0x30));
-    TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_GAME,          espnow_app_classify(0x40));
+    TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_GAME,
+                          espnow_app_classify(ESPNOW_APP_GAME_BASE));
+    TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_GAME,
+                          espnow_app_classify(ESPNOW_APP_GAME_BASE + 1u));
     TEST_ASSERT_EQUAL_INT(ESPNOW_APP_CLASS_CRYPTO,        espnow_app_classify(0xE0));
 }
 
@@ -302,6 +325,7 @@ int main(void)
     RUN_TEST(test_reasm_ignores_non_fragment);
     RUN_TEST(test_reasm_out_of_order);
     RUN_TEST(test_reasm_duplicate_fragment_tolerated);
+    RUN_TEST(test_reasm_rejects_conflicting_duplicate_fragment);
     RUN_TEST(test_reasm_rejects_bad_index);
     RUN_TEST(test_reasm_rejects_short_nonfinal_fragment);
     RUN_TEST(test_reasm_new_msgid_restarts);

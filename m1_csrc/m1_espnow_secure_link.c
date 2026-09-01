@@ -16,6 +16,7 @@
 static espnow_crypto_key_t s_key;
 static espnow_chunk_reasm_t s_reasm;
 static uint8_t s_peer_mac[ESPNOW_MAC_LEN];
+static uint8_t s_reasm_owner[ESPNOW_MAC_LEN];
 static uint8_t s_next_msg_id;
 static bool s_configured;
 static bool s_encrypted;
@@ -26,6 +27,7 @@ void m1_espnow_secure_link_reset(void)
 {
     memset(&s_key, 0, sizeof(s_key));
     memset(s_peer_mac, 0, sizeof(s_peer_mac));
+    memset(s_reasm_owner, 0, sizeof(s_reasm_owner));
     espnow_chunk_reasm_init(&s_reasm);
     s_next_msg_id = 1u;
     s_configured = false;
@@ -195,8 +197,6 @@ bool m1_espnow_secure_link_recv(uint8_t from_mac[ESPNOW_MAC_LEN],
             espnow_secure_parse_control(raw, raw_len, &ctrl)) {
             if (ctrl == ESPNOW_SECURE_CTRL_HELLO) {
                 secure_send_control(ESPNOW_SECURE_CTRL_ACK);
-                s_encrypted = true;
-                s_fallback = false;
             } else if (ctrl == ESPNOW_SECURE_CTRL_ACK) {
                 s_encrypted = true;
                 s_fallback = false;
@@ -206,21 +206,33 @@ bool m1_espnow_secure_link_recv(uint8_t from_mac[ESPNOW_MAC_LEN],
             continue;
         }
 
+        if (raw[0] == ESPNOW_APP_FRAG) {
+            if (s_reasm.active &&
+                memcmp(raw_from, s_reasm_owner, ESPNOW_MAC_LEN) != 0) {
+                espnow_chunk_reasm_init(&s_reasm);
+            }
+            if (!s_reasm.active)
+                memcpy(s_reasm_owner, raw_from, ESPNOW_MAC_LEN);
+        }
         chunk_status = espnow_chunk_reasm_feed(&s_reasm, raw, raw_len);
         if (chunk_status == ESPNOW_CHUNK_COMPLETE) {
             if (secure_peer_matches(raw_from) &&
                 s_reasm.msg[0] == ESPNOW_APP_CRYPTO_BASE) {
                 if (secure_open_reassembled(buf, buf_size, out_len)) {
                     memcpy(from_mac, raw_from, ESPNOW_MAC_LEN);
+                    memset(s_reasm_owner, 0, sizeof(s_reasm_owner));
                     return true;
                 }
                 continue;
             }
             if (secure_copy_reassembled_plaintext(from_mac, raw_from, buf,
                                                   buf_size, out_len)) {
+                memset(s_reasm_owner, 0, sizeof(s_reasm_owner));
                 return true;
             }
         }
+        if (chunk_status == ESPNOW_CHUNK_ERROR)
+            memset(s_reasm_owner, 0, sizeof(s_reasm_owner));
         if (chunk_status != ESPNOW_CHUNK_IGNORED)
             continue;
 

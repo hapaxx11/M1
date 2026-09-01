@@ -111,7 +111,7 @@ bool espnow_ft_send_offer(espnow_ft_ctx_t *ctx)
     return ok;
 }
 
-bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type,
+bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type, uint8_t seq,
                              const uint8_t *data, size_t len)
 {
     if (!ctx)
@@ -135,6 +135,8 @@ bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type,
 
     case ESPNOW_FT_STATE_WAIT_ACK:
         if (type == ESPNOW_FT_MSG_ACK) {
+            if (seq != (uint8_t)(ctx->current_seq - 1u))
+                return false;
             /* ACK received — advance to next chunk or complete */
             ctx->retry_count = 0;
             if (ctx->bytes_transferred >= ctx->file_size) {

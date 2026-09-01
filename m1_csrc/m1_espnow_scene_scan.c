@@ -42,15 +42,15 @@ static uint32_t s_last_poll_tick;
 static void scan_on_enter(M1SceneApp *app)
 {
     uint8_t mac[ESPNOW_MAC_LEN];
-    m1_espnow_get_mac(mac);
-    espnow_session_init(&s_session, "M1", mac, m1_espnow_get_channel());
 
-    if (!m1_espnow_start(s_session.our_channel)) {
+    if (!m1_espnow_start(m1_espnow_get_channel())) {
         app->need_redraw = true;
         m1_scene_pop(app);
         return;
     }
 
+    m1_espnow_get_mac(mac);
+    espnow_session_init(&s_session, "M1", mac, m1_espnow_get_channel());
     espnow_session_start_scan(&s_session);
     m1_espnow_announce();
     s_sel = 0;
@@ -107,7 +107,6 @@ static bool scan_on_event(M1SceneApp *app, M1SceneEvent event)
         return true;
 
     case M1SceneEventBack:
-        m1_espnow_stop();
         espnow_session_stop(&s_session);
         m1_scene_pop(app);
         return true;

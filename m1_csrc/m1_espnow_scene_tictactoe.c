@@ -18,6 +18,7 @@
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
 #include "m1_espnow_secure_link.h"
+#include "espnow_appmsg.h"
 #include "espnow_tictactoe.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -36,8 +37,8 @@ static bool s_game_active;
 #define TTT_POLL_INTERVAL_MS  100
 
 /* Wire message: [game_id=0x01][move_cell:1] */
-#define TTT_MSG_MOVE    0x20
-#define TTT_MSG_RESIGN  0x21
+#define TTT_MSG_MOVE    (ESPNOW_APP_GAME_BASE + 0u)
+#define TTT_MSG_RESIGN  (ESPNOW_APP_GAME_BASE + 1u)
 
 /*==========================================================================*/
 /* Tic-Tac-Toe scene — on_enter                                             */

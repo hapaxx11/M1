@@ -135,6 +135,9 @@ espnow_chunk_status_t espnow_chunk_reasm_feed(espnow_chunk_reasm_t *r,
     } else if (r->frag_len[idx] != (uint16_t)dlen) {
         /* Inconsistent duplicate — treat as corruption. */
         return ESPNOW_CHUNK_ERROR;
+    } else if (memcmp(&r->msg[dst], &frame[ESPNOW_CHUNK_HDR_LEN], dlen) != 0) {
+        /* A duplicate must be byte-for-byte identical to the first copy. */
+        return ESPNOW_CHUNK_ERROR;
     }
     memcpy(&r->msg[dst], &frame[ESPNOW_CHUNK_HDR_LEN], dlen);
 
