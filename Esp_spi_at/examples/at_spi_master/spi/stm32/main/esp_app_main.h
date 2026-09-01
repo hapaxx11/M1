@@ -28,6 +28,7 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                  uint8_t *rx_buf, int rx_buf_size,
                                  int *out_len, int timeout_sec);
+uint32_t m1_esp32_m1link_last_elapsed_ms(void);
 uint8_t wifi_ap_scan_list(ctrl_cmd_t *app_req);
 uint8_t ble_scan_list(ctrl_cmd_t *app_req);
 uint8_t ble_advertise(ctrl_cmd_t *app_req);

@@ -434,9 +434,11 @@ void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn);
  *  request while waiting for the pipelined response before giving up.
  *
  *  The pure helper uses this as a transaction count only (host tests inject an
- *  instantaneous fake exchange). On-target timing is set by
- *  spi_m1link_send_recv_bin(), which scales max_polls from timeout_sec and
- *  applies this macro as a floor. */
+ *  instantaneous fake exchange). On-target, spi_m1link_send_recv_bin() no
+ *  longer derives its poll budget from this macro (issue #719 Phase 7): it
+ *  now paces on real wall-clock time via m1_esp32_m1link_send_recv_timed()
+ *  instead, so this floor only bounds m1_esp32_m1link_send_recv()'s own
+ *  fixed-count callers (see "Poll-budget wall-clock FIX" below). */
 #define M1_ESP32_M1LINK_MAX_POLLS  8
 
 /**
@@ -487,6 +489,236 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
                                   int *out_len);
 
 /* =========================================================================
+ * Feature-call diagnostics (Phase 2, issue #719)
+ *
+ * Phase 0/1 instrumented the CD3 detection probe (m1_esp32_caps.h's
+ * m1_esp32_caps_diag_t) and fixed the SPI3 contention that was zeroing the
+ * M1_RPC PING.  With that fixed, the dashboard now reports a real brain
+ * (e.g. "m1-native 1.5.0") with a non-zero, WIFI_SCAN-capable bitmap — yet
+ * WiFi Scan itself still fails with "AP scan failed. Please try again."
+ * That failure is downstream of a DIFFERENT call: every feature (WIFI_SCAN
+ * included) goes through m1_esp32_rpc_call(), not the tiny single-frame PING/
+ * GET_STATUS probe, so the probe succeeding tells us nothing about whether a
+ * bulk-list feature call (which alone exercises the M1 Link FRAG reassembly
+ * path in m1_esp32_m1link_send_recv()) is transporting, framing, and
+ * decoding correctly.
+ *
+ * This is the same "diagnose before fixing blind" approach as Phase 0: record
+ * a snapshot of the last m1_esp32_rpc_call() outcome (which opcode, whether
+ * the transport ever replied, how many raw frame bytes came back, the final
+ * status, and how many payload bytes were decoded) and surface it on the
+ * dashboard, so the next report can say e.g. "op0103 no-reply st253 r0 p0" or
+ * "op0103 ok st0 r512 p24" instead of just "still fails" — pinpointing
+ * whether the fault is transport (no reply / reassembly overflow), framing
+ * (bad CRC/msg_id), an explicit ESP32 NAK, or the firmware genuinely
+ * returning an empty list.
+ *
+ * Pure logic, no HAL deps: the struct is populated by m1_esp32_rpc_call()
+ * (already host-testable via the injectable transport) and the formatter is
+ * a static inline so it is covered by host-side unit tests without linking
+ * the .c file.
+ *
+ * --------------------------------------------------------------------------
+ * Poll-budget wall-clock diagnostic (issue #719 Phase 6)
+ *
+ * Phase 5 widened the M1 Link poll budget for WIFI_SCAN
+ * (M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S, 10 s) because the field read-back showed
+ * "op0103 no-reply st253 r0 p0" — poll-budget exhaustion. A repeat report
+ * after that fix landed showed the SAME line, which is ambiguous: it could
+ * mean the brain's real scan still takes longer than the new 10 s budget
+ * (needs a bigger number, or an async trigger/poll redesign), OR it could
+ * mean the transport gave up well before 10 s actually elapsed (a bug in the
+ * poll-budget/timeout plumbing itself, not a "too small" number). The old
+ * "no-reply" line cannot distinguish these — both render identically.
+ *
+ * m1_esp32_rpc_call() now records how many wall-clock milliseconds the
+ * transport call actually took (via m1_esp32_m1link_last_elapsed_ms(),
+ * populated by spi_m1link_send_recv_bin() from HAL_GetTick() either side of
+ * its poll loop) alongside the existing snapshot fields. The formatter
+ * appends this to the ERR_TRANSPORT ("no-reply") line only — e.g.
+ * "op0103 no-reply st253 r0 p0 t10s" means the transport genuinely spent the
+ * whole ~10 s budget waiting (points at the scan itself needing more time),
+ * while "op0103 no-reply st253 r0 p0 t1s" on a call issued with the 10 s
+ * WIFI_SCAN timeout means something gave up far earlier than it should have
+ * (a poll-budget/timeout bug, not a too-short number). Other outcomes (ok /
+ * bad-frame / nak) already imply a prompt reply, so their line is unchanged.
+ *
+ * --------------------------------------------------------------------------
+ * Poll-budget wall-clock FIX (issue #719 Phase 7)
+ *
+ * A field read-back after Phase 6 landed showed "op0103 no-reply st253 r0 p0
+ * t0s" — the transport gave up in well under a second despite the 10 s
+ * WIFI_SCAN budget, confirming the second (buggy) case Phase 6 called out.
+ *
+ * Root cause: spi_m1link_send_recv_bin() converted the caller's timeout_sec
+ * into a fixed transaction COUNT (max_polls) by assuming each poll consumes
+ * roughly M1LINK_HS_TIMEOUT_MS of wall-clock time. In practice the brain
+ * typically keeps its HANDSHAKE line asserted between transactions, so each
+ * poll (HANDSHAKE wait + one fixed-size SPI transfer) can complete in well
+ * under a millisecond — nowhere near the assumed ~50 ms/poll the scaling
+ * math used. The fixed poll count then exhausts almost instantly, long
+ * before the caller's real timeout_sec has elapsed, regardless of how that
+ * count was scaled.
+ *
+ * Fix: m1_esp32_m1link_send_recv() (fixed poll-COUNT budget) is unchanged —
+ * it stays exactly as-is for callers that want that semantics and remains
+ * covered by its existing host tests. spi_m1link_send_recv_bin() instead
+ * uses the new m1_esp32_m1link_send_recv_timed(), which paces itself on
+ * actual elapsed wall-clock time (via an injected clock function — HAL_GetTick
+ * on-target, a fake counter in host tests) rather than a poll count, so it
+ * always waits the caller's full timeout_sec regardless of how fast any
+ * individual transaction happens to complete. A generous max_iterations is
+ * still passed as a safety backstop against a runaway loop if the clock
+ * source ever misbehaves.
+ * ========================================================================= */
+
+/**
+ * Wall-clock source used by m1_esp32_m1link_send_recv_timed() to pace its
+ * poll loop. On-target this is HAL_GetTick (matching signature exactly); host
+ * tests inject a fake counter to simulate the passage of time without a real
+ * clock (see issue #719 Phase 7).
+ *
+ * @return Monotonically non-decreasing milliseconds since some fixed epoch.
+ */
+typedef uint32_t (*m1_esp32_m1link_clock_fn)(void);
+
+/**
+ * Optional inter-poll scheduler yield injected into m1_esp32_m1link_send_recv_timed().
+ * Called once between each unmatched poll iteration so the RTOS scheduler can
+ * service the idle task and watchdog during long scans.  Pass NULL to skip
+ * (pure-logic host tests; the on-target adapter passes a vTaskDelay(1) wrapper).
+ *
+ * @param ctx  Opaque context forwarded from the pace_ctx argument.
+ */
+typedef void (*m1_esp32_m1link_pace_fn)(void *ctx);
+
+/**
+ * Wall-clock-paced variant of m1_esp32_m1link_send_recv() (issue #719
+ * Phase 7). Sends @p tx_buf on the first transaction, then follow-up IDLE
+ * polls, exactly like m1_esp32_m1link_send_recv() — but keeps polling until
+ * either a matching RESP/NAK arrives, @p timeout_ms of wall-clock time (per
+ * @p now_ms) has elapsed, or the @p max_iterations safety backstop is hit
+ * (whichever comes first). Unlike a fixed poll count, this correctly waits
+ * the caller's full budget even when individual transactions complete much
+ * faster than assumed — see the "Poll-budget wall-clock FIX" comment above.
+ *
+ * @param xfer           Single-transaction full-duplex exchange primitive
+ * @param ctx            Opaque context passed through to @p xfer
+ * @param scratch_tx     Caller-provided @p mtu-byte TX working buffer
+ * @param scratch_rx     Caller-provided @p mtu-byte RX working buffer
+ * @param mtu            Transaction size (M1_ESP32_M1LINK_MTU on-target)
+ * @param now_ms         Wall-clock source (>= 1 call between iterations)
+ * @param timeout_ms     Wall-clock budget to keep polling for, in ms
+ * @param max_iterations Hard cap on transactions issued (>= 1); a safety net
+ *                       independent of @p now_ms in case the clock source
+ *                       ever fails to advance
+ * @param pace_fn        Optional inter-poll pacing callback (may be NULL); called
+ *                       between each unmatched poll to yield to the RTOS scheduler
+ *                       and prevent starving the idle task or watchdog during long
+ *                       scans.  On-target: pass a vTaskDelay(1) wrapper.  Host
+ *                       pure-logic tests: pass NULL.
+ * @param pace_ctx       Opaque pointer forwarded to @p pace_fn (ignored if NULL)
+ * @param tx_buf         Request frame bytes (built by m1_esp32_rpc_build_req)
+ * @param tx_len         Request frame length (> 0, <= @p mtu)
+ * @param rx_buf         Output buffer for the matched response frame
+ * @param rx_buf_size    Capacity of @p rx_buf
+ * @param out_len        [out] response frame bytes written (0 on failure)
+ * @return 0 on success; non-zero on invalid args, transport error, reassembly
+ *         overflow, or no match within the time/iteration budget
+ */
+uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
+                                        uint8_t *scratch_tx, uint8_t *scratch_rx,
+                                        uint16_t mtu,
+                                        m1_esp32_m1link_clock_fn now_ms,
+                                        uint32_t timeout_ms, int max_iterations,
+                                        m1_esp32_m1link_pace_fn pace_fn, void *pace_ctx,
+                                        const uint8_t *tx_buf, int tx_len,
+                                        uint8_t *rx_buf, int rx_buf_size,
+                                        int *out_len);
+
+/** Snapshot of the last m1_esp32_rpc_call() invocation. */
+typedef struct
+{
+    uint16_t msg_id;     /**< M1_ESP32_RPC_* opcode of the last call             */
+    uint8_t  attempted;  /**< a call has been made since boot                    */
+    uint8_t  status;     /**< m1_esp32_rpc_status_t result returned to the caller*/
+    int16_t  rx_len;     /**< raw transport frame bytes received (<=0 == none)   */
+    uint16_t resp_len;   /**< decoded response payload bytes copied to the caller*/
+    uint16_t elapsed_ms; /**< wall-clock ms spent in the transport call (capped  *
+                          *   at 65535); see "Poll-budget wall-clock diagnostic" *
+                          *   below (issue #719 Phase 6)                         */
+} m1_esp32_rpc_call_diag_t;
+
+/**
+ * Render a compact, human-readable one-line summary of a call snapshot,
+ * suitable for a 128px display line.  Pure logic — no HAL deps.
+ *
+ * The ERR_TRANSPORT ("no-reply") case additionally appends the wall-clock
+ * time actually spent waiting (see "Poll-budget wall-clock diagnostic",
+ * issue #719 Phase 6): this tells the very next thing a "no-reply" read-back
+ * needs to answer — did the transport genuinely exhaust its whole poll
+ * budget (a real scan took longer than the configured timeout) or did it
+ * give up early (the timeout/poll-budget plumbing itself is broken)?  Other
+ * outcomes already imply a prompt reply, so their format is unchanged.
+ *
+ * Examples:
+ *   "no call yet"                       (no m1_esp32_rpc_call() issued yet)
+ *   "op0103 ok st0 r512 p24"            (WIFI_SCAN succeeded, 24 payload bytes)
+ *   "op0103 no-reply st253 r0 p0 t10s"  (no reply after waiting ~10s)
+ *   "op0103 bad-frame st254 r18 p0"     (a reply arrived but failed to decode)
+ *   "op0103 nak st10 r18 p0"            (ESP32 explicitly rejected, e.g. err 10)
+ *   "op0103 bad-arg st2 r-1 p0"         (invalid arguments — never sent)
+ *   "op0103 no-mem st5 r-1 p0"          (host alloc failure — never sent)
+ *
+ * @param d        Snapshot to render (may be NULL — yields "no call yet")
+ * @param buf      Destination buffer
+ * @param buf_size Capacity of @p buf in bytes (>= 1)
+ */
+static inline void
+m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
+                              char *buf, size_t buf_size)
+{
+    if (!buf || buf_size == 0u)
+        return;
+    buf[0] = '\0';
+    if (!d || !d->attempted)
+    {
+        snprintf(buf, buf_size, "no call yet");
+        return;
+    }
+
+    const char *tag;
+    switch ((m1_esp32_rpc_status_t)d->status)
+    {
+        case M1_ESP32_RPC_OK:            tag = "ok";        break;
+        case M1_ESP32_RPC_ERR_TRANSPORT: tag = "no-reply";  break;
+        case M1_ESP32_RPC_ERR_BAD_FRAME: tag = "bad-frame"; break;
+        case M1_ESP32_RPC_ERR_INVALID:   tag = "bad-arg";   break;
+        case M1_ESP32_RPC_ERR_NO_MEM:    tag = "no-mem";    break;
+        default:                         tag = "nak";       break;
+    }
+
+    int n = snprintf(buf, buf_size, "op%04X %s st%u r%d p%u",
+                     (unsigned)d->msg_id, tag, (unsigned)d->status,
+                     (int)d->rx_len, (unsigned)d->resp_len);
+
+    if ((m1_esp32_rpc_status_t)d->status == M1_ESP32_RPC_ERR_TRANSPORT &&
+        n > 0 && (size_t)n < buf_size)
+    {
+        snprintf(buf + n, buf_size - (size_t)n, " t%us",
+                 (unsigned)(d->elapsed_ms / 1000u));
+    }
+}
+
+/**
+ * Copy out a snapshot of the last m1_esp32_rpc_call() invocation without
+ * re-issuing any request.  @p out->attempted is 0 if no call has been made
+ * since boot (or since the last m1_esp32_rpc_set_transport(), which resets
+ * the snapshot along with the transport in host tests).
+ */
+void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out);
+
+/* =========================================================================
  * Public client API
  * =========================================================================*/
 
@@ -494,8 +726,11 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
  * Return the wire transport the currently-detected ESP32 firmware speaks.
  *
  * Thin runtime wrapper over esp32_firmware_transport() applied to the cached
- * capability bitmap (m1_esp32_caps_get_bitmap()).  Returns ESP32_TRANSPORT_NONE
- * before m1_esp32_caps_init() has populated the bitmap.
+ * capability bitmap (m1_esp32_caps_get_bitmap()).  Self-primes exactly like
+ * m1_esp32_has_cap(): if m1_esp32_caps_init() has not yet populated the
+ * bitmap, it is run first (only when the ESP32 HAL transport is already up),
+ * so the very first feature call of a session classifies correctly instead
+ * of reading back a stale all-zero bitmap as ESP32_TRANSPORT_NONE.
  */
 esp32_transport_t m1_esp32_active_transport(void);
 

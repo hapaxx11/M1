@@ -606,17 +606,27 @@ uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
   *
   * CS (PB10) and the HANDSHAKE line (PD7) are driven manually per transaction,
   * mirroring the SiN360 direct-HAL pattern in m1_esp32_cmd.c.  This path does
-  * NOT rely on the ESP-AT RTOS task (spi_trans_control_task), which the brain
-  * firmware does not run.
+  * NOT depend on the ESP-AT RTOS task (spi_trans_control_task) being present
+  * -- the brain firmware itself never runs it -- but DOES take the same
+  * shared `pxMutex` that task uses whenever it has been created, so the two
+  * can never clock SPI3 at the same time (issue #719 C1: SPI3 bus
+  * contention).  Safe to call before the AT task has ever been started
+  * (pxMutex is still NULL and no locking is attempted).
   *
   * @param  tx_buf      Binary request frame to send (built by m1_esp32_rpc_*)
   * @param  tx_len      Length of @p tx_buf in bytes (> 0, <= 512)
   * @param  rx_buf      Caller buffer for the binary response frame
   * @param  rx_buf_size Capacity of @p rx_buf in bytes (>= 1)
   * @param  out_len     [out] bytes written to @p rx_buf (0 on error/timeout)
-  * @param  timeout_sec Unused (the poll budget bounds the wait); kept for
-  *                     signature compatibility with spi_AT_send_recv_bin()
+  * @param  timeout_sec Real wall-clock budget (seconds) the transport waits
+  *                     for a reply before giving up (issue #719 Phase 7);
+  *                     <= 0 falls back to a 2 s default.
   * @return SUCCESS on success, CTRL_ERR_* otherwise
+  *
+  * The wall-clock milliseconds actually spent in the poll loop (regardless of
+  * outcome) are recorded and readable via m1_esp32_m1link_last_elapsed_ms() --
+  * see the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
+  * (issue #719 Phase 6).
   */
 /******************************************************************************/
 #define M1LINK_SPI_TIMEOUT_MS   100u
@@ -659,7 +669,31 @@ static bool m1link_wait_handshake(uint32_t timeout_ms)
 	return true;
 }
 
-/* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn. */
+/* Take the shared SPI3 mutex before a full-duplex M1 Link transfer, but only
+ * if the host AT task has actually been created (pxMutex is a file-scope
+ * static, zero-initialised to NULL until init_master_hd() creates it inside
+ * esp32_main_init()).  This lets the M1 Link probe run standalone — before
+ * the AT task has ever been started — while still serialising with
+ * spi_trans_control_task on SPI3 whenever that task exists, regardless of
+ * which caller started it (see issue #719 C1: SPI3 bus contention between
+ * the host AT task and the M1 Link probe). */
+static void m1link_lock_spi_if_at_task_present(void)
+{
+	if (pxMutex)
+		spi_mutex_lock();
+}
+
+static void m1link_unlock_spi_if_at_task_present(void)
+{
+	if (pxMutex)
+		spi_mutex_unlock();
+}
+
+/* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn.
+ * The caller (spi_m1link_send_recv_bin) holds the shared SPI3 mutex for the
+ * entire abort + timed-exchange sequence, so no per-transfer locking is needed
+ * here — doing it per-transfer would serialise individual transactions but still
+ * allow spi_trans_control_task to interpose between request and reply polls. */
 static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
                            void *ctx)
 {
@@ -705,6 +739,31 @@ static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
 	return 0;
 }
 
+/* Wall-clock ms spent in the most recent spi_m1link_send_recv_bin() poll
+ * loop, regardless of outcome -- see m1_esp32_m1link_last_elapsed_ms() below
+ * and the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
+ * (issue #719 Phase 6). */
+static uint32_t s_m1link_last_elapsed_ms;
+
+/* Read back the elapsed time recorded by the last spi_m1link_send_recv_bin()
+ * call.  Consulted by m1_esp32_rpc_call() to annotate its "no-reply"
+ * diagnostic line with how long the transport actually waited, so a repeated
+ * "no-reply" report after a poll-budget fix can be told apart from a
+ * transport that is giving up early. */
+uint32_t m1_esp32_m1link_last_elapsed_ms(void)
+{
+	return s_m1link_last_elapsed_ms;
+}
+
+/* 1 ms inter-poll yield so the RTOS idle task / watchdog gets CPU time
+ * during the long brain CD3 scan timeout.  Injected as a pacing callback
+ * into m1_esp32_m1link_send_recv_timed() between each unmatched poll. */
+static void m1link_pace_1ms(void *ctx)
+{
+	(void)ctx;
+	vTaskDelay(pdMS_TO_TICKS(1));
+}
+
 uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                  uint8_t *rx_buf, int rx_buf_size,
                                  int *out_len, int timeout_sec)
@@ -714,8 +773,9 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * additional .bss in the firmware image. */
 	uint8_t s_m1link_tx[M1_ESP32_M1LINK_MTU];
 	uint8_t s_m1link_rx[M1_ESP32_M1LINK_MTU];
-	uint8_t rc;
-	int     max_polls;
+	uint8_t  rc;
+	uint32_t timeout_ms;
+	uint32_t t0 = HAL_GetTick();
 
 	if (out_len)
 		*out_len = 0;
@@ -723,21 +783,31 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	if (!tx_buf || tx_len <= 0 || !rx_buf || rx_buf_size < 1)
 		return CTRL_ERR_INCORRECT_ARG;
 
-	/* The poll budget is the response wait.  Each poll waits for the slave's
-	 * HANDSHAKE (up to M1LINK_HS_TIMEOUT_MS) and yields, so the count maps to a
-	 * real time window.  Bulk-list operations (WiFi scan, station scan, BLE
-	 * scan) keep the brain busy for a second or more before it queues its
-	 * RESP, so an 8-poll (~sub-second) budget reliably timed out with "AP scan
-	 * failed" in any real RF environment.  Scale the budget from the caller's
-	 * timeout (seconds) so slow features get the window they need; floor it so
-	 * the default quick commands still complete promptly. */
+	/* The poll budget is the response wait, paced on real wall-clock time
+	 * (issue #719 Phase 7) rather than a poll count: earlier revisions
+	 * derived a fixed transaction COUNT from timeout_sec assuming each poll
+	 * costs ~M1LINK_HS_TIMEOUT_MS, but a poll (HANDSHAKE wait + one SPI
+	 * transfer) can complete in well under a millisecond whenever the
+	 * brain's HANDSHAKE line is already asserted, so that count-based budget
+	 * could exhaust in a fraction of a second regardless of timeout_sec --
+	 * see the "Poll-budget wall-clock FIX" comment in m1_esp32_rpc.h. Pacing
+	 * on HAL_GetTick() instead means we always wait the caller's requested
+	 * timeout_sec, however fast or slow individual transactions turn out to
+	 * be. max_iterations remains only as a generous safety backstop against
+	 * a runaway loop if the clock source itself ever misbehaves. */
 	/* Floor for a poll budget when the caller passes no timeout (seconds). */
 	const int m1link_default_timeout_s = 2;
 	if (timeout_sec <= 0)
 		timeout_sec = m1link_default_timeout_s;
-	max_polls = timeout_sec * (1000 / (int)M1LINK_HS_TIMEOUT_MS) * 2;
-	if (max_polls < M1_ESP32_M1LINK_MAX_POLLS)
-		max_polls = M1_ESP32_M1LINK_MAX_POLLS;
+	timeout_ms = (uint32_t)timeout_sec * 1000u;
+
+	/* Hold the mutex across the abort AND the full timed request/poll sequence.
+	 * Taking it per-transfer (inside m1link_hal_xfer) serialises individual
+	 * transactions but still allows spi_trans_control_task to acquire the mutex
+	 * and issue an incompatible half-duplex transaction between the request
+	 * unlock and the next IDLE poll.  Holding it here for the entire sequence
+	 * prevents that interleaving (issue #719 Phase 1 C1). */
+	m1link_lock_spi_if_at_task_present();
 
 	/* Flush any residual FIFO / packing state before full-duplex M1 Link
 	 * transactions.  The brain (CD3) detection probe runs AFTER the half-duplex
@@ -749,12 +819,18 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	 * M1 Link transaction starts byte-aligned (harmless when already idle). */
 	HAL_SPI_Abort(&hspi_esp);
 
-	rc = m1_esp32_m1link_send_recv(m1link_hal_xfer, NULL,
-	                               s_m1link_tx, s_m1link_rx,
-	                               M1_ESP32_M1LINK_MTU,
-	                               max_polls,
-	                               tx_buf, tx_len,
-	                               rx_buf, rx_buf_size, out_len);
+	rc = m1_esp32_m1link_send_recv_timed(m1link_hal_xfer, NULL,
+	                                     s_m1link_tx, s_m1link_rx,
+	                                     M1_ESP32_M1LINK_MTU,
+	                                     HAL_GetTick,
+	                                     timeout_ms, 20000,
+	                                     m1link_pace_1ms, NULL,
+	                                     tx_buf, tx_len,
+	                                     rx_buf, rx_buf_size, out_len);
+
+	m1link_unlock_spi_if_at_task_present();
+
+	s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
 
 	switch (rc) {
 	case 0u:  return SUCCESS;

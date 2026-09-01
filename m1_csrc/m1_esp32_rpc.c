@@ -40,6 +40,18 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
                                         uint8_t *rx_buf, int rx_buf_size,
                                         int *out_len, int timeout_sec);
 
+/* Declared extern exactly as in m1_esp32_caps.c, rather than pulling in all of
+ * m1_esp32_hal.h (FreeRTOS/SPI/UART handles) just for this one status check --
+ * see m1_esp32_active_transport() below. */
+extern uint8_t m1_esp32_get_init_status(void);
+
+/* Wall-clock milliseconds spent in the most recent spi_m1link_send_recv_bin()
+ * poll loop (implemented in esp_app_main.c via HAL_GetTick()), regardless of
+ * whether it matched a reply. Used only for the "no-reply" diagnostic line --
+ * see the "Poll-budget wall-clock diagnostic" comment in m1_esp32_rpc.h
+ * (issue #719 Phase 6). */
+extern uint32_t m1_esp32_m1link_last_elapsed_ms(void);
+
 /*==========================================================================*/
 /* Transport selection                                                      */
 /*==========================================================================*/
@@ -49,14 +61,53 @@ extern uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * host tests swap in a fake via m1_esp32_rpc_set_transport(). */
 static m1_esp32_rpc_transport_fn s_transport = spi_m1link_send_recv_bin;
 
+/* Snapshot of the last m1_esp32_rpc_call() invocation — see the "Feature-call
+ * diagnostics (Phase 2, issue #719)" comment in m1_esp32_rpc.h.  Diagnostic
+ * only: never consulted by any feature gate or decode path. */
+static m1_esp32_rpc_call_diag_t s_call_diag = { 0 };
+
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn)
 {
     s_transport = fn ? fn : spi_m1link_send_recv_bin;
+    /* Host tests call this from setUp()/tearDown() between cases; reset the
+     * snapshot alongside the transport so stale diagnostics from a previous
+     * test/call never leak into the next one. */
+    memset(&s_call_diag, 0, sizeof(s_call_diag));
 }
 
 esp32_transport_t m1_esp32_active_transport(void)
 {
+    /* Self-prime exactly like m1_esp32_has_cap(): m1_esp32_caps_get_bitmap()
+     * only returns the cached bitmap and never re-probes, so before
+     * m1_esp32_caps_init() has ever run this used to read back an all-zero
+     * bitmap and misclassify a brain-CD3 device as ESP32_TRANSPORT_NONE.
+     * That silently routed the *first* ESP32 feature call down the wrong
+     * (legacy binary-SPI or AT) path on scene delegates that don't already
+     * force a probe first -- e.g. the un-gated WiFi Scan / "Scan & Connect"
+     * entry (m1_wifi_scene_menu.c) -- which never reaches m1_esp32_rpc_call()
+     * at all, so the Dashboard's "Last feature RPC:" line reads "no call
+     * yet" forever even after a scan was attempted. */
+    if (!m1_esp32_caps_is_queried() && m1_esp32_get_init_status())
+        m1_esp32_caps_init();
     return esp32_firmware_transport(m1_esp32_caps_get_bitmap());
+}
+
+void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out)
+{
+    if (out) *out = s_call_diag;
+}
+
+static void rpc_call_diag_record(uint16_t msg_id, m1_esp32_rpc_status_t status,
+                                 int rx_len, uint16_t resp_len,
+                                 uint32_t elapsed_ms)
+{
+    s_call_diag.msg_id     = msg_id;
+    s_call_diag.attempted  = 1u;
+    s_call_diag.status     = (uint8_t)status;
+    s_call_diag.rx_len     = (int16_t)rx_len;
+    s_call_diag.resp_len   = resp_len;
+    s_call_diag.elapsed_ms = (elapsed_ms > 0xFFFFu) ? 0xFFFFu
+                                                    : (uint16_t)elapsed_ms;
 }
 
 /*==========================================================================*/
@@ -74,25 +125,36 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
 
     if (resp_len) *resp_len = 0u;
 
-    if (req_len > M1_ESP32_RPC_PAYLOAD_MAX || (req_len > 0u && !req))
+    if (req_len > M1_ESP32_RPC_PAYLOAD_MAX || (req_len > 0u && !req)) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u, 0u);
         return M1_ESP32_RPC_ERR_INVALID;
+    }
 
     uint16_t frame_sz = m1_esp32_rpc_build_req(tx, (uint16_t)sizeof(tx),
                                                msg_id, req, req_len);
-    if (frame_sz == 0u)
+    if (frame_sz == 0u) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u, 0u);
         return M1_ESP32_RPC_ERR_INVALID;
+    }
 
     /* Heap-allocated: the reception budget (M1_ESP32_RPC_RESP_FRAME_MAX) must
      * cover the firmware's largest bulk-list response (WIFI_SCAN/STA_SCAN/
      * BLE_SCAN_RESULTS), which is far bigger than a stack-friendly control
      * frame -- see the comment on M1_ESP32_RPC_RESP_FRAME_MAX. */
     rx = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
-    if (!rx)
+    if (!rx) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
         return M1_ESP32_RPC_ERR_NO_MEM;
+    }
 
     memset(rx, 0, M1_ESP32_RPC_RESP_FRAME_MAX);
-    if (s_transport(tx, (int)frame_sz, rx, (int)M1_ESP32_RPC_RESP_FRAME_MAX,
-                    &rx_len, timeout_sec) != 0 || rx_len <= 0) {
+    int transport_rc = s_transport(tx, (int)frame_sz, rx,
+                                   (int)M1_ESP32_RPC_RESP_FRAME_MAX,
+                                   &rx_len, timeout_sec);
+    uint32_t elapsed_ms = m1_esp32_m1link_last_elapsed_ms();
+    if (transport_rc != 0 || rx_len <= 0) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, rx_len, 0u,
+                             elapsed_ms);
         free(rx);
         return M1_ESP32_RPC_ERR_TRANSPORT;
     }
@@ -103,15 +165,18 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                                         msg_id, &payload,
                                                         &payload_len);
     if (st != M1_ESP32_RPC_OK) {
+        rpc_call_diag_record(msg_id, st, rx_len, 0u, elapsed_ms);
         free(rx);
         return st;
     }
 
+    uint16_t copy_len = 0u;
     if (resp && resp_cap > 0u && payload_len > 0u) {
-        uint16_t copy_len = (payload_len < resp_cap) ? payload_len : resp_cap;
+        copy_len = (payload_len < resp_cap) ? payload_len : resp_cap;
         memcpy(resp, payload, copy_len);
         if (resp_len) *resp_len = copy_len;
     }
+    rpc_call_diag_record(msg_id, M1_ESP32_RPC_OK, rx_len, copy_len, elapsed_ms);
     free(rx);
     return M1_ESP32_RPC_OK;
 }
@@ -203,6 +268,114 @@ static void m1link_build_header_frame(uint8_t *buf, uint8_t msg_type,
     buf[M1_ESP32_RPC_HDR_SIZE + 1u] = (uint8_t)((crc >> 8u) & 0xFFu);
 }
 
+/* Perform ONE M1 Link transaction and update FRAG reassembly state that
+ * persists across calls. Shared by m1_esp32_m1link_send_recv() (fixed
+ * poll-COUNT budget) and m1_esp32_m1link_send_recv_timed() (wall-clock
+ * budget, issue #719 Phase 7) so both drive identical framing/pipelining
+ * logic and only differ in how they decide when to stop polling.
+ *
+ * @param is_first  Non-zero for the transaction that must carry @p tx_buf
+ *                  (the request); zero sends an IDLE filler instead.
+ * @param reasm_len/reasm_active  FRAG reassembly progress, threaded by the
+ *                  caller across successive calls for the same request.
+ * @return 0 matched a RESP/NAK for our msg_id (*out_len valid, done)
+ *         1 no match yet (IDLE/EVENT/other id/FRAG accumulated) — keep polling
+ *         2 transport error — abort
+ *         3 reassembly overflow — abort
+ */
+static uint8_t m1link_step(m1_esp32_m1link_xfer_fn xfer, void *ctx,
+                           uint8_t *scratch_tx, uint8_t *scratch_rx,
+                           uint16_t mtu, uint8_t is_first,
+                           const uint8_t *tx_buf, int tx_len,
+                           uint16_t expected_id,
+                           uint16_t *reasm_len, uint8_t *reasm_active,
+                           uint8_t *rx_buf, int rx_buf_size, int *out_len)
+{
+    memset(scratch_tx, 0, mtu);
+    if (is_first)
+        memcpy(scratch_tx, tx_buf, (size_t)tx_len);
+    else
+        m1link_build_header_frame(scratch_tx, M1_ESP32_RPC_IDLE, 0u);
+
+    if (xfer(scratch_tx, scratch_rx, mtu, ctx) != 0)
+        return 2u; /* transport error */
+
+    uint8_t        rtype = 0u;
+    uint16_t       rid = 0u, rplen = 0u;
+    const uint8_t *rpayload = NULL;
+    if (m1link_parse_frame(scratch_rx, mtu, &rtype, &rid, &rplen,
+                           &rpayload) != 0)
+        return 1u; /* garbage/padding — poll again */
+
+    if (rtype == M1_ESP32_RPC_IDLE) return 1u;   /* slave has nothing yet */
+    if (rid != expected_id)         return 1u;   /* EVENT / stale / other */
+
+    if (rtype == M1_ESP32_RPC_FRAG) {
+        /* Accumulate payload after the reserved header slot. */
+        if ((int)(M1_ESP32_RPC_HDR_SIZE + *reasm_len + rplen +
+                  M1_ESP32_RPC_CRC_SIZE) > rx_buf_size)
+            return 3u; /* reassembly overflow */
+        memcpy(rx_buf + M1_ESP32_RPC_HDR_SIZE + *reasm_len, rpayload, rplen);
+        *reasm_len = (uint16_t)(*reasm_len + rplen);
+        *reasm_active = 1u;
+        return 1u;
+    }
+
+    if (rtype == M1_ESP32_RPC_RESP || rtype == M1_ESP32_RPC_NAK) {
+        if (*reasm_active) {
+            /* Append the terminating payload and rebuild a single frame. */
+            if ((int)(M1_ESP32_RPC_HDR_SIZE + *reasm_len + rplen +
+                      M1_ESP32_RPC_CRC_SIZE) > rx_buf_size)
+                return 3u;
+            memcpy(rx_buf + M1_ESP32_RPC_HDR_SIZE + *reasm_len, rpayload,
+                   rplen);
+            uint16_t total_plen = (uint16_t)(*reasm_len + rplen);
+            rx_buf[0] = (uint8_t)(M1_ESP32_RPC_MAGIC        & 0xFFu);
+            rx_buf[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
+            rx_buf[2] = M1_ESP32_RPC_VERSION;
+            rx_buf[3] = rtype;
+            rx_buf[4] = (uint8_t)(expected_id        & 0xFFu);
+            rx_buf[5] = (uint8_t)((expected_id >> 8u) & 0xFFu);
+            rx_buf[6] = (uint8_t)(total_plen        & 0xFFu);
+            rx_buf[7] = (uint8_t)((total_plen >> 8u) & 0xFFu);
+            uint16_t crc = m1_esp32_rpc_crc16(
+                rx_buf, M1_ESP32_RPC_HDR_SIZE + total_plen);
+            rx_buf[M1_ESP32_RPC_HDR_SIZE + total_plen] =
+                (uint8_t)(crc & 0xFFu);
+            rx_buf[M1_ESP32_RPC_HDR_SIZE + total_plen + 1u] =
+                (uint8_t)((crc >> 8u) & 0xFFu);
+            if (out_len)
+                *out_len = (int)(M1_ESP32_RPC_HDR_SIZE + total_plen +
+                                 M1_ESP32_RPC_CRC_SIZE);
+        } else {
+            /* Single-frame response: copy it out verbatim from the located
+             * frame base (which may be a few bytes into scratch_rx when a
+             * shifted frame was recovered), not the start of scratch_rx. */
+            const uint8_t *base = rpayload - M1_ESP32_RPC_HDR_SIZE;
+            int frame = (int)(M1_ESP32_RPC_HDR_SIZE + rplen +
+                              M1_ESP32_RPC_CRC_SIZE);
+            if (frame > rx_buf_size) return 3u;
+            memcpy(rx_buf, base, (size_t)frame);
+            if (out_len) *out_len = frame;
+        }
+        return 0u; /* matched */
+    }
+    /* Any other msg_type sharing our id: ignore and keep polling. */
+    return 1u;
+}
+
+static int m1link_validate_common_args(m1_esp32_m1link_xfer_fn xfer,
+                                       uint8_t *scratch_tx,
+                                       uint8_t *scratch_rx, uint16_t mtu,
+                                       const uint8_t *tx_buf, int tx_len,
+                                       uint8_t *rx_buf, int rx_buf_size)
+{
+    return (!xfer || !scratch_tx || !scratch_rx || !tx_buf || !rx_buf ||
+            mtu < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE) ||
+            tx_len < (int)M1_ESP32_RPC_HDR_SIZE || tx_len > (int)mtu ||
+            rx_buf_size < (int)M1_ESP32_RPC_HDR_SIZE);
+}
+
 uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
                                   uint8_t *scratch_tx, uint8_t *scratch_rx,
                                   uint16_t mtu, int max_polls,
@@ -212,10 +385,9 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
 {
     if (out_len) *out_len = 0;
 
-    if (!xfer || !scratch_tx || !scratch_rx || !tx_buf || !rx_buf ||
-        mtu < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE) ||
-        max_polls < 1 || tx_len < (int)M1_ESP32_RPC_HDR_SIZE ||
-        tx_len > (int)mtu || rx_buf_size < (int)M1_ESP32_RPC_HDR_SIZE)
+    if (max_polls < 1 ||
+        m1link_validate_common_args(xfer, scratch_tx, scratch_rx, mtu,
+                                    tx_buf, tx_len, rx_buf, rx_buf_size))
         return 1u; /* invalid argument */
 
     /* The response echoes the request's msg_id (header bytes 4/5). */
@@ -228,77 +400,60 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
      * reply is pipelined onto a later transaction, so we must poll. */
     const int total_txns = max_polls + 1;
     for (int i = 0; i < total_txns; i++) {
-        memset(scratch_tx, 0, mtu);
-        if (i == 0)
-            memcpy(scratch_tx, tx_buf, (size_t)tx_len);
-        else
-            m1link_build_header_frame(scratch_tx, M1_ESP32_RPC_IDLE, 0u);
-
-        if (xfer(scratch_tx, scratch_rx, mtu, ctx) != 0)
-            return 2u; /* transport error */
-
-        uint8_t        rtype = 0u;
-        uint16_t       rid = 0u, rplen = 0u;
-        const uint8_t *rpayload = NULL;
-        if (m1link_parse_frame(scratch_rx, mtu, &rtype, &rid, &rplen,
-                               &rpayload) != 0)
-            continue; /* garbage/padding — poll again */
-
-        if (rtype == M1_ESP32_RPC_IDLE) continue;   /* slave has nothing yet */
-        if (rid != expected_id)         continue;   /* EVENT / stale / other */
-
-        if (rtype == M1_ESP32_RPC_FRAG) {
-            /* Accumulate payload after the reserved header slot. */
-            if ((int)(M1_ESP32_RPC_HDR_SIZE + reasm_len + rplen +
-                      M1_ESP32_RPC_CRC_SIZE) > rx_buf_size)
-                return 3u; /* reassembly overflow */
-            memcpy(rx_buf + M1_ESP32_RPC_HDR_SIZE + reasm_len, rpayload, rplen);
-            reasm_len = (uint16_t)(reasm_len + rplen);
-            reasm_active = 1u;
-            continue;
-        }
-
-        if (rtype == M1_ESP32_RPC_RESP || rtype == M1_ESP32_RPC_NAK) {
-            if (reasm_active) {
-                /* Append the terminating payload and rebuild a single frame. */
-                if ((int)(M1_ESP32_RPC_HDR_SIZE + reasm_len + rplen +
-                          M1_ESP32_RPC_CRC_SIZE) > rx_buf_size)
-                    return 3u;
-                memcpy(rx_buf + M1_ESP32_RPC_HDR_SIZE + reasm_len, rpayload,
-                       rplen);
-                uint16_t total_plen = (uint16_t)(reasm_len + rplen);
-                rx_buf[0] = (uint8_t)(M1_ESP32_RPC_MAGIC        & 0xFFu);
-                rx_buf[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
-                rx_buf[2] = M1_ESP32_RPC_VERSION;
-                rx_buf[3] = rtype;
-                rx_buf[4] = (uint8_t)(expected_id        & 0xFFu);
-                rx_buf[5] = (uint8_t)((expected_id >> 8u) & 0xFFu);
-                rx_buf[6] = (uint8_t)(total_plen        & 0xFFu);
-                rx_buf[7] = (uint8_t)((total_plen >> 8u) & 0xFFu);
-                uint16_t crc = m1_esp32_rpc_crc16(
-                    rx_buf, M1_ESP32_RPC_HDR_SIZE + total_plen);
-                rx_buf[M1_ESP32_RPC_HDR_SIZE + total_plen] =
-                    (uint8_t)(crc & 0xFFu);
-                rx_buf[M1_ESP32_RPC_HDR_SIZE + total_plen + 1u] =
-                    (uint8_t)((crc >> 8u) & 0xFFu);
-                if (out_len)
-                    *out_len = (int)(M1_ESP32_RPC_HDR_SIZE + total_plen +
-                                     M1_ESP32_RPC_CRC_SIZE);
-            } else {
-                /* Single-frame response: copy it out verbatim from the located
-                 * frame base (which may be a few bytes into scratch_rx when a
-                 * shifted frame was recovered), not the start of scratch_rx. */
-                const uint8_t *base = rpayload - M1_ESP32_RPC_HDR_SIZE;
-                int frame = (int)(M1_ESP32_RPC_HDR_SIZE + rplen +
-                                  M1_ESP32_RPC_CRC_SIZE);
-                if (frame > rx_buf_size) return 3u;
-                memcpy(rx_buf, base, (size_t)frame);
-                if (out_len) *out_len = frame;
-            }
-            return 0u; /* matched */
-        }
-        /* Any other msg_type sharing our id: ignore and keep polling. */
+        uint8_t rc = m1link_step(xfer, ctx, scratch_tx, scratch_rx, mtu,
+                                 (i == 0) ? 1u : 0u, tx_buf, tx_len,
+                                 expected_id, &reasm_len, &reasm_active,
+                                 rx_buf, rx_buf_size, out_len);
+        if (rc == 0u) return 0u;
+        if (rc == 2u) return 2u;
+        if (rc == 3u) return 3u;
+        /* rc == 1u: no match yet — keep polling. */
     }
 
     return 4u; /* no matching response within the poll budget */
+}
+
+uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
+                                        uint8_t *scratch_tx, uint8_t *scratch_rx,
+                                        uint16_t mtu,
+                                        m1_esp32_m1link_clock_fn now_ms,
+                                        uint32_t timeout_ms, int max_iterations,
+                                       m1_esp32_m1link_pace_fn pace_fn, void *pace_ctx,
+                                       const uint8_t *tx_buf, int tx_len,
+                                       uint8_t *rx_buf, int rx_buf_size,
+                                       int *out_len)
+{
+    if (out_len) *out_len = 0;
+
+    if (!now_ms || max_iterations < 1 ||
+        m1link_validate_common_args(xfer, scratch_tx, scratch_rx, mtu,
+                                    tx_buf, tx_len, rx_buf, rx_buf_size))
+        return 1u; /* invalid argument */
+
+    uint16_t expected_id = (uint16_t)tx_buf[4] | ((uint16_t)tx_buf[5] << 8u);
+    uint16_t reasm_len    = 0u;
+    uint8_t  reasm_active = 0u;
+    uint32_t start = now_ms();
+
+    for (int i = 0; i < max_iterations; i++) {
+        uint8_t rc = m1link_step(xfer, ctx, scratch_tx, scratch_rx, mtu,
+                                 (i == 0) ? 1u : 0u, tx_buf, tx_len,
+                                 expected_id, &reasm_len, &reasm_active,
+                                 rx_buf, rx_buf_size, out_len);
+        if (rc == 0u) return 0u;
+        if (rc == 2u) return 2u;
+        if (rc == 3u) return 3u;
+
+        /* rc == 1u: no match yet. Yield to the scheduler before the next
+         * poll so the idle task and watchdog are not starved during a long
+         * scan timeout — see m1link_wait_handshake() IWDG reset warning.
+         * Then check the wall-clock deadline (issue #719 Phase 7 "Poll-budget
+         * wall-clock FIX") so we always wait the caller's full budget. */
+        if (pace_fn)
+            pace_fn(pace_ctx);
+        if ((uint32_t)(now_ms() - start) >= timeout_ms)
+            return 4u;
+    }
+
+    return 4u; /* max_iterations safety backstop exhausted */
 }

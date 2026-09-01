@@ -116,6 +116,71 @@ void test_sd_status_unknown(void)
     TEST_ASSERT_EQUAL_STRING("Error", dashboard_sd_status_text(SD_access_EndOfStatus));
 }
 
+/* --- dashboard_split_rpc_wallclock_suffix tests (issue #719 Phase 7) --- */
+
+/* Regression guard: the "no-reply" RPC diag line's trailing " tNs" wall-
+ * clock suffix used to be drawn in-line on the dashboard and ran off the
+ * right edge of the 128px display, making it unreadable. The line must be
+ * split so the base and the suffix each fit on their own line. */
+void test_split_wallclock_suffix_splits_no_reply_line(void)
+{
+    char base[40], suffix[16];
+    dashboard_split_rpc_wallclock_suffix("op0103 no-reply st253 r0 p0 t10s",
+                                         base, sizeof(base),
+                                         suffix, sizeof(suffix));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0", base);
+    TEST_ASSERT_EQUAL_STRING("t10s", suffix);
+}
+
+void test_split_wallclock_suffix_splits_short_elapsed(void)
+{
+    char base[40], suffix[16];
+    dashboard_split_rpc_wallclock_suffix("op0103 no-reply st253 r0 p0 t1s",
+                                         base, sizeof(base),
+                                         suffix, sizeof(suffix));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0", base);
+    TEST_ASSERT_EQUAL_STRING("t1s", suffix);
+}
+
+void test_split_wallclock_suffix_leaves_line_without_suffix_untouched(void)
+{
+    char base[40], suffix[16];
+    dashboard_split_rpc_wallclock_suffix("op0103 ok st0 r512 p24",
+                                         base, sizeof(base),
+                                         suffix, sizeof(suffix));
+    TEST_ASSERT_EQUAL_STRING("op0103 ok st0 r512 p24", base);
+    TEST_ASSERT_EQUAL_STRING("", suffix);
+}
+
+void test_split_wallclock_suffix_no_call_yet_untouched(void)
+{
+    char base[40], suffix[16];
+    dashboard_split_rpc_wallclock_suffix("no call yet",
+                                         base, sizeof(base),
+                                         suffix, sizeof(suffix));
+    TEST_ASSERT_EQUAL_STRING("no call yet", base);
+    TEST_ASSERT_EQUAL_STRING("", suffix);
+}
+
+void test_split_wallclock_suffix_null_line_is_safe(void)
+{
+    char base[40], suffix[16];
+    strcpy(base, "unset");
+    strcpy(suffix, "unset");
+    dashboard_split_rpc_wallclock_suffix(NULL, base, sizeof(base),
+                                         suffix, sizeof(suffix));
+    TEST_ASSERT_EQUAL_STRING("", base);
+    TEST_ASSERT_EQUAL_STRING("", suffix);
+}
+
+void test_split_wallclock_suffix_null_suffix_out_is_safe(void)
+{
+    char base[40];
+    dashboard_split_rpc_wallclock_suffix("op0103 no-reply st253 r0 p0 t10s",
+                                         base, sizeof(base), NULL, 0);
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0", base);
+}
+
 /*============================================================================*/
 /* Main                                                                       */
 /*============================================================================*/
@@ -141,6 +206,14 @@ int main(void)
     RUN_TEST(test_sd_status_not_ready);
     RUN_TEST(test_sd_status_not_ok);
     RUN_TEST(test_sd_status_unknown);
+
+    /* RPC diagnostic line wall-clock suffix splitting */
+    RUN_TEST(test_split_wallclock_suffix_splits_no_reply_line);
+    RUN_TEST(test_split_wallclock_suffix_splits_short_elapsed);
+    RUN_TEST(test_split_wallclock_suffix_leaves_line_without_suffix_untouched);
+    RUN_TEST(test_split_wallclock_suffix_no_call_yet_untouched);
+    RUN_TEST(test_split_wallclock_suffix_null_line_is_safe);
+    RUN_TEST(test_split_wallclock_suffix_null_suffix_out_is_safe);
 
     return UNITY_END();
 }

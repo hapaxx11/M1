@@ -43,6 +43,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "FreeRTOS.h"           /* TickType_t, TaskHandle_t, SemaphoreHandle_t */
 #include "m1_esp32_rpc.h"       /* client + opcode enum + payload structs */
 #include "esp32_feature_map.h"  /* esp32_feature_id_t */
 
@@ -54,6 +55,37 @@ extern "C" {
  * Matches the ESP-NOW / CD3 detection probe timeout — generous for the prompt
  * single-transaction control commands these features issue. */
 #define M1_ESP32_RPC_FEATURE_TIMEOUT_S  2
+
+/* WIFI_SCAN-specific response timeout (seconds) — issue #719 Phase 5.
+ *
+ * Unlike every other scan-style feature (STA_SCAN, BLE_SCAN), which use a
+ * START trigger followed by a separate, quick RESULTS poll of an
+ * already-buffered list, the brain's handle_wifi_scan() runs the *entire*
+ * channel sweep synchronously inside the single WIFI_SCAN request/response
+ * transaction (see m1_esp32_rpc_wifi_scan()'s "one logical response" comment
+ * below) and only replies once the scan completes. A real active scan across
+ * all 2.4 GHz channels can legitimately take several seconds — far longer
+ * than M1_ESP32_RPC_FEATURE_TIMEOUT_S's 2 s budget for prompt commands.
+ *
+ * Field read-back on the Settings > Dashboard > page 5/5 "Last feature RPC"
+ * line confirmed the failure mode this predicted: "op0103 no-reply st253 r0
+ * p0" (M1_ESP32_RPC_ERR_TRANSPORT) — the M1 Link transport's poll budget,
+ * scaled from the caller's timeout_sec (see spi_m1link_send_recv_bin()),
+ * expired before the brain queued its reply. Widening the budget passed for
+ * this call (rather than the shared constant, which stays 2 s for every
+ * other prompt command) lets a real scan finish before the transport gives
+ * up.
+ *
+ * Update (issue #719 Phase 7): a later field read-back of the same line
+ * showed "op0103 no-reply st253 r0 p0 t0s" — the transport was giving up in
+ * well under a second despite this 10 s budget, because
+ * spi_m1link_send_recv_bin() converted timeout_sec into a fixed poll COUNT
+ * that assumed a fixed per-poll cost, not real elapsed time (see the
+ * "Poll-budget wall-clock FIX" comment in m1_esp32_rpc.h). With that
+ * transport bug fixed, this 10 s value now takes effect as originally
+ * intended; a further field read-back after the fix confirmed a real scan
+ * completing well within the budget: "op0103 ok st0 r456 p446". */
+#define M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S  10
 
 /* =========================================================================
  * Feature -> RPC opcode map
@@ -92,6 +124,80 @@ typedef struct {
 /** WIFI_SCAN: fill up to @p max decoded entries; sets @p *out_count. */
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *out,
                                              uint8_t max, uint8_t *out_count);
+
+/* -------------------------------------------------------------------------
+ * Async WIFI_SCAN: non-blocking variant for use on the FreeRTOS target.
+ *
+ * The synchronous m1_esp32_rpc_wifi_scan() blocks the caller for up to
+ * M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S (10 s) while the brain firmware sweeps
+ * all channels.  The async API offloads that work to a short-lived worker
+ * task so the calling task can remain responsive (check buttons, refresh the
+ * UI) while the scan is in flight.
+ *
+ * Usage:
+ *   m1_esp32_rpc_wifi_scan_async_t ctx;
+ *   m1_esp32_rpc_wifi_scan_async_start(&ctx, buf, max);
+ *   while (!m1_esp32_rpc_wifi_scan_async_poll(&ctx))
+ *       vTaskDelay(pdMS_TO_TICKS(50));          // yield; check buttons here
+ *   st = ctx.status; count = ctx.count;
+ *   m1_esp32_rpc_wifi_scan_async_cleanup(&ctx);
+ * -------------------------------------------------------------------------*/
+
+/** State block for an in-flight async WiFi scan.  Stack- or heap-allocate
+ *  one per scan call; do not share between tasks.  All fields are written by
+ *  the worker task and read by the caller after completion. */
+typedef struct {
+    m1_esp32_rpc_wifi_scan_result_t *out;    /**< Result buffer (caller-owned). */
+    uint8_t                          max;    /**< Buffer capacity in entries. */
+    uint8_t                          count;  /**< Entries written by worker. */
+    m1_esp32_rpc_status_t            status; /**< Worker exit status. */
+    volatile bool                    cancel; /**< Caller sets true to abort. */
+    SemaphoreHandle_t                done;   /**< Binary semaphore: given on exit. */
+    TaskHandle_t                     task;   /**< Worker handle (NULL after done). */
+} m1_esp32_rpc_wifi_scan_async_t;
+
+/**
+ * Start an async WiFi scan.
+ *
+ * Allocates a binary semaphore, spawns a worker task that calls
+ * m1_esp32_rpc_wifi_scan(), and returns immediately.  The caller must later
+ * call m1_esp32_rpc_wifi_scan_async_poll() to detect completion and
+ * m1_esp32_rpc_wifi_scan_async_cleanup() to release resources.
+ *
+ * @param ctx  Uninitialised state block; must remain valid until cleanup.
+ * @param out  Caller-allocated result buffer; must remain valid until cleanup.
+ * @param max  Capacity of @p out in entries.
+ * @return true on success (worker launched), false if semaphore or task
+ *         creation failed.
+ */
+bool m1_esp32_rpc_wifi_scan_async_start(m1_esp32_rpc_wifi_scan_async_t *ctx,
+                                        m1_esp32_rpc_wifi_scan_result_t *out,
+                                        uint8_t max);
+
+/**
+ * Non-blocking completion check.
+ *
+ * @return true when the worker has finished (or been cancelled) and results
+ *         are available in @p ctx->out / @p ctx->count / @p ctx->status.
+ *         false while the scan is still in flight.
+ */
+bool m1_esp32_rpc_wifi_scan_async_poll(m1_esp32_rpc_wifi_scan_async_t *ctx);
+
+/**
+ * Request cancellation of an in-flight scan.
+ *
+ * Sets a flag the worker task checks before issuing the RPC call.  Does not
+ * block; callers must still poll for completion and call cleanup.
+ */
+void m1_esp32_rpc_wifi_scan_async_cancel(m1_esp32_rpc_wifi_scan_async_t *ctx);
+
+/**
+ * Release resources allocated by m1_esp32_rpc_wifi_scan_async_start().
+ *
+ * Must be called exactly once after m1_esp32_rpc_wifi_scan_async_poll()
+ * returns true (or after cancellation + poll confirms completion).
+ */
+void m1_esp32_rpc_wifi_scan_async_cleanup(m1_esp32_rpc_wifi_scan_async_t *ctx);
 
 /**
  * WIFI_CONNECT: join an AP with @p ssid and @p password.
@@ -304,6 +410,40 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_sniff_get(m1_esp32_rpc_zb_device_t *out,
 m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_start(uint8_t channel);
 /** ZB_FLOOD_STOP. */
 m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_stop(void);
+
+/* =========================================================================
+ * System
+ * =========================================================================*/
+
+/**
+ * Decoded UTC time from a SYS_SNTP_SYNC response.
+ * Field layout mirrors m1_time_t and clock_time_t so the caller can copy
+ * directly to either without field-by-field assignment.
+ */
+typedef struct {
+    uint16_t year;
+    uint8_t  month;   /**< 1–12 */
+    uint8_t  day;     /**< 1–31 */
+    uint8_t  hour;    /**< 0–23 */
+    uint8_t  minute;  /**< 0–59 */
+    uint8_t  second;  /**< 0–59 */
+    uint8_t  weekday; /**< 0=Sun … 6=Sat */
+} m1_esp32_rpc_utctime_t;
+
+/**
+ * SYS_SNTP_SYNC: request the brain firmware to fetch the current time from
+ * the NTP pool and return it.
+ *
+ * The brain issues a pool.ntp.org query and replies with the UTC time once
+ * synchronized (or returns an error if no IP connectivity is available).
+ * The call uses M1_ESP32_RPC_FEATURE_TIMEOUT_S (2 s) because the firmware
+ * is already associated when this is called (after a successful WIFI_CONNECT).
+ *
+ * @param out  [out] receives the decoded UTC time on success; may be NULL to
+ *             merely trigger synchronization without reading back the time.
+ * @return M1_ESP32_RPC_OK on success, or an error code on failure.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_sntp_sync(m1_esp32_rpc_utctime_t *out);
 
 #ifdef __cplusplus
 }

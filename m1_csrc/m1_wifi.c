@@ -217,12 +217,26 @@ static uint16_t wifi_do_scan(void)
 	m1_resp_t resp;
 	int ret;
 
-	/* Capability dispatch requires the SPI-AT RTOS task (esp32_main_init). */
+	/* Classify firmware immediately after bringing up the SPI HAL, before
+	 * the host AT task starts — so a brain-CD3 device is probed over M1_RPC
+	 * without any AT task contention on SPI3.  esp32_main_init() below is
+	 * only called when the classification has already fallen through to the
+	 * AT path (not brain CD3), so the AT task never races the M1 Link
+	 * transfer (issue #719 Phase 1 ordering regression). */
 	m1_esp32_ensure_init();
-	if (!get_esp32_main_init_status())
-		esp32_main_init();
+	if (!m1_esp32_caps_is_queried() && m1_esp32_get_init_status())
+		m1_esp32_caps_init();
 
-	/* brain CD3 (binary M1_RPC): use WIFI_SCAN opcode. */
+	/* Start the host AT RTOS task only when the detected transport actually
+	 * needs it (AT or Unknown fallback).  Brain CD3 (M1_RPC) never uses
+	 * the AT task, so skip esp32_main_init() for that path entirely. */
+	if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC) {
+		if (!get_esp32_main_init_status())
+			esp32_main_init();
+	}
+
+	/* brain CD3 (binary M1_RPC): use WIFI_SCAN opcode via async worker so
+	 * the calling task is not blocked for the full 10 s scan window. */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC) {
 		wifi_ap_list_free();
 
@@ -230,9 +244,20 @@ static uint16_t wifi_do_scan(void)
 		    (m1_esp32_rpc_wifi_scan_result_t *)malloc(WIFI_AP_MAX * sizeof(m1_esp32_rpc_wifi_scan_result_t));
 		if (!rpc_entries)
 			return 0u;
-		uint8_t rpc_count = 0u;
-		if (m1_esp32_rpc_wifi_scan(rpc_entries, WIFI_AP_MAX, &rpc_count) != M1_ESP32_RPC_OK
-		    || rpc_count == 0u) {
+
+		m1_esp32_rpc_wifi_scan_async_t scan_ctx;
+		if (!m1_esp32_rpc_wifi_scan_async_start(&scan_ctx, rpc_entries, WIFI_AP_MAX)) {
+			free(rpc_entries);
+			return 0u;
+		}
+		while (!m1_esp32_rpc_wifi_scan_async_poll(&scan_ctx))
+			vTaskDelay(pdMS_TO_TICKS(50));
+
+		uint8_t rpc_count = scan_ctx.count;
+		m1_esp32_rpc_status_t rpc_st = scan_ctx.status;
+		m1_esp32_rpc_wifi_scan_async_cleanup(&scan_ctx);
+
+		if (rpc_st != M1_ESP32_RPC_OK || rpc_count == 0u) {
 			free(rpc_entries);
 			return 0u;
 		}
@@ -5882,6 +5907,38 @@ uint8_t wifi_sync_rtc(void)
 
 	if (!s_wifi_stub_connected)
 		return 1;
+
+	/* brain CD3 (binary M1_RPC): use SYS_SNTP_SYNC opcode.
+	 * The brain firmware fetches the time from pool.ntp.org internally;
+	 * poll with 500 ms retries for up to 5 s to allow NTP convergence on
+	 * slow connections, matching the AT firmware poll budget below. */
+	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
+	{
+		start_ms  = HAL_GetTick();
+		first_poll = true;
+		while ((HAL_GetTick() - start_ms) < 5000u)
+		{
+			if (!first_poll)
+				vTaskDelay(pdMS_TO_TICKS(500));
+			first_poll = false;
+			m1_wdt_reset();
+
+			m1_esp32_rpc_utctime_t utc;
+			if (m1_esp32_rpc_sntp_sync(&utc) == M1_ESP32_RPC_OK)
+			{
+				mt.year    = utc.year;
+				mt.month   = utc.month;
+				mt.day     = utc.day;
+				mt.hour    = utc.hour;
+				mt.minute  = utc.minute;
+				mt.second  = utc.second;
+				mt.weekday = utc.weekday;
+				m1_set_datetime(&mt);
+				return 0;
+			}
+		}
+		return 3;  /* Timeout waiting for SNTP sync */
+	}
 
 	/* AT firmware: send SNTP config, then poll for time.
 	 * Binary SPI (SiN360) does not yet support NTP — return silently. */

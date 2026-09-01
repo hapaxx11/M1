@@ -16,6 +16,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
+
 #include "m1_esp32_rpc_features.h"
 
 /*==========================================================================*/
@@ -115,7 +119,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u, resp,
                           M1_ESP32_RPC_RESP_PAYLOAD_MAX,
-                          &rlen, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+                          &rlen, M1_ESP32_RPC_WIFI_SCAN_TIMEOUT_S);
     if (st != M1_ESP32_RPC_OK) {
         free(resp);
         return st;
@@ -160,6 +164,67 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
     free(resp);
     if (out_count) *out_count = got;
     return M1_ESP32_RPC_OK;
+}
+
+/*--------------------------------------------------------------------------*/
+/* Async WIFI_SCAN                                                          */
+/*--------------------------------------------------------------------------*/
+
+/* Worker task: calls the synchronous scan and signals completion via the
+ * binary semaphore.  The pacing callback installed in
+ * m1_esp32_m1link_send_recv_timed() (1 ms vTaskDelay between polls) keeps
+ * the scheduler responsive while the worker blocks on the transport. */
+static void wifi_scan_worker(void *arg)
+{
+    m1_esp32_rpc_wifi_scan_async_t *ctx = (m1_esp32_rpc_wifi_scan_async_t *)arg;
+    if (!ctx->cancel)
+        ctx->status = m1_esp32_rpc_wifi_scan(ctx->out, ctx->max, &ctx->count);
+    else
+        ctx->status = M1_ESP32_RPC_ERR_TIMEOUT;
+    xSemaphoreGive(ctx->done);
+    vTaskDelete(NULL);
+}
+
+bool m1_esp32_rpc_wifi_scan_async_start(m1_esp32_rpc_wifi_scan_async_t *ctx,
+                                        m1_esp32_rpc_wifi_scan_result_t *out,
+                                        uint8_t max)
+{
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->out    = out;
+    ctx->max    = max;
+    ctx->status = M1_ESP32_RPC_ERR_NO_MEM;  /* default until worker runs */
+
+    ctx->done = xSemaphoreCreateBinary();
+    if (!ctx->done)
+        return false;
+
+    BaseType_t xret = xTaskCreate(wifi_scan_worker, "wifi_scan_rpc",
+                                  512u, ctx, 2u, &ctx->task);
+    if (xret != pdPASS) {
+        vSemaphoreDelete(ctx->done);
+        ctx->done = NULL;
+        return false;
+    }
+    return true;
+}
+
+bool m1_esp32_rpc_wifi_scan_async_poll(m1_esp32_rpc_wifi_scan_async_t *ctx)
+{
+    /* Non-blocking: take the semaphore only if it is already available. */
+    return xSemaphoreTake(ctx->done, (TickType_t)0) == pdTRUE;
+}
+
+void m1_esp32_rpc_wifi_scan_async_cancel(m1_esp32_rpc_wifi_scan_async_t *ctx)
+{
+    ctx->cancel = true;
+}
+
+void m1_esp32_rpc_wifi_scan_async_cleanup(m1_esp32_rpc_wifi_scan_async_t *ctx)
+{
+    if (ctx->done) {
+        vSemaphoreDelete(ctx->done);
+        ctx->done = NULL;
+    }
 }
 
 m1_esp32_rpc_status_t m1_esp32_rpc_wifi_disconnect(void)
@@ -733,4 +798,41 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_start(uint8_t channel)
 m1_esp32_rpc_status_t m1_esp32_rpc_zb_flood_stop(void)
 {
     return rpc_trigger(M1_ESP32_RPC_ZB_FLOOD_STOP);
+}
+
+/*==========================================================================*/
+/* System                                                                   */
+/*==========================================================================*/
+
+m1_esp32_rpc_status_t m1_esp32_rpc_sntp_sync(m1_esp32_rpc_utctime_t *out)
+{
+    m1_esp32_rpc_time_t wire;
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_SYS_SNTP_SYNC, NULL, 0u,
+                          (uint8_t *)&wire, sizeof(wire), &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st != M1_ESP32_RPC_OK)
+        return st;
+
+    if (rlen < sizeof(wire))
+        return M1_ESP32_RPC_ERR_BAD_FRAME;
+
+    /* Reject any response whose year field looks like the epoch (1970 or
+     * earlier) — the brain firmware may reply before NTP converges on slow
+     * connections.  Callers that need to retry should loop with a short delay
+     * (see wifi_sync_rtc()). */
+    if (wire.year <= 1970u)
+        return M1_ESP32_RPC_ERR_TIMEOUT;
+
+    if (out) {
+        out->year    = wire.year;
+        out->month   = wire.month;
+        out->day     = wire.day;
+        out->hour    = wire.hour;
+        out->minute  = wire.minute;
+        out->second  = wire.second;
+        out->weekday = wire.weekday;
+    }
+    return M1_ESP32_RPC_OK;
 }

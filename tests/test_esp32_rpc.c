@@ -27,6 +27,24 @@
 static uint64_t g_bitmap;
 uint64_t m1_esp32_caps_get_bitmap(void) { return g_bitmap; }
 
+/* Controllable capability-probe state for the self-priming regression tests
+ * (m1_esp32_active_transport() below).  Existing tests set g_bitmap directly
+ * and expect no re-probe, so default g_queried true (bitmap already
+ * "current") and only flip it for the dedicated priming tests. */
+static bool     g_queried;
+static bool     g_hal_ready;
+static uint64_t g_caps_init_bitmap;
+static int      g_caps_init_calls;
+
+bool m1_esp32_caps_is_queried(void) { return g_queried; }
+uint8_t m1_esp32_get_init_status(void) { return g_hal_ready ? 1u : 0u; }
+void m1_esp32_caps_init(void)
+{
+    g_caps_init_calls++;
+    g_bitmap  = g_caps_init_bitmap;
+    g_queried = true;
+}
+
 /* The default transport pointer references this symbol; provide a stub so the
  * module links.  Tests install a fake via m1_esp32_rpc_set_transport(). */
 uint8_t spi_AT_send_recv_bin(const uint8_t *tx_buf, int tx_len,
@@ -50,6 +68,12 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
     if (out_len) *out_len = 0;
     return 1; /* non-zero == transport error */
 }
+
+/* Controllable elapsed-time stub for the Phase 6 "wall-clock diagnostic"
+ * tests (issue #719) -- on-target this is populated by
+ * spi_m1link_send_recv_bin() from HAL_GetTick(). */
+static uint32_t g_last_elapsed_ms;
+uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return g_last_elapsed_ms; }
 
 /* ------------------------------------------------------------------ */
 /* Fake transport: replays a canned response frame.                   */
@@ -103,9 +127,14 @@ static int make_frame(uint8_t *buf, uint8_t msg_type, uint16_t msg_id,
 void setUp(void)
 {
     g_bitmap = 0u;
+    g_queried = true;
+    g_hal_ready = true;
+    g_caps_init_bitmap = 0u;
+    g_caps_init_calls = 0;
     g_canned_len = 0;
     g_ret = 0;
     g_last_tx_len = 0;
+    g_last_elapsed_ms = 0u;
     memset(g_canned, 0, sizeof(g_canned));
     m1_esp32_rpc_set_transport(fake_transport);
 }
@@ -231,6 +260,180 @@ void test_call_truncates_payload_to_capacity(void)
 }
 
 /* ================================================================== */
+/* m1_esp32_rpc_call() call diagnostics (Phase 2, issue #719)         */
+/* ================================================================== */
+
+void test_diag_no_call_yet_before_any_call(void)
+{
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(0u, d.attempted);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("no call yet", buf);
+}
+
+void test_diag_records_ok_call_with_payload_len(void)
+{
+    const uint8_t body[] = {0x00, 0xAA, 0xBB, 0xCC};
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body, sizeof(body));
+
+    uint8_t  resp[16];
+    uint16_t rlen = 0;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0,
+                          resp, sizeof(resp), &rlen, 1);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, st);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(1u, d.attempted);
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_WIFI_SCAN, d.msg_id);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, d.status);
+    TEST_ASSERT_EQUAL_UINT16(sizeof(body), d.resp_len);
+    TEST_ASSERT_EQUAL_INT(g_canned_len, d.rx_len);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 ok st0 r14 p4", buf);
+}
+
+void test_diag_records_transport_failure_as_no_reply(void)
+{
+    g_ret = 1; /* fake reports a transport error, 0 bytes returned */
+    g_last_elapsed_ms = 10000u; /* transport genuinely waited the full ~10s */
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 10);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(1u, d.attempted);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_TRANSPORT, d.status);
+    TEST_ASSERT_EQUAL_INT(0, d.rx_len);
+    TEST_ASSERT_EQUAL_UINT16(0u, d.resp_len);
+    TEST_ASSERT_EQUAL_UINT16(10000u, d.elapsed_ms);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0 t10s", buf);
+}
+
+/* Regression guard (issue #719 Phase 6): a repeat "no-reply" field report
+ * after the Phase 5 timeout widening cannot by itself tell apart "the scan
+ * genuinely needs longer than the budget" from "something is giving up
+ * early" -- both used to render the exact same line. Confirm the elapsed
+ * suffix reflects a short wait distinctly from a full one. */
+void test_diag_no_reply_reports_short_elapsed_when_transport_gives_up_early(void)
+{
+    g_ret = 1;
+    g_last_elapsed_ms = 1000u; /* gave up after ~1s despite a 10s budget */
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 10);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT16(1000u, d.elapsed_ms);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-reply st253 r0 p0 t1s", buf);
+}
+
+void test_diag_records_msgid_mismatch_as_bad_frame(void)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_NOW_STOP, NULL, 0);
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_NOW_START, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_BAD_FRAME, d.status);
+    TEST_ASSERT_TRUE(d.rx_len > 0);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0600 bad-frame st254 r10 p0", buf);
+}
+
+void test_diag_records_nak_status_code(void)
+{
+    const uint8_t nak_body[] = { M1_ESP32_RPC_ERR_UNSUPPORTED };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_NAK,
+                              M1_ESP32_RPC_WIFI_SCAN, nak_body, sizeof(nak_body));
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_UNSUPPORTED, d.status);
+    TEST_ASSERT_EQUAL_UINT16(0u, d.resp_len);
+
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 nak st10 r11 p0", buf);
+}
+
+void test_diag_set_transport_resets_snapshot(void)
+{
+    const uint8_t body[] = {0x00};
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_WIFI_SCAN, body, sizeof(body));
+    (void)m1_esp32_rpc_call(M1_ESP32_RPC_WIFI_SCAN, NULL, 0, NULL, 0, NULL, 1);
+
+    m1_esp32_rpc_call_diag_t d;
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(1u, d.attempted);
+
+    m1_esp32_rpc_set_transport(fake_transport); /* re-install: resets snapshot */
+    m1_esp32_rpc_get_call_diag(&d);
+    TEST_ASSERT_EQUAL_UINT8(0u, d.attempted);
+}
+
+void test_diag_format_null_snapshot_is_no_call(void)
+{
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(NULL, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("no call yet", buf);
+}
+
+void test_diag_format_null_buffer_is_safe(void)
+{
+    m1_esp32_rpc_call_diag_t d = { .attempted = 1u };
+    m1_esp32_rpc_call_diag_format(&d, NULL, 0u);
+    char buf[40];
+    m1_esp32_rpc_call_diag_format(&d, buf, 0u);
+}
+
+/* Host-side local failures (invalid args, no-mem) are distinct from an ESP32
+ * NAK: m1_esp32_rpc_call() records them with rx_len==-1 before any transport
+ * call, so the dashboard correctly says "bad-arg"/"no-mem" rather than "nak"
+ * (which would imply the ESP32 explicitly rejected a request that was never
+ * sent). */
+void test_diag_format_invalid_args_shows_bad_arg(void)
+{
+    m1_esp32_rpc_call_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.attempted = 1u;
+    d.status    = (uint8_t)M1_ESP32_RPC_ERR_INVALID;
+    d.rx_len    = -1;
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0000 bad-arg st2 r-1 p0", buf);
+}
+
+void test_diag_format_no_mem_shows_no_mem(void)
+{
+    m1_esp32_rpc_call_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.attempted = 1u;
+    d.msg_id    = (uint16_t)M1_ESP32_RPC_WIFI_SCAN;
+    d.status    = (uint8_t)M1_ESP32_RPC_ERR_NO_MEM;
+    d.rx_len    = -1;
+    m1_esp32_rpc_call_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("op0103 no-mem st5 r-1 p0", buf);
+}
+
+/* ================================================================== */
 /* m1_esp32_rpc_decode_resp() framing errors                          */
 /* ================================================================== */
 
@@ -327,6 +530,47 @@ void test_transport_at_for_legacy_cd3_at(void)
     TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_AT, m1_esp32_active_transport());
 }
 
+void test_transport_self_primes_when_not_yet_queried(void)
+{
+    /* Regression: before m1_esp32_caps_init() has ever run in a session (e.g.
+     * the very first ESP32 feature entered is WiFi Scan / "Scan & Connect",
+     * which is not capability-gated -- see scan_connect_on_enter() in
+     * m1_wifi_scene_menu.c), m1_esp32_active_transport() used to read back the
+     * still-zero cached bitmap and misclassify a brain-CD3 device as
+     * ESP32_TRANSPORT_NONE.  wifi_do_scan() then fell through to the legacy
+     * binary-SPI scan path instead of m1_esp32_rpc_wifi_scan(), so
+     * m1_esp32_rpc_call() was never invoked and the Dashboard's "Last feature
+     * RPC:" line read "no call yet" even after a scan was attempted. */
+    uint64_t cd3 = M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154_TX;
+    g_queried = false;
+    g_hal_ready = true;
+    g_caps_init_bitmap = cd3;
+    g_caps_init_calls = 0;
+
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC, m1_esp32_active_transport());
+    TEST_ASSERT_EQUAL_INT(1, g_caps_init_calls);
+    TEST_ASSERT_TRUE(g_queried);
+
+    /* A second call must not re-probe -- the bitmap is now cached. */
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC, m1_esp32_active_transport());
+    TEST_ASSERT_EQUAL_INT(1, g_caps_init_calls);
+}
+
+void test_transport_none_and_no_probe_when_hal_not_initialised(void)
+{
+    /* Priming must never run (and would time out) against a transport that
+     * isn't up yet -- mirrors m1_esp32_has_cap()'s own guard. */
+    g_queried = false;
+    g_hal_ready = false;
+    g_caps_init_bitmap = M1_ESP32_CAP_HANDSHAKE | M1_ESP32_CAP_802154_TX;
+    g_caps_init_calls = 0;
+    g_bitmap = 0u;
+
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_NONE, m1_esp32_active_transport());
+    TEST_ASSERT_EQUAL_INT(0, g_caps_init_calls);
+    TEST_ASSERT_FALSE(g_queried);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -337,6 +581,17 @@ int main(void)
     RUN_TEST(test_call_msgid_mismatch_is_bad_frame);
     RUN_TEST(test_call_oversize_request_rejected);
     RUN_TEST(test_call_truncates_payload_to_capacity);
+    RUN_TEST(test_diag_no_call_yet_before_any_call);
+    RUN_TEST(test_diag_records_ok_call_with_payload_len);
+    RUN_TEST(test_diag_records_transport_failure_as_no_reply);
+    RUN_TEST(test_diag_no_reply_reports_short_elapsed_when_transport_gives_up_early);
+    RUN_TEST(test_diag_records_msgid_mismatch_as_bad_frame);
+    RUN_TEST(test_diag_records_nak_status_code);
+    RUN_TEST(test_diag_set_transport_resets_snapshot);
+    RUN_TEST(test_diag_format_null_snapshot_is_no_call);
+    RUN_TEST(test_diag_format_null_buffer_is_safe);
+    RUN_TEST(test_diag_format_invalid_args_shows_bad_arg);
+    RUN_TEST(test_diag_format_no_mem_shows_no_mem);
     RUN_TEST(test_decode_bad_magic);
     RUN_TEST(test_decode_bad_crc);
     RUN_TEST(test_decode_short_buffer);
@@ -346,5 +601,7 @@ int main(void)
     RUN_TEST(test_transport_binary_spi_for_sin360);
     RUN_TEST(test_transport_at_for_generic_at_firmware);
     RUN_TEST(test_transport_at_for_legacy_cd3_at);
+    RUN_TEST(test_transport_self_primes_when_not_yet_queried);
+    RUN_TEST(test_transport_none_and_no_probe_when_hal_not_initialised);
     return UNITY_END();
 }

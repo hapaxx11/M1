@@ -334,18 +334,67 @@ request (skipping `IDLE`/`EVENT`/mismatched frames and reassembling `FRAG`
 chains). On-target, `spi_m1link_send_recv_bin()` (`esp_app_main.c`) supplies the
 single-transaction primitive using `HAL_SPI_TransmitReceive` on `hspi_esp`
 (SPI3) with manual CS (PB10) and HANDSHAKE (PD7) handling — it does **not**
-rely on the ESP-AT RTOS task, which the brain firmware does not run. The
-follow-up **poll budget is scaled from the caller's timeout (seconds)** and each
+depend on the ESP-AT RTOS task being present (the brain firmware does not run
+it), but it **does** take the same shared SPI3 mutex that task uses whenever
+it has been created, so the two can never clock the bus at the same time
+(issue #719 Phase 1). The
+follow-up **poll budget is paced on real wall-clock time** (via
+`m1_esp32_m1link_send_recv_timed()`, issue #719 Phase 7) and each
 poll is paced on the slave's HANDSHAKE with a scheduler yield (plus
 `HAL_SPI_Abort` self-heal after a failed transaction): a WiFi/BLE scan keeps the
 brain busy for ~1 s+ before it queues its RESP, so the old fixed 8-poll,
 busy-spin budget reliably timed out with "AP scan failed" before the reply
 arrived. The `M1_RPC` client defaults to this M1 Link transport, and the CD3
-detection probe (Probe 3 in `m1_esp32_caps.c`) uses it for `SYS_PING` /
+detection probe (Probe 2 in `m1_esp32_caps.c`, which runs before the host AT
+task is started) uses it for `SYS_PING` /
 `SYS_GET_STATUS` / `SYS_GET_FW_VERSION`; the AT presence and `AT+CMD?` probes
 stay on `spi_AT_send_recv_bin`. ESP-NOW (`m1_espnow_hal.c`) is the first
 consumer; other WiFi/BLE/802.15.4 features adopt it by branching on
 `m1_esp32_active_transport()`.
+
+> **Feature-call diagnostics (issue #719 Phase 2).** A successful CD3 probe
+> only proves the tiny single-frame `SYS_PING`/`SYS_GET_STATUS` exchange
+> works — it does not prove a bulk-list feature call (`WIFI_SCAN`,
+> `OFF_STA_SCAN_RESULTS`, `BLE_SCAN_RESULTS`, ...) transports, reassembles
+> (`FRAG`), and decodes correctly, since those are the only calls that
+> exercise the M1 Link reassembly loop across multiple polled transactions
+> against real hardware. `m1_esp32_rpc_call()` — the single client every
+> feature dispatches through — records a snapshot of its last invocation
+> (opcode, raw frame byte count, final status, decoded payload byte count) via
+> `m1_esp32_rpc_get_call_diag()`; `m1_esp32_rpc_call_diag_format()` renders it
+> as a one-line summary (e.g. `"op0103 no-reply st253 r0 p0"`) shown on
+> Settings > Dashboard page 5/5, so a "feature X still fails" report can be
+> replaced with the specific failure mode (no reply / bad frame / an ESP32 NAK
+> / a genuinely empty result) without needing a debugger.
+>
+> **Wall-clock diagnostic (issue #719 Phase 6).** A "no-reply" line by itself
+> cannot tell apart a transport that genuinely exhausted its whole poll
+> budget from one that gave up early — both rendered identically, which was
+> ambiguous when a repeat field report showed the same "no-reply" line after
+> the Phase 5 WIFI_SCAN timeout widening. The `no-reply` line now appends how
+> long the transport actually waited, e.g. `"op0103 no-reply st253 r0 p0
+> t10s"` (waited the full ~10 s budget) vs `"...t1s"` (gave up early despite
+> a 10 s budget) — pinpointing whether the next fix should widen the timeout
+> further or repair the poll-budget plumbing itself.
+>
+> **Poll-budget wall-clock fix (issue #719 Phase 7).** A field read-back
+> after the Phase 5 timeout widening showed `"op0103 no-reply st253 r0 p0
+> t0s"` — the transport gave up in well under a second despite the 10 s
+> WIFI_SCAN budget. Root cause: `spi_m1link_send_recv_bin()` converted the
+> caller's timeout into a fixed transaction **count**, assuming each poll
+> costs roughly `M1LINK_HS_TIMEOUT_MS` of wall-clock time; in practice a poll
+> completes in well under a millisecond whenever the brain's HANDSHAKE line
+> is already asserted, so that count-based budget could exhaust long before
+> the intended timeout elapsed, regardless of how it was scaled. The fix adds
+> `m1_esp32_m1link_send_recv_timed()`, which reuses the same framing/
+> reassembly logic (via a shared `m1link_step()` helper) but paces the poll
+> loop on an injected wall-clock function (`HAL_GetTick` on-target; a fake
+> counter in host tests) instead of a poll count, with a generous
+> `max_iterations` safety backstop. `spi_m1link_send_recv_bin()` now calls
+> this timed variant; the original poll-count-based
+> `m1_esp32_m1link_send_recv()` is unchanged for callers that want that
+> semantics. Field read-backs after the fix confirmed WiFi Scan completing
+> normally (`"op0103 ok st0 r456 p446"`).
 
 > **SPI clock note:** the brain reports ~4.7 MHz stable with a 10 MHz target, so
 > start the SPI3 prescaler conservative and only raise it after `SYS_PING` is
@@ -531,16 +580,20 @@ When the M1 initialises the ESP32, it performs a multi-step capability probe:
 
 3. **M1_RPC PING** (magic `0x4D31` "M1"): tried only when neither CMD_PING nor
    CMD_GET_STATUS succeeded (i.e. the firmware is not SiN360-style binary-SPI).
-   Detects CD3 firmware (`bedge117/m1-esp32-brain`), which uses the M1_RPC
-   binary protocol with a different frame format (see [M1_RPC Protocol](#m1_rpc-protocol)
-   below).  If PING succeeds, M1_RPC GET_STATUS is immediately issued to
-   retrieve the capability bitmap; if GET_STATUS fails, the CD3 conservative
-   profile macro (`M1_ESP32_CAP_PROFILE_CD3`) is applied.
+   Runs over the full-duplex M1 Link transport **before** the host AT task is
+   started (issue #719 Phase 1), so a brain that only speaks M1_RPC never
+   touches the AT task at all.  Detects CD3 firmware (`bedge117/m1-esp32-brain`),
+   which uses the M1_RPC binary protocol with a different frame format (see
+   [M1_RPC Protocol](#m1_rpc-protocol) below).  If PING succeeds, M1_RPC
+   GET_STATUS is immediately issued to retrieve the capability bitmap; if
+   GET_STATUS fails, the CD3 conservative profile macro
+   (`M1_ESP32_CAP_PROFILE_CD3`) is applied.
 
-4. **Stock `AT+CMD?`** (AT text command): tried only when steps 1–3 all fail
-   — i.e. for AT firmware that does not implement the binary extension
-   (CD3-AT base, dag) and the AT task (`get_esp32_main_init_status()`) is active.
-   `AT+CMD?` is part of the standard ESP-AT command set
+4. **Stock `AT+CMD?`** (AT text command): tried only when steps 1–3 all fail.
+   The host AT task is (re)started here if it is not already running
+   (`get_esp32_main_init_status()`), then a quick `AT\r\n` presence check
+   gates the heavier `AT+CMD?` probe.  `AT+CMD?` is part of the standard
+   ESP-AT command set
    ([reference](https://docs.espressif.com/projects/esp-at/en/latest/esp32/AT_Command_Set/Basic_AT_Commands.html#at-cmd))
    and is supported unchanged by every tracked AT firmware variant.
 
@@ -681,9 +734,18 @@ section above for the framing/pipelining details.
 > M1_RPC frames contain embedded `0x00` bytes in their header/CRC, so that
 > path truncated them and CD3 was misdetected as `Unknown (fallback)`.  The
 > receive copy now uses a length-based `esp32_spi_bin_copy()`
-> (`m1_csrc/esp32_spi_bin.h`, host-tested by `tests/test_esp32_spi_bin.c`), and
-> the CD3 probe runs **after** the `AT+CMD?` text probe so a working AT
-> firmware is never sent a binary frame.
+> (`m1_csrc/esp32_spi_bin.h`, host-tested by `tests/test_esp32_spi_bin.c`).
+>
+> **Probe ordering (issue #719 Phase 1):** the CD3 probe now runs **before**
+> the host AT task is started and before the `AT+CMD?` text probe, not after
+> — a brain that only speaks M1_RPC never needs the AT task, and probing it
+> first avoids racing `spi_trans_control_task` for SPI3 (`m1link_hal_xfer()`
+> takes the same shared mutex the AT task uses whenever that task has been
+> created). Real AT firmware simply does not answer the M1_RPC PING (it
+> speaks a different framing over the half-duplex `spi_slave_hd` protocol),
+> so the probe times out and falls through to start the AT task and run the
+> AT probes below it, the same way Probes 0/1 already speculatively try the
+> binary-SPI protocol against firmware that may not implement it.
 
 **Pure-logic helpers** for building and validating M1_RPC frames are in
 `m1_csrc/m1_esp32_caps.h` (static inline, no HAL deps):

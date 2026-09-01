@@ -12,6 +12,7 @@
  */
 
 #include "unity.h"
+#include <string.h>
 #include "m1_esp32_caps.h"
 #include <string.h>
 #include <stdint.h>
@@ -1127,6 +1128,136 @@ void test_format_fw_version_null_out_is_safe(void)
 }
 
 /* =========================================================================
+ * Probe diagnostics formatter (issue #719 Phase 0)
+ * =========================================================================*/
+
+void test_diag_format_null_snapshot_is_no_probe(void)
+{
+    char buf[40];
+    m1_esp32_caps_diag_format(NULL, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("no probe yet", buf);
+}
+
+void test_diag_format_none_outcome_is_no_probe(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));       /* outcome == M1_ESP32_PROBE_NONE */
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("no probe yet", buf);
+}
+
+void test_diag_format_hal_off(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.outcome = (uint8_t)M1_ESP32_PROBE_HAL_OFF;
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("HAL off", buf);
+}
+
+void test_diag_format_at_probed_no_rpc_detail(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.outcome   = (uint8_t)M1_ESP32_PROBE_AT;
+    d.at_cmd_ok = 1u;
+    /* rpc_attempted == 0, so no "rc/n/at" suffix should be appended */
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("AT probed", buf);
+}
+
+void test_diag_format_rpc_ok(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.outcome        = (uint8_t)M1_ESP32_PROBE_RPC_STATUS;
+    d.rpc_attempted  = 1u;
+    d.rpc_ping_ok    = 1u;
+    d.rpc_status_ok  = 1u;
+    d.rpc_ping_rc    = 0;
+    d.rpc_ping_rxlen = 20;
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("RPC ok rc0 n20 at0", buf);
+}
+
+/* The "Unknown (fallback)" case (issue #719): the M1_RPC PING was attempted,
+ * failed (rc != 0, 0 bytes back) and the host AT task was running at probe time
+ * — the contention signal we want the owner to be able to read off-device. */
+void test_diag_format_unknown_reports_rpc_detail_and_at_task(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.outcome        = (uint8_t)M1_ESP32_PROBE_UNKNOWN;
+    d.rpc_attempted  = 1u;
+    d.rpc_ping_rc    = 13; /* CTRL_ERR_REQUEST_TIMEOUT */
+    d.rpc_ping_rxlen = 0;
+    d.at_task_after  = 1u;
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("FAIL rc13 n0 at1", buf);
+}
+
+void test_diag_format_null_buffer_is_safe(void)
+{
+    m1_esp32_caps_diag_t d;
+    memset(&d, 0, sizeof(d));
+    d.outcome = (uint8_t)M1_ESP32_PROBE_UNKNOWN;
+    /* Must not crash / write when out buffer is NULL or zero-length. */
+    m1_esp32_caps_diag_format(&d, NULL, 0u);
+    char buf[1] = { 'x' };
+    m1_esp32_caps_diag_format(&d, buf, 0u);
+    TEST_ASSERT_EQUAL_CHAR('x', buf[0]);  /* untouched */
+}
+
+/* M1_ESP32_PROBE_NO_MEM: AT presence probe succeeded but the AT+CMD? response
+ * buffer allocation failed.  The formatter must render "no-mem/retry" rather
+ * than "no probe yet" (PROBE_NONE), so the dashboard clearly reports a local
+ * heap failure and not a missing probe. */
+void test_diag_format_no_mem_outcome_is_distinct(void)
+{
+    m1_esp32_caps_diag_t d;
+    char buf[40];
+    memset(&d, 0, sizeof(d));
+    d.outcome          = (uint8_t)M1_ESP32_PROBE_NO_MEM;
+    d.at_presence_ok   = 1u;  /* AT presence succeeded */
+    m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+    /* Must not render the PROBE_NONE string */
+    TEST_ASSERT_NOT_EQUAL(0, strcmp("no probe yet", buf));
+    TEST_ASSERT_EQUAL_STRING("no-mem/retry", buf);
+}
+
+/* Every distinct outcome renders a non-empty string that fits the 128px
+ * dashboard line (buffer 40, main-menu font ~21 chars — but the diag line uses
+ * the small dashboard font and m1_draw_text truncates, so we only assert the
+ * formatter itself stays within its buffer and is never empty). */
+void test_diag_format_all_outcomes_nonempty_and_bounded(void)
+{
+    static const uint8_t outcomes[] = {
+        M1_ESP32_PROBE_NONE, M1_ESP32_PROBE_HAL_OFF, M1_ESP32_PROBE_RETRY,
+        M1_ESP32_PROBE_BIN_STATUS, M1_ESP32_PROBE_BIN_PING, M1_ESP32_PROBE_AT,
+        M1_ESP32_PROBE_RPC_STATUS, M1_ESP32_PROBE_RPC_PROFILE,
+        M1_ESP32_PROBE_NO_MEM, M1_ESP32_PROBE_UNKNOWN
+    };
+    for (size_t i = 0; i < sizeof(outcomes) / sizeof(outcomes[0]); i++)
+    {
+        m1_esp32_caps_diag_t d;
+        char buf[40];
+        memset(&d, 0, sizeof(d));
+        d.outcome       = outcomes[i];
+        d.rpc_attempted = 1u;          /* exercise the longest branch */
+        d.rpc_ping_rc    = -1;
+        d.rpc_ping_rxlen = 512;
+        m1_esp32_caps_diag_format(&d, buf, sizeof(buf));
+        TEST_ASSERT_TRUE(buf[0] != '\0');
+        TEST_ASSERT_TRUE(strlen(buf) < sizeof(buf));
+    }
+}
+
+/* =========================================================================
  * main
  * =========================================================================*/
 
@@ -1226,6 +1357,17 @@ int main(void)
     /* "Feature not supported" screen wording (issue #668 defect 2) */
     RUN_TEST(test_unsupported_screen_lines_are_grammatical);
     RUN_TEST(test_unsupported_screen_lines_fit_display);
+
+    /* Probe diagnostics formatter (issue #719 Phase 0) */
+    RUN_TEST(test_diag_format_null_snapshot_is_no_probe);
+    RUN_TEST(test_diag_format_none_outcome_is_no_probe);
+    RUN_TEST(test_diag_format_hal_off);
+    RUN_TEST(test_diag_format_at_probed_no_rpc_detail);
+    RUN_TEST(test_diag_format_rpc_ok);
+    RUN_TEST(test_diag_format_unknown_reports_rpc_detail_and_at_task);
+    RUN_TEST(test_diag_format_null_buffer_is_safe);
+    RUN_TEST(test_diag_format_no_mem_outcome_is_distinct);
+    RUN_TEST(test_diag_format_all_outcomes_nonempty_and_bounded);
 
     return UNITY_END();
 }
