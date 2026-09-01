@@ -40,11 +40,13 @@
 - **Commit**: `espnow: Phase 3 — danger-gated remote trigger FSM`
 
 ### Phase 4 — Authenticated encryption (app-layer AES)
-- **Description**: `espnow_crypto.c/h` pure AEAD wrapper over the existing
-  `m1_crypto` AES-256-CBC with an auth tag + nonce, keyed off the pairing
-  confirm secret. Host tests (round-trip, tamper detection, wrong key).
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Description**: `espnow_crypto.c/h` pure Encrypt-then-MAC envelope over the
+  existing `m1_crypto` AES-256-CBC with a truncated HMAC-SHA256 auth tag, keyed
+  off the pairing confirm secret via SHA-256 key separation. Host tests
+  (RFC 4231 HMAC KAT, key derivation, round-trip, tamper detection, wrong key,
+  format guards).
+- **Status**: ✅ Done (21 tests pass)
+- **Commit**: _Phase 4: app-layer authenticated encryption (EtM envelope)_
 
 ### Phase 5 — Polish, docs, changelog
 - **Description**: Update `documentation/esp32_firmware.md` ESP-NOW section and

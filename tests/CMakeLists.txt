@@ -2960,6 +2960,36 @@ endif()
 add_test(NAME espnow_trigger COMMAND test_espnow_trigger)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_crypto (ESP-NOW app-layer authenticated
+# encryption — Phase 4)
+#
+# Encrypt-then-MAC envelope built on AES-256-CBC (m1_crypto) + HMAC-SHA256
+# (NFC/amiibo/sha256.c).  m1_crypto.c is compiled with
+# -DM1_CRYPTO_SKIP_UID_FUNCTIONS and paired with the deterministic
+# m1_crypto_stub.c IV generator so encryption is reproducible on the host.
+# ------------------------------------------------------------------
+add_executable(test_espnow_crypto
+    test_espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+)
+target_include_directories(test_espnow_crypto PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/NFC/amiibo
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_espnow_crypto PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+)
+target_link_libraries(test_espnow_crypto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_crypto PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_crypto COMMAND test_espnow_crypto)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.
