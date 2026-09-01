@@ -24,14 +24,14 @@
 #include "m1_virtual_kb.h"
 
 #define MSG_POLL_INTERVAL_MS  100u
-#define MSG_TEXT_UI_MAX       (M1_ESPNOW_SEND_PAYLOAD_MAX - ESPNOW_MSG_HDR_LEN)
+#define MSG_TEXT_UI_MAX       ESPNOW_MSG_TEXT_MAX
 
 static espnow_inbox_t s_inbox;
 static uint8_t s_peer_mac[ESPNOW_MAC_LEN];
 static char s_peer_name[M1_ESPNOW_PEER_NAME_MAX + 1u];
 static uint8_t s_next_seq;
 static uint32_t s_last_poll_tick;
-static char s_status[24];
+static char s_status[32];
 static bool s_have_peer;
 
 static void messages_poll(M1SceneApp *app)
@@ -86,7 +86,8 @@ static void messages_compose(M1SceneApp *app)
     s_next_seq++;
     snprintf(s_status, sizeof(s_status),
              m1_espnow_secure_link_encrypted() ? "Sent secure" :
-             (m1_espnow_secure_link_fallback() ? "Sent plain" : "Sent"));
+             (frame_len > M1_ESPNOW_SEND_PAYLOAD_MAX ? "Sent chunked" :
+              (m1_espnow_secure_link_fallback() ? "Sent compat" : "Sent")));
     app->need_redraw = true;
 }
 
@@ -97,7 +98,7 @@ static void messages_on_enter(M1SceneApp *app)
     if (!s_have_peer)
         snprintf(s_status, sizeof(s_status), "Scan Peers first");
     else
-        snprintf(s_status, sizeof(s_status), "OK: compose");
+        snprintf(s_status, sizeof(s_status), "40=C3  >40=Hapax");
     espnow_inbox_init(&s_inbox);
     s_next_seq = 0;
     s_last_poll_tick = HAL_GetTick();
@@ -144,7 +145,7 @@ static void messages_draw(M1SceneApp *app)
         char line[32];
         snprintf(line, sizeof(line), "Peer: %s", s_peer_name);
         m1_draw_text(&m1_u8g2, 2, 26, 120, line, TEXT_ALIGN_CENTER);
-        m1_draw_text(&m1_u8g2, 2, 40, 120, "OK to compose",
+        m1_draw_text(&m1_u8g2, 2, 40, 120, "OK compose (120 max)",
                      TEXT_ALIGN_CENTER);
     } else {
         uint8_t visible = M1_MENU_VIS(s_inbox.count);

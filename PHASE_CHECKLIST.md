@@ -18,10 +18,10 @@
 
 ### Phase 3 — Messages UI polish
 - **Description**: Raise the Messages composer to the full protocol text length and add concise on-screen hint/status text for chunked Hapax messages versus short compatibility messages.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Enable long ESP-NOW messages`
 
 ### Phase 4 — Docs, validation, cleanup
 - **Description**: Update related docs/changelog, run targeted tests, attempt firmware build, remove this checklist, and reply to the PR comment.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
