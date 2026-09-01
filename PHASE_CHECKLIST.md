@@ -13,10 +13,10 @@
 
 ### Phase 2 — Lifecycle and UI safety
 - **Description**: Restore ESP-NOW lifecycle ownership and remove unsafe receive-path handling.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Make Peer Link transfers nonblocking`
 
 ### Phase 3 — Completion validation
 - **Description**: Correct transfer/replay completion handling, update the plan, and validate affected host tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Make Peer Link transfers nonblocking`

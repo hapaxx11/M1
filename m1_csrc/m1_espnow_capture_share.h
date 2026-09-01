@@ -18,6 +18,11 @@ extern "C" {
 
 bool m1_espnow_capture_share_choose_and_send(espnow_share_kind_t kind);
 bool m1_espnow_capture_share_send_path(const char *path);
+bool m1_espnow_capture_share_choose_and_begin(espnow_share_kind_t kind);
+bool m1_espnow_capture_share_step(void);
+void m1_espnow_capture_share_cancel(void);
+bool m1_espnow_capture_share_active(void);
+const char *m1_espnow_capture_share_status(void);
 
 #ifdef __cplusplus
 }

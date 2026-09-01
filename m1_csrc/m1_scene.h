@@ -40,6 +40,8 @@ typedef enum {
     M1SceneEventDown,
     M1SceneEventLeft,
     M1SceneEventRight,
+    M1SceneEventSubghzTx,
+    M1SceneEventInfraredTx,
 } M1SceneEvent;
 
 /*============================================================================*/

@@ -33,6 +33,9 @@ static espnow_ft_ctx_t s_send_ctx;
 static char s_send_status[32];
 static char s_send_path[160];
 static char s_send_filename[ESPNOW_FT_FILENAME_MAX + 1u];
+static FIL s_send_file;
+static bool s_send_file_open;
+static bool s_send_active;
 
 static bool send_hal_send(const uint8_t mac[ESPNOW_FT_MAC_LEN],
                           const uint8_t *data, size_t len, void *ctx)
@@ -233,6 +236,7 @@ bool m1_espnow_capture_share_send_path(const char *path)
         HAL_Delay(1200);
         return false;
     }
+
     if (path == NULL || path[0] == '\0') {
         snprintf(s_send_status, sizeof(s_send_status), "No file selected");
         send_progress_draw_card();
@@ -292,3 +296,84 @@ bool m1_espnow_capture_share_choose_and_send(espnow_share_kind_t kind)
              fi->dir_name, fi->file_name);
     return m1_espnow_capture_share_send_path(path);
 }
+
+bool m1_espnow_capture_share_choose_and_begin(espnow_share_kind_t kind)
+    {
+        const char *dir = espnow_share_kind_dir(kind);
+        S_M1_file_info *fi;
+        char path[160];
+        uint8_t peer_mac[ESPNOW_MAC_LEN];
+        uint32_t file_size;
+        uint32_t crc;
+
+        if (dir == NULL)
+            return false;
+        fi = storage_browse(dir);
+        if (fi == NULL || !fi->file_is_selected || fi->status != FB_OK)
+            return false;
+        snprintf(path, sizeof(path), "%s/%s", fi->dir_name, fi->file_name);
+
+        if (!m1_espnow_scene_ctx_get_peer(peer_mac, NULL, 0) ||
+            !espnow_share_basename(path, s_send_filename, sizeof(s_send_filename)) ||
+            !espnow_share_is_shareable(s_send_filename) ||
+            !espnow_share_name_is_safe(s_send_filename, ESPNOW_FT_FILENAME_MAX) ||
+            !send_compute_crc(path, &file_size, &crc) ||
+            !m1_espnow_start(m1_espnow_get_channel()))
+            return false;
+        if (f_open(&s_send_file, path, FA_READ | FA_OPEN_EXISTING) != FR_OK) {
+            m1_espnow_stop();
+            return false;
+        }
+
+        s_send_file_open = true;
+        espnow_ft_send_init(&s_send_ctx, &s_send_hal, peer_mac, s_send_filename,
+                            file_size, crc, SEND_CHUNK_BYTES);
+        s_send_active = espnow_ft_send_offer(&s_send_ctx);
+        if (!s_send_active)
+            m1_espnow_capture_share_cancel();
+        return s_send_active;
+    }
+
+bool m1_espnow_capture_share_step(void)
+    {
+        uint8_t from_mac[ESPNOW_MAC_LEN], msg[64], msg_len = 0;
+
+        if (!s_send_active)
+            return false;
+        if (m1_espnow_secure_link_recv(from_mac, msg, sizeof(msg), &msg_len) &&
+            memcmp(from_mac, s_send_ctx.peer_mac, ESPNOW_MAC_LEN) == 0 &&
+            msg_len >= 2u)
+            espnow_ft_send_on_recv(&s_send_ctx, msg[0], msg[1], msg + 2, msg_len - 2u);
+        if (s_send_ctx.state == ESPNOW_FT_STATE_WAIT_ACK)
+            espnow_ft_send_check_timeout(&s_send_ctx);
+        if (s_send_ctx.state == ESPNOW_FT_STATE_SENDING) {
+            uint8_t buf[SEND_CHUNK_BYTES];
+            UINT br = 0;
+            if (f_lseek(&s_send_file, s_send_ctx.bytes_transferred) != FR_OK ||
+                f_read(&s_send_file, buf, s_send_ctx.chunk_size, &br) != FR_OK ||
+                br == 0u || !espnow_ft_send_chunk(&s_send_ctx, buf, br))
+                s_send_ctx.state = ESPNOW_FT_STATE_FAILED;
+        }
+        if (s_send_ctx.state == ESPNOW_FT_STATE_DONE ||
+            s_send_ctx.state == ESPNOW_FT_STATE_FAILED)
+            m1_espnow_capture_share_cancel();
+        return s_send_active;
+    }
+
+void m1_espnow_capture_share_cancel(void)
+    {
+        if (s_send_file_open) {
+            f_close(&s_send_file);
+            s_send_file_open = false;
+        }
+        if (s_send_active && s_send_ctx.state != ESPNOW_FT_STATE_DONE &&
+            s_send_ctx.state != ESPNOW_FT_STATE_FAILED)
+            m1_espnow_secure_link_send(
+                s_send_ctx.peer_mac,
+                (uint8_t[]){ESPNOW_FT_MSG_ABORT, s_send_ctx.current_seq}, 2u);
+        s_send_active = false;
+        m1_espnow_stop();
+    }
+
+bool m1_espnow_capture_share_active(void) { return s_send_active; }
+const char *m1_espnow_capture_share_status(void) { return s_send_status; }

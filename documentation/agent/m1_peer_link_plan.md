@@ -119,11 +119,11 @@ so early phases unblock later ones.
 ### Phase 0 — De-risk & enablement (no user-visible feature)
 - Decide the capability-detection strategy: brain self-reports bit 24, **or** add
   a Hapax-side `NOW_START`/ping fallback probe in `m1_esp32_caps_init()`.
-- Specify (in `documentation/esp32_firmware.md`) the multi-transaction **RPC
-  chunking** scheme for `NOW_SEND` / `NOW_RECV_GET` so payloads > 42 bytes work;
-  implement the pure host-side chunk splitter/reassembler with tests. No brain
-  change is required to *reassemble* on receive; sending large frames does need
-  brain cooperation — document which side each part lands on.
+- Specify (in `documentation/esp32_firmware.md`) STM32 application-layer
+  fragmentation for `NOW_SEND` / `NOW_RECV_GET` so payloads > 42 bytes work;
+  implement the pure host-side chunk splitter/reassembler with tests. Both
+  directions use multiple ordinary ≤42-byte frames, so no brain-firmware
+  change is required.
 - **Deliverable:** capability path decided + chunking helper (pure + tested).
 - **Host tests:** chunk split/reassemble round-trip, boundary at 42/240 bytes.
 - **Hardware gate:** none (pure logic); bench-confirm probe once brain is ready.

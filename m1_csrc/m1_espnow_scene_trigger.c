@@ -15,6 +15,8 @@
 #include "m1_espnow_scene.h"
 #include "m1_espnow_scene_ctx.h"
 #include "m1_espnow_trigger_exec.h"
+#include "m1_sub_ghz.h"
+#include "m1_ir_universal.h"
 #include "m1_scene.h"
 #include "m1_submenu.h"
 #include "m1_espnow_hal.h"
@@ -25,6 +27,7 @@
 #include "m1_lcd.h"
 #include "m1_storage.h"
 #include "m1_file_browser.h"
+#include "ff.h"
 
 #define TRIG_MENU_COUNT         2u
 #define TRIG_KIND_COUNT         2u
@@ -65,6 +68,8 @@ static uint32_t s_request_start_tick;
 static bool s_have_peer;
 static bool s_pending_request;
 static bool s_terminal;
+static bool s_execution_active;
+static const char *s_subghz_tmp_path;
 
 static const char *trigger_kind_label(espnow_share_kind_t kind)
 {
@@ -121,6 +126,41 @@ static void trigger_reset_receiver(void)
 {
     espnow_trigger_init(&s_resp_ctx, ESPNOW_TRIG_ROLE_RESPONDER, true);
     s_pending_request = false;
+    s_execution_active = false;
+}
+
+static bool trigger_start_execution(void)
+{
+    char path[96];
+
+    if (!espnow_trig_build_replay_path(s_resp_ctx.kind, s_resp_ctx.name,
+                                       path, sizeof(path)))
+        return false;
+
+    if (s_resp_ctx.kind == ESPNOW_SHARE_KIND_SUBGHZ) {
+        return sub_ghz_replay_prepare_flipper(path, &s_subghz_tmp_path) == 0u &&
+               sub_ghz_replay_start_async() == 0u;
+    }
+    if (s_resp_ctx.kind == ESPNOW_SHARE_KIND_IR)
+        return m1_ir_universal_start_file_all(path);
+    return false;
+}
+
+static void trigger_finish_execution(M1SceneApp *app, bool ok)
+{
+    if (s_subghz_tmp_path != NULL) {
+        f_unlink(s_subghz_tmp_path);
+        s_subghz_tmp_path = NULL;
+    }
+    espnow_trigger_execution_done(&s_resp_ctx, ok);
+    trigger_send_status(ESPNOW_TRIG_MSG_RESULT,
+                        ok ? ESPNOW_TRIG_RESULT_OK : ESPNOW_TRIG_RESULT_FAIL);
+    snprintf(s_status, sizeof(s_status), "%s",
+             ok ? "Triggered OK" : "Trigger failed");
+    s_execution_active = false;
+    s_terminal = true;
+    s_pending_request = false;
+    app->need_redraw = true;
 }
 
 /*==========================================================================*/
@@ -416,7 +456,6 @@ static bool trigger_listen_on_event(M1SceneApp *app, M1SceneEvent event)
     switch (event) {
     case M1SceneEventOk:
         if (s_pending_request && espnow_trigger_grant(&s_resp_ctx)) {
-            bool ok;
             if (!trigger_send_status(ESPNOW_TRIG_MSG_ACCEPT, 0u)) {
                 snprintf(s_status, sizeof(s_status), "Send failed");
                 s_terminal = true;
@@ -425,22 +464,43 @@ static bool trigger_listen_on_event(M1SceneApp *app, M1SceneEvent event)
                 return true;
             }
             snprintf(s_status, sizeof(s_status), "Executing...");
-            trigger_draw_card("Allow Trigger", s_detail, s_peer_name,
-                              s_status);
-            ok = m1_espnow_trigger_execute(s_resp_ctx.kind, s_resp_ctx.name);
-            espnow_trigger_execution_done(&s_resp_ctx, ok);
-            trigger_send_status(ESPNOW_TRIG_MSG_RESULT,
-                                ok ? ESPNOW_TRIG_RESULT_OK
-                                   : ESPNOW_TRIG_RESULT_FAIL);
-            snprintf(s_status, sizeof(s_status), "%s",
-                     ok ? "Triggered OK" : "Trigger failed");
-            s_terminal = true;
-            s_pending_request = false;
-            app->need_redraw = true;
+            s_execution_active = trigger_start_execution();
+            if (!s_execution_active)
+                trigger_finish_execution(app, false);
+            else
+                app->need_redraw = true;
         }
         return true;
 
+    case M1SceneEventSubghzTx:
+        if (s_execution_active &&
+            s_resp_ctx.kind == ESPNOW_SHARE_KIND_SUBGHZ) {
+            sub_ghz_replay_async_status_t status =
+                sub_ghz_replay_continue_async(false);
+            if (status != SUBGHZ_REPLAY_ASYNC_RUNNING)
+                trigger_finish_execution(app, status == SUBGHZ_REPLAY_ASYNC_DONE);
+            return true;
+        }
+        return false;
+
+    case M1SceneEventInfraredTx:
+        if (s_execution_active && s_resp_ctx.kind == ESPNOW_SHARE_KIND_IR) {
+            m1_ir_file_tx_status_t status = m1_ir_universal_continue_file_all();
+            if (status != M1_IR_FILE_TX_RUNNING)
+                trigger_finish_execution(app, status == M1_IR_FILE_TX_DONE);
+            return true;
+        }
+        return false;
+
     case M1SceneEventBack:
+        if (s_execution_active) {
+            if (s_resp_ctx.kind == ESPNOW_SHARE_KIND_SUBGHZ)
+                sub_ghz_replay_abort();
+            else if (s_resp_ctx.kind == ESPNOW_SHARE_KIND_IR)
+                m1_ir_universal_abort_file_all();
+            trigger_finish_execution(app, false);
+            return true;
+        }
         if (s_pending_request) {
             espnow_trigger_deny(&s_resp_ctx);
             trigger_send_status(ESPNOW_TRIG_MSG_REJECT,

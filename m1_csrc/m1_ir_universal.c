@@ -93,6 +93,8 @@ typedef struct {
 
 static ir_universal_cmd_t s_commands[IR_UNIVERSAL_MAX_CMDS];
 static uint16_t s_cmd_count;
+static uint16_t s_file_tx_index;
+static bool s_file_tx_active;
 static char s_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
 static uint16_t s_browse_count;
 static uint16_t s_browse_page;
@@ -1002,35 +1004,73 @@ static uint16_t parse_ir_file(const char *filepath)
 	return count;
 } // static uint16_t parse_ir_file(...)
 
-bool m1_ir_universal_send_file_all(const char *ir_file_path)
+static bool start_next_file_command(void)
 {
-	bool sent_any = false;
-	bool cancelled = false;
+	while (s_file_tx_index < s_cmd_count) {
+		if (s_commands[s_file_tx_index++].valid) {
+			transmit_command(&s_commands[s_file_tx_index - 1u]);
+			return true;
+		}
+	}
+	return false;
+}
 
+bool m1_ir_universal_start_file_all(const char *ir_file_path)
+{
 	if (ir_file_path == NULL || ir_file_path[0] == '\0')
 		return false;
 
 	strncpy(s_raw_tx_filepath, ir_file_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
 	s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
 	s_cmd_count = parse_ir_file(ir_file_path);
-	if (s_cmd_count == 0)
-		return false;
+	s_file_tx_index = 0;
+	s_file_tx_active = s_cmd_count > 0 && start_next_file_command();
+	return s_file_tx_active;
+}
 
-	for (uint16_t i = 0; i < s_cmd_count && !cancelled; i++)
-	{
-		if (!s_commands[i].valid)
-			continue;
+m1_ir_file_tx_status_t m1_ir_universal_continue_file_all(void)
+{
+	if (!s_file_tx_active)
+		return M1_IR_FILE_TX_FAILED;
 
-		transmit_command(&s_commands[i]);
-		sent_any = true;
-		(void)wait_for_ir_tx_complete(&cancelled);
-		infrared_encode_sys_deinit();
-		if (!cancelled)
-			vTaskDelay(pdMS_TO_TICKS(200));
-	}
+	infrared_encode_sys_deinit();
+	if (start_next_file_command())
+		return M1_IR_FILE_TX_RUNNING;
 
+	s_file_tx_active = false;
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
 	                  LED_FASTBLINK_ONTIME_OFF);
+	return M1_IR_FILE_TX_DONE;
+}
+
+void m1_ir_universal_abort_file_all(void)
+{
+	if (!s_file_tx_active)
+		return;
+	s_file_tx_active = false;
+	infrared_encode_sys_deinit();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+}
+
+bool m1_ir_universal_send_file_all(const char *ir_file_path)
+{
+	bool sent_any;
+	bool cancelled = false;
+
+	if (!m1_ir_universal_start_file_all(ir_file_path))
+		return false;
+
+	sent_any = true;
+	while (!cancelled) {
+		if (!wait_for_ir_tx_complete(&cancelled)) {
+			m1_ir_universal_abort_file_all();
+			return false;
+		}
+		if (m1_ir_universal_continue_file_all() != M1_IR_FILE_TX_RUNNING)
+			break;
+		vTaskDelay(pdMS_TO_TICKS(200));
+	}
 	return sent_any && !cancelled;
 }
 
