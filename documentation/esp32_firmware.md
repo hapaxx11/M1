@@ -861,11 +861,13 @@ stubbed ESP-NOW HAL calls.
   category, browses the SD card, and streams the file to the paired peer.  Saved
   capture action menus also expose Send to Peer shortcuts that reuse the same
   paired-peer transfer flow.  The receiver stores into `/ESPNOW/`.
-- *Messaging (`espnow_message`)* — Builds/parses short text frames (type `0x20`,
+- *Messaging (`espnow_message`)* — Builds/parses text frames (type `0x20`,
   ≤ 120 chars) and maintains a bounded inbox ring (cap 8) with eviction and
-  duplicate suppression.  The first Messages scene caps composed text to one
-  direct 42-byte send frame (40 text bytes plus the 2-byte message header) until
-  scene-level fragmentation is wired for longer chat messages.
+  duplicate suppression.  The Messages scene accepts the full 120-byte text
+  payload.  Short messages fit one direct 42-byte `NOW_SEND` frame for
+  C3/other-firmware friendliness; longer plaintext fallback messages and
+  encrypted envelopes are split into `espnow_chunk` fragments and reassembled on
+  STM32 without any ESP32 brain firmware change.
 - *Remote trigger (`espnow_trigger`)* — A danger-gated request → consent →
   execute → result state machine (types `0x30..0x33`) that asks a paired peer to
   replay a **named** saved capture; it reuses `espnow_shareable` name-safety and

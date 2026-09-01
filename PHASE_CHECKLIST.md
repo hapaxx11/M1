@@ -23,5 +23,5 @@
 
 ### Phase 4 — Docs, validation, cleanup
 - **Description**: Update related docs/changelog, run targeted tests, attempt firmware build, remove this checklist, and reply to the PR comment.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Document ESP-NOW long messages`

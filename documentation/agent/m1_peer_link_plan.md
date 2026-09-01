@@ -70,7 +70,7 @@ discovery, capture sharing, remote trigger.**
 |------------|-------------|--------------|
 | **Peer discovery** | ✅ `espnow_peer_session` + Scan scene + confirm code; `M1_ESP32_CAP_ESPNOW` is temporarily inferred for confirmed native CD3 via STM32 M1_RPC probe fallback | None (polish only; brain should eventually self-report bit 24) |
 | **Capture sharing** | ✅ Sender UI offers a Peer Link category picker and saved-item Send to Peer shortcuts for Sub-GHz / NFC / RFID / IR captures, then streams the selected file to the paired peer; receiver still stores into `/ESPNOW/` | Two-device bench validation |
-| **Peer messaging** | ✅ Messages scene uses VKB compose plus the `espnow_message` inbox/framing module for paired-peer short text | Scene-level chunking for messages longer than one direct `NOW_SEND` call |
+| **Peer messaging** | ✅ Messages scene uses VKB compose plus the `espnow_message` inbox/framing module for paired-peer text up to 120 bytes; short messages stay direct-frame/C3-friendly and longer messages use STM32-side chunking | Two-device bench validation, especially against other M1 firmware compatibility |
 | **AES-256 encryption** | ✅ Optional app-layer Encrypt-then-MAC is wired for paired app payloads. Peers opportunistically exchange plaintext crypto HELLO/ACK control frames; once acknowledged, payloads are AES-256-CBC + HMAC-SHA256 envelopes over the fragment helper. If negotiation does not complete, the UI keeps a plaintext fallback for compatibility. | Two-device bench validation and a future stronger key exchange before treating it as robust confidentiality |
 | **Remote trigger** | ✅ Peer Link → Remote Trigger lets a paired sender request Sub-GHz/IR replay by safe saved-capture name; the receiver must explicitly allow incoming triggers and confirm each request before bounded replay | Two-device bench validation and future expansion only if additional capture kinds get safe bounded execution paths |
 
@@ -85,9 +85,8 @@ Two enablement blockers apply to **all** on-device use, regardless of pillar:
 2. **Payload size.** The fixed 64-byte SPI-HD transaction caps ESP-NOW app data
    at **42 bytes per `NOW_SEND` call** (`esp32_firmware.md:795-800`); this branch
    adds STM32-side app-layer chunking/reassembly for full 240-byte logical
-   messages.  The first Messages UI intentionally caps composed text to one
-   direct frame; scene integration still needs to route larger app payloads
-   through the chunk helper.
+   messages, and the Messages UI now uses it for text beyond the direct-frame
+   C3-friendly size.
 
 ---
 
@@ -153,9 +152,10 @@ so early phases unblock later ones.
   for messages longer than one SPI call.
 - **Status:** Messages UI is wired through Peer Link → Messages, with VKB
   compose, paired-peer send, receive polling and an 8-entry inbox display. The
-  UI currently limits text to 40 bytes so frames fit the direct 42-byte
-  `NOW_SEND` budget until scene-level fragmentation is added.
-- **Deliverable:** two paired M1s exchange short text messages.
+  composer accepts the full 120-byte `espnow_message` payload; short messages
+  fit a direct 42-byte `NOW_SEND` frame for C3/other-firmware friendliness, while
+  longer messages are fragmented/reassembled on STM32 using `espnow_chunk`.
+- **Deliverable:** two paired M1s exchange text messages up to the protocol max.
 - **Host tests:** `test_espnow_message.c` — framing, ordering, truncation,
   type-demux against pairing/FT/game types.
 - **Hardware gate:** two-device chat.
