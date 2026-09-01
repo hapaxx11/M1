@@ -70,6 +70,21 @@ static int     g_fail_at;          /* transaction index to fail (-1 = never) */
 static uint8_t g_tx_type[MAX_TXNS]; /* msg_type of each master frame */
 static int     g_tx_calls;
 
+/* Fake wall-clock for m1_esp32_m1link_send_recv_timed() tests (issue #719
+ * Phase 7): each call returns the current counter, then advances it by
+ * g_fake_step milliseconds -- letting a test dial in "many fast transactions"
+ * (small step) vs. "budget expires after N iterations" (large step) vs. a
+ * "stuck clock" (step == 0) without any real timing dependency. */
+static uint32_t g_fake_now;
+static uint32_t g_fake_step;
+
+static uint32_t fake_now_ms(void)
+{
+    uint32_t t = g_fake_now;
+    g_fake_now += g_fake_step;
+    return t;
+}
+
 static void fake_reset(void)
 {
     memset(g_slave, 0, sizeof(g_slave));
@@ -78,6 +93,8 @@ static void fake_reset(void)
     g_fail_at = -1;
     memset(g_tx_type, 0, sizeof(g_tx_type));
     g_tx_calls = 0;
+    g_fake_now = 0u;
+    g_fake_step = 1u;
 }
 
 /* Queue a full slave frame (header+payload+crc) as the reply for the Nth txn. */
@@ -580,6 +597,167 @@ void test_m1link_ignores_stray_magic_before_real_frame(void)
     TEST_ASSERT_EQUAL_MEMORY(cookie, pl, 4);
 }
 
+/* ------------------------------------------------------------------ */
+/* m1_esp32_m1link_send_recv_timed() -- wall-clock budget (issue #719 Phase 7) */
+/* ------------------------------------------------------------------ */
+
+/* ---- Paces on wall-clock time, not a fixed poll count ------------------
+ * 20 IDLE polls (far more than the OLD hard-coded poll budgets used
+ * elsewhere in this file, e.g. 8) are needed before the reply lands. With a
+ * generous max_iterations safety net and a fake clock that advances slowly,
+ * the timed variant must keep polling and succeed -- proving it isn't
+ * capped by any fixed transaction count, only by real elapsed time. */
+void test_m1link_timed_paces_on_wallclock_not_poll_count(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_WIFI_SCAN, NULL, 0u);
+
+    for (int i = 0; i < 20; i++)
+        queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+    const uint8_t scan_resp[2] = {0x00, 0x00};
+    queue_frame(M1_ESP32_RPC_RESP, M1_ESP32_RPC_WIFI_SCAN, scan_resp, 2u);
+
+    g_fake_now = 0u;
+    g_fake_step = 10u; /* each transaction "costs" 10ms of wall-clock time */
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv_timed(
+        fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 10000u, 100,
+        s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_EQUAL_UINT8(0u, rc);
+    const uint8_t *pl = NULL; uint16_t pl_len = 0u;
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_OK,
+        m1_esp32_rpc_decode_resp(s_out, (uint16_t)out_len,
+                                 M1_ESP32_RPC_WIFI_SCAN, &pl, &pl_len));
+    TEST_ASSERT_EQUAL_UINT16(2u, pl_len);
+    TEST_ASSERT_EQUAL_MEMORY(scan_resp, pl, 2);
+    /* All 20 IDLE polls plus the final RESP transaction were consumed. */
+    TEST_ASSERT_EQUAL_INT(21, g_tx_calls);
+}
+
+/* ---- Gives up once the wall-clock budget is exhausted, well before
+ * max_iterations is reached -- the actual Phase 7 bug this variant fixes:
+ * a reply that never comes must not be waited on forever, but the give-up
+ * point must be driven by elapsed time, not a poll count. */
+void test_m1link_timed_gives_up_after_wallclock_timeout(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    for (int i = 0; i < 5; i++)
+        queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+
+    g_fake_now = 0u;
+    g_fake_step = 1000u; /* each check "costs" a full second */
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv_timed(
+        fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 2500u, 100,
+        s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_NOT_EQUAL(0u, rc);
+    TEST_ASSERT_EQUAL_INT(0, out_len);
+    /* Elapsed time (not the 100-iteration safety net) ends the loop. */
+    TEST_ASSERT_EQUAL_INT(3, g_tx_calls);
+}
+
+/* ---- max_iterations is a safety net independent of the clock source ----
+ * If the clock source ever fails to advance (stuck), the loop must still
+ * terminate via the hard iteration cap rather than spinning forever. */
+void test_m1link_timed_max_iterations_safety_net(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    for (int i = 0; i < 10; i++)
+        queue_frame(M1_ESP32_RPC_IDLE, 0u, NULL, 0u);
+
+    g_fake_now = 0u;
+    g_fake_step = 0u; /* stuck clock: never advances */
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv_timed(
+        fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000000u, 5,
+        s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_NOT_EQUAL(0u, rc);
+    TEST_ASSERT_EQUAL_INT(0, out_len);
+    TEST_ASSERT_EQUAL_INT(5, g_tx_calls);
+}
+
+/* ---- Transport error still propagates through the timed variant -------- */
+void test_m1link_timed_transport_error(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    g_fail_at = 0;
+    g_fake_now = 0u;
+    g_fake_step = 10u;
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv_timed(
+        fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000u, 10,
+        s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_EQUAL_UINT8(2u, rc);
+    TEST_ASSERT_EQUAL_INT(0, out_len);
+}
+
+/* ---- FRAG reassembly still works identically through the timed variant - */
+void test_m1link_timed_reassembles_fragments(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_SYS_GET_STATUS, NULL, 0u);
+
+    uint8_t part1[5] = {0x10, 0x11, 0x12, 0x13, 0x14};
+    uint8_t part2[3] = {0x20, 0x21, 0x22};
+    uint8_t part3[2] = {0x30, 0x31};
+    queue_frame(M1_ESP32_RPC_FRAG, M1_ESP32_RPC_SYS_GET_STATUS, part1, 5u);
+    queue_frame(M1_ESP32_RPC_FRAG, M1_ESP32_RPC_SYS_GET_STATUS, part2, 3u);
+    queue_frame(M1_ESP32_RPC_RESP, M1_ESP32_RPC_SYS_GET_STATUS, part3, 2u);
+
+    g_fake_now = 0u;
+    g_fake_step = 5u;
+
+    int out_len = 0;
+    uint8_t rc = m1_esp32_m1link_send_recv_timed(
+        fake_xfer, NULL, s_tx, s_rx, MTU, fake_now_ms, 1000u, 10,
+        s_req, req_len, s_out, (int)sizeof(s_out), &out_len);
+    TEST_ASSERT_EQUAL_UINT8(0u, rc);
+
+    const uint8_t *pl = NULL; uint16_t pl_len = 0u;
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_OK,
+        m1_esp32_rpc_decode_resp(s_out, (uint16_t)out_len,
+                                 M1_ESP32_RPC_SYS_GET_STATUS, &pl, &pl_len));
+    TEST_ASSERT_EQUAL_UINT16(10u, pl_len);
+    uint8_t expect[10] = {0x10,0x11,0x12,0x13,0x14, 0x20,0x21,0x22, 0x30,0x31};
+    TEST_ASSERT_EQUAL_MEMORY(expect, pl, 10);
+}
+
+/* ---- Invalid arguments are rejected ------------------------------------ */
+void test_m1link_timed_invalid_args(void)
+{
+    int req_len = build_req(M1_ESP32_RPC_SYS_PING, NULL, 0u);
+    int out_len = 0;
+    g_fake_now = 0u;
+    g_fake_step = 10u;
+
+    /* NULL now_ms */
+    TEST_ASSERT_NOT_EQUAL(0u,
+        m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
+                                        NULL, 1000u, 10,
+                                        s_req, req_len, s_out,
+                                        (int)sizeof(s_out), &out_len));
+    /* max_iterations < 1 */
+    TEST_ASSERT_NOT_EQUAL(0u,
+        m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
+                                        fake_now_ms, 1000u, 0,
+                                        s_req, req_len, s_out,
+                                        (int)sizeof(s_out), &out_len));
+    /* NULL xfer */
+    TEST_ASSERT_NOT_EQUAL(0u,
+        m1_esp32_m1link_send_recv_timed(NULL, NULL, s_tx, s_rx, MTU,
+                                        fake_now_ms, 1000u, 10,
+                                        s_req, req_len, s_out,
+                                        (int)sizeof(s_out), &out_len));
+    /* tx_len > mtu */
+    TEST_ASSERT_NOT_EQUAL(0u,
+        m1_esp32_m1link_send_recv_timed(fake_xfer, NULL, s_tx, s_rx, MTU,
+                                        fake_now_ms, 1000u, 10,
+                                        s_req, (int)MTU + 1, s_out,
+                                        (int)sizeof(s_out), &out_len));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -599,5 +777,11 @@ int main(void)
     RUN_TEST(test_m1link_recovers_byte_shifted_ping);
     RUN_TEST(test_m1link_reassembles_shifted_fragments);
     RUN_TEST(test_m1link_ignores_stray_magic_before_real_frame);
+    RUN_TEST(test_m1link_timed_paces_on_wallclock_not_poll_count);
+    RUN_TEST(test_m1link_timed_gives_up_after_wallclock_timeout);
+    RUN_TEST(test_m1link_timed_max_iterations_safety_net);
+    RUN_TEST(test_m1link_timed_transport_error);
+    RUN_TEST(test_m1link_timed_reassembles_fragments);
+    RUN_TEST(test_m1link_timed_invalid_args);
     return UNITY_END();
 }

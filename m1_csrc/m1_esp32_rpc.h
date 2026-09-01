@@ -540,7 +540,82 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
  * WIFI_SCAN timeout means something gave up far earlier than it should have
  * (a poll-budget/timeout bug, not a too-short number). Other outcomes (ok /
  * bad-frame / nak) already imply a prompt reply, so their line is unchanged.
+ *
+ * --------------------------------------------------------------------------
+ * Poll-budget wall-clock FIX (issue #719 Phase 7)
+ *
+ * A field read-back after Phase 6 landed showed "op0103 no-reply st253 r0 p0
+ * t0s" — the transport gave up in well under a second despite the 10 s
+ * WIFI_SCAN budget, confirming the second (buggy) case Phase 6 called out.
+ *
+ * Root cause: spi_m1link_send_recv_bin() converted the caller's timeout_sec
+ * into a fixed transaction COUNT (max_polls) by assuming each poll consumes
+ * roughly M1LINK_HS_TIMEOUT_MS of wall-clock time. In practice the brain
+ * typically keeps its HANDSHAKE line asserted between transactions, so each
+ * poll (HANDSHAKE wait + one fixed-size SPI transfer) can complete in well
+ * under a millisecond — nowhere near the assumed ~50 ms/poll the scaling
+ * math used. The fixed poll count then exhausts almost instantly, long
+ * before the caller's real timeout_sec has elapsed, regardless of how that
+ * count was scaled.
+ *
+ * Fix: m1_esp32_m1link_send_recv() (fixed poll-COUNT budget) is unchanged —
+ * it stays exactly as-is for callers that want that semantics and remains
+ * covered by its existing host tests. spi_m1link_send_recv_bin() instead
+ * uses the new m1_esp32_m1link_send_recv_timed(), which paces itself on
+ * actual elapsed wall-clock time (via an injected clock function — HAL_GetTick
+ * on-target, a fake counter in host tests) rather than a poll count, so it
+ * always waits the caller's full timeout_sec regardless of how fast any
+ * individual transaction happens to complete. A generous max_iterations is
+ * still passed as a safety backstop against a runaway loop if the clock
+ * source ever misbehaves.
  * ========================================================================= */
+
+/**
+ * Wall-clock source used by m1_esp32_m1link_send_recv_timed() to pace its
+ * poll loop. On-target this is HAL_GetTick (matching signature exactly); host
+ * tests inject a fake counter to simulate the passage of time without a real
+ * clock (see issue #719 Phase 7).
+ *
+ * @return Monotonically non-decreasing milliseconds since some fixed epoch.
+ */
+typedef uint32_t (*m1_esp32_m1link_clock_fn)(void);
+
+/**
+ * Wall-clock-paced variant of m1_esp32_m1link_send_recv() (issue #719
+ * Phase 7). Sends @p tx_buf on the first transaction, then follow-up IDLE
+ * polls, exactly like m1_esp32_m1link_send_recv() — but keeps polling until
+ * either a matching RESP/NAK arrives, @p timeout_ms of wall-clock time (per
+ * @p now_ms) has elapsed, or the @p max_iterations safety backstop is hit
+ * (whichever comes first). Unlike a fixed poll count, this correctly waits
+ * the caller's full budget even when individual transactions complete much
+ * faster than assumed — see the "Poll-budget wall-clock FIX" comment above.
+ *
+ * @param xfer           Single-transaction full-duplex exchange primitive
+ * @param ctx            Opaque context passed through to @p xfer
+ * @param scratch_tx     Caller-provided @p mtu-byte TX working buffer
+ * @param scratch_rx     Caller-provided @p mtu-byte RX working buffer
+ * @param mtu            Transaction size (M1_ESP32_M1LINK_MTU on-target)
+ * @param now_ms         Wall-clock source (>= 1 call between iterations)
+ * @param timeout_ms     Wall-clock budget to keep polling for, in ms
+ * @param max_iterations Hard cap on transactions issued (>= 1); a safety net
+ *                       independent of @p now_ms in case the clock source
+ *                       ever fails to advance
+ * @param tx_buf         Request frame bytes (built by m1_esp32_rpc_build_req)
+ * @param tx_len         Request frame length (> 0, <= @p mtu)
+ * @param rx_buf         Output buffer for the matched response frame
+ * @param rx_buf_size    Capacity of @p rx_buf
+ * @param out_len        [out] response frame bytes written (0 on failure)
+ * @return 0 on success; non-zero on invalid args, transport error, reassembly
+ *         overflow, or no match within the time/iteration budget
+ */
+uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
+                                        uint8_t *scratch_tx, uint8_t *scratch_rx,
+                                        uint16_t mtu,
+                                        m1_esp32_m1link_clock_fn now_ms,
+                                        uint32_t timeout_ms, int max_iterations,
+                                        const uint8_t *tx_buf, int tx_len,
+                                        uint8_t *rx_buf, int rx_buf_size,
+                                        int *out_len);
 
 /** Snapshot of the last m1_esp32_rpc_call() invocation. */
 typedef struct
