@@ -490,6 +490,23 @@ endif()
 add_test(NAME subghz_tx_repeat_mode COMMAND test_subghz_tx_repeat_mode)
 
 # ------------------------------------------------------------------
+# Module under test: Sub_Ghz/subghz_rssi_bar.inc — RSSI geometry helper
+# Tests subghz_rssi_fill_w() boundary values, clamping, and linear
+# mapping.  Header-only; no firmware .c file needed.
+# ------------------------------------------------------------------
+add_executable(test_subghz_rssi
+    test_subghz_rssi.c
+)
+target_include_directories(test_subghz_rssi PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_rssi PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_rssi PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_rssi COMMAND test_subghz_rssi)
+
+# ------------------------------------------------------------------
 # Source invariant: ESP32 transport must be quiesced around Sub-GHz.
 # Bug context: SiN360 ESP32 tools can leave SPI3/EXTI active; Sub-GHz
 # Read/Read Raw depend on timing-sensitive SI4463/TIM1 capture.

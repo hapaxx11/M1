@@ -13,8 +13,8 @@
 
 ### Phase 2 — Live RSSI bar on record screen (Tasks 1–2)
 - **Description**: Task 1: extract geometry helper `subghz_rssi_fill_w()` into `Sub_Ghz/subghz_rssi_bar.inc` and refactor `subghz_rssi_bar_draw()` to use it; add host test `tests/test_subghz_rssi.c`. Task 2: call `subghz_rssi_bar_draw()` in the RECORDING state of the Read Raw `draw()` function. Tasks 3–4 from dag are already present in Hapax (100 ms rate limiter and passive pre-scan RX).
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Phase 2: Live RSSI bar on Read Raw record screen (dag Tasks 1-2)`
 
 ### Phase 3 — IR Custom Remotes + new ir_database files
 - **Description**: (a) Extend `flipper_ir.c/h` with `flipper_ir_rewrite()`, `flipper_ir_rename_signal()`, `flipper_ir_delete_signal()`, `flipper_ir_raw_feed()`. (b) Add host tests `tests/test_flipper_ir_custom.c`. (c) Create `m1_csrc/m1_ir_custom.c/h` — multi-button custom remote scene (learn, browse, rename, delete). (d) Wire "Custom Remotes" entry into `m1_infrared_scene.c`. (e) Add new ir_database files: `ir_database/Bluray/Samsung_Bluray.ir`, `ir_database/Bluray/Sony_Bluray.ir`, `ir_database/Monitor/Universal_Monitor.ir`, `ir_database/LED/RGB_24key.ir`.

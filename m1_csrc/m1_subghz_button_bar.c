@@ -20,6 +20,7 @@
 #include "m1_lcd.h"
 #include "m1_button_bar.h"
 #include "m1_subghz_button_bar.h"
+#include "subghz_rssi_bar.inc"
 
 /*============================================================================*/
 /* Bottom bar (forwards to the shared m1_button_bar module)                  */
@@ -46,8 +47,7 @@ void subghz_button_bar_draw(
 /* RSSI bar */
 #define RSSI_BAR_Y     11   /* Just below status bar */
 #define RSSI_BAR_H      3   /* Height of RSSI bar */
-#define RSSI_MIN     -110   /* dBm mapped to 0 pixels */
-#define RSSI_MAX      -30   /* dBm mapped to full width (128px) */
+/* Range constants are defined in subghz_rssi_bar.inc (included above) */
 
 /*============================================================================*/
 /* Status bar                                                                 */
@@ -98,13 +98,12 @@ void subghz_rssi_bar_draw(int16_t rssi_dbm)
 {
     char rssi_str[8];
 
-    /* Clamp RSSI to displayable range */
-    if (rssi_dbm < RSSI_MIN) rssi_dbm = RSSI_MIN;
-    if (rssi_dbm > RSSI_MAX) rssi_dbm = RSSI_MAX;
-
-    /* Map to 0-108 pixels (leave 20px for text) */
+    /* Map to 0–108 pixels (leave 20px for text); clamp is inside the helper */
     uint8_t bar_max_w = M1_LCD_DISPLAY_WIDTH - 20;
-    uint8_t bar_w = (uint8_t)((uint32_t)(rssi_dbm - RSSI_MIN) * bar_max_w / (RSSI_MAX - RSSI_MIN));
+    uint8_t bar_w = subghz_rssi_fill_w(rssi_dbm, bar_max_w);
+    /* Clamp rssi_dbm for display text */
+    if (rssi_dbm < (int16_t)SUBGHZ_RSSI_FLOOR) rssi_dbm = (int16_t)SUBGHZ_RSSI_FLOOR;
+    if (rssi_dbm > (int16_t)SUBGHZ_RSSI_CEIL)  rssi_dbm = (int16_t)SUBGHZ_RSSI_CEIL;
 
     /* Clear RSSI bar area */
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
