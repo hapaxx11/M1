@@ -215,6 +215,15 @@ const SubGhzProtocolDef* subghz_protocol_get(uint16_t index);
 /** Get the protocol name by index (equivalent to old protocol_text[]).  Returns NULL if out of range. */
 const char* subghz_protocol_get_name(uint16_t index);
 
+/**
+ * Returns true if the protocol at @p index is a weather-station sensor
+ * (registry type == SubGhzProtocolTypeWeather).  Returns false for an
+ * out-of-range index.  Use this instead of hard-coded numeric ranges when
+ * classifying decoded protocols — the registry order is not guaranteed to
+ * keep all weather protocols contiguous.
+ */
+bool subghz_protocol_is_weather(uint16_t index);
+
 /*============================================================================*/
 /* Flipper-Compatible Building Blocks                                         */
 /*                                                                            */

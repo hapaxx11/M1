@@ -114,7 +114,55 @@ void test_find_weather_protocol(void)
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeWeather, proto->type);
 }
 
-/* Bug regression: "not found" case must return -1 cleanly */
+/* ===================================================================
+ * subghz_protocol_is_weather — weather-station classification
+ *
+ * Regression for the Weather Station monitor bug: it used a hard-coded
+ * numeric range (protocol >= OREGON_V2 && protocol <= LACROSSE_TX) that
+ * matched only 3 of the many weather protocols.  These tests assert the
+ * registry-driven helper classifies every weather protocol correctly and
+ * rejects non-weather protocols and out-of-range indices.
+ * =================================================================== */
+
+void test_is_weather_matches_registry_type(void)
+{
+	/* Every registry entry: is_weather() must agree with the type field. */
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++) {
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		TEST_ASSERT_NOT_NULL(proto);
+		bool expect = (proto->type == SubGhzProtocolTypeWeather);
+		TEST_ASSERT_EQUAL(expect, subghz_protocol_is_weather(i));
+	}
+}
+
+void test_is_weather_true_for_known_weather(void)
+{
+	/* A spread of weather protocols that were OUTSIDE the old broken
+	 * OREGON_V2..LACROSSE_TX range and were therefore never displayed. */
+	static const char *weather[] = {
+		"Nexus-TH", "Acurite_606TX", "GT-WT02", "Auriol_AHFL",
+		"Bresser 3ch", "TFA Dostmann", "Oregon v2",
+	};
+	for (unsigned k = 0; k < sizeof(weather) / sizeof(weather[0]); k++) {
+		int16_t idx = subghz_protocol_find_by_name(weather[k]);
+		if (idx < 0) continue; /* name variant not present in this build */
+		TEST_ASSERT_TRUE_MESSAGE(subghz_protocol_is_weather((uint16_t)idx),
+		                         weather[k]);
+	}
+}
+
+void test_is_weather_false_for_non_weather(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Princeton");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+	TEST_ASSERT_FALSE(subghz_protocol_is_weather((uint16_t)idx));
+}
+
+void test_is_weather_false_for_out_of_range(void)
+{
+	TEST_ASSERT_FALSE(subghz_protocol_is_weather(subghz_protocol_registry_count));
+	TEST_ASSERT_FALSE(subghz_protocol_is_weather(0xFFFF));
+}
 void test_find_not_found(void)
 {
 	TEST_ASSERT_EQUAL_INT16(-1, subghz_protocol_find_by_name("NonExistentProtocol"));
@@ -709,6 +757,10 @@ int main(void)
 	RUN_TEST(test_find_security_plus);
 	RUN_TEST(test_find_marantec_exact);
 	RUN_TEST(test_find_weather_protocol);
+	RUN_TEST(test_is_weather_matches_registry_type);
+	RUN_TEST(test_is_weather_true_for_known_weather);
+	RUN_TEST(test_is_weather_false_for_non_weather);
+	RUN_TEST(test_is_weather_false_for_out_of_range);
 	RUN_TEST(test_find_not_found);
 	RUN_TEST(test_find_null);
 	RUN_TEST(test_find_case_insensitive);

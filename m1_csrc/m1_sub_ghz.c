@@ -4532,9 +4532,13 @@ void sub_ghz_weather_station(void)
         /* Check for decoded data */
         if (subghz_decenc_read(&decoded_data, false))
         {
-            /* Check if it's a weather protocol */
-            if (decoded_data.protocol >= OREGON_V2 &&
-                decoded_data.protocol <= LACROSSE_TX)
+            /* Check if it's a weather protocol.  Use the registry type flag
+             * rather than a hard-coded numeric range — weather protocols are
+             * NOT contiguous in the registry, so the old
+             * `protocol >= OREGON_V2 && protocol <= LACROSSE_TX` check matched
+             * only 3 of the ~35 weather protocols and silently discarded the
+             * rest (Nexus-TH, Acurite-606, Auriol, GT-WT02, ...). */
+            if (subghz_protocol_is_weather(decoded_data.protocol))
             {
                 wx = subghz_get_weather_data();
                 has_data = true;
