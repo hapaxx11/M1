@@ -39,6 +39,7 @@
 #include "m1_ir_quick_remote.h"
 #include "m1_settings.h"
 #include "ir_signal_record.h"
+#include "m1_espnow_capture_share.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -92,6 +93,8 @@ typedef struct {
 
 static ir_universal_cmd_t s_commands[IR_UNIVERSAL_MAX_CMDS];
 static uint16_t s_cmd_count;
+static uint16_t s_file_tx_index;
+static bool s_file_tx_active;
 static char s_browse_names[BROWSE_NAMES_MAX][BROWSE_NAME_MAX_LEN];
 static uint16_t s_browse_count;
 static uint16_t s_browse_page;
@@ -147,6 +150,7 @@ static void show_commands(const char *ir_file_path);
 static bool ir_file_action_menu(const char *ir_file_path);
 static void transmit_command(const ir_universal_cmd_t *cmd);
 static void transmit_raw_command(const ir_universal_cmd_t *cmd);
+static bool wait_for_ir_tx_complete(bool *cancelled);
 static void load_favorites(void);
 static void save_favorites(void);
 static void add_to_recent(const char *path);
@@ -918,6 +922,35 @@ static bool parse_ir_signal_block(flipper_file_t *ff, ir_universal_cmd_t *cmd)
 	return ir_cmd_parse(&s_ff_reader, ff, cmd);
 }
 
+static bool wait_for_ir_tx_complete(bool *cancelled)
+{
+	S_M1_Main_Q_t tx_q;
+	uint32_t deadline = HAL_GetTick() + 3000;
+
+	while (1)
+	{
+		uint32_t now = HAL_GetTick();
+		uint32_t remaining = (now < deadline) ? (deadline - now) : 0;
+		if (remaining == 0)
+			return false;
+		if (xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(remaining)) != pdTRUE)
+			return false;
+		if (tx_q.q_evt_type == Q_EVENT_IRRED_TX)
+			return true;
+		if (tx_q.q_evt_type == Q_EVENT_KEYPAD)
+		{
+			S_M1_Buttons_Status bs;
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (cancelled != NULL &&
+			    bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				*cancelled = true;
+				return false;
+			}
+		}
+	}
+}
+
 
 /*============================================================================*/
 /*
@@ -971,13 +1004,83 @@ static uint16_t parse_ir_file(const char *filepath)
 	return count;
 } // static uint16_t parse_ir_file(...)
 
+static bool start_next_file_command(void)
+{
+	while (s_file_tx_index < s_cmd_count) {
+		if (s_commands[s_file_tx_index++].valid) {
+			transmit_command(&s_commands[s_file_tx_index - 1u]);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool m1_ir_universal_start_file_all(const char *ir_file_path)
+{
+	if (ir_file_path == NULL || ir_file_path[0] == '\0')
+		return false;
+
+	strncpy(s_raw_tx_filepath, ir_file_path, IR_UNIVERSAL_PATH_MAX_LEN - 1);
+	s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN - 1] = '\0';
+	s_cmd_count = parse_ir_file(ir_file_path);
+	s_file_tx_index = 0;
+	s_file_tx_active = s_cmd_count > 0 && start_next_file_command();
+	return s_file_tx_active;
+}
+
+m1_ir_file_tx_status_t m1_ir_universal_continue_file_all(void)
+{
+	if (!s_file_tx_active)
+		return M1_IR_FILE_TX_FAILED;
+
+	infrared_encode_sys_deinit();
+	if (start_next_file_command())
+		return M1_IR_FILE_TX_RUNNING;
+
+	s_file_tx_active = false;
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+	return M1_IR_FILE_TX_DONE;
+}
+
+void m1_ir_universal_abort_file_all(void)
+{
+	if (!s_file_tx_active)
+		return;
+	s_file_tx_active = false;
+	infrared_encode_sys_deinit();
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+	                  LED_FASTBLINK_ONTIME_OFF);
+}
+
+bool m1_ir_universal_send_file_all(const char *ir_file_path)
+{
+	bool sent_any;
+	bool cancelled = false;
+
+	if (!m1_ir_universal_start_file_all(ir_file_path))
+		return false;
+
+	sent_any = true;
+	while (!cancelled) {
+		if (!wait_for_ir_tx_complete(&cancelled)) {
+			m1_ir_universal_abort_file_all();
+			return false;
+		}
+		if (m1_ir_universal_continue_file_all() != M1_IR_FILE_TX_RUNNING)
+			break;
+		vTaskDelay(pdMS_TO_TICKS(200));
+	}
+	return sent_any && !cancelled;
+}
+
 
 
 /*============================================================================*/
 /*
  * IR Saved File Action Menu — Flipper "saved_menu" pattern.
  *
- * Presents file-level actions (Send All, Info, Rename, Delete) after a
+ * Presents file-level actions (Send All, Send to Peer, Info, Rename, Delete) after a
  * .ir file has been loaded and its commands are in s_commands[].
  *
  * Returns:
@@ -986,21 +1089,33 @@ static uint16_t parse_ir_file(const char *filepath)
  */
 /*============================================================================*/
 
-#define IR_ACTION_COUNT   4
-#define IR_ACTION_SEND_ALL 0
-#define IR_ACTION_INFO     1
-#define IR_ACTION_RENAME   2
-#define IR_ACTION_DELETE   3
+#define IR_ACTION_COUNT        5
+#define IR_ACTION_SEND_ALL     0
+#define IR_ACTION_SEND_TO_PEER 1
+#define IR_ACTION_INFO         2
+#define IR_ACTION_RENAME       3
+#define IR_ACTION_DELETE       4
 
 static const char *ir_action_labels[IR_ACTION_COUNT] = {
-    "Send All", "Info", "Rename", "Delete"
+    "Send All", "Send to Peer", "Info", "Rename", "Delete"
 };
 
 static void draw_ir_action_menu(const char *filename, uint8_t sel)
 {
     char dname[22];
+    uint8_t scroll = 0;
     strncpy(dname, filename, 21);
     dname[21] = '\0';
+
+    const uint8_t row_h = m1_menu_item_h();
+    const uint8_t max_vis = M1_MENU_VIS(IR_ACTION_COUNT);
+
+    if ((max_vis < IR_ACTION_COUNT) && (sel >= max_vis))
+    {
+        scroll = sel - max_vis + 1;
+        if (scroll > (IR_ACTION_COUNT - max_vis))
+            scroll = IR_ACTION_COUNT - max_vis;
+    }
 
     m1_u8g2_firstpage();
     u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
@@ -1010,17 +1125,17 @@ static void draw_ir_action_menu(const char *filename, uint8_t sel)
     u8g2_DrawStr(&m1_u8g2, 2, 10, dname);
     u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 
-    /* 4 items in 52px (y=13..64) → 13px per item */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    for (uint8_t i = 0; i < IR_ACTION_COUNT; i++)
+    u8g2_SetFont(&m1_u8g2, m1_menu_font());
+    for (uint8_t i = 0; i < max_vis; i++)
     {
-        uint8_t y = 13 + i * 13;
-        if (i == sel)
+        uint8_t idx = scroll + i;
+        uint8_t y = 13 + i * row_h;
+        if (idx == sel)
         {
-            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, 13, 2);
+            u8g2_DrawRBox(&m1_u8g2, 0, y, M1_LCD_DISPLAY_WIDTH, row_h, 2);
             u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
         }
-        u8g2_DrawStr(&m1_u8g2, 8, y + 10, ir_action_labels[i]);
+        u8g2_DrawStr(&m1_u8g2, 8, y + row_h - 3u, ir_action_labels[idx]);
         u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
     }
 
@@ -1117,57 +1232,14 @@ static bool ir_file_action_menu(const char *ir_file_path)
             {
                 case IR_ACTION_SEND_ALL:
                 {
-                    /* Transmit every command in the file sequentially.
-                     * Each transmit_command() calls infrared_encode_sys_init(),
-                     * so we must deinit after each TX — even on timeout —
-                     * before the next command can re-init the hardware. */
-                    bool cancelled = false;
-                    for (uint16_t i = 0; i < s_cmd_count && !cancelled; i++)
-                    {
-                        if (s_commands[i].valid)
-                        {
-                            transmit_command(&s_commands[i]);
-
-                            /* Wait specifically for Q_EVENT_IRRED_TX, ignoring
-                             * unrelated events.  BACK cancels the loop.
-                             * Drain button_events_q_hdl when keypad events
-                             * arrive to keep the two queues in sync. */
-                            S_M1_Main_Q_t tx_q;
-                            uint32_t deadline = HAL_GetTick() + 3000;
-                            bool tx_done = false;
-                            while (!tx_done && !cancelled)
-                            {
-                                uint32_t now = HAL_GetTick();
-                                uint32_t remaining = (now < deadline) ? (deadline - now) : 0;
-                                if (remaining == 0)
-                                    break; /* timeout */
-                                BaseType_t rx = xQueueReceive(main_q_hdl, &tx_q, pdMS_TO_TICKS(remaining));
-                                if (rx != pdTRUE)
-                                    break; /* timeout */
-                                if (tx_q.q_evt_type == Q_EVENT_IRRED_TX)
-                                {
-                                    tx_done = true;
-                                }
-                                else if (tx_q.q_evt_type == Q_EVENT_KEYPAD)
-                                {
-                                    S_M1_Buttons_Status bs;
-                                    xQueueReceive(button_events_q_hdl, &bs, 0);
-                                    if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-                                        cancelled = true;
-                                }
-                                /* else: ignore other event types, loop again */
-                            }
-
-                            /* Always deinit — transmit_command() called
-                             * infrared_encode_sys_init(), so we must tear down
-                             * regardless of whether TX complete arrived. */
-                            infrared_encode_sys_deinit();
-                            if (!cancelled)
-                                vTaskDelay(pdMS_TO_TICKS(200));
-                        }
-                    }
-                    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+                    m1_ir_universal_send_file_all(ir_file_path);
                     return true;  /* Done — stay in commands */
+                }
+
+                case IR_ACTION_SEND_TO_PEER:
+                {
+                    m1_espnow_capture_share_send_path(ir_file_path);
+                    break;  /* Redraw action menu */
                 }
 
                 case IR_ACTION_INFO:

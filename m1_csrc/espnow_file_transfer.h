@@ -30,7 +30,7 @@ extern "C" {
  * =========================================================================*/
 
 /** Maximum filename length in FILE_OFFER. */
-#define ESPNOW_FT_FILENAME_MAX   32
+#define ESPNOW_FT_FILENAME_MAX   31
 
 /** Maximum data bytes per FILE_DATA chunk (ESP-NOW 250 - framing). */
 #define ESPNOW_FT_CHUNK_MAX      200
@@ -180,11 +180,12 @@ bool espnow_ft_send_offer(espnow_ft_ctx_t *ctx);
  *
  * @param  ctx   Transfer context.
  * @param  type  Message type byte.
+ * @param  seq   Message sequence byte.
  * @param  data  Message payload (after type+seq header).
  * @param  len   Payload length.
  * @return true if the message was handled.
  */
-bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type,
+bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type, uint8_t seq,
                              const uint8_t *data, size_t len);
 
 /**

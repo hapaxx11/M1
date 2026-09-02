@@ -5,9 +5,12 @@
  * @brief  ESP-NOW Peer Link Scene Manager — scene IDs and handler exports.
  *
  * Scene implementation:
- *   m1_espnow_scene_main.c     — top-level menu (Scan, Send File, Tic-Tac-Toe)
+ *   m1_espnow_scene_main.c     — top-level menu
  *   m1_espnow_scene_scan.c     — peer discovery / scan list + pairing
- *   m1_espnow_scene_transfer.c — file send/receive progress
+ *   m1_espnow_scene_messages.c — short text messages
+ *   m1_espnow_scene_send.c     — capture sender picker/progress
+ *   m1_espnow_scene_transfer.c — file receive progress
+ *   m1_espnow_scene_trigger.c  — remote trigger request/consent
  *   m1_espnow_scene_tictactoe.c — Tic-Tac-Toe game
  *
  * m1_espnow_scene.c owns the scene_registry[] table and espnow_scene_entry().
@@ -31,6 +34,17 @@ typedef enum {
 
     /* File transfer */
     EspnowSceneTransfer,
+    EspnowSceneSendCapture,
+    EspnowSceneSendProgress,
+
+    /* Messaging */
+    EspnowSceneMessages,
+
+    /* Remote trigger */
+    EspnowSceneTriggerMenu,
+    EspnowSceneTriggerRequest,
+    EspnowSceneTriggerStatus,
+    EspnowSceneTriggerListen,
 
     /* Games */
     EspnowSceneTicTacToe,
@@ -51,6 +65,19 @@ extern const M1SceneHandlers espnow_scene_pair_handlers;
 
 /* m1_espnow_scene_transfer.c */
 extern const M1SceneHandlers espnow_scene_transfer_handlers;
+
+/* m1_espnow_scene_send.c */
+extern const M1SceneHandlers espnow_scene_send_capture_handlers;
+extern const M1SceneHandlers espnow_scene_send_progress_handlers;
+
+/* m1_espnow_scene_messages.c */
+extern const M1SceneHandlers espnow_scene_messages_handlers;
+
+/* m1_espnow_scene_trigger.c */
+extern const M1SceneHandlers espnow_scene_trigger_menu_handlers;
+extern const M1SceneHandlers espnow_scene_trigger_request_handlers;
+extern const M1SceneHandlers espnow_scene_trigger_status_handlers;
+extern const M1SceneHandlers espnow_scene_trigger_listen_handlers;
 
 /* m1_espnow_scene_tictactoe.c */
 extern const M1SceneHandlers espnow_scene_tictactoe_handlers;

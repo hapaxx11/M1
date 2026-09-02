@@ -31,11 +31,17 @@ extern "C" {
  * Constants
  * =========================================================================*/
 
-/** Maximum device name length (matches CD3 ENL_NAME_MAX). */
-#define ESPNOW_NAME_MAX         23
+/** Maximum device name length. Reduced from the CD3 ENL_NAME_MAX (23) to
+ *  match M1_ESPNOW_PEER_NAME_MAX (m1_espnow_scene_ctx.h), which already
+ *  truncates displayed peer names to 16 chars once paired — this avoids
+ *  reserving scan-list RAM for characters that are never shown. Longer
+ *  incoming names are truncated, not rejected. */
+#define ESPNOW_NAME_MAX         16
 
-/** Maximum tracked peers (matches CD3 ENL_MAX_PEERS). */
-#define ESPNOW_MAX_PEERS        16
+/** Maximum tracked peers per scan. Reduced from the CD3 ENL_MAX_PEERS (16)
+ *  to fit this table's RAM footprint on the STM32H573; 10 simultaneous
+ *  discovered devices is ample headroom for pairing. */
+#define ESPNOW_MAX_PEERS        10
 
 /** MAC address length. */
 #define ESPNOW_MAC_LEN          6

@@ -109,10 +109,12 @@ void test_parse_peers_old_64_byte_cap_silently_drops_peers(void)
     uint8_t got = espnow_rpc_parse_peers(body, truncated_len, peers,
                                         ESPNOW_MAX_PEERS, 6);
 
-    /* Each full-length-name peer record is 6+1+1+23 = 31 bytes, so 64
-     * truncated bytes can only ever yield 2 complete peers -- the
-     * remaining 14 claimed peers are silently missing. */
-    TEST_ASSERT_EQUAL_UINT8(2, got);
+    /* Each peer record's fixed 8-byte header (mac+rssi+namelen) must fit
+     * within the truncated buffer for the peer to be counted at all (its
+     * name may still be silently shortened). With the 64-byte cap this
+     * still yields fewer decoded peers than were actually reported --
+     * demonstrating the pre-fix data loss -- regardless of the exact
+     * value of ESPNOW_NAME_MAX. */
     TEST_ASSERT_LESS_THAN_UINT8(ESPNOW_MAX_PEERS, got);
 }
 

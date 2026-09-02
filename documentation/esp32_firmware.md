@@ -796,27 +796,106 @@ using the wrong path silently fails every ESP-NOW command.  The fixed 64-byte
 SPI transaction leaves at most 48 bytes of usable RPC payload per call (after
 the 16-byte M1_RPC header+CRC overhead).  `NOW_SEND` prefixes a 6-byte MAC, so
 the maximum ESP-NOW application data per SPI call is **42 bytes** — not the
-240-byte ESP-NOW protocol limit.  Full-size payloads require multi-transaction
-RPC chunking (not yet implemented).
+240-byte ESP-NOW protocol limit.  Full-size payloads are carried by the
+STM32-side application-layer fragmentation described below (`espnow_chunk`),
+which reassembles multiple 42-byte OTA frames on the receiver and needs **no**
+brain-firmware change.
 
 **Capability bit:** `M1_ESP32_CAP_ESPNOW` (bit **24**, `m1_csrc/m1_esp32_caps.h`).
 This is a host-only bit above the canonical CD3 wire range (bits 0-23); CD3
-implements the handlers but does not self-report ESP-NOW in `M1_FW_CAPS`, so
-the feature gate fails closed until CD3 adds it.
+implements the handlers but current shipped builds do not self-report ESP-NOW
+in `M1_FW_CAPS`.  Until the brain firmware reports bit 24 itself, the STM32
+capability probe sets the host-owned bit after native CD3 is confirmed via
+M1_RPC, keeping the Peer Link gate satisfied only for that probed firmware path.
 
 **Key design decisions:**
-- *No encryption* — `encrypt = false` always, matching CD3's `esp_now_link`.
-  Visual confirmation codes (4-digit `CRC32(mac_A‖mac_B) % 10000`) provide
-  MITM awareness.  CCMP support will be added if a future CD3 release
-  standardises it.
+- *Link-layer encryption off; authentication at the app layer* — the ESP-NOW
+  link itself uses `encrypt = false` (matching CD3's `esp_now_link`), and visual
+  confirmation codes (4-digit `CRC32(mac_A‖mac_B) % 10000`) provide MITM
+  awareness at pairing.  Confidentiality/integrity for peer-link payloads is
+  instead provided by the STM32-side **app-layer authenticated-encryption
+  envelope** (`espnow_crypto`, see below), which does not depend on any CD3
+  release standardising CCMP.
 - *Channel coordination* — The **acknowledging device (responder) always hops**
   to the initiator's channel at `NOW_START` time.  If the responder does not
   hop, the initiator treats it as a declined connection.  No public
   protocol-level standard exists; this is our application-layer convention.
 - *File transfer* — Stop-and-wait ARQ over the peer link, implemented in
   `m1_csrc/espnow_file_transfer.c/h` with streaming-to-SD (FatFS) and
-  incremental CRC32.  Chunk size must not exceed 42 bytes with the current
-  SPI transport.
+  incremental CRC32.  Direct sender frames must not exceed 42 bytes with the
+  current SPI transport; the sender UI uses 31-byte transfer filenames and
+  36-byte file chunks so OFFER/DATA frames fit without transport truncation.
+
+#### App-layer peer-link protocol (STM32-side, host-tested)
+
+The STM32 side layers a small family of application protocols on top of the raw
+peer link.  Every payload's first byte is an **app-type** selector; the ranges
+are registered centrally in `m1_csrc/espnow_appmsg.h` (`espnow_app_classify()`):
+
+| Range | Class | Module | Purpose |
+|-------|-------|--------|---------|
+| `0x01..0x0F` | pair | `espnow_peer_session.c/h` | Pairing / confirm handshake |
+| `0x10..0x1F` | file transfer | `espnow_file_transfer.c/h` | Saved-capture sharing (ARQ) |
+| `0x20..0x2F` | message | `espnow_message.c/h` | Short peer text messages |
+| `0x30..0x3F` | trigger | `espnow_trigger.c/h` | Danger-gated remote replay |
+| `0x40..0x4F` | game | `espnow_tictactoe.c` | Tic-tac-toe |
+| `0x50` | fragment | `espnow_chunk.c/h` | App-layer fragmentation |
+| `0xE0..0xEF` | crypto | `espnow_crypto.c/h` | Authenticated-encryption envelope |
+
+Each module is **pure logic** (no HAL/RTOS/display), extracted so it can be
+exercised by host unit tests under `tests/` (`test_espnow_chunk`,
+`test_espnow_shareable`, `test_espnow_message`, `test_espnow_trigger`,
+`test_espnow_crypto`, `test_espnow_secure`).  The firmware-side optional
+encrypted transport wrapper is covered by `test_m1_espnow_secure_link` with
+stubbed ESP-NOW HAL calls.
+
+- *Fragmentation (`espnow_chunk`)* — Splits an app message up to 240 bytes into
+  ≤ 42-byte OTA frames (4-byte header: type/msg_id/frag_idx/frag_cnt) and
+  reassembles them on the receiver with out-of-order, duplicate and error
+  handling.  The type byte is `0x50`; this is what lets full-size payloads cross
+  the 42-byte SPI ceiling without any brain-firmware change.
+- *Capture sharing (`espnow_shareable`)* — Classifies which saved items
+  (`.sub` / `.nfc` / `.rfid` / `.ir`) may be shared, extracts a safe basename,
+  rejects path-traversal / unsafe names, and builds the `/ESPNOW/<name>` receive
+  path.  The Peer Link menu exposes Send Capture; the sender picks a saved-item
+  category, browses the SD card, and streams the file to the paired peer.  Saved
+  capture action menus also expose Send to Peer shortcuts that reuse the same
+  paired-peer transfer flow.  The receiver stores into `/ESPNOW/`.
+- *Messaging (`espnow_message`)* — Builds/parses text frames (type `0x20`,
+  ≤ 120 chars) and maintains a bounded inbox ring (cap 8) with eviction and
+  duplicate suppression.  The Messages scene accepts the full 120-byte text
+  payload.  Short messages fit one direct 42-byte `NOW_SEND` frame for
+  C3/other-firmware friendliness; longer plaintext fallback messages and
+  encrypted envelopes are split into `espnow_chunk` fragments and reassembled on
+  STM32 without any ESP32 brain firmware change.
+- *Remote trigger (`espnow_trigger`)* — A danger-gated request → consent →
+  execute → result state machine (types `0x30..0x33`) that asks a paired peer to
+  replay a **named** saved capture; it reuses `espnow_shareable` name-safety and
+  requires explicit consent on the responder.  The Peer Link Remote Trigger UI
+  sends only safe basenames over the existing DATA channel, limits executable
+  requests to bounded Sub-GHz `.sub` replay and IR `.ir` Send All, and rejects
+  NFC/RFID remote execution until those lifecycles have a safe bounded path.
+- *Authenticated encryption (`espnow_crypto`)* — An Encrypt-then-MAC envelope
+  (type `0xE0`) wrapping the payload with AES-256-CBC (`m1_crypto`) and a
+  truncated HMAC-SHA256 tag (`NFC/amiibo/sha256.c`).  `espnow_secure` derives
+  stable pair key material from the ordered peer MAC addresses plus the visual
+  confirm code, then negotiates optional use with plaintext `0xE1` HELLO and
+  `0xE2` ACK control frames.  Once ACK is observed, `m1_espnow_secure_link`
+  fragments the larger encrypted envelope through `espnow_chunk` and sends it as
+  ordinary `NOW_SEND` frames.  If negotiation does not complete, app payloads
+  fall back to plaintext for compatibility; after encryption is established,
+  plaintext frames from the configured peer are rejected to avoid silent
+  downgrade.  The tag covers the type byte, IV and ciphertext and is verified
+  **before** any decryption, so tampered or wrong-key frames are rejected up
+  front.  The current key material is best-effort and should be replaced by a
+  stronger key exchange before treating the link as robust against passive
+  observers.
+
+> **Gating:** all of the above is compiled unconditionally but only reachable
+> once the peer-link scene passes the `M1_ESP32_CAP_ESPNOW` gate.  Current
+> shipped CD3 firmware does not self-report bit 24, so the STM32 side adds a
+> temporary runtime-probe fallback after native CD3 is confirmed; a future brain
+> firmware can replace this by self-reporting the bit directly.
 
 ### `AT+CMD?` — runtime probe for AT firmware
 

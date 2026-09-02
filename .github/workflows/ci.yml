@@ -68,10 +68,25 @@ jobs:
       # ------------------------------------------------------------------ #
       - name: Build firmware
         run: |
-          cmake --build build --parallel $(nproc)
+          cmake --build build --parallel $(nproc) 2>&1 | tee build-firmware.log
 
       # ------------------------------------------------------------------ #
-      # 5. Verify artifacts and print memory usage
+      # 5. Check RAM budget (early warning, non-blocking)
+      # ------------------------------------------------------------------ #
+      # See tools/check_ram_budget.sh and the "Static RAM Budget" section of
+      # .github/skills/memory-heap/SKILL.md: a hard RAM-overflow link failure
+      # (like PR #737 / CI job 100054096523) is the *last* moment to notice a
+      # RAM problem. This step re-parses the linker's own memory-usage
+      # summary and raises a visible (but non-blocking) warning annotation
+      # whenever headroom is critically low, so a PR that eats into the last
+      # few KB gets flagged immediately rather than only once some later PR
+      # finally tips it over.
+      - name: Check RAM budget
+        run: |
+          bash tools/check_ram_budget.sh build-firmware.log
+
+      # ------------------------------------------------------------------ #
+      # 6. Verify artifacts and print memory usage
       # ------------------------------------------------------------------ #
       - name: Verify build artifacts
         run: |

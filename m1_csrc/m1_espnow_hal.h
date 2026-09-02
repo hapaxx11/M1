@@ -28,6 +28,7 @@ extern "C" {
 #endif
 
 #define ESPNOW_MAC_LEN  6
+#define M1_ESPNOW_SEND_PAYLOAD_MAX  42u
 
 /*==========================================================================*/
 /* Transport layer API                                                      */
@@ -70,11 +71,12 @@ uint8_t m1_espnow_poll_peers(void *peers, uint8_t max_peers);
  *
  * @param  mac   Destination 6-byte MAC address.
  * @param  data  Payload bytes.
- * @param  len   Payload length.  Capped to 42 bytes per call by the 64-byte
+ * @param  len   Payload length.  Maximum is M1_ESPNOW_SEND_PAYLOAD_MAX
+ *               (42 bytes) per call by the 64-byte
  *               SPI transaction limit (SPI_BUF_SIZE(64) - RPC_HDR(16) - MAC(6)).
  *               ENL_MSG_MAX=240 is the ESP-NOW protocol limit but cannot be
  *               reached in a single SPI call without RPC multi-transaction
- *               chunking (not yet implemented).
+ *               chunking (not yet implemented). Oversized sends fail.
  * @return true on success.
  */
 bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len);
@@ -119,6 +121,29 @@ void *m1_espnow_file_open(const char *path);
  * @return true on success.
  */
 bool m1_espnow_file_write(void *handle, const uint8_t *data, size_t len);
+
+/**
+ * @brief  Open a file for reading on the SD card.
+ * @param  path  File path (e.g. "/ESPNOW/file.sub").
+ * @return Opaque file handle (NULL on failure).  Shares the same
+ *         underlying FatFS object as @ref m1_espnow_file_open — safe
+ *         because only one transfer (send or receive) is ever active.
+ */
+void *m1_espnow_file_open_read(const char *path);
+
+/**
+ * @brief  Read data from an open file.
+ * @param  out_len  Receives the number of bytes actually read (may be NULL).
+ * @return true on success (including a short/zero-byte read at EOF).
+ */
+bool m1_espnow_file_read(void *handle, uint8_t *data, size_t len,
+                         size_t *out_len);
+
+/**
+ * @brief  Seek an open file to an absolute byte offset.
+ * @return true on success.
+ */
+bool m1_espnow_file_seek(void *handle, uint32_t offset);
 
 /**
  * @brief  Close a file handle.

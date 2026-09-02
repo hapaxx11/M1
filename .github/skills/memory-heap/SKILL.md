@@ -1,11 +1,72 @@
 ---
 name: memory-heap
-description: FreeRTOS heap-4 redirect (malloc == pvPortMalloc), the 8-component Heap-Redirect Checklist to verify after any RTOS/libc/linker update, heap anti-patterns (ISR allocation, NULL checks, unbounded growth), and the idempotent heap-init rule. Load when touching malloc/free, FreeRTOS, the linker, or any *_init that allocates.
+description: FreeRTOS heap-4 redirect (malloc == pvPortMalloc), the 8-component Heap-Redirect Checklist to verify after any RTOS/libc/linker update, heap anti-patterns (ISR allocation, NULL checks, unbounded growth), the idempotent heap-init rule, and the Static RAM Budget rule for new global/static buffers. Load when touching malloc/free, FreeRTOS, the linker, or any *_init that allocates, or when adding any new static/global buffer, struct, or array (especially in a new feature).
 ---
 
 # Memory & Heap Rules
 
 > Extracted from CLAUDE.md Architecture Rules. See also documentation/memory_management.md.
+
+### ⚠️ Static RAM Budget (`.data` + `.bss`) — check BEFORE adding any new global/static buffer
+
+> **This is a different, separate budget from the FreeRTOS heap below — reading
+> only the Heap Redirect / anti-pattern sections is NOT enough to avoid a RAM
+> build failure.** The STM32H573VITX `RAM` region is 640 KiB (655360 bytes)
+> total (`STM32H573VITX_FLASH.ld`). Of that, **256 KiB (`configTOTAL_HEAP_SIZE`,
+> `Core/Inc/FreeRTOSConfig.h`) is permanently reserved** as the static
+> `ucHeap[]` array backing the FreeRTOS heap (`heap_4.c`) — that space is
+> **not** available for ordinary `static`/global buffers, structs, or arrays,
+> no matter how much of the heap itself is free at runtime. Every other
+> `static`/global variable in the firmware — plus the stack — competes for
+> the remaining ~384 KiB, and this project runs that remainder **extremely
+> close to full**: `main` was at 99.96% RAM used (272 bytes free) before PR
+> #737, and after PR #737's RAM-overflow fix (CI job 100054096523, which
+> originally overflowed by 2344 bytes) it settled at 99.98% used (144 bytes
+> free). **There is essentially no slack left** — almost any sizable new
+> `static`/global buffer will overflow the link.
+>
+> **Rules for agents, whenever a change adds a new `static`/global variable,
+> struct field, or array (not just in Peer-Link/ESP-NOW code — anywhere):**
+>
+> 1. **Build locally and check headroom before AND after your change.**
+>    Configure/build with the ARM toolchain (`gcc-arm-none-eabi` +
+>    `binutils-arm-none-eabi` + `cmake` + `ninja-build`), e.g.:
+>    ```
+>    cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+>    cmake --build build --parallel $(nproc)
+>    ```
+>    The linker's `-Wl,--print-memory-usage` flag (`cmake/gcc-arm-none-eabi.cmake`)
+>    prints a `Memory region ... RAM: ... B ... KB (...%)` summary on every
+>    build — even one that fails on overflow. CI also runs
+>    `tools/check_ram_budget.sh` after every build and raises a non-blocking
+>    `::warning::` annotation whenever RAM usage is critically high — treat
+>    that warning as a hard signal to justify or shrink your new static state,
+>    not something to ignore because the build "still passed."
+> 2. **Prefer these patterns over a new permanent `static`/global buffer**,
+>    roughly in order of preference:
+>    - A **local (stack) variable**, if the data doesn't need to outlive one
+>      function call.
+>    - A **shared scratch union** across mutually-exclusive states — e.g.
+>      `m1_espnow_scene_scratch_t` (`m1_csrc/m1_espnow_scene_scratch.h`)
+>      lets the alternate, never-simultaneously-active Peer Link scenes
+>      (Messages / Send / Receive / Trigger) share one physical backing
+>      buffer instead of each reserving its own `.bss` copy. Use this pattern
+>      whenever two or more pieces of scene/mode-local state are provably
+>      never live at the same time (each resets/`memset`s its own state on
+>      entry, and only one is ever the active/foreground scene).
+>    - **Heap allocation** (`malloc`/`pvPortMalloc`, see below) for data with
+>      a genuinely dynamic/bounded lifetime — subject to the heap anti-patterns
+>      below (NULL checks, no ISR allocation, budget the bytes).
+>    - A **right-sized constant**, derived from the actual largest real value
+>      the field needs to hold (not a round number "for headroom") — e.g. a
+>      protocol's max-plaintext constant should be derived from the largest
+>      message any sub-protocol actually produces, not padded generously.
+>    - Only as a last resort, a new permanent `static`/global — and if you add
+>      one, note its size in the PR description so reviewers can see the RAM
+>      cost.
+> 3. **Never treat a passing CI build as proof there's no RAM risk.** Check the
+>    RAM budget warning/summary explicitly; a build can pass today at 99.98%
+>    used and overflow on the very next PR that adds a few hundred bytes.
 
 ### Heap Redirect — `malloc()` ≡ `pvPortMalloc()`
 

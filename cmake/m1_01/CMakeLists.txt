@@ -698,12 +698,26 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/espnow_peer_session.c
     ../../m1_csrc/espnow_file_transfer.c
     ../../m1_csrc/espnow_tictactoe.c
+    ../../m1_csrc/espnow_chunk.c
+    ../../m1_csrc/espnow_shareable.c
+    ../../m1_csrc/espnow_message.c
+    ../../m1_csrc/espnow_secure.c
+    ../../m1_csrc/espnow_trigger.c
+    ../../m1_csrc/espnow_crypto.c
     ../../m1_csrc/espnow_rpc_parse.c
     ../../m1_csrc/m1_espnow_hal.c
+    ../../m1_csrc/m1_espnow_capture_share.c
+    ../../m1_csrc/m1_espnow_trigger_exec.c
     ../../m1_csrc/m1_espnow_scene.c
+    ../../m1_csrc/m1_espnow_scene_ctx.c
     ../../m1_csrc/m1_espnow_scene_main.c
     ../../m1_csrc/m1_espnow_scene_scan.c
+    ../../m1_csrc/m1_espnow_scene_messages.c
+    ../../m1_csrc/m1_espnow_scene_scratch.c
+    ../../m1_csrc/m1_espnow_scene_send.c
     ../../m1_csrc/m1_espnow_scene_transfer.c
+    ../../m1_csrc/m1_espnow_scene_trigger.c
+    ../../m1_csrc/m1_espnow_secure_link.c
     ../../m1_csrc/m1_espnow_scene_tictactoe.c
 
     ../../m1_csrc/privateprofilestring.c
@@ -774,4 +788,3 @@ target_link_libraries(m1_01 INTERFACE
 if(CMAKE_C_STANDARD LESS 11)
     message(ERROR "Generated code requires C11 or higher")
 endif()
-

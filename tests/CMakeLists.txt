@@ -2876,6 +2876,181 @@ endif()
 add_test(NAME espnow_file_transfer COMMAND test_espnow_file_transfer)
 
 # ------------------------------------------------------------------
+# Module under test: espnow_chunk (ESP-NOW payload fragmentation/reassembly)
+#
+# Pure app-layer fragmentation so logical messages larger than the 42-byte
+# per-NOW_SEND SPI budget ride multiple frames and reassemble on the receiver
+# without any brain-firmware change.  Also covers the espnow_appmsg type
+# registry and the espnow_caps_decide availability decision (header-only).
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_chunk
+    test_espnow_chunk.c
+    ${M1_ROOT}/m1_csrc/espnow_chunk.c
+)
+target_include_directories(test_espnow_chunk PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_chunk PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_chunk PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_chunk COMMAND test_espnow_chunk)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_shareable (ESP-NOW capture-sharing helpers)
+#
+# Pure sender-side decisions for Phase 1 capture sharing: shareable-kind
+# classification by extension, basename extraction, received-filename safety
+# validation (path-traversal guard), and receive-path construction.
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_shareable
+    test_espnow_shareable.c
+    ${M1_ROOT}/m1_csrc/espnow_shareable.c
+)
+target_include_directories(test_espnow_shareable PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_shareable PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_shareable PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_shareable COMMAND test_espnow_shareable)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_message (ESP-NOW short-text peer messaging)
+#
+# Pure framing (build/parse) for text messages over the DATA channel plus a
+# fixed-capacity inbox ring with eviction and duplicate detection.
+# Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_message
+    test_espnow_message.c
+    ${M1_ROOT}/m1_csrc/espnow_message.c
+)
+target_include_directories(test_espnow_message PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_message PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_message PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_message COMMAND test_espnow_message)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_trigger (ESP-NOW danger-gated remote trigger)
+#
+# Pure request/consent/execute/result FSM + wire framing for asking a paired
+# peer to replay a named saved capture.  Reuses espnow_shareable for name
+# safety.  Zero HAL / RTOS / display dependencies.
+# ------------------------------------------------------------------
+add_executable(test_espnow_trigger
+    test_espnow_trigger.c
+    ${M1_ROOT}/m1_csrc/espnow_trigger.c
+    ${M1_ROOT}/m1_csrc/espnow_shareable.c
+)
+target_include_directories(test_espnow_trigger PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_espnow_trigger PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_trigger PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_trigger COMMAND test_espnow_trigger)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_crypto (ESP-NOW app-layer authenticated
+# encryption — Phase 4)
+#
+# Encrypt-then-MAC envelope built on AES-256-CBC (m1_crypto) + HMAC-SHA256
+# (NFC/amiibo/sha256.c).  m1_crypto.c is compiled with
+# -DM1_CRYPTO_SKIP_UID_FUNCTIONS and paired with the deterministic
+# m1_crypto_stub.c IV generator so encryption is reproducible on the host.
+# ------------------------------------------------------------------
+add_executable(test_espnow_crypto
+    test_espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+)
+target_include_directories(test_espnow_crypto PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/NFC/amiibo
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_espnow_crypto PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+)
+target_link_libraries(test_espnow_crypto PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_crypto PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_crypto COMMAND test_espnow_crypto)
+
+# ------------------------------------------------------------------
+# Module under test: espnow_secure (optional ESP-NOW encrypted session)
+#
+# Pure negotiation-frame helpers and stable pair-key derivation for optional
+# app-layer encryption.  Uses espnow_crypto + espnow_chunk in the test to prove
+# encrypted envelopes fit through app-layer fragmentation.
+# ------------------------------------------------------------------
+add_executable(test_espnow_secure
+    test_espnow_secure.c
+    ${M1_ROOT}/m1_csrc/espnow_secure.c
+    ${M1_ROOT}/m1_csrc/espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/espnow_chunk.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+)
+target_include_directories(test_espnow_secure PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/NFC/amiibo
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_espnow_secure PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+)
+target_link_libraries(test_espnow_secure PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_espnow_secure PRIVATE sanitizers)
+endif()
+add_test(NAME espnow_secure COMMAND test_espnow_secure)
+
+# ------------------------------------------------------------------
+# Module under test: m1_espnow_secure_link (firmware optional encryption
+# transport wrapper)
+#
+# Host test with stubbed m1_espnow_hal calls for plaintext fallback,
+# negotiation, and encrypted fragmented sends.
+# ------------------------------------------------------------------
+add_executable(test_m1_espnow_secure_link
+    test_m1_espnow_secure_link.c
+    ${M1_ROOT}/m1_csrc/m1_espnow_secure_link.c
+    ${M1_ROOT}/m1_csrc/espnow_secure.c
+    ${M1_ROOT}/m1_csrc/espnow_crypto.c
+    ${M1_ROOT}/m1_csrc/espnow_chunk.c
+    ${M1_ROOT}/m1_csrc/m1_crypto.c
+    ${M1_ROOT}/NFC/amiibo/sha256.c
+    ${STUBS_DIR}/m1_crypto_stub.c
+)
+target_include_directories(test_m1_espnow_secure_link PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/NFC/amiibo
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_m1_espnow_secure_link PRIVATE
+    M1_CRYPTO_SKIP_UID_FUNCTIONS
+)
+target_link_libraries(test_m1_espnow_secure_link PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_m1_espnow_secure_link PRIVATE sanitizers)
+endif()
+add_test(NAME m1_espnow_secure_link COMMAND test_m1_espnow_secure_link)
+
+# ------------------------------------------------------------------
 # Module under test: espnow_tictactoe (ESP-NOW Tic-Tac-Toe game logic)
 #
 # Pure-logic board validation, win detection, and move application.

@@ -12,8 +12,8 @@
  * scene replaces itself in the scene stack with SubGhzSceneReadRaw via
  * subghz_scene_replace(), so Back in Read Raw returns to the file browser.
  *
- * Parsed files show the action menu (Emulate / Info / Rename / Delete).
- *   Parsed files: Emulate, Info, Rename, Delete
+ * Parsed files show the action menu (Emulate / Send to Peer / Info / Rename / Delete).
+ *   Parsed files: Emulate, Send to Peer, Info, Rename, Delete
  *
  * "Emulate" for parsed files pushes the Transmitter scene which drives
  * the async-TX state machine.
@@ -47,6 +47,7 @@
 #include "subghz_submenu_model.h"
 #include "subghz_signal_fields.h"
 #include "subghz_signal_format.h"
+#include "m1_espnow_capture_share.h"
 
 /*============================================================================*/
 /* Action menu — unified action IDs                                           */
@@ -54,19 +55,24 @@
 
 enum {
     SAVED_ACTION_EMULATE = 0,
+    SAVED_ACTION_SEND_TO_PEER,
     SAVED_ACTION_INFO,
     SAVED_ACTION_RENAME,
     SAVED_ACTION_DELETE,
     SAVED_ACTION_SETTINGS,        /**< Per-file SignalSettings */
 };
 
-static const char *const parsed_action_labels[] = { "Emulate", "Info", "Rename", "Delete" };
+static const char *const parsed_action_labels[] = {
+    "Emulate", "Send to Peer", "Info", "Rename", "Delete"
+};
 /* Parsed-file label set when the protocol supports the SignalSettings
  * scene when the loaded protocol supports it. */
-static const char *const parsed_settings_labels[] = { "Emulate", "Info", "Settings", "Rename", "Delete" };
+static const char *const parsed_settings_labels[] = {
+    "Emulate", "Send to Peer", "Info", "Settings", "Rename", "Delete"
+};
 
-#define PARSED_ACTION_COUNT          4
-#define PARSED_SETTINGS_ACTION_COUNT 5
+#define PARSED_ACTION_COUNT          5
+#define PARSED_SETTINGS_ACTION_COUNT 6
 
 /* Action menu uses the reusable pure-logic submenu model.
  * Selection is reset on every scene_on_enter to match prior behaviour. */
@@ -90,19 +96,19 @@ static flipper_subghz_signal_t saved_signal;
 /**
  * @brief  Map selected action index to unified action ID.
  *         When the SignalSettings entry is present, it
- *         occupies index 2 between Info and Rename.
+ *         occupies index 3 between Info and Rename.
  */
 static uint8_t map_action(uint8_t sel)
 {
     if (has_settings_entry)
     {
-        /* Parsed-with-Settings layout: 0→Emulate, 1→Info, 2→Settings,
-         * 3→Rename, 4→Delete. */
-        if (sel == 2) return SAVED_ACTION_SETTINGS;
-        if (sel <= 1) return sel;   /* 0→Emulate, 1→Info */
-        return sel - 1;             /* 3→Rename(2), 4→Delete(3) */
+        /* Parsed-with-Settings layout: 0→Emulate, 1→Send to Peer,
+         * 2→Info, 3→Settings, 4→Rename, 5→Delete. */
+        if (sel == 3) return SAVED_ACTION_SETTINGS;
+        if (sel <= 2) return sel;
+        return sel - 1;             /* 4→Rename(3), 5→Delete(4) */
     }
-    return sel;                /* 0→Emulate, 1→Info, 2→Rename, 3→Delete */
+    return sel;                /* 0→Emulate, 1→Send, 2→Info, 3→Rename, 4→Delete */
 }
 
 /*============================================================================*/
@@ -222,6 +228,14 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         case SAVED_ACTION_INFO:
         {
             in_info_screen = true;
+            app->need_redraw = true;
+            return true;
+        }
+        case SAVED_ACTION_SEND_TO_PEER:
+        {
+            char full_path[80];
+            snprintf(full_path, sizeof(full_path), "0:%s", app->saved_filepath);
+            m1_espnow_capture_share_send_path(full_path);
             app->need_redraw = true;
             return true;
         }

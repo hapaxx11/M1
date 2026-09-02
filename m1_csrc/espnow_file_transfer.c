@@ -83,7 +83,7 @@ bool espnow_ft_send_offer(espnow_ft_ctx_t *ctx)
     if (!ctx || ctx->state != ESPNOW_FT_STATE_IDLE)
         return false;
 
-    /* Build OFFER: type(1) + seq(1) + filename(32) + size(4LE) + crc(4LE) + chunk_size(1) */
+    /* Build OFFER: type(1) + seq(1) + filename + size(4LE) + crc(4LE) + chunk_size(1) */
     uint8_t msg[2 + ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1];
     memset(msg, 0, sizeof(msg));
     msg[0] = ESPNOW_FT_MSG_OFFER;
@@ -111,7 +111,7 @@ bool espnow_ft_send_offer(espnow_ft_ctx_t *ctx)
     return ok;
 }
 
-bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type,
+bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type, uint8_t seq,
                              const uint8_t *data, size_t len)
 {
     if (!ctx)
@@ -135,6 +135,8 @@ bool espnow_ft_send_on_recv(espnow_ft_ctx_t *ctx, uint8_t type,
 
     case ESPNOW_FT_STATE_WAIT_ACK:
         if (type == ESPNOW_FT_MSG_ACK) {
+            if (seq != (uint8_t)(ctx->current_seq - 1u))
+                return false;
             /* ACK received — advance to next chunk or complete */
             ctx->retry_count = 0;
             if (ctx->bytes_transferred >= ctx->file_size) {
@@ -242,7 +244,7 @@ bool espnow_ft_recv_on_msg(espnow_ft_ctx_t *ctx,
     case ESPNOW_FT_MSG_OFFER:
         if (ctx->state != ESPNOW_FT_STATE_IDLE)
             return false;
-        /* Parse offer: filename(32) + size(4LE) + crc(4LE) + chunk_size(1) */
+        /* Parse offer: filename + size(4LE) + crc(4LE) + chunk_size(1) */
         if (len < ESPNOW_FT_FILENAME_MAX + 4 + 4 + 1)
             return false;
         memcpy(ctx->peer_mac, peer_mac, ESPNOW_FT_MAC_LEN);

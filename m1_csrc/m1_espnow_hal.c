@@ -188,7 +188,10 @@ bool m1_espnow_send(const uint8_t mac[6], const uint8_t *data, size_t len)
      * in a single SPI call without RPC multi-transaction chunking. */
     uint8_t payload[SPI_BUF_SIZE - 16];
     const size_t max_data = sizeof(payload) - 6;
-    if (len > max_data) len = max_data;
+    if (max_data != M1_ESPNOW_SEND_PAYLOAD_MAX)
+        return false;
+    if (len > max_data)
+        return false;
     if (len == 0) return false;
 
     memcpy(payload, mac, 6);
@@ -227,9 +230,14 @@ uint8_t m1_espnow_get_channel(void)
 /* File operations (FatFS adapter)                                          */
 /*==========================================================================*/
 
+/* Only one ESP-NOW file transfer (send or receive) is ever active at a
+ * time, so a single static FIL is shared across all open/read/write/close
+ * helpers below rather than each caller paying for its own 500+ byte
+ * FatFS file object. */
+static FIL s_file;
+
 void *m1_espnow_file_open(const char *path)
 {
-    static FIL s_file;  /* single concurrent transfer supported */
     FRESULT fr = f_open(&s_file, path, FA_WRITE | FA_CREATE_ALWAYS);
     if (fr != FR_OK) return NULL;
     return &s_file;
@@ -241,6 +249,29 @@ bool m1_espnow_file_write(void *handle, const uint8_t *data, size_t len)
     UINT bw;
     FRESULT fr = f_write((FIL *)handle, data, (UINT)len, &bw);
     return (fr == FR_OK && bw == (UINT)len);
+}
+
+void *m1_espnow_file_open_read(const char *path)
+{
+    FRESULT fr = f_open(&s_file, path, FA_READ | FA_OPEN_EXISTING);
+    if (fr != FR_OK) return NULL;
+    return &s_file;
+}
+
+bool m1_espnow_file_read(void *handle, uint8_t *data, size_t len,
+                         size_t *out_len)
+{
+    if (!handle) return false;
+    UINT br = 0;
+    FRESULT fr = f_read((FIL *)handle, data, (UINT)len, &br);
+    if (out_len) *out_len = br;
+    return fr == FR_OK;
+}
+
+bool m1_espnow_file_seek(void *handle, uint32_t offset)
+{
+    if (!handle) return false;
+    return f_lseek((FIL *)handle, offset) == FR_OK;
 }
 
 void m1_espnow_file_close(void *handle)

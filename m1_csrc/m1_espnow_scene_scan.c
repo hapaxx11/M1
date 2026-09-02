@@ -15,8 +15,10 @@
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_espnow_scene.h"
+#include "m1_espnow_scene_ctx.h"
 #include "m1_scene.h"
 #include "m1_espnow_hal.h"
+#include "m1_espnow_secure_link.h"
 #include "espnow_peer_session.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -40,15 +42,15 @@ static uint32_t s_last_poll_tick;
 static void scan_on_enter(M1SceneApp *app)
 {
     uint8_t mac[ESPNOW_MAC_LEN];
-    m1_espnow_get_mac(mac);
-    espnow_session_init(&s_session, "M1", mac, m1_espnow_get_channel());
 
-    if (!m1_espnow_start(s_session.our_channel)) {
+    if (!m1_espnow_start(m1_espnow_get_channel())) {
         app->need_redraw = true;
         m1_scene_pop(app);
         return;
     }
 
+    m1_espnow_get_mac(mac);
+    espnow_session_init(&s_session, "M1", mac, m1_espnow_get_channel());
     espnow_session_start_scan(&s_session);
     m1_espnow_announce();
     s_sel = 0;
@@ -105,7 +107,6 @@ static bool scan_on_event(M1SceneApp *app, M1SceneEvent event)
         return true;
 
     case M1SceneEventBack:
-        m1_espnow_stop();
         espnow_session_stop(&s_session);
         m1_scene_pop(app);
         return true;
@@ -184,6 +185,16 @@ static bool pair_on_event(M1SceneApp *app, M1SceneEvent event)
     if (m1_espnow_recv_msg(from_mac, msg_buf, sizeof(msg_buf), &msg_len)) {
         if (msg_len >= 1 && msg_buf[0] == ESPNOW_MSG_PAIR_ACCEPT) {
             espnow_session_pair_accepted(&s_session);
+            if (s_session.selected_peer_idx < s_session.peer_count) {
+                uint8_t local_mac[ESPNOW_MAC_LEN];
+                const espnow_peer_info_t *peer =
+                    &s_session.peers[s_session.selected_peer_idx];
+                m1_espnow_get_mac(local_mac);
+                m1_espnow_scene_ctx_set_peer(
+                    peer->mac, peer->name);
+                (void)m1_espnow_secure_link_configure(
+                    local_mac, peer->mac, s_session.confirm_code);
+            }
             app->need_redraw = true;
             /* Stay on pair screen showing confirm code briefly,
              * then pop back.  For now just pop. */

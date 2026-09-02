@@ -185,10 +185,12 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
     m1_scene_draw(&app);
     app.need_redraw = false;
 
-    /* Main event loop — button events only */
+    /* Main event loop — button events plus periodic M1SceneEventNone ticks.
+     * ESP-NOW scenes poll the coprocessor on these ticks so receive/status
+     * frames are processed without requiring a button press. */
     while (app.running)
     {
-        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
 
         if (ret == pdTRUE)
         {
@@ -196,9 +198,16 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
 
             if (q_item.q_evt_type == Q_EVENT_KEYPAD)
                 evt = translate_button();
+            else if (q_item.q_evt_type == Q_EVENT_SUBGHZ_TX)
+                evt = M1SceneEventSubghzTx;
+            else if (q_item.q_evt_type == Q_EVENT_IRRED_TX)
+                evt = M1SceneEventInfraredTx;
 
-            if (evt != M1SceneEventNone)
-                m1_scene_send_event(&app, evt);
+            m1_scene_send_event(&app, evt);
+        }
+        else
+        {
+            m1_scene_send_event(&app, M1SceneEventNone);
         }
 
         if (app.need_redraw)
