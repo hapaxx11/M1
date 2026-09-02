@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.8] - 2026-09-02
+
+### Changed
+
+- **Main menu: battery indicator moved further left** — The battery glyph added
+  in #741/#745 was positioned right up against the menu item icon column and
+  the selection highlight frame, with almost no gap. It is now shifted left to
+  use the free space above the M1 logo, leaving a comfortable margin before
+  the menu items.
 ## [0.9.3.7] - 2026-09-02
 
 ### Fixed
