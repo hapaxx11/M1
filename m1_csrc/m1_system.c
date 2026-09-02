@@ -936,79 +936,22 @@ static void splash_draw_status_icons(void)
 
 /*============================================================================*/
 /*
- * Draw a battery indicator icon with fill level and optional charging bolt.
- * Positioned at top-right corner of the display.
+ * Draw the battery indicator (frame + proportional fill + charging bolt +
+ * percentage text) at the top-right corner of the display.
  *
- *   Battery icon layout (18x9 + 2px nub):
- *
- *     percentage  ┌──────────────┐╗
- *       text      │ ████████     │║
- *                 └──────────────┘╝
- *
- *   Charging indicator: small lightning bolt drawn inside the battery body.
+ * The actual drawing is shared with the main menu via
+ * m1_draw_battery_indicator() (m1_display.c) so both screens show an
+ * identical battery glyph.
  */
 /*============================================================================*/
 static void splash_draw_battery_indicator(void)
 {
-	S_M1_Power_Status_t pwr;
-	char pct_str[8];
-
 	/* Force a one-time read so the splash shows real values — battery_service_init()
 	 * only configures the ICs and does not populate power_status. */
 	battery_status_update();
-	battery_power_status_get(&pwr);
-
-	uint8_t level = pwr.battery_level;
-	if (level > 100)
-		level = 100;
-
-	/* Battery icon geometry */
-	const uint8_t batt_body_w = 18;
-	const uint8_t batt_body_h = 9;
-	const uint8_t batt_nub_w = 2;
-	const uint8_t batt_nub_h = 5;
-	const uint8_t batt_fill_max = 14;  /* inner fill width: batt_body_w - 4 */
 
 	/* Position: top-right corner with 2px margin */
-	const uint8_t batt_x = M1_LCD_DISPLAY_WIDTH - batt_body_w - batt_nub_w - 2;
-	const uint8_t batt_y = 2;
-
-	/* Battery body outline */
-	u8g2_DrawFrame(&m1_u8g2, batt_x, batt_y, batt_body_w, batt_body_h);
-
-	/* Positive terminal nub */
-	u8g2_DrawBox(&m1_u8g2, batt_x + batt_body_w, batt_y + 2, batt_nub_w, batt_nub_h);
-
-	/* Fill bar proportional to battery level */
-	uint8_t fill_w = (uint8_t)((uint16_t)level * batt_fill_max / 100);
-	if (fill_w > 0)
-		u8g2_DrawBox(&m1_u8g2, batt_x + 2, batt_y + 2, fill_w, batt_body_h - 4);
-
-	/* Charging bolt overlay (stat: 0=none, 1=pre-charge, 2=fast charge, 3=done) */
-	if (pwr.stat == 1 || pwr.stat == 2)
-	{
-		/* Small 7-pixel lightning bolt centered in the battery body */
-		uint8_t bx = batt_x + batt_body_w / 2;
-		uint8_t by = batt_y + 1;
-
-		/* Draw bolt by toggling pixels (XOR) so it's visible over both
-		 * filled and empty areas */
-		u8g2_SetDrawColor(&m1_u8g2, 2); /* XOR mode */
-		u8g2_DrawPixel(&m1_u8g2, bx,     by);
-		u8g2_DrawPixel(&m1_u8g2, bx - 1, by + 1);
-		u8g2_DrawPixel(&m1_u8g2, bx,     by + 2);
-		u8g2_DrawPixel(&m1_u8g2, bx,     by + 3);
-		u8g2_DrawPixel(&m1_u8g2, bx + 1, by + 4);
-		u8g2_DrawPixel(&m1_u8g2, bx,     by + 5);
-		u8g2_DrawPixel(&m1_u8g2, bx - 1, by + 6);
-		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-	}
-
-	/* Percentage text to the left of the battery icon */
-	snprintf(pct_str, sizeof(pct_str), "%u%%", level);
-	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	uint8_t txt_w = u8g2_GetStrWidth(&m1_u8g2, pct_str);
-	u8g2_DrawStr(&m1_u8g2, batt_x - txt_w - 2, batt_y + batt_body_h - 1, pct_str);
+	m1_draw_battery_indicator(M1_LCD_DISPLAY_WIDTH - 2, 2);
 }
 
 

@@ -54,6 +54,19 @@
 
 #define MAIN_MENU_LOGO_FONT					M1_MAIN_LOGO_FONT_1B
 
+/* Main-menu battery indicator: right-aligned to just left of the menu item
+ * icon column (MAIN_MENU_ICON_LEFT_POS_X), in the free area above the logo. */
+#define MAIN_MENU_BATTERY_RIGHT_POS_X		(MAIN_MENU_ICON_LEFT_POS_X - 2)
+#define MAIN_MENU_BATTERY_TOP_POS_Y			2
+
+/* Battery indicator widget geometry — shared by the main menu and the home
+ * screen (see m1_draw_battery_indicator()). */
+#define BATTERY_ICON_BODY_W					18
+#define BATTERY_ICON_BODY_H					9
+#define BATTERY_ICON_NUB_W					2
+#define BATTERY_ICON_NUB_H					5
+#define BATTERY_ICON_FILL_MAX				14 /* inner fill width: body_w - 4 */
+
 #define SUB_MENU_TEXT_ITEMS					4 // rows
 #define SUB_MENU_TEXT_FRAME_TOP_POS_Y		0
 #define SUB_MENU_TXT_LEFT_POS_X				4
@@ -244,42 +257,62 @@ static uint8_t subgui_win_size(void)
 
 /*============================================================================*/
 /**
-  * @brief Draw a small battery indicator (outline + fill + percent) at (x,y).
-  *        Shows a lightning bolt when charging. Reads the cached power status,
-  *        so it is cheap to call each redraw.
+  * @brief Draw the standard battery indicator (frame + proportional fill +
+  *        charging bolt + percentage text), right-aligned to right_x.
+  *        This is the same widget used on the home screen; reused here so
+  *        the main menu shows an identical battery glyph. Reads the cached
+  *        power status, so it is cheap to call each redraw.
+  * @param right_x  X coordinate just past the icon's positive-terminal nub
+  * @param y         Y coordinate of the top of the battery frame
   */
 /*============================================================================*/
-static void draw_main_menu_battery(uint8_t x, uint8_t y)
+void m1_draw_battery_indicator(uint8_t right_x, uint8_t y)
 {
 	S_M1_Power_Status_t ps;
-	uint8_t level, fillw;
-	char buf[8];
+	char pct_str[8];
+	uint8_t level, fill_w, txt_w;
+	const uint8_t batt_x = right_x - BATTERY_ICON_BODY_W - BATTERY_ICON_NUB_W;
 
 	battery_power_status_get(&ps);
 	level = ps.battery_level;
 	if ( level > 100 ) level = 100;
 
-	/* Battery body (20x10) + positive-terminal tip */
-	u8g2_DrawFrame(&m1_u8g2, x, y, 20, 10);
-	u8g2_DrawBox(&m1_u8g2, x + 20, y + 3, 2, 4);
+	/* Battery body outline */
+	u8g2_DrawFrame(&m1_u8g2, batt_x, y, BATTERY_ICON_BODY_W, BATTERY_ICON_BODY_H);
 
-	/* Fill proportional to level, inside the 1px border (interior width 18) */
-	fillw = (uint8_t)(((uint16_t)level * 18U) / 100U);
-	if ( fillw > 0 )
-		u8g2_DrawBox(&m1_u8g2, x + 1, y + 1, fillw, 8);
+	/* Positive terminal nub */
+	u8g2_DrawBox(&m1_u8g2, batt_x + BATTERY_ICON_BODY_W, y + 2, BATTERY_ICON_NUB_W, BATTERY_ICON_NUB_H);
 
-	/* Charging: a small lightning bolt just right of the icon (clear of the menu) */
-	if ( ps.stat != CHRG_STAT_NOT_CHARGING )
+	/* Fill bar proportional to battery level */
+	fill_w = (uint8_t)(((uint16_t)level * BATTERY_ICON_FILL_MAX) / 100U);
+	if ( fill_w > 0 )
+		u8g2_DrawBox(&m1_u8g2, batt_x + 2, y + 2, fill_w, BATTERY_ICON_BODY_H - 4);
+
+	/* Charging bolt overlay, drawn only while actively charging (not once complete) */
+	if ( (ps.stat == CHRG_STAT_PRE_CHARGE) || (ps.stat == CHRG_STAT_FAST_CHARGE) )
 	{
-		uint8_t bx = x + 24, by = y;
-		u8g2_DrawTriangle(&m1_u8g2, bx + 3, by,     bx,     by + 5, bx + 3, by + 5);
-		u8g2_DrawTriangle(&m1_u8g2, bx + 1, by + 4, bx + 4, by + 4, bx + 1, by + 9);
+		/* Small 7-pixel lightning bolt centered in the battery body, drawn by
+		 * toggling pixels (XOR) so it stays visible over both filled and
+		 * empty areas. */
+		uint8_t bx = batt_x + BATTERY_ICON_BODY_W / 2;
+		uint8_t by = y + 1;
+
+		u8g2_SetDrawColor(&m1_u8g2, 2); /* XOR mode */
+		u8g2_DrawPixel(&m1_u8g2, bx,     by);
+		u8g2_DrawPixel(&m1_u8g2, bx - 1, by + 1);
+		u8g2_DrawPixel(&m1_u8g2, bx,     by + 2);
+		u8g2_DrawPixel(&m1_u8g2, bx,     by + 3);
+		u8g2_DrawPixel(&m1_u8g2, bx + 1, by + 4);
+		u8g2_DrawPixel(&m1_u8g2, bx,     by + 5);
+		u8g2_DrawPixel(&m1_u8g2, bx - 1, by + 6);
+		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	}
 
-	/* Percentage text BELOW the icon, kept in the left column */
+	/* Percentage text to the left of the battery icon */
+	snprintf(pct_str, sizeof(pct_str), "%u%%", level);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	sprintf(buf, "%u%%", (unsigned)level);
-	u8g2_DrawStr(&m1_u8g2, x, y + 20, buf);
+	txt_w = u8g2_GetStrWidth(&m1_u8g2, pct_str);
+	u8g2_DrawStr(&m1_u8g2, batt_x - txt_w - 2, y + BATTERY_ICON_BODY_H - 1, pct_str);
 }
 
 /*============================================================================*/
@@ -566,7 +599,7 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 		u8g2_DrawStr(&m1_u8g2, MAIN_MENU_LOGO_LEFT_POS_X + MAIN_MENU_LOGO_WIDTH + 1, MAIN_MENU_LOGO_TOP_POS_Y + MAIN_MENU_LOGO_HEIGHT, "M1");
 
 		// Battery indicator in the free top-left area above the logo
-		draw_main_menu_battery(2, 2);
+		m1_draw_battery_indicator(MAIN_MENU_BATTERY_RIGHT_POS_X, MAIN_MENU_BATTERY_TOP_POS_Y);
 	} // if ( menu_level_id==0 )
 
 	// Draw the scroll bar
