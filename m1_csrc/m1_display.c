@@ -785,26 +785,50 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
                 u8g2_DrawStr(&m1_u8g2, 2, y, trunc); y += line_height;
             }
 
-            /* Draw buttons at the bottom with rounded corners */
-            for (uint8_t i = 0; i < button_cnt; i++) {
-                u8g2_uint_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_labels[i]) + 6u;
-                int16_t btn_x_i = (int16_t)((128u / (button_cnt + 1u)) * (i + 1u)) - (int16_t)(btn_w / 2u);
-                int16_t max_x = (btn_w < 128u) ? (int16_t)(128u - btn_w) : 0;
+            if (button_cnt <= 2) {
+                /* Two (or one) short buttons: side-by-side pill layout at the
+                 * bottom of the screen. */
+                for (uint8_t i = 0; i < button_cnt; i++) {
+                    u8g2_uint_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_labels[i]) + 6u;
+                    int16_t btn_x_i = (int16_t)((128u / (button_cnt + 1u)) * (i + 1u)) - (int16_t)(btn_w / 2u);
+                    int16_t max_x = (btn_w < 128u) ? (int16_t)(128u - btn_w) : 0;
 
-                if (btn_x_i < 0)
-                    btn_x_i = 0;
-                else if (btn_x_i > max_x)
-                    btn_x_i = max_x;
+                    if (btn_x_i < 0)
+                        btn_x_i = 0;
+                    else if (btn_x_i > max_x)
+                        btn_x_i = max_x;
 
-                u8g2_uint_t btn_x = (u8g2_uint_t)btn_x_i;
-                u8g2_uint_t box_x = (btn_x >= 2u) ? (btn_x - 2u) : 0u;
+                    u8g2_uint_t btn_x = (u8g2_uint_t)btn_x_i;
+                    u8g2_uint_t box_x = (btn_x >= 2u) ? (btn_x - 2u) : 0u;
 
-                if (i == cursor) {
-                    u8g2_DrawRBox(&m1_u8g2, box_x, 50, btn_w, 12, 2);
-                    u8g2_SetDrawColor(&m1_u8g2, 0);
+                    if (i == cursor) {
+                        u8g2_DrawRBox(&m1_u8g2, box_x, 50, btn_w, 12, 2);
+                        u8g2_SetDrawColor(&m1_u8g2, 0);
+                    }
+                    u8g2_DrawStr(&m1_u8g2, btn_x, 60, btn_labels[i]);
+                    u8g2_SetDrawColor(&m1_u8g2, 1);
                 }
-                u8g2_DrawStr(&m1_u8g2, btn_x, 60, btn_labels[i]);
-                u8g2_SetDrawColor(&m1_u8g2, 1);
+            } else {
+                /* Three or more (or long) labels don't fit side-by-side on a
+                 * 128px-wide screen without overlapping — stack them as a
+                 * vertical, single-column list instead. */
+                uint8_t row_h = 10u;
+                uint8_t list_y = (y + 3u <= 64u - (button_cnt * row_h)) ?
+                                  y + 3u : (uint8_t)(64u - (button_cnt * row_h) - 1u);
+
+                for (uint8_t i = 0; i < button_cnt; i++) {
+                    u8g2_uint_t btn_w = u8g2_GetStrWidth(&m1_u8g2, btn_labels[i]) + 6u;
+                    u8g2_uint_t box_x = 2u;
+                    u8g2_uint_t btn_x = box_x + 3u;
+                    uint8_t box_y = (uint8_t)(list_y + i * row_h);
+
+                    if (i == cursor) {
+                        u8g2_DrawRBox(&m1_u8g2, box_x, box_y, btn_w, row_h - 1u, 2);
+                        u8g2_SetDrawColor(&m1_u8g2, 0);
+                    }
+                    u8g2_DrawStr(&m1_u8g2, btn_x, box_y + row_h - 3u, btn_labels[i]);
+                    u8g2_SetDrawColor(&m1_u8g2, 1);
+                }
             }
         } while (m1_u8g2_nextpage());
 
