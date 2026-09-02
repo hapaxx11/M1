@@ -385,6 +385,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_alutech_at_4n.c
     ../../Sub_Ghz/subghz_alutech_at_4n_table_builtin.c
     ../../Sub_Ghz/subghz_proto_pirate_timing.c
+    ../../Sub_Ghz/subghz_weather_scan.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c

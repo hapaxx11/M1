@@ -2433,6 +2433,23 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_scene_state COMMAND test_subghz_scene_state)
 
+# ------------------------------------------------------------------
+# Module under test: subghz_weather_scan (Momentum-style AM/FSK dwell
+# state machine for the Weather Station RX scan loop). Pure logic, no deps.
+# ------------------------------------------------------------------
+add_executable(test_subghz_weather_scan
+    test_subghz_weather_scan.c
+    ${M1_ROOT}/Sub_Ghz/subghz_weather_scan.c
+)
+target_include_directories(test_subghz_weather_scan PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_weather_scan PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_weather_scan PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_weather_scan COMMAND test_subghz_weather_scan)
+
 # ── Submenu model ──
 add_executable(test_subghz_submenu_model
     test_subghz_submenu_model.c
