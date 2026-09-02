@@ -20,6 +20,7 @@
 #include "m1_io_defs.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
+#include "m1_display_util.h"
 #include "m1_scene.h"
 #include "battery.h"   /* battery_power_status_get() for the main-menu indicator */
 
@@ -270,7 +271,8 @@ void m1_draw_battery_indicator(uint8_t right_x, uint8_t y)
 {
 	S_M1_Power_Status_t ps;
 	char pct_str[8];
-	uint8_t level, fill_w, txt_w;
+	uint8_t level, fill_w;
+	u8g2_uint_t txt_w;
 	const uint8_t batt_x = right_x - BATTERY_ICON_BODY_W - BATTERY_ICON_NUB_W;
 
 	battery_power_status_get(&ps);
@@ -311,7 +313,7 @@ void m1_draw_battery_indicator(uint8_t right_x, uint8_t y)
 	/* Percentage text to the left of the battery icon */
 	snprintf(pct_str, sizeof(pct_str), "%u%%", level);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-	txt_w = u8g2_GetStrWidth(&m1_u8g2, pct_str);
+	txt_w = m1_battery_pct_text_width(&m1_u8g2, pct_str);
 	u8g2_DrawStr(&m1_u8g2, batt_x - txt_w - 2, y + BATTERY_ICON_BODY_H - 1, pct_str);
 }
 
