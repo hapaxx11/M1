@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.5] - 2026-09-02
+
+### Fixed
+
+- **WiFi: post-deauth follow-up menu overlap** — `m1_message_box_choice()` now
+  stacks button labels vertically when there are more than two of them, fixing the
+  garbled/overlapping "Handshake / Evil Portal / Done" prompt shown after a per-target deauth.
+  "Handshake / Evil Portal / Done" prompt shown after a per-target deauth.
 ## [0.9.3.4] - 2026-09-02
 
 ### Added
