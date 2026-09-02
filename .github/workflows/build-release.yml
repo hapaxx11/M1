@@ -328,7 +328,16 @@ jobs:
       # ------------------------------------------------------------------ #
       - name: Build firmware
         run: |
-          cmake --build build --parallel $(nproc)
+          cmake --build build --parallel $(nproc) 2>&1 | tee build-firmware.log
+
+      # ------------------------------------------------------------------ #
+      # 6b. Check RAM budget (early warning, non-blocking)
+      # ------------------------------------------------------------------ #
+      # See tools/check_ram_budget.sh and the "Static RAM Budget" section of
+      # .github/skills/memory-heap/SKILL.md.
+      - name: Check RAM budget
+        run: |
+          bash tools/check_ram_budget.sh build-firmware.log
 
       # ------------------------------------------------------------------ #
       # 7. Verify artifacts and print memory usage

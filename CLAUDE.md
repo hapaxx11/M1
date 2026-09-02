@@ -27,7 +27,7 @@ from the relevant skills.
 | Any scene, menu, button bar, font, saved-item UI, post-connection navigation | [`ui-scene-architecture`](.github/skills/ui-scene-architecture/SKILL.md) |
 | Adding tests, extracting pure logic, refactors, the phase-checklist workflow | [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) |
 | Radio / ESP32 / NFC / IR / Read Raw / backlight lifecycle & async RTOS flows | [`hardware-state-mgmt`](.github/skills/hardware-state-mgmt/SKILL.md) |
-| `malloc`/heap/FreeRTOS/ISR allocation, heap-redirect checklist | [`memory-heap`](.github/skills/memory-heap/SKILL.md) |
+| `malloc`/heap/FreeRTOS/ISR allocation, heap-redirect checklist, adding a new static/global buffer | [`memory-heap`](.github/skills/memory-heap/SKILL.md) |
 | Updating vendored libs (u8g2, FreeRTOS, FatFs, IRMP) | [`vendored-deps`](.github/skills/vendored-deps/SKILL.md) |
 | Any change needing a changelog entry or documentation update | [`docs-changelog`](.github/skills/docs-changelog/SKILL.md) |
 | Fork auditing, upstream comparison, cherry-pick decisions | [`forks-tracker`](.github/skills/forks-tracker/SKILL.md) |
@@ -84,6 +84,7 @@ Terminology used when communicating with the agent about the M1 UI.
 ## Workflow Rules
 
 - **Always build after code changes** — if you edit source code, you must build it yourself. Do not tell the user to build; just do it.
+- **RAM is critically tight — always check the linker's memory-usage summary after building.** The STM32H573 `RAM` region has almost no headroom left (~144 bytes free as of the PR #737 RAM-overflow fix — see the `memory-heap` skill's Static RAM Budget section). Any new `static`/global buffer, struct, or array is at high risk of overflowing the link. Read the `Memory region ... RAM: ...` line the linker prints on every build (also re-checked non-blockingly by CI via `tools/check_ram_budget.sh`) and treat a high/rising percentage as a signal to revisit your change, not just a build-passed checkbox.
 - **Do NOT build for non-compilation changes** — if a session only modifies files that
   do not affect compilation (`.md` files, `documentation/`, `ir_database/`,
   `subghz_database/`, `subghz_playlist/`, `LICENSE`, `COPYING.txt`, IDE project files

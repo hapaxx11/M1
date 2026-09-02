@@ -28,7 +28,7 @@ current task needs to be loaded.
 | [`ui-scene-architecture`](.github/skills/ui-scene-architecture/SKILL.md) | Scenes, menus, button bars, fonts, saved-item UI, post-connection nav |
 | [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) | Host tests, pure-logic extraction, phase checklist, modularization |
 | [`hardware-state-mgmt`](.github/skills/hardware-state-mgmt/SKILL.md) | Async RTOS + radio/ESP32/NFC/IR/Read Raw/backlight lifecycles |
-| [`memory-heap`](.github/skills/memory-heap/SKILL.md) | `malloc`/heap/FreeRTOS/ISR allocation, heap-redirect checklist |
+| [`memory-heap`](.github/skills/memory-heap/SKILL.md) | `malloc`/heap/FreeRTOS/ISR allocation, heap-redirect checklist, static RAM budget for new global/static buffers |
 | [`vendored-deps`](.github/skills/vendored-deps/SKILL.md) | Updating u8g2 / FreeRTOS / FatFs / IRMP |
 | [`docs-changelog`](.github/skills/docs-changelog/SKILL.md) | Changelog fragments + documentation update matrix |
 | [`forks-tracker`](.github/skills/forks-tracker/SKILL.md) | Fork auditing, upstream comparison, cherry-pick decisions |
