@@ -13,6 +13,7 @@
 /*************************** I N C L U D E S **********************************/
 
 #include <stdint.h>
+#include <stdio.h>
 //#include "stm32h5xx_hal.h"
 //#include "main.h"
 #include "m1_lp5814.h"
@@ -20,6 +21,7 @@
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_scene.h"
+#include "battery.h"   /* battery_power_status_get() for the main-menu indicator */
 
 /*************************** D E F I N E S ************************************/
 
@@ -238,6 +240,46 @@ void m1_gui_menu_update(const S_M1_Menu_t *phmenu, uint8_t sel_item, uint8_t dir
 static uint8_t subgui_win_size(void)
 {
 	return (menu_level_id == 1) ? m1_menu_max_visible() : menu_window_sizes[0];
+}
+
+/*============================================================================*/
+/**
+  * @brief Draw a small battery indicator (outline + fill + percent) at (x,y).
+  *        Shows a lightning bolt when charging. Reads the cached power status,
+  *        so it is cheap to call each redraw.
+  */
+/*============================================================================*/
+static void draw_main_menu_battery(uint8_t x, uint8_t y)
+{
+	S_M1_Power_Status_t ps;
+	uint8_t level, fillw;
+	char buf[8];
+
+	battery_power_status_get(&ps);
+	level = ps.battery_level;
+	if ( level > 100 ) level = 100;
+
+	/* Battery body (20x10) + positive-terminal tip */
+	u8g2_DrawFrame(&m1_u8g2, x, y, 20, 10);
+	u8g2_DrawBox(&m1_u8g2, x + 20, y + 3, 2, 4);
+
+	/* Fill proportional to level, inside the 1px border (interior width 18) */
+	fillw = (uint8_t)(((uint16_t)level * 18U) / 100U);
+	if ( fillw > 0 )
+		u8g2_DrawBox(&m1_u8g2, x + 1, y + 1, fillw, 8);
+
+	/* Charging: a small lightning bolt just right of the icon (clear of the menu) */
+	if ( ps.stat != CHRG_STAT_NOT_CHARGING )
+	{
+		uint8_t bx = x + 24, by = y;
+		u8g2_DrawTriangle(&m1_u8g2, bx + 3, by,     bx,     by + 5, bx + 3, by + 5);
+		u8g2_DrawTriangle(&m1_u8g2, bx + 1, by + 4, bx + 4, by + 4, bx + 1, by + 9);
+	}
+
+	/* Percentage text BELOW the icon, kept in the left column */
+	u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+	sprintf(buf, "%u%%", (unsigned)level);
+	u8g2_DrawStr(&m1_u8g2, x, y + 20, buf);
 }
 
 /*============================================================================*/
@@ -522,6 +564,9 @@ uint8_t m1_gui_submenu_update(const char *phmenu[], uint8_t num_items, uint8_t s
 		u8g2_DrawXBMP(&m1_u8g2, MAIN_MENU_LOGO_LEFT_POS_X, MAIN_MENU_LOGO_TOP_POS_Y, MAIN_MENU_LOGO_WIDTH, MAIN_MENU_LOGO_HEIGHT, m1_logo_26x14);
 		u8g2_SetFont(&m1_u8g2, MAIN_MENU_LOGO_FONT);
 		u8g2_DrawStr(&m1_u8g2, MAIN_MENU_LOGO_LEFT_POS_X + MAIN_MENU_LOGO_WIDTH + 1, MAIN_MENU_LOGO_TOP_POS_Y + MAIN_MENU_LOGO_HEIGHT, "M1");
+
+		// Battery indicator in the free top-left area above the logo
+		draw_main_menu_battery(2, 2);
 	} // if ( menu_level_id==0 )
 
 	// Draw the scroll bar
