@@ -7,7 +7,7 @@
  * Scene implementation is split across five files following the
  * m1_subghz_scene_*.c convention (Phase D):
  *
- *   m1_settings_scene_menu.c    — top-level 7-item menu + LCD/About/Dashboard
+ *   m1_settings_scene_menu.c    — top-level 6-item menu + LCD/Dashboard
  *   m1_settings_scene_storage.c — Storage sub-menu + 5 storage delegates
  *   m1_settings_scene_power.c   — Power sub-menu + 3 power delegates
  *   m1_settings_scene_fw.c      — Firmware Update sub-menu + 4 fw delegates
@@ -51,7 +51,6 @@ typedef enum {
     SettingsSceneEsp32Download,
     SettingsSceneEsp32Backup,
     SettingsSceneEsp32CheckInfo,
-    SettingsSceneAbout,
     SettingsSceneDashboard,
     SettingsSceneCount
 } SettingsSceneId;
@@ -63,7 +62,6 @@ typedef enum {
 /* m1_settings_scene_menu.c */
 extern const M1SceneHandlers settings_scene_menu_handlers;
 extern const M1SceneHandlers settings_scene_lcd_handlers;
-extern const M1SceneHandlers settings_scene_about_handlers;
 extern const M1SceneHandlers settings_scene_dashboard_handlers;
 
 /* m1_settings_scene_storage.c */

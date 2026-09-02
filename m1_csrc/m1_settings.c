@@ -28,7 +28,6 @@
 #include "m1_display.h"
 #include "ff.h"
 #include "m1_log_debug.h"
-#include "m1_fw_update_bl.h"
 #include "m1_system.h"
 #include "m1_file_util.h"
 #include "m1_scene.h"
@@ -45,9 +44,6 @@
 #define SETTINGS_FILE_PATH        "0:/System/settings.cfg"
 #define SETTINGS_FILE_MAX_SIZE    512
 #define RGB_BACKLIGHT_COLOR_KEY   "rgb_backlight_color="
-
-/* (ABOUT_BOX defines and SETTING_ABOUT_CHOICES_MAX removed — About screen
- * now uses settings_about_draw_page() with full-screen redraw per page.) */
 
 /* LCD & Notifications menu items */
 #if M1_HAS_RGB_BACKLIGHT
@@ -85,7 +81,6 @@ static const char *s_text_size_text[] = { "Small", "Medium", "Large" };
 
 void menu_settings_init(void);
 void menu_settings_exit(void);
-void settings_about(void);
 void settings_save_to_sd(void);
 #if M1_HAS_RGB_BACKLIGHT
 void app_rgb_backlight_run(void);
@@ -573,106 +568,6 @@ void settings_power(void)
 {
 	;
 } // void settings_power(void)
-
-
-/*============================================================================*/
-/**
-  * @brief  About screen — paginated info view without bottom bar.
-  *         L/R navigation is intuitive; a small page indicator replaces
-  *         the old Prev/Next bar to reclaim screen space.
-  */
-/*============================================================================*/
-
-#define ABOUT_PAGES  3   /* FW info, Company info, M1 image */
-
-static void settings_about_draw_page(uint8_t choice)
-{
-    char buf[48];
-
-    m1_u8g2_firstpage();
-    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
-
-    /* Title */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-    m1_draw_text(&m1_u8g2, 2, 9, 120, "About", TEXT_ALIGN_CENTER);
-
-    /* Separator line */
-    u8g2_DrawHLine(&m1_u8g2, 0, 10, M1_LCD_DISPLAY_WIDTH);
-
-    /* Page content — starts at y=20, full height available */
-    switch (choice)
-    {
-    case 0: /* FW info */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_B);
-        u8g2_DrawStr(&m1_u8g2, 4, 22, "M1 by Hapax");
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        snprintf(buf, sizeof(buf), "%d.%d.%d.%d-Hapax.%d",
-                 m1_device_stat.config.fw_version_major,
-                 m1_device_stat.config.fw_version_minor,
-                 m1_device_stat.config.fw_version_build,
-                 m1_device_stat.config.fw_version_rc,
-                 M1_HAPAX_REVISION);
-        u8g2_DrawStr(&m1_u8g2, 4, 34, buf);
-        snprintf(buf, sizeof(buf), "Active bank: %d",
-                 (m1_device_stat.active_bank == BANK1_ACTIVE) ? 1 : 2);
-        u8g2_DrawStr(&m1_u8g2, 4, 46, buf);
-        break;
-
-    case 1: /* Company info */
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 4, 22, "MonstaTek Inc.");
-        u8g2_DrawStr(&m1_u8g2, 4, 34, "San Jose, CA, USA");
-        break;
-
-    default: /* M1 device image */
-        u8g2_DrawXBMP(&m1_u8g2, 23, 14, 82, 36, m1_device_82x36);
-        break;
-    }
-
-    /* Page indicator "< N/M >" at bottom right — no inverted bar */
-    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-    snprintf(buf, sizeof(buf), "< %d/%d >", choice + 1, ABOUT_PAGES);
-    uint8_t tw = u8g2_GetStrWidth(&m1_u8g2, buf);
-    u8g2_DrawStr(&m1_u8g2, (M1_LCD_DISPLAY_WIDTH - tw) / 2, 62, buf);
-
-    m1_u8g2_nextpage();
-}
-
-void settings_about(void)
-{
-    S_M1_Buttons_Status this_button_status;
-    S_M1_Main_Q_t q_item;
-    BaseType_t ret;
-    uint8_t choice = 0;
-
-    settings_about_draw_page(choice);
-
-    while (1)
-    {
-        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-        if (ret != pdTRUE) continue;
-        if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
-
-        ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-        if (ret != pdTRUE) continue;
-
-        if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            xQueueReset(main_q_hdl);
-            break;
-        }
-        else if (this_button_status.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            choice = (choice == 0) ? (ABOUT_PAGES - 1) : (choice - 1);
-            settings_about_draw_page(choice);
-        }
-        else if (this_button_status.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            choice = (choice + 1) % ABOUT_PAGES;
-            settings_about_draw_page(choice);
-        }
-    }
-}
 
 
 /*============================================================================*/

@@ -5,7 +5,7 @@
  * @brief  Settings Scene Manager — scene registry and entry point.
  *
  * Scene implementations live in per-group files (Phase D split):
- *   m1_settings_scene_menu.c    — top-level menu + LCD/About/Dashboard delegates
+ *   m1_settings_scene_menu.c    — top-level menu + LCD/Dashboard delegates
  *   m1_settings_scene_storage.c — Storage sub-menu + 5 storage delegates
  *   m1_settings_scene_power.c   — Power sub-menu + 3 power delegates
  *   m1_settings_scene_fw.c      — Firmware Update sub-menu + 4 fw delegates
@@ -27,7 +27,6 @@ static const M1SceneHandlers *const scene_registry[SettingsSceneCount] = {
     /* Top-level menu */
     [SettingsSceneMenu]             = &settings_scene_menu_handlers,
     [SettingsSceneLCD]              = &settings_scene_lcd_handlers,
-    [SettingsSceneAbout]            = &settings_scene_about_handlers,
     [SettingsSceneDashboard]        = &settings_scene_dashboard_handlers,
 
     /* Storage sub-menu + delegates */

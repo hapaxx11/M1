@@ -2,7 +2,7 @@
 
 /**
  * @file   m1_settings_scene_menu.c
- * @brief  Settings top-level menu scene + LCD, About, and Dashboard delegates.
+ * @brief  Settings top-level menu scene + LCD and Dashboard delegates.
  *
  * Submenu model: uses `subghz_submenu_model_t` + `m1_submenu_draw/event` for
  * consistent font-aware layout and automatic visible-count sync.
@@ -32,14 +32,6 @@ static void lcd_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
-static void about_on_enter(M1SceneApp *app)
-{
-    (void)app;
-    settings_about();
-    app->running = true;
-    m1_scene_pop(app);
-}
-
 static void dashboard_on_enter(M1SceneApp *app)
 {
     (void)app;
@@ -49,14 +41,13 @@ static void dashboard_on_enter(M1SceneApp *app)
 }
 
 const M1SceneHandlers settings_scene_lcd_handlers       = { .on_enter = lcd_on_enter       };
-const M1SceneHandlers settings_scene_about_handlers     = { .on_enter = about_on_enter     };
 const M1SceneHandlers settings_scene_dashboard_handlers = { .on_enter = dashboard_on_enter };
 
 /*==========================================================================*/
 /* Top-level Settings menu                                                  */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  7
+#define MENU_ITEM_COUNT  6
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Dashboard",
@@ -65,7 +56,6 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Power",
     "Firmware update",
     "ESP32 update",
-    "About",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -75,7 +65,6 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     SettingsScenePowerMenu,
     SettingsSceneFwUpdateMenu,
     SettingsSceneEsp32Menu,
-    SettingsSceneAbout,
 };
 
 static subghz_submenu_model_t s_menu_model;
