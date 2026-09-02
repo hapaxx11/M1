@@ -28,6 +28,9 @@
 #include "res_string.h"
 #include "lfrfid.h"
 #include "lfrfid_file.h"
+#include "lfrfid_protocol.h"
+#include "lfrfid_protocol_fdx_b.h"
+#include "m1_pet_tag.h"
 #include "privateprofilestring.h"
 #include "m1_file_util.h"
 #include "m1_diag.h"
@@ -110,9 +113,15 @@ static char *lfrfid_protocol_menu_items[LFRFIDProtocolMax];
 static uint8_t lfrfid_uiview_gui_latest_param;
 S_M1_RFID_Record_t record_stat;
 
+/* Pet Tag Scanner mode: when true, the read-complete view renders the
+ * FDX-B pet-chip layout (ISO FDX-B / ID / Country / Animal) instead of the
+ * generic protocol data view. */
+static bool s_lfrfid_pet_scan = false;
+
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
 void rfid_125khz_read(void);
+void rfid_125khz_pet_scan(void);
 void rfid_125khz_saved(void);
 void rfid_125khz_add_manually(void);
 void rfid_125khz_utilities(void);
@@ -354,6 +363,39 @@ void rfid_125khz_read(void)
 
 /*============================================================================*/
 /*
+  * @brief  rfid_125khz_pet_scan
+  *
+  * Pet Tag Scanner: reads a 125 kHz tag and presents ISO 11784/11785 FDX-B
+  * animal microchips in a pet-chip view (ID / Country / Animal).  Reuses the
+  * standard read view pipeline with pet-scan rendering enabled.
+  * @param  None
+  * @retval None
+ */
+/*============================================================================*/
+void rfid_125khz_pet_scan(void)
+{
+	s_lfrfid_pet_scan = true;
+
+	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+	lfrfid_uiview_gui_latest_param = 0xFF; // Initialize with an invalid parameter
+	// init
+	m1_uiView_functions_init(VIEW_MODE_LFRFID_READ_END, view_lfrfid_read_table);
+	m1_uiView_display_switch(VIEW_MODE_LFRFID_READ, 0);
+
+	// loop
+	while( m1_uiView_q_message_process() )
+	{
+		;
+	}
+
+	s_lfrfid_pet_scan = false;
+
+} // void rfid_125khz_pet_scan(void)
+
+
+
+/*============================================================================*/
+/*
   * @brief  rfid read
   * @param  None
   * @retval None
@@ -431,6 +473,57 @@ static void lfrfid_read_destroy(uint8_t param)
 
 /*============================================================================*/
 /*
+  * @brief  Draw the Pet Tag Scanner read-complete view for an FDX-B tag.
+  *
+  * Renders the ISO FDX-B pet-chip layout: title, 15-digit ID
+  * (country + national code), country code and animal-application flag,
+  * with the standard Retry / More bottom bar.  Non-FDX-B tags fall back to a
+  * short "not a pet tag" notice while still allowing Retry.
+ */
+/*============================================================================*/
+static void lfrfid_pet_read_complete_draw(void)
+{
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	m1_u8g2_firstpage(); // This call required for page drawing in mode 1
+
+	if( lfrfid_tag_info.protocol==LFRFIDProtocolFDX_B )
+	{
+		uint8_t data[FDX_B_DECODED_SIZE];
+		m1_pet_tag_info_t pet;
+		char line[32];
+
+		protocol_get_data(lfrfid_tag_info.protocol, data, sizeof(data));
+		m1_pet_tag_decode_fdxb(data, &pet);
+
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		m1_draw_text(&m1_u8g2, 2, 12,124,"ISO FDX-B", TEXT_ALIGN_LEFT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+
+		snprintf(line, sizeof(line), "ID: %s", pet.id_string);
+		m1_draw_text(&m1_u8g2, 2, 24,124,line, TEXT_ALIGN_LEFT);
+
+		snprintf(line, sizeof(line), "Country: %u", (unsigned)pet.country_code);
+		m1_draw_text(&m1_u8g2, 2, 34,124,line, TEXT_ALIGN_LEFT);
+
+		snprintf(line, sizeof(line), "Animal: %s", pet.animal ? "Yes" : "No");
+		m1_draw_text(&m1_u8g2, 2, 44,124,line, TEXT_ALIGN_LEFT);
+	}
+	else
+	{
+		u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+		m1_draw_text(&m1_u8g2, 2, 12,124,"Pet Scanner", TEXT_ALIGN_LEFT);
+		u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+		m1_draw_text(&m1_u8g2, 2, 30,124,"Not an FDX-B", TEXT_ALIGN_LEFT);
+		m1_draw_text(&m1_u8g2, 2, 40,124,"pet tag", TEXT_ALIGN_LEFT);
+	}
+
+	m1_draw_bottom_bar(&m1_u8g2, arrowleft_8x8, res_string(IDS_RETRY),res_string(IDS_MORE),arrowright_8x8 );
+
+	m1_u8g2_nextpage(); // Update display RAM
+}
+
+/*============================================================================*/
+/*
   * @brief
   * @param
   * @retval
@@ -467,6 +560,13 @@ static void lfrfid_read_update(uint8_t param)
     	char *card_num;
 
     	char szString[64];
+
+    	if( s_lfrfid_pet_scan )
+    	{
+    		lfrfid_pet_read_complete_draw();
+    		return;
+    	}
+
     	lfrfid_protocol_make_menu_list(lfrfid_tag_info.protocol, szString);
 
 		u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
