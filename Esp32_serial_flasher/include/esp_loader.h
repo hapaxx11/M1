@@ -88,7 +88,11 @@ typedef struct {
 typedef struct {
     uint32_t addr;
     uint32_t size;
-    uint8_t *data;
+    /* M1 LOCAL MODIFICATION (issue #747) — do not remove during upgrades.
+     * `const` keeps the ~91 KB `esp_stub[]` payloads in flash (.rodata)
+     * instead of RAM (.data).  See esp_stubs.c and the Local Modification
+     * Registry in .github/skills/vendored-deps/SKILL.md. */
+    const uint8_t *data;
 } esp_loader_bin_segment_t;
 
 typedef struct {
