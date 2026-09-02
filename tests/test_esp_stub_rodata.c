@@ -44,15 +44,16 @@ static char *read_file(const char *path)
 {
     FILE *f = fopen(path, "rb");
     TEST_ASSERT_NOT_NULL_MESSAGE(f, path);
-    fseek(f, 0, SEEK_END);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, fseek(f, 0, SEEK_END), path);
     long len = ftell(f);
-    TEST_ASSERT_GREATER_THAN_INT(0, (int)len);
-    fseek(f, 0, SEEK_SET);
+    TEST_ASSERT_MESSAGE(len > 0, path);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, fseek(f, 0, SEEK_SET), path);
     char *buf = malloc((size_t)len + 1);
     TEST_ASSERT_NOT_NULL(buf);
     size_t got = fread(buf, 1, (size_t)len, f);
-    buf[got] = '\0';
     fclose(f);
+    TEST_ASSERT_EQUAL_INT_MESSAGE((int)len, (int)got, path);
+    buf[(size_t)len] = '\0';
     return buf;
 }
 
