@@ -87,6 +87,25 @@ add_test(NAME bit_util COMMAND test_bit_util)
 add_test(NAME logdb_growth COMMAND test_logdb_growth)
 
 # ------------------------------------------------------------------
+# Module under test: battery percentage text width
+#
+# Regression guard for the battery indicator bug: u8g2_GetStrWidth() returns a
+# wide u8g2_uint_t, and a narrower uint8_t would truncate widths above 255 px.
+# ------------------------------------------------------------------
+add_executable(test_battery_text_width
+    test_battery_text_width.c
+)
+target_include_directories(test_battery_text_width PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Drivers/u8g2_csrc
+)
+target_link_libraries(test_battery_text_width PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_battery_text_width PRIVATE sanitizers)
+endif()
+add_test(NAME battery_text_width COMMAND test_battery_text_width)
+
+# ------------------------------------------------------------------
 # Module under test: m1_esp32_caps (parse payload + capability bits + AT+CMD? parser)
 #
 # Tests the static-inline helpers in m1_esp32_caps.h which have zero hardware
