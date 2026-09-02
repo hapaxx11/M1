@@ -55,9 +55,12 @@
 
 #define MAIN_MENU_LOGO_FONT					M1_MAIN_LOGO_FONT_1B
 
-/* Main-menu battery indicator: right-aligned to just left of the menu item
- * icon column (MAIN_MENU_ICON_LEFT_POS_X), in the free area above the logo. */
-#define MAIN_MENU_BATTERY_RIGHT_POS_X		(MAIN_MENU_ICON_LEFT_POS_X - 2)
+/* Main-menu battery indicator: positioned in the free area above the logo
+ * (x=0..MAIN_MENU_TEXT_FRAME_LEFT_POS_X), shifted as far left as the widest
+ * percentage text ("100%") allows so it stays clear of the menu item icon
+ * column (MAIN_MENU_ICON_LEFT_POS_X) and the selection highlight frame
+ * (MAIN_MENU_TEXT_FRAME_LEFT_POS_X), instead of crowding right up against them. */
+#define MAIN_MENU_BATTERY_RIGHT_POS_X		(MAIN_MENU_ICON_LEFT_POS_X - 9)
 #define MAIN_MENU_BATTERY_TOP_POS_Y			2
 
 /* Battery indicator widget geometry — shared by the main menu and the home
