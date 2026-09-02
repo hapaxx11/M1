@@ -3136,3 +3136,25 @@ if(TARGET sanitizers)
     target_link_libraries(test_m1_amiibo PRIVATE sanitizers)
 endif()
 add_test(NAME m1_amiibo COMMAND test_m1_amiibo)
+
+# ------------------------------------------------------------------
+# Module under test: esp_stub .rodata placement guard (issue #747)
+# Source-level regression guard ensuring the ~91 KB ESP32 flasher-stub
+# table stays in flash (.rodata) and does not regress into RAM (.data).
+# Parses esp_stubs.c and esp_loader.h as text — no firmware/vendored deps.
+# ------------------------------------------------------------------
+add_executable(test_esp_stub_rodata
+    test_esp_stub_rodata.c
+)
+target_include_directories(test_esp_stub_rodata PRIVATE
+    ${STUBS_DIR}
+)
+target_compile_definitions(test_esp_stub_rodata PRIVATE
+    ESP_STUBS_SRC_PATH="${M1_ROOT}/Esp32_serial_flasher/src/esp_stubs.c"
+    ESP_LOADER_HDR_PATH="${M1_ROOT}/Esp32_serial_flasher/include/esp_loader.h"
+)
+target_link_libraries(test_esp_stub_rodata PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp_stub_rodata PRIVATE sanitizers)
+endif()
+add_test(NAME esp_stub_rodata COMMAND test_esp_stub_rodata)
