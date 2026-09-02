@@ -2,7 +2,7 @@
 
 # RAM Reduction Plan (issue #747)
 
-> **Status:** Phase 1 landed in PR #737. Phases 2+ are proposals for follow-up
+> **Status:** Phase 1 landed in PR #749. Phases 2+ are proposals for follow-up
 > PRs, pending owner review. This is the "plan + phased checklist" requested in
 > issue #747.
 
@@ -48,7 +48,7 @@ section (RAM), even though the enclosing array is `const`. All 14 payloads
 (`__compound_literal.0..13`, from `esp_stubs.c` per the `.map`) therefore
 consumed **~92,912 bytes of RAM**.
 
-**Fix (PR #737).** Make the payloads `const` so they live in flash (`.rodata`):
+**Fix (PR #749).** Make the payloads `const` so they live in flash (`.rodata`):
 
 - `Esp32_serial_flasher/include/esp_loader.h` — `esp_loader_bin_segment_t.data`
   is now `const uint8_t *`.
