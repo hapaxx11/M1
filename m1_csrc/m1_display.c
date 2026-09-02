@@ -854,9 +854,8 @@ uint8_t m1_message_box_choice(u8g2_t *u8g2, const char *title1, const char *titl
                     u8g2_SetDrawColor(&m1_u8g2, 1);
                 }
             } else {
-                /* Three or more (or long) labels don't fit side-by-side on a
-                 * 128px-wide screen without overlapping — stack them as a
-                 * vertical, single-column list instead. */
+/* Three or more labels don't fit side-by-side on a 128px-wide screen without
+ * overlapping — stack them as a vertical, single-column list instead. */
                 uint8_t row_h = 10u;
                 uint8_t list_y = (y + 3u <= 64u - (button_cnt * row_h)) ?
                                   y + 3u : (uint8_t)(64u - (button_cnt * row_h) - 1u);
