@@ -1248,6 +1248,24 @@ endif()
 add_test(NAME lfrfid_manchester COMMAND test_lfrfid_manchester)
 
 # ------------------------------------------------------------------
+# Module under test: m1_pet_tag (Pet Tag Scanner FDX-B decoder)
+# Pure logic — decodes FDX-B payload into country/national/animal fields.
+# ------------------------------------------------------------------
+add_executable(test_pet_tag
+    test_pet_tag.c
+    ${M1_ROOT}/m1_csrc/m1_pet_tag.c
+)
+target_include_directories(test_pet_tag PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_pet_tag PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_pet_tag PRIVATE sanitizers)
+endif()
+add_test(NAME pet_tag COMMAND test_pet_tag)
+
+# ------------------------------------------------------------------
 # lfrfid_uid_copy: pure clamp helper, no HAL/RTOS/FatFs deps at all.
 # ------------------------------------------------------------------
 add_executable(test_lfrfid_uid_copy
