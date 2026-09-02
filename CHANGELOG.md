@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.3] - 2026-09-02
+
+### Removed
+
+- **Settings: About scene** — Removed the Settings > About screen (firmware/company
+  info + M1 device image pages). Device info is now shown on the Dashboard.
 ## [0.9.3.2] - 2026-09-02
 
 ### Added
