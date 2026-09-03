@@ -25,6 +25,7 @@
 //#include "m1_sub_ghz.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_weather_scan.h"
 #include "subghz_key_encoder.h"
 #include "subghz_raw_line_parser.h"
 #include "subghz_raw_capture_alloc.h"
@@ -4496,7 +4497,60 @@ void sub_ghz_spectrum_analyzer(void)
 /*  WEATHER STATION MONITOR                                                   */
 /*  Listen for weather station transmissions and display decoded data          */
 /*                                                                            */
+/*  Momentum-style scan: weather stations use either OOK/AM650 or 2FSK at     */
+/*  433.92 MHz and the SI4463 demodulator can only be configured for one at   */
+/*  a time, so we dwell on each modulation in turn (like Flipper's Weather     */
+/*  Station app) and re-arm the radio when the pure scan state machine says    */
+/*  to switch.                                                                 */
+/*                                                                            */
 /*============================================================================*/
+
+/* 433.92 MHz — the ISM band virtually all consumer weather stations use. */
+#define WX_SCAN_FREQ_HZ     433920000UL
+/* Dwell time per modulation before switching (ms).  Long enough to catch a
+ * full transmission burst (stations repeat every 30-60 s but a single burst
+ * is only tens of ms) while still cycling both modulations within a minute. */
+#define WX_SCAN_DWELL_MS    4000U
+
+/*
+ * (Re)arm the SI4463 RX input-capture chain for the given modulation on
+ * WX_SCAN_FREQ_HZ.  Mirrors the proven Read-scene startup sequence
+ * (set_opmode -> rx_init -> rx_start) so the TIM1 capture ISR actually feeds
+ * the pulse decoder — the previous weather monitor skipped this entirely and
+ * therefore never decoded anything.
+ */
+static void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod)
+{
+    /* Tear down any capture already running (safe no-op on first call). */
+    sub_ghz_rx_pause();
+    sub_ghz_rx_deinit();
+
+    subghz_pulse_handler_reset();
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
+
+    if (mod == WX_SCAN_MOD_FSK)
+    {
+        /* 2FSK: the only modem config with 2FSK settings is the 915 config,
+         * so load it via the CUSTOM band path and retune to 433.92 MHz
+         * (sub_ghz_set_opmode handles the load + retune + frontend select). */
+        subghz_scan_config.band       = SUB_GHZ_BAND_CUSTOM;
+        subghz_scan_config.modulation = MODULATION_FSK;
+        subghz_custom_freq_hz         = WX_SCAN_FREQ_HZ;
+        sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_CUSTOM, 0, 0);
+    }
+    else
+    {
+        /* OOK / AM650 on the native 433.92 MHz config. */
+        subghz_scan_config.band       = SUB_GHZ_BAND_433_92;
+        subghz_scan_config.modulation = MODULATION_OOK;
+        subghz_custom_freq_hz         = WX_SCAN_FREQ_HZ;
+        sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_433_92, 0, 0);
+        SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+    }
+
+    sub_ghz_rx_init();
+    sub_ghz_rx_start();
+}
 
 void sub_ghz_weather_station(void)
 {
@@ -4505,36 +4559,69 @@ void sub_ghz_weather_station(void)
     BaseType_t ret;
     SubGHz_Dec_Info_t decoded_data;
     const SubGHz_Weather_Data_t *wx;
-    char line1[32], line2[32], line3[32];
+    char line0[32], line1[32], line2[32], line3[32];
     bool running = true;
     bool has_data = false;
+    bool need_redraw = true;
+    SubGhzWeatherScan scan;
 
     menu_sub_ghz_init();
-
-    /* Weather stations typically transmit on 433.92 MHz */
-    radio_init_rx_tx(SUB_GHZ_BAND_433_92, MODEM_MOD_TYPE_OOK, true);
-    SI446x_Select_Frontend(SUB_GHZ_BAND_433_92);
-    radio_set_antenna_mode(RADIO_ANTENNA_MODE_RX);
-    SI446x_Start_Rx(0);
     subghz_decenc_init();
 
-    /* Initial display */
-    m1_u8g2_firstpage();
-    do {
-        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        u8g2_DrawStr(&m1_u8g2, 2, 12, "Weather Station");
-        u8g2_DrawStr(&m1_u8g2, 2, 28, "Listening 433.92MHz...");
-        u8g2_DrawStr(&m1_u8g2, 2, 56, "Press BACK to exit");
-    } while (m1_u8g2_nextpage());
+    /* Momentum-style dual-modulation scan starting on OOK/AM650. */
+    subghz_weather_scan_init(&scan, WX_SCAN_DWELL_MS, WX_SCAN_MOD_OOK,
+                             true, xTaskGetTickCount() * portTICK_PERIOD_MS);
+    sub_ghz_weather_rx_arm(scan.mod);
 
     while (running)
     {
-        /* Check for decoded data */
+        /* --- Feed the decoder: drain all pending pulse-edge events into the
+         * pulse handler.  The TIM1 capture ISR queues one Q_EVENT_SUBGHZ_RX
+         * per edge; without this drain the decoder is never fed and nothing
+         * decodes (this is the core reception fix). --- */
+        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(50));
+        if (ret == pdTRUE)
+        {
+            if (q_item.q_evt_type == Q_EVENT_SUBGHZ_RX &&
+                subghz_decenc_ctl.subghz_pulse_handler)
+            {
+                for (;;)
+                {
+                    S_M1_Main_Q_t peek;
+                    uint16_t dur = q_item.q_data.ir_rx_data.ir_edge_te;
+                    uint8_t pdet = subghz_decenc_ctl.subghz_pulse_handler(dur);
+
+                    if (pdet == PULSE_DET_EOP || pdet == PULSE_DET_IDLE)
+                        subghz_decenc_ctl.pulse_det_stat = pdet;
+
+                    if (subghz_decenc_ctl.subghz_data_ready &&
+                        subghz_decenc_ctl.subghz_data_ready())
+                        break;
+
+                    if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE)
+                        break;
+                    if (peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
+                        break;
+                    xQueueReceive(main_q_hdl, &q_item, 0);
+                }
+            }
+            else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+            {
+                if (xQueueReceive(button_events_q_hdl, &this_button_status, 0)
+                        == pdTRUE &&
+                    this_button_status.event[BUTTON_BACK_KP_ID] ==
+                        BUTTON_EVENT_CLICK)
+                {
+                    running = false;
+                    continue;
+                }
+            }
+        }
+
+        /* --- Consume any decoded frame; keep only weather-typed protocols. */
         if (subghz_decenc_read(&decoded_data, false))
         {
-            /* Check if it's a weather protocol */
-            if (decoded_data.protocol >= OREGON_V2 &&
-                decoded_data.protocol <= LACROSSE_TX)
+            if (subghz_protocol_is_weather(decoded_data.protocol))
             {
                 wx = subghz_get_weather_data();
                 has_data = true;
@@ -4551,36 +4638,56 @@ void sub_ghz_weather_station(void)
                          wx->battery_low ? "LOW" : "OK",
                          decoded_data.rssi);
 
-                m1_u8g2_firstpage();
-                do {
-                    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-                    u8g2_DrawStr(&m1_u8g2, 2, 12, "Weather Station");
+                M1_LOG_I(M1_LOGDB_TAG, "WX[%s]: %s ch%d %d.%dC %d%% RSSI=%d\r\n",
+                         subghz_weather_scan_label(scan.mod),
+                         protocol_text[decoded_data.protocol],
+                         wx->channel, temp_int, temp_frac,
+                         wx->humidity, decoded_data.rssi);
+                need_redraw = true;
+            }
+        }
+
+        /* --- Momentum scan: switch modulation when the dwell elapses. --- */
+        if (subghz_weather_scan_tick(&scan,
+                xTaskGetTickCount() * portTICK_PERIOD_MS))
+        {
+            sub_ghz_weather_rx_arm(scan.mod);
+            need_redraw = true;
+        }
+
+        /* --- Redraw only when something changed. --- */
+        if (need_redraw)
+        {
+            need_redraw = false;
+            snprintf(line0, sizeof(line0), "Weather Station [%s]",
+                     subghz_weather_scan_label(scan.mod));
+
+            m1_u8g2_firstpage();
+            do {
+                u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+                u8g2_DrawStr(&m1_u8g2, 2, 12, line0);
+                if (has_data)
+                {
                     u8g2_DrawStr(&m1_u8g2, 2, 24, line1);
                     u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
                     u8g2_DrawStr(&m1_u8g2, 2, 38, line2);
                     u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
                     u8g2_DrawStr(&m1_u8g2, 2, 50, line3);
-                    u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
-                } while (m1_u8g2_nextpage());
-
-                M1_LOG_I(M1_LOGDB_TAG, "WX: %s ch%d %d.%dC %d%% RSSI=%d\r\n",
-                         protocol_text[decoded_data.protocol],
-                         wx->channel, temp_int, temp_frac,
-                         wx->humidity, decoded_data.rssi);
-            }
-        }
-
-        ret = xQueueReceive(main_q_hdl, &q_item, pdMS_TO_TICKS(200));
-        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-        {
-            ret = xQueueReceive(button_events_q_hdl, &this_button_status, 0);
-            if (this_button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-            {
-                running = false;
-            }
+                }
+                else
+                {
+                    u8g2_DrawStr(&m1_u8g2, 2, 30, "Scanning 433.92MHz");
+                    u8g2_DrawStr(&m1_u8g2, 2, 42, "AM + FSK ...");
+                }
+                u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
+            } while (m1_u8g2_nextpage());
         }
     }
 
+    /* Tear down the RX capture chain and power the radio down. */
+    sub_ghz_rx_pause();
+    sub_ghz_rx_deinit();
+    subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
     radio_set_antenna_mode(RADIO_ANTENNA_MODE_ISOLATED);
     SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
     menu_sub_ghz_exit();

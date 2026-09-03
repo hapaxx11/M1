@@ -1214,6 +1214,12 @@ const char* subghz_protocol_get_name(uint16_t index)
     return subghz_protocol_registry[index].name;
 }
 
+bool subghz_protocol_is_weather(uint16_t index)
+{
+    const SubGhzProtocolDef *proto = subghz_protocol_get(index);
+    return proto != NULL && proto->type == SubGhzProtocolTypeWeather;
+}
+
 /* subghz_registry_decode_try_fn() has been extracted to subghz_decode_try_fn.c
  * to enable isolated unit testing with a minimal stub registry.  The function
  * is declared in subghz_raw_decoder.h and linked from either this production
