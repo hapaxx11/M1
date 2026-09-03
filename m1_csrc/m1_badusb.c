@@ -202,10 +202,13 @@ static void badusb_send_sysrq(uint8_t key)
     busb_hold_build_report(&badusb_held, BUSB_MOD_LALT, BUSB_KEY_PRINTSCREEN,
                            hid_report);
     /* Add the command key in the next free report slot. */
+    bool inserted = false;
     for (int i = 2; i < 8; i++)
     {
-        if (hid_report[i] == 0) { hid_report[i] = key; break; }
+        if (hid_report[i] == 0) { hid_report[i] = key; inserted = true; break; }
     }
+    if (!inserted)
+        hid_report[7] = key;  /* drop one held key for this report */
     USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
 #if BADUSB_KEY_PRESS_MS > 0
     osDelay(BADUSB_KEY_PRESS_MS);
