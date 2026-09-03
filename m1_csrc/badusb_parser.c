@@ -189,6 +189,44 @@ static void trim_tail(const char *src, char *dst, size_t dstsz)
         dst[--len] = '\0';
 }
 
+/* Parse a "MOD MOD ... KEY" combo (e.g. "CTRL SHIFT a", "GUI", "ENTER").
+ * Accumulates leading modifier keywords, then an optional final key name.
+ * Applies an implicit SHIFT when the final key is a shifted printable char.
+ * @return true if at least one modifier or a key was recognized. */
+static bool parse_key_combo(const char *s, uint8_t *mod_out, uint8_t *key_out)
+{
+    uint8_t mod_accum = 0;
+    const char *cur = s;
+    const char *rest = NULL;
+
+    while (cur && *cur)
+    {
+        uint8_t m = busb_parse_modifier(cur, &rest);
+        if (m == 0)
+            break;
+        mod_accum |= m;
+        cur = rest;
+    }
+
+    uint8_t kc = BUSB_KEY_NONE;
+    if (cur != NULL && *cur != '\0')
+    {
+        char keybuf[32];
+        trim_tail(cur, keybuf, sizeof(keybuf));
+        kc = busb_parse_key_name(keybuf);
+        if (kc != BUSB_KEY_NONE &&
+            strlen(keybuf) == 1 && keybuf[0] >= 0x20 && keybuf[0] <= 0x7E)
+        {
+            if (s_ascii_to_hid[(unsigned char)keybuf[0] - 0x20].shift)
+                mod_accum |= BUSB_MOD_LSHIFT;
+        }
+    }
+
+    *mod_out = mod_accum;
+    *key_out = kc;
+    return (mod_accum != 0 || kc != BUSB_KEY_NONE);
+}
+
 bool busb_classify_line(const char *line, busb_parsed_line_t *out)
 {
     /* Skip leading whitespace */
@@ -202,6 +240,22 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
     }
 
     /* REM — comment */
+    if (strncmp(line, "REM_BLOCK", 9) == 0 &&
+        (line[9] == '\0' || line[9] == ' ' || line[9] == '\t' ||
+         line[9] == '\r' || line[9] == '\n'))
+    {
+        out->type = BUSB_LINE_REM_BLOCK_START;
+        return true;
+    }
+
+    if (strncmp(line, "END_REM", 7) == 0 &&
+        (line[7] == '\0' || line[7] == ' ' || line[7] == '\t' ||
+         line[7] == '\r' || line[7] == '\n'))
+    {
+        out->type = BUSB_LINE_REM_BLOCK_END;
+        return true;
+    }
+
     if (strncmp(line, "REM ", 4) == 0 || strncmp(line, "REM\r", 4) == 0 ||
         strncmp(line, "REM\n", 4) == 0 || strcmp(line, "REM") == 0)
     {
@@ -227,6 +281,24 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
         return true;
     }
 
+    /* STRINGLN <text> — type text then press ENTER (checked before STRING) */
+    if (strncmp(line, "STRINGLN", 8) == 0)
+    {
+        char sep = line[8];
+        if (sep == ' ')
+        {
+            out->type = BUSB_LINE_STRINGLN;
+            out->u.string_text = line + 9;
+            return true;
+        }
+        if (sep == '\0' || sep == '\r' || sep == '\n')
+        {
+            out->type = BUSB_LINE_STRINGLN;
+            out->u.string_text = "";
+            return true;
+        }
+    }
+
     /* STRING <text> */
     if (strncmp(line, "STRING ", 7) == 0)
     {
@@ -240,6 +312,90 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
     {
         out->type = BUSB_LINE_REPEAT;
         out->u.repeat_count = atoi(line + 7);
+        return true;
+    }
+
+    /* HOLD <combo> — press and hold key(s) */
+    if (strncmp(line, "HOLD ", 5) == 0)
+    {
+        uint8_t mod = 0, kc = BUSB_KEY_NONE;
+        if (parse_key_combo(line + 5, &mod, &kc))
+        {
+            out->type = BUSB_LINE_HOLD;
+            out->u.key.modifiers = mod;
+            out->u.key.keycode = kc;
+            return true;
+        }
+    }
+
+    /* RELEASE [combo] — release held key(s); no argument releases all */
+    if (strncmp(line, "RELEASE", 7) == 0 &&
+        (line[7] == '\0' || line[7] == ' ' || line[7] == '\t' ||
+         line[7] == '\r' || line[7] == '\n'))
+    {
+        uint8_t mod = 0, kc = BUSB_KEY_NONE;
+        if (line[7] == ' ')
+            parse_key_combo(line + 8, &mod, &kc);
+        out->type = BUSB_LINE_RELEASE;
+        out->u.key.modifiers = mod;
+        out->u.key.keycode = kc;
+        return true;
+    }
+
+    /* STRINGDELAY / STRING_DELAY <ms> — per-character typing delay */
+    if (strncmp(line, "STRINGDELAY ", 12) == 0 ||
+        strncmp(line, "STRING_DELAY ", 13) == 0)
+    {
+        const char *p = line + (line[6] == '_' ? 13 : 12);
+        out->type = BUSB_LINE_STRING_DELAY;
+        out->u.delay_ms = (uint32_t)atoi(p);
+        return true;
+    }
+
+    /* SYSRQ <key> — Linux Magic SysRq (Alt+PrintScreen+key) */
+    if (strncmp(line, "SYSRQ ", 6) == 0)
+    {
+        char keybuf[32];
+        trim_tail(line + 6, keybuf, sizeof(keybuf));
+        uint8_t kc = busb_parse_key_name(keybuf);
+        if (kc != BUSB_KEY_NONE)
+        {
+            out->type = BUSB_LINE_SYSRQ;
+            out->u.key.modifiers = BUSB_MOD_LALT;
+            out->u.key.keycode = kc;
+            return true;
+        }
+    }
+
+    /* ALTCHAR <code> — Windows Alt+Numpad single character */
+    if (strncmp(line, "ALTCHAR ", 8) == 0)
+    {
+        out->type = BUSB_LINE_ALTCHAR;
+        out->u.string_text = line + 8;
+        return true;
+    }
+
+    /* ALTSTRING / ALTCODE <text> — Windows Alt+Numpad string */
+    if (strncmp(line, "ALTSTRING ", 10) == 0)
+    {
+        out->type = BUSB_LINE_ALTSTRING;
+        out->u.string_text = line + 10;
+        return true;
+    }
+    if (strncmp(line, "ALTCODE ", 8) == 0)
+    {
+        out->type = BUSB_LINE_ALTSTRING;
+        out->u.string_text = line + 8;
+        return true;
+    }
+
+    /* WAIT_FOR_BUTTON_PRESS — pause until the user presses a device button.
+     * (Experimental on M1: waits for any M1 keypad button.) */
+    if (strncmp(line, "WAIT_FOR_BUTTON_PRESS", 21) == 0 &&
+        (line[21] == '\0' || line[21] == ' ' || line[21] == '\t' ||
+         line[21] == '\r' || line[21] == '\n'))
+    {
+        out->type = BUSB_LINE_WAIT_FOR_BUTTON;
         return true;
     }
 
@@ -303,6 +459,26 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
 
     out->type = BUSB_LINE_UNKNOWN;
     return false;
+}
+
+/*──────────── busb_digit_to_keypad ────────────*/
+
+uint8_t busb_digit_to_keypad(char c)
+{
+    switch (c)
+    {
+    case '1': return BUSB_KEY_KP_1;
+    case '2': return BUSB_KEY_KP_2;
+    case '3': return BUSB_KEY_KP_3;
+    case '4': return BUSB_KEY_KP_4;
+    case '5': return BUSB_KEY_KP_5;
+    case '6': return BUSB_KEY_KP_6;
+    case '7': return BUSB_KEY_KP_7;
+    case '8': return BUSB_KEY_KP_8;
+    case '9': return BUSB_KEY_KP_9;
+    case '0': return BUSB_KEY_KP_0;
+    default:  return BUSB_KEY_NONE;
+    }
 }
 
 /*──────────── busb_count_lines ────────────*/

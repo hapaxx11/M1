@@ -25,6 +25,9 @@
 #include "usbd_hid.h"
 #include "m1_log_debug.h"
 #include "badusb_parser.h"
+#include "badusb_hold.h"
+#include "m1_led_indicator.h"
+#include "m1_lp5814.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -59,6 +62,12 @@ static badusb_state_t badusb_state;
 /* USB HID report buffer: [modifier, reserved, key1..key6] */
 static uint8_t hid_report[8];
 
+/* Currently-held keys/modifiers for the HOLD / RELEASE commands. */
+static busb_hold_state_t badusb_held;
+
+/* Script filename for on-screen prompts (set in badusb_execute_file). */
+static const char *s_current_fname = "";
+
 /* ASCII to HID scancode table is provided by badusb_parser (busb_ascii_to_hid()) */
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -66,11 +75,16 @@ static uint8_t hid_report[8];
 static void badusb_wait_tx_idle(void);
 void badusb_send_key(uint8_t modifier, uint8_t keycode);
 static void badusb_release_all(void);
+static void badusb_send_held_report(void);
+static void badusb_raw_report(uint8_t extra_mod, uint8_t keycode);
+static void badusb_send_sysrq(uint8_t key);
+static void badusb_send_altchar(const char *digits);
 void badusb_type_char(char c);
 void badusb_type_string(const char *str);
 static bool badusb_parse_line(const char *line);
 static void badusb_show_progress(const char *filename);
 static bool badusb_check_abort(void);
+static bool badusb_wait_for_button(const char *fname);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -117,9 +131,8 @@ static void badusb_wait_tx_idle(void)
 void badusb_send_key(uint8_t modifier, uint8_t keycode)
 {
     badusb_wait_tx_idle();
-    memset(hid_report, 0, sizeof(hid_report));
-    hid_report[0] = modifier;
-    hid_report[2] = keycode;
+    /* Merge any held keys/modifiers with this transient press. */
+    busb_hold_build_report(&badusb_held, modifier, keycode, hid_report);
     USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
 #if BADUSB_KEY_PRESS_MS > 0
     osDelay(BADUSB_KEY_PRESS_MS);
@@ -134,14 +147,96 @@ void badusb_send_key(uint8_t modifier, uint8_t keycode)
 
 /*============================================================================*/
 /**
-  * @brief  Release all keys (send empty report)
+  * @brief  Release the transient key, returning to the held-key baseline
+  *
+  * Sends a report reflecting only the keys currently held via HOLD (which may
+  * be none). Used after a transient key press and after a HOLD/RELEASE change.
   */
 /*============================================================================*/
 static void badusb_release_all(void)
 {
     badusb_wait_tx_idle();
-    memset(hid_report, 0, sizeof(hid_report));
+    busb_hold_build_report(&badusb_held, 0, 0, hid_report);
     USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Send a report reflecting the current held-key state (HOLD/RELEASE)
+  */
+/*============================================================================*/
+static void badusb_send_held_report(void)
+{
+    badusb_wait_tx_idle();
+    busb_hold_build_report(&badusb_held, 0, 0, hid_report);
+    USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Send a report = held state + extra modifier + one keycode (no auto-
+  *         release). Used to build multi-step sequences like ALTCHAR/SYSRQ.
+  */
+/*============================================================================*/
+static void badusb_raw_report(uint8_t extra_mod, uint8_t keycode)
+{
+    badusb_wait_tx_idle();
+    busb_hold_build_report(&badusb_held, extra_mod, keycode, hid_report);
+    USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+#if BADUSB_KEY_PRESS_MS > 0
+    osDelay(BADUSB_KEY_PRESS_MS);
+#endif
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Linux Magic SysRq: hold Alt+PrintScreen, tap the command key.
+  */
+/*============================================================================*/
+static void badusb_send_sysrq(uint8_t key)
+{
+    badusb_wait_tx_idle();
+    busb_hold_build_report(&badusb_held, BUSB_MOD_LALT, BUSB_KEY_PRINTSCREEN,
+                           hid_report);
+    /* Add the command key in the next free report slot. */
+    bool inserted = false;
+    for (int i = 2; i < 8; i++)
+    {
+        if (hid_report[i] == 0) { hid_report[i] = key; inserted = true; break; }
+    }
+    if (!inserted)
+        hid_report[7] = key;  /* drop one held key for this report */
+    USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+#if BADUSB_KEY_PRESS_MS > 0
+    osDelay(BADUSB_KEY_PRESS_MS);
+#endif
+    badusb_release_all();
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Windows Alt+Numpad: hold Alt, tap keypad digits, release Alt.
+  * @param  digits  numeric string (e.g. "0169"); non-digits are skipped.
+  */
+/*============================================================================*/
+static void badusb_send_altchar(const char *digits)
+{
+    bool any = false;
+    for (const char *p = digits; *p && badusb_state.running; p++)
+    {
+        uint8_t kp = busb_digit_to_keypad(*p);
+        if (kp == BUSB_KEY_NONE)
+            continue;
+        any = true;
+        badusb_raw_report(BUSB_MOD_LALT, kp);   /* Alt + keypad digit */
+        badusb_raw_report(BUSB_MOD_LALT, 0);    /* keep Alt, release digit */
+    }
+    if (any)
+        badusb_release_all();                   /* release Alt -> baseline */
 }
 
 
@@ -185,6 +280,8 @@ void badusb_type_string(const char *str)
 #if BADUSB_INTER_CHAR_MS > 0
         osDelay(BADUSB_INTER_CHAR_MS);
 #endif
+        if (badusb_state.string_delay_ms > 0)
+            osDelay(badusb_state.string_delay_ms);
     }
 }
 
@@ -236,10 +333,23 @@ static bool badusb_parse_line(const char *line)
     busb_parsed_line_t parsed;
     busb_classify_line(line, &parsed);
 
+    /* Inside a REM_BLOCK, skip everything until END_REM */
+    if (badusb_state.in_rem_block)
+    {
+        if (parsed.type == BUSB_LINE_REM_BLOCK_END)
+            badusb_state.in_rem_block = 0;
+        return true;
+    }
+
     switch (parsed.type)
     {
     case BUSB_LINE_EMPTY:
     case BUSB_LINE_COMMENT:
+    case BUSB_LINE_REM_BLOCK_END:
+        return true;
+
+    case BUSB_LINE_REM_BLOCK_START:
+        badusb_state.in_rem_block = 1;
         return true;
 
     case BUSB_LINE_DELAY:
@@ -251,9 +361,40 @@ static bool badusb_parse_line(const char *line)
         badusb_state.default_delay_ms = (uint16_t)parsed.u.delay_ms;
         return true;
 
+    case BUSB_LINE_STRING_DELAY:
+        badusb_state.string_delay_ms = (uint16_t)parsed.u.delay_ms;
+        return true;
+
     case BUSB_LINE_STRING:
         badusb_type_string(parsed.u.string_text);
         return true;
+
+    case BUSB_LINE_STRINGLN:
+        badusb_type_string(parsed.u.string_text);
+        badusb_send_key(0, BUSB_KEY_ENTER);
+        return true;
+
+    case BUSB_LINE_SYSRQ:
+        badusb_send_sysrq(parsed.u.key.keycode);
+        return true;
+
+    case BUSB_LINE_ALTCHAR:
+        badusb_send_altchar(parsed.u.string_text);
+        return true;
+
+    case BUSB_LINE_ALTSTRING:
+    {
+        const char *s = parsed.u.string_text;
+        char code[8];
+        while (*s && badusb_state.running)
+        {
+            snprintf(code, sizeof(code), "%u", (unsigned char)*s++);
+            badusb_send_altchar(code);
+            if (badusb_state.string_delay_ms > 0)
+                osDelay(badusb_state.string_delay_ms);
+        }
+        return true;
+    }
 
     case BUSB_LINE_REPEAT:
         if (parsed.u.repeat_count > 0 && badusb_state.last_line[0] != '\0')
@@ -267,9 +408,35 @@ static bool badusb_parse_line(const char *line)
         }
         return true;  /* Don't update last_line for REPEAT */
 
+    case BUSB_LINE_HOLD:
+    {
+        bool ok = busb_hold_add(&badusb_held, parsed.u.key.modifiers,
+                               parsed.u.key.keycode);
+        if (!ok)
+            M1_LOG_W(M1_LOGDB_TAG,
+                     "HOLD overflow: too many keys held (max %u)\r\n",
+                     (unsigned)BUSB_HOLD_MAX_KEYS);
+        badusb_send_held_report();
+        return true;
+    }
+
+    case BUSB_LINE_RELEASE:
+        if (parsed.u.key.modifiers == 0 && parsed.u.key.keycode == BUSB_KEY_NONE)
+            busb_hold_release_all(&badusb_held);
+        else
+            busb_hold_remove(&badusb_held, parsed.u.key.modifiers,
+                             parsed.u.key.keycode);
+        badusb_send_held_report();
+        return true;
+
     case BUSB_LINE_MODIFIER_KEY:
     case BUSB_LINE_STANDALONE_KEY:
         badusb_send_key(parsed.u.key.modifiers, parsed.u.key.keycode);
+        return true;
+
+    case BUSB_LINE_WAIT_FOR_BUTTON:
+        /* EXPERIMENTAL: pause until an M1 button is pressed (see function). */
+        badusb_wait_for_button(s_current_fname);
         return true;
 
     default:
@@ -352,9 +519,95 @@ static bool badusb_check_abort(void)
 
 /*============================================================================*/
 /**
-  * @brief  Execute a BadUSB script file
-  * @param  filepath: full path to script on SD card (e.g., "0:/BadUSB/test.txt")
-  * @retval true on success, false on error
+  * @brief  EXPERIMENTAL: Pause script execution until a device button is pressed
+  *
+  * Implements the Flipper/Momentum WAIT_FOR_BUTTON_PRESS DuckyScript command.
+  * Momentum blocks on a hardware button and resumes on press; the M1 has no
+  * dedicated "continue" key during a BadUSB run, so this maps the semantics to
+  * "wait for any M1 keypad button" — OK/UP/DOWN/LEFT/RIGHT resume the script,
+  * BACK aborts it (matching the normal abort behavior).
+  *
+  * This command is EXPERIMENTAL. Because it is easy to miss that a script has
+  * paused, the wait is announced non-intrusively three ways:
+  *   1. an on-screen prompt on the M1 LCD,
+  *   2. a SLOW red LED flash (~1 Hz) for the duration of the wait, and
+  *   3. a debug-log warning.
+  *
+  * @param  fname  script filename, for the on-screen prompt
+  * @retval true if a button resumed the script, false if BACK aborted it
+  */
+/*============================================================================*/
+static bool badusb_wait_for_button(const char *fname)
+{
+    M1_LOG_W(M1_LOGDB_TAG,
+             "WAIT_FOR_BUTTON_PRESS (experimental): script '%s' paused, "
+             "press any M1 button to continue (BACK aborts)\r\n", fname);
+
+    /* Non-intrusive on-screen prompt. */
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 12, 124, "BadUSB Paused", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 28, 124, "WAIT_FOR_BUTTON", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 40, 124, "(experimental)", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 54, 124, "Press to continue", TEXT_ALIGN_CENTER);
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Go", NULL, NULL);
+    m1_u8g2_nextpage();
+
+    bool resumed = false;
+    bool led_on = false;
+    uint32_t last_toggle = osKernelGetTickCount();
+    const uint32_t LED_HALF_PERIOD_MS = 500;   /* ~1 Hz slow flash */
+
+    while (badusb_state.running)
+    {
+        /* Slow red LED flash to signal the paused/experimental state. */
+        uint32_t now = osKernelGetTickCount();
+        if ((now - last_toggle) >= LED_HALF_PERIOD_MS)
+        {
+            last_toggle = now;
+            led_on = !led_on;
+            if (led_on)
+                lp5814_led_on_Red(128);
+            else
+                lp5814_all_off_RGB();
+        }
+
+        /* Poll for a keypad button. */
+        S_M1_Main_Q_t q_item;
+        S_M1_Buttons_Status btn;
+        if (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE &&
+            q_item.q_evt_type == Q_EVENT_KEYPAD &&
+            xQueueReceive(button_events_q_hdl, &btn, 0) == pdTRUE)
+        {
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                badusb_state.running = 0;   /* BACK aborts the script */
+                break;
+            }
+            if (btn.event[BUTTON_OK_KP_ID]    == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_UP_KP_ID]    == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_DOWN_KP_ID]  == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_LEFT_KP_ID]  == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                resumed = true;
+                break;
+            }
+        }
+
+        osDelay(10);
+    }
+
+    /* Restore LED state. */
+    m1_led_indicator_off(NULL);
+    return resumed;
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Execute a DuckyScript file
   */
 /*============================================================================*/
 bool badusb_execute_file(const char *filepath)
@@ -387,12 +640,14 @@ bool badusb_execute_file(const char *filepath)
 
     /* Init state */
     memset(&badusb_state, 0, sizeof(badusb_state));
+    busb_hold_init(&badusb_held);
     badusb_state.running = 1;
     badusb_state.total_lines = busb_count_lines(script_buf, bytes_read);
 
     /* Extract just the filename for display */
     const char *fname = strrchr(filepath, '/');
     if (fname) fname++; else fname = filepath;
+    s_current_fname = fname;
 
     /* Reset HID debug counters before switching */
     USBD_HID_ResetDbgCounters();
@@ -492,7 +747,8 @@ bool badusb_execute_file(const char *filepath)
         }
     }
 
-    /* Ensure all keys released */
+    /* Ensure all keys released (including any left held by HOLD) */
+    busb_hold_release_all(&badusb_held);
     badusb_release_all();
 
     /* Show final progress */

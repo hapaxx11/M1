@@ -24,6 +24,8 @@ typedef struct
     uint16_t current_line;
     uint16_t total_lines;
     uint16_t default_delay_ms;
+    uint16_t string_delay_ms; /* per-character delay set by STRINGDELAY */
+    uint8_t  in_rem_block;   /* inside a REM_BLOCK ... END_REM comment */
     char     last_line[BADUSB_MAX_LINE_LEN];
 } badusb_state_t;
 
