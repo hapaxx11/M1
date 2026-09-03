@@ -147,6 +147,7 @@ typedef enum
     BUSB_LINE_SYSRQ,           /* SYSRQ <key> — Linux Magic SysRq */
     BUSB_LINE_ALTCHAR,         /* ALTCHAR <code> — Alt+Numpad single char */
     BUSB_LINE_ALTSTRING,       /* ALTSTRING/ALTCODE <text> — Alt+Numpad string */
+    BUSB_LINE_WAIT_FOR_BUTTON, /* WAIT_FOR_BUTTON_PRESS — pause until keypress (experimental) */
     BUSB_LINE_MODIFIER_KEY,    /* CTRL x, GUI r, ALT F4, etc. */
     BUSB_LINE_STANDALONE_KEY,  /* ENTER, ESC, F5, etc. */
     BUSB_LINE_UNKNOWN,         /* unrecognized */

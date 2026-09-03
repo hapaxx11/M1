@@ -389,6 +389,16 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
         return true;
     }
 
+    /* WAIT_FOR_BUTTON_PRESS — pause until the user presses a device button.
+     * (Experimental on M1: waits for any M1 keypad button.) */
+    if (strncmp(line, "WAIT_FOR_BUTTON_PRESS", 21) == 0 &&
+        (line[21] == '\0' || line[21] == ' ' || line[21] == '\t' ||
+         line[21] == '\r' || line[21] == '\n'))
+    {
+        out->type = BUSB_LINE_WAIT_FOR_BUTTON;
+        return true;
+    }
+
     /* Try as modifier combo */
     {
         uint8_t mod_accum = 0;

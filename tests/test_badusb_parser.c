@@ -6,9 +6,10 @@
  * Host-side unit tests for the DuckyScript parser (badusb_parser.c/h).
  * Tests key-name lookup, modifier parsing, ASCII-to-HID mapping,
  * line classification, and line counting for core DuckyScript commands.
- * Advanced commands (MOUSE, MEDIA, WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet
- * implemented. STRINGLN, REM_BLOCK/END_REM, HOLD/RELEASE, STRINGDELAY, SYSRQ
- * and ALTCHAR/ALTSTRING/ALTCODE are supported.
+ * Advanced commands (MOUSE, MEDIA, DEFINE) are not yet implemented.
+ * STRINGLN, REM_BLOCK/END_REM, HOLD/RELEASE, STRINGDELAY, SYSRQ,
+ * ALTCHAR/ALTSTRING/ALTCODE and WAIT_FOR_BUTTON_PRESS (experimental) are
+ * supported.
  */
 
 #include "unity.h"
@@ -411,6 +412,20 @@ void test_digit_to_keypad(void)
     TEST_ASSERT_EQUAL(BUSB_KEY_NONE, busb_digit_to_keypad(' '));
 }
 
+void test_classify_wait_for_button(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("WAIT_FOR_BUTTON_PRESS", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_WAIT_FOR_BUTTON, out.type);
+}
+
+void test_classify_wait_for_button_trailing(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("WAIT_FOR_BUTTON_PRESS\r\n", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_WAIT_FOR_BUTTON, out.type);
+}
+
 void test_classify_repeat(void)
 {
     busb_parsed_line_t out;
@@ -570,6 +585,8 @@ int main(void)
     RUN_TEST(test_classify_altcode_alias);
     RUN_TEST(test_classify_string_not_string_delay);
     RUN_TEST(test_digit_to_keypad);
+    RUN_TEST(test_classify_wait_for_button);
+    RUN_TEST(test_classify_wait_for_button_trailing);
     RUN_TEST(test_classify_repeat);
     RUN_TEST(test_classify_modifier_with_key);
     RUN_TEST(test_classify_multi_modifier);

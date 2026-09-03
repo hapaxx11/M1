@@ -26,6 +26,8 @@
 #include "m1_log_debug.h"
 #include "badusb_parser.h"
 #include "badusb_hold.h"
+#include "m1_led_indicator.h"
+#include "m1_lp5814.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -63,6 +65,9 @@ static uint8_t hid_report[8];
 /* Currently-held keys/modifiers for the HOLD / RELEASE commands. */
 static busb_hold_state_t badusb_held;
 
+/* Script filename for on-screen prompts (set in badusb_execute_file). */
+static const char *s_current_fname = "";
+
 /* ASCII to HID scancode table is provided by badusb_parser (busb_ascii_to_hid()) */
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -79,6 +84,7 @@ void badusb_type_string(const char *str);
 static bool badusb_parse_line(const char *line);
 static void badusb_show_progress(const char *filename);
 static bool badusb_check_abort(void);
+static bool badusb_wait_for_button(const char *fname);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -419,6 +425,11 @@ static bool badusb_parse_line(const char *line)
         badusb_send_key(parsed.u.key.modifiers, parsed.u.key.keycode);
         return true;
 
+    case BUSB_LINE_WAIT_FOR_BUTTON:
+        /* EXPERIMENTAL: pause until an M1 button is pressed (see function). */
+        badusb_wait_for_button(s_current_fname);
+        return true;
+
     default:
         M1_LOG_W(M1_LOGDB_TAG, "Unknown cmd: %s\r\n", line);
         return true;  /* Skip unrecognized lines rather than aborting */
@@ -499,15 +510,90 @@ static bool badusb_check_abort(void)
 
 /*============================================================================*/
 /**
-  * @brief  Execute a BadUSB script file
-  * @param  filepath: full path to script on SD card (e.g., "0:/BadUSB/test.txt")
-  * @retval true on success, false on error
+  * @brief  EXPERIMENTAL: Pause script execution until a device button is pressed
+  *
+  * Implements the Flipper/Momentum WAIT_FOR_BUTTON_PRESS DuckyScript command.
+  * Momentum blocks on a hardware button and resumes on press; the M1 has no
+  * dedicated "continue" key during a BadUSB run, so this maps the semantics to
+  * "wait for any M1 keypad button" — OK/UP/DOWN/LEFT/RIGHT resume the script,
+  * BACK aborts it (matching the normal abort behavior).
+  *
+  * This command is EXPERIMENTAL. Because it is easy to miss that a script has
+  * paused, the wait is announced non-intrusively three ways:
+  *   1. an on-screen prompt on the M1 LCD,
+  *   2. a SLOW red LED flash (~1 Hz) for the duration of the wait, and
+  *   3. a debug-log warning.
+  *
+  * @param  fname  script filename, for the on-screen prompt
+  * @retval true if a button resumed the script, false if BACK aborted it
   */
 /*============================================================================*/
-bool badusb_execute_file(const char *filepath)
+static bool badusb_wait_for_button(const char *fname)
 {
-    FIL fp;
-    FRESULT fres;
+    M1_LOG_W(M1_LOGDB_TAG,
+             "WAIT_FOR_BUTTON_PRESS (experimental): script '%s' paused, "
+             "press any M1 button to continue (BACK aborts)\r\n", fname);
+
+    /* Non-intrusive on-screen prompt. */
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    m1_draw_text(&m1_u8g2, 2, 12, 124, "BadUSB Paused", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 28, 124, "WAIT_FOR_BUTTON", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 40, 124, "(experimental)", TEXT_ALIGN_CENTER);
+    m1_draw_text(&m1_u8g2, 2, 54, 124, "Press to continue", TEXT_ALIGN_CENTER);
+    m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Go", NULL, NULL);
+    m1_u8g2_nextpage();
+
+    bool resumed = false;
+    bool led_on = false;
+    uint32_t last_toggle = osKernelGetTickCount();
+    const uint32_t LED_HALF_PERIOD_MS = 500;   /* ~1 Hz slow flash */
+
+    while (badusb_state.running)
+    {
+        /* Slow red LED flash to signal the paused/experimental state. */
+        uint32_t now = osKernelGetTickCount();
+        if ((now - last_toggle) >= LED_HALF_PERIOD_MS)
+        {
+            last_toggle = now;
+            led_on = !led_on;
+            if (led_on)
+                lp5814_led_on_Red(128);
+            else
+                lp5814_all_off_RGB();
+        }
+
+        /* Poll for a keypad button. */
+        S_M1_Main_Q_t q_item;
+        S_M1_Buttons_Status btn;
+        if (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE &&
+            q_item.q_evt_type == Q_EVENT_KEYPAD &&
+            xQueueReceive(button_events_q_hdl, &btn, 0) == pdTRUE)
+        {
+            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                badusb_state.running = 0;   /* BACK aborts the script */
+                break;
+            }
+            if (btn.event[BUTTON_OK_KP_ID]    == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_UP_KP_ID]    == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_DOWN_KP_ID]  == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_LEFT_KP_ID]  == BUTTON_EVENT_CLICK ||
+                btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                resumed = true;
+                break;
+            }
+        }
+
+        osDelay(10);
+    }
+
+    /* Restore LED state. */
+    m1_led_indicator_off(NULL);
+    return resumed;
+}
     UINT bytes_read;
     char script_buf[BADUSB_MAX_SCRIPT_SIZE];
     char line_buf[BADUSB_MAX_LINE_LEN];
@@ -541,6 +627,7 @@ bool badusb_execute_file(const char *filepath)
     /* Extract just the filename for display */
     const char *fname = strrchr(filepath, '/');
     if (fname) fname++; else fname = filepath;
+    s_current_fname = fname;
 
     /* Reset HID debug counters before switching */
     USBD_HID_ResetDbgCounters();
