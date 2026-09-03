@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.11] - 2026-09-03
+
+### Added
+
+- **BadUSB: `STRINGDELAY`, `SYSRQ`, `ALTCHAR` and `ALTSTRING`/`ALTCODE`
+  DuckyScript commands** — the BadUSB engine now covers the remaining common
+  Flipper/Momentum DuckyScript commands. `STRINGDELAY <ms>` (alias
+  `STRING_DELAY`) inserts a delay between each typed character for slow targets;
+  `SYSRQ <key>` issues the Linux Magic SysRq combo (Alt+PrintScreen+key);
+  `ALTCHAR <code>` types a single character via the Windows Alt+Numpad method;
+  and `ALTSTRING`/`ALTCODE <text>` types an entire string using Alt+Numpad
+  codes. The digit→keypad mapping and command classification are pure-logic and
+  covered by host-side unit tests. Combined with the new `WAIT_FOR_BUTTON_PRESS`
+  support, this completes 14/14 parity with Flipper/Momentum command families.
+- **BadUSB: `HOLD` and `RELEASE` DuckyScript commands** — the BadUSB engine now
+  supports pressing and holding keys/modifiers across subsequent commands.
+  `HOLD <combo>` presses and holds one or more keys (e.g. `HOLD SHIFT`,
+  `HOLD CTRL c`), and they stay down — even across `DELAY`s — until a matching
+  `RELEASE <combo>` (or a bare `RELEASE`, which releases everything). The held
+  keys are merged into every HID report (up to the 6-key boot-keyboard limit)
+  and are always released when the script ends. Held-key bookkeeping lives in a
+  new pure-logic module (`badusb_hold`) covered by host-side unit tests.
+- **BadUSB: `STRINGLN` and `REM_BLOCK`/`END_REM` DuckyScript commands** — the
+  BadUSB engine now supports two standard Flipper/Momentum DuckyScript commands
+  that many payloads rely on. `STRINGLN <text>` types the text and then presses
+  ENTER (a bare `STRINGLN` just presses ENTER), and `REM_BLOCK` … `END_REM`
+  delimits a multi-line comment block so long payloads can be documented without
+  a `REM` on every line. Both are parsed by the pure-logic DuckyScript parser and
+  covered by host-side unit tests.
+- **BadUSB: `WAIT_FOR_BUTTON_PRESS` DuckyScript command (experimental)** — the
+  BadUSB engine now recognizes and acts on `WAIT_FOR_BUTTON_PRESS`, completing
+  parity (14/14) with the Flipper/Momentum DuckyScript command families. Because
+  the M1 has no dedicated "continue" key during a run, the command is mapped to
+  "pause until any M1 keypad button is pressed" (OK/UP/DOWN/LEFT/RIGHT resume,
+  BACK aborts). As this behavior is **experimental**, a paused script is signaled
+  non-intrusively three ways: an on-screen "BadUSB Paused / WAIT_FOR_BUTTON
+  (experimental)" prompt, a slow (~1 Hz) red LED flash for the duration of the
+  wait, and a debug-log warning. The command classification is pure-logic and
+  covered by host-side unit tests.
 ## [0.9.3.10] - 2026-09-03
 
 ### Added
