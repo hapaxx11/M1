@@ -189,6 +189,44 @@ static void trim_tail(const char *src, char *dst, size_t dstsz)
         dst[--len] = '\0';
 }
 
+/* Parse a "MOD MOD ... KEY" combo (e.g. "CTRL SHIFT a", "GUI", "ENTER").
+ * Accumulates leading modifier keywords, then an optional final key name.
+ * Applies an implicit SHIFT when the final key is a shifted printable char.
+ * @return true if at least one modifier or a key was recognized. */
+static bool parse_key_combo(const char *s, uint8_t *mod_out, uint8_t *key_out)
+{
+    uint8_t mod_accum = 0;
+    const char *cur = s;
+    const char *rest = NULL;
+
+    while (cur && *cur)
+    {
+        uint8_t m = busb_parse_modifier(cur, &rest);
+        if (m == 0)
+            break;
+        mod_accum |= m;
+        cur = rest;
+    }
+
+    uint8_t kc = BUSB_KEY_NONE;
+    if (cur != NULL && *cur != '\0')
+    {
+        char keybuf[32];
+        trim_tail(cur, keybuf, sizeof(keybuf));
+        kc = busb_parse_key_name(keybuf);
+        if (kc != BUSB_KEY_NONE &&
+            strlen(keybuf) == 1 && keybuf[0] >= 0x20 && keybuf[0] <= 0x7E)
+        {
+            if (s_ascii_to_hid[(unsigned char)keybuf[0] - 0x20].shift)
+                mod_accum |= BUSB_MOD_LSHIFT;
+        }
+    }
+
+    *mod_out = mod_accum;
+    *key_out = kc;
+    return (mod_accum != 0 || kc != BUSB_KEY_NONE);
+}
+
 bool busb_classify_line(const char *line, busb_parsed_line_t *out)
 {
     /* Skip leading whitespace */
@@ -274,6 +312,33 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
     {
         out->type = BUSB_LINE_REPEAT;
         out->u.repeat_count = atoi(line + 7);
+        return true;
+    }
+
+    /* HOLD <combo> — press and hold key(s) */
+    if (strncmp(line, "HOLD ", 5) == 0)
+    {
+        uint8_t mod = 0, kc = BUSB_KEY_NONE;
+        if (parse_key_combo(line + 5, &mod, &kc))
+        {
+            out->type = BUSB_LINE_HOLD;
+            out->u.key.modifiers = mod;
+            out->u.key.keycode = kc;
+            return true;
+        }
+    }
+
+    /* RELEASE [combo] — release held key(s); no argument releases all */
+    if (strncmp(line, "RELEASE", 7) == 0 &&
+        (line[7] == '\0' || line[7] == ' ' || line[7] == '\t' ||
+         line[7] == '\r' || line[7] == '\n'))
+    {
+        uint8_t mod = 0, kc = BUSB_KEY_NONE;
+        if (line[7] == ' ')
+            parse_key_combo(line + 8, &mod, &kc);
+        out->type = BUSB_LINE_RELEASE;
+        out->u.key.modifiers = mod;
+        out->u.key.keycode = kc;
         return true;
     }
 

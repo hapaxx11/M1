@@ -6,9 +6,9 @@
  * Host-side unit tests for the DuckyScript parser (badusb_parser.c/h).
  * Tests key-name lookup, modifier parsing, ASCII-to-HID mapping,
  * line classification, and line counting for core DuckyScript commands.
- * Advanced commands (ALTCHAR, HOLD/RELEASE, MOUSE, MEDIA,
+ * Advanced commands (ALTCHAR, MOUSE, MEDIA,
  * WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet implemented.
- * STRINGLN and REM_BLOCK/END_REM are supported.
+ * STRINGLN, REM_BLOCK/END_REM and HOLD/RELEASE are supported.
  */
 
 #include "unity.h"
@@ -299,6 +299,51 @@ void test_classify_rem_still_comment(void)
     TEST_ASSERT_EQUAL(BUSB_LINE_COMMENT, out.type);
 }
 
+void test_classify_hold_modifier_and_key(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("HOLD CTRL c", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_HOLD, out.type);
+    TEST_ASSERT_EQUAL(BUSB_MOD_LCTRL, out.u.key.modifiers);
+    TEST_ASSERT_EQUAL(BUSB_KEY_C, out.u.key.keycode);
+}
+
+void test_classify_hold_modifier_only(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("HOLD SHIFT", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_HOLD, out.type);
+    TEST_ASSERT_EQUAL(BUSB_MOD_LSHIFT, out.u.key.modifiers);
+    TEST_ASSERT_EQUAL(BUSB_KEY_NONE, out.u.key.keycode);
+}
+
+void test_classify_hold_single_key(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("HOLD a", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_HOLD, out.type);
+    TEST_ASSERT_EQUAL(BUSB_KEY_A, out.u.key.keycode);
+}
+
+void test_classify_release_with_key(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("RELEASE CTRL c", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_RELEASE, out.type);
+    TEST_ASSERT_EQUAL(BUSB_MOD_LCTRL, out.u.key.modifiers);
+    TEST_ASSERT_EQUAL(BUSB_KEY_C, out.u.key.keycode);
+}
+
+void test_classify_release_all(void)
+{
+    /* Bare RELEASE releases everything: no modifiers, no keycode. */
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("RELEASE", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_RELEASE, out.type);
+    TEST_ASSERT_EQUAL(0, out.u.key.modifiers);
+    TEST_ASSERT_EQUAL(BUSB_KEY_NONE, out.u.key.keycode);
+}
+
 void test_classify_repeat(void)
 {
     busb_parsed_line_t out;
@@ -445,6 +490,11 @@ int main(void)
     RUN_TEST(test_classify_rem_block_start);
     RUN_TEST(test_classify_rem_block_end);
     RUN_TEST(test_classify_rem_still_comment);
+    RUN_TEST(test_classify_hold_modifier_and_key);
+    RUN_TEST(test_classify_hold_modifier_only);
+    RUN_TEST(test_classify_hold_single_key);
+    RUN_TEST(test_classify_release_with_key);
+    RUN_TEST(test_classify_release_all);
     RUN_TEST(test_classify_repeat);
     RUN_TEST(test_classify_modifier_with_key);
     RUN_TEST(test_classify_multi_modifier);

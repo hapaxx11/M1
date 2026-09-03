@@ -25,6 +25,7 @@
 #include "usbd_hid.h"
 #include "m1_log_debug.h"
 #include "badusb_parser.h"
+#include "badusb_hold.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -59,6 +60,9 @@ static badusb_state_t badusb_state;
 /* USB HID report buffer: [modifier, reserved, key1..key6] */
 static uint8_t hid_report[8];
 
+/* Currently-held keys/modifiers for the HOLD / RELEASE commands. */
+static busb_hold_state_t badusb_held;
+
 /* ASCII to HID scancode table is provided by badusb_parser (busb_ascii_to_hid()) */
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
@@ -66,6 +70,7 @@ static uint8_t hid_report[8];
 static void badusb_wait_tx_idle(void);
 void badusb_send_key(uint8_t modifier, uint8_t keycode);
 static void badusb_release_all(void);
+static void badusb_send_held_report(void);
 void badusb_type_char(char c);
 void badusb_type_string(const char *str);
 static bool badusb_parse_line(const char *line);
@@ -117,9 +122,8 @@ static void badusb_wait_tx_idle(void)
 void badusb_send_key(uint8_t modifier, uint8_t keycode)
 {
     badusb_wait_tx_idle();
-    memset(hid_report, 0, sizeof(hid_report));
-    hid_report[0] = modifier;
-    hid_report[2] = keycode;
+    /* Merge any held keys/modifiers with this transient press. */
+    busb_hold_build_report(&badusb_held, modifier, keycode, hid_report);
     USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
 #if BADUSB_KEY_PRESS_MS > 0
     osDelay(BADUSB_KEY_PRESS_MS);
@@ -134,13 +138,29 @@ void badusb_send_key(uint8_t modifier, uint8_t keycode)
 
 /*============================================================================*/
 /**
-  * @brief  Release all keys (send empty report)
+  * @brief  Release the transient key, returning to the held-key baseline
+  *
+  * Sends a report reflecting only the keys currently held via HOLD (which may
+  * be none). Used after a transient key press and after a HOLD/RELEASE change.
   */
 /*============================================================================*/
 static void badusb_release_all(void)
 {
     badusb_wait_tx_idle();
-    memset(hid_report, 0, sizeof(hid_report));
+    busb_hold_build_report(&badusb_held, 0, 0, hid_report);
+    USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Send a report reflecting the current held-key state (HOLD/RELEASE)
+  */
+/*============================================================================*/
+static void badusb_send_held_report(void)
+{
+    badusb_wait_tx_idle();
+    busb_hold_build_report(&badusb_held, 0, 0, hid_report);
     USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
 }
 
@@ -285,6 +305,21 @@ static bool badusb_parse_line(const char *line)
         }
         return true;  /* Don't update last_line for REPEAT */
 
+    case BUSB_LINE_HOLD:
+        busb_hold_add(&badusb_held, parsed.u.key.modifiers,
+                      parsed.u.key.keycode);
+        badusb_send_held_report();
+        return true;
+
+    case BUSB_LINE_RELEASE:
+        if (parsed.u.key.modifiers == 0 && parsed.u.key.keycode == BUSB_KEY_NONE)
+            busb_hold_release_all(&badusb_held);
+        else
+            busb_hold_remove(&badusb_held, parsed.u.key.modifiers,
+                             parsed.u.key.keycode);
+        badusb_send_held_report();
+        return true;
+
     case BUSB_LINE_MODIFIER_KEY:
     case BUSB_LINE_STANDALONE_KEY:
         badusb_send_key(parsed.u.key.modifiers, parsed.u.key.keycode);
@@ -405,6 +440,7 @@ bool badusb_execute_file(const char *filepath)
 
     /* Init state */
     memset(&badusb_state, 0, sizeof(badusb_state));
+    busb_hold_init(&badusb_held);
     badusb_state.running = 1;
     badusb_state.total_lines = busb_count_lines(script_buf, bytes_read);
 
@@ -510,7 +546,8 @@ bool badusb_execute_file(const char *filepath)
         }
     }
 
-    /* Ensure all keys released */
+    /* Ensure all keys released (including any left held by HOLD) */
+    busb_hold_release_all(&badusb_held);
     badusb_release_all();
 
     /* Show final progress */

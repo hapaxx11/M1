@@ -2088,6 +2088,21 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME badusb_parser COMMAND test_badusb_parser)
 
+# ── BadUSB HOLD / RELEASE held-key state ──
+add_executable(test_badusb_hold
+    test_badusb_hold.c
+    ${M1_ROOT}/m1_csrc/badusb_hold.c
+)
+target_include_directories(test_badusb_hold PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_badusb_hold PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_badusb_hold PRIVATE sanitizers)
+endif()
+add_test(NAME badusb_hold COMMAND test_badusb_hold)
+
 # ── m1_badusb.c migration to badusb_parser.h ──
 add_executable(test_badusb_migration
     test_badusb_migration.c
