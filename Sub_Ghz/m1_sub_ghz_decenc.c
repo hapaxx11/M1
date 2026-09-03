@@ -304,45 +304,105 @@ void subghz_pulse_handler_reset(void)
   * @retval None
   */
 /*============================================================================*/
+/*
+ * Run every eligible protocol decoder over the pulse buffer.
+ * Returns true as soon as one of them accepts the burst.
+ */
+static bool decode_try_all_protocols(uint16_t pulsecount)
+{
+	  uint16_t i;
+
+	  for(i = 0; i < subghz_protocol_registry_count; i++)
+	  {
+		  /* Weather Station scene: restrict the scope to weather-typed
+		   * protocols so a generic gate/remote protocol cannot consume
+		   * the burst first. */
+		  if ( decode_weather_only )
+		  {
+			  if ( !subghz_protocol_is_weather(i) )
+			  {
+				  continue;
+			  }
+		  }
+		  /* Skip protocols the user has chosen to ignore
+		   * (Protocol Filter) during live Read capture. */
+		  else if ( subghz_ignore_is_ignored(i) )
+		  {
+			  continue;
+		  }
+		  if ( !subghz_decode_protocol(i, pulsecount) )
+		  {
+			  // receive successfully for protocol i
+			  return true;
+		  }
+	  } // for(i = 0; i < subghz_protocol_registry_count; i++)
+	  return false;
+}
+
+/*
+ * Weather-mode decode attempt with sliding start offsets.
+ *
+ * Weather sensors prefix every frame with a sync/preamble burst and repeat
+ * the frame several times inside one capture window, so the first pulse in
+ * the buffer is rarely the first data bit.  The decoders always start at a
+ * fixed offset, which made a correctly received frame fail to decode.  On
+ * failure, drop one bit period (two pulses) from the front of the buffer and
+ * retry, which recovers frames that start mid-buffer.  Only used in weather
+ * mode so the Read scene's timing behaviour is unchanged.
+ */
+static bool decode_try_sliding(uint16_t pulsecount)
+{
+	  uint8_t attempt;
+
+	  for(attempt = 0; attempt < WEATHER_DECODE_MAX_OFFSETS; attempt++)
+	  {
+		  if ( pulsecount < PACKET_PULSE_COUNT_MIN )
+		  {
+			  break;
+		  }
+		  if ( decode_try_all_protocols(pulsecount) )
+		  {
+			  return true;
+		  }
+		  /* Shift the buffer left by one bit period and retry.  The buffer
+		   * is discarded by the caller right afterwards, so destroying it
+		   * here is safe. */
+		  memmove(&subghz_decenc_ctl.pulse_times[0],
+		          &subghz_decenc_ctl.pulse_times[2],
+		          (size_t)(pulsecount - 2) * sizeof(subghz_decenc_ctl.pulse_times[0]));
+		  pulsecount -= 2;
+	  }
+	  return false;
+}
+
 uint8_t subghz_pulse_handler(uint16_t duration)
 {
-	  uint8_t i;
 	  int16_t rssi;
 	  struct si446x_reply_GET_MODEM_STATUS_map *pmodemstat;
+	  /* Weather PPM protocols encode bits as gaps of up to ~4 ms, so the
+	   * Read scene's 1.5 ms packet-boundary threshold cut every frame in
+	   * half.  Weather mode uses a longer boundary (sensor sync gaps are
+	   * 8-9 ms) so a complete frame is accumulated before decoding. */
+	  const uint32_t gap_min = decode_weather_only ? WEATHER_INTERPACKET_GAP_MIN
+	                                               : INTERPACKET_GAP_MIN;
 
 	  if (duration >= PACKET_PULSE_TIME_MIN)
 	  {
-		  if (duration >= INTERPACKET_GAP_MIN) // Possible gap between packets?
+		  if (duration >= gap_min) // Possible gap between packets?
 		  {
 			  subghz_decenc_ctl.pulse_times[subghz_decenc_ctl.npulsecount++] = duration; // End bit
 
 			  M1_LOG_D(M1_LOGDB_TAG, "Valid gap: %d, pulses:%d\r\n", duration, subghz_decenc_ctl.npulsecount);
 			  if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN ) // Potential packet received?
 			  {
-				  for(i = 0; i < subghz_protocol_registry_count; i++)
+				  if ( decode_weather_only )
 				  {
-					  /* Weather Station scene: restrict the scope to
-					   * weather-typed protocols so a generic gate/remote
-					   * protocol cannot consume the burst first. */
-					  if ( decode_weather_only )
-					  {
-						  if ( !subghz_protocol_is_weather(i) )
-						  {
-							  continue;
-						  }
-					  }
-					  /* Skip protocols the user has chosen to ignore
-					   * (Protocol Filter) during live Read capture. */
-					  else if ( subghz_ignore_is_ignored(i) )
-					  {
-						  continue;
-					  }
-					  if ( !subghz_decode_protocol(i, subghz_decenc_ctl.npulsecount) )
-					  {
-						  // receive successfully for protocol i
-						  break;
-					  }
-				  } // for(i = 0; i < subghz_protocol_registry_count; i++)
+					  decode_try_sliding(subghz_decenc_ctl.npulsecount);
+				  }
+				  else
+				  {
+					  decode_try_all_protocols(subghz_decenc_ctl.npulsecount);
+				  }
 			  } // if ( subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MIN )
 			  pulse_handler_interpacket_gap = duration; // update
 			  subghz_decenc_ctl.npulsecount = 0;
@@ -368,6 +428,13 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 	  // detect overflow
 	  if (subghz_decenc_ctl.npulsecount >= PACKET_PULSE_COUNT_MAX)
 	  {
+		  /* Weather frames repeat back-to-back and can fill the buffer
+		   * before a sync gap arrives — try to decode what we have instead
+		   * of throwing the whole burst away. */
+		  if ( decode_weather_only )
+		  {
+			  decode_try_sliding(subghz_decenc_ctl.npulsecount);
+		  }
 		  subghz_decenc_ctl.npulsecount = 0; // Reset rx buffer
 		  return PULSE_DET_IDLE; // error
 	  }

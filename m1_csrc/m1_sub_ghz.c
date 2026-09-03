@@ -26,6 +26,8 @@
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_protocol_registry.h"
 #include "subghz_weather_scan.h"
+#include "subghz_weather_parse.h"
+#include "subghz_weather_history.h"
 #include "subghz_key_encoder.h"
 #include "subghz_raw_line_parser.h"
 #include "subghz_raw_capture_alloc.h"
@@ -4552,29 +4554,199 @@ static void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod)
     sub_ghz_rx_start();
 }
 
+/* Rows visible at once in the sensor list. */
+#define WX_LIST_ROWS        4
+#define WX_LIST_ROW_H       12
+#define WX_LIST_TOP_Y       14
+
+/* Build the one-line list entry for a sensor. */
+static void sub_ghz_weather_row_text(const SubGhzWeatherSensor *s,
+                                     uint32_t now_ms, char *buf, size_t len)
+{
+    char temp[12];
+    char hum[8];
+
+    if (s->has_temp)
+    {
+        snprintf(temp, sizeof(temp), "%d.%dC",
+                 (int)(s->temp_raw / 10), (int)(abs(s->temp_raw) % 10));
+    }
+    else
+    {
+        snprintf(temp, sizeof(temp), "--");
+    }
+
+    if (s->humidity == WX_NO_HUMIDITY)
+    {
+        snprintf(hum, sizeof(hum), "--");
+    }
+    else
+    {
+        snprintf(hum, sizeof(hum), "%u%%", (unsigned)s->humidity);
+    }
+
+    snprintf(buf, len, "%s %s %s %um",
+             protocol_text[s->protocol], temp, hum,
+             (unsigned)subghz_weather_history_age_min(s, now_ms));
+}
+
+/* Flipper-style detail view for one captured sensor. */
+static void sub_ghz_weather_draw_detail(const SubGhzWeatherSensor *s,
+                                        uint32_t now_ms)
+{
+    char l[5][32];
+    int16_t temp_f;
+
+    snprintf(l[0], sizeof(l[0]), "%s %ub",
+             protocol_text[s->protocol], (unsigned)s->bit_len);
+
+    if (s->channel == WX_NO_CHANNEL)
+    {
+        snprintf(l[1], sizeof(l[1]), "Sn: 0x%02lX", (unsigned long)s->serial);
+    }
+    else
+    {
+        snprintf(l[1], sizeof(l[1]), "Sn: 0x%02lX  Ch: %u",
+                 (unsigned long)s->serial, (unsigned)s->channel);
+    }
+
+    if (s->button == WX_NO_BUTTON)
+    {
+        snprintf(l[2], sizeof(l[2]), "Batt: %s", s->battery_low ? "low" : "ok");
+    }
+    else
+    {
+        snprintf(l[2], sizeof(l[2]), "Btn: %u  Batt: %s",
+                 (unsigned)s->button, s->battery_low ? "low" : "ok");
+    }
+
+    snprintf(l[3], sizeof(l[3]), "Data: 0x%08lX%08lX",
+             (unsigned long)(s->data >> 32), (unsigned long)(s->data & 0xFFFFFFFFUL));
+
+    if (s->has_temp)
+    {
+        temp_f = subghz_weather_c_to_f_d10(s->temp_raw);
+        if (s->humidity == WX_NO_HUMIDITY)
+        {
+            snprintf(l[4], sizeof(l[4]), "%d.%dF (%d.%dC)",
+                     (int)(temp_f / 10), (int)(abs(temp_f) % 10),
+                     (int)(s->temp_raw / 10), (int)(abs(s->temp_raw) % 10));
+        }
+        else
+        {
+            snprintf(l[4], sizeof(l[4]), "%d.%dF  %u%%  %um",
+                     (int)(temp_f / 10), (int)(abs(temp_f) % 10),
+                     (unsigned)s->humidity,
+                     (unsigned)subghz_weather_history_age_min(s, now_ms));
+        }
+    }
+    else
+    {
+        snprintf(l[4], sizeof(l[4]), "no temperature");
+    }
+
+    m1_u8g2_firstpage();
+    do {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, l[0]);
+        u8g2_DrawStr(&m1_u8g2, 2, 21, l[1]);
+        u8g2_DrawStr(&m1_u8g2, 2, 31, l[2]);
+        u8g2_DrawStr(&m1_u8g2, 2, 41, l[3]);
+        u8g2_DrawFrame(&m1_u8g2, 0, 45, 128, 19);
+        u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+        u8g2_DrawStr(&m1_u8g2, 4, 59, l[4]);
+    } while (m1_u8g2_nextpage());
+}
+
+/* Sensor list (Flipper "Weather Station" main view). */
+static void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
+                                      uint8_t sel, uint8_t top,
+                                      SubGhzWeatherScanMod mod, uint32_t now_ms)
+{
+    char title[32];
+    char row[32];
+    uint8_t i;
+
+    snprintf(title, sizeof(title), "Weather Station [%s]",
+             subghz_weather_scan_label(mod));
+
+    m1_u8g2_firstpage();
+    do {
+        u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+
+        if (hist->count == 0)
+        {
+            u8g2_DrawStr(&m1_u8g2, 2, 30, "Scanning 433.92MHz");
+            u8g2_DrawStr(&m1_u8g2, 2, 42, "no sensors yet ...");
+            u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
+        }
+        else
+        {
+            for (i = 0; i < WX_LIST_ROWS && (uint8_t)(top + i) < hist->count; i++)
+            {
+                uint8_t idx = (uint8_t)(top + i);
+                uint8_t y = (uint8_t)(WX_LIST_TOP_Y + i * WX_LIST_ROW_H);
+
+                sub_ghz_weather_row_text(&hist->items[idx], now_ms,
+                                         row, sizeof(row));
+                if (idx == sel)
+                {
+                    u8g2_DrawBox(&m1_u8g2, 0, y, 128, WX_LIST_ROW_H);
+                    u8g2_SetDrawColor(&m1_u8g2, 0);
+                    u8g2_DrawStr(&m1_u8g2, 2, (u8g2_uint_t)(y + 9), row);
+                    u8g2_SetDrawColor(&m1_u8g2, 1);
+                }
+                else
+                {
+                    u8g2_DrawStr(&m1_u8g2, 2, (u8g2_uint_t)(y + 9), row);
+                }
+            }
+        }
+    } while (m1_u8g2_nextpage());
+}
+
 void sub_ghz_weather_station(void)
 {
     S_M1_Buttons_Status this_button_status;
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
     SubGHz_Dec_Info_t decoded_data;
-    const SubGHz_Weather_Data_t *wx;
-    char line0[32], line1[32], line2[32], line3[32];
     bool running = true;
-    bool has_data = false;
     bool need_redraw = true;
+    bool detail_view = false;
+    uint8_t sel = 0;
+    uint8_t top = 0;
+    uint32_t last_age_tick;
     SubGhzWeatherScan scan;
+    static SubGhzWeatherHistory wx_hist;
 
     menu_sub_ghz_init();
     subghz_decenc_init();
+    subghz_weather_history_reset(&wx_hist);
 
-    /* Momentum-style dual-modulation scan starting on OOK/AM650. */
+    /* The Read scene can leave raw-record mode armed; while it is set the
+     * TIM1 capture ISR diverts edges into the raw ring buffer and only
+     * forwards every Nth edge, which starves the decoder. */
+    subghz_record_mode_flag = 0;
+
+    /* Consider weather-typed protocols only, so a generic gate/remote
+     * protocol cannot consume the burst before the weather decoders see it,
+     * and enable the weather packet-segmentation / sliding-offset decode. */
+    subghz_decenc_set_weather_only(true);
+
+    /* Every Flipper weather-station protocol is OOK/AM at 433.92 MHz — there
+     * is no FSK weather decoder — so dwell on OOK only instead of spending
+     * half the time on a modulation that can never decode. */
     subghz_weather_scan_init(&scan, WX_SCAN_DWELL_MS, WX_SCAN_MOD_OOK,
-                             true, xTaskGetTickCount() * portTICK_PERIOD_MS);
+                             false, xTaskGetTickCount() * portTICK_PERIOD_MS);
     sub_ghz_weather_rx_arm(scan.mod);
+    last_age_tick = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
     while (running)
     {
+        uint32_t now_ms;
+
         /* --- Feed the decoder: drain all pending pulse-edge events into the
          * pulse handler.  The TIM1 capture ISR queues one Q_EVENT_SUBGHZ_RX
          * per edge; without this drain the decoder is never fed and nothing
@@ -4608,83 +4780,148 @@ void sub_ghz_weather_station(void)
             else if (q_item.q_evt_type == Q_EVENT_KEYPAD)
             {
                 if (xQueueReceive(button_events_q_hdl, &this_button_status, 0)
-                        == pdTRUE &&
-                    this_button_status.event[BUTTON_BACK_KP_ID] ==
-                        BUTTON_EVENT_CLICK)
+                        == pdTRUE)
                 {
-                    running = false;
-                    continue;
+                    if (this_button_status.event[BUTTON_BACK_KP_ID] ==
+                            BUTTON_EVENT_CLICK)
+                    {
+                        if (detail_view)
+                        {
+                            detail_view = false;
+                            need_redraw = true;
+                        }
+                        else
+                        {
+                            running = false;
+                            continue;
+                        }
+                    }
+                    else if (this_button_status.event[BUTTON_OK_KP_ID] ==
+                                 BUTTON_EVENT_CLICK)
+                    {
+                        if (!detail_view && wx_hist.count > 0)
+                        {
+                            detail_view = true;
+                            need_redraw = true;
+                        }
+                    }
+                    else if (this_button_status.event[BUTTON_UP_KP_ID] ==
+                                 BUTTON_EVENT_CLICK)
+                    {
+                        if (!detail_view && sel > 0)
+                        {
+                            sel--;
+                            if (sel < top) top = sel;
+                            need_redraw = true;
+                        }
+                    }
+                    else if (this_button_status.event[BUTTON_DOWN_KP_ID] ==
+                                 BUTTON_EVENT_CLICK)
+                    {
+                        if (!detail_view && (uint8_t)(sel + 1) < wx_hist.count)
+                        {
+                            sel++;
+                            if (sel >= (uint8_t)(top + WX_LIST_ROWS))
+                                top = (uint8_t)(sel - WX_LIST_ROWS + 1);
+                            need_redraw = true;
+                        }
+                    }
                 }
             }
         }
+
+        now_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
         /* --- Consume any decoded frame; keep only weather-typed protocols. */
         if (subghz_decenc_read(&decoded_data, false))
         {
             if (subghz_protocol_is_weather(decoded_data.protocol))
             {
-                wx = subghz_get_weather_data();
-                has_data = true;
+                SubGhzWeatherFields f;
+                SubGhzWeatherSensor s;
+                bool ok;
 
-                int16_t temp_int = wx->temp_raw / 10;
-                int16_t temp_frac = abs(wx->temp_raw) % 10;
+                ok = subghz_weather_parse(decoded_data.protocol,
+                                          decoded_data.key,
+                                          decoded_data.bit_len, &f);
+                if (!ok)
+                {
+                    /* Protocols whose decoder already fills the shared
+                     * weather struct (oregon_v2, acurite, lacrosse_tx,
+                     * infactory) still display without a parser entry. */
+                    const SubGHz_Weather_Data_t *wx = subghz_get_weather_data();
 
-                snprintf(line1, sizeof(line1), "%s  Ch:%d",
-                         protocol_text[decoded_data.protocol], wx->channel);
-                snprintf(line2, sizeof(line2), "Temp: %d.%dC  Hum: %d%%",
-                         temp_int, temp_frac, wx->humidity);
-                snprintf(line3, sizeof(line3), "ID:%04X %s %ddBm",
-                         wx->id,
-                         wx->battery_low ? "LOW" : "OK",
-                         decoded_data.rssi);
+                    f.id          = wx->id;
+                    f.channel     = wx->channel;
+                    f.button      = WX_NO_BUTTON;
+                    f.battery_low = wx->battery_low ? 1U : 0U;
+                    f.humidity    = wx->humidity;
+                    f.temp_d10    = wx->temp_raw;
+                    f.has_temp    = true;
+                    ok            = (wx->id != 0) || (wx->temp_raw != 0);
+                }
 
-                M1_LOG_I(M1_LOGDB_TAG, "WX[%s]: %s ch%d %d.%dC %d%% RSSI=%d\r\n",
-                         subghz_weather_scan_label(scan.mod),
-                         protocol_text[decoded_data.protocol],
-                         wx->channel, temp_int, temp_frac,
-                         wx->humidity, decoded_data.rssi);
-                need_redraw = true;
+                if (ok)
+                {
+                    memset(&s, 0, sizeof(s));
+                    s.protocol    = decoded_data.protocol;
+                    s.data        = decoded_data.key;
+                    s.bit_len     = decoded_data.bit_len;
+                    s.serial      = f.id;
+                    s.channel     = f.channel;
+                    s.button      = f.button;
+                    s.battery_low = f.battery_low;
+                    s.humidity    = f.humidity;
+                    s.temp_raw    = f.temp_d10;
+                    s.has_temp    = f.has_temp;
+                    s.rssi        = decoded_data.rssi;
+
+                    subghz_weather_history_add(&wx_hist, &s, now_ms);
+                    if (sel >= wx_hist.count) sel = (uint8_t)(wx_hist.count - 1);
+
+                    M1_LOG_I(M1_LOGDB_TAG,
+                             "WX: %s id=%lX ch%u %d.%dC %u%% RSSI=%d\r\n",
+                             protocol_text[decoded_data.protocol],
+                             (unsigned long)f.id, (unsigned)f.channel,
+                             (int)(f.temp_d10 / 10), (int)(abs(f.temp_d10) % 10),
+                             (unsigned)f.humidity, decoded_data.rssi);
+                    need_redraw = true;
+                }
             }
         }
 
         /* --- Momentum scan: switch modulation when the dwell elapses. --- */
-        if (subghz_weather_scan_tick(&scan,
-                xTaskGetTickCount() * portTICK_PERIOD_MS))
+        if (subghz_weather_scan_tick(&scan, now_ms))
         {
             sub_ghz_weather_rx_arm(scan.mod);
             need_redraw = true;
+        }
+
+        /* Refresh the displayed ages once a minute. */
+        if ((uint32_t)(now_ms - last_age_tick) >= 60000U)
+        {
+            last_age_tick = now_ms;
+            if (wx_hist.count > 0) need_redraw = true;
         }
 
         /* --- Redraw only when something changed. --- */
         if (need_redraw)
         {
             need_redraw = false;
-            snprintf(line0, sizeof(line0), "Weather Station [%s]",
-                     subghz_weather_scan_label(scan.mod));
-
-            m1_u8g2_firstpage();
-            do {
-                u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-                u8g2_DrawStr(&m1_u8g2, 2, 12, line0);
-                if (has_data)
-                {
-                    u8g2_DrawStr(&m1_u8g2, 2, 24, line1);
-                    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-                    u8g2_DrawStr(&m1_u8g2, 2, 38, line2);
-                    u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-                    u8g2_DrawStr(&m1_u8g2, 2, 50, line3);
-                }
-                else
-                {
-                    u8g2_DrawStr(&m1_u8g2, 2, 30, "Scanning 433.92MHz");
-                    u8g2_DrawStr(&m1_u8g2, 2, 42, "AM + FSK ...");
-                }
-                u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
-            } while (m1_u8g2_nextpage());
+            if (detail_view && sel < wx_hist.count)
+            {
+                sub_ghz_weather_draw_detail(&wx_hist.items[sel], now_ms);
+            }
+            else
+            {
+                detail_view = false;
+                sub_ghz_weather_draw_list(&wx_hist, sel, top, scan.mod, now_ms);
+            }
         }
     }
 
     /* Tear down the RX capture chain and power the radio down. */
+    subghz_decenc_set_weather_only(false);
     sub_ghz_rx_pause();
     sub_ghz_rx_deinit();
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
