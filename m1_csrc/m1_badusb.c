@@ -406,10 +406,16 @@ static bool badusb_parse_line(const char *line)
         return true;  /* Don't update last_line for REPEAT */
 
     case BUSB_LINE_HOLD:
-        busb_hold_add(&badusb_held, parsed.u.key.modifiers,
-                      parsed.u.key.keycode);
+    {
+        bool ok = busb_hold_add(&badusb_held, parsed.u.key.modifiers,
+                               parsed.u.key.keycode);
+        if (!ok)
+            M1_LOG_W(M1_LOGDB_TAG,
+                     "HOLD overflow: too many keys held (max %u)\r\n",
+                     (unsigned)BUSB_HOLD_MAX_KEYS);
         badusb_send_held_report();
         return true;
+    }
 
     case BUSB_LINE_RELEASE:
         if (parsed.u.key.modifiers == 0 && parsed.u.key.keycode == BUSB_KEY_NONE)
