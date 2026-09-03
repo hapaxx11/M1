@@ -19,6 +19,20 @@
 #define SUBGHZ_RAW_DATA_PULSE_COUNT_MAX		20
 
 #define INTERPACKET_GAP_MIN					1500 // uS
+/*
+ * Packet-boundary gap used while the Weather Station scene is active.
+ * Weather PPM protocols encode a data bit as a gap of up to ~4 ms (e.g.
+ * infactory/Kedsum bit '1' = 4000 us), which is far above the generic
+ * 1.5 ms threshold — with the generic value every weather frame was split
+ * into fragments and never decoded.  Sensor sync gaps are 8-9 ms, so 5 ms
+ * separates frames while keeping their bit gaps inside one packet.
+ */
+#define WEATHER_INTERPACKET_GAP_MIN			5000 // uS
+/*
+ * Maximum number of sliding start offsets (one bit period = two pulses each)
+ * tried when decoding a weather burst that failed to decode at offset 0.
+ */
+#define WEATHER_DECODE_MAX_OFFSETS			8
 #define INTERPACKET_GAP_MAX					80000//5000 // uS
 #define PACKET_PULSE_TIME_MIN				80  // uS — was 120; lowered to handle Princeton
                                                 //   variants with te≈125µs whose Flipper-recorded
@@ -292,6 +306,16 @@ extern SubGHz_protocol_t *subghz_protocols_list_ptr;
 
 void subghz_decenc_init(void);
 void subghz_pulse_handler_reset(void);
+
+/**
+ * Restrict (or release) the live-decode protocol scope to weather-typed
+ * protocols only.  Used by the Weather Station scene so that generic
+ * gate/remote protocols earlier in the registry cannot consume a weather
+ * burst before the weather decoders get to see it.  Must be cleared again
+ * when leaving the scene.
+ */
+void subghz_decenc_set_weather_only(bool weather_only);
+bool subghz_decenc_get_weather_only(void);
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);
 uint16_t get_diff(uint16_t n_a, uint16_t n_b);
 

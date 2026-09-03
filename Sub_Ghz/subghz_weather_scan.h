@@ -7,8 +7,14 @@
  * Weather Station RX scan loop.
  *
  * Weather stations transmit in one of two modulations at 433.92 MHz:
- *   - OOK / AM650  (Oregon v1/v2/v3, Acurite, Nexus-TH, Auriol, GT-WT02, ...)
- *   - 2FSK         (LaCrosse TX141TH-Bv2, Bresser 5-in-1/6-in-1, Fine Offset)
+ *   - OOK / AM650  (Oregon v1/v2/v3, Acurite, Nexus-TH, Auriol, GT-WT02,
+ *                   LaCrosse TX / TX141TH-Bv2, ...) — the large majority
+ *   - 2FSK         (Bresser 5-in-1 / 6-in-1 and Fine Offset derivatives)
+ *
+ * Both are represented in the protocol registry, so neither modulation may be
+ * dropped from the rotation.  The switch is fully automatic — the dwell is
+ * sized to cover a whole sensor transmit interval (30-60 s) so that each
+ * window realistically contains a burst.
  *
  * The M1 SI4463 demodulator can only be configured for one modulation at a
  * time, so — exactly like Flipper/Momentum's Weather Station app — we dwell

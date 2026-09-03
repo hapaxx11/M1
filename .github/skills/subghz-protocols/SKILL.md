@@ -430,6 +430,29 @@ protocols in an ignored group never produce a "decoded" hit there either.
 
 ---
 
+## Weather Station modulation coverage — do not "optimise" FSK away
+
+Weather protocols in this repo are **not** all OOK/AM.  `Bresser 5in1` (56-bit)
+and `Bresser 6in1` (104-bit) in `Sub_Ghz/subghz_protocol_registry.c` are
+registered as `SubGhzProtocolTypeWeather` and are FSK sensors in the field
+(as are Fine Offset derivatives).  The `F_WEATHER` macro sets
+`SubGhzProtocolFlag_AM` on *every* weather entry uniformly — it is authored
+boilerplate, **not** a per-protocol modulation survey, so it must never be
+cited as evidence that a protocol is AM-only.
+
+Consequences for agents:
+
+- The Weather Station scene **must keep alternating AM and 2FSK dwells**.
+  Removing the FSK dwell silently deletes support for the FSK sensors above.
+- The dwell must stay long enough to span a sensor's transmit interval
+  (sensors re-transmit every 30-60 s, so a few seconds per modulation lands
+  between bursts and hears nothing — `WX_SCAN_DWELL_MS` is 60 s for this
+  reason, in `m1_csrc/m1_sub_ghz.c`).
+- Switching modulation is **automatic**; do not add a user-facing AM/FSK
+  selector to the scene.
+
+---
+
 ## Remaining Sub-GHz Momentum-Parity Work
 
 > The Momentum-parity phased programme (Phases 1–12) is **complete and shipped**.

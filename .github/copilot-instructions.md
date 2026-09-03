@@ -22,3 +22,8 @@ Key non-negotiables (full text in `CLAUDE.md`):
   changes (`.md`, `documentation/`, `.github/`, databases) do not require a build.
 - **Every bug fix requires a host-side regression test** that fails before the fix
   and passes after it.
+- **Never remove capability on an unverified claim** — cite a file and line in this
+  repo before deleting/disabling anything; research-agent or web summaries are
+  hypotheses, not evidence. When in doubt, keep the existing behaviour.
+- **Don't make the user choose** to work around a design problem — prefer behaviour
+  that is automatically correct, even if slower.

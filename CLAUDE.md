@@ -105,6 +105,31 @@ Terminology used when communicating with the agent about the M1 UI.
 > **More on testing, modularization, and the phase checklist:** read the
 > [`firmware-testing`](.github/skills/firmware-testing/SKILL.md) skill.
 
+- **Never delete working capability on the strength of an unverified claim** — a
+  claim that some capability is unnecessary ("no weather protocol uses FSK", "no
+  device needs that band", "that code path is dead") is a **negative** claim, and
+  negative claims are the easiest kind to get wrong.  Before removing, disabling
+  or narrowing anything on the basis of one, you **MUST** cite evidence *in this
+  repository* — a specific file and line — that supports it, and you must
+  actively look for counter-evidence in the same place (registry tables, enums,
+  protocol descriptors, `#define`s, existing decoders).  A summary produced by a
+  research agent, a web search, or your own recollection of some upstream
+  project is **not** evidence: it is a hypothesis to be checked against the
+  code.  If the repo cannot settle the question, say so plainly and keep the
+  existing behaviour — the cost of a redundant code path is far lower than the
+  cost of silently removing support for hardware the user owns.  When you do act
+  on a claim, put the citation in the code comment or commit message so the next
+  person can re-check it.
+  *(Origin: an agent removed the Weather Station's 2FSK scan dwell after a
+  research agent reported that no Flipper weather protocol is FSK, while
+  `Sub_Ghz/subghz_protocol_registry.c` registered `Bresser 5in1`/`6in1` — FSK
+  sensors — as weather protocols the whole time.)*
+- **Do not resolve a design question by making the user choose** — adding a
+  setting, a mode selector or a "pick one" prompt to sidestep an engineering
+  problem is a last resort, not a solution.  Prefer behaviour that is correct
+  automatically, even when that costs latency or throughput: a slower automatic
+  cycle beats a fast one the user has to configure.  Only surface a control when
+  the choice genuinely depends on user intent that the firmware cannot infer.
 - **Changelog entries MUST use fragment files — NEVER edit `CHANGELOG.md` directly** —
   create a `.changelog/<short-description>.<category>.md` file instead (see
   [`.changelog/README.md`](.changelog/README.md)).  Editing `CHANGELOG.md` directly on
