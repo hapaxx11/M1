@@ -4687,7 +4687,6 @@ void sub_ghz_weather_station(void)
     /* Tear down the RX capture chain and power the radio down. */
     sub_ghz_rx_pause();
     sub_ghz_rx_deinit();
-    sub_ghz_set_opmode(SUB_GHZ_OPMODE_ISOLATED, subghz_scan_config.band, 0, 0);
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
     radio_set_antenna_mode(RADIO_ANTENNA_MODE_ISOLATED);
     SI446x_Change_State(SI446X_CMD_CHANGE_STATE_ARG_NEXT_STATE1_NEW_STATE_ENUM_SLEEP);
