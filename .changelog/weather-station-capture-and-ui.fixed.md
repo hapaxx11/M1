@@ -13,8 +13,13 @@ Reception fixes:
   frame used to be split into undecodable fragments.
 - A failed weather decode is retried with sliding start offsets, recovering
   frames that begin mid-buffer after a sync/preamble burst.
-- The dwell scan no longer wastes half its time on 2FSK: every supported
-  weather protocol is OOK/AM at 433.92 MHz.
+
+Scanning still alternates AM/OOK and 2FSK automatically, since FSK weather
+sensors (Bresser 5-in-1 / 6-in-1 and Fine Offset derivatives) are registered
+protocols and dropping FSK would silently lose them. The per-modulation dwell
+is now 60 s instead of 4 s: sensors re-transmit only every 30-60 s, so the old
+window almost always fell between two bursts and heard nothing. No modulation
+selection is required from the user.
 
 New decoding: sensor fields (id, channel, button, battery, temperature,
 humidity) are now extracted with Flipper-compatible bit layouts and checksum

@@ -4509,10 +4509,17 @@ void sub_ghz_spectrum_analyzer(void)
 
 /* 433.92 MHz — the ISM band virtually all consumer weather stations use. */
 #define WX_SCAN_FREQ_HZ     433920000UL
-/* Dwell time per modulation before switching (ms).  Long enough to catch a
- * full transmission burst (stations repeat every 30-60 s but a single burst
- * is only tens of ms) while still cycling both modulations within a minute. */
-#define WX_SCAN_DWELL_MS    4000U
+/*
+ * Dwell time per modulation before switching (ms).
+ *
+ * The SI4463 demodulator can only be configured for one modulation at a time,
+ * so the scene alternates between them automatically.  Weather sensors
+ * re-transmit only every 30-60 s, so a short dwell almost always lands
+ * between two bursts and hears nothing: the window must be at least one full
+ * transmit interval.  60 s per modulation gives a 2-minute AM/FSK cycle and
+ * makes it very likely that every dwell contains at least one burst.
+ */
+#define WX_SCAN_DWELL_MS    60000U
 
 /*
  * (Re)arm the SI4463 RX input-capture chain for the given modulation on
@@ -4735,11 +4742,14 @@ void sub_ghz_weather_station(void)
      * and enable the weather packet-segmentation / sliding-offset decode. */
     subghz_decenc_set_weather_only(true);
 
-    /* Every Flipper weather-station protocol is OOK/AM at 433.92 MHz — there
-     * is no FSK weather decoder — so dwell on OOK only instead of spending
-     * half the time on a modulation that can never decode. */
+    /* Alternate AM <-> FSK automatically: most sensors are OOK/AM at
+     * 433.92 MHz, but FSK weather sensors are registered too (Bresser
+     * 5-in-1 / 6-in-1, Fine Offset derivatives), so dropping FSK would
+     * silently remove support for them.  The user never has to choose a
+     * modulation — the dwell is simply long enough that each window covers a
+     * full sensor transmit interval. */
     subghz_weather_scan_init(&scan, WX_SCAN_DWELL_MS, WX_SCAN_MOD_OOK,
-                             false, xTaskGetTickCount() * portTICK_PERIOD_MS);
+                             true, xTaskGetTickCount() * portTICK_PERIOD_MS);
     sub_ghz_weather_rx_arm(scan.mod);
     last_age_tick = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
@@ -4826,6 +4836,7 @@ void sub_ghz_weather_station(void)
                             need_redraw = true;
                         }
                     }
+
                 }
             }
         }
