@@ -4726,8 +4726,7 @@ void sub_ghz_weather_station(void)
     uint8_t top = 0;
     uint32_t last_age_tick;
     SubGhzWeatherScan scan;
-    static SubGhzWeatherHistory wx_hist;
-
+    SubGhzWeatherHistory wx_hist;
     menu_sub_ghz_init();
     subghz_decenc_init();
     subghz_weather_history_reset(&wx_hist);
