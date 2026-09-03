@@ -53,7 +53,7 @@ SubGhzWeatherScanMod subghz_weather_scan_other(SubGhzWeatherScanMod m);
 /**
  * Initialise the scan state.
  *
- * @param s        Scan state to initialise (must be non-NULL).
+ * @param s        Scan state to initialise (may be NULL; if NULL this is a no-op).
  * @param dwell_ms Milliseconds to dwell on each modulation before switching.
  *                 A value of 0 is clamped to 1 to avoid a divide-by-zero-like
  *                 busy switch.
