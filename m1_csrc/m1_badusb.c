@@ -71,6 +71,9 @@ static void badusb_wait_tx_idle(void);
 void badusb_send_key(uint8_t modifier, uint8_t keycode);
 static void badusb_release_all(void);
 static void badusb_send_held_report(void);
+static void badusb_raw_report(uint8_t extra_mod, uint8_t keycode);
+static void badusb_send_sysrq(uint8_t key);
+static void badusb_send_altchar(const char *digits);
 void badusb_type_char(char c);
 void badusb_type_string(const char *str);
 static bool badusb_parse_line(const char *line);
@@ -167,6 +170,69 @@ static void badusb_send_held_report(void)
 
 /*============================================================================*/
 /**
+  * @brief  Send a report = held state + extra modifier + one keycode (no auto-
+  *         release). Used to build multi-step sequences like ALTCHAR/SYSRQ.
+  */
+/*============================================================================*/
+static void badusb_raw_report(uint8_t extra_mod, uint8_t keycode)
+{
+    badusb_wait_tx_idle();
+    busb_hold_build_report(&badusb_held, extra_mod, keycode, hid_report);
+    USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+#if BADUSB_KEY_PRESS_MS > 0
+    osDelay(BADUSB_KEY_PRESS_MS);
+#endif
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Linux Magic SysRq: hold Alt+PrintScreen, tap the command key.
+  */
+/*============================================================================*/
+static void badusb_send_sysrq(uint8_t key)
+{
+    badusb_wait_tx_idle();
+    busb_hold_build_report(&badusb_held, BUSB_MOD_LALT, BUSB_KEY_PRINTSCREEN,
+                           hid_report);
+    /* Add the command key in the next free report slot. */
+    for (int i = 2; i < 8; i++)
+    {
+        if (hid_report[i] == 0) { hid_report[i] = key; break; }
+    }
+    USBD_HID_SendReport(&hUsbDeviceFS, hid_report, sizeof(hid_report));
+#if BADUSB_KEY_PRESS_MS > 0
+    osDelay(BADUSB_KEY_PRESS_MS);
+#endif
+    badusb_release_all();
+}
+
+
+/*============================================================================*/
+/**
+  * @brief  Windows Alt+Numpad: hold Alt, tap keypad digits, release Alt.
+  * @param  digits  numeric string (e.g. "0169"); non-digits are skipped.
+  */
+/*============================================================================*/
+static void badusb_send_altchar(const char *digits)
+{
+    bool any = false;
+    for (const char *p = digits; *p && badusb_state.running; p++)
+    {
+        uint8_t kp = busb_digit_to_keypad(*p);
+        if (kp == BUSB_KEY_NONE)
+            continue;
+        any = true;
+        badusb_raw_report(BUSB_MOD_LALT, kp);   /* Alt + keypad digit */
+        badusb_raw_report(BUSB_MOD_LALT, 0);    /* keep Alt, release digit */
+    }
+    if (any)
+        badusb_release_all();                   /* release Alt -> baseline */
+}
+
+
+/*============================================================================*/
+/**
   * @brief  Type a single ASCII character via HID keyboard
   */
 /*============================================================================*/
@@ -205,6 +271,8 @@ void badusb_type_string(const char *str)
 #if BADUSB_INTER_CHAR_MS > 0
         osDelay(BADUSB_INTER_CHAR_MS);
 #endif
+        if (badusb_state.string_delay_ms > 0)
+            osDelay(badusb_state.string_delay_ms);
     }
 }
 
@@ -284,6 +352,10 @@ static bool badusb_parse_line(const char *line)
         badusb_state.default_delay_ms = (uint16_t)parsed.u.delay_ms;
         return true;
 
+    case BUSB_LINE_STRING_DELAY:
+        badusb_state.string_delay_ms = (uint16_t)parsed.u.delay_ms;
+        return true;
+
     case BUSB_LINE_STRING:
         badusb_type_string(parsed.u.string_text);
         return true;
@@ -292,6 +364,28 @@ static bool badusb_parse_line(const char *line)
         badusb_type_string(parsed.u.string_text);
         badusb_send_key(0, BUSB_KEY_ENTER);
         return true;
+
+    case BUSB_LINE_SYSRQ:
+        badusb_send_sysrq(parsed.u.key.keycode);
+        return true;
+
+    case BUSB_LINE_ALTCHAR:
+        badusb_send_altchar(parsed.u.string_text);
+        return true;
+
+    case BUSB_LINE_ALTSTRING:
+    {
+        const char *s = parsed.u.string_text;
+        char code[8];
+        while (*s && badusb_state.running)
+        {
+            snprintf(code, sizeof(code), "%u", (unsigned char)*s++);
+            badusb_send_altchar(code);
+            if (badusb_state.string_delay_ms > 0)
+                osDelay(badusb_state.string_delay_ms);
+        }
+        return true;
+    }
 
     case BUSB_LINE_REPEAT:
         if (parsed.u.repeat_count > 0 && badusb_state.last_line[0] != '\0')

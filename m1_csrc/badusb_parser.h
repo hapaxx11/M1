@@ -101,6 +101,16 @@
 #define BUSB_KEY_DOWN         0x51
 #define BUSB_KEY_UP           0x52
 #define BUSB_KEY_NUMLOCK      0x53
+#define BUSB_KEY_KP_1         0x59
+#define BUSB_KEY_KP_2         0x5A
+#define BUSB_KEY_KP_3         0x5B
+#define BUSB_KEY_KP_4         0x5C
+#define BUSB_KEY_KP_5         0x5D
+#define BUSB_KEY_KP_6         0x5E
+#define BUSB_KEY_KP_7         0x5F
+#define BUSB_KEY_KP_8         0x60
+#define BUSB_KEY_KP_9         0x61
+#define BUSB_KEY_KP_0         0x62
 #define BUSB_KEY_MENU         0x65
 
 /*─────────────── HID modifiers ───────────────*/
@@ -133,6 +143,10 @@ typedef enum
     BUSB_LINE_REM_BLOCK_END,   /* END_REM — end of multi-line comment */
     BUSB_LINE_HOLD,            /* HOLD <combo> — press and hold key(s) */
     BUSB_LINE_RELEASE,         /* RELEASE [combo] — release held key(s) */
+    BUSB_LINE_STRING_DELAY,    /* STRINGDELAY <ms> — per-char typing delay */
+    BUSB_LINE_SYSRQ,           /* SYSRQ <key> — Linux Magic SysRq */
+    BUSB_LINE_ALTCHAR,         /* ALTCHAR <code> — Alt+Numpad single char */
+    BUSB_LINE_ALTSTRING,       /* ALTSTRING/ALTCODE <text> — Alt+Numpad string */
     BUSB_LINE_MODIFIER_KEY,    /* CTRL x, GUI r, ALT F4, etc. */
     BUSB_LINE_STANDALONE_KEY,  /* ENTER, ESC, F5, etc. */
     BUSB_LINE_UNKNOWN,         /* unrecognized */
@@ -186,6 +200,13 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out);
  * @return pointer to the map entry, or NULL if out of range
  */
 const busb_ascii_hid_map_t *busb_ascii_to_hid(char c);
+
+/**
+ * Map a decimal digit character ('0'–'9') to its USB HID keypad scancode.
+ * Used by the ALTCHAR / ALTSTRING Alt+Numpad implementation.
+ * @return keypad keycode, or BUSB_KEY_NONE if the character is not a digit.
+ */
+uint8_t busb_digit_to_keypad(char c);
 
 /**
  * Count lines in a text buffer.

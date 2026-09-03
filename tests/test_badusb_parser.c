@@ -6,9 +6,9 @@
  * Host-side unit tests for the DuckyScript parser (badusb_parser.c/h).
  * Tests key-name lookup, modifier parsing, ASCII-to-HID mapping,
  * line classification, and line counting for core DuckyScript commands.
- * Advanced commands (ALTCHAR, MOUSE, MEDIA,
- * WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet implemented.
- * STRINGLN, REM_BLOCK/END_REM and HOLD/RELEASE are supported.
+ * Advanced commands (MOUSE, MEDIA, WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet
+ * implemented. STRINGLN, REM_BLOCK/END_REM, HOLD/RELEASE, STRINGDELAY, SYSRQ
+ * and ALTCHAR/ALTSTRING/ALTCODE are supported.
  */
 
 #include "unity.h"
@@ -344,6 +344,73 @@ void test_classify_release_all(void)
     TEST_ASSERT_EQUAL(BUSB_KEY_NONE, out.u.key.keycode);
 }
 
+void test_classify_string_delay(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("STRINGDELAY 25", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_STRING_DELAY, out.type);
+    TEST_ASSERT_EQUAL(25, out.u.delay_ms);
+}
+
+void test_classify_string_delay_underscore(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("STRING_DELAY 40", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_STRING_DELAY, out.type);
+    TEST_ASSERT_EQUAL(40, out.u.delay_ms);
+}
+
+void test_classify_sysrq(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("SYSRQ b", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_SYSRQ, out.type);
+    TEST_ASSERT_EQUAL(BUSB_MOD_LALT, out.u.key.modifiers);
+    TEST_ASSERT_EQUAL(BUSB_KEY_B, out.u.key.keycode);
+}
+
+void test_classify_altchar(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("ALTCHAR 0169", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_ALTCHAR, out.type);
+    TEST_ASSERT_EQUAL_STRING("0169", out.u.string_text);
+}
+
+void test_classify_altstring(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("ALTSTRING hello", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_ALTSTRING, out.type);
+    TEST_ASSERT_EQUAL_STRING("hello", out.u.string_text);
+}
+
+void test_classify_altcode_alias(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("ALTCODE world", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_ALTSTRING, out.type);
+    TEST_ASSERT_EQUAL_STRING("world", out.u.string_text);
+}
+
+void test_classify_string_not_string_delay(void)
+{
+    /* Plain STRING must still classify as STRING, not STRINGDELAY. */
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("STRING STRINGDELAY test", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_STRING, out.type);
+    TEST_ASSERT_EQUAL_STRING("STRINGDELAY test", out.u.string_text);
+}
+
+void test_digit_to_keypad(void)
+{
+    TEST_ASSERT_EQUAL(BUSB_KEY_KP_0, busb_digit_to_keypad('0'));
+    TEST_ASSERT_EQUAL(BUSB_KEY_KP_1, busb_digit_to_keypad('1'));
+    TEST_ASSERT_EQUAL(BUSB_KEY_KP_9, busb_digit_to_keypad('9'));
+    TEST_ASSERT_EQUAL(BUSB_KEY_NONE, busb_digit_to_keypad('a'));
+    TEST_ASSERT_EQUAL(BUSB_KEY_NONE, busb_digit_to_keypad(' '));
+}
+
 void test_classify_repeat(void)
 {
     busb_parsed_line_t out;
@@ -495,6 +562,14 @@ int main(void)
     RUN_TEST(test_classify_hold_single_key);
     RUN_TEST(test_classify_release_with_key);
     RUN_TEST(test_classify_release_all);
+    RUN_TEST(test_classify_string_delay);
+    RUN_TEST(test_classify_string_delay_underscore);
+    RUN_TEST(test_classify_sysrq);
+    RUN_TEST(test_classify_altchar);
+    RUN_TEST(test_classify_altstring);
+    RUN_TEST(test_classify_altcode_alias);
+    RUN_TEST(test_classify_string_not_string_delay);
+    RUN_TEST(test_digit_to_keypad);
     RUN_TEST(test_classify_repeat);
     RUN_TEST(test_classify_modifier_with_key);
     RUN_TEST(test_classify_multi_modifier);

@@ -342,6 +342,53 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
         return true;
     }
 
+    /* STRINGDELAY / STRING_DELAY <ms> — per-character typing delay */
+    if (strncmp(line, "STRINGDELAY ", 12) == 0 ||
+        strncmp(line, "STRING_DELAY ", 13) == 0)
+    {
+        const char *p = line + (line[6] == '_' ? 13 : 12);
+        out->type = BUSB_LINE_STRING_DELAY;
+        out->u.delay_ms = (uint32_t)atoi(p);
+        return true;
+    }
+
+    /* SYSRQ <key> — Linux Magic SysRq (Alt+PrintScreen+key) */
+    if (strncmp(line, "SYSRQ ", 6) == 0)
+    {
+        char keybuf[32];
+        trim_tail(line + 6, keybuf, sizeof(keybuf));
+        uint8_t kc = busb_parse_key_name(keybuf);
+        if (kc != BUSB_KEY_NONE)
+        {
+            out->type = BUSB_LINE_SYSRQ;
+            out->u.key.modifiers = BUSB_MOD_LALT;
+            out->u.key.keycode = kc;
+            return true;
+        }
+    }
+
+    /* ALTCHAR <code> — Windows Alt+Numpad single character */
+    if (strncmp(line, "ALTCHAR ", 8) == 0)
+    {
+        out->type = BUSB_LINE_ALTCHAR;
+        out->u.string_text = line + 8;
+        return true;
+    }
+
+    /* ALTSTRING / ALTCODE <text> — Windows Alt+Numpad string */
+    if (strncmp(line, "ALTSTRING ", 10) == 0)
+    {
+        out->type = BUSB_LINE_ALTSTRING;
+        out->u.string_text = line + 10;
+        return true;
+    }
+    if (strncmp(line, "ALTCODE ", 8) == 0)
+    {
+        out->type = BUSB_LINE_ALTSTRING;
+        out->u.string_text = line + 8;
+        return true;
+    }
+
     /* Try as modifier combo */
     {
         uint8_t mod_accum = 0;
@@ -402,6 +449,26 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
 
     out->type = BUSB_LINE_UNKNOWN;
     return false;
+}
+
+/*──────────── busb_digit_to_keypad ────────────*/
+
+uint8_t busb_digit_to_keypad(char c)
+{
+    switch (c)
+    {
+    case '1': return BUSB_KEY_KP_1;
+    case '2': return BUSB_KEY_KP_2;
+    case '3': return BUSB_KEY_KP_3;
+    case '4': return BUSB_KEY_KP_4;
+    case '5': return BUSB_KEY_KP_5;
+    case '6': return BUSB_KEY_KP_6;
+    case '7': return BUSB_KEY_KP_7;
+    case '8': return BUSB_KEY_KP_8;
+    case '9': return BUSB_KEY_KP_9;
+    case '0': return BUSB_KEY_KP_0;
+    default:  return BUSB_KEY_NONE;
+    }
 }
 
 /*──────────── busb_count_lines ────────────*/
