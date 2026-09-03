@@ -127,7 +127,10 @@ typedef enum
     BUSB_LINE_DELAY,           /* DELAY <ms> */
     BUSB_LINE_DEFAULT_DELAY,   /* DEFAULT_DELAY / DEFAULTDELAY */
     BUSB_LINE_STRING,          /* STRING <text> */
+    BUSB_LINE_STRINGLN,        /* STRINGLN <text> — type text then ENTER */
     BUSB_LINE_REPEAT,          /* REPEAT <n> */
+    BUSB_LINE_REM_BLOCK_START, /* REM_BLOCK — start of multi-line comment */
+    BUSB_LINE_REM_BLOCK_END,   /* END_REM — end of multi-line comment */
     BUSB_LINE_MODIFIER_KEY,    /* CTRL x, GUI r, ALT F4, etc. */
     BUSB_LINE_STANDALONE_KEY,  /* ENTER, ESC, F5, etc. */
     BUSB_LINE_UNKNOWN,         /* unrecognized */

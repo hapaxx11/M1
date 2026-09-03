@@ -202,6 +202,22 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
     }
 
     /* REM — comment */
+    if (strncmp(line, "REM_BLOCK", 9) == 0 &&
+        (line[9] == '\0' || line[9] == ' ' || line[9] == '\t' ||
+         line[9] == '\r' || line[9] == '\n'))
+    {
+        out->type = BUSB_LINE_REM_BLOCK_START;
+        return true;
+    }
+
+    if (strncmp(line, "END_REM", 7) == 0 &&
+        (line[7] == '\0' || line[7] == ' ' || line[7] == '\t' ||
+         line[7] == '\r' || line[7] == '\n'))
+    {
+        out->type = BUSB_LINE_REM_BLOCK_END;
+        return true;
+    }
+
     if (strncmp(line, "REM ", 4) == 0 || strncmp(line, "REM\r", 4) == 0 ||
         strncmp(line, "REM\n", 4) == 0 || strcmp(line, "REM") == 0)
     {
@@ -225,6 +241,24 @@ bool busb_classify_line(const char *line, busb_parsed_line_t *out)
         const char *p = line + (line[7] == '_' ? 14 : 13);
         out->u.delay_ms = (uint32_t)atoi(p);
         return true;
+    }
+
+    /* STRINGLN <text> — type text then press ENTER (checked before STRING) */
+    if (strncmp(line, "STRINGLN", 8) == 0)
+    {
+        char sep = line[8];
+        if (sep == ' ')
+        {
+            out->type = BUSB_LINE_STRINGLN;
+            out->u.string_text = line + 9;
+            return true;
+        }
+        if (sep == '\0' || sep == '\r' || sep == '\n')
+        {
+            out->type = BUSB_LINE_STRINGLN;
+            out->u.string_text = "";
+            return true;
+        }
     }
 
     /* STRING <text> */

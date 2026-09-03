@@ -236,10 +236,23 @@ static bool badusb_parse_line(const char *line)
     busb_parsed_line_t parsed;
     busb_classify_line(line, &parsed);
 
+    /* Inside a REM_BLOCK, skip everything until END_REM */
+    if (badusb_state.in_rem_block)
+    {
+        if (parsed.type == BUSB_LINE_REM_BLOCK_END)
+            badusb_state.in_rem_block = 0;
+        return true;
+    }
+
     switch (parsed.type)
     {
     case BUSB_LINE_EMPTY:
     case BUSB_LINE_COMMENT:
+    case BUSB_LINE_REM_BLOCK_END:
+        return true;
+
+    case BUSB_LINE_REM_BLOCK_START:
+        badusb_state.in_rem_block = 1;
         return true;
 
     case BUSB_LINE_DELAY:
@@ -253,6 +266,11 @@ static bool badusb_parse_line(const char *line)
 
     case BUSB_LINE_STRING:
         badusb_type_string(parsed.u.string_text);
+        return true;
+
+    case BUSB_LINE_STRINGLN:
+        badusb_type_string(parsed.u.string_text);
+        badusb_send_key(0, BUSB_KEY_ENTER);
         return true;
 
     case BUSB_LINE_REPEAT:

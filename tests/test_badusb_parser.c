@@ -8,6 +8,7 @@
  * line classification, and line counting for core DuckyScript commands.
  * Advanced commands (ALTCHAR, HOLD/RELEASE, MOUSE, MEDIA,
  * WAIT_FOR_BUTTON_PRESS, DEFINE) are not yet implemented.
+ * STRINGLN and REM_BLOCK/END_REM are supported.
  */
 
 #include "unity.h"
@@ -251,6 +252,53 @@ void test_classify_string(void)
     TEST_ASSERT_EQUAL_STRING("Hello World", out.u.string_text);
 }
 
+void test_classify_stringln_with_text(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("STRINGLN Hello World", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_STRINGLN, out.type);
+    TEST_ASSERT_EQUAL_STRING("Hello World", out.u.string_text);
+}
+
+void test_classify_stringln_empty(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("STRINGLN", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_STRINGLN, out.type);
+    TEST_ASSERT_EQUAL_STRING("", out.u.string_text);
+}
+
+void test_classify_string_not_stringln(void)
+{
+    /* Plain STRING must not be misread as STRINGLN */
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("STRING Hello", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_STRING, out.type);
+    TEST_ASSERT_EQUAL_STRING("Hello", out.u.string_text);
+}
+
+void test_classify_rem_block_start(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("REM_BLOCK", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_REM_BLOCK_START, out.type);
+}
+
+void test_classify_rem_block_end(void)
+{
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("END_REM", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_REM_BLOCK_END, out.type);
+}
+
+void test_classify_rem_still_comment(void)
+{
+    /* Single-line REM must remain a plain comment, not a block marker */
+    busb_parsed_line_t out;
+    TEST_ASSERT_TRUE(busb_classify_line("REM just a note", &out));
+    TEST_ASSERT_EQUAL(BUSB_LINE_COMMENT, out.type);
+}
+
 void test_classify_repeat(void)
 {
     busb_parsed_line_t out;
@@ -391,6 +439,12 @@ int main(void)
     RUN_TEST(test_classify_default_delay_underscore);
     RUN_TEST(test_classify_default_delay_nounderscore);
     RUN_TEST(test_classify_string);
+    RUN_TEST(test_classify_stringln_with_text);
+    RUN_TEST(test_classify_stringln_empty);
+    RUN_TEST(test_classify_string_not_stringln);
+    RUN_TEST(test_classify_rem_block_start);
+    RUN_TEST(test_classify_rem_block_end);
+    RUN_TEST(test_classify_rem_still_comment);
     RUN_TEST(test_classify_repeat);
     RUN_TEST(test_classify_modifier_with_key);
     RUN_TEST(test_classify_multi_modifier);
