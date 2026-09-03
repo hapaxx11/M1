@@ -26,6 +26,7 @@
 enum {
     RfidSceneMenu = 0,
     RfidSceneRead,
+    RfidScenePetScan,
     RfidSceneSaved,
     RfidSceneAdd,
 #ifdef M1_APP_FILE_IMPORT_ENABLE
@@ -41,6 +42,14 @@ static void read_on_enter(M1SceneApp *app)
 {
     (void)app;
     rfid_125khz_read();
+    app->running = true;
+    m1_scene_pop(app);
+}
+
+static void pet_scan_on_enter(M1SceneApp *app)
+{
+    (void)app;
+    rfid_125khz_pet_scan();
     app->running = true;
     m1_scene_pop(app);
 }
@@ -82,6 +91,7 @@ static void utilities_on_enter(M1SceneApp *app)
 /*--- Handler tables -------------------------------------------------------*/
 
 static const M1SceneHandlers read_handlers      = { .on_enter = read_on_enter      };
+static const M1SceneHandlers pet_scan_handlers  = { .on_enter = pet_scan_on_enter  };
 static const M1SceneHandlers saved_handlers     = { .on_enter = saved_on_enter     };
 static const M1SceneHandlers add_handlers       = { .on_enter = add_on_enter       };
 #ifdef M1_APP_FILE_IMPORT_ENABLE
@@ -92,13 +102,14 @@ static const M1SceneHandlers utilities_handlers = { .on_enter = utilities_on_ent
 /*--- Menu scene -----------------------------------------------------------*/
 
 #ifdef M1_APP_FILE_IMPORT_ENABLE
-#define MENU_ITEM_COUNT  5
+#define MENU_ITEM_COUNT  6
 #else
-#define MENU_ITEM_COUNT  4
+#define MENU_ITEM_COUNT  5
 #endif
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Read",
+    "Pet Scanner",
     "Saved",
     "Add",
 #ifdef M1_APP_FILE_IMPORT_ENABLE
@@ -109,6 +120,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     RfidSceneRead,
+    RfidScenePetScan,
     RfidSceneSaved,
     RfidSceneAdd,
 #ifdef M1_APP_FILE_IMPORT_ENABLE
@@ -153,6 +165,7 @@ static const M1SceneHandlers menu_handlers = {
 static const M1SceneHandlers *const scene_registry[RfidSceneCount] = {
     [RfidSceneMenu]      = &menu_handlers,
     [RfidSceneRead]      = &read_handlers,
+    [RfidScenePetScan]   = &pet_scan_handlers,
     [RfidSceneSaved]     = &saved_handlers,
     [RfidSceneAdd]       = &add_handlers,
 #ifdef M1_APP_FILE_IMPORT_ENABLE

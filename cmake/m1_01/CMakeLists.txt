@@ -601,6 +601,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_power_ctl.c
     ../../m1_csrc/m1_rf_spi.c
     ../../m1_csrc/m1_rfid.c
+    ../../m1_csrc/m1_pet_tag.c
     ../../m1_csrc/m1_rng.c
     ../../m1_csrc/m1_rfid_scene.c
     ../../m1_csrc/m1_ring_buffer.c
