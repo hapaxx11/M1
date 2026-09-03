@@ -6,6 +6,5 @@
   `ALTCHAR <code>` types a single character via the Windows Alt+Numpad method;
   and `ALTSTRING`/`ALTCODE <text>` types an entire string using Alt+Numpad
   codes. The digit→keypad mapping and command classification are pure-logic and
-  covered by host-side unit tests. With these, the M1 supports 13 of the 14
-  Flipper/Momentum DuckyScript command families (only the hardware-coupled
-  `WAIT_FOR_BUTTON_PRESS` remains).
+  covered by host-side unit tests. Combined with the new `WAIT_FOR_BUTTON_PRESS`
+  support, this completes 14/14 parity with Flipper/Momentum command families.
