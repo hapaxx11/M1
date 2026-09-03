@@ -744,6 +744,7 @@ target_sources(m1_01 INTERFACE
     ../../USB/Class/HID/Src/usbd_hid.c
     ../../m1_csrc/m1_badusb.c
     ../../m1_csrc/badusb_parser.c
+    ../../m1_csrc/badusb_hold.c
     # === Enhanced firmware: Bad-BT ===
     ../../m1_csrc/m1_badbt.c
 

@@ -603,6 +603,17 @@ static bool badusb_wait_for_button(const char *fname)
     m1_led_indicator_off(NULL);
     return resumed;
 }
+
+
+/*============================================================================*/
+/**
+  * @brief  Execute a DuckyScript file
+  */
+/*============================================================================*/
+bool badusb_execute_file(const char *filepath)
+{
+    FIL fp;
+    FRESULT fres;
     UINT bytes_read;
     char script_buf[BADUSB_MAX_SCRIPT_SIZE];
     char line_buf[BADUSB_MAX_LINE_LEN];
