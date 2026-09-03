@@ -2483,6 +2483,45 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME subghz_weather_scan COMMAND test_subghz_weather_scan)
 
+# ------------------------------------------------------------------
+# Module under test: subghz_weather_history (Flipper-style per-sensor
+# list for the Weather Station scene). Pure logic, no deps.
+# ------------------------------------------------------------------
+add_executable(test_subghz_weather_history
+    test_subghz_weather_history.c
+    ${M1_ROOT}/Sub_Ghz/subghz_weather_history.c
+)
+target_include_directories(test_subghz_weather_history PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_weather_history PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_weather_history PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_weather_history COMMAND test_subghz_weather_history)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_weather_parse (weather-frame field
+# extraction + checksum validation, Flipper-compatible layouts).
+# Needs bit_util.c for the CRC/LFSR/parity helpers and the HAL stubs
+# for the protocol id enum in m1_sub_ghz_decenc.h.
+# ------------------------------------------------------------------
+add_executable(test_subghz_weather_parse
+    test_subghz_weather_parse.c
+    ${M1_ROOT}/Sub_Ghz/subghz_weather_parse.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+)
+target_include_directories(test_subghz_weather_parse PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_weather_parse PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_weather_parse PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_weather_parse COMMAND test_subghz_weather_parse)
+
 # ── Submenu model ──
 add_executable(test_subghz_submenu_model
     test_subghz_submenu_model.c

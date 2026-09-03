@@ -292,6 +292,16 @@ extern SubGHz_protocol_t *subghz_protocols_list_ptr;
 
 void subghz_decenc_init(void);
 void subghz_pulse_handler_reset(void);
+
+/**
+ * Restrict (or release) the live-decode protocol scope to weather-typed
+ * protocols only.  Used by the Weather Station scene so that generic
+ * gate/remote protocols earlier in the registry cannot consume a weather
+ * burst before the weather decoders get to see it.  Must be cleared again
+ * when leaving the scene.
+ */
+void subghz_decenc_set_weather_only(bool weather_only);
+bool subghz_decenc_get_weather_only(void);
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);
 uint16_t get_diff(uint16_t n_a, uint16_t n_b);
 

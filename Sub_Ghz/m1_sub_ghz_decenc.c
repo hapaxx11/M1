@@ -255,6 +255,30 @@ static bool subghz_decode_protocol(uint16_t p, uint16_t pulsecount)
 /* File-level static so subghz_pulse_handler_reset() can clear it */
 static uint32_t pulse_handler_interpacket_gap = 0;
 
+/*
+ * Weather-only decode scope.
+ *
+ * The pulse handler walks the registry in index order and stops at the FIRST
+ * protocol whose decoder accepts the burst.  Weather-station frames are plain
+ * PWM bursts, so a generic gate/remote protocol earlier in the registry
+ * (Princeton, CAME, ...) can accept them first; the Weather Station scene then
+ * discards the result because the winning protocol is not weather-typed, and
+ * the sensor is never shown.  When this flag is set the dispatch loop
+ * considers weather-typed protocols only, so weather frames can no longer be
+ * "stolen" by an unrelated protocol.
+ */
+static bool decode_weather_only = false;
+
+void subghz_decenc_set_weather_only(bool weather_only)
+{
+    decode_weather_only = weather_only;
+}
+
+bool subghz_decenc_get_weather_only(void)
+{
+    return decode_weather_only;
+}
+
 /*============================================================================*/
 /**
   * @brief  Reset the pulse handler's accumulated state.
@@ -297,9 +321,19 @@ uint8_t subghz_pulse_handler(uint16_t duration)
 			  {
 				  for(i = 0; i < subghz_protocol_registry_count; i++)
 				  {
+					  /* Weather Station scene: restrict the scope to
+					   * weather-typed protocols so a generic gate/remote
+					   * protocol cannot consume the burst first. */
+					  if ( decode_weather_only )
+					  {
+						  if ( !subghz_protocol_is_weather(i) )
+						  {
+							  continue;
+						  }
+					  }
 					  /* Skip protocols the user has chosen to ignore
 					   * (Protocol Filter) during live Read capture. */
-					  if ( subghz_ignore_is_ignored(i) )
+					  else if ( subghz_ignore_is_ignored(i) )
 					  {
 						  continue;
 					  }
