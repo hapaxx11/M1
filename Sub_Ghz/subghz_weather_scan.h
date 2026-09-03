@@ -69,7 +69,7 @@ void subghz_weather_scan_init(SubGhzWeatherScan *s, uint32_t dwell_ms,
 /**
  * Advance the dwell timer.
  *
- * @param s      Scan state.
+ * @param s      Scan state (may be NULL; if NULL this returns false).
  * @param now_ms Current monotonic millisecond tick.
  * @return true  if the dwell elapsed and the modulation was switched (the
  *               caller must re-arm the radio for @c s->mod); false otherwise.
