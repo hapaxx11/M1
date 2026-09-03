@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.10] - 2026-09-03
+
+### Added
+
+- Sub-GHz Weather Station monitor now performs a Momentum-style dual-modulation RX scan, alternating between OOK/AM650 and 2FSK on 433.92 MHz so it can receive both OOK stations (Oregon, Acurite, Nexus-TH, Auriol, ...) and FSK stations (LaCrosse TX141TH-Bv2, Bresser, Fine-Offset clones). The monitor also now correctly starts the RX input-capture and feeds the protocol decoder — previously it armed neither, so it could not decode any weather signal. The active modulation (AM/FSK) is shown in the header.
+
+### Fixed
+
+- Sub-GHz Weather Station monitor now recognizes **all** weather-station protocols. It previously used a hard-coded protocol-index range that matched only 3 of the ~35 weather protocols, so decoded readings from Nexus-TH, Acurite-606/609, Auriol, GT-WT02, Bresser, TFA and many others were silently discarded and never shown. Classification is now driven by the protocol registry's weather type.
 ## [0.9.3.9] - 2026-09-02
 
 ### Added
