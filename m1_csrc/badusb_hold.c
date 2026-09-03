@@ -56,11 +56,14 @@ void busb_hold_remove(busb_hold_state_t *s, uint8_t modifier, uint8_t keycode)
 {
     if (!s) return;
 
-    s->modifiers &= (uint8_t)~modifier;
-
     if (keycode == 0)
-        return;   /* modifier-only release */
+    {
+        /* Modifier-only release (e.g. RELEASE CTRL). */
+        s->modifiers &= (uint8_t)~modifier;
+        return;
+    }
 
+    bool removed_key = false;
     for (uint8_t i = 0; i < s->count; i++)
     {
         if (s->keys[i] == keycode)
@@ -70,9 +73,15 @@ void busb_hold_remove(busb_hold_state_t *s, uint8_t modifier, uint8_t keycode)
                 s->keys[j] = s->keys[j + 1];
             s->count--;
             s->keys[s->count] = 0;
-            return;
+            removed_key = true;
+            break;
         }
     }
+
+    /* If this was the last held key, allow releasing modifiers in the same command.
+     * Otherwise keep modifiers so remaining held keys keep their chord semantics. */
+    if (removed_key && s->count == 0)
+        s->modifiers &= (uint8_t)~modifier;
 }
 
 void busb_hold_build_report(const busb_hold_state_t *s,
