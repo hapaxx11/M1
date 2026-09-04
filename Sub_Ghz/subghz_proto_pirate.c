@@ -2675,6 +2675,7 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
                 (KIA_V3_V4_DATA_BITS * 2) +
                 (KIA_V3_V4_CRC_BITS * 2) + 2) * sweep_reps;
     }
+    case SubGhzProtoPirate_KiaV5:
         return ((KIA_V5_PREAMBLE_PAIRS * 2) + 4 +
                 ((KIA_V5_DATA_BITS + KIA_V5_CRC_BITS) * 2) + 2) * reps;
     case SubGhzProtoPirate_FiatV1:
