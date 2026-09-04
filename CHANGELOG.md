@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.16] - 2026-09-04
+
+### Added
+
+- **Sub-GHz: Guard the frequency-mask ceiling against silent overflow.**
+  The Sub-GHz frequency preset table is already at the 64-bit ceiling a `uint64_t` freq mask can address (63 real presets + Custom == indices 0..63). Added a compile-time `#error` guard in `subghz_freq_presets.h` plus a host-side regression test (`test_freq_preset_custom_fits_in_uint64_mask`) so that adding one more preset in the future fails loudly instead of silently truncating/overflowing `subghz_protocol_freq_mask_for_registry()` and the Config scene's allowed-frequency mask.
+
+### Changed
+
+- **Sub-GHz: Limit Config scene frequency/modulation choices to registry-supported combinations.**
+  The shared Config scene now filters the frequency and modulation pickers based on the active protocol scope. Proto Pirate Receiver exposes only OOK/AM at 433.92 MHz (plus Custom); the regular Read scene uses the full Sub-GHz registry; Read Raw remains completely unfiltered so arbitrary signals can still be captured. Hopping is hidden when the filtered frequency list cannot cover the hopper table.
+
+### Fixed
+
+- **Sub-GHz: Fix Config scene registry-filter regressions found in review.**
+  The frequency allowed-mask is now `uint64_t` (63 real presets + Custom needed 64 bits, so the previous `uint32_t` truncated/undefined-shifted valid choices away). Read Raw's unrestricted Frequency/Modulation controls can cycle again — the cycling helper no longer short-circuits for the unfiltered filter mode. Full-registry frequency filtering now keeps every registry-supported preset within an active band (e.g. Magellan at 319.5 MHz, Somfy Telis at 433.42 MHz) instead of collapsing each band to its nearest center preset.
 ## [0.9.3.15] - 2026-09-04
 
 ### Added
