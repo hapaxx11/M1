@@ -1,0 +1,1 @@
+**Forks tracker: resolve dag Sub-GHz record leak audit** — confirmed the v0.3.0 once-per-boot ring-buffer leak fix is not applicable to Hapax; scene-based Read Raw already frees capture ring buffers on stop, scene exit, and all error paths, and `sub_ghz_ring_buffers_init()` deinits at entry as a guard.
