@@ -659,6 +659,7 @@ add_executable(test_subghz_freq_presets
 )
 target_include_directories(test_subghz_freq_presets PRIVATE
     ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
 )
 target_link_libraries(test_subghz_freq_presets PRIVATE unity)
 if(TARGET sanitizers)

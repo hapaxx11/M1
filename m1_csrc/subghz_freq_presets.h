@@ -29,6 +29,11 @@
 
 #include <stdint.h>
 
+/* SubGhzProtocolFlag band flags are referenced by helper functions in this
+ * module.  Include the registry header only for the flag definitions; the
+ * actual protocol table is not needed here. */
+#include "subghz_protocol_registry.h"
+
 /* ── Preset table dimensions ──────────────────────────────────────────────── */
 
 /** Total number of real frequency presets in the table. */
@@ -95,5 +100,44 @@ extern const uint32_t subghz_hopper_freqs_OFF[SUBGHZ_HOPPER_FREQ_COUNT];
  * Hopping reads ism_band_region at runtime via subghz_get_hopper_freqs_ext().
  */
 const uint32_t *subghz_get_hopper_freqs(uint8_t ism_region);
+
+/**
+ * @brief Find the frequency preset index whose frequency equals @p freq_hz.
+ *
+ * Searches the real preset table only (indices 0..SUBGHZ_FREQ_PRESET_COUNT-1).
+ * Returns SUBGHZ_FREQ_PRESET_CUSTOM only when @p freq_hz matches the current
+ * user custom frequency; this function does not know the custom value, so the
+ * caller should treat a -1 result as "not a real preset".
+ *
+ * @param freq_hz  Frequency in Hz.
+ * @return Preset index on success, -1 if not found.
+ */
+int16_t subghz_freq_preset_find_hz(uint32_t freq_hz);
+
+/**
+ * @brief Find the first frequency preset index whose frequency is within
+ *        ±@p tolerance_hz of @p freq_hz.
+ *
+ * Used to map nominal protocol frequencies (which may differ by a few kHz
+ * from the preset table entries) to a preset index.
+ *
+ * @param freq_hz      Target frequency in Hz.
+ * @param tolerance_hz Maximum absolute difference in Hz.
+ * @return Preset index on success, -1 if no preset is within tolerance.
+ */
+int16_t subghz_freq_preset_find_near_hz(uint32_t freq_hz,
+                                         uint32_t tolerance_hz);
+
+/**
+ * @brief Map a SubGhzProtocolFlag band flag to its nominal centre frequency.
+ *
+ * Returns the canonical centre frequency for the 300/315/433/868 MHz band
+ * flags.  This is a convenience for tests and UI filters; the actual preset
+ * table may contain multiple entries within each band.
+ *
+ * @param flag  One of SubGhzProtocolFlag_300, _315, _433, _868.
+ * @return Nominal centre frequency in Hz, or 0 for an unknown flag.
+ */
+uint32_t subghz_freq_preset_band_center(uint32_t flag);
 
 #endif /* SUBGHZ_FREQ_PRESETS_H */

@@ -225,6 +225,51 @@ const char* subghz_protocol_get_name(uint16_t index);
 bool subghz_protocol_is_weather(uint16_t index);
 
 /*============================================================================*/
+/* Registry capability filtering                                               */
+/*                                                                            */
+/* Pure-logic helpers used by the Config scene to restrict frequency and       */
+/* modulation choices to combinations that are actually used by a protocol     */
+/* scope (full registry, Proto Pirate subset, or none for Read Raw).          */
+/*============================================================================*/
+
+/**
+ * @brief Compute the bitmask of modulation preset indices supported by a
+ *        registry subset.
+ *
+ * @param registry  Array of protocol descriptors to scan.
+ * @param count     Number of entries in @p registry.
+ * @return Bitmask where bit i is set iff modulation preset index i is used
+ *         by at least one protocol in the subset.  The four M1 modulation
+ *         presets are AM270 (OOK), AM650 (OOK), FM238 (FSK), FM476 (FSK),
+ *         so bits 0..1 map to OOK and bits 2..3 map to FSK.
+ */
+uint32_t subghz_protocol_mod_mask_for_registry(const SubGhzProtocolDef *registry,
+                                                uint16_t count);
+
+/**
+ * @brief Compute the bitmask of frequency preset indices supported by a
+ *        registry subset and a selected modulation preset index.
+ *
+ * The modulation preset index selects OOK (AM270/AM650) or FSK (FM238/FM476).
+ * Frequencies are matched when at least one protocol in the registry has the
+ * corresponding band flag (300/315/433/868) and modulation flag (AM/FM).
+ *
+ * The Custom frequency preset (SUBGHZ_FREQ_PRESET_CUSTOM) is always included
+ * so the user can still enter an arbitrary frequency if desired, except when
+ * @p mod_idx is disallowed entirely (then the result is zero).
+ *
+ * @param registry  Array of protocol descriptors to scan.
+ * @param count     Number of entries in @p registry.
+ * @param mod_idx   Modulation preset index (0..3).
+ * @return Bitmask where bit i is set iff frequency preset index i can produce
+ *         a match in the registry for the selected modulation.  Returns 0
+ *         if @p mod_idx is unsupported by the registry or out of range.
+ */
+uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registry,
+                                                 uint16_t count,
+                                                 uint8_t mod_idx);
+
+/*============================================================================*/
 /* Flipper-Compatible Building Blocks                                         */
 /*                                                                            */
 /* The canonical implementations now live in dedicated headers that mirror     */

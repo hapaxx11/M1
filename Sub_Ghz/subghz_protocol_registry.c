@@ -29,6 +29,7 @@
 #include "subghz_signal_format.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_raw_decoder.h"
+#include "subghz_freq_presets.h"
 
 /*============================================================================*/
 /* Portable case-insensitive compare (replaces POSIX strcasecmp)              */
@@ -1416,6 +1417,106 @@ bool subghz_protocol_is_weather(uint16_t index)
 {
     const SubGhzProtocolDef *proto = subghz_protocol_get(index);
     return proto != NULL && proto->type == SubGhzProtocolTypeWeather;
+}
+
+/*============================================================================*/
+/* Registry capability filtering                                               */
+/*============================================================================*/
+
+/* M1 modulation presets (indices 0..3).  Kept in sync with m1_sub_ghz.c:
+ *   0 = AM270, 1 = AM650  → OOK
+ *   2 = FM238, 3 = FM476  → FSK */
+#define SUBGHZ_MOD_PRESET_COUNT 4
+
+/* Map a modulation preset index to the registry modulation flag. */
+static uint32_t mod_idx_to_flag(uint8_t mod_idx)
+{
+    if (mod_idx <= 1)
+        return SubGhzProtocolFlag_AM;   /* AM270 / AM650 → OOK/AM */
+    if (mod_idx <= 3)
+        return SubGhzProtocolFlag_FM;   /* FM238 / FM476 → FSK/FM */
+    return 0;
+}
+
+/* Map a registry band flag to the frequency preset index closest to its
+ * nominal centre frequency. */
+static int16_t band_flag_to_preset_idx(uint32_t flag)
+{
+    uint32_t center = subghz_freq_preset_band_center(flag);
+    if (center == 0)
+        return -1;
+    return subghz_freq_preset_find_near_hz(center, 5000000U /* 5 MHz */);
+}
+
+uint32_t subghz_protocol_mod_mask_for_registry(const SubGhzProtocolDef *registry,
+                                                uint16_t count)
+{
+    uint32_t mask = 0;
+    if (!registry || count == 0)
+        return mask;
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        if (registry[i].flags & SubGhzProtocolFlag_AM)
+        {
+            mask |= (1u << 0) | (1u << 1);  /* AM270, AM650 */
+        }
+        if (registry[i].flags & SubGhzProtocolFlag_FM)
+        {
+            mask |= (1u << 2) | (1u << 3);  /* FM238, FM476 */
+        }
+    }
+    return mask;
+}
+
+uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registry,
+                                                 uint16_t count,
+                                                 uint8_t mod_idx)
+{
+    uint32_t mask = 0;
+    if (!registry || count == 0 || mod_idx >= SUBGHZ_MOD_PRESET_COUNT)
+        return mask;
+
+    uint32_t mod_flag = mod_idx_to_flag(mod_idx);
+    if (mod_flag == 0)
+        return mask;
+
+    /* Build a set of band flags used by any protocol that matches the
+     * selected modulation. */
+    uint32_t band_flags = 0;
+    for (uint16_t i = 0; i < count; i++)
+    {
+        if ((registry[i].flags & mod_flag) == 0)
+            continue;
+        band_flags |= registry[i].flags & (SubGhzProtocolFlag_300 |
+                                           SubGhzProtocolFlag_315 |
+                                           SubGhzProtocolFlag_433 |
+                                           SubGhzProtocolFlag_868);
+    }
+
+    /* Map each used band flag to at least one frequency preset. */
+    static const uint32_t all_band_flags[] = {
+        SubGhzProtocolFlag_300,
+        SubGhzProtocolFlag_315,
+        SubGhzProtocolFlag_433,
+        SubGhzProtocolFlag_868,
+    };
+    for (uint8_t b = 0; b < 4; b++)
+    {
+        if (!(band_flags & all_band_flags[b]))
+            continue;
+        int16_t idx = band_flag_to_preset_idx(all_band_flags[b]);
+        if (idx >= 0 && (uint16_t)idx < SUBGHZ_FREQ_PRESET_COUNT)
+            mask |= (1u << (uint16_t)idx);
+    }
+
+    /* Always allow the Custom entry so the user can still tune manually.
+     * If the modulation itself is unsupported by the registry the mask
+     * remains zero, which callers treat as "no frequencies allowed". */
+    if (mask != 0)
+        mask |= (1uL << (uint8_t)SUBGHZ_FREQ_PRESET_CUSTOM);
+
+    return mask;
 }
 
 /* subghz_registry_decode_try_fn() has been extracted to subghz_decode_try_fn.c
