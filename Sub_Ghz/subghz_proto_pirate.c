@@ -2669,11 +2669,12 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
         return (FORD_V1_PREAMBLE_PAIRS + 1 + (FORD_V1_DATA_BYTES * 16) + 1) *
                FORD_V1_BURST_COUNT * reps;
     case SubGhzProtoPirate_KiaV3:
-    case SubGhzProtoPirate_KiaV4:
+    case SubGhzProtoPirate_KiaV4: {
+        const uint8_t sweep_reps = (reps > KIA_V3_V4_CRC_COUNT) ? KIA_V3_V4_CRC_COUNT : reps;
         return ((KIA_V3_V4_PREAMBLE_PAIRS * 2) + 2 +
                 (KIA_V3_V4_DATA_BITS * 2) +
-                (KIA_V3_V4_CRC_BITS * 2) + 2) * KIA_V3_V4_CRC_COUNT;
-    case SubGhzProtoPirate_KiaV5:
+                (KIA_V3_V4_CRC_BITS * 2) + 2) * sweep_reps;
+    }
         return ((KIA_V5_PREAMBLE_PAIRS * 2) + 4 +
                 ((KIA_V5_DATA_BITS + KIA_V5_CRC_BITS) * 2) + 2) * reps;
     case SubGhzProtoPirate_FiatV1:
