@@ -1,2 +1,0 @@
-**Sub-GHz: Guard the frequency-mask ceiling against silent overflow.**
-  The Sub-GHz frequency preset table is already at the 64-bit ceiling a `uint64_t` freq mask can address (63 real presets + Custom == indices 0..63). Added a compile-time `#error` guard in `subghz_freq_presets.h` plus a host-side regression test (`test_freq_preset_custom_fits_in_uint64_mask`) so that adding one more preset in the future fails loudly instead of silently truncating/overflowing `subghz_protocol_freq_mask_for_registry()` and the Config scene's allowed-frequency mask.
