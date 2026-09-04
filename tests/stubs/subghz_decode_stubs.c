@@ -123,6 +123,14 @@ uint8_t subghz_decode_renault_v0(uint16_t a, uint16_t b) { (void)a; (void)b; ret
 uint8_t subghz_decode_chrysler_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_fiat_v0(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_subaru_pp(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_honda_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_honda_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_ford_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_ford_v2(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_kia_v3(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_kia_v4(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_kia_v5(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_fiat_v1(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 
 /* Stubs for ARM-only globals referenced by subghz_registry_decode_try_fn().
  * These are never called from host-side unit tests; they exist only to

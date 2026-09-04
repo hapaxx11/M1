@@ -198,6 +198,14 @@ extern uint8_t subghz_decode_renault_v0(uint16_t, uint16_t);
 extern uint8_t subghz_decode_chrysler_v0(uint16_t, uint16_t);
 extern uint8_t subghz_decode_fiat_v0(uint16_t, uint16_t);
 extern uint8_t subghz_decode_subaru_pp(uint16_t, uint16_t);
+extern uint8_t subghz_decode_honda_v1(uint16_t, uint16_t);
+extern uint8_t subghz_decode_honda_v2(uint16_t, uint16_t);
+extern uint8_t subghz_decode_ford_v1(uint16_t, uint16_t);
+extern uint8_t subghz_decode_ford_v2(uint16_t, uint16_t);
+extern uint8_t subghz_decode_kia_v3(uint16_t, uint16_t);
+extern uint8_t subghz_decode_kia_v4(uint16_t, uint16_t);
+extern uint8_t subghz_decode_kia_v5(uint16_t, uint16_t);
+extern uint8_t subghz_decode_fiat_v1(uint16_t, uint16_t);
 
 /*============================================================================*/
 /* Shorthand flags for common protocol profiles                                */
@@ -1285,6 +1293,81 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .timing = { .te_short=620, .te_long=1620, .te_delta=160,
                     .min_count_bit_for_found=64 },
         .decode = subghz_decode_subaru_pp,
+    },
+
+    /* ── ProtoPirate Tier-B automotive keyfob protocols ───────────────── */
+
+    [HONDA_V1] = {
+        .name   = "Honda V1",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=1000, .te_long=2000, .te_delta=400,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_honda_v1,
+    },
+    [HONDA_V2] = {
+        .name   = "Honda V2",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=250, .te_long=500, .te_delta=100,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_honda_v2,
+    },
+    [FORD_V1] = {
+        .name   = "Ford V1",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=65, .te_long=130, .te_delta=39,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_ford_v1,
+    },
+    [FORD_V2] = {
+        .name   = "Ford V2",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=200, .te_long=400, .te_delta=260,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_ford_v2,
+    },
+    [KIA_V3] = {
+        .name   = "Kia V3/V4",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=400, .te_long=800, .te_delta=150,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_kia_v3,
+    },
+    [KIA_V4] = {
+        .name   = "Kia V4",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=400, .te_long=800, .te_delta=150,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_kia_v4,
+    },
+    [KIA_V5] = {
+        .name   = "Kia V5",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=400, .te_long=800, .te_delta=150,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_kia_v5,
+    },
+    [FIAT_V1] = {
+        .name   = "Fiat V1",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=250, .te_long=500, .te_delta=100,
+                    .min_count_bit_for_found=64 },
+        .decode = subghz_decode_fiat_v1,
     },
 };
 

@@ -287,6 +287,16 @@ enum {
 	CHRYSLER_V0,
 	FIAT_V0,
 	SUBARU_PP,
+
+	/* --- ProtoPirate Tier-B automotive keyfob protocols --- */
+	HONDA_V1,
+	HONDA_V2,
+	FORD_V1,
+	FORD_V2,
+	KIA_V3,
+	KIA_V4,
+	KIA_V5,
+	FIAT_V1,
 };
 
 /* Weather station decoded data */

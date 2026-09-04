@@ -46,6 +46,16 @@ typedef enum {
     SubGhzProtoPirate_FiatV0,
     SubGhzProtoPirate_Subaru,
 
+    /* --- Tier B --- */
+    SubGhzProtoPirate_HondaV1,
+    SubGhzProtoPirate_HondaV2,
+    SubGhzProtoPirate_FordV1,
+    SubGhzProtoPirate_FordV2,
+    SubGhzProtoPirate_KiaV3,
+    SubGhzProtoPirate_KiaV4,
+    SubGhzProtoPirate_KiaV5,
+    SubGhzProtoPirate_FiatV1,
+
     SubGhzProtoPirate_Count,
     SubGhzProtoPirate_Unknown = -1,
 } SubGhzProtoPirateId;
