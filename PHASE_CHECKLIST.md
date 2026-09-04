@@ -18,8 +18,8 @@
 
 ### Phase 3 — Restrict Config scene frequency/modulation cycling
 - **Description**: Update `m1_subghz_scene_config.c` to respect the filter mode when cycling modulation and frequency, and to hide/disable hopping when the current filter excludes hopper frequencies.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `subghz: apply registry-based filtering in Config scene`
 
 ### Phase 4 — Host-side regression tests
 - **Description**: Extend registry tests to verify Proto Pirate mask (OOK only, 433.92 MHz only), full-registry mask includes FSK, and frequency mask changes with modulation. Add tests for the new pure-logic helpers.
