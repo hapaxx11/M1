@@ -42,6 +42,7 @@ const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
     [SubGhzProtoPirate_ChryslerV0]  = { SubGhzProtoPirate_ChryslerV0,  "Chrysler V0",   270,  540, 64, false },
     [SubGhzProtoPirate_FiatV0]      = { SubGhzProtoPirate_FiatV0,      "Fiat V0",       250,  500, 64, false },
     [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        620, 1620, 64, false },
+    [SubGhzProtoPirate_StarLine]    = { SubGhzProtoPirate_StarLine,    "Star Line",     250,  500, 64, false },
 
     /* --- Tier B --- */
     [SubGhzProtoPirate_HondaV1]     = { SubGhzProtoPirate_HondaV1,     "Honda V1",     1000, 2000, 68, false },
@@ -69,6 +70,16 @@ static void pair(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
         out[*idx].low_us  = low_us;
         (*idx)++;
     }
+}
+
+static bool pair_bool(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                      bool level, uint32_t duration)
+{
+    if (*idx >= max) return false;
+    out[*idx].high_us = level ? duration : 0;
+    out[*idx].low_us  = level ? 0 : duration;
+    (*idx)++;
+    return true;
 }
 
 /*============================================================================*/
@@ -199,6 +210,1254 @@ static uint8_t reverse8_local(uint8_t x)
     x = (uint8_t)(((x & 0xCCU) >> 2) | ((x & 0x33U) << 2));
     x = (uint8_t)(((x & 0xAAU) >> 1) | ((x & 0x55U) << 1));
     return x;
+}
+
+/*============================================================================*/
+/* Kia V0 — Kia/Suzuki/Honda sub-formats                                       */
+/*============================================================================*/
+
+#define KIA_V0_TE_SHORT            250
+#define KIA_V0_TE_LONG             500
+#define KIA_V0_TYPE1_SYNC          750
+#define KIA_V0_TYPE1_PREAMBLE_PAIRS 319
+#define KIA_V0_TYPE2_PREAMBLE_PAIRS 320
+#define KIA_V0_TAIL_PREAMBLE_PAIRS  15
+#define KIA_V0_KIA_GAP             1000
+#define KIA_V0_SUZUKI_GAP          2000
+
+#define kia_v0_crc8_poly(data, len) subghz_protocol_blocks_crc8((data), (len), 0x7F, 0x00)
+
+static const uint8_t kia_v0_honda_crc_table[16] = {
+    0x4A, 0x25, 0x96, 0x4B, 0xA1, 0xD4, 0x6A, 0x35,
+    0x9E, 0x4F, 0xA3, 0xD5, 0xEE, 0x77, 0xBF, 0xDB,
+};
+
+static uint8_t kia_v0_honda_header(uint8_t button)
+{
+    const uint8_t button_3bit = button & 0x07U;
+    const uint8_t base = (button_3bit == 0x07U) ? 0x1AU : 0x0AU;
+    return (uint8_t)(((button_3bit << 5U) & 0xE0U) | base);
+}
+
+static uint8_t kia_v0_honda_fold_counter(uint16_t counter)
+{
+    uint8_t value = 0;
+    for (size_t i = 0; i < 16; i++) {
+        if ((counter >> i) & 1U) value ^= kia_v0_honda_crc_table[i];
+    }
+    return value;
+}
+
+static uint8_t kia_v0_honda_crc(uint8_t header, uint16_t counter)
+{
+    uint8_t value = kia_v0_honda_fold_counter(counter);
+    switch (header) {
+    case 0xAA: value ^= 0xA5; break;
+    case 0x2A: value ^= 0x21; break;
+    case 0x6A: value ^= 0x15; break;
+    case 0xFA: value ^= 0x73; break;
+    default:   value ^= 0xC6; break;
+    }
+    return value;
+}
+
+static uint64_t kia_v0_build_honda_key(uint32_t serial, uint8_t button, uint16_t counter)
+{
+    const uint8_t header = kia_v0_honda_header(button);
+    const uint8_t crc = kia_v0_honda_crc(header, counter);
+    const uint8_t bytes[8] = {
+        0xF0,
+        reverse8_local((uint8_t)(counter >> 8U)),
+        reverse8_local((uint8_t)counter),
+        (uint8_t)(serial >> 16U),
+        (uint8_t)(serial >> 8U),
+        (uint8_t)serial,
+        header,
+        crc,
+    };
+    uint64_t key = 0;
+    for (int i = 0; i < 8; i++) key = (key << 8) | bytes[i];
+    return key;
+}
+
+static uint8_t kia_v0_family_crc(uint16_t counter, uint32_t serial, uint8_t button)
+{
+    const uint8_t bytes[6] = {
+        (uint8_t)(counter >> 8U),
+        (uint8_t)counter,
+        (uint8_t)(serial >> 20U),
+        (uint8_t)(serial >> 12U),
+        (uint8_t)(serial >> 4U),
+        (uint8_t)(((serial & 0x0FU) << 4U) | (button & 0x0FU)),
+    };
+    uint8_t crc = 0;
+    for (size_t i = 0; i < sizeof(bytes); i++) crc ^= bytes[i];
+    return crc;
+}
+
+static uint64_t kia_v0_build_kia_raw(uint32_t serial, uint8_t button, uint16_t counter)
+{
+    const uint32_t high = 0x0F000000UL | (((uint32_t)counter & 0xFFFFUL) << 8U) |
+                          ((serial >> 20U) & 0xFFUL);
+    const uint32_t low = (((uint32_t)serial & 0x000FFFFFUL) << 12U) |
+                         (((uint32_t)button & 0x0FUL) << 8U);
+    const uint64_t partial = ((uint64_t)high << 32U) | low;
+    const uint8_t crc = kia_v0_family_crc(counter, serial, button);
+    return partial | crc;
+}
+
+static uint8_t kia_v0_suzuki_crc8_from_fields(uint32_t serial, uint8_t button, uint32_t counter)
+{
+    const uint16_t cnt_u16 = (uint16_t)(counter & 0xFFFFU);
+    const uint16_t c_sw = (uint16_t)((cnt_u16 << 8) | (cnt_u16 >> 8));
+    const uint8_t buf[6] = {
+        (uint8_t)(c_sw & 0xFFU),
+        (uint8_t)((c_sw >> 8) & 0xFFU),
+        (uint8_t)((serial >> 20) & 0xFFU),
+        (uint8_t)((serial >> 12) & 0xFFU),
+        (uint8_t)((serial >> 4) & 0xFFU),
+        (uint8_t)((button & 0x0FU) | ((uint8_t)((uint32_t)serial << 4))),
+    };
+    return kia_v0_crc8_poly(buf, 6);
+}
+
+static uint64_t kia_v0_suzuki_shifted_key_from_fields(
+    uint32_t serial, uint8_t button, uint32_t counter, uint8_t crc_byte)
+{
+    const uint32_t r8 = ((uint32_t)serial << 16) | ((uint32_t)crc_byte << 4) |
+                        (((uint32_t)button & 0x0FU) << 12);
+    const uint32_t r5 =
+        (uint32_t)(((serial >> 16) & 0xFFFU) | (((uint32_t)(counter & 0xFFFFU)) << 12)) |
+        0xF0000000U;
+    return ((uint64_t)r5 << 32) | r8;
+}
+
+static uint64_t kia_v0_honda_transform(uint64_t data)
+{
+    uint8_t bytes[8];
+    for (int i = 0; i < 8; i++) bytes[i] = (uint8_t)(data >> (56 - i * 8));
+    for (size_t i = 0; i < 8; i++) bytes[i] = reverse8_local(bytes[i]);
+    uint64_t key = 0;
+    for (int i = 0; i < 8; i++) key = (key << 8) | bytes[i];
+    return key;
+}
+
+static void kia_v0_append_short_pairs(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                                      uint32_t count)
+{
+    for (uint32_t i = 0; i < count; i++) {
+        pair(out, idx, max, KIA_V0_TE_SHORT, 0);
+        pair(out, idx, max, 0, KIA_V0_TE_SHORT);
+    }
+}
+
+static void kia_v0_append_data_pairs(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                                     uint64_t raw, uint8_t bits)
+{
+    for (int i = (int)bits - 1; i >= 0; i--) {
+        bool bit = ((raw >> i) & 1ULL) != 0ULL;
+        if (bit) {
+            pair(out, idx, max, KIA_V0_TE_SHORT, 0);
+            pair(out, idx, max, 0, KIA_V0_TE_LONG);
+        } else {
+            pair(out, idx, max, KIA_V0_TE_LONG, 0);
+            pair(out, idx, max, 0, KIA_V0_TE_SHORT);
+        }
+    }
+}
+
+static uint32_t encode_kia_v0(const SubGhzKeyParams *params,
+                               SubGhzRawPair *out,
+                               uint32_t max_pairs,
+                               uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 32) & 0x0FFFFFFFU);
+    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+
+    /* Default to the Kia subtype. */
+    uint8_t type = (params->extra[0] > 0 && params->extra[0] <= 3) ? params->extra[0] : 1;
+
+    uint64_t raw;
+    uint8_t bits;
+    uint32_t burst_pairs;
+    if (type == 3) { /* Honda V0 */
+        raw  = kia_v0_build_honda_key(serial, btn & 0x07U, cnt);
+        bits = 72;
+        burst_pairs = 40 * 2 + 4 * 2 + bits * 2 + 1;
+    } else if (type == 2) { /* Suzuki V0 */
+        const uint8_t crc = kia_v0_suzuki_crc8_from_fields(serial, btn, cnt);
+        raw = kia_v0_suzuki_shifted_key_from_fields(serial, btn, cnt, crc);
+        bits = 64;
+        burst_pairs = KIA_V0_TYPE2_PREAMBLE_PAIRS * 2 + bits * 2 + 3 +
+                      KIA_V0_TAIL_PREAMBLE_PAIRS * 2 + bits * 2;
+    } else { /* Kia */
+        raw = kia_v0_build_kia_raw(serial, btn, cnt);
+        bits = 61;
+        burst_pairs = 2 + KIA_V0_TYPE1_PREAMBLE_PAIRS * 2 + bits * 2 + 2 +
+                      KIA_V0_TAIL_PREAMBLE_PAIRS * 2 + bits * 2 + 1;
+    }
+
+    const uint32_t total = burst_pairs * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        if (type == 3) {
+            kia_v0_append_short_pairs(out, &idx, max_pairs, 40);
+            for (size_t p = 0; p < 4; p++) {
+                pair(out, &idx, max_pairs, KIA_V0_TE_LONG, 0);
+                pair(out, &idx, max_pairs, 0, KIA_V0_TE_LONG);
+            }
+            kia_v0_append_data_pairs(out, &idx, max_pairs, kia_v0_honda_transform(raw), 56);
+            pair(out, &idx, max_pairs, KIA_V0_TE_SHORT, 0);
+            pair(out, &idx, max_pairs, 0, KIA_V0_KIA_GAP);
+        } else if (type == 2) {
+            kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TYPE2_PREAMBLE_PAIRS);
+            kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
+            pair(out, &idx, max_pairs, 0, KIA_V0_SUZUKI_GAP);
+            pair(out, &idx, max_pairs, KIA_V0_SUZUKI_GAP, 0);
+            pair(out, &idx, max_pairs, 0, KIA_V0_TE_SHORT);
+            kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TAIL_PREAMBLE_PAIRS);
+            kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
+        } else {
+            pair(out, &idx, max_pairs, KIA_V0_TYPE1_SYNC, 0);
+            pair(out, &idx, max_pairs, 0, KIA_V0_TYPE1_SYNC);
+            kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TYPE1_PREAMBLE_PAIRS);
+            kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
+            pair(out, &idx, max_pairs, KIA_V0_TE_SHORT, 0);
+            pair(out, &idx, max_pairs, 0, 1500);
+            kia_v0_append_short_pairs(out, &idx, max_pairs, KIA_V0_TAIL_PREAMBLE_PAIRS);
+            kia_v0_append_data_pairs(out, &idx, max_pairs, raw, bits);
+            pair(out, &idx, max_pairs, KIA_V0_TE_SHORT, 0);
+            pair(out, &idx, max_pairs, 0, KIA_V0_KIA_GAP);
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Kia V1 — OOK PWM, 57-bit, 3 bursts                                          */
+/*============================================================================*/
+
+#define KIA_V1_TE_SHORT            800
+#define KIA_V1_TE_LONG             1600
+#define KIA_V1_HEADER_PULSES       90
+#define KIA_V1_TOTAL_BURSTS        3
+#define KIA_V1_INTER_BURST_GAP_US  25000
+
+static uint8_t kia_v1_crc4(const uint8_t *bytes, int count, uint8_t offset)
+{
+    uint8_t crc = 0;
+    for (int i = 0; i < count; i++) {
+        uint8_t b = bytes[i];
+        crc ^= ((b & 0x0F) ^ (b >> 4));
+    }
+    return (uint8_t)((crc + offset) & 0x0F);
+}
+
+static uint32_t encode_kia_v1(const SubGhzKeyParams *params,
+                               SubGhzRawPair *out,
+                               uint32_t max_pairs,
+                               uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 24) & 0xFFFFFFFFU);
+    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 16) & 0xFFU);
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+
+    uint8_t cnt_high = (cnt >> 8) & 0x0F;
+    uint8_t char_data[7];
+    char_data[0] = (uint8_t)(serial >> 24);
+    char_data[1] = (uint8_t)(serial >> 16);
+    char_data[2] = (uint8_t)(serial >> 8);
+    char_data[3] = (uint8_t)serial;
+    char_data[4] = btn;
+    char_data[5] = (uint8_t)(cnt & 0xFF);
+    char_data[6] = cnt_high;
+    uint8_t crc = kia_v1_crc4(char_data, 7, 1);
+
+    uint64_t data = ((uint64_t)serial << 24) | ((uint64_t)btn << 16) |
+                    ((uint64_t)(cnt & 0xFF) << 8) |
+                    ((uint64_t)cnt_high << 4) | crc;
+
+    const uint32_t burst_pairs = (KIA_V1_HEADER_PULSES * 2) + 1 + ((57U - 1) * 2);
+    const uint32_t total = burst_pairs * KIA_V1_TOTAL_BURSTS * reps + (KIA_V1_TOTAL_BURSTS - 1) * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint8_t burst = 0; burst < KIA_V1_TOTAL_BURSTS; burst++) {
+            if (burst > 0) {
+                pair(out, &idx, max_pairs, 0, KIA_V1_INTER_BURST_GAP_US);
+            }
+            for (int i = 0; i < KIA_V1_HEADER_PULSES; i++) {
+                pair(out, &idx, max_pairs, 0, KIA_V1_TE_LONG);
+                pair(out, &idx, max_pairs, KIA_V1_TE_LONG, 0);
+            }
+            pair(out, &idx, max_pairs, 0, KIA_V1_TE_SHORT);
+            for (uint8_t i = 57; i > 1; i--) {
+                bool bit = ((data >> (i - 2)) & 1ULL) != 0ULL;
+                if (bit) {
+                    pair(out, &idx, max_pairs, KIA_V1_TE_SHORT, 0);
+                    pair(out, &idx, max_pairs, 0, KIA_V1_TE_SHORT);
+                } else {
+                    pair(out, &idx, max_pairs, 0, KIA_V1_TE_SHORT);
+                    pair(out, &idx, max_pairs, KIA_V1_TE_SHORT, 0);
+                }
+            }
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Kia V2 — OOK PWM, 53-bit, 2 bursts                                          */
+/*============================================================================*/
+
+#define KIA_V2_TE_SHORT            500
+#define KIA_V2_TE_LONG             1000
+#define KIA_V2_HEADER_PAIRS        252
+#define KIA_V2_TOTAL_BURSTS        2
+
+static uint8_t kia_v2_calculate_crc(uint64_t data)
+{
+    uint64_t data_without_crc = data >> 4;
+    uint8_t bytes[6];
+    for (int i = 0; i < 6; i++) bytes[i] = (uint8_t)((data_without_crc >> (i * 8)) & 0xFFU);
+    uint8_t crc = 0;
+    for (int i = 0; i < 6; i++) crc ^= (bytes[i] & 0x0F) ^ (bytes[i] >> 4);
+    return (uint8_t)((crc + 1) & 0x0F);
+}
+
+static uint32_t encode_kia_v2(const SubGhzKeyParams *params,
+                               SubGhzRawPair *out,
+                               uint32_t max_pairs,
+                               uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 20) & 0xFFFFFFFFU);
+    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 16) & 0x0FU);
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+
+    uint32_t uVar6 = ((uint32_t)(cnt & 0xFF) << 8) |
+                     ((uint32_t)(btn & 0x0F) << 16) |
+                     ((uint32_t)(cnt >> 4) & 0xF0);
+
+    uint64_t data = (1ULL << 52) |
+                    (((uint64_t)serial << 20) & 0xFFFFFFFFF00000ULL) |
+                    (uint64_t)uVar6;
+    data = (data & ~0x0FULL) | kia_v2_calculate_crc(data);
+
+    const uint32_t burst_pairs = (KIA_V2_HEADER_PAIRS * 2) + 1 + ((53U - 1) * 2);
+    const uint32_t total = burst_pairs * KIA_V2_TOTAL_BURSTS * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint8_t burst = 0; burst < KIA_V2_TOTAL_BURSTS; burst++) {
+            for (int i = 0; i < KIA_V2_HEADER_PAIRS; i++) {
+                pair(out, &idx, max_pairs, 0, KIA_V2_TE_LONG);
+                pair(out, &idx, max_pairs, KIA_V2_TE_LONG, 0);
+            }
+            pair(out, &idx, max_pairs, 0, KIA_V2_TE_SHORT);
+            for (uint8_t i = 53; i > 1; i--) {
+                bool bit = ((data >> (i - 2)) & 1ULL) != 0ULL;
+                if (bit) {
+                    pair(out, &idx, max_pairs, KIA_V2_TE_SHORT, 0);
+                    pair(out, &idx, max_pairs, 0, KIA_V2_TE_SHORT);
+                } else {
+                    pair(out, &idx, max_pairs, 0, KIA_V2_TE_SHORT);
+                    pair(out, &idx, max_pairs, KIA_V2_TE_SHORT, 0);
+                }
+            }
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Subaru — OOK PWM, 64-bit                                                    */
+/*============================================================================*/
+
+#define SUBARU_TE_SHORT            800
+#define SUBARU_TE_LONG             1600
+#define SUBARU_PREAMBLE_PAIRS      75
+#define SUBARU_GAP_US              2800
+#define SUBARU_SYNC_US             2800
+
+static void subaru_rotate_left_3bytes(uint8_t *b0, uint8_t *b1, uint8_t *b2, uint8_t count)
+{
+    for (uint8_t i = 0; i < count; i++) {
+        uint8_t t = *b0;
+        *b0 = (uint8_t)((*b0 << 1) | (*b1 >> 7));
+        *b1 = (uint8_t)((*b1 << 1) | (*b2 >> 7));
+        *b2 = (uint8_t)((*b2 << 1) | (t >> 7));
+    }
+}
+
+static void subaru_encode_count(uint8_t *KB, uint16_t count)
+{
+    uint8_t lo = count & 0xFF;
+    uint8_t hi = (count >> 8) & 0xFF;
+
+    KB[4] &= ~0xC0;
+    KB[5] &= ~0xC3;
+    KB[6] &= ~0x03;
+
+    if ((lo & 0x01) == 0) KB[4] |= 0x40;
+    if ((lo & 0x02) == 0) KB[4] |= 0x80;
+    if ((lo & 0x04) == 0) KB[5] |= 0x01;
+    if ((lo & 0x08) == 0) KB[5] |= 0x02;
+    if ((lo & 0x10) == 0) KB[6] |= 0x01;
+    if ((lo & 0x20) == 0) KB[6] |= 0x02;
+    if ((lo & 0x40) == 0) KB[5] |= 0x40;
+    if ((lo & 0x80) == 0) KB[5] |= 0x80;
+
+    uint8_t SER0 = KB[3];
+    uint8_t SER1 = KB[1];
+    uint8_t SER2 = KB[2];
+
+    uint8_t total_rot = (uint8_t)(4 + lo);
+    subaru_rotate_left_3bytes(&SER0, &SER1, &SER2, total_rot);
+
+    const uint8_t rel = (uint8_t)(SER0 ^ KB[0]);
+    KB[4] = (uint8_t)((KB[4] & 0xC0) | ((rel >> 2) & 0x3F));
+    KB[5] = (uint8_t)((KB[5] & 0xCF) | ((rel << 4) & 0x30));
+
+    uint8_t T1 = 0xFF;
+    uint8_t T2 = 0xFF;
+
+    if (hi & 0x04) T1 &= ~0x10;
+    if (hi & 0x08) T1 &= ~0x20;
+    if (hi & 0x02) T2 &= ~0x80;
+    if (hi & 0x01) T2 &= ~0x40;
+    if (hi & 0x40) T1 &= ~0x01;
+    if (hi & 0x80) T1 &= ~0x02;
+    if (hi & 0x20) T2 &= ~0x08;
+    if (hi & 0x10) T2 &= ~0x04;
+
+    uint8_t new_REG_SH1 = T1 ^ SER1;
+    uint8_t new_REG_SH2 = T2 ^ SER2;
+
+    KB[5] &= ~0x0C;
+    KB[6] &= ~0xC0;
+
+    KB[7] = (uint8_t)((KB[7] & 0xF0) | ((new_REG_SH1 >> 4) & 0x0F));
+
+    if (new_REG_SH1 & 0x04) KB[5] |= 0x04;
+    if (new_REG_SH1 & 0x08) KB[5] |= 0x08;
+    if (new_REG_SH1 & 0x02) KB[6] |= 0x80;
+    if (new_REG_SH1 & 0x01) KB[6] |= 0x40;
+
+    KB[6] = (uint8_t)((KB[6] & 0xC3) | ((new_REG_SH2 >> 2) & 0x3C));
+    KB[7] = (uint8_t)((KB[7] & 0x0F) | ((new_REG_SH2 << 4) & 0xF0));
+}
+
+static uint64_t subaru_build_key(uint32_t serial, uint8_t button, uint16_t count)
+{
+    uint8_t b[8];
+    b[0] = button & 0x0F;
+    b[1] = (uint8_t)(serial >> 16);
+    b[2] = (uint8_t)(serial >> 8);
+    b[3] = (uint8_t)serial;
+    b[4] = 0;
+    b[5] = 0;
+    b[6] = 0;
+    b[7] = 0;
+    subaru_encode_count(b, count);
+    uint64_t key = 0;
+    for (int i = 0; i < 8; i++) key = (key << 8) | b[i];
+    return key;
+}
+
+static uint32_t encode_subaru(const SubGhzKeyParams *params,
+                               SubGhzRawPair *out,
+                               uint32_t max_pairs,
+                               uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 40) & 0xFFFFFFU);
+    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+
+    uint64_t key = subaru_build_key(serial, btn, cnt);
+
+    const uint32_t burst_pairs = (SUBARU_PREAMBLE_PAIRS * 2) + 2 + 64 * 2 + 2;
+    const uint32_t total = burst_pairs * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (int i = 0; i < SUBARU_PREAMBLE_PAIRS; i++) {
+            pair(out, &idx, max_pairs, 0, SUBARU_TE_LONG);
+            pair(out, &idx, max_pairs, SUBARU_TE_LONG, 0);
+        }
+        pair(out, &idx, max_pairs, 0, SUBARU_GAP_US);
+        pair(out, &idx, max_pairs, SUBARU_SYNC_US, 0);
+
+        for (int i = 63; i >= 0; i--) {
+            bool bit = ((key >> i) & 1ULL) != 0ULL;
+            if (bit) {
+                pair(out, &idx, max_pairs, 0, SUBARU_TE_LONG);
+                pair(out, &idx, max_pairs, SUBARU_TE_SHORT, 0);
+            } else {
+                pair(out, &idx, max_pairs, 0, SUBARU_TE_SHORT);
+                pair(out, &idx, max_pairs, SUBARU_TE_LONG, 0);
+            }
+        }
+        pair(out, &idx, max_pairs, 0, SUBARU_GAP_US);
+        pair(out, &idx, max_pairs, SUBARU_SYNC_US, 0);
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Ford V0 — differential Manchester, 80-bit, 6 bursts                         */
+/*============================================================================*/
+
+#define FORD_V0_TE_SHORT           250
+#define FORD_V0_TE_LONG            500
+#define FORD_V0_PREAMBLE_PAIRS     4
+#define FORD_V0_GAP_US             3500
+#define FORD_V0_TOTAL_BURSTS       6
+#define FORD_V0_INTER_BURST_US     50000
+
+static const uint8_t ford_v0_crc_matrix[64] = {
+    0xDA, 0xB5, 0x55, 0x6A, 0xAA, 0xAA, 0xAA, 0xD5,
+    0xB6, 0x6C, 0xCC, 0xD9, 0x99, 0x99, 0x99, 0xB3,
+    0x71, 0xE3, 0xC3, 0xC7, 0x87, 0x87, 0x87, 0x8F,
+    0x0F, 0xE0, 0x3F, 0xC0, 0x7F, 0x80, 0x7F, 0x80,
+    0x00, 0x1F, 0xFF, 0xC0, 0x00, 0x7F, 0xFF, 0x80,
+    0x00, 0x00, 0x00, 0x3F, 0xFF, 0xFF, 0xFF, 0x80,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F,
+    0x23, 0x12, 0x94, 0x84, 0x35, 0xF4, 0x55, 0x84,
+};
+
+static uint8_t ford_v0_calculate_checksum(uint32_t serial, uint32_t count, uint8_t button)
+{
+    return (uint8_t)((((count >> 24) & 0xFF) + ((count >> 16) & 0xFF) +
+                      ((count >> 8) & 0xFF) + (count & 0xFF) +
+                      ((serial >> 24) & 0xFF) + ((serial >> 16) & 0xFF) +
+                      ((serial >> 8) & 0xFF) + (serial & 0xFF) + (button << 3)) & 0xFF);
+}
+
+static uint8_t ford_v0_calculate_crc(uint8_t *buf)
+{
+    uint8_t crc = 0;
+    for (int row = 0; row < 8; row++) {
+        uint8_t xor_sum = 0;
+        for (int col = 0; col < 8; col++) {
+            xor_sum ^= (uint8_t)(ford_v0_crc_matrix[row * 8 + col] & buf[col + 1]);
+        }
+        uint8_t parity = subghz_protocol_blocks_parity8(xor_sum);
+        if (parity) crc |= (uint8_t)(1 << row);
+    }
+    return crc;
+}
+
+static void ford_v0_encode_key(uint8_t header_byte, uint32_t serial, uint8_t button,
+                                uint32_t count, uint8_t checksum, uint64_t *key1)
+{
+    uint8_t buf[8] = {0};
+    buf[0] = header_byte;
+    buf[1] = (uint8_t)((serial >> 24) & 0xFF);
+    buf[2] = (uint8_t)((serial >> 16) & 0xFF);
+    buf[3] = (uint8_t)((serial >> 8) & 0xFF);
+    buf[4] = (uint8_t)(serial & 0xFF);
+    buf[5] = (uint8_t)(((button & 0x0F) << 3) | ((count >> 16) & 0x0F));
+
+    uint8_t count_mid = (uint8_t)((count >> 8) & 0xFF);
+    uint8_t count_low = (uint8_t)(count & 0xFF);
+
+    uint8_t post_xor_6 = (uint8_t)((count_mid & 0xAA) | (count_low & 0x55));
+    uint8_t post_xor_7 = (uint8_t)((count_low & 0xAA) | (count_mid & 0x55));
+
+    uint8_t parity = 0;
+    uint8_t tmp = checksum;
+    while (tmp) {
+        parity ^= (tmp & 1);
+        tmp >>= 1;
+    }
+    bool parity_bit = (checksum != 0) ? (parity != 0) : false;
+
+    if (parity_bit) {
+        uint8_t xor_byte = post_xor_7;
+        for (int i = 1; i <= 5; i++) buf[i] ^= xor_byte;
+        buf[6] = (uint8_t)(post_xor_6 ^ xor_byte);
+        buf[7] = post_xor_7;
+    } else {
+        uint8_t xor_byte = post_xor_6;
+        for (int i = 1; i <= 5; i++) buf[i] ^= xor_byte;
+        buf[6] = post_xor_6;
+        buf[7] = (uint8_t)(post_xor_7 ^ xor_byte);
+    }
+
+    *key1 = 0;
+    for (int i = 0; i < 8; i++) *key1 = (*key1 << 8) | buf[i];
+}
+
+static bool ford_v0_add_level(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                               bool level, uint32_t duration)
+{
+    if (*idx >= max) return false;
+    out[*idx].high_us = level ? duration : 0;
+    out[*idx].low_us  = level ? 0 : duration;
+    (*idx)++;
+    return true;
+}
+
+static bool ford_v0_add_bit(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                             bool *prev_bit, bool bit)
+{
+    const uint32_t te_short = FORD_V0_TE_SHORT;
+    const uint32_t te_long  = FORD_V0_TE_LONG;
+    if (!*prev_bit && !bit) {
+        if (!ford_v0_add_level(out, idx, max, true, te_short) ||
+            !ford_v0_add_level(out, idx, max, false, te_short)) return false;
+    } else if (!*prev_bit && bit) {
+        if (!ford_v0_add_level(out, idx, max, true, te_long)) return false;
+    } else if (*prev_bit && !bit) {
+        if (!ford_v0_add_level(out, idx, max, false, te_long)) return false;
+    } else {
+        if (!ford_v0_add_level(out, idx, max, false, te_short) ||
+            !ford_v0_add_level(out, idx, max, true, te_short)) return false;
+    }
+    *prev_bit = bit;
+    return true;
+}
+
+static uint32_t encode_ford_v0(const SubGhzKeyParams *params,
+                                SubGhzRawPair *out,
+                                uint32_t max_pairs,
+                                uint8_t reps)
+{
+    uint8_t  header = (uint8_t)((params->key_value >> 56) & 0xFF);
+    uint32_t serial = params->serial ? params->serial : (uint32_t)(params->key_value >> 32);
+    uint8_t  button = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 16) & 0xFF);
+    uint32_t count  = params->cnt ? params->cnt : (uint32_t)(params->key_value & 0xFFFFFFU);
+
+    uint8_t checksum = ford_v0_calculate_checksum(serial, count, button);
+    uint64_t key1;
+    ford_v0_encode_key(header, serial, button, count, checksum, &key1);
+
+    uint8_t buf[9] = {0};
+    for (int i = 0; i < 8; i++) buf[i] = (uint8_t)(key1 >> (56 - i * 8));
+    buf[8] = checksum;
+    uint8_t crc = (uint8_t)(ford_v0_calculate_crc(buf) ^ 0x80);
+    uint16_t key2 = (uint16_t)((checksum << 8) | crc);
+
+    uint64_t tx_key1 = ~key1;
+    uint16_t tx_key2 = ~key2;
+
+    const uint32_t burst_pairs = 2 + (FORD_V0_PREAMBLE_PAIRS * 2) + 2 + 79 * 2 + 16 * 2;
+    const uint32_t total = (burst_pairs * FORD_V0_TOTAL_BURSTS + (FORD_V0_TOTAL_BURSTS - 1)) * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint8_t burst = 0; burst < FORD_V0_TOTAL_BURSTS; burst++) {
+            if (!ford_v0_add_level(out, &idx, max_pairs, true, FORD_V0_TE_SHORT) ||
+                !ford_v0_add_level(out, &idx, max_pairs, false, FORD_V0_TE_LONG)) return 0;
+            for (int i = 0; i < FORD_V0_PREAMBLE_PAIRS; i++) {
+                if (!ford_v0_add_level(out, &idx, max_pairs, true, FORD_V0_TE_LONG) ||
+                    !ford_v0_add_level(out, &idx, max_pairs, false, FORD_V0_TE_LONG)) return 0;
+            }
+            if (!ford_v0_add_level(out, &idx, max_pairs, true, FORD_V0_TE_SHORT) ||
+                !ford_v0_add_level(out, &idx, max_pairs, false, FORD_V0_GAP_US)) return 0;
+
+            bool prev = (bool)((tx_key1 >> 62) & 1ULL);
+            if (prev) {
+                if (!ford_v0_add_level(out, &idx, max_pairs, true, FORD_V0_TE_LONG)) return 0;
+            } else {
+                if (!ford_v0_add_level(out, &idx, max_pairs, true, FORD_V0_TE_SHORT) ||
+                    !ford_v0_add_level(out, &idx, max_pairs, false, FORD_V0_TE_LONG)) return 0;
+            }
+            for (int bit = 61; bit >= 0; bit--) {
+                if (!ford_v0_add_bit(out, &idx, max_pairs, &prev,
+                                     ((tx_key1 >> bit) & 1ULL) != 0ULL)) return 0;
+            }
+            for (int bit = 15; bit >= 0; bit--) {
+                if (!ford_v0_add_bit(out, &idx, max_pairs, &prev,
+                                     ((tx_key2 >> bit) & 1U) != 0U)) return 0;
+            }
+            if (burst + 1 < FORD_V0_TOTAL_BURSTS) {
+                if (!ford_v0_add_level(out, &idx, max_pairs, false, FORD_V0_INTER_BURST_US)) return 0;
+            }
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Honda Static — FM Manchester-ish, 64-bit                                    */
+/*============================================================================*/
+
+#define HONDA_STATIC_SYNC_TIME_US     700
+#define HONDA_STATIC_ELEMENT_TIME_US  63
+#define HONDA_STATIC_PREAMBLE_COUNT   160
+#define HONDA_STATIC_BITS             64
+
+static void honda_static_set_bits(uint8_t *data, uint8_t start, uint8_t count, uint32_t value)
+{
+    for (uint8_t i = 0; i < count; i++) {
+        const uint8_t bit_index = start + i;
+        const uint8_t byte_index = bit_index >> 3U;
+        const uint8_t shift = ((uint8_t)~bit_index) & 0x07U;
+        const uint8_t mask = (uint8_t)(1U << shift);
+        const bool bit = ((value >> (count - 1U - i)) & 1U) != 0U;
+        if (bit) data[byte_index] |= mask;
+        else     data[byte_index] &= (uint8_t)~mask;
+    }
+}
+
+static void honda_static_build_packet(const SubGhzKeyParams *params, uint8_t packet[8])
+{
+    memset(packet, 0, 8);
+    uint32_t serial = params->serial ? params->serial : (uint32_t)((params->key_value >> 28) & 0x0FFFFFFFU);
+    uint8_t  button = params->btn ? (uint8_t)params->btn : (uint8_t)(params->key_value & 0x0FU);
+    uint32_t counter = params->cnt ? params->cnt : (uint32_t)((params->key_value >> 4) & 0x00FFFFFFU);
+
+    honda_static_set_bits(packet, 0, 4, button & 0x0FU);
+    honda_static_set_bits(packet, 4, 28, serial);
+    honda_static_set_bits(packet, 32, 24, counter);
+
+    uint8_t checksum = 0;
+    for (size_t i = 0; i < 7; i++) checksum ^= packet[i];
+    honda_static_set_bits(packet, 56, 8, checksum);
+}
+
+static uint32_t encode_honda_static(const SubGhzKeyParams *params,
+                                     SubGhzRawPair *out,
+                                     uint32_t max_pairs,
+                                     uint8_t reps)
+{
+    uint8_t packet[8];
+    honda_static_build_packet(params, packet);
+
+    const uint32_t pairs_per_rep = 1 + HONDA_STATIC_PREAMBLE_COUNT + (HONDA_STATIC_BITS * 2) + 1;
+    const uint32_t total = pairs_per_rep * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        pair(out, &idx, max_pairs, HONDA_STATIC_SYNC_TIME_US, 0);
+        for (size_t i = 0; i < HONDA_STATIC_PREAMBLE_COUNT; i++) {
+            bool level = (i & 1U) != 0U;
+            pair(out, &idx, max_pairs, level ? HONDA_STATIC_ELEMENT_TIME_US : 0,
+                 level ? 0 : HONDA_STATIC_ELEMENT_TIME_US);
+        }
+        for (uint8_t bit = 0; bit < HONDA_STATIC_BITS; bit++) {
+            bool value = ((packet[bit >> 3U] >> (((uint8_t)~bit) & 0x07U)) & 1U) != 0U;
+            pair(out, &idx, max_pairs, value ? 0 : HONDA_STATIC_ELEMENT_TIME_US,
+                 value ? HONDA_STATIC_ELEMENT_TIME_US : 0);
+            pair(out, &idx, max_pairs, value ? HONDA_STATIC_ELEMENT_TIME_US : 0,
+                 value ? 0 : HONDA_STATIC_ELEMENT_TIME_US);
+        }
+        bool last = (packet[7] & 1U) != 0U;
+        pair(out, &idx, max_pairs, last ? 0 : HONDA_STATIC_SYNC_TIME_US,
+             last ? HONDA_STATIC_SYNC_TIME_US : 0);
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Mazda V0 — Manchester, 64-bit                                               */
+/*============================================================================*/
+
+#define MAZDA_V0_TE_SHORT      250
+#define MAZDA_V0_TE_LONG       500
+#define MAZDA_V0_GAP_US        0xCB20
+#define MAZDA_V0_SYNC_BYTE     0xD7
+#define MAZDA_V0_TAIL_BYTE     0x5A
+#define MAZDA_V0_PREAMBLE_ONES 16
+
+static uint8_t mazda_v0_calculate_checksum(uint32_t serial, uint8_t button, uint32_t counter)
+{
+    counter &= 0xFFFFFU;
+    return (uint8_t)(((serial >> 24) & 0xFF) + ((serial >> 16) & 0xFF) +
+                     ((serial >> 8) & 0xFF) + (serial & 0xFF) +
+                     ((counter >> 8) & 0xFF) + (counter & 0xFF) +
+                     ((((counter >> 16) & 0x0F) | ((button & 0x0F) << 4)) & 0xFF));
+}
+
+static uint64_t mazda_v0_encode_key(uint32_t serial, uint8_t button, uint32_t counter)
+{
+    uint8_t data[8];
+    counter &= 0xFFFFFU;
+    button &= 0x0F;
+
+    data[0] = (uint8_t)((serial >> 24) & 0xFF);
+    data[1] = (uint8_t)((serial >> 16) & 0xFF);
+    data[2] = (uint8_t)((serial >> 8) & 0xFF);
+    data[3] = (uint8_t)(serial & 0xFF);
+    data[4] = (uint8_t)((button << 4) | ((counter >> 16) & 0x0F));
+    data[5] = (uint8_t)((counter >> 8) & 0xFF);
+    data[6] = (uint8_t)(counter & 0xFF);
+    data[7] = mazda_v0_calculate_checksum(serial, button, counter);
+
+    const uint8_t stored_5 = (uint8_t)((data[6] & 0x55) | (data[5] & 0xAA));
+    const uint8_t stored_6 = (uint8_t)((data[6] & 0xAA) | (data[5] & 0x55));
+    const uint8_t xor_mask = (uint8_t)(stored_5 ^ stored_6);
+    const bool replace_second = subghz_protocol_blocks_parity8(data[7]) == 0;
+    const uint8_t forward_mask = replace_second ? stored_5 : stored_6;
+
+    data[5] = replace_second ? stored_5 : xor_mask;
+    data[6] = replace_second ? xor_mask : stored_6;
+
+    for (size_t i = 0; i < 5; i++) data[i] ^= forward_mask;
+
+    uint64_t key = 0;
+    for (int i = 0; i < 8; i++) key = (key << 8) | data[i];
+    return key;
+}
+
+static void mazda_v0_append_byte(SubGhzRawPair *out, uint32_t *idx, uint32_t max, uint8_t value)
+{
+    for (int bit_i = 7; bit_i >= 0; bit_i--) {
+        bool bit = ((value >> bit_i) & 1U) != 0U;
+        pair(out, idx, max, bit ? MAZDA_V0_TE_SHORT : 0, bit ? 0 : MAZDA_V0_TE_SHORT);
+        pair(out, idx, max, bit ? 0 : MAZDA_V0_TE_SHORT, bit ? MAZDA_V0_TE_SHORT : 0);
+    }
+}
+
+static uint32_t encode_mazda_v0(const SubGhzKeyParams *params,
+                                 SubGhzRawPair *out,
+                                 uint32_t max_pairs,
+                                 uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)(params->key_value >> 32);
+    uint8_t  button = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
+    uint32_t counter = params->cnt ? params->cnt : (uint32_t)(params->key_value & 0xFFFFFU);
+
+    uint64_t key64 = mazda_v0_encode_key(serial, button, counter);
+
+    const uint32_t pairs_per_rep = (12 + 3 + 8 + 1) * 16 + 2;
+    const uint32_t total = pairs_per_rep * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (size_t p = 0; p < 12; p++) mazda_v0_append_byte(out, &idx, max_pairs, 0xFF);
+        pair(out, &idx, max_pairs, 0, MAZDA_V0_GAP_US);
+        mazda_v0_append_byte(out, &idx, max_pairs, 0xFF);
+        mazda_v0_append_byte(out, &idx, max_pairs, 0xFF);
+        mazda_v0_append_byte(out, &idx, max_pairs, MAZDA_V0_SYNC_BYTE);
+        for (int bi = 0; bi < 8; bi++) {
+            uint8_t raw = (uint8_t)((key64 >> (56 - bi * 8)) & 0xFF);
+            mazda_v0_append_byte(out, &idx, max_pairs, (uint8_t)~raw);
+        }
+        mazda_v0_append_byte(out, &idx, max_pairs, MAZDA_V0_TAIL_BYTE);
+        pair(out, &idx, max_pairs, 0, MAZDA_V0_GAP_US);
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Chrysler V0 — PWM, 80-bit dual payload                                      */
+/*============================================================================*/
+
+#define CHRYSLER_V0_TE_SHORT         300
+#define CHRYSLER_V0_TE_LONG_A        3400
+#define CHRYSLER_V0_TE_LONG_B        3700
+#define CHRYSLER_V0_TE_ONE_SHORT     600
+#define CHRYSLER_V0_FRAME_GAP        15600
+#define CHRYSLER_V0_PREAMBLE_PAIRS   24
+
+static const uint8_t chrysler_v0_xor_table[16] = {
+    0x0F, 0x02, 0x40, 0x0C, 0x30, 0x0E, 0x70, 0x08,
+    0x10, 0x0A, 0x50, 0xF4, 0x2F, 0xF6, 0x6F, 0xF0,
+};
+
+static uint8_t chrysler_v0_reverse6(uint32_t value)
+{
+    uint8_t out = 0;
+    for (int i = 0; i < 6; i++) {
+        out = (uint8_t)((out << 1) | (value & 1U));
+        value >>= 1;
+    }
+    return out;
+}
+
+static void chrysler_v0_transform_block(const uint8_t in[9], uint8_t out[9],
+                                         uint32_t key, uint8_t button)
+{
+    uint8_t mask = chrysler_v0_xor_table[key & 0x0FU];
+    if (button == 1U) mask ^= (key & 1U) ? 0xF0U : 0x0FU;
+    for (size_t i = 0; i < 9; i++) out[i] = (uint8_t)(in[i] ^ mask);
+}
+
+static void chrysler_v0_build_payload(const uint8_t plain[9], uint8_t counter,
+                                       uint8_t button, uint8_t header_low2,
+                                       uint8_t payload[10])
+{
+    uint8_t transformed[9];
+    chrysler_v0_transform_block(plain, transformed, counter, button);
+    payload[0] = (uint8_t)((chrysler_v0_reverse6(counter) << 2U) | (header_low2 & 0x03U));
+    memcpy(&payload[1], transformed, 9);
+}
+
+static uint32_t encode_chrysler_v0(const SubGhzKeyParams *params,
+                                    SubGhzRawPair *out,
+                                    uint32_t max_pairs,
+                                    uint8_t reps)
+{
+    uint8_t plain_a[9], plain_b[9];
+    memset(plain_a, 0, 9);
+    memset(plain_b, 0, 9);
+    for (int i = 0; i < 9 && i < (int)sizeof(params->extra); i++) plain_a[i] = params->extra[i];
+    memcpy(plain_b, plain_a, 9);
+
+    uint8_t header_low2 = (uint8_t)(params->key_value & 0x03U);
+    uint8_t button = params->btn ? (uint8_t)params->btn : 1;
+    uint8_t counter = (uint8_t)(params->cnt & 0x3FU);
+    if (counter & 1U) counter = (uint8_t)((counter - 1U) & 0x3FU);
+    uint8_t counter_b = (counter == 0) ? 0x3FU : (uint8_t)(counter - 1U);
+
+    uint8_t payload_a[10], payload_b[10];
+    chrysler_v0_build_payload(plain_a, counter, button, header_low2, payload_a);
+    chrysler_v0_build_payload(plain_b, counter_b, button, header_low2, payload_b);
+
+    const uint32_t pairs_per_rep =
+        (CHRYSLER_V0_PREAMBLE_PAIRS * 2 + 2 + 80 * 2) * 2;
+    const uint32_t total = pairs_per_rep * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint8_t pass = 0; pass < 2; pass++) {
+            const uint8_t *payload = (pass == 0) ? payload_a : payload_b;
+            for (size_t p = 0; p < CHRYSLER_V0_PREAMBLE_PAIRS; p++) {
+                pair(out, &idx, max_pairs, CHRYSLER_V0_TE_SHORT, 0);
+                pair(out, &idx, max_pairs, 0, CHRYSLER_V0_TE_LONG_B);
+            }
+            pair(out, &idx, max_pairs, CHRYSLER_V0_TE_SHORT, 0);
+            pair(out, &idx, max_pairs, 0, CHRYSLER_V0_FRAME_GAP);
+            for (uint8_t bit = 0; bit < 80; bit++) {
+                bool value = ((payload[bit >> 3] >> (7 - (bit & 7))) & 1U) != 0U;
+                pair(out, &idx, max_pairs,
+                     value ? CHRYSLER_V0_TE_ONE_SHORT : CHRYSLER_V0_TE_SHORT, 0);
+                pair(out, &idx, max_pairs, 0,
+                     value ? CHRYSLER_V0_TE_LONG_A : CHRYSLER_V0_TE_LONG_B);
+            }
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Fiat V0 — differential Manchester, 64-bit + 6-bit endbyte, 3 bursts         */
+/*============================================================================*/
+
+#define FIAT_V0_TE_SHORT       200
+#define FIAT_V0_TE_LONG        400
+#define FIAT_V0_PREAMBLE_PAIRS 150
+#define FIAT_V0_GAP_US         800
+#define FIAT_V0_TOTAL_BURSTS   3
+#define FIAT_V0_INTER_BURST_US 25000
+
+static bool fiat_v0_add_level(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                               bool level, uint32_t duration)
+{
+    if (*idx >= max) return false;
+    out[*idx].high_us = level ? duration : 0;
+    out[*idx].low_us  = level ? 0 : duration;
+    (*idx)++;
+    return true;
+}
+
+static bool fiat_v0_add_bit(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                             bool *prev_bit, bool bit)
+{
+    if (!*prev_bit && !bit) {
+        if (!fiat_v0_add_level(out, idx, max, true, FIAT_V0_TE_SHORT) ||
+            !fiat_v0_add_level(out, idx, max, false, FIAT_V0_TE_SHORT)) return false;
+    } else if (!*prev_bit && bit) {
+        if (!fiat_v0_add_level(out, idx, max, true, FIAT_V0_TE_LONG)) return false;
+    } else if (*prev_bit && !bit) {
+        if (!fiat_v0_add_level(out, idx, max, false, FIAT_V0_TE_LONG)) return false;
+    } else {
+        if (!fiat_v0_add_level(out, idx, max, false, FIAT_V0_TE_SHORT) ||
+            !fiat_v0_add_level(out, idx, max, true, FIAT_V0_TE_SHORT)) return false;
+    }
+    *prev_bit = bit;
+    return true;
+}
+
+static uint32_t encode_fiat_v0(const SubGhzKeyParams *params,
+                                SubGhzRawPair *out,
+                                uint32_t max_pairs,
+                                uint8_t reps)
+{
+    uint32_t hop = (uint32_t)(params->key_value >> 32);
+    uint32_t fix = (uint32_t)(params->key_value & 0xFFFFFFFFU);
+    uint8_t endbyte = params->btn ? (uint8_t)params->btn : (uint8_t)(params->key_value & 0x7FU);
+    uint8_t endbyte_to_send = endbyte >> 1;
+
+    uint64_t data = ((uint64_t)hop << 32) | fix;
+
+    const uint32_t burst_pairs =
+        (FIAT_V0_PREAMBLE_PAIRS * 2) + 1 + 64 * 2 + 6 * 2 + 2;
+    const uint32_t total = (burst_pairs * FIAT_V0_TOTAL_BURSTS + (FIAT_V0_TOTAL_BURSTS - 1)) * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint8_t burst = 0; burst < FIAT_V0_TOTAL_BURSTS; burst++) {
+            if (burst > 0) {
+                if (!fiat_v0_add_level(out, &idx, max_pairs, false, FIAT_V0_INTER_BURST_US)) return 0;
+            }
+            for (int i = 0; i < FIAT_V0_PREAMBLE_PAIRS; i++) {
+                if (!fiat_v0_add_level(out, &idx, max_pairs, true, FIAT_V0_TE_SHORT) ||
+                    !fiat_v0_add_level(out, &idx, max_pairs, false, FIAT_V0_TE_SHORT)) return 0;
+            }
+            /* Replace last short LOW with gap */
+            if (idx > 0) out[idx - 1].low_us = FIAT_V0_GAP_US;
+
+            bool first_bit = ((data >> 63) & 1ULL) != 0ULL;
+            bool prev = first_bit;
+            if (first_bit) {
+                if (!fiat_v0_add_level(out, &idx, max_pairs, true, FIAT_V0_TE_LONG)) return 0;
+            } else {
+                if (!fiat_v0_add_level(out, &idx, max_pairs, true, FIAT_V0_TE_SHORT) ||
+                    !fiat_v0_add_level(out, &idx, max_pairs, false, FIAT_V0_TE_LONG)) return 0;
+            }
+            for (int bit = 62; bit >= 0; bit--) {
+                if (!fiat_v0_add_bit(out, &idx, max_pairs, &prev,
+                                     ((data >> bit) & 1ULL) != 0ULL)) return 0;
+            }
+            for (int bit = 5; bit >= 0; bit--) {
+                if (!fiat_v0_add_bit(out, &idx, max_pairs, &prev,
+                                     ((endbyte_to_send >> bit) & 1U) != 0U)) return 0;
+            }
+            if (prev) {
+                if (!fiat_v0_add_level(out, &idx, max_pairs, false, FIAT_V0_TE_SHORT)) return 0;
+            }
+            if (!fiat_v0_add_level(out, &idx, max_pairs, false, FIAT_V0_TE_SHORT * 8)) return 0;
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Renault V0 — Manchester, 82-bit, 3 bursts                                   */
+/*============================================================================*/
+
+#define RENAULT_V0_TE_DEFAULT_US    125
+#define RENAULT_V0_MIN_BITS         0x52
+#define RENAULT_V0_UPLOAD_CAPACITY  0x258
+
+static const uint32_t renault_v0_matrix_low[42] = {
+    0x00000001, 0x04000029, 0x0000001B, 0x00000000, 0x00000001, 0x05220124,
+    0x00000001, 0x00088410, 0x60132D1D, 0x60170F87, 0x00000000, 0x002000A9,
+    0x20863E01, 0x24BB3755, 0x640199A4, 0x24225C43, 0x607886F1, 0x6007A101,
+    0x66672A10, 0x4651623F, 0x43380BBF, 0x20237F84, 0x4245755E, 0x60AAF581,
+    0x22722DAD, 0x27C617F7, 0x46DE8F1B, 0x231DEC51, 0x03ACAA0B, 0x22D2BF81,
+    0x626EF6AE, 0x40441F95, 0x00000001, 0x00000000, 0x20B9A590, 0x656C8E86,
+    0x60129F96, 0x2368F667, 0x442A1A5C, 0x04C43242, 0x22198640, 0x23D6B958,
+};
+static const uint32_t renault_v0_matrix_high[42] = {
+    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00001004, 0x00000000, 0x00000000,
+    0x0000100C, 0x00000004, 0x00000004, 0x00001004, 0x0000100C, 0x0000000C,
+    0x00000004, 0x00001008, 0x00001008, 0x00001000, 0x00001008, 0x00000004,
+    0x0000000C, 0x00000000, 0x0000000C, 0x00000000, 0x00000008, 0x00000004,
+    0x0000100C, 0x0000000C, 0x00000000, 0x00000000, 0x00000008, 0x00001008,
+    0x0000000C, 0x00001000, 0x00000000, 0x0000100C, 0x00001000, 0x00001008,
+};
+
+static void renault_v0_set_split_bit(uint32_t *low, uint32_t *high, uint8_t bit)
+{
+    if (bit < 32) *low |= 1UL << bit;
+    else          *high |= 1UL << (bit - 32);
+}
+
+static uint8_t renault_v0_parity32(uint32_t value)
+{
+    uint8_t parity = 0;
+    while (value) {
+        parity ^= (value & 1U);
+        value >>= 1;
+    }
+    return parity;
+}
+
+static void renault_v0_build_key(uint32_t serial, uint8_t button, uint8_t counter,
+                                  uint64_t *out_data, uint32_t *out_key2)
+{
+    uint8_t vars[7];
+    vars[0] = (button == 0x0AU) ? 1U : 0U;
+    for (uint8_t bit = 0; bit < 6; bit++) vars[bit + 1] = (uint8_t)((counter >> bit) & 1U);
+
+    uint32_t mask_low = 1U;
+    uint32_t mask_high = 0U;
+    uint8_t mask_bit = 1;
+
+    for (uint8_t i = 0; i < 7; i++, mask_bit++) {
+        if (vars[i]) renault_v0_set_split_bit(&mask_low, &mask_high, mask_bit);
+    }
+    for (uint8_t i = 0; i < 6; i++) {
+        for (uint8_t j = (uint8_t)(i + 1); j < 7; j++, mask_bit++) {
+            if (vars[i] & vars[j]) renault_v0_set_split_bit(&mask_low, &mask_high, mask_bit);
+        }
+    }
+    for (uint8_t i = 0; i < 6; i++) {
+        for (uint8_t j = (uint8_t)(i + 1); j < 7; j++) {
+            for (uint8_t k = (uint8_t)(j + 1); k < 7; k++, mask_bit++) {
+                if (vars[i] & vars[j] & vars[k]) renault_v0_set_split_bit(&mask_low, &mask_high, mask_bit);
+            }
+        }
+    }
+
+    uint8_t parity_bits[42];
+    for (size_t row = 0; row < 42; row++) {
+        const uint32_t mixed = (renault_v0_matrix_low[row] & mask_low) ^
+                               (renault_v0_matrix_high[row] & mask_high);
+        parity_bits[row] = renault_v0_parity32(mixed);
+    }
+    if (counter & 0x40U) parity_bits[41] ^= 1U;
+    if ((counter >> 7U) != 0U) parity_bits[40] ^= 1U;
+
+    uint32_t data_low = ((uint32_t)counter) << 24;
+    uint32_t data_high = (serial << 8) | button;
+    for (uint8_t i = 0; i < 24; i++) {
+        if (parity_bits[i]) data_low |= 1UL << (23U - i);
+    }
+    uint32_t key2 = 0;
+    for (uint8_t i = 24; i < 42; i++) {
+        if (parity_bits[i]) key2 |= 1UL << (41U - i);
+    }
+
+    *out_data = ((uint64_t)data_high << 32U) | data_low;
+    *out_key2 = key2;
+}
+
+static bool renault_v0_emit_decoded_bit(SubGhzRawPair *out, uint32_t *idx, uint32_t max,
+                                         uint8_t *state, uint32_t te_short, bool bit)
+{
+    const uint32_t te_long = te_short * 2U;
+    if (*state == 1U) {
+        if (bit) {
+            return pair_bool(out, idx, max, false, te_short) &&
+                   pair_bool(out, idx, max, true, te_short);
+        }
+        *state = 2U;
+        return pair_bool(out, idx, max, false, te_long);
+    }
+    if (bit) {
+        *state = 1U;
+        return pair_bool(out, idx, max, true, te_long);
+    }
+    return pair_bool(out, idx, max, true, te_short) &&
+           pair_bool(out, idx, max, false, te_short);
+}
+
+static bool renault_v0_get_bit_msb82(uint64_t data, uint32_t key2, uint8_t bit_index)
+{
+    if (bit_index <= 0x3FU) return ((data >> (63U - bit_index)) & 1ULL) != 0ULL;
+    return ((key2 >> (0x51U - bit_index)) & 1U) != 0U;
+}
+
+static uint32_t encode_renault_v0(const SubGhzKeyParams *params,
+                                   SubGhzRawPair *out,
+                                   uint32_t max_pairs,
+                                   uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)(params->key_value >> 40);
+    uint8_t  button = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 32) & 0xFFU);
+    uint8_t  counter = (uint8_t)(params->cnt ? params->cnt : ((params->key_value >> 24) & 0xFFU));
+
+    uint64_t data;
+    uint32_t key2;
+    renault_v0_build_key(serial, button, counter, &data, &key2);
+
+    const uint8_t preamble_pairs = 16;
+    const uint8_t burst_count = 3;
+    const uint32_t inter_burst_low = 1500;
+    const uint32_t final_low = 1500;
+
+    const uint32_t burst_pairs = 1 + (preamble_pairs * 2) + (RENAULT_V0_MIN_BITS * 2) + 2;
+    const uint32_t total = (burst_pairs * burst_count + (burst_count - 1)) * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint8_t burst = 0; burst < burst_count; burst++) {
+            pair(out, &idx, max_pairs, true, 1000);
+            uint8_t state = 1U;
+            for (uint8_t p = 0; p < preamble_pairs; p++) {
+                if (!renault_v0_emit_decoded_bit(out, &idx, max_pairs, &state,
+                                                  RENAULT_V0_TE_DEFAULT_US, true)) return 0;
+            }
+            for (uint8_t bit = 0; bit < RENAULT_V0_MIN_BITS; bit++) {
+                if (!renault_v0_emit_decoded_bit(out, &idx, max_pairs, &state,
+                                                  RENAULT_V0_TE_DEFAULT_US,
+                                                  renault_v0_get_bit_msb82(data, key2, bit))) return 0;
+            }
+            if (state == 2U) {
+                if (!pair_bool(out, &idx, max_pairs, true, RENAULT_V0_TE_DEFAULT_US)) return 0;
+            }
+            uint32_t trailing = (burst + 1 < burst_count) ? inter_burst_low : final_low;
+            if (!pair_bool(out, &idx, max_pairs, false, trailing)) return 0;
+        }
+    }
+    return idx;
+}
+
+/*============================================================================*/
+/* Star Line — KeeLoq rolling-code, 64-bit PWM                                 */
+/*============================================================================*/
+
+#define STAR_LINE_TE_SHORT  250
+#define STAR_LINE_TE_LONG   500
+#define STAR_LINE_PREAMBLE_PAIRS 6
+
+static uint32_t encode_star_line(const SubGhzKeyParams *params,
+                                  SubGhzRawPair *out,
+                                  uint32_t max_pairs,
+                                  uint8_t reps)
+{
+    uint32_t serial = params->serial ? params->serial : (uint32_t)(params->key_value >> 32);
+    uint8_t  btn    = params->btn ? (uint8_t)params->btn : (uint8_t)((params->key_value >> 60) & 0x0FU);
+    uint16_t cnt    = (uint16_t)(params->cnt ? params->cnt : (params->key_value & 0xFFFFU));
+
+    uint64_t mfr_key = 0;
+    for (int i = 0; i < 8; i++) mfr_key = (mfr_key << 8) | params->extra[i];
+
+    uint32_t fix = ((uint32_t)btn << 24) | serial;
+    uint32_t decrypt = ((uint32_t)btn << 24) | ((serial & 0xFF) << 16) | cnt;
+
+    uint64_t device_key;
+    if (mfr_key != 0) {
+        device_key = keeloq_learn_simple(serial, mfr_key);
+    } else {
+        /* Without a manufacturer key, decrypt cannot be computed. Use the raw
+         * key_value low 32 bits as the hop word so TX still produces a signal. */
+        device_key = 0;
+    }
+    uint32_t hop = (device_key != 0) ? keeloq_encrypt(decrypt, device_key) : (uint32_t)(params->key_value & 0xFFFFFFFFU);
+    uint64_t yek = ((uint64_t)fix << 32) | hop;
+    uint64_t data = subghz_protocol_blocks_reverse_key(yek, 64);
+
+    const uint32_t pairs_per_rep = (STAR_LINE_PREAMBLE_PAIRS * 2) + (64 * 2);
+    const uint32_t total = pairs_per_rep * reps;
+    if (total > max_pairs) return 0;
+
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++) {
+        for (uint32_t p = 0; p < STAR_LINE_PREAMBLE_PAIRS; p++) {
+            pair(out, &idx, max_pairs, STAR_LINE_TE_LONG * 2, 0);
+            pair(out, &idx, max_pairs, 0, STAR_LINE_TE_LONG * 2);
+        }
+        for (int i = 63; i >= 0; i--) {
+            bool bit = ((data >> i) & 1ULL) != 0ULL;
+            if (bit) {
+                pair(out, &idx, max_pairs, STAR_LINE_TE_LONG, 0);
+                pair(out, &idx, max_pairs, 0, STAR_LINE_TE_LONG);
+            } else {
+                pair(out, &idx, max_pairs, STAR_LINE_TE_SHORT, 0);
+                pair(out, &idx, max_pairs, 0, STAR_LINE_TE_SHORT);
+            }
+        }
+    }
+    return idx;
 }
 
 /*============================================================================*/
@@ -1315,14 +2574,6 @@ bool subghz_proto_pirate_is_supported(const char *name)
     return subghz_proto_pirate_find_by_name(name) != SubGhzProtoPirate_Unknown;
 }
 
-static uint32_t encode_unsupported(const SubGhzKeyParams *params,
-                                    SubGhzRawPair *out, uint32_t max_pairs,
-                                    uint8_t reps)
-{
-    (void)params; (void)out; (void)max_pairs; (void)reps;
-    return 0;
-}
-
 typedef uint32_t (*ProtoPirateEncodeFn)(const SubGhzKeyParams *params,
                                          SubGhzRawPair *out,
                                          uint32_t max_pairs,
@@ -1347,17 +2598,18 @@ static uint32_t encode_kia_v7_wrapper(const SubGhzKeyParams *params,
 }
 
 static const ProtoPirateEncodeFn encode_table[SubGhzProtoPirate_Count] = {
-    [SubGhzProtoPirate_FordV0]      = encode_unsupported,
-    [SubGhzProtoPirate_MazdaV0]     = encode_unsupported,
-    [SubGhzProtoPirate_HondaStatic] = encode_unsupported,
-    [SubGhzProtoPirate_KiaV0]       = encode_unsupported,
-    [SubGhzProtoPirate_KiaV1]       = encode_unsupported,
-    [SubGhzProtoPirate_KiaV2]       = encode_unsupported,
+    [SubGhzProtoPirate_FordV0]      = encode_ford_v0,
+    [SubGhzProtoPirate_MazdaV0]     = encode_mazda_v0,
+    [SubGhzProtoPirate_HondaStatic] = encode_honda_static,
+    [SubGhzProtoPirate_KiaV0]       = encode_kia_v0,
+    [SubGhzProtoPirate_KiaV1]       = encode_kia_v1,
+    [SubGhzProtoPirate_KiaV2]       = encode_kia_v2,
     [SubGhzProtoPirate_KiaV7]       = encode_kia_v7_wrapper,
-    [SubGhzProtoPirate_RenaultV0]   = encode_unsupported,
-    [SubGhzProtoPirate_ChryslerV0]  = encode_unsupported,
-    [SubGhzProtoPirate_FiatV0]      = encode_unsupported,
-    [SubGhzProtoPirate_Subaru]      = encode_unsupported,
+    [SubGhzProtoPirate_RenaultV0]   = encode_renault_v0,
+    [SubGhzProtoPirate_ChryslerV0]  = encode_chrysler_v0,
+    [SubGhzProtoPirate_FiatV0]      = encode_fiat_v0,
+    [SubGhzProtoPirate_Subaru]      = encode_subaru,
+    [SubGhzProtoPirate_StarLine]    = encode_star_line,
 
     /* Tier B */
     [SubGhzProtoPirate_HondaV1]     = encode_honda_v1_wrapper,
@@ -1375,6 +2627,33 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
     switch (id) {
     case SubGhzProtoPirate_KiaV7:
         return (KIA_V7_PREAMBLE_PAIRS + 1 + (64 * 2) + 1 + 1) * 2 * reps;
+    case SubGhzProtoPirate_FordV0:
+        return ((2 + (FORD_V0_PREAMBLE_PAIRS * 2) + 2 + (79 * 2) + (16 * 2)) *
+                FORD_V0_TOTAL_BURSTS + (FORD_V0_TOTAL_BURSTS - 1)) * reps;
+    case SubGhzProtoPirate_MazdaV0:
+        return (((12 + 3 + 8 + 1) * 16) + 2) * reps;
+    case SubGhzProtoPirate_HondaStatic:
+        return (1 + HONDA_STATIC_PREAMBLE_COUNT + (HONDA_STATIC_BITS * 2) + 1) * reps;
+    case SubGhzProtoPirate_KiaV0:
+        /* Worst case is the Suzuki subtype (type 2). */
+        return ((KIA_V0_TYPE2_PREAMBLE_PAIRS * 2) + (64 * 2) + 3 +
+                (KIA_V0_TAIL_PREAMBLE_PAIRS * 2) + (64 * 2)) * reps;
+    case SubGhzProtoPirate_KiaV1:
+        return (((KIA_V1_HEADER_PULSES * 2) + 1 + ((57U - 1) * 2)) * KIA_V1_TOTAL_BURSTS +
+                (KIA_V1_TOTAL_BURSTS - 1)) * reps;
+    case SubGhzProtoPirate_KiaV2:
+        return (((KIA_V2_HEADER_PAIRS * 2) + 1 + ((53U - 1) * 2)) * KIA_V2_TOTAL_BURSTS) * reps;
+    case SubGhzProtoPirate_RenaultV0:
+        return ((1 + (16 * 2) + (RENAULT_V0_MIN_BITS * 2) + 2) * 3 + 2) * reps;
+    case SubGhzProtoPirate_ChryslerV0:
+        return ((CHRYSLER_V0_PREAMBLE_PAIRS * 2 + 2 + (80 * 2)) * 2) * reps;
+    case SubGhzProtoPirate_FiatV0:
+        return (((FIAT_V0_PREAMBLE_PAIRS * 2) + 1 + (64 * 2) + (6 * 2) + 2) * FIAT_V0_TOTAL_BURSTS +
+                (FIAT_V0_TOTAL_BURSTS - 1)) * reps;
+    case SubGhzProtoPirate_Subaru:
+        return ((SUBARU_PREAMBLE_PAIRS * 2) + 2 + (64 * 2) + 2) * reps;
+    case SubGhzProtoPirate_StarLine:
+        return ((STAR_LINE_PREAMBLE_PAIRS * 2) + (64 * 2)) * reps;
     case SubGhzProtoPirate_HondaV1:
         /* Per frame: preamble + gap + 12 start bits + 72 data bits + tail + gap.
          * Two CRC variants, each repeated twice -> 4 frames per repetition. */

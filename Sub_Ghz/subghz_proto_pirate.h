@@ -45,6 +45,7 @@ typedef enum {
     SubGhzProtoPirate_ChryslerV0,
     SubGhzProtoPirate_FiatV0,
     SubGhzProtoPirate_Subaru,
+    SubGhzProtoPirate_StarLine,
 
     /* --- Tier B --- */
     SubGhzProtoPirate_HondaV1,

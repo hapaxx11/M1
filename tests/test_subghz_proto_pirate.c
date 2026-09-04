@@ -137,7 +137,7 @@ void test_kia_v7_buffer_overflow(void)
 
 void test_unsupported_protocol_returns_zero(void)
 {
-    SubGhzKeyParams params = make_params("Ford V0", 0x12345678ULL, 32);
+    SubGhzKeyParams params = make_params("ToyotaProtoPirate", 0x12345678ULL, 32);
     SubGhzRawPair out[100];
     TEST_ASSERT_EQUAL_UINT32(0, subghz_proto_pirate_encode(&params, out, 100, 1));
     TEST_ASSERT_EQUAL_UINT32(0, subghz_proto_pirate_required_pairs(&params, 1));
@@ -299,6 +299,116 @@ void test_fiat_v1_encode_nonzero(void)
 }
 
 /* ===================================================================
+ * Tier-A encoders — smoke tests
+ * =================================================================== */
+
+static void tier_a_smoke(const char *proto, uint32_t serial, uint8_t btn,
+                         uint32_t cnt, uint32_t out_size)
+{
+    SubGhzRawPair *out = calloc(out_size, sizeof(SubGhzRawPair));
+    TEST_ASSERT_NOT_NULL(out);
+    SubGhzKeyParams params = make_params(proto, 0, 64);
+    params.serial = serial;
+    params.btn = btn;
+    params.cnt = cnt;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(out_size, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, out_size, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    free(out);
+}
+
+void test_ford_v0_encode_nonzero(void)
+{
+    tier_a_smoke("Ford V0", 0x12345678, 0x02, 0x1234, 8192);
+}
+
+void test_mazda_v0_encode_nonzero(void)
+{
+    tier_a_smoke("Mazda V0", 0x12345678, 0x02, 0x12345, 4096);
+}
+
+void test_honda_static_encode_nonzero(void)
+{
+    tier_a_smoke("Honda Static", 0x0ABCDEF, 0x02, 0x1234, 2048);
+}
+
+void test_kia_v0_encode_nonzero(void)
+{
+    tier_a_smoke("Kia V0", 0x0123456, 0x02, 0x1234, 8192);
+}
+
+void test_kia_v1_encode_nonzero(void)
+{
+    tier_a_smoke("Kia V1", 0x12345678, 0x02, 0x1234, 4096);
+}
+
+void test_kia_v2_encode_nonzero(void)
+{
+    tier_a_smoke("Kia V2", 0x12345678, 0x02, 0x1234, 4096);
+}
+
+void test_renault_v0_encode_nonzero(void)
+{
+    tier_a_smoke("Renault V0", 0x12345678, 0x0A, 0x12, 4096);
+}
+
+void test_chrysler_v0_encode_nonzero(void)
+{
+    SubGhzRawPair out[4096];
+    SubGhzKeyParams params = make_params("Chrysler V0", 0x03, 64);
+    params.btn = 0x01;
+    params.cnt = 0x10;
+    for (size_t i = 0; i < 9; i++) params.extra[i] = (uint8_t)(0xA0 + i);
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 4096, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+}
+
+void test_fiat_v0_encode_nonzero(void)
+{
+    SubGhzRawPair out[8192];
+    SubGhzKeyParams params = make_params("Fiat V0", 0x123456789ABCDEF0ULL, 64);
+    params.btn = 0x02;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 8192, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+}
+
+void test_subaru_encode_nonzero(void)
+{
+    tier_a_smoke("Subaru", 0xABCDEF, 0x02, 0x1234, 4096);
+}
+
+void test_star_line_encode_nonzero(void)
+{
+    SubGhzRawPair out[2048];
+    SubGhzKeyParams params = make_params("Star Line", 0, 64);
+    params.serial = 0x12345678;
+    params.btn = 0x02;
+    params.cnt = 0x1234;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 2048, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -326,5 +436,17 @@ int main(void)
     RUN_TEST(test_kia_v4_encode_nonzero);
     RUN_TEST(test_kia_v5_encode_nonzero);
     RUN_TEST(test_fiat_v1_encode_nonzero);
+
+    RUN_TEST(test_ford_v0_encode_nonzero);
+    RUN_TEST(test_mazda_v0_encode_nonzero);
+    RUN_TEST(test_honda_static_encode_nonzero);
+    RUN_TEST(test_kia_v0_encode_nonzero);
+    RUN_TEST(test_kia_v1_encode_nonzero);
+    RUN_TEST(test_kia_v2_encode_nonzero);
+    RUN_TEST(test_renault_v0_encode_nonzero);
+    RUN_TEST(test_chrysler_v0_encode_nonzero);
+    RUN_TEST(test_fiat_v0_encode_nonzero);
+    RUN_TEST(test_subaru_encode_nonzero);
+    RUN_TEST(test_star_line_encode_nonzero);
     return UNITY_END();
 }
