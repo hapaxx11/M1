@@ -13,6 +13,12 @@
  *   3. Keep SUBGHZ_FREQ_PRESET_CUSTOM == SUBGHZ_FREQ_PRESET_COUNT.
  *   4. Run the host-side test suite — test_subghz_freq_presets will
  *      catch any count mismatch, out-of-range entry, or sorting error.
+ *   5. The table is already at the 64-preset ceiling a uint64_t freq
+ *      mask can address (63 real presets + Custom == indices 0..63).
+ *      Adding one more real preset trips the SUBGHZ_FREQ_PRESET_CUSTOM
+ *      #error below at compile time; widen the freq-mask type in
+ *      subghz_protocol_registry.[ch] and m1_subghz_scene_config.c (and
+ *      the matching host test) before increasing COUNT past 63.
  *
  * When porting a new Sub-GHz protocol from Flipper/Momentum:
  *   - Check every frequency at which the protocol operates (e.g. 319.5 MHz
@@ -44,6 +50,21 @@
 
 /** Index of the factory-default frequency preset (433.92 MHz). */
 #define SUBGHZ_FREQ_DEFAULT_IDX     40
+
+/* subghz_protocol_freq_mask_for_registry() and the Config scene's
+ * cfg_allowed_freq_mask cache pack one bit per preset index (0..CUSTOM)
+ * into a uint64_t, so SUBGHZ_FREQ_PRESET_CUSTOM must stay <= 63 — the
+ * table is already at that limit (63 real presets + Custom == 64 bits
+ * used). Adding one more real preset would require widening every
+ * freq-mask type (currently uint64_t) and every UINT64_C(1) << idx shift
+ * across subghz_protocol_registry.[ch] and m1_subghz_scene_config.c, or
+ * switching to a bitset array. This assert exists so that day the build
+ * fails loudly instead of silently truncating/overflowing the mask.
+ * See test_freq_preset_custom_fits_in_uint64_mask() in
+ * tests/test_subghz_freq_presets.c for the matching host-side check. */
+#if SUBGHZ_FREQ_PRESET_CUSTOM > 63
+#error "SUBGHZ_FREQ_PRESET_CUSTOM no longer fits a uint64_t freq mask bit index — widen the freq-mask type (see subghz_protocol_freq_mask_for_registry and cfg_allowed_freq_mask) before adding more presets"
+#endif
 
 /* ── SI4463 hardware limits ────────────────────────────────────────────────── */
 

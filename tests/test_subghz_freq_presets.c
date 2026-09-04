@@ -18,6 +18,7 @@
  * Invariants verified:
  *   1. Array length  == SUBGHZ_FREQ_PRESET_COUNT
  *   2. SUBGHZ_FREQ_PRESET_CUSTOM == SUBGHZ_FREQ_PRESET_COUNT
+ *   2b. SUBGHZ_FREQ_PRESET_CUSTOM <= 63 (fits a uint64_t freq-mask bit index)
  *   3. Default index  <= SUBGHZ_FREQ_PRESET_COUNT (in bounds)
  *   4. Default entry  == 433.92 MHz
  *   5. All entries within [SUBGHZ_MIN_FREQ_HZ, SUBGHZ_MAX_FREQ_HZ]
@@ -82,6 +83,24 @@ void test_array_length_matches_count(void)
 void test_custom_sentinel_equals_count(void)
 {
 	TEST_ASSERT_EQUAL_UINT32(SUBGHZ_FREQ_PRESET_COUNT, SUBGHZ_FREQ_PRESET_CUSTOM);
+}
+
+/* ================================================================
+ * 2b. SUBGHZ_FREQ_PRESET_CUSTOM fits within a uint64_t freq-mask bit
+ *     index. subghz_protocol_freq_mask_for_registry() and the Config
+ *     scene's cfg_allowed_freq_mask cache pack one bit per preset index
+ *     (0..CUSTOM) into a uint64_t, so CUSTOM must stay <= 63. The table
+ *     is already at that limit (63 real presets + Custom == 64 bits
+ *     used) — this is a deliberate regression guard: if a future
+ *     protocol port grows SUBGHZ_FREQ_PRESET_COUNT past 63, this test
+ *     (and the matching #error in subghz_freq_presets.h) must fail
+ *     until every uint64_t freq-mask type and UINT64_C(1) << idx shift
+ *     in subghz_protocol_registry.[ch] and m1_subghz_scene_config.c is
+ *     widened (or replaced with a bitset array).
+ * ================================================================ */
+void test_freq_preset_custom_fits_in_uint64_mask(void)
+{
+	TEST_ASSERT_LESS_OR_EQUAL_UINT32(63, SUBGHZ_FREQ_PRESET_CUSTOM);
 }
 
 /* ================================================================
@@ -314,6 +333,7 @@ int main(void)
 	/* Structural invariants */
 	RUN_TEST(test_array_length_matches_count);
 	RUN_TEST(test_custom_sentinel_equals_count);
+	RUN_TEST(test_freq_preset_custom_fits_in_uint64_mask);
 	RUN_TEST(test_default_idx_in_bounds);
 	RUN_TEST(test_default_idx_is_433_92);
 	RUN_TEST(test_all_presets_in_si4463_range);
