@@ -65,6 +65,14 @@ volatile uint16_t ir_ota_data_tx_counter;
 uint16_t *pir_ota_data_tx_buffer;
 static TimerHandle_t ir_tx_timer_hdl = NULL;
 
+/* Shared OTA buffer for raw IR transmission (used by universal + custom). */
+static uint16_t s_ir_raw_ota_buffer[FLIPPER_IR_RAW_MAX_SAMPLES];
+
+uint16_t *infrared_raw_ota_buffer(void)
+{
+	return s_ir_raw_ota_buffer;
+}
+
 static IRMP_DATA 			irmp_loopback_data;
 static uint8_t				new_remote_learned;
 
@@ -77,8 +85,8 @@ void infrared_learn_new_remote(void);
 void infrared_saved_remotes(void);
 S_M1_IR_Tx_States infrared_transmit(uint8_t init);
 
-static void infrared_decode_sys_init(void);
-static void infrared_decode_sys_deinit(void);
+void infrared_decode_sys_init(void);
+void infrared_decode_sys_deinit(void);
 void infrared_encode_sys_init(void);
 void infrared_encode_sys_deinit(void);
 static void infrared_encode_timer_cb(TimerHandle_t xTimer);
@@ -707,7 +715,7 @@ static bool ir_save_learned_signal(const IRMP_DATA *data)
   * @retval None
  */
 /*============================================================================*/
-static void infrared_decode_sys_init(void)
+void infrared_decode_sys_init(void)
 {
 	GPIO_InitTypeDef gpio_init_struct;
 	TIM_IC_InitTypeDef tim_ic_init = {0};
@@ -834,7 +842,7 @@ static void infrared_decode_sys_init(void)
   * @retval None
   */
 /*============================================================================*/
-static void infrared_decode_sys_deinit(void)
+void infrared_decode_sys_deinit(void)
 {
 	HAL_TIM_IC_DeInit(&Timerhdl_IrRx);
 
@@ -1048,6 +1056,103 @@ void infrared_encode_sys_deinit(void)
 
 	//HAL_GPIO_DeInit(IR_GPIO_PORT, IR_TX_GPIO_PIN);
 } // void infrared_encode_sys_deinit(void)
+
+
+
+/*============================================================================*/
+/*
+ * Transmit a raw Flipper .ir signal and block until completion or cancel.
+ *
+ * Converts the signed mark/space timing array into the OTA uint16_t format
+ * (LSB=1 mark, LSB=0 space) and drives TIM16 directly, matching the raw path
+ * used by m1_ir_universal.c. Returns when the ISR posts Q_EVENT_IRRED_TX,
+ * the user presses BACK, or a 3-second safety deadline expires.
+ */
+/*============================================================================*/
+void infrared_send_raw_signal(const flipper_ir_signal_t *sig)
+{
+	S_M1_Main_Q_t q;
+	uint16_t i;
+	uint16_t ota_len;
+	uint32_t duration;
+	uint8_t tx_done = 0;
+
+	if (sig == NULL || !sig->valid || sig->type != FLIPPER_IR_SIGNAL_RAW ||
+	    sig->raw.sample_count == 0)
+	{
+		return;
+	}
+
+	ota_len = sig->raw.sample_count;
+	if (ota_len > FLIPPER_IR_RAW_MAX_SAMPLES)
+		ota_len = FLIPPER_IR_RAW_MAX_SAMPLES;
+
+	for (i = 0; i < ota_len; i++)
+	{
+		duration = (uint32_t)abs(sig->raw.samples[i]);
+		if (duration > 65534)
+			duration = 65534;
+		if (duration < 2)
+			duration = 2;
+
+		if (i % 2 == 0) /* Even index = mark (carrier ON) */
+			s_ir_raw_ota_buffer[i] = (uint16_t)duration | IR_OTA_PULSE_BIT_MASK;
+		else /* Odd index = space (carrier OFF) */
+			s_ir_raw_ota_buffer[i] = (uint16_t)duration & IR_OTA_SPACE_BIT_MASK;
+	}
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+	infrared_encode_sys_init();
+	irsnd_set_carrier_freq(sig->raw.frequency);
+
+	ir_ota_data_tx_active = TRUE;
+	ir_ota_data_tx_counter = 0;
+	ir_ota_data_tx_len = ota_len;
+	pir_ota_data_tx_buffer = s_ir_raw_ota_buffer;
+
+	__HAL_TIM_URS_ENABLE(&Timerhdl_IrTx);
+	Timerhdl_IrTx.Instance->ARR = s_ir_raw_ota_buffer[0];
+	HAL_TIM_GenerateEvent(&Timerhdl_IrTx, TIM_EVENTSOURCE_UPDATE);
+	__HAL_TIM_URS_DISABLE(&Timerhdl_IrTx);
+
+	if (HAL_IS_BIT_SET(Timerhdl_IrTx.Instance->SR, TIM_FLAG_UPDATE))
+		CLEAR_BIT(Timerhdl_IrTx.Instance->SR, TIM_FLAG_UPDATE);
+
+	if (s_ir_raw_ota_buffer[0] & 0x0001)
+		irsnd_on();
+
+	__HAL_TIM_ENABLE(&Timerhdl_IrTx);
+
+	if (ota_len > 1)
+		Timerhdl_IrTx.Instance->ARR = s_ir_raw_ota_buffer[++ir_ota_data_tx_counter];
+
+	uint32_t deadline = HAL_GetTick() + 3000;
+	while (!tx_done)
+	{
+		if (HAL_GetTick() >= deadline)
+			break;
+
+		if (xQueueReceive(main_q_hdl, &q, pdMS_TO_TICKS(50)) == pdTRUE)
+		{
+			if (q.q_evt_type == Q_EVENT_IRRED_TX)
+			{
+				tx_done = 1;
+			}
+			else if (q.q_evt_type == Q_EVENT_KEYPAD)
+			{
+				S_M1_Buttons_Status bs;
+				if (xQueueReceive(button_events_q_hdl, &bs, 0) == pdTRUE &&
+				    bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+					break;
+			}
+		}
+	}
+
+	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
+	infrared_encode_sys_deinit();
+	xQueueReset(main_q_hdl);
+} // void infrared_send_raw_signal(void)
+
 
 
 /*============================================================================*/

@@ -8,12 +8,14 @@
  * completion, then returns.
  *
  * Directory layout:
- *   0:/IR/Custom/<remote_name>.ir   — standard Flipper .ir, parsed signals only
+ *   0:/IR/Custom/<remote_name>.ir   — standard Flipper .ir, parsed or raw
  *
  * Navigation:
- *   "Custom Remotes" list  →  per-remote button list  →  Send / Rename / Delete
+ *   "Custom Remotes" list  →  per-remote button list
  *   "[+ New Remote]" entry at top of remote list
- *   "[+ New Button]" entry at top of button list
+ *   "[+ New Button] / [Rename Remote] / [Delete Remote]" entries at top of
+ *   the per-remote button list; remaining rows are learned buttons.
+ *   Per-button actions: Send / Rename / Delete.
  *
  * Port of dagnazty/M1_T-1000 Phase 3 (romulofer, commit 08cd5560), adapted to
  * Hapax's blocking-delegate pattern, m1_menu_item_h() font-aware layout, VKB,
@@ -23,6 +25,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "stm32h5xx_hal.h"
@@ -33,6 +36,7 @@
 #include "m1_infrared.h"
 #include "m1_ir_universal.h"
 #include "m1_ir_custom.h"
+#include "ir_cust_name.h"
 #include "flipper_ir.h"
 #include "flipper_file.h"
 #include "ff.h"
@@ -59,11 +63,17 @@
 #define IR_CUSTOM_MAX_BUTTONS    32
 #define IR_CUSTOM_NAME_LEN       FLIPPER_IR_NAME_MAX_LEN   /* 32 */
 #define IR_CUSTOM_PATH_LEN       80
+#define IR_CUSTOM_MAX_DEDUP      99
 
 /* Layout: header bar height + scrollable list items */
 #define IR_CUST_HDR_H            11   /* pixels: same as status bar */
 #define IR_CUST_ITEM_H           ((uint8_t)m1_menu_item_h())
 #define IR_CUST_VISIBLE          4    /* max visible rows at once */
+
+/* Raw learn fallback (used when IRMP cannot decode the signal) */
+#define IR_RAW_MIN_SAMPLES       8
+#define IR_RAW_FREQ_DEFAULT      38000
+#define IR_RAW_DUTY_DEFAULT      0.33f
 
 /* ---- List display -------------------------------------------------------- */
 
@@ -245,8 +255,15 @@ static void ir_cust_send_signal(const flipper_ir_signal_t *sig)
     IRMP_DATA     irmp;
     uint8_t       tx_done = 0;
 
-    if (sig == NULL || !sig->valid || sig->type != FLIPPER_IR_SIGNAL_PARSED)
+    if (sig == NULL || !sig->valid)
         return;
+
+    if (sig->type == FLIPPER_IR_SIGNAL_RAW)
+    {
+        /* Shared helper handles raw transmit; keeps the OTA buffer in one place. */
+        infrared_send_raw_signal(sig);
+        return;
+    }
 
     irmp.protocol = sig->parsed.protocol;
     irmp.address  = sig->parsed.address;
@@ -289,21 +306,61 @@ static void ir_cust_send_signal(const flipper_ir_signal_t *sig)
     xQueueReset(main_q_hdl);
 }
 
+/* ---- Filename helpers ---------------------------------------------------- */
+
+/**
+ * @brief  Build a unique "0:/IR/Custom/<name>.ir" path, appending _1, _2, ...
+ *         on collision with an existing file.
+ */
+static bool ir_cust_unique_path(const char *name, char *out, size_t out_len)
+{
+    FILINFO  fno;
+    int      n;
+    unsigned i;
+
+    n = snprintf(out, out_len, "%s/Custom/%s%s",
+                 IR_UNIVERSAL_IRDB_ROOT, name, IR_CUSTOM_EXT);
+    if (n < 0 || n >= (int)out_len)
+        return false;
+    if (f_stat(out, &fno) != FR_OK)
+        return true;   /* no such file -> unique */
+
+    for (i = 1; i <= IR_CUSTOM_MAX_DEDUP; i++)
+    {
+        n = snprintf(out, out_len, "%s/Custom/%s_%u%s",
+                     IR_UNIVERSAL_IRDB_ROOT, name, i, IR_CUSTOM_EXT);
+        if (n < 0 || n >= (int)out_len)
+            return false;
+        if (f_stat(out, &fno) != FR_OK)
+            return true;
+    }
+
+    return false;   /* too many name collisions */
+}
+
 /* ---- Create new remote --------------------------------------------------- */
 
 static bool ir_cust_create_remote(void)
 {
-    char           base_name[IR_CUSTOM_NAME_LEN];
+    char           entered[IR_CUSTOM_NAME_LEN];
+    char           name[IR_CUSTOM_NAME_LEN];
     char           full_path[IR_CUSTOM_PATH_LEN];
     flipper_file_t ff;
 
-    if (!m1_vkb_get_filename("Remote name:", "", base_name))
+    entered[0] = '\0';
+    if (!m1_vkb_get_filename("Remote name:", "", entered))
         return false;
-    if (base_name[0] == '\0')
+    if (entered[0] == '\0')
         return false;
 
-    if (!ir_cust_full_path(base_name, full_path, sizeof(full_path)))
+    ir_cust_sanitize_name(entered, name, sizeof(name));
+
+    if (!ir_cust_unique_path(name, full_path, sizeof(full_path)))
+    {
+        m1_message_box(&m1_u8g2, "Create failed",
+                       "Name in use", "", "BACK to return");
         return false;
+    }
 
     if (!ff_open_write(&ff, full_path))
     {
@@ -318,36 +375,202 @@ static bool ir_cust_create_remote(void)
 
 /* ---- Learn and append a new button -------------------------------------- */
 
+typedef enum {
+    IR_CUST_CAP_NONE = 0,
+    IR_CUST_CAP_PARSED,
+    IR_CUST_CAP_RAW
+} ir_cust_capture_state_t;
+
+/**
+ * @brief  Draw the learn screen: prompt while waiting, decoded info after a
+ *         parsed capture, or sample count after a raw capture.
+ */
+static void ir_cust_draw_learn(ir_cust_capture_state_t state,
+                                const IRMP_DATA *data,
+                                uint16_t raw_count)
+{
+    char line[32];
+
+    m1_u8g2_firstpage();
+    u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Learn Button");
+    u8g2_DrawHLine(&m1_u8g2, 0, IR_CUST_HDR_H, M1_LCD_DISPLAY_WIDTH);
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    if (state == IR_CUST_CAP_PARSED && data != NULL)
+    {
+        u8g2_DrawStr(&m1_u8g2, 4, 24, "Captured:");
+        u8g2_DrawStr(&m1_u8g2, 4, 34, flipper_ir_irmp_to_proto(data->protocol));
+        snprintf(line, sizeof(line), "A:%04X C:%04X",
+                 data->address, data->command);
+        u8g2_DrawStr(&m1_u8g2, 4, 44, line);
+        m1_button_bar_draw(arrowleft_8x8, "Back",
+                           ok_circle_8x8, "Save",
+                           NULL, NULL);
+    }
+    else if (state == IR_CUST_CAP_RAW)
+    {
+        u8g2_DrawStr(&m1_u8g2, 4, 24, "Captured (raw):");
+        snprintf(line, sizeof(line), "%u samples", (unsigned)raw_count);
+        u8g2_DrawStr(&m1_u8g2, 4, 38, line);
+        m1_button_bar_draw(arrowleft_8x8, "Back",
+                           ok_circle_8x8, "Save",
+                           NULL, NULL);
+    }
+    else
+    {
+        u8g2_DrawStr(&m1_u8g2, 4, 26, "Point remote at M1,");
+        u8g2_DrawStr(&m1_u8g2, 4, 38, "press a button...");
+        m1_button_bar_draw(arrowleft_8x8, "Back",
+                           NULL, NULL,
+                           NULL, NULL);
+    }
+    m1_u8g2_nextpage();
+}
+
+/**
+ * @brief  Convert one IR edge event into a raw sample and push it.
+ *
+ * The active-low receiver produces:
+ *   FALLING edge -> end of a space -> negative sample
+ *   RISING edge  -> end of a mark  -> positive sample
+ *   te == 0 on FALLING -> start-of-frame marker, ignored
+ */
+static void ir_cust_raw_feed_edge(flipper_ir_raw_feed_t *f,
+                                   uint32_t te,
+                                   uint8_t dir)
+{
+    if (f == NULL || f->overflow)
+        return;
+    if (te == 0)
+        return;
+
+    if (dir == EDGE_DET_RISING)
+        flipper_ir_raw_feed_push(f, (int32_t)te);
+    else
+        flipper_ir_raw_feed_push(f, -(int32_t)te);
+}
+
 static bool ir_cust_learn_button(const char *remote_path)
 {
-    IRMP_DATA          irmp_data;
-    char               button_name[IR_CUSTOM_NAME_LEN];
-    flipper_ir_signal_t sig;
+    S_M1_Main_Q_t           q;
+    S_M1_Buttons_Status     bs;
+    IRMP_DATA               irmp_data;
+    char                    button_name[IR_CUSTOM_NAME_LEN];
+    flipper_ir_signal_t     sig;
+    flipper_ir_raw_feed_t   raw_feed;
+    ir_cust_capture_state_t cap = IR_CUST_CAP_NONE;
 
-    if (!infrared_capture_one_signal(&irmp_data))
-        return false; /* user cancelled */
+    memset(&irmp_data, 0, sizeof(irmp_data));
+    flipper_ir_raw_feed_init(&raw_feed, "Raw", IR_RAW_FREQ_DEFAULT, IR_RAW_DUTY_DEFAULT);
 
-    if (!m1_vkb_get_filename("Button name:", "", button_name))
+    infrared_decode_sys_init();
+    irmp_init();
+    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_M, LED_FASTBLINK_ONTIME_M);
+    ir_cust_draw_learn(IR_CUST_CAP_NONE, NULL, 0);
+
+    while (1)
+    {
+        if (xQueueReceive(main_q_hdl, &q, portMAX_DELAY) != pdTRUE)
+            continue;
+
+        if (q.q_evt_type == Q_EVENT_IRRED_RX)
+        {
+            uint32_t te  = q.q_data.ir_rx_data.ir_edge_te;
+            uint8_t  dir = q.q_data.ir_rx_data.ir_edge_dir;
+
+            irmp_data_sampler(te, dir);
+
+            if (cap == IR_CUST_CAP_NONE && irmp_get_data(&irmp_data))
+            {
+                cap = IR_CUST_CAP_PARSED;
+                m1_buzzer_notification();
+                ir_cust_draw_learn(IR_CUST_CAP_PARSED, &irmp_data, 0);
+            }
+            else if (cap == IR_CUST_CAP_NONE)
+            {
+                /* No decode yet: accumulate raw edges. A timeout event marks
+                 * the end of a frame; finalize if we have enough samples. */
+                if (te > IRMP_TIMEOUT_TIME)
+                {
+                    if (raw_feed.sig.raw.sample_count >= IR_RAW_MIN_SAMPLES &&
+                        flipper_ir_raw_feed_finish(&raw_feed))
+                    {
+                        cap = IR_CUST_CAP_RAW;
+                        m1_buzzer_notification();
+                        ir_cust_draw_learn(IR_CUST_CAP_RAW, NULL,
+                                           raw_feed.sig.raw.sample_count);
+                    }
+                    /* Not enough samples -> keep waiting. */
+                }
+                else
+                {
+                    ir_cust_raw_feed_edge(&raw_feed, te, dir);
+                }
+            }
+        }
+        else if (q.q_evt_type == Q_EVENT_KEYPAD)
+        {
+            xQueueReceive(button_events_q_hdl, &bs, 0);
+
+            if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+            {
+                m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+                                  LED_FASTBLINK_ONTIME_OFF);
+                infrared_decode_sys_deinit();
+                xQueueReset(main_q_hdl);
+                return false;
+            }
+            else if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK &&
+                     cap != IR_CUST_CAP_NONE)
+            {
+                break;
+            }
+        }
+    }
+
+    /* Tear RX down before the keyboard drives its own event loop. */
+    m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF,
+                      LED_FASTBLINK_ONTIME_OFF);
+    infrared_decode_sys_deinit();
+
+    /* Prompt for button name. */
+    button_name[0] = '\0';
+    if (!m1_vkb_get_filename("Button name:", "", button_name) ||
+        button_name[0] == '\0')
+    {
+        xQueueReset(main_q_hdl);
         return false;
-    if (button_name[0] == '\0')
-        return false;
+    }
 
-    /* Build a parsed signal from the captured data */
     memset(&sig, 0, sizeof(sig));
-    strncpy(sig.name, button_name, sizeof(sig.name) - 1);
-    sig.type             = FLIPPER_IR_SIGNAL_PARSED;
-    sig.parsed.protocol  = irmp_data.protocol;
-    sig.parsed.address   = irmp_data.address;
-    sig.parsed.command   = irmp_data.command;
-    sig.parsed.flags     = 0;
-    sig.valid            = true;
+    ir_cust_sanitize_name(button_name, sig.name, sizeof(sig.name));
+
+    if (cap == IR_CUST_CAP_PARSED)
+    {
+        sig.type            = FLIPPER_IR_SIGNAL_PARSED;
+        sig.parsed.protocol = irmp_data.protocol;
+        sig.parsed.address  = irmp_data.address;
+        sig.parsed.command  = irmp_data.command;
+        sig.parsed.flags    = 0;
+    }
+    else
+    {
+        sig = raw_feed.sig; /* copies accumulated raw signal */
+    }
+    sig.valid = true;
 
     if (!flipper_ir_append_signal(remote_path, &sig))
     {
         m1_message_box(&m1_u8g2, "Save failed",
                        "Could not save button", "", "BACK to return");
+        xQueueReset(main_q_hdl);
         return false;
     }
+
+    xQueueReset(main_q_hdl);
     return true;
 }
 
@@ -420,29 +643,108 @@ static void ir_cust_button_action(const char *remote_path,
     }
 }
 
+/* ---- Remote-level rename/delete ----------------------------------------- */
+
+static bool ir_cust_rename_remote(const char *remote_path)
+{
+    char   entered[IR_CUSTOM_NAME_LEN];
+    char   new_name[IR_CUSTOM_NAME_LEN];
+    char   new_path[IR_CUSTOM_PATH_LEN];
+    char   bak_path[IR_CUSTOM_PATH_LEN];
+    size_t base_len;
+
+    entered[0] = '\0';
+    if (!m1_vkb_get_filename("Rename remote:", "", entered) ||
+        entered[0] == '\0')
+    {
+        return false;
+    }
+
+    ir_cust_sanitize_name(entered, new_name, sizeof(new_name));
+    if (!ir_cust_unique_path(new_name, new_path, sizeof(new_path)))
+    {
+        m1_message_box(&m1_u8g2, "Rename failed",
+                       "Name in use", "", "BACK to return");
+        return false;
+    }
+
+    /* Use a backup name so a failed rename cannot lose the original file. */
+    base_len = strlen(remote_path);
+    if (base_len >= sizeof(bak_path) - 4)
+        return false;
+
+    snprintf(bak_path, sizeof(bak_path), "%s.bak", remote_path);
+    (void)f_unlink(bak_path);
+
+    if (f_rename(remote_path, bak_path) != FR_OK)
+    {
+        m1_message_box(&m1_u8g2, "Rename failed",
+                       "Could not rename file", "", "BACK to return");
+        return false;
+    }
+
+    if (f_rename(bak_path, new_path) != FR_OK)
+    {
+        (void)f_rename(bak_path, remote_path); /* best-effort rollback */
+        m1_message_box(&m1_u8g2, "Rename failed",
+                       "Could not rename file", "", "BACK to return");
+        return false;
+    }
+
+    (void)f_unlink(bak_path);
+    return true;
+}
+
+static bool ir_cust_delete_remote(const char *remote_path)
+{
+    uint8_t confirm = m1_message_box_choice(&m1_u8g2,
+                          "Delete remote?",
+                          "This cannot be undone", "",
+                          "OK  /  Cancel");
+    if (confirm != 1)
+        return false;
+
+    if (f_unlink(remote_path) != FR_OK)
+    {
+        m1_message_box(&m1_u8g2, "Delete failed",
+                       "Could not delete file", "", "BACK to return");
+        return false;
+    }
+    return true;
+}
+
 /* ---- Button list for one remote ----------------------------------------- */
+
+/* Special rows at the top of the per-remote button list. */
+#define IR_CUST_ROW_NEW_BUTTON    0
+#define IR_CUST_ROW_RENAME_REMOTE 1
+#define IR_CUST_ROW_DELETE_REMOTE 2
+#define IR_CUST_ROW_FIRST_BUTTON  3
 
 static void ir_cust_show_buttons(const char *remote_path)
 {
-    char     btn_names[IR_CUSTOM_MAX_BUTTONS + 1][IR_CUSTOM_NAME_LEN];
+    char     btn_names[IR_CUSTOM_MAX_BUTTONS + IR_CUST_ROW_FIRST_BUTTON][IR_CUSTOM_NAME_LEN];
     uint16_t btn_count;
     uint16_t sel;
-
-    /* Slot 0 is always the "New Button" action */
-    strncpy(btn_names[0], "[+ New Button]", IR_CUSTOM_NAME_LEN - 1);
-    btn_names[0][IR_CUSTOM_NAME_LEN - 1] = '\0';
 
     while (1)
     {
         /* Reload button list each time (signals may have been renamed/deleted) */
-        btn_count = 1;
+        strncpy(btn_names[IR_CUST_ROW_NEW_BUTTON], "[+ New Button]", IR_CUSTOM_NAME_LEN - 1);
+        btn_names[IR_CUST_ROW_NEW_BUTTON][IR_CUSTOM_NAME_LEN - 1] = '\0';
+        strncpy(btn_names[IR_CUST_ROW_RENAME_REMOTE], "[Rename Remote]", IR_CUSTOM_NAME_LEN - 1);
+        btn_names[IR_CUST_ROW_RENAME_REMOTE][IR_CUSTOM_NAME_LEN - 1] = '\0';
+        strncpy(btn_names[IR_CUST_ROW_DELETE_REMOTE], "[Delete Remote]", IR_CUSTOM_NAME_LEN - 1);
+        btn_names[IR_CUST_ROW_DELETE_REMOTE][IR_CUSTOM_NAME_LEN - 1] = '\0';
+
+        btn_count = IR_CUST_ROW_FIRST_BUTTON;
         {
             flipper_file_t      ff;
             flipper_ir_signal_t sig;
 
             if (flipper_ir_open(&ff, remote_path))
             {
-                while (btn_count <= IR_CUSTOM_MAX_BUTTONS &&
+                while ((btn_count - IR_CUST_ROW_FIRST_BUTTON) < IR_CUSTOM_MAX_BUTTONS &&
                        flipper_ir_read_signal(&ff, &sig))
                 {
                     strncpy(btn_names[btn_count], sig.name, IR_CUSTOM_NAME_LEN - 1);
@@ -468,14 +770,26 @@ static void ir_cust_show_buttons(const char *remote_path)
         if (sel == UINT16_MAX)
             return;
 
-        if (sel == 0)
+        if (sel == IR_CUST_ROW_NEW_BUTTON)
         {
             ir_cust_learn_button(remote_path);
         }
+        else if (sel == IR_CUST_ROW_RENAME_REMOTE)
+        {
+            if (ir_cust_rename_remote(remote_path))
+                return; /* name changed; caller will re-scan */
+        }
+        else if (sel == IR_CUST_ROW_DELETE_REMOTE)
+        {
+            if (ir_cust_delete_remote(remote_path))
+                return; /* file gone; caller will re-scan */
+        }
         else
         {
-            /* sel 1..N → button index sel-1 */
-            ir_cust_button_action(remote_path, (uint16_t)(sel - 1), btn_names[sel]);
+            /* sel >= IR_CUST_ROW_FIRST_BUTTON → button index sel - first_button */
+            ir_cust_button_action(remote_path,
+                                  (uint16_t)(sel - IR_CUST_ROW_FIRST_BUTTON),
+                                  btn_names[sel]);
         }
     }
 }
