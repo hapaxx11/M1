@@ -1089,7 +1089,7 @@ void infrared_send_raw_signal(const flipper_ir_signal_t *sig)
 
 	for (i = 0; i < ota_len; i++)
 	{
-		duration = (uint32_t)abs(sig->raw.samples[i]);
+		duration = (uint32_t)((sig->raw.samples[i] < 0) ? -sig->raw.samples[i] : sig->raw.samples[i]);
 		if (duration > 65534)
 			duration = 65534;
 		if (duration < 2)
@@ -1146,6 +1146,13 @@ void infrared_send_raw_signal(const flipper_ir_signal_t *sig)
 					break;
 			}
 		}
+	}
+
+	if (!tx_done)
+	{
+		ir_ota_data_tx_active = FALSE;
+		__HAL_TIM_DISABLE(&Timerhdl_IrTx);
+		irsnd_off();
 	}
 
 	m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
