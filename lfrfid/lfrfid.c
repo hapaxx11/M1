@@ -457,9 +457,9 @@ void lfrfid_rxThread(void *param)
         }
 
         /* The RX task runs at TASK_PRIORITY_SYS_INIT (highest), so it can
-         * starve the WDT task while continuously decoding RFID edges during
-         * a long scan. Kick the IWDG on every batch so the 16 s watchdog
-         * window does not expire while waiting for a tag. */
+         * starve the WDT task under sustained decode load during a long scan.
+         * Kick the IWDG on every non-empty batch so the 16 s watchdog window
+         * does not expire while continuously decoding RFID edges. */
         m1_wdt_reset();
 
         /* Determine which feature set to try based on current carrier.

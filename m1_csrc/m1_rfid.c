@@ -37,6 +37,7 @@
 #include "m1_button_bar.h"
 #include "m1_espnow_capture_share.h"
 #include "m1_wdt_hw.h"
+#include "m1_rfid_watchdog.h"
 
 #define M1_LOGDB_TAG	"RFID"
 
@@ -392,7 +393,7 @@ void rfid_125khz_pet_scan(void)
 		 * WDT task (IDLE+1), so the WDT task can be starved during continuous
 		 * carrier switching. Kick the IWDG on every message processed so a
 		 * 5-10 s scan does not trigger a watchdog reset. */
-		m1_wdt_reset();
+		m1_rfid_scan_watchdog_kick(true, m1_wdt_reset);
 	}
 
 	s_lfrfid_pet_scan = false;
