@@ -24,7 +24,7 @@
 ### Phase 3 — Tier-B encoder implementations
 - **Description**: Add encoders for Honda V1/V2, Ford V1/V2, Kia V3/V4/V5, Fiat V1 in `subghz_proto_pirate.c`. Honda V1 (PWM 68-bit), Honda V2 (Manchester 81-bit), Ford V1 (Manchester 136-bit + CRC-16), Ford V2 (Manchester 104-bit), Kia V3/V4 (PWM + KeeLoq + CRC sweep), Kia V5 (Manchester + custom mixer), Fiat V1 (PWM + Hitag2 authenticator).
 - **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Commit**: `ProtoPirate Tier-B partial: Honda V1/V2 + Ford V2 encoders with host tests`
 
 ### Phase 4 — Additional Tier-A encoders
 - **Description**: Add encoders for Ford V0, Mazda V0, Honda Static, Kia V0/V1/V2, Subaru, Chrysler V0, Renault V0, Fiat V0 as ProtoPirate source is audited.

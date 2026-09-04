@@ -12,6 +12,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 #include "unity.h"
 #include "subghz_proto_pirate.h"
 
@@ -150,6 +151,64 @@ void test_null_params(void)
 }
 
 /* ===================================================================
+ * Tier-B encoders — smoke tests
+ * =================================================================== */
+
+void test_honda_v1_encode_nonzero(void)
+{
+    SubGhzRawPair out[2048];
+    SubGhzKeyParams params = make_params("Honda V1", 0x123456789ABCDEF0ULL, 68);
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 2048, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    TEST_ASSERT_EQUAL_UINT32(1000, out[0].high_us);
+}
+
+void test_honda_v2_encode_nonzero(void)
+{
+    SubGhzRawPair out[2048];
+    SubGhzKeyParams params = make_params("Honda V2", 0, 81);
+    params.serial = 0x123456;
+    params.btn = 0x02; /* Lock */
+    params.cnt = 0x100;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 2048, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Preamble starts with short HIGH/short LOW */
+    TEST_ASSERT_EQUAL_UINT32(250, out[0].high_us);
+    TEST_ASSERT_EQUAL_UINT32(250, out[0].low_us);
+}
+
+void test_ford_v2_encode_nonzero(void)
+{
+    SubGhzRawPair out[4096];
+    SubGhzKeyParams params = make_params("Ford V2", 0, 104);
+    /* Default sync word will be filled in; extra holds tail bytes */
+    params.extra[0] = 0x12;
+    params.extra[1] = 0x34;
+    params.extra[2] = 0x56;
+    params.extra[3] = 0x78;
+    params.extra[4] = 0x9A;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 4096, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Preamble starts LOW then HIGH */
+    TEST_ASSERT_EQUAL_UINT32(0, out[0].high_us);
+    TEST_ASSERT_EQUAL_UINT32(200, out[0].low_us);
+}
+
+/* ===================================================================
  * Runner
  * =================================================================== */
 
@@ -168,6 +227,10 @@ int main(void)
     RUN_TEST(test_kia_v7_buffer_overflow);
     RUN_TEST(test_unsupported_protocol_returns_zero);
     RUN_TEST(test_null_params);
+
+    RUN_TEST(test_honda_v1_encode_nonzero);
+    RUN_TEST(test_honda_v2_encode_nonzero);
+    RUN_TEST(test_ford_v2_encode_nonzero);
 
     return UNITY_END();
 }
