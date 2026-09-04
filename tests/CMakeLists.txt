@@ -703,6 +703,7 @@ add_executable(test_subghz_key_encoder
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_key_encoder PRIVATE
@@ -2914,6 +2915,7 @@ add_executable(test_subghz_proto_pirate
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_proto_pirate PRIVATE
