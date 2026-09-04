@@ -24,6 +24,7 @@
 #include "m1_esp32_hal.h"
 #include "uiView.h"
 #include "privateprofilestring.h"
+#include "m1_wdt_hw.h"
 #include "lfrfid.h"
 
 #define M1_LOGDB_TAG	"RFID"
@@ -454,6 +455,12 @@ void lfrfid_rxThread(void *param)
         if(n == 0 || lfrfid_lock == 0){
             continue;
         }
+
+        /* The RX task runs at TASK_PRIORITY_SYS_INIT (highest), so it can
+         * starve the WDT task under sustained decode load during a long scan.
+         * Kick the IWDG on every non-empty batch so the 16 s watchdog window
+         * does not expire while continuously decoding RFID edges. */
+        m1_wdt_reset();
 
         /* Determine which feature set to try based on current carrier.
          * Both ASK 125 kHz and ASK 134.2 kHz use ASK decoders — the

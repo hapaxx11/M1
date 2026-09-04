@@ -350,6 +350,24 @@ endif()
 add_test(NAME watchdog_decision COMMAND test_watchdog_decision)
 
 # ------------------------------------------------------------------
+# Module under test: m1_rfid_watchdog
+#
+# Regression coverage for the pet-scan watchdog kick decision: sustained
+# message processing requires a direct kick, while idle iterations do not.
+# ------------------------------------------------------------------
+add_executable(test_rfid_watchdog
+    test_rfid_watchdog.c
+)
+target_include_directories(test_rfid_watchdog PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_rfid_watchdog PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rfid_watchdog PRIVATE sanitizers)
+endif()
+add_test(NAME rfid_watchdog COMMAND test_rfid_watchdog)
+
+# ------------------------------------------------------------------
 # Module under test: SD detection task self-heal decision
 # Pure helper logic in m1_sdcard_selfheal.h; verifies the bounded SD
 # detection task only re-drives recovery for a physically-present card
