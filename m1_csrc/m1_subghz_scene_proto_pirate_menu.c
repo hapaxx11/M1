@@ -34,18 +34,20 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define PP_MENU_ITEM_COUNT  3
+#define PP_MENU_ITEM_COUNT  4
 
 static const char *pp_menu_labels[PP_MENU_ITEM_COUNT] = {
     "Receiver",
     "Sub Decode",
     "Timing Tuner",
+    "Emulate",
 };
 
 static const SubGhzSceneId pp_menu_targets[PP_MENU_ITEM_COUNT] = {
     SubGhzSceneRead,                   /* Receiver: reuse existing async read scene */
     SubGhzSceneSaved,                  /* Sub Decode: browse saved files → Decode Raw flow */
     SubGhzSceneProtoPirateTuner,       /* Timing Tuner: new async scene */
+    SubGhzSceneProtoPirateEmulate,     /* Emulate: pick ProtoPirate protocol and send */
 };
 
 /*============================================================================*/
