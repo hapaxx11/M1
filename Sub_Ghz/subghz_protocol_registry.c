@@ -1438,14 +1438,30 @@ static uint32_t mod_idx_to_flag(uint8_t mod_idx)
     return 0;
 }
 
-/* Map a registry band flag to the frequency preset index closest to its
- * nominal centre frequency. */
-static int16_t band_flag_to_preset_idx(uint32_t flag)
+/* Map a registry band flag to the [lo, hi] Hz range of the preset table
+ * section it corresponds to, so every real preset in that section is kept
+ * (e.g. Magellan at 319.5 MHz, Somfy Telis at 433.42 MHz), not just the
+ * single preset nearest the nominal centre frequency. */
+static bool band_flag_to_hz_range(uint32_t flag, uint32_t *lo_hz, uint32_t *hi_hz)
 {
-    uint32_t center = subghz_freq_preset_band_center(flag);
-    if (center == 0)
-        return -1;
-    return subghz_freq_preset_find_near_hz(center, 5000000U /* 5 MHz */);
+    switch (flag)
+    {
+        case SubGhzProtocolFlag_300:
+        case SubGhzProtocolFlag_315:
+            *lo_hz = 300000000UL;
+            *hi_hz = 350000000UL;
+            return true;
+        case SubGhzProtocolFlag_433:
+            *lo_hz = 387000000UL;
+            *hi_hz = 468000000UL;
+            return true;
+        case SubGhzProtocolFlag_868:
+            *lo_hz = 779000000UL;
+            *hi_hz = 928000000UL;
+            return true;
+        default:
+            return false;
+    }
 }
 
 uint32_t subghz_protocol_mod_mask_for_registry(const SubGhzProtocolDef *registry,
@@ -1469,11 +1485,11 @@ uint32_t subghz_protocol_mod_mask_for_registry(const SubGhzProtocolDef *registry
     return mask;
 }
 
-uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registry,
+uint64_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registry,
                                                  uint16_t count,
                                                  uint8_t mod_idx)
 {
-    uint32_t mask = 0;
+    uint64_t mask = 0;
     if (!registry || count == 0 || mod_idx >= SUBGHZ_MOD_PRESET_COUNT)
         return mask;
 
@@ -1494,7 +1510,10 @@ uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
                                            SubGhzProtocolFlag_868);
     }
 
-    /* Map each used band flag to at least one frequency preset. */
+    /* For each used band flag, include every real preset whose frequency
+     * falls within that band's section of the table — not just the preset
+     * nearest the nominal centre frequency — so protocols like Magellan
+     * (319.5 MHz) and Somfy Telis (433.42 MHz) remain selectable. */
     static const uint32_t all_band_flags[] = {
         SubGhzProtocolFlag_300,
         SubGhzProtocolFlag_315,
@@ -1505,16 +1524,22 @@ uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
     {
         if (!(band_flags & all_band_flags[b]))
             continue;
-        int16_t idx = band_flag_to_preset_idx(all_band_flags[b]);
-        if (idx >= 0 && (uint16_t)idx < SUBGHZ_FREQ_PRESET_COUNT)
-            mask |= (1uL << (uint16_t)idx);
+        uint32_t lo_hz, hi_hz;
+        if (!band_flag_to_hz_range(all_band_flags[b], &lo_hz, &hi_hz))
+            continue;
+        for (uint16_t p = 0; p < SUBGHZ_FREQ_PRESET_COUNT; p++)
+        {
+            uint32_t f = subghz_freq_presets[p].freq_hz;
+            if (f >= lo_hz && f <= hi_hz)
+                mask |= (UINT64_C(1) << p);
+        }
     }
 
     /* Always allow the Custom entry so the user can still tune manually.
      * If the modulation itself is unsupported by the registry the mask
      * remains zero, which callers treat as "no frequencies allowed". */
     if (mask != 0)
-        mask |= (1uLL << (uint8_t)SUBGHZ_FREQ_PRESET_CUSTOM);
+        mask |= (UINT64_C(1) << (uint8_t)SUBGHZ_FREQ_PRESET_CUSTOM);
 
     return mask;
 }

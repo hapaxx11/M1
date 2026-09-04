@@ -264,8 +264,10 @@ uint32_t subghz_protocol_mod_mask_for_registry(const SubGhzProtocolDef *registry
  * @return Bitmask where bit i is set iff frequency preset index i can produce
  *         a match in the registry for the selected modulation.  Returns 0
  *         if @p mod_idx is unsupported by the registry or out of range.
+ *         A 64-bit mask is required because there are 63 real presets plus
+ *         the Custom entry at index SUBGHZ_FREQ_PRESET_CUSTOM (63).
  */
-uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registry,
+uint64_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registry,
                                                  uint16_t count,
                                                  uint8_t mod_idx);
 

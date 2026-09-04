@@ -29,6 +29,7 @@
 #include "subghz_freq_presets.h"
 #include "subghz_protocol_ignore.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_config_cycle.h"
 
 /*============================================================================*/
 /* Frequency & modulation preset tables (shared with m1_sub_ghz.c)            */
@@ -104,7 +105,7 @@ static SubGhzConfigFilterMode cfg_filter_mode = SubGhzConfigFilterNone;
 /* Cached allowed masks for the current filter mode.  Computed on enter so
  * cycling remains O(1). */
 static uint32_t cfg_allowed_mod_mask = 0;   /* bits 0..3 */
-static uint32_t cfg_allowed_freq_mask = 0;  /* bits 0..SUBGHZ_FREQ_PRESET_CUSTOM */
+static uint64_t cfg_allowed_freq_mask = 0;  /* bits 0..SUBGHZ_FREQ_PRESET_CUSTOM */
 
 /* Effective item count and display→real item index mapping.
  * When hopping is hidden (Read Raw context), the Hopping row is
@@ -159,31 +160,22 @@ static bool cfg_freq_allowed(uint8_t idx)
 {
     if (cfg_filter_mode == SubGhzConfigFilterNone)
         return true;
-    return (cfg_allowed_freq_mask & (1uL << idx)) != 0;
+    return (cfg_allowed_freq_mask & (UINT64_C(1) << idx)) != 0;
 }
 
 /** Advance @p idx to the next allowed value in the filtered direction.
- *  Searches circularly; if no value is allowed returns the original index. */
-static uint8_t cfg_next_allowed(uint8_t idx, int8_t dir, uint8_t count,
-                                 bool (*allowed)(uint8_t))
+ *  Delegates the circular search to subghz_cfg_cycle_next_allowed(), so
+ *  callers pass the raw allowed-mask instead of a per-index predicate. */
+static uint8_t cfg_next_allowed_mod(uint8_t idx, int8_t dir)
 {
-    if (cfg_filter_mode == SubGhzConfigFilterNone || count == 0)
-        return idx;
+    return subghz_cfg_cycle_next_allowed(idx, dir, CFG_MOD_COUNT,
+                                          cfg_allowed_mod_mask);
+}
 
-    for (uint8_t step = 0; step < count; step++)
-    {
-        if (dir > 0)
-        {
-            idx = (idx + 1) % count;
-        }
-        else
-        {
-            idx = (idx > 0) ? idx - 1 : count - 1;
-        }
-        if (allowed(idx))
-            return idx;
-    }
-    return idx;  /* no allowed value found (should not happen) */
+static uint8_t cfg_next_allowed_freq(uint8_t idx, int8_t dir)
+{
+    return subghz_cfg_cycle_next_allowed(idx, dir, CFG_FREQ_COUNT,
+                                          cfg_allowed_freq_mask);
 }
 
 /** True if the current filter excludes at least one hopper frequency. */
@@ -266,8 +258,7 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
     switch (item)
     {
         case CFG_FREQUENCY:
-            app->freq_idx = cfg_next_allowed(app->freq_idx, dir, CFG_FREQ_COUNT,
-                                             cfg_freq_allowed);
+            app->freq_idx = cfg_next_allowed_freq(app->freq_idx, dir);
             break;
         case CFG_HOPPING:
             app->hopping = !app->hopping;
@@ -275,15 +266,13 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
         case CFG_MODULATION:
         {
             uint8_t prev_mod = app->mod_idx;
-            app->mod_idx = cfg_next_allowed(app->mod_idx, dir, CFG_MOD_COUNT,
-                                            cfg_mod_allowed);
+            app->mod_idx = cfg_next_allowed_mod(app->mod_idx, dir);
             /* If modulation changed and the current frequency is no longer
              * allowed for the new modulation, jump to the nearest allowed
              * frequency.  This keeps freq/mod always consistent. */
             if (app->mod_idx != prev_mod && !cfg_freq_allowed(app->freq_idx))
             {
-                app->freq_idx = cfg_next_allowed(app->freq_idx, +1, CFG_FREQ_COUNT,
-                                                 cfg_freq_allowed);
+                app->freq_idx = cfg_next_allowed_freq(app->freq_idx, +1);
             }
             break;
         }
@@ -371,8 +360,8 @@ static void scene_on_enter(SubGhzApp *app)
             /* Restrict modulation to OOK/AM because all Proto Pirate
              * automotive protocols are AM/OOK at 433.92 MHz. */
             cfg_allowed_mod_mask &= (1u << 0) | (1u << 1);
-            cfg_allowed_freq_mask &= (1uL << SUBGHZ_FREQ_DEFAULT_IDX) |
-                                     (1uL << SUBGHZ_FREQ_PRESET_CUSTOM);
+            cfg_allowed_freq_mask &= (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX) |
+                                     (UINT64_C(1) << SUBGHZ_FREQ_PRESET_CUSTOM);
             break;
         case SubGhzConfigFilterFullRegistry:
             cfg_allowed_mod_mask = subghz_protocol_mod_mask_for_registry(
@@ -383,15 +372,14 @@ static void scene_on_enter(SubGhzApp *app)
             break;
         default:
             cfg_allowed_mod_mask = 0xFFFFFFFFu;
-            cfg_allowed_freq_mask = 0xFFFFFFFFu;
+            cfg_allowed_freq_mask = UINT64_MAX;
             break;
     }
 
     /* If the current modulation is not allowed, snap to the lowest allowed. */
     if (!cfg_mod_allowed(app->mod_idx))
     {
-        app->mod_idx = cfg_next_allowed((uint8_t)(CFG_MOD_COUNT - 1), +1,
-                                        CFG_MOD_COUNT, cfg_mod_allowed);
+        app->mod_idx = cfg_next_allowed_mod((uint8_t)(CFG_MOD_COUNT - 1), +1);
         /* Recompute frequency mask for the newly-selected modulation. */
         if (cfg_filter_mode == SubGhzConfigFilterProtoPirate ||
             cfg_filter_mode == SubGhzConfigFilterFullRegistry)
@@ -401,8 +389,8 @@ static void scene_on_enter(SubGhzApp *app)
                 app->mod_idx);
             if (cfg_filter_mode == SubGhzConfigFilterProtoPirate)
             {
-                cfg_allowed_freq_mask &= (1uL << SUBGHZ_FREQ_DEFAULT_IDX) |
-                                         (1uL << SUBGHZ_FREQ_PRESET_CUSTOM);
+                cfg_allowed_freq_mask &= (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX) |
+                                         (UINT64_C(1) << SUBGHZ_FREQ_PRESET_CUSTOM);
             }
         }
     }
@@ -411,8 +399,7 @@ static void scene_on_enter(SubGhzApp *app)
      * snap to the lowest allowed. */
     if (!cfg_freq_allowed(app->freq_idx))
     {
-        app->freq_idx = cfg_next_allowed((uint8_t)(CFG_FREQ_COUNT - 1), +1,
-                                         CFG_FREQ_COUNT, cfg_freq_allowed);
+        app->freq_idx = cfg_next_allowed_freq((uint8_t)(CFG_FREQ_COUNT - 1), +1);
     }
 
     /* When the active filter would exclude hopper frequencies, force hopping

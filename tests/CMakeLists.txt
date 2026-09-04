@@ -670,6 +670,25 @@ endif()
 add_test(NAME subghz_registry_filter COMMAND test_subghz_registry_filter)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_config_cycle (Config scene cycling logic)
+# Pure mask-based cycling/wraparound helper extracted from
+# m1_subghz_scene_config.c so unfiltered cycling, wraparound, and
+# modulation-mask transitions can be regression-tested on the host.
+# ------------------------------------------------------------------
+add_executable(test_subghz_config_cycle
+    test_subghz_config_cycle.c
+    ${M1_ROOT}/m1_csrc/subghz_config_cycle.c
+)
+target_include_directories(test_subghz_config_cycle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_config_cycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_config_cycle PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_config_cycle COMMAND test_subghz_config_cycle)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_freq_presets
 # Pure data — no HAL or RTOS dependencies; links nothing but the
 # preset table itself.  Enforces structural invariants (count,

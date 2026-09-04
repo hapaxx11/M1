@@ -104,10 +104,10 @@ const uint32_t *subghz_get_hopper_freqs(uint8_t ism_region);
 /**
  * @brief Find the frequency preset index whose frequency equals @p freq_hz.
  *
- * Searches the real preset table only (indices 0..SUBGHZ_FREQ_PRESET_COUNT-1).
- * Returns SUBGHZ_FREQ_PRESET_CUSTOM only when @p freq_hz matches the current
- * user custom frequency; this function does not know the custom value, so the
- * caller should treat a -1 result as "not a real preset".
+ * Searches the real preset table only (indices 0..SUBGHZ_FREQ_PRESET_COUNT-1)
+ * and never returns SUBGHZ_FREQ_PRESET_CUSTOM: this function has no
+ * knowledge of the current user custom frequency, so a custom-only match
+ * (or no match at all) is reported the same way, as -1.
  *
  * @param freq_hz  Frequency in Hz.
  * @return Preset index on success, -1 if not found.
