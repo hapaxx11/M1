@@ -1,1 +1,0 @@
-**Sub-GHz: ProtoPirate Tier-B automotive TX encoders** — Implemented pure-logic transmit encoders for Honda V1/V2, Ford V1/V2, Kia V3/V4/V5, and Fiat V1, completing the Tier-B catalog in the ProtoPirate dispatcher.
