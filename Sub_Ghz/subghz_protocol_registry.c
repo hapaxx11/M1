@@ -1514,7 +1514,7 @@ uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
      * If the modulation itself is unsupported by the registry the mask
      * remains zero, which callers treat as "no frequencies allowed". */
     if (mask != 0)
-        mask |= (1uL << (uint8_t)SUBGHZ_FREQ_PRESET_CUSTOM);
+        mask |= (1uLL << (uint8_t)SUBGHZ_FREQ_PRESET_CUSTOM);
 
     return mask;
 }
