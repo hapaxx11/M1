@@ -679,6 +679,7 @@ add_executable(test_subghz_key_encoder
     test_subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
@@ -2889,6 +2890,7 @@ add_test(NAME proto_pirate_timing COMMAND test_proto_pirate_timing)
 add_executable(test_subghz_proto_pirate
     test_subghz_proto_pirate.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c

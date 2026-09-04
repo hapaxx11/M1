@@ -208,6 +208,96 @@ void test_ford_v2_encode_nonzero(void)
     TEST_ASSERT_EQUAL_UINT32(200, out[0].low_us);
 }
 
+void test_ford_v1_encode_nonzero(void)
+{
+    SubGhzRawPair out[8192];
+    SubGhzKeyParams params = make_params("Ford V1", 0, 136);
+    params.serial = 0x12345678;
+    params.btn = 0x02;
+    params.cnt = 0x12345;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 8192, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Preamble starts with long HIGH/long LOW */
+    TEST_ASSERT_EQUAL_UINT32(130, out[0].high_us);
+}
+
+void test_kia_v3_encode_nonzero(void)
+{
+    SubGhzRawPair out[2048];
+    SubGhzKeyParams params = make_params("Kia V3/V4", 0, 68);
+    params.serial = 0x0123456;
+    params.btn = 0x02;
+    params.cnt = 0x1234;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 2048, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Preamble starts HIGH for V3 */
+    TEST_ASSERT_GREATER_THAN_UINT32(0, out[0].high_us);
+}
+
+void test_kia_v4_encode_nonzero(void)
+{
+    SubGhzRawPair out[2048];
+    SubGhzKeyParams params = make_params("Kia V4", 0, 68);
+    params.serial = 0x0123456;
+    params.btn = 0x02;
+    params.cnt = 0x1234;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 2048, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Preamble starts LOW for V4 */
+    TEST_ASSERT_EQUAL_UINT32(0, out[0].high_us);
+}
+
+void test_kia_v5_encode_nonzero(void)
+{
+    SubGhzRawPair out[2048];
+    SubGhzKeyParams params = make_params("Kia V5", 0, 67);
+    params.serial = 0x0123456;
+    params.btn = 0x02;
+    params.cnt = 0x1234;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 2048, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Preamble starts HIGH */
+    TEST_ASSERT_GREATER_THAN_UINT32(0, out[0].high_us);
+}
+
+void test_fiat_v1_encode_nonzero(void)
+{
+    SubGhzRawPair out[256];
+    SubGhzKeyParams params = make_params("Fiat V1", 0, 104);
+    params.serial = 0x12345678;
+    params.btn = 0x02;
+    params.cnt = 0x123;
+
+    uint32_t req = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, req);
+
+    uint32_t count = subghz_proto_pirate_encode(&params, out, 256, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(req, count);
+    /* Lead-in pulse */
+    TEST_ASSERT_EQUAL_UINT32(2033, out[0].high_us);
+}
+
 /* ===================================================================
  * Runner
  * =================================================================== */
@@ -231,6 +321,10 @@ int main(void)
     RUN_TEST(test_honda_v1_encode_nonzero);
     RUN_TEST(test_honda_v2_encode_nonzero);
     RUN_TEST(test_ford_v2_encode_nonzero);
-
+    RUN_TEST(test_ford_v1_encode_nonzero);
+    RUN_TEST(test_kia_v3_encode_nonzero);
+    RUN_TEST(test_kia_v4_encode_nonzero);
+    RUN_TEST(test_kia_v5_encode_nonzero);
+    RUN_TEST(test_fiat_v1_encode_nonzero);
     return UNITY_END();
 }
