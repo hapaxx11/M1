@@ -2883,6 +2883,27 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME proto_pirate_timing COMMAND test_proto_pirate_timing)
 
+# ---------- subghz_proto_pirate (Proto Pirate automotive encoder dispatcher) ----------
+add_executable(test_subghz_proto_pirate
+    test_subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
+    ${M1_ROOT}/m1_csrc/bit_util.c
+    ${STUBS_DIR}/subghz_decode_stubs.c
+)
+target_include_directories(test_subghz_proto_pirate PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_proto_pirate PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_proto_pirate PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_proto_pirate COMMAND test_subghz_proto_pirate)
+
 # IR UX Polish — source-level regression checks
 add_executable(test_ir_ux_polish
     test_ir_ux_polish.c
