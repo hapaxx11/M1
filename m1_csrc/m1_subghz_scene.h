@@ -35,6 +35,17 @@
 #include "subghz_scene_polish.h"
 
 /*============================================================================*/
+/* Config filter mode — controls which frequencies/modulations are shown      */
+/* when the shared Config scene is opened from different parent scenes.       */
+/*============================================================================*/
+
+typedef enum {
+    SubGhzConfigFilterNone = 0,       /**< No filtering (Read Raw, generic use) */
+    SubGhzConfigFilterProtoPirate,    /**< Limit to Proto Pirate capabilities */
+    SubGhzConfigFilterFullRegistry,   /**< Limit to full Sub-GHz registry */
+} SubGhzConfigFilterMode;
+
+/*============================================================================*/
 /* Scene identifiers                                                          */
 /*============================================================================*/
 
@@ -235,6 +246,9 @@ typedef struct {
     bool     running;                 /**< false = exit scene manager loop */
     bool     resume_from_child;       /**< Set when Read pushes a child scene;
                                            cleared after resume_rx() uses it */
+
+    /* --- Config scene filter context --- */
+    SubGhzConfigFilterMode config_filter_mode; /**< Set by parent scene before pushing Config */
 
     /* --- Scene-manager polish state --- */
     /** Wall-clock cadence (ms) for SubGhzEventTick.  Set via

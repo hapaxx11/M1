@@ -130,6 +130,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             SubGhzSceneId target = menu_targets[s_model.selected];
             if (target < SubGhzSceneCount)
             {
+                /* The main menu does not know what filter the target scene
+                 * needs, so reset the filter mode here.  Each target scene
+                 * sets its own mode before pushing Config. */
+                app->config_filter_mode = SubGhzConfigFilterNone;
                 subghz_scene_push(app, target);
             }
             return true;

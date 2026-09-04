@@ -397,6 +397,11 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             if (!app->history_view && !app->detail_view)
             {
                 app->resume_from_child = true;
+                /* If a parent scene (e.g. Proto Pirate menu) has already set
+                 * a more restrictive filter, leave it alone; otherwise apply
+                 * the full-registry filter for the regular Read scene. */
+                if (app->config_filter_mode == SubGhzConfigFilterNone)
+                    app->config_filter_mode = SubGhzConfigFilterFullRegistry;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
             return true;
