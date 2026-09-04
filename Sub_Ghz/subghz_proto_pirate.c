@@ -42,14 +42,14 @@ const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
     [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        620, 1620, 64, false },
 
     /* --- Tier B --- */
-    [SubGhzProtoPirate_HondaV1]     = { SubGhzProtoPirate_HondaV1,     "Honda V1",     1000, 2000, 64, false },
-    [SubGhzProtoPirate_HondaV2]     = { SubGhzProtoPirate_HondaV2,     "Honda V2",      250,  500, 64, true  },
-    [SubGhzProtoPirate_FordV1]      = { SubGhzProtoPirate_FordV1,      "Ford V1",        65,  130, 64, true  },
-    [SubGhzProtoPirate_FordV2]      = { SubGhzProtoPirate_FordV2,      "Ford V2",       200,  400, 64, true  },
-    [SubGhzProtoPirate_KiaV3]       = { SubGhzProtoPirate_KiaV3,       "Kia V3/V4",     400,  800, 64, false },
-    [SubGhzProtoPirate_KiaV4]       = { SubGhzProtoPirate_KiaV4,       "Kia V4",        400,  800, 64, false },
-    [SubGhzProtoPirate_KiaV5]       = { SubGhzProtoPirate_KiaV5,       "Kia V5",        400,  800, 64, true  },
-    [SubGhzProtoPirate_FiatV1]      = { SubGhzProtoPirate_FiatV1,      "Fiat V1",       250,  500, 64, false },
+    [SubGhzProtoPirate_HondaV1]     = { SubGhzProtoPirate_HondaV1,     "Honda V1",     1000, 2000, 68, false },
+    [SubGhzProtoPirate_HondaV2]     = { SubGhzProtoPirate_HondaV2,     "Honda V2",      250,  500, 81, true  },
+    [SubGhzProtoPirate_FordV1]      = { SubGhzProtoPirate_FordV1,      "Ford V1",        65,  130, 136, true  },
+    [SubGhzProtoPirate_FordV2]      = { SubGhzProtoPirate_FordV2,      "Ford V2",       200,  400, 104, true  },
+    [SubGhzProtoPirate_KiaV3]       = { SubGhzProtoPirate_KiaV3,       "Kia V3/V4",     400,  800, 68, false },
+    [SubGhzProtoPirate_KiaV4]       = { SubGhzProtoPirate_KiaV4,       "Kia V4",        400,  800, 68, false },
+    [SubGhzProtoPirate_KiaV5]       = { SubGhzProtoPirate_KiaV5,       "Kia V5",        400,  800, 67, true  },
+    [SubGhzProtoPirate_FiatV1]      = { SubGhzProtoPirate_FiatV1,      "Fiat V1",       250,  500, 104, false },
 };
 
 const uint8_t subghz_proto_pirate_catalog_count =
