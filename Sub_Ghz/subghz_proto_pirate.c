@@ -1380,7 +1380,7 @@ static uint32_t encode_renault_v0(const SubGhzKeyParams *params,
     uint32_t idx = 0;
     for (uint8_t r = 0; r < reps; r++) {
         for (uint8_t burst = 0; burst < burst_count; burst++) {
-            pair(out, &idx, max_pairs, true, 1000);
+            pair(out, &idx, max_pairs, 1000, 0);
             uint8_t state = 1U;
             for (uint8_t p = 0; p < preamble_pairs; p++) {
                 if (!renault_v0_emit_decoded_bit(out, &idx, max_pairs, &state,
