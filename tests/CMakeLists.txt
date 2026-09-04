@@ -1173,6 +1173,23 @@ endif()
 add_test(NAME flipper_ir COMMAND test_flipper_ir)
 
 # ------------------------------------------------------------------
+# Module under test: ir_cust_name (pure-logic name sanitizer)
+# Tests ir_cust_sanitize_name() without HAL/RTOS/FatFS dependencies.
+# ------------------------------------------------------------------
+add_executable(test_ir_cust_name
+    test_ir_cust_name.c
+    ${M1_ROOT}/m1_csrc/ir_cust_name.c
+)
+target_include_directories(test_ir_cust_name PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_ir_cust_name PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ir_cust_name PRIVATE sanitizers)
+endif()
+add_test(NAME ir_cust_name COMMAND test_ir_cust_name)
+
+# ------------------------------------------------------------------
 # Module under test: flipper_ir_custom extensions
 # Tests flipper_ir_rename_signal(), flipper_ir_delete_signal(),
 # flipper_ir_append_signal(), and flipper_ir_raw_feed_t.

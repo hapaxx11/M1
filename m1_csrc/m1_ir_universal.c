@@ -118,7 +118,6 @@ static IRMP_DATA s_tx_irmp_data;
 /* Raw IR TX support */
 #define IR_RAW_OTA_BUFFER_MAX  FLIPPER_IR_RAW_MAX_SAMPLES
 static char s_raw_tx_filepath[IR_UNIVERSAL_PATH_MAX_LEN];
-static uint16_t s_raw_ota_buffer[IR_RAW_OTA_BUFFER_MAX];
 static flipper_ir_signal_t s_raw_tx_signal;
 
 /* Dashboard menu text */
@@ -1518,6 +1517,7 @@ static void transmit_raw_command(const ir_universal_cmd_t *cmd)
 	uint32_t duration;
 	char tx_info[32];
 	bool found = false;
+	uint16_t *raw_ota_buffer = infrared_raw_ota_buffer();
 
 	if (cmd == NULL || !cmd->valid || !cmd->is_raw)
 		return;
@@ -1588,9 +1588,9 @@ static void transmit_raw_command(const ir_universal_cmd_t *cmd)
 			duration = 2;
 
 		if (i % 2 == 0) /* Even index = mark (carrier ON) */
-			s_raw_ota_buffer[i] = (uint16_t)duration | IR_OTA_PULSE_BIT_MASK;
+			raw_ota_buffer[i] = (uint16_t)duration | IR_OTA_PULSE_BIT_MASK;
 		else /* Odd index = space (carrier OFF) */
-			s_raw_ota_buffer[i] = (uint16_t)duration & IR_OTA_SPACE_BIT_MASK;
+			raw_ota_buffer[i] = (uint16_t)duration & IR_OTA_SPACE_BIT_MASK;
 	}
 
 	/* Initialize the IR encoder hardware (TIM1 carrier + TIM16 baseband) */
@@ -1603,30 +1603,30 @@ static void transmit_raw_command(const ir_universal_cmd_t *cmd)
 	ir_ota_data_tx_active = TRUE;
 	ir_ota_data_tx_counter = 0;
 	ir_ota_data_tx_len = ota_len;
-	pir_ota_data_tx_buffer = s_raw_ota_buffer;
+	pir_ota_data_tx_buffer = raw_ota_buffer;
 
 	/* Configure TIM16 with first entry and start transmission */
 	__HAL_TIM_URS_ENABLE(&Timerhdl_IrTx);
-	Timerhdl_IrTx.Instance->ARR = s_raw_ota_buffer[0];
+	Timerhdl_IrTx.Instance->ARR = raw_ota_buffer[0];
 	HAL_TIM_GenerateEvent(&Timerhdl_IrTx, TIM_EVENTSOURCE_UPDATE);
 	__HAL_TIM_URS_DISABLE(&Timerhdl_IrTx);
 
 	if (HAL_IS_BIT_SET(Timerhdl_IrTx.Instance->SR, TIM_FLAG_UPDATE))
 		CLEAR_BIT(Timerhdl_IrTx.Instance->SR, TIM_FLAG_UPDATE);
 
-	if (s_raw_ota_buffer[0] & 0x0001) /* First entry is a mark */
+	if (raw_ota_buffer[0] & 0x0001) /* First entry is a mark */
 		irsnd_on();
 
 	__HAL_TIM_ENABLE(&Timerhdl_IrTx);
 
 	/* Load next entry for the second period */
 	if (ota_len > 1)
-		Timerhdl_IrTx.Instance->ARR = s_raw_ota_buffer[++ir_ota_data_tx_counter];
+		Timerhdl_IrTx.Instance->ARR = raw_ota_buffer[++ir_ota_data_tx_counter];
 
 	m1_buzzer_notification();
 
 	/* TX is now running asynchronously via TIM16 ISR.
-	 * The ISR steps through s_raw_ota_buffer and sends Q_EVENT_IRRED_TX
+	 * The ISR steps through the shared raw buffer and sends Q_EVENT_IRRED_TX
 	 * when complete. The caller's event loop handles cleanup. */
 } // static void transmit_raw_command(...)
 

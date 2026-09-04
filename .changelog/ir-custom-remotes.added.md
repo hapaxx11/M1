@@ -1,0 +1,1 @@
+**Infrared: Custom Remotes** — On-device IR learning with decoded + RAW fallback capture, remote and button rename/delete, filename sanitization/deduplication, and host-side regression tests. Adapted from dagnazty/M1_T-1000 Phase 3 to Hapax's scene architecture.

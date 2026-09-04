@@ -19,6 +19,7 @@
 #include "m1_compile_cfg.h"
 #include "queue.h"
 #include "irmp.h"
+#include "flipper_ir.h"
 
 #define IR_DECODE_TIMER                 TIM2        /*!< Timer used for IR decoding */
 /* TIM prescaler is computed to have 1 μs as time base. TIM frequency (in MHz) / (prescaler+1) */
@@ -112,8 +113,12 @@ void esl_scene_entry(void);
 void infrared_learn_new_remote(void);
 void infrared_saved_remotes(void);
 bool infrared_capture_one_signal(IRMP_DATA *out_data);
+void infrared_decode_sys_init(void);
+void infrared_decode_sys_deinit(void);
 void infrared_encode_sys_init(void);
 void infrared_encode_sys_deinit(void);
+void infrared_send_raw_signal(const flipper_ir_signal_t *sig);
+uint16_t *infrared_raw_ota_buffer(void);
 /* Diagnostic: drive a solid 38 kHz carrier on the external TX pin (PA9) and show
    the TIM1/GPIO register state. Triggered from Settings -> External IR (OK). */
 void infrared_ext_tx_selftest(void);

@@ -735,6 +735,7 @@ target_sources(m1_01 INTERFACE
     # === Enhanced firmware: Universal Remote + Crypto ===
     ../../m1_csrc/ir_signal_record.c
     ../../m1_csrc/ir_button_map.c
+    ../../m1_csrc/ir_cust_name.c
     ../../m1_csrc/m1_ir_universal.c
     ../../m1_csrc/m1_ir_quick_remote.c
     ../../m1_csrc/m1_ir_custom.c
