@@ -107,7 +107,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
         {
             SubGhzSceneId target = pp_menu_targets[s_model.selected];
             if (target < SubGhzSceneCount)
+            {
+                /* Receiver is the live protocol-aware read scene; tell it to
+                 * restrict Config choices to Proto Pirate capabilities. */
+                if (target == SubGhzSceneRead)
+                    app->config_filter_mode = SubGhzConfigFilterProtoPirate;
                 subghz_scene_push(app, target);
+            }
             return true;
         }
 

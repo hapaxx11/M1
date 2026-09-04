@@ -13,6 +13,12 @@
  *   3. Keep SUBGHZ_FREQ_PRESET_CUSTOM == SUBGHZ_FREQ_PRESET_COUNT.
  *   4. Run the host-side test suite — test_subghz_freq_presets will
  *      catch any count mismatch, out-of-range entry, or sorting error.
+ *   5. The table is already at the 64-preset ceiling a uint64_t freq
+ *      mask can address (63 real presets + Custom == indices 0..63).
+ *      Adding one more real preset trips the SUBGHZ_FREQ_PRESET_CUSTOM
+ *      #error below at compile time; widen the freq-mask type in
+ *      subghz_protocol_registry.[ch] and m1_subghz_scene_config.c (and
+ *      the matching host test) before increasing COUNT past 63.
  *
  * When porting a new Sub-GHz protocol from Flipper/Momentum:
  *   - Check every frequency at which the protocol operates (e.g. 319.5 MHz
@@ -29,6 +35,11 @@
 
 #include <stdint.h>
 
+/* SubGhzProtocolFlag band flags are referenced by helper functions in this
+ * module.  Include the registry header only for the flag definitions; the
+ * actual protocol table is not needed here. */
+#include "subghz_protocol_registry.h"
+
 /* ── Preset table dimensions ──────────────────────────────────────────────── */
 
 /** Total number of real frequency presets in the table. */
@@ -39,6 +50,21 @@
 
 /** Index of the factory-default frequency preset (433.92 MHz). */
 #define SUBGHZ_FREQ_DEFAULT_IDX     40
+
+/* subghz_protocol_freq_mask_for_registry() and the Config scene's
+ * cfg_allowed_freq_mask cache pack one bit per preset index (0..CUSTOM)
+ * into a uint64_t, so SUBGHZ_FREQ_PRESET_CUSTOM must stay <= 63 — the
+ * table is already at that limit (63 real presets + Custom == 64 bits
+ * used). Adding one more real preset would require widening every
+ * freq-mask type (currently uint64_t) and every UINT64_C(1) << idx shift
+ * across subghz_protocol_registry.[ch] and m1_subghz_scene_config.c, or
+ * switching to a bitset array. This assert exists so that day the build
+ * fails loudly instead of silently truncating/overflowing the mask.
+ * See test_freq_preset_custom_fits_in_uint64_mask() in
+ * tests/test_subghz_freq_presets.c for the matching host-side check. */
+#if SUBGHZ_FREQ_PRESET_CUSTOM > 63
+#error "SUBGHZ_FREQ_PRESET_CUSTOM no longer fits a uint64_t freq mask bit index — widen the freq-mask type (see subghz_protocol_freq_mask_for_registry and cfg_allowed_freq_mask) before adding more presets"
+#endif
 
 /* ── SI4463 hardware limits ────────────────────────────────────────────────── */
 
@@ -95,5 +121,44 @@ extern const uint32_t subghz_hopper_freqs_OFF[SUBGHZ_HOPPER_FREQ_COUNT];
  * Hopping reads ism_band_region at runtime via subghz_get_hopper_freqs_ext().
  */
 const uint32_t *subghz_get_hopper_freqs(uint8_t ism_region);
+
+/**
+ * @brief Find the frequency preset index whose frequency equals @p freq_hz.
+ *
+ * Searches the real preset table only (indices 0..SUBGHZ_FREQ_PRESET_COUNT-1)
+ * and never returns SUBGHZ_FREQ_PRESET_CUSTOM: this function has no
+ * knowledge of the current user custom frequency, so a custom-only match
+ * (or no match at all) is reported the same way, as -1.
+ *
+ * @param freq_hz  Frequency in Hz.
+ * @return Preset index on success, -1 if not found.
+ */
+int16_t subghz_freq_preset_find_hz(uint32_t freq_hz);
+
+/**
+ * @brief Find the first frequency preset index whose frequency is within
+ *        ±@p tolerance_hz of @p freq_hz.
+ *
+ * Used to map nominal protocol frequencies (which may differ by a few kHz
+ * from the preset table entries) to a preset index.
+ *
+ * @param freq_hz      Target frequency in Hz.
+ * @param tolerance_hz Maximum absolute difference in Hz.
+ * @return Preset index on success, -1 if no preset is within tolerance.
+ */
+int16_t subghz_freq_preset_find_near_hz(uint32_t freq_hz,
+                                         uint32_t tolerance_hz);
+
+/**
+ * @brief Map a SubGhzProtocolFlag band flag to its nominal centre frequency.
+ *
+ * Returns the canonical centre frequency for the 300/315/433/868 MHz band
+ * flags.  This is a convenience for tests and UI filters; the actual preset
+ * table may contain multiple entries within each band.
+ *
+ * @param flag  One of SubGhzProtocolFlag_300, _315, _433, _868.
+ * @return Nominal centre frequency in Hz, or 0 for an unknown flag.
+ */
+uint32_t subghz_freq_preset_band_center(uint32_t flag);
 
 #endif /* SUBGHZ_FREQ_PRESETS_H */

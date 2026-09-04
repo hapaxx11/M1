@@ -617,6 +617,9 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                  * on return via the resume path.  User presses OK to start
                  * recording on the newly-configured frequency. */
                 app->resume_from_child = true;
+                /* Read Raw must never restrict frequency or modulation: it
+                 * captures arbitrary signals, not known protocols. */
+                app->config_filter_mode = SubGhzConfigFilterNone;
                 subghz_scene_push(app, SubGhzSceneConfig);
             }
             else if (app->raw_state == SubGhzReadRawStateIdle)

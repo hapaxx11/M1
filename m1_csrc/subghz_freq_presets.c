@@ -61,6 +61,51 @@ const uint32_t *subghz_get_hopper_freqs(uint8_t ism_region)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+ * Frequency preset lookup helpers
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+int16_t subghz_freq_preset_find_hz(uint32_t freq_hz)
+{
+	for (uint16_t i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
+	{
+		if (subghz_freq_presets[i].freq_hz == freq_hz)
+			return (int16_t)i;
+	}
+	return -1;
+}
+
+int16_t subghz_freq_preset_find_near_hz(uint32_t freq_hz,
+                                         uint32_t tolerance_hz)
+{
+	int16_t best_idx = -1;
+	uint32_t best_delta = UINT32_MAX;
+
+	for (uint16_t i = 0; i < SUBGHZ_FREQ_PRESET_COUNT; i++)
+	{
+		uint32_t f = subghz_freq_presets[i].freq_hz;
+		uint32_t delta = (freq_hz > f) ? (freq_hz - f) : (f - freq_hz);
+		if (delta <= tolerance_hz && delta < best_delta)
+		{
+			best_delta = delta;
+			best_idx = (int16_t)i;
+		}
+	}
+	return best_idx;
+}
+
+uint32_t subghz_freq_preset_band_center(uint32_t flag)
+{
+	switch (flag)
+	{
+		case SubGhzProtocolFlag_300: return 300000000UL;
+		case SubGhzProtocolFlag_315: return 315000000UL;
+		case SubGhzProtocolFlag_433: return 433920000UL;
+		case SubGhzProtocolFlag_868: return 868350000UL;
+		default: return 0;
+	}
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
  * Frequency preset table
  * ───────────────────────────────────────────────────────────────────────────── */
 

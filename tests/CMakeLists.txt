@@ -645,6 +645,50 @@ endif()
 add_test(NAME subghz_registry COMMAND test_subghz_registry)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_protocol_registry filtering helpers
+# Pure-logic subset of the registry: modulation and frequency masks
+# used by the Config scene to restrict choices to protocol-supported
+# combinations.  Links the same registry + stubs as test_subghz_registry.
+# ------------------------------------------------------------------
+add_executable(test_subghz_registry_filter
+    test_subghz_registry_filter.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
+    ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
+    ${STUBS_DIR}/subghz_decode_stubs.c
+)
+target_include_directories(test_subghz_registry_filter PRIVATE
+    ${STUBS_DIR}            # HAL/FatFS stubs
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_registry_filter PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_registry_filter PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_registry_filter COMMAND test_subghz_registry_filter)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_config_cycle (Config scene cycling logic)
+# Pure mask-based cycling/wraparound helper extracted from
+# m1_subghz_scene_config.c so unfiltered cycling, wraparound, and
+# modulation-mask transitions can be regression-tested on the host.
+# ------------------------------------------------------------------
+add_executable(test_subghz_config_cycle
+    test_subghz_config_cycle.c
+    ${M1_ROOT}/m1_csrc/subghz_config_cycle.c
+)
+target_include_directories(test_subghz_config_cycle PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_subghz_config_cycle PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_config_cycle PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_config_cycle COMMAND test_subghz_config_cycle)
+
+# ------------------------------------------------------------------
 # Module under test: subghz_freq_presets
 # Pure data — no HAL or RTOS dependencies; links nothing but the
 # preset table itself.  Enforces structural invariants (count,
@@ -659,6 +703,7 @@ add_executable(test_subghz_freq_presets
 )
 target_include_directories(test_subghz_freq_presets PRIVATE
     ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
 )
 target_link_libraries(test_subghz_freq_presets PRIVATE unity)
 if(TARGET sanitizers)
@@ -702,6 +747,7 @@ add_executable(test_subghz_key_encoder
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_key_encoder PRIVATE
@@ -2913,6 +2959,7 @@ add_executable(test_subghz_proto_pirate
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
+    ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
 )
 target_include_directories(test_subghz_proto_pirate PRIVATE

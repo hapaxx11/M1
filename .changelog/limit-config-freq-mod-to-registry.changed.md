@@ -1,0 +1,2 @@
+**Sub-GHz: Limit Config scene frequency/modulation choices to registry-supported combinations.**
+  The shared Config scene now filters the frequency and modulation pickers based on the active protocol scope. Proto Pirate Receiver exposes only OOK/AM at 433.92 MHz (plus Custom); the regular Read scene uses the full Sub-GHz registry; Read Raw remains completely unfiltered so arbitrary signals can still be captured. Hopping is hidden when the filtered frequency list cannot cover the hopper table.

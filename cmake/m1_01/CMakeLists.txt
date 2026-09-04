@@ -659,6 +659,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_read_raw.c
     ../../m1_csrc/subghz_autosave.c
     ../../m1_csrc/m1_subghz_scene_receiver_info.c
+    ../../m1_csrc/subghz_config_cycle.c
     ../../m1_csrc/m1_subghz_scene_config.c
     ../../m1_csrc/m1_subghz_scene_saved.c
     ../../m1_csrc/m1_subghz_scene_save_name.c
