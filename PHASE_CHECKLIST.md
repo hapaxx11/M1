@@ -13,8 +13,8 @@
 
 ### Phase 2 — Add config filter mode to SubGhzApp and wire parent scenes
 - **Description**: Define `SubGhzConfigFilterMode` enum; add `config_filter_mode` field to `SubGhzApp`. Set it to Proto Pirate/full/none in the appropriate parent scenes before pushing Config.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `subghz: add config filter mode and wire parent scenes`
 
 ### Phase 3 — Restrict Config scene frequency/modulation cycling
 - **Description**: Update `m1_subghz_scene_config.c` to respect the filter mode when cycling modulation and frequency, and to hide/disable hopping when the current filter excludes hopper frequencies.
