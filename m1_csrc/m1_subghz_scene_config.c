@@ -267,12 +267,25 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
         {
             uint8_t prev_mod = app->mod_idx;
             app->mod_idx = cfg_next_allowed_mod(app->mod_idx, dir);
-            /* If modulation changed and the current frequency is no longer
-             * allowed for the new modulation, jump to the nearest allowed
-             * frequency.  This keeps freq/mod always consistent. */
-            if (app->mod_idx != prev_mod && !cfg_freq_allowed(app->freq_idx))
+            if (app->mod_idx != prev_mod &&
+                (cfg_filter_mode == SubGhzConfigFilterProtoPirate ||
+                 cfg_filter_mode == SubGhzConfigFilterFullRegistry))
             {
-                app->freq_idx = cfg_next_allowed_freq(app->freq_idx, +1);
+                cfg_allowed_freq_mask = subghz_protocol_freq_mask_for_registry(
+                    subghz_protocol_registry, subghz_protocol_registry_count,
+                    app->mod_idx);
+                if (cfg_filter_mode == SubGhzConfigFilterProtoPirate)
+                {
+                    cfg_allowed_freq_mask &=
+                        (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX) |
+                        (UINT64_C(1) << SUBGHZ_FREQ_PRESET_CUSTOM);
+                }
+                /* If modulation changed and the current frequency is no
+                 * longer allowed, jump to the nearest allowed frequency. */
+                if (!cfg_freq_allowed(app->freq_idx))
+                    app->freq_idx = cfg_next_allowed_freq(app->freq_idx, +1);
+                if (app->hopping && cfg_hopper_restricted())
+                    app->hopping = false;
             }
             break;
         }
