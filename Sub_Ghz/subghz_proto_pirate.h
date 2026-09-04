@@ -53,9 +53,10 @@ typedef enum {
 /** Static catalog entry: canonical ProtoPirate name and capabilities. */
 typedef struct {
     SubGhzProtoPirateId id;
-    const char         *name;      /**< Exact ProtoPirate protocol name */
-    uint16_t            te_short;  /**< Short symbol timing (µs) */
-    uint16_t            te_long;   /**< Long symbol timing (µs), 0 if not PWM */
+    const char         *name;       /**< Exact ProtoPirate protocol name */
+    uint16_t            te_short;   /**< Short symbol timing (µs) */
+    uint16_t            te_long;    /**< Long symbol timing (µs), 0 if not PWM */
+    uint8_t             bit_count;  /**< Key bit width */
     bool                manchester; /**< True if encoded as Manchester/biphase */
 } SubGhzProtoPirateDef;
 

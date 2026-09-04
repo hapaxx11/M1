@@ -29,17 +29,17 @@
 /*============================================================================*/
 
 const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
-    [SubGhzProtoPirate_FordV0]      = { SubGhzProtoPirate_FordV0,      "Ford V0",       250,  500, false },
-    [SubGhzProtoPirate_MazdaV0]     = { SubGhzProtoPirate_MazdaV0,     "Mazda V0",      250,  500, true  },
-    [SubGhzProtoPirate_HondaStatic] = { SubGhzProtoPirate_HondaStatic, "Honda Static",   63,   63, true  },
-    [SubGhzProtoPirate_KiaV0]       = { SubGhzProtoPirate_KiaV0,       "Kia V0",        250,  500, false },
-    [SubGhzProtoPirate_KiaV1]       = { SubGhzProtoPirate_KiaV1,       "Kia V1",        800, 1600, false },
-    [SubGhzProtoPirate_KiaV2]       = { SubGhzProtoPirate_KiaV2,       "Kia V2",        500, 1000, false },
-    [SubGhzProtoPirate_KiaV7]       = { SubGhzProtoPirate_KiaV7,       "Kia V7",        250,  500, true  },
-    [SubGhzProtoPirate_RenaultV0]   = { SubGhzProtoPirate_RenaultV0,   "Renault V0",    250,  500, false },
-    [SubGhzProtoPirate_ChryslerV0]  = { SubGhzProtoPirate_ChryslerV0,  "Chrysler V0",   270,  540, false },
-    [SubGhzProtoPirate_FiatV0]      = { SubGhzProtoPirate_FiatV0,      "Fiat V0",       250,  500, false },
-    [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        620, 1620, false },
+    [SubGhzProtoPirate_FordV0]      = { SubGhzProtoPirate_FordV0,      "Ford V0",       250,  500, 64, false },
+    [SubGhzProtoPirate_MazdaV0]     = { SubGhzProtoPirate_MazdaV0,     "Mazda V0",      250,  500, 64, true  },
+    [SubGhzProtoPirate_HondaStatic] = { SubGhzProtoPirate_HondaStatic, "Honda Static",   63,   63, 64, true  },
+    [SubGhzProtoPirate_KiaV0]       = { SubGhzProtoPirate_KiaV0,       "Kia V0",        250,  500, 61, false },
+    [SubGhzProtoPirate_KiaV1]       = { SubGhzProtoPirate_KiaV1,       "Kia V1",        800, 1600, 57, false },
+    [SubGhzProtoPirate_KiaV2]       = { SubGhzProtoPirate_KiaV2,       "Kia V2",        500, 1000, 53, false },
+    [SubGhzProtoPirate_KiaV7]       = { SubGhzProtoPirate_KiaV7,       "Kia V7",        250,  500, 64, true  },
+    [SubGhzProtoPirate_RenaultV0]   = { SubGhzProtoPirate_RenaultV0,   "Renault V0",    250,  500, 64, false },
+    [SubGhzProtoPirate_ChryslerV0]  = { SubGhzProtoPirate_ChryslerV0,  "Chrysler V0",   270,  540, 64, false },
+    [SubGhzProtoPirate_FiatV0]      = { SubGhzProtoPirate_FiatV0,      "Fiat V0",       250,  500, 64, false },
+    [SubGhzProtoPirate_Subaru]      = { SubGhzProtoPirate_Subaru,      "Subaru",        620, 1620, 64, false },
 };
 
 const uint8_t subghz_proto_pirate_catalog_count =
