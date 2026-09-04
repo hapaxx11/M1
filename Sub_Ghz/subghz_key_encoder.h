@@ -28,6 +28,13 @@ typedef struct {
     uint64_t key_value;       /**< Key data, MSB-first */
     uint32_t bit_count;       /**< Number of bits to encode */
     uint32_t te;              /**< Short pulse duration override (0 = use registry default) */
+
+    /* Extended fields used by protocol-specific encoders (ProtoPirate, etc.).
+     * Callers that do not need them can leave them zero-initialized. */
+    uint32_t serial;          /**< Device serial number */
+    uint32_t btn;             /**< Button code */
+    uint32_t cnt;             /**< Rolling counter / tail / epoch */
+    uint8_t  extra[16];       /**< Opaque protocol payload bytes (raw packet, key, etc.) */
 } SubGhzKeyParams;
 
 /** Timing parameters resolved from the registry + fallbacks */

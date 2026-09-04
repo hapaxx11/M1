@@ -1,0 +1,1 @@
+**Sub-GHz: ProtoPirate Tier-A automotive TX encoders** — Implemented pure-logic transmit encoders for Chrysler V0, Honda Static, Ford V0, Fiat V0, Renault V0, Mazda V0, Subaru, Kia V0/V1/V2, Kia V7, and Star Line, wired into the existing KEY→RAW transmitter pipeline via the ProtoPirate dispatcher.
