@@ -8,8 +8,8 @@
 
 ### Phase 1 — Add pure-logic filtering API to registry and frequency presets
 - **Description**: Add helpers to compute allowed modulation bitmask and allowed frequency-preset-index bitmask from a registry subset and a selected modulation. Add frequency-preset lookup helpers if missing.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `subghz: add registry/frequency filtering helpers for config scene`
 
 ### Phase 2 — Add config filter mode to SubGhzApp and wire parent scenes
 - **Description**: Define `SubGhzConfigFilterMode` enum; add `config_filter_mode` field to `SubGhzApp`. Set it to Proto Pirate/full/none in the appropriate parent scenes before pushing Config.
