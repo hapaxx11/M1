@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.13] - 2026-09-04
+
+### Added
+
+- **Infrared: Custom Remotes** — On-device IR learning with decoded + RAW fallback capture, remote and button rename/delete, filename sanitization/deduplication, and host-side regression tests. Adapted from dagnazty/M1_T-1000 Phase 3 to Hapax's scene architecture.
 ## [0.9.3.12] - 2026-09-03
 
 ### Changed
