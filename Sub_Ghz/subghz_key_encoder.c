@@ -15,6 +15,7 @@
 #include <string.h>
 #include "subghz_key_encoder.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_proto_pirate.h"
 
 /*============================================================================*/
 /* subghz_key_resolve_timing                                                   */
@@ -203,7 +204,11 @@ uint8_t subghz_low_te_calc_reps(uint32_t key_te)
 bool subghz_key_has_custom_encoder(const char *protocol)
 {
     if (!protocol) return false;
-    return (subghz_ascii_strcasecmp(protocol, "Magellan") == 0);
+    if (subghz_ascii_strcasecmp(protocol, "Magellan") == 0)
+        return true;
+    if (subghz_proto_pirate_is_supported(protocol))
+        return true;
+    return false;
 }
 
 /*
@@ -305,6 +310,9 @@ uint32_t subghz_key_encode_custom(const SubGhzKeyParams *params,
     if (subghz_ascii_strcasecmp(params->protocol, "Magellan") == 0)
         return subghz_key_encode_magellan(params, out, max_pairs, repetitions);
 
+    if (subghz_proto_pirate_is_supported(params->protocol))
+        return subghz_proto_pirate_encode(params, out, max_pairs, repetitions);
+
     return 0;  /* No custom encoder for this protocol */
 }
 
@@ -320,6 +328,9 @@ uint32_t subghz_key_custom_required_pairs(const SubGhzKeyParams *params,
             return 0;  /* Invalid Magellan bit count */
         return (uint32_t)SUBGHZ_MAGELLAN_PAIRS_PER_REP * repetitions;
     }
+
+    if (subghz_proto_pirate_is_supported(params->protocol))
+        return subghz_proto_pirate_required_pairs(params, repetitions);
 
     return 0;  /* No custom encoder for this protocol */
 }

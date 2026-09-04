@@ -274,6 +274,19 @@ enum {
 
 	/* --- Nord ICE gate/garage remote (Momentum, 2026) --- */
 	NORD_ICE,
+
+	/* --- ProtoPirate automotive keyfob protocols --- */
+	FORD_V0,
+	MAZDA_V0,
+	HONDA_STATIC,
+	KIA_V0,
+	KIA_V1,
+	KIA_V2,
+	KIA_V7,
+	RENAULT_V0,
+	CHRYSLER_V0,
+	FIAT_V0,
+	SUBARU_PP,
 };
 
 /* Weather station decoded data */

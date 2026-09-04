@@ -497,6 +497,18 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_beninca_arc_decode.c
     ../../Sub_Ghz/protocols/m1_hormann_bisecur_decode.c
     ../../Sub_Ghz/protocols/m1_nord_ice_decode.c
+    ../../Sub_Ghz/subghz_proto_pirate.c
+    ../../Sub_Ghz/protocols/m1_ford_v0_decode.c
+    ../../Sub_Ghz/protocols/m1_mazda_v0_decode.c
+    ../../Sub_Ghz/protocols/m1_honda_static_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v0_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v1_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v2_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v7_decode.c
+    ../../Sub_Ghz/protocols/m1_renault_v0_decode.c
+    ../../Sub_Ghz/protocols/m1_chrysler_v0_decode.c
+    ../../Sub_Ghz/protocols/m1_fiat_v0_decode.c
+    ../../Sub_Ghz/protocols/m1_subaru_pp_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c
