@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3.15] - 2026-09-04
+
+### Added
+
+- **Sub-GHz: ProtoPirate Tier-A automotive TX encoders** — Implemented pure-logic transmit encoders for Chrysler V0, Honda Static, Ford V0, Fiat V0, Renault V0, Mazda V0, Subaru, Kia V0/V1/V2, Kia V7, and Star Line, wired into the existing KEY→RAW transmitter pipeline via the ProtoPirate dispatcher.
+- **Sub-GHz: ProtoPirate Tier-B automotive TX encoders** — Implemented pure-logic transmit encoders for Honda V1/V2, Ford V1/V2, Kia V3/V4/V5, and Fiat V1, completing the Tier-B catalog in the ProtoPirate dispatcher.
 ## [0.9.3.14] - 2026-09-04
 
 ### Fixed
