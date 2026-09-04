@@ -1507,7 +1507,7 @@ uint32_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
             continue;
         int16_t idx = band_flag_to_preset_idx(all_band_flags[b]);
         if (idx >= 0 && (uint16_t)idx < SUBGHZ_FREQ_PRESET_COUNT)
-            mask |= (1u << (uint16_t)idx);
+            mask |= (1uL << (uint16_t)idx);
     }
 
     /* Always allow the Custom entry so the user can still tune manually.
