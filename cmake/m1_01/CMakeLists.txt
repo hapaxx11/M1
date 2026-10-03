@@ -696,6 +696,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_diag.c
     ../../m1_csrc/m1_system.c
+    ../../m1_csrc/lcd_saver.c
     ../../m1_csrc/m1_tasks.c
     ../../m1_csrc/m1_usb_cdc_msc.c
     ../../m1_csrc/m1_virtual_kb.c

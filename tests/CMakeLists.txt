@@ -3015,6 +3015,19 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME esp32_idle COMMAND test_esp32_idle)
 
+add_executable(test_lcd_saver
+    test_lcd_saver.c
+    ${M1_ROOT}/m1_csrc/lcd_saver.c
+)
+target_include_directories(test_lcd_saver PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_lcd_saver PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lcd_saver PRIVATE sanitizers)
+endif()
+add_test(NAME lcd_saver COMMAND test_lcd_saver)
+
 # rf_smart_scan — Smart ID pre-scan probe-plan builder
 add_executable(test_rf_smart_scan
     test_rf_smart_scan.c
