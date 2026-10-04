@@ -16,7 +16,7 @@
 #include "unity.h"
 #include "lcd_saver.h"
 
-#define TIMEOUT_MS  30000u   /* default M1 inactivity window (30 s) */
+#define TIMEOUT_MS  60000u   /* default M1 inactivity window (60 s) */
 
 void setUp(void) { }
 void tearDown(void) { }
@@ -114,9 +114,9 @@ void test_regression_result_screen_restarts_timer(void)
     TEST_ASSERT_EQUAL(LCD_SAVER_ACTION_OFF, lcd_saver_poll(&ctx, TIMEOUT_MS, 0u, TIMEOUT_MS));
     TEST_ASSERT_TRUE(ctx.backlight_off);  /* bug: result screen would be dark */
 
-    /* Fix: on showing the read-complete info screen the firmware calls
-     * m1_lcd_wake_restart_timer(), which reseats active_timestamp to "now"
-     * and runs the saver. Model that by polling with active == now. */
+    /* On showing the read-complete info screen the firmware calls
+     * m1_lcd_wake_restart_timer(), which asks the system task to reseat
+     * active_timestamp and run the saver. Model that by polling with active == now. */
     uint32_t woke_at = scan_done;
     TEST_ASSERT_EQUAL(LCD_SAVER_ACTION_ON, lcd_saver_poll(&ctx, woke_at, woke_at, TIMEOUT_MS));
     TEST_ASSERT_FALSE(ctx.backlight_off);

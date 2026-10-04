@@ -357,7 +357,8 @@ void system_periodic_task(void *param)
 #endif
         } // if ( m1_device_stat.op_mode != M1_OPERATION_MODE_FIRMWARE_UPDATE )
 
-        vTaskDelay(pdMS_TO_TICKS(SYSTEM_PERIODIC_TASK_DELAY));
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(SYSTEM_PERIODIC_TASK_DELAY)) > 0U)
+            m1_device_stat.active_timestamp = HAL_GetTick();
         m1_wdt_send_report(M1_REPORT_ID_BUTTONS_HANDLER_TASK, SYSTEM_PERIODIC_TASK_DELAY);
     } // while (TRUE)
 
@@ -643,8 +644,8 @@ static void lcd_saver_update(void)
 /*============================================================================*/
 void m1_lcd_wake_restart_timer(void)
 {
-	m1_device_stat.active_timestamp = HAL_GetTick();
-	lcd_saver_update();
+	/* Keep saver state transitions and backlight writes in the system task. */
+	xTaskNotifyGive(system_task_hdl);
 }
 
 

@@ -7,7 +7,7 @@
  * Pure-logic decision state machine for the LCD backlight screen-saver.
  *
  * The M1 dims its backlight after an inactivity window (m1_sleep_timeout_idx,
- * default 30 s). A button press reseats m1_device_stat.active_timestamp; when
+ * default 60 s). A button press reseats m1_device_stat.active_timestamp; when
  * HAL_GetTick() - active_timestamp exceeds the timeout the backlight is turned
  * off, and the next sub-timeout tick turns it back on. A long NFC/RFID scan
  * that finishes without any button press therefore shows its successful-read
