@@ -7,24 +7,25 @@ description: Public forks tracker (Monstatek, bedge117, sincere360, dagnazty and
 
 > Extracted from CLAUDE.md. Load when auditing forks or evaluating an upstream cherry-pick.
 
-### Upstream Merge Policy — Why We Don't Merge Monstatek
+### Upstream Merge Policy — Cherry-Pick, Don't Merge
 
-As of April 2026, **we do not merge from Monstatek/M1 upstream**. Reasons:
+As of **October 2026**, Monstatek/M1 upstream is **active again** (it published
+`v0.8.1.0` as a fresh open-source release in Oct 2026 after being parked at
+`v0.8.0.x` since mid-2024).  Even so, **we still do not merge Monstatek/M1
+wholesale** — we cherry-pick.  Reasons:
 
-1. **Upstream is stale.** Monstatek/M1 has been at `v0.8.0.0` since mid-2024 with no
-   public commits. There is nothing new to merge.
-2. **Divergence is too large.** Hapax has rewritten the build system (CMake + Ninja
+1. **Divergence is too large.** Hapax has rewritten the build system (CMake + Ninja
    replacing STM32CubeIDE managed makefiles), added 60+ Sub-GHz protocols, a Flipper
    file compatibility layer (`lib/furi/`), CAN bus support, ESP32-C6 SPI AT integration,
    LF-RFID / NFC / IR Flipper import, and a full CI/CD pipeline. A blind merge would
    produce hundreds of conflicts with no benefit.
-3. **Version scheme divergence.** Hapax owns `FW_VERSION_MINOR` (9) and `FW_VERSION_RC`.
+2. **Version scheme divergence.** Hapax owns `FW_VERSION_MINOR` (9) and `FW_VERSION_RC`.
    Monstatek's version numbering assumptions no longer apply.
-4. **Cherry-pick, don't merge.** If Monstatek ever pushes a meaningful update, the
+3. **Cherry-pick, don't merge.** When Monstatek pushes a meaningful update, the
    correct approach is to **review the diff, cherry-pick relevant changes**, and adapt
    them to the Hapax codebase — not to merge the branch wholesale.
 
-If Monstatek publishes a new release in the future, re-evaluate this policy by:
+When Monstatek publishes further releases, re-evaluate by:
 - Fetching `monstatek/main` and inspecting the diff against our `main`
 - Cherry-picking any bug fixes or HAL updates that apply
 - Bumping `FW_VERSION_MAJOR` only if upstream introduces a breaking API change
@@ -48,7 +49,7 @@ a fresh analysis is warranted.  All timestamps are **UTC**.
 
 | Fork | Owner | Activity | Latest Commit (SHA) | Latest Commit Date (UTC) | Last Reviewed by Hapax | Notes |
 |------|-------|----------|---------------------|--------------------------|------------------------|-------|
-| [Monstatek/M1](https://github.com/Monstatek/M1) | Monstatek | **Active** (upstream) | `4c77bb86` | 2026-06-05 06:30 | 2026-07-21 00:30 | Original upstream, stale (v0.8.0.0/0.8.0.2). Cherry-pick candidate outstanding: `battery_log.c` diagnostic CSV logger. Reviewed 2026-07-21: only new commit is macOS build support ([#11](https://github.com/Monstatek/M1/pull/11)), low value, not imported. |
+| [Monstatek/M1](https://github.com/Monstatek/M1) | Monstatek | **Active** (upstream) | `2af1f8a3` | 2026-10-03 02:21 | 2026-10-03 | Original upstream, **active again**: shipped `v0.8.1.0` open-source release Oct 2026 after being parked at v0.8.0.x since mid-2024. Cherry-picked: NFC/RFID read-result backlight wake (`m1_lcd_wake_restart_timer()`, `664ec652`). Cherry-pick candidate still outstanding: `battery_log.c` diagnostic CSV logger. Not imported: Sub-GHz "TX Restricted" notice restyle (cosmetic) and upstream's private release-build hygiene (irrelevant to Hapax CMake/CI). |
 | [bedge117/M1](https://github.com/bedge117/M1) | bedge117 | **Active** | `41228460` | 2026-08-04 06:45 | 2026-08-09 | C3 enhanced firmware (now C3.164), the most actively-diverged fork and Hapax's primary cherry-pick source. Extensively reviewed across many 2026-07-24→2026-08-09 sessions; most headline C3 features (100+ Sub-GHz protocols, PicoPass, RPC file ops, offensive WiFi/BLE suite, external-app GPIO) are already present or superseded in Hapax. Cherry-picked fixes/features (see git history for per-commit detail, not reproduced here): bad-USB typing speedup; logdb/SDMMC/mutex/I2C stability fixes; self-flash EXTI-masking brick-risk fix; HW TRNG driver (`m1_rng.c`); FatFs reentrancy; LF-RFID UID-copy overflow fix; Amiibo master-key re-signing (MIT/public-domain sources, license documented in `README_License.md` §7); new games (Flappy, Coin Flip, RPS); Sub-GHz RAW replay full-waveform fix; USB-MSC/CDC/watchdog/field-detector stability hardening (bounded spins, TX abort, USB session-epoch NACK); `rpc_task`/SD-detection watchdog + self-heal. Deferred/rejected (do not re-propose without new information): Recovery FW build variant (`-DRECOVERY=ON`) — explicit owner decision, not a technical blocker; WiFi Hotspot NAT passthrough and BLE Direct (NUS) transport — architecturally complex, ESP32-firmware-dependent; ESP32 "SPI-slave brain" + ESP-NOW peer link and `game_peer_ttt` — Hapax owns a divergent ESP32 integration (see `esp32-coprocessor` skill), blind port would conflict; `game_tamagotchi` — RAM footprint exceeds M1 budget; Sub-GHz "full scene engine" — Hapax already has its own (see `subghz-protocols` skill); portrait/90° orientation mode — large cross-cutting UI rewrite, treat as its own scoped feature if wanted; 1-Wire API — no source exists in either fork to port; SWD peer-recovery tool — concept only, no code in either fork. |
 | [sincere360/M1_SiN360](https://github.com/sincere360/M1_SiN360) | sincere360 | **Active** | `786b7c21` | 2026-05-09 03:29 | 2026-05-21 02:14 | v0.9 lineage — LCD settings, IR remote, screen orientation; Hapax's version scheme is derived from SiN360. Cherry-picked: NFC Amiibo/Switch HALT fix; binary SPI WiFi/BLE subsystem (`m1_wifi.c`, `m1_bt.c`); Google Fast Pair BLE spam; BLE HID (`m1_badbt.c`); `ble_gatt_discovery()` as `BtSceneGattDiscovery`. Not integrated: `m1_apps.c` ELF loader (Hapax's `m1_app_manager.c`/`m1_elf_loader.c` is superior); `lfrfid_protocol_extra.c` (not needed, Hapax has individual protocol files). |
 | [dagnazty/M1_T-1000](https://github.com/dagnazty/M1_T-1000) | dagnazty (dag) | **Active** | `268d8ca1` | 2026-08-18 09:49 | 2026-09-04 05:36 | STM32 fork (T-1000) on bedge117/C3.12, using dag's ESP32 AT firmware (custom AT+M1* offensive-WiFi/BLE/Zigbee commands, see `documentation/esp32_firmware.md` for the AT table). Most dag features already in Hapax; cherry-picked: `wifi_survey_24g()`, AT+M1* CAP mappings, PMKID Grab scene, ESP32-C6 idle auto power-off (`esp32_idle.c/h`). Outstanding cherry-pick candidates from contributor romulofer (reviewed 2026-09-01, not yet ported): ~~**Sub-GHz Send Once/Repeat** toggle on the replay screen (PR#2, `a1f489c7`)~~ — reviewed 2026-09-03: already implemented (and superseded) by Hapax's Read Raw `raw_tx_repeat_mode` toggle + hold-to-repeat (`m1_subghz_scene_read_raw.c`, `m1_subghz_read_raw_state.h`); do not re-propose. **Live RSSI bar** on the Sub-GHz record screen (4 tasks, ~400 lines with host tests) — Phase 2 candidate, bench-gate the periodic-refresh/pre-scan tasks on hardware. ~~Deferred pending audit: Sub-GHz record once-per-boot leak fix (dag v0.3.0)~~ — reviewed 2026-09-04: not applicable; Hapax's scene-based Read Raw frees ring buffers on `stop_raw_rx()`, `scene_on_exit()`, and all error paths, and `sub_ghz_ring_buffers_init()` deinits at entry as a guard. Rejected: **M1↔M1 peer link** (`m1_link.c/h`, ~2600 lines, 915 MHz FSK peer messaging) — entangled with dag's divergent AT+M1LINK protocol; would require designing Hapax's own peer-link layer, treat as an independent feature if wanted. |
@@ -58,7 +59,7 @@ a fresh analysis is warranted.  All timestamps are **UTC**.
 | [steveAG/monstatek-m1](https://github.com/steveAG/monstatek-m1) | steveAG | Inactive | `2df97efc` | 2026-02-20 21:22 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
 | [fengjuan0/Monstatek-M1](https://github.com/fengjuan0/Monstatek-M1) | fengjuan0 | Inactive | `2df97efc` | 2026-02-24 03:45 | 2026-04-02 03:21 | Mirror of stock at time of fork. No custom commits. |
 | [RogueMaster/M1](https://github.com/RogueMaster/M1) | RogueMaster | Inactive | `682e6a06` | 2026-06-15 22:09 | 2026-08-03 02:29 | Branding/promo fork layered on bedge117's C3.12 line (`81434fa8`, already reviewed under the bedge117 row) plus Monstatek's macOS build support and v0.8.0.2 content (already tracked under the Monstatek row). No original code contributions found; nothing new to cherry-pick. |
-| [RocketGod-git/ProtoPirate](https://github.com/RocketGod-git/ProtoPirate) | RocketGod / The Pirates' Plunder | **Active** | `4b039064` | 2026-07-25 01:13 | 2026-09-04 06:23 | Flipper Zero automotive keyfob rolling-code analysis app, **not an M1 fork**. Source of the imported Timing Tuner scene (`m1_subghz_scene_proto_pirate_tuner.c`, `subghz_proto_pirate_timing.c/h`) and Proto Pirate sub-menu (`m1_subghz_scene_proto_pirate_menu.c`). Imported: timing-analysis algorithm and protocol timing table. Not applicable: Flipper-specific UI, plugin/`.fam` build system, TX/emulation plugins, keystore, PSA brute-force plugin — M1 has its own scene stack, radio HAL, and replay paths. Latest commit is code-formatting only; no new timing data or decoders since the import. |
+| [RocketGod-git/ProtoPirate](https://github.com/RocketGod-git/ProtoPirate) | RocketGod / The Pirates' Plunder | **Active** | `5e97913d` | 2026-10-04 13:33 | 2026-10-04 | Flipper Zero automotive keyfob rolling-code analysis app, **not an M1 fork**. Source of the imported Timing Tuner scene (`m1_subghz_scene_proto_pirate_tuner.c`, `subghz_proto_pirate_timing.c/h`) and Proto Pirate sub-menu (`m1_subghz_scene_proto_pirate_menu.c`). Imported: timing-analysis algorithm and protocol timing table. Not applicable: Flipper-specific UI, plugin/`.fam` build system, TX/emulation plugins, keystore, PSA brute-force plugin — M1 has its own scene stack, radio HAL, and replay paths. Reviewed 2026-10-04: Timing Tuner was refactored into the plugin system; no imported timing-table changes were identified. Remaining updates cover plugins, SubDecode, receiver configuration, and a Remote Analyzer. |
 
 ### How to Update This Table
 

@@ -196,6 +196,12 @@ void startup_device_init(void);
 void startup_config_handler(void);
 void startup_config_write(uint8_t config_byte, uint8_t config_val);
 void startup_info_screen_display(const char *scr_text);
+
+/* Request an LCD backlight wake and restart the normal inactivity timer.
+ * The system task applies the request so saver transitions and backlight writes
+ * remain serialized. Call when fresh, user-relevant output is shown (e.g. the
+ * NFC/RFID successful-read info screen). Does not affect scanning timeouts. */
+void m1_lcd_wake_restart_timer(void);
 void startup_home_screen_refresh(void);
 
 typedef struct {

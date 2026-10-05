@@ -36,6 +36,7 @@
 #include "nfc_ndef_parse.h"
 #include "nfc_ndef_encode.h"
 #include "m1_espnow_capture_share.h"
+#include "m1_system.h"   /* m1_lcd_wake_restart_timer() for the successful-read info screen */
 
 /*************************** D E F I N E S ************************************/
 #define M1_LOGDB_TAG					"NFC"
@@ -548,6 +549,10 @@ static int nfc_read_gui_message(void)
 			m1_buzzer_notification();
 			m1_led_fast_blink(LED_BLINK_ON_RGB, LED_FASTBLINK_PWM_OFF, LED_FASTBLINK_ONTIME_OFF);
 			m1_uiView_display_update(NFC_READ_DISPLAY_PARAM_READING_COMPLETE);
+			/* Read-complete info screen is now shown: wake the backlight and
+			 * restart the inactivity timer so a long scan that dimmed the
+			 * display doesn't leave the result screen dark. */
+			m1_lcd_wake_restart_timer();
 		} 
 	} // if (ret==pdTRUE)
 

@@ -30,6 +30,7 @@
 #include "m1_wifi.h"
 #include "m1_bt.h"
 #include "m1_clock_util.h"
+#include "lcd_saver.h"
 #if M1_HAS_RGB_BACKLIGHT
 #include "m1_rgb_backlight.h"
 #endif
@@ -356,7 +357,8 @@ void system_periodic_task(void *param)
 #endif
         } // if ( m1_device_stat.op_mode != M1_OPERATION_MODE_FIRMWARE_UPDATE )
 
-        vTaskDelay(pdMS_TO_TICKS(SYSTEM_PERIODIC_TASK_DELAY));
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(SYSTEM_PERIODIC_TASK_DELAY)) > 0U)
+            m1_device_stat.active_timestamp = HAL_GetTick();
         m1_wdt_send_report(M1_REPORT_ID_BUTTONS_HANDLER_TASK, SYSTEM_PERIODIC_TASK_DELAY);
     } // while (TRUE)
 
@@ -605,45 +607,45 @@ static const uint32_t s_sleep_timeout_ms[] = {
 /* Brightness values indexed by m1_brightness_level */
 static const uint8_t s_brightness_values[] = { 0, 64, 128, 192, 255 };
 
+/* Backlight screen-saver decision state (pure logic lives in lcd_saver.c). */
+static lcd_saver_ctx_t s_lcd_saver_ctx;
+
 static void lcd_saver_update(void)
 {
-	static uint8_t saver_mode = 0;
-	uint32_t delta;
 	uint32_t timeout;
+	lcd_saver_action_t action;
 
 	/* Get current sleep timeout */
 	if (m1_sleep_timeout_idx >= sizeof(s_sleep_timeout_ms)/sizeof(s_sleep_timeout_ms[0]))
 		m1_sleep_timeout_idx = 1; /* safety */
 	timeout = s_sleep_timeout_ms[m1_sleep_timeout_idx];
 
-	/* If timeout is 0 (Never), always stay on */
-	if (timeout == 0)
-	{
-		if (saver_mode)
-		{
-			lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
-			saver_mode = 0;
-		}
-		return;
-	}
+	action = lcd_saver_poll(&s_lcd_saver_ctx, HAL_GetTick(),
+	                                m1_device_stat.active_timestamp, timeout);
 
-	delta = HAL_GetTick() - m1_device_stat.active_timestamp;
-	if ( saver_mode )
-	{
-		if ( delta < timeout ) /* Keypad is active? */
-		{
-			lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
-			saver_mode = 0;
-		}
-	}
-	else
-	{
-		if ( delta >= timeout ) /* Keypad has been inactive? */
-		{
-			lp5814_backlight_on(M1_BACKLIGHT_OFF);
-			saver_mode = 1;
-		}
-	}
+	if ( action == LCD_SAVER_ACTION_ON )
+		lp5814_backlight_on(s_brightness_values[m1_brightness_level]);
+	else if ( action == LCD_SAVER_ACTION_OFF )
+		lp5814_backlight_on(M1_BACKLIGHT_OFF);
+}
+
+
+/*============================================================================*/
+/**
+ * @brief Wake the LCD backlight now and restart the inactivity timer.
+ *
+ * Used when a view representing fresh, user-relevant output is shown (e.g. the
+ * NFC/RFID successful-read info screen). Reseat active_timestamp so the normal
+ * inactivity window starts from this moment, then run the saver immediately so
+ * a backlight that had already dimmed during a long scan comes back on without
+ * waiting for the next periodic tick. Scanning is not affected and continues to
+ * time out normally.
+ */
+/*============================================================================*/
+void m1_lcd_wake_restart_timer(void)
+{
+	/* Keep saver state transitions and backlight writes in the system task. */
+	xTaskNotifyGive(system_task_hdl);
 }
 
 
