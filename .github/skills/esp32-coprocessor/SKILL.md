@@ -57,10 +57,33 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
 
 | Firmware | Discriminator | Transport |
 |----------|---------------|-----------|
+| MtkCore (Legacy-SPI compat) | `MTKCORE` host-classifier bit (zero on-wire bitmap + dotted-semver `fw_name`) | `ESP32_TRANSPORT_RPC` |
 | brain CD3 (`m1-esp32-brain`) | `HANDSHAKE && (802154_TX \|\| BLE_SPAM)` | `ESP32_TRANSPORT_RPC` |
 | SiN360 | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
 | AT builds **incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
 | unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
+
+- **MtkCore (`Monstatek/MonstaTek-Esp32-Core`) Legacy-SPI compatibility:** MtkCore's
+  *"Legacy SPI Compatibility"* adapter speaks our exact m1_link wire protocol (magic
+  `0x4D31`, 8-byte header, 512-byte full-duplex cells, CRC-16/CCITT-FALSE, flat 16-bit
+  `msg_id`). Its legacy `GET_STATUS (0x0002)` returns a well-formed devstatus but
+  **deliberately hard-codes `cap_bitmap` to all zeros** (the authors declined to guess
+  legacy bit indices; real negotiation is over the canonical `GET_CAPABILITIES`, which
+  the legacy adapter does not expose). Our host therefore fingerprints MtkCore as
+  **`cap_bitmap == 0` AND a dotted-semver `fw_name` (e.g. `"0.8.1.0"`)** in
+  `m1_esp32_caps_init()` (Probe 2), synthesises `M1_ESP32_CAP_PROFILE_MTKCORE`, and sets
+  the host-only `M1_ESP32_CAP_MTKCORE` classifier bit so `esp32_firmware_transport()`
+  routes to `ESP32_TRANSPORT_RPC` (not AT). Without this it misdetects as AT and every
+  feature is gated off — same failure class as the brain-CD3 OTA-discriminator bug above.
+  Cached `fw_name` is prefixed `"MtkCore <semver>"` for device-info display (the semver
+  still satisfies qMonstatek's `parseVerNums()`).
+  - **Supported over compat_spi:** WiFi scan/sta-scan/join/disconnect, deauth, beacon,
+    handshake capture, SoftAP, packet monitor/raw-TX, captive portal, BLE scan/adv, GATT.
+  - **NOT supported over compat_spi (excluded from the profile):** ESP-NOW (`0x06xx`),
+    802.15.4 (`0x05xx`), PMKID, probe-flood, karma, WiFi-mode-set, time-sync, BLE HID/spam.
+    Full parity for those needs MtkCore's canonical **Native M1 SPI v1** transport
+    (magic `"M1S1"`, 1024-byte cells, CRC32C, `GET_CAPABILITIES` pagination), which the
+    host does not yet implement.
 
 - **`m1_esp32_rpc.c/.h`** is the reusable M1_RPC feature layer for brain CD3:
   the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared

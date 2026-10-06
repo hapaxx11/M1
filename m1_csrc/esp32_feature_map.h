@@ -208,10 +208,11 @@ typedef enum {
  * @brief  Classify the wire transport implied by @p cap_bitmap.
  *
  * Resolution order (a firmware matches at most one):
- *   1. brain CD3 (HANDSHAKE + 802154_TX/BLE_SPAM) -> ESP32_TRANSPORT_RPC
- *   2. SiN360 (BLE_HID, no JOIN)                   -> ESP32_TRANSPORT_BINARY_SPI
- *   3. any other non-zero bitmap                   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
- *   4. all-zero bitmap                             -> ESP32_TRANSPORT_NONE
+ *   1. MtkCore Legacy-SPI (M1_ESP32_CAP_MTKCORE)  -> ESP32_TRANSPORT_RPC
+ *   2. brain CD3 (HANDSHAKE + 802154_TX/BLE_SPAM) -> ESP32_TRANSPORT_RPC
+ *   3. SiN360 (BLE_HID, no JOIN)                   -> ESP32_TRANSPORT_BINARY_SPI
+ *   4. any other non-zero bitmap                   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
+ *   5. all-zero bitmap                             -> ESP32_TRANSPORT_NONE
  *
  * The legacy CD3-AT firmware advertises WIFI_JOIN without the brain CD3's
  * HANDSHAKE + 802154_TX/BLE_SPAM combination, so it correctly resolves to
@@ -250,6 +251,22 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap);
  * to call before m1_esp32_caps_init() completes.
  */
 bool esp32_firmware_is_cd3(uint64_t cap_bitmap);
+
+/**
+ * @brief  Return true when the bitmap indicates an MtkCore Legacy-SPI firmware
+ *         (Monstatek/MonstaTek-Esp32-Core).
+ *
+ * Discriminator: the host-only M1_ESP32_CAP_MTKCORE classifier bit is set.
+ * That bit is never received over the wire — MtkCore's legacy GET_STATUS
+ * reports an all-zero capability bitmap by design — it is synthesised by
+ * m1_esp32_caps_init() when it recognises MtkCore (zero bitmap + dotted-semver
+ * fw_name).  MtkCore's "Legacy SPI Compatibility" adapter speaks the m1_link
+ * binary protocol, so it must be driven over ESP32_TRANSPORT_RPC.
+ *
+ * Returns false for all-zero bitmaps — safe to call before
+ * m1_esp32_caps_init() completes.
+ */
+bool esp32_firmware_is_mtkcore(uint64_t cap_bitmap);
 
 #ifdef __cplusplus
 }

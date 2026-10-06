@@ -234,6 +234,8 @@ void test_cap_bits_are_unique(void)
         M1_ESP32_CAP_SOFTAP,
         M1_ESP32_CAP_ESPNOW,
         M1_ESP32_CAP_WIFI_HOTSPOT,
+        M1_ESP32_CAP_WIFI_DISCONNECT,
+        M1_ESP32_CAP_MTKCORE,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -275,6 +277,8 @@ void test_cap_bits_are_single_bit_powers_of_two(void)
         M1_ESP32_CAP_SOFTAP,
         M1_ESP32_CAP_ESPNOW,
         M1_ESP32_CAP_WIFI_HOTSPOT,
+        M1_ESP32_CAP_WIFI_DISCONNECT,
+        M1_ESP32_CAP_MTKCORE,
     };
     const size_t ncaps = sizeof(caps) / sizeof(caps[0]);
 
@@ -491,6 +495,91 @@ void test_cd3_host_bits_add_probe_fallback_caps(void)
                              M1_ESP32_CAP_WIFI_DISCONNECT |
                              M1_ESP32_CAP_ESPNOW,
                              m1_esp32_caps_with_cd3_host_bits(reported));
+}
+
+/* =========================================================================
+ * MtkCore (Legacy-SPI) detection & profile
+ * =========================================================================*/
+
+void test_fw_name_semver_accepts_dotted_versions(void)
+{
+    TEST_ASSERT_TRUE(m1_esp32_caps_fw_name_is_semver("0.8.1.0"));
+    TEST_ASSERT_TRUE(m1_esp32_caps_fw_name_is_semver("1.0"));
+    TEST_ASSERT_TRUE(m1_esp32_caps_fw_name_is_semver("12.34.56"));
+}
+
+void test_fw_name_semver_rejects_non_versions(void)
+{
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver(NULL));
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver(""));
+    /* brain-CD3 bare identifier must NOT be mistaken for a semver */
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver("m1-native"));
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver("SiN360-0.9.6"));
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver("123"));     /* no dot */
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver(".1.2"));    /* leading dot */
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver("1.2."));    /* trailing dot */
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver("1..2"));    /* empty comp */
+    TEST_ASSERT_FALSE(m1_esp32_caps_fw_name_is_semver("1.2.3b")); /* letter */
+}
+
+void test_is_mtkcore_devstatus_zero_bitmap_semver_name(void)
+{
+    /* MtkCore signature: all-zero bitmap + dotted-semver fw_name */
+    TEST_ASSERT_TRUE(m1_esp32_caps_is_mtkcore_devstatus(0u, "0.8.1.0"));
+}
+
+void test_is_mtkcore_devstatus_rejects_nonzero_bitmap(void)
+{
+    /* A non-zero bitmap means the firmware self-reports caps — not MtkCore. */
+    TEST_ASSERT_FALSE(
+        m1_esp32_caps_is_mtkcore_devstatus(M1_ESP32_CAP_WIFI_SCAN, "0.8.1.0"));
+}
+
+void test_is_mtkcore_devstatus_rejects_bare_identifier(void)
+{
+    /* brain-CD3 reports a bare "m1-native" with a zero bitmap in early
+     * firmware — must NOT be classified as MtkCore. */
+    TEST_ASSERT_FALSE(m1_esp32_caps_is_mtkcore_devstatus(0u, "m1-native"));
+}
+
+void test_mtkcore_profile_includes_compat_supported_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_MTKCORE;
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_STA_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_JOIN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_DISCONNECT);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_DEAUTH);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BEACON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_HANDSHAKE);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_SOFTAP);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PKTMON);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PORTAL);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SCAN);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_ADV);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_GATT);
+    /* host-only transport classifier bit */
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_MTKCORE);
+}
+
+void test_mtkcore_profile_excludes_unsupported_caps(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_MTKCORE;
+    /* Absent / UNSUPPORTED / DISABLED over MtkCore's compat adapter. */
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_ESPNOW);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_802154_TX);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PMKID);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_PROBE_FLOOD);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_KARMA);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SET_MAC);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_SET_CHAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_HID);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BLE_SPAM);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_NETSCAN);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_BT_MANAGE);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_OTA);
+    TEST_ASSERT_EQUAL_UINT64(UINT64_C(0), p & M1_ESP32_CAP_WIFI_HOTSPOT);
 }
 
 /* =========================================================================
@@ -1322,6 +1411,15 @@ int main(void)
     RUN_TEST(test_cd3_fallback_bss_less_than_at);
     RUN_TEST(test_cd3_fallback_heap_exceeds_at);
     RUN_TEST(test_cd3_host_bits_add_probe_fallback_caps);
+
+    /* MtkCore (Legacy-SPI) detection & profile */
+    RUN_TEST(test_fw_name_semver_accepts_dotted_versions);
+    RUN_TEST(test_fw_name_semver_rejects_non_versions);
+    RUN_TEST(test_is_mtkcore_devstatus_zero_bitmap_semver_name);
+    RUN_TEST(test_is_mtkcore_devstatus_rejects_nonzero_bitmap);
+    RUN_TEST(test_is_mtkcore_devstatus_rejects_bare_identifier);
+    RUN_TEST(test_mtkcore_profile_includes_compat_supported_caps);
+    RUN_TEST(test_mtkcore_profile_excludes_unsupported_caps);
 
     /* M1_RPC helpers: CRC16 */
     RUN_TEST(test_rpc_crc16_empty_returns_0xffff);

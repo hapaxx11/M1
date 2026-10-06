@@ -241,7 +241,21 @@
  */
 #define M1_ESP32_CAP_WIFI_DISCONNECT (UINT64_C(1) << 26)
 
-/* Bits 27-63 reserved for future use */
+/**
+ * MtkCore (Monstatek/MonstaTek-Esp32-Core) Legacy-SPI firmware classifier.
+ * Host-only bit — NOT a feature capability and NOT part of the canonical CD3
+ * wire header.  It is never received over the wire: MtkCore's "Legacy SPI
+ * Compatibility" GET_STATUS (msg_id 0x0002) deliberately hard-codes its 8-byte
+ * cap_bitmap to all zeros (the firmware refuses to guess legacy bit indices —
+ * see Monstatek/MonstaTek-Esp32-Core components/mtek_transport_spi_compat/
+ * mtek_compat_dispatch.c handle_get_status).  m1_esp32_caps_init() synthesises
+ * this bit when it detects MtkCore (zero bitmap + dotted-semver fw_name) so the
+ * transport classifier can route the device to ESP32_TRANSPORT_RPC (the m1_link
+ * binary path MtkCore's compat adapter speaks) instead of the AT text path it
+ * cannot answer.  esp32_feature_map.c never lists it as a gated feature. */
+#define M1_ESP32_CAP_MTKCORE        (UINT64_C(1) << 27)
+
+/* Bits 28-63 reserved for future use */
 
 /* =========================================================================
  * Compile-time profile reference
@@ -350,6 +364,118 @@
 static inline uint64_t m1_esp32_caps_with_cd3_host_bits(uint64_t bitmap)
 {
     return bitmap | M1_ESP32_CAP_WIFI_DISCONNECT | M1_ESP32_CAP_ESPNOW;
+}
+
+/**
+ * MtkCore (Monstatek/MonstaTek-Esp32-Core) Legacy-SPI capability profile.
+ *
+ * MtkCore's "Legacy SPI Compatibility" adapter speaks the same m1_link binary
+ * wire protocol this host already emits (magic 0x4D31, 8-byte header, 512-byte
+ * cells, CRC-16/CCITT-FALSE, flat 16-bit msg_id), but its GET_STATUS reply
+ * reports an all-zero capability bitmap by design.  The host therefore
+ * synthesises this fixed profile on detection, enumerating ONLY the opcodes the
+ * compat adapter actually serves.  Each bit is justified against the firmware's
+ * dispatch switch in
+ * Monstatek/MonstaTek-Esp32-Core:components/mtek_transport_spi_compat/mtek_compat_dispatch.c
+ * (verified 2026-10, release build 0.8.1.0):
+ *
+ *   WIFI_SCAN       - AP scan          (legacy msg_id 0x0103 -> AP_SCAN_*)
+ *   STA_SCAN        - station scan      (0x030E/0x030F -> STA_SCAN_*)
+ *   WIFI_JOIN       - STA connect       (0x0104 -> STA_CONNECT)
+ *   WIFI_DISCONNECT - STA disconnect    (0x0105 -> STA_DISCONNECT)
+ *   DEAUTH          - deauth attack     (0x0302/0x0303/0x030D -> DEAUTH_*)
+ *   BEACON          - beacon flood      (0x0304/0x0305 -> BEACON_*)
+ *   HANDSHAKE       - WPA handshake cap (0x0310-0x0313 -> HANDSHAKE_*)
+ *   SOFTAP          - SoftAP hotspot    (0x0200-0x0202 -> SOFTAP_*)
+ *   PKTMON          - monitor/capture   (0x0300/0x0301/0x0314/0x0315 -> CAPTURE_*)
+ *   PORTAL          - captive portal    (0x0316-0x0319 -> CAPTIVE_PORTAL_*)
+ *   BLE_SCAN        - BLE passive scan  (0x0401/0x0402 -> BLE_SCAN_*)
+ *   BLE_ADV         - BLE advertise     (0x0403/0x0404 -> BLE_ADV_*)
+ *   BLE_GATT        - GATT client       (0x0409/0x040A -> GATT_*)
+ *   MTKCORE         - host-only transport classifier (routes to RPC)
+ *
+ * Deliberately EXCLUDED because the compat adapter returns UNSUPPORTED /
+ * DISABLED / has no wire opcode for them (same source file + docs/
+ * CAPABILITY_MANIFEST.md): ESP-NOW (0x06xx absent), 802.15.4 (0x05xx absent),
+ * PMKID (0x0308/0x030B gaps), PROBE_FLOOD (0x0306/0x0307 overlay UNSUPPORTED),
+ * KARMA (0x0309/0x030A overlay UNSUPPORTED), WIFI_SET_MAC/WIFI_SET_CHAN
+ * (WIFI_MODE_GET/SET DISABLED), BLE_HID / BLE_SPAM (DISABLED), NETSCAN,
+ * BT_MANAGE, OTA, WIFI_HOTSPOT, and time-sync (no SNTP client).
+ */
+#define M1_ESP32_CAP_PROFILE_MTKCORE \
+    (M1_ESP32_CAP_WIFI_SCAN      | \
+     M1_ESP32_CAP_STA_SCAN       | \
+     M1_ESP32_CAP_WIFI_JOIN      | \
+     M1_ESP32_CAP_WIFI_DISCONNECT| \
+     M1_ESP32_CAP_DEAUTH         | \
+     M1_ESP32_CAP_BEACON         | \
+     M1_ESP32_CAP_HANDSHAKE      | \
+     M1_ESP32_CAP_SOFTAP         | \
+     M1_ESP32_CAP_PKTMON         | \
+     M1_ESP32_CAP_PORTAL         | \
+     M1_ESP32_CAP_BLE_SCAN       | \
+     M1_ESP32_CAP_BLE_ADV        | \
+     M1_ESP32_CAP_BLE_GATT       | \
+     M1_ESP32_CAP_MTKCORE)
+
+/**
+ * Return true when @p name is a dotted numeric version string ("X.Y", "X.Y.Z",
+ * "0.8.1.0", …): one or more decimal digits, at least one '.', and only digits
+ * and '.' throughout (no leading/trailing dot, no empty components).
+ *
+ * This is the distinguishing signature of MtkCore's Legacy-SPI GET_STATUS reply,
+ * whose fw_name carries the release string (e.g. "0.8.1.0") rather than a bare
+ * product identifier like the brain-CD3 "m1-native".  Pure logic — no deps.
+ */
+static inline bool m1_esp32_caps_fw_name_is_semver(const char *name)
+{
+    if (!name || name[0] == '\0')
+        return false;
+
+    bool    seen_dot    = false;
+    bool    seen_digit  = false;   /* a digit in the current component */
+    size_t  components  = 0u;      /* completed numeric components */
+
+    for (const char *p = name; *p != '\0'; p++)
+    {
+        if (*p >= '0' && *p <= '9')
+        {
+            seen_digit = true;
+        }
+        else if (*p == '.')
+        {
+            if (!seen_digit)       /* leading dot or empty component */
+                return false;
+            seen_dot   = true;
+            components++;
+            seen_digit = false;
+        }
+        else
+        {
+            return false;          /* any other character disqualifies */
+        }
+    }
+
+    if (!seen_digit)               /* trailing dot / empty final component */
+        return false;
+    components++;                   /* count the final component */
+
+    return seen_dot && components >= 2u;
+}
+
+/**
+ * Return true when a GET_STATUS devstatus reply is MtkCore's Legacy-SPI adapter:
+ * an all-zero capability bitmap paired with a dotted-semver fw_name.
+ *
+ * MtkCore hard-codes its legacy cap_bitmap to zero (see M1_ESP32_CAP_MTKCORE),
+ * so a zero bitmap alone is ambiguous; the dotted-semver fw_name is the
+ * disambiguator (brain-CD3 reports "m1-native", not a version string).  Pure
+ * logic — host-testable, no HAL deps.
+ */
+static inline bool m1_esp32_caps_is_mtkcore_devstatus(uint64_t bitmap,
+                                                      const char *fw_name)
+{
+    return bitmap == 0u && m1_esp32_caps_fw_name_is_semver(fw_name);
 }
 
 /* =========================================================================

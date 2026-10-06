@@ -475,6 +475,58 @@ void test_is_cd3_all_ones_returns_true(void)
 }
 
 /* =========================================================================
+ * esp32_firmware_is_mtkcore / transport routing — MtkCore Legacy-SPI
+ * =========================================================================*/
+
+void test_is_mtkcore_zero_bitmap_returns_false(void)
+{
+    TEST_ASSERT_FALSE(esp32_firmware_is_mtkcore(0u));
+}
+
+void test_is_mtkcore_classifier_bit_returns_true(void)
+{
+    TEST_ASSERT_TRUE(esp32_firmware_is_mtkcore(M1_ESP32_CAP_MTKCORE));
+    TEST_ASSERT_TRUE(esp32_firmware_is_mtkcore(M1_ESP32_CAP_PROFILE_MTKCORE));
+}
+
+void test_mtkcore_profile_routes_to_rpc_transport(void)
+{
+    /* Regression for the "misdetected as AT" bug: MtkCore's synthesised
+     * profile must resolve to the m1_link RPC transport, never AT. */
+    TEST_ASSERT_EQUAL_INT(ESP32_TRANSPORT_RPC,
+                          esp32_firmware_transport(M1_ESP32_CAP_PROFILE_MTKCORE));
+}
+
+void test_mtkcore_not_classified_as_cd3_or_sin360(void)
+{
+    /* MtkCore has HANDSHAKE but not 802154_TX/BLE_SPAM (not CD3), and no
+     * BLE_HID (not SiN360) — only the MTKCORE bit selects RPC. */
+    TEST_ASSERT_FALSE(esp32_firmware_is_cd3(M1_ESP32_CAP_PROFILE_MTKCORE));
+    TEST_ASSERT_FALSE(esp32_firmware_is_sin360(M1_ESP32_CAP_PROFILE_MTKCORE));
+}
+
+void test_mtkcore_profile_supports_compat_features(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_MTKCORE;
+    TEST_ASSERT_TRUE(esp32_feature_supported(p, ESP32_FEATURE_WIFI_SCAN));
+    TEST_ASSERT_TRUE(esp32_feature_supported(p, ESP32_FEATURE_DEAUTH));
+    TEST_ASSERT_TRUE(esp32_feature_supported(p, ESP32_FEATURE_HANDSHAKE));
+    TEST_ASSERT_TRUE(esp32_feature_supported(p, ESP32_FEATURE_BLE_SCAN));
+    TEST_ASSERT_TRUE(esp32_feature_supported(p, ESP32_FEATURE_BLE_GATT));
+}
+
+void test_mtkcore_profile_excludes_unsupported_features(void)
+{
+    const uint64_t p = M1_ESP32_CAP_PROFILE_MTKCORE;
+    TEST_ASSERT_FALSE(esp32_feature_supported(p, ESP32_FEATURE_ESPNOW));
+    TEST_ASSERT_FALSE(esp32_feature_supported(p, ESP32_FEATURE_802154));
+    TEST_ASSERT_FALSE(esp32_feature_supported(p, ESP32_FEATURE_PMKID));
+    TEST_ASSERT_FALSE(esp32_feature_supported(p, ESP32_FEATURE_PROBE_FLOOD));
+    TEST_ASSERT_FALSE(esp32_feature_supported(p, ESP32_FEATURE_KARMA));
+    TEST_ASSERT_FALSE(esp32_feature_supported(p, ESP32_FEATURE_BLE_HID));
+}
+
+/* =========================================================================
  * esp32_firmware_is_sin360 — classifier
  * =========================================================================*/
 
@@ -603,6 +655,13 @@ int main(void)
     RUN_TEST(test_is_cd3_rpc_bit_only_returns_false);
     RUN_TEST(test_is_cd3_sin360_profile_returns_false);
     RUN_TEST(test_is_cd3_all_ones_returns_true);
+
+    RUN_TEST(test_is_mtkcore_zero_bitmap_returns_false);
+    RUN_TEST(test_is_mtkcore_classifier_bit_returns_true);
+    RUN_TEST(test_mtkcore_profile_routes_to_rpc_transport);
+    RUN_TEST(test_mtkcore_not_classified_as_cd3_or_sin360);
+    RUN_TEST(test_mtkcore_profile_supports_compat_features);
+    RUN_TEST(test_mtkcore_profile_excludes_unsupported_features);
 
     RUN_TEST(test_feature_count_equals_24);
 
