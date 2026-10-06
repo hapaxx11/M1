@@ -220,6 +220,57 @@ endif()
 add_test(NAME esp32_native COMMAND test_esp32_native)
 
 # ------------------------------------------------------------------
+# Module under test: wifi_pcapng (pure-logic PCAPNG + radiotap encoder)
+#
+# The file-format half of MonstaShark-equivalent WiFi capture: turns raw
+# 802.11 frames + per-frame RSSI/channel into a Wireshark-openable PCAPNG byte
+# stream (SHB/IDB/EPB blocks, LINKTYPE_IEEE802_11_RADIOTAP).  Verifies:
+#   - channel->frequency mapping and the fixed radiotap header layout
+#   - SHB / IDB / EPB little-endian byte offsets, trailers and 32-bit padding
+#   - wifi_pcapng_build_epb_radiotap() radiotap+frame assembly + bounds checks
+# ------------------------------------------------------------------
+add_executable(test_wifi_pcapng
+    test_wifi_pcapng.c
+    ${M1_ROOT}/m1_csrc/wifi_pcapng.c
+)
+target_include_directories(test_wifi_pcapng PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_pcapng PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_pcapng PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_pcapng COMMAND test_wifi_pcapng)
+
+# ------------------------------------------------------------------
+# Module under test: m1_esp32_capture (Native M1 SPI v1 CAPTURE service)
+#
+# Codec + client driver for MonstaShark-equivalent 802.11 capture over the
+# native transport (service 0x0004).  The 1024-byte SPI exchange primitive is
+# injected as a fake canned-cell queue, so START / POLL_READ / STOP run on the
+# host.  Verifies:
+#   - CAPTURE_START / POLL_READ / STOP request body byte layouts
+#   - START token + POLL_READ record parsers (EMPTY / RECORD / MALFORMED)
+#   - the GET_CAPABILITIES capability gate for CAPTURE_START
+#   - record->EPB (radiotap) PCAPNG glue
+#   - the mtk_capture_start/poll/stop driver over mtk_native_call()
+# ------------------------------------------------------------------
+add_executable(test_esp32_capture
+    test_esp32_capture.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_capture.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_native.c
+    ${M1_ROOT}/m1_csrc/wifi_pcapng.c
+)
+target_include_directories(test_esp32_capture PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_capture PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_capture COMMAND test_esp32_capture)
+
+# ------------------------------------------------------------------
 # Module under test: m1_esp32_rpc_features (per-feature M1_RPC action layer)
 #
 # Builds on the m1_esp32_rpc client to provide one action wrapper per
