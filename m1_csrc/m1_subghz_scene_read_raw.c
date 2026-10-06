@@ -903,12 +903,14 @@ static void draw(SubGhzApp *app)
 
     /* Live RSSI bar — shown while listening (Start) and recording to indicate
      * signal strength before and during capture.
-     * Uses the same `app->rssi` that drives the spectrogram waveform; at
-     * most one 100 ms tick stale, matching the Read scene's RSSI bar update
-     * cadence. */
+     * RSSI is sampled before the bar is drawn so the bar and the spectrogram
+     * waveform below both use the same fresh value (matches the Read scene). */
     if (app->raw_state == SubGhzReadRawStateStart ||
         app->raw_state == SubGhzReadRawStateRecording)
+    {
+        app->rssi = subghz_read_rssi_ext();
         subghz_rssi_bar_draw(app->rssi);
+    }
 
     /* Waveform area frame — always visible */
     subghz_raw_draw_frame_ext();
@@ -925,7 +927,6 @@ static void draw(SubGhzApp *app)
      */
     if (app->raw_state == SubGhzReadRawStateStart)
     {
-        app->rssi = subghz_read_rssi_ext();
         /* In Start state the cursor must NOT advance — the waveform should only
          * scroll during an active recording (RECORDING state, button = "Stop").
          * Advancing the cursor in passive-listen mode makes the waveform look
@@ -939,7 +940,6 @@ static void draw(SubGhzApp *app)
     }
     else if (app->raw_state == SubGhzReadRawStateRecording)
     {
-        app->rssi = subghz_read_rssi_ext();
         bool signal_present = ((float)app->rssi > (float)subghz_get_rssi_threshold_ext());
 
         /* Rate-limit cursor advance to ~100 ms/step (Momentum tick rate).
