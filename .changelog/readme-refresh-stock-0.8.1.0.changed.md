@@ -1,1 +1,0 @@
-**Docs: refreshed README for official Monstatek v0.8.1.0 / MtkCore.** Updated the stock-comparison version, documented MtkCore as the official ESP32 firmware (including PCAPNG capture), merged duplicate DFU instructions, corrected the test-file count and trimmed the obsolete pre-v0.9.0.124 upgrade notes.

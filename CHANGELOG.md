@@ -9,7 +9,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.1] - 2026-10-06
 
+### Added
+
+- **ESP32: support Monstatek MtkCore firmware over its Legacy-SPI compatibility
+  adapter.** MtkCore speaks our m1_link binary-RPC wire protocol but reports a
+  zero capability bitmap by design, so the host previously misdetected it as an
+  AT device and disabled every feature. The host now fingerprints MtkCore
+  (`cap_bitmap == 0` plus a dotted-semver `fw_name` such as `0.8.1.0`),
+  synthesises the new `M1_ESP32_CAP_PROFILE_MTKCORE` capability profile, and
+  routes it to `ESP32_TRANSPORT_RPC`. This lights up WiFi
+  scan/join/deauth/beacon/handshake/SoftAP/packet-monitor/captive-portal and BLE
+  scan/adv/GATT. ESP-NOW, 802.15.4, PMKID, karma, probe-flood and BLE HID/spam
+  remain unsupported over the compat adapter. The host-side Native M1 SPI v1
+  codec/client exists, but live SPI activation is not yet implemented. Detection
+  and transport routing are host-tested (`tests/test_esp32_caps.c`,
+  `tests/test_esp32_feature_map.c`).
+- **ESP32: add the host-side codec and client for MtkCore's canonical "Native M1
+  SPI v1" transport.** This is the full-feature-parity transport MtkCore exposes
+  alongside its Legacy-SPI compatibility adapter (magic `"M1S1"`, 1024-byte
+  cells, a 40-byte little-endian header, CRC32C framing, 16-bit service + 16-bit
+  opcode addressing, request-id fragment reassembly, and a paginated per-opcode
+  `GET_CAPABILITIES` negotiation in place of a capability bitmap). The new
+  `m1_esp32_native.h` codec and `m1_esp32_native.c` client implement the
+  HELLO handshake, single- and multi-cell request/response exchange, and
+  decoders for PING, GET_API_IDENTITY and GET_CAPABILITIES, driven through an
+  injectable 1024-byte exchange primitive. Every host-verifiable part is covered
+  by `tests/test_esp32_native.c` (31 tests: CRC32C check-value anchor, exact
+  header byte offsets, cell build/verify, fragment reassembly, payload decoders,
+  and the client over a fake transport). The physical 512→1024 SPI handshake and
+  live transport activation are deferred to an on-hardware follow-up: MtkCore's
+  own source documents the HELLO negotiation payload and the cell-size handshake
+  as undefined, so they cannot be validated without the device.
+- **ESP32: add host-side codec, client driver and PCAPNG encoder for
+  MonstaShark-equivalent WiFi capture.** MtkCore's Native M1 SPI v1 transport
+  exposes a monitor-mode packet-capture service (`0x0004`) that returns raw
+  802.11 frames with per-frame RSSI/channel metadata; our fork previously had no
+  transport for it. The new `m1_esp32_capture.h/.c` implements the CAPTURE
+  service codec (START/POLL_READ/STOP request builders, the START-token and
+  POLL_READ frame-record parsers, and a `GET_CAPABILITIES` capability gate) plus
+  a thin client driver layered on `mtk_native_call`, and `wifi_pcapng.h/.c` is a
+  pure-logic PCAPNG + radiotap encoder that turns those raw frames into a
+  Wireshark-openable capture stream (SHB/IDB/EPB, `LINKTYPE_IEEE802_11_RADIOTAP`).
+  Both modules are buffer-only (no new static RAM) and fully host-tested
+  (`tests/test_esp32_capture.c`, `tests/test_wifi_pcapng.c`). Consistent with the
+  native transport, the physical 1024-byte SPI exchange primitive and live
+  session-to-SD capture wiring are deferred to an on-hardware follow-up; the
+  codec, driver and encoder are complete and host-verified today.
+- **WiFi sniffers now save MonstaShark-equivalent PCAPNG captures to SD.** When the
+  ESP32 is on the RPC "M1 Link" transport, the packet sniffers (All / Beacon /
+  Probe / Deauth / SAE / Pwnagotchi, via `wifi_sniffer_run`) open a capture
+  session and write every raw 802.11 frame — with per-frame radiotap
+  RSSI/channel metadata — to `capture/sniffNNN.pcapng` (auto-indexed 0..999,
+  Wireshark-openable, `LINKTYPE_IEEE802_11_RADIOTAP`). The new
+  `m1_pcap_capture.h/.c` session wraps the existing host-tested `wifi_pcapng`
+  encoder over FatFS; frames are captured up to a 512-byte snaplen while the EPB
+  `original_len` preserves the true frame length. The SD-write glue is fully
+  host-tested through the stdio-backed FatFS stub (`tests/test_pcap_capture.c`),
+  and the session is heap/buffer-only (no new static RAM; link RAM unchanged).
+  The decoded-record sniffers (EAPOL and the binary-SPI `CMD_PKTMON_NEXT` path)
+  do not deliver raw frames and are left unchanged.
+
+### Changed
+
+- **Version: next release line is now v0.9.4.x.** `FW_VERSION_BUILD` bumped from `3` to `4` in `m1_fw_update_bl.h`; `FW_VERSION_RC`/`M1_HAPAX_REVISION` stay `0` so the release workflow auto-increments to `v0.9.4.1` for the first release on the new line.
+- **Docs: refreshed README for official Monstatek v0.8.1.0 / MtkCore.** Updated the stock-comparison version, documented MtkCore as the official ESP32 firmware (including PCAPNG capture), merged duplicate DFU instructions, corrected the test-file count and trimmed the obsolete pre-v0.9.0.124 upgrade notes.
+
+### Fixed
+
+- **NFC/RFID: keep the backlight on for the read result** — a successful read that
+  followed a long scan with no button press could show its result/info screen
+  with the backlight already dimmed by the inactivity timer. The read-complete
+  screen now wakes the backlight and restarts the inactivity timer so the result
+  is actually visible (ported from upstream Monstatek). Scanning still times out
+  normally. The backlight screen-saver decision is now host-tested
+  (`tests/test_lcd_saver.c`).
 ## [0.9.3.16] - 2026-09-04
 
 ### Added
