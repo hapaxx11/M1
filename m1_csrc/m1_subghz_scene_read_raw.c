@@ -901,11 +901,13 @@ static void draw(SubGhzApp *app)
 
     subghz_status_bar_draw(freq, mod, right_status, false);
 
-    /* Live RSSI bar — shown during recording to indicate signal strength.
+    /* Live RSSI bar — shown while listening (Start) and recording to indicate
+     * signal strength before and during capture.
      * Uses the same `app->rssi` that drives the spectrogram waveform; at
      * most one 100 ms tick stale, matching the Read scene's RSSI bar update
      * cadence. */
-    if (app->raw_state == SubGhzReadRawStateRecording)
+    if (app->raw_state == SubGhzReadRawStateStart ||
+        app->raw_state == SubGhzReadRawStateRecording)
         subghz_rssi_bar_draw(app->rssi);
 
     /* Waveform area frame — always visible */
