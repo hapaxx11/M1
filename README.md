@@ -51,7 +51,7 @@ project discussion, and related project resources:
 
 ## Highlights vs Stock Firmware
 
-| Feature | Monstatek Stock (v0.8.0.1) | Hapax |
+| Feature | Monstatek Stock (v0.8.1.0) | Hapax |
 |---------|---------------------------|-------|
 | Sub-GHz protocols | ~20 | **105** |
 | LF-RFID protocols | ~10 | **26** |
@@ -66,7 +66,7 @@ project discussion, and related project resources:
 | Bad-BT (Bluetooth HID) | ✗ | ✓ |
 | WiFi sniffers, attacks, recon & net scan (ESP32 required) | ✗ | ✓ (27 tools) |
 | BLE sniffers, wardrive, spam & detectors (ESP32 required) | ✗ | ✓ (20 tools) |
-| IR remote database | — | **1,412** files included |
+| IR remote database | Separate download (`INFRARED/db/`, IR Database v1) | **1,412** files included |
 | Sub-GHz signal database | — | **313** files included |
 | Sub-GHz playlist database | — | Included (Tesla, doorbells, fans) |
 | Browser-based flashing | ✗ | ✓ ([Web Updater](https://hapaxx11.github.io/M1/)) |
@@ -146,7 +146,7 @@ project discussion, and related project resources:
 
 ### WiFi
 
-> **Requires compatible ESP32 firmware** — either [SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases) (binary SPI, full feature set) or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT commands, partial feature set). See ESP32 note below.
+> **Requires compatible ESP32 firmware** — one of the supported variants in the ESP32 table below — e.g. [MtkCore](https://github.com/Monstatek/MonstaTek-Esp32-Core) (official), [SiN360](https://github.com/sincere360/M1_SiN360_ESP32/releases), CD3, or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT, partial feature set). See ESP32 note below.
 
 **Sniffers:**
 - Packet sniffers: All, Beacon, Probe, Deauth, EAPOL, SAE/WPA3, Pwnagotchi
@@ -177,7 +177,7 @@ project discussion, and related project resources:
 
 ### Bluetooth & BLE
 
-> **Requires compatible ESP32 firmware** — either [SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases) (binary SPI) or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT commands, BLE Spam only). See ESP32 note below.
+> **Requires compatible ESP32 firmware** — one of the supported variants in the ESP32 table below — e.g. [MtkCore](https://github.com/Monstatek/MonstaTek-Esp32-Core) (official), [SiN360](https://github.com/sincere360/M1_SiN360_ESP32/releases), CD3, or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT, BLE Spam only). See ESP32 note below.
 
 **BLE Sniffers:** Analyzer, Generic, Flipper, AirTag Sniff/Monitor, Flock
 
@@ -274,7 +274,7 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 > | Firmware | Caps supported | Notes |
 > |----------|:---------------:|-------|
 > | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 (profile macro; see caveat) | Native ESP-IDF, no AT stack; not a fork of the AT-based firmware below. Includes WiFi join + 802.15.4. PMKID capture and ESP32 OTA self-update are **reserved protocol message IDs that are not yet implemented** in shipped releases (see caveat); WPA handshake capture is implemented but not yet self-reported via the capability bitmap. |
-> | **[MtkCore (Monstatek/MonstaTek-Esp32-Core)](https://github.com/Monstatek/MonstaTek-Esp32-Core)** — Legacy-SPI compat adapter | 13 / 21 | Native ESP-IDF; its *"Legacy SPI Compatibility"* adapter speaks our exact m1_link RPC wire protocol. Reports a **zero capability bitmap** by design, so the host fingerprints it by `cap_bitmap == 0` + dotted-semver `fw_name` and synthesises `M1_ESP32_CAP_PROFILE_MTKCORE` → `ESP32_TRANSPORT_RPC`. Supports WiFi scan/join/deauth/beacon/handshake/SoftAP/pktmon/portal + BLE scan/adv/GATT. **No** ESP-NOW, 802.15.4, PMKID, karma, probe-flood, or BLE HID/spam over the compat adapter (those need its Native M1 SPI v1 transport, not yet implemented host-side). |
+> | **[MtkCore (Monstatek/MonstaTek-Esp32-Core)](https://github.com/Monstatek/MonstaTek-Esp32-Core)** — official ESP32 firmware | 13 / 21 (Legacy-SPI compat) | Native ESP-IDF. Over its *"Legacy SPI Compatibility"* adapter it speaks our m1_link RPC protocol and reports a **zero capability bitmap**; the host fingerprints it (`cap_bitmap == 0` + dotted-semver `fw_name`) and synthesises `M1_ESP32_CAP_PROFILE_MTKCORE` → `ESP32_TRANSPORT_RPC`. Supports WiFi scan/join/deauth/beacon/handshake/SoftAP/pktmon/portal + BLE scan/adv/GATT; RPC WiFi sniffers save Wireshark-openable PCAPNG captures to `capture/` on SD. **No** ESP-NOW, 802.15.4, PMKID, karma, probe-flood, or BLE HID/spam over the compat adapter. Its Native M1 SPI v1 transport (full parity) has a host-tested codec/client, but live SPI activation awaits on-hardware validation. |
 > | **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** | 13 / 21 | Binary SPI; full sniffer/recon/station-scan/BLE feature set; no PMKID/handshake capture or OTA. |
 > | **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** | 10 / 21 | AT commands over SPI; WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, network joining. No packet-monitor sniffers, station scan, or advanced BLE features. |
 >
@@ -349,7 +349,7 @@ as GitHub Actions workflows:
 |------|-------------|-------|------|
 | **cppcheck** | `static-analysis.yml` | `m1_csrc/`, `Sub_Ghz/protocols/` | On-demand (`workflow_dispatch`) |
 | **cppcheck MISRA-C** | `static-analysis.yml` | `m1_csrc/` | On-demand (`workflow_dispatch`) |
-| **Unity + ASan/UBSan** | `tests.yml` | 123 test files, 5,000+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
+| **Unity + ASan/UBSan** | `tests.yml` | 177 test files, 5,000+ test functions (Sub-GHz, WiFi, NFC, RFID, IR, BLE, crypto, and more) | Enforced (blocks PR) |
 | **Doxygen** | `docs.yml` | Application source | Auto-deploy to Pages |
 
 ## Flashing
@@ -382,7 +382,7 @@ install)** section below instead.
 ### Via WiFi (OTA)
 
 > 🚧 **Work in progress** — OTA download is functional but still being stabilised.
-> Requires an ESP32 firmware that supports WiFi joining (SiN360 or dag T-800).
+> Requires an ESP32 firmware that supports WiFi joining (SiN360, dag T-800, CD3, or MtkCore).
 
 The M1 can download firmware updates over WiFi directly from GitHub Releases:
 
@@ -395,12 +395,7 @@ you flash it via **Settings → FW Update → Install from SD** as a separate st
 the device does not reflash itself automatically.
 
 ### Via DFU Mode (recovery / first install)
-1. Power off the M1 (Settings → Power → Power Off → Right Button)
-2. Hold **Up + OK** for 5 seconds to enter DFU mode (screen stays dark)
-3. Connect via USB-C
-4. Use the DFU Flash page in [qMonstatek](https://github.com/bedge117/qMonstatek)
-
-To exit DFU mode without flashing, hold **Right + Back** to reboot.
+See [Entering DFU Mode](#entering-dfu-mode-hardware-strap) below, then use the DFU Flash page in [qMonstatek](https://github.com/bedge117/qMonstatek).
 
 ### ST-Link Connection
 
@@ -470,36 +465,10 @@ If you need to flash the firmware directly via USB using STM32CubeProgrammer (wi
 
 ## Upgrading & Compatibility
 
-### Sub-GHz saved files — pre-v0.9.0.124 files are not emulatable
-
-> ⚠ **If you saved Sub-GHz signals using any Hapax firmware build earlier than
-> v0.9.0.124, those files must be deleted and recaptured.**
-
-Any `.sub` or `.sgh` file that was saved by the Hapax firmware **before v0.9.0.124**
-contains a zeroed key (`Key: 0x0`) and a blank frequency field due to two bugs that
-were fixed together in v0.9.0.124:
-
-1. **Zero key bug** — the legacy save code path did not copy the decoded key value
-   into the signal struct before writing to disk. Every file it produced has
-   `Key: 00 00 00 00 00 00 00 00`, which causes emulation to transmit all-zero
-   pulses — the gate or remote will not respond.
-2. **Blank frequency bug** — `snprintf("%.2f MHz", ...)` is a no-op under
-   `--specs=nano.specs` (newlib-nano) without `-u _printf_float`, so the
-   `Freq:` field in the Signal Info screen was empty and the saved value was not
-   useful for diagnosis.
-
-**Files NOT affected by this:**
-
-| File source | Status |
-|---|---|
-| Captured and saved on **Hapax v0.9.0.124 or later** | ✅ Correct — key, bits, TE, and frequency all written correctly |
-| `.sub` / `.sgh` files from **C3.12 or SiN360** firmware | ✅ Correct — those firmwares had working save paths; load and emulate fine on Hapax |
-| **Stock Monstatek v0.8.0.x** — files captured on-device | ✅ If the stock firmware wrote a file at all, the key field is correct |
-| Files from the bundled **`subghz_database/`** signal library | ✅ Pre-validated Flipper `.sub` format; unaffected |
-| Files captured and saved on **Hapax before v0.9.0.124** | ❌ Key is 0x0 — delete and recapture using v0.9.0.124+ |
-
-**How to check a file:** Open Sub-GHz → Saved, select the file, press OK → Info.
-If "Key: 0x0" appears, the file is corrupted by this bug and must be recaptured.
+> ⚠ Sub-GHz `.sub`/`.sgh` files saved by Hapax builds earlier than **v0.9.0.124**
+> contain a zeroed key (`Key: 0x0`) and cannot be emulated — delete and recapture them.
+> Check via Sub-GHz → Saved → OK → Info. Files from v0.9.0.124+, C3.12, SiN360, stock
+> Monstatek, and the bundled `subghz_database/` are unaffected.
 
 ## Contributing
 
