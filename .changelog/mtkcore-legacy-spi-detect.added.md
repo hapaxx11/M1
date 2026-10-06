@@ -7,7 +7,7 @@
   routes it to `ESP32_TRANSPORT_RPC`. This lights up WiFi
   scan/join/deauth/beacon/handshake/SoftAP/packet-monitor/captive-portal and BLE
   scan/adv/GATT. ESP-NOW, 802.15.4, PMKID, karma, probe-flood and BLE HID/spam
-  remain unsupported over the compat adapter (they require MtkCore's Native M1
-  SPI v1 transport, not yet implemented host-side). Detection and transport
-  routing are host-tested (`tests/test_esp32_caps.c`,
+  remain unsupported over the compat adapter. The host-side Native M1 SPI v1
+  codec/client exists, but live SPI activation is not yet implemented. Detection
+  and transport routing are host-tested (`tests/test_esp32_caps.c`,
   `tests/test_esp32_feature_map.c`).
