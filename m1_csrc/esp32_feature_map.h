@@ -182,36 +182,49 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
 /**
  * @brief  Wire transport an ESP32 firmware variant speaks.
  *
- * The M1 supports three mutually-exclusive on-wire command protocols over the
- * same SPI-HD hardware.  A feature module that wants to drive the ESP32 must
- * pick the encoder matching the detected transport:
+ * The M1 supports several mutually-exclusive on-wire command protocols over the
+ * same SPI hardware.  A feature module that wants to drive the ESP32 must pick
+ * the encoder matching the detected transport:
  *   - AT text commands ("AT+...\r\n") for the bedge117 / neddy299 / dag builds
  *     and the legacy CD3-AT firmware,
  *   - the 64-byte binary CMD_* protocol for SiN360,
- *   - the M1_RPC binary framing (magic 0x4D31) for the native "brain" CD3
- *     (m1-esp32-brain).
+ *   - the M1_RPC binary framing (magic 0x4D31, 512-byte cells) for the native
+ *     "brain" CD3 (m1-esp32-brain) and MtkCore's Legacy-SPI compat adapter,
+ *   - MtkCore's canonical "Native M1 SPI v1" (magic "M1S1", 1024-byte cells,
+ *     service+opcode addressing, CRC32C, paginated GET_CAPABILITIES) — the
+ *     codec/client for this lives in m1_esp32_native.c.
  *
  * NOTE: there are two distinct CD3 firmwares.  The legacy **CD3-AT** speaks AT
  * text commands and therefore classifies as ESP32_TRANSPORT_AT (it advertises
  * WIFI_JOIN and never sets the HANDSHAKE + 802154_TX/BLE_SPAM combination).
  * Only the newer native **brain CD3** speaks M1_RPC and classifies as
  * ESP32_TRANSPORT_RPC.  Both remain fully supported.
+ *
+ * NOTE: ESP32_TRANSPORT_NATIVE_V1 is NEVER returned by
+ * esp32_firmware_transport() — the native transport has no capability bitmap to
+ * classify from (it negotiates via the paginated GET_CAPABILITIES opcode).  It
+ * is currently a host-side codec/client only (m1_esp32_native.c): the live
+ * HELLO / GET_API_IDENTITY handshake is not yet wired into the production
+ * transport selection, so this value is not selectable at runtime.  Wiring it
+ * in is deferred to follow-up work.
  */
 typedef enum {
     ESP32_TRANSPORT_NONE = 0,   /**< Unknown / not detected — fail closed */
     ESP32_TRANSPORT_AT,         /**< AT text commands (bedge117 / neddy299 / dag / CD3-AT) */
     ESP32_TRANSPORT_BINARY_SPI, /**< 64-byte binary CMD_* protocol (SiN360) */
-    ESP32_TRANSPORT_RPC,        /**< M1_RPC binary framing (native brain CD3) */
+    ESP32_TRANSPORT_RPC,        /**< M1_RPC binary framing (native brain CD3 / MtkCore Legacy-SPI) */
+    ESP32_TRANSPORT_NATIVE_V1,  /**< MtkCore "Native M1 SPI v1" (magic "M1S1", 1024-byte cells) */
 } esp32_transport_t;
 
 /**
  * @brief  Classify the wire transport implied by @p cap_bitmap.
  *
  * Resolution order (a firmware matches at most one):
- *   1. brain CD3 (HANDSHAKE + 802154_TX/BLE_SPAM) -> ESP32_TRANSPORT_RPC
- *   2. SiN360 (BLE_HID, no JOIN)                   -> ESP32_TRANSPORT_BINARY_SPI
- *   3. any other non-zero bitmap                   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
- *   4. all-zero bitmap                             -> ESP32_TRANSPORT_NONE
+ *   1. MtkCore Legacy-SPI (M1_ESP32_CAP_MTKCORE)  -> ESP32_TRANSPORT_RPC
+ *   2. brain CD3 (HANDSHAKE + 802154_TX/BLE_SPAM) -> ESP32_TRANSPORT_RPC
+ *   3. SiN360 (BLE_HID, no JOIN)                   -> ESP32_TRANSPORT_BINARY_SPI
+ *   4. any other non-zero bitmap                   -> ESP32_TRANSPORT_AT  (incl. CD3-AT)
+ *   5. all-zero bitmap                             -> ESP32_TRANSPORT_NONE
  *
  * The legacy CD3-AT firmware advertises WIFI_JOIN without the brain CD3's
  * HANDSHAKE + 802154_TX/BLE_SPAM combination, so it correctly resolves to
@@ -250,6 +263,22 @@ bool esp32_firmware_is_sin360(uint64_t cap_bitmap);
  * to call before m1_esp32_caps_init() completes.
  */
 bool esp32_firmware_is_cd3(uint64_t cap_bitmap);
+
+/**
+ * @brief  Return true when the bitmap indicates an MtkCore Legacy-SPI firmware
+ *         (Monstatek/MonstaTek-Esp32-Core).
+ *
+ * Discriminator: the host-only M1_ESP32_CAP_MTKCORE classifier bit is set.
+ * That bit is never received over the wire — MtkCore's legacy GET_STATUS
+ * reports an all-zero capability bitmap by design — it is synthesised by
+ * m1_esp32_caps_init() when it recognises MtkCore (zero bitmap + dotted-semver
+ * fw_name).  MtkCore's "Legacy SPI Compatibility" adapter speaks the m1_link
+ * binary protocol, so it must be driven over ESP32_TRANSPORT_RPC.
+ *
+ * Returns false for all-zero bitmaps — safe to call before
+ * m1_esp32_caps_init() completes.
+ */
+bool esp32_firmware_is_mtkcore(uint64_t cap_bitmap);
 
 #ifdef __cplusplus
 }

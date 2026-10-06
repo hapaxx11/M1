@@ -191,6 +191,113 @@ endif()
 add_test(NAME esp32_rpc COMMAND test_esp32_rpc)
 
 # ------------------------------------------------------------------
+# Module under test: m1_esp32_native (MtkCore "Native M1 SPI v1" transport)
+#
+# Pure-logic frame codec + client for the canonical native transport (magic
+# "M1S1", 1024-byte cells, 40-byte header, CRC32C, service+opcode addressing,
+# fragment reassembly, paginated GET_CAPABILITIES).  The 1024-byte SPI exchange
+# primitive is injected as a fake canned-cell queue, so the HELLO handshake and
+# request/response reassembly run entirely on the host.  Verifies:
+#   - mtk_crc32c(): anchored to the CRC-32C/iSCSI check value (0xE3069283)
+#   - header serialize/parse at exact little-endian byte offsets
+#   - cell build/verify: zero-padding, bad magic/version/flags/CRC/length
+#   - fragment reassembly: multi-cell assembly, offset-gap / BUSY / ceiling
+#   - PING / GET_API_IDENTITY / GET_CAPABILITIES payload decoders + pagination
+#   - mtk_native_call(): single + multi-cell response, NAK status, timeout,
+#     transport error, uncorrelated-cell skipping; HELLO handshake ok/timeout
+# ------------------------------------------------------------------
+add_executable(test_esp32_native
+    test_esp32_native.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_native.c
+)
+target_include_directories(test_esp32_native PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_native PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_native PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_native COMMAND test_esp32_native)
+
+# ------------------------------------------------------------------
+# Module under test: wifi_pcapng (pure-logic PCAPNG + radiotap encoder)
+#
+# The file-format half of MonstaShark-equivalent WiFi capture: turns raw
+# 802.11 frames + per-frame RSSI/channel into a Wireshark-openable PCAPNG byte
+# stream (SHB/IDB/EPB blocks, LINKTYPE_IEEE802_11_RADIOTAP).  Verifies:
+#   - channel->frequency mapping and the fixed radiotap header layout
+#   - SHB / IDB / EPB little-endian byte offsets, trailers and 32-bit padding
+#   - wifi_pcapng_build_epb_radiotap() radiotap+frame assembly + bounds checks
+# ------------------------------------------------------------------
+add_executable(test_wifi_pcapng
+    test_wifi_pcapng.c
+    ${M1_ROOT}/m1_csrc/wifi_pcapng.c
+)
+target_include_directories(test_wifi_pcapng PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_pcapng PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_pcapng PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_pcapng COMMAND test_wifi_pcapng)
+
+# ------------------------------------------------------------------
+# Module under test: m1_esp32_capture (Native M1 SPI v1 CAPTURE service)
+#
+# Codec + client driver for MonstaShark-equivalent 802.11 capture over the
+# native transport (service 0x0004).  The 1024-byte SPI exchange primitive is
+# injected as a fake canned-cell queue, so START / POLL_READ / STOP run on the
+# host.  Verifies:
+#   - CAPTURE_START / POLL_READ / STOP request body byte layouts
+#   - START token + POLL_READ record parsers (EMPTY / RECORD / MALFORMED)
+#   - the GET_CAPABILITIES capability gate for CAPTURE_START
+#   - record->EPB (radiotap) PCAPNG glue
+#   - the mtk_capture_start/poll/stop driver over mtk_native_call()
+# ------------------------------------------------------------------
+add_executable(test_esp32_capture
+    test_esp32_capture.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_capture.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_native.c
+    ${M1_ROOT}/m1_csrc/wifi_pcapng.c
+)
+target_include_directories(test_esp32_capture PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_capture PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_capture COMMAND test_esp32_capture)
+
+# ------------------------------------------------------------------
+# Module under test: m1_pcap_capture (SD PCAPNG capture session)
+#
+# On-target glue that streams the pure-logic PCAPNG blocks (wifi_pcapng.c) to a
+# FatFS file, one radiotap EPB per raw 802.11 frame, for the WiFi sniffers.
+# FatFS calls run through the stdio-backed stub (stubs/ff.h), so the whole
+# on-SD byte layout is validated by reading the produced file back.  Verifies:
+#   - the capture/sniffNNN.pcapng filename formatter + bounds
+#   - SHB/IDB header + per-frame radiotap EPB layout round-trip
+#   - snap-length truncation (captured vs original length)
+#   - closed-session and auto-index open behaviour
+# ------------------------------------------------------------------
+add_executable(test_pcap_capture
+    test_pcap_capture.c
+    ${M1_ROOT}/m1_csrc/m1_pcap_capture.c
+    ${M1_ROOT}/m1_csrc/wifi_pcapng.c
+)
+target_include_directories(test_pcap_capture PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs
+)
+target_link_libraries(test_pcap_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_pcap_capture PRIVATE sanitizers)
+endif()
+add_test(NAME pcap_capture COMMAND test_pcap_capture)
+
+# ------------------------------------------------------------------
 # Module under test: m1_esp32_rpc_features (per-feature M1_RPC action layer)
 #
 # Builds on the m1_esp32_rpc client to provide one action wrapper per

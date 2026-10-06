@@ -429,6 +429,33 @@ void m1_esp32_caps_init(void)
                                                      (uint8_t)rpc_plen,
                                                      &bitmap, fw_name))
                     {
+                        /* MtkCore (Monstatek/MonstaTek-Esp32-Core) Legacy-SPI
+                         * firmware answers PING + GET_STATUS over the same
+                         * m1_link wire protocol as brain-CD3, but its compat
+                         * adapter hard-codes the capability bitmap to all zeros
+                         * and reports the release string (e.g. "0.8.1.0") in
+                         * fw_name.  Detect that signature and apply the fixed
+                         * MtkCore profile instead of the CD3 host-bits path —
+                         * otherwise the zero bitmap would resolve to
+                         * ESP32_TRANSPORT_AT and every feature would be gated
+                         * off.  See M1_ESP32_CAP_PROFILE_MTKCORE. */
+                        if (m1_esp32_caps_is_mtkcore_devstatus(bitmap, fw_name))
+                        {
+                            s_bitmap = M1_ESP32_CAP_PROFILE_MTKCORE;
+                            /* fw_name is already a parseable dotted semver;
+                             * prefix the product name for the device-info /
+                             * dual-boot display while keeping the X.Y.Z that
+                             * qMonstatek's parseVerNums() needs. */
+                            snprintf(s_fw_name, sizeof(s_fw_name),
+                                     "MtkCore %s", fw_name);
+                            caps_apply_footprint_estimates(s_bitmap);
+                            s_diag.rpc_status_ok = 1u;
+                            s_diag.outcome = (uint8_t)M1_ESP32_PROBE_RPC_STATUS;
+                            s_diag.bitmap  = s_bitmap;
+                            s_queried = true;
+                            return;
+                        }
+
                         s_bitmap = m1_esp32_caps_with_cd3_host_bits(bitmap);
                         /* fw_name is a bare identifier (e.g. "m1-native") with
                          * no dotted version.  Fold in the GET_FW_VERSION semver

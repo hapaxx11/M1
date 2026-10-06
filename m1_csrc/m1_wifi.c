@@ -27,6 +27,7 @@
 #include "m1_virtual_kb.h"
 #include "m1_lib.h"
 #include "ff.h"
+#include "m1_pcap_capture.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_compile_cfg.h"
@@ -1138,6 +1139,8 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	bool paused = false;
 	bool has_pkt = false;
 	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	m1_pcap_session_t cap_sess = {0};
+	uint8_t *rpc_frame = NULL;
 
 	ensure_esp32_ready();
 
@@ -1152,8 +1155,18 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 	if (use_rpc)
 	{
+		/* Full-size buffer so monitor_read reports the true frame length;
+		 * the capture session does the snaplen truncation. */
+		rpc_frame = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
+		if (!rpc_frame)
+			goto start_fail;
 		if (m1_esp32_rpc_monitor_start(0u) != M1_ESP32_RPC_OK)
 			goto start_fail;
+
+		/* The RPC monitor transport delivers true raw 802.11 frames, so we
+		 * can mirror MonstaShark and save a Wireshark-openable PCAPNG to SD.
+		 * Best-effort: a missing/full SD card just disables the recording. */
+		(void)m1_pcap_session_open(&cap_sess);
 	}
 	else
 	{
@@ -1177,6 +1190,8 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
 	u8g2_DrawStr(&m1_u8g2, 2, 35, "Listening...");
+	if (m1_pcap_session_active(&cap_sess))
+		u8g2_DrawStr(&m1_u8g2, 2, 50, "REC pcapng");
 	m1_u8g2_nextpage();
 
 	/* Main sniffing loop */
@@ -1207,14 +1222,18 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 		if (use_rpc)
 		{
-			uint8_t frame[M1_MAX_RESP_PAYLOAD];
+			uint8_t *frame = rpc_frame;
 			uint16_t flen = 0u;
 			uint8_t ch = 0u;
 			int8_t rssi = 0;
 			m1_esp32_rpc_status_t rst = m1_esp32_rpc_monitor_read(
-			    frame, sizeof(frame), &flen, &ch, &rssi);
+			    frame, M1_ESP32_RPC_RESP_FRAME_MAX, &flen, &ch, &rssi);
 			if (rst != M1_ESP32_RPC_OK || flen == 0u)
 				continue;
+			/* Save the full raw frame to the PCAPNG file (if recording). */
+			if (m1_pcap_session_active(&cap_sess))
+				(void)m1_pcap_session_write(&cap_sess, frame, flen, ch, rssi,
+				                            (uint64_t)HAL_GetTick() * 1000u);
 			wifi_sniffer_resp_from_monitor_frame(sniff_type, frame, flen,
 			                                     rssi, ch, &resp);
 		}
@@ -1231,9 +1250,13 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 		has_pkt = true;
 		sniffer_draw_packet(&last_resp, title, pkt_count, false);
 	}
+	m1_pcap_session_close(&cap_sess);
+	free(rpc_frame);
 	return;
 
 start_fail:
+	m1_pcap_session_close(&cap_sess);
+	free(rpc_frame);
 	m1_u8g2_firstpage();
 	u8g2_DrawStr(&m1_u8g2, 6, 15, title);
 	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,

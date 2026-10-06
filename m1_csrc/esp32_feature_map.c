@@ -142,18 +142,31 @@ bool esp32_firmware_is_cd3(uint64_t cap_bitmap)
            (cap_bitmap & (M1_ESP32_CAP_802154_TX | M1_ESP32_CAP_BLE_SPAM)) != 0u;
 }
 
+bool esp32_firmware_is_mtkcore(uint64_t cap_bitmap)
+{
+    /* MtkCore (Monstatek/MonstaTek-Esp32-Core) Legacy-SPI firmware.  The
+     * host-only M1_ESP32_CAP_MTKCORE classifier bit is synthesised by
+     * m1_esp32_caps_init() when it detects MtkCore (zero wire bitmap +
+     * dotted-semver fw_name).  All-zero bitmaps return false. */
+    return (cap_bitmap & M1_ESP32_CAP_MTKCORE) != 0u;
+}
+
 esp32_transport_t esp32_firmware_transport(uint64_t cap_bitmap)
 {
-    /* Order matters: the native brain CD3 is the most specific (HANDSHAKE +
-     * an RPC-only bit) and must be tested before the SiN360 rule, then SiN360
-     * before the generic AT fallback.  The legacy CD3-AT firmware sets WIFI_JOIN
-     * but NOT the brain CD3's HANDSHAKE + 802154_TX/BLE_SPAM combination, so it
-     * falls through to ESP32_TRANSPORT_AT and continues to be driven over AT
-     * text commands — this layer never re-routes it to M1_RPC.  An all-zero
-     * bitmap (unknown / not yet probed) yields NONE so transport-selecting
-     * callers fail closed. */
+    /* Order matters: MtkCore is the most specific (a dedicated host-only
+     * classifier bit) and the native brain CD3 is next (HANDSHAKE + an
+     * RPC-only bit); both speak the m1_link binary protocol and must resolve
+     * to ESP32_TRANSPORT_RPC before the SiN360 rule, then SiN360 before the
+     * generic AT fallback.  The legacy CD3-AT firmware sets WIFI_JOIN but NOT
+     * the brain CD3's HANDSHAKE + 802154_TX/BLE_SPAM combination nor the
+     * MtkCore bit, so it falls through to ESP32_TRANSPORT_AT and continues to
+     * be driven over AT text commands — this layer never re-routes it to
+     * M1_RPC.  An all-zero bitmap (unknown / not yet probed) yields NONE so
+     * transport-selecting callers fail closed. */
     if (cap_bitmap == 0u)
         return ESP32_TRANSPORT_NONE;
+    if (esp32_firmware_is_mtkcore(cap_bitmap))
+        return ESP32_TRANSPORT_RPC;
     if (esp32_firmware_is_cd3(cap_bitmap))
         return ESP32_TRANSPORT_RPC;
     if (esp32_firmware_is_sin360(cap_bitmap))

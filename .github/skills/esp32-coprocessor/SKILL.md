@@ -57,10 +57,114 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
 
 | Firmware | Discriminator | Transport |
 |----------|---------------|-----------|
+| MtkCore (Legacy-SPI compat) | `MTKCORE` host-classifier bit (zero on-wire bitmap + dotted-semver `fw_name`) | `ESP32_TRANSPORT_RPC` |
 | brain CD3 (`m1-esp32-brain`) | `HANDSHAKE && (802154_TX \|\| BLE_SPAM)` | `ESP32_TRANSPORT_RPC` |
 | SiN360 | `BLE_HID && !WIFI_JOIN` | `ESP32_TRANSPORT_BINARY_SPI` |
 | AT builds **incl. legacy CD3-AT** | any other non-zero bitmap | `ESP32_TRANSPORT_AT` |
 | unknown / not probed | zero bitmap | `ESP32_TRANSPORT_NONE` |
+
+- **MtkCore (`Monstatek/MonstaTek-Esp32-Core`) Legacy-SPI compatibility:** MtkCore's
+  *"Legacy SPI Compatibility"* adapter speaks our exact m1_link wire protocol (magic
+  `0x4D31`, 8-byte header, 512-byte full-duplex cells, CRC-16/CCITT-FALSE, flat 16-bit
+  `msg_id`). Its legacy `GET_STATUS (0x0002)` returns a well-formed devstatus but
+  **deliberately hard-codes `cap_bitmap` to all zeros** (the authors declined to guess
+  legacy bit indices; real negotiation is over the canonical `GET_CAPABILITIES`, which
+  the legacy adapter does not expose). Our host therefore fingerprints MtkCore as
+  **`cap_bitmap == 0` AND a dotted-semver `fw_name` (e.g. `"0.8.1.0"`)** in
+  `m1_esp32_caps_init()` (Probe 2), synthesises `M1_ESP32_CAP_PROFILE_MTKCORE`, and sets
+  the host-only `M1_ESP32_CAP_MTKCORE` classifier bit so `esp32_firmware_transport()`
+  routes to `ESP32_TRANSPORT_RPC` (not AT). Without this it misdetects as AT and every
+  feature is gated off — same failure class as the brain-CD3 OTA-discriminator bug above.
+  Cached `fw_name` is prefixed `"MtkCore <semver>"` for device-info display (the semver
+  still satisfies qMonstatek's `parseVerNums()`).
+  - **Supported over compat_spi:** WiFi scan/sta-scan/join/disconnect, deauth, beacon,
+    handshake capture, SoftAP, packet monitor/raw-TX, captive portal, BLE scan/adv, GATT.
+  - **NOT supported over compat_spi (excluded from the profile):** ESP-NOW
+    (service `0x0006`), 802.15.4 (service `0x0007`), PMKID, probe-flood, karma,
+    WiFi-mode-set, time-sync, BLE HID/spam. Full parity for those needs MtkCore's
+    canonical **Native M1 SPI v1** transport (see next bullet).
+
+- **MtkCore Native M1 SPI v1 (`m1_esp32_native.c/.h`) — host codec + client:**
+  MtkCore's full-feature-parity transport, implemented host-side as a pure-logic
+  codec plus a thin client. Wire format (all authoritative from
+  `Monstatek/MonstaTek-Esp32-Core@main`): magic `"M1S1"` (`0x3153314D` LE),
+  fixed **1024-byte cells**, a **40-byte little-endian header**
+  (magic/major/minor/msg_class/flags/service/opcode/status/payload_len/
+  request_id/packet_seq/boot_epoch/message_len/fragment_offset/crc32c),
+  **CRC32C** (Castagnoli, poly `0x82F63B78`, covers header[0..35] ∥ payload),
+  16-bit **service + opcode** addressing (System `0x0000`, WiFi `0x0001`, BLE
+  `0x0002`, GATT `0x0003`, Capture `0x0004`, Diagnostics `0x0005`, ESP-NOW
+  `0x0006`, 802.15.4/RCP `0x0007`), request-id **fragment reassembly**
+  (`fragment_offset` == bytes-so-far, ceiling `MTK_SPI_NATIVE_MAX_MESSAGE 8192`,
+  one inbound reassembly at a time), and a **paginated per-opcode
+  `GET_CAPABILITIES`** (no bitmap — each `{service,opcode}` carries its own
+  `capability_id` + `state`; re-request with `start_index = next_index` until
+  `next_index == 0`). `m1_esp32_native.h` is the codec (header struct, CRC32C,
+  cell build/verify, reassembly, PING/GET_API_IDENTITY/GET_CAPABILITIES
+  decoders); `m1_esp32_native.c` is the client (HELLO handshake, single-/multi-
+  cell `mtk_native_call`, request-id sequencing) over an **injectable 1024-byte
+  exchange fn-pointer** (`mtk_native_xfer_fn`). Buffers are heap-allocated — the
+  module adds **no static buffers** (RAM budget is critically tight). All host-
+  verifiable behaviour is covered by `tests/test_esp32_native.c`.
+  - **`ESP32_TRANSPORT_NATIVE_V1`** exists in `esp32_transport_t` but
+    `esp32_firmware_transport()` **never returns it** — native has no capability
+    bitmap to classify from, so it is selected only by a live HELLO /
+    `GET_API_IDENTITY` exchange, never by bitmap inference. Existing device
+    detection is unchanged.
+  - **Native SPI is exposed only by the `universal` and `mtkcore-154` build
+    images, not `mtkcore-154-rcp`** ("Spinel owns the link"). A host **must**
+    branch on live `GET_CAPABILITIES`, never on variant name.
+  - **Deferred to an on-hardware follow-up (author-disclosed gaps — do NOT
+    guess):** the HELLO_ACK negotiation payload is **empty / undefined** in the
+    accepted contract, and the physical **512→1024 cell-size handshake** has no
+    explicit byte layout in MtkCore source. The physical SPI exchange primitive
+    and live transport activation therefore cannot be validated without the
+    device, and are intentionally left unimplemented per the repo rule against
+    asserting unverified capability.
+
+- **MtkCore CAPTURE service (`m1_esp32_capture.c/.h`) — MonstaShark-equivalent
+  802.11 → PCAPNG:** host-side codec + client driver for the native **Capture
+  service `0x0004`** (opcodes START `0x01`, STOP `0x02`, STATUS `0x03`,
+  SESSION_INFO `0x04`, STATS `0x05`, POLL_READ `0x06`). Wire contract
+  (authoritative from `Monstatek/MonstaTek-Esp32-Core@main`, commit `3e21a6a`):
+  **CAPTURE_START** req is a tight-LE 18-byte body (`u8 mode; u16 snap_len;
+  u32 duration_ms; channel_plan{u8 mode;u8 channel;u8 band;u16 hop_dwell_ms};
+  filter{u8 bssid[6]}`), firmware rejects `snap_len == 0 || > 1000`, and replies
+  **ACCEPTED (status 1, not OK)** with a `u32 operation_token` — so the driver
+  treats OK and `MTK_STATUS_ACCEPTED` alike. **CAPTURE_POLL_READ** req is the
+  `u32` token; the response is a tagged union — **EMPTY = zero body bytes**
+  (nothing buffered, success) or a **20-byte record header** (`u32 sequence;
+  u64 timestamp_us; u8 link_type(0=IEEE80211); u8 channel; i8 rssi; u8 flags
+  (bit0=truncated); u16 original_len; u16 captured_len`) followed by
+  `captured_len` raw frame bytes (a POLL record can be 1020 B → spans 2 cells;
+  native reassembly handles it). **CAPTURE_STOP** req is `u32 token; u8 reason`.
+  A **capability gate** (`mtk_capture_caps_page_supported`) scans the native
+  `GET_CAPABILITIES` entries for a SUPPORTED CAPTURE_START before use. The
+  **PCAPNG half is `wifi_pcapng.c/.h`** — a pure-logic encoder emitting a
+  Wireshark-openable SHB/IDB/EPB stream with `LINKTYPE_IEEE802_11_RADIOTAP`
+  (each EPB = a 15-byte radiotap header carrying Flags/Channel/dBm-signal, then
+  the raw 802.11 frame). Everything is stack/buffer-only (**no static buffers**;
+  RAM unchanged) and host-tested (`tests/test_esp32_capture.c`,
+  `tests/test_wifi_pcapng.c`).
+  - **Live SD capture IS wired — on the RPC transport (`m1_pcap_capture.c/.h`).**
+    The grounded raw-frame producer `m1_esp32_rpc_monitor_read()` already returns
+    true raw 802.11 frames + channel + RSSI over the shipping RPC "M1 Link", so
+    the RPC packet sniffers (`wifi_sniffer_run` → All/Beacon/Probe/Deauth/SAE/
+    Pwnagotchi) now open an `m1_pcap_session_t`, write each frame through the
+    `wifi_pcapng` encoder, and save `capture/sniffNNN.pcapng` (auto-indexed
+    0..999, best-effort) to SD. The SD-write glue is **host-tested through the
+    stdio-backed FatFS stub** (`tests/test_pcap_capture.c`) — the file is read
+    back and its PCAPNG/radiotap byte layout validated. Snaplen is 512 B; the EPB
+    `original_len` keeps the true frame length even when truncated. The session is
+    heap/buffer-only (no new static RAM; link RAM unchanged at 85.82%).
+  - **Still deferred to the on-hardware follow-up:** the *native* CAPTURE
+    service's physical 1024-byte SPI exchange primitive and probe-time activation
+    are not wired to live SPI (its byte layout is author-disclosed-incomplete),
+    so the native-transport SD path is validated only once that link is driven
+    on-device. The EAPOL and binary-SPI `CMD_PKTMON_NEXT` sniffers deliver
+    *decoded* records (not raw frames) and intentionally do not emit a capture
+    file. The native codec, capability gate, driver, and PCAPNG encoder are
+    complete and host-verified today.
 
 - **`m1_esp32_rpc.c/.h`** is the reusable M1_RPC feature layer for brain CD3:
   the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared
