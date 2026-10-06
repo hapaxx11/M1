@@ -191,6 +191,35 @@ endif()
 add_test(NAME esp32_rpc COMMAND test_esp32_rpc)
 
 # ------------------------------------------------------------------
+# Module under test: m1_esp32_native (MtkCore "Native M1 SPI v1" transport)
+#
+# Pure-logic frame codec + client for the canonical native transport (magic
+# "M1S1", 1024-byte cells, 40-byte header, CRC32C, service+opcode addressing,
+# fragment reassembly, paginated GET_CAPABILITIES).  The 1024-byte SPI exchange
+# primitive is injected as a fake canned-cell queue, so the HELLO handshake and
+# request/response reassembly run entirely on the host.  Verifies:
+#   - mtk_crc32c(): anchored to the CRC-32C/iSCSI check value (0xE3069283)
+#   - header serialize/parse at exact little-endian byte offsets
+#   - cell build/verify: zero-padding, bad magic/version/flags/CRC/length
+#   - fragment reassembly: multi-cell assembly, offset-gap / BUSY / ceiling
+#   - PING / GET_API_IDENTITY / GET_CAPABILITIES payload decoders + pagination
+#   - mtk_native_call(): single + multi-cell response, NAK status, timeout,
+#     transport error, uncorrelated-cell skipping; HELLO handshake ok/timeout
+# ------------------------------------------------------------------
+add_executable(test_esp32_native
+    test_esp32_native.c
+    ${M1_ROOT}/m1_csrc/m1_esp32_native.c
+)
+target_include_directories(test_esp32_native PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_native PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_native PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_native COMMAND test_esp32_native)
+
+# ------------------------------------------------------------------
 # Module under test: m1_esp32_rpc_features (per-feature M1_RPC action layer)
 #
 # Builds on the m1_esp32_rpc client to provide one action wrapper per

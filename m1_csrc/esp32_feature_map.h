@@ -182,26 +182,36 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
 /**
  * @brief  Wire transport an ESP32 firmware variant speaks.
  *
- * The M1 supports three mutually-exclusive on-wire command protocols over the
- * same SPI-HD hardware.  A feature module that wants to drive the ESP32 must
- * pick the encoder matching the detected transport:
+ * The M1 supports several mutually-exclusive on-wire command protocols over the
+ * same SPI hardware.  A feature module that wants to drive the ESP32 must pick
+ * the encoder matching the detected transport:
  *   - AT text commands ("AT+...\r\n") for the bedge117 / neddy299 / dag builds
  *     and the legacy CD3-AT firmware,
  *   - the 64-byte binary CMD_* protocol for SiN360,
- *   - the M1_RPC binary framing (magic 0x4D31) for the native "brain" CD3
- *     (m1-esp32-brain).
+ *   - the M1_RPC binary framing (magic 0x4D31, 512-byte cells) for the native
+ *     "brain" CD3 (m1-esp32-brain) and MtkCore's Legacy-SPI compat adapter,
+ *   - MtkCore's canonical "Native M1 SPI v1" (magic "M1S1", 1024-byte cells,
+ *     service+opcode addressing, CRC32C, paginated GET_CAPABILITIES) — the
+ *     codec/client for this lives in m1_esp32_native.c.
  *
  * NOTE: there are two distinct CD3 firmwares.  The legacy **CD3-AT** speaks AT
  * text commands and therefore classifies as ESP32_TRANSPORT_AT (it advertises
  * WIFI_JOIN and never sets the HANDSHAKE + 802154_TX/BLE_SPAM combination).
  * Only the newer native **brain CD3** speaks M1_RPC and classifies as
  * ESP32_TRANSPORT_RPC.  Both remain fully supported.
+ *
+ * NOTE: ESP32_TRANSPORT_NATIVE_V1 is NEVER returned by
+ * esp32_firmware_transport() — the native transport has no capability bitmap to
+ * classify from (it negotiates via the paginated GET_CAPABILITIES opcode), so it
+ * is selected by a successful live HELLO / GET_API_IDENTITY handshake over the
+ * 1024-byte link rather than inferred from a cached bitmap.
  */
 typedef enum {
     ESP32_TRANSPORT_NONE = 0,   /**< Unknown / not detected — fail closed */
     ESP32_TRANSPORT_AT,         /**< AT text commands (bedge117 / neddy299 / dag / CD3-AT) */
     ESP32_TRANSPORT_BINARY_SPI, /**< 64-byte binary CMD_* protocol (SiN360) */
-    ESP32_TRANSPORT_RPC,        /**< M1_RPC binary framing (native brain CD3) */
+    ESP32_TRANSPORT_RPC,        /**< M1_RPC binary framing (native brain CD3 / MtkCore Legacy-SPI) */
+    ESP32_TRANSPORT_NATIVE_V1,  /**< MtkCore "Native M1 SPI v1" (magic "M1S1", 1024-byte cells) */
 } esp32_transport_t;
 
 /**
