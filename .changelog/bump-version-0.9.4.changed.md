@@ -1,0 +1,1 @@
+**Version: next release line is now v0.9.4.x.** `FW_VERSION_BUILD` bumped from `3` to `4` in `m1_fw_update_bl.h`; `FW_VERSION_RC`/`M1_HAPAX_REVISION` stay `0` so the release workflow auto-increments to `v0.9.4.1` for the first release on the new line.
