@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.1] - 2026-10-06
+
+### Changed
+
+- **Version: next release line is now v0.9.4.x.** `FW_VERSION_BUILD` bumped from `3` to `4` in `m1_fw_update_bl.h`; `FW_VERSION_RC`/`M1_HAPAX_REVISION` stay `0` so the release workflow auto-increments to `v0.9.4.1` for the first release on the new line.
+- **Docs: refreshed README for official Monstatek v0.8.1.0 / MtkCore.** Updated the stock-comparison version, documented MtkCore as the official ESP32 firmware (including PCAPNG capture), merged duplicate DFU instructions, corrected the test-file count and trimmed the obsolete pre-v0.9.0.124 upgrade notes.
 ## [0.9.3.18] - 2026-10-06
 
 ### Added
