@@ -64,7 +64,9 @@ bool m1_pcap_session_open_path(m1_pcap_session_t *s, const char *path,
     /* Section Header Block followed by one radiotap Interface Description. */
     uint8_t hdr[WIFI_PCAPNG_SHB_LEN + WIFI_PCAPNG_IDB_LEN];
     size_t off = wifi_pcapng_build_shb(hdr, sizeof(hdr));
-    off += wifi_pcapng_build_idb(hdr + off, sizeof(hdr) - off, s->snaplen);
+    /* Interface snap length covers the radiotap header + captured frame. */
+    off += wifi_pcapng_build_idb(hdr + off, sizeof(hdr) - off,
+                                 (uint32_t)WIFI_RADIOTAP_LEN + s->snaplen);
     if (off != sizeof(hdr) || !pcap_write_all(s, hdr, off)) {
         m1_pcap_session_close(s);
         return false;
@@ -86,8 +88,11 @@ bool m1_pcap_session_open(m1_pcap_session_t *s)
         if (m1_pcap_format_name(path, sizeof(path), i) == 0u)
             return false;
         FILINFO fno;
-        if (f_stat(path, &fno) != FR_OK)        /* first free index */
+        FRESULT fr = f_stat(path, &fno);
+        if (fr == FR_NO_FILE)                   /* first free index */
             return m1_pcap_session_open_path(s, path, (uint16_t)M1_PCAP_SNAPLEN);
+        if (fr != FR_OK)                        /* disk/FS error: don't risk overwrite */
+            return false;
     }
     return false;                                /* all indices in use */
 }

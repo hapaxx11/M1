@@ -131,10 +131,13 @@ static inline int f_printf(FIL *fp, const char *fmt, ...)
 	return r;
 }
 
+/* Tests may override the f_stat() result (default: file not found). */
+FRESULT ff_stub_stat_result __attribute__((weak)) = FR_NO_FILE;  /* weak: shared across TUs */
+
 static inline FRESULT f_stat(const char *path, FILINFO *fno)
 {
 	(void)path; (void)fno;
-	return FR_NO_FILE;  /* default: file not found */
+	return ff_stub_stat_result;
 }
 
 static inline FRESULT f_mkdir(const char *path)

@@ -374,6 +374,45 @@ void test_driver_poll_empty_is_success(void)
     TEST_ASSERT_EQUAL_UINT16(0u, flen);
 }
 
+void test_driver_poll_rejects_oversized_response(void)
+{
+    /* Reassembled response (20 + 1030 = 1050 B) exceeds poll's 1020-byte
+     * buffer; mtk_native_call reports the full length but copies only what
+     * fits, so the parser must never be handed that larger length. */
+    mtk_native_reset_request_id(0);
+    static uint8_t frame[1030];
+    static uint8_t body[20 + 1030];
+    memset(frame, 0xA5, sizeof(frame));
+    size_t blen = build_record(body, 1u, 1ull, 6u, -40, 0u, 1030u, frame, 1030u);
+    TEST_ASSERT_EQUAL_size_t(sizeof(body), blen);
+
+    uint8_t cells[2 * MTK_SPI_NATIVE_CELL_SIZE];
+    size_t first = MTK_SPI_NATIVE_MAX_PAYLOAD;
+    for (int i = 0; i < 2; i++) {
+        mtk_spi_native_header_t h;
+        memset(&h, 0, sizeof(h));
+        h.magic = MTK_SPI_NATIVE_MAGIC; h.major = 1; h.minor = 0;
+        h.msg_class = MTK_SPI_CLASS_RESPONSE;
+        h.flags = (i == 0) ? MTK_SPI_FLAG_FIRST : MTK_SPI_FLAG_LAST;
+        h.status = MTK_STATUS_OK; h.request_id = 1;
+        h.message_len = (uint16_t)blen;
+        h.fragment_offset = (i == 0) ? 0u : (uint16_t)first;
+        size_t plen = (i == 0) ? first : blen - first;
+        mtk_native_build_cell(cells + (size_t)i * MTK_SPI_NATIVE_CELL_SIZE,
+                              MTK_SPI_NATIVE_CELL_SIZE, &h,
+                              body + h.fragment_offset, (uint16_t)plen);
+    }
+
+    fake_ctx_t f = { cells, 2, 0, -1, 0 };
+    mtk_capture_record_t rec;
+    uint8_t fbuf[32]; uint16_t flen = 0; bool have = false; uint16_t status = 0;
+    mtk_native_result_t r = mtk_capture_poll(fake_xfer, &f, 1u, &rec,
+                                             fbuf, sizeof(fbuf), &flen, &have,
+                                             &status, 0, 8);
+    TEST_ASSERT_EQUAL_INT(MTK_NATIVE_ERR_PROTOCOL, r);
+    TEST_ASSERT_FALSE(have);
+}
+
 void test_driver_stop_ok(void)
 {
     mtk_native_reset_request_id(0);
@@ -412,6 +451,7 @@ int main(void)
     RUN_TEST(test_driver_start_rejects_null_args);
     RUN_TEST(test_driver_poll_returns_frame);
     RUN_TEST(test_driver_poll_empty_is_success);
+    RUN_TEST(test_driver_poll_rejects_oversized_response);
     RUN_TEST(test_driver_stop_ok);
     return UNITY_END();
 }

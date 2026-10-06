@@ -1140,6 +1140,7 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 	bool has_pkt = false;
 	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
 	m1_pcap_session_t cap_sess = {0};
+	uint8_t *rpc_frame = NULL;
 
 	ensure_esp32_ready();
 
@@ -1154,6 +1155,11 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 	if (use_rpc)
 	{
+		/* Full-size buffer so monitor_read reports the true frame length;
+		 * the capture session does the snaplen truncation. */
+		rpc_frame = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
+		if (!rpc_frame)
+			goto start_fail;
 		if (m1_esp32_rpc_monitor_start(0u) != M1_ESP32_RPC_OK)
 			goto start_fail;
 
@@ -1216,12 +1222,12 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 
 		if (use_rpc)
 		{
-			uint8_t frame[M1_PCAP_SNAPLEN];
+			uint8_t *frame = rpc_frame;
 			uint16_t flen = 0u;
 			uint8_t ch = 0u;
 			int8_t rssi = 0;
 			m1_esp32_rpc_status_t rst = m1_esp32_rpc_monitor_read(
-			    frame, sizeof(frame), &flen, &ch, &rssi);
+			    frame, M1_ESP32_RPC_RESP_FRAME_MAX, &flen, &ch, &rssi);
 			if (rst != M1_ESP32_RPC_OK || flen == 0u)
 				continue;
 			/* Save the full raw frame to the PCAPNG file (if recording). */
@@ -1245,10 +1251,12 @@ static void wifi_sniffer_run(uint8_t sniff_type, const char *title)
 		sniffer_draw_packet(&last_resp, title, pkt_count, false);
 	}
 	m1_pcap_session_close(&cap_sess);
+	free(rpc_frame);
 	return;
 
 start_fail:
 	m1_pcap_session_close(&cap_sess);
+	free(rpc_frame);
 	m1_u8g2_firstpage();
 	u8g2_DrawStr(&m1_u8g2, 6, 15, title);
 	u8g2_DrawXBMP(&m1_u8g2, M1_LCD_DISPLAY_WIDTH / 2 - 32 / 2,

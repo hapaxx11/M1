@@ -96,7 +96,9 @@ void test_session_header_and_frames(void)
     TEST_ASSERT_EQUAL_UINT32(WIFI_PCAPNG_BT_IDB, rd32(buf + off));
     TEST_ASSERT_EQUAL_UINT16(WIFI_PCAPNG_LINKTYPE_IEEE802_11_RADIOTAP,
                              rd16(buf + off + 8));
-    TEST_ASSERT_EQUAL_UINT32((uint32_t)M1_PCAP_SNAPLEN, rd32(buf + off + 12));
+    /* Interface snaplen covers radiotap header + captured frame bytes. */
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)WIFI_RADIOTAP_LEN + M1_PCAP_SNAPLEN,
+                             rd32(buf + off + 12));
     off += WIFI_PCAPNG_IDB_LEN;
 
     /* First EPB */
@@ -137,7 +139,9 @@ void test_session_truncates_to_snaplen(void)
     TEST_ASSERT_TRUE(n > 0u);
     size_t off = WIFI_PCAPNG_SHB_LEN + WIFI_PCAPNG_IDB_LEN;
     /* IDB snaplen reflects the session snaplen */
-    TEST_ASSERT_EQUAL_UINT32(32u, rd32(buf + WIFI_PCAPNG_SHB_LEN + 12));
+    uint32_t idb_snap = rd32(buf + WIFI_PCAPNG_SHB_LEN + 12);
+    TEST_ASSERT_EQUAL_UINT32(WIFI_RADIOTAP_LEN + 32u, idb_snap);
+    TEST_ASSERT_TRUE(rd32(buf + off + 20) <= idb_snap);   /* EPB caplen fits */
     /* captured = radiotap + 32 (truncated); original = radiotap + 100 */
     TEST_ASSERT_EQUAL_UINT32(WIFI_RADIOTAP_LEN + 32u, rd32(buf + off + 20));
     TEST_ASSERT_EQUAL_UINT32(WIFI_RADIOTAP_LEN + 100u, rd32(buf + off + 24));
@@ -188,6 +192,19 @@ void test_session_open_auto_picks_index_zero(void)
     remove("/tmp/capture/sniff000.pcapng");
 }
 
+void test_session_open_aborts_on_stat_error(void)
+{
+    /* Only FR_NO_FILE means "slot free"; any other error must not fall through
+     * to FA_CREATE_ALWAYS (which could truncate an existing capture). */
+    TEST_ASSERT_EQUAL_INT(0, chdir("/tmp"));
+    (void)system("mkdir -p /tmp/capture; rm -f /tmp/capture/sniff000.pcapng");
+    ff_stub_stat_result = FR_DISK_ERR;
+    m1_pcap_session_t s;
+    TEST_ASSERT_FALSE(m1_pcap_session_open(&s));
+    ff_stub_stat_result = FR_NO_FILE;
+    TEST_ASSERT_EQUAL_INT(-1, access("/tmp/capture/sniff000.pcapng", F_OK));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -198,5 +215,6 @@ int main(void)
     RUN_TEST(test_write_after_close_fails);
     RUN_TEST(test_open_path_rejects_null);
     RUN_TEST(test_session_open_auto_picks_index_zero);
+    RUN_TEST(test_session_open_aborts_on_stat_error);
     return UNITY_END();
 }

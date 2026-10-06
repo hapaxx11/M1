@@ -228,6 +228,8 @@ mtk_capture_poll(mtk_native_xfer_fn xfer, void *ctx, uint32_t token,
     if (status_out) *status_out = status;
     if (r != MTK_NATIVE_OK)
         return r;
+    if (resp_len > sizeof(resp))        /* reassembled larger than we copied */
+        return MTK_NATIVE_ERR_PROTOCOL;
 
     mtk_capture_record_t rec;
     const uint8_t *frame = NULL;

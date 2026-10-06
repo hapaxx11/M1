@@ -202,9 +202,11 @@ const char *esp32_feature_label(esp32_feature_id_t fid);
  *
  * NOTE: ESP32_TRANSPORT_NATIVE_V1 is NEVER returned by
  * esp32_firmware_transport() — the native transport has no capability bitmap to
- * classify from (it negotiates via the paginated GET_CAPABILITIES opcode), so it
- * is selected by a successful live HELLO / GET_API_IDENTITY handshake over the
- * 1024-byte link rather than inferred from a cached bitmap.
+ * classify from (it negotiates via the paginated GET_CAPABILITIES opcode).  It
+ * is currently a host-side codec/client only (m1_esp32_native.c): the live
+ * HELLO / GET_API_IDENTITY handshake is not yet wired into the production
+ * transport selection, so this value is not selectable at runtime.  Wiring it
+ * in is deferred to follow-up work.
  */
 typedef enum {
     ESP32_TRANSPORT_NONE = 0,   /**< Unknown / not detected — fail closed */
