@@ -79,11 +79,48 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
   still satisfies qMonstatek's `parseVerNums()`).
   - **Supported over compat_spi:** WiFi scan/sta-scan/join/disconnect, deauth, beacon,
     handshake capture, SoftAP, packet monitor/raw-TX, captive portal, BLE scan/adv, GATT.
-  - **NOT supported over compat_spi (excluded from the profile):** ESP-NOW (`0x06xx`),
-    802.15.4 (`0x05xx`), PMKID, probe-flood, karma, WiFi-mode-set, time-sync, BLE HID/spam.
-    Full parity for those needs MtkCore's canonical **Native M1 SPI v1** transport
-    (magic `"M1S1"`, 1024-byte cells, CRC32C, `GET_CAPABILITIES` pagination), which the
-    host does not yet implement.
+  - **NOT supported over compat_spi (excluded from the profile):** ESP-NOW
+    (service `0x0006`), 802.15.4 (service `0x0007`), PMKID, probe-flood, karma,
+    WiFi-mode-set, time-sync, BLE HID/spam. Full parity for those needs MtkCore's
+    canonical **Native M1 SPI v1** transport (see next bullet).
+
+- **MtkCore Native M1 SPI v1 (`m1_esp32_native.c/.h`) — host codec + client:**
+  MtkCore's full-feature-parity transport, implemented host-side as a pure-logic
+  codec plus a thin client. Wire format (all authoritative from
+  `Monstatek/MonstaTek-Esp32-Core@main`): magic `"M1S1"` (`0x3153314D` LE),
+  fixed **1024-byte cells**, a **40-byte little-endian header**
+  (magic/major/minor/msg_class/flags/service/opcode/status/payload_len/
+  request_id/packet_seq/boot_epoch/message_len/fragment_offset/crc32c),
+  **CRC32C** (Castagnoli, poly `0x82F63B78`, covers header[0..35] ∥ payload),
+  16-bit **service + opcode** addressing (System `0x0000`, WiFi `0x0001`, BLE
+  `0x0002`, GATT `0x0003`, Capture `0x0004`, Diagnostics `0x0005`, ESP-NOW
+  `0x0006`, 802.15.4/RCP `0x0007`), request-id **fragment reassembly**
+  (`fragment_offset` == bytes-so-far, ceiling `MTK_SPI_NATIVE_MAX_MESSAGE 8192`,
+  one inbound reassembly at a time), and a **paginated per-opcode
+  `GET_CAPABILITIES`** (no bitmap — each `{service,opcode}` carries its own
+  `capability_id` + `state`; re-request with `start_index = next_index` until
+  `next_index == 0`). `m1_esp32_native.h` is the codec (header struct, CRC32C,
+  cell build/verify, reassembly, PING/GET_API_IDENTITY/GET_CAPABILITIES
+  decoders); `m1_esp32_native.c` is the client (HELLO handshake, single-/multi-
+  cell `mtk_native_call`, request-id sequencing) over an **injectable 1024-byte
+  exchange fn-pointer** (`mtk_native_xfer_fn`). Buffers are heap-allocated — the
+  module adds **no static buffers** (RAM budget is critically tight). All host-
+  verifiable behaviour is covered by `tests/test_esp32_native.c`.
+  - **`ESP32_TRANSPORT_NATIVE_V1`** exists in `esp32_transport_t` but
+    `esp32_firmware_transport()` **never returns it** — native has no capability
+    bitmap to classify from, so it is selected only by a live HELLO /
+    `GET_API_IDENTITY` exchange, never by bitmap inference. Existing device
+    detection is unchanged.
+  - **Native SPI is exposed only by the `universal` and `mtkcore-154` build
+    images, not `mtkcore-154-rcp`** ("Spinel owns the link"). A host **must**
+    branch on live `GET_CAPABILITIES`, never on variant name.
+  - **Deferred to an on-hardware follow-up (author-disclosed gaps — do NOT
+    guess):** the HELLO_ACK negotiation payload is **empty / undefined** in the
+    accepted contract, and the physical **512→1024 cell-size handshake** has no
+    explicit byte layout in MtkCore source. The physical SPI exchange primitive
+    and live transport activation therefore cannot be validated without the
+    device, and are intentionally left unimplemented per the repo rule against
+    asserting unverified capability.
 
 - **`m1_esp32_rpc.c/.h`** is the reusable M1_RPC feature layer for brain CD3:
   the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared
