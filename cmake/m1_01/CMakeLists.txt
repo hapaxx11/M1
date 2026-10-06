@@ -583,6 +583,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_esp32_native.c
     ../../m1_csrc/m1_esp32_capture.c
     ../../m1_csrc/wifi_pcapng.c
+    ../../m1_csrc/m1_pcap_capture.c
     ../../m1_csrc/m1_rf_fingerprint_24.c
     ../../m1_csrc/m1_esp_hosted_dummy.c
     ../../m1_csrc/m1_file_browser.c

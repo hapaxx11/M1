@@ -146,12 +146,25 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
   the raw 802.11 frame). Everything is stack/buffer-only (**no static buffers**;
   RAM unchanged) and host-tested (`tests/test_esp32_capture.c`,
   `tests/test_wifi_pcapng.c`).
-  - **Deferred to the same on-hardware follow-up as the native transport:** the
-    physical 1024-byte SPI exchange primitive and probe-time activation are not
-    wired to live SPI, so writing `capture/sniffNNN.pcapng` to SD from a live
-    capture session is validated only once the native link is driven on-device.
-    The codec, capability gate, driver, and PCAPNG encoder are complete and
-    host-verified today.
+  - **Live SD capture IS wired — on the RPC transport (`m1_pcap_capture.c/.h`).**
+    The grounded raw-frame producer `m1_esp32_rpc_monitor_read()` already returns
+    true raw 802.11 frames + channel + RSSI over the shipping RPC "M1 Link", so
+    the RPC packet sniffers (`wifi_sniffer_run` → All/Beacon/Probe/Deauth/SAE/
+    Pwnagotchi) now open an `m1_pcap_session_t`, write each frame through the
+    `wifi_pcapng` encoder, and save `capture/sniffNNN.pcapng` (auto-indexed
+    0..999, best-effort) to SD. The SD-write glue is **host-tested through the
+    stdio-backed FatFS stub** (`tests/test_pcap_capture.c`) — the file is read
+    back and its PCAPNG/radiotap byte layout validated. Snaplen is 512 B; the EPB
+    `original_len` keeps the true frame length even when truncated. The session is
+    heap/buffer-only (no new static RAM; link RAM unchanged at 85.82%).
+  - **Still deferred to the on-hardware follow-up:** the *native* CAPTURE
+    service's physical 1024-byte SPI exchange primitive and probe-time activation
+    are not wired to live SPI (its byte layout is author-disclosed-incomplete),
+    so the native-transport SD path is validated only once that link is driven
+    on-device. The EAPOL and binary-SPI `CMD_PKTMON_NEXT` sniffers deliver
+    *decoded* records (not raw frames) and intentionally do not emit a capture
+    file. The native codec, capability gate, driver, and PCAPNG encoder are
+    complete and host-verified today.
 
 - **`m1_esp32_rpc.c/.h`** is the reusable M1_RPC feature layer for brain CD3:
   the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared

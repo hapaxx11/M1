@@ -271,6 +271,33 @@ endif()
 add_test(NAME esp32_capture COMMAND test_esp32_capture)
 
 # ------------------------------------------------------------------
+# Module under test: m1_pcap_capture (SD PCAPNG capture session)
+#
+# On-target glue that streams the pure-logic PCAPNG blocks (wifi_pcapng.c) to a
+# FatFS file, one radiotap EPB per raw 802.11 frame, for the WiFi sniffers.
+# FatFS calls run through the stdio-backed stub (stubs/ff.h), so the whole
+# on-SD byte layout is validated by reading the produced file back.  Verifies:
+#   - the capture/sniffNNN.pcapng filename formatter + bounds
+#   - SHB/IDB header + per-frame radiotap EPB layout round-trip
+#   - snap-length truncation (captured vs original length)
+#   - closed-session and auto-index open behaviour
+# ------------------------------------------------------------------
+add_executable(test_pcap_capture
+    test_pcap_capture.c
+    ${M1_ROOT}/m1_csrc/m1_pcap_capture.c
+    ${M1_ROOT}/m1_csrc/wifi_pcapng.c
+)
+target_include_directories(test_pcap_capture PRIVATE
+    ${M1_ROOT}/m1_csrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs
+)
+target_link_libraries(test_pcap_capture PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_pcap_capture PRIVATE sanitizers)
+endif()
+add_test(NAME pcap_capture COMMAND test_pcap_capture)
+
+# ------------------------------------------------------------------
 # Module under test: m1_esp32_rpc_features (per-feature M1_RPC action layer)
 #
 # Builds on the m1_esp32_rpc client to provide one action wrapper per
