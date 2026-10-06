@@ -122,6 +122,37 @@ via `esp32_firmware_transport(cap_bitmap)` (`esp32_feature_map.c`), returning
     device, and are intentionally left unimplemented per the repo rule against
     asserting unverified capability.
 
+- **MtkCore CAPTURE service (`m1_esp32_capture.c/.h`) — MonstaShark-equivalent
+  802.11 → PCAPNG:** host-side codec + client driver for the native **Capture
+  service `0x0004`** (opcodes START `0x01`, STOP `0x02`, STATUS `0x03`,
+  SESSION_INFO `0x04`, STATS `0x05`, POLL_READ `0x06`). Wire contract
+  (authoritative from `Monstatek/MonstaTek-Esp32-Core@main`, commit `3e21a6a`):
+  **CAPTURE_START** req is a tight-LE 18-byte body (`u8 mode; u16 snap_len;
+  u32 duration_ms; channel_plan{u8 mode;u8 channel;u8 band;u16 hop_dwell_ms};
+  filter{u8 bssid[6]}`), firmware rejects `snap_len == 0 || > 1000`, and replies
+  **ACCEPTED (status 1, not OK)** with a `u32 operation_token` — so the driver
+  treats OK and `MTK_STATUS_ACCEPTED` alike. **CAPTURE_POLL_READ** req is the
+  `u32` token; the response is a tagged union — **EMPTY = zero body bytes**
+  (nothing buffered, success) or a **20-byte record header** (`u32 sequence;
+  u64 timestamp_us; u8 link_type(0=IEEE80211); u8 channel; i8 rssi; u8 flags
+  (bit0=truncated); u16 original_len; u16 captured_len`) followed by
+  `captured_len` raw frame bytes (a POLL record can be 1020 B → spans 2 cells;
+  native reassembly handles it). **CAPTURE_STOP** req is `u32 token; u8 reason`.
+  A **capability gate** (`mtk_capture_caps_page_supported`) scans the native
+  `GET_CAPABILITIES` entries for a SUPPORTED CAPTURE_START before use. The
+  **PCAPNG half is `wifi_pcapng.c/.h`** — a pure-logic encoder emitting a
+  Wireshark-openable SHB/IDB/EPB stream with `LINKTYPE_IEEE802_11_RADIOTAP`
+  (each EPB = a 15-byte radiotap header carrying Flags/Channel/dBm-signal, then
+  the raw 802.11 frame). Everything is stack/buffer-only (**no static buffers**;
+  RAM unchanged) and host-tested (`tests/test_esp32_capture.c`,
+  `tests/test_wifi_pcapng.c`).
+  - **Deferred to the same on-hardware follow-up as the native transport:** the
+    physical 1024-byte SPI exchange primitive and probe-time activation are not
+    wired to live SPI, so writing `capture/sniffNNN.pcapng` to SD from a live
+    capture session is validated only once the native link is driven on-device.
+    The codec, capability gate, driver, and PCAPNG encoder are complete and
+    host-verified today.
+
 - **`m1_esp32_rpc.c/.h`** is the reusable M1_RPC feature layer for brain CD3:
   the canonical opcode map (`m1_esp32_rpc_id_t`, mirrored from the shared
   `bedge117/m1-esp32-brain` `m1_rpc.h`), payload structs, and a NAK/status-aware
