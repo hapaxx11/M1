@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.0] - 2026-10-06
+
+### Fixed
+
+- **NFC/RFID: keep the backlight on for the read result** — a successful read that
+  followed a long scan with no button press could show its result/info screen
+  with the backlight already dimmed by the inactivity timer. The read-complete
+  screen now wakes the backlight and restarts the inactivity timer so the result
+  is actually visible (ported from upstream Monstatek). Scanning still times out
+  normally. The backlight screen-saver decision is now host-tested
+  (`tests/test_lcd_saver.c`).
 ## [0.9.3.16] - 2026-09-04
 
 ### Added
