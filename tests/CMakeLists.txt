@@ -1473,6 +1473,23 @@ endif()
 add_test(NAME lfrfid_uid_copy COMMAND test_lfrfid_uid_copy)
 
 # ------------------------------------------------------------------
+# lfrfid_carrier: pure carrier-cycling state machine, no HAL/RTOS deps.
+# Regression: 128 kHz pet-chip carrier must be swept (125/128/134.2 kHz).
+# ------------------------------------------------------------------
+add_executable(test_lfrfid_carrier
+    test_lfrfid_carrier.c
+    ${M1_ROOT}/lfrfid/lfrfid_carrier.c
+)
+target_include_directories(test_lfrfid_carrier PRIVATE
+    ${M1_ROOT}/lfrfid
+)
+target_link_libraries(test_lfrfid_carrier PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_lfrfid_carrier PRIVATE sanitizers)
+endif()
+add_test(NAME lfrfid_carrier COMMAND test_lfrfid_carrier)
+
+# ------------------------------------------------------------------
 # Module under test: t5577_timing (T5577 write-timing constants)
 # Regression test for the da-pingwing timing bug fix: the previous
 # WRITE_GAP=18 + DATA_1=56 gave a "1" bit gap-to-gap of 74 Tc,

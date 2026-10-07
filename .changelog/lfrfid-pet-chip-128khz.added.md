@@ -1,0 +1,1 @@
+LF-RFID pet/animal chip scan now sweeps all three US carrier frequencies (125, 128 and 134.2 kHz), so pets tagged on the older 125/128 kHz chips are read in addition to current ISO 11784/11785 FDX-B (134.2 kHz) tags.

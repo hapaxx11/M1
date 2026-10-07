@@ -463,9 +463,9 @@ void lfrfid_rxThread(void *param)
         m1_wdt_reset();
 
         /* Determine which feature set to try based on current carrier.
-         * Both ASK 125 kHz and ASK 134.2 kHz use ASK decoders — the
-         * FDX-B timing windows (68-188 / 196-316 µs) cover both frequencies. */
-        uint32_t active_feature = (lfrfid_current_carrier == LFRFID_CARRIER_PSK)
+         * All three ASK frequencies (125/128/134.2 kHz) use ASK decoders — the
+         * FDX-B timing windows (68-188 / 196-316 µs) cover every US pet chip. */
+        uint32_t active_feature = lfrfid_carrier_is_psk(lfrfid_current_carrier)
                                   ? LFRFIDFeaturePSK : LFRFIDFeatureASK;
 
         uint16_t total_events = n / LFR_ITEM_SIZE;
@@ -554,26 +554,18 @@ void lfrfidThread(void *param)
 			{
 				if(lfrfid_lock && lfrfid_state == LFRFID_STATE_READ)
 				{
-					/* Cycle carrier: ASK 125k -> ASK 134.2k -> PSK -> ASK 125k ...
-					 * ASK 134.2 kHz supports FDX-B pet/animal chips (ISO 11784/11785) */
-					if(lfrfid_current_carrier == LFRFID_CARRIER_ASK)
-					{
-						lfrfid_current_carrier = LFRFID_CARRIER_ASK_134;
-						lfrfid_carrier_switch(LFRFID_CARRIER_ASK_134_FREQ,
-						                      LFRFID_CARRIER_ASK_134_DUTY);
-					}
-					else if(lfrfid_current_carrier == LFRFID_CARRIER_ASK_134)
-					{
-						lfrfid_current_carrier = LFRFID_CARRIER_PSK;
-						lfrfid_carrier_switch(LFRFID_CARRIER_PSK_FREQ,
-						                      LFRFID_CARRIER_PSK_DUTY);
-					}
-					else
-					{
-						lfrfid_current_carrier = LFRFID_CARRIER_ASK;
-						lfrfid_carrier_switch(LFRFID_CARRIER_ASK_FREQ,
-						                      LFRFID_CARRIER_ASK_DUTY);
-					}
+					/* Cycle carrier: ASK 125k -> ASK 128k -> ASK 134.2k -> PSK -> ...
+					 * The three ASK frequencies (125/128/134.2 kHz) cover every US
+					 * pet/animal chip, including older AVID (125/128 kHz) tags and
+					 * current ISO 11784/11785 FDX-B (134.2 kHz) tags. */
+					uint32_t carrier_freq;
+					float    carrier_duty;
+
+					lfrfid_current_carrier =
+						lfrfid_carrier_next(lfrfid_current_carrier);
+					lfrfid_carrier_params(lfrfid_current_carrier,
+					                      &carrier_freq, &carrier_duty);
+					lfrfid_carrier_switch(carrier_freq, carrier_duty);
 					/* Reset decoders after carrier switch */
 					lfrfid_isr_init();
 					lfrfid_decoder_begin();

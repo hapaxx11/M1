@@ -531,6 +531,7 @@ target_sources(m1_01 INTERFACE
     ../../USB/Core/Src/usbd_desc.c
     ../../USB/Core/Src/usbd_ioreq.c
     ../../lfrfid/lfrfid.c
+    ../../lfrfid/lfrfid_carrier.c
     ../../lfrfid/lfrfid_file.c
     ../../lfrfid/lfrfid_uid_copy.c
     ../../lfrfid/lfrfid_hal.c
