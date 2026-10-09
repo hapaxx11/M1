@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.4] - 2026-10-09
+
+### Added
+
+- **Sub-GHz: ProtoPirate key injection** — optionally embed plaintext Kia V6 and VAG keystore data into firmware builds using the `KIA_V6_KEYSTORE_RAW` and `VAG_AUT64_KEYSTORE_RAW` Actions secrets; encrypted entries are ignored.
+- Sub-GHz: added a real decoder for the Fiat V2 (FCA) automotive keyfob protocol (Manchester, 112-bit), so M1 can now identify and parse these signals — UID, button, rolling counter and hop — from a capture instead of only replaying them. Ported from the ProtoPirate reference; host-tested.
+- **Sub-GHz: Kia V6 and VAG field decoding** — Decode Kia V6 serial, button, and counter with optional Kia keystore keys; decrypt VAG type-1 AUT64 and type-2 TEA frames. Receive-side decoding only.
+- Sub-GHz: real RX-identify decoders for ProtoPirate automotive keyfobs — Renault V1, PSA, and Ford V3 are now fully decoded (cipher-free), and VAG is identified (prefix/type/button). Previously these were TX-replay-only placeholders.
+
+### Changed
+
+- Sub-GHz tests: add a synthetic lifecycle contract for future ProtoPirate
+  brute-force cores, covering progress, cancellation, and match/no-match status
+  without real protocol frames, keys, or cryptographic search logic.
+
+### Fixed
+
+- Sub-GHz: Increase live and offline pulse capacity for long Kia V6 frames, and
+  restore Renault V1's supported 315, 433, and 868 MHz frequency bands.
 ## [0.9.4.3] - 2026-10-09
 
 ### Added
