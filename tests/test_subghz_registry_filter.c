@@ -50,7 +50,7 @@ void test_full_registry_am_frequency_mask_includes_300_315_433_868(void)
     TEST_ASSERT_TRUE_MESSAGE((mask & (UINT64_C(1) << (uint8_t)idx_300)) != 0,
         "Full-registry AM mask must include 300 MHz");
     TEST_ASSERT_TRUE_MESSAGE((mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
-        "Full-registry AM mask must include 315 MHz");
+        "Full-registry AM mask must include 315 MHz in the 300 MHz preset section");
     TEST_ASSERT_TRUE_MESSAGE((mask & (UINT64_C(1) << (uint8_t)idx_868)) != 0,
         "Full-registry AM mask must include 868.35 MHz");
 
@@ -59,9 +59,9 @@ void test_full_registry_am_frequency_mask_includes_300_315_433_868(void)
         "Frequency mask must include Custom");
 }
 
-void test_full_registry_fm_frequency_mask_is_433_only(void)
+void test_full_registry_fm_frequency_mask_includes_315_and_433(void)
 {
-    /* FM (FSK) protocols operate at 433 MHz (POCSAG/PCSG). */
+    /* Kia V6 supports FM at 315/433 MHz; other FM protocols include 433 MHz. */
     uint64_t mask = subghz_protocol_freq_mask_for_registry(
         subghz_protocol_registry, subghz_protocol_registry_count, 2);
     TEST_ASSERT_TRUE_MESSAGE((mask & (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX)) != 0,
@@ -69,8 +69,8 @@ void test_full_registry_fm_frequency_mask_is_433_only(void)
 
     int16_t idx_315 = subghz_freq_preset_find_hz(315000000UL);
     TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, idx_315, "315 MHz preset missing");
-    TEST_ASSERT_TRUE_MESSAGE((mask & (UINT64_C(1) << (uint8_t)idx_315)) == 0,
-        "Full-registry FM mask must NOT include 315 MHz");
+    TEST_ASSERT_TRUE_MESSAGE((mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
+        "Full-registry FM mask must include Kia V6's 315 MHz band");
 }
 
 void test_frequency_mask_changes_with_modulation(void)
@@ -85,8 +85,8 @@ void test_frequency_mask_changes_with_modulation(void)
 
     TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
         "AM mask must include 315 MHz");
-    TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << (uint8_t)idx_315)) == 0,
-        "FM mask must NOT include 315 MHz");
+    TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
+        "FM mask must include Kia V6's 315 MHz band");
 }
 
 void test_full_registry_am_mask_preserves_all_presets_in_active_bands(void)
@@ -119,8 +119,10 @@ void test_proto_pirate_masks_follow_protocol_capabilities(void)
     uint64_t fm_mask = subghz_protocol_proto_pirate_freq_mask(2);
     int16_t idx_315 = subghz_freq_preset_find_hz(315000000UL);
     TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, idx_315, "315 MHz preset missing");
-    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
-        "ProtoPirate AM mask must include Kia V6's 315 MHz band");
+    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) == 0,
+        "ProtoPirate AM mask must exclude Kia V6's FM-only 315 MHz band");
+    TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
+        "ProtoPirate FM mask must include Kia V6's 315 MHz band");
     TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX)) != 0,
         "ProtoPirate FM mask must include Renault V1's 433 MHz band");
 }
@@ -151,7 +153,7 @@ int main(void)
 
     RUN_TEST(test_full_registry_includes_am_and_fm_modulations);
     RUN_TEST(test_full_registry_am_frequency_mask_includes_300_315_433_868);
-    RUN_TEST(test_full_registry_fm_frequency_mask_is_433_only);
+    RUN_TEST(test_full_registry_fm_frequency_mask_includes_315_and_433);
     RUN_TEST(test_frequency_mask_changes_with_modulation);
     RUN_TEST(test_full_registry_am_mask_preserves_all_presets_in_active_bands);
     RUN_TEST(test_proto_pirate_masks_follow_protocol_capabilities);

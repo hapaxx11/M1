@@ -1431,7 +1431,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .name   = "Kia V6",
         .type   = SubGhzProtocolTypeDynamic,
         .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
-                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
                   SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=200, .te_long=400, .te_delta=100,
