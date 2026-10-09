@@ -1612,6 +1612,18 @@ uint64_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
     return mask;
 }
 
+uint32_t subghz_protocol_proto_pirate_mod_mask(void)
+{
+    return subghz_protocol_mod_mask_for_registry(
+        &subghz_protocol_registry[FORD_V0], KIA_V6 - FORD_V0 + 1);
+}
+
+uint64_t subghz_protocol_proto_pirate_freq_mask(uint8_t mod_idx)
+{
+    return subghz_protocol_freq_mask_for_registry(
+        &subghz_protocol_registry[FORD_V0], KIA_V6 - FORD_V0 + 1, mod_idx);
+}
+
 /* subghz_registry_decode_try_fn() has been extracted to subghz_decode_try_fn.c
  * to enable isolated unit testing with a minimal stub registry.  The function
  * is declared in subghz_raw_decoder.h and linked from either this production

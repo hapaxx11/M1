@@ -109,6 +109,22 @@ void test_full_registry_am_mask_preserves_all_presets_in_active_bands(void)
         "Full-registry AM mask must include Somfy Telis' 433.42 MHz preset");
 }
 
+void test_proto_pirate_masks_follow_protocol_capabilities(void)
+{
+    uint32_t mod_mask = subghz_protocol_proto_pirate_mod_mask();
+    TEST_ASSERT_BITS_HIGH((1u << 0) | (1u << 1), mod_mask);
+    TEST_ASSERT_BITS_HIGH((1u << 2) | (1u << 3), mod_mask);
+
+    uint64_t am_mask = subghz_protocol_proto_pirate_freq_mask(1);
+    uint64_t fm_mask = subghz_protocol_proto_pirate_freq_mask(2);
+    int16_t idx_315 = subghz_freq_preset_find_hz(315000000UL);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, idx_315, "315 MHz preset missing");
+    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
+        "ProtoPirate AM mask must include Kia V6's 315 MHz band");
+    TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX)) != 0,
+        "ProtoPirate FM mask must include Renault V1's 433 MHz band");
+}
+
 /* ================================================================
  * Empty / invalid registry edge cases
  * ================================================================ */
@@ -138,6 +154,7 @@ int main(void)
     RUN_TEST(test_full_registry_fm_frequency_mask_is_433_only);
     RUN_TEST(test_frequency_mask_changes_with_modulation);
     RUN_TEST(test_full_registry_am_mask_preserves_all_presets_in_active_bands);
+    RUN_TEST(test_proto_pirate_masks_follow_protocol_capabilities);
     RUN_TEST(test_empty_registry_returns_zero_masks);
     RUN_TEST(test_invalid_modulation_index_returns_zero_freq_mask);
 
