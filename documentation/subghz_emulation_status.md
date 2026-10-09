@@ -22,6 +22,24 @@ in the future.
 
 ---
 
+## ProtoPirate Kia V6 / VAG key injection
+
+The release workflow optionally embeds `KIA_V6_KEYSTORE_RAW` and
+`VAG_AUT64_KEYSTORE_RAW` into firmware flash. Encrypted (`Encryption: 1`) files are
+skipped; malformed plaintext inputs fail the build rather than silently producing
+partial key data. Accepted plaintext inputs:
+
+- Kia V6: a RAW file with exactly 16 payload bytes (Type 11 key then Type 12 key,
+  each big-endian), or a standard plaintext Flipper keystore with one entry of
+  each type.
+- VAG: a RAW file with exactly 48 payload bytes (three packed 16-byte AUT64 records).
+
+These injected arrays make key material available to firmware code, but do not
+themselves add Kia V6 decoding or VAG serial/counter decryption. Keys embedded in
+firmware can be extracted from a firmware image.
+
+---
+
 ## ✅ Replayable — Plain OOK PWM (no cipher needed)
 
 These protocols use simple counter-increment or fixed rolling-code counters with no

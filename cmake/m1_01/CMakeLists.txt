@@ -362,6 +362,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_keeloq.c
     ../../Sub_Ghz/subghz_keeloq_mfkeys.c
     ../../Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
+    ../../Sub_Ghz/subghz_protopirate_keys_builtin.c
     ../../Sub_Ghz/subghz_keeloq_encoder.c
     ../../Sub_Ghz/subghz_txrx_state.c
     ../../Sub_Ghz/subghz_scene_state.c
