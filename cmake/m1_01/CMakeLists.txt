@@ -518,6 +518,10 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_kia_v5_decode.c
     ../../Sub_Ghz/protocols/m1_fiat_v1_decode.c
     ../../Sub_Ghz/protocols/m1_fiat_v2_decode.c
+    ../../Sub_Ghz/protocols/m1_renault_v1_decode.c
+    ../../Sub_Ghz/protocols/m1_psa_decode.c
+    ../../Sub_Ghz/protocols/m1_ford_v3_decode.c
+    ../../Sub_Ghz/protocols/m1_vag_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c

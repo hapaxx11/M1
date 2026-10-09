@@ -300,6 +300,12 @@ enum {
 
 	/* --- Fiat V2 (FCA) — real decoder (Manchester 112-bit, ProtoPirate) --- */
 	FIAT_V2,
+
+	/* --- ProtoPirate automotive — real (cipher-free) decoders --- */
+	RENAULT_V1,   /* HITAG2 frame, XOR8 checksum */
+	PSA,          /* Direct-XOR (type 0x23) path */
+	FORD_V3,      /* structural validation (US/EU variants) */
+	VAG,          /* T12 identify (prefix/type/button; serial encrypted) */
 };
 
 /* Weather station decoded data */
