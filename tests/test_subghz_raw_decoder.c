@@ -361,20 +361,37 @@ void test_trailing_packet_without_gap(void)
 /* Tests: Pulse overflow                                                      */
 /*============================================================================*/
 
-void test_pulse_overflow_resets(void)
+void test_long_pulse_packet_decodes(void)
 {
-    /* More than PACKET_PULSE_COUNT_MAX (256) pulses without a gap
-     * should reset the accumulator and not crash */
-    int16_t raw[300];
+    /* A packet above the old 256-pulse limit should still be decoded */
+    int16_t raw[281];
     for (int i = 0; i < 280; i++)
         raw[i] = (int16_t)((i % 2 == 0) ? 300 : -300);
-    /* Add a gap at the end */
     raw[280] = 2000;
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 1, 0x123, 280);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, 281, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_HEX64(0x123, results[0].key);
+}
+
+void test_pulse_overflow_resets(void)
+{
+    /* More than PACKET_PULSE_COUNT_MAX pulses without a gap should reset
+     * the accumulator and not crash */
+    int16_t raw[PACKET_PULSE_COUNT_MAX + 2];
+    for (int i = 0; i < PACKET_PULSE_COUNT_MAX + 1; i++)
+        raw[i] = (int16_t)((i % 2 == 0) ? 300 : -300);
+    /* Add a gap at the end */
+    raw[PACKET_PULSE_COUNT_MAX + 1] = 2000;
 
     SubGhzRawDecodeResult results[4];
     MockDecodeCtx ctx = make_mock(true, 1, 0x123, 40);
     uint8_t count = subghz_decode_raw_offline(
-        raw, 281, 433920000, results, 4, mock_try_decode, &ctx);
+        raw, PACKET_PULSE_COUNT_MAX + 2, 433920000, results, 4, mock_try_decode, &ctx);
 
     /* After overflow reset, the gap pulse starts a new packet of 1 pulse
      * which is below PACKET_PULSE_COUNT_MIN → no decode */
@@ -682,7 +699,8 @@ int main(void)
     /* Trailing packet */
     RUN_TEST(test_trailing_packet_without_gap);
 
-    /* Overflow */
+    /* Long packets and overflow */
+    RUN_TEST(test_long_pulse_packet_decodes);
     RUN_TEST(test_pulse_overflow_resets);
 
     /* Clamping */
