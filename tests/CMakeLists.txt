@@ -924,6 +924,23 @@ endif()
 add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
 
 # ------------------------------------------------------------------
+# Module under test: synthetic ProtoPirate brute-force lifecycle contract
+# Exercises match/no-match, progress, cancellation, and empty-range behavior
+# without real protocol data or key-search logic.
+# ------------------------------------------------------------------
+add_executable(test_protopirate_bruteforce_contract
+    test_protopirate_bruteforce_contract.c
+)
+target_include_directories(test_protopirate_bruteforce_contract PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_protopirate_bruteforce_contract PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_protopirate_bruteforce_contract PRIVATE sanitizers)
+endif()
+add_test(NAME protopirate_bruteforce_contract COMMAND test_protopirate_bruteforce_contract)
+
+# ------------------------------------------------------------------
 # Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)
 # Verifies the pure frame parser (16-bit header + XOR8 checksum, field slicing)
 # and full Manchester pulse-array decode.
