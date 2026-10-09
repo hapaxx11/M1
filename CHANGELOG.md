@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.3] - 2026-10-09
+
+### Added
+
+- LF-RFID read sweep now also energises a 128 kHz ASK carrier (125, 128 and 134.2 kHz ASK, then PSK), and the read timeout was extended to cover all four carrier dwells. This changes excitation only; no new tag decoders were added.
 ## [0.9.4.2] - 2026-10-07
 
 ### Added
