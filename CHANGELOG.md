@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.2] - 2026-10-07
+
+### Added
+
+- Live RSSI bar now also shown on the Read Raw screen while listening (before recording starts).
 ## [0.9.4.1] - 2026-10-06
 
 ### Added
