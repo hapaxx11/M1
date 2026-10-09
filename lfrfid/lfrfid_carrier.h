@@ -11,11 +11,10 @@
  * cycle order; it touches no hardware, RTOS or display state and is unit-tested
  * on the host (tests/test_lfrfid_carrier.c).
  *
- * Pet / animal microchips in the US use three carrier frequencies:
- *   - 125   kHz : older AVID / FDX-A chips
- *   - 128   kHz : older US chips
- *   - 134.2 kHz : ISO 11784/11785 FDX-B (current standard)
- * All three are swept so that pets tagged on any of them can be read.
+ * The sweep energises the antenna at 125, 128 and 134.2 kHz (ASK) and 62.5 kHz
+ * (PSK).  This module only schedules excitation frequencies; whether a tag
+ * answering at a given frequency can be decoded depends on the registered
+ * protocol decoders, which are outside this module.
  */
 
 #ifndef LFRFID_CARRIER_H_
@@ -28,17 +27,23 @@
 #define LFRFID_CARRIER_SWITCH_MS    2000   /* switch every 2 seconds */
 #define LFRFID_CARRIER_ASK_FREQ     125000
 #define LFRFID_CARRIER_ASK_DUTY     0.5f
-#define LFRFID_CARRIER_ASK_128_FREQ 128000  /* older US pet/animal chips */
+#define LFRFID_CARRIER_ASK_128_FREQ 128000  /* 128 kHz ASK excitation */
 #define LFRFID_CARRIER_ASK_128_DUTY 0.5f
-#define LFRFID_CARRIER_ASK_134_FREQ 134200  /* ISO 11784/11785 pet chips */
+#define LFRFID_CARRIER_ASK_134_FREQ 134200  /* 134.2 kHz ASK excitation */
 #define LFRFID_CARRIER_ASK_134_DUTY 0.5f
 #define LFRFID_CARRIER_PSK_FREQ     62500
 #define LFRFID_CARRIER_PSK_DUTY     0.25f
 
+/* Number of carriers in the sweep and the time one full cycle takes.  A read
+ * timeout must exceed LFRFID_CARRIER_CYCLE_MS so every carrier (including the
+ * last, PSK) gets a full dwell before the read is torn down. */
+#define LFRFID_CARRIER_COUNT        4
+#define LFRFID_CARRIER_CYCLE_MS     (LFRFID_CARRIER_COUNT * LFRFID_CARRIER_SWITCH_MS)
+
 typedef enum {
     LFRFID_CARRIER_ASK,      /* 125 kHz ASK */
-    LFRFID_CARRIER_ASK_128,  /* 128 kHz ASK — older US pet/animal chips */
-    LFRFID_CARRIER_ASK_134,  /* 134.2 kHz for FDX-B pet/animal chips */
+    LFRFID_CARRIER_ASK_128,  /* 128 kHz ASK */
+    LFRFID_CARRIER_ASK_134,  /* 134.2 kHz ASK */
     LFRFID_CARRIER_PSK,
 } lfrfid_carrier_t;
 

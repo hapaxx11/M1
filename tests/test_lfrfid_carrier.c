@@ -5,11 +5,10 @@
  *
  * Unit tests for lfrfid_carrier.c — the LF-RFID carrier-cycling state machine.
  *
- * Regression context: US pet/animal microchips use three carrier frequencies —
- * 125 kHz and 128 kHz (older AVID / FDX-A chips) and 134.2 kHz (ISO 11784/11785
- * FDX-B). The read sweep previously only energised 125 kHz and 134.2 kHz, so
- * pets tagged on the older 128 kHz carrier could never be read. These tests pin
- * the sweep order (which now includes 128 kHz) and the per-carrier PWM params.
+ * Regression context: the read sweep previously only energised 125 kHz and
+ * 134.2 kHz; it now also energises 128 kHz.  These tests pin the sweep order,
+ * the per-carrier PWM params and the cycle-time constant used to size the read
+ * timeout.  They do not exercise tag decoding.
  *
  * Build:
  *   cmake -B build-tests -S tests && cmake --build build-tests
@@ -21,6 +20,14 @@
 
 void setUp(void) {}
 void tearDown(void) {}
+
+void test_carrier_cycle_ms_covers_all_dwells(void)
+{
+	/* Four carriers (ASK 125/128/134.2 + PSK) each get a full dwell. */
+	TEST_ASSERT_EQUAL_INT(4, LFRFID_CARRIER_COUNT);
+	TEST_ASSERT_EQUAL_INT(4 * LFRFID_CARRIER_SWITCH_MS, LFRFID_CARRIER_CYCLE_MS);
+	TEST_ASSERT_GREATER_OR_EQUAL_INT(8000, LFRFID_CARRIER_CYCLE_MS);
+}
 
 /* ===================================================================
  * lfrfid_carrier_next — sweep order
@@ -133,6 +140,7 @@ int main(void)
 {
 	UNITY_BEGIN();
 	RUN_TEST(test_carrier_cycle_full_order);
+	RUN_TEST(test_carrier_cycle_ms_covers_all_dwells);
 	RUN_TEST(test_carrier_cycle_sweeps_all_three_pet_frequencies);
 	RUN_TEST(test_carrier_cycle_returns_to_start_after_four_steps);
 	RUN_TEST(test_carrier_next_unknown_wraps_to_ask);

@@ -32,7 +32,9 @@
 /*************************** D E F I N E S ************************************/
 #define LFRFID_QUEUE_ITEMS_MAX_N		10
 
-#define LFRFID_READ_TIMEOUT_MS   (6000)
+/* Must cover one full carrier cycle (all dwells) plus margin so PSK, the last
+ * carrier, still receives a full dwell before the timeout fires. */
+#define LFRFID_READ_TIMEOUT_MS   (LFRFID_CARRIER_CYCLE_MS + 2000)
 #define LFRFID_CARRIER_STABILIZE_MS  50
 //************************** C O N S T A N T **********************************/
 
@@ -463,8 +465,11 @@ void lfrfid_rxThread(void *param)
         m1_wdt_reset();
 
         /* Determine which feature set to try based on current carrier.
-         * All three ASK frequencies (125/128/134.2 kHz) use ASK decoders — the
-         * FDX-B timing windows (68-188 / 196-316 µs) cover every US pet chip. */
+         * The 125/128/134.2 kHz carriers all select the ASK feature set (this
+         * routes to the ASK decoders, e.g. FDX-B with its own timing windows
+         * and FDX-A via the separate fsk_symbol_feed() path); PSK selects the
+         * PSK feature set.  Carrier choice does not by itself imply a tag is
+         * decodable — that depends on the registered decoders. */
         uint32_t active_feature = lfrfid_carrier_is_psk(lfrfid_current_carrier)
                                   ? LFRFIDFeaturePSK : LFRFIDFeatureASK;
 
@@ -555,9 +560,7 @@ void lfrfidThread(void *param)
 				if(lfrfid_lock && lfrfid_state == LFRFID_STATE_READ)
 				{
 					/* Cycle carrier: ASK 125k -> ASK 128k -> ASK 134.2k -> PSK -> ...
-					 * The three ASK frequencies (125/128/134.2 kHz) cover every US
-					 * pet/animal chip, including older AVID (125/128 kHz) tags and
-					 * current ISO 11784/11785 FDX-B (134.2 kHz) tags. */
+					 * Excitation only; decoding depends on the registered decoders. */
 					uint32_t carrier_freq;
 					float    carrier_duty;
 
