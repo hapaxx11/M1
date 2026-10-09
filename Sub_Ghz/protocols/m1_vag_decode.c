@@ -35,6 +35,7 @@
 #include <string.h>
 #include "m1_sub_ghz_decenc.h"
 #include "m1_aut64.h"
+#include "m1_vag_decode.h"
 #include "subghz_protopirate_keys_builtin.h"
 
 /* Timing (µs) — T12 format (ProtoPirate reference types 1/2). */
@@ -126,7 +127,7 @@ static bool vag_decrypted_button_matches(const uint8_t block[8], uint8_t dispatc
 }
 
 bool m1_vag_t12_decrypt(uint8_t type, uint64_t key1, uint16_t key2,
-                        const uint8_t packed_keys[M1_VAG_AUT64_KEY_BYTES],
+                        const uint8_t *packed_keys,
                         bool keys_available, uint32_t *serial,
                         uint32_t *counter, uint8_t *button)
 {

@@ -8,9 +8,13 @@
 #include "m1_kia_v6_decode.h"
 
 #include <string.h>
-#include "../../NFC/amiibo/tiny_aes.h"
 #include "m1_sub_ghz_decenc.h"
 #include "subghz_protopirate_keys_builtin.h"
+#include "../../NFC/amiibo/tiny_aes.h"
+
+#undef CBC
+#undef ECB
+#undef CTR
 
 #define KIA_TE_SHORT 200u
 #define KIA_TE_LONG  400u

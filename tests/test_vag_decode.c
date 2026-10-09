@@ -3,17 +3,18 @@
 /*
  * test_vag_decode.c
  *
- * Host unit tests for Sub_Ghz/protocols/m1_vag_decode.c — the ported
- * ProtoPirate "VAG" automotive keyfob *identify* decoder (T12 format).
+ * Host unit tests for the ProtoPirate VAG T12 parser, decryptors, and
+ * Manchester waveform decoder.
  *
- *   1. m1_vag_t12_parse() — pure prefix/type + dispatch-byte(button) validation,
- *      with the payload one's-complement applied.
- *   2. subghz_decode_vag() — full 95-bit Manchester pulse-array decode.
+ *   1. m1_vag_t12_parse() — prefix/type + dispatch-button validation.
+ *   2. m1_vag_t12_decrypt() — synthetic AUT64 and TEA field recovery.
+ *   3. subghz_decode_vag() — full 95-bit Manchester pulse-array decode.
  */
 
 #include <string.h>
 #include "unity.h"
 #include "m1_sub_ghz_decenc.h"
+#include "m1_vag_decode.h"
 #include "subghz_protopirate_keys_builtin.h"
 
 #define VAG_BITS 95u
@@ -25,12 +26,6 @@
 #define VAG_BTN_LOCK   0x2u
 #define VAG_BTN_BOOT   0x4u
 
-bool m1_vag_t12_parse(uint16_t prefix, uint64_t key1_raw, uint16_t key2_raw,
-                      uint8_t *type, uint8_t *button, uint64_t *key1_out);
-bool m1_vag_t12_decrypt(uint8_t type, uint64_t key1, uint16_t key2,
-                        const uint8_t packed_keys[M1_VAG_AUT64_KEY_BYTES],
-                        bool keys_available, uint32_t *serial,
-                        uint32_t *counter, uint8_t *button);
 uint8_t subghz_decode_vag(uint16_t p, uint16_t pulsecount);
 
 void setUp(void) { memset(&subghz_decenc_ctl, 0, sizeof(subghz_decenc_ctl)); }
