@@ -29,7 +29,8 @@ static uint8_t crc8(const uint8_t *data, size_t length)
     return crc;
 }
 
-static void build_frame(const uint64_t keys[2], uint8_t bits[M1_KIA_V6_FRAME_BITS])
+static void build_frame(const uint64_t keys[2], uint32_t counter,
+                        uint8_t bits[M1_KIA_V6_FRAME_BITS])
 {
     uint8_t plain[16] = {0};
     plain[0] = 0x34u;
@@ -37,10 +38,10 @@ static void build_frame(const uint64_t keys[2], uint8_t bits[M1_KIA_V6_FRAME_BIT
     plain[5] = 0x34u;
     plain[6] = 0x56u;
     plain[7] = 0x02u;
-    plain[8] = 0x01u;
-    plain[9] = 0x02u;
-    plain[10] = 0x03u;
-    plain[11] = 0x04u;
+    plain[8] = (uint8_t)(counter >> 24);
+    plain[9] = (uint8_t)(counter >> 16);
+    plain[10] = (uint8_t)(counter >> 8);
+    plain[11] = (uint8_t)counter;
     plain[15] = crc8(plain, 15);
 
     uint8_t aes_key[16];
@@ -105,7 +106,7 @@ void test_parse_decrypts_fields_and_checks_crc(void)
 {
     uint8_t bits[M1_KIA_V6_FRAME_BITS];
     m1_kia_v6_data_t data = {0};
-    build_frame(m1_kia_v6_keys_builtin, bits);
+    build_frame(m1_kia_v6_keys_builtin, 0x01020304u, bits);
 
     TEST_ASSERT_TRUE(m1_kia_v6_parse(bits, m1_kia_v6_keys_builtin, &data));
     TEST_ASSERT_EQUAL_HEX32(0x123456u, data.serial);
@@ -136,7 +137,7 @@ void test_decoder_rejects_noise(void)
 void test_decoder_decodes_manchester_waveform(void)
 {
     uint8_t bits[M1_KIA_V6_FRAME_BITS];
-    build_frame(m1_kia_v6_keys_builtin, bits);
+    build_frame(m1_kia_v6_keys_builtin, 0x01020304u, bits);
     const uint16_t count = build_waveform(bits);
     TEST_ASSERT_LESS_THAN_UINT16(PACKET_PULSE_COUNT_MAX, count);
 
@@ -149,6 +150,18 @@ void test_decoder_decodes_manchester_waveform(void)
     TEST_ASSERT_EQUAL_HEX8(2u, subghz_decenc_ctl.n8_buttonid);
 }
 
+void test_decoder_accepts_321_pulse_kia_frame(void)
+{
+    uint8_t bits[M1_KIA_V6_FRAME_BITS];
+    build_frame(m1_kia_v6_keys_builtin, 0x003CF089u, bits);
+    const uint16_t count = build_waveform(bits);
+
+    TEST_ASSERT_EQUAL_UINT16(321u, count);
+    TEST_ASSERT_EQUAL_UINT8(0u, subghz_decode_kia_v6(KIA_V6, count));
+    TEST_ASSERT_EQUAL_HEX32(0x123456u, subghz_decenc_ctl.n32_serialnumber);
+    TEST_ASSERT_EQUAL_HEX32(0x003CF089u, subghz_decenc_ctl.n32_rollingcode);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -156,5 +169,6 @@ int main(void)
     RUN_TEST(test_parse_rejects_invalid_metadata_and_nulls);
     RUN_TEST(test_decoder_rejects_noise);
     RUN_TEST(test_decoder_decodes_manchester_waveform);
+    RUN_TEST(test_decoder_accepts_321_pulse_kia_frame);
     return UNITY_END();
 }

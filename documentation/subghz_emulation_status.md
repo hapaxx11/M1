@@ -34,9 +34,12 @@ partial key data. Accepted plaintext inputs:
   each type.
 - VAG: a RAW file with exactly 48 payload bytes (three packed 16-byte AUT64 records).
 
-These injected arrays make key material available to firmware code, but do not
-themselves add Kia V6 decoding or VAG serial/counter decryption. Keys embedded in
-firmware can be extracted from a firmware image.
+The Kia V6 decoder uses the injected keys to decrypt frames and validate their
+CRC. The VAG decoder uses the AUT64 records to recover serial/counter fields for
+type 1; type 2 uses its fixed TEA schedule. Without injected Kia or VAG type-1
+keys, VAG still identifies the protocol and button but cannot recover its
+encrypted fields. Keys embedded in firmware can be extracted from a firmware
+image.
 
 ---
 

@@ -157,9 +157,28 @@ void test_renault_v1_supports_am_and_fm(void)
     uint32_t mod_mask = subghz_protocol_mod_mask_for_registry(proto, 1);
     TEST_ASSERT_BITS_HIGH((1u << 0) | (1u << 2), mod_mask);
 
-    uint64_t am_mask = subghz_protocol_freq_mask_for_registry(proto, 1, 1);
-    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX)) != 0,
-        "Renault V1 AM frequency mask must include 433 MHz");
+    const uint32_t band_flags = SubGhzProtocolFlag_315 |
+                                SubGhzProtocolFlag_433 |
+                                SubGhzProtocolFlag_868;
+    TEST_ASSERT_BITS_HIGH(band_flags, proto->flags);
+
+    const int16_t band_indices[] = {
+        subghz_freq_preset_find_hz(315000000UL),
+        subghz_freq_preset_find_hz(433920000UL),
+        subghz_freq_preset_find_hz(868350000UL),
+    };
+    const uint8_t modulation_indices[] = {1u, 2u};
+    for (uint8_t mod = 0; mod < sizeof(modulation_indices) / sizeof(modulation_indices[0]); mod++) {
+        uint64_t mask = subghz_protocol_freq_mask_for_registry(
+            proto, 1, modulation_indices[mod]);
+        for (uint8_t band = 0; band < sizeof(band_indices) / sizeof(band_indices[0]); band++) {
+            TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(
+                0, band_indices[band], "Renault V1 frequency preset missing");
+            TEST_ASSERT_TRUE_MESSAGE(
+                (mask & (UINT64_C(1) << (uint8_t)band_indices[band])) != 0,
+                "Renault V1 AM/FM masks must include its supported 315/433/868 MHz bands");
+        }
+    }
 }
 
 /* ================================================================

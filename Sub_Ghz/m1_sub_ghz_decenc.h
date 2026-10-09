@@ -42,7 +42,7 @@
  * 48 pulses so is unaffected.  Shorter protocols (CAME 12-bit = 24 pulses)
  * still fall below this threshold unless they repeat within one capture window. */
 #define PACKET_PULSE_COUNT_MIN				40 // was 48 (24 bits)
-#define PACKET_PULSE_COUNT_MAX				320 // fits 144-bit Manchester frames with preamble
+#define PACKET_PULSE_COUNT_MAX				384 // includes long Manchester frames and terminal gap
 
 #define PACKET_PULSE_TIME_TOLERANCE20		20 // percentage
 #define PACKET_PULSE_TIME_TOLERANCE25		25

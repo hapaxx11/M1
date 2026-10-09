@@ -45,6 +45,7 @@ typedef struct {
     uint16_t min_pulses;        /**< Minimum pulses to "decode" */
     bool     should_match;      /**< Whether callback should report success */
     uint8_t  call_count;        /**< Number of times callback was invoked */
+    uint16_t last_pulse_count;  /**< Pulse count of the last callback invocation */
 } MockDecodeCtx;
 
 static MockDecodeCtx make_mock(bool should_match, uint16_t protocol,
@@ -68,6 +69,7 @@ static bool mock_try_decode(const uint16_t *pulse_buf,
 {
     MockDecodeCtx *ctx = (MockDecodeCtx *)user_ctx;
     ctx->call_count++;
+    ctx->last_pulse_count = pulse_count;
 
     if (!ctx->should_match)
         return false;
@@ -376,6 +378,23 @@ void test_long_pulse_packet_decodes(void)
 
     TEST_ASSERT_EQUAL_UINT8(1, count);
     TEST_ASSERT_EQUAL_HEX64(0x123, results[0].key);
+}
+
+void test_360_pulse_packet_and_terminal_gap_decode(void)
+{
+    int16_t raw[361];
+    for (uint16_t i = 0; i < 360u; i++)
+        raw[i] = (int16_t)((i % 2u == 0u) ? 300 : -300);
+    raw[360] = 2000;
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 1, 0x123, 360);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, 361, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1u, count);
+    TEST_ASSERT_EQUAL_UINT16(361u, ctx.last_pulse_count);
+    TEST_ASSERT_EQUAL_HEX64(0x123u, results[0].key);
 }
 
 void test_pulse_overflow_resets(void)
@@ -701,6 +720,7 @@ int main(void)
 
     /* Long packets and overflow */
     RUN_TEST(test_long_pulse_packet_decodes);
+    RUN_TEST(test_360_pulse_packet_and_terminal_gap_decode);
     RUN_TEST(test_pulse_overflow_resets);
 
     /* Clamping */

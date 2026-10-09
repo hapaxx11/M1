@@ -1388,7 +1388,8 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [RENAULT_V1] = {
         .name   = "Renault V1",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_AM |
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM |
                   SubGhzProtocolFlag_FM |
                   SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
