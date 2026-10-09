@@ -1379,7 +1379,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [FIAT_V2] = {
         .name   = "Fiat V2",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433,
+        .flags  = SubGhzProtocolFlag_315 | F_ROLLING_433,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=210, .te_long=420, .te_delta=100,
                     .min_count_bit_for_found=112 },
@@ -1388,7 +1388,8 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [RENAULT_V1] = {
         .name   = "Renault V1",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_FM |
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_FM |
                   SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=125, .te_long=250, .te_delta=60,

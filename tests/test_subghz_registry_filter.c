@@ -119,12 +119,47 @@ void test_proto_pirate_masks_follow_protocol_capabilities(void)
     uint64_t fm_mask = subghz_protocol_proto_pirate_freq_mask(2);
     int16_t idx_315 = subghz_freq_preset_find_hz(315000000UL);
     TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, idx_315, "315 MHz preset missing");
-    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) == 0,
-        "ProtoPirate AM mask must exclude Kia V6's FM-only 315 MHz band");
+    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
+        "ProtoPirate AM mask must include Fiat V2's 315 MHz band");
     TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
         "ProtoPirate FM mask must include Kia V6's 315 MHz band");
     TEST_ASSERT_TRUE_MESSAGE((fm_mask & (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX)) != 0,
         "ProtoPirate FM mask must include Renault V1's 433 MHz band");
+}
+
+void test_fiat_v2_supports_315_mhz_am_without_replay(void)
+{
+    int16_t index = subghz_protocol_find_by_name("Fiat V2");
+    TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, index, "Fiat V2 missing from registry");
+    const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)index);
+    TEST_ASSERT_NOT_NULL(proto);
+
+    TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                          SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                          SubGhzProtocolFlag_Save, proto->flags);
+    TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_Send | SubGhzProtocolFlag_PwmKeyReplay,
+                         proto->flags);
+
+    uint64_t am_mask = subghz_protocol_freq_mask_for_registry(proto, 1, 1);
+    int16_t idx_315 = subghz_freq_preset_find_hz(315000000UL);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, idx_315, "315 MHz preset missing");
+    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << (uint8_t)idx_315)) != 0,
+        "Fiat V2 AM frequency mask must include 315 MHz");
+}
+
+void test_renault_v1_supports_am_and_fm(void)
+{
+    int16_t index = subghz_protocol_find_by_name("Renault V1");
+    TEST_ASSERT_GREATER_OR_EQUAL_INT_MESSAGE(0, index, "Renault V1 missing from registry");
+    const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)index);
+    TEST_ASSERT_NOT_NULL(proto);
+
+    uint32_t mod_mask = subghz_protocol_mod_mask_for_registry(proto, 1);
+    TEST_ASSERT_BITS_HIGH((1u << 0) | (1u << 2), mod_mask);
+
+    uint64_t am_mask = subghz_protocol_freq_mask_for_registry(proto, 1, 1);
+    TEST_ASSERT_TRUE_MESSAGE((am_mask & (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX)) != 0,
+        "Renault V1 AM frequency mask must include 433 MHz");
 }
 
 /* ================================================================
@@ -157,6 +192,8 @@ int main(void)
     RUN_TEST(test_frequency_mask_changes_with_modulation);
     RUN_TEST(test_full_registry_am_mask_preserves_all_presets_in_active_bands);
     RUN_TEST(test_proto_pirate_masks_follow_protocol_capabilities);
+    RUN_TEST(test_fiat_v2_supports_315_mhz_am_without_replay);
+    RUN_TEST(test_renault_v1_supports_am_and_fm);
     RUN_TEST(test_empty_registry_returns_zero_masks);
     RUN_TEST(test_invalid_modulation_index_returns_zero_freq_mask);
 
