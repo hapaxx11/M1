@@ -136,20 +136,8 @@ typedef enum {
 
 #define LFRFID_WRITE_ERROR_COUNT	(10)
 
-/* Carrier mode for ASK/PSK auto-switching (follows Flipper Zero approach) */
-#define LFRFID_CARRIER_SWITCH_MS    2000   /* switch every 2 seconds */
-#define LFRFID_CARRIER_ASK_FREQ     125000
-#define LFRFID_CARRIER_ASK_DUTY     0.5f
-#define LFRFID_CARRIER_ASK_134_FREQ 134200  /* ISO 11784/11785 pet chips */
-#define LFRFID_CARRIER_ASK_134_DUTY 0.5f
-#define LFRFID_CARRIER_PSK_FREQ     62500
-#define LFRFID_CARRIER_PSK_DUTY     0.25f
-
-typedef enum {
-    LFRFID_CARRIER_ASK,
-    LFRFID_CARRIER_ASK_134,  /* 134.2 kHz for FDX-B pet/animal chips */
-    LFRFID_CARRIER_PSK,
-} lfrfid_carrier_t;
+/* Carrier definitions and cycle state machine (pure-logic, host-tested). */
+#include "lfrfid_carrier.h"
 
 extern volatile lfrfid_carrier_t lfrfid_current_carrier;
 

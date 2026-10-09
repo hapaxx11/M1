@@ -1,0 +1,1 @@
+LF-RFID read sweep now also energises a 128 kHz ASK carrier (125, 128 and 134.2 kHz ASK, then PSK), and the read timeout was extended to cover all four carrier dwells. This changes excitation only; no new tag decoders were added.
