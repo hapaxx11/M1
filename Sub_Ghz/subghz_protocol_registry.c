@@ -207,6 +207,7 @@ extern uint8_t subghz_decode_kia_v3(uint16_t, uint16_t);
 extern uint8_t subghz_decode_kia_v4(uint16_t, uint16_t);
 extern uint8_t subghz_decode_kia_v5(uint16_t, uint16_t);
 extern uint8_t subghz_decode_fiat_v1(uint16_t, uint16_t);
+extern uint8_t subghz_decode_fiat_v2(uint16_t, uint16_t);
 
 /*============================================================================*/
 /* Shorthand flags for common protocol profiles                                */
@@ -1369,6 +1370,15 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .timing = { .te_short=250, .te_long=500, .te_delta=100,
                     .min_count_bit_for_found=64 },
         .decode = subghz_decode_fiat_v1,
+    },
+    [FIAT_V2] = {
+        .name   = "Fiat V2",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = F_ROLLING_433_PWM,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=210, .te_long=420, .te_delta=100,
+                    .min_count_bit_for_found=112 },
+        .decode = subghz_decode_fiat_v2,
     },
 };
 

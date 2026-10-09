@@ -297,6 +297,9 @@ enum {
 	KIA_V4,
 	KIA_V5,
 	FIAT_V1,
+
+	/* --- Fiat V2 (FCA) — real decoder (Manchester 112-bit, ProtoPirate) --- */
+	FIAT_V2,
 };
 
 /* Weather station decoded data */
