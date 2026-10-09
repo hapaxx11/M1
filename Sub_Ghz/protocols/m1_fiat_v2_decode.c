@@ -179,6 +179,7 @@ static bool fiat_v2_try_window(const uint8_t *cells, uint16_t cell_count,
 
     subghz_decenc_ctl.n64_decodedvalue  = ((uint64_t)uid << 32) | hop;
     subghz_decenc_ctl.n32_serialnumber  = uid;
+    subghz_decenc_ctl.n32_rollingcode   = counter;
     subghz_decenc_ctl.n8_buttonid       = button;
     subghz_decenc_ctl.ndecodedbitlength = (uint16_t)FIAT_V2_WIRE_BITS;
     subghz_decenc_ctl.ndecodeddelay     = 0;
