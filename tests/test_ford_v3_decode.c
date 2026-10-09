@@ -48,6 +48,18 @@ static uint16_t build_manchester_pulses(const uint8_t *raw, uint16_t nbits,
     return np;
 }
 
+static uint16_t add_ford_v3_preamble(uint16_t pulse_count)
+{
+    const uint16_t prefix_count = 31u;
+    memmove(&subghz_decenc_ctl.pulse_times[prefix_count],
+            subghz_decenc_ctl.pulse_times,
+            pulse_count * sizeof(subghz_decenc_ctl.pulse_times[0]));
+    for (uint16_t i = 0; i < prefix_count - 1u; i++)
+        subghz_decenc_ctl.pulse_times[i] = FV3_TE_SHORT;
+    subghz_decenc_ctl.pulse_times[prefix_count - 1u] = FV3_TE_LONG;
+    return (uint16_t)(pulse_count + prefix_count);
+}
+
 static void make_frame_us(uint8_t raw[FV3_BYTES])
 {
     memset(raw, 0, FV3_BYTES);
@@ -108,11 +120,24 @@ void test_parse_rejects_zero_serial(void)
 void test_decode_us_waveform(void)
 {
     uint8_t raw[FV3_BYTES]; make_frame_us(raw);
-    uint16_t n = build_manchester_pulses(raw, FV3_BITS, FV3_TE_SHORT, FV3_TE_LONG);
+    uint16_t n = add_ford_v3_preamble(
+        build_manchester_pulses(raw, FV3_BITS, FV3_TE_SHORT, FV3_TE_LONG));
     TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v3(FORD_V3, n));
     TEST_ASSERT_EQUAL_UINT16(FORD_V3, subghz_decenc_ctl.ndecodedprotocol);
     TEST_ASSERT_EQUAL_HEX32(0x12345678u, subghz_decenc_ctl.n32_serialnumber);
     TEST_ASSERT_EQUAL_HEX8(0x02u, subghz_decenc_ctl.n8_buttonid);
+}
+
+void test_decode_eu_requires_preamble(void)
+{
+    uint8_t raw[FV3_BYTES]; make_frame_eu(raw);
+    uint16_t n = build_manchester_pulses(raw, FV3_BITS, FV3_TE_SHORT, FV3_TE_LONG);
+    TEST_ASSERT_EQUAL_UINT8(1, subghz_decode_ford_v3(FORD_V3, n));
+
+    n = add_ford_v3_preamble(n);
+    TEST_ASSERT_EQUAL_UINT8(0, subghz_decode_ford_v3(FORD_V3, n));
+    TEST_ASSERT_EQUAL_UINT16(FORD_V3, subghz_decenc_ctl.ndecodedprotocol);
+    TEST_ASSERT_EQUAL_HEX32(0x12345678u, subghz_decenc_ctl.n32_serialnumber);
 }
 
 void test_decode_rejects_noise(void)
@@ -130,6 +155,7 @@ int main(void)
     RUN_TEST(test_parse_rejects_bad_marker);
     RUN_TEST(test_parse_rejects_zero_serial);
     RUN_TEST(test_decode_us_waveform);
+    RUN_TEST(test_decode_eu_requires_preamble);
     RUN_TEST(test_decode_rejects_noise);
     return UNITY_END();
 }

@@ -429,6 +429,19 @@ void test_find_centurion(void)
 	TEST_ASSERT_EQUAL(SubGhzProtocolTypeStatic, proto->type);
 }
 
+void test_fiat_v2_is_decode_save_only(void)
+{
+	int16_t idx = subghz_protocol_find_by_name("Fiat V2");
+	TEST_ASSERT_GREATER_OR_EQUAL_INT16(0, idx);
+
+	const SubGhzProtocolDef *proto = subghz_protocol_get((uint16_t)idx);
+	TEST_ASSERT_NOT_NULL(proto);
+	TEST_ASSERT_BITS_HIGH(SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+		proto->flags);
+	TEST_ASSERT_BITS_LOW(SubGhzProtocolFlag_PwmKeyReplay | SubGhzProtocolFlag_Send,
+		proto->flags);
+}
+
 void test_find_bett(void)
 {
 	int16_t idx = subghz_protocol_find_by_name("BETT");
@@ -791,6 +804,7 @@ int main(void)
 	RUN_TEST(test_find_marantec24);
 	RUN_TEST(test_find_clemsa);
 	RUN_TEST(test_find_centurion);
+	RUN_TEST(test_fiat_v2_is_decode_save_only);
 	RUN_TEST(test_find_bett);
 	RUN_TEST(test_find_legrand);
 	RUN_TEST(test_find_linear_delta3);

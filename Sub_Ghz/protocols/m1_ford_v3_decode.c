@@ -39,6 +39,7 @@
 #define FORD_V3_TE_SHORT  240u
 #define FORD_V3_TE_LONG   480u
 #define FORD_V3_TE_DELTA  90u
+#define FORD_V3_PREAMBLE_PULSES 30u
 
 /* Frame geometry. */
 #define FORD_V3_WIRE_BITS  104u
@@ -169,6 +170,8 @@ uint8_t subghz_decode_ford_v3(uint16_t p, uint16_t pulsecount)
 {
     uint8_t  cells[FORD_V3_WIRE_CELLS];
     uint16_t cell_count = 0;
+    uint8_t preamble_count = 0;
+    bool frame_started = false;
 
     for (uint16_t i = 0; i < pulsecount; i++)
     {
@@ -176,12 +179,41 @@ uint8_t subghz_decode_ford_v3(uint16_t p, uint16_t pulsecount)
         const uint8_t  level = (uint8_t)((i & 1u) == 0u);
 
         uint8_t push = 0;
-        if (ford_v3_is_short(d))
+        if (!frame_started)
+        {
+            if (ford_v3_is_short(d))
+            {
+                if (preamble_count < FORD_V3_PREAMBLE_PULSES)
+                    preamble_count++;
+                continue;
+            }
+
+            if (preamble_count >= FORD_V3_PREAMBLE_PULSES &&
+                ford_v3_is_long(d))
+            {
+                frame_started = true;
+                cell_count = 0;
+                preamble_count = 0;
+                push = 2;
+            }
+            else
+            {
+                preamble_count = 0;
+                continue;
+            }
+        }
+        else if (ford_v3_is_short(d))
+        {
             push = 1;
+        }
         else if (ford_v3_is_long(d))
+        {
             push = 2;
+        }
         else
         {
+            frame_started = false;
+            preamble_count = 0;
             cell_count = 0;
             continue;
         }

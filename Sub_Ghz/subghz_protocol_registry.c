@@ -1378,7 +1378,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
     [FIAT_V2] = {
         .name   = "Fiat V2",
         .type   = SubGhzProtocolTypeDynamic,
-        .flags  = F_ROLLING_433_PWM,
+        .flags  = F_ROLLING_433,
         .filter = SubGhzProtocolFilter_Auto,
         .timing = { .te_short=210, .te_long=420, .te_delta=100,
                     .min_count_bit_for_found=112 },

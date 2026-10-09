@@ -42,6 +42,7 @@
 #define PSA_WIRE_BYTES 10u
 #define PSA_WIRE_CELLS (PSA_WIRE_BITS * 2u)   /* 160 Manchester cells */
 #define PSA_MARKER_NIBBLE 0x0Au
+#define PSA_PREAMBLE_MIN_PULSES 143u
 
 /*============================================================================*/
 /* Pure frame parsing (host-testable)                                          */
@@ -136,6 +137,11 @@ static inline bool psa_is_long(uint16_t d)
     return get_diff(d, PSA_TE_LONG) < PSA_TE_DELTA;
 }
 
+static inline bool psa_is_end(uint16_t d)
+{
+    return get_diff(d, 1000u) <= 199u;
+}
+
 static bool psa_try_window(const uint8_t *cells, uint16_t cell_count,
                            uint16_t protocol_index, bool invert)
 {
@@ -186,6 +192,8 @@ uint8_t subghz_decode_psa(uint16_t p, uint16_t pulsecount)
 {
     uint8_t  cells[PSA_WIRE_CELLS];
     uint16_t cell_count = 0;
+    uint16_t preamble_count = 0;
+    bool frame_started = false;
 
     for (uint16_t i = 0; i < pulsecount; i++)
     {
@@ -193,12 +201,46 @@ uint8_t subghz_decode_psa(uint16_t p, uint16_t pulsecount)
         const uint8_t  level = (uint8_t)((i & 1u) == 0u);
 
         uint8_t push = 0;
+        if (!frame_started)
+        {
+            if (psa_is_short(d))
+            {
+                if (preamble_count < PSA_PREAMBLE_MIN_PULSES)
+                    preamble_count++;
+                continue;
+            }
+
+            if (preamble_count >= PSA_PREAMBLE_MIN_PULSES && psa_is_long(d))
+            {
+                frame_started = true;
+                cell_count = 0;
+                preamble_count = 0;
+                continue;
+            }
+
+            preamble_count = 0;
+            continue;
+        }
+
         if (psa_is_short(d))
+        {
             push = 1;
+        }
         else if (psa_is_long(d))
+        {
             push = 2;
+        }
         else
         {
+            if (psa_is_end(d) && cell_count >= PSA_WIRE_CELLS &&
+                (psa_try_window(cells, cell_count, p, false) ||
+                 psa_try_window(cells, cell_count, p, true)))
+            {
+                return 0;
+            }
+
+            frame_started = false;
+            preamble_count = 0;
             cell_count = 0;
             continue;
         }
@@ -215,14 +257,6 @@ uint8_t subghz_decode_psa(uint16_t p, uint16_t pulsecount)
                 cells[PSA_WIRE_CELLS - 1u] = level;
             }
 
-            if (cell_count == PSA_WIRE_CELLS)
-            {
-                if (psa_try_window(cells, cell_count, p, false) ||
-                    psa_try_window(cells, cell_count, p, true))
-                {
-                    return 0;
-                }
-            }
         }
     }
 
