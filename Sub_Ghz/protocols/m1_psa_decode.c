@@ -177,6 +177,7 @@ static bool psa_try_window(const uint8_t *cells, uint16_t cell_count,
 
     subghz_decenc_ctl.n64_decodedvalue  = key1;
     subghz_decenc_ctl.n32_serialnumber  = serial;
+    subghz_decenc_ctl.n32_rollingcode   = counter;
     subghz_decenc_ctl.n8_buttonid       = button;
     subghz_decenc_ctl.ndecodedbitlength = (uint16_t)PSA_WIRE_BITS;
     subghz_decenc_ctl.ndecodeddelay     = 0;
