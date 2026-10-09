@@ -136,6 +136,7 @@ uint8_t subghz_decode_renault_v1(uint16_t a, uint16_t b) { (void)a; (void)b; ret
 uint8_t subghz_decode_psa(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_ford_v3(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 uint8_t subghz_decode_vag(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
+uint8_t subghz_decode_kia_v6(uint16_t a, uint16_t b) { (void)a; (void)b; return 1; }
 
 /* Stubs for ARM-only globals referenced by subghz_registry_decode_try_fn().
  * These are never called from host-side unit tests; they exist only to

@@ -990,13 +990,15 @@ endif()
 add_test(NAME ford_v3_decode COMMAND test_ford_v3_decode)
 
 # ------------------------------------------------------------------
-# Module under test: m1_vag_decode (ProtoPirate VAG, T12 identify decoder)
-# Verifies the pure prefix/type + dispatch(button) parser (with payload
-# one's-complement) and full 95-bit Manchester pulse-array decode.
+# Module under test: m1_vag_decode (ProtoPirate VAG, T12 decoder)
+# Verifies prefix/type/button parsing, optional AUT64/TEA field decryption,
+# and full 95-bit Manchester pulse-array decode.
 # ------------------------------------------------------------------
 add_executable(test_vag_decode
     test_vag_decode.c
     ${M1_ROOT}/Sub_Ghz/protocols/m1_vag_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protopirate_keys_builtin.c
     ${STUBS_DIR}/subghz_decode_impl.c
 )
 target_include_directories(test_vag_decode PRIVATE
@@ -1010,6 +1012,29 @@ if(TARGET sanitizers)
     target_link_libraries(test_vag_decode PRIVATE sanitizers)
 endif()
 add_test(NAME vag_decode COMMAND test_vag_decode)
+
+# ------------------------------------------------------------------
+# Module under test: m1_kia_v6_decode (ProtoPirate Kia V6 AES-128 decoder)
+# Covers keystore-derived AES key parsing, CRC validation, and waveform decode.
+# ------------------------------------------------------------------
+add_executable(test_kia_v6_decode
+    test_kia_v6_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v6_decode.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v6_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
+)
+target_link_libraries(test_kia_v6_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v6_decode PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v6_decode COMMAND test_kia_v6_decode)
 
 # ------------------------------------------------------------------
 # Module under test: firecracker_cm17a (40-bit CM17A home-automation decoder)

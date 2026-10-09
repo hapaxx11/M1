@@ -212,6 +212,7 @@ extern uint8_t subghz_decode_renault_v1(uint16_t, uint16_t);
 extern uint8_t subghz_decode_psa(uint16_t, uint16_t);
 extern uint8_t subghz_decode_ford_v3(uint16_t, uint16_t);
 extern uint8_t subghz_decode_vag(uint16_t, uint16_t);
+extern uint8_t subghz_decode_kia_v6(uint16_t, uint16_t);
 
 /*============================================================================*/
 /* Shorthand flags for common protocol profiles                                */
@@ -1425,6 +1426,17 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .timing = { .te_short=300, .te_long=600, .te_delta=120,
                     .min_count_bit_for_found=95 },
         .decode = subghz_decode_vag,
+    },
+    [KIA_V6] = {
+        .name   = "Kia V6",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=200, .te_long=400, .te_delta=100,
+                    .min_count_bit_for_found=144 },
+        .decode = subghz_decode_kia_v6,
     },
 };
 

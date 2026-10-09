@@ -12,15 +12,9 @@
  * identified by a 15-bit plaintext prefix:
  *   0x2F3F → type 1 (AUT64),   0x2F1C → type 2 (TEA/XTEA)
  *
- * IMPORTANT — this is an *identify* decoder, not a full field decoder.  In the
- * reference, recovering the serial and rolling counter requires decrypting the
- * 8-byte block with AUT64 or TEA using three fixed manufacturer keys loaded from
- * a keystore asset.  Those keys are NOT shipped in the ProtoPirate repository
- * (they default to zero and load from a user-supplied keystore), so a verifiable
- * full decode is impossible here.  What *is* cipher-free and therefore ported:
- *   - preamble/prefix detection and protocol/type identification
- *   - the plaintext dispatch byte (low byte of Key2), which encodes the button
- *   - the raw 64-bit Key1 blob (which carries a plaintext type/model byte)
+ * Type 1 AUT64 keys are supplied by the optional VAG keystore build secret.
+ * Type 2 uses the fixed TEA schedule from ProtoPirate. If type 1 keys are
+ * unavailable, the decoder still identifies the prefix and dispatch button.
  *
  * Unlike the name-only placeholder automotive entries in this directory, this
  * decoder actually parses the on-air waveform so M1 can identify VAG keyfobs and
@@ -31,7 +25,7 @@
  * bits (prefix is received raw); the dual-polarity window decode below recovers
  * the correct orientation.
  *
- * The frame-parsing logic (m1_vag_t12_parse) is pure and host-testable.
+ * Frame parsing and decryption are pure and host-testable.
  *
  * M1 Project -- Hapax fork
  */
@@ -40,6 +34,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include "m1_sub_ghz_decenc.h"
+#include "m1_aut64.h"
+#include "subghz_protopirate_keys_builtin.h"
 
 /* Timing (µs) — T12 format (ProtoPirate reference types 1/2). */
 #define VAG_TE_SHORT  300u
@@ -116,6 +112,87 @@ bool m1_vag_t12_parse(uint16_t prefix, uint64_t key1_raw, uint16_t key2_raw,
     return true;
 }
 
+static uint32_t vag_read_be32(const uint8_t *data)
+{
+    return ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) |
+           ((uint32_t)data[2] << 8) | data[3];
+}
+
+static bool vag_decrypted_button_matches(const uint8_t block[8], uint8_t dispatch)
+{
+    const uint8_t expected = (uint8_t)(dispatch >> 4);
+    const uint8_t decoded = (uint8_t)(block[7] >> 4);
+    return decoded == expected || (block[7] == 0u && expected == VAG_BTN_LOCK);
+}
+
+bool m1_vag_t12_decrypt(uint8_t type, uint64_t key1, uint16_t key2,
+                        const uint8_t packed_keys[M1_VAG_AUT64_KEY_BYTES],
+                        bool keys_available, uint32_t *serial,
+                        uint32_t *counter, uint8_t *button)
+{
+    uint8_t block[8] = {
+        (uint8_t)(key1 >> 48), (uint8_t)(key1 >> 40),
+        (uint8_t)(key1 >> 32), (uint8_t)(key1 >> 24),
+        (uint8_t)(key1 >> 16), (uint8_t)(key1 >> 8),
+        (uint8_t)key1, (uint8_t)(key2 >> 8),
+    };
+    const uint8_t dispatch = (uint8_t)key2;
+    uint8_t decoded_button = 0;
+    if (!vag_dispatch_to_button(dispatch, &decoded_button))
+        return false;
+
+    bool found = false;
+    if (type == 1u && keys_available && packed_keys != NULL) {
+        for (uint8_t i = 0; i < 3u; i++) {
+            m1_aut64_key_t key;
+            uint8_t candidate[sizeof(block)];
+            if (!m1_aut64_unpack(&key, &packed_keys[i * 16u]))
+                continue;
+            memcpy(candidate, block, sizeof(candidate));
+            m1_aut64_decrypt(&key, candidate);
+            if (vag_decrypted_button_matches(candidate, dispatch)) {
+                memcpy(block, candidate, sizeof(block));
+                found = true;
+                break;
+            }
+        }
+    } else if (type == 2u) {
+        uint32_t left = vag_read_be32(block);
+        uint32_t right = vag_read_be32(&block[4]);
+        uint32_t sum = 0x9E3779B9u * 32u;
+        static const uint32_t tea_key[4] = {
+            0x0B46502Du, 0x5E253718u, 0x2BF93A19u, 0x622C1206u,
+        };
+        for (uint8_t round = 0; round < 32u; round++) {
+            right -= (((left << 4) ^ (left >> 5)) + left) ^
+                     (sum + tea_key[(sum >> 11) & 3u]);
+            sum -= 0x9E3779B9u;
+            left -= (((right << 4) ^ (right >> 5)) + right) ^
+                    (sum + tea_key[sum & 3u]);
+        }
+        block[0] = (uint8_t)(left >> 24);
+        block[1] = (uint8_t)(left >> 16);
+        block[2] = (uint8_t)(left >> 8);
+        block[3] = (uint8_t)left;
+        block[4] = (uint8_t)(right >> 24);
+        block[5] = (uint8_t)(right >> 16);
+        block[6] = (uint8_t)(right >> 8);
+        block[7] = (uint8_t)right;
+        found = vag_decrypted_button_matches(block, dispatch);
+    }
+
+    if (!found)
+        return false;
+    if (serial != NULL)
+        *serial = vag_read_be32(block);
+    if (counter != NULL)
+        *counter = (uint32_t)block[4] | ((uint32_t)block[5] << 8) |
+                   ((uint32_t)block[6] << 16);
+    if (button != NULL)
+        *button = decoded_button;
+    return true;
+}
+
 /*============================================================================*/
 /* Manchester cell helpers                                                     */
 /*============================================================================*/
@@ -166,9 +243,19 @@ static bool vag_try_window(const uint8_t *cells, uint16_t cell_count,
     if (!m1_vag_t12_parse(prefix, key1_raw, key2_raw, &type, &button, &key1))
         return false;
 
+    uint32_t serial = 0, counter = 0;
+    if (m1_vag_t12_decrypt(type, key1, (uint16_t)~key2_raw,
+                           m1_vag_aut64_keys_builtin,
+                           m1_vag_aut64_keys_builtin_available,
+                           &serial, &counter, &button)) {
+        subghz_decenc_ctl.n32_serialnumber = serial;
+        subghz_decenc_ctl.n32_rollingcode = counter;
+    } else {
+        /* Keep the previous stable identifier when type-1 keys are absent. */
+        subghz_decenc_ctl.n32_serialnumber = (uint32_t)(key1 >> 32);
+        subghz_decenc_ctl.n32_rollingcode = 0;
+    }
     subghz_decenc_ctl.n64_decodedvalue  = key1;
-    /* Serial is encrypted; expose the plaintext Key1 high word as a stable id. */
-    subghz_decenc_ctl.n32_serialnumber  = (uint32_t)(key1 >> 32);
     subghz_decenc_ctl.n8_buttonid       = button;
     subghz_decenc_ctl.ndecodedbitlength = (uint16_t)VAG_WIRE_BITS;
     subghz_decenc_ctl.ndecodeddelay     = 0;
