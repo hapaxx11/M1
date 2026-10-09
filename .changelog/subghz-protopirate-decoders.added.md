@@ -1,1 +1,0 @@
-Sub-GHz: real RX-identify decoders for ProtoPirate automotive keyfobs — Renault V1, PSA, and Ford V3 are now fully decoded (cipher-free), and VAG is identified (prefix/type/button). Previously these were TX-replay-only placeholders.

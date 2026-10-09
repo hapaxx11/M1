@@ -1,1 +1,0 @@
-**Sub-GHz: ProtoPirate key injection** — optionally embed plaintext Kia V6 and VAG keystore data into firmware builds using the `KIA_V6_KEYSTORE_RAW` and `VAG_AUT64_KEYSTORE_RAW` Actions secrets; encrypted entries are ignored.
