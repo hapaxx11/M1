@@ -902,6 +902,158 @@ endif()
 add_test(NAME subghz_protocol_decode COMMAND test_subghz_protocol_decode)
 
 # ------------------------------------------------------------------
+# Module under test: m1_fiat_v2_decode (ProtoPirate Fiat V2 / FCA decoder)
+# Verifies the pure frame parser (markers/UID/button/hop/counter, FCA vs
+# non-FCA) and full Manchester pulse-array decode via subghz_decenc_ctl.
+# ------------------------------------------------------------------
+add_executable(test_fiat_v2_decode
+    test_fiat_v2_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_fiat_v2_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_fiat_v2_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_fiat_v2_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_fiat_v2_decode PRIVATE sanitizers)
+endif()
+add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
+
+# ------------------------------------------------------------------
+# Module under test: synthetic ProtoPirate brute-force lifecycle contract
+# Exercises match/no-match, progress, cancellation, and empty-range behavior
+# without real protocol data or key-search logic.
+# ------------------------------------------------------------------
+add_executable(test_protopirate_bruteforce_contract
+    test_protopirate_bruteforce_contract.c
+)
+target_include_directories(test_protopirate_bruteforce_contract PRIVATE
+    ${STUBS_DIR}
+)
+target_link_libraries(test_protopirate_bruteforce_contract PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_protopirate_bruteforce_contract PRIVATE sanitizers)
+endif()
+add_test(NAME protopirate_bruteforce_contract COMMAND test_protopirate_bruteforce_contract)
+
+# ------------------------------------------------------------------
+# Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)
+# Verifies the pure frame parser (16-bit header + XOR8 checksum, field slicing)
+# and full Manchester pulse-array decode.
+# ------------------------------------------------------------------
+add_executable(test_renault_v1_decode
+    test_renault_v1_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_renault_v1_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_renault_v1_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_renault_v1_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_renault_v1_decode PRIVATE sanitizers)
+endif()
+add_test(NAME renault_v1_decode COMMAND test_renault_v1_decode)
+
+# ------------------------------------------------------------------
+# Module under test: m1_psa_decode (ProtoPirate PSA, cipher-free Direct-XOR path)
+# Verifies the pure frame parser (marker, gate, nibble checksum, XOR un-mixing)
+# and full Manchester pulse-array decode.
+# ------------------------------------------------------------------
+add_executable(test_psa_decode
+    test_psa_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_psa_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_psa_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_psa_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_psa_decode PRIVATE sanitizers)
+endif()
+add_test(NAME psa_decode COMMAND test_psa_decode)
+
+# ------------------------------------------------------------------
+# Module under test: m1_ford_v3_decode (ProtoPirate Ford V3, US/EU variants)
+# Verifies the pure frame parser (0xFF marker, serial sanity, US/EU field
+# layouts) and full Manchester pulse-array decode.
+# ------------------------------------------------------------------
+add_executable(test_ford_v3_decode
+    test_ford_v3_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_ford_v3_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_ford_v3_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_ford_v3_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ford_v3_decode PRIVATE sanitizers)
+endif()
+add_test(NAME ford_v3_decode COMMAND test_ford_v3_decode)
+
+# ------------------------------------------------------------------
+# Module under test: m1_vag_decode (ProtoPirate VAG, T12 decoder)
+# Verifies prefix/type/button parsing, optional AUT64/TEA field decryption,
+# and full 95-bit Manchester pulse-array decode.
+# ------------------------------------------------------------------
+add_executable(test_vag_decode
+    test_vag_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_vag_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_aut64.c
+    ${M1_ROOT}/Sub_Ghz/subghz_protopirate_keys_builtin.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_vag_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_vag_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_vag_decode PRIVATE sanitizers)
+endif()
+add_test(NAME vag_decode COMMAND test_vag_decode)
+
+# ------------------------------------------------------------------
+# Module under test: m1_kia_v6_decode (ProtoPirate Kia V6 AES-128 decoder)
+# Covers keystore-derived AES key parsing, CRC validation, and waveform decode.
+# ------------------------------------------------------------------
+add_executable(test_kia_v6_decode
+    test_kia_v6_decode.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v6_decode.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v6_decode PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
+)
+target_link_libraries(test_kia_v6_decode PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v6_decode PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v6_decode COMMAND test_kia_v6_decode)
+
+# ------------------------------------------------------------------
 # Module under test: firecracker_cm17a (40-bit CM17A home-automation decoder)
 # Tests validate header/footer recognition, house-code/unit/command decode,
 # and rejection of invalid or truncated packets.

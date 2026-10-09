@@ -44,7 +44,7 @@
  */
 
 /* Max protocols we can hold in the legacy arrays (must be >= registry count) */
-#define LEGACY_PROTOCOL_MAX  128
+#define LEGACY_PROTOCOL_MAX  130
 
 static SubGHz_protocol_t _subghz_protocols_list_storage[LEGACY_PROTOCOL_MAX];
 static const char *_protocol_text_storage[LEGACY_PROTOCOL_MAX];

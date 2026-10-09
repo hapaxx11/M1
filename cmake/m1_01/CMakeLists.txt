@@ -362,6 +362,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_keeloq.c
     ../../Sub_Ghz/subghz_keeloq_mfkeys.c
     ../../Sub_Ghz/subghz_keeloq_mfkeys_builtin.c
+    ../../Sub_Ghz/subghz_protopirate_keys_builtin.c
     ../../Sub_Ghz/subghz_keeloq_encoder.c
     ../../Sub_Ghz/subghz_txrx_state.c
     ../../Sub_Ghz/subghz_scene_state.c
@@ -517,6 +518,13 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/protocols/m1_kia_v4_decode.c
     ../../Sub_Ghz/protocols/m1_kia_v5_decode.c
     ../../Sub_Ghz/protocols/m1_fiat_v1_decode.c
+    ../../Sub_Ghz/protocols/m1_fiat_v2_decode.c
+    ../../Sub_Ghz/protocols/m1_renault_v1_decode.c
+    ../../Sub_Ghz/protocols/m1_psa_decode.c
+    ../../Sub_Ghz/protocols/m1_ford_v3_decode.c
+    ../../Sub_Ghz/protocols/m1_aut64.c
+    ../../Sub_Ghz/protocols/m1_vag_decode.c
+    ../../Sub_Ghz/protocols/m1_kia_v6_decode.c
     ../../USB/Class/CDC/Src/usbd_cdc.c
     ../../USB/Class/CDC/Src/usbd_cdc_if.c
     ../../USB/Class/CompositeBuilder/Src/usbd_composite_builder.c

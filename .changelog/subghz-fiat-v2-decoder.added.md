@@ -1,0 +1,1 @@
+Sub-GHz: added a real decoder for the Fiat V2 (FCA) automotive keyfob protocol (Manchester, 112-bit), so M1 can now identify and parse these signals — UID, button, rolling counter and hop — from a capture instead of only replaying them. Ported from the ProtoPirate reference; host-tested.

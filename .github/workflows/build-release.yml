@@ -276,6 +276,33 @@ jobs:
           fi
 
       # ------------------------------------------------------------------ #
+      # 4a. Embed optional ProtoPirate Kia V6 and VAG keys. Plaintext RAW
+      #     files are validated by the generator; encrypted files are skipped
+      #     until replaced with plaintext. Key data is embedded in firmware.
+      # ------------------------------------------------------------------ #
+      - name: Embed ProtoPirate Kia and VAG keys
+        env:
+          KIA_V6_KEYSTORE_RAW: ${{ secrets.KIA_V6_KEYSTORE_RAW }}
+          VAG_AUT64_KEYSTORE_RAW: ${{ secrets.VAG_AUT64_KEYSTORE_RAW }}
+        run: |
+          umask 077
+          secret_dir="$(mktemp -d)"
+          trap 'rm -rf "$secret_dir"' EXIT
+          args=()
+          if [ -n "${KIA_V6_KEYSTORE_RAW}" ]; then
+            printf '%s' "${KIA_V6_KEYSTORE_RAW}" > "${secret_dir}/kia.txt"
+            args+=(--kia-keystore "${secret_dir}/kia.txt")
+          fi
+          if [ -n "${VAG_AUT64_KEYSTORE_RAW}" ]; then
+            printf '%s' "${VAG_AUT64_KEYSTORE_RAW}" > "${secret_dir}/vag.txt"
+            args+=(--vag-keystore "${secret_dir}/vag.txt")
+          fi
+          python3 scripts/gen_protopirate_keys_builtin.py \
+            "${args[@]}" \
+            Sub_Ghz/subghz_protopirate_keys_builtin.c
+          echo "ProtoPirate key data prepared for firmware build."
+
+      # ------------------------------------------------------------------ #
       # 4b. Embed Nice FloR-S rainbow table (optional — same pattern as
       #     KeeLoq).  The NICE_FLOR_S_RAINBOW_TABLE secret holds 64 hex
       #     chars (32 bytes).  When absent, the NULL stub is used and

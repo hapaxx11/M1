@@ -45,6 +45,7 @@ typedef struct {
     uint16_t min_pulses;        /**< Minimum pulses to "decode" */
     bool     should_match;      /**< Whether callback should report success */
     uint8_t  call_count;        /**< Number of times callback was invoked */
+    uint16_t last_pulse_count;  /**< Pulse count of the last callback invocation */
 } MockDecodeCtx;
 
 static MockDecodeCtx make_mock(bool should_match, uint16_t protocol,
@@ -68,6 +69,7 @@ static bool mock_try_decode(const uint16_t *pulse_buf,
 {
     MockDecodeCtx *ctx = (MockDecodeCtx *)user_ctx;
     ctx->call_count++;
+    ctx->last_pulse_count = pulse_count;
 
     if (!ctx->should_match)
         return false;
@@ -361,20 +363,54 @@ void test_trailing_packet_without_gap(void)
 /* Tests: Pulse overflow                                                      */
 /*============================================================================*/
 
-void test_pulse_overflow_resets(void)
+void test_long_pulse_packet_decodes(void)
 {
-    /* More than PACKET_PULSE_COUNT_MAX (256) pulses without a gap
-     * should reset the accumulator and not crash */
-    int16_t raw[300];
+    /* A packet above the old 256-pulse limit should still be decoded */
+    int16_t raw[281];
     for (int i = 0; i < 280; i++)
         raw[i] = (int16_t)((i % 2 == 0) ? 300 : -300);
-    /* Add a gap at the end */
     raw[280] = 2000;
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 1, 0x123, 280);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, 281, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1, count);
+    TEST_ASSERT_EQUAL_HEX64(0x123, results[0].key);
+}
+
+void test_360_pulse_packet_and_terminal_gap_decode(void)
+{
+    int16_t raw[361];
+    for (uint16_t i = 0; i < 360u; i++)
+        raw[i] = (int16_t)((i % 2u == 0u) ? 300 : -300);
+    raw[360] = 2000;
+
+    SubGhzRawDecodeResult results[4];
+    MockDecodeCtx ctx = make_mock(true, 1, 0x123, 360);
+    uint8_t count = subghz_decode_raw_offline(
+        raw, 361, 433920000, results, 4, mock_try_decode, &ctx);
+
+    TEST_ASSERT_EQUAL_UINT8(1u, count);
+    TEST_ASSERT_EQUAL_UINT16(361u, ctx.last_pulse_count);
+    TEST_ASSERT_EQUAL_HEX64(0x123u, results[0].key);
+}
+
+void test_pulse_overflow_resets(void)
+{
+    /* More than PACKET_PULSE_COUNT_MAX pulses without a gap should reset
+     * the accumulator and not crash */
+    int16_t raw[PACKET_PULSE_COUNT_MAX + 2];
+    for (int i = 0; i < PACKET_PULSE_COUNT_MAX + 1; i++)
+        raw[i] = (int16_t)((i % 2 == 0) ? 300 : -300);
+    /* Add a gap at the end */
+    raw[PACKET_PULSE_COUNT_MAX + 1] = 2000;
 
     SubGhzRawDecodeResult results[4];
     MockDecodeCtx ctx = make_mock(true, 1, 0x123, 40);
     uint8_t count = subghz_decode_raw_offline(
-        raw, 281, 433920000, results, 4, mock_try_decode, &ctx);
+        raw, PACKET_PULSE_COUNT_MAX + 2, 433920000, results, 4, mock_try_decode, &ctx);
 
     /* After overflow reset, the gap pulse starts a new packet of 1 pulse
      * which is below PACKET_PULSE_COUNT_MIN → no decode */
@@ -682,7 +718,9 @@ int main(void)
     /* Trailing packet */
     RUN_TEST(test_trailing_packet_without_gap);
 
-    /* Overflow */
+    /* Long packets and overflow */
+    RUN_TEST(test_long_pulse_packet_decodes);
+    RUN_TEST(test_360_pulse_packet_and_terminal_gap_decode);
     RUN_TEST(test_pulse_overflow_resets);
 
     /* Clamping */

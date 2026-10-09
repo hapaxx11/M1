@@ -271,6 +271,9 @@ uint64_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
                                                  uint16_t count,
                                                  uint8_t mod_idx);
 
+uint32_t subghz_protocol_proto_pirate_mod_mask(void);
+uint64_t subghz_protocol_proto_pirate_freq_mask(uint8_t mod_idx);
+
 /*============================================================================*/
 /* Flipper-Compatible Building Blocks                                         */
 /*                                                                            */

@@ -42,7 +42,7 @@
  * 48 pulses so is unaffected.  Shorter protocols (CAME 12-bit = 24 pulses)
  * still fall below this threshold unless they repeat within one capture window. */
 #define PACKET_PULSE_COUNT_MIN				40 // was 48 (24 bits)
-#define PACKET_PULSE_COUNT_MAX				256 // 128 bits (weather protocols need longer packets)
+#define PACKET_PULSE_COUNT_MAX				384 // includes long Manchester frames and terminal gap
 
 #define PACKET_PULSE_TIME_TOLERANCE20		20 // percentage
 #define PACKET_PULSE_TIME_TOLERANCE25		25
@@ -297,6 +297,16 @@ enum {
 	KIA_V4,
 	KIA_V5,
 	FIAT_V1,
+
+	/* --- Fiat V2 (FCA) — real decoder (Manchester 112-bit, ProtoPirate) --- */
+	FIAT_V2,
+
+	/* --- ProtoPirate automotive — real (cipher-free) decoders --- */
+	RENAULT_V1,   /* HITAG2 frame, XOR8 checksum */
+	PSA,          /* Direct-XOR (type 0x23) path */
+	FORD_V3,      /* structural validation (US/EU variants) */
+	VAG,          /* T12 prefix/type/button; optional AUT64/TEA field decode */
+	KIA_V6,       /* 144-bit Manchester AES-128 frame */
 };
 
 /* Weather station decoded data */

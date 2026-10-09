@@ -59,10 +59,10 @@ extern "C" {
 
 /*
  * Maximum number of protocols the group cache can track.  Must be >= the
- * protocol registry size.  Matches LEGACY_PROTOCOL_MAX (128) in
+ * protocol registry size.  Matches LEGACY_PROTOCOL_MAX (130) in
  * m1_sub_ghz_decenc.c and the registry's _Static_assert upper bound.
  */
-#define SUBGHZ_IGNORE_MAX_PROTOCOLS   128
+#define SUBGHZ_IGNORE_MAX_PROTOCOLS   130
 
 /*============================================================================*/
 /* Ignore groups (categories)                                                 */

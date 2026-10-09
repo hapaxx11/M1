@@ -207,6 +207,12 @@ extern uint8_t subghz_decode_kia_v3(uint16_t, uint16_t);
 extern uint8_t subghz_decode_kia_v4(uint16_t, uint16_t);
 extern uint8_t subghz_decode_kia_v5(uint16_t, uint16_t);
 extern uint8_t subghz_decode_fiat_v1(uint16_t, uint16_t);
+extern uint8_t subghz_decode_fiat_v2(uint16_t, uint16_t);
+extern uint8_t subghz_decode_renault_v1(uint16_t, uint16_t);
+extern uint8_t subghz_decode_psa(uint16_t, uint16_t);
+extern uint8_t subghz_decode_ford_v3(uint16_t, uint16_t);
+extern uint8_t subghz_decode_vag(uint16_t, uint16_t);
+extern uint8_t subghz_decode_kia_v6(uint16_t, uint16_t);
 
 /*============================================================================*/
 /* Shorthand flags for common protocol profiles                                */
@@ -1370,6 +1376,70 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
                     .min_count_bit_for_found=64 },
         .decode = subghz_decode_fiat_v1,
     },
+    [FIAT_V2] = {
+        .name   = "Fiat V2",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_315 | F_ROLLING_433,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=210, .te_long=420, .te_delta=100,
+                    .min_count_bit_for_found=112 },
+        .decode = subghz_decode_fiat_v2,
+    },
+    [RENAULT_V1] = {
+        .name   = "Renault V1",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_868 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_FM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=125, .te_long=250, .te_delta=60,
+                    .min_count_bit_for_found=104 },
+        .decode = subghz_decode_renault_v1,
+    },
+    [PSA] = {
+        .name   = "PSA",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_AM | SubGhzProtocolFlag_FM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=250, .te_long=500, .te_delta=100,
+                    .min_count_bit_for_found=80 },
+        .decode = subghz_decode_psa,
+    },
+    [FORD_V3] = {
+        .name   = "Ford V3",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=240, .te_long=480, .te_delta=90,
+                    .min_count_bit_for_found=104 },
+        .decode = subghz_decode_ford_v3,
+    },
+    [VAG] = {
+        .name   = "VAG",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_433 | SubGhzProtocolFlag_AM |
+                  SubGhzProtocolFlag_Decodable | SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=300, .te_long=600, .te_delta=120,
+                    .min_count_bit_for_found=95 },
+        .decode = subghz_decode_vag,
+    },
+    [KIA_V6] = {
+        .name   = "Kia V6",
+        .type   = SubGhzProtocolTypeDynamic,
+        .flags  = SubGhzProtocolFlag_315 | SubGhzProtocolFlag_433 |
+                  SubGhzProtocolFlag_FM | SubGhzProtocolFlag_Decodable |
+                  SubGhzProtocolFlag_Save,
+        .filter = SubGhzProtocolFilter_Auto,
+        .timing = { .te_short=200, .te_long=400, .te_delta=100,
+                    .min_count_bit_for_found=144 },
+        .decode = subghz_decode_kia_v6,
+    },
 };
 
 const uint16_t subghz_protocol_registry_count =
@@ -1377,13 +1447,13 @@ const uint16_t subghz_protocol_registry_count =
 
 /*
  * Build-time check: ensure registry does not exceed legacy array capacity.
- * LEGACY_PROTOCOL_MAX is defined in m1_sub_ghz_decenc.c as 128.
+ * LEGACY_PROTOCOL_MAX is defined in m1_sub_ghz_decenc.c as 130.
  * If the registry grows beyond this, increase LEGACY_PROTOCOL_MAX or remove
  * legacy array support.
  */
 _Static_assert(
-    sizeof(subghz_protocol_registry) / sizeof(subghz_protocol_registry[0]) <= 128,
-    "Protocol registry exceeds LEGACY_PROTOCOL_MAX (128) — increase the limit");
+    sizeof(subghz_protocol_registry) / sizeof(subghz_protocol_registry[0]) <= 130,
+    "Protocol registry exceeds LEGACY_PROTOCOL_MAX (130) — increase the limit");
 
 /*============================================================================*/
 /* Registry Lookup Implementations                                             */
@@ -1542,6 +1612,18 @@ uint64_t subghz_protocol_freq_mask_for_registry(const SubGhzProtocolDef *registr
         mask |= (UINT64_C(1) << (uint8_t)SUBGHZ_FREQ_PRESET_CUSTOM);
 
     return mask;
+}
+
+uint32_t subghz_protocol_proto_pirate_mod_mask(void)
+{
+    return subghz_protocol_mod_mask_for_registry(
+        &subghz_protocol_registry[FORD_V0], KIA_V6 - FORD_V0 + 1);
+}
+
+uint64_t subghz_protocol_proto_pirate_freq_mask(uint8_t mod_idx)
+{
+    return subghz_protocol_freq_mask_for_registry(
+        &subghz_protocol_registry[FORD_V0], KIA_V6 - FORD_V0 + 1, mod_idx);
 }
 
 /* subghz_registry_decode_try_fn() has been extracted to subghz_decode_try_fn.c

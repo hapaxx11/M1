@@ -271,15 +271,12 @@ static void change_value(SubGhzApp *app, uint8_t item, int8_t dir)
                 (cfg_filter_mode == SubGhzConfigFilterProtoPirate ||
                  cfg_filter_mode == SubGhzConfigFilterFullRegistry))
             {
-                cfg_allowed_freq_mask = subghz_protocol_freq_mask_for_registry(
-                    subghz_protocol_registry, subghz_protocol_registry_count,
-                    app->mod_idx);
-                if (cfg_filter_mode == SubGhzConfigFilterProtoPirate)
-                {
-                    cfg_allowed_freq_mask &=
-                        (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX) |
-                        (UINT64_C(1) << SUBGHZ_FREQ_PRESET_CUSTOM);
-                }
+                cfg_allowed_freq_mask =
+                    cfg_filter_mode == SubGhzConfigFilterProtoPirate
+                        ? subghz_protocol_proto_pirate_freq_mask(app->mod_idx)
+                        : subghz_protocol_freq_mask_for_registry(
+                              subghz_protocol_registry, subghz_protocol_registry_count,
+                              app->mod_idx);
                 /* If modulation changed and the current frequency is no
                  * longer allowed, jump to the nearest allowed frequency. */
                 if (!cfg_freq_allowed(app->freq_idx))
@@ -365,16 +362,9 @@ static void scene_on_enter(SubGhzApp *app)
     switch (cfg_filter_mode)
     {
         case SubGhzConfigFilterProtoPirate:
-            cfg_allowed_mod_mask = subghz_protocol_mod_mask_for_registry(
-                subghz_protocol_registry, subghz_protocol_registry_count);
-            cfg_allowed_freq_mask = subghz_protocol_freq_mask_for_registry(
-                subghz_protocol_registry, subghz_protocol_registry_count,
-                app->mod_idx);
-            /* Restrict modulation to OOK/AM because all Proto Pirate
-             * automotive protocols are AM/OOK at 433.92 MHz. */
-            cfg_allowed_mod_mask &= (1u << 0) | (1u << 1);
-            cfg_allowed_freq_mask &= (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX) |
-                                     (UINT64_C(1) << SUBGHZ_FREQ_PRESET_CUSTOM);
+            cfg_allowed_mod_mask = subghz_protocol_proto_pirate_mod_mask();
+            cfg_allowed_freq_mask =
+                subghz_protocol_proto_pirate_freq_mask(app->mod_idx);
             break;
         case SubGhzConfigFilterFullRegistry:
             cfg_allowed_mod_mask = subghz_protocol_mod_mask_for_registry(
@@ -397,14 +387,12 @@ static void scene_on_enter(SubGhzApp *app)
         if (cfg_filter_mode == SubGhzConfigFilterProtoPirate ||
             cfg_filter_mode == SubGhzConfigFilterFullRegistry)
         {
-            cfg_allowed_freq_mask = subghz_protocol_freq_mask_for_registry(
-                subghz_protocol_registry, subghz_protocol_registry_count,
-                app->mod_idx);
-            if (cfg_filter_mode == SubGhzConfigFilterProtoPirate)
-            {
-                cfg_allowed_freq_mask &= (UINT64_C(1) << SUBGHZ_FREQ_DEFAULT_IDX) |
-                                         (UINT64_C(1) << SUBGHZ_FREQ_PRESET_CUSTOM);
-            }
+            cfg_allowed_freq_mask =
+                cfg_filter_mode == SubGhzConfigFilterProtoPirate
+                    ? subghz_protocol_proto_pirate_freq_mask(app->mod_idx)
+                    : subghz_protocol_freq_mask_for_registry(
+                          subghz_protocol_registry, subghz_protocol_registry_count,
+                          app->mod_idx);
         }
     }
 
