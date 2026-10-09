@@ -3,7 +3,6 @@
 """Embed optional ProtoPirate Kia V6 and VAG keys into firmware flash."""
 
 import argparse
-import os
 import re
 import sys
 
@@ -122,24 +121,22 @@ def generate_source(kia_keys=None, vag_keys=None):
 
 #include "subghz_protopirate_keys_builtin.h"
 
-#if defined(__GNUC__) && __GNUC__ >= 11
-#define M1_KEY_DATA_RETAIN __attribute__((used, retain))
-#elif defined(__GNUC__)
-#define M1_KEY_DATA_RETAIN __attribute__((used))
+#if defined(__GNUC__)
+#define M1_KEY_DATA_USED __attribute__((used, section(".rodata.m1_protopirate_keys")))
 #else
-#define M1_KEY_DATA_RETAIN
+#define M1_KEY_DATA_USED
 #endif
 
-M1_KEY_DATA_RETAIN const uint64_t m1_kia_v6_keys_builtin[M1_KIA_V6_KEY_COUNT] = {{
+M1_KEY_DATA_USED const uint64_t m1_kia_v6_keys_builtin[M1_KIA_V6_KEY_COUNT] = {{
     0x{kia_values[0]:016X}ULL,
     0x{kia_values[1]:016X}ULL,
 }};
-M1_KEY_DATA_RETAIN const bool m1_kia_v6_keys_builtin_available = {str(kia_keys is not None).lower()};
+M1_KEY_DATA_USED const bool m1_kia_v6_keys_builtin_available = {str(kia_keys is not None).lower()};
 
-M1_KEY_DATA_RETAIN const uint8_t m1_vag_aut64_keys_builtin[M1_VAG_AUT64_KEY_BYTES] = {{
+M1_KEY_DATA_USED const uint8_t m1_vag_aut64_keys_builtin[M1_VAG_AUT64_KEY_BYTES] = {{
     {_format_bytes(vag_values)},
 }};
-M1_KEY_DATA_RETAIN const bool m1_vag_aut64_keys_builtin_available = {str(vag_keys is not None).lower()};
+M1_KEY_DATA_USED const bool m1_vag_aut64_keys_builtin_available = {str(vag_keys is not None).lower()};
 """
 
 
