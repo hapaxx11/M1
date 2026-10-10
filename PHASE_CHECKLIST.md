@@ -8,12 +8,12 @@
 
 ### Phase 1 — Pure BLE signature rules
 - **Description**: Extract advertisement parsing and name-based candidate matching into host-testable logic with boundary tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add host-tested BLE detector signatures`
 
 ### Phase 2 — Monitors and detector scenes
 - **Description**: Implement raw-ad AirTag/Meta scans and name-based detector results; gate scan scenes on BLE capability.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 3 — Validation and cleanup

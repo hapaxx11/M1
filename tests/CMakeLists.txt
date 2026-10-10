@@ -411,6 +411,21 @@ endif()
 add_test(NAME ble_signal_finder COMMAND test_ble_signal_finder)
 
 # ------------------------------------------------------------------
+# Module under test: pure BLE detector name and advertisement signatures
+# ------------------------------------------------------------------
+add_executable(test_ble_detector
+    test_ble_detector.c
+)
+target_include_directories(test_ble_detector PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_ble_detector PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ble_detector PRIVATE sanitizers)
+endif()
+add_test(NAME ble_detector COMMAND test_ble_detector)
+
+# ------------------------------------------------------------------
 # Module under test: bq27421_init pure-logic helpers
 #
 # Regression for v0.9.0.166 crash: bq27421_init() entered the full
