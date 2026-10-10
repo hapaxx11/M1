@@ -268,6 +268,7 @@ static uint32_t pulse_handler_interpacket_gap = 0;
  * "stolen" by an unrelated protocol.
  */
 static bool decode_weather_only = false;
+static bool decode_tpms_only = false;
 
 void subghz_decenc_set_weather_only(bool weather_only)
 {
@@ -277,6 +278,16 @@ void subghz_decenc_set_weather_only(bool weather_only)
 bool subghz_decenc_get_weather_only(void)
 {
     return decode_weather_only;
+}
+
+void subghz_decenc_set_tpms_only(bool tpms_only)
+{
+    decode_tpms_only = tpms_only;
+}
+
+bool subghz_decenc_get_tpms_only(void)
+{
+    return decode_tpms_only;
 }
 
 /*============================================================================*/
@@ -320,6 +331,13 @@ static bool decode_try_all_protocols(uint16_t pulsecount)
 		  if ( decode_weather_only )
 		  {
 			  if ( !subghz_protocol_is_weather(i) )
+			  {
+				  continue;
+			  }
+		  }
+		  else if ( decode_tpms_only )
+		  {
+			  if ( !subghz_protocol_is_tpms(i) )
 			  {
 				  continue;
 			  }

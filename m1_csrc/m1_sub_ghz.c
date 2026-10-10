@@ -4550,8 +4550,6 @@ void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod, uint32_t frequency_hz)
     else
     {
         S_M1_SubGHz_Band band = subghz_freq_hz_to_band(frequency_hz);
-        if (band == SUB_GHZ_BAND_CUSTOM)
-            band = SUB_GHZ_BAND_CUSTOM;
         subghz_scan_config.band       = band;
         subghz_scan_config.modulation = MODULATION_OOK;
         subghz_custom_freq_hz         = frequency_hz;
@@ -4682,6 +4680,8 @@ void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
 
     m1_u8g2_firstpage();
     do {
+        subghz_button_bar_draw(NULL, "CFG", NULL, "OK:INFO", NULL,
+                               "U/D:LIST");
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
         u8g2_DrawStr(&m1_u8g2, 2, 10, title);
 

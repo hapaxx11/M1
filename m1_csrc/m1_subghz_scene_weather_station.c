@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "stm32h5xx_hal.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
 #include "m1_settings.h"
 #include "m1_sub_ghz.h"
 #include "m1_sub_ghz_api.h"
 #include "m1_sub_ghz_decenc.h"
-#include "m1_subghz_button_bar.h"
 #include "m1_subghz_scene.h"
 #include "subghz_freq_presets.h"
 #include "subghz_weather_app.h"
@@ -98,6 +98,7 @@ static void scene_on_enter(SubGhzApp *app)
     app->resume_from_child = false;
     subghz_decenc_init();
     subghz_decenc_set_weather_only(true);
+    subghz_decenc_set_tpms_only(false);
     subghz_weather_scan_init(&state->scan, 60000U, WX_SCAN_MOD_OOK, true,
                              current_time_ms());
     state->last_age_tick_ms = current_time_ms();
@@ -287,9 +288,6 @@ static void draw(SubGhzApp *app)
                                   state->first_visible_sensor, state->scan.mod,
                                   current_time_ms());
     }
-    subghz_button_bar_draw(NULL, state->detail_view ? NULL : "CFG", NULL,
-                           state->detail_view ? NULL : "OK:INFO", NULL,
-                           state->detail_view ? NULL : "U/D:LIST");
 }
 
 const SubGhzSceneHandlers subghz_scene_weather_station_handlers = {

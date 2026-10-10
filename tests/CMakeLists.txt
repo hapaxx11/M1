@@ -3659,3 +3659,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_pocsag_receiver PRIVATE sanitizers)
 endif()
 add_test(NAME pocsag_receiver COMMAND test_pocsag_receiver)
+
+# ------------------------------------------------------------------
+# Module under test: TPMS receiver history and sensor deduplication
+# ------------------------------------------------------------------
+add_executable(test_tpms_receiver
+    test_tpms_receiver.c
+    ${M1_ROOT}/Sub_Ghz/tpms_receiver.c
+)
+target_include_directories(test_tpms_receiver PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_tpms_receiver PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_tpms_receiver PRIVATE sanitizers)
+endif()
+add_test(NAME tpms_receiver COMMAND test_tpms_receiver)

@@ -1489,6 +1489,12 @@ bool subghz_protocol_is_weather(uint16_t index)
     return proto != NULL && proto->type == SubGhzProtocolTypeWeather;
 }
 
+bool subghz_protocol_is_tpms(uint16_t index)
+{
+    const SubGhzProtocolDef *proto = subghz_protocol_get(index);
+    return proto != NULL && proto->type == SubGhzProtocolTypeTPMS;
+}
+
 /*============================================================================*/
 /* Registry capability filtering                                               */
 /*============================================================================*/

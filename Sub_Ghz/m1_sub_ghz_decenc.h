@@ -349,6 +349,8 @@ void subghz_pulse_handler_reset(void);
  */
 void subghz_decenc_set_weather_only(bool weather_only);
 bool subghz_decenc_get_weather_only(void);
+void subghz_decenc_set_tpms_only(bool tpms_only);
+bool subghz_decenc_get_tpms_only(void);
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);
 uint16_t get_diff(uint16_t n_a, uint16_t n_b);
 

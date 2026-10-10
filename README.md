@@ -57,7 +57,7 @@ project discussion, and related project resources:
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
-| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG pager, weather, brute force, playlist) | ✗ | ✓ |
+| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG pager, weather, TPMS, brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
 | OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
@@ -87,11 +87,12 @@ project discussion, and related project resources:
 ### Sub-GHz Enhancements
 - **105 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **POCSAG Pager app** — M1-native live receiver inspired by Momentum's pager app, with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
+- **TPMS app** — M1-native receiver for Schrader and generic TPMS frames, with bounded sensor history, reception details, and frequency configuration.
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
 - **Frequency Scanner** — sweep and find active frequencies above threshold
 - **Signal Identifier (RF Rosetta)** — passive signal identification: fingerprints captured signals by physical characteristics (band, modulation, timing, repetition) and scores against a protocol database with security metadata; works on both sub-GHz and 2.4 GHz domains (BLE/WiFi/802.15.4 via ESP32-C6)
-- **Weather Station** — decode Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
+- **Weather Station** — non-blocking receiver with automatic OOK/FSK scanning, sensor history and readings, and frequency configuration; decodes Oregon v2, Acurite 606TX/609TXC/592TXR/986, LaCrosse TX141THBv2, Auriol, GT-WT-02, Kedsum-TH, ThermoPro TX-4, Solight TE44, Vauno EN8822C, Emos E601x sensors
 - **Brute Force** — brute-force RF code transmitter (Princeton, CAME, Nice FLO, Linear, Holtek)
 - **Playlist Player** — load `.txt` playlist files from `SubGHz/playlist/` and transmit each `.sub` file sequentially; supports repeat count, progress display, and Flipper path remapping
 - **Proto Pirate** — rolling-code analysis toolkit: live capture, offline `.sub` file decode, and timing tuner comparing captured pulse widths against 25 automotive/garage protocol definitions (KeeLoq, Star Line, CAME, Nice FLO, etc.)

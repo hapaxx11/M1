@@ -223,6 +223,7 @@ const char* subghz_protocol_get_name(uint16_t index);
  * keep all weather protocols contiguous.
  */
 bool subghz_protocol_is_weather(uint16_t index);
+bool subghz_protocol_is_tpms(uint16_t index);
 
 /*============================================================================*/
 /* Registry capability filtering                                               */

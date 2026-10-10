@@ -35,6 +35,7 @@
 #include "subghz_scene_polish.h"
 #include "pocsag_receiver.h"
 #include "subghz_weather_app.h"
+#include "tpms_receiver.h"
 
 /*============================================================================*/
 /* Config filter mode — controls which frequencies/modulations are shown      */
@@ -90,6 +91,7 @@ typedef enum {
     SubGhzSceneAnalyzerMenu,   /**< Analyzer sub-menu (Smart ID + RF analysis tools) */
     SubGhzSceneProtocolFilter, /**< Protocol-group ignore filter (Weather/TPMS/Vehicles/Gates/Sensors/Pagers) */
     SubGhzScenePocsag,         /**< POCSAG pager receiver and message history */
+    SubGhzSceneTpms,           /**< TPMS sensor receiver and history */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -330,6 +332,7 @@ typedef struct {
     uint16_t pocsag_pulse_duration_us;
     bool     pocsag_pulse_level;
     subghz_weather_app_state_t *weather_state;
+    tpms_receiver_app_state_t *tpms_state;
 
     /* --- Create-from-scratch KeeLoq field state --- */
     /** User-entered KeeLoq serial.  Width depends on the picked protocol
@@ -540,6 +543,7 @@ void subghz_scene_set_tick_period(SubGhzApp *app, uint32_t period_ms);
 void subghz_scene_app_run(void);
 void subghz_pocsag_scene_deinit(SubGhzApp *app);
 void subghz_weather_scene_deinit(SubGhzApp *app);
+void subghz_tpms_scene_deinit(SubGhzApp *app);
 
 /*============================================================================*/
 /* Scene handler tables (defined in each scene_*.c file)                      */
@@ -583,6 +587,7 @@ extern const SubGhzSceneHandlers subghz_scene_smart_signal_id_handlers;
 extern const SubGhzSceneHandlers subghz_scene_analyzer_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_protocol_filter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_pocsag_handlers;
+extern const SubGhzSceneHandlers subghz_scene_tpms_handlers;
 
 /*============================================================================*/
 /* SignalSettings cross-scene API                                              */
