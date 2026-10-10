@@ -464,7 +464,7 @@ const SubGhzProtocolDef subghz_protocol_registry[] = {
         .type   = SubGhzProtocolTypeTPMS,
         .flags  = F_WEATHER,
         .filter = SubGhzProtocolFilter_TPMS,
-        .timing = { .te_short=120, .te_long=240, .te_tolerance_pct=25, .preamble_bits=8, .min_count_bit_for_found=40 },
+        .timing = { .te_short=120, .te_long=240, .te_tolerance_pct=25, .preamble_bits=8, .min_count_bit_for_found=64 },
         .decode = subghz_decode_schrader,
     },
 

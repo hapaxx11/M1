@@ -19,7 +19,7 @@
 
 #define TPMS_DEFAULT_FREQUENCY_HZ 433920000UL
 #define TPMS_MODULATION_AM650 1U
-#define TPMS_VISIBLE_ROWS 4U
+#define TPMS_VISIBLE_ROWS 2U
 
 extern S_M1_SubGHz_Scan_Config subghz_scan_config;
 extern int16_t subghz_read_rssi_ext(void);
@@ -177,6 +177,13 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     .receptions = 1U,
                     .rssi = decoded.rssi,
                 };
+                if (decoded.protocol == SCHRADER_TPMS)
+                {
+                    (void)tpms_schrader_gg4_parse(
+                        decoded.key, decoded.bit_len, &sensor.telemetry);
+                    if (sensor.telemetry.valid)
+                        sensor.serial = sensor.telemetry.serial;
+                }
                 (void)tpms_history_add(&state->history, &sensor);
                 if (state->selected_sensor >= state->history.count)
                     state->selected_sensor = state->history.count - 1U;
@@ -218,30 +225,41 @@ static void scene_on_exit(SubGhzApp *app)
 static void draw_detail(const tpms_sensor_t *sensor)
 {
     char line[32];
+    const char *protocol_name = subghz_protocol_get_name(sensor->protocol);
+    if (protocol_name == NULL)
+        protocol_name = "Unknown";
     m1_u8g2_firstpage();
     do
     {
         u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-        (void)snprintf(line, sizeof(line), "%s  %u bits",
-                       subghz_protocol_get_name(sensor->protocol),
+        (void)snprintf(line, sizeof(line), "%.12s %u bits",
+                       protocol_name,
                        (unsigned)sensor->bit_length);
-        u8g2_DrawStr(&m1_u8g2, 0, 12, line);
+        u8g2_DrawStr(&m1_u8g2, 0, 10, line);
         (void)snprintf(line, sizeof(line), "ID: %08lX",
                        (unsigned long)sensor->serial);
-        u8g2_DrawStr(&m1_u8g2, 0, 23, line);
+        u8g2_DrawStr(&m1_u8g2, 0, 19, line);
+        if (sensor->telemetry.valid)
+            (void)snprintf(line, sizeof(line), "P %u.%02u bar  T %dC",
+                           (unsigned)(sensor->telemetry.pressure_hundredths_bar / 100U),
+                           (unsigned)(sensor->telemetry.pressure_hundredths_bar % 100U),
+                           (int)sensor->telemetry.temperature_c);
+        else
+            (void)snprintf(line, sizeof(line), "Pressure --  Temp --");
+        u8g2_DrawStr(&m1_u8g2, 0, 28, line);
         (void)snprintf(line, sizeof(line), "Data: %08lX%08lX",
                        (unsigned long)(sensor->data >> 32),
                        (unsigned long)sensor->data);
-        u8g2_DrawStr(&m1_u8g2, 0, 34, line);
-        (void)snprintf(line, sizeof(line), "%lu.%03lu MHz  %ddBm",
+        u8g2_DrawStr(&m1_u8g2, 0, 37, line);
+        (void)snprintf(line, sizeof(line), "%lu.%03lu MHz %ddBm",
                        (unsigned long)(sensor->frequency_hz / 1000000UL),
                        (unsigned long)((sensor->frequency_hz % 1000000UL) / 1000UL),
                        (int)sensor->rssi);
-        u8g2_DrawStr(&m1_u8g2, 0, 45, line);
+        u8g2_DrawStr(&m1_u8g2, 0, 46, line);
         (void)snprintf(line, sizeof(line), "Seen %um  x%u",
                        (unsigned)tpms_sensor_age_min(sensor, HAL_GetTick()),
                        (unsigned)sensor->receptions);
-        u8g2_DrawStr(&m1_u8g2, 0, 57, line);
+        u8g2_DrawStr(&m1_u8g2, 0, 55, line);
     } while (m1_u8g2_nextpage());
 }
 
@@ -287,12 +305,21 @@ static void draw(SubGhzApp *app)
                             subghz_protocol_get_name(sensor->protocol);
                         uint32_t sensor_id = sensor->serial != 0U ?
                             sensor->serial : (uint32_t)sensor->data;
-                        (void)snprintf(line, sizeof(line), "%c%.9s %08lX x%u",
+                        (void)snprintf(line, sizeof(line), "%c%.8s %08lX",
                                        first + row == state->selected_sensor ? '>' : ' ',
                                        name != NULL ? name : "Unknown",
-                                       (unsigned long)sensor_id,
-                                       (unsigned)sensor->receptions);
-                    u8g2_DrawStr(&m1_u8g2, 0, 23 + row * 9, line);
+                                       (unsigned long)sensor_id);
+                        u8g2_DrawStr(&m1_u8g2, 0, 23 + row * 18, line);
+                        if (sensor->telemetry.valid)
+                            (void)snprintf(line, sizeof(line), "P%u.%02u bar T%dC x%u",
+                                           (unsigned)(sensor->telemetry.pressure_hundredths_bar / 100U),
+                                           (unsigned)(sensor->telemetry.pressure_hundredths_bar % 100U),
+                                           (int)sensor->telemetry.temperature_c,
+                                           (unsigned)sensor->receptions);
+                        else
+                            (void)snprintf(line, sizeof(line), "P--.--bar T--C x%u",
+                                           (unsigned)sensor->receptions);
+                        u8g2_DrawStr(&m1_u8g2, 0, 32 + row * 18, line);
                 }
             }
             subghz_button_bar_draw(NULL,

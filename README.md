@@ -87,7 +87,7 @@ project discussion, and related project resources:
 ### Sub-GHz Enhancements
 - **105 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **POCSAG Pager app** — M1-native live receiver inspired by Momentum's pager app, with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
-- **TPMS app** — M1-native receiver for Schrader and generic TPMS frames, with bounded sensor history, reception details, and frequency configuration.
+- **TPMS app** — M1-native receiver for Schrader GG4 and generic TPMS frames, with bounded sensor history, tire pressure/temperature readings when supported, reception details, and frequency configuration.
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
 - **Frequency Scanner** — sweep and find active frequencies above threshold

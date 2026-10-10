@@ -13,10 +13,10 @@
 
 ### Phase 2 — Receiver and UI integration
 - **Description**: Extend Schrader decoding to 64-bit GG4 frames without losing legacy 40-bit support, display telemetry in TPMS list/detail screens, and update user-facing documentation.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Display Schrader TPMS telemetry`
 
 ### Phase 3 — Finalize
 - **Description**: Validate tests/build/RAM, review changes, then remove this checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

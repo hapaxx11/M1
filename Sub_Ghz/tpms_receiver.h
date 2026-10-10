@@ -20,6 +20,7 @@ typedef struct {
     uint16_t bit_length;
     uint32_t serial;
     uint64_t data;
+    tpms_telemetry_t telemetry;
     uint32_t frequency_hz;
     uint32_t last_seen_ms;
     uint16_t receptions;
