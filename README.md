@@ -47,7 +47,7 @@ project discussion, and related project resources:
 >
 > Browser-based flashing if Hapax is already installed. Plug in via USB-C, open
 > Chrome/Edge, pick a release, and flash. For a first install from stock firmware,
-> use the DFU/qMonstatek method below.
+> use the DFU method below.
 
 ## Highlights vs Stock Firmware
 
@@ -82,11 +82,11 @@ project discussion, and related project resources:
 - Import and use Flipper Zero `.sub`, `.rfid`, `.nfc`, and `.ir` files directly
 - Drop Flipper files onto the SD card and use them on the M1
 - Flipper Music Format (`.fmf`) playback via the Music Player
-- Furi compatibility layer for near-direct protocol porting from Flipper/Momentum
+- Furi compatibility layer for near-direct protocol porting from Flipper
 
 ### Sub-GHz Enhancements
 - **105 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
-- **POCSAG Pager app** — M1-native live receiver inspired by Momentum's pager app, with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
+- **POCSAG Pager app** — M1-native live receiver with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
 - **TPMS app** — M1-native receiver for Schrader GG4 and generic TPMS frames, with bounded sensor history, tire pressure/temperature readings when supported, reception details, and frequency configuration.
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
@@ -140,7 +140,6 @@ project discussion, and related project resources:
 ### External Apps
 - **ELF app loader** — load and run third-party apps from SD card
 - Browse and launch `.m1app` files from the Apps menu
-- Download ready-to-use apps and the App SDK at **[m1-sdk](https://github.com/bedge117/m1-sdk)**
 
 ### Games & Entertainment
 - Snake, Tetris, T-Rex Runner, Pong, 2048, Dice — built-in games accessible from the menu
@@ -148,7 +147,7 @@ project discussion, and related project resources:
 
 ### WiFi
 
-> **Requires compatible ESP32 firmware** — one of the supported variants in the ESP32 table below — e.g. [MtkCore](https://github.com/Monstatek/MonstaTek-Esp32-Core) (official), [SiN360](https://github.com/sincere360/M1_SiN360_ESP32/releases), CD3, or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT, partial feature set). See ESP32 note below.
+> **Requires compatible ESP32 firmware.** Feature availability depends on the coprocessor firmware; see the [ESP32 firmware compatibility guide](documentation/esp32_firmware.md).
 
 **Sniffers:**
 - Packet sniffers: All, Beacon, Probe, Deauth, EAPOL, SAE/WPA3, Pwnagotchi
@@ -179,7 +178,7 @@ project discussion, and related project resources:
 
 ### Bluetooth & BLE
 
-> **Requires compatible ESP32 firmware** — one of the supported variants in the ESP32 table below — e.g. [MtkCore](https://github.com/Monstatek/MonstaTek-Esp32-Core) (official), [SiN360](https://github.com/sincere360/M1_SiN360_ESP32/releases), CD3, or [dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1) (AT, BLE Spam only). See ESP32 note below.
+> **Requires compatible ESP32 firmware.** Feature availability depends on the coprocessor firmware; see the [ESP32 firmware compatibility guide](documentation/esp32_firmware.md).
 
 **BLE Sniffers:** Analyzer, Generic, Flipper, AirTag Sniff/Monitor, Flock
 
@@ -200,7 +199,7 @@ project discussion, and related project resources:
 
 ### Dual Boot
 - Two firmware banks with safe boot validation
-- Swap between banks from the menu or via the companion app
+- Swap between banks from the menu or through the RPC interface
 - CRC verification before boot — falls back to working bank on corruption
 
 ### Security & Crypto
@@ -210,20 +209,12 @@ project discussion, and related project resources:
 
 ### Other Improvements
 - **Scene-based UI** — all modules use a stack-based scene manager with push/pop navigation
-- **RPC protocol** for [qMonstatek](https://github.com/bedge117/qMonstatek) companion app communication
+- **RPC protocol** for USB communication with external tools
 - **Settings persistence** — LCD brightness, southpaw mode, ISM band region, preferences saved to SD card
 - **Southpaw mode** — swap left/right button functions
 - **Safe NMI handler** — proper ECC fault recovery instead of hard fault
 - **Watchdog improvements** — task-level suspend/resume for long operations
-- **CI/CD pipeline** — automated build, test, and release on every merge to `main` via GitHub Actions.  Hapax is the only M1 fork with automated builds and releases.
-
-## Companion App
-
-**[qMonstatek](https://github.com/bedge117/qMonstatek)** — community-maintained Windows desktop app (developed by bedge117; not part of Hapax). Connect your M1 via USB to mirror the device screen, manage SD card files, configure WiFi, update the ESP32 coprocessor firmware, and flash firmware over USB — including DFU mode for first-time installation from stock firmware.
-
-For firmware updates on a device already running Hapax, the browser-based **[Web Updater](https://hapaxx11.github.io/M1/)** requires no software at all. qMonstatek is the recommended path for first-time installation from stock or for users who prefer a desktop UI.
-
-Download from the [qMonstatek releases page](https://github.com/bedge117/qMonstatek/releases).
+- **CI/CD pipeline** — automated builds, tests, and releases via GitHub Actions.
 
 ## Included Databases
 
@@ -269,43 +260,11 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **Storage:** microSD card
 - **Hardware revision:** 2.x
 
-> **ESP32 firmware required:** Hapax supports multiple ESP32-C6 coprocessor firmware
-> variants. The most capable, ranked by number of capabilities (CAPS) supported
-> out of the 21 currently defined:
->
-> | Firmware | Caps supported | Notes |
-> |----------|:---------------:|-------|
-> | **[CD3 native binary RPC (bedge117/m1-esp32-brain)](https://github.com/bedge117/m1-esp32-brain)** | 17 / 21 (profile macro; see caveat) | Native ESP-IDF, no AT stack; not a fork of the AT-based firmware below. Includes WiFi join + 802.15.4. PMKID capture and ESP32 OTA self-update are **reserved protocol message IDs that are not yet implemented** in shipped releases (see caveat); WPA handshake capture is implemented but not yet self-reported via the capability bitmap. |
-> | **[MtkCore (Monstatek/MonstaTek-Esp32-Core)](https://github.com/Monstatek/MonstaTek-Esp32-Core)** — official ESP32 firmware | 13 / 21 (Legacy-SPI compat) | Native ESP-IDF. Over its *"Legacy SPI Compatibility"* adapter it speaks our m1_link RPC protocol and reports a **zero capability bitmap**; the host fingerprints it (`cap_bitmap == 0` + dotted-semver `fw_name`) and synthesises `M1_ESP32_CAP_PROFILE_MTKCORE` → `ESP32_TRANSPORT_RPC`. Supports WiFi scan/join/deauth/beacon/handshake/SoftAP/pktmon/portal + BLE scan/adv/GATT; RPC WiFi sniffers save Wireshark-openable PCAPNG captures to `capture/` on SD. **No** ESP-NOW, 802.15.4, PMKID, karma, probe-flood, or BLE HID/spam over the compat adapter. Its Native M1 SPI v1 transport (full parity) has a host-tested codec/client, but live SPI activation awaits on-hardware validation. |
-> | **[SiN360 ESP32](https://github.com/sincere360/M1_SiN360_ESP32/releases)** | 13 / 21 | Binary SPI; full sniffer/recon/station-scan/BLE feature set; no PMKID/handshake capture or OTA. |
-> | **[dag T-800](https://github.com/dagnazty/ESP32-C6-ESP-AT_M1)** | 10 / 21 | AT commands over SPI; WiFi attacks (deauth, beacon spam, karma, evil portal, probe flood, PMKID grab), BLE Spam, AP scanning, network joining. No packet-monitor sniffers, station scan, or advanced BLE features. |
->
-> **Caveat on CD3's "17/21":** that figure is the *reference/target* capability
-> profile macro (`M1_ESP32_CAP_PROFILE_CD3`), used only as a conservative
-> fallback when a CD3 device can't be live-probed. As of the 2026-07-21 review
-> of public CD3 source, no shipped release actually self-reports OTA or PMKID
-> support at runtime — see [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#wire-bits--cap_bitmap)
-> for the verified per-message-ID status. Do not rely on CD3 OTA or PMKID
-> until a release advertises those capability bits.
->
-> See [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#capability-matrix-by-firmware-variant)
-> for the full firmware comparison, AT command reference, and per-capability
-> matrix. Other variants exist (**CD3-AT** base, neddy299 deauth, hapaxx11-caps)
-> for development and testing. **CD3-AT** (the AT-based `bedge117/esp32-at-monstatek-m1`
-> lineage) and **CD3** (the native `bedge117/m1-esp32-brain` binary-RPC firmware)
-> are two separate, non-interoperable codebases from the same author — see
-> [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md#source-repository)
-> for the naming disambiguation.
->
-> **Note:** the compile-time CAPS profile macros (`M1_ESP32_CAP_PROFILE_*`) are
-> only a conservative fallback used when a connected firmware can't be probed
-> dynamically (e.g. `CMD_GET_STATUS`/`M1_RPC GET_STATUS` is unavailable or
-> unimplemented). Whenever a firmware self-reports its capability bitmap at
-> runtime, that live bitmap is always used instead of the fallback profile.
->
-> Flash via **Settings → ESP32 Update** (OTA over SPI) or via esptool — no hardware changes required. The stock Espressif UART-based AT firmware is **not** compatible.
->
-> Download the latest SiN360 binary from the [SiN360 ESP32 releases page](https://github.com/sincere360/M1_SiN360_ESP32/releases).
+> **ESP32 firmware required:** Hapax supports multiple ESP32-C6 coprocessor
+> firmware variants, with feature availability depending on the firmware. See
+> [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for the
+> compatibility matrix and flashing guidance. The stock Espressif UART-based AT
+> firmware is not compatible.
 
 ## Building
 
@@ -344,8 +303,7 @@ ctest --test-dir build-tests --output-on-failure
 
 ## Code Quality
 
-Hapax is the only M1 firmware fork with automated quality checks.  All of these run
-as GitHub Actions workflows:
+Hapax runs automated quality checks through GitHub Actions:
 
 | Tool | CI Workflow | Scope | Mode |
 |------|-------------|-------|------|
@@ -384,7 +342,7 @@ install)** section below instead.
 ### Via WiFi (OTA)
 
 > 🚧 **Work in progress** — OTA download is functional but still being stabilised.
-> Requires an ESP32 firmware that supports WiFi joining (SiN360, dag T-800, CD3, or MtkCore).
+> Requires compatible ESP32 firmware with WiFi-joining support; see the [ESP32 firmware compatibility guide](documentation/esp32_firmware.md).
 
 The M1 can download firmware updates over WiFi directly from GitHub Releases:
 
@@ -397,7 +355,8 @@ you flash it via **Settings → FW Update → Install from SD** as a separate st
 the device does not reflash itself automatically.
 
 ### Via DFU Mode (recovery / first install)
-See [Entering DFU Mode](#entering-dfu-mode-hardware-strap) below, then use the DFU Flash page in [qMonstatek](https://github.com/bedge117/qMonstatek).
+Enter DFU mode using the hardware strap below. In STM32CubeProgrammer, select **USB**,
+connect to the device, open the firmware `.hex` release artifact, and click **Download**.
 
 ### ST-Link Connection
 
@@ -469,8 +428,8 @@ If you need to flash the firmware directly via USB using STM32CubeProgrammer (wi
 
 > ⚠ Sub-GHz `.sub`/`.sgh` files saved by Hapax builds earlier than **v0.9.0.124**
 > contain a zeroed key (`Key: 0x0`) and cannot be emulated — delete and recapture them.
-> Check via Sub-GHz → Saved → OK → Info. Files from v0.9.0.124+, C3.12, SiN360, stock
-> Monstatek, and the bundled `subghz_database/` are unaffected.
+> Check via Sub-GHz → Saved → OK → Info. Files from v0.9.0.124+, stock Monstatek
+> firmware, and the bundled `subghz_database/` are unaffected.
 
 ## Contributing
 
