@@ -87,6 +87,7 @@ bool subghz_weather_scan_tick(SubGhzWeatherScan *s, uint32_t now_ms);
 
 /** Short human label for the current modulation ("AM" / "FSK"). */
 const char *subghz_weather_scan_label(SubGhzWeatherScanMod m);
+bool subghz_weather_ook_uses_custom_band(uint32_t frequency_hz);
 
 #ifdef __cplusplus
 }

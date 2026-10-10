@@ -4551,6 +4551,8 @@ void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod, uint32_t frequency_hz)
     else
     {
         S_M1_SubGHz_Band band = subghz_freq_hz_to_band(frequency_hz);
+        if (subghz_weather_ook_uses_custom_band(frequency_hz))
+            band = SUB_GHZ_BAND_CUSTOM;
         subghz_scan_config.band       = band;
         subghz_scan_config.modulation = MODULATION_OOK;
         subghz_custom_freq_hz         = frequency_hz;

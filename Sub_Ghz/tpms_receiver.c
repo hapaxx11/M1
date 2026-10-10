@@ -45,6 +45,29 @@ void tpms_history_reset(tpms_history_t *history)
         memset(history, 0, sizeof(*history));
 }
 
+static bool tpms_sensor_matches(const tpms_sensor_t *entry,
+                                const tpms_sensor_t *sensor)
+{
+    return entry->protocol == sensor->protocol &&
+        ((sensor->serial != 0U && entry->serial == sensor->serial) ||
+         (sensor->serial == 0U && entry->serial == 0U &&
+          entry->data == sensor->data));
+}
+
+uint8_t tpms_history_selection_index(const tpms_history_t *history,
+                                     const tpms_sensor_t *sensor)
+{
+    if (history == NULL || sensor == NULL)
+        return 0U;
+
+    for (uint8_t i = 0; i < history->count; ++i)
+    {
+        if (tpms_sensor_matches(&history->entries[i], sensor))
+            return i;
+    }
+    return 0U;
+}
+
 int tpms_history_add(tpms_history_t *history, const tpms_sensor_t *sensor)
 {
     if (history == NULL || sensor == NULL)
@@ -52,18 +75,17 @@ int tpms_history_add(tpms_history_t *history, const tpms_sensor_t *sensor)
 
     for (uint8_t i = 0; i < history->count; ++i)
     {
-        tpms_sensor_t *entry = &history->entries[i];
-        bool same_sensor = entry->protocol == sensor->protocol &&
-            ((sensor->serial != 0U && entry->serial == sensor->serial) ||
-             (sensor->serial == 0U && entry->serial == 0U &&
-              entry->data == sensor->data));
-        if (same_sensor)
+        if (tpms_sensor_matches(&history->entries[i], sensor))
         {
-            uint16_t receptions = entry->receptions;
-            *entry = *sensor;
-            entry->receptions = (receptions == UINT16_MAX) ?
+            uint16_t receptions = history->entries[i].receptions;
+            tpms_sensor_t refreshed = *sensor;
+            refreshed.receptions = (receptions == UINT16_MAX) ?
                 UINT16_MAX : (uint16_t)(receptions + 1U);
-            return i;
+            if (i > 0U)
+                memmove(&history->entries[1], &history->entries[0],
+                        i * sizeof(history->entries[0]));
+            history->entries[0] = refreshed;
+            return 0;
         }
     }
 

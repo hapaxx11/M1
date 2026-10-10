@@ -184,9 +184,16 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     if (sensor.telemetry.valid)
                         sensor.serial = sensor.telemetry.serial;
                 }
+                const tpms_sensor_t *selected =
+                    tpms_history_get(&state->history, state->selected_sensor);
+                tpms_sensor_t selected_sensor;
+                if (selected != NULL)
+                    selected_sensor = *selected;
+                else
+                    selected = NULL;
                 (void)tpms_history_add(&state->history, &sensor);
-                if (state->selected_sensor >= state->history.count)
-                    state->selected_sensor = state->history.count - 1U;
+                state->selected_sensor = tpms_history_selection_index(
+                    &state->history, selected != NULL ? &selected_sensor : NULL);
                 app->need_redraw = true;
             }
             return true;

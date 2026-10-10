@@ -3666,8 +3666,12 @@ add_test(NAME pocsag_receiver COMMAND test_pocsag_receiver)
 add_executable(test_tpms_receiver
     test_tpms_receiver.c
     ${M1_ROOT}/Sub_Ghz/tpms_receiver.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_schrader_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
 )
 target_include_directories(test_tpms_receiver PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
     ${M1_ROOT}/Sub_Ghz
 )
 target_link_libraries(test_tpms_receiver PRIVATE unity)

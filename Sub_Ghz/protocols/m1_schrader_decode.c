@@ -101,7 +101,7 @@ uint8_t subghz_decode_schrader(uint16_t p, uint16_t pulsecount)
         }
     }
 
-    if (legacy_bit_count >= 40U)
+    if (legacy_bit_count == 40U && bit_count == 40U)
     {
         subghz_decenc_ctl.n64_decodedvalue = legacy_code;
         subghz_decenc_ctl.ndecodedbitlength = legacy_bit_count;

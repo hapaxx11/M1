@@ -44,6 +44,8 @@ typedef struct {
 
 void tpms_history_reset(tpms_history_t *history);
 int tpms_history_add(tpms_history_t *history, const tpms_sensor_t *sensor);
+uint8_t tpms_history_selection_index(const tpms_history_t *history,
+                                    const tpms_sensor_t *sensor);
 const tpms_sensor_t *tpms_history_get(const tpms_history_t *history,
                                       uint8_t newest_index);
 uint8_t tpms_sensor_age_min(const tpms_sensor_t *sensor, uint32_t now_ms);

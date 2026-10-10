@@ -50,3 +50,8 @@ const char *subghz_weather_scan_label(SubGhzWeatherScanMod m)
 {
     return (m == WX_SCAN_MOD_FSK) ? "FSK" : "AM";
 }
+
+bool subghz_weather_ook_uses_custom_band(uint32_t frequency_hz)
+{
+    return frequency_hz == 915000000UL;
+}
