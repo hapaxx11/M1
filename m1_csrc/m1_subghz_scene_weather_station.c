@@ -27,10 +27,10 @@ extern void subghz_set_user_custom_freq_ext(uint32_t frequency_hz);
 extern void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx);
 extern void subghz_set_freq_idx_ext(uint8_t idx);
 extern void subghz_set_mod_idx_ext(uint8_t idx);
-extern void subghz_rx_pause_ext(void);
-extern void subghz_rx_deinit_ext(void);
-extern void subghz_set_opmode_ext(uint8_t opmode, uint8_t band,
-                                 uint8_t channel, uint8_t tx_power);
+extern void sub_ghz_rx_pause_ext(void);
+extern void sub_ghz_rx_deinit_ext(void);
+extern void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band,
+                                   uint8_t channel, uint8_t tx_power);
 
 static uint32_t current_time_ms(void)
 {
@@ -41,10 +41,10 @@ static void stop_rx(subghz_weather_app_state_t *state)
 {
     if (state->radio_active)
     {
-        subghz_rx_pause_ext();
-        subghz_rx_deinit_ext();
-        subghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED,
-                              subghz_scan_config.band, 0, 0);
+        sub_ghz_rx_pause_ext();
+        sub_ghz_rx_deinit_ext();
+        sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED,
+                               subghz_scan_config.band, 0, 0);
         subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
         state->radio_active = false;
     }
@@ -55,14 +55,16 @@ static void start_rx(SubGhzApp *app)
     subghz_weather_app_state_t *state = app->weather_state;
     uint32_t frequency_hz = subghz_get_freq_hz_ext(app->freq_idx);
 
-    stop_rx(state);
     subghz_record_mode_flag = 0;
-    subghz_set_user_custom_freq_ext(frequency_hz);
-    subghz_apply_config_ext(app->freq_idx, app->mod_idx);
-    menu_sub_ghz_init();
+    if (!state->radio_active)
+    {
+        subghz_set_user_custom_freq_ext(frequency_hz);
+        subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+        menu_sub_ghz_init();
+    }
 
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
-    subghz_weather_rx_arm(state->scan.mod, frequency_hz);
+    sub_ghz_weather_rx_arm(state->scan.mod, frequency_hz);
     state->radio_active = true;
     app->current_freq_hz = frequency_hz;
 }
@@ -286,7 +288,7 @@ static void draw(SubGhzApp *app)
     {
         sub_ghz_weather_draw_list(&state->history, state->selected_sensor,
                                   state->first_visible_sensor, state->scan.mod,
-                                  current_time_ms());
+                                  app->current_freq_hz, current_time_ms());
     }
 }
 

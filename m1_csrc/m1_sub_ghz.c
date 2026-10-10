@@ -54,6 +54,7 @@
 #include "m1_settings.h"
 #include "m1_virtual_kb.h"
 #include "m1_scene.h"
+#include "m1_subghz_button_bar.h"
 #include "uiView.h"
 
 /*************************** D E F I N E S ************************************/
@@ -4523,7 +4524,7 @@ void sub_ghz_spectrum_analyzer(void)
 
 /*
  * (Re)arm the SI4463 RX input-capture chain for the given modulation on
- * WX_SCAN_FREQ_HZ.  Mirrors the proven Read-scene startup sequence
+ * requested frequency.  Mirrors the proven Read-scene startup sequence
  * (set_opmode -> rx_init -> rx_start) so the TIM1 capture ISR actually feeds
  * the pulse decoder — the previous weather monitor skipped this entirely and
  * therefore never decoded anything.
@@ -4669,13 +4670,16 @@ void sub_ghz_weather_draw_detail(const SubGhzWeatherSensor *s,
 /* Sensor list (Flipper "Weather Station" main view). */
 void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
                                uint8_t sel, uint8_t top,
-                               SubGhzWeatherScanMod mod, uint32_t now_ms)
+                               SubGhzWeatherScanMod mod,
+                               uint32_t frequency_hz, uint32_t now_ms)
 {
     char title[32];
     char row[32];
     uint8_t i;
 
-    snprintf(title, sizeof(title), "Weather Station [%s]",
+    snprintf(title, sizeof(title), "WX %lu.%03lu %s",
+             (unsigned long)(frequency_hz / 1000000UL),
+             (unsigned long)((frequency_hz % 1000000UL) / 1000UL),
              subghz_weather_scan_label(mod));
 
     m1_u8g2_firstpage();
@@ -4687,7 +4691,7 @@ void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
 
         if (hist->count == 0)
         {
-            u8g2_DrawStr(&m1_u8g2, 2, 30, "Scanning 433.92MHz");
+            u8g2_DrawStr(&m1_u8g2, 2, 30, "Listening for sensors");
             u8g2_DrawStr(&m1_u8g2, 2, 42, "no sensors yet ...");
             u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to exit");
         }
@@ -4928,7 +4932,8 @@ void sub_ghz_weather_station(void)
             else
             {
                 detail_view = false;
-                sub_ghz_weather_draw_list(&wx_hist, sel, top, scan.mod, now_ms);
+                sub_ghz_weather_draw_list(&wx_hist, sel, top, scan.mod,
+                                          WX_SCAN_FREQ_HZ, now_ms);
             }
         }
     }

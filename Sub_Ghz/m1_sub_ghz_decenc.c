@@ -273,6 +273,8 @@ static bool decode_tpms_only = false;
 void subghz_decenc_set_weather_only(bool weather_only)
 {
     decode_weather_only = weather_only;
+    if (weather_only)
+        decode_tpms_only = false;
 }
 
 bool subghz_decenc_get_weather_only(void)
@@ -283,6 +285,8 @@ bool subghz_decenc_get_weather_only(void)
 void subghz_decenc_set_tpms_only(bool tpms_only)
 {
     decode_tpms_only = tpms_only;
+    if (tpms_only)
+        decode_weather_only = false;
 }
 
 bool subghz_decenc_get_tpms_only(void)

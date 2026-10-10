@@ -29,21 +29,21 @@ extern void subghz_set_user_custom_freq_ext(uint32_t frequency_hz);
 extern void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx);
 extern void subghz_set_freq_idx_ext(uint8_t idx);
 extern void subghz_set_mod_idx_ext(uint8_t idx);
-extern void subghz_rx_init_ext(void);
-extern void subghz_rx_start_ext(void);
-extern void subghz_rx_pause_ext(void);
-extern void subghz_rx_deinit_ext(void);
-extern void subghz_set_opmode_ext(uint8_t opmode, uint8_t band,
-                                 uint8_t channel, uint8_t tx_power);
+extern void sub_ghz_rx_init_ext(void);
+extern void sub_ghz_rx_start_ext(void);
+extern void sub_ghz_rx_pause_ext(void);
+extern void sub_ghz_rx_deinit_ext(void);
+extern void sub_ghz_set_opmode_ext(uint8_t opmode, uint8_t band,
+                                   uint8_t channel, uint8_t tx_power);
 
 static void stop_rx(tpms_receiver_app_state_t *state)
 {
     if (state->radio_active)
     {
-        subghz_rx_pause_ext();
-        subghz_rx_deinit_ext();
-        subghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED,
-                              subghz_scan_config.band, 0, 0);
+        sub_ghz_rx_pause_ext();
+        sub_ghz_rx_deinit_ext();
+        sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_ISOLATED,
+                               subghz_scan_config.band, 0, 0);
         subghz_decenc_ctl.pulse_det_stat = PULSE_DET_IDLE;
         state->radio_active = false;
     }
@@ -60,9 +60,9 @@ static void start_rx(SubGhzApp *app)
     menu_sub_ghz_init();
 
     subghz_decenc_ctl.pulse_det_stat = PULSE_DET_ACTIVE;
-    subghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
-    subghz_rx_init_ext();
-    subghz_rx_start_ext();
+    sub_ghz_set_opmode_ext(SUB_GHZ_OPMODE_RX, subghz_scan_config.band, 0, 0);
+    sub_ghz_rx_init_ext();
+    sub_ghz_rx_start_ext();
     state->radio_active = true;
     app->current_freq_hz = frequency_hz;
 }
@@ -283,11 +283,15 @@ static void draw(SubGhzApp *app)
                 {
                     const tpms_sensor_t *sensor =
                         tpms_history_get(&state->history, first + row);
-                    (void)snprintf(line, sizeof(line), "%c%s %08lX x%u",
-                                   first + row == state->selected_sensor ? '>' : ' ',
-                                   subghz_protocol_get_name(sensor->protocol),
-                                   (unsigned long)sensor->serial,
-                                   (unsigned)sensor->receptions);
+                        const char *name =
+                            subghz_protocol_get_name(sensor->protocol);
+                        uint32_t sensor_id = sensor->serial != 0U ?
+                            sensor->serial : (uint32_t)sensor->data;
+                        (void)snprintf(line, sizeof(line), "%c%.9s %08lX x%u",
+                                       first + row == state->selected_sensor ? '>' : ' ',
+                                       name != NULL ? name : "Unknown",
+                                       (unsigned long)sensor_id,
+                                       (unsigned)sensor->receptions);
                     u8g2_DrawStr(&m1_u8g2, 0, 23 + row * 9, line);
                 }
             }

@@ -8,15 +8,15 @@
 
 ### Phase 1 — Scene-based Weather Station
 - **Description**: Move weather reception, navigation, and rendering into a non-blocking scene while preserving the existing dual-modulation scan and sensor history.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `convert Weather Station scene`
 
 ### Phase 2 — TPMS receiver app
 - **Description**: Add TPMS-scoped decoding, a bounded reception history, a scene with detail/config navigation, and host-side tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `add TPMS receiver app`
 
 ### Phase 3 — Integration and validation
 - **Description**: Register firmware and host-test sources, update menu and user-facing docs/changelog, then run host tests and firmware build/RAM checks.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
