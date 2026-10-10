@@ -632,6 +632,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/nfc_classify.c
     ../../m1_csrc/nfc_file_parse.c
     ../../m1_csrc/nfc_ndef_encode.c
+    ../../m1_csrc/nfc_ndef_authoring.c
     ../../m1_csrc/nfc_ndef_parse.c
     ../../m1_csrc/nfc_ntag.c
     ../../m1_csrc/mfc_layout.c

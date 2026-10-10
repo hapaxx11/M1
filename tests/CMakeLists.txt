@@ -2607,6 +2607,22 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
 
+# ── NFC NDEF authoring dispatcher ──
+add_executable(test_nfc_ndef_authoring
+    test_nfc_ndef_authoring.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_authoring.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_encode.c
+)
+target_include_directories(test_nfc_ndef_authoring PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ndef_authoring PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ndef_authoring PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ndef_authoring COMMAND test_nfc_ndef_authoring)
+
 # ------------------------------------------------------------------
 # Module under test: nfc_ndef_parse (NDEF TLV record parser — URI + Text)
 #
