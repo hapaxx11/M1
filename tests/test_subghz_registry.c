@@ -163,6 +163,23 @@ void test_is_weather_false_for_out_of_range(void)
 	TEST_ASSERT_FALSE(subghz_protocol_is_weather(subghz_protocol_registry_count));
 	TEST_ASSERT_FALSE(subghz_protocol_is_weather(0xFFFF));
 }
+
+void test_is_tpms_matches_registry_type(void)
+{
+	for (uint16_t i = 0; i < subghz_protocol_registry_count; i++) {
+		const SubGhzProtocolDef *proto = subghz_protocol_get(i);
+		TEST_ASSERT_NOT_NULL(proto);
+		bool expect = (proto->type == SubGhzProtocolTypeTPMS);
+		TEST_ASSERT_EQUAL(expect, subghz_protocol_is_tpms(i));
+	}
+}
+
+void test_is_tpms_false_for_out_of_range(void)
+{
+	TEST_ASSERT_FALSE(subghz_protocol_is_tpms(subghz_protocol_registry_count));
+	TEST_ASSERT_FALSE(subghz_protocol_is_tpms(0xFFFF));
+}
+
 void test_find_not_found(void)
 {
 	TEST_ASSERT_EQUAL_INT16(-1, subghz_protocol_find_by_name("NonExistentProtocol"));
@@ -774,6 +791,8 @@ int main(void)
 	RUN_TEST(test_is_weather_true_for_known_weather);
 	RUN_TEST(test_is_weather_false_for_non_weather);
 	RUN_TEST(test_is_weather_false_for_out_of_range);
+	RUN_TEST(test_is_tpms_matches_registry_type);
+	RUN_TEST(test_is_tpms_false_for_out_of_range);
 	RUN_TEST(test_find_not_found);
 	RUN_TEST(test_find_null);
 	RUN_TEST(test_find_case_insensitive);

@@ -87,6 +87,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneAnalyzerMenu]     = &subghz_scene_analyzer_menu_handlers,
     [SubGhzSceneProtocolFilter]   = &subghz_scene_protocol_filter_handlers,
     [SubGhzScenePocsag]           = &subghz_scene_pocsag_handlers,
+    [SubGhzSceneTpms]             = &subghz_scene_tpms_handlers,
 };
 
 /*============================================================================*/
@@ -563,6 +564,8 @@ void subghz_scene_app_run(void)
 
     /* Cleanup */
     subghz_pocsag_scene_deinit(&app);
+    subghz_weather_scene_deinit(&app);
+    subghz_tpms_scene_deinit(&app);
     menu_sub_ghz_exit();
     xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);

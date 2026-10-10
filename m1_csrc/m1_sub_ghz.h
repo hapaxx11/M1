@@ -15,6 +15,7 @@
 
 #include "m1_io_defs.h"
 #include "m1_ring_buffer.h"
+#include "subghz_weather_app.h"
 #include <stdbool.h>
 
 #define SUBGHZ_RX_TIMER                 TIM1        /*!< Timer used for Sub-GHz decoding */
@@ -149,6 +150,13 @@ void sub_ghz_init(void);
 void sub_ghz_frequency_reader(void);
 void sub_ghz_spectrum_analyzer(void);
 void sub_ghz_weather_station(void);
+void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod, uint32_t frequency_hz);
+void sub_ghz_weather_draw_detail(const SubGhzWeatherSensor *sensor,
+                                uint32_t now_ms);
+void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *history,
+                              uint8_t selected, uint8_t first_visible,
+                              SubGhzWeatherScanMod mod, uint32_t frequency_hz,
+                              uint32_t now_ms);
 void sub_ghz_brute_force(void);
 void sub_ghz_rssi_meter(void);
 void sub_ghz_freq_scanner(void);

@@ -41,6 +41,13 @@ void test_label_strings(void)
     TEST_ASSERT_EQUAL_STRING("FSK", subghz_weather_scan_label(WX_SCAN_MOD_FSK));
 }
 
+void test_ook_915_mhz_uses_custom_band(void)
+{
+    TEST_ASSERT_TRUE(subghz_weather_ook_uses_custom_band(915000000UL));
+    TEST_ASSERT_FALSE(subghz_weather_ook_uses_custom_band(433920000UL));
+    TEST_ASSERT_FALSE(subghz_weather_ook_uses_custom_band(914999999UL));
+}
+
 /* ------------------------------------------------------------------ */
 /* init                                                                */
 /* ------------------------------------------------------------------ */
@@ -144,6 +151,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_other_toggles);
     RUN_TEST(test_label_strings);
+    RUN_TEST(test_ook_915_mhz_uses_custom_band);
     RUN_TEST(test_init_sets_fields);
     RUN_TEST(test_init_clamps_zero_dwell);
     RUN_TEST(test_init_null_safe);
