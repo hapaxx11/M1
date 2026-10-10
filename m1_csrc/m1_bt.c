@@ -31,6 +31,7 @@
 #include "esp32_feature_map.h"
 #include "m1_esp32_rpc.h"
 #include "m1_esp32_rpc_features.h"
+#include "ble_signal_finder.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -1640,6 +1641,174 @@ void bluetooth_scan(void)
                 }
             }
         }
+    }
+}
+
+static void ble_signal_finder_draw_selection(void)
+{
+    char line[25];
+    ble_dev_t *device = &ble_list[ble_view_idx];
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Signal Finder");
+    snprintf(line, sizeof(line), "%u/%u",
+             (unsigned)ble_view_idx + 1u, (unsigned)ble_count);
+    u8g2_DrawStr(&m1_u8g2, M1_LCD_DISPLAY_WIDTH - 6 * M1_GUI_FONT_WIDTH,
+                 10, line);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 23, device->name[0] ? device->name : "(no name)");
+    u8g2_DrawStr(&m1_u8g2, 2, 33, device->addr_str);
+    snprintf(line, sizeof(line), "RSSI: %d dBm", device->rssi);
+    u8g2_DrawStr(&m1_u8g2, 2, 43, line);
+    u8g2_DrawStr(&m1_u8g2, 2, 50, "UP/DOWN to select");
+    m1_button_bar_draw(arrowleft_8x8, "Back", ok_circle_8x8, "Track", NULL, NULL);
+    m1_u8g2_nextpage();
+}
+
+static void ble_signal_finder_draw_tracking(const char *name, const char *addr,
+                                             bool seen, int8_t rssi)
+{
+    char line[32];
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "Signal Finder");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 23, name[0] ? name : "(no name)");
+    u8g2_DrawStr(&m1_u8g2, 2, 33, addr);
+    u8g2_DrawStr(&m1_u8g2, 2, 42, seen ? "Device in range" : "Not seen this scan");
+    if (seen)
+    {
+        snprintf(line, sizeof(line), "RSSI:%d dBm  Signal:%u/4",
+                 rssi, (unsigned)ble_signal_finder_strength(rssi));
+        u8g2_DrawStr(&m1_u8g2, 2, 51, line);
+    }
+    else
+    {
+        u8g2_DrawStr(&m1_u8g2, 2, 51, "RSSI: --");
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to stop");
+    m1_u8g2_nextpage();
+}
+
+static bool ble_signal_finder_wait_back(TickType_t ticks)
+{
+    S_M1_Buttons_Status button_status;
+    S_M1_Main_Q_t q_item;
+
+    if (xQueueReceive(main_q_hdl, &q_item, ticks) != pdTRUE ||
+        q_item.q_evt_type != Q_EVENT_KEYPAD)
+        return false;
+
+    if (xQueueReceive(button_events_q_hdl, &button_status, 0) == pdTRUE &&
+        button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+    {
+        xQueueReset(main_q_hdl);
+        return true;
+    }
+    return false;
+}
+
+void bluetooth_signal_finder(void)
+{
+    S_M1_Buttons_Status button_status;
+    S_M1_Main_Q_t q_item;
+    uint8_t target_addr[6];
+    uint8_t target_addr_type;
+    char target_name[sizeof(ble_list[0].name)];
+    char target_addr_str[sizeof(ble_list[0].addr_str)];
+    int8_t target_rssi;
+    bool target_seen = true;
+
+    ble_ensure_esp32_ready();
+
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    m1_u8g2_firstpage();
+    u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning BLE...");
+    m1_u8g2_nextpage();
+
+    uint16_t list_count = ble_do_scan();
+    if (list_count == 0)
+    {
+        ble_list_free();
+        ble_show_pending("Signal Finder", "No BLE devices found", NULL);
+        return;
+    }
+
+    ble_view_idx = 0;
+    ble_signal_finder_draw_selection();
+
+    while (1)
+    {
+        if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) != pdTRUE ||
+            q_item.q_evt_type != Q_EVENT_KEYPAD ||
+            xQueueReceive(button_events_q_hdl, &button_status, 0) != pdTRUE)
+            continue;
+
+        if (button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            ble_list_free();
+            xQueueReset(main_q_hdl);
+            return;
+        }
+        if (button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            ble_view_idx = (ble_view_idx == 0) ? list_count - 1 : ble_view_idx - 1;
+            ble_signal_finder_draw_selection();
+        }
+        else if (button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            ble_view_idx = (ble_view_idx + 1) % list_count;
+            ble_signal_finder_draw_selection();
+        }
+        else if (button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+        {
+            break;
+        }
+    }
+
+    memcpy(target_addr, ble_list[ble_view_idx].addr, sizeof(target_addr));
+    target_addr_type = ble_list[ble_view_idx].addr_type;
+    snprintf(target_name, sizeof(target_name), "%s", ble_list[ble_view_idx].name);
+    snprintf(target_addr_str, sizeof(target_addr_str), "%s", ble_list[ble_view_idx].addr_str);
+    target_rssi = ble_list[ble_view_idx].rssi;
+    ble_list_free();
+
+    while (1)
+    {
+        ble_signal_finder_draw_tracking(target_name, target_addr_str,
+                                        target_seen, target_rssi);
+
+        for (uint8_t i = 0; i < 10; i++)
+        {
+            if (ble_signal_finder_wait_back(pdMS_TO_TICKS(100)))
+            {
+                ble_list_free();
+                return;
+            }
+        }
+
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        m1_u8g2_firstpage();
+        u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning BLE...");
+        m1_u8g2_nextpage();
+
+        (void)ble_do_scan();
+        target_seen = false;
+        for (uint16_t i = 0; i < ble_count; i++)
+        {
+            if (ble_signal_finder_matches(target_addr, target_addr_type,
+                                          ble_list[i].addr, ble_list[i].addr_type))
+            {
+                target_rssi = ble_list[i].rssi;
+                target_seen = true;
+                break;
+            }
+        }
+        ble_list_free();
     }
 }
 

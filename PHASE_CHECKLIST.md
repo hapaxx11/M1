@@ -9,7 +9,7 @@
 ### Phase 1 — Signal-finder logic and tests
 - **Description**: Add pure BLE target matching and RSSI strength classification with host-side tests.
 - **Status**: ✅ Complete
-- **Commit**: _(pending)_
+- **Commit**: `Add BLE signal finder logic tests`
 
 ### Phase 2 — Bluetooth app integration
 - **Description**: Add device selection, repeated tracking scans, menu access, changelog fragment, and run host tests plus firmware build.

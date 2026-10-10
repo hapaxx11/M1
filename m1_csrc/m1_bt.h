@@ -20,6 +20,7 @@
 void menu_bluetooth_init(void);
 void bluetooth_config(void);
 void bluetooth_scan(void);
+void bluetooth_signal_finder(void);
 void bluetooth_advertise(void);
 void ble_sniff_analyzer(void);
 void ble_sniff_generic(void);

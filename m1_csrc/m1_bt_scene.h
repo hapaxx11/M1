@@ -33,6 +33,7 @@ typedef enum {
 
     /* Core */
     BtSceneScan,
+    BtSceneSignalFinder,
     BtSceneAdvertise,
     BtSceneConfig,
 
@@ -88,6 +89,7 @@ typedef enum {
 /* m1_bt_scene_menu.c */
 extern const M1SceneHandlers bt_scene_menu_handlers;
 extern const M1SceneHandlers bt_scene_scan_handlers;
+extern const M1SceneHandlers bt_scene_signal_finder_handlers;
 extern const M1SceneHandlers bt_scene_advertise_handlers;
 extern const M1SceneHandlers bt_scene_config_handlers;
 

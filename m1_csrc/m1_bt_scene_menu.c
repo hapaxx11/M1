@@ -47,10 +47,12 @@
 /*==========================================================================*/
 
 DELEGATE_FEATURE(scan,      bluetooth_scan,      ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(signal_finder, bluetooth_signal_finder, ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(advertise, bluetooth_advertise, ESP32_FEATURE_BLE_ADV)
 DELEGATE(config,    bluetooth_config)
 
 const M1SceneHandlers bt_scene_scan_handlers      = { .on_enter = scan_on_enter      };
+const M1SceneHandlers bt_scene_signal_finder_handlers = { .on_enter = signal_finder_on_enter };
 const M1SceneHandlers bt_scene_advertise_handlers = { .on_enter = advertise_on_enter };
 const M1SceneHandlers bt_scene_config_handlers    = { .on_enter = config_on_enter    };
 
@@ -58,10 +60,11 @@ const M1SceneHandlers bt_scene_config_handlers    = { .on_enter = config_on_ente
 /* Top-level menu                                                           */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  14
+#define MENU_ITEM_COUNT  15
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "BLE Scan",
+    "Signal Finder",
     "BLE Advertise",
     "BLE Config",
     "Sniffers",
@@ -79,6 +82,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     BtSceneScan,
+    BtSceneSignalFinder,
     BtSceneAdvertise,
     BtSceneConfig,
     BtSceneSnifferMenu,
