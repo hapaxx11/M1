@@ -3643,3 +3643,19 @@ if(TARGET sanitizers)
     target_link_libraries(test_esp_stub_rodata PRIVATE sanitizers)
 endif()
 add_test(NAME esp_stub_rodata COMMAND test_esp_stub_rodata)
+
+# ------------------------------------------------------------------
+# Module under test: POCSAG receiver stream decoder and message history
+# ------------------------------------------------------------------
+add_executable(test_pocsag_receiver
+    test_pocsag_receiver.c
+    ${M1_ROOT}/Sub_Ghz/pocsag_receiver.c
+)
+target_include_directories(test_pocsag_receiver PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_pocsag_receiver PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_pocsag_receiver PRIVATE sanitizers)
+endif()
+add_test(NAME pocsag_receiver COMMAND test_pocsag_receiver)

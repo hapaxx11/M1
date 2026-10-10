@@ -389,6 +389,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_weather_scan.c
     ../../Sub_Ghz/subghz_weather_parse.c
     ../../Sub_Ghz/subghz_weather_history.c
+    ../../Sub_Ghz/pocsag_receiver.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
@@ -706,6 +707,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_subghz_scene_smart_signal_id.c
     ../../m1_csrc/m1_subghz_scene_analyzer_menu.c
     ../../m1_csrc/m1_subghz_scene_protocol_filter.c
+    ../../m1_csrc/m1_subghz_scene_pocsag.c
     ../../m1_csrc/m1_sys_init.c
     ../../m1_csrc/m1_diag.c
     ../../m1_csrc/m1_system.c
