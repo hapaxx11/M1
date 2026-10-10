@@ -252,7 +252,8 @@ static void draw(SubGhzApp *app)
     else
     {
         (void)snprintf(frequency, sizeof(frequency), "%s",
-                       subghz_freq_labels[app->freq_idx]);
+                       (subghz_freq_labels != NULL) ?
+                           subghz_freq_labels[app->freq_idx] : "???");
     }
 
     m1_u8g2_firstpage();
@@ -302,7 +303,7 @@ static void draw(SubGhzApp *app)
             }
         }
         subghz_button_bar_draw(NULL,
-                       (state != NULL && state->detail_view) ? NULL : "CFG",
+                               (state != NULL && state->detail_view) ? NULL : "CFG",
                                NULL,
                                (state != NULL && state->detail_view) ? NULL : "OK:INFO",
                                NULL,
