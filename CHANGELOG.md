@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.5] - 2026-10-10
+
+### Changed
+
+- Sub-GHz: accept decrypted headerless Kia Type 11/12 entries and VAG offset hexdumps
+  as ProtoPirate build secrets, while keeping key material out of tracked files.
 ## [0.9.4.4] - 2026-10-09
 
 ### Added
