@@ -11,6 +11,7 @@
 #define POCSAG_PREAMBLE_BITS   24U
 #define POCSAG_FRAME_WORDS     16U
 #define POCSAG_MAX_RUN_BITS    32U
+#define POCSAG_BCH_GENERATOR   0x769U
 
 typedef struct {
     uint16_t period_us;
@@ -120,6 +121,55 @@ static uint8_t reverse_nibble(uint8_t value)
     return (uint8_t)(((value & 0x3U) << 2) | ((value & 0xCU) >> 2));
 }
 
+static uint16_t bch_remainder(uint32_t word)
+{
+    uint32_t value = word >> 1;
+    for (int8_t bit = 30; bit >= 10; --bit)
+    {
+        if ((value & (1UL << bit)) != 0U)
+            value ^= POCSAG_BCH_GENERATOR << (bit - 10);
+    }
+    return (uint16_t)(value & 0x3FFU);
+}
+
+static bool codeword_valid(uint32_t word)
+{
+    uint32_t parity = word;
+    parity ^= parity >> 16;
+    parity ^= parity >> 8;
+    parity ^= parity >> 4;
+    parity ^= parity >> 2;
+    parity ^= parity >> 1;
+    return (bch_remainder(word) == 0U) && ((parity & 1U) == 0U);
+}
+
+static bool correct_codeword(uint32_t *word)
+{
+    if (codeword_valid(*word))
+        return true;
+
+    uint32_t received = *word;
+    for (uint8_t first = 0; first < 32U; ++first)
+    {
+        uint32_t one_bit = received ^ (1UL << first);
+        if (codeword_valid(one_bit))
+        {
+            *word = one_bit;
+            return true;
+        }
+        for (uint8_t second = (uint8_t)(first + 1U); second < 32U; ++second)
+        {
+            uint32_t two_bits = one_bit ^ (1UL << second);
+            if (codeword_valid(two_bits))
+            {
+                *word = two_bits;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static void decode_numeric_word(pocsag_receiver_t *receiver, uint32_t word)
 {
     static const char extra_chars[] = "*U -)(";
@@ -164,6 +214,9 @@ static void process_codeword(pocsag_receiver_t *receiver, uint32_t word)
         return;
     }
 
+    if (!correct_codeword(&word))
+        goto next_codeword;
+
     if (word == POCSAG_IDLE_WORD)
     {
         finish_message(receiver);
@@ -178,7 +231,6 @@ static void process_codeword(pocsag_receiver_t *receiver, uint32_t word)
         receiver->text_length = 0;
         receiver->char_value = 0;
         receiver->char_bit_count = 0;
-        receiver->message.text[0] = '\0';
     }
     else if (receiver->message_active)
     {
@@ -188,6 +240,7 @@ static void process_codeword(pocsag_receiver_t *receiver, uint32_t word)
             decode_alphanumeric_word(receiver, word);
     }
 
+next_codeword:
     receiver->codeword_index++;
     if (receiver->codeword_index >= POCSAG_FRAME_WORDS)
     {
@@ -346,6 +399,20 @@ bool pocsag_receiver_take_message(pocsag_receiver_t *receiver,
     receiver->message_ready = false;
     receiver->message.text[0] = '\0';
     return true;
+}
+
+void pocsag_receiver_app_state_enter(pocsag_receiver_app_state_t *state,
+                                     bool resume_from_child,
+                                     uint32_t custom_frequency_hz,
+                                     uint8_t frequency_index,
+                                     uint8_t modulation_index)
+{
+    if (state == NULL || resume_from_child)
+        return;
+
+    state->saved_custom_frequency_hz = custom_frequency_hz;
+    state->saved_frequency_index = frequency_index;
+    state->saved_modulation_index = modulation_index;
 }
 
 void pocsag_history_reset(pocsag_history_t *history)

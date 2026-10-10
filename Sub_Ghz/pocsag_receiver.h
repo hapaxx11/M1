@@ -69,6 +69,11 @@ bool pocsag_receiver_feed(pocsag_receiver_t *receiver, bool level,
                           uint16_t duration_us);
 bool pocsag_receiver_take_message(pocsag_receiver_t *receiver,
                                   pocsag_message_t *message);
+void pocsag_receiver_app_state_enter(pocsag_receiver_app_state_t *state,
+                                     bool resume_from_child,
+                                     uint32_t custom_frequency_hz,
+                                     uint8_t frequency_index,
+                                     uint8_t modulation_index);
 
 void pocsag_history_reset(pocsag_history_t *history);
 bool pocsag_history_add(pocsag_history_t *history,

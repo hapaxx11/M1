@@ -12,6 +12,7 @@
 #include "m1_subghz_button_bar.h"
 #include "m1_subghz_scene.h"
 #include "subghz_freq_presets.h"
+#include "m1_settings.h"
 
 extern const char *subghz_freq_labels[];
 extern const char *subghz_mod_labels[];
@@ -72,8 +73,8 @@ static void start_rx(SubGhzApp *app)
 
 static void scene_on_enter(SubGhzApp *app)
 {
-    bool first_entry = (app->pocsag_state == NULL);
-    if (first_entry)
+    bool resume_from_child = app->resume_from_child;
+    if (app->pocsag_state == NULL)
     {
         app->pocsag_state = malloc(sizeof(*app->pocsag_state));
         if (app->pocsag_state == NULL)
@@ -82,12 +83,14 @@ static void scene_on_enter(SubGhzApp *app)
             return;
         }
         memset(app->pocsag_state, 0, sizeof(*app->pocsag_state));
-        app->pocsag_state->saved_frequency_index = app->freq_idx;
-        app->pocsag_state->saved_modulation_index = app->mod_idx;
-        app->pocsag_state->saved_custom_frequency_hz =
-            subghz_get_user_custom_freq_ext();
         pocsag_history_reset(&app->pocsag_state->history);
+    }
 
+    pocsag_receiver_app_state_enter(app->pocsag_state, resume_from_child,
+                                    subghz_get_user_custom_freq_ext(),
+                                    app->freq_idx, app->mod_idx);
+    if (!resume_from_child)
+    {
         subghz_set_user_custom_freq_ext(POCSAG_DEFAULT_FREQUENCY_HZ);
         app->freq_idx = SUBGHZ_FREQ_PRESET_CUSTOM;
     }
@@ -204,7 +207,10 @@ static void scene_on_exit(SubGhzApp *app)
         subghz_set_user_custom_freq_ext(state->saved_custom_frequency_hz);
         app->freq_idx = state->saved_frequency_index;
         app->mod_idx = state->saved_modulation_index;
+        subghz_set_freq_idx_ext(app->freq_idx);
+        subghz_set_mod_idx_ext(app->mod_idx);
         subghz_apply_config_ext(app->freq_idx, app->mod_idx);
+        settings_save_to_sd();
     }
 }
 
