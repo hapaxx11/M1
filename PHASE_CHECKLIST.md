@@ -13,10 +13,10 @@
 
 ### Phase 2 — Bluetooth app integration
 - **Description**: Add device selection, repeated tracking scans, menu access, changelog fragment, and run host tests plus firmware build.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Integrate Bluetooth signal finder`
 
 ### Phase 3 — Final review and checklist cleanup
 - **Description**: Review changes, remove the temporary phase checklist, and verify the final worktree.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
