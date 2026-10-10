@@ -13,10 +13,10 @@
 
 ### Phase 2 — Monitors and detector scenes
 - **Description**: Implement raw-ad AirTag/Meta scans and name-based detector results; gate scan scenes on BLE capability.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Implement BLE monitors and detectors`
 
 ### Phase 3 — Validation and cleanup
 - **Description**: Add changelog fragment, run host tests and firmware build, inspect RAM budget, review diff, and remove this checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_

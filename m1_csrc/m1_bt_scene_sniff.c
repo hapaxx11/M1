@@ -43,10 +43,7 @@
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated blocking delegate — see m1_bt_scene_badbt.c for the
- * canonical documentation of this pattern.  Only sniffers that actually
- * touch the ESP32 (via CMD_BLE_SCAN_START/NEXT_RAW, ESP32_FEATURE_BLE_SCAN)
- * are gated here — monitor_airtag / sniff_flock below are placeholder
- * ("not yet implemented") stubs with no ESP32 dependency. */
+ * canonical documentation of this pattern. */
 #define DELEGATE_FEATURE(name, fn, fid) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
@@ -63,8 +60,8 @@ DELEGATE_FEATURE(sniff_analyzer, ble_sniff_analyzer, ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(sniff_generic,  ble_sniff_generic,  ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(sniff_flipper,  ble_sniff_flipper,  ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(sniff_airtag,   ble_sniff_airtag,   ESP32_FEATURE_BLE_SCAN)
-DELEGATE(monitor_airtag,  ble_monitor_airtag)
-DELEGATE(sniff_flock,     ble_sniff_flock)
+DELEGATE_FEATURE(monitor_airtag, ble_monitor_airtag, ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(sniff_flock,    ble_sniff_flock,    ESP32_FEATURE_BLE_SCAN)
 
 const M1SceneHandlers bt_scene_sniff_analyzer_handlers  = { .on_enter = sniff_analyzer_on_enter  };
 const M1SceneHandlers bt_scene_sniff_generic_handlers   = { .on_enter = sniff_generic_on_enter   };

@@ -32,6 +32,7 @@
 #include "m1_esp32_rpc.h"
 #include "m1_esp32_rpc_features.h"
 #include "ble_signal_finder.h"
+#include "ble_detector.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -124,6 +125,7 @@ void ble_gatt_discovery(void);
 
 static void ble_list_free(void);
 static uint16_t ble_list_print(bool up_dir);
+static bool ble_signal_finder_wait_back(TickType_t ticks);
 
 /* AT command transport — provided by esp_app_main.c (RTOS SPI-AT task) */
 extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
@@ -1324,6 +1326,7 @@ typedef enum {
     BLE_RAW_ANALYZER = 0,
     BLE_RAW_AIRTAG,
     BLE_RAW_FLIPPER,
+    BLE_RAW_META,
 } ble_raw_mode_t;
 
 static bool ble_adv_next_field(const uint8_t *adv, uint8_t adv_len, uint8_t *idx,
@@ -1419,59 +1422,123 @@ static bool ble_adv_get_name(const uint8_t *adv, uint8_t adv_len, char *name, ui
     return false;
 }
 
-static bool ble_adv_is_airtag_like(const uint8_t *adv, uint8_t adv_len)
-{
-    uint8_t idx = 0;
-    uint8_t type;
-    const uint8_t *data;
-    uint8_t data_len;
-
-    while (ble_adv_next_field(adv, adv_len, &idx, &type, &data, &data_len))
-    {
-        if (type == 0xFF && data_len >= 3 &&
-            data[0] == 0x4C && data[1] == 0x00 && data[2] == 0x12)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
+typedef struct {
+    uint16_t total;
+    uint16_t matches;
+    uint16_t apple_count;
+    uint16_t flipper_count;
+    uint16_t named_count;
+    char first_addr[18];
+    char first_name[20];
+    int8_t first_rssi;
+} ble_raw_scan_result_t;
 
 static void ble_wait_back(void)
 {
     S_M1_Buttons_Status btn;
     S_M1_Main_Q_t q_item;
-    BaseType_t ret;
 
-    while (1)
-    {
-        ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
-        if (ret == pdTRUE && q_item.q_evt_type == Q_EVENT_KEYPAD)
-        {
-            xQueueReceive(button_events_q_hdl, &btn, 0);
-            if (btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-            {
-                xQueueReset(main_q_hdl);
-                break;
-            }
+    while (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) == pdTRUE) {
+        if (q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+        if (xQueueReceive(button_events_q_hdl, &btn, 0) == pdTRUE &&
+            btn.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
+            xQueueReset(main_q_hdl);
+            break;
         }
     }
 }
 
-static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
+static bool ble_raw_scan_collect(ble_raw_mode_t mode, ble_raw_scan_result_t *scan)
 {
     m1_resp_t resp;
-    int ret;
     uint16_t expected;
-    uint16_t total = 0;
-    uint16_t matches = 0;
-    uint16_t apple_count = 0;
-    uint16_t flipper_count = 0;
-    uint16_t named_count = 0;
-    char first_addr[18] = "";
-    char first_name[20] = "";
-    int8_t first_rssi = 0;
+    int ret;
+    char name[30];
+
+    if (!scan) return false;
+    memset(scan, 0, sizeof(*scan));
+    ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
+    if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2u)
+        return false;
+
+    expected = (uint16_t)resp.payload[0] |
+               ((uint16_t)resp.payload[1] << 8u);
+    if (expected > BLE_DEV_MAX) expected = BLE_DEV_MAX;
+
+    for (uint16_t i = 0u; i < expected; i++) {
+        ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT_RAW, &resp,
+                                  BLE_NEXT_TIMEOUT_MS);
+        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9u)
+            break;
+
+        uint8_t adv_len = resp.payload[8];
+        if (adv_len > resp.payload_len - 9u)
+            adv_len = (uint8_t)(resp.payload_len - 9u);
+        const uint8_t *adv = &resp.payload[9];
+        bool has_name = ble_adv_get_name(adv, adv_len, name, sizeof(name));
+        bool is_airtag = ble_detector_advertisement_matches(
+            adv, adv_len, BLE_DETECTOR_AIRTAG);
+        bool is_meta = ble_detector_advertisement_matches(
+            adv, adv_len, BLE_DETECTOR_RAY_BAN_META_ADV);
+        bool is_flipper = ble_adv_name_contains(adv, adv_len, "flipper");
+        bool is_match = mode == BLE_RAW_ANALYZER ||
+                        (mode == BLE_RAW_AIRTAG && is_airtag) ||
+                        (mode == BLE_RAW_FLIPPER && is_flipper) ||
+                        (mode == BLE_RAW_META && is_meta);
+
+        scan->total++;
+        if (has_name) scan->named_count++;
+        if (is_airtag) scan->apple_count++;
+        if (is_flipper) scan->flipper_count++;
+        if (!is_match) continue;
+
+        scan->matches++;
+        if (scan->first_addr[0] == '\0') {
+            snprintf(scan->first_addr, sizeof(scan->first_addr),
+                     "%02X:%02X:%02X:%02X:%02X:%02X",
+                     resp.payload[2], resp.payload[3], resp.payload[4],
+                     resp.payload[5], resp.payload[6], resp.payload[7]);
+            scan->first_rssi = (int8_t)resp.payload[0];
+            if (has_name) {
+                strncpy(scan->first_name, name, sizeof(scan->first_name) - 1u);
+                scan->first_name[sizeof(scan->first_name) - 1u] = '\0';
+            }
+        }
+    }
+    return true;
+}
+
+static void ble_raw_detection_draw(const char *title,
+                                   const char *kind,
+                                   const ble_raw_scan_result_t *scan)
+{
+    char line[26];
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    snprintf(line, sizeof(line), "Candidates:%u",
+             (unsigned)scan->matches);
+    u8g2_DrawStr(&m1_u8g2, 2, 23, line);
+    u8g2_DrawStr(&m1_u8g2, 2, 31, kind);
+    if (scan->matches > 0u) {
+        u8g2_DrawStr(&m1_u8g2, 2, 40, scan->first_addr);
+        snprintf(line, sizeof(line), "RSSI:%d dBm", scan->first_rssi);
+        u8g2_DrawStr(&m1_u8g2, 2, 50, line);
+        if (scan->first_name[0] != '\0')
+            u8g2_DrawStr(&m1_u8g2, 2, 58, scan->first_name);
+    } else {
+        u8g2_DrawStr(&m1_u8g2, 2, 40, "No matching signature");
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 63, "Heuristic only - BACK");
+    m1_u8g2_nextpage();
+}
+
+static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
+{
+    ble_raw_scan_result_t scan;
     char ln[26];
 
     ble_ensure_esp32_ready();
@@ -1484,90 +1551,149 @@ static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
         M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
     m1_u8g2_nextpage();
 
-    ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
-    if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2)
-    {
+    if (!ble_raw_scan_collect(mode, &scan)) {
         ble_show_pending(title, "Scan failed", "Check ESP32 FW");
         return;
     }
 
-    expected = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
-    if (expected > BLE_DEV_MAX) expected = BLE_DEV_MAX;
-
-    for (uint16_t i = 0; i < expected; i++)
-    {
-        ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT_RAW, &resp, BLE_NEXT_TIMEOUT_MS);
-        if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9) break;
-
-        uint8_t adv_len = resp.payload[8];
-        if (adv_len > resp.payload_len - 9) adv_len = resp.payload_len - 9;
-
-        const uint8_t *adv = &resp.payload[9];
-        bool has_name = ble_adv_get_name(adv, adv_len, ln, sizeof(ln));
-        bool is_airtag = ble_adv_is_airtag_like(adv, adv_len);
-        bool is_flipper = ble_adv_name_contains(adv, adv_len, "flipper");
-        bool is_match = (mode == BLE_RAW_ANALYZER) ||
-            (mode == BLE_RAW_AIRTAG && is_airtag) ||
-            (mode == BLE_RAW_FLIPPER && is_flipper);
-
-        total++;
-        if (has_name) named_count++;
-        if (is_airtag) apple_count++;
-        if (is_flipper) flipper_count++;
-
-        if (is_match)
-        {
-            matches++;
-            if (first_addr[0] == '\0')
-            {
-                snprintf(first_addr, sizeof(first_addr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                    resp.payload[2], resp.payload[3], resp.payload[4],
-                    resp.payload[5], resp.payload[6], resp.payload[7]);
-                first_rssi = (int8_t)resp.payload[0];
-                if (has_name)
-                {
-                    strncpy(first_name, ln, sizeof(first_name) - 1);
-                    first_name[sizeof(first_name) - 1] = '\0';
-                }
-            }
-        }
+    if (mode != BLE_RAW_ANALYZER) {
+        ble_raw_detection_draw(
+            title,
+            mode == BLE_RAW_AIRTAG ? "AirTag-like beacon" :
+            mode == BLE_RAW_META ? "Ray-Ban Meta signature" : "Flipper name",
+            &scan);
+        ble_wait_back();
+        return;
     }
 
     m1_u8g2_firstpage();
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 2, 10, title);
     u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
-
     u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
     uint8_t y = 22;
-    snprintf(ln, sizeof(ln), "Total:%d Match:%d", total, matches);
+    snprintf(ln, sizeof(ln), "Total:%u Match:%u",
+             (unsigned)scan.total, (unsigned)scan.matches);
     u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
 
-    if (mode == BLE_RAW_ANALYZER)
-    {
-        snprintf(ln, sizeof(ln), "Name:%d Apple:%d", named_count, apple_count);
+    if (mode == BLE_RAW_ANALYZER) {
+        snprintf(ln, sizeof(ln), "Name:%u Apple:%u",
+                 (unsigned)scan.named_count, (unsigned)scan.apple_count);
         u8g2_DrawStr(&m1_u8g2, 2, y, ln); y += 9;
-        snprintf(ln, sizeof(ln), "Flipper:%d", flipper_count);
+        snprintf(ln, sizeof(ln), "Flipper:%u", (unsigned)scan.flipper_count);
         u8g2_DrawStr(&m1_u8g2, 2, y, ln);
     }
-    else if (matches > 0)
-    {
-        u8g2_DrawStr(&m1_u8g2, 2, y, first_addr); y += 9;
-        if (first_name[0]) u8g2_DrawStr(&m1_u8g2, 2, y, first_name);
-        else
-        {
-            snprintf(ln, sizeof(ln), "RSSI:%ddBm", first_rssi);
-            u8g2_DrawStr(&m1_u8g2, 2, y, ln);
-        }
-    }
-    else
-    {
-        u8g2_DrawStr(&m1_u8g2, 2, y, "No matches found");
-    }
+    m1_u8g2_nextpage();
+    ble_wait_back();
+}
 
+static void ble_name_detector_draw(const char *title, const char *confidence)
+{
+    char line[28];
+    const ble_dev_t *device = &ble_list[ble_view_idx];
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, title);
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    snprintf(line, sizeof(line), "Possible matches:%u",
+             (unsigned)ble_count);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+    u8g2_DrawStr(&m1_u8g2, 2, 32, device->name[0] ? device->name : "(no name)");
+    u8g2_DrawStr(&m1_u8g2, 2, 42, device->addr_str);
+    snprintf(line, sizeof(line), "RSSI:%d dBm", device->rssi);
+    u8g2_DrawStr(&m1_u8g2, 2, 51, line);
+    u8g2_DrawStr(&m1_u8g2, 2, 60, confidence);
+    m1_u8g2_nextpage();
+}
+
+static void ble_name_detector_run(const char *title,
+                                  ble_detector_name_kind_t kind,
+                                  const char *confidence)
+{
+    S_M1_Buttons_Status button_status;
+    S_M1_Main_Q_t q_item;
+
+    ble_ensure_esp32_ready();
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 6, 15, title);
+    u8g2_DrawStr(&m1_u8g2, 6, 30, "Scanning BLE names...");
     m1_u8g2_nextpage();
 
-    ble_wait_back();
+    if (ble_do_scan() == 0u) {
+        ble_list_free();
+        ble_show_pending(title, "No BLE devices found", NULL);
+        return;
+    }
+
+    uint16_t found = 0u;
+    for (uint16_t i = 0u; i < ble_count; i++) {
+        if (!ble_detector_name_matches(ble_list[i].name, kind)) continue;
+        if (found != i) ble_list[found] = ble_list[i];
+        found++;
+    }
+    ble_count = found;
+    if (ble_count == 0u) {
+        ble_list_free();
+        ble_show_pending(title, "No candidates found", "Name match only");
+        return;
+    }
+
+    ble_view_idx = 0u;
+    ble_name_detector_draw(title, confidence);
+    while (1) {
+        if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) != pdTRUE ||
+            q_item.q_evt_type != Q_EVENT_KEYPAD ||
+            xQueueReceive(button_events_q_hdl, &button_status, 0) != pdTRUE)
+            continue;
+
+        if (button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK) {
+            ble_list_free();
+            xQueueReset(main_q_hdl);
+            return;
+        }
+        if (button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK) {
+            ble_view_idx = (ble_view_idx == 0u) ? ble_count - 1u :
+                           ble_view_idx - 1u;
+            ble_name_detector_draw(title, confidence);
+        } else if (button_status.event[BUTTON_DOWN_KP_ID] ==
+                   BUTTON_EVENT_CLICK) {
+            ble_view_idx = (ble_view_idx + 1u) % ble_count;
+            ble_name_detector_draw(title, confidence);
+        }
+    }
+}
+
+static void ble_airtag_monitor_draw(const ble_raw_scan_result_t *scan,
+                                    uint32_t seen,
+                                    bool scan_ok)
+{
+    char line[28];
+
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 10, "AirTag Monitor");
+    u8g2_DrawHLine(&m1_u8g2, 0, 12, M1_LCD_DISPLAY_WIDTH);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    snprintf(line, sizeof(line), "Possible ads seen:%lu",
+             (unsigned long)seen);
+    u8g2_DrawStr(&m1_u8g2, 2, 22, line);
+    if (!scan_ok) {
+        u8g2_DrawStr(&m1_u8g2, 2, 34, "Scan failed; retrying");
+    } else if (scan->matches > 0u) {
+        snprintf(line, sizeof(line), "This scan:%u",
+                 (unsigned)scan->matches);
+        u8g2_DrawStr(&m1_u8g2, 2, 33, line);
+        u8g2_DrawStr(&m1_u8g2, 2, 43, scan->first_addr);
+        snprintf(line, sizeof(line), "RSSI:%d dBm", scan->first_rssi);
+        u8g2_DrawStr(&m1_u8g2, 2, 53, line);
+    } else {
+        u8g2_DrawStr(&m1_u8g2, 2, 38, "No matching ad this scan");
+    }
+    u8g2_DrawStr(&m1_u8g2, 2, 62, "Apple signature heuristic");
+    m1_u8g2_nextpage();
 }
 
 
@@ -2586,7 +2712,26 @@ void ble_sniff_airtag(void)
 
 void ble_monitor_airtag(void)
 {
-    ble_show_pending("AIRTAG MONITOR", "Continuous scan mode", "ESP32 cmd next");
+    if (m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI) {
+        ble_show_pending("AirTag Monitor", "Raw ads unavailable", "Not RPC scan data");
+        return;
+    }
+
+    ble_ensure_esp32_ready();
+    uint32_t seen = 0u;
+    while (1) {
+        ble_raw_scan_result_t scan;
+        bool scan_ok = ble_raw_scan_collect(BLE_RAW_AIRTAG, &scan);
+        if (scan_ok) {
+            if (UINT32_MAX - seen < scan.matches)
+                seen = UINT32_MAX;
+            else
+                seen += scan.matches;
+        }
+        ble_airtag_monitor_draw(&scan, seen, scan_ok);
+        if (ble_signal_finder_wait_back(pdMS_TO_TICKS(100)))
+            break;
+    }
 }
 
 void ble_wardrive(void)
@@ -2601,17 +2746,23 @@ void ble_wardrive_continuous(void)
 
 void ble_detect_skimmers(void)
 {
-    ble_show_pending("SKIMMER DETECT", "Needs adv pattern DB", "ESP32 cmd next");
+    ble_name_detector_run("Skimmer Candidates",
+                          BLE_DETECTOR_SKIMMER_MODULE,
+                          "Name-only; not proof");
 }
 
 void ble_detect_flock(void)
 {
-    ble_show_pending("FLOCK DETECT", "Needs signature set", "ESP32 cmd next");
+    ble_name_detector_run("Flock Candidates",
+                          BLE_DETECTOR_FLOCK,
+                          "Name-only; unverified");
 }
 
 void ble_sniff_flock(void)
 {
-    ble_show_pending("FLOCK SNIFF", "Needs signature set", "ESP32 cmd next");
+    ble_name_detector_run("Flock BLE Sniff",
+                          BLE_DETECTOR_FLOCK,
+                          "Name-only; unverified");
 }
 
 void ble_wardrive_flock(void)
@@ -2621,7 +2772,27 @@ void ble_wardrive_flock(void)
 
 void ble_detect_meta(void)
 {
-    ble_show_pending("META DETECT", "Needs mfg data match", "ESP32 cmd next");
+    if (m1_esp32_active_transport() == ESP32_TRANSPORT_BINARY_SPI) {
+        ble_raw_scan_result_t scan;
+        ble_ensure_esp32_ready();
+        m1_u8g2_firstpage();
+        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+        u8g2_DrawStr(&m1_u8g2, 6, 15, "Meta Device Scan");
+        u8g2_DrawStr(&m1_u8g2, 6, 30, "Scanning raw adv...");
+        m1_u8g2_nextpage();
+        if (!ble_raw_scan_collect(BLE_RAW_META, &scan)) {
+            ble_show_pending("Meta Device Scan", "Scan failed", "Check ESP32 FW");
+            return;
+        }
+        ble_raw_detection_draw("Meta Device Scan",
+                               "Ray-Ban Meta signature", &scan);
+        ble_wait_back();
+        return;
+    }
+
+    ble_name_detector_run("Ray-Ban Meta Names",
+                          BLE_DETECTOR_RAY_BAN_META,
+                          "Name-only; unverified");
 }
 
 void ble_spoof_airtag(void)

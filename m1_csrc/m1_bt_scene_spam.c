@@ -33,6 +33,8 @@
 #include "m1_submenu.h"
 #include "m1_bt.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_caps.h"
+#include "esp32_feature_map.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
 
@@ -43,6 +45,14 @@
 #define DELEGATE(name, fn) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
+
+#define DELEGATE_FEATURE(name, fn, fid) \
+    static void name##_on_enter(M1SceneApp *app) { \
+        (void)app; \
+        m1_esp32_ensure_init(); \
+        if (m1_esp32_require_cap(esp32_feature_required_caps(fid), \
+                                  esp32_feature_label(fid))) { fn(); } \
+        m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /*==========================================================================*/
 /* Spam delegates                                                           */
@@ -70,9 +80,9 @@ const M1SceneHandlers bt_scene_spoof_airtag_handlers    = { .on_enter = spoof_ai
 /* Detect delegates                                                         */
 /*==========================================================================*/
 
-DELEGATE(detect_skimmers, ble_detect_skimmers)
-DELEGATE(detect_flock,    ble_detect_flock)
-DELEGATE(detect_meta,     ble_detect_meta)
+DELEGATE_FEATURE(detect_skimmers, ble_detect_skimmers, ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(detect_flock,    ble_detect_flock,    ESP32_FEATURE_BLE_SCAN)
+DELEGATE_FEATURE(detect_meta,     ble_detect_meta,     ESP32_FEATURE_BLE_SCAN)
 
 const M1SceneHandlers bt_scene_detect_skimmers_handlers = { .on_enter = detect_skimmers_on_enter };
 const M1SceneHandlers bt_scene_detect_flock_handlers    = { .on_enter = detect_flock_on_enter    };
