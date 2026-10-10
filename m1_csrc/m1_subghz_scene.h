@@ -34,6 +34,7 @@
 #include "subghz_scene_state.h"
 #include "subghz_scene_polish.h"
 #include "pocsag_receiver.h"
+#include "subghz_weather_app.h"
 
 /*============================================================================*/
 /* Config filter mode — controls which frequencies/modulations are shown      */
@@ -328,6 +329,7 @@ typedef struct {
     pocsag_receiver_app_state_t *pocsag_state;
     uint16_t pocsag_pulse_duration_us;
     bool     pocsag_pulse_level;
+    subghz_weather_app_state_t *weather_state;
 
     /* --- Create-from-scratch KeeLoq field state --- */
     /** User-entered KeeLoq serial.  Width depends on the picked protocol
@@ -537,6 +539,7 @@ void subghz_scene_set_tick_period(SubGhzApp *app, uint32_t period_ms);
  */
 void subghz_scene_app_run(void);
 void subghz_pocsag_scene_deinit(SubGhzApp *app);
+void subghz_weather_scene_deinit(SubGhzApp *app);
 
 /*============================================================================*/
 /* Scene handler tables (defined in each scene_*.c file)                      */

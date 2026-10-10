@@ -4528,7 +4528,7 @@ void sub_ghz_spectrum_analyzer(void)
  * the pulse decoder — the previous weather monitor skipped this entirely and
  * therefore never decoded anything.
  */
-static void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod)
+void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod, uint32_t frequency_hz)
 {
     /* Tear down any capture already running (safe no-op on first call). */
     sub_ghz_rx_pause();
@@ -4544,17 +4544,20 @@ static void sub_ghz_weather_rx_arm(SubGhzWeatherScanMod mod)
          * (sub_ghz_set_opmode handles the load + retune + frontend select). */
         subghz_scan_config.band       = SUB_GHZ_BAND_CUSTOM;
         subghz_scan_config.modulation = MODULATION_FSK;
-        subghz_custom_freq_hz         = WX_SCAN_FREQ_HZ;
+        subghz_custom_freq_hz         = frequency_hz;
         sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_CUSTOM, 0, 0);
     }
     else
     {
-        /* OOK / AM650 on the native 433.92 MHz config. */
-        subghz_scan_config.band       = SUB_GHZ_BAND_433_92;
+        S_M1_SubGHz_Band band = subghz_freq_hz_to_band(frequency_hz);
+        if (band == SUB_GHZ_BAND_CUSTOM)
+            band = SUB_GHZ_BAND_CUSTOM;
+        subghz_scan_config.band       = band;
         subghz_scan_config.modulation = MODULATION_OOK;
-        subghz_custom_freq_hz         = WX_SCAN_FREQ_HZ;
-        sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, SUB_GHZ_BAND_433_92, 0, 0);
-        SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
+        subghz_custom_freq_hz         = frequency_hz;
+        sub_ghz_set_opmode(SUB_GHZ_OPMODE_RX, band, 0, 0);
+        if (band == SUB_GHZ_BAND_433_92)
+            SI446x_Change_Modem_OOK_PDTC(SUB_GHZ_433_92_NEW_PDTC);
     }
 
     sub_ghz_rx_init();
@@ -4598,8 +4601,8 @@ static void sub_ghz_weather_row_text(const SubGhzWeatherSensor *s,
 }
 
 /* Flipper-style detail view for one captured sensor. */
-static void sub_ghz_weather_draw_detail(const SubGhzWeatherSensor *s,
-                                        uint32_t now_ms)
+void sub_ghz_weather_draw_detail(const SubGhzWeatherSensor *s,
+                                 uint32_t now_ms)
 {
     char l[5][32];
     int16_t temp_f;
@@ -4666,9 +4669,9 @@ static void sub_ghz_weather_draw_detail(const SubGhzWeatherSensor *s,
 }
 
 /* Sensor list (Flipper "Weather Station" main view). */
-static void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
-                                      uint8_t sel, uint8_t top,
-                                      SubGhzWeatherScanMod mod, uint32_t now_ms)
+void sub_ghz_weather_draw_list(const SubGhzWeatherHistory *hist,
+                               uint8_t sel, uint8_t top,
+                               SubGhzWeatherScanMod mod, uint32_t now_ms)
 {
     char title[32];
     char row[32];
@@ -4749,7 +4752,7 @@ void sub_ghz_weather_station(void)
      * full sensor transmit interval. */
     subghz_weather_scan_init(&scan, WX_SCAN_DWELL_MS, WX_SCAN_MOD_OOK,
                              true, xTaskGetTickCount() * portTICK_PERIOD_MS);
-    sub_ghz_weather_rx_arm(scan.mod);
+    sub_ghz_weather_rx_arm(scan.mod, WX_SCAN_FREQ_HZ);
     last_age_tick = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
     while (running)
@@ -4903,7 +4906,7 @@ void sub_ghz_weather_station(void)
         /* --- Momentum scan: switch modulation when the dwell elapses. --- */
         if (subghz_weather_scan_tick(&scan, now_ms))
         {
-            sub_ghz_weather_rx_arm(scan.mod);
+            sub_ghz_weather_rx_arm(scan.mod, WX_SCAN_FREQ_HZ);
             need_redraw = true;
         }
 

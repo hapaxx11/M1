@@ -563,6 +563,7 @@ void subghz_scene_app_run(void)
 
     /* Cleanup */
     subghz_pocsag_scene_deinit(&app);
+    subghz_weather_scene_deinit(&app);
     menu_sub_ghz_exit();
     xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);
