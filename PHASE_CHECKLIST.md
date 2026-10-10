@@ -6,17 +6,12 @@
 
 ## Phases
 
-### Phase 1 — Keystore format support and tests
-- **Description**: Extend the strict parser for the supplied headerless formats and test valid and invalid inputs using synthetic values.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+### Phase 1 — Parser, tests, and documentation
+- **Description**: Extend parsers for supplied plaintext formats; add synthetic input/generator coverage and document supported secret formats.
+- **Status**: ✅ Complete
+- **Commit**: `fix: accept decrypted ProtoPirate keystores`
 
-### Phase 2 — Documentation and validation
-- **Description**: Update key-injection documentation and changelog; run Python and host-side suites and review the final diff.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
-
-### Phase 3 — Checklist cleanup
+### Phase 2 — Checklist cleanup
 - **Description**: Remove this temporary checklist and verify it is absent from the final changes.
 - **Status**: 🔲 Not started
 - **Commit**: _(pending)_

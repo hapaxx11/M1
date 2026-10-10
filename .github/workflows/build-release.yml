@@ -276,9 +276,10 @@ jobs:
           fi
 
       # ------------------------------------------------------------------ #
-      # 4a. Embed optional ProtoPirate Kia V6 and VAG keys. Plaintext RAW
-      #     files are validated by the generator; encrypted files are skipped
-      #     until replaced with plaintext. Key data is embedded in firmware.
+      # 4a. Embed optional ProtoPirate Kia V6 and VAG keys. The generator
+      #     validates plaintext Flipper entries / RAW data and decrypted VAG
+      #     hexdumps; encrypted files are skipped until replaced with plaintext.
+      #     Key data is embedded in firmware.
       # ------------------------------------------------------------------ #
       - name: Embed ProtoPirate Kia and VAG keys
         env:

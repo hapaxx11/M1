@@ -30,9 +30,16 @@ skipped; malformed plaintext inputs fail the build rather than silently producin
 partial key data. Accepted plaintext inputs:
 
 - Kia V6: a RAW file with exactly 16 payload bytes (Type 11 key then Type 12 key,
-  each big-endian), or a standard plaintext Flipper keystore with one entry of
-  each type.
-- VAG: a RAW file with exactly 48 payload bytes (three packed 16-byte AUT64 records).
+  each big-endian), or plaintext Type 11/12 entries in a standard Flipper keystore
+  with or without its file header.
+- VAG: 48 bytes of packed AUT64 records, either as contiguous hex or a sequential
+  offset hexdump. A 64-byte dump is accepted when its final 16 padding bytes are
+  zero; only the first 48 bytes are embedded.
+
+The Actions secrets may contain just the decrypted payload lines; the `#` comments
+from a local decryption report are not required. Keep real key material in Actions
+secrets only, not in source, tests, or documentation. Host-side tests use synthetic
+values and exercise parsing and generated-source availability flags.
 
 The Kia V6 decoder uses the injected keys to decrypt frames and validate their
 CRC. The VAG decoder uses the AUT64 records to recover serial/counter fields for
