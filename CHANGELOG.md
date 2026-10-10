@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.6] - 2026-10-10
+
+### Added
+
+- **Sub-GHz: POCSAG Pager app** — Add a live receiver with 512/1200/2400 baud decoding, decoded message history and details, and a DAPNET default frequency.
 ## [0.9.4.5] - 2026-10-10
 
 ### Changed
