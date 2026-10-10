@@ -39,7 +39,7 @@ static uint32_t make_alphanumeric_word(const char *text, uint8_t offset)
     {
         uint8_t absolute_bit = (uint8_t)(offset + i);
         uint8_t character = (uint8_t)(absolute_bit / 7U);
-        uint8_t bit = (uint8_t)(6U - (absolute_bit % 7U));
+        uint8_t bit = (uint8_t)(absolute_bit % 7U);
         if (character < text_length && ((text[character] >> bit) & 1U))
             payload |= 1UL << (19U - i);
     }
@@ -63,7 +63,8 @@ static bool feed_stream(pocsag_receiver_t *receiver, const uint8_t *bits,
             run++;
             continue;
         }
-        if (pocsag_receiver_feed(receiver, (uint16_t)(period * run)))
+        if (pocsag_receiver_feed(receiver, bits[i - 1U] == 0U,
+                                 (uint16_t)(period * run)))
             return true;
         run = 1U;
     }
@@ -80,9 +81,9 @@ static bool feed_numeric_frame(pocsag_receiver_t *receiver, uint32_t address,
     append_word(bits, &count, TEST_SYNC_WORD);
 
     uint32_t words[16] = {
+        address, message, TEST_IDLE_WORD, TEST_IDLE_WORD,
         TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
         TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
-        TEST_IDLE_WORD, TEST_IDLE_WORD, address, message,
         TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD
     };
 
@@ -102,11 +103,11 @@ static void test_decodes_numeric_at_all_supported_baud_rates(void)
         pocsag_message_t message;
         pocsag_receiver_reset(&receiver);
         TEST_ASSERT_TRUE(feed_numeric_frame(&receiver,
-                                            make_address_word(0x12345U, 0U),
+                                            make_address_word(0x12340U, 0U),
                                             make_numeric_word("12345"),
                                             periods[i]));
         TEST_ASSERT_TRUE(pocsag_receiver_take_message(&receiver, &message));
-        TEST_ASSERT_EQUAL_UINT32(0x12345U, message.ric);
+        TEST_ASSERT_EQUAL_UINT32(0x12340U, message.ric);
         TEST_ASSERT_EQUAL_UINT16(baud[i], message.baud);
         TEST_ASSERT_EQUAL_UINT8(0U, message.function);
         TEST_ASSERT_EQUAL_STRING("12345", message.text);
@@ -125,19 +126,20 @@ static void test_decodes_alphanumeric_message(void)
         bits[count++] = (uint8_t)((i & 1U) == 0U);
     append_word(bits, &count, TEST_SYNC_WORD);
     uint32_t words[16] = {
-        TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
-        TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
-        TEST_IDLE_WORD, TEST_IDLE_WORD, make_address_word(0x12340U, 3U),
+        make_address_word(0x12340U, 3U),
         make_alphanumeric_word("OK", 0U),
         make_alphanumeric_word("OK", 20U),
-        TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD
+        TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
+        TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
+        TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD, TEST_IDLE_WORD,
+        TEST_IDLE_WORD, TEST_IDLE_WORD
     };
     for (uint8_t i = 0; i < 16U; ++i)
         append_word(bits, &count, words[i]);
     TEST_ASSERT_TRUE(feed_stream(&receiver, bits, count, 833U));
 
     TEST_ASSERT_TRUE(pocsag_receiver_take_message(&receiver, &message));
-    TEST_ASSERT_EQUAL_UINT32(0x12345U, message.ric);
+    TEST_ASSERT_EQUAL_UINT32(0x12340U, message.ric);
     TEST_ASSERT_EQUAL_UINT8(3U, message.function);
     TEST_ASSERT_EQUAL_STRING("OK", message.text);
 }

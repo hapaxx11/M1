@@ -31,7 +31,6 @@ typedef struct {
     uint32_t codeword;
     uint16_t bit_period_us;
     uint16_t baud;
-    uint8_t pulse_level;
     uint8_t bit_count;
     uint8_t alternating_bits;
     uint8_t codeword_index;
@@ -54,8 +53,20 @@ typedef struct {
     uint8_t next;
 } pocsag_history_t;
 
+typedef struct {
+    pocsag_receiver_t receiver;
+    pocsag_history_t history;
+    uint32_t saved_custom_frequency_hz;
+    uint8_t saved_frequency_index;
+    uint8_t saved_modulation_index;
+    uint8_t selected_message;
+    bool detail_view;
+    bool radio_active;
+} pocsag_receiver_app_state_t;
+
 void pocsag_receiver_reset(pocsag_receiver_t *receiver);
-bool pocsag_receiver_feed(pocsag_receiver_t *receiver, uint16_t duration_us);
+bool pocsag_receiver_feed(pocsag_receiver_t *receiver, bool level,
+                          uint16_t duration_us);
 bool pocsag_receiver_take_message(pocsag_receiver_t *receiver,
                                   pocsag_message_t *message);
 

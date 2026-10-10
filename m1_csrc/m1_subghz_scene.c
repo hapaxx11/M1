@@ -86,6 +86,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneSmartSignalId]    = &subghz_scene_smart_signal_id_handlers,
     [SubGhzSceneAnalyzerMenu]     = &subghz_scene_analyzer_menu_handlers,
     [SubGhzSceneProtocolFilter]   = &subghz_scene_protocol_filter_handlers,
+    [SubGhzScenePocsag]           = &subghz_scene_pocsag_handlers,
 };
 
 /*============================================================================*/
@@ -438,7 +439,24 @@ void subghz_scene_app_run(void)
                     evt = translate_button();
                     break;
                 case Q_EVENT_SUBGHZ_RX:
-                    if (subghz_record_mode_flag)
+                    if (subghz_scene_current(&app) == SubGhzScenePocsag)
+                    {
+                        do
+                        {
+                            app.pocsag_pulse_duration_us =
+                                q_item.q_data.ir_rx_data.ir_edge_te;
+                            app.pocsag_pulse_level =
+                                q_item.q_data.ir_rx_data.ir_edge_dir == PULSE_DET_RISING;
+                            subghz_scene_send_event(&app, SubGhzEventRxData);
+
+                            S_M1_Main_Q_t peek;
+                            if (xQueuePeek(main_q_hdl, &peek, 0) != pdTRUE ||
+                                peek.q_evt_type != Q_EVENT_SUBGHZ_RX)
+                                break;
+                            xQueueReceive(main_q_hdl, &q_item, 0);
+                        } while (true);
+                    }
+                    else if (subghz_record_mode_flag)
                     {
                         /* Raw recording mode — pass through to scene
                          * (ring buffer data handled by Read Raw scene) */
@@ -544,6 +562,7 @@ void subghz_scene_app_run(void)
     }
 
     /* Cleanup */
+    subghz_pocsag_scene_deinit(&app);
     menu_sub_ghz_exit();
     xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);

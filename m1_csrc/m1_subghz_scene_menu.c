@@ -15,11 +15,12 @@
  *   4. Playlist
  *   5. Analyzer (Smart ID, Freq/Spectrum Analyzer, RSSI Meter,
  *      Freq Scanner, Proto Pirate)
- *   6. Weather Station
- *   7. Brute Force
- *   8. Add Manually
- *   9. Remote
- *  10. Bind Remote
+ *   6. POCSAG pager
+ *   7. Weather Station
+ *   8. Brute Force
+ *   9. Add Manually
+ *  10. Remote
+ *  11. Bind Remote
  */
 
 #include <stdint.h>
@@ -38,7 +39,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT   10
+#define MENU_ITEM_COUNT   11
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -46,6 +47,7 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Saved",
     "Playlist",
     "Analyzer",
+    "POCSAG",
     "Weather Station",
     "Brute Force",
     "Add Manually",
@@ -59,6 +61,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzSceneSaved,
     SubGhzScenePlaylist,
     SubGhzSceneAnalyzerMenu,
+    SubGhzScenePocsag,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,
     SubGhzSceneSetType,   /* "Add Manually" now uses the scene-native create-from-scratch flow */

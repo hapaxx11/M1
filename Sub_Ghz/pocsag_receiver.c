@@ -32,16 +32,32 @@ static uint16_t duration_diff(uint16_t a, uint16_t b)
 static bool select_rate(uint16_t duration_us, uint16_t *period_us,
                         uint16_t *baud)
 {
+    for (size_t i = 0; i < sizeof(pocsag_rates) / sizeof(pocsag_rates[0]); ++i)
+    {
+        if (duration_diff(duration_us, pocsag_rates[i].period_us) <=
+            pocsag_rates[i].tolerance_us)
+        {
+            *period_us = pocsag_rates[i].period_us;
+            *baud = pocsag_rates[i].baud;
+            return true;
+        }
+    }
+
     uint16_t best_diff = UINT16_MAX;
     const pocsag_rate_t *best = NULL;
 
     for (size_t i = 0; i < sizeof(pocsag_rates) / sizeof(pocsag_rates[0]); ++i)
     {
-        uint16_t diff = duration_diff(duration_us, pocsag_rates[i].period_us);
-        if (diff <= pocsag_rates[i].tolerance_us && diff < best_diff)
+        for (uint8_t run = 2U; run <= 16U; ++run)
         {
-            best_diff = diff;
-            best = &pocsag_rates[i];
+            uint16_t expected = (uint16_t)(pocsag_rates[i].period_us * run);
+            uint16_t diff = duration_diff(duration_us, expected);
+            uint16_t tolerance = (uint16_t)(pocsag_rates[i].tolerance_us * run);
+            if (diff <= tolerance && (uint16_t)(diff / run) < best_diff)
+            {
+                best_diff = (uint16_t)(diff / run);
+                best = &pocsag_rates[i];
+            }
         }
     }
 
@@ -122,8 +138,9 @@ static void decode_alphanumeric_word(pocsag_receiver_t *receiver,
 {
     for (int8_t bit = 19; bit >= 0; --bit)
     {
-        receiver->char_value = (uint8_t)((receiver->char_value << 1) |
-                                         ((word >> (11U + (uint8_t)bit)) & 1U));
+        receiver->char_value >>= 1;
+        if ((word >> (11U + (uint8_t)bit)) & 1U)
+            receiver->char_value |= 0x40U;
         receiver->char_bit_count++;
         if (receiver->char_bit_count == 7U)
         {
@@ -182,6 +199,9 @@ static void process_codeword(pocsag_receiver_t *receiver, uint32_t word)
 
 static void feed_bit(pocsag_receiver_t *receiver, bool bit)
 {
+    if (receiver->message_ready)
+        return;
+
     switch (receiver->state)
     {
         case POCSAG_RX_WAIT_PREAMBLE:
@@ -268,15 +288,15 @@ void pocsag_receiver_reset(pocsag_receiver_t *receiver)
         memset(receiver, 0, sizeof(*receiver));
 }
 
-bool pocsag_receiver_feed(pocsag_receiver_t *receiver, uint16_t duration_us)
+bool pocsag_receiver_feed(pocsag_receiver_t *receiver, bool level,
+                          uint16_t duration_us)
 {
     if (receiver == NULL || duration_us == 0U)
         return false;
     if (receiver->message_ready)
         return true;
 
-    receiver->pulse_level ^= 1U;
-    bool bit = receiver->pulse_level == 0U;
+    bool bit = !level;
 
     if (receiver->bit_period_us == 0U)
     {
@@ -307,7 +327,11 @@ bool pocsag_receiver_feed(pocsag_receiver_t *receiver, uint16_t duration_us)
     }
 
     for (uint16_t i = 0; i < run_bits; ++i)
+    {
         feed_bit(receiver, bit);
+        if (receiver->message_ready)
+            break;
+    }
 
     return receiver->message_ready;
 }
