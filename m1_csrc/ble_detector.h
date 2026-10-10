@@ -102,21 +102,16 @@ static inline bool ble_detector_is_flock_name(const char *name)
 static inline bool ble_detector_name_matches(const char *name,
                                              ble_detector_name_kind_t kind)
 {
-    static const char *const skimmer_module_names[] = {
-        "HMSoft", "BT05", "MLT-BT05", "AT-09", "CC41-A",
-        "JDY-08", "JDY-10",
-    };
-
     if (!name) return false;
     switch (kind) {
     case BLE_DETECTOR_SKIMMER_MODULE:
-        for (size_t i = 0u;
-             i < sizeof(skimmer_module_names) / sizeof(skimmer_module_names[0]);
-             i++) {
-            if (ble_detector_text_equal(name, skimmer_module_names[i]))
-                return true;
-        }
-        return false;
+        return ble_detector_text_equal(name, "HMSoft") ||
+               ble_detector_text_equal(name, "BT05") ||
+               ble_detector_text_equal(name, "MLT-BT05") ||
+               ble_detector_text_equal(name, "AT-09") ||
+               ble_detector_text_equal(name, "CC41-A") ||
+               ble_detector_text_equal(name, "JDY-08") ||
+               ble_detector_text_equal(name, "JDY-10");
     case BLE_DETECTOR_FLOCK:
         return ble_detector_is_flock_name(name);
     case BLE_DETECTOR_RAY_BAN_META:
