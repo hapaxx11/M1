@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 
 
@@ -35,6 +36,18 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
             (0x0123456789ABCDEF, 0xFEDCBA9876543210),
         )
 
+    def test_parse_headerless_kia_entry_list(self):
+        source = (
+            "0123456789ABCDEF:10:KIA\n"
+            "1122334455667788:11:KIAV6A\n"
+            "99AABBCCDDEEFF00:12:KIAV6B\n"
+            "FEDCBA9876543210:13:KIAV5\n"
+        )
+        self.assertEqual(
+            KEYVAULT.parse_kia_keystore(source),
+            (0x1122334455667788, 0x99AABBCCDDEEFF00),
+        )
+
     def test_parse_vag_aut64_records(self):
         payload = bytes(range(KEYVAULT.VAG_AUT64_SIZE))
         source = (
@@ -45,6 +58,30 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
             + "\n"
         )
         self.assertEqual(KEYVAULT.parse_vag_keystore(source), payload)
+
+    def test_parse_vag_offset_hexdump_with_zero_padding(self):
+        payload = bytes(range(KEYVAULT.VAG_AUT64_SIZE)) + bytes(16)
+        source = (
+            f"0000: {' '.join(f'{byte:02X}' for byte in payload[:32])}\n"
+            f"0020: {' '.join(f'{byte:02X}' for byte in payload[32:])}\n"
+        )
+        self.assertEqual(
+            KEYVAULT.parse_vag_keystore(source),
+            payload[:KEYVAULT.VAG_AUT64_SIZE],
+        )
+
+    def test_rejects_invalid_vag_hexdump_offsets_and_padding(self):
+        payload = bytes(range(KEYVAULT.VAG_AUT64_SIZE)) + bytes(16)
+        bad_offset = (
+            f"0000: {' '.join(f'{byte:02X}' for byte in payload[:32])}\n"
+            f"0021: {' '.join(f'{byte:02X}' for byte in payload[32:])}\n"
+        )
+        with self.assertRaises(ValueError):
+            KEYVAULT.parse_vag_keystore(bad_offset)
+
+        nonzero_padding = bytes(range(KEYVAULT.VAG_AUT64_SIZE)) + bytes(15) + b"\x01"
+        with self.assertRaises(ValueError):
+            KEYVAULT.parse_vag_keystore(nonzero_padding.hex())
 
     def test_encrypted_keystores_are_ignored(self):
         source = (
@@ -89,6 +126,37 @@ class ProtoPirateKeyvaultTests(unittest.TestCase):
         self.assertIn("0xFEDCBA9876543210ULL", source)
         self.assertIn("m1_kia_v6_keys_builtin_available = true", source)
         self.assertIn("m1_vag_aut64_keys_builtin_available = true", source)
+
+    def test_cli_generates_source_from_plaintext_secret_formats(self):
+        kia_source = (
+            "1122334455667788:11:KIAV6A\n"
+            "99AABBCCDDEEFF00:12:KIAV6B\n"
+        )
+        vag_payload = bytes(range(KEYVAULT.VAG_AUT64_SIZE)) + bytes(16)
+        vag_source = (
+            f"0000: {' '.join(f'{byte:02X}' for byte in vag_payload[:32])}\n"
+            f"0020: {' '.join(f'{byte:02X}' for byte in vag_payload[32:])}\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            kia_path = Path(directory) / "kia.txt"
+            vag_path = Path(directory) / "vag.txt"
+            output_path = Path(directory) / "builtin.c"
+            kia_path.write_text(kia_source, encoding="utf-8")
+            vag_path.write_text(vag_source, encoding="utf-8")
+
+            result = KEYVAULT.main([
+                "--kia-keystore", str(kia_path),
+                "--vag-keystore", str(vag_path),
+                str(output_path),
+            ])
+
+            self.assertEqual(result, 0)
+            generated = output_path.read_text(encoding="utf-8")
+            self.assertIn("0x1122334455667788ULL", generated)
+            self.assertIn("0x99AABBCCDDEEFF00ULL", generated)
+            self.assertIn("m1_kia_v6_keys_builtin_available = true", generated)
+            self.assertIn("m1_vag_aut64_keys_builtin_available = true", generated)
+            self.assertIn("0x2F", generated)
 
     def test_stub_generation_marks_both_stores_unavailable(self):
         source = KEYVAULT.generate_source()

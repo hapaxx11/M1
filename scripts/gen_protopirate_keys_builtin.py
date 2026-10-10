@@ -43,13 +43,33 @@ def _parse_header(text, expected_filetypes):
     return filetype, lines[encryption_index + 1 :]
 
 
-def _parse_raw_payload(lines, expected_size):
-    payload = "".join(line.strip() for line in lines if line.strip())
-    if not payload or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", payload):
-        raise ValueError("plaintext RAW keystore payload must contain only hex bytes")
-    data = bytes.fromhex(payload)
-    if len(data) != expected_size:
-        raise ValueError(f"expected exactly {expected_size} plaintext key bytes")
+def _parse_raw_payload(lines, expected_sizes):
+    nonempty_lines = [line.strip() for line in lines if line.strip()]
+    if any(":" in line for line in nonempty_lines):
+        data = bytearray()
+        for line in nonempty_lines:
+            match = re.fullmatch(r"([0-9a-fA-F]{4,8}):\s*(.*)", line)
+            if not match:
+                raise ValueError("malformed plaintext RAW keystore hexdump")
+            offset = int(match.group(1), 16)
+            tokens = match.group(2).split()
+            if (
+                offset != len(data)
+                or not tokens
+                or any(not re.fullmatch(r"[0-9a-fA-F]{2}", token) for token in tokens)
+            ):
+                raise ValueError("malformed plaintext RAW keystore hexdump")
+            data.extend(bytes.fromhex("".join(tokens)))
+        data = bytes(data)
+    else:
+        payload = "".join(nonempty_lines)
+        if not payload or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", payload):
+            raise ValueError("plaintext RAW keystore payload must contain only hex bytes")
+        data = bytes.fromhex(payload)
+
+    if len(data) not in expected_sizes:
+        expected = " or ".join(str(size) for size in expected_sizes)
+        raise ValueError(f"expected exactly {expected} plaintext key bytes")
     return data
 
 
@@ -57,14 +77,19 @@ def parse_kia_keystore(text):
     """Return the type-11/type-12 keys, or None for an encrypted RAW keystore.
 
     Accepts either a plaintext RAW file containing the two 8-byte keys in order,
-    or a plaintext standard Flipper keystore containing Type 11 and Type 12.
+    or a plaintext standard Flipper keystore containing Type 11 and Type 12,
+    with or without its Flipper file header.
     """
-    filetype, lines = _parse_header(text, (RAW_FILETYPE, KEYSTORE_FILETYPE))
+    lines = text.splitlines()
+    if lines and lines[0].strip().startswith("Filetype:"):
+        filetype, lines = _parse_header(text, (RAW_FILETYPE, KEYSTORE_FILETYPE))
+    else:
+        filetype = KEYSTORE_FILETYPE
     if lines is None:
         return None
 
     if filetype == RAW_FILETYPE:
-        data = _parse_raw_payload(lines, KIA_RAW_SIZE)
+        data = _parse_raw_payload(lines, (KIA_RAW_SIZE,))
         return tuple(int.from_bytes(data[index : index + 8], "big") for index in (0, 8))
 
     keys = {}
@@ -98,11 +123,16 @@ def parse_kia_keystore(text):
 
 
 def parse_vag_keystore(text):
-    """Return the three packed AUT64 keys, or None for an encrypted RAW keystore."""
-    _, lines = _parse_header(text, (RAW_FILETYPE,))
+    """Return three packed AUT64 keys from plaintext RAW data or an offset dump."""
+    lines = text.splitlines()
+    if lines and lines[0].strip().startswith("Filetype:"):
+        _, lines = _parse_header(text, (RAW_FILETYPE,))
     if lines is None:
         return None
-    return _parse_raw_payload(lines, VAG_AUT64_SIZE)
+    data = _parse_raw_payload(lines, (VAG_AUT64_SIZE, 64))
+    if len(data) == 64 and any(data[VAG_AUT64_SIZE:]):
+        raise ValueError("64-byte VAG keystore must have zero-filled trailing padding")
+    return data[:VAG_AUT64_SIZE]
 
 
 def _format_bytes(data):
