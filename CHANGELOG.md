@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.7] - 2026-10-10
+
+### Added
+
+- **Sub-GHz: Weather Station and TPMS apps** — Add event-driven sensor receivers with frequency configuration, bounded reception history, and packet details; Weather Station automatically alternates OOK and FSK.
+
+### Changed
+
+- **TPMS: Schrader GG4 telemetry** — decode validated sensor frames and show tire pressure in bar and temperature in °C on receiver list and detail screens.
 ## [0.9.4.6] - 2026-10-10
 
 ### Added

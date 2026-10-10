@@ -1,1 +1,0 @@
-**Sub-GHz: Weather Station and TPMS apps** — Add event-driven sensor receivers with frequency configuration, bounded reception history, and packet details; Weather Station automatically alternates OOK and FSK.
