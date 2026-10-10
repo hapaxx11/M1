@@ -18,5 +18,5 @@
 
 ### Phase 3 — Integration and validation
 - **Description**: Register firmware and host-test sources, update menu and user-facing docs/changelog, then run host tests and firmware build/RAM checks.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `integrate and validate sensor apps`
