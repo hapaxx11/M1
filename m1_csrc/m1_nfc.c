@@ -1538,7 +1538,7 @@ static int nfc_utils_kp_handler(void)
 					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 					break;
 
-				case 7: /* Write URL */
+				case 7: /* NDEF Maker */
 					nfc_tool_write_ndef();
 					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 					break;
@@ -3045,8 +3045,8 @@ static void nfc_tool_read_ndef(void)
 /**
  * @brief nfc_tool_write_ndef - Create and write an NDEF record to a Type 2 tag
  *
- * Prompts the user for a URL using the virtual keyboard, then writes it
- * as an NDEF URI record (https:// prefix) to T2T pages starting at page 4.
+ * Prompts for a URI, text, phone number, or Wi-Fi credential and writes the
+ * encoded record to Type 2 Tag pages starting at page 4.
  *
  * @retval None
  */
@@ -3056,12 +3056,17 @@ static void nfc_tool_write_ndef(void)
 	S_M1_Buttons_Status bs;
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
-	static const char *record_types[] = {"URL", "Text", "Phone", "Wi-Fi"};
-	static const char *record_type_names[] = {"URL", "Text", "Phone", "Wi-Fi"};
+	const char *record_types[] = {"URL", "Text", "Phone", "Wi-Fi"};
 	char field[128] = "";
 	char secondary_field[64] = "";
 	char default_url[] = "https://github.com/hapaxx11/M1";
 	char default_field[] = "";
+
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+	}
 
 	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
 	m1_gui_submenu_update(record_types, 4, 0, X_MENU_UPDATE_RESET);
@@ -3138,7 +3143,7 @@ static void nfc_tool_write_ndef(void)
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write NDEF Record");
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, 4, 26, record_type_names[authoring_type]);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, record_types[authoring_type]);
 	if (authoring_type != NFC_NDEF_AUTHOR_WIFI)
 	{
 		char preview[22];
