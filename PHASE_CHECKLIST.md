@@ -8,11 +8,11 @@
 
 ### Phase 1 — NFC NDEF authoring
 - **Description**: Extend the existing NFC URL writer into a guided authoring flow for URI, text, phone, and Wi-Fi records using the existing NDEF encoders.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Implement NFC NDEF authoring workflow`
 
-### Phase 2 — LF-RFID raw capture and emulation
-- **Description**: Add bounded raw event capture, a saved raw format, and replay through the existing RFID output path.
+### Phase 2 — T5577 password clearing
+- **Description**: Add a utility to clear a T5577 password when the caller supplies the current password, with tested input validation and careful write sequencing.
 - **Status**: 🔲 Not started
 - **Commit**: _(pending)_
 
