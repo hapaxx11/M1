@@ -9,6 +9,13 @@
 #define TPMS_HISTORY_CAPACITY 8U
 
 typedef struct {
+    bool valid;
+    uint32_t serial;
+    uint16_t pressure_hundredths_bar;
+    int16_t temperature_c;
+} tpms_telemetry_t;
+
+typedef struct {
     uint16_t protocol;
     uint16_t bit_length;
     uint32_t serial;
@@ -39,5 +46,7 @@ int tpms_history_add(tpms_history_t *history, const tpms_sensor_t *sensor);
 const tpms_sensor_t *tpms_history_get(const tpms_history_t *history,
                                       uint8_t newest_index);
 uint8_t tpms_sensor_age_min(const tpms_sensor_t *sensor, uint32_t now_ms);
+bool tpms_schrader_gg4_parse(uint64_t data, uint16_t bit_length,
+                             tpms_telemetry_t *telemetry);
 
 #endif

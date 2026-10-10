@@ -87,6 +87,48 @@ void test_history_rejects_null_and_checks_indices(void)
     TEST_ASSERT_NULL(tpms_history_get(&history, 0U));
 }
 
+void test_schrader_gg4_parses_momentum_example(void)
+{
+    tpms_telemetry_t telemetry;
+
+    TEST_ASSERT_TRUE(tpms_schrader_gg4_parse(
+        UINT64_C(0x3000878456094cd0), 64U, &telemetry));
+    TEST_ASSERT_TRUE(telemetry.valid);
+    TEST_ASSERT_EQUAL_HEX32(0x00878456U, telemetry.serial);
+    TEST_ASSERT_EQUAL_UINT16(155U, telemetry.pressure_hundredths_bar);
+    TEST_ASSERT_EQUAL_INT16(26, telemetry.temperature_c);
+}
+
+void test_schrader_gg4_converts_other_sample_and_temperature_offset(void)
+{
+    tpms_telemetry_t telemetry;
+
+    TEST_ASSERT_TRUE(tpms_schrader_gg4_parse(
+        UINT64_C(0x3000878456084ecb), 64U, &telemetry));
+    TEST_ASSERT_EQUAL_HEX32(0x00878456U, telemetry.serial);
+    TEST_ASSERT_EQUAL_UINT16(138U, telemetry.pressure_hundredths_bar);
+    TEST_ASSERT_EQUAL_INT16(28, telemetry.temperature_c);
+}
+
+void test_schrader_gg4_rejects_bad_crc_and_wrong_length(void)
+{
+    tpms_telemetry_t telemetry = {
+        .valid = true,
+        .serial = 1U,
+        .pressure_hundredths_bar = 1U,
+        .temperature_c = 1,
+    };
+
+    TEST_ASSERT_FALSE(tpms_schrader_gg4_parse(
+        UINT64_C(0x3000878456094cd1), 64U, &telemetry));
+    TEST_ASSERT_FALSE(telemetry.valid);
+    TEST_ASSERT_EQUAL_UINT32(0U, telemetry.serial);
+    TEST_ASSERT_FALSE(tpms_schrader_gg4_parse(
+        UINT64_C(0x3000878456094cd0), 40U, &telemetry));
+    TEST_ASSERT_FALSE(tpms_schrader_gg4_parse(
+        UINT64_C(0x3000878456094cd0), 64U, NULL));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -95,5 +137,8 @@ int main(void)
     RUN_TEST(test_history_evicts_oldest_when_full);
     RUN_TEST(test_age_saturates_and_handles_tick_wrap);
     RUN_TEST(test_history_rejects_null_and_checks_indices);
+    RUN_TEST(test_schrader_gg4_parses_momentum_example);
+    RUN_TEST(test_schrader_gg4_converts_other_sample_and_temperature_offset);
+    RUN_TEST(test_schrader_gg4_rejects_bad_crc_and_wrong_length);
     return UNITY_END();
 }

@@ -4,6 +4,41 @@
 
 #include <string.h>
 
+static uint8_t tpms_schrader_gg4_crc8(uint64_t data)
+{
+    uint8_t crc = 0U;
+    for (uint8_t byte_index = 1U; byte_index <= 6U; ++byte_index)
+    {
+        uint8_t byte = (uint8_t)(data >> ((7U - byte_index) * 8U));
+        crc ^= byte;
+        for (uint8_t bit = 0U; bit < 8U; ++bit)
+            crc = (crc & 0x80U) != 0U ?
+                (uint8_t)((crc << 1) ^ 0x07U) : (uint8_t)(crc << 1);
+    }
+    return crc;
+}
+
+bool tpms_schrader_gg4_parse(uint64_t data, uint16_t bit_length,
+                             tpms_telemetry_t *telemetry)
+{
+    if (telemetry == NULL)
+        return false;
+
+    memset(telemetry, 0, sizeof(*telemetry));
+    if (bit_length != 64U ||
+        tpms_schrader_gg4_crc8(data) != (uint8_t)data)
+        return false;
+
+    uint8_t raw_pressure = (uint8_t)(data >> 16);
+    uint8_t raw_temperature = (uint8_t)(data >> 8);
+    telemetry->serial = (uint32_t)(data >> 24);
+    telemetry->pressure_hundredths_bar =
+        (uint16_t)(((uint32_t)raw_pressure * 69U + 2U) / 4U);
+    telemetry->temperature_c = (int16_t)raw_temperature - 50;
+    telemetry->valid = true;
+    return true;
+}
+
 void tpms_history_reset(tpms_history_t *history)
 {
     if (history != NULL)
