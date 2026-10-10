@@ -86,7 +86,7 @@ static const char *m1_nfc_tool_options[] = {
 	"Wipe Tag",
 	"Cyborg Detector",
 	"Read NDEF",
-	"Write URL"
+	"NDEF Maker"
 };
 
 //************************** S T R U C T U R E S *******************************
@@ -193,7 +193,7 @@ static int nfc_utils_kp_handler(void);
 static void nfc_tool_fuzzer(void);
 static void nfc_tool_cyborg_detector(void);
 static void nfc_tool_read_ndef(void);
-static void nfc_tool_write_url(void);
+static void nfc_tool_write_ndef(void);
 
 static void nfc_info_gui_init(void);
 static void nfc_info_gui_create(uint8_t param);
@@ -1539,7 +1539,7 @@ static int nfc_utils_kp_handler(void)
 					break;
 
 				case 7: /* Write URL */
-					nfc_tool_write_url();
+					nfc_tool_write_ndef();
 					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 					break;
 
@@ -3043,7 +3043,7 @@ static void nfc_tool_read_ndef(void)
 
 /*============================================================================*/
 /**
- * @brief nfc_tool_write_url - Write a URL as NDEF to an NTAG tag
+ * @brief nfc_tool_write_ndef - Create and write an NDEF record to a Type 2 tag
  *
  * Prompts the user for a URL using the virtual keyboard, then writes it
  * as an NDEF URI record (https:// prefix) to T2T pages starting at page 4.
@@ -3056,8 +3056,8 @@ static void nfc_tool_write_ndef(void)
 	S_M1_Buttons_Status bs;
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
-	static const char *const record_types[] = {"URL", "Text", "Phone", "Wi-Fi"};
-	static const char *const record_type_names[] = {"URL", "Text", "Phone", "Wi-Fi"};
+	static const char *record_types[] = {"URL", "Text", "Phone", "Wi-Fi"};
+	static const char *record_type_names[] = {"URL", "Text", "Phone", "Wi-Fi"};
 	char field[128] = "";
 	char secondary_field[64] = "";
 	char default_url[] = "https://github.com/hapaxx11/M1";
@@ -3099,7 +3099,7 @@ static void nfc_tool_write_ndef(void)
 	}
 	else
 	{
-		const char *prompt = "Enter URL:";
+		char *prompt = "Enter URL:";
 		char *default_value = default_url;
 		if (authoring_type == NFC_NDEF_AUTHOR_TEXT)
 		{

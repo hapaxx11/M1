@@ -291,3 +291,21 @@ void t5577_execute_write(LFRFIDProgram* write, int block)
     m1_diag_set_phase(M1_DIAG_PHASE_DONE);
 
 }
+
+void t5577_clear_password(uint32_t password)
+{
+    const uint32_t em_config = 0x00148040u;
+
+    m1_diag_set_phase(M1_DIAG_PHASE_START);
+    t5577_write_start();
+    taskENTER_CRITICAL();
+    m1_diag_set_phase(M1_DIAG_PHASE_WRITE_BIT);
+    t5577_write_block_data(0, 0, false, em_config, true, password);
+    t5577_write_block_data(0, 7, false, 0, true, password);
+    t5577_write_reset();
+    t5577_delay_us(1600);
+    t5577_write_gap(27);
+    taskEXIT_CRITICAL();
+    t5577_write_stop();
+    m1_diag_set_phase(M1_DIAG_PHASE_DONE);
+}

@@ -29,7 +29,9 @@
 #include "lfrfid.h"
 #include "lfrfid_file.h"
 #include "lfrfid_protocol.h"
+#include "t5577.h"
 #include "lfrfid_protocol_fdx_b.h"
+#include "rfid_t5577_password.h"
 #include "m1_pet_tag.h"
 #include "privateprofilestring.h"
 #include "m1_file_util.h"
@@ -2815,7 +2817,7 @@ void lfrfid_addm_save_init(void)
 /*============================================================================*/
 /* Utilities submenu options                                                  */
 /*============================================================================*/
-#define RFID_UTIL_OPTIONS_COUNT		6
+#define RFID_UTIL_OPTIONS_COUNT		7
 
 static const char *m1_rfid_util_options[] = {
 	"Clone Card",
@@ -2823,8 +2825,60 @@ static const char *m1_rfid_util_options[] = {
 	"T5577 Info",
 	"RFID Fuzzer",
 	"Brute Force FC",
+	"Clear T5577 Password",
 	"RFID Diagnostics"
 };
+
+static void lfrfid_util_clear_t5577_password(void)
+{
+	S_M1_Buttons_Status bs;
+	S_M1_Main_Q_t q_item;
+	uint32_t password = 0;
+	char password_text[16] = "";
+	char default_password[] = "";
+
+	if (!m1_vkb_get_filename("Enter 8 hex password:", default_password, password_text))
+		return;
+	if (!rfid_t5577_password_parse(password_text, &password))
+	{
+		m1_message_box(&m1_u8g2, "T5577 Password", "Use exactly 8 hex digits", "No tag was changed", "BACK to return");
+		return;
+	}
+
+	m1_u8g2_firstpage();
+	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
+	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
+	u8g2_DrawStr(&m1_u8g2, 4, 14, "Clear T5577 Password?");
+	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+	u8g2_DrawStr(&m1_u8g2, 4, 30, "Writes tag config and");
+	u8g2_DrawStr(&m1_u8g2, 4, 40, "password block.");
+	m1_button_bar_draw(arrowleft_8x8, "Cancel", ok_circle_8x8, "Clear", NULL, NULL);
+	m1_u8g2_nextpage();
+
+	for (;;)
+	{
+		if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) != pdTRUE ||
+		    q_item.q_evt_type != Q_EVENT_KEYPAD)
+			continue;
+		if (xQueueReceive(button_events_q_hdl, &bs, 0) != pdTRUE)
+			continue;
+
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return;
+		}
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK ||
+		    bs.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			t5577_clear_password(password);
+			m1_wdt_reset();
+			m1_message_box(&m1_u8g2, "T5577 Password", "Clear command sent", "Re-read tag to verify", "BACK to return");
+			xQueueReset(main_q_hdl);
+			return;
+		}
+	}
+}
 
 /* Clone state machine */
 typedef enum {
@@ -3681,7 +3735,8 @@ void rfid_125khz_utilities(void)
 						case 2: lfrfid_util_t5577_info(); break;
 						case 3: lfrfid_util_fuzzer(); break;
 						case 4: lfrfid_util_brute_force_fc(); break;
-						case 5: m1_diag_screen(); break;
+						case 5: lfrfid_util_clear_t5577_password(); break;
+						case 6: m1_diag_screen(); break;
 					}
 					m1_gui_submenu_update(m1_rfid_util_options, RFID_UTIL_OPTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);
 				}

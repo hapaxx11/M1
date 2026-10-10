@@ -2623,6 +2623,21 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME nfc_ndef_authoring COMMAND test_nfc_ndef_authoring)
 
+# ── T5577 password input validation ──
+add_executable(test_rfid_t5577_password
+    test_rfid_t5577_password.c
+    ${M1_ROOT}/m1_csrc/rfid_t5577_password.c
+)
+target_include_directories(test_rfid_t5577_password PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_rfid_t5577_password PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rfid_t5577_password PRIVATE sanitizers)
+endif()
+add_test(NAME rfid_t5577_password COMMAND test_rfid_t5577_password)
+
 # ------------------------------------------------------------------
 # Module under test: nfc_ndef_parse (NDEF TLV record parser — URI + Text)
 #

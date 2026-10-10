@@ -13,10 +13,10 @@
 
 ### Phase 2 — T5577 password clearing
 - **Description**: Add a utility to clear a T5577 password when the caller supplies the current password, with tested input validation and careful write sequencing.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add T5577 password clearing tool`
 
 ### Phase 3 — Validation and cleanup
 - **Description**: Run host tests and firmware build, inspect RAM usage, request code review, and remove this temporary checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
