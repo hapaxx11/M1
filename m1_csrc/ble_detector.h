@@ -18,6 +18,29 @@ typedef enum {
     BLE_DETECTOR_RAY_BAN_META_ADV,
 } ble_detector_adv_kind_t;
 
+typedef enum {
+    BLE_DETECTOR_ROUTE_UNSUPPORTED = 0,
+    BLE_DETECTOR_ROUTE_NAMES,
+    BLE_DETECTOR_ROUTE_RAW,
+} ble_detector_scan_route_t;
+
+static inline ble_detector_scan_route_t ble_detector_select_scan_route(
+    bool raw_supported,
+    bool names_supported,
+    bool prefer_raw,
+    bool require_raw)
+{
+    if (require_raw)
+        return raw_supported ? BLE_DETECTOR_ROUTE_RAW :
+                               BLE_DETECTOR_ROUTE_UNSUPPORTED;
+    if (prefer_raw && raw_supported)
+        return BLE_DETECTOR_ROUTE_RAW;
+    if (names_supported)
+        return BLE_DETECTOR_ROUTE_NAMES;
+    return raw_supported ? BLE_DETECTOR_ROUTE_RAW :
+                           BLE_DETECTOR_ROUTE_UNSUPPORTED;
+}
+
 static inline char ble_detector_lower(char c)
 {
     return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
@@ -87,7 +110,8 @@ static inline bool ble_detector_text_contains_word(const char *text,
 static inline bool ble_detector_is_flock_name(const char *name)
 {
     if (ble_detector_text_contains_word(name, "flock")) return true;
-    if (!name || name[0] != 'F' || name[1] != 'S' || name[2] != '-')
+    if (!name || ble_detector_lower(name[0]) != 'f' ||
+        ble_detector_lower(name[1]) != 's' || name[2] != '-')
         return false;
 
     for (size_t i = 3u; i < 9u; i++) {

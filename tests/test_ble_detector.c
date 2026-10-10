@@ -24,12 +24,30 @@ void test_flock_name_requires_flock_marker_or_six_hex_device_suffix(void)
                                                BLE_DETECTOR_FLOCK));
     TEST_ASSERT_TRUE(ble_detector_name_matches("FS-01a2F9",
                                                BLE_DETECTOR_FLOCK));
+    TEST_ASSERT_TRUE(ble_detector_name_matches("fs-01a2f9",
+                                               BLE_DETECTOR_FLOCK));
     TEST_ASSERT_FALSE(ble_detector_name_matches("FS-01a2G9",
                                                 BLE_DETECTOR_FLOCK));
     TEST_ASSERT_FALSE(ble_detector_name_matches("FS-12345",
                                                 BLE_DETECTOR_FLOCK));
     TEST_ASSERT_FALSE(ble_detector_name_matches("Flockish",
                                                 BLE_DETECTOR_FLOCK));
+}
+
+void test_scan_route_enforces_raw_requirements_and_meta_fallback(void)
+{
+    TEST_ASSERT_EQUAL(BLE_DETECTOR_ROUTE_RAW,
+        ble_detector_select_scan_route(true, false, true, true));
+    TEST_ASSERT_EQUAL(BLE_DETECTOR_ROUTE_UNSUPPORTED,
+        ble_detector_select_scan_route(false, true, true, true));
+    TEST_ASSERT_EQUAL(BLE_DETECTOR_ROUTE_RAW,
+        ble_detector_select_scan_route(true, true, true, false));
+    TEST_ASSERT_EQUAL(BLE_DETECTOR_ROUTE_NAMES,
+        ble_detector_select_scan_route(false, true, true, false));
+    TEST_ASSERT_EQUAL(BLE_DETECTOR_ROUTE_NAMES,
+        ble_detector_select_scan_route(true, true, false, false));
+    TEST_ASSERT_EQUAL(BLE_DETECTOR_ROUTE_UNSUPPORTED,
+        ble_detector_select_scan_route(false, false, false, false));
 }
 
 void test_meta_name_matches_ray_ban_meta_names(void)
@@ -85,6 +103,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_skimmer_module_names_match_exactly_and_case_insensitively);
     RUN_TEST(test_flock_name_requires_flock_marker_or_six_hex_device_suffix);
+    RUN_TEST(test_scan_route_enforces_raw_requirements_and_meta_fallback);
     RUN_TEST(test_meta_name_matches_ray_ban_meta_names);
     RUN_TEST(test_airtag_advertisement_requires_apple_manufacturer_signature);
     RUN_TEST(test_meta_advertisement_matches_service_uuid_or_service_data);

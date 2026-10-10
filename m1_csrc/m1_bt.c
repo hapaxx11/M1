@@ -1448,6 +1448,17 @@ static void ble_wait_back(void)
     }
 }
 
+static ble_detector_scan_route_t ble_detector_current_route(bool prefer_raw,
+                                                             bool require_raw)
+{
+    esp32_transport_t transport = m1_esp32_active_transport();
+    bool raw_supported = transport == ESP32_TRANSPORT_BINARY_SPI;
+    bool names_supported = raw_supported || transport == ESP32_TRANSPORT_RPC;
+
+    return ble_detector_select_scan_route(raw_supported, names_supported,
+                                          prefer_raw, require_raw);
+}
+
 static bool ble_raw_scan_collect(ble_raw_mode_t mode, ble_raw_scan_result_t *scan)
 {
     m1_resp_t resp;
@@ -1527,12 +1538,10 @@ static void ble_raw_detection_draw(const char *title,
         u8g2_DrawStr(&m1_u8g2, 2, 40, scan->first_addr);
         snprintf(line, sizeof(line), "RSSI:%d dBm", scan->first_rssi);
         u8g2_DrawStr(&m1_u8g2, 2, 50, line);
-        if (scan->first_name[0] != '\0')
-            u8g2_DrawStr(&m1_u8g2, 2, 58, scan->first_name);
     } else {
-        u8g2_DrawStr(&m1_u8g2, 2, 40, "No matching signature");
+        u8g2_DrawStr(&m1_u8g2, 2, 43, "No signature this scan");
     }
-    u8g2_DrawStr(&m1_u8g2, 2, 63, "Heuristic only - BACK");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, "Heuristic only - BACK");
     m1_u8g2_nextpage();
 }
 
@@ -1542,6 +1551,10 @@ static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
     char ln[26];
 
     ble_ensure_esp32_ready();
+    if (ble_detector_current_route(true, true) != BLE_DETECTOR_ROUTE_RAW) {
+        ble_show_pending(title, "Raw ads unavailable", "Requires binary SPI");
+        return;
+    }
 
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
     m1_u8g2_firstpage();
@@ -1559,8 +1572,8 @@ static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
     if (mode != BLE_RAW_ANALYZER) {
         ble_raw_detection_draw(
             title,
-            mode == BLE_RAW_AIRTAG ? "AirTag-like beacon" :
-            mode == BLE_RAW_META ? "Ray-Ban Meta signature" : "Flipper name",
+            mode == BLE_RAW_AIRTAG ? "AirTag-like BLE ad" :
+            mode == BLE_RAW_META ? "Meta UUID signature" : "Flipper name",
             &scan);
         ble_wait_back();
         return;
@@ -1616,6 +1629,11 @@ static void ble_name_detector_run(const char *title,
     S_M1_Main_Q_t q_item;
 
     ble_ensure_esp32_ready();
+    if (ble_detector_current_route(false, false) !=
+        BLE_DETECTOR_ROUTE_NAMES) {
+        ble_show_pending(title, "BLE scan unavailable", NULL);
+        return;
+    }
     m1_u8g2_firstpage();
     u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
     u8g2_DrawStr(&m1_u8g2, 6, 15, title);
@@ -2712,8 +2730,9 @@ void ble_sniff_airtag(void)
 
 void ble_monitor_airtag(void)
 {
-    if (m1_esp32_active_transport() != ESP32_TRANSPORT_BINARY_SPI) {
-        ble_show_pending("AirTag Monitor", "Raw ads unavailable", "Not RPC scan data");
+    if (ble_detector_current_route(true, true) != BLE_DETECTOR_ROUTE_RAW) {
+        ble_show_pending("AirTag Monitor", "Raw ads unavailable",
+                         "Requires binary SPI");
         return;
     }
 
@@ -2772,7 +2791,8 @@ void ble_wardrive_flock(void)
 
 void ble_detect_meta(void)
 {
-    if (m1_esp32_active_transport() == ESP32_TRANSPORT_BINARY_SPI) {
+    ble_detector_scan_route_t route = ble_detector_current_route(true, false);
+    if (route == BLE_DETECTOR_ROUTE_RAW) {
         ble_raw_scan_result_t scan;
         ble_ensure_esp32_ready();
         m1_u8g2_firstpage();
@@ -2785,14 +2805,17 @@ void ble_detect_meta(void)
             return;
         }
         ble_raw_detection_draw("Meta Device Scan",
-                               "Ray-Ban Meta signature", &scan);
+                               "Meta UUID signature", &scan);
         ble_wait_back();
         return;
     }
-
-    ble_name_detector_run("Ray-Ban Meta Names",
-                          BLE_DETECTOR_RAY_BAN_META,
-                          "Name-only; unverified");
+    if (route == BLE_DETECTOR_ROUTE_NAMES) {
+        ble_name_detector_run("Ray-Ban Meta Names",
+                              BLE_DETECTOR_RAY_BAN_META,
+                              "Name-only; unverified");
+        return;
+    }
+    ble_show_pending("Meta Device Scan", "BLE scan unavailable", NULL);
 }
 
 void ble_spoof_airtag(void)
