@@ -960,9 +960,11 @@ add_test(NAME fiat_v2_decode COMMAND test_fiat_v2_decode)
 # ------------------------------------------------------------------
 add_executable(test_protopirate_bruteforce_contract
     test_protopirate_bruteforce_contract.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
 )
 target_include_directories(test_protopirate_bruteforce_contract PRIVATE
     ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
 )
 target_link_libraries(test_protopirate_bruteforce_contract PRIVATE unity)
 if(TARGET sanitizers)
