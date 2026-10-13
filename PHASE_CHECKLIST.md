@@ -22,6 +22,11 @@
 - **Commit**: `Make continuous BLE scans cancellable`
 
 ### Phase 4 — Validation and cleanup
-- **Description**: Run targeted host tests and firmware build, review RAM usage and final diff, and remove this temporary checklist.
+- **Description**: Run the full host suite and firmware build, inspect RAM usage, and review the final changes.
+- **Status**: ✅ Complete
+- **Commit**: `Verify build, tests, and review feedback`
+
+### Phase 5 — Checklist cleanup
+- **Description**: Remove this temporary checklist before finalizing the PR.
 - **Status**: 🔄 In progress
 - **Commit**: _(pending)_
