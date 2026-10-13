@@ -237,15 +237,25 @@ restaurant_pager_format_t restaurant_pager_auto_detect(uint32_t data,
                                                        uint16_t max_pager)
 {
     restaurant_pager_fields_t fields;
+    restaurant_pager_format_t fallback = RESTAURANT_PAGER_TD157;
+    bool found_fallback = false;
     for (restaurant_pager_format_t format = RESTAURANT_PAGER_TD157;
          format < RESTAURANT_PAGER_FORMAT_COUNT;
          format = (restaurant_pager_format_t)(format + 1))
     {
         if (restaurant_pager_decode(format, data, &fields) &&
             fields.pager <= max_pager)
-            return format;
+        {
+            if (!found_fallback)
+            {
+                fallback = format;
+                found_fallback = true;
+            }
+            if (fields.action != RESTAURANT_PAGER_ACTION_UNKNOWN)
+                return format;
+        }
     }
-    return RESTAURANT_PAGER_TD157;
+    return found_fallback ? fallback : RESTAURANT_PAGER_TD157;
 }
 
 const char *restaurant_pager_format_name(restaurant_pager_format_t format)

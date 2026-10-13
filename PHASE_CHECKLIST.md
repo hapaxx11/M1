@@ -2,7 +2,7 @@
 
 ## PR Metadata
 - **PR Title**: Add a native restaurant pager app
-- **PR Description**: Add a native Sub-GHz restaurant pager workflow with protocol-specific decoding/editing, named station categories, configurable replay, and saved-signal actions, following M1 hardware and storage constraints.
+- **PR Description**: Add a native Sub-GHz restaurant pager workflow with protocol-specific decoding/editing, named station categories, configurable replay, confirmed batch sending, and saved-signal actions, following M1 hardware and storage constraints.
 
 ## Phases
 
@@ -22,6 +22,6 @@
 - **Commit**: `Add restaurant pager saved stations and settings`
 
 ### Phase 4 — Documentation and validation
-- **Description**: Update the feature documentation and changelog, run host tests and the firmware build, inspect RAM usage, and remove this temporary checklist.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Description**: Update the feature documentation and changelog, run host tests and the firmware build, and inspect RAM usage.
+- **Status**: ✅ Complete
+- **Commit**: `Finalize restaurant pager implementation`

@@ -131,7 +131,7 @@ static bool load_signal(const SubGhzApp *app)
     if (app->saved_filepath[0] == '\0')
         return false;
 
-    char full_path[80];
+    char full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
     snprintf(full_path, sizeof(full_path), "0:%s", app->saved_filepath);
 
     memset(&saved_signal, 0, sizeof(saved_signal));
@@ -234,7 +234,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_SEND_TO_PEER:
         {
-            char full_path[80];
+            char full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
             snprintf(full_path, sizeof(full_path), "0:%s", app->saved_filepath);
             m1_espnow_capture_share_send_path(full_path);
             app->need_redraw = true;
@@ -252,22 +252,19 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
 
             if (m1_vkb_get_filename("Rename to:", base, new_name))
             {
-                char old_path[80], new_path[80], directory[64];
-                char renamed[32], relative_path[64];
+                char old_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+                char new_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+                char renamed[32], relative_path[SUBGHZ_SAVED_PATH_MAX];
                 const char *ext = strrchr(app->saved_filename, '.');
                 if (!ext) ext = ".sub";
-                strncpy(directory, app->saved_filepath, sizeof(directory) - 1U);
-                directory[sizeof(directory) - 1U] = '\0';
-                char *slash = strrchr(directory, '/');
                 int renamed_len = snprintf(renamed, sizeof(renamed), "%s%s",
                                            new_name, ext);
-                if (slash != NULL && renamed_len >= 0 &&
+                if (renamed_len >= 0 &&
                     (size_t)renamed_len < sizeof(renamed))
                 {
-                    *slash = '\0';
-                    if (subghz_saved_path_build(relative_path,
-                                                sizeof(relative_path),
-                                                directory, renamed))
+                    if (subghz_saved_path_rename_build(
+                            relative_path, sizeof(relative_path),
+                            app->saved_filepath, renamed))
                     {
                         snprintf(old_path, sizeof(old_path), "0:%s",
                                  app->saved_filepath);

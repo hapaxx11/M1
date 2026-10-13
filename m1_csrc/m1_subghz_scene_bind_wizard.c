@@ -348,7 +348,7 @@ static bool bw_generate_and_save(void)
  *  back here on completion or BACK abort. */
 static void bw_push_tx(SubGhzApp *app)
 {
-    /* tx_path is 72 bytes; bw_filepath is "0:/SUBGHZ/" + up to 39 chars
+    /* tx_path is 128 bytes; bw_filepath is "0:/SUBGHZ/" + up to 39 chars
      * of file_base + ".sub" = at most 53 chars, safely within bounds. */
     strncpy(app->tx_path, bw_filepath, sizeof(app->tx_path) - 1);
     app->tx_path[sizeof(app->tx_path) - 1] = '\0';

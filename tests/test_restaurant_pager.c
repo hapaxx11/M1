@@ -49,6 +49,8 @@ void test_td165_reversed_fields_and_mute(void)
     TEST_ASSERT_EQUAL_UINT16(0x123U, fields.station);
     TEST_ASSERT_EQUAL_UINT16(42U, fields.pager);
     TEST_ASSERT_EQUAL(RESTAURANT_PAGER_ACTION_RING, fields.action);
+    TEST_ASSERT_EQUAL(RESTAURANT_PAGER_TD165,
+                      restaurant_pager_auto_detect(data, 255U));
 
     TEST_ASSERT_TRUE(restaurant_pager_set_action(
         RESTAURANT_PAGER_TD165, &data, RESTAURANT_PAGER_ACTION_MUTE));

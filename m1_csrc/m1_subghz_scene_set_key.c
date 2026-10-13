@@ -113,7 +113,7 @@ static bool push_transmitter_with_key(SubGhzApp *app)
     }
 
     /* Populate Transmitter inputs.  SETKEY_TMP_PATH fits comfortably
-     * in tx_path (24 chars vs 72). */
+     * in tx_path (24 chars vs 128). */
     strncpy(app->tx_path, SETKEY_TMP_PATH, sizeof(app->tx_path) - 1);
     app->tx_path[sizeof(app->tx_path) - 1] = '\0';
     app->tx_repeat_count = 1U;    /* static / one-shot OOK */

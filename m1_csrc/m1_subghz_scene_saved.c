@@ -55,7 +55,7 @@ static bool open_saved_browser(SubGhzApp *app)
     S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
     if (!f_info || !f_info->file_is_selected ||
         !subghz_saved_path_build(app->saved_filepath,
-                                 sizeof(app->saved_filepath),
+                                 SUBGHZ_SAVED_PATH_MAX,
                                  f_info->dir_name, f_info->file_name))
         return false;
 

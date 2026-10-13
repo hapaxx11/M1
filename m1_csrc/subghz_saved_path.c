@@ -53,3 +53,26 @@ bool subghz_saved_path_build(char *output,
                           (int)directory_length, directory, filename);
     return length >= 0 && (size_t)length < output_size;
 }
+
+bool subghz_saved_path_rename_build(char *output,
+                                    size_t output_size,
+                                    const char *existing_path,
+                                    const char *new_filename)
+{
+    if (existing_path == NULL)
+        return false;
+
+    const char *slash = strrchr(existing_path, '/');
+    if (slash == NULL || slash == existing_path)
+        return false;
+
+    size_t directory_length = (size_t)(slash - existing_path);
+    if (directory_length >= SUBGHZ_SAVED_PATH_MAX)
+        return false;
+
+    char directory[SUBGHZ_SAVED_PATH_MAX];
+    memcpy(directory, existing_path, directory_length);
+    directory[directory_length] = '\0';
+    return subghz_saved_path_build(output, output_size, directory,
+                                   new_filename);
+}

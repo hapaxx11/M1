@@ -146,7 +146,7 @@ static void load_and_decode(const SubGhzApp *app)
     if (app->raw_filepath[0] == '\0')
         return;
 
-    char full_path[80];
+    char full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
     snprintf(full_path, sizeof(full_path), "0:%s", app->raw_filepath);
 
     memset(&s_sig, 0, sizeof(s_sig));

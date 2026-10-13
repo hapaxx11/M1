@@ -80,7 +80,7 @@ static uint64_t                s_device_key;
  *  save-back helper (`subghz_signal_settings_apply_button`).  Populated
  *  by scene_on_enter from `app->saved_filepath`; cleared on exit so a
  *  stale path can never be written to. */
-static char                    s_saved_full_path[80];
+static char                    s_saved_full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
 
 /** UI selection cursor — selects which field is acted upon when the user
  *  presses OK. CounterMode sits between Button and Counter so it remains
@@ -206,7 +206,7 @@ static void scene_on_enter(SubGhzApp *app)
         return;
     }
 
-    char full_path[80];
+    char full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
     snprintf(full_path, sizeof(full_path), "0:%s", app->saved_filepath);
 
     if (!flipper_subghz_load(full_path, &s_signal))
