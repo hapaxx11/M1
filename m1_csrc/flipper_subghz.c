@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include "flipper_subghz.h"
 #include "m1_sub_ghz.h"
+#include "subghz_psa_bruteforce.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -854,6 +855,113 @@ bool flipper_subghz_save_key_with_key2(const char *path,
 
 	ff_close(&ff);
 	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Save a PSA capture patched with the fields recovered by the TEA
+ *         brute-force search (subghz_psa_bruteforce.c).
+ *
+ * Writes a Flipper Key file carrying the original Key/Key_2 plus the
+ * recovered Serial, Btn, Cnt, Type (0x36), CRC and Seed fields — the same
+ * field set the ProtoPirate reference applies to a capture after a
+ * successful search.
+ */
+bool flipper_subghz_save_psa_recovered(const char *path,
+                                        uint32_t    frequency,
+                                        const char *preset,
+                                        uint32_t    bit_count,
+                                        uint64_t    key,
+                                        uint16_t    key_2,
+                                        uint32_t    te,
+                                        const subghz_psa_bf_result_t *result)
+{
+	flipper_file_t ff;
+	bool ok = true;
+	char key_str[40];
+
+	if (path == NULL || result == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	ok = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (ok && preset && preset[0] != '\0')
+		ok = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (ok)
+		ok = ff_write_kv_str(&ff, "Protocol", "PSA");
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (ok)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		ok = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (ok)
+	{
+		snprintf(key_str, sizeof(key_str), "%02X %02X",
+		         (unsigned int)((key_2 >> 8) & 0xFF),
+		         (unsigned int)( key_2       & 0xFF));
+		ok = ff_write_kv_str(&ff, "Key_2", key_str);
+	}
+
+	if (ok && te > 0)
+		ok = ff_write_kv_uint32(&ff, "TE", te);
+
+	/* Recovered fields (ProtoPirate write-back set). */
+	if (ok)
+	{
+		snprintf(key_str, sizeof(key_str), "%02X %02X %02X",
+		         (unsigned int)((result->serial >> 16) & 0xFF),
+		         (unsigned int)((result->serial >> 8) & 0xFF),
+		         (unsigned int)( result->serial & 0xFF));
+		ok = ff_write_kv_str(&ff, "Serial", key_str);
+	}
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Btn", result->button);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Cnt", result->counter);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Type", result->type);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "CRC", result->crc);
+
+	if (ok)
+	{
+		snprintf(key_str, sizeof(key_str), "%02X %02X %02X",
+		         (unsigned int)((result->seed >> 16) & 0xFF),
+		         (unsigned int)((result->seed >> 8) & 0xFF),
+		         (unsigned int)( result->seed & 0xFF));
+		ok = ff_write_kv_str(&ff, "Seed", key_str);
+	}
+
+	ff_close(&ff);
+	return ok;
 }
 
 /*============================================================================*/
