@@ -28,6 +28,7 @@
 #include "lfrfid.h"
 #include "t5577_timing.h"    /* in-spec write-timing constants (da-pingwing fix) */
 #include "m1_diag.h"         /* write-phase breadcrumbs for reset diagnostics */
+#include "rfid_t5577_password.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -294,14 +295,18 @@ void t5577_execute_write(LFRFIDProgram* write, int block)
 
 void t5577_clear_password(uint32_t password)
 {
-    const uint32_t em_config = 0x00148040u;
-
     m1_diag_set_phase(M1_DIAG_PHASE_START);
     t5577_write_start();
     taskENTER_CRITICAL();
     m1_diag_set_phase(M1_DIAG_PHASE_WRITE_BIT);
-    t5577_write_block_data(0, 0, false, em_config, true, password);
-    t5577_write_block_data(0, 7, false, 0, true, password);
+    for (uint8_t i = 0u; i < RFID_T5577_PASSWORD_CLEAR_WRITE_COUNT; i++) {
+        rfid_t5577_password_clear_write_t write;
+        if (rfid_t5577_password_clear_write(i, password, &write)) {
+            t5577_write_block_data(write.page, write.block, write.lock_bit,
+                                   write.data, write.with_password,
+                                   write.password);
+        }
+    }
     t5577_write_reset();
     t5577_delay_us(1600);
     t5577_write_gap(27);

@@ -2834,7 +2834,7 @@ static void lfrfid_util_clear_t5577_password(void)
 	S_M1_Buttons_Status bs;
 	S_M1_Main_Q_t q_item;
 	uint32_t password = 0;
-	char password_text[16] = "";
+	char password_text[M1_VIRTUAL_KB_INPUT_MAX + 1] = "";
 	char default_password[] = "";
 
 	if (!m1_vkb_get_filename("Enter 8 hex password:", default_password, password_text))

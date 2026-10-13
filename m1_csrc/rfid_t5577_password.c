@@ -26,3 +26,33 @@ bool rfid_t5577_password_parse(const char *text, uint32_t *password)
     *password = parsed;
     return true;
 }
+
+bool rfid_t5577_password_clear_write(
+    uint8_t index,
+    uint32_t password,
+    rfid_t5577_password_clear_write_t *write)
+{
+    if (!write || index >= RFID_T5577_PASSWORD_CLEAR_WRITE_COUNT)
+        return false;
+
+    if (index == 0u) {
+        *write = (rfid_t5577_password_clear_write_t) {
+            .page = 0u,
+            .block = 0u,
+            .lock_bit = false,
+            .data = 0x00148040u,
+            .with_password = true,
+            .password = password,
+        };
+    } else {
+        *write = (rfid_t5577_password_clear_write_t) {
+            .page = 0u,
+            .block = 7u,
+            .lock_bit = false,
+            .data = 0u,
+            .with_password = false,
+            .password = 0u,
+        };
+    }
+    return true;
+}
