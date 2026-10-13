@@ -16,13 +16,12 @@
  *   - WiFi MAC Track / Signal Monitor (CMD_PKTMON_*)
  *   - WiFi Net Scan (Ping/ARP/SSH/Telnet/Port)
  *   - WiFi 802.15.4 (Zigbee/Thread)
- *   - Bluetooth BLE Scan / BLE Advertise
- *   - Bluetooth BLE Sniffers (Analyzer/Generic/Flipper/AirTag)
+ *   - Bluetooth BLE Scan / BLE Advertise / Signal Finder
+ *   - Bluetooth BLE Sniffers (Analyzer/Generic/Flipper/AirTag/AirTag Monitor)
  *
  * Functions that are pure local placeholders ("not yet implemented" stubs
- * with no ESP32 SPI traffic — e.g. ble_monitor_airtag, ble_wardrive,
- * ble_detect_*, ble_spoof_airtag, bluetooth_config) are intentionally left
- * ungated and are NOT covered here.
+ * with no ESP32 SPI traffic — e.g. ble_wardrive, ble_spoof_airtag,
+ * bluetooth_config) are intentionally left ungated and are NOT covered here.
  *
  * Functions that already implement a dual AT/binary-SPI dispatch path
  * internally (deauth, beacon, karma, evil portal, probe flood, ap clone,
@@ -164,23 +163,39 @@ void test_bt_scan_and_advertise_capability_gated(void)
 }
 
 /*--------------------------------------------------------------------------*/
-/* Bluetooth BLE Sniffers — CMD_BLE_SCAN_START/NEXT_RAW,                   */
-/* ESP32_FEATURE_BLE_SCAN.  Placeholder stubs must remain ungated.          */
+/* Bluetooth BLE Sniffers — BLE_SCAN, ESP32_FEATURE_BLE_SCAN.               */
 /*--------------------------------------------------------------------------*/
 
 void test_bt_sniffers_capability_gated(void)
 {
     const char *path = "m1_csrc/m1_bt_scene_sniff.c";
+    const char *menu_path = "m1_csrc/m1_bt_scene_menu.c";
 
     expect_gated(path, "DELEGATE_FEATURE(sniff_analyzer, ble_sniff_analyzer, ESP32_FEATURE_BLE_SCAN)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_generic,  ble_sniff_generic,  ESP32_FEATURE_BLE_SCAN)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_flipper,  ble_sniff_flipper,  ESP32_FEATURE_BLE_SCAN)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_airtag,   ble_sniff_airtag,   ESP32_FEATURE_BLE_SCAN)");
 
-    /* Placeholder ("not yet implemented") stubs — no ESP32 SPI traffic, must
-     * remain on the plain DELEGATE() macro. */
-    expect_gated(path, "DELEGATE(monitor_airtag,  ble_monitor_airtag)");
-    expect_gated(path, "DELEGATE(sniff_flock,     ble_sniff_flock)");
+    expect_gated(path, "esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(path, "ble_monitor_airtag_scene_enter(app)");
+    expect_gated(menu_path, "esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(menu_path, "bluetooth_signal_finder_scene_enter(app)");
+    expect_gated(path, "DELEGATE_FEATURE(sniff_flock,    ble_sniff_flock,    ESP32_FEATURE_BLE_SCAN)");
+    expect_not_present(menu_path, "DELEGATE(signal_finder,");
+    expect_not_present(path, "DELEGATE(monitor_airtag,");
+    expect_not_present(path, "DELEGATE(sniff_flock,");
+}
+
+void test_bt_detectors_capability_gated(void)
+{
+    const char *path = "m1_csrc/m1_bt_scene_spam.c";
+
+    expect_gated(path, "DELEGATE_FEATURE(detect_skimmers, ble_detect_skimmers, ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(path, "DELEGATE_FEATURE(detect_flock,    ble_detect_flock,    ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(path, "DELEGATE_FEATURE(detect_meta,     ble_detect_meta,     ESP32_FEATURE_BLE_SCAN)");
+    expect_not_present(path, "DELEGATE(detect_skimmers,");
+    expect_not_present(path, "DELEGATE(detect_flock,");
+    expect_not_present(path, "DELEGATE(detect_meta,");
 }
 
 /*--------------------------------------------------------------------------*/
@@ -213,6 +228,7 @@ int main(void)
     RUN_TEST(test_wifi_netscan_capability_gated);
     RUN_TEST(test_bt_scan_and_advertise_capability_gated);
     RUN_TEST(test_bt_sniffers_capability_gated);
+    RUN_TEST(test_bt_detectors_capability_gated);
     RUN_TEST(test_wifi_general_binary_commands_capability_gated);
     return UNITY_END();
 }

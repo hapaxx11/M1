@@ -43,10 +43,7 @@
         (void)app; fn(); m1_esp32_deinit(); app->running = true; m1_scene_pop(app); }
 
 /* Capability-gated blocking delegate — see m1_bt_scene_badbt.c for the
- * canonical documentation of this pattern.  Only sniffers that actually
- * touch the ESP32 (via CMD_BLE_SCAN_START/NEXT_RAW, ESP32_FEATURE_BLE_SCAN)
- * are gated here — monitor_airtag / sniff_flock below are placeholder
- * ("not yet implemented") stubs with no ESP32 dependency. */
+ * canonical documentation of this pattern. */
 #define DELEGATE_FEATURE(name, fn, fid) \
     static void name##_on_enter(M1SceneApp *app) { \
         (void)app; \
@@ -63,14 +60,44 @@ DELEGATE_FEATURE(sniff_analyzer, ble_sniff_analyzer, ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(sniff_generic,  ble_sniff_generic,  ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(sniff_flipper,  ble_sniff_flipper,  ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(sniff_airtag,   ble_sniff_airtag,   ESP32_FEATURE_BLE_SCAN)
-DELEGATE(monitor_airtag,  ble_monitor_airtag)
-DELEGATE(sniff_flock,     ble_sniff_flock)
+DELEGATE_FEATURE(sniff_flock,    ble_sniff_flock,    ESP32_FEATURE_BLE_SCAN)
+
+static void monitor_airtag_on_enter(M1SceneApp *app)
+{
+    m1_esp32_ensure_init();
+    if (!m1_esp32_require_cap(
+            esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN),
+            esp32_feature_label(ESP32_FEATURE_BLE_SCAN)) ||
+        !ble_monitor_airtag_scene_enter(app))
+        m1_scene_pop(app);
+}
+
+static bool monitor_airtag_on_event(M1SceneApp *app, M1SceneEvent event)
+{
+    return ble_monitor_airtag_scene_event(app, event);
+}
+
+static void monitor_airtag_on_exit(M1SceneApp *app)
+{
+    ble_monitor_airtag_scene_exit(app);
+    m1_esp32_deinit();
+}
+
+static void monitor_airtag_draw(M1SceneApp *app)
+{
+    ble_monitor_airtag_scene_draw(app);
+}
 
 const M1SceneHandlers bt_scene_sniff_analyzer_handlers  = { .on_enter = sniff_analyzer_on_enter  };
 const M1SceneHandlers bt_scene_sniff_generic_handlers   = { .on_enter = sniff_generic_on_enter   };
-const M1SceneHandlers bt_scene_sniff_flipper_handlers   = { .on_enter = sniff_flipper_on_enter   };
+const M1SceneHandlers bt_scene_sniff_flipper_handlers  = { .on_enter = sniff_flipper_on_enter   };
 const M1SceneHandlers bt_scene_sniff_airtag_handlers    = { .on_enter = sniff_airtag_on_enter    };
-const M1SceneHandlers bt_scene_monitor_airtag_handlers  = { .on_enter = monitor_airtag_on_enter  };
+const M1SceneHandlers bt_scene_monitor_airtag_handlers  = {
+    .on_enter = monitor_airtag_on_enter,
+    .on_event = monitor_airtag_on_event,
+    .on_exit = monitor_airtag_on_exit,
+    .draw = monitor_airtag_draw,
+};
 const M1SceneHandlers bt_scene_sniff_flock_handlers     = { .on_enter = sniff_flock_on_enter     };
 
 /*==========================================================================*/

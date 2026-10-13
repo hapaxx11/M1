@@ -42,6 +42,7 @@ typedef enum {
     M1SceneEventRight,
     M1SceneEventSubghzTx,
     M1SceneEventInfraredTx,
+    M1SceneEventBleScanComplete,
 } M1SceneEvent;
 
 /*============================================================================*/
@@ -58,6 +59,7 @@ struct M1SceneApp {
     /* Flags */
     bool    need_redraw;
     bool    running;
+    void   *user_data;
 
     /* Registry (set during init, used by push/pop/replace) */
     const struct M1SceneHandlers *const *registry;
