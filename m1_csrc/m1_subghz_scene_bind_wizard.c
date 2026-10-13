@@ -348,10 +348,10 @@ static bool bw_generate_and_save(void)
  *  back here on completion or BACK abort. */
 static void bw_push_tx(SubGhzApp *app)
 {
-    /* tx_path is 72 bytes; bw_filepath is "0:/SUBGHZ/" + up to 39 chars
+    /* tx_path is 128 bytes; bw_filepath is "0:/SUBGHZ/" + up to 39 chars
      * of file_base + ".sub" = at most 53 chars, safely within bounds. */
-    strncpy(app->tx_path, bw_filepath, sizeof(app->tx_path) - 1);
-    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    strncpy(app->tx_path, bw_filepath, SUBGHZ_SAVED_PATH_MAX - 1U);
+    app->tx_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
     app->tx_repeat_count = 1U;                   /* static keys: 1 burst */
     app->tx_mode         = 0U;                   /* SUBGHZ_TX_MODE_SINGLE */
     app->tx_autostart    = true;                 /* 1-press fire UX */

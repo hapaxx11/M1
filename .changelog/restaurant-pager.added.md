@@ -1,0 +1,1 @@
+**Sub-GHz: Restaurant Pager app** — Receive and edit Princeton/SMC5326 restaurant pages, replay one pager or explicitly confirmed batches, save named stations by category, and configure the pager limit and transmit repeat count.

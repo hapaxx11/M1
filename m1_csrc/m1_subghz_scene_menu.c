@@ -16,12 +16,13 @@
  *   5. Analyzer (Smart ID, Freq/Spectrum Analyzer, RSSI Meter,
  *      Freq Scanner, Proto Pirate)
  *   6. POCSAG pager
- *   7. TPMS
- *   8. Weather Station
- *   9. Brute Force
- *  10. Add Manually
- *  11. Remote
- *  12. Bind Remote
+ *   7. Restaurant Pager
+ *   8. TPMS
+ *   9. Weather Station
+ *  10. Brute Force
+ *  11. Add Manually
+ *  12. Remote
+ *  13. Bind Remote
  */
 
 #include <stdint.h>
@@ -40,7 +41,7 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define MENU_ITEM_COUNT   12
+#define MENU_ITEM_COUNT   13
 
 static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Read",
@@ -49,6 +50,7 @@ static const char *menu_labels[MENU_ITEM_COUNT] = {
     "Playlist",
     "Analyzer",
     "POCSAG",
+    "Restaurant Pager",
     "TPMS",
     "Weather Station",
     "Brute Force",
@@ -64,6 +66,7 @@ static const SubGhzSceneId menu_targets[MENU_ITEM_COUNT] = {
     SubGhzScenePlaylist,
     SubGhzSceneAnalyzerMenu,
     SubGhzScenePocsag,
+    SubGhzSceneRestaurantPager,
     SubGhzSceneTpms,
     SubGhzSceneWeatherStation,
     SubGhzSceneBruteForce,

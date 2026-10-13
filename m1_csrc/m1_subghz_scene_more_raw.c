@@ -105,16 +105,23 @@ static void do_rename(SubGhzApp *app)
     const char *ext = strrchr(fname, '.');
     if (!ext) ext = ".sub";
 
-    char old_path[80];
-    char new_path[80];
+    char old_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+    char new_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+    char relative_path[SUBGHZ_SAVED_PATH_MAX];
     snprintf(old_path, sizeof(old_path), "0:%s", app->raw_filepath);
-    snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
+    char renamed[32];
+    int renamed_len = snprintf(renamed, sizeof(renamed), "%s%s", new_name, ext);
+    if (renamed_len < 0 || (size_t)renamed_len >= sizeof(renamed) ||
+        !subghz_saved_path_rename_build(relative_path, sizeof(relative_path),
+                                        app->raw_filepath, renamed))
+        return;
+    snprintf(new_path, sizeof(new_path), "0:%s", relative_path);
 
     FRESULT res = f_rename(old_path, new_path);
     if (res == FR_OK)
     {
-        snprintf(app->raw_filepath, sizeof(app->raw_filepath),
-                 "/SUBGHZ/%s%s", new_name, ext);
+        snprintf(app->raw_filepath, SUBGHZ_SAVED_PATH_MAX,
+                 "%s", relative_path);
     }
     else
     {
@@ -138,7 +145,7 @@ static void do_delete(SubGhzApp *app)
     if (confirm != 1)
         return;
 
-    char del_path[80];
+    char del_path[SUBGHZ_SAVED_FULL_PATH_MAX];
     snprintf(del_path, sizeof(del_path), "0:%s", app->raw_filepath);
     FRESULT res = f_unlink(del_path);
     if ((res == FR_OK) || (res == FR_NO_FILE))
