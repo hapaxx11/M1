@@ -37,8 +37,8 @@
   (marker nibble valid, direct-XOR path failed) and surfaces Key_2 via
   `rolling_code`; Read-scene save paths write `Key_2` for such captures.
   Host tests for parse/save round-trip and decoder acceptance.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Parse and persist PSA Key_2 captures for brute-force`
 
 ### Phase 3 — Result writeback (recovered-fields file)
 - **Description**: Pure formatter for the recovered `.sub` content (Key,

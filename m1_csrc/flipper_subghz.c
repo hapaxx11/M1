@@ -175,6 +175,19 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 				out->key = (out->key << 8) | key_bytes[i];
 			}
 		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0)
+		{
+			/* PSA second key word — "99 AA" (2 hex bytes, big-endian).
+			 * Present on ProtoPirate PSA captures; required to seed the
+			 * TEA brute-force key search. */
+			uint8_t k2[2] = {0, 0};
+			uint8_t count = ff_parse_hex_bytes(ff_get_value(ctx), k2, 2);
+			if (count > 0)
+			{
+				out->key_2 = (uint16_t)(((uint16_t)k2[0] << 8) | k2[1]);
+				out->has_key_2 = true;
+			}
+		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "TE") == 0)
 		{
 			out->te = (uint32_t)strtoul(ff_get_value(ctx), NULL, 10);
@@ -759,6 +772,81 @@ bool flipper_subghz_save_key(const char *path, uint32_t frequency,
 		         (unsigned int)((key >>  8) & 0xFF),
 		         (unsigned int)( key        & 0xFF));
 		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Variant of flipper_subghz_save_key() that also writes the
+ *         `Key_2:` field — the 16-bit second key word carried by PSA
+ *         captures (required to seed the PSA TEA brute-force search).
+ *
+ * The Key_2 line is written immediately after Key, matching the field order
+ * used by ProtoPirate captures.
+ */
+bool flipper_subghz_save_key_with_key2(const char *path,
+                                        uint32_t    frequency,
+                                        const char *preset,
+                                        const char *protocol,
+                                        uint32_t    bit_count,
+                                        uint64_t    key,
+                                        uint16_t    key_2,
+                                        uint32_t    te)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != '\0')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result && protocol && protocol[0] != '\0')
+		result = ff_write_kv_str(&ff, "Protocol", protocol);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str), "%02X %02X",
+		         (unsigned int)((key_2 >> 8) & 0xFF),
+		         (unsigned int)( key_2       & 0xFF));
+		result = ff_write_kv_str(&ff, "Key_2", key_str);
 	}
 
 	if (result && te > 0)

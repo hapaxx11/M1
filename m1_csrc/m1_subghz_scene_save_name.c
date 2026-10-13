@@ -89,6 +89,13 @@ static void scene_on_enter(SubGhzApp *app)
                     e->frequency, "FuriHalSubGhzPresetOok650Async",
                     protocol_text[e->info.protocol],
                     e->info.bit_len, e->info.key, e->info.te);
+    else if (subghz_psa_capture_needs_bruteforce(e->info.protocol,
+                                                 e->info.serial_number))
+        saved = flipper_subghz_save_key_with_key2(app->file_path,
+                    e->frequency, "FuriHalSubGhzPresetOok650Async",
+                    protocol_text[e->info.protocol],
+                    e->info.bit_len, e->info.key,
+                    (uint16_t)(e->info.rolling_code & 0xFFFFu), e->info.te);
     else
         saved = flipper_subghz_save_key(app->file_path,
                     e->frequency, "FuriHalSubGhzPresetOok650Async",

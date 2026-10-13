@@ -1235,6 +1235,103 @@ void test_resave_increment_via_save_key_full_omits_field(void)
  * Runner
  * =================================================================== */
 
+/* ===================================================================
+ * Key_2 field load / save round-trip (PSA brute-force captures)
+ *
+ * ProtoPirate PSA captures carry a 16-bit second key word in `Key_2:` —
+ * required to seed the TEA brute-force search.  The parser must populate
+ * key_2/has_key_2, absent fields must leave has_key_2 false, and
+ * flipper_subghz_save_key_with_key2() must round-trip the field.
+ * =================================================================== */
+
+void test_load_flipper_key_psa_key2_field(void)
+{
+	const char *path = "/tmp/test_psa_key2.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: PSA\r\n"
+	    "Bit: 80\r\n"
+	    "Key: 12 3A 44 55 66 77 88 99\r\n"
+	    "Key_2: B1 AA\r\n"
+	    "TE: 250\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL_STRING("PSA", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT64(0x123A445566778899ULL, sig.key);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+
+	remove(path);
+}
+
+void test_load_flipper_key_without_key2_clears_flag(void)
+{
+	const char *path = "/tmp/test_no_key2.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: Princeton\r\n"
+	    "Bit: 24\r\n"
+	    "Key: 00 00 00 00 00 52 A1 2E\r\n"
+	    "TE: 400\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_FALSE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0u, sig.key_2);
+
+	remove(path);
+}
+
+void test_save_key_with_key2_roundtrip(void)
+{
+	const char *path = "/tmp/test_save_key2.sub";
+	bool ok = flipper_subghz_save_key_with_key2(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "PSA", 80, 0x123A445566778899ULL, 0xB1AAu, 250);
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL_STRING("PSA", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT32(80, sig.bit_count);
+	TEST_ASSERT_EQUAL_UINT64(0x123A445566778899ULL, sig.key);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+	TEST_ASSERT_EQUAL_UINT32(250, sig.te);
+
+	remove(path);
+}
+
+void test_save_key_plain_writes_no_key2_line(void)
+{
+	const char *path = "/tmp/test_save_plain_no_key2.sub";
+	bool ok = flipper_subghz_save_key(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "Princeton", 24, 0x52A12EULL, 400);
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_FALSE(sig.has_key_2);
+
+	remove(path);
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -1332,6 +1429,12 @@ int main(void)
 	 * re-saves a loaded file via save_key_full (apply_button / apply_counter). */
 	RUN_TEST(test_resave_static_via_save_key_full_preserves_mode);
 	RUN_TEST(test_resave_increment_via_save_key_full_omits_field);
+
+	/* Key_2 field load / save round-trip (PSA brute-force captures) */
+	RUN_TEST(test_load_flipper_key_psa_key2_field);
+	RUN_TEST(test_load_flipper_key_without_key2_clears_flag);
+	RUN_TEST(test_save_key_with_key2_roundtrip);
+	RUN_TEST(test_save_key_plain_writes_no_key2_line);
 
 	return UNITY_END();
 }

@@ -73,6 +73,11 @@ typedef struct {
 	/* Optional `CounterMode:` field. Defaults to INCREMENT
 	 * for files that omit the field or carry an unrecognised value. */
 	flipper_subghz_counter_mode_t counter_mode;
+	/* Optional `Key_2:` field carried by PSA Flipper Key files (16-bit
+	 * second key word, big-endian).  `has_key_2` distinguishes "field
+	 * absent" from a genuine zero value; it is set only by the parser. */
+	uint16_t key_2;
+	bool     has_key_2;
 	/* Set to true when the file was loaded from an M1 native .sgh format
 	 * (not a Flipper .sub file).  Used to select the direct replay path
 	 * which feeds the original file into the streaming engine without any
@@ -131,6 +136,21 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
                                                uint64_t    key,
                                                uint32_t    te,
                                                const char *manufacture);
+
+/*
+ * Variant of flipper_subghz_save_key() that also writes the `Key_2:` field —
+ * the 16-bit second key word carried by PSA captures (required to seed the
+ * PSA TEA brute-force search).  The Key_2 line follows the Key line, matching
+ * ProtoPirate capture field order.
+ */
+bool flipper_subghz_save_key_with_key2(const char *path,
+                                        uint32_t    frequency,
+                                        const char *preset,
+                                        const char *protocol,
+                                        uint32_t    bit_count,
+                                        uint64_t    key,
+                                        uint16_t    key_2,
+                                        uint32_t    te);
 
 /*
  * Save variant that additionally writes the optional

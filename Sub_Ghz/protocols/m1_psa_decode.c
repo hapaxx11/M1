@@ -8,11 +8,16 @@
  *
  * Reference implementation: RocketGod-git/ProtoPirate protocols/psa.c +
  * psa_crypto.c (te_short=250µs, te_long=500µs, 80 Manchester wire bits = 10
- * bytes, OOK/AM+FM).  Only the cipher-free "Direct XOR" decode path (reference
- * type 0x23) is ported here — it recovers the button, serial and rolling counter
- * through a pure XOR network guarded by a nibble checksum.  The reference's other
- * path (type 0x36) requires TEA and is deferred there to a brute-force plugin, so
- * no cipher is used on this decode/identify path.
+ * bytes, OOK/AM+FM).  Two paths are ported:
+ *
+ *   - Direct XOR (reference type 0x23): recovers the button, serial and
+ *     rolling counter through a pure XOR network guarded by a nibble
+ *     checksum.  No cipher involved.
+ *   - TEA mode (reference type 0x36): frames that fail the Direct-XOR path
+ *     but carry a valid marker nibble are still identified as PSA and
+ *     surfaced with serial == 0 and Key_2 in the rolling-code slot, so the
+ *     capture can be saved and fed to the TEA brute-force key search
+ *     (Sub_Ghz/subghz_psa_bruteforce.c).
  *
  * Unlike the name-only placeholder automotive entries in this directory, this
  * decoder actually parses the on-air waveform so M1 can identify PSA keyfobs from
@@ -123,6 +128,30 @@ bool m1_psa_parse_frame(const uint8_t frame[PSA_WIRE_BYTES],
     return true;
 }
 
+/**
+ * Identify a TEA-mode (reference type 0x36) PSA frame — a structurally-valid
+ * frame (Manchester pairing already verified by the caller plus the 0xA
+ * marker nibble) that the cipher-free Direct-XOR path cannot decode.
+ *
+ * Such frames can only be recovered by the TEA brute-force search
+ * (subghz_psa_bruteforce.c), which needs the captured Key (buffer[0..7]) and
+ * Key_2 (buffer[8..9]); the latter is returned via @p key2.
+ *
+ * Pure function — no global side effects; unit-tested on the host.
+ */
+bool m1_psa_parse_frame_encrypted(const uint8_t frame[PSA_WIRE_BYTES],
+                                  uint16_t *key2)
+{
+    if (frame == NULL)
+        return false;
+    if ((frame[1] & 0x0Fu) != PSA_MARKER_NIBBLE)
+        return false;
+
+    if (key2)
+        *key2 = (uint16_t)(((uint16_t)frame[8] << 8) | frame[9]);
+    return true;
+}
+
 /*============================================================================*/
 /* Manchester cell helpers                                                     */
 /*============================================================================*/
@@ -168,17 +197,34 @@ static bool psa_try_window(const uint8_t *cells, uint16_t cell_count,
     uint32_t serial = 0;
     uint16_t counter = 0;
     uint8_t  button = 0;
-    if (!m1_psa_parse_frame(frame, &serial, &button, &counter))
-        return false;
 
     uint64_t key1 = 0;
     for (uint8_t i = 0; i < 8u; i++)
         key1 = (key1 << 8) | frame[i];
 
-    subghz_decenc_ctl.n64_decodedvalue  = key1;
-    subghz_decenc_ctl.n32_serialnumber  = serial;
-    subghz_decenc_ctl.n32_rollingcode   = counter;
-    subghz_decenc_ctl.n8_buttonid       = button;
+    if (m1_psa_parse_frame(frame, &serial, &button, &counter))
+    {
+        subghz_decenc_ctl.n64_decodedvalue  = key1;
+        subghz_decenc_ctl.n32_serialnumber  = serial;
+        subghz_decenc_ctl.n32_rollingcode   = counter;
+        subghz_decenc_ctl.n8_buttonid       = button;
+    }
+    else
+    {
+        /* TEA-mode (type 0x36) frame: the fields stay encrypted.  Surface the
+         * capture for the brute-force search: serial == 0 marks "needs brute
+         * force" (a Direct-XOR decode never yields serial 0), and Key_2 rides
+         * in the rolling-code slot so the save path can persist it. */
+        uint16_t key2 = 0;
+        if (!m1_psa_parse_frame_encrypted(frame, &key2))
+            return false;
+
+        subghz_decenc_ctl.n64_decodedvalue  = key1;
+        subghz_decenc_ctl.n32_serialnumber  = 0;
+        subghz_decenc_ctl.n32_rollingcode   = key2;
+        subghz_decenc_ctl.n8_buttonid       = 0;
+    }
+
     subghz_decenc_ctl.ndecodedbitlength = (uint16_t)PSA_WIRE_BITS;
     subghz_decenc_ctl.ndecodeddelay     = 0;
     subghz_decenc_ctl.ndecodedprotocol  = protocol_index;

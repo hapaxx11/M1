@@ -351,6 +351,21 @@ void subghz_decenc_set_weather_only(bool weather_only);
 bool subghz_decenc_get_weather_only(void);
 void subghz_decenc_set_tpms_only(bool tpms_only);
 bool subghz_decenc_get_tpms_only(void);
+
+/**
+ * PSA TEA-mode (type 0x36) frames cannot be field-decoded on the receive
+ * path; the PSA decoder surfaces them with serial_number == 0 (a Direct-XOR
+ * decode never yields serial 0) and the 16-bit Key_2 word in the
+ * rolling_code slot.  This predicate marks such captures so save paths can
+ * persist `Key_2:` and the UI/Proto Pirate tools can offer the TEA
+ * brute-force key search (Sub_Ghz/subghz_psa_bruteforce.c).
+ */
+static inline bool subghz_psa_capture_needs_bruteforce(uint16_t protocol,
+                                                       uint32_t serial_number)
+{
+    return protocol == (uint16_t)PSA && serial_number == 0u;
+}
+
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);
 uint16_t get_diff(uint16_t n_a, uint16_t n_b);
 
