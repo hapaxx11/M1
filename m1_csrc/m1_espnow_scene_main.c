@@ -18,6 +18,7 @@
 #include "m1_esp32_hal.h"
 #include "m1_esp32_caps.h"
 #include "esp32_feature_map.h"
+#include "m1_espnow_hal.h"
 #include "m1_tasks.h"
 
 /*==========================================================================*/

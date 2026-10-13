@@ -21,6 +21,8 @@ extern int16_t subghz_read_rssi_ext(void);
 extern uint32_t subghz_get_freq_hz_ext(uint8_t freq_idx);
 extern uint32_t subghz_get_user_custom_freq_ext(void);
 extern void subghz_set_user_custom_freq_ext(uint32_t frequency_hz);
+extern void subghz_set_freq_idx_ext(uint8_t idx);
+extern void subghz_set_mod_idx_ext(uint8_t idx);
 extern void subghz_apply_config_ext(uint8_t freq_idx, uint8_t mod_idx);
 extern void sub_ghz_rx_init_ext(void);
 extern void sub_ghz_rx_start_ext(void);

@@ -45,6 +45,7 @@
 #include "m1_tasks.h"
 #include "m1_compile_cfg.h"
 #include "esp32_feature_map.h"
+#include "m1_esp32_caps.h"
 
 /*==========================================================================*/
 /* Blocking delegate macro                                                  */
