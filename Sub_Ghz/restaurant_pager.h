@@ -23,6 +23,14 @@ typedef enum {
     RESTAURANT_PAGER_ACTION_ALL_OFF
 } restaurant_pager_action_t;
 
+typedef enum {
+    RESTAURANT_PAGER_VIEW_SCAN = 0,
+    RESTAURANT_PAGER_VIEW_EDIT,
+    RESTAURANT_PAGER_VIEW_ACTIONS,
+    RESTAURANT_PAGER_VIEW_SETTINGS,
+    RESTAURANT_PAGER_VIEW_BATCH_CONFIRM
+} restaurant_pager_view_t;
+
 typedef struct {
     uint16_t station;
     uint16_t pager;
@@ -30,6 +38,7 @@ typedef struct {
     restaurant_pager_action_t action;
 } restaurant_pager_fields_t;
 
+bool restaurant_pager_capture_updates_history(restaurant_pager_view_t view);
 bool restaurant_pager_decode(restaurant_pager_format_t format,
                              uint32_t data,
                              restaurant_pager_fields_t *fields);

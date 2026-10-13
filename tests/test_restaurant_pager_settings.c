@@ -23,7 +23,10 @@ void test_parse_and_format_settings(void)
 
 void test_settings_validation_rejects_invalid_values(void)
 {
-    restaurant_pager_settings_t settings;
+    restaurant_pager_settings_t settings = {
+        .max_pager = 255U,
+        .tx_repeat_count = 10U,
+    };
     char buffer[16];
 
     TEST_ASSERT_FALSE(restaurant_pager_settings_parse(NULL, &settings));

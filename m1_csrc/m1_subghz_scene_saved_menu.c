@@ -191,8 +191,9 @@ static void scene_on_enter(SubGhzApp *app)
      * More button inside Read Raw. */
     if (is_raw_file)
     {
-        strncpy(app->raw_load_path, app->saved_filepath, sizeof(app->raw_load_path) - 1);
-        app->raw_load_path[sizeof(app->raw_load_path) - 1] = '\0';
+        strncpy(app->raw_load_path, app->saved_filepath,
+                SUBGHZ_SAVED_PATH_MAX - 1U);
+        app->raw_load_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
         app->raw_load_is_native = saved_signal.is_m1_native;
         app->raw_load_freq_hz   = saved_signal.frequency;
         {
@@ -214,8 +215,9 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         {
             /* Parsed (static-key) files: push the Transmitter scene which
              * drives the async-TX state machine on top of our scene. */
-            strncpy(app->tx_path, app->saved_filepath, sizeof(app->tx_path) - 1);
-            app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+            strncpy(app->tx_path, app->saved_filepath,
+                    SUBGHZ_SAVED_PATH_MAX - 1U);
+            app->tx_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
             app->tx_repeat_count = 5U;             /* static keys: 5 bursts for reliable TX */
             app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
             /* Propagate the parsed protocol name so the Transmitter

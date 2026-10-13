@@ -58,14 +58,6 @@ typedef struct {
     restaurant_pager_format_t format;
 } restaurant_pager_entry_t;
 
-typedef enum {
-    RESTAURANT_PAGER_VIEW_SCAN = 0,
-    RESTAURANT_PAGER_VIEW_EDIT,
-    RESTAURANT_PAGER_VIEW_ACTIONS,
-    RESTAURANT_PAGER_VIEW_SETTINGS,
-    RESTAURANT_PAGER_VIEW_BATCH_CONFIRM
-} restaurant_pager_view_t;
-
 struct restaurant_pager_app_state {
     restaurant_pager_entry_t history[RESTAURANT_PAGER_HISTORY_CAPACITY];
     uint8_t count;
@@ -315,6 +307,9 @@ static bool push_transmitter(SubGhzApp *app, restaurant_pager_entry_t *entry)
     if (protocol == NULL)
         return false;
 
+    if (fs_directory_ensure("/SUBGHZ") != FR_OK)
+        return false;
+
     (void)f_unlink(RESTAURANT_PAGER_TX_PATH);
     if (!flipper_subghz_save_key(RESTAURANT_PAGER_TX_PATH,
                                  entry->frequency_hz,
@@ -325,7 +320,7 @@ static bool push_transmitter(SubGhzApp *app, restaurant_pager_entry_t *entry)
                                  entry->te))
         return false;
 
-    (void)snprintf(app->tx_path, sizeof(app->tx_path), "%s",
+    (void)snprintf(app->tx_path, SUBGHZ_SAVED_PATH_MAX, "%s",
                    RESTAURANT_PAGER_TX_PATH);
     app->tx_repeat_count = app->restaurant_pager_state->tx_repeat_count;
     app->tx_mode = 0U;
@@ -727,7 +722,10 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
             {
                 SubGHz_Dec_Info_t decoded;
                 if (subghz_decenc_read(&decoded, false))
-                    add_capture(state, &decoded, app->current_freq_hz);
+                {
+                    if (restaurant_pager_capture_updates_history(state->view))
+                        add_capture(state, &decoded, app->current_freq_hz);
+                }
                 app->need_redraw = true;
             }
             return true;

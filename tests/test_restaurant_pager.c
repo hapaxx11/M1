@@ -39,6 +39,20 @@ void test_td157_decode_and_edit_fields(void)
                                                   &data, 1024U));
 }
 
+void test_capture_updates_history_only_in_scan_view(void)
+{
+    TEST_ASSERT_TRUE(restaurant_pager_capture_updates_history(
+        RESTAURANT_PAGER_VIEW_SCAN));
+    TEST_ASSERT_FALSE(restaurant_pager_capture_updates_history(
+        RESTAURANT_PAGER_VIEW_EDIT));
+    TEST_ASSERT_FALSE(restaurant_pager_capture_updates_history(
+        RESTAURANT_PAGER_VIEW_ACTIONS));
+    TEST_ASSERT_FALSE(restaurant_pager_capture_updates_history(
+        RESTAURANT_PAGER_VIEW_SETTINGS));
+    TEST_ASSERT_FALSE(restaurant_pager_capture_updates_history(
+        RESTAURANT_PAGER_VIEW_BATCH_CONFIRM));
+}
+
 void test_td165_reversed_fields_and_mute(void)
 {
     uint32_t data = (reverse_bits(0x123U, 13U) << 11U) |
@@ -157,6 +171,7 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_td157_decode_and_edit_fields);
+    RUN_TEST(test_capture_updates_history_only_in_scan_view);
     RUN_TEST(test_td165_reversed_fields_and_mute);
     RUN_TEST(test_td174_desync_fields);
     RUN_TEST(test_l8r_and_l8s_pager_bit_order);

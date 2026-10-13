@@ -120,7 +120,7 @@ static void do_rename(SubGhzApp *app)
     FRESULT res = f_rename(old_path, new_path);
     if (res == FR_OK)
     {
-        snprintf(app->raw_filepath, sizeof(app->raw_filepath),
+        snprintf(app->raw_filepath, SUBGHZ_SAVED_PATH_MAX,
                  "%s", relative_path);
     }
     else

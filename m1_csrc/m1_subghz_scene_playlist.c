@@ -177,8 +177,8 @@ static void playlist_push_transmitter(SubGhzApp *app)
         return;
 
     const char *path = app->playlist_files[app->playlist_current];
-    strncpy(app->tx_path, path, sizeof(app->tx_path) - 1);
-    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    strncpy(app->tx_path, path, SUBGHZ_SAVED_PATH_MAX - 1U);
+    app->tx_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
     app->tx_repeat_count = 1U;            /* one burst per playlist item */
     app->tx_mode         = 0U;            /* SUBGHZ_TX_MODE_SINGLE */
     /* Phase 4b — Playlist runs items back-to-back automatically; button

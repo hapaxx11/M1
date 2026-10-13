@@ -75,6 +75,11 @@ static uint32_t set_field(uint32_t data, uint32_t value, uint8_t bits,
     return (data & ~mask) | ((encoded << offset) & mask);
 }
 
+bool restaurant_pager_capture_updates_history(restaurant_pager_view_t view)
+{
+    return view == RESTAURANT_PAGER_VIEW_SCAN;
+}
+
 bool restaurant_pager_decode(restaurant_pager_format_t format,
                              uint32_t data,
                              restaurant_pager_fields_t *fields)

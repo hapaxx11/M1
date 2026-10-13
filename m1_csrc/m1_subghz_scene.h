@@ -213,7 +213,7 @@ typedef struct {
     /* --- Read Raw state --- */
     SubGhzReadRawState raw_state;
     uint32_t raw_sample_count;        /**< Total RAW samples received */
-    char     raw_load_path[SUBGHZ_SAVED_PATH_MAX]; /**< Pre-loaded filepath from Saved */
+    char    *raw_load_path;              /**< Pre-loaded filepath from Saved */
     bool     raw_load_is_native;      /**< true = .sgh (use sub_ghz_replay_datafile) */
     uint32_t raw_load_freq_hz;        /**< Frequency for native replay */
     uint8_t  raw_load_mod;            /**< Modulation for native replay */
@@ -225,7 +225,7 @@ typedef struct {
      *  scene is showing.  Empty string when no capture is loaded.  Cleared
      *  by MoreRAW on delete so the Read Raw resume-from-child path detects
      *  the deletion and resets to Start state. */
-    char     raw_filepath[SUBGHZ_SAVED_PATH_MAX];
+    char    *raw_filepath;
 
     /* --- Save flow --- */
     char     file_path[64];           /**< Current file path for save */
@@ -279,7 +279,7 @@ typedef struct {
      *  caller before pushing SubGhzSceneTransmitter; remains valid for
      *  the lifetime of that scene.  Empty string = no file (the scene
      *  shows a "Load a file" error and BACK exits). */
-    char     tx_path[SUBGHZ_SAVED_PATH_MAX];
+    char    *tx_path;
     /** Engine repeat count (tail bursts) — typical: 1 for static OOK,
      *  3 for rolling codes.  Clamped to >= 1 by the controller. */
     uint16_t tx_repeat_count;
@@ -319,7 +319,7 @@ typedef struct {
      *  Saved file-browser scene when a file is chosen, consumed by the
      *  SavedMenu scene (for action handling) and the Delete scene (for
      *  the unlink target).  Empty string when no file is selected. */
-    char     saved_filepath[SUBGHZ_SAVED_PATH_MAX];
+    char    *saved_filepath;
     /** Bare filename (basename only, no directory) of the currently-
      *  selected saved file.  Set together with `saved_filepath`. */
     char     saved_filename[32];
