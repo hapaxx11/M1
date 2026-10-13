@@ -13,8 +13,8 @@
 
 ### Phase 2 — Decoder and key-data documentation
 - **Description**: Document current M1 decoder and build-time key/table organization.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Document ProtoPirate decoder and key data layout`
 
 ### Phase 3 — Checklist cleanup
 - **Description**: Remove this temporary checklist before the final PR.
