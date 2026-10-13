@@ -4,6 +4,9 @@
 
 #include <stddef.h>
 
+/* TODO: connect a future generic worker adapter here; protocol-specific search
+ * and verification remain outside this lifecycle module. */
+
 void subghz_bruteforce_job_init(subghz_bruteforce_job_t *job)
 {
     if (job == NULL)
