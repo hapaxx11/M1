@@ -35,6 +35,7 @@
 #include "nfc_card_info.h"
 #include "nfc_ndef_parse.h"
 #include "nfc_ndef_encode.h"
+#include "nfc_ndef_authoring.h"
 #include "m1_espnow_capture_share.h"
 #include "m1_system.h"   /* m1_lcd_wake_restart_timer() for the successful-read info screen */
 
@@ -85,7 +86,7 @@ static const char *m1_nfc_tool_options[] = {
 	"Wipe Tag",
 	"Cyborg Detector",
 	"Read NDEF",
-	"Write URL"
+	"NDEF Maker"
 };
 
 //************************** S T R U C T U R E S *******************************
@@ -192,7 +193,7 @@ static int nfc_utils_kp_handler(void);
 static void nfc_tool_fuzzer(void);
 static void nfc_tool_cyborg_detector(void);
 static void nfc_tool_read_ndef(void);
-static void nfc_tool_write_url(void);
+static void nfc_tool_write_ndef(void);
 
 static void nfc_info_gui_init(void);
 static void nfc_info_gui_create(uint8_t param);
@@ -1537,8 +1538,8 @@ static int nfc_utils_kp_handler(void)
 					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 					break;
 
-				case 7: /* Write URL */
-					nfc_tool_write_url();
+				case 7: /* NDEF Maker */
+					nfc_tool_write_ndef();
 					m1_uiView_display_update(X_MENU_UPDATE_REFRESH);
 					break;
 
@@ -3042,32 +3043,127 @@ static void nfc_tool_read_ndef(void)
 
 /*============================================================================*/
 /**
- * @brief nfc_tool_write_url - Write a URL as NDEF to an NTAG tag
+ * @brief nfc_tool_write_ndef - Create and write an NDEF record to a Type 2 tag
  *
- * Prompts the user for a URL using the virtual keyboard, then writes it
- * as an NDEF URI record (https:// prefix) to T2T pages starting at page 4.
+ * Prompts for a URI, text, phone number, or Wi-Fi credential and writes the
+ * encoded record to Type 2 Tag pages starting at page 4.
  *
  * @retval None
  */
 /*============================================================================*/
-static void nfc_tool_write_url(void)
+static void nfc_tool_write_ndef(void)
 {
 	S_M1_Buttons_Status bs;
 	S_M1_Main_Q_t q_item;
 	BaseType_t ret;
+	const char *record_types[] = {"URL", "Text", "Phone", "Wi-Fi"};
+	char field[128] = "";
+	char secondary_field[64] = "";
+	char default_url[] = "https://github.com/hapaxx11/M1";
+	char default_field[] = "";
 
-	/* Prompt for URL text via virtual keyboard */
-	char url_text[128];
-	char default_url[] = "github.com/hapaxx11/M1";
-	uint8_t vkb_ret = m1_vkb_get_filename("Enter URL (no https://):", default_url, url_text);
-	if (!vkb_ret) return;
+	while (xQueueReceive(main_q_hdl, &q_item, 0) == pdTRUE)
+	{
+		if (q_item.q_evt_type == Q_EVENT_KEYPAD)
+			xQueueReceive(button_events_q_hdl, &bs, 0);
+	}
 
-	if (url_text[0] == '\0') return;
+	m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+	m1_gui_submenu_update(record_types, 4, 0, X_MENU_UPDATE_RESET);
+	uint8_t authoring_type = 0xFF;
+	while (authoring_type == 0xFF)
+	{
+		ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+		if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+		ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+		if (ret != pdTRUE) continue;
+
+		if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			xQueueReset(main_q_hdl);
+			return;
+		}
+		if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+			authoring_type = m1_gui_submenu_update(NULL, 0, 0, MENU_UPDATE_NONE);
+		else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+			m1_gui_submenu_update(record_types, 4, 0, X_MENU_UPDATE_MOVE_UP);
+		else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+			m1_gui_submenu_update(record_types, 4, 0, X_MENU_UPDATE_MOVE_DOWN);
+	}
+	if (authoring_type >= 4) return;
+
+	uint8_t vkb_ret = 0;
+	if (authoring_type == NFC_NDEF_AUTHOR_WIFI)
+	{
+		char default_ssid[] = "";
+		vkb_ret = m1_vkb_get_filename("Enter Wi-Fi SSID:", default_ssid, field);
+		if (!vkb_ret || field[0] == '\0') return;
+
+		const char *wifi_security_options[] = {"Open network", "Secured network"};
+		m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+		m1_gui_submenu_update(wifi_security_options, 2, 0, X_MENU_UPDATE_RESET);
+		uint8_t wifi_security = 0xFFu;
+		while (wifi_security == 0xFFu)
+		{
+			ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+			if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret != pdTRUE) continue;
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				return;
+			}
+			if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+				wifi_security = m1_gui_submenu_update(
+					NULL, 0, 0, MENU_UPDATE_NONE);
+			else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+				m1_gui_submenu_update(wifi_security_options, 2, 0,
+				                      X_MENU_UPDATE_MOVE_UP);
+			else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+				m1_gui_submenu_update(wifi_security_options, 2, 0,
+				                      X_MENU_UPDATE_MOVE_DOWN);
+		}
+		if (wifi_security >= 2u) return;
+		if (wifi_security == 1u)
+		{
+			char default_password[] = "";
+			vkb_ret = m1_vkb_get_filename(
+				"Enter Wi-Fi password:", default_password, secondary_field);
+			if (!vkb_ret || secondary_field[0] == '\0') return;
+		}
+	}
+	else
+	{
+		char *prompt = "Enter URL:";
+		char *default_value = default_url;
+		if (authoring_type == NFC_NDEF_AUTHOR_TEXT)
+		{
+			prompt = "Enter text:";
+			default_value = default_field;
+		}
+		else if (authoring_type == NFC_NDEF_AUTHOR_PHONE)
+		{
+			prompt = "Enter phone number:";
+			default_value = default_field;
+		}
+		vkb_ret = m1_vkb_get_filename(prompt, default_value, field);
+		if (!vkb_ret || field[0] == '\0') return;
+	}
 
 	uint8_t ndef_record[128];
-	size_t ndef_total = ndef_encode_uri(ndef_record, sizeof(ndef_record),
-	                                    NDEF_URI_HTTPS, url_text);
-	if (ndef_total == 0) return;
+	size_t ndef_total = nfc_ndef_authoring_encode(
+		(nfc_ndef_authoring_type_t)authoring_type,
+		field,
+		secondary_field,
+		ndef_record,
+		sizeof(ndef_record));
+	if (ndef_total == 0)
+	{
+		m1_message_box(&m1_u8g2, "NDEF Maker", "Content is too large", "Use shorter text", "BACK to return");
+		return;
+	}
 
 	/* Pad to 4-byte alignment for T2T pages */
 	while (ndef_total % 4 != 0)
@@ -3077,14 +3173,16 @@ static void nfc_tool_write_url(void)
 	m1_u8g2_firstpage();
 	u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 	u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write NFC URL");
+	u8g2_DrawStr(&m1_u8g2, 4, 12, "Write NDEF Record");
 	u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
-	u8g2_DrawStr(&m1_u8g2, 4, 26, "https://");
-	/* Truncate display if too long */
-	char disp_url[22];
-	strncpy(disp_url, url_text, 21);
-	disp_url[21] = '\0';
-	u8g2_DrawStr(&m1_u8g2, 4, 36, disp_url);
+	u8g2_DrawStr(&m1_u8g2, 4, 26, record_types[authoring_type]);
+	if (authoring_type != NFC_NDEF_AUTHOR_WIFI)
+	{
+		char preview[22];
+		strncpy(preview, field, sizeof(preview) - 1);
+		preview[sizeof(preview) - 1] = '\0';
+		u8g2_DrawStr(&m1_u8g2, 4, 38, preview);
+	}
 	m1_button_bar_draw(NULL, NULL, ok_circle_8x8, "Write", NULL, NULL);
 	m1_u8g2_nextpage();
 
@@ -3110,15 +3208,25 @@ static void nfc_tool_write_url(void)
 			m1_u8g2_firstpage();
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
-			u8g2_DrawStr(&m1_u8g2, 4, 25, "Writing URL...");
+			u8g2_DrawStr(&m1_u8g2, 4, 25, "Writing NDEF...");
 			u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
 			u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold NTAG to back");
 			m1_u8g2_nextpage();
 
-			/* Write NDEF to pages starting at page 4 (user data area) */
-			ReturnCode err = RFAL_ERR_NONE;
-			uint8_t pages_needed = ndef_total / 4;
-			for (uint8_t p = 0; p < pages_needed; p++)
+			/* Read page 0 to validate the capability container before writing. */
+			uint8_t tag_header[16] = {0};
+			uint16_t tag_header_len = 0;
+			ReturnCode err = rfalT2TPollerRead(
+				0, tag_header, sizeof(tag_header), &tag_header_len);
+			bool capacity_valid =
+				err == RFAL_ERR_NONE && tag_header_len >= sizeof(tag_header) &&
+				nfc_ndef_authoring_fits_capacity(ndef_total, &tag_header[12]);
+			if (!capacity_valid)
+				err = RFAL_ERR_PARAM;
+
+			/* Write NDEF to pages starting at page 4 (user data area). */
+			uint16_t pages_needed = ndef_pages_needed(ndef_total);
+			for (uint16_t p = 0; capacity_valid && p < pages_needed; p++)
 			{
 				err = rfalT2TPollerWrite(4 + p, &ndef_record[p * 4]);
 				if (err != RFAL_ERR_NONE) break;
@@ -3130,12 +3238,14 @@ static void nfc_tool_write_url(void)
 			u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			u8g2_SetFont(&m1_u8g2, M1_DISP_RUN_MENU_FONT_B);
 			if (err == RFAL_ERR_NONE) {
-				u8g2_DrawStr(&m1_u8g2, 4, 25, "URL Written!");
+				u8g2_DrawStr(&m1_u8g2, 4, 25, "NDEF Written!");
 				m1_buzzer_notification();
 			} else {
 				u8g2_DrawStr(&m1_u8g2, 4, 25, "Write Failed!");
 				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-				u8g2_DrawStr(&m1_u8g2, 4, 40, "Use writable NTAG");
+				u8g2_DrawStr(&m1_u8g2, 4, 40,
+				             capacity_valid ? "Use writable NTAG" :
+				                              "Tag too small or invalid");
 			}
 			m1_u8g2_nextpage();
 			vTaskDelay(pdMS_TO_TICKS(2000));
@@ -4591,7 +4701,7 @@ static const char *m1_nfc_extra_options[] = {
 	"Wipe Tag",
 	"Cyborg Detector",
 	"Read NDEF",
-	"Write URL"
+	"NDEF Maker"
 };
 
 void nfc_extra_actions(void)
@@ -4649,7 +4759,7 @@ void nfc_extra_actions(void)
 					case 8:  nfc_utils_wipe_tag_run();  break;
 					case 9:  nfc_tool_cyborg_detector(); break;
 					case 10: nfc_tool_read_ndef();      break;
-					case 11: nfc_tool_write_url();      break;
+					case 11: nfc_tool_write_ndef();     break;
 					default: break;
 				}
 				m1_gui_submenu_update(m1_nfc_extra_options, NFC_EXTRA_ACTIONS_COUNT, 0, X_MENU_UPDATE_REFRESH);

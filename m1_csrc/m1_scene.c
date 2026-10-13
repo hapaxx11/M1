@@ -202,6 +202,8 @@ void m1_scene_run(const M1SceneHandlers *const *registry,
                 evt = M1SceneEventSubghzTx;
             else if (q_item.q_evt_type == Q_EVENT_IRRED_TX)
                 evt = M1SceneEventInfraredTx;
+            else if (q_item.q_evt_type == Q_EVENT_BLE_SCAN_COMPLETE)
+                evt = M1SceneEventBleScanComplete;
 
             m1_scene_send_event(&app, evt);
         }

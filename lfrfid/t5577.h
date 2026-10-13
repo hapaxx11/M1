@@ -108,6 +108,7 @@ typedef struct {
  * @param data 
  */
 void t5577_execute_write(LFRFIDProgram* data, int block);
+void t5577_clear_password(uint32_t password);
 
 #ifdef __cplusplus
 }

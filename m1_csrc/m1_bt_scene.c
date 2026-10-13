@@ -25,6 +25,7 @@
 static const M1SceneHandlers *const scene_registry[BtSceneCount] = {
     [BtSceneMenu]           = &bt_scene_menu_handlers,
     [BtSceneScan]           = &bt_scene_scan_handlers,
+    [BtSceneSignalFinder]   = &bt_scene_signal_finder_handlers,
     [BtSceneAdvertise]      = &bt_scene_advertise_handlers,
     [BtSceneConfig]         = &bt_scene_config_handlers,
 

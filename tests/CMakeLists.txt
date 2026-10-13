@@ -396,6 +396,36 @@ endif()
 add_test(NAME bt_spam_counts COMMAND test_bt_spam_counts)
 
 # ------------------------------------------------------------------
+# Module under test: pure BLE signal-finder target matching and RSSI strength
+# ------------------------------------------------------------------
+add_executable(test_ble_signal_finder
+    test_ble_signal_finder.c
+)
+target_include_directories(test_ble_signal_finder PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_ble_signal_finder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ble_signal_finder PRIVATE sanitizers)
+endif()
+add_test(NAME ble_signal_finder COMMAND test_ble_signal_finder)
+
+# ------------------------------------------------------------------
+# Module under test: pure BLE detector name and advertisement signatures
+# ------------------------------------------------------------------
+add_executable(test_ble_detector
+    test_ble_detector.c
+)
+target_include_directories(test_ble_detector PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_ble_detector PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_ble_detector PRIVATE sanitizers)
+endif()
+add_test(NAME ble_detector COMMAND test_ble_detector)
+
+# ------------------------------------------------------------------
 # Module under test: bq27421_init pure-logic helpers
 #
 # Regression for v0.9.0.166 crash: bq27421_init() entered the full
@@ -2576,6 +2606,37 @@ if(TARGET sanitizers)
     target_link_libraries(test_nfc_ndef_encode PRIVATE sanitizers)
 endif()
 add_test(NAME nfc_ndef_encode COMMAND test_nfc_ndef_encode)
+
+# ── NFC NDEF authoring dispatcher ──
+add_executable(test_nfc_ndef_authoring
+    test_nfc_ndef_authoring.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_authoring.c
+    ${M1_ROOT}/m1_csrc/nfc_ndef_encode.c
+)
+target_include_directories(test_nfc_ndef_authoring PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_nfc_ndef_authoring PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_nfc_ndef_authoring PRIVATE sanitizers)
+endif()
+add_test(NAME nfc_ndef_authoring COMMAND test_nfc_ndef_authoring)
+
+# ── T5577 password input validation ──
+add_executable(test_rfid_t5577_password
+    test_rfid_t5577_password.c
+    ${M1_ROOT}/m1_csrc/rfid_t5577_password.c
+)
+target_include_directories(test_rfid_t5577_password PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_rfid_t5577_password PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rfid_t5577_password PRIVATE sanitizers)
+endif()
+add_test(NAME rfid_t5577_password COMMAND test_rfid_t5577_password)
 
 # ------------------------------------------------------------------
 # Module under test: nfc_ndef_parse (NDEF TLV record parser — URI + Text)

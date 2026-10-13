@@ -106,6 +106,7 @@ project discussion, and related project resources:
 - **Clone & Emulate** — copy and replay NFC tags
 - **PicoPass/iCLASS** — read, authenticate, and emulate HID iCLASS cards (DES key diversification)
 - **NFC Fuzzer** — protocol testing tool
+- **NDEF Maker** — write URI, text, phone, and Wi-Fi records to Type 2 tags
 - **MIFARE Classic Crypto1** support
 - **On-device MFKey32 key recovery** — after capturing two reader authentication nonces via Detect Reader, recovers the MIFARE Classic sector key entirely on-device using a memory-bounded Crapto-1 solver; saves recovered keys in Proxmark-compatible dictionary format
 
@@ -114,6 +115,7 @@ project discussion, and related project resources:
 - **Clone Card** — write to T5577 tags
 - **Erase Tag** — reset T5577 to factory
 - **T5577 Info** — read tag configuration
+- **Clear T5577 Password** — clear password protection when the current password is known
 - **RFID Fuzzer** — protocol testing tool
 - **Manchester decoder** with carrier auto-detection (ASK/PSK)
 
