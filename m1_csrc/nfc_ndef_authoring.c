@@ -7,6 +7,20 @@
 
 #include "nfc_ndef_encode.h"
 
+bool nfc_ndef_authoring_fits_capacity(
+    size_t ndef_size,
+    const uint8_t capability_container[4])
+{
+    if (ndef_size == 0u || !capability_container ||
+        capability_container[0] != 0xE1u ||
+        (capability_container[1] & 0xF0u) != 0x10u ||
+        capability_container[2] == 0u)
+        return false;
+
+    size_t user_pages = (size_t)capability_container[2] * 2u;
+    return ndef_pages_needed(ndef_size) <= user_pages;
+}
+
 size_t nfc_ndef_authoring_encode(
     nfc_ndef_authoring_type_t type,
     const char *value,

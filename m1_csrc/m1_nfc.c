@@ -3098,9 +3098,41 @@ static void nfc_tool_write_ndef(void)
 		char default_ssid[] = "";
 		vkb_ret = m1_vkb_get_filename("Enter Wi-Fi SSID:", default_ssid, field);
 		if (!vkb_ret || field[0] == '\0') return;
-		char default_password[] = "";
-		vkb_ret = m1_vkb_get_filename("Password (blank=open):", default_password, secondary_field);
-		if (!vkb_ret) return;
+
+		const char *wifi_security_options[] = {"Open network", "Secured network"};
+		m1_gui_submenu_update(NULL, 0, 0, X_MENU_UPDATE_INIT);
+		m1_gui_submenu_update(wifi_security_options, 2, 0, X_MENU_UPDATE_RESET);
+		uint8_t wifi_security = 0xFFu;
+		while (wifi_security == 0xFFu)
+		{
+			ret = xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY);
+			if (ret != pdTRUE || q_item.q_evt_type != Q_EVENT_KEYPAD) continue;
+			ret = xQueueReceive(button_events_q_hdl, &bs, 0);
+			if (ret != pdTRUE) continue;
+
+			if (bs.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
+			{
+				xQueueReset(main_q_hdl);
+				return;
+			}
+			if (bs.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
+				wifi_security = m1_gui_submenu_update(
+					NULL, 0, 0, MENU_UPDATE_NONE);
+			else if (bs.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
+				m1_gui_submenu_update(wifi_security_options, 2, 0,
+				                      X_MENU_UPDATE_MOVE_UP);
+			else if (bs.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
+				m1_gui_submenu_update(wifi_security_options, 2, 0,
+				                      X_MENU_UPDATE_MOVE_DOWN);
+		}
+		if (wifi_security >= 2u) return;
+		if (wifi_security == 1u)
+		{
+			char default_password[] = "";
+			vkb_ret = m1_vkb_get_filename(
+				"Enter Wi-Fi password:", default_password, secondary_field);
+			if (!vkb_ret || secondary_field[0] == '\0') return;
+		}
 	}
 	else
 	{
@@ -3181,10 +3213,20 @@ static void nfc_tool_write_ndef(void)
 			u8g2_DrawStr(&m1_u8g2, 4, 40, "Hold NTAG to back");
 			m1_u8g2_nextpage();
 
-			/* Write NDEF to pages starting at page 4 (user data area) */
-			ReturnCode err = RFAL_ERR_NONE;
+			/* Read page 0 to validate the capability container before writing. */
+			uint8_t tag_header[16] = {0};
+			uint16_t tag_header_len = 0;
+			ReturnCode err = rfalT2TPollerRead(
+				0, tag_header, sizeof(tag_header), &tag_header_len);
+			bool capacity_valid =
+				err == RFAL_ERR_NONE && tag_header_len >= sizeof(tag_header) &&
+				nfc_ndef_authoring_fits_capacity(ndef_total, &tag_header[12]);
+			if (!capacity_valid)
+				err = RFAL_ERR_PARAM;
+
+			/* Write NDEF to pages starting at page 4 (user data area). */
 			uint16_t pages_needed = ndef_pages_needed(ndef_total);
-			for (uint16_t p = 0; p < pages_needed; p++)
+			for (uint16_t p = 0; capacity_valid && p < pages_needed; p++)
 			{
 				err = rfalT2TPollerWrite(4 + p, &ndef_record[p * 4]);
 				if (err != RFAL_ERR_NONE) break;
@@ -3201,7 +3243,9 @@ static void nfc_tool_write_ndef(void)
 			} else {
 				u8g2_DrawStr(&m1_u8g2, 4, 25, "Write Failed!");
 				u8g2_SetFont(&m1_u8g2, M1_DISP_SUB_MENU_FONT_N);
-				u8g2_DrawStr(&m1_u8g2, 4, 40, "Use writable NTAG");
+				u8g2_DrawStr(&m1_u8g2, 4, 40,
+				             capacity_valid ? "Use writable NTAG" :
+				                              "Tag too small or invalid");
 			}
 			m1_u8g2_nextpage();
 			vTaskDelay(pdMS_TO_TICKS(2000));

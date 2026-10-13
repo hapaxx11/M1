@@ -13,12 +13,12 @@
 
 ### Phase 2 — NFC authoring safety
 - **Description**: Reject NDEF records exceeding the Type 2 tag's advertised user memory before any write, and make open versus secured Wi-Fi submission explicit. Add host-side coverage.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Reject NDEF writes beyond tag capacity`
 
 ### Phase 3 — BLE scan responsiveness
 - **Description**: Move continuous BLE signal tracking and AirTag monitoring into scene-driven asynchronous scans that process BACK cancellation without blocking the UI task.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Validation and cleanup

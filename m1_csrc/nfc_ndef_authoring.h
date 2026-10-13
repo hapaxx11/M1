@@ -3,6 +3,7 @@
 #ifndef NFC_NDEF_AUTHORING_H_
 #define NFC_NDEF_AUTHORING_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -19,5 +20,9 @@ size_t nfc_ndef_authoring_encode(
     const char *secondary_value,
     uint8_t *out,
     size_t out_size);
+
+bool nfc_ndef_authoring_fits_capacity(
+    size_t ndef_size,
+    const uint8_t capability_container[4]);
 
 #endif
