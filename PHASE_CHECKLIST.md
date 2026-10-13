@@ -43,8 +43,8 @@
 ### Phase 3 — Result writeback (recovered-fields file)
 - **Description**: Pure formatter for the recovered `.sub` content (Key,
   Key_2, Serial, Btn, Cnt, Type 0x36, Seed) + save helper; host tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add PSA recovered-capture write-back save`
 
 ### Phase 4 — Async worker + Proto Pirate Brute Force scene
 - **Description**: New `SubGhzSceneProtoPirateBruteForce` scene: file browser
@@ -52,7 +52,7 @@
   semaphore completion, cancel flag) → progress bar UI on scene tick →
   result screen → optional save of recovered file. Register scene enum,
   handlers, CMake; add 5th Proto Pirate menu item.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 5 — Firmware build, RAM budget, docs, changelog
