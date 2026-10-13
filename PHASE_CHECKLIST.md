@@ -8,12 +8,12 @@
 
 ### Phase 1 — Protocol logic
 - **Description**: Add host-testable decode, encode/edit, and format-detection logic for supported restaurant pager encodings.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Add restaurant pager protocol logic`
 
 ### Phase 2 — Receiver and replay scene
 - **Description**: Add the native scene for live capture, history, field editing, and asynchronous transmission using the built-in SI4463.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 3 — Saved stations and categories

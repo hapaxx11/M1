@@ -391,6 +391,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_weather_history.c
     ../../Sub_Ghz/tpms_receiver.c
     ../../Sub_Ghz/pocsag_receiver.c
+    ../../Sub_Ghz/restaurant_pager.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c

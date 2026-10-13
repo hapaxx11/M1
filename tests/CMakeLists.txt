@@ -3661,6 +3661,22 @@ endif()
 add_test(NAME pocsag_receiver COMMAND test_pocsag_receiver)
 
 # ------------------------------------------------------------------
+# Module under test: restaurant pager field decoding and editing
+# ------------------------------------------------------------------
+add_executable(test_restaurant_pager
+    test_restaurant_pager.c
+    ${M1_ROOT}/Sub_Ghz/restaurant_pager.c
+)
+target_include_directories(test_restaurant_pager PRIVATE
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_restaurant_pager PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_restaurant_pager PRIVATE sanitizers)
+endif()
+add_test(NAME restaurant_pager COMMAND test_restaurant_pager)
+
+# ------------------------------------------------------------------
 # Module under test: TPMS receiver history and sensor deduplication
 # ------------------------------------------------------------------
 add_executable(test_tpms_receiver
