@@ -36,6 +36,7 @@ bool restaurant_pager_decode(restaurant_pager_format_t format,
 bool restaurant_pager_set_pager(restaurant_pager_format_t format,
                                 uint32_t *data,
                                 uint16_t pager);
+uint16_t restaurant_pager_pager_limit(restaurant_pager_format_t format);
 bool restaurant_pager_set_action(restaurant_pager_format_t format,
                                  uint32_t *data,
                                  restaurant_pager_action_t action);

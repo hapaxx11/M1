@@ -36,6 +36,7 @@
 #include "m1_storage.h"
 #include "m1_scene.h"
 #include "m1_subghz_scene.h"
+#include "subghz_saved_path.h"
 
 /*============================================================================*/
 /* Scene callbacks                                                            */
@@ -52,11 +53,12 @@
 static bool open_saved_browser(SubGhzApp *app)
 {
     S_M1_file_info *f_info = storage_browse("0:/SUBGHZ");
-    if (!f_info || !f_info->file_is_selected)
+    if (!f_info || !f_info->file_is_selected ||
+        !subghz_saved_path_build(app->saved_filepath,
+                                 sizeof(app->saved_filepath),
+                                 f_info->dir_name, f_info->file_name))
         return false;
 
-    snprintf(app->saved_filepath, sizeof(app->saved_filepath), "/SUBGHZ/%s",
-             f_info->file_name);
     strncpy(app->saved_filename, f_info->file_name, sizeof(app->saved_filename) - 1);
     app->saved_filename[sizeof(app->saved_filename) - 1] = '\0';
     return true;

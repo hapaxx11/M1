@@ -392,6 +392,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/tpms_receiver.c
     ../../Sub_Ghz/pocsag_receiver.c
     ../../Sub_Ghz/restaurant_pager.c
+    ../../Sub_Ghz/restaurant_pager_settings.c
     ../../Sub_Ghz/cc1101_fec.c
     ../../lib/furi/core/string.c
     ../../Sub_Ghz/protocols/m1_princeton_decode.c
@@ -600,6 +601,7 @@ target_sources(m1_01 INTERFACE
     ../../m1_csrc/m1_esp_hosted_dummy.c
     ../../m1_csrc/m1_file_browser.c
     ../../m1_csrc/m1_file_util.c
+    ../../m1_csrc/subghz_saved_path.c
     ../../m1_csrc/m1_fusb302.c
     ../../m1_csrc/m1_fw_update.c
     ../../m1_csrc/m1_fw_update_bl.c

@@ -57,7 +57,7 @@ project discussion, and related project resources:
 | LF-RFID protocols | ~10 | **26** |
 | Flipper `.sub`/`.rfid`/`.nfc`/`.ir` import | ✗ | ✓ |
 | Scene-based UI architecture | ✗ | ✓ (all modules) |
-| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG pager, weather, TPMS, brute force, playlist) | ✗ | ✓ |
+| Sub-GHz tools (spectrum, RSSI, scanner, signal ID, POCSAG and restaurant pagers, weather, TPMS, brute force, playlist) | ✗ | ✓ |
 | CAN bus support | ✗ | ✓ (FDCAN1) |
 | OTA firmware download (device WiFi → GitHub Releases) | ✗ | ✓ |
 | PicoPass / iCLASS NFC | ✗ | ✓ |
@@ -87,6 +87,7 @@ project discussion, and related project resources:
 ### Sub-GHz Enhancements
 - **105 protocol decoders** — Princeton, CAME, Nice Flo, Keeloq, Security+ 1.0/2.0, Linear, Holtek, Hormann, Marantec, Somfy, Ansonic, BETT, Clemsa, Doitrand, FireFly, CAME Twee/Atomo, Nice Flor S, Alutech AT-4N, Centurion, Kinggates Stylo, Megacode, Mastercode, Chamberlain 7/8/9-bit, Liftmaster 10-bit, Dooya, Honeywell, Intertechno, Elro, Nord ICE, Acurite (incl. 592TXR/986), Bresser, Oregon v1/v2/v3, LaCrosse, Scher-Khan, Toyota, Auriol AHFL, GT-WT-02, Kedsum-TH, ThermoPro TX-4, LaCrosse TX141THBv2, Wendox W6726, DITEC GOL4, Honeywell WDB, X10, FireCracker/CM17A, TX-8300, POCSAG pager decode, and more
 - **POCSAG Pager app** — M1-native live receiver with automatic 512/1200/2400 baud decode, decoded page history and details, and a DAPNET default frequency.
+- **Restaurant Pager app** — receive Princeton/SMC5326 restaurant pages, edit pager IDs and actions across five field layouts, replay one pager or explicitly confirmed batches, and save named stations into SD-card categories.
 - **TPMS app** — M1-native receiver for Schrader GG4 and generic TPMS frames, with bounded sensor history, tire pressure/temperature readings when supported, reception details, and frequency configuration.
 - **Spectrum Analyzer** — visual RF spectrum display with zoom, pan, and peak detection
 - **RSSI Meter** — real-time signal strength with bar graph and peak tracking
@@ -416,9 +417,11 @@ If you need to flash the firmware directly via USB using STM32CubeProgrammer (wi
 ├── NFC/             NFC tag .nfc files
 ├── RFID/            RFID tag .rfid files
 ├── SubGHz/          Sub-GHz signal .sub files (see subghz_database/)
-│   └── playlist/    Playlist .txt files (see subghz_playlist/)
+│   ├── playlist/    Playlist .txt files (see subghz_playlist/)
+│   └── Pagers/      Restaurant pager .sub files, grouped by category
 ├── System/          System configuration files
-│   └── fw_sources.txt  Firmware download sources (auto-generated, user-editable)
+│   ├── fw_sources.txt  Firmware download sources (auto-generated, user-editable)
+│   └── restaurant_pager.cfg  Restaurant pager max ID and TX repeat settings
 ├── apps/            External .m1app applications
 ├── settings.ini     M1 settings (auto-generated)
 └── wifi_cred.ini    Saved WiFi credentials (AES-256 encrypted, auto-generated)

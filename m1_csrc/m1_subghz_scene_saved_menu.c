@@ -47,6 +47,7 @@
 #include "subghz_submenu_model.h"
 #include "subghz_signal_fields.h"
 #include "subghz_signal_format.h"
+#include "subghz_saved_path.h"
 #include "m1_espnow_capture_share.h"
 
 /*============================================================================*/
@@ -251,13 +252,30 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
 
             if (m1_vkb_get_filename("Rename to:", base, new_name))
             {
-                char old_path[80], new_path[80];
-                snprintf(old_path, sizeof(old_path), "0:%s", app->saved_filepath);
-                /* Determine extension */
+                char old_path[80], new_path[80], directory[64];
+                char renamed[32], relative_path[64];
                 const char *ext = strrchr(app->saved_filename, '.');
                 if (!ext) ext = ".sub";
-                snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
-                f_rename(old_path, new_path);
+                strncpy(directory, app->saved_filepath, sizeof(directory) - 1U);
+                directory[sizeof(directory) - 1U] = '\0';
+                char *slash = strrchr(directory, '/');
+                int renamed_len = snprintf(renamed, sizeof(renamed), "%s%s",
+                                           new_name, ext);
+                if (slash != NULL && renamed_len >= 0 &&
+                    (size_t)renamed_len < sizeof(renamed))
+                {
+                    *slash = '\0';
+                    if (subghz_saved_path_build(relative_path,
+                                                sizeof(relative_path),
+                                                directory, renamed))
+                    {
+                        snprintf(old_path, sizeof(old_path), "0:%s",
+                                 app->saved_filepath);
+                        snprintf(new_path, sizeof(new_path), "0:%s",
+                                 relative_path);
+                        (void)f_rename(old_path, new_path);
+                    }
+                }
             }
             /* The renamed (or unchanged) file is no longer guaranteed to
              * exist at app->saved_filepath — return to the file browser. */

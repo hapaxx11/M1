@@ -135,6 +135,22 @@ void test_invalid_inputs_are_rejected(void)
         RESTAURANT_PAGER_TD165, &data, RESTAURANT_PAGER_ACTION_RING));
 }
 
+void test_pager_limits_match_each_encoding(void)
+{
+    TEST_ASSERT_EQUAL_UINT16(1023U,
+        restaurant_pager_pager_limit(RESTAURANT_PAGER_TD157));
+    TEST_ASSERT_EQUAL_UINT16(1023U,
+        restaurant_pager_pager_limit(RESTAURANT_PAGER_TD165));
+    TEST_ASSERT_EQUAL_UINT16(511U,
+        restaurant_pager_pager_limit(RESTAURANT_PAGER_TD174));
+    TEST_ASSERT_EQUAL_UINT16(255U,
+        restaurant_pager_pager_limit(RESTAURANT_PAGER_L8R));
+    TEST_ASSERT_EQUAL_UINT16(255U,
+        restaurant_pager_pager_limit(RESTAURANT_PAGER_L8S));
+    TEST_ASSERT_EQUAL_UINT16(0U,
+        restaurant_pager_pager_limit(RESTAURANT_PAGER_FORMAT_COUNT));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -144,5 +160,6 @@ int main(void)
     RUN_TEST(test_l8r_and_l8s_pager_bit_order);
     RUN_TEST(test_auto_detect_respects_pager_limit_and_fallback);
     RUN_TEST(test_invalid_inputs_are_rejected);
+    RUN_TEST(test_pager_limits_match_each_encoding);
     return UNITY_END();
 }

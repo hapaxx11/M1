@@ -145,6 +145,12 @@ bool restaurant_pager_set_pager(restaurant_pager_format_t format,
     return true;
 }
 
+uint16_t restaurant_pager_pager_limit(restaurant_pager_format_t format)
+{
+    const restaurant_pager_format_spec_t *spec = get_spec(format);
+    return (spec != NULL) ? (uint16_t)field_mask(spec->pager_bits) : 0U;
+}
+
 bool restaurant_pager_set_action(restaurant_pager_format_t format,
                                  uint32_t *data,
                                  restaurant_pager_action_t action)
