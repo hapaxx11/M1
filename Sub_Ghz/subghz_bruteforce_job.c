@@ -2,6 +2,8 @@
 
 #include "subghz_bruteforce_job.h"
 
+#include <stddef.h>
+
 void subghz_bruteforce_job_init(subghz_bruteforce_job_t *job)
 {
     if (job == NULL)
