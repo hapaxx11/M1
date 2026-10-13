@@ -973,6 +973,26 @@ endif()
 add_test(NAME protopirate_bruteforce_contract COMMAND test_protopirate_bruteforce_contract)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_psa_bruteforce (ProtoPirate PSA two-phase TEA
+# brute-force key search).  Uses synthetic captures built by forward
+# encryption; no real key material.
+# ------------------------------------------------------------------
+add_executable(test_subghz_psa_bruteforce
+    test_subghz_psa_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_psa_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+)
+target_include_directories(test_subghz_psa_bruteforce PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_psa_bruteforce PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_psa_bruteforce PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_psa_bruteforce COMMAND test_subghz_psa_bruteforce)
+
+# ------------------------------------------------------------------
 # Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)
 # Verifies the pure frame parser (16-bit header + XOR8 checksum, field slicing)
 # and full Manchester pulse-array decode.
