@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.8] - 2026-10-13
+
+### Added
+
+- **Bluetooth: BLE monitor and detector tools** — Added continuous AirTag-like
+  Apple advertisement monitoring and heuristic candidates for BLE serial modules,
+  Flock name patterns, and Ray-Ban Meta signatures. Name matches are not proof
+  of malicious activity; raw advertisement matching requires binary-SPI transport.
+- **Bluetooth: BLE Signal Finder** — select a nearby device and track its signal strength across repeated scans.
+- **NFC: NDEF Maker** — write URL, text, phone, and Wi-Fi records to Type 2 tags.
+- **LF-RFID: T5577 password clearing** — clear a protected tag using its supplied current password.
+
+### Changed
+
+- Documentation: Trimmed README references to third-party M1 forks and companion software while preserving general compatibility and setup guidance.
 ## [0.9.4.7] - 2026-10-10
 
 ### Added
