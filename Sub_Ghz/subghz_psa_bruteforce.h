@@ -64,7 +64,7 @@ typedef enum {
 } subghz_psa_bf_phase_t;
 
 /** Recovered frame fields, filled when the search finds the key. */
-typedef struct {
+typedef struct subghz_psa_bf_result {
     uint32_t serial;   /**< 24-bit keyfob serial */
     uint32_t seed;     /**< seed (same value as serial in the reference) */
     uint32_t counter;  /**< 28-bit rolling counter */

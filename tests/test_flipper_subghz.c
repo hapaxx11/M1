@@ -27,6 +27,7 @@
 
 /* Declaration from flipper_subghz.h — we include the header directly */
 #include "flipper_subghz.h"
+#include "subghz_psa_bruteforce.h"  /* subghz_psa_bf_result_t */
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -1332,6 +1333,79 @@ void test_save_key_plain_writes_no_key2_line(void)
 	remove(path);
 }
 
+/* ===================================================================
+ * PSA brute-force recovered-capture write-back
+ * =================================================================== */
+
+/* Helper: read a whole small text file into buf (NUL-terminated). */
+static void read_tmp(const char *path, char *buf, size_t cap)
+{
+	FILE *f = fopen(path, "r");
+	size_t n = 0;
+	if (f)
+	{
+		n = fread(buf, 1, cap - 1, f);
+		fclose(f);
+	}
+	buf[n] = '\0';
+}
+
+void test_save_psa_recovered_writes_all_fields(void)
+{
+	const char *path = "/tmp/test_psa_recovered.sub";
+	subghz_psa_bf_result_t r = {
+		.serial    = 0x051309u,
+		.seed      = 0x051309u,
+		.counter   = 0x086F0u,
+		.candidate = 0x23ABCD01u,
+		.crc       = 0x42u,
+		.button    = 1u,
+		.type      = 0x36u,
+	};
+
+	bool ok = flipper_subghz_save_psa_recovered(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    80, 0x123A445566778899ULL, 0xB1AAu, 250, &r);
+	TEST_ASSERT_TRUE(ok);
+
+	char text[640];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: PSA"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Bit: 80"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key: 12 3A 44 55 66 77 88 99"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: B1 AA"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 250"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 05 13 09"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 1"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 34544"));    /* 0x86F0 */
+	TEST_ASSERT_NOT_NULL(strstr(text, "Type: 54"));     /* 0x36 */
+	TEST_ASSERT_NOT_NULL(strstr(text, "CRC: 66"));      /* 0x42 */
+	TEST_ASSERT_NOT_NULL(strstr(text, "Seed: 05 13 09"));
+
+	/* The recovered file re-parses as a valid PSA capture with Key_2. */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL_STRING("PSA", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT64(0x123A445566778899ULL, sig.key);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+
+	remove(path);
+}
+
+void test_save_psa_recovered_rejects_null(void)
+{
+	subghz_psa_bf_result_t r = {0};
+	TEST_ASSERT_FALSE(flipper_subghz_save_psa_recovered(
+	    NULL, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    80, 0x123A445566778899ULL, 0xB1AAu, 250, &r));
+	TEST_ASSERT_FALSE(flipper_subghz_save_psa_recovered(
+	    "/tmp/test_psa_recovered_null.sub", 433920000,
+	    "FuriHalSubGhzPresetOok650Async", 80, 0x123A445566778899ULL,
+	    0xB1AAu, 250, NULL));
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -1435,6 +1509,10 @@ int main(void)
 	RUN_TEST(test_load_flipper_key_without_key2_clears_flag);
 	RUN_TEST(test_save_key_with_key2_roundtrip);
 	RUN_TEST(test_save_key_plain_writes_no_key2_line);
+
+	/* PSA brute-force recovered-capture write-back */
+	RUN_TEST(test_save_psa_recovered_writes_all_fields);
+	RUN_TEST(test_save_psa_recovered_rejects_null);
 
 	return UNITY_END();
 }

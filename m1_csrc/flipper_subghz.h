@@ -153,6 +153,23 @@ bool flipper_subghz_save_key_with_key2(const char *path,
                                         uint32_t    te);
 
 /*
+ * Save a PSA capture patched with the fields recovered by the TEA
+ * brute-force search (Sub_Ghz/subghz_psa_bruteforce.c): the original
+ * Key/Key_2 plus recovered Serial, Btn, Cnt, Type (0x36), CRC and Seed —
+ * the same write-back set the ProtoPirate reference applies after a
+ * successful search.
+ */
+struct subghz_psa_bf_result;  /* defined in Sub_Ghz/subghz_psa_bruteforce.h */
+bool flipper_subghz_save_psa_recovered(const char *path,
+                                        uint32_t    frequency,
+                                        const char *preset,
+                                        uint32_t    bit_count,
+                                        uint64_t    key,
+                                        uint16_t    key_2,
+                                        uint32_t    te,
+                                        const struct subghz_psa_bf_result *result);
+
+/*
  * Save variant that additionally writes the optional
  * `CounterMode:` field.  The field is only emitted when @p counter_mode
  * differs from the default (Increment), so files round-tripped from
