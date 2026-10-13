@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.9] - 2026-10-13
+
+### Added
+
+- **Sub-GHz: Restaurant Pager app** — Receive and edit Princeton/SMC5326 restaurant pages, replay one pager or explicitly confirmed batches, save named stations by category, and configure the pager limit and transmit repeat count.
 ## [0.9.4.8] - 2026-10-13
 
 ### Added
