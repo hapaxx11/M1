@@ -1,5 +1,6 @@
 #include "unity.h"
 #include "ble_signal_finder.h"
+#include "ble_scan_state.h"
 
 void setUp(void) { }
 void tearDown(void) { }
@@ -36,11 +37,21 @@ void test_strength_maps_rssi_thresholds(void)
     TEST_ASSERT_EQUAL_UINT8(4, ble_signal_finder_strength(0));
 }
 
+void test_scan_state_starts_only_when_continuous_and_ready(void)
+{
+    TEST_ASSERT_TRUE(ble_scan_state_should_start(true, false, false, true));
+    TEST_ASSERT_FALSE(ble_scan_state_should_start(false, false, false, true));
+    TEST_ASSERT_FALSE(ble_scan_state_should_start(true, true, false, true));
+    TEST_ASSERT_FALSE(ble_scan_state_should_start(true, false, true, true));
+    TEST_ASSERT_FALSE(ble_scan_state_should_start(true, false, false, false));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_matches_same_address_and_type);
     RUN_TEST(test_does_not_match_different_address_or_type);
     RUN_TEST(test_strength_maps_rssi_thresholds);
+    RUN_TEST(test_scan_state_starts_only_when_continuous_and_ready);
     return UNITY_END();
 }

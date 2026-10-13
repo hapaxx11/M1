@@ -47,12 +47,42 @@
 /*==========================================================================*/
 
 DELEGATE_FEATURE(scan,      bluetooth_scan,      ESP32_FEATURE_BLE_SCAN)
-DELEGATE_FEATURE(signal_finder, bluetooth_signal_finder, ESP32_FEATURE_BLE_SCAN)
 DELEGATE_FEATURE(advertise, bluetooth_advertise, ESP32_FEATURE_BLE_ADV)
 DELEGATE(config,    bluetooth_config)
 
+static void signal_finder_on_enter(M1SceneApp *app)
+{
+    m1_esp32_ensure_init();
+    if (!m1_esp32_require_cap(
+            esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN),
+            esp32_feature_label(ESP32_FEATURE_BLE_SCAN)) ||
+        !bluetooth_signal_finder_scene_enter(app))
+        m1_scene_pop(app);
+}
+
+static bool signal_finder_on_event(M1SceneApp *app, M1SceneEvent event)
+{
+    return bluetooth_signal_finder_scene_event(app, event);
+}
+
+static void signal_finder_on_exit(M1SceneApp *app)
+{
+    bluetooth_signal_finder_scene_exit(app);
+    m1_esp32_deinit();
+}
+
+static void signal_finder_draw(M1SceneApp *app)
+{
+    bluetooth_signal_finder_scene_draw(app);
+}
+
 const M1SceneHandlers bt_scene_scan_handlers      = { .on_enter = scan_on_enter      };
-const M1SceneHandlers bt_scene_signal_finder_handlers = { .on_enter = signal_finder_on_enter };
+const M1SceneHandlers bt_scene_signal_finder_handlers = {
+    .on_enter = signal_finder_on_enter,
+    .on_event = signal_finder_on_event,
+    .on_exit = signal_finder_on_exit,
+    .draw = signal_finder_draw,
+};
 const M1SceneHandlers bt_scene_advertise_handlers = { .on_enter = advertise_on_enter };
 const M1SceneHandlers bt_scene_config_handlers    = { .on_enter = config_on_enter    };
 

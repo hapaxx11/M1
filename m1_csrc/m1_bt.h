@@ -16,17 +16,24 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "m1_compile_cfg.h"
+#include "m1_scene.h"
 
 void menu_bluetooth_init(void);
 void bluetooth_config(void);
 void bluetooth_scan(void);
-void bluetooth_signal_finder(void);
+bool bluetooth_signal_finder_scene_enter(M1SceneApp *app);
+bool bluetooth_signal_finder_scene_event(M1SceneApp *app, M1SceneEvent event);
+void bluetooth_signal_finder_scene_exit(M1SceneApp *app);
+void bluetooth_signal_finder_scene_draw(M1SceneApp *app);
 void bluetooth_advertise(void);
 void ble_sniff_analyzer(void);
 void ble_sniff_generic(void);
 void ble_sniff_flipper(void);
 void ble_sniff_airtag(void);
-void ble_monitor_airtag(void);
+bool ble_monitor_airtag_scene_enter(M1SceneApp *app);
+bool ble_monitor_airtag_scene_event(M1SceneApp *app, M1SceneEvent event);
+void ble_monitor_airtag_scene_exit(M1SceneApp *app);
+void ble_monitor_airtag_scene_draw(M1SceneApp *app);
 void ble_wardrive(void);
 void ble_wardrive_continuous(void);
 void ble_detect_skimmers(void);

@@ -16,8 +16,8 @@
  *   - WiFi MAC Track / Signal Monitor (CMD_PKTMON_*)
  *   - WiFi Net Scan (Ping/ARP/SSH/Telnet/Port)
  *   - WiFi 802.15.4 (Zigbee/Thread)
- *   - Bluetooth BLE Scan / BLE Advertise
- *   - Bluetooth BLE Sniffers (Analyzer/Generic/Flipper/AirTag)
+ *   - Bluetooth BLE Scan / BLE Advertise / Signal Finder
+ *   - Bluetooth BLE Sniffers (Analyzer/Generic/Flipper/AirTag/AirTag Monitor)
  *
  * Functions that are pure local placeholders ("not yet implemented" stubs
  * with no ESP32 SPI traffic — e.g. ble_wardrive, ble_spoof_airtag,
@@ -169,14 +169,19 @@ void test_bt_scan_and_advertise_capability_gated(void)
 void test_bt_sniffers_capability_gated(void)
 {
     const char *path = "m1_csrc/m1_bt_scene_sniff.c";
+    const char *menu_path = "m1_csrc/m1_bt_scene_menu.c";
 
     expect_gated(path, "DELEGATE_FEATURE(sniff_analyzer, ble_sniff_analyzer, ESP32_FEATURE_BLE_SCAN)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_generic,  ble_sniff_generic,  ESP32_FEATURE_BLE_SCAN)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_flipper,  ble_sniff_flipper,  ESP32_FEATURE_BLE_SCAN)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_airtag,   ble_sniff_airtag,   ESP32_FEATURE_BLE_SCAN)");
 
-    expect_gated(path, "DELEGATE_FEATURE(monitor_airtag, ble_monitor_airtag, ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(path, "esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(path, "ble_monitor_airtag_scene_enter(app)");
+    expect_gated(menu_path, "esp32_feature_required_caps(ESP32_FEATURE_BLE_SCAN)");
+    expect_gated(menu_path, "bluetooth_signal_finder_scene_enter(app)");
     expect_gated(path, "DELEGATE_FEATURE(sniff_flock,    ble_sniff_flock,    ESP32_FEATURE_BLE_SCAN)");
+    expect_not_present(menu_path, "DELEGATE(signal_finder,");
     expect_not_present(path, "DELEGATE(monitor_airtag,");
     expect_not_present(path, "DELEGATE(sniff_flock,");
 }

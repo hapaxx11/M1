@@ -32,7 +32,9 @@
 #include "m1_esp32_rpc.h"
 #include "m1_esp32_rpc_features.h"
 #include "ble_signal_finder.h"
+#include "ble_scan_state.h"
 #include "ble_detector.h"
+#include "m1_tasks.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -125,7 +127,6 @@ void ble_gatt_discovery(void);
 
 static void ble_list_free(void);
 static uint16_t ble_list_print(bool up_dir);
-static bool ble_signal_finder_wait_back(TickType_t ticks);
 
 /* AT command transport — provided by esp_app_main.c (RTOS SPI-AT task) */
 extern uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf,
@@ -330,7 +331,12 @@ static void ble_show_pending(const char *title, const char *line1, const char *l
   * @retval Number of devices found, 0 on error
   */
 /*============================================================================*/
-static uint16_t ble_do_scan(void)
+static bool ble_scan_cancelled(const volatile bool *cancel_requested)
+{
+    return cancel_requested && *cancel_requested;
+}
+
+static uint16_t ble_do_scan_cancelable(const volatile bool *cancel_requested)
 {
     m1_resp_t resp;
     int ret;
@@ -341,6 +347,8 @@ static uint16_t ble_do_scan(void)
     if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
     {
         if (m1_esp32_rpc_ble_scan_start(5u) != M1_ESP32_RPC_OK)
+            return 0;
+        if (ble_scan_cancelled(cancel_requested))
             return 0;
 
         /* Call BLE_SCAN_RESULTS directly to parse variable-length name bytes.
@@ -356,7 +364,7 @@ static uint16_t ble_do_scan(void)
         if (m1_esp32_rpc_call(M1_ESP32_RPC_BLE_SCAN_RESULTS, NULL, 0u,
                               raw, M1_ESP32_RPC_RESP_PAYLOAD_MAX, &rlen,
                               10u) != M1_ESP32_RPC_OK
-            || rlen < 2u)
+            || rlen < 2u || ble_scan_cancelled(cancel_requested))
         {
             free(raw);
             return 0;
@@ -378,6 +386,12 @@ static uint16_t ble_do_scan(void)
         const uint16_t PREFIX = 9u; /* addr[6] + type[1] + rssi[1] + name_len[1] */
         for (uint16_t i = 0u; i < total; i++)
         {
+            if (ble_scan_cancelled(cancel_requested))
+            {
+                ble_list_free();
+                free(raw);
+                return 0;
+            }
             if ((uint16_t)(off + PREFIX) > rlen)
                 break;
             memcpy(ble_list[i].addr, &raw[off], 6u);
@@ -410,6 +424,8 @@ static uint16_t ble_do_scan(void)
         M1_LOG_I(M1_LOGDB_TAG, "BLE scan start failed: ret=%d status=%d\n\r", ret, resp.status);
         return 0;
     }
+    if (ble_scan_cancelled(cancel_requested))
+        return 0;
 
     uint16_t count = resp.payload[0] | ((uint16_t)resp.payload[1] << 8);
     if (count == 0)
@@ -426,9 +442,19 @@ static uint16_t ble_do_scan(void)
 
     for (uint16_t i = 0; i < count; i++)
     {
+        if (ble_scan_cancelled(cancel_requested))
+        {
+            ble_list_free();
+            return 0;
+        }
         ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT, &resp, BLE_NEXT_TIMEOUT_MS);
         if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9)
             break;
+        if (ble_scan_cancelled(cancel_requested))
+        {
+            ble_list_free();
+            return 0;
+        }
 
         /* Unpack: [0]=rssi, [1]=addr_type, [2..7]=addr, [8]=name_len, [9..]=name */
         ble_list[i].rssi = (int8_t)resp.payload[0];
@@ -449,6 +475,11 @@ static uint16_t ble_do_scan(void)
     }
 
     return ble_count;
+}
+
+static uint16_t ble_do_scan(void)
+{
+    return ble_do_scan_cancelable(NULL);
 }
 
 
@@ -1459,7 +1490,9 @@ static ble_detector_scan_route_t ble_detector_current_route(bool prefer_raw,
                                           prefer_raw, require_raw);
 }
 
-static bool ble_raw_scan_collect(ble_raw_mode_t mode, ble_raw_scan_result_t *scan)
+static bool ble_raw_scan_collect(ble_raw_mode_t mode,
+                                 ble_raw_scan_result_t *scan,
+                                 const volatile bool *cancel_requested)
 {
     m1_resp_t resp;
     uint16_t expected;
@@ -1471,16 +1504,22 @@ static bool ble_raw_scan_collect(ble_raw_mode_t mode, ble_raw_scan_result_t *sca
     ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_START, &resp, BLE_SCAN_TIMEOUT_MS);
     if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 2u)
         return false;
+    if (ble_scan_cancelled(cancel_requested))
+        return false;
 
     expected = (uint16_t)resp.payload[0] |
                ((uint16_t)resp.payload[1] << 8u);
     if (expected > BLE_DEV_MAX) expected = BLE_DEV_MAX;
 
     for (uint16_t i = 0u; i < expected; i++) {
+        if (ble_scan_cancelled(cancel_requested))
+            return false;
         ret = m1_esp32_simple_cmd(CMD_BLE_SCAN_NEXT_RAW, &resp,
                                   BLE_NEXT_TIMEOUT_MS);
         if (ret != 0 || resp.status != RESP_OK || resp.payload_len < 9u)
             break;
+        if (ble_scan_cancelled(cancel_requested))
+            return false;
 
         uint8_t adv_len = resp.payload[8];
         if (adv_len > resp.payload_len - 9u)
@@ -1564,7 +1603,7 @@ static void ble_raw_scan_report(const char *title, ble_raw_mode_t mode)
         M1_LCD_DISPLAY_HEIGHT / 2 - 2, 18, 32, hourglass_18x32);
     m1_u8g2_nextpage();
 
-    if (!ble_raw_scan_collect(mode, &scan)) {
+    if (!ble_raw_scan_collect(mode, &scan, NULL)) {
         ble_show_pending(title, "Scan failed", "Check ESP32 FW");
         return;
     }
@@ -1686,7 +1725,9 @@ static void ble_name_detector_run(const char *title,
 
 static void ble_airtag_monitor_draw(const ble_raw_scan_result_t *scan,
                                     uint32_t seen,
-                                    bool scan_ok)
+                                    bool scan_ok,
+                                    bool scanning,
+                                    bool cancelling)
 {
     char line[28];
 
@@ -1698,7 +1739,11 @@ static void ble_airtag_monitor_draw(const ble_raw_scan_result_t *scan,
     snprintf(line, sizeof(line), "Possible ads seen:%lu",
              (unsigned long)seen);
     u8g2_DrawStr(&m1_u8g2, 2, 22, line);
-    if (!scan_ok) {
+    if (cancelling) {
+        u8g2_DrawStr(&m1_u8g2, 2, 34, "Cancelling scan...");
+    } else if (scanning) {
+        u8g2_DrawStr(&m1_u8g2, 2, 34, "Scanning BLE...");
+    } else if (!scan_ok) {
         u8g2_DrawStr(&m1_u8g2, 2, 34, "Scan failed; retrying");
     } else if (scan->matches > 0u) {
         snprintf(line, sizeof(line), "This scan:%u",
@@ -1710,7 +1755,7 @@ static void ble_airtag_monitor_draw(const ble_raw_scan_result_t *scan,
     } else {
         u8g2_DrawStr(&m1_u8g2, 2, 38, "No matching ad this scan");
     }
-    u8g2_DrawStr(&m1_u8g2, 2, 62, "Apple signature heuristic");
+    u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to stop");
     m1_u8g2_nextpage();
 }
 
@@ -1812,7 +1857,8 @@ static void ble_signal_finder_draw_selection(void)
 }
 
 static void ble_signal_finder_draw_tracking(const char *name, const char *addr,
-                                             bool seen, int8_t rssi)
+                                             bool seen, int8_t rssi,
+                                             const char *status)
 {
     char line[32];
 
@@ -1834,126 +1880,280 @@ static void ble_signal_finder_draw_tracking(const char *name, const char *addr,
     {
         u8g2_DrawStr(&m1_u8g2, 2, 51, "RSSI: --");
     }
+    u8g2_DrawStr(&m1_u8g2, 2, 62, status);
+    m1_u8g2_nextpage();
+}
+
+typedef enum {
+    BLE_TRACKING_INITIAL_SCAN,
+    BLE_TRACKING_SELECT_DEVICE,
+    BLE_TRACKING_SIGNAL,
+    BLE_TRACKING_AIRTAG,
+    BLE_TRACKING_NO_RESULTS,
+} ble_tracking_phase_t;
+
+typedef struct {
+    bool is_airtag;
+    bool scan_in_progress;
+    volatile bool cancel_requested;
+    bool scan_ok;
+    bool target_seen;
+    uint16_t scan_count;
+    uint32_t seen_count;
+    TickType_t next_scan_tick;
+    ble_tracking_phase_t phase;
+    uint8_t target_addr[6];
+    uint8_t target_addr_type;
+    char target_name[30];
+    char target_addr_str[18];
+    int8_t target_rssi;
+    ble_raw_scan_result_t raw_scan;
+} ble_tracking_scene_t;
+
+static void ble_tracking_scan_task(void *arg)
+{
+    ble_tracking_scene_t *scene = (ble_tracking_scene_t *)arg;
+
+    if (scene->is_airtag) {
+        scene->scan_ok = ble_raw_scan_collect(
+            BLE_RAW_AIRTAG, &scene->raw_scan, &scene->cancel_requested);
+    } else {
+        scene->scan_count =
+            ble_do_scan_cancelable(&scene->cancel_requested);
+        scene->scan_ok = scene->scan_count > 0u;
+    }
+
+    S_M1_Main_Q_t event = {0};
+    event.q_evt_type = Q_EVENT_BLE_SCAN_COMPLETE;
+    (void)xQueueSend(main_q_hdl, &event, portMAX_DELAY);
+    vTaskDelete(NULL);
+}
+
+static bool ble_tracking_start_scan(ble_tracking_scene_t *scene)
+{
+    scene->scan_count = 0u;
+    scene->scan_ok = false;
+    scene->cancel_requested = false;
+    scene->scan_in_progress = true;
+
+    if (xTaskCreate(ble_tracking_scan_task, "ble_tracking_scan",
+                    M1_TASK_STACK_SIZE_1024, scene,
+                    TASK_PRIORITY_RUNONCE_TASK_HANDLER, NULL) != pdPASS) {
+        scene->scan_in_progress = false;
+        return false;
+    }
+    return true;
+}
+
+static void ble_tracking_draw_status(const char *title, const char *status)
+{
+    m1_u8g2_firstpage();
+    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 15, title);
+    u8g2_SetFont(&m1_u8g2, M1_DISP_FUNC_MENU_FONT_N);
+    u8g2_DrawStr(&m1_u8g2, 2, 32, status);
     u8g2_DrawStr(&m1_u8g2, 2, 62, "BACK to stop");
     m1_u8g2_nextpage();
 }
 
-static bool ble_signal_finder_wait_back(TickType_t ticks)
+static bool ble_tracking_scene_enter(M1SceneApp *app, bool is_airtag)
 {
-    S_M1_Buttons_Status button_status;
-    S_M1_Main_Q_t q_item;
-
-    if (xQueueReceive(main_q_hdl, &q_item, ticks) != pdTRUE ||
-        q_item.q_evt_type != Q_EVENT_KEYPAD)
+    ble_tracking_scene_t *scene =
+        (ble_tracking_scene_t *)calloc(1u, sizeof(*scene));
+    if (!scene)
         return false;
 
-    if (xQueueReceive(button_events_q_hdl, &button_status, 0) == pdTRUE &&
-        button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-    {
-        xQueueReset(main_q_hdl);
-        return true;
+    scene->is_airtag = is_airtag;
+    scene->phase = is_airtag ? BLE_TRACKING_AIRTAG :
+                               BLE_TRACKING_INITIAL_SCAN;
+    app->user_data = scene;
+    if (!ble_tracking_start_scan(scene)) {
+        scene->phase = is_airtag ? BLE_TRACKING_AIRTAG :
+                                   BLE_TRACKING_NO_RESULTS;
+        scene->next_scan_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1000u);
     }
-    return false;
+    app->need_redraw = true;
+    return true;
 }
 
-void bluetooth_signal_finder(void)
+static void ble_tracking_scan_complete(M1SceneApp *app,
+                                       ble_tracking_scene_t *scene)
 {
-    S_M1_Buttons_Status button_status;
-    S_M1_Main_Q_t q_item;
-    uint8_t target_addr[6];
-    uint8_t target_addr_type;
-    char target_name[sizeof(ble_list[0].name)];
-    char target_addr_str[sizeof(ble_list[0].addr_str)];
-    int8_t target_rssi;
-    bool target_seen = true;
-
-    ble_ensure_esp32_ready();
-
-    u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-    m1_u8g2_firstpage();
-    u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning BLE...");
-    m1_u8g2_nextpage();
-
-    uint16_t list_count = ble_do_scan();
-    if (list_count == 0)
-    {
-        ble_list_free();
-        ble_show_pending("Signal Finder", "No BLE devices found", NULL);
+    scene->scan_in_progress = false;
+    if (scene->cancel_requested) {
+        m1_scene_pop(app);
         return;
     }
 
-    ble_view_idx = 0;
-    ble_signal_finder_draw_selection();
-
-    while (1)
-    {
-        if (xQueueReceive(main_q_hdl, &q_item, portMAX_DELAY) != pdTRUE ||
-            q_item.q_evt_type != Q_EVENT_KEYPAD ||
-            xQueueReceive(button_events_q_hdl, &button_status, 0) != pdTRUE)
-            continue;
-
-        if (button_status.event[BUTTON_BACK_KP_ID] == BUTTON_EVENT_CLICK)
-        {
+    if (scene->is_airtag) {
+        if (scene->scan_ok) {
+            if (UINT32_MAX - scene->seen_count < scene->raw_scan.matches)
+                scene->seen_count = UINT32_MAX;
+            else
+                scene->seen_count += scene->raw_scan.matches;
+        }
+        scene->next_scan_tick = xTaskGetTickCount() + pdMS_TO_TICKS(100u);
+    } else if (scene->phase == BLE_TRACKING_INITIAL_SCAN) {
+        if (scene->scan_ok) {
+            scene->phase = BLE_TRACKING_SELECT_DEVICE;
+            ble_view_idx = 0u;
+        } else {
+            scene->phase = BLE_TRACKING_NO_RESULTS;
             ble_list_free();
-            xQueueReset(main_q_hdl);
-            return;
         }
-        if (button_status.event[BUTTON_UP_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            ble_view_idx = (ble_view_idx == 0) ? list_count - 1 : ble_view_idx - 1;
-            ble_signal_finder_draw_selection();
-        }
-        else if (button_status.event[BUTTON_DOWN_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            ble_view_idx = (ble_view_idx + 1) % list_count;
-            ble_signal_finder_draw_selection();
-        }
-        else if (button_status.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
-        {
-            break;
-        }
-    }
-
-    memcpy(target_addr, ble_list[ble_view_idx].addr, sizeof(target_addr));
-    target_addr_type = ble_list[ble_view_idx].addr_type;
-    snprintf(target_name, sizeof(target_name), "%s", ble_list[ble_view_idx].name);
-    snprintf(target_addr_str, sizeof(target_addr_str), "%s", ble_list[ble_view_idx].addr_str);
-    target_rssi = ble_list[ble_view_idx].rssi;
-    ble_list_free();
-
-    while (1)
-    {
-        ble_signal_finder_draw_tracking(target_name, target_addr_str,
-                                        target_seen, target_rssi);
-
-        for (uint8_t i = 0; i < 10; i++)
-        {
-            if (ble_signal_finder_wait_back(pdMS_TO_TICKS(100)))
-            {
-                ble_list_free();
-                return;
-            }
-        }
-
-        u8g2_SetFont(&m1_u8g2, M1_DISP_MAIN_MENU_FONT_N);
-        m1_u8g2_firstpage();
-        u8g2_DrawStr(&m1_u8g2, 6, 15, "Scanning BLE...");
-        m1_u8g2_nextpage();
-
-        (void)ble_do_scan();
-        target_seen = false;
-        for (uint16_t i = 0; i < ble_count; i++)
-        {
-            if (ble_signal_finder_matches(target_addr, target_addr_type,
-                                          ble_list[i].addr, ble_list[i].addr_type))
-            {
-                target_rssi = ble_list[i].rssi;
-                target_seen = true;
+    } else {
+        scene->target_seen = false;
+        for (uint16_t i = 0u; i < ble_count; i++) {
+            if (ble_signal_finder_matches(
+                    scene->target_addr, scene->target_addr_type,
+                    ble_list[i].addr, ble_list[i].addr_type)) {
+                scene->target_rssi = ble_list[i].rssi;
+                scene->target_seen = true;
                 break;
             }
         }
         ble_list_free();
+        scene->next_scan_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1000u);
     }
+    app->need_redraw = true;
+}
+
+bool bluetooth_signal_finder_scene_enter(M1SceneApp *app)
+{
+    return ble_tracking_scene_enter(app, false);
+}
+
+static bool ble_tracking_scene_event(M1SceneApp *app, M1SceneEvent event,
+                                     bool is_airtag)
+{
+    ble_tracking_scene_t *scene = (ble_tracking_scene_t *)app->user_data;
+    if (!scene || scene->is_airtag != is_airtag)
+        return false;
+
+    if (event == M1SceneEventBack) {
+        if (scene->scan_in_progress) {
+            scene->cancel_requested = true;
+            app->need_redraw = true;
+        } else {
+            m1_scene_pop(app);
+        }
+        return true;
+    }
+
+    if (event == M1SceneEventBleScanComplete) {
+        ble_tracking_scan_complete(app, scene);
+        return true;
+    }
+
+    if (event == M1SceneEventNone &&
+        ble_scan_state_should_start(
+            is_airtag || scene->phase == BLE_TRACKING_SIGNAL,
+            scene->scan_in_progress,
+            scene->cancel_requested,
+            (int32_t)(xTaskGetTickCount() - scene->next_scan_tick) >= 0)) {
+        if (!ble_tracking_start_scan(scene))
+            scene->next_scan_tick =
+                xTaskGetTickCount() + pdMS_TO_TICKS(1000u);
+        app->need_redraw = true;
+        return true;
+    }
+
+    if (is_airtag || scene->phase != BLE_TRACKING_SELECT_DEVICE)
+        return false;
+
+    if (event == M1SceneEventUp) {
+        ble_view_idx = (ble_view_idx == 0u) ? ble_count - 1u :
+                                              ble_view_idx - 1u;
+        app->need_redraw = true;
+    } else if (event == M1SceneEventDown) {
+        ble_view_idx = (ble_view_idx + 1u) % ble_count;
+        app->need_redraw = true;
+    } else if (event == M1SceneEventOk) {
+        ble_dev_t *device = &ble_list[ble_view_idx];
+        memcpy(scene->target_addr, device->addr, sizeof(scene->target_addr));
+        scene->target_addr_type = device->addr_type;
+        snprintf(scene->target_name, sizeof(scene->target_name), "%s",
+                 device->name);
+        snprintf(scene->target_addr_str, sizeof(scene->target_addr_str), "%s",
+                 device->addr_str);
+        scene->target_rssi = device->rssi;
+        scene->target_seen = true;
+        ble_list_free();
+        scene->phase = BLE_TRACKING_SIGNAL;
+        scene->next_scan_tick = xTaskGetTickCount() + pdMS_TO_TICKS(1000u);
+        app->need_redraw = true;
+    }
+    return true;
+}
+
+bool bluetooth_signal_finder_scene_event(M1SceneApp *app, M1SceneEvent event)
+{
+    return ble_tracking_scene_event(app, event, false);
+}
+
+void bluetooth_signal_finder_scene_exit(M1SceneApp *app)
+{
+    ble_tracking_scene_t *scene = (ble_tracking_scene_t *)app->user_data;
+    if (scene) {
+        ble_list_free();
+        free(scene);
+        app->user_data = NULL;
+    }
+}
+
+void bluetooth_signal_finder_scene_draw(M1SceneApp *app)
+{
+    ble_tracking_scene_t *scene = (ble_tracking_scene_t *)app->user_data;
+    if (!scene)
+        return;
+
+    if (scene->phase == BLE_TRACKING_INITIAL_SCAN) {
+        ble_tracking_draw_status(
+            "Signal Finder",
+            scene->cancel_requested ? "Cancelling scan..." :
+                                      "Scanning BLE devices...");
+    } else if (scene->phase == BLE_TRACKING_SELECT_DEVICE) {
+        ble_signal_finder_draw_selection();
+    } else if (scene->phase == BLE_TRACKING_SIGNAL) {
+        const char *status = scene->cancel_requested ? "Cancelling scan..." :
+                             scene->scan_in_progress ? "Scanning BLE..." :
+                                                       "BACK to stop";
+        ble_signal_finder_draw_tracking(
+            scene->target_name, scene->target_addr_str, scene->target_seen,
+            scene->target_rssi, status);
+    } else {
+        ble_tracking_draw_status("Signal Finder", "No BLE devices found");
+    }
+}
+
+bool ble_monitor_airtag_scene_enter(M1SceneApp *app)
+{
+    if (ble_detector_current_route(true, true) != BLE_DETECTOR_ROUTE_RAW) {
+        ble_show_pending("AirTag Monitor", "Raw ads unavailable",
+                         "Requires binary SPI");
+        return false;
+    }
+    return ble_tracking_scene_enter(app, true);
+}
+
+bool ble_monitor_airtag_scene_event(M1SceneApp *app, M1SceneEvent event)
+{
+    return ble_tracking_scene_event(app, event, true);
+}
+
+void ble_monitor_airtag_scene_exit(M1SceneApp *app)
+{
+    bluetooth_signal_finder_scene_exit(app);
+}
+
+void ble_monitor_airtag_scene_draw(M1SceneApp *app)
+{
+    ble_tracking_scene_t *scene = (ble_tracking_scene_t *)app->user_data;
+    if (!scene)
+        return;
+    ble_airtag_monitor_draw(
+        &scene->raw_scan, scene->seen_count, scene->scan_ok,
+        scene->scan_in_progress, scene->cancel_requested);
 }
 
 
@@ -2728,31 +2928,6 @@ void ble_sniff_airtag(void)
     ble_raw_scan_report("AIRTAG SNIFF", BLE_RAW_AIRTAG);
 }
 
-void ble_monitor_airtag(void)
-{
-    if (ble_detector_current_route(true, true) != BLE_DETECTOR_ROUTE_RAW) {
-        ble_show_pending("AirTag Monitor", "Raw ads unavailable",
-                         "Requires binary SPI");
-        return;
-    }
-
-    ble_ensure_esp32_ready();
-    uint32_t seen = 0u;
-    while (1) {
-        ble_raw_scan_result_t scan;
-        bool scan_ok = ble_raw_scan_collect(BLE_RAW_AIRTAG, &scan);
-        if (scan_ok) {
-            if (UINT32_MAX - seen < scan.matches)
-                seen = UINT32_MAX;
-            else
-                seen += scan.matches;
-        }
-        ble_airtag_monitor_draw(&scan, seen, scan_ok);
-        if (ble_signal_finder_wait_back(pdMS_TO_TICKS(100)))
-            break;
-    }
-}
-
 void ble_wardrive(void)
 {
     ble_show_pending("BLE WARDRIVE", "Needs SD logging", "and raw adv fields");
@@ -2800,7 +2975,7 @@ void ble_detect_meta(void)
         u8g2_DrawStr(&m1_u8g2, 6, 15, "Meta Device Scan");
         u8g2_DrawStr(&m1_u8g2, 6, 30, "Scanning raw adv...");
         m1_u8g2_nextpage();
-        if (!ble_raw_scan_collect(BLE_RAW_META, &scan)) {
+        if (!ble_raw_scan_collect(BLE_RAW_META, &scan, NULL)) {
             ble_show_pending("Meta Device Scan", "Scan failed", "Check ESP32 FW");
             return;
         }

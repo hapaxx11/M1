@@ -18,10 +18,10 @@
 
 ### Phase 3 — BLE scan responsiveness
 - **Description**: Move continuous BLE signal tracking and AirTag monitoring into scene-driven asynchronous scans that process BACK cancellation without blocking the UI task.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Make continuous BLE scans cancellable`
 
 ### Phase 4 — Validation and cleanup
 - **Description**: Run targeted host tests and firmware build, review RAM usage and final diff, and remove this temporary checklist.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
