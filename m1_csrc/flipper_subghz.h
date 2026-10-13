@@ -189,6 +189,10 @@ bool flipper_subghz_save_key_full(const char *path,
 bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
                                        const char *preset, const char *protocol,
                                        uint32_t bit_count, uint64_t key, uint32_t te);
+bool flipper_subghz_save_m1native_key_with_key2(
+    const char *path, uint32_t frequency, const char *preset,
+    const char *protocol, uint32_t bit_count, uint64_t key,
+    uint16_t key_2, uint32_t te);
 
 /* Map Flipper preset name to M1 modulation type */
 uint8_t flipper_subghz_preset_to_modulation(const char *preset);

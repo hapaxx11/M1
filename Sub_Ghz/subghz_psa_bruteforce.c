@@ -273,6 +273,12 @@ bool subghz_psa_bf_run_range(subghz_bruteforce_job_t *job, uint64_t key1,
         return false;
     if (phase != PSA_BF_PHASE_1 && phase != PSA_BF_PHASE_2)
         return false;
+    const uint32_t phase_start =
+        (phase == PSA_BF_PHASE_1) ? PSA_BF1_START : PSA_BF2_START;
+    const uint32_t phase_end =
+        (phase == PSA_BF_PHASE_1) ? PSA_BF1_END : PSA_BF2_END;
+    if (start < phase_start || end > phase_end)
+        return false;
 
     uint8_t buffer[10];
     subghz_psa_bf_setup_byte_buffer(buffer, (uint32_t)(key1 & 0xFFFFFFFFu),

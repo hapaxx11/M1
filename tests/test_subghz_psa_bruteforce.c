@@ -367,6 +367,32 @@ void test_run_range_rejects_invalid_arguments(void)
     TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_RUNNING, job.status);
 }
 
+void test_run_range_rejects_candidates_outside_phase_bounds(void)
+{
+    const struct {
+        subghz_psa_bf_phase_t phase;
+        uint32_t start;
+        uint32_t end;
+    } invalid_ranges[] = {
+        {PSA_BF_PHASE_1, PSA_BF1_START - 1u, PSA_BF1_START},
+        {PSA_BF_PHASE_1, PSA_BF1_END, PSA_BF1_END + 1u},
+        {PSA_BF_PHASE_2, PSA_BF2_START - 1u, PSA_BF2_START},
+        {PSA_BF_PHASE_2, PSA_BF2_END, PSA_BF2_END + 1u},
+    };
+
+    for (size_t i = 0; i < sizeof(invalid_ranges) / sizeof(invalid_ranges[0]); i++)
+    {
+        subghz_bruteforce_job_t job;
+        subghz_bruteforce_job_init(&job);
+        TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, 10u));
+        TEST_ASSERT_FALSE(subghz_psa_bf_run_range(
+            &job, 0, 0, invalid_ranges[i].phase,
+            invalid_ranges[i].start, invalid_ranges[i].end, NULL));
+        TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_RUNNING, job.status);
+        TEST_ASSERT_EQUAL_UINT32(0u, job.progress_current);
+    }
+}
+
 void test_full_run_arms_total_candidate_count(void)
 {
     /* The full two-phase search covers 2 × 2^24 candidates — too slow to
@@ -395,6 +421,7 @@ int main(void)
     RUN_TEST(test_phase2_rejects_phase1_fabrication_and_vice_versa);
     RUN_TEST(test_cancel_is_honoured_immediately);
     RUN_TEST(test_run_range_rejects_invalid_arguments);
+    RUN_TEST(test_run_range_rejects_candidates_outside_phase_bounds);
     RUN_TEST(test_full_run_arms_total_candidate_count);
     return UNITY_END();
 }

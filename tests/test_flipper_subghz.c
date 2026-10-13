@@ -1272,6 +1272,49 @@ void test_load_flipper_key_psa_key2_field(void)
 	remove(path);
 }
 
+void test_load_flipper_key_psa_padded_key2_field(void)
+{
+	const char *path = "/tmp/test_psa_padded_key2.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: PSA\r\n"
+	    "Bit: 80\r\n"
+	    "Key: 12 3A 44 55 66 77 88 99\r\n"
+	    "Key_2: 00 00 00 00 00 00 B1 AA\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+
+	remove(path);
+}
+
+void test_load_flipper_key_rejects_truncated_key2_field(void)
+{
+	const char *path = "/tmp/test_psa_truncated_key2.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: PSA\r\n"
+	    "Bit: 80\r\n"
+	    "Key: 12 3A 44 55 66 77 88 99\r\n"
+	    "Key_2: B1\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_FALSE(sig.has_key_2);
+
+	remove(path);
+}
+
 void test_load_flipper_key_without_key2_clears_flag(void)
 {
 	const char *path = "/tmp/test_no_key2.sub";
@@ -1333,6 +1376,24 @@ void test_save_key_plain_writes_no_key2_line(void)
 	remove(path);
 }
 
+void test_save_m1native_key_with_key2_roundtrip(void)
+{
+	const char *path = "/tmp/test_save_native_key2.sgh";
+	TEST_ASSERT_TRUE(flipper_subghz_save_m1native_key_with_key2(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "PSA", 80, 0x123A445566778899ULL, 0xB1AAu, 250));
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.is_m1_native);
+	TEST_ASSERT_EQUAL_STRING("PSA", sig.protocol);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+
+	remove(path);
+}
+
 /* ===================================================================
  * PSA brute-force recovered-capture write-back
  * =================================================================== */
@@ -1375,12 +1436,14 @@ void test_save_psa_recovered_writes_all_fields(void)
 	TEST_ASSERT_NOT_NULL(strstr(text, "Key: 12 3A 44 55 66 77 88 99"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: B1 AA"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 250"));
-	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 05 13 09"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Serial: 332553"));
+	TEST_ASSERT_NULL(strstr(text, "Serial: 05 13 09"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 1"));
 	TEST_ASSERT_NOT_NULL(strstr(text, "Cnt: 34544"));    /* 0x86F0 */
 	TEST_ASSERT_NOT_NULL(strstr(text, "Type: 54"));     /* 0x36 */
 	TEST_ASSERT_NOT_NULL(strstr(text, "CRC: 66"));      /* 0x42 */
-	TEST_ASSERT_NOT_NULL(strstr(text, "Seed: 05 13 09"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Seed: 332553"));
+	TEST_ASSERT_NULL(strstr(text, "Seed: 05 13 09"));
 
 	/* The recovered file re-parses as a valid PSA capture with Key_2. */
 	flipper_subghz_signal_t sig;
@@ -1506,9 +1569,12 @@ int main(void)
 
 	/* Key_2 field load / save round-trip (PSA brute-force captures) */
 	RUN_TEST(test_load_flipper_key_psa_key2_field);
+	RUN_TEST(test_load_flipper_key_psa_padded_key2_field);
+	RUN_TEST(test_load_flipper_key_rejects_truncated_key2_field);
 	RUN_TEST(test_load_flipper_key_without_key2_clears_flag);
 	RUN_TEST(test_save_key_with_key2_roundtrip);
 	RUN_TEST(test_save_key_plain_writes_no_key2_line);
+	RUN_TEST(test_save_m1native_key_with_key2_roundtrip);
 
 	/* PSA brute-force recovered-capture write-back */
 	RUN_TEST(test_save_psa_recovered_writes_all_fields);

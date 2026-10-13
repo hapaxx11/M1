@@ -8,8 +8,8 @@
 
 ### Phase 1 — Address review feedback
 - **Description**: Fix all six review threads and add targeted regression tests.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Fix PSA brute-force review findings`
 
 ### Phase 2 — Finalize branch
 - **Description**: Remove this temporary checklist after validation and final review.

@@ -122,9 +122,8 @@ static void pp_bf_ctx_free(void)
     s_ctx = NULL;
 }
 
-/** Cancel a running search and wait (bounded, short) for the worker to exit.
- *  The cancel flag is observed on the next candidate evaluation, so the wait
- *  is on the order of microseconds; the 50 ms cap is pure headroom. */
+/** Cancel a running search and wait for the worker to finish before freeing
+ *  its shared context or completion semaphore. */
 static void pp_bf_stop_worker(void)
 {
     if (s_ctx == NULL || s_ctx->done == NULL)
@@ -132,7 +131,9 @@ static void pp_bf_stop_worker(void)
     if (s_ctx->state == PP_BF_STATE_RUNNING)
     {
         subghz_bruteforce_job_cancel(&s_ctx->job);
-        (void)xSemaphoreTake(s_ctx->done, pdMS_TO_TICKS(50U));
+        while (xSemaphoreTake(s_ctx->done, portMAX_DELAY) != pdTRUE)
+        {
+        }
     }
 }
 
