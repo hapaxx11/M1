@@ -92,6 +92,7 @@ typedef enum {
     SubGhzSceneProtocolFilter, /**< Protocol-group ignore filter (Weather/TPMS/Vehicles/Gates/Sensors/Pagers) */
     SubGhzScenePocsag,         /**< POCSAG pager receiver and message history */
     SubGhzSceneTpms,           /**< TPMS sensor receiver and history */
+    SubGhzSceneRestaurantPager, /**< Restaurant pager receiver/editor */
     SubGhzSceneCount           /**< Number of scenes */
 } SubGhzSceneId;
 
@@ -169,6 +170,8 @@ typedef enum {
 #define SUBGHZ_FREQ_PRESET_CNT  17
 #define SUBGHZ_FREQ_DEFAULT_ID  10  /* 433.92 MHz */
 #define SUBGHZ_MOD_PRESET_CNT   4
+
+struct restaurant_pager_app_state;
 
 typedef struct {
     /* --- Scene manager state --- */
@@ -333,6 +336,7 @@ typedef struct {
     bool     pocsag_pulse_level;
     subghz_weather_app_state_t *weather_state;
     tpms_receiver_app_state_t *tpms_state;
+    struct restaurant_pager_app_state *restaurant_pager_state;
 
     /* --- Create-from-scratch KeeLoq field state --- */
     /** User-entered KeeLoq serial.  Width depends on the picked protocol
@@ -544,6 +548,7 @@ void subghz_scene_app_run(void);
 void subghz_pocsag_scene_deinit(SubGhzApp *app);
 void subghz_weather_scene_deinit(SubGhzApp *app);
 void subghz_tpms_scene_deinit(SubGhzApp *app);
+void subghz_restaurant_pager_scene_deinit(SubGhzApp *app);
 
 /*============================================================================*/
 /* Scene handler tables (defined in each scene_*.c file)                      */
@@ -588,6 +593,7 @@ extern const SubGhzSceneHandlers subghz_scene_analyzer_menu_handlers;
 extern const SubGhzSceneHandlers subghz_scene_protocol_filter_handlers;
 extern const SubGhzSceneHandlers subghz_scene_pocsag_handlers;
 extern const SubGhzSceneHandlers subghz_scene_tpms_handlers;
+extern const SubGhzSceneHandlers subghz_scene_restaurant_pager_handlers;
 
 /*============================================================================*/
 /* SignalSettings cross-scene API                                              */
