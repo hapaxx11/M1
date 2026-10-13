@@ -60,7 +60,7 @@ static void do_confirm(SubGhzApp *app)
 {
     if (app->saved_filepath[0] != '\0')
     {
-        char del_path[80];
+        char del_path[SUBGHZ_SAVED_FULL_PATH_MAX];
         snprintf(del_path, sizeof(del_path), "0:%s", app->saved_filepath);
         f_unlink(del_path);
     }

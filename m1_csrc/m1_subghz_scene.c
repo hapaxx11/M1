@@ -12,6 +12,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include "stm32h5xx_hal.h"
@@ -88,6 +89,7 @@ static const SubGhzSceneHandlers *scene_registry[SubGhzSceneCount] = {
     [SubGhzSceneProtocolFilter]   = &subghz_scene_protocol_filter_handlers,
     [SubGhzScenePocsag]           = &subghz_scene_pocsag_handlers,
     [SubGhzSceneTpms]             = &subghz_scene_tpms_handlers,
+    [SubGhzSceneRestaurantPager]  = &subghz_scene_restaurant_pager_handlers,
 };
 
 /*============================================================================*/
@@ -353,16 +355,22 @@ static SubGhzEvent translate_button(void)
 
 void subghz_scene_app_run(void)
 {
-    /* SubGhzApp is 5+ KB — far larger than the menu task's 4 KB stack.
-     * Declare it static so it lives in BSS instead of on the stack.
-     * subghz_scene_init() calls memset(app, 0, sizeof(*app)) on every
-     * entry, so stale state from a previous session is never a concern. */
+    /* SubGhzApp is 5+ KB — far larger than the menu task's 4 KB stack. */
     static SubGhzApp app;
+    /* Keep the four bounded 128-byte paths (512 bytes total) in the heap. */
+    char *path_storage = malloc(4U * SUBGHZ_SAVED_PATH_MAX);
+    if (path_storage == NULL)
+        return;
+
     S_M1_Main_Q_t q_item;
     BaseType_t ret;
 
     /* Initialize scene manager and app context */
     subghz_scene_init(&app);
+    app.raw_load_path = path_storage;
+    app.raw_filepath = path_storage + SUBGHZ_SAVED_PATH_MAX;
+    app.tx_path = path_storage + 2U * SUBGHZ_SAVED_PATH_MAX;
+    app.saved_filepath = path_storage + 3U * SUBGHZ_SAVED_PATH_MAX;
 
     /* Sub-GHz is timing-sensitive and does not use the ESP32.  If a prior
      * WiFi/BLE tool left the ESP32 SPI/EXTI transport active, tear it down
@@ -566,7 +574,9 @@ void subghz_scene_app_run(void)
     subghz_pocsag_scene_deinit(&app);
     subghz_weather_scene_deinit(&app);
     subghz_tpms_scene_deinit(&app);
+    subghz_restaurant_pager_scene_deinit(&app);
     menu_sub_ghz_exit();
     xQueueReset(button_events_q_hdl);
     xQueueReset(main_q_hdl);
+    free(path_storage);
 }

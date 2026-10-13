@@ -142,8 +142,8 @@ extern uint32_t sub_ghz_raw_recording_get_total_samples_ext(void);
  * is a compatibility alias so the existing call sites in this scene keep
  * referencing `raw_filepath` — every reference is inside a function with
  * `app` in lexical scope.  RAW_FILEPATH_MAX must remain in sync with the
- * size of `SubGhzApp::raw_filepath` (sized to 72 bytes = 71-char path + NUL). */
-#define RAW_FILEPATH_MAX  70   /* 70 chars + NUL = 71 bytes */
+ * size of `SubGhzApp::raw_filepath`. */
+#define RAW_FILEPATH_MAX  (SUBGHZ_SAVED_PATH_MAX - 1U)
 #define raw_filepath      (app->raw_filepath)
 
 
@@ -683,15 +683,29 @@ static bool scene_on_event(SubGhzApp *app, SubGhzEvent event)
                     const char *ext = strrchr(fname, '.');
                     if (!ext) ext = ".sub";
 
-                    char old_path[RAW_FILEPATH_MAX + 3], new_path[RAW_FILEPATH_MAX + 3];
+                    char old_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+                    char new_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+                    char relative_path[SUBGHZ_SAVED_PATH_MAX];
+                    char renamed[32];
+                    int renamed_len = snprintf(renamed, sizeof(renamed),
+                                               "%s%s", new_name, ext);
+                    if (renamed_len < 0 ||
+                        (size_t)renamed_len >= sizeof(renamed) ||
+                        !subghz_saved_path_rename_build(
+                            relative_path, sizeof(relative_path),
+                            raw_filepath, renamed))
+                    {
+                        app->need_redraw = true;
+                        return true;
+                    }
                     snprintf(old_path, sizeof(old_path), "0:%s", raw_filepath);
-                    snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
+                    snprintf(new_path, sizeof(new_path), "0:%s", relative_path);
 
                     FRESULT rename_result = f_rename(old_path, new_path);
                     if (rename_result == FR_OK)
                     {
                         snprintf(raw_filepath, sizeof(raw_filepath),
-                                 "/SUBGHZ/%s%s", new_name, ext);
+                                 "%s", relative_path);
                         /* Momentum: after naming, transition IDLE → Loaded
                          * (mirrors IDLE → LoadKeyIDLE) to expose the MoreRAW
                          * submenu (Decode / Rename / Delete) via Right = "More". */

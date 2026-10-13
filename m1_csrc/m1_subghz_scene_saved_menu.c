@@ -47,6 +47,7 @@
 #include "subghz_submenu_model.h"
 #include "subghz_signal_fields.h"
 #include "subghz_signal_format.h"
+#include "subghz_saved_path.h"
 #include "m1_espnow_capture_share.h"
 
 /*============================================================================*/
@@ -130,7 +131,7 @@ static bool load_signal(const SubGhzApp *app)
     if (app->saved_filepath[0] == '\0')
         return false;
 
-    char full_path[80];
+    char full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
     snprintf(full_path, sizeof(full_path), "0:%s", app->saved_filepath);
 
     memset(&saved_signal, 0, sizeof(saved_signal));
@@ -190,8 +191,9 @@ static void scene_on_enter(SubGhzApp *app)
      * More button inside Read Raw. */
     if (is_raw_file)
     {
-        strncpy(app->raw_load_path, app->saved_filepath, sizeof(app->raw_load_path) - 1);
-        app->raw_load_path[sizeof(app->raw_load_path) - 1] = '\0';
+        strncpy(app->raw_load_path, app->saved_filepath,
+                SUBGHZ_SAVED_PATH_MAX - 1U);
+        app->raw_load_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
         app->raw_load_is_native = saved_signal.is_m1_native;
         app->raw_load_freq_hz   = saved_signal.frequency;
         {
@@ -213,8 +215,9 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         {
             /* Parsed (static-key) files: push the Transmitter scene which
              * drives the async-TX state machine on top of our scene. */
-            strncpy(app->tx_path, app->saved_filepath, sizeof(app->tx_path) - 1);
-            app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+            strncpy(app->tx_path, app->saved_filepath,
+                    SUBGHZ_SAVED_PATH_MAX - 1U);
+            app->tx_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
             app->tx_repeat_count = 5U;             /* static keys: 5 bursts for reliable TX */
             app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
             /* Propagate the parsed protocol name so the Transmitter
@@ -233,7 +236,7 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
         }
         case SAVED_ACTION_SEND_TO_PEER:
         {
-            char full_path[80];
+            char full_path[SUBGHZ_SAVED_FULL_PATH_MAX];
             snprintf(full_path, sizeof(full_path), "0:%s", app->saved_filepath);
             m1_espnow_capture_share_send_path(full_path);
             app->need_redraw = true;
@@ -251,13 +254,27 @@ static bool handle_action(SubGhzApp *app, uint8_t action)
 
             if (m1_vkb_get_filename("Rename to:", base, new_name))
             {
-                char old_path[80], new_path[80];
-                snprintf(old_path, sizeof(old_path), "0:%s", app->saved_filepath);
-                /* Determine extension */
+                char old_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+                char new_path[SUBGHZ_SAVED_FULL_PATH_MAX];
+                char renamed[32], relative_path[SUBGHZ_SAVED_PATH_MAX];
                 const char *ext = strrchr(app->saved_filename, '.');
                 if (!ext) ext = ".sub";
-                snprintf(new_path, sizeof(new_path), "0:/SUBGHZ/%s%s", new_name, ext);
-                f_rename(old_path, new_path);
+                int renamed_len = snprintf(renamed, sizeof(renamed), "%s%s",
+                                           new_name, ext);
+                if (renamed_len >= 0 &&
+                    (size_t)renamed_len < sizeof(renamed))
+                {
+                    if (subghz_saved_path_rename_build(
+                            relative_path, sizeof(relative_path),
+                            app->saved_filepath, renamed))
+                    {
+                        snprintf(old_path, sizeof(old_path), "0:%s",
+                                 app->saved_filepath);
+                        snprintf(new_path, sizeof(new_path), "0:%s",
+                                 relative_path);
+                        (void)f_rename(old_path, new_path);
+                    }
+                }
             }
             /* The renamed (or unchanged) file is no longer guaranteed to
              * exist at app->saved_filepath — return to the file browser. */

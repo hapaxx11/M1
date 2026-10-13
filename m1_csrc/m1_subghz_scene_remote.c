@@ -181,8 +181,8 @@ static void remote_fire(SubGhzApp *app, uint8_t btn_idx)
      * READY/Press-OK confirmation screen).  On TX completion or BACK,
      * Transmitter pops and our scene_on_enter() runs again — the
      * Remote screen is redrawn and ready for the next press. */
-    strncpy(app->tx_path, fat_path, sizeof(app->tx_path) - 1);
-    app->tx_path[sizeof(app->tx_path) - 1] = '\0';
+    strncpy(app->tx_path, fat_path, SUBGHZ_SAVED_PATH_MAX - 1U);
+    app->tx_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
     app->tx_repeat_count = 1U;             /* static keys: 1 burst */
     app->tx_mode         = 0U;             /* SUBGHZ_TX_MODE_SINGLE */
     app->tx_autostart    = true;           /* one-press fire UX */
