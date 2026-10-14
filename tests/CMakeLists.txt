@@ -993,6 +993,26 @@ endif()
 add_test(NAME subghz_psa_bruteforce COMMAND test_subghz_psa_bruteforce)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_renault_v1_bruteforce (ProtoPirate Renault V1
+# Hitag2 IV/seed search).  Uses synthetic frames fabricated around a chosen
+# candidate; no real key material.
+# ------------------------------------------------------------------
+add_executable(test_subghz_renault_v1_bruteforce
+    test_subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+)
+target_include_directories(test_subghz_renault_v1_bruteforce PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_renault_v1_bruteforce PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_renault_v1_bruteforce PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_renault_v1_bruteforce COMMAND test_subghz_renault_v1_bruteforce)
+
+# ------------------------------------------------------------------
 # Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)
 # Verifies the pure frame parser (16-bit header + XOR8 checksum, field slicing)
 # and full Manchester pulse-array decode.
