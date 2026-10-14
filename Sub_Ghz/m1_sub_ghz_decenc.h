@@ -75,6 +75,7 @@ typedef struct
     uint64_t n64_decodedvalue;
     uint32_t n32_serialnumber;
     uint32_t n32_rollingcode;
+    uint32_t n32_key2;   /* Protocol-specific 2nd key word (Renault V1: frame bytes 8..10) */
     uint8_t n8_buttonid;
     int16_t ndecodedrssi;
     uint16_t ndecodedbitlength;
@@ -103,6 +104,7 @@ typedef struct
     /* Extended fields — populated by protocol decoders that set them */
     uint32_t serial_number;
     uint32_t rolling_code;
+    uint32_t key2;        /* Renault V1: frame bytes 8..10 (Key_2); 0 otherwise */
     uint8_t  button_id;
 } SubGHz_Dec_Info_t;
 
@@ -364,6 +366,34 @@ static inline bool subghz_psa_capture_needs_bruteforce(uint16_t protocol,
                                                        uint32_t serial_number)
 {
     return protocol == (uint16_t)PSA && serial_number == 0u;
+}
+
+/**
+ * Capture Key_2 persistence dispatch (pure; host-testable).
+ *
+ * Returns how many Key_2 bytes a decoded capture carries (0 = none):
+ *  - PSA TEA-mode captures (serial==0 marker): 2 bytes, stored in
+ *    rolling_code by the decoder.
+ *  - Renault V1: 3 bytes (frame bytes 8..10), stored in the key2 field.
+ * Both feed the ProtoPirate brute-force searches when the capture is saved.
+ */
+static inline uint8_t subghz_capture_key2_len(uint16_t protocol,
+                                              uint32_t serial_number)
+{
+    if (subghz_psa_capture_needs_bruteforce(protocol, serial_number))
+        return 2u;
+    if (protocol == (uint16_t)RENAULT_V1)
+        return 3u;
+    return 0u;
+}
+
+/** Value companion of subghz_capture_key2_len(): the Key_2 word to persist. */
+static inline uint32_t subghz_capture_key2_value(const SubGHz_Dec_Info_t *info)
+{
+    return subghz_psa_capture_needs_bruteforce(info->protocol,
+                                               info->serial_number)
+               ? (info->rolling_code & 0xFFFFu)
+               : info->key2;
 }
 
 bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw);

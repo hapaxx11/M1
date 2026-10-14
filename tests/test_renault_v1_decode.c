@@ -120,6 +120,22 @@ void test_decode_waveform(void)
     TEST_ASSERT_EQUAL_UINT16(RENAULT_V1, subghz_decenc_ctl.ndecodedprotocol);
     TEST_ASSERT_EQUAL_HEX32(0x12345678u, subghz_decenc_ctl.n32_serialnumber);
     TEST_ASSERT_EQUAL_HEX8(1u, subghz_decenc_ctl.n8_buttonid);
+    /* Capture layout for the Hitag2 IV brute force: Key = payload bytes
+     * 0..7 (BE), Key_2 = payload bytes 8..10 (raw[8], raw[9], XOR8). */
+    TEST_ASSERT_EQUAL_HEX64(0x123456781A8CDEADULL,
+                            subghz_decenc_ctl.n64_decodedvalue);
+    uint8_t x = 0;
+    {
+        uint8_t full_chk[RV1_BYTES];
+        make_frame(full_chk);
+        for (uint8_t i = 2; i < 12u; i++)
+            x ^= full_chk[i];
+    }
+    TEST_ASSERT_EQUAL_HEX32(((uint32_t)0xBE << 16) | ((uint32_t)0xEF << 8) | x,
+                            subghz_decenc_ctl.n32_key2);
+    TEST_ASSERT_EQUAL_UINT8(3u, subghz_capture_key2_len(
+        subghz_decenc_ctl.ndecodedprotocol,
+        subghz_decenc_ctl.n32_serialnumber));
 }
 
 void test_decode_rejects_noise(void)

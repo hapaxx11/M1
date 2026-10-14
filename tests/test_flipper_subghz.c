@@ -1371,7 +1371,7 @@ void test_save_key_with_key2_roundtrip(void)
 	const char *path = "/tmp/test_save_key2.sub";
 	bool ok = flipper_subghz_save_key_with_key2(
 	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
-	    "PSA", 80, 0x123A445566778899ULL, 0xB1AAu, 250);
+	    "PSA", 80, 0x123A445566778899ULL, 0xB1AAu, 2u, 250);
 	TEST_ASSERT_TRUE(ok);
 
 	flipper_subghz_signal_t sig;
@@ -1381,8 +1381,53 @@ void test_save_key_with_key2_roundtrip(void)
 	TEST_ASSERT_EQUAL_UINT32(80, sig.bit_count);
 	TEST_ASSERT_EQUAL_UINT64(0x123A445566778899ULL, sig.key);
 	TEST_ASSERT_TRUE(sig.has_key_2);
-	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+	TEST_ASSERT_EQUAL_HEX32(0xB1AAu, sig.key_2);
 	TEST_ASSERT_EQUAL_UINT32(250, sig.te);
+
+	remove(path);
+}
+
+void test_load_flipper_key_renault_key2_8byte_field(void)
+{
+	/* ProtoPirate writes Renault V1 Key_2 as 8 hex bytes; the frame tail
+	 * lives in the low 3. */
+	const char *path = "/tmp/test_renault_key2.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: Renault V1\r\n"
+	    "Bit: 88\r\n"
+	    "Key: 11 22 33 44 55 66 77 88\r\n"
+	    "Key_2: 00 00 00 00 00 99 AA 55\r\n"
+	    "TE: 125\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	bool ok = flipper_subghz_load(path, &sig);
+
+	TEST_ASSERT_TRUE(ok);
+	TEST_ASSERT_EQUAL_STRING("Renault V1", sig.protocol);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX32(0x99AA55u, sig.key_2);
+
+	remove(path);
+}
+
+void test_save_key_with_key2_three_bytes_roundtrip(void)
+{
+	const char *path = "/tmp/test_save_key2_3b.sub";
+	bool ok = flipper_subghz_save_key_with_key2(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    "Renault V1", 104, 0x123456781A8CDEADULL, 0xBEEF42u, 3u, 125);
+	TEST_ASSERT_TRUE(ok);
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX32(0xBEEF42u, sig.key_2);
 
 	remove(path);
 }
@@ -1408,7 +1453,7 @@ void test_save_m1native_key_with_key2_roundtrip(void)
 	const char *path = "/tmp/test_save_native_key2.sgh";
 	TEST_ASSERT_TRUE(flipper_subghz_save_m1native_key_with_key2(
 	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
-	    "PSA", 80, 0x123A445566778899ULL, 0xB1AAu, 250));
+	    "PSA", 80, 0x123A445566778899ULL, 0xB1AAu, 2u, 250));
 
 	flipper_subghz_signal_t sig;
 	memset(&sig, 0, sizeof(sig));
@@ -1607,6 +1652,8 @@ int main(void)
 	RUN_TEST(test_save_key_with_key2_roundtrip);
 	RUN_TEST(test_save_key_plain_writes_no_key2_line);
 	RUN_TEST(test_save_m1native_key_with_key2_roundtrip);
+	RUN_TEST(test_load_flipper_key_renault_key2_8byte_field);
+	RUN_TEST(test_save_key_with_key2_three_bytes_roundtrip);
 
 	/* PSA brute-force recovered-capture write-back */
 	RUN_TEST(test_save_psa_recovered_writes_all_fields);

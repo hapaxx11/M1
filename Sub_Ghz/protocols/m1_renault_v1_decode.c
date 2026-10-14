@@ -149,7 +149,18 @@ static bool renault_v1_try_window(const uint8_t *cells, uint16_t cell_count,
     if (!m1_renault_v1_parse_frame(full, &serial, &button, &counter, &hop))
         return false;
 
-    subghz_decenc_ctl.n64_decodedvalue  = ((uint64_t)serial << 32) | hop;
+    /* Persist the full frame in the ProtoPirate capture layout so the saved
+     * file can seed the Hitag2 IV brute-force search
+     * (Sub_Ghz/subghz_renault_v1_bruteforce.c): Key = payload bytes 0..7
+     * (big-endian), Key_2 = payload bytes 8..10. */
+    uint64_t key = 0;
+    for (uint8_t i = 0; i < 8u; i++)
+        key = (key << 8) | full[2u + i];
+
+    subghz_decenc_ctl.n64_decodedvalue  = key;
+    subghz_decenc_ctl.n32_key2          = ((uint32_t)full[10] << 16) |
+                                          ((uint32_t)full[11] << 8) |
+                                          (uint32_t)full[12];
     subghz_decenc_ctl.n32_serialnumber  = serial;
     subghz_decenc_ctl.n32_rollingcode   = counter;
     subghz_decenc_ctl.n8_buttonid       = button;

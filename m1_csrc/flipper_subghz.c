@@ -47,21 +47,45 @@ static bool m1sgh_parse_raw(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out);
 static const char *stristr(const char *haystack, const char *needle);
 
-static bool subghz_parse_key_2(const char *value, uint16_t *key_2)
+static bool subghz_parse_key_2(const char *value, uint32_t *key_2)
 {
 	uint8_t key_bytes[9];
 	uint8_t count;
+	uint8_t i;
+	uint32_t v = 0;
 
 	if (key_2 == NULL)
 		return false;
 
+	/* PSA writes 2 bytes; ProtoPirate Renault V1 writes 8 (low 3 carry the
+	 * frame tail).  Accept 2..8 bytes and keep the low 4, big-endian. */
 	count = ff_parse_hex_bytes(value, key_bytes, sizeof(key_bytes));
-	if (count != 2 && count != 8)
+	if (count < 2 || count > 8)
 		return false;
 
-	*key_2 = (uint16_t)(((uint16_t)key_bytes[count - 2] << 8) |
-	                    key_bytes[count - 1]);
+	for (i = (count > 4) ? (uint8_t)(count - 4) : 0; i < count; i++)
+		v = (v << 8) | key_bytes[i];
+	*key_2 = v;
 	return true;
+}
+
+/* Format the low key_2_len bytes of key_2 as "AA BB[ CC[ DD]]" (big-endian). */
+static void subghz_format_key_2(char *buf, size_t size, uint32_t key_2,
+                                uint8_t key_2_len)
+{
+	uint8_t n = 0;
+
+	if (key_2_len > 4)
+		key_2_len = 4;
+	for (uint8_t i = 0; i < key_2_len; i++)
+	{
+		int w = snprintf(buf + n, size - n, "%s%02X",
+		                 i == 0 ? "" : " ",
+		                 (unsigned int)((key_2 >> (8 * (key_2_len - 1 - i))) & 0xFF));
+		if (w <= 0 || (size_t)w >= size - n)
+			break;
+		n += (uint8_t)w;
+	}
 }
 
 static void subghz_parse_protocol_type(const char *value,
@@ -838,7 +862,8 @@ bool flipper_subghz_save_key_with_key2(const char *path,
                                         const char *protocol,
                                         uint32_t    bit_count,
                                         uint64_t    key,
-                                        uint16_t    key_2,
+                                        uint32_t    key_2,
+                                        uint8_t     key_2_len,
                                         uint32_t    te)
 {
 	flipper_file_t ff;
@@ -885,9 +910,7 @@ bool flipper_subghz_save_key_with_key2(const char *path,
 
 	if (result)
 	{
-		snprintf(key_str, sizeof(key_str), "%02X %02X",
-		         (unsigned int)((key_2 >> 8) & 0xFF),
-		         (unsigned int)( key_2       & 0xFF));
+		subghz_format_key_2(key_str, sizeof(key_str), key_2, key_2_len);
 		result = ff_write_kv_str(&ff, "Key_2", key_str);
 	}
 
@@ -913,7 +936,7 @@ bool flipper_subghz_save_psa_recovered(const char *path,
                                         const char *preset,
                                         uint32_t    bit_count,
                                         uint64_t    key,
-                                        uint16_t    key_2,
+                                        uint32_t    key_2,
                                         uint32_t    te,
                                         const subghz_psa_bf_result_t *result)
 {
@@ -1114,7 +1137,7 @@ bool flipper_subghz_save_key_full(const char *path,
 static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
                                       const char *preset, const char *protocol,
                                       uint32_t bit_count, uint64_t key,
-                                      uint16_t key_2, bool has_key_2,
+                                      uint32_t key_2, uint8_t key_2_len,
                                       uint32_t te)
 {
 	flipper_file_t ff;
@@ -1159,11 +1182,9 @@ static bool subghz_save_m1native_key(const char *path, uint32_t frequency,
 		result = ff_write_kv_str(&ff, "Payload", buf);
 	}
 
-	if (result && has_key_2)
+	if (result && key_2_len > 0)
 	{
-		snprintf(buf, sizeof(buf), "%02X %02X",
-		         (unsigned int)((key_2 >> 8) & 0xFF),
-		         (unsigned int)(key_2 & 0xFF));
+		subghz_format_key_2(buf, sizeof(buf), key_2, key_2_len);
 		result = ff_write_kv_str(&ff, "Key_2", buf);
 	}
 
@@ -1179,16 +1200,16 @@ bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
                                        uint32_t bit_count, uint64_t key, uint32_t te)
 {
 	return subghz_save_m1native_key(path, frequency, preset, protocol,
-	                                bit_count, key, 0, false, te);
+	                                bit_count, key, 0, 0, te);
 }
 
 bool flipper_subghz_save_m1native_key_with_key2(
     const char *path, uint32_t frequency, const char *preset,
     const char *protocol, uint32_t bit_count, uint64_t key,
-    uint16_t key_2, uint32_t te)
+    uint32_t key_2, uint8_t key_2_len, uint32_t te)
 {
 	return subghz_save_m1native_key(path, frequency, preset, protocol,
-	                                bit_count, key, key_2, true, te);
+	                                bit_count, key, key_2, key_2_len, te);
 }
 
 /*============================================================================*/
