@@ -156,6 +156,22 @@ void test_cancellation_is_observed_on_next_advance_and_wins_match(void)
     TEST_ASSERT_FALSE(subghz_bruteforce_job_advance(&job, false, 0u));
 }
 
+void test_progress_snapshot_reports_current_and_total(void)
+{
+    subghz_bruteforce_job_t job;
+    uint32_t current;
+    uint32_t total;
+
+    subghz_bruteforce_job_init(&job);
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, 3u));
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_advance(&job, false, 0u));
+
+    subghz_bruteforce_job_progress_snapshot(&job, &current, &total);
+
+    TEST_ASSERT_EQUAL_UINT32(1u, current);
+    TEST_ASSERT_EQUAL_UINT32(3u, total);
+}
+
 void test_null_job_arguments_are_safe(void)
 {
     subghz_bruteforce_job_init(NULL);
@@ -175,6 +191,7 @@ int main(void)
     RUN_TEST(test_begin_restarts_terminal_job_and_clears_cancel);
     RUN_TEST(test_zero_result_can_be_a_match_and_terminal_state_is_unchanged);
     RUN_TEST(test_cancellation_is_observed_on_next_advance_and_wins_match);
+    RUN_TEST(test_progress_snapshot_reports_current_and_total);
     RUN_TEST(test_null_job_arguments_are_safe);
     return UNITY_END();
 }

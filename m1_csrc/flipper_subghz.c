@@ -237,8 +237,7 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "Key_2") == 0)
 		{
-			/* Accept the local two-byte and ProtoPirate padded eight-byte
-			 * forms, using the final two bytes in either case. */
+			/* Accept 2–8-byte values, retaining the low four bytes. */
 			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
 				out->has_key_2 = true;
 		}
@@ -1064,7 +1063,7 @@ bool flipper_subghz_save_renault_v1_recovered(const char *path,
 	if (ok)
 		ok = ff_write_kv_uint32(&ff, "Frequency", frequency);
 
-	if (ok && preset && preset[0] != ' ')
+	if (ok && preset && preset[0] != '\0')
 		ok = ff_write_kv_str(&ff, "Preset", preset);
 
 	if (ok)

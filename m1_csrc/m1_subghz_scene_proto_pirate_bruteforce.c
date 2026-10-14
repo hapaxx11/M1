@@ -63,7 +63,7 @@ typedef enum {
     PP_BF_STATE_NOT_FOUND,
     PP_BF_STATE_CANCELLED,
     PP_BF_STATE_INVALID,   /* picked file is not a BF-able PSA/Renault capture */
-    PP_BF_STATE_ERROR,     /* worker/semaphore allocation failed */
+    PP_BF_STATE_ERROR,
 } pp_bf_state_t;
 
 typedef enum {
@@ -584,8 +584,9 @@ static void draw(SubGhzApp *app)
                                                        : "Recovering seed...");
 
             /* Progress bar with a real fill. */
-            const uint32_t cur = s_ctx->job.progress_current;
-            const uint32_t total = s_ctx->job.progress_total;
+            uint32_t cur;
+            uint32_t total;
+            subghz_bruteforce_job_progress_snapshot(&s_ctx->job, &cur, &total);
             const uint16_t fill =
                 (total > 0U) ? (uint16_t)(((uint64_t)cur * 112ULL) / total) : 0U;
             u8g2_DrawFrame(&m1_u8g2, 4, 30, 120, 10);
@@ -649,7 +650,7 @@ static void draw(SubGhzApp *app)
 
         case PP_BF_STATE_ERROR:
         default:
-            u8g2_DrawStr(&m1_u8g2, 2, 24, "Error: no resources");
+            u8g2_DrawStr(&m1_u8g2, 2, 24, "Operation failed");
             break;
     }
 
