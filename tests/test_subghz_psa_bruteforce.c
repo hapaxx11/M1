@@ -322,6 +322,21 @@ void test_phase2_rejects_phase1_fabrication_and_vice_versa(void)
     TEST_ASSERT_FALSE(subghz_psa_bf_run_range(&job, key1, key2, PSA_BF_PHASE_1,
                                               cand1 - 1u, cand1 + 2u, NULL));
     TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_NOT_FOUND, job.status);
+
+    const uint32_t phase1_candidate = 0x23ABCD01u;
+    v0 = ((phase1_candidate & 0xFFFFFFu) << 8) | 0x52u;
+    v1 = 0x12345600u;
+    v1 |= subghz_psa_bf_tea_crc(v0, v1);
+    fabricate_phase1(phase1_candidate, v0, v1, &key1, &key2);
+
+    const uint32_t phase2_candidate =
+        PSA_BF2_START | (phase1_candidate & 0xFFFFFFu);
+    subghz_bruteforce_job_init(&job);
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, 3u));
+    TEST_ASSERT_FALSE(subghz_psa_bf_run_range(
+        &job, key1, key2, PSA_BF_PHASE_2, phase2_candidate - 1u,
+        phase2_candidate + 2u, NULL));
+    TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_NOT_FOUND, job.status);
 }
 
 /*============================================================================*/
@@ -347,6 +362,18 @@ void test_cancel_is_honoured_immediately(void)
     /* The very first candidate evaluation observes the cancel request. */
     TEST_ASSERT_FALSE(subghz_psa_bf_run_range(&job, key1, key2, PSA_BF_PHASE_1,
                                               cand - 2u, cand + 98u, NULL));
+    TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_CANCELLED, job.status);
+    TEST_ASSERT_EQUAL_UINT32(0u, job.progress_current);
+}
+
+void test_cancel_after_job_arm_before_run_is_preserved(void)
+{
+    subghz_bruteforce_job_t job;
+    subghz_bruteforce_job_init(&job);
+    TEST_ASSERT_TRUE(subghz_bruteforce_job_begin(&job, PSA_BF_TOTAL));
+    subghz_bruteforce_job_cancel(&job);
+
+    TEST_ASSERT_FALSE(subghz_psa_bf_run(&job, 0u, 0u, NULL));
     TEST_ASSERT_EQUAL(SUBGHZ_BRUTEFORCE_JOB_CANCELLED, job.status);
     TEST_ASSERT_EQUAL_UINT32(0u, job.progress_current);
 }
@@ -420,6 +447,7 @@ int main(void)
     RUN_TEST(test_phase2_finds_fabricated_capture);
     RUN_TEST(test_phase2_rejects_phase1_fabrication_and_vice_versa);
     RUN_TEST(test_cancel_is_honoured_immediately);
+    RUN_TEST(test_cancel_after_job_arm_before_run_is_preserved);
     RUN_TEST(test_run_range_rejects_invalid_arguments);
     RUN_TEST(test_run_range_rejects_candidates_outside_phase_bounds);
     RUN_TEST(test_full_run_arms_total_candidate_count);

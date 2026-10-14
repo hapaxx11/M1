@@ -64,6 +64,23 @@ static bool subghz_parse_key_2(const char *value, uint16_t *key_2)
 	return true;
 }
 
+static void subghz_parse_protocol_type(const char *value,
+                                      flipper_subghz_signal_t *out)
+{
+	char *end;
+	unsigned long parsed;
+
+	if (value == NULL || out == NULL)
+		return;
+
+	parsed = strtoul(value, &end, 0);
+	if (end != value && *end == '\0' && parsed <= UINT32_MAX)
+	{
+		out->protocol_type = (uint32_t)parsed;
+		out->has_protocol_type = true;
+	}
+}
+
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
 /*============================================================================*/
@@ -199,6 +216,10 @@ static bool subghz_parse_key(flipper_file_t *ctx, flipper_subghz_signal_t *out)
 			 * forms, using the final two bytes in either case. */
 			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
 				out->has_key_2 = true;
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Type") == 0)
+		{
+			subghz_parse_protocol_type(ff_get_value(ctx), out);
 		}
 		else if (subghz_strcasecmp(ff_get_key(ctx), "TE") == 0)
 		{
@@ -347,6 +368,10 @@ static bool m1sgh_parse_packet(flipper_file_t *ctx, flipper_subghz_signal_t *out
 		{
 			if (subghz_parse_key_2(ff_get_value(ctx), &out->key_2))
 				out->has_key_2 = true;
+		}
+		else if (subghz_strcasecmp(ff_get_key(ctx), "Type") == 0)
+		{
+			subghz_parse_protocol_type(ff_get_value(ctx), out);
 		}
 	}
 

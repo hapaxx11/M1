@@ -17,5 +17,8 @@ bool subghz_saved_path_rename_build(char *output,
                                     size_t output_size,
                                     const char *existing_path,
                                     const char *new_filename);
+bool subghz_saved_path_recovered_build(char *output,
+                                       size_t output_size,
+                                       const char *source_path);
 
 #endif

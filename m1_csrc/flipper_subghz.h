@@ -78,12 +78,26 @@ typedef struct {
 	 * absent" from a genuine zero value; it is set only by the parser. */
 	uint16_t key_2;
 	bool     has_key_2;
+	/* Optional PSA frame type, as written by ProtoPirate and in recovered files. */
+	uint32_t protocol_type;
+	bool     has_protocol_type;
 	/* Set to true when the file was loaded from an M1 native .sgh format
 	 * (not a Flipper .sub file).  Used to select the direct replay path
 	 * which feeds the original file into the streaming engine without any
 	 * temp-file conversion. */
 	bool     is_m1_native;
 } flipper_subghz_signal_t;
+
+#define FLIPPER_SUBGHZ_PSA_TEA_TYPE 0x36u
+
+static inline bool flipper_subghz_psa_is_tea_candidate(bool has_key_2,
+                                                        bool has_protocol_type,
+                                                        uint32_t protocol_type)
+{
+	return has_key_2 &&
+	       (!has_protocol_type ||
+	        protocol_type == FLIPPER_SUBGHZ_PSA_TEA_TYPE);
+}
 
 /*
  * Lightweight header probe — reads only the first few header lines of a

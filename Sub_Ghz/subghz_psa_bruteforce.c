@@ -326,7 +326,8 @@ bool subghz_psa_bf_run(subghz_bruteforce_job_t *job, uint64_t key1,
     if (job == NULL)
         return false;
 
-    if (!subghz_bruteforce_job_begin(job, PSA_BF_TOTAL))
+    if (job->status != SUBGHZ_BRUTEFORCE_JOB_RUNNING &&
+        !subghz_bruteforce_job_begin(job, PSA_BF_TOTAL))
         return false;
 
     if (subghz_psa_bf_run_range(job, key1, key2, PSA_BF_PHASE_1,

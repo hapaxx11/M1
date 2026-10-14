@@ -48,6 +48,21 @@ void test_rename_preserves_the_existing_category(void)
         path, sizeof(path), "/System/Old.sub", "New.sub"));
 }
 
+void test_recovered_name_strips_supported_extensions(void)
+{
+    char path[64];
+
+    TEST_ASSERT_TRUE(subghz_saved_path_recovered_build(
+        path, sizeof(path), "/SUBGHZ/PSA/capture.sub"));
+    TEST_ASSERT_EQUAL_STRING("/SUBGHZ/PSA/capture_recovered.sub", path);
+    TEST_ASSERT_TRUE(subghz_saved_path_recovered_build(
+        path, sizeof(path), "/SUBGHZ/PSA/capture.sgh"));
+    TEST_ASSERT_EQUAL_STRING("/SUBGHZ/PSA/capture_recovered.sub", path);
+    TEST_ASSERT_TRUE(subghz_saved_path_recovered_build(
+        path, sizeof(path), "/SUBGHZ/PSA/capture.SGH"));
+    TEST_ASSERT_EQUAL_STRING("/SUBGHZ/PSA/capture_recovered.sub", path);
+}
+
 void test_reject_paths_outside_saved_root_and_traversal(void)
 {
     char path[64];
@@ -72,6 +87,7 @@ int main(void)
     RUN_TEST(test_build_root_and_nested_saved_paths);
     RUN_TEST(test_build_long_nested_saved_path);
     RUN_TEST(test_rename_preserves_the_existing_category);
+    RUN_TEST(test_recovered_name_strips_supported_extensions);
     RUN_TEST(test_reject_paths_outside_saved_root_and_traversal);
     return UNITY_END();
 }

@@ -6,8 +6,8 @@
  *
  * Flow:
  *   1. on_enter opens the file browser (0:/SUBGHZ); the user picks a PSA
- *      capture saved as a Flipper Key .sub file carrying `Key:` and
- *      `Key_2:` (written by the Read scene for TEA-mode/0x36 captures, or
+ *      capture in Flipper Key .sub or M1 native .sgh format carrying `Key:`
+ *      and `Key_2:` (written by the Read scene for TEA-mode/0x36 captures, or
  *      exported by ProtoPirate).
  *   2. The two-phase TEA key search (Sub_Ghz/subghz_psa_bruteforce.c) runs on
  *      a low-priority worker task; the scene polls completion on its 100 ms
@@ -150,7 +150,8 @@ static bool pp_bf_load_capture(pp_bf_ctx_t *ctx)
     if (flipper_subghz_load(ctx->src_path, sig) &&
         sig->type == FLIPPER_SUBGHZ_TYPE_PARSED &&
         pp_str_ieq(sig->protocol, "PSA") &&
-        sig->has_key_2)
+        flipper_subghz_psa_is_tea_candidate(
+            sig->has_key_2, sig->has_protocol_type, sig->protocol_type))
     {
         ctx->key1      = sig->key;
         ctx->key2      = sig->key_2;
@@ -169,6 +170,8 @@ static bool pp_bf_load_capture(pp_bf_ctx_t *ctx)
 static bool pp_bf_start_worker(pp_bf_ctx_t *ctx)
 {
     subghz_bruteforce_job_init(&ctx->job);
+    if (!subghz_bruteforce_job_begin(&ctx->job, PSA_BF_TOTAL))
+        return false;
 
     ctx->done = xSemaphoreCreateBinary();
     if (ctx->done == NULL)
@@ -188,24 +191,8 @@ static bool pp_bf_start_worker(pp_bf_ctx_t *ctx)
 static bool pp_bf_save_recovered(pp_bf_ctx_t *ctx)
 {
     char path[SUBGHZ_SAVED_FULL_PATH_MAX + 16];
-    strncpy(path, ctx->src_path, sizeof(path) - 1);
-    path[sizeof(path) - 1] = '\0';
-
-    char *dot = strrchr(path, '.');
-    const char *suffix = "_recovered.sub";
-    if (dot != NULL && pp_str_ieq(dot, ".sub"))
-    {
-        *dot = '\0';
-        if (strlen(path) + strlen(suffix) >= sizeof(path))
-            return false;
-        strcat(path, suffix);
-    }
-    else
-    {
-        if (strlen(path) + strlen(suffix) >= sizeof(path))
-            return false;
-        strcat(path, suffix);
-    }
+    if (!subghz_saved_path_recovered_build(path, sizeof(path), ctx->src_path))
+        return false;
 
     return flipper_subghz_save_psa_recovered(path, ctx->frequency, ctx->preset,
                                              ctx->bit_count, ctx->key1,
@@ -407,7 +394,7 @@ static void draw(SubGhzApp *app)
 
         case PP_BF_STATE_INVALID:
             u8g2_DrawStr(&m1_u8g2, 2, 24, "Not a PSA capture");
-            u8g2_DrawStr(&m1_u8g2, 2, 36, "Need .sub with Key_2");
+            u8g2_DrawStr(&m1_u8g2, 2, 36, "Need PSA Key_2 capture");
             break;
 
         case PP_BF_STATE_ERROR:

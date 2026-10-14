@@ -1294,6 +1294,33 @@ void test_load_flipper_key_psa_padded_key2_field(void)
 	remove(path);
 }
 
+void test_load_psa_type_rejects_direct_xor_for_tea_search(void)
+{
+	const char *path = "/tmp/test_psa_direct_type.sub";
+	write_tmp(path,
+	    "Filetype: Flipper SubGhz Key File\r\n"
+	    "Version: 1\r\n"
+	    "Frequency: 433920000\r\n"
+	    "Preset: FuriHalSubGhzPresetOok650Async\r\n"
+	    "Protocol: PSA\r\n"
+	    "Bit: 80\r\n"
+	    "Key: 12 3A 44 55 66 77 88 99\r\n"
+	    "Key_2: 00 00 00 00 00 00 B1 AA\r\n"
+	    "Type: 0x23\r\n");
+
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_TRUE(sig.has_protocol_type);
+	TEST_ASSERT_EQUAL_UINT32(0x23u, sig.protocol_type);
+	TEST_ASSERT_FALSE(flipper_subghz_psa_is_tea_candidate(
+	    sig.has_key_2, sig.has_protocol_type, sig.protocol_type));
+	TEST_ASSERT_TRUE(flipper_subghz_psa_is_tea_candidate(true, false, 0u));
+	TEST_ASSERT_TRUE(flipper_subghz_psa_is_tea_candidate(true, true, 0x36u));
+
+	remove(path);
+}
+
 void test_load_flipper_key_rejects_truncated_key2_field(void)
 {
 	const char *path = "/tmp/test_psa_truncated_key2.sub";
@@ -1453,6 +1480,10 @@ void test_save_psa_recovered_writes_all_fields(void)
 	TEST_ASSERT_EQUAL_UINT64(0x123A445566778899ULL, sig.key);
 	TEST_ASSERT_TRUE(sig.has_key_2);
 	TEST_ASSERT_EQUAL_HEX16(0xB1AAu, sig.key_2);
+	TEST_ASSERT_TRUE(sig.has_protocol_type);
+	TEST_ASSERT_EQUAL_UINT32(0x36u, sig.protocol_type);
+	TEST_ASSERT_TRUE(flipper_subghz_psa_is_tea_candidate(
+	    sig.has_key_2, sig.has_protocol_type, sig.protocol_type));
 
 	remove(path);
 }
@@ -1570,6 +1601,7 @@ int main(void)
 	/* Key_2 field load / save round-trip (PSA brute-force captures) */
 	RUN_TEST(test_load_flipper_key_psa_key2_field);
 	RUN_TEST(test_load_flipper_key_psa_padded_key2_field);
+	RUN_TEST(test_load_psa_type_rejects_direct_xor_for_tea_search);
 	RUN_TEST(test_load_flipper_key_rejects_truncated_key2_field);
 	RUN_TEST(test_load_flipper_key_without_key2_clears_flag);
 	RUN_TEST(test_save_key_with_key2_roundtrip);
