@@ -19,6 +19,7 @@
 #include "flipper_subghz.h"
 #include "m1_sub_ghz.h"
 #include "subghz_psa_bruteforce.h"
+#include "subghz_renault_v1_bruteforce.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -1011,6 +1012,117 @@ bool flipper_subghz_save_psa_recovered(const char *path,
 
 	if (ok)
 		ok = ff_write_kv_uint32(&ff, "Seed", result->seed);
+
+	ff_close(&ff);
+	return ok;
+}
+
+/*============================================================================*/
+/**
+ * @brief  Save a Renault V1 capture patched with the seed (IV) recovered by
+ *         the Hitag2 brute-force search (subghz_renault_v1_bruteforce.c).
+ *
+ * Writes a Flipper Key file carrying the original Key/Key_2 plus Serial, Btn,
+ * Cnt (full counter reconstructed from the seed), Hop, Seed (4 hex bytes) and
+ * Recovered: 01 — the field set the ProtoPirate reference applies after a
+ * successful search.  The plaintext fields are sliced back out of the
+ * captured frame itself (the Renault V1 wire format is cipher-free except
+ * for the hop word).
+ */
+bool flipper_subghz_save_renault_v1_recovered(const char *path,
+                                               uint32_t    frequency,
+                                               const char *preset,
+                                               uint32_t    bit_count,
+                                               uint64_t    key,
+                                               uint32_t    key_2,
+                                               uint32_t    te,
+                                               uint32_t    seed)
+{
+	flipper_file_t ff;
+	bool ok = true;
+	char buf[40];
+
+	if (path == NULL)
+		return false;
+
+	uint8_t frame[11];
+	subghz_renault_v1_bf_frame_from_capture(frame, key, key_2 & 0xFFFFFFu);
+
+	uint32_t serial = 0, hop = 0;
+	uint16_t cnt10 = 0;
+	uint8_t  btn = 0;
+	subghz_renault_v1_bf_unpack_frame(frame, &serial, &btn, &cnt10, &hop);
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	ok = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (ok && preset && preset[0] != ' ')
+		ok = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (ok)
+		ok = ff_write_kv_str(&ff, "Protocol", "Renault V1");
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (ok)
+	{
+		snprintf(buf, sizeof(buf),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		ok = ff_write_kv_str(&ff, "Key", buf);
+	}
+
+	if (ok)
+	{
+		subghz_format_key_2(buf, sizeof(buf), key_2, 3u);
+		ok = ff_write_kv_str(&ff, "Key_2", buf);
+	}
+
+	if (ok && te > 0)
+		ok = ff_write_kv_uint32(&ff, "TE", te);
+
+	/* Recovered write-back set (ProtoPirate field formats). */
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Serial", serial);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Btn", btn);
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Cnt",
+		                        subghz_renault_v1_bf_counter_from_seed(seed));
+
+	if (ok)
+		ok = ff_write_kv_uint32(&ff, "Hop", hop);
+
+	if (ok)
+	{
+		snprintf(buf, sizeof(buf), "%02X %02X %02X %02X",
+		         (unsigned int)((seed >> 24) & 0xFF),
+		         (unsigned int)((seed >> 16) & 0xFF),
+		         (unsigned int)((seed >>  8) & 0xFF),
+		         (unsigned int)( seed        & 0xFF));
+		ok = ff_write_kv_str(&ff, "Seed", buf);
+	}
+
+	if (ok)
+		ok = ff_write_kv_str(&ff, "Recovered", "01");
 
 	ff_close(&ff);
 	return ok;

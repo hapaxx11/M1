@@ -399,3 +399,21 @@ uint32_t subghz_renault_v1_bf_counter_from_seed(uint32_t seed)
 {
     return ((seed >> 12) & 0xFF0u) | ((seed << 4) & 0xF000u) | (seed >> 28);
 }
+
+void subghz_renault_v1_bf_unpack_frame(const uint8_t frame[RENAULT_V1_BF_FRAME_BYTES],
+                                       uint32_t *serial, uint8_t *button,
+                                       uint16_t *counter10, uint32_t *hop)
+{
+    if (serial != NULL)
+        *serial = ((uint32_t)frame[0] << 24) | ((uint32_t)frame[1] << 16) |
+                  ((uint32_t)frame[2] << 8) | (uint32_t)frame[3];
+    if (button != NULL)
+        *button = (uint8_t)((frame[4] >> 4) & 0x0Fu);
+    if (counter10 != NULL)
+        *counter10 = (uint16_t)(((uint16_t)(frame[4] & 0x0Fu) << 6) |
+                                (uint16_t)(frame[5] >> 2));
+    if (hop != NULL)
+        *hop = ((uint32_t)(frame[5] & 0x03u) << 30) |
+               ((uint32_t)frame[6] << 22) | ((uint32_t)frame[7] << 14) |
+               ((uint32_t)frame[8] << 6) | ((uint32_t)frame[9] >> 2);
+}

@@ -1545,6 +1545,64 @@ void test_save_psa_recovered_rejects_null(void)
 	    0xB1AAu, 250, NULL));
 }
 
+/* ===================================================================
+ * Renault V1 Hitag2 brute-force recovered-capture write-back
+ * =================================================================== */
+
+void test_save_renault_v1_recovered_writes_all_fields(void)
+{
+	/* Frame: serial 0x12345678, btn 1, cnt10 0x2A3, hop from bytes below.
+	 * raw = 12 34 56 78 1A 8C DE AD BE EF <xor8=BC> */
+	const uint64_t key = 0x123456781A8CDEADULL;
+	const uint32_t key_2 = 0xBEEFBCu;
+	const uint32_t seed = 0x12345678u;
+
+	const char *path = "/tmp/test_renault_recovered.sub";
+	bool ok = flipper_subghz_save_renault_v1_recovered(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    104, key, key_2, 125, seed);
+	TEST_ASSERT_TRUE(ok);
+
+	char text[768];
+	char expect[48];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: Renault V1"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key: 12 34 56 78 1A 8C DE AD"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key_2: BE EF BC"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 125"));
+	snprintf(expect, sizeof(expect), "Serial: %lu", 0x12345678UL);
+	TEST_ASSERT_NOT_NULL(strstr(text, expect));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 1"));
+	/* Cnt = counter_from_seed(0x12345678) = 0x6341 */
+	snprintf(expect, sizeof(expect), "Cnt: %lu", 0x6341UL);
+	TEST_ASSERT_NOT_NULL(strstr(text, expect));
+	/* hop = (0x8C&3)<<30 | DE<<22 | AD<<14 | BE<<6 | EF>>2 */
+	snprintf(expect, sizeof(expect), "Hop: %lu",
+	         (unsigned long)((0xDEUL << 22) | (0xADUL << 14) |
+	                         (0xBEUL << 6) | (0xEFUL >> 2)));
+	TEST_ASSERT_NOT_NULL(strstr(text, expect));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Seed: 12 34 56 78"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Recovered: 01"));
+
+	/* The recovered file re-parses with Key and 3-byte Key_2 intact. */
+	flipper_subghz_signal_t sig;
+	memset(&sig, 0, sizeof(sig));
+	TEST_ASSERT_TRUE(flipper_subghz_load(path, &sig));
+	TEST_ASSERT_EQUAL_STRING("Renault V1", sig.protocol);
+	TEST_ASSERT_EQUAL_UINT64(key, sig.key);
+	TEST_ASSERT_TRUE(sig.has_key_2);
+	TEST_ASSERT_EQUAL_HEX32(key_2, sig.key_2);
+
+	remove(path);
+}
+
+void test_save_renault_v1_recovered_rejects_null(void)
+{
+	TEST_ASSERT_FALSE(flipper_subghz_save_renault_v1_recovered(
+	    NULL, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    104, 0x123456781A8CDEADULL, 0xBEEFBCu, 125, 0x12345678u));
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -1658,6 +1716,10 @@ int main(void)
 	/* PSA brute-force recovered-capture write-back */
 	RUN_TEST(test_save_psa_recovered_writes_all_fields);
 	RUN_TEST(test_save_psa_recovered_rejects_null);
+
+	/* Renault V1 Hitag2 brute-force recovered-capture write-back */
+	RUN_TEST(test_save_renault_v1_recovered_writes_all_fields);
+	RUN_TEST(test_save_renault_v1_recovered_rejects_null);
 
 	return UNITY_END();
 }

@@ -188,6 +188,21 @@ bool flipper_subghz_save_psa_recovered(const char *path,
                                         const struct subghz_psa_bf_result *result);
 
 /*
+ * Save a Renault V1 capture patched with the seed (IV) recovered by the
+ * Hitag2 brute-force search: Key/Key_2 plus Serial, Btn, Cnt (full counter
+ * reconstructed from the seed), Hop, Seed (4 hex bytes) and Recovered: 01 —
+ * the ProtoPirate post-search write-back set.
+ */
+bool flipper_subghz_save_renault_v1_recovered(const char *path,
+                                               uint32_t    frequency,
+                                               const char *preset,
+                                               uint32_t    bit_count,
+                                               uint64_t    key,
+                                               uint32_t    key_2,
+                                               uint32_t    te,
+                                               uint32_t    seed);
+
+/*
  * Save variant that additionally writes the optional
  * `CounterMode:` field.  The field is only emitted when @p counter_mode
  * differs from the default (Increment), so files round-tripped from

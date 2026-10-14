@@ -572,6 +572,8 @@ add_executable(test_flipper_subghz
     test_flipper_subghz.c
     ${M1_ROOT}/m1_csrc/flipper_subghz.c
     ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
 )
 target_include_directories(test_flipper_subghz PRIVATE
     ${STUBS_DIR}            # ff.h, m1_io_defs.h, m1_ring_buffer.h stubs

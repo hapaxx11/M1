@@ -132,6 +132,15 @@ bool subghz_renault_v1_bf_run(subghz_bruteforce_job_t *job,
 uint32_t subghz_renault_v1_bf_seed_from_iv(const uint8_t iv[4]);
 
 /**
+ * @brief  Slice the plaintext fields out of an 11-byte capture frame
+ *         (serial, 4-bit button, 10-bit partial counter, 32-bit hop).
+ *         Pure; no checksum validation (capture-time concern).
+ */
+void subghz_renault_v1_bf_unpack_frame(const uint8_t frame[RENAULT_V1_BF_FRAME_BYTES],
+                                       uint32_t *serial, uint8_t *button,
+                                       uint16_t *counter10, uint32_t *hop);
+
+/**
  * @brief  Reconstruct the full rolling counter from the recovered seed
  *         (reference formula; the 10-bit frame counter is only partial).
  */
