@@ -135,6 +135,29 @@ Manchester decoder, and the OTA asset filter.
 6. **Build and run**: `cmake -B build-tests -S tests && cmake --build build-tests
    && ctest --test-dir build-tests --output-on-failure`
 
+#### How to actually run the host tests (CI vs local)
+
+- **CI is the authoritative gate** — `.github/workflows/tests.yml` builds and
+  runs the full suite (Unity + ASan/UBSan) on every PR/push that touches
+  `m1_csrc/`, `Sub_Ghz/`, `tests/` or the workflow itself.  If no local host
+  toolchain is available, push nothing: hand the branch/PR to the owner and
+  ask for the CI result to be pasted back, or read the run via `gh run list`
+  / `gh run view` when `gh` is authenticated.  Never claim tests pass without
+  either a local run or a green CI run.
+- **Local run via WSL** (set up 2026-10): the `kali-linux` WSL distro has
+  gcc/make/cmake installed (its apt sources were switched from the stale
+  `kali-last-snapshot` to `kali-rolling`, and `kali-archive-keyring` 2025.3
+  was installed).  Run:
+  ```bash
+  wsl.exe -d kali-linux -u root -- bash -c "cd /mnt/c/Users/david/source/repos/Hapax/M1 \
+    && cmake -B tests/build-tests -S tests && cmake --build tests/build-tests -j4 \
+    && ctest --test-dir tests/build-tests --output-on-failure"
+  ```
+  If the distro or toolchain is gone, reinstall with:
+  `apt-get install -y gcc make cmake libc6-dev` (root, no password needed via `-u root`).
+- **Native Windows**: no host gcc/clang/MSVC is installed (the CubeIDE
+  toolchain is ARM-cross only, Docker Desktop is not running).  Use WSL or CI.
+
 7. **Update the CI path filter** — open `.github/workflows/tests.yml` and check
    that every top-level source directory referenced by your new test's
    `add_executable` block already appears in the `paths:` list under both the

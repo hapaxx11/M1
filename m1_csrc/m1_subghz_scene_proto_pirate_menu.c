@@ -15,6 +15,9 @@
  *                    file, then the existing Decode-Raw flow handles analysis.
  *   3. Timing Tuner — Async timing analysis tool; pushes
  *                    SubGhzSceneProtoPirateTuner.
+ *   4. Emulate     — Pick a ProtoPirate protocol and transmit a hex key.
+ *   5. Brute Force — PSA TEA key recovery from a saved capture; pushes
+ *                    SubGhzSceneProtoPirateBruteForce.
  *
  * All scene transitions are non-blocking; the scene itself only handles
  * navigation events (UP / DOWN / OK / BACK).
@@ -34,13 +37,14 @@
 /* Menu items                                                                 */
 /*============================================================================*/
 
-#define PP_MENU_ITEM_COUNT  4
+#define PP_MENU_ITEM_COUNT  5
 
 static const char *pp_menu_labels[PP_MENU_ITEM_COUNT] = {
     "Receiver",
     "Sub Decode",
     "Timing Tuner",
     "Emulate",
+    "Brute Force",
 };
 
 static const SubGhzSceneId pp_menu_targets[PP_MENU_ITEM_COUNT] = {
@@ -48,6 +52,7 @@ static const SubGhzSceneId pp_menu_targets[PP_MENU_ITEM_COUNT] = {
     SubGhzSceneSaved,                  /* Sub Decode: browse saved files → Decode Raw flow */
     SubGhzSceneProtoPirateTuner,       /* Timing Tuner: new async scene */
     SubGhzSceneProtoPirateEmulate,     /* Emulate: pick ProtoPirate protocol and send */
+    SubGhzSceneProtoPirateBruteForce,  /* Brute Force: PSA TEA key recovery */
 };
 
 /*============================================================================*/

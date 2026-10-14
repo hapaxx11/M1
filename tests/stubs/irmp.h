@@ -56,4 +56,11 @@ typedef struct {
     uint8_t  flags;
 } IRMP_DATA;
 
+/* Decoder entry points (signatures match Infrared/irmp.h).  Required for
+ * test_irmp_decode under GCC >= 14, where implicit function declarations are
+ * a hard error. */
+void    irmp_init(void);
+uint8_t irmp_get_data(IRMP_DATA *);
+void    irmp_data_sampler(uint32_t pulse_len, uint8_t rx_logic_high);
+
 #endif /* IRMP_H_STUB */

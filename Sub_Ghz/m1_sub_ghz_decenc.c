@@ -137,6 +137,7 @@ void subghz_reset_data()
 	subghz_decenc_ctl.ndecodedbitlength = 0;
 	subghz_decenc_ctl.n32_serialnumber = 0;
 	subghz_decenc_ctl.n32_rollingcode = 0;
+	subghz_decenc_ctl.n32_key2 = 0;
 	subghz_decenc_ctl.n8_buttonid = 0;
 	memset(subghz_decenc_ctl.pulse_times, 0, sizeof(subghz_decenc_ctl.pulse_times));
 }
@@ -516,6 +517,7 @@ bool subghz_decenc_read(SubGHz_Dec_Info_t *received, bool raw)
             /* Copy extended fields set by protocol-specific decoders */
             received->serial_number = subghz_decenc_ctl.n32_serialnumber;
             received->rolling_code  = subghz_decenc_ctl.n32_rollingcode;
+            received->key2          = subghz_decenc_ctl.n32_key2;
             received->button_id     = subghz_decenc_ctl.n8_buttonid;
         } // if (value)
         subghz_decenc_ctl.subghz_reset_data();

@@ -572,6 +572,8 @@ add_executable(test_flipper_subghz
     test_flipper_subghz.c
     ${M1_ROOT}/m1_csrc/flipper_subghz.c
     ${M1_ROOT}/m1_csrc/flipper_file.c
+    ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
 )
 target_include_directories(test_flipper_subghz PRIVATE
     ${STUBS_DIR}            # ff.h, m1_io_defs.h, m1_ring_buffer.h stubs
@@ -971,6 +973,67 @@ if(TARGET sanitizers)
     target_link_libraries(test_protopirate_bruteforce_contract PRIVATE sanitizers)
 endif()
 add_test(NAME protopirate_bruteforce_contract COMMAND test_protopirate_bruteforce_contract)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_psa_bruteforce (ProtoPirate PSA two-phase TEA
+# brute-force key search).  Uses synthetic captures built by forward
+# encryption; no real key material.
+# ------------------------------------------------------------------
+add_executable(test_subghz_psa_bruteforce
+    test_subghz_psa_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_psa_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+)
+target_include_directories(test_subghz_psa_bruteforce PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_psa_bruteforce PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_psa_bruteforce PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_psa_bruteforce COMMAND test_subghz_psa_bruteforce)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_renault_v1_bruteforce (ProtoPirate Renault V1
+# Hitag2 IV/seed search).  Uses synthetic frames fabricated around a chosen
+# candidate; no real key material.
+# ------------------------------------------------------------------
+add_executable(test_subghz_renault_v1_bruteforce
+    test_subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+)
+target_include_directories(test_subghz_renault_v1_bruteforce PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_renault_v1_bruteforce PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_renault_v1_bruteforce PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_renault_v1_bruteforce COMMAND test_subghz_renault_v1_bruteforce)
+
+# ------------------------------------------------------------------
+# Module under test: subghz_renault_v1_encoder (Renault V1 seed-path TX
+# after recovery).  Round-trip: encrypted frames must be crackable by the
+# brute-force search, recovering exactly the IV the encoder used.
+# ------------------------------------------------------------------
+add_executable(test_subghz_renault_v1_encoder
+    test_subghz_renault_v1_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_renault_v1_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+)
+target_include_directories(test_subghz_renault_v1_encoder PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/Sub_Ghz
+)
+target_link_libraries(test_subghz_renault_v1_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_renault_v1_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_renault_v1_encoder COMMAND test_subghz_renault_v1_encoder)
 
 # ------------------------------------------------------------------
 # Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)

@@ -143,12 +143,26 @@ static void autosave_signal(const SubGHz_History_Entry_t *entry)
             fmt == 1) == 0)
         return;
 
+    const uint8_t k2_len = subghz_capture_key2_len(entry->info.protocol,
+                                                   entry->info.serial_number);
+    const uint32_t k2 = subghz_capture_key2_value(&entry->info);
+
     bool saved;
-    if (fmt == 1)
+    if (fmt == 1 && k2_len > 0)
+        saved = flipper_subghz_save_m1native_key_with_key2(path,
+            entry->frequency, "FuriHalSubGhzPresetOok650Async",
+            protocol_text[entry->info.protocol],
+            entry->info.bit_len, entry->info.key, k2, k2_len, entry->info.te);
+    else if (fmt == 1)
         saved = flipper_subghz_save_m1native_key(path,
             entry->frequency, "FuriHalSubGhzPresetOok650Async",
             protocol_text[entry->info.protocol],
             entry->info.bit_len, entry->info.key, entry->info.te);
+    else if (k2_len > 0)
+        saved = flipper_subghz_save_key_with_key2(path,
+            entry->frequency, "FuriHalSubGhzPresetOok650Async",
+            protocol_text[entry->info.protocol],
+            entry->info.bit_len, entry->info.key, k2, k2_len, entry->info.te);
     else
         saved = flipper_subghz_save_key(path,
             entry->frequency, "FuriHalSubGhzPresetOok650Async",

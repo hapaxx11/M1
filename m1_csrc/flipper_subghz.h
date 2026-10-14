@@ -73,12 +73,33 @@ typedef struct {
 	/* Optional `CounterMode:` field. Defaults to INCREMENT
 	 * for files that omit the field or carry an unrecognised value. */
 	flipper_subghz_counter_mode_t counter_mode;
+	/* Optional `Key_2:` field carried by ProtoPirate captures — the second
+	 * key word (PSA: 16-bit; Renault V1: 24-bit low bytes of the 8-byte
+	 * field upstream writes).  The parser keeps the low 4 bytes,
+	 * big-endian; `has_key_2` distinguishes "field absent" from a genuine
+	 * zero value and is set only by the parser. */
+	uint32_t key_2;
+	bool     has_key_2;
+	/* Optional PSA frame type, as written by ProtoPirate and in recovered files. */
+	uint32_t protocol_type;
+	bool     has_protocol_type;
 	/* Set to true when the file was loaded from an M1 native .sgh format
 	 * (not a Flipper .sub file).  Used to select the direct replay path
 	 * which feeds the original file into the streaming engine without any
 	 * temp-file conversion. */
 	bool     is_m1_native;
 } flipper_subghz_signal_t;
+
+#define FLIPPER_SUBGHZ_PSA_TEA_TYPE 0x36u
+
+static inline bool flipper_subghz_psa_is_tea_candidate(bool has_key_2,
+                                                        bool has_protocol_type,
+                                                        uint32_t protocol_type)
+{
+	return has_key_2 &&
+	       (!has_protocol_type ||
+	        protocol_type == FLIPPER_SUBGHZ_PSA_TEA_TYPE);
+}
 
 /*
  * Lightweight header probe — reads only the first few header lines of a
@@ -133,6 +154,55 @@ bool flipper_subghz_save_key_with_manufacture(const char *path,
                                                const char *manufacture);
 
 /*
+ * Variant of flipper_subghz_save_key() that also writes the `Key_2:` field —
+ * the second key word carried by ProtoPirate captures (PSA: 2 bytes; Renault
+ * V1: 3 bytes) and required to seed the brute-force searches.  `key_2_len`
+ * selects how many low bytes of `key_2` are written (big-endian); the Key_2
+ * line follows the Key line, matching ProtoPirate capture field order.
+ */
+bool flipper_subghz_save_key_with_key2(const char *path,
+                                        uint32_t    frequency,
+                                        const char *preset,
+                                        const char *protocol,
+                                        uint32_t    bit_count,
+                                        uint64_t    key,
+                                        uint32_t    key_2,
+                                        uint8_t     key_2_len,
+                                        uint32_t    te);
+
+/*
+ * Save a PSA capture patched with the fields recovered by the TEA
+ * brute-force search (Sub_Ghz/subghz_psa_bruteforce.c): the original
+ * Key/Key_2 plus recovered Serial, Btn, Cnt, Type (0x36), CRC and Seed —
+ * the same write-back set the ProtoPirate reference applies after a
+ * successful search.
+ */
+struct subghz_psa_bf_result;  /* defined in Sub_Ghz/subghz_psa_bruteforce.h */
+bool flipper_subghz_save_psa_recovered(const char *path,
+                                        uint32_t    frequency,
+                                        const char *preset,
+                                        uint32_t    bit_count,
+                                        uint64_t    key,
+                                        uint32_t    key_2,
+                                        uint32_t    te,
+                                        const struct subghz_psa_bf_result *result);
+
+/*
+ * Save a Renault V1 capture patched with the seed (IV) recovered by the
+ * Hitag2 brute-force search: Key/Key_2 plus Serial, Btn, Cnt (full counter
+ * reconstructed from the seed), Hop, Seed (4 hex bytes) and Recovered: 01 —
+ * the ProtoPirate post-search write-back set.
+ */
+bool flipper_subghz_save_renault_v1_recovered(const char *path,
+                                               uint32_t    frequency,
+                                               const char *preset,
+                                               uint32_t    bit_count,
+                                               uint64_t    key,
+                                               uint32_t    key_2,
+                                               uint32_t    te,
+                                               uint32_t    seed);
+
+/*
  * Save variant that additionally writes the optional
  * `CounterMode:` field.  The field is only emitted when @p counter_mode
  * differs from the default (Increment), so files round-tripped from
@@ -152,6 +222,10 @@ bool flipper_subghz_save_key_full(const char *path,
 bool flipper_subghz_save_m1native_key(const char *path, uint32_t frequency,
                                        const char *preset, const char *protocol,
                                        uint32_t bit_count, uint64_t key, uint32_t te);
+bool flipper_subghz_save_m1native_key_with_key2(
+    const char *path, uint32_t frequency, const char *preset,
+    const char *protocol, uint32_t bit_count, uint64_t key,
+    uint32_t key_2, uint8_t key_2_len, uint32_t te);
 
 /* Map Flipper preset name to M1 modulation type */
 uint8_t flipper_subghz_preset_to_modulation(const char *preset);
