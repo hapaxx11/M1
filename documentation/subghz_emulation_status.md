@@ -87,11 +87,19 @@ The port from RocketGod-git/ProtoPirate (`protocols/psa_crypto_bf.c`) is:
   progress bar (2 × 2^24 candidates worst case — minutes; BACK cancels), and
   OK saves `<name>_recovered.sub` with the recovered fields.
 
-The upstream Renault V1 Hitag2 IV search is **not** ported (M1's Renault V1
-decoder already recovers serial/button/counter cipher-free; the IV search only
-feeds re-encoding, which M1 does not implement for Renault V1).  Kia V6 and VAG
-AUT64 have **no** search upstream — both use provisioned keys there exactly as
-M1's build-injected keystores do.
+The upstream Renault V1 Hitag2 IV search is also ported
+(`Sub_Ghz/subghz_renault_v1_bruteforce.c`): M1's Renault V1 decoder recovers
+serial/button/counter cipher-free, so the 2^18-candidate IV search exists to
+recover the 32-bit seed needed for **TX after recovery** — implemented in
+`Sub_Ghz/subghz_renault_v1_encoder.c` (seed-path `hitag2_encrypt_frame` port +
+the 1295-entry upload waveform builder).  Renault V1 captures are saved in the
+upstream-compatible layout (Key = frame bytes 0..7, Key_2 = bytes 8..10).  In
+the Proto Pirate → Brute Force scene, a Renault V1 hit offers Emulate (RIGHT):
+a fresh frame with an incremented counter is synthesized and handed to the
+Read Raw scene for async TX, and the recovered capture is saved with Seed +
+Recovered: 01 (upstream write-back set).  Kia V6 and VAG AUT64 have **no**
+search upstream — both use provisioned keys there exactly as M1's
+build-injected keystores do.
 
 Build-injected data is likewise protocol-specific:
 
