@@ -80,6 +80,16 @@ void subghz_hitag2_serial_permute(const uint8_t serial[4], uint8_t perm[6]);
 void subghz_hitag2_keystream(const uint8_t serial_be[4], const uint8_t perm[6],
                              const uint8_t iv[4], uint8_t keystream[4]);
 
+/**
+ * @brief  Extended form of subghz_hitag2_keystream() that also returns the
+ *         final LFSR state byte (state[5] after 64 clocks) via
+ *         @p state5_out (may be NULL).  The Renault V1 encoder needs it for
+ *         the last hop byte.
+ */
+void subghz_hitag2_keystream_ex(const uint8_t serial_be[4],
+                                const uint8_t perm[6], const uint8_t iv[4],
+                                uint8_t keystream[4], uint8_t *state5_out);
+
 /*============================================================================*/
 /* Search                                                                      */
 /*============================================================================*/

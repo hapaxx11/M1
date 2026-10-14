@@ -15,7 +15,16 @@
   (closed-form shuffle inverse; both tail bits of frame[9] are provably unused)
   and assert found/exhaustion/cancel plus the recovered-counter-from-seed
   formula.
-- **Status**: 🔄 In progress
+- **Status**: ✅ Complete
+- **Commit**: `Add Renault V1 Hitag2 IV brute-force search core`
+
+### Phase R1b — Renault V1 seed-path encoder (TX after recovery)
+- **Description**: `Sub_Ghz/subghz_renault_v1_encoder.c/h` — pure port of
+  `hitag2_build_iv` + `hitag2_encrypt_frame` (seed-based re-encryption with a
+  fresh counter) and the 1295-entry upload builder (250 preamble pairs, 3 long
+  frames, 3 short frames; TE=125 µs Manchester, header 1500/1000 µs).  Host
+  tests: encrypt→BF round-trip recovers the same seed, upload shape/timings.
+- **Status**: 🔲 Not started
 - **Commit**: _(pending)_
 
 ### Phase R2 — Capture path: key_2 widening + Renault V1 decoder frame storage

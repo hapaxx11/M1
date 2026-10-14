@@ -388,6 +388,7 @@ target_sources(m1_01 INTERFACE
     ../../Sub_Ghz/subghz_bruteforce_job.c
     ../../Sub_Ghz/subghz_psa_bruteforce.c
     ../../Sub_Ghz/subghz_renault_v1_bruteforce.c
+    ../../Sub_Ghz/subghz_renault_v1_encoder.c
     ../../Sub_Ghz/subghz_proto_pirate_timing.c
     ../../Sub_Ghz/subghz_weather_scan.c
     ../../Sub_Ghz/subghz_weather_parse.c

@@ -276,8 +276,9 @@ static void hitag2_clock_cipher(uint8_t state[6], uint8_t iv_work[4],
     }
 }
 
-void subghz_hitag2_keystream(const uint8_t serial_be[4], const uint8_t perm[6],
-                             const uint8_t iv[4], uint8_t keystream[4])
+void subghz_hitag2_keystream_ex(const uint8_t serial_be[4],
+                                const uint8_t perm[6], const uint8_t iv[4],
+                                uint8_t keystream[4], uint8_t *state5_out)
 {
     uint8_t state[6];
     uint8_t iv_work[4];
@@ -303,6 +304,14 @@ void subghz_hitag2_keystream(const uint8_t serial_be[4], const uint8_t perm[6],
     keystream[1] = iv_work[1];
     keystream[2] = iv_work[2];
     keystream[3] = iv_work[3];
+    if (state5_out != NULL)
+        *state5_out = state[5];
+}
+
+void subghz_hitag2_keystream(const uint8_t serial_be[4], const uint8_t perm[6],
+                             const uint8_t iv[4], uint8_t keystream[4])
+{
+    subghz_hitag2_keystream_ex(serial_be, perm, iv, keystream, NULL);
 }
 
 /*============================================================================*/
