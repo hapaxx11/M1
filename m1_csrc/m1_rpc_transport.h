@@ -4,7 +4,6 @@
 #define M1_RPC_TRANSPORT_H_
 
 #include <stdbool.h>
-#include <stdint.h>
 
 typedef enum {
     M1_RPC_TRANSPORT_USB = 0,
@@ -13,19 +12,18 @@ typedef enum {
     M1_RPC_TRANSPORT_COUNT,
 } m1_rpc_transport_t;
 
-#define M1_RPC_TRANSPORT_BIT(transport) (1u << (transport))
-
 static inline bool m1_rpc_transport_valid(m1_rpc_transport_t transport)
 {
     return transport >= M1_RPC_TRANSPORT_USB &&
            transport < M1_RPC_TRANSPORT_COUNT;
 }
 
-static inline bool m1_rpc_transport_can_send(m1_rpc_transport_t transport,
-                                             uint32_t registered_mask)
+static inline m1_rpc_transport_t m1_rpc_transport_reply_to_request(
+    m1_rpc_transport_t request_transport)
 {
-    return m1_rpc_transport_valid(transport) &&
-           (registered_mask & M1_RPC_TRANSPORT_BIT(transport)) != 0u;
+    return m1_rpc_transport_valid(request_transport)
+               ? request_transport
+               : M1_RPC_TRANSPORT_USB;
 }
 
 static inline bool m1_rpc_transport_feed_allowed(

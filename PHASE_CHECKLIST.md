@@ -23,8 +23,8 @@
 
 ### Phase 4 — Request-scoped transport routing and mobile-session state
 - **Description**: Replace USB-only response assumptions with an ingress-aware RPC transport interface, preserve per-request reply routing, and report accurate active-session state without changing existing USB clients.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Complete RPC transport routing`
 
 ### Phase 5 — BLE Direct (NUS), exclusive client ownership, and screen mirroring
 - **Description**: Add opt-in BLE NUS RPC transport and connection lifecycle, arbitrate the single BLE-or-WiFi RPC client, and stream display frames at a bounded 5 fps. Requires a compatible ESP32 firmware protocol/transport implementation and hardware validation.

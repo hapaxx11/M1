@@ -712,9 +712,8 @@ static void rpc_dispatch_frame(const S_RPC_Frame *frame)
     if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
         return;
     previous_transport = s_reply_transport;
-    s_reply_transport = m1_rpc_transport_valid(frame->transport)
-                            ? frame->transport
-                            : M1_RPC_TRANSPORT_USB;
+    s_reply_transport =
+        m1_rpc_transport_reply_to_request(frame->transport);
 
     M1_LOG_I(M1_LOGDB_TAG, "DISPATCH cmd=0x%02X seq=%u len=%u\r\n",
              frame->cmd, frame->seq, frame->len);
@@ -2814,9 +2813,8 @@ void m1_rpc_task(void *param)
                 continue;
             }
             m1_rpc_transport_t previous_transport = s_reply_transport;
-            s_reply_transport = m1_rpc_transport_valid(frame.transport)
-                                    ? frame.transport
-                                    : M1_RPC_TRANSPORT_USB;
+            s_reply_transport =
+                m1_rpc_transport_reply_to_request(frame.transport);
 
             switch (frame.cmd)
             {
