@@ -1174,6 +1174,31 @@ endif()
 add_test(NAME kia_v6_decode COMMAND test_kia_v6_decode)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_kia_v6_encoder (Kia V6 TX path).
+# Round-trip: encoder upload waveform must decode through the real
+# subghz_decode_kia_v6() with intact fields.  Synthetic keystore.
+# ------------------------------------------------------------------
+add_executable(test_kia_v6_encoder
+    test_subghz_kia_v6_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_kia_v6_decode.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_kia_v6_encoder PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
+)
+target_link_libraries(test_kia_v6_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_kia_v6_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME kia_v6_encoder COMMAND test_kia_v6_encoder)
+
+# ------------------------------------------------------------------
 # Module under test: firecracker_cm17a (40-bit CM17A home-automation decoder)
 # Tests validate header/footer recognition, house-code/unit/command decode,
 # and rejection of invalid or truncated packets.
