@@ -1,2 +1,0 @@
-- Integrate opt-in Bluetooth Direct/NUS with the native ESP32 brain relay, including qMonstatek request/reply routing, persisted advertising preference, and screen mirroring through the brain's 5 fps BLE path.
-- Fragment large native ESP32 RPC requests across fixed-size M1 Link transactions.

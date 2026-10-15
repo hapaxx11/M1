@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4.12] - 2026-10-15
+
+### Added
+
+- Integrate opt-in Bluetooth Direct/NUS with the native ESP32 brain relay, including qMonstatek request/reply routing, persisted advertising preference, and screen mirroring through the brain's 5 fps BLE path.
+  - Fragment large native ESP32 RPC requests across fixed-size M1 Link transactions.
+- **RPC: GPIO and I2C hardware scans** — Add USB RPC commands for a read-only external GPIO level snapshot and bounded I2C address-range scans.
+- **WiFi Hotspot** — persist editable SoftAP credentials, use the native ESP32
+  SoftAP RPC, and report connected clients and upstream NAT status.
+- **WiFi: primary network auto-connect** — Select a saved network as the primary network and opt in to a single boot-time connection attempt; no other saved network is tried as fallback.
+
+### Changed
+
+- RPC request responses and screen streams now use their originating transport,
+  while USB RPC mode remains isolated from mobile-session state.
 ## [0.9.4.11] - 2026-10-14
 
 ### Added
