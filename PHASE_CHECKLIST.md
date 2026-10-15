@@ -8,8 +8,8 @@
 
 ### Phase 1 — Preserve the ESP32 RX buffer across UART cycles
 - **Description**: Stop freeing the reusable ESP32 RX allocation during UART deinit, so repeated init/deinit cycles reuse it; add regression coverage for the allocation lifetime and existing teardown behavior.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Preserve ESP32 RX buffer across UART cycles`
 
 ### Phase 2 — Primary WiFi network and opt-in boot connection
 - **Description**: Persist a selected primary saved network and an explicit WiFi-on-boot preference, connect through the existing firmware-variant dispatch, and handle missing credentials, unavailable SD/ESP32, and failed association without blocking boot.

@@ -306,6 +306,42 @@ void test_m1_esp32_deinit_disables_exti_before_task_deinit(void)
     free(content);
 }
 
+void test_esp32_uart_rx_buffer_reused_across_cycles(void)
+{
+    char *content = read_file("m1_csrc/m1_esp32_hal.c");
+    const char *deinit = strstr(content, "\nvoid esp32_UART_deinit(void)\n{");
+    const char *deinit_end = NULL;
+    const char *free_call = NULL;
+    int init_allocates_once;
+    int deinit_found;
+    int deinit_end_found = 0;
+    int deinit_retains_buffer = 0;
+
+    init_allocates_once =
+        strstr(content, "if ( !pesp32_rx )\n\t\tpesp32_rx = malloc(ESP32_RX_BUFFER_LEN);") != NULL;
+    deinit_found = deinit != NULL;
+    if (deinit != NULL)
+    {
+        deinit_end = strstr(deinit, "} // void esp32_UART_deinit(void)");
+        if (deinit_end != NULL)
+        {
+            deinit_end_found = 1;
+            free_call = strstr(deinit, "free(pesp32_rx)");
+            deinit_retains_buffer = free_call == NULL || free_call >= deinit_end;
+        }
+    }
+
+    /* UART init allocates the 4 KiB buffer only when it has no backing store;
+     * UART deinit must leave it available for the next init/deinit cycle. */
+    free(content);
+    TEST_ASSERT_TRUE_MESSAGE(init_allocates_once,
+                             "UART init must allocate the RX backing store only when absent");
+    TEST_ASSERT_TRUE_MESSAGE(deinit_found && deinit_end_found,
+                             "UART deinit definition must be found");
+    TEST_ASSERT_TRUE_MESSAGE(deinit_retains_buffer,
+                             "UART deinit must retain the reusable RX buffer");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -321,5 +357,6 @@ int main(void)
     RUN_TEST(test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown);
     RUN_TEST(test_esp32_main_deinit_nulls_queue_before_delete);
     RUN_TEST(test_m1_esp32_deinit_disables_exti_before_task_deinit);
+    RUN_TEST(test_esp32_uart_rx_buffer_reused_across_cycles);
     return UNITY_END();
 }

@@ -292,6 +292,7 @@ void esp32_UART_init(void)
 
 	esp32_UART_DMA_init();
 
+	/* Keep the 4 KiB backing store across UART cycles to avoid heap churn. */
 	if ( !pesp32_rx )
 		pesp32_rx = malloc(ESP32_RX_BUFFER_LEN);
 	assert(pesp32_rx!=NULL);
@@ -691,12 +692,6 @@ void esp32_UART_deinit(void)
 		HAL_UART_DeInit(&huart_esp);
 	HAL_NVIC_DisableIRQ(ESP32_UART_IRQn);
 	__HAL_RCC_UART4_CLK_DISABLE();
-
-	if ( pesp32_rx )
-	{
-		free(pesp32_rx);
-		pesp32_rx = NULL;
-	} // if ( pesp32_rx )
 
 	if ( sem_esp32_trans )
 	{
