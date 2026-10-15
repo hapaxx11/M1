@@ -416,6 +416,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_rpc_adv(bool enable);
 m1_esp32_rpc_status_t m1_esp32_rpc_ble_state(uint8_t *flags);
 /** RPC_STATUS: bitmask of connected qMonstatek TCP and BLE clients. */
 m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status(uint8_t *status);
+m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status_timeout(uint8_t *status,
+                                                       int timeout_sec);
 /** QMON_POLL: fetch one raw qMonstatek request frame, or an empty response. */
 m1_esp32_rpc_status_t m1_esp32_rpc_qmon_poll(uint8_t *frame, uint16_t capacity,
                                              uint16_t *frame_len);

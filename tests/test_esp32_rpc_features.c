@@ -496,6 +496,39 @@ void test_probe_start_uses_full_ssid_capacity(void)
     TEST_ASSERT_EQUAL_UINT8(8u, tx_payload()[1]);
 }
 
+void test_beacon_start_fills_ssid_buffer_capacity(void)
+{
+    char ssids[32][33];
+    for (uint8_t i = 0u; i < 32u; i++) {
+        memset(ssids[i], 'A' + (char)(i % 26u), 32u);
+        ssids[i][32] = '\0';
+    }
+
+    canned_ok(M1_ESP32_RPC_OFF_BEACON_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_beacon_start((const char (*)[33])ssids, 32u));
+    TEST_ASSERT_EQUAL_UINT16(1057u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[1024u]);
+}
+
+void test_probe_start_fills_ssid_buffer_capacity(void)
+{
+    char ssids[32][33];
+    for (uint8_t i = 0u; i < 32u; i++) {
+        memset(ssids[i], 'a' + (char)(i % 26u), 32u);
+        ssids[i][32] = '\0';
+    }
+
+    canned_ok(M1_ESP32_RPC_OFF_PROBE_START);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_probe_start(6u, (const char (*)[33])ssids, 32u));
+    TEST_ASSERT_EQUAL_UINT16(1058u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(6u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[1]);
+    TEST_ASSERT_EQUAL_UINT8(32u, tx_payload()[1025u]);
+}
+
 void test_probe_start_rejects_missing_ssids_or_zero_count(void)
 {
     char ssids[1][33] = {{0}};
@@ -635,6 +668,19 @@ void test_rpc_status_decodes_client_mask(void)
     uint8_t out = 0u;
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_rpc_status(&out));
     TEST_ASSERT_EQUAL_UINT8(client_mask, out);
+}
+
+void test_rpc_status_supports_short_poll_timeout(void)
+{
+    const uint8_t client_mask = M1_ESP32_RPC_CLIENT_BLE;
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_RPC_STATUS,
+                              &client_mask, sizeof(client_mask));
+    uint8_t out = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_rpc_status_timeout(&out, 1));
+    TEST_ASSERT_EQUAL_UINT8(client_mask, out);
+    TEST_ASSERT_EQUAL_INT(1, g_last_timeout_sec);
 }
 
 void test_qmon_poll_copies_complete_frame(void)
@@ -1122,6 +1168,8 @@ int main(void)
     RUN_TEST(test_ble_adv_start_null_name_empty_payload);
     RUN_TEST(test_beacon_start_uses_full_ssid_capacity);
     RUN_TEST(test_probe_start_uses_full_ssid_capacity);
+    RUN_TEST(test_beacon_start_fills_ssid_buffer_capacity);
+    RUN_TEST(test_probe_start_fills_ssid_buffer_capacity);
     RUN_TEST(test_probe_start_rejects_missing_ssids_or_zero_count);
 
     RUN_TEST(test_deauth_start_serialises_struct);
@@ -1138,6 +1186,7 @@ int main(void)
     RUN_TEST(test_ble_rpc_adv_encodes_enable_flag);
     RUN_TEST(test_ble_state_decodes_direct_flags);
     RUN_TEST(test_rpc_status_decodes_client_mask);
+    RUN_TEST(test_rpc_status_supports_short_poll_timeout);
     RUN_TEST(test_qmon_poll_copies_complete_frame);
     RUN_TEST(test_qmon_response_accepts_fragmentable_frame);
     RUN_TEST(test_screen_push_requires_full_framebuffer);

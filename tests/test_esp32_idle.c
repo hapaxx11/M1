@@ -56,6 +56,23 @@ void test_busy_resets_idle_window(void)
     TEST_ASSERT_EQUAL(ESP32_IDLE_ACTION_NONE, esp32_idle_poll(&ctx, true, true, 100000u));
 }
 
+void test_background_owners_keep_esp32_alive_until_all_release(void)
+{
+    uint8_t owners = 0u;
+    owners = esp32_background_owner_update(
+        owners, ESP32_BACKGROUND_OWNER_BLE_DIRECT, true);
+    owners = esp32_background_owner_update(
+        owners, ESP32_BACKGROUND_OWNER_WIFI_STA, true);
+    TEST_ASSERT_TRUE(esp32_background_owner_active(owners));
+
+    owners = esp32_background_owner_update(
+        owners, ESP32_BACKGROUND_OWNER_BLE_DIRECT, false);
+    TEST_ASSERT_TRUE(esp32_background_owner_active(owners));
+    owners = esp32_background_owner_update(
+        owners, ESP32_BACKGROUND_OWNER_WIFI_STA, false);
+    TEST_ASSERT_FALSE(esp32_background_owner_active(owners));
+}
+
 /* --- normal power-off after timeout -------------------------------------- */
 
 void test_power_off_after_timeout(void)
@@ -128,6 +145,7 @@ int main(void)
     RUN_TEST(test_ctx_init_null_is_safe);
     RUN_TEST(test_not_powered_never_powers_off);
     RUN_TEST(test_busy_resets_idle_window);
+    RUN_TEST(test_background_owners_keep_esp32_alive_until_all_release);
     RUN_TEST(test_power_off_after_timeout);
     RUN_TEST(test_power_off_fires_only_once);
     RUN_TEST(test_reuse_resets_window);

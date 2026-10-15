@@ -57,21 +57,21 @@ typedef struct
  * in the brand-new session (deferred_epoch == session_epoch) is real work
  * and must be left alone, not silently dropped.
  *
- * A partial file write is always considered stale at a session boundary:
- * the previous host connection is gone, so nothing will ever send the
- * FILE_WRITE_DATA/FINISH to complete it. */
+ * A partial USB file write is stale at a session boundary. Uploads owned by
+ * other transports remain active because the USB reset did not end them. */
 static inline S_RpcUsbEpochAction m1_rpc_usb_epoch_check(uint32_t session_epoch,
                                                           bool deferred_pending,
                                                           bool deferred_is_usb,
                                                           uint32_t deferred_epoch,
-                                                          bool file_write_active)
+                                                          bool file_write_active,
+                                                          bool file_write_is_usb)
 {
     S_RpcUsbEpochAction action = { false, false };
 
     if (deferred_pending && deferred_is_usb && deferred_epoch != session_epoch)
         action.discard_deferred = true;
 
-    if (file_write_active)
+    if (file_write_active && file_write_is_usb)
         action.close_file_write = true;
 
     return action;

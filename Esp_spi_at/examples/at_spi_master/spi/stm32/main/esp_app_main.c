@@ -58,6 +58,7 @@ esp_queue_t* ctrl_msg_Q = NULL;
 static spi_device_handle_t spi_dev_handle = NULL;
 static StreamBufferHandle_t spi_master_tx_ring_buf = NULL;
 static SemaphoreHandle_t pxMutex;
+static SemaphoreHandle_t s_m1link_spi_mutex;
 static uint8_t initiative_send_flag = 0; // it means master has data to send to slave
 static uint32_t plan_send_len = 0; // master plan to send data len
 
@@ -93,6 +94,41 @@ static void spi_mutex_lock(void)
 static void spi_mutex_unlock(void)
 {
     xSemaphoreGive(pxMutex);
+}
+
+bool esp32_m1link_spi_mutex_init(void)
+{
+    if (s_m1link_spi_mutex == NULL)
+        s_m1link_spi_mutex = xSemaphoreCreateMutex();
+    return s_m1link_spi_mutex != NULL;
+}
+
+bool esp32_m1link_lifecycle_lock(void)
+{
+    return s_m1link_spi_mutex != NULL &&
+           xSemaphoreTake(s_m1link_spi_mutex, portMAX_DELAY) == pdPASS;
+}
+
+void esp32_m1link_lifecycle_unlock(void)
+{
+    if (s_m1link_spi_mutex != NULL)
+        xSemaphoreGive(s_m1link_spi_mutex);
+}
+
+bool esp32_m1link_spi_lock(void)
+{
+    if (!esp32_m1link_lifecycle_lock())
+        return false;
+    if (pxMutex != NULL)
+        spi_mutex_lock();
+    return true;
+}
+
+void esp32_m1link_spi_unlock(void)
+{
+    if (pxMutex != NULL)
+        spi_mutex_unlock();
+    esp32_m1link_lifecycle_unlock();
 }
 
 static void at_spi_master_send_data(uint8_t* data, uint32_t len)
@@ -669,31 +705,9 @@ static bool m1link_wait_handshake(uint32_t timeout_ms)
 	return true;
 }
 
-/* Take the shared SPI3 mutex before a full-duplex M1 Link transfer, but only
- * if the host AT task has actually been created (pxMutex is a file-scope
- * static, zero-initialised to NULL until init_master_hd() creates it inside
- * esp32_main_init()).  This lets the M1 Link probe run standalone — before
- * the AT task has ever been started — while still serialising with
- * spi_trans_control_task on SPI3 whenever that task exists, regardless of
- * which caller started it (see issue #719 C1: SPI3 bus contention between
- * the host AT task and the M1 Link probe). */
-static void m1link_lock_spi_if_at_task_present(void)
-{
-	if (pxMutex)
-		spi_mutex_lock();
-}
-
-static void m1link_unlock_spi_if_at_task_present(void)
-{
-	if (pxMutex)
-		spi_mutex_unlock();
-}
-
 /* Single fixed-size full-duplex exchange; matches m1_esp32_m1link_xfer_fn.
- * The caller (spi_m1link_send_recv_bin) holds the shared SPI3 mutex for the
- * entire abort + timed-exchange sequence, so no per-transfer locking is needed
- * here — doing it per-transfer would serialise individual transactions but still
- * allow spi_trans_control_task to interpose between request and reply polls. */
+ * The caller (spi_m1link_send_recv_bin) holds the persistent transaction mutex
+ * and, when present, the legacy AT mutex across the full exchange. */
 static int m1link_hal_xfer(const uint8_t *tx, uint8_t *rx, uint16_t mtu,
                            void *ctx)
 {
@@ -801,13 +815,15 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 		timeout_sec = m1link_default_timeout_s;
 	timeout_ms = (uint32_t)timeout_sec * 1000u;
 
-	/* Hold the mutex across the abort AND the full timed request/poll sequence.
-	 * Taking it per-transfer (inside m1link_hal_xfer) serialises individual
-	 * transactions but still allows spi_trans_control_task to acquire the mutex
-	 * and issue an incompatible half-duplex transaction between the request
-	 * unlock and the next IDLE poll.  Holding it here for the entire sequence
-	 * prevents that interleaving (issue #719 Phase 1 C1). */
-	m1link_lock_spi_if_at_task_present();
+	/* Hold the independent transaction mutex across the complete request/reply
+	 * sequence, even when the legacy AT task (and pxMutex) was never started. */
+	if (!esp32_m1link_spi_lock())
+		return CTRL_ERR_TRANSPORT_SEND;
+	if (!m1_esp32_get_init_status())
+	{
+		esp32_m1link_spi_unlock();
+		return CTRL_ERR_TRANSPORT_SEND;
+	}
 
 	/* Flush any residual FIFO / packing state before full-duplex M1 Link
 	 * transactions.  The brain (CD3) detection probe runs AFTER the half-duplex
@@ -828,7 +844,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
 	                                     tx_buf, tx_len,
 	                                     rx_buf, rx_buf_size, out_len);
 
-	m1link_unlock_spi_if_at_task_present();
+	esp32_m1link_spi_unlock();
 
 	s_m1link_last_elapsed_ms = HAL_GetTick() - t0;
 

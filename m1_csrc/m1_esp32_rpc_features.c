@@ -776,12 +776,18 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_state(uint8_t *flags)
 
 m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status(uint8_t *status)
 {
+    return m1_esp32_rpc_rpc_status_timeout(
+        status, M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status_timeout(uint8_t *status,
+                                                       int timeout_sec)
+{
     uint8_t resp[1];
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_RPC_STATUS, NULL, 0u, resp,
-                          sizeof(resp), &rlen,
-                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+                          sizeof(resp), &rlen, timeout_sec);
     if (st == M1_ESP32_RPC_OK) {
         if (rlen < 1u)
             return M1_ESP32_RPC_ERR_BAD_FRAME;

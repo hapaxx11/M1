@@ -37,24 +37,33 @@ static inline bool m1_rpc_transport_feed_allowed(
     return !partial_frame || parser_transport == incoming_transport;
 }
 
-static inline bool m1_rpc_transport_reply_payload_fits(
-    m1_rpc_transport_t transport, uint16_t payload_len,
-    uint16_t relay_payload_limit)
+static inline bool m1_rpc_transport_parser_reset_on_usb_epoch(
+    bool epoch_advanced, bool partial_frame,
+    m1_rpc_transport_t parser_transport)
 {
-    return m1_rpc_transport_valid(transport) &&
-           (transport != M1_RPC_TRANSPORT_ESP32 ||
-            payload_len <= relay_payload_limit);
+    return epoch_advanced && partial_frame &&
+           parser_transport == M1_RPC_TRANSPORT_USB;
 }
 
-static inline bool m1_rpc_transport_file_write_allowed(
-    bool active, m1_rpc_transport_t owner, m1_rpc_transport_t requester,
-    bool start)
+static inline bool m1_rpc_transport_upload_allowed(
+    bool upload_active, m1_rpc_transport_t upload_transport,
+    m1_rpc_transport_t request_transport)
 {
-    if (!m1_rpc_transport_valid(requester))
-        return false;
-    if (start)
-        return !active || owner == requester;
-    return active && owner == requester;
+    return !upload_active || upload_transport == request_transport;
+}
+
+static inline bool m1_rpc_transport_response_too_large(
+    m1_rpc_transport_t transport, uint16_t payload_len,
+    uint16_t rpc_max_payload, uint16_t relay_frame_payload_max,
+    uint16_t rpc_frame_overhead)
+{
+    if (!m1_rpc_transport_valid(transport))
+        return true;
+    if (transport != M1_RPC_TRANSPORT_ESP32)
+        return payload_len > rpc_max_payload;
+    return relay_frame_payload_max < rpc_frame_overhead ||
+           payload_len > (uint16_t)(relay_frame_payload_max -
+                                    rpc_frame_overhead);
 }
 
 #endif /* M1_RPC_TRANSPORT_H_ */

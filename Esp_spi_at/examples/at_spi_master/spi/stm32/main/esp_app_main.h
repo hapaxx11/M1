@@ -19,6 +19,11 @@
 bool get_esp32_main_init_status(void);
 void esp32_main_init(void);
 void esp32_main_deinit(void);
+bool esp32_m1link_spi_mutex_init(void);
+bool esp32_m1link_spi_lock(void);
+void esp32_m1link_spi_unlock(void);
+bool esp32_m1link_lifecycle_lock(void);
+void esp32_m1link_lifecycle_unlock(void);
 void esp32_queue_reset(void);
 bool esp32_queue_reset_locked(void);
 uint8_t spi_AT_send_recv(const char *at_cmd, char *out_buf, int out_buf_size, int timeout_sec);

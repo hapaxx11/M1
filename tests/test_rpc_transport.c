@@ -40,30 +40,30 @@ void test_partial_frame_remains_owned_by_its_ingress_transport(void)
         true, M1_RPC_TRANSPORT_USB, M1_RPC_TRANSPORT_COUNT));
 }
 
-void test_mobile_reply_payload_limit_is_enforced(void)
+void test_usb_epoch_reset_clears_only_usb_owned_partial_frame(void)
 {
-    TEST_ASSERT_TRUE(m1_rpc_transport_reply_payload_fits(
-        M1_RPC_TRANSPORT_ESP32, 4075u, 4075u));
-    TEST_ASSERT_FALSE(m1_rpc_transport_reply_payload_fits(
-        M1_RPC_TRANSPORT_ESP32, 4076u, 4075u));
-    TEST_ASSERT_TRUE(m1_rpc_transport_reply_payload_fits(
-        M1_RPC_TRANSPORT_USB, 8192u, 0u));
+    TEST_ASSERT_TRUE(m1_rpc_transport_parser_reset_on_usb_epoch(
+        true, true, M1_RPC_TRANSPORT_USB));
+    TEST_ASSERT_FALSE(m1_rpc_transport_parser_reset_on_usb_epoch(
+        true, true, M1_RPC_TRANSPORT_ESP32));
+    TEST_ASSERT_FALSE(m1_rpc_transport_parser_reset_on_usb_epoch(
+        false, true, M1_RPC_TRANSPORT_USB));
+    TEST_ASSERT_TRUE(m1_rpc_transport_upload_allowed(
+        true, M1_RPC_TRANSPORT_USB, M1_RPC_TRANSPORT_USB));
+    TEST_ASSERT_FALSE(m1_rpc_transport_upload_allowed(
+        true, M1_RPC_TRANSPORT_USB, M1_RPC_TRANSPORT_ESP32));
+    TEST_ASSERT_TRUE(m1_rpc_transport_upload_allowed(
+        true, M1_RPC_TRANSPORT_ESP32, M1_RPC_TRANSPORT_ESP32));
 }
 
-void test_file_write_commands_are_isolated_by_transport(void)
+void test_transport_response_payload_limits_include_relay_overhead(void)
 {
-    TEST_ASSERT_TRUE(m1_rpc_transport_file_write_allowed(
-        false, M1_RPC_TRANSPORT_USB, M1_RPC_TRANSPORT_ESP32, true));
-    TEST_ASSERT_TRUE(m1_rpc_transport_file_write_allowed(
-        true, M1_RPC_TRANSPORT_ESP32, M1_RPC_TRANSPORT_ESP32, true));
-    TEST_ASSERT_FALSE(m1_rpc_transport_file_write_allowed(
-        true, M1_RPC_TRANSPORT_ESP32, M1_RPC_TRANSPORT_USB, true));
-    TEST_ASSERT_TRUE(m1_rpc_transport_file_write_allowed(
-        true, M1_RPC_TRANSPORT_ESP32, M1_RPC_TRANSPORT_ESP32, false));
-    TEST_ASSERT_FALSE(m1_rpc_transport_file_write_allowed(
-        true, M1_RPC_TRANSPORT_ESP32, M1_RPC_TRANSPORT_USB, false));
-    TEST_ASSERT_FALSE(m1_rpc_transport_file_write_allowed(
-        false, M1_RPC_TRANSPORT_ESP32, M1_RPC_TRANSPORT_ESP32, false));
+    TEST_ASSERT_FALSE(m1_rpc_transport_response_too_large(
+        M1_RPC_TRANSPORT_ESP32, 4075u, 8192u, 4082u, 7u));
+    TEST_ASSERT_TRUE(m1_rpc_transport_response_too_large(
+        M1_RPC_TRANSPORT_ESP32, 4076u, 8192u, 4082u, 7u));
+    TEST_ASSERT_FALSE(m1_rpc_transport_response_too_large(
+        M1_RPC_TRANSPORT_USB, 8192u, 8192u, 4082u, 7u));
 }
 
 int main(void)
@@ -71,7 +71,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_reply_route_matches_request_source);
     RUN_TEST(test_partial_frame_remains_owned_by_its_ingress_transport);
-    RUN_TEST(test_mobile_reply_payload_limit_is_enforced);
-    RUN_TEST(test_file_write_commands_are_isolated_by_transport);
+    RUN_TEST(test_usb_epoch_reset_clears_only_usb_owned_partial_frame);
+    RUN_TEST(test_transport_response_payload_limits_include_relay_overhead);
     return UNITY_END();
 }

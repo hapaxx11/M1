@@ -75,7 +75,8 @@ void test_usb_reset_preserves_active_mobile_parser(void)
 
 void test_check_no_deferred_no_file_write_is_noop(void)
 {
-    S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(1, false, false, 0, false);
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(1, false, false, 0, false, false);
     TEST_ASSERT_FALSE(action.discard_deferred);
     TEST_ASSERT_FALSE(action.close_file_write);
 }
@@ -84,7 +85,8 @@ void test_check_stale_deferred_command_is_discarded(void)
 {
     /* Deferred command tagged with epoch 0, but the session moved to 1:
      * it belongs to the OLD session and must be discarded (NACKed). */
-    S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(1, true, true, 0, false);
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(1, true, true, 0, false, false);
     TEST_ASSERT_TRUE(action.discard_deferred);
 }
 
@@ -94,25 +96,36 @@ void test_check_current_epoch_deferred_command_is_kept(void)
      * a command that arrived in the CURRENT (new) session must NOT be
      * treated as stale and dropped, even though a session boundary was
      * just crossed. */
-    S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(1, true, true, 1, false);
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(1, true, true, 1, false, false);
     TEST_ASSERT_FALSE(action.discard_deferred);
 }
 
 void test_check_no_pending_deferred_is_never_discarded(void)
 {
-    S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(1, false, true, 0, false);
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(1, false, true, 0, false, false);
     TEST_ASSERT_FALSE(action.discard_deferred);
 }
 
 void test_check_open_file_write_always_closed_at_boundary(void)
 {
-    S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(1, false, false, 0, true);
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(1, false, false, 0, true, true);
     TEST_ASSERT_TRUE(action.close_file_write);
+}
+
+void test_check_non_usb_upload_survives_usb_epoch_change(void)
+{
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(1, false, false, 0, true, false);
+    TEST_ASSERT_FALSE(action.close_file_write);
 }
 
 void test_check_combined_stale_deferred_and_open_file(void)
 {
-    S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(2, true, true, 0, true);
+    S_RpcUsbEpochAction action =
+        m1_rpc_usb_epoch_check(2, true, true, 0, true, true);
     TEST_ASSERT_TRUE(action.discard_deferred);
     TEST_ASSERT_TRUE(action.close_file_write);
 }
@@ -131,6 +144,7 @@ int main(void)
     RUN_TEST(test_check_current_epoch_deferred_command_is_kept);
     RUN_TEST(test_check_no_pending_deferred_is_never_discarded);
     RUN_TEST(test_check_open_file_write_always_closed_at_boundary);
+    RUN_TEST(test_check_non_usb_upload_survives_usb_epoch_change);
     RUN_TEST(test_check_combined_stale_deferred_and_open_file);
     return UNITY_END();
 }

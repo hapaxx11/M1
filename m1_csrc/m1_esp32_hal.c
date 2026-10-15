@@ -70,6 +70,7 @@ EXTI_HandleTypeDef esp32_exti_dataready;
 
 static uint8_t esp32_init_done = FALSE;
 static uint8_t esp32_uart_init_done = FALSE;
+static volatile uint8_t s_esp32_background_owners;
 
 /* Idle auto power-off: cut ESP32-C6 power after it has been powered but unused
  * (transport not initialised) for ESP32_IDLE_POWER_OFF_MS.  m1_esp32_deinit()
@@ -114,6 +115,10 @@ static void esp32_SPI3_init(void);
 void m1_esp32_init(void)
 {
 	GPIO_InitTypeDef gpio_init_structure;
+
+	if (!esp32_m1link_spi_mutex_init() ||
+	    !esp32_m1link_lifecycle_lock())
+		return;
 
 	if ( !esp32_init_done )
 	{
@@ -165,6 +170,7 @@ void m1_esp32_init(void)
 		esp32_enable();
 	} // if ( !esp32_init_done )
 
+	esp32_m1link_lifecycle_unlock();
 } // void m1_esp32_init(void)
 
 
@@ -437,6 +443,17 @@ void m1_esp32_deinit(void)
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
+	if (m1_esp32_background_owner_active() || !esp32_init_done)
+		return;
+	if (!esp32_m1link_spi_mutex_init() ||
+	    !esp32_m1link_lifecycle_lock())
+		return;
+	if (m1_esp32_background_owner_active())
+	{
+		esp32_m1link_lifecycle_unlock();
+		return;
+	}
+
 	if ( esp32_init_done )
 	{
 		/* Disable and clear the EXTI lines that feed esp_spi_msg_queue from the
@@ -512,7 +529,25 @@ void m1_esp32_deinit(void)
 		http_ssl_reset();
 	} // if ( esp32_init_done )
 
+	esp32_m1link_lifecycle_unlock();
 } // void m1_esp32_deinit(void)
+
+void m1_esp32_background_owner_set(esp32_background_owner_t owner, bool active)
+{
+	taskENTER_CRITICAL();
+	s_esp32_background_owners =
+		esp32_background_owner_update(s_esp32_background_owners, owner, active);
+	taskEXIT_CRITICAL();
+}
+
+bool m1_esp32_background_owner_active(void)
+{
+	bool active;
+	taskENTER_CRITICAL();
+	active = esp32_background_owner_active(s_esp32_background_owners);
+	taskEXIT_CRITICAL();
+	return active;
+}
 
 
 
@@ -550,12 +585,18 @@ void m1_esp32_idle_poll(void)
 	/* "powered" is read directly from the EN output so the flag can never
 	 * drift out of sync with other writers of the pin (m1_bt.c, fw update). */
 	bool powered = (HAL_GPIO_ReadPin(ESP32_EN_GPIO_Port, ESP32_EN_Pin) == GPIO_PIN_SET);
-	bool busy    = (esp32_init_done == TRUE);
+	bool busy    = (esp32_init_done == TRUE) ||
+	               m1_esp32_background_owner_active();
 
 	if (esp32_idle_poll(&esp32_idle_ctx, powered, busy, HAL_GetTick())
 	        == ESP32_IDLE_ACTION_POWER_OFF)
 	{
-		esp32_disable();
+		if (esp32_m1link_lifecycle_lock())
+		{
+			if (!esp32_init_done && !m1_esp32_background_owner_active())
+				esp32_disable();
+			esp32_m1link_lifecycle_unlock();
+		}
 	}
 } // void m1_esp32_idle_poll(void)
 
