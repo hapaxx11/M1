@@ -119,9 +119,11 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                         uint8_t *resp, uint16_t resp_cap,
                                         uint16_t *resp_len, int timeout_sec)
 {
-    uint8_t *tx;
+    uint8_t  tx_small[M1_ESP32_RPC_CONTROL_FRAME_MAX];
+    uint8_t *tx = tx_small;
     uint8_t *rx;
     int      rx_len = 0;
+    bool     tx_heap_allocated = false;
 
     if (resp_len) *resp_len = 0u;
 
@@ -132,17 +134,24 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
 
     uint16_t tx_cap = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + req_len +
                                  M1_ESP32_RPC_CRC_SIZE);
-    tx = (uint8_t *)malloc(tx_cap);
-    if (!tx) {
-        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
-        return M1_ESP32_RPC_ERR_NO_MEM;
+    if (tx_cap > sizeof(tx_small)) {
+        tx = (uint8_t *)malloc(tx_cap);
+        if (!tx) {
+            rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
+            return M1_ESP32_RPC_ERR_NO_MEM;
+        }
+        tx_heap_allocated = true;
     }
 
-    uint16_t frame_sz = m1_esp32_rpc_build_req(tx, tx_cap,
+    uint16_t frame_sz = m1_esp32_rpc_build_req(tx,
+                                               tx_heap_allocated
+                                                   ? tx_cap
+                                                   : (uint16_t)sizeof(tx_small),
                                                msg_id, req, req_len);
     if (frame_sz == 0u) {
         rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u, 0u);
-        free(tx);
+        if (tx_heap_allocated)
+            free(tx);
         return M1_ESP32_RPC_ERR_INVALID;
     }
 
@@ -153,7 +162,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     rx = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
     if (!rx) {
         rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
-        free(tx);
+        if (tx_heap_allocated)
+            free(tx);
         return M1_ESP32_RPC_ERR_NO_MEM;
     }
 
@@ -161,7 +171,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     int transport_rc = s_transport(tx, (int)frame_sz, rx,
                                    (int)M1_ESP32_RPC_RESP_FRAME_MAX,
                                    &rx_len, timeout_sec);
-    free(tx);
+    if (tx_heap_allocated)
+        free(tx);
     uint32_t elapsed_ms = m1_esp32_m1link_last_elapsed_ms();
     if (transport_rc != 0 || rx_len <= 0) {
         rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, rx_len, 0u,

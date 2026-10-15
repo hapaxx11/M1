@@ -9,6 +9,7 @@ typedef enum {
     M1_RPC_TRANSPORT_USB = 0,
     M1_RPC_TRANSPORT_BLE,
     M1_RPC_TRANSPORT_WIFI,
+    M1_RPC_TRANSPORT_ESP32,
     M1_RPC_TRANSPORT_COUNT,
 } m1_rpc_transport_t;
 

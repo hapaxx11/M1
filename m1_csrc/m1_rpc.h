@@ -247,6 +247,8 @@ bool m1_rpc_transport_register(m1_rpc_transport_t transport,
 /** Mark whether a mobile RPC client is currently connected. */
 void m1_rpc_set_mobile_session_active(bool active);
 bool m1_rpc_mobile_session_active(void);
+/** Schedule synchronization of the saved Bluetooth Direct preference to the brain. */
+void m1_rpc_bluetooth_direct_setting_changed(void);
 
 /**
  * @brief  Record a USB transport reset (bus reset / disconnect) from the PCD

@@ -57,7 +57,7 @@ uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return 0u; }
 static uint8_t g_canned[2048];
 static int     g_canned_len;
 static uint8_t g_ret;
-static uint8_t g_last_tx[256];
+static uint8_t g_last_tx[M1_ESP32_RPC_FRAME_MAX];
 static int     g_last_tx_len;
 static int     g_last_timeout_sec;
 
@@ -545,6 +545,84 @@ void test_ble_hid_init_null_name_empty_payload(void)
     TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
 }
 
+void test_ble_rpc_adv_encodes_enable_flag(void)
+{
+    canned_ok(M1_ESP32_RPC_BLE_RPC_ADV);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_rpc_adv(true));
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_BLE_RPC_ADV, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(1u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(1u, tx_payload()[0]);
+}
+
+void test_ble_state_decodes_direct_flags(void)
+{
+    const uint8_t flags[2] = { M1_ESP32_RPC_BLE_DIRECT_ADVERTISING |
+                               M1_ESP32_RPC_BLE_DIRECT_CONNECTED, 0u };
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_BLE_STATE, flags, sizeof(flags));
+    uint8_t out = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_ble_state(&out));
+    TEST_ASSERT_EQUAL_UINT8(flags[0], out);
+}
+
+void test_rpc_status_decodes_client_mask(void)
+{
+    const uint8_t client_mask = M1_ESP32_RPC_CLIENT_TCP |
+                                M1_ESP32_RPC_CLIENT_BLE;
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_RPC_STATUS,
+                              &client_mask, sizeof(client_mask));
+    uint8_t out = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, m1_esp32_rpc_rpc_status(&out));
+    TEST_ASSERT_EQUAL_UINT8(client_mask, out);
+}
+
+void test_qmon_poll_copies_complete_frame(void)
+{
+    static uint8_t body[1200];
+    static uint8_t out[M1_ESP32_RPC_RESP_PAYLOAD_MAX];
+    for (uint16_t i = 0u; i < sizeof(body); i++)
+        body[i] = (uint8_t)(i ^ 0xA5u);
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_QMON_POLL, body, sizeof(body));
+
+    uint16_t len = 0u;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_qmon_poll(out, sizeof(out), &len));
+    TEST_ASSERT_EQUAL_UINT16(sizeof(body), len);
+    TEST_ASSERT_EQUAL_MEMORY(body, out, sizeof(body));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+                      m1_esp32_rpc_qmon_poll(out, 32u, &len));
+    TEST_ASSERT_EQUAL_UINT16(0u, len);
+}
+
+void test_qmon_response_accepts_fragmentable_frame(void)
+{
+    static uint8_t frame[1024];
+    memset(frame, 0x6C, sizeof(frame));
+    canned_ok(M1_ESP32_RPC_QMON_RESP);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_qmon_resp(frame, sizeof(frame)));
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_QMON_RESP, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(sizeof(frame), tx_plen());
+    TEST_ASSERT_EQUAL_MEMORY(frame, tx_payload(), sizeof(frame));
+}
+
+void test_screen_push_requires_full_framebuffer(void)
+{
+    static uint8_t framebuffer[M1_ESP32_RPC_SCREEN_FB_SIZE];
+    memset(framebuffer, 0x93, sizeof(framebuffer));
+    canned_ok(M1_ESP32_RPC_SCREEN_PUSH);
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_screen_push(framebuffer, sizeof(framebuffer)));
+    TEST_ASSERT_EQUAL_UINT16(M1_ESP32_RPC_SCREEN_PUSH, tx_msg_id());
+    TEST_ASSERT_EQUAL_UINT16(sizeof(framebuffer), tx_plen());
+    TEST_ASSERT_EQUAL_MEMORY(framebuffer, tx_payload(), sizeof(framebuffer));
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+                      m1_esp32_rpc_screen_push(framebuffer,
+                                              sizeof(framebuffer) - 1u));
+}
+
 /* ================================================================== */
 /* WiFi scan response decode                                          */
 /* ================================================================== */
@@ -990,6 +1068,12 @@ int main(void)
     RUN_TEST(test_ble_hid_key_rejects_bad_args);
     RUN_TEST(test_ble_hid_init_truncates_long_name);
     RUN_TEST(test_ble_hid_init_null_name_empty_payload);
+    RUN_TEST(test_ble_rpc_adv_encodes_enable_flag);
+    RUN_TEST(test_ble_state_decodes_direct_flags);
+    RUN_TEST(test_rpc_status_decodes_client_mask);
+    RUN_TEST(test_qmon_poll_copies_complete_frame);
+    RUN_TEST(test_qmon_response_accepts_fragmentable_frame);
+    RUN_TEST(test_screen_push_requires_full_framebuffer);
 
     RUN_TEST(test_wifi_scan_decodes_entries);
     RUN_TEST(test_wifi_scan_caps_to_max);

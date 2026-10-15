@@ -394,6 +394,32 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_hid_deinit(void);
 bool m1_esp32_rpc_ble_hid_is_connected(void);
 
 /* =========================================================================
+ * Bluetooth Direct and qMonstatek relay
+ * =========================================================================*/
+
+#define M1_ESP32_RPC_CLIENT_TCP  UINT8_C(0x01)
+#define M1_ESP32_RPC_CLIENT_BLE  UINT8_C(0x02)
+#define M1_ESP32_RPC_BLE_DIRECT_ADVERTISING UINT8_C(0x01)
+#define M1_ESP32_RPC_BLE_DIRECT_CONNECTED  UINT8_C(0x02)
+#define M1_ESP32_RPC_SCREEN_FB_SIZE 1024u
+
+/** Enable/disable Bluetooth Direct NUS advertising using the brain's default name. */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_rpc_adv(bool enable);
+/** BLE_STATE: flags include Direct advertising/connected and Bad-BT HID state. */
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_state(uint8_t *flags);
+/** RPC_STATUS: bitmask of connected qMonstatek TCP and BLE clients. */
+m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status(uint8_t *status);
+/** QMON_POLL: fetch one raw qMonstatek request frame, or an empty response. */
+m1_esp32_rpc_status_t m1_esp32_rpc_qmon_poll(uint8_t *frame, uint16_t capacity,
+                                             uint16_t *frame_len);
+/** QMON_RESP: forward one complete raw qMonstatek frame to the active client. */
+m1_esp32_rpc_status_t m1_esp32_rpc_qmon_resp(const uint8_t *frame,
+                                             uint16_t frame_len);
+/** SCREEN_PUSH: send the raw 128x64 framebuffer to the brain's screen mailbox. */
+m1_esp32_rpc_status_t m1_esp32_rpc_screen_push(const uint8_t *framebuffer,
+                                               uint16_t length);
+
+/* =========================================================================
  * IEEE 802.15.4 (Zigbee / Thread)
  * =========================================================================*/
 

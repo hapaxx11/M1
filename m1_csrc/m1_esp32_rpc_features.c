@@ -725,6 +725,80 @@ bool m1_esp32_rpc_ble_hid_is_connected(void)
 }
 
 /*==========================================================================*/
+/* Bluetooth Direct and qMonstatek relay                                    */
+/*==========================================================================*/
+
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_rpc_adv(bool enable)
+{
+    uint8_t payload = enable ? 1u : 0u;
+    return rpc_do(M1_ESP32_RPC_BLE_RPC_ADV, &payload, sizeof(payload));
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_ble_state(uint8_t *flags)
+{
+    uint8_t resp[2];
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_BLE_STATE, NULL, 0u, resp,
+                          sizeof(resp), &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st == M1_ESP32_RPC_OK) {
+        if (rlen < 1u)
+            return M1_ESP32_RPC_ERR_BAD_FRAME;
+        if (flags)
+            *flags = resp[0];
+    }
+    return st;
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status(uint8_t *status)
+{
+    uint8_t resp[1];
+    uint16_t rlen = 0u;
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_RPC_STATUS, NULL, 0u, resp,
+                          sizeof(resp), &rlen,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (st == M1_ESP32_RPC_OK) {
+        if (rlen < 1u)
+            return M1_ESP32_RPC_ERR_BAD_FRAME;
+        if (status)
+            *status = resp[0];
+    }
+    return st;
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_qmon_poll(uint8_t *frame,
+                                             uint16_t capacity,
+                                             uint16_t *frame_len)
+{
+    if (frame_len)
+        *frame_len = 0u;
+    if (!frame || capacity < M1_ESP32_RPC_RESP_PAYLOAD_MAX)
+        return M1_ESP32_RPC_ERR_INVALID;
+    return m1_esp32_rpc_call(M1_ESP32_RPC_QMON_POLL, NULL, 0u,
+                             frame, capacity, frame_len,
+                             M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_qmon_resp(const uint8_t *frame,
+                                             uint16_t frame_len)
+{
+    if (!frame || frame_len == 0u ||
+        frame_len > M1_ESP32_RPC_PAYLOAD_MAX)
+        return M1_ESP32_RPC_ERR_INVALID;
+    return rpc_do(M1_ESP32_RPC_QMON_RESP, frame, frame_len);
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_screen_push(const uint8_t *framebuffer,
+                                               uint16_t length)
+{
+    if (!framebuffer || length != M1_ESP32_RPC_SCREEN_FB_SIZE)
+        return M1_ESP32_RPC_ERR_INVALID;
+    return rpc_do(M1_ESP32_RPC_SCREEN_PUSH, framebuffer, length);
+}
+
+/*==========================================================================*/
 /* IEEE 802.15.4 (Zigbee / Thread)                                          */
 /*==========================================================================*/
 

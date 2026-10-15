@@ -43,6 +43,7 @@
 #include "battery.h"
 #include "m1_esp32_hal.h"
 #include "m1_esp32_caps.h"
+#include "m1_esp32_rpc_features.h"
 #include "esp_loader.h"
 #include "stm32_port.h"
 #include "app_common.h"
@@ -53,6 +54,7 @@
 #include "m1_gpio.h"
 #include "m1_i2c.h"
 #include "m1_rpc_scan.h"
+#include "m1_settings.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -134,6 +136,12 @@ S_RPC_ScreenStream rpc_screen_stream;
 static uint8_t     s_screen_fb_copy[RPC_SCREEN_FB_SIZE];
 static m1_rpc_transport_t s_screen_transport = M1_RPC_TRANSPORT_USB;
 static volatile bool s_mobile_session_active;
+static volatile bool s_ble_direct_sync_pending = true;
+static TickType_t s_ble_direct_last_sync_tick;
+static bool s_brain_rpc_status_unsupported;
+static bool s_brain_qmon_poll_unsupported;
+static uint8_t *s_brain_relay_pending_frame;
+static uint16_t s_brain_relay_pending_len;
 
 /* RPC mode flag — when true, debug output goes to UART only (not USB CDC) */
 volatile bool m1_rpc_active = false;
@@ -265,6 +273,9 @@ static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f);
 static void rpc_send_screen_frame(uint8_t seq,
                                   m1_rpc_transport_t transport);
 static void rpc_flip_buffer_180(uint8_t *buf, uint16_t size);
+static bool rpc_brain_transmit(void *context, const uint8_t *data,
+                               uint16_t len);
+static void rpc_brain_relay_poll(void);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
 
@@ -391,6 +402,22 @@ void m1_rpc_set_mobile_session_active(bool active)
 bool m1_rpc_mobile_session_active(void)
 {
     return s_mobile_session_active;
+}
+
+void m1_rpc_bluetooth_direct_setting_changed(void)
+{
+    s_ble_direct_sync_pending = true;
+    s_ble_direct_last_sync_tick = 0u;
+    if (s_rpc_task_hdl != NULL)
+        xTaskNotifyGive(s_rpc_task_hdl);
+}
+
+static bool rpc_brain_transmit(void *context, const uint8_t *data,
+                               uint16_t len)
+{
+    (void)context;
+    return len <= M1_ESP32_RPC_PAYLOAD_MAX &&
+           m1_esp32_rpc_qmon_resp(data, len) == M1_ESP32_RPC_OK;
 }
 
 bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
@@ -990,6 +1017,8 @@ static void rpc_handle_screen_start(const S_RPC_Frame *f)
         if (fps < RPC_SCREEN_FPS_MIN) fps = RPC_SCREEN_FPS_MIN;
         if (fps > RPC_SCREEN_FPS_MAX) fps = RPC_SCREEN_FPS_MAX;
     }
+    if (f->transport == M1_RPC_TRANSPORT_ESP32 && fps > 5u)
+        fps = 5u;
 
     rpc_screen_stream.fps          = fps;
     rpc_screen_stream.interval_ms  = 1000 / fps;
@@ -1093,8 +1122,16 @@ static void rpc_send_screen_frame(uint8_t seq,
         rpc_flip_buffer_180(s_screen_fb_copy, RPC_SCREEN_FB_SIZE);
     }
 
-    (void)m1_rpc_send_frame_to(transport, RPC_CMD_SCREEN_FRAME, seq,
-                               s_screen_fb_copy, RPC_SCREEN_FB_SIZE);
+    if (transport == M1_RPC_TRANSPORT_ESP32)
+    {
+        (void)m1_esp32_rpc_screen_push(s_screen_fb_copy,
+                                       RPC_SCREEN_FB_SIZE);
+    }
+    else
+    {
+        (void)m1_rpc_send_frame_to(transport, RPC_CMD_SCREEN_FRAME, seq,
+                                   s_screen_fb_copy, RPC_SCREEN_FB_SIZE);
+    }
 }
 
 
@@ -2699,6 +2736,105 @@ static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f)
 /*                      R P C   T A S K                                       */
 /*============================================================================*/
 
+/* Pull the brain's relay queue on the existing RPC task. The queued payload is
+ * one complete qMonstatek frame; a single heap copy is retained only if the
+ * USB parser currently owns an incomplete frame, and is bounded by 2038 bytes. */
+static void rpc_brain_relay_poll(void)
+{
+    if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
+    {
+        m1_rpc_set_mobile_session_active(false);
+        s_brain_rpc_status_unsupported = false;
+        s_brain_qmon_poll_unsupported = false;
+        free(s_brain_relay_pending_frame);
+        s_brain_relay_pending_frame = NULL;
+        s_brain_relay_pending_len = 0u;
+        return;
+    }
+
+    if (s_brain_rpc_status_unsupported)
+        return;
+
+    uint8_t client_status = 0u;
+    m1_esp32_rpc_status_t status = m1_esp32_rpc_rpc_status(&client_status);
+    if (status == M1_ESP32_RPC_ERR_UNSUPPORTED)
+    {
+        s_brain_rpc_status_unsupported = true;
+        m1_rpc_set_mobile_session_active(false);
+        return;
+    }
+    if (status != M1_ESP32_RPC_OK)
+    {
+        s_ble_direct_sync_pending = true;
+        return;
+    }
+
+    bool client_active =
+        (client_status & (M1_ESP32_RPC_CLIENT_TCP |
+                          M1_ESP32_RPC_CLIENT_BLE)) != 0u;
+    m1_rpc_set_mobile_session_active(client_active);
+
+    TickType_t now = xTaskGetTickCount();
+    if (s_ble_direct_sync_pending &&
+        (s_ble_direct_last_sync_tick == 0u ||
+         (now - s_ble_direct_last_sync_tick) >= pdMS_TO_TICKS(5000u)))
+    {
+        status = m1_esp32_rpc_ble_rpc_adv(
+            settings_bluetooth_direct_enabled());
+        if (status == M1_ESP32_RPC_OK ||
+            status == M1_ESP32_RPC_ERR_UNSUPPORTED)
+            s_ble_direct_sync_pending = false;
+        s_ble_direct_last_sync_tick = now;
+    }
+
+    if (!client_active || s_brain_qmon_poll_unsupported)
+    {
+        free(s_brain_relay_pending_frame);
+        s_brain_relay_pending_frame = NULL;
+        s_brain_relay_pending_len = 0u;
+        return;
+    }
+
+    if (s_brain_relay_pending_frame != NULL)
+    {
+        if (m1_rpc_feed_from_transport(M1_RPC_TRANSPORT_ESP32,
+                                       s_brain_relay_pending_frame,
+                                       s_brain_relay_pending_len))
+        {
+            free(s_brain_relay_pending_frame);
+            s_brain_relay_pending_frame = NULL;
+            s_brain_relay_pending_len = 0u;
+        }
+        return;
+    }
+
+    uint8_t frame[M1_ESP32_RPC_RESP_PAYLOAD_MAX];
+    uint16_t frame_len = 0u;
+    status = m1_esp32_rpc_qmon_poll(frame, sizeof(frame), &frame_len);
+    if (status == M1_ESP32_RPC_ERR_UNSUPPORTED)
+    {
+        s_brain_qmon_poll_unsupported = true;
+        return;
+    }
+    if (status != M1_ESP32_RPC_OK || frame_len == 0u)
+        return;
+
+    if (!m1_rpc_feed_from_transport(M1_RPC_TRANSPORT_ESP32, frame, frame_len))
+    {
+        s_brain_relay_pending_frame = (uint8_t *)malloc(frame_len);
+        if (s_brain_relay_pending_frame != NULL)
+        {
+            memcpy(s_brain_relay_pending_frame, frame, frame_len);
+            s_brain_relay_pending_len = frame_len;
+        }
+        else
+        {
+            M1_LOG_W(M1_LOGDB_TAG, "Relay frame deferred but no heap memory\r\n");
+        }
+    }
+}
+
+
 /**
  * @brief  RPC periodic task — handles screen streaming.
  *
@@ -2737,6 +2873,7 @@ void m1_rpc_task(void *param)
          *  - rpc_dispatch_frame() for deferred slow commands
          *  - m1_rpc_usb_session_reset_from_isr() for a host re-enumeration */
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+        rpc_brain_relay_poll();
 
         /* Drop stale state left by a host re-enumeration (qM reconnect
          * without an MCU reboot). Discard ONLY a deferred command that was
@@ -2915,6 +3052,16 @@ void m1_rpc_init(void)
 
     /* File write state */
     memset(&s_file_write, 0, sizeof(s_file_write));
+
+    s_ble_direct_sync_pending = true;
+    s_ble_direct_last_sync_tick = 0u;
+    s_brain_rpc_status_unsupported = false;
+    s_brain_qmon_poll_unsupported = false;
+    free(s_brain_relay_pending_frame);
+    s_brain_relay_pending_frame = NULL;
+    s_brain_relay_pending_len = 0u;
+    (void)m1_rpc_transport_register(M1_RPC_TRANSPORT_ESP32,
+                                    rpc_brain_transmit, NULL);
 
     /* Create RPC task */
     BaseType_t ret = xTaskCreate(
