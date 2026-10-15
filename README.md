@@ -264,7 +264,8 @@ Copy the directories manually: `ir_database/` contents → `IR/`, `subghz_databa
 - **Hardware revision:** 2.x
 
 > **ESP32 firmware required:** Hapax supports multiple ESP32-C6 coprocessor
-> firmware variants, with feature availability depending on the firmware. See
+> firmware variants. The native **CD3 brain** firmware is the recommended
+> default for its broad feature set; availability varies by firmware. See
 > [`documentation/esp32_firmware.md`](documentation/esp32_firmware.md) for the
 > compatibility matrix and flashing guidance. The stock Espressif UART-based AT
 > firmware is not compatible.
