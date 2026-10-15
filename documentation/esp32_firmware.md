@@ -6,11 +6,22 @@
 
 The Monstatek M1 uses an ESP32-C6 coprocessor for WiFi, Bluetooth, BLE, and
 IEEE 802.15.4 (Zigbee/Thread) connectivity.  The STM32H573 host communicates
-with the ESP32-C6 via **SPI AT commands** at runtime and uses **UART** (ROM
-bootloader protocol) for firmware flashing.
+with it over SPI at runtime: the preferred native CD3 firmware uses binary
+`M1_RPC`, while legacy firmware variants use AT commands or binary SPI. Firmware
+flashing uses **UART** (ROM bootloader protocol).
 
 Espressif's stock AT firmware downloads are **UART-only** and will **NOT** work
 with the M1.  A custom SPI-configured build is required.
+
+> **Recommended firmware — native CD3 brain:** For most users, use
+> [`bedge117/m1-esp32-brain`](https://github.com/bedge117/m1-esp32-brain) as the
+> primary ESP32 firmware. It provides the broadest integrated M1 feature set
+> across WiFi, BLE, and 802.15.4, plus ESP-NOW peer link and GPIO support. Other
+> firmware variants remain supported and may be preferable when you specifically
+> need a capability CD3 does not currently provide; for example, CD3 does not
+> currently implement PMKID capture, ESP32 OTA self-update, network scanning, or
+> Bluetooth Classic management. See the capability matrix below and check the
+> connected firmware's reported capabilities.
 
 > **Naming note — two unrelated bedge117 ESP32 firmwares:** bedge117 has
 > authored **two separate, non-interoperable** ESP32-C6 coprocessor firmwares
@@ -40,11 +51,11 @@ with the M1.  A custom SPI-configured build is required.
 
 | Repository | Description |
 |-----------|-------------|
-| [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **CD3-AT (primary)** — custom ESP32-C6 SPI AT firmware for M1 |
+| [bedge117/esp32-at-monstatek-m1](https://github.com/bedge117/esp32-at-monstatek-m1) | **CD3-AT (legacy AT alternative)** — custom ESP32-C6 SPI AT firmware for M1 |
 | [neddy299/esp32-at-monstatek-m1](https://github.com/neddy299/esp32-at-monstatek-m1) | CD3-AT fork with WiFi deauthentication (`AT+DEAUTH`, `AT+STASCAN`) |
 | [dagnazty/esp32-at-monstatek-m1](https://github.com/dagnazty/esp32-at-monstatek-m1) | CD3-AT fork (dag / T-800) — additional AT command extensions |
 | [hapaxx11/esp32-at-monstatek-m1](https://github.com/hapaxx11/esp32-at-monstatek-m1) | CD3-AT fork of neddy299 — adds `CMD_GET_STATUS` binary capability probe (eliminates `AT+CMD?` timeout) |
-| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC** — separate codebase, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
+| [bedge117/m1-esp32-brain](https://github.com/bedge117/m1-esp32-brain) | **CD3 native binary RPC (recommended primary)** — separate codebase, ESP-IDF native WiFi/BLE/802.15.4, no AT stack, `M1_RPC` protocol |
 
 All AT-based repos above are forks of Espressif's official
 [esp-at](https://github.com/espressif/esp-at) project, customised for the M1's
@@ -237,8 +248,9 @@ library.
 1. Connect to WiFi via **WiFi → Scan + Connect**.
 2. Navigate to **Settings → ESP32 update → Download**.
 3. Select a firmware source (`C3 ESP32 AT`, `Deauth ESP32 AT` — both are
-   **CD3-AT** AT-based firmware; there is currently no default download source
-   configured for the native **CD3** `m1-esp32-brain` firmware).
+**CD3-AT** AT-based alternatives; there is currently no default download
+source configured for the recommended native **CD3** `m1-esp32-brain`
+firmware, which must be downloaded from its releases).
 4. Select a release version.
 5. The firmware `.bin` and `.md5` are downloaded to `0:/ESP32_FW/` on SD card.
 6. Return to **ESP32 update → Image File** to select and flash.
