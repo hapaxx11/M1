@@ -262,7 +262,8 @@ static void rpc_handle_cli_exec(const S_RPC_Frame *f);
 static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f);
 
 /* Screen streaming helpers */
-static void rpc_send_screen_frame(uint8_t seq);
+static void rpc_send_screen_frame(uint8_t seq,
+                                  m1_rpc_transport_t transport);
 static void rpc_flip_buffer_180(uint8_t *buf, uint16_t size);
 
 /*************** F U N C T I O N   I M P L E M E N T A T I O N ****************/
@@ -927,6 +928,7 @@ static void rpc_handle_get_device_info(const S_RPC_Frame *f)
     info.op_mode         = (uint8_t)m1_device_stat.op_mode;
     info.southpaw_mode   = m1_southpaw_mode;
     info.hapax_revision  = M1_HAPAX_REVISION;
+    info.mobile_session_active = m1_rpc_mobile_session_active() ? 1u : 0u;
 
     m1_rpc_send_frame(RPC_CMD_DEVICE_INFO_RESP, f->seq,
                       (const uint8_t *)&info, sizeof(info));
@@ -994,6 +996,7 @@ static void rpc_handle_screen_start(const S_RPC_Frame *f)
     rpc_screen_stream.interval_ms  = 1000 / fps;
     rpc_screen_stream.last_send_tick = xTaskGetTickCount();
     rpc_screen_stream.active       = true;
+    s_screen_transport = f->transport;
 
     m1_rpc_send_ack(f->seq);
 }
@@ -1014,7 +1017,7 @@ static void rpc_handle_screen_stop(const S_RPC_Frame *f)
  */
 static void rpc_handle_screen_capture(const S_RPC_Frame *f)
 {
-    rpc_send_screen_frame(f->seq);
+    rpc_send_screen_frame(f->seq, f->transport);
 }
 
 
@@ -1064,7 +1067,8 @@ static void rpc_flip_buffer_180(uint8_t *buf, uint16_t size)
  *         app never needs to know about southpaw — it always receives
  *         correctly-oriented data.
  */
-static void rpc_send_screen_frame(uint8_t seq)
+static void rpc_send_screen_frame(uint8_t seq,
+                                 m1_rpc_transport_t transport)
 {
     uint8_t *fb = u8g2_GetBufferPtr(&m1_u8g2);
 
@@ -1090,8 +1094,8 @@ static void rpc_send_screen_frame(uint8_t seq)
         rpc_flip_buffer_180(s_screen_fb_copy, RPC_SCREEN_FB_SIZE);
     }
 
-    m1_rpc_send_frame(RPC_CMD_SCREEN_FRAME, seq,
-                      s_screen_fb_copy, RPC_SCREEN_FB_SIZE);
+    (void)m1_rpc_send_frame_to(transport, RPC_CMD_SCREEN_FRAME, seq,
+                               s_screen_fb_copy, RPC_SCREEN_FB_SIZE);
 }
 
 
@@ -2748,7 +2752,10 @@ void m1_rpc_task(void *param)
             if (m1_rpc_usb_epoch_advanced(&s_usb_cleanup_epoch, session_epoch))
             {
                 S_RpcUsbEpochAction action = m1_rpc_usb_epoch_check(
-                    session_epoch, s_deferred_pending, true,
+                    session_epoch,
+                    s_deferred_pending &&
+                        s_deferred_frame.transport == M1_RPC_TRANSPORT_USB,
+                    true,
                     s_deferred_epoch, s_file_write.active);
 
                 if (action.discard_deferred)
@@ -2759,8 +2766,11 @@ void m1_rpc_task(void *param)
                      * reply. NACK it so the host fails fast and can retry on
                      * the new session. */
                     uint8_t discarded_seq = s_deferred_frame.seq;
+                    uint8_t error = RPC_ERR_BUSY;
                     s_deferred_pending = false;
-                    m1_rpc_send_nack(discarded_seq, RPC_ERR_BUSY);
+                    (void)m1_rpc_send_frame_to(
+                        s_deferred_frame.transport, RPC_CMD_NACK,
+                        discarded_seq, &error, sizeof(error));
                 }
 
                 if (action.close_file_write)
@@ -2791,6 +2801,23 @@ void m1_rpc_task(void *param)
             if (rpc_flash_op)
                 m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK);
 
+            if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
+            {
+                uint8_t error = RPC_ERR_BUSY;
+                (void)m1_rpc_send_frame_to(frame.transport, RPC_CMD_NACK,
+                                           frame.seq, &error, sizeof(error));
+                if (rpc_flash_op)
+                {
+                    m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
+                    rpc_wdt_last = xTaskGetTickCount();
+                }
+                continue;
+            }
+            m1_rpc_transport_t previous_transport = s_reply_transport;
+            s_reply_transport = m1_rpc_transport_valid(frame.transport)
+                                    ? frame.transport
+                                    : M1_RPC_TRANSPORT_USB;
+
             switch (frame.cmd)
             {
             case RPC_CMD_FILE_WRITE_START:  rpc_handle_file_write_start(&frame);  break;
@@ -2806,6 +2833,8 @@ void m1_rpc_task(void *param)
             case RPC_CMD_I2C_SCAN:          rpc_handle_i2c_scan(&frame);          break;
             default: break;
             }
+            s_reply_transport = previous_transport;
+            xSemaphoreGive(s_route_mutex);
 
             if (rpc_flash_op)
             {
@@ -2816,16 +2845,37 @@ void m1_rpc_task(void *param)
             }
         }
 
+        /* Snapshot stream state under the routing lock; the command
+         * dispatcher owns writes to these fields. */
+        bool stream_active = false;
+        uint32_t stream_interval_ms = 0;
+        uint32_t stream_last_send_tick = 0;
+        m1_rpc_transport_t stream_transport = M1_RPC_TRANSPORT_USB;
+        if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+        {
+            stream_active = rpc_screen_stream.active;
+            stream_interval_ms = rpc_screen_stream.interval_ms;
+            stream_last_send_tick = rpc_screen_stream.last_send_tick;
+            stream_transport = s_screen_transport;
+            xSemaphoreGive(s_route_mutex);
+        }
+
         /* Screen streaming */
-        if (rpc_screen_stream.active)
+        if (stream_active)
         {
             uint32_t now = xTaskGetTickCount();
-            uint32_t elapsed = now - rpc_screen_stream.last_send_tick;
+            uint32_t elapsed = now - stream_last_send_tick;
 
-            if (elapsed >= pdMS_TO_TICKS(rpc_screen_stream.interval_ms))
+            if (elapsed >= pdMS_TO_TICKS(stream_interval_ms))
             {
-                rpc_send_screen_frame(screen_seq++);
-                rpc_screen_stream.last_send_tick = now;
+                rpc_send_screen_frame(screen_seq++, stream_transport);
+                if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+                {
+                    if (rpc_screen_stream.active &&
+                        s_screen_transport == stream_transport)
+                        rpc_screen_stream.last_send_tick = now;
+                    xSemaphoreGive(s_route_mutex);
+                }
             }
         }
     }
@@ -2844,10 +2894,17 @@ void m1_rpc_init(void)
 {
     /* Parser state */
     s_parse_state = RPC_STATE_IDLE;
+    s_parser_transport_active = false;
+    s_feed_transport = M1_RPC_TRANSPORT_USB;
+    s_parser_transport = M1_RPC_TRANSPORT_USB;
 
     /* TX mutex */
     s_tx_mutex = xSemaphoreCreateMutex();
     assert(s_tx_mutex != NULL);
+    s_parser_mutex = xSemaphoreCreateMutex();
+    assert(s_parser_mutex != NULL);
+    s_route_mutex = xSemaphoreCreateMutex();
+    assert(s_route_mutex != NULL);
 
     /* Screen streaming off by default */
     memset(&rpc_screen_stream, 0, sizeof(rpc_screen_stream));
