@@ -50,6 +50,9 @@
 #include "FreeRTOS_CLI.h"
 #include "m1_power_ctl.h"
 #include "m1_sys_init.h"
+#include "m1_gpio.h"
+#include "m1_i2c.h"
+#include "m1_rpc_scan.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -240,6 +243,8 @@ static void rpc_handle_fw_bank_swap(const S_RPC_Frame *f);
 static void rpc_handle_fw_bank_erase(const S_RPC_Frame *f);
 static void rpc_handle_fw_dfu_enter(const S_RPC_Frame *f);
 static void rpc_handle_esp_info(const S_RPC_Frame *f);
+static void rpc_handle_gpio_scan(const S_RPC_Frame *f);
+static void rpc_handle_i2c_scan(const S_RPC_Frame *f);
 static void rpc_handle_esp_update_start(const S_RPC_Frame *f);
 static void rpc_handle_esp_update_data(const S_RPC_Frame *f);
 static void rpc_handle_esp_update_finish(const S_RPC_Frame *f);
@@ -670,6 +675,33 @@ static void rpc_dispatch_frame(const S_RPC_Frame *frame)
             s_deferred_pending = true;
             xTaskNotifyGive(s_rpc_task_hdl);
         }
+        break;
+
+    /* I2C scanning probes multiple addresses and may take hundreds of
+     * milliseconds; validate its exact request before deferring it. */
+    case RPC_CMD_I2C_SCAN:
+    {
+        if (!rpc_i2c_scan_request_valid(frame->payload, frame->len))
+        {
+            m1_rpc_send_nack(frame->seq, RPC_ERR_INVALID_PAYLOAD);
+        }
+        else if (s_deferred_pending)
+        {
+            m1_rpc_send_nack(frame->seq, RPC_ERR_BUSY);
+        }
+        else
+        {
+            memcpy(&s_deferred_frame, frame, sizeof(S_RPC_Frame));
+            s_deferred_epoch = s_usb_session_epoch;
+            s_deferred_pending = true;
+            xTaskNotifyGive(s_rpc_task_hdl);
+        }
+        break;
+    }
+
+    /* GPIO reads are a short, read-only snapshot and stay inline. */
+    case RPC_CMD_GPIO_SCAN:
+        rpc_handle_gpio_scan(frame);
         break;
 
     /* Debug / CLI — deferred to rpc_task (16KB stack).
@@ -2015,6 +2047,70 @@ static void rpc_handle_esp_info(const S_RPC_Frame *f)
     m1_rpc_send_frame(RPC_CMD_ESP_INFO_RESP, f->seq, resp, 33);
 }
 
+_Static_assert(M1_EXT_GPIO_LIST_N == RPC_GPIO_SCAN_PIN_COUNT,
+               "RPC GPIO scan layout must match the external GPIO table");
+
+static void rpc_handle_gpio_scan(const S_RPC_Frame *f)
+{
+    uint8_t response[RPC_GPIO_SCAN_RESULT_SIZE];
+    uint16_t levels = 0u;
+
+    if (f->len != 0u)
+    {
+        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        return;
+    }
+
+    for (uint8_t i = 0; i < M1_EXT_GPIO_LIST_N; i++)
+    {
+        if (HAL_GPIO_ReadPin(m1_ext_gpio[i].gpio_port,
+                             m1_ext_gpio[i].gpio_pin) == GPIO_PIN_SET)
+            levels |= (uint16_t)(1u << i);
+    }
+
+    if (!rpc_gpio_scan_encode(levels, response, sizeof(response)))
+    {
+        m1_rpc_send_nack(f->seq, RPC_ERR_HARDWARE);
+        return;
+    }
+
+    m1_rpc_send_frame(RPC_CMD_GPIO_SCAN_RESP, f->seq,
+                      response, sizeof(response));
+}
+
+static void rpc_handle_i2c_scan(const S_RPC_Frame *f)
+{
+    uint8_t first;
+    uint8_t last;
+    uint8_t addresses[M1_I2C_SCAN_MAX_RESULTS];
+    uint8_t count = 0u;
+    uint8_t response[RPC_I2C_SCAN_MAX_RESPONSE_SIZE];
+    uint16_t response_len;
+
+    if (!rpc_i2c_scan_request_decode(f->payload, f->len, &first, &last))
+    {
+        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        return;
+    }
+
+    if (!m1_i2c_scan_addresses(first, last, addresses,
+                               sizeof(addresses), &count))
+    {
+        m1_rpc_send_nack(f->seq, RPC_ERR_HARDWARE);
+        return;
+    }
+
+    if (!rpc_i2c_scan_response_encode(addresses, count, response,
+                                      sizeof(response), &response_len))
+    {
+        m1_rpc_send_nack(f->seq, RPC_ERR_HARDWARE);
+        return;
+    }
+
+    m1_rpc_send_frame(RPC_CMD_I2C_SCAN_RESP, f->seq,
+                      response, response_len);
+}
+
 
 /**
  * @brief  Handle ESP_UPDATE_START — connect to ESP32 and prepare for direct flash.
@@ -2579,6 +2675,7 @@ void m1_rpc_task(void *param)
             case RPC_CMD_CLI_EXEC:          rpc_handle_cli_exec(&frame);          break;
             case RPC_CMD_ESP_UPDATE_START:  rpc_handle_esp_update_start(&frame);  break;
             case RPC_CMD_ESP_UPDATE_FINISH: rpc_handle_esp_update_finish(&frame); break;
+            case RPC_CMD_I2C_SCAN:          rpc_handle_i2c_scan(&frame);          break;
             default: break;
             }
 

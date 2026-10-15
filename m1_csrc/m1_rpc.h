@@ -90,6 +90,16 @@
 #define RPC_CMD_ESP_UART_SNOOP  0x62
 #define RPC_CMD_ESP_UART_SNOOP_RESP 0x63
 
+/* ── Hardware Scan Commands (0x70–0x7F) ── */
+/* GPIO_SCAN: empty request; response is [pin_count][little-endian level bitset].
+ * Bit N is the sampled level of m1_ext_gpio[N]. */
+#define RPC_CMD_GPIO_SCAN       0x70
+#define RPC_CMD_GPIO_SCAN_RESP  0x71
+/* I2C_SCAN request: [first_7bit_address][last_7bit_address], inclusive.
+ * Response: [found_count][ascending list of found 7-bit addresses]. */
+#define RPC_CMD_I2C_SCAN        0x72
+#define RPC_CMD_I2C_SCAN_RESP   0x73
+
 /* ── Button IDs (match m1_system.h) ── */
 #define RPC_BUTTON_OK           0
 #define RPC_BUTTON_UP           1
@@ -109,6 +119,7 @@
 #define RPC_ERR_SIZE_TOO_LARGE  0x09
 #define RPC_ERR_BANK_EMPTY      0x0A
 #define RPC_ERR_ESP_FLASH       0x0B
+#define RPC_ERR_HARDWARE        0x0C
 
 /* ESP32 flash sub-error codes (sent as 2nd NACK payload byte) */
 #define RPC_ESP_SUB_CONNECT     0x01   /* connect_to_target() failed */

@@ -17,13 +17,13 @@
 - **Commit**: `Add primary WiFi boot auto-connect`
 
 ### Phase 3 — GPIO and I2C scanner RPC APIs
-- **Description**: Define versioned USB RPC commands and bounded response formats for existing local GPIO/I2C scan capabilities; dispatch them safely and test parsing, range validation, busy/error responses, and scanner results.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Description**: Add documented USB RPC commands with bounded payloads for a read-only external GPIO snapshot and I2C address-range scan; defer the mutex-protected I2C scan and host-test request validation and response encoding.
+- **Status**: ✅ Complete
+- **Commit**: `Add GPIO and I2C RPC scanners`
 
 ### Phase 4 — Request-scoped transport routing and mobile-session state
 - **Description**: Replace USB-only response assumptions with an ingress-aware RPC transport interface, preserve per-request reply routing, and report accurate active-session state without changing existing USB clients.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 5 — BLE Direct (NUS), exclusive client ownership, and screen mirroring

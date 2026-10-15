@@ -161,6 +161,62 @@ HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf)
 	return stat;
 } // HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf trans_inf)
 
+/*
+ * Probe a bounded 7-bit address range while holding the same bus mutex used
+ * by normal I2C transactions. An address NACK is an expected empty result;
+ * bus errors and timeouts abort the scan.
+ */
+static m1_i2c_scan_probe_result_t m1_i2c_scan_probe(uint8_t address,
+                                                      void *context)
+{
+	I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)context;
+	HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(
+		hi2c, (uint16_t)(address << 1), 1u,
+		M1_I2C_SCAN_PROBE_TIMEOUT_MS);
+
+	if (status == HAL_OK)
+		return M1_I2C_SCAN_PROBE_ACK;
+
+	/* HAL_I2C_IsDeviceReady reports a missing target as HAL_ERROR. In this
+	 * HAL version that path sets AF or TIMEOUT after the address NACK. */
+	if (status == HAL_ERROR &&
+	    (hi2c->ErrorCode == HAL_I2C_ERROR_AF ||
+	     hi2c->ErrorCode == HAL_I2C_ERROR_TIMEOUT))
+		return M1_I2C_SCAN_PROBE_NACK;
+
+	return M1_I2C_SCAN_PROBE_ERROR;
+}
+
+bool m1_i2c_scan_addresses(uint8_t first,
+                           uint8_t last,
+                           uint8_t *addresses,
+                           size_t capacity,
+                           uint8_t *count)
+{
+	uint16_t range_size;
+
+	if (count == NULL)
+		return false;
+	*count = 0u;
+
+	if (addresses == NULL ||
+	    !m1_i2c_scan_range_valid(first, last) ||
+	    pi2chdl == NULL || mutex_i2c_trans == NULL)
+		return false;
+
+	range_size = (uint16_t)last - first + 1u;
+	if (capacity < range_size)
+		return false;
+
+	if (xSemaphoreTake(mutex_i2c_trans, portMAX_DELAY) != pdTRUE)
+		return false;
+
+	bool success = m1_i2c_scan_collect(first, last, m1_i2c_scan_probe,
+	                                   pi2chdl, addresses, capacity, count);
+	xSemaphoreGive(mutex_i2c_trans);
+	return success;
+}
+
 
 
 /*============================================================================*/
