@@ -116,14 +116,24 @@ static uint16_t          s_header_idx;
 static uint16_t          s_payload_idx;
 static uint8_t           s_crc_buf[2];
 static uint8_t           s_crc_idx;
+static m1_rpc_transport_t s_feed_transport = M1_RPC_TRANSPORT_USB;
+static m1_rpc_transport_t s_parser_transport = M1_RPC_TRANSPORT_USB;
+static bool               s_parser_transport_active;
+static SemaphoreHandle_t  s_parser_mutex;
 
 /* TX frame buffer */
 static uint8_t           s_tx_buf[RPC_MAX_FRAME_SIZE];
 static SemaphoreHandle_t s_tx_mutex;
+static m1_rpc_transport_tx_fn s_transport_tx[M1_RPC_TRANSPORT_COUNT];
+static void *s_transport_tx_context[M1_RPC_TRANSPORT_COUNT];
+static m1_rpc_transport_t s_reply_transport = M1_RPC_TRANSPORT_USB;
+static SemaphoreHandle_t s_route_mutex;
 
 /* Screen streaming */
 S_RPC_ScreenStream rpc_screen_stream;
 static uint8_t     s_screen_fb_copy[RPC_SCREEN_FB_SIZE];
+static m1_rpc_transport_t s_screen_transport = M1_RPC_TRANSPORT_USB;
+static volatile bool s_mobile_session_active;
 
 /* RPC mode flag — when true, debug output goes to UART only (not USB CDC) */
 volatile bool m1_rpc_active = false;
@@ -213,7 +223,7 @@ static void rpc_parse_byte(uint8_t byte);
 static void rpc_dispatch_frame(const S_RPC_Frame *frame);
 
 /* USB CDC TX helper */
-static void rpc_usb_transmit(const uint8_t *data, uint16_t len);
+static bool rpc_usb_transmit(void *context, const uint8_t *data, uint16_t len);
 
 /* Command handlers */
 static void rpc_handle_ping(const S_RPC_Frame *f);
@@ -304,12 +314,14 @@ static uint16_t rpc_crc16_continue(uint16_t crc, const uint8_t *data, uint16_t l
  * @brief  Transmit data over USB CDC with retry logic.
  *         Must be called from task context (not ISR).
  */
-static void rpc_usb_transmit(const uint8_t *data, uint16_t len)
+static bool rpc_usb_transmit(void *context, const uint8_t *data, uint16_t len)
 {
+    UNUSED(context);
+
     if (m1_USB_CDC_ready != 0)
     {
         M1_LOG_I(M1_LOGDB_TAG, "TX blocked: CDC_ready=%d\r\n", m1_USB_CDC_ready);
-        return;
+        return false;
     }
 
     /* Skip outright if the IN endpoint is still busy with a previous transfer
@@ -322,7 +334,7 @@ static void rpc_usb_transmit(const uint8_t *data, uint16_t len)
     if (CDC_Transmit_Busy())
     {
         M1_LOG_I(M1_LOGDB_TAG, "TX blocked: EP busy\r\n");
-        return;
+        return false;
     }
 
     for (int retry = 0; retry < RPC_USB_TX_RETRIES; retry++)
@@ -331,12 +343,13 @@ static void rpc_usb_transmit(const uint8_t *data, uint16_t len)
         if (result == USBD_OK)
         {
             M1_LOG_I(M1_LOGDB_TAG, "TX OK %u bytes cmd=0x%02X\r\n", len, data[1]);
-            return;
+            return true;
         }
         M1_LOG_I(M1_LOGDB_TAG, "TX retry %d result=%d\r\n", retry, result);
         osDelay(RPC_USB_TX_RETRY_MS);
     }
     M1_LOG_I(M1_LOGDB_TAG, "TX FAILED after %d retries\r\n", RPC_USB_TX_RETRIES);
+    return false;
 }
 
 
@@ -351,14 +364,61 @@ static void rpc_usb_transmit(const uint8_t *data, uint16_t len)
  * Frame: [0xAA] [CMD] [SEQ] [LEN_LO] [LEN_HI] [PAYLOAD...] [CRC_LO] [CRC_HI]
  *   CRC computed over CMD through end of PAYLOAD.
  */
-void m1_rpc_send_frame(uint8_t cmd, uint8_t seq,
-                       const uint8_t *payload, uint16_t len)
+bool m1_rpc_transport_register(m1_rpc_transport_t transport,
+                               m1_rpc_transport_tx_fn transmit,
+                               void *context)
 {
-    if (len > RPC_MAX_PAYLOAD)
-        return;
+    if (!m1_rpc_transport_valid(transport) ||
+        transport == M1_RPC_TRANSPORT_USB ||
+        s_tx_mutex == NULL)
+        return false;
 
     if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
-        return;
+        return false;
+
+    s_transport_tx[transport] = transmit;
+    s_transport_tx_context[transport] = transmit != NULL ? context : NULL;
+    xSemaphoreGive(s_tx_mutex);
+    return true;
+}
+
+void m1_rpc_set_mobile_session_active(bool active)
+{
+    s_mobile_session_active = active;
+}
+
+bool m1_rpc_mobile_session_active(void)
+{
+    return s_mobile_session_active;
+}
+
+bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
+                          uint8_t cmd,
+                          uint8_t seq,
+                          const uint8_t *payload,
+                          uint16_t len)
+{
+    m1_rpc_transport_tx_fn transmit;
+    void *context;
+    bool sent;
+
+    if (len > RPC_MAX_PAYLOAD || !m1_rpc_transport_valid(transport))
+        return false;
+
+    if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+        return false;
+
+    transmit = (transport == M1_RPC_TRANSPORT_USB)
+                   ? rpc_usb_transmit
+                   : s_transport_tx[transport];
+    context = (transport == M1_RPC_TRANSPORT_USB)
+                  ? NULL
+                  : s_transport_tx_context[transport];
+    if (transmit == NULL)
+    {
+        xSemaphoreGive(s_tx_mutex);
+        return false;
+    }
 
     uint16_t frame_size = RPC_HEADER_SIZE + len + RPC_CRC_SIZE;
     uint16_t idx = 0;
@@ -388,10 +448,16 @@ void m1_rpc_send_frame(uint8_t cmd, uint8_t seq,
     s_tx_buf[idx++] = (uint8_t)(crc & 0xFF);
     s_tx_buf[idx++] = (uint8_t)(crc >> 8);
 
-    /* Transmit */
-    rpc_usb_transmit(s_tx_buf, frame_size);
+    sent = transmit(context, s_tx_buf, frame_size);
 
     xSemaphoreGive(s_tx_mutex);
+    return sent;
+}
+
+void m1_rpc_send_frame(uint8_t cmd, uint8_t seq,
+                       const uint8_t *payload, uint16_t len)
+{
+    (void)m1_rpc_send_frame_to(s_reply_transport, cmd, seq, payload, len);
 }
 
 
@@ -451,18 +517,59 @@ void m1_rpc_usb_session_reset_from_isr(void)
  */
 void m1_rpc_feed(const uint8_t *data, uint16_t len)
 {
+    (void)m1_rpc_feed_from_transport(M1_RPC_TRANSPORT_USB, data, len);
+}
+
+bool m1_rpc_feed_from_transport(m1_rpc_transport_t transport,
+                                const uint8_t *data,
+                                uint16_t len)
+{
+    if (!m1_rpc_transport_valid(transport) ||
+        (data == NULL && len != 0u) ||
+        s_parser_mutex == NULL)
+        return false;
+    if (len == 0u)
+        return true;
+
+    if (transport != M1_RPC_TRANSPORT_USB)
+    {
+        bool registered;
+        if (s_tx_mutex == NULL ||
+            xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+            return false;
+        registered = s_transport_tx[transport] != NULL;
+        xSemaphoreGive(s_tx_mutex);
+        if (!registered)
+            return false;
+    }
+
+    if (xSemaphoreTake(s_parser_mutex, portMAX_DELAY) != pdTRUE)
+        return false;
+
     /* A USB bus reset can split an RPC frame across the reset. Never let the
      * first bytes from a newly enumerated host complete a frame that
      * belonged to the old host — reset the parser state machine at the
      * epoch boundary before parsing any new bytes. */
-    if (m1_rpc_usb_epoch_advanced(&s_usb_parser_epoch, s_usb_session_epoch))
+    if (transport == M1_RPC_TRANSPORT_USB &&
+        m1_rpc_usb_epoch_advanced(&s_usb_parser_epoch, s_usb_session_epoch) &&
+        (!s_parser_transport_active ||
+         s_parser_transport == M1_RPC_TRANSPORT_USB))
     {
         s_parse_state = RPC_STATE_IDLE;
         s_header_idx   = 0;
         s_payload_idx  = 0;
         s_crc_idx      = 0;
+        s_parser_transport_active = false;
     }
 
+    if (!m1_rpc_transport_feed_allowed(s_parse_state != RPC_STATE_IDLE,
+                                       s_parser_transport, transport))
+    {
+        xSemaphoreGive(s_parser_mutex);
+        return false;
+    }
+
+    s_feed_transport = transport;
     M1_LOG_I(M1_LOGDB_TAG, "FEED %u bytes [%02X %02X %02X ...]\r\n",
              len,
              (len > 0) ? data[0] : 0,
@@ -472,6 +579,8 @@ void m1_rpc_feed(const uint8_t *data, uint16_t len)
     {
         rpc_parse_byte(data[i]);
     }
+    xSemaphoreGive(s_parser_mutex);
+    return true;
 }
 
 
@@ -505,6 +614,8 @@ static void rpc_parse_byte(uint8_t byte)
             s_header_idx  = 0;
             s_payload_idx = 0;
             s_crc_idx     = 0;
+            s_parser_transport = s_feed_transport;
+            s_parser_transport_active = true;
             s_parse_state = RPC_STATE_HEADER;
         }
         break;
@@ -522,6 +633,7 @@ static void rpc_parse_byte(uint8_t byte)
             {
                 /* Invalid length — reset */
                 s_parse_state = RPC_STATE_IDLE;
+                s_parser_transport_active = false;
             }
             else if (s_rx_frame.len == 0)
             {
@@ -563,6 +675,7 @@ static void rpc_parse_byte(uint8_t byte)
 
             if (rx_crc == computed_crc)
             {
+                s_rx_frame.transport = s_parser_transport;
                 rpc_dispatch_frame(&s_rx_frame);
             }
             else
@@ -572,11 +685,13 @@ static void rpc_parse_byte(uint8_t byte)
             }
 
             s_parse_state = RPC_STATE_IDLE;
+            s_parser_transport_active = false;
         }
         break;
 
     default:
         s_parse_state = RPC_STATE_IDLE;
+        s_parser_transport_active = false;
         break;
     }
 }
@@ -591,11 +706,21 @@ static void rpc_parse_byte(uint8_t byte)
  */
 static void rpc_dispatch_frame(const S_RPC_Frame *frame)
 {
+    m1_rpc_transport_t previous_transport;
+
+    if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
+        return;
+    previous_transport = s_reply_transport;
+    s_reply_transport = m1_rpc_transport_valid(frame->transport)
+                            ? frame->transport
+                            : M1_RPC_TRANSPORT_USB;
+
     M1_LOG_I(M1_LOGDB_TAG, "DISPATCH cmd=0x%02X seq=%u len=%u\r\n",
              frame->cmd, frame->seq, frame->len);
 
-    /* First valid RPC frame received — suppress debug CDC output */
-    if (!m1_rpc_active)
+    /* RPC mode is a USB CDC/VCP concern; mobile requests must not divert the
+     * desktop's serial stream from its normal mode. */
+    if (frame->transport == M1_RPC_TRANSPORT_USB && !m1_rpc_active)
     {
         m1_rpc_active = true;
     }
@@ -726,6 +851,9 @@ static void rpc_dispatch_frame(const S_RPC_Frame *frame)
         m1_rpc_send_nack(frame->seq, RPC_ERR_UNKNOWN_CMD);
         break;
     }
+
+    s_reply_transport = previous_transport;
+    xSemaphoreGive(s_route_mutex);
 }
 
 

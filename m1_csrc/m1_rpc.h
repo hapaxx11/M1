@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "m1_rpc_transport.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -145,6 +146,7 @@ typedef struct {
     uint8_t  cmd;
     uint8_t  seq;
     uint16_t len;
+    m1_rpc_transport_t transport;
     uint8_t  payload[RPC_MAX_PAYLOAD];
 } S_RPC_Frame;
 
@@ -183,6 +185,7 @@ typedef struct __attribute__((packed)) {
     uint8_t  batt_health;       /* BQ27421 state-of-health 0-100% */
     uint8_t  charge_state;      /* BQ25896 stat: 0=off, 1=pre, 2=fast, 3=done */
     uint8_t  charge_fault;      /* BQ25896 fault code */
+    uint8_t  mobile_session_active; /* BLE/WiFi RPC session connected */
 } S_RPC_DeviceInfo;
 
 /* Firmware bank info (packed) */
@@ -219,6 +222,31 @@ void m1_rpc_init(void);
  * @param  len    Number of bytes
  */
 void m1_rpc_feed(const uint8_t *data, uint16_t len);
+
+/**
+ * @brief Feed bytes received from a registered RPC transport.
+ * @return false if the transport is invalid or another transport currently
+ *         owns a partially received frame; rejected bytes are not consumed.
+ */
+bool m1_rpc_feed_from_transport(m1_rpc_transport_t transport,
+                                const uint8_t *data,
+                                uint16_t len);
+
+typedef bool (*m1_rpc_transport_tx_fn)(void *context,
+                                       const uint8_t *data,
+                                       uint16_t len);
+
+/**
+ * @brief Register or remove the transmit adapter for a non-USB RPC transport.
+ *        Pass NULL to unregister it.
+ */
+bool m1_rpc_transport_register(m1_rpc_transport_t transport,
+                               m1_rpc_transport_tx_fn transmit,
+                               void *context);
+
+/** Mark whether a mobile RPC client is currently connected. */
+void m1_rpc_set_mobile_session_active(bool active);
+bool m1_rpc_mobile_session_active(void);
 
 /**
  * @brief  Record a USB transport reset (bus reset / disconnect) from the PCD
@@ -258,6 +286,11 @@ bool m1_rpc_screen_streaming_active(void);
  */
 void m1_rpc_send_frame(uint8_t cmd, uint8_t seq,
                        const uint8_t *payload, uint16_t len);
+bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
+                          uint8_t cmd,
+                          uint8_t seq,
+                          const uint8_t *payload,
+                          uint16_t len);
 
 /**
  * @brief  Send ACK response.

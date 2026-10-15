@@ -560,6 +560,21 @@ endif()
 add_test(NAME rpc_scan_protocol COMMAND test_rpc_scan_protocol)
 
 # ------------------------------------------------------------------
+# Module under test: RPC transport routing/admission decisions.
+# ------------------------------------------------------------------
+add_executable(test_rpc_transport
+    test_rpc_transport.c
+)
+target_include_directories(test_rpc_transport PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_rpc_transport PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_rpc_transport PRIVATE sanitizers)
+endif()
+add_test(NAME rpc_transport COMMAND test_rpc_transport)
+
+# ------------------------------------------------------------------
 # Module under test: m1_json_mini
 # Pure JSON parser — no hardware dependencies at all.
 # Bug context: OTA firmware download always returned "No releases found"
