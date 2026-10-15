@@ -265,6 +265,33 @@ void test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown(void)
     free(content);
 }
 
+void test_m1link_transaction_uses_independent_lifecycle_mutex(void)
+{
+    char *app_content = read_file(
+        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+    char *hal_content = read_file("m1_csrc/m1_esp32_hal.c");
+    const char *deinit = strstr(hal_content, "void m1_esp32_deinit(void)\n{");
+
+    assert_contains(app_content, "static SemaphoreHandle_t s_m1link_spi_mutex;");
+    assert_contains(app_content,
+                    "bool esp32_m1link_spi_mutex_init(void)");
+    assert_contains(app_content, "esp32_m1link_spi_lock");
+    assert_ordered(app_content, "esp32_m1link_spi_lock",
+                   "HAL_SPI_Abort(&hspi_esp);");
+    assert_contains(hal_content,
+                    "if (!esp32_m1link_spi_mutex_init() ||");
+    TEST_ASSERT_NOT_NULL(deinit);
+    assert_ordered(deinit,
+                   "if (m1_esp32_background_owner_active() || !esp32_init_done)",
+                   "if (!esp32_m1link_spi_mutex_init() ||");
+    assert_ordered(deinit,
+                   "if (!esp32_m1link_spi_mutex_init() ||",
+                   "if (m1_esp32_background_owner_active())");
+
+    free(app_content);
+    free(hal_content);
+}
+
 /* ----- esp_app_main.c: ISR-safe queue teardown ---------------------------- */
 
 void test_esp32_main_deinit_nulls_queue_before_delete(void)
@@ -355,6 +382,7 @@ int main(void)
     RUN_TEST(test_m1_esp32_deinit_calls_esp32_main_deinit);
     RUN_TEST(test_m1_esp32_deinit_calls_main_deinit_after_uart_deinit);
     RUN_TEST(test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown);
+    RUN_TEST(test_m1link_transaction_uses_independent_lifecycle_mutex);
     RUN_TEST(test_esp32_main_deinit_nulls_queue_before_delete);
     RUN_TEST(test_m1_esp32_deinit_disables_exti_before_task_deinit);
     RUN_TEST(test_esp32_uart_rx_buffer_reused_across_cycles);
