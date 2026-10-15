@@ -37,6 +37,24 @@ typedef enum {
     ESP32_IDLE_ACTION_POWER_OFF,  /* cut ESP32-C6 power (drop EN pin low) */
 } esp32_idle_action_t;
 
+typedef enum {
+    ESP32_BACKGROUND_OWNER_BLE_DIRECT = 1u << 0,
+    ESP32_BACKGROUND_OWNER_WIFI_STA   = 1u << 1,
+    ESP32_BACKGROUND_OWNER_HOTSPOT   = 1u << 2,
+} esp32_background_owner_t;
+
+static inline uint8_t esp32_background_owner_update(
+    uint8_t owners, esp32_background_owner_t owner, bool active)
+{
+    return active ? (uint8_t)(owners | owner)
+                  : (uint8_t)(owners & (uint8_t)~owner);
+}
+
+static inline bool esp32_background_owner_active(uint8_t owners)
+{
+    return owners != 0u;
+}
+
 /* Idle-timer context.  Zero-initialise then call esp32_idle_ctx_init(). */
 typedef struct {
     uint32_t timeout_ms;    /* idle window before power-off              */

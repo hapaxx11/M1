@@ -22,6 +22,7 @@
 #include "FreeRTOS.h"
 #include "m1_esp32_caps.h"
 #include "m1_esp32_cmd.h"
+#include "m1_esp32_rpc.h"
 #include "m1_compile_cfg.h"
 #include "m1_display.h"
 #include "m1_lcd.h"
@@ -247,7 +248,7 @@ static void caps_apply_footprint_estimates(uint64_t bitmap)
 
 /*************** P U B L I C   A P I ******************************************/
 
-void m1_esp32_caps_init(void)
+static void m1_esp32_caps_init_locked(void)
 {
     m1_resp_t resp;
     int       ret;
@@ -629,6 +630,15 @@ caps_fallback:
     s_diag.outcome = (uint8_t)M1_ESP32_PROBE_UNKNOWN;
     s_diag.bitmap  = 0u;
     s_queried = true;
+}
+
+void m1_esp32_caps_init(void)
+{
+    if (!m1_esp32_rpc_transaction_lock())
+        return;
+
+    m1_esp32_caps_init_locked();
+    m1_esp32_rpc_transaction_unlock();
 }
 
 void m1_esp32_caps_reset(void)

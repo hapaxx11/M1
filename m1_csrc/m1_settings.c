@@ -34,6 +34,13 @@
 #include "m1_virtual_kb.h"
 #include "m1_clock_util.h"
 #include "subghz_protocol_ignore.h"
+#ifdef M1_APP_RPC_ENABLE
+#include "m1_rpc.h"
+#endif
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+#include "m1_wifi.h"
+#include "m1_wifi_cred.h"
+#endif
 #if M1_HAS_RGB_BACKLIGHT
 #include "m1_rgb_backlight.h"
 #endif
@@ -42,7 +49,7 @@
 
 #define SETTINGS_TAG              "SETT"
 #define SETTINGS_FILE_PATH        "0:/System/settings.cfg"
-#define SETTINGS_FILE_MAX_SIZE    512
+#define SETTINGS_FILE_MAX_SIZE    768
 #define RGB_BACKLIGHT_COLOR_KEY   "rgb_backlight_color="
 
 /* LCD & Notifications menu items */
@@ -76,6 +83,7 @@ static const char *s_brightness_text[] = { "Off", "Low", "Med", "High", "Max" };
 static const char *s_orient_text[] = { "Normal", "Southpaw", "Remote" };
 static const char *s_sleep_text[] = { "30s", "1 min", "5 min", "10 min", "15 min", "Never" };
 static const char *s_text_size_text[] = { "Small", "Medium", "Large" };
+static bool s_bluetooth_direct_enabled;
 
 /********************* F U N C T I O N   P R O T O T Y P E S ******************/
 
@@ -141,6 +149,16 @@ void menu_settings_exit(void)
 {
 	;
 } // void menu_settings_exit(void)
+
+bool settings_bluetooth_direct_enabled(void)
+{
+    return s_bluetooth_direct_enabled;
+}
+
+void settings_set_bluetooth_direct_enabled(bool enabled)
+{
+    s_bluetooth_direct_enabled = enabled;
+}
 
 
 /*============================================================================*/
@@ -659,6 +677,16 @@ void settings_save_to_sd(void)
     }
 
     SETTINGS_WRITE("clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
+    SETTINGS_WRITE("bluetooth_direct=%u\n",
+                   s_bluetooth_direct_enabled ? 1u : 0u);
+
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    {
+        wifi_boot_config_t wifi_config = wifi_boot_config_get();
+        SETTINGS_WRITE("wifi_auto_connect=%u\n", wifi_config.auto_connect ? 1u : 0u);
+        SETTINGS_WRITE("wifi_primary_idx=%u\n", (unsigned)wifi_config.primary_index);
+    }
+#endif
 
 #if M1_HAS_RGB_BACKLIGHT
     {
@@ -706,6 +734,15 @@ void settings_load_from_sd(void)
     char buf[SETTINGS_FILE_MAX_SIZE];
     char *p;
     int val;
+    s_bluetooth_direct_enabled = false;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    bool wifi_auto_connect = false;
+    long wifi_primary_index = WIFI_BOOT_PRIMARY_NONE;
+    wifi_boot_config_t wifi_config;
+
+    wifi_boot_config_reset(&wifi_config);
+    wifi_boot_config_set(wifi_config);
+#endif
 
     fres = f_open(&fp, SETTINGS_FILE_PATH, FA_READ);
     if (fres != FR_OK)
@@ -815,6 +852,15 @@ void settings_load_from_sd(void)
         val = (int)(*(p + 12) - '0');
         if (val == 0 || val == 1)
             m1_ir_ext_on = (uint8_t)val;
+    }
+
+    /* Parse "bluetooth_direct=X" */
+    p = strstr(buf, "bluetooth_direct=");
+    if (p != NULL)
+    {
+        val = (int)(*(p + 17) - '0');
+        if (val == 0 || val == 1)
+            s_bluetooth_direct_enabled = (val != 0);
     }
 
     /* Parse "ism_region=X" */
@@ -971,6 +1017,35 @@ void settings_load_from_sd(void)
         }
     }
 
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    p = strstr(buf, "wifi_auto_connect=");
+    if (p != NULL)
+    {
+        char *end;
+        long parsed = strtol(p + 18, &end, 10);
+        if (end != p + 18 && (parsed == 0 || parsed == 1) &&
+            (*end == '\n' || *end == '\r' || *end == '\0' || *end == ' '))
+            wifi_auto_connect = parsed == 1;
+    }
+
+    p = strstr(buf, "wifi_primary_idx=");
+    if (p != NULL)
+    {
+        char *end;
+        long parsed = strtol(p + 17, &end, 10);
+        if (end != p + 17 && parsed >= 0 && parsed <= WIFI_BOOT_PRIMARY_NONE &&
+            (*end == '\n' || *end == '\r' || *end == '\0' || *end == ' '))
+            wifi_primary_index = parsed;
+    }
+
+    if (wifi_primary_index < WIFI_CRED_MAX_STORED)
+        (void)wifi_boot_config_set_primary(&wifi_config,
+                                            (uint8_t)wifi_primary_index,
+                                            WIFI_CRED_MAX_STORED);
+    wifi_boot_config_set_enabled(&wifi_config, wifi_auto_connect);
+    wifi_boot_config_set(wifi_config);
+#endif
+
 #if M1_HAS_RGB_BACKLIGHT
     p = strstr(buf, "rgb_backlight_installed=");
     if (p != NULL)
@@ -1093,6 +1168,9 @@ apply:
     /* Power the external IR module rails if the feature is enabled, so the
      * HX-53 (+5_EXT) and HX-M121 (EXT3V3) are live from boot. */
     infrared_ext_power(m1_ir_ext_on);
+#ifdef M1_APP_RPC_ENABLE
+    m1_rpc_bluetooth_direct_setting_changed();
+#endif
 }
 
 

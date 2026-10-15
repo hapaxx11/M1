@@ -355,7 +355,7 @@ static uint16_t ble_do_scan_cancelable(const volatile bool *cancel_requested)
          * Heap-allocated at M1_ESP32_RPC_RESP_PAYLOAD_MAX: the brain firmware
          * returns the whole device list in one response (see
          * m1_esp32_rpc_ble_scan_results() in m1_esp32_rpc_features.c), so the
-         * small control-command M1_ESP32_RPC_PAYLOAD_MAX silently truncated
+         * small control-command M1_ESP32_RPC_CONTROL_PAYLOAD_MAX silently truncated
          * multi-device scans. */
         uint8_t *raw = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
         uint16_t rlen;

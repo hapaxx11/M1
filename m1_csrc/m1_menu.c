@@ -287,6 +287,11 @@ void menu_main_handler_task(void *param)
 	settings_load_from_sd();  /* Load southpaw and other user settings (needs stack > sys_init) */
 
 	vTaskDelay(POWER_UP_SYS_CONFIG_WAIT_TIME); // Give some time to startup_config_handler() during power-up
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+	/* Run the optional primary-network attempt here, before menu operations can
+	 * use the ESP32, so the existing synchronous join path stays serialized. */
+	wifi_auto_connect_primary();
+#endif
 	while(1)
 	{
 		menu_update_stat = MENU_UPDATE_NONE;

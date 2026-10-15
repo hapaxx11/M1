@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
+#include "m1_compile_cfg.h"
 #include "stm32h5xx_hal.h"
 #include "main.h"
 #include "m1_settings_scene.h"
@@ -19,6 +21,9 @@
 #include "m1_system_dashboard.h"
 #include "m1_lib.h"
 #include "m1_tasks.h"
+#ifdef M1_APP_RPC_ENABLE
+#include "m1_rpc.h"
+#endif
 
 /*==========================================================================*/
 /* Top-level delegates                                                      */
@@ -40,14 +45,29 @@ static void dashboard_on_enter(M1SceneApp *app)
     m1_scene_pop(app);
 }
 
+static void bluetooth_direct_on_enter(M1SceneApp *app)
+{
+    settings_set_bluetooth_direct_enabled(
+        !settings_bluetooth_direct_enabled());
+    settings_save_to_sd();
+#ifdef M1_APP_RPC_ENABLE
+    m1_rpc_bluetooth_direct_setting_changed();
+#endif
+    app->running = true;
+    m1_scene_pop(app);
+}
+
 const M1SceneHandlers settings_scene_lcd_handlers       = { .on_enter = lcd_on_enter       };
 const M1SceneHandlers settings_scene_dashboard_handlers = { .on_enter = dashboard_on_enter };
+const M1SceneHandlers settings_scene_bluetooth_direct_handlers = {
+    .on_enter = bluetooth_direct_on_enter
+};
 
 /*==========================================================================*/
 /* Top-level Settings menu                                                  */
 /*==========================================================================*/
 
-#define MENU_ITEM_COUNT  6
+#define MENU_ITEM_COUNT  7
 
 static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Dashboard",
@@ -56,6 +76,7 @@ static const char *const menu_labels[MENU_ITEM_COUNT] = {
     "Power",
     "Firmware update",
     "ESP32 update",
+    "Bluetooth Direct: Off",
 };
 
 static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
@@ -65,6 +86,7 @@ static const uint8_t menu_targets[MENU_ITEM_COUNT] = {
     SettingsScenePowerMenu,
     SettingsSceneFwUpdateMenu,
     SettingsSceneEsp32Menu,
+    SettingsSceneBluetoothDirect,
 };
 
 static subghz_submenu_model_t s_menu_model;
@@ -88,7 +110,12 @@ static void menu_on_exit(M1SceneApp *app) { (void)app; }
 static void menu_draw(M1SceneApp *app)
 {
     (void)app;
-    m1_submenu_draw(&s_menu_model, "Settings", menu_labels);
+    const char *labels[MENU_ITEM_COUNT];
+    memcpy(labels, menu_labels, sizeof(labels));
+    labels[6] = settings_bluetooth_direct_enabled()
+                    ? "Bluetooth Direct: On"
+                    : "Bluetooth Direct: Off";
+    m1_submenu_draw(&s_menu_model, "Settings", labels);
 }
 
 const M1SceneHandlers settings_scene_menu_handlers = {

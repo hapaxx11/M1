@@ -11,6 +11,8 @@
 #ifndef M1_I2C_H_
 #define M1_I2C_H_
 
+#include "m1_i2c_scan.h"
+
 /**
 The MCU PB6/PB7 are configured as I2C1_SCL and I2C1_SDA respectively.
 The table below lists the peripheral addresses:
@@ -67,5 +69,10 @@ typedef struct
 void m1_i2c_hal_init(I2C_HandleTypeDef *phi2c);
 HAL_StatusTypeDef m1_i2c_hal_trans_req(S_M1_I2C_Trans_Inf *trans_inf);
 uint32_t m1_i2c_hal_get_error(void);
+bool m1_i2c_scan_addresses(uint8_t first,
+                           uint8_t last,
+                           uint8_t *addresses,
+                           size_t capacity,
+                           uint8_t *count);
 
 #endif /* M1_I2C_H_ */

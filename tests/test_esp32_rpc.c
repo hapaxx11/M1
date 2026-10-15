@@ -73,22 +73,28 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * tests (issue #719) -- on-target this is populated by
  * spi_m1link_send_recv_bin() from HAL_GetTick(). */
 static uint32_t g_last_elapsed_ms;
+static bool g_transaction_lock_available_during_transport;
 uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return g_last_elapsed_ms; }
 
 /* ------------------------------------------------------------------ */
 /* Fake transport: replays a canned response frame.                   */
 /* ------------------------------------------------------------------ */
 
-static uint8_t g_canned[256];
+static uint8_t g_canned[M1_ESP32_RPC_RESP_FRAME_MAX];
 static int     g_canned_len;
 static uint8_t g_ret;             /* value the fake returns (0 == SUCCESS) */
-static uint8_t g_last_tx[256];    /* copy of the last request frame sent */
+static uint8_t g_last_tx[M1_ESP32_RPC_FRAME_MAX]; /* last request frame sent */
 static int     g_last_tx_len;
 
 static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
                               uint8_t *rx_buf, int rx_buf_size,
                               int *out_len, int timeout_sec)
 {
+    g_transaction_lock_available_during_transport =
+        m1_esp32_rpc_transaction_try_lock();
+    if (g_transaction_lock_available_during_transport)
+        m1_esp32_rpc_transaction_unlock();
+
     (void)timeout_sec;
     g_last_tx_len = (tx_len < (int)sizeof(g_last_tx)) ? tx_len
                                                       : (int)sizeof(g_last_tx);
@@ -135,6 +141,7 @@ void setUp(void)
     g_ret = 0;
     g_last_tx_len = 0;
     g_last_elapsed_ms = 0u;
+    g_transaction_lock_available_during_transport = false;
     memset(g_canned, 0, sizeof(g_canned));
     m1_esp32_rpc_set_transport(fake_transport);
 }
@@ -163,6 +170,30 @@ void test_call_resp_ok_copies_payload(void)
     TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, st);
     TEST_ASSERT_EQUAL_UINT16(sizeof(body), rlen);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(body, resp, sizeof(body));
+}
+
+void test_call_serializes_the_entire_exchange(void)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_NOW_ANNOUNCE, NULL, 0u);
+
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_call(M1_ESP32_RPC_NOW_ANNOUNCE,
+                                        NULL, 0u, NULL, 0u, NULL, 1));
+    TEST_ASSERT_FALSE(g_transaction_lock_available_during_transport);
+    TEST_ASSERT_TRUE(m1_esp32_rpc_transaction_try_lock());
+    m1_esp32_rpc_transaction_unlock();
+}
+
+void test_call_does_not_transmit_after_hal_deinit(void)
+{
+    g_hal_ready = false;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_NOT_INIT,
+                      m1_esp32_rpc_call(M1_ESP32_RPC_NOW_ANNOUNCE,
+                                        NULL, 0u, NULL, 0u, NULL, 1));
+    TEST_ASSERT_EQUAL_INT(0, g_last_tx_len);
+    TEST_ASSERT_TRUE(m1_esp32_rpc_transaction_try_lock());
+    m1_esp32_rpc_transaction_unlock();
 }
 
 void test_call_builds_valid_request_frame(void)
@@ -239,6 +270,27 @@ void test_call_oversize_request_rejected(void)
         m1_esp32_rpc_call(M1_ESP32_RPC_OFF_RAW_TX, big, sizeof(big),
                           NULL, 0, NULL, 1);
     TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_ERR_INVALID, st);
+}
+
+void test_call_accepts_fragmentable_request(void)
+{
+    static uint8_t req[1024];
+    memset(req, 0xA7, sizeof(req));
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_QMON_RESP, NULL, 0u);
+
+    m1_esp32_rpc_status_t st =
+        m1_esp32_rpc_call(M1_ESP32_RPC_QMON_RESP, req, sizeof(req),
+                          NULL, 0u, NULL, 1);
+
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, st);
+    TEST_ASSERT_EQUAL_INT(M1_ESP32_RPC_HDR_SIZE + (int)sizeof(req) +
+                          M1_ESP32_RPC_CRC_SIZE, g_last_tx_len);
+    TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_REQ, g_last_tx[3]);
+    TEST_ASSERT_EQUAL_UINT16(sizeof(req),
+        (uint16_t)g_last_tx[6] | ((uint16_t)g_last_tx[7] << 8u));
+    TEST_ASSERT_EQUAL_MEMORY(req, g_last_tx + M1_ESP32_RPC_HDR_SIZE,
+                             sizeof(req));
 }
 
 void test_call_truncates_payload_to_capacity(void)
@@ -575,11 +627,14 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_call_resp_ok_copies_payload);
+    RUN_TEST(test_call_serializes_the_entire_exchange);
+    RUN_TEST(test_call_does_not_transmit_after_hal_deinit);
     RUN_TEST(test_call_builds_valid_request_frame);
     RUN_TEST(test_call_nak_returns_status_code);
     RUN_TEST(test_call_transport_failure);
     RUN_TEST(test_call_msgid_mismatch_is_bad_frame);
     RUN_TEST(test_call_oversize_request_rejected);
+    RUN_TEST(test_call_accepts_fragmentable_request);
     RUN_TEST(test_call_truncates_payload_to_capacity);
     RUN_TEST(test_diag_no_call_yet_before_any_call);
     RUN_TEST(test_diag_records_ok_call_with_payload_len);

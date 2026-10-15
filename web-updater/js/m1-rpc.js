@@ -430,6 +430,9 @@ export function parseDeviceInfo(payload) {
     if (payload.length >= 58) {
         info.hapaxRevision = payload[57];
     }
+    if (payload.length >= 67) {
+        info.mobileSessionActive = payload[66] !== 0;
+    }
 
     return info;
 }

@@ -28,6 +28,7 @@ static const M1SceneHandlers *const scene_registry[SettingsSceneCount] = {
     [SettingsSceneMenu]             = &settings_scene_menu_handlers,
     [SettingsSceneLCD]              = &settings_scene_lcd_handlers,
     [SettingsSceneDashboard]        = &settings_scene_dashboard_handlers,
+    [SettingsSceneBluetoothDirect]  = &settings_scene_bluetooth_direct_handlers,
 
     /* Storage sub-menu + delegates */
     [SettingsSceneStorageMenu]      = &settings_scene_storage_menu_handlers,
