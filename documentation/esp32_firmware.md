@@ -248,9 +248,9 @@ library.
 1. Connect to WiFi via **WiFi → Scan + Connect**.
 2. Navigate to **Settings → ESP32 update → Download**.
 3. Select a firmware source (`C3 ESP32 AT`, `Deauth ESP32 AT` — both are
-**CD3-AT** AT-based alternatives; there is currently no default download
-source configured for the recommended native **CD3** `m1-esp32-brain`
-firmware, which must be downloaded from its releases).
+   **CD3-AT** AT-based alternatives; there is currently no default download
+   source configured for the recommended native **CD3** `m1-esp32-brain`
+   firmware, which must be downloaded from its releases).
 4. Select a release version.
 5. The firmware `.bin` and `.md5` are downloaded to `0:/ESP32_FW/` on SD card.
 6. Return to **ESP32 update → Image File** to select and flash.
