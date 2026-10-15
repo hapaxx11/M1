@@ -267,29 +267,36 @@ void test_m1_esp32_deinit_stops_task_before_spi_hardware_teardown(void)
 
 void test_m1link_transaction_uses_independent_lifecycle_mutex(void)
 {
-    char *app_content = read_file(
-        "Esp_spi_at/examples/at_spi_master/spi/stm32/main/esp_app_main.c");
+    char *rpc_content = read_file("m1_csrc/m1_esp32_rpc.c");
     char *hal_content = read_file("m1_csrc/m1_esp32_hal.c");
+    const char *rpc_call = strstr(
+        rpc_content, "m1_esp32_rpc_status_t m1_esp32_rpc_call(");
     const char *deinit = strstr(hal_content, "void m1_esp32_deinit(void)\n{");
+    const char *rpc_lock = rpc_call
+                               ? strstr(rpc_call,
+                                        "if (!m1_esp32_rpc_transaction_lock())")
+                               : NULL;
+    const char *rpc_exchange = rpc_call
+                                   ? strstr(rpc_call,
+                                            "m1_esp32_rpc_call_unlocked(")
+                                   : NULL;
+    const char *deinit_lock =
+        deinit ? strstr(deinit, "if (!m1_esp32_rpc_transaction_lock())") : NULL;
+    const char *spi_deinit =
+        deinit ? strstr(deinit, "HAL_SPI_DeInit(&hspi_esp)") : NULL;
+    int has_transaction_mutex =
+        strstr(rpc_content, "static SemaphoreHandle_t s_transaction_mutex;") != NULL;
+    int serializes_rpc_exchange =
+        rpc_lock != NULL && rpc_exchange != NULL && rpc_lock < rpc_exchange;
+    int serializes_hal_teardown =
+        deinit_lock != NULL && spi_deinit != NULL && deinit_lock < spi_deinit;
 
-    assert_contains(app_content, "static SemaphoreHandle_t s_m1link_spi_mutex;");
-    assert_contains(app_content,
-                    "bool esp32_m1link_spi_mutex_init(void)");
-    assert_contains(app_content, "esp32_m1link_spi_lock");
-    assert_ordered(app_content, "esp32_m1link_spi_lock",
-                   "HAL_SPI_Abort(&hspi_esp);");
-    assert_contains(hal_content,
-                    "if (!esp32_m1link_spi_mutex_init() ||");
-    TEST_ASSERT_NOT_NULL(deinit);
-    assert_ordered(deinit,
-                   "if (m1_esp32_background_owner_active() || !esp32_init_done)",
-                   "if (!esp32_m1link_spi_mutex_init() ||");
-    assert_ordered(deinit,
-                   "if (!esp32_m1link_spi_mutex_init() ||",
-                   "if (m1_esp32_background_owner_active())");
-
-    free(app_content);
+    free(rpc_content);
     free(hal_content);
+
+    TEST_ASSERT_TRUE(has_transaction_mutex);
+    TEST_ASSERT_TRUE(serializes_rpc_exchange);
+    TEST_ASSERT_TRUE(serializes_hal_teardown);
 }
 
 /* ----- esp_app_main.c: ISR-safe queue teardown ---------------------------- */

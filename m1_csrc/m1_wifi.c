@@ -83,11 +83,6 @@ static uint16_t ap_view_idx = 0;
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 static bool s_wifi_stub_connected = false;
 static char s_wifi_stub_ssid[33] = {0};
-static void wifi_connection_state_set(bool connected)
-{
-	s_wifi_stub_connected = connected;
-	m1_esp32_background_owner_set(ESP32_BACKGROUND_OWNER_WIFI_STA, connected);
-}
 static wifi_boot_config_t s_wifi_boot_config = {
 	.primary_index = WIFI_BOOT_PRIMARY_NONE,
 	.auto_connect = false,
@@ -4893,7 +4888,7 @@ void wifi_general_hotspot(void)
 			wifi_show_message("WiFi Hotspot", "Start failed", "Check ESP32 firmware");
 			return;
 		}
-		m1_esp32_background_owner_set(ESP32_BACKGROUND_OWNER_HOTSPOT, true);
+		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
 		if (m1_esp32_rpc_softap_status(&clients, &internet_shared) == M1_ESP32_RPC_OK)
 		{
 			snprintf(status_line, sizeof(status_line), "%u clients, %s", clients,
@@ -4922,7 +4917,7 @@ void wifi_general_hotspot(void)
 			wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
 			return;
 		}
-		m1_esp32_background_owner_set(ESP32_BACKGROUND_OWNER_HOTSPOT, true);
+		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
 		snprintf(status_line, sizeof(status_line), "%s", "NAT unavailable");
 	}
 
@@ -4951,7 +4946,7 @@ void wifi_general_hotspot(void)
 			if (strstr(resp_buf, "OK") != NULL)
 			{
 				m1_esp32_background_owner_set(
-					ESP32_BACKGROUND_OWNER_HOTSPOT, false);
+					M1_ESP32_BG_OWNER_HOTSPOT, false);
 				wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
 			}
 			else

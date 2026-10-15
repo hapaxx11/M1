@@ -45,8 +45,6 @@ uint8_t m1_esp32_get_init_status(void);
 void m1_esp32_background_owner_set(m1_esp32_bg_owner_t owner, bool active);
 bool m1_esp32_background_owner_active(void);
 void m1_esp32_idle_poll(void);
-void m1_esp32_background_owner_set(esp32_background_owner_t owner, bool active);
-bool m1_esp32_background_owner_active(void);
 void esp32_UART_init(void);
 void esp32_UART_deinit(void);
 void esp32_UART_change_baudrate(uint32_t baudrate);

@@ -133,11 +133,6 @@ static void *s_transport_tx_context[M1_RPC_TRANSPORT_COUNT];
 static m1_rpc_transport_t s_parser_reply_transport = M1_RPC_TRANSPORT_USB;
 static m1_rpc_transport_t s_rpc_task_reply_transport = M1_RPC_TRANSPORT_USB;
 static SemaphoreHandle_t s_route_mutex;
-typedef struct {
-    TaskHandle_t task;
-    uint8_t transport;
-} S_RPC_ReplyRoute;
-static S_RPC_ReplyRoute s_reply_routes[2];
 
 /* Screen streaming */
 S_RPC_ScreenStream rpc_screen_stream;
@@ -146,9 +141,6 @@ static m1_rpc_transport_t s_screen_transport = M1_RPC_TRANSPORT_USB;
 static volatile bool s_mobile_session_active;
 static volatile bool s_ble_direct_sync_pending = true;
 static TickType_t s_ble_direct_last_sync_tick;
-static TickType_t s_brain_status_retry_tick;
-static bool s_brain_status_retry_waiting;
-static bool s_brain_status_poll_failed;
 static bool s_brain_rpc_status_unsupported;
 static bool s_brain_qmon_poll_unsupported;
 static bool s_brain_rpc_poll_scheduled;
@@ -246,9 +238,6 @@ static void rpc_dispatch_frame(const S_RPC_Frame *frame);
 
 /* USB CDC TX helper */
 static bool rpc_usb_transmit(void *context, const uint8_t *data, uint16_t len);
-static bool rpc_reply_route_set_current(m1_rpc_transport_t transport);
-static void rpc_reply_route_clear_current(void);
-static m1_rpc_transport_t rpc_reply_route_current(void);
 
 /* Command handlers */
 static void rpc_handle_ping(const S_RPC_Frame *f);
@@ -427,86 +416,10 @@ void m1_rpc_bluetooth_direct_setting_changed(void)
     m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_BLE_DIRECT, enabled);
     s_ble_direct_sync_pending = true;
     s_ble_direct_last_sync_tick = 0u;
-    s_brain_status_retry_tick = 0u;
-    s_brain_status_retry_waiting = false;
-    s_brain_status_poll_failed = false;
-    s_brain_rpc_status_unsupported = false;
-    s_brain_qmon_poll_unsupported = false;
-    if (!enabled && !m1_esp32_background_owner_active())
-        m1_esp32_deinit();
     if (s_rpc_task_hdl != NULL)
         xTaskNotifyGive(s_rpc_task_hdl);
     if (!enabled && !m1_esp32_background_owner_active())
         m1_esp32_deinit();
-}
-
-static bool rpc_reply_route_set_current(m1_rpc_transport_t transport)
-{
-    TaskHandle_t task = xTaskGetCurrentTaskHandle();
-    S_RPC_ReplyRoute *slot = NULL;
-
-    if (s_route_mutex == NULL ||
-        xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
-        return false;
-
-    for (size_t i = 0u; i < sizeof(s_reply_routes) / sizeof(s_reply_routes[0]); i++)
-    {
-        if (s_reply_routes[i].task == task)
-        {
-            slot = &s_reply_routes[i];
-            break;
-        }
-        if (slot == NULL && s_reply_routes[i].task == NULL)
-            slot = &s_reply_routes[i];
-    }
-
-    if (slot != NULL)
-    {
-        slot->task = task;
-        slot->transport = (uint8_t)transport;
-    }
-    xSemaphoreGive(s_route_mutex);
-    return slot != NULL;
-}
-
-static void rpc_reply_route_clear_current(void)
-{
-    TaskHandle_t task = xTaskGetCurrentTaskHandle();
-
-    if (s_route_mutex == NULL ||
-        xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
-        return;
-
-    for (size_t i = 0u; i < sizeof(s_reply_routes) / sizeof(s_reply_routes[0]); i++)
-    {
-        if (s_reply_routes[i].task == task)
-        {
-            s_reply_routes[i].task = NULL;
-            break;
-        }
-    }
-    xSemaphoreGive(s_route_mutex);
-}
-
-static m1_rpc_transport_t rpc_reply_route_current(void)
-{
-    TaskHandle_t task = xTaskGetCurrentTaskHandle();
-    m1_rpc_transport_t transport = M1_RPC_TRANSPORT_USB;
-
-    if (s_route_mutex == NULL ||
-        xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
-        return transport;
-
-    for (size_t i = 0u; i < sizeof(s_reply_routes) / sizeof(s_reply_routes[0]); i++)
-    {
-        if (s_reply_routes[i].task == task)
-        {
-            transport = (m1_rpc_transport_t)s_reply_routes[i].transport;
-            break;
-        }
-    }
-    xSemaphoreGive(s_route_mutex);
-    return transport;
 }
 
 static bool rpc_brain_transmit(void *context, const uint8_t *data,
@@ -536,7 +449,7 @@ bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
     void *context;
     bool sent;
 
-    if (!m1_rpc_transport_valid(transport))
+    if (len > RPC_MAX_PAYLOAD || !m1_rpc_transport_valid(transport))
         return false;
 
     if (m1_rpc_transport_payload_too_large(
@@ -1670,7 +1583,6 @@ static void rpc_handle_file_write_start(const S_RPC_Frame *f)
     s_file_write.bytes_written = 0;
     s_file_write.transport = f->transport;
     s_file_write.active = true;
-    s_file_write.transport = (uint8_t)f->transport;
 
     m1_rpc_send_ack(f->seq);
 }
@@ -2909,9 +2821,6 @@ static void rpc_brain_relay_poll(void)
     if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
     {
         m1_rpc_set_mobile_session_active(false);
-        s_brain_status_retry_tick = 0u;
-        s_brain_status_retry_waiting = false;
-        s_brain_status_poll_failed = false;
         s_brain_rpc_status_unsupported = false;
         s_brain_qmon_poll_unsupported = false;
         s_brain_rpc_poll_scheduled = false;
@@ -3085,6 +2994,7 @@ void m1_rpc_task(void *param)
                         s_deferred_frame.transport == M1_RPC_TRANSPORT_USB,
                     true,
                     s_deferred_epoch,
+                    s_file_write.active,
                     m1_rpc_transport_file_write_is_usb(
                         s_file_write.active, s_file_write.transport));
 
@@ -3229,7 +3139,6 @@ void m1_rpc_init(void)
     s_parser_transport_active = false;
     s_feed_transport = M1_RPC_TRANSPORT_USB;
     s_parser_transport = M1_RPC_TRANSPORT_USB;
-    memset(s_reply_routes, 0, sizeof(s_reply_routes));
 
     /* TX mutex */
     s_tx_mutex = xSemaphoreCreateMutex();
@@ -3253,11 +3162,8 @@ void m1_rpc_init(void)
 
     s_ble_direct_sync_pending = true;
     s_ble_direct_last_sync_tick = 0u;
-    s_brain_status_retry_tick = 0u;
-    s_brain_status_retry_waiting = false;
-    s_brain_status_poll_failed = false;
     m1_esp32_background_owner_set(
-        ESP32_BACKGROUND_OWNER_BLE_DIRECT,
+        M1_ESP32_BG_OWNER_BLE_DIRECT,
         settings_bluetooth_direct_enabled());
     s_brain_rpc_status_unsupported = false;
     s_brain_qmon_poll_unsupported = false;

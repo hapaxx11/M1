@@ -531,25 +531,6 @@ void m1_esp32_deinit(void)
 	m1_esp32_rpc_transaction_unlock();
 } // void m1_esp32_deinit(void)
 
-void m1_esp32_background_owner_set(esp32_background_owner_t owner, bool active)
-{
-	taskENTER_CRITICAL();
-	s_esp32_background_owners =
-		esp32_background_owner_update(s_esp32_background_owners, owner, active);
-	taskEXIT_CRITICAL();
-}
-
-bool m1_esp32_background_owner_active(void)
-{
-	bool active;
-	taskENTER_CRITICAL();
-	active = esp32_background_owner_active(s_esp32_background_owners);
-	taskEXIT_CRITICAL();
-	return active;
-}
-
-
-
 /******************************************************************************/
 /**
 * @brief Return the initialization status of the ESP32 module
@@ -601,19 +582,11 @@ void m1_esp32_idle_poll(void)
 	/* "powered" is read directly from the EN output so the flag can never
 	 * drift out of sync with other writers of the pin (m1_bt.c, fw update). */
 	bool powered = (HAL_GPIO_ReadPin(ESP32_EN_GPIO_Port, ESP32_EN_Pin) == GPIO_PIN_SET);
-	bool busy    = (esp32_init_done == TRUE) ||
-	               m1_esp32_background_owner_active();
+	bool busy    = (esp32_init_done == TRUE);
 
 	if (esp32_idle_poll(&esp32_idle_ctx, powered, busy, HAL_GetTick())
 	        == ESP32_IDLE_ACTION_POWER_OFF)
-	{
-		if (esp32_m1link_lifecycle_lock())
-		{
-			if (!esp32_init_done && !m1_esp32_background_owner_active())
-				esp32_disable();
-			esp32_m1link_lifecycle_unlock();
-		}
-	}
+		esp32_disable();
 } // void m1_esp32_idle_poll(void)
 
 
