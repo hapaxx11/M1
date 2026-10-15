@@ -23,7 +23,7 @@
 
 ### Phase 4 — Request-scoped transport routing and mobile-session state
 - **Description**: Replace USB-only response assumptions with an ingress-aware RPC transport interface, preserve per-request reply routing, and report accurate active-session state without changing existing USB clients.
-- **Status**: 🔄 In progress
+- **Status**: 🔲 Not started
 - **Commit**: _(pending)_
 
 ### Phase 5 — BLE Direct (NUS), exclusive client ownership, and screen mirroring
