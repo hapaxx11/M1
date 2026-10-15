@@ -8,12 +8,12 @@
 
 ### Phase 1 — Payload and reset regressions
 - **Description**: Correct SSID payload test expectations and cover USB reset cleanup for mobile ingress.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Fix USB epoch parser cleanup`
 
 ### Phase 2 — RPC response and upload isolation
 - **Description**: Return explicit oversized-reply errors, track upload transport ownership, and avoid holding reply routing across deferred handlers.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 3 — ESP32 lifecycle and SPI serialization

@@ -61,6 +61,16 @@ void test_epoch_advanced_multiple_resets_before_consumption(void)
     TEST_ASSERT_FALSE(m1_rpc_usb_epoch_advanced(&last_seen, 5));
 }
 
+void test_usb_reset_cleans_partial_usb_frame_on_mobile_input(void)
+{
+    TEST_ASSERT_TRUE(m1_rpc_usb_epoch_should_reset_parser(true, true, true));
+}
+
+void test_usb_reset_preserves_active_mobile_parser(void)
+{
+    TEST_ASSERT_FALSE(m1_rpc_usb_epoch_should_reset_parser(true, true, false));
+}
+
 /* ── m1_rpc_usb_epoch_check() ── */
 
 void test_check_no_deferred_no_file_write_is_noop(void)
@@ -114,6 +124,8 @@ int main(void)
     RUN_TEST(test_epoch_advanced_detects_bump_once);
     RUN_TEST(test_epoch_advanced_independent_consumers);
     RUN_TEST(test_epoch_advanced_multiple_resets_before_consumption);
+    RUN_TEST(test_usb_reset_cleans_partial_usb_frame_on_mobile_input);
+    RUN_TEST(test_usb_reset_preserves_active_mobile_parser);
     RUN_TEST(test_check_no_deferred_no_file_write_is_noop);
     RUN_TEST(test_check_stale_deferred_command_is_discarded);
     RUN_TEST(test_check_current_epoch_deferred_command_is_kept);

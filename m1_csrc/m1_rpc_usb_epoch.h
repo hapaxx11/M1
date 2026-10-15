@@ -32,6 +32,14 @@ static inline bool m1_rpc_usb_epoch_advanced(uint32_t *last_seen_epoch,
     return true;
 }
 
+static inline bool m1_rpc_usb_epoch_should_reset_parser(
+    bool epoch_advanced, bool parser_transport_active,
+    bool parser_transport_is_usb)
+{
+    return epoch_advanced &&
+           (!parser_transport_active || parser_transport_is_usb);
+}
+
 /* Cleanup action decided for rpc_task's deferred-command/file-write state at
  * a consumed epoch boundary. */
 typedef struct

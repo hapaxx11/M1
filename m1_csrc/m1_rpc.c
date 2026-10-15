@@ -579,10 +579,11 @@ bool m1_rpc_feed_from_transport(m1_rpc_transport_t transport,
      * first bytes from a newly enumerated host complete a frame that
      * belonged to the old host — reset the parser state machine at the
      * epoch boundary before parsing any new bytes. */
-    if (transport == M1_RPC_TRANSPORT_USB &&
-        m1_rpc_usb_epoch_advanced(&s_usb_parser_epoch, s_usb_session_epoch) &&
-        (!s_parser_transport_active ||
-         s_parser_transport == M1_RPC_TRANSPORT_USB))
+    bool usb_epoch_advanced =
+        m1_rpc_usb_epoch_advanced(&s_usb_parser_epoch, s_usb_session_epoch);
+    if (m1_rpc_usb_epoch_should_reset_parser(
+            usb_epoch_advanced, s_parser_transport_active,
+            s_parser_transport == M1_RPC_TRANSPORT_USB))
     {
         s_parse_state = RPC_STATE_IDLE;
         s_header_idx   = 0;
