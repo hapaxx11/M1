@@ -229,6 +229,13 @@ m1_esp32_rpc_status_t m1_esp32_rpc_softap_start(const char *ssid,
 /** SOFTAP_STOP: bring the SoftAP hotspot down. */
 m1_esp32_rpc_status_t m1_esp32_rpc_softap_stop(void);
 
+/**
+ * SOFTAP_STA_LIST: return the connected-client count and whether NAT
+ * passthrough to the upstream station is active.
+ */
+m1_esp32_rpc_status_t m1_esp32_rpc_softap_status(uint8_t *out_clients,
+                                                 bool *out_internet_shared);
+
 /* =========================================================================
  * Offensive WiFi
  * =========================================================================*/

@@ -497,7 +497,7 @@ Set the bit for each capability your firmware supports; leave all other bits cle
 | 22 | `M1_ESP32_CAP_802154_TX` | IEEE 802.15.4 raw TX / flood / inject — `M1_RPC_ZB_FLOOD_START` / `M1_RPC_ZB_INJECT`. **Canonical CD3 wire bit** (`M1_CAP_802154_TX`) |
 | 23 | `M1_ESP32_CAP_SOFTAP` | WiFi SoftAP hotspot — `M1_RPC_SOFTAP_START/STOP`. **Canonical CD3 wire bit** (`M1_CAP_SOFTAP`) |
 | 24 | `M1_ESP32_CAP_ESPNOW` | ESP-NOW peer link — `M1_RPC_NOW_*` (host-only bit; **not** in the canonical CD3 header, not self-reported by any firmware) |
-| 25 | `M1_ESP32_CAP_WIFI_HOTSPOT` | AT `AT+CWMODE=2` SoftAP path (host-only bit; not self-reported by any firmware) |
+| 25 | `M1_ESP32_CAP_WIFI_HOTSPOT` | Legacy AT `AT+CWMODE=2` SoftAP path (host-only; not used for the CD3 native SoftAP gate) |
 | 26-63 | — | Reserved for future use |
 
 > **Bits 21-23 are owned by the canonical CD3 wire header**

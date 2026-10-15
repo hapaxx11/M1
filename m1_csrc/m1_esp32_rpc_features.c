@@ -285,7 +285,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_softap_start(const char *ssid,
 
     size_t slen = strlen(ssid);
     size_t plen = password ? strlen(password) : 0u;
-    if (slen == 0u || slen > 32u || plen > 63u)
+    if (slen == 0u || slen > 32u || plen > 63u ||
+        (plen != 0u && plen < 8u))
         return M1_ESP32_RPC_ERR_INVALID;
 
     /* Wire: [channel:1][ssid\0][pass\0] */
@@ -304,6 +305,28 @@ m1_esp32_rpc_status_t m1_esp32_rpc_softap_start(const char *ssid,
 m1_esp32_rpc_status_t m1_esp32_rpc_softap_stop(void)
 {
     return rpc_trigger(M1_ESP32_RPC_SOFTAP_STOP);
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_softap_status(uint8_t *out_clients,
+                                                 bool *out_internet_shared)
+{
+    if (!out_clients || !out_internet_shared)
+        return M1_ESP32_RPC_ERR_INVALID;
+
+    uint8_t resp[2];
+    uint16_t resp_len = 0u;
+    m1_esp32_rpc_status_t status =
+        m1_esp32_rpc_call(M1_ESP32_RPC_SOFTAP_STA_LIST, NULL, 0u,
+                          resp, sizeof(resp), &resp_len,
+                          M1_ESP32_RPC_FEATURE_TIMEOUT_S);
+    if (status != M1_ESP32_RPC_OK)
+        return status;
+    if (resp_len != sizeof(resp))
+        return M1_ESP32_RPC_ERR_BAD_FRAME;
+
+    *out_clients = resp[0];
+    *out_internet_shared = (resp[1] != 0u);
+    return M1_ESP32_RPC_OK;
 }
 
 /*==========================================================================*/

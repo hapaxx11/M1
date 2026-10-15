@@ -33,8 +33,8 @@
 
 ### Phase 6 — Editable SoftAP configuration and NAT passthrough
 - **Description**: Complete persisted/editable SoftAP settings, add upstream station plus AP routing/NAT control, and expose lifecycle/status through the RPC feature layer. Requires ESP32 firmware support for concurrent AP/STA and NAT; do not claim parity until on-device validation.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Status**: 🟡 Implemented; end-to-end hardware validation pending
+- **Commit**: `Add editable SoftAP and NAT status`
 
 ### Phase 7 — End-to-end verification and checklist cleanup
 - **Description**: Run host tests and available firmware builds with RAM review; validate network, BLE, scanner, session-routing, and reconnect behavior on hardware; document remaining ESP32 firmware dependencies and remove this temporary checklist before any PR.

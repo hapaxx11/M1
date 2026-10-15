@@ -47,6 +47,7 @@
 #include "wifi_at_scan.h"
 #include "wifi_scan_fail_msg.h"
 #include "wifi_ntp_parse.h"
+#include "wifi_hotspot_config.h"
 #include "m1_esp32_caps.h"
 #include "esp_app_main.h"
 #include "m1_esp32_rpc_features.h"
@@ -4767,76 +4768,158 @@ void wifi_general_select_ep_html(void)
 	wifi_show_message("EP HTML", line, "Ready for portal");
 }
 
-/* General: WiFi Hotspot (SoftAP) — Phase 5 of the WiFi cleanup plan (§3.9).
- * Raw ESP-AT path: AT+CWMODE=2 switches the radio to SoftAP mode and
- * AT+CWSAP configures the SSID/password/channel/security.  Gated behind
- * M1_ESP32_CAP_WIFI_HOTSPOT (esp32_feature_map.h), which no shipped
- * firmware self-reports yet — the DELEGATE_FEATURE wrapper in
- * m1_wifi_scene_general.c shows "Feature not supported" until a firmware
- * advertises the bit, so this body only runs once support is confirmed. */
+#define WIFI_HOTSPOT_CONFIG_PATH "0:/System/hotspot.cfg"
+
+static bool wifi_hotspot_config_load(char ssid[WIFI_HOTSPOT_SSID_MAX_LEN + 1u],
+                                     char password[WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u])
+{
+	FIL file;
+	UINT bytes_read = 0u;
+	char text[WIFI_HOTSPOT_CONFIG_TEXT_MAX + 1u];
+	if (f_open(&file, WIFI_HOTSPOT_CONFIG_PATH, FA_READ) != FR_OK)
+		return false;
+
+	FRESULT result = f_read(&file, text, sizeof(text), &bytes_read);
+	f_close(&file);
+	if (result != FR_OK || bytes_read > WIFI_HOTSPOT_CONFIG_TEXT_MAX)
+		return false;
+
+	return wifi_hotspot_config_parse(text, bytes_read, ssid,
+	                                 WIFI_HOTSPOT_SSID_MAX_LEN + 1u,
+	                                 password,
+	                                 WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u);
+}
+
+static bool wifi_hotspot_config_save(const char *ssid, const char *password)
+{
+	char text[WIFI_HOTSPOT_CONFIG_TEXT_MAX + 1u];
+	size_t text_len = wifi_hotspot_config_format(text, sizeof(text), ssid, password);
+	if (text_len == 0u)
+		return false;
+
+	f_mkdir("0:/System");
+	FIL file;
+	if (f_open(&file, WIFI_HOTSPOT_CONFIG_PATH,
+	           FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+		return false;
+
+	UINT bytes_written = 0u;
+	FRESULT result = f_write(&file, text, (UINT)text_len, &bytes_written);
+	FRESULT close_result = f_close(&file);
+	return result == FR_OK && close_result == FR_OK &&
+	       bytes_written == (UINT)text_len;
+}
+
+/* General: editable, persisted WiFi Hotspot configuration.  Native M1_RPC
+ * firmware handles AP+STA mode and NAT passthrough; the legacy AT transport
+ * retains its existing SoftAP path without claiming NAT support. */
 void wifi_general_hotspot(void)
 {
-	char ssid[33];
-	char pwd[65];
+	char ssid[WIFI_HOTSPOT_SSID_MAX_LEN + 1u] = "M1-Hotspot";
+	char pwd[WIFI_HOTSPOT_PASSWORD_MAX_LEN + 1u] = "";
 	char cmd_buf[160];
 	char resp_buf[256];
 	uint8_t choice;
+	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	uint8_t clients = 0u;
+	bool internet_shared = false;
+	char status_line[32];
+	const char *internet_line = "NAT unavailable";
 
-	memset(ssid, 0, sizeof(ssid));
-	if (m1_vkb_get_text("Hotspot SSID:", "", ssid, 32) == 0 || ssid[0] == '\0')
+	(void)wifi_hotspot_config_load(ssid, pwd);
+	if (m1_vkb_get_text("Hotspot SSID:", ssid, ssid, sizeof(ssid)) == 0)
 		return;
 
-	memset(pwd, 0, sizeof(pwd));
-	if (m1_vkb_get_text("Hotspot Password:", "", pwd, 64) == 0)
+	if (m1_vkb_get_text("Hotspot Password:", pwd, pwd, sizeof(pwd)) == 0)
 		return;
 
-	if (pwd[0] != '\0' && strlen(pwd) < 8)
+	if (!wifi_hotspot_config_validate(ssid, pwd))
 	{
-		wifi_show_message("WiFi Hotspot", "Password too short", "Need 8+ chars");
+		wifi_show_message("WiFi Hotspot", "Invalid settings",
+		                  "SSID 1-32, pass 8-63");
 		return;
 	}
 
-	/* Reject characters that would break/inject into quoted ESP-AT parameters. */
-	for (size_t i = 0; ssid[i]; i++)
+	if (!use_rpc)
 	{
-		char ch = ssid[i];
-		if (ch == '"' || ch == '\\' || ch == ',' || ch == '\r' || ch == '\n')
+		/* Keep quoted ESP-AT parameters safe on legacy firmware. */
+		for (size_t i = 0; ssid[i]; i++)
 		{
-			wifi_show_message("WiFi Hotspot", "Invalid SSID", "No \\\\ \" , CR/LF");
-			return;
+			char ch = ssid[i];
+			if (ch == '"' || ch == '\\' || ch == ',')
+			{
+				wifi_show_message("WiFi Hotspot", "Invalid SSID", "Unsafe AT character");
+				return;
+			}
+		}
+		for (size_t i = 0; pwd[i]; i++)
+		{
+			char ch = pwd[i];
+			if (ch == '"' || ch == '\\' || ch == ',')
+			{
+				wifi_show_message("WiFi Hotspot", "Invalid password", "Unsafe AT character");
+				return;
+			}
 		}
 	}
-	for (size_t i = 0; pwd[i]; i++)
+
+	if (use_rpc)
 	{
-		char ch = pwd[i];
-		if (ch == '"' || ch == '\\' || ch == ',' || ch == '\r' || ch == '\n')
+		if (m1_esp32_rpc_softap_start(ssid, pwd, 6u) != M1_ESP32_RPC_OK)
 		{
-			wifi_show_message("WiFi Hotspot", "Invalid password", "No \\\\ \" , CR/LF");
+			wifi_show_message("WiFi Hotspot", "Start failed", "Check ESP32 firmware");
 			return;
 		}
+		if (m1_esp32_rpc_softap_status(&clients, &internet_shared) == M1_ESP32_RPC_OK)
+		{
+			snprintf(status_line, sizeof(status_line), "%u clients, %s", clients,
+			         internet_shared ? "Internet shared" : "NAT inactive");
+			internet_line = internet_shared ? "Internet shared" : "NAT inactive";
+		}
+		else
+		{
+			snprintf(status_line, sizeof(status_line), "%s", "Status unavailable");
+			internet_line = "NAT status unavailable";
+		}
 	}
-
-	ensure_esp32_ready();
-	memset(resp_buf, 0, sizeof(resp_buf));
-	(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
-
-	snprintf(cmd_buf, sizeof(cmd_buf), "AT+CWSAP=\"%s\",\"%s\",6,%d\r\n",
-	         ssid, pwd, (pwd[0] != '\0') ? 3 : 0);
-	memset(resp_buf, 0, sizeof(resp_buf));
-	(void)spi_AT_send_recv(cmd_buf, resp_buf, sizeof(resp_buf), 3);
-	if (strstr(resp_buf, "OK") == NULL)
+	else
 	{
-		(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-		wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
-		return;
+		ensure_esp32_ready();
+		memset(resp_buf, 0, sizeof(resp_buf));
+		(void)spi_AT_send_recv("AT+CWMODE=2\r\n", resp_buf, sizeof(resp_buf), 2);
+
+		snprintf(cmd_buf, sizeof(cmd_buf), "AT+CWSAP=\"%s\",\"%s\",6,%d\r\n",
+		         ssid, pwd, (pwd[0] != '\0') ? 3 : 0);
+		memset(resp_buf, 0, sizeof(resp_buf));
+		(void)spi_AT_send_recv(cmd_buf, resp_buf, sizeof(resp_buf), 3);
+		if (strstr(resp_buf, "OK") == NULL)
+		{
+			(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+			wifi_show_message("WiFi Hotspot", "Start failed", "Flash ESP32 FW?");
+			return;
+		}
+		snprintf(status_line, sizeof(status_line), "%s", "NAT unavailable");
 	}
 
-	choice = m1_message_box_choice(&m1_u8g2, "WiFi Hotspot", "Broadcasting", ssid,
+	if (!wifi_hotspot_config_save(ssid, pwd))
+		wifi_show_message("WiFi Hotspot", "Settings not saved", "SD card write failed");
+
+	choice = m1_message_box_choice(&m1_u8g2, "Hotspot running", ssid, status_line,
 	                                "Stop\nKeep");
 	if (choice == 1)
 	{
-		(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
-		wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
+		if (use_rpc)
+		{
+			if (m1_esp32_rpc_softap_stop() == M1_ESP32_RPC_OK)
+				wifi_show_message("WiFi Hotspot", "Stopped", internet_line);
+			else
+				wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
+		}
+		else
+		{
+			(void)spi_AT_send_recv("AT+CWMODE=1\r\n", resp_buf, sizeof(resp_buf), 2);
+			wifi_show_message("WiFi Hotspot", "Stopped", "STA mode restored");
+		}
 	}
 }
 

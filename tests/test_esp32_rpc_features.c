@@ -106,6 +106,11 @@ static void canned_ok(uint16_t msg_id)
     g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP, msg_id, NULL, 0u);
 }
 
+static void canned_resp(uint16_t msg_id, const uint8_t *payload, uint16_t plen)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP, msg_id, payload, plen);
+}
+
 /* Accessors for the captured request frame. */
 static uint16_t tx_msg_id(void)
 {
@@ -225,6 +230,59 @@ void test_trigger_variants_route_expected_opcodes(void)
         TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK, cases[i].fn());
         TEST_ASSERT_EQUAL_HEX16(cases[i].op, tx_msg_id());
         TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
+    }
+
+    void test_softap_start_encodes_configuration(void)
+    {
+        static const uint8_t expected[] = { 6u, 'M', '1', '-', 'A', 'P', 0u,
+                                            'p', 'a', 's', 's', 'w', 'o', 'r', 'd', 0u };
+        canned_ok(M1_ESP32_RPC_SOFTAP_START);
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+            m1_esp32_rpc_softap_start("M1-AP", "password", 6u));
+        TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_SOFTAP_START, tx_msg_id());
+        TEST_ASSERT_EQUAL_UINT16(sizeof(expected), tx_plen());
+        TEST_ASSERT_EQUAL_MEMORY(expected, tx_payload(), sizeof(expected));
+    }
+
+    void test_softap_start_rejects_invalid_configuration(void)
+    {
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+            m1_esp32_rpc_softap_start("", "password", 6u));
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+            m1_esp32_rpc_softap_start("M1-AP", "short", 6u));
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+            m1_esp32_rpc_softap_start("M1-AP", NULL, 6u));
+    }
+
+    void test_softap_status_decodes_clients_and_nat(void)
+    {
+        const uint8_t payload[] = { 3u, 1u };
+        uint8_t clients = 0u;
+        bool internet_shared = false;
+        canned_resp(M1_ESP32_RPC_SOFTAP_STA_LIST, payload, sizeof(payload));
+
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+            m1_esp32_rpc_softap_status(&clients, &internet_shared));
+        TEST_ASSERT_EQUAL_UINT8(3u, clients);
+        TEST_ASSERT_TRUE(internet_shared);
+        TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_SOFTAP_STA_LIST, tx_msg_id());
+    }
+
+    void test_softap_status_rejects_malformed_reply_and_null_outputs(void)
+    {
+        const uint8_t payload[] = { 2u };
+        uint8_t clients = 7u;
+        bool internet_shared = true;
+        canned_resp(M1_ESP32_RPC_SOFTAP_STA_LIST, payload, sizeof(payload));
+
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_BAD_FRAME,
+            m1_esp32_rpc_softap_status(&clients, &internet_shared));
+        TEST_ASSERT_EQUAL_UINT8(7u, clients);
+        TEST_ASSERT_TRUE(internet_shared);
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+            m1_esp32_rpc_softap_status(NULL, &internet_shared));
+        TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_INVALID,
+            m1_esp32_rpc_softap_status(&clients, NULL));
     }
 }
 
@@ -1040,6 +1098,10 @@ int main(void)
 
     RUN_TEST(test_trigger_builds_correct_opcode_and_empty_payload);
     RUN_TEST(test_trigger_variants_route_expected_opcodes);
+    RUN_TEST(test_softap_start_encodes_configuration);
+    RUN_TEST(test_softap_start_rejects_invalid_configuration);
+    RUN_TEST(test_softap_status_decodes_clients_and_nat);
+    RUN_TEST(test_softap_status_rejects_malformed_reply_and_null_outputs);
     RUN_TEST(test_trigger_propagates_nak);
     RUN_TEST(test_trigger_transport_failure);
 

@@ -23,6 +23,13 @@ session or UDP for a WiFi session; its BLE path is capped at approximately
 5 fps. Bluetooth Direct NUS advertising is opt-in from System Settings and the
 preference is persisted in `0:/System/settings.cfg`.
 
+The brain's WiFi Hotspot uses `SOFTAP_START` (`[channel][ssid NUL][password NUL]`),
+`SOFTAP_STOP`, and `SOFTAP_STA_LIST` (`[client_count][internet_shared]`).
+Starting the AP preserves an existing station link, and the brain enables NAT
+when both the AP and an upstream station IP are available. The M1 stores editable
+hotspot credentials in plaintext on the SD card at `0:/System/hotspot.cfg` and
+displays the reported NAT state.
+
 The device-info response appends `mobile_session_active` after the existing
 battery detail fields; it is byte offset 66 (when the full 67-byte response is
 present). It reflects the brain's connected TCP/BLE client status through
