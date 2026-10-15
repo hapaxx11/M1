@@ -463,7 +463,7 @@ void test_ble_adv_start_null_name_empty_payload(void)
     TEST_ASSERT_EQUAL_UINT16(0u, tx_plen());
 }
 
-void test_beacon_start_caps_payload_and_patches_count(void)
+void test_beacon_start_uses_full_ssid_capacity(void)
 {
     char ssids[8][33];
     for (uint8_t i = 0u; i < 8u; i++) {
@@ -475,11 +475,11 @@ void test_beacon_start_caps_payload_and_patches_count(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_beacon_start((const char (*)[33])ssids, 8u));
     TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_BEACON_START, tx_msg_id());
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(M1_ESP32_RPC_PAYLOAD_MAX, tx_plen());
-    TEST_ASSERT_EQUAL_UINT8(7u, tx_payload()[0]);
+    TEST_ASSERT_EQUAL_UINT16(265u, tx_plen());
+    TEST_ASSERT_EQUAL_UINT8(8u, tx_payload()[0]);
 }
 
-void test_probe_start_caps_payload_and_patches_count(void)
+void test_probe_start_uses_full_ssid_capacity(void)
 {
     char ssids[8][33];
     for (uint8_t i = 0u; i < 8u; i++) {
@@ -491,9 +491,9 @@ void test_probe_start_caps_payload_and_patches_count(void)
     TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
                       m1_esp32_rpc_probe_start(6u, (const char (*)[33])ssids, 8u));
     TEST_ASSERT_EQUAL_HEX16(M1_ESP32_RPC_OFF_PROBE_START, tx_msg_id());
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(M1_ESP32_RPC_PAYLOAD_MAX, tx_plen());
+    TEST_ASSERT_EQUAL_UINT16(266u, tx_plen());
     TEST_ASSERT_EQUAL_UINT8(6u, tx_payload()[0]);
-    TEST_ASSERT_EQUAL_UINT8(7u, tx_payload()[1]);
+    TEST_ASSERT_EQUAL_UINT8(8u, tx_payload()[1]);
 }
 
 void test_probe_start_rejects_missing_ssids_or_zero_count(void)
@@ -1120,6 +1120,9 @@ int main(void)
 
     RUN_TEST(test_ble_adv_start_encodes_name);
     RUN_TEST(test_ble_adv_start_null_name_empty_payload);
+    RUN_TEST(test_beacon_start_uses_full_ssid_capacity);
+    RUN_TEST(test_probe_start_uses_full_ssid_capacity);
+    RUN_TEST(test_probe_start_rejects_missing_ssids_or_zero_count);
 
     RUN_TEST(test_deauth_start_serialises_struct);
     RUN_TEST(test_deauth_start_null_rejected);
