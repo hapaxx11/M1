@@ -109,7 +109,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_wifi_scan(m1_esp32_rpc_wifi_scan_result_t *ou
      * handle_wifi_scan() returns the entire AP list as one logical response
      * (up to its own M1_SCAN_RESP_MAX == 1800 payload bytes), not chunked
      * behind separate *_GET calls, so the reception budget here must match
-     * that rather than the small control-command M1_ESP32_RPC_PAYLOAD_MAX
+     * that rather than the small control-command M1_ESP32_RPC_CONTROL_PAYLOAD_MAX
      * (246 bytes), which silently failed every scan of more than ~6-8 APs. */
     uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
     if (!resp)
@@ -399,7 +399,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_beacon_start(const char (*ssids)[33],
         return M1_ESP32_RPC_ERR_INVALID;
 
     /* Wire: [count:1] then per SSID [len:1][ssid] */
-    uint8_t payload[M1_ESP32_RPC_PAYLOAD_MAX];
+    uint8_t payload[1u + 32u * 33u];
     uint16_t off = 0u;
     uint8_t encoded = 0u;
     payload[off++] = 0u;
@@ -431,7 +431,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_probe_start(uint8_t channel,
         return M1_ESP32_RPC_ERR_INVALID;
 
     /* Wire: [channel:1][count:1] then per SSID [len:1][ssid] */
-    uint8_t payload[M1_ESP32_RPC_PAYLOAD_MAX];
+    uint8_t payload[2u + 32u * 33u];
     uint16_t off = 0u;
     uint8_t encoded = 0u;
     payload[off++] = channel;
@@ -524,7 +524,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_sta_scan_results(m1_esp32_rpc_sta_entry_t *ou
 
     /* See m1_esp32_rpc_wifi_scan(): handle_sta_scan_results() also returns
      * its full list in one response, so this needs the bulk-list reception
-     * budget, not the small control-command M1_ESP32_RPC_PAYLOAD_MAX. */
+     * budget, not the small control-command M1_ESP32_RPC_CONTROL_PAYLOAD_MAX. */
     uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
     if (!resp)
         return M1_ESP32_RPC_ERR_NO_MEM;
@@ -610,7 +610,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_ble_scan_results(m1_esp32_rpc_ble_dev_t *out,
 
     /* See m1_esp32_rpc_wifi_scan(): BLE_SCAN_RESULTS also returns its full
      * device list in one response, so this needs the bulk-list reception
-     * budget, not the small control-command M1_ESP32_RPC_PAYLOAD_MAX. */
+     * budget, not the small control-command M1_ESP32_RPC_CONTROL_PAYLOAD_MAX. */
     uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
     if (!resp)
         return M1_ESP32_RPC_ERR_NO_MEM;
@@ -753,7 +753,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_zb_sniff_get(m1_esp32_rpc_zb_device_t *out,
     /* See m1_esp32_rpc_wifi_scan(): handle_zb_sniff_get() returns up to 64
      * fixed-size device records (1 + 64*17 = 1089 bytes) in one response, so
      * this needs the bulk-list reception budget, not the small
-     * control-command M1_ESP32_RPC_PAYLOAD_MAX. */
+     * control-command M1_ESP32_RPC_CONTROL_PAYLOAD_MAX. */
     uint8_t *resp = (uint8_t *)malloc(M1_ESP32_RPC_RESP_PAYLOAD_MAX);
     if (!resp)
         return M1_ESP32_RPC_ERR_NO_MEM;

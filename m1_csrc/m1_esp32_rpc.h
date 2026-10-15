@@ -197,15 +197,15 @@ typedef enum {
 /* =========================================================================
  * Frame sizing
  *
- * Single-transaction control commands and their requests fit comfortably in
- * this budget (ESP-NOW frames are <= 64 bytes; deauth / connect / HID-string
- * requests are well under 246 payload bytes), so M1_ESP32_RPC_FRAME_MAX still
- * bounds outbound REQ frames (built into the small stack buffer in
- * m1_esp32_rpc_call()).
+ * The full-duplex M1 Link fragments larger REQ payloads across 512-byte SPI
+ * transactions. This budget covers qMonstatek relay frames and screen pushes;
+ * the temporary request buffer is heap-allocated in m1_esp32_rpc_call().
  * =========================================================================*/
-#define M1_ESP32_RPC_FRAME_MAX   256u
+#define M1_ESP32_RPC_FRAME_MAX   2048u
 #define M1_ESP32_RPC_PAYLOAD_MAX \
     (M1_ESP32_RPC_FRAME_MAX - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
+#define M1_ESP32_RPC_CONTROL_PAYLOAD_MAX \
+    (256u - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE)
 
 /* =========================================================================
  * Response reception budget.

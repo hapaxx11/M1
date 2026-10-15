@@ -119,7 +119,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
                                         uint8_t *resp, uint16_t resp_cap,
                                         uint16_t *resp_len, int timeout_sec)
 {
-    uint8_t  tx[M1_ESP32_RPC_FRAME_MAX];
+    uint8_t *tx;
     uint8_t *rx;
     int      rx_len = 0;
 
@@ -130,10 +130,19 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
         return M1_ESP32_RPC_ERR_INVALID;
     }
 
-    uint16_t frame_sz = m1_esp32_rpc_build_req(tx, (uint16_t)sizeof(tx),
+    uint16_t tx_cap = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + req_len +
+                                 M1_ESP32_RPC_CRC_SIZE);
+    tx = (uint8_t *)malloc(tx_cap);
+    if (!tx) {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
+        return M1_ESP32_RPC_ERR_NO_MEM;
+    }
+
+    uint16_t frame_sz = m1_esp32_rpc_build_req(tx, tx_cap,
                                                msg_id, req, req_len);
     if (frame_sz == 0u) {
         rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_INVALID, -1, 0u, 0u);
+        free(tx);
         return M1_ESP32_RPC_ERR_INVALID;
     }
 
@@ -144,6 +153,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     rx = (uint8_t *)malloc(M1_ESP32_RPC_RESP_FRAME_MAX);
     if (!rx) {
         rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NO_MEM, -1, 0u, 0u);
+        free(tx);
         return M1_ESP32_RPC_ERR_NO_MEM;
     }
 
@@ -151,6 +161,7 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     int transport_rc = s_transport(tx, (int)frame_sz, rx,
                                    (int)M1_ESP32_RPC_RESP_FRAME_MAX,
                                    &rx_len, timeout_sec);
+    free(tx);
     uint32_t elapsed_ms = m1_esp32_m1link_last_elapsed_ms();
     if (transport_rc != 0 || rx_len <= 0) {
         rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_TRANSPORT, rx_len, 0u,
@@ -250,22 +261,37 @@ static int m1link_parse_frame(const uint8_t *buf, uint16_t buf_len,
     return -1;
 }
 
-/* Write a bare header-only frame (no payload) of the given type/id into @p buf,
- * appending the CRC16.  Used to emit IDLE filler frames. */
-static void m1link_build_header_frame(uint8_t *buf, uint8_t msg_type,
-                                      uint16_t msg_id)
+/* Build a padded M1_RPC frame into @p buf and return its unpadded length. */
+static uint16_t m1link_build_frame(uint8_t *buf, uint8_t msg_type,
+                                   uint16_t msg_id, const uint8_t *payload,
+                                   uint16_t payload_len)
 {
+    uint16_t frame_len = (uint16_t)(M1_ESP32_RPC_HDR_SIZE + payload_len +
+                                    M1_ESP32_RPC_CRC_SIZE);
     buf[0] = (uint8_t)(M1_ESP32_RPC_MAGIC        & 0xFFu);
     buf[1] = (uint8_t)((M1_ESP32_RPC_MAGIC >> 8u) & 0xFFu);
     buf[2] = M1_ESP32_RPC_VERSION;
     buf[3] = msg_type;
     buf[4] = (uint8_t)(msg_id        & 0xFFu);
     buf[5] = (uint8_t)((msg_id >> 8u) & 0xFFu);
-    buf[6] = 0u;
-    buf[7] = 0u;
-    uint16_t crc = m1_esp32_rpc_crc16(buf, M1_ESP32_RPC_HDR_SIZE);
-    buf[M1_ESP32_RPC_HDR_SIZE]      = (uint8_t)(crc        & 0xFFu);
-    buf[M1_ESP32_RPC_HDR_SIZE + 1u] = (uint8_t)((crc >> 8u) & 0xFFu);
+    buf[6] = (uint8_t)(payload_len & 0xFFu);
+    buf[7] = (uint8_t)((payload_len >> 8u) & 0xFFu);
+    if (payload_len > 0u)
+        memcpy(buf + M1_ESP32_RPC_HDR_SIZE, payload, payload_len);
+    uint16_t crc = m1_esp32_rpc_crc16(buf,
+                                      M1_ESP32_RPC_HDR_SIZE + payload_len);
+    buf[M1_ESP32_RPC_HDR_SIZE + payload_len] =
+        (uint8_t)(crc & 0xFFu);
+    buf[M1_ESP32_RPC_HDR_SIZE + payload_len + 1u] =
+        (uint8_t)((crc >> 8u) & 0xFFu);
+    return frame_len;
+}
+
+/* Write a bare header-only IDLE filler frame. */
+static void m1link_build_header_frame(uint8_t *buf, uint8_t msg_type,
+                                      uint16_t msg_id)
+{
+    (void)m1link_build_frame(buf, msg_type, msg_id, NULL, 0u);
 }
 
 /* Perform ONE M1 Link transaction and update FRAG reassembly state that
@@ -368,11 +394,14 @@ static int m1link_validate_common_args(m1_esp32_m1link_xfer_fn xfer,
                                        uint8_t *scratch_tx,
                                        uint8_t *scratch_rx, uint16_t mtu,
                                        const uint8_t *tx_buf, int tx_len,
-                                       uint8_t *rx_buf, int rx_buf_size)
+                                       uint8_t *rx_buf, int rx_buf_size,
+                                       bool allow_fragmented_request)
 {
     return (!xfer || !scratch_tx || !scratch_rx || !tx_buf || !rx_buf ||
             mtu < (uint16_t)(M1_ESP32_RPC_HDR_SIZE + M1_ESP32_RPC_CRC_SIZE) ||
-            tx_len < (int)M1_ESP32_RPC_HDR_SIZE || tx_len > (int)mtu ||
+            tx_len < (int)M1_ESP32_RPC_HDR_SIZE ||
+            tx_len > (allow_fragmented_request
+                          ? (int)M1_ESP32_RPC_FRAME_MAX : (int)mtu) ||
             rx_buf_size < (int)M1_ESP32_RPC_HDR_SIZE);
 }
 
@@ -387,7 +416,8 @@ uint8_t m1_esp32_m1link_send_recv(m1_esp32_m1link_xfer_fn xfer, void *ctx,
 
     if (max_polls < 1 ||
         m1link_validate_common_args(xfer, scratch_tx, scratch_rx, mtu,
-                                    tx_buf, tx_len, rx_buf, rx_buf_size))
+                                    tx_buf, tx_len, rx_buf, rx_buf_size,
+                                    false))
         return 1u; /* invalid argument */
 
     /* The response echoes the request's msg_id (header bytes 4/5). */
@@ -427,7 +457,8 @@ uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
 
     if (!now_ms || max_iterations < 1 ||
         m1link_validate_common_args(xfer, scratch_tx, scratch_rx, mtu,
-                                    tx_buf, tx_len, rx_buf, rx_buf_size))
+                                    tx_buf, tx_len, rx_buf, rx_buf_size,
+                                    true))
         return 1u; /* invalid argument */
 
     uint16_t expected_id = (uint16_t)tx_buf[4] | ((uint16_t)tx_buf[5] << 8u);
@@ -435,9 +466,52 @@ uint8_t m1_esp32_m1link_send_recv_timed(m1_esp32_m1link_xfer_fn xfer, void *ctx,
     uint8_t  reasm_active = 0u;
     uint32_t start = now_ms();
 
+    bool request_already_sent = false;
+    if (tx_len > (int)mtu) {
+        uint8_t request_type = 0u;
+        uint16_t request_id = 0u;
+        uint16_t request_payload_len = 0u;
+        const uint8_t *request_payload = NULL;
+        if (m1link_parse_frame_at(tx_buf, (size_t)tx_len, &request_type,
+                                  &request_id, &request_payload_len,
+                                  &request_payload) != 0 ||
+            request_type != M1_ESP32_RPC_REQ || request_id != expected_id ||
+            tx_len != (int)(M1_ESP32_RPC_HDR_SIZE + request_payload_len +
+                            M1_ESP32_RPC_CRC_SIZE))
+            return 1u; /* only a complete, valid REQ can be fragmented */
+
+        const uint16_t chunk_max =
+            (uint16_t)(mtu - M1_ESP32_RPC_HDR_SIZE - M1_ESP32_RPC_CRC_SIZE);
+        uint16_t offset = 0u;
+        while ((uint16_t)(request_payload_len - offset) > chunk_max) {
+            uint16_t fragment_len = m1link_build_frame(
+                scratch_tx, M1_ESP32_RPC_FRAG, expected_id,
+                request_payload + offset, chunk_max);
+            memset(scratch_tx + fragment_len, 0, mtu - fragment_len);
+            memset(scratch_rx, 0, mtu);
+            if (xfer(scratch_tx, scratch_rx, mtu, ctx) != 0)
+                return 2u;
+            offset = (uint16_t)(offset + chunk_max);
+            if ((uint32_t)(now_ms() - start) >= timeout_ms)
+                return 4u;
+        }
+
+        uint16_t final_len = m1link_build_frame(
+            scratch_tx, request_type, expected_id, request_payload + offset,
+            (uint16_t)(request_payload_len - offset));
+        memset(scratch_tx + final_len, 0, mtu - final_len);
+        memset(scratch_rx, 0, mtu);
+        if (xfer(scratch_tx, scratch_rx, mtu, ctx) != 0)
+            return 2u;
+        request_already_sent = true;
+        if ((uint32_t)(now_ms() - start) >= timeout_ms)
+            return 4u;
+    }
+
     for (int i = 0; i < max_iterations; i++) {
         uint8_t rc = m1link_step(xfer, ctx, scratch_tx, scratch_rx, mtu,
-                                 (i == 0) ? 1u : 0u, tx_buf, tx_len,
+                                 (!request_already_sent && i == 0) ? 1u : 0u,
+                                 tx_buf, tx_len,
                                  expected_id, &reasm_len, &reasm_active,
                                  rx_buf, rx_buf_size, out_len);
         if (rc == 0u) return 0u;
