@@ -145,6 +145,8 @@ static volatile bool s_mobile_session_active;
 static volatile bool s_ble_direct_sync_pending = true;
 static TickType_t s_ble_direct_last_sync_tick;
 static TickType_t s_brain_status_retry_tick;
+static bool s_brain_status_retry_waiting;
+static bool s_brain_status_poll_failed;
 static bool s_brain_rpc_status_unsupported;
 static bool s_brain_qmon_poll_unsupported;
 static uint8_t *s_brain_relay_pending_frame;
@@ -421,6 +423,8 @@ void m1_rpc_bluetooth_direct_setting_changed(void)
     s_ble_direct_sync_pending = true;
     s_ble_direct_last_sync_tick = 0u;
     s_brain_status_retry_tick = 0u;
+    s_brain_status_retry_waiting = false;
+    s_brain_status_poll_failed = false;
     s_brain_rpc_status_unsupported = false;
     s_brain_qmon_poll_unsupported = false;
     if (!enabled && !m1_esp32_background_owner_active())
@@ -2855,6 +2859,9 @@ static void rpc_brain_relay_poll(void)
     if (!m1_esp32_background_owner_active())
     {
         m1_rpc_set_mobile_session_active(false);
+        s_brain_status_retry_tick = 0u;
+        s_brain_status_retry_waiting = false;
+        s_brain_status_poll_failed = false;
         s_brain_rpc_status_unsupported = false;
         s_brain_qmon_poll_unsupported = false;
         free(s_brain_relay_pending_frame);
@@ -2886,39 +2893,58 @@ static void rpc_brain_relay_poll(void)
     }
 
     TickType_t now = xTaskGetTickCount();
-    if (s_brain_status_retry_tick != 0u &&
-        (int32_t)(now - s_brain_status_retry_tick) < 0)
-        return;
-
-    uint8_t client_status = 0u;
-    m1_esp32_rpc_status_t status =
-        m1_esp32_rpc_rpc_status_timeout(&client_status, 1);
-    if (status == M1_ESP32_RPC_ERR_UNSUPPORTED)
+    bool status_due = m1_rpc_poll_retry_due(
+        (uint32_t)now, (uint32_t)s_brain_status_retry_tick,
+        s_brain_status_retry_waiting);
+    bool client_active;
+    m1_esp32_rpc_status_t status;
+    if (status_due)
     {
-        s_brain_rpc_status_unsupported = true;
-        m1_rpc_set_mobile_session_active(false);
-        if (direct_enabled)
+        uint8_t client_status = 0u;
+        status = m1_esp32_rpc_rpc_status_timeout(&client_status, 1);
+        if (status == M1_ESP32_RPC_ERR_UNSUPPORTED)
         {
-            m1_esp32_background_owner_set(
-                ESP32_BACKGROUND_OWNER_BLE_DIRECT, false);
-            s_ble_direct_sync_pending = false;
-            if (!m1_esp32_background_owner_active())
-                m1_esp32_deinit();
+            s_brain_rpc_status_unsupported = true;
+            s_brain_status_retry_waiting = false;
+            s_brain_status_poll_failed = false;
+            m1_rpc_set_mobile_session_active(false);
+            if (direct_enabled)
+            {
+                m1_esp32_background_owner_set(
+                    ESP32_BACKGROUND_OWNER_BLE_DIRECT, false);
+                s_ble_direct_sync_pending = false;
+                if (!m1_esp32_background_owner_active())
+                    m1_esp32_deinit();
+            }
+            return;
         }
-        return;
+        if (status != M1_ESP32_RPC_OK)
+        {
+            s_ble_direct_sync_pending = true;
+            s_brain_status_retry_waiting = true;
+            s_brain_status_poll_failed = true;
+            s_brain_status_retry_tick =
+                xTaskGetTickCount() + pdMS_TO_TICKS(5000u);
+            return;
+        }
+
+        s_brain_status_retry_waiting = true;
+        s_brain_status_poll_failed = false;
+        s_brain_status_retry_tick =
+            xTaskGetTickCount() + pdMS_TO_TICKS(1000u);
+        client_active =
+            (client_status & (M1_ESP32_RPC_CLIENT_TCP |
+                              M1_ESP32_RPC_CLIENT_BLE)) != 0u;
+        m1_rpc_set_mobile_session_active(client_active);
     }
-    if (status != M1_ESP32_RPC_OK)
+    else
     {
-        s_ble_direct_sync_pending = true;
-        s_brain_status_retry_tick = now + pdMS_TO_TICKS(5000u);
-        return;
+        if (s_brain_status_poll_failed)
+            return;
+        client_active = m1_rpc_mobile_session_active();
     }
 
-    s_brain_status_retry_tick = now + pdMS_TO_TICKS(1000u);
-    bool client_active =
-        (client_status & (M1_ESP32_RPC_CLIENT_TCP |
-                          M1_ESP32_RPC_CLIENT_BLE)) != 0u;
-    m1_rpc_set_mobile_session_active(client_active);
+    now = xTaskGetTickCount();
 
     if (s_ble_direct_sync_pending &&
         (s_ble_direct_last_sync_tick == 0u ||
@@ -3203,6 +3229,8 @@ void m1_rpc_init(void)
     s_ble_direct_sync_pending = true;
     s_ble_direct_last_sync_tick = 0u;
     s_brain_status_retry_tick = 0u;
+    s_brain_status_retry_waiting = false;
+    s_brain_status_poll_failed = false;
     m1_esp32_background_owner_set(
         ESP32_BACKGROUND_OWNER_BLE_DIRECT,
         settings_bluetooth_direct_enabled());

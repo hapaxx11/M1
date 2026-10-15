@@ -66,6 +66,15 @@ void test_transport_response_payload_limits_include_relay_overhead(void)
         M1_RPC_TRANSPORT_USB, 8192u, 8192u, 4082u, 7u));
 }
 
+void test_rpc_status_retry_deadline_handles_tick_wrap(void)
+{
+    TEST_ASSERT_TRUE(m1_rpc_poll_retry_due(100u, 900u, false));
+    TEST_ASSERT_FALSE(m1_rpc_poll_retry_due(899u, 900u, true));
+    TEST_ASSERT_TRUE(m1_rpc_poll_retry_due(900u, 900u, true));
+    TEST_ASSERT_FALSE(m1_rpc_poll_retry_due(UINT32_MAX, 5u, true));
+    TEST_ASSERT_TRUE(m1_rpc_poll_retry_due(5u, 5u, true));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -73,5 +82,6 @@ int main(void)
     RUN_TEST(test_partial_frame_remains_owned_by_its_ingress_transport);
     RUN_TEST(test_usb_epoch_reset_clears_only_usb_owned_partial_frame);
     RUN_TEST(test_transport_response_payload_limits_include_relay_overhead);
+    RUN_TEST(test_rpc_status_retry_deadline_handles_tick_wrap);
     return UNITY_END();
 }

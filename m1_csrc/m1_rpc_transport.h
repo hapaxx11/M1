@@ -66,4 +66,10 @@ static inline bool m1_rpc_transport_response_too_large(
                                     rpc_frame_overhead);
 }
 
+static inline bool m1_rpc_poll_retry_due(uint32_t now, uint32_t deadline,
+                                         bool retry_waiting)
+{
+    return !retry_waiting || (int32_t)(now - deadline) >= 0;
+}
+
 #endif /* M1_RPC_TRANSPORT_H_ */
