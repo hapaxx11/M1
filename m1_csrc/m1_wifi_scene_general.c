@@ -20,7 +20,7 @@
  *   WifiSceneGeneralShutdown        — Shutdown WiFi delegate
  *   WifiSceneGeneralSetEpSsid       — Set EP SSID delegate
  *   WifiSceneGeneralSelectEpHtml    — Select EP HTML delegate
- *   WifiSceneGeneralHotspot         — WiFi Hotspot delegate (Phase 5, §3.9)
+ *   WifiSceneGeneralHotspot         — WiFi Hotspot delegate (native SoftAP/NAT)
  *
  * The AP/SSID list-management delegates (Save/Load/Clear APs, Load/Clear
  * SSIDs) are still implemented here but are now reached from the Wardrive

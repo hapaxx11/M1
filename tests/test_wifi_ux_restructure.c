@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "esp32_feature_map.h"
+#include "m1_esp32_caps.h"
 
 #ifndef M1_ROOT
 #error "M1_ROOT must be defined by CMake"

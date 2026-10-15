@@ -21,6 +21,20 @@ void test_validate_accepts_boundary_values(void)
     TEST_ASSERT_TRUE(wifi_hotspot_config_validate(ssid, password));
 }
 
+void test_transport_dispatch_routes_only_supported_paths(void)
+{
+    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_AT,
+        wifi_hotspot_select_path(ESP32_TRANSPORT_AT));
+    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_RPC,
+        wifi_hotspot_select_path(ESP32_TRANSPORT_RPC));
+    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_UNSUPPORTED,
+        wifi_hotspot_select_path(ESP32_TRANSPORT_NONE));
+    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_UNSUPPORTED,
+        wifi_hotspot_select_path(ESP32_TRANSPORT_BINARY_SPI));
+    TEST_ASSERT_EQUAL(WIFI_HOTSPOT_PATH_UNSUPPORTED,
+        wifi_hotspot_select_path(ESP32_TRANSPORT_NATIVE_V1));
+}
+
 void test_validate_rejects_invalid_lengths_and_control_characters(void)
 {
     char long_ssid[WIFI_HOTSPOT_SSID_MAX_LEN + 2u];
@@ -118,6 +132,7 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_validate_accepts_boundary_values);
+    RUN_TEST(test_transport_dispatch_routes_only_supported_paths);
     RUN_TEST(test_validate_rejects_invalid_lengths_and_control_characters);
     RUN_TEST(test_format_and_parse_round_trip);
     RUN_TEST(test_parse_accepts_crlf_and_empty_open_password);

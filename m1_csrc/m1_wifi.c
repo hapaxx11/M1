@@ -4820,13 +4820,25 @@ void wifi_general_hotspot(void)
 	char cmd_buf[160];
 	char resp_buf[256];
 	uint8_t choice;
-	bool use_rpc = (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC);
+	wifi_hotspot_path_t hotspot_path =
+		wifi_hotspot_select_path(m1_esp32_active_transport());
+	bool use_rpc = (hotspot_path == WIFI_HOTSPOT_PATH_RPC);
 	uint8_t clients = 0u;
 	bool internet_shared = false;
 	char status_line[32];
 	const char *internet_line = "NAT unavailable";
 
-	(void)wifi_hotspot_config_load(ssid, pwd);
+	if (hotspot_path == WIFI_HOTSPOT_PATH_UNSUPPORTED)
+	{
+		wifi_show_message("WiFi Hotspot", "Unsupported transport", NULL);
+		return;
+	}
+
+	if (!wifi_hotspot_config_load(ssid, pwd))
+	{
+		snprintf(ssid, sizeof(ssid), "%s", "M1-Hotspot");
+		pwd[0] = '\0';
+	}
 	if (m1_vkb_get_text("Hotspot SSID:", ssid, ssid, sizeof(ssid)) == 0)
 		return;
 

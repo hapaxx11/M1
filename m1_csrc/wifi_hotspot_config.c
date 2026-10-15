@@ -5,6 +5,18 @@
 #include <stdio.h>
 #include <string.h>
 
+wifi_hotspot_path_t wifi_hotspot_select_path(esp32_transport_t transport)
+{
+    switch (transport) {
+    case ESP32_TRANSPORT_AT:
+        return WIFI_HOTSPOT_PATH_AT;
+    case ESP32_TRANSPORT_RPC:
+        return WIFI_HOTSPOT_PATH_RPC;
+    default:
+        return WIFI_HOTSPOT_PATH_UNSUPPORTED;
+    }
+}
+
 static bool has_line_break_or_control(const char *value)
 {
     for (const unsigned char *p = (const unsigned char *)value; *p; p++) {
