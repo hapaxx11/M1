@@ -170,21 +170,48 @@ static m1_i2c_scan_probe_result_t m1_i2c_scan_probe(uint8_t address,
                                                       void *context)
 {
 	I2C_HandleTypeDef *hi2c = (I2C_HandleTypeDef *)context;
-	HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(
-		hi2c, (uint16_t)(address << 1), 1u,
-		M1_I2C_SCAN_PROBE_TIMEOUT_MS);
+	uint32_t tickstart;
+	bool completed = false;
+	bool nack = false;
 
-	if (status == HAL_OK)
-		return M1_I2C_SCAN_PROBE_ACK;
+	if (hi2c->State != HAL_I2C_STATE_READY ||
+	    __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) == SET)
+		return M1_I2C_SCAN_PROBE_ERROR;
 
-	/* HAL_I2C_IsDeviceReady reports a missing target as HAL_ERROR. In this
-	 * HAL version that path sets AF or TIMEOUT after the address NACK. */
-	if (status == HAL_ERROR &&
-	    (hi2c->ErrorCode == HAL_I2C_ERROR_AF ||
-	     hi2c->ErrorCode == HAL_I2C_ERROR_TIMEOUT))
-		return M1_I2C_SCAN_PROBE_NACK;
+	if (hi2c->Lock == HAL_LOCKED)
+		return M1_I2C_SCAN_PROBE_ERROR;
+	__HAL_LOCK(hi2c);
+	hi2c->State = HAL_I2C_STATE_BUSY;
+	hi2c->ErrorCode = HAL_I2C_ERROR_NONE;
+	hi2c->Instance->CR2 = I2C_GENERATE_START(
+		hi2c->Init.AddressingMode, (uint16_t)(address << 1));
 
-	return M1_I2C_SCAN_PROBE_ERROR;
+	tickstart = HAL_GetTick();
+	while (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF) == RESET &&
+	       __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) == RESET)
+	{
+		if ((HAL_GetTick() - tickstart) >= M1_I2C_SCAN_PROBE_TIMEOUT_MS)
+			goto probe_done;
+	}
+
+	nack = (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_AF) != RESET);
+	while (__HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_STOPF) == RESET)
+	{
+		if ((HAL_GetTick() - tickstart) >= M1_I2C_SCAN_PROBE_TIMEOUT_MS)
+			goto probe_done;
+	}
+
+	if (nack)
+		__HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_AF);
+	__HAL_I2C_CLEAR_FLAG(hi2c, I2C_FLAG_STOPF);
+	completed = true;
+
+probe_done:
+	if (!completed)
+		hi2c->ErrorCode |= HAL_I2C_ERROR_TIMEOUT;
+	hi2c->State = HAL_I2C_STATE_READY;
+	__HAL_UNLOCK(hi2c);
+	return m1_i2c_scan_probe_classify(completed, nack);
 }
 
 bool m1_i2c_scan_addresses(uint8_t first,

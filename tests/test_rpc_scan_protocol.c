@@ -173,6 +173,16 @@ void test_i2c_scan_collect_rejects_insufficient_capacity(void)
     TEST_ASSERT_EQUAL_UINT8(0u, fixture.calls);
 }
 
+void test_i2c_scan_probe_classifies_completed_nack_and_real_timeout(void)
+{
+    TEST_ASSERT_EQUAL(M1_I2C_SCAN_PROBE_NACK,
+                      m1_i2c_scan_probe_classify(true, true));
+    TEST_ASSERT_EQUAL(M1_I2C_SCAN_PROBE_ERROR,
+                      m1_i2c_scan_probe_classify(false, true));
+    TEST_ASSERT_EQUAL(M1_I2C_SCAN_PROBE_ACK,
+                      m1_i2c_scan_probe_classify(true, false));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -187,5 +197,6 @@ int main(void)
     RUN_TEST(test_i2c_scan_collect_returns_only_acknowledged_addresses);
     RUN_TEST(test_i2c_scan_collect_aborts_on_bus_error_without_partial_count);
     RUN_TEST(test_i2c_scan_collect_rejects_insufficient_capacity);
+    RUN_TEST(test_i2c_scan_probe_classifies_completed_nack_and_real_timeout);
     return UNITY_END();
 }

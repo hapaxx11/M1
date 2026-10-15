@@ -19,6 +19,14 @@ typedef enum {
     M1_I2C_SCAN_PROBE_ERROR,
 } m1_i2c_scan_probe_result_t;
 
+static inline m1_i2c_scan_probe_result_t m1_i2c_scan_probe_classify(
+    bool completed, bool nack)
+{
+    if (!completed)
+        return M1_I2C_SCAN_PROBE_ERROR;
+    return nack ? M1_I2C_SCAN_PROBE_NACK : M1_I2C_SCAN_PROBE_ACK;
+}
+
 typedef m1_i2c_scan_probe_result_t (*m1_i2c_scan_probe_fn)(
     uint8_t address, void *context);
 
