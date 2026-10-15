@@ -37,39 +37,67 @@ static inline bool m1_rpc_transport_feed_allowed(
     return !partial_frame || parser_transport == incoming_transport;
 }
 
-static inline bool m1_rpc_transport_parser_reset_on_usb_epoch(
-    bool epoch_advanced, bool partial_frame,
-    m1_rpc_transport_t parser_transport)
+static inline m1_rpc_transport_t *m1_rpc_transport_reply_slot(
+    bool rpc_task_context, m1_rpc_transport_t *parser_transport,
+    m1_rpc_transport_t *rpc_task_transport)
 {
-    return epoch_advanced && partial_frame &&
-           parser_transport == M1_RPC_TRANSPORT_USB;
+    return rpc_task_context ? rpc_task_transport : parser_transport;
 }
 
-static inline bool m1_rpc_transport_upload_allowed(
-    bool upload_active, m1_rpc_transport_t upload_transport,
-    m1_rpc_transport_t request_transport)
-{
-    return !upload_active || upload_transport == request_transport;
-}
-
-static inline bool m1_rpc_transport_response_too_large(
-    m1_rpc_transport_t transport, uint16_t payload_len,
-    uint16_t rpc_max_payload, uint16_t relay_frame_payload_max,
-    uint16_t rpc_frame_overhead)
+static inline uint16_t m1_rpc_transport_payload_limit(
+    m1_rpc_transport_t transport, uint16_t default_limit,
+    uint16_t esp32_limit)
 {
     if (!m1_rpc_transport_valid(transport))
-        return true;
-    if (transport != M1_RPC_TRANSPORT_ESP32)
-        return payload_len > rpc_max_payload;
-    return relay_frame_payload_max < rpc_frame_overhead ||
-           payload_len > (uint16_t)(relay_frame_payload_max -
-                                    rpc_frame_overhead);
+        return 0u;
+    return transport == M1_RPC_TRANSPORT_ESP32 ? esp32_limit : default_limit;
 }
 
-static inline bool m1_rpc_poll_retry_due(uint32_t now, uint32_t deadline,
-                                         bool retry_waiting)
+static inline bool m1_rpc_transport_payload_too_large(
+    m1_rpc_transport_t transport, uint16_t len, uint16_t default_limit,
+    uint16_t esp32_limit)
 {
-    return !retry_waiting || (int32_t)(now - deadline) >= 0;
+    uint16_t limit = m1_rpc_transport_payload_limit(
+        transport, default_limit, esp32_limit);
+    return limit == 0u || len > limit;
+}
+
+static inline bool m1_rpc_transport_file_write_start_allowed(
+    bool upload_active, m1_rpc_transport_t upload_transport,
+    m1_rpc_transport_t incoming_transport)
+{
+    return m1_rpc_transport_valid(incoming_transport) &&
+           (!upload_active || upload_transport == incoming_transport);
+}
+
+static inline bool m1_rpc_transport_file_write_matches(
+    bool upload_active, m1_rpc_transport_t upload_transport,
+    m1_rpc_transport_t incoming_transport)
+{
+    return upload_active && m1_rpc_transport_valid(incoming_transport) &&
+           upload_transport == incoming_transport;
+}
+
+static inline bool m1_rpc_transport_file_write_is_usb(
+    bool upload_active, m1_rpc_transport_t upload_transport)
+{
+    return upload_active && upload_transport == M1_RPC_TRANSPORT_USB;
+}
+
+static inline uint32_t m1_rpc_poll_backoff_ms(uint8_t failures)
+{
+    uint32_t delay_ms = 500u;
+    while (failures > 0u && delay_ms < 5000u)
+    {
+        delay_ms *= 2u;
+        failures--;
+    }
+    return delay_ms > 5000u ? 5000u : delay_ms;
+}
+
+static inline bool m1_rpc_poll_deadline_due(uint32_t now, uint32_t deadline)
+{
+    return (int32_t)(now - deadline) >= 0;
 }
 
 #endif /* M1_RPC_TRANSPORT_H_ */

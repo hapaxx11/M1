@@ -16,7 +16,7 @@
 #include "app_freertos.h"
 #include "semphr.h"
 #include "m1_ring_buffer.h"
-#include "esp32_idle.h"
+#include "m1_esp32_bg_owner.h"
 
 #define ESP32_UART_BAUDRATE					115200
 #define ESP32_UART_HIGH_BAUDRATE			921600
@@ -42,6 +42,8 @@ void esp32_disable(void);
 void m1_esp32_uart_tx(char *txdata);
 void esp32_uartrx_handler(uint8_t rx_byte);
 uint8_t m1_esp32_get_init_status(void);
+void m1_esp32_background_owner_set(m1_esp32_bg_owner_t owner, bool active);
+bool m1_esp32_background_owner_active(void);
 void m1_esp32_idle_poll(void);
 void m1_esp32_background_owner_set(esp32_background_owner_t owner, bool active);
 bool m1_esp32_background_owner_active(void);

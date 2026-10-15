@@ -47,6 +47,7 @@ target_include_directories(unity PUBLIC unity)
 # Source root
 # ------------------------------------------------------------------
 set(M1_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+set(STUBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 
 # ------------------------------------------------------------------
 # Module under test: bit_util
@@ -182,6 +183,7 @@ add_executable(test_esp32_rpc
     ${M1_ROOT}/m1_csrc/esp32_feature_map.c
 )
 target_include_directories(test_esp32_rpc PRIVATE
+    ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc
 )
 target_link_libraries(test_esp32_rpc PRIVATE unity)
@@ -344,6 +346,7 @@ add_executable(test_esp32_m1link
     ${M1_ROOT}/m1_csrc/esp32_feature_map.c
 )
 target_include_directories(test_esp32_m1link PRIVATE
+    ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc
 )
 target_link_libraries(test_esp32_m1link PRIVATE unity)
@@ -370,12 +373,6 @@ if(TARGET sanitizers)
     target_link_libraries(test_battery_soc PRIVATE sanitizers)
 endif()
 add_test(NAME battery_soc COMMAND test_battery_soc)
-
-# ------------------------------------------------------------------
-# Stubs directory — provides minimal HAL/FatFS/RTOS stubs so firmware
-# source files compile on the host without hardware dependencies.
-# ------------------------------------------------------------------
-set(STUBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stubs")
 
 # ------------------------------------------------------------------
 # Module under test: BLE spam packet-count helper
@@ -573,6 +570,21 @@ if(TARGET sanitizers)
     target_link_libraries(test_rpc_transport PRIVATE sanitizers)
 endif()
 add_test(NAME rpc_transport COMMAND test_rpc_transport)
+
+# ------------------------------------------------------------------
+# Module under test: persistent ESP32 background-owner decisions.
+# ------------------------------------------------------------------
+add_executable(test_esp32_bg_ownership
+    test_esp32_bg_ownership.c
+)
+target_include_directories(test_esp32_bg_ownership PRIVATE
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_esp32_bg_ownership PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_esp32_bg_ownership PRIVATE sanitizers)
+endif()
+add_test(NAME esp32_bg_ownership COMMAND test_esp32_bg_ownership)
 
 # ------------------------------------------------------------------
 # Module under test: m1_json_mini

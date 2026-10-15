@@ -19,6 +19,7 @@
 #include "main.h"
 #include "m1_settings.h"
 #include "m1_esp32_hal.h"
+#include "m1_esp32_rpc.h"
 #include "esp32_idle.h"
 #include "m1_esp32_caps.h"
 #include "m1_http_client.h"
@@ -70,7 +71,7 @@ EXTI_HandleTypeDef esp32_exti_dataready;
 
 static uint8_t esp32_init_done = FALSE;
 static uint8_t esp32_uart_init_done = FALSE;
-static volatile uint8_t s_esp32_background_owners;
+static volatile uint8_t esp32_background_owners;
 
 /* Idle auto power-off: cut ESP32-C6 power after it has been powered but unused
  * (transport not initialised) for ESP32_IDLE_POWER_OFF_MS.  m1_esp32_deinit()
@@ -116,8 +117,8 @@ void m1_esp32_init(void)
 {
 	GPIO_InitTypeDef gpio_init_structure;
 
-	if (!esp32_m1link_spi_mutex_init() ||
-	    !esp32_m1link_lifecycle_lock())
+	m1_esp32_rpc_transaction_lock_init();
+	if (!m1_esp32_rpc_transaction_lock())
 		return;
 
 	if ( !esp32_init_done )
@@ -170,7 +171,7 @@ void m1_esp32_init(void)
 		esp32_enable();
 	} // if ( !esp32_init_done )
 
-	esp32_m1link_lifecycle_unlock();
+	m1_esp32_rpc_transaction_unlock();
 } // void m1_esp32_init(void)
 
 
@@ -443,18 +444,16 @@ void m1_esp32_deinit(void)
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-	if (m1_esp32_background_owner_active() || !esp32_init_done)
+	m1_esp32_rpc_transaction_lock_init();
+	if (!m1_esp32_rpc_transaction_lock())
 		return;
-	if (!esp32_m1link_spi_mutex_init() ||
-	    !esp32_m1link_lifecycle_lock())
-		return;
-	if (m1_esp32_background_owner_active())
-	{
-		esp32_m1link_lifecycle_unlock();
-		return;
-	}
 
-	if ( esp32_init_done )
+	taskENTER_CRITICAL();
+	bool background_owned =
+		m1_esp32_bg_owner_any(esp32_background_owners);
+	taskEXIT_CRITICAL();
+
+	if (esp32_init_done && !background_owned)
 	{
 		/* Disable and clear the EXTI lines that feed esp_spi_msg_queue from the
 		 * ISR (ESP32_GPIO_EXTI_Callback).  Do this FIRST, before any task or
@@ -529,7 +528,7 @@ void m1_esp32_deinit(void)
 		http_ssl_reset();
 	} // if ( esp32_init_done )
 
-	esp32_m1link_lifecycle_unlock();
+	m1_esp32_rpc_transaction_unlock();
 } // void m1_esp32_deinit(void)
 
 void m1_esp32_background_owner_set(esp32_background_owner_t owner, bool active)
@@ -563,6 +562,23 @@ uint8_t m1_esp32_get_init_status(void)
 {
 	return esp32_init_done;
 } // uint8_t m1_esp32_get_init_status(void)
+
+void m1_esp32_background_owner_set(m1_esp32_bg_owner_t owner, bool active)
+{
+	taskENTER_CRITICAL();
+	esp32_background_owners =
+		m1_esp32_bg_owner_update(esp32_background_owners, owner, active);
+	taskEXIT_CRITICAL();
+}
+
+bool m1_esp32_background_owner_active(void)
+{
+	bool active;
+	taskENTER_CRITICAL();
+	active = m1_esp32_bg_owner_any(esp32_background_owners);
+	taskEXIT_CRITICAL();
+	return active;
+}
 
 
 /******************************************************************************/

@@ -73,6 +73,7 @@ uint8_t spi_m1link_send_recv_bin(const uint8_t *tx_buf, int tx_len,
  * tests (issue #719) -- on-target this is populated by
  * spi_m1link_send_recv_bin() from HAL_GetTick(). */
 static uint32_t g_last_elapsed_ms;
+static bool g_transaction_lock_available_during_transport;
 uint32_t m1_esp32_m1link_last_elapsed_ms(void) { return g_last_elapsed_ms; }
 
 /* ------------------------------------------------------------------ */
@@ -89,6 +90,11 @@ static uint8_t fake_transport(const uint8_t *tx_buf, int tx_len,
                               uint8_t *rx_buf, int rx_buf_size,
                               int *out_len, int timeout_sec)
 {
+    g_transaction_lock_available_during_transport =
+        m1_esp32_rpc_transaction_try_lock();
+    if (g_transaction_lock_available_during_transport)
+        m1_esp32_rpc_transaction_unlock();
+
     (void)timeout_sec;
     g_last_tx_len = (tx_len < (int)sizeof(g_last_tx)) ? tx_len
                                                       : (int)sizeof(g_last_tx);
@@ -135,6 +141,7 @@ void setUp(void)
     g_ret = 0;
     g_last_tx_len = 0;
     g_last_elapsed_ms = 0u;
+    g_transaction_lock_available_during_transport = false;
     memset(g_canned, 0, sizeof(g_canned));
     m1_esp32_rpc_set_transport(fake_transport);
 }
@@ -163,6 +170,30 @@ void test_call_resp_ok_copies_payload(void)
     TEST_ASSERT_EQUAL_UINT8(M1_ESP32_RPC_OK, st);
     TEST_ASSERT_EQUAL_UINT16(sizeof(body), rlen);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(body, resp, sizeof(body));
+}
+
+void test_call_serializes_the_entire_exchange(void)
+{
+    g_canned_len = make_frame(g_canned, M1_ESP32_RPC_RESP,
+                              M1_ESP32_RPC_NOW_ANNOUNCE, NULL, 0u);
+
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_OK,
+                      m1_esp32_rpc_call(M1_ESP32_RPC_NOW_ANNOUNCE,
+                                        NULL, 0u, NULL, 0u, NULL, 1));
+    TEST_ASSERT_FALSE(g_transaction_lock_available_during_transport);
+    TEST_ASSERT_TRUE(m1_esp32_rpc_transaction_try_lock());
+    m1_esp32_rpc_transaction_unlock();
+}
+
+void test_call_does_not_transmit_after_hal_deinit(void)
+{
+    g_hal_ready = false;
+    TEST_ASSERT_EQUAL(M1_ESP32_RPC_ERR_NOT_INIT,
+                      m1_esp32_rpc_call(M1_ESP32_RPC_NOW_ANNOUNCE,
+                                        NULL, 0u, NULL, 0u, NULL, 1));
+    TEST_ASSERT_EQUAL_INT(0, g_last_tx_len);
+    TEST_ASSERT_TRUE(m1_esp32_rpc_transaction_try_lock());
+    m1_esp32_rpc_transaction_unlock();
 }
 
 void test_call_builds_valid_request_frame(void)
@@ -596,6 +627,8 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_call_resp_ok_copies_payload);
+    RUN_TEST(test_call_serializes_the_entire_exchange);
+    RUN_TEST(test_call_does_not_transmit_after_hal_deinit);
     RUN_TEST(test_call_builds_valid_request_frame);
     RUN_TEST(test_call_nak_returns_status_code);
     RUN_TEST(test_call_transport_failure);

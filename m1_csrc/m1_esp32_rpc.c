@@ -21,6 +21,8 @@
  */
 
 #include <stdlib.h>
+#include "FreeRTOS.h"
+#include "semphr.h"
 #include <string.h>
 
 #include "m1_esp32_rpc.h"
@@ -60,11 +62,38 @@ extern uint32_t m1_esp32_m1link_last_elapsed_ms(void);
  * (the brain CD3 is a full-duplex spi_slave, not an ESP-AT spi_slave_hd device);
  * host tests swap in a fake via m1_esp32_rpc_set_transport(). */
 static m1_esp32_rpc_transport_fn s_transport = spi_m1link_send_recv_bin;
+static SemaphoreHandle_t s_transaction_mutex;
 
 /* Snapshot of the last m1_esp32_rpc_call() invocation — see the "Feature-call
  * diagnostics (Phase 2, issue #719)" comment in m1_esp32_rpc.h.  Diagnostic
  * only: never consulted by any feature gate or decode path. */
 static m1_esp32_rpc_call_diag_t s_call_diag = { 0 };
+
+void m1_esp32_rpc_transaction_lock_init(void)
+{
+    if (s_transaction_mutex == NULL)
+        s_transaction_mutex = xSemaphoreCreateMutex();
+}
+
+bool m1_esp32_rpc_transaction_lock(void)
+{
+    m1_esp32_rpc_transaction_lock_init();
+    return s_transaction_mutex != NULL &&
+           xSemaphoreTake(s_transaction_mutex, portMAX_DELAY) == pdTRUE;
+}
+
+bool m1_esp32_rpc_transaction_try_lock(void)
+{
+    m1_esp32_rpc_transaction_lock_init();
+    return s_transaction_mutex != NULL &&
+           xSemaphoreTake(s_transaction_mutex, 0u) == pdTRUE;
+}
+
+void m1_esp32_rpc_transaction_unlock(void)
+{
+    if (s_transaction_mutex != NULL)
+        xSemaphoreGive(s_transaction_mutex);
+}
 
 void m1_esp32_rpc_set_transport(m1_esp32_rpc_transport_fn fn)
 {
@@ -114,10 +143,9 @@ static void rpc_call_diag_record(uint16_t msg_id, m1_esp32_rpc_status_t status,
 /* RPC client                                                               */
 /*==========================================================================*/
 
-m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
-                                        const uint8_t *req, uint16_t req_len,
-                                        uint8_t *resp, uint16_t resp_cap,
-                                        uint16_t *resp_len, int timeout_sec)
+static m1_esp32_rpc_status_t m1_esp32_rpc_call_unlocked(
+    uint16_t msg_id, const uint8_t *req, uint16_t req_len,
+    uint8_t *resp, uint16_t resp_cap, uint16_t *resp_len, int timeout_sec)
 {
     uint8_t  tx_small[M1_ESP32_RPC_CONTROL_FRAME_MAX];
     uint8_t *tx = tx_small;
@@ -201,6 +229,27 @@ m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
     rpc_call_diag_record(msg_id, M1_ESP32_RPC_OK, rx_len, copy_len, elapsed_ms);
     free(rx);
     return M1_ESP32_RPC_OK;
+}
+
+m1_esp32_rpc_status_t m1_esp32_rpc_call(uint16_t msg_id,
+                                        const uint8_t *req, uint16_t req_len,
+                                        uint8_t *resp, uint16_t resp_cap,
+                                        uint16_t *resp_len, int timeout_sec)
+{
+    if (!m1_esp32_rpc_transaction_lock())
+        return M1_ESP32_RPC_ERR_BUSY;
+
+    if (!m1_esp32_get_init_status())
+    {
+        rpc_call_diag_record(msg_id, M1_ESP32_RPC_ERR_NOT_INIT, -1, 0u, 0u);
+        m1_esp32_rpc_transaction_unlock();
+        return M1_ESP32_RPC_ERR_NOT_INIT;
+    }
+
+    m1_esp32_rpc_status_t status = m1_esp32_rpc_call_unlocked(
+        msg_id, req, req_len, resp, resp_cap, resp_len, timeout_sec);
+    m1_esp32_rpc_transaction_unlock();
+    return status;
 }
 
 /*==========================================================================*/

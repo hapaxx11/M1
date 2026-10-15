@@ -92,6 +92,22 @@ static wifi_boot_config_t s_wifi_boot_config = {
 	.primary_index = WIFI_BOOT_PRIMARY_NONE,
 	.auto_connect = false,
 };
+
+static void wifi_set_connected_state(const char *ssid)
+{
+	s_wifi_stub_connected = ssid != NULL;
+	if (ssid != NULL)
+	{
+		strncpy(s_wifi_stub_ssid, ssid, sizeof(s_wifi_stub_ssid) - 1u);
+		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1u] = '\0';
+	}
+	else
+	{
+		memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
+	}
+	m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_WIFI_STA,
+	                              s_wifi_stub_connected);
+}
 #endif
 
 typedef struct {
@@ -626,10 +642,7 @@ static void wifi_connect_selected_ap(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 		if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 			wifi_show_message("Connect", "Warning", "Credentials not saved");
-		strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
-		        sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		wifi_connection_state_set(true);
+		wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
@@ -680,10 +693,7 @@ static void wifi_connect_selected_ap(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 		if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 			wifi_show_message("Connect", "Warning", "Credentials not saved");
-		strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid,
-		        sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		wifi_connection_state_set(true);
+		wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 		memset(password, 0, sizeof(password));
 		wifi_show_message("Connect", "Connected!", ap_list[ap_view_idx].ssid);
@@ -729,9 +739,7 @@ static void wifi_connect_selected_ap(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 		wifi_show_message("Connect", "Warning", "Credentials not saved");
-	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
-	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-	wifi_connection_state_set(true);
+	wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 	memset(password, 0, sizeof(password));
 
@@ -4349,9 +4357,7 @@ void wifi_general_join_wifi(void)
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 	if (!wifi_cred_save(ap_list[ap_view_idx].ssid, password))
 		wifi_show_message("Join WiFi", "Warning", "Credentials not saved");
-	strncpy(s_wifi_stub_ssid, ap_list[ap_view_idx].ssid, sizeof(s_wifi_stub_ssid) - 1);
-	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-	wifi_connection_state_set(true);
+	wifi_set_connected_state(ap_list[ap_view_idx].ssid);
 #endif
 	memset(password, 0, sizeof(password));
 
@@ -4932,7 +4938,7 @@ void wifi_general_hotspot(void)
 			if (m1_esp32_rpc_softap_stop() == M1_ESP32_RPC_OK)
 			{
 				m1_esp32_background_owner_set(
-					ESP32_BACKGROUND_OWNER_HOTSPOT, false);
+					M1_ESP32_BG_OWNER_HOTSPOT, false);
 				wifi_show_message("WiFi Hotspot", "Stopped", internet_line);
 			}
 			else
@@ -4953,6 +4959,10 @@ void wifi_general_hotspot(void)
 				wifi_show_message("WiFi Hotspot", "Stop failed", "Check ESP32 link");
 			}
 		}
+	}
+	else if (use_rpc)
+	{
+		m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_HOTSPOT, true);
 	}
 }
 
@@ -6218,9 +6228,7 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 				wifi_show_message("Connect", "Connect failed", "Check password");
 			return false;
 		}
-		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		wifi_connection_state_set(true);
+		wifi_set_connected_state(cred->ssid);
 		if (show_status)
 			wifi_show_message("Connect", "Connected!", cred->ssid);
 		if (sync_clock)
@@ -6266,9 +6274,7 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 		}
 
 		/* Success — update connected state */
-		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
-		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-		wifi_connection_state_set(true);
+		wifi_set_connected_state(cred->ssid);
 		if (show_status)
 			wifi_show_message("Connect", "Connected!", cred->ssid);
 		if (sync_clock)
@@ -6304,9 +6310,7 @@ static bool wifi_connect_from_saved(const wifi_credential_t *cred,
 	}
 
 	/* Success — update connected state */
-	strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
-	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
-	wifi_connection_state_set(true);
+	wifi_set_connected_state(cred->ssid);
 
 	if (show_status && resp.payload_len >= 2)
 	{
@@ -6568,8 +6572,7 @@ void wifi_disconnect(void)
 		m1_esp32_simple_cmd(CMD_WIFI_DISCONNECT, &resp, 3000);
 	}
 
-	wifi_connection_state_set(false);
-	memset(s_wifi_stub_ssid, 0, sizeof(s_wifi_stub_ssid));
+	wifi_set_connected_state(NULL);
 }
 
 bool wifi_prompt_disconnect(void)

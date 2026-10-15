@@ -61,14 +61,27 @@ void test_epoch_advanced_multiple_resets_before_consumption(void)
     TEST_ASSERT_FALSE(m1_rpc_usb_epoch_advanced(&last_seen, 5));
 }
 
-void test_usb_reset_cleans_partial_usb_frame_on_mobile_input(void)
+void test_mobile_feed_consumes_usb_epoch_and_discards_partial_usb_frame(void)
 {
-    TEST_ASSERT_TRUE(m1_rpc_usb_epoch_should_reset_parser(true, true, true));
+    uint32_t parser_epoch = 0u;
+    bool partial_usb_frame = true;
+
+    TEST_ASSERT_FALSE(m1_rpc_transport_feed_allowed(
+        partial_usb_frame, M1_RPC_TRANSPORT_USB, M1_RPC_TRANSPORT_ESP32));
+    bool epoch_advanced = m1_rpc_usb_epoch_advanced(&parser_epoch, 1u);
+    TEST_ASSERT_TRUE(m1_rpc_usb_epoch_should_reset_parser(
+        epoch_advanced, partial_usb_frame, M1_RPC_TRANSPORT_USB));
+    partial_usb_frame = false;
+    TEST_ASSERT_TRUE(m1_rpc_transport_feed_allowed(
+        partial_usb_frame, M1_RPC_TRANSPORT_USB, M1_RPC_TRANSPORT_ESP32));
 }
 
-void test_usb_reset_preserves_active_mobile_parser(void)
+void test_usb_epoch_preserves_active_mobile_frame(void)
 {
-    TEST_ASSERT_FALSE(m1_rpc_usb_epoch_should_reset_parser(true, true, false));
+    TEST_ASSERT_FALSE(m1_rpc_usb_epoch_should_reset_parser(
+        true, true, M1_RPC_TRANSPORT_ESP32));
+    TEST_ASSERT_FALSE(m1_rpc_usb_epoch_should_reset_parser(
+        false, true, M1_RPC_TRANSPORT_USB));
 }
 
 /* ── m1_rpc_usb_epoch_check() ── */
@@ -137,8 +150,8 @@ int main(void)
     RUN_TEST(test_epoch_advanced_detects_bump_once);
     RUN_TEST(test_epoch_advanced_independent_consumers);
     RUN_TEST(test_epoch_advanced_multiple_resets_before_consumption);
-    RUN_TEST(test_usb_reset_cleans_partial_usb_frame_on_mobile_input);
-    RUN_TEST(test_usb_reset_preserves_active_mobile_parser);
+    RUN_TEST(test_mobile_feed_consumes_usb_epoch_and_discards_partial_usb_frame);
+    RUN_TEST(test_usb_epoch_preserves_active_mobile_frame);
     RUN_TEST(test_check_no_deferred_no_file_write_is_noop);
     RUN_TEST(test_check_stale_deferred_command_is_discarded);
     RUN_TEST(test_check_current_epoch_deferred_command_is_kept);

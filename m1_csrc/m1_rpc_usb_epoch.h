@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "m1_rpc_transport.h"
 
 /* A host-side USB bus reset or disconnect (re-enumeration of qMonstatek
  * without an MCU reboot) ends the previous RPC session even though nothing
@@ -34,10 +35,11 @@ static inline bool m1_rpc_usb_epoch_advanced(uint32_t *last_seen_epoch,
 
 static inline bool m1_rpc_usb_epoch_should_reset_parser(
     bool epoch_advanced, bool parser_transport_active,
-    bool parser_transport_is_usb)
+    m1_rpc_transport_t parser_transport)
 {
     return epoch_advanced &&
-           (!parser_transport_active || parser_transport_is_usb);
+           (!parser_transport_active ||
+            parser_transport == M1_RPC_TRANSPORT_USB);
 }
 
 /* Cleanup action decided for rpc_task's deferred-command/file-write state at

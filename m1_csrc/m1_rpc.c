@@ -107,7 +107,7 @@ typedef struct {
     FIL      file;
     uint32_t total_size;
     uint32_t bytes_written;
-    uint8_t  transport;
+    m1_rpc_transport_t transport;
 } S_RPC_FileWriteState;
 
 /***************************** V A R I A B L E S ******************************/
@@ -130,6 +130,8 @@ static uint8_t           s_tx_buf[RPC_MAX_FRAME_SIZE];
 static SemaphoreHandle_t s_tx_mutex;
 static m1_rpc_transport_tx_fn s_transport_tx[M1_RPC_TRANSPORT_COUNT];
 static void *s_transport_tx_context[M1_RPC_TRANSPORT_COUNT];
+static m1_rpc_transport_t s_parser_reply_transport = M1_RPC_TRANSPORT_USB;
+static m1_rpc_transport_t s_rpc_task_reply_transport = M1_RPC_TRANSPORT_USB;
 static SemaphoreHandle_t s_route_mutex;
 typedef struct {
     TaskHandle_t task;
@@ -149,6 +151,9 @@ static bool s_brain_status_retry_waiting;
 static bool s_brain_status_poll_failed;
 static bool s_brain_rpc_status_unsupported;
 static bool s_brain_qmon_poll_unsupported;
+static bool s_brain_rpc_poll_scheduled;
+static TickType_t s_brain_rpc_poll_deadline;
+static uint8_t s_brain_rpc_poll_failures;
 static uint8_t *s_brain_relay_pending_frame;
 static uint16_t s_brain_relay_pending_len;
 
@@ -419,7 +424,7 @@ bool m1_rpc_mobile_session_active(void)
 void m1_rpc_bluetooth_direct_setting_changed(void)
 {
     bool enabled = settings_bluetooth_direct_enabled();
-    m1_esp32_background_owner_set(ESP32_BACKGROUND_OWNER_BLE_DIRECT, enabled);
+    m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_BLE_DIRECT, enabled);
     s_ble_direct_sync_pending = true;
     s_ble_direct_last_sync_tick = 0u;
     s_brain_status_retry_tick = 0u;
@@ -431,6 +436,8 @@ void m1_rpc_bluetooth_direct_setting_changed(void)
         m1_esp32_deinit();
     if (s_rpc_task_hdl != NULL)
         xTaskNotifyGive(s_rpc_task_hdl);
+    if (!enabled && !m1_esp32_background_owner_active())
+        m1_esp32_deinit();
 }
 
 static bool rpc_reply_route_set_current(m1_rpc_transport_t transport)
@@ -510,6 +517,15 @@ static bool rpc_brain_transmit(void *context, const uint8_t *data,
            m1_esp32_rpc_qmon_resp(data, len) == M1_ESP32_RPC_OK;
 }
 
+static m1_rpc_transport_t *rpc_reply_transport_context(void)
+{
+    bool rpc_task_context = s_rpc_task_hdl != NULL &&
+                            xTaskGetCurrentTaskHandle() == s_rpc_task_hdl;
+    return m1_rpc_transport_reply_slot(rpc_task_context,
+                                       &s_parser_reply_transport,
+                                       &s_rpc_task_reply_transport);
+}
+
 bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
                           uint8_t cmd,
                           uint8_t seq,
@@ -523,15 +539,18 @@ bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
     if (!m1_rpc_transport_valid(transport))
         return false;
 
-    if (m1_rpc_transport_response_too_large(
-            transport, len, RPC_MAX_PAYLOAD, M1_ESP32_RPC_PAYLOAD_MAX,
-            RPC_HEADER_SIZE + RPC_CRC_SIZE))
+    if (m1_rpc_transport_payload_too_large(
+            transport, len, RPC_MAX_PAYLOAD,
+            (uint16_t)(M1_ESP32_RPC_PAYLOAD_MAX -
+                       RPC_HEADER_SIZE - RPC_CRC_SIZE)))
     {
-        if (cmd == RPC_CMD_NACK)
-            return false;
-        uint8_t error = RPC_ERR_SIZE_TOO_LARGE;
-        return m1_rpc_send_frame_to(transport, RPC_CMD_NACK, seq, &error,
-                                   sizeof(error));
+        if (transport == M1_RPC_TRANSPORT_ESP32)
+        {
+            uint8_t error = RPC_ERR_SIZE_TOO_LARGE;
+            return m1_rpc_send_frame_to(transport, RPC_CMD_NACK, seq,
+                                        &error, sizeof(error));
+        }
+        return false;
     }
 
     if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
@@ -586,7 +605,7 @@ bool m1_rpc_send_frame_to(m1_rpc_transport_t transport,
 void m1_rpc_send_frame(uint8_t cmd, uint8_t seq,
                        const uint8_t *payload, uint16_t len)
 {
-    (void)m1_rpc_send_frame_to(rpc_reply_route_current(), cmd, seq,
+    (void)m1_rpc_send_frame_to(*rpc_reply_transport_context(), cmd, seq,
                                payload, len);
 }
 
@@ -654,6 +673,8 @@ bool m1_rpc_feed_from_transport(m1_rpc_transport_t transport,
                                 const uint8_t *data,
                                 uint16_t len)
 {
+    bool usb_epoch_advanced;
+
     if (!m1_rpc_transport_valid(transport) ||
         (data == NULL && len != 0u) ||
         s_parser_mutex == NULL)
@@ -676,11 +697,13 @@ bool m1_rpc_feed_from_transport(m1_rpc_transport_t transport,
     if (xSemaphoreTake(s_parser_mutex, portMAX_DELAY) != pdTRUE)
         return false;
 
-    /* Consume USB session changes on every ingress. Clear only an incomplete
-     * frame owned by USB; an active mobile frame remains with its transport. */
-    bool usb_epoch_advanced =
+    /* A USB bus reset can split an RPC frame across the reset. Never let the
+     * first bytes from a newly enumerated host complete a frame that
+     * belonged to the old host — reset the parser state machine at the
+     * epoch boundary before parsing any new bytes. */
+    usb_epoch_advanced =
         m1_rpc_usb_epoch_advanced(&s_usb_parser_epoch, s_usb_session_epoch);
-    if (m1_rpc_transport_parser_reset_on_usb_epoch(
+    if (m1_rpc_usb_epoch_should_reset_parser(
             usb_epoch_advanced, s_parser_transport_active,
             s_parser_transport))
     {
@@ -835,14 +858,9 @@ static void rpc_parse_byte(uint8_t byte)
  */
 static void rpc_dispatch_frame(const S_RPC_Frame *frame)
 {
-    if (!rpc_reply_route_set_current(
-            m1_rpc_transport_reply_to_request(frame->transport)))
-    {
-        uint8_t error = RPC_ERR_BUSY;
-        (void)m1_rpc_send_frame_to(frame->transport, RPC_CMD_NACK,
-                                   frame->seq, &error, sizeof(error));
-        return;
-    }
+    m1_rpc_transport_t *reply_context = rpc_reply_transport_context();
+    m1_rpc_transport_t previous_transport = *reply_context;
+    *reply_context = m1_rpc_transport_reply_to_request(frame->transport);
 
     M1_LOG_I(M1_LOGDB_TAG, "DISPATCH cmd=0x%02X seq=%u len=%u\r\n",
              frame->cmd, frame->seq, frame->len);
@@ -981,7 +999,7 @@ static void rpc_dispatch_frame(const S_RPC_Frame *frame)
         break;
     }
 
-    rpc_reply_route_clear_current();
+    *reply_context = previous_transport;
 }
 
 
@@ -1104,6 +1122,26 @@ static void rpc_handle_power_off(const S_RPC_Frame *f)
 /*                  S C R E E N   C O M M A N D S                             */
 /*============================================================================*/
 
+static bool rpc_screen_stream_active_get(void)
+{
+    bool active = false;
+    if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        active = rpc_screen_stream.active;
+        xSemaphoreGive(s_route_mutex);
+    }
+    return active;
+}
+
+static void rpc_screen_stream_active_set(bool active)
+{
+    if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        rpc_screen_stream.active = active;
+        xSemaphoreGive(s_route_mutex);
+    }
+}
+
 /**
  * @brief  Handle SCREEN_START — begin streaming at requested FPS.
  *         Payload: fps(1 byte), 1-15.
@@ -1121,11 +1159,15 @@ static void rpc_handle_screen_start(const S_RPC_Frame *f)
     if (f->transport == M1_RPC_TRANSPORT_ESP32 && fps > 5u)
         fps = 5u;
 
-    rpc_screen_stream.fps          = fps;
-    rpc_screen_stream.interval_ms  = 1000 / fps;
-    rpc_screen_stream.last_send_tick = xTaskGetTickCount();
-    rpc_screen_stream.active       = true;
-    s_screen_transport = f->transport;
+    if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        rpc_screen_stream.fps = fps;
+        rpc_screen_stream.interval_ms = 1000 / fps;
+        rpc_screen_stream.last_send_tick = xTaskGetTickCount();
+        rpc_screen_stream.active = true;
+        s_screen_transport = f->transport;
+        xSemaphoreGive(s_route_mutex);
+    }
 
     m1_rpc_send_ack(f->seq);
 }
@@ -1136,7 +1178,7 @@ static void rpc_handle_screen_start(const S_RPC_Frame *f)
  */
 static void rpc_handle_screen_stop(const S_RPC_Frame *f)
 {
-    rpc_screen_stream.active = false;
+    rpc_screen_stream_active_set(false);
     m1_rpc_send_ack(f->seq);
 }
 
@@ -1255,7 +1297,7 @@ void m1_rpc_notify_screen_update(void)
  */
 bool m1_rpc_screen_streaming_active(void)
 {
-    return rpc_screen_stream.active;
+    return rpc_screen_stream_active_get();
 }
 
 
@@ -1592,15 +1634,14 @@ static void rpc_handle_file_write_start(const S_RPC_Frame *f)
         return;
     }
 
-    if (!m1_rpc_transport_upload_allowed(
-            s_file_write.active,
-            (m1_rpc_transport_t)s_file_write.transport, f->transport))
+    if (!m1_rpc_transport_file_write_start_allowed(
+            s_file_write.active, s_file_write.transport, f->transport))
     {
         m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
         return;
     }
 
-    /* Abort any previous write from the same transport. */
+    /* Abort any previous write */
     if (s_file_write.active)
     {
         f_close(&s_file_write.file);
@@ -1627,6 +1668,7 @@ static void rpc_handle_file_write_start(const S_RPC_Frame *f)
     }
 
     s_file_write.bytes_written = 0;
+    s_file_write.transport = f->transport;
     s_file_write.active = true;
     s_file_write.transport = (uint8_t)f->transport;
 
@@ -1643,9 +1685,8 @@ static void rpc_handle_file_write_data(const S_RPC_Frame *f)
 {
     m1_wdt_reset();
 
-    if (!s_file_write.active ||
-        !m1_rpc_transport_upload_allowed(
-            true, (m1_rpc_transport_t)s_file_write.transport, f->transport))
+    if (!m1_rpc_transport_file_write_matches(
+            s_file_write.active, s_file_write.transport, f->transport))
     {
         m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
         return;
@@ -1689,9 +1730,8 @@ static void rpc_handle_file_write_finish(const S_RPC_Frame *f)
 {
     m1_wdt_reset();
 
-    if (!s_file_write.active ||
-        !m1_rpc_transport_upload_allowed(
-            true, (m1_rpc_transport_t)s_file_write.transport, f->transport))
+    if (!m1_rpc_transport_file_write_matches(
+            s_file_write.active, s_file_write.transport, f->transport))
     {
         m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
         return;
@@ -2497,9 +2537,9 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
     /* Suspend screen streaming during ESP flash to eliminate USB TX
      * mutex contention between screen frames and flash ACK responses.
      * This reduces USB interrupt load and prevents timing jitter. */
-    s_esp_update.screen_was_streaming = rpc_screen_stream.active;
-    if (rpc_screen_stream.active)
-        rpc_screen_stream.active = false;
+    s_esp_update.screen_was_streaming = rpc_screen_stream_active_get();
+    if (s_esp_update.screen_was_streaming)
+        rpc_screen_stream_active_set(false);
 
     /* Connect to ESP32 ROM bootloader.
      * Use 230400 for RPC path — UART4 RX is byte-by-byte ISR with no DMA,
@@ -2520,7 +2560,7 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
         HAL_NVIC_EnableIRQ(EXTI7_IRQn);
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
         if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
+            rpc_screen_stream_active_set(true);
         rpc_send_nack_sub(f->seq, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_CONNECT);
         return;
     }
@@ -2543,7 +2583,7 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
         HAL_NVIC_EnableIRQ(EXTI7_IRQn);
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
         if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
+            rpc_screen_stream_active_set(true);
         rpc_send_nack_sub(f->seq, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_ERASE);
         return;
     }
@@ -2609,7 +2649,7 @@ static void rpc_handle_esp_update_data(const S_RPC_Frame *f)
         HAL_NVIC_EnableIRQ(EXTI7_IRQn);
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
         if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
+            rpc_screen_stream_active_set(true);
         rpc_send_nack_sub(f->seq, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_WRITE);
         return;
     }
@@ -2691,7 +2731,7 @@ static void rpc_handle_esp_update_finish(const S_RPC_Frame *f)
         }
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
         if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
+            rpc_screen_stream_active_set(true);
         return;
     }
 #endif
@@ -2717,7 +2757,7 @@ static void rpc_handle_esp_update_finish(const S_RPC_Frame *f)
 
     m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
     if (s_esp_update.screen_was_streaming)
-        rpc_screen_stream.active = true;
+        rpc_screen_stream_active_set(true);
     m1_rpc_send_ack(f->seq);
 }
 
@@ -2855,8 +2895,18 @@ static void rpc_handle_esp_uart_snoop(const S_RPC_Frame *f)
  * USB parser currently owns an incomplete frame, and is bounded by 2038 bytes. */
 static void rpc_brain_relay_poll(void)
 {
-    bool direct_enabled = settings_bluetooth_direct_enabled();
-    if (!m1_esp32_background_owner_active())
+    m1_esp32_background_owner_set(M1_ESP32_BG_OWNER_BLE_DIRECT,
+                                  settings_bluetooth_direct_enabled());
+    if (!m1_esp32_get_init_status() &&
+        m1_esp32_background_owner_active())
+        m1_esp32_init();
+    if (!m1_esp32_get_init_status())
+    {
+        m1_rpc_set_mobile_session_active(false);
+        return;
+    }
+
+    if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
     {
         m1_rpc_set_mobile_session_active(false);
         s_brain_status_retry_tick = 0u;
@@ -2864,87 +2914,56 @@ static void rpc_brain_relay_poll(void)
         s_brain_status_poll_failed = false;
         s_brain_rpc_status_unsupported = false;
         s_brain_qmon_poll_unsupported = false;
+        s_brain_rpc_poll_scheduled = false;
+        s_brain_rpc_poll_failures = 0u;
         free(s_brain_relay_pending_frame);
         s_brain_relay_pending_frame = NULL;
         s_brain_relay_pending_len = 0u;
         return;
     }
 
-    if (s_brain_rpc_status_unsupported)
-        return;
-
-    if (!m1_esp32_get_init_status())
-        m1_esp32_ensure_init();
-
-    if (m1_esp32_active_transport() != ESP32_TRANSPORT_RPC)
-    {
-        m1_rpc_set_mobile_session_active(false);
-        s_brain_rpc_status_unsupported = true;
-        s_brain_qmon_poll_unsupported = true;
-        if (direct_enabled)
-        {
-            m1_esp32_background_owner_set(
-                ESP32_BACKGROUND_OWNER_BLE_DIRECT, false);
-            s_ble_direct_sync_pending = false;
-            if (!m1_esp32_background_owner_active())
-                m1_esp32_deinit();
-        }
-        return;
-    }
-
     TickType_t now = xTaskGetTickCount();
-    bool status_due = m1_rpc_poll_retry_due(
-        (uint32_t)now, (uint32_t)s_brain_status_retry_tick,
-        s_brain_status_retry_waiting);
-    bool client_active;
-    m1_esp32_rpc_status_t status;
+    bool status_due = !s_brain_rpc_status_unsupported &&
+                      (!s_brain_rpc_poll_scheduled ||
+                      m1_rpc_poll_deadline_due(
+                          now, s_brain_rpc_poll_deadline));
+    m1_esp32_rpc_status_t status = M1_ESP32_RPC_OK;
     if (status_due)
     {
         uint8_t client_status = 0u;
-        status = m1_esp32_rpc_rpc_status_timeout(&client_status, 1);
+        status = m1_esp32_rpc_rpc_status(&client_status);
+        now = xTaskGetTickCount();
         if (status == M1_ESP32_RPC_ERR_UNSUPPORTED)
         {
             s_brain_rpc_status_unsupported = true;
-            s_brain_status_retry_waiting = false;
-            s_brain_status_poll_failed = false;
+            s_brain_rpc_poll_scheduled = false;
             m1_rpc_set_mobile_session_active(false);
-            if (direct_enabled)
-            {
-                m1_esp32_background_owner_set(
-                    ESP32_BACKGROUND_OWNER_BLE_DIRECT, false);
-                s_ble_direct_sync_pending = false;
-                if (!m1_esp32_background_owner_active())
-                    m1_esp32_deinit();
-            }
-            return;
         }
-        if (status != M1_ESP32_RPC_OK)
+        else if (status != M1_ESP32_RPC_OK)
         {
+            if (s_brain_rpc_poll_failures < UINT8_MAX)
+                s_brain_rpc_poll_failures++;
+            s_brain_rpc_poll_deadline =
+                now + pdMS_TO_TICKS(m1_rpc_poll_backoff_ms(
+                                        s_brain_rpc_poll_failures - 1u));
+            s_brain_rpc_poll_scheduled = true;
             s_ble_direct_sync_pending = true;
-            s_brain_status_retry_waiting = true;
-            s_brain_status_poll_failed = true;
-            s_brain_status_retry_tick =
-                xTaskGetTickCount() + pdMS_TO_TICKS(5000u);
             return;
         }
+        else
+        {
+            s_brain_rpc_poll_failures = 0u;
+            s_brain_rpc_poll_deadline = now + pdMS_TO_TICKS(1000u);
+            s_brain_rpc_poll_scheduled = true;
 
-        s_brain_status_retry_waiting = true;
-        s_brain_status_poll_failed = false;
-        s_brain_status_retry_tick =
-            xTaskGetTickCount() + pdMS_TO_TICKS(1000u);
-        client_active =
-            (client_status & (M1_ESP32_RPC_CLIENT_TCP |
-                              M1_ESP32_RPC_CLIENT_BLE)) != 0u;
-        m1_rpc_set_mobile_session_active(client_active);
-    }
-    else
-    {
-        if (s_brain_status_poll_failed)
-            return;
-        client_active = m1_rpc_mobile_session_active();
+            bool client_active =
+                (client_status & (M1_ESP32_RPC_CLIENT_TCP |
+                                  M1_ESP32_RPC_CLIENT_BLE)) != 0u;
+            m1_rpc_set_mobile_session_active(client_active);
+        }
     }
 
-    now = xTaskGetTickCount();
+    bool client_active = m1_rpc_mobile_session_active();
 
     if (s_ble_direct_sync_pending &&
         (s_ble_direct_last_sync_tick == 0u ||
@@ -2957,6 +2976,9 @@ static void rpc_brain_relay_poll(void)
             s_ble_direct_sync_pending = false;
         s_ble_direct_last_sync_tick = now;
     }
+
+    if (s_brain_rpc_status_unsupported)
+        return;
 
     if (!client_active || s_brain_qmon_poll_unsupported)
     {
@@ -3062,8 +3084,9 @@ void m1_rpc_task(void *param)
                     s_deferred_pending &&
                         s_deferred_frame.transport == M1_RPC_TRANSPORT_USB,
                     true,
-                    s_deferred_epoch, s_file_write.active,
-                    s_file_write.transport == M1_RPC_TRANSPORT_USB);
+                    s_deferred_epoch,
+                    m1_rpc_transport_file_write_is_usb(
+                        s_file_write.active, s_file_write.transport));
 
                 if (action.discard_deferred)
                 {
@@ -3108,19 +3131,10 @@ void m1_rpc_task(void *param)
             if (rpc_flash_op)
                 m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK);
 
-            if (!rpc_reply_route_set_current(
-                    m1_rpc_transport_reply_to_request(frame.transport)))
-            {
-                uint8_t error = RPC_ERR_BUSY;
-                (void)m1_rpc_send_frame_to(frame.transport, RPC_CMD_NACK,
-                                           frame.seq, &error, sizeof(error));
-                if (rpc_flash_op)
-                {
-                    m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
-                    rpc_wdt_last = xTaskGetTickCount();
-                }
-                continue;
-            }
+            m1_rpc_transport_t *reply_context = rpc_reply_transport_context();
+            m1_rpc_transport_t previous_transport = *reply_context;
+            *reply_context =
+                m1_rpc_transport_reply_to_request(frame.transport);
 
             switch (frame.cmd)
             {
@@ -3137,7 +3151,7 @@ void m1_rpc_task(void *param)
             case RPC_CMD_I2C_SCAN:          rpc_handle_i2c_scan(&frame);          break;
             default: break;
             }
-            rpc_reply_route_clear_current();
+            *reply_context = previous_transport;
 
             if (rpc_flash_op)
             {
@@ -3148,8 +3162,6 @@ void m1_rpc_task(void *param)
             }
         }
 
-        /* Service queued foreground RPC work before background relay/status
-         * polling, which may wait for the native ESP32 transport. */
         rpc_brain_relay_poll();
 
         /* Snapshot stream state under the routing lock; the command
@@ -3199,6 +3211,19 @@ void m1_rpc_task(void *param)
  */
 void m1_rpc_init(void)
 {
+    m1_esp32_rpc_transaction_lock_init();
+    bool transaction_lock_ready = m1_esp32_rpc_transaction_lock();
+    if (!transaction_lock_ready)
+    {
+        assert(transaction_lock_ready);
+        return;
+    }
+    m1_esp32_rpc_transaction_unlock();
+
+    m1_esp32_background_owner_set(
+        M1_ESP32_BG_OWNER_BLE_DIRECT,
+        settings_bluetooth_direct_enabled());
+
     /* Parser state */
     s_parse_state = RPC_STATE_IDLE;
     s_parser_transport_active = false;
@@ -3236,6 +3261,9 @@ void m1_rpc_init(void)
         settings_bluetooth_direct_enabled());
     s_brain_rpc_status_unsupported = false;
     s_brain_qmon_poll_unsupported = false;
+    s_brain_rpc_poll_scheduled = false;
+    s_brain_rpc_poll_deadline = 0u;
+    s_brain_rpc_poll_failures = 0u;
     free(s_brain_relay_pending_frame);
     s_brain_relay_pending_frame = NULL;
     s_brain_relay_pending_len = 0u;

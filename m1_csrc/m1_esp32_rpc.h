@@ -720,6 +720,10 @@ m1_esp32_rpc_call_diag_format(const m1_esp32_rpc_call_diag_t *d,
  * the snapshot along with the transport in host tests).
  */
 void m1_esp32_rpc_get_call_diag(m1_esp32_rpc_call_diag_t *out);
+void m1_esp32_rpc_transaction_lock_init(void);
+bool m1_esp32_rpc_transaction_lock(void);
+bool m1_esp32_rpc_transaction_try_lock(void);
+void m1_esp32_rpc_transaction_unlock(void);
 
 /* =========================================================================
  * Public client API

@@ -787,7 +787,8 @@ m1_esp32_rpc_status_t m1_esp32_rpc_rpc_status_timeout(uint8_t *status,
     uint16_t rlen = 0u;
     m1_esp32_rpc_status_t st =
         m1_esp32_rpc_call(M1_ESP32_RPC_RPC_STATUS, NULL, 0u, resp,
-                          sizeof(resp), &rlen, timeout_sec);
+                          sizeof(resp), &rlen,
+                          M1_ESP32_RPC_STATUS_TIMEOUT_S);
     if (st == M1_ESP32_RPC_OK) {
         if (rlen < 1u)
             return M1_ESP32_RPC_ERR_BAD_FRAME;
