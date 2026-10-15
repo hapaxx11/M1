@@ -1036,6 +1036,31 @@ endif()
 add_test(NAME subghz_renault_v1_encoder COMMAND test_subghz_renault_v1_encoder)
 
 # ------------------------------------------------------------------
+# Module under test: subghz_psa_encoder (PSA TX after recovery, types
+# 0x23/0x36).  Round-trips: 0x36 encode → brute-force crack; 0x23 encode →
+# decoder parse.  No real key material.
+# ------------------------------------------------------------------
+add_executable(test_subghz_psa_encoder
+    test_subghz_psa_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_psa_encoder.c
+    ${M1_ROOT}/Sub_Ghz/subghz_psa_bruteforce.c
+    ${M1_ROOT}/Sub_Ghz/subghz_bruteforce_job.c
+    ${M1_ROOT}/Sub_Ghz/protocols/m1_psa_decode.c
+    ${STUBS_DIR}/subghz_decode_impl.c
+)
+target_include_directories(test_subghz_psa_encoder PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+    ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+)
+target_link_libraries(test_subghz_psa_encoder PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_subghz_psa_encoder PRIVATE sanitizers)
+endif()
+add_test(NAME subghz_psa_encoder COMMAND test_subghz_psa_encoder)
+
+# ------------------------------------------------------------------
 # Module under test: m1_renault_v1_decode (ProtoPirate Renault V1, HITAG2 frame)
 # Verifies the pure frame parser (16-bit header + XOR8 checksum, field slicing)
 # and full Manchester pulse-array decode.
