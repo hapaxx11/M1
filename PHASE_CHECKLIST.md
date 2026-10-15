@@ -12,9 +12,9 @@
 - **Commit**: `Preserve ESP32 RX buffer across UART cycles`
 
 ### Phase 2 — Primary WiFi network and opt-in boot connection
-- **Description**: Persist a selected primary saved network and an explicit WiFi-on-boot preference, connect through the existing firmware-variant dispatch, and handle missing credentials, unavailable SD/ESP32, and failed association without blocking boot.
-- **Status**: 🔲 Not started
-- **Commit**: _(pending)_
+- **Description**: Persist a selected primary saved-network index and WiFi-on-boot preference, expose selection/toggle in Saved Networks, and attempt only that network through the existing firmware-variant dispatch. The current join APIs are synchronous, so the serialized one-shot boot attempt may delay menu interaction until their bounded timeout returns.
+- **Status**: ✅ Complete
+- **Commit**: `Add primary WiFi boot auto-connect`
 
 ### Phase 3 — GPIO and I2C scanner RPC APIs
 - **Description**: Define versioned USB RPC commands and bounded response formats for existing local GPIO/I2C scan capabilities; dispatch them safely and test parsing, range validation, busy/error responses, and scanner results.

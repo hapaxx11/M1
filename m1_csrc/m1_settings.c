@@ -34,6 +34,10 @@
 #include "m1_virtual_kb.h"
 #include "m1_clock_util.h"
 #include "subghz_protocol_ignore.h"
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+#include "m1_wifi.h"
+#include "m1_wifi_cred.h"
+#endif
 #if M1_HAS_RGB_BACKLIGHT
 #include "m1_rgb_backlight.h"
 #endif
@@ -42,7 +46,7 @@
 
 #define SETTINGS_TAG              "SETT"
 #define SETTINGS_FILE_PATH        "0:/System/settings.cfg"
-#define SETTINGS_FILE_MAX_SIZE    512
+#define SETTINGS_FILE_MAX_SIZE    768
 #define RGB_BACKLIGHT_COLOR_KEY   "rgb_backlight_color="
 
 /* LCD & Notifications menu items */
@@ -660,6 +664,14 @@ void settings_save_to_sd(void)
 
     SETTINGS_WRITE("clock_tz_offset=%d\n", (int)m1_clock_tz_offset);
 
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    {
+        wifi_boot_config_t wifi_config = wifi_boot_config_get();
+        SETTINGS_WRITE("wifi_auto_connect=%u\n", wifi_config.auto_connect ? 1u : 0u);
+        SETTINGS_WRITE("wifi_primary_idx=%u\n", (unsigned)wifi_config.primary_index);
+    }
+#endif
+
 #if M1_HAS_RGB_BACKLIGHT
     {
         rgb_backlight_color_t c = rgb_backlight_get_color();
@@ -706,6 +718,14 @@ void settings_load_from_sd(void)
     char buf[SETTINGS_FILE_MAX_SIZE];
     char *p;
     int val;
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    bool wifi_auto_connect = false;
+    long wifi_primary_index = WIFI_BOOT_PRIMARY_NONE;
+    wifi_boot_config_t wifi_config;
+
+    wifi_boot_config_reset(&wifi_config);
+    wifi_boot_config_set(wifi_config);
+#endif
 
     fres = f_open(&fp, SETTINGS_FILE_PATH, FA_READ);
     if (fres != FR_OK)
@@ -970,6 +990,35 @@ void settings_load_from_sd(void)
             m1_clock_tz_offset = (int8_t)lval;
         }
     }
+
+#ifdef M1_APP_WIFI_CONNECT_ENABLE
+    p = strstr(buf, "wifi_auto_connect=");
+    if (p != NULL)
+    {
+        char *end;
+        long parsed = strtol(p + 18, &end, 10);
+        if (end != p + 18 && (parsed == 0 || parsed == 1) &&
+            (*end == '\n' || *end == '\r' || *end == '\0' || *end == ' '))
+            wifi_auto_connect = parsed == 1;
+    }
+
+    p = strstr(buf, "wifi_primary_idx=");
+    if (p != NULL)
+    {
+        char *end;
+        long parsed = strtol(p + 17, &end, 10);
+        if (end != p + 17 && parsed >= 0 && parsed <= WIFI_BOOT_PRIMARY_NONE &&
+            (*end == '\n' || *end == '\r' || *end == '\0' || *end == ' '))
+            wifi_primary_index = parsed;
+    }
+
+    if (wifi_primary_index < WIFI_CRED_MAX_STORED)
+        (void)wifi_boot_config_set_primary(&wifi_config,
+                                            (uint8_t)wifi_primary_index,
+                                            WIFI_CRED_MAX_STORED);
+    wifi_boot_config_set_enabled(&wifi_config, wifi_auto_connect);
+    wifi_boot_config_set(wifi_config);
+#endif
 
 #if M1_HAS_RGB_BACKLIGHT
     p = strstr(buf, "rgb_backlight_installed=");

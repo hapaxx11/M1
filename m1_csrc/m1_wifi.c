@@ -51,7 +51,9 @@
 #include "esp_app_main.h"
 #include "m1_esp32_rpc_features.h"
 #include "m1_system.h"
+#include "m1_settings.h"
 #include "m1_wdt_hw.h"
+#include "wifi_boot_config.h"
 
 /*************************** D E F I N E S ************************************/
 
@@ -80,6 +82,10 @@ static uint16_t ap_view_idx = 0;
 #ifdef M1_APP_WIFI_CONNECT_ENABLE
 static bool s_wifi_stub_connected = false;
 static char s_wifi_stub_ssid[33] = {0};
+static wifi_boot_config_t s_wifi_boot_config = {
+	.primary_index = WIFI_BOOT_PRIMARY_NONE,
+	.auto_connect = false,
+};
 #endif
 
 typedef struct {
@@ -6042,7 +6048,9 @@ void wifi_ntp_background_sync(void)
  * all ESP32 firmware variants.
  */
 /*============================================================================*/
-static void wifi_connect_from_saved(const wifi_credential_t *cred)
+static bool wifi_connect_from_saved(const wifi_credential_t *cred,
+                                    bool show_status,
+                                    bool sync_clock)
 {
 	m1_cmd_t cmd;
 	m1_resp_t resp;
@@ -6052,15 +6060,16 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	int ret;
 
 	if (cred == NULL || !cred->valid || cred->ssid[0] == '\0')
-		return;
+		return false;
 
 	ssid_len = (uint8_t)strnlen(cred->ssid, 32);
 	pass_len = (uint8_t)strnlen(cred->password, WIFI_JOIN_PASS_MAX);
 
 	if ((uint16_t)2 + ssid_len + pass_len > M1_MAX_CMD_PAYLOAD)
 	{
-		wifi_show_message("Connect", "Credentials too long", NULL);
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Credentials too long", NULL);
+		return false;
 	}
 
 	ensure_esp32_ready();
@@ -6082,21 +6091,25 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	/* ---- brain CD3 M1_RPC path ---- */
 	if (m1_esp32_active_transport() == ESP32_TRANSPORT_RPC)
 	{
-		wifi_draw_message("Connect", "Connecting...", cred->ssid);
+		if (show_status)
+			wifi_draw_message("Connect", "Connecting...", cred->ssid);
 		uint32_t assigned_ip = 0u;
 		m1_esp32_rpc_status_t st =
 		    m1_esp32_rpc_wifi_connect(cred->ssid, cred->password, &assigned_ip);
 		if (st != M1_ESP32_RPC_OK)
 		{
-			wifi_show_message("Connect", "Connect failed", "Check password");
-			return;
+			if (show_status)
+				wifi_show_message("Connect", "Connect failed", "Check password");
+			return false;
 		}
 		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
 		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
 		s_wifi_stub_connected = true;
-		wifi_show_message("Connect", "Connected!", cred->ssid);
-		wifi_sync_rtc();
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Connected!", cred->ssid);
+		if (sync_clock)
+			wifi_sync_rtc();
+		return true;
 	}
 
 	/* ---- AT firmware path (dag/T-800, bedge117) ---- */
@@ -6115,7 +6128,8 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 		         "AT+CWJAP=\"%s\",\"%s\"\r\n",
 		         ssid_esc, pass_esc);
 
-		wifi_draw_message("Connect", "Connecting...", cred->ssid);
+		if (show_status)
+			wifi_draw_message("Connect", "Connecting...", cred->ssid);
 		memset(at_resp, 0, sizeof(at_resp));
 		(void)spi_AT_send_recv(at_cmd, at_resp, sizeof(at_resp), 20);
 
@@ -6130,17 +6144,20 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 		got_ip = strstr(at_resp, "WIFI GOT IP") != NULL;
 		if (!got_ip || has_fail)
 		{
-			wifi_show_message("Connect", "Connect failed", reason);
-			return;
+			if (show_status)
+				wifi_show_message("Connect", "Connect failed", reason);
+			return false;
 		}
 
 		/* Success — update connected state */
 		strncpy(s_wifi_stub_ssid, cred->ssid, sizeof(s_wifi_stub_ssid) - 1);
 		s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
 		s_wifi_stub_connected = true;
-		wifi_show_message("Connect", "Connected!", cred->ssid);
-		wifi_sync_rtc();
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Connected!", cred->ssid);
+		if (sync_clock)
+			wifi_sync_rtc();
+		return true;
 	}
 
 	/* ---- Binary SPI path (SiN360) ---- */
@@ -6153,18 +6170,21 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	memcpy(&cmd.payload[2 + ssid_len], cred->password, pass_len);
 	cmd.payload_len = 2 + ssid_len + pass_len;
 
-	wifi_draw_message("Connect", "Connecting...", cred->ssid);
+	if (show_status)
+		wifi_draw_message("Connect", "Connecting...", cred->ssid);
 	ret = m1_esp32_send_cmd(&cmd, &resp, 10000);
 	if (ret != 0 || resp.status == RESP_ERR)
 	{
-		wifi_show_message("Connect", "Connect failed", "Check password");
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Connect failed", "Check password");
+		return false;
 	}
 
 	if (resp.status == RESP_BUSY)
 	{
-		wifi_show_message("Connect", "Connecting...", "Check Status later");
-		return;
+		if (show_status)
+			wifi_show_message("Connect", "Connecting...", "Check Status later");
+		return false;
 	}
 
 	/* Success — update connected state */
@@ -6172,18 +6192,20 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
 	s_wifi_stub_ssid[sizeof(s_wifi_stub_ssid) - 1] = '\0';
 	s_wifi_stub_connected = true;
 
-	if (resp.payload_len >= 2)
+	if (show_status && resp.payload_len >= 2)
 	{
 		snprintf(line, sizeof(line), "CH:%d RSSI:%ddBm",
 			resp.payload[0], (int8_t)resp.payload[1]);
 		wifi_show_message("Connect", "Connected!", line);
 	}
-	else
+	else if (show_status)
 	{
 		wifi_show_message("Connect", "Connected!", cred->ssid);
 	}
 
-	wifi_sync_rtc();
+	if (sync_clock)
+		wifi_sync_rtc();
+	return true;
 }
 
 /*============================================================================*/
@@ -6191,6 +6213,35 @@ static void wifi_connect_from_saved(const wifi_credential_t *cred)
  * Saved Networks — browse, connect to, or delete encrypted WiFi credentials.
  */
 /*============================================================================*/
+wifi_boot_config_t wifi_boot_config_get(void)
+{
+	return s_wifi_boot_config;
+}
+
+void wifi_boot_config_set(wifi_boot_config_t config)
+{
+	s_wifi_boot_config = config;
+}
+
+void wifi_auto_connect_primary(void)
+{
+	wifi_credential_t creds[WIFI_CRED_MAX_STORED];
+	wifi_boot_config_t config = wifi_boot_config_get();
+	uint8_t count;
+	uint8_t index;
+
+	if (!config.auto_connect)
+		return;
+
+	count = wifi_cred_load_all(creds, WIFI_CRED_MAX_STORED);
+	if (wifi_boot_config_target(&config, count, &index))
+	{
+		(void)wifi_connect_from_saved(&creds[index], false, false);
+		m1_esp32_deinit();
+	}
+	memset(creds, 0, sizeof(creds));
+}
+
 void wifi_saved_networks(void)
 {
 	wifi_credential_t creds[WIFI_CRED_MAX_STORED];
@@ -6216,6 +6267,7 @@ void wifi_saved_networks(void)
 		if (redraw)
 		{
 			redraw = false;
+			wifi_boot_config_t boot_config = wifi_boot_config_get();
 			const uint8_t item_h  = m1_menu_item_h();
 			const uint8_t vis     = m1_menu_max_visible();
 			const uint8_t text_ofs = item_h - 1;
@@ -6245,6 +6297,9 @@ void wifi_saved_networks(void)
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_BG);
 				}
 				u8g2_DrawStr(&m1_u8g2, 4, (uint8_t)(y + text_ofs), creds[idx].ssid);
+				if (boot_config.auto_connect && boot_config.primary_index == idx)
+					u8g2_DrawStr(&m1_u8g2, M1_MENU_TEXT_W - 8,
+					             (uint8_t)(y + text_ofs), "P");
 				if (idx == sel)
 					u8g2_SetDrawColor(&m1_u8g2, M1_DISP_DRAW_COLOR_TXT);
 			}
@@ -6290,7 +6345,24 @@ void wifi_saved_networks(void)
 		else if (btn.event[BUTTON_OK_KP_ID] == BUTTON_EVENT_CLICK)
 		{
 			/* Connect using stored password — no prompt */
-			wifi_connect_from_saved(&creds[sel]);
+			(void)wifi_connect_from_saved(&creds[sel], true, true);
+			redraw = true;
+		}
+		else if (btn.event[BUTTON_RIGHT_KP_ID] == BUTTON_EVENT_CLICK)
+		{
+			wifi_boot_config_t config = wifi_boot_config_get();
+			if (config.primary_index == sel && config.auto_connect)
+			{
+				wifi_boot_config_set_enabled(&config, false);
+				wifi_show_message("WiFi on Boot", "Auto-connect off", creds[sel].ssid);
+			}
+			else
+			{
+				(void)wifi_boot_config_set_primary(&config, sel, count);
+				wifi_show_message("WiFi on Boot", "Primary selected", creds[sel].ssid);
+			}
+			wifi_boot_config_set(config);
+			settings_save_to_sd();
 			redraw = true;
 		}
 		else if (btn.event[BUTTON_LEFT_KP_ID] == BUTTON_EVENT_CLICK)
@@ -6302,7 +6374,13 @@ void wifi_saved_networks(void)
 			                     "OK\nCancel");
 			if (choice == 1)
 			{
-				wifi_cred_delete(creds[sel].ssid);
+				if (wifi_cred_delete(creds[sel].ssid))
+				{
+					wifi_boot_config_t config = wifi_boot_config_get();
+					wifi_boot_config_on_delete(&config, sel);
+					wifi_boot_config_set(config);
+					settings_save_to_sd();
+				}
 				count = wifi_cred_load_all(creds, WIFI_CRED_MAX_STORED);
 				if (count == 0)
 				{

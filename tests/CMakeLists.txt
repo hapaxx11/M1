@@ -3307,6 +3307,20 @@ if(TARGET sanitizers)
 endif()
 add_test(NAME wifi_selection COMMAND test_wifi_selection)
 
+# ---------- wifi_boot_config ----------
+add_executable(test_wifi_boot_config
+    test_wifi_boot_config.c
+)
+target_include_directories(test_wifi_boot_config PRIVATE
+    ${STUBS_DIR}
+    ${M1_ROOT}/m1_csrc
+)
+target_link_libraries(test_wifi_boot_config PRIVATE unity)
+if(TARGET sanitizers)
+    target_link_libraries(test_wifi_boot_config PRIVATE sanitizers)
+endif()
+add_test(NAME wifi_boot_config COMMAND test_wifi_boot_config)
+
 # ---------- wifi_ap_cycle ----------
 add_executable(test_wifi_ap_cycle
     test_wifi_ap_cycle.c
