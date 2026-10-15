@@ -13,5 +13,7 @@ than discard them.
 Screen capture responses follow the request transport. Periodic screen frames
 continue over the transport that started the stream. The device-info response
 appends `mobile_session_active` after the existing battery detail fields; it is
-true while the BLE/WiFi RPC client reports an active session through
-`m1_rpc_set_mobile_session_active()`.
+byte offset 66 (when the full 67-byte response is present). It is true while
+the BLE/WiFi RPC client reports an active session through
+`m1_rpc_set_mobile_session_active()`. The web updater exposes this as
+`mobileSessionActive` when parsing the extended response.
