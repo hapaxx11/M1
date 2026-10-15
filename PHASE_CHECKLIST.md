@@ -13,12 +13,12 @@
 
 ### Phase 2 — RPC response and upload isolation
 - **Description**: Return explicit oversized-reply errors, track upload transport ownership, and avoid holding reply routing across deferred handlers.
-- **Status**: 🔄 In progress
-- **Commit**: _(pending)_
+- **Status**: ✅ Complete
+- **Commit**: `Isolate deferred RPC replies by transport`
 
 ### Phase 3 — ESP32 lifecycle and SPI serialization
 - **Description**: Keep required background networking owners alive, serialize M1 Link transactions independently of the legacy AT task, and coordinate teardown.
-- **Status**: 🔲 Not started
+- **Status**: 🔄 In progress
 - **Commit**: _(pending)_
 
 ### Phase 4 — Background polling fairness

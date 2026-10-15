@@ -104,6 +104,7 @@ typedef struct {
 /* File write state */
 typedef struct {
     bool     active;
+    m1_rpc_transport_t transport;
     FIL      file;
     uint32_t total_size;
     uint32_t bytes_written;
@@ -515,6 +516,53 @@ static void rpc_send_nack_sub(uint8_t seq, uint8_t error_code, uint8_t sub_error
 {
     uint8_t buf[2] = { error_code, sub_error };
     m1_rpc_send_frame(RPC_CMD_NACK, seq, buf, 2);
+}
+
+static void rpc_send_reply_frame(const S_RPC_Frame *frame, uint8_t cmd,
+                                 const uint8_t *payload, uint16_t len)
+{
+    (void)m1_rpc_send_frame_to(
+        m1_rpc_transport_reply_to_request(frame->transport), cmd, frame->seq,
+        payload, len);
+}
+
+static void rpc_send_reply_ack(const S_RPC_Frame *frame)
+{
+    rpc_send_reply_frame(frame, RPC_CMD_ACK, NULL, 0u);
+}
+
+static void rpc_send_reply_nack(const S_RPC_Frame *frame, uint8_t error_code)
+{
+    rpc_send_reply_frame(frame, RPC_CMD_NACK, &error_code, 1u);
+}
+
+static void rpc_send_reply_nack_sub(const S_RPC_Frame *frame,
+                                    uint8_t error_code, uint8_t sub_error)
+{
+    uint8_t payload[2] = { error_code, sub_error };
+    rpc_send_reply_frame(frame, RPC_CMD_NACK, payload, sizeof(payload));
+}
+
+static bool rpc_screen_stream_suspend(void)
+{
+    bool was_active = false;
+    if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        was_active = rpc_screen_stream.active;
+        rpc_screen_stream.active = false;
+        xSemaphoreGive(s_route_mutex);
+    }
+    return was_active;
+}
+
+static void rpc_screen_stream_resume(bool was_active)
+{
+    if (was_active &&
+        xSemaphoreTake(s_route_mutex, portMAX_DELAY) == pdTRUE)
+    {
+        rpc_screen_stream.active = true;
+        xSemaphoreGive(s_route_mutex);
+    }
 }
 
 
@@ -1393,7 +1441,17 @@ static void rpc_handle_file_list(const S_RPC_Frame *f)
     M1_LOG_I(M1_LOGDB_TAG, "FILE_LIST: sending %u entries, %u bytes\r\n",
              entry_count, resp_len);
 
-    m1_rpc_send_frame(RPC_CMD_FILE_LIST_RESP, f->seq, resp, resp_len);
+    const uint16_t relay_reply_limit =
+        (uint16_t)(M1_ESP32_RPC_PAYLOAD_MAX -
+                   (RPC_HEADER_SIZE + RPC_CRC_SIZE));
+    if (!m1_rpc_transport_reply_payload_fits(
+            f->transport, resp_len, relay_reply_limit))
+    {
+        rpc_send_reply_nack(f, RPC_ERR_SIZE_TOO_LARGE);
+        return;
+    }
+
+    rpc_send_reply_frame(f, RPC_CMD_FILE_LIST_RESP, resp, resp_len);
 }
 
 
@@ -1481,15 +1539,22 @@ static void rpc_handle_file_write_start(const S_RPC_Frame *f)
 {
     m1_wdt_reset();
 
+    if (!m1_rpc_transport_file_write_allowed(
+            s_file_write.active, s_file_write.transport, f->transport, true))
+    {
+        rpc_send_reply_nack(f, RPC_ERR_BUSY);
+        return;
+    }
+
     if (f->len < 5)  /* Need at least 4 bytes size + 1 byte path */
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
     if (!m1_sd_detected())
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_SD_NOT_READY);
+        rpc_send_reply_nack(f, RPC_ERR_SD_NOT_READY);
         return;
     }
 
@@ -1515,14 +1580,15 @@ static void rpc_handle_file_write_start(const S_RPC_Frame *f)
                          FA_WRITE | FA_CREATE_ALWAYS);
     if (res != FR_OK)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_FILE_NOT_FOUND);
+        rpc_send_reply_nack(f, RPC_ERR_FILE_NOT_FOUND);
         return;
     }
 
     s_file_write.bytes_written = 0;
+    s_file_write.transport = f->transport;
     s_file_write.active = true;
 
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -1535,15 +1601,16 @@ static void rpc_handle_file_write_data(const S_RPC_Frame *f)
 {
     m1_wdt_reset();
 
-    if (!s_file_write.active)
+    if (!m1_rpc_transport_file_write_allowed(
+            s_file_write.active, s_file_write.transport, f->transport, false))
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
+        rpc_send_reply_nack(f, RPC_ERR_BUSY);
         return;
     }
 
     if (f->len < 5)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
@@ -1563,12 +1630,12 @@ static void rpc_handle_file_write_data(const S_RPC_Frame *f)
                           data_len, &written);
     if (res != FR_OK || written != data_len)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_FILE_NOT_FOUND);
+        rpc_send_reply_nack(f, RPC_ERR_FILE_NOT_FOUND);
         return;
     }
 
     s_file_write.bytes_written += written;
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -1579,9 +1646,10 @@ static void rpc_handle_file_write_finish(const S_RPC_Frame *f)
 {
     m1_wdt_reset();
 
-    if (!s_file_write.active)
+    if (!m1_rpc_transport_file_write_allowed(
+            s_file_write.active, s_file_write.transport, f->transport, false))
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
+        rpc_send_reply_nack(f, RPC_ERR_BUSY);
         return;
     }
 
@@ -1589,7 +1657,7 @@ static void rpc_handle_file_write_finish(const S_RPC_Frame *f)
     f_close(&s_file_write.file);
     s_file_write.active = false;
 
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -1600,13 +1668,13 @@ static void rpc_handle_file_delete(const S_RPC_Frame *f)
 {
     if (f->len < 1)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
     if (!m1_sd_detected())
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_SD_NOT_READY);
+        rpc_send_reply_nack(f, RPC_ERR_SD_NOT_READY);
         return;
     }
 
@@ -1616,11 +1684,11 @@ static void rpc_handle_file_delete(const S_RPC_Frame *f)
     FRESULT res = f_unlink(path);
     if (res != FR_OK)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_FILE_NOT_FOUND);
+        rpc_send_reply_nack(f, RPC_ERR_FILE_NOT_FOUND);
         return;
     }
 
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -1631,13 +1699,13 @@ static void rpc_handle_file_mkdir(const S_RPC_Frame *f)
 {
     if (f->len < 1)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
     if (!m1_sd_detected())
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_SD_NOT_READY);
+        rpc_send_reply_nack(f, RPC_ERR_SD_NOT_READY);
         return;
     }
 
@@ -1647,11 +1715,11 @@ static void rpc_handle_file_mkdir(const S_RPC_Frame *f)
     FRESULT res = f_mkdir(path);
     if (res != FR_OK && res != FR_EXIST)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_FILE_NOT_FOUND);
+        rpc_send_reply_nack(f, RPC_ERR_FILE_NOT_FOUND);
         return;
     }
 
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -1663,12 +1731,12 @@ static void rpc_handle_sd_unmount(const S_RPC_Frame *f)
     S_M1_SDCard_Access_Status st = m1_sdcard_get_status();
     if (st != SD_access_OK && st != SD_access_NoFS)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_SD_NOT_READY);
+        rpc_send_reply_nack(f, RPC_ERR_SD_NOT_READY);
         return;
     }
 
     m1_sdcard_unmount();
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -1682,11 +1750,11 @@ static void rpc_handle_sd_mount(const S_RPC_Frame *f)
     S_M1_SDCard_Access_Status st = m1_sdcard_get_status();
     if (st == SD_access_OK || st == SD_access_NoFS)
     {
-        m1_rpc_send_ack(f->seq);
+        rpc_send_reply_ack(f);
     }
     else
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_SD_NOT_READY);
+        rpc_send_reply_nack(f, RPC_ERR_SD_NOT_READY);
     }
 }
 
@@ -2259,26 +2327,25 @@ static void rpc_handle_i2c_scan(const S_RPC_Frame *f)
 
     if (!rpc_i2c_scan_request_decode(f->payload, f->len, &first, &last))
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
     if (!m1_i2c_scan_addresses(first, last, addresses,
                                sizeof(addresses), &count))
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_HARDWARE);
+        rpc_send_reply_nack(f, RPC_ERR_HARDWARE);
         return;
     }
 
     if (!rpc_i2c_scan_response_encode(addresses, count, response,
                                       sizeof(response), &response_len))
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_HARDWARE);
+        rpc_send_reply_nack(f, RPC_ERR_HARDWARE);
         return;
     }
 
-    m1_rpc_send_frame(RPC_CMD_I2C_SCAN_RESP, f->seq,
-                      response, response_len);
+    rpc_send_reply_frame(f, RPC_CMD_I2C_SCAN_RESP, response, response_len);
 }
 
 
@@ -2297,7 +2364,7 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
 
     if (f->len < 8)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
@@ -2326,7 +2393,7 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
         s_esp_update.start_addr >= ESP32_FLASH_SIZE ||
         (s_esp_update.start_addr + s_esp_update.total_size) > ESP32_FLASH_SIZE)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
@@ -2385,9 +2452,7 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
     /* Suspend screen streaming during ESP flash to eliminate USB TX
      * mutex contention between screen frames and flash ACK responses.
      * This reduces USB interrupt load and prevents timing jitter. */
-    s_esp_update.screen_was_streaming = rpc_screen_stream.active;
-    if (rpc_screen_stream.active)
-        rpc_screen_stream.active = false;
+    s_esp_update.screen_was_streaming = rpc_screen_stream_suspend();
 
     /* Connect to ESP32 ROM bootloader.
      * Use 230400 for RPC path — UART4 RX is byte-by-byte ISR with no DMA,
@@ -2407,9 +2472,8 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
         HAL_NVIC_EnableIRQ(EXTI1_IRQn);
         HAL_NVIC_EnableIRQ(EXTI7_IRQn);
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
-        if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
-        rpc_send_nack_sub(f->seq, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_CONNECT);
+        rpc_screen_stream_resume(s_esp_update.screen_was_streaming);
+        rpc_send_reply_nack_sub(f, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_CONNECT);
         return;
     }
 
@@ -2430,9 +2494,8 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
         HAL_NVIC_EnableIRQ(EXTI1_IRQn);
         HAL_NVIC_EnableIRQ(EXTI7_IRQn);
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
-        if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
-        rpc_send_nack_sub(f->seq, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_ERASE);
+        rpc_screen_stream_resume(s_esp_update.screen_was_streaming);
+        rpc_send_reply_nack_sub(f, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_ERASE);
         return;
     }
 
@@ -2440,7 +2503,7 @@ static void rpc_handle_esp_update_start(const S_RPC_Frame *f)
     s_esp_update.active = true;
 
     m1_wdt_reset();
-    m1_rpc_send_ack(f->seq);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -2456,13 +2519,13 @@ static void rpc_handle_esp_update_data(const S_RPC_Frame *f)
 {
     if (!s_esp_update.active)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
+        rpc_send_reply_nack(f, RPC_ERR_BUSY);
         return;
     }
 
     if (f->len < 5)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
@@ -2496,9 +2559,8 @@ static void rpc_handle_esp_update_data(const S_RPC_Frame *f)
         HAL_NVIC_EnableIRQ(EXTI1_IRQn);
         HAL_NVIC_EnableIRQ(EXTI7_IRQn);
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
-        if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
-        rpc_send_nack_sub(f->seq, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_WRITE);
+        rpc_screen_stream_resume(s_esp_update.screen_was_streaming);
+        rpc_send_reply_nack_sub(f, RPC_ERR_ESP_FLASH, RPC_ESP_SUB_WRITE);
         return;
     }
 
@@ -2521,7 +2583,7 @@ static void rpc_handle_esp_update_finish(const S_RPC_Frame *f)
 
     if (!s_esp_update.active)
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_BUSY);
+        rpc_send_reply_nack(f, RPC_ERR_BUSY);
         return;
     }
 
@@ -2575,11 +2637,10 @@ static void rpc_handle_esp_update_finish(const S_RPC_Frame *f)
             uint32_t overruns = esp32_uart4_overrun_count;
             memcpy(&diag[74], &overruns, 4);
 
-            m1_rpc_send_frame(RPC_CMD_NACK, f->seq, diag, sizeof(diag));
+            rpc_send_reply_frame(f, RPC_CMD_NACK, diag, sizeof(diag));
         }
         m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
-        if (s_esp_update.screen_was_streaming)
-            rpc_screen_stream.active = true;
+        rpc_screen_stream_resume(s_esp_update.screen_was_streaming);
         return;
     }
 #endif
@@ -2604,9 +2665,8 @@ static void rpc_handle_esp_update_finish(const S_RPC_Frame *f)
     HAL_NVIC_EnableIRQ(EXTI7_IRQn);
 
     m1_wdt_resume_task(M1_REPORT_ID_BUTTONS_HANDLER_TASK);
-    if (s_esp_update.screen_was_streaming)
-        rpc_screen_stream.active = true;
-    m1_rpc_send_ack(f->seq);
+    rpc_screen_stream_resume(s_esp_update.screen_was_streaming);
+    rpc_send_reply_ack(f);
 }
 
 
@@ -2627,7 +2687,7 @@ static void rpc_handle_cli_exec(const S_RPC_Frame *f)
 
     if (f->len < 2)  /* At minimum: one char + null */
     {
-        m1_rpc_send_nack(f->seq, RPC_ERR_INVALID_PAYLOAD);
+        rpc_send_reply_nack(f, RPC_ERR_INVALID_PAYLOAD);
         return;
     }
 
@@ -2679,8 +2739,8 @@ static void rpc_handle_cli_exec(const S_RPC_Frame *f)
 
     M1_LOG_I(M1_LOGDB_TAG, "CLI_EXEC: captured %u bytes\r\n", out_len);
 
-    m1_rpc_send_frame(RPC_CMD_CLI_RESP, f->seq,
-                      (const uint8_t *)out_buf, out_len);
+    rpc_send_reply_frame(f, RPC_CMD_CLI_RESP,
+                         (const uint8_t *)out_buf, out_len);
 }
 
 
@@ -2894,7 +2954,9 @@ void m1_rpc_task(void *param)
                     s_deferred_pending &&
                         s_deferred_frame.transport == M1_RPC_TRANSPORT_USB,
                     true,
-                    s_deferred_epoch, s_file_write.active);
+                    s_deferred_epoch,
+                    s_file_write.active &&
+                        s_file_write.transport == M1_RPC_TRANSPORT_USB);
 
                 if (action.discard_deferred)
                 {
@@ -2939,22 +3001,6 @@ void m1_rpc_task(void *param)
             if (rpc_flash_op)
                 m1_wdt_suspend_task(M1_REPORT_ID_RPC_TASK);
 
-            if (xSemaphoreTake(s_route_mutex, portMAX_DELAY) != pdTRUE)
-            {
-                uint8_t error = RPC_ERR_BUSY;
-                (void)m1_rpc_send_frame_to(frame.transport, RPC_CMD_NACK,
-                                           frame.seq, &error, sizeof(error));
-                if (rpc_flash_op)
-                {
-                    m1_wdt_resume_task(M1_REPORT_ID_RPC_TASK);
-                    rpc_wdt_last = xTaskGetTickCount();
-                }
-                continue;
-            }
-            m1_rpc_transport_t previous_transport = s_reply_transport;
-            s_reply_transport =
-                m1_rpc_transport_reply_to_request(frame.transport);
-
             switch (frame.cmd)
             {
             case RPC_CMD_FILE_WRITE_START:  rpc_handle_file_write_start(&frame);  break;
@@ -2970,8 +3016,6 @@ void m1_rpc_task(void *param)
             case RPC_CMD_I2C_SCAN:          rpc_handle_i2c_scan(&frame);          break;
             default: break;
             }
-            s_reply_transport = previous_transport;
-            xSemaphoreGive(s_route_mutex);
 
             if (rpc_flash_op)
             {
