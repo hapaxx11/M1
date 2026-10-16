@@ -1,0 +1,1 @@
+Documentation: Release builds, PR firmware builds and changelog stamping now run only for changes to firmware inputs (C/H/INC/S/LD sources, CMake files, build-time generator scripts), so docs, CI and test-only changes no longer produce a new version.

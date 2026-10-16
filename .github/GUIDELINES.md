@@ -57,7 +57,7 @@ The Web Updater (GitHub Pages) and device OTA both pull from GitHub Releases
 Keep README.md updated with accurate feature descriptions and protocol counts
 Update CHANGELOG.md for every meaningful change following [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
   - Use version label [{major}.{minor}.{build}.{rc}] matching the FW_VERSION_* macros in m1_fw_update_bl.h (e.g. [0.9.0.94])
-  - Always add new entries under `[Unreleased]` — CI automatically stamps the version heading on each release
+  - Always add new entries under `[Unreleased]` — CI stamps the predicted next version heading in the PR branch before merge (prepare-changelog.yml)
   - Subsections: ### Added / ### Changed / ### Fixed / ### Removed
   - New feature → ### Added; behaviour change → ### Changed; bug fix → ### Fixed
   - Append to the current version block rather than creating a duplicate heading — scan the entire `[Unreleased]` block for an existing `### Fixed` / `### Added` / etc. before adding a new one

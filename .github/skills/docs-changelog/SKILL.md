@@ -44,13 +44,20 @@ to build.**
 - **Multiple entries** in one file are separated by a blank line.
 - **Naming**: use lowercase, hyphens, keep it short.  The description is for
   humans browsing the directory — it does not appear in the changelog.
-- **CI assembly**: `build-release.yml` runs `scripts/assemble_changelog.py`
-  at release time, which reads all fragment files, groups entries by category,
-  merges them into the `[Unreleased]` section of `CHANGELOG.md`, deletes the
-  fragment files, then stamps the version heading.
-- **Release notes**: the same fragments are rendered (via `--preview`) into
-  the "What's Changed" section of the GitHub release body, instead of
-  GitHub's PR-label-based auto-generated notes.
+- **CI assembly (pre-merge)**: `prepare-changelog.yml` runs on every
+  non-draft PR to `main` that changes firmware inputs (same `paths`
+  allow-list as `build-release.yml`; other PRs never release, so their
+  fragments wait for the next firmware PR).  It runs `scripts/assemble_changelog.py`, which
+  reads all fragment files, groups entries by category, merges them into the
+  `[Unreleased]` section of `CHANGELOG.md` and deletes the fragment files;
+  then `scripts/stamp_changelog.py` stamps the predicted next release version
+  (latest release RC + 1, the same rule `build-release.yml` uses) and the
+  result is committed back to the PR branch.  There is no post-release
+  changelog PR.
+- **Release notes**: `build-release.yml` renders the changelog sections newer
+  than the previous release (plus any un-assembled fragments) into the
+  "What's Changed" section of the GitHub release body, instead of GitHub's
+  PR-label-based auto-generated notes.
 - **Local preview**: `python scripts/assemble_changelog.py --preview` shows
   what the assembled output would look like without modifying any files.
 
@@ -80,13 +87,17 @@ to build.**
   heading string in changelog entry body text, fragment files, or code
   spans.  When referring to the heading in prose, write `[Unreleased]`
   (without the `## ` prefix).
-- **Changelog stamp PRs are NOT changelog-worthy.**  The CI workflow creates a
-  PR titled `changelog: stamp [Unreleased] as <tag>` after every release.
-  These automated stamp PRs **MUST NOT** appear in changelog entries, release
-  notes, or PR descriptions.  They are infrastructure housekeeping — they do
-  not represent a user-visible change.  If you see one in auto-generated
-  release notes, the `.github/release.yml` label exclusion has failed and
-  should be investigated.
+- **Changelog stamp commits are NOT changelog-worthy.**  The Prepare
+  Changelog workflow pushes a commit titled `changelog: stamp [Unreleased] as
+  <tag>` to PR branches.  These automated commits **MUST NOT** appear in
+  changelog entries, release notes, or PR descriptions — they are
+  infrastructure housekeeping.  Pull them before pushing further work to the
+  branch.
+- **Stamped version is a prediction.**  If another release is published
+  before the PR merges, the next push to (or re-run on) the PR re-stamps it;
+  any stamped section newer than the latest release is folded into the new
+  heading.  Release notes use the same rule, so they stay correct even if a
+  stale heading reaches `main`.
 
 #### Backward compatibility
 
