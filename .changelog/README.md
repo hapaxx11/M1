@@ -1,13 +1,14 @@
 # Changelog Fragments
 
 This directory holds **changelog fragment files** — one file per change,
-assembled into `CHANGELOG.md` automatically at release time.
+assembled into `CHANGELOG.md` automatically before a PR merges to `main`.
 
 ## Why fragments?
 
 When multiple branches edit `CHANGELOG.md` simultaneously, merge conflicts
 are inevitable.  Fragment files are **new files** — git merges them without
-conflicts.  CI assembles them into the changelog when a release is published.
+conflicts.  CI assembles them into the changelog in the PR branch once the
+PR is ready for review (non-draft).
 
 ## File naming
 
@@ -61,16 +62,22 @@ Multiple entries can go in one file, separated by a blank line:
 1. **On your branch**, create a fragment file here instead of editing
    `CHANGELOG.md`.
 2. Commit the fragment with your code changes.
-3. When the PR merges and a release build runs, CI assembles all fragments
-   into `CHANGELOG.md` and deletes the fragment files.
+3. When the PR is (or becomes) ready for review, the **Prepare Changelog**
+   workflow assembles all fragments into `CHANGELOG.md`, deletes the fragment
+   files, stamps the predicted next release version
+   (`scripts/stamp_changelog.py`), and commits the result back to the PR
+   branch.  Pull that commit before pushing more work.  Fork PRs cannot be
+   written to — their fragments are assembled by the next same-repo PR.
 
 ## Release notes
 
-The same fragments are also rendered into the **"What's Changed"** section of
-the GitHub release body (`build-release.yml`), instead of relying on GitHub's
-PR-label-based auto-generated notes (which otherwise collapse everything into
-a single "Other Changes" bullet when PRs aren't labelled). If a release has no
-fragments, the release notes fall back to a placeholder message.
+The changelog sections newer than the previous release (plus any fragments
+still un-assembled on `main`) are rendered into the **"What's Changed"** section
+of the GitHub release body (`build-release.yml`), instead of relying on
+GitHub's PR-label-based auto-generated notes (which otherwise collapse
+everything into a single "Other Changes" bullet when PRs aren't labelled). If
+there is nothing to report, the release notes fall back to a placeholder
+message.
 
 ## Local preview
 

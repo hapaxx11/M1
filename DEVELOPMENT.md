@@ -335,9 +335,12 @@ echo '**Infrared: Quick-access remotes** — category remotes accessible
   from the Universal Remote dashboard.' > .changelog/ir-quick-remotes.added.md
 ```
 
-At release time, CI runs `scripts/assemble_changelog.py` to merge all fragments
-into `CHANGELOG.md`, stamps the version heading, and deletes the consumed
-fragment files.
+When a (non-draft) PR targets `main`, the **Prepare Changelog** workflow
+(`.github/workflows/prepare-changelog.yml`) runs `scripts/assemble_changelog.py`
+to merge all fragments into `CHANGELOG.md`, deletes the consumed fragment files,
+stamps the predicted next release version via `scripts/stamp_changelog.py`, and
+commits the result back to the PR branch — so no separate changelog PR is
+needed after the release.
 
 ### Category mapping
 
