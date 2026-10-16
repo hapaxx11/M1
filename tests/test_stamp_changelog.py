@@ -120,6 +120,45 @@ class TestStamp(unittest.TestCase):
         self.assertIn("## [0.9.4.1] - 2026-10-16", out)
         self.assertIn("## [0.9.4.12] - 2026-10-15", out)
 
+    def test_version_lost_race_is_restamped(self):
+        # PRs A and B both predicted 0.9.4.13; A was released first, so B's
+        # still-unpublished section now *looks* released.  Comparing against
+        # the published changelog keeps B's entries and re-stamps them.
+        branch = sc.stamp(BASE, "0.9.4.13", "0.9.4.12", "2026-10-16")
+        released = textwrap.dedent("""\
+            # Changelog
+
+            ## [Unreleased]
+
+            ## [0.9.4.13] - 2026-10-16
+
+            ### Added
+
+            - A's feature
+
+            ## [0.9.4.12] - 2026-10-15
+
+            ### Added
+
+            - Old feature
+        """)
+        out = sc.stamp(branch, "0.9.4.14", "0.9.4.13", "2026-10-17",
+                       released_changelog=released)
+        self.assertIn("## [0.9.4.14] - 2026-10-17", out)
+        self.assertNotIn("## [0.9.4.13]", out)
+        self.assertIn("- New feature", out)
+        self.assertIn("- A fix\n  with continuation", out)
+        self.assertNotIn("A's feature", out)
+
+    def test_published_section_still_untouched_with_released_changelog(self):
+        # The section really was published: its entries are in the released
+        # changelog, so nothing is folded back in.
+        text = "## [Unreleased]\n\n## [0.9.4.12] - 2026-10-15\n\n### Added\n\n- Released\n"
+        self.assertEqual(
+            sc.stamp(text, "0.9.4.13", "0.9.4.12", "2026-10-16", released_changelog=text),
+            text,
+        )
+
 
 class TestNotes(unittest.TestCase):
     def setUp(self):
@@ -151,6 +190,21 @@ class TestNotes(unittest.TestCase):
     def test_notes_empty_when_nothing_pending(self):
         text = "## [Unreleased]\n\n## [0.9.4.12] - 2026-10-15\n\n### Added\n\n- Released\n"
         self.assertEqual(sc.notes(text, "v0.9.4.12"), "")
+
+    def test_notes_keep_entries_whose_version_was_released_by_another_pr(self):
+        # Same race as TestStamp.test_version_lost_race_is_restamped: the
+        # entries must still reach the release notes.
+        text = sc.stamp(BASE, "0.9.4.13", "0.9.4.12", "2026-10-16")
+        released = (
+            "# Changelog\n\n## [Unreleased]\n\n"
+            "## [0.9.4.13] - 2026-10-16\n\n### Added\n\n- A's feature\n\n"
+            "## [0.9.4.12] - 2026-10-15\n\n### Added\n\n- Old feature\n"
+        )
+        out = sc.notes(text, "v0.9.4.13", released_changelog=released)
+        self.assertIn("- New feature", out)
+        self.assertIn("- A fix", out)
+        self.assertNotIn("A's feature", out)
+        self.assertNotIn("Old feature", out)
 
 
 if __name__ == "__main__":

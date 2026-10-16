@@ -14,10 +14,11 @@ name: Prepare Changelog
 # latest published release v{MAJOR}.{MINOR}.{BUILD}.N → N + 1 (MAJOR/MINOR/BUILD
 # from m1_fw_update_bl.h).  No separate RC scheme is introduced.  Because the
 # prediction is made before merge, it can go stale if another release is
-# published first; any stamped section newer than the latest release is folded
-# back in and re-stamped on every run, so pushing to (or re-running on) the PR
-# corrects it.  Release notes are built from the same pending sections, so
-# they stay correct even if a stale heading reaches main.
+# published first; any stamped section that is not yet published — newer than
+# the latest release, or carrying entries absent from that release's
+# CHANGELOG.md — is folded back in and re-stamped on every run, so pushing to
+# (or re-running on) the PR corrects it.  Release notes are built from the same
+# pending sections, so they stay correct even if a stale heading reaches main.
 #
 # Only PRs that change firmware inputs (same `paths` allow-list as
 # build-release.yml) are stamped, because only those produce a release and
@@ -29,8 +30,10 @@ name: Prepare Changelog
 # can cause between concurrent PRs) as close to merge time as possible.
 #
 # Loop guard: the stamp is idempotent (a second run on the stamped branch is a
-# no-op, so nothing is committed), and the job also skips when HEAD is this
-# workflow's own commit.
+# no-op, so nothing is committed), and the first automatic run of the push this
+# workflow just made is short-circuited when HEAD is its own stamp commit.
+# Manual `workflow_dispatch` runs and re-runs always do the full work so an
+# explicit refresh (e.g. after another release was published) can re-stamp.
 on:
   pull_request:
     branches: [main]
@@ -92,10 +95,18 @@ jobs:
 
       - name: Check for own stamp commit
         id: guard
+        env:
+          # Only the first automatic run of a `synchronize` event can be the
+          # push this workflow made; manual dispatches and re-runs must do the
+          # full work (the no-diff check below stops redundant commits).
+          AUTO_PUSH_RUN: ${{ github.event_name == 'pull_request'
+                             && github.event.action == 'synchronize'
+                             && github.run_attempt == '1' }}
         run: |
           AUTHOR="$(git log -1 --format='%ae')"
           SUBJECT="$(git log -1 --format='%s')"
-          if [ "${AUTHOR}" = "41898282+github-actions[bot]@users.noreply.github.com" ] \
+          if [ "${AUTO_PUSH_RUN}" = "true" ] \
+             && [ "${AUTHOR}" = "41898282+github-actions[bot]@users.noreply.github.com" ] \
              && [[ "${SUBJECT}" == "changelog: stamp "* ]]; then
             echo "HEAD is this workflow's own stamp commit — skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -143,12 +154,37 @@ jobs:
           echo "Latest released: ${RELEASED} → stamping as: ${VERSION}"
           echo "released=${RELEASED}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
+          if [ "${LATEST_RC}" -gt 0 ]; then
+            echo "released_tag=v${RELEASED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "released_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Lets the stamper tell "already published" sections from a section that
+      # merely *predicted* a version another PR released first (its entries are
+      # absent from the published changelog, so they stay pending).
+      - name: Fetch published CHANGELOG.md
+        id: published
+        if: steps.guard.outputs.skip != 'true' && steps.version.outputs.released_tag != ''
+        env:
+          GH_TOKEN:     ${{ github.token }}
+          RELEASED_TAG: ${{ steps.version.outputs.released_tag }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GITHUB_REPOSITORY}/contents/CHANGELOG.md?ref=${RELEASED_TAG}" \
+               -H "Accept: application/vnd.github.raw" > "${RUNNER_TEMP}/released_changelog.md"; then
+            echo "path=${RUNNER_TEMP}/released_changelog.md" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Could not fetch CHANGELOG.md at ${RELEASED_TAG} — using version comparison only."
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Assemble fragments and stamp CHANGELOG.md
         if: steps.guard.outputs.skip != 'true'
         env:
           VERSION:  ${{ steps.version.outputs.version }}
           RELEASED: ${{ steps.version.outputs.released }}
+          RELEASED_CHANGELOG: ${{ steps.published.outputs.path }}
         run: |
           set -euo pipefail
           if ! grep -qF '## [Unreleased]' CHANGELOG.md 2>/dev/null; then
@@ -160,6 +196,7 @@ jobs:
           python3 scripts/stamp_changelog.py stamp \
             --version "${VERSION}" \
             --released "${RELEASED}" \
+            --released-changelog "${RELEASED_CHANGELOG}" \
             --date "$(date -u +%Y-%m-%d)"
 
           echo "--- First 20 lines of CHANGELOG.md ---"

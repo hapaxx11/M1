@@ -74,13 +74,18 @@ Multiple entries can go in one file, separated by a blank line:
 
 ## Release notes
 
-The changelog sections newer than the previous release (plus any fragments
+The changelog sections not yet published (plus any fragments
 still un-assembled on `main`) are rendered into the **"What's Changed"** section
 of the GitHub release body (`build-release.yml`), instead of relying on
 GitHub's PR-label-based auto-generated notes (which otherwise collapse
 everything into a single "Other Changes" bullet when PRs aren't labelled). If
 there is nothing to report, the release notes fall back to a placeholder
 message.
+
+A section counts as unpublished when its version is newer than the previous
+release, or when its entries are absent from `CHANGELOG.md` as published in
+that release — which is how a section keeps its entries after another PR
+released the version it had predicted.
 
 ## Local preview
 
