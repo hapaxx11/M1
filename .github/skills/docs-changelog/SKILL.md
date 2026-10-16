@@ -45,7 +45,9 @@ to build.**
 - **Naming**: use lowercase, hyphens, keep it short.  The description is for
   humans browsing the directory — it does not appear in the changelog.
 - **CI assembly (pre-merge)**: `prepare-changelog.yml` runs on every
-  non-draft PR to `main`.  It runs `scripts/assemble_changelog.py`, which
+  non-draft PR to `main` that changes firmware inputs (same `paths`
+  allow-list as `build-release.yml`; other PRs never release, so their
+  fragments wait for the next firmware PR).  It runs `scripts/assemble_changelog.py`, which
   reads all fragment files, groups entries by category, merges them into the
   `[Unreleased]` section of `CHANGELOG.md` and deletes the fragment files;
   then `scripts/stamp_changelog.py` stamps the predicted next release version

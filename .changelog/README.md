@@ -62,11 +62,14 @@ Multiple entries can go in one file, separated by a blank line:
 1. **On your branch**, create a fragment file here instead of editing
    `CHANGELOG.md`.
 2. Commit the fragment with your code changes.
-3. When the PR is (or becomes) ready for review, the **Prepare Changelog**
-   workflow assembles all fragments into `CHANGELOG.md`, deletes the fragment
+3. When the PR is (or becomes) ready for review and changes firmware inputs
+   (the `paths` allow-list shared with `build-release.yml`), the **Prepare
+   Changelog** workflow assembles all fragments into `CHANGELOG.md`, deletes the fragment
    files, stamps the predicted next release version
    (`scripts/stamp_changelog.py`), and commits the result back to the PR
-   branch.  Pull that commit before pushing more work.  Fork PRs cannot be
+   branch.  Pull that commit before pushing more work.  Fragments from PRs
+   that don't change the binary (docs, CI, tests) stay in `.changelog/` until
+   the next firmware PR assembles them.  Fork PRs cannot be
    written to — their fragments are assembled by the next same-repo PR.
 
 ## Release notes

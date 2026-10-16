@@ -2,28 +2,27 @@ name: Build and Release
 
 # Triggers:
 #   1. Every push (merge) to main → automatic release with auto-incremented version.
-#      Docs-only pushes (*.md, documentation/, LICENSE, IDE files) are skipped.
+#      Only pushes that change firmware inputs (see `paths` below) release;
+#      docs, databases, IDE files, CI workflows and host tests are skipped.
 #   2. Manual dispatch from the Actions tab → optional tag/name overrides.
 # Releases are NOT marked pre-release by default — use the 'prerelease' input to override.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'documentation/**'
-      - 'ir_database/**'
-      - 'subghz_database/**'
-      - 'LICENSE'
-      - 'COPYING.txt'
-      - '.vscode/**'
-      - '.settings/**'
-      - '.project'
-      - '.cproject'
-      - '.mxproject'
-      - 'subghz_playlist/**'
-      - '.github/workflows/**'
-      - '.github/*.md'
-      - '.github/ISSUE_TEMPLATE/**'
+    # Firmware inputs only — keep identical in build-release.yml, ci.yml and
+    # prepare-changelog.yml.  Anything else cannot change the release binary.
+    paths:
+      - '**.c'
+      - '**.h'
+      - '**.inc'                       # #included sources (e.g. Sub_Ghz/*.inc)
+      - '**.s'                         # startup assembly
+      - '**.ld'                        # linker scripts
+      - '**/CMakeLists.txt'
+      - 'cmake/**'
+      - 'scripts/gen_*_builtin.py'     # build-time generated key/table sources
+      - 'tools/append_crc32.py'        # injects CRC + Hapax metadata into the image
+      - '!tests/**'                    # host tests — covered by tests.yml
+      - '!documentation/**'            # reference-only sources, not compiled
   workflow_dispatch:
     inputs:
       tag:

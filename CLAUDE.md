@@ -89,9 +89,12 @@ Terminology used when communicating with the agent about the M1 UI.
   do not affect compilation (`.md` files, `documentation/`, `ir_database/`,
   `subghz_database/`, `subghz_playlist/`, `LICENSE`, `COPYING.txt`, IDE project files
   like `.vscode/`, `.settings/`, `.project`, `.cproject`, `.mxproject`, or CI workflow
-  files in `.github/`), a firmware build is **not required**.  These paths match the
-  `paths-ignore` lists in both `ci.yml` and `build-release.yml` — CI will also skip
-  the build job for such changes.
+  files in `.github/`), a firmware build is **not required**.  CI uses the same
+  rule in reverse: `ci.yml`, `build-release.yml` and `prepare-changelog.yml` only
+  run for changes to firmware inputs (the shared `paths` allow-list: `.c`/`.h`/
+  `.inc`/`.s`/`.ld`, CMake files, `scripts/gen_*_builtin.py`,
+  `tools/append_crc32.py`; `tests/` and `documentation/` excluded), so other
+  changes produce no CI build, no release, no new version and no changelog stamp.
 - **XIAO/Pico test bench: build → flash → test is YOUR job** — When working on ESP32-C6 features with the XIAO + Pico AT bridge setup, YOU are responsible for the full cycle: build the firmware, flash it to the XIAO (via COM6), and run the test script (via COM8). Do NOT stop after building and tell the user to flash/test. Only ask the user for help when something is physically outside your control (hard reset, USB replug, putting Pico in boot mode, etc.).
 - **ESP32 XIAO flashing command**: `python -m esptool --chip esp32c6 --port COM6 --baud 460800 write_flash 0x0 build/factory/factory_ESP32C6-SPI-XIAO.bin` (from `D:\M1Projects\esp32-at-hid\`). After flashing, the XIAO auto-resets — wait 3-5s before testing.
 - **Bug fixes require regression tests** — every bug fix **MUST** include one or more

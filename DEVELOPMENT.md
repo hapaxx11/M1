@@ -335,7 +335,8 @@ echo '**Infrared: Quick-access remotes** — category remotes accessible
   from the Universal Remote dashboard.' > .changelog/ir-quick-remotes.added.md
 ```
 
-When a (non-draft) PR targets `main`, the **Prepare Changelog** workflow
+When a (non-draft) PR that changes firmware inputs targets `main`, the
+**Prepare Changelog** workflow
 (`.github/workflows/prepare-changelog.yml`) runs `scripts/assemble_changelog.py`
 to merge all fragments into `CHANGELOG.md`, deletes the consumed fragment files,
 stamps the predicted next release version via `scripts/stamp_changelog.py`, and
@@ -398,9 +399,10 @@ GitHub Actions as the authoritative build system:
   from a browser with zero software installation.
 - The M1 device itself can **download firmware over WiFi** directly from GitHub
   Releases (Settings → FW Update → Download).
-- Builds that only touch docs, databases, IDE configs, or CI workflow files are
-  automatically skipped (see `paths-ignore` in `build-release.yml` for release
-  builds and `ci.yml` for PR checks).
+- Only changes to firmware inputs (`.c`/`.h`/`.inc`/`.s`/`.ld`, CMake files,
+  build-time generator scripts — see the `paths` allow-list shared by
+  `build-release.yml`, `ci.yml` and `prepare-changelog.yml`) trigger a build,
+  release, version bump or changelog stamp; everything else is skipped.
 
 ## Testing
 

@@ -19,6 +19,12 @@ name: Prepare Changelog
 # corrects it.  Release notes are built from the same pending sections, so
 # they stay correct even if a stale heading reaches main.
 #
+# Only PRs that change firmware inputs (same `paths` allow-list as
+# build-release.yml) are stamped, because only those produce a release and
+# therefore a new version.  Fragments from other PRs (docs, CI, tests) stay
+# in .changelog/ and are assembled by the next firmware PR; release notes
+# include them either way.
+#
 # Draft PRs are skipped to keep CHANGELOG.md edits (and the conflicts they
 # can cause between concurrent PRs) as close to merge time as possible.
 #
@@ -29,6 +35,20 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+    # Firmware inputs only — keep identical in build-release.yml, ci.yml and
+    # prepare-changelog.yml.  Anything else cannot change the release binary.
+    paths:
+      - '**.c'
+      - '**.h'
+      - '**.inc'                       # #included sources (e.g. Sub_Ghz/*.inc)
+      - '**.s'                         # startup assembly
+      - '**.ld'                        # linker scripts
+      - '**/CMakeLists.txt'
+      - 'cmake/**'
+      - 'scripts/gen_*_builtin.py'     # build-time generated key/table sources
+      - 'tools/append_crc32.py'        # injects CRC + Hapax metadata into the image
+      - '!tests/**'                    # host tests — covered by tests.yml
+      - '!documentation/**'            # reference-only sources, not compiled
   workflow_dispatch:
 
 permissions:

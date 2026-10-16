@@ -1,28 +1,26 @@
 name: CI Build Check
 
 # Runs on every PR targeting main (not on direct pushes — Build and Release
-# handles those).  Docs-only and non-compilation changes are skipped via
-# paths-ignore.  GitHub branch-protection rules can require this job
-# ("build") to pass before a PR is mergeable.
+# handles those).  Only PRs that change firmware inputs run it (same `paths`
+# allow-list as build-release.yml).  GitHub branch-protection rules can
+# require this job ("build") to pass before a PR is mergeable.
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'documentation/**'
-      - 'ir_database/**'
-      - 'subghz_database/**'
-      - 'LICENSE'
-      - 'COPYING.txt'
-      - '.vscode/**'
-      - '.settings/**'
-      - '.project'
-      - '.cproject'
-      - '.mxproject'
-      - 'subghz_playlist/**'
-      - '.github/workflows/**'
-      - '.github/*.md'
-      - '.github/ISSUE_TEMPLATE/**'
+    # Firmware inputs only — keep identical in build-release.yml, ci.yml and
+    # prepare-changelog.yml.  Anything else cannot change the release binary.
+    paths:
+      - '**.c'
+      - '**.h'
+      - '**.inc'                       # #included sources (e.g. Sub_Ghz/*.inc)
+      - '**.s'                         # startup assembly
+      - '**.ld'                        # linker scripts
+      - '**/CMakeLists.txt'
+      - 'cmake/**'
+      - 'scripts/gen_*_builtin.py'     # build-time generated key/table sources
+      - 'tools/append_crc32.py'        # injects CRC + Hapax metadata into the image
+      - '!tests/**'                    # host tests — covered by tests.yml
+      - '!documentation/**'            # reference-only sources, not compiled
 
 permissions:
   contents: read
