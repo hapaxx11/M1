@@ -88,7 +88,12 @@ static void scene_on_enter(SubGhzApp *app)
     const uint32_t k2 = subghz_capture_key2_value(&e->info);
 
     bool saved;
-    if (fmt == 1 && k2_len > 0)
+    if (e->info.protocol == (uint16_t)KIA_V6 && fmt != 1)
+        saved = flipper_subghz_save_kia_v6(app->file_path,
+                    e->frequency, "FuriHalSubGhzPresetOok650Async",
+                    e->info.bit_len, e->info.key, e->info.te,
+                    e->info.button_id, (uint8_t)(e->info.key2 & 0xFFu));
+    else if (fmt == 1 && k2_len > 0)
         saved = flipper_subghz_save_m1native_key_with_key2(app->file_path,
                     e->frequency, "FuriHalSubGhzPresetOok650Async",
                     protocol_text[e->info.protocol],

@@ -21,8 +21,8 @@
  *      RIGHT (Emulate) synthesizes a fresh frame with an incremented counter
  *      — Renault V1 via subghz_renault_v1_encoder.c (seed path), PSA via
  *      subghz_psa_encoder.c (type 0x36 TEA re-encryption) — writes it as a
- *      temp .sgh and hands off to the Read Raw scene in Loaded state, where
- *      Send transmits it via the async TX path.
+ *      temp Flipper RAW .sub and hands off to the Read Raw scene in Loaded
+ *      state, where Send transmits it via the async TX path.
  *
  * Async pattern: bounded one-shot worker + binary semaphore + cancel flag
  * (same pattern as the WiFi-scan RPC worker), polled from the scene tick —
@@ -74,8 +74,8 @@ typedef enum {
     PP_BF_KIND_RENAULT_V1,
 } pp_bf_kind_t;
 
-/** Temp waveform file handed to the Read Raw scene for Renault V1 TX. */
-#define PP_BF_TX_TMP_PATH  "0:/SUBGHZ/_pp_bf_tx_tmp.sgh"
+/** Temp waveform file (Flipper RAW format) handed to the Read Raw scene. */
+#define PP_BF_TX_TMP_PATH  "0:/SUBGHZ/_pp_bf_tx_tmp.sub"
 
 /* Worker + scene shared context — heap-allocated for the scene's lifetime.
  * Budget: ~400 B context + 3 KB task stack/TCB from the 256 KB FreeRTOS pool
@@ -289,9 +289,11 @@ static void pp_bf_rv1_finish(pp_bf_ctx_t *ctx)
 /*============================================================================*/
 
 /**
- * Write the upload waveform as an M1 native NOISE .sgh (unsigned alternating
- * durations, first sample is a mark).  Consecutive same-level entries are
- * merged so the alternation invariant holds.
+ * Write the upload waveform as a Flipper RAW .sub file (signed RAW_Data:
+ * mark positive, space negative, first sample is a mark).  The Flipper format
+ * keeps the synthesized capture interchangeable with Flipper/ProtoPirate
+ * tooling; the M1 replay path converts it internally.  Consecutive same-level
+ * entries are merged so the sign alternation invariant holds.
  */
 static bool pp_bf_write_waveform(const char *path,
                                  const subghz_upload_entry_t *upload,
@@ -301,72 +303,76 @@ static bool pp_bf_write_waveform(const char *path,
     if (f_open(&f, path, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
         return false;
 
-    bool ok = f_puts("Filetype: M1 SubGHz NOISE\r\n", &f) >= 0 &&
-              f_puts("Version: 0.9\r\n", &f) >= 0;
+    bool ok = f_puts("Filetype: " FLIPPER_SUBGHZ_RAW_FILETYPE "\r\n", &f) >= 0 &&
+              f_puts("Version: 1\r\n", &f) >= 0;
 
     char line[160];
     if (ok)
     {
-        snprintf(line, sizeof(line), "Frequency: %lu\r\nModulation: OOK\r\n",
+        snprintf(line, sizeof(line),
+                 "Frequency: %lu\r\nPreset: FuriHalSubGhzPresetOok650Async\r\n"
+                 "Protocol: RAW\r\n",
                  (unsigned long)frequency);
         ok = f_puts(line, &f) >= 0;
     }
 
-    /* Stream merged durations in Data: lines of bounded length. */
-    int pos = snprintf(line, sizeof(line), "Data:");
+    /* Stream merged runs in RAW_Data: lines of bounded length. */
+    int pos = snprintf(line, sizeof(line), "RAW_Data:");
     bool have_pending = false;
+    bool pending_level = false;
     uint32_t pending = 0;
     for (uint32_t i = 0; ok && i < count; i++)
     {
         if (!have_pending)
         {
             pending = upload[i].duration;
+            pending_level = upload[i].level;
             have_pending = true;
             continue;
         }
-        if (upload[i].level == upload[i - 1u].level)
+        if (upload[i].level == pending_level)
         {
             pending += upload[i].duration;
             continue;
         }
 
-        int w = snprintf(line + pos, sizeof(line) - (size_t)pos, " %lu",
-                         (unsigned long)pending);
+        int w = snprintf(line + pos, sizeof(line) - (size_t)pos, " %s%lu",
+                         pending_level ? "" : "-", (unsigned long)pending);
         if (w <= 0)
         {
             ok = false;
             break;
         }
         pos += w;
-        have_pending = false;
         pending = upload[i].duration;
-        have_pending = true;
+        pending_level = upload[i].level;
 
         if (pos > 100)
         {
             ok = f_puts(line, &f) >= 0 && f_puts("\r\n", &f) >= 0;
-            pos = snprintf(line, sizeof(line), "Data:");
+            pos = snprintf(line, sizeof(line), "RAW_Data:");
         }
     }
     if (ok && have_pending)
     {
-        snprintf(line + pos, sizeof(line) - (size_t)pos, " %lu",
-                 (unsigned long)pending);
+        snprintf(line + pos, sizeof(line) - (size_t)pos, " %s%lu",
+                 pending_level ? "" : "-", (unsigned long)pending);
         pos = (int)strlen(line);
     }
-    if (ok && pos > 5)
+    if (ok && pos > 9)
         ok = f_puts(line, &f) >= 0 && f_puts("\r\n", &f) >= 0;
 
     f_close(&f);
     return ok;
 }
 
-/** Hand the temp waveform to Read Raw (Loaded state → async Send). */
+/** Hand the temp waveform (Flipper RAW .sub) to Read Raw: Loaded state,
+ *  async Send via sub_ghz_replay_prepare_flipper(). */
 static void pp_bf_handoff_to_read_raw(SubGhzApp *app, pp_bf_ctx_t *ctx)
 {
     strncpy(app->raw_load_path, PP_BF_TX_TMP_PATH, SUBGHZ_SAVED_PATH_MAX - 1U);
     app->raw_load_path[SUBGHZ_SAVED_PATH_MAX - 1U] = '\0';
-    app->raw_load_is_native = true;
+    app->raw_load_is_native = false;
     app->raw_load_freq_hz = ctx->frequency > 0 ? ctx->frequency : 433920000UL;
     app->raw_load_mod = MODULATION_OOK;
     app->resume_from_child = true;

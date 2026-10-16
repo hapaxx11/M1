@@ -23,8 +23,11 @@
 #include "subghz_protocol_registry.h"   /* for subghz_ascii_strcasecmp */
 #include "subghz_manchester_encoder.h"
 #include "subghz_keeloq.h"
+#include "subghz_kia_v6_encoder.h"
+#include "subghz_protopirate_keys_builtin.h"
 #include "subghz_blocks_math.h"
 #include <string.h>
+#include <stdlib.h>
 
 /*============================================================================*/
 /* Catalog (.rodata)                                                           */
@@ -53,6 +56,9 @@ const SubGhzProtoPirateDef subghz_proto_pirate_catalog[] = {
     [SubGhzProtoPirate_KiaV4]       = { SubGhzProtoPirate_KiaV4,       "Kia V4",        400,  800, 68, false },
     [SubGhzProtoPirate_KiaV5]       = { SubGhzProtoPirate_KiaV5,       "Kia V5",        400,  800, 67, true  },
     [SubGhzProtoPirate_FiatV1]      = { SubGhzProtoPirate_FiatV1,      "Fiat V1",       250,  500, 104, false },
+
+    /* --- Keystore-gated (AES) --- */
+    [SubGhzProtoPirate_KiaV6]       = { SubGhzProtoPirate_KiaV6,       "Kia V6",        200,  400, 144, true  },
 };
 
 const uint8_t subghz_proto_pirate_catalog_count =
@@ -2597,6 +2603,137 @@ static uint32_t encode_kia_v7_wrapper(const SubGhzKeyParams *params,
     return encode_kia_v7(key, out, max_pairs, reps);
 }
 
+/*============================================================================*/
+/* Kia V6 (AES-128, injected keystore)                                          */
+/*============================================================================*/
+
+/** Merged (level-run) pairs per Kia V6 burst, worst case (no merges):
+ *  1928 upload entries → 964 (high,low) pairs. */
+#define KIA_V6_MAX_PAIRS_PER_BURST  (KIA_V6_ENC_UPLOAD_SIZE / 2u)
+
+/**
+ * Kia V6 encoder: AES-128-encrypted rolling code.
+ *
+ * Field sources (saved captures): serial = key_value >> 32 (decoder layout),
+ * counter = params->cnt or key_value low 32 bits, button = params->btn,
+ * Fx = params->extra[0].  Requires the injected keystore; returns 0 when the
+ * build has no Kia V6 keys.
+ */
+static uint32_t encode_kia_v6(const SubGhzKeyParams *params,
+                               SubGhzRawPair *out,
+                               uint32_t max_pairs,
+                               uint8_t reps)
+{
+    if (!m1_kia_v6_keys_builtin_available)
+        return 0;
+
+    const uint32_t serial = (uint32_t)(params->key_value >> 32);
+    const uint32_t cnt = params->cnt
+                             ? params->cnt
+                             : (uint32_t)(params->key_value & 0xFFFFFFFFu);
+    const uint8_t btn = (uint8_t)(params->btn & 0x0Fu);
+    const uint8_t fx = params->extra[0];
+
+    uint8_t frame[18];
+    subghz_kia_v6_encrypt_frame(fx, serial, btn, cnt, m1_kia_v6_keys_builtin,
+                                frame);
+
+    /* Heap: 1928 entries × 8 B ≈ 15.4 KB, too large for the caller's stack. */
+    subghz_upload_entry_t *up =
+        malloc(KIA_V6_ENC_UPLOAD_SIZE * sizeof(*up));
+    if (up == NULL)
+        return 0;
+
+    const uint32_t n =
+        subghz_kia_v6_build_upload(up, KIA_V6_ENC_UPLOAD_SIZE, frame);
+    if (n == 0)
+    {
+        free(up);
+        return 0;
+    }
+
+    /* Merge same-level runs and emit (high, low) pairs.  The merged stream
+     * strictly alternates, starts with a mark and ends with the low
+     * separator, so pairs always open high and close low. */
+    uint32_t idx = 0;
+    for (uint8_t r = 0; r < reps; r++)
+    {
+        bool pending_valid = false;
+        bool pending_level = false;
+        uint32_t pending_dur = 0;
+        bool pair_open = false;
+
+        for (uint32_t i = 0; i < n; i++)
+        {
+            if (!pending_valid)
+            {
+                pending_valid = true;
+                pending_level = up[i].level;
+                pending_dur = up[i].duration;
+                continue;
+            }
+            if (up[i].level == pending_level)
+            {
+                pending_dur += up[i].duration;
+                continue;
+            }
+
+            if (pending_level)
+            {
+                if (idx >= max_pairs)
+                {
+                    free(up);
+                    return 0;
+                }
+                out[idx].high_us = pending_dur;
+                pair_open = true;
+            }
+            else
+            {
+                if (!pair_open)   /* cannot start a pair on a space */
+                {
+                    free(up);
+                    return 0;
+                }
+                out[idx].low_us = pending_dur;
+                idx++;
+                pair_open = false;
+            }
+            pending_level = up[i].level;
+            pending_dur = up[i].duration;
+        }
+
+        /* Trailing run: the burst ends on the low separator. */
+        if (pending_valid)
+        {
+            if (pending_level)
+            {
+                if (idx >= max_pairs)
+                {
+                    free(up);
+                    return 0;
+                }
+                out[idx].high_us = pending_dur;
+                out[idx].low_us = 0;
+                idx++;
+            }
+            else
+            {
+                if (!pair_open)
+                {
+                    free(up);
+                    return 0;
+                }
+                out[idx].low_us = pending_dur;
+                idx++;
+            }
+        }
+    }
+
+    free(up);
+    return idx;
+}
+
 static const ProtoPirateEncodeFn encode_table[SubGhzProtoPirate_Count] = {
     [SubGhzProtoPirate_FordV0]      = encode_ford_v0,
     [SubGhzProtoPirate_MazdaV0]     = encode_mazda_v0,
@@ -2620,6 +2757,7 @@ static const ProtoPirateEncodeFn encode_table[SubGhzProtoPirate_Count] = {
     [SubGhzProtoPirate_KiaV4]       = encode_kia_v4_wrapper,
     [SubGhzProtoPirate_KiaV5]       = encode_kia_v5,
     [SubGhzProtoPirate_FiatV1]      = encode_fiat_v1,
+    [SubGhzProtoPirate_KiaV6]       = encode_kia_v6,
 };
 
 static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
@@ -2680,6 +2818,8 @@ static uint32_t required_pairs_for_id(SubGhzProtoPirateId id, uint8_t reps)
                 ((KIA_V5_DATA_BITS + KIA_V5_CRC_BITS) * 2) + 2) * reps;
     case SubGhzProtoPirate_FiatV1:
         return (1 + FIAT_V1_WIRE_BITS + 1) * reps;
+    case SubGhzProtoPirate_KiaV6:
+        return KIA_V6_MAX_PAIRS_PER_BURST * reps;
     default:
         return 0;
     }

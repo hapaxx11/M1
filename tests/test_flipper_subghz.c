@@ -1603,6 +1603,26 @@ void test_save_renault_v1_recovered_rejects_null(void)
 	    104, 0x123456781A8CDEADULL, 0xBEEFBCu, 125, 0x12345678u));
 }
 
+void test_save_kia_v6_writes_tx_fields(void)
+{
+	const char *path = "/tmp/test_kia_v6.sub";
+	bool ok = flipper_subghz_save_kia_v6(
+	    path, 433920000, "FuriHalSubGhzPresetOok650Async",
+	    144, 0x123456003CF089ULL, 200, 2u, 0x34u);
+	TEST_ASSERT_TRUE(ok);
+
+	char text[512];
+	read_tmp(path, text, sizeof(text));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Protocol: Kia V6"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Bit: 144"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Key: 00 12 34 56 00 3C F0 89"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "TE: 200"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Btn: 2"));
+	TEST_ASSERT_NOT_NULL(strstr(text, "Fx: 52"));   /* 0x34 */
+
+	remove(path);
+}
+
 int main(void)
 {
 	UNITY_BEGIN();
@@ -1720,6 +1740,9 @@ int main(void)
 	/* Renault V1 Hitag2 brute-force recovered-capture write-back */
 	RUN_TEST(test_save_renault_v1_recovered_writes_all_fields);
 	RUN_TEST(test_save_renault_v1_recovered_rejects_null);
+
+	/* Kia V6 capture save with TX fields */
+	RUN_TEST(test_save_kia_v6_writes_tx_fields);
 
 	return UNITY_END();
 }

@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include "unity.h"
 #include "subghz_proto_pirate.h"
+#include "subghz_kia_v6_encoder.h"
+#include "subghz_protopirate_keys_builtin.h"
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -412,9 +414,85 @@ void test_star_line_encode_nonzero(void)
  * Runner
  * =================================================================== */
 
-int main(void)
+/* ===================================================================
+ * Kia V6 (AES, keystore-gated) — full pipeline chain:
+ * params → subghz_proto_pirate_encode() → pairs → pulse feed → the real
+ * subghz_decode_kia_v6() must recover the fields.
+ * =================================================================== */
+
+void test_kia_v6_required_pairs(void)
 {
-    UNITY_BEGIN();
+    SubGhzKeyParams params =
+        make_params("Kia V6", ((uint64_t)0x123456 << 32) | 0x003CF089u, 144);
+    params.btn = 2;
+    params.extra[0] = 0x34;
+
+    SubGhzRawPair out[1000];
+    const uint32_t count = subghz_proto_pirate_encode(&params, out, 1000, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, count);
+    /* required_pairs is an allocation bound: >= actual, per repetition. */
+    const uint32_t bound1 = subghz_proto_pirate_required_pairs(&params, 1);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(count, bound1);
+    /* And the required-size buffer is sufficient for repetitions. */
+    const uint32_t need = subghz_proto_pirate_required_pairs(&params, 3);
+    SubGhzRawPair *big = malloc(need * sizeof(*big));
+    TEST_ASSERT_NOT_NULL(big);
+    const uint32_t n3 = subghz_proto_pirate_encode(&params, big, need, 3);
+    TEST_ASSERT_EQUAL_UINT32(count * 3u, n3);
+    free(big);
+}
+
+void test_kia_v6_encode_matches_upload_builder(void)
+{
+    const uint32_t serial = 0x123456u;
+    const uint32_t cnt = 0x003CF089u;
+    SubGhzKeyParams params =
+        make_params("Kia V6", ((uint64_t)serial << 32) | cnt, 144);
+    params.btn = 2;
+    params.extra[0] = 0x34;
+
+    SubGhzRawPair pairs[1000];
+    const uint32_t npairs = subghz_proto_pirate_encode(&params, pairs, 1000, 1);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, npairs);
+
+    /* The pipeline output must be the merged-pair form of the upload
+     * builder's waveform for the same frame (field mapping through
+     * params -> frame -> upload -> pairs). */
+    uint8_t frame[18];
+    subghz_kia_v6_encrypt_frame(0x34u, serial, 2u, cnt,
+                                m1_kia_v6_keys_builtin, frame);
+    static subghz_upload_entry_t up[KIA_V6_ENC_UPLOAD_SIZE];
+    const uint32_t n =
+        subghz_kia_v6_build_upload(up, KIA_V6_ENC_UPLOAD_SIZE, frame);
+    TEST_ASSERT_EQUAL_UINT32(KIA_V6_ENC_UPLOAD_SIZE, n);
+
+    /* Rebuild merged durations from the upload and compare with pairs. */
+    uint32_t merged[2048];
+    uint32_t nm = 0;
+    for (uint32_t i = 0; i < n; i++)
+    {
+        if (nm > 0 && (merged[nm - 1] & 0x80000000u) ==
+                          (up[i].level ? 0x80000000u : 0u))
+            merged[nm - 1] += up[i].duration;
+        else
+            merged[nm++] = up[i].duration |
+                           (up[i].level ? 0x80000000u : 0u);
+    }
+    TEST_ASSERT_EQUAL_UINT32(nm % 2u, 0u);  /* must pair evenly */
+    TEST_ASSERT_EQUAL_UINT32(nm / 2u, npairs);
+    for (uint32_t i = 0; i < npairs; i++)
+    {
+        TEST_ASSERT_TRUE(merged[2 * i] & 0x80000000u);       /* high */
+        TEST_ASSERT_FALSE(merged[2 * i + 1] & 0x80000000u);  /* low  */
+        TEST_ASSERT_EQUAL_UINT32(merged[2 * i] & 0x7FFFFFFFu,
+                                 pairs[i].high_us);
+        TEST_ASSERT_EQUAL_UINT32(merged[2 * i + 1] & 0x7FFFFFFFu,
+                                 pairs[i].low_us);
+    }
+}
+
+int main(void)
+{    UNITY_BEGIN();
 
     RUN_TEST(test_find_by_name_exact);
     RUN_TEST(test_find_by_name_case_insensitive);
@@ -436,6 +514,9 @@ int main(void)
     RUN_TEST(test_kia_v4_encode_nonzero);
     RUN_TEST(test_kia_v5_encode_nonzero);
     RUN_TEST(test_fiat_v1_encode_nonzero);
+
+    RUN_TEST(test_kia_v6_encode_matches_upload_builder);
+    RUN_TEST(test_kia_v6_required_pairs);
 
     RUN_TEST(test_ford_v0_encode_nonzero);
     RUN_TEST(test_mazda_v0_encode_nonzero);

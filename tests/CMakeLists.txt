@@ -881,18 +881,22 @@ add_executable(test_subghz_key_encoder
     test_subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_key_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
     ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
+    ${STUBS_DIR}/protopirate_keys_test_data.c
 )
 target_include_directories(test_subghz_key_encoder PRIVATE
     ${STUBS_DIR}            # HAL stubs
     ${M1_ROOT}/m1_csrc
     ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/NFC/amiibo
 )
 target_link_libraries(test_subghz_key_encoder PRIVATE unity)
 if(TARGET sanitizers)
@@ -3406,18 +3410,23 @@ add_test(NAME proto_pirate_timing COMMAND test_proto_pirate_timing)
 add_executable(test_subghz_proto_pirate
     test_subghz_proto_pirate.c
     ${M1_ROOT}/Sub_Ghz/subghz_proto_pirate.c
+    ${M1_ROOT}/Sub_Ghz/subghz_kia_v6_encoder.c
     ${M1_ROOT}/Sub_Ghz/subghz_keeloq.c
+    ${M1_ROOT}/NFC/amiibo/tiny_aes.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_registry.c
     ${M1_ROOT}/Sub_Ghz/subghz_decode_try_fn.c
     ${M1_ROOT}/Sub_Ghz/subghz_protocol_ignore.c
     ${M1_ROOT}/m1_csrc/bit_util.c
     ${M1_ROOT}/m1_csrc/subghz_freq_presets.c
     ${STUBS_DIR}/subghz_decode_stubs.c
+    ${STUBS_DIR}/protopirate_keys_test_data.c
 )
 target_include_directories(test_subghz_proto_pirate PRIVATE
     ${STUBS_DIR}
     ${M1_ROOT}/m1_csrc
     ${M1_ROOT}/Sub_Ghz
+    ${M1_ROOT}/Sub_Ghz/protocols
+    ${M1_ROOT}/NFC/amiibo
 )
 target_link_libraries(test_subghz_proto_pirate PRIVATE unity)
 if(TARGET sanitizers)

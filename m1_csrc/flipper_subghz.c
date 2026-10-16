@@ -1018,6 +1018,76 @@ bool flipper_subghz_save_psa_recovered(const char *path,
 
 /*============================================================================*/
 /**
+ * @brief  Save a Kia V6 capture with the fields needed to re-encrypt frames
+ *         for TX (subghz_kia_v6_encoder.c): Key (serial<<32|counter per the
+ *         decoder layout) plus Btn and Fx.
+ */
+bool flipper_subghz_save_kia_v6(const char *path,
+                                 uint32_t    frequency,
+                                 const char *preset,
+                                 uint32_t    bit_count,
+                                 uint64_t    key,
+                                 uint32_t    te,
+                                 uint8_t     button,
+                                 uint8_t     fx)
+{
+	flipper_file_t ff;
+	bool result = true;
+	char key_str[32];
+
+	if (path == NULL)
+		return false;
+
+	if (!ff_open_write(&ff, path))
+		return false;
+
+	result = ff_write_kv_str(&ff, "Filetype", FLIPPER_SUBGHZ_KEY_FILETYPE);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Version", 1);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Frequency", frequency);
+
+	if (result && preset && preset[0] != ' ')
+		result = ff_write_kv_str(&ff, "Preset", preset);
+
+	if (result)
+		result = ff_write_kv_str(&ff, "Protocol", "Kia V6");
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Bit", bit_count);
+
+	if (result)
+	{
+		snprintf(key_str, sizeof(key_str),
+		         "%02X %02X %02X %02X %02X %02X %02X %02X",
+		         (unsigned int)((key >> 56) & 0xFF),
+		         (unsigned int)((key >> 48) & 0xFF),
+		         (unsigned int)((key >> 40) & 0xFF),
+		         (unsigned int)((key >> 32) & 0xFF),
+		         (unsigned int)((key >> 24) & 0xFF),
+		         (unsigned int)((key >> 16) & 0xFF),
+		         (unsigned int)((key >>  8) & 0xFF),
+		         (unsigned int)( key        & 0xFF));
+		result = ff_write_kv_str(&ff, "Key", key_str);
+	}
+
+	if (result && te > 0)
+		result = ff_write_kv_uint32(&ff, "TE", te);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Btn", button);
+
+	if (result)
+		result = ff_write_kv_uint32(&ff, "Fx", fx);
+
+	ff_close(&ff);
+	return result;
+}
+
+/*============================================================================*/
+/**
  * @brief  Save a Renault V1 capture patched with the seed (IV) recovered by
  *         the Hitag2 brute-force search (subghz_renault_v1_bruteforce.c).
  *

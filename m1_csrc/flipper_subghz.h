@@ -203,6 +203,20 @@ bool flipper_subghz_save_renault_v1_recovered(const char *path,
                                                uint32_t    seed);
 
 /*
+ * Save a Kia V6 capture with the fields needed to re-encrypt frames for TX
+ * (Sub_Ghz/subghz_kia_v6_encoder.c): Key (serial<<32|counter, the decoder
+ * layout) plus Btn and Fx.
+ */
+bool flipper_subghz_save_kia_v6(const char *path,
+                                 uint32_t    frequency,
+                                 const char *preset,
+                                 uint32_t    bit_count,
+                                 uint64_t    key,
+                                 uint32_t    te,
+                                 uint8_t     button,
+                                 uint8_t     fx);
+
+/*
  * Save variant that additionally writes the optional
  * `CounterMode:` field.  The field is only emitted when @p counter_mode
  * differs from the default (Increment), so files round-tripped from

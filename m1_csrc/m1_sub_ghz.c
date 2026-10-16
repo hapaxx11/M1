@@ -2043,6 +2043,10 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 	uint64_t key_value = 0;
 	uint32_t key_bit_count = 0;
 	uint32_t key_te = 0;
+	/* Optional ProtoPirate field lines (Kia V6 / VAG TX): button id and
+	 * Fx byte.  Zero when the file omits them. */
+	uint32_t key_btn = 0;
+	uint32_t key_fx = 0;
 	/* Optional `CounterMode:` field on KeeLoq-family
 	 * .sub files.  Defaults to INCREMENT for files that omit the
 	 * field (matches the parse behaviour in flipper_subghz_load). */
@@ -2267,6 +2271,16 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 				key_counter_mode = FLIPPER_SUBGHZ_COUNTER_MODE_INCREMENT;
 			}
 		}
+		else if (strncmp(line_buf, "Btn:", 4) == 0)
+		{
+			/* ProtoPirate button field (Kia V6 / VAG TX). */
+			key_btn = (uint32_t)strtoul(line_buf + 4, NULL, 10);
+		}
+		else if (strncmp(line_buf, "Fx:", 3) == 0)
+		{
+			/* ProtoPirate Fx field (Kia V6 TX). */
+			key_fx = (uint32_t)strtoul(line_buf + 3, NULL, 10);
+		}
 		else if (strncmp(line_buf, "RAW_Data:", 9) == 0)
 		{
 			/* Parse signed values, write absolute values as Data: lines.
@@ -2343,6 +2357,8 @@ static uint8_t subghz_replay_flipper_to_tmp(const char *sub_path)
 		key_params.key_value = key_value;
 		key_params.bit_count = key_bit_count;
 		key_params.te        = key_te;
+		key_params.btn       = key_btn;
+		key_params.extra[0]  = (uint8_t)(key_fx & 0xFFu);
 
 		uint32_t npairs = 0;
 		SubGhzRawPair *pairs = NULL;

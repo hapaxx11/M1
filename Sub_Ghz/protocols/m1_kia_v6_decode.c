@@ -181,6 +181,9 @@ uint8_t subghz_decode_kia_v6(uint16_t protocol_index, uint16_t pulse_count)
                     ((uint64_t)decoded.serial << 32) | decoded.counter;
                 subghz_decenc_ctl.n32_serialnumber = decoded.serial;
                 subghz_decenc_ctl.n32_rollingcode = decoded.counter;
+                /* Fx rides the aux Key_2 slot so the save path can persist
+                 * it (needed to re-encrypt frames for TX). */
+                subghz_decenc_ctl.n32_key2 = decoded.fx;
                 subghz_decenc_ctl.n8_buttonid = decoded.button;
                 subghz_decenc_ctl.ndecodedbitlength = M1_KIA_V6_FRAME_BITS;
                 subghz_decenc_ctl.ndecodeddelay = 0;
