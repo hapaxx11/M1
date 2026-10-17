@@ -1,1 +1,0 @@
-Documentation: Changelog fragments are now assembled and the next release version is stamped into `CHANGELOG.md` inside the PR branch before merge (new Prepare Changelog workflow), replacing the separate post-release changelog stamp PR.

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.4.12] - 2026-10-15
+## [0.9.4.13] - 2026-10-17
 
 ### Added
 
@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - RPC request responses and screen streams now use their originating transport,
   while USB RPC mode remains isolated from mobile-session state.
+- Documentation: Release builds, PR firmware builds and changelog stamping now run only for changes to firmware inputs (C/H/INC/S/LD sources, CMake files, build-time generator scripts), so docs, CI and test-only changes no longer produce a new version.
+- Documentation: Changelog fragments are now assembled and the next release version is stamped into `CHANGELOG.md` inside the PR branch before merge (new Prepare Changelog workflow), replacing the separate post-release changelog stamp PR.
+- Documentation: Recommend the native CD3 brain ESP32 firmware as the primary
+  choice for most M1 users, while documenting current capability gaps and
+  supported alternatives.
+
+### Fixed
+
+- **ESP32: retry transient compatibility-probe failures** — Do not cache a failed coprocessor probe for the entire STM32 boot; retry after a short cooldown so qMonstatek can recognize a brain ESP32 that was not ready during the initial probe.
+
 ## [0.9.4.11] - 2026-10-14
 
 ### Added

@@ -1223,6 +1223,33 @@ void test_format_fw_version_null_out_is_safe(void)
  * Probe diagnostics formatter (issue #719 Phase 0)
  * =========================================================================*/
 
+void test_caps_probe_retry_initial_attempt_is_due(void)
+{
+    TEST_ASSERT_TRUE(
+        m1_esp32_caps_probe_retry_due(false, 100u, 100u));
+}
+
+void test_caps_probe_retry_waits_for_interval_after_failure(void)
+{
+    const uint32_t last_probe = 1000u;
+    TEST_ASSERT_FALSE(m1_esp32_caps_probe_retry_due(
+        true, last_probe, last_probe + M1_ESP32_CAPS_RETRY_INTERVAL_MS - 1u));
+    TEST_ASSERT_TRUE(m1_esp32_caps_probe_retry_due(
+        true, last_probe, last_probe + M1_ESP32_CAPS_RETRY_INTERVAL_MS));
+}
+
+void test_caps_probe_retry_interval_handles_tick_wraparound(void)
+{
+    const uint32_t last_probe = UINT32_MAX - 1000u;
+    const uint32_t before_due = last_probe +
+        M1_ESP32_CAPS_RETRY_INTERVAL_MS - 1u;
+    const uint32_t due = last_probe + M1_ESP32_CAPS_RETRY_INTERVAL_MS;
+
+    TEST_ASSERT_FALSE(m1_esp32_caps_probe_retry_due(
+        true, last_probe, before_due));
+    TEST_ASSERT_TRUE(m1_esp32_caps_probe_retry_due(true, last_probe, due));
+}
+
 void test_diag_format_null_snapshot_is_no_probe(void)
 {
     char buf[40];
@@ -1460,6 +1487,9 @@ int main(void)
     RUN_TEST(test_unsupported_screen_lines_fit_display);
 
     /* Probe diagnostics formatter (issue #719 Phase 0) */
+    RUN_TEST(test_caps_probe_retry_initial_attempt_is_due);
+    RUN_TEST(test_caps_probe_retry_waits_for_interval_after_failure);
+    RUN_TEST(test_caps_probe_retry_interval_handles_tick_wraparound);
     RUN_TEST(test_diag_format_null_snapshot_is_no_probe);
     RUN_TEST(test_diag_format_none_outcome_is_no_probe);
     RUN_TEST(test_diag_format_hal_off);
